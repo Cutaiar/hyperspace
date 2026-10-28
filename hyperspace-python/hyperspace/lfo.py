@@ -95,7 +95,7 @@ REST = 0.5
 GROUP = "lfo"
 RANDOM = SHAPES.index("random")
 # the knobs that feed an LFO's node in the modulation patch, in the order
-# `declare` makes them (patch.LFO_KNOBS, which the router reads)
+# `declare` makes them (modgraph.LFO_KNOBS, which the router reads)
 KNOBS = ("shape", "rate", "sync", "depth", "phase", "reset")
 
 

@@ -1,14 +1,18 @@
 """The modulation graph as data, and the order it is evaluated in (plan 28 N0).
 
 Every performer row, macro subscriber, `scale`, LFO knob and modifier
-input is an edge between nodes; `Router.build_patch` (routing.py) makes the
-graph from the table, and `Router.modulate` runs it in `order(patch)`, so
+input is an edge between nodes; `Router.build_modgraph` (routing.py) makes the
+graph from the table, and `Router.modulate` runs it in `order(g)`, so
 a value that something else in the pass reads — an LFO's depth a hand
 owns, a macro scaling a push, a `scale` param that is itself modulated —
 lands **this frame**, before its reader (decision 7: the one-frame lag
 is gone). Nothing reads a stale value but through a `delay` modifier.
 
-Nodes (`PatchNode.kind`):
+Until plan 40 this module was named `patch` (`Patch`, `PatchNode`, `PatchEdge`)
+(D1): "patch" is now the owner's word for a saved group of nodes and its
+boundary (`patches.py`); this is the modulation graph, `Router.modgraph`.
+
+Nodes (`ModNode.kind`):
 
   source    a fed lane: ``lane:0``, ``hand:right.y``, ``axis:2``, ``ext:1``,
             an OSC role's axis — its id is the address a row names
@@ -20,7 +24,7 @@ Nodes (`PatchNode.kind`):
             params' `base` and other cables' `depth`
   param     a registry param, with a `base` port and a `mod` port
 
-Edges (`PatchEdge.port`, the port on `dst`):
+Edges (`ModEdge.port`, the port on `dst`):
 
   mod       a performer row: source → param. ``cable`` is the row's
             identity, ``(source, target)`` — routes convert one-to-one
@@ -73,12 +77,12 @@ PORTS = tuple(dict.fromkeys(("mod", "when", "depth", "base", "in", *LFO_PORTS, *
 # the ports that never order the pass (see the module docstring)
 UNORDERED = frozenset({"base"})
 # `cycles` stops listing past this many loops: a pathological table is
-# refused loop by loop anyway (Router.build_patch cuts one and asks again)
+# refused loop by loop anyway (Router.build_modgraph cuts one and asks again)
 MAX_CYCLES = 256
 
 
 @dataclass(frozen=True)
-class PatchNode:
+class ModNode:
     """One node. `id` is the address a row names for a source, an LFO or a
     modifier (``lane:0``, ``lfo:1``, ``mod:3``) and the param id for a
     param or a macro (``view.bright``, ``macro.2``) — the two never meet:
@@ -89,11 +93,11 @@ class PatchNode:
 
 
 @dataclass(frozen=True)
-class PatchEdge:
+class ModEdge:
     """`src` → `dst`, into `dst`'s `port`. `cable` is the performer row the
     edge belongs to — ``(source, target)`` — for a `mod`, `when` or `depth`
     edge; None for the rest. A disabled edge (a row switched off, or the
-    cable `Router.build_patch` cut to break a loop) is drawn but does not
+    cable `Router.build_modgraph` cut to break a loop) is drawn but does not
     order or run."""
     src: str
     dst: str
@@ -103,45 +107,45 @@ class PatchEdge:
 
 
 @dataclass
-class Patch:
+class ModGraph:
     """Nodes in insertion order (a dict by id) and edges in insertion order."""
-    nodes: dict[str, PatchNode] = field(default_factory=dict)
-    edges: list[PatchEdge] = field(default_factory=list)
+    nodes: dict[str, ModNode] = field(default_factory=dict)
+    edges: list[ModEdge] = field(default_factory=list)
 
-    def add(self, node_id: str, kind: str, *, delay: bool = False) -> PatchNode:
+    def add(self, node_id: str, kind: str, *, delay: bool = False) -> ModNode:
         """The node `node_id`, added at the end unless it is there already
         (then the first kind given stands)."""
         n = self.nodes.get(node_id)
         if n is None:
-            n = self.nodes[node_id] = PatchNode(node_id, kind, delay)
+            n = self.nodes[node_id] = ModNode(node_id, kind, delay)
         return n
 
     def link(self, src: str, dst: str, port: str, cable: tuple[str, str] | None = None,
-             enabled: bool = True) -> PatchEdge:
-        e = PatchEdge(src, dst, port, cable, enabled)
+             enabled: bool = True) -> ModEdge:
+        e = ModEdge(src, dst, port, cable, enabled)
         self.edges.append(e)
         return e
 
-    def into(self, node_id: str) -> list[PatchEdge]:
+    def into(self, node_id: str) -> list[ModEdge]:
         return [e for e in self.edges if e.dst == node_id]
 
-    def out_of(self, node_id: str) -> list[PatchEdge]:
+    def out_of(self, node_id: str) -> list[ModEdge]:
         return [e for e in self.edges if e.src == node_id]
 
 
-def _live(patch: Patch, e: PatchEdge) -> bool:
+def _live(g: ModGraph, e: ModEdge) -> bool:
     """An edge that could order: enabled, not `base`, between two nodes."""
     return (e.enabled and e.port not in UNORDERED
-            and e.src in patch.nodes and e.dst in patch.nodes)
+            and e.src in g.nodes and e.dst in g.nodes)
 
 
-def ordering(patch: Patch) -> list[PatchEdge]:
+def ordering(g: ModGraph) -> list[ModEdge]:
     """The edges that constrain the pass — `e.src` runs before `e.dst` —
     in edge order: every live edge but one into a delay node that the
     delay itself reaches back to (that edge closes a loop through the
     delay, which is where the loop takes its one frame)."""
-    live = [e for e in patch.edges if _live(patch, e)]
-    delays = {n for n, node in patch.nodes.items() if node.delay}
+    live = [e for e in g.edges if _live(g, e)]
+    delays = {n for n, node in g.nodes.items() if node.delay}
     if not delays:
         return live
     succ: dict[str, list[str]] = {}
@@ -161,28 +165,28 @@ def ordering(patch: Patch) -> list[PatchEdge]:
     return [e for e in live if e.dst not in delays or e.src not in back[e.dst]]
 
 
-def orders(patch: Patch, e: PatchEdge) -> bool:
+def orders(g: ModGraph, e: ModEdge) -> bool:
     """Does edge `e` constrain the pass? (`ordering`, for one edge.)"""
-    return any(x is e for x in ordering(patch))
+    return any(x is e for x in ordering(g))
 
 
-def _deps(patch: Patch) -> dict[str, list[str]]:
+def _deps(g: ModGraph) -> dict[str, list[str]]:
     """node id → the ids it reads, in edge order, each once."""
-    deps: dict[str, list[str]] = {n: [] for n in patch.nodes}
-    for e in ordering(patch):
+    deps: dict[str, list[str]] = {n: [] for n in g.nodes}
+    for e in ordering(g):
         if e.src not in deps[e.dst]:
             deps[e.dst].append(e.src)
     return deps
 
 
-def order(patch: Patch) -> list[PatchNode]:
+def order(g: ModGraph) -> list[ModNode]:
     """Every node, each after everything it reads: a depth-first walk in
     insertion order, dependencies first, ties left in insertion order (as
     `graph.Graph._sort`). On a loop the walk does not go round again — a
     node already on the walk's path is taken as done — so it always ends;
-    `Router.build_patch` cuts every loop before it asks."""
-    deps = _deps(patch)
-    done: list[PatchNode] = []
+    `Router.build_modgraph` cuts every loop before it asks."""
+    deps = _deps(g)
+    done: list[ModNode] = []
     seen: set[str] = set()
 
     def visit(nid: str) -> None:
@@ -191,23 +195,23 @@ def order(patch: Patch) -> list[PatchNode]:
         seen.add(nid)
         for d in deps[nid]:
             visit(d)
-        done.append(patch.nodes[nid])
+        done.append(g.nodes[nid])
 
-    for nid in patch.nodes:
+    for nid in g.nodes:
         visit(nid)
     return done
 
 
-def cycles(patch: Patch) -> list[list[str]]:
+def cycles(g: ModGraph) -> list[list[str]]:
     """Every loop over the ordering edges, each as its node ids from the
     loop's earliest node (in insertion order) round to the node before it
     comes back; a loop through a delay modifier is none (its edge in does
     not order). Each elementary loop once, in a stable order; at most
     `MAX_CYCLES`."""
-    ids = list(patch.nodes)
+    ids = list(g.nodes)
     rank = {n: i for i, n in enumerate(ids)}
     succ: dict[str, list[str]] = {n: [] for n in ids}
-    for e in ordering(patch):
+    for e in ordering(g):
         if e.dst not in succ[e.src]:
             succ[e.src].append(e.dst)
     found: list[list[str]] = []

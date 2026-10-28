@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from hyperspace import lfo, modbank, patch, undo
+from hyperspace import lfo, modbank, modgraph, undo
 from hyperspace.lfo import REST, SHAPES, LFOs, register
 from hyperspace.params import Registry
 from hyperspace.routing import Binding, Bindings, Router
@@ -115,8 +115,8 @@ def test_modbank_imports_nothing_from_the_host():
             assert not any(a.name.startswith("hyperspace") for a in n.names)
 
 
-def test_the_lfo_knobs_are_the_patchs():
-    assert LFOs.KNOBS == patch.LFO_KNOBS
+def test_the_lfo_knobs_are_the_modgraphs():
+    assert LFOs.KNOBS == modgraph.LFO_KNOBS
 
 
 # ---- the LFOs as a bank ----
@@ -131,7 +131,7 @@ def test_removing_lfo_2_keeps_lfo_3_on_lfo_2():
     assert three.depth == 0.4                   # the knob is still LFO 3's
     router = Router(reg, Bindings([Binding("lfo:2", "view.bright", "push", 1.0)]))
     router.use_lfos(lfos, c)
-    nodes = router.patch.nodes
+    nodes = router.modgraph.nodes
     assert "lfo:2" in nodes and "lfo:1" not in nodes and nodes["lfo:2"].kind == "lfo"
     assert ("bank", "lfo", 2) in router.__dict__["_plan"]
     assert lfos.add() == 5                      # one past the highest
@@ -157,13 +157,13 @@ def test_a_membership_change_rebuilds_the_patch():
     reg, c, lfos = rig()
     router = Router(reg, Bindings([]))
     router.use_lfos(lfos, c)
-    before = router.patch
+    before = router.modgraph
     serial = reg.serial
     lfos.add()
     assert reg.serial > serial                  # the registry says so…
-    after = router.patch
+    after = router.modgraph
     assert after is not before and "lfo:4" in after.nodes   # …and the patch follows
-    assert router.patch is after                # cached until the next change
+    assert router.modgraph is after                # cached until the next change
 
 
 def test_an_lfo_owning_another_with_gaps_lands_the_same_frame():

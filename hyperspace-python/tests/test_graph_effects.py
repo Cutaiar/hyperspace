@@ -444,13 +444,13 @@ def test_the_value_port_type_exists_and_no_node_uses_it():
     `GEOMETRY`, its docstring naming its two intended uses (the palette's
     value out for a lights sink; an image-in `sample` port setting a
     palette's params) — and no node publishes or reads one in this plan:
-    not any Node class, nor any node of a built default graph. `patch.py`
+    not any Node class, nor any node of a built default graph. `modgraph.py`
     knows the name without importing the graph (it is a leaf)."""
     import ast
     import inspect
     from pathlib import Path
 
-    from hyperspace import patch
+    from hyperspace import modgraph
 
     assert G.VALUE == "value" and G.PORT_TYPES == (G.IMAGE, G.MASK, G.GEOMETRY, G.VALUE)
     assert len(set(G.PORT_TYPES)) == 4
@@ -466,8 +466,8 @@ def test_the_value_port_type_exists_and_no_node_uses_it():
               G.Wiring(run=RUN), effects=RUN)
     for node in g.order:
         assert node.OUTPUT != G.VALUE and G.VALUE not in node.INPUTS.values(), node.name
-    assert patch.RENDER_VALUE == G.VALUE
-    for node in ast.walk(ast.parse(Path(patch.__file__).read_text())):
+    assert modgraph.RENDER_VALUE == G.VALUE
+    for node in ast.walk(ast.parse(Path(modgraph.__file__).read_text())):
         if isinstance(node, ast.ImportFrom):
             assert "graph" not in {(node.module or "").split(".")[-1],
                                    *(a.name for a in node.names)}

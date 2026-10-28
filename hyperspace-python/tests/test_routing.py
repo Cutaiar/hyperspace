@@ -2681,7 +2681,7 @@ def _hand_tape(lay, k: int) -> tuple[list[float], list[float]]:
 
 def _lag_of(table: Bindings) -> tuple[dict[str, int], dict[int, int]]:
     """How many frames late the base build lands each param and each LFO's
-    output, from the table alone (not patch.py): a param read in the pass
+    output, from the table alone (not modgraph.py): a param read in the pass
     — a `scale`, a macro behind a depth subscriber, an LFO's knob — that a
     performer moves reaches its reader one frame late, and a chain of them
     adds up. Params no row reaches are 0."""
@@ -2807,8 +2807,8 @@ def test_a_cycle_without_a_delay_disables_its_last_cable_with_a_note(tmp_path):
     table = Bindings([first, other, second])
     router = Router(r.reg, table)
     router.use_lfos(r.lfos, r.clock)
-    assert router.patch_cut == {("lfo:1", "lfo.1.depth")}
-    (note,) = router.patch_notes
+    assert router.modgraph_cut == {("lfo:1", "lfo.1.depth")}
+    (note,) = router.modgraph_notes
     assert note == ("loop: lfo:0 → lfo.2.rate → lfo:1 → lfo.1.depth → lfo:0 needs a delay"
                     " — lfo:1 → lfo.1.depth is off until it has one")
     assert second in table.routes() and second.enabled          # nothing removed
@@ -2825,7 +2825,7 @@ def test_a_cycle_without_a_delay_disables_its_last_cable_with_a_note(tmp_path):
     # in the file as written: a preset saved now carries the row
     assert any(d == second.to_json() for d in (b.to_json() for b in table.routes()))
     table.remove(first)                                         # no loop: it runs
-    assert router.patch_cut == set() and router.patch_notes == []
+    assert router.modgraph_cut == set() and router.modgraph_notes == []
     router.modulate(r.chain, 1 / 60, now=1.0 + 1 / 60)
     r.reg.apply()
     assert depth.modulated

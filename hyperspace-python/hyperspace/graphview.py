@@ -4,7 +4,7 @@ ports and cables, built from the live objects and drawn by ui_graph.py.
 Nothing here draws. `build` reads the binding
 table (`routing.Bindings`: the routes, the desk / pad / key rows, the
 macros, the modifiers), the registry (every param a cable can reach), the
-Router (the source lanes' names and readings, the LFOs, the loops `patch`
+Router (the source lanes' names and readings, the LFOs, the loops `modgraph`
 keeps off), the device registry (`devices.DeviceRegistry`: one node per
 listed device, its ports its `Device.sources` in their port groups) and
 the render graph the renderer last built (`graph.Graph`: its nodes, their
@@ -106,7 +106,7 @@ unused macro, an unpatched LFO, a group node no cable reaches, a lost
 device with no rows) is not drawn: its area shows one "n idle" line in
 its place that expands to show them.
 
-Imports `routing`, `params`, `graph`, `patch`, `modifiers` — the device
+Imports `routing`, `params`, `graph`, `modgraph`, `modifiers` — the device
 registry is handed in and read through `devices.Device`'s protocol
 (`role`, `kind`, `status`, `sources`, `schemes`), so nothing of
 `devices.py` is imported — and never imgui (tests/test_graphview.py
@@ -123,10 +123,9 @@ from typing import Any
 
 from . import envelope as envmod
 from . import graph as rgraph
-from . import graphmigrate, modbank
+from . import graphmigrate, modbank, modgraph
 from . import learn as learnmod
 from . import modifiers as modmod
-from . import patch as patchmod
 from . import sequencer as seqmod
 from .params import PERFORMANCE_GROUPS, Kind, Param, Registry
 from .routing import (
@@ -182,8 +181,8 @@ def voice_of(nid: str) -> tuple[str, int] | None:
     if scheme in BANK_SCHEMES and dot and n.isdecimal() and int(n) >= 1:
         return scheme, int(n)
     return None
-# the LFO's knobs, in the order its node lists them (patch.py's ports)
-LFO_KNOBS = patchmod.LFO_KNOBS
+# the LFO's knobs, in the order its node lists them (modgraph.py's ports)
+LFO_KNOBS = modgraph.LFO_KNOBS
 # setter ops that move a param in steps or fire it: a trigger cable
 TRIGGER_OPS = ("fire", "toggle", "step", "set", "momentary", "hold")
 
@@ -268,7 +267,7 @@ class VCable:
     stands for (the `Binding`, (macro id, `Sub`), (`Modifier`, input
     index), (source node, node, port) for a render edge); `off` a cable
     that cannot act whatever its source reads (a disabled row, a target no
-    registry holds or no performer may drive, a cable `Router.patch` keeps
+    registry holds or no performer may drive, a cable `Router.modgraph` keeps
     off to break a loop, a depth subscriber on a route that is not there);
     `dormant` that, or a source not live this frame. `depth` the route's
     effective depth (`value × scale × Π depth subs`); `label` what the
@@ -1516,7 +1515,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             n.ports.sort(key=lambda q: q.direction == OUT)
 
     # ---- the cables ----
-    cut = set(getattr(router, "patch_cut", ()) or ()) if router is not None else set()
+    cut = set(getattr(router, "modgraph_cut", ()) or ()) if router is not None else set()
     ids: dict[str, int] = {}
 
     def cable_id(base: str) -> str:
@@ -1750,7 +1749,7 @@ def refresh(view: View, reg: Registry, router: Router | None, lanes=None,
     says true for (plan 28 N7) reads only what its lines show — its
     patched ports, its outputs and a macro's knob — not every port."""
     table = getattr(router, "table", None) if router is not None else None
-    cut = set(getattr(router, "patch_cut", ()) or ()) if router is not None else set()
+    cut = set(getattr(router, "modgraph_cut", ()) or ()) if router is not None else set()
     layer_of = getattr(table, "layer_of", None)
     for n in view.nodes:
         if n.layer and layer_of is not None:      # plan 28 N5: the latch, read each frame
@@ -1812,7 +1811,7 @@ def key(table: Bindings, reg: Registry, router: Router | None, devices,
             getattr(table, "modifiers_serial", 0), getattr(reg, "serial", len(reg)),
             devs, id(render_graph), id(spec), len(labels.get("lane") or ()),
             tuple(labels.get("lfo") or ()), tuple(labels.get("env") or ()),
-            frozenset(getattr(router, "patch_cut", ()) or ()) if router is not None else (),
+            frozenset(getattr(router, "modgraph_cut", ()) or ()) if router is not None else (),
             effect_switches(reg), seq_key(reg), channel_bins(reg))
 
 
