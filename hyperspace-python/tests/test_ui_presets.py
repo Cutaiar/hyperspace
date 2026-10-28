@@ -955,3 +955,58 @@ def test_new_then_save_never_writes_over_a_preset_named_untitled(rig):  # noqa: 
     lib.presets.new()
     lib.presets.load("blank")
     assert not lib.presets.unsaved
+
+
+def test_the_patches_fold_lists_patches_hides_a_factory_one_and_renames_yours(
+        rig, tmp_path_factory, monkeypatch):  # noqa: F811
+    """Plan 40 T3: the PRESETS page's **patches** fold, where "more · module
+    presets" is — factory then yours, each a row of the preset list's own:
+    × hides a factory patch (`hidden.json`), rename and × on yours. A pick
+    loads nothing: a patch is spawned on GRAPH. (The factory here is a
+    scratch copy of the real one with a patch in it: no patch ships.)"""
+    import shutil
+    from pathlib import Path
+
+    from hyperspace.library import PATCHES
+
+    acid = Path(__file__).resolve().parent / "fixtures" / "patches" / "acid-wash.json"
+    panel, lib = rig.panel, rig.lib
+    factory = tmp_path_factory.mktemp("factory")     # (outside the home: not "yours")
+    for child in lib.factory.iterdir():
+        (factory / child.name).symlink_to(child)
+    (factory / PATCHES).mkdir()
+    shutil.copy(acid, factory / PATCHES / "acid-wash.json")
+    mine = json.loads(acid.read_text())
+    mine["name"] = "my wash"
+    (lib.home / PATCHES).mkdir(parents=True, exist_ok=True)
+    (lib.home / PATCHES / "my-wash.json").write_text(json.dumps(mine))
+    monkeypatch.setattr(lib, "factory", factory)
+    real_header, real_chip, real_selectable = imgui.collapsing_header, ui.chip, imgui.selectable
+    monkeypatch.setattr(imgui, "collapsing_header", lambda label, *a, **k: (
+        label == "patches##presets.patches" or real_header(label, *a, **k)))
+    loads = []
+    monkeypatch.setattr(lib, "load", lambda *a, **k: loads.append(a))
+    monkeypatch.setattr(imgui, "selectable", lambda label, *a, **k: (
+        (True, True) if label == "my wash##pick" else real_selectable(label, *a, **k)))
+    frame(panel, "presets")
+    drawn = ui_presets._state(panel)["patches"]
+    assert [(n, chips, hidden) for n, chips, hidden in drawn["rows"]] == [
+        ("acid wash", ("×",), False), ("my wash", ("rename", "×"), False)]
+    assert loads == []                                     # a pick loads nothing
+    monkeypatch.setattr(ui, "chip", lambda label, *a, **k: (
+        label == "×##×.acid wash" or real_chip(label, *a, **k)))
+    frame(panel)
+    assert lib.hidden(PATCHES) == frozenset({"acid-wash"})
+    monkeypatch.setattr(ui, "chip", lambda label, *a, **k: (
+        label == "rename##rename.my wash" or real_chip(label, *a, **k)))
+    frame(panel)
+    st = ui_presets._state(panel)
+    assert st["naming"] == f"rename:{PATCHES}:my wash" and st["buf"] == "my wash"
+    monkeypatch.setattr(ui, "chip", real_chip)
+    ui_presets._rename(panel, "my wash", "their wash", PATCHES)
+    st["naming"] = None
+    frame(panel)
+    drawn = ui_presets._state(panel)["patches"]
+    assert [n for n, _, _ in drawn["rows"]] == ["their wash"]
+    assert drawn["foot"] == ["show hidden (1)"]
+    assert lib.list(PATCHES) == ["their wash"]

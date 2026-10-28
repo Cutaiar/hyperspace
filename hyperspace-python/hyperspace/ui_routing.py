@@ -442,34 +442,194 @@ def answer(panel, replace_it: bool) -> None:
     q[2](replace_it)
 
 
+# ---- plan 40 T3: the conflict sheet (D3, D9) — a spawn's second question ----
+#
+# `panel.spawn_question = (landing, choices, on_spawn, on_cancel)`: a
+# `patches.Landing` whose rig rows collide with the preset, the answer per
+# conflict (index → "patch" / "preset", every row the patch's at first, D9),
+# and what Spawn (`on_spawn(choices)`) and Cancel (`on_cancel()`) do. The
+# same modal draws it, ahead of the Replace / Keep question, wider. While it
+# is up the hands learn nothing (`Learn.hold`, kept in step every frame).
+
+SHEET_W = 560.0
+SHEET_TIP = ("Each row: which keeps this control — the patch's row, or the one the preset "
+             "has. A row the preset keeps is not added; the group says so")
+
+
+def sheet(panel):
+    """(landing, choices) of the conflict sheet up now, or None."""
+    q = getattr(panel, "spawn_question", None)
+    return None if q is None else (q[0], q[1])
+
+
+def choose(panel, k: int, which: str) -> None:
+    """Row `k` of the sheet answered: ``"patch"`` or ``"preset"``."""
+    q = getattr(panel, "spawn_question", None)
+    if q is not None and 0 <= k < len(q[0].conflicts):
+        q[1][k] = which
+
+
+def keep_all(panel, which: str = "preset") -> None:
+    """**keep all existing** (every row to the preset) — or, with
+    ``"patch"``, **take all** (every row back to the patch)."""
+    q = getattr(panel, "spawn_question", None)
+    if q is not None:
+        for k in range(len(q[0].conflicts)):
+            q[1][k] = which
+
+
+def settle_sheet(panel, go: bool):
+    """**Spawn** (`go`: the whole landing with the answers, one undo step)
+    or **Cancel** (nothing lands, no undo step). The sheet goes first, so
+    the hands may learn again; returns what the answer returned."""
+    q = getattr(panel, "spawn_question", None)
+    if q is None:
+        return None
+    panel.spawn_question = None
+    lrn = getattr(panel, "learn", None)
+    if lrn is not None and hasattr(lrn, "hold"):
+        lrn.hold(False)
+    _landing, choices, on_spawn, on_cancel = q
+    return on_spawn(dict(choices)) if go else on_cancel()
+
+
+def conflict_words(c) -> tuple[str, str, str]:
+    """A conflict as the sheet says it (`patches.Conflict`): (what is
+    contested, the patch's side, the preset's side) — "K1", then
+    ``fx.acid.2.speed`` and ``view.bright``; a param a performer owns, then
+    each side's source in words."""
+    from .routing import row_words
+
+    def glyph(src: str) -> str | None:          # the desk's names, as the wants say them
+        return apc40.glyph(src) if Binding(src, "").is_midi else None
+    if c.kind == "target":
+        return (c.control_or_source, row_words(c.patch_target, glyph),
+                row_words(c.host_target, glyph))
+    return row_words(c.control_or_source, glyph), c.patch_target, c.host_target
+
+
+def sheet_wants(panel, landing) -> list[str]:
+    """The patch's wants the rig lacks, one line per device role (plan 40
+    P4, T4's words over the landing's rows): "apc40 (lost): K1", "leap (not
+    in this rig): right hand y"."""
+    from types import SimpleNamespace
+
+    from . import devices
+    router = router_of(panel)
+    host = router.table if router is not None else None
+    rows = [Binding.from_json(dict(r)) for r in landing.routes]
+    rows += [Binding.from_json({**dict(r), "layer": "preset"}) for r in landing.desk]
+    mods = []
+    for d in landing.modifiers:
+        try:
+            mods.append(Modifier.from_json(dict(d)))
+        except (ValueError, TypeError):
+            continue
+    rows_only = SimpleNamespace(bindings=rows, modifiers=tuple(mods),
+                                profile=getattr(host, "profile", "apc40"),
+                                primary_role=getattr(host, "primary_role", lambda: ""))
+    return devices.want_lines(devices.wants(rows_only, getattr(panel, "devices", None)))
+
+
+def sheet_title(panel, landing) -> str:
+    """"spawn acid wash into party-trip"."""
+    lib = getattr(panel, "library", None)
+    into = (lib.current(PRESETS) if lib is not None else None) or "this preset"
+    return f"spawn {landing.group.get('name') or 'patch'} into {into}"
+
+
+def _sheet(panel, landing, choices) -> None:
+    """The sheet's body (inside the modal): the title, a row per conflict —
+    its words, then **the patch** / **the preset**, lit as answered — then
+    **keep all existing** and **take all**, the wants, **Spawn** / **Cancel**."""
+    ui._micro("conflicts")
+    imgui.text_wrapped(sheet_title(panel, landing))
+    imgui.text_disabled(f"{len(landing.conflicts)} control"
+                        f"{'' if len(landing.conflicts) == 1 else 's'} the preset already "
+                        "uses: which keeps each?")
+    if imgui.is_item_hovered():
+        ui.tooltip(SHEET_TIP)
+    imgui.spacing()
+    for k, c in enumerate(landing.conflicts):
+        what, mine, theirs = conflict_words(c)
+        imgui.text(f"{what}:")
+        imgui.same_line()
+        if ui.lit_chip(f"the patch: {mine}##sheet.{k}.patch", choices.get(k) != "preset"):
+            choose(panel, k, "patch")
+        imgui.same_line()
+        if ui.lit_chip(f"the preset: {theirs}##sheet.{k}.preset", choices.get(k) == "preset"):
+            choose(panel, k, "preset")
+    imgui.spacing()
+    if ui.chip("keep all existing##sheet"):
+        keep_all(panel, "preset")
+    if imgui.is_item_hovered():
+        ui.tooltip("Every row to the preset: the patch's rows on those controls are not added")
+    imgui.same_line()
+    if ui.chip("take all##sheet"):
+        keep_all(panel, "patch")
+    if imgui.is_item_hovered():
+        ui.tooltip("Every row back to the patch")
+    wants = sheet_wants(panel, landing)
+    if wants:
+        imgui.spacing()
+        ui._micro("waits for")
+        for line in wants:
+            imgui.text_colored(ui.WARN, line)
+    imgui.separator()
+    if ui.chip("Spawn##sheet"):
+        settle_sheet(panel, True)
+        imgui.close_current_popup()
+    if imgui.is_item_hovered():
+        ui.tooltip("Land the patch with these answers — one undo step")
+    imgui.same_line()
+    if ui.chip("Cancel##sheet"):
+        settle_sheet(panel, False)
+        imgui.close_current_popup()
+    if imgui.is_item_hovered():
+        ui.tooltip("Land nothing")
+
+
 def modal(panel) -> None:
     """The Replace / Keep modal, drawn by the panel every frame — before
     anything else it draws, so a question shows on any page, with the
     panel hidden or collapsed; a learn can come from anywhere. A question
-    withdrawn while the modal was up (a new learn armed) closes it."""
+    withdrawn while the modal was up (a new learn armed) closes it. Plan 40
+    T3: a spawn's conflict sheet (`panel.spawn_question`) is drawn first,
+    in the same popup, wider (`SHEET_W`); while it is up the shared
+    `Learn` is held (`Learn.hold`: the hands learn nothing)."""
     st = _state(panel)
+    sq = getattr(panel, "spawn_question", None)
+    lrn = getattr(panel, "learn", None)
+    if lrn is not None and hasattr(lrn, "hold"):
+        lrn.hold(sq is not None)
     q = _question(panel)
     st["modal"] = False                 # did the modal draw this frame (tests read it)
-    if q is None:
+    st["sheet"] = False                 # …and was it the spawn's sheet (plan 40 T3)
+    if q is None and sq is None:
         if imgui.is_popup_open(PROMPT):                  # stale: the question went away
             opened, _ = imgui.begin_popup_modal(PROMPT, None, imgui.WindowFlags_.no_title_bar)
             if opened:
                 imgui.close_current_popup()
                 imgui.end_popup()
         return
-    old, new, _ = q
-    router = router_of(panel)           # a question exists only over a table: never None
     if not imgui.is_popup_open(PROMPT):
         imgui.open_popup(PROMPT)
     vp = imgui.get_main_viewport()
     imgui.set_next_window_pos(vp.get_center(), imgui.Cond_.appearing, imgui.ImVec2(0.5, 0.5))
-    imgui.set_next_window_size(imgui.ImVec2(PROMPT_W, 0))
+    imgui.set_next_window_size(imgui.ImVec2(SHEET_W if sq is not None else PROMPT_W, 0))
     opened, _ = imgui.begin_popup_modal(
         PROMPT, None, imgui.WindowFlags_.no_saved_settings | imgui.WindowFlags_.no_resize
         | imgui.WindowFlags_.no_title_bar)
     st["modal"] = opened
     if not opened:
         return
+    if sq is not None:
+        st["sheet"] = True
+        _sheet(panel, sq[0], sq[1])
+        imgui.end_popup()
+        return
+    old, new, _ = q
+    router = router_of(panel)           # a question exists only over a table: never None
     p = panel.reg.get(new.target)
     label = p.label if p is not None else new.target
     who, asks = router.describe(old), router.describe(new)
