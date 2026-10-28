@@ -49,7 +49,7 @@ def noita(rig, groups=None):
     """party-noita on the GRAPH page (its `groups` set as a load would),
     drawn twice. Returns the page's state."""
     rig.lib.load("presets", "party-noita")
-    rig.lib.presets.groups = [dict(g) for g in groups or ()]
+    rig.lib.presets.groups = [{**g, "nodes": list(g["nodes"])} for g in groups or ()]
     frame(rig.panel, "graph")
     frame(rig.panel, "graph")
     return ui_graph._state(rig.panel)
@@ -975,6 +975,24 @@ def test_save_as_patch_writes_that_file_and_nothing_else(rig):
         assert files(rig.lib.home) == after
     finally:
         undo.install(None)
+
+
+def test_save_as_patch_never_replaces_another_patch_of_that_name(rig):
+    """**Save as patch…** named like a patch the library has (acid wash,
+    the user's) from a group that is not that patch's: refused in words,
+    nothing written, the group unchanged. The group that *is* acid wash's
+    (its `patch` the slug) updates it: the file rewritten."""
+    with_patch(rig)
+    noita(rig, [ENTRY])
+    home = files(rig.lib.home)
+    assert ui_graph.save_patch(rig.panel, "group.1", "Acid Wash", "") == (
+        "a patch named Acid Wash exists — Update patch, or another name")
+    assert files(rig.lib.home) == home and "patch" not in rig.lib.presets.groups[0]
+    rig.lib.presets.groups[0]["patch"] = "acid-wash"
+    assert ui_graph.save_patch(rig.panel, "group.1", "acid wash", "") is None
+    after = files(rig.lib.home)
+    assert after["patches/acid-wash.json"] != home["patches/acid-wash.json"]
+    assert json.loads(after["patches/acid-wash.json"])["nodes"][0]["file"] == "doublevision"
 
 
 def test_the_browser_lists_each_patch_with_its_boundary_in_words(rig, monkeypatch):

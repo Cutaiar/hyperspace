@@ -3008,6 +3008,7 @@ NOTHING_OPEN = "no pin of {name} is open"
 SAVED_PATCH = "saved {name} as a patch"
 UPDATED_PATCH = "updated patch {name}"
 PATCH_NEEDS_NAME = "a patch needs a name"
+PATCH_EXISTS = "a patch named {name} exists — Update patch, or another name"
 RIG_KINDS = ("output", "channel", "camera", "cloud")   # always there: the rig's own nodes
 
 
@@ -4579,6 +4580,12 @@ class Edit:
         name = str(name or "").strip()
         if not name:
             return PATCH_NEEDS_NAME
+        stem = patches.slug(name)
+        lib = getattr(self.presets, "lib", None)
+        if (g.get("patch") != stem and lib is not None
+                and lib.path_of("patches", stem) is not None):     # (library.PATCHES)
+            # (review fix) another patch has this file: Save as never replaces it
+            return PATCH_EXISTS.format(name=name)
         spec, table, values, layout = self.presets.parts()
         _, refused = patches.select(spec, table, g["nodes"])
         if refused:
