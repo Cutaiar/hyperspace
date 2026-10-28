@@ -5274,10 +5274,8 @@ class SegmentNode(Node):
     def reads(self, frame: Frame) -> bool:
         return self.matte(frame) is not None
 
-    def own_size(self, frame: Frame) -> tuple[int, int] | None:
-        """The matte's own size (W4: "the model's"), while it makes one."""
-        tex = self.matte(frame)
-        return tuple(tex.size) if tex is not None else None
+    # (no `own_size`: the matte is at the model's size — `native` — and every
+    # consumer of a mask fits it by cover from there, as a matte's)
 
     def native(self, frame: Frame) -> moderngl.Texture | None:
         """The matte at its own size, as made (rows as `rows_top_first`

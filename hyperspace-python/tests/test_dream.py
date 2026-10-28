@@ -64,10 +64,21 @@ def test_core_does_not_import_the_worker():
         importlib.import_module(m)
     assert "hyperspace.dream" not in sys.modules
     # no module under hyperspace/ imports torch at the top except dream.py
+    # (plan 39 T4: segment.py's torch backend imports it inside its own
+    # functions, in the worker's first job — never at its module's top)
+    import ast
     from pathlib import Path
 
     for f in (Path(__file__).parents[1] / "hyperspace").glob("*.py"):
         if f.name == "dream.py":
+            continue
+        if f.name == "segment.py":
+            top = [a.name for n in ast.parse(f.read_text()).body
+                   if isinstance(n, ast.Import | ast.ImportFrom)
+                   for a in n.names] + [n.module or "" for n in ast.parse(f.read_text()).body
+                                        if isinstance(n, ast.ImportFrom)]
+            assert not [m for m in top if m.split(".")[0] in ("torch", "torchvision",
+                                                               "Vision", "Quartz")], top
             continue
         assert "import torch" not in f.read_text(), f.name
 
