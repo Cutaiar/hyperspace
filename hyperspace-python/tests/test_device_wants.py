@@ -218,7 +218,22 @@ def test_the_chip_draws_on_the_graph_head_the_preset_strip_and_system(shell_rig,
     ui_frame(p, "system")
     assert "wanted by the preset: leap — not in this rig; 1 row wait" in texts
     assert any(t.startswith("wanted by the preset: apc40 — lost; ") for t in texts)
-    assert callable(ui_graph._wants_chip)
+
+
+def test_the_wants_are_asked_once_a_frame_for_every_place_that_shows_them(shell_rig,  # noqa: F811
+                                                                          monkeypatch):
+    """The GRAPH head, the PRESET strip and the SYSTEM lines share one
+    `devices.wants` a frame (`ui_graph.panel_wants`, cached on the panel)."""
+    p = shell_rig.panel
+    p.devices = rig_of(DESK)
+    calls: list[int] = []
+    real = devices.wants
+    monkeypatch.setattr(devices, "wants", lambda t, r, only=None: calls.append(1) or real(t, r))
+    ui_frame(p, "graph")
+    ui_frame(p, "graph")
+    assert calls == [1, 1]
+    first = ui_graph.panel_wants(p)
+    assert ui_graph.panel_wants(p) is first and calls == [1, 1]   # the same frame: no call
 
 
 # ---------------------------------------------------------------- the arrival
@@ -368,8 +383,6 @@ def test_a_midi_device_coming_back_fires_the_listeners_once_and_the_hook_once(in
     for _ in range(5):
         frame(r)
     assert told == [] and said == []
-    n = len({b.source for b in r.table.desk() if b.enabled})
-    assert n > 0
     io = apc.io
     r.bus.plug(APC)
     io.ports._next_try = 0.0                          # its retry is due
@@ -378,7 +391,23 @@ def test_a_midi_device_coming_back_fires_the_listeners_once_and_the_hook_once(in
     for _ in range(5):
         frame(r)
     assert told == [1]
-    assert said == [f"apc40 connected — {n} controls live"]
+    # the factory desk's preset layer: 26 controls, counted by `wants`
+    assert said == ["apc40 connected — 26 controls live"]
+
+
+def test_wants_builds_no_ports(inputs_build, monkeypatch):  # noqa: F811
+    """`wants` reads each device's `status` itself, never `lines()` — which
+    builds a connected desk's whole layout as fresh `Port`s for its count:
+    the chip asks every frame."""
+    r = inputs_build(entries(launch=False), plug=(APC,))
+    assert r.devices.get("apc40").status == "connected"
+
+    def no(self):
+        raise AssertionError("wants built a device's ports")
+    monkeypatch.setattr(devices.MidiDevice, "sources", property(no))
+    monkeypatch.setattr(devices.DeviceRegistry, "lines", no)
+    ws = devices.wants(r.table, r.devices)
+    assert [(w.role, w.state) for w in ws] == [("apc40", "connected")]
 
 
 def test_a_device_added_to_config_says_it_through_apply():

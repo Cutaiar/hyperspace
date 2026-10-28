@@ -2667,7 +2667,7 @@ class Panel:
                 imgui.text_disabled(line)
         if not len(regs):
             imgui.text_disabled("no devices — [[devices]] in config.toml")
-        for line in wanted_lines(regs, getattr(getattr(self, "router", None), "table", None)):
+        for line in devices.wanted_lines(ui_graph.panel_wants(self)):
             imgui.text_colored(WARN, line)          # plan 40 T4: what the preset waits for
 
     def _publish_lines(self) -> None:

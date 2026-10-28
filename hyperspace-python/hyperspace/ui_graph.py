@@ -908,6 +908,22 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
         imgui.text_disabled(EDIT_HINT)
 
 
+def panel_wants(panel) -> list:
+    """Plan 40 T4: `devices.wants` of the panel's table and registry, once a
+    frame — the GRAPH head, the PRESET strip and the SYSTEM lines share it
+    (cached on the panel by imgui's frame count); [] with no registry or
+    no router (a panel from a test)."""
+    from . import devices  # (late: the GRAPH page's imports stay as they are)
+    rig, router = getattr(panel, "devices", None), getattr(panel, "router", None)
+    if rig is None or router is None:
+        return []
+    key = (imgui.get_frame_count(), id(rig), id(router.table))
+    got = panel.__dict__.get("_wants_cache")
+    if got is None or got[0] != key:
+        got = panel.__dict__["_wants_cache"] = (key, devices.wants(router.table, rig))
+    return got[1]
+
+
 def _wants_chip(panel) -> None:
     """Plan 40 T4: **N devices missing** on the line after the chips before
     it, its hover one line per device the loaded preset wants and the rig
@@ -915,10 +931,7 @@ def _wants_chip(panel) -> None:
     every wanted device is there, or with no registry (a panel from a
     test). The PRESET strip draws the same chip (ui_presets.strip)."""
     from . import devices  # (late: the GRAPH page's imports stay as they are)
-    rig, router = getattr(panel, "devices", None), getattr(panel, "router", None)
-    if rig is None or router is None:
-        return
-    ws = devices.wants(router.table, rig)
+    ws = panel_wants(panel)
     text = devices.missing_chip(ws)
     if text is None:
         return

@@ -1883,17 +1883,23 @@ def _desk_glyph(source: str) -> str | None:
 
 def _rig(registry, table) -> tuple[dict[str, str], str, dict[str, str], dict[str, str],
                                    dict[str, str]]:
-    """What `wants` reads of the registry, once a call: role → status (its
-    `lines()`), the first MIDI role, the primaries, scheme → the first
-    listed device publishing it (off ones too), role → MIDI profile."""
+    """What `wants` reads of the registry, once a call: role → status (each
+    device's own `status`, read directly — not through `lines()`, which
+    builds every desk's ports for their count), the first MIDI role, the
+    primaries, scheme → the first listed device publishing it (off ones
+    too), role → MIDI profile."""
     if registry is None:
         return {}, "", {}, {}, {}
-    status = {role: st for role, _kind, st, _n, _last in registry.lines()}
+    status: dict[str, str] = {}
     midi_roles = registry.midi_roles()
     prim = registry.primaries()
     listed: dict[str, str] = {}
     profile: dict[str, str] = {}
     for d in registry:
+        try:
+            status[d.role] = str(d.status)
+        except Exception as e:  # noqa: BLE001 — a status never takes a page down (as `lines`)
+            status[d.role] = _err("status", e)
         for s in getattr(d, "schemes", ()) or ():
             listed.setdefault(s, d.role)
         if getattr(d, "kind", "") == "midi":

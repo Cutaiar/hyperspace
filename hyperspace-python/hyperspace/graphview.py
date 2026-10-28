@@ -108,8 +108,8 @@ its place that expands to show them.
 
 Imports `routing`, `params`, `graph`, `modgraph`, `modifiers` — the device
 registry is handed in and read through `devices.Device`'s protocol
-(`role`, `kind`, `status`, `sources`, `schemes`), so nothing of
-`devices.py` is imported but its `SCHEME_ROLE` — and never imgui (tests/test_graphview.py
+(`role`, `kind`, `status`, `sources`, `schemes`), so of
+`devices.py` only its `SCHEME_ROLE` table is imported — and never imgui (tests/test_graphview.py
 holds it)."""
 
 from __future__ import annotations
@@ -636,8 +636,10 @@ LAYER_LABEL = {GLOBAL_LAYER: "SHIFT"}
 INVARIANT = "invariant"
 DESK_GROUPS = (INVARIANT, "track knobs", "device knobs", "knobs", "faders", "clip grid",
                "buttons")
-# a role-less row's role when no listed device publishes its scheme is
-# `SCHEME_ROLE`, devices.py's since plan 40 T4 (imported above)
+# a role-less row's role when no listed device publishes its scheme: the
+# rig's usual name for the kind behind it (config.py's example list); a
+# scheme not here is a role of its own (an OSC device's scheme is its role)
+# — `SCHEME_ROLE`, devices.py's since plan 40 T4 (imported above)
 # schemes that are no device's: the keyboard, the built-in lanes, the modifiers
 NO_DEVICE = ("key", "lane", "lfo", "env", SEQ, modmod.SCHEME)
 PLACEHOLDER_STATUS = "not in this rig: its cables wait for it"
