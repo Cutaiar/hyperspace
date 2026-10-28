@@ -5,7 +5,8 @@ Nothing in the app changed; the two benchmark scripts beside this file ran in sc
 environments. The ask: take real-time video, split it into foreground and background, find edges, and use
 any picture as a mask laid over other pictures — and understand what each needs before deciding how the
 nodes are cast onto the graph. Plan 37 (nodes as pictures, the faces) and plan 38 (output hold) are spoken
-for, so this is written towards a plan 39.
+for, so this is written towards a plan 39 — now [`../../39-vision.md`](../../39-vision.md), agreed the same
+day; this file stays as the record of what was found and measured.
 
 Summary:
 
