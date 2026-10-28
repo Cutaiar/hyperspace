@@ -333,7 +333,8 @@ def view_of(panel) -> graphview.View | None:
     st = _state(panel)
     reg, table = panel.reg, router.table
     devices = getattr(panel, "devices", None)
-    rgraph = getattr(getattr(panel, "renderer", None), "_graph", None)
+    # (plan 38 B3: while held, the preview's graph — the edited one)
+    rgraph = getattr(holdmod.canvas_renderer(panel), "_graph", None)
     gs = getattr(getattr(getattr(panel, "library", None), "presets", None), "graph", None)
     # (plan 35 G: the wired frame itself, in the new ids)
     spec = getattr(gs, "spec", None)
@@ -1492,7 +1493,7 @@ def render_edit(panel) -> graphview.Edit:
     pins named through the renderer's last graph, one undo step each."""
     lib = getattr(panel, "library", None)
     gs = getattr(getattr(lib, "presets", None), "graph", None)
-    rg = getattr(getattr(panel, "renderer", None), "_graph", None)
+    rg = getattr(holdmod.canvas_renderer(panel), "_graph", None)      # (plan 38 B3)
     e = graphview.Edit(graph=gs, render=rg, push=lambda label: undo.push(label, load=True))
     e.slots = getattr(panel, "outputs", None) or ()     # (plan 35 G: a window's name)
     e.show = getattr(lib, "project", None)              # (plan 36 T1: the rig's wires)
@@ -2112,7 +2113,7 @@ def edit_of(panel, view: graphview.View | None = None) -> graphview.Edit | None:
     lib = getattr(panel, "library", None)
     e = graphview.Edit(table, panel.reg, router, view, profile,
                        graph=getattr(getattr(lib, "presets", None), "graph", None),
-                       render=getattr(getattr(panel, "renderer", None), "_graph", None))
+                       render=getattr(holdmod.canvas_renderer(panel), "_graph", None))
     e.show = getattr(lib, "project", None)              # (plan 36 T1: the rig's wires)
     return e
 

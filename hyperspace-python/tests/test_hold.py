@@ -31,9 +31,24 @@ def rig(tmp_path):
     # a preset's graph lands one, the open show's rig cables (`rig_source`)
     r.renderer = SimpleNamespace(wiring=G.EMPTY, ghost_states={}, rig_source=r.lib.project)
     r.presets.graph.attach(r.renderer)
-    r.hold = H.Hold(r.reg, r.renderer, undo=r.undo)
+    r.hold = H.Hold(r.reg, r.renderer, undo=r.undo, section=r.presets.graph)
     settle(r)
     return r
+
+
+# plan 38 B3: a look with an effect, a switch and a resize (`kaleido`
+# between the scene and All outputs; the switch and the resize unwired —
+# a landing declares them reached or not)
+LOOK = {"frame": "wired",
+        "nodes": [{"kind": "switch"}, {"kind": "resize"}],
+        "wires": [{"from": a, "to": b} for a, b in (
+            ("shape", "scene.geometry"), ("scene", "kaleido.image"),
+            ("kaleido", "output.all.image"))]}
+
+
+def _land(rig, doc):
+    rig.presets.graph.land(G.read_graph(doc), doc)
+    settle(rig)
 
 
 def test_only_the_looks_render_params_are_held(rig):
@@ -68,6 +83,197 @@ def test_the_program_draws_the_held_look_and_the_live_one_comes_back(rig):
     with pytest.raises(RuntimeError), hold.program():
         raise RuntimeError("boom")
     assert view.bright == 0.25 and reg["view.bright"].base == 0.25
+
+
+def test_a_raise_puts_the_wiring_cables_and_hands_back_and_no_draw_is_an_edit(rig):
+    """Plan 38 B3 (M5): after a program draw that raised, the renderer has
+    the live wiring, rig source and hands states again; and a program draw
+    — raised or not — pushes no undo step and leaves the dirty dot."""
+    from hyperspace.library import PRESETS
+
+    r, hold, reg = rig.renderer, rig.hold, rig.reg
+    rig.undo.clear()
+    hold.engage()
+    _land(rig, LOOK)
+    reg["view.bright"].set(0.25)
+    settle(rig)
+    live = (r.wiring, r.rig_source, r.ghost_states)
+    depth, dirty = len(rig.undo.stack), rig.lib.is_dirty(PRESETS)
+    with pytest.raises(RuntimeError), hold.program():
+        assert r.wiring is hold.wiring and r.rig_source is not live[1]
+        raise RuntimeError("boom")
+    assert (r.wiring, r.rig_source, r.ghost_states) == live
+    assert r.wiring is live[0] and r.rig_source is live[1] and r.ghost_states is live[2]
+    with hold.program():
+        pass
+    settle(rig)
+    assert len(rig.undo.stack) == depth and rig.lib.is_dirty(PRESETS) == dirty
+
+
+def test_the_turns_speed_and_planes_are_not_held(rig):
+    """Plan 38 B3 (M1): the draw never reads them (the integrator does,
+    once a frame, for both) — held, they would only count on the red line."""
+    rig.hold.engage()
+    held = set(rig.hold.values)
+    assert "view.speed" not in held and not any(p.startswith("view.plane.") for p in held)
+    rig.reg["view.speed"].set(rig.reg["view.speed"].base * 0.5 + 0.1)
+    assert "view.speed" not in rig.hold.changed()
+
+
+def test_a_landing_while_held_keeps_the_programs_effects_switches_and_resizes(rig):
+    """Plan 38 B3 (C1): a look with an effect, a switch and a resize held;
+    a blank graph lands (as `new` does). The effect instance, its params,
+    values and phase, the switch's pick and the resize's state all stay for
+    the program; Take settles to the live graph and they go; a fresh hold
+    on the blank look keeps nothing extra."""
+    from hyperspace.params import _resize_state, _switch_state
+
+    reg, fx, hold = rig.reg, rig.presets.graph.fx, rig.hold
+    _land(rig, LOOK)
+    assert "kaleido" in fx.specs and "switch.select" in reg and "resize" in _resize_state(reg)
+    reg["switch.select"].set(2)
+    amt = next(p for p in reg if p.id.startswith("fx.kaleido.") and p.id != "fx.kaleido.on"
+               and getattr(p.kind, "value", p.kind) == "continuous")
+    amt.set(amt._value_of_norm(0.7))
+    fx.advance(0.5)
+    phase = fx.phase["kaleido"]
+    assert phase > 0
+    hold.engage()
+    _land(rig, {"frame": "wired"})                       # `new`: nothing wired
+    assert "kaleido" in fx.specs and fx.phase["kaleido"] == phase
+    assert amt.id in reg and reg["switch.select"].get() == 2
+    assert _switch_state(reg)["switch"] == 2 and "resize" in _resize_state(reg)
+    with hold.program():
+        assert reg["switch.select"].get() == 2
+    # …and none of them is the preset's: a save, and the dirty dot, read the
+    # live graph's values only
+    values = rig.presets._values()
+    assert amt.id in hold.program_only() and "switch.select" in hold.program_only()
+    assert not any(k.startswith(("fx.kaleido.", "switch.", "resize.")) for k in values)
+    fx.advance(0.25)                                    # the projector's clock runs on
+    assert fx.phase["kaleido"] > phase
+    assert hold.take()
+    assert "kaleido" not in fx.specs and amt.id not in reg and "switch.select" not in reg
+    assert "resize" not in _resize_state(reg)
+    hold.engage()
+    _land(rig, {"frame": "wired"})
+    assert "kaleido" not in fx.specs
+
+
+def test_an_effects_clock_runs_on_through_hold_land_and_take(rig):
+    """Plan 38 B3 (C1): the held look's effect, lost by a landing and
+    brought back by the next one, keeps its phase — Take shows it
+    mid-stride, not from 0."""
+    fx, hold = rig.presets.graph.fx, rig.hold
+    _land(rig, LOOK)
+    fx.advance(1.0)
+    hold.engage()
+    _land(rig, {"frame": "wired"})
+    fx.advance(0.5)
+    p = fx.phase["kaleido"]
+    _land(rig, LOOK)                                     # back on GRAPH
+    assert hold.take()
+    assert fx.phase["kaleido"] == p and "kaleido" in fx.specs
+
+
+def test_an_undo_after_take_brings_no_program_only_instance_back(rig):
+    """Plan 38 B3 (I-a): a landing's undo mark made while held records the
+    landed graph's own effect instances, not those kept for the program —
+    so after Take, ⌘Z of a step from the hold lands a graph with exactly
+    its instances, and a save carries no dead id."""
+    fx, hold, gs = rig.presets.graph.fx, rig.hold, rig.presets.graph
+    _land(rig, LOOK)
+    rig.undo.clear()
+    hold.engage()
+    straight = {"frame": "wired", "wires": [{"from": "shape", "to": "scene.geometry"},
+                                            {"from": "scene", "to": "output.all.image"}]}
+    for doc in ({"frame": "wired"}, straight):
+        rig.undo.push("land", load=True)
+        _land(rig, doc)
+    assert "kaleido" in fx.specs                         # kept for the program
+    assert hold.take()
+    assert "kaleido" not in fx.specs
+    assert rig.undo.undo()
+    settle(rig)
+    assert set(fx.specs) == set(gs.spec.effect_names())
+    assert not any(k.startswith("fx.kaleido.") for k in rig.presets._values())
+    assert not any(p.id.startswith("fx.kaleido.") for p in rig.reg)
+
+
+def test_program_only_knows_every_kind_and_every_file_live(rig):
+    """Plan 38 B3 (M-a, M-c): a kind `names` settles that `PROGRAM_IDS`
+    lacks raises rather than leak its params into a save; a live `fx` of
+    None (every file exists) makes no effect program-only."""
+    hold = rig.hold
+    _land(rig, LOOK)
+    hold.engage()
+    _land(rig, {"frame": "wired"})
+    assert any(i.startswith("fx.kaleido.") for i in hold.program_only())
+    real = rig.presets.graph.names
+    rig.presets.graph.names = lambda spec=None: {**real(spec), "fx": None}
+    assert not any(i.startswith("fx.") for i in hold.program_only())
+    hold.kept["matte"] = ["matte"]
+    rig.presets.graph.names = lambda spec=None: {**real(spec), "matte": []}
+    with pytest.raises(KeyError, match="matte"):
+        hold.program_only()
+    rig.presets.graph.names = real
+    del hold.kept["matte"]
+
+
+def test_drop_after_a_landing_while_held_brings_the_programs_nodes_back_whole(rig):
+    """Plan 38 B3 (C1): Drop lands the hold point — the effect, the
+    switch's pick, the phase as the projector ran it."""
+    reg, fx, hold = rig.reg, rig.presets.graph.fx, rig.hold
+    _land(rig, LOOK)
+    reg["switch.select"].set(3)
+    settle(rig)
+    hold.engage()
+    _land(rig, {"frame": "wired"})
+    fx.advance(0.5)
+    p = fx.phase["kaleido"]
+    assert hold.drop()
+    settle(rig)
+    assert "kaleido" in fx.specs and fx.phase["kaleido"] == p
+    assert reg["switch.select"].get() == 3
+
+
+def test_a_load_while_held_resets_the_previews_delays_and_the_projectors_at_take(rig):
+    """Plan 38 B3 (I1): R19 resets a load's delays. Held, it is the
+    preview's; the projector's trail runs on until Take, which resets it
+    then. A hold with no load takes without a reset."""
+    resets: list[str] = []
+    rig.renderer.reset_delays = lambda: resets.append("program")
+    hold = rig.hold
+    hold.preview = SimpleNamespace(reset_delays=lambda: resets.append("preview"))
+    hold.engage()
+    rig.reg["preset.load.4"].fire()
+    settle(rig)
+    assert resets == ["preview"]
+    assert hold.take()
+    assert resets == ["preview", "program"]
+    hold.engage()
+    assert hold.take() and resets == ["preview", "program"]
+    rig.reg["preset.load.4"].fire()
+    settle(rig)
+    assert resets[-1] == "program"                       # unheld: as before
+
+
+def test_the_canvas_reads_the_previews_graph_while_held():
+    """Plan 38 B3 (I2): `canvas_renderer` — the preview's renderer while
+    held and drawn (its graph is the edited one), else the panel's."""
+    main = SimpleNamespace(_graph="held")
+    hold = SimpleNamespace(on=False, preview=None)
+    panel = SimpleNamespace(renderer=main, hold=hold)
+    assert H.canvas_renderer(panel) is main
+    hold.on = True
+    assert H.canvas_renderer(panel) is main              # no preview drawn yet
+    hold.preview = SimpleNamespace(_graph=None)
+    assert H.canvas_renderer(panel) is main
+    hold.preview._graph = "edited"
+    assert H.canvas_renderer(panel) is hold.preview
+    hold.on = False
+    assert H.canvas_renderer(panel) is main
+    assert H.canvas_renderer(SimpleNamespace(renderer=main)) is main
 
 
 def test_the_program_takes_the_held_wiring_and_hands(rig):
@@ -396,7 +602,9 @@ def test_held_the_outputs_draw_the_program_and_the_preview_follows(monkeypatch):
     preview.tap, monitor.tap = Tap(), object()
     preview.want()
     monitor.want()
-    app._draw_render(main, _Ctx(log), object(), _rig_slots("x"),
+    slots = _rig_slots("x")
+    slots[0].switches.flip_x, slots[0].switches.hands, slots[0].switches.dim = True, False, 0.4
+    app._draw_render(main, _Ctx(log), object(), slots,
                      flush=lambda: log.append("flush"), preview=preview, hold=hold,
                      monitor=monitor)
     (wiring, views, _), = main.calls
@@ -404,6 +612,9 @@ def test_held_the_outputs_draw_the_program_and_the_preview_follows(monkeypatch):
     assert views[0].publish == [monitor] and views[0].tap is monitor.tap
     (pw, pviews, dpr), = pr.calls
     assert pw == "live" and pviews[0].target == "fbo" and pviews[0].size == (1280, 800)
+    # plan 38 B3 (M3): output 1's mutes and flips, at full dim (the room's stays)
+    sw = pviews[0].switches
+    assert sw.flip_x and not sw.hands and sw.dim == 1.0 and slots[0].switches.dim == 0.4
     assert dpr == pytest.approx(1280 / 1600)
     assert preview.tex == "tap-tex" and not preview.wanted and not monitor.wanted
     assert log.index("draw held") < log.index("fit (1280, 800)") < log.index("draw live")
@@ -617,4 +828,67 @@ def test_on_gl_the_program_draws_the_held_wiring_while_a_graph_edit_lands(ctx):
     alone2 = outputs()
     assert np.array_equal(preview, alone2)
     assert not np.array_equal(alone1, alone2)
+    assert ctx.error == "GL_NO_ERROR"
+
+
+@pytest.mark.empty_frame        # the app's own renderers: nothing until a graph lands
+def test_on_gl_a_blank_graph_landed_while_held_leaves_the_projector_whole(ctx):
+    """Plan 38 B3 (C1), on GL: a look with an effect (kaleido between the
+    scene and All outputs) landed through the preset's `GraphSection` and
+    held; then `new`'s blank graph lands. The program's frame is the look's
+    frame drawn alone, byte for byte — the effect instance is still there
+    for it, not read through as dormant — and after Take the outputs are
+    black (the blank graph's). The effect shows: the look with the scene
+    straight into All outputs draws another picture."""
+    import numpy as np
+    from test_outputs import H as HH
+    from test_outputs import W, fbo, px, scene_view
+
+    from hyperspace.control import Control
+    from hyperspace.outputs import Switches, View
+    from hyperspace.params import build_registry
+    from hyperspace.preset import GraphSection
+    from hyperspace.render import Renderer
+
+    T = 2.0
+    r = Renderer(ctx)
+    r.rig_source = SimpleNamespace(rig=G.RigWires())
+    s = scene_view()
+    from hyperspace.analysis import Analyser
+    from hyperspace.analyzer import Analyzer
+
+    chain = Analyzer(Analyser())
+    reg = build_registry(s, Control(chain), SimpleNamespace(chain=chain), None,
+                         dream=r.lookback.state, fx=r.fx.state)
+    gs = GraphSection(reg, fx=r.fx.state, renderer=r)
+    gs.land(G.read_graph(LOOK), LOOK)
+    assert "kaleido" in r.fx.state.specs
+    for pid in ("fx.on", "fx.kaleido.on"):                  # the effect drawing
+        reg[pid].set(True)
+    for pid in ("fx.mix", "fx.kaleido.mix"):
+        reg[pid].set(reg[pid]._value_of_norm(1.0))
+    reg.apply()
+    assert r.fx.state.live("kaleido")
+    hold = H.Hold(reg, r, section=gs)
+    out = fbo(ctx)
+
+    def outputs():
+        with hold.program():
+            r.draw_outputs(s, W, HH, 1.0, [View(Switches(), (W, HH), target=out)], t_now=T)
+        return px(ctx, out)
+
+    alone = outputs()
+    assert alone[..., :3].max() > 0
+    hold.engage()
+    blank = {"frame": "wired"}
+    gs.land(G.read_graph(blank), blank)
+    assert "kaleido" in r.fx.state.specs and r.wiring != hold.wiring
+    assert np.array_equal(outputs(), alone)
+    assert hold.take()
+    assert "kaleido" not in r.fx.state.specs
+    assert outputs()[..., :3].max() == 0
+    straight = {**LOOK, "wires": [{"from": "shape", "to": "scene.geometry"},
+                                  {"from": "scene", "to": "output.all.image"}]}
+    gs.land(G.read_graph(straight), straight)
+    assert not np.array_equal(outputs(), alone)
     assert ctx.error == "GL_NO_ERROR"
