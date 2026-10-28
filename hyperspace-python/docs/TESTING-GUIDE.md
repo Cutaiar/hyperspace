@@ -206,8 +206,8 @@ second or more goes in the tables at the top of `tests/conftest.py`.
 |---|---|---|---|---|
 | L1 | First launch updates the control-mapping file, with a backup | 1 | laptop, the copy | 57, 84, 81 |
 | L2 | Presets saved before load without a fuss | 1 | laptop, the copy | 83, 57 |
-| L3 | The page holds twenty-four presets | 1 | laptop, the copy | 81 |
-| L4 | The app starts, runs and quits; the keys | 1 | laptop | 1 |
+| L3 | The page holds twenty-four presets (superseded 2026-10-28) | 1 | laptop, the copy | 81 |
+| L4 | The app starts, runs and quits; the keys (superseded 2026-10-28) | 1 | laptop | 1 |
 | L5 | A config mistake is shown, not a crash | 1 | laptop | 2 |
 | L6 | Sound from the microphone | 1 | laptop, music or clapping | 3 |
 | L7 | Every page fits and reads from a distance | 1 | laptop | 4 |
@@ -233,19 +233,19 @@ second or more goes in the tables at the top of `tests/conftest.py`.
 | L27 | Instances down to zero | 1 | laptop | 62 |
 | L28 | Instance layouts | 1 | laptop | 97 |
 | L29 | Loading a preset resets everything it should | 1 | laptop | 38 |
-| L30 | What the show starts on | 1 | laptop | 40 |
+| L30 | What the show starts on (superseded 2026-10-28) | 1 | laptop | 40 |
 | L31 | Undo a slider drag | 1 | laptop | 48 |
 | L32 | Undo a preset load | 1 | laptop | 50 |
-| L33 | The Home key | 1 | laptop | 54 |
+| L33 | The Home key (superseded 2026-10-28) | 1 | laptop | 54 |
 | L34 | The key legend is off at launch | 1 | laptop | 58 |
 | L35 | One Unbind | 1 | laptop | 64 |
 | L36 | The right-click menu from labels and meters | 1 | laptop | 68 |
 | L37 | The big desk drawing | 1 | laptop | 69 |
 | L38 | The ROUTING filter | 1 | laptop | 71 |
-| L39 | Hide presets from the list | 1 | laptop, the copy | 86 |
-| L40 | Rename a preset | 1 | laptop, the copy | 87 |
+| L39 | Hide presets from the list (superseded 2026-10-28) | 1 | laptop, the copy | 86 |
+| L40 | Rename a preset (superseded 2026-10-28) | 1 | laptop, the copy | 87 |
 | L41 | The trash | 1 | laptop, the copy | 53, 88 |
-| L42 | The unsaved dot from a step back | 1 | laptop, the copy | 89 |
+| L42 | The unsaved dot from a step back (superseded 2026-10-28) | 1 | laptop, the copy | 89 |
 | L43 | The shared library folder | 1 | laptop, a second Mac, a shared cloud folder | 139–143 |
 | L44 | One output is as it was | 1 | laptop (recorded hands) | 99 |
 | L45 | The HANDS page explains a bad setting | 1 | laptop | 100 |
@@ -269,7 +269,7 @@ second or more goes in the tables at the top of `tests/conftest.py`.
 | L63 | Colour turning, faces apart, on the 120-cell | 1 | laptop | 124 |
 | L64 | MARBLE's frame rate | 1 | laptop | 130 |
 | L65 | KALEIDO and TRUCHET as art | 1 | laptop, music | 131 |
-| L66 | The factory presets with music | 1 | laptop, music | 132 |
+| L66 | The factory presets with music (superseded 2026-10-28) | 1 | laptop, music | 132 |
 | L67 | `legacy6` in silence | 1 | laptop, music | 137 |
 | L68 | WARP at full on HEX | 1 | laptop | 138 |
 | L69 | The palette fold | 1 | laptop (APC40 for the fader) | 166 |
@@ -399,6 +399,7 @@ second or more goes in the tables at the top of `tests/conftest.py`.
 | L193 | The fx module presets are gone; the FX page is not (plan 40) | 1 | laptop | 400 |
 | L194 | The same patch twice in one preset (plan 40) | 1 | laptop, the copy | 401 |
 | L195 | A macro wired from the param menu moves the param (row 537) | 1 | laptop | 402 |
+| L196 | The PRESETS page is the library (plan 41) | 1 | laptop, the copy | 403 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -410,7 +411,7 @@ second or more goes in the tables at the top of `tests/conftest.py`.
 | A9 | One knob, two directions | 2a | APC40 | 39 |
 | A10 | Undo a knob turn, and a load from the desk | 2a | APC40 | 49, 50 |
 | A11 | Undo a Learn and an Unbind | 2a | APC40 | 51 |
-| A12 | OVERDUB is Home | 2a | APC40 | 54 |
+| A12 | OVERDUB is Home (superseded 2026-10-28) | 2a | APC40 | 54 |
 | A13 | The crossfader is the master dimmer | 2a | APC40 | 55 |
 | A14 | Hold an empty pad to save a new preset into it | 2a | APC40, the copy | 56, 83 |
 | A15 | Pad rows 4 and 5 are presets | 2a | APC40, the copy | 82 |
@@ -644,6 +645,8 @@ old file to the trash.
 
 #### L3. The page holds twenty-four presets
 
+**Superseded (2026-10-28):** the PRESETS page has no bank pills or `more`; the pads are set on the desk only (check 403, L196).
+
 **Needs:** the copy.
 
 **Do:**
@@ -671,6 +674,8 @@ as `.bak-v2-bank8`.
 ## Starting, keys and settings
 
 #### L4. The app starts, runs and quits; the keys
+
+**Superseded (2026-10-28):** no party show ships or opens: a fresh library opens an unsaved show called `untitled` on a blank preset, and F1–F8 load the pads of your own library. The R, T, ⌘R and `/` steps still hold (check 403, L196).
 
 **Needs:** laptop.
 
@@ -1359,6 +1364,8 @@ look-back on (24 echoes, fade 0.60 s) with the dream, no extra step.
 
 #### L30. What the show starts on
 
+**Superseded (2026-10-28):** the PRESETS page has no "starts on" picker, no show "factory" tag and no shipped party or house show; the startup preset is read from the file and Home still loads it, but nothing on the panel sets it (L196).
+
 **Needs:** laptop.
 
 **Do:**
@@ -1425,6 +1432,8 @@ presses for one load; routes not back.
 *(check 50)*
 
 #### L33. The Home key (laptop part)
+
+**Superseded (2026-10-28):** the "set starts on to — (none)" steps are gone: nothing on the panel sets "starts on" any more, and no show ships with one. Home loads the show's startup preset when its file names one (L196).
 
 **Needs:** laptop. The APC40 part is A12.
 
@@ -1602,6 +1611,8 @@ Run L39–L42 in a terminal where `HYPERSPACE_HOME` points at the copy.
 
 #### L39. Hide presets from the list
 
+**Superseded (2026-10-28):** there is no hidden list, no `hidden.json` and no "show hidden": × puts any preset in the trash (L196).
+
 **Needs:** the copy.
 
 **Do:** PRESETS page → click the preset name → the list. Click × on
@@ -1626,6 +1637,8 @@ no preset '<name>'".
 *(check 86)*
 
 #### L40. Rename a preset
+
+**Superseded (2026-10-28):** there are no factory presets: rename works on every preset, and the list has no dim rows (L196).
 
 **Needs:** the copy; one of your presets on a slot in two of your shows.
 
@@ -1680,6 +1693,8 @@ click emptying the trash.
 *(check 53, 88)*
 
 #### L42. The unsaved dot from a step back
+
+**Superseded (2026-10-28):** there is no factory preset to load and no dim row or "save copy": use one of your own presets; the dot and the save chip are as described (L196).
 
 **Needs:** the copy.
 
@@ -2406,6 +2421,8 @@ always six-sided, whatever shape a face is.
 *(check 131)*
 
 #### L66. The factory presets with music
+
+**Superseded (2026-10-28):** no preset ships: the house and party presets live in `tests/corpus/` only. Run this with your own presets with faces on.
 
 **Needs:** laptop, music with quiet and loud passages.
 
@@ -4941,6 +4958,43 @@ the new line; the knob moves nothing; macro ▸ on the BPM.
 
 *(check 402)*
 
+## One tier: the PRESETS page (L196; plan 41)
+
+#### L196. The PRESETS page is the library
+
+**Needs:** laptop, the copy (on the Drive library).
+
+**Do:**
+1. Open PRESETS. Read it top to bottom: the strip, the list, the patches
+   fold, the show line.
+2. Click a preset in the list. Click **rename** on another, type a name,
+   press Enter. Click **×** on a third.
+3. Open **trash (n) ▸** at the foot of the list and take the third back.
+4. Open the **patches** fold; rename one, × one.
+5. Open **open ▾** on the show line, then **as…**, name a show, and
+   **new**.
+6. On the desk press F1–F8 and a clip-row pad; hold an empty pad.
+
+**Right if:** (1) the strip reads ◀ name ● ▶ · new · save · as…; the list
+fills the page with every preset in the library and no others; the show
+line reads "show · the desk's pads, the session, the rig's wires", then
+the show's name, a red dot while unsaved, **open ▾**, **save**, **as…**,
+**new**. Nothing reads "starts on", "F1–F8", "show hidden", "factory" or
+"save copy", and no row is dim. (2) the click loads it and the strip
+names it; the rename sticks and the shows that name it follow; the × puts
+the file in the trash. (3) it is back in the list. (4) the same chips, no
+pick. (5) a new show is called `untitled` with an empty bank. (6) the
+pads still load and save; holding an empty pad saves into it.
+
+**Wrong if:** a pill row, a "starts on" picker, a preset drop-down or a
+module-preset fold on the page; a row that cannot be renamed or deleted;
+a pad that loads nothing.
+
+**Changes:** presets in your copy (renamed, trashed and restored), a new
+show file; remove them with × if you do not want them.
+
+*(check 403)*
+
 # Part 2 — tests that need hardware
 
 ## (a) The APC40
@@ -5193,6 +5247,8 @@ with its depth and gate; no preset file's time moved.
 *(check 51)*
 
 #### A12. OVERDUB is Home
+
+**Superseded (2026-10-28):** the "set starts on to none" steps are gone: nothing on the panel sets "starts on", and no show ships with one (L196).
 
 **Needs:** APC40. The laptop part is L33.
 
@@ -8113,9 +8169,10 @@ band produces a *lane*.
 **Band scene** — a saved set of all the sound bands' settings, picked
 from pad rows 2–3 with SHIFT latched.
 
-**Bank / slot** — a show's list of 24 numbered places for presets: slots
-1–8 are F1–F8 and pad row 1, slots 9–24 are pad rows 4–5 and the small
-numbered buttons on the PRESETS page.
+**Bank / slot (pads)** — a show's list of 24 numbered places for presets,
+the desk's pads: slots 1–8 are F1–F8 and pad row 1, slots 9–24 are pad
+rows 4–5. Set on the desk only (hold a pad, or SAVE + a pad); the PRESETS
+page shows none of them since 2026-10-28.
 
 **Bindings file** — `bindings.json` in the home folder: the control
 mapping that belongs to the setup rather than to any preset (keys, the
@@ -8208,8 +8265,10 @@ preset changes them.
 
 **FACES page** — the page for the faces' pattern and colours.
 
-**Factory** — shipped with the app, as opposed to saved by you (shown dim
-in the preset list; yours are white).
+**Factory** — *superseded 2026-10-28*: nothing ships with the app any
+more. Every preset in the library is yours, listed alike, and the
+twenty-five the build once shipped live on only as test data
+(`tests/corpus/`).
 
 **FL Studio** — music software (a DAW) that the app can exchange MIDI
 with.
@@ -8265,7 +8324,8 @@ and the LFO, found in the preset list (on no F-key).
 **HANDS page** — the page for hand tracking: the box view, the feel
 settings, calibration and the ghost hands.
 
-**Home** — loading the preset the show "starts on" (fn+← or OVERDUB).
+**Home** — loading the show's startup preset (fn+← or OVERDUB), the one
+its file names; nothing on the panel sets it since 2026-10-28.
 
 **Home folder** — `~/Hyperspace`, where the app keeps your config,
 presets, shows, mapping file and logs; another folder can be used with
@@ -8274,7 +8334,8 @@ presets, shows, mapping file and logs; another folder can be used with
 **Hot reload** — the app picking up a saved code or effect file while it
 runs.
 
-**House mood** — one of the factory presets of the house show.
+**House mood** — one of the eight presets of the old `house` show
+(BIG BLUE WAVE…); test corpus only since 2026-10-28.
 
 **IAC bus** — the Mac's built-in virtual MIDI cable (Audio MIDI Setup →
 IAC Driver), used to connect the app to FL Studio with no hardware.
@@ -8348,9 +8409,11 @@ desktop; only possible when the config has `[output] overlay = true`.
 loads presets 1–8; rows 2–3 with SHIFT pick band scenes; rows 4–5 load
 presets 9–24.
 
-**Party show** — the factory show the app opens with: F1 TUMBLE, F2
+**Party show** — the show the app used to open with (F1 TUMBLE, F2
 FACES, F3 FIELD, F4 WAKE, F5 TRIP, F6 ACID, F7 MANDALA, F8 NOITA, slot 9
-TRACER. The **house show** is another factory show (F1 BIG BLUE WAVE).
+TRACER); test corpus only since 2026-10-28, with the **house show**. A
+fresh library opens an unsaved show called `untitled`; the owner's own
+shows are in the Drive library.
 
 **Patch** — a group of GRAPH boxes saved with the cables that cross its
 edge, in `patches/` in the library, to drop into any preset (plan 40).
@@ -8369,7 +8432,9 @@ sensor), listed in the device list and drawn inside the shape's world.
 **Preset** — a saved look: every performance setting, its routes and
 what the desk's knobs do.
 
-**PRESETS page** — the page for shows, presets, the bank and "starts on".
+**PRESETS page** — the preset strip over a list of every preset (click
+loads; rename, ×), the trash at its foot, the patches fold and one line
+for the show (open ▾ · save · as… · new).
 
 **Projector** — here, any second screen.
 
@@ -8414,13 +8479,15 @@ bindings file and config rather than in a preset.
 **SHIFT layer** — the desk's second layer, latched by pressing SHIFT once
 (its light stays on); see *Layer*.
 
-**Show (project file)** — a file in `<home>/projects/` holding a bank of
-presets and the one it starts on.
+**Show (project file)** — a file in `<library>/projects/` holding the
+session, the desk's pads (a bank of preset names), the rig's wires and a
+startup preset.
 
 **Stall log** — `<home>/stall.log`, where the app writes what it was
 doing when it froze or hit a drawing error.
 
-**Starts on** — the preset a show opens with, also what Home loads.
+**Starts on (startup)** — the preset a show's file names for Home and a
+launch; no longer picked on the panel (2026-10-28).
 
 **Stderr** — what the app prints in the terminal it was launched from.
 

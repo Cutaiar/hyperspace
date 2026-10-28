@@ -14,7 +14,8 @@ from __future__ import annotations
 from types import SimpleNamespace as NS
 
 import pytest
-from test_graph_legible import party
+from conftest import seed
+from test_graph_legible import party as _party
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
@@ -23,6 +24,12 @@ from hyperspace import ui_graph
 from hyperspace.outputs import Preview, PreviewTextures
 
 # ---------------------------------------------------------------- headless
+
+def party(rig):
+    """`test_graph_legible.party` over the corpus: party-trip is test data
+    since 2026-10-28, seeded into the rig's home first (never over a file)."""
+    seed(rig.lib.home, "presets")
+    return _party(rig)
 
 
 def _hold(on: bool, preview=None):

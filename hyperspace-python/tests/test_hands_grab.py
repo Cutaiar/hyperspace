@@ -8,7 +8,7 @@ HANDS page. The proof the owner asked for: their intended mapping
 `camera.yaw`, `camera.pitch` and `rot.phase.XY`, each gated by the grab)
 is a fixture preset, loaded through a scratch library and played by
 synthetic hands on a tape: the shape follows the hand only while it is
-closed. No preset in hyperspace/library/ is touched."""
+closed. No corpus preset is touched."""
 
 import json
 import math

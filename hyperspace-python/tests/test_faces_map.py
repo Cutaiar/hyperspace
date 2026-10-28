@@ -21,7 +21,7 @@ from hyperspace.patterns import NAMES
 # in the fast tier on purpose (~1.5 s, one load per preset): a preset edit
 # that leaves the map stale fails on the next bare `pytest`
 def test_the_map_matches_every_preset_and_fixture_as_loaded():
-    """Every factory preset's and fixture's mode, faces switch and faces
+    """Every corpus preset's and fixture's mode, faces switch and faces
     wire in the map are what the files load to (`--check`)."""
     assert fs.check() == []
 
@@ -29,7 +29,7 @@ def test_the_map_matches_every_preset_and_fixture_as_loaded():
 @pytest.mark.slow
 def test_the_usage_reads_the_drawn_faces_wire():
     uses = {u.slug: u for u in fs.usage()}
-    assert set(uses) >= {p.stem for p in fs.FACTORY.glob("*.json")}
+    assert set(uses) >= {p.stem for p in fs.CORPUS.glob("*.json")}
     assert uses["party-faces"].state == "on screen" and uses["party-faces"].name == "HEX"
     assert uses["party-faces"].path == ("pattern", "shape.faces")
     assert uses["legacy6"].state == "faces off"           # wired, view.faces off

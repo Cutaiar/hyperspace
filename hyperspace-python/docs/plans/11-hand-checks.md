@@ -5,7 +5,7 @@ Each gives the steps, what passes, what fails and where in the code a
 failure points, and the headless tests that show what "right" looks
 like. [`../TESTING-GUIDE.md`](../TESTING-GUIDE.md) is the plain-language
 version, ordered by device, and the place to start; it cites these
-numbers. They run 1–401 (group AD (332–341) is plan 34's, feedback, on `plan-34-feedback` (PR #236), and runs with group AE); group Y (232–266, 272–276) is plan 28's (261–266 its N7,
+numbers. They run 1–403 (group AD (332–341) is plan 34's, feedback, on `plan-34-feedback` (PR #236), and runs with group AE); group Y (232–266, 272–276) is plan 28's (261–266 its N7,
 272–276 its N9), 267–271, plan 30's N8 (the palette as compression), are at
 the end of group X, and group Z (277–295) is two parts: 277–279 the
 instanced field from `main`, renumbered from its 144–146 when main was
@@ -13,7 +13,7 @@ merged in, and 280–295 plan 31's (286–295 the APC40 page, on
 `plan-31-a1`); group AA (296–316) is plan 32's, and 317 the two plans
 together; group AC (318–331) is plan 33's, the free graph, on
 `plan-33-free-graph`; group AE (342–352) is plan 35's, the free frame,
-on `plan-34-feedback` (PR #236). Past 352: check 353 (group AF) is row 394's, group AG (354–369) is plan 36's, the WYSIWYG graph, and groups AH (370–376), AI (377–383) and AJ (384–393) are plans 37's (nodes as pictures, and the faces), 38's (hold the projector) and 39's (vision), run together and integrated on `plan-37-38-39-integration`. Group AK (394–401) is plan 40's, patches, on `plan-40-build`.
+on `plan-34-feedback` (PR #236). Past 352: check 353 (group AF) is row 394's, group AG (354–369) is plan 36's, the WYSIWYG graph, and groups AH (370–376), AI (377–383) and AJ (384–393) are plans 37's (nodes as pictures, and the faces), 38's (hold the projector) and 39's (vision), run together and integrated on `plan-37-38-39-integration`. Group AK (394–401) is plan 40's, patches, on `plan-40-build`; check 402 (group AL) is the macro's throw; check 403 (group AM) is the one-tier library and the PRESETS page, on `worktree-presets-one-tier`.
 
 ## Before you start
 
@@ -6152,6 +6152,42 @@ label back together, the second whatever came before. (5) only
 on `routing.base_sub`); the knob moving nothing (`follow_macros` not
 re-landing: `macros_serial` not bumped); macro ▸ offered on the BPM
 (`base_refusal` not asked).
+
+## AM. One tier: the PRESETS page over the Drive library
+
+The owner, 2026-10-28 (decision register rows 538–541, plan 41): the
+library has one tier — no factory presets, no hidden list — and the
+PRESETS page is the list: the strip, a flat list of every preset, the
+trash at its foot, a patches fold and one show line.
+
+**403. The PRESETS page is the library.** (laptop, PRESETS; the copy, on the Drive library)
+Headless: `tests/test_ui_presets.py`; `tests/test_library.py`.
+1. Open PRESETS. Read the page top to bottom: the strip (◀ name ● ▶ ·
+   new · save · as…), then the list, then the patches fold, then the
+   show line.
+2. Click a preset in the list. Click **rename** on another, type a new
+   name, press Enter. Click **×** on a third.
+3. Open the **trash (n) ▸** line at the foot of the list and take the
+   third back.
+4. Open the **patches** fold: rename one, × one.
+5. Read the show line. Open **open ▾**, then press **as…**, name a show,
+   press **new**.
+6. Press F1–F8 and a clip-row pad on the desk, then hold an empty pad.
+
+*Pass:* (1) the list fills the page and holds every preset in the
+library, the owner's own and no others; the show line reads "show · the
+desk's pads, the session, the rig's wires", then the show's name, a red
+dot while it has unsaved changes, **open ▾**, **save**, **as…**,
+**new**. Nothing reads "starts on", "F1–F8", "show hidden", "factory" or
+"save copy", and no row is dim. (2) the click loads it and the strip
+names it; the rename sticks and the shows that name it follow; the × puts
+the file in the trash, not away. (3) it is back in the list. (4) the same
+chips, no pick. (5) a new show is called `untitled` with an empty bank.
+(6) the pads still load and save; a hold on an empty pad saves into it.
+*Fail:* a pill row, a "starts on" picker, a preset drop-down or a module
+fold on the page (`ui_presets.page` drawing the removed blocks); a row
+that cannot be renamed or deleted (`Library.rename` / `delete` refusing);
+a pad that loads nothing (`Library.bank` / `preset.load.k`).
 
 ## What no test covers
 

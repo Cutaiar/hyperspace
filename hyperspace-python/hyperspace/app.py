@@ -93,7 +93,7 @@ from .outputs import Offscreen, Presenter, Preview, Slot, Switches, View
 from .overlay import RENDER_DEFAULT, GlfwBackend, Output, register_switches, render_index
 from .params import Registry, build_registry
 from .pinch import install as install_pinch
-from .preset import Presets, migrate_home
+from .preset import Presets
 from .render import Renderer
 from .routing import SLEW_DEFAULT_S, Bindings, Router, bindings_path, register_desk
 from .ui import Panel, apply_style, load_fonts
@@ -1419,10 +1419,6 @@ def main() -> None:
     # hands an extra hands node its own state (`Renderer.ghost_states`)
     presets.graph.attach(renderer)
     hold.section = presets.graph           # plan 38 B3: landings keep the held program's nodes
-    # plan 13 §6, once: an older home's projects, routing presets and the
-    # preset part of bindings.json become presets (backups beside every
-    # rewritten file); a home already migrated finds nothing to do
-    migrate_home(library, router, cfg.get("hands"))   # hand lanes named by the rig's layout
     # one Learn over the live table, whatever the MIDI gate says: a knob
     # or a hand completes it, the panel's prompt settles what the referee
     # refused (learn.py; the band.sel.* rule is the registry's `real`)

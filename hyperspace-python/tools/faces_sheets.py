@@ -5,7 +5,7 @@ shape, for the owner to judge by eye (D1), and the migration map
 
 Not plan 22's `tools/pattern_sheet.py` (one face's pattern alone, a tile per
 input value): here each pattern is drawn **on the faces of a shape, as a
-show draws it** — a factory preset loaded through the real `Presets` over a
+show draws it** — a corpus preset loaded through the real `Presets` over a
 scratch library home (`tools/golden_frames.py`'s `Rig`: HYPERSPACE_HOME is
 a temporary folder before anything is imported, the library home another;
 nothing reads or writes ~/Hyperspace or the Drive library), its own
@@ -16,10 +16,10 @@ frames on the pinned clock, so an animated pattern is past its first frame.
 What a tile shows, the same for every mode (only `view.pattern` differs):
 - `view.pattern_mix` 1.0 — the pattern alone on the faces, not the
   preset's blend with the plain fill;
-- the eight inputs where the factory routes leave them on a **medium
-  passage** (plan 22 B3's MEDIUM bands: lane i pushes input i at
+- the eight inputs where the corpus presets' lane routes leave them on a
+  **medium passage** (plan 22 B3's MEDIUM bands: lane i pushes input i at
   `routing.PATTERN_DEPTH` on a base of 1; HUE and SPREAD at 1.0) — the
-  factory pattern depth, set as the inputs' bases since the rig's analyzer
+  default pattern depth, set as the inputs' bases since the rig's analyzer
   is never fed;
 - the analyzer's lanes as the renderer reads them (`Renderer.bands`) at
   the same passage, which only METER and PULSE draw.
@@ -35,8 +35,8 @@ The migration map (`docs/plans/assets/37-faces/migration-map.md`) is
 generated, never hand-edited: what each mode draws and its ranked nearest
 neighbours are data here (`DRAWS`, `NEAREST`); which presets use each mode
 — with the faces wire drawn, with the faces off, or carried unwired — is
-read off every factory preset and every fixture as the real loader lands
-them (`usage`). `--check` regenerates it and fails when the file differs
+read off every corpus preset (`tests/corpus/presets`) and every fixture as
+the real loader lands them (`usage`). `--check` regenerates it and fails when the file differs
 (tests/test_faces_map.py runs it), so the map cannot rot silently.
 
     uv run python tools/faces_sheets.py            # sheets + map
@@ -78,7 +78,7 @@ from hyperspace.routing import PATTERN_DEPTH
 
 OUT = ROOT / "docs" / "plans" / "assets" / "37-faces"
 MAP = OUT / "migration-map.md"
-FACTORY = ROOT / "hyperspace" / "library" / "presets"
+CORPUS = gf.CORPUS                                  # tests/corpus/presets
 FIXTURES = ROOT / "tests" / "fixtures" / "presets"
 
 FRAMES = 3                    # frames drawn before the read: past the first
@@ -97,9 +97,9 @@ SHEETS = (("sheet.png", "party-faces",
 MEDIUM = (1.00, 1.00, 0.70, 0.90, 0.60, 0.60)
 
 
-def factory_inputs(out=MEDIUM, depth: float = PATTERN_DEPTH) -> list[float]:
-    """The eight inputs as the factory routes leave them for lanes `out`
-    (tools/pattern_sheet.py's rule): lane i pushes input i at `depth` of
+def passage_inputs(out=MEDIUM, depth: float = PATTERN_DEPTH) -> list[float]:
+    """The eight inputs as the presets' lane routes leave them for lanes
+    `out` (tools/pattern_sheet.py's rule): lane i pushes input i at `depth` of
     the 0–2.6 range on a base of 1, held to the range; HUE and SPREAD 1."""
     mods = [1.0] * N_INPUTS
     for i, o in enumerate(out):
@@ -233,7 +233,7 @@ class Use:
     """One preset's pattern, as the real loader lands it."""
 
     slug: str
-    where: str            # "factory" or "fixture"
+    where: str            # "corpus" or "fixture"
     schema: str           # the file's schema ("/7")
     mode: int             # view.pattern after the load
     faces_on: bool        # view.faces after the load
@@ -295,17 +295,18 @@ def _driven(doc: dict) -> tuple[str, ...]:
 
 
 def usage() -> list[Use]:
-    """Every factory preset and every fixture under tests/fixtures/presets/,
+    """Every corpus preset and every fixture under tests/fixtures/presets/,
     each loaded through the real `Presets` over a scratch library (the
     golden rig's headless `Loader`, every fixture copied in), read for its
     landed mode, faces switch and wires."""
     loader = gf.Loader()
     own = Path(loader._home.name) / "presets"
-    for f in sorted(FIXTURES.glob("*.json")):          # every one, not just the goldens'
-        (own / f.name).write_text(f.read_text())
+    for folder in (CORPUS, FIXTURES):                  # every one, not just the goldens'
+        for f in sorted(folder.glob("*.json")):
+            (own / f.name).write_text(f.read_text())
     out = []
     try:
-        for where, folder in (("factory", FACTORY), ("fixture", FIXTURES)):
+        for where, folder in (("corpus", CORPUS), ("fixture", FIXTURES)):
             for f in sorted(folder.glob("*.json")):
                 doc = json.loads(f.read_text())
                 _, _, effects, free = loader.load(f.stem)
@@ -365,7 +366,7 @@ def render_map(uses: list[Use]) -> str:
         "with the same table, on the owner's say, the way plan 36's",
         "`tools/migrate_library.py` moved it to `/7` (backup first).",
         "",
-        f"Inputs on the sheets: the factory pattern depth ({PATTERN_DEPTH}) on a medium",
+        f"Inputs on the sheets: the default pattern depth ({PATTERN_DEPTH}) on a medium",
         "passage (plan 22 B3's MEDIUM bands), `view.pattern_mix` 1.0,",
         f"{FRAMES} frames in, hands absent; each tile is the frame's middle at full",
         "resolution; the Heart sheet is lit at `view.bright` 2.5.",
@@ -388,7 +389,7 @@ def render_map(uses: list[Use]) -> str:
         if n != "FLAT":
             lines += [f"![{n}]({n}.png)", ""]
         for state in ("on screen", "faces off", "unwired"):
-            for where in ("factory", "fixture"):
+            for where in ("corpus", "fixture"):
                 lines.append(f"- {state}, {where}: "
                              + names([u for u in us if u.where == where], state))
         lines += ["- nearest kept, in order:"]
@@ -437,7 +438,7 @@ def check() -> list[str]:
 def shoot(slug: str, modes: list[int], frames: int, over: dict | None = None):
     """{mode: (H, W, 3) uint8, top row first} — preset `slug` on the golden
     rig, hands absent, one fresh rig per mode (so every mode starts on the
-    same clock), the mode set, the inputs at the factory depth on a medium
+    same clock), the mode set, the inputs at the default depth on a medium
     passage, the mix at 1, then `over`'s values."""
     import numpy as np
 
@@ -453,7 +454,7 @@ def shoot(slug: str, modes: list[int], frames: int, over: dict | None = None):
                     section, effects={n.partition(".")[0] for n in rig.fx.specs}).wiring()
                 rig.reg["view.pattern"].set(mode)
                 rig.reg["view.pattern_mix"].set(1.0)
-                for k, v in enumerate(factory_inputs()):
+                for k, v in enumerate(passage_inputs()):
                     rig.reg[f"pattern.mod.{k}"].set(v)
                 for pid, v in (over or {}).items():
                     rig.reg[pid].set(v)

@@ -21,8 +21,8 @@ from hyperspace import analyzer as A
 from hyperspace.analysis import FFT_SIZE, Analyser
 from hyperspace.analyzer import CURVES, RECT, Analyzer, centre_q, edges, legacy_layout
 from hyperspace.bands import BANDS, CEIL, Params, default_band_params, default_params
-from hyperspace.control import SCENES, Control
-from hyperspace.library import FACTORY, Library, factory_doc
+from hyperspace.control import SCENES, SCENES_DIR, Control
+from hyperspace.library import Library, scene_doc, slug
 from hyperspace.offline import load_wav
 from hyperspace.params import build_registry
 from hyperspace.view import ViewState
@@ -40,6 +40,20 @@ def fixture_wavs():
             check=True,
         )
     return FIXTURES
+
+
+def scene(name: str) -> dict:
+    """A band scene's document — code data under hyperspace/scenes/band/
+    since the library went one-tier (2026-10-28), read as control.py does."""
+    return scene_doc(SCENES_DIR / f"{slug(name)}.json")
+
+
+def put_band(home: Path, name: str, doc: dict) -> Path:
+    """A band preset of the user's in `home`, as the strip would save it."""
+    (home / "band").mkdir(exist_ok=True)
+    path = home / "band" / f"{slug(name)}.json"
+    path.write_text(json.dumps(doc))
+    return path
 
 
 def frames(samples: np.ndarray, sr: float, fps: float):
@@ -323,7 +337,7 @@ def test_apply_layout_keeps_state_by_index_and_params_unless_given():
 def test_scene_rows_past_the_layout_take_the_default_row():
     a = Analyzer(Analyser())
     a.add_band()
-    a.apply_scene(factory_doc("band", "Bass Engine")["values"])   # six rows onto seven bands
+    a.apply_scene(scene("Bass Engine")["values"])   # six rows onto seven bands
     assert a.n == 7, "a scene re-tunes the bands loaded; only a strip load applies a layout"
     assert a.params[3].trim == -10
     assert a.params[6] == default_band_params()
@@ -357,12 +371,18 @@ def strip_of(chain):
             for p in chain.params]
 
 
-def test_the_scene_combo_and_the_strip_read_one_file(tmp_path):
-    """Audit A1: the combo's scene and the strip's preset are the same
-    document, so the two can never drift — and a strip load keeps the
-    band names because the layout carries them."""
+def test_the_scene_combo_and_the_strip_follow_each_other(tmp_path):
+    """Audit A1, as it stands since the library went one-tier: the combo's
+    scenes are code data (hyperspace/scenes/band/), the strip's presets the
+    user's — a band preset saved under a scene's name with the scene's
+    document lands the same strip, the combo follows a strip load of it
+    (Library.on_load), and a strip load keeps the band names because the
+    layout carries them."""
     reg, control, audio, lib = wired(tmp_path)
-    assert reg["scene.select"].names == list(SCENES) and set(SCENES) == set(lib.list("band"))
+    assert reg["scene.select"].names == list(SCENES)
+    assert lib.list("band") == [], "nothing ships: the strip lists the user's presets"
+    put_band(tmp_path, "Kick & Sizzle", scene("Kick & Sizzle"))
+    put_band(tmp_path, "Balanced", scene("Balanced"))
     control.select_scene(SCENES.index("Kick & Sizzle"))
     by_combo = strip_of(audio.chain)
     assert lib.current("band") == "Kick & Sizzle" and not lib.is_dirty("band")
@@ -372,23 +392,6 @@ def test_the_scene_combo_and_the_strip_read_one_file(tmp_path):
     lib.load("band", "Kick & Sizzle")
     assert strip_of(audio.chain) == by_combo
     assert control.scene == SCENES.index("Kick & Sizzle")
-
-
-def test_a_user_scene_file_shadows_the_factory_one_for_the_combo(tmp_path):
-    _, control, audio, lib = wired(tmp_path)
-    doc = factory_doc("band", "Percussive")
-    doc["values"]["band.1.atk"] = 0.321
-    (tmp_path / "band").mkdir()
-    shadow = tmp_path / "band" / "percussive.json"
-    shadow.write_text(json.dumps(doc))
-    control.select_scene(SCENES.index("Percussive"))
-    assert audio.chain.params[1].atk == 0.321 and not lib.is_factory("band", "Percussive")
-    # a broken shadow falls back to the factory copy and says so
-    shadow.write_text("{not json")
-    lib._docs.clear()
-    control.select_scene(SCENES.index("Percussive"))
-    assert audio.chain.params[1].atk == factory_doc("band", "Percussive")["values"]["band.1.atk"]
-    assert "percussive.json" in lib.error
 
 
 # ------------------------------------------------ control + registry rebuild
@@ -464,6 +467,7 @@ def test_the_combo_is_clean_on_any_layout_and_undo_gives_the_strip_back(tmp_path
     for "clean" is the state it landed, not the file's layout ids; and a
     reset undo puts the strip's current preset back too."""
     reg, control, audio, lib = wired(tmp_path)
+    put_band(tmp_path, "Balanced", scene("Balanced"))   # the strip's Balanced: the user's
     control.add_band()                                # seven bands, not the file's six
     control.select_scene(SCENES.index("Bass Engine"))
     assert audio.chain.n == 7 and lib.current("band") == "Bass Engine"
@@ -479,66 +483,42 @@ def test_the_combo_is_clean_on_any_layout_and_undo_gives_the_strip_back(tmp_path
     assert lib.current("band") == "Mine" and not lib.is_dirty("band")
 
 
-def test_an_edited_scene_file_is_re_applied_by_the_road_it_came_in(tmp_path):
+def test_an_edited_band_preset_is_re_applied_with_its_layout(tmp_path):
     """Code review of PR #44: poll() re-applies a changed file the way it
-    was landed — the combo's scene is re-tuned, never loaded whole."""
+    was landed — a strip load, layout included (the combo's scenes are code
+    data since the library went one-tier, never a file a user edits)."""
     _, control, audio, lib = wired(tmp_path)
-    control.add_band()
-    control.add_band()
-    control.select_scene(SCENES.index("Balanced"))
-    assert audio.chain.n == 8
-    doc = factory_doc("band", "Balanced")
+    doc = scene("Balanced")
+    doc["name"] = "Warm"
     doc["values"]["band.1.atk"] = 0.777
-    (tmp_path / "band").mkdir()
-    (tmp_path / "band" / "balanced.json").write_text(json.dumps(doc))
-    assert lib.poll(now=10.0)
-    assert audio.chain.n == 8, "an editor save of the combo's scene keeps the bands"
-    assert audio.chain.params[1].atk == 0.777 and lib.current("band") == "Balanced"
-    lib.load("band", "Balanced")                      # the strip's road: layout included
-    assert audio.chain.n == 6
+    path = put_band(tmp_path, "Warm", doc)
+    control.add_band()
+    control.add_band()
+    assert audio.chain.n == 8
+    lib.load("band", "Warm")                          # the strip's road: layout included
+    assert audio.chain.n == 6 and audio.chain.params[1].atk == 0.777
     doc["values"]["band.1.atk"] = 0.555
-    (tmp_path / "band" / "balanced.json").write_text(json.dumps(doc))
+    path.write_text(json.dumps(doc))
     control.add_band()
     assert lib.poll(now=20.0)
     assert audio.chain.n == 6 and audio.chain.params[1].atk == 0.555
+    assert lib.current("band") == "Warm"
 
 
-def test_a_partial_scene_file_fills_the_same_way_on_both_roads(tmp_path):
-    """Code review of PR #44: the combo and the strip fill a missing id
-    from the same place (Library.resolved: fresh values under Balanced)."""
+def test_a_partial_band_preset_fills_from_the_defaults(tmp_path):
+    """Code review of PR #44: the strip fills a missing id from the one
+    place the combo would (Library.resolved — the group's defaults: the
+    fresh values, which are Balanced's numbers, `test_balanced_is_the_
+    default_table…` — no Balanced file in the library needed)."""
     _, control, audio, lib = wired(tmp_path)
-    doc = factory_doc("band", "Percussive")
+    doc = scene("Percussive")
+    doc["name"] = "Perc Lite"
     del doc["values"]["band.2.exp"]
-    (tmp_path / "band").mkdir()
-    (tmp_path / "band" / "percussive.json").write_text(json.dumps(doc))
+    put_band(tmp_path, "Perc Lite", doc)
     control.select_scene(SCENES.index("Percussive"))
-    by_combo = audio.chain.params[2].exp
-    lib.load("band", "Percussive")
-    assert audio.chain.params[2].exp == by_combo == 0.95   # Balanced's MIDB contrast
-
-
-def test_the_combo_reads_the_librarys_own_factory_tree(tmp_path):
-    """Code review of PR #44: a Library built over another factory folder
-    never falls back to the wheel's files."""
-    import shutil
-
-    other = tmp_path / "factory"
-    shutil.copytree(FACTORY, other)
-    doc = factory_doc("band", "Strobe Cage")
-    doc["values"]["band.0.atk"] = 0.123
-    (other / "band" / "strobe-cage.json").write_text(json.dumps(doc))
-    reg, control, audio = rig()
-    lib = Library(tmp_path / "home", factory=other)
-    control.library = lib
-    lib.attach(reg)
-    control.select_scene(SCENES.index("Strobe Cage"))
-    assert audio.chain.params[0].atk == 0.123 and lib.error == ""
-    (tmp_path / "home" / "band").mkdir()
-    (tmp_path / "home" / "band" / "strobe-cage.json").write_text("{not json")
-    lib._docs.clear()
-    audio.chain.params[0].atk = 0.5
-    control.select_scene(SCENES.index("Strobe Cage"))   # a broken shadow: that factory tree
-    assert audio.chain.params[0].atk == 0.123 and "strobe-cage.json" in lib.error
+    assert audio.chain.params[2].exp == scene("Percussive")["values"]["band.2.exp"]
+    lib.load("band", "Perc Lite")
+    assert audio.chain.params[2].exp == lib.defaults("band")["band.2.exp"] == 0.95
 
 
 def test_a_scene_lands_on_the_base_under_a_performer_and_reads_clean(tmp_path):
@@ -551,23 +531,24 @@ def test_a_scene_lands_on_the_base_under_a_performer_and_reads_clean(tmp_path):
     p.modulate(0.1)                                   # a lane holds BASS attack
     reg.apply()
     control.select_scene(SCENES.index("Kick & Sizzle"))
-    scene = factory_doc("band", "Kick & Sizzle")["values"]["band.1.atk"]
-    assert p.base == scene, "the scene landed on the base"
+    want = scene("Kick & Sizzle")["values"]["band.1.atk"]
+    assert p.base == want, "the scene landed on the base"
     assert not lib.is_dirty("band"), "clean straight after the select"
     p.modulate(0.1)
     reg.apply()
-    assert p.base == scene and p.value > scene, "the offset rides on the scene's value"
+    assert p.base == want and p.value > want, "the offset rides on the scene's value"
     assert not lib.is_dirty("band")
     control.reset_band(1)
-    assert p.base == scene and not lib.is_dirty("band")
+    assert p.base == want and not lib.is_dirty("band")
     # no library: the combo writes the analyzer's Params directly, as before
     _, bare, bare_audio = rig()
     bare.select_scene(SCENES.index("Kick & Sizzle"))
-    assert bare_audio.chain.params[1].atk == scene
+    assert bare_audio.chain.params[1].atk == want
 
 
 def test_a_strip_load_is_a_scene_change_for_the_undo(tmp_path):
     _, control, audio, lib = wired(tmp_path)
+    put_band(tmp_path, "Balanced", scene("Balanced"))
     control.add_band()
     audio.chain.params[2].pre = 3.3
     control.reset_all_clicked()
@@ -592,7 +573,7 @@ def test_balanced_is_the_default_table_and_the_reference_edges():
     """The reference's per-band windows live once in code (`default_params`);
     the Balanced scene file is the same numbers as a preset, and its layout
     is the six reference bands (audit A5: one table, the file pinned to it)."""
-    doc = factory_doc("band", "Balanced")
+    doc = scene("Balanced")
     rows = A.scene_rows(doc["values"])
     table = default_params()
     assert sorted(rows) == list(range(6))
@@ -633,7 +614,7 @@ def test_auto_is_the_default_and_a_scene_without_the_key_lands_auto():
     a = Analyzer(Analyser())
     assert all(P.norm == 0 for P in a.params)
     a.params[2].norm = 1
-    a.apply_scene(factory_doc("band", "Balanced")["values"])
+    a.apply_scene(scene("Balanced")["values"])
     assert all(P.norm == 0 for P in a.params)
     assert A.scene_strip({}, 2)["band.1.norm"] == 0
     a.apply_scene_band(3, {"norm": 1.0})

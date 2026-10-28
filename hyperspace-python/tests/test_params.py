@@ -4,6 +4,7 @@ import math
 from types import SimpleNamespace
 
 import pytest
+from conftest import CORPUS, seed
 
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
@@ -27,6 +28,7 @@ def make(tmp_path):
     control = Control(chain)
     audio = SimpleNamespace(chain=chain)
     view = ViewState()
+    seed(tmp_path)                  # the corpus: the shipped presets, the party and house shows
     lib = Library(tmp_path)
     presets = lib.project
     reg = build_registry(view, control, audio, presets)
@@ -329,7 +331,7 @@ def test_preset_bank_params(rig):
 
     reg, view, _control, _audio, bank = rig
     Presets(bank.lib, reg, Router(reg, Bindings()))
-    bank.load("house", startup=False)          # the house moods (a fresh home opens party)
+    bank.load("house", startup=False)          # the house moods (the seed opens party)
     assert reg["preset.select"].names[:2] == ["BIG BLUE WAVE", "EMBER ORBIT"]
     assert len(reg["preset.select"].names) == 24
     assert reg["preset.select"].names[8:] == [f"SLOT {k}" for k in range(9, 25)]
@@ -621,7 +623,7 @@ def test_inst_layout_is_declared(tmp_path):
     frames(r, 5)
     assert r.view.inst_layout == 0 and r.undo.stack == []
 
-    # a preset that does not name it loads it as GRID: every factory preset
+    # a preset that does not name it loads it as GRID: every corpus preset
     names = r.lib.list("presets")
     assert len(names) >= 5
     for name in names:
@@ -629,15 +631,14 @@ def test_inst_layout_is_declared(tmp_path):
         assert r.view.inst_layout == 2
         assert "view.inst_layout" not in r.presets.load(name), name
         assert r.view.inst_layout == 0 and lay.base == 0, name
-    # (plan 36 T3: the factory `/7` files are full saves — at its default;
+    # (plan 36 T3: the corpus `/7` files are full saves — at its default;
     # their sources, made before it, never name it)
     import json
 
-    from hyperspace import preset
-
-    for f in preset.FACTORY_SOURCES.glob("*.json"):
+    sources = CORPUS.parent / "fixtures" / "factory-sources" / "presets"
+    for f in sources.glob("*.json"):
         assert "inst_layout" not in f.read_text(), f.name
-    for f in preset.FACTORY_DIR.glob("*.json"):
+    for f in (CORPUS / "presets").glob("*.json"):
         assert json.loads(f.read_text())["values"].get("view.inst_layout", 0) == 0, f.name
 
 

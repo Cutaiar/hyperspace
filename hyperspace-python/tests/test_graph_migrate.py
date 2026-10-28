@@ -12,6 +12,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from conftest import CORPUS
 from test_plan31_wiring import make_app
 
 from hyperspace import fx, preset
@@ -20,7 +21,7 @@ from hyperspace import graphmigrate as M
 from hyperspace.library import LibraryError
 
 ROOT = Path(__file__).parent.parent / "hyperspace"
-# plan 36 T3: the factory presets' sources (the factory files are their `/7`)
+# plan 36 T3: the corpus presets' sources (the corpus files are their `/7`)
 SOURCES = Path(__file__).parent / "fixtures" / "factory-sources" / "presets"
 FILES = sorted(SOURCES.glob("*.json"))
 # the presets written before plan 33 (a `/5` fixture — plan 33 T4's proofs —
@@ -88,9 +89,9 @@ def test_no_library_preset_routes_an_effect_it_leaves_out(path):
 def test_mandala_keeps_kaleido_first():
     """`fx.kaleido.order = 8` is read: kaleido sits where it did, right
     after the plasma (order 5) it folds and before the fractals (60).
-    (Plan 40 T5: the mandala fx module preset is retired; its values, which
-    the party-mandala generator keeps, are the old file this reads.)"""
-    doc = {"values": dict(preset.MANDALA_FX)}
+    (Plan 40 T5: the mandala fx module preset is retired; its values are
+    party-mandala's source's, the old file this reads.)"""
+    doc = {"values": json.loads((SOURCES / "party-mandala.json").read_text())["values"]}
     assert doc["values"]["fx.kaleido.order"] == 8
     section, _ = M.to_free(doc, SPECS)
     assert G.run_of(G.read_graph(section)) == ("plasma", "kaleido", "fractals", "glimmer")
@@ -304,17 +305,19 @@ def _values_of(doc: dict) -> dict:
 TESTS = Path(__file__).parent
 PRESET_FIXTURES = sorted([*(TESTS / "fixtures" / "presets").glob("*.json"),
                           *(TESTS / "fixtures" / "merge-31-32").glob("*.json")])
-FACTORY = sorted((ROOT / "library" / "presets").glob("*.json"))
+# the corpus: the presets the build once shipped (tests/corpus/presets, one tier)
+CORPUS_PRESETS = sorted((CORPUS / "presets").glob("*.json"))
 # a name that is only ever an old id (V2): `ghost[.n]`, `readout[.n]`,
 # `history`, `media.<c>` (`hands` is the geometry now, not the old layer)
 _OLD_ONLY = r"ghost(\.[0-9]+)?|readout(\.[0-9]+)?|history|media\.[a-h]"
 
 
 def loaded(tmp_path: Path, path: Path):
-    """`path` loaded as the rig loads it — a factory preset by name, a
-    fixture copied in as a user's preset — on the app's presets: (the graph
-    section's spec, its free section, the load's notes)."""
-    if path.parent != ROOT / "library" / "presets":
+    """`path` loaded as the rig loads it — a corpus preset by name (the
+    app is seeded with the corpus), a fixture copied in as a user's preset
+    — on the app's presets: (the graph section's spec, its free section,
+    the load's notes)."""
+    if path.parent != CORPUS / "presets":
         (tmp_path / "presets").mkdir(parents=True, exist_ok=True)
         shutil.copyfile(path, tmp_path / "presets" / path.name)
     app = make_app(tmp_path)
@@ -340,10 +343,10 @@ def old_ends(spec: G.GraphSpec) -> list[str]:
     return out
 
 
-@pytest.mark.parametrize("path", [*FACTORY, *PRESET_FIXTURES],
+@pytest.mark.parametrize("path", [*CORPUS_PRESETS, *PRESET_FIXTURES],
                          ids=lambda p: f"{p.parent.name}/{p.stem}")
 def test_every_section_loads_as_a_wired_frame(tmp_path, path):
-    """Every factory preset, every fixture — and so every one of the byte
+    """Every corpus preset, every fixture — and so every one of the byte
     test's 38 sources — lands `spec.wired`, in the new ids, with no graph
     note (a refused wire, an old id), no `into` or `holds` left in an entry
     and no retired value left in the registry's way."""

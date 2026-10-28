@@ -2,8 +2,8 @@
 (ui_graph.py), headless.
 
 The model is built from the shell's rig (tests/test_ui_shell.py: the full
-registry, the factory table, a scratch library on tmp_path) with factory
-presets loaded through it, a render graph built by `graph.default_graph`
+registry, the factory table, a scratch library on tmp_path) with the
+corpus's presets (tests/corpus, seeded) loaded through it, a render graph built by `graph.default_graph`
 (or by hand, for an effect placed off the default chain) and a device
 registry of fakes. The page is drawn under the same headless imgui
 context the other pages are, with the node editor's own context on it:
@@ -15,6 +15,7 @@ import importlib
 from pathlib import Path
 
 import pytest
+from conftest import seed
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
 from test_ui_shell import frame
@@ -35,6 +36,7 @@ PKG = Path(__file__).resolve().parents[1] / "hyperspace"
 
 @pytest.fixture()
 def rig(shell_rig):  # noqa: F811
+    seed(shell_rig.lib.home)         # (the corpus: the presets the tests load by slug)
     return shell_rig
 
 
@@ -317,12 +319,12 @@ def test_old_layout_positions_follow_the_renamed_ids(rig):
 def test_layout_round_trips_through_the_preset_and_the_show(rig):
     """The look's nodes' positions are the preset's ``layout``, the rig's
     the show's: written on save, read on load. A preset without the key
-    (every factory preset) loads with no note and no dirt; one with a bad
+    (every corpus preset) loads with no note and no dirt; one with a bad
     entry keeps the good ones and says so."""
     from hyperspace.preset import LAYOUT_KEY
     lib, presets, project = rig.lib, rig.lib.presets, rig.lib.project
     lib.load("presets", "party-trip")
-    # (plan 36 T3: the factory `/7` holds the envelopes' and the sequencer's
+    # (plan 36 T3: the corpus `/7` holds the envelopes' and the sequencer's
     # values, which this rig — the panel's, built without them — lacks)
     said = [n for n in presets.notes if not n.endswith("…") or "env." not in n]
     assert presets.layout == {} and said == [] and not lib.is_dirty("presets")
@@ -448,8 +450,8 @@ def test_the_graph_page_sits_after_routing():
     assert PAGES[keys.index("graph")][2] == PAGES[keys.index("routing")][2]
 
 
-def test_the_page_draws_with_a_factory_preset_and_a_render_graph(rig):
-    """The page drawn for real on the node editor, headless: a factory
+def test_the_page_draws_with_a_corpus_preset_and_a_render_graph(rig):
+    """The page drawn for real on the node editor, headless: a corpus
     preset loaded, a render graph with effects, every node expanded and
     collapsed, a route and an effect node selected (the side column), a
     tidy — and nothing raises; the SYSTEM page then has its line."""

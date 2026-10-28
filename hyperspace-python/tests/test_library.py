@@ -1,4 +1,4 @@
-"""The preset & project library: files, shadowing, dirty state, live edits.
+"""The preset & project library: files, dirty state, live edits.
 
 Every test builds its library on tmp_path (or points HYPERSPACE_HOME at
 one) — nothing here may touch ~/Hyperspace.
@@ -19,6 +19,7 @@ from conftest import (
     far_pads,
     old_shape_pads,
     opened_last,
+    seed,
     tree,
 )
 
@@ -26,8 +27,8 @@ from hyperspace import config, library, params, placement, preset, routing
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.bands import BANDS
-from hyperspace.control import SCENES, Control
-from hyperspace.library import FACTORY, Library, LibraryError, legacy_slot, migrate_doc, slug
+from hyperspace.control import SCENES, SCENES_DIR, Control
+from hyperspace.library import Library, LibraryError, migrate_doc, scene_doc, slug
 from hyperspace.params import build_registry
 from hyperspace.preset import Presets
 from hyperspace.routing import Bindings as _Bindings
@@ -51,8 +52,11 @@ def edit(path, fn):
 
 
 def make(home, show: str | None = "house"):
-    """Over a home that opened `show` last — the house moods these tests
-    were written on (None: a fresh home, which opens the party show)."""
+    """Over a home seeded with the corpus (conftest.seed: the presets the
+    build once shipped and the party and house shows) that opened `show`
+    last — the house moods these tests were written on (None: the party
+    show, the seed's `last_show`)."""
+    seed(home)
     if show:
         opened_last(home, show)
     chain = Analyzer(Analyser())
@@ -72,6 +76,16 @@ def rig(tmp_path):
     return make(tmp_path)
 
 
+def band(home, *names: str) -> None:
+    """The band scenes `names` (code data since the library went one-tier,
+    hyperspace/scenes/band/) as band presets of the user's in `home` —
+    what the strip's list held while the build shipped them."""
+    (home / "band").mkdir(exist_ok=True)
+    for name in names:
+        doc = scene_doc(SCENES_DIR / f"{slug(name)}.json")
+        (home / "band" / f"{slug(name)}.json").write_text(json.dumps(doc))
+
+
 # ---------------------------------------------------------------- home
 
 def test_home_resolves_env_then_default(monkeypatch, tmp_path):
@@ -86,10 +100,6 @@ def test_first_run_migrates_working_directory_files(tmp_path, monkeypatch, capsy
     cwd.mkdir()
     (cwd / "config.toml").write_text('[midi]\nport = "X"\n')
     (cwd / "midi_map.json").write_text('{"version": 1, "bindings": []}')
-    (cwd / "presets.json").write_text(json.dumps({"version": 1, "slots": [
-        None, {"name": "MINE", "scene": 3, "view": {"shape": 4, "planes": [True] * 6},
-               "bands": [{"fn": 2, "atk": 0.5}], "master": {"gain": 2.0}},
-    ]}))
     monkeypatch.chdir(cwd)
     monkeypatch.setenv("HYPERSPACE_HOME", str(home))
     cfg = config.load()
@@ -98,27 +108,7 @@ def test_first_run_migrates_working_directory_files(tmp_path, monkeypatch, capsy
     assert (home / "config.toml").read_text() == (cwd / "config.toml").read_text()
     assert (cwd / "config.toml").exists()                       # originals stay
     err = capsys.readouterr().err
-    assert "config.toml" in err and "presets.json" in err
-    # the legacy theme bank became user presets and a schema-2 show
-    # naming them, `mine` (plan 13 WP2, plan 14 WP3); an empty legacy slot
-    # stays empty
-    assert (home / "projects" / "mine.hyp.json").is_file()
-    assert not (home / "projects" / "default.hyp.json").exists()
-    r = make(home, show="mine")
-    assert r.lib.project.bank[:2] == [None, "MINE"] and r.lib.project.startup == "MINE"
-    doc = json.loads((home / "presets" / "mine.json").read_text())
-    assert doc["schema"] == "hyperspace.preset/2" and doc["routes"]   # the factory lanes
-    # the slot's session ids (scene, band, master) are dropped: a preset never has them (D9)
-    assert doc["values"] == {"view.shape": 4, **{f"view.plane.{n}": True for n in library.PLANES}}
-    atk, gain = r.chain.params[0].atk, r.chain.gain
-    r.lib.project.load_slot(1)
-    assert r.view.shape == 4 and r.chain.params[0].atk == atk and r.chain.gain == gain
-    # no `desk` key: loading it gives the factory preset layer, not a dark desk
-    # (review of PR #65 — an explicit [] would blank every preset control)
-    assert "desk" not in doc
-    table = r.lib.presets.router.table
-    assert [b.source for b in table.desk()] == [
-        b.source for b in routing.factory_desk() if b.layer == "preset"]
+    assert "config.toml" in err and "midi_map.json" in err
     # second run: nothing to do, nothing said (migrate itself; ensure_home is memoised)
     assert library.migrate(home, cwd) == []
     library.ensure_home(home, cwd)
@@ -135,14 +125,17 @@ def test_config_explicit_path_keeps_working(tmp_path):
 
 # ---------------------------------------------------------------- files
 
-def test_factory_presets_ship_in_the_package():
-    assert (FACTORY / "projects" / "party.hyp.json").is_file()      # what a fresh home opens
-    assert (FACTORY / "projects" / "house.hyp.json").is_file()      # the house moods
-    assert not (FACTORY / "projects" / "default.hyp.json").exists()   # plan 14 WP3
-    names = {json.loads(p.read_text())["name"] for p in (FACTORY / "band").glob("*.json")}
+def test_the_band_scenes_ship_in_the_package():
+    """Nothing of the library ships with the app (one tier, 2026-10-28);
+    the analyzer's eleven scenes do, as code data under
+    hyperspace/scenes/band/, read by control.py without a library."""
+    names = {json.loads(p.read_text())["name"] for p in SCENES_DIR.glob("*.json")}
     assert names == set(SCENES)
-    doc = json.loads((FACTORY / "band" / "balanced.json").read_text())
+    doc = json.loads((SCENES_DIR / "balanced.json").read_text())
     assert doc["schema"] == "hyperspace.preset/1" and doc["group"] == "band"
+    assert scene_doc(SCENES_DIR / "balanced.json") == doc
+    with pytest.raises(LibraryError, match="no scene file"):
+        scene_doc(SCENES_DIR / "no-such.json")
     # the analyzer contract: a layout next to the flat band.{i}.* values
     assert [b["curve"] for b in doc["layout"]["bands"]] == ["rect"] * 6
     assert doc["layout"]["bands"][0]["f"] == pytest.approx((20 * 60) ** 0.5)
@@ -215,33 +208,11 @@ def test_a_project_keeps_the_session_apart(rig, tmp_path):
     assert not lib.project.is_dirty()
 
 
-def test_list_user_shadows_factory(rig, tmp_path):
-    lib = rig.lib
-    assert lib.list("band") == sorted(SCENES, key=str.lower)
-    assert lib.is_factory("band", "Balanced")
-    assert lib.list("nothing") == []
-    assert "band" in lib.groups() and "view" in lib.groups()
-    # a user file with the factory slug takes over; the name is what the file says
-    user = tmp_path / "band" / "balanced.json"
-    user.parent.mkdir()
-    doc = json.loads((FACTORY / "band" / "balanced.json").read_text())
-    doc["values"]["band.0.atk"] = 0.123
-    user.write_text(json.dumps(doc))
-    assert lib.list("band").count("Balanced") == 1
-    assert not lib.is_factory("band", "Balanced")
-    lib.load("band", "Balanced")
-    assert rig.chain.params[0].atk == 0.123
-    # deleting the shadow brings the factory one back
-    assert lib.delete("band", "Balanced")
-    assert lib.is_factory("band", "Balanced") and lib.current("band") == "Balanced"
-    assert not lib.delete("band", "Balanced")     # factory files are read-only
-
-
 # ---------------------------------------------------------------- presets
 
 def test_load_fills_missing_ids_from_the_default_preset(rig, tmp_path):
     lib = rig.lib
-    (tmp_path / "band").mkdir()
+    band(tmp_path, "Balanced", "Kick & Sizzle")
     (tmp_path / "band" / "sparse.json").write_text(json.dumps({
         "schema": "hyperspace.preset/1", "group": "band", "name": "Sparse",
         "values": {"band.3.atk": 0.9, "band.9.atk": 1.0},
@@ -277,14 +248,16 @@ def test_dirty_save_as_overwrite_reset(rig, tmp_path):
     assert lib.reset("view") is None                 # view has no default preset: fresh
     assert rig.view.bright == 1.0 and rig.view.shape == 3
     assert lib.current("view") is None
-    # band resets to Balanced by name
+    # band resets to Balanced by name (DEFAULT_NAMES) when the library holds one
+    reg["band.0.atk"].set(0.7)
+    assert lib.reset("band") is None and rig.chain.params[0].atk == 0.25
+    band(tmp_path, "Balanced")
     reg["band.0.atk"].set(0.7)
     assert lib.reset("band") == "Balanced"
     assert rig.chain.params[0].atk == 0.25 and lib.current("band") == "Balanced"
-    # a factory preset overwritten becomes a user shadow, the factory file untouched
     reg["band.0.atk"].set(0.7)
     assert lib.overwrite("band") == tmp_path / "band" / "balanced.json"
-    assert json.loads((FACTORY / "band" / "balanced.json").read_text())["values"]["band.0.atk"] == 0.25
+    assert json.loads((tmp_path / "band" / "balanced.json").read_text())["values"]["band.0.atk"] == 0.7
 
 
 def test_a_band_preset_saved_from_the_strip_carries_its_layout(rig, tmp_path):
@@ -337,16 +310,19 @@ def test_a_projects_inline_band_copy_carries_the_layout(rig, tmp_path):
     assert len(inline["layout"]["bands"]) == 7 and "band.6.atk" in inline["values"]
 
 
-def test_delete_is_user_only(rig, tmp_path):
-    """Audit L5: `rename` had no caller and went; delete stays user-only.
-    Plan 19 WP4 brings a rename back with a caller (the preset list), for
-    the presets' group only: a module preset is named by shows and scenes."""
+def test_delete_and_rename(rig, tmp_path):
+    """Audit L5: `rename` had no caller and went; delete deletes any file
+    (False only when there is no such preset). Plan 19 WP4 brings a rename
+    back with a caller (the preset list), for the presets' group — and
+    plan 40 the patches' (`RENAMABLE`): a module preset is named by shows
+    and scenes."""
     lib = rig.lib
     lib.save_as("camera", "Wide")
     assert lib.list("camera") == ["Wide"] and lib.current("camera") == "Wide"
     with pytest.raises(LibraryError, match="only a preset can be renamed"):
         lib.rename("camera", "Wide", "Tall")
-    assert not lib.delete("band", "Percussive")             # factory
+    assert library.RENAMABLE == ("presets", "patches")
+    assert not lib.delete("band", "Percussive")             # no such preset
     assert not lib.delete("camera", "never was")
     assert lib.delete("camera", "Wide")
     assert lib.list("camera") == [] and lib.current("camera") is None
@@ -386,6 +362,7 @@ def test_a_project_restores_a_modules_layout(rig, tmp_path):
     """Audit L8: a project saved on eight bands comes back with eight —
     `Project._apply` takes the same road a strip load does, layout first."""
     lib, control, chain = rig.lib, rig.control, rig.chain
+    band(tmp_path, "Balanced")
     lib.on_layout("band", control.apply_layout)
     lib.extra("band", lambda: {"layout": chain.layout()})      # six bands: the fresh layout
     control.add_band()
@@ -409,7 +386,7 @@ def test_a_project_restores_a_modules_layout(rig, tmp_path):
     assert lib.defaults("band")["band.7.atk"] != edited
     # a new project goes back to the layout the app started with
     lib.project.new()
-    assert chain.n == 6 and lib.current("band") == "Balanced"   # the party show's scene
+    assert chain.n == 6 and lib.current("band") is None         # a blank show: no module
     # …and the module as an inline copy, when its file is gone
     lib.project.load("Wide")
     (tmp_path / "band" / "eight.json").unlink()
@@ -427,8 +404,8 @@ def test_presets_are_the_librarys_one_document_kind(rig, tmp_path):
     """Audit L1, closed by plan 13 WP5: one preset system. The routing
     presets' kind is gone (was test_routing_presets_are_a_document_kind_of_
     the_library); what they were — legacy6, lfo-breathe, the hands-* — are
-    presets, which list, shadow, load, save, dirty and delete through the
-    library like any module's. A user's old bindings/ folder is no group."""
+    presets, which list, load, save, dirty and delete through the library
+    like any module's. A user's old bindings/ folder is no group."""
     from hyperspace.routing import Binding
 
     lib, router = rig.lib, rig.presets.router
@@ -439,7 +416,7 @@ def test_presets_are_the_librarys_one_document_kind(rig, tmp_path):
     assert "bindings" not in lib.groups() and "presets" in lib.groups()
     names = lib.list("presets")
     assert {"legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play"} <= set(names)
-    assert lib.is_factory("presets", "legacy6") and lib.current("presets") is None
+    assert lib.current("presets") is None
     assert not lib.is_dirty("presets")                    # nothing loaded: never dirty
     rig.view.pattern_mod[0] = 0.4
     lib.load("presets", "legacy6")
@@ -453,7 +430,6 @@ def test_presets_are_the_librarys_one_document_kind(rig, tmp_path):
     doc = json.loads(path.read_text())
     assert doc["schema"] == "hyperspace.preset/7" and len(doc["routes"]) == 13
     assert lib.current("presets") == "My Routes" and not lib.is_dirty("presets")
-    assert not lib.is_factory("presets", "My Routes")
     lib.load("presets", "hands-play")
     assert not router.table.routes_to("view.bright")[0].source.startswith("lane")
     lib.load("presets", "My Routes")
@@ -461,14 +437,6 @@ def test_presets_are_the_librarys_one_document_kind(rig, tmp_path):
     assert lib.delete("presets", "My Routes") and "My Routes" not in lib.list("presets")
     with pytest.raises(LibraryError):
         lib.load("presets", "no-such")
-    # a shadow: a user file named like a factory one wins, and lifts on delete
-    (tmp_path / "presets" / "legacy6.json").write_text(json.dumps(
-        {"schema": "hyperspace.preset/2", "name": "legacy6", "values": {}, "routes": [
-            {"source": "lane:0", "target": "view.bright", "op": "push", "value": 0.1}]}))
-    assert not lib.is_factory("presets", "legacy6")
-    lib.load("presets", "legacy6")
-    assert [b.target for b in router.table.routes()] == ["view.bright"]
-    assert lib.delete("presets", "legacy6") and lib.is_factory("presets", "legacy6")
 
 
 def test_a_bad_preset_is_reported_not_fatal(rig, tmp_path):
@@ -477,7 +445,6 @@ def test_a_bad_preset_is_reported_not_fatal(rig, tmp_path):
     LibraryError and the rest of the tree is fine."""
     lib = rig.lib
     d = tmp_path / "presets"
-    d.mkdir()
     (d / "odd.json").write_text(json.dumps({"schema": "hyperspace.bindings/3", "name": "odd"}))
     with pytest.raises(LibraryError):
         lib.load("presets", "odd")
@@ -492,7 +459,7 @@ def test_a_bad_preset_is_reported_not_fatal(rig, tmp_path):
     (d / "bare.json").write_text(json.dumps({"name": "bare", "values": {}}))    # no schema
     with pytest.raises(LibraryError):
         lib.load("presets", "bare")
-    assert lib.list("band")                               # the rest of the tree is fine
+    assert "TUMBLE" in lib.list("presets")                # the rest of the tree is fine
 
 
 def test_the_preset_kind_reaches_presets_at_call_time(rig):
@@ -528,9 +495,11 @@ def test_a_project_never_carries_the_loaded_preset(rig, tmp_path):
     assert not hasattr(lib.project, "io")
 
 
-def test_next_prev_cycle_by_name(rig):
+def test_next_prev_cycle_by_name(rig, tmp_path):
     lib = rig.lib
+    band(tmp_path, "Balanced", "Kick & Sizzle", "Percussive")
     names = lib.list("band")
+    assert names == ["Balanced", "Kick & Sizzle", "Percussive"]
     assert lib.next("band") == names[0]
     assert lib.next("band") == names[1]
     assert lib.prev("band") == names[0]
@@ -538,7 +507,8 @@ def test_next_prev_cycle_by_name(rig):
     assert lib.next("view") is None                   # nothing to cycle
 
 
-def test_layout_hook_runs_before_values(rig):
+def test_layout_hook_runs_before_values(rig, tmp_path):
+    band(tmp_path, "Kick & Sizzle")
     seen = []
     rig.lib.on_layout("band", lambda layout: seen.append((len(layout["bands"]),
                                                           rig.chain.params[0].fn)))
@@ -581,16 +551,13 @@ def test_schema_migration_table():
         migrate_doc({"schema": "hyperspace.preset/0"}, "hyperspace.preset")
 
 
-def test_legacy_slot_conversion():
-    assert legacy_slot({"name": "X", "view": {"pan": [1, 2], "unknown": 3}}) == {
-        "name": "X", "values": {"camera.pan.x": 1, "camera.pan.y": 2}}
-
-
 # ---------------------------------------------------------------- projects
 
 def test_project_save_load_new(rig, tmp_path):
     lib, reg = rig.lib, rig.reg
-    assert lib.project.name == "house" and lib.project.path is None   # the factory one
+    assert lib.project.name == "house"                        # the seed's, opened last
+    assert lib.project.path == tmp_path / "projects" / "house.hyp.json"
+    band(tmp_path, "Balanced", "Percussive")
     lib.load("band", "Percussive")
     lib.save_as("view", "Mine")
     reg["camera.zoom"].set_value(3.0)
@@ -598,22 +565,22 @@ def test_project_save_load_new(rig, tmp_path):
     lib.project.save_slot(2)
     p = lib.project.save("Gig")
     assert p == tmp_path / "projects" / "gig.hyp.json"
-    assert lib.project.list() == ["gig", "house", "party"]   # house, party: the factory ones
+    assert lib.project.list() == ["gig", "house", "party"]   # house, party: the seed's
     doc = json.loads(p.read_text())
     assert doc["schema"] == "hyperspace.project/2" and doc["name"] == "Gig"
     # a performance group's label is the preset's, never the project's
     assert doc["modules"] == {"band": "Percussive"}
     assert doc["session"]["master.gain"] == 2.5 and "camera.zoom" not in doc["session"]
     assert doc["bank"][2] == "STROBE CAGE"
-    assert lib.read("presets", "STROBE CAGE")["values"]["camera.zoom"] == 3.0   # the user's shadow
+    assert lib.read("presets", "STROBE CAGE")["values"]["camera.zoom"] == 3.0
     assert "io" not in doc                                  # audit L3: never written, gone
 
     lib.project.new()
     assert lib.project.name == "untitled" and lib.project.path is None
     assert rig.chain.gain == 1.0                                     # a fresh session…
-    assert lib.current("band") == "Balanced"                         # …the party show's scene,
-    assert lib.project.bank[2] == "FIELD"                            # …its bank
-    assert lib.current("presets") == "TUMBLE"                        # …and its first preset
+    assert lib.current("band") is None                               # …no module preset,
+    assert lib.project.bank == [None] * library.SLOTS                # …an empty bank
+    assert lib.project.startup is None                               # …and nothing to start on
 
     missing = lib.project.load("Gig")
     assert missing == [] and lib.project.path == p
@@ -645,9 +612,10 @@ def test_project_unknown_ids_and_a_short_bank(rig, tmp_path):
 
 def test_the_users_copy_of_the_last_show_opens_on_attach(tmp_path):
     r = make(tmp_path)
+    band(tmp_path, "Tremolo Web")
     r.reg["master.gain"].set(2.0)
     r.lib.load("band", "Tremolo Web")
-    r.lib.project.save()                              # the factory house show: your copy
+    r.lib.project.save()                              # the house show, opened last
     r2 = make(tmp_path, show=None)
     assert r2.lib.project.path == tmp_path / "projects" / "house.hyp.json"
     assert r2.chain.gain == 2.0 and r2.lib.current("band") == "Tremolo Web"
@@ -708,14 +676,15 @@ def test_a_band_presets_normalisation_switch_round_trips(rig):
 
 
 
-def test_factory_projects_are_listed_and_load_by_name(rig):
-    """The load combo lists the factory projects (plan 12's `party`) beside
-    the user's; opening one by name lands its bank without a user file,
+def test_the_librarys_shows_are_listed_and_load_by_name(rig, tmp_path):
+    """The load combo lists the library's shows (`projects/*.hyp.json`;
+    plan 12's `party`, from the seed); opening one by name lands its bank,
     and its startup preset with it."""
     lib = rig.lib
-    assert "party" in lib.project.list()
+    assert lib.project.list() == ["house", "party"]
     assert lib.project.load("party") == []
-    assert lib.project.name == "party" and lib.project.path is None
+    assert lib.project.name == "party"
+    assert lib.project.path == tmp_path / "projects" / "party.hyp.json"
     assert lib.project.bank == ["TUMBLE", "FACES", "FIELD", "WAKE", "TRIP", "ACID", "MANDALA",
                                 "NOITA", "TRACER"] + [None] * 15    # plan 19 WP1: slot 9
     assert lib.current("presets") == "TUMBLE" and lib.project.active == 0
@@ -747,21 +716,21 @@ def test_a_save_over_a_preset_keeps_the_old_file_in_the_trash(rig, tmp_path, mon
     stamp = kept.name[len("loud-one."):-len(".json")]
     assert len(stamp) == 15 and stamp[8] == "-" and stamp.replace("-", "").isdigit()
     # a preset (the document kind), by ⇧F: the bank's save
-    lib.project.save_slot(2)
+    lib.project.save_slot(2)                                  # over STROBE CAGE, the seed's
     name = lib.project.bank[2]
     mine = lib.path_of("presets", name)
     old = mine.read_bytes()
-    assert trash(tmp_path, "presets") == []
+    (seeds,) = trash(tmp_path, "presets")                     # the seed's file, kept
     reg["view.shape"].set(7)
     lib.project.save_slot(2)
-    (kept,) = trash(tmp_path, "presets")
+    (kept,) = [p for p in trash(tmp_path, "presets") if p != seeds]
     assert kept.read_bytes() == old and mine.read_bytes() != old
-    # a factory preset saved over becomes a user shadow: nothing of yours was lost
-    reg["band.0.atk"].set(0.7)
+    # a module preset saved over, the same: the old file kept
+    band(tmp_path, "Balanced")
     lib.load("band", "Balanced")
     reg["band.0.atk"].set(0.7)
     lib.overwrite("band")
-    assert trash(tmp_path, "band") == []
+    assert len(trash(tmp_path, "band")) == 1
     # a copy that fails: the save goes on, and says the old file was not kept
     monkeypatch.setattr(library, "to_trash", lambda path, root: None)
     lib.warning = ""
@@ -783,7 +752,7 @@ def test_a_delete_keeps_the_file_in_the_trash_or_does_not_delete(rig, tmp_path, 
     assert lib.delete("camera", "Wide") and not path.exists()
     (kept,) = trash(tmp_path, "camera")
     assert kept.read_bytes() == body and lib.list("camera") == []
-    assert not lib.delete("band", "Percussive") and trash(tmp_path, "band") == []   # factory
+    assert not lib.delete("band", "Percussive") and trash(tmp_path, "band") == []   # no such
     # the copy fails (the trash is a file, say): nothing is deleted
     path = lib.save_as("camera", "Tall")
     blocked = tmp_path / "blocked"
@@ -1040,14 +1009,14 @@ def test_an_eight_slot_show_loads_and_is_not_rewritten(owner_home):
 
 
 def test_loading_never_rewrites_a_preset_file(owner_home):
-    """The owner's files (on a copy): every preset in the home and in the
-    factory folder loads — from the bank, the strip and the file watch —
-    and no preset file changes by a byte or a tick of its mtime."""
+    """The owner's files (on a copy): every preset in the home loads — from
+    the bank, the strip and the file watch — and no preset file changes by
+    a byte or a tick of its mtime."""
     home = owner_home
     def presets_of(root):
         return {p.name: (p.read_bytes(), p.stat().st_mtime_ns)
                 for p in sorted((root / "presets").glob("*.json"))}
-    before, factory = presets_of(home), presets_of(FACTORY)
+    before = presets_of(home)
     r = boot_home(home)
     lib, pr = r.lib, r.lib.project
     for k in range(8):
@@ -1057,7 +1026,7 @@ def test_loading_never_rewrites_a_preset_file(owner_home):
         lib.load("presets", name)
         lib.poll()
     assert set(OWNER_PRESETS) <= set(lib.list("presets"))
-    assert presets_of(home) == before and presets_of(FACTORY) == factory
+    assert presets_of(home) == before
     assert len(list((home / "trash" / "presets").iterdir())) == 1        # nothing new in the trash
 
 
@@ -1071,7 +1040,7 @@ def test_a_show_that_uses_only_the_first_eight_is_written_with_eight(owner_home)
     lib, pr = r.lib, r.lib.project
     show = home / "projects" / "mine.hyp.json"
     was = json.loads(show.read_text())
-    pr.startup = "NIGHT TWO"                               # "starts on" (ui_presets.set_starts_on)
+    pr.startup = "NIGHT TWO"                               # the startup preset, in memory
     pr.write()
     doc = json.loads(show.read_text())
     assert doc == {**was, "startup": "NIGHT TWO"} and len(doc["bank"]) == 8
@@ -1244,114 +1213,7 @@ def test_a_long_bank_read_by_eight_slots_shows_the_first_eight(owner_home):
     assert json.loads(bak8(show)[0].read_text())["bank"] == eight
 
 
-# ------------------------------------------- plan 19 WP4: hide, rename, the trash
-
-def test_hiding_a_factory_preset_takes_it_off_the_list_and_nothing_else(owner_home):
-    """The owner's files (on a copy): × on a factory preset writes
-    `<home>/hidden.json` and nothing else — its stem, never a display name
-    — and takes it off `list()` only. `list(hidden=True)` keeps it; a slot
-    and "starts on" that name it still load it; a user preset is never
-    hidden by it. Unhide puts it back, again touching only `hidden.json`."""
-    home = owner_home
-    r = boot_home(home)
-    lib, pr = r.lib, r.lib.project
-    assert pr.bank[3] == "WAKE" and lib.is_factory("presets", "WAKE")
-    factory_wake = lib.path_of("presets", "WAKE")
-    factory_bytes = factory_wake.read_bytes()
-    before = tree(home)
-    assert lib.hide("presets", "WAKE")
-    assert lib.status == "hidden WAKE — F4 still loads it"
-    assert tree(home, but=("hidden.json",)) == before          # nothing else written
-    assert json.loads((home / "hidden.json").read_text()) == {
-        "schema": "hyperspace.hidden/1", "presets": ["party-wake"]}
-    assert "WAKE" not in lib.list("presets") and "WAKE" in lib.list("presets", hidden=True)
-    assert lib.hidden() == {"party-wake"} and factory_wake.read_bytes() == factory_bytes
-    # a slot and "starts on" still load it; a load is no edit of a file
-    pr.load_slot(3)
-    assert lib.current("presets") == "WAKE" and pr.active == 3
-    pr.startup = "WAKE"                                        # (in memory: no write)
-    lib.load("presets", "NIGHT ONE")
-    pr.load_startup()
-    assert lib.current("presets") == "WAKE"
-    pr.startup = "NIGHT ONE"
-    assert tree(home, but=("hidden.json",)) == before
-    # a user preset is never hidden by it, and a second hide writes nothing
-    assert not lib.hide("presets", "NIGHT TWO") and "NIGHT TWO" in lib.list("presets")
-    hidden = tree(home)
-    assert lib.hide("presets", "WAKE") and tree(home) == hidden
-    # a new Library reads it back
-    assert "WAKE" not in Library(home, period=0.0).list("presets")
-    # unhide: back on the list, only hidden.json rewritten
-    assert lib.unhide("presets", "WAKE") and "WAKE" in lib.list("presets")
-    assert json.loads((home / "hidden.json").read_text())["presets"] == []
-    assert tree(home, but=("hidden.json",)) == before
-    assert not lib.unhide("presets", "WAKE")                   # not hidden: nothing to do
-
-
-def test_a_user_file_that_shadows_a_hidden_factory_preset_shows_as_itself(tmp_path):
-    lib = make(tmp_path).lib
-    assert lib.hide("presets", "TRIP")
-    stem = lib.path_of("presets", "TRIP").name                # party-trip.json, the factory's
-    (tmp_path / "presets").mkdir(exist_ok=True)
-    (tmp_path / "presets" / stem).write_text(
-        (FACTORY / "presets" / stem).read_text())              # your copy under the same stem
-    assert "TRIP" in lib.list("presets") and not lib.is_factory("presets", "TRIP")
-
-
-def test_a_made_up_name_never_collides_with_a_hidden_preset(owner_home, tmp_path):
-    """`Project.save_new` and `_fresh_name` ask the list with
-    `hidden=True`: with TRACER loaded and a hidden factory preset called
-    "TRACER 2" (its stem says nothing of the name), save-as makes
-    "TRACER 3"; an empty slot's ⇧-save skips a hidden "PRESET 10"."""
-    import shutil
-
-    r = boot_home(owner_home)
-    lib, pr = r.lib, r.lib.project
-    factory = tmp_path / "factory"
-    shutil.copytree(FACTORY, factory)
-    for stem, name in (("party-tracer-two", "TRACER 2"), ("odd-one", "PRESET 10")):
-        doc = json.loads((factory / "presets" / "party-tracer.json").read_text())
-        (factory / "presets" / f"{stem}.json").write_text(preset.dumps({**doc, "name": name}))
-    lib.factory = factory
-    assert lib.hide("presets", "TRACER 2") and lib.hide("presets", "PRESET 10")
-    assert "TRACER 2" not in lib.list("presets")
-    lib.load("presets", "TRACER")
-    assert lib.hidden() == {"party-tracer-two", "odd-one"}
-    assert pr.save_new() and lib.current("presets") == "TRACER 3"
-    assert lib.path_of("presets", "TRACER 2") == factory / "presets" / "party-tracer-two.json"
-    pr.save_slot(9)                                            # an empty slot: PRESET 10…
-    assert pr.bank[9] == "PRESET 10 (2)"
-    assert lib.path_of("presets", "PRESET 10").parent == factory / "presets"
-
-
-def test_an_unreadable_hidden_list_is_kept_before_it_is_replaced(owner_home, monkeypatch):
-    """`hidden.json` that will not parse reads as nothing hidden, with a
-    warning; the first rewrite keeps it beside itself
-    (`hidden.json.bak-v0`); a backup that cannot be made means no
-    rewrite — and nothing else in the home changes either way."""
-    home = owner_home
-    bad = b'{"schema": "hyperspace.hidden/1", "presets": [ "party-wake",'
-    (home / "hidden.json").write_bytes(bad)
-    r = boot_home(home)
-    lib = r.lib
-    assert lib.hidden() == frozenset() and "WAKE" in lib.list("presets")
-    assert lib.warning.startswith("hidden.json:") and "nothing is hidden" in lib.warning
-    before = tree(home)
-    with monkeypatch.context() as m:
-        m.setattr(routing, "backup", lambda path, schema: None)
-        with pytest.raises(LibraryError, match="not rewritten"):
-            lib.hide("presets", "WAKE")
-    assert tree(home) == before and "WAKE" in lib.list("presets")
-    assert lib.hide("presets", "WAKE")
-    assert (home / "hidden.json.bak-v0").read_bytes() == bad
-    assert json.loads((home / "hidden.json").read_text())["presets"] == ["party-wake"]
-    assert tree(home, but=("hidden.json",)) == {k: v for k, v in before.items()
-                                                if k != "hidden.json"}
-    # the next write finds a good file: no second backup
-    assert lib.hide("presets", "TRIP")
-    assert sorted(p.name for p in home.glob("hidden.json*")) == ["hidden.json",
-                                                                 "hidden.json.bak-v0"]
-
+# ------------------------------------------- plan 19 WP4: rename, the trash
 
 def _shows_naming(r, name: str) -> None:
     """The owner's two shows both name `name` on a slot and as "starts on",
@@ -1381,7 +1243,7 @@ def test_rename_updates_every_show_and_keeps_each_old_file(owner_home):
     file in `trash/projects/` byte for byte; the open show's dot is clean
     and its light on the slot. A schema-1 show naming it is left alone, and
     so is a show whose copy cannot be made — both named in the warning.
-    Factory shows are never written; nothing else in the home changes."""
+    Nothing else in the home changes."""
     home = owner_home
     r = boot_home(home)
     lib, pr = r.lib, r.lib.project
@@ -1398,7 +1260,6 @@ def test_rename_updates_every_show_and_keeps_each_old_file(owner_home):
     preset_before = (home / "presets" / "night-two.json").read_bytes()
     show_before = {s: (shows / f"{s}.hyp.json").read_bytes()
                    for s in ("mine", "party", "old", "spare", "other")}
-    factory_before = {p.name: p.read_bytes() for p in (FACTORY / "projects").iterdir()}
     trash_before = {p.name for p in home.rglob("trash/**/*") if p.is_file()}
     before = tree(home)
     real = library.to_trash
@@ -1429,38 +1290,32 @@ def test_rename_updates_every_show_and_keeps_each_old_file(owner_home):
     assert pr.bank[1] == "SUNRISE" and pr.startup == "SUNRISE" and not pr.is_dirty()
     assert lib.current("presets") == "SUNRISE" and pr.active == 1
     assert "SUNRISE" in lib.list("presets") and "NIGHT TWO" not in lib.list("presets")
-    # nothing else changed; the factory shows never
+    # nothing else changed
     changed = {"presets/night-two.json", "presets/sunrise.json", "projects/mine.hyp.json",
                "projects/party.hyp.json"}
     after = tree(home, but=("trash/",))
     assert {k: v for k, v in after.items() if k not in changed} == {
         k: v for k, v in before.items() if k not in changed and not k.startswith("trash/")}
     assert trash_before <= {p.name for p in home.rglob("trash/**/*") if p.is_file()}
-    assert {p.name: p.read_bytes() for p in (FACTORY / "projects").iterdir()} == factory_before
     # the other show, opened: its slot has the new name and loads it
     pr.load("party")
     assert pr.bank[5] == "SUNRISE" and lib.current("presets") == "SUNRISE"
 
 
-def test_rename_refuses_a_taken_name_and_a_factory_preset(owner_home):
-    """Refused, nothing on disk changed: a factory preset ("save copy,
-    then rename the copy"), an empty name, a name taken by a preset of
-    yours, by a factory preset's name or its file stem, by a hidden one,
-    or by another spelling of the same slug. A rename that only changes
-    case or spacing keeps the file's stem: rewritten in place, its old
-    text in the trash."""
+def test_rename_refuses_a_taken_name(owner_home):
+    """Refused, nothing on disk changed: an empty name, a name taken by
+    another preset's name or its file stem, or by another spelling of the
+    same slug. A rename that only changes case or spacing keeps the
+    file's stem: rewritten in place, its old text in the trash."""
     home = owner_home
     r = boot_home(home)
     lib = r.lib
-    assert lib.hide("presets", "WAKE")
     before = tree(home)
-    for old, new, why in (("TRIP", "MY TRIP", "factory preset: save copy, then rename the copy"),
-                          ("NIGHT TWO", "   ", "needs a name"),
+    for old, new, why in (("NIGHT TWO", "   ", "needs a name"),
                           ("NIGHT TWO", "NIGHT ONE", "taken"),
                           ("NIGHT TWO", "night  one!", "taken"),
                           ("NIGHT TWO", "TRIP", "taken"),
                           ("NIGHT TWO", "party-trip", "taken"),
-                          ("NIGHT TWO", "WAKE", "taken"),          # hidden, still taken
                           ("GONE", "X", "no preset")):
         with pytest.raises(LibraryError, match=why):
             lib.rename("presets", old, new)
@@ -1514,26 +1369,22 @@ def test_renaming_the_loaded_preset_keeps_its_unsaved_edit(owner_home):
 
 def test_a_deleted_preset_says_which_slots_still_name_it(owner_home):
     """× on your own preset is plan 15's delete, unchanged; new is what is
-    said: which slots and "starts on" still name it. The slots are not
-    cleared for the owner — a restore to the old name makes them work."""
+    said: which slots and the startup preset still name it (nothing on the
+    panel sets it since the library went one-tier; the file still carries
+    it). The slots are not cleared for the owner — a restore to the old
+    name makes them work."""
     home = owner_home
     r = boot_home(home)
     lib, pr = r.lib, r.lib.project
     show = (home / "projects" / "mine.hyp.json").read_bytes()
-    assert lib.delete("presets", "NIGHT ONE")                 # F1 and "starts on"
-    assert lib.warning == ("NIGHT ONE is in the trash — F1 and 'starts on' still name it; "
+    assert lib.delete("presets", "NIGHT ONE")                 # F1 and the startup preset
+    assert lib.warning == ("NIGHT ONE is in the trash — F1 and the startup preset still name it; "
                            "restore it from the trash, or clear the slot")
     assert pr.bank[0] == "NIGHT ONE" and pr.startup == "NIGHT ONE"
     assert (home / "projects" / "mine.hyp.json").read_bytes() == show
     pr.load("party", startup=False)                          # a show that names it nowhere
     assert lib.delete("presets", "NIGHT THREE")
-    assert lib.status == "NIGHT THREE is in the trash — the preset list's trash can restore it"
-    # your copy of a factory preset: the factory one is back (the shadow rule)
-    lib.load("presets", "TRIP")
-    lib.overwrite("presets")
-    assert not lib.is_factory("presets", "TRIP")
-    assert lib.delete("presets", "TRIP") and lib.is_factory("presets", "TRIP")
-    assert lib.status == "your TRIP is in the trash — the factory TRIP is back"
+    assert lib.status == "NIGHT THREE is in the trash — the PRESETS page's trash can restore it"
 
 
 def test_the_watcher_never_resurrects_or_reloads(owner_home):
@@ -1564,11 +1415,10 @@ def test_the_watcher_never_resurrects_or_reloads(owner_home):
     (item,) = [t for t in lib.trash() if t.name == "SUNRISE"]
     lib.restore_trash(item)
     assert not poll() and lib.current("presets") is None       # a restore loads nothing
-    lib.hide("presets", "WAKE")
     lib.empty_trash()
     assert not poll()
     assert loads == [] and lib.list("presets").count("SUNRISE") == 1
-    assert "NIGHT TWO" not in lib.list("presets", hidden=True)
+    assert "NIGHT TWO" not in lib.list("presets")
 
 
 def test_restore_never_overwrites(owner_home):
@@ -1688,19 +1538,5 @@ def test_the_trash_lists_only_what_it_kept(owner_home):
     assert [t.path.name.split(".")[0] for t in lib.trash()] == ["night-one"]
     with pytest.raises(LibraryError, match="not a file the trash kept"):
         lib.restore_trash(library.Trashed(junk[0], "presets", "", ""))
-    assert ".DS_Store" not in lib.list("presets", hidden=True)
+    assert ".DS_Store" not in lib.list("presets")
     assert lib.empty_trash() == 1 and all(p.exists() for p in junk)
-
-
-def test_deleting_your_copy_of_a_hidden_factory_preset_says_it_is_hidden(owner_home):
-    """Review of PR #117: × on your ACID while the factory ACID is hidden
-    says the factory one is hidden, not that it is back."""
-    lib = boot_home(owner_home).lib
-    assert lib.hide("presets", "ACID")
-    lib.load("presets", "ACID")
-    lib.overwrite("presets")                                   # your copy, acid.json
-    assert "ACID" in lib.list("presets") and not lib.is_factory("presets", "ACID")
-    assert lib.delete("presets", "ACID")
-    assert lib.status == ("your ACID is in the trash — the factory ACID is hidden: show "
-                          "hidden in the list brings it back")
-    assert "ACID" not in lib.list("presets") and lib.is_factory("presets", "ACID")

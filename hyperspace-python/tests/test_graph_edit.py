@@ -13,6 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from conftest import seed
 from imgui_bundle import imgui
 from test_graphview import FakeDevice
 from test_ui_shell import frame
@@ -29,6 +30,7 @@ PKG = Path(__file__).resolve().parents[1] / "hyperspace"
 
 @pytest.fixture()
 def rig(shell_rig):  # noqa: F811
+    seed(shell_rig.lib.home)         # (the corpus: the presets the tests load by slug)
     return shell_rig
 
 
@@ -1459,8 +1461,8 @@ def test_an_lfo_route_is_unchanged(banks, monkeypatch):
 
 def wired_rig(tmp_path, graph=None, *, slug=None, undo_rig=False):
     """`free_rig` for a wired frame: preset "Wired" whose section is
-    `graph` (a `/6` section) — or factory preset `slug` loaded, migrated as
-    every load is — on a stub renderer, an Edit on it."""
+    `graph` (a `/6` section) — or corpus preset `slug` (tests/corpus) loaded,
+    migrated as every load is — on a stub renderer, an Edit on it."""
     from test_graph_json import Stub
     from test_presets import boot, put
 
@@ -1481,7 +1483,8 @@ def wired_rig(tmp_path, graph=None, *, slug=None, undo_rig=False):
         (rig.home / "presets").mkdir(parents=True, exist_ok=True)
         (rig.home / "presets" / fixture.name).write_text(fixture.read_text())
         rig.lib.load(PRESETS, slug)
-    else:
+    else:                           # (a corpus preset, seeded into the scratch library)
+        seed(rig.home, "presets", "dream")
         rig.lib.load(PRESETS, slug)
     stub = Stub()
     rig.presets.graph.attach(stub)

@@ -334,12 +334,12 @@ def test_click_to_map_offers_a_migrated_tracers_trail_knobs():
     cannot show (no dream drawn). With no look-back drawn, the trail knobs
     are dead."""
     import json
-    from pathlib import Path
+
+    from conftest import CORPUS
 
     from hyperspace import learn
 
-    lib = Path(__file__).resolve().parents[1] / "hyperspace" / "library" / "presets"
-    doc = json.loads((lib / "party-tracer.json").read_text())
+    doc = json.loads((CORPUS / "presets" / "party-tracer.json").read_text())
     values = doc["values"]
     assert values["dream.on"] is False
     drawn = learn.drawn_of(G.read_graph(doc["graph"]))
@@ -358,28 +358,19 @@ def test_click_to_map_offers_a_migrated_tracers_trail_knobs():
     assert learn.cannot_show("dream.2.fade", values, drawn=drawn) == "no look-back"
 
 
-def test_a_routed_trail_knob_leaves_the_dream_alone():
-    """A routes-only file's route into a look-back's knob switches nothing
-    on (the trail needs no switch); one into the dream's own turns
-    `dream.on` on, as before."""
-    from hyperspace.preset import effects_on
-
-    assert effects_on([{"target": "dream.fade"}], {}) == {}
-    assert effects_on([{"target": "dream.echo_mix"}, {"target": "dream.2.gap"}], {}) == {}
-    assert effects_on([{"target": "dream.mix"}], {}) == {"dream.on": True}
-
-
 def test_the_tracer_only_group_preset_leaves_the_worker_idle(ctx, tmp_path):
     """The dream group's `tracer-only` (echoes alone, mix 0) says the dream
     off since plan 36 T4: applied over a frame drawing a dream, the dream
     passes through and the worker gets no submission; its note says a
     values-only preset draws no node."""
+    from conftest import seed
     from test_lookback import registry
 
     from hyperspace.library import Library
 
     d = DreamState(on=True)
     reg = registry(d)
+    seed(tmp_path, "dream")          # (the corpus's dream module presets)
     lib = Library(tmp_path, period=0.0)
     lib.attach(reg)
     assert lib.load("dream", "tracer-only") == [] and d.on is False

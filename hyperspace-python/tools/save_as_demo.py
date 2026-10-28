@@ -14,15 +14,14 @@ PRESETS page's "put preset here…" and "clear slot" calls, and a Learn
 the bar refuses.
 
 It always runs on a fresh temp home of its own (`undo_demo` sets
-`HYPERSPACE_HOME` on import, before anything reads it): it cannot touch
+`HYPERSPACE_HOME` on import, before anything reads it, and seeds it with
+the test corpus: the party show and its presets): it cannot touch
 ~/Hyperspace.
 
   uv run python tools/save_as_demo.py [--out docs/plans/assets/15-safety-net/save-as-demo.txt]
-                                      [--shot docs/plans/assets/15-safety-net/save-as-slot-menu.png]
 
-`--shot` also draws the control panel's PRESETS page in a **hidden** GLFW
-window, right-clicks the slot the first save filled and opens "put
-preset here…", and saves the picture as a PNG.
+(The `--shot` of the PRESETS page's slot menu went with the page's bank
+pills, 2026-10-28: the bank is the desk's now.)
 """
 
 # ruff: noqa: I001 — undo_demo is imported first, on purpose: it sets
@@ -37,7 +36,6 @@ from pathlib import Path
 import undo_demo as demo
 from undo_demo import frames, say, settle, stack
 
-import glfw
 import mido
 
 from hyperspace import apc40, midi
@@ -115,90 +113,6 @@ def footer(r) -> str:
     return f"·  {lib.warning or lib.status}"
 
 
-def shot(r, path: Path, slot: int) -> None:
-    """The PRESETS page with slot `slot`'s menu open on "put preset
-    here…", read back from a hidden window."""
-    import numpy as np
-    from imgui_bundle import imgui, implot
-    from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
-    from OpenGL import GL
-    from PIL import Image
-
-    from hyperspace import ui_presets
-    from hyperspace.app import CONTROL_SIZE
-    from hyperspace.ui import PAGE_KEYS, Panel, apply_style, load_fonts
-
-    if not glfw.init():
-        raise SystemExit("GLFW failed to initialise (no display?)")
-    glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
-    glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
-    glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, True)
-    glfw.window_hint(glfw.VISIBLE, False)             # never shown
-    win = glfw.create_window(*CONTROL_SIZE, "save-as shot", None, None)
-    if not win:
-        glfw.terminate()
-        raise SystemExit("could not create the hidden window")
-    glfw.make_context_current(win)
-    imgui.create_context()
-    implot.create_context()
-    apply_style()
-    load_fonts()
-    impl = GlfwRenderer(win)
-    panel = Panel(r.control, r.audio, r.view, bank=r.lib.project, registry=r.reg,
-                  library=r.lib)
-    panel.clock, panel.lfos, panel.router, panel.learn = r.clock, r.lfos, r.router, r.learn
-    panel.hands, panel.hand_settings, panel.output = r.hands_io, r.settings, r.output
-    panel.midi, panel.undo = r.midi, r.undo
-    panel.reg["ui.page"].set(PAGE_KEYS.index("presets"))
-    io = imgui.get_io()
-
-    def draw(n: int = 1, at=None, button=None, pressed=False) -> None:
-        for _ in range(n):
-            frames(r)
-            glfw.poll_events()
-            impl.process_inputs()
-            if at is not None:                        # the mouse, by hand: nobody is at it
-                io.add_mouse_pos_event(*at)
-            if button is not None:
-                io.add_mouse_button_event(button, pressed)
-                button = None
-            imgui.new_frame()
-            GL.glClearColor(0.0, 0.0, 0.0, 1.0)
-            GL.glClear(GL.GL_COLOR_BUFFER_BIT)
-            panel.draw(demo.DT, 60.0)
-            imgui.render()
-            impl.render(imgui.get_draw_data())
-            GL.glFinish()
-
-    def click(rect, button: int) -> None:
-        at = ((rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2)
-        draw(2, at)
-        draw(1, at, button, True)
-        draw(1, at, button, False)
-        draw(2, at)
-
-    draw(8)
-    st = ui_presets._state(panel)
-    click(st["rects"][f"preset.{slot}"], 1)           # right-click the slot
-    menu = st.get("slot_menu")
-    if menu is None:
-        print("the slot's menu did not open in the hidden window: the page alone is shot")
-    else:
-        put = menu["rects"]["put"]
-        draw(30, ((put[0] + put[2]) / 2, (put[1] + put[3]) / 2))   # hover: the submenu opens
-    w, h = glfw.get_framebuffer_size(win)
-    raw = GL.glReadPixels(0, 0, w, h, GL.GL_RGB, GL.GL_UNSIGNED_BYTE)
-    px = np.frombuffer(raw, dtype=np.uint8).reshape(h, w, 3)[::-1]
-    impl.shutdown()
-    glfw.terminate()
-    if not px.any():
-        raise SystemExit("the hidden window read back black: no picture on this machine")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    Image.fromarray(px).save(path, optimize=True)
-    print(f"wrote {path}")
-
-
 def main() -> None:
     r = demo.boot()
     lib, proj, table = r.lib, r.lib.project, r.router.table
@@ -268,7 +182,7 @@ def main() -> None:
     say(f"    <home>/presets: {files(r)}")
     doc = json.loads((demo.HOME / "presets" / "trip-2.json").read_text())
     say(f"    trip-2.json: name {doc['name']!r}, view.bright {doc['values']['view.bright']:g} "
-        f"(the edit); the factory TRIP is untouched: "
+        f"(the edit); TRIP itself is untouched: "
         f"{lib.read(PRESETS, 'TRIP')['values']['view.bright']:g}")
     stack(r)
 
@@ -315,7 +229,7 @@ def main() -> None:
     say(f"    bank: {bank(r)}")
 
     say()
-    say('7. "put preset here…" and "clear slot" (Project.put_slot / clear_slot)')
+    say("7. A preset put on a slot and a slot cleared (Project.put_slot / clear_slot)")
     was = files(r)
     proj.put_slot(1, "TRIP 3")
     say(f"    put TRIP 3 on F2:  footer: {footer(r)}")
@@ -356,8 +270,6 @@ def main() -> None:
         out = Path(sys.argv[sys.argv.index("--out") + 1])
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text("\n".join(demo.lines) + "\n")
-    if "--shot" in sys.argv:
-        shot(r, Path(sys.argv[sys.argv.index("--shot") + 1]), 5)
 
 
 if __name__ == "__main__":

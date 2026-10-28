@@ -1,7 +1,7 @@
 """Plan 40 T1 (P1, D5): the patch as data — `patches.py` and the library's
 `patches` kind.
 
-No GL, no imgui: a factory preset's parts are landed headless from its file
+No GL, no imgui: a corpus preset's parts are landed headless from its file
 (the graph section read, the routes and preset-layer desk in a bare
 `routing.Bindings`, its values as the registry's snapshot would hold them).
 
@@ -13,9 +13,8 @@ No GL, no imgui: a factory preset's parts are landed headless from its file
 - `spawn` renames into a host that holds them, lists a desk conflict, and
   notes a macro with no free number;
 - the round trip — `read(lift(spawn(p)))` is `read(p)` up to the renames and
-  the origin — over the example and over every factory preset's main run;
-- the library lists, hides, renames, saves and reads patches, and never
-  loads one.
+  the origin — over the example and over every corpus preset's main run;
+- the library lists, renames, saves and reads patches, and never loads one.
 """
 
 from __future__ import annotations
@@ -30,20 +29,14 @@ import pytest
 
 from hyperspace import graph as G
 from hyperspace import graphview, library, patches
-from hyperspace.library import (
-    FACTORY,
-    HIDDEN,
-    PATCH_SCHEMA,
-    PATCHES,
-    Library,
-    LibraryError,
-)
+from hyperspace.library import PATCH_SCHEMA, PATCHES, Library, LibraryError
 from hyperspace.patches import Host, read, spawn
 from hyperspace.routing import Binding, Bindings
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "patches"
 ACID_WASH = FIXTURES / "acid-wash.json"
-PRESETS = FACTORY / "presets"
+# the presets the build once shipped (tests/corpus: test data, never read by the app)
+PRESETS = Path(__file__).resolve().parent / "corpus" / "presets"
 
 
 def example() -> dict:
@@ -619,8 +612,8 @@ NO_RUN = {"big-blue-wave", "ember-orbit", "hands-orbit", "hands-play", "hex-engi
           "party-tracer"}
 
 
-def test_a_patch_cut_from_every_factory_presets_main_run_round_trips():
-    """For each factory preset: its main run (`graph.run_back` into
+def test_a_patch_cut_from_every_corpus_presets_main_run_round_trips():
+    """For each corpus preset: its main run (`graph.run_back` into
     `output.all.image`) lifted, spawned back into the same preset — every
     id renamed, `.2` — landed, and lifted again reads as the first."""
     skipped, done = set(), []
@@ -696,17 +689,15 @@ def test_crossing_and_the_sides_classify_what_crosses_a_region():
 
 @pytest.fixture()
 def lib(tmp_path):
-    """A scratch library whose factory is a copy of the wheel's plus one
-    factory patch (the example), so list, hide and the shadow are seen."""
-    factory = tmp_path / "factory"
-    shutil.copytree(FACTORY, factory)
-    (factory / PATCHES).mkdir(exist_ok=True)
-    shutil.copy(ACID_WASH, factory / PATCHES / ACID_WASH.name)
-    return Library(tmp_path / "home", factory=factory, period=0.0)
+    """A scratch library holding one patch (the example), so list, rename
+    and the trash are seen."""
+    home = tmp_path / "home"
+    (home / PATCHES).mkdir(parents=True)
+    shutil.copy(ACID_WASH, home / PATCHES / ACID_WASH.name)
+    return Library(home, period=0.0)
 
 
-def test_the_factory_ships_no_patch_folder_and_lists_nothing(tmp_path):
-    assert not (FACTORY / PATCHES).exists() or not list((FACTORY / PATCHES).glob("*.json"))
+def test_a_fresh_library_lists_no_patch(tmp_path):
     lib = Library(tmp_path / "home", period=0.0)
     assert lib.list(PATCHES) == []
     assert PATCHES in lib.kinds and PATCHES in lib.groups()
@@ -750,34 +741,25 @@ def test_a_bad_patch_is_a_library_error(lib):
         lib.load(PATCHES, "acid wash")
 
 
-def test_patches_list_hide_and_rename_as_presets_do(lib):
-    """Factory and the user's by name, a user's shadowing a factory one by
-    slug; × hides a factory patch (`hidden.json`'s ``patches``), not a
-    user's; a user's patch renames, the old file to the trash."""
-    assert lib.list(PATCHES) == ["acid wash"] and lib.is_factory(PATCHES, "acid wash")
+def test_patches_list_rename_and_delete_as_presets_do(lib):
+    """Listed by name, case folded; a patch renames, the old file to the
+    trash; × deletes it, the file to the trash (one tier: every patch is
+    the user's)."""
+    assert lib.list(PATCHES) == ["acid wash"]
     mine = {**example(), "name": "Blue Wash"}
     lib.save_patch(mine)
     assert lib.list(PATCHES) == ["acid wash", "Blue Wash"]
-    assert lib.hide(PATCHES, "acid wash")
-    assert lib.status == "hidden acid wash — show hidden in the list brings it back"
-    assert json.loads((lib.home / HIDDEN).read_text()) == {
-        "schema": "hyperspace.hidden/1", "presets": [], "patches": ["acid-wash"]}
-    assert lib.list(PATCHES) == ["Blue Wash"]
-    assert lib.list(PATCHES, hidden=True) == ["acid wash", "Blue Wash"]
-    assert lib.read_patch("acid wash")["name"] == "acid wash"   # hidden, still read
-    assert not lib.hide(PATCHES, "Blue Wash")                   # a user's: deleted, not hidden
-    assert lib.hidden() == frozenset()                          # the presets' untouched
     # read back by a fresh library over the same home
-    again = Library(lib.home, factory=lib.factory, period=0.0)
-    assert again.list(PATCHES) == ["Blue Wash"]
-    assert lib.unhide(PATCHES, "acid wash")
-    assert json.loads((lib.home / HIDDEN).read_text()) == {
-        "schema": "hyperspace.hidden/1", "presets": []}
+    again = Library(lib.home, period=0.0)
+    assert again.list(PATCHES) == ["acid wash", "Blue Wash"]
     dst = lib.rename(PATCHES, "Blue Wash", "Deep Wash")
     assert dst.name == "deep-wash.json" and lib.read_patch("Deep Wash")["name"] == "Deep Wash"
     assert lib.list(PATCHES) == ["acid wash", "Deep Wash"]
     assert lib.status == "renamed Blue Wash → Deep Wash"
     assert {t.name for t in lib.trash()} == {"Blue Wash"}
-    with pytest.raises(LibraryError, match="factory preset"):
-        lib.rename(PATCHES, "acid wash", "x")
+    with pytest.raises(LibraryError, match="taken"):
+        lib.rename(PATCHES, "acid wash", "Deep Wash")
     assert lib.delete(PATCHES, "Deep Wash") and lib.list(PATCHES) == ["acid wash"]
+    assert {t.name for t in lib.trash()} == {"Blue Wash", "Deep Wash"}
+    assert not lib.delete(PATCHES, "Deep Wash")                 # gone: nothing to delete
+    assert lib.delete(PATCHES, "acid wash") and lib.list(PATCHES) == []

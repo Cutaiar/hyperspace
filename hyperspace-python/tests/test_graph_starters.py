@@ -13,12 +13,12 @@ wires what it can and says what is left unwired."""
 from __future__ import annotations
 
 import pytest
+from conftest import seed
 from test_graph_edit import wired_rig, wired_wires
-from test_ui_presets import _click, _rects
-from test_ui_shell import frame
+from test_ui_shell import _click, frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
-from hyperspace import graphview, preset, ui_graph, undo
+from hyperspace import graphview, preset, ui_graph, ui_presets, undo
 from hyperspace.library import Marks
 
 ALL = "output.all.image"
@@ -29,6 +29,7 @@ SCENE = {"frame": "wired", "wires": [{"from": "shape", "to": "scene.geometry"},
 
 @pytest.fixture()
 def page(shell_rig):  # noqa: F811
+    seed(shell_rig.lib.home)         # (the corpus: the presets the tests load by slug)
     return shell_rig
 
 
@@ -91,7 +92,7 @@ def test_new_from_the_strip_lays_out_at_the_page_s_view(page):
     frame(panel, "presets")
     st["seen"] = (300.0, 200.0)             # (as the GRAPH page last saw it)
     frame(panel)
-    _click(panel, _rects(panel)["strip.presets.new"])
+    _click(panel, ui_presets._state(panel)["rects"]["strip.presets.new"])
     assert page.lib.current("presets") == preset.UNTITLED_PRESET
     assert page.lib.presets.layout["render:shape"] == list(at)
     assert wired_wires(page.lib) == CHAIN

@@ -17,6 +17,7 @@ import copy
 import json
 from pathlib import Path
 
+from conftest import seed
 from test_graph_edit import free_rig
 
 from hyperspace import graph as G
@@ -206,28 +207,28 @@ def test_through_needs_a_hands_layer_over_all_outputs(tmp_path):
 
 
 def test_a_picture_put_back_saves_the_untouched_frame(tmp_path):
-    """A factory preset, a picture picked for output 2 and put back — the
+    """A corpus preset, a picture picked for output 2 and put back — the
     frame is the migrated one again, so the save is the untouched preset's
     (row 394: `/6` either way, and the same graph)."""
     from test_plan31_wiring import make_app
 
-    app = make_app(tmp_path)
-    app.lib.load("presets", "party-trip")
+    app = make_app(seed(tmp_path))
+    app.lib.load("presets", "TRIP")
     gs = app.presets.graph
-    untouched = app.presets.document("party-trip")
+    untouched = app.presets.document("TRIP")
     assert untouched["schema"] == M.WIRED_SCHEMA
     e = graphview.Edit(graph=gs, push=lambda label: None)
     assert graphview.set_picture(e, "output.2.image", "scene") is None
     assert G.Wire("scene", "output.2.image") in gs.spec.wires    # (plan 28's words: /2)
     assert graphview.set_picture(e, "output.2.image", "nothing") is None
-    edited = app.presets.document("party-trip")
+    edited = app.presets.document("TRIP")
     assert edited["schema"] == M.WIRED_SCHEMA and edited["graph"] != untouched["graph"]
     assert graphview.set_picture(e, "output.2.image", "as All outputs") is None
-    assert app.presets.document("party-trip") == untouched
-    assert graphview.set_through(e, 2, True) is None      # (party-trip lays All outputs' hands)
-    assert app.presets.document("party-trip")["graph"] != untouched["graph"]
+    assert app.presets.document("TRIP") == untouched
+    assert graphview.set_through(e, 2, True) is None      # (TRIP lays All outputs' hands)
+    assert app.presets.document("TRIP")["graph"] != untouched["graph"]
     assert graphview.set_through(e, 2, False) is None
-    assert app.presets.document("party-trip") == untouched
+    assert app.presets.document("TRIP") == untouched
 
 
 def test_open_on_graph_selects_the_window(tmp_path):

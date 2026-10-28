@@ -303,7 +303,7 @@ def test_the_replace_prompt_swaps_the_owner_or_leaves_the_table(rig, tmp_path, m
 
 def test_the_conflict_sheet_asks_per_row_preselected_to_the_patch(rig):
     """Plan 40 T3 (D3, D9): a spawn whose K1 collides (acid-wash into
-    party-trip, where K1 is view.bright) puts up the conflict sheet in the
+    TRIP, where K1 is view.bright) puts up the conflict sheet in the
     same modal, ahead of any Replace / Keep question: its title, one row
     per conflict in words, every row on the patch; **keep all existing**
     flips them, **take all** back; the wants the rig lacks beneath. While it
@@ -319,7 +319,7 @@ def test_the_conflict_sheet_asks_per_row_preselected_to_the_patch(rig):
     panel, reg = rig.panel, rig.reg
     table = rig.router.table
     with_patch(rig)
-    rig.lib.load("presets", "party-trip")
+    rig.lib.load("presets", "TRIP")
     frame(panel, "graph")
     lrn = panel.learn = Learn(reg, table)
     lrn.arm("view.speed")
@@ -380,7 +380,7 @@ def test_the_sheet_is_drawn_ahead_of_a_replace_question_up_with_it(rig, monkeypa
     from hyperspace import ui
     panel, table = rig.panel, rig.router.table
     with_patch(rig)
-    rig.lib.load("presets", "party-trip")
+    rig.lib.load("presets", "TRIP")
     frame(panel, "graph")
     old = Binding("lfo:0", "view.speed", "push", 0.5)
     new = Binding("lfo:1", "view.speed", "push", 0.5)
@@ -1316,27 +1316,29 @@ def test_a_desk_click_clears_a_filter_that_has_the_keyboard(rig, monkeypatch):
 def test_the_head_has_the_same_dot_and_label(rig, tmp_path):
     """Plan 19 WP5: ROUTING's head is the preset strip's save over the
     same preset — the same 12 px disc beside the name, the save chip lit
-    while dirty and saying "save copy" on a factory preset, "save" on
-    yours. Clicking it is `Library.overwrite`, as before."""
+    while dirty and reading "save" (one tier: every preset is yours).
+    Clicking it is `Library.overwrite`, as before."""
     from test_ui_shell import _click
 
     from hyperspace import ui
 
     panel, lib, reg = rig.panel, rig.lib, rig.reg
-    lib.load("presets", "TRIP")
+    lib.load("presets", "BIG BLUE WAVE")
+    path = tmp_path / "presets" / "big-blue-wave.json"
+    was = path.read_bytes()
     frame(panel, "routing")
     frame(panel)
     st = ui_presets._state(panel)
-    assert "head.dot" not in st["rects"] and st["save"]["head"] == ("save copy", False)
+    assert "head.dot" not in st["rects"] and st["save"]["head"] == ("save", False)
     reg["view.bright"].set(reg["view.bright"].value * 0.5 + 0.1)
     frame(panel)
     frame(panel)
     x0, y0, x1, y1 = st["rects"]["head.dot"]
     assert x1 - x0 == y1 - y0 == 2 * ui.DOT_R
-    assert st["save"]["head"] == ("save copy", True)
-    assert not (tmp_path / "presets" / "trip.json").exists()
+    assert st["save"]["head"] == ("save", True)
     _click(panel, st["rects"]["head.save"])
-    assert (tmp_path / "presets" / "trip.json").is_file() and not lib.is_dirty("presets")
+    assert path.read_bytes() != was and not lib.is_dirty("presets")
+    assert [t.name for t in lib.trash()] == ["BIG BLUE WAVE"]  # the old text, kept
     frame(panel)
     assert "head.dot" not in st["rects"] and st["save"]["head"] == ("save", False)
 

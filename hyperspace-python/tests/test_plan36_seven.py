@@ -10,7 +10,7 @@
 - `/4`–`/6` are read only through the one-way migration to `/7`
   (`graphmigrate.seven`), with a note — and a `/7` is never migrated, so a
   migrated wire the owner cuts stays cut through a save and a reload.
-- The factory presets are their sources' `/7`, fixed points.
+- The corpus presets are their sources' `/7`, fixed points.
 
 The goldens (tests/test_golden_frames.py) prove the migrated pictures."""
 
@@ -20,6 +20,7 @@ import json
 from pathlib import Path
 
 import pytest
+from conftest import CORPUS
 
 from hyperspace import graph as G
 from hyperspace import graphmigrate as M
@@ -29,6 +30,8 @@ from hyperspace.outputs import Switches, View
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures" / "presets"
+# the corpus presets' sources (plan 36 T3: the corpus files are their `/7`)
+SOURCES = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
 SIZE = (240, 150)
 SEVEN = M.WIRED_SCHEMA
 # today's frame: what a section-less old preset migrates to (`wired_of(Wiring())`;
@@ -183,7 +186,7 @@ def test_the_migration_drops_the_values_of_effects_not_in_the_section():
 # ---------------------------------------------------------------- old files, one way
 
 def test_an_old_section_less_preset_migrates_to_todays_frame():
-    """A `/2` with no section (every factory preset's source) is today's
+    """A `/2` with no section (every corpus preset's source) is today's
     frame, each hidden edge a wire, as `/7`."""
     out, notes = M.seven({"schema": "hyperspace.preset/2", "values": {}}, {})
     assert out["schema"] == SEVEN and notes == []
@@ -258,7 +261,7 @@ def test_a_cut_migrated_wire_stays_cut_through_a_save_and_a_reload(tmp_path):
     folder = tmp_path / "home" / preset.GROUP
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "trip.json").write_bytes(
-        (preset.FACTORY_SOURCES / "party-trip.json").read_bytes())          # a /2
+        (SOURCES / "party-trip.json").read_bytes())                          # a /2
     app.lib.load(preset.GROUP, "trip")
     assert ("pattern", "shape.faces") in _pairs(app.presets.graph.free_doc())
     e = graphview.Edit(graph=app.presets.graph, push=lambda label: None)
@@ -272,21 +275,21 @@ def test_a_cut_migrated_wire_stays_cut_through_a_save_and_a_reload(tmp_path):
     assert again.presets.migrated == ""
 
 
-# ---------------------------------------------------------------- the factory presets
+# ---------------------------------------------------------------- the corpus presets
 
-def test_every_factory_preset_is_its_sources_seven_and_round_trips(tmp_path):
-    """Each factory preset is `/7`; loaded and saved untouched it is the same
-    bytes; and it is exactly what tools/migrate_library.py makes of its
-    source (`--to`: load the old file, save) — so the migration can be
-    re-run from the sources and lands the same files."""
-    paths = sorted(preset.FACTORY_DIR.glob("*.json"))
+def test_every_corpus_preset_is_its_sources_seven_and_round_trips(tmp_path):
+    """Each corpus preset (tests/corpus/presets) is `/7`; loaded and saved
+    untouched it is the same bytes; and it is exactly what
+    tools/migrate_library.py makes of its source (`--to`: load the old file,
+    save) — so the migration can be re-run from the sources and lands the
+    same files."""
+    paths = sorted((CORPUS / "presets").glob("*.json"))
     assert len(paths) == 25
-    assert sorted(p.name for p in preset.FACTORY_SOURCES.glob("*.json")) == \
-        [p.name for p in paths]
+    assert sorted(p.name for p in SOURCES.glob("*.json")) == [p.name for p in paths]
     for k, path in enumerate(paths):
         data = path.read_bytes()
         assert json.loads(data)["schema"] == SEVEN, path.name
-        again, notes, _ = headless.resave(path, tmp_path / f"f{k}", factory=True)
+        again, notes, _ = headless.resave(path, tmp_path / f"f{k}")
         assert again == data and notes == [], path.name
-        made, _, _ = headless.resave(preset.FACTORY_SOURCES / path.name, tmp_path / f"s{k}")
+        made, _, _ = headless.resave(SOURCES / path.name, tmp_path / f"s{k}")
         assert made == data, path.name

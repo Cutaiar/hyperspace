@@ -1,6 +1,7 @@
 """tools/move_library.py (plan 25 D8): an existing library copied into a
-shared folder — never over a file, the machine files left behind, the
-hidden lists united, nothing in the home touched. All on tmp_path."""
+shared folder — never over a file, the machine files left behind, nothing
+in the home touched. All on tmp_path. (The hidden lists' union went with
+hidden presets, 2026-10-28: a `hidden.json` is a machine file now.)"""
 
 import importlib.util
 import json
@@ -34,7 +35,7 @@ def a_home(tmp_path) -> Path:
         (h / f).write_text(f)
     (h / "hidden.json").write_text(json.dumps({"schema": "hyperspace.hidden/1",
                                                "presets": ["party-trip", "house"]}))
-    return h
+    return h                        # (hidden.json: a leftover of the two-tier library)
 
 
 def snapshot(root: Path) -> dict:
@@ -52,10 +53,10 @@ def test_a_fresh_copy_takes_the_library_and_leaves_the_machine(tmp_path):
     before = snapshot(home)
     dest = tmp_path / "Dropbox" / "Hyperspace"
     done, _ = run(tmp_path, dest, home)
-    assert sorted(snapshot(dest)) == ["band/wide.json", "fx/acid.json", "hidden.json",
+    assert sorted(snapshot(dest)) == ["band/wide.json", "fx/acid.json",
                                       "presets/hi-frek.json", "presets/mine.json",
                                       "projects/mine.hyp.json"]
-    assert {w for w, _ in done} == {"copied", "hidden +2"}
+    assert {w for w, _ in done} == {"copied"}
     assert (dest / "presets" / "mine.json").read_text() == '{"name": "MINE", "v": 1}'
     assert snapshot(home) == before                  # nothing in the home touched
 
@@ -67,7 +68,7 @@ def test_a_second_run_changes_nothing(tmp_path):
     first = snapshot(dest)
     done, _ = run(tmp_path, dest, home)
     assert snapshot(dest) == first
-    assert {w for w, _ in done} == {"have", "hidden"}
+    assert {w for w, _ in done} == {"have"}
 
 
 def test_a_conflict_keeps_theirs_and_says_where_yours_is(tmp_path):
@@ -82,20 +83,6 @@ def test_a_conflict_keeps_theirs_and_says_where_yours_is(tmp_path):
     assert str(home / "presets" / "mine.json") in said
 
 
-def test_hidden_is_the_union_of_both_lists(tmp_path):
-    home = a_home(tmp_path)
-    dest = tmp_path / "shared"
-    dest.mkdir()
-    (dest / "hidden.json").write_text(json.dumps({"schema": "hyperspace.hidden/1",
-                                                  "presets": ["house", "acid-rain"]}))
-    done, lines = run(tmp_path, dest, home)
-    doc = json.loads((dest / "hidden.json").read_text())
-    assert doc == {"schema": "hyperspace.hidden/1",
-                   "presets": ["acid-rain", "house", "party-trip"]}
-    assert ("hidden +1", Path("hidden.json")) in done
-    assert any("party-trip" in line for line in lines)
-
-
 def test_machine_files_trash_git_and_backups_stay_behind(tmp_path):
     home = a_home(tmp_path)
     dest = tmp_path / "shared"
@@ -103,8 +90,9 @@ def test_machine_files_trash_git_and_backups_stay_behind(tmp_path):
     got = set(snapshot(dest))
     for left in ("config.toml", "bindings.json", "bindings.json.bak-v2", "hands.json",
                  "windows.json", "last_show", "stall.log", ".gitignore", ".git/config.json",
-                 "weights/big.json", "bindings/show-a.json", "presets/mine.json.bak-v2",
-                 "presets/.DS_Store.json", "trash/presets/old.20261004-011203.json"):
+                 "hidden.json", "weights/big.json", "bindings/show-a.json",
+                 "presets/mine.json.bak-v2", "presets/.DS_Store.json",
+                 "trash/presets/old.20261004-011203.json"):
         assert left not in got
     assert not (dest / "trash").exists()
 

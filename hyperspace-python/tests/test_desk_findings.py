@@ -31,6 +31,7 @@ from types import SimpleNamespace
 
 import mido
 import pytest
+from conftest import seed
 from test_midi import FakeIn, FakeOut, note, push, rig  # noqa: F401 — the fixture
 
 from hyperspace import apc40, hands, lfo, routing, tempo
@@ -96,9 +97,11 @@ class Apc40:
 
 
 def owner_rig(tmp_path):
-    """test_midi's rig on the owner's session file and a factory preset
-    (its desk holds the activator row, as every factory preset's does)."""
+    """test_midi's rig on the owner's session file and a shipped preset
+    from the corpus (its desk holds the activator row, as every corpus
+    preset's does)."""
     shutil.copy(OWNER, tmp_path / "bindings.json")
+    seed(tmp_path)
     chain = Analyzer(Analyser())
     control = Control(chain)
     audio = SimpleNamespace(chain=chain)
@@ -120,7 +123,7 @@ def owner_rig(tmp_path):
     t = [100.0]
     m = MidiIO(reg, path=tmp_path / "bindings.json", inp=inp, out=out, clock=lambda: t[0])
     presets = Presets(lib, reg, Router(reg, m.table))
-    presets.load("party-tumble")
+    presets.load("TUMBLE")
     m.poll()
     return SimpleNamespace(reg=reg, view=view, control=control, lib=lib, midi=m,
                            inp=inp, out=out, t=t)

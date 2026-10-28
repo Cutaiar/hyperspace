@@ -55,8 +55,8 @@ live render error is a red banner at the bottom of the control window.
   the render stack (`geometry`, `view`, `render`, `glsl`, `fx`, `lookback`,
   `dream`, `overlay`, `shaders/`), the panel (`ui`, `ui_bands`,
   `ui_routing`, `ui_graph`, `ui_lfo`, `ui_seq`, `ui_fx`, `ui_lookback`, `ui_presets`,
-  `hands/panel`, `control`), the library (`library`, `preset`, `config`,
-  `library/` with the factory presets) and the host (`app`, `hotreload`). Who owns
+  `hands/panel`, `control`), the library (`library`, `preset`, `config`;
+  `scenes/band/` holds the band scenes) and the host (`app`, `hotreload`). Who owns
   what and who may write a parameter: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 - `tests/` — pytest suite plus committed `golden/` traces recorded from
   `hyperspace-web/hyperspace.html` (the oracle for geometry and audio
@@ -104,11 +104,13 @@ onto it, or to unbind it.
 A **preset** is one whole performance moment — the look, its routes, the
 APC40's preset layer and the macros — and a load replaces all of it
 without touching the session (tempo, the hands' feel, the analyzer, the
-outputs). A **show** holds the session, the preset it starts on and a
-bank of twenty-four presets: F1–F8 and the APC40's clip rows 1, 4 and 5
-load them. Factory presets and shows live in `hyperspace/library/`;
-yours go in `~/Hyperspace` (or `$HYPERSPACE_HOME`) in the same tree, as
-plain JSON the running app follows when you edit it.
+outputs). A **show** is the desk's pads (a bank of
+twenty-four presets: F1–F8 and the APC40's clip rows 1, 4 and 5 load them,
+set on the desk only), the session and the rig's wires. Nothing ships with
+the app: the library is the owner's, in `~/Hyperspace` (or
+`$HYPERSPACE_HOME`), as plain JSON the running app follows when you edit
+it; a fresh one opens an unsaved show called `untitled`. The band scenes
+are code data in `hyperspace/scenes/band/`.
 
 The control window has sixteen pages — Output · View · Faces · Bitmap ·
 Camera · Lookback · FX · Audio · Analyzer · Routing · Graph · LFO · Seq ·

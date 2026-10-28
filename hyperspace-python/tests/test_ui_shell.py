@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from types import SimpleNamespace
 
 import pytest
+from conftest import seed
 from imgui_bundle import imgui, implot
 
 from hyperspace import hands, lfo, routing, tempo, ui, ui_presets, ui_routing
@@ -62,6 +63,9 @@ def build_rig(tmp_path, renderer=None):
     control = Control(chain)
     audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
     view = ViewState()
+    # the corpus first (conftest.seed): the shipped presets and the party
+    # show, which the home then opens as a fresh one did until 2026-10-28
+    seed(tmp_path)
     lib = Library(tmp_path, period=0.0)
     live = {} if renderer is None else {"dream": renderer.lookback.state,
                                         "fx": renderer.fx.state}
@@ -319,14 +323,6 @@ def test_page_param_is_ui_state_not_a_preset(rig):
     p.set(99)                       # out of range lands on the last page
     frame(rig.panel)
     assert rig.panel.page == len(PAGES) - 1
-
-
-def test_panel_draws_factory_only(rig):
-    """A fresh home: only factory presets, no user files, no saved project."""
-    assert rig.lib.list("view") == [] and rig.lib.list("band")
-    assert rig.lib.project.path is None
-    for page in ("view", "analyzer", "presets"):
-        frame(rig.panel, page)
 
 
 def _page_scroll(rig, monkeypatch) -> dict[str, float]:
@@ -929,8 +925,8 @@ def test_the_routing_rows_scroll_in_their_own_child(rig, monkeypatch):
 
 def test_the_routing_page_fits_over_a_loaded_preset_and_a_full_desk(rig, monkeypatch):
     """Plan 13 decision 13: the one ROUTING page — head, routes, desk,
-    macros, session — never scrolls itself, with the factory preset
-    loaded and with a full desk (every preset control mapped, each macro
+    macros, session — never scrolls itself, with the house show's first
+    preset loaded and with a full desk (every preset control mapped, each macro
     subscribed), a refused learn and a dropped desk row in the head."""
     from hyperspace.learn import Learn
 
@@ -938,7 +934,7 @@ def test_the_routing_page_fits_over_a_loaded_preset_and_a_full_desk(rig, monkeyp
     lib.load("presets", "BIG BLUE WAVE")
     assert table.desk()
     over = _page_scroll(rig, monkeypatch)
-    assert over["routing"] == 0, "the ROUTING page scrolled with the factory preset"
+    assert over["routing"] == 0, "the ROUTING page scrolled with a preset loaded"
     full = [*table.desk(), *[Binding(f"cc:*:{0x10 + k}", "view.speed", "abs",
                                      feedback="ring", layer="preset") for k in range(8)],
             *[Binding(f"note:{k}:{0x36}", "view.shape", "set", float(k), feedback="led",
@@ -1118,11 +1114,10 @@ def test_strip_round_trip(rig):
     assert lib.reset("view") is None
     assert lib.current("view") is None
     frame(panel)
-    # the band group resets to its factory default, a factory preset that
-    # the strip's save is disabled for (as… still works)
+    # the band group has no default preset either (one tier: the scenes are
+    # code data, not presets) — reset lands the fresh values and draws
     frame(panel, "analyzer")
-    assert lib.reset("band") == "Balanced"
-    assert lib.is_factory("band", "Balanced")
+    assert lib.reset("band") is None
     frame(panel)
 
 
@@ -1167,7 +1162,7 @@ def test_project_row_and_dirty_state(rig, tmp_path):
     panel, lib, reg = rig.panel, rig.lib, rig.reg
     proj = lib.project
     frame(panel, "presets")
-    assert not proj.is_dirty() and proj.factory   # a factory show as it shipped: clean
+    assert not proj.is_dirty()                     # the party show as saved: clean
     ui_presets._project_save_as(panel, "Show")
     assert proj.name == "Show" and proj.path == tmp_path / "projects" / "show.hyp.json"
     assert not proj.is_dirty()

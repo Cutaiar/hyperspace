@@ -52,7 +52,7 @@ runs the one frame loop.
 | **Graph** (in the render stack) | `graph.py` | the frame as nodes — geometries (the shape, the hands, a point cloud), the scene, layers, composites, one effect node per effect instance the preset wires (wherever its wires put it: onto the faces, the pattern, the backdrop, an output or an `aux`), the pattern, backdrop and switch nodes, the look-back and the dream, the masks (plan 39: `matte`, `cut`, and `segment` with its `fg` / `bg` / `mask` pins), the history, the outputs — built by `build_graph` from the renderer's `Wiring` alone (a preset's `/7` `graph` section, every edge a wire; a window's ports its own wires, else All outputs' by the rig's bus cables), the listed clouds and the effect files present, evaluated once a frame in dependency order; node instances (`ghost.2`, `fx.acid.2`), the graph JSON's reader (`read_graph`, `NODE_KINDS`) | the screens, through the render stack's passes; nothing in the registry | imports `moderngl`, `numpy`, `geometry` and `outputs` only — no `params`, `routing`, `library`, `preset`, `undo`, `control`, `devices`, and neither `masks` nor `segment`, `Vision` or `torch` (plan 39: the passes and the worker are reached duck-typed, `frame.r.mask_passes()`, `frame.r.segmenter(name)`); node methods are `run` / `paint` / `draw` / `image` / `depth`, never `apply`, `modulate`, `snapshot`, `set_value` (`tests/test_graph.py::test_graph_imports_only_the_render_stack_and_names_no_write`); the device registry reaches it duck-typed (`Renderer.cloud_source`) |
 | **Panel** | `ui.py`, `ui_*.py`, `hands/panel.py`, `control.py`, `graphview.py` | imgui state, page selection, the Replace / Keep modal, the routing page's edits, the GRAPH page (`ui_graph.py` drawing `graphview.py`'s model on `imgui_node_editor`; its editor context held on the panel) | param **bases** through `Param.set*`; table rows through the table's edit doors and `Learn` | only `app`, `hands/panel.py` and the `ui*` modules import `ui*`. By convention: no test holds it; `graphview` imports no imgui (`tests/test_graphview.py::test_graphview_imports_no_imgui`) and edits only through the table's own calls and the preset's `graph` section |
 | **Media** | `media/` (`frame`, `source`, `ids`, `pool`, `adapters`, `still`, `video`, `proxy`, `transport`, `channels`, `folder`, `thumbs`, `live`, `ndi`, `syphon`, `camera`, `publish`), `media_tex.py`, `ui_media.py` | the eight channels (`MediaState`: bins, sources, transports), the media folder (`MediaFolder`), live kinds, the publishers; `MediaTextures` (a texture per channel) on the renderer | nothing in the registry: `media.<c>.*` params are read when a channel polls; `MediaTextures` writes textures, `publish` hands finished frames to Syphon / NDI | `import hyperspace.app` imports none of `av`, `pillow_heif`, `syphon`, `cyndilib`, `AVFoundation`: each adapter library is imported inside the function that opens a source (`tests/test_app_boundary.py`); the render graph reaches a channel duck-typed (`graph.MEDIA_CHANNELS`, held equal to `channels.CHANNELS` by a test); the frame thread never decodes, resizes, scans or joins (below); a `segment` (plan 39) wired straight from a channel whose newest `MediaFrame` has CPU pixels (a camera, NDI) and a cover fit hands the worker that array (`Renderer.media_now`) and no readback runs — the shortcut changes where the worker reads, never what is wired |
-| **Library** | `library.py`, `preset.py`, `patches.py`, `config.py`, `library/` | the library root (`Library.home`: module presets, presets, patches (plan 40, §3.11), shows (projects), the trash, `hidden.json` — the home, or the folder `[library] path` names), the machine home (`Library.machine`: `last_show`), the bank of twenty-four, `config.toml` (its `[[devices]]` list checked per entry, the old device tables translated; `config.read_devices` for the registry's watch) | bases through `Registry.restore`; a preset load replaces the table's performer rows, desk layer and macros | `library` imports `params` and `undo` (and `routing`, `preset` lazily), never `config` (`tests/test_app_boundary.py::test_the_library_never_imports_config`) |
+| **Library** | `library.py`, `preset.py`, `patches.py`, `config.py` | the library root (`Library.home`: module presets, presets, patches (plan 40, §3.11), shows (projects), the trash — the home, or the folder `[library] path` names; one tier since 2026-10-28: nothing ships with the app, every preset is yours), the machine home (`Library.machine`: `last_show`), the desk's bank of twenty-four, `config.toml` (its `[[devices]]` list checked per entry, the old device tables translated; `config.read_devices` for the registry's watch) | bases through `Registry.restore`; a preset load replaces the table's performer rows, desk layer and macros | `library` imports `params` and `undo` (and `routing`, `preset` lazily), never `config` (`tests/test_app_boundary.py::test_the_library_never_imports_config`) |
 | **Undo** | `undo.py` | the undo and redo stacks, the last settled state | bases (`Registry.restore`) and the table's preset parts, on ⌘Z / Ctrl+Z only | a leaf: imports nothing from the package and never touches `modulate` or `feed` (`tests/test_undo.py::test_undo_imports_nothing_from_the_package`) |
 | **Host** | `app.py`, `hotreload.py`, `placement.py`, `watchdog.py`, `hold.py` | construction order, the frame loop, the windows and render outputs, the hold (plan 38: the program's held wiring, rig cables and values, the preview renderer), the reload watch list, the stall log, where the library is (`[library] path` → `Library(path, machine=home)`) | bases for the relative writers (↑ / ↓; the pad's sticks are the pad device's own, `gamepad.steer`); no key of its own but `app.LOOP_KEYS` | builds the device registry (`app._open_devices`: every device behind its own `[[devices]]` entry) and the dream worker behind `[dream] enabled` (`_open_dream`, the one gate left); `Host.devices`, one close list `Host.adapters == (media, devices, dream_io)` (the media close first); importing `app` imports no gated adapter, no `osc`, no `pythonosc`, no `torch`, no `leap`, and (plan 39) no `hyperspace.segment`, `Vision`, `CoreML` or `torchvision` (`tests/test_app_boundary.py::test_importing_app_leaves_every_gated_adapter_unimported`); the host hands the program renderer `[segment]` (`renderer.segment_cfg`) and closes its segment workers beside the dream's, at quit and restart; `placement` is a leaf (`tests/test_placement.py::test_placement_imports_nothing_from_the_package`) |
 
@@ -122,7 +122,7 @@ Rules that follow from the order:
   modulated all land **this frame**
   (`tests/test_lfo.py::test_an_lfo_owning_another_lfos_depth_changes_its_output_the_same_frame`,
   `tests/test_routing.py::test_a_macro_owned_by_a_hand_scales_a_lanes_push_the_same_frame`),
-  and every factory preset lands the same values as before, a frame
+  and every corpus preset (`tests/corpus/presets/`) lands the same values as before, a frame
   earlier where it was late
   (`tests/test_routing.py::test_every_factory_preset_lands_the_same_values_one_frame_earlier`).
   **Nothing reads a stale value but through a delay node**: a loop that
@@ -494,8 +494,9 @@ no edge is hidden, and a window shows only its own wires.
   migrate to `scene → lookback → dream → composite → output`.
 - **Schema `/7`.** A save writes `/7` only; `graphmigrate` reads `/4`-`/6`
   as an explicit one-way migration with a note on load, and
-  `tools/migrate_library.py` rewrites a library (the 25 factory files are
-  its output, their `/6` sources in `tests/fixtures/factory-sources/`).
+  `tools/migrate_library.py` rewrites a library (the 25 corpus files,
+  `tests/corpus/presets/`, are its output, their `/6` sources in
+  `tests/fixtures/factory-sources/`).
   `graph.signature` and the goldens prove each migration.
 - **A new preset and "preset only".** `Presets.new` lays `shape → scene →
   output.all.image` where GRAPH is looking; `graphview.STARTERS` are
@@ -563,7 +564,7 @@ What the order guarantees, each held by tests in `tests/test_render.py`,
 `tests/test_golden_frames.py`:
 
 - **Every golden frame is drawn byte for byte**: 789 frames (757 before plan 39; its four fixtures added 32, and eight backdrop frames were re-recorded for the honest blend, register row 448) — every
-  factory preset in every output state, hands absent and present, the
+  corpus preset (`tests/corpus/presets/`, the twenty-four the manifest names; nothing ships with the app since 2026-10-28) in every output state, hands absent and present, the
   other wirings, the fixture presets (plan 30's three placements and
   plan 28's two wire fixtures and plan 34's five among them) and a recorded cloud — on the gate
   Mac's renderer ("Apple M3 Max"); elsewhere the test skips
@@ -1071,7 +1072,7 @@ is not live is dormant: its lane reads NaN and a route on it lets go
 | a key with a row (`B`, `⇧B`, `F`, `M`, `1–6`, …) | `Router.keys` → `routing.act` | base |
 | `R`, F1–F8, ⇧F1–F8 | key rows (`routing.LOOP_KEY_ROWS`): `camera.reset`, `preset.load.k` → `Project.load_slot`, `preset.save.k` → `Project.save_slot`. Only the first `params.F_KEYS` = 8 slots have keys | base (a trigger) |
 | ⌘Z / Ctrl+Z, with ⇧ | key rows → `edit.undo` / `edit.redo` → `undo.undo()` / `undo.redo()` | the bases and table parts that differ |
-| Home, or the APC40's OVERDUB | `preset.home` → `Project.home`: the show's "starts on" preset loads | a preset load |
+| Home, or the APC40's OVERDUB | `preset.home` → `Project.home`: the show's `startup` preset loads (the file's; nothing on the panel sets it since 2026-10-28) | a preset load |
 | ⌘R, ⌘[ / ⌘], Q, ↑ / ↓ | loop code (`app.LOOP_KEYS`): restart, the panel's page history (`ui.PageHistory`), quit, `_ride_depth` on `view.depth4` | ↑ / ↓: base, relative |
 | mouse drag / wheel, a pad stick or trigger | `Mouse.poll`; the pad device's camera job (`gamepad.steer`, in `PadDevice.act`) → `nudge` / `scale` | base, relative |
 | a pad button or hat | `Router.pad` → `routing.act` | base |
@@ -1082,8 +1083,8 @@ is not live is dormant: its lane reads NaN and a route on it lets go
 | SHIFT | the invariant row → `desk.shift`: flips the table's layer; every ring and LED redrawn, a control the layer does not map dark | the table's layer |
 | the crossfader | invariant row → `output.dim`, the master dim (CC 0 black — hand check 55); a rig setting, 1 at every launch | base of a rig setting |
 | a bank pad (clip rows 1, 4, 5) or a bank button | invariant `set` rows → `preset.select = k` → `Project.load_slot(k)` (`apc40.BANK_PADS`: 24 slots, `library.SLOTS`). Lights by `routing.led_level`: loaded, filled, empty | a preset load |
-| a hold on an empty bank pad | its invariant `preset.select` row, held → `Param.held` → `Project.save_into(k)`: a new user preset named from the loaded one (`library.next_name`), into that slot; a filled slot is never written | files, not params; no undo step |
-| the pad's B / X | `pad:B` / `pad:X` rows → `preset.list.next` / `prev` → `Project.walk` → `Library.next` / `prev` on the presets: the PRESETS page's drop-down list (`Library.list`: by name, a × hid factory one left out, re-read each step so a new save is in it), wrapping. The APC40's QUANT (`preset.next`) walks the bank's filled slots instead (`Project.cycle`) | a preset load |
+| a hold on an empty bank pad | its invariant `preset.select` row, held → `Param.held` → `Project.save_into(k)`: a new preset named from the loaded one (`library.next_name`), into that slot; a filled slot is never written | files, not params; no undo step |
+| the pad's B / X | `pad:B` / `pad:X` rows → `preset.list.next` / `prev` → `Project.walk` → `Library.next` / `prev` on the presets: the PRESETS page's list (`Library.list`: every preset by name, re-read each step so a new save is in it), wrapping. The APC40's QUANT (`preset.next`) walks the bank's filled slots instead (`Project.cycle`) | a preset load |
 | a macro's knob | its base → `Router.follow_macros` → each base subscriber's base | base |
 | an analyzer band, a hand axis, a pinch, a DAW lane, an LFO | `lane:` / `hand:` / `ext:` / `lfo:` → its performer row → `Router.modulate` | offset (a pinch may instead gate a row) |
 | right-click → Learn hand / Learn desk / click-then-map | `Learn` (§3.5) | the loaded preset's table |
@@ -1197,8 +1198,9 @@ Behaviour the code has today that the model does not guard:
   base subscriber sets does not round-trip it: the reload lands the
   subscriber's value.
 - Undo does not take back: a band added, removed or moved; a tap or a
-  typed BPM (the `tempo` group is `undo.EXCLUDED_GROUPS`); the bank and
-  "starts on"; a save or a delete (the trash is their net); an edit in
+  typed BPM (the `tempo` group is `undo.EXCLUDED_GROUPS`); the bank (a pad
+  change is written to the show at once); a save, a rename or a delete
+  (the trash is their net); an edit in
   the `undo.ABSORB_FRAMES` frames after a restore.
 - Knob smoothing infers a glide's ownership by reading the norm back, not
   from a write counter; a preset load drops a performance param's glide
@@ -1357,8 +1359,8 @@ docstring has the rest.
 | `ui_seq.py` | the SEQ page (plan 31): the transport, the 5 × 8 step grid in the APC40's LED palette (the playhead column in the one red, columns past `length` dimmed and inert), each lane's select, mute and envelope picker, and a strip per envelope (one open, the rest folded) | `page`, `toggle_step`, `cell_state`, `fill`, `select_lane`, `open_env`, `add_env`, `remove_env` | a function over the Panel; every cell and knob an ordinary param write; envelopes 1–5 never removed; the default page fits the control window (`tests/test_ui_seq.py`) |
 | `graphview.py` + `ui_graph.py` | the GRAPH page (plan 28): the model of both graphs as nodes, ports and cables (since plan 31 a node per LFO and envelope by id, the sequencer's node with five trigger outs, and its `lane` cables — a lane's envelope binding, rebound by a drag, never deleted), its layout and its edits (`graphview`, no imgui); the canvas on `imgui_node_editor`, its menus and the drag / delete dispatch (`ui_graph`); since plan 37 every picture node drawn as its picture, its hover and the tint switch | `View`, `VNode`, `VPort`, `VCable`, `build`, `refresh`, `key`, `OWNERS`, `auto_layout`, `home`, `device_nodes`, `Edit` (`connect`, `move`, `disconnect`, `insert_modifier`, `wire`, `unwire`, `add_node`, `drop_node`, `set_node`), `Refusal`, `Ask`, `cable_near`, `THUMBS`, `thumb_of`, `THUMB_H`, `picture_hover`, `laid_areas`; `ui_graph.page`, `editor`, `close`, `CREATE`, `DELETE`, `DELETE_NODE`, `picker`, `render_edit`, `thumb_wants`, `tint`, `cable_tints` | `graphview` imports no imgui (`tests/test_graphview.py::test_graphview_imports_no_imgui`); one table for ROUTING and GRAPH (`::test_the_routing_page_and_the_graph_page_show_one_table`); every edit through the table's own calls or a `graph` section read back (`tests/test_graph_edit.py`, `tests/test_graph_wires.py`); the APC40 drawn, never changed (`tests/test_graphview_devices.py`); a thumbnail is made only for a wanted node and moves no output pixel (`tests/test_thumbnails.py`); no cable runs backwards across areas (`tests/test_graph_areas.py`) |
 | `control.py` | the headless half of the analyzer page: band selection, scenes, reset | `Control`, `SCENES` | reset goes to the selected scene and never changes the layout (`tests/test_control.py::test_reset_resolves_to_selected_scene`) |
-| `library.py` | the library root (`Library.home`) and the machine home (`Library.machine`), document kinds (presets; patches, spawned never loaded, plan 40), module presets (fx's retired), shows, the bank, the trash, `hidden.json` | `Library`, `Project`, `Marks`, `SLOTS`, `to_trash`, `next_name`, `bank_doc`, `PATCHES`, `read_patch`, `save_patch`, `RETIRED_MODULES` | never writes a factory file; a user file is copied to the trash before it is overwritten or deleted; a load never rewrites a show; every write is atomic; a shared library missing at launch is never created and refuses every write; never imports `config` (`tests/test_library.py`, `tests/test_presets.py`, `tests/test_shared_library.py`) |
-| `preset.py` | the preset document kind: values, routes, desk, macros, module labels, the `graph` section (nodes and wires), the modifiers, the banks' membership (`lfos`, `envs`), the GRAPH page's layout, and since plan 40 its `groups` (written only when one exists, then `hyperspace.preset/8`); `hyperspace.preset/3` only when a preset uses the sequencer, the envelopes or N ≠ 4 LFOs, else `/2`; the factory generator; the first-launch migration | `Presets` (`load`, `load_doc`, `document`, `signature`, `layout`, `template_at_load`, `live_groups`, `parts`, `banks`), `schema_of`, `SCHEMA_V3`, `VERSIONS`, `GraphSection`, `GRAPH_KEY`, `MODIFIERS_KEY`, `LAYOUT_KEY`, `GROUPS_KEY`, `read_groups`, `group_entry`, `merge_modifiers`, `FACTORY_PRESETS`, `write_factory`, `migrate_home` | a load lands every performance base and replaces every performer row, never a session param; a route onto a non-modulatable param is dropped with a note (`tests/test_presets.py`, `tests/test_migration.py`) |
+| `library.py` | the library root (`Library.home`) and the machine home (`Library.machine`), document kinds (presets; patches, spawned never loaded, plan 40), module presets (fx's retired), shows, the bank, the trash — one tier since 2026-10-28: nothing ships, every preset deletable and renameable | `Library`, `Project`, `Marks`, `SLOTS`, `RENAMABLE`, `scene_doc`, `to_trash`, `next_name`, `bank_doc`, `PATCHES`, `read_patch`, `save_patch`, `RETIRED_MODULES` | a file is copied to the trash before it is overwritten or deleted; a load never rewrites a show; every write is atomic; a shared library missing at launch is never created and refuses every write; never imports `config` (`tests/test_library.py`, `tests/test_presets.py`, `tests/test_shared_library.py`) |
+| `preset.py` | the preset document kind: values, routes, desk, macros, module labels, the `graph` section (nodes and wires), the modifiers, the banks' membership (`lfos`, `envs`), the GRAPH page's layout, and since plan 40 its `groups` (written only when one exists, then `hyperspace.preset/8`); `hyperspace.preset/3` only when a preset uses the sequencer, the envelopes or N ≠ 4 LFOs, else `/2` | `Presets` (`load`, `load_doc`, `document`, `signature`, `layout`, `template_at_load`, `live_groups`, `parts`, `banks`), `schema_of`, `SCHEMA_V3`, `VERSIONS`, `GraphSection`, `GRAPH_KEY`, `MODIFIERS_KEY`, `LAYOUT_KEY`, `GROUPS_KEY`, `read_groups`, `group_entry`, `merge_modifiers` | a load lands every performance base and replaces every performer row, never a session param; a route onto a non-modulatable param is dropped with a note (`tests/test_presets.py`) |
 | `config.py` | `config.toml`: defaults, reading, `[[output.screens]]`, `[[devices]]` (checked per entry; the old device tables translated; `[hands] out` → `hands-daw`) | `DEFAULTS`, `load`, `screens`, `number`, `devices`, `read_devices`, `DEVICE_TABLES`, `MIDI_OUT`, `DAW_ROLE` | a bad value is its default with a note, never a raise (`tests/test_config.py`) |
 | `undo.py` | undo and redo with no write hook | `Undo`, `watched`, `alike`, `install`, `push`, `SETTLE_S`, `LIMIT` | a leaf (`tests/test_undo.py::test_undo_imports_nothing_from_the_package`); §3.2 (`tests/test_undo.py`) |
 | `hold.py` | hold the projector (plan 38): the program drawn from the wiring, rig cables and look held at HOLD while edits land as the preview behind GRAPH; take, drop; the `output.hold` / `.take` / `.drop` controls | `Hold` (`engage`, `take`, `drop`, `program`, `draw_preview`, `keep`, `program_only`, `reset_delays`, `changed`, `rewired`), `HELD_GROUPS`, `ONE_FOR_BOTH`, `PROGRAM_IDS`, `program_value`, `preview_size`, `mirror`, `MIRRORED`, `preview_renderer`, `canvas_renderer`, `register` | at module level imports only `undo` and `params`' groups and id helpers, no graph and no GL (`preview_renderer` imports `render` when first called; the renderer, registry and undo are arguments, read duck-typed); the program writes with `Param.put`, never `set`, and puts every live value, the wiring and the rig back even when the draw raises; never constructs a `Wiring` or fills in a cable (`tests/test_hold.py`) |
@@ -1387,7 +1389,7 @@ The band → plane map is routes, not code in the renderer:
 `routing.legacy6_routes` makes one push row per band of `bands.BANDS`
 onto `rot.rate.<plane>` — SUB → ZW, BASS → XW, MIDB → YW (the three W
 planes), MID → XY, UPR → XZ, AIR → YZ — with each band's `dir` as the
-sign. Most factory presets carry those six rows (the hands and LFO
+sign. Most of the corpus presets carry those six rows (the hands and LFO
 presets do not), and a preset may re-aim them.
 
 **The modulation patch** (plan 28). `Router.build_modgraph` reads the table
@@ -1519,7 +1521,8 @@ lights and what `ui_desk` draws. A preset load replaces the preset layer
 fader's catch is cleared only if its param moved, and every control that
 lost its row goes dark. The bank of twenty-four (`library.SLOTS`) is
 F1–F8 plus clip row 1 for slots 1–8 (`params.F_KEYS`) and clip rows 4–5
-for slots 9–24 (`apc40.BANK_PADS`). **Several desks** (plan 27): each
+for slots 9–24 (`apc40.BANK_PADS`); the pads are the desk's, set there
+alone (the PRESETS page shows none since 2026-10-28). **Several desks** (plan 27): each
 MIDI entry is a `MidiIO` with its role and profile. One desk owns the
 unqualified rows and SHIFT — the first whose profile is `bindings.json`'s
 (`DeviceRegistry.midi_roles`, told to the table as `Bindings.midi_roles`
@@ -1637,8 +1640,8 @@ the hands — the effect instances the chain holds
 outputs as nodes, composites: plan 28); a second hands node is its own `Ghost`
 (`Renderer.ghost_of`) over a `GhostState` the preset section keeps, so
 the render stack never declares a param. The golden frames
-(`tools/golden_frames.py`) pin every factory preset's picture in every
-state to the byte on the gate Mac, and the fixture presets' (the
+(`tools/golden_frames.py`) pin every corpus preset's picture
+(`tests/corpus/presets/`) in every state to the byte on the gate Mac, and the fixture presets' (the
 placements and the wires among them).
 
 **Outputs.** `config.toml`'s `[[output.screens]]` lists up to
@@ -1657,20 +1660,25 @@ output 1's flags (`app.flipped`).
 **Presets, shows, the library.** A **preset** (`hyperspace.preset/2`) is
 the performance: values, routes, desk, macros, module labels. A **show**
 (`library.Project`, `hyperspace.project/2`) is the session: session values,
-the bank of preset names and a "starts on" preset. `Library.home` is the
+the desk's bank of preset names, the rig's wires and a `startup` preset
+(kept in the file; nothing on the panel sets it). `Library.home` is the
 **library root** — the home, or the folder `[library] path` names (plan
 25: a cloud-synced folder two machines share) — and `Library.machine` the
 home for this machine's files; app.main builds `Library(path,
 machine=home)` and reads `bindings.json`, `windows.json` and the stall log
 from the home. The launch opens the show opened last on this machine
-(`<machine>/last_show`). A user preset file is copied to
+(`<machine>/last_show`); a fresh library opens an unsaved `untitled` show
+with every pad empty and nothing loaded. A preset file is copied to
 `<library>/trash/<group>/` before a save overwrites it or a delete removes
-it; the trash is listed, restored and emptied from the preset list.
-Factory presets are hidden, not deleted (`<library>/hidden.json`). Writes
+it; the trash is listed, restored and emptied from the PRESETS page's
+list. **One tier** (2026-10-28): nothing ships with the app and there is
+no hidden list — every preset is listed, loaded, renamed and trashed
+alike; the presets the build used to ship are the goldens' corpus
+(`tests/corpus/`), read by no app code. Writes
 are atomic (a dot-named temp file, then `os.replace`), and a cloud
 client's conflict copy is listed under its own file stem. A library
 folder named but missing at launch (`Library.missing`) is never created:
-only the factory lists and every write raises `LibraryError`.
+every list is empty and every write raises `LibraryError`.
 
 **Media (plan 32).** Sources become frames off the frame thread and are
 uploaded on it. The threads, by owner:

@@ -419,7 +419,7 @@ def template_of(panel):
     """The loaded preset's desk template (plan 24 C3) as ``(name, rows)`` —
     the rows as the load expanded them, the ones a save compacts against
     (`preset.Presets._desk_part`), else the library's file — or None when
-    the preset names none (every factory preset). Read when the view is
+    the preset names none. Read when the view is
     rebuilt, not each frame: a load moves the table's rows, so the view's
     key moves with it."""
     presets = getattr(getattr(panel, "library", None), "presets", None)

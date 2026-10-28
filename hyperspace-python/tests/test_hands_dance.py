@@ -7,7 +7,7 @@ core.py, the layout (the new `hand` lanes after the switches, the `hands`
 scheme with its own rests), and the proof the owner asked for: a fixture
 preset that routes every new source onto a param, loaded through a scratch
 library and played by synthetic hands on a tape — each param moves.
-No preset in hyperspace/library/ is touched."""
+No corpus preset is touched."""
 
 import math
 import shutil

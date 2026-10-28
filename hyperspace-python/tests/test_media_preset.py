@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 import pytest
+from conftest import seed
 from test_media_channels import FakeOpener, Here
 from test_presets import boot
 
@@ -223,7 +224,8 @@ def test_bmp_alpha_is_an_alias_of_media_alpha(rig):
     put(rig.home, "BOTH", values={"view.bmp_alpha": 0.25, "view.media_alpha": 0.6})
     assert rig.presets.load("BOTH") == []
     assert real.value == 0.6                       # the file's own new id wins
-    # a factory preset's knob 7 row lands on the real param
+    # a corpus preset's knob 7 row (party-faces, seeded) lands on the real param
+    seed(rig.home, "presets")
     rig.presets.load("party-faces")
     knob =[b for b in rig.router.table.desk() if b.target == "view.bmp_alpha"]
     assert knob and all(reg.real(reg[b.target]) is real for b in knob)

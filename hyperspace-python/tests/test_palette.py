@@ -20,6 +20,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from conftest import CORPUS
 from test_presets import boot, put
 
 from hyperspace import ui_fx
@@ -450,10 +451,10 @@ def test_the_fixtures_carry_the_slice(slug):
     assert palette_slice(doc) == (doc, [])                 # nothing left to convert
 
 
-def test_no_factory_file_names_the_palette():
-    """The base goldens cannot move: no factory preset turns the palette on."""
-    lib = FX_DIR.parent.parent / "library"
-    hits = [p for p in lib.rglob("*.json") if "fx.palette" in p.read_text()]
+def test_no_corpus_file_names_the_palette():
+    """The base goldens cannot move: no corpus preset (tests/corpus, the
+    goldens' subjects) turns the palette on."""
+    hits = [p for p in CORPUS.rglob("*.json") if "fx.palette" in p.read_text()]
     assert hits == []
 
 

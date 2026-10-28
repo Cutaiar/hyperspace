@@ -65,7 +65,7 @@ Addresses: the router's source addresses are 0-based (``lfo:0`` is
 **N of them** (plan 31 B): the bank is a `modbank.Bank` — four by
 default (`N`), up to 16, each added or removed by its stable id. Ids
 never compact: with LFO 2 removed, LFO 3 is still ``lfo:2`` and
-``lfo.3.*``, so every route and factory preset keeps its meaning, and
+``lfo.3.*``, so every route and preset keeps its meaning, and
 LFO 2's lane reads NaN (dormant). The membership is the preset's
 ``"lfos"`` key and part of undo; `declare` is this kind's half of
 `Bank.bind`.

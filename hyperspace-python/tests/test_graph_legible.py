@@ -9,7 +9,7 @@ the GRAPH page takes over the routes and the modifiers from ROUTING,
 whose desk, macros, session and sinks stay where they are.
 
 Headless, on the harness N2 and N3 used: the shell's rig
-(tests/test_ui_shell.py) with party-trip loaded, a render graph built by
+(tests/test_ui_shell.py) with the corpus's party-trip loaded, a render graph built by
 `graph.default_graph`, the APC40 as a real `devices.MidiDevice` over a
 stand-in adapter (tests/test_graphview_devices.py), and the page drawn
 for real on `imgui_node_editor`. No preset is edited or added."""
@@ -20,6 +20,7 @@ from types import SimpleNamespace as NS
 
 import numpy as np
 import pytest
+from conftest import seed
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
 from test_graphview import _in_editor, stacked, thru
@@ -39,15 +40,18 @@ DT = 1 / 60
 
 @pytest.fixture()
 def rig(shell_rig):  # noqa: F811
+    seed(shell_rig.lib.home)         # (the corpus: party-trip and the rest, one tier)
     return shell_rig
 
 
 def party(rig):
-    """party-trip on the page: its rows, a render graph with effects, the
-    APC40 listed. Returns the page's state after two frames. Plan 35 T5:
-    the canvas is the preset's wired frame, so the frame the render graph
-    is built from — acid and palette in the run, output 2 the hands
-    through them — is landed as the preset's graph too."""
+    """party-trip (the corpus's, seeded into the scratch library) on the
+    page: its rows, a render graph with effects, the APC40 listed. Returns
+    the page's state after two frames. Plan 35 T5: the canvas is the
+    preset's wired frame, so the frame the render graph is built from —
+    acid and palette in the run, output 2 the hands through them — is
+    landed as the preset's graph too."""
+    seed(rig.lib.home)
     rig.lib.load("presets", "party-trip")
     spec = land_frame(rig, stacked(("acid", "palette")), Shows(), Shows(through=True))
     g = thru(stacked(("acid", "palette")), ("acid", "palette"), Shows(), Shows(through=True))

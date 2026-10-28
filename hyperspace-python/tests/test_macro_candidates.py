@@ -2,8 +2,8 @@
 tests/fixtures/macro-candidates/ since plan 25 retired shared/; the owner
 has them in his library) load cleanly through the real road — copied into
 a library's presets/, then `Presets.load` — with no note, no dropped row,
-every subscriber on a real param or a route the file carries, and the
-factory list and bank untouched. Whether the macros are any good is the
+every subscriber on a real param or a route the file carries. Whether
+the macros are any good is the
 owner's listening session (docs/plans/22-macro-candidates.md), not a test's."""
 
 import json
@@ -15,9 +15,8 @@ import numpy as np
 import pytest
 from conftest import boot_home
 
-from hyperspace import preset, routing
+from hyperspace import routing
 from hyperspace.bands import CEIL
-from hyperspace.library import FACTORY
 from hyperspace.params import Kind
 
 CANDIDATES = Path(__file__).resolve().parent / "fixtures" / "macro-candidates"
@@ -36,16 +35,9 @@ def rig(tmp_path):
     return boot_home(home)
 
 
-def test_there_are_candidates_and_none_is_a_factory_preset():
-    """They sit beside the factory presets, never in them: the factory
-    folder, its 23 files and the factory shows' banks are not theirs."""
+def test_there_are_candidates():
     assert {p.stem for p in FILES} >= {"macro-performance", "macro-streams",
                                        "macro-intensity", "macro-breakdown-drop"}
-    factory = {p.stem for p in preset.FACTORY_DIR.glob("*.json")}
-    assert not factory & {p.stem for p in FILES}
-    names = {json.loads(p.read_text())["name"] for p in FILES}
-    for show in (FACTORY / "projects").glob("*.hyp.json"):
-        assert not names & set(json.loads(show.read_text())["bank"]), show.name
 
 
 @pytest.mark.parametrize("path", FILES, ids=lambda p: p.stem)

@@ -582,9 +582,9 @@ DEFAULT_MAP: list[dict] = [
     _note("tempo.nudge", N_NUDGE_M, op="step", value=-1),
     _note("lfo.trigger", N_METRO), _note("preset.next", N_QUANT),
     # OVERDUB is home (plan 15 WP2, decision 27): it loads the preset the
-    # show starts on. No layer, so invariant — the same on both layers, no
+    # show's startup preset. No layer, so invariant — the same on both layers, no
     # Learn takes it, no preset maps it. Lit while the show names a
-    # "starts on" (the trigger param carries the light, as METRONOME's does)
+    # startup preset (the trigger param carries the light, as METRONOME's does)
     _note("preset.home", N_OVERDUB),
     _note("view.bright", N_UP, op="step", value=3, layer=P),
     _note("view.bright", N_DOWN, op="step", value=-3, layer=P),

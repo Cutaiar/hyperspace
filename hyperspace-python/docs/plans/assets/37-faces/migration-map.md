@@ -27,7 +27,7 @@ library are not read here (never touched by a build); P2 migrates them
 with the same table, on the owner's say, the way plan 36's
 `tools/migrate_library.py` moved it to `/7` (backup first).
 
-Inputs on the sheets: the factory pattern depth (0.35) on a medium
+Inputs on the sheets: the default pattern depth (0.35) on a medium
 passage (plan 22 B3's MEDIUM bands), `view.pattern_mix` 1.0,
 3 frames in, hands absent; each tile is the frame's middle at full
 resolution; the Heart sheet is lit at `view.bright` 2.5.
@@ -60,11 +60,11 @@ resolution; the Heart sheet is lit at `view.bright` 2.5.
 
 No pattern: a plain white fill, tinted by the shape's own colour; reads no input.
 
-- on screen, factory: —
+- on screen, corpus: —
 - on screen, fixture: —
-- faces off, factory: `hands-fx`, `hands-orbit`, `hands-pinch`, `hands-play`, `legacy6`, `lfo-breathe`, `seq-demo`
+- faces off, corpus: `hands-fx`, `hands-orbit`, `hands-pinch`, `hands-play`, `legacy6`, `lfo-breathe`, `seq-demo`
 - faces off, fixture: `edges-scene`
-- unwired, factory: —
+- unwired, corpus: —
 - unwired, fixture: —
 - nearest kept, in order:
   1. **PLASMA** — a full, soft fill of the face, the least 'pattern' of the rest
@@ -77,11 +77,11 @@ Concentric rings from the face centre, beaten by a second ring set into travelli
 
 ![RINGS](RINGS.png)
 
-- on screen, factory: `dial`, `inverse-halo`, `party-acid`
+- on screen, corpus: `dial`, `inverse-halo`, `party-acid`
 - on screen, fixture: `palette-glass`, `wired-outputs`
-- faces off, factory: —
+- faces off, corpus: —
 - faces off, fixture: —
-- unwired, factory: —
+- unwired, corpus: —
 - unwired, fixture: —
 - nearest kept, in order:
   1. **BLOOM** — radial about the face centre, the hue riding round it
@@ -94,11 +94,11 @@ Two crossing straight-stripe wave systems, warm red on one axis and cool blue on
 
 ![PLAID](PLAID.png)
 
-- on screen, factory: —
+- on screen, corpus: —
 - on screen, fixture: —
-- faces off, factory: —
+- faces off, corpus: —
 - faces off, fixture: —
-- unwired, factory: —
+- unwired, corpus: —
 - unwired, fixture: —
 - nearest kept, in order:
   1. **WEAVE** — a straight warm/cool lattice crossing at right angles
@@ -111,11 +111,11 @@ Two near-equal straight stripe fields at a slight angle, beating into broad moir
 
 ![MOIRE](MOIRE.png)
 
-- on screen, factory: `strobe-cage`
+- on screen, corpus: `strobe-cage`
 - on screen, fixture: —
-- faces off, factory: —
+- faces off, corpus: —
 - faces off, fixture: —
-- unwired, factory: —
+- unwired, corpus: —
 - unwired, fixture: —
 - nearest kept, in order:
   1. **PLAID** — straight stripe fields interfering
@@ -128,11 +128,11 @@ A single ring of seven petals round the centre, turning, the hue round the wheel
 
 ![BLOOM](BLOOM.png)
 
-- on screen, factory: —
+- on screen, corpus: —
 - on screen, fixture: —
-- faces off, factory: —
+- faces off, corpus: —
 - faces off, fixture: —
-- unwired, factory: —
+- unwired, corpus: —
 - unwired, fixture: —
 - nearest kept, in order:
   1. **KALEIDO** — radial symmetry about the centre, turning, round the wheel
@@ -145,11 +145,11 @@ Deep water: dark-blue troughs and bright cyan-white filaments where three sine s
 
 ![CAUSTIC](CAUSTIC.png)
 
-- on screen, factory: `big-blue-wave`
+- on screen, corpus: `big-blue-wave`
 - on screen, fixture: —
-- faces off, factory: —
+- faces off, corpus: —
 - faces off, fixture: —
-- unwired, factory: —
+- unwired, corpus: —
 - unwired, fixture: —
 - nearest kept, in order:
   1. **MARBLE** — flowing liquid lines on deep blue, bright filaments
@@ -162,11 +162,11 @@ A honeycomb of round cells, each flashing on its own phase in its own hue.
 
 ![HEX](HEX.png)
 
-- on screen, factory: `hex-engine`, `party-faces`
+- on screen, corpus: `hex-engine`, `party-faces`
 - on screen, fixture: `backdrop-still`, `blend-luma-key`, `cut-out`, `delay-trails`, `displace-luma`, `faces-media`, `media-chain-backdrop`, `media-to-output-2`, `resize-crop`, `segment-motion`, `through-one-output`
-- faces off, factory: —
+- faces off, corpus: —
 - faces off, fixture: —
-- unwired, factory: —
+- unwired, corpus: —
 - unwired, fixture: `blank-frame`, `branch-two-sizes`, `channel-out-only`, `delay-faces`, `echo-faces`, `mask-as-picture`, `media-chain-faces`, `resize-faces`, `switch-faces`
 - nearest kept, in order:
   1. **CELLS** — a lattice of cells each in its own hue
@@ -179,11 +179,11 @@ Five galaxy arms winding out of a hot white core, the colour running out along t
 
 ![SPIRAL](SPIRAL.png)
 
-- on screen, factory: `spiral-silk`
+- on screen, corpus: `spiral-silk`
 - on screen, fixture: —
-- faces off, factory: —
+- faces off, corpus: —
 - faces off, fixture: —
-- unwired, factory: —
+- unwired, corpus: —
 - unwired, fixture: —
 - nearest kept, in order:
   1. **BLOOM** — radial about a centre, turning, hue round the wheel
@@ -196,11 +196,11 @@ Voronoi cells: drifting nuclei, each cell a flat hue, bright white membranes bet
 
 ![CELLS](CELLS.png)
 
-- on screen, factory: `party-tumble`
+- on screen, corpus: `party-tumble`
 - on screen, fixture: —
-- faces off, factory: —
+- faces off, corpus: —
 - faces off, fixture: —
-- unwired, factory: —
+- unwired, corpus: —
 - unwired, fixture: —
 - nearest kept, in order:
   1. **HEX** — a lattice of cells each in its own hue
@@ -213,11 +213,11 @@ The classic folded sine field: soft rainbow contour bands flowing over the whole
 
 ![PLASMA](PLASMA.png)
 
-- on screen, factory: `party-mandala`, `party-trip`, `party-wake`, `plasma-heart`
+- on screen, corpus: `party-mandala`, `party-trip`, `party-wake`, `plasma-heart`
 - on screen, fixture: `acid-scene`, `glimmer-bug`
-- faces off, factory: `party-tracer`
+- faces off, corpus: `party-tracer`
 - faces off, fixture: `hands-glass-only`, `hands-lines`, `palette-hands`
-- unwired, factory: —
+- unwired, corpus: —
 - unwired, fixture: —
 - nearest kept, in order:
   1. **MARBLE** — a flowing noise/sine field over the whole face
@@ -230,11 +230,11 @@ Orange warp and blue weft ribbons interlaced over and under on a checker, breath
 
 ![WEAVE](WEAVE.png)
 
-- on screen, factory: —
+- on screen, corpus: —
 - on screen, fixture: —
-- faces off, factory: `woven-lattice`
+- faces off, corpus: `woven-lattice`
 - faces off, fixture: —
-- unwired, factory: —
+- unwired, corpus: —
 - unwired, fixture: —
 - nearest kept, in order:
   1. **PLAID** — a straight warm/cool lattice crossing at right angles
@@ -247,11 +247,11 @@ Rising fractal noise: dark coals under ash, glowing orange, white-hot where it p
 
 ![EMBER](EMBER.png)
 
-- on screen, factory: `ember-orbit`, `party-field`, `party-noita`
+- on screen, corpus: `ember-orbit`, `party-field`, `party-noita`
 - on screen, fixture: —
-- faces off, factory: —
+- faces off, corpus: —
 - faces off, fixture: —
-- unwired, factory: —
+- unwired, corpus: —
 - unwired, fixture: —
 - nearest kept, in order:
   1. **MARBLE** — fractal noise flowing, bright veins out of dark
@@ -264,11 +264,11 @@ The bands themselves: a radial LED equaliser, a spectrum-coloured wedge per band
 
 ![METER](METER.png)
 
-- on screen, factory: —
+- on screen, corpus: —
 - on screen, fixture: —
-- faces off, factory: —
+- faces off, corpus: —
 - faces off, fixture: —
-- unwired, factory: —
+- unwired, corpus: —
 - unwired, fixture: —
 - nearest kept, in order:
   1. **PULSE** — the other mode that draws the bands themselves
@@ -281,11 +281,11 @@ The beat as shapes: a magenta kick disc throwing a ring, yellow snare rays, cyan
 
 ![PULSE](PULSE.png)
 
-- on screen, factory: —
+- on screen, corpus: —
 - on screen, fixture: —
-- faces off, factory: —
+- faces off, corpus: —
 - faces off, fixture: —
-- unwired, factory: —
+- unwired, corpus: —
 - unwired, fixture: —
 - nearest kept, in order:
   1. **METER** — the other mode that draws the bands themselves
@@ -298,11 +298,11 @@ Domain-warped noise folded through itself: lapis ink, teal currents and fine gol
 
 ![MARBLE](MARBLE.png)
 
-- on screen, factory: —
+- on screen, corpus: —
 - on screen, fixture: —
-- faces off, factory: —
+- faces off, corpus: —
 - faces off, fixture: —
-- unwired, factory: —
+- unwired, corpus: —
 - unwired, fixture: —
 - nearest kept, in order:
   1. **CAUSTIC** — flowing liquid lines on deep blue
@@ -315,11 +315,11 @@ A maze of quarter-circle arcs on a navy checker, tiles flipping, a neon cyan-to-
 
 ![TRUCHET](TRUCHET.png)
 
-- on screen, factory: —
+- on screen, corpus: —
 - on screen, fixture: —
-- faces off, factory: —
+- faces off, corpus: —
 - faces off, fixture: —
-- unwired, factory: —
+- unwired, corpus: —
 - unwired, fixture: —
 - nearest kept, in order:
   1. **WEAVE** — a square lattice of ribbons crossing
@@ -332,11 +332,11 @@ Six mirrored wedges of flat pop colour — magenta, yellow, cyan, black bands an
 
 ![KALEIDO](KALEIDO.png)
 
-- on screen, factory: —
+- on screen, corpus: —
 - on screen, fixture: —
-- faces off, factory: —
+- faces off, corpus: —
 - faces off, fixture: —
-- unwired, factory: —
+- unwired, corpus: —
 - unwired, fixture: —
 - nearest kept, in order:
   1. **BLOOM** — radial symmetry about the centre, turning, saturated
@@ -352,31 +352,31 @@ into; *driven* the file's own rows that set `view.pattern`.
 
 | preset | where | schema | mode | faces | state | path | also | driven |
 |---|---|---|---|---|---|---|---|---|
-| `big-blue-wave` | factory | /7 | 5 CAUSTIC | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `dial` | factory | /7 | 1 RINGS | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `ember-orbit` | factory | /7 | 11 EMBER | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `hands-fx` | factory | /7 | 0 FLAT | off | faces off | pattern → shape.faces | — | — |
-| `hands-orbit` | factory | /7 | 0 FLAT | off | faces off | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `hands-pinch` | factory | /7 | 0 FLAT | off | faces off | pattern → shape.faces | — | desk: cc:*:22 abs |
-| `hands-play` | factory | /7 | 0 FLAT | off | faces off | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `hex-engine` | factory | /7 | 6 HEX | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `inverse-halo` | factory | /7 | 1 RINGS | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `legacy6` | factory | /7 | 0 FLAT | off | faces off | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `lfo-breathe` | factory | /7 | 0 FLAT | off | faces off | pattern → shape.faces | — | — |
-| `party-acid` | factory | /7 | 1 RINGS | on | on screen | pattern → shape.faces | — | — |
-| `party-faces` | factory | /7 | 6 HEX | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `party-field` | factory | /7 | 11 EMBER | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `party-mandala` | factory | /7 | 9 PLASMA | on | on screen | pattern → shape.faces | — | — |
-| `party-noita` | factory | /7 | 11 EMBER | on | on screen | pattern → shape.faces | — | — |
-| `party-tracer` | factory | /7 | 9 PLASMA | off | faces off | pattern → shape.faces | — | — |
-| `party-trip` | factory | /7 | 9 PLASMA | on | on screen | pattern → shape.faces | — | — |
-| `party-tumble` | factory | /7 | 8 CELLS | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `party-wake` | factory | /7 | 9 PLASMA | on | on screen | pattern → shape.faces | — | — |
-| `plasma-heart` | factory | /7 | 9 PLASMA | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `seq-demo` | factory | /7 | 0 FLAT | off | faces off | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `spiral-silk` | factory | /7 | 7 SPIRAL | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `strobe-cage` | factory | /7 | 3 MOIRE | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
-| `woven-lattice` | factory | /7 | 10 WEAVE | off | faces off | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `big-blue-wave` | corpus | /7 | 5 CAUSTIC | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `dial` | corpus | /7 | 1 RINGS | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `ember-orbit` | corpus | /7 | 11 EMBER | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `hands-fx` | corpus | /7 | 0 FLAT | off | faces off | pattern → shape.faces | — | — |
+| `hands-orbit` | corpus | /7 | 0 FLAT | off | faces off | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `hands-pinch` | corpus | /7 | 0 FLAT | off | faces off | pattern → shape.faces | — | desk: cc:*:22 abs |
+| `hands-play` | corpus | /7 | 0 FLAT | off | faces off | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `hex-engine` | corpus | /7 | 6 HEX | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `inverse-halo` | corpus | /7 | 1 RINGS | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `legacy6` | corpus | /7 | 0 FLAT | off | faces off | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `lfo-breathe` | corpus | /7 | 0 FLAT | off | faces off | pattern → shape.faces | — | — |
+| `party-acid` | corpus | /7 | 1 RINGS | on | on screen | pattern → shape.faces | — | — |
+| `party-faces` | corpus | /7 | 6 HEX | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `party-field` | corpus | /7 | 11 EMBER | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `party-mandala` | corpus | /7 | 9 PLASMA | on | on screen | pattern → shape.faces | — | — |
+| `party-noita` | corpus | /7 | 11 EMBER | on | on screen | pattern → shape.faces | — | — |
+| `party-tracer` | corpus | /7 | 9 PLASMA | off | faces off | pattern → shape.faces | — | — |
+| `party-trip` | corpus | /7 | 9 PLASMA | on | on screen | pattern → shape.faces | — | — |
+| `party-tumble` | corpus | /7 | 8 CELLS | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `party-wake` | corpus | /7 | 9 PLASMA | on | on screen | pattern → shape.faces | — | — |
+| `plasma-heart` | corpus | /7 | 9 PLASMA | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `seq-demo` | corpus | /7 | 0 FLAT | off | faces off | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `spiral-silk` | corpus | /7 | 7 SPIRAL | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `strobe-cage` | corpus | /7 | 3 MOIRE | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
+| `woven-lattice` | corpus | /7 | 10 WEAVE | off | faces off | pattern → shape.faces | — | desk: cc:*:19 abs |
 | `acid-scene` | fixture | /2 | 9 PLASMA | on | on screen | pattern → shape.faces | — | — |
 | `backdrop-still` | fixture | /4 | 6 HEX | on | on screen | pattern → shape.faces | — | desk: cc:*:19 abs |
 | `blank-frame` | fixture | /6 | 6 HEX | on | unwired | — | — | desk: cc:*:19 abs |
