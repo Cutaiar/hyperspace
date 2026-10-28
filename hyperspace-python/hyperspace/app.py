@@ -1405,6 +1405,8 @@ def main() -> None:
     dream_io, panel.dream_error = _open_dream(reg, cfg)
     if dream_io is not None:            # what the dream node dreams with (plan 36 T4)
         renderer.dreamer.source = dream_io
+    renderer.segment_cfg = cfg.get("segment", {})   # the segment workers' backend (plan 39 T4)
+    segmenters = _Closer(renderer.close)   # …closed with the adapters, at quit and restart
     # the sticks as dials (gamepad.dial, a prototype): session params on
     # whichever pad is the primary now
     _register_dial(reg, lambda: rig.adapter("gamepad"))
@@ -1548,7 +1550,7 @@ def main() -> None:
                 renderer=renderer, panel=panel, reloader=reloader,
                 draw_render=draw_render, draw_panel=draw_panel,
                 restart=lambda: _restart(audio, (watchdog, awake, panel, *host.adapters,
-                                                 publishers), impl,
+                                                 publishers, segmenters), impl,
                                          ctrl_win,
                                          save=save_windows, windows=all_windows()),
                 quit=lambda: glfw.set_window_should_close(render_win, True),
@@ -1599,7 +1601,7 @@ def main() -> None:
     _quiet(save_windows)      # where the windows are, for the next launch (placement.py)
     # the watchdog first: teardown is no stall; the panel before imgui goes
     # (its GRAPH page's node editor context, plan 28 N2)
-    close_all(audio, watchdog, awake, panel, *host.adapters, publishers)
+    close_all(audio, watchdog, awake, panel, *host.adapters, publishers, segmenters)
     impl.shutdown()
     _destroy_windows(all_windows())   # every window before terminate: the exit crash
     glfw.terminate()

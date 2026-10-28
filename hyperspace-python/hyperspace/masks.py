@@ -17,6 +17,18 @@ target's viewport (`glsl.QUAD_VS`), premultiplied in and out:
   fitted into the consumer by cover as an own-sized node is.
 - `CUT_FS`, picture + mask → picture (T3's `cut`): where the mask passes
   the picture, elsewhere cut away to transparent black, by `amount`.
+- Plan 39 T4 (`segment`): `MOTION_FS` and `LEARN_FS`, motion mode's
+  background model — the mask where the picture differs from the
+  background it has learnt, and the background learning the picture;
+  `DOWN_FS` and `readback`, a picture downsampled and read back for the
+  segment worker (the dream's path); `feather`, a mask's blur alone.
+
+Orientation: every mask a GL pass made has its first row at the bottom,
+as every texture here; one uploaded from a CPU array as it is (the segment
+worker's matte) has its top row first. Each pass that samples a mask —
+`PROMOTE_FS`, `CUT_FS`, and `fit` through the promotion — takes `u_flip`
+(`flip=`) and reads such a mask upside down, so it lands the right way up
+(the flag is the maker's: `graph.mask_of`).
 
 `MaskPasses` is the one object the renderer holds (`Renderer.mask_passes`):
 the programs compiled once, the targets asked of the renderer's
@@ -118,16 +130,19 @@ void main() {{
 # mask → picture (W1): the mask laid into the consumer's viewport about the
 # centre by `u_scale` (cover: `cover_scale`), sampled inside its edge
 # texels, white where it passes, black elsewhere, opaque — a grey picture,
-# premultiplied
+# premultiplied. Plan 39 T4: `u_flip` reads a rows-top-first mask upside
+# down (as `CUT_FS` does), so a segment's matte lands the right way up
 PROMOTE_FS = """
 #version 330
 in vec2 v_uv;
 uniform sampler2D u_mask;
 uniform vec2 u_scale;
+uniform int u_flip;
 out vec4 f_color;
 void main() {
     vec2 half_texel = 0.5 / vec2(textureSize(u_mask, 0));
     vec2 uv = clamp(0.5 + (v_uv - 0.5) * u_scale, half_texel, 1.0 - half_texel);
+    if (u_flip != 0) uv.y = 1.0 - uv.y;
     float m = texture(u_mask, uv).r;
     f_color = vec4(vec3(m), 1.0);
 }
@@ -161,6 +176,51 @@ void main() {
     f_color = texture(u_src, v_uv) * mix(1.0, m, clamp(u_amount, 0.0, 1.0));
 }
 """
+
+
+# plan 39 T4 (W4, motion mode): the mask where the picture differs from the
+# background model — `d` the largest channel's difference (premultiplied,
+# alpha included), the mask `smoothstep(sense − soft, sense + soft, d)`;
+# and the model learning the picture, `bg ← mix(bg, picture, k)` (k from
+# `segment.learn`'s seconds)
+MOTION_FS = """
+#version 330
+in vec2 v_uv;
+uniform sampler2D u_src;
+uniform sampler2D u_bg;
+uniform float u_sense;
+uniform float u_soft;
+out vec4 f_color;
+void main() {
+    vec4 d4 = abs(texture(u_src, v_uv) - texture(u_bg, v_uv));
+    float d = max(max(d4.r, d4.g), max(d4.b, d4.a));
+    float m = smoothstep(u_sense - u_soft, u_sense + u_soft, d);
+    f_color = vec4(m, 0.0, 0.0, 1.0);
+}
+"""
+
+LEARN_FS = """
+#version 330
+in vec2 v_uv;
+uniform sampler2D u_src;
+uniform sampler2D u_bg;
+uniform float u_k;
+out vec4 f_color;
+void main() {
+    f_color = mix(texture(u_bg, v_uv), texture(u_src, v_uv), clamp(u_k, 0.0, 1.0));
+}
+"""
+
+# a picture into a smaller target (the readback for the segment worker):
+# trilinear over its mipmaps, a box-ish downsample, as the dream's DOWN_FS
+DOWN_FS = """
+#version 330
+in vec2 v_uv;
+uniform sampler2D u_src;
+out vec4 f_color;
+void main() { f_color = texture(u_src, v_uv); }
+"""
+MOTION_SOFT = 0.04      # motion's edge either side of `sense`
 
 
 def cover_scale(src: tuple[int, int], dst: tuple[int, int]) -> tuple[float, float]:
@@ -197,7 +257,8 @@ class MaskPasses:
         self.frame_target = frame_target
         self._progs: dict[str, tuple[moderngl.Program, moderngl.VertexArray]] = {}
         for name, fs in (("matte", MATTE_FS), ("blur", BLUR_FS), ("promote", PROMOTE_FS),
-                         ("cut", CUT_FS)):
+                         ("cut", CUT_FS), ("motion", MOTION_FS), ("learn", LEARN_FS),
+                         ("down", DOWN_FS)):
             prog = ctx.program(vertex_shader=QUAD_VS, fragment_shader=fs)
             try:
                 vao = ctx.vertex_array(prog, [])
@@ -206,11 +267,16 @@ class MaskPasses:
                 raise
             self._progs[name] = (prog, vao)
 
+        self._mip = None            # (the readback's trilinear sampler, made on first use)
+
     def release(self) -> None:
         for prog, vao in self._progs.values():
             vao.release()
             prog.release()
         self._progs = {}
+        if self._mip is not None:
+            self._mip.release()
+            self._mip = None
 
     def _run(self, name: str, dst: moderngl.Framebuffer, rect: tuple[int, int, int, int],
              textures: tuple[moderngl.Texture, ...], **uniforms) -> None:
@@ -255,12 +321,79 @@ class MaskPasses:
                       u_radius=radius)
         return out
 
-    def promote(self, mask: moderngl.Texture, dst: moderngl.Framebuffer) -> None:
+    def feather(self, mask: moderngl.Texture, key, radius: float) -> moderngl.Texture:
+        """Mask `mask` blurred by `radius` px (plan 39 T4: a segment's matte,
+        `BLUR_FS` twice) into a target of its own at the mask's size, kept
+        under frame key `key` (the half-way one `(key, "/blur")`) — its rows
+        as `mask`'s (a blur does not mind which way up). `mask` itself at
+        radius 0."""
+        radius = min(max(float(radius), 0.0), float(MAX_FEATHER))
+        if radius <= 0.0:
+            return mask
+        size = (int(mask.size[0]), int(mask.size[1]))
+        rect = (0, 0, *size)
+        half, hfbo = self.frame_target((key, "/blur"), size, components=1)
+        out, fbo = self.frame_target(key, size, components=1)
+        self._run("blur", hfbo, rect, (mask,), u_src=0, u_step=(1.0 / size[0], 0.0),
+                  u_radius=radius)
+        self._run("blur", fbo, rect, (half,), u_src=0, u_step=(0.0, 1.0 / size[1]),
+                  u_radius=radius)
+        return out
+
+    def motion(self, src: moderngl.Texture, bg: moderngl.Texture | None,
+               dst: moderngl.Framebuffer, *, sense: float, soft: float = MOTION_SOFT) -> None:
+        """Motion mode's mask into `dst`'s viewport (plan 39 T4, `MOTION_FS`):
+        1 where picture `src` differs from background `bg` past `sense`,
+        both read 1:1 at `dst`'s size. No background yet: nothing passes."""
+        rect = tuple(int(v) for v in dst.viewport)
+        if bg is None:
+            dst.use()
+            self.ctx.viewport = rect
+            self.ctx.clear(0.0, 0.0, 0.0, 1.0, viewport=rect)
+            return
+        self._run("motion", dst, rect, (src, bg), u_src=0, u_bg=1,
+                  u_sense=float(sense), u_soft=max(float(soft), 1e-4))
+
+    def learn(self, src: moderngl.Texture, bg: moderngl.Texture | None,
+              dst: moderngl.Framebuffer, k: float) -> None:
+        """The background model's step into `dst` (`LEARN_FS`): `bg` moved
+        towards picture `src` by `k` (0 still, 1 the picture itself); with no
+        `bg` yet, the picture itself."""
+        rect = tuple(int(v) for v in dst.viewport)
+        self._run("learn", dst, rect, (src, bg if bg is not None else src), u_src=0, u_bg=1,
+                  u_k=1.0 if bg is None else float(k))
+
+    def readback(self, src: moderngl.Texture, key, size: tuple[int, int],
+                 out: np.ndarray | None = None) -> np.ndarray:
+        """Picture `src` downsampled to `size` (trilinear over its mipmaps:
+        the dream's path) into an RGBA8 target kept under frame key `key`,
+        and read back once into `out` (an (h, w, 4) uint8 array; a new one
+        when None or another shape) — its rows bottom first, as GL's are."""
+        size = (int(size[0]), int(size[1]))
+        _, fbo = self.frame_target(key, size)
+        if self._mip is None:
+            self._mip = self.ctx.sampler(filter=(moderngl.LINEAR_MIPMAP_LINEAR, moderngl.LINEAR),
+                                         repeat_x=False, repeat_y=False)
+        src.build_mipmaps()
+        self._mip.use(location=0)
+        try:
+            self._run("down", fbo, (0, 0, *size), (src,), u_src=0)
+        finally:
+            self._mip.clear(location=0)
+        shape = (size[1], size[0], 4)
+        if out is None or out.shape != shape or out.dtype != np.uint8:
+            out = np.empty(shape, np.uint8)
+        fbo.read_into(out, components=4)
+        return out
+
+    def promote(self, mask: moderngl.Texture, dst: moderngl.Framebuffer, *,
+                flip: bool = False) -> None:
         """Mask `mask` as a picture into `dst`'s viewport (W1): white where
-        it passes, black elsewhere, opaque, fitted by cover."""
+        it passes, black elsewhere, opaque, fitted by cover. `flip`: its rows
+        are top first (plan 39 T4), so it is read upside down."""
         rect = tuple(int(v) for v in dst.viewport)
         self._run("promote", dst, rect, (mask,), u_mask=0,
-                  u_scale=cover_scale(mask.size, rect[2:]))
+                  u_scale=cover_scale(mask.size, rect[2:]), u_flip=int(bool(flip)))
 
     def cut(self, src: moderngl.Texture, mask: moderngl.Texture, dst: moderngl.Framebuffer,
             *, invert: bool = False, amount: float = 1.0, flip: bool = False) -> None:
@@ -279,16 +412,19 @@ class MaskPasses:
                   u_invert=int(bool(invert)), u_amount=float(amount),
                   u_flip=int(bool(flip)))
 
-    def fit(self, mask: moderngl.Texture, key, size: tuple[int, int]) -> moderngl.Texture:
+    def fit(self, mask: moderngl.Texture, key, size: tuple[int, int], *,
+            flip: bool = False) -> moderngl.Texture:
         """Mask `mask` refitted by cover to `size`, one channel (`PROMOTE_FS`
         into an R8 target: its red is the mask), kept under frame key `key` —
         what a mask port that reads the frame's pixels 1:1 binds
         (`lookback.cover`), so the mask lands where its promoted picture
-        shows it. Returns `mask` itself when it is that size already."""
+        shows it. `flip` (plan 39 T4): its rows are top first — the refit
+        turns it the right way up, as every GL mask is. Returns `mask`
+        itself when it is that size already and needs no turning."""
         size = (int(size[0]), int(size[1]))
-        if tuple(mask.size) == size:
+        if tuple(mask.size) == size and not flip:
             return mask
         out, fbo = self.frame_target(key, size, components=1)
         fbo.viewport = (0, 0, *size)
-        self.promote(mask, fbo)
+        self.promote(mask, fbo, flip=flip)
         return out

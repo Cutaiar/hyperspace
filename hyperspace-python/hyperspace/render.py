@@ -144,6 +144,7 @@ from .graph import (
     Frame,
     Graph,
     Hands,
+    SegmentNode,
     Wiring,
     build_graph,
     channel_into,
@@ -1125,6 +1126,14 @@ class Renderer:
         self._swatch_frame = self._swatch_until = self._swatch_next = 0
         self.swatch_error = ""
         self._build_face_program()
+        # plan 39 T4: the segment nodes' workers (`segmenter`), made from
+        # `segment_cfg` (the config's [segment], app.py hands it over) on a
+        # node's first need — None, as the hold's preview renderer is given,
+        # makes none: its segments pass their pictures through — and motion
+        # mode's background models (`motion_pair`), each by its node's name
+        self.segment_cfg: dict | None = None
+        self._segmenters: dict = {}
+        self._motions: dict[str, DelayPair] = {}
         ctx.enable(moderngl.BLEND | moderngl.PROGRAM_POINT_SIZE)
         ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
 
@@ -1572,6 +1581,9 @@ class Renderer:
         # history (it starts clean when one is drawn again); the dream
         # forgets `D` with no dream node, so the worker sleeps
         self._idle_rings(graph)
+        # plan 39 T4: a segment no node of this graph holds lets its worker
+        # and its background model go, after `SIZED_KEEP_FRAMES`
+        self._tend_segments(graph)
         # plan 30 D1: "an effect is on" means one of the pipelines' runs: an
         # effect the preset placed on an edge runs there (and moves its
         # clock in `run_one`) but bends no pipeline, so with only placed
@@ -1730,6 +1742,15 @@ class Renderer:
             now = self._media_now = {}
         return now
 
+    def media_now(self, c: str) -> tuple[object | None, int]:
+        """Channel `c`'s newest frame this frame — the `MediaFrame` its
+        texture was uploaded from (None: black) — and its fit (`media.<c>.
+        fit`: 0 cover): the segment's shortcut to a camera's or a feed's CPU
+        pixels (plan 39 T4), read once a frame with the texture."""
+        self.media_texture(c)
+        ch = getattr(getattr(self, "media", None), "channels", {}).get(c)
+        return self._media_frame_now().get(("frame", c)), int(getattr(ch, "fit", 0) or 0)
+
     def media_texture(self, c: str) -> moderngl.Texture | None:
         """Channel `c`'s raw texture this frame — the picture at its own
         size and aspect, for the faces — or None (black). The channel is
@@ -1748,6 +1769,7 @@ class Renderer:
                 f = media.frame(c)
             except Exception:  # noqa: BLE001 — a channel must not take the frame down
                 f = None
+            now[("frame", c)] = f         # (plan 39 T4: `media_now`)
             now[key] = self._media_textures().texture(c, f)
         return now[key]
 
@@ -2159,6 +2181,83 @@ class Renderer:
         if got is None:
             got = pairs[name] = DelayPair()
         return got
+
+    def segmenter(self, name: str):
+        """Segment node `name`'s worker (plan 39 T4, `segment.SegmentWorker`),
+        made on its first need from `segment_cfg` and kept by name across
+        graph rebuilds — or None on a renderer with no `segment_cfg` (the
+        hold's preview: only the program renderer runs a model). Closed when
+        no graph has held its node for `SIZED_KEEP_FRAMES` (`_tend_segments`)
+        and in `close`. `segment_factory(cfg, name)`, when set, makes it
+        instead (tests). segment.py is imported here, on the first need,
+        never by graph.py nor on `import hyperspace.app`."""
+        cfg = getattr(self, "segment_cfg", None)
+        if cfg is None:
+            return None
+        workers = self.__dict__.setdefault("_segmenters", {})
+        got = workers.get(name)
+        if got is None:
+            make = getattr(self, "segment_factory", None)
+            if make is None:
+                from . import segment
+
+                make = segment.make_worker
+            got = workers[name] = make(cfg, name)
+        return got
+
+    def motion_pair(self, name: str) -> DelayPair:
+        """Segment node `name`'s background model in motion mode (plan 39
+        T4): a half-float pair on the delay's pattern (`DelayPair`), made on
+        first ask and kept by name across graph rebuilds; the node writes
+        one side and turns it once a frame. Released with its worker."""
+        pairs = self.__dict__.setdefault("_motions", {})
+        got = pairs.get(name)
+        if got is None:
+            got = pairs[name] = DelayPair()
+        return got
+
+    def _tend_segments(self, graph: Graph) -> None:
+        """Once a frame: each worker and background model whose segment no
+        node of `graph` is counts a frame idle, and goes at
+        `SIZED_KEEP_FRAMES` (half a second at 60 fps) — the worker closed,
+        the pair released. Never raises."""
+        workers = self.__dict__.get("_segmenters") or {}
+        pairs = self.__dict__.get("_motions") or {}
+        if not workers and not pairs:
+            return
+        held = {n.name for n in getattr(graph, "nodes", {}).values()
+                if isinstance(n, SegmentNode)}
+        idle = self.__dict__.setdefault("_segment_idle", {})
+        for name in {*workers, *pairs}:
+            if name in held:
+                idle.pop(name, None)
+                continue
+            idle[name] = idle.get(name, 0) + 1
+            if idle[name] < SIZED_KEEP_FRAMES:
+                continue
+            del idle[name]
+            try:
+                w = workers.pop(name, None)
+                if w is not None:
+                    w.close()
+                pair = pairs.pop(name, None)
+                if pair is not None:
+                    pair.release()
+            except Exception:  # noqa: BLE001, S110 — a lost context: nothing to free
+                pass
+
+    def close(self) -> None:
+        """This renderer's own segment workers closed, each within a second
+        (plan 39 T4; app.py's close list, at quit and restart) — never
+        anything another renderer shares (the hold's preview has none of
+        its own). Threads only: the GL it holds goes with its context, which
+        may not be current at this point of the exit."""
+        for w in list((self.__dict__.get("_segmenters") or {}).values()):
+            try:
+                w.close()
+            except Exception:  # noqa: BLE001, S110 — teardown is best-effort
+                pass
+        self._segmenters = {}
 
     def reset_delays(self) -> None:
         """R19 (final review, row 354): a preset load landed a new section —
