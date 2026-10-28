@@ -850,6 +850,38 @@ def test_splice_on_a_cable_lands_the_patch_in_the_run_in_one_step(rig):
         undo.install(None)
 
 
+def test_a_splice_that_raises_the_sheet_lands_the_splice_with_its_answers(rig):
+    """Dropped on `scene → plasma.image` with K1 colliding (party-trip's
+    view.bright): the sheet goes up and nothing lands; **keep all existing**
+    + Spawn lands the *splice* — the cable taken out, the run through the
+    patch — with K1 left on brightness and kept by the group, one step."""
+    from hyperspace import ui_routing
+    st = trip(rig)
+    pre, table = rig.lib.presets, rig.router.table
+    cable = next(c for c in st["view"].cables if c.kind == "render"
+                 and (c.ref.src, c.ref.dst) == ("scene", "plasma.image"))
+    wired = wires(rig)
+    u = watch(rig)
+    try:
+        n = len(u.stack)
+        assert ui_graph.spawn(rig.panel, "acid-wash", (0.0, 0.0), splice=cable) is None
+        assert ui_routing.sheet(rig.panel) is not None
+        assert wires(rig) == wired and pre.groups == [] and len(u.stack) == n
+        ui_routing.keep_all(rig.panel)
+        assert ui_routing.settle_sheet(rig.panel, True) is None
+        assert len(u.stack) == n + 1
+        assert u.stack[-1].label == "splice acid wash into scene → plasma.image"
+        w = wires(rig)
+        assert ("scene", "plasma.image") not in w
+        assert {("scene", "acid.image"), ("delay", "plasma.image")} <= set(w)
+        assert [b.target for b in table.desk() if b.source == "cc:0:48"] == ["view.bright"]
+        (g,) = pre.groups
+        assert [k["source"] for k in g["kept_by_host"]] == ["cc:0:48"]
+        assert ui_graph._state(rig.panel)["said"].startswith("spliced acid wash")
+    finally:
+        undo.install(None)
+
+
 def test_wire_as_saved_wires_the_free_ports_and_refuses_a_taken_one(rig):
     """**wire as saved** (D2's chip): scene → acid.image lands, delay →
     output.all.image is refused in words while party-trip's run holds it —
