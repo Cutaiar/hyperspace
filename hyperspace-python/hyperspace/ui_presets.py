@@ -75,7 +75,15 @@ from __future__ import annotations
 from imgui_bundle import imgui
 
 from . import preset, ui
-from .library import F_KEYS, HOME_UNSET, PRESETS, RETIRED_MODULES, LibraryError, slot_key
+from .library import (
+    F_KEYS,
+    HOME_UNSET,
+    PATCHES,
+    PRESETS,
+    RETIRED_MODULES,
+    LibraryError,
+    slot_key,
+)
 from .params import PERFORMANCE_GROUPS
 
 LIST_POLL = 1.0      # seconds between re-listings of a group's presets
@@ -425,9 +433,9 @@ def _said(panel, fn, *args):
         return None
 
 
-def _rename(panel, old: str, new: str) -> None:
-    _said(panel, panel.library.rename, PRESETS, old, new)
-    invalidate(panel, PRESETS)
+def _rename(panel, old: str, new: str, group: str = PRESETS) -> None:
+    _said(panel, panel.library.rename, group, old, new)
+    invalidate(panel, group)
     invalidate(panel, PROJECT)
 
 
@@ -513,13 +521,18 @@ def list_row_h() -> float:
 
 def _list_row(panel, group: str, name: str, cur: str | None, hidden: bool, drawn: dict,
               rect) -> None:
-    """One row of the preset list: the name (a pick loads it), then its chips."""
+    """One row of the preset list: the name (a pick loads it), then its
+    chips. Plan 40 T3: a patch's row (the PRESETS page's **patches** fold)
+    has the presets' chips — × to hide a factory one or trash your own,
+    rename on yours — and no pick: a patch is spawned on GRAPH, never
+    loaded."""
     lib, st = panel.library, _state(panel)
-    presets = group == PRESETS
-    key = f"rename:{name}"
+    patch = group == PATCHES
+    presets = group == PRESETS or patch            # (the hideable, renameable groups)
+    key = f"rename:{group}:{name}" if patch else f"rename:{name}"
     if presets and st["naming"] == key:            # the row is the name field
         drawn["rows"].append((name, ("field",), hidden))
-        _name_field(panel, key, lambda n, old=name: _rename(panel, old, n))
+        _name_field(panel, key, lambda n, old=name: _rename(panel, old, n, group))
         return
     factory = is_factory(panel, group, name)
     ink =(imgui.ImVec4(0.42, 0.42, 0.45, 1) if hidden else ui.DIM if factory
@@ -535,7 +548,7 @@ def _list_row(panel, group: str, name: str, cur: str | None, hidden: bool, drawn
         imgui.get_window_draw_list().add_line(
             imgui.ImVec2(a.x, y), imgui.ImVec2(a.x + imgui.calc_text_size(name).x, y),
             ui.u32(ink), 1.5)
-    if picked:
+    if picked and not patch:
         _guard(panel, lib.load, group, name)
     if hidden:
         chips = ("unhide",)
@@ -566,7 +579,7 @@ def _list_row(panel, group: str, name: str, cur: str | None, hidden: bool, drawn
         if chip == "unhide":
             _said(panel, lib.unhide, group, name)
         elif chip == "rename":
-            _begin_naming(panel, f"rename:{name}", name)
+            _begin_naming(panel, key, name)
         elif factory:
             _said(panel, lib.hide, group, name)
         else:
@@ -1008,7 +1021,44 @@ def overview(panel) -> None:
     if lib is None or lib.reg is None:
         return
     more(panel)
+    patches_fold(panel)                 # plan 40 T3: where "more · module presets" is
     notes(panel)
+
+
+def patches_fold(panel) -> None:
+    """Plan 40 T3: the **patches** fold — every patch (`Library.list(PATCHES)`:
+    factory then yours, hidden ones out unless shown), each a row of the
+    preset list's own (`_list_row`): × hides a factory patch or puts yours
+    in the trash, rename renames yours. No spawn from here: that is GRAPH's
+    (its head's **patches** chip, the canvas's **spawn ▸**). Folded unless
+    opened; what was drawn is kept in `_state`'s ``patches``."""
+    lib = panel.library
+    if lib is None:
+        return
+    if not imgui.collapsing_header("patches##presets.patches"):
+        return
+    st = _state(panel)
+    show = st.get("show_hidden_patches", False)
+    listing = names(panel, PATCHES)
+    rows = names(panel, PATCHES, hidden=True) if show else listing
+    gone = set(names(panel, PATCHES, hidden=True)) - set(listing)
+    drawn: dict = {"group": PATCHES, "rows": [], "foot": [], "rects": {}}
+    st["patches"] = drawn
+
+    def rect(key: str) -> None:
+        a, b = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        drawn["rects"][key] = (a.x, a.y, b.x, b.y)
+
+    if not rows:
+        imgui.text_disabled("no patches — on GRAPH, a group's menu: save as patch…")
+    for name in rows:
+        _list_row(panel, PATCHES, name, None, name in gone, drawn, rect)
+    if gone:
+        line = f"show hidden ({len(gone)})"
+        hit, _ = imgui.selectable(f"{line}##hidden.patches", show)
+        drawn["foot"].append(line)
+        if hit:
+            st["show_hidden_patches"] = not show
 
 
 def notes(panel) -> None:

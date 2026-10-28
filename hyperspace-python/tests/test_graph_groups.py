@@ -334,7 +334,8 @@ def test_the_right_click_menus_offer_group_with_two_nodes_selected(rig, monkeypa
     ui_graph.menu(rig.panel, st, st["view"])
     imgui.end()
     imgui.end_frame()
-    assert items == ["open", "rename…", "ungroup"]
+    # (plan 40 T3: and save as patch…; update patch only for a group with a patch)
+    assert items == ["open", "rename…", "save as patch…", "ungroup"]
     assert rig.lib.presets.groups[0]["open"] is True
 
 
@@ -558,3 +559,398 @@ def test_patches_select_is_the_one_rule_for_lift_and_group():
     assert "select(" in inspect.getsource(patches.lift)
     assert "patches.select(" in inspect.getsource(graphview.Edit.group)
     assert "patches.crossing(" in inspect.getsource(graphview._boundary)
+
+
+# ---------------------------------------------------------------- plan 40 T3: save, browse, spawn
+#
+# A group becomes a file (save as patch: that file, nothing else) and a
+# file becomes a group in any preset (spawn: through today's doors in load
+# order, one undo step; the conflicts asked first — tests/test_ui_routing.py
+# drives the sheet — and nothing attached by itself, D2). The patch is the
+# spec's example, tests/fixtures/patches/acid-wash.json, put into the rig's
+# scratch library; the host is party-trip (K1 there is view.bright: the
+# sheet asks), whose own effects are none of the patch's, so the first
+# spawn keeps the patch's ids and a second one takes `.2`.
+
+ACID_WASH = Path(__file__).resolve().parent / "fixtures" / "patches" / "acid-wash.json"
+ACID = ["render:acid", "render:delay", "render:wobble", "mod.1"]
+
+
+def files(root: Path) -> dict[str, bytes]:
+    """Every file under `root`, by its path: what a spawn may not change."""
+    return {str(p.relative_to(root)): p.read_bytes() for p in sorted(root.rglob("*"))
+            if p.is_file()}
+
+
+def with_patch(rig, doc: dict | None = None, slug: str = "acid-wash") -> None:
+    """A patch in the rig's scratch library (its user folder)."""
+    d = rig.lib.home / "patches"
+    d.mkdir(parents=True, exist_ok=True)
+    text = ACID_WASH.read_text() if doc is None else json.dumps(doc)
+    (d / f"{slug}.json").write_text(text)
+
+
+def trip(rig):
+    """party-trip on GRAPH with acid-wash in the library, drawn twice."""
+    with_patch(rig)
+    rig.lib.load("presets", "party-trip")
+    frame(rig.panel, "graph")
+    frame(rig.panel, "graph")
+    return ui_graph._state(rig.panel)
+
+
+def wires(rig) -> list[tuple[str, str]]:
+    return [(w.src, w.dst) for w in rig.lib.presets.graph.spec.wires]
+
+
+def state(rig) -> tuple:
+    """Everything a spawn may add, as it stands."""
+    pre, table = rig.lib.presets, rig.router.table
+    return (pre.signature(), dict(pre.layout), [dict(g) for g in pre.groups],
+            pre.graph.spec.to_json(), [b.to_json() for b in table.bindings],
+            table.modifiers_doc(rig.reg), table.macros_doc())
+
+
+def spawned(rig, slug="acid-wash", at=(100.0, 50.0), keep=False, splice=None):
+    """Spawn `slug` and answer the sheet: every row the patch's, or (`keep`)
+    every row the preset's."""
+    from hyperspace import ui_routing
+    assert ui_graph.spawn(rig.panel, slug, at, splice=splice) is None
+    if ui_routing.sheet(rig.panel) is not None:
+        if keep:
+            ui_routing.keep_all(rig.panel)
+        return ui_routing.settle_sheet(rig.panel, True)
+    return None
+
+
+def test_spawn_lands_through_the_doors_as_one_step_and_one_undo_takes_it_all(rig):
+    """acid-wash into party-trip (P3): the sheet asks about K1 (party-trip's
+    view.bright) and, answered for the patch, the whole landing is one undo
+    step — acid, wobble and delay in the section with their two wires and
+    their values, mod.1 reading the right hand, the lane route, the hand's
+    route through mod.1, K1 on the patch's speed, the group folded with its
+    pins open and its layout at the drop point. No file is written. One ⌘Z
+    takes every part of it away: the signature, the layout and the groups
+    are as they were."""
+    st = trip(rig)
+    pre, table, reg = rig.lib.presets, rig.router.table, rig.reg
+    before, wired, home = state(rig), wires(rig), files(rig.lib.home)
+    u = watch(rig)
+    try:
+        n = len(u.stack)
+        assert spawned(rig) is None
+        assert len(u.stack) == n + 1 and u.stack[-1].label == "spawn acid wash"
+        assert {"acid", "wobble", "delay"} <= patches.spec_names(pre.graph.spec)
+        # D2: the section's wires are the host's and the patch's own — nothing to the scene
+        assert sorted(wires(rig)) == sorted([*wired, ("acid", "wobble.image"),
+                                             ("wobble", "delay.image")])
+        assert reg["fx.acid.speed"].value == pytest.approx(0.4)
+        assert reg["fx.wobble.amount"].value == pytest.approx(0.3)
+        assert reg["fx.acid.on"].value and reg["fx.wobble.on"].value
+        m = table.modifier("mod.1")
+        assert m.kind == "smooth" and m.inputs == ("hand:right.y",)
+        rows = {(b.source, b.target) for b in table.routes()}
+        assert {("lane:0", "fx.acid.speed"), ("mod:1", "fx.wobble.amount")} <= rows
+        assert [b.target for b in table.desk() if b.source == "cc:0:48"] == ["fx.acid.speed"]
+        (g,) = pre.groups
+        assert {k: g[k] for k in ("id", "name", "patch", "open")} == {
+            "id": "group.1", "name": "acid wash", "patch": "acid-wash", "open": False}
+        assert sorted(g["nodes"]) == sorted(ACID) and "kept_by_host" not in g
+        assert [p["id"] for p in g["ports"]] == ["in", "out"]
+        assert {k: pre.layout[k] for k in ACID} == {
+            "render:acid": [100, 50], "render:wobble": [360, 50], "render:delay": [620, 50],
+            "mod.1": [100, 250]}
+        assert rig.lib.is_dirty("presets") and files(rig.lib.home) == home
+        frame(rig.panel, "graph")
+        (vg,) = st["view"].groups
+        opened = [p.name for p in vg.ports if "/open:" in p.id]
+        assert opened == ["in · open (was scene)", "out · open (was output.all.image)"]
+        assert vg.real[graphview.group_pin("group.1", graphview.IN, "open:in")] == \
+            "rin:acid/image"
+        assert u.undo()
+        assert state(rig) == before and wires(rig) == wired
+        assert table.modifier("mod.1") is None and pre.groups == []
+        assert [b.target for b in table.desk() if b.source == "cc:0:48"] == ["view.bright"]
+        assert files(rig.lib.home) == home
+    finally:
+        undo.install(None)
+
+
+BREATH = {"schema": "hyperspace.patch/1", "name": "breath", "note": "",
+          "nodes": [{"kind": "effect", "file": "acid"}], "wires": [],
+          "values": {"fx.acid.on": True, "lfo.1.rate": 0.3}, "modifiers": [],
+          "routes": [{"source": "lfo:0", "target": "fx.acid.speed", "op": "push", "value": 0.2}],
+          "desk": [],
+          "macros": {"macro.3": {"label": "wash", "subs": [
+              {"base": "fx.acid.speed", "from": 0.1, "to": 0.9}]}},
+          "lfos": [1], "envs": [], "ports": [],
+          "layout": {"render:acid": [0, 0], "lfo.1": [0, 200]}}
+
+
+def test_a_spawn_with_a_voice_and_a_subscriber_is_one_step_through_the_banks(tmp_path):
+    """The app's own rig (`headless.make_app`: the LFO and envelope banks):
+    a patch with an LFO and a macro lands its voice by `bank.add` (lfo.1 →
+    lfo.5, past party-trip's four), its knob's value, its route on the new
+    lane and the macro's subscriber merged (`set_macros`) — one undo step,
+    and one ⌘Z takes the voice, the value, the route, the subscriber, the
+    group and its layout back off."""
+    assert patches.check(BREATH) == []
+    app = headless.make_app(tmp_path)
+    app.lib.load("presets", "party-trip")
+    pre, table, reg = app.presets, app.router.table, app.reg
+    u = undo.Undo(reg, table, marks=Marks(app.lib), banks=pre._banks)
+    undo.install(u)
+    try:
+        u.tick(1.0)
+        u.tick(2.0)
+        e = graphview.Edit(table, reg, app.router, graph=pre.graph,
+                           push=lambda label: undo.push(label, load=True))
+        e.presets = pre
+        before = (pre.signature(), dict(pre.layout), list(pre.groups), table.macros_doc())
+        landing = patches.spawn(BREATH, patches.Host.of(pre.graph.spec, table, pre._banks()),
+                                (40.0, 60.0))
+        assert landing.renames == {"lfo.1": "lfo.5"}
+        n = len(u.stack)
+        assert e.spawn(landing) is None
+        assert len(u.stack) == n + 1 and u.stack[-1].label == "spawn breath"
+        assert pre._banks()["lfo"].doc() == [1, 2, 3, 4, 5]
+        assert reg["lfo.5.rate"].value == pytest.approx(0.3)
+        assert ("lfo:4", "fx.acid.speed") in {(b.source, b.target) for b in table.routes()}
+        assert table.macros_doc()["macro.3"]["subs"] == [
+            {"base": "fx.acid.speed", "from": 0.1, "to": 0.9}]
+        assert pre.groups[0]["nodes"] == ["render:acid", "lfo.5", "macro.3"]
+        assert pre.layout["lfo.5"] == [40, 260]
+        assert e.spawn(landing) == graphview.SPAWN_STALE.format(name="breath")   # landed once
+        assert u.undo()
+        assert (pre.signature(), dict(pre.layout), list(pre.groups),
+                table.macros_doc()) == before
+        assert pre._banks()["lfo"].doc() == [1, 2, 3, 4] and "lfo.5.rate" not in reg
+    finally:
+        undo.install(None)
+
+
+def test_a_spawn_with_no_conflict_lands_at_once(rig):
+    """A patch whose rows collide with nothing: no sheet, one step, the
+    spawn said on the head."""
+    from hyperspace import ui_routing
+    doc = json.loads(ACID_WASH.read_text())
+    doc["desk"] = []
+    trip(rig)
+    with_patch(rig, doc, "quiet-wash")
+    assert ui_graph.spawn(rig.panel, "quiet-wash", (0, 0)) is None
+    assert ui_routing.sheet(rig.panel) is None
+    assert rig.lib.presets.groups[0]["patch"] == "quiet-wash"
+    st = ui_graph._state(rig.panel)
+    assert st["said"].startswith("spawned acid wash: 4 nodes, its pins open")
+
+
+def test_splice_on_a_cable_lands_the_patch_in_the_run_in_one_step(rig):
+    """Dropped on `scene → plasma.image` (D2's splice, `render_insert`'s
+    shape): the cable goes, scene → acid … delay → plasma come, in the same
+    undo step; no pin is left open. A patch with two inlets is no drop
+    target: refused in words, nothing changed."""
+    st = trip(rig)
+    pre = rig.lib.presets
+    cable = next(c for c in st["view"].cables if c.kind == "render"
+                 and (c.ref.src, c.ref.dst) == ("scene", "plasma.image"))
+    e = ui_graph.render_edit(rig.panel)
+    ports = patches.read(json.loads(ACID_WASH.read_text())).ports
+    assert graphview.splice_target(e, cable, "acid wash", ports) is None
+    two = [*ports, {"id": "in.2", "type": "image", "to": "wobble.aux", "was": "scene"}]
+    assert graphview.splice_target(e, cable, "x", two) == (
+        "x has 2 picture inlets and 1 outlet: a splice needs one of each")
+    u = watch(rig)
+    try:
+        n = len(u.stack)
+        assert spawned(rig, splice=cable) is None
+        assert len(u.stack) == n + 1
+        assert u.stack[-1].label == "splice acid wash into scene → plasma.image"
+        w = wires(rig)
+        assert ("scene", "plasma.image") not in w
+        assert {("scene", "acid.image"), ("acid", "wobble.image"), ("wobble", "delay.image"),
+                ("delay", "plasma.image")} <= set(w)
+        assert G.run_of(pre.graph.spec, "scene", "delay.image") == ("acid", "wobble")
+        assert G.run_back(pre.graph.spec, "output.all.image") == (
+            "plasma", "kaleido", "zoomblur", "huecycle")
+        assert "ports" not in pre.groups[0]
+        assert graphview.open_ports(pre.graph.spec, pre.groups[0]) == []
+        assert u.undo() and ("scene", "plasma.image") in wires(rig) and pre.groups == []
+    finally:
+        undo.install(None)
+
+
+def test_wire_as_saved_wires_the_free_ports_and_refuses_a_taken_one(rig):
+    """**wire as saved** (D2's chip): scene → acid.image lands, delay →
+    output.all.image is refused in words while party-trip's run holds it —
+    one undo step for the press; with the port freed, a second press lands
+    it and no pin is open, so the chip is gone."""
+    st = trip(rig)
+    pre = rig.lib.presets
+    spawned(rig)
+    u = watch(rig)
+    try:
+        n = len(u.stack)
+        assert ui_graph.wire_as_saved(rig.panel, "group.1") == "output.all.image is taken"
+        assert len(u.stack) == n + 1 and u.stack[-1].label == "wire acid wash as saved"
+        assert ("scene", "acid.image") in wires(rig)
+        assert ("delay", "output.all.image") not in wires(rig)
+        assert st["said"] == "wired as saved: scene → acid.image"
+        assert [p["id"] for p in graphview.open_ports(pre.graph.spec, pre.groups[0])] == ["out"]
+        frame(rig.panel, "graph")
+        cable = next(c for c in st["view"].cables if c.kind == "render"
+                     and (c.ref.src, c.ref.dst) == ("huecycle", "output.all.image"))
+        assert ui_graph._render_said(rig.panel, ui_graph.render_edit(rig.panel),
+                                     lambda e: e.unwire(cable)) is None
+        assert ui_graph.wire_as_saved(rig.panel, "group.1") is None
+        assert ("delay", "output.all.image") in wires(rig)
+        assert graphview.open_ports(pre.graph.spec, pre.groups[0]) == []
+        assert ui_graph.wire_as_saved(rig.panel, "group.1") == "no pin of acid wash is open"
+    finally:
+        undo.install(None)
+
+
+def test_wire_as_saved_refuses_a_node_the_preset_lacks():
+    """A port whose `was` names a node the host does not have is refused,
+    named, and nothing lands (pure, on the edit layer)."""
+    spec = G.read_graph({"frame": "wired", "wires": [{"from": "shape", "to": "scene.geometry"}],
+                         "nodes": [{"kind": "effect", "file": "acid"}]})
+    entry = {"id": "group.1", "name": "g", "nodes": ["render:acid"],
+             "ports": [{"id": "in", "type": "image", "to": "acid.image", "was": "tripcolour"}]}
+    assert graphview.open_ports(spec, entry) == [entry["ports"][0]]
+
+    class GS:
+        def __init__(self):
+            self.spec = spec
+
+        def files(self):
+            return None
+
+        def land(self, *a):
+            raise AssertionError("nothing lands")
+
+    def no_step(label):
+        raise AssertionError("no undo step")
+
+    e = graphview.Edit(graph=GS(), push=no_step)
+    e.presets = type("P", (), {"groups": [entry], "layout": {}})()
+    assert e.wire_as_saved("group.1") == "no node tripcolour"
+
+
+def test_a_second_spawn_takes_the_next_ids_and_its_kept_rows_are_said(rig):
+    """Twice (P3): the second copy is `.2` everywhere and a second group;
+    its K1 collides with the first copy's, and **keep all existing** keeps
+    the first's — the second's row is not in the table, it is in the
+    group's `kept_by_host` and said on the node ("K1 kept by the preset");
+    the fresh ids are on the group's hover for the session (never saved)."""
+    st = trip(rig)
+    pre, table = rig.lib.presets, rig.router.table
+    spawned(rig)
+    spawned(rig, at=(100.0, 400.0), keep=True)
+    g1, g2 = pre.groups
+    assert (g1["id"], g2["id"]) == ("group.1", "group.2") and "kept_by_host" not in g1
+    assert sorted(g2["nodes"]) == ["mod.2", "render:acid.2", "render:delay.2",
+                                   "render:wobble.2"]
+    assert {"acid.2", "wobble.2", "delay.2"} <= patches.spec_names(pre.graph.spec)
+    assert g2["renames"] == {"acid": "acid.2", "delay": "delay.2", "wobble": "wobble.2",
+                             "mod.1": "mod.2"}
+    assert [b.target for b in table.desk() if b.source == "cc:0:48"] == ["fx.acid.speed"]
+    (kept,) = g2["kept_by_host"]
+    assert kept["source"] == "cc:0:48" and kept["target"] == "fx.acid.2.speed"
+    assert graphview.kept_words(kept) == "K1 kept by the preset"
+    assert ("lane:0", "fx.acid.2.speed") in {(b.source, b.target) for b in table.routes()}
+    frame(rig.panel, "graph")
+    vg = st["view"].group("group.2")
+    assert vg.kept_by_host == [kept]
+    tip = ui_graph.group_tip(rig.panel, st["view"], vg)
+    assert "spawned as acid → acid.2, delay → delay.2, wobble → wobble.2, mod.1 → mod.2" in tip
+    saved = pre.document("trip twice")["groups"]
+    assert "renames" not in saved[1] and "ports" not in saved[1]
+    assert saved[1]["kept_by_host"] == [kept]
+
+
+def test_save_as_patch_writes_that_file_and_nothing_else(rig):
+    """**Save as patch…** on party-noita's grouped core: `patches.lift` over
+    the loaded parts, `Library.save_patch` — one new file, the spec's shape,
+    listed — and the group names it (one undo step, the dirty dot); **update
+    patch** writes it again with nothing else touched; a group holding what
+    no patch may (a hand-edited preset's `scene`) is refused in words and
+    nothing is written."""
+    from hyperspace import library
+    noita(rig, [ENTRY])
+    home = files(rig.lib.home)
+    u = watch(rig)
+    try:
+        assert ui_graph.save_patch(rig.panel, "group.1", "  ", "") == graphview.PATCH_NEEDS_NAME
+        assert ui_graph.save_patch(rig.panel, "group.1", "noita core", "the middle") is None
+        after = files(rig.lib.home)
+        assert set(after) - set(home) == {"patches/noita-core.json"}
+        assert {k: v for k, v in after.items() if k in home} == home
+        doc = json.loads(after["patches/noita-core.json"])
+        assert doc["schema"] == "hyperspace.patch/1" and doc["name"] == "noita core"
+        assert doc["note"] == "the middle"
+        assert [e.get("file") for e in doc["nodes"]] == ["doublevision", "fractals", "warp"]
+        assert [(p["id"], p["was"]) for p in doc["ports"]] == [
+            ("in", "scene"), ("out", "tripcolour.image")]
+        assert "noita core" in rig.lib.list(library.PATCHES)
+        assert rig.lib.presets.groups[0]["patch"] == "noita-core"
+        assert u.stack[-1].label == "save noita core as patch noita core"
+        assert ui_graph._state(rig.panel)["said"] == "saved noita core as a patch"
+        assert ui_graph.save_patch(rig.panel, "group.1", "noita core", "the middle") is None
+        assert files(rig.lib.home) == after             # the same text: nothing moved
+        assert ui_graph._state(rig.panel)["said"] == "updated patch noita core"
+        rig.lib.presets.groups[0]["nodes"].append("render:scene")
+        assert ui_graph.save_patch(rig.panel, "group.1", "bad", "") == (
+            "scene is the frame's; left out")
+        assert files(rig.lib.home) == after
+    finally:
+        undo.install(None)
+
+
+def test_the_browser_lists_each_patch_with_its_boundary_in_words(rig, monkeypatch):
+    """The head's **patches** chip opens the list: each patch's name, its
+    note and its boundary in words (the desk's glyph for K1); the canvas's
+    menu offers **spawn ▸** with the same list, at the click."""
+    st = trip(rig)
+    (row,) = ui_graph.patch_list(rig.panel)
+    assert (row["name"], row["slug"]) == ("acid wash", "acid-wash")
+    assert row["note"].startswith("acid → wobble through a delay")
+    assert row["words"] == "in: picture · out: picture · wants: band 1, K1, right hand y"
+    drawn = []
+    real_selectable, real_chip = imgui.selectable, ui_graph.ui.chip
+    monkeypatch.setattr(ui_graph.ui, "chip", lambda label, *a, **k: (
+        label == "patches##graph" or real_chip(label, *a, **k)))
+    monkeypatch.setattr(imgui, "selectable", lambda label, *a, **k: (
+        drawn.append(label), real_selectable(label, *a, **k))[1])
+    frame(rig.panel, "graph")
+    frame(rig.panel, "graph")
+    assert "acid wash##patch.acid-wash" in drawn
+    monkeypatch.undo()
+    spawns = []
+    monkeypatch.setattr(ui_graph, "spawn", lambda panel, slug, at=None, splice=None:
+                        spawns.append((slug, at)))
+    monkeypatch.setattr(imgui, "begin_menu", lambda label, *a: label == "spawn")
+    monkeypatch.setattr(imgui, "end_menu", lambda: None)
+    monkeypatch.setattr(imgui, "menu_item_simple", lambda label, *a, **k:
+                        label == "acid wash##spawn.acid-wash")
+    st["pan"] = (10.0, 20.0)
+    ui_graph._spawn_menu(rig.panel, (110.0, 220.0))
+    assert spawns == [("acid-wash", (100.0, 200.0))]
+
+
+def test_a_dragged_patch_lights_a_cable_it_can_splice_into_and_lands_on_release(rig,
+                                                                                 monkeypatch):
+    """The drag (hand check 396 covers the gesture itself): while a browser
+    line is dragged, a picture cable under the pointer lights when the
+    patch's one inlet and one outlet match it; let go there, it is spliced."""
+    st = trip(rig)
+    cable = next(c for c in st["view"].cables if c.kind == "render"
+                 and (c.ref.src, c.ref.dst) == ("scene", "plasma.image"))
+    monkeypatch.setattr(graphview, "cable_near", lambda *a, **k: cable)
+    st["patch_drag"] = "acid-wash"
+    ui_graph._drop_target(rig.panel, st, st["view"])
+    assert st["drop_cable"] == cable.id and st["drop_why"] == ""
+    got = []
+    monkeypatch.setattr(ui_graph, "spawn", lambda panel, slug, at=None, splice=None:
+                        got.append((slug, splice)))
+    ui_graph._patch_drop(rig.panel, st, st["view"])
+    assert got == [("acid-wash", cable)] and st["patch_drag"] is None

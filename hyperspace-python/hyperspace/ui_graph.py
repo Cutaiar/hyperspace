@@ -160,7 +160,7 @@ from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
 
 from . import graph as rgraph
-from . import graphview, modifiers, params, pinch, ui, ui_fx, ui_pad, ui_routing, undo
+from . import graphview, modifiers, params, patches, pinch, ui, ui_fx, ui_pad, ui_routing, undo
 from . import hold as holdmod
 from .bands import CEIL
 from .graph import Effect
@@ -298,6 +298,14 @@ def _state(panel) -> dict:
     st.setdefault("side_w", None)
     st.setdefault("side_drag", False)
     st.setdefault("machine", None)
+    # plan 40 T3: the patch a browser line is dragging (its slug), the cable
+    # it would splice into this frame and why not, the side pane's save-as-
+    # patch form (``[group id, name, note]``), the browser's listing
+    st.setdefault("patch_drag", None)
+    st.setdefault("drop_cable", None)
+    st.setdefault("drop_why", "")
+    st.setdefault("patch_form", None)
+    st.setdefault("patch_list", None)
     return st
 
 
@@ -904,6 +912,8 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
     width = imgui.get_content_region_avail().x
     if _hold_chips(panel):
         imgui.same_line()
+    if _patches_chip(panel):                # plan 40 T3: the browser
+        imgui.same_line()
     any_open = bool(st["open"])
     if ui.chip("collapse all##graph" if any_open else "expand all##graph"):
         expand_all(st, view, not any_open)
@@ -1309,6 +1319,7 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
         if ids and all(i in st["hide"] for i in ids):    # plan 36 T6: nothing there to say
             continue
         _idle_line(st, view, area, ids)
+    _drop_target(panel, st, view)       # plan 40 T3: a dragged patch's cable, lit below
     # plan 28 N7: one wire per node pair while either end is collapsed
     singles, bundles = _wiring(st, view)
     st["tints"] = cable_tints(st, view)     # plan 37 C2: the through wires known
@@ -1338,6 +1349,7 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     _menus(panel, st, view)
     _hover(st, view, panel)
     _moved(panel, st, view)
+    _patch_drop(panel, st, view)        # plan 40 T3: let go on a lit cable: splice
     imgui.pop_font()
     ed.end()
     if through > 0.0:
@@ -1764,6 +1776,9 @@ def group_tip(panel, view: graphview.View, g) -> str:
              + ", ".join(names[:6]) + (f", + {more} more" if more > 0 else "")]
     if g.patch:
         lines.append(f"from patch {g.patch}")
+    renames = (group_entry_of(panel, g.id) or {}).get("renames") or {}
+    if renames:                             # plan 40 T3: fresh ids are said (this session)
+        lines.append("spawned as " + ", ".join(f"{a} → {b}" for a, b in renames.items()))
     lines += graphview.group_words(view, g)[:graphview.TIP_ROWS]
     status = group_status(panel, view, g)
     if status:
@@ -2010,8 +2025,371 @@ def _group_side(panel, st: dict, view: graphview.View, g) -> None:
 
 
 def _group_chips(panel, g) -> None:
-    """Plan 40 T3's seam: the group's **save as patch** / **update patch**
-    / **wire as saved** chips go here. T2 draws none."""
+    """Plan 40 T3: the group's chips on its side pane — **wire as saved**
+    while a spawn's pin is open (D2: "scene → in, out → output.all", one
+    press, its result drawn), **save as patch…** and, for a group spawned
+    from or saved as one, **update patch** — each opening the name / note
+    form (`_patch_form`)."""
+    st = _state(panel)
+    view = st.get("view")
+    entry = group_entry_of(panel, g.id) or {}
+    ports = graphview.open_ports(getattr(view, "spec", None), entry)
+    if ports:
+        ui._micro("open pins")
+        if ui.chip("wire as saved##graph.group"):
+            wire_as_saved(panel, g.id)
+        if imgui.is_item_hovered():
+            ui.tooltip(WIRE_AS_SAVED_TIP + "\n" + saved_words(ports))
+    form = st.get("patch_form")
+    if form is not None and form[0] == g.id:
+        _patch_form(panel, g, form)
+        return
+    ui._micro("patch")
+    if ui.chip("save as patch…##graph.group"):
+        open_patch_form(panel, g)
+    if imgui.is_item_hovered():
+        ui.tooltip(SAVE_PATCH_TIP)
+    if g.patch:
+        imgui.same_line()
+        if ui.chip("update patch##graph.group"):
+            open_patch_form(panel, g, update=True)
+        if imgui.is_item_hovered():
+            ui.tooltip(f"Write this group over patch {g.patch} (its old text to the trash)")
+
+
+# ---------------------------------------------------------------- plan 40 T3: patches
+#
+# A group becomes a file (save as patch: `patches.lift` over the loaded
+# parts, `Library.save_patch` — that file and nothing else) and a file
+# becomes a group in any preset (spawn: `patches.spawn` over a `Host` of
+# the live parts, then — when its rig rows collide with the preset's —
+# the conflict sheet, `ui_routing`'s modal, else straight on — landed by
+# `graphview.Edit.spawn` through today's doors as one undo step). Nothing
+# is attached by itself (D2): every host port is an open pin on the group
+# node, unless the patch was dropped on a cable (splice) or **wire as
+# saved** is pressed. The browser is the head's **patches** chip and the
+# canvas's **spawn ▸**; the PRESETS page lists the same, for × and rename
+# only (ui_presets). The control window's only (D8): nothing on the desk.
+
+PATCH_DRAG = "PATCH"                 # a browser line's drag payload: the patch's slug
+PATCHES_POPUP = "##graph.patches"
+DROP_COLOUR = imgui.ImVec4(1.0, 0.86, 0.35, 1.0)    # the cable a dragged patch would splice into
+DROP_WIRE = 6.0
+PATCHES_TIP = ("The patches: a click spawns one at the canvas's centre, its pins open — "
+               "nothing wired to this preset. Drag one onto a picture cable to splice it in")
+NO_PATCHES = "no patches yet — a group's menu: save as patch…"
+WIRE_AS_SAVED_TIP = ("Wire each open pin as the patch was saved, where this preset has that "
+                     "node and the port is free — the rest said, nothing else touched")
+SAVE_PATCH_TIP = ("Save this group as a patch: its nodes, values, wires, rows and the cables "
+                  "across its edge — the patch's file, nothing else written")
+SHEET_UP = "{n} control{s} the preset already uses: the sheet asks which keeps each"
+SPAWN_CANCELLED = "spawn of {name} cancelled: nothing landed"
+NO_LIBRARY = "no library: nothing to spawn"
+
+
+def group_entry_of(panel, gid: str) -> dict | None:
+    """The loaded preset's entry of group `gid` (its session keys too: a
+    spawn's open `ports` and its `renames`), or None."""
+    pre = getattr(getattr(panel, "library", None), "presets", None)
+    return next((g for g in getattr(pre, "groups", None) or () if g.get("id") == gid), None)
+
+
+def saved_words(ports) -> str:
+    """The open pins as **wire as saved** would wire them: "scene → in,
+    out → output.all.image"."""
+    return ", ".join(f"{p.get('was')} → {p.get('id')}" if "to" in p
+                     else f"{p.get('id')} → {p.get('was')}" for p in ports)
+
+
+def patch_list(panel) -> list[dict]:
+    """The browser's lines (plan 40 T3): each patch of `Library.list(PATCHES)`
+    — factory then the user's shadowing them, hidden ones out, as the
+    PRESETS list is (`ui_presets.names`, on its poll) — as ``{"name",
+    "slug", "note", "words", "ports"}`` (`graphview.patch_words`: "in:
+    picture · out: picture · wants: K1, right hand y, band 1"). A patch
+    the library refuses is left out (its words on the footer once).
+    Re-read only when the listing or a file moves."""
+    from . import library as libmod
+    from . import ui_presets
+    lib = getattr(panel, "library", None)
+    if lib is None:
+        return []
+    st = _state(panel)
+    listed = ui_presets.names(panel, libmod.PATCHES)
+    paths = [lib.path_of(libmod.PATCHES, n) for n in listed]
+    key = tuple((n, str(p), p.stat().st_mtime if p is not None and p.exists() else 0.0)
+                for n, p in zip(listed, paths))
+    held = st.get("patch_list")
+    if held is not None and held[0] == key:
+        return held[1]
+    out = []
+    for name, path in zip(listed, paths):
+        if path is None:
+            continue
+        try:
+            doc = lib.read_patch(path.name[:-5])
+        except LibraryError as e:
+            lib.say(warning=f"library: {e}")
+            continue
+        out.append({"name": name, "slug": path.name[:-5], "note": str(doc.get("note") or ""),
+                    "words": graphview.patch_words(doc, _glyph(panel)),
+                    "ports": tuple(patches.read(doc).ports)})
+    st["patch_list"] = (key, out)
+    return out
+
+
+def _glyph(panel):
+    """The desk's names for a MIDI row ("K1"), when the table is the APC40's."""
+    router = ui_routing.router_of(panel)
+    if router is None or getattr(router.table, "profile", None) != "apc40":
+        return None
+    return lambda src: ui.apc40.glyph(src) if src.partition(":")[0] in ("cc", "note",
+                                                                         "pitch") else None
+
+
+def view_centre(panel) -> tuple[float, float]:
+    """The canvas's centre last drawn, in layout units (a click in the
+    browser spawns there): `st["seen_rect"]`'s middle, less the pan."""
+    st = _state(panel)
+    (x0, y0), (x1, y1) = st.get("seen_rect") or ((0.0, 0.0), (0.0, 0.0))
+    px, py = panned(st)
+    return (round((x0 + x1) / 2 - px), round((y0 + y1) / 2 - py))
+
+
+def _held_names(gs) -> frozenset[str]:
+    """The instance names a held program keeps (plan 38 B3: a spawned node
+    takes none of them)."""
+    hold = getattr(gs, "hold", None)
+    if hold is None or not getattr(hold, "on", False):
+        return frozenset()
+    out: set[str] = set()
+    for names in (getattr(hold, "kept", None) or {}).values():
+        out |= set(names or ())
+    return frozenset(out)
+
+
+def spawn(panel, slug: str, at=None, splice=None) -> str | None:
+    """Spawn patch `slug` (plan 40 P3): `Library.read_patch`, then
+    `patches.spawn` over a `Host` of the live parts, its layout placed at
+    `at` (layout units; None: the canvas's centre) — and, when its rig rows
+    collide with the preset's, the conflict sheet first
+    (`panel.spawn_question`, drawn by `ui_routing.modal`: every row the
+    patch's, D9), else landed at once (`land_spawn`: one undo step).
+    `splice`: a picture cable it was dropped on. Returns the refusal (said
+    on the head), or None."""
+    st = _state(panel)
+    lib = getattr(panel, "library", None)
+    pre = getattr(lib, "presets", None)
+    e = group_edit(panel)
+    if lib is None or pre is None or e is None:
+        _note(st, NO_LIBRARY)
+        return NO_LIBRARY
+    try:
+        doc = lib.read_patch(slug)
+    except LibraryError as err:
+        _note(st, str(err))
+        return str(err)
+    from . import library as libmod
+    path = lib.path_of(libmod.PATCHES, slug)
+    stem = path.name[:-5] if path is not None else patches.slug(str(doc.get("name") or slug))
+    at = view_centre(panel) if at is None else (float(at[0]), float(at[1]))
+    gs = pre.graph
+    host = patches.Host.of(gs.spec, e.table, pre._banks(), _held_names(gs))
+    landing = patches.spawn(doc, host, at, patch=stem)
+    if splice is not None:
+        why = graphview.splice_target(e, splice, landing.group.get("name") or stem,
+                                      landing.ports)
+        if why is not None:
+            _note(st, why)
+            return why
+    if not landing.conflicts:
+        return land_spawn(panel, landing, {}, splice)
+    name = landing.group.get("name") or stem
+
+    def cancelled() -> None:
+        _note(st, None)
+        st["said"] = SPAWN_CANCELLED.format(name=name)
+    panel.spawn_question = (landing, {k: graphview.PATCH_SIDE
+                                      for k in range(len(landing.conflicts))},
+                            lambda choices: land_spawn(panel, landing, choices, splice),
+                            cancelled)
+    lrn = getattr(panel, "learn", None)
+    if lrn is not None and hasattr(lrn, "hold"):
+        lrn.hold(True)                      # the hands learn nothing while it asks
+    k = len(landing.conflicts)
+    _note(st, None)
+    st["said"] = SHEET_UP.format(n=k, s="" if k == 1 else "s")
+    return None
+
+
+def land_spawn(panel, landing, choices, splice=None) -> str | None:
+    """Land `landing` with the sheet's `choices` (`Edit.spawn` / `Edit.splice`:
+    one undo step through the doors); its words on the head. Returns the
+    refusal, or None."""
+    e = group_edit(panel)
+    if e is None:
+        return NO_LIBRARY
+    why = e.splice(landing, splice, choices) if splice is not None else e.spawn(landing, choices)
+    return _group_said(panel, e, why)
+
+
+def wire_as_saved(panel, gid: str) -> str | None:
+    """**wire as saved** on group `gid` (`Edit.wire_as_saved`): what landed on
+    the head's line, what was refused as its note."""
+    e = group_edit(panel)
+    if e is None:
+        return None
+    why = e.wire_as_saved(gid)
+    st = _state(panel)
+    st["note"] = why or ""
+    st["said"] = e.said if e.said else ""
+    return why
+
+
+def save_patch(panel, gid: str, name: str, note: str = "") -> str | None:
+    """**Save** on the side pane's form (`Edit.save_patch`): the patch's file
+    written and nothing else; a refusal on the head, nothing written."""
+    from . import library as libmod
+    from . import ui_presets
+    e = group_edit(panel)
+    if e is None:
+        return None
+    why = _group_said(panel, e, e.save_patch(gid, name, note))
+    if why is None:
+        st = _state(panel)
+        st["patch_form"], st["patch_list"] = None, None
+        ui_presets.invalidate(panel, libmod.PATCHES)
+    return why
+
+
+def open_patch_form(panel, g, update: bool = False) -> None:
+    """The side pane's name / note form for group `g`: its name (or, to
+    update, the patch's own name and note) filled in."""
+    name, note = g.name, ""
+    if update and g.patch:
+        try:
+            doc = panel.library.read_patch(g.patch)
+            name, note = str(doc.get("name") or g.name), str(doc.get("note") or "")
+        except (LibraryError, AttributeError):
+            pass
+    _state(panel)["patch_form"] = [g.id, name, note]
+
+
+def _patch_form(panel, g, form: list) -> None:
+    """The save-as-patch form: a name, a note, **Save** / **cancel**."""
+    ui._micro("save as patch")
+    w = imgui.get_content_region_avail().x
+    imgui.set_next_item_width(w)
+    _, form[1] = imgui.input_text_with_hint("##graph.patch.name", "name", form[1])
+    imgui.set_next_item_width(w)
+    _, form[2] = imgui.input_text_with_hint("##graph.patch.note", "note", form[2])
+    if ui.chip("Save##graph.patch"):
+        save_patch(panel, g.id, form[1], form[2])
+    if imgui.is_item_hovered():
+        ui.tooltip(SAVE_PATCH_TIP)
+    imgui.same_line()
+    if ui.chip("cancel##graph.patch"):
+        _state(panel)["patch_form"] = None
+
+
+def _patches_chip(panel) -> bool:
+    """**patches** on the head (plan 40 T3): the browser's popup — False
+    with no library (a panel from a test without one)."""
+    if getattr(panel, "library", None) is None:
+        return False
+    if ui.chip("patches##graph"):
+        imgui.open_popup(PATCHES_POPUP)
+    if imgui.is_item_hovered():
+        ui.tooltip(PATCHES_TIP)
+    if imgui.begin_popup(PATCHES_POPUP):
+        _patch_rows(panel)
+        imgui.end_popup()
+    return True
+
+
+def _patch_rows(panel) -> None:
+    """The browser's lines: each patch's name (a click spawns it at the
+    canvas's centre; a drag carries it to a cable), its note and its
+    boundary in words."""
+    st = _state(panel)
+    rows = patch_list(panel)
+    ui._micro("patches")
+    if not rows:
+        imgui.text_disabled(NO_PATCHES)
+        return
+    for k, row in enumerate(rows):
+        picked, _ = imgui.selectable(f"{row['name']}##patch.{row['slug']}", False)
+        if imgui.begin_drag_drop_source():
+            st["patch_drag"] = row["slug"]
+            imgui.set_drag_drop_payload_py_id(PATCH_DRAG, k)
+            imgui.text(row["name"])
+            imgui.end_drag_drop_source()
+        elif picked:
+            spawn(panel, row["slug"])
+        if row["note"]:
+            imgui.text_disabled(row["note"])
+        if row["words"]:
+            imgui.text_disabled(row["words"])
+
+
+def _spawn_menu(panel, at=None) -> None:
+    """The canvas's **spawn ▸** (plan 40 T3): the browser's list, each item
+    spawning at the point the menu opened (`at`, canvas units)."""
+    rows = patch_list(panel)
+    if not rows or not imgui.begin_menu("spawn"):
+        return
+    st = _state(panel)
+    for row in rows:
+        if imgui.menu_item_simple(f"{row['name']}##spawn.{row['slug']}"):
+            px, py = panned(st)
+            spawn(panel, row["slug"], None if not at else (at[0] - px, at[1] - py))
+        if imgui.is_item_hovered() and (row["note"] or row["words"]):
+            ui.tooltip("\n".join(x for x in (row["note"], row["words"]) if x))
+    imgui.end_menu()
+
+
+def _drop_target(panel, st: dict, view: graphview.View) -> None:
+    """While a browser line is dragged (`st["patch_drag"]`): the picture
+    cable under the pointer that the patch may splice into lights
+    (`st["drop_cable"]`: one inlet and one outlet of its type) — or the
+    words why not (`st["drop_why"]`, the hover's)."""
+    st["drop_cable"], st["drop_why"] = None, ""
+    slug = st.get("patch_drag")
+    if not slug:
+        return
+    m = imgui.get_mouse_pos()                  # canvas units, inside the editor
+    c = graphview.cable_near(view, st["pin_xy"], (m.x, m.y), kinds=("render",))
+    if c is None:
+        return
+    row = next((r for r in patch_list(panel) if r["slug"] == slug), None)
+    if row is None:
+        return
+    why = graphview.splice_target(render_edit(panel), c, row["name"], row["ports"])
+    if why is None:
+        st["drop_cable"] = c.id
+    else:
+        st["drop_why"] = why
+        ed.suspend()
+        ui.tooltip(why)
+        ed.resume()
+
+
+def _patch_drop(panel, st: dict, view: graphview.View) -> None:
+    """A dragged patch let go: on a lit cable, spliced in (`spawn` with the
+    cable) — anywhere else, nothing (a click on its line spawns it)."""
+    slug = st.get("patch_drag")
+    if not slug:
+        return
+    if imgui.is_mouse_down(imgui.MouseButton_.left):
+        return
+    st["patch_drag"] = None
+    cid = st.get("drop_cable")
+    st["drop_cable"] = None
+    c = next((x for x in view.cables if x.id == cid), None) if cid else None
+    if c is not None:
+        m = imgui.get_mouse_pos()
+        px, py = panned(st)
+        spawn(panel, slug, (m.x - px, m.y - py), splice=c)
 
 
 def _group_menu(panel, st: dict, view: graphview.View, g) -> None:
@@ -2022,6 +2400,12 @@ def _group_menu(panel, st: dict, view: graphview.View, g) -> None:
         set_open(panel, g.id, not g.open)
     if imgui.menu_item_simple("rename…"):
         st["select_group"] = g.id
+    if imgui.menu_item_simple("save as patch…"):          # plan 40 T3: the side pane's form
+        st["select_group"] = g.id
+        open_patch_form(panel, g)
+    if g.patch and imgui.menu_item_simple("update patch"):
+        st["select_group"] = g.id
+        open_patch_form(panel, g, update=True)
     if imgui.menu_item_simple("ungroup"):
         ungroup(panel, g.id)
 
@@ -2224,6 +2608,8 @@ def _cable(st: dict, c: graphview.VCable, a: str | None = None, b: str | None = 
         thick = THIN + (THICK - THIN) * max(0.0, min(1.0, abs(u)))
     else:
         thick = WIRE
+    if st.get("drop_cable") == c.id:        # plan 40 T3: a dragged patch would splice here
+        col, thick = DROP_COLOUR, DROP_WIRE
     ed.link(ed.LinkId(_id(st, "c:" + c.id)), ed.PinId(_id(st, a or c.src_port)),
             ed.PinId(_id(st, b or c.dst_port)), col, thick)
 
@@ -3743,6 +4129,7 @@ def picker(panel, view: graphview.View, at=None) -> None:
                                   enabled=why is None):
             add_voice(panel, scheme, at)
     render_picker(panel, at)                    # N4 (and plan 33 U): an effect, a switch …
+    _spawn_menu(panel, at)                      # plan 40 T3: a patch, spawned here
     free = macros_free(panel, view)
     if free and imgui.begin_menu("macro"):
         for mid in free:
