@@ -66,6 +66,23 @@ clean, and 596 golden frames match on the gate Mac, every one recorded
 before unchanged. No preset was edited or added; `apc40.py` and
 `midi.py` (Dylan's desk work) untouched.
 
+**Plan 39, vision, is built** on `plan-39-vision`
+([`plans/39-vision.md`](plans/39-vision.md), 2026-10-27, every decision
+the owner's), run in parallel with plans 37 and 38 and merged with plan 38
+into `plan-37-38-39-integration`, which goes to `main` in one final PR the
+owner merges. `segment` takes any picture and puts out its foreground, its
+background and its mask (Apple Vision on the Neural Engine on a worker
+thread, torchvision behind it, a motion mode with no model); `matte`
+(picture → mask) and `cut` (picture + mask → picture); the mask its own
+purple wire that never rides in alpha, readable as a white-on-black picture
+wherever a picture is taken; `edges` an effect file; the cut-through blend
+made honest (eight backdrop fixture goldens re-recorded for it); on GRAPH a
+media ▸ and a masks ▸ group and a cut-out starter. Fast tier 4105 passed,
+2 skipped; goldens 136 passed over 789 pictures. `uv sync` on both Macs
+(`pyobjc-framework-vision`), and **both Macs on this build before a preset
+with `segment`, `matte` or `cut` is shared**: an older build reads such a
+section as black. No preset was edited or added.
+
 ## What is left
 
 - **The hand checks.** None has been run by a person. Start from
@@ -73,11 +90,13 @@ before unchanged. No preset was edited or added; `apc40.py` and
   plans 24, 26 and 27 add checks 144–218, plans 30 and 28 checks
   220–276 (N8's palette as compression 267–271, N9's graph by concern
   272–276). Above all: a cable dragged on the GRAPH page (247), which no
-  test can do.
+  test can do. Plan 39 adds group AJ, checks 384–393: the camera, a
+  dancer, the party light, two cameras, an unplugged camera, and the
+  honest cut-through by eye.
 - **The owner's keep or overturn** on register rows 34–310 (the answer
   sheet at the top of [`DECISION-REGISTER.md`](DECISION-REGISTER.md)),
   plans 30 and 28's being rows 214–310 (N7's 278–290, N8's 291–298, N9's
-  299–310).
+  299–310); plan 39's are rows 440–459 and 471–497.
 - **Both Macs on this build before sharing presets**: an older build
   drops a preset's modifiers and positions when it saves (row 277).
 - **The owner's creative pass** on the new mechanisms, which no factory

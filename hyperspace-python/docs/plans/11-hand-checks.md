@@ -13,7 +13,10 @@ merged in, and 280–295 plan 31's (286–295 the APC40 page, on
 `plan-31-a1`); group AA (296–316) is plan 32's, and 317 the two plans
 together; group AC (318–331) is plan 33's, the free graph, on
 `plan-33-free-graph`; group AE (342–352) is plan 35's, the free frame,
-on `plan-34-feedback` (PR #236).
+on `plan-34-feedback` (PR #236); group AG (354–369) is plan 36's, the
+WYSIWYG graph; group AJ (384–393) is plan 39's, vision, on
+`plan-39-vision` (groups AH, 370–376, and AI, 377–383, are plans 37's
+and 38's).
 
 ## Before you start
 
@@ -5250,6 +5253,307 @@ and `palette-glass` ones differ from the old ones only at the edges of
 the placements, and the `acid.2` one by 1/255.
 *Fail:* a picture with hands where the mute is on, or one that moved
 visibly.
+
+<!-- Group AH (plan 37, checks 370–376) and group AI (plan 38, checks 377–383) go here, before AJ: they are on their own branches; the integrator orders the three groups. -->
+
+## AJ. Plan 39: vision
+
+Plan 39 as built is [`39-vision.md`](39-vision.md): `segment` (any picture
+in; `segment.fg`, `segment.bg` and `segment.mask` out; Apple Vision on the
+Neural Engine, torchvision behind it, a motion mode with no model),
+`matte` (picture → mask) and `cut` (picture + mask → picture), the mask its
+own purple wire that never rides in alpha (wired into a picture port it
+reads white where it passes, black elsewhere), `edges` as an effect file,
+and the cut-through blend made honest. On `plan-39-vision`. Run on the copy
+(`export HYPERSPACE_HOME=~/Hyperspace-try`), after **`uv sync`** (it adds
+`pyobjc-framework-vision` on macOS). The first camera open asks for camera
+permission: allow it. **A preset with `segment`, `matte` or `cut` reads as
+black with a note on an older build:** both Macs run this build before such
+a preset is shared. Register rows 440–459 and 471–497. None of these has
+been run by a person; the goldens were recorded on the build machine, and
+the two real-model tests ran once each on a synthetic frame. Until GRAPH's
+picker is in front of you, every node here can be added from right-click →
+**media ▸** (segment) or **masks ▸** (matte, cut), or as an entry in the
+preset's file (`{"kind": "segment"}`).
+
+**384. A webcam segmented by person: the dancer over the polytope, then the
+room with a person-shaped hole.** (the show Mac, the camera, the copy)
+Headless: `tests/test_graph_segment.py`
+(`test_fg_bg_and_mask_from_a_known_matte`,
+`test_a_rows_top_first_matte_lands_the_right_way_up_everywhere`,
+`test_the_shortcut_for_a_channel_with_pixels_and_the_readback_for_one_without`,
+`test_before_the_first_matte_fg_is_the_picture_whole`,
+`test_a_scene_through_a_segment_turned_off_shows_the_under`);
+`tests/test_plan39_graph.py` (`test_the_cut_out_on_the_scene_chain`,
+`test_a_second_cut_out_is_refused_nothing`,
+`test_every_segment_instance_draws_its_pins_and_their_cables`);
+`tests/test_segment.py::test_vision_runs_once_on_a_synthetic_frame` (live
+tier: `--all`). For the hold step: `tests/test_hold.py`
+(`test_a_landing_while_held_keeps_the_programs_mattes_cuts_and_segments`,
+`test_a_knob_turned_on_a_held_matte_cut_or_segment_stays_off_the_projector`,
+`test_drop_after_a_blank_landing_brings_the_mattes_cuts_and_segments_back`,
+`test_every_kind_a_landing_settles_has_its_program_ids`), on the
+integration branch.
+1. Put the camera on channel a (MEDIA).
+2. On GRAPH, in a preset with the scene chain, right-click empty canvas →
+   starters ▸ **cut-out**. A Segment and a Composite appear left to right
+   where you clicked, cabled `channel.a → segment.image`, `segment.fg →
+   composite.over`, `scene → composite.under`, `composite → All outputs`;
+   the status line says what fed All outputs before ("… — in place of scene
+   into All outputs"). Check the picker: **media ▸** lists segment, **masks
+   ▸** lists matte and cut.
+3. Stand in front of the camera.
+4. Rewire `segment.bg → composite.over`.
+5. Wire `segment.mask → output.2.image`.
+6. Turn `segment.on` off, then on.
+7. Starters ▸ cut-out again: `segment.2` and `composite.2` appear with
+   `segment.2`'s fg, bg and mask pins and their cables drawn. Undo once: the
+   second group is gone.
+8. (With plan 38 on the same build.) With step 3's look on the projector,
+   press HOLD, then New (a blank graph); turn a knob on the held segment;
+   press DROP; then HOLD, New, save to a scratch name, TAKE.
+*Pass:* at step 3 you are over the polytope and the room is gone; the cut
+sits on you, the right way up, not mirrored, not beside you, within a frame
+or two; the node says `256×144 · Vision fast · a frame or two late · ~30
+fps`. At step 4 the room shows with a person-shaped hole and the polytope
+through it. At step 5 output 2 shows your white silhouette on black. At
+step 6 the scene shows over the camera's room unchanged while off. At step
+7 every node and cable is visible, nothing refused, one undo per starter.
+At step 8 the projector keeps the cut person, live, until TAKE, the knob
+moves only the preview, DROP brings the three nodes back with their values,
+and the scratch save holds no `segment.*` ids when the live graph has none.
+*Fail:* upside down (the flip flag: rows 474, 480); squashed, offset or
+beside you (the aspect resample or the shortcut's cover condition: rows
+480, 481); the whole picture and the node waiting or in error (the backend:
+`[segment] backend`, the camera permission, `uv sync`); a segment.2 cable
+missing (row 493); the scene changing when `segment.on` goes off (row 477);
+at step 8 the projector going black or uncut at New (a declare outside
+`_settle`: row 495), a knob moving the projector (`HELD_GROUPS`: row 496)
+or the save writing the ids (`PROGRAM_IDS`: row 495).
+
+**385. `segment.quality` fast → balanced → accurate at the machine.** (the
+show Mac, the camera)
+Headless: `tests/test_graph_segment.py::test_the_shortcut_for_a_channel_with_pixels_and_the_readback_for_one_without`
+(a new level is a new submit); `tests/test_segment.py::test_the_levels_and_the_input_sizes`.
+1. With 384 running, step `segment.quality` through its three values.
+2. Watch the edge and the hair, the node's fps and the SYSTEM page's frame
+   time.
+*Pass:* each level gives a finer edge; the node's rate falls roughly as
+measured (Vision about 4 / 14 / 36 ms a frame: about 30 / 30 / 25 fps from a
+30 fps camera); the render's frame time does not move (the model runs on
+the Neural Engine, off the frame thread).
+*Fail:* the frame time rises with the level: the worker is blocking the
+frame thread, or the readback is taken every frame (row 481).
+
+**386. `segment.feather` and `segment.smooth` by eye: the halo and the
+flicker.** (the show Mac, the projector, the camera)
+Headless: `tests/test_segment.py` (the worker);
+`tests/test_graph_segment.py::test_smooth_near_one_still_reaches_the_new_matte`;
+no pixel test of the feather on a live matte (`tests/test_graph_masks.py::test_the_feather_widens_the_edge_in_one_channel`
+is the matte's).
+1. With 384 running, raise `segment.feather` from 0 to 8.
+2. Raise `segment.smooth` from 0 to 0.6 and wave a hand; then to 0.95, step
+   out of frame and wait.
+*Pass:* at 1 the edge softens, the steps of the 256-wide matte vanish and a
+halo widens; at 2 the flicker along the edge calms, at the cost of a
+trailing edge on fast moves, and at 0.95 you fade out fully within some
+seconds.
+*Fail:* the feather does nothing (the feather pass not reached); `smooth`
+leaves a frozen ghost where you stood (the matte re-quantised per result:
+row 488).
+
+**387. Motion mode on a still camera: the walker is foreground and fades in
+when still.** (the show Mac, the camera on a tripod)
+Headless: `tests/test_graph_segment.py::test_motion_on_two_stills_makes_the_moved_region_foreground`;
+the `segment-motion` goldens (`tests/golden/frames/png/0af84155993b2d4b.png`).
+1. With 384's wiring, set `segment.mode` to motion.
+2. Walk through the frame.
+3. Stand still for `segment.learn` seconds (3 by default).
+4. Move again. Then raise `segment.sense` a little.
+5. Turn a party light on and sweep it across the room.
+*Pass:* at 2 the walker is foreground and the still room is cut away; at 3
+you fade into the background over about `learn` seconds; at 4 you return at
+once, and a higher sense drops small changes (noise, shadows); at 5 the
+swept area is foreground until it is learnt (expected: row 482).
+*Fail:* everything foreground and staying so (the background not learning:
+`LEARN_FS`, `motion_pair` not turning); nothing ever foreground (`sense` too
+high, or the first frame learnt every frame).
+
+**388. A matte from luma on a still, a kaleido branch cut by it, over the
+scene: the owner's "image as a mask".** (the dev Mac, then the show Mac)
+Headless: `tests/test_graph_masks.py` (`test_luma_passes_the_bright_half`,
+`test_the_key_moves_where_a_pixel_passes`,
+`test_soft_widens_the_edge_and_invert_flips`,
+`test_the_feather_widens_the_edge_in_one_channel`,
+`test_an_asymmetric_picture_lands_the_right_way_up`,
+`test_an_own_sized_mask_lands_on_the_cover_where_its_picture_shows_it`);
+`tests/test_graph_cut.py` (`test_the_hole_is_transparent_before_any_composite`,
+`test_the_under_shows_through_the_hole`,
+`test_amount_a_half_dims_the_cut_part_by_half`,
+`test_invert_keeps_the_hole_and_cuts_the_rest`,
+`test_no_mask_is_the_picture_untouched`,
+`test_the_mask_of_an_asymmetric_picture_lands_on_the_right_rows`,
+`test_a_cut_is_transparent_to_laid_over_ness`,
+`test_the_under_shows_where_a_laid_over_scene_draws_nothing`); the
+`cut-out` goldens (`tests/golden/frames/png/a0abb485a6c1ca6a.png`).
+1. Load the `cut-out` fixture through a scratch library
+   (`tests/fixtures/presets/cut-out.json`; channel a is
+   `backdrop-still.png`). Every window shows the polytope; inside the
+   still's white disc (right of centre) it shows the scene through the
+   kaleidoscope instead.
+2. In your own preset do the same with any still from the media folder:
+   the still on channel a; from masks ▸ a matte and a cut, and a composite;
+   wire `channel.a → matte.image`, `matte → cut.mask`, `scene →
+   kaleido.image`, `kaleido → cut.image`, `cut → composite.over`, `scene →
+   composite.under`, `composite → output.all.image`.
+3. Turn `matte.key`: the kaleidoscope area follows the bright parts. Raise
+   `matte.soft`, then `matte.feather`: its edge greys, then softens. Set
+   `matte.from` to chroma and turn `matte.hue` onto a colour in the still.
+4. Turn `cut.amount` from 1 to 0.5.
+5. Turn on `cut.invert`.
+6. Unwire `matte → cut.mask`.
+7. Optional: wire `cut → output.2.image` instead of through the composite.
+*Pass:* the kaleidoscope shows only where the still is bright (or the keyed
+colour), the right way up; inside the disc the scene under it shows
+through the kaleidoscope's empty space, not black; at 4 the kaleidoscope
+comes back at half strength over the scene outside the bright parts; at 5
+it shows everywhere but the bright parts; at 6 it covers the whole window,
+untouched; at 7 output 2 shows the kaleidoscope in the bright parts and
+the window's black elsewhere. Every knob acts live, without a stutter.
+*Fail:* the cut area upside down or mirrored (a sampler flip: row 474);
+the scene not showing outside the bright parts (the cut not transparent,
+or the composite not "over"); the cut area stretched against the still
+(cover fit missing: row 454); black inside the disc (laid-over-ness not
+passed through the cut: row 477); a knob that does nothing (the value not
+landing in `ViewState.mattes` / `.cuts`); a stutter on the feather (the
+blur's cost: row 455).
+
+**389. A matte wired straight into an output shows white where it
+passes.** (the dev Mac)
+Headless: `tests/test_graph_masks.py`
+(`test_the_promotion_is_at_the_consumers_size_by_cover`,
+`test_the_promote_pass_fits_by_cover`); the `mask-as-picture` goldens
+(`tests/golden/frames/png/2e75409c8ea40738.png`);
+`tests/test_plan39_graph.py`
+(`test_a_promoted_mask_cable_is_purple_into_a_red_port`,
+`test_a_segment_s_mask_pin_is_purple_its_pictures_red`);
+`tests/test_hotreload.py` (the `MODULES` order and the cold set) for the
+last step.
+1. Load the `mask-as-picture` fixture through a scratch library
+   (`tests/fixtures/presets/`): channel a's `backdrop-still.png` → `matte`
+   (luma, key 0.95, feather 4) → `output.all.image`.
+2. Look at the cable from the Matte to All outputs; collapse the Matte.
+3. Wire `matte → acid.2.image` (acid.2 on) and acid.2 into the output
+   instead.
+4. Try to wire `channel.a` straight into a cut's `mask`.
+5. With the app running, change a comment in `hyperspace/masks.py` and
+   save.
+*Pass:* every window shows a soft white disc where the still's white
+circle is, on black, opaque, filling the window by cover, the disc on the
+right as in the still; the cable is purple end to end into All outputs'
+red image pin (channel a → matte.image red), and stays purple collapsed;
+the effect bends the disc as it would any picture; step 4 is refused in
+words ("… makes a picture, cut.mask takes a mask — put a matte between");
+at 5 no error line, and the matte keeps drawing. (A promoted mask wired
+into `lookback.occluder` or `composite.over` is an opaque picture
+everywhere, so it covers what is under it: that is not a cut — use `cut`.)
+*Fail:* a red-tinted or transparent picture (the promotion reading the
+mask's one channel as RGBA: row 453); a stretched disc (not cover); the
+wire refused (the type rule); a red cable (the cable typed by its port: row
+492); at 5 an import-order error (`masks` after `render` in
+`hotreload.MODULES`: row 459).
+
+**390. Edges on the scene, on the camera, and into a cut.** (the projector
+rig or the laptop, GRAPH page)
+Headless: `tests/test_fx_edges.py` (params, flat → black, a vertical edge,
+threshold, glow, direction hues);
+`tests/test_fx.py::test_each_effect_changes_the_frame[edges]` and
+`::test_every_effect_runs_on_the_face_target[edges]`; the `edges-scene`
+goldens (`tests/test_golden_frames.py`).
+1. Load any scene preset. On GRAPH wire `scene → edges → output.all.image`
+   and switch edges on (it is on the FX page like any effect). The
+   polytope's lines show as thin white outlines on black.
+2. Sweep **Threshold** 0 → 1: at 0 every soft gradient of the faces'
+   pattern shows; around 0.2 only the lines; near 1 almost nothing.
+3. Raise **Glow** to 4: each line gains a halo a few pixels wide, as bright
+   as the line.
+4. **Colour** → source: the outlines take the scene's colours (on a dark
+   edge with something under it, an opaque black line: row 450). →
+   direction: lines facing different ways turn different hues, and the hue
+   turns as the polytope rotates.
+5. Wire a camera channel into `edges` instead: the room's edges (door
+   frames, furniture, people's outlines) draw as lines, steady at the
+   default threshold.
+6. Wire `edges → matte (luma) → cut.mask`, with `pattern → cut.image`, into
+   an output: the pattern shows only along the lines.
+*Pass:* 1–6 as written, no GL error on the SYSTEM page, the frame rate
+unchanged (a 9-tap pass).
+*Fail:* a flat area that is not black (the threshold or the
+premultiplication); lines at the frame's border (`src()` mirroring broken);
+direction all one hue (the `atan` arguments swapped or the glow swamping
+it); camera edges sparkling everywhere (noise above the threshold: raise
+it; a pre-blur is the follow-up); in 6 the pattern everywhere (the matte
+reading alpha, not luma, or the promotion missing).
+
+**391. Two cameras, two segments: both run; the frame time on the show
+Mac.** (the show Mac, two cameras)
+Headless: `tests/test_graph_segment.py`
+(`test_a_removed_node_closes_its_worker`,
+`test_several_segments_are_several_workers`);
+`tests/test_plan39_graph.py::test_every_segment_instance_draws_its_pins_and_their_cables`.
+1. Camera 1 on channel a, camera 2 on channel b.
+2. Add `segment` and `segment.2` (media ▸ twice), with `channel.a →
+   segment.image` and `channel.b → segment.2.image`, each `fg` over the
+   scene on its own output.
+*Pass:* both cut their own person, each node says its own rate; the frame
+time stays within the show's budget (the SYSTEM page); two threads named
+`segment-segment` and `segment-segment.2` exist (Activity Monitor's sample,
+or `py-spy dump`).
+*Fail:* one starves (the Neural Engine is shared: read both rates); the
+frame time spikes (something reading back on the frame thread: row 481).
+
+**392. Unplug the camera mid-show: the node says so, the picture passes
+through whole, nothing crashes; plug it back and it resumes.** (the show
+Mac, the camera)
+Headless: `tests/test_graph_segment.py`
+(`test_a_channel_with_no_frame_says_so`,
+`test_an_error_mid_show_passes_the_picture_whole_and_says_it`);
+`tests/test_segment.py` (`test_an_error_is_said_and_the_next_result_clears_it`,
+`test_stop_never_waits_and_the_backend_closes_on_its_thread`).
+1. Run 384.
+2. Unplug the camera.
+3. Plug it back.
+4. Delete the segment node; then quit the app.
+*Pass:* at 2 the node says `no frame on channel a: its picture through,
+whole` and the output shows what channel a now gives (the empty channel's
+black), with no crash and no stall; at 3 the feed and the cut return within
+a second or two; at 4 the frame does not hitch and the app quits within a
+second or so.
+*Fail:* the app stalls (the worker or its close blocking: row 497); the
+last matte frozen over a black channel (the node not checking that its
+input reads: row 483); the cut not resuming (the frame-id "moved" check
+stuck).
+
+**393. A half-transparent face over a bright backdrop, cut-through on and
+off.** (the projector, an opaque window)
+Headless: `tests/test_media_render.py::test_a_half_transparent_scene_over_white_is_honest_on_an_opaque_window`;
+`tests/test_lookback.py` (`test_cut_through_never_cuts_an_opaque_ground`,
+`test_cut_through_still_cuts_in_overlay_mode`). Also open the eight
+re-recorded goldens (`backdrop-still` and `media-chain-backdrop` at
+`present|scene`, `scene+through`, `scene+hands`, `scene+hands+through`;
+`tests/golden/frames/frames.json` names them).
+1. Put a white or bright still on channel a. On GRAPH wire `channel.a →
+   composite.under`, `scene → composite.over`, `composite →
+   output.all.image`. For a second pass, put the same still on the
+   backdrop and wire `scene → backdrop.scene` explicitly.
+2. Faces on, lines and points off, a pattern with translucent fills.
+3. Flip `view.cut_through` on and off a few times on the projector.
+*Pass:* nothing changes; the faces sit over the white at their own
+opacity, their colour readable; the eight goldens show the faces at their
+own opacity over the backdrop, not washed toward white.
+*Fail:* the faces wash out toward white, or brighten with the switch on:
+the cut-through blend is being taken for a zero ground again
+(`render.draw_scene`'s blend choice: row 448).
 
 ## What no test covers
 
