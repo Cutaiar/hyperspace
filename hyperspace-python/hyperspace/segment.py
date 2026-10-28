@@ -436,22 +436,31 @@ class SegmentWorker:
     # ---- the worker's side ----
 
     def _run(self) -> None:
-        while not self._stop.is_set():
-            with self._cv:
-                while self._pending is None and not self._stop.is_set():
-                    self._cv.wait()
-                if self._stop.is_set():
-                    return
-                job, self._pending = self._pending, None
-                self._busy = job
-            try:
-                self._process(job)
-            except Exception as e:  # noqa: BLE001 — the worker outlives a bad frame
-                self.errors += 1
-                self.error = f"{type(e).__name__}: {e}"[:160]
-            finally:
+        try:
+            while not self._stop.is_set():
                 with self._cv:
-                    self._busy = None
+                    while self._pending is None and not self._stop.is_set():
+                        self._cv.wait()
+                    if self._stop.is_set():
+                        return
+                    job, self._pending = self._pending, None
+                    self._busy = job
+                try:
+                    self._process(job)
+                except Exception as e:  # noqa: BLE001 — the worker outlives a bad frame
+                    self.errors += 1
+                    self.error = f"{type(e).__name__}: {e}"[:160]
+                finally:
+                    with self._cv:
+                        self._busy = None
+        finally:
+            # (the backend closed on the thread that ran it, once its last
+            # run is over — never under a run a non-blocking `stop` left going)
+            if self._opened:
+                try:
+                    self.backend.close()
+                except Exception:  # noqa: BLE001, S110 — teardown is best-effort
+                    pass
 
     def _open(self) -> bool:
         if self._opened:
@@ -500,8 +509,9 @@ class SegmentWorker:
         matte's size, the backend and level, the lag and the result rate
         (`256×192 · Vision fast · a frame or two late · 29 fps`)."""
         if self.error:
-            return f"{self.backend_name}: {self.error}" if self.backend is not None \
-                else self.error
+            # (a reason — no library, a backend that would not open — names
+            # the backend itself; a run's error is prefixed with it)
+            return self.error if self.reason else f"{self.backend_name}: {self.error}"
         if self.loading:
             return f"loading {self.backend_name} …"
         got = self._latest
@@ -527,19 +537,20 @@ class SegmentWorker:
     def alive(self) -> bool:
         return self._thread.is_alive()
 
-    def close(self) -> None:
-        """Stop the thread (within `CLOSE_S`), then the backend."""
+    def stop(self) -> None:
+        """Ask the thread to end, and return at once: a submit is ignored
+        from now on, the thread ends after any run in hand and closes its
+        backend itself (`Renderer._tend_segments`, on the frame thread)."""
         self._stop.set()
         with self._cv:
             self._pending = None
             self._cv.notify_all()
-        if self._thread.is_alive():
-            self._thread.join(timeout=CLOSE_S)
-        if self.backend is not None and self._opened:
-            try:
-                self.backend.close()
-            except Exception:  # noqa: BLE001, S110 — teardown is best-effort
-                pass
+
+    def close(self, timeout: float = CLOSE_S) -> None:
+        """`stop`, then join the thread for at most `timeout` seconds."""
+        self.stop()
+        if self._thread.is_alive() and timeout > 0:
+            self._thread.join(timeout=timeout)
 
 
 def make_worker(cfg: dict | None, name: str = "segment") -> SegmentWorker:

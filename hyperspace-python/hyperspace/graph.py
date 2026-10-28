@@ -5167,16 +5167,19 @@ class SegmentNode(Node):
         size = (int(size[0]), int(size[1]))
         tex, _ = frame.r._frame_target(self.name + "#mask", size, components=1)
         if index != self._uploaded or tex is not self._raw:
-            m = np.ascontiguousarray(mask, dtype=np.uint8)
+            # (the smoothed matte is kept in float: re-quantised each result,
+            # a smooth near 1 would stall short of the new value for good —
+            # 1 itself would never move, so it is held under)
             k = min(max(float(st.smooth), 0.0), 0.99)
             if index != self._uploaded:
+                m = np.asarray(mask, dtype=np.float32)
                 if k > 0.0 and self._prev is not None and self._prev.shape == m.shape:
-                    m = (self._prev.astype(np.float32) * k
-                         + m.astype(np.float32) * (1.0 - k) + 0.5).astype(np.uint8)
+                    m = self._prev * k + m * (1.0 - k)
                 self._prev = m
-            else:
-                m = self._prev if self._prev is not None else m
-            tex.write(m.tobytes(), alignment=1)
+            elif self._prev is None:
+                self._prev = np.asarray(mask, dtype=np.float32)
+            up = np.ascontiguousarray(np.clip(np.round(self._prev), 0, 255).astype(np.uint8))
+            tex.write(up.tobytes(), alignment=1)
             self._raw, self._uploaded = tex, index
         return tex
 
@@ -6747,7 +6750,10 @@ class _Build:
         where it draws. Plan 39 T3: a cut's `image` is a picture path like
         an effect's (its `mask` is not) — `CUT_FS` multiplies the alpha it
         is given, so the see-through ground passes through it, and where
-        the mask passes the picture is what it would be without the cut."""
+        the mask passes the picture is what it would be without the cut.
+        Plan 39 T4: a segment's `image` likewise, when its `fg` or `bg` pin
+        is laid over — each is its input, cut or (before a matte, off, in
+        the preview) whole, so it keeps the input's see-through ground."""
         for w in self.wires:
             if w.src != src or w.node in seen:
                 continue
@@ -6756,7 +6762,12 @@ class _Build:
                     or (kind == "composite" and w.port == "over"
                         and self.blends.get(w.node, "over") != "add")
                     or (kind in ("effect", "cut") and w.port == "image"
-                        and self.laid_over(w.node, seen | {w.node}))):
+                        and self.laid_over(w.node, seen | {w.node}))
+                    # plan 39 T4: a segment's image is a picture path to its
+                    # fg and bg pins (each its input, cut or whole)
+                    or (kind == "segment" and w.port == "image"
+                        and any(self.laid_over(f"{w.node}.{p}", seen | {w.node})
+                                for p in ("fg", "bg")))):
                 return True
         return False
 

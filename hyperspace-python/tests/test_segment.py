@@ -125,7 +125,7 @@ def test_a_backend_that_will_not_open_is_said():
     try:
         w.submit(_frame(1), 1)
         assert w.drain()
-        assert w.said() == "broken: broken would not open: ImportError: no such framework"
+        assert w.said() == "broken would not open: ImportError: no such framework"
         assert w.latest() is None
     finally:
         w.close()
@@ -153,6 +153,23 @@ def test_the_thread_sleeps_until_a_submit_and_close_joins_within_a_second():
     w2.close()
     assert time.perf_counter() - t0 < segment.CLOSE_S + 0.1
     b2.go.set()
+
+
+def test_stop_never_waits_and_the_backend_closes_on_its_thread():
+    """`stop` (the frame thread's, for a removed node) returns at once even
+    mid-run; the thread ends after that run and closes the backend itself;
+    `close(timeout)` waits at most its timeout."""
+    b = Gate()
+    w = segment.SegmentWorker(b)
+    w.submit(_frame(1), 1)
+    assert b.started.wait(2.0)
+    t0 = time.perf_counter()
+    w.stop()
+    w.close(0.0)
+    assert time.perf_counter() - t0 < 0.05 and w.alive and b.closed == 0
+    b.go.set()
+    w.close(2.0)
+    assert not w.alive and b.closed == 1
 
 
 def test_a_reason_string_is_a_worker_that_makes_nothing_and_says_why():
@@ -206,7 +223,7 @@ def _synthetic(w: int = 640, h: int = 360) -> np.ndarray:
     return f
 
 
-@pytest.mark.live
+# (both in the live tier by name: conftest's `_LIVE_TESTS`)
 @pytest.mark.skipif(sys.platform != "darwin", reason="Apple Vision is macOS only")
 def test_vision_runs_once_on_a_synthetic_frame():
     b = segment.pick_backend({"backend": "vision"})
@@ -225,7 +242,6 @@ def test_vision_runs_once_on_a_synthetic_frame():
         w.close()
 
 
-@pytest.mark.live
 def test_torch_runs_once_on_a_synthetic_frame():
     b = segment.pick_backend({"backend": "torch"})
     assert isinstance(b, segment.TorchBackend), b

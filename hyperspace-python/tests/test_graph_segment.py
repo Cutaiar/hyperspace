@@ -169,6 +169,56 @@ def test_graph_py_never_imports_segment_py():
         assert "segment" not in names and "Vision" not in names and "torch" not in names
 
 
+def test_a_scene_through_a_segment_laid_over_keeps_its_see_through_ground():
+    """As through an effect or a cut (T3's rule): a scene into a segment
+    whose fg (or bg) is laid over clears see-through, so before a matte,
+    off, or in the preview the under shows where the scene draws nothing."""
+    for pin in ("fg", "bg"):
+        spec = _spec(("scene", "segment.image"), (f"segment.{pin}", "composite.over"),
+                     ("channel.c", "composite.under"), ("composite", "output.2.image"),
+                     nodes=(SEGMENT, COMPOSITE))
+        g = G.build_graph(_views(), spec.wiring())
+        assert g.nodes["scene"].ground == 0.0, pin
+    spec = _spec(("scene", "segment.2.image"), ("segment.2.fg", "composite.over"),
+                 ("channel.c", "composite.under"), ("composite", "output.2.image"),
+                 nodes=(SEGMENT2, COMPOSITE))
+    assert G.build_graph(_views(), spec.wiring()).nodes["scene"].ground == 0.0
+    # … not when its pins go straight to a window, nor through its mask
+    spec = _spec(("scene", "segment.image"), ("segment.fg", "output.2.image"))
+    assert G.build_graph(_views(), spec.wiring()).nodes["scene"].ground is None
+
+
+def test_smooth_near_one_still_reaches_the_new_matte():
+    """`segment.smooth` keeps the smoothed matte in float: at 0.99 a region
+    that leaves (255 → 0) decays all the way to 0, and one that arrives to
+    255 — never stalling short (a re-quantised 8-bit matte stalls at ~50)."""
+    from types import SimpleNamespace
+
+    class Tex:
+        def __init__(self):
+            self.data = b""
+
+        def write(self, data, alignment=1):
+            self.data = data
+
+    tex = Tex()
+    r = SimpleNamespace(_frame_target=lambda key, size, components=1: (tex, None))
+    frame = SimpleNamespace(r=r)
+    node = G.SegmentNode("segment")
+    w = FakeWorker(np.full((2, 2), 255, np.uint8))
+    st = SegmentState(smooth=0.99)
+    node._pull(frame, w, st)
+    assert tex.data == bytes([255] * 4)
+    for _ in range(1000):
+        w.set(np.zeros((2, 2), np.uint8))
+        node._pull(frame, w, st)
+    assert tex.data == bytes([0] * 4)
+    for _ in range(1000):
+        w.set(np.full((2, 2), 255, np.uint8))
+        node._pull(frame, w, st)
+    assert tex.data == bytes([255] * 4)
+
+
 def test_the_canvas_knows_the_segment():
     from hyperspace import graphview
 
@@ -320,8 +370,13 @@ class FakeWorker:
     def said(self) -> str:
         return self.error or ("fake fast" if self.result else "waiting for fake fast")
 
-    def close(self) -> None:
+    def stop(self) -> None:
         self.closed = True
+
+    def close(self, timeout: float = 1.0) -> None:
+        self.closed = True
+
+    alive = False
 
 
 def _left(w=32, h=24) -> np.ndarray:
@@ -507,6 +562,18 @@ def test_on_off_idles_the_worker_and_passes_the_picture_whole(ctx):
         "off: its picture through, whole, the worker idle"
 
 
+def test_a_scene_through_a_segment_turned_off_shows_the_under(ctx):
+    """The review's case: scene → segment (off) → fg → composite.over, a
+    colour under — the scene draws nothing here, so the under shows."""
+    w = FakeWorker(_left())
+    pairs = [("scene", "segment.image"), ("segment.fg", "composite.over"),
+             ("channel.c", "composite.under"), ("composite", "output.2.image")]
+    r = _renderer(ctx, _sources(), pairs, nodes=(SEGMENT, COMPOSITE), worker=w)
+    _, out = _draw(ctx, r, _s(on=False))
+    left, right = _lr(out)
+    assert tuple(left[:3]) == BLUE and tuple(right[:3]) == BLUE
+
+
 def test_subject_is_refused_in_words(ctx):
     w = FakeWorker(_left())
     r = _renderer(ctx, _sources(), PINS3, worker=w)
@@ -549,6 +616,34 @@ def test_a_removed_node_closes_its_worker(ctx):
     for k in range(SIZED_KEEP_FRAMES):
         _draw(ctx, r, _s(), n=2, t=3.0 + k / 60)
     assert w.closed and "segment" not in r._segmenters
+
+
+def test_several_segments_are_several_workers(ctx):
+    """AJ.8's headless line: two segment nodes, two workers, each by its
+    node's name, each fed its own channel."""
+    made: dict[str, FakeWorker] = {}
+    media = _sources()
+    from hyperspace.render import Renderer
+
+    r = Renderer(ctx)
+    r.ghost.state.on = False
+    r.media = media
+    r.segment_cfg = {}
+    r.segment_factory = lambda cfg, name: made.setdefault(name, FakeWorker())
+    spec = G.read_graph(wired(("channel.a", "segment.image"), ("channel.c", "segment.2.image"),
+                              ("segment.fg", "output.2.image"),
+                              ("segment.2.fg", "output.3.image"), *FACTORY_FRAME,
+                              nodes=[SEGMENT, SEGMENT2]), effects=set(r.fx.state.specs))
+    assert not spec.notes, spec.notes
+    r.wiring = spec.wiring()
+    s = _s()
+    s.segments["segment.2"] = SegmentState()
+    _draw(ctx, r, s, n=3)
+    assert sorted(made) == ["segment", "segment.2"] and made["segment"] is not made["segment.2"]
+    assert tuple(made["segment"].submits[0][0][0, 0, :3]) == COLOUR
+    assert tuple(made["segment.2"].submits[0][0][0, 0, :3]) == BLUE
+    r.close()
+    assert all(w.closed for w in made.values())
 
 
 def test_the_preview_runs_no_worker_and_closing_it_leaves_the_programs(ctx):

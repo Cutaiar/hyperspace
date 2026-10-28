@@ -2219,10 +2219,14 @@ class Renderer:
     def _tend_segments(self, graph: Graph) -> None:
         """Once a frame: each worker and background model whose segment no
         node of `graph` is counts a frame idle, and goes at
-        `SIZED_KEEP_FRAMES` (half a second at 60 fps) — the worker closed,
-        the pair released. Never raises."""
+        `SIZED_KEEP_FRAMES` (half a second at 60 fps) — the worker stopped
+        (never joined here: its thread ends after any run in hand, `close`
+        joins it at the exit), the pair released. Never raises."""
         workers = self.__dict__.get("_segmenters") or {}
         pairs = self.__dict__.get("_motions") or {}
+        stopped = self.__dict__.get("_stopped")
+        if stopped:                      # (those stopped earlier, once their threads end)
+            self._stopped = [w for w in stopped if getattr(w, "alive", False)]
         if not workers and not pairs:
             return
         held = {n.name for n in getattr(graph, "nodes", {}).values()
@@ -2239,25 +2243,39 @@ class Renderer:
             try:
                 w = workers.pop(name, None)
                 if w is not None:
-                    w.close()
+                    # (stopped, never joined here: the frame thread does not
+                    # wait on a model's last run — `close` joins at the exit)
+                    w.stop()
+                    self.__dict__.setdefault("_stopped", []).append(w)
                 pair = pairs.pop(name, None)
                 if pair is not None:
                     pair.release()
             except Exception:  # noqa: BLE001, S110 — a lost context: nothing to free
                 pass
 
-    def close(self) -> None:
-        """This renderer's own segment workers closed, each within a second
-        (plan 39 T4; app.py's close list, at quit and restart) — never
-        anything another renderer shares (the hold's preview has none of
-        its own). Threads only: the GL it holds goes with its context, which
-        may not be current at this point of the exit."""
-        for w in list((self.__dict__.get("_segmenters") or {}).values()):
+    def close(self, timeout: float = 1.0) -> None:
+        """This renderer's own segment workers closed (plan 39 T4; app.py's
+        close list, at quit and restart) — all stopped first, then joined
+        against one shared deadline of `timeout` seconds, the ones
+        `_tend_segments` stopped earlier too — never anything another
+        renderer shares (the hold's preview has none of its own). Threads
+        only: the GL it holds goes with its context, which may not be
+        current at this point of the exit."""
+        workers = [*(self.__dict__.get("_segmenters") or {}).values(),
+                   *(self.__dict__.get("_stopped") or [])]
+        for w in workers:
             try:
-                w.close()
+                w.stop()
+            except Exception:  # noqa: BLE001, S110 — teardown is best-effort
+                pass
+        end = time.perf_counter() + timeout
+        for w in workers:
+            try:
+                w.close(max(0.0, end - time.perf_counter()))
             except Exception:  # noqa: BLE001, S110 — teardown is best-effort
                 pass
         self._segmenters = {}
+        self._stopped = []
 
     def reset_delays(self) -> None:
         """R19 (final review, row 354): a preset load landed a new section —
