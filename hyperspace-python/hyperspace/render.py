@@ -139,22 +139,28 @@ from .glsl import QUAD_VS, common, common_mtime, gl_error
 from .graph import (
     EMPTY,
     FACE_PIC,
+    IMAGE,
     MEDIA_CHANNELS,
     Delay,
+    Effect,
     Frame,
     Graph,
     Hands,
+    HandsLayer,
+    Output,
+    Scene,
     Wiring,
     build_graph,
     channel_into,
     cloud_roles,
     graph_key,
     param_prefix,
+    picture,
     rig_of,
 )
 from .lookback import Dreamer, DreamState, Lookback
 from .media_tex import COVER, FIT_FS, MediaTextures, UiTextures, fit_scale
-from .outputs import Handoff, Presenter, Switches, View, capped, fit
+from .outputs import Handoff, Presenter, PreviewTextures, Switches, View, capped, fit
 from .patterns import MODES, SPEED
 from .tapers import clamp
 from .view import N_MOD, RED, ViewState  # re-exported for callers that had them from here
@@ -991,6 +997,57 @@ class _Timed:
         return False
 
 
+def thumb_source(frame: Frame, name: str, how: str,
+                 pulled: frozenset[str] | None = None) -> moderngl.Texture | None:
+    """The picture node `name`'s thumbnail is copied from, this frame
+    (plan 37 C1; `how` is `graphview.THUMBS`' word for its kind) — or None:
+    it made nothing this frame (no such node built, not pulled behind a
+    switch, reading nothing, a hands layer with no hand drawn).
+
+    - ``picture``: a node whose output is a picture, asked for it
+      (`graph.picture`: the texture it made, else painted once into a
+      frame texture of its own);
+    - ``scene``: a geometry (the shape, a cloud): the picture of the first
+      scene that draws it (the page draws it faint);
+    - ``layer``: a hands node: the first hands layer drawing it, else the
+      scene it is drawn in;
+    - ``window``: an output after the first: its presenter's picture (the
+      `Handoff`'s frame, a texture of this context: no readback), or a
+      publish-only output's own target; output 1 is the page's `Preview`,
+      never asked here."""
+    g = frame.graph
+    node = g.nodes.get(name) if g is not None else None
+    if node is None:
+        return None
+    if how == "window":
+        if not isinstance(node, Output) or not 0 < node.index < len(frame.views):
+            return None
+        v = frame.views[node.index]
+        if v.handoff is not None:
+            return v.handoff.frame
+        own = getattr(v.target, "color_attachments", None) if v.target is not None else None
+        return own[0] if own and isinstance(own[0], moderngl.Texture) else None
+    if how in ("scene", "layer"):
+        if how == "layer":
+            layer = next((n for n in g.order if isinstance(n, HandsLayer)
+                          and n.inputs.get("geometry") is node), None)
+            if layer is not None:
+                return layer.image(frame)
+        scene = next((n for n in g.order if isinstance(n, Scene)
+                      and any(x is node for x in n.inputs.values())), None)
+        if scene is None:
+            return None
+        node = scene
+    if getattr(node, "OUTPUT", None) != IMAGE:
+        return None
+    if pulled is not None and node.name not in pulled and (node.MAKES
+                                                          or isinstance(node, Effect)):
+        return None
+    if not node.reads(frame):
+        return None
+    return picture(frame, node)
+
+
 class Renderer:
     def __init__(self, ctx: moderngl.Context, dream: DreamState | None = None,
                  fx: FxState | None = None, ghost: GhostState | None = None):
@@ -1102,6 +1159,12 @@ class Renderer:
         # frame, `_for_the_panel`) and its thumbnails (`ui_upload`)
         self.media_watch: set[str] = set()
         self.ui_tex: UiTextures | None = None
+        # plan 37 C1: the GRAPH page's thumbnails — the nodes it has on
+        # screen (`PreviewTextures.want`), copied at the end of the next
+        # frame (`_thumbnails`) from that frame (`_thumb_frame`, held only
+        # until then)
+        self.thumbs = PreviewTextures(ctx)
+        self._thumb_frame: Frame | None = None
         self._view_now: ViewState | None = None    # the frame's (`_draw_frame`)
         # face program is assembled around the user-editable patterns.glsl
         self.pattern_error = ""
@@ -1223,6 +1286,11 @@ class Renderer:
         # (the reloader re-classes the renderer's own): released, and made
         # again from ghost.py as it is now on next use, over the same state
         self.drop_ghosts()
+        # plan 37 C1: the thumbnails' textures and pass, made again from
+        # outputs.py as it is now (the page wants them again next frame)
+        if getattr(self, "thumbs", None) is not None:
+            self.thumbs.close()
+        self.thumbs = None
         for res in (getattr(self, "_show_vao", None), getattr(self, "_show_prog", None),
                     getattr(self, "_lay_vao", None), getattr(self, "_lay_prog", None)):
             if res is not None:
@@ -1584,8 +1652,10 @@ class Renderer:
                       target, vp, bg_alpha=getattr(self, "bg_alpha", 1.0), fx_on=fx_on,
                       stats=stats, selects=selects, resizes=resizes)
         timer = self._pass_timer()
+        self._thumb_frame = None
         try:
             graph.evaluate(frame)
+            self._thumb_frame = frame       # plan 37 C1: the panel's thumbnails read it
         finally:
             timer.end_frame(graph.timed_in(frame))
             stats["gpu_ms"] = timer.medians()
@@ -1682,6 +1752,61 @@ class Renderer:
                 ui.upload()
             except Exception:  # noqa: BLE001, S110 — a thumbnail not made stays a dark box
                 pass
+        self._thumbnails()
+
+    # ---- plan 37 C1: the GRAPH page's thumbnails ----
+
+    def _thumbs(self) -> PreviewTextures:
+        """The thumbnails, made on first use (getattr: a renderer from
+        before plan 37, or after a reload, has none)."""
+        th = getattr(self, "thumbs", None)
+        if th is None:
+            th = self.thumbs = PreviewTextures(self.ctx)
+        return th
+
+    def _thumbnails(self) -> None:
+        """The end of a frame (`_for_the_panel`): each node the GRAPH page
+        wanted since the last frame (`PreviewTextures.take`) copied into its
+        thumbnail from this frame's picture of it (`thumb_source`), then the
+        names not wanted for a second dropped. Nothing wanted, nothing done:
+        a closed page costs nothing. A painted node is painted again here
+        (`graph.picture`, into a frame texture of its own) with the GPU
+        timer muted, so the SYSTEM page's per-node times stay the frame's,
+        and on a copy of the frame's `stats`, so its counts stay the
+        frame's. Never raises: the panel's pictures must not take the frame
+        down."""
+        frame, self._thumb_frame = getattr(self, "_thumb_frame", None), None
+        th = getattr(self, "thumbs", None)
+        if th is None:
+            if frame is None:
+                return
+            th = self._thumbs()
+        wanted = th.take()
+        th.begin_frame()
+        if wanted and frame is not None:
+            timer = getattr(self, "timer", None)
+            was = getattr(timer, "_active", False) if timer is not None else False
+            if timer is not None:
+                timer._active = True        # (`PassTimer.time` is then a no-op)
+            # (the frame's counts as the frame left them: restored in place
+            # after, so `self.stats` — the same dict — says what the frame ran)
+            saved = {k: list(v) if isinstance(v, list) else v for k, v in frame.stats.items()}
+            try:
+                pulled = frame.graph.pulled(frame) if frame.graph is not None else None
+                for name, how in wanted.items():
+                    try:
+                        src = thumb_source(frame, name, how, pulled)
+                    except Exception as e:  # noqa: BLE001 — one node's picture: not the rest
+                        th.error = f"{name}: {type(e).__name__}: {e}"[:120]
+                        continue
+                    if src is not None:
+                        th.put(name, src)
+            finally:
+                frame.stats.clear()
+                frame.stats.update(saved)
+                if timer is not None:
+                    timer._active = was
+        th.end_frame()
 
     def media_shown(self, c: str) -> tuple[moderngl.Texture, bool] | None:
         """Channel `c`'s raw texture as this frame read it, and whether its
