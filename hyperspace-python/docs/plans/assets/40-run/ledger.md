@@ -32,7 +32,7 @@ See `decisions.md`.
 | T1 patches.py + DocKind | `plan-40-t1` | 51106e1 | **merged** 44eb753 (PR #274) | fast 4167/2 skipped, goldens 136 | reviewed, 2 Important fixed | 471x–479x drafts, AK.1–4 |
 | T4 devices.wants + arrival | `plan-40-t4` | 51106e1 | **merged** b0b23f3 (PR #272) | fast 4139/2 skipped, goldens 136 | reviewed, 1 Important fixed | 47a–47f drafts |
 | T5 fx modules retired | `plan-40-t5` | 51106e1 | **merged** 3094691 (PR #271) | fast 4097/2 skipped, goldens 136 | controller | rulings 9–11 |
-| T2 the group node | | after T1 and main merged | waiting | | | |
+| T2 the group node | `plan-40-t2` | d08a363 | dispatched | | | |
 | T3 save / browse / spawn | | after T2 | waiting | | | |
 | review | | after T5 | waiting | | | |
 | T6 docs | | last | waiting | | | 471–495 / 394–401 |
@@ -151,3 +151,20 @@ See `decisions.md`.
   test_bad_file_is_an_error`, both pass serially (load-flaky, pre-existing);
   goldens **136 passed**, none moved. Pushed. T0, T1, T4, T5 are on
   `plan-40-build`; T2 waits for PR #270 → `main`.
+- **Dry run of the integration head** (07885a2) into `plan-40-build`: one
+  conflicted file, `ui_graph.py`, three both-sides hunks (imports, `st`
+  defaults, the chip order) — keep both. Schema: nothing writes `/8`, so
+  `groups` is `/8` (ruling 13). **Register rows renumbered to 501–525**
+  (PR #270's docs took through 499; ruling 12); hand checks 394–401 stand.
+  Run records committed to `docs/plans/assets/40-run/` (75a9af5, pushed).
+  **Waiting on PR #270 → `main`** before T2; or the owner's word to cut
+  T2 against the integration head.
+- **PR #270 merged** to `main` 2026-10-28 05:19 (plans 37/38/39) and
+  **#275** 05:20 (the pattern node's side pane). `main` @ 026989e merged
+  into `plan-40-build` as **d08a363**: one conflict, `ui_graph.py`'s head
+  chips (T4's wants chip kept, plan 37's tint chip last). Fast tier
+  **4269 passed, 2 skipped**; goldens **136**; ruff clean on `ui_graph.py`.
+  Pushed. Register's last row on `main` is now **500** → plan 40 takes
+  **501–525** (ruling 12 amended). Schema: nothing writes `/8` → `groups`
+  is `/8`.
+- **T2** dispatched (Opus, own worktree, branch `plan-40-t2` off d08a363).

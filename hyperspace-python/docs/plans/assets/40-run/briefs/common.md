@@ -144,7 +144,7 @@ Create `<workspace>/decisions/<task>.md` (path in your dispatch) with:
    461–470): title; **Answer** (`controller — 2026-10-27`); **Built**
    (what the owner will see or feel); **Other options**; **To reverse**
    (cost); **Rough edge**; **Judge it** (which hand check). Number them
-   `47x`; the docs task numbers them inside 471–495.
+   `50x`; the docs task numbers them inside 501–525 (the prompt's 471–495 were taken by plans 37–39's later rows; the controller's ruling 12).
 2. **Hand-check drafts** in `docs/plans/11-hand-checks.md`'s format (bold
    number and title with where it runs; `Headless:` the tests behind it;
    the steps; *Pass:* / *Fail:* with the likely cause) only where your

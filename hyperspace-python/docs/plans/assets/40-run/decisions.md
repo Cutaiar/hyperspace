@@ -56,3 +56,17 @@ reverses it.
     `write_factory` is byte-identical; `party-acid` / `party-mandala`'s
     notes still say "fx module preset" — preset data, not changed by this
     run. *Reverse:* reword at the next factory regeneration.
+12. **Register rows 501–525, not 471–495.** The integration branch's docs
+    tasks (plans 37/38/39, PR #270) took rows through 499, and `main` @ 026989e (PR #275) row 500, so the
+    prompt's 471–495 are gone; the prompt says "take the next
+    free and say so in the ledger". Plan 40 takes **501–525**. Hand checks
+    394–401 (group AK) still hold: plan 39's AJ ends at 393. The sub-agents'
+    drafts are numbered `47x` / `50x`; T6 numbers them.
+13. **`groups` is schema `/8`** (D7): nothing on `main` or the integration
+    head writes `preset/8` (37B took no schema). T2 cuts on that; the
+    ladder's rule keeps an ungrouped preset on `/7` byte for byte.
+14. **The `main` merge before T2 conflicts only in `ui_graph.py`**, three
+    both-sides hunks (the `json` / `colorsys` imports, three `st` defaults,
+    the T4 wants chip beside plan 37's tint chip): keep both sides of each.
+    Checked by a dry-run merge of the integration head 07885a2 on
+    2026-10-27; abandoned without a commit.
