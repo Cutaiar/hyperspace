@@ -118,7 +118,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from . import apc40, graphmigrate, graphview, modifiers, routing, tapers, undo
+from . import apc40, graphmigrate, graphview, modifiers, patches, routing, tapers, undo
 from .bands import BANDS
 from .fx import declare as declare_fx
 from .ghost import GhostState
@@ -197,7 +197,11 @@ SCHEMA_V3 = f"{SCHEMA.rpartition('/')[0]}/3"
 MEDIA_SCHEMA = f"{SCHEMA.rpartition('/')[0]}/4"
 FREE_SCHEMA = graphmigrate.FREE_SCHEMA
 WIRED_SCHEMA = graphmigrate.WIRED_SCHEMA
-VERSIONS = (2, 3, 4, 5, 6, 7)
+# plan 40 T2 (D4, D7): `/8` is `/7` plus `groups` — what a save writes only
+# when the preset holds a group (the lowest schema that loses nothing: a
+# preset with none writes `/7`, byte for byte as before)
+GROUPS_SCHEMA = graphmigrate.GROUPS_SCHEMA
+VERSIONS = (2, 3, 4, 5, 6, 7, 8)
 # the registry groups (and lane schemes) a /2 file never names
 V3_GROUPS = ("env", "seq")
 # the preset keys a bank writes only off its default (modbank, plan 31 B)
@@ -615,6 +619,20 @@ MODIFIERS_KEY = "modifiers"
 # line; the rig's nodes are the show's (library.LAYOUT). No key: laid out
 # automatically, no note and no dirt. An older build ignores the key
 LAYOUT_KEY = "layout"
+# plan 40 T2 (P2, D4, D7): the GRAPH page's groups — a fold of the canvas
+# and a list in the file, never a node of the renderer (`build_graph`, the
+# signature and the goldens see the flat graph) — ``[{"id": "group.1",
+# "name": "acid wash", "patch": "acid-wash", "nodes": ["render:acid.2",
+# "mod.3"], "open": false}]``, written after `layout`, only when there is
+# one (then the file is `/8`). `patch` is provenance (the slug it was
+# spawned from), never re-read; a group's position is its members'
+GROUPS_KEY = graphmigrate.GROUPS_KEY
+GROUP_NAME = "group {n}"
+GROUP_GONE = "group {name}: {node} is not in the preset — left out"
+GROUP_REFUSED = "group {name}: {why}"
+GROUP_EMPTY = "group {name}: nothing of it is in the preset — left out"
+GROUP_TWICE = "group {name}: {node} is in group {other} already — left out"
+GROUP_BAD = "groups: an entry that is not a group, ignored"
 # the performance groups with no module presets: a macro's meaning is its
 # subscribers and a modifier's params are its entry, both the preset's
 # (plan 33 S: a switch's pick means nothing without the preset's graph;
@@ -627,6 +645,78 @@ NO_MODULE = ("macro", modifiers.GROUP, SWITCH_GROUP, RESIZE_GROUP, MATTE_GROUP, 
 # `library.RETIRED_MODULES`): a file that still names one keeps the label
 # on load, quietly — it never loaded anything (D3) — and the next save
 # drops it (`NO_MODULE`)
+
+
+def group_number(gid) -> int:
+    """`group.3` → 3; 0 for anything else."""
+    head, dot, n = gid.partition(".") if isinstance(gid, str) else ("", "", "")
+    return int(n) if head == "group" and dot and n.isdecimal() and int(n) >= 1 else 0
+
+
+def group_entry(g: dict) -> dict:
+    """A group's entry in the file's key order: id, name, patch (when it
+    has one), nodes, open — and `kept_by_host` (plan 40 T3's rows a spawn's
+    conflict sheet gave the preset) when present."""
+    out = {"id": g["id"], "name": g["name"]}
+    if g.get("patch"):
+        out["patch"] = g["patch"]
+    out["nodes"] = list(g["nodes"])
+    out["open"] = bool(g.get("open"))
+    if g.get("kept_by_host"):
+        out["kept_by_host"] = copy.deepcopy(list(g["kept_by_host"]))
+    return out
+
+
+def read_groups(raw, held, refusal: Callable[[list[str]], tuple[set, list[str]]] | None = None
+                ) -> tuple[list[dict], list[str]]:
+    """A file's `groups` (plan 40 T2, load step 6½) → (the groups, the
+    notes). A member id the preset does not hold (`held`, the canvas ids
+    its graph, modifiers and voices make) is left out with a note ("group
+    acid wash: acid.3 is not in the preset — left out"); one a group may
+    not hold (`refusal(ids)` → (the ids kept, the words for the rest):
+    `patches.select`'s rule) is left out in its words; a node already in an
+    earlier group is left out of the later; a group left with no member is
+    dropped, said; an entry that is not a group is ignored, said. Pure."""
+    groups: list[dict] = []
+    notes: list[str] = []
+    seen: dict[str, str] = {}
+    bad = False
+    for g in raw if isinstance(raw, list) else ([] if raw is None else [raw]):
+        if (not isinstance(g, dict) or not group_number(g.get("id"))
+                or not isinstance(g.get("nodes"), list)):
+            bad = True
+            continue
+        name = g.get("name") if isinstance(g.get("name"), str) and g.get("name") else (
+            GROUP_NAME.format(n=group_number(g["id"])))
+        if any(x["id"] == g["id"] for x in groups):
+            bad = True
+            continue
+        ids = [x for x in dict.fromkeys(g["nodes"]) if isinstance(x, str)]
+        kept = []
+        for cid in ids:
+            if cid not in held:
+                notes.append(GROUP_GONE.format(name=name, node=cid.removeprefix("render:")))
+            elif cid in seen:
+                notes.append(GROUP_TWICE.format(name=name, node=cid.removeprefix("render:"),
+                                                other=seen[cid]))
+            else:
+                kept.append(cid)
+        if refusal is not None and kept:
+            ok, words = refusal(kept)
+            notes += [GROUP_REFUSED.format(name=name, why=w) for w in words]
+            kept = [cid for cid in kept if cid in ok]
+        if not kept:
+            notes.append(GROUP_EMPTY.format(name=name))
+            continue
+        for cid in kept:
+            seen[cid] = name
+        patch = g.get("patch") if isinstance(g.get("patch"), str) else None
+        kept_by = g.get("kept_by_host") if isinstance(g.get("kept_by_host"), list) else None
+        groups.append(group_entry({"id": g["id"], "name": name, "patch": patch, "nodes": kept,
+                                   "open": g.get("open") is True, "kept_by_host": kept_by}))
+    if bad:
+        notes.append(GROUP_BAD)
+    return groups, notes
 
 
 def _bank_prefix(pid: str) -> str:
@@ -754,7 +844,7 @@ def dumps(doc: dict) -> str:
             rows = ",\n".join(f"  {json.dumps(c)}: {json.dumps(b)}"
                                for c, b in v["channels"].items())
             text = '{"channels": {\n' + rows + '\n }}'
-        elif key in ("routes", MODIFIERS_KEY, "desk") and isinstance(v, list):
+        elif key in ("routes", MODIFIERS_KEY, "desk", GROUPS_KEY) and isinstance(v, list):
             if v:
                 rows = ",\n".join("  " + json.dumps(r) for r in v)
                 text = f"[\n{rows}\n ]"
@@ -843,6 +933,8 @@ class Presets:
         self.desk_notes: list[str] = []  # the desk rows the last load dropped (set_desk)
         # plan 28 N2: the GRAPH page's positions of the look's nodes
         self.layout: dict[str, list[float]] = {}
+        # plan 40 T2: the GRAPH page's groups (`GROUPS_KEY` entries)
+        self.groups: list[dict] = []
         # R17 (final review): the live preset came from `new` and has never
         # been saved — save names it (whatever a file of its name holds);
         # a load or a save clears it (`_landed`)
@@ -1224,6 +1316,12 @@ class Presets:
         self.layout = graphmigrate.renamed_layout(positions)
         if bad:
             notes.append(f"layout: {bad} entr{'y' if bad == 1 else 'ies'} unreadable, ignored")
+        #     plan 40 T2 (D4): and its groups — a member the graph does not
+        #     hold left out, said, a group left empty dropped; no key is no
+        #     group (`graphmigrate.groups_of`)
+        self.groups, group_notes = read_groups(graphmigrate.groups_of(doc), self._held_canvas(),
+                                               self._groupable)
+        notes += group_notes
         # 7. the notes, for the panel
         self.notes = notes
         self.migrated = migrated            # plan 36 T3: the one-way migration's word
@@ -1273,6 +1371,12 @@ class Presets:
         layout = getattr(self, "layout", None)
         if layout:                      # plan 28 N2: a preset with none writes none
             doc[LAYOUT_KEY] = {k: list(layout[k]) for k in sorted(layout)}
+        # plan 40 T2 (D4, D7): the groups, after the layout, each of what the
+        # preset still holds; a preset with none writes none and stays `/7`
+        groups = self.live_groups()
+        if groups:
+            doc[GROUPS_KEY] = groups
+            doc["schema"] = GROUPS_SCHEMA
         # plan 32 S: the channels' bins
         media = self.media
         if media is not None:
@@ -1352,6 +1456,44 @@ class Presets:
             gs = self.graph = GraphSection(self.reg, lib=self.lib)
         return gs
 
+    def _held_canvas(self) -> set[str]:
+        """Plan 40 T2: the GRAPH canvas ids the loaded preset holds that a
+        group may name — its section's render nodes (``render:acid.2``), its
+        modifiers, its LFOs and envelopes (every id, with no bank to ask)
+        and the eight macros."""
+        spec = getattr(self._graph_section(), "spec", None)
+        held = {f"render:{n}" for n in patches.spec_names(spec)}
+        held |= {m.id for m in getattr(self.router.table, "modifiers", ())}
+        banks = self._banks()
+        for scheme in ("lfo", "env"):
+            bank = banks.get(scheme)
+            ids = bank.doc() if bank is not None else range(1, 100)
+            held |= {f"{scheme}.{n}" for n in ids}
+        held |= {f"macro.{n}" for n in range(1, patches.MACROS + 1)}
+        return held
+
+    def _groupable(self, ids: list[str]) -> tuple[set[str], list[str]]:
+        """Plan 40 T2: of canvas ids `ids`, those a group may hold and the
+        words for the rest (`patches.select`: the lift's rule)."""
+        members, refused = patches.select(getattr(self._graph_section(), "spec", None),
+                                          self.router.table, ids)
+        return set(members.canvas()), refused
+
+    def live_groups(self) -> list[dict]:
+        """Plan 40 T2: the groups as a save writes them — each member the
+        preset no longer holds (a node deleted since) left out, a group left
+        with none left out — in the file's key order."""
+        groups = getattr(self, "groups", None) or []
+        if not groups:
+            return []
+        held = self._held_canvas()
+        out = []
+        for g in groups:
+            nodes = [cid for cid in g.get("nodes", ()) if cid in held]
+            if nodes:
+                out.append(group_entry({**g, "nodes": nodes}))
+        return out
+
     def template_of_loaded(self) -> str | None:
         """The desk template the loaded preset's file names (plan 24 C3),
         or None: read from the file, so an undo that puts an earlier preset
@@ -1428,7 +1570,9 @@ class Presets:
                 # plan 28 N2: a node moved on the GRAPH page; none, no part
                 json.dumps(getattr(self, "layout", None) or None, sort_keys=True),
                 # plan 32: a bin entry assigned or cleared
-                None if self.media is None else json.dumps(self.media.to_json()))
+                None if self.media is None else json.dumps(self.media.to_json()),
+                # plan 40 T2: a group made, opened, renamed or taken apart
+                json.dumps(getattr(self, "groups", None) or None, sort_keys=True))
 
     # ---- internals ----
 

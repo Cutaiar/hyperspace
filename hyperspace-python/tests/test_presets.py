@@ -1781,8 +1781,9 @@ FIXTURE_DIR = FACTORY.parents[1] / "tests" / "fixtures" / "presets"
 def test_a_wired_preset_saves_as_v6(rig):
     """Row 385, row 394: every save is the newest schema — plan 36 T3:
     `hyperspace.preset/7` — the frame edited or not; the ladder reads `/2`
-    … `/7`, and a `/8` file is refused in its words."""
-    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7)
+    … `/7` — and (plan 40 T2) `/8`, a `/7` with groups, which only a preset
+    holding a group writes — and a `/9` file is refused in its words."""
+    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7, 8)
     assert graphmigrate.WIRED_SCHEMA == preset.WIRED_SCHEMA == "hyperspace.preset/7"
     rig.presets.load_doc({"schema": preset.SCHEMA, "name": "edited", "values": {}})
     section = rig.presets.graph.free_doc()
@@ -1793,10 +1794,10 @@ def test_a_wired_preset_saves_as_v6(rig):
     rig.presets.graph.land(G.read_graph(edited), edited)
     doc = rig.presets.document("edited")
     assert doc["schema"] == "hyperspace.preset/7" and doc["graph"] == edited
-    put(rig.home, "EIGHT", schema="hyperspace.preset/8")
+    put(rig.home, "NINE", schema="hyperspace.preset/9")
     rig.lib.poll()
     with pytest.raises(LibraryError, match="is not a hyperspace.preset"):
-        rig.lib.read("presets", "EIGHT")
+        rig.lib.read("presets", "NINE")
 
 
 @pytest.mark.parametrize("name", WIRED_FIXTURES)
