@@ -28,6 +28,7 @@ moderngl and glsl at most — never app, ui or params — and the
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -327,6 +328,224 @@ class Preview:
         self.tex = None
         if self.tap is not None:
             self.tap.release()
+
+# ---------------------------------------------------------------- plan 37 C1: the thumbnails
+
+# the long side of a node's thumbnail on GRAPH, in texels (P1)
+THUMB_PX = 192
+# a thumbnail not wanted for this long is dropped (its texture freed)
+THUMB_DROP_S = 1.0
+# a node that made nothing this long shows black (dimmed before that)
+THUMB_BLACK_S = 1.0
+# the downsample pass (plan 37 C1): 4×4 bilinear taps over the footprint
+# of one thumbnail texel — each tap averages 2×2 source texels, so a
+# 1920-wide picture's ten texels a thumbnail texel are read eight across,
+# in one draw, with no mipmap built on (and no filter changed on) a
+# texture the frame owns. Written opaque: the picture over black, so a
+# see-through layer reads on the node as it would on a black window
+THUMB_FS = """
+#version 330
+in vec2 v_uv;
+uniform sampler2D u_src;
+uniform vec2 u_step;          // one thumbnail texel, in the source's uv
+out vec4 f_color;
+void main() {
+    vec4 c = vec4(0.0);
+    for (int j = 0; j < 4; ++j)
+        for (int i = 0; i < 4; ++i)
+            c += texture(u_src, v_uv + (vec2(i, j) - 1.5) * 0.25 * u_step);
+    f_color = vec4(c.rgb / 16.0, 1.0);
+}
+"""
+
+
+def thumb_size(src: tuple[int, int], px: int = THUMB_PX) -> tuple[int, int]:
+    """A thumbnail's size for a picture of size `src`: its long side `px`,
+    the picture's aspect (never under one texel, never above the source)."""
+    w, h = max(int(src[0]), 1), max(int(src[1]), 1)
+    k = min(px / max(w, h), 1.0)
+    return max(1, round(w * k)), max(1, round(h * k))
+
+
+class PreviewTextures:
+    """The GRAPH page's thumbnails (plan 37 C1, P1): a small texture per
+    node name, its long side `THUMB_PX`, the picture's aspect — `Preview`'s
+    pattern, one per node. The page `want`s, each frame it draws, the
+    names it has on screen (each with how its picture is found:
+    `graphview.THUMBS`); the renderer, at the end of its next frame
+    (`Renderer._for_the_panel`), `take`s the wish and `put`s each wanted
+    node's picture, which one downsample pass (`THUMB_FS`) copies into
+    that node's texture, and calls `end_frame`. A name not wanted for
+    `THUMB_DROP_S` is dropped and its texture freed, so a node off screen,
+    hidden or collapsed off the canvas costs nothing after a second.
+
+    A node wanted that made nothing this frame keeps its last thumbnail:
+    `shade(name)` is 1 when it was copied the renderer's last frame, `DIM`
+    while it is less than `THUMB_BLACK_S` old, 0 (black) after — a number
+    the page multiplies the picture by, never a copy. `count` is the
+    copies the last frame made (the SYSTEM line), `repainted` how many of
+    them were of a picture the frame had not made (a node that paints into
+    its consumer, painted again at the frame's size for its thumbnail),
+    `kept` the thumbnail textures held. The textures are the render context's, which the control
+    window's shares, as `Preview`'s is; with no context (a test, a
+    stand-in) `put` keeps only the name and the time."""
+
+    DIM = 0.45
+
+    def __init__(self, ctx: moderngl.Context | None = None, clock=None):
+        self.ctx = ctx
+        self.clock = clock if clock is not None else time.monotonic
+        self.wanted: dict[str, str] = {}
+        self.asked: dict[str, float] = {}       # name → when it was last wanted
+        self.made: dict[str, float] = {}        # name → when it was last copied
+        self.tex: dict[str, Any] = {}           # name → (texture, framebuffer)
+        self.sizes: dict[str, tuple[int, int]] = {}   # name → the picture's own size
+        self.frame = 0                          # the renderer's frames ended
+        self.made_in: dict[str, int] = {}       # name → the frame it was last copied in
+        self.count = 0
+        self.repainted = 0
+        self.error = ""
+        self._prog = self._vao = self._sampler = None
+
+    # ---- the page's side
+
+    def want(self, ids) -> None:
+        """The page draws these nodes this frame: copy each next frame.
+        `ids` names → how (a mapping), or names (each "picture")."""
+        now = self.clock()
+        items = ids.items() if hasattr(ids, "items") else ((i, "picture") for i in ids)
+        for name, how in items:
+            self.wanted[name] = how
+            self.asked[name] = now
+
+    def get(self, name: str):
+        """`name`'s thumbnail texture, or None (never copied, or dropped)."""
+        got = self.tex.get(name)
+        return got[0] if got is not None else None
+
+    def size_of(self, name: str) -> tuple[int, int] | None:
+        """The size of the picture `name`'s thumbnail was last copied from."""
+        return self.sizes.get(name)
+
+    def shade(self, name: str) -> float:
+        """1 copied the last frame; `DIM` while the last copy is under
+        `THUMB_BLACK_S` old; 0 after that, or never copied."""
+        if self.made_in.get(name) == self.frame and self.frame:
+            return 1.0
+        at = self.made.get(name)
+        if at is None or self.clock() - at >= THUMB_BLACK_S:
+            return 0.0
+        return self.DIM
+
+    @property
+    def kept(self) -> int:
+        """The thumbnails held: a texture each (with no context, a picture
+        size each — a node copied at least once and not dropped)."""
+        return len(self.tex) if self.ctx is not None else len(self.sizes)
+
+    # ---- the renderer's side
+
+    def take(self) -> dict[str, str]:
+        """What was wanted since the last frame (and forget the wish)."""
+        wanted, self.wanted = self.wanted, {}
+        return wanted
+
+    def begin_frame(self) -> None:
+        """A frame's copies start: none counted yet."""
+        self.frame += 1
+        self.count = self.repainted = 0
+
+    def put(self, name: str, src, repainted: bool = False) -> bool:
+        """`src` (a texture of the render context) copied into `name`'s
+        thumbnail by one downsample pass; True when it was. `repainted`: the
+        frame had not made `src`, it was painted for this (`repainted`).
+        A pass that raises leaves the last thumbnail (`error` says why)."""
+        try:
+            size = tuple(int(v) for v in src.size)
+            if self.ctx is not None:
+                self._copy(name, src, size)
+        except Exception as e:  # noqa: BLE001 — a thumbnail must not take the frame down
+            self.error = f"{type(e).__name__}: {e}"[:120]
+            return False
+        self.sizes[name] = size
+        self.made[name] = self.clock()
+        self.made_in[name] = self.frame
+        self.count += 1
+        self.repainted += bool(repainted)
+        return True
+
+    def end_frame(self) -> None:
+        """Drop every name not wanted for `THUMB_DROP_S` (its texture freed)."""
+        now = self.clock()
+        for name in [n for n, at in self.asked.items() if now - at >= THUMB_DROP_S]:
+            self.drop(name)
+
+    def drop(self, name: str) -> None:
+        for d in (self.asked, self.made, self.sizes, self.made_in, self.wanted):
+            d.pop(name, None)
+        got = self.tex.pop(name, None)
+        if got is not None:
+            for res in (got[1], got[0]):
+                try:
+                    res.release()
+                except Exception:  # noqa: BLE001, S110 — teardown is best-effort
+                    pass
+
+    def close(self) -> None:
+        for name in list(self.tex) + list(self.asked):
+            self.drop(name)
+        for res in (self._vao, self._prog, self._sampler):
+            if res is not None:
+                try:
+                    res.release()
+                except Exception:  # noqa: BLE001, S110 — teardown is best-effort
+                    pass
+        self._prog = self._vao = self._sampler = None
+
+    def _target(self, name: str, size: tuple[int, int]):
+        want = thumb_size(size)
+        got = self.tex.get(name)
+        if got is not None and tuple(got[0].size) == want:
+            return got
+        if got is not None:
+            self.tex.pop(name)
+            for res in (got[1], got[0]):
+                res.release()
+        tex = self.ctx.texture(want, 4)
+        tex.filter = (moderngl.LINEAR, moderngl.LINEAR)
+        tex.repeat_x = tex.repeat_y = False
+        try:
+            fbo = self.ctx.framebuffer(color_attachments=[tex])
+        except Exception:
+            tex.release()
+            raise
+        got = self.tex[name] = (tex, fbo)
+        return got
+
+    def _copy(self, name: str, src, size: tuple[int, int]) -> None:
+        ctx = self.ctx
+        if self._prog is None:
+            self._prog = ctx.program(vertex_shader=QUAD_VS, fragment_shader=THUMB_FS)
+            self._vao = ctx.vertex_array(self._prog, [])
+            # a sampler of our own: the source's filter (NEAREST on a
+            # texelFetch target) is never changed, and taps blend
+            self._sampler = ctx.sampler(filter=(moderngl.LINEAR, moderngl.LINEAR),
+                                        repeat_x=False, repeat_y=False)
+        tex, fbo = self._target(name, size)
+        fbo.use()
+        ctx.viewport = (0, 0, *tex.size)
+        blend = moderngl.BLEND
+        ctx.disable(blend)
+        try:
+            src.use(location=0)
+            self._sampler.use(location=0)
+            self._prog["u_src"].value = 0
+            self._prog["u_step"].value = (1.0 / tex.size[0], 1.0 / tex.size[1])
+            self._vao.render(moderngl.TRIANGLES, vertices=3)
+        finally:
+            self._sampler.clear(location=0)
+            ctx.enable(blend)
+
 
 # a frame texture or a layer into a rect of a presenter's framebuffer:
 # 1:1 by texelFetch (the renderer's SHOW_FS) or scaled by the sampler,

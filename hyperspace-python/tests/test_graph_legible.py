@@ -104,10 +104,14 @@ def test_every_node_starts_collapsed_with_at_most_five_lines(rig):
     # 33 T7: less view.media (retired: the wire into pattern.media)
     assert graphview.summary(view.node("render:shape"))[0].startswith("50 params · ")
     assert st["wires"] < len(view.cables) / 3
-    # a collapsed node takes its lines' room in the column, not its ports'
+    # a collapsed node takes its lines' room in the column, not its ports' —
+    # plan 37 C1: a picture node (the shape's is its scene's, faint) its
+    # thumbnail's instead, its lines moved to its hover
+    desk = view.node("device:apc40")
+    assert desk.thumb is None and graphview.height(desk, collapsed=True) == (
+        graphview.HEAD_H + graphview.ROW_H * len(graphview.summary(desk)))
     shape = view.node("render:shape")
-    assert graphview.height(shape, collapsed=True) == (
-        graphview.HEAD_H + graphview.ROW_H * len(graphview.summary(shape)))
+    assert graphview.height(shape, collapsed=True) == graphview.HEAD_H + graphview.THUMB_H
     assert graphview.height(shape, collapsed=True) < graphview.height(shape)
 
 

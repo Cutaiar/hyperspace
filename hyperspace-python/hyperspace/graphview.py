@@ -257,6 +257,14 @@ class VNode:
     # that no path leads from to a sink (`graph.reaches`): kept, never run,
     # drawn faint with the line "reaches nothing" — never idle
     faint: bool = False
+    # plan 37 C1 (P1): how this node's thumbnail is found (`THUMBS`' word:
+    # "picture", "scene", "layer", "window"), None for a node that stays
+    # text (the modulation side, a group, the camera); and the size of the
+    # picture its thumbnail was last copied from (the page sets it each
+    # frame from `outputs.PreviewTextures.size_of`: C2's hover says it),
+    # None before the first copy
+    thumb: str | None = None
+    picture: tuple[int, int] | None = None
 
     def port(self, pid: str) -> VPort | None:
         return next((p for p in self.ports if p.id == pid), None)
@@ -836,6 +844,43 @@ NO_SUCH_WIRE = "{wire}: no such wire"
 NO_SUCH_COPY = "copy of {of}: no such effect instance in the graph"
 
 
+# plan 37 C1 (P1, the one table): how each canvas kind's thumbnail is
+# found — "picture": the picture the node makes (`graph.picture`);
+# "scene": a geometry, which makes draw calls, not a picture — the scene
+# that draws it, faint (`THUMB_FAINT`); "layer": a hands node — its hands
+# layer, else the scene it is drawn in; "window": an output — what the
+# window shows (output 1 the page's `outputs.Preview`, any other its
+# presenter's picture: `render.thumb_source`). A kind missing here whose
+# node's output is a picture (a kind added later: plan 39's) is a
+# "picture" too (`thumb_of`); the rest (All outputs, the camera, ground,
+# the modulation side) stay text.
+PICTURE, SCENE_PIC, LAYER_PIC, WINDOW_PIC = "picture", "scene", "layer", "window"
+THUMBS: dict[str, str] = {
+    "channel": PICTURE, "pattern": PICTURE, "scene": PICTURE, "backdrop": PICTURE,
+    "composite": PICTURE, "switch": PICTURE, "delay": PICTURE, "resize": PICTURE,
+    "lookback": PICTURE, "echo": PICTURE, "dream": PICTURE, "effect": PICTURE,
+    "copy": PICTURE, "layer": PICTURE, "guide": PICTURE,
+    "shape": SCENE_PIC, "cloud": SCENE_PIC, "hands": LAYER_PIC,
+    "output": WINDOW_PIC,
+}
+THUMB_FAINT = frozenset({SCENE_PIC})     # drawn faint (`ui_graph.FAINT_PIC`)
+# the thumbnail's box on a node, canvas units: the node's inner width
+# (`ui_graph.NODE_W`, 190 × SCALE) at 16:9 — a picture of another aspect
+# is fitted inside it, so the layout never moves with a picture's size
+THUMB_H = float(round(190 * 1.25 * 9 / 16))
+
+
+def thumb_of(name: str, ref=None) -> str | None:
+    """How canvas node `name`'s thumbnail is found (`THUMBS`), its render
+    node `ref` deciding for a kind the table does not name; None: text."""
+    kind = kind_of(name)
+    if kind in THUMBS:
+        return THUMBS[kind]
+    if kind in (None, CAMERA, rgraph.ALL_OUTPUTS, rgraph.GROUND):
+        return None
+    return PICTURE if getattr(ref, "OUTPUT", None) == IMAGE else None
+
+
 def kind_of(name: str) -> str | None:
     """A canvas name's kind (plan 35 G): a wired frame's (`graph.
     wire_node_kind(…, wired=True)`), All outputs' own key, the rig's camera
@@ -1407,6 +1452,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                  "output" if kind in ("output", rgraph.ALL_OUTPUTS) else "render")
         of = copies.get(name, "")
         n = add_node(VNode(f"render:{name}", vkind, label_of(name, slots, of=of), ref=r,
+                           thumb=thumb_of(name, r),
                            status=hover_of(name, slots, of=of,
                                            tip=_tip(reg, name) if kind == "effect" else "")))
         for port, typ in _takes(kind).items():
@@ -2358,12 +2404,14 @@ def height(n: VNode, full: bool = False, folds=frozenset(), collapsed: bool = Fa
     """A node's height as auto_layout stacks it: its title, the ports it
     shows (`visible`) and, expanded, a line per port group — or, while it
     is `collapsed` (plan 28 N7), its title and its lines (`summary`)."""
+    pic = THUMB_H if n.thumb is not None else 0.0    # plan 37 C1 (D2): always
     if collapsed:
-        return HEAD_H + ROW_H * len(summary(n))
+        # (a picture node's lines are its hover's: plan 37 P1)
+        return HEAD_H + (pic if n.thumb is not None else ROW_H * len(summary(n)))
     rows = len(visible(n, full, folds))
     if grouped(n, full):
         rows += len({p.group for p in n.ports})
-    return HEAD_H + ROW_H * rows
+    return HEAD_H + pic + ROW_H * rows
 
 
 def layout(view: View, placed: Mapping[str, Any] | None = None,
