@@ -1,6 +1,6 @@
 # Plan 37A — nodes as pictures: the picture a node makes is the node, the cable palette, legibility from the display
 
-**Status: spec (2026-10-27), awaiting the owner's decisions D1–D5.** Build
+**Status: spec (2026-10-27), awaiting the owner's decisions D1–D6.** Build
 plan [`37a-nodes-as-pictures-build.md`](37a-nodes-as-pictures-build.md).
 From item 4 and item 1 of the owner's notes after the 2026-10-25 install
 (register row 415, owner 2026-10-26: "Plan 37 is nodes as pictures, and
@@ -189,6 +189,39 @@ units on every Mac, and instead:
 - **Decision D5** is whether the launch zoom is per Mac (the show, as
   recommended) or per preset.
 
+### P5 — watch one node (the owner's ask of 2026-10-27)
+
+The owner's words: working on a wobble shader in the middle of a giant
+chain, "I need to be able to just look at what that particular node is
+doing — a preview up to that node in the chain"; not high resolution,
+but big enough to tell what you are doing. The thumbnail is for the
+whole graph at a glance; the **watch** is for the one node you are
+editing.
+
+- **One watched node at a time.** An eye on every picture node's title
+  line (and `watch` in its right-click menu) marks it; the head shows a
+  chip **watching `acid.2`** that clears it; clicking another node's eye
+  moves the watch. Esc does not clear it (Esc is the page's).
+- **Where it shows.** The GRAPH backdrop — the picture behind the
+  canvas that **output behind** draws today — shows the watched node's
+  picture instead of output 1's while a node is watched, same alpha
+  slider, same letterbox; and the side pane shows it again at the
+  column's width above the node's params, so it is in view while a knob
+  is turned. **Decision D6** is whether it also goes to an output window.
+- **What it is.** The node's own output after its own pass, exactly what
+  its thumbnail captures, but captured **every frame** at `WATCH_W = 960`
+  wide (16:9, cover-fitted) into one extra texture of the thumbnail
+  service: one blit a frame on top of the budget. An effect in a chain
+  shows the chain up to and including itself. A through (off) node shows
+  what passes through it; a dormant node shows what it last made, faint.
+- **Not a wire.** The watch is a tap, like the output preview: it is
+  panel state for this session, saved nowhere (not the preset, not the
+  show), it changes no node's inputs or outputs, and it never changes
+  what any window shows unless D6 says so. The graph stays the whole
+  truth; the watch is a reading of it.
+- Hover (P2) is the glance; the watch is the sitting. Both come from the
+  same capture path, so T1 builds the capture and T2 the eye.
+
 ### What this plan does not do
 
 - No node is added, moved, hidden or wired by this plan. No layout runs.
@@ -209,13 +242,14 @@ units on every Mac, and instead:
 | D3 | Picture cables: a hue by the source's **kind** (the table above), or a hue **per source node** (each node its own colour from a wheel, Patcher-style)? | **By kind.** Two media channels read alike, two effects read alike, and the legend fits on a chip. Per node is prettier and says nothing. |
 | D4 | The thumbnail budget: 4 captures a frame, round robin (a 40-node graph refreshes every ~10 frames), or every wanted node every frame? | **4 a frame.** The GRAPH page is for wiring, not watching; the output-behind backdrop is the live picture. SYSTEM shows the cost either way. |
 | D5 | The launch zoom from the display: kept per Mac in the show (with the pan), or per preset? | **Per Mac.** It is a property of the screen in front of you; a preset's layout is in canvas units and does not change. |
+| D6 | The watched node (P5): shown on the GRAPH backdrop and the side pane only, or also **solo to a window** (an output window shows the watched node's picture while the watch is on, its own wiring untouched)? | **Backdrop and side pane now; solo to a window as a chip beside the watch, off by default.** On the rig the projector is the only screen big enough to judge a shader, and it is a reading too (the window's wires do not change), but a wrong press at a party shows the guests half a chain. |
 
 ## Order of work
 
 | task | what | proves |
 |---|---|---|
 | T1 | P1: `render.Thumbs`, the `frame.made` hook, `Preview` per output | a thumbnail per wanted node; goldens and signatures unmoved with every node wanted |
-| T2 | P2: the node draws its picture; summary to hover; `tooltip_image` | a collapsed node's height ≤ today's; hover shows the lines that left |
+| T2 | P2 and P5: the node draws its picture; summary to hover; `tooltip_image`; the eye, the watch chip, the backdrop and side pane showing the watched node | a collapsed node's height ≤ today's; hover shows the lines that left; watching `acid.2` in a four-effect chain shows the chain up to it and nothing after |
 | T3 | P3: the palette by kind, pins the same, the legend chip | no cable is `ui.RED`; two cables from a channel and a scene differ |
 | T4 | P4: launch zoom from the display, `PIN` 14, `[ui] font` | the zoom at launch on a 900-px window is 1.0 and on a 1440-px one 1.6 |
 | T5 | docs: this spec's "as built", ARCHITECTURE, register rows, hand checks | — |
@@ -257,6 +291,12 @@ T5–T6 together.
    Nothing moved on the canvas from where it was.
 2. **Hover is the detail.** Hover a node: the bigger picture, the summary
    lines and the GPU time. Hover a pin: its reading, as before.
+2a. **Watch one node.** On `party-noita` (a long chain), press the eye
+   on an effect in the middle: the backdrop and the side pane show the
+   chain up to that effect, moving; turn one of its knobs and see it
+   there; press the eye on the next effect and the picture gains that
+   effect's work. Clear the chip: output 1 is back behind the canvas.
+   Nothing on any output window changed meanwhile.
 3. **The palette.** With `party-noita` loaded, a channel cable, a scene
    cable, an effect cable and a trail cable are four colours, none of
    them red; the `?` chip names them.

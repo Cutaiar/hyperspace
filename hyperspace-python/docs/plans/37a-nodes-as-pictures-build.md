@@ -3,7 +3,7 @@
 Spec: [`37a-nodes-as-pictures.md`](37a-nodes-as-pictures.md), the
 authority. Read its "What is there today" map before any task; its
 file:line references are to `main` @ f2351a0 and may have drifted.
-Decisions D1–D5 are the owner's; build on the recommendations until he
+Decisions D1–D6 are the owner's; build on the recommendations until he
 says otherwise, and say in the report which ones you built on.
 
 Branch `plan-37a-build`, cut from `main`. Work in `hyperspace-python/`.
@@ -78,6 +78,12 @@ picture node by name, for a budgeted cost, and only when asked.
    picture", skip this step and the panel draws the kind word.
 5. The GPU timer gets one `thumbs` name around all the frame's captures
    (`PassTimer`, one query, never nested inside a node's).
+5a. **The watch** (spec P5): `Thumbs.watch: str | None` names one node;
+   its `made` is captured **every frame**, outside the round-robin
+   budget, into `Thumbs.watched` (`WATCH_W = 960`, 16:9, cover-fitted,
+   RGBA8), released when the watch clears. The same `frame.made` call
+   serves both; a node that is watched and wanted is blitted twice (small
+   and big) from the one source.
 6. Tests (standalone GL, the precedent is `test_ui_shell.py:655`):
    - wanted names get a thumbnail whose mean colour matches a cover-fit
      downsample of the node's result (scene, one effect, a delay, an
@@ -85,14 +91,19 @@ picture node by name, for a budgeted cost, and only when asked.
    - with nothing wanted, zero captures and zero timer time;
    - a 40-node want refreshes each name within 10 frames;
    - an unwanted name is released after `THUMB_KEEP_FRAMES`;
+   - the watched node is captured every frame, at `WATCH_W`, and in a
+     chain `scene → a → b → c → output` watching `b` gives `b`'s result
+     (differs from `a`'s and from `c`'s by a known pixel); clearing the
+     watch releases the texture;
    - **the proof**: `tools/golden_frames.py` with every node wanted
      draws every golden byte-identical, and `frame-signatures.json`
      holds.
 
-## Task 2: the node is its picture (spec P2, D1)
+## Task 2: the node is its picture, and the watch (spec P2, P5, D1, D6)
 
 Goal: a collapsed picture node on GRAPH is its title and its moving
-picture; the words that left go to hover. Nothing moves.
+picture; the words that left go to hover; one node can be watched big.
+Nothing moves.
 
 1. `graphview.height`: a render node whose output is a picture or a mask
    is `HEAD_H + THUMB_ROWS × ROW_H + (ROW_H if n.said else 0)` collapsed,
@@ -117,11 +128,30 @@ picture; the words that left go to hover. Nothing moves.
    big, then `graphview.summary(n)` in full, then the node's GPU time
    from `renderer.stats["gpu_ms"]`. The error / faint-tip / status
    lines stay first when present.
-5. Tests (`tests/test_graph_legible.py`, `test_graphview.py`, headless):
+5. **The watch.** An eye `small_button` on every picture node's title
+   line (between the label and `+`/`-`; lit while watched) and `watch` /
+   `unwatch` in the node's right-click menu set `renderer.thumbs.watch`.
+   The head gets a chip **watching `<name>`** that clears it, beside
+   **output behind**. `_backdrop` draws `thumbs.watched` instead of the
+   output-1 preview while a watch is on (same `backdrop_rect`, same
+   alpha; the **output behind** chip need not be lit for the watch to
+   show — the watch lights its own). `_node_side` draws `thumbs.watched`
+   contained at `SIDE_W` above the param rows when the watched node is
+   the one in the pane, and a one-line "watching" link otherwise. The
+   watch is `st["watch"]` in the panel's GRAPH state: not written to the
+   preset or the show; a preset load keeps it if the name still exists,
+   else clears it; a deleted node clears it. If D6 is accepted, a second
+   chip **solo to window N** sets `outputs.solo = (N, name)` and the
+   window's `Shown` presents `thumbs.watched` (cover-fitted) instead of
+   its own picture while set — its wires untouched, the OUTPUT page
+   saying so in words; off by default, cleared with the watch.
+6. Tests (`tests/test_graph_legible.py`, `test_graphview.py`, headless):
    collapsed height rule; the summary lines absent from the node's text
    and present in the hover text; the want set equals the visible
    picture nodes minus the preset-only-hidden ones; the want set is empty
-   on the FX page; `tools/control_shots.py` still shoots GRAPH.
+   on the FX page; the eye sets the watch and the chip clears it; a load
+   without the node clears it; the watch is absent from a saved preset
+   and show; `tools/control_shots.py` still shoots GRAPH.
 
 ## Task 3: the cable palette (spec P3, D3)
 
