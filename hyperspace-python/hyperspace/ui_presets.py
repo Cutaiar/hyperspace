@@ -355,6 +355,9 @@ def strip(panel, group: str) -> None:
         _guard(panel, lib.next, group)
     _rect(panel, f"strip.{group}.next")
     imgui.end_disabled()
+    if group == PRESETS:
+        from . import ui_graph  # (late, as `new` below)
+        ui_graph._wants_chip(panel)     # plan 40 T4: the devices the preset waits for
     _list_popup(panel, group, listing, cur)
 
     # save · as… (· reset on a module strip), flush right

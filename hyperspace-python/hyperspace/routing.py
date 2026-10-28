@@ -855,6 +855,73 @@ class Binding:
 _SHIFT = Binding(SHIFT_SOURCE, SHIFT_PARAM, "toggle")    # the latch's control
 
 
+def row_words(row: Binding | str, names=None) -> str:
+    """A row's source in words (plan 40 T4): what a person calls the
+    control or the lane, without its device's role — the caller says the
+    role. `row` is a `Binding` or its source string. `names(bare source)`
+    is the caller's say first: the desk's glyph where a MIDI profile has
+    one (``cc:0:48`` → "K1", devices.wants hands it `apc40.glyph`), the
+    port's name on the canvas (graphview.cable_words); None or "" falls
+    through to the row's own words —
+
+      ``hand:right.y`` → "right hand y"    ``hands:gap`` → "hands gap"
+      ``lane:0`` → "band 1"                ``pad:A`` → "pad A"
+      ``hat:UP`` → "d-pad up"              ``axis@p2:LX`` → "axis LX"
+      ``cc:0:48`` → "CC 48 ch1"            ``pitch:*`` → "pitch bend any ch"
+      ``lfo:0`` → "LFO 1"                  ``mod:3`` → "mod.3"
+      ``osc1:/fader/1`` → "/fader/1"       anything else → the source
+
+    Pure: reads nothing but its arguments."""
+    source = row.source if isinstance(row, Binding) else str(row)
+    head, colon, addr = source.partition(":")
+    scheme = base_scheme(head)
+    bare = f"{scheme}:{addr}" if colon else scheme
+    if names is not None:
+        said = names(bare)
+        if said:
+            return str(said)
+    if not colon:
+        return source
+    if scheme == "hand":
+        side, _, rest = addr.partition(".")
+        if side in ("left", "right"):
+            return f"{side} hand {rest.replace('.', ' ')}".rstrip()
+        return f"hand {addr.replace('.', ' ')}"
+    if scheme == "hands":
+        return f"hands {addr.replace('.', ' ')}"
+    n = addr.split(":")[0]
+    k = int(n) + 1 if n.isdecimal() else None
+    if scheme == "lane":
+        return f"band {k}" if k is not None else f"band {addr}"
+    if scheme in ("lfo", "env"):
+        return f"{scheme.upper() if scheme == 'lfo' else scheme} {k if k is not None else addr}"
+    if scheme == "seq":
+        return f"seq lane {k}" if k is not None else f"seq {addr}"
+    if scheme == modifiers.SCHEME:
+        return modifiers.id_of(f"{scheme}:{addr}") or source
+    if scheme == "pad":
+        return f"pad {addr}"
+    if scheme == "hat":
+        return f"d-pad {addr.lower()}"
+    if scheme == "axis":
+        return f"axis {addr}"
+    if scheme == "key":
+        return f"key {addr}"
+    if scheme in MIDI_SCHEMES:
+        b = Binding(bare, "")
+        try:
+            ch = "any ch" if b.channel is None else f"ch{b.channel + 1}"
+            num = b.number
+        except ValueError:
+            return source
+        if scheme == "pitch":
+            return f"pitch bend {ch}"
+        return f"{'CC' if scheme == 'cc' else 'note'} {num} {ch}"
+    if addr.startswith("/"):            # an OSC address is itself (plan 27 B4)
+        return addr
+    return source
+
+
 def _macro_n(mid: str) -> int:
     tail = mid[len(MACRO_PREFIX):]
     return int(tail) if tail.isdigit() else 0
