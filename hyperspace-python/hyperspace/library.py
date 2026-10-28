@@ -126,6 +126,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from . import patches as patchdoc
 from . import undo
 from .graph import RigWires
 from .graphmigrate import renamed_layout, retired
@@ -163,6 +164,18 @@ PRESETS = "presets"       # the presets' group, a document kind (preset.py)
 # never applied as its module preset
 DESK = "desk"
 DESK_SCHEMA = "hyperspace.desk/1"
+# <root>/patches/<slug>.json (plan 40 P1): the patches — a group of nodes
+# and its boundary, saved once, spawned anywhere (patches.py). A document
+# kind of the library's own (`Library.__init__`), so the folder lists,
+# shadows, hides, renames and goes to the trash like the presets'; but a
+# patch is never loaded through the group's door — it is spawned
+# (`patches.spawn`) — so the kind's `load` refuses, and its `document` and
+# `signature` are never asked. Read through `read_patch` (the schema and
+# `patches.check`), written through `save_patch`. The factory's
+# hyperspace/library/patches/ may not exist (as desk/ may not)
+PATCHES = "patches"
+PATCH_SCHEMA = patchdoc.SCHEMA          # "hyperspace.patch/1"
+PATCH_SPAWNED = "a patch is spawned, not loaded"
 # folders in a library root that are no group: the routing presets' old
 # folder, kept as it was by plan 13's migration and never read again
 LEGACY_DIRS = ("bindings",)
@@ -177,6 +190,10 @@ TRASH = "trash"
 # taste, the home's; hiding deletes nothing and changes only `list()`
 HIDDEN = "hidden.json"
 HIDDEN_SCHEMA = "hyperspace.hidden/1"
+# plan 40 T1: the groups whose factory files × may hide — the presets, and
+# the patches (``"patches": [stem, …]`` beside ``"presets"``, written only
+# when one is hidden, so a home that hides none writes what it always did)
+HIDEABLE = (PRESETS, PATCHES)
 # the trash's file names: <stem>.<YYYYMMDD-HHMMSS>[-n]<suffix> (`to_trash`)
 _TRASHED = re.compile(r"(?P<stem>.+)\.(?P<stamp>\d{8}-\d{6})(?:-(?P<n>\d+))?(?P<suffix>\.[^.]+)")
 HOME_ENV = "HYPERSPACE_HOME"
@@ -599,6 +616,19 @@ class DocKind:
     document: Callable[[str], dict]
     signature: Callable[[], Any]
     text: Callable[[dict], str] | None = None   # the file's text, when json.dumps is not it
+
+
+def _patch_spawned(*_args) -> Any:
+    raise LibraryError(PATCH_SPAWNED)
+
+
+def _patch_kind() -> DocKind:
+    """The patches' document kind (plan 40 T1): its schema and versions, so
+    `read` checks a file as it does a preset's, and the doors that refuse —
+    a patch is spawned (`patches.spawn`), never loaded, and what a save
+    writes is `save_patch`'s document, never the live state's."""
+    kind, _, v = PATCH_SCHEMA.rpartition("/")
+    return DocKind(kind, (int(v),), _patch_spawned, _patch_spawned, _patch_spawned)
 
 
 def factory_doc(group: str, name: str, factory: Path = FACTORY) -> dict:
@@ -1526,6 +1556,7 @@ class Library:
         self._load_hooks: dict[str, Any] = {}     # group → told the name after a load
         self._adopted: dict[str, Any] = {}        # group → how to re-apply an adopted preset
         self._kinds: dict[str, DocKind] = {}      # group → a document kind of its own
+        self._kinds[PATCHES] = _patch_kind()      # plan 40 T1: spawned, never loaded
         self._fresh_extra: dict[str, dict] = {}   # group → its extra (layout) at attach
         self._defaults: dict[str, dict[str, Any]] = {}   # defaults(group), until a file moves
         self._docs: dict[Path, tuple[float, dict]] = {}   # parsed files, by mtime
@@ -1536,6 +1567,7 @@ class Library:
         # the file there would not parse — kept beside itself before the
         # first rewrite (`_write_hidden`)
         self._hidden: frozenset[str] = frozenset()
+        self._hidden_patches: frozenset[str] = frozenset()     # plan 40 T1
         self._hidden_bad = False
         self._read_hidden()
         self.project = Project(self)
@@ -1837,14 +1869,18 @@ class Library:
         with a warning, and is kept beside itself before the first rewrite."""
         path = self.home / HIDDEN
         self._hidden, self._hidden_bad = frozenset(), False
+        self._hidden_patches = frozenset()
         if not path.exists():
             return
         try:
             doc = _read_json(path)
             stems = doc.get("presets")
-            if doc.get("schema") != HIDDEN_SCHEMA or not isinstance(stems, list):
+            more = doc.get(PATCHES, [])
+            if (doc.get("schema") != HIDDEN_SCHEMA or not isinstance(stems, list)
+                    or not isinstance(more, list)):
                 raise LibraryError(f"{HIDDEN}: not a {HIDDEN_SCHEMA} list")
             self._hidden = frozenset(str(s) for s in stems if isinstance(s, str) and s)
+            self._hidden_patches = frozenset(str(s) for s in more if isinstance(s, str) and s)
         except LibraryError as e:
             self._hidden_bad = True
             self.say(warning=f"{e} — nothing is hidden; the file is kept as it is until "
@@ -1852,14 +1888,19 @@ class Library:
 
     def hidden(self, group: str = PRESETS) -> frozenset[str]:
         """The factory file stems hidden from the group's list (only the
-        presets' group has any)."""
+        presets' and, plan 40 T1, the patches' groups have any)."""
+        if group == PATCHES:
+            return getattr(self, "_hidden_patches", frozenset())
         return getattr(self, "_hidden", frozenset()) if group == PRESETS else frozenset()
 
-    def _write_hidden(self, stems: frozenset[str]) -> None:
-        """Write `hidden.json`. A file there that did not parse is kept first
-        (`routing.backup(path, "0")`, ``hidden.json.bak-v0``): no backup, no
-        rewrite (LibraryError)."""
+    def _write_hidden(self, stems: frozenset[str], group: str = PRESETS) -> None:
+        """Write `hidden.json` with `group`'s hidden stems `stems`, the other
+        hideable group's as they are. A file there that did not parse is
+        kept first (`routing.backup(path, "0")`, ``hidden.json.bak-v0``): no
+        backup, no rewrite (LibraryError)."""
         self.writable()
+        presets = stems if group == PRESETS else self.hidden(PRESETS)
+        more = stems if group == PATCHES else self.hidden(PATCHES)
         path = self.home / HIDDEN
         if getattr(self, "_hidden_bad", False) and path.exists():
             from .routing import backup
@@ -1867,20 +1908,28 @@ class Library:
             if backup(path, "0") is None:
                 raise LibraryError(f"{HIDDEN}: not rewritten — the unreadable file there "
                                    "could not be kept first")
-        _write_json(path, {"schema": HIDDEN_SCHEMA, "presets": sorted(stems)})
-        self._hidden, self._hidden_bad = frozenset(stems), False
+        doc = {"schema": HIDDEN_SCHEMA, "presets": sorted(presets)}
+        if more:
+            doc[PATCHES] = sorted(more)
+        _write_json(path, doc)
+        self._hidden, self._hidden_bad = frozenset(presets), False
+        self._hidden_patches = frozenset(more)
 
     def hide(self, group: str, name: str) -> bool:
         """× on a factory preset: off the list, by its file stem in
         `hidden.json`; its file is untouched and a slot or a show that names
         it still loads it. False (nothing written) for anything but a
-        factory preset of the presets' group."""
+        factory preset of the presets' group — or (plan 40 T1) a factory
+        patch, which nothing in a show names."""
         path = self.path_of(group, name)
-        if group != PRESETS or path is None or self._is_user(path):
+        if group not in HIDEABLE or path is None or self._is_user(path):
             return False
         stem = path.name[:-5]
         if stem not in self.hidden(group):
-            self._write_hidden(self.hidden(group) | {stem})
+            self._write_hidden(self.hidden(group) | {stem}, group)
+        if group == PATCHES:
+            self.say(f"hidden {name} — show hidden in the list brings it back")
+            return True
         still = self.still_named(name, path)
         self.say(f"hidden {name} — " + (f"{_and(still)} still load{'s' if len(still) == 1 else ''}"
                                          " it" if still else "show hidden in the list brings it "
@@ -1895,7 +1944,7 @@ class Library:
         stem = path.name[:-5]
         if stem not in self.hidden(group):
             return False
-        self._write_hidden(self.hidden(group) - {stem})
+        self._write_hidden(self.hidden(group) - {stem}, group)
         self.say(f"{name} is back in the list")
         return True
 
@@ -1929,6 +1978,48 @@ class Library:
         if doc.get("group", group) != group:
             raise LibraryError(f"{path.name} is a {doc['group']} preset, not {group}")
         return doc
+
+    # ---- patches (plan 40 T1) ----
+
+    def read_patch(self, name: str) -> dict:
+        """The patch `name`: its file under ``<root>/patches/``, the user's
+        shadowing the factory's, checked — the schema (`read`) and the shape
+        (`patches.check`). A patch that is not there, or that check refuses,
+        raises LibraryError with the reasons in words."""
+        doc = self.read(PATCHES, name)
+        refused = patchdoc.check(doc)
+        if refused:
+            path = self.path_of(PATCHES, name)
+            raise LibraryError(f"{path.name if path else name}: " + "; ".join(refused))
+        return doc
+
+    def save_patch(self, doc: dict) -> Path:
+        """Write patch `doc` as ``<home>/patches/<slug of its name>.json``
+        — atomically (`_write_text`), a different text already there copied
+        to the trash first, as `save_as` does — and nothing else: no preset,
+        show or binding is touched. A document `patches.check` refuses is
+        not written (LibraryError)."""
+        self.writable()
+        refused = patchdoc.check(doc)
+        name = str(doc.get("name") or "").strip() if isinstance(doc, dict) else ""
+        if not name:
+            refused = ["a patch needs a name", *refused]
+        if refused:
+            raise LibraryError("patch not saved: " + "; ".join(refused))
+        path = self.home / PATCHES / f"{slug(name)}.json"
+        text = _json_text(doc)
+        if path.is_file():
+            try:
+                old = path.read_text()
+            except (OSError, ValueError):
+                old = None                               # unreadable as text: keep it anyway
+            if old != text and to_trash(path, self.home) is None:
+                self.say(warning=f"{PATCHES}/{path.name}: overwritten — the old file could "
+                                 "not be kept in the trash")
+        _write_text(path, text)
+        self._sync(path)
+        self.say(f"{PATCHES}: saved {name}")
+        return path
 
     def desk_template(self, name: str) -> dict:
         """The desk template `name` (plan 24 C3): its file under
@@ -2276,8 +2367,10 @@ class Library:
            their old files are in the trash; the rest name the old one*;
         6. `Project.follow()`; the status says how many shows changed."""
         self.writable()
-        if group != PRESETS:
-            raise LibraryError(f"{group}: only a preset can be renamed")
+        # plan 40 T1: a patch renames the same way, less step 5 (no show
+        # names a patch; a group's provenance slug is the preset's to keep)
+        if group not in HIDEABLE:
+            raise LibraryError(f"{group}: only a preset can be renamed (or a patch)")
         path = self.path_of(group, old)
         if path is None:
             raise LibraryError(f"no preset {old!r}")
@@ -2334,6 +2427,9 @@ class Library:
             hook = self._load_hooks.get(group)
             if hook is not None:
                 hook(new)
+        if group == PATCHES:
+            self.say(f"renamed {old} → {new}")
+            return dst
         done, left = self._repoint(old, new, mine)         # 5.
         self.project.follow()                              # 6.
         self.say(f"renamed {old} → {new} ({done} show{'' if done == 1 else 's'} updated)")

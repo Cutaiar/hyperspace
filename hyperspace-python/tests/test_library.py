@@ -432,7 +432,8 @@ def test_presets_are_the_librarys_one_document_kind(rig, tmp_path):
     from hyperspace.routing import Binding
 
     lib, router = rig.lib, rig.presets.router
-    assert lib.kinds == ("presets",) and not hasattr(lib, "routing")
+    # plan 40 T1: and the patches, a kind that is spawned, never loaded
+    assert lib.kinds == ("patches", "presets") and not hasattr(lib, "routing")
     (tmp_path / "bindings").mkdir()
     (tmp_path / "bindings" / "mine.json").write_text("{}")
     assert "bindings" not in lib.groups() and "presets" in lib.groups()
