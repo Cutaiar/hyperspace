@@ -565,6 +565,7 @@ here; overturn → the change, then the same.
 | 534 | A retired module group named; its label loads quietly | 400 | controller — 2026-10-27 |
 | 535 | The party generator keeps the fx families' values inline | — | controller — 2026-10-27 |
 | 536 | Plan 38's PROJECTOR inset fix rides on plan 40's PR | 377 | controller — 2026-10-27 |
+| 537 | A macro's new base subscriber has a throw (from where the param sits to its fader's end); Route from ▸ is one submenu per kind, the macros among them | 402 | owner — 2026-10-28 |
 
 "—": no hand check shows it; tests only.
 
@@ -9169,3 +9170,56 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
 - **To reverse.** —
 - **Rough edge.** None.
 - **Judge it.** Check 377.
+
+### 537. A macro's new base subscriber has a throw; Route from ▸ is one submenu per kind, the macros among them
+
+- **Answer.** owner — 2026-10-28: "by default when you wire up a macro,
+  the From and To parameters start at the same value so there's actually
+  no range of motion. That's not right"; and the param menu's Route from
+  "should probably include the macros as well … instead of listing all
+  the LFOs and envelopes together, it should have an LFO thing you can
+  mouse over, a macro thing you can mouse over, and an envelope thing …
+  because you can have up to six … we might add more things to route
+  from".
+- **Built.** `routing.base_sub(p)`: the base subscriber a macro's cable
+  makes on `p` runs `from` where the param sits `to` 1 — or to 0 when it
+  already sits at 1 — so the knob moves the param from the day it lands
+  (at 0 the scene as designed, at 1 the fader's end). `Edit.subscribe`
+  (a `bus:` → `base:` cable on GRAPH) and ROUTING's **+ base** chip both
+  take it; before, both set `from = to` where the param sat ("so adding
+  it moves nothing"), and the macro moved nothing ever until both ends
+  were set by hand — the owner's "Tracer Macro Test", whose macro `test`
+  had three base subscribers all with `from = to`. The ends stay the
+  performer's to edit on ROUTING's subscriber line; a depth subscriber is
+  0…1 as before. Presets already saved with `from = to` are left as they
+  are: a file's ends are a design, not a default.
+  **Route from ▸** (`ui_graph.route_from_menu`) is now **LFO ▸** (the
+  bank's voices, then new LFO), **envelope ▸** (the envelopes, then new
+  envelope) and **macro ▸** (the rig's eight knobs by ROUTING's label,
+  else "macro 3"); `SECTIONS` / `SECTION_WORDS` hold the order and the
+  titles, so another kind of source is one more section. The bank
+  sections come on a modulatable param that is no trigger, as before;
+  macro ▸ on any param a base subscriber may name (`routing.base_refusal`:
+  a persisted performance param, not an alias, not a macro, no text) —
+  modulatable or not, a base subscriber being no route. A macro pick is
+  the cable a drag on GRAPH makes, `bus:macro.N` → `base:<param>`
+  (`Edit.connect_value` → `subscribe`), under `connect`'s undo label; an
+  idle macro is labelled first (`Edit.show_macro`, as the canvas's picker
+  labels it) in the same step. A macro already setting the param is
+  checked and a click does nothing. Tests:
+  `tests/test_macros.py::test_a_new_base_subscriber_runs_from_where_the_param_sits_to_the_end_of_its_fader`,
+  `tests/test_graph_edit.py::test_route_from_lists_the_macros_on_a_param_a_base_subscriber_may_name`,
+  `…::test_route_from_a_macro_makes_the_base_subscriber_a_graph_cable_makes`.
+- **Other options.** The whole fader, 0 → 1, for every new base
+  subscriber (loses the designed value at the macro's 0); a `from`/`to`
+  that keeps the param still at the macro's current position (not
+  predictable); the macros listed flat among the voices; a "new macro"
+  item that takes the next idle knob (a performer wants a numbered knob,
+  the desk's).
+- **To reverse.** `routing.base_sub`; `ui_graph.route_from_items`
+  (`SECTIONS`), `route_from` (the `bus:` branch).
+- **Rough edge.** A macro that sits at 1 (its default) lands its new
+  subscriber's param at the fader's end on the next frame — the wiring
+  is visible at once, and the knob turned down brings the scene back. A
+  param at 0.98 gets a throw of 0.02 up: the ends are there to edit.
+- **Judge it.** Check 402.

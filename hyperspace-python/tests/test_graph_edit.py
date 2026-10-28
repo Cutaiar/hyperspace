@@ -181,13 +181,16 @@ def test_a_hand_into_a_base_port_is_refused_in_words_and_a_pad_is_a_setter_row(r
     _, view = edit(rig, leap())
     refs = [c.ref for c in cables(view, "setter")]
     assert any(x is knob for x in refs) and any(x is pad for x in refs)
-    # a macro: a base subscriber (it moves nothing as it lands) and a depth one
+    # a macro: a base subscriber (from where the param sits to the top of
+    # its fader, row 537 — the land itself moves nothing; the next
+    # `follow_macros` does) and a depth one
     route = e.connect("out:lane:3", f"mod:{free_param(rig).id}")
     e, view = edit(rig, leap())
     was = reg["view.bright"].base
     s = e.connect("bus:macro.2", "base:view.bright")
     assert s.base == "view.bright" and s in table.macros["macro.2"].subs
     assert reg["view.bright"].base == was
+    assert (s.lo, s.hi) == (pytest.approx(reg["view.bright"].norm), 1.0) and s.lo < s.hi
     d = e.connect(f"depth:{route.target}", "bus:macro.2")      # either end first
     assert d.depth == (route.source, route.target)
     assert e.connect("out:lane:1", f"depth:{route.target}") == graphview.ONLY_MACRO_DEPTH
@@ -1181,20 +1184,24 @@ def drawn_route_from(panel, p, monkeypatch, pick=None):
 
 
 VOICES = ["LFO 1", "LFO 2", "LFO 3", "LFO 4", "env 1", "env 2", "env 3", "env 4", "env 5"]
+MACROS = [f"macro {k}" for k in range(1, 9)]
 
 
 def test_route_from_lists_the_lfos_and_envelopes_on_a_modulatable_param(banks, rig,
                                                                          monkeypatch):
-    """On a modulatable param the submenu is every LFO, then every
-    envelope, by its bank's label, then new LFO / new envelope; a trigger
-    and a param no lane may drive have none. The shared param menu
-    (`Panel._ctx_learn`) draws it — on fx.glimmer.mix, between the Learn
-    items and Learn sink."""
+    """On a modulatable param the submenu is one submenu per kind (the
+    owner, 2026-10-28): LFO ▸ every LFO by its bank's label then new LFO,
+    envelope ▸ the envelopes then new envelope — and, where the rig has
+    macros, macro ▸ (`test_route_from_lists_the_macros…`); this rig has
+    none. A trigger and a param no lane may drive have none. The shared
+    param menu (`Panel._ctx_learn`) draws it — on fx.glimmer.mix, between
+    the Learn items and Learn sink."""
     panel, reg = banks.panel, banks.r.reg
     opened, items = drawn_route_from(panel, reg["t.x"], monkeypatch)
-    assert opened == [ui_graph.ROUTE_FROM]
-    assert [i[0] for i in items] == VOICES + ["new LFO", "new envelope"]
+    assert opened == [ui_graph.ROUTE_FROM, "LFO", "envelope"]
+    assert [i[0] for i in items] == VOICES[:4] + ["new LFO"] + VOICES[4:] + ["new envelope"]
     assert all(enabled and not checked for _, checked, enabled in items)
+    assert list(ui_graph.route_from_items(panel, reg["t.x"])) == ["lfo", "env"]
     assert ui_graph.route_from_items(panel, reg["t.hit"]) is None          # a trigger
     reg.continuous("t.fixed", "fixed", lambda: 0.0, lambda v: None, group="view",
                    modulatable=False)
@@ -1225,8 +1232,80 @@ def test_route_from_lists_the_lfos_and_envelopes_on_a_modulatable_param(banks, r
     imgui.end_frame()
     monkeypatch.undo()
     assert seen == ["fx.glimmer.mix", "view.bmp_alpha"]
-    assert ui_graph.route_from_items(p, rig.reg["view.bmp_alpha"]) is None
-    assert [i[0] for i in ui_graph.route_from_items(p, g)][:4] == VOICES[:4]
+    assert ui_graph.route_from_items(p, rig.reg["view.bmp_alpha"]) is None   # an alias
+    sections = ui_graph.route_from_items(p, g)
+    assert list(sections) == ["lfo", "env", "macro"]
+    assert [i[0] for i in sections["lfo"]][:4] == VOICES[:4]
+    assert [i[0] for i in sections["macro"]] == MACROS
+
+
+def test_route_from_lists_the_macros_on_a_param_a_base_subscriber_may_name(rig, monkeypatch):
+    """macro ▸ (the owner, 2026-10-28: the Route from menu "should
+    probably include the macros as well"): the rig's eight knobs by label
+    (`macro_label`: ROUTING's label, else "macro 3"), one already setting
+    the param checked — on a persisted performance param, modulatable or
+    not (a base subscriber is no route), never on a macro or a session
+    param (`routing.base_refusal`, plan 13 D9)."""
+    from hyperspace.routing import Macro, Sub
+
+    panel, reg, table = rig.panel, rig.reg, rig.router.table
+    table.macros["macro.3"] = Macro("Test", [Sub(base="view.bright", lo=0.2, hi=1.0)])
+    opened, items = drawn_route_from(panel, reg["view.bright"], monkeypatch)
+    assert opened == [ui_graph.ROUTE_FROM, "LFO", "envelope", "macro"]
+    macros = items[-8:]
+    assert [m[0] for m in macros] == MACROS[:2] + ["Test"] + MACROS[3:]
+    assert [m[0] for m in macros if m[1]] == ["Test"]                     # checked
+    # a param no lane may drive still takes a macro: only macro ▸
+    fixed = reg.continuous("view.t_fixed", "fixed", lambda: 0.0, lambda v: None,
+                           group="view", modulatable=False)
+    assert list(ui_graph.route_from_items(panel, fixed)) == ["macro"]
+    assert drawn_route_from(panel, fixed, monkeypatch)[0] == [ui_graph.ROUTE_FROM, "macro"]
+    # never on a macro, nor on a session param (the BPM)
+    assert "macro" not in (ui_graph.route_from_items(panel, reg["macro.1"]) or {})
+    assert "macro" not in (ui_graph.route_from_items(panel, reg["tempo.bpm"]) or {})
+
+
+def test_route_from_a_macro_makes_the_base_subscriber_a_graph_cable_makes(rig, monkeypatch):
+    """A macro picked: the cable from its bus into the param's base stub
+    (`Edit.connect_value` → `subscribe`) — a base subscriber from where
+    the param sits to the top of its fader (row 537), the idle macro
+    labelled "macro 2" as the canvas's picker labels it, in one undo step;
+    then the macro's knob moves the param (`Router.follow_macros`) — the
+    owner's "Tracer Macro Test" symptom, where from = to moved nothing.
+    A second pick is checked and does nothing."""
+    from hyperspace import undo
+
+    panel, reg, table, router = rig.panel, rig.reg, rig.router.table, rig.router
+    u = undo.Undo(reg, table)
+    undo.install(u)
+    try:
+        p = reg["view.bright"]
+        p.set_norm(0.4)
+        assert "macro.2" not in table.macros
+        drawn_route_from(panel, p, monkeypatch, pick="macro 2")
+        m = table.macros["macro.2"]
+        assert m.label == "macro 2" and len(m.subs) == 1
+        s = m.subs[0]
+        assert (s.base, s.lo, s.hi) == ("view.bright", pytest.approx(0.4), 1.0)
+        # the knob has a throw from the day it lands
+        knob = reg["macro.2"]
+        for v, at in ((0.0, 0.4), (0.5, 0.7), (1.0, 1.0)):
+            knob.set_norm(v)
+            router.follow_macros()
+            reg.apply()
+            assert p.norm == pytest.approx(at), v
+        # checked now: a click does nothing
+        _, items = drawn_route_from(panel, p, monkeypatch, pick="macro 2")
+        assert ("macro 2", True, True) in items and len(table.macros["macro.2"].subs) == 1
+        # one step takes the label and the subscriber back
+        t = 1.0
+        for _ in range(3):
+            u.tick(t)
+            t += 1.0
+        assert u.undo() and u.status.endswith("connect macro.2 → view.bright")
+        assert table.macros.get("macro.2") is None or table.macros["macro.2"].empty
+    finally:
+        undo.install(None)
 
 
 def test_route_from_an_lfo_makes_the_route_a_graph_cable_makes(banks, monkeypatch):

@@ -29,6 +29,32 @@ def frame(router, reg):
     reg.apply()
 
 
+def test_a_new_base_subscriber_runs_from_where_the_param_sits_to_the_end_of_its_fader():
+    """Row 537 (the owner, 2026-10-28: "by default when you wire up a
+    macro, the From and To parameters start at the same value so there's
+    actually no range of motion"): `routing.base_sub` — what a macro's
+    cable on GRAPH and ROUTING's "+ base" both add — runs from the param's
+    fader position to 1, or to 0 when it already sits at 1; never
+    from = to. On the knob the param moves at once."""
+    r = rig()
+    reg = r.reg
+    router = Router(reg, Bindings())
+    bright, speed, m = reg["view.bright"], reg["view.speed"], reg["macro.1"]
+    bright.set_norm(0.3)
+    speed.set_norm(1.0)
+    subs = [routing.base_sub(bright), routing.base_sub(speed)]
+    assert (subs[0].base, subs[0].lo, subs[0].hi) == ("view.bright", pytest.approx(0.3), 1.0)
+    assert (subs[1].base, subs[1].lo, subs[1].hi) == ("view.speed", 1.0, 0.0)
+    assert all(s.lo != s.hi for s in subs)
+    router.table.macros["macro.1"] = routing.Macro("Test", subs)
+    router.table.macros_serial += 1
+    for v in (0.0, 0.5, 1.0):
+        m.set_norm(v)
+        frame(router, reg)
+        assert bright.norm == pytest.approx(0.3 + 0.7 * v, abs=1e-9)
+        assert speed.norm == pytest.approx(1.0 - v, abs=1e-9)
+
+
 def test_base_subscribers_of_opposite_polarity_move_opposite_ways():
     r = rig()
     reg = r.reg

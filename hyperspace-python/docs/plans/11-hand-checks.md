@@ -6112,6 +6112,47 @@ are gone, row 523). (3) the first copy keeps the bare names
 `host.names`); a kept row gone after the reload (`preset.group_entry`
 not writing `kept_by_host`).
 
+## AL. The macro's throw, and Route from ▸ by kind
+
+The owner, 2026-10-28 (decision register row 537): a base subscriber a
+macro's cable makes now runs from where the param sits to its fader's
+end, where before both ends sat on the param and the knob moved nothing;
+and the param menu's **Route from ▸** is one submenu per kind — **LFO ▸**,
+**envelope ▸**, **macro ▸** — so a macro can be put on a param without
+the canvas.
+
+**402. A macro wired from the menu moves the param.** (laptop, GRAPH)
+Headless: `tests/test_graph_edit.py::test_route_from_a_macro_makes_the_base_subscriber_a_graph_cable_makes`;
+`tests/test_macros.py::test_a_new_base_subscriber_runs_from_where_the_param_sits_to_the_end_of_its_fader`.
+1. Load **Tracer Macro Test** (or any preset) and open GRAPH. Open the
+   shape's panel, right-click the 4D depth slider → **Route from ▸**.
+2. Open each submenu in turn: **LFO ▸**, **envelope ▸**, **macro ▸**.
+   Pick **macro 2** (an unused knob).
+3. Open the macro 2 node and turn its knob from 0 to 1 and back. Then on
+   ROUTING find macro 2's subscriber line.
+4. Right-click the 4D depth slider → **Route from ▸ macro ▸** again. Then
+   ⌘Z twice.
+5. Right-click a param no lane may drive — the look-back's **gap**
+   slider (`dream.gap`, one of the owner's own targets in Tracer Macro
+   Test) → **Route from ▸**; and a session param (the BPM on the audio
+   page).
+
+*Pass:* (1) three entries, each with ▸, nothing else under Route from.
+(2) LFO ▸ lists the LFOs then "new LFO"; envelope ▸ the envelopes then
+"new envelope"; macro ▸ the eight knobs, the owner's `test` by its label,
+the rest "macro N". The pick lands a cable from macro 2's bus into the
+slider's base stub; the node is titled "macro 2". (3) the depth slider
+follows the knob — the scene's value at 0, the top of the fader at 1 —
+and the line reads `from <where it sat> to 1.00`. (4) macro 2 is
+checked; a click does nothing; the first ⌘Z takes the cable and the
+label back together, the second whatever came before. (5) only
+**macro ▸** for the first; no Route from at all for the BPM.
+*Fail:* a flat list under Route from (`route_from_menu` not opening
+`SECTIONS`); `from` and `to` equal on the new line (`Edit.subscribe` not
+on `routing.base_sub`); the knob moving nothing (`follow_macros` not
+re-landing: `macros_serial` not bumped); macro ▸ offered on the BPM
+(`base_refusal` not asked).
+
 ## What no test covers
 
 Only a person can settle these:
