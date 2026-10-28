@@ -134,21 +134,24 @@ void main() {
 """
 
 # picture + mask → picture (W3, T3's `cut`): the mask sampled bilinearly at
-# the picture's size; where it passes the picture, elsewhere the picture ×
-# (1 − amount) — 1 cuts to transparent black, 0.5 dims; `u_invert` keeps the
-# hole and cuts the rest. Premultiplied in and out, so colour and alpha go
-# together
+# the picture's size, fitted by cover (`u_scale`, `cover_scale` of the mask
+# into the picture: where the promoted picture shows it); where it passes
+# the picture, elsewhere the picture × (1 − amount) — 1 cuts to transparent
+# black, 0.5 dims; `u_invert` keeps the hole and cuts the rest.
+# Premultiplied in and out, so colour and alpha go together
 CUT_FS = """
 #version 330
 in vec2 v_uv;
 uniform sampler2D u_src;
 uniform sampler2D u_mask;
+uniform vec2 u_scale;
 uniform int u_invert;
 uniform float u_amount;
 out vec4 f_color;
 void main() {
     vec2 half_texel = 0.5 / vec2(textureSize(u_mask, 0));
-    float m = texture(u_mask, clamp(v_uv, half_texel, 1.0 - half_texel)).r;
+    vec2 uv = clamp(0.5 + (v_uv - 0.5) * u_scale, half_texel, 1.0 - half_texel);
+    float m = texture(u_mask, uv).r;
     if (u_invert != 0) m = 1.0 - m;
     f_color = texture(u_src, v_uv) * mix(1.0, m, clamp(u_amount, 0.0, 1.0));
 }
@@ -258,7 +261,23 @@ class MaskPasses:
             *, invert: bool = False, amount: float = 1.0) -> None:
         """Picture `src` cut by `mask` into `dst`'s viewport (W3, `CUT_FS`):
         what passes stays, the rest goes to transparent black by `amount`.
-        The `cut` node (plan 39 T3) is its caller."""
+        The mask is fitted into the picture (`dst`'s viewport) by cover, as
+        the promotion fits it. The `cut` node (plan 39 T3) is its caller."""
         rect = tuple(int(v) for v in dst.viewport)
         self._run("cut", dst, rect, (src, mask), u_src=0, u_mask=1,
+                  u_scale=cover_scale(mask.size, rect[2:]),
                   u_invert=int(bool(invert)), u_amount=float(amount))
+
+    def fit(self, mask: moderngl.Texture, key, size: tuple[int, int]) -> moderngl.Texture:
+        """Mask `mask` refitted by cover to `size`, one channel (`PROMOTE_FS`
+        into an R8 target: its red is the mask), kept under frame key `key` —
+        what a mask port that reads the frame's pixels 1:1 binds
+        (`lookback.cover`), so the mask lands where its promoted picture
+        shows it. Returns `mask` itself when it is that size already."""
+        size = (int(size[0]), int(size[1]))
+        if tuple(mask.size) == size:
+            return mask
+        out, fbo = self.frame_target(key, size, components=1)
+        fbo.viewport = (0, 0, *size)
+        self.promote(mask, fbo)
+        return out

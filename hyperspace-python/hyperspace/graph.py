@@ -4580,9 +4580,13 @@ class MatteNode(Node):
             return tuple(own) if own is not None else tuple(frame.root.size)
         return super().size_for(port, frame)
 
-    # (no `own_size`: the mask is at its input's size — `size_for` — but no
-    # consumer fits it by `OWN_FIT`: a mask port binds it as it is, and a
-    # picture port reads it through `MaskPicture`, at the consumer's size)
+    def own_size(self, frame: Frame) -> tuple[int, int] | None:
+        """Its input's own size (W2's "own size: its input's"), passed
+        through as an effect's is — None when the input has none (the mask
+        is then at the frame's size). A mask port is handed it refitted to
+        the frame (`image`), a picture port promoted (`MaskPicture`)."""
+        src = self.inputs["image"]
+        return src.own_size(frame) if src is not None else None
 
     def reads(self, frame: Frame) -> bool:
         src = self.inputs["image"]
@@ -4617,9 +4621,24 @@ class MatteNode(Node):
         root.data[key] = out
         return out
 
-    def image(self, frame: Frame) -> moderngl.Texture | None:
-        """Its mask (the `MASK` contract: one channel, at its own size)."""
+    def native(self, frame: Frame) -> moderngl.Texture | None:
+        """The mask at its own size, as made: what the promotion (and T3's
+        cut) fits by cover themselves."""
         return self.made(frame)
+
+    def image(self, frame: Frame) -> moderngl.Texture | None:
+        """Its mask as a mask port binds it (the `MASK` contract: one
+        channel at the frame's size — `lookback.cover` fetches it 1:1 by
+        the frame's pixel): the mask itself when it is that size, else
+        refitted by cover once a frame into `<name>#fit` (one R8 pass,
+        `MaskPasses.fit`), so it lands where its promoted picture shows it."""
+        tex = self.made(frame)
+        if tex is None or tuple(tex.size) == tuple(frame.size):
+            return tex
+        key = self.name + "#fit"
+        if key not in frame.data:
+            frame.data[key] = frame.r.mask_passes().fit(tex, frame.key(key), frame.size)
+        return frame.data[key]
 
     def run(self, frame: Frame) -> None:
         """What it says (GRAPH's summary)."""
@@ -4665,7 +4684,10 @@ class MaskPicture(Node):
 
     def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
         m = self.inputs["mask"]
-        tex = m.image(frame) if m is not None else None
+        # (the mask at its own size where its maker keeps one — `native` —
+        # fitted by cover here, once, never refitted twice)
+        native = getattr(m, "native", None)
+        tex = (native(frame) if native is not None else m.image(frame)) if m is not None else None
         if tex is not None:
             frame.r.mask_passes().promote(tex, dst)
             return

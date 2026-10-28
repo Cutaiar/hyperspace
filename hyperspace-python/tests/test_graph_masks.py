@@ -511,6 +511,47 @@ def test_a_matte_into_the_look_back_cover_draws(ctx):
     assert r._graph.nodes["lookback"].inputs["cover"] is r._graph.nodes["matte"]
 
 
+def test_an_own_sized_mask_lands_on_the_cover_where_its_picture_shows_it(ctx):
+    """Review fix (Important 1): `lookback.cover` fetches its mask 1:1 by the
+    frame's pixel, so a matte of a 64×36 resize is handed to it refitted by
+    cover to the 160×90 frame (`MatteNode.image`, `MaskPasses.fit`): the
+    cover the look-back binds equals the promoted picture on output 1, pixel
+    for pixel, and the native mask stays 64×36."""
+    px = _rgba(160, 90, (20, 20, 20))
+    px[:30, 100:, :3] = 230                  # bright in the top right only
+    pairs = [("channel.a", "resize.image"), ("resize", "matte.image"),
+             ("matte", "lookback.cover"), ("scene", "lookback.image"),
+             ("lookback", "output.2.image"), ("matte", "output.1.image")]
+    r = _renderer(ctx, _media(a=Still(px)), pairs, (MATTE, RESIZE))
+    seen = []
+    from hyperspace import lookback as L
+
+    real = L.Lookback.trail
+
+    def spy(self, target, cover=None, *a, **k):
+        if cover is not None:
+            w, h = cover.size
+            seen.append((cover.size, cover.components,
+                         np.frombuffer(cover.read(), np.uint8).reshape(h, w)[::-1].astype(int)))
+        return real(self, target, cover, *a, **k)
+
+    L.Lookback.trail = spy
+    try:
+        size = (160, 90)
+        vs = [View(Switches(), size, target=_fbo(ctx, *size)) for _ in range(2)]
+        r.draw_outputs(_s(resize=ResizeState(size=2)), *size, 1.0, vs, t_now=2.0)
+        assert ctx.error == "GL_NO_ERROR"
+    finally:
+        L.Lookback.trail = real
+    assert _mask(r).size == (64, 36)
+    assert seen, "the look-back bound no cover"
+    got_size, comps, cover = seen[-1]
+    assert got_size == size and comps == 1
+    shown = _px(vs[0].target)[..., 0]
+    assert np.abs(cover - shown).max() <= 1
+    assert cover[10, 150] == 255 and cover[80, 10] == 0 and cover[10, 10] == 0
+
+
 def test_the_cut_pass_cuts(ctx):
     """`CUT_FS` (T3's `cut` is its caller): where the mask passes the
     picture, elsewhere transparent black at amount 1, half at 0.5; invert
@@ -531,3 +572,36 @@ def test_the_cut_pass_cuts(ctx):
         got = np.frombuffer(out.read(), np.uint8).reshape(4, 4)
         assert np.allclose(got[:, 3], want, atol=1), (invert, amount, got)
         assert np.allclose(got[:, 0], np.array(want) * 200 / 255, atol=2), got
+
+
+def test_the_cut_pass_fits_its_mask_by_cover(ctx):
+    """Review fix: CUT_FS fits the mask into the picture by cover, as the
+    promotion does — a 16×4 mask passing its right quarter, over an 8×8
+    picture, has that quarter cropped off (all cut); stretched, the last two
+    columns would stay."""
+    from hyperspace.render import Renderer
+
+    passes = Renderer(ctx).mask_passes()
+    src = ctx.texture((8, 8), 4, data=bytes([255, 255, 255, 255] * 64))
+    m = np.zeros((4, 16), np.uint8)
+    m[:, 12:] = 255
+    mask = ctx.texture((16, 4), 1, data=m.tobytes())
+    out = ctx.texture((8, 8), 4)
+    fbo = ctx.framebuffer(color_attachments=[out])
+    fbo.viewport = (0, 0, 8, 8)
+    passes.cut(src, mask, fbo)
+    alpha = np.frombuffer(out.read(), np.uint8).reshape(8, 8, 4)[..., 3]
+    assert (alpha == 0).all(), alpha
+
+
+def test_a_reload_drops_the_mask_passes(ctx):
+    """Review fix (Important 2): `Renderer.on_reload` releases the cached
+    `MaskPasses`, so the next ask compiles `masks.py` as it is now."""
+    from hyperspace.render import Renderer
+
+    r = Renderer(ctx)
+    first = r.mask_passes()
+    assert r.mask_passes() is first
+    r.on_reload()
+    assert "_mask_passes" not in r.__dict__ and first._progs == {}
+    assert r.mask_passes() is not first

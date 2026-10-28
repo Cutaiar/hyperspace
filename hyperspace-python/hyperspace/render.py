@@ -1205,6 +1205,11 @@ class Renderer:
                 res.release()
         self._dim_prog = self._dim_vao = None
         self.dim_error = ""
+        # plan 39 T2: the mask passes, likewise — compiled again from
+        # masks.py as it is now on the next ask (`mask_passes`)
+        mp = self.__dict__.pop("_mask_passes", None)
+        if mp is not None:
+            mp.release()
         # plan 21's frame textures and the program that shows them: dropped,
         # made again from this module's source on next use. getattr: a
         # renderer from before the outputs existed has none of them
