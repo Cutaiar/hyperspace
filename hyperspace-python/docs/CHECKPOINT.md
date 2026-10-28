@@ -19,14 +19,16 @@ and a projector. It is one Python process in `hyperspace-python/`.
   - [`ENGINEERING.md`](ENGINEERING.md): how each part behaves.
   - [`DECISIONS.md`](DECISIONS.md): the decisions in force, and what was
     decided not to build.
-  - [`DECISION-REGISTER.md`](DECISION-REGISTER.md): rows 34–310 (bar
+  - [`DECISION-REGISTER.md`](DECISION-REGISTER.md): rows 34–536 (bar
     109), built on a recommendation and waiting for the owner's keep or
-    overturn; row 109 records the owner's plan 25 answers.
+    overturn; row 109 records the owner's plan 25 answers, and some later
+    rows are the owner's own answers before a build (plan 40's 501–510
+    among them).
   - [`AUDIT-2026-09.md`](AUDIT-2026-09.md): the open defects.
   - [`TESTING-GUIDE.md`](TESTING-GUIDE.md): everything a person still has
     to test, in plain words, by hardware.
   - [`plans/11-hand-checks.md`](plans/11-hand-checks.md): the same checks,
-    numbered 1–276, with the automated test behind each.
+    numbered 1–401, with the automated test behind each.
   - [`plans/`](plans/README.md) `15-…` to `30-…`: what each plan built
     (plan 23 in part); plan 22 also has a ranked shortlist of new
     4-polytopes and macro candidates to audition; `24-party-wishlist.md`
@@ -113,6 +115,33 @@ backdrop frames plan 39 re-recorded. `uv sync` on both Macs
 preset with `segment`, `matte` or `cut` is shared**: an older build reads
 such a section as black. No preset was edited or added.
 
+**Plan 40, patches, is built** on `plan-40-build`
+([`plans/40-patches.md`](plans/40-patches.md), every decision D1–D10 the
+owner's, 2026-10-27), cut from the plans 37–39 integration branch with
+`main` (PRs #270, #275) merged in; it goes to `main` in one final PR the
+owner merges. A **patch** is a group of GRAPH nodes saved with its
+boundary — the cables that cross its edge, a knob or a hand axis kept as
+the address it is, the scene in and the outputs out kept as typed ports
+with the name they were on — as `<library>/patches/<slug>.json`
+(`hyperspace.patch/1`, `patches.py`). **Group** folds selected nodes into
+one node on GRAPH (`+` opens it in place, a tinted region), saved in the
+preset's `groups` (`/8`): a fold of the canvas the renderer never sees,
+and the one sanctioned exception to "no hidden edges". **save as patch…**
+writes the file; the **patches** chip and **spawn ▸** land one in any
+preset under fresh ids as one undo step through the existing doors, its
+host ports open pins, or spliced in when dropped on a picture cable; a
+knob or hand that collides is asked in one sheet, every row starting on
+the patch. The devices the loaded preset wants and the rig lacks are said
+on the group, as **N devices missing** on GRAPH's head and the PRESET
+strip, and on SYSTEM; a device coming back is said in the footer. The fx
+module presets are retired outright (the FX page stays, less its module
+strip); `patch.py` is `modgraph.py`. Plan 38's PROJECTOR inset, which
+never drew on `main` (an `add_rect` TypeError), is fixed on the same
+branch. At e0675a6 the fast tier is 4320 passed, 2 skipped, the full suite
+4551 passed, 2 skipped, and the goldens 144 passed (8 new grouped-twin
+proofs), none moved. No preset was edited or added; Dylan's files are
+untouched.
+
 ## What is left
 
 - **Plan 37: the owner's list of face patterns** (register row 417, D1).
@@ -132,16 +161,24 @@ such a section as black. No preset was edited or added.
   (377–383: the hold on the rig with the projector up, take, drop, the
   desk buttons, the preview's cost) and AJ (384–393: the camera, a
   dancer, the party light, two cameras, an unplugged camera, and the
-  honest cut-through by eye).
+  honest cut-through by eye). Plan 40 adds group AK (394–401: group and
+  ungroup, save and spawn, splice, the conflict sheet with the APC40, the
+  desk unplugged and plugged back, a rig without a Leap, the fx module
+  presets gone, a patch twice).
 - **The owner's keep or overturn** on register rows 34–310 (the answer
   sheet at the top of [`DECISION-REGISTER.md`](DECISION-REGISTER.md)),
   plans 30 and 28's being rows 214–310 (N7's 278–290, N8's 291–298, N9's
   299–310); and on rows 417–500, plans 37, 38 and 39's: plan 37's
   417–429 and 460 (D1, 417, still open), plan 38's 430–439 (its D1–D5
   are 430–434, taken as recommended) and 461–470, plan 39's 440–459 and
-  471–497 (440–447 the owner's own), and the integrator's 498–500.
+  471–497 (440–447 the owner's own), and the integrator's 498–500; and
+  plan 40's 501–536 (501–510 its D1–D10, the owner's own; **521 and 524
+  pending the owner**: whether a preset with no group also saves as `/8`,
+  per row 394, and whether **wire as saved** gets a take-over chip).
 - **Both Macs on this build before sharing presets**: an older build
-  drops a preset's modifiers and positions when it saves (row 277).
+  drops a preset's modifiers and positions when it saves (row 277), and
+  refuses a preset with a GRAPH group outright (plan 40's `groups` key,
+  `hyperspace.preset/8`).
 - **The owner's creative pass** on the new mechanisms, which no factory
   preset uses yet: fader sets for S1–S8, hand mappings (the dance sources,
   the grab), dance presets, palettes and where they sit, modifier

@@ -8,7 +8,10 @@ recommendation where the two differ (D3, D4, D6, D10).
 
 Branch `plan-40-build`, cut from **`plan-37-38-39-integration` @ 2b185ea
 or later** (plan 38 and plan 39 T0–T4 are on it; `main` @ f984d3b, with
-PR #266's resizable side pane, is under it). Each task in its own
+PR #266's resizable side pane, is under it — corrected in the build: it
+was not, `git merge-base --is-ancestor` said no; it came in with the plan
+40 docs merge, f10f281, cut from f984d3b, so the build branch held it as
+assumed). Each task in its own
 worktree off `plan-40-build` (`plan-40-t<n>`), merged into it when green;
 the final PR is `plan-40-build` → `main`, the owner merges. Work in
 `hyperspace-python/`. Tests: `uv run pytest -q …` from there (the fast
@@ -350,6 +353,16 @@ the conflicts asked first and nothing attached by itself.
    while the sheet is up; a second spawn of the same patch makes `.3` ids
    and a second group; the PRESETS fold lists patches and hides one; no
    file but the patch's is written by any of it (`tmp_path` diffed).
+   (Corrected in the build: `party-trip` holds no `acid`, `wobble`,
+   `delay` or `warp` — its run is `scene → plasma → kaleido → zoomblur →
+   huecycle → All outputs` — so a first spawn keeps `acid`, `wobble`,
+   `delay`, `mod.1` by the instance rule and the second takes `.2` /
+   `mod.2` / `group.2`; the splice is on `scene → plasma.image`, the run
+   then `scene → acid → wobble → delay → plasma` (`run_of(spec, "scene",
+   "delay.image") == ("acid", "wobble")`, a delay ending an effects run);
+   "the hand row" is `mod.1`'s input, no route; **wire as saved** lands
+   `scene → acid.image` and refuses `output.all.image` while huecycle
+   feeds it. The tests assert these.)
 
 ## Task 4: what the preset wants, and the arrival (spec P4)
 

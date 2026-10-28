@@ -108,3 +108,17 @@ reverses it.
     ids by the instance rule, the second spawn proves `.2`, and the splice
     proof is on `scene → plasma.image`; the hand reaches the patch through
     `mod.1`'s input. T6 corrects the build plan's examples in "as built".
+20. **Save as patch… refuses any existing slug, a factory patch's too**
+    (fix 4 went further than the finding): a factory patch is shadowed by
+    a user file of the same slug "like any group", but a save that
+    shadows one by accident is a surprise; the owner renames instead.
+    *Reverse:* one condition.
+21. **The grouped-twin signature proof over the 16 `NO_RUN` presets groups
+    every node a group may hold** (fix 12): none of the 16 has an effect
+    node, so "group every effect" proves nothing there; the wider rule
+    proves `party-tracer` and `party-wake` and shows the other 14 hold
+    only the frame's own nodes. *Reverse:* none needed.
+22. **The plan 38 `_monitor` fix rides on plan 40's PR** (fix 15, commit
+    86795d5): one line, on `main` since #270, the PROJECTOR inset never
+    drew; a stub-texture test now reaches the call. Said in the PR body.
+    *Reverse:* cherry-pick it to `main` alone if the owner wants it sooner.

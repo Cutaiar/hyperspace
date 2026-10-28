@@ -5,7 +5,7 @@ Each gives the steps, what passes, what fails and where in the code a
 failure points, and the headless tests that show what "right" looks
 like. [`../TESTING-GUIDE.md`](../TESTING-GUIDE.md) is the plain-language
 version, ordered by device, and the place to start; it cites these
-numbers. They run 1–393 (group AD (332–341) is plan 34's, feedback, on `plan-34-feedback` (PR #236), and runs with group AE); group Y (232–266, 272–276) is plan 28's (261–266 its N7,
+numbers. They run 1–401 (group AD (332–341) is plan 34's, feedback, on `plan-34-feedback` (PR #236), and runs with group AE); group Y (232–266, 272–276) is plan 28's (261–266 its N7,
 272–276 its N9), 267–271, plan 30's N8 (the palette as compression), are at
 the end of group X, and group Z (277–295) is two parts: 277–279 the
 instanced field from `main`, renumbered from its 144–146 when main was
@@ -13,7 +13,7 @@ merged in, and 280–295 plan 31's (286–295 the APC40 page, on
 `plan-31-a1`); group AA (296–316) is plan 32's, and 317 the two plans
 together; group AC (318–331) is plan 33's, the free graph, on
 `plan-33-free-graph`; group AE (342–352) is plan 35's, the free frame,
-on `plan-34-feedback` (PR #236). Past 352: check 353 (group AF) is row 394's, group AG (354–369) is plan 36's, the WYSIWYG graph, and groups AH (370–376), AI (377–383) and AJ (384–393) are plans 37's (nodes as pictures, and the faces), 38's (hold the projector) and 39's (vision), run together and integrated on `plan-37-38-39-integration`.
+on `plan-34-feedback` (PR #236). Past 352: check 353 (group AF) is row 394's, group AG (354–369) is plan 36's, the WYSIWYG graph, and groups AH (370–376), AI (377–383) and AJ (384–393) are plans 37's (nodes as pictures, and the faces), 38's (hold the projector) and 39's (vision), run together and integrated on `plan-37-38-39-integration`. Group AK (394–401) is plan 40's, patches, on `plan-40-build`.
 
 ## Before you start
 
@@ -3358,7 +3358,7 @@ right-click the param → Route a lane here…, which opens GRAPH. ROUTING's
 desk, macros, session and sinks are as the checks say.
 
 **232. The lag is gone on a real LFO-on-LFO patch.**
-Headless: `tests/test_lfo.py::test_an_lfo_owning_another_lfos_depth_changes_its_output_the_same_frame`, `tests/test_routing.py::{test_every_factory_preset_lands_the_same_values_one_frame_earlier,test_a_macro_owned_by_a_hand_scales_a_lanes_push_the_same_frame}`, `tests/test_patch.py::test_a_param_the_pass_lands_is_applied_once_a_frame`.
+Headless: `tests/test_lfo.py::test_an_lfo_owning_another_lfos_depth_changes_its_output_the_same_frame`, `tests/test_routing.py::{test_every_factory_preset_lands_the_same_values_one_frame_earlier,test_a_macro_owned_by_a_hand_scales_a_lanes_push_the_same_frame}`, `tests/test_modgraph.py::test_a_param_the_pass_lands_is_applied_once_a_frame`.
 TRIP (F5); LFO page. Set LFO 2's depth to 0.5; on GRAPH drop *LFO 1*'s
 out stub on *LFO 2*'s in stub and pick its depth · mod, then click the
 wire and set the row's op to push. Watch LFO 2's scope, then SYSTEM's frame
@@ -3372,7 +3372,7 @@ mark; an LFO stepped twice: `use_lfos` and `app.frame` both stepping);
 it sticks after the hand leaves.
 
 **233. A loop is refused in words; the rest of the preset runs.**
-Headless: `tests/test_routing.py::test_a_cycle_without_a_delay_disables_its_last_cable_with_a_note`, `tests/test_patch.py::test_a_loop_of_modifiers_alone_keeps_its_last_input_off_with_a_note`.
+Headless: `tests/test_routing.py::test_a_cycle_without_a_delay_disables_its_last_cable_with_a_note`, `tests/test_modgraph.py::test_a_loop_of_modifiers_alone_keeps_its_last_input_off_with_a_note`.
 Any preset; GRAPH: drop *LFO 1*'s out stub on *LFO 2* and pick its rate
 · mod, then *LFO 2*'s out stub on *LFO 1* and pick its depth · mod (each
 row's op push, from its wire). Open ROUTING for its head; back on GRAPH
@@ -3387,7 +3387,7 @@ stutters (a loop run every frame); a row removed or switched off in the
 file.
 
 **234. A delay closes a loop.**
-Headless: `tests/test_patch.py::{test_cycles_finds_every_loop_and_none_through_a_delay,test_a_loop_through_a_delay_runs_exactly_one_frame_late}`, `tests/test_modifiers.py::test_delay_is_one_frame_late`.
+Headless: `tests/test_modgraph.py::{test_cycles_finds_every_loop_and_none_through_a_delay,test_a_loop_through_a_delay_runs_exactly_one_frame_late}`, `tests/test_modifiers.py::test_delay_is_one_frame_late`.
 GRAPH: right-click → modifier ▸ **delay**, input `LFO 1` in its editor;
 drop its out stub on *LFO 1*'s in stub and pick depth · mod (op push in
 the wire's row): LFO 1 riding its own depth one frame late.
@@ -5342,7 +5342,11 @@ Headless: `tests/test_hold.py::test_on_gl_the_program_draws_the_held_wiring_whil
 `::test_on_gl_a_blank_graph_landed_while_held_leaves_the_projector_whole`,
 `::test_a_landing_while_held_keeps_the_programs_effects_switches_and_resizes`,
 `::test_the_program_draws_the_held_look_and_the_live_one_comes_back`,
-`::test_held_the_outputs_draw_the_program_and_the_preview_follows`.
+`::test_held_the_outputs_draw_the_program_and_the_preview_follows`,
+`::test_the_projector_inset_draws_framed_while_held` (plan 40's run fixed
+the inset's `add_rect` call, which raised a TypeError the first time the
+inset drew: on any build before that fix the inset is missing and the log
+says `TypeError: add_rect()`; register row 536).
 1. Load a moving look that has an effect and a switch (`party-trip`).
 2. Press **hold**, the first chip on GRAPH's head.
 3. Press **new** on the PRESET strip.
@@ -5783,6 +5787,330 @@ own opacity over the backdrop, not washed toward white.
 *Fail:* the faces wash out toward white, or brighten with the switch on:
 the cut-through blend is being taken for a zero ground again
 (`render.draw_scene`'s blend choice: row 448).
+
+## AK. Plan 40: patches
+
+Plan 40 as built is [`40-patches.md`](40-patches.md): select nodes on GRAPH
+and **Group** them into one folded node whose pins are the cables crossing
+its edge (`+` opens it in place, a tinted region); **save as patch…** writes
+the group and its boundary to `<library>/patches/<slug>.json`; the
+**patches** chip on GRAPH's head (and the canvas's right-click **spawn ▸**)
+lands one in any preset under fresh ids as one undo step, its host ports
+open pins, or spliced in when dropped on a picture cable; a knob or hand
+that collides with the preset is asked in one sheet; the preset's wanted
+devices that the rig lacks are said on the group, on GRAPH's head, on the
+PRESET strip and on SYSTEM, and a device's arrival in the footer. The fx
+module presets are gone; the FX page stays. On `plan-40-build`. Run on the
+copy (`export HYPERSPACE_HOME=~/Hyperspace-try`) **with `[library] path`
+commented out in the copy's `config.toml`**, so a saved patch lands in
+`~/Hyperspace-try/patches/` and never on the Drive. A preset with a group is
+`hyperspace.preset/8`: an older build refuses it, so both Macs run this
+build before such a preset is shared. Register rows 501–536. None of these
+has been run by a person; the headless tests are mostly in
+`tests/test_graph_groups.py`, `tests/test_patches.py` and
+`tests/test_device_wants.py`.
+
+**394. Group and ungroup.** (laptop, GRAPH; the APC40 for step 2; the copy)
+Headless: `tests/test_graph_groups.py::test_group_from_a_selection_refuses_scene_and_keeps_the_rest`,
+`::test_the_right_click_menus_offer_group_with_two_nodes_selected`,
+`::test_a_folded_group_hides_its_members_and_inside_cables_and_reends_the_rest`,
+`::test_a_grouped_preset_builds_the_graph_of_its_ungrouped_twin`,
+`::test_rename_open_and_fold_are_each_one_step`,
+`::test_a_drag_of_the_title_moves_every_member_in_one_step`,
+`::test_a_drag_of_the_folded_node_moves_every_member`,
+`::test_a_member_dragged_out_leaves_the_group`,
+`::test_two_members_dragged_out_together_leave_in_one_step`,
+`::test_a_box_select_across_an_open_group_leaves_its_title_out_of_group`,
+`::test_signature_changes_when_a_group_is_made_and_a_save_drops_a_deleted_member`,
+`::test_a_drop_on_a_folded_groups_stub_is_refused_in_words`,
+`::test_ungroup_leaves_every_node_and_cable_where_it_was`,
+`::test_a_group_made_then_undone_is_gone_and_the_signature_is_back`,
+`::test_the_schema_is_eight_and_the_key_absent_is_no_groups`;
+`tests/test_golden_frames.py::test_every_preset_with_its_main_run_grouped_draws_its_goldens`
+(`--all`).
+1. Load `party-noita` and open GRAPH. Box-select `scene`, `warp`,
+   `doublevision` and `fractals`; right-click one of them → **group 4
+   nodes**.
+2. Hover the folded node's rows; turn D2 and D3 on the APC40 and watch
+   their wires; hover a row's pin.
+3. Press `+` on it; then `−`.
+4. Open it again. Drag its title bar; fold it and drag the folded node;
+   open it and drag one member far outside the tinted region; box-select
+   two members and drag them both out. Press ⌘Z after each.
+5. Box-select across the open group, its title included, and right-click
+   → **group n nodes**; ⌘Z.
+6. Select `doublevision` and one node outside the group → **group 2
+   nodes**; ⌘Z.
+7. Open the group, delete `fractals`, press ⌘Z, fold it.
+8. Drag a cable onto the folded node's `in` stub (not a pin).
+9. Right-click the group → **ungroup**; then ⌘Z.
+10. Save the preset as a copy and open its file; save another preset with
+    no group and open that.
+
+*Pass:* (1) one folded node "group 1" with a picture in, a picture out and
+one row per param that has a cable (D2, D3, D5–D8 and the hand axes); the
+head says "scene is the frame's; left out"; nothing on the projector
+moved. (2) each wire brightens with its knob and the pin's hover reads
+"D2 → fx.warp.amount". (3) `+` draws the three nodes at their own places
+in a tinted region titled "group 1", every cable between them drawn;
+the dirty dot lights (open / fold is a preset edit, row 518). (4) the
+members follow the mouse live in both drags; the dragged-out member
+leaves ("fractals left group 1") and the region shrinks; the two leave
+together; each ⌘Z puts back exactly one gesture. (5) no "is a group: …
+left out". (6) "doublevision left group 1 for this group". (7) while
+deleted the region holds two; after ⌘Z three, and folded the picture out
+is `fractals`'. (8) the drag shows red with "group 1 is folded: drop it on
+one of its pins, or open it (+)", and no empty picker opens. (9) every
+node and cable stays where it was, the projector unchanged. (10) the
+grouped copy is `hyperspace.preset/8` with `groups` after `layout`, one
+group a line; the other is `/7` (row 521, pending the owner).
+*Fail:* `scene` grouped: `patches.select` bypassed. A knob's wire ends on
+the in stub: the cable is missing from the group's `ends`. Members jump
+only on release: `_place_groups` did not run; the title snaps back: its
+target was recomputed from moving sizes. ⌘Z takes back one leaver at a
+time: `_moved` is not collecting them. "group.1 is a group" in step 5:
+`selected_ids`. `fractals` back but outside the group: the delete edited
+the list (row 519). An empty picker in step 8: `stub_refusal`. Anything
+moves on the projector: the renderer heard of a group (it must see the
+flat graph).
+
+**395. Save and spawn; wire as saved; the PRESETS fold.** (laptop, GRAPH
+and PRESETS; the copy)
+Headless: `tests/test_graph_groups.py::test_save_as_patch_writes_that_file_and_nothing_else`,
+`::test_save_as_patch_never_replaces_another_patch_of_that_name`,
+`::test_spawn_lands_through_the_doors_as_one_step_and_one_undo_takes_it_all`,
+`::test_a_spawn_with_a_voice_and_a_subscriber_is_one_step_through_the_banks`,
+`::test_wire_as_saved_wires_the_free_ports_and_refuses_a_taken_one`,
+`::test_wire_as_saved_refuses_a_node_the_preset_lacks`,
+`::test_the_browser_lists_each_patch_with_its_boundary_in_words`;
+`tests/test_ui_presets.py::test_the_patches_fold_lists_patches_hides_a_factory_one_and_renames_yours`;
+`tests/test_patches.py::test_spawn_lands_only_the_members_values`,
+`::test_patches_list_hide_and_rename_as_presets_do`.
+1. In `party-noita`, group `warp`, `doublevision` and `fractals` (394).
+   Select the group: its side pane has **save as patch…**. Press it, name
+   it "noita core", give a note, **Save**.
+2. Look in `~/Hyperspace-try/`: only `patches/noita-core.json` is new.
+3. Press **new** on the PRESET strip. Press **patches** on GRAPH's head and
+   read the list; then right-click the canvas to the right of the scene →
+   **spawn ▸** noita core.
+4. Hover the new group; press `+`, then `−`. Drag `scene` onto its `in`
+   pin and its `out` pin onto All outputs' `image`. Then ⌘Z three times.
+5. Press **new** again, spawn noita core, and press **wire as saved** on
+   its side pane. ⌘Z once.
+6. Group two nodes of any preset and **save as patch…** under the name
+   "noita core"; then, on `party-noita`'s first group, press **update
+   patch** and **Save**.
+7. On PRESETS open **patches** (after "more · module presets"): rename
+   noita core, then × it; reveal it in the trash.
+
+*Pass:* (1) the head says "saved noita core as a patch"; the preset's dot
+lights and **update patch** now shows beside **save as patch…**. (2)
+nothing else in the library or the home changed (no preset, no
+`bindings.json`). (3) the list shows "noita core", its note and its
+boundary in words ("in: picture · out: picture · wants: D2, D3, … right
+hand y …"); the spawn lands **folded** at the click, one group node with
+two open pins, "in · open (was scene)" and "out · open (was
+tripcolour.image)"; nothing new on the projector; the head says "spawned
+noita core: 3 nodes, its pins open — nothing wired to the preset";
+the preset's dot lights and no file is written. (4) the node reads
+"group · 3 nodes · from noita-core" (its hover has no "spawned as" line
+here: in a new preset no id moved); `+` shows the three in a tinted region; after the two drags the
+picture is noita's middle; the three ⌘Z take the two cables, then the
+whole group and everything it brought in one step. (5) the head says
+"wired as saved: scene → warp.image" and "no node tripcolour"; one ⌘Z
+removes the one press. (6) the save is refused, "a patch named noita core
+exists — Update patch, or another name", nothing written; update rewrites
+the file (the old text in the trash only if it changed). (7) a click on a
+name loads and spawns nothing; rename renames the file; × moves yours to
+the trash.
+*Fail:* a preset or `bindings.json` touched by the save or the spawn (a
+spawn writes no file); a host value changed by the spawn (D5: only the
+members' values land); the pins missing (the entry's `ports` lost, row
+523); **wire as saved** wiring a taken port (row 524 reversed); an
+existing patch replaced in step 6 (`Edit.save_patch`'s `PATCH_EXISTS`
+check skipped); a click in the fold spawning (`_list_row`'s pick not
+suppressed for PATCHES); more than one ⌘Z to take a spawn back (the
+spawn pushed twice).
+*After a reload* (save the spawned preset, load another, load it back)
+the group has no open pins and no **wire as saved** chip: as built (row
+523), for the owner to judge.
+
+**396. Splice.** (laptop, GRAPH, the projector or TV as a second window;
+the copy)
+Headless: `tests/test_graph_groups.py::test_splice_on_a_cable_lands_the_patch_in_the_run_in_one_step`,
+`::test_a_splice_that_raises_the_sheet_lands_the_splice_with_its_answers`,
+`::test_a_dragged_patch_lights_a_cable_it_can_splice_into_and_lands_on_release`.
+1. Load `party-trip`. Open **patches** on GRAPH's head and drag "noita
+   core" (395) from the popup over the canvas: hover several cables, then
+   let go on `scene → plasma.image`. (`party-trip` has no `trip` node: its
+   run is `scene → plasma → kaleido → zoomblur → huecycle → All outputs`.)
+2. Watch the projector; press ⌘Z.
+3. Save a two-in patch (a group whose members take two picture cables
+   from outside) and drag it onto the same cable.
+
+*Pass:* while dragged, the picture cable nearest the pointer lights and
+only picture cables of the preset's own section do (not the rig's bus);
+let go, the run reads `scene → warp → doublevision → fractals → plasma`,
+said on the head ("spliced noita core into scene → plasma.image"), seen on
+the projector; one ⌘Z puts the cable back. The two-in patch lights
+nothing and its hover says why ("… has 2 picture inlets and 1 outlet: a
+splice needs one of each").
+*Fail:* the popup closes when the drag starts (the drag source and popup
+interact: note it); the cable does not light (`graphview.cable_near` over
+last frame's pin positions); a splice takes two ⌘Z (the splice and the
+spawn pushed apart).
+
+**397. The knobs come with it, and the sheet asks.** (laptop and the
+APC40, GRAPH; the Leap if there is one; the copy)
+Headless: `tests/test_ui_routing.py::test_the_conflict_sheet_asks_per_row_preselected_to_the_patch`,
+`::test_the_sheet_is_drawn_ahead_of_a_replace_question_up_with_it`;
+`tests/test_patches.py::test_a_spawn_with_k1_already_mapped_lists_one_conflict_and_lands_nothing`,
+`::test_spawn_renames_the_modulation_by_the_hosts_rules`,
+`::test_a_macro_with_no_free_number_is_a_note_and_the_rest_spawns`,
+`::test_spawn_into_a_host_that_holds_warp_renames_every_reference`;
+`tests/test_graph_groups.py::test_a_second_spawn_takes_the_next_ids_and_its_kept_rows_are_said`.
+1. Copy `tests/fixtures/patches/acid-wash.json` into
+   `~/Hyperspace-try/patches/` (acid → wobble → delay, K1 on acid's speed,
+   the right hand's height through a `smooth` modifier onto wobble's
+   amount). Load `party-acid`, where K1 is `view.bright`, and spawn acid
+   wash.
+2. Read the sheet; press **Spawn**. Turn K1; then ⌘Z and turn K1 again.
+3. Spawn it again; while the sheet is up, arm **Learn hand** on any param
+   and move a hand (or turn a knob for a desk learn).
+4. Press **keep all existing**, then **Spawn**. Turn K1; hover the group.
+   Spawn a third time and press **Cancel**.
+5. Load `party-noita` (the right hand's height drives warp's amount there)
+   and spawn acid wash.
+6. On ROUTING give all eight macros a label, then spawn a patch that
+   carries `macro.2` (save one from a group whose member a macro
+   subscribes to).
+7. Save "noita core" from `party-noita` (395) and spawn it back into
+   `party-noita`.
+
+*Pass:* (1–2) the sheet lists "K1: `fx.acid.2.speed` (the patch) or
+`view.bright` (the preset)", the row preselected to the patch, with
+**keep all existing**, **take all**, the wants beneath (if a device is
+missing), **Spawn** and **Cancel**; after Spawn K1 turns acid.2's speed
+and its ring agrees; one ⌘Z takes the whole spawn back and K1 turns the
+brightness again. (3) nothing is learned while the sheet is up; the
+learn is still armed after it closes. (4) K1 still turns the brightness;
+the group says "K1 kept by the preset" (the head "1 row kept by the
+preset"); the hover lists the renames ("acid → acid.2 …"); Cancel lands
+nothing and pushes no undo step. (5) the sheet lists **only K1**: acid
+wash reads the hand through its modifier, and a modifier input is never
+a conflict as built (row 514 — the spec's own D3 example names this case:
+judge whether it should be one). (6) the footer says "macro.2: no free
+macro — its subscribers not spawned" and the rest lands. (7) the sheet
+lists the six desk knobs and every shared hand axis, each "the patch" or
+"the preset" (correct by "one axis, one param", and noisy: judge it).
+*Fail:* K1 wrong after Spawn (the `replace_owner` path, `Edit._spawn_rows`);
+a learn completes under the sheet (`Learn.hold` not set by `modal`); the
+kept row not said (`kept_by_host` not written); a hand axis missing in
+step 7 (`patches.ONE_OWNER`); the host's macro.2 loses its subscribers in
+step 6 (the used-macro rule, row 513).
+
+**398. Not connected, said.** (laptop and the APC40, the copy; GRAPH,
+PRESETS, SYSTEM)
+Headless: `tests/test_device_wants.py::test_the_chip_draws_on_the_graph_head_the_preset_strip_and_system`,
+`::test_the_chip_and_the_system_lines`,
+`::test_wants_for_keeps_the_rows_that_land_on_the_ids_and_want_words_say_them`,
+`::test_a_midi_device_coming_back_fires_the_listeners_once_and_the_hook_once`,
+`::test_the_hook_fires_once_per_change_with_the_count_and_never_when_steady`,
+`::test_an_error_is_no_coming_or_going_but_a_failed_open_that_succeeds_is`,
+`::test_row_words_say_a_control_as_a_person_does`;
+`tests/test_graph_groups.py::test_the_group_node_side_pane_hover_and_status_draw`.
+1. Save the `party-acid` preset with acid wash's group in it (397, step
+   2). Quit, unplug the APC40, relaunch and load it.
+2. Read the group node's status line; GRAPH's head; the PRESET strip;
+   SYSTEM.
+3. Hover **1 device missing** on GRAPH's head, then on the PRESET strip.
+4. Plug the desk in. Press nothing.
+5. Turn K1.
+6. (On the copy) list a desk whose port name is wrong, so SYSTEM shows
+   `error: …`; fix the name in `config.toml` and save it.
+
+*Pass:* (2) the group reads "waits for apc40 (lost): K1"; the head and the
+strip show **1 device missing**; SYSTEM reads "wanted by the preset:
+apc40 — lost; n controls wait". (3) both hovers read "apc40 (lost): K1,
+K2, …, + k more" in the desk's glyphs. (4) the footer says "apc40
+connected — n controls live" once (n every control the preset maps, about
+26 on a party preset), the rings light, the chip and the SYSTEM line go.
+(5) K1 turns acid.2's speed. (6) the footer says "<role> connected — n
+controls live" once and the desk works. With the APC40 unplugged every
+party preset shows **1 device missing**: correct, and constant on the
+laptop (judge it).
+*Fail:* nothing in the footer at (4): the registry's status event did not
+fire (`DeviceRegistry.poll`'s `_statuses`); said twice: a second hook in
+the frame; "CC 48 ch1" words: the profile lookup missed (row 532); the
+chip and the strip disagree: `ui_graph.panel_wants` not shared.
+
+**399. Not in this rig, said.** (the laptop config, no Leap listed; GRAPH)
+Headless: `tests/test_device_wants.py::test_hand_rows_on_a_rig_without_hands_want_leap_not_in_this_rig`,
+`::test_a_listed_hands_device_is_off_or_lost_or_connected`;
+`tests/test_graph_groups.py::test_a_spawn_with_no_conflict_lands_at_once`,
+`::test_a_spawn_whose_devices_are_all_there_says_no_wait`,
+`::test_a_row_the_sheet_kept_for_the_preset_waits_for_nothing`.
+1. On the laptop config with no hands device listed, load the preset of
+   398.
+2. Spawn acid wash into a preset where nothing collides (a **new** one).
+3. Spawn it into `party-acid`, press **keep all existing**, Spawn.
+
+*Pass:* (1) the group reads "waits for leap (not in this rig): right hand
+y" (with the APC40 plugged in, only the leap); the grey placeholder node
+is drawn as before. (2) no sheet; the head ends "…; waits for leap (not
+in this rig): right hand y". (3) the sheet lists the wants under the
+conflicts; after Spawn the head ends the same way and does **not** name
+K1 (a row the preset kept waits for nothing).
+*Fail:* no "waits for" after a spawn with no conflict (`land_spawn` not
+reached); K1 listed after keep-all (the `choices` filter in
+`ui_routing.sheet_wants`); "leap" named while the rig lists the hands
+under another role (row 531's role order).
+
+**400. The fx modules are gone; the FX page is not.** (laptop; PRESETS,
+FX)
+Headless: `tests/test_presets.py::test_the_fx_presets_are_retired`,
+`::test_an_old_fx_label_loads_quietly_and_saves_without_it`;
+`tests/test_ui_presets.py::test_more_opened_holds_a_strip_per_module_and_still_fits`;
+`tests/test_fx.py::test_the_page_draws_and_fits`;
+`tests/test_plan36_seven.py::test_every_factory_preset_is_its_sources_seven_and_round_trips`.
+1. PRESETS → **more · module presets**.
+2. The FX tab.
+3. Load every factory preset in turn (the bank, or the list with B / X on
+   the pad).
+4. Load a preset of yours saved before this build that names an fx module
+   (`"modules": {"fx": …}`), then save it.
+
+*Pass:* (1) no fx entry; `view`, `rot`, `camera`, `band`, `dream` … as
+before. (2) the page as before, except that the strip under its
+"effects" title (◀ name ▶ · save · as… · reset) is gone: the effect list
+and an open effect's strip are as they were. (3) no note in the footer
+for any. (4) it loads quietly and the saved file has no `fx` in
+`modules`.
+*Fail:* a strip under the FX page's title: `ui_presets.strip` is not
+leaving out `library.RETIRED_MODULES` (row 533); an fx entry in the fold:
+`Library.groups()`; a note on load: the label is not kept quietly (row
+534).
+
+**401. Twice.** (laptop, GRAPH; the copy)
+Headless: `tests/test_graph_groups.py::test_a_second_spawn_takes_the_next_ids_and_its_kept_rows_are_said`;
+`tests/test_patches.py::test_a_patch_twice_collides_with_itself_row_by_row`.
+1. Load `party-noita` and spawn "noita core" (395) twice: answer the
+   first sheet with **Spawn**; at the second press **keep all existing**,
+   then Spawn.
+2. Hover each group. Save the preset, load another, load it back, and
+   hover again.
+3. Load **new** and spawn noita core twice.
+
+*Pass:* (1) two groups, "group 1" and "group 2"; the first spawn's sheet
+lists the host's own rows on the three effects, the second's the first
+copy's. (2) the hovers list `warp → warp.2 …` and `warp → warp.3 …`; the
+second group says "n rows kept by the preset", and still does after the
+reload (the kept rows are saved; the rename lines are the session's and
+are gone, row 523). (3) the first copy keeps the bare names
+(`warp`, `doublevision`, `fractals`), the second takes `.2`.
+*Fail:* the second spawn reuses the first's ids (the instance rule over
+`host.names`); a kept row gone after the reload (`preset.group_entry`
+not writing `kept_by_host`).
 
 ## What no test covers
 
