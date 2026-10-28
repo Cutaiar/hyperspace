@@ -56,7 +56,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 # pyGLFW and imgui_bundle each ship a libglfw; loading both trips ObjC class
@@ -680,7 +680,7 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
         else:
             renderer.draw_outputs(s, max(w, 1), max(h, 1), fbw / max(w, 1), views)
         previewed = on_hold and wanted and _draw_preview(hold, renderer, ctx, s, (w, h),
-                                                         (fbw, fbh), preview)
+                                                         (fbw, fbh), preview, first.switches)
         if later or shown_to_panel or watched or previewed:
             (flush or _gl_flush)()
         for sl, v in shown:
@@ -702,20 +702,25 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
 
 
 def _draw_preview(hold, renderer, ctx, s, logical: tuple[int, int], full: tuple[int, int],
-                  preview) -> bool:
+                  preview, switches: Switches | None = None) -> bool:
     """Plan 38: the preview frame while the projector is held — the live
     wiring and look, drawn by the hold's renderer (`Hold.draw_preview`)
     into the preview's tap at `hold.preview_size` (output 1's framebuffer
     `full` under the render cap, at most `PREVIEW_MAX` on its long side),
     then handed to the preview as its picture. Output 1's window is bound
-    again after, with its viewport. True when drawn."""
+    again after, with its viewport. True when drawn.
+
+    Plan 38 B3: drawn with output 1's `switches` (its mutes and flips, as
+    the unheld backdrop shows output 1) at full dim — the preview is the
+    look, the room's dim stays the projector's."""
     tap = getattr(preview, "tap", None)
+    sw = replace(switches, dim=1.0) if switches is not None else Switches()
     if tap is None:
         return False
     size = preview_size(full, getattr(renderer, "max_frame", None))
     try:
         drew = hold.draw_preview(s, logical[0], logical[1], size, tap.fit(size),
-                                 lambda sz, fbo: View(Switches(), sz, target=fbo,
+                                 lambda sz, fbo: View(sw, sz, target=fbo,
                                                       viewport=(0, 0, *sz)))
     except Exception as e:  # noqa: BLE001 — the preview must not cost the program
         hold.error, drew = _err("preview", e), False
@@ -1413,6 +1418,7 @@ def main() -> None:
     # plan 26 A4: a preset's graph section sets the renderer's wiring and
     # hands an extra hands node its own state (`Renderer.ghost_states`)
     presets.graph.attach(renderer)
+    hold.section = presets.graph           # plan 38 B3: landings keep the held program's nodes
     # plan 13 §6, once: an older home's projects, routing presets and the
     # preset part of bindings.json become presets (backups beside every
     # rewritten file); a home already migrated finds nothing to do

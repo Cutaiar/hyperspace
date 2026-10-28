@@ -40,8 +40,16 @@ for both:
 - the modulators (`lfo`, `env`, `seq`, `macro`, `mod`) and the routes:
   their offsets are this frame's, read once — a route added under hold
   moves the program's param too;
-- an effect instance a new preset removed: the program's node reads
-  through (`FxState.live` is False for it) until Take or Drop.
+
+and what a landing would take from the program, it keeps (plan 38 B3):
+every `preset.GraphSection` landing — a load, a GRAPH edit, an undo —
+settles the effect instances, the switches, the resizes and the extra
+look-backs to its graph; while held it asks `keep`, which adds the held
+program's own (snapshotted at the press), so their params, values, picks,
+states and effect phases stay for the program until Take (which settles to
+the live graph alone) or Drop (which lands the hold point). A load's delay
+reset goes to the preview while held (`reset_delays`), and to the
+projector's renderer at Take.
 
 Imports only `undo` (for `alike`) and the param groups; the registry, the
 renderer and the undo object arrive as arguments and are used duck-typed,
@@ -56,7 +64,7 @@ from contextlib import contextmanager
 from dataclasses import replace
 from typing import Any
 
-from .params import PERFORMANCE_GROUPS
+from .params import PERFORMANCE_GROUPS, lookback_ids, resize_ids, switch_id
 from .undo import alike
 
 # the performance groups the renderer reads, held for the program; the
@@ -64,7 +72,10 @@ from .undo import alike
 HELD_GROUPS = ("view", "camera", "pattern", "dream", "fx", "backdrop", "switch", "resize")
 # …less the params the integrator reads before either draw: holding the 3D
 # switch alone would draw the program's pose with the preview's body
-ONE_FOR_BOTH = ("view.three_d",)
+# (plan 38 B3: and the turn's speed and planes, which the draw never reads —
+# held, they would only count as "changed" on the head's red line)
+ONE_FOR_BOTH = ("view.three_d", "view.speed")
+ONE_FOR_BOTH_PREFIXES = ("view.plane.",)
 # the preview's long side at most: the GRAPH page's backdrop, not a show
 PREVIEW_MAX = 1280
 
@@ -85,10 +96,16 @@ class Hold:
     (`Renderer.wiring` and `ghost_states` are the live, edited ones);
     `undo` (optional) the app's `undo.Undo`, which holds the point to drop
     back to; `make` (optional) builds the preview renderer on first use —
-    without it there is no preview, and the hold still holds."""
+    without it there is no preview, and the hold still holds; `section`
+    (optional) the presets' `GraphSection`, whose landings keep the held
+    program's nodes while held (plan 38 B3)."""
 
-    def __init__(self, reg, renderer, undo=None, make: Callable[[], Any] | None = None):
+    def __init__(self, reg, renderer, undo=None, make: Callable[[], Any] | None = None,
+                 section=None):
         self.reg, self.renderer, self.undo, self.make = reg, renderer, undo, make
+        self.section = section
+        self.kept: dict[str, Any] = {}  # the program's node instances by kind, as engaged
+        self.loaded = False             # a load reset the preview's delays while held
         self.on = False
         self.wiring = None              # the program's wiring, as engaged
         self.rig = None                 # …its rig cables (a `graph.RigWires`), as engaged
@@ -114,6 +131,10 @@ class Hold:
         self.values = {p.id: _copy(p.base) for p in reg if held(p)}
         undo = self.undo
         self.point = undo.checkpoint() if undo is not None else None
+        sec = self.section
+        if sec is not None:
+            self.kept = sec.names()
+            sec.hold = self
         self.on, self.since, self.moved, self.error = True, now, 0, ""
         self.status = "held: the projector keeps this look"
         return True
@@ -122,7 +143,14 @@ class Hold:
         """The preview onto the projector: let go. False: nothing was held."""
         if not self.on:
             return False
+        loaded = self.loaded
+        self._release()
+        self._settle()                  # the live graph's instances alone, now
         self._let_go()
+        if loaded:                      # R19: a load's delays start empty — on the projector now
+            reset = getattr(self.renderer, "reset_delays", None)
+            if callable(reset):
+                reset()
         self.status = "taken: the projector shows the preview"
         return True
 
@@ -133,6 +161,7 @@ class Hold:
         if not self.on:
             return False
         undo, point = self.undo, self.point
+        self._release()                 # the revert lands the hold point as it was
         if undo is not None and point is not None:
             undo.revert(_preset_part(point, self.reg), "drop the preview")
         else:
@@ -140,6 +169,7 @@ class Hold:
                     if pid in self.reg and not alike(self.reg[pid].base, v)}
             if todo:
                 self.reg.restore(todo)
+            self._settle()              # (the revert's landing settles in the branch above)
         self._let_go()
         self.status = "dropped: back to what the projector shows"
         return True
@@ -152,9 +182,69 @@ class Hold:
             self.take()
 
     def _let_go(self) -> None:
+        self._release()
         self.on = False
         self.wiring, self.rig, self.ghosts, self.values, self.point = None, None, {}, {}, None
-        self.moved, self.error = 0, ""
+        self.moved, self.error, self.kept, self.loaded = 0, "", {}, False
+
+    def _release(self) -> None:
+        """The landings no longer keep the program's nodes."""
+        sec = self.section
+        if sec is not None and getattr(sec, "hold", None) is self:
+            sec.hold = None
+
+    def _settle(self) -> None:
+        sec = self.section
+        if sec is not None and callable(getattr(sec, "settle", None)):
+            sec.settle()
+
+    # ---- what a landing keeps while held (preset.GraphSection's seam)
+
+    def keep(self, kind: str, names):
+        """`names` (a landing's instances of `kind`) with the held program's
+        own added, in `names`' own shape (a list keeps its order, the held
+        ones after; None — every effect file — stays None). Off: `names`."""
+        held = self.kept.get(kind) if self.on else None
+        if kind == "fx" and self.on and held is None and kind in self.kept:
+            return None                 # the program had every file: keep them all
+        if names is None or not held:
+            return names
+        if isinstance(names, list):
+            return [*names, *sorted(n for n in held if n not in names)]
+        return frozenset(names) | frozenset(held)
+
+    def program_only(self) -> frozenset[str]:
+        """The param ids of the instances kept for the program alone — the
+        held look's nodes the live graph no longer has. Not the preset's:
+        `Presets._values` leaves them out, so a save while held writes, and
+        the dirty dot weighs, the live graph's values only."""
+        sec = self.section
+        if not self.on or sec is None or not callable(getattr(sec, "names", None)):
+            return frozenset()
+        live = sec.names()
+        ids: set[str] = set()
+        for kind, held in self.kept.items():
+            if not held:
+                continue
+            for n in set(held) - set(live.get(kind) or ()):
+                if kind == "fx":
+                    ids |= {p.id for p in self.reg if p.id.startswith(f"fx.{n}.")}
+                elif kind == "switch":
+                    ids.add(switch_id(n))
+                elif kind == "resize":
+                    ids.update(resize_ids(n))
+                elif kind == "lookback":
+                    ids.update(lookback_ids(n))
+        return frozenset(ids)
+
+    def reset_delays(self) -> None:
+        """A load's delay reset while held (`Presets.load`, R19): the
+        preview's delays start empty; the projector's keep their trail
+        until Take, which resets them then."""
+        self.loaded = True
+        reset = getattr(self.preview, "reset_delays", None)
+        if callable(reset):
+            reset()
 
     # ---- what the program is
 
@@ -168,7 +258,8 @@ class Hold:
         """Has the graph changed since the hold — the preset's wires or the
         rig's bus cables (plan 36: both are drawn on GRAPH)?"""
         r = self.renderer
-        return self.on and (getattr(r, "wiring", None) != self.wiring or _rig(r) != self.rig)
+        return self.on and (getattr(r, "wiring", None) != self.wiring
+                            or _cut(_rig(r)) != _cut(self.rig))
 
     @contextmanager
     def program(self, renderer=None) -> Iterator[None]:
@@ -243,6 +334,7 @@ def held(p) -> bool:
     """Is this param part of the program's look — a persisted, real, set
     (not fired, not typed) param of a group the renderer reads?"""
     return (p.persist and not p.alias and p.group in HELD_GROUPS and p.id not in ONE_FOR_BOTH
+            and not p.id.startswith(ONE_FOR_BOTH_PREFIXES)
             and getattr(p.kind, "value", p.kind) not in ("trigger", "text"))
 
 
@@ -356,6 +448,24 @@ def _rig(r):
     """The rig cables `r` draws from — its `rig_source`'s `rig`, read the
     way `graph.rig_of` does (duck-typed: hold imports no graph)."""
     return getattr(getattr(r, "rig_source", None), "rig", None)
+
+
+def _cut(rig) -> frozenset:
+    """The cables `rig` cuts, as `graph.rig_of` reads it: None, or no
+    `RigWires`, cuts none (plan 38 B3 M8)."""
+    return frozenset(getattr(rig, "cut", None) or ())
+
+
+def canvas_renderer(panel):
+    """The renderer the GRAPH canvas reads (plan 38 B3): while the projector
+    is held and the preview has been drawn, the preview's — its graph is
+    the edited one, so a new node's refs, the dormant lines and the
+    refusals describe what TAKE would put up; else the panel's own."""
+    hold, r = getattr(panel, "hold", None), getattr(panel, "renderer", None)
+    pr = getattr(hold, "preview", None) if hold is not None and hold.on else None
+    if pr is not None and getattr(pr, "_graph", None) is not None:
+        return pr
+    return r
 
 
 def _copy(v):

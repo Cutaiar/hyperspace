@@ -351,6 +351,11 @@ class GraphSection:
         self.free: dict | None = None
         self.states: dict[str, GhostState] = {}  # extra hands nodes' states, by node name
         self.declared: set[str] = set()         # the extra hands nodes whose params exist
+        # plan 38 B3: the hold, while the projector is held (`hold.Hold`,
+        # duck-typed: `keep(kind, names)`, `reset_delays()`) — every landing
+        # keeps the held program's nodes too; None: a landing is exactly
+        # its graph
+        self.hold = None
         if renderer is not None:
             self.attach(renderer)
 
@@ -428,21 +433,53 @@ class GraphSection:
             if not was:
                 self._seed(name)
         self.declared = set(want)
-        if self.fx is not None:
-            # plan 36 T3 (W3): the effects the section names, and no others
-            changed = self.fx.hold(spec.effect_names() if spec is not None else frozenset())
-            if changed:
-                declare_fx(reg, self.fx, changed)
-        # plan 33 S: each switch's `select`, as the effect instances' params
-        declare_switches(reg, [sw.name for sw in spec.switches] if spec is not None else [])
-        # plan 34 Z: each resize's values, by its entry — reached or not, so
-        # an unwired resize keeps its knobs as an unwired switch its pick
-        declare_resizes(reg, [z.name for z in spec.resizes] if spec is not None else [])
-        # plan 36 T4: each extra look-back's own ring and trail, by its entry
-        declare_lookbacks(reg, [lb.name for lb in spec.lookbacks] if spec is not None else [])
+        self._settle(spec)
         self.spec, self.doc = spec, copy.deepcopy(doc)
         self.free = copy.deepcopy(free)
         self._push()
+
+    def names(self, spec: GraphSpec | None = None) -> dict[str, Any]:
+        """The node instances `spec` (the landed one by default) declares,
+        by kind — what a landing settles: ``fx`` (the effect instances that
+        exist, `FxState.held`'s word: None for every file), ``switch``,
+        ``resize``, ``lookback``. Plan 38 B3: what a hold keeps."""
+        spec = self.spec if spec is None else spec
+        if spec is None:
+            fx = getattr(self.fx, "held", None) if self.fx is not None else frozenset()
+            return {"fx": fx, "switch": [], "resize": [], "lookback": []}
+        return {"fx": frozenset(spec.effect_names()),
+                "switch": [sw.name for sw in spec.switches],
+                "resize": [z.name for z in spec.resizes],
+                "lookback": [lb.name for lb in spec.lookbacks]}
+
+    def settle(self) -> None:
+        """Settle the instances to the landed graph again (plan 38 B3: at
+        Take, once the hold no longer keeps the program's — the live set
+        wins: what only the program had goes)."""
+        self._settle(self.spec)
+
+    def _settle(self, spec: GraphSpec | None) -> None:
+        """Declare `spec`'s instances and drop the others' — each kind's
+        names through the hold's `keep` while the projector is held (plan
+        38 B3: the program's effects, switch picks, resizes and look-backs
+        stay, with their values, phases and states, until Take or Drop)."""
+        reg, names = self.reg, self.names(spec) if spec is not None else {
+            "fx": frozenset(), "switch": [], "resize": [], "lookback": []}
+        hold = getattr(self, "hold", None)
+        if hold is not None:
+            names = {kind: hold.keep(kind, n) for kind, n in names.items()}
+        if self.fx is not None:
+            # plan 36 T3 (W3): the effects the section names, and no others
+            changed = self.fx.hold(names["fx"])
+            if changed:
+                declare_fx(reg, self.fx, changed)
+        # plan 33 S: each switch's `select`, as the effect instances' params
+        declare_switches(reg, names["switch"])
+        # plan 34 Z: each resize's values, by its entry — reached or not, so
+        # an unwired resize keeps its knobs as an unwired switch its pick
+        declare_resizes(reg, names["resize"])
+        # plan 36 T4: each extra look-back's own ring and trail, by its entry
+        declare_lookbacks(reg, names["lookback"])
 
     def free_doc(self) -> dict | None:
         """The section in the free graph's words (plan 33 M; plan 35 T3: the
@@ -493,8 +530,12 @@ class GraphSection:
         # plan 36 T3: the instances that existed (every file, before a graph
         # had landed), as they were
         fx = self.fx
-        if len(mark) > 3 and fx is not None and getattr(fx, "held", None) != mark[3]:
-            changed = fx.hold(mark[3])
+        held = mark[3] if len(mark) > 3 else None
+        hold = getattr(self, "hold", None)
+        if hold is not None and len(mark) > 3:          # plan 38 B3: an undo while held
+            held = hold.keep("fx", held)
+        if len(mark) > 3 and fx is not None and getattr(fx, "held", None) != held:
+            changed = fx.hold(held)
             if changed:
                 declare_fx(self.reg, fx, changed)
 
@@ -1044,7 +1085,8 @@ class Presets:
             gs.land(spec, section)
             # R19 (row 354: "rebuilds, not loads"): a load's delays start
             # empty — no trail of the preset before in this one
-            reset = getattr(gs.renderer, "reset_delays", None)
+            # (plan 38 B3: while held, the preview's — the projector's at Take)
+            reset = getattr(getattr(gs, "hold", None) or gs.renderer, "reset_delays", None)
             if callable(reset):
                 reset()
             # the modifiers and their params (plan 28 N1), landed with the
@@ -1207,8 +1249,11 @@ class Presets:
         """The preset's `values`: every performance base but the modifiers'
         params, which their entries hold (so a file saved here loads on an
         older build with no unknown id)."""
+        # (plan 38 B3: nor a held program's own nodes, kept while held)
+        hold = getattr(self._graph_section(), "hold", None)
+        only = hold.program_only() if hold is not None else frozenset()
         return {k: v for k, v in self.reg.snapshot(part="performance").items()
-                if not k.startswith(modifiers.PREFIX)}
+                if not k.startswith(modifiers.PREFIX) and k not in only}
 
     def _mods_at_load(self) -> dict[str, tuple[str, list[dict]]]:
         """preset name → (its template's name, the template's modifier
