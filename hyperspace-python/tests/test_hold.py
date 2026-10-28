@@ -258,6 +258,104 @@ def test_the_head_line_says_how_long_and_what_changed(rig):
     assert "1 setting changed" in line and "the graph changed" in line
 
 
+# ---- plan 38 B2: the hand checks the controller can run headless
+
+
+def test_drop_after_a_whole_new_look_is_one_undo_step_back_and_one_forward(rig):
+    """Hand check AI.4, headless (plan 38 B2). Held on a clean TUMBLE: three
+    of the look's params moved, the graph rewired on GRAPH, another preset
+    loaded (TRIP: other values, routes, desk, graph), its macros and a
+    route edited, a rig param (the eye's) moved. DROP: the values, the
+    graph, the routes, the desk's preset layer, the macros and the name are
+    the hold point's — the dirty dot out as it was — and the rig's param is
+    left. One step: the stack grows by one, and one ⌘Z brings the whole
+    dropped state back (TRIP, edited, dirty), the rig's param still left."""
+    from test_undo import look, same_look
+
+    from hyperspace.graph import read_graph
+    from hyperspace.library import PRESETS
+
+    reg, lib, hold, r, table = rig.reg, rig.lib, rig.hold, rig.renderer, rig.table
+    rig.undo.clear()
+    assert lib.current(PRESETS) == "TUMBLE" and not lib.is_dirty(PRESETS)
+    at_hold, wiring0, fov0 = look(rig), r.wiring, reg["eye.fov"].base
+    hold.engage()
+    for pid, k in (("view.bright", 3), ("camera.zoom", 4), ("fx.mix", -5)):
+        reg[pid].step(k)
+    settle(rig)
+    rig.presets.graph.land(read_graph({"frame": "wired"}))     # a GRAPH edit
+    settle(rig)
+    reg["preset.load.4"].fire()                                # another preset
+    settle(rig)
+    assert lib.current(PRESETS) == "TRIP"
+    table.set_macros({"macro.1": {"label": "mine", "subs": [
+        {"base": "view.speed", "from": 0.2, "to": 0.9}]}}, reg)
+    table.remove(table.routes()[0])
+    reg["eye.fov"].set(fov0 + 10)                              # the room's, not the look's
+    settle(rig)
+    assert lib.is_dirty(PRESETS) and hold.rewired()
+    dropped, wiring1, depth = look(rig), r.wiring, len(rig.undo.stack)
+    assert not same_look(dropped, at_hold) and wiring1 != wiring0
+    assert all(a != b for a, b in zip(at_hold[1:], dropped[1:], strict=True))
+
+    assert hold.drop() and not hold.on
+    assert same_look(look(rig), at_hold) and r.wiring == wiring0
+    assert lib.current(PRESETS) == "TUMBLE" and not lib.is_dirty(PRESETS)
+    assert reg["eye.fov"].base == pytest.approx(fov0 + 10)
+    assert len(rig.undo.stack) == depth + 1 and rig.undo.stack[-1].label == "drop the preview"
+    settle(rig)
+    assert same_look(look(rig), at_hold) and r.wiring == wiring0   # nothing re-lands
+
+    assert rig.undo.undo()                                     # one step, not several
+    assert same_look(look(rig), dropped) and r.wiring == wiring1
+    assert lib.current(PRESETS) == "TRIP" and lib.is_dirty(PRESETS)
+    assert reg["eye.fov"].base == pytest.approx(fov0 + 10)
+    assert len(rig.undo.stack) == depth
+
+
+def test_learned_desk_buttons_light_while_held(rig):
+    """Hand check AI.5, headless (plan 38 B2): `output.hold` and
+    `output.take` learned onto the two free APC40 buttons (a press on each
+    while armed, as at the desk, lands a preset-layer row). A press on hold
+    holds and both LEDs go on; a press on take lets go and both go dark.
+    Held again, DROP (from the panel) puts both out too."""
+    from test_midi import note, push
+
+    H.register(rig.reg, rig.hold, now=lambda: rig.t)
+    free = (0x3C, 0x3D)                        # unbound on the startup desk
+    assert not any(rig.table.route("note", 0, n) for n in free)
+    for pid, n in zip(("output.hold", "output.take"), free, strict=True):
+        rig.learn.arm(pid)
+        push(rig, note(n), note(n, 0))
+        assert rig.learn.learning is None and not rig.learn.refused, rig.learn.last
+        assert [b.target for b in rig.table.route("note", 0, n)] == [pid]
+    assert not rig.hold.on                     # a learning press does not fire
+
+    def leds():
+        on = {}
+        for m in rig.out.sent:
+            if m.type in ("note_on", "note_off") and m.channel == 0 and m.note in free:
+                on[m.note] = m.type == "note_on" and m.velocity > 0
+        return tuple(on.get(n, False) for n in free)
+
+    rig.midi.poll()
+    assert leds() == (False, False)
+    push(rig, note(free[0]), note(free[0], 0))                 # hold
+    rig.midi.poll()
+    assert rig.hold.on and leds() == (True, True)
+    push(rig, note(free[1]), note(free[1], 0))                 # take
+    rig.midi.poll()
+    assert not rig.hold.on and leds() == (False, False)
+    assert rig.hold.status.startswith("taken")
+    push(rig, note(free[0]), note(free[0], 0))                 # hold again
+    rig.midi.poll()
+    assert rig.hold.on and leds() == (True, True)
+    rig.reg["output.drop"].fire()
+    rig.midi.poll()
+    assert not rig.hold.on and leds() == (False, False)
+    assert rig.hold.status.startswith("dropped")
+
+
 # ---- app._draw_render with the hold (stand-ins, test_app_boundary's)
 
 
@@ -449,4 +547,74 @@ def test_on_gl_a_bus_cable_cut_after_the_hold_stays_off_the_projector(ctx):
     assert px(ctx, pv)[..., :3].max() == 0
     assert hold.take()
     assert program(2.0)[..., :3].max() == 0 and r._graph.rig == show.rig
+    assert ctx.error == "GL_NO_ERROR"
+
+
+@pytest.mark.empty_frame        # the app's own renderers: nothing until a graph lands
+def test_on_gl_the_program_draws_the_held_wiring_while_a_graph_edit_lands(ctx):
+    """Hand checks AI.1 and AI.2, headless (plan 38 B2). Wiring W1 (today's
+    frame) landed through the preset's `GraphSection`; held; then the GRAPH
+    page's own edit (`graphview.Edit.insert_effect`: kaleido onto the cable
+    scene → All outputs) lands W2. With the renderer drawing, the outputs'
+    picture is W1's and the preview's W2's, each byte for byte the frame
+    its wiring draws alone, on the same renderers at the same clock: W1's
+    from before the hold, W2's from after Take. The two differ, so the
+    edit shows."""
+    import numpy as np
+    from test_outputs import H as HH
+    from test_outputs import W, fbo, px, scene_view
+
+    from hyperspace import graphmigrate, graphview
+    from hyperspace.control import Control
+    from hyperspace.outputs import Switches, View
+    from hyperspace.params import build_registry
+    from hyperspace.preset import GraphSection
+    from hyperspace.render import Renderer
+
+    T = 2.0
+    r = Renderer(ctx)
+    r.rig_source = SimpleNamespace(rig=G.RigWires())
+    s = scene_view()
+    from hyperspace.analysis import Analyser
+    from hyperspace.analyzer import Analyzer
+
+    chain = Analyzer(Analyser())
+    reg = build_registry(s, Control(chain), SimpleNamespace(chain=chain), None,
+                         dream=r.lookback.state, fx=r.fx.state)
+    gs = GraphSection(reg, fx=r.fx.state, renderer=r)
+    doc1 = {"frame": "wired", **graphmigrate.section_of(graphmigrate.wiring_of(r.fx.state))}
+    gs.land(G.read_graph(doc1), doc1)
+    w1 = r.wiring
+    assert G.Wire("scene", "output.all.image") in w1.wires
+    hold = H.Hold(reg, r, make=lambda: H.preview_renderer(r))
+    out = fbo(ctx)
+
+    def outputs():
+        with hold.program():
+            r.draw_outputs(s, W, HH, 1.0, [View(Switches(), (W, HH), target=out)], t_now=T)
+        return px(ctx, out)
+
+    alone1 = outputs()
+    assert alone1[..., :3].max() > 0
+    hold.engage()
+    edit = graphview.Edit(graph=gs)
+    assert edit.insert_effect(("scene", "output.all.image"), "kaleido") is None
+    w2 = r.wiring
+    assert w2 != w1 and G.Wire("kaleido", "output.all.image") in w2.wires
+    assert hold.rewired() and hold.wiring is w1
+
+    held = outputs()
+    assert np.array_equal(held, alone1) and r.wiring is w2
+    pr = hold.preview_renderer()
+    pr.now = lambda t_now=None: T          # the preview's clock pinned, as the outputs' is
+    pv = fbo(ctx)
+    assert hold.draw_preview(s, W, HH, (W, HH), pv,
+                             lambda sz, t: View(Switches(), sz, target=t))
+    preview = px(ctx, pv)
+    assert pr.wiring is w2
+
+    assert hold.take()
+    alone2 = outputs()
+    assert np.array_equal(preview, alone2)
+    assert not np.array_equal(alone1, alone2)
     assert ctx.error == "GL_NO_ERROR"
