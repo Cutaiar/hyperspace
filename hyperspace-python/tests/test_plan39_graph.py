@@ -63,14 +63,18 @@ def test_each_adds_unwired_one_undo_step_and_a_second_is_the_next(tmp_path, kind
     assert rig.presets.graph.spec.notes == ()
 
 
-def test_a_new_one_skips_a_name_a_wire_already_says(tmp_path):
-    """`segment.2.fg` wired with no entry for it names segment.2: the next
-    add is segment (1), then segment.3."""
+def test_a_new_one_is_past_the_highest_instance_declared(tmp_path):
+    """With segment.2 declared (and wired), the next add is segment.3, not
+    the gap at 1 (`_next`'s rule, as a composite's). A wire naming an
+    undeclared segment never lands — it is a note — so no wire-only name
+    can be taken."""
     section = {"frame": "wired", "nodes": [{"kind": "segment", "instance": 2}],
                "wires": [{"from": "channel.a", "to": "segment.2.image"},
                          {"from": "segment.2.fg", "to": ALL}]}
     _, e, _ = wired_rig(tmp_path, section)
     assert e.add_node("segment") is None and e.added == "segment.3"
+    spec = G.read_graph({"frame": "wired", "wires": [{"from": "segment.4.fg", "to": ALL}]})
+    assert spec.notes and not spec.wires
 
 
 # ---------------------------------------------------------------- the cut-out starter
@@ -138,6 +142,17 @@ def test_a_promoted_mask_cable_is_purple_into_a_red_port():
     assert port.type == graphview.IMAGE
     # a picture into the same port stays red; a matte's own input too
     assert cable(view, "channel.a", "matte.image").type == graphview.IMAGE
+
+
+def test_a_promoted_mask_into_a_switch_left_of_it_runs_back_by_design():
+    """Review: `returns` takes a mask cable into a `TAKEN_BACK` node (a
+    switch, with the media) back as it does a picture cable."""
+    spec = spec_of(("shape", "scene.geometry"), ("scene", "lookback.image"),
+                   ("lookback", ALL), ("lookback", "matte.image"), ("matte", "switch.in1"),
+                   ("switch", "output.2.image"), nodes=[{"kind": "matte"}, {"kind": "switch"}])
+    view = view_of(spec, build(spec, n=2))
+    lay = graphview.layout(view, collapsed=lambda nid: True)
+    assert cable(view, "matte", "switch.in1").id in graphview.returns(view, lay)
 
 
 def test_a_segment_s_mask_pin_is_purple_its_pictures_red():

@@ -2307,7 +2307,7 @@ def returns(view: View, lay: Layout) -> set[str]:
         wrapped = (a.area == b.area == EFFECTS_AREA
                    and lay.rows.get(b.id, 0) > lay.rows.get(a.id, 0))
         taken = (order.get(a.area, 0) > order.get(b.area, 0) and isinstance(b.ref, TAKEN_BACK)
-                 and c.type == IMAGE)
+                 and c.type in (IMAGE, MASK))     # (plan 39 T5: a promoted mask too)
         if kept or wrapped or taken:
             out.add(c.id)
     return out
@@ -4097,16 +4097,6 @@ def _next(spec, kind: str) -> int:
                default=0) + 1
 
 
-def _fresh(spec, named: set[str], kind: str) -> int:
-    """The next instance of declared `kind` (`_next`), past any name the
-    section says by a wire alone too (plan 39 T5: a new node never lands
-    on a name a wire already says)."""
-    n = _next(spec, kind)
-    while (kind if n == 1 else f"{kind}.{n}") in named:
-        n += 1
-    return n
-
-
 # plan 39 T5 (W6): what adding each of plan 39's nodes says
 ADD_SAID = {
     "matte": ("{name} added: wire a picture into {name}.image — it makes a mask of it "
@@ -4206,7 +4196,7 @@ def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> st
                      f"{name} added: wire a picture into {name}.image — {how}")
     if kind in ADD_SAID:                         # plan 39 T5 (W6)
         at = {"matte": rgraph.MatteAt, "cut": rgraph.CutAt,
-              "segment": rgraph.SegmentAt}[kind](_fresh(spec, named, kind))
+              "segment": rgraph.SegmentAt}[kind](_next(spec, kind))
         doc["nodes"].append(at.to_json())
         name = edit.added = at.name
         return _land(edit, doc, f"add {name}", ADD_SAID[kind].format(name=name))
@@ -4302,8 +4292,8 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
         # outputs' picture, said
         spec = _spec(edit)
         feed = rgraph.channel_name(rgraph.MEDIA_CHANNELS[0])
-        seg = rgraph.SegmentAt(_fresh(spec, before, "segment"))
-        comp = rgraph.CompositeAt(_fresh(spec, before, "composite"), "over")
+        seg = rgraph.SegmentAt(_next(spec, "segment"))
+        comp = rgraph.CompositeAt(_next(spec, "composite"), "over")
         was = _was_into(doc, all_in, comp.name)
         wires = [x for x in doc.get("wires", []) if x["to"] != all_in]
         wires += [{"from": a, "to": b} for a, b in (
