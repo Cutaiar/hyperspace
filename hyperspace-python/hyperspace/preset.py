@@ -1471,15 +1471,17 @@ class Presets:
     def _held_canvas(self) -> set[str]:
         """Plan 40 T2: the GRAPH canvas ids the loaded preset holds that a
         group may name — its section's render nodes (``render:acid.2``), its
-        modifiers, its LFOs and envelopes (every id, with no bank to ask)
-        and the eight macros."""
+        modifiers, its LFOs and envelopes (the bank's ids; with no bank —
+        a test's bare router — the voices the registry holds, the canvas's
+        own rule, `graphview.bank_ids`: never an id nothing holds) and the
+        eight macros."""
         spec = getattr(self._graph_section(), "spec", None)
         held = {f"render:{n}" for n in patches.spec_names(spec)}
         held |= {m.id for m in getattr(self.router.table, "modifiers", ())}
         banks = self.banks()
         for scheme in ("lfo", "env"):
             bank = banks.get(scheme)
-            ids = bank.doc() if bank is not None else range(1, 100)
+            ids = bank.doc() if bank is not None else graphview.bank_ids(None, self.reg, scheme)
             held |= {f"{scheme}.{n}" for n in ids}
         held |= {f"macro.{n}" for n in range(1, patches.MACROS + 1)}
         return held

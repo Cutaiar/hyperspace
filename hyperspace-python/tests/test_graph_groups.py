@@ -177,6 +177,23 @@ def test_a_member_the_graph_lacks_is_dropped_with_a_note(tmp_path):
         {"id": "group.5", "name": "twice", "nodes": ["lfo.1"], "open": False}]
 
 
+def test_with_no_bank_the_held_voices_are_the_ones_the_registry_holds(rig):
+    """A router with no modulator banks (a test's bare one): the voices a
+    group may hold are the ones the canvas draws (`graphview.bank_ids` over
+    the registry), never any id up to 99 — a save drops a member no voice
+    is."""
+    pre = rig.lib.presets
+    rig.lib.load("presets", "party-noita")
+    assert pre.banks() == {}
+    lfos = graphview.bank_ids(None, rig.reg, "lfo")
+    held = pre._held_canvas()
+    assert {c for c in held if c.startswith("lfo.")} == {f"lfo.{n}" for n in lfos}
+    assert "lfo.99" not in held and "env.98" not in held
+    pre.groups = [{"id": "group.1", "name": "g", "nodes": ["render:warp", "lfo.99"],
+                   "open": False}]
+    assert pre.live_groups()[0]["nodes"] == ["render:warp"]
+
+
 def test_signature_changes_when_a_group_is_made_and_a_save_drops_a_deleted_member(tmp_path):
     app = headless.make_app(tmp_path)
     app.lib.load("presets", "party-noita")
