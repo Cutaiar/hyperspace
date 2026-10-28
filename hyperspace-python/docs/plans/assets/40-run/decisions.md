@@ -70,3 +70,17 @@ reverses it.
     the T4 wants chip beside plan 37's tint chip): keep both sides of each.
     Checked by a dry-run merge of the integration head 07885a2 on
     2026-10-27; abandoned without a commit.
+15. **Schema of an ungrouped save — pending the owner.** T2's ruling 50g
+    writes `/7` for a preset with no groups and `/8` only for a grouped one
+    (the build plan's "a preset without `groups` saves byte for byte as
+    before" and "the factory presets and the library are not rewritten",
+    which the T2 brief carried). The T2 reviewer notes this revives "the
+    lowest schema that loses nothing" (R10), which the owner overturned on
+    2026-10-25 with row 394 ("every save is the newest schema; migrate the
+    library forward"). D7 cites row 394, so the spec's intent is likelier
+    the newest schema. **Controller's recommendation:** follow row 394 —
+    every save writes `/8`, reading `/7` is the identity, the factory files
+    and the Drive library are migrated forward by `tools/migrate_library.py`
+    as plan 36 did (a schema-line rewrite only; backups as before). Built
+    as 50g until the owner answers; the review-fix pass flips it on his
+    word. *Reverse:* one rule in `preset.schema_of` and a migration run.

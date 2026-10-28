@@ -32,8 +32,8 @@ See `decisions.md`.
 | T1 patches.py + DocKind | `plan-40-t1` | 51106e1 | **merged** 44eb753 (PR #274) | fast 4167/2 skipped, goldens 136 | reviewed, 2 Important fixed | 471x–479x drafts, AK.1–4 |
 | T4 devices.wants + arrival | `plan-40-t4` | 51106e1 | **merged** b0b23f3 (PR #272) | fast 4139/2 skipped, goldens 136 | reviewed, 1 Important fixed | 47a–47f drafts |
 | T5 fx modules retired | `plan-40-t5` | 51106e1 | **merged** 3094691 (PR #271) | fast 4097/2 skipped, goldens 136 | controller | rulings 9–11 |
-| T2 the group node | `plan-40-t2` | d08a363 | dispatched | | | |
-| T3 save / browse / spawn | | after T2 | waiting | | | |
+| T2 the group node | `plan-40-t2` | d08a363 | **merged** f8d2e73 (PR #276) | fast 4294/2 skipped, goldens 144 | approved; minors to the fix pass | 50a–50h drafts, AK.n1–n4 |
+| T3 save / browse / spawn | `plan-40-t3` | f8d2e73 | dispatched | | | |
 | review | | after T5 | waiting | | | |
 | T6 docs | | last | waiting | | | 471–495 / 394–401 |
 
@@ -168,3 +168,40 @@ See `decisions.md`.
   **501–525** (ruling 12 amended). Schema: nothing writes `/8` → `groups`
   is `/8`.
 - **T2** dispatched (Opus, own worktree, branch `plan-40-t2` off d08a363).
+- **T2** DONE_WITH_CONCERNS → PR #276 (`plan-40-t2`, 7f8ff80, 865d0b3).
+  14 files, +2383: `preset.GROUPS_KEY` + `/8`, `graphmigrate`'s step,
+  `Marks` carry `groups`, the one boundary classifier in `patches.py`
+  shared with `lift`, `graphview.VGroup` + `Edit.group` / `ungroup` /
+  rename / move / leave, `ui_graph._group_node` / `_region` / the menus /
+  the side pane with the `_group_chips` hook, `tests/test_graph_groups.py`
+  (560 lines), a grouped `party-noita` fixture, 8 grouped-twin golden
+  proofs. `graph.py`, `render.py`, `tests/golden/`, `frame-signatures.json`
+  untouched. Fast 4294/2 skipped (+25), goldens 144 (136 + 8 proofs, none
+  re-recorded), `--all` 4525 (one GL flake in `test_migrate_library` on
+  the first run, passes alone). Concerns: no person has seen the drawing;
+  **plan 38's `ui_graph._monitor` `add_rect(..., 0.0, 0, 2.0)` raises a
+  TypeError the first time the hold inset draws** (on `main`; for the
+  review-fix pass); an older build refuses an `/8` file rather than
+  dropping the key (the ladder's rule; T6 says so). Merged `--no-ff` as
+  **f8d2e73** locally (not pushed until the reviewer and the controller's
+  tests agree). **Reviewer dispatched** (`briefs/review-t2.md`).
+  Controller's gates on f8d2e73: fast tier **4294 passed, 2 skipped** (4293
+  + `test_media_folder::test_a_file_still_downloading_is_not_opened_until_it_is_ready`,
+  which failed under `-n auto` and passes serially; T2 touches no media
+  file); goldens **144 passed**. Push waits for the T2 review.
+- **T2 review** (`reports/t2-review.md`): **Approved**, no Critical or
+  Important; all ten doubts settle for the PR. Minors for the review-fix
+  pass: multi-member drag-out = several undo steps; a drop on a folded
+  group's stub opens an empty picker; `preset.group_number` /
+  `graphview._group_n` duplicate; two thin tests; proofs cover the 9
+  presets with a main run (the 16 `NO_RUN` named); `_held_canvas`'s
+  `range(1, 100)` fallback; ids reusable after ungroup (50f); the open
+  region's title selectable. **Plan 38's `_monitor` bug confirmed**:
+  imgui_bundle's `add_rect(p_min, p_max, col, rounding, thickness, flags)`
+  — the call passes `0.0, 0, 2.0` and raises `TypeError` in a frame; fix
+  `(…, 0.0, 2.0)` at `ui_graph.py` ~1157; no headless test reaches it
+  (`tex.glo == 0` returns early) — a stub-texture test for the fix pass.
+  **Tension flagged**: ruling 50g (ungrouped saves `/7`) vs the owner's row
+  394 (every save the newest schema) — put to the owner (ruling 15).
+  f8d2e73 **pushed**.
+- **T3** dispatched (Opus, own worktree, branch `plan-40-t3` off f8d2e73).
