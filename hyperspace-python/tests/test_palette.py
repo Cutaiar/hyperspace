@@ -442,18 +442,6 @@ def test_an_old_preset_loads_as_the_same_slice(tmp_path):
                    if k.startswith("fx.palette"))
 
 
-def test_an_old_fx_module_preset_is_read_as_the_slice(tmp_path):
-    rig = boot(tmp_path)
-    (rig.home / "fx").mkdir(parents=True, exist_ok=True)
-    (rig.home / "fx" / "teal.json").write_text(json.dumps({
-        "schema": "hyperspace.preset/1", "group": "fx", "name": "teal",
-        "values": {"fx.palette.on": True, "fx.palette.mix": 1.0,
-                   "fx.palette.centre": 180.0, "fx.palette.width": 20.0}}))
-    assert rig.lib.load("fx", "teal") == []
-    v = rig.reg.fx_state.values["palette"]
-    assert (v["hue_from"], v["hue_to"]) == (170.0, 190.0)
-
-
 @pytest.mark.parametrize("slug", ["palette-hands", "palette-glass", "wired-outputs"])
 def test_the_fixtures_carry_the_slice(slug):
     doc = json.loads((FIXTURES / f"{slug}.json").read_text())

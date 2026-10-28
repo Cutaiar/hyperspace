@@ -75,7 +75,7 @@ from __future__ import annotations
 from imgui_bundle import imgui
 
 from . import preset, ui
-from .library import F_KEYS, HOME_UNSET, PRESETS, LibraryError, slot_key
+from .library import F_KEYS, HOME_UNSET, PRESETS, RETIRED_MODULES, LibraryError, slot_key
 from .params import PERFORMANCE_GROUPS
 
 LIST_POLL = 1.0      # seconds between re-listings of a group's presets
@@ -316,8 +316,8 @@ def strip(panel, group: str) -> None:
     a factory preset and there is no reset: `Library.reset` on a kind
     loads a preset called "default", and none ships (plan 19 WP5)."""
     lib = panel.library
-    if lib is None or lib.reg is None:
-        return
+    if lib is None or lib.reg is None or group in RETIRED_MODULES:
+        return                  # (plan 40 T5: a retired module group has no strip)
     imgui.push_id(f"strip.{group}")
     if _name_field(panel, group, lambda n: _save_as(panel, group, n)):
         imgui.pop_id()
@@ -977,7 +977,8 @@ def groups(panel) -> list[str]:
     """The groups the overview lists: the performance groups less the
     macros, and the band strip (OVERVIEW_GROUPS), each in the library
     *and* with a persisted param in this registry — a folder alone is not
-    a module the panel can save."""
+    a module the panel can save. (Plan 40 T5: no ``fx`` — its module
+    presets are retired, and `Library.groups` lists it no more.)"""
     lib = panel.library
     known = {p.group for p in lib.reg if p.persist and p.group}
     return [g for g in lib.groups() if g in known and g in OVERVIEW_GROUPS]

@@ -241,10 +241,13 @@ def test_every_party_preset_has_a_preset_a_card_and_only_real_ids(tmp_path):
         assert vals <= ids, (name, vals - ids)
         assert (FACTORY.parents[1] / "docs" / "plans" / "assets" / "12-presets"
                 / f"{name}.md").is_file(), name
-    for group, file in (("fx", "trip.json"), ("dream", "wake.json"), ("fx", "acid.json"),
-                        ("fx", "mandala.json"), ("fx", "noita-heavily-tripping.json")):
-        vals = json.loads((FACTORY / group / file).read_text())["values"]
-        assert {v for v in vals if not retired(v)} <= ids, file
+    vals = json.loads((FACTORY / "dream" / "wake.json").read_text())["values"]
+    assert {v for v in vals if not retired(v)} <= ids, "wake.json"
+    # (plan 40 T5: the fx module presets are retired, D6 — the effect
+    # families' settings they held are the generator's own now)
+    from hyperspace.preset import ACID_FX, MANDALA_FX, NOITA_FX
+    for vals in (ACID_FX, MANDALA_FX, NOITA_FX):
+        assert {v for v in vals if not retired(v)} <= ids, vals
     # plan 14 WP5 (decision 24): the effect families on F6–F8
     assert doc["bank"][5:8] == ["ACID", "MANDALA", "NOITA"]
     assert [f"party-{n.lower()}" for n in doc["bank"][:8]] == list(PARTY_BANK)

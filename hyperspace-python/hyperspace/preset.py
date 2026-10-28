@@ -6,7 +6,7 @@
    "routes": [row, …],                 the performer rows (routing.Binding)
    "desk":   [row, …],                 the APC40's preset layer (routing.Binding)
    "macros": {"macro.1": {…}, …},      the macros' labels and subscribers
-   "modules": {"fx": "trip", …}}       module-preset labels (D3)
+   "modules": {"dream": "wake", …}}    module-preset labels (D3)
 
 (plan 24 C3: a file may also name a desk template, ``"desk_template":
 "<name>"`` before ``desk``, and then ``desk`` holds only its overrides —
@@ -138,9 +138,9 @@ from .library import (
     PROJECT_SUFFIX,
     PROJECT_V1,
     PROJECTS,
+    RETIRED_MODULES,
     SLOTS,
     LibraryError,
-    _module_values,
     _write_text,
     bank_doc,
     read_positions,
@@ -306,7 +306,7 @@ def file_desk(profile: str = "apc40") -> list[Binding]:
 # ---- the render graph (plan 26 A4) ----
 
 GRAPH_KEY = "graph"
-FX_GROUP = "fx"          # the effects' module group (`library/fx/*.json`): plan 33 R12
+FX_GROUP = "fx"          # the effects' param group (plan 40 T5: no module presets since D6)
 
 
 class GraphSection:
@@ -619,9 +619,14 @@ LAYOUT_KEY = "layout"
 # subscribers and a modifier's params are its entry, both the preset's
 # (plan 33 S: a switch's pick means nothing without the preset's graph;
 # plan 34 Z: nor a resize's values; plan 39 T2: nor a matte's; T3: nor a cut's)
-# (T4: nor a segment's)
+# (T4: nor a segment's) — and (plan 40 T5, D6) the effects', whose module
+# presets are retired outright: a save writes no fx label
 NO_MODULE = ("macro", modifiers.GROUP, SWITCH_GROUP, RESIZE_GROUP, MATTE_GROUP, CUT_GROUP,
-             SEGMENT_GROUP)
+             SEGMENT_GROUP, FX_GROUP)
+# the groups whose module presets are retired (plan 40 T5, D6,
+# `library.RETIRED_MODULES`): a file that still names one keeps the label
+# on load, quietly — it never loaded anything (D3) — and the next save
+# drops it (`NO_MODULE`)
 
 
 def _bank_prefix(pid: str) -> str:
@@ -852,8 +857,6 @@ class Presets:
                  versions=VERSIONS,
                  text=lambda doc: dumps(doc))
         lib.on_load(GROUP, lambda name: self._landed(name))
-        # plan 33 R12: an fx module loaded replaces the graph's runs
-        self._watch_fx_modules()
         lib.presets = self
         self.listeners: list = []        # called with the name after every load (app.py)
 
@@ -922,9 +925,6 @@ class Presets:
         Returns the unknown ids; the notes land in `notes`."""
         lib, reg, table = self.lib, self.reg, self.router.table
         notes: list[str] = []
-        # plan 33 R12: (again on every load — a Presets from before a hot
-        # reload brought this method never ran the __init__ that registers it)
-        self._watch_fx_modules()
         # 0. the look-back's per-frame ids, read as 60 Hz frames (plan 14
         #    WP6) — a file the launch's migration has not rewritten
         doc, converted = echo_seconds(doc)
@@ -1103,6 +1103,8 @@ class Presets:
         macros = {mid: m.to_json() for mid, m in held.items()}
         modules = dict(doc.get("modules") or {})
         for group in list(modules):
+            if group in RETIRED_MODULES:
+                continue                    # (plan 40 T5: kept, quietly, until a save)
             if group not in PERFORMANCE_GROUPS or group in NO_MODULE:
                 notes.append(f"module {group}: not a performance group, ignored")
                 modules.pop(group)
@@ -1210,7 +1212,7 @@ class Presets:
         self.note = str(doc.get("note") or "")
         # 6. the module labels: a label and a clean dot, never a load (D3)
         for group in PERFORMANCE_GROUPS:
-            if group in NO_MODULE:
+            if group in NO_MODULE and group not in RETIRED_MODULES:
                 continue
             label = modules.get(group)
             lib.label(group, str(label) if label else None)
@@ -1329,80 +1331,6 @@ class Presets:
             theirs[m.id] = m.to_json()
         own = [d for d in live if not undo.alike(theirs.get(d["id"]), d)]
         return {MODIFIERS_KEY: own} if own else {}
-
-    def _watch_fx_modules(self) -> None:
-        """Hand the library's fx module loads to `_fx_module` (plan 33 R12,
-        `Library.on_apply`): idempotent, so `load_doc` calls it as well as
-        `__init__` and a hot reload that re-classes this object (never
-        re-inits it) is registered at its next preset load. The hook looks
-        the method up at call time, so a re-class reaches it."""
-        on_apply = getattr(self.lib, "on_apply", None)
-        if on_apply is not None:
-            on_apply(FX_GROUP, lambda name, doc: self._fx_module(name, doc))
-
-    def _fx_module(self, name: str, doc: dict) -> None:
-        """An fx module just landed (plan 33 R12, `Library.on_apply`): its
-        run replaces the loaded graph's main run, and its faces run the
-        faces' when it has one (`graphmigrate.module_runs`); every branch,
-        composite, switch and placement stays. Its values are the fx group
-        as the module landed them. A wire the loaded graph had refused stays
-        refused, as the load said, and the rest lands with the module's run
-        (the load's own landing: the spec without it, the section with it).
-        A graph this build cannot read at all is left as it is, said in a
-        note; one that comes out the same is not landed again."""
-        gs = self._graph_section()
-        table = self.router.table
-        rows = {"routes": [b.to_json() for b in table.routes()],
-                "desk": desk_json(table.desk()), "macros": table.macros_doc()}
-        before = gs.free_doc()
-        if before is None:
-            # (plan 36 T4, the T3 review's WYSIWYG leak: before any preset
-            # has landed the frame is the empty wired one — the module's run
-            # goes into it, and nothing of today's frame is filled in)
-            before = read_graph({FRAME_KEY: WIRED_FRAME}).to_json()
-        # (its order and target are no params since plan 33 T7: read from
-        # the module's file over the group's defaults, as its values land)
-        own = self._held_retired(_module_values(FX_GROUP, doc), (FX_GROUP,))
-        # (plan 36 T3: an effect the graph does not name has no params yet —
-        # the module's own values say whether it joins the run)
-        landed = {**self.lib.defaults(FX_GROUP), **_module_values(FX_GROUP, doc),
-                  **self.reg.snapshot(FX_GROUP)}
-        new, notes = graphmigrate.module_runs(before, {**landed, **own}, gs.specs(), rows)
-        spec, section, read_notes = gs.read(new)
-        if spec is None:
-            notes = [*notes, ("its run is not applied — the preset's graph is not one "
-                              "this build reads")]
-        else:
-            notes = [*notes, *read_notes]
-        # (final review, finding 1: every note the module's run makes is
-        # said — a run refused here would otherwise vanish without a word;
-        # one the preset's load already said is not said twice)
-        said = list(getattr(self, "notes", []))
-        for note in (f"fx module {name}: {n}" for n in notes):
-            if note not in said and not any(n == note.partition(": ")[2] for n in said):
-                said.append(note)
-                self.lib.say(warning=note)
-        self.notes = said
-        if spec is None:
-            return
-        if section != before:
-            gs.land(spec, section)
-
-    def _held_retired(self, values: dict, groups=PERFORMANCE_GROUPS) -> dict[str, Any]:
-        """The retired values (plan 33 T7) a load of `values` (a file's, or
-        an fx module's) lands, as a build from before T7 landed them —
-        `graphmigrate.landed_retired` over the groups' defaults
-        (`Library.defaults`) and the effects this build holds: an fx
-        module's run is read from its orders (`_fx_module`)."""
-        defaults: dict[str, Any] = {}
-        for g in groups:
-            try:
-                defaults.update(self.lib.defaults(g))
-            except (LibraryError, AttributeError, KeyError):   # a stand-in library
-                continue
-        return graphmigrate.landed_retired(
-            values, defaults, self._graph_section().specs(), effects=FX_GROUP in groups,
-            channels=bool({"view", "backdrop"} & set(groups)))
 
     def _template_rows(self, doc: dict) -> list | None:
         """A copy of the rows of the desk template `doc` names (plan 24 C3),
@@ -1718,8 +1646,8 @@ def party_trip_routes() -> list[Binding]:
 
 # ---- plan 14 WP5 (decision 24): the effect families on F6–F8 ----
 #
-# One effect family each, the effect values from the matching `library/fx`
-# module preset (`fx_module`), and between them every effect in
+# One effect family each, the effect values those of the retired fx module
+# preset of the same name (`ACID_FX`, `MANDALA_FX`, `NOITA_FX`), and between them every effect in
 # shaders/fx on in a party preset: ACID acid · wobble · deconverge · hue
 # cycle; MANDALA plasma · kaleidoscope · fractals · glimmer; NOITA trip
 # warp · trip colour · fractals · double vision. The plan-12 rules that
@@ -1733,12 +1661,21 @@ def party_trip_routes() -> list[Binding]:
 # effect, the left grips the object (as in tumble, faces and wake) and
 # its height adds the second effect.
 
-def fx_module(name: str) -> dict[str, Any]:
-    """A `library/fx` module preset's values — what an effect preset
-    takes its effect settings from (read at generation, so the module
-    file stays the one place they are tuned)."""
-    doc = json.loads((FACTORY / "fx" / f"{name}.json").read_text())
-    return dict(doc.get("values") or {})
+# the effect settings each family takes, as the retired fx module presets
+# of the same names held them (plan 40 T5, D6: those files are gone, their
+# values kept here so the generated presets stay byte-identical)
+ACID_FX: dict[str, Any] = {"fx.acid.on": True, "fx.wobble.on": True,
+                           "fx.deconverge.on": True, "fx.huecycle.on": True}
+MANDALA_FX: dict[str, Any] = {
+    "fx.plasma.on": True, "fx.plasma.level": 0.45, "fx.kaleido.on": True,
+    "fx.kaleido.segments": 8, "fx.kaleido.order": 8, "fx.fractals.on": True,
+    "fx.fractals.ground": 0.6, "fx.fractals.amount": 1.2, "fx.glimmer.on": True,
+    "fx.glimmer.ground": 0.4}
+# Noita's trip stages 0–2 (data/entities/misc/effect_trip_0N.xml, fx_add:
+# each stage's amounts add to the ones before)
+NOITA_FX: dict[str, Any] = {"fx.warp.on": True, "fx.warp.amount": 0.9,
+                            "fx.tripcolour.on": True, "fx.tripcolour.amount": 0.55,
+                            "fx.fractals.on": True, "fx.fractals.amount": 1.4}
 
 
 def party_scene(**view) -> dict[str, Any]:
@@ -1785,7 +1722,7 @@ def party_acid_values() -> dict[str, Any]:
     return {**party_scene(view_shape=11, view_speed=0.3, view_bright=2.0, view_depth4=2.6,
                           view_pattern=1, view_pattern_mix=0.6, camera_zoom=1.1,
                           **{f"view_plane.{n}": True for n in ("XW", "YW", "ZW")}),
-            **fx_module("acid"),
+            **ACID_FX,
             "fx.acid.bend": 0.04, "fx.acid.twist": 0.9, "fx.acid.reach": 10.0,
             "fx.acid.breathe": 0.35, "fx.deconverge.amount": 5.0,
             "fx.wobble.amount": 0.004, "fx.huecycle.paint": 0.7, "fx.huecycle.spread": 1.2}
@@ -1818,7 +1755,7 @@ def party_mandala_values() -> dict[str, Any]:
                           view_faces=True, view_pattern=9, camera_zoom=0.7,
                           **{"camera_pan.x": 190.0},
                           **{f"view_plane.{n}": True for n in ("XW", "ZW")}),
-            **fx_module("mandala"),
+            **MANDALA_FX,
             "fx.kaleido.zoom": 1.0, "fx.kaleido.swirl": 0.0, "fx.glimmer.amount": 1.0,
             # tuned for the glass (plan 14 WP5): a black ground
             "fx.plasma.level": 0.0, "fx.fractals.ground": 0.0, "fx.glimmer.ground": 0.0}
@@ -1849,7 +1786,7 @@ def party_noita_values() -> dict[str, Any]:
     return {**party_scene(view_shape=7, view_speed=0.3, view_bright=1.4, view_depth4=2.4,
                           view_pattern=11, view_pattern_mix=0.8, camera_zoom=1.0,
                           **{f"view_plane.{n}": True for n in ("XW", "YW", "ZW")}),
-            **fx_module("noita-heavily-tripping"),
+            **NOITA_FX,
             "fx.doublevision.on": True, "fx.doublevision.amount": 4.0,
             "fx.doublevision.ghost": 0.5, "fx.doublevision.copies": 2}
 
