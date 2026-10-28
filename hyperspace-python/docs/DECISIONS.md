@@ -17,6 +17,8 @@ behaviour in [`ENGINEERING.md`](ENGINEERING.md).
   (the step sequencer, 2026-10-22) say "owner (plan 31 decision N)": the
   owner accepted all ten recommendations before the build, and register
   rows 311–320 record what was built against each.
+  Plan 37's rows (417–429 and 460, 2026-10-27) were the controller's,
+  in the owner's absence.
   The owner
   has still to confirm or overturn it in
   [`DECISION-REGISTER.md`](DECISION-REGISTER.md) under that row number.
@@ -219,6 +221,7 @@ replaces a row, rewrite that row instead of adding a new one.
 | **Hands through effects** (`output.N.through`, off by default). When on, that output's hands' layer is composited after the look-back composite and before the first effect. With the scene off and through on, the output shows the hands alone through the effects. | `graph.default_graph` (`composite(scene+hands)`, `fx(scene+hands)`) | owner (switch); rows 79, 193 (where they go in) |
 | The guide and the tethers' labels are never bent: when hands go through effects, they are drawn in a layer of their own laid on afterwards. | `Ghost.readout` | row 80 |
 | **Instances are laid out by `view.inst_layout`: GRID, HEX or RING.** | `render.inst_positions` | row 71 |
+| **The cut-through blend is a window's, not a ground's** (plan 39 T1): the squared-alpha cut-through (`SRC_ALPHA, ONE_MINUS_SRC_ALPHA`) is taken only when the window is see-through (`Renderer.bg_alpha < 1`, overlay mode); a scene cleared to a zero ground — laid into a composite's `over` or over the backdrop — always takes the separate blend, so its picture is honest premultiplied data and `view.cut_through` changes nothing on an opaque window. Eight backdrop fixture goldens were re-recorded for it, no factory preset's. | `render.draw_scene` | row 448 |
 
 ## Media
 
@@ -321,6 +324,55 @@ replaces a row, rewrite that row instead of adding a new one.
 | **A new preset is `shape → scene → output.all.image`**, plain faces; the picker's starters (scene chain, tracers, tracers + dream, dream on a picture, a channel to the backdrop) are pre-wired groups, every node and cable visible. | `preset.Presets.new`, `graphview.STARTERS` | row 411 |
 | **"Preset only"** hides every node not in the preset's section or cabled to one (an uncabled controller, modulation or macro, a group node and the camera hide), on by default for every preset. | `graphview.preset_only`, `ui_graph.PRESET_ONLY` | rows 399, 413 (D4) |
 | Dream fidelity, deferred: the migrated dream dreams the occluded trail; a dream `submit` port and an occluder after the dream would restore the old look. | — | row 412 (owner) |
+
+## Nodes as pictures (plan 37)
+
+| Decision | Where | Who |
+|---|---|---|
+| **A picture node on GRAPH is drawn as the picture it makes.** A thumbnail is made only for the nodes the page has on screen and drawn. The renderer copies each one at the frame's end, in `_for_the_panel`, through `graph.picture`, into a small texture: 192 texels on the long side, one 16-tap downsample pass, not mipmaps. It is dropped after a second unwanted. A node that made nothing is dimmed, then black a second later. Nothing behind an unpicked switch input is read, and the outputs are byte-identical with or without thumbnails. A shape shows its scene faint, a hands node its layer, and an output its window. The modulation side stays text. A kind whose output is a picture and that the table does not name gets a thumbnail too. | `outputs.PreviewTextures`, `render.thumb_source`, `Renderer._thumbnails`, `graphview.THUMBS`, `thumb_of` | rows 422–426 |
+| **The thumbnail is always drawn**, collapsed or expanded, in a 16:9 box at the node's width with the picture letterboxed inside. Collapsed, the node is its title and its picture. Hovering the picture gives the node's summary lines, the picture's size and its GPU time. | `ui_graph._node`, `_thumb`, `graphview.picture_hover`, `THUMB_H` | rows 418 (D2), 425, 427 |
+| **Picture cables are plain red.** The tint is behind the head chip `pictures · tint cables`, off by default and kept on the page, never in the preset or the show. Lit, red leans at most 20° toward the picture's hue, which is read asynchronously, one node a frame. `COLOURS` is unchanged. | `ui_graph.tint`, `_tint_chip`, `outputs.dominant_hue` | rows 419 (D3), 428 |
+| **An effect is laid in the area of its consumers** when they sit left of the effects: the leftmost consumer area not left of what feeds it. Only effect-area nodes move, and a saved position never moves. No factory preset or graph fixture draws a cable backwards across areas. | `graphview.laid_areas` | rows 421 (D5), 429 |
+| The face patterns that stay are the owner's list, and it is **pending**: nothing is dropped until he names it. The sheets and the migration map ("nearest kept", ranked by structure, then palette, then motion) are ready in `docs/plans/assets/37-faces/`. With the list he also decides renumber or tombstones for `view.pattern`'s index. Until P2 runs, "appended, never inserted" (Face patterns, row 105) stands. | `tools/faces_sheets.py`, `tests/test_faces_map.py` | rows 417 (D1, open), 460 |
+| Faces per instance (`shape.faces.<k>`) come after this plan. | — | row 420 (D4) |
+
+## Hold the projector (plan 38)
+
+| Decision | Where | Who |
+|---|---|---|
+| **Take is a hard cut**, not a crossfade; the look-back's trails carry on through it. | `hold.Hold.take` | row 430 (D1, rec) |
+| **The turn is one for both**: `rot.*`, the 3D switch, speed and the planes are integrated once a frame and never held. | `hold.ONE_FOR_BOTH`, `ONE_FOR_BOTH_PREFIXES` | row 431 (D2, rec) |
+| **Drop puts back the preset's part**, as one undo step to the hold point (the look, the graph and the show's cables, the routes, the desk's preset layer, the macros, the name and dot); the rig's params stay. | `hold._preset_part`, `undo.Undo.revert` | rows 432 (D3, rec), 438, 439 |
+| **The preview shows only behind GRAPH**, drawn only on frames the page shows it. | `ui_graph._backdrop`, `app._draw_preview` | row 433 (D4, rec) |
+| **A hold holds every output**; the PROJECTOR inset is the laptop's view of the room. | `app._draw_render`, `hold.Hold.program` | row 434 (D5, rec) |
+| **While held, GRAPH's node pictures are the preview's**: the thumbnails, their hues and the hover's GPU times come from the renderer the canvas reads; output 1's node shows the program's picture, the PROJECTOR inset's. | `ui_graph.picture_sources`, `hold.canvas_renderer` | rows 498, 499 |
+
+## Masks are their own wire (plan 39)
+
+The owner's two sentences (2026-10-27), which the plan builds on:
+
+- **One concept.** "I can take an arbitrary bitmap and do foreground/background
+  segmentation on that, and then have those two things come out of that node
+  as two bitmaps. A separate node could handle the conversion of a bitmap
+  into a mask."
+- **Alpha is not a mask.** "Alpha is: how transparent is this thing? A mask
+  means that I have a pattern here, and it's a very binary thing. Either the
+  pixel passes, or it doesn't. I don't necessarily want to ride on alpha to
+  make that happen … have an image as your foreground, then put a mask over
+  that image that cuts out part of that image, and then allow the background
+  to shine through."
+
+| Decision | Where | Who |
+|---|---|---|
+| **A mask is its own wire** (`mask`, purple): one channel, a pixel passes or it does not, at its maker's size; it never rides in a picture's alpha. The converters are explicit: `matte` (picture → mask), `cut` (picture + mask → picture). | `graph.MASK`, `graph.MatteNode`, `graph.CutNode`, `masks.py` | owner (plan 39 decision 1); row 440 |
+| **A mask may be wired where a picture is taken**: white where it passes, black elsewhere, fitted by cover. One-way: a picture into a mask port is refused in words; the converter is always a `matte`. | `graph._Build._taken`, `graph.MaskPicture`, `graph.PICTURE_INTO_MASK` | owner (decision 2); rows 441, 453 |
+| **`segment` takes any picture and makes two**, `segment.fg` and `segment.bg`, and its matte as a third pin, `segment.mask`; picture → mask is the separate `matte`. | `graph.SegmentNode`, `graph.SegmentPin` | owner (decision 3); row 442 |
+| **Apple Vision first** (the Neural Engine), torchvision behind the same node; `[segment] backend` auto picks Vision on macOS. Dependency `pyobjc-framework-vision` (macOS only). | `segment.pick_backend`, `VisionBackend`, `TorchBackend` | owner (decision 4); row 443 |
+| **Person and motion** in this build; `subject` is declared and refused in words. | `segment.mode` | owner (decision 5); rows 444, 486 |
+| **`cut` first**; a `mask` port on `composite` only if the two-node wiring feels like one too many at the machine. | `graph.CutNode` | owner (decision 6); row 445 |
+| **`edges` is an effect file**, landed first. | `shaders/fx/edges.glsl` | owner (decision 7); row 446 |
+| **Plan 39 ran in parallel** with plans 37 and 38, each on its own branch. | `plans/37-38-39-orchestrator-prompt.md` | owner (decision 8); row 447 |
+| A segment's worker exists only on the program renderer; the hold's preview passes a person segment through. A held matte, cut or segment keeps its knobs for the projector. | `Renderer.segment_cfg`, `hold.HELD_GROUPS` | rows 484, 495, 496 |
 
 ## Face patterns
 

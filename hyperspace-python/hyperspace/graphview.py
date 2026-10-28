@@ -257,6 +257,14 @@ class VNode:
     # that no path leads from to a sink (`graph.reaches`): kept, never run,
     # drawn faint with the line "reaches nothing" — never idle
     faint: bool = False
+    # plan 37 C1 (P1): how this node's thumbnail is found (`THUMBS`' word:
+    # "picture", "scene", "layer", "window"), None for a node that stays
+    # text (the modulation side, a group, the camera); and the size of the
+    # picture its thumbnail was last copied from (the page sets it each
+    # frame from `outputs.PreviewTextures.size_of`: C2's hover says it),
+    # None before the first copy
+    thumb: str | None = None
+    picture: tuple[int, int] | None = None
 
     def port(self, pid: str) -> VPort | None:
         return next((p for p in self.ports if p.id == pid), None)
@@ -405,6 +413,12 @@ OWNERS: dict[str, str | Callable[[str, _Ctx], str | None]] = {
     "backdrop": "backdrop",
     "switch": _switch_owner,
     "resize": _resize_owner,
+    # plan 39 T2: `matte[.<n>].<key>` on its matte's node (the resize's rule)
+    "matte": _resize_owner,
+    # plan 39 T3: `cut[.<n>].<key>` on its cut's node (the resize's rule)
+    "cut": _resize_owner,
+    # plan 39 T4: `segment[.<n>].<key>` on its segment's node (the resize's rule)
+    "segment": _resize_owner,
     "ghost": _hands_owner,
     "cloud": _cloud_owner,
     "dream": rgraph.LOOKBACK,
@@ -764,6 +778,7 @@ LABELS: dict[str, str] = {
     "backdrop": "Backdrop", "lookback": "Look-back", "pattern": "Faces pattern",
     "channel": "Channel", "composite": "Composite", "switch": "Switch", "delay": "Delay",
     "resize": "Resize", "echo": "Echo", "dream": "Dream", "copy": "copy of",
+    "matte": "Matte", "cut": "Cut", "segment": "Segment",
     "output": "Output", rgraph.ALL_OUTPUTS: "All outputs", rgraph.GROUND: "Ground",
 }
 # … and its hover, one line (V's hover column; an effect says its file's
@@ -789,6 +804,12 @@ HOVERS: dict[str, str] = {
     "switch": "Picks one of eight.",
     "delay": "Last frame's picture.",
     "resize": "A crop at its own size.",
+    "matte": ("Makes a mask of its picture — by brightness, coverage or a keyed hue. Wired "
+              "where a picture goes, the mask shows white where it passes."),
+    "cut": ("Cuts its picture by a mask: the picture where the mask passes, see-through "
+            "elsewhere. Lay it over another picture to show that one through the hole."),
+    "segment": ("Cuts its picture into a foreground and a background — a person, or what "
+                "moves — with the matte between them as a mask."),
     "echo": "The k-th newest look-back frame.",
     "dream": "The dream buffer.",
     "output": "A window: shows its picture, the hands over it, the guide over all.",
@@ -820,7 +841,9 @@ CLOUD_INTO_SCENE = "{cloud} is a cloud device: its one wire is into scene.geomet
 # undo step, every node and cable ordinary after it. (key, the item's words)
 STARTERS = (("scene", "scene chain"), ("tracers", "tracers"),
             ("tracers+dream", "tracers + dream"), ("dream", "dream on a picture"),
-            ("backdrop", "channel to backdrop"))
+            ("backdrop", "channel to backdrop"),
+            # plan 39 T5 (W6): channel a segmented, its foreground over the scene
+            ("cut-out", "cut-out"))
 # the starters a picture cable's menu offers, that cable their picture
 CABLE_STARTERS = ("tracers", "tracers+dream", "dream")
 # the scene chain: a new preset's whole section and the first starter —
@@ -828,12 +851,60 @@ CABLE_STARTERS = ("tracers", "tracers+dream", "dream")
 SCENE_CHAIN = (("shape", "scene.geometry"), ("scene", f"{rgraph.ALL_OUTPUTS}.image"))
 NEW_CHAIN = ("shape", "scene", rgraph.ALL_OUTPUTS)   # its nodes, left to right
 STARTER_SAID = "scene chain: shape → scene → All outputs"
+# plan 39 T5 (plan 36's follow-up): a starter that takes All outputs'
+# picture says what fed it before — its words' tail
+STARTER_REPLACED = " — in place of {was} into All outputs"
+# plan 39 T5 (W6): the cut-out starter's words, and the scene it lays the
+# foreground over drawing nothing until a shape is wired in
+CUT_OUT_SAID = ("cut-out: {feed} → {seg}.image, {seg}.fg over the scene in {comp} "
+                "→ All outputs")
+CUT_OUT_NO_SHAPE = " — left unwired: scene.geometry (wire a shape in: the scene draws nothing)"
 NO_STARTER = "no starter {which!r}: the starters are " + ", ".join(w for _, w in STARTERS)
 NO_CABLE_STARTER = "{label} starts from no cable: pick it from the canvas's starters"
 IN_ALREADY = "{label} is in the graph already"
 NOTHING_TO_DELETE = "nothing to delete: {what} has no wires"
 NO_SUCH_WIRE = "{wire}: no such wire"
 NO_SUCH_COPY = "copy of {of}: no such effect instance in the graph"
+
+
+# plan 37 C1 (P1, the one table): how each canvas kind's thumbnail is
+# found — "picture": the picture the node makes (`graph.picture`);
+# "scene": a geometry, which makes draw calls, not a picture — the scene
+# that draws it, faint (`THUMB_FAINT`); "layer": a hands node — its hands
+# layer, else the scene it is drawn in; "window": an output — what the
+# window shows (output 1 the page's `outputs.Preview`, any other its
+# presenter's picture: `render.thumb_source`). A kind missing here whose
+# node's output is a picture (a kind added later: plan 39's) is a
+# "picture" too (`thumb_of`); the rest (All outputs, the camera, ground,
+# the modulation side) stay text.
+PICTURE, SCENE_PIC, LAYER_PIC, WINDOW_PIC = "picture", "scene", "layer", "window"
+THUMBS: dict[str, str] = {
+    "channel": PICTURE, "pattern": PICTURE, "scene": PICTURE, "backdrop": PICTURE,
+    "composite": PICTURE, "switch": PICTURE, "delay": PICTURE, "resize": PICTURE,
+    "lookback": PICTURE, "echo": PICTURE, "dream": PICTURE, "effect": PICTURE,
+    "copy": PICTURE, "layer": PICTURE, "guide": PICTURE,
+    # plan 39 at the plan 37 merge: a cut is its picture; a matte (a mask)
+    # and a segment (its own picture is its matte; fg, bg are its pins) are text
+    "cut": PICTURE,
+    "shape": SCENE_PIC, "cloud": SCENE_PIC, "hands": LAYER_PIC,
+    "output": WINDOW_PIC,
+}
+THUMB_FAINT = frozenset({SCENE_PIC})     # drawn faint (`ui_graph.FAINT_PIC`)
+# the thumbnail's box on a node, canvas units: the node's inner width
+# (`ui_graph.NODE_W`, 190 × SCALE) at 16:9 — a picture of another aspect
+# is fitted inside it, so the layout never moves with a picture's size
+THUMB_H = float(round(190 * 1.25 * 9 / 16))
+
+
+def thumb_of(name: str, ref=None) -> str | None:
+    """How canvas node `name`'s thumbnail is found (`THUMBS`), its render
+    node `ref` deciding for a kind the table does not name; None: text."""
+    kind = kind_of(name)
+    if kind in THUMBS:
+        return THUMBS[kind]
+    if kind in (None, CAMERA, rgraph.ALL_OUTPUTS, rgraph.GROUND):
+        return None
+    return PICTURE if getattr(ref, "OUTPUT", None) == IMAGE else None
 
 
 def kind_of(name: str) -> str | None:
@@ -1038,6 +1109,7 @@ FRAME_CLASS: dict[str, type] = {
     "pattern": rgraph.PatternNode, "channel": rgraph.MediaNode, "effect": rgraph.Effect,
     "copy": rgraph.Copy, "composite": rgraph.Composite, "switch": rgraph.SwitchNode,
     "delay": rgraph.Delay, "resize": rgraph.ResizeNode, "echo": rgraph.EchoNode,
+    "matte": rgraph.MatteNode, "cut": rgraph.CutNode, "segment": rgraph.SegmentNode,
     "dream": rgraph.DreamNode, "output": rgraph.Output, rgraph.ALL_OUTPUTS: rgraph.Output,
     rgraph.GROUND: GroundNode,
 }
@@ -1072,7 +1144,40 @@ def _stand_in(name: str, spec=None) -> rgraph.Node | None:
         return rgraph.Output(name, int(rest) - 1 if rest.isdecimal() else -1)
     if kind == CAMERA:
         return None
-    return FRAME_CLASS[kind](name)
+    r = FRAME_CLASS[kind](name)
+    if kind in STAND_IN_SAID:                        # plan 39 T5: its body line, in words
+        into = {w.port: w.src for w in (spec.all_wires() if spec is not None else ())
+                if w.node == name}
+        r.said = STAND_IN_SAID[kind](name, into)
+    return r
+
+
+def _matte_said(name: str, into: dict[str, str]) -> str:
+    src = into.get("image")
+    return f"a mask of {src}'s picture" if src else MATTE_UNWIRED
+
+
+def _cut_said(name: str, into: dict[str, str]) -> str:
+    if "image" not in into:
+        return CUT_NO_PICTURE
+    m = into.get("mask")
+    return f"{into['image']} cut by {m}" if m else CUT_NO_MASK
+
+
+def _segment_said(name: str, into: dict[str, str]) -> str:
+    src = into.get("image")
+    return f"{src} into it: no worker runs until it is reached" if src else SEGMENT_UNWIRED
+
+
+# plan 39 T5 (W6): what a matte, a cut or a segment the renderer built
+# none of says (`summary` reads `said`): unwired, or wired but reached by
+# nothing — a built one says its own (`graph.MatteNode.run` …)
+MATTE_UNWIRED = "nothing wired into its image: no mask"
+CUT_NO_PICTURE = "nothing wired into its image: no picture"
+CUT_NO_MASK = "no mask wired: its picture through, whole"
+SEGMENT_UNWIRED = "nothing wired into its image: no worker runs"
+STAND_IN_SAID: dict[str, Callable[[str, dict[str, str]], str]] = {
+    "matte": _matte_said, "cut": _cut_said, "segment": _segment_said}
 
 
 def _built(rnodes: Iterable[rgraph.Node]) -> dict[str, rgraph.Node]:
@@ -1407,6 +1512,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                  "output" if kind in ("output", rgraph.ALL_OUTPUTS) else "render")
         of = copies.get(name, "")
         n = add_node(VNode(f"render:{name}", vkind, label_of(name, slots, of=of), ref=r,
+                           thumb=thumb_of(name, r),
                            status=hover_of(name, slots, of=of,
                                            tip=_tip(reg, name) if kind == "effect" else "")))
         for port, typ in _takes(kind).items():
@@ -1417,8 +1523,11 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         if kind == rgraph.ALL_OUTPUTS:           # plan 36 T1: the bus's pins, one a port
             for port in rgraph.BUS_PORTS:
                 add_port(n, VPort(f"rout:{name}.{port}", port, OUT, IMAGE))
+        if kind == "segment":                    # plan 39 T5: every instance's three pins
+            for p, typ in rgraph.SEGMENT_PINS.items():
+                add_port(n, VPort(f"rout:{name}.{p}", p, OUT, typ))
         for pin, owner in rgraph.PINS.items():   # plan 36 T2: the scene's cover and depth
-            if owner == name:
+            if owner == name and kind != "segment":
                 typ = rgraph.WIRED_MAKES[kind_of(pin)]
                 add_port(n, VPort(f"rout:{pin}", pin.rpartition(".")[2], OUT, typ))
         if kind == "lookback":                   # plan 36 T4: its own frames, pins
@@ -1596,8 +1705,11 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                 and w.node not in windows)
         said = (f"no {w.node} this frame" if shut else
                 f"{lay} {D1_AFTER} {w.src}: what reads {w.src} reads it" if lay else "")
+        # plan 39 T5 (W6): a cable whose maker makes a mask is a mask cable
+        # (purple), whatever port takes it — promoted into a picture port too
+        typ = MASK if pin_type.get(src) == MASK else _takes(kind_of(w.node)).get(w.port, IMAGE)
         view.cables.append(VCable(cable_id(f"wire:{w.src}>{w.node}/{w.port}"), src, dst,
-                                  _takes(kind_of(w.node)).get(w.port, IMAGE), ref=w,
+                                  typ, ref=w,
                                   kind="render", dormant=shut, off=shut, label=said))
     # plan 36 T1 (W1, D1): the rig's bus cables, `output.all.<port> →
     # output.<n>.<port>` — each standing one the show has not cut, into
@@ -1670,6 +1782,9 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             or (n.kind != "channel" and is_idle(n, macros, named))
             or (n.kind == "render" and effect_off(n, reg) and n.ref.effect not in cabled))
     view.nodes = list(nodes.values())
+    # plan 37 P3: an effect is laid where its consumers are (`laid_areas`)
+    for nid, area in laid_areas(view).items():
+        nodes[nid].area = area
     _columns(view, render_graph)
     refresh(view, reg, router, lanes)
     return view
@@ -1928,6 +2043,89 @@ def area_of(n: VNode) -> str:
                 return AREA[cls.__name__]
         return EFFECTS_AREA
     return AREA.get(n.kind, OTHER)
+
+
+def area_column(area: str) -> int | None:
+    """Area `area`'s place left to right (`AREAS`; an area drawn under
+    another's, `SHARES`, at that one's); None for an area of no column."""
+    area = SHARES.get(area, area)
+    return AREAS.index(area) if area in AREAS else None
+
+
+def laid_areas(view: View) -> dict[str, str]:
+    """Plan 37 P3, D5 (the rules): the nodes `area_of` lays in the effects
+    that are laid where their consumers are instead, so no cable runs back
+    across areas — by node id, the area each is laid in.
+
+    An effect, copy, composite or resize (a node of the frame `area_of`
+    gives the effects) whose consumers sit left of the effects is laid in
+    the leftmost of their areas that is not left of what feeds it: with
+    one consumer area that is D5's rule (`acid-scene`'s acid.2, between
+    the scene and the look-back, is the look-back's), with several the
+    leftmost (acid.2 also feeds a composite: it still sits in LOOK-BACK, so
+    that cable runs right). Tie-breaks: a consumer left of what feeds the
+    node (a picture of the scene taken back into a switch) is a return by
+    design and does not count; neither does a cable kept for the next
+    frame (`kept`: into a look-back's or a delay's `image`) — such a cable
+    is not counted as a consumer but still counts in `makers`, as a feed
+    bounding its taker from the left, so "not left of what feeds it"
+    holds across every drawn cable, kept ones included; a consumer of
+    no area is not counted; a chain whose only consumer is in another area
+    goes there whole (consumers first, to a fixed point); what feeds the
+    node bounds it from the left (a node of the chain at the earliest
+    area its own feeds allow). A node with no consumer left of the
+    effects keeps the effects.
+
+    Plan 36's rule holds: this names an *area*, the one `layout` lays an
+    unplaced node in — a node with a saved position keeps it (`layout`
+    skips what `placed` holds), nothing re-lays on a later frame, and a
+    tidy lays out by the same areas. To reverse: drop the call in `build`."""
+    by = {n.id: n for n in view.nodes}
+    col = {k: area_column(n.area) for k, n in by.items()}
+    free = [k for k, n in by.items() if n.kind in FRAME_VKINDS and n.area == EFFECTS_AREA]
+    if not free:
+        return {}
+    makers: dict[str, list[str]] = {}
+    takers: dict[str, list[str]] = {}
+    for c in view.cables:
+        a, b = node_of(view, c.src_port), node_of(view, c.dst_port)
+        if a == b or a not in by or b not in by:
+            continue
+        makers.setdefault(b, []).append(a)
+        if not kept(c, by[b]):
+            takers.setdefault(a, []).append(b)
+    movable = set(free)
+    # The caps (len(free) + 1 passes each): a pass carries a change one more
+    # node along a chain, so for any chain without a loop — all a built
+    # graph can hold (a loop closes only through a kept cable, which is no
+    # consumer here) — both passes settle before the cap. Should a cap be
+    # hit, the result is partial: some nodes not yet where the rule would
+    # lay them (never a saved position moved; only areas named).
+    # the earliest column each may sit at: past every fixed node feeding it
+    lo = dict.fromkeys(free, 0)
+    for _ in range(len(free) + 1):
+        moved = False
+        for k in free:
+            feeds = [lo[m] if m in movable else col[m] for m in makers.get(k, ())]
+            v = max((f for f in feeds if f is not None), default=0)
+            if v > lo[k]:
+                lo[k], moved = v, True
+        if not moved:
+            break
+    # where each is laid: the leftmost of its consumers' (as laid) not left of `lo`
+    home = {k: col[k] for k in free}
+    at = dict(home)
+    for _ in range(len(free) + 1):
+        moved = False
+        for k in free:
+            seen = [at[t] if t in movable else col[t] for t in takers.get(k, ())]
+            seen = [s for s in seen if s is not None and s >= lo[k]]
+            v = min(seen) if seen and min(seen) < home[k] else home[k]
+            if v != at[k]:
+                at[k], moved = v, True
+        if not moved:
+            break
+    return {k: AREAS[at[k]] for k in free if at[k] != home[k]}
 
 
 # which kinds may sit idle (`is_idle`): a node of any other kind is always
@@ -2235,19 +2433,23 @@ def returns(view: View, lay: Layout) -> set[str]:
         a, b = view.node(node_of(view, c.src_port)), view.node(node_of(view, c.dst_port))
         if a is None or b is None:
             continue
-        # (plan 36 T4: what a look-back records is its `image`)
-        kept = (isinstance(b.ref, (rgraph.Delay, rgraph.History))
-                and c.dst_port.endswith("/image"))
-        # (an old preset's D1 `after X` effect, drawn where X's readers read
-        # it: it sits with the effects, its reader may sit left of them)
-        kept = kept or (c.kind == "render" and f" {D1_AFTER} " in c.label)
         wrapped = (a.area == b.area == EFFECTS_AREA
                    and lay.rows.get(b.id, 0) > lay.rows.get(a.id, 0))
         taken = (order.get(a.area, 0) > order.get(b.area, 0) and isinstance(b.ref, TAKEN_BACK)
-                 and c.type == IMAGE)
-        if kept or wrapped or taken:
+                 and c.type in (IMAGE, MASK))     # (plan 39 T5: a promoted mask too)
+        if kept(c, b) or wrapped or taken:
             out.add(c.id)
     return out
+
+
+def kept(c: VCable, b: VNode) -> bool:
+    """Is cable `c` (into node `b`) what is kept for the frames after — a
+    loop by design, drawn back where its ring or its delay sits (`returns`)?
+    Plan 36 T4: what a look-back records is its `image`, as a delay's; an
+    old preset's D1 `after X` effect is drawn where X's readers read it."""
+    if isinstance(b.ref, (rgraph.Delay, rgraph.History)) and c.dst_port.endswith("/image"):
+        return True
+    return c.kind == "render" and f" {D1_AFTER} " in c.label
 
 def visible(n: VNode, full: bool, folds=frozenset()) -> list[VPort]:
     """The ports node `n` draws: a patched port and a render port always;
@@ -2268,12 +2470,14 @@ def height(n: VNode, full: bool = False, folds=frozenset(), collapsed: bool = Fa
     """A node's height as auto_layout stacks it: its title, the ports it
     shows (`visible`) and, expanded, a line per port group — or, while it
     is `collapsed` (plan 28 N7), its title and its lines (`summary`)."""
+    pic = THUMB_H if n.thumb is not None else 0.0    # plan 37 C1 (D2): always
     if collapsed:
-        return HEAD_H + ROW_H * len(summary(n))
+        # (a picture node's lines are its hover's: plan 37 P1)
+        return HEAD_H + (pic if n.thumb is not None else ROW_H * len(summary(n)))
     rows = len(visible(n, full, folds))
     if grouped(n, full):
         rows += len({p.group for p in n.ports})
-    return HEAD_H + ROW_H * rows
+    return HEAD_H + pic + ROW_H * rows
 
 
 def layout(view: View, placed: Mapping[str, Any] | None = None,
@@ -2530,6 +2734,22 @@ def summary(n: VNode) -> list[str]:
         if n.faint:                         # plan 33 U: unreached, said first
             lines.insert(0, REACHES_NOTHING)
     return lines[:SUMMARY_LINES]
+
+
+def picture_hover(n: VNode, gpu_ms: float | None = None) -> str:
+    """What hovering a picture node's thumbnail says (plan 37 C2, P1): its
+    title, then the lines a collapsed text node shows under its title
+    (`summary`: param counts, picture ports, the node's own words, a
+    switch's pick, "reaches nothing"), then the size of the picture its
+    thumbnail was copied from (`VNode.picture`, "1920×1080 picture"), then,
+    for a node the GPU timer times, its time (the SYSTEM page's rolling
+    median, "gpu 0.42 ms"). A line it has nothing for is left out."""
+    lines = [n.label, *summary(n)]
+    if n.picture is not None:
+        lines.append(f"{n.picture[0]}×{n.picture[1]} picture")
+    if gpu_ms is not None:
+        lines.append(f"gpu {gpu_ms:.2f} ms")
+    return "\n".join(lines)
 
 
 def switch_pick(n: VNode) -> str:
@@ -3547,6 +3767,10 @@ PICKER_GROUP: dict[str, str] = {
     "lookback": "look-back", "echo": "look-back", "dream": "look-back",
     "pattern": "pictures", "composite": "pictures", "switch": "pictures",
     "channels": "pictures", "resize": "pictures", "delay": "pictures",
+    # plan 39 T5 (W6): the segment under media ▸ (what a channel's picture
+    # is cut into), the mask nodes in their own group, masks ▸
+    "segment": "media",
+    "matte": "masks", "cut": "masks",
     "effect": "effects",
     "copy": "copy of",
 }
@@ -3570,7 +3794,8 @@ def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
     scene, the shape, hands, a hands layer, a hands guide, the backdrop);
     look-back ▸ (the look-back, plan 34's look-back frames echo.1 … echo.32
     and the dream); pictures ▸ (the faces pattern, a composite, a switch,
-    R28's switch over the channels, plan 34's resize and delay); every
+    R28's switch over the channels, plan 34's resize and delay); media ▸
+    (plan 39's segment); masks ▸ (plan 39's matte and cut); every
     effect file this build has; and a copy of each effect instance in the
     section."""
     gs = edit.graph
@@ -3587,6 +3812,8 @@ def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
             ("switch", None, "switch"),
             *(("channels", port, label) for port, label in CHANNEL_SWITCH_PORTS),
             ("resize", None, "resize"), ("delay", None, "delay")]
+    # plan 39 T5 (W6): media ▸ the segment; masks ▸ the matte and the cut
+    out += [("segment", None, "segment"), ("matte", None, "matte"), ("cut", None, "cut")]
     out += [("effect", f, f) for f in sorted(files or ())]
     out += [("copy", name, f"copy of {name}") for name in _instances(spec)]
     return out
@@ -3796,7 +4023,7 @@ def _node_name(e: dict) -> str | None:
         return f"echo.{e.get('index')}"
     if kind in rgraph.FRAME_KINDS or kind == "dream":
         return kind
-    if kind in ("composite", "switch", "delay", "resize", "copy"):
+    if kind in ("composite", "switch", "delay", "resize", "copy", "matte", "cut", "segment"):
         return kind if n == 1 else f"{kind}.{n}"
     return None
 
@@ -4027,6 +4254,17 @@ def _next(spec, kind: str) -> int:
                default=0) + 1
 
 
+# plan 39 T5 (W6): what adding each of plan 39's nodes says
+ADD_SAID = {
+    "matte": ("{name} added: wire a picture into {name}.image — it makes a mask of it "
+              "({name}.from, {name}.key)"),
+    "cut": ("{name} added: wire a picture into {name}.image and a mask into {name}.mask — "
+            "the picture where the mask passes, see-through elsewhere"),
+    "segment": ("{name} added: wire a picture into {name}.image — its pins are {name}.fg, "
+                "{name}.bg and {name}.mask"),
+}
+
+
 def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> str | None:
     edit.placed = ()
     if kind == "starter":
@@ -4113,6 +4351,12 @@ def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> st
                else f"it makes it at {name}.size")
         return _land(edit, doc, f"add {name}",
                      f"{name} added: wire a picture into {name}.image — {how}")
+    if kind in ADD_SAID:                         # plan 39 T5 (W6)
+        at = {"matte": rgraph.MatteAt, "cut": rgraph.CutAt,
+              "segment": rgraph.SegmentAt}[kind](_next(spec, kind))
+        doc["nodes"].append(at.to_json())
+        name = edit.added = at.name
+        return _land(edit, doc, f"add {name}", ADD_SAID[kind].format(name=name))
     if kind == "echo":
         # plan 36 T4: an echo is the look-back's own output — its pin; the
         # item adds the look-back when the section has none
@@ -4160,6 +4404,12 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
     - **dream**: `picture → dream.image`, `→ composite.under`, `dream →
       composite.over` (blend over: the dream is its picture, dreamed).
     - **backdrop**: a backdrop, `channel.a → backdrop.image`.
+    - **cut-out** (plan 39 T5, W6): a new segment and a new composite,
+      `channel.a → segment.image`, `segment.fg → composite.over`, `scene →
+      composite.under`, `composite → output.all.image` — never refused.
+
+    The scene chain and the cut-out take All outputs' picture: the words
+    name what fed it before (`STARTER_REPLACED`).
 
     The picture is `cable`'s source and the composite goes where the cable
     went; with no cable, the scene, the composite into the one picture
@@ -4181,13 +4431,38 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
             return why
     doc = _with_frame(_doc(edit))
     before = _named(doc)
+    all_in = f"{rgraph.ALL_OUTPUTS}.image"
     if which == "scene":
-        wires = [x for x in doc.get("wires", []) if x["to"] != f"{rgraph.ALL_OUTPUTS}.image"]
+        was = _was_into(doc, all_in, "scene")
+        wires = [x for x in doc.get("wires", []) if x["to"] != all_in]
         for a, b in SCENE_CHAIN:
             if {"from": a, "to": b} not in wires:
                 wires.append({"from": a, "to": b})
         doc["wires"] = wires
-        return _started(edit, doc, before, "shape", "scene", label=label, said=STARTER_SAID)
+        return _started(edit, doc, before, "shape", "scene", label=label,
+                        said=STARTER_SAID + was)
+    if which == "cut-out":
+        # plan 39 T5 (W6): `channel.a → segment.image`, `segment.fg →
+        # composite.over`, `scene → composite.under`, `composite →
+        # output.all.image` — a new segment and a new composite (never
+        # refused: there may be many of each), in place of what fed All
+        # outputs' picture, said
+        spec = _spec(edit)
+        feed = rgraph.channel_name(rgraph.MEDIA_CHANNELS[0])
+        seg = rgraph.SegmentAt(_next(spec, "segment"))
+        comp = rgraph.CompositeAt(_next(spec, "composite"), "over")
+        was = _was_into(doc, all_in, comp.name)
+        wires = [x for x in doc.get("wires", []) if x["to"] != all_in]
+        wires += [{"from": a, "to": b} for a, b in (
+            (feed, f"{seg.name}.image"), (f"{seg.name}.fg", f"{comp.name}.over"),
+            ("scene", f"{comp.name}.under"), (comp.name, all_in))]
+        doc["wires"] = wires
+        doc["nodes"] += [seg.to_json(), comp.to_json()]
+        shaped = any(x["to"] == "scene.geometry" for x in wires)
+        said = (CUT_OUT_SAID.format(feed=feed, seg=seg.name, comp=comp.name) + was
+                + ("" if shaped else CUT_OUT_NO_SHAPE))
+        return _started(edit, doc, before, "scene", seg.name, comp.name, label=label,
+                        said=said)
     if which == "backdrop":
         if "backdrop" in before:
             return IN_ALREADY.format(label=label_of("backdrop"))
@@ -4239,6 +4514,15 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
             + (" — left unwired: " + "; ".join(unwired) if unwired else ""))
     order = (*(["lookback"] if looks else []), *(["dream"] if dreams else []), comp.name)
     return _started(edit, doc, before, *order, label=label, said=said)
+
+
+def _was_into(doc: dict, port: str, keep: str) -> str:
+    """`STARTER_REPLACED`'s words for what fed `port` in section `doc`
+    before a starter takes it (plan 39 T5, plan 36's follow-up), but
+    `keep` — the starter's own feed, when it was already there; "" when
+    nothing else fed it."""
+    was = [x["from"] for x in doc.get("wires", []) if x["to"] == port and x["from"] != keep]
+    return STARTER_REPLACED.format(was=", ".join(was)) if was else ""
 
 
 def _picture_port(port: str) -> bool:

@@ -727,18 +727,18 @@
         <div class="chip c-offset">Feed</div>
       </div>
       <div class="rrow">
-        <div><div class="name">Render stack</div><div class="mods">geometry · view · field · graph · render · glsl · fx · lookback · dream · ghost · outputs · overlay</div></div>
-        <div class="what">GL resources, the shared camera the shape and the hands are seen through, the instance field, the frame history, the dream worker, the faces' picture. <span>Imports no registry at all.</span></div>
+        <div><div class="name">Render stack</div><div class="mods">geometry · view · field · graph · render · glsl · fx · masks · lookback · dream · segment · ghost · outputs · overlay</div></div>
+        <div class="what">GL resources, the shared camera the shape and the hands are seen through, the instance field, the frame history, the dream worker, the segment workers and the mask passes, the faces' picture. <span>Imports no registry at all.</span></div>
         <div class="chip c-read">Reads</div>
       </div>
       <div class="rrow">
         <div><div class="name">Graph</div><div class="mods">graph</div></div>
-        <div class="what">The frame as nodes — the shape, the hands and a point cloud as geometry, the scene, layers, composites, one node per effect, the look-back and the dream, the outputs — built from the preset's graph alone (every edge a drawn wire; a window shows its own wires, else All outputs' by the rig's bus cables), evaluated once a frame in dependency order. <span>Part of the render stack: reads, never writes.</span></div>
+        <div class="what">The frame as nodes — the shape, the hands and a point cloud as geometry, the scene, layers, composites, one node per effect, the look-back and the dream, the masks (a matte, a cut, a segment with its foreground, background and mask), the outputs — built from the preset's graph alone (every edge a drawn wire; a window shows its own wires, else All outputs' by the rig's bus cables), evaluated once a frame in dependency order. <span>Part of the render stack: reads, never writes.</span></div>
         <div class="chip c-read">Reads</div>
       </div>
       <div class="rrow">
         <div><div class="name">Panel</div><div class="mods">ui · ui_* · ui_graph · graphview · hands/panel · control</div></div>
-        <div class="what">The imgui control window — pages, the routing editor, the band and FX editors, the Replace-or-Keep modal, the GRAPH page: both graphs on one node-editor canvas, edited by dragging cables through the table's own calls, and the SEQ page's step grid in the APC40's LED colours.</div>
+        <div class="what">The imgui control window — pages, the routing editor, the band and FX editors, the Replace-or-Keep modal, the GRAPH page: both graphs on one node-editor canvas, edited by dragging cables through the table's own calls, every picture node drawn as its live picture (plan 37: a thumbnail made at the frame's end only for nodes on screen; while the projector is held, by the preview's renderer), and the SEQ page's step grid in the APC40's LED colours.</div>
         <div class="chip c-base">Base</div>
       </div>
       <div class="rrow">
@@ -752,8 +752,8 @@
         <div class="chip c-base">Base</div>
       </div>
       <div class="rrow">
-        <div><div class="name">Host</div><div class="mods">app · hotreload · placement · watchdog</div></div>
-        <div class="what">Construction order, the one frame loop, the windows, the reload watch list. Builds the device registry and the dream worker; importing it pulls in no gated adapter.</div>
+        <div><div class="name">Host</div><div class="mods">app · hotreload · placement · watchdog · hold</div></div>
+        <div class="what">Construction order, the one frame loop, the windows, the hold (plan 38: the projector kept on its held look while the next is built as a preview behind GRAPH), the reload watch list. Builds the device registry and the dream worker; importing it pulls in no gated adapter.</div>
         <div class="chip c-read">Builds</div>
       </div>
     </div>
@@ -792,7 +792,7 @@
       <div class="step mark"><div class="n">11</div><div class="d"><b>reg.apply()</b> — base plus offsets onto every live object</div><div class="chip c-read">objects</div></div>
       <div class="step"><div class="n">12</div><div class="d">Devices send — <b>devices.send()</b>: the sinks send this frame's effective values out (the bridge, the hands' DAW port)</div><div class="chip c-read">out</div></div>
       <div class="step"><div class="n">13</div><div class="d"><b>view.integrate()</b> — the angle advances by rate × dt</div><div class="chip c-read">direct</div></div>
-      <div class="step"><div class="n">14</div><div class="d">Hand the renderer the bands, read only; evaluate the render graph, every render output — a 3D shape's W angles are dropped here</div><div class="chip c-read">screen</div></div>
+      <div class="step"><div class="n">14</div><div class="d">Hand the renderer the bands, read only; evaluate the render graph, every render output — a 3D shape's W angles are dropped here. While the projector is held (plan 38), the outputs draw inside the hold, from the held wiring, rig cables and look (written with <code>Param.put</code>, never <code>set</code>, and put back after); then, only while GRAPH shows it, a second renderer draws the live wiring as the preview</div><div class="chip c-read">screen</div></div>
       <div class="step"><div class="n">15</div><div class="d">Draw the control panel</div><div class="chip c-base">base</div></div>
     </div>
 
@@ -881,6 +881,20 @@
         <span class="path">lookback · dream</span>
       </div>
       <div class="sub">
+        <h4>Masks &amp; vision</h4>
+        <p>A mask is its own purple wire — a pattern, a pixel passes or it
+        does not — and never rides in a picture's alpha. A matte turns a
+        picture into a mask (by brightness, coverage or a colour key); a cut
+        cuts a picture by a mask; a segment takes any picture and puts out
+        its foreground, its background and its mask, from Apple Vision on the
+        Neural Engine (torchvision behind it) on a worker thread a frame or
+        two late, or from a motion model with no network at all. A mask wired
+        where a picture is taken shows white where it passes, black elsewhere
+        — one way only: a picture becomes a mask through a matte. Edges is an
+        effect file.</p>
+        <span class="path">graph · masks · segment · shaders/fx/edges.glsl</span>
+      </div>
+      <div class="sub">
         <h4>Outputs</h4>
         <p>Several render outputs: the first is the main window, each later one a
         window in its share group with its own presenter and overlay. Per-output
@@ -941,7 +955,7 @@
         preset's file says all of its wiring (schema <code>/7</code>: nothing
         is filled in at load) — the hands in the scene or as a layer, an effect
         twice, a wire that gives one output its own picture or its own hands —
-        and 757 golden frames pin
+        and 789 golden frames pin
         every factory preset's picture, and the fixture presets', to the
         byte.</p>
         <span class="path">graph · render · geometry · tools/golden_frames</span>
@@ -983,7 +997,10 @@
         nothing above it; that
         the render stack and its graph import no registry; that <code>Param.modulate</code> has
         exactly one call site; and that importing the host pulls in no gated
-        adapter, no <code>torch</code> and no tracking SDK.
+        adapter, no <code>torch</code>, no Apple Vision and no tracking SDK
+        — the segment worker is imported by the renderer on a segment's first
+        need, never by the graph, and loads its model inside its own first
+        job.
       </p>
       <p>
         <strong>Leaves</strong> — modules that import nothing from the package, so

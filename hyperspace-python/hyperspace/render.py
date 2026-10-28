@@ -139,22 +139,29 @@ from .glsl import QUAD_VS, common, common_mtime, gl_error
 from .graph import (
     EMPTY,
     FACE_PIC,
+    IMAGE,
     MEDIA_CHANNELS,
     Delay,
     Frame,
     Graph,
     Hands,
+    HandsLayer,
+    Output,
+    Scene,
+    SegmentNode,
     Wiring,
     build_graph,
     channel_into,
     cloud_roles,
     graph_key,
     param_prefix,
+    picture,
     rig_of,
 )
 from .lookback import Dreamer, DreamState, Lookback
+from .masks import MaskPasses
 from .media_tex import COVER, FIT_FS, MediaTextures, UiTextures, fit_scale
-from .outputs import Handoff, Presenter, Switches, View, capped, fit
+from .outputs import Handoff, Presenter, PreviewTextures, Switches, View, capped, fit
 from .patterns import MODES, SPEED
 from .tapers import clamp
 from .view import N_MOD, RED, ViewState  # re-exported for callers that had them from here
@@ -991,6 +998,71 @@ class _Timed:
         return False
 
 
+def _flush() -> None:
+    """glFlush in the current context (the render context, at the end of a
+    frame); best-effort — a thumbnail late by a frame costs nothing."""
+    try:
+        from OpenGL import GL
+
+        GL.glFlush()
+    except Exception:  # noqa: BLE001, S110 — no PyOpenGL, or no current context
+        pass
+
+
+def thumb_source(frame: Frame, name: str, how: str,
+                 pulled: frozenset[str] | None = None) -> moderngl.Texture | None:
+    """The picture node `name`'s thumbnail is copied from, this frame
+    (plan 37 C1; `how` is `graphview.THUMBS`' word for its kind) — or None:
+    it made nothing this frame (no such node built, not pulled behind a
+    switch, reading nothing, a hands layer with no hand drawn).
+
+    - ``picture``: a node whose output is a picture, asked for it
+      (`graph.picture`: the texture it made, else painted once into a
+      frame texture of its own);
+    - ``scene``: a geometry (the shape, a cloud): the picture of the first
+      scene that draws it (the page draws it faint);
+    - ``layer``: a hands node: the first hands layer drawing it, else the
+      scene it is drawn in;
+    - ``window``: an output after the first: its presenter's picture (the
+      `Handoff`'s frame, a texture of this context: no readback), or a
+      publish-only output's own target; output 1 is the page's `Preview`,
+      never asked here."""
+    g = frame.graph
+    node = g.nodes.get(name) if g is not None else None
+    if node is None:
+        return None
+    if how == "window":
+        if not isinstance(node, Output) or not 0 < node.index < len(frame.views):
+            return None
+        v = frame.views[node.index]
+        if v.handoff is not None:
+            return v.handoff.frame
+        own = getattr(v.target, "color_attachments", None) if v.target is not None else None
+        return own[0] if own and isinstance(own[0], moderngl.Texture) else None
+    if how in ("scene", "layer"):
+        if how == "layer":
+            layer = next((n for n in g.order if isinstance(n, HandsLayer)
+                          and n.inputs.get("geometry") is node), None)
+            if layer is not None:
+                return layer.image(frame)
+        scene = next((n for n in g.order if isinstance(n, Scene)
+                      and any(x is node for x in n.inputs.values())), None)
+        if scene is None:
+            return None
+        node = scene
+    if getattr(node, "OUTPUT", None) != IMAGE:
+        return None
+    # (review: every kind — a composite, a delay, a resize, a copy behind a
+    # switch's unpicked input made nothing this frame, and painting it would
+    # pull its inputs: the gated effects, the unpicked channels read and
+    # uploaded — plan 33 S. First, before `reads`, which reads a channel)
+    if pulled is not None and node.name not in pulled:
+        return None
+    if not node.reads(frame):
+        return None
+    return picture(frame, node)
+
+
 class Renderer:
     def __init__(self, ctx: moderngl.Context, dream: DreamState | None = None,
                  fx: FxState | None = None, ghost: GhostState | None = None):
@@ -1102,6 +1174,12 @@ class Renderer:
         # frame, `_for_the_panel`) and its thumbnails (`ui_upload`)
         self.media_watch: set[str] = set()
         self.ui_tex: UiTextures | None = None
+        # plan 37 C1: the GRAPH page's thumbnails — the nodes it has on
+        # screen (`PreviewTextures.want`), copied at the end of the next
+        # frame (`_thumbnails`) from that frame (`_thumb_frame`, held only
+        # until then)
+        self.thumbs = PreviewTextures(ctx)
+        self._thumb_frame: Frame | None = None
         self._view_now: ViewState | None = None    # the frame's (`_draw_frame`)
         # face program is assembled around the user-editable patterns.glsl
         self.pattern_error = ""
@@ -1124,6 +1202,14 @@ class Renderer:
         self._swatch_frame = self._swatch_until = self._swatch_next = 0
         self.swatch_error = ""
         self._build_face_program()
+        # plan 39 T4: the segment nodes' workers (`segmenter`), made from
+        # `segment_cfg` (the config's [segment], app.py hands it over) on a
+        # node's first need — None, as the hold's preview renderer is given,
+        # makes none: its segments pass their pictures through — and motion
+        # mode's background models (`motion_pair`), each by its node's name
+        self.segment_cfg: dict | None = None
+        self._segmenters: dict = {}
+        self._motions: dict[str, DelayPair] = {}
         ctx.enable(moderngl.BLEND | moderngl.PROGRAM_POINT_SIZE)
         ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
 
@@ -1204,6 +1290,11 @@ class Renderer:
                 res.release()
         self._dim_prog = self._dim_vao = None
         self.dim_error = ""
+        # plan 39 T2: the mask passes, likewise — compiled again from
+        # masks.py as it is now on the next ask (`mask_passes`)
+        mp = self.__dict__.pop("_mask_passes", None)
+        if mp is not None:
+            mp.release()
         # plan 21's frame textures and the program that shows them: dropped,
         # made again from this module's source on next use. getattr: a
         # renderer from before the outputs existed has none of them
@@ -1223,6 +1314,11 @@ class Renderer:
         # (the reloader re-classes the renderer's own): released, and made
         # again from ghost.py as it is now on next use, over the same state
         self.drop_ghosts()
+        # plan 37 C1: the thumbnails' textures and pass, made again from
+        # outputs.py as it is now (the page wants them again next frame)
+        if getattr(self, "thumbs", None) is not None:
+            self.thumbs.close()
+        self.thumbs = None
         for res in (getattr(self, "_show_vao", None), getattr(self, "_show_prog", None),
                     getattr(self, "_lay_vao", None), getattr(self, "_lay_prog", None)):
             if res is not None:
@@ -1566,6 +1662,9 @@ class Renderer:
         # history (it starts clean when one is drawn again); the dream
         # forgets `D` with no dream node, so the worker sleeps
         self._idle_rings(graph)
+        # plan 39 T4: a segment no node of this graph holds lets its worker
+        # and its background model go, after `SIZED_KEEP_FRAMES`
+        self._tend_segments(graph)
         # plan 30 D1: "an effect is on" means one of the pipelines' runs: an
         # effect the preset placed on an edge runs there (and moves its
         # clock in `run_one`) but bends no pipeline, so with only placed
@@ -1584,8 +1683,10 @@ class Renderer:
                       target, vp, bg_alpha=getattr(self, "bg_alpha", 1.0), fx_on=fx_on,
                       stats=stats, selects=selects, resizes=resizes)
         timer = self._pass_timer()
+        self._thumb_frame = None
         try:
             graph.evaluate(frame)
+            self._thumb_frame = frame       # plan 37 C1: the panel's thumbnails read it
         finally:
             timer.end_frame(graph.timed_in(frame))
             stats["gpu_ms"] = timer.medians()
@@ -1682,6 +1783,70 @@ class Renderer:
                 ui.upload()
             except Exception:  # noqa: BLE001, S110 — a thumbnail not made stays a dark box
                 pass
+        self._thumbnails()
+
+    # ---- plan 37 C1: the GRAPH page's thumbnails ----
+
+    def _thumbs(self) -> PreviewTextures:
+        """The thumbnails, made on first use (getattr: a renderer from
+        before plan 37, or after a reload, has none)."""
+        th = getattr(self, "thumbs", None)
+        if th is None:
+            th = self.thumbs = PreviewTextures(self.ctx)
+        return th
+
+    def _thumbnails(self) -> None:
+        """The end of a frame (`_for_the_panel`): each node the GRAPH page
+        wanted since the last frame (`PreviewTextures.take`) copied into its
+        thumbnail from this frame's picture of it (`thumb_source`), then the
+        names not wanted for a second dropped. Nothing wanted, nothing done:
+        a closed page costs nothing. A painted node is painted again here
+        (`graph.picture`, into a frame texture of its own: counted as
+        `PreviewTextures.repainted`) with the GPU timer muted, so the
+        SYSTEM page's per-node times stay the frame's, and on a copy of the
+        frame's `stats`, so its counts stay the frame's. When anything was
+        copied, the render context is flushed (`glFlush`, as app.py's
+        `_gl_flush` does for a presenter — not `ctx.finish`, a full sync):
+        the control window's context samples the thumbnails, and output 1's
+        swap is not always the next thing to flush. Never raises: the
+        panel's pictures must not take the frame down."""
+        frame, self._thumb_frame = getattr(self, "_thumb_frame", None), None
+        th = getattr(self, "thumbs", None)
+        if th is None:
+            if frame is None:
+                return
+            th = self._thumbs()
+        wanted = th.take()
+        th.begin_frame()
+        if wanted and frame is not None:
+            timer = getattr(self, "timer", None)
+            was = getattr(timer, "_active", False) if timer is not None else False
+            if timer is not None:
+                timer._active = True        # (`PassTimer.time` is then a no-op)
+            # (the frame's counts as the frame left them: restored in place
+            # after, so `self.stats` — the same dict — says what the frame ran)
+            saved = {k: list(v) if isinstance(v, list) else v for k, v in frame.stats.items()}
+            try:
+                pulled = frame.graph.pulled(frame) if frame.graph is not None else None
+                for name, how in wanted.items():
+                    held = len(frame.data)
+                    try:
+                        src = thumb_source(frame, name, how, pulled)
+                    except Exception as e:  # noqa: BLE001 — one node's picture: not the rest
+                        th.error = f"{name}: {type(e).__name__}: {e}"[:120]
+                        continue
+                    # (a picture the frame had not made — painted, or made
+                    # into a texture — leaves a new entry in the frame's data)
+                    if src is not None:
+                        th.put(name, src, repainted=len(frame.data) > held)
+            finally:
+                frame.stats.clear()
+                frame.stats.update(saved)
+                if timer is not None:
+                    timer._active = was
+            if th.count:
+                _flush()
+        th.end_frame()
 
     def media_shown(self, c: str) -> tuple[moderngl.Texture, bool] | None:
         """Channel `c`'s raw texture as this frame read it, and whether its
@@ -1724,6 +1889,15 @@ class Renderer:
             now = self._media_now = {}
         return now
 
+    def media_now(self, c: str) -> tuple[object | None, int]:
+        """Channel `c`'s newest frame this frame — the `MediaFrame` its
+        texture was uploaded from (None: black) — and its fit (`media.<c>.
+        fit`: 0 cover): the segment's shortcut to a camera's or a feed's CPU
+        pixels (plan 39 T4), read once a frame with the texture."""
+        self.media_texture(c)
+        ch = getattr(getattr(self, "media", None), "channels", {}).get(c)
+        return self._media_frame_now().get(("frame", c)), int(getattr(ch, "fit", 0) or 0)
+
     def media_texture(self, c: str) -> moderngl.Texture | None:
         """Channel `c`'s raw texture this frame — the picture at its own
         size and aspect, for the faces — or None (black). The channel is
@@ -1742,6 +1916,7 @@ class Renderer:
                 f = media.frame(c)
             except Exception:  # noqa: BLE001 — a channel must not take the frame down
                 f = None
+            now[("frame", c)] = f         # (plan 39 T4: `media_now`)
             now[key] = self._media_textures().texture(c, f)
         return now[key]
 
@@ -2053,7 +2228,8 @@ class Renderer:
         self._lay_prog, self._lay_vao = prog, vao
         return prog, vao
 
-    def _frame_target(self, key, size: tuple[int, int], dtype: str = "f1"
+    def _frame_target(self, key, size: tuple[int, int], dtype: str = "f1",
+                      components: int = 4
                       ) -> tuple[moderngl.Texture, moderngl.Framebuffer]:
         """The frame texture for an end (plan 35: by its name): RGBA8 at the frame's size,
         LINEAR (a 1:1 show reads it by texelFetch), made on first use and
@@ -2063,7 +2239,8 @@ class Renderer:
         any other key, after `SIZED_KEEP_FRAMES` idle. Plan 34 D:
         `dtype` "f2" a half-float one (a delay's picture refitted, which
         must not quantise); a stored texture of another dtype is made
-        again."""
+        again. Plan 39 T2: `components` 1 a one-channel one (a mask,
+        `masks.MaskPasses`), likewise made again when it differs."""
         frames = getattr(self, "_frames", None)
         if frames is None:
             frames = self._frames = {}
@@ -2073,14 +2250,15 @@ class Renderer:
         self.__dict__.setdefault("_sized_used", set()).add(key)
         have = frames.get(key)
         if (have is not None and have[0].size == size
-                and getattr(have[0], "dtype", "f1") == dtype):
+                and getattr(have[0], "dtype", "f1") == dtype
+                and getattr(have[0], "components", 4) == components):
             return have
         if have is not None:
             for res in (have[1], have[0]):
                 res.release()
             del frames[key]
-        tex = self.ctx.texture(size, 4) if dtype == "f1" else self.ctx.texture(size, 4,
-                                                                                dtype=dtype)
+        tex = (self.ctx.texture(size, components) if dtype == "f1"
+               else self.ctx.texture(size, components, dtype=dtype))
         try:
             tex.repeat_x = tex.repeat_y = False
             tex.filter = (moderngl.LINEAR, moderngl.LINEAR)
@@ -2090,6 +2268,17 @@ class Renderer:
             raise
         frames[key] = (tex, fbo)
         return tex, fbo
+
+    def mask_passes(self) -> MaskPasses:
+        """The mask passes (plan 39 T2, `masks.MaskPasses`): compiled on
+        first ask and kept, handed `_frame_target` for their one-channel
+        targets (late-bound, so a spy on it sees their asks too). What the
+        graph's mask nodes paint through (`graph.MatteNode`, `MaskPicture`)."""
+        got = self.__dict__.get("_mask_passes")
+        if got is None:
+            got = self._mask_passes = MaskPasses(
+                self.ctx, lambda *a, **k: self._frame_target(*a, **k))
+        return got
 
     def _release_frames(self) -> None:
         for tex, fbo in (getattr(self, "_frames", None) or {}).values():
@@ -2139,6 +2328,101 @@ class Renderer:
         if got is None:
             got = pairs[name] = DelayPair()
         return got
+
+    def segmenter(self, name: str):
+        """Segment node `name`'s worker (plan 39 T4, `segment.SegmentWorker`),
+        made on its first need from `segment_cfg` and kept by name across
+        graph rebuilds — or None on a renderer with no `segment_cfg` (the
+        hold's preview: only the program renderer runs a model). Closed when
+        no graph has held its node for `SIZED_KEEP_FRAMES` (`_tend_segments`)
+        and in `close`. `segment_factory(cfg, name)`, when set, makes it
+        instead (tests). segment.py is imported here, on the first need,
+        never by graph.py nor on `import hyperspace.app`."""
+        cfg = getattr(self, "segment_cfg", None)
+        if cfg is None:
+            return None
+        workers = self.__dict__.setdefault("_segmenters", {})
+        got = workers.get(name)
+        if got is None:
+            make = getattr(self, "segment_factory", None)
+            if make is None:
+                from . import segment
+
+                make = segment.make_worker
+            got = workers[name] = make(cfg, name)
+        return got
+
+    def motion_pair(self, name: str) -> DelayPair:
+        """Segment node `name`'s background model in motion mode (plan 39
+        T4): a half-float pair on the delay's pattern (`DelayPair`), made on
+        first ask and kept by name across graph rebuilds; the node writes
+        one side and turns it once a frame. Released with its worker."""
+        pairs = self.__dict__.setdefault("_motions", {})
+        got = pairs.get(name)
+        if got is None:
+            got = pairs[name] = DelayPair()
+        return got
+
+    def _tend_segments(self, graph: Graph) -> None:
+        """Once a frame: each worker and background model whose segment no
+        node of `graph` is counts a frame idle, and goes at
+        `SIZED_KEEP_FRAMES` (half a second at 60 fps) — the worker stopped
+        (never joined here: its thread ends after any run in hand, `close`
+        joins it at the exit), the pair released. Never raises."""
+        workers = self.__dict__.get("_segmenters") or {}
+        pairs = self.__dict__.get("_motions") or {}
+        stopped = self.__dict__.get("_stopped")
+        if stopped:                      # (those stopped earlier, once their threads end)
+            self._stopped = [w for w in stopped if getattr(w, "alive", False)]
+        if not workers and not pairs:
+            return
+        held = {n.name for n in getattr(graph, "nodes", {}).values()
+                if isinstance(n, SegmentNode)}
+        idle = self.__dict__.setdefault("_segment_idle", {})
+        for name in {*workers, *pairs}:
+            if name in held:
+                idle.pop(name, None)
+                continue
+            idle[name] = idle.get(name, 0) + 1
+            if idle[name] < SIZED_KEEP_FRAMES:
+                continue
+            del idle[name]
+            try:
+                w = workers.pop(name, None)
+                if w is not None:
+                    # (stopped, never joined here: the frame thread does not
+                    # wait on a model's last run — `close` joins at the exit)
+                    w.stop()
+                    self.__dict__.setdefault("_stopped", []).append(w)
+                pair = pairs.pop(name, None)
+                if pair is not None:
+                    pair.release()
+            except Exception:  # noqa: BLE001, S110 — a lost context: nothing to free
+                pass
+
+    def close(self, timeout: float = 1.0) -> None:
+        """This renderer's own segment workers closed (plan 39 T4; app.py's
+        close list, at quit and restart) — all stopped first, then joined
+        against one shared deadline of `timeout` seconds, the ones
+        `_tend_segments` stopped earlier too — never anything another
+        renderer shares (the hold's preview has none of its own). Threads
+        only: the GL it holds goes with its context, which may not be
+        current at this point of the exit."""
+        workers = [*(self.__dict__.get("_segmenters") or {}).values(),
+                   *(self.__dict__.get("_stopped") or [])]
+        for w in workers:
+            try:
+                w.stop()
+            except Exception:  # noqa: BLE001, S110 — teardown is best-effort
+                pass
+        end = time.perf_counter() + timeout
+        for w in workers:
+            try:
+                w.close(max(0.0, end - time.perf_counter()))
+            except Exception:  # noqa: BLE001, S110 — teardown is best-effort
+                pass
+        self._segmenters = {}
+        self._stopped = []
 
     def reset_delays(self) -> None:
         """R19 (final review, row 354): a preset load landed a new section —
@@ -2782,7 +3066,13 @@ class Renderer:
         # Only on a see-through ground (overlay mode): on an opaque one the
         # frame stays alpha 1 everywhere, so the desktop never shows through
         # the window (plan 14 WP1 — the Pepper's Ghost rig)
-        if s.cut_through and bg_alpha < 1.0:
+        # plan 39 T1 (alpha is honest): the see-through *window*'s ground
+        # (`bg_alpha`), never a laid-over scene's zero one (`scene_ground`):
+        # a scene in a composite's `over` (PR #240) or laid over the
+        # backdrop (`backdrop.scene`, plan 32 R — the case that moved the
+        # backdrop goldens). There the plain blend squared the alpha
+        # against a colour of c·a, so what lay under showed too much
+        if s.cut_through and float(getattr(self, "bg_alpha", 1.0)) < 1.0:
             blend = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
         else:
             blend = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA,

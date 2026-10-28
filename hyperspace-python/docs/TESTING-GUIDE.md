@@ -53,6 +53,8 @@ explained in the [glossary](#glossary) at the end.
    A graph with a delay, resize, echo or dream saves `/5` where its frame
    round-trips, which a plan 33 build reads with a note, so both Macs must
    run that build before L167.
+   The hold entries (L179–L181, A48) are plan 38's: use branch
+   `plan-38-hold`, then `plan-37-38-39-integration`, until it is merged.
    Two windows open: the picture (the *render window*) and the *control
    window*. **Esc** quits.
 3. **Use the copy instead of the real home folder:** in the terminal,
@@ -155,6 +157,19 @@ changes brightness or volume instead).
     dream worker, L169 with the TV for two windows), then L173 with both
     Macs on `plan-36-build` last of all, since a `/7` file is refused by
     an older build (it supersedes L168's `/6`).
+21. Plan 37, nodes as pictures and the faces, on `plan-37-pictures`:
+    L174, L176 and L178 on the laptop, and L175 on the show Mac. L177's
+    first half, naming the face patterns to keep, is the owner's and can
+    happen any time. Its second half waits for the build that drops the
+    others.
+22. Plan 38, hold the projector: L179 and L180 on the laptop with a
+    second screen as the projector, L181 on the show Mac with music,
+    and A48 with the APC40 (Part 2).
+23. Plan 39, vision, after `uv sync` on `plan-39-vision`: L185 and L186
+    on the laptop first (a still and the camera, no person needed), then
+    L182 with the camera, L183 with a dancer on the projector, L184 with
+    the camera on a tripod and the party light, L187 on the show Mac with
+    two cameras, and L188 on the projector.
 
 ## Running the automated tests (tiers)
 
@@ -169,7 +184,9 @@ tiers that `tests/conftest.py` marks by name:
 - `slow`: about 1 s or more each (torch dream, undo, plan 12 presets,
   whole-library sweeps).
 - `live`: Syphon, NDI and file loopbacks with timeouts; they share global
-  names, so they run on one worker and can fail under heavy load.
+  names, so they run on one worker and can fail under heavy load. Plan
+  39's two real-model tests are here too (Apple Vision and torchvision,
+  once each on a made-up frame: `uv run pytest -q --all tests/test_segment.py`).
 
 `uv run pytest --all` runs every tier (about 50 s). Pick a tier with
 `-m golden`, `-m slow` or `-m live` (add `--all` or name the file), and
@@ -354,6 +371,21 @@ second or more goes in the tables at the top of `tests/conftest.py`.
 | L171 | Tracers without the dream; the dream alone; `party-wake` live (plan 36) | 1 | laptop, the copy, the dream worker | 364-366 |
 | L172 | Preset only; the nine re-recorded goldens (plan 36) | 1 | laptop, the gate Mac | 367, 369 |
 | L173 | The libraries migrated to `/7`; both Macs on this build (plan 36) | 1 | two Macs, the shared library | 368 |
+| L174 | Every node shows its picture; the tint switch (plan 37) | 1 | laptop, the copy | 370 |
+| L175 | What the pictures cost; a hidden node stops being made (plan 37) | 1 | the show Mac, the copy | 371, 374 |
+| L176 | Expand and collapse; hover a picture (plan 37) | 1 | laptop, the copy | 372, 373 |
+| L177 | Pick the face patterns to keep; the FACES page after (plan 37) | 1 | laptop, then the show Mac, music | 375 |
+| L178 | `acid-scene` draws forward (plan 37) | 1 | laptop, a scratch home | 376 |
+| L179 | Hold, then build a new look behind GRAPH (plan 38) | 1 | laptop, a second screen, the copy, music | 377, 378 |
+| L180 | Take and drop (plan 38) | 1 | laptop, a second screen, the copy | 379, 380 |
+| L181 | What a hold costs; a band on a held setting (plan 38) | 1 | the show Mac, music, a Syphon or NDI source | 382, 383 |
+| L182 | A webcam cut by person; the cut-out starter; the quality levels (plan 39) | 1 | show Mac, a camera, the copy | 384, 385 |
+| L183 | The edge and the flicker, with a dancer (plan 39) | 1 | the projector, a camera, a dancer | 386 |
+| L184 | Motion on a still camera, and the party light (plan 39) | 1 | a camera on a tripod, a party light | 387 |
+| L185 | A still as a mask; a mask on a window (plan 39) | 1 | laptop, a still, the copy | 388, 389 |
+| L186 | Edges on the shape, on the camera, into a cut (plan 39) | 1 | laptop or the projector, a camera | 390 |
+| L187 | Two cameras, two segments; unplug a camera (plan 39) | 1 | show Mac, two cameras | 391, 392 |
+| L188 | A half-transparent face over a bright picture, cut-through on and off (plan 39) | 1 | the projector, a still, the gate Mac | 393 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -401,6 +433,7 @@ second or more goes in the tables at the top of `tests/conftest.py`.
 | A45 | Switch the desk off and on with the pattern up | 2a | APC40, `plan-31-a1` | 294 |
 | A46 | SEND A after the desk fell back to Generic mode | 2a | APC40, `plan-31-a1` | 295 |
 | A47 | A switch over three channels on a knob, into the faces | 2a | APC40, the copy | 319 |
+| A48 | Hold and take on two desk buttons (plan 38) | 2a | APC40, the copy | 381 |
 | B1 | Calibrate, and the box it draws | 2b | hand camera | 72, 15 |
 | B2 | The probe sees both hands | 2b | hand camera | 13 |
 | B3 | The HANDS page and which way is up | 2b | hand camera | 14, 4 |
@@ -4312,6 +4345,412 @@ changes when saved untouched.
 
 *(check 368)*
 
+## Plan 37: nodes as pictures, and the faces (L174-L178)
+
+On GRAPH, a node that makes a picture is now drawn as that picture: a
+small, live image under its title. The app only makes these images for
+the nodes you can see, so panning or hiding nodes makes them cheaper.
+
+Plan 37's tests: the fast tier is 4,035 passed (2 skipped) and the
+goldens 128 passed, with none of the 757 pictures moved.
+`tests/test_thumbnails.py`, `tests/test_graph_hover.py`,
+`tests/test_graph_areas.py` (the backward-wire sweep) and
+`tests/test_faces_map.py` are its own.
+
+The face patterns are not cut yet. The owner picks which stay (L177),
+and a later build drops the rest. The checks are 370–376 (group AH);
+register rows 417–429 and 460.
+
+#### L174. Every node shows its picture; the tint switch
+
+**Needs:** laptop; the copy.
+
+**Do:**
+1. Load `party-trip` and open GRAPH.
+2. Look at each node: the clip or camera, the pattern, the scene, the
+   effects, the composites, the look-back and the outputs.
+3. On FX, move an effect's mix up and down.
+4. Turn on **pictures · tint cables** at the right end of the GRAPH head
+   and wait a second or two. Then turn it off.
+
+**Right if:**
+- Every one of those nodes shows a small moving picture, and an effect's
+  picture changes as you move its mix.
+- The shape node shows the scene, faintly. Output 1 shows the window, and
+  output 2 shows its window without the hands.
+- With the switch on, the red cables lean slightly orange out of
+  yellow-green pictures and slightly pink out of blue-violet ones. They
+  stay plain red out of red, cyan or grey pictures, and every one still
+  reads as red.
+- With the switch off, every picture cable is plain red again.
+
+**Wrong if:** a black box on a node that is clearly drawing, an upside-down
+or frozen picture, or a cable that looks amber (a trigger's colour) or
+purple (a mask's).
+
+*(check 370)*
+
+#### L175. What the pictures cost; a hidden node stops being made
+
+**Needs:** the show Mac; the copy.
+
+**Do:**
+1. With GRAPH closed, note the frame time on SYSTEM.
+2. Open GRAPH and pan until about twenty picture nodes are on screen.
+   Read SYSTEM again: the frame time and the line `thumbnails · N copied ·
+   K repainted · M kept`.
+3. Turn on the tint and read the frame time once more.
+4. Turn **preset only** on (or pan nodes off screen) and read the line
+   again after a second.
+5. On a switch node, pick another input.
+
+**Right if:**
+- The show's frame rate holds with GRAPH open, with the tint on and off.
+- N is about the number of picture nodes you can see, and it falls when
+  nodes are hidden or off screen. M follows within a second.
+- The node behind the input you left greys at once, goes black a second
+  later, and comes back when you pick it again.
+
+**Wrong if:** dropped frames with GRAPH open; a count that does not fall
+when nodes go out of sight; a stutter only while the tint is on.
+
+*(checks 371, 374)*
+
+#### L176. Expand and collapse; hover a picture
+
+**Needs:** laptop; the copy.
+
+**Do:**
+1. On GRAPH, expand an effect node with **+**, then collapse it.
+2. Rest the pointer on the scene node's picture, then on an effect's, then
+   on output 2's.
+3. Rest it on a node's title.
+
+**Right if:**
+- Expanded, the picture sits above the ports. Collapsed, the node is just
+  its title and its picture. Nothing overlaps.
+- On a picture, a tooltip gives the node's lines, its size (such as
+  `1920×1080 picture`) and `gpu … ms`, the same time SYSTEM shows for
+  that node.
+- On the title, the hover is as it was before.
+
+**Wrong if:** the picture vanishes when expanded, nodes overlap, or no
+tooltip appears on the picture.
+
+*(checks 372, 373)*
+
+#### L177. Pick the face patterns to keep; the FACES page after
+
+**Needs:** laptop, then the show Mac; music (for METER, PULSE and SPEED).
+
+**Do:**
+1. Open `docs/plans/assets/37-faces/sheet.png` and `heart-sheet.png`.
+   Each shows all 17 patterns on a shape, as a show draws them.
+2. Play music on the FACES page to see the ones that move.
+3. Name the patterns to keep. Then read `migration-map.md`'s "nearest
+   kept" for the ones you drop, and say whether to renumber the patterns
+   or keep the retired numbers (register row 417).
+4. After the build that drops the others, open FACES, load each preset
+   the map says used a dropped pattern, and turn the desk's pattern knob
+   from end to end.
+
+**Right if:**
+- Before the build: you have a list, and the map's replacements read
+  right to you.
+- After it: FACES shows only the kept patterns, each preset that lost its
+  pattern shows the nearest one and says so in its card, and the knob
+  walks only the kept patterns.
+
+**Wrong if:** a dropped pattern still on FACES, a preset on the wrong
+pattern, or white faces.
+
+*(check 375)*
+
+#### L178. `acid-scene` draws forward
+
+**Needs:** laptop; a scratch home with no `[library]` and no devices.
+
+**Do:**
+1. Copy `tests/fixtures/presets/acid-scene.json` into the scratch home's
+   `presets/`, load it, and open GRAPH.
+2. Follow the effect acid.2 from the scene into the look-back and on to
+   the composite.
+3. Drag acid.2 elsewhere and reload.
+
+**Right if:** acid.2 sits in LOOK-BACK, left of the look-back, and every
+cable out of it runs left to right. After the drag it stays where you put
+it.
+
+**Wrong if:** a cable curls back into the look-back, or a node jumps back
+by itself.
+
+*(check 376)*
+
+## Plan 38: hold the projector (L179-L181)
+
+Plan 38 lets the person at the laptop build the next look without the
+room watching it being built. **hold** (the first chip on GRAPH's head)
+freezes what every screen shows: the projector keeps the look it had,
+still moving with the music, while everything you do afterwards appears
+only behind GRAPH's nodes (the *preview*). A small red-framed **PROJECTOR**
+picture in the canvas's corner shows what the room sees. **take** puts the
+preview on the projector; **drop** throws it away. Its tests are in
+`tests/test_hold.py` (32; the fast tier 3,990 passed, 2 skipped; no golden
+moved). The checks are 377-383 (group AI); the desk buttons are A48 in
+Part 2. These are best run with the projector or the TV as a second
+screen, so you can see the room's picture and the laptop's at once.
+
+#### L179. Hold, then build a new look behind GRAPH
+
+**Needs:** laptop; the TV or the projector as a second window; the copy;
+music.
+
+**Do:** load `party-trip`, open GRAPH, press **hold**, then press **new**
+on the PRESET strip. Wire shape → scene → All outputs, add an effect,
+delete one of the old look's effects, and cut the cable from All outputs
+into window 2. Open the node picker near the top-right corner. Save the
+preview as a new preset.
+
+**Right if:** the second screen keeps the `party-trip` look, effects and
+all, moving with the music, the whole time; behind GRAPH's nodes you see
+only your new look; the PROJECTOR inset shows the old look; the red
+`HELD 0:0x …` line counts your changes and says "the graph changed".
+(The inset covers the picker in its corner: that is known, say whether it
+is in the way.)
+
+**Wrong if:** the second screen changes at any step, goes black at
+**new**, or loses an effect when you delete one on GRAPH.
+
+*(checks 377, 378)*
+
+#### L180. Take and drop
+
+**Needs:** as L179, with the look-back on (trails).
+
+**Do:** after L179 press **take**. Then note the preset's name and dot,
+press **hold**, turn some knobs, rewire, load another preset and turn a
+knob on it, dim the room, and press **drop**; then ⌘Z once. Last, hold a
+look with an echo, load another preset, and press **take**.
+
+**Right if:** **take** cuts the second screen to the new look in one
+frame, with the trails carrying on. After **drop** the knobs, the canvas
+and the preset's name and dot are back to what the projector shows, the
+projector never changed, and the dim stayed; one ⌘Z brings the dropped
+work back. The echo keeps trailing through the load and starts empty at
+**take**. Say whether the cut feels harsh.
+
+**Wrong if:** a black frame or a flash at **take**, a knob that stays
+moved after **drop**, the dim undone by **drop**, ⌘Z needing two presses,
+or the echo cut at the load.
+
+*(checks 379, 380)*
+
+#### L181. What a hold costs; a band on a held setting
+
+**Needs:** the show Mac; music; a Syphon or NDI source if you have one.
+
+**Do:** route a band to the brightness (`view.bright`). Press **hold**,
+move the brightness on the panel, and turn the speed. Read the frame rate
+on the SYSTEM page with GRAPH open and with it closed. Wire a Syphon or
+NDI input into the preview.
+
+**Right if:** the projector keeps its brightness and still pumps with the
+band, the preview shows the new brightness pumping too; the speed turns
+both (that is by design) and is not counted on the red line. The frame
+rate drops a little with GRAPH open and not at all with it closed. The
+live input shows in the preview (a stutter is fine) and stays smooth on
+the projector.
+
+**Wrong if:** the projector stops pumping or jumps to the new
+brightness, the frame rate falls with GRAPH closed, or the projector's
+live input stutters.
+
+*(checks 382, 383)*
+
+## Plan 39: vision (L182-L188)
+
+Plan 39 lets a picture be cut into its foreground and its background:
+a **segment** node takes any picture (a camera above all) and puts out the
+person (`segment.fg`), the room without them (`segment.bg`) and the
+person's shape as a mask (`segment.mask`). A **matte** turns any picture
+into a mask (its bright parts, its coverage, or a colour), a **cut** cuts a
+picture by a mask, and **edges** is a new effect that draws a picture's
+outlines. A mask is a purple cable; wired straight into a window it shows
+white where it passes and black elsewhere. On `plan-39-vision`; run
+`uv sync` first (it adds Apple Vision's Python wrapper). The first time a
+camera opens, macOS asks whether the terminal may use it: allow it. A
+preset with a segment, matte or cut shows black on an older build, so
+**both Macs run this build before such a preset is shared**.
+
+Its tests: the fast tier is 4,105 passed (2 skipped) and the goldens 136
+passed over 789 pictures, 32 of them new and 8 re-recorded (the two
+backdrop fixtures, for the honest cut-through: L188). Its own files are
+`tests/test_fx_edges.py`, `tests/test_graph_masks.py`,
+`tests/test_graph_cut.py`, `tests/test_segment.py`,
+`tests/test_graph_segment.py` and `tests/test_plan39_graph.py`. Two tests
+run the real models once each on a made-up frame; they are in the `live`
+tier, so `uv run pytest -q` leaves them out: run them with
+`uv run pytest -q --all tests/test_segment.py` (Vision only on a Mac). The
+checks are 384-393 (group AJ). Find the new nodes on GRAPH's right-click
+menu: **media ▸** segment, **masks ▸** matte and cut, and starters ▸
+**cut-out**.
+
+#### L182. A webcam cut by person: you over the shape, then the room with your hole
+
+**Needs:** the show Mac (or the laptop) with a camera; the copy.
+
+**Do:** put the camera on channel a (MEDIA). On GRAPH right-click empty
+canvas → starters ▸ cut-out. Stand in front of the camera. Then rewire the
+segment's `bg` pin into the composite's `over` instead of `fg`; then wire
+the segment's `mask` pin to output 2. Step `segment.quality` through fast,
+balanced and accurate, watching the edge, the node's rate and the SYSTEM
+page's frame time. Turn `segment.on` off and on. Use the starter a second
+time, then undo. If plan 38's hold is on this build: HOLD, New, turn a knob
+on the segment, DROP.
+
+**Right if:** you stand over the turning shape with the room gone, the cut
+on you (not upside down, not beside you) a frame or two behind; the node
+says `256×144 · Vision fast · a frame or two late · ~30 fps`; `bg` shows
+the room with a person-shaped hole and the shape through it; output 2
+shows your white silhouette; each quality level gives a finer edge and the
+frame time does not move; off shows the picture unchanged; the second
+starter's nodes and cables are all drawn and one undo removes them; while
+held the projector does not change.
+
+**Wrong if:** the cut is upside down, squashed or beside you; the node
+waits for ever or shows an error (check `uv sync` and the camera
+permission); the frame time rises with the quality; a knob moves the
+projector while held.
+
+*(checks 384, 385)*
+
+#### L183. The edge and the flicker, with a dancer
+
+**Needs:** L182's set-up on the projector; a dancer.
+
+**Do:** with the dancer moving, raise `segment.feather` from 0 to 8, then
+`segment.smooth` from 0 to 0.6; then smooth to 0.95, have the dancer step
+out, and wait.
+
+**Right if:** the feather softens the edge and hides its steps; smooth
+calms the flicker along the edge, at the cost of a trail on fast moves; at
+0.95 the dancer still fades out completely after some seconds.
+
+**Wrong if:** the feather does nothing, or smooth leaves a frozen ghost
+where the dancer stood.
+
+*(check 386)*
+
+#### L184. Motion on a still camera, and the party light
+
+**Needs:** a camera on a tripod pointed at the room; L182's wiring; a party
+light.
+
+**Do:** set `segment.mode` to motion. Walk through the frame; stand still
+for three seconds (`segment.learn`); move again; raise `segment.sense` a
+little. Then sweep the party light across the room.
+
+**Right if:** the walker is cut out and the still room is gone; standing
+still you fade into the room over about three seconds and come back at
+once when you move; more sense ignores small flickers; the swept light
+counts as movement until it has been still for a moment (expected: motion
+cannot tell light from a person).
+
+**Wrong if:** everything stays cut out, or nothing ever is.
+
+*(check 387)*
+
+#### L185. A still as a mask; a mask on a window
+
+**Needs:** the laptop; the copy; a still with a clear bright shape in the
+media folder.
+
+**Do:** load the `cut-out` fixture through a scratch library
+(`tests/fixtures/presets/cut-out.json`), or build it: the still on channel
+a, from masks ▸ a matte and a cut, and a composite; wire `channel.a →
+matte.image`, `matte → cut.mask`, `scene → kaleido.image`, `kaleido →
+cut.image`, `cut → composite.over`, `scene → composite.under`, `composite →
+All outputs`. Turn `matte.key`, `matte.soft`, `matte.feather`; set
+`matte.from` to chroma and turn `matte.hue` onto a colour in the still.
+Turn `cut.amount` to 0.5; turn on `cut.invert`; unwire the mask. Then wire
+the matte straight into All outputs, look at its cable, and try to wire
+the still straight into the cut's mask.
+
+**Right if:** the kaleidoscope shows only where the still is bright (or
+the keyed colour), the right way up, with the shape showing through its
+empty parts; half amount brings it back at half strength elsewhere;
+invert swaps the two; no mask shows the kaleidoscope everywhere. The
+matte on a window is a soft white shape on black filling the window, its
+cable purple into the red pin; the picture into the mask is refused with
+"put a matte between".
+
+**Wrong if:** the cut area is upside down, mirrored or stretched against
+the still, black inside the bright shape, or a knob does nothing.
+
+*(checks 388, 389)*
+
+#### L186. Edges on the shape, on the camera, and into a cut
+
+**Needs:** the laptop or the projector; a camera for the second part.
+
+**Do:** wire `scene → edges → All outputs` and switch edges on. Sweep its
+threshold, raise its glow to 4, try its three colours. Then feed it the
+camera instead. Last, wire `edges → matte → cut.mask` with the pattern
+into the cut's picture.
+
+**Right if:** the shape's lines draw as thin white outlines on black; the
+threshold thins them to only the strong lines; the glow adds a halo; the
+direction colour turns as the shape turns; the room's door frames and
+people's outlines draw steadily from the camera; the pattern shows only
+along the lines.
+
+**Wrong if:** flat areas are not black, the frame's border draws as a
+line, or the camera's picture sparkles everywhere at the default
+threshold.
+
+*(check 390)*
+
+#### L187. Two cameras, two segments; unplug a camera
+
+**Needs:** the show Mac; two cameras.
+
+**Do:** camera 1 on channel a, camera 2 on channel b; add two segments
+(media ▸ twice), one fed by each, each `fg` over the shape on its own
+output; watch the SYSTEM page's frame time. Then unplug camera 1, plug it
+back, delete a segment, and quit.
+
+**Right if:** both cut their own person, each node shows its own rate,
+the frame time stays within the show's budget; unplugged, the node says
+`no frame on channel a: its picture through, whole` and nothing stalls;
+plugged back, the cut returns within a second or two; deleting a node and
+quitting do not hitch.
+
+**Wrong if:** one segment starves, the frame time spikes, the app stalls
+or the last cut stays frozen over a black channel.
+
+*(checks 391, 392)*
+
+#### L188. A half-transparent face over a bright picture, cut-through on and off
+
+**Needs:** the projector (an opaque window); a bright still; the gate Mac
+for the eight re-recorded goldens.
+
+**Do:** put the still on channel a; wire `channel.a → composite.under`,
+`scene → composite.over`, `composite → All outputs`; faces on, lines and
+points off, a pattern with see-through fills. Flip `view.cut_through` a
+few times. Again with the still on the backdrop and `scene →
+backdrop.scene` wired. Open the eight re-recorded goldens
+(`backdrop-still` and `media-chain-backdrop`, the `present` states).
+
+**Right if:** nothing changes when you flip it: the faces sit over the
+white at their own strength, their colour readable; the goldens show the
+same.
+
+**Wrong if:** the faces wash out toward white, or brighten with the switch
+on.
+
+*(check 393)*
+
 # Part 2 — tests that need hardware
 
 ## (a) The APC40
@@ -5320,6 +5759,24 @@ continuous knob are easy to land on.
 unpicked channel still uploading.
 
 *(check 319)*
+
+#### A48. Hold and take on two desk buttons
+
+**Needs:** the APC40; the copy; branch `plan-38-hold` (plan 38).
+
+**Do:** with no hold on, learn `output.hold` and `output.take` onto two
+free buttons. Press the hold button, then the take button. Hold again and
+press **drop** on GRAPH.
+
+**Right if:** both buttons light while held and go dark after take and
+after drop; the press that learns a button does not start a hold. Learn
+the buttons *before* holding: a button learned during a hold is unlearned
+by **drop** (register row 438).
+
+**Wrong if:** the take button stays dark while held, or a learning press
+starts a hold.
+
+*(check 381)*
 
 ## (b) The hand camera
 
@@ -7305,6 +7762,9 @@ what you want changed.
 - **The GRAPH page at a distance** — can you hit a pin and read a box on
   the laptop at the control window's normal size? Is the selected route's
   row better under the canvas or beside it? (L111, L113; checks 245, 247)
+- **Pictures on GRAPH** — are the thumbnails big enough to read across
+  the room? Is the tint's ±20° lean too subtle, or should it stay off?
+  (L174, L176; checks 370, 373)
 - **The modifiers' defaults** — a smooth's 0.35 s release, a threshold
   at 0.6 / 0.4, a curve's shape range: do they feel right on music?
   (L107, B43; checks 236, 241)

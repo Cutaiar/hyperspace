@@ -87,7 +87,22 @@ from .media import channels as media_channels
 from .media.transport import LOOPS as MEDIA_LOOPS
 from .tapers import Taper
 from .tapers import clamp as _clamp
-from .view import RESIZE_ASPECTS, RESIZE_FILTERS, RESIZE_FITS, RESIZE_SIDES, ResizeState
+from .view import (
+    MATTE_FEATHER,
+    MATTE_FROM,
+    RESIZE_ASPECTS,
+    RESIZE_FILTERS,
+    RESIZE_FITS,
+    RESIZE_SIDES,
+    SEGMENT_FEATHER,
+    SEGMENT_LEARN,
+    SEGMENT_MODES,
+    SEGMENT_QUALITY,
+    CutState,
+    MatteState,
+    ResizeState,
+    SegmentState,
+)
 
 PATTERNS = patterns.NAMES   # the face patterns, in patterns.glsl's mode order
 # field.py's layouts, in its order: three flat, then the six 3D lattices
@@ -121,8 +136,15 @@ F_KEYS = 8
 # while its graph holds the switch (declare_switches)
 # `resize` (plan 34 Z): each resize node's size, aspect, fit, filter and
 # crop, the preset's, declared while its graph holds the entry (declare_resizes)
+# `matte` (plan 39 T2): each matte node's source, key, edge and feather, the
+# preset's, declared while its graph holds the entry (declare_mattes)
+# `cut` (plan 39 T3): each cut node's invert and amount, the preset's,
+# declared while its graph holds the entry (declare_cuts)
+# `segment` (plan 39 T4): each segment node's mode, level, feather, smooth,
+# switch and motion's sense and learn, the preset's, declared while its
+# graph holds the entry (declare_segments)
 PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "media", "backdrop",
-                      "switch", "resize", "lfo", "env", "seq", "macro", "mod")
+                      "switch", "resize", "matte", "cut", "segment", "lfo", "env", "seq", "macro", "mod")
 SESSION_GROUPS = ("tempo", "hands", "ghost", "band", "master", "scene", "audio", "output",
                   "overlay", "ui", "desk", "eye", "cloud")
 PARTS = {"performance": PERFORMANCE_GROUPS, "session": SESSION_GROUPS}
@@ -1077,6 +1099,257 @@ def declare_resizes(r: Registry, names: Iterable[str]) -> list[str]:
     return changed
 
 
+# ---- plan 39 T2: the mattes' values ----
+MATTE_GROUP = "matte"
+# `matte[.n].from` is the param; its state's field is `source` (`from` is a keyword)
+_MATTE_KEYS = ("from", "key", "soft", "invert", "feather", "hue", "sat")
+_MATTE_ATTR = {"from": "source"}
+_MATTE_ID = re.compile(r"matte(?:\.(?:[2-9]|[1-9][0-9]+))?\.(" + "|".join(_MATTE_KEYS) + ")")
+
+
+def matte_ids(name: str) -> list[str]:
+    """Matte node `name`'s params (`matte.2` → `matte.2.from` …), in order."""
+    return [f"{name}.{k}" for k in _MATTE_KEYS]
+
+
+def is_matte_id(pid: str) -> bool:
+    """Is `pid` one of a matte's values — one that exists only while a
+    preset's graph holds that matte (plan 39 T2)? A preset load sorts such
+    ids against the graph it lands, as it does a resize's."""
+    return bool(_MATTE_ID.fullmatch(pid))
+
+
+def _matte_state(r: Registry) -> dict[str, MatteState]:
+    """The states the matte params write, matte name → `MatteState`: the
+    view state's (`ViewState.mattes`, which the renderer reads once a
+    frame), kept by `build_registry` as `r.matte_state`; a dict of the
+    registry's own for one built without a view (as `_resize_state`)."""
+    state = getattr(r, "matte_state", None)
+    if not isinstance(state, dict):
+        state = r.matte_state = {}
+    return state
+
+
+_MATTE_TIPS = {
+    "from": "What makes a pixel of {name}'s picture pass: its brightness (luma), its "
+            "own coverage (alpha), or how near its colour is to {name}'s hue (chroma).",
+    "key": "Where a pixel of {name}'s picture starts to pass, 0–1: at or past it, it "
+           "passes.",
+    "soft": "The width of {name}'s edge either side of the key: 0 is hard, pass or not.",
+    "invert": "{name} passes what it would not, and the other way round.",
+    "feather": "A blur of {name}'s mask, in pixels: 0 keeps the edge as the key makes it.",
+    "hue": "The colour {name} keys on in chroma, round the wheel (0 red, 0.33 green, "
+           "0.67 blue).",
+    "sat": "How saturated the colour {name} keys on in chroma is: 0 keys the greys.",
+}
+
+
+def declare_mattes(r: Registry, names: Iterable[str]) -> list[str]:
+    """The mattes' params (plan 39 T2), as `declare_resizes` does the
+    resizes': for each matte `names` holds, `from` (an enum over
+    `MATTE_FROM`), `key` 0–1, `soft` 0–0.5, `invert`, `feather` 0–32 px and
+    the chroma key's `hue` and `sat` (0–1) — group `matte` (a performance
+    group: the preset's), modulatable — over a `MatteState` made when first
+    declared and kept while the name stays; those of every matte no longer
+    named dropped, with their states. Returns the ids that appeared or went."""
+    state = _matte_state(r)
+    want = {n: matte_ids(n) for n in names}
+    keep = {pid for ids in want.values() for pid in ids}
+    changed: list[str] = []
+    for p in [p for p in r if p.group == MATTE_GROUP and p.id not in keep]:
+        r.remove(p.id)
+        changed.append(p.id)
+    for name in [n for n in state if n not in want]:
+        del state[name]
+    for name, ids in want.items():
+        st = state.get(name)
+        # (made only when missing — a live state is kept across a hot
+        # reload of `view`, its params bound to it: `declare_resizes`')
+        if st is None:
+            st = state[name] = MatteState()
+        for pid, key in zip(ids, _MATTE_KEYS, strict=True):
+            if pid in r:
+                continue
+            label = f"{name} {key}"
+            tip = _MATTE_TIPS[key].format(name=name)
+            got = _attr(st, _MATTE_ATTR.get(key, key))
+            if key == "from":
+                r.enum(pid, label, *got, list(MATTE_FROM), group=MATTE_GROUP, tip=tip)
+            elif key == "invert":
+                r.toggle(pid, label, *got, group=MATTE_GROUP, tip=tip)
+            else:
+                hi = {"soft": 0.5, "feather": MATTE_FEATHER}.get(key, 1.0)
+                r.continuous(pid, label, *got, lo=0.0, hi=hi, group=MATTE_GROUP, tip=tip)
+            changed.append(pid)
+    return changed
+
+
+# ---- plan 39 T3: the cuts' values ----
+CUT_GROUP = "cut"
+_CUT_KEYS = ("invert", "amount")
+_CUT_ID = re.compile(r"cut(?:\.(?:[2-9]|[1-9][0-9]+))?\.(" + "|".join(_CUT_KEYS) + ")")
+
+
+def cut_ids(name: str) -> list[str]:
+    """Cut node `name`'s params (`cut.2` → `cut.2.invert`, `cut.2.amount`)."""
+    return [f"{name}.{k}" for k in _CUT_KEYS]
+
+
+def is_cut_id(pid: str) -> bool:
+    """Is `pid` one of a cut's values — one that exists only while a
+    preset's graph holds that cut (plan 39 T3)? A preset load sorts such ids
+    against the graph it lands, as it does a matte's."""
+    return bool(_CUT_ID.fullmatch(pid))
+
+
+def _cut_state(r: Registry) -> dict[str, CutState]:
+    """The states the cut params write, cut name → `CutState`: the view
+    state's (`ViewState.cuts`), kept by `build_registry` as `r.cut_state`; a
+    dict of the registry's own for one built without a view (as
+    `_matte_state`)."""
+    state = getattr(r, "cut_state", None)
+    if not isinstance(state, dict):
+        state = r.cut_state = {}
+    return state
+
+
+_CUT_TIPS = {
+    "invert": "{name} keeps the hole and cuts the rest: the picture shows where the mask "
+              "does not pass.",
+    "amount": "How far {name} cuts, 0–1: 1 cuts to nothing where the mask does not pass, "
+              "0.5 dims it by half, 0 leaves the picture whole.",
+}
+
+
+def declare_cuts(r: Registry, names: Iterable[str]) -> list[str]:
+    """The cuts' params (plan 39 T3), as `declare_mattes` does the mattes':
+    for each cut `names` holds, `invert` (off) and `amount` 0–1 (1) — group
+    `cut` (a performance group: the preset's), both modulatable — over a
+    `CutState` made when first declared and kept while the name stays;
+    those of every cut no longer named dropped, with their states. Returns
+    the ids that appeared or went."""
+    state = _cut_state(r)
+    want = {n: cut_ids(n) for n in names}
+    keep = {pid for ids in want.values() for pid in ids}
+    changed: list[str] = []
+    for p in [p for p in r if p.group == CUT_GROUP and p.id not in keep]:
+        r.remove(p.id)
+        changed.append(p.id)
+    for name in [n for n in state if n not in want]:
+        del state[name]
+    for name, ids in want.items():
+        st = state.get(name)
+        # (made only when missing — a live state is kept across a hot
+        # reload of `view`, its params bound to it: `declare_mattes`')
+        if st is None:
+            st = state[name] = CutState()
+        for pid, key in zip(ids, _CUT_KEYS, strict=True):
+            if pid in r:
+                continue
+            label = f"{name} {key}"
+            tip = _CUT_TIPS[key].format(name=name)
+            got = _attr(st, key)
+            if key == "invert":
+                r.toggle(pid, label, *got, group=CUT_GROUP, tip=tip)
+            else:
+                r.continuous(pid, label, *got, lo=0.0, hi=1.0, group=CUT_GROUP, tip=tip)
+            changed.append(pid)
+    return changed
+
+
+# ---- plan 39 T4: the segments' values ----
+SEGMENT_GROUP = "segment"
+_SEGMENT_KEYS = ("mode", "quality", "feather", "smooth", "on", "sense", "learn")
+_SEGMENT_ID = re.compile(r"segment(?:\.(?:[2-9]|[1-9][0-9]+))?\.("
+                         + "|".join(_SEGMENT_KEYS) + ")")
+
+
+def segment_ids(name: str) -> list[str]:
+    """Segment node `name`'s params (`segment.2` → `segment.2.mode` …), in order."""
+    return [f"{name}.{k}" for k in _SEGMENT_KEYS]
+
+
+def is_segment_id(pid: str) -> bool:
+    """Is `pid` one of a segment's values — one that exists only while a
+    preset's graph holds that segment (plan 39 T4)? A preset load sorts
+    such ids against the graph it lands, as it does a cut's."""
+    return bool(_SEGMENT_ID.fullmatch(pid))
+
+
+def _segment_state(r: Registry) -> dict[str, SegmentState]:
+    """The states the segment params write, segment name → `SegmentState`:
+    the view state's (`ViewState.segments`), kept by `build_registry` as
+    `r.segment_state`; a dict of the registry's own for one built without
+    a view (as `_cut_state`)."""
+    state = getattr(r, "segment_state", None)
+    if not isinstance(state, dict):
+        state = r.segment_state = {}
+    return state
+
+
+_SEGMENT_TIPS = {
+    "mode": "What {name} takes for its foreground: a person (a model on the Neural "
+            "Engine), what moves against a still camera (motion), or any subject (not in "
+            "this build).",
+    "quality": "The person model's level for {name}: fast (256×192 matte), balanced, or "
+               "accurate (finer edges, slower results).",
+    "feather": "A blur of {name}'s matte, in pixels: 0 keeps the model's own edge.",
+    "smooth": "How much of {name}'s last matte each new one keeps, 0–1: against flicker, "
+              "at the cost of a little more trail.",
+    "on": "{name} cuts its picture: off, its foreground is the picture whole, its "
+          "background and matte nothing, and its worker idle.",
+    "sense": "Motion: how far a pixel of {name}'s picture must differ from the background "
+             "it has learnt to be foreground, 0–1.",
+    "learn": "Motion: how many seconds a still thing takes to fade into {name}'s "
+             "background.",
+}
+
+
+def declare_segments(r: Registry, names: Iterable[str]) -> list[str]:
+    """The segments' params (plan 39 T4), as `declare_cuts` does the cuts':
+    for each segment `names` holds, `mode` (person / motion / subject, not
+    modulatable: a model is not started per frame), `quality` (fast /
+    balanced / accurate, not modulatable likewise), `feather` 0–32 px,
+    `smooth` 0–1, `on`, and motion's `sense` 0–1 and `learn` 0.1–30 s —
+    group `segment` (a performance group: the preset's) — over a
+    `SegmentState` made when first declared and kept while the name stays;
+    those of every segment no longer named dropped, with their states.
+    Returns the ids that appeared or went."""
+    state = _segment_state(r)
+    want = {n: segment_ids(n) for n in names}
+    keep = {pid for ids in want.values() for pid in ids}
+    changed: list[str] = []
+    for p in [p for p in r if p.group == SEGMENT_GROUP and p.id not in keep]:
+        r.remove(p.id)
+        changed.append(p.id)
+    for name in [n for n in state if n not in want]:
+        del state[name]
+    for name, ids in want.items():
+        st = state.get(name)
+        # (made only when missing — a live state is kept across a hot
+        # reload of `view`, its params bound to it: `declare_cuts`')
+        if st is None:
+            st = state[name] = SegmentState()
+        for pid, key in zip(ids, _SEGMENT_KEYS, strict=True):
+            if pid in r:
+                continue
+            label = f"{name} {key}"
+            tip = _SEGMENT_TIPS[key].format(name=name)
+            got = _attr(st, key)
+            if key in ("mode", "quality"):
+                choices = SEGMENT_MODES if key == "mode" else SEGMENT_QUALITY
+                r.enum(pid, label, *got, list(choices), group=SEGMENT_GROUP, tip=tip,
+                       modulatable=False)
+            elif key == "on":
+                r.toggle(pid, label, *got, group=SEGMENT_GROUP, tip=tip)
+            else:
+                lo, hi = {"feather": (0.0, SEGMENT_FEATHER),
+                          "learn": SEGMENT_LEARN}.get(key, (0.0, 1.0))
+                r.continuous(pid, label, *got, lo=lo, hi=hi, group=SEGMENT_GROUP, tip=tip)
+            changed.append(pid)
+    return changed
+
+
 # ---- plan 36 T4: the extra look-backs' values ----
 # `lookback.<n>` (n ≥ 2) has its own ring and trail: `dream.<n>.<key>` for
 # the look-back's own knobs (`lookback`'s are `dream.<key>`, as ever), in
@@ -1241,6 +1514,33 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
         except AttributeError:            # (a view without the field: the registry's own)
             pass
     r.resize_state = sizes
+    # plan 39 T2: the mattes' values likewise (`ViewState.mattes`)
+    mattes = getattr(view, "mattes", None)
+    if not isinstance(mattes, dict):
+        mattes = {}
+        try:
+            view.mattes = mattes
+        except AttributeError:            # (a view without the field: the registry's own)
+            pass
+    r.matte_state = mattes
+    # plan 39 T3: the cuts' values likewise (`ViewState.cuts`)
+    cuts = getattr(view, "cuts", None)
+    if not isinstance(cuts, dict):
+        cuts = {}
+        try:
+            view.cuts = cuts
+        except AttributeError:            # (a view without the field: the registry's own)
+            pass
+    r.cut_state = cuts
+    # plan 39 T4: the segments' values likewise (`ViewState.segments`)
+    segments = getattr(view, "segments", None)
+    if not isinstance(segments, dict):
+        segments = {}
+        try:
+            view.segments = segments
+        except AttributeError:            # (a view without the field: the registry's own)
+            pass
+    r.segment_state = segments
     # plan 36 T4: the extra look-backs' values likewise (`ViewState.lookback`)
     rings = getattr(view, "lookback", None)
     if not isinstance(rings, dict):
