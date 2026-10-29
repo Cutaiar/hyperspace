@@ -5,7 +5,7 @@ Each gives the steps, what passes, what fails and where in the code a
 failure points, and the headless tests that show what "right" looks
 like. [`../TESTING-GUIDE.md`](../TESTING-GUIDE.md) is the plain-language
 version, ordered by device, and the place to start; it cites these
-numbers. They run 1–403 (group AD (332–341) is plan 34's, feedback, on `plan-34-feedback` (PR #236), and runs with group AE); group Y (232–266, 272–276) is plan 28's (261–266 its N7,
+numbers. They run 1–404 (group AD (332–341) is plan 34's, feedback, on `plan-34-feedback` (PR #236), and runs with group AE); group Y (232–266, 272–276) is plan 28's (261–266 its N7,
 272–276 its N9), 267–271, plan 30's N8 (the palette as compression), are at
 the end of group X, and group Z (277–295) is two parts: 277–279 the
 instanced field from `main`, renumbered from its 144–146 when main was
@@ -13,7 +13,7 @@ merged in, and 280–295 plan 31's (286–295 the APC40 page, on
 `plan-31-a1`); group AA (296–316) is plan 32's, and 317 the two plans
 together; group AC (318–331) is plan 33's, the free graph, on
 `plan-33-free-graph`; group AE (342–352) is plan 35's, the free frame,
-on `plan-34-feedback` (PR #236). Past 352: check 353 (group AF) is row 394's, group AG (354–369) is plan 36's, the WYSIWYG graph, and groups AH (370–376), AI (377–383) and AJ (384–393) are plans 37's (nodes as pictures, and the faces), 38's (hold the projector) and 39's (vision), run together and integrated on `plan-37-38-39-integration`. Group AK (394–401) is plan 40's, patches, on `plan-40-build`; check 402 (group AL) is the macro's throw; check 403 (group AM) is the one-tier library and the PRESETS page, on `worktree-presets-one-tier`.
+on `plan-34-feedback` (PR #236). Past 352: check 353 (group AF) is row 394's, group AG (354–369) is plan 36's, the WYSIWYG graph, and groups AH (370–376), AI (377–383) and AJ (384–393) are plans 37's (nodes as pictures, and the faces), 38's (hold the projector) and 39's (vision), run together and integrated on `plan-37-38-39-integration`. Group AK (394–401) is plan 40's, patches, on `plan-40-build`; check 402 (group AL) is the macro's throw; check 403 (group AM) is the one-tier library and the PRESETS page, on `worktree-presets-one-tier`; check 404 (group AN) is the gamepad dial's readings in the preset and on the pad node, on `pad-dial-in-preset`.
 
 ## Before you start
 
@@ -6188,6 +6188,39 @@ chips, no pick. (5) a new show is called `untitled` with an empty bank.
 fold on the page (`ui_presets.page` drawing the removed blocks); a row
 that cannot be renamed or deleted (`Library.rename` / `delete` refusing);
 a pad that loads nothing (`Library.bank` / `preset.load.k`).
+
+## AN. The dial's readings: the preset's, on the pad node
+
+The owner, 2026-10-29 (decision register row 542, plan 28): each stick's
+dial reading, petal or blend, is saved in the preset and set in the
+GRAPH page's pad node.
+
+**404. A preset keeps its sticks' readings.** (laptop, the Xbox pad; GRAPH, PRESETS)
+Headless: `tests/test_dial.py`; `tools/dial_demo.py` (its
+`dial-timing.txt` ends with a save and two loads in the running app).
+1. Copy `tests/corpus/presets/dial.json` into the library's `presets/`
+   and load DIAL. Open GRAPH and click the **pad** node.
+2. Read its details under the pad's picture: both sticks' faces and
+   their legends, then **Left dial**, **Right dial** and **Swap dials**.
+   Move each stick round the rim.
+3. Read the pad's picture: the two sticks' wells and their X / Y lanes.
+4. Set Left dial to blend and Right dial to petal. Save the preset as a
+   new one. Load another preset, then the new one.
+5. Press ⌘Z.
+6. Open SYSTEM → gamepad.
+
+*Pass:* (2) the faces fill under the stick, each sector named by its
+param in full; the picks take. (3) each well shows eight sectors, filling
+as the stick moves; the lanes under them read "Left dial · petal" /
+"Right dial · blend", not the orbit. (4) the new preset comes back with
+left blend and right petal, and the sticks read that way; DIAL comes back
+petal / blend. (5) the last reading change is undone. (6) only the
+sticks' feel; no dials.
+*Fail:* a reading that does not come back with its preset (`pad` not in
+`params.PERFORMANCE_GROUPS`, or `pad.dial.*` registered after
+`library.attach`); a stick that reads the old way after its pad
+reconnects (`PadDevice.open` not taking `Context.dial_modes`); the
+picture still saying "Orbit yaw" on a dialed stick (`ui_pad.says`).
 
 ## What no test covers
 

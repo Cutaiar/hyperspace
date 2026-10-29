@@ -246,6 +246,10 @@ class Context:
     # joystick each reads, the pinned indices, the one USB reader's owner.
     # Made by the first pad that opens
     pads: object | None = None
+    # each stick's dial reading, {"L": "petal", "R": "blend"} — the preset's
+    # (`pad.dial.*`, app._register_dial): every pad reads this one dict, so a
+    # pad that opens later, or opens again, reads as the preset says
+    dial_modes: dict | None = None
 
 
 class Base:
@@ -594,11 +598,14 @@ class PadDevice(Base):
     def open(self) -> None:
         from .gamepad import DIAL_MODES, Claims, Pad
         self.io = Pad(usb=bool(self.entry.get("usb", True)))
-        # where each stick's dial reading starts (`dial_left` / `dial_right`)
-        for stick, key in (("L", "dial_left"), ("R", "dial_right")):
-            mode = self.entry.get(key)
-            if mode in DIAL_MODES:
-                self.io.dial_modes[stick] = mode
+        shared = getattr(self.ctx, "dial_modes", None)
+        if shared is not None:          # the app's: the preset's readings, one dict
+            self.io.dial_modes = shared
+        else:                           # alone: where each stick starts (`dial_left` / `dial_right`)
+            for stick, key in (("L", "dial_left"), ("R", "dial_right")):
+                mode = self.entry.get(key)
+                if mode in DIAL_MODES:
+                    self.io.dial_modes[stick] = mode
         claims = getattr(self.ctx, "pads", None)
         if claims is None:
             claims = self.ctx.pads = Claims()

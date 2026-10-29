@@ -35,9 +35,13 @@ always knows where it is by feel: centre is home.
   it points into (`gamepad.learn_from`'s `dials`). A stick with no dial
   route learns `LX` / `LY` as before. So the first dial route comes from
   a preset or the ROUTING page, and Learn fills in the rest.
-- SYSTEM → gamepad draws both faces: each sector filled out to how far
-  it reads, named by the param its route drives, the stick as a white
-  dot. Under them are the two readings and **Swap dials**.
+- The GRAPH page's **pad node** draws both faces in its details, under
+  the pad's picture: each sector filled out to how far it reads, named by
+  the param its route drives, the stick as a white dot. Under them are
+  the two readings and **Swap dials**. On the picture itself a dialed
+  stick shows its sectors in its well, and its X / Y read "Left dial ·
+  petal" instead of the orbit (2026-10-29; until then the faces were on
+  SYSTEM).
 
 ## The two readings
 
@@ -49,11 +53,20 @@ There is one reading per stick, switched live:
 | **petal** | the whole radius in the sector the stick points into, 0 in every other; a border is sticky (`DIAL_STICKY`, 15 % of a sector) so a stick held on one does not flicker | eight separate buttons with depth: crossing a border is a cut from one parameter to the next |
 | **blend** | a triangle about each sector's own direction: on a sector's centre it has the whole radius, halfway to the next the two share it | a crossfade: a sweep round the rim morphs one parameter into the next, and the lanes always add up to the radius |
 
-They start as the gamepad entry's `dial_left = "petal"` and `dial_right = "blend"`
-(a `[[devices]]` entry, or the old `[gamepad]` table).
-**Swap dials** (`desk.pad.dial.swap`) trades them, so the same routes can
-be felt both ways. Learn pad can put it on BACK (`pad:VIEW`), which is
-free.
+**The readings are the preset's** (2026-10-29, the owner's: "if this is
+in the graph, it should be treated like the rest of the settings and be
+saved in the preset"). `pad.dial.left` / `pad.dial.right` are in the
+`pad` group, a performance group: saved in the preset's `values`, put
+back by its load. A reading changes what the preset's own `axis:L.*` /
+`axis:R.*` routes do, so it travels with them; the sticks' *feel*
+(`desk.pad.*`) is about the hardware and stays the rig's. Until then the
+readings were `desk.pad.dial.*`, never saved. The gamepad entry's
+`dial_left = "petal"` / `dial_right = "blend"` (a `[[devices]]` entry, or
+the old `[gamepad]` table) are now the launch readings, which a preset
+that names none gets. **Swap dials** (`pad.dial.swap`) trades them, so
+the same routes can be felt both ways — an edit, which undo takes back
+and a save keeps. BACK (`pad:VIEW`) taps the tempo now; Learn pad can put
+the swap on SHARE.
 
 ## The DIAL preset
 

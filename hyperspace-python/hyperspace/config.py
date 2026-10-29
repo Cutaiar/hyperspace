@@ -198,8 +198,9 @@ like the rename above. The SYSTEM page shows both.
                             # one gamepad entry each; the first is the primary (the
                             # unqualified rows, the sticks' camera job), another's rows
                             # carry its role (pad@p2:A, axis@p2:LX) — Learn pad writes them
-    dial_left = "petal"     # how each stick reads as a dial (gamepad.dial): "petal",
-    dial_right = "blend"    # hard sectors, or "blend", neighbours crossfade
+    dial_left = "petal"     # how each stick reads as a dial (gamepad.dial) at launch, and
+    dial_right = "blend"    # in a preset that names none: "petal", hard sectors, or
+                            # "blend", neighbours crossfade (a preset's own `pad.dial.*` wins)
 
     [bridge]                # lanes out / external lanes in over MIDI (bridge.py)
     enabled = false         # true opens the bridge; off, it is never imported

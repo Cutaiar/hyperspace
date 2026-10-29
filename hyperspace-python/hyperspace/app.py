@@ -805,45 +805,54 @@ def _open_dream(reg: Registry, cfg: dict) -> tuple[object | None, str]:
         return None, dream_error(e)
 
 
-def _register_dial(reg: Registry, pad) -> None:
-    """The sticks' dial readings (gamepad.dial, a prototype) as session
-    params on the pad: one enum per stick, and a trigger that swaps the
-    two — the same routes felt the other way, to compare them. Never
-    saved, never performed: the gamepad entry's `dial_left` / `dial_right`
-    set where a launch starts. `pad` is a `gamepad.Pad` or a callable
-    returning the one that is current (the device registry's primary pad,
-    which a config edit may replace); None, no pad: nothing registered."""
-    pad_of = pad if callable(pad) else (lambda: pad)
-    if pad_of() is None or "desk.pad.dial.left" in reg:
-        return
-    modes = list(gamepad.DIAL_MODES)
+def _dial_launch(cfg: dict) -> dict[str, str]:
+    """Each stick's dial reading at launch, {"L": …, "R": …}: the first
+    gamepad entry's `dial_left` / `dial_right` (`[[devices]]`, or the old
+    `[gamepad]` table translated), else `gamepad.DIAL_DEFAULT`. Read before
+    the library attaches, so it is the fresh value — what a preset that
+    names no reading gets."""
+    out = dict(gamepad.DIAL_DEFAULT)
+    entry = next((e for e in config.devices(cfg) if e.get("kind") == "gamepad"), {})
+    for stick, key in (("L", "dial_left"), ("R", "dial_right")):
+        if entry.get(key) in gamepad.DIAL_MODES:
+            out[stick] = entry[key]
+    return out
 
-    def mode_of(stick: str) -> str:
-        p = pad_of()
-        return (p.dial_modes if p is not None else gamepad.DIAL_DEFAULT).get(
-            stick, gamepad.DIAL_DEFAULT[stick])
+
+def _register_dial(reg: Registry, modes: dict[str, str]) -> None:
+    """The sticks' dial readings (gamepad.dial) as the preset's params over
+    `modes`, the one dict every pad reads (`devices.Context.dial_modes`):
+    `pad.dial.left` / `.right`, one enum per stick, saved and loaded with
+    the preset like its routes — a reading changes what the preset's
+    `axis:L.*` / `axis:R.*` routes do — and `pad.dial.swap`, which trades
+    them. Registered whether or not a pad is connected, so a preset keeps
+    its readings through a session with none. Not a performer's (no lane
+    rides a reading), but a pad button can set one (Learn pad)."""
+    if "pad.dial.left" in reg:
+        return
+    names = list(gamepad.DIAL_MODES)
+
+    def mode_of(stick: str) -> int:
+        m = modes.get(stick)
+        return names.index(m) if m in names else names.index(gamepad.DIAL_DEFAULT[stick])
 
     def set_mode(stick: str, i) -> None:
-        p = pad_of()
-        if p is not None:
-            p.dial_modes[stick] = modes[int(i) % len(modes)]
+        modes[stick] = names[int(i) % len(names)]
 
     tip = ("How the {} stick reads as a dial (its axis:{}.* lanes): petal, the "
            "sector it points into gets the whole push; blend, neighbouring sectors "
-           "crossfade as it sweeps round.")
+           "crossfade as it sweeps round. The preset's: saved with its routes.")
     for stick, side in (("L", "left"), ("R", "right")):
-        reg.enum(f"desk.pad.dial.{side}", f"{side.capitalize()} dial",
-                 lambda s=stick: modes.index(mode_of(s)),
-                 lambda i, s=stick: set_mode(s, i),
-                 modes, group="desk", persist=False, modulatable=False,
-                 tip=tip.format(side, stick))
+        reg.enum(f"pad.dial.{side}", f"{side.capitalize()} dial",
+                 lambda s=stick: mode_of(s), lambda i, s=stick: set_mode(s, i),
+                 names, group="pad", modulatable=False, tip=tip.format(side, stick))
 
     def swap():
-        p = pad_of()
-        if p is not None:
-            m = p.dial_modes
-            m["L"], m["R"] = m.get("R", "blend"), m.get("L", "petal")
-    reg.trigger("desk.pad.dial.swap", "Swap dials", swap, group="desk", modulatable=False,
+        left, right = reg["pad.dial.left"], reg["pad.dial.right"]
+        a, b = left.base, right.base
+        left.set(b)
+        right.set(a)
+    reg.trigger("pad.dial.swap", "Swap dials", swap, group="pad", modulatable=False,
                 tip="Swap the two sticks' dial readings — petal ↔ blend.")
 
 
@@ -1398,6 +1407,11 @@ def main() -> None:
         bindings_path(home), mc.get("profile", "apc40"),
         Path(mc.get("map", "midi_map.json")),
     ))
+    # the sticks' dial readings (gamepad.dial): the preset's, at the
+    # config's launch values until a preset says otherwise — before attach,
+    # so those are the fresh values a preset naming none gets
+    dial_modes = _dial_launch(cfg)
+    _register_dial(reg, dial_modes)
     library.attach(reg)
     panel = Panel(control, audio, s, renderer, library.project, registry=reg, library=library)
     panels.append(panel)
@@ -1433,7 +1447,8 @@ def main() -> None:
     # skeletons) — is pointed at it now and again whenever the list changes
     rig = _open_devices(cfg, devices.Context(reg=reg, table=router.table, learn=learn,
                                              audio=audio, hand_settings=hand_settings,
-                                             notes=cfg.setdefault("notes", []), home=home),
+                                             notes=cfg.setdefault("notes", []), home=home,
+                                             dial_modes=dial_modes),
                         home)
 
     def point_at_devices() -> None:
@@ -1464,9 +1479,6 @@ def main() -> None:
         renderer.dreamer.source = dream_io
     renderer.segment_cfg = cfg.get("segment", {})   # the segment workers' backend (plan 39 T4)
     segmenters = _Closer(renderer.close)   # …closed with the adapters, at quit and restart
-    # the sticks as dials (gamepad.dial, a prototype): session params on
-    # whichever pad is the primary now
-    _register_dial(reg, lambda: rig.adapter("gamepad"))
     awake = _open_awake(cfg)               # no screensaver over the show
     # the project's startup preset (D11), once, now that everything it lands
     # on exists; a missing one is said on the panel and the app runs on

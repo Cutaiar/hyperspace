@@ -2485,20 +2485,21 @@ class Panel:
             mode = self.reg["desk.pad.feel"].text()
             for k in {"follow": ("attack", "release"), "spring": ("hz", "damp")}.get(mode, ()):
                 self._row(f"desk.pad.{k}")
-            if "desk.pad.dial.left" in self.reg:   # the sticks as dials (app._register_dial)
-                self._dials()
+            # (the sticks' dials, the preset's, are on the GRAPH page's pad node)
 
     # ---- the sticks as dials (gamepad.dial, a prototype) ----
 
     DIAL_R = 52.0        # the clock face's radius, px
     DIAL_ROW = 16.0      # a legend line's height, px
+    DIAL_WIDE = 380.0    # under this the legend goes under the face, not beside it
 
     def _dials(self) -> None:
         """Both sticks as clock faces, one above the other, each with its
         legend beside it: the eight sectors clockwise from N, the param
         each one's route drives (FAINT "·" where none does) and how far it
         reads now. A sector fills out to its reading; the stick is a white
-        dot. Under them each stick's reading and the swap."""
+        dot. Under them each stick's reading and the swap — the preset's
+        (`pad.dial.*`). The GRAPH page's pad node draws it (ui_graph)."""
         pad = self.pad
         routed: dict[str, str] = {}
         router = self.router
@@ -2511,32 +2512,46 @@ class Panel:
         lanes = pad.dials() if on else [0.0] * len(gamepad.DIAL_LANES)
         n = gamepad.DIAL
         for j, stick in enumerate(gamepad.DIAL_STICKS):
-            mode = pad.dial_modes.get(stick, "") if pad is not None else ""
+            side = "left" if stick == "L" else "right"
+            mode = self.reg[f"pad.dial.{side}"].text()
             xy = None
             if on:
                 ax, ay = gamepad.DIAL_STICKS[stick]
                 xy = (pad.axes[ax] if ax < len(pad.axes) else 0.0,
                       pad.axes[ay] if ay < len(pad.axes) else 0.0)
             names = [routed.get(f"axis:{stick}.{k}") for k in gamepad.COMPASS]
-            self._dial(lanes[j * n:(j + 1) * n], names, xy,
-                       f"{'left' if stick == 'L' else 'right'} stick · {mode}")
-        self._row("desk.pad.dial.left")
-        self._row("desk.pad.dial.right")
-        self._button("desk.pad.dial.swap", small=True)
+            self._dial(lanes[j * n:(j + 1) * n], names, xy, f"{side} stick · {mode}")
+        self._row("pad.dial.left")
+        self._row("pad.dial.right")
+        self._button("pad.dial.swap", small=True)
         if not any(routed.get(f"axis:{n}") for n in gamepad.DIAL_LANES):
             imgui.same_line()
-            imgui.text_disabled("no route reads a dial — load the DIAL preset")
+            imgui.text_disabled("no route reads a dial (axis:L.N … R.NW)")
 
     def _dial(self, vals, names, xy, title: str) -> None:
-        """One stick: its face on the left, its legend to the right."""
-        r, n = self.DIAL_R, gamepad.DIAL
+        """One stick: its face on the left and its legend to the right — or,
+        where that leaves the names no room (the GRAPH page's details pane,
+        under `DIAL_WIDE`), the title, the face, then the legend under it."""
+        n, row = gamepad.DIAL, self.DIAL_ROW
         step = math.tau / n
-        row = self.DIAL_ROW
-        h = max(2 * r + 8, (n + 1) * row + 4)
         origin = imgui.get_cursor_screen_pos()
         avail = imgui.get_content_region_avail().x
+        wide = avail >= self.DIAL_WIDE
+        bar_w = 64.0 if wide else 40.0
+        if wide:
+            r = self.DIAL_R
+            h = max(2 * r + 8, (n + 1) * row + 4)
+            c = imgui.ImVec2(origin.x + r + 4, origin.y + h / 2)
+            lx = origin.x + 2 * r + 24
+            y0 = origin.y + (h - (n + 1) * row) / 2       # the title's line
+        else:
+            r = min(self.DIAL_R, (avail - 8) / 2)
+            c = imgui.ImVec2(origin.x + avail / 2, origin.y + row + 6 + r)
+            lx = origin.x
+            y0 = origin.y
+            h = row + 2 * r + 12 + n * row + 4
+        name_w = max(40.0, origin.x + avail - lx - 36 - bar_w - 10)
         dl = imgui.get_window_draw_list()
-        c = imgui.ImVec2(origin.x + r + 4, origin.y + h / 2)
 
         def at(theta: float, rad: float) -> imgui.ImVec2:   # θ clockwise from up
             return imgui.ImVec2(c.x + rad * math.sin(theta), c.y - rad * math.cos(theta))
@@ -2558,17 +2573,14 @@ class Panel:
                 x, y = x / m, y / m
             dl.add_circle_filled(imgui.ImVec2(c.x + x * r, c.y + y * r), 4.0, u32(TEXT))
         # the legend: the title, then a line per sector, clockwise from N
-        lx = origin.x + 2 * r + 24
-        bar_w = 64.0
-        name_w = max(40.0, origin.x + avail - lx - 36 - bar_w - 10)
-        y0 = origin.y + (h - (n + 1) * row) / 2
         imgui.push_font(_FONTS["micro"], FONT_MICRO)
         dl.add_text(imgui.ImVec2(lx, y0), u32(DIM), title.upper())
         imgui.pop_font()
+        first = y0 + row if wide else c.y + r + 8      # the N line
         for k in range(n):
             v = float(vals[k]) if k < len(vals) else 0.0
             name = names[k] if k < len(names) else None
-            y = y0 + (k + 1) * row
+            y = first + k * row
             live = v > 0.002
             dl.add_text(imgui.ImVec2(lx, y), u32(TEXT if live else FAINT), gamepad.COMPASS[k])
             dl.add_text(imgui.ImVec2(lx + 36, y),

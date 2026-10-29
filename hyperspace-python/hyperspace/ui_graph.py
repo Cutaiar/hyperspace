@@ -3076,6 +3076,10 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
         _switch_block(panel, view, n)
     if n.id == PAD_NODE:                        # the pad, drawn: what each control does
         ui_pad.inline(panel)
+        if "pad.dial.left" in panel.reg:        # …and its sticks as dials, the preset's
+            imgui.spacing()
+            ui._micro("dials")
+            panel._dials()
     if _param_rows(panel, st, n):
         return
     for port in n.ports:

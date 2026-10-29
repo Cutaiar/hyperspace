@@ -6,9 +6,11 @@ tools/control_shots.py does) with the DIAL preset loaded, and the gamepad
 is a `gamepad.Pad` whose sticks follow a script instead of hardware —
 every other piece is the app's own: `Pad.lanes` → `Router.pad` → the
 claims → `Router.modulate` → the registry → the renderer and the fx
-stack → the SYSTEM page's dial faces. The clock is simulated (1/FPS a
-frame), so effect speeds in the video are true to time however slowly
-the frames render; the wall time each frame took is recorded beside it.
+stack → the dial faces in the GRAPH page's pad node details. The clock
+is simulated (1/FPS a frame), so effect speeds in the video are true to
+time however slowly the frames render; the wall time each frame took is
+recorded beside it. After the script the readings are taken through a
+preset save and two loads, in the running app.
 
     HYPERSPACE_HOME=$(mktemp -d) xvfb-run -a -s "-screen 0 2400x1200x24" \\
         uv run python tools/dial_demo.py [--out DIR] [--scale 0.5]
@@ -25,8 +27,10 @@ Writes, under --out (default docs/plans/assets/28-gamepad-dial/):
   dial-traces.png    the lanes and their params over the whole script
   dial-borders.png   petal against blend with the stick shaking on a border
   dial-sheet.png     a contact sheet: scene + both faces at the script's beats
-  dial-timing.txt    what the dial costs per frame (micro-benchmark) and
-                     how long the app's frames took here (software GL)
+  dial-timing.txt    what the dial costs per frame (micro-benchmark), how
+                     long the app's frames took here (software GL), the
+                     camera job while the sticks are dials, and the
+                     readings through a preset save and load
   dial.mp4           every frame composited (scene | faces) at FPS, if
                      ffmpeg is on the path (--frames DIR keeps the PNGs)
 
@@ -60,7 +64,7 @@ from conftest import seed
 from OpenGL import GL
 from PIL import Image, ImageDraw, ImageFont
 
-from hyperspace import app, devices, gamepad, render, ui
+from hyperspace import app, devices, gamepad, render, ui, ui_graph
 from hyperspace.ui import PAGE_KEYS
 
 FPS = 30
@@ -167,21 +171,48 @@ _swap = glfw.swap_buffers
 
 def draw(self, dt, fps):
     state.panel = self
-    self.reg["ui.page"].set(PAGE_KEYS.index("system"))
+    self.reg["ui.page"].set(PAGE_KEYS.index("graph"))
+    if state.n <= WARM:                  # the pad node selected: its details hold the dials
+        ui_graph._state(self)["select_node"] = "device:pad"
     if not state.loaded and self.library is not None:
         self.library.presets.load("DIAL")
         state.loaded = True
+    if state.n == WARM + TOTAL:
+        round_trip(self)
     k, name, _, swap = at_frame(state.n)
     if swap:
-        self.reg["desk.pad.dial.swap"].fire()
+        self.reg["pad.dial.swap"].fire()
     state.phase = name
     try:
         _draw(self, dt, fps)
     except Exception:  # noqa: BLE001 — surface it; the loop would swallow it
         traceback.print_exc()
         raise SystemExit(1) from None
-    if state.n >= WARM:
-        record(self, k, name)
+    if WARM <= state.n < WARM + TOTAL:
+        try:
+            record(self, k, name)
+        except Exception:  # noqa: BLE001 — surface it; the loop would swallow it
+            traceback.print_exc()
+            raise SystemExit(1) from None
+
+
+def round_trip(panel) -> None:
+    """After the script, in the app as it runs: the readings are the
+    preset's. The swapped readings saved as a preset of their own, DIAL
+    loaded (its own readings back), then the saved one (the swap back) —
+    what the pad reads, each time, into `state.trip`."""
+    presets, pad, reg = panel.library.presets, panel.pad, panel.reg
+    trip = state.trip = []
+
+    def now(what):
+        trip.append((what, dict(pad.dial_modes), reg["pad.dial.left"].text(),
+                     reg["pad.dial.right"].text()))
+    now("after the script (swapped)")
+    presets.save_as("DIAL SWAPPED")
+    presets.load("DIAL")
+    now("DIAL loaded")
+    presets.load("DIAL SWAPPED")
+    now("DIAL SWAPPED loaded")
 
 
 def record(panel, k: int, name: str) -> None:
@@ -225,6 +256,9 @@ def swap_buffers(win):
 
 def end_frame():
     now = time.perf_counter()
+    if state.n % 150 == 0:
+        print(f"frame {state.n} / {WARM + TOTAL}, {len(state.rows)} rows", file=sys.stderr,
+              flush=True)
     if state.n >= WARM:
         state.walls.append(now - state.wall)
         if state.n < WARM + TOTAL:
@@ -386,6 +420,9 @@ def timing(out: Path) -> None:
     lines += ["", "the sticks' camera job while both sticks are dials (largest move from the",
               "first frame; 0 means the routes claimed the sticks):"]
     lines += [f"  {pid:<14} {d:.6f}" for pid, d in moved.items()]
+    lines += ["", "the readings are the preset's (in the app: save, load, load again):"]
+    lines += [f"  {what:<28} pad reads L {m['L']}, R {m['R']}  ·  params say {left}, {right}"
+              for what, m, left, right in getattr(state, "trip", [])]
     (out / "dial-timing.txt").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
 
@@ -398,14 +435,13 @@ _dials = ui.Panel._dials
 def dials(self):
     """The faces' canvas, caught where `Panel._dials` puts it."""
     from imgui_bundle import imgui
-    # the SYSTEM page runs longer than the window (the device lines, the
-    # GPU timing): scroll it so the faces are at the top, from the next frame
+    # the pad node's details run longer than the side pane (the pad's
+    # picture first): scroll it so the faces are at the top, from the next frame
     imgui.set_scroll_here_y(0.0)
     p = imgui.get_cursor_screen_pos()
     w = imgui.get_content_region_avail().x
-    h = 2 * max(2 * self.DIAL_R + 8, (gamepad.DIAL + 1) * self.DIAL_ROW + 4)
-    state.dial_rect = (p.x, p.y, w, h)
     _dials(self)
+    state.dial_rect = (p.x, p.y, w, imgui.get_cursor_screen_pos().y - p.y)
 
 
 _pad_open = devices.PadDevice.open
@@ -436,6 +472,9 @@ def main() -> None:
     ui.Panel._dials = dials
     app.time = SimClock()
     render.time = SimClock()
+    # the stall watchdog reads the frame clock against the wall: on the
+    # simulated clock every check is a "stall", every stack dumped — off
+    app.Watchdog.start = lambda self: None
     # the pad device (plan 27) opens its Pad, then hands the scripted one in
     # its place, with the modes its entry gave it
     def _open(self):
@@ -492,11 +531,11 @@ def main() -> None:
 
 
 def _swap_in(pad):
-    """The app's pad, made a ScriptedPad with the modes the config gave it."""
+    """The app's pad, made a ScriptedPad reading the same readings."""
     if pad is None:
         return None
     sp = ScriptedPad()
-    sp.dial_modes = dict(pad.dial_modes)
+    sp.dial_modes = pad.dial_modes       # the one dict the preset's params write
     return sp
 
 
