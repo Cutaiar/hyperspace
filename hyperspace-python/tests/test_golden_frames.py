@@ -293,7 +293,17 @@ def ctx():
     yield c
     # its objects (gc_mode auto) are freed now, while it is still the
     # current context — never later, on some other module's
+    c.__enter__()
     gc.collect()
+
+
+@pytest.fixture(autouse=True)
+def _current(request):
+    """The tool's context current again before each test that draws on it:
+    a test on this worker since may have made and released its own
+    (tests/conftest.py's `ctx`), which leaves none current."""
+    if "ctx" in request.fixturenames:
+        request.getfixturevalue("ctx").__enter__()
 
 
 @pytest.fixture

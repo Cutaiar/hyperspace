@@ -96,7 +96,9 @@ def ctx():
     release, so whatever a test builds lives as long as the context — one
     shared by a module grew a worker past 4 GB on Mesa's llvmpipe, which
     holds textures in the process (CI's runner, 16 GB for four workers).
-    test_golden_frames.py and test_graph_frame.py keep their own."""
+    test_golden_frames.py and test_graph_frame.py keep their own, and make
+    it current again before each test: releasing this one leaves no context
+    current, and GL calls go to the current one."""
     moderngl = pytest.importorskip("moderngl")
     try:
         c = moderngl.create_context(standalone=True)
