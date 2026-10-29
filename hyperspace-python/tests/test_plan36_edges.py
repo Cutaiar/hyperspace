@@ -391,18 +391,6 @@ def test_an_old_sections_loop_through_its_frame_is_left_out_by_the_migration():
     assert ("pattern", "shape.faces") in pairs_of(doc["graph"])
 
 
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        import moderngl
-
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-    c.release()
-
-
 @pytest.fixture
 def rig(ctx):
     from test_graph_frame import _tool

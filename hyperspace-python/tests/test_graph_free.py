@@ -435,16 +435,6 @@ def _effect_nodes(g) -> list:
 moderngl = pytest.importorskip("moderngl")
 
 
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-    c.release()
-
-
 def test_only_wired_effects_have_nodes(ctx, tmp_path):
     """PARTY-ACID migrated: the scene pipeline's effect nodes are exactly
     its run (the effects on with mix > 0, in its order), not one per file."""

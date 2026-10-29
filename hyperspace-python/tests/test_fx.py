@@ -238,16 +238,6 @@ def test_clocks_integrate_the_speed():
 moderngl = pytest.importorskip("moderngl")
 
 
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-    c.release()
-
-
 W, H = 320, 200
 
 
@@ -295,8 +285,6 @@ def test_the_shared_helpers_are_written_once(ctx):
     assert glsl.FALLBACK == shared, "glsl.FALLBACK must be the shipped _common.glsl"
 
 
-
-
 def test_off_is_the_old_frame_exactly(ctx):
     base = render(ctx, FxState())
     bypassed = FxState()
@@ -328,6 +316,19 @@ def test_each_effect_changes_the_frame(ctx, name):
     assert ctx.error == "GL_NO_ERROR"
     diff = np.abs(img[..., :3].astype(int) - base[..., :3]).sum()
     assert diff > W * H * 0.05, f"{name} left the frame (almost) as it was"
+
+
+def test_a_compile_error_names_its_file_and_line_on_either_compiler():
+    """Apple's compiler and Mesa's (the CI runner's) word an error
+    differently; both come out as the file's own line."""
+    from hyperspace.glsl import gl_error
+
+    names = {1: "_common.glsl:", 3: "line "}
+    apple = RuntimeError("ERROR: 3:11: 'nope' : undeclared identifier")
+    mesa = RuntimeError("3:11(41): error: `nope' undeclared")
+    assert gl_error(apple, names) == "line 11: 'nope' : undeclared identifier"
+    assert gl_error(mesa, names) == "line 11: `nope' undeclared"
+    assert gl_error(RuntimeError("1:1(1): error: bad"), names) == "_common.glsl:1: bad"
 
 
 def test_a_compile_error_is_reported_and_skipped(ctx, fxdir):

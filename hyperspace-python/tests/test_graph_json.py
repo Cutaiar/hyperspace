@@ -700,16 +700,6 @@ def test_undoing_a_load_puts_the_graph_back_before_the_values(tmp_path):
 moderngl = pytest.importorskip("moderngl")
 
 
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-    c.release()
-
-
 def test_two_acids_run_in_one_chain_on_one_program(ctx):
     """The second acid is a pass of its own in the chain (its own mix and
     clock) on the file's one compiled program; the frame differs from one

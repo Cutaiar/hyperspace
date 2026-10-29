@@ -89,6 +89,23 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.slow)
 
 
+@pytest.fixture
+def ctx():
+    """A standalone GL context of the test's own, released after it (skips
+    where there is none). Per test, not per module: a Renderer has no
+    release, so whatever a test builds lives as long as the context — one
+    shared by a module grew a worker past 4 GB on Mesa's llvmpipe, which
+    holds textures in the process (CI's runner, 16 GB for four workers).
+    test_golden_frames.py and test_graph_frame.py keep their own."""
+    moderngl = pytest.importorskip("moderngl")
+    try:
+        c = moderngl.create_context(standalone=True)
+    except Exception as e:  # noqa: BLE001 — any GL failure means skip
+        pytest.skip(f"no standalone GL context available: {e}")
+    yield c
+    c.release()
+
+
 @pytest.fixture(autouse=True)
 def _library_home(tmp_path):
     # set in os.environ directly, not through monkeypatch: a test that calls

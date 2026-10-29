@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from types import SimpleNamespace as NS
 
-import moderngl
 import numpy as np
 import pytest
 from conftest import seed
@@ -144,14 +143,6 @@ def test_every_picture_kind_has_a_thumbnail_and_the_modulation_side_none():
 
 
 # ---------------------------------------------------------------- the renderer
-
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
 
 
 SIZE = (96, 64)

@@ -104,15 +104,6 @@ def test_an_aux_wire_leaves_the_effect_in_its_run():
 moderngl = pytest.importorskip("moderngl")
 
 
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-
-
 def _fbo(ctx, w, h):
     return ctx.framebuffer(color_attachments=[ctx.renderbuffer((w, h), 4)])
 

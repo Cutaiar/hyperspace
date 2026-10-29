@@ -91,15 +91,6 @@ moderngl = pytest.importorskip("moderngl")
 from test_graph_faces import Still, _fbo, _media, _px, _rgba
 
 
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-
-
 def _empty(select=None, **kw):
     from hyperspace.view import ViewState
 

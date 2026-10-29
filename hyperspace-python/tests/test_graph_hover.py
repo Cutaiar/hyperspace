@@ -260,15 +260,6 @@ def test_hues_are_read_a_frame_late_one_a_frame_each_once_a_second_only_while_as
     assert a.reads == b.reads == 0                 # never a texture's read()
 
 
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-
-
 def test_a_real_thumbnails_hue_is_its_pictures_a_frame_later_without_a_texture_read(
         ctx, monkeypatch):
     th = PreviewTextures(ctx)

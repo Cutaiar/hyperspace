@@ -777,16 +777,6 @@ def test_held_with_the_page_closed_draws_no_preview(monkeypatch):
 moderngl = pytest.importorskip("moderngl")
 
 
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-    c.release()
-
-
 def test_on_gl_the_projector_keeps_the_held_frame_while_the_preview_shows_the_edit(ctx):
     """The default frame held; the operator lands a new preset (nothing
     wired: black) and turns the brightness down. The program draw is the

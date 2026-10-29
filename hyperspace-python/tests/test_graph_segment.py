@@ -1,4 +1,4 @@
-# ruff: noqa: F811 — `ctx` is test_graph_faces' fixture, taken as each GL test's argument
+
 """Plan 39 T4 — `segment`: any picture → foreground, background and mask
 (W4; decisions 3, 4, 5).
 
@@ -34,7 +34,6 @@ from test_graph_faces import (
     _media,
     _px,
     _rgba,
-    ctx,  # noqa: F401 — the GL context fixture, taken as each GL test's argument
 )
 from test_graph_resize import FACTORY_FRAME
 from test_graph_wired import wired

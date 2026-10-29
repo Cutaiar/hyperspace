@@ -10,7 +10,7 @@ from types import SimpleNamespace as NS
 
 import numpy as np
 from conftest import seed
-from test_thumbnails import SIZE, S, _px, _renderer, _views, ctx  # noqa: F401 — the GL fixture
+from test_thumbnails import SIZE, S, _px, _renderer, _views
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
@@ -23,7 +23,7 @@ def _rgba(tex) -> np.ndarray:
     return np.frombuffer(tex.read(), np.uint8).reshape(h, w, 4)
 
 
-def test_the_outputs_are_byte_identical_with_and_without_the_wireframe(ctx):  # noqa: F811
+def test_the_outputs_are_byte_identical_with_and_without_the_wireframe(ctx):
     """Three frames with the wireframe asked for give the same bytes on both
     outputs, and the same counts, as three without."""
     plain, wired = _renderer(ctx), _renderer(ctx)
@@ -41,7 +41,7 @@ def test_the_outputs_are_byte_identical_with_and_without_the_wireframe(ctx):  # 
     assert not getattr(wired, "wire_error", "")
 
 
-def test_the_wireframe_is_the_shapes_edges_white_on_black(ctx):  # noqa: F811
+def test_the_wireframe_is_the_shapes_edges_white_on_black(ctx):
     """The square is opaque black with grey-to-white lines on it — no
     faces' colour, no red points — and turns with the shape."""
     r, views = _renderer(ctx), _views(ctx)
@@ -64,7 +64,7 @@ def test_the_wireframe_is_the_shapes_edges_white_on_black(ctx):  # noqa: F811
     assert not np.array_equal(_rgba(r.wire_texture()).astype(int), px)
 
 
-def test_the_wireframe_follows_its_size_and_is_dropped_unasked(ctx, monkeypatch):  # noqa: F811
+def test_the_wireframe_follows_its_size_and_is_dropped_unasked(ctx, monkeypatch):
     """Its square is the size asked (clamped); not asked for `WIRE_DROP_S`,
     its texture is freed; a hot reload frees it too."""
     r, views = _renderer(ctx), _views(ctx)

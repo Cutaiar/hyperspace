@@ -1,4 +1,4 @@
-# ruff: noqa: F811 — `ctx` is test_graph_faces' fixture, taken as each GL test's argument
+
 """Plan 39 T3 — `cut`: picture + mask → picture (W3; decisions 1 and 6).
 
 `cut[.n]` takes the picture on its `image` port and the mask on its `mask`
@@ -30,7 +30,6 @@ from test_graph_faces import (
     _media,
     _px,
     _rgba,
-    ctx,  # noqa: F401 — the GL context fixture, taken as each GL test's argument
 )
 from test_graph_resize import FACTORY_FRAME
 from test_graph_wired import wired

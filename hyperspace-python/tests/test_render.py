@@ -21,7 +21,6 @@ from hyperspace.view import ViewState
 GOLDEN = Path(__file__).parent / "golden"
 
 
-
 class CardMedia:
     """The renderer's media channels for a test (plan 32 T7: the faces draw
     the channel `view.media` names where the one bitmap file was): `pixels`
@@ -40,16 +39,6 @@ def _carded(r, card):
     """Renderer `r` with `card` (a `CardMedia`) as its channels."""
     r.media = card
     return r
-
-
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-    c.release()
 
 
 VIEW = {"ang": [0.3, 0.7, 1.1, 0.5, 0.9, 1.3], "yaw": 0.4, "pitch": 0.25}
@@ -86,11 +75,17 @@ def test_pixels_land_on_projection(ctx):
 
 def test_render_performance(ctx):
     """120-cell (1200 edges) and 20,20-duoprism (800 edges) at 1080p:
-    raw draw must be comfortably above 60 fps equivalent."""
+    raw draw must be comfortably above 60 fps equivalent. A floor on the
+    GPU's rate: on a software rasteriser (Mesa's llvmpipe on the CI runner,
+    sharing its cores with the other xdist workers) it would measure the
+    machine's CPU instead, so it skips there."""
     import time
 
     from hyperspace.render import Renderer
 
+    gl = ctx.info["GL_RENDERER"]
+    if any(w in gl.lower() for w in ("llvmpipe", "softpipe", "swrast", "software")):
+        pytest.skip(f"a frame-rate floor needs a GPU; GL here is {gl}")
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((1920, 1080))])
     fbo.use()
     ctx.viewport = (0, 0, 1920, 1080)
