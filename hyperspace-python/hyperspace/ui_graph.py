@@ -91,7 +91,11 @@ and the shape's `faces` port are drawn like the other render nodes
 opened (`add_render`): faint, "reaches nothing", until it is wired in. A
 render cable's menu offers "insert effect ▸ <file>" (`insert_effect`); a
 free effect node let go on a picture cable is inserted into it
-(`dropped`, `Edit.place_effect`). A compile error colours an effect
+(`dropped`, `Edit.place_effect`): the cable's picture into its ``image``
+port, its output on into whichever port the cable fed. A cable is under
+the node when it runs through the node's box; with more than one under
+it, a chooser names each ("Look-back → Acid") and the pick takes it
+(`st["onto"]`, `put_onto`) — a modifier the same. A compile error colours an effect
 node's title and is its hover (`effect_errors`). The selected effect is
 the panel's one selection, shared with the FX page (`Panel.fx_selected`,
 `share`, `select_effect`).
@@ -283,7 +287,8 @@ def _state(panel) -> dict:
     # plan 28 N7: the expanded nodes (every other one is collapsed: the
     # default), the bundles drawn last frame by id, how many wires were
     # drawn, a drag let go on a collapsed node's stub (its port picker)
-    for k, make in (("open", set), ("bundles", dict), ("wires", int), ("land", lambda: None)):
+    for k, make in (("open", set), ("bundles", dict), ("wires", int), ("land", lambda: None),
+                    ("onto", lambda: None)):
         st.setdefault(k, make())
     st.setdefault("idle_open", set())       # plan 28 N9: the areas whose idle line is open
     st.setdefault("backdrop", True)         # 2026-10-26: output 1 behind the canvas
@@ -1273,7 +1278,8 @@ def _moved(panel, st: dict, view: graphview.View) -> None:
             m[n.id] = [round(now[0] - px), round(now[1] - py)]
         if n.kind == "modifier" or isinstance(n.ref, Effect):   # (plan 33 U: an effect too)
             size = ed.get_node_size(ed.NodeId(_id(st, "n:" + n.id)))
-            dropped(panel, view, n.id, (now[0] + size.x / 2, now[1] + size.y / 2))
+            dropped(panel, view, n.id, (now[0] + size.x / 2, now[1] + size.y / 2),
+                    (size.x, size.y))
 
 
 def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
@@ -3733,37 +3739,82 @@ def route_from_menu(panel, p) -> None:
     imgui.end_menu()
 
 
-def dropped(panel, view: graphview.View, nid: str, centre) -> graphview.VCable | None:
-    """A modifier node let go at `centre` (canvas units): if it is still
-    free — no cable in or out — and lands on a route or a modifier's input
-    cable (`graphview.cable_near`, by the curve the widget draws), it is
-    inserted there. Plan 33 U: an effect node let go on a picture cable is
-    put onto it the same way (`Edit.place_effect`, one undo step) — a free
+def dropped(panel, view: graphview.View, nid: str, centre,
+            size=None) -> graphview.VCable | None:
+    """A modifier node let go at `centre` (canvas units; `size` its box):
+    if it is still free — no cable in or out — and lands on a route or a
+    modifier's input cable (`graphview.cables_near`, by the curve the
+    widget draws, through the node's box), it is inserted there. Plan 33
+    U: an effect node let go on a picture cable is put onto it the same
+    way (`Edit.place_effect`, one undo step) — the cable's picture into
+    its ``image`` port, its output on into the port the cable fed; a free
     one (in the section, no cable in or out) inserted; (R22) one already
-    wired moved there, out of its place, the wires either side of it closed
-    over it: reordering the run is dragging a node to another cable. Its
-    own cables (any pipeline's node of it) are passed over, so a node let
-    go where it was, or on nothing, stays. Returns the cable it went into,
+    wired moved there, out of its place, the wires either side of it
+    closed over it: reordering the run is dragging a node to another
+    cable. Its own cables (any pipeline's node of it) are passed over, so
+    a node let go where it was, or on nothing, stays. More than one cable
+    under it (2026-10-29): a chooser opens (`st["onto"]`, `put_onto`) and
+    nothing changes until one is picked. Returns the cable it went into,
     or None."""
+    cands = onto_choices(panel, view, nid, centre, size)
+    if not cands:
+        return None
+    if len(cands) > 1:
+        _state(panel)["onto"] = {"node": nid, "cables": [c.id for c in cands], "open": True}
+        return None
+    return put_onto(panel, view, nid, cands[0])
+
+
+def onto_choices(panel, view: graphview.View, nid: str, centre,
+                 size=None) -> list[graphview.VCable]:
+    """The cables node `nid`, let go at `centre`, may go onto, nearest
+    first: picture cables of the section for an effect (not the rig's bus,
+    not its own), value cables for a free modifier."""
+    n = view.node(nid)
+    if n is None:
+        return []
+    pins = _state(panel)["pin_xy"]
+    if n.kind == "render" and isinstance(n.ref, Effect):
+        e = render_edit(panel)
+        return [c for c in graphview.cables_near(view, pins, centre, kinds=("render",),
+                                                 skip={nid}, size=size)
+                if c.type == graphview.IMAGE
+                and (e is None or graphview._cable_ends(e, c)[2] is None)]
+    if n.kind != "modifier" or view.cables_of(nid):
+        return []
+    return graphview.cables_near(view, pins, centre, skip=(nid,), size=size)
+
+
+def put_onto(panel, view: graphview.View, nid: str,
+             c: graphview.VCable) -> graphview.VCable | None:
+    """Node `nid` onto cable `c` (`dropped`'s, or the chooser's pick): an
+    effect through `Edit.place_effect`, a modifier `insert_modifier`.
+    Returns the cable, or None (refused: said on the head)."""
+    st = _state(panel)
+    st["onto"] = None
     n = view.node(nid)
     if n is None:
         return None
-    pins = _state(panel)["pin_xy"]
     if n.kind == "render" and isinstance(n.ref, Effect):
         # (plan 35 G: the node's own name — an instance, or a copy of one)
         name = n.id.partition(":")[2]
-        c = graphview.cable_near(view, pins, centre, kinds=("render",), skip={nid})
-        if c is None or c.type != graphview.IMAGE:
-            return None
         why = _render_said(panel, render_edit(panel), lambda e: e.place_effect(c, name))
         return None if why is not None else c
-    if n.kind != "modifier" or view.cables_of(nid):
-        return None
-    c = graphview.cable_near(view, pins, centre, skip=(nid,))
-    if c is None:
-        return None
     res = insert_modifier(panel, c, nid)
     return None if isinstance(res, graphview.Refusal) else c
+
+
+def _onto_menu(panel, st: dict, view: graphview.View) -> None:
+    """The chooser a node let go over several cables opens: one item per
+    cable (`graphview.onto_words`), nearest first; picked, the node goes
+    onto it (`put_onto`)."""
+    held = st["onto"]
+    n = view.node(held["node"])
+    ui._micro(f"put {n.label if n is not None else held['node']} onto")
+    for cid in held["cables"]:
+        c = next((x for x in view.cables if x.id == cid), None)
+        if c is not None and imgui.menu_item_simple(f"{graphview.onto_words(view, c)}##{cid}"):
+            put_onto(panel, view, held["node"], c)
 
 
 def macros_free(panel, view: graphview.View) -> list[str]:
@@ -3835,6 +3886,7 @@ BOTH_STUBS = "drag from a port: expand one of the two nodes first"
 GROUP_STUB = "{name} is folded: drop it on one of its pins, or open it (+)"
 LAND_HINT = "let go: pick one of {label}'s ports"
 LAND = "##graph.land"
+ONTO = "##graph.onto"                   # a node let go over several cables: which one
 
 
 def stub_refusal(view: graphview.View, a: str, b: str) -> str | None:
@@ -4082,6 +4134,15 @@ def _menus(panel, st: dict, view: graphview.View) -> None:
             imgui.end_popup()
         else:
             st["land"] = None               # closed without a pick
+    held = st["onto"]                       # 2026-10-29: a node let go over several cables
+    if held is not None:
+        if held.pop("open", False):
+            imgui.open_popup(ONTO)
+        if imgui.begin_popup(ONTO):
+            _onto_menu(panel, st, view)
+            imgui.end_popup()
+        else:
+            st["onto"] = None               # closed without a pick
     ed.resume()
 
 

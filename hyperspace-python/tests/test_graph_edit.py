@@ -482,6 +482,65 @@ def test_cable_near_follows_the_widgets_curve():
     assert graphview.cable_near(view, pins, mid, skip=("n2",)) is None
 
 
+def test_cables_near_takes_every_cable_through_the_dropped_nodes_box():
+    """A node let go over cables: every cable through its box (grown by
+    `NEAR`) is under it, nearest its centre first — one far from the
+    centre but crossing the box counts; without the box only the centre
+    is asked."""
+    view = graphview.View(cables=[graphview.VCable("low", "out:a", "mod:x", kind="route"),
+                                  graphview.VCable("high", "out:b", "mod:y", kind="route"),
+                                  graphview.VCable("far", "out:c", "mod:z", kind="route")],
+                          pins={"out:a": ("n1", "a"), "mod:x": ("n2", "x"),
+                                "out:b": ("n1", "b"), "mod:y": ("n2", "y"),
+                                "out:c": ("n1", "c"), "mod:z": ("n2", "z")})
+    pins = {"out:a": (0.0, 30.0), "mod:x": (400.0, 30.0),
+            "out:b": (0.0, -10.0), "mod:y": (400.0, -10.0),
+            "out:c": (0.0, 300.0), "mod:z": (400.0, 300.0)}
+    under = graphview.cables_near(view, pins, (200.0, 0.0), size=(100.0, 60.0))
+    assert [c.id for c in under] == ["high", "low"]
+    assert [c.id for c in graphview.cables_near(view, pins, (200.0, 0.0))] == ["high"]
+
+
+def test_a_node_dropped_over_two_cables_asks_which(rig):
+    """An effect let go over two picture cables at once is put on neither:
+    a chooser opens naming both (`st["onto"]`), and the one picked takes it
+    — its picture into the effect's ``image``, the effect's output on into
+    the port the cable fed."""
+    from types import SimpleNamespace as NS
+
+    from test_graphview import views
+    from test_presets import put
+
+    from hyperspace.outputs import Switches
+    put(rig.lib.home, "Two", schema="hyperspace.preset/7", graph=_section(
+        *FRAME0, ("lookback", "acid.image"), ("acid", "output.all.image"),
+        nodes=[{"kind": "effect", "file": "wobble", "instance": 2}]))
+    rig.lib.load("presets", "Two")
+    gs = rig.lib.presets.graph
+    rig.panel.renderer = NS(_graph=G.build_graph(views(Switches()), gs.spec.wiring(),
+                                                   effects=("acid", "wobble.2")))
+    frame(rig.panel, "graph")
+    st = ui_graph._state(rig.panel)
+    view = st["view"]
+    st["pin_xy"] = {}                       # only these three nodes' stubs are drawn
+    for nid, x in {"render:lookback": 0.0, "render:acid": 300.0,
+                   "render:output.all": 600.0}.items():
+        st["pin_xy"][graphview.stub_out(nid)] = (x + 100.0, 0.0)
+        st["pin_xy"][graphview.stub_in(nid)] = (x, 0.0)
+    # a box from x 100 to 500 covers both cables: nothing yet, the chooser
+    assert ui_graph.dropped(rig.panel, view, "render:wobble.2", (300.0, 0.0),
+                            (400.0, 40.0)) is None
+    assert G.run_back(gs.spec, "output.all.image") == ("acid",)
+    held = st["onto"]
+    assert held["node"] == "render:wobble.2" and len(held["cables"]) == 2
+    words = {graphview.onto_words(view, c) for c in view.cables if c.id in held["cables"]}
+    assert len(words) == 2 and all(" → " in w for w in words)
+    after = next(c for c in view.cables if c.dst_port == "rin:output.all/image")
+    assert ui_graph.put_onto(rig.panel, view, "render:wobble.2", after) is after
+    assert G.run_back(gs.spec, "output.all.image") == ("acid", "wobble.2")
+    assert st["onto"] is None
+
+
 def test_create_and_delete_open_only_in_the_typed_dispatch():
     """The canvas's create and delete queries live in `_create` / `_delete`
     alone, and an item is accepted or rejected only by a handler those
