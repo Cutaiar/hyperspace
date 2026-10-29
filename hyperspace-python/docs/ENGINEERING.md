@@ -1613,7 +1613,7 @@ the panel at 540 and the desk takes what is left.
 | SEQ | The step sequencer (plan 31, `ui_seq.py`): run · span · restart, length and swing; the 5 × 8 grid in the APC40's LED colours (the playhead's column in red, columns past the length dimmed); each lane's select, mute and envelope; a strip per envelope, one open, `+ env` for extras. |
 | HANDS | The tracker, the box, the axes and their setup, feel and calibration, the ghost hands (§12). |
 | PRESETS | The preset strip (◀ name ● ▶ · new · save · as…), every preset as a list filling the page (click loads; rename, ×), the trash at its foot, your patches under **patches** (rename and ×; a click spawns nothing — spawn is GRAPH's, plan 40), and one line for the show: its name ●, open ▾, save, as…, new (§10). |
-| SYSTEM | Cheat sheet and desk-diagram switches, Restart process, hot reload status, the library path, config errors and notes, the dream worker's state, the stall log's line; **devices**: one line per `[[devices]]` entry — `role · kind · status · n sources · last` (MIDI: the port, its binding count, the last message; the pad's road and its GLFW joystick (`glfw 1`, plan 27 B6); the hands' tracker; a sink's `n sinks`, port and what it sent), `error:` lines in the warning colour; **midi**: knob smoothing, the desk log, the learn line; **gamepad**: the sticks' feel (a spring's preset beside it: snappy, smooth, bouncy, wobbly, lazy or custom), its knobs — attack and release, or a spring's perceptual duration and bounce — and beside them the feel working live: the stick that moved most lately, as read (dim) and after the feel (white), over the last few seconds (`ui_feel.py`). |
+| SYSTEM | Cheat sheet and desk-diagram switches, Restart process, hot reload status, the library path, config errors and notes, the dream worker's state, the stall log's line; **devices**: one line per `[[devices]]` entry — `role · kind · status · n sources · last` (MIDI: the port, its binding count, the last message; the pad's road and its GLFW joystick (`glfw 1`, plan 27 B6); the hands' tracker; a sink's `n sinks`, port and what it sent), `error:` lines in the warning colour; **midi**: knob smoothing, the desk log, the learn line; **gamepad**: the sticks' feel (a spring's preset beside it: snappy, smooth, bouncy, wobbly, lazy or custom), its knobs — attack and release, or a spring's perceptual duration and bounce — and beside them the feel's shape (how it carries a jump; its red dot is the live feel on it, running from each jump of the stick) over the feel working live: the stick that moved most lately, as read (dim) and after the feel (white), over the last few seconds (`ui_feel.py`). |
 
 **The FACES page** (`ui_patterns.py`), top to bottom:
 
@@ -2347,8 +2347,8 @@ kind combo and **+ modifier**; per modifier `MOD n`, its kind, a combo
 per input (the route sources and the other modifiers' lanes), its live
 output ("dormant" while not live) and ×, then its params as ordinary
 widgets (right-click for Learn); a smooth's block, stacked, ends in its
-feel working live — its input as read, its output after the feel
-(`ui_feel.py`, `modifiers.smooth_motion`). Each add, remove, input picked and
+feel's shape, the live dot on it, and its feel working live — its input
+as read, its output after the feel (`ui_feel.py`, `modifiers.smooth_motion`). Each add, remove, input picked and
 param drag is an undo step. "Right hand energy, smoothed, times band 0,
 into acid mix": + smooth on `hand R energy`; + combine on `mod 1 smooth`
 and `0 sub`, how mul; + route from `mod 2 combine` onto `fx.acid.mix`.

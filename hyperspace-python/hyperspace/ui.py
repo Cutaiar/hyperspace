@@ -2482,8 +2482,8 @@ class Panel:
             imgui.spacing()
             self._section("gamepad")
             # the feel (a spring's preset beside it) and its two knobs, the
-            # feel working live beside them, as tall as they are (ui_feel) —
-            # beside, since the page has no height to spare
+            # feel's shape over the feel working live beside them, as tall as
+            # they are (ui_feel) — beside, since the page has no height to spare
             feel = self.router.source_feel("axis") if self.router is not None else None
             plotted = feel is not None and feel.on
             sp = imgui.get_style().item_spacing.x
@@ -2510,28 +2510,31 @@ class Panel:
             if "desk.pad.dial.left" in self.reg:   # the sticks as dials (app._register_dial)
                 self._dials()
 
-    PAD_FEEL_W = 220.0   # the sticks' feel working live (ui_feel), px at most, beside its knobs
+    PAD_FEEL_W = 220.0   # the sticks' feel plots (ui_feel), px at most, beside its knobs
 
     def _pad_feel_plot(self, feel, width: float, height: float) -> None:
-        """The sticks' feel working live: every axis lane sampled each
-        frame — as the pad reads it (`router.feeds`) and after the feel
-        (`Router.felt_lanes`, the camera job's followers) — and the one
-        that moved most lately drawn, named in its corner."""
+        """The sticks' feel, its shape over the feel working live: every
+        axis lane sampled each frame — as the pad reads it (`router.feeds`)
+        and after the feel (`Router.felt_lanes`, the camera job's
+        followers) — and the one that moved most lately drawn, named in its
+        corner, its dot riding the shape."""
         router = self.router
         raws = router.feeds.get("axis")
         felts = router.felt_lanes("axis")
+        rests = router.rests.get("axis") or []
         n = max(len(raws) if raws is not None else 0, len(felts or ()))
         traces = [ui_feel.sample(self, ("pad", i),
                                  float(raws[i]) if raws is not None and i < len(raws) else None,
-                                 felts[i] if felts is not None and i < len(felts) else None)
+                                 felts[i] if felts is not None and i < len(felts) else None,
+                                 rests[i] if i < len(rests) else None)
                   for i in range(n)]
         if not traces:
-            ui_feel.draw(feel, None, width, height)
+            ui_feel.draw(feel, None, width, height, stacked=True)
             return
         i = ui_feel.busiest(traces, imgui.get_time(), ui_feel.span(feel))
         names = router.labels.get("axis") or []
         ui_feel.draw(feel, traces[i], width, height,
-                     title=names[i] if i < len(names) else f"axis {i}")
+                     title=names[i] if i < len(names) else f"axis {i}", stacked=True)
 
     # ---- the sticks as dials (gamepad.dial, a prototype) ----
 

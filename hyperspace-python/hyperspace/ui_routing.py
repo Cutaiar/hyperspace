@@ -35,8 +35,9 @@ The feel chip (motion.py) cycles auto → follow → spring → still: auto is
 the source's own feel (the pad's, for a stick), still is none at all, and
 follow / spring are the row's own, with their knobs on a third line —
 attack and release about rest, or a spring's preset, perceptual duration
-and bounce — and on a fourth, the row's width, the feel working live: the
-reading and what the feel makes of it (ui_feel).
+and bounce — and on a fourth, the row's width, its shape with the live
+feel's dot riding it and the feel working live beside it: the reading and
+what the feel makes of it (ui_feel).
 
 The target is a searchable combo over every modulatable param, grouped
 by registry group; depth is signed — ±1 in norm units for `push` (1 puts
@@ -127,6 +128,7 @@ from .bands import CEIL
 from .library import PRESETS
 from .modifiers import KINDS as MOD_KINDS
 from .modifiers import PARAMS as MOD_PARAMS
+from .modifiers import REST as MOD_REST
 from .modifiers import Modifier, smooth_motion
 from .motion import Motion
 from .params import Kind, Param, part_of
@@ -1048,8 +1050,8 @@ def _feel_chip(router: Router, b: Binding, width: float) -> None:
 def _feel_line(panel, router: Router, b: Binding) -> None:
     """The row's own feel: its knobs — attack / release, or a spring's
     preset, perceptual duration and bounce — then, a line of its own the
-    row's width, the feel working live (ui_feel: the reading and what the
-    feel makes of it)."""
+    row's width, its shape with the live feel's dot on it and the feel
+    working live beside it (ui_feel)."""
     m = b.motion
     sp = imgui.get_style().item_spacing.x
     imgui.dummy(imgui.ImVec2(18, 0))
@@ -1096,8 +1098,10 @@ def _feel_line(panel, router: Router, b: Binding) -> None:
     imgui.pop_font()
     imgui.dummy(imgui.ImVec2(18, 0))
     imgui.same_line()
+    rest = b.rest if b.rest is not None else router.rest_of(b.source)
     trace = ui_feel.sample(panel, ("route", b.source, b.target),
-                           _live(panel, router, b) if b.enabled else None, router.felt_now(b))
+                           _live(panel, router, b) if b.enabled else None, router.felt_now(b),
+                           rest)
     ui_feel.draw(m, trace, imgui.get_content_region_avail().x, FEEL_PLOT_H)
 
 
@@ -1785,7 +1789,7 @@ def modifier_block(panel, router: Router, m: Modifier, stacked: bool = False) ->
                 panel._slider(pid, -1.0)
         if m.kind == "smooth":                  # its feel working live (ui_feel)
             trace = ui_feel.sample(panel, ("mod", m.id), reading(panel, router, m.inputs[0]),
-                                   modifier_output(router, m.id))
+                                   modifier_output(router, m.id), MOD_REST)
             ui_feel.draw(smooth_motion(m.params), trace, imgui.get_content_region_avail().x,
                          SMOOTH_PLOT_H)
         imgui.push_style_color(imgui.Col_.text, ui.DIM)

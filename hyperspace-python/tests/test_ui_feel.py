@@ -1,6 +1,9 @@
-"""A feel drawn live (ui_feel): the reading and what the feel makes of it,
-sampled from the Router as the panel draws — a route row's own feel, a
-smooth modifier's, the pad's — and the panel still fits its window."""
+"""A feel drawn (ui_feel): its shape — motion.response across a time axis
+fitted to the feel, a spring's step, a follow's push and let-go — with the
+live feel's dot riding it from each jump of the reading; and the feel
+working live, the reading and what the feel makes of it, sampled from the
+Router as the panel draws — a route row's own feel, a smooth modifier's,
+the pad's. The panel still fits its window."""
 
 import math
 
@@ -14,21 +17,135 @@ from hyperspace import app, modifiers, motion, ui_feel, ui_graph, ui_routing
 from hyperspace.motion import Motion
 from hyperspace.routing import Binding, Bindings, Router
 from hyperspace.ui import Panel
-from hyperspace.ui_feel import KEEP, SPAN_MAX, SPAN_MIN, TRACES, Trace, busiest, sample, span
+from hyperspace.ui_feel import (
+    JUMP,
+    KEEP,
+    PAUSE,
+    RING_CYCLES,
+    SPAN_MAX,
+    SPAN_MIN,
+    STALE,
+    TRACES,
+    WINDOW_MIN,
+    Trace,
+    busiest,
+    curve,
+    head,
+    let_go,
+    playhead,
+    position,
+    sample,
+    span,
+    target,
+    window,
+)
 
 DT = 1 / 60
 SPRING = Motion("spring", dur=0.5, bounce=0.3)
 FOLLOW = Motion("follow", atk=0.1, rel=0.4)
 
 
-# ---- the span, the trace ----
+# ---- the shape ----
 
-def test_the_span_is_twice_the_settle_within_its_bounds():
+def test_a_springs_shape_is_its_step_response():
+    assert let_go(SPRING) is None and target(SPRING, 10.0) == 1.0
+    assert position(SPRING, 0.2) == pytest.approx(motion.response(SPRING, 0.2))
+    pts = curve(SPRING, 16)
+    assert len(pts) == 17 and pts[0] == (0.0, 0.0)
+    assert pts[-1][0] == pytest.approx(window(SPRING))
+
+
+def test_with_bounce_a_spring_overshoots_and_with_none_it_does_not():
+    assert max(y for _, y in curve(Motion("spring", dur=0.6, bounce=0.7))) > 1.2
+    for bounce in (0.0, -0.5):
+        pts = curve(Motion("spring", dur=0.6, bounce=bounce))
+        assert max(y for _, y in pts) <= 1.0 + 1e-9
+        assert abs(pts[-1][1] - 1.0) <= motion.BAND + 1e-9    # settled by the axis' end
+
+
+def test_a_follows_shape_is_a_push_out_on_attack_and_home_on_release():
+    g = let_go(FOLLOW)
     out, home = motion.settle(FOLLOW), motion.settle(FOLLOW, home=True)
-    assert span(FOLLOW) == pytest.approx(2 * (out + home))
+    assert g == pytest.approx(max(out, (out + home) / 3))    # held until the attack arrives
+    assert target(FOLLOW, g * 0.5) == 1.0 and target(FOLLOW, g * 1.01) == 0.0
+    assert position(FOLLOW, g) >= 1 - motion.BAND
+    x = position(FOLLOW, g)
+    assert position(FOLLOW, g + 0.2) == pytest.approx(x * math.exp(-0.2 / FOLLOW.rel))
+    assert abs(curve(FOLLOW)[-1][1]) <= motion.BAND               # home by the axis' end
+
+
+def test_an_instant_edge_still_shows_its_plateau():
+    m = Motion("follow", atk=0.0, rel=0.4)
+    assert let_go(m) == pytest.approx(window(m) / 4)           # a third of the release's 3/4
+    assert position(m, 0.001) == 1.0
+    assert window(Motion("follow", atk=0.0, rel=0.0)) == pytest.approx(WINDOW_MIN)
+
+
+def test_the_shapes_axis_fits_the_feel():
+    assert window(Motion("spring", dur=0.25, bounce=0)) < window(Motion("spring", dur=1, bounce=0))
+    assert window(Motion("spring", dur=0.5, bounce=-0.6)) > \
+        window(Motion("spring", dur=0.5, bounce=0.0))           # creeps
+    assert window(Motion("spring", dur=0.5, bounce=1.0)) == pytest.approx(RING_CYCLES * 0.5)
+
+
+def test_the_idle_playhead_sweeps_then_rests_then_sweeps_again():
+    w = window(SPRING)
+    assert playhead(0.0, SPRING) == 0.0
+    assert playhead(w / 2, SPRING) == pytest.approx(w / 2)
+    assert playhead(w + PAUSE / 2, SPRING) == pytest.approx(w)
+    assert playhead(w + PAUSE + 0.01, SPRING) == pytest.approx(0.01)
+
+
+# ---- the live dot on the shape ----
+
+def _trace(readings, rest=0.5, dt=DT) -> Trace:
+    tr = Trace()
+    for k, u in enumerate(readings):
+        tr.push(k * dt, u, u, rest)
+    return tr
+
+
+def test_a_jump_starts_the_dot_and_a_slow_move_does_not():
+    tr = _trace([0.5, 0.5, 1.0, 1.0, 1.0])
+    assert tr.jump == pytest.approx(2 * DT) and not tr.home
+    now = 4 * DT
+    assert head(SPRING, tr, now) == pytest.approx(2 * DT)     # the time since the jump
+    slow = _trace([0.5 + JUMP / 2 * k for k in range(10)])
+    assert slow.jump is None
+    assert head(SPRING, slow, 9 * DT) == pytest.approx(window(SPRING))   # settled: the end
+    tr.push(10.0, 1.0, 1.0, 0.5)              # long after, still held: the end
+    assert head(SPRING, tr, 10.0) == pytest.approx(window(SPRING))
+
+
+def test_on_follow_a_push_holds_at_the_let_go_and_a_fall_home_runs_the_release():
+    g = let_go(FOLLOW)
+    pushed = _trace([0.5, 1.0, *[1.0] * 200])
+    assert head(FOLLOW, pushed, 2 * DT) == pytest.approx(DT)
+    assert head(FOLLOW, pushed, 201 * DT) == pytest.approx(g)   # held out: parked at the let-go
+    home = _trace([0.5, 1.0, *[1.0] * 30, 0.5, 0.5])
+    assert home.home
+    assert head(FOLLOW, home, 33 * DT) == pytest.approx(g + DT)
+    held = _trace([1.0, 1.0])                 # seen held out, no jump: at the let-go
+    assert head(FOLLOW, held, DT) == pytest.approx(g)
+
+
+def test_not_live_the_shape_sweeps_on_its_own():
+    assert head(SPRING, None, 1.0) is None
+    tr = _trace([0.5, 1.0])
+    assert head(SPRING, tr, DT + STALE + 0.01) is None         # stale
+    tr.push(2 * DT, None, None, 0.5)
+    assert head(SPRING, tr, 2 * DT) is None                     # the source went away
+    tr.push(3 * DT, 0.0, 0.0, 0.5)            # back: no jump from before the gap
+    assert tr.jump == pytest.approx(DT)
+
+
+# ---- the live plot's span, the trace ----
+
+def test_the_span_is_twice_the_shapes_window_within_its_bounds():
+    assert span(FOLLOW) == pytest.approx(2 * window(FOLLOW))
     assert span(Motion("spring", dur=0.05, bounce=0.0)) == SPAN_MIN      # tight: the floor
     assert span(Motion("spring", dur=4.0, bounce=-0.5)) == SPAN_MAX      # lazy: the ceiling
-    assert span(Motion("spring", dur=0.5, bounce=1.0)) == pytest.approx(3.0)   # rings: 3 periods
+    assert span(Motion("spring", dur=0.5, bounce=1.0)) == pytest.approx(2 * RING_CYCLES * 0.5)
     assert span(motion.OFF) == SPAN_MIN
 
 
@@ -72,11 +189,11 @@ def _draws(monkeypatch) -> list:
     drawn = []
     real = ui_feel.draw
 
-    def rec(m, trace, width, height, title=""):
+    def rec(m, trace, width, height, title="", stacked=False):
         right = imgui.get_cursor_screen_pos().x + width
         edge = imgui.get_window_pos().x + imgui.get_window_width()
         drawn.append((m, trace, title, right <= edge + 0.5))
-        real(m, trace, width, height, title)
+        real(m, trace, width, height, title, stacked)
     monkeypatch.setattr(ui_feel, "draw", rec)
     return drawn
 
