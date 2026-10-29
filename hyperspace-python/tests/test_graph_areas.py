@@ -982,3 +982,58 @@ def test_esc_closes_the_details(rig):
     io.add_key_event(imgui.Key.escape, False)
     frame(rig.panel, "graph")
     assert ui_graph._selection(st, st["view"]) is None
+
+
+def _modifier_selected(rig):
+    """party-trip on the page with a new threshold modifier, selected: the
+    page's state and the modifier."""
+    st = load(rig, "party-trip")
+    m = ui_graph.add_modifier(rig.panel, "threshold")
+    frame(rig.panel, "graph")
+    st["select_node"] = m.id
+    frame(rig.panel, "graph")
+    frame(rig.panel, "graph")
+    assert ui_graph._selection(st, st["view"])[1].id == m.id
+    return st, m
+
+
+def _press(rig, key, focus=True):
+    """`key` pressed and let go on GRAPH, the canvas focused (`focus`: as a
+    click on it leaves it), then a frame for the editor's delete query."""
+    if focus:
+        page = next(w for w in imgui.get_current_context().windows if "##page" in w.name)
+        imgui.internal.focus_window(page)
+    io = imgui.get_io()
+    io.add_key_event(key, True)
+    frame(rig.panel, "graph")
+    io.add_key_event(key, False)
+    frame(rig.panel, "graph")
+    frame(rig.panel, "graph")
+
+
+@pytest.mark.parametrize("key", [imgui.Key.backspace, imgui.Key.delete])
+def test_delete_or_backspace_deletes_the_selected_node(rig, key):
+    """The owner, 2026-10-29: Delete with a node selected deletes it — a
+    Mac's delete key (⌫, Backspace to imgui) as well as fn+⌫, the pointer
+    anywhere."""
+    _, m = _modifier_selected(rig)
+    _press(rig, key)
+    assert rig.router.table.modifier(m.id) is None
+
+
+def test_backspace_off_the_canvas_deletes_nothing(rig):
+    """⌫ with the canvas not focused (a click on the rail took the keys) is
+    not GRAPH's: the node stays."""
+    _, m = _modifier_selected(rig)
+    rail = next(w for w in imgui.get_current_context().windows if "##rail" in w.name)
+    imgui.internal.focus_window(rail)
+    _press(rig, imgui.Key.backspace, focus=False)
+    assert rig.router.table.modifier(m.id) is not None
+
+
+def test_backspace_with_a_popup_open_deletes_nothing(rig, monkeypatch):
+    """⌫ while a menu is open is the menu's: the node stays."""
+    _, m = _modifier_selected(rig)
+    monkeypatch.setattr(imgui, "is_popup_open", lambda *a: True)
+    _press(rig, imgui.Key.backspace)
+    assert rig.router.table.modifier(m.id) is not None
