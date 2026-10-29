@@ -248,6 +248,13 @@ MONITOR_TIP = "What the projector shows: the held look. TAKE puts the preview be
 # drawn at `FAINT_PIC` of its brightness (`graphview.THUMB_FAINT`)
 FAINT_PIC = 0.4
 THUMB_GROUND = (0.0, 0.0, 0.0, 1.0)    # the box before (or without) a picture
+# the shape node's side panel: the polytope alone, as white lines on black
+# (`_wireframe`, drawn by the renderer: `Renderer.want_wire`) — the shape as
+# it turns now, without the scene's faces, points, pattern or effects; a
+# square this wide (capped) at the top
+WIRE_MAX = 260.0         # px: the square's side at most
+WIRE_TIP = ("The shape alone, live: its edges at the angles it is drawn at — no faces, "
+            "points, pattern or effects")
 # plan 37 C2 (D3): the head's **pictures · tint cables** switch, off by
 # default (plain red), page state only — never the preset's or the show's.
 # Lit, a picture cable's red leans by its maker's dominant hue
@@ -3058,6 +3065,8 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
             ui_routing.remove_modifier(panel, m.id)
         return
     ui._micro(n.kind)
+    if isinstance(n.ref, rgraph.Shape):
+        _wireframe(panel)
     # plan 35 G (V2): a frame node's header says its id and its params' prefix
     imgui.text(graphview.side_head(n) if n.kind in graphview.FRAME_VKINDS else n.label)
     if n.status:
@@ -3072,6 +3081,41 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
     for port in n.ports:
         if port.patched:
             imgui.text_disabled(f"{port.name}: {_said(port.live)}")
+
+
+def wire_px(side: float, fb_scale: float) -> int:
+    """The wireframe's square in framebuffer px: the box's logical `side`
+    × the window's framebuffer scale (2 on a Retina screen), so it is drawn
+    1:1 and stays sharp."""
+    return max(16, round(side * max(fb_scale, 1.0)))
+
+
+def _wireframe(panel) -> None:
+    """The shape node's side panel: a black square as wide as the column
+    (at most `WIRE_MAX`) holding the renderer's wireframe of the shape
+    (`Renderer.want_wire`: the edges alone, drawn on the GPU at the end of
+    each frame while this asks) — the renderer the canvas reads
+    (`holdmod.canvas_renderer`: held, the preview's, as the sliders under
+    it are). Black until its first picture, or with no renderer."""
+    side = min(imgui.get_content_region_avail().x, WIRE_MAX)
+    if side < 16.0:
+        return
+    p0 = imgui.get_cursor_screen_pos()
+    imgui.dummy(imgui.ImVec2(side, side))
+    if imgui.is_item_hovered():
+        ui.tooltip(WIRE_TIP)
+    p1 = imgui.ImVec2(p0.x + side, p0.y + side)
+    dl = imgui.get_window_draw_list()
+    dl.add_rect_filled(p0, p1, ui.u32(imgui.ImVec4(*THUMB_GROUND)))
+    r = holdmod.canvas_renderer(panel)
+    if r is None or not hasattr(r, "want_wire"):
+        return
+    r.want_wire(wire_px(side, imgui.get_io().display_framebuffer_scale.x))
+    tex = r.wire_texture()
+    if tex is None or getattr(tex, "glo", 0) == 0:
+        return
+    dl.add_image(imgui.ImTextureRef(tex.glo), p0, p1,
+                 imgui.ImVec2(0, 1), imgui.ImVec2(1, 0))      # GL's rows: upside down in v
 
 
 # ---------------------------------------------------------------- a node's controls (2026-10-24)

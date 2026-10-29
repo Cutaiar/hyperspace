@@ -171,6 +171,12 @@ from .view import N_MOD, RED, ViewState  # re-exported for callers that had them
 PREVIEW_HZ = 10.0
 PREVIEWS_PER_FRAME = 2
 
+# the GRAPH page's shape wireframe (`Renderer.want_wire`): the shape's edges
+# alone, white on black, in a square at most this many px a side, dropped
+# this long after the page last asked for it
+WIRE_PX_MAX = 1024
+WIRE_DROP_S = 1.0
+
 # plan 33 R29: how many frames a texture made at another size (`pool_at`, a
 # `(name, size)` frame target) is kept after its last use before
 # `_prune_sized` releases it — so a switch the sequencer flicks between two
@@ -1319,6 +1325,7 @@ class Renderer:
         if getattr(self, "thumbs", None) is not None:
             self.thumbs.close()
         self.thumbs = None
+        self._drop_wire()               # (the page asks again next frame)
         for res in (getattr(self, "_show_vao", None), getattr(self, "_show_prog", None),
                     getattr(self, "_lay_vao", None), getattr(self, "_lay_prog", None)):
             if res is not None:
@@ -1783,6 +1790,7 @@ class Renderer:
                 ui.upload()
             except Exception:  # noqa: BLE001, S110 — a thumbnail not made stays a dark box
                 pass
+        self._wire()
         self._thumbnails()
 
     # ---- plan 37 C1: the GRAPH page's thumbnails ----
@@ -1847,6 +1855,74 @@ class Renderer:
             if th.count:
                 _flush()
         th.end_frame()
+
+    # ---- the shape node's wireframe (GRAPH's side panel) ----
+
+    def want_wire(self, px: int) -> None:
+        """The GRAPH page shows the shape node's details: draw the shape's
+        wireframe into a `px` square at the end of the next frame (`_wire`),
+        and every frame after until the page has not asked for
+        `WIRE_DROP_S` — then its texture is freed, so a page not showing it
+        costs nothing."""
+        self.wire_asked = (max(16, min(int(px), WIRE_PX_MAX)), time.monotonic())
+
+    def wire_texture(self) -> moderngl.Texture | None:
+        """The wireframe as last drawn (GL's rows), or None: never asked, or dropped."""
+        got = self.__dict__.get("_wire_gl")
+        return got[0] if got is not None else None
+
+    def _drop_wire(self) -> None:
+        got, self._wire_gl = self.__dict__.get("_wire_gl"), None
+        for res in (got or ())[::-1]:
+            try:
+                res.release()
+            except Exception:  # noqa: BLE001, S110 — teardown is best-effort
+                pass
+
+    def _wire(self) -> None:
+        """The end of a frame (`_for_the_panel`), when the page asked: the
+        shape as this frame drew it (`_thumb_frame`'s view state: its shape,
+        angles, 3D hold, yaw and pitch) through `draw_scene` with the edges
+        alone — no faces, no points, one copy, the camera's zoom and pan and
+        the eye left at rest, brightness 1 — over black, into the wire's
+        own square. The scene pass's buffers it writes are rewritten by the
+        next frame's before anything reads them; what the cover pass reads
+        of the last pass (`_face_verts`, `_copies`, `_scene_mats`) is put
+        back; flushed, as the thumbnails are. Never raises: the panel's pictures must not take the frame down."""
+        asked = getattr(self, "wire_asked", None)
+        if asked is None:
+            return
+        px, at = asked
+        if time.monotonic() - at >= WIRE_DROP_S:
+            self.wire_asked = None
+            self._drop_wire()
+            return
+        frame = getattr(self, "_thumb_frame", None)
+        if frame is None:
+            return
+        ctx = self.ctx
+        saved = (self._face_verts, self._copies, self._scene_mats)
+        try:
+            got = self.__dict__.get("_wire_gl")
+            if got is None or tuple(got[0].size) != (px, px):
+                self._drop_wire()
+                tex = ctx.texture((px, px), 4)
+                tex.filter = (moderngl.LINEAR, moderngl.LINEAR)
+                got = self._wire_gl = (tex, ctx.framebuffer(color_attachments=[tex]))
+            ws = replace(frame.s, faces=False, points=False, lines=True, lines_alpha=1.0,
+                         bright=1.0, instances=1, inst_fit=False, zoom=1.0, pan=[0.0, 0.0],
+                         eye_fov=EYE_FOV, eye_distance=EYE_DISTANCE, screen_strokes=False)
+            got[1].use()
+            ctx.viewport = (0, 0, px, px)
+            ctx.clear(0.0, 0.0, 0.0, 1.0)
+            self.draw_scene(ws, px, px, clear=False)
+            _flush()                    # (the control window samples it: as `_thumbnails`)
+            self.wire_error = ""
+        except Exception as e:  # noqa: BLE001 — a wireframe not drawn stays black
+            self.wire_error = f"{type(e).__name__}: {e}"[:120]
+        finally:
+            self._face_verts, self._copies, self._scene_mats = saved
+            ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
 
     def media_shown(self, c: str) -> tuple[moderngl.Texture, bool] | None:
         """Channel `c`'s raw texture as this frame read it, and whether its
