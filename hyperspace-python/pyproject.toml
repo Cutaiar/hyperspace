@@ -4,19 +4,6 @@ version = "0.1.0"
 description = "Real-time 4D polytope visualizer — Python engine (see docs/ARCHITECTURE.md)"
 requires-python = ">=3.12"
 dependencies = [
-    # Ultraleap hands (hyperspace/hands): the SDK's own Python wrapper
-    # (`leap`, pure Python) over the cffi module it binds (`leapc_cffi`),
-    # built here at `uv sync` from vendor/leapc-cffi: upstream's package at
-    # the same pinned commit, patched to build against whichever Gemini is
-    # installed (libLeapC 5 or 6; see vendor/leapc-cffi/VENDORED.md). The
-    # Hand Tracking app also ships a leapc_cffi, but an older app's is built
-    # for 3.8 and will not import under this project's 3.12 — ours is found
-    # first on sys.path (leap appends the app's folder, never prepends it).
-    # cffi is the built module's runtime. Imported only when [hands] is
-    # enabled. Neither is on PyPI: [tool.uv.sources].
-    "cffi>=1.17",
-    "leap",
-    "leapc-cffi",
     "glfw>=2.10.2",
     "imgui-bundle>=1.92.900",
     "mido>=1.3.3",
@@ -28,12 +15,6 @@ dependencies = [
     "python-rtmidi>=1.5.8",
     "sounddevice>=0.5.6",
     "soundfile>=0.14.0",
-    # the look-back's dream worker (dream.py, torch on MPS) and the bench in
-    # tools/dream_bench/ — part of the app since decision 23 (a), 2026-09-29:
-    # plain `uv sync` installs it. dream.py is still imported lazily, only
-    # under `[dream] enabled` (on by default), so importing app pulls no torch.
-    "torch>=2.2",
-    "torchvision>=0.17",
     "mlx>=0.20 ; sys_platform == 'darwin'",
     "pyobjc-framework-metal>=12.2 ; sys_platform == 'darwin'",
     "pyobjc-framework-quartz>=12.2 ; sys_platform == 'darwin'",
@@ -67,11 +48,45 @@ dependencies = [
 ]
 
 [dependency-groups]
+# The groups below are on by default ([tool.uv] default-groups), so a plain
+# `uv sync` installs them as before; CI leaves `hands` and `dream` out
+# (`uv sync --no-group hands --no-group dream`, docs/ENGINEERING.md §16):
+# a runner has no Ultraleap SDK to build against, and Linux torch wheels
+# pull gigabytes of CUDA no test in the default tier imports.
+#
+# Ultraleap hands (hyperspace/hands): the SDK's own Python wrapper
+# (`leap`, pure Python) over the cffi module it binds (`leapc_cffi`),
+# built here at `uv sync` from vendor/leapc-cffi: upstream's package at
+# the same pinned commit, patched to build against whichever Gemini is
+# installed (libLeapC 5 or 6; see vendor/leapc-cffi/VENDORED.md). The
+# Hand Tracking app also ships a leapc_cffi, but an older app's is built
+# for 3.8 and will not import under this project's 3.12 — ours is found
+# first on sys.path (leap appends the app's folder, never prepends it).
+# cffi is the built module's runtime. Imported only when [hands] is
+# enabled. Neither is on PyPI: [tool.uv.sources].
+hands = [
+    "cffi>=1.17",
+    "leap",
+    "leapc-cffi",
+]
+# the look-back's dream worker (dream.py, torch on MPS) and the bench in
+# tools/dream_bench/ — part of the app since decision 23 (a), 2026-09-29:
+# plain `uv sync` installs it. dream.py is still imported lazily, only
+# under `[dream] enabled` (on by default), so importing app pulls no torch.
+dream = [
+    "torch>=2.2",
+    "torchvision>=0.17",
+]
 dev = [
     "pytest>=8.0",
     "ruff>=0.8",
     "playwright>=1.49",
     "pytest-xdist>=3.8.0",
+    # a hung test fails alone instead of stalling its xdist worker (and the
+    # whole run) at 99 %: CI passes --timeout
+    "pytest-timeout>=2.3",
+    # vendor/leapc-cffi/setup.py's own tests import it (tests/test_leapc_build.py)
+    "setuptools",
 ]
 
 [build-system]
@@ -96,12 +111,15 @@ markers = [
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-extend-exclude = ["vendor/"]   # upstream code, kept in upstream's style
+# vendor/: upstream code, kept in upstream's style; docs/plans/assets/: a
+# spike's throwaway benches, kept as they ran
+extend-exclude = ["vendor/", "docs/plans/assets/"]
 
 [project.scripts]
 hyperspace = "hyperspace.app:main"
 
 [tool.uv]
+default-groups = ["dev", "hands", "dream"]
 # The interpreter is uv's own, not whatever Python the machine happens to
 # have (.python-version pins the series, 3.14). A python.org framework
 # build ships no CA bundle until its Install Certificates.command is run,
@@ -111,6 +129,12 @@ hyperspace = "hyperspace.app:main"
 # >=3.12 (and ruff's target with it) — the package still runs there; this
 # only fixes what a sync builds the venv on.
 python-preference = "managed"
+# leapc-cffi's metadata, stated so a lock needs no build of it (the build
+# needs the Ultraleap SDK, which a CI runner lacks): keep it in step with
+# vendor/leapc-cffi/setup.py
+dependency-metadata = [
+    { name = "leapc-cffi", version = "0.0.1", requires-dist = ["cffi"] },
+]
 
 [tool.uv.sources]
 # Ultraleap's Python wrapper, pinned by commit (see the dependency's note)

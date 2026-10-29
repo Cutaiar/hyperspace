@@ -26,7 +26,10 @@ uv run hyperspace     # opens the render window and the control window
 one commit in `pyproject.toml`) and compiles its `leapc_cffi` module from
 `vendor/leapc-cffi` (upstream's at the same commit, patched to build
 against whichever Ultraleap Hand Tracking is installed); they are only
-imported when the hands are switched on.
+imported when the hands are switched on. They are the `hands` dependency
+group, and torch the `dream` one: both on by default (`[tool.uv]
+default-groups`), so plain `uv sync` installs them; CI leaves them out
+(`ENGINEERING.md` §16, "CI").
 To check the install: `uv run pytest -q`.
 
 **Microphone permission.** The first time you press M (or *Listen to
@@ -37,8 +40,8 @@ Privacy & Security → Microphone.
 
 ## The dream
 
-On by default. torch and torchvision are ordinary dependencies, so plain
-`uv sync` installs them. The first time the dream runs it downloads the
+On by default. torch and torchvision are the `dream` dependency group,
+on by default, so plain `uv sync` installs them. The first time the dream runs it downloads the
 pretrained weights (VGG16, or GoogLeNet for some layers) into
 `~/Hyperspace/weights` unless they are already there or in torch's hub
 cache. If the worker cannot start, the app runs the echoes alone and
