@@ -54,7 +54,7 @@ live render error is a red banner at the bottom of the control window.
   `hands/`; `bridge`), the input adapters (`midi` + `apc40`, `gamepad`),
   the render stack (`geometry`, `view`, `render`, `glsl`, `fx`, `lookback`,
   `dream`, `overlay`, `shaders/`), the panel (`ui`, `ui_bands`,
-  `ui_routing`, `ui_graph`, `ui_lfo`, `ui_seq`, `ui_fx`, `ui_lookback`, `ui_presets`,
+  `ui_routing`, `ui_feel`, `ui_graph`, `ui_lfo`, `ui_seq`, `ui_fx`, `ui_lookback`, `ui_presets`,
   `hands/panel`, `control`), the library (`library`, `preset`, `config`;
   `scenes/band/` holds the band scenes) and the host (`app`, `hotreload`). Who owns
   what and who may write a parameter: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).

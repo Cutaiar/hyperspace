@@ -27,6 +27,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from hyperspace.graph import Wiring
+from hyperspace.graphmigrate import look_of, wired_wiring
 from hyperspace.lookback import LAYERS, DreamState
 from hyperspace.render import Renderer
 from hyperspace.view import ViewState
@@ -51,6 +53,10 @@ def registry(dream):
 def scene(ctx, dream):
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H))])
     r = Renderer(ctx, dream)
+    # plan 36 T3: a bare renderer draws the app's empty frame; the
+    # tool's own wiring is today's frame, its look-back as `dream` has it
+    # (plan 36 T4: drawn while on, with the dream while its mix is above 0)
+    r.wiring = wired_wiring(Wiring(), look_of({"dream.on": dream.on, "dream.mix": dream.mix}))
     s = ViewState(shape=10, faces=True, pattern=2, bright=1.3, speed=3.0)
     s.ang = [0.3, 0.7, 1.1, 0.5, 0.9, 1.3]
     s.yaw, s.pitch = 0.4, 0.25

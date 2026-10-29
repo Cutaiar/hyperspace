@@ -43,6 +43,7 @@ from . import (
     learn,
     ui_bands,
     ui_desk,
+    ui_feel,
     ui_fx,
     ui_graph,
     ui_lfo,
@@ -2481,12 +2482,63 @@ class Panel:
         if "desk.pad.feel" in self.reg:    # the sticks' feel (routing._register_pad_feel)
             imgui.spacing()
             self._section("gamepad")
-            self._row("desk.pad.feel")
+            # the feel (a spring's preset beside it) and its two knobs, the
+            # feel's shape over the feel working live beside them, as tall as
+            # they are (ui_feel) — beside, since the page has no height to spare
+            feel = self.router.source_feel("axis") if self.router is not None else None
+            plotted = feel is not None and feel.on
+            sp = imgui.get_style().item_spacing.x
+            avail = imgui.get_content_region_avail().x
+            plot_w = min(self.PAD_FEEL_W, avail * 0.4)
+            ctl = (avail - plot_w - sp - LABEL_W
+                   if plotted else -1)          # a control's width, after its label
             mode = self.reg["desk.pad.feel"].text()
-            for k in {"follow": ("attack", "release"), "spring": ("hz", "damp")}.get(mode, ()):
-                self._row(f"desk.pad.{k}")
+            imgui.begin_group()
+            if mode == "spring" and feel is not None and "desk.pad.spring" in self.reg:
+                feel_w = max(ctl * 0.45, 60.0)
+                self._row("desk.pad.feel", feel_w)
+                imgui.same_line()
+                spring = self.reg["desk.pad.spring"]      # its presets drawn as their curves
+                picked = ui_feel.spring_picker("##desk.pad.spring", feel, ctl - feel_w - sp)
+                self._tip(spring)
+                self._ctx(spring)
+                if picked is not None:
+                    spring.set(spring.names.index(picked))
+            else:
+                self._row("desk.pad.feel", ctl)
+            for k in {"follow": ("attack", "release"),
+                      "spring": ("duration", "bounce")}.get(mode, ()):
+                self._row(f"desk.pad.{k}", ctl)
+            imgui.end_group()
+            if plotted:
+                imgui.same_line()
+                self._pad_feel_plot(feel, plot_w, imgui.get_item_rect_size().y)
             if "desk.pad.dial.left" in self.reg:   # the sticks as dials (app._register_dial)
                 self._dials()
+
+    PAD_FEEL_W = 220.0   # the sticks' feel plots (ui_feel), px at most, beside its knobs
+
+    def _pad_feel_plot(self, feel, width: float, height: float) -> None:
+        """The sticks' feel, its shape over the feel working live: every
+        axis lane sampled each frame — as the pad reads it (`router.feeds`)
+        and after the feel (`Router.felt_lanes`, the camera job's
+        followers) — and the one that moved most lately drawn, named in its
+        corner."""
+        router = self.router
+        raws = router.feeds.get("axis")
+        felts = router.felt_lanes("axis")
+        n = max(len(raws) if raws is not None else 0, len(felts or ()))
+        traces = [ui_feel.sample(self, ("pad", i),
+                                 float(raws[i]) if raws is not None and i < len(raws) else None,
+                                 felts[i] if felts is not None and i < len(felts) else None)
+                  for i in range(n)]
+        if not traces:
+            ui_feel.draw(feel, None, width, height, stacked=True)
+            return
+        i = ui_feel.busiest(traces, imgui.get_time(), ui_feel.span(feel))
+        names = router.labels.get("axis") or []
+        ui_feel.draw(feel, traces[i], width, height,
+                     title=names[i] if i < len(names) else f"axis {i}", stacked=True)
 
     # ---- the sticks as dials (gamepad.dial, a prototype) ----
 
