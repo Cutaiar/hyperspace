@@ -8,7 +8,7 @@ from types import SimpleNamespace as NS
 import pytest
 
 import hyperspace.gamepad as gp
-from hyperspace import midi, routing
+from hyperspace import midi, routing, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
@@ -224,12 +224,13 @@ def test_hold_fires_once_after_hold_s(rig):
 def test_the_factory_pad_walks_on_a_held_d_pad_and_b_x_back_are_harmless(rig):
     """2026-10-29, on the factory table: a brush of the d-pad's ← / →
     walks nothing, a hold of HOLD_S walks the list once per press; B / X
-    toggle points and screen strokes, BACK undoes — none of them loads."""
+    toggle points and screen strokes, BACK taps the tempo — none of them loads."""
     pad, r, reg = ScriptedPad(), rig.router, rig.reg
-    walked, undone = [], []
+    tempo.register(reg, tempo.Clock())
+    walked, tapped = [], []
     reg["preset.list.prev"].fire = lambda: walked.append(-1)
     reg["preset.list.next"].fire = lambda: walked.append(1)
-    reg["edit.undo"].fire = lambda: undone.append(1)
+    reg["tempo.tap"].fire = lambda: tapped.append(1)
     pad.frame(hat=gp.HAT_LEFT)                  # a brush
     r.pad(pad, now=1.0)
     pad.frame()
@@ -254,7 +255,7 @@ def test_the_factory_pad_walks_on_a_held_d_pad_and_b_x_back_are_harmless(rig):
         r.pad(pad, now=5.0)
     assert reg["view.points"].value != points
     assert reg["view.screen_strokes"].value != strokes
-    assert undone == [1] and walked == [1, -1]
+    assert tapped == [1] and walked == [1, -1]
 
 
 def test_the_hold_times_agree():
@@ -282,7 +283,7 @@ def test_an_older_files_pad_rows_move_to_the_new_layout_and_the_owners_stay(tmp_
     sheet, BACK the panel, the right-stick click the camera) move to the
     layout of 2026-10-14 — BACK's panel gone, START's sheet gone and its
     hold-to-save in its place (PAD_NEW_ROWS) — and on to 2026-10-29's
-    where it moved again (X screen strokes, BACK undo); a row the owner
+    where it moved again (X screen strokes, BACK tap tempo); a row the owner
     learned onto a button stays; a second load changes nothing."""
     old = [Binding("pad:A", "view.rotate", "toggle"), Binding("pad:X", "view.points", "toggle"),
            Binding("pad:Y", "view.faces", "toggle"), Binding("pad:MENU", "ui.cheatsheet", "toggle"),
@@ -298,7 +299,7 @@ def test_an_older_files_pad_rows_move_to_the_new_layout_and_the_owners_stay(tmp_
     assert rows["pad:X"] == ("view.screen_strokes", "toggle")   # straight to the newest
     assert rows["pad:Y"] == ("view.lines", "toggle")
     assert rows["pad:MENU"] == ("preset.save_new", "hold")   # the sheet's row gone
-    assert rows["pad:VIEW"] == ("edit.undo", "fire")          # the panel's row gone
+    assert rows["pad:VIEW"] == ("tempo.tap", "fire")          # the panel's row gone
     assert rows["pad:LSTICK"] == ("camera.reset", "fire")
     assert rows["pad:RSTICK"] == ("rot.reset_w", "fire")
     assert rows["hat:UP"] == ("fx.wobble.freq", "step")
@@ -329,7 +330,7 @@ def test_the_pads_bank_rows_move_straight_to_the_newest_layout(tmp_path):
         assert rows["pad:LB"] == ("preset.next", "fire")
         assert rows["pad:RB"] == ("preset.prev", "hold")
         assert rows["pad:MENU"] == ("preset.save_new", "hold")      # added, not held
-        assert rows["pad:VIEW"] == ("edit.undo", "fire")            # added
+        assert rows["pad:VIEW"] == ("tempo.tap", "fire")            # added
         assert sum("the pad layout of 2026-10-14" in n for n in t.notes) == 1
         assert sum("the pad layout of 2026-10-29" in n for n in t.notes) == 3
         after = path.read_text()
@@ -340,7 +341,7 @@ def test_the_pads_bank_rows_move_straight_to_the_newest_layout(tmp_path):
 def test_the_10_14_layout_moves_the_walk_onto_the_held_d_pad(tmp_path):
     """2026-10-29: the layout of 2026-10-14 (B / X walk the list, the
     d-pad's ← / → step the speed) moves the walk onto ← / → held, B / X
-    onto points and screen strokes, and adds BACK's undo; a d-pad row the
+    onto points and screen strokes, and adds BACK's tap tempo; a d-pad row the
     owner changed stays; a second load changes nothing."""
     old = [Binding("pad:B", "preset.list.next", "fire"),
            Binding("pad:X", "preset.list.prev", "fire"),
@@ -355,7 +356,7 @@ def test_the_10_14_layout_moves_the_walk_onto_the_held_d_pad(tmp_path):
     assert rows["pad:X"] == ("view.screen_strokes", "toggle", 1.0)
     assert rows["hat:LEFT"] == ("preset.list.prev", "hold", 1.0)
     assert rows["hat:RIGHT"] == ("view.speed", "step", 2.0)
-    assert rows["pad:VIEW"] == ("edit.undo", "fire", 1.0)
+    assert rows["pad:VIEW"] == ("tempo.tap", "fire", 1.0)
     assert sum("the pad layout of 2026-10-29" in n for n in t.notes) == 4
     after = path.read_text()
     again = Bindings.load(path, legacy_midi=None)
@@ -378,12 +379,12 @@ def test_the_factory_pad_walks_the_list_held_and_the_desk_the_bank():
                for b in factory_desk())
 
 
-def test_held_start_saves_a_new_preset_and_back_undoes(rig):
+def test_held_start_saves_a_new_preset_and_back_taps_the_tempo(rig):
     """START carries the factory's hold-to-save and fires it once the
-    button has been down HOLD_S; BACK undoes (2026-10-29)."""
+    button has been down HOLD_S; BACK taps the tempo (2026-10-29)."""
     rows = {b.source: (b.target, b.op) for b in routing.padmap()}
     assert rows["pad:MENU"] == ("preset.save_new", "hold")
-    assert rows["pad:VIEW"] == ("edit.undo", "fire")
+    assert rows["pad:VIEW"] == ("tempo.tap", "fire")
     pad, r = ScriptedPad(), rig.router
     saved = []
     rig.reg["preset.save_new"].fire = lambda: saved.append(1)

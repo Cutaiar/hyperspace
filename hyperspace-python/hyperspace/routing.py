@@ -549,8 +549,9 @@ THEME_TO_PRESET = {
 # 2026-10-29: the preset walk leaves the face buttons, where a thumb
 # brushing B or X threw the live look away, for the d-pad's ← / → held
 # HOLD_S; speed leaves the pad. B takes points, X screen strokes, and BACK
-# undo (PAD_NEW_ROWS) — a load is one undo step. Every older B / X form
-# above maps straight to the newest.
+# tap tempo (PAD_NEW_ROWS) — the pad makes no edits worth an undo, and a
+# held ← / → makes a stray load rare. Every older B / X form above maps
+# straight to the newest.
 PRESET_WALK_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float]] = {
     ("pad:B", "preset.list.next", "fire", 1.0): ("view.points", "toggle", 1.0),
     ("pad:X", "preset.list.prev", "fire", 1.0): ("view.screen_strokes", "toggle", 1.0),
@@ -578,7 +579,7 @@ PAD_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float] | None] = {
 # second load finds the source taken.
 PAD_NEW_ROWS = (
     ("pad:MENU", "preset.save_new", "hold", 1.0),
-    ("pad:VIEW", "edit.undo", "fire", 1.0),                 # 2026-10-29
+    ("pad:VIEW", "tempo.tap", "fire", 1.0),                 # 2026-10-29
 )
 KEY_NEW_ROWS = (
     ("key:B", "tempo.tap", "fire", 1.0),
@@ -1107,13 +1108,13 @@ def padmap() -> list[Binding]:
     A / Y the faces and lines, B / X the points and screen strokes, ↑ / ↓
     the brightness; the left-stick click resets the camera, the
     right-stick click the 4D spin; START (``pad:MENU``) held HOLD_S saves
-    the live state as a new preset, and BACK (``pad:VIEW``) undoes (the
+    the live state as a new preset, and BACK (``pad:VIEW``) taps the tempo (the
     owner's layout — PAD_REMAP moves an older file's, PAD_NEW_ROWS adds
     what it never held)."""
     rows = [
         ("pad:A", "view.faces", "toggle"), ("pad:B", "view.points", "toggle"),
         ("pad:X", "view.screen_strokes", "toggle"), ("pad:Y", "view.lines", "toggle"),
-        ("pad:MENU", "preset.save_new", "hold"), ("pad:VIEW", "edit.undo", "fire"),
+        ("pad:MENU", "preset.save_new", "hold"), ("pad:VIEW", "tempo.tap", "fire"),
         ("pad:LB", "view.shape", "step", -1), ("pad:RB", "view.shape", "step", 1),
         ("pad:LSTICK", "camera.reset", "fire"), ("pad:RSTICK", "rot.reset_w", "fire"),
         ("hat:UP", "view.bright", "step", 3), ("hat:DOWN", "view.bright", "step", -3),
@@ -1354,7 +1355,7 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
         if source in used:
             continue
         out.append(Binding(source, target, op, value))
-        when = "2026-10-29" if target == "edit.undo" else "2026-10-14"
+        when = "2026-10-29" if source == "pad:VIEW" else "2026-10-14"
         notes.append(f"added {source} → {target} (the pad layout of {when})")
     # a key row is taken by its chord, however its modifiers are ordered:
     # "key:SUPER+SHIFT+Z" holds ⌘⇧Z as "key:SHIFT+SUPER+Z" does

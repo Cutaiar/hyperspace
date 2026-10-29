@@ -1940,8 +1940,7 @@ the key names is ignored.
 button map; the factory rows in `bindings.default.json`): A faces · Y
 lines · B points · X screen strokes · hold the d-pad's ← / → (HOLD_S,
 0.6 s) for the previous / next preset in the PRESETS list — a brush does
-nothing · d-pad ↑↓ brightness · BACK undo (a preset load is one undo
-step) · LB / RB previous / next shape · left stick orbit, its click
+nothing · d-pad ↑↓ brightness · BACK tap tempo · LB / RB previous / next shape · left stick orbit, its click
 resets the camera · right stick ↕ zoom, ↔ the spin of the W planes, its
 click resets the 4D spin · LT / RT 4D depth out / in · hold START to save
 the live state as a new preset. Share, on a pad that has one, is free;
