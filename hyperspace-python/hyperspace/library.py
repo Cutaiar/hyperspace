@@ -145,6 +145,11 @@ SLOTS = 24                # the bank: F1–F8, then the desk's clip rows 4 and 5
 # puts more than F_KEYS entries in a show file, <file>.bak-v2-bank8
 # (routing.backup's schema argument)
 BANK8_BACKUP = "2-bank8"
+# SPRING_BACKUP: the copy `Project.write` makes before the first write that
+# drops a show's stick spring as it was stored before 2026-10-29
+# (`desk.pad.hz` / `.damp`, read as today's knobs by routing.renamed_session),
+# <file>.bak-v2-spring
+SPRING_BACKUP = "2-spring"
 PRESETS = "presets"       # the presets' group, a document kind (preset.py)
 # <root>/desk/<slug>.json (plan 24 C3): the desk templates — named sets of
 # preset-layer rows a preset's desk can start from (`desk_template`,
@@ -603,7 +608,8 @@ class Project:
         self.path = path
         # the file's own name, which a launch finds the show by (`stem`)
         self._stem = where[: -len(PROJECT_SUFFIX)] if where.endswith(PROJECT_SUFFIX) else None
-        self.session = dict(doc.get("session") or {})
+        from .routing import renamed_session  # the stick spring's old ids, as today's
+        self.session = renamed_session(dict(doc.get("session") or {}))
         # how many shows this project object has taken: a hands node of a
         # preset's graph is seeded from a show's session once per show
         # opened (plan 26 A4, preset.GraphSection)
@@ -1125,7 +1131,12 @@ class Project:
         second copy. A build from before plan 19 reads a long bank by
         cutting it to eight, and drops the far slots' names from the file
         the next time it writes that show; the backup is the file from
-        before any far slot existed."""
+        before any far slot existed.
+
+        Likewise the first write over a file that holds the stick spring as
+        stored before 2026-10-29 (`desk.pad.hz` / `.damp`, which this
+        write drops: they were read as today's knobs) keeps it first as
+        ``<file>.bak-v2-spring``; no backup, no write."""
         self.lib.writable()
         path = self.path_for(self.name) if self.path is None else self.path
         try:
@@ -1134,11 +1145,17 @@ class Project:
             old = None
         doc = self.to_doc()
         if isinstance(old, dict):
-            from .routing import backup
+            from .routing import PAD_FEEL_OLD, backup
             if (len(doc["bank"]) > F_KEYS and _bank_len(old) <= F_KEYS
                     and not _kept(path) and backup(path, BANK8_BACKUP) is None):
                 raise LibraryError(f"{path.name}: not written — no backup of the "
                                    "eight-slot file could be made")
+            session = old.get("session")
+            if (isinstance(session, dict) and any(k in session for k in PAD_FEEL_OLD)
+                    and not _kept(path, SPRING_BACKUP)
+                    and backup(path, SPRING_BACKUP) is None):
+                raise LibraryError(f"{path.name}: not written — no backup of the show "
+                                   "with its stick spring as it was stored could be made")
         self.path = path
         _write_json(self.path, doc)
         self.lib._sync(self.path)
@@ -1169,14 +1186,15 @@ class Project:
                 if is_instance_id(pid) and (reg is None or pid not in reg)}
 
 
-def _kept(path: Path) -> bool:
+def _kept(path: Path, tag: str = BANK8_BACKUP) -> bool:
     """Is the file at `path` already kept, byte for byte, in one of its
-    eight-slot backups? Then a write that failed after its backup, tried
-    again, makes no second copy of the same file."""
+    backups under `tag` (the eight-slot bank's, the stick spring's)? Then a
+    write that failed after its backup, tried again, makes no second copy
+    of the same file."""
     try:
         data = path.read_bytes()
         return any(p.read_bytes() == data
-                   for p in path.parent.glob(f"{path.name}.bak-v{BANK8_BACKUP}*"))
+                   for p in path.parent.glob(f"{path.name}.bak-v{tag}*"))
     except OSError:
         return False
 

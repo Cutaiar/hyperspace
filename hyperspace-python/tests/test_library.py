@@ -1540,3 +1540,57 @@ def test_the_trash_lists_only_what_it_kept(owner_home):
         lib.restore_trash(library.Trashed(junk[0], "presets", "", ""))
     assert ".DS_Store" not in lib.list("presets")
     assert lib.empty_trash() == 1 and all(p.exists() for p in junk)
+
+
+# ------------------------------------------- the stick spring's knobs (2026-10-29)
+
+def _bare(home):
+    """A library over an empty home with the desk's session params — the
+    pad's feel among them (routing._register_pad_feel, through the Router)."""
+    chain = Analyzer(Analyser())
+    lib = Library(home, period=0.0)
+    reg = build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain), lib.project)
+    table = _Bindings()
+    _Router(reg, table)
+    lib.attach(reg)
+    return lib, table
+
+
+def spring_baks(show):
+    return sorted(show.parent.glob(f"{show.name}.bak-v{library.SPRING_BACKUP}*"))
+
+
+def test_an_old_shows_stick_spring_opens_as_it_was_and_is_kept_before_a_save_drops_it(tmp_path):
+    """A show saved before the stick spring's knobs became duration and
+    bounce holds `desk.pad.hz` / `.damp`: it opens with no unknown ids and
+    the same spring, and the first save keeps the old file beside it,
+    `<file>.bak-v2-spring`, before writing today's ids — once. No backup,
+    no write."""
+    lib, table = _bare(tmp_path)
+    pr = lib.project
+    pr.save("old")
+    show = pr.path
+    doc = json.loads(show.read_text())
+    for k in ("desk.pad.duration", "desk.pad.bounce"):
+        doc["session"].pop(k)
+    doc["session"].update({"desk.pad.hz": 4.0, "desk.pad.damp": 0.3, "desk.pad.feel": 2})
+    show.write_text(json.dumps(doc))
+    old = show.read_bytes()
+    lib.warning = ""
+    assert pr.load(show) == [] and lib.warning == ""
+    m = table.pad_feel
+    assert m.mode == "spring" and (m.hz, m.damp) == pytest.approx((4.0, 0.3))
+    assert not pr.is_dirty() and show.read_bytes() == old    # opening rewrites nothing
+    # no backup, no write
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(routing, "backup", lambda path, schema: None)
+        with pytest.raises(LibraryError, match="no backup of the show"):
+            pr.save()
+    assert show.read_bytes() == old and spring_baks(show) == []
+    pr.save()
+    assert [p.read_bytes() for p in spring_baks(show)] == [old]
+    session = json.loads(show.read_text())["session"]
+    assert "desk.pad.hz" not in session and "desk.pad.damp" not in session
+    assert (session["desk.pad.duration"], session["desk.pad.bounce"]) == pytest.approx((0.25, 0.7))
+    pr.save()                                                 # today's file on disk: no second copy
+    assert len(spring_baks(show)) == 1
