@@ -53,6 +53,7 @@ from . import (
     ui_presets,
     ui_routing,
     ui_seq,
+    ui_spring,
 )
 from .analyzer import N_MAX
 from .audio import AudioEngine
@@ -2484,6 +2485,11 @@ class Panel:
             mode = self.reg["desk.pad.feel"].text()
             for k in {"follow": ("attack", "release"), "spring": ("hz", "damp")}.get(mode, ()):
                 self._row(f"desk.pad.{k}")
+            if mode == "spring":            # the sticks' spring, drawn (ui_spring)
+                imgui.dummy(imgui.ImVec2(LABEL_W, 0))
+                imgui.same_line()
+                ui_spring.draw(self.reg["desk.pad.hz"].value, self.reg["desk.pad.damp"].value,
+                               min(220.0, imgui.get_content_region_avail().x), 30.0)
             if "desk.pad.dial.left" in self.reg:   # the sticks as dials (app._register_dial)
                 self._dials()
 
