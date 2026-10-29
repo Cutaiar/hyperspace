@@ -248,3 +248,8 @@ as the owner's own, lower-cased (`dial`, `trip`, `plasma heart`,
 - FL Studio does not fuse 14-bit MSB/LSB pairs in "Link to controller":
   the bridge needs a small FL MIDI script, or per-channel pitch bend.
 - An instanced GPU field (per-instance rotation phases, true instancing).
+- Tempo-synced springs: a spring feel's perceptual duration given in
+  beats (1/4, 1/2, 1 bar) from the tap-tempo clock, so its overshoot and
+  ring land on the beat. Perceptual duration is exactly one period of the
+  spring (`motion.spring_hz`: hz = 1 / duration), so a beat length is all
+  it needs; the file would store "in beats" beside the milliseconds.
