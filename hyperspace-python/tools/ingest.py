@@ -56,7 +56,7 @@ def media_dir(shared: bool) -> Path:
 def title_of(ytdlp: str, url: str, extra: list[str]) -> str:
     """The video's title, asked of yt-dlp without downloading."""
     out = subprocess.run([ytdlp, "--no-playlist", "--skip-download", "--print", "title", *extra, url],
-                         capture_output=True, text=True)
+                         capture_output=True, text=True, check=False)
     if out.returncode != 0:
         sys.stderr.write(out.stderr)
         sys.exit(out.returncode)
@@ -97,7 +97,7 @@ def main(argv: list[str] | None = None) -> int:
            "-S", "vcodec:h264,acodec:aac",
            "--merge-output-format", "mp4", "--remux-video", "mp4",
            "-o", f"{out.with_suffix('')}.%(ext)s", *extra, args.url]
-    rc = subprocess.run(cmd).returncode
+    rc = subprocess.run(cmd, check=False).returncode
     if rc == 0:
         print(f"saved {out}")
     return rc
