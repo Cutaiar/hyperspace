@@ -78,7 +78,10 @@ the scene or the layer is where that node is drawn. Right-click the
 canvas for the picker (an effect instance, a hands node, a composite);
 right-click a render node to delete it, draw its hands as lines or set
 a composite's blend;
-Delete takes a selected render cable or node out of the graph. Each
+Delete takes a selected render cable or node out of the graph. A box
+dragged on the background selects the nodes in it; with ⌥ (Option) held,
+the cables it touches instead (the widget's own link select: nodes and
+cables are never selected together), so Delete takes many cables at once. Each
 edit is one undo step and dirties the preset; the renderer builds the
 graph again from it. Render edits do not go through N3's `_act`:
 their handlers (`_create_render`, `_delete_render_cable`,
@@ -3373,7 +3376,7 @@ def timing_line(panel) -> str:
 # them; `CREATE` / `DELETE` are the dispatch by type N4 extends.
 
 EDIT_HINT = ("drag pin to pin: a cable  ·  right-click: Learn, insert, add  ·  "
-             "Delete: the selection")
+             "drag a box: nodes, Option-drag: cables  ·  Delete: the selection")
 MENU = "##graph.menu"
 REFUSED_RGB = (1.0, 0.45, 0.35, 1.0)       # ui.WARN: a drag the table would refuse
 
