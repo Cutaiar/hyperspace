@@ -433,8 +433,33 @@ def test_nodes_the_picker_adds_and_delete_removes(rig):
     p = free_param(rig, centred=False)
     route = e.connect(f"out:{m.address}", f"mod:{p.id}")
     assert route.source == m.address
+    # a second modifier reading the first, to see it bridged too
+    m2 = table.add_modifier("smooth", (m.address,), rig.panel.reg)
     ui_graph.remove_node(panel, m.id)
+    # deleting it closes the chain over it: what fed its first input feeds
+    # what read it — the route and the other modifier's input
     assert table.modifier(m.id) is None and route in table.bindings
+    assert route.source == "lane:0" and route.target == p.id
+    assert table.modifier(m2.id).inputs[0] == "lane:0"
+    # with nothing in its first input, a route on its lane is left dormant
+    m3 = table.add_modifier("smooth", (), rig.panel.reg)
+    q = free_param(rig, centred=False)
+    dormant = table.add(Binding(m3.address, q.id, "position", 0.5))
+    ui_graph.remove_node(panel, m3.id)
+    assert table.modifier(m3.id) is None and dormant.source == m3.address
+    # a loop through it (a → b → a): b is never left reading its own lane
+    a = table.add_modifier("smooth", (), rig.panel.reg)
+    b = table.add_modifier("smooth", (a.address,), rig.panel.reg)
+    table.set_modifier_input(a.id, 0, b.address, rig.panel.reg)
+    ui_graph.remove_node(panel, a.id)
+    assert table.modifier(b.id).inputs[0] == ""
+    # a threshold makes a trigger of a value: what read its trigger is not
+    # handed the value — its route is left dormant, as before
+    t = table.add_modifier("threshold", ("lane:0",), rig.panel.reg)
+    r = free_param(rig, centred=False)
+    fires = table.add(Binding(t.address, r.id, "position", 0.5))
+    ui_graph.remove_node(panel, t.id)
+    assert table.modifier(t.id) is None and fires.source == t.address
     ui_graph.remove_node(panel, "macro.7")
     assert "macro.7" not in table.macros
     assert ui_graph.remove_node(panel, graphview.ANALYZER) == graphview.NOT_REMOVABLE.format(
@@ -480,6 +505,179 @@ def test_cable_near_follows_the_widgets_curve():
     assert graphview.cable_near(view, pins, mid) is view.cables[0]
     assert graphview.cable_near(view, pins, (40.0, 80.0)) is None
     assert graphview.cable_near(view, pins, mid, skip=("n2",)) is None
+
+
+def test_cables_near_lists_the_cables_under_a_node_nearest_first():
+    """A dragged node over cables: each within `NEAR` of its centre — or,
+    given its size, through its box — with its distance from the centre,
+    nearest first; one outside the box is not under it."""
+    view = graphview.View(cables=[graphview.VCable("low", "out:a", "mod:x", kind="route"),
+                                  graphview.VCable("high", "out:b", "mod:y", kind="route"),
+                                  graphview.VCable("far", "out:c", "mod:z", kind="route")],
+                          pins={"out:a": ("n1", "a"), "mod:x": ("n2", "x"),
+                                "out:b": ("n1", "b"), "mod:y": ("n2", "y"),
+                                "out:c": ("n1", "c"), "mod:z": ("n2", "z")})
+    pins = {"out:a": (0.0, 8.0), "mod:x": (400.0, 8.0),
+            "out:b": (0.0, -3.0), "mod:y": (400.0, -3.0),
+            "out:c": (0.0, 300.0), "mod:z": (400.0, 300.0)}
+    under = graphview.cables_near(view, pins, (200.0, 0.0))
+    assert [c.id for _, c in under] == ["high", "low"]
+    assert [round(d) for d, _ in under] == [3, 8]
+    pins["out:a"], pins["mod:x"] = (0.0, 40.0), (400.0, 40.0)    # out of reach of the centre
+    assert [c.id for _, c in graphview.cables_near(view, pins, (200.0, 0.0))] == ["high"]
+    boxed = graphview.cables_near(view, pins, (200.0, 0.0), size=(100.0, 60.0))
+    assert [c.id for _, c in boxed] == ["high", "low"]          # the box reaches it
+
+
+def test_onto_words_names_a_cable_whose_port_is_gone():
+    """A pin whose port its node no longer lists (`View.owner` gives None
+    for it): the chooser and the drag's words name the node, never fail."""
+    n1 = graphview.VNode("n1", "render", "Acid", ports=[])
+    n2 = graphview.VNode("n2", "render", "Wobble", ports=[])
+    view = graphview.View(nodes=[n1, n2],
+                          cables=[graphview.VCable("c", "rout:n1", "rin:n2/gone", kind="render")],
+                          pins={"rout:n1": ("n1", "out"), "rin:n2/gone": ("n2", "gone")})
+    assert graphview.onto_words(view, view.cables[0]) == "Acid → Wobble"
+
+
+def _two_cable_rig(rig):
+    """`lookback → acid → output.all` and a free `wobble.2`, the page
+    drawn once and its stubs placed by hand: lookback 0–100, acid
+    300–400, output.all at 600."""
+    from types import SimpleNamespace as NS
+
+    from test_graphview import views
+    from test_presets import put
+
+    from hyperspace.outputs import Switches
+    put(rig.lib.home, "Two", schema="hyperspace.preset/7", graph=_section(
+        *FRAME0, ("lookback", "acid.image"), ("acid", "output.all.image"),
+        nodes=[{"kind": "effect", "file": "wobble", "instance": 2}]))
+    rig.lib.load("presets", "Two")
+    gs = rig.lib.presets.graph
+    rig.panel.renderer = NS(_graph=G.build_graph(views(Switches()), gs.spec.wiring(),
+                                                   effects=("acid", "wobble.2")))
+    frame(rig.panel, "graph")
+    st = ui_graph._state(rig.panel)
+    st["pin_xy"] = {}                       # only these three nodes' stubs are drawn
+    for nid, x in {"render:lookback": 0.0, "render:acid": 300.0,
+                   "render:output.all": 600.0}.items():
+        st["pin_xy"][graphview.stub_out(nid)] = (x + 100.0, 0.0)
+        st["pin_xy"][graphview.stub_in(nid)] = (x, 0.0)
+    return st, st["view"], gs
+
+
+def test_a_node_dropped_on_two_cables_as_near_asks_which(rig):
+    """An effect let go with its centre equally near two picture cables is
+    put on neither: a chooser opens naming both (`st["onto"]`), and the one
+    picked takes it — its picture into the effect's ``image``, the
+    effect's output on into the port the cable fed."""
+    st, view, gs = _two_cable_rig(rig)
+    # the two cables drawn over each other: a tie under the centre
+    st["pin_xy"][graphview.stub_out("render:acid")] = (0.0, 0.0)
+    st["pin_xy"][graphview.stub_in("render:output.all")] = (300.0, 0.0)
+    assert ui_graph.dropped(rig.panel, view, "render:wobble.2", (150.0, 0.0)) is None
+    assert G.run_back(gs.spec, "output.all.image") == ("acid",)
+    held = st["onto"]
+    assert held["node"] == "render:wobble.2" and len(held["cables"]) == 2
+    words = {graphview.onto_words(view, c) for c in view.cables if c.id in held["cables"]}
+    assert len(words) == 2 and all(" → " in w for w in words)
+    after = next(c for c in view.cables if c.dst_port == "rin:output.all/image")
+    assert ui_graph.put_onto(rig.panel, view, "render:wobble.2", after) is after
+    assert G.run_back(gs.spec, "output.all.image") == ("acid", "wobble.2")
+    assert st["onto"] is None
+
+
+def test_the_drag_plan_lights_what_the_drop_will_do(rig):
+    """`onto_plan` is what the drag lights and what the drop does: a free
+    effect over a cable lights it as the one it goes onto; a wired effect
+    without ⌘ lights nothing and says to hold ⌘; with ⌘ it lights the
+    cable, fades its own and shows the join its chain closes with; a
+    cable it may not go onto is refused in words."""
+    st, view, gs = _two_cable_rig(rig)
+    into = next(c for c in view.cables if c.dst_port == "rin:acid/image")
+    out = next(c for c in view.cables if c.dst_port == "rin:output.all/image")
+    free = ui_graph.onto_plan(rig.panel, view, "render:wobble.2", (500.0, 0.0))
+    assert free["best"] == out.id and free["lit"] == [out.id] and not free["lift"]
+    # a box across both cables lights both; the one nearest the centre is it
+    both = ui_graph.onto_plan(rig.panel, view, "render:wobble.2", (420.0, 60.0), (400.0, 160.0))
+    assert both["best"] == out.id and set(both["lit"]) == {out.id, into.id}
+    assert ui_graph.drag_words(view, free).startswith("let go: ")
+    assert free["hot"]                      # a free node: its border says a drop can land
+    # over nothing: still hot, nothing lit, nothing said
+    away = ui_graph.onto_plan(rig.panel, view, "render:wobble.2", (500.0, 900.0))
+    assert away["hot"] and away["best"] is None and ui_graph.drag_words(view, away) == ""
+    # acid, wired, without ⌘: not hot, and taught ⌘ from the drag's start —
+    # here over only its own cable
+    own = ui_graph.onto_plan(rig.panel, view, "render:acid", (200.0, 0.0))
+    assert not own["hot"] and own["hint"] == "away" and own["best"] is None
+    assert "hold ⌘ to lift" in ui_graph.drag_words(view, own)
+    assert ui_graph.onto_plan(rig.panel, view, "render:acid", (200.0, 0.0), lift=True)["hot"]
+    # wobble.2 wired in after acid; acid over wobble.2's cable to the output
+    assert ui_graph.put_onto(rig.panel, view, "render:wobble.2", out) is out
+    frame(rig.panel, "graph")
+    view = st["view"]
+    st["pin_xy"][graphview.stub_out("render:wobble.2")] = (800.0, 0.0)
+    st["pin_xy"][graphview.stub_in("render:wobble.2")] = (700.0, 0.0)
+    st["pin_xy"][graphview.stub_in("render:output.all")] = (1000.0, 0.0)
+    last = next(c for c in view.cables if c.dst_port == "rin:output.all/image")
+    still = ui_graph.onto_plan(rig.panel, view, "render:acid", (900.0, 0.0))
+    assert still["hint"] == "over" and still["best"] is None and not still["lit"]
+    assert "hold ⌘" in ui_graph.drag_words(view, still)
+    assert ui_graph.dropped(rig.panel, view, "render:acid", (900.0, 0.0)) is None
+    assert G.run_back(gs.spec, "output.all.image") == ("acid", "wobble.2")
+    lifted = ui_graph.onto_plan(rig.panel, view, "render:acid", (900.0, 0.0), lift=True)
+    assert lifted["lift"] and lifted["best"] == last.id
+    assert "out of its chain" in ui_graph.drag_words(view, lifted)
+    assert ui_graph.dropped(rig.panel, view, "render:acid", (900.0, 0.0), lift=True) is last
+    assert G.run_back(gs.spec, "output.all.image") == ("wobble.2", "acid")
+    # a geometry cable under a free effect: refused, in words
+    frame(rig.panel, "graph")
+    view = st["view"]
+    geo = next(c for c in view.cables if c.type == graphview.GEOMETRY)
+    st["pin_xy"][geo.src_port] = (0.0, 500.0)
+    st["pin_xy"][geo.dst_port] = (400.0, 500.0)
+    no = ui_graph.onto_plan(rig.panel, view, "render:wobble.2", (200.0, 500.0))
+    if no is not None:                      # (wobble.2 is wired now: a lift asks)
+        assert no["best"] is None
+    no = ui_graph.onto_plan(rig.panel, view, "render:wobble.2", (200.0, 500.0), lift=True)
+    assert no["best"] is None and geo.id in no["refused"] and ui_graph.drag_words(view, no)
+
+
+def test_a_lifted_drag_draws_its_lit_cable_border_and_join(rig, monkeypatch):
+    """The drag drawn (hand check 404 judges the look): the node the mouse
+    went down on (`st["press"]`), dragged — its plan asked where the
+    pointer has taken it, not where the editor says it is; the lit cable,
+    a dimmed one, the dotted join and its outline drawn without error, the
+    words said and no hover card over them; let go, the plan is gone."""
+    from imgui_bundle import imgui
+    st, view, _ = _two_cable_rig(rig)
+    drawn = [c for c in view.cables if c.type == graphview.IMAGE]
+    plan = {"node": "render:wobble.2", "hot": True, "lift": True, "lit": [drawn[0].id],
+            "best": drawn[0].id, "tie": [], "refused": {}, "hint": ""}
+    asked = []
+    monkeypatch.setattr(ui_graph, "onto_plan", lambda *a, **k: asked.append(a[3]) or plan)
+    monkeypatch.setattr(imgui, "is_mouse_down", lambda *a: True)
+    monkeypatch.setattr(imgui, "is_mouse_clicked", lambda *a, **k: False)
+    monkeypatch.setattr(imgui, "is_mouse_dragging", lambda *a: True)
+    said = []
+    monkeypatch.setattr(ui_graph, "_drag_tip", said.append)
+    imgui.get_io().add_mouse_pos_event(400.0, 400.0)
+    frame(rig.panel, "graph")
+    st["press"] = ("render:wobble.2", (-1000.0, -1000.0), (0.0, 0.0))
+    for _ in range(2):
+        frame(rig.panel, "graph")
+    assert st["onto_lit"] is plan and said and "out of its chain" in said[-1]
+    # the pointer is far from where it went down: so is the centre asked of
+    assert asked and asked[-1][0] > 500.0
+    tips = []
+    monkeypatch.setattr(ui_graph.ui, "tooltip", tips.append)
+    ui_graph._hover(st, st["view"], rig.panel)
+    assert tips == []
+    monkeypatch.setattr(imgui, "is_mouse_down", lambda *a: False)
+    frame(rig.panel, "graph")
+    assert st["onto_lit"] is None and st["press"] is None
+    imgui.get_io().add_mouse_pos_event(-1.0, -1.0)
 
 
 def test_create_and_delete_open_only_in_the_typed_dispatch():
@@ -1095,12 +1293,14 @@ def test_dragging_a_run_member_onto_another_cable_moves_it(rig, monkeypatch):
         st["pin_xy"][graphview.stub_out(nid)] = (x + 100.0, 0.0)
         st["pin_xy"][graphview.stub_in(nid)] = (x, 0.0)
     # on its own cables (lookback → acid, acid → wobble), and on nothing: no change
-    assert ui_graph.dropped(rig.panel, view, "render:acid", (200.0, 0.0)) is None
-    assert ui_graph.dropped(rig.panel, view, "render:acid", (500.0, 900.0)) is None
+    for at in ((200.0, 0.0), (500.0, 900.0)):
+        assert ui_graph.dropped(rig.panel, view, "render:acid", at, lift=True) is None
+    # on another cable without ⌘ (2026-10-29): only moved on the canvas
+    assert ui_graph.dropped(rig.panel, view, "render:acid", (800.0, 0.0)) is None
     assert G.run_back(gs.spec, "output.all.image") == ("acid", "wobble")
     assert pushed == []
     cable = next(c for c in view.cables if c.dst_port == "rin:output.all/image")
-    assert ui_graph.dropped(rig.panel, view, "render:acid", (800.0, 0.0)) is cable
+    assert ui_graph.dropped(rig.panel, view, "render:acid", (800.0, 0.0), lift=True) is cable
     assert G.run_back(gs.spec, "output.all.image") == ("wobble", "acid")
     assert pushed == ["move acid onto wobble → output.all.image"]
 

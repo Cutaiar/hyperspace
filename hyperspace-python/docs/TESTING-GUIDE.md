@@ -401,8 +401,9 @@ second or more goes in the tables at the top of `tests/conftest.py`.
 | L195 | A macro wired from the param menu moves the param (row 537) | 1 | laptop | 402 |
 | L196 | The PRESETS page is the library (plan 41) | 1 | laptop, the copy | 403 |
 | L197 | The shape node's details show its wireframe | 1 | laptop | — |
-| L198 | The Flow mark and the Flow capsules (row 543) | 1 | laptop | 404 |
-| L199 | A flat shape facing you is at full brightness (row 542) | 1 | laptop | 405 |
+| L198 | Drop a node on a cable: the drag shows what will happen, ⌘ for a wired effect | 1 | laptop | 404 |
+| L199 | The Flow mark and the Flow capsules (row 543) | 1 | laptop | 405 |
+| L200 | A flat shape facing you is at full brightness (row 542) | 1 | laptop | 406 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -3929,6 +3930,8 @@ picture is gone after the reload; the second Mac opens it.
 
 #### L153. The headline graph; reordering by dragging; the FX page on a branch
 
+**Superseded in part (2026-10-29):** dragging an effect that is already in the run onto another cable moves it only with ⌘ held (check 404, L198).
+
 **Needs:** laptop; a clip and a camera; the copy; branch
 `plan-33-free-graph`.
 
@@ -3956,6 +3959,8 @@ node duplicates, or the two pages disagree about which effect is open.
 *(checks 318, 320, 321)*
 
 #### L154. A drop beside a cable; a shader back into the faces on the layout
+
+**Superseded in part (2026-10-29):** a cable lights while a node is dragged over it and the drop lands only on a lit one; an effect already wired moves to another cable only with ⌘ held (check 404, L198).
 
 **Needs:** laptop; the copy; L153's graph.
 
@@ -5029,9 +5034,46 @@ the Shape node is selected, or anything on an output changing when it is.
 
 *(automated: `tests/test_shape_wire.py`)*
 
-## The Flow mark (L198–L199; rows 542–543)
+## Dropping a node on a cable (L198)
 
-#### L198. The Flow mark and the Flow capsules
+#### L198. Drop a node on a cable
+
+**Needs:** laptop; a preset with two effects in a row (for example
+`lookback → acid → wobble → All outputs`).
+
+**Do:**
+1. Right-click the canvas and add an effect. Drag it slowly over the
+   cables, including the shape's geometry cable, and let go with
+   `acid → wobble` the bright one.
+2. Drag `wobble` over `lookback → acid` and let go without any key.
+3. Drag `wobble` again, hold ⌘, and let go over `lookback → acid`. Press
+   ⌘Z.
+4. Wire an LFO through a Smooth modifier into a param, select the Smooth
+   and press Delete.
+5. Hold Option and drag a box across three cables; press Delete, then
+   ⌘Z.
+
+**Right if:** (1) while dragging, of the cables the node covers, the one
+nearest its middle is thick gold and every other cable dims;
+words beside the pointer say what letting go will do (over the geometry
+cable alone, why it cannot go there); let go, the effect
+is in the run. (2) from the first movement the words say "hold ⌘ …",
+nothing lights or dims, and the node just moves. (3) with ⌘ a cable
+lights gold and the others dim; let go, `wobble`
+moves before `acid`; one ⌘Z undoes it. (4) the LFO drives the param
+directly. (5) the box picks cables, Delete removes them, ⌘Z restores them.
+
+**Wrong if:** a drop does something the drag did not show, or the drag
+shows something and the drop does nothing; ⌘ does not lift the node; the
+param stops moving after (4).
+
+*(check 404)*
+
+# Part 2 — tests that need hardware
+
+## The Flow mark (L199–L200; rows 542–543)
+
+#### L199. The Flow mark and the Flow capsules
 
 **Needs:** laptop.
 
@@ -5054,9 +5096,9 @@ either shape.
 
 **Changes:** nothing.
 
-*(check 404)*
+*(check 405)*
 
-#### L199. A flat shape facing you is at full brightness
+#### L200. A flat shape facing you is at full brightness
 
 **Needs:** laptop.
 
@@ -5079,9 +5121,7 @@ face-on; the Heart's back or the tesseract brighter than before.
 
 **Changes:** nothing.
 
-*(check 405)*
-
-# Part 2 — tests that need hardware
+*(check 406)*
 
 ## (a) The APC40
 

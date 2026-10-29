@@ -43,7 +43,7 @@ Rows 501–536 (plan 40, patches) were written during its run on 2026-10-27 and 
 
 Rows 538–541 are the owner's own answers of 2026-10-28, on `worktree-presets-one-tier` (the library goes one-tier: no factory presets, a flat PRESETS page, one show line). Hand check 403.
 
-Rows 542–543 come with the Flow mark (`subjects-flow-logo`, PR #214): 543 is the owner's ask, a vector logo as the subject; 542 is the build's own ruling on the depth cue the flat mark needed, for the owner to keep or overturn. Hand checks 404–405.
+Rows 542–543 come with the Flow mark (`subjects-flow-logo`, PR #214): 543 is the owner's ask, a vector logo as the subject; 542 is the build's own ruling on the depth cue the flat mark needed, for the owner to keep or overturn. Hand checks 405–406.
 Every other one is in the app now (rows 110–213
 on `plan-24-26-27-integration`, rows from 214 on `plan-28-30-integration`,
 until the owner merges them) and waits
@@ -574,8 +574,8 @@ here; overturn → the change, then the same.
 | 539 | The PRESETS page is a flat list: no bank pills, starts-on, preset drop-down or module-preset fold | 403 | owner — 2026-10-28 |
 | 540 | Module presets' UI leaves the PRESETS page; the concept stays for now (to become patches) | 403 | owner — 2026-10-28 |
 | 541 | The show block is one line that says what a show is; the pads are set on the desk only | 403 | owner — 2026-10-28 |
-| 542 | The depth cue never spreads over less than 0.05, so a plane figure facing the eye draws at full weight | 405 | (rec) — PR #214 |
-| 543 | The Wispr Flow mark is two shapes in the catalog, Flow mark and Flow capsules (indices 99 and 100, for good) | 404 | owner — 2026-10-17 |
+| 542 | The depth cue never spreads over less than 0.05, so a plane figure facing the eye draws at full weight | 406 | (rec) — PR #214 |
+| 543 | The Wispr Flow mark is two shapes in the catalog, Flow mark and Flow capsules (indices 99 and 100, for good) | 405 | owner — 2026-10-17 |
 
 "—": no hand check shows it; tests only.
 
@@ -9294,7 +9294,7 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
 - **Rough edge.** A plane figure tilted a few degrees still has its far
   side at the dimmest, as every thin shape does: the floor fixes the
   face-on case, not how steeply a thin shape's cue falls off.
-- **Judge it.** Check 405.
+- **Judge it.** Check 406.
 
 ### 543. The Wispr Flow mark is two shapes in the catalog
 
@@ -9320,4 +9320,4 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
   fine for a prototype on the owner's machines, but before it ships in a
   public show or build, check Wispr's brand terms, or swap in a mark of
   the project's own (keeping the slots).
-- **Judge it.** Check 404.
+- **Judge it.** Check 405.

@@ -1638,8 +1638,8 @@ def set_modifier_input(panel, mid: str, k: int, source: str) -> None:
 
 
 def remove_modifier(panel, mid: str) -> None:
-    """The ×: the modifier and its params go; a route on its lane stays,
-    dormant. One undo step."""
+    """The ×: the modifier and its params go, what fed it wired on to
+    what it fed (`Bindings.remove_modifier`). One undo step."""
     router = router_of(panel)
     undo.push(f"delete modifier {mid}")
     router.table.remove_modifier(mid, panel.reg)
@@ -1789,7 +1789,7 @@ def modifier_block(panel, router: Router, m: Modifier, stacked: bool = False) ->
         dead = ui.chip("× remove")
         imgui.pop_style_color()
         if imgui.is_item_hovered():
-            ui.tooltip("Remove this modifier — a route on it goes dormant")
+            ui.tooltip("Remove this modifier — what fed it is wired straight on to what it fed")
         imgui.pop_id()
         return dead
     imgui.same_line()
@@ -1800,7 +1800,7 @@ def modifier_block(panel, router: Router, m: Modifier, stacked: bool = False) ->
         dead = True
     imgui.pop_style_color()
     if imgui.is_item_hovered():
-        ui.tooltip("Remove this modifier — a route on it goes dormant")
+        ui.tooltip("Remove this modifier — what fed it is wired straight on to what it fed")
     specs = MOD_PARAMS[m.kind]
     if specs:
         imgui.dummy(imgui.ImVec2(MOD_ID_W, 0))
