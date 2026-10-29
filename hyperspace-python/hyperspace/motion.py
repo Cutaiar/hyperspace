@@ -26,12 +26,17 @@ the `axis` lanes — the same knobs drive the sticks' default camera job.
            above 1 it creeps).
 
 Times are seconds, τ the one-pole's time constant (63 % of the way in τ).
+
+`response` and `settle` say what a feel does to a jump, in closed form —
+where the reading is t seconds on, and when it has arrived. The panel
+plots them beside a feel's knobs (ui_feel.py).
 """
 
 from __future__ import annotations
 
 import math
 from dataclasses import asdict, dataclass, fields
+from functools import lru_cache
 
 MODES = ("off", "follow", "spring")
 
@@ -41,6 +46,7 @@ HZ_MIN, HZ_MAX = 0.1, 12.0
 DAMP_MAX = 3.0
 SETTLE = 1e-4       # a Follower this close to its target, and this slow, lands
 _CRIT = 1e-6         # |damp − 1| under this is critical damping
+BAND = 0.02          # `settle`: within this of where it is going counts as arrived
 
 
 # ------------------------------------------------------------- kernels
@@ -159,3 +165,42 @@ class Follower:
         if abs(self.x - target) < SETTLE and abs(self.v) < SETTLE * 10:
             self.x, self.v = target, 0.0
         return self.x
+
+
+# ------------------------------------------------------------ response
+
+def response(m: Motion, t: float, x: float = 0.0, target: float = 1.0,
+             rest: float = 0.0) -> float:
+    """Where a reading resting at `x` is t s after it jumped to `target`,
+    under the feel `m`: its kernel stepped once over the whole time —
+    exact, each kernel being closed form for a held target. No motion:
+    already there."""
+    if t <= 0:
+        return x
+    if m.mode == "follow":
+        return follow(x, target, t, m.atk, m.rel, rest)
+    if m.mode == "spring":
+        return spring(x, 0.0, target, t, m.hz, m.damp)[0]
+    return target
+
+
+@lru_cache(maxsize=256)    # the panel asks every frame; the knobs change rarely
+def settle(m: Motion, home: bool = False) -> float:
+    """Seconds until a jump from rest 0 to 1 (`home`: from 1 back to rest)
+    stays within BAND of where it is going. follow: ln(1 / BAND) of the
+    edge's τ. A spring, the same either way: measured off its own
+    response, since critical damping's (1 + ωt)·e^(−ωt) lands later than
+    its envelope says — never, undamped. No motion: 0."""
+    if m.mode == "follow":
+        return max(m.rel if home else m.atk, 0.0) * math.log(1 / BAND)
+    if m.mode != "spring" or m.hz <= 0:
+        return 0.0
+    w, z = 2 * math.pi * m.hz, max(m.damp, 0.0)
+    if z <= _CRIT:
+        return math.inf
+    r = z * w if z <= 1 else w * (z - math.sqrt(z * z - 1))    # the slowest root
+    end, n = 8.0 / r, 400                       # its envelope, well inside BAND by then
+    for i in range(n, -1, -1):
+        if abs(response(m, end * i / n) - 1.0) > BAND:
+            return end * min(i + 1, n) / n
+    return 0.0

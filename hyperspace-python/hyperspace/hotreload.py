@@ -58,7 +58,7 @@ MODULES = (
     "analysis", "tapers", "motion", "media.transport", "media.channels", "modifiers", "palettecompat", "undo", "placement", "geometry", "bands", "analyzer", "audio", "tempo", "modbank", "lfo", "envelope", "sequencer", "glsl", "masks", "patterns",
     "lookback", "dream", "fx", "ghost", "outputs", "view", "field", "graph", "graphmigrate", "media_tex", "render", "params", "hold", "library", "control", "config",
     "overlay", "gamepad", "apc40", "generic", "modgraph", "seq_page", "routing", "patches", "preset", "learn", "midi", "bridge",
-    "hands.signal", "hands.tape", "hands.core", "hands", "devices", "media.live", "media.ndi", "media.syphon", "media.camera", "media.publish", "hands.device", "osc", "graphview", "ui_presets", "ui_lookback", "ui_bands", "ui_spring", "ui_routing", "ui_fx", "ui_patterns",
+    "hands.signal", "hands.tape", "hands.core", "hands", "devices", "media.live", "media.ndi", "media.syphon", "media.camera", "media.publish", "hands.device", "osc", "graphview", "ui_presets", "ui_lookback", "ui_bands", "ui_feel", "ui_routing", "ui_fx", "ui_patterns",
     "ui_lfo", "ui_media", "ui_desk", "ui_pad", "hands.panel", "ui_graph", "ui_seq", "ui",
 )
 # (plan 39 T2: `masks` sits after `glsl`, whose QUAD_VS it binds, and before

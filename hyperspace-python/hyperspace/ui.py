@@ -43,6 +43,7 @@ from . import (
     learn,
     ui_bands,
     ui_desk,
+    ui_feel,
     ui_fx,
     ui_graph,
     ui_lfo,
@@ -53,7 +54,6 @@ from . import (
     ui_presets,
     ui_routing,
     ui_seq,
-    ui_spring,
 )
 from .analyzer import N_MAX
 from .audio import AudioEngine
@@ -2481,21 +2481,27 @@ class Panel:
         if "desk.pad.feel" in self.reg:    # the sticks' feel (routing._register_pad_feel)
             imgui.spacing()
             self._section("gamepad")
-            self._row("desk.pad.feel")
+            # the feel and its two knobs, its curve beside them as tall as
+            # they are (ui_feel) — beside, since the page has no height to spare
+            feel = self.router.source_feel("axis") if self.router is not None else None
+            plotted = feel is not None and feel.on
+            w = (imgui.get_content_region_avail().x - self.PAD_FEEL_W
+                 - imgui.get_style().item_spacing.x) if plotted else -1
+            imgui.begin_group()
+            self._row("desk.pad.feel", w)
             mode = self.reg["desk.pad.feel"].text()
             for k in {"follow": ("attack", "release"), "spring": ("hz", "damp")}.get(mode, ()):
-                self._row(f"desk.pad.{k}")
-            if mode == "spring":            # the sticks' spring as its curve (ui_spring)
-                imgui.dummy(imgui.ImVec2(LABEL_W, 0))
+                self._row(f"desk.pad.{k}", w)
+            imgui.end_group()
+            if plotted:
                 imgui.same_line()
-                ui_spring.draw(self.reg["desk.pad.hz"].value, self.reg["desk.pad.damp"].value,
-                               min(260.0, imgui.get_content_region_avail().x), 84.0,
-                               track=True)
+                ui_feel.draw(feel, self.PAD_FEEL_W, imgui.get_item_rect_size().y, track=True)
             if "desk.pad.dial.left" in self.reg:   # the sticks as dials (app._register_dial)
                 self._dials()
 
     # ---- the sticks as dials (gamepad.dial, a prototype) ----
 
+    PAD_FEEL_W = 220.0   # the sticks' feel curve (ui_feel), px, beside its knobs
     DIAL_R = 52.0        # the clock face's radius, px
     DIAL_ROW = 16.0      # a legend line's height, px
 

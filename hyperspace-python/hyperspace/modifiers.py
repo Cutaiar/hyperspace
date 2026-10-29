@@ -243,18 +243,23 @@ def _scale(x: float, p: dict) -> float:
     return clamp(y, 0.0, 1.0) if p.get("clamp", 1.0) >= 0.5 else y
 
 
-def _smooth(x: float, p: dict, state: ModState, dt: float) -> float:
+def smooth_motion(p: dict) -> Motion:
+    """`smooth`'s feel from its params: the follower on attack / release,
+    or with spring on a spring whose speed is attack's (ω = 1 / attack,
+    its time feel) at SPRING_DAMP. What it steps, and what the panel
+    plots (ui_feel)."""
     atk, rel = max(0.0, p.get("attack", 0.0)), max(0.0, p.get("release", 0.0))
+    if p.get("spring", 0.0) >= 0.5:
+        hz = 0.0 if atk <= 0 else 1.0 / (2 * math.pi * atk)
+        return Motion("spring", hz=hz, damp=SPRING_DAMP)
+    return Motion("follow", atk=atk, rel=rel)
+
+
+def _smooth(x: float, p: dict, state: ModState, dt: float) -> float:
     if state.follower is None:            # first sight: start on the reading
         state.follower = Follower(x)
         return x
-    if p.get("spring", 0.0) >= 0.5:
-        # the spring's speed from attack: ω = 1 / attack, its time feel
-        hz = 0.0 if atk <= 0 else 1.0 / (2 * math.pi * atk)
-        m = Motion("spring", hz=hz, damp=SPRING_DAMP)
-    else:
-        m = Motion("follow", atk=atk, rel=rel)
-    return state.follower.step(x, dt, m, REST)
+    return state.follower.step(x, dt, smooth_motion(p), REST)
 
 
 def _combine(a: float, b: float, p: dict) -> float:

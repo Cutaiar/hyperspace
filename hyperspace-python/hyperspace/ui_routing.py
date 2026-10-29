@@ -35,7 +35,7 @@ The feel chip (motion.py) cycles auto → follow → spring → still: auto is
 the source's own feel (the pad's, for a stick), still is none at all, and
 follow / spring are the row's own, with their two knobs on a third line —
 attack and release about rest, or a spring's Hz and damping ratio and
-its curve beside them, position over time (ui_spring).
+its curve beside them, position over time (ui_feel).
 
 The target is a searchable combo over every modulatable param, grouped
 by registry group; depth is signed — ±1 in norm units for `push` (1 puts
@@ -121,12 +121,12 @@ from dataclasses import replace
 
 from imgui_bundle import imgui
 
-from . import apc40, motion, ui, ui_presets, ui_spring, undo
+from . import apc40, motion, ui, ui_feel, ui_presets, undo
 from .bands import CEIL
 from .library import PRESETS
 from .modifiers import KINDS as MOD_KINDS
 from .modifiers import PARAMS as MOD_PARAMS
-from .modifiers import Modifier
+from .modifiers import Modifier, smooth_motion
 from .motion import Motion
 from .params import Kind, Param, part_of
 from .routing import (
@@ -171,8 +171,9 @@ POINTER_TIP = ("The routes and the modifiers are edited on the GRAPH page now �
 FEEL_CYCLE = (None, "follow", "spring", "off")
 FEEL_CHIP = {None: "auto", "follow": "follow", "spring": "spring", "off": "still"}
 FEEL_W = 112.0           # each of the feel line's two knobs
-SPRING_W = 120.0         # the spring feel's curve beside them (ui_spring)
-SPRING_H = 40.0
+FEEL_PLOT_W = 120.0      # the feel's curve beside them (ui_feel)
+FEEL_PLOT_H = 40.0
+SMOOTH_PLOT_H = 56.0     # a smooth modifier's curve, under its params in GRAPH's side pane
 NO_MATCH = "no row matches"
 
 
@@ -1035,8 +1036,8 @@ def _feel_chip(router: Router, b: Binding, width: float) -> None:
 
 
 def _feel_line(b: Binding) -> None:
-    """Two knobs for the row's own feel: attack / release, or Hz / damping
-    and the spring's curve beside them (ui_spring)."""
+    """Two knobs for the row's own feel — attack / release, or Hz /
+    damping — and the feel's curve beside them (ui_feel)."""
     m = b.motion
     imgui.dummy(imgui.ImVec2(18, 0))
     imgui.same_line()
@@ -1063,9 +1064,8 @@ def _feel_line(b: Binding) -> None:
         if imgui.is_item_hovered():
             ui.tooltip(tip + "\nctrl-click to type")
     imgui.pop_font()
-    if m.mode == "spring":                        # the feel itself, as its curve
-        imgui.same_line()
-        ui_spring.draw(m.hz, m.damp, SPRING_W, SPRING_H)
+    imgui.same_line()
+    ui_feel.draw(m, FEEL_PLOT_W, FEEL_PLOT_H)
 
 
 def _live_bar(panel, router: Router, b: Binding, p: Param | None) -> None:
@@ -1749,6 +1749,9 @@ def modifier_block(panel, router: Router, m: Modifier, stacked: bool = False) ->
                 panel._combo(pid, -1.0)
             else:
                 panel._slider(pid, -1.0)
+        if m.kind == "smooth":                  # its feel, as its curve (ui_feel)
+            ui_feel.draw(smooth_motion(m.params), imgui.get_content_region_avail().x,
+                         SMOOTH_PLOT_H)
         imgui.push_style_color(imgui.Col_.text, ui.DIM)
         dead = ui.chip("× remove")
         imgui.pop_style_color()

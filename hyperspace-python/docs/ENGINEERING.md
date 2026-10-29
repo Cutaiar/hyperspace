@@ -1613,7 +1613,7 @@ the panel at 540 and the desk takes what is left.
 | SEQ | The step sequencer (plan 31, `ui_seq.py`): run · span · restart, length and swing; the 5 × 8 grid in the APC40's LED colours (the playhead's column in red, columns past the length dimmed); each lane's select, mute and envelope; a strip per envelope, one open, `+ env` for extras. |
 | HANDS | The tracker, the box, the axes and their setup, feel and calibration, the ghost hands (§12). |
 | PRESETS | The preset strip (◀ name ● ▶ · new · save · as…), every preset as a list filling the page (click loads; rename, ×), the trash at its foot, your patches under **patches** (rename and ×; a click spawns nothing — spawn is GRAPH's, plan 40), and one line for the show: its name ●, open ▾, save, as…, new (§10). |
-| SYSTEM | Cheat sheet and desk-diagram switches, Restart process, hot reload status, the library path, config errors and notes, the dream worker's state, the stall log's line; **devices**: one line per `[[devices]]` entry — `role · kind · status · n sources · last` (MIDI: the port, its binding count, the last message; the pad's road and its GLFW joystick (`glfw 1`, plan 27 B6); the hands' tracker; a sink's `n sinks`, port and what it sent), `error:` lines in the warning colour; **midi**: knob smoothing, the desk log, the learn line; **gamepad**: the sticks' feel. |
+| SYSTEM | Cheat sheet and desk-diagram switches, Restart process, hot reload status, the library path, config errors and notes, the dream worker's state, the stall log's line; **devices**: one line per `[[devices]]` entry — `role · kind · status · n sources · last` (MIDI: the port, its binding count, the last message; the pad's road and its GLFW joystick (`glfw 1`, plan 27 B6); the hands' tracker; a sink's `n sinks`, port and what it sent), `error:` lines in the warning colour; **midi**: knob smoothing, the desk log, the learn line; **gamepad**: the sticks' feel, its curve beside its knobs (position over time, a square on a track under it; `ui_feel.py`). |
 
 **The FACES page** (`ui_patterns.py`), top to bottom:
 
@@ -2346,7 +2346,8 @@ and edited in GRAPH's side pane, the strip's own block stacked): a
 kind combo and **+ modifier**; per modifier `MOD n`, its kind, a combo
 per input (the route sources and the other modifiers' lanes), its live
 output ("dormant" while not live) and ×, then its params as ordinary
-widgets (right-click for Learn). Each add, remove, input picked and
+widgets (right-click for Learn); a smooth's block, stacked, ends in its
+feel's curve (`ui_feel.py`, `modifiers.smooth_motion`). Each add, remove, input picked and
 param drag is an undo step. "Right hand energy, smoothed, times band 0,
 into acid mix": + smooth on `hand R energy`; + combine on `mod 1 smooth`
 and `0 sub`, how mul; + route from `mod 2 combine` onto `fx.acid.mix`.
@@ -2819,7 +2820,7 @@ re-run on live objects. Shaders (`patterns.glsl`, `_common.glsl`,
 `shaders/fx/`) and the library's JSON files reload too. Plan 28's
 modules are on the list in dependency order: `modifiers` after
 `motion`, `modgraph` before `routing`, `graphview` after `osc`, `ui_graph`
-before `ui`. A reload of `ui_graph` keeps the GRAPH page's editor
+before `ui`; `ui_feel`, the feel curves, before `ui_routing`. A reload of `ui_graph` keeps the GRAPH page's editor
 context (it is held on the panel, not in the module), so the page goes
 on drawing with its zoom and selection.
 

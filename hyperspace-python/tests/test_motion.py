@@ -110,6 +110,37 @@ def test_the_spring_shaper_is_motion_spring():
     assert max(ys) > 1.0 and min(ys) >= 0.0          # kicks overshoot, never runs backwards
 
 
+# ---- what a feel does to a jump (the panel's plot, ui_feel) ----
+
+def test_a_response_is_the_kernel_stepped_once_over_the_whole_time():
+    sp, fo = Motion("spring", hz=2.0, damp=0.5), Motion("follow", atk=0.1, rel=0.4)
+    assert motion.response(sp, 0.3) == pytest.approx(spring(0.0, 0.0, 1.0, 0.3, 2.0, 0.5)[0])
+    assert motion.response(fo, 0.3) == pytest.approx(1 - math.exp(-0.3 / 0.1))
+    # home: back toward rest on the release
+    assert motion.response(fo, 0.3, x=1.0, target=0.0) == pytest.approx(math.exp(-0.3 / 0.4))
+    assert motion.response(OFF, 0.3) == 1.0 and motion.response(sp, 0.0) == 0.0
+    # and it is what a Follower stepping frame by frame lands on
+    f = Follower()
+    for _ in range(30):
+        f.step(1.0, DT, sp)
+    assert f.x == pytest.approx(motion.response(sp, 30 * DT), abs=1e-9)
+
+
+def test_settle_is_when_a_jump_stays_within_the_band():
+    fo = Motion("follow", atk=0.1, rel=0.4)
+    assert motion.settle(fo) == pytest.approx(0.1 * math.log(1 / motion.BAND))
+    assert motion.settle(fo, home=True) == pytest.approx(0.4 * math.log(1 / motion.BAND))
+    for m in (Motion("spring", hz=1.5, damp=0.3), Motion("spring", hz=1.5, damp=1.0),
+              Motion("spring", hz=1.5, damp=2.5)):
+        st = motion.settle(m)
+        tail = [abs(motion.response(m, st + k * 0.01) - 1) for k in range(200)]
+        assert max(tail) <= motion.BAND + 1e-9              # stays in, from then on
+        assert abs(motion.response(m, st * 0.9) - 1) > motion.BAND or m.damp >= 1
+    assert motion.settle(Motion("spring", hz=4, damp=1)) < motion.settle(Motion("spring", hz=1, damp=1))
+    assert math.isinf(motion.settle(Motion("spring", hz=2.0, damp=0.0)))
+    assert motion.settle(OFF) == 0.0
+
+
 # ---- the feel on file ----
 
 def test_motion_files_only_the_knobs_its_mode_reads():
