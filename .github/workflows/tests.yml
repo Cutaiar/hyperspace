@@ -1,14 +1,13 @@
 # The Python app's lint and fast test tier on every pull request and every
-# push to main (hyperspace-python/docs/ENGINEERING.md §16, "CI"). Two jobs,
-# named so a ruleset on main can require them by name:
+# push to main (hyperspace-python/docs/ENGINEERING.md §16, "CI"). The job is
+# named `tests` so a ruleset on main can require it by that name.
 #
-# - `tests-macos`: the platform the app ships on — SF Rounded and SF Mono,
-#   Apple's GL, the macOS-only wheels (mlx, pyobjc, Syphon).
-# - `tests`: Linux, GL through Mesa's software rasteriser under Xvfb; it
-#   catches what only holds on a Mac.
-#
-# Neither has the Ultraleap SDK or the M3 Max, so `hands` is left out and
-# the golden frames skip. Public repository: standard runners cost nothing.
+# Linux only. A macOS job was tried: its GL is Apple's software renderer
+# (no GPU in the VM either), and about fifty tests hung there to the
+# timeout, 30+ minutes against Linux's 2.5. GL draws through Mesa's
+# software rasteriser under Xvfb; what only the Mac can judge (golden
+# frames on "Apple M3 Max", frame-rate floors, hands) is `pytest --all` on
+# the Mac. Public repository: the runner costs nothing.
 name: tests
 
 on:
@@ -67,38 +66,3 @@ jobs:
           xvfb-run -a -s "-screen 0 1920x1080x24"
           uv run pytest -q -rs --timeout 120 --max-worker-restart=0 --durations=20
 
-  tests-macos:
-    name: tests-macos
-    runs-on: macos-15
-    timeout-minutes: 40
-    defaults:
-      run:
-        working-directory: hyperspace-python
-    env:
-      # no Ultraleap SDK; torch only serves the slow tier
-      UV_NO_GROUP: hands dream
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: System tools
-        # glslang, the reference compiler test_patterns holds the face
-        # shaders to (PortAudio and CoreMIDI come with the wheels)
-        run: brew install glslang
-
-      - uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-          cache-dependency-glob: hyperspace-python/uv.lock
-
-      - name: Sync
-        run: uv sync --locked
-
-      - name: GL
-        # what the GL tests draw on here (a VM's GPU, not the M3 Max)
-        run: >
-          uv run python -c "import moderngl;
-          c = moderngl.create_context(standalone=True);
-          print(c.info['GL_RENDERER'], c.info['GL_VERSION'])"
-
-      - name: Fast tier
-        run: uv run pytest -q -rs --timeout 120 --max-worker-restart=0 --durations=20

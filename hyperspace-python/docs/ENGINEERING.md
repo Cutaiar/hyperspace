@@ -2976,10 +2976,11 @@ four cores.
   xvfb-run -a uv run pytest -q --timeout 120
   ```
 
-- **Linux, not macOS.** A macOS runner costs ten times the minutes, has
-  no Ultraleap SDK either, and its virtual machine's GL is not the M3
-  Max's, so the golden frames would still skip: it would check little
-  the Linux job does not. GL there
+- **Linux, not macOS.** A `macos-15` job was tried (2026-10-29): its GL
+  is "Apple Software Renderer" (no GPU in the runner's VM), it has no
+  Ultraleap SDK, and about fifty tests hung there to the 120 s timeout,
+  30+ minutes against Linux's 2.5. Runners cost nothing on a public
+  repository; the time and the hangs decided it. GL on Linux
   is Mesa's software rasteriser, llvmpipe. What only the Mac can judge
   skips or loosens itself, narrowly: the golden frames (`Apple M3 Max`
   only), `test_render.py::test_render_performance` (a frame-rate floor
