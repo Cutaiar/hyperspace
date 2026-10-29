@@ -500,9 +500,10 @@ def test_cable_near_follows_the_widgets_curve():
     assert graphview.cable_near(view, pins, mid, skip=("n2",)) is None
 
 
-def test_cables_near_lists_the_cables_under_a_centre_nearest_first():
-    """A dragged node's centre over cables: each within `NEAR` of it, with
-    its distance, nearest first; one farther is not under it."""
+def test_cables_near_lists_the_cables_under_a_node_nearest_first():
+    """A dragged node over cables: each within `NEAR` of its centre — or,
+    given its size, through its box — with its distance from the centre,
+    nearest first; one outside the box is not under it."""
     view = graphview.View(cables=[graphview.VCable("low", "out:a", "mod:x", kind="route"),
                                   graphview.VCable("high", "out:b", "mod:y", kind="route"),
                                   graphview.VCable("far", "out:c", "mod:z", kind="route")],
@@ -515,6 +516,10 @@ def test_cables_near_lists_the_cables_under_a_centre_nearest_first():
     under = graphview.cables_near(view, pins, (200.0, 0.0))
     assert [c.id for _, c in under] == ["high", "low"]
     assert [round(d) for d, _ in under] == [3, 8]
+    pins["out:a"], pins["mod:x"] = (0.0, 40.0), (400.0, 40.0)    # out of reach of the centre
+    assert [c.id for _, c in graphview.cables_near(view, pins, (200.0, 0.0))] == ["high"]
+    boxed = graphview.cables_near(view, pins, (200.0, 0.0), size=(100.0, 60.0))
+    assert [c.id for _, c in boxed] == ["high", "low"]          # the box reaches it
 
 
 def _two_cable_rig(rig):
@@ -572,9 +577,13 @@ def test_the_drag_plan_lights_what_the_drop_will_do(rig):
     cable, fades its own and shows the join its chain closes with; a
     cable it may not go onto is refused in words."""
     st, view, gs = _two_cable_rig(rig)
+    into = next(c for c in view.cables if c.dst_port == "rin:acid/image")
     out = next(c for c in view.cables if c.dst_port == "rin:output.all/image")
     free = ui_graph.onto_plan(rig.panel, view, "render:wobble.2", (500.0, 0.0))
     assert free["best"] == out.id and free["lit"] == [out.id] and not free["lift"]
+    # a box across both cables lights both; the one nearest the centre is it
+    both = ui_graph.onto_plan(rig.panel, view, "render:wobble.2", (420.0, 60.0), (400.0, 160.0))
+    assert both["best"] == out.id and set(both["lit"]) == {out.id, into.id}
     assert ui_graph.drag_words(view, free).startswith("let go: ")
     assert ui_graph.onto_plan(rig.panel, view, "render:wobble.2", (500.0, 900.0)) is None
     # acid, wired, over the lookback's cable into it is its own: nothing
@@ -638,6 +647,12 @@ def test_a_lifted_drag_draws_its_lit_cable_border_and_join(rig, monkeypatch):
     for _ in range(2):
         frame(rig.panel, "graph")
     assert st["onto_lit"] is plan and said and "out of its chain" in said[-1]
+    # a hover's tooltip (the node's card) is not drawn over the drag's words
+    tips = []
+    monkeypatch.setattr(ui_graph.ui, "tooltip", tips.append)
+    monkeypatch.setattr(imgui, "is_mouse_dragging", lambda *a: True)
+    ui_graph._hover(st, st["view"], rig.panel)
+    assert tips == []
     monkeypatch.setattr(imgui, "is_mouse_down", lambda *a: False)
     monkeypatch.setattr(ui_graph.ed, "get_node_position", real)
     frame(rig.panel, "graph")

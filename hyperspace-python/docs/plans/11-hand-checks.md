@@ -6201,7 +6201,7 @@ it on to what it fed; Option-drag selects cables.
 Headless: `tests/test_graph_edit.py` (`onto_plan`, `dropped`, the drawn drag).
 1. Right-click the canvas and add an effect: it is free, faint. Drag it
    slowly across the canvas, over the run's cables and over the shape's
-   geometry cable, then let go with its centre on `acid → wobble`.
+   geometry cable, then let go with `acid → wobble` the bright one.
 2. Drag `wobble` (wired) over `lookback → acid` and let go, no key held.
 3. Drag `wobble` again, hold ⌘ before letting go over `lookback → acid`;
    let go. Press ⌘Z.
@@ -6210,8 +6210,8 @@ Headless: `tests/test_graph_edit.py` (`onto_plan`, `dropped`, the drawn drag).
    and press Delete.
 6. Option-drag a box across three cables on the background; press Delete;
    press ⌘Z.
-*Pass:* (1) the cable under the node's centre is thick and gold, another
-near one faint gold, the geometry cable red with "… is no picture cable"
+*Pass:* (1) every cable the node's box crosses is faint gold and the one
+nearest its centre thick gold, the geometry cable red with "… is no picture cable"
 beside the pointer, which otherwise reads "let go: <node> onto <a> →
 <b>"; nothing lights over empty canvas; let go, the effect sits in the
 run, the cable's picture into its `image`, its output into `wobble`.

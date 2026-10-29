@@ -897,8 +897,9 @@ error skips the pass.
   port, its output on into the port the cable fed (`Edit.place_effect`;
   the cable's right-click menu offers "insert effect ▸ <file>"). While a
   node is dragged the canvas shows what letting go will do
-  (`ui_graph.onto_plan`): the cable under its centre that it will go onto
-  is thick and gold, others it could take are faint gold, one it may not
+  (`ui_graph.onto_plan`): every cable through its box it could go onto
+  is faint gold, and the one nearest its centre — where it will go — is
+  thick gold, one it may not
   take is red, and the pointer says it in words; nothing lit, nothing
   happens. Two cables as near as each other open a chooser. An effect
   already wired only moves on the canvas; **⌘-drag** lifts it out of its

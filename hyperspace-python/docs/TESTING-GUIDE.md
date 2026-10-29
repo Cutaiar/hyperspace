@@ -5009,8 +5009,8 @@ show file; remove them with × if you do not want them.
 
 **Do:**
 1. Right-click the canvas and add an effect. Drag it slowly over the
-   cables, including the shape's geometry cable, and let go with its
-   middle on `acid → wobble`.
+   cables, including the shape's geometry cable, and let go with
+   `acid → wobble` the bright one.
 2. Drag `wobble` over `lookback → acid` and let go without any key.
 3. Drag `wobble` again, hold ⌘, and let go over `lookback → acid`. Press
    ⌘Z.
@@ -5019,8 +5019,8 @@ show file; remove them with × if you do not want them.
 5. Hold Option and drag a box across three cables; press Delete, then
    ⌘Z.
 
-**Right if:** (1) while dragging, the cable under the node's middle is
-thick and gold, other nearby ones faint gold, the geometry cable red, and
+**Right if:** (1) while dragging, every cable the node covers is faint
+gold and the one nearest its middle thick gold, the geometry cable red, and
 words beside the pointer say what letting go will do; let go, the effect
 is in the run. (2) the words say "hold ⌘ …", nothing lights, and the node
 just moves. (3) with ⌘ the node's border goes gold, its own cables fade

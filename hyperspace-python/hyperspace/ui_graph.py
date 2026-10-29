@@ -96,9 +96,9 @@ render cable's menu offers "insert effect ▸ <file>" (`insert_effect`); a
 free effect node let go on a picture cable is inserted into it
 (`dropped`, `Edit.place_effect`): the cable's picture into its ``image``
 port, its output on into whichever port the cable fed. **The drag shows
-what the drop will do** (2026-10-29, `onto_plan`, `_drag_preview`): the
-cable under the node's centre it will go onto is drawn thick in the drop
-colour, other cables it could take faint in it, one it may not take red
+what the drop will do** (2026-10-29, `onto_plan`, `_drag_preview`): every
+cable through the node's box it could go onto is drawn faint in the drop
+colour, and the one nearest its centre — where it will go — thick, one it may not take red
 with the reason beside the pointer, which also says what letting go does;
 nothing lit, nothing happens. Two cables as near: a chooser names each
 ("Look-back → Acid") and the pick takes it (`st["onto"]`, `put_onto`). An
@@ -1294,7 +1294,7 @@ def _moved(panel, st: dict, view: graphview.View) -> None:
         if len(moves) == 1 and (n.kind == "modifier" or isinstance(n.ref, Effect)):
             size = ed.get_node_size(ed.NodeId(_id(st, "n:" + n.id)))
             dropped(panel, view, n.id, (now[0] + size.x / 2, now[1] + size.y / 2),
-                    lift_held())
+                    (size.x, size.y), lift_held())
 
 
 def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
@@ -2744,6 +2744,8 @@ def cable_tip(view: graphview.View, c: graphview.VCable) -> str:
 
 
 def _hover(st: dict, view: graphview.View, panel=None) -> None:
+    if imgui.is_mouse_dragging(imgui.MouseButton_.left):
+        return          # 2026-10-29: a drag's own words (`_drag_preview`) are not covered
     tip = None
     names = st["names"]
     link = ed.get_hovered_link().id()
@@ -3793,11 +3795,12 @@ def route_from_menu(panel, p) -> None:
     imgui.end_menu()
 
 
-def dropped(panel, view: graphview.View, nid: str, centre,
+def dropped(panel, view: graphview.View, nid: str, centre, size=None,
             lift: bool = False) -> graphview.VCable | None:
-    """A node let go at `centre` (canvas units): what `onto_plan` lit while
-    it was dragged happens. A free effect goes onto the brightest picture
-    cable under its centre (`Edit.place_effect`, one undo step) — the
+    """A node let go at `centre` (canvas units; `size` its box): what
+    `onto_plan` lit while it was dragged happens. A free effect goes onto
+    the brightest picture cable under it — the one through its box nearest
+    its centre (`Edit.place_effect`, one undo step) — the
     cable's picture into its ``image`` port, its output on into the port
     the cable fed — a free modifier onto the brightest route or input
     (`insert_modifier`). An effect already wired is only moved when `lift`
@@ -3806,7 +3809,7 @@ def dropped(panel, view: graphview.View, nid: str, centre,
     without ⌘ a drag only moves it on the canvas. Two cables as near as
     each other: a chooser opens (`st["onto"]`, `put_onto`) and nothing
     changes until one is picked. Returns the cable it went into, or None."""
-    plan = onto_plan(panel, view, nid, centre, lift)
+    plan = onto_plan(panel, view, nid, centre, size, lift)
     if plan is None or plan["best"] is None:
         return None
     if plan["tie"]:
@@ -3819,12 +3822,13 @@ def dropped(panel, view: graphview.View, nid: str, centre,
 ONTO_TIE = 1.0          # canvas units: two cables this near each other's distance are a tie
 
 
-def onto_plan(panel, view: graphview.View, nid: str, centre, lift: bool = False) -> dict | None:
-    """What letting node `nid` go at `centre` would do — what the drag
+def onto_plan(panel, view: graphview.View, nid: str, centre, size=None,
+              lift: bool = False) -> dict | None:
+    """What letting node `nid` (its box `size`) go at `centre` would do — what the drag
     lights (`_drag_preview`) and what the drop does (`dropped`), so the two
     never disagree. None: nothing. Else ``{"node", "lift", "lit", "best",
     "tie", "refused", "leaving", "ghost", "hint"}``: the cables it may go
-    onto under its centre, nearest first (`lit`), the one it will (`best`),
+    onto through its box, nearest its centre first (`lit`), the one it will (`best`),
     the cables as near as that one when there are two or more (`tie`: the
     chooser's), the render cables under it it may not go onto with why
     (`refused`); for a wired effect lifted with ⌘, its own cables
@@ -3839,7 +3843,8 @@ def onto_plan(panel, view: graphview.View, nid: str, centre, lift: bool = False)
     if n.kind == "render" and isinstance(n.ref, Effect):
         e = render_edit(panel)
         ok, refused = [], {}
-        for d, c in graphview.cables_near(view, pins, centre, kinds=("render",), skip={nid}):
+        for d, c in graphview.cables_near(view, pins, centre, kinds=("render",), skip={nid},
+                                          size=size):
             why = (graphview.onto_refusal(e, c) if e is not None
                    else None if c.type == graphview.IMAGE else "no picture cable")
             if why is None:
@@ -3847,7 +3852,7 @@ def onto_plan(panel, view: graphview.View, nid: str, centre, lift: bool = False)
             else:
                 refused[c.id] = why
     elif n.kind == "modifier" and not mine:     # (a wired modifier is not lifted)
-        ok, refused = graphview.cables_near(view, pins, centre, skip=(nid,)), {}
+        ok, refused = graphview.cables_near(view, pins, centre, skip=(nid,), size=size), {}
     else:
         return None
     plan = {"node": nid, "lift": False, "lit": [], "best": None, "tie": [], "refused": {},
@@ -3923,7 +3928,8 @@ def _drag_preview(panel, st: dict, view: graphview.View) -> None:
         return
     n, p = moved[0]
     size = ed.get_node_size(ed.NodeId(_id(st, "n:" + n.id)))
-    plan = onto_plan(panel, view, n.id, (p.x + size.x / 2, p.y + size.y / 2), lift_held())
+    plan = onto_plan(panel, view, n.id, (p.x + size.x / 2, p.y + size.y / 2),
+                     (size.x, size.y), lift_held())
     if plan is None:
         return
     st["onto_lit"] = plan
