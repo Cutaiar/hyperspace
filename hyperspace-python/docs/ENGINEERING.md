@@ -2970,7 +2970,7 @@ four cores.
   same run on a Linux machine:
 
   ```bash
-  sudo apt-get install libasound2-dev libportaudio2 libgl-dev xvfb fonts-dejavu-core
+  sudo apt-get install libasound2-dev libportaudio2 libgl-dev xvfb fonts-dejavu-core glslang-tools
   export UV_NO_GROUP="hands dream"
   uv sync --locked
   xvfb-run -a uv run pytest -q --timeout 120
