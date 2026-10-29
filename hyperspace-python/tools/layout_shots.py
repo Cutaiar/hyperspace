@@ -58,9 +58,14 @@ def view(n: int, layout: int, motion: int = 0) -> ViewState:
 
 
 def render(ctx, s: ViewState) -> np.ndarray:
+    from hyperspace.graph import Wiring
+    from hyperspace.graphmigrate import wired_wiring
     from hyperspace.render import Renderer
 
     r = Renderer(ctx)
+    # plan 36 T3: a bare renderer draws the app's empty frame; the
+    # tool's own wiring is today's frame (render.render_offscreen's)
+    r.wiring = wired_wiring(Wiring())
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H), 4)])
     fbo.use()
     ctx.viewport = (0, 0, W, H)
