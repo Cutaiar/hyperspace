@@ -8,6 +8,9 @@ The solids are appended after the Klein bottle (index is identity) and are
 own scale, weight, colour and spin (`geometry.shape_view`).
 """
 
+import re
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -294,6 +297,50 @@ def _bars(V: np.ndarray, faces: list) -> list:
     return sorted(out)
 
 
+FLOW_SVG = Path(__file__).parent / "fixtures" / "flow-mark.svg"
+
+
+def _svg_boxes(path: Path) -> list[tuple[float, float, float, float]]:
+    """Each path's box (x0, y0, x1, y1) in the SVG, left to right: the
+    mark's paths use only absolute M, C, H, V and Z, and a cubic's control
+    points lie inside the box of a stadium's quarter arcs, so every point
+    named counts."""
+    boxes = []
+    for d in re.findall(r' d="([^"]+)"', path.read_text()):
+        xs, ys, x, y = [], [], 0.0, 0.0
+        for cmd, args in re.findall(r"([MCHVZ])([^MCHVZ]*)", d):
+            v = [float(t) for t in re.findall(r"-?\d*\.?\d+", args)]
+            if cmd in "MC":
+                for k in range(0, len(v), 2):
+                    x, y = v[k], v[k + 1]
+                    xs.append(x)
+                    ys.append(y)
+            elif cmd == "H":
+                for x in v:
+                    xs.append(x)
+                    ys.append(y)
+            elif cmd == "V":
+                for y in v:
+                    xs.append(x)
+                    ys.append(y)
+        boxes.append((min(xs), min(ys), max(xs), max(ys)))
+    return sorted(boxes)
+
+
+def test_flow_bars_are_the_svgs_paths():
+    # FLOW_BARS is read off the mark's SVG (tests/fixtures/flow-mark.svg,
+    # as wisprflow.ai serves it, its round backdrop taken out): each bar's
+    # x centre, top and bottom, and the one end radius, half a bar's width
+    # (the SVG's first bar is 0.002 narrower than the other four; the mark
+    # takes their shared radius)
+    boxes = _svg_boxes(FLOW_SVG)
+    assert len(boxes) == len(G.FLOW_BARS) == 5
+    for (x0, y0, x1, y1), (cx, top, bot) in zip(boxes, G.FLOW_BARS):
+        assert (x0 + x1) / 2 == pytest.approx(cx, abs=1e-3)
+        assert (y0, y1) == pytest.approx((top, bot), abs=1e-3)
+        assert (x1 - x0) / 2 == pytest.approx(G.FLOW_R, abs=2.5e-3)
+
+
 def test_the_flow_mark_is_five_stadia_as_the_svg_draws_them():
     # five bars of one width on one pitch, their heights the SVG's: the
     # two outer bars tallest, then the middle one, the two short ones equal
@@ -307,7 +354,7 @@ def test_the_flow_mark_is_five_stadia_as_the_svg_draws_them():
     assert np.ptp(widths) < 1e-9
     assert np.ptp(np.diff([b[0] for b in bars])) < 1e-3          # one pitch
     h = [b[2] / widths[0] for b in bars]                          # height in widths
-    svg = [(bot - top) / (2 * G.FLOW_R) for _, top, bot in G.FLOW_BARS]
+    svg = [(y1 - y0) / (2 * G.FLOW_R) for _, y0, _, y1 in _svg_boxes(FLOW_SVG)]
     assert h == pytest.approx(svg, abs=1e-3)
     assert h[0] == pytest.approx(h[4], abs=0.01) and h[1] == pytest.approx(h[3])
     assert h[0] > h[2] > h[1]

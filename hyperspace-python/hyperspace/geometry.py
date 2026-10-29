@@ -1183,8 +1183,9 @@ def _build_orbit() -> dict:
 # Flow mark is five pill-shaped bars (stadia), read off the paths of
 # wisprflow.ai's own SVG on its 28-unit artboard: each bar's x centre and
 # its top and bottom edge, SVG y running down, and the one end radius
-# (half a bar's width) they share. prototypes/subjects/ in the repository
-# root holds the SVG and a browser prototype of the looks.
+# (half a bar's width) they share. The SVG is tests/fixtures/flow-mark.svg,
+# and tests/test_catalog.py::test_flow_bars_are_the_svgs_paths holds these
+# numbers to it.
 
 FLOW_R = 0.8648
 FLOW_BARS = ((8.8096, 7.9961, 20.0039), (11.4058, 13.4966, 18.7963),

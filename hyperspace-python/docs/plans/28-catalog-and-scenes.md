@@ -122,7 +122,9 @@ One renderer change came with it, for every shape, not the mark alone:
 **the depth cue's floor** (`render.DEPTH_FLOOR`). The cue spreads over a
 shape's own depth, which is nothing for a shape flat toward the eye (the
 Orbit face-on, the flat mark), so those drew at their dimmest. The cue
-now never spreads over less than 1.0; a deeper pose draws as before.
+now never spreads over less than 0.05, under every real solid's thinnest
+(the Rose at rest, 0.16), so only a plane figure facing the eye reaches
+it and every other pose draws as before (decision register row 542).
 
 One picture laid across a whole shape (on the flat mark, through all
 five bars) was tried as a third `fx.face_map` choice and left out for
@@ -185,6 +187,10 @@ too), 4D shapes untouched, the 3D switch never jumping and turning
 rigidly, every 4D shape over the volume floor. The shape digests gained
 the new rows, and the seven shapes plan 22 had lifted were re-recorded
 at w = 0 (`tests/golden/shape_digests.json`); no polytope's row moved.
-The Flow tests check the bars against the SVG, the mark's one-picture
-UVs, the capsules' wrap, and the flat cue's full weight face-on
+The Flow tests hold `FLOW_BARS` to the mark's SVG
+(`tests/fixtures/flow-mark.svg`), check the five bars' widths, pitch and
+heights, and the capsules' outline and depth against the flat mark; the
+depth cue's tests check the flat mark and the face-on Orbit at full
+weight, that only the flat mark is thinner than the floor at rest, and
+that a deep shape draws byte for byte as with no floor
 (`tests/test_render.py`).

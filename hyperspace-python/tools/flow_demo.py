@@ -4,19 +4,20 @@ offscreen by the real renderer.
 
   uv run python tools/flow_demo.py
 
-Writes `docs/plans/assets/28-catalog/flow-demo.mp4` (1280×720, 30 fps,
-through ffmpeg on the PATH). Each segment is a ViewState turned by
-`ViewState.integrate`, as the app turns it; the stage, the captions and
-the encoder are catalog_demo's.
+Writes into docs/plans/assets/28-catalog/: `flow-demo.mp4` (1280×720,
+30 fps, through ffmpeg on the PATH) and `flow-mark-and-capsules.png`, the
+mark with PLAID on its bars beside the capsules with BLOOM, turned. Each
+segment is a ViewState turned by `ViewState.integrate`, as the app turns
+it; the stage, the captions and the encoder are catalog_demo's.
 """
 
 from __future__ import annotations
 
 import math
 import shutil
-import subprocess
 
-from catalog_demo import FPS, OUT, H, Segment, Stage, W, caption
+from catalog_demo import FPS, OUT, Segment, Stage, caption, encoder
+from PIL import Image
 
 from hyperspace import geometry as G
 from hyperspace.patterns import NAMES as PATTERN_NAMES
@@ -74,14 +75,11 @@ def segments() -> list[Segment]:
 def run() -> None:
     if shutil.which("ffmpeg") is None:
         raise SystemExit("ffmpeg is not on the PATH")
+    OUT.mkdir(parents=True, exist_ok=True)
     stage = Stage()
     segs = segments()
     out = OUT / "flow-demo.mp4"
-    ff = subprocess.Popen(
-        ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
-         "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-preset",
-         "slow", "-crf", "27", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
-         str(out)], stdin=subprocess.PIPE)
+    ff = encoder(out)
     t = 0.0
     for k, seg in enumerate(segs, 1):
         v = ViewState(**seg.view)
@@ -101,6 +99,22 @@ def run() -> None:
     ff.stdin.close()
     ff.wait()
     print("wrote", out)
+    still()
+
+
+def still() -> None:
+    """The picture beside the plan 28 record: the flat mark face-on with
+    PLAID on its bars, and the capsules turned with BLOOM."""
+    stage = Stage(640, 480)
+    shots = [ViewState(shape=MARK, faces=True, pattern=PATTERN_NAMES.index("PLAID"),
+                       bright=1.4),
+             ViewState(shape=CAPS, faces=True, pattern=PATTERN_NAMES.index("BLOOM"),
+                       bright=1.4, ang=[0.0, 0.5, 0.25, 0.0, 0.0, 0.0])]
+    out = Image.new("RGB", (1280, 480))
+    for k, v in enumerate(shots):
+        out.paste(stage.shot(v, 1.5), (640 * k, 0))
+    out.save(OUT / "flow-mark-and-capsules.png", optimize=True)
+    print("wrote", OUT / "flow-mark-and-capsules.png")
 
 
 if __name__ == "__main__":

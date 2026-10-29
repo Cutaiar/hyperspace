@@ -401,6 +401,8 @@ second or more goes in the tables at the top of `tests/conftest.py`.
 | L195 | A macro wired from the param menu moves the param (row 537) | 1 | laptop | 402 |
 | L196 | The PRESETS page is the library (plan 41) | 1 | laptop, the copy | 403 |
 | L197 | The shape node's details show its wireframe | 1 | laptop | — |
+| L198 | The Flow mark and the Flow capsules (row 543) | 1 | laptop | 404 |
+| L199 | A flat shape facing you is at full brightness (row 542) | 1 | laptop | 405 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -5026,6 +5028,58 @@ the Shape node is selected, or anything on an output changing when it is.
 **Changes:** nothing.
 
 *(automated: `tests/test_shape_wire.py`)*
+
+## The Flow mark (L198–L199; rows 542–543)
+
+#### L198. The Flow mark and the Flow capsules
+
+**Needs:** laptop.
+
+**Do:**
+1. Open VIEW, open the Shape menu and scroll to the end of its 3D part.
+2. Pick **Flow mark** and stop every plane.
+3. Turn Faces on and pick the pattern PLAID.
+4. Pick **Flow capsules**, turn XZ and YZ on, and let it turn.
+5. Turn XW, YW and ZW on too.
+
+**Right if:** (1) a **Vector marks** group is last under 3D, holding Flow
+mark and Flow capsules. (2) the five bars of the Wispr Flow logo as white
+outlines, bright: the outer two tallest, then the middle one, the two
+short ones equal, and no red dots. (3) each bar carries its own pattern.
+(4) five round-ended capsules in wireframe, tumbling, no red dots. (5)
+the capsules turn no differently: the W planes leave a 3D shape alone.
+
+**Wrong if:** no Vector marks group; a dim logo facing you; red dots on
+either shape.
+
+**Changes:** nothing.
+
+*(check 404)*
+
+#### L199. A flat shape facing you is at full brightness
+
+**Needs:** laptop.
+
+**Do:**
+1. Pick **Flow mark**, every plane stopped, the camera at rest.
+2. Turn the camera slowly to one side and back.
+3. Pick **Orbit**, stop every plane, then turn YZ until the ring faces you
+   as a circle.
+4. Pick **Heart**, then **Tesseract**, every plane stopped, the camera at
+   rest.
+
+**Right if:** (1) the outlines are as bright as any shape's nearest edge.
+(2) the far side dims as it turns away and comes back as it faces you,
+with no jump. (3) the circle is bright all round as it faces you. (4)
+each looks as it did before: the Heart's back dimmer than its front, the
+tesseract's far cube dimmer than its near one.
+
+**Wrong if:** a dim logo or ring facing you; a jump as the camera passes
+face-on; the Heart's back or the tesseract brighter than before.
+
+**Changes:** nothing.
+
+*(check 405)*
 
 # Part 2 — tests that need hardware
 

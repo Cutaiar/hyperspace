@@ -189,11 +189,12 @@ PATTERNS_GLSL = Path(__file__).parent / "shaders" / "patterns.glsl"
 BG = (0.0, 0.0, 0.0)
 
 # the least depth the cue spreads over (draw_scene), in the shapes' unit
-# (circumradius 1): a shape thinner than this toward the eye — flat, or
-# turned flat — is cued over this much from its nearest point instead of
-# over its own sliver. Over 40 random poses of every shape, 12 shapes are
-# ever thinner and 1.2 % of poses
-DEPTH_FLOOR = 1.0
+# (circumradius 1): a shape flat toward the eye is cued over this much
+# from its nearest point instead of over its own nothing. Set under every
+# real solid's thinnest (the Rose at rest, 0.16), so only a plane figure
+# reaches it: through each plane from rest, in 5° steps, the Flow mark and
+# the Orbit face-on, and no other shape (decision register row 542)
+DEPTH_FLOOR = 0.05
 
 # FACE_PIC (graph.py's, imported above): the side, in texels, of the
 # picture the faces show while something other than the pattern is wired
@@ -3087,12 +3088,12 @@ class Renderer:
         near, far = pd.min(), pd.max()
         span = max(far - near, 1e-6)
         if span < DEPTH_FLOOR:
-            # a shape turned flat toward the eye (the Orbit face-on, the Flow
-            # mark) has almost no depth, and stretching that sliver over the
-            # whole cue would put it at its dimmest: the cue never spans less
-            # than DEPTH_FLOOR back from the nearest point. Face-on it draws
-            # at full weight, a tilt dims its far side; a shape any deeper
-            # draws as it always did
+            # pd grows toward the eye, so `far` (pd.max) is the nearest
+            # point and the brightest. A shape flat toward the eye (the Flow
+            # mark, the Orbit face-on) has no depth to spread the cue over,
+            # and its own sliver would leave it at its dimmest: the cue
+            # spans DEPTH_FLOOR back from that nearest point instead, so it
+            # draws at full weight. At span == DEPTH_FLOOR the two agree
             near, span = far - DEPTH_FLOOR, DEPTH_FLOOR
         E = g["E"]
         edepth = (pd[E[:, 0]] + pd[E[:, 1]]) * 0.5

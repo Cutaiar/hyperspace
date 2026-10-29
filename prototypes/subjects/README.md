@@ -24,10 +24,10 @@ material on top. Open `index.html` from any static server
 
 `demo.mp4` walks through it: the capsules moving to the demo voice, the
 morph to flat and back, every look, a texture per part, and the wordmark
-in chrome. It was recorded headless on a stepped clock, so it plays at an
-even 30 fps.
+in chrome. `tools/record.mjs` recorded it headless on a stepped clock, so
+it plays at an even 30 fps; its header says how to run it again.
 
-In the Python app (plan 28, stacked): the mark is now two shapes in the
-catalog, Flow mark and Flow capsules (`hyperspace-python/hyperspace/geometry.py`,
-`docs/plans/28-catalog-and-scenes.md`). Still to port: the solid
+In the Python app: the mark is two shapes in the catalog, Flow mark and
+Flow capsules (`hyperspace-python/hyperspace/geometry.py`,
+`hyperspace-python/docs/plans/28-catalog-and-scenes.md`). Still to port: the solid
 materials, and the bar gains as routable params so audio can drive them.

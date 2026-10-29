@@ -42,6 +42,8 @@ Rows 440–447 (plan 39, vision) are the plan's eight decisions, every one the o
 Rows 501–536 (plan 40, patches) were written during its run on 2026-10-27 and 2026-10-28, on `plan-40-build`: 501–510 are the plan's D1–D10, every one the owner's on 2026-10-27, before the build; 511–536 are the controller's rulings during the build, answered "controller — 2026-10-27", except 521 and 524, which are **pending the owner** (the schema of a save with no group, and a take-over chip for "wire as saved"). The plan was assigned 471–495, which plans 37–39 had taken, so it took the next free, 501–525, and overflowed into 526–536.
 
 Rows 538–541 are the owner's own answers of 2026-10-28, on `worktree-presets-one-tier` (the library goes one-tier: no factory presets, a flat PRESETS page, one show line). Hand check 403.
+
+Rows 542–543 come with the Flow mark (`subjects-flow-logo`, PR #214): 543 is the owner's ask, a vector logo as the subject; 542 is the build's own ruling on the depth cue the flat mark needed, for the owner to keep or overturn. Hand checks 404–405.
 Every other one is in the app now (rows 110–213
 on `plan-24-26-27-integration`, rows from 214 on `plan-28-30-integration`,
 until the owner merges them) and waits
@@ -572,6 +574,8 @@ here; overturn → the change, then the same.
 | 539 | The PRESETS page is a flat list: no bank pills, starts-on, preset drop-down or module-preset fold | 403 | owner — 2026-10-28 |
 | 540 | Module presets' UI leaves the PRESETS page; the concept stays for now (to become patches) | 403 | owner — 2026-10-28 |
 | 541 | The show block is one line that says what a show is; the pads are set on the desk only | 403 | owner — 2026-10-28 |
+| 542 | The depth cue never spreads over less than 0.05, so a plane figure facing the eye draws at full weight | 405 | (rec) — PR #214 |
+| 543 | The Wispr Flow mark is two shapes in the catalog, Flow mark and Flow capsules (indices 99 and 100, for good) | 404 | owner — 2026-10-17 |
 
 "—": no hand check shows it; tests only.
 
@@ -9265,3 +9269,55 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
 - **To reverse.** Restore `show_block` and `preset_bank`.
 - **Rough edge.** The only way to see which preset a pad holds is the desk's LEDs.
 - **Judge it.** Check 403.
+
+### 542. The depth cue never spreads over less than 0.05
+
+- **Answer.** (rec) — PR #214: the build's ruling, for the owner to keep
+  or overturn.
+- **Built.** `render.DEPTH_FLOOR` = 0.05. The cue (each line's fade and
+  width, the faces' and points' weight) spreads over the shape's own
+  depth toward the eye, nearest brightest. A plane figure facing the eye
+  has none, so it drew at its dimmest: the Flow mark at rest, and the
+  Orbit stood face-on on `main`. With the floor, such a shape is cued
+  over 0.05 back from its nearest point and draws at full weight; a tilt
+  dims its far side. The floor sits under every real solid's thinnest
+  (the Rose at rest, 0.16): at rest only the Flow mark is thinner,
+  through each plane from rest in 5° steps only the Flow mark and the
+  Orbit, over 40 random poses of every shape none. No corpus preset's
+  shape reaches it, so no golden frame moves.
+- **Other options.** A floor of 1.0 (the first try): it also eased the
+  contrast of 14 shapes at rest, the Heart of `plasma-heart` among them,
+  and moved golden frames. A flag on the Flow mark alone (the try before
+  that): the Orbit kept the fault.
+- **To reverse.** Remove the `span < DEPTH_FLOOR` branch in
+  `Renderer.draw_scene`.
+- **Rough edge.** A plane figure tilted a few degrees still has its far
+  side at the dimmest, as every thin shape does: the floor fixes the
+  face-on case, not how steeply a thin shape's cue falls off.
+- **Judge it.** Check 405.
+
+### 543. The Wispr Flow mark is two shapes in the catalog
+
+- **Answer.** owner — 2026-10-17: "prototype using different main sources
+  as the subject, for example the wispr flow logo … render the scene
+  both as a flat thing or make it three-dimensional so that each one of
+  the bars has a pill-capsule shape".
+- **Built.** `geometry.FLOW_BARS` and `FLOW_R`, read off the mark's SVG
+  (`tests/fixtures/flow-mark.svg`, as wisprflow.ai serves it) and held to
+  it by `tests/test_catalog.py::test_flow_bars_are_the_svgs_paths`. Flow
+  mark (index 99): five stadium outlines in the z = 0 plane, one face
+  each. Flow capsules (index 100): each bar a capsule round its own axis.
+  Both `dims=3`, family Vector marks, last in the menu's 3D section;
+  neither draws points.
+- **Other options.** Read vector sources as data (an SVG the panel
+  loads) instead of shapes in `SHAPES`; ship a neutral demo mark instead
+  of a brand's.
+- **To reverse.** The index is the identity and `SHAPES` is append-only,
+  so the two entries can never simply go: a preset saved on 99 or 100
+  would load another shape, or none. Retiring them means keeping the
+  slots (an empty or stand-in shape) or migrating presets.
+- **Rough edge.** It is another company's logo, taken from its website:
+  fine for a prototype on the owner's machines, but before it ships in a
+  public show or build, check Wispr's brand terms, or swap in a mark of
+  the project's own (keeping the slots).
+- **Judge it.** Check 404.

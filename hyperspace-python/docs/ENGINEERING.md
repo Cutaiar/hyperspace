@@ -74,13 +74,18 @@ writes the result back, so `ViewState.ang`, the integrator and every
 fade, width and draw order) reads its depth toward the 3D camera —
 `geometry.view_depth`, z after the camera's yaw and pitch — since its w
 is 0. The cue spreads over the shape's own depth, nearest to farthest,
-but never over less than `render.DEPTH_FLOOR` (1.0, in the shapes' unit):
-a shape turned flat toward the eye (the Orbit face-on, the Flow mark)
-is cued over that much from its nearest point, so it draws at full
-weight instead of its dimmest, and a tilt dims its far side. Over 40
-random poses of every shape, 12 shapes are ever thinner than the floor,
-in 1.2 % of poses; any deeper pose draws as it always did
-(`tests/test_render.py::test_a_shape_flat_toward_the_eye_draws_at_full_weight`,
+but never over less than `render.DEPTH_FLOOR` (0.05, in the shapes'
+unit). That floor is for a shape with no depth toward the eye: a plane
+figure facing it (the Flow mark at rest, the Orbit stood face-on) is cued
+over 0.05 back from its nearest point, so it draws at full weight instead
+of its dimmest. It sits under every real solid's thinnest (the Rose at
+rest, 0.16). At rest only the Flow mark is thinner; through each plane
+from rest in 5° steps only the Flow mark and the Orbit; over 40 random
+poses of every shape none is. Every other pose draws as it always did,
+and no corpus preset's shape ever reaches it, so no golden frame moves
+(decision register row 542;
+`tests/test_render.py::test_a_shape_flat_toward_the_eye_draws_at_full_weight`,
+`::test_only_a_plane_figure_is_thinner_than_the_depth_floor_at_rest`,
 `::test_the_depth_floor_leaves_a_deep_shape_as_it_was`). On the VIEW page the header says 3D or 4D, the Shape menu lists
 the 4D shapes and then the 3D ones under their own headings (the index
 stays the identity), and the W plane keys dim while they can do nothing.

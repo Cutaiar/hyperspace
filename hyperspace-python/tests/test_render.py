@@ -80,6 +80,20 @@ def test_a_shape_flat_toward_the_eye_draws_at_full_weight(ctx, name, ang):
     assert img.max() >= 200
 
 
+def test_only_a_plane_figure_is_thinner_than_the_depth_floor_at_rest():
+    # the floor is for a shape with no depth toward the eye: at rest, the
+    # pose every preset starts from, every other shape is deeper than it,
+    # so none of them draws differently for it
+    from hyperspace.geometry import shape_world
+    from hyperspace.render import DEPTH_FLOOR
+    thin = []
+    for i, s in enumerate(SHAPES):
+        _, _, pd = shape_world(i, [0.0] * 6, 0.0, 0.0, d4=2.6, flat=False, body=None)
+        if np.ptp(pd) < DEPTH_FLOOR:
+            thin.append(s.name)
+    assert thin == ["Flow mark"]
+
+
 def test_the_depth_floor_leaves_a_deep_shape_as_it_was(ctx, monkeypatch):
     # a shape deeper than the floor at this pose draws the same with the
     # floor at 0, byte for byte: only near-flat moments are touched
