@@ -139,7 +139,7 @@ def at_frame(n: int):
 
 # ---- the pad, the clock and the capture ----
 
-state = SimpleNamespace(n=0, rows=[], panel=None, router=None, phase="", grab={},
+state = SimpleNamespace(still=False, n=0, rows=[], panel=None, router=None, phase="", grab={},
                         wall=time.perf_counter(), walls=[], loaded=False)
 
 
@@ -284,18 +284,18 @@ def compose(i: int) -> None:
     if scene is None or panel is None:
         return
     x0, y0, x1, y1 = state.face_box
-    faces = Image.fromarray(panel[y0:y1, x0:x1])
+    faces = Image.fromarray(panel[y0:y1, x0:x1])     # at the panel's own pixels: legible
     sc = Image.fromarray(scene)
-    hh = 540
-    sc = sc.resize((int(sc.width * hh / sc.height), hh), Image.LANCZOS)
-    fw = int(faces.width * (hh - 60) / faces.height)
-    faces = faces.resize((fw, hh - 60), Image.LANCZOS)
-    out = Image.new("RGB", (sc.width + fw, hh), (0, 0, 0))
-    out.paste(sc, (0, 0))
-    out.paste(faces, (sc.width, 60))
+    head = 44                                        # the phase and the time, full width
+    sc = sc.resize((int(sc.width * faces.height / sc.height), faces.height), Image.LANCZOS)
+    out = Image.new("RGB", (sc.width + faces.width, faces.height + head), (0, 0, 0))
+    out.paste(sc, (0, head))
+    out.paste(faces, (sc.width, head))
     d = ImageDraw.Draw(out)
-    d.text((sc.width + 12, 10), state.phase, fill=(240, 240, 240), font=_font(20))
-    d.text((sc.width + 12, 36), f"t {i / FPS:5.2f} s", fill=(150, 150, 155), font=_font(15))
+    d.text((12, 10), state.phase, fill=(240, 240, 240), font=_font(20))
+    t = f"t {i / FPS:5.2f} s"
+    d.text((out.width - 12 - d.textlength(t, font=_font(15)), 14), t, fill=(150, 150, 155),
+           font=_font(15))
     state.frames_dir.mkdir(parents=True, exist_ok=True)
     out.save(state.frames_dir / f"{i:05d}.png")
 
@@ -437,7 +437,8 @@ def dials(self):
     from imgui_bundle import imgui
     # the pad node's details run longer than the side pane (the pad's
     # picture first): scroll it so the faces are at the top, from the next frame
-    imgui.set_scroll_here_y(0.0)
+    if not state.still:
+        imgui.set_scroll_here_y(0.0)
     p = imgui.get_cursor_screen_pos()
     w = imgui.get_content_region_avail().x
     _dials(self)
@@ -452,7 +453,11 @@ def main() -> None:
     ap.add_argument("--out", type=Path, default=ROOT / "docs" / "plans" / "assets" / "28-gamepad-dial")
     ap.add_argument("--frames", default="", help="keep the composited frames here")
     ap.add_argument("--limit", type=int, default=0, help="stop after this many frames (a probe)")
+    ap.add_argument("--still", action="store_true",
+                    help="with --limit: leave the pad node's details unscrolled, the pad's "
+                         "picture on top, and keep the last frame's pane as dial-pad-node.png")
     a = ap.parse_args()
+    state.still = a.still
     out = a.out
     out.mkdir(parents=True, exist_ok=True)
     import tempfile
@@ -510,6 +515,11 @@ def main() -> None:
     if a.limit:
         for name, px in state.grab.items():
             Image.fromarray(px).save(out / f"probe-{name.replace('/', '_')}.png")
+        if a.still:                    # the details pane: from the faces' left edge, full height
+            px = state.grab[state.ctrl_title]
+            x0 = max(0, state.face_box[0] - 12)
+            Image.fromarray(px[150:px.shape[0] - 40, x0:]).save(out / "dial-pad-node.png",
+                                                                 optimize=True)
         print(f"probe: {len(state.rows)} rows, grabs {list(state.grab)}, faces {state.face_box}")
         return
 

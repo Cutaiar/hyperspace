@@ -92,11 +92,14 @@ The depths in the file are first guesses.
 pad whose sticks follow a script, on a simulated 30 fps clock. The script
 is: a push up and let go, a slow lap of the rim on each stick, a stick
 shaking ±4° on the N | NE border, then the readings swapped and the left
-stick's lap again. Its output is in
+stick's lap again. Since 2026-10-29 it shows the faces where they now
+are, in the GRAPH page's pad node details, and ends with a save and two
+loads in the running app. Its output is in
 [`assets/28-gamepad-dial/`](assets/28-gamepad-dial/): `dial.mp4` (scene
 beside the faces), `dial-sheet.png`, `dial-traces.png` (each lane and the
-param it pushes), `dial-borders.png`, `dial-trace.csv` and
-`dial-timing.txt`.
+param it pushes), `dial-borders.png`, `dial-trace.csv`,
+`dial-timing.txt`, and `dial-pad-node.png` (the pad node's details, the
+pad's picture on top: `--still`).
 
 What it showed (2026-10-17):
 
@@ -120,6 +123,21 @@ What it showed (2026-10-17):
 - **Fixed on the way:** the first recording showed the rim labels of the
   two faces colliding and both wobble sectors cut to "Wobbl…". The faces
   now stack, each with a legend.
+
+Again on 2026-10-29, after the readings moved to the preset and the
+faces to the pad node:
+
+- **The readings are the preset's, in the running app.** After the
+  script left them swapped (left blend, right petal), the live state was
+  saved as DIAL SWAPPED; loading DIAL put petal / blend back, loading
+  DIAL SWAPPED put blend / petal back — what the pad read and what the
+  params said agreed each time (`dial-timing.txt`).
+- **Every sector, the camera, the borders and the cost** came out as on
+  2026-10-17: the camera did not move, petal held its border, the dial
+  costs about 7 µs a frame.
+- **Fixed on the way:** the pad node's details pane is narrow, and the
+  faces' side-by-side legend cut every name to "Wo…"; under `DIAL_WIDE`
+  the legend now goes under the face, names in full.
 
 It cannot show how a stick feels in the hand. That is the list below.
 
