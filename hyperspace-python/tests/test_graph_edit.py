@@ -630,40 +630,40 @@ def test_the_drag_plan_lights_what_the_drop_will_do(rig):
 
 
 def test_a_lifted_drag_draws_its_lit_cable_border_and_join(rig, monkeypatch):
-    """The drag drawn (hand check 404 judges the look): one node moved with
-    the mouse held, its plan a lift — the lit cable, a faded own cable, the
-    join and the node's border drawn without error, the tooltip said; let
-    go, the plan is gone."""
+    """The drag drawn (hand check 404 judges the look): the node the mouse
+    went down on (`st["press"]`), dragged — its plan asked where the
+    pointer has taken it, not where the editor says it is; the lit cable,
+    a dimmed one, the dotted join and its outline drawn without error, the
+    words said and no hover card over them; let go, the plan is gone."""
     from imgui_bundle import imgui
     st, view, _ = _two_cable_rig(rig)
     drawn = [c for c in view.cables if c.type == graphview.IMAGE]
     plan = {"node": "render:wobble.2", "hot": True, "lift": True, "lit": [drawn[0].id],
             "best": drawn[0].id, "tie": [], "refused": {}, "leaving": [drawn[1].id],
             "ghost": [(drawn[0].id, drawn[1].id)], "hint": ""}
-    monkeypatch.setattr(ui_graph, "onto_plan", lambda *a, **k: plan)
+    asked = []
+    monkeypatch.setattr(ui_graph, "onto_plan", lambda *a, **k: asked.append(a[3]) or plan)
     monkeypatch.setattr(imgui, "is_mouse_down", lambda *a: True)
+    monkeypatch.setattr(imgui, "is_mouse_clicked", lambda *a, **k: False)
+    monkeypatch.setattr(imgui, "is_mouse_dragging", lambda *a: True)
     said = []
     monkeypatch.setattr(ui_graph, "_drag_tip", said.append)
-    node = ui_graph._id(st, "n:render:wobble.2")
-    real = ui_graph.ed.get_node_position
-
-    def nudged(nk):                         # the node held 50 units right of where it was put
-        p = real(nk)
-        return imgui.ImVec2(p.x + 50.0, p.y) if nk.id() == node else p
-    monkeypatch.setattr(ui_graph.ed, "get_node_position", nudged)
+    imgui.get_io().add_mouse_pos_event(400.0, 400.0)
+    frame(rig.panel, "graph")
+    st["press"] = ("render:wobble.2", (-1000.0, -1000.0), (0.0, 0.0))
     for _ in range(2):
         frame(rig.panel, "graph")
     assert st["onto_lit"] is plan and said and "out of its chain" in said[-1]
-    # a hover's tooltip (the node's card) is not drawn over the drag's words
+    # the pointer is far from where it went down: so is the centre asked of
+    assert asked and asked[-1][0] > 500.0
     tips = []
     monkeypatch.setattr(ui_graph.ui, "tooltip", tips.append)
-    monkeypatch.setattr(imgui, "is_mouse_dragging", lambda *a: True)
     ui_graph._hover(st, st["view"], rig.panel)
     assert tips == []
     monkeypatch.setattr(imgui, "is_mouse_down", lambda *a: False)
-    monkeypatch.setattr(ui_graph.ed, "get_node_position", real)
     frame(rig.panel, "graph")
-    assert st["onto_lit"] is None
+    assert st["onto_lit"] is None and st["press"] is None
+    imgui.get_io().add_mouse_pos_event(-1.0, -1.0)
 
 
 def test_the_join_is_dotted_evenly_along_its_curve():

@@ -335,6 +335,7 @@ def _state(panel) -> dict:
     st.setdefault("patch_drag", None)
     st.setdefault("drop_cable", None)
     st.setdefault("onto_lit", None)         # 2026-10-29: a dragged node's `onto_plan`
+    st.setdefault("press", None)            # … and the node the mouse went down on
     st.setdefault("drop_why", "")
     st.setdefault("patch_form", None)
     st.setdefault("patch_list", None)
@@ -1314,12 +1315,16 @@ def _moved(panel, st: dict, view: graphview.View) -> None:
         if m is not None:
             px, py = panned(st)                 # saved in layout units, not panned ones
             m[n.id] = [round(now[0] - px), round(now[1] - py)]
-        # (plan 33 U: an effect too; 2026-10-29: one node let go alone, as
-        # the drag lit it — several moved together only move)
-        if len(moves) == 1 and (n.kind == "modifier" or isinstance(n.ref, Effect)):
+        # (plan 33 U: an effect too; 2026-10-29: the node the mouse went
+        # down on, let go alone, as the drag lit it — several selected
+        # nodes moved together only move)
+        press = st.get("press")
+        if (press is not None and press[0] == n.id and not _with_others(st, n.id)
+                and (n.kind == "modifier" or isinstance(n.ref, Effect))):
             size = ed.get_node_size(ed.NodeId(_id(st, "n:" + n.id)))
             dropped(panel, view, n.id, (now[0] + size.x / 2, now[1] + size.y / 2),
                     (size.x, size.y), lift_held())
+    st["press"] = None
 
 
 def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
@@ -1353,18 +1358,9 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
             _region(st, g)
     st["errors"] = effect_errors(panel, view)
     drawn: set[str] = set()
-    lit = st.get("onto_lit")            # last frame's drag: a hot node's border lit
     for n in view.nodes:
         if drawn_node(st, n):
-            hot = lit is not None and lit.get("hot") and lit["node"] == n.id
-            if hot:
-                k = DROP_COLOUR if lit["best"] is not None else imgui.ImVec4(
-                    DROP_COLOUR.x, DROP_COLOUR.y, DROP_COLOUR.z, LIT_ALPHA)
-                for b in HOT_BORDERS:
-                    ed.push_style_color(b, k)
             _node(st, n, drawn)
-            if hot:
-                ed.pop_style_color(len(HOT_BORDERS))
     for g in view.groups:               # plan 40 T2: a folded group's node, an open one's title
         if g.open:
             _region_title(panel, st, g)
@@ -2158,8 +2154,7 @@ DROP_WIRE = 6.0
 LIT_ALPHA = 0.45        # a hot node's border while no cable is lit for it
 SPOT_ALPHA = 0.15       # every other cable while a hot node is dragged (refused, its own)
 GHOST_GAP, GHOST_DOT = 9.0, 1.8     # the dotted join its chain closes over it with
-HOT_BORDERS = (ed.StyleColor.node_border, ed.StyleColor.sel_node_border,
-                ed.StyleColor.hov_node_border)
+HOT_OUT, HOT_LINE = 4.0, 3.0    # a hot node's outline: how far outside its edge, how thick
 PATCHES_TIP = ("The patches: a click spawns one at the canvas's centre, its pins open — "
                "nothing wired to this preset. Drag one onto a picture cable to splice it in")
 NO_PATCHES = "no patches yet — a group's menu: save as patch…"
@@ -3998,35 +3993,69 @@ def drag_words(view: graphview.View, plan: dict) -> str:
 
 def _drag_preview(panel, st: dict, view: graphview.View) -> None:
     """While one effect or modifier node is dragged: what letting it go
-    would do (`onto_plan`), kept in `st["onto_lit"]` for the cables and
-    the node's border drawn this frame and next, and said beside the
-    pointer. Nothing while several nodes move together."""
+    would do (`onto_plan`), kept in `st["onto_lit"]` for the cables drawn
+    this frame, its outline drawn and its words said beside the pointer.
+    The node is the one the mouse went down on (`st["press"]`), where it
+    is now its place then plus how far the pointer has come — never a
+    guess from which positions changed. Nothing while several selected
+    nodes move together."""
     st["onto_lit"] = None
-    if not imgui.is_mouse_down(imgui.MouseButton_.left) or st.get("patch_drag"):
+    left = imgui.MouseButton_.left
+    if imgui.is_mouse_clicked(left):
+        st["press"] = _pressed(st, view)
+    press = st.get("press")
+    if (press is None or not imgui.is_mouse_down(left) or st.get("patch_drag")
+            or not imgui.is_mouse_dragging(left) or _with_others(st, press[0])):
         return
-    applied = st["applied"]
-    moved = []
-    for n in view.nodes:
-        was = applied.get(n.id)
-        if was is None or not drawn_node(st, n):
-            continue
-        p = ed.get_node_position(ed.NodeId(_id(st, "n:" + n.id)))
-        if (round(p.x), round(p.y)) != (round(was[0]), round(was[1])):
-            moved.append((n, p))
-            if len(moved) > 1:
-                return
-    if len(moved) != 1:
-        return
-    n, p = moved[0]
-    size = ed.get_node_size(ed.NodeId(_id(st, "n:" + n.id)))
-    plan = onto_plan(panel, view, n.id, (p.x + size.x / 2, p.y + size.y / 2),
+    nid, (mx, my), (x0, y0) = press
+    m = imgui.get_mouse_pos()                  # canvas units, inside the editor
+    x, y = x0 + m.x - mx, y0 + m.y - my
+    size = ed.get_node_size(ed.NodeId(_id(st, "n:" + nid)))
+    plan = onto_plan(panel, view, nid, (x + size.x / 2, y + size.y / 2),
                      (size.x, size.y), lift_held())
     if plan is None:
         return
     st["onto_lit"] = plan
+    if plan["hot"]:
+        _hot_outline(plan, (x, y), (size.x, size.y))
     words = drag_words(view, plan)
     if words:
         _drag_tip(words)
+
+
+def _pressed(st: dict, view: graphview.View):
+    """The mouse just went down: on an effect or modifier node (not on one
+    of its pins — that is a cable's drag), ``(node id, the pointer, the
+    node's place)``, both in canvas units; else None."""
+    if ed.get_hovered_pin().id():
+        return None
+    name = st["names"].get(ed.get_hovered_node().id(), "")[2:]
+    n = view.node(name) if name else None
+    if n is None or not (n.kind == "modifier" or isinstance(n.ref, Effect)):
+        return None
+    m = imgui.get_mouse_pos()
+    p = ed.get_node_position(ed.NodeId(_id(st, "n:" + n.id)))
+    return n.id, (m.x, m.y), (p.x, p.y)
+
+
+def _with_others(st: dict, nid: str) -> bool:
+    """Is node `nid` dragged with other selected nodes (a group move)?"""
+    sel = ed.get_selected_nodes()
+    k = _id(st, "n:" + nid)
+    return len(sel) > 1 and any(x.id() == k for x in sel)
+
+
+def _hot_outline(plan: dict, at, size) -> None:
+    """A hot node's outline (`onto_plan`'s ``hot``): gold just outside its
+    edge — solid while a cable is lit for it, faint while none is — drawn
+    by the page, as the editor paints a selected node's own border last."""
+    k = DROP_COLOUR if plan["best"] is not None else imgui.ImVec4(
+        DROP_COLOUR.x, DROP_COLOUR.y, DROP_COLOUR.z, LIT_ALPHA)
+    r = ed.get_style().node_rounding
+    imgui.get_window_draw_list().add_rect(
+        imgui.ImVec2(at[0] - HOT_OUT, at[1] - HOT_OUT),
+        imgui.ImVec2(at[0] + size[0] + HOT_OUT, at[1] + size[1] + HOT_OUT),
+        imgui.get_color_u32(k), r + HOT_OUT, HOT_LINE)
 
 
 def put_onto(panel, view: graphview.View, nid: str,
