@@ -1888,7 +1888,7 @@ class Renderer:
         own square. The scene pass's buffers it writes are rewritten by the
         next frame's before anything reads them; what the cover pass reads
         of the last pass (`_face_verts`, `_copies`, `_scene_mats`) is put
-        back. Never raises: the panel's pictures must not take the frame down."""
+        back; flushed, as the thumbnails are. Never raises: the panel's pictures must not take the frame down."""
         asked = getattr(self, "wire_asked", None)
         if asked is None:
             return
@@ -1916,6 +1916,7 @@ class Renderer:
             ctx.viewport = (0, 0, px, px)
             ctx.clear(0.0, 0.0, 0.0, 1.0)
             self.draw_scene(ws, px, px, clear=False)
+            _flush()                    # (the control window samples it: as `_thumbnails`)
             self.wire_error = ""
         except Exception as e:  # noqa: BLE001 — a wireframe not drawn stays black
             self.wire_error = f"{type(e).__name__}: {e}"[:120]
