@@ -98,13 +98,15 @@ free effect node let go on a picture cable is inserted into it
 port, its output on into whichever port the cable fed. **The drag shows
 what the drop will do** (2026-10-29, `onto_plan`, `_drag_preview`): every
 cable through the node's box it could go onto is drawn faint in the drop
-colour, and the one nearest its centre — where it will go — thick, one it may not take red
-with the reason beside the pointer, which also says what letting go does;
+colour, and the one nearest its centre — where it will go — thick; every
+other cable dims (a spotlight: a picture cable is already red, a trigger
+already orange). One it may not take dims with the rest, the reason
+beside the pointer, which otherwise says what letting go does;
 nothing lit, nothing happens. Two cables as near: a chooser names each
 ("Look-back → Acid") and the pick takes it (`st["onto"]`, `put_onto`). An
 effect already wired only moves on the canvas — unless ⌘ is held: then
-its border is lit, its own cables fade, a thin join shows its chain closed
-over it, and let go on a lit cable it moves there (reordering the run).
+its border is lit, its own cables dim, a dotted wire in its cable's colour shows the
+chain closed over it, and let go on a lit cable it moves there (reordering the run).
 Without ⌘ the pointer says to hold it from the drag's start. A dragged
 node that a drop can move — free, or wired with ⌘ — is **hot**: its
 border faint gold, solid gold while a cable is lit for it. A free modifier goes
@@ -168,6 +170,7 @@ the preset's and the show's, never a NodeEditor.json beside the app.
 from __future__ import annotations
 
 import colorsys
+import itertools
 import json
 import math
 import sys
@@ -1372,7 +1375,7 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
             _cable(st, c, a, b)
             ends[c.id] = (a, b)
             wires += 1
-    _ghosts(st, ends)
+    _ghosts(st, view, ends)
     st["bundles"] = {}
     for b in bundles:
         if b.src_port in drawn and b.dst_port in drawn:
@@ -2132,8 +2135,8 @@ PATCHES_POPUP = "##graph.patches"
 DROP_COLOUR = imgui.ImVec4(1.0, 0.86, 0.35, 1.0)    # the cable a dragged patch would splice into
 DROP_WIRE = 6.0
 LIT_ALPHA = 0.45        # a cable the dragged node could go onto, not the one it will
-LEAVING_ALPHA = 0.2     # a lifted node's own cables: they go when it is let go
-GHOST_WIRE = 2.0        # the join its chain closes over it with
+SPOT_ALPHA = 0.15       # every other cable while a hot node is dragged (refused, its own)
+GHOST_GAP, GHOST_DOT = 9.0, 1.8     # the dotted join its chain closes over it with
 HOT_BORDERS = (ed.StyleColor.node_border, ed.StyleColor.sel_node_border,
                 ed.StyleColor.hov_node_border)
 PATCHES_TIP = ("The patches: a click spawns one at the canvas's centre, its pins open — "
@@ -2684,30 +2687,52 @@ def _cable(st: dict, c: graphview.VCable, a: str | None = None, b: str | None = 
         thick = WIRE
     if st.get("drop_cable") == c.id:        # plan 40 T3: a dragged patch would splice here
         col, thick = DROP_COLOUR, DROP_WIRE
-    lit = st.get("onto_lit")                # 2026-10-29: a dragged node, what it would do
-    if lit is not None:
+    lit = st.get("onto_lit")                # 2026-10-29: a hot node dragged — the spotlight
+    if lit is not None and lit.get("hot"):
         if c.id == lit["best"] or c.id in lit["tie"]:
             col, thick = DROP_COLOUR, DROP_WIRE
         elif c.id in lit["lit"]:
             col, thick = imgui.ImVec4(DROP_COLOUR.x, DROP_COLOUR.y, DROP_COLOUR.z, LIT_ALPHA), WIRE
-        elif c.id in lit["refused"]:
-            col = imgui.ImVec4(*REFUSED_RGB)
-        elif c.id in lit["leaving"]:
-            col = imgui.ImVec4(col.x, col.y, col.z, LEAVING_ALPHA)
+        else:                               # every other cable, refused or its own, dim
+            col = imgui.ImVec4(col.x, col.y, col.z, min(col.w, SPOT_ALPHA))
     ed.link(ed.LinkId(_id(st, "c:" + c.id)), ed.PinId(_id(st, a or c.src_port)),
             ed.PinId(_id(st, b or c.dst_port)), col, thick)
 
 
-def _ghosts(st: dict, ends: dict) -> None:
+def _ghosts(st: dict, view: graphview.View, ends: dict) -> None:
     """A lifted effect's chain closed over it (`onto_plan`'s ``ghost``): a
-    thin drop-coloured wire from what feeds its picture to each port it
-    feeds, drawn between the pins those cables are drawn to."""
+    dotted wire, in the colour of what it carries, from what feeds its
+    picture to each port it feeds — a cable that will be there once it is
+    let go, between the pins those cables are drawn to. Dots on the
+    widget's own curve (`graphview.bezier`): its links are never dotted."""
     lit = st.get("onto_lit")
+    pins = st["pin_xy"]
+    dl = imgui.get_window_draw_list()
     for i, o in (lit or {}).get("ghost", ()):
-        if i in ends and o in ends:
-            ed.link(ed.LinkId(_id(st, f"g:{i}>{o}")), ed.PinId(_id(st, ends[i][0])),
-                    ed.PinId(_id(st, ends[o][1])),
-                    imgui.ImVec4(DROP_COLOUR.x, DROP_COLOUR.y, DROP_COLOUR.z, LIT_ALPHA), GHOST_WIRE)
+        if i not in ends or o not in ends:
+            continue
+        a, b = pins.get(ends[i][0]), pins.get(ends[o][1])
+        c = next((x for x in view.cables if x.id == i), None)
+        if a is None or b is None or c is None:
+            continue
+        k = COLOURS.get(c.type, ui.DIM)
+        col = imgui.get_color_u32(imgui.ImVec4(k.x, k.y, k.z, 1.0))
+        for x, y in dots(graphview.bezier(a, b, steps=64), GHOST_GAP):
+            dl.add_circle_filled(imgui.ImVec2(x, y), GHOST_DOT, col)
+
+
+def dots(pts, gap: float) -> list[tuple[float, float]]:
+    """Points every `gap` (canvas units) along the polyline `pts`, its
+    first point first."""
+    out, left = [pts[0]], gap
+    for (x0, y0), (x1, y1) in itertools.pairwise(pts):
+        seg = math.hypot(x1 - x0, y1 - y0)
+        t = left
+        while t <= seg:
+            out.append((x0 + (x1 - x0) * t / seg, y0 + (y1 - y0) * t / seg))
+            t += gap
+        left = t - seg
+    return out
 
 
 def bundle_thickness(count: int) -> float:
@@ -2721,6 +2746,9 @@ def _bundle(st: dict, b: graphview.VBundle) -> None:
     by what it carries, as thick as it is many, faint while dormant."""
     k = COLOURS.get(b.type, ui.DIM)
     col = imgui.ImVec4(k.x, k.y, k.z, DORMANT_ALPHA if b.dormant else k.w)
+    lit = st.get("onto_lit")
+    if lit is not None and lit.get("hot"):  # 2026-10-29: dim under a dragged node's spotlight
+        col = imgui.ImVec4(col.x, col.y, col.z, min(col.w, SPOT_ALPHA))
     ed.link(ed.LinkId(_id(st, "c:" + b.id)), ed.PinId(_id(st, b.src_port)),
             ed.PinId(_id(st, b.dst_port)), col, bundle_thickness(b.count))
 

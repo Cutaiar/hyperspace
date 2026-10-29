@@ -899,12 +899,13 @@ error skips the pass.
   node is dragged the canvas shows what letting go will do
   (`ui_graph.onto_plan`): every cable through its box it could go onto
   is faint gold, and the one nearest its centre — where it will go — is
-  thick gold, one it may not
-  take is red, and the pointer says it in words; nothing lit, nothing
-  happens. Two cables as near as each other open a chooser. An effect
+  thick gold; every other cable dims (a spotlight: picture cables are
+  already red, trigger cables orange). One it may not take dims with the
+  rest, the reason beside the pointer, which otherwise says what letting
+  go does; nothing lit, nothing happens. Two cables as near as each other open a chooser. An effect
   already wired only moves on the canvas; **⌘-drag** lifts it out of its
-  chain — its border lit, its cables faded, a thin gold join where the
-  chain will close — and let go on a lit cable it moves there (one undo
+  chain — its border lit, its cables dimmed, a dotted wire in the
+  cable's own colour where the chain will close — and let go on a lit cable it moves there (one undo
   step: reordering the run). Without ⌘ the pointer says "hold ⌘" from
   the moment the drag starts. A dragged node a drop can move — free, or
   wired with ⌘ — is **hot**: its border is faint gold, solid gold while

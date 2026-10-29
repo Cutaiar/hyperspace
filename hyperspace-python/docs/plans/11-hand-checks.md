@@ -6211,15 +6211,16 @@ Headless: `tests/test_graph_edit.py` (`onto_plan`, `dropped`, the drawn drag).
 6. Option-drag a box across three cables on the background; press Delete;
    press ⌘Z.
 *Pass:* (1) every cable the node's box crosses is faint gold and the one
-nearest its centre thick gold, the geometry cable red with "… is no picture cable"
-beside the pointer, which otherwise reads "let go: <node> onto <a> →
+nearest its centre thick gold, every other cable dim; over only the
+geometry cable, "… is no picture cable" beside the pointer, which
+otherwise reads "let go: <node> onto <a> →
 <b>"; nothing lights over empty canvas; let go, the effect sits in the
 run, the cable's picture into its `image`, its output into `wobble`.
 Through all of (1) the node's border is faint gold, solid gold while a
 cable is lit. (2) from the first movement the pointer says "hold ⌘ …",
 the border stays as it was, nothing lights, and the node only moves.
-(3) with ⌘ its border goes faint gold, then solid over a lit cable, its own cables fade, a thin gold join
-shows `acid` straight to All outputs; let go, the run is `lookback →
+(3) with ⌘ its border goes faint gold, then solid over a lit cable, the other cables dim, a dotted red
+wire shows `acid` straight to All outputs; let go, the run is `lookback →
 wobble → acid → …`; ⌘Z puts it back in one press. (4) a menu "put <node>
 onto" names both; the pick takes it; Escape leaves both as they were.
 (5) the LFO now drives the param directly. (6) the box lights cables, not

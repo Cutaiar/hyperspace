@@ -666,6 +666,14 @@ def test_a_lifted_drag_draws_its_lit_cable_border_and_join(rig, monkeypatch):
     assert st["onto_lit"] is None
 
 
+def test_the_join_is_dotted_evenly_along_its_curve():
+    """The dotted wire a lifted node's chain will close with: a dot every
+    `gap` along the curve, the first at its start, never past its end."""
+    pts = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0)]
+    got = ui_graph.dots(pts, 4.0)
+    assert got == [(0.0, 0.0), (4.0, 0.0), (8.0, 0.0), (10.0, 2.0), (10.0, 6.0), (10.0, 10.0)]
+
+
 def test_create_and_delete_open_only_in_the_typed_dispatch():
     """The canvas's create and delete queries live in `_create` / `_delete`
     alone, and an item is accepted or rejected only by a handler those
