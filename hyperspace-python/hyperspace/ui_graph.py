@@ -156,6 +156,7 @@ import sys
 import time
 from pathlib import Path
 
+import numpy as np
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
 
@@ -163,6 +164,7 @@ from . import graph as rgraph
 from . import graphview, modifiers, params, patches, pinch, ui, ui_fx, ui_pad, ui_routing, undo
 from . import hold as holdmod
 from .bands import CEIL
+from .geometry import geom, shape_view
 from .graph import Effect
 from .library import LibraryError
 from .params import Kind
@@ -247,6 +249,13 @@ MONITOR_TIP = "What the projector shows: the held look. TAKE puts the preview be
 # drawn at `FAINT_PIC` of its brightness (`graphview.THUMB_FAINT`)
 FAINT_PIC = 0.4
 THUMB_GROUND = (0.0, 0.0, 0.0, 1.0)    # the box before (or without) a picture
+# the shape node's side panel: the polytope alone, as white lines on black
+# (`wireframe`) — the shape as it turns now, without the scene's faces,
+# points, pattern or effects; a square this wide (capped) at the top
+WIRE_MAX = 260.0         # px: the square's side at most
+WIRE_ALPHA = 0.85        # a line's alpha (white)
+WIRE_TIP = ("The shape alone, live: its edges at the angles it is drawn at — no faces, "
+            "points, pattern or effects")
 # plan 37 C2 (D3): the head's **pictures · tint cables** switch, off by
 # default (plain red), page state only — never the preset's or the show's.
 # Lit, a picture cable's red leans by its maker's dominant hue
@@ -3044,6 +3053,8 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
             ui_routing.remove_modifier(panel, m.id)
         return
     ui._micro(n.kind)
+    if isinstance(n.ref, rgraph.Shape):
+        _wireframe(panel)
     # plan 35 G (V2): a frame node's header says its id and its params' prefix
     imgui.text(graphview.side_head(n) if n.kind in graphview.FRAME_VKINDS else n.label)
     if n.status:
@@ -3058,6 +3069,43 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
     for port in n.ports:
         if port.patched:
             imgui.text_disabled(f"{port.name}: {_said(port.live)}")
+
+
+def wireframe(s, side: float):
+    """The shape node's preview: its edges as segments ((m, 4) — x0, y0,
+    x1, y1, px from the top-left of a `side` × `side` square) at the angles
+    the renderer draws it at now (`shape_view`: its 3D hold, its
+    body, yaw and pitch, a scene's layers each at its spin) — the camera's
+    zoom and pan, the copies and the faces left out. `s` the ViewState."""
+    g = geom(s.shape)
+    px, py, _, _ = shape_view(
+        s.shape, s.ang, s.yaw, s.pitch, d4=s.depth4, w=side, h=side,
+        flat=getattr(s, "held", False), body=getattr(s, "body", None))
+    E = g["E"]
+    return np.stack([px[E[:, 0]], py[E[:, 0]], px[E[:, 1]], py[E[:, 1]]], axis=1)
+
+
+def _wireframe(panel) -> None:
+    """The shape node's side panel: `wireframe` in a black square as wide
+    as the column (at most `WIRE_MAX`), white lines, clipped to it."""
+    s = getattr(panel, "view", None)
+    if s is None:
+        return
+    side = min(imgui.get_content_region_avail().x, WIRE_MAX)
+    if side < 16.0:
+        return
+    p0 = imgui.get_cursor_screen_pos()
+    imgui.dummy(imgui.ImVec2(side, side))
+    if imgui.is_item_hovered():
+        ui.tooltip(WIRE_TIP)
+    p1 = imgui.ImVec2(p0.x + side, p0.y + side)
+    dl = imgui.get_window_draw_list()
+    dl.add_rect_filled(p0, p1, ui.u32(imgui.ImVec4(*THUMB_GROUND)))
+    dl.push_clip_rect(p0, p1, True)
+    col = ui.u32(imgui.ImVec4(1.0, 1.0, 1.0, WIRE_ALPHA))
+    for x0, y0, x1, y1 in wireframe(s, side):
+        dl.add_line(imgui.ImVec2(p0.x + x0, p0.y + y0), imgui.ImVec2(p0.x + x1, p0.y + y1), col)
+    dl.pop_clip_rect()
 
 
 # ---------------------------------------------------------------- a node's controls (2026-10-24)
