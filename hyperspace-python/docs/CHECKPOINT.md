@@ -253,3 +253,22 @@ as the owner's own, lower-cased (`dial`, `trip`, `plasma heart`,
   ring land on the beat. Perceptual duration is exactly one period of the
   spring (`motion.spring_hz`: hz = 1 / duration), so a beat length is all
   it needs; the file would store "in beats" beside the milliseconds.
+- `/deep-review` on every PR, unattended (`.claude/skills/deep-review`).
+  The skill first needs a PR mode: review, reproduce the findings, and
+  post them ranked as one PR comment, with no pushes. Three ways were
+  documented as of 2026-10-29:
+  - **A cloud scheduled task on a GitHub `pull_request` trigger**
+    (claude.ai/code/routines, or `/schedule`). Each PR starts a fresh
+    session at its head, on the owner's Claude account, with no API key.
+    It's a research preview, and whether skills load there is unconfirmed:
+    try one PR first.
+  - **A GitHub Actions workflow** (`anthropics/claude-code-action` with
+    `prompt: "/deep-review"`). It needs an `ANTHROPIC_API_KEY` secret, or a
+    `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token`, and costs Actions
+    minutes. Whether subagents run there is unconfirmed.
+  - **Anthropic's managed Code Review** (Team and Enterprise plans only).
+    It reads `REVIEW.md` from the base branch but runs no skills, so it
+    gives the checklist without the independent reviewer.
+
+  Separately: Devin Review's flags are not posted to GitHub with the
+  current settings, so a session can't read them.
