@@ -809,12 +809,17 @@ function setSubject(svgText) {
   document.getElementById('stats').textContent = `${state.source === 'custom' ? 'Your SVG' : SOURCES[state.source].name} · ${bits.join(' · ')}`;
 }
 
-function frame() {
+// the camera distance that fits the subject in the stage as it is now
+function fitDistance() {
   const [w, h] = subject.size;
   const aspect = stageEl.clientWidth / Math.max(stageEl.clientHeight, 1);
   const fit = Math.max(h, w / aspect) * 1.5;
-  const dist = fit / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
-  camera.position.setLength(Math.max(dist, 4));
+  return Math.max(fit / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))), 4);
+}
+let lastFit = null;   // the fit the camera was last framed or kept against
+function frame() {
+  lastFit = fitDistance();
+  camera.position.setLength(lastFit);
   controls.target.set(0, 0, 0);
 }
 
@@ -971,12 +976,17 @@ document.addEventListener('paste', (e) => {
 document.getElementById('img-file').addEventListener('change', (e) => {
   const f = e.target.files[0]; if (!f) return;
   const url = URL.createObjectURL(f);
+  // the file is let go once the image is decoded (or fails), not kept for the tab's life
   new THREE.TextureLoader().load(url, (t) => {
+    URL.revokeObjectURL(url);
     t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8;
     if (TEX.image) TEX.image.dispose();
     TEX.image = t;
     pick('tex', 'image'); applyLook();
-  }, undefined, () => showError('That image could not be read. Try a PNG or JPEG.'));
+  }, undefined, () => {
+    URL.revokeObjectURL(url);
+    showError('That image could not be read. Try a PNG or JPEG.');
+  });
   e.target.value = '';
 });
 document.getElementById('audio-file').addEventListener('change', (e) => {
@@ -1031,7 +1041,13 @@ function resize() {
   renderer.setSize(w, h, false);
   camera.aspect = w / Math.max(h, 1);
   camera.updateProjectionMatrix();
-  if (subject) frame();
+  if (subject && lastFit) {
+    // keep the viewer's own zoom: scale it by how much the fit changed,
+    // rather than snapping back to the fit
+    const fit = fitDistance();
+    camera.position.setLength(camera.position.length() * fit / lastFit);
+    lastFit = fit;
+  }
 }
 new ResizeObserver(resize).observe(stageEl);
 resize();
