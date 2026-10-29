@@ -62,7 +62,7 @@ def test_lanes_rest_and_travel():
 
 def test_the_share_button_is_named_and_free(rig):
     """A pad with a Share button reports it at 15 (2026-10-15). It carries
-    no factory row — like BACK, Learn pad puts anything on it — and the
+    no factory row — Learn pad puts anything on it — and the
     name has to exist for the learn to land at all."""
     pad, lrn = ScriptedPad(), rig.learn
     assert gp.BUTTONS["SHARE"] == 15 and gp.SHARE < gp.N_BUTTONS
@@ -219,6 +219,42 @@ def test_hold_fires_once_after_hold_s(rig):
     pad.frame()
     r.pad(pad, now=13.1)
     assert fired == [1]
+
+
+def test_the_factory_pad_walks_on_a_held_d_pad_and_b_x_back_are_harmless(rig):
+    """2026-10-29, on the factory table: a brush of the d-pad's ← / →
+    walks nothing, a hold of HOLD_S walks the list once per press; B / X
+    toggle points and screen strokes, BACK undoes — none of them loads."""
+    pad, r, reg = ScriptedPad(), rig.router, rig.reg
+    walked, undone = [], []
+    reg["preset.list.prev"].fire = lambda: walked.append(-1)
+    reg["preset.list.next"].fire = lambda: walked.append(1)
+    reg["edit.undo"].fire = lambda: undone.append(1)
+    pad.frame(hat=gp.HAT_LEFT)                  # a brush
+    r.pad(pad, now=1.0)
+    pad.frame()
+    r.pad(pad, now=1.1)
+    assert walked == []
+    pad.frame(hat=gp.HAT_RIGHT)                 # held
+    r.pad(pad, now=2.0)
+    pad.frame(hat=gp.HAT_RIGHT)
+    r.pad(pad, now=2.0 + routing.HOLD_S)
+    pad.frame(hat=gp.HAT_RIGHT)
+    r.pad(pad, now=3.0 + routing.HOLD_S)
+    pad.frame(hat=gp.HAT_LEFT)                  # let go, then ← held
+    r.pad(pad, now=4.0)
+    pad.frame(hat=gp.HAT_LEFT)
+    r.pad(pad, now=4.1 + routing.HOLD_S)
+    assert walked == [1, -1]
+    points, strokes = reg["view.points"].value, reg["view.screen_strokes"].value
+    for button in (gp.B, gp.X, gp.VIEW):
+        pad.frame()
+        r.pad(pad, now=5.0)
+        pad.frame(held={button})
+        r.pad(pad, now=5.0)
+    assert reg["view.points"].value != points
+    assert reg["view.screen_strokes"].value != strokes
+    assert undone == [1] and walked == [1, -1]
 
 
 def test_the_hold_times_agree():
