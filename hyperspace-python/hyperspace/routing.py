@@ -2714,15 +2714,19 @@ class Bindings:
         `move_route` (op, depth and depth subscribers kept), another
         modifier's input in place. With nothing in its first input, a
         route on its lane stays, dormant, until it is removed or the id
-        comes back."""
+        comes back — as it does when the modifier changes the signal's
+        kind (a threshold makes a trigger of a value: what read the
+        trigger is not handed the value)."""
         m = self.modifier(mid)
         src = m.inputs[0] if m is not None and m.inputs else ""
+        same = m is not None and modifiers.OUT.get(m.kind, modifiers.VALUE) == modifiers.VALUE
+        lanes = {x.id: x.address for x in self.modifiers}
         docs = [d for d in self.modifiers_doc(reg) if d["id"] != mid]
-        if src and src != m.address:
+        if src and same and src != m.address:
             for b in [b for b in self.bindings if b.source == m.address]:
                 self.move_route(b, source=src)
             for d in docs:      # (never a modifier onto its own lane: a loop through it)
-                own = f"{modifiers.SCHEME}:{modifiers.number(d['id'])}"
+                own = lanes.get(d["id"])
                 d["in"] = [src if a == m.address and src != own else
                            None if a == m.address else a for a in d["in"]]
         self.set_modifiers(docs, reg)

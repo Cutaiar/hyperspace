@@ -4715,7 +4715,7 @@ def onto_words(view: View, c: VCable) -> str:
     def side(pin: str) -> tuple[str, str]:
         hit = view.owner(pin)
         if hit is not None:
-            return hit[0].label, hit[1].name
+            return hit[0].label, hit[1].name if hit[1] is not None else ""
         n = view.node(node_of(view, pin))
         return (n.label if n is not None else pin), ""
     src, _ = side(c.src_port)

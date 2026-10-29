@@ -2716,10 +2716,14 @@ def _bundle(st: dict, b: graphview.VBundle) -> None:
     k = COLOURS.get(b.type, ui.DIM)
     col = imgui.ImVec4(k.x, k.y, k.z, DORMANT_ALPHA if b.dormant else k.w)
     lit = st.get("onto_lit")
-    if lit is not None and lit.get("hot"):  # 2026-10-29: dim under a dragged node's spotlight
-        col = imgui.ImVec4(col.x, col.y, col.z, min(col.w, SPOT_ALPHA))
+    thick = bundle_thickness(b.count)
+    if lit is not None and lit.get("hot"):  # 2026-10-29: a dragged node's spotlight —
+        if any(c.id == lit["best"] or c.id in lit["tie"] for c in b.cables):
+            col, thick = DROP_COLOUR, max(thick, DROP_WIRE)     # the cable it lands in is here
+        else:
+            col = imgui.ImVec4(col.x, col.y, col.z, min(col.w, SPOT_ALPHA))
     ed.link(ed.LinkId(_id(st, "c:" + b.id)), ed.PinId(_id(st, b.src_port)),
-            ed.PinId(_id(st, b.dst_port)), col, bundle_thickness(b.count))
+            ed.PinId(_id(st, b.dst_port)), col, thick)
 
 
 def _said(v: float | None) -> str:
@@ -2745,8 +2749,8 @@ def cable_tip(view: graphview.View, c: graphview.VCable) -> str:
 
 
 def _hover(st: dict, view: graphview.View, panel=None) -> None:
-    if imgui.is_mouse_dragging(imgui.MouseButton_.left):
-        return          # 2026-10-29: a drag's own words (`_drag_preview`) are not covered
+    if st.get("onto_lit") is not None:
+        return          # 2026-10-29: a node drag's own words (`_drag_preview`) are not covered
     tip = None
     names = st["names"]
     link = ed.get_hovered_link().id()
@@ -3892,7 +3896,10 @@ def onto_plan(panel, view: graphview.View, nid: str, centre, size=None,
             else:
                 refused[c.id] = why
     elif n.kind == "modifier" and not mine:     # (a wired modifier is not lifted)
-        ok, refused = graphview.cables_near(view, pins, centre, skip=(nid,), size=size), {}
+        # (only a cable with a source to take: `insert_modifier`'s rule)
+        ok = [(d, c) for d, c in graphview.cables_near(view, pins, centre, skip=(nid,), size=size)
+              if c.addr]
+        refused = {}
     else:
         return None
     plan = {"node": nid, "hot": not mine or lift, "lift": False, "lit": [], "best": None,

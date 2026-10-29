@@ -453,6 +453,13 @@ def test_nodes_the_picker_adds_and_delete_removes(rig):
     table.set_modifier_input(a.id, 0, b.address, rig.panel.reg)
     ui_graph.remove_node(panel, a.id)
     assert table.modifier(b.id).inputs[0] == ""
+    # a threshold makes a trigger of a value: what read its trigger is not
+    # handed the value — its route is left dormant, as before
+    t = table.add_modifier("threshold", ("lane:0",), rig.panel.reg)
+    r = free_param(rig, centred=False)
+    fires = table.add(Binding(t.address, r.id, "position", 0.5))
+    ui_graph.remove_node(panel, t.id)
+    assert table.modifier(t.id) is None and fires.source == t.address
     ui_graph.remove_node(panel, "macro.7")
     assert "macro.7" not in table.macros
     assert ui_graph.remove_node(panel, graphview.ANALYZER) == graphview.NOT_REMOVABLE.format(
@@ -520,6 +527,17 @@ def test_cables_near_lists_the_cables_under_a_node_nearest_first():
     assert [c.id for _, c in graphview.cables_near(view, pins, (200.0, 0.0))] == ["high"]
     boxed = graphview.cables_near(view, pins, (200.0, 0.0), size=(100.0, 60.0))
     assert [c.id for _, c in boxed] == ["high", "low"]          # the box reaches it
+
+
+def test_onto_words_names_a_cable_whose_port_is_gone():
+    """A pin whose port its node no longer lists (`View.owner` gives None
+    for it): the chooser and the drag's words name the node, never fail."""
+    n1 = graphview.VNode("n1", "render", "Acid", ports=[])
+    n2 = graphview.VNode("n2", "render", "Wobble", ports=[])
+    view = graphview.View(nodes=[n1, n2],
+                          cables=[graphview.VCable("c", "rout:n1", "rin:n2/gone", kind="render")],
+                          pins={"rout:n1": ("n1", "out"), "rin:n2/gone": ("n2", "gone")})
+    assert graphview.onto_words(view, view.cables[0]) == "Acid → Wobble"
 
 
 def _two_cable_rig(rig):
