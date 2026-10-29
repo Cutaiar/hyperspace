@@ -100,7 +100,7 @@ dormant no-ops.
 Either op's reading first travels with the row's *feel* (`motion`,
 motion.py): ``follow`` — the analyzer's own asymmetric envelope, attack
 away from the source's rest and release back toward it — or ``spring``,
-a damped spring (Hz, damping ratio). A row with no feel of its own takes
+a damped spring (perceptual duration, bounce). A row with no feel of its own takes
 its source's (`Router.feel_of`): for the pad's `axis` lanes the session's
 `desk.pad.*`, which the sticks' default camera job reads too
 (`Router.felt`); none for every other source. A row's follower starts
@@ -264,7 +264,7 @@ import numpy as np
 from . import apc40, envelope, lfo, modgraph, modifiers, motion, seq_page
 from .bands import BANDS, CEIL
 from .modifiers import Modifier, ModState
-from .motion import OFF, Follower, Motion
+from .motion import CUSTOM, OFF, Follower, Motion
 from .params import (
     DRIVE,
     F_KEYS,
@@ -1706,7 +1706,9 @@ PAD_FEEL = "desk.pad"     # the pad's feel: PAD_FEEL + ".feel" / ".attack" / …
 
 
 def _register_pad_feel(reg: Registry, table: Bindings) -> None:
-    """The pad's feel as five session params over `table.pad_feel`: the
+    """The pad's feel as six session params over `table.pad_feel` (the
+    mode; follow's attack and release; a spring's preset, perceptual
+    duration and bounce): the
     motion an `axis` lane travels with when its row names none, and the
     sticks' default camera job's (motion.py). Off, a stick is as it reads."""
     if f"{PAD_FEEL}.feel" in reg:
@@ -1743,17 +1745,64 @@ def _register_pad_feel(reg: Registry, table: Bindings) -> None:
                    group="desk", modulatable=False, fmt=ms,
                    tip="follow: how long a stick takes going back toward rest (63 %) — "
                        "long, and the spring's snap becomes a glide.")
-    reg.continuous(f"{PAD_FEEL}.hz", "Stick spring", get("hz"),
-                   put("hz", motion.HZ_MIN, motion.HZ_MAX), lo=motion.HZ_MIN,
-                   hi=motion.HZ_MAX, log=True, group="desk", modulatable=False,
-                   fmt=lambda v: f"{v:.2f} Hz",
-                   tip="spring: its natural frequency — low is lazy, high is tight.")
-    reg.continuous(f"{PAD_FEEL}.damp", "Stick damping", get("damp"),
-                   put("damp", 0.0, motion.DAMP_MAX), lo=0.0, hi=motion.DAMP_MAX,
-                   group="desk", modulatable=False, fmt=lambda v: f"ζ {v:.2f}",
-                   tip="spring: the damping ratio. 1 arrives fastest without "
-                       "overshoot; below 1 it overshoots and rings; above, it creeps.")
+    springs = [*motion.SPRINGS, CUSTOM]
 
+    def spring_get():
+        m = getattr(table, "pad_feel", OFF)
+        name = motion.spring_name(m.dur, m.bounce)
+        return springs.index(name if name is not None else CUSTOM)
+
+    def spring_set(i):
+        name = springs[int(i) % len(springs)]
+        if name != CUSTOM:              # custom: the knobs as they are
+            dur, bounce = motion.SPRINGS[name]
+            table.pad_feel = replace(getattr(table, "pad_feel", OFF), dur=dur, bounce=bounce)
+
+    # derived from duration and bounce, which persist: it does not
+    reg.enum(f"{PAD_FEEL}.spring", "Stick spring", spring_get, spring_set, springs,
+             group="desk", modulatable=False, persist=False,
+             tip="spring: a named spring — sets the duration and bounce below; "
+                 "custom once either is moved off one.")
+    reg.continuous(f"{PAD_FEEL}.duration", "Stick duration", get("dur"),
+                   put("dur", motion.DUR_MIN, motion.DUR_MAX), lo=motion.DUR_MIN,
+                   hi=motion.DUR_MAX, log=True, group="desk", modulatable=False, fmt=ms,
+                   tip="spring: its perceptual duration — how long a move feels; "
+                       "short is tight, long is lazy.")
+    reg.continuous(f"{PAD_FEEL}.bounce", "Stick bounce", get("bounce"),
+                   put("bounce", motion.BOUNCE_MIN, motion.BOUNCE_MAX),
+                   lo=motion.BOUNCE_MIN, hi=motion.BOUNCE_MAX, group="desk",
+                   modulatable=False, fmt=lambda v: f"{v * 100:.0f} %",
+                   tip="spring: 0 arrives fastest without overshoot; above 0 it "
+                       "overshoots and rings; below 0 it creeps.")
+
+
+
+# the stick spring's session params before 2026-10-29 — a natural frequency
+# and a damping ratio: an old show's values read as the perceptual knobs
+# (`renamed_session`), and its file is kept before a save drops them
+# (library.SPRING_BACKUP)
+PAD_FEEL_OLD = (f"{PAD_FEEL}.hz", f"{PAD_FEEL}.damp")
+
+
+def renamed_session(session: dict) -> dict:
+    """A show's session with the stick spring's old values (`desk.pad.hz`,
+    `desk.pad.damp`) as today's `desk.pad.duration` and `desk.pad.bounce`,
+    each on its own and exactly (`motion.spring_feel`); a value the
+    session already holds under today's id wins, one that is no number is
+    dropped. The session given is left as it is."""
+    hz_id, damp_id = PAD_FEEL_OLD
+    if hz_id not in session and damp_id not in session:
+        return session
+    out = {k: v for k, v in session.items() if k not in PAD_FEEL_OLD}
+    for old, new, part in ((hz_id, f"{PAD_FEEL}.duration", 0), (damp_id, f"{PAD_FEEL}.bounce", 1)):
+        if old not in session or new in out:
+            continue
+        try:
+            v = float(session[old])
+        except (TypeError, ValueError):
+            continue
+        out[new] = motion.spring_feel(v, 1.0)[0] if part == 0 else motion.spring_feel(1.0, v)[1]
+    return out
 
 def legacy_planedrive(lanes, gain: float = 1.0) -> np.ndarray:
     """The reference's PLANEDRIVE from six lanes — what the legacy6 routes
@@ -2659,9 +2708,28 @@ class Bindings:
         return self.set_modifiers(docs, reg)
 
     def remove_modifier(self, mid: str, reg: Registry | None = None) -> None:
-        """Take a modifier out, its params with it; a route on its lane
-        stays, dormant, until it is removed or the id comes back."""
-        self.set_modifiers([d for d in self.modifiers_doc(reg) if d["id"] != mid], reg)
+        """Take a modifier out, its params with it, and close the chain
+        over it (2026-10-29: as deleting an effect does): what fed its
+        first input now feeds whatever read its lane — a route through
+        `move_route` (op, depth and depth subscribers kept), another
+        modifier's input in place. With nothing in its first input, a
+        route on its lane stays, dormant, until it is removed or the id
+        comes back — as it does when the modifier changes the signal's
+        kind (a threshold makes a trigger of a value: what read the
+        trigger is not handed the value)."""
+        m = self.modifier(mid)
+        src = m.inputs[0] if m is not None and m.inputs else ""
+        same = m is not None and modifiers.OUT.get(m.kind, modifiers.VALUE) == modifiers.VALUE
+        lanes = {x.id: x.address for x in self.modifiers}
+        docs = [d for d in self.modifiers_doc(reg) if d["id"] != mid]
+        if src and same and src != m.address:
+            for b in [b for b in self.bindings if b.source == m.address]:
+                self.move_route(b, source=src)
+            for d in docs:      # (never a modifier onto its own lane: a loop through it)
+                own = lanes.get(d["id"])
+                d["in"] = [src if a == m.address and src != own else
+                           None if a == m.address else a for a in d["in"]]
+        self.set_modifiers(docs, reg)
 
 
 # ---------------------------------------------------------------- router
@@ -3056,6 +3124,20 @@ class Router:
             fs = felt[scheme] = [Follower(v) for v in values]
         return [f.step(v, dt, m, rests[i] if i < len(rests) else 0.0)
                 for i, (f, v) in enumerate(zip(fs, values))]
+
+    def felt_now(self, b: Binding) -> float | None:
+        """Row `b`'s reading after its feel, as the last `modulate` left
+        it — what the panel's live plot draws (ui_feel); None while the row
+        has no follower (no feel, or it did not act)."""
+        f = self.__dict__.get("_movers", {}).get((b.source, b.target))
+        return None if f is None else f.x
+
+    def felt_lanes(self, scheme: str) -> list[float] | None:
+        """`scheme`'s lanes after its own feel, as the last `felt` left
+        them (the pad's camera job; the SYSTEM page's plot); None while
+        that feel is off or nothing has run it."""
+        fs = self.__dict__.get("_felt", {}).get(scheme)
+        return None if fs is None else [f.x for f in fs]
 
     def _move(self, b: Binding, m: Motion, u: float, p: Param, depth: float,
               dt: float, movers: dict) -> float:

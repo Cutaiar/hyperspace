@@ -177,10 +177,15 @@ def main() -> None:
         return
     import moderngl
 
+    from hyperspace.graph import Wiring
+    from hyperspace.graphmigrate import wired_wiring
     from hyperspace.render import Renderer
 
     ctx = moderngl.create_context(standalone=True)
     renderer = Renderer(ctx)
+    # plan 36 T3: a bare renderer draws the app's empty frame; the
+    # tool's own wiring is today's frame (render.render_offscreen's)
+    renderer.wiring = wired_wiring(Wiring())
     for i in shapes:
         path = OUT / f"{a.prefix}-{i:02d}-{slug(G.SHAPES[i].name)}.png"
         # red on black quantizes to a small palette with nothing lost to the eye

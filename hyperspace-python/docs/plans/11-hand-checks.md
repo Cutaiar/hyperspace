@@ -5,7 +5,7 @@ Each gives the steps, what passes, what fails and where in the code a
 failure points, and the headless tests that show what "right" looks
 like. [`../TESTING-GUIDE.md`](../TESTING-GUIDE.md) is the plain-language
 version, ordered by device, and the place to start; it cites these
-numbers. They run 1–403 (group AD (332–341) is plan 34's, feedback, on `plan-34-feedback` (PR #236), and runs with group AE); group Y (232–266, 272–276) is plan 28's (261–266 its N7,
+numbers. They run 1–404 (group AD (332–341) is plan 34's, feedback, on `plan-34-feedback` (PR #236), and runs with group AE); group Y (232–266, 272–276) is plan 28's (261–266 its N7,
 272–276 its N9), 267–271, plan 30's N8 (the palette as compression), are at
 the end of group X, and group Z (277–295) is two parts: 277–279 the
 instanced field from `main`, renumbered from its 144–146 when main was
@@ -13,7 +13,7 @@ merged in, and 280–295 plan 31's (286–295 the APC40 page, on
 `plan-31-a1`); group AA (296–316) is plan 32's, and 317 the two plans
 together; group AC (318–331) is plan 33's, the free graph, on
 `plan-33-free-graph`; group AE (342–352) is plan 35's, the free frame,
-on `plan-34-feedback` (PR #236). Past 352: check 353 (group AF) is row 394's, group AG (354–369) is plan 36's, the WYSIWYG graph, and groups AH (370–376), AI (377–383) and AJ (384–393) are plans 37's (nodes as pictures, and the faces), 38's (hold the projector) and 39's (vision), run together and integrated on `plan-37-38-39-integration`. Group AK (394–401) is plan 40's, patches, on `plan-40-build`; check 402 (group AL) is the macro's throw; check 403 (group AM) is the one-tier library and the PRESETS page, on `worktree-presets-one-tier`.
+on `plan-34-feedback` (PR #236). Past 352: check 353 (group AF) is row 394's, group AG (354–369) is plan 36's, the WYSIWYG graph, and groups AH (370–376), AI (377–383) and AJ (384–393) are plans 37's (nodes as pictures, and the faces), 38's (hold the projector) and 39's (vision), run together and integrated on `plan-37-38-39-integration`. Group AK (394–401) is plan 40's, patches, on `plan-40-build`; check 402 (group AL) is the macro's throw; check 403 (group AM) is the one-tier library and the PRESETS page, on `worktree-presets-one-tier`. Check 404 (group AN) is dropping a node on a cable: the drag that shows what the drop will do, ⌘ to move a wired effect, a modifier's delete closing its chain, and Option-drag selecting cables.
 
 ## Before you start
 
@@ -6188,6 +6188,87 @@ chips, no pick. (5) a new show is called `untitled` with an empty bank.
 fold on the page (`ui_presets.page` drawing the removed blocks); a row
 that cannot be renamed or deleted (`Library.rename` / `delete` refusing);
 a pad that loads nothing (`Library.bank` / `preset.load.k`).
+
+## AN. Dropping a node on a cable
+
+The owner, 2026-10-29: a node let go on a cable goes into it, its input
+the cable's picture (or reading) and its output on to where the cable
+went; the drag shows what will happen before the mouse lets go; an effect
+already wired moves only with ⌘ held; deleting a modifier wires what fed
+it on to what it fed; Option-drag selects cables.
+
+**404. The drag shows what the drop will do.** (laptop, GRAPH; a preset with a run of two effects, say `lookback → acid → wobble → All outputs`)
+Headless: `tests/test_graph_edit.py` (`onto_plan`, `dropped`, the drawn drag).
+1. Right-click the canvas and add an effect: it is free, faint. Drag it
+   slowly across the canvas, over the run's cables and over the shape's
+   geometry cable, then let go with `acid → wobble` the bright one.
+2. Drag `wobble` (wired) over `lookback → acid` and let go, no key held.
+3. Drag `wobble` again, hold ⌘ before letting go over `lookback → acid`;
+   let go. Press ⌘Z.
+4. Lay two cables over each other and let a free effect go on both.
+5. Wire an LFO through a Smooth modifier into a param; select the Smooth
+   and press Delete.
+6. Option-drag a box across three cables on the background; press Delete;
+   press ⌘Z.
+*Pass:* (1) of the cables the node's box crosses, the one nearest its
+centre is thick gold and every other cable dims; over only the
+geometry cable, "… is no picture cable" beside the pointer, which
+otherwise reads "let go: <node> onto <a> →
+<b>"; nothing lights over empty canvas; let go, the effect sits in the
+run, the cable's picture into its `image`, its output into `wobble`.
+(2) from the first movement the pointer says "hold ⌘ …", nothing lights
+or dims, and the node only moves. (3) with ⌘ a cable lights gold and the
+others dim; let go, the run is `lookback →
+wobble → acid → …`; ⌘Z puts it back in one press. (4) a menu "put <node>
+onto" names both; the pick takes it; Escape leaves both as they were.
+(5) the LFO now drives the param directly. (6) the box lights cables, not
+nodes; Delete takes all three; ⌘Z brings them back.
+*Fail:* a drop that does something the drag did not light, or lights
+something and does nothing (`ui_graph.onto_plan` / `dropped`); ⌘ toggling
+the node's selection or not lifting it (`lift_held`); the param left
+still after (5) (`Bindings.remove_modifier`).
+
+## AO. The Flow mark, and the depth cue's floor
+
+The owner, 2026-10-17 (decision register rows 542–543, PR #214): the
+Wispr Flow mark as the subject, flat and as capsules, and a depth cue
+that no longer leaves a plane figure facing the eye at its dimmest.
+
+**405. The Flow mark and the Flow capsules.** (laptop, VIEW)
+Headless: `tests/test_catalog.py`; `tests/test_render.py`.
+1. Open VIEW, open the Shape menu and scroll to the end of its 3D
+   section.
+2. Pick **Flow mark**. Stop every plane.
+3. Turn on Faces and pick the pattern PLAID.
+4. Pick **Flow capsules**, turn XZ and YZ on, and let it turn.
+5. Turn XW, YW and ZW on as well.
+
+*Pass:* (1) a **Vector marks** family last in 3D, holding Flow mark and
+Flow capsules. (2) the five bars of the Wispr Flow mark, white outlines
+at full weight, the outer two tallest, then the middle, the two short
+ones equal; no red points. (3) each bar carries its own pattern. (4)
+five round-ended capsules, wireframe, tumbling; no red points. (5) the
+capsules turn no differently: the W planes leave a 3D shape alone.
+*Fail:* no Vector marks family (`geometry.MENU`); a dim outline face-on
+(check 406's floor); points on either (`"curve"` lost in `geom`).
+
+**406. A plane figure facing the eye is at full weight.** (laptop, VIEW)
+Headless: `tests/test_render.py::test_a_shape_flat_toward_the_eye_draws_at_full_weight`.
+1. Pick **Flow mark**, every plane stopped, the camera at rest.
+2. Turn the camera's yaw slowly to one side and back.
+3. Pick **Orbit**. Stop every plane, then turn YZ until the ring faces
+   you as a circle.
+4. Pick **Heart**, then **Tesseract**, every plane stopped, the camera at rest.
+
+*Pass:* (1) the outlines as bright as any shape's nearest edge. (2) the
+far side dims as it turns away and comes back as it faces you again,
+with no jump. (3) the circle bright all round as it faces you, not dim.
+(4) each looks exactly as it did before this change: the Heart's
+back cap dimmer than its front, the tesseract's far cube dimmer than its near one.
+*Fail:* a dim mark or ring face-on (`render.DEPTH_FLOOR` not reached in
+`draw_scene`); a jump as the yaw passes face-on; the Heart's back cap or
+the tesseract brighter than before (the floor set too high: row 542's
+first try).
 
 ## What no test covers
 

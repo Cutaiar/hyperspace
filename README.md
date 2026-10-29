@@ -1,13 +1,15 @@
 # Hyperspace
 
-A real-time 4D polytope visualizer. 99 shapes (the 5-cell to the 600-cell and
+A real-time 4D polytope visualizer. 101 shapes (the 5-cell to the 600-cell and
 some forty more 4-polytopes from the grand antiprism to the star polychora, the
 Clifford torus, eight surfaces from
 the Heart to a Klein bottle, and — plan 28's spike — a catalog of 3D solids,
-stars, compounds, mathematical toys and multi-shape scenes), rotating through six planes, with each plane driven by a
+stars, compounds, mathematical toys and multi-shape scenes, and a vector
+logo drawn flat and as capsules), rotating through six planes, with each plane driven by a
 frequency band of whatever audio is playing.
 
-This repository holds two iterations, plus a couple of companions for sharing it:
+This repository holds two iterations, a couple of companions for sharing it,
+and a prototype:
 
 - **[`hyperspace-python/`](hyperspace-python/)** — the Python re-platform. Where
   active development happens. See
@@ -27,3 +29,8 @@ This repository holds two iterations, plus a couple of companions for sharing it
 - **[`hyperspace-ios-widget/`](hyperspace-ios-widget/)** — an iOS Home Screen
   widget (a [Scriptable](https://scriptable.app) script) showing the same QR
   code.
+
+- **[`prototypes/subjects/`](prototypes/subjects/)** — a browser sketch of a
+  vector logo as the subject (the Wispr Flow mark), flat or as 3D capsules,
+  under a set of materials. Not part of the app; its shapes are, as the
+  Flow mark and Flow capsules.

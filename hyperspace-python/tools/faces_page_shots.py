@@ -78,6 +78,8 @@ def main() -> int:
     from PIL import Image
 
     from hyperspace.app import CONTROL_SIZE
+    from hyperspace.graph import Wiring
+    from hyperspace.graphmigrate import wired_wiring
     from hyperspace.render import Renderer
     from hyperspace.ui import PAGE_KEYS, Panel, apply_style, load_fonts
 
@@ -101,6 +103,9 @@ def main() -> int:
 
     ctx = moderngl.create_context()
     renderer = Renderer(ctx)
+    # plan 36 T3: a bare renderer draws the app's empty frame; the
+    # tool's own wiring is today's frame (render.render_offscreen's)
+    renderer.wiring = wired_wiring(Wiring())
     r = boot(renderer)
     reg, view = r.reg, r.view
     view.shape = 3

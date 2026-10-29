@@ -38,7 +38,7 @@ def test_geometry_traces_present():
 def test_the_engineering_table_matches_the_code():
     """ENGINEERING §1 lists every shape's V and E; the numbers are geom()'s."""
     rows = ve_table()
-    assert len(rows) == len(SHAPES) == 99
+    assert len(rows) == len(SHAPES) == 101
     for i, (name, n, m) in enumerate(rows):
         g = geom(i)
         first = SHAPES[i].name.split(" ")[0].lower()[:4]

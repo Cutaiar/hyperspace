@@ -73,7 +73,20 @@ writes the result back, so `ViewState.ang`, the integrator and every
 `rot.*` param are untouched. A 3D shape's depth cue (`pd`: the line
 fade, width and draw order) reads its depth toward the 3D camera —
 `geometry.view_depth`, z after the camera's yaw and pitch — since its w
-is 0. On the VIEW page the header says 3D or 4D, the Shape menu lists
+is 0. The cue spreads over the shape's own depth, nearest to farthest,
+but never over less than `render.DEPTH_FLOOR` (0.05, in the shapes'
+unit). That floor is for a shape with no depth toward the eye: a plane
+figure facing it (the Flow mark at rest, the Orbit stood face-on) is cued
+over 0.05 back from its nearest point, so it draws at full weight instead
+of its dimmest. It sits under every real solid's thinnest (the Rose at
+rest, 0.16). At rest only the Flow mark is thinner; through each plane
+from rest in 5° steps only the Flow mark and the Orbit; over 40 random
+poses of every shape none is. Every other pose draws as it always did,
+and no corpus preset's shape ever reaches it, so no golden frame moves
+(decision register row 542;
+`tests/test_render.py::test_a_shape_flat_toward_the_eye_draws_at_full_weight`,
+`::test_only_a_plane_figure_is_thinner_than_the_depth_floor_at_rest`,
+`::test_the_depth_floor_leaves_a_deep_shape_as_it_was`). On the VIEW page the header says 3D or 4D, the Shape menu lists
 the 4D shapes and then the 3D ones under their own headings (the index
 stays the identity), and the W plane keys dim while they can do nothing.
 
@@ -167,8 +180,8 @@ another builds it itself.
 polytopes; the 5-cell, tesseract, 24-cell and 600-cell families;
 Catalan duals; star polychora; prisms and pyramids; surfaces and
 fibrations), **3D** (surfaces, Platonic, Archimedean and
-Catalan solids, star polyhedra, compounds, mathematical toys) and
-**Scenes**. `geometry.menu()` lists them; within a family, index order.
+Catalan solids, star polyhedra, compounds, mathematical toys, vector
+marks) and **Scenes**. `geometry.menu()` lists them; within a family, index order.
 The index stays the identity, so the menu's order never reaches a preset
 (`tests/test_catalog.py::test_the_menu_holds_every_shape_once_by_kind`).
 
@@ -247,6 +260,23 @@ The index stays the identity, so the menu's order never reaches a preset
 | 97 | Octagonal antiprism prism | Prisms and pyramids | 68 | 32 | 80 |
 | 98 | Icosidodecahedral prism | Prisms and pyramids | 124 | 60 | 150 |
 | 99 | Truncated icosahedral prism | Prisms and pyramids | 154 | 120 | 240 |
+| 100 | Flow mark | Vector marks | 5 | 130 | 130 |
+| 101 | Flow capsules | Vector marks | 1040 | 970 | 2000 |
+
+**Vector marks** (3D, after the prisms). A subject read from a vector
+source instead of a formula: the Wispr Flow mark, five pill-shaped bars
+taken from wisprflow.ai's SVG (`geometry.FLOW_BARS`, each bar's centre
+and ends on the 28-unit artboard; `FLOW_R` their end radius). **Flow
+mark** is the mark as drawn, five stadium outlines in the z = 0 plane,
+one face each. **Flow capsules** lifts each bar into a capsule round its
+own axis. Neither draws points. They need nothing of their own from the
+renderer: the depth cue's floor keeps the flat mark at full weight
+face-on (§1, the depth cue)
+(`tests/test_catalog.py::test_the_flow_mark_is_five_stadia_as_the_svg_draws_them`,
+`::test_the_flow_capsules_are_the_marks_bars_lifted`).
+A browser prototype of their looks (flat ↔ capsules, materials,
+textures, bars moving to audio) is in
+[`prototypes/subjects/`](../../prototypes/subjects/).
 
 **Scenes** (`Shape.layers`, `geometry.Layer`). A scene is several shapes
 in one frame sharing a centre — a glome round a tesseract round a star.
@@ -892,13 +922,25 @@ error skips the pass.
   the faces row are gone.
 - **Adding, wiring and ordering are on GRAPH.** The right-click picker
   adds an effect (`acid.2`, …) or a switch **unwired**, faint and "reaches
-  nothing", where the menu opened. An effect dropped on a render cable is
-  **inserted** into it (`graphview.Edit.insert_effect(cable, file)`; the
-  cable's right-click menu offers "insert effect ▸ <file>"). Dragging an
-  effect already in the graph onto another cable moves it
-  (`Edit.place_effect(cable, name)`: lifted out, the run closes over the
-  gap, put on the cable; one undo step; a drop on its own cable or on
-  empty canvas does nothing). Deleting a run cable lifts the effect it
+  nothing", where the menu opened. A free effect dropped on a picture
+  cable is **inserted** into it — the cable's picture into its `image`
+  port, its output on into the port the cable fed (`Edit.place_effect`;
+  the cable's right-click menu offers "insert effect ▸ <file>"). While a
+  node is dragged the canvas shows what letting go will do
+  (`ui_graph.onto_plan`): the cable it will go onto — of those through
+  its box, the one nearest its centre — is thick gold; every other cable
+  dims (a spotlight: picture cables are
+  already red, trigger cables orange). One it may not take dims with the
+  rest, the reason beside the pointer, which otherwise says what letting
+  go does; nothing lit, nothing happens. Two cables as near as each other open a chooser. An effect
+  already wired only moves on the canvas; **⌘-drag** lifts it out of its
+  chain: it lights a cable as a free one does, and let go on it moves
+  there (one undo step: reordering the run). Without ⌘ the pointer says
+  "hold ⌘" from the moment the drag starts, and nothing dims. A
+  free modifier drops onto a route or a modifier input the same way, and
+  deleting a modifier wires what fed it on to what it fed.
+  **Option-drag** on the background box-selects cables (a plain box
+  selects nodes; the two are never selected together). Deleting a run cable lifts the effect it
   led into; deleting the last `frame → fx.image` is refused. An instance 1
   taken out of the run is kept unwired (`{"kind": "effect", "file": f}`),
   faint, and the section saves `/5`.
@@ -1613,7 +1655,7 @@ the panel at 540 and the desk takes what is left.
 | SEQ | The step sequencer (plan 31, `ui_seq.py`): run · span · restart, length and swing; the 5 × 8 grid in the APC40's LED colours (the playhead's column in red, columns past the length dimmed); each lane's select, mute and envelope; a strip per envelope, one open, `+ env` for extras. |
 | HANDS | The tracker, the box, the axes and their setup, feel and calibration, the ghost hands (§12). |
 | PRESETS | The preset strip (◀ name ● ▶ · new · save · as…), every preset as a list filling the page (click loads; rename, ×), the trash at its foot, your patches under **patches** (rename and ×; a click spawns nothing — spawn is GRAPH's, plan 40), and one line for the show: its name ●, open ▾, save, as…, new (§10). |
-| SYSTEM | Cheat sheet and desk-diagram switches, Restart process, hot reload status, the library path, config errors and notes, the dream worker's state, the stall log's line; **devices**: one line per `[[devices]]` entry — `role · kind · status · n sources · last` (MIDI: the port, its binding count, the last message; the pad's road and its GLFW joystick (`glfw 1`, plan 27 B6); the hands' tracker; a sink's `n sinks`, port and what it sent), `error:` lines in the warning colour; **midi**: knob smoothing, the desk log, the learn line; **gamepad**: the sticks' feel. |
+| SYSTEM | Cheat sheet and desk-diagram switches, Restart process, hot reload status, the library path, config errors and notes, the dream worker's state, the stall log's line; **devices**: one line per `[[devices]]` entry — `role · kind · status · n sources · last` (MIDI: the port, its binding count, the last message; the pad's road and its GLFW joystick (`glfw 1`, plan 27 B6); the hands' tracker; a sink's `n sinks`, port and what it sent), `error:` lines in the warning colour; **midi**: knob smoothing, the desk log, the learn line; **gamepad**: the sticks' feel (a spring's preset beside it: snappy, smooth, bouncy, wobbly, lazy or custom, each drawn as its curve in the list), its knobs — attack and release, or a spring's perceptual duration and bounce — and beside them the feel's shape (how it carries a jump, a picture of the knobs) over the feel working live: the stick that moved most lately, as read (dim) and after the feel (white), over the last few seconds (`ui_feel.py`). |
 
 **The FACES page** (`ui_patterns.py`), top to bottom:
 
@@ -2348,7 +2390,9 @@ and edited in GRAPH's side pane, the strip's own block stacked): a
 kind combo and **+ modifier**; per modifier `MOD n`, its kind, a combo
 per input (the route sources and the other modifiers' lanes), its live
 output ("dormant" while not live) and ×, then its params as ordinary
-widgets (right-click for Learn). Each add, remove, input picked and
+widgets (right-click for Learn); a smooth's block, stacked, ends in its
+feel's shape and its feel working live — its input as read, its output
+after the feel (`ui_feel.py`, `modifiers.smooth_motion`). Each add, remove, input picked and
 param drag is an undo step. "Right hand energy, smoothed, times band 0,
 into acid mix": + smooth on `hand R energy`; + combine on `mod 1 smooth`
 and `0 sub`, how mul; + route from `mod 2 combine` onto `fx.acid.mix`.
@@ -2821,7 +2865,7 @@ re-run on live objects. Shaders (`patterns.glsl`, `_common.glsl`,
 `shaders/fx/`) and the library's JSON files reload too. Plan 28's
 modules are on the list in dependency order: `modifiers` after
 `motion`, `modgraph` before `routing`, `graphview` after `osc`, `ui_graph`
-before `ui`. A reload of `ui_graph` keeps the GRAPH page's editor
+before `ui`; `ui_feel`, the live feel plots, before `ui_routing`. A reload of `ui_graph` keeps the GRAPH page's editor
 context (it is held on the panel, not in the module), so the page goes
 on drawing with its zoom and selection.
 
