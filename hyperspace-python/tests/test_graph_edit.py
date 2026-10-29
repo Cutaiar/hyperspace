@@ -12,7 +12,6 @@ import ast
 from pathlib import Path
 from types import SimpleNamespace
 
-import numpy as np
 import pytest
 from conftest import seed
 from imgui_bundle import imgui
@@ -20,7 +19,7 @@ from test_graphview import FakeDevice
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
-from hyperspace import devices, gamepad, geometry, graphview, learn, ui_graph, ui_pad, ui_routing
+from hyperspace import devices, gamepad, graphview, learn, ui_graph, ui_pad, ui_routing
 from hyperspace import graph as G
 from hyperspace.devices import Port
 from hyperspace.learn import Learn
@@ -1816,29 +1815,3 @@ def test_the_pad_nodes_details_draw_the_pad(rig, monkeypatch):
         imgui.end_frame()
         assert drew == want
     assert ui_pad.rect(panel, gamepad.LAYOUT[0]) is not None    # it really laid the pad out
-
-
-def test_the_shape_nodes_details_draw_its_wireframe(rig, monkeypatch):
-    """The shape node selected on GRAPH: its details open on the shape
-    alone as white lines (`ui_graph.wireframe`) — an edge a segment, at the
-    angles it is drawn at, inside the square — and another node's do not."""
-    panel = rig.panel
-    frame(panel, "graph")
-    st = ui_graph._state(panel)
-    s = panel.view
-    segs = ui_graph.wireframe(s, 200.0)
-    assert segs.shape == (geometry.geom(s.shape)["m"], 4)
-    assert np.all((segs > 0.0) & (segs < 200.0))        # a 4D shape at rest fits its square
-    s.ang = [0.3, 0.0, 0.0, 0.9, 0.0, 0.0]
-    assert not np.allclose(ui_graph.wireframe(s, 200.0), segs)   # it turns as the shape does
-    drew, real = [], ui_graph._wireframe
-    monkeypatch.setattr(ui_graph, "_wireframe", lambda p: (drew.append(1), real(p)))
-    shape = st["view"].node("render:shape")
-    for n, want in ((shape, [1]), (graphview.VNode("device:pad", "device", "pad"), [])):
-        drew.clear()
-        imgui.new_frame()
-        imgui.begin("side")
-        ui_graph._side(panel, st, st["view"], ("node", n))
-        imgui.end()
-        imgui.end_frame()
-        assert drew == want

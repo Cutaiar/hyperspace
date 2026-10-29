@@ -156,7 +156,6 @@ import sys
 import time
 from pathlib import Path
 
-import numpy as np
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
 
@@ -164,7 +163,6 @@ from . import graph as rgraph
 from . import graphview, modifiers, params, patches, pinch, ui, ui_fx, ui_pad, ui_routing, undo
 from . import hold as holdmod
 from .bands import CEIL
-from .geometry import geom, shape_view
 from .graph import Effect
 from .library import LibraryError
 from .params import Kind
@@ -250,10 +248,10 @@ MONITOR_TIP = "What the projector shows: the held look. TAKE puts the preview be
 FAINT_PIC = 0.4
 THUMB_GROUND = (0.0, 0.0, 0.0, 1.0)    # the box before (or without) a picture
 # the shape node's side panel: the polytope alone, as white lines on black
-# (`wireframe`) — the shape as it turns now, without the scene's faces,
-# points, pattern or effects; a square this wide (capped) at the top
+# (`_wireframe`, drawn by the renderer: `Renderer.want_wire`) — the shape as
+# it turns now, without the scene's faces, points, pattern or effects; a
+# square this wide (capped) at the top
 WIRE_MAX = 260.0         # px: the square's side at most
-WIRE_ALPHA = 0.85        # a line's alpha (white)
 WIRE_TIP = ("The shape alone, live: its edges at the angles it is drawn at — no faces, "
             "points, pattern or effects")
 # plan 37 C2 (D3): the head's **pictures · tint cables** switch, off by
@@ -3071,26 +3069,20 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
             imgui.text_disabled(f"{port.name}: {_said(port.live)}")
 
 
-def wireframe(s, side: float):
-    """The shape node's preview: its edges as segments ((m, 4) — x0, y0,
-    x1, y1, px from the top-left of a `side` × `side` square) at the angles
-    the renderer draws it at now (`shape_view`: its 3D hold, its
-    body, yaw and pitch, a scene's layers each at its spin) — the camera's
-    zoom and pan, the copies and the faces left out. `s` the ViewState."""
-    g = geom(s.shape)
-    px, py, _, _ = shape_view(
-        s.shape, s.ang, s.yaw, s.pitch, d4=s.depth4, w=side, h=side,
-        flat=getattr(s, "held", False), body=getattr(s, "body", None))
-    E = g["E"]
-    return np.stack([px[E[:, 0]], py[E[:, 0]], px[E[:, 1]], py[E[:, 1]]], axis=1)
+def wire_px(side: float, fb_scale: float) -> int:
+    """The wireframe's square in framebuffer px: the box's logical `side`
+    × the window's framebuffer scale (2 on a Retina screen), so it is drawn
+    1:1 and stays sharp."""
+    return max(16, round(side * max(fb_scale, 1.0)))
 
 
 def _wireframe(panel) -> None:
-    """The shape node's side panel: `wireframe` in a black square as wide
-    as the column (at most `WIRE_MAX`), white lines, clipped to it."""
-    s = getattr(panel, "view", None)
-    if s is None:
-        return
+    """The shape node's side panel: a black square as wide as the column
+    (at most `WIRE_MAX`) holding the renderer's wireframe of the shape
+    (`Renderer.want_wire`: the edges alone, drawn on the GPU at the end of
+    each frame while this asks) — the renderer the canvas reads
+    (`holdmod.canvas_renderer`: held, the preview's, as the sliders under
+    it are). Black until its first picture, or with no renderer."""
     side = min(imgui.get_content_region_avail().x, WIRE_MAX)
     if side < 16.0:
         return
@@ -3101,11 +3093,15 @@ def _wireframe(panel) -> None:
     p1 = imgui.ImVec2(p0.x + side, p0.y + side)
     dl = imgui.get_window_draw_list()
     dl.add_rect_filled(p0, p1, ui.u32(imgui.ImVec4(*THUMB_GROUND)))
-    dl.push_clip_rect(p0, p1, True)
-    col = ui.u32(imgui.ImVec4(1.0, 1.0, 1.0, WIRE_ALPHA))
-    for x0, y0, x1, y1 in wireframe(s, side):
-        dl.add_line(imgui.ImVec2(p0.x + x0, p0.y + y0), imgui.ImVec2(p0.x + x1, p0.y + y1), col)
-    dl.pop_clip_rect()
+    r = holdmod.canvas_renderer(panel)
+    if r is None or not hasattr(r, "want_wire"):
+        return
+    r.want_wire(wire_px(side, imgui.get_io().display_framebuffer_scale.x))
+    tex = r.wire_texture()
+    if tex is None or getattr(tex, "glo", 0) == 0:
+        return
+    dl.add_image(imgui.ImTextureRef(tex.glo), p0, p1,
+                 imgui.ImVec2(0, 1), imgui.ImVec2(1, 0))      # GL's rows: upside down in v
 
 
 # ---------------------------------------------------------------- a node's controls (2026-10-24)
