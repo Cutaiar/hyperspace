@@ -23,6 +23,7 @@ from test_ui_shell import (
 
 from hyperspace import apc40, routing, ui, ui_desk, ui_routing
 from hyperspace.app import CONTROL_SIZE
+from hyperspace.geometry import SHAPES
 from hyperspace.routing import Binding
 
 # ---------------------------------------------------------------- the layout
@@ -454,7 +455,10 @@ def test_a_controls_text(rig):
     assert text(reg, Binding("cc:*:18", "fx.kaleido.segments", "abs")) \
         == reg["fx.kaleido.segments"].label
     assert text(reg, Binding("cc:0:49", "no.such.param", "abs")) == "no.such.param"
-    assert text(reg, Binding("note:0:91", "view.shape", "set", 99.0)) == reg["view.shape"].label
+    # a value past the last shape names none: the label (one past the end,
+    # so a shape appended to the catalog never turns it into a name)
+    past = float(len(SHAPES))
+    assert text(reg, Binding("note:0:91", "view.shape", "set", past)) == reg["view.shape"].label
     # the hover carries the words too
     c = next(c for c in apc40.LAYOUT if c.glyph == "D3")
     b = Binding("cc:*:18", "fx.kaleido.segments", "abs", layer="preset")

@@ -188,6 +188,14 @@ PATTERNS_GLSL = Path(__file__).parent / "shaders" / "patterns.glsl"
 
 BG = (0.0, 0.0, 0.0)
 
+# the least depth the cue spreads over (draw_scene), in the shapes' unit
+# (circumradius 1): a shape flat toward the eye is cued over this much
+# from its nearest point instead of over its own nothing. Set under every
+# real solid's thinnest (the Rose at rest, 0.16), so only a plane figure
+# reaches it: through each plane from rest, in 5° steps, the Flow mark and
+# the Orbit face-on, and no other shape (decision register row 542)
+DEPTH_FLOOR = 0.05
+
 # FACE_PIC (graph.py's, imported above): the side, in texels, of the
 # picture the faces show while something other than the pattern is wired
 # into them (plan 20 fork F2; plan 33 R: what `shape.faces` asks)
@@ -3079,6 +3087,14 @@ class Renderer:
 
         near, far = pd.min(), pd.max()
         span = max(far - near, 1e-6)
+        if span < DEPTH_FLOOR:
+            # pd grows toward the eye, so `far` (pd.max) is the nearest
+            # point and the brightest. A shape flat toward the eye (the Flow
+            # mark, the Orbit face-on) has no depth to spread the cue over,
+            # and its own sliver would leave it at its dimmest: the cue
+            # spans DEPTH_FLOOR back from that nearest point instead, so it
+            # draws at full weight. At span == DEPTH_FLOOR the two agree
+            near, span = far - DEPTH_FLOOR, DEPTH_FLOOR
         E = g["E"]
         edepth = (pd[E[:, 0]] + pd[E[:, 1]]) * 0.5
         order = np.argsort(edepth, kind="stable")  # painter: far first

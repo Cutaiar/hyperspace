@@ -1484,7 +1484,7 @@ a picture is drawn as that picture, collapsed or expanded: a thumbnail in a
   of what feeds it. It names the area only, never a position, so no cable
   runs backwards across areas (`tests/test_graph_areas.py`).
 
-**Shapes: polytopes, surfaces, 3D and 4D.** `geometry.SHAPES` holds 99
+**Shapes: polytopes, surfaces, 3D and 4D.** `geometry.SHAPES` holds 101
 shapes, append-only. Three fields say what each one is:
 
 - `Shape.cells` is the polytope's cell count, and **0 marks a surface

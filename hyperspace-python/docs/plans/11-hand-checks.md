@@ -6228,6 +6228,48 @@ something and does nothing (`ui_graph.onto_plan` / `dropped`); ⌘ toggling
 the node's selection or not lifting it (`lift_held`); the param left
 still after (5) (`Bindings.remove_modifier`).
 
+## AO. The Flow mark, and the depth cue's floor
+
+The owner, 2026-10-17 (decision register rows 542–543, PR #214): the
+Wispr Flow mark as the subject, flat and as capsules, and a depth cue
+that no longer leaves a plane figure facing the eye at its dimmest.
+
+**405. The Flow mark and the Flow capsules.** (laptop, VIEW)
+Headless: `tests/test_catalog.py`; `tests/test_render.py`.
+1. Open VIEW, open the Shape menu and scroll to the end of its 3D
+   section.
+2. Pick **Flow mark**. Stop every plane.
+3. Turn on Faces and pick the pattern PLAID.
+4. Pick **Flow capsules**, turn XZ and YZ on, and let it turn.
+5. Turn XW, YW and ZW on as well.
+
+*Pass:* (1) a **Vector marks** family last in 3D, holding Flow mark and
+Flow capsules. (2) the five bars of the Wispr Flow mark, white outlines
+at full weight, the outer two tallest, then the middle, the two short
+ones equal; no red points. (3) each bar carries its own pattern. (4)
+five round-ended capsules, wireframe, tumbling; no red points. (5) the
+capsules turn no differently: the W planes leave a 3D shape alone.
+*Fail:* no Vector marks family (`geometry.MENU`); a dim outline face-on
+(check 406's floor); points on either (`"curve"` lost in `geom`).
+
+**406. A plane figure facing the eye is at full weight.** (laptop, VIEW)
+Headless: `tests/test_render.py::test_a_shape_flat_toward_the_eye_draws_at_full_weight`.
+1. Pick **Flow mark**, every plane stopped, the camera at rest.
+2. Turn the camera's yaw slowly to one side and back.
+3. Pick **Orbit**. Stop every plane, then turn YZ until the ring faces
+   you as a circle.
+4. Pick **Heart**, then **Tesseract**, every plane stopped, the camera at rest.
+
+*Pass:* (1) the outlines as bright as any shape's nearest edge. (2) the
+far side dims as it turns away and comes back as it faces you again,
+with no jump. (3) the circle bright all round as it faces you, not dim.
+(4) each looks exactly as it did before this change: the Heart's
+back cap dimmer than its front, the tesseract's far cube dimmer than its near one.
+*Fail:* a dim mark or ring face-on (`render.DEPTH_FLOOR` not reached in
+`draw_scene`); a jump as the yaw passes face-on; the Heart's back cap or
+the tesseract brighter than before (the floor set too high: row 542's
+first try).
+
 ## What no test covers
 
 Only a person can settle these:

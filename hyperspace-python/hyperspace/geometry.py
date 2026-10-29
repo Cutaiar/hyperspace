@@ -1178,6 +1178,63 @@ def _build_orbit() -> dict:
     return g
 
 
+# ---------------------------------------------------------- vector subjects
+# A subject drawn from a vector source rather than a formula. The Wispr
+# Flow mark is five pill-shaped bars (stadia), read off the paths of
+# wisprflow.ai's own SVG on its 28-unit artboard: each bar's x centre and
+# its top and bottom edge, SVG y running down, and the one end radius
+# (half a bar's width) they share. The SVG is tests/fixtures/flow-mark.svg,
+# and tests/test_catalog.py::test_flow_bars_are_the_svgs_paths holds these
+# numbers to it.
+
+FLOW_R = 0.8648
+FLOW_BARS = ((8.8096, 7.9961, 20.0039), (11.4058, 13.4966, 18.7963),
+             (14.0000, 9.9612, 17.9536), (16.5943, 13.4966, 18.7963),
+             (19.1884, 7.9961, 19.9996))
+
+
+def _flow_bars():
+    """Each bar as (x, the lower and the upper end's centre), y up, centred
+    on the artboard's middle (14, 14)."""
+    return [(cx - 14.0, 14.0 - bot + FLOW_R, 14.0 - top - FLOW_R) for cx, top, bot in FLOW_BARS]
+
+
+def _build_flow_mark(n_cap: int = 12) -> dict:
+    """The mark as drawn: five stadium outlines in the z = 0 plane, each one
+    face. It draws no points: its outline's samples are not corners."""
+    V: list = []
+    E: list = []
+    F: list = []
+    for x, y0, y1 in _flow_bars():
+        arc = [(FLOW_R * math.cos(math.pi * k / n_cap), FLOW_R * math.sin(math.pi * k / n_cap))
+               for k in range(n_cap + 1)]
+        # over the top end right to left, then under the bottom end: CCW
+        ring = [(x + c, y1 + s) for c, s in arc] + [(x - c, y0 - s) for c, s in arc]
+        off = len(V)
+        V.extend([px, py, 0.0, 0.0] for px, py in ring)
+        E.extend([off + k, off + (k + 1) % len(ring)] for k in range(len(ring)))
+        F.append(list(range(off, off + len(ring))))
+    return {"V": V, "E": E, "F": F, "curve": True}
+
+
+def _build_flow_capsules(m: int = 16, n_cap: int = 6) -> dict:
+    """The mark lifted into 3D: each bar a capsule round its own axis —
+    a hemisphere, the cylinder between the ends' centres, a hemisphere —
+    m segments round and n_cap rings over each end."""
+    parts = []
+    for x, y0, y1 in _flow_bars():
+        prof = [(FLOW_R * math.sin(p), y0 - FLOW_R * math.cos(p))
+                for p in (math.pi / 2 * k / n_cap for k in range(n_cap + 1))]
+        prof += [(FLOW_R * math.sin(p), y1 - FLOW_R * math.cos(p))
+                 for p in (math.pi / 2 * (1 + k / n_cap) for k in range(n_cap + 1))]
+        grid = [[(x + rho * math.cos(a), y, rho * math.sin(a)) for rho, y in prof]
+                for a in (2 * math.pi * j / m for j in range(m))]
+        parts.append(_mesh3(grid, wrap_u=True, wrap_v=False)[0])
+    # a smooth surface's samples are not corners: drawn without points,
+    # which would bunch into a blot at each pole
+    return {**_merge(parts), "curve": True}
+
+
 def _kepler_layers() -> tuple:
     # Kepler's model of the six planets' spheres (Mysterium Cosmographicum,
     # 1596): each Platonic solid inscribed in one planet's sphere and
@@ -1424,6 +1481,12 @@ SHAPES = [
     Shape("Truncated icosahedral prism", "hyperprism", 34, "t{3,5}×{ }",
           lambda: prism([v[:3] for v in _build_trunc_icosa()["V"]]),
           family="Prisms and pyramids"),
+    # -------- vector marks: a subject drawn from an SVG (appended: index is
+    # identity)
+    Shape("Flow mark", "vector · the Wispr Flow mark, five stadia", 0, "5 ⊂⊃ · SVG",
+          _build_flow_mark, dims=3, family="Vector marks"),
+    Shape("Flow capsules", "vector · the Flow mark's bars as capsules", 0, "5 ⊂⊃ × S¹",
+          _build_flow_capsules, dims=3, family="Vector marks"),
 ]
 
 # The Shape menu (ui.Panel._shape_combo): sections, each a run of
@@ -1434,7 +1497,7 @@ MENU = (
             "600-cell family", "Catalan duals", "Star polychora", "Prisms and pyramids",
             "Surfaces and fibrations")),
     ("3D", ("Surfaces", "Platonic solids", "Archimedean solids", "Catalan solids",
-            "Star polyhedra", "Compounds", "Mathematical toys")),
+            "Star polyhedra", "Compounds", "Mathematical toys", "Vector marks")),
     ("Scenes", ("Scenes",)),
 )
 

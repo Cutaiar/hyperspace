@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+"""The Flow mark's demo: the vector subject, flat and as capsules, drawn
+offscreen by the real renderer.
+
+  uv run python tools/flow_demo.py
+
+Writes into docs/plans/assets/28-catalog/: `flow-demo.mp4` (1280×720,
+30 fps, through ffmpeg on the PATH) and `flow-mark-and-capsules.png`, the
+mark with PLAID on its bars beside the capsules with BLOOM, turned. Each
+segment is a ViewState turned by `ViewState.integrate`, as the app turns
+it; the stage, the captions and the encoder are catalog_demo's.
+"""
+
+from __future__ import annotations
+
+import math
+import shutil
+
+from catalog_demo import FPS, OUT, Segment, Stage, caption, encoder
+from PIL import Image
+
+from hyperspace import geometry as G
+from hyperspace.patterns import NAMES as PATTERN_NAMES
+from hyperspace.view import ViewState
+
+MARK, CAPS = G.shape_index("Flow mark"), G.shape_index("Flow capsules")
+# what the patterns segment walks through, a second and a half each
+WALK = ["PLAID", "RINGS", "MOIRE", "BLOOM", "CAUSTIC", "PLASMA", "KALEIDO", "METER"]
+STILL = [False] * 6
+
+
+def walk_patterns(v, u):
+    v.pattern = PATTERN_NAMES.index(WALK[min(int(u * len(WALK)), len(WALK) - 1)])
+
+
+def walk_caption(u: float) -> tuple[str, str]:
+    name = WALK[min(int(u * len(WALK)), len(WALK) - 1)]
+    return ("Face patterns on the mark", f"pattern {name} · each bar its own face")
+
+
+def sway(amp: float, rate: float):
+    """Turn the camera back and forth, the shape's own angles left alone."""
+    def each(v, u):
+        v.yaw = amp * math.sin(2 * math.pi * rate * u)
+    return each
+
+
+def segments() -> list[Segment]:
+    return [
+        Segment("Flow mark", "vector · five stadia read off wisprflow.ai's SVG, "
+                "drawn as the mark is drawn", 4.0,
+                {"shape": MARK, "bright": 1.3, "speed": 0.0}, planes=STILL),
+        Segment("Flow mark · turning", "flat toward the eye, the depth cue's floor "
+                "keeps it at full weight face-on; a tilt dims its far side", 7.0,
+                {"shape": MARK, "bright": 1.3, "speed": 0.25},
+                each=sway(0.95, 1.0), planes=[True, False, False, False, False, False]),
+        Segment("", "", 12.0,
+                {"shape": MARK, "faces": True, "bright": 1.7, "speed": 0.0},
+                each=walk_patterns, caption=walk_caption, planes=STILL),
+        Segment("Flow capsules", "each bar lifted into a capsule round its own axis", 7.0,
+                {"shape": CAPS, "bright": 1.3, "speed": 0.0},
+                each=sway(0.9, 1.0), planes=STILL),
+        Segment("Flow capsules · tumbling", "faces on, pattern BLOOM", 8.0,
+                {"shape": CAPS, "faces": True, "bright": 1.6, "speed": 0.5,
+                 "pattern": PATTERN_NAMES.index("BLOOM")},
+                planes=[False, True, True, False, False, False]),   # a 3D shape: 3D planes
+        Segment("A field of marks", "nine instances on a grid, RIPPLE: the app's "
+                "instancing, on the new subject", 7.0,
+                {"shape": MARK, "bright": 1.2, "speed": 0.0, "instances": 9,
+                 "inst_motion": 3, "inst_amp": 0.3, "zoom": 0.45},
+                each=sway(0.7, 1.0), planes=STILL),
+    ]
+
+
+def run() -> None:
+    if shutil.which("ffmpeg") is None:
+        raise SystemExit("ffmpeg is not on the PATH")
+    OUT.mkdir(parents=True, exist_ok=True)
+    stage = Stage()
+    segs = segments()
+    out = OUT / "flow-demo.mp4"
+    ff = encoder(out)
+    t = 0.0
+    for k, seg in enumerate(segs, 1):
+        v = ViewState(**seg.view)
+        v.planes = list(seg.planes)
+        v.ang = [0.0] * 6
+        frames = int(seg.seconds * FPS)
+        for f in range(frames):
+            u = f / max(frames - 1, 1)
+            if seg.each is not None:
+                seg.each(v, u)
+            im = stage.shot(v, t)
+            title, sub = seg.caption(u) if seg.caption else (seg.title, seg.sub)
+            ff.stdin.write(caption(im, title, sub, k, len(segs)).tobytes())
+            v.integrate(1 / FPS)
+            t += 1 / FPS
+        print(f"{k:2d}/{len(segs)} {seg.title or 'patterns'}")
+    ff.stdin.close()
+    ff.wait()
+    print("wrote", out)
+    still()
+
+
+def still() -> None:
+    """The picture beside the plan 28 record: the flat mark face-on with
+    PLAID on its bars, and the capsules turned with BLOOM."""
+    stage = Stage(640, 480)
+    shots = [ViewState(shape=MARK, faces=True, pattern=PATTERN_NAMES.index("PLAID"),
+                       bright=1.4),
+             ViewState(shape=CAPS, faces=True, pattern=PATTERN_NAMES.index("BLOOM"),
+                       bright=1.4, ang=[0.0, 0.5, 0.25, 0.0, 0.0, 0.0])]
+    out = Image.new("RGB", (1280, 480))
+    for k, v in enumerate(shots):
+        out.paste(stage.shot(v, 1.5), (640 * k, 0))
+    out.save(OUT / "flow-mark-and-capsules.png", optimize=True)
+    print("wrote", OUT / "flow-mark-and-capsules.png")
+
+
+if __name__ == "__main__":
+    run()

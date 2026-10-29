@@ -73,7 +73,20 @@ writes the result back, so `ViewState.ang`, the integrator and every
 `rot.*` param are untouched. A 3D shape's depth cue (`pd`: the line
 fade, width and draw order) reads its depth toward the 3D camera —
 `geometry.view_depth`, z after the camera's yaw and pitch — since its w
-is 0. On the VIEW page the header says 3D or 4D, the Shape menu lists
+is 0. The cue spreads over the shape's own depth, nearest to farthest,
+but never over less than `render.DEPTH_FLOOR` (0.05, in the shapes'
+unit). That floor is for a shape with no depth toward the eye: a plane
+figure facing it (the Flow mark at rest, the Orbit stood face-on) is cued
+over 0.05 back from its nearest point, so it draws at full weight instead
+of its dimmest. It sits under every real solid's thinnest (the Rose at
+rest, 0.16). At rest only the Flow mark is thinner; through each plane
+from rest in 5° steps only the Flow mark and the Orbit; over 40 random
+poses of every shape none is. Every other pose draws as it always did,
+and no corpus preset's shape ever reaches it, so no golden frame moves
+(decision register row 542;
+`tests/test_render.py::test_a_shape_flat_toward_the_eye_draws_at_full_weight`,
+`::test_only_a_plane_figure_is_thinner_than_the_depth_floor_at_rest`,
+`::test_the_depth_floor_leaves_a_deep_shape_as_it_was`). On the VIEW page the header says 3D or 4D, the Shape menu lists
 the 4D shapes and then the 3D ones under their own headings (the index
 stays the identity), and the W plane keys dim while they can do nothing.
 
@@ -167,8 +180,8 @@ another builds it itself.
 polytopes; the 5-cell, tesseract, 24-cell and 600-cell families;
 Catalan duals; star polychora; prisms and pyramids; surfaces and
 fibrations), **3D** (surfaces, Platonic, Archimedean and
-Catalan solids, star polyhedra, compounds, mathematical toys) and
-**Scenes**. `geometry.menu()` lists them; within a family, index order.
+Catalan solids, star polyhedra, compounds, mathematical toys, vector
+marks) and **Scenes**. `geometry.menu()` lists them; within a family, index order.
 The index stays the identity, so the menu's order never reaches a preset
 (`tests/test_catalog.py::test_the_menu_holds_every_shape_once_by_kind`).
 
@@ -247,6 +260,23 @@ The index stays the identity, so the menu's order never reaches a preset
 | 97 | Octagonal antiprism prism | Prisms and pyramids | 68 | 32 | 80 |
 | 98 | Icosidodecahedral prism | Prisms and pyramids | 124 | 60 | 150 |
 | 99 | Truncated icosahedral prism | Prisms and pyramids | 154 | 120 | 240 |
+| 100 | Flow mark | Vector marks | 5 | 130 | 130 |
+| 101 | Flow capsules | Vector marks | 1040 | 970 | 2000 |
+
+**Vector marks** (3D, after the prisms). A subject read from a vector
+source instead of a formula: the Wispr Flow mark, five pill-shaped bars
+taken from wisprflow.ai's SVG (`geometry.FLOW_BARS`, each bar's centre
+and ends on the 28-unit artboard; `FLOW_R` their end radius). **Flow
+mark** is the mark as drawn, five stadium outlines in the z = 0 plane,
+one face each. **Flow capsules** lifts each bar into a capsule round its
+own axis. Neither draws points. They need nothing of their own from the
+renderer: the depth cue's floor keeps the flat mark at full weight
+face-on (§1, the depth cue)
+(`tests/test_catalog.py::test_the_flow_mark_is_five_stadia_as_the_svg_draws_them`,
+`::test_the_flow_capsules_are_the_marks_bars_lifted`).
+A browser prototype of their looks (flat ↔ capsules, materials,
+textures, bars moving to audio) is in
+[`prototypes/subjects/`](../../prototypes/subjects/).
 
 **Scenes** (`Shape.layers`, `geometry.Layer`). A scene is several shapes
 in one frame sharing a centre — a glome round a tesseract round a star.
