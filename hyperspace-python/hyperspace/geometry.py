@@ -8,9 +8,11 @@ did (JS Map insertion order == Python dict insertion order).
 from __future__ import annotations
 
 import math
+import threading
 from dataclasses import dataclass, field
 
 import numpy as np
+from numpy.random import default_rng
 
 PHI = (1 + math.sqrt(5)) / 2
 IP1 = 1 / PHI
@@ -70,19 +72,52 @@ def d2(a, b) -> float:
     return sum((x - y) ** 2 for x, y in zip(a, b))
 
 
+def _pair_d2(V) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Every vertex pair i < j in row-major order (the order the nested
+    loops walked) and its squared distance, bit-for-bit d2's: the squared
+    coordinate differences summed left to right, as Python's sum does."""
+    A = np.asarray(V, dtype=np.float64)
+    iu, ju = np.triu_indices(len(A), k=1)
+    if len(iu) == 0:
+        return iu, ju, np.zeros(0)
+    D = A[iu] - A[ju]
+    d = D[:, 0] * D[:, 0]
+    for k in range(1, A.shape[1]):
+        d = d + D[:, k] * D[:, k]
+    return iu, ju, d
+
+
+def _pairs(iu: np.ndarray, ju: np.ndarray, keep: np.ndarray) -> list[list[int]]:
+    return [[int(i), int(j)] for i, j in zip(iu[keep], ju[keep])]
+
+
+def _distance_classes(d: np.ndarray, tol: float) -> list[float]:
+    """The distinct distances in d as the old pair walk found them: in pair
+    order, a distance opened a new class unless it was within tol (relative)
+    of one already seen. One pass over d per class, not per pair."""
+    out: list[float] = []
+    if len(d) == 0:
+        return out
+    seen = np.zeros(len(d), bool)
+    k = 0
+    while True:
+        x = float(d[k])
+        out.append(x)
+        seen |= np.abs(d - x) <= x * tol
+        rest = np.flatnonzero(~seen[k:])
+        if len(rest) == 0:
+            return out
+        k += int(rest[0])
+
+
 def edges_by_min_dist(V, tol: float = 1e-4) -> list[list[int]]:
-    mn = math.inf
-    for i in range(len(V)):
-        for j in range(i + 1, len(V)):
-            d = d2(V[i], V[j])
-            mn = min(mn, d)
-    lim = mn * (1 + tol) + 1e-9
-    return [
-        [i, j]
-        for i in range(len(V))
-        for j in range(i + 1, len(V))
-        if d2(V[i], V[j]) <= lim
-    ]
+    """Every vertex pair at the minimum pairwise distance (within tol), as
+    [i, j] with i < j in row-major order."""
+    iu, ju, d = _pair_d2(V)
+    if len(d) == 0:
+        return []
+    lim = float(d.min()) * (1 + tol) + 1e-9
+    return _pairs(iu, ju, d <= lim)
 
 
 def auto(V) -> dict:
@@ -278,15 +313,11 @@ def _permutations5() -> list[tuple[int, ...]]:
 def edges_by_classes(V, k: int, tol: float = 1e-4) -> list[list[int]]:
     """Edges between every pair at one of the k shortest distances — for a
     shape with more than one edge length (a Catalan dual)."""
-    ds: list[float] = []
-    for i in range(len(V)):
-        for j in range(i + 1, len(V)):
-            d = d2(V[i], V[j])
-            if not any(abs(d - x) <= x * tol for x in ds):
-                ds.append(d)
-    lim = sorted(ds)[:k]
-    return [[i, j] for i in range(len(V)) for j in range(i + 1, len(V))
-            if any(abs(d2(V[i], V[j]) - x) <= x * tol for x in lim)]
+    iu, ju, d = _pair_d2(V)
+    keep = np.zeros(len(d), bool)
+    for x in sorted(_distance_classes(d, tol))[:k]:
+        keep |= np.abs(d - x) <= x * tol
+    return _pairs(iu, ju, keep)
 
 
 def _build_snub_24cell() -> dict:
@@ -386,15 +417,9 @@ def _star(V, cls: int, face_len: int = 0) -> dict:
     with 0 there are none drawn — a {5/2} pentagram face needs points the
     face pipeline does not have (plan 22's shortlist)."""
     V = [list(v) for v in V]
-    ds: list[float] = []
-    for i in range(len(V)):
-        for j in range(i + 1, len(V)):
-            d = d2(V[i], V[j])
-            if not any(abs(d - x) <= x * 1e-4 for x in ds):
-                ds.append(d)
-    target = sorted(ds)[cls]
-    E = [[i, j] for i in range(len(V)) for j in range(i + 1, len(V))
-         if abs(d2(V[i], V[j]) - target) <= target * 1e-4]
+    iu, ju, d = _pair_d2(V)
+    target = sorted(_distance_classes(d, 1e-4))[cls]
+    E = _pairs(iu, ju, np.abs(d - target) <= target * 1e-4)
     g = {"V": V, "E": E}
     if face_len:
         h = {"V": np.asarray(V, dtype=np.float64), "E": np.asarray(E, dtype=np.int32),
@@ -1506,30 +1531,58 @@ def menu() -> list[tuple[str, str, list[int]]]:
 
 _cache: dict[int, dict] = {}
 
+# The per-shape caches (geom, faces, face_triangles, face_uvs) are filled
+# from two threads: the render thread, lazily, and warm_all's. Each shape
+# has its own re-entrant lock, held while that shape's entry is built, so
+# a frame that reaches a shape the warmer is part-way through waits for
+# its result rather than building it a second time, and a frame that
+# wants a shape the warmer has not reached is not held up by the one it
+# is on. An entry is stored only once whole, so the lock-free read in
+# front of each sees a finished entry or none. A scene's lock is taken
+# before its layers' (it builds them); no build takes them the other way.
+_locks: dict[int, threading.RLock] = {}
+_locks_guard = threading.Lock()
+
+
+def _lock(i: int) -> threading.RLock:
+    with _locks_guard:
+        lk = _locks.get(i)
+        if lk is None:
+            lk = _locks[i] = threading.RLock()
+        return lk
+
 
 def geom(i: int) -> dict:
     """Built geometry, normalised to unit circumradius, cached.
 
     Returns {"V": float64 (n,4), "E": int32 (m,2), "n": int, "m": int}.
     """
-    if i in _cache:
+    g = _cache.get(i)
+    if g is not None:
+        return g
+    with _lock(i):
+        if i not in _cache:
+            _cache[i] = _geom_build(i)
         return _cache[i]
+
+
+def _geom_build(i: int) -> dict:
     g = SHAPES[i].build()
     mx = max(math.hypot(*v) for v in g["V"])
     V = np.asarray(g["V"], dtype=np.float64) / mx
     E = np.asarray(g["E"], dtype=np.int32)
-    _cache[i] = {"V": V, "E": E, "n": len(g["V"]), "m": len(g["E"])}
+    out = {"V": V, "E": E, "n": len(g["V"]), "m": len(g["E"])}
     if "F" in g:  # explicit face cycles from a 3D surface builder
-        _cache[i]["F"] = g["F"]
+        out["F"] = g["F"]
     if g.get("curve"):  # a curve's samples are not corners: no points drawn
-        _cache[i]["curve"] = True
+        out["curve"] = True
     if g.get("flat"):  # a plane figure: the depth cue spans the unit sphere (render)
-        _cache[i]["flat"] = True
+        out["flat"] = True
     if "FUV" in g:  # a face's UVs given by its builder (a vector subject's)
-        _cache[i]["FUV"] = g["FUV"]
+        out["FUV"] = g["FUV"]
     if "layers" in g:  # a scene: whose rows are whose, and how each draws
-        _cache[i].update(_scene_style(g["layers"], len(g["V"]), len(g["E"]), len(g["F"])))
-    return _cache[i]
+        out.update(_scene_style(g["layers"], len(g["V"]), len(g["E"]), len(g["F"])))
+    return out
 
 
 def shape_index(name: str) -> int:
@@ -1632,19 +1685,27 @@ _face_cache: dict[int, list[list[int]]] = {}
 
 def _planar_cycles(g: dict, plane_tol: float = 1e-5, max_len: int = 64) -> list[list[int]]:
     """Every closed cycle of edges lying in one 2-plane (walk from each edge
-    path a→b→c, stepping to the unique in-plane neighbour until closure)."""
+    path a→b→c, stepping to the unique in-plane neighbour until closure).
+
+    A walk is fixed by its plane, so every corner (x, y, z) of a cycle
+    already found, in either direction, would only walk that cycle again:
+    those starts are skipped. Each step tests all of the current vertex's
+    neighbours against the plane in one numpy call. Both only save time —
+    the cycles, their order and their starting corners are unchanged."""
     V, E, n = g["V"], g["E"], g["n"]
     adj: list[list[int]] = [[] for _ in range(n)]
     for a, b in E:
         adj[int(a)].append(int(b))
         adj[int(b)].append(int(a))
+    nbr = [V[np.asarray(ns, dtype=np.intp)] for ns in adj]
 
     found: set[frozenset] = set()
+    walked: set[tuple[int, int, int]] = set()
     faces: list[list[int]] = []
     for a in range(n):
         for b in adj[a]:
             for c in adj[b]:
-                if c == a:
+                if c == a or (a, b, c) in walked:
                     continue
                 e1 = V[b] - V[a]
                 e1 = e1 / np.linalg.norm(e1)
@@ -1654,19 +1715,18 @@ def _planar_cycles(g: dict, plane_tol: float = 1e-5, max_len: int = 64) -> list[
                 if nw < plane_tol:
                     continue  # collinear
                 e2 = w2 / nw
-
-                def inplane(p, origin=V[a], e1=e1, e2=e2):
-                    d = p - origin
-                    r = d - (d @ e1) * e1 - (d @ e2) * e2
-                    return np.linalg.norm(r) < plane_tol
+                origin = V[a]
 
                 cyc = [a, b, c]
                 ok = True
                 while True:
                     prev, cur = cyc[-2], cyc[-1]
+                    D = nbr[cur] - origin
+                    R = D - np.outer(D @ e1, e1) - np.outer(D @ e2, e2)
+                    inplane = np.sqrt((R * R).sum(axis=1)) < plane_tol
                     nxt = None
-                    for cand in adj[cur]:
-                        if cand != prev and inplane(V[cand]):
+                    for k, cand in enumerate(adj[cur]):
+                        if cand != prev and inplane[k]:
                             nxt = cand
                             break
                     if nxt is None or len(cyc) > max_len:
@@ -1683,7 +1743,17 @@ def _planar_cycles(g: dict, plane_tol: float = 1e-5, max_len: int = 64) -> list[
                     if key not in found:
                         found.add(key)
                         faces.append(cyc)
+                    m = len(cyc)
+                    for k in range(m):
+                        x, y, z = cyc[k], cyc[(k + 1) % m], cyc[(k + 2) % m]
+                        walked.add((x, y, z))
+                        walked.add((z, y, x))
     return faces
+
+
+# the fixed random pair _is_boundary_face completes a face's plane with: the
+# same draw on every call, so drawn once
+_COMPLEMENT_SEED = default_rng(1).standard_normal((4, 2))
 
 
 def _is_boundary_face(V: np.ndarray, cyc: list[int], tol: float = 1e-7) -> bool:
@@ -1702,7 +1772,7 @@ def _is_boundary_face(V: np.ndarray, cyc: list[int], tol: float = 1e-7) -> bool:
     e2 = w / np.linalg.norm(w)
     A = np.stack([e1, e2]).T
     q_basis, _ = np.linalg.qr(
-        np.hstack([A, np.random.default_rng(1).standard_normal((4, 2))])
+        np.hstack([A, _COMPLEMENT_SEED])
     )
     o1, o2 = q_basis[:, 2], q_basis[:, 3]
     mask = np.ones(len(V), bool)
@@ -1722,13 +1792,18 @@ def faces(i: int) -> list[list[int]]:
     """Boundary 2-faces of shape i as vertex cycles. Cached like geom().
     Explicit "F" cycles from a builder (curved 3D surfaces, where no planar
     edge cycles exist) win over planar-cycle extraction."""
-    if i not in _face_cache:
-        g = geom(i)
-        if "F" in g:
-            _face_cache[i] = [list(c) for c in g["F"]]
-        else:
-            _face_cache[i] = [c for c in _planar_cycles(g) if _is_boundary_face(g["V"], c)]
-    return _face_cache[i]
+    f = _face_cache.get(i)
+    if f is not None:
+        return f
+    with _lock(i):
+        if i not in _face_cache:
+            g = geom(i)
+            if "F" in g:
+                _face_cache[i] = [list(c) for c in g["F"]]
+            else:
+                _face_cache[i] = [c for c in _planar_cycles(g)
+                                  if _is_boundary_face(g["V"], c)]
+        return _face_cache[i]
 
 
 def _face_xy(P: np.ndarray) -> np.ndarray:
@@ -1820,14 +1895,18 @@ _tri_cache: dict[int, np.ndarray] = {}
 def face_triangles(i: int) -> np.ndarray:
     """Triangulation of faces(i): int32 (T, 3) vertex indices, plus the
     face index each triangle came from in the fourth column. Cached."""
-    if i not in _tri_cache:
-        V = geom(i)["V"]
-        tris = []
-        for fi, cyc in enumerate(faces(i)):
-            for a, b, c in _tri_cycle(cyc, V):
-                tris.append((a, b, c, fi))
-        _tri_cache[i] = np.asarray(tris, dtype=np.int32).reshape(-1, 4)
-    return _tri_cache[i]
+    t = _tri_cache.get(i)
+    if t is not None:
+        return t
+    with _lock(i):
+        if i not in _tri_cache:
+            V = geom(i)["V"]
+            tris = []
+            for fi, cyc in enumerate(faces(i)):
+                for a, b, c in _tri_cycle(cyc, V):
+                    tris.append((a, b, c, fi))
+            _tri_cache[i] = np.asarray(tris, dtype=np.int32).reshape(-1, 4)
+        return _tri_cache[i]
 
 
 _uv_cache: dict[int, np.ndarray] = {}
@@ -1844,8 +1923,16 @@ def face_uvs(i: int) -> np.ndarray:
     same scale and framing on every face. A builder that gives its own
     ("FUV": the vector subjects) has them used as given.
     """
-    if i in _uv_cache:
+    uv = _uv_cache.get(i)
+    if uv is not None:
+        return uv
+    with _lock(i):
+        if i not in _uv_cache:
+            _uv_cache[i] = _face_uvs_build(i)
         return _uv_cache[i]
+
+
+def _face_uvs_build(i: int) -> np.ndarray:
     g = geom(i)
     V = g["V"]
     per_face: list[np.ndarray] = []
@@ -1866,8 +1953,43 @@ def face_uvs(i: int) -> np.ndarray:
         uv[t_i * 3 + 0] = fuv[pos[int(a)]]
         uv[t_i * 3 + 1] = fuv[pos[int(b)]]
         uv[t_i * 3 + 2] = fuv[pos[int(c)]]
-    _uv_cache[i] = uv
     return uv
+
+
+def warm(i: int) -> None:
+    """Fill every per-shape cache the renderer reads for shape i: geom,
+    faces, face_triangles, face_uvs."""
+    face_uvs(i)   # builds geom, faces and face_triangles on the way
+
+
+def warm_order(first: int | None = None) -> list[int]:
+    """Every SHAPES index, `first` (when it is one) moved to the front."""
+    order = list(range(len(SHAPES)))
+    if first is not None and 0 <= first < len(SHAPES):
+        order.remove(first)
+        order.insert(0, first)
+    return order
+
+
+def warm_all(first: int | None = None) -> threading.Thread:
+    """Warm every shape's caches on a background thread, `first` first.
+
+    The first draw of a big shape otherwise builds its faces mid-frame —
+    the rectified 600-cell, the 600-cell, the 120-cell, the Clifford torus
+    each cost a visible stutter on the switch to them. It walks all of
+    SHAPES: the 4-polytopes, the solids, the surfaces and curves, the
+    scenes. A frame that reaches a shape first builds it itself, under the
+    same per-shape lock (see _locks), so nothing is built twice. A daemon,
+    so it never holds up quit."""
+    order = warm_order(first)
+
+    def run() -> None:
+        for i in order:
+            warm(i)
+
+    t = threading.Thread(target=run, name="geometry-warm", daemon=True)
+    t.start()
+    return t
 
 
 def _to3(V: np.ndarray, ang, d4: float):
@@ -1929,6 +2051,109 @@ def project_h(
     return px, py, v[:, 3].copy(), div4 * div3
 
 
+# ------------------------------------------------------------ the one camera
+#
+# Plan 26 A2. The renderer's path is no longer project_h: the CPU takes a
+# vertex to 3D (`world_points`: rotate4, the 4D divide, the yaw/pitch
+# turntable) and the GPU takes it on to the clip through two 4×4s — the
+# shape's world transform (`model_matrix`: camera.zoom scales it about the
+# world origin, camera.pan moves it) and the eye (`eye_matrix`: a fixed
+# perspective camera, the `eye.*` params). The default eye IS project_h's
+# 3D divide: CAM3 − 0.9·z1 is an eye at CAM3 / 0.9 on +z looking at the
+# origin, and min(w, h)·SCALE px per unit at the origin is a field of view
+# across the shorter side with tan(fov / 2) = 1 / (2·SCALE·distance). With
+# the default eye, zoom 1 and pan 0, `eye_project` lands every vertex
+# where project_h puts it (tests/test_camera.py: within a millionth of a
+# pixel in float64, and the float32 the GPU sees well inside half a pixel);
+# project / project_h stay the parity oracle.
+
+SCALE = 0.30                         # project_h's px per unit at the origin, × min(w, h)
+EYE_DISTANCE = CAM3 / 0.9            # world units from the eye to the origin
+EYE_FOV = math.degrees(2.0 * math.atan(1.0 / (2.0 * SCALE * EYE_DISTANCE)))   # ≈ 47.6°
+EYE_NEAR = 0.05                      # the eye's clip planes, world units: depth for
+EYE_FAR = 1000.0                     # the scene's depth test, nothing the picture shows
+# a preset/2 file's camera.pan is in logical px; through the default eye a
+# px at the origin is min(w, h)·SCALE of a unit, and the reference screen
+# is the 1080p render cap (the projector the party runs on): 324 px a unit
+PAN_REF_PX = SCALE * 1080.0
+
+
+def world_points(V: np.ndarray, ang, yaw: float, pitch: float, d4: float = 2.6):
+    """The CPU's half of the one camera: (P, div4, w) — P (n, 3) the
+    vertices after the 4D tumble, the 4D divide and the yaw/pitch
+    turntable (x right, y up, z toward the eye), in the shape's own units
+    (the unit circumradius), before camera.zoom/pan; div4 the 4D divisor,
+    which the face shader multiplies into its clip w so the faces' uv
+    stays perspective-correct across the 4D divide as well; w the rotated
+    4D w, project_h's pd (the depth cue)."""
+    x, y, z, v, div4 = _to3(V, ang, d4)
+    x1, y1, z1 = _camera(x, y, z, yaw, pitch)
+    return np.stack([x1, y1, z1], axis=1), div4, v[:, 3].copy()
+
+
+def model_matrix(zoom: float = 1.0, pan=(0.0, 0.0)) -> np.ndarray:
+    """camera.zoom / camera.pan as the shape's world transform, 4×4
+    (column vectors): scale about the world origin, then move. pan is in
+    world units — the shape's unit circumradius — with pan.y positive
+    *down* the screen, as it always was (so a stored or routed pan keeps
+    its direction): world y is up, so it moves by −pan.y."""
+    m = np.eye(4)
+    m[0, 0] = m[1, 1] = m[2, 2] = float(zoom)
+    m[0, 3], m[1, 3] = float(pan[0]), -float(pan[1])
+    return m
+
+
+def eye_matrix(w: float, h: float, fov: float = EYE_FOV, distance: float = EYE_DISTANCE,
+               near: float = EYE_NEAR, far: float = EYE_FAR) -> np.ndarray:
+    """The eye's view-projection, 4×4 (column vectors): at `distance` on
+    +z looking at the world origin, y up, `fov` degrees across the
+    shorter side of a (w, h) picture (the longer side sees more), OpenGL
+    clip space. The defaults are project_h's divide (module comment)."""
+    f = 1.0 / math.tan(math.radians(fov) / 2.0)
+    aspect = max(float(w), 1e-6) / max(float(h), 1e-6)
+    p = np.zeros((4, 4))
+    if aspect >= 1.0:
+        p[0, 0], p[1, 1] = f / aspect, f
+    else:
+        p[0, 0], p[1, 1] = f, f * aspect
+    p[2, 2] = (far + near) / (near - far)
+    p[2, 3] = 2.0 * far * near / (near - far)
+    p[3, 2] = -1.0
+    view = np.eye(4)
+    view[2, 3] = -float(distance)
+    return p @ view
+
+
+def eye_project(V: np.ndarray, ang, yaw: float, pitch: float, d4: float = 2.6,
+                w: int = 1200, h: int = 800, *, zoom: float = 1.0, pan=(0.0, 0.0),
+                fov: float = EYE_FOV, distance: float = EYE_DISTANCE,
+                dtype=np.float64) -> tuple[np.ndarray, np.ndarray]:
+    """(px, py) in logical pixels, y down, through the one camera: what
+    the scene's vertex shader computes (`render.FACE_VS`, `LINE_VS`), on
+    the CPU. `dtype=np.float32` does the GPU's arithmetic (positions and
+    the matrix in float32). With the default eye, zoom 1 and pan 0 it is
+    project_h's (px, py)."""
+    P, _, _ = world_points(V, ang, yaw, pitch, d4)
+    mvp = (eye_matrix(w, h, fov, distance) @ model_matrix(zoom, pan)).astype(dtype)
+    q = np.concatenate([P, np.ones((len(P), 1))], axis=1).astype(dtype)
+    c = q @ mvp.T
+    nx, ny = c[:, 0] / c[:, 3], c[:, 1] / c[:, 3]
+    return (w / 2 + nx * (w / 2)).astype(np.float64), (h / 2 - ny * (h / 2)).astype(np.float64)
+
+
+def px_per_unit(w: float, h: float, fov: float = EYE_FOV,
+                distance: float = EYE_DISTANCE) -> float:
+    """Logical px a world unit spans at the world origin (depth 0) through
+    the eye: what a pan moves the shape's centre by on screen. The default
+    eye's is project_h's min(w, h)·SCALE."""
+    return min(float(w), float(h)) / 2.0 / math.tan(math.radians(fov) / 2.0) / float(distance)
+
+
+def pan_px_to_world(px: float) -> float:
+    """A preset/2 file's camera.pan (logical px) in world units, through
+    the default eye at the reference screen (`PAN_REF_PX`): the shape's
+    centre lands where it did on that screen."""
+    return float(px) / PAN_REF_PX
 def shape_view(
     i: int, ang, yaw: float, pitch: float, d4: float = 2.6, w: int = 1200, h: int = 800,
     flat: bool = False, body=None,
@@ -1962,6 +2187,33 @@ def shape_view(
         for k, arr in enumerate((px, py, pd, wc)):
             out[k][a:b] = arr
     return out[0], out[1], out[2], out[3]
+
+
+def shape_world(
+    i: int, ang, yaw: float, pitch: float, d4: float = 2.6, flat: bool = False, body=None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """shape_view in the one camera (plan 26 A2): world_points' (P, div4,
+    pd) for shape i — what the renderer draws — at the shape's own angles,
+    the same rules as shape_view: a 4D shape turned to `body` first, `flat`
+    the 3D switch holding it, a 3D shape cueing on its depth toward the 3D
+    camera, a scene's layers each at its own angles × its spin."""
+    g = geom(i)
+    n = g["n"]
+    P, div4, pd = np.empty((n, 3)), np.empty(n), np.empty(n)
+    for a, b, j, spin in g.get("layers") or [(0, n, i, 1.0)]:
+        la = view_angles(j, ang, flat)
+        if spin != 1.0:
+            la = [float(x) * spin for x in la]
+        V = g["V"][a:b] if "layers" in g else g["V"]
+        if body is not None and not is_3d(j):
+            V = V @ np.asarray(body).T
+        Pj, dj, wj = world_points(V, la, yaw, pitch, d4=d4)
+        if is_3d(j):
+            wj = view_depth(V, la, yaw, pitch, d4=d4)   # as shape_view's depth cue
+        if "layers" not in g:
+            return Pj, dj, wj
+        P[a:b], div4[a:b], pd[a:b] = Pj, dj, wj
+    return P, div4, pd
 
 
 # ----------------------------------------------------------- volume ratio

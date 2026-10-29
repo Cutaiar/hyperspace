@@ -189,6 +189,21 @@ def test_no_screens_list_is_one_output_as_today(tmp_path, capsys):
     assert capsys.readouterr().err == ""
 
 
+def test_a_through_key_is_said_once(tmp_path, capsys):
+    """Plan 35 M: `through` in `[[output.screens]]` is the preset's wiring
+    now — read, ignored, and said once (`THROUGH_IS_WIRING`); the entry
+    carries no `through`."""
+    p = tmp_path / "config.toml"
+    p.write_text('[[output.screens]]\nname = "glass"\n'
+                 '[[output.screens]]\nname = "projector"\nthrough = true\n')
+    cfg = config.load(p)
+    want = config.THROUGH_IS_WIRING.format(n=2)
+    assert cfg["notes"].count(want) == 1
+    assert all("through" not in e for e in config.screens(cfg))
+    assert "through" not in config.SCREEN
+    assert want in capsys.readouterr().err
+
+
 def test_a_screens_list_wins_over_the_scalar_keys_with_a_note(tmp_path, capsys):
     p = tmp_path / "config.toml"
     p.write_text('[output]\nmonitor = 0\nfullscreen = false\nbg = 0.4\n'
@@ -200,12 +215,14 @@ def test_a_screens_list_wins_over_the_scalar_keys_with_a_note(tmp_path, capsys):
     glass, proj = config.screens(cfg)
     assert glass == {**config.SCREEN, "name": "glass", "monitor": 1, "fullscreen": True}
     assert proj == {**config.SCREEN, "name": "projector", "monitor": 2, "hands": False,
-                    "through": True, "dim": 0.6}
+                    "dim": 0.6}
     # output 1's entry is what the first window's readers see
     assert (oc["monitor"], oc["fullscreen"], oc["bg"]) == (1, True, 0.4)
-    assert cfg["notes"] == [("config: [[output.screens]] is listed, so [output] monitor and "
-                            "fullscreen are ignored — output 1's entry says")]
-    assert capsys.readouterr().err.strip() == cfg["notes"][0]
+    # (plan 35 T4: the `through` key said once — the preset's wiring now)
+    assert cfg["notes"] == [config.THROUGH_IS_WIRING.format(n=2),
+                            ("config: [[output.screens]] is listed, so [output] monitor and "
+                             "fullscreen are ignored — output 1's entry says")]
+    assert capsys.readouterr().err.strip().splitlines() == cfg["notes"]
     # no scalar keys in the file: nothing to say
     p.write_text('[[output.screens]]\nmonitor = 1\n[[output.screens]]\nmonitor = -1\n')
     cfg = config.load(p)
@@ -263,3 +280,131 @@ def test_a_ground_or_opacity_that_is_not_a_number_is_the_default_with_a_note(tmp
     p.write_text("[output]\nbg = 0.5\nalpha = 1\n")
     cfg = config.load(p)
     assert (cfg["output"]["bg"], cfg["output"]["alpha"]) == (0.5, 1) and "notes" not in cfg
+
+
+# ---- plan 27 B1: [[devices]], the device list ----
+
+def test_no_devices_list_translates_the_old_tables_with_one_note_each(tmp_path, capsys):
+    """A rig config from before plan 27 keeps working unedited: its
+    `[midi]` / `[gamepad]` / `[hands]` / `[bridge]` tables become the
+    equivalent entries, in today's poll order, and each table the file
+    holds is asked to become an entry — once, on stderr and the SYSTEM
+    page. No file at all: the four default entries, nothing said."""
+    p = tmp_path / "config.toml"
+    cfg = config.load(p)
+    assert [(e["role"], e["kind"], e["enabled"]) for e in config.devices(cfg)] == [
+        ("pad", "gamepad", True), ("apc40", "midi", True), ("leap", "hands", False),
+        ("bridge", "bridge", False)]
+    assert "notes" not in cfg and capsys.readouterr().err == ""
+    pad, midi, leap, bridge = config.devices(cfg)
+    assert pad == {"role": "pad", "kind": "gamepad", "enabled": True, "usb": True,
+                   "dial_left": "petal", "dial_right": "blend"}
+    assert midi == {"role": "apc40", "kind": "midi", "enabled": True, "port": None,
+                    "profile": "apc40", "map": str(tmp_path / "midi_map.json")}
+    assert {k for k in leap if k not in ("role", "kind", "enabled")} == set(cfg["hands"]) - {"enabled"}
+    assert bridge["send"] == ["lane:*"] and bridge["in_lanes"] == 16
+    p.write_text('[midi]\nport = "Launchpad"\n[hands]\nenabled = true\ntape = "t.json"\n'
+                 '[gamepad]\nusb = false\n')
+    cfg = config.load(p)
+    # the hands on: their DAW out is a sink entry right after them (plan 27
+    # B3), the default port translated silently — the file never wrote `out`
+    pad, midi, leap, daw, bridge = config.devices(cfg)
+    assert (pad["usb"], midi["port"], leap["enabled"], leap["tape"]) == (
+        False, "Launchpad", True, str(tmp_path / "t.json"))
+    assert daw == {"role": "hands-daw", "kind": "midi-out", "enabled": True, **config.MIDI_OUT,
+                   "port": "Hyperspace Hands", "carries": "leap"}
+    assert cfg["hands"]["tape"] == str(tmp_path / "t.json")
+    assert cfg["notes"] == [
+        "config: [gamepad] is now a [[devices]] entry (role = 'pad', kind = 'gamepad') — see config.py",
+        "config: [midi] is now a [[devices]] entry (role = 'apc40', kind = 'midi') — see config.py",
+        "config: [hands] is now a [[devices]] entry (role = 'leap', kind = 'hands') — see config.py",
+    ]
+    assert capsys.readouterr().err.strip().split("\n") == cfg["notes"]
+    assert "problems" not in cfg
+
+
+def test_a_devices_list_wins_and_is_checked_per_entry(tmp_path, capsys):
+    """With a list, the list says: its entries are checked one by one (a
+    bad role or kind drops the entry, a bad `enabled` is true, a known
+    kind's own keys are filled from its defaults, an unknown kind is kept
+    for the registry to refuse), the old tables are ignored with a note,
+    and the first entry of each old kind is folded back into its table so
+    `cfg["midi"]` / `cfg["hands"]` say what the entry says."""
+    p = tmp_path / "config.toml"
+    p.write_text(
+        '[[devices]]\nrole = "apc40"\nkind = "midi"\n'
+        '[[devices]]\nrole = "leap"\nkind = "hands"\ndofs = ["x"]\ncalibration = "c.json"\n'
+        '[[devices]]\nrole = "phone"\nkind = "osc"\nhost = "0.0.0.0"\nenabled = "yes"\n'
+        '[[devices]]\nrole = "x:y"\nkind = "midi"\n'
+        '[[devices]]\nkind = "midi"\n'
+        '[[devices]]\nrole = "apc40"\nkind = "midi"\n'
+        '[[devices]]\nrole = "pad2"\n'
+        '[[devices]]\nrole = "pad2"\nkind = 3\n'
+        '[midi]\nport = "ignored"\n')
+    cfg = config.load(p)
+    got = config.devices(cfg)
+    # (the enabled hands' default DAW out becomes a midi-out sink after them:
+    # plan 27 B3)
+    assert [(e["role"], e["kind"], e["enabled"]) for e in got] == [
+        ("apc40", "midi", True), ("leap", "hands", True), ("hands-daw", "midi-out", True),
+        ("phone", "osc", True)]
+    # the defaults fill the entry's missing keys — the *defaults*, never the
+    # ignored [midi] table's `port = "ignored"`
+    assert got[0]["port"] is None and got[0]["profile"] == "apc40"
+    assert got[1]["dofs"] == ["x"] and got[1]["calibration"] == str(tmp_path / "c.json")
+    assert got[3] == {"role": "phone", "kind": "osc", "enabled": True, "host": "0.0.0.0"}
+    assert cfg["midi"]["port"] is None and cfg["midi"]["enabled"] is True
+    assert cfg["hands"]["dofs"] == ["x"] and cfg["hands"]["enabled"] is True
+    assert cfg["hands"]["calibration"] == str(tmp_path / "c.json")
+    assert cfg["gamepad"]["enabled"] is False and cfg["bridge"]["enabled"] is False
+    assert cfg["problems"] == [
+        "config: [[devices]] entry 4: role = 'x:y' is not a name without ':' — dropped",
+        "config: [[devices]] entry 5: role = None is not a name without ':' — dropped",
+        "config: [[devices]] entry 6: role 'apc40' is listed twice — the second dropped",
+        "config: [[devices]] entry 7: (pad2) kind = None is not a kind — dropped",
+        "config: [[devices]] entry 8: (pad2) kind = 3 is not a kind — dropped",
+    ]
+    assert cfg["notes"] == [
+        "config: [[devices]] entry 3: (phone) enabled = 'yes' is not true or false — true",
+        "config: [[devices]] is listed, so [midi] is ignored — its midi entry says",
+        *cfg["problems"],
+    ]
+    assert "error" not in cfg
+    err = capsys.readouterr().err
+    assert all(n in err for n in cfg["notes"])
+    # `devices = 3`, or an entry that is not a table: a problem, the rest stand
+    p.write_text("devices = 3\n")
+    cfg = config.load(p)
+    assert config.devices(cfg) == [] and "error" not in cfg
+    assert cfg["problems"] == ["config: devices = 3 is not a list of [[devices]] tables"]
+    p.write_text('devices = [{role = "a", kind = "midi"}, 7]\n')
+    cfg = config.load(p)
+    assert [e["role"] for e in config.devices(cfg)] == ["a"]
+    assert cfg["problems"] == ["config: [[devices]] entry 2 is not a table (7) — dropped"]
+    # any other top-level list is still an error, as before
+    p.write_text("[[midi]]\nenabled = true\n")
+    assert "[midi] must be a table" in config.load(p)["error"]
+
+
+def test_read_devices_reports_problems_and_prints_nothing(tmp_path, capsys):
+    """The registry's re-read: the checked entries and every reason to
+    keep the old list — a file that will not parse first — with nothing
+    on stderr (the launch said what there was to say)."""
+    p = tmp_path / "config.toml"
+    p.write_text('[midi]\nenabled = false\n[[devices]]\nrole = "a"\nkind = "midi"\n')
+    entries, problems = config.read_devices(p)
+    assert [e["role"] for e in entries] == ["a"] and problems == []
+    p.write_text('[[devices]]\nrole = "a"\nkind = "midi"\n[[devices]]\nrole = "a"\nkind = "midi"\n')
+    entries, problems = config.read_devices(p)
+    assert [e["role"] for e in entries] == ["a"]
+    assert problems == ["config: [[devices]] entry 2: role 'a' is listed twice — the second dropped"]
+    p.write_text("[[devices\n")
+    entries, problems = config.read_devices(p)
+    assert len(problems) == 1 and problems[0].startswith("config: ") and entries == []
+    # an error elsewhere in the file (a scalar where a table should be) is
+    # not the list's problem: the list still applies
+    p.write_text('midi = true\n[[devices]]\nrole = "a"\nkind = "midi"\n')
+    entries, problems = config.read_devices(p)
+    assert [e["role"] for e in entries] == ["a"] and problems == []
+    assert "[midi] must be a table" in config.load(p)["error"]
+    assert capsys.readouterr().err == ""

@@ -2,8 +2,8 @@
 slot (plan 07, WP6b; the spike is docs/plans/assets/06-lookback-perf.md).
 
 Off by default; ``[dream] enabled = true`` in config.toml opens it and
-app.py hangs it on ``renderer.lookback.source``. Nothing in the core
-imports this module — like midi.py and bridge.py it depends on the core,
+app.py hangs it on ``renderer.dreamer.source`` (plan 36 T4: the dream
+node's). Nothing in the core imports this module — like midi.py and bridge.py it depends on the core,
 never the reverse — and without torch it is never touched: the look-back
 stays the plain tracer lookback.py draws on its own.
 

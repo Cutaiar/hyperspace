@@ -1,0 +1,27 @@
+{
+ "schema": "hyperspace.preset/2",
+ "name": "FADERS",
+ "note": "plan 24 C2 fixture: a preset whose desk binds the eight track faders S1-S8 on the preset layer (the mechanism only: no factory preset has fader rows in this run). Device knob 1 keeps a row so knobs and faders are seen side by side",
+ "values": {
+  "view.points_alpha": 0.5,
+  "view.lines_alpha": 0.75,
+  "view.pattern_mix": 0.25,
+  "view.bmp_alpha": 1.0,
+  "view.inst_amp": 0.25,
+  "dream.mix": 0.5
+ },
+ "routes": [],
+ "desk": [
+  {"source": "cc:*:16", "target": "view.depth4", "op": "abs", "feedback": "ring"},
+  {"source": "cc:0:7", "target": "view.points_alpha", "op": "abs", "ring": 0},
+  {"source": "cc:1:7", "target": "view.lines_alpha", "op": "abs", "ring": 0},
+  {"source": "cc:2:7", "target": "view.pattern_mix", "op": "abs", "ring": 0},
+  {"source": "cc:3:7", "target": "view.bmp_alpha", "op": "abs", "ring": 0},
+  {"source": "cc:4:7", "target": "view.bright", "op": "abs", "ring": 0},
+  {"source": "cc:5:7", "target": "view.speed", "op": "abs", "ring": 0},
+  {"source": "cc:6:7", "target": "view.inst_amp", "op": "abs", "ring": 0},
+  {"source": "cc:7:7", "target": "dream.mix", "op": "abs", "ring": 0}
+ ],
+ "macros": {},
+ "modules": {}
+}

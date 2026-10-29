@@ -12,9 +12,10 @@ row 18, open).
 import json
 
 import pytest
+from conftest import CORPUS
 from test_routing import rig
 
-from hyperspace import preset, routing
+from hyperspace import routing
 from hyperspace.routing import Binding, Bindings, Router, bindings_path
 
 
@@ -27,6 +28,32 @@ def frame(router, reg):
     router.follow_macros()
     router.modulate()
     reg.apply()
+
+
+def test_a_new_base_subscriber_runs_from_where_the_param_sits_to_the_end_of_its_fader():
+    """Row 537 (the owner, 2026-10-28: "by default when you wire up a
+    macro, the From and To parameters start at the same value so there's
+    actually no range of motion"): `routing.base_sub` — what a macro's
+    cable on GRAPH and ROUTING's "+ base" both add — runs from the param's
+    fader position to 1, or to 0 when it already sits at 1; never
+    from = to. On the knob the param moves at once."""
+    r = rig()
+    reg = r.reg
+    router = Router(reg, Bindings())
+    bright, speed, m = reg["view.bright"], reg["view.speed"], reg["macro.1"]
+    bright.set_norm(0.3)
+    speed.set_norm(1.0)
+    subs = [routing.base_sub(bright), routing.base_sub(speed)]
+    assert (subs[0].base, subs[0].lo, subs[0].hi) == ("view.bright", pytest.approx(0.3), 1.0)
+    assert (subs[1].base, subs[1].lo, subs[1].hi) == ("view.speed", 1.0, 0.0)
+    assert all(s.lo != s.hi for s in subs)
+    router.table.macros["macro.1"] = routing.Macro("Test", subs)
+    router.table.macros_serial += 1
+    for v in (0.0, 0.5, 1.0):
+        m.set_norm(v)
+        frame(router, reg)
+        assert bright.norm == pytest.approx(0.3 + 0.7 * v, abs=1e-9)
+        assert speed.norm == pytest.approx(1.0 - v, abs=1e-9)
 
 
 def test_base_subscribers_of_opposite_polarity_move_opposite_ways():
@@ -56,7 +83,8 @@ def test_base_subscribers_of_opposite_polarity_move_opposite_ways():
 
 def test_a_performer_on_a_macro_moves_only_its_depth_subscribers():
     """Row 12b: a hand owning macro.1 deepens the route its depth
-    subscriber names — a frame later, from the macro's effective value —
+    subscriber names — the same frame, from the macro's effective value
+    (plan 28 N0, decision 7: the macro's node runs before the route) —
     and leaves its base subscribers alone; the knob moves those."""
     r = rig()
     reg = r.reg
@@ -74,10 +102,10 @@ def test_a_performer_on_a_macro_moves_only_its_depth_subscribers():
     router.feed("hand", [0.9])
     frame(router, reg)                           # the set_macros lands the bases
     assert speed.norm == pytest.approx(0.2)
-    # this frame the route read the macro before the hand moved it: 0.2
-    assert bright.eff_norm - bright.norm == pytest.approx(0.5 * 0.2 * 0.5, abs=1e-6)
+    # this frame the route read the macro after the hand moved it: 0.9
+    assert bright.eff_norm - bright.norm == pytest.approx(0.5 * 0.9 * 0.5, abs=1e-6)
     assert m.modulated and m.value == pytest.approx(0.9)
-    frame(router, reg)                           # next frame: 0.9, the hand's
+    frame(router, reg)                           # and the next: still 0.9, the hand's
     assert bright.eff_norm - bright.norm == pytest.approx(0.5 * 0.9 * 0.5, abs=1e-6)
     assert speed.norm == pytest.approx(0.2)      # the base subscriber never moved
     # the knob turns the macro's base under the hand: the base subscriber
@@ -88,10 +116,10 @@ def test_a_performer_on_a_macro_moves_only_its_depth_subscribers():
     assert bright.eff_norm - bright.norm == pytest.approx(0.5 * 0.9 * 0.5, abs=1e-6)
 
 
-def test_scale_on_a_macro_migrates_to_a_depth_subscriber(tmp_path, capsys):
+def test_scale_on_a_macro_migrates_to_a_depth_subscriber(tmp_path):
     row = {"source": "lfo:1", "target": "fx.mix", "op": "push", "value": 0.3,
            "scale": "macro.1"}
-    # the live file: moved, noted, backed up and written back once
+    # the live file: read, noted, the depth subscriber made
     path = bindings_path(tmp_path)
     v2 = {"schema": routing.SCHEMA_V2, "profile": "apc40", "bindings": [row]}
     path.write_text(json.dumps(v2))
@@ -99,30 +127,16 @@ def test_scale_on_a_macro_migrates_to_a_depth_subscriber(tmp_path, capsys):
     assert t.bindings[0].scale is None
     assert t.macros_doc() == {"macro.1": {"subs": [depth_sub("lfo:1", "fx.mix")]}}
     assert any("depth subscriber of macro.1" in n for n in t.notes)
-    # the route and its macro are a preset's (plan 13 WP5): the migration
-    # keeps them in one, then rewrites the file with the session's rows
-    assert t.carried.macros == t.macros_doc() and "scale" not in json.dumps(t.carried.routes)
-    from test_routing import migrate_home
-    migrate_home(tmp_path, t)
-    assert "kept as bindings.json.bak-v2" in capsys.readouterr().err
-    doc = json.loads(path.read_text())
-    assert "macros" not in doc and not any(d.get("op") in routing.MOD_OPS for d in doc["bindings"])
-    kept = json.loads((tmp_path / "presets" / "migrated.json").read_text())
-    assert kept["macros"] == t.macros_doc() and "scale" not in json.dumps(kept["routes"])
-    again = Bindings.load(path, legacy_midi=None)
-    assert again.to_json() == t.to_json() and not again.changed
-    # a user routing preset: made a preset through the same reading, the
-    # same subscriber, the same depth
-    (tmp_path / "bindings").mkdir()
-    (tmp_path / "bindings" / "old.json").write_text(
-        json.dumps({"schema": routing.SCHEMA_V2, "bindings": [row]}))
-    from hyperspace.preset import migrate_routing_presets
-    migrate_routing_presets(tmp_path)
-    made = json.loads((tmp_path / "presets" / "old.json").read_text())
+    # the route and its macro are a preset's (plan 13 WP5): the table
+    # carries them as one, the same subscriber, the same depth (nothing
+    # reads `carried` since the one-tier library of 2026-10-28 retired
+    # plan 13 §6's migration; the next write leaves it out)
+    made = t.carried
+    assert made.macros == t.macros_doc() and "scale" not in json.dumps(made.routes)
     r = rig()
     router = Router(r.reg, Bindings())
-    router.table.set_routes(Binding.from_json(d) for d in made["routes"])
-    router.table.set_macros(made["macros"])
+    router.table.set_routes(Binding.from_json(d) for d in made.routes)
+    router.table.set_macros(made.macros)
     assert router.table.routes()[0].scale is None
     assert router.table.macros_doc()["macro.1"]["subs"] == [depth_sub("lfo:1", "fx.mix")]
     reg, mix = r.reg, r.reg["fx.mix"]
@@ -137,8 +151,8 @@ def test_scale_on_a_macro_migrates_to_a_depth_subscriber(tmp_path, capsys):
     t2 = Bindings.from_json({"schema": routing.SCHEMA, "bindings": [row],
                              "macros": {"macro.1": {"subs": [depth_sub("lfo:1", "fx.mix")]}}})
     assert len(t2.macros["macro.1"].subs) == 1
-    # the factory file is regenerated: lfo-breathe's macro.1 is a subscriber
-    lfo_breathe = json.loads((preset.FACTORY_DIR / "lfo-breathe.json").read_text())
+    # the corpus's lfo-breathe (what the build shipped): its macro.1 is a subscriber
+    lfo_breathe = json.loads((CORPUS / "presets" / "lfo-breathe.json").read_text())
     assert lfo_breathe["macros"]["macro.1"]["subs"][0] == depth_sub("lfo:1", "fx.mix")
     assert "scale" not in json.dumps(lfo_breathe["routes"])
 
@@ -151,7 +165,7 @@ def test_a_scale_on_a_session_param_is_left_alone():
            "scale": "master.gain"}
     t = Bindings.from_json({"schema": routing.SCHEMA_V2, "bindings": [row]})
     assert t.bindings[0].scale == "master.gain" and t.macros == {} and not t.changed
-    legacy6 = json.loads((preset.FACTORY_DIR / "legacy6.json").read_text())
+    legacy6 = json.loads((CORPUS / "presets" / "legacy6.json").read_text())
     assert sum(b.get("scale") == "master.gain" for b in legacy6["routes"]) == 6
     assert legacy6["macros"] == {}
     assert all(b.scale == "master.gain" for b in routing.legacy6_routes()
@@ -161,9 +175,8 @@ def test_a_scale_on_a_session_param_is_left_alone():
 def test_a_scale_on_a_performance_param_is_refused_with_a_note(tmp_path):
     """Decision register row 18 (a): a `scale` naming a performance param
     (one a preset load could move under the route) is dropped with a note
-    — in the live table, in a preset's load and in the migration of a
-    routing preset — the depth kept; a macro's becomes a depth subscriber
-    and a session param's stays, as before."""
+    — in the live table and in a preset's load — the depth kept; a macro's
+    becomes a depth subscriber and a session param's stays, as before."""
     rows = [{"source": "hand:1", "target": "view.bright", "op": "push", "value": 0.3,
              "scale": "view.speed"},                                  # performance: dropped
             {"source": "lfo:1", "target": "fx.mix", "op": "push", "value": 0.3,
@@ -185,14 +198,6 @@ def test_a_scale_on_a_performance_param_is_refused_with_a_note(tmp_path):
     assert [b.scale for b in r.router.table.routes()] == [None, None, "master.gain"]
     assert any("dropped the scale view.speed" in n for n in r.presets.notes)
     assert r.router.table.macros_doc()["macro.4"]["subs"] == [depth_sub("lfo:1", "fx.mix")]
-    # a user routing preset made a preset by the migration
-    (tmp_path / "bindings").mkdir()
-    (tmp_path / "bindings" / "old.json").write_text(
-        json.dumps({"schema": routing.SCHEMA_V2, "bindings": rows}))
-    from hyperspace.preset import migrate_routing_presets
-    migrate_routing_presets(tmp_path)
-    made = json.loads((tmp_path / "presets" / "old.json").read_text())
-    assert [d.get("scale") for d in made["routes"]] == [None, None, "master.gain"]
     # the ROUTING page's combo offers session params only
     from types import SimpleNamespace
 
@@ -237,16 +242,6 @@ def test_a_base_subscriber_on_a_session_param_is_dropped_with_a_note(tmp_path):
     got = Bindings().set_macros({"macro.2": {"subs": [{"base": "master.gain"},
                                                        {"base": "fx.mix"}]}})
     assert len(got) == 1 and "master.gain" in got[0]
-    # the migration of a user routing preset drops it too, with its note
-    (tmp_path / "bindings").mkdir()
-    (tmp_path / "bindings" / "old.json").write_text(json.dumps(
-        {"schema": routing.SCHEMA, "bindings": routes, "macros": macros}))
-    from hyperspace.preset import migrate_routing_presets
-    notes = migrate_routing_presets(tmp_path, reg=reg)
-    assert any(n.startswith("bindings/old.json: dropped macro.1's base subscriber tempo.bpm")
-               for n in notes)
-    made = json.loads((tmp_path / "presets" / "old.json").read_text())
-    assert [s.get("base") for s in made["macros"]["macro.1"]["subs"]] == ["view.bright", None]
 
 
 def test_a_depth_range_crossing_zero_flips_the_route():

@@ -21,6 +21,7 @@ LENGTHS = (60.0, 42.0, 26.0, 20.0)        # metacarpal, proximal, intermediate, 
 WIDTHS = (19.0, 18.0, 16.5, 15.0)
 OPEN = (0.0, 4.0, 4.0, 4.0)               # degrees each bone bends past the last
 FIST = (0.0, 85.0, 95.0, 55.0)
+FAN = 0.6       # degrees a finger fans out per mm of knuckle offset, per unit of spread past 1
 
 
 def v3(p) -> NS:
@@ -32,22 +33,35 @@ def _bone(a, b, w) -> NS:
 
 
 def hand(side: str = "right", grip: str = "open", at=(0.0, 200.0, 0.0), conf: float = 1.0,
-         spread: float = 1.0) -> NS:
-    """A hand namespace. `grip` "open" or "fist"; `at` the palm in mm."""
+         spread: float = 1.0, roll: float = 0.0, close: float | None = None) -> NS:
+    """A hand namespace. `grip` "open" or "fist"; `at` the palm in mm.
+    `spread` past 1 fans the fingers apart (FAN), `roll` turns the whole
+    hand about its fingers' axis, degrees, thumb up for + on either hand
+    (the anatomical roll `features` reads). `close`, 0 … 1, bends the four
+    fingers that far from open toward a fist whatever `grip` says (the
+    thumb follows `grip`): a half-closed hand. The defaults are the hand
+    the tests have always had."""
     palm = np.asarray(at, dtype=float)
     f = np.array([0.0, 0.0, -1.0])                          # fingers forward
-    n = np.array([0.0, -1.0, 0.0])                          # palm down
-    s = np.array([-1.0 if side == "right" else 1.0, 0.0, 0.0])   # toward the thumb
+    n0 = np.array([0.0, -1.0, 0.0])                         # palm down
+    s0 = np.array([-1.0 if side == "right" else 1.0, 0.0, 0.0])  # toward the thumb
+    r = math.radians(roll)
+    n = math.cos(r) * n0 + math.sin(r) * s0                 # the thumb side rises
+    s = math.cos(r) * s0 - math.sin(r) * n0
     bends = FIST if grip == "fist" else OPEN
+    if close is not None:
+        bends = tuple(o + close * (c - o) for o, c in zip(OPEN, FIST))
     digits = {}
     for name, (lat, scale) in FINGERS.items():
         base = palm - f * 38.0 + s * lat * 0.45
         knuckle = palm + f * 40.0 + s * lat * spread
         joints = [base, knuckle]
+        fan = math.radians((spread - 1.0) * lat * FAN)
+        fi = math.cos(fan) * f + math.sin(fan) * s          # this finger's forward
         theta = 0.0
         for k in (1, 2, 3):
             theta += math.radians(bends[k])
-            d = math.cos(theta) * f + math.sin(theta) * n
+            d = math.cos(theta) * fi + math.sin(theta) * n
             joints.append(joints[-1] + d * LENGTHS[k] * scale)
         digits[name] = joints
     # the thumb: no metacarpal length, out from the palm's thumb side

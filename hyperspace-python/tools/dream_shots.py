@@ -71,7 +71,7 @@ def pct(xs, q):
 def run(ctx, dream, worker, frames, fps=60.0):
     """The paced loop; returns (frame times ms, last composite)."""
     fbo, r, s = scene(ctx, dream)
-    r.lookback.source = worker
+    r.dreamer.source = worker
     times = []
     tick = 1.0 / fps
     next_tick = time.perf_counter()
@@ -109,7 +109,7 @@ def preset_shot(ctx, slug: str, frames: int, precision: str, poses) -> None:
     for label, pose in poses:
         st = ps.Stage(slug, ctx)
         worker = DreamWorker(st.reg, {"enabled": True, "precision": precision})
-        st.renderer.lookback.source = worker
+        st.renderer.dreamer.source = worker
         st.frame({}, fbo)
         worker.drain(120.0)                       # the trunk loads on the first submit
         hands = ps.pose_hands(pose)
@@ -162,7 +162,7 @@ def main() -> None:
     worker = DreamWorker(reg, {"enabled": True, "precision": args.precision})
     # warm: the trunk loads on the first submit; keep the loop from timing that
     fbo, r, s = scene(ctx, dream)
-    r.lookback.source = worker
+    r.dreamer.source = worker
     frame(ctx, fbo, r, s, 0.0)
     worker.drain(120.0)
     fbo.release()

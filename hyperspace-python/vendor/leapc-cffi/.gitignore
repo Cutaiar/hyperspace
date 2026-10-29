@@ -1,0 +1,11 @@
+# Build outputs (upstream's repo-level .gitignore, scoped to this package)
+build/
+dist/
+src/leapc_cffi.egg-info/
+src/leapc_cffi/*.h
+src/leapc_cffi/*.dll
+src/leapc_cffi/*.pyd
+src/leapc_cffi/*.lib
+src/leapc_cffi/*.dylib
+src/leapc_cffi/*.so
+src/leapc_cffi/*.so.*

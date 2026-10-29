@@ -36,6 +36,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from hyperspace.fx import FxState
+from hyperspace.graphmigrate import wiring_of
 from hyperspace.render import Renderer
 from hyperspace.view import ViewState
 
@@ -59,10 +60,11 @@ def shot(ctx, counts: list[int], *, plasma: bool = False,
     fx = FxState()
     fx.values["plasma"]["on"] = plasma
     r = Renderer(ctx, fx=fx)
+    r.wiring = wiring_of(fx)  # plan 33 R23: its run as a load lands it
     if lookback:
         st = r.lookback.state
         st.on, st.echoes, st.gap, st.echo_mix, st.tint_from = True, 8, 1 / 30, 0.8, 0
-        r.lookback.source = None                     # no dream worker: the echoes alone
+        r.dreamer.source = None                      # no dream worker: the echoes alone
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H), 4)])
     s = view()
     for k, n in enumerate(counts):

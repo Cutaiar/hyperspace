@@ -2,9 +2,10 @@
 """Plan 18 WP4 — `hands-orbit`, two hands on the camera, shown headless.
 
 SYNTHETIC HANDS and OFFSCREEN RENDERS: no tracker and no window. The
-factory preset is loaded through the real `Presets` over a `Router` on a
-throwaway library home (`tools/preset_shots.py`'s construction, so
-nothing touches ~/Hyperspace), and two fake hands are driven through the
+corpus preset (`tests/corpus/presets/hands-orbit.json`) is loaded through
+the real `Presets` over a `Router` on a throwaway library home
+(`tools/preset_shots.py`'s construction, so nothing touches ~/Hyperspace),
+and two fake hands are driven through the
 real `HandsIO` chain (range → One Euro → dead zone → follower, the
 default feel and the default ranges, no interaction box), each reading
 held for a second and a half.
@@ -44,7 +45,6 @@ for _p in (ROOT, ROOT / "tools"):
 import preset_shots as shots  # tools/preset_shots.py: Stage, the fake source, the poses
 
 from hyperspace.hands.core import default_range
-from hyperspace.preset import FACTORY_PRESETS
 
 NAME = "hands-orbit"
 OUT = ROOT / "docs" / "plans" / "assets" / "18-hand-and-knob-feel"
@@ -56,7 +56,7 @@ SAY = {("right", "x"): "left … right", ("right", "pitch"): "fingers down … u
        ("left", "y"): "low … high"}
 # a camera the mouse moved before the hands came in (the last table)
 MOUSE = {"camera.yaw": math.radians(30), "camera.pitch": math.radians(-10),
-         "camera.zoom": 1.6, "camera.pan.x": 120.0, "camera.pan.y": -60.0}
+         "camera.zoom": 1.6, "camera.pan.x": 0.4, "camera.pan.y": -0.2}   # world units (plan 26 A2)
 # the strip: the right hand across its range, the left hand low / half / high
 COLS = (("R left", 0.0), ("R centre", 0.5), ("R right", 1.0))
 ROWS = (("L low", 0.0), ("L half up", 0.5), ("L high", 1.0))
@@ -73,7 +73,8 @@ class Stage(shots.Stage):
 
 
 def rows():
-    return [b for b in FACTORY_PRESETS[NAME].routes()]
+    """The preset's routes, as one load lands them (`Stage.routes`)."""
+    return list(Stage().routes)
 
 
 def axis_of(b) -> tuple[str, str]:
@@ -91,7 +92,7 @@ def reading(side: str, axis: str, u: float) -> str:
 
 def camera(st) -> dict[str, float]:
     """The five camera params as the picture has them, in norm units."""
-    return {b.target: st.reg[b.target].eff_norm for b in rows()}
+    return {b.target: st.reg[b.target].eff_norm for b in st.routes}
 
 
 def others(st, own: str, before: dict[str, float]) -> str:

@@ -4,6 +4,7 @@ import math
 from types import SimpleNamespace
 
 import pytest
+from conftest import CORPUS, seed
 
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
@@ -27,6 +28,7 @@ def make(tmp_path):
     control = Control(chain)
     audio = SimpleNamespace(chain=chain)
     view = ViewState()
+    seed(tmp_path)                  # the corpus: the shipped presets, the party and house shows
     lib = Library(tmp_path)
     presets = lib.project
     reg = build_registry(view, control, audio, presets)
@@ -87,16 +89,16 @@ def test_raw_ranges_clamp_int_and_log(rig):
     reg, view, *_ = rig
     inst = reg["view.instances"]
     inst.set_norm(1.0)
-    assert view.instances == 100 and isinstance(view.instances, int)
+    assert view.instances == 4096 and isinstance(view.instances, int)
     inst.set_value(-5)
     assert view.instances == 0          # the floor is zero (plan 16 WP5)
     inst.step(3)
     assert view.instances == 3
     z = reg["camera.zoom"]
-    z.set_norm(0.5)  # log: halfway is the geometric middle
-    assert view.zoom == pytest.approx(math.sqrt(0.05 * 40.0))
+    z.set_norm(0.5)  # log: halfway is the geometric middle — 1×, the range's ends about it
+    assert view.zoom == pytest.approx(math.sqrt(z.lo * z.hi)) == pytest.approx(1.0)
     z.set_value(1.0)
-    assert z.norm == pytest.approx(math.log2(1.0 / 0.05) / math.log2(40.0 / 0.05))
+    assert z.norm == pytest.approx(math.log2(1.0 / z.lo) / math.log2(z.hi / z.lo))
     yaw = reg["camera.yaw"]
     yaw.set_value(math.pi + 0.5)  # wraps, never clamps
     assert view.yaw == pytest.approx(-math.pi + 0.5)
@@ -118,19 +120,38 @@ def test_pitch_wraps_over_the_top_as_yaw_does(rig):
 
 
 def test_instances_read_nothing_drawn_at_zero(rig):
-    """Plan 16 WP5 (fork F3): a plain 0–100 range, zero at the very bottom
-    of the throw, and a readout that says what a black render is."""
+    """Plan 16 WP5 (fork F3): zero at the very bottom of the throw, and a
+    readout that says what a black render is. Since the instanced field:
+    0–4096 on a count taper — every count to 64 one detent apart, then 40
+    detents a doubling — whole numbers only, modulated or not."""
+    from hyperspace.tapers import T_INSTANCES
+
     reg, view, *_ = rig
     inst = reg["view.instances"]
-    assert (inst.lo, inst.hi) == (0, 100) and inst.modulatable and inst.persist
+    assert (inst.lo, inst.hi) == (0, 4096) and inst.modulatable and inst.persist
+    assert inst.taper is T_INSTANCES and inst.integer and inst.steps == 304
     assert view.instances == 1 and inst.text() == "1 instance(s)"     # the default stays 1
     inst.set_norm(0.0)                  # the knob's bottom, the slider's left end
     assert view.instances == 0 and isinstance(view.instances, int)
     assert inst.norm == 0.0 and inst.text() == "0 · nothing drawn"
     inst.step(1)
     assert view.instances == 1 and inst.text() == "1 instance(s)"
-    inst.set_norm(0.5)                  # linear: no taper to bend the throw
-    assert view.instances == 50 and inst.text() == "50 instance(s)"
+    for n in range(65):                 # every count to 64 is a detent
+        inst.set_value(n)
+        assert view.instances == n and inst.position() == n
+    inst.step(40)                       # then 40 detents double it
+    assert view.instances == 128 and inst.text() == "128 instance(s)"
+    counts = [T_INSTANCES.map(p) for p in range(inst.steps + 1)]
+    assert counts == sorted(set(counts)) and counts[-1] == 4096
+    assert all(T_INSTANCES.unmap(c) == p for p, c in enumerate(counts))
+    assert all(isinstance(T_INSTANCES.map(p + 0.37), int) for p in range(0, 304, 7))
+    # a lane rides it in whole copies
+    inst.set_value(10)
+    inst.modulate(0.1)
+    inst.apply()
+    assert isinstance(view.instances, int) and view.instances == T_INSTANCES.map(10 + 30)
+    inst.apply()                        # the lane let go: the base comes back
+    assert view.instances == 10
     assert "0 draws nothing" in inst.tip
     # zero is a value like any other to a snapshot
     inst.set_value(0)
@@ -152,15 +173,15 @@ def test_nudge_and_scale_move_the_base_without_a_detent(rig):
     assert yaw.nudge(0.3) == 0.3
     assert view.yaw == pytest.approx(-math.pi + 0.2)
     # clamp: what the stop let through
-    zoom.set_value(39.0)
-    assert zoom.nudge(5.0) == pytest.approx(1.0) and view.zoom == 40.0
-    assert zoom.scale(2.0) == pytest.approx(1.0) and view.zoom == 40.0
+    zoom.set_value(zoom.hi - 1.0)
+    assert zoom.nudge(5.0) == pytest.approx(1.0) and view.zoom == zoom.hi
+    assert zoom.scale(2.0) == pytest.approx(1.0) and view.zoom == zoom.hi
     zoom.set_value(2.0)
     assert zoom.scale(1.5) == pytest.approx(1.5) and view.zoom == pytest.approx(3.0)
     assert zoom.nudge(-0.5) == pytest.approx(-0.5) and view.zoom == pytest.approx(2.5)
     # a ratio means nothing across zero: yaw's range does, a base of 0 does
     assert yaw.scale(2.0) == 1.0 and view.yaw == pytest.approx(-math.pi + 0.2)
-    zoom.set_value(0.05)
+    zoom.set_value(zoom.lo)
     assert zoom.scale(2.0) == pytest.approx(2.0)          # lo is above zero: fine
     # an integer range stays integer
     inst.set_value(4)
@@ -310,7 +331,7 @@ def test_preset_bank_params(rig):
 
     reg, view, _control, _audio, bank = rig
     Presets(bank.lib, reg, Router(reg, Bindings()))
-    bank.load("house", startup=False)          # the house moods (a fresh home opens party)
+    bank.load("house", startup=False)          # the house moods (the seed opens party)
     assert reg["preset.select"].names[:2] == ["BIG BLUE WAVE", "EMBER ORBIT"]
     assert len(reg["preset.select"].names) == 24
     assert reg["preset.select"].names[8:] == [f"SLOT {k}" for k in range(9, 25)]
@@ -562,12 +583,14 @@ def test_inst_layout_is_declared(tmp_path):
     whole factory layer — loads it as GRID."""
     from test_undo import boot, frames, labels, settle
 
-    from hyperspace.library import FACTORY
     from hyperspace.params import INST_LAYOUT
 
     reg, view, *_ = make(tmp_path / "plain")
+    from hyperspace import field
+
     p = reg["view.inst_layout"]
-    assert INST_LAYOUT == ["GRID", "HEX", "RING"]
+    assert INST_LAYOUT == ["GRID", "HEX", "RING", "CUBIC", "BCC", "FCC", "HCP", "HEX PRISM",
+                           "DIAMOND"] == field.NAMES
     assert p.kind is Kind.ENUM and p.names == INST_LAYOUT and p.label == "Layout"
     assert p.base == 0 and view.inst_layout == 0 and ViewState().inst_layout == 0
     assert p.group == "view" and p.persist and p.modulatable
@@ -577,6 +600,14 @@ def test_inst_layout_is_declared(tmp_path):
     assert ids.index("view.inst_layout") + 1 == ids.index("view.inst_motion")
     assert [reg[f"view.inst_{k}"].label for k in ("motion", "amp", "rate")] == [
         "Field motion", "Field amp", "Field rate"]
+    # the instanced field's three: fit, spacing and a lattice's depth, after
+    # the motion's, persisted and modulatable like it, off / 1 / 0.5 at rest
+    fit, sp, de = (reg[f"view.inst_{k}"] for k in ("fit", "spacing", "persp"))
+    assert ids.index("view.inst_rate") + 1 == ids.index("view.inst_fit")
+    assert (fit.kind, sp.kind, de.kind) == (Kind.TOGGLE, Kind.CONTINUOUS, Kind.CONTINUOUS)
+    assert all(q.group == "view" and q.persist and q.modulatable for q in (fit, sp, de))
+    assert (fit.base, sp.base, de.base) == (False, 1.0, 0.5)
+    assert (view.inst_fit, view.inst_spacing, view.inst_persp) == (False, 1.0, 0.5)
     p.set(2)
     assert view.inst_layout == 2 and reg.snapshot()["view.inst_layout"] == 2
 
@@ -592,7 +623,7 @@ def test_inst_layout_is_declared(tmp_path):
     frames(r, 5)
     assert r.view.inst_layout == 0 and r.undo.stack == []
 
-    # a preset that does not name it loads it as GRID: every factory preset
+    # a preset that does not name it loads it as GRID: every corpus preset
     names = r.lib.list("presets")
     assert len(names) >= 5
     for name in names:
@@ -600,5 +631,69 @@ def test_inst_layout_is_declared(tmp_path):
         assert r.view.inst_layout == 2
         assert "view.inst_layout" not in r.presets.load(name), name
         assert r.view.inst_layout == 0 and lay.base == 0, name
-    for f in FACTORY.rglob("*.json"):
+    # (plan 36 T3: the corpus `/7` files are full saves — at its default;
+    # their sources, made before it, never name it)
+    import json
+
+    sources = CORPUS.parent / "fixtures" / "factory-sources" / "presets"
+    for f in sources.glob("*.json"):
         assert "inst_layout" not in f.read_text(), f.name
+    for f in (CORPUS / "presets").glob("*.json"):
+        assert json.loads(f.read_text())["values"].get("view.inst_layout", 0) == 0, f.name
+
+
+# ---- plan 26 A0: the naming rule for node instances (ENGINEERING §2) ----
+
+def test_the_first_instance_keeps_todays_id_and_extras_carry_a_marker():
+    """The first instance of a node is today's id; instance n ≥ 2 carries
+    n as a segment right after the node's prefix, never a new first
+    segment; `instance_of` reads either back."""
+    from hyperspace.params import instance_id, instance_of
+
+    for node, key in (("fx.acid", "mix"), ("ghost", "alpha"), ("dream", "mix")):
+        assert instance_id(node, key) == instance_id(node, key, 1) == f"{node}.{key}"
+        assert instance_of(f"{node}.{key}", node) == (1, key)
+        for n in (2, 3, 12):
+            pid = instance_id(node, key, n)
+            assert pid.split(".")[0] == node.split(".")[0]          # the group stays
+            assert instance_of(pid, node) == (n, key)
+    assert instance_id("fx.acid", "mix", 2) == "fx.acid.2.mix"
+    assert instance_id("ghost", "alpha", 2) == "ghost.2.alpha"
+    assert instance_of("fx.acid.mix", "fx.warp") is None
+    # an explicit `.1.` is never written, so it reads as a key, by design
+    assert instance_of("fx.acid.1.mix", "fx.acid") == (1, "1.mix")
+    with pytest.raises(ValueError):
+        instance_id("fx.acid", "mix", 0)
+
+
+def test_every_node_param_today_reads_as_its_first_instance():
+    """No preset or binding migrates for a single-instance graph: every
+    effect's, the hands' and the dream's params as registered today read
+    back as instance 1 under their own id, their group is their id's
+    first segment (so an extra instance lands in the same part of a
+    preset), and no effect file or key is purely decimal (which would
+    read as a marker)."""
+    from hyperspace.fx import FxState
+    from hyperspace.ghost import GhostState
+    from hyperspace.lookback import DreamState
+    from hyperspace.params import instance_of
+
+    chain = Analyzer(Analyser())
+    fx = FxState()
+    reg = build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain), None,
+                         DreamState(), fx, ghost=GhostState())
+    nodes = [f"fx.{name}" for name in fx.names()] + ["ghost", "dream"]
+    assert len(nodes) > 2
+    assert not any(name.isdecimal() for name in fx.names())
+    seen = set()
+    for p in reg:
+        for node in nodes:
+            got = instance_of(p.id, node)
+            if got is None:
+                continue
+            n, key = got
+            assert n == 1 and f"{node}.{key}" == p.id, p.id
+            assert not key.split(".")[0].isdecimal(), p.id
+            assert p.group == p.id.split(".")[0], (p.id, p.group)
+            seen.add(node)
+    assert seen == set(nodes)

@@ -404,10 +404,10 @@ def test_lanes_carry_outputs_then_presence_then_pinches():
     r = rig()
     run(r, 1, hand())
     lanes = r.io.lanes()
-    # 12 axes, 2 presence, 8 pinch switches
-    assert len(lanes) == 22 and r.io.lane_names[12:14] == ["L in", "R in"]
+    # 12 axes, 2 presence, 8 pinch switches, then 16 dance lanes and 2 grabs
+    assert len(lanes) == 40 and r.io.lane_names[12:14] == ["L in", "R in"]
     assert all(math.isnan(u) for u in lanes[:6]) and lanes[12:14] == [0.0, 1.0]
-    assert lanes[14:] == [0.0] * 8          # a palm-only hand pinches nothing
+    assert lanes[14:22] == [0.0] * 8        # a palm-only hand pinches nothing
     assert r.io.lane_names[14:16] == ["L ind", "L mid"]
 
 
@@ -937,7 +937,7 @@ def test_pinches_drive_lanes_and_notes():
     # thumb to index only
     pinched = lambda: hand(tips=(10.0, 60.0, 60.0, 60.0), palm_w=100.0)
     run(r, 2, open_hand())
-    assert r.io.lanes()[14:] == [0.0] * 8
+    assert r.io.lanes()[14:22] == [0.0] * 8
     msgs = run(r, 2, pinched())
     on = [m for m in msgs if m.type == "note_on"]
     assert len(on) == 1 and on[0].note == 104          # right index = 100 + 4
@@ -955,14 +955,14 @@ def test_a_hand_that_leaves_releases_its_pinches():
     assert on == [104, 105, 121]          # index, middle, and the presence note
     off = [m for m in run(r, 2) if m.type == "note_off"]   # no hands at all
     assert sorted(m.note for m in off) == [104, 105, 121]  # index, middle, presence
-    assert r.io.lanes()[14:] == [0.0] * 8
+    assert r.io.lanes()[14:22] == [0.0] * 8
 
 
 def test_pinch_gates_can_be_turned_off():
     r = rig(pinch_gates=False)
     msgs = run(r, 2, hand(tips=(10.0, 10.0, 10.0, 10.0), palm_w=100.0))
     assert not any(m.note >= 100 and m.note < 120 for m in msgs if m.type == "note_on")
-    assert r.io.lanes()[14:] == [0.0] * 8
+    assert r.io.lanes()[14:22] == [0.0] * 8
 
 
 def test_pinch_ratios_can_be_axes_too():
@@ -1104,9 +1104,10 @@ def test_the_adapter_publishes_its_switches_as_gates(app):
     r = rig()
     run(r, 1, hand(), router=app.router)
     gates = app.router.gates["hand"]
-    assert len(gates) == 8
+    assert len(gates) == 10
     assert gates[0] == (r.io.gate_lane("left", "index"), "L ind")
-    assert gates[-1] == (r.io.gate_lane("right", "pinky"), "R pin")
+    assert gates[7] == (r.io.gate_lane("right", "pinky"), "R pin")
+    assert gates[-1] == (r.io.layout.grab["right"], "R grab")
     # every published gate names a real lane
     lanes = r.io.lanes()
     assert all(0 <= i < len(lanes) for i, _ in gates)
@@ -1117,7 +1118,7 @@ def test_the_adapter_publishes_its_switches_as_gates(app):
     assert len(rests) == len(lanes)
     assert rests[:len(r.s.axes)] == [a.rest_value for a in r.s.axes]
     assert rests[r.io.axis("left.x")] == 0.5 and rests[r.io.axis("left.y")] == 0.0
-    assert rests[len(r.s.axes):] == [0.0] * 10
+    assert rests[len(r.s.axes):] == [0.0] * 28
     r.s.axes[r.io.axis("left.y")].rest_value = 0.2                     # the setup says so
     run(r, 1, hand(), router=app.router)
     assert app.router.rests["hand"][r.io.axis("left.y")] == 0.2
@@ -1175,28 +1176,29 @@ def test_the_layout_is_one_object_published_once_and_rests_on_change():
     assert router.names["hand"] is lay.index                 # name → lane (row 20)
     assert r.io.lane_names is lay.names
     # every lane has one address name: the axes as dofs spells them, the
-    # presence lanes, the switches
+    # presence lanes, the pinch switches, the dance sources, the grabs
     assert lay.addresses == hands.addresses(r.s.axes) == hands.default_addresses()
-    assert lay.index == {n: i for i, n in enumerate(lay.addresses)} and len(lay.index) == 22
+    assert lay.index == {n: i for i, n in enumerate(lay.addresses)} and len(lay.index) == 40
     assert lay.index["right.roll"] == ax(r, "right.roll")
     assert lay.index["left.present"] == lay.presence["left"]
     assert lay.index["right.pinch.index"] == r.io.gate_lane("right", "index")
     assert [r.io.address(i) for i in (0, 11, 13, 21)] == [
         "hand:left.x", "hand:right.yaw", "hand:right.present", "hand:right.pinch.pinky"]
     rests = router.rests["hand"]
-    assert len(lay.names) == len(rests) == len(r.io.lanes()) == lay.n == 22
+    assert len(lay.names) == len(rests) == len(r.io.lanes()) == lay.n == 40
     # the index maps agree with the vector lanes() fills
     lanes = r.io.lanes()
     assert lanes[lay.presence["right"]] == 1.0 and lanes[lay.presence["left"]] == 0.0
     assert all(lay.gate[(s, f)] == r.io.gate_lane(s, f) for s in hands.SIDES
                for f in hands.PINCHES)
     assert lay.gates == [(lay.gate[(s, f)], lay.names[lay.gate[(s, f)]])
-                         for s in hands.SIDES for f in hands.PINCHES]
+                         for s in hands.SIDES for f in hands.PINCHES] + [
+        (lay.grab[s], lay.names[lay.grab[s]]) for s in hands.SIDES]
     run(r, 3, hand(), router=router)
     # nothing republished while nothing changed: the same objects
     assert router.labels["hand"] is lay.names and router.rests["hand"] is rests
     assert router.names["hand"] is lay.index
-    assert len(router.fed) == 4                       # feed is every frame
+    assert [s for s, _ in router.fed].count("hand") == 4  # feed is every frame
     r.s.axes[ax(r, "left.y")].rest_value = 0.3        # the setup moved a rest
     run(r, 1, hand(), router=router)
     assert router.rests["hand"] is not rests
@@ -1255,17 +1257,40 @@ class Backend:
 
 
 def daw_rig(monkeypatch, names):
-    from hyperspace.hands import core
+    """The hands' DAW out as it runs since plan 27 B3: a `HandsIO` that opens
+    no port, and the `hands-daw` sink — a `midi-out` device carrying its
+    messages through a `bridge.OutPort` found by name — over a fake backend.
+    `port` is the sink's port (what `io.out` was), `io` the instrument."""
+    from hyperspace import bridge, devices
 
     be = Backend(names)
-    monkeypatch.setattr(core.mido, "get_output_names", be.get_output_names)
-    monkeypatch.setattr(core.mido, "open_output", be.open_output)
+    monkeypatch.setattr(bridge.mido, "get_output_names", be.get_output_names)
+    monkeypatch.setattr(bridge.mido, "open_output", be.open_output)
     settings = HandSettings.from_config({"out": "fake daw"})
     settings.catch_s, settings.rate, settings.pinch_hold = 0.0, 0, 0.0
     clock = Clock()
     src = FakeSource(clock)
     io = HandsIO(settings, {"out": "fake daw"}, source=src, clock=clock)
-    return NS(io=io, src=src, clock=clock, s=settings, be=be)
+    leap = NS(role="leap", io=io)
+    ctx = devices.Context(devices=NS(get=lambda role: leap if role == "leap" else None))
+    port = bridge.OutPort("fake daw", clock=clock, who="hands-daw")
+    sink = devices.MidiOutDevice("hands-daw", {"port": "fake daw", "carries": "leap"}, ctx,
+                                 io=port, sender=bridge.Sender(clock=clock))
+    port.open()
+    return NS(io=io, src=src, clock=clock, s=settings, be=be, port=port, sink=sink)
+
+
+def drun(r, frames=1, *hs_):
+    """`frames` render frames through the registry's slots: the sink's
+    `poll` (its port looked for again), the hands' frame, the sink's `send`."""
+    out = []
+    for _ in range(frames):
+        r.clock.t += DT
+        r.src.put(*hs_)
+        r.sink.poll(DT, r.clock.t)
+        out += r.io.poll(DT)
+        r.sink.send(None, None)
+    return out
 
 
 def notes(msgs, kind="note_on"):
@@ -1273,97 +1298,112 @@ def notes(msgs, kind="note_on"):
 
 
 def test_a_lost_daw_port_is_looked_for_again_and_the_daw_resynced(monkeypatch, capsys):
-    from hyperspace.hands import core
+    from hyperspace import midi
 
     r = daw_rig(monkeypatch, ["Fake DAW 1"])
-    io, be, clock = r.io, r.be, r.clock
-    assert be.opened == [("Fake DAW 1", False)] and io.out_name == "Fake DAW" and io.error == ""
+    io, be, clock, port = r.io, r.be, r.clock, r.port
+    assert be.opened == [("Fake DAW 1", False)] and port.name == "Fake DAW" and port.error == ""
+    assert r.sink.status == "connected"
     pinched = hand(tips=(10.0, 80.0, 80.0, 80.0), palm_w=100.0)   # R index closed
-    run(r, 1, pinched)
-    port = io.out
-    assert 120 + 1 in notes(port.sent) and 100 + 4 in notes(port.sent)   # presence, R ind
-    assert io.last                                                       # something went out
+    drun(r, 1, pinched)
+    out = port.out
+    assert 120 + 1 in notes(out.sent) and 100 + 4 in notes(out.sent)     # presence, R ind
+    assert io.last and io.out_name == "Fake DAW"                         # something went out
     last = io.last
     # the DAW goes away: the port fails, is closed, and nothing is said to have been sent
-    port.broken = True
+    out.broken = True
     be.names = []
-    run(r, 1, hand(pos=(50.0, 300.0, 0.0), tips=(10.0, 80.0, 80.0, 80.0), palm_w=100.0))
-    assert io.out is None and io.error.startswith("send: port yanked")
-    assert port.closed and io.last == last
+    drun(r, 1, hand(pos=(50.0, 300.0, 0.0), tips=(10.0, 80.0, 80.0, 80.0), palm_w=100.0))
+    assert port.out is None and port.error.startswith("send: port yanked")
+    assert out.closed and io.last == last and r.sink.status == "lost"
     # a retry while the DAW is still gone makes no virtual port in its place
-    clock.t += core.RECONNECT_S
-    run(r, 1, hand(pos=(60.0, 310.0, 0.0), tips=(10.0, 80.0, 80.0, 80.0), palm_w=100.0))
-    assert io.out is None and io.error == "out 'fake daw': no such port" and len(be.opened) == 1
+    clock.t += midi.RECONNECT_S
+    drun(r, 1, hand(pos=(60.0, 310.0, 0.0), tips=(10.0, 80.0, 80.0, 80.0), palm_w=100.0))
+    assert port.out is None and port.error == "out 'fake daw': no such port"
+    assert len(be.opened) == 1 and io.daw_error == port.error
     # the DAW is back: the port reopens, the notes that are on go out again,
     # and every axis resends its value rather than waiting for a change
     be.names = ["Fake DAW 1"]
-    clock.t += core.RECONNECT_S
-    run(r, 1, hand(pos=(60.0, 310.0, 0.0), tips=(10.0, 80.0, 80.0, 80.0), palm_w=100.0))
-    assert io.out is not None and io.out is not port and be.opened[-1] == ("Fake DAW 1", False)
-    assert io.error == ""
-    assert notes(io.out.sent)[:2] == [121, 104]                          # presence, R index
-    ccs = [m for m in io.out.sent if m.type == "control_change"]
+    clock.t += midi.RECONNECT_S
+    drun(r, 1, hand(pos=(60.0, 310.0, 0.0), tips=(10.0, 80.0, 80.0, 80.0), palm_w=100.0))
+    assert port.out is not None and port.out is not out and be.opened[-1] == ("Fake DAW 1", False)
+    assert port.error == ""
+    assert notes(port.out.sent)[:2] == [121, 104]                        # presence, R index
+    ccs = [m for m in port.out.sent if m.type == "control_change"]
     assert {m.control for m in ccs} >= {a.number for a in r.s.axes if a.side == "right"}
     # the backend refusing: said once on stderr, retried every interval
     be.fail = True
-    io.out.broken = True
-    run(r, 1, hand(pos=(80.0, 330.0, 0.0)))
+    port.out.broken = True
+    drun(r, 1, hand(pos=(80.0, 330.0, 0.0)))
     for _ in range(3):
-        clock.t += core.RECONNECT_S
-        run(r, 1, hand(pos=(90.0, 330.0, 0.0)))
-    assert io.out is None and io.error == "out 'fake daw': no backend"
+        clock.t += midi.RECONNECT_S
+        drun(r, 1, hand(pos=(90.0, 330.0, 0.0)))
+    assert port.out is None and port.error == "out 'fake daw': no backend"
     assert capsys.readouterr().err.count("no backend") == 1
     be.fail = False
-    clock.t += core.RECONNECT_S
-    run(r, 1, hand(pos=(99.0, 330.0, 0.0)))
-    assert io.out is not None and io.error == ""
+    clock.t += midi.RECONNECT_S
+    drun(r, 1, hand(pos=(99.0, 330.0, 0.0)))
+    assert port.out is not None and port.error == ""
 
 
 def test_a_daw_port_that_stays_missing_is_looked_for_less_often(monkeypatch):
     """The hands' out port keeps midi.Ports' pace (audit R15): RECONNECT_S
     for RECONNECT_FAST looks, then RECONNECT_SLOW_S, and from the start
     again once it has opened."""
-    from hyperspace.hands import core
+    from hyperspace import bridge, midi
 
     r = daw_rig(monkeypatch, ["Fake DAW 1"])
-    io, be, clock = r.io, r.be, r.clock
+    be, clock, port = r.be, r.clock, r.port
     looks: list[float] = []
     real = be.get_output_names
-    monkeypatch.setattr(core.mido, "get_output_names", lambda: (looks.append(clock.t), real())[1])
-    run(r, 1, hand())
-    io.out.broken = True
+    monkeypatch.setattr(bridge.mido, "get_output_names",
+                        lambda: (looks.append(clock.t), real())[1])
+    drun(r, 1, hand())
+    port.out.broken = True
     be.names = []
-    run(r, 1, hand(pos=(50.0, 300.0, 0.0)))
-    assert io.out is None
+    drun(r, 1, hand(pos=(50.0, 300.0, 0.0)))
+    assert port.out is None
     for k in range(600):
         clock.t += 0.1
-        run(r, 1, hand(pos=(50.0 + k % 7, 300.0, 0.0)))
-    import itertools
-
+        drun(r, 1, hand(pos=(50.0 + k % 7, 300.0, 0.0)))
     gaps = [round(b - a, 1) for a, b in itertools.pairwise(looks)]
-    fast, slow = gaps[:core.RECONNECT_FAST - 1], gaps[core.RECONNECT_FAST:]  # (a 0.1 s poll)
-    assert all(core.RECONNECT_S <= g <= core.RECONNECT_S + 0.2 for g in fast), fast
-    assert slow and all(core.RECONNECT_SLOW_S <= g <= core.RECONNECT_SLOW_S + 0.2 for g in slow), slow
+    fast, slow = gaps[:midi.RECONNECT_FAST - 1], gaps[midi.RECONNECT_FAST:]  # (a 0.1 s poll)
+    assert all(midi.RECONNECT_S <= g <= midi.RECONNECT_S + 0.2 for g in fast), fast
+    assert slow and all(midi.RECONNECT_SLOW_S <= g <= midi.RECONNECT_SLOW_S + 0.2
+                        for g in slow), slow
     assert len(looks) <= 12
     be.names = ["Fake DAW 1"]
-    clock.t += core.RECONNECT_SLOW_S
-    run(r, 1, hand(pos=(60.0, 300.0, 0.0)))
-    assert io.out is not None and io._out_misses == 0
+    clock.t += midi.RECONNECT_SLOW_S
+    drun(r, 1, hand(pos=(60.0, 300.0, 0.0)))
+    assert port.out is not None and port.misses == 0
 
 
 def test_a_virtual_port_is_made_again_when_it_fails(monkeypatch):
-    from hyperspace.hands import core
+    from hyperspace import midi
 
     r = daw_rig(monkeypatch, [])                       # nothing to join: a virtual port
-    io, be, clock = r.io, r.be, r.clock
-    assert be.opened == [("fake daw", True)] and io.error == ""
-    run(r, 1, hand())
-    io.out.broken = True
-    run(r, 1, hand(pos=(50.0, 300.0, 0.0)))
-    assert io.out is None
-    clock.t += core.RECONNECT_S
-    run(r, 1, hand(pos=(60.0, 300.0, 0.0)))
-    assert io.out is not None and be.opened[-1] == ("fake daw", True) and io.error == ""
+    be, clock, port = r.be, r.clock, r.port
+    assert be.opened == [("fake daw", True)] and port.error == ""
+    drun(r, 1, hand())
+    port.out.broken = True
+    drun(r, 1, hand(pos=(50.0, 300.0, 0.0)))
+    assert port.out is None
+    clock.t += midi.RECONNECT_S
+    drun(r, 1, hand(pos=(60.0, 300.0, 0.0)))
+    assert port.out is not None and be.opened[-1] == ("fake daw", True) and port.error == ""
+
+
+def test_the_hands_daw_sink_sends_what_the_instrument_made_and_no_port_is_opened(monkeypatch):
+    """Plan 27 B3: `HandsIO` opens no port whatever `[hands] out` says; the
+    frame's DAW messages wait in `outbox` and the `hands-daw` sink sends
+    exactly them, in order — what `HandsIO._send` sent before."""
+    r = daw_rig(monkeypatch, ["Fake DAW 1"])
+    assert r.io.out is None and len(r.be.opened) == 1      # the sink's one port, not the hands'
+    made = []
+    for k in range(5):
+        made += drun(r, 1, hand(pos=(10.0 * k, 200.0 + 5 * k, 0.0),
+                               tips=(10.0, 80.0, 80.0, 80.0), palm_w=100.0))
+    assert made and r.port.out.sent == made and r.io.outbox == []
 
 
 def test_an_injected_port_is_the_callers_and_never_reopened():
@@ -1598,7 +1638,7 @@ def test_the_sweep_sets_the_box_with_its_margin_and_a_symmetric_x(tmp_path):
                                     f"{bx[1] - bx[0]:.0f} × {by[1] - by[0]:.0f} × "
                                     f"{bz[1] - bz[0]:.0f} mm")
     saved = json.loads((tmp_path / "hands.json").read_text())
-    assert saved["schema"] == "hyperspace.hands/2"
+    assert saved["schema"] == "hyperspace.hands/3"      # /3 since plan 26 A2 (units)
     assert saved["box"]["x"] == [round(-(xs[1] + m), 3), round(xs[1] + m, 3)]
     # the other hand, never swept, is inside on its own side
     run(r, 1, hand("left", pos=(-xs[1], 200.0, 0.0)), hand("right", pos=(xs[1], ys[1], zs[0])))
@@ -1692,9 +1732,9 @@ def test_the_first_rewrite_of_an_old_file_keeps_a_backup(tmp_path):
     r = rig(tmp_path)
     sweep(r, wide)                                    # the first save of this build
     assert bak.read_text() == OLD_FILE
-    assert json.loads(path.read_text())["schema"] == "hyperspace.hands/2"
+    assert json.loads(path.read_text())["schema"] == "hyperspace.hands/3"   # plan 26 A2
     assert "the old file kept as hands.json.bak-v1" in r.io.cal_note
-    sweep(r, wide)                                    # a /2 file now: no second copy
+    sweep(r, wide)                                    # a /3 file now: no second copy
     r.io.reset_ranges()
     assert sorted(p.name for p in tmp_path.iterdir()) == ["hands.json", "hands.json.bak-v1"]
     assert bak.read_text() == OLD_FILE and "kept" not in r.io.cal_note
@@ -1727,7 +1767,7 @@ def test_a_backup_that_cannot_be_made_never_stops_the_save(tmp_path, monkeypatch
     monkeypatch.setattr(hands.core, "_keep", refuse)
     sweep(r, wide)
     saved = json.loads(path.read_text())
-    assert saved["schema"] == "hyperspace.hands/2" and saved["box"] is not None
+    assert saved["schema"] == "hyperspace.hands/3" and saved["box"] is not None
     assert "no backup of the old file: read-only folder" in r.io.cal_note
     assert "calibrated" in r.io.cal_note
     assert [p.name for p in tmp_path.iterdir()] == ["hands.json"]

@@ -24,6 +24,11 @@ Top to bottom:
                            where the hand is (the shaped target) as a
                            hairline, the rest value as a dim tick, the
                            MIDI out on the right. Click a row to edit it.
+  the dance sources        a line per hand: five curls and the grab
+                           switch (● closed, a fist; plan 24 C5), then
+                           spread, energy, flick; a line for both: gap,
+                           twist — small bars, hollow while they read
+                           nothing; hover one for its address (plan 24 C4)
   the selected axis        its transfer (dead zone and curve over the
                            calibrated range) with the live point on it,
                            then invert · centred · dead zone · curve ·
@@ -51,7 +56,21 @@ from imgui_bundle import imgui
 
 from .. import ui
 from ..ghost import MODES as GHOST_MODES
-from .core import BOX_AXES, BOX_MARGIN, FEATURES, GROUP, PINCHES, SIDES, conflicts, mirror
+from .core import (
+    BOX_AXES,
+    BOX_MARGIN,
+    DIGITS,
+    FEATURES,
+    GRAB_CLOSE,
+    GRAB_OPEN,
+    GROUP,
+    PINCHES,
+    SIDES,
+    conflicts,
+    fist,
+    grab_name,
+    mirror,
+)
 from .signal import shape
 
 ROW_LABEL_W = 62.0
@@ -247,7 +266,7 @@ def _note_line(text: str) -> None:
     shown = ui.fit_text(text, imgui.get_content_region_avail().x)
     imgui.text_colored(ui.WARN, shown)
     if shown != text and imgui.is_item_hovered():
-        imgui.set_tooltip(text)
+        ui.tooltip(text)
 
 
 def ghost_notes(panel) -> list[tuple[str, bool]]:
@@ -274,7 +293,7 @@ def _more_chip(panel, label: str, notes) -> None:
         imgui.open_popup(GHOST_POPUP)
     if imgui.is_item_hovered():
         tip = "Mirror" + (" and Tethers" if "ghost.tethers" in panel.reg else "")
-        imgui.set_tooltip("\n".join([f"{tip}, and the ghost's notes.", *(t for t, _ in notes)]))
+        ui.tooltip("\n".join([f"{tip}, and the ghost's notes.", *(t for t, _ in notes)]))
 
 
 def _more_popup(panel, notes) -> None:
@@ -323,10 +342,13 @@ def _status(io, notes=()) -> None:
     port = io.out_name or "no DAW port"
     imgui.text_disabled(f"{io.status or '—'}  ·  {_ins(io)}  ·  {port}")
     if imgui.is_item_hovered():
-        imgui.set_tooltip("● in the box  ·  ◌ tracked, but outside the box: it reads "
+        ui.tooltip("● in the box  ·  ◌ tracked, but outside the box: it reads "
                           "absent  ·  ○ not seen")
-    if io.error:
-        imgui.text_colored(ui.WARN, io.error)
+    # the DAW port is the hands-daw sink's (plan 27 B3): why it has none
+    # comes through `HandsIO.carry`, beside the instrument's own error
+    err = io.error or getattr(io, "daw_error", "")
+    if err:
+        imgui.text_colored(ui.WARN, err)
     elif io.last:
         imgui.text_disabled(f"last out  {io.last}")
 
@@ -465,7 +487,7 @@ def _box(io) -> None:
     imgui.dummy(imgui.ImVec2(BOX_W, BOX_H))
     if imgui.is_item_hovered():
         said = _box_text(box)
-        imgui.set_tooltip("The box from above: the camera at the centre, the "
+        ui.tooltip("The box from above: the camera at the centre, the "
                           "performer at the bottom edge. A dot's size is the hand's "
                           "height, and the gauge at the right shows it "
                           f"({GAUGE_MM[0]:.0f}–{GAUGE_MM[1]:.0f} mm).\n"
@@ -479,20 +501,39 @@ def _axes(panel, io, settings) -> int:
     k = _sel(panel, len(settings.axes))
     bad = conflicts(settings)
     h = imgui.get_text_line_height() + 2
+    # the dance sources (plan 24 C4) take a column on the right of the
+    # rows, so the page grows no taller: it has to fit the control window
+    dance = io is not None and getattr(io, "dance", None) is not None
+    right = DANCE_W if dance else 0.0
+    top, avail = imgui.get_cursor_screen_pos(), imgui.get_content_region_avail().x
     # twelve rows have to share the page with the editor: tight spacing
     imgui.push_style_var(imgui.StyleVar_.item_spacing,
                          imgui.ImVec2(imgui.get_style().item_spacing.x, 2.0))
     for i, a in enumerate(settings.axes):
-        if _axis_row(panel, io, i, a, i == k, h, a.name in bad):
+        if _axis_row(panel, io, i, a, i == k, h, a.name in bad, right):
             _select(panel, i)
             k = i
+    if dance:
+        end = imgui.get_cursor_screen_pos()
+        imgui.set_cursor_screen_pos(imgui.ImVec2(top.x + avail - DANCE_W + DANCE_GAP, top.y))
+        _dance(io, h)
+        # back under both: the column (five lines) is taller than a short
+        # `dofs` list, and what follows must not run into it. Then an
+        # empty item, so the window's content size takes the cursor; it
+        # adds one item spacing, which the cursor is set that much short of
+        gap = imgui.get_style().item_spacing.y
+        y = max(end.y, imgui.get_item_rect_max().y + gap)
+        imgui.set_cursor_screen_pos(imgui.ImVec2(end.x, y - gap))
+        imgui.dummy(imgui.ImVec2(0.0, 0.0))
     imgui.pop_style_var()
     return k
 
 
-def _axis_row(panel, io, i: int, a, selected: bool, h: float, conflict: bool) -> bool:
+def _axis_row(panel, io, i: int, a, selected: bool, h: float, conflict: bool,
+              right: float = 0.0) -> bool:
     """One axis: its name, the output bar with the hand's live point and the
-    rest tick, and what goes to the DAW. True when it was clicked."""
+    rest tick, and what goes to the DAW, `right` px short of the edge. True
+    when it was clicked."""
     st = io.state[i] if io is not None else None
     here = io is not None and io.present[a.side]
     imgui.push_style_color(imgui.Col_.text, ui.RED if conflict else
@@ -500,7 +541,7 @@ def _axis_row(panel, io, i: int, a, selected: bool, h: float, conflict: bool) ->
     hit = imgui.selectable(f"{a.label}##hax{i}", selected, 0, imgui.ImVec2(ROW_LABEL_W, h))[0]
     imgui.pop_style_color()
     imgui.same_line()
-    bar_w = imgui.get_content_region_avail().x - OUT_W
+    bar_w = imgui.get_content_region_avail().x - OUT_W - right
     pos = imgui.get_cursor_screen_pos()
     dl = imgui.get_window_draw_list()
     bx0, by0, bx1, by1 = pos.x, pos.y + 3, pos.x + bar_w, pos.y + h - 3
@@ -526,11 +567,87 @@ def _axis_row(panel, io, i: int, a, selected: bool, h: float, conflict: bool) ->
             y += " (DAW only; lane —)"
         raw = "—" if st is None or st.raw is None else \
             f"{st.raw:.1f} {FEATURES[a.feature][0]}"
-        imgui.set_tooltip(f"{a.name}: out {y}  ·  hand {raw}")
+        ui.tooltip(f"{a.name}: out {y}  ·  hand {raw}")
     imgui.same_line()
     q = "" if st is None or st.q is None else f" {st.q}"
     imgui.text_disabled(_out_text(a) + q if a.out != "off" else "off")
     return hit
+
+
+DANCE_BAR_W = 16.0     # one dance source's bar
+DANCE_W = 220.0        # the dance column, right of the axis rows …
+DANCE_GAP = 14.0       # … this much of it a gap
+
+
+def _dance(io, h: float) -> None:
+    """The dance sources (plan 24 C4), live, in a column beside the axes:
+    per hand a row of the five curls (thumb … pinky) and the grab switch
+    (C5: ● while the hand is a closed fist), and a row of spread, energy
+    and flick; then a row for the two hands together — gap, twist.
+    Each a small bar like an axis's output, hollow while it reads nothing
+    (the hand away, no skeleton). Hover a bar for its address and value:
+    what a ROUTING row names."""
+    lay = io._layout()
+    lanes, pair = io.lanes(), io.pair_lanes()
+    imgui.begin_group()
+    for s in SIDES:
+        col = LEFT if io.present[s] else ui.DIM
+        side = s[0].upper()
+        rows = [(f"{side} curl", [(None, f"curl.{d}") for d in DIGITS]),
+                (f"{side} spr", [(None, "spread"), ("en", "energy"), ("flk", "flick")])]
+        for label, bars in rows:
+            imgui.text_colored(col, label)
+            for tag, kind in bars:
+                if tag:
+                    imgui.same_line(0.0, 6.0)
+                    imgui.text_disabled(tag)
+                imgui.same_line(0.0, 3.0)
+                _dance_bar(f"hand:{s}.{kind}", lanes[lay.dance[(s, kind)]], h)
+            if label.endswith("curl"):
+                imgui.same_line(0.0, 6.0)
+                _grab(io, s, lanes[lay.grab[s]])
+    for k, name in enumerate(lay.pair_names):
+        if k:
+            imgui.same_line(0.0, 6.0)
+        imgui.text_colored(ui.DIM, name)
+        imgui.same_line(0.0, 3.0)
+        _dance_bar(f"hands:{lay.pair_addresses[k]}", pair[k], h, centred=name == "twist")
+    imgui.end_group()
+
+
+def _grab(io, side: str, v: float) -> None:
+    """One hand's grab switch: ● lit while closed, ○ open. Hover: the
+    address, and how closed the hand is (`fist`, what the switch reads)
+    against where it closes and lets go — the number to watch."""
+    on = v >= 0.5
+    imgui.text_colored(ui.RED if on else (ui.TEXT if io.present[side] else ui.FAINT),
+                       f"grab {'●' if on else '○'}")
+    if imgui.is_item_hovered():
+        f = fist(io.dance[side].raw.get("curl"))
+        level = "—" if f is None else f"{f:.2f}"
+        ui.tooltip(f"hand:{grab_name(side)}: {'closed' if on else 'open'}  ·  "
+                          f"fist {level} (closes ≥ {GRAB_CLOSE:.2f}, "
+                          f"lets go < {GRAB_OPEN:.2f})")
+
+
+def _dance_bar(address: str, v: float, h: float, *, centred: bool = False) -> None:
+    """One source's value as a small bar; a centred one (the twist) with a
+    tick at the middle. Hover: the address and the value."""
+    pos = imgui.get_cursor_screen_pos()
+    dl = imgui.get_window_draw_list()
+    x0, y0, x1, y1 = pos.x, pos.y + 3, pos.x + DANCE_BAR_W, pos.y + h - 3
+    dl.add_rect(imgui.ImVec2(x0, y0), imgui.ImVec2(x1, y1), ui.u32(ui.LINE))
+    live = not math.isnan(v)
+    if live:
+        dl.add_rect_filled(imgui.ImVec2(x0 + 1, y0 + 1),
+                           imgui.ImVec2(x0 + 1 + (DANCE_BAR_W - 2) * v, y1 - 1),
+                           ui.u32(imgui.ImVec4(0.92, 0.92, 0.92, 0.85)))
+    if centred:
+        mx = x0 + DANCE_BAR_W / 2
+        dl.add_line(imgui.ImVec2(mx, y1), imgui.ImVec2(mx, y1 + 2), ui.u32(ui.DIM))
+    imgui.dummy(imgui.ImVec2(DANCE_BAR_W, h))
+    if imgui.is_item_hovered():
+        ui.tooltip(f"{address}: {v:.3f}" if live else f"{address}: —")
 
 
 def _out_text(a) -> str:
@@ -566,7 +683,7 @@ def _editor(panel, io, settings, k: int) -> None:
     if imgui.small_button("mirror"):
         mirror(settings, a.name)
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Copy this axis's feel (not its MIDI out) to the same axis "
+        ui.tooltip("Copy this axis's feel (not its MIDI out) to the same axis "
                           "on the other hand.")
     if io is not None:
         imgui.same_line()
@@ -576,7 +693,7 @@ def _editor(panel, io, settings, k: int) -> None:
             io.solo = None if solo else k
         imgui.pop_style_color()
         if imgui.is_item_hovered():
-            imgui.set_tooltip("Send only this axis to the DAW port — for a DAW's MIDI learn.")
+            ui.tooltip("Send only this axis to the DAW port — for a DAW's MIDI learn.")
     imgui.end_group()
     ui._micro("On exit")
     imgui.same_line(ui.LABEL_W)
@@ -624,7 +741,7 @@ def _transfer(a, st) -> None:
                              ui.u32(ui.RED))
     imgui.dummy(imgui.ImVec2(s, s))
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Hand position across the calibrated range (→) against what "
+        ui.tooltip("Hand position across the calibrated range (→) against what "
                           "the axis outputs before attack/decay (↑). Dead zone and curve "
                           "shape it; the red dot is the hand now.")
 
@@ -644,7 +761,7 @@ def _calibrate(io, settings, k: int) -> None:
         if imgui.small_button(f"calibrate {CAL_SECONDS:.0f} s"):
             io.start_calibration(CAL_SECONDS)
         if imgui.is_item_hovered():
-            imgui.set_tooltip("For the next 20 s, move each hand through everything it "
+            ui.tooltip("For the next 20 s, move each hand through everything it "
                               "should reach. Each axis's range becomes what you covered "
                               "(2nd–98th percentile), saved to hands.json for this box, "
                               "and the box becomes what your palms covered plus "
@@ -653,7 +770,7 @@ def _calibrate(io, settings, k: int) -> None:
         if imgui.small_button("reset ranges"):
             io.reset_ranges()
         if imgui.is_item_hovered():
-            imgui.set_tooltip("Every axis's range back to its default, and the box "
+            ui.tooltip("Every axis's range back to its default, and the box "
                               "opened: a hand counts wherever the tracker sees it. "
                               "Another sweep sets both again.")
     st, a = io.state[k], settings.axes[k]

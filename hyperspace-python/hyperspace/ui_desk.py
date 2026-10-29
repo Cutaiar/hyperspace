@@ -1,12 +1,19 @@
 """The APC40 drawn on screen (plan 14 WP7, decision 25 (a); plan 17 WP4).
 
+**APC40-only** (plan 27 B2): with several MIDI desks listed, this draws
+the first MIDI role's rows (`Bindings.active()` with no role) over
+`apc40.LAYOUT` — the APC40 in every rig that lists it first. A second
+desk (a `generic` profile) has no layout to draw; plan 29's generic
+on-screen desk is what replaces this module for any profile.
+
 A picture of the desk in the control window: every control of
 `apc40.LAYOUT` at its place on the device, with its glyph — the same
 glyph the ROUTING page prints first on a desk or session row and Learn
 prints in its messages — so a row can be found on the device by looking.
 
 **It takes the room it has** (`room`, plan 17 fork 1): the space left of
-the panel, bottom-left, above the cheat sheet when that shows; with the
+the panel, bottom-left, above the cheat sheet when that shows and under
+the pad diagram when that is up (ui_pad.py); with the
 panel hidden (`ui.panel`: H, DEVICE ON/OFF, the header's `big` chip) it is
 the whole control window. There is no DESK page and no param for its
 size. Once a layout unit is `LABEL_UNIT` px wide every lit control also
@@ -48,6 +55,16 @@ line lets go, and so does `PICK_S` seconds without a click (`tick`) —
 a dimmed page is never left standing. While "Learn desk" is armed a
 click completes it instead, as a knob bump would.
 
+**The offer** (plan 24 C3): while a mappable control is picked, the
+empty ground of the right-hand section (`OFFER`, under the transport row)
+lists the params this preset uses, ranked (`offer`, `learn.ranked`: what
+its routes and macros move, what it set off the group default, the
+effects and layers it has on, then what is already on the desk), and its
+chip "all params ▾" opens every param, this preset's first and then a
+menu per group — not the whole registry in one list. A click on one puts
+the picked control there (`take`): `Learn.map_picked`, the same road the
+page's click takes, which still works beside it.
+
 A function over the Panel, like ui_lfo: the cache lives on the panel, a
 save of this file lands live (hotreload.MODULES). `ui.desk` (the SYSTEM
 page, beside the cheat sheet's switch) hides it at any size. The window
@@ -66,8 +83,8 @@ from imgui_bundle import imgui
 
 from . import apc40, learn, ui, ui_routing
 from .apc40 import GREEN, GREEN_BLINK, RED, RED_BLINK, YELLOW, YELLOW_BLINK
-from .params import Kind
-from .routing import Binding, led_level
+from .params import PERFORMANCE_GROUPS, Kind
+from .routing import Binding, led_shade
 
 MIN_W = 300.0              # the window is never narrower, px
 MIN_H = 120.0              # …or shorter (a control window with no room above the sheet)
@@ -81,10 +98,21 @@ GAP = EDGE                 # from the cheat sheet
 LABEL_PX = (11.0, 18.0)    # the labels' type size: 0.2 of a unit, kept in this range
 LABEL_LINES = 2            # a label wraps to at most this many lines
 BIG, PANEL = "big", "panel"    # the header's chip: hide the panel / bring it back
+CLOSE = "×"                # the header's last chip: close the desk (`ui.desk`)
 PICK_S = 20.0              # a picked control lets go by itself after this long with no click
 PICK_MOVE = 12.0           # px the mouse must leave a pick's click by before a click can map
 SAYS_S = 0.5               # how long the labels' texts are kept (a renamed preset shows by then)
 LET_GO_TIP = "click to let go"     # the footer's picked line: on it where it fits, and on hover
+# The offer (plan 24 C3): where the picked control's list of this preset's
+# params is drawn, in layout units (x, y, w, h) — the right-hand section's
+# empty ground between the transport row and the crossfader, so it covers
+# no control and the desk's own layout never moves while a pick stands
+OFFER = (apc40.RIGHT, 10.45, 4.0, 2.95)
+OFFER_ALL = "all params ▾"          # its chip: every param, this preset's first, then by group
+OFFER_SHORT = "all ▾"               # …where the long label does not fit beside the head
+OFFER_PAD = (4.0, 3.0)              # its inner padding, px
+OFFER_SPACING = (4.0, 1.0)          # …and its items' spacing: three items fit on the small desk
+OFFER_CHIP_PAD = (5.0, 0.0)         # the chip's padding: one text line tall
 
 # LED colours by the grid velocity (apc40's table); any other lit button red
 _LED = {GREEN: (0.30, 0.85, 0.40), GREEN_BLINK: (0.30, 0.85, 0.40),
@@ -108,9 +136,22 @@ def _state(panel) -> dict:
 
 
 def _key(table) -> tuple:
-    """What changes the lit map: the table's serials and its rows."""
+    """What changes the lit map: the table's serials and its rows — and the
+    surface page's (plan 31 §A: its flips, and its rows, rebuilt when the
+    lane or the length changes)."""
     return (table.layer, table.layer_serial, table.desk_serial,
-            getattr(table, "redraw_serial", 0), id(table.bindings), len(table.bindings))
+            getattr(table, "redraw_serial", 0), id(table.bindings), len(table.bindings),
+            getattr(table, "page_serial", 0),
+            id(table.page_rows) if getattr(table, "page", None) is not None else None)
+
+
+PAGE_OWNS = "the sequencer page owns this"
+
+
+def on_page(table, c: apc40.Control) -> bool:
+    """Is this control one the surface page that is up holds (plan 31 §A)?"""
+    probe = Binding(c.source, "")
+    return any(probe.overlaps(b) for b in getattr(table, "page_rows", ()))
 
 
 def lit(table) -> dict[str, Binding]:
@@ -143,6 +184,8 @@ def mappable(table, c: apc40.Control) -> str | None:
     (D6), and nothing is mapped while the global layer is up (D5) — what
     `Learn.learn_control` refuses, asked before the click."""
     name = apc40.named(c.source) or c.glyph
+    if on_page(table, c):                       # (learn.blocked says "invariant" too)
+        return f"{name}: {PAGE_OWNS}"
     why = learn.blocked(table, c.source)        # the rule `learn_control` refuses by
     if why == "invariant":
         return f"{name} is invariant (the session's)"
@@ -290,6 +333,155 @@ def footer_line(panel, now: float | None = None) -> tuple[str, bool] | None:
     return f"{c.glyph} picked ({secs} s): click a param to put it here", True
 
 
+def offer(panel, table) -> tuple[list[tuple[str, str]], list[tuple[str, list[str]]]]:
+    """What a picked control is offered (plan 24 C3): `learn.ranked` over
+    every param a desk control may take (`ui_routing.desk_target`) — this
+    preset's own first, ranked, then the rest by group. Built from the
+    registry, the table and the library's group defaults, and kept while
+    the pick, the table and the loaded preset stand."""
+    st = _state(panel)
+    lib = getattr(panel, "library", None)
+    key = (getattr(getattr(panel, "learn", None), "control", None), _key(table),
+           getattr(table, "macros_serial", 0),
+           lib.current("presets") if lib is not None else None)
+    hit = st.get("offer")
+    if hit is not None and hit[0] == key:
+        return hit[1]
+    reg = panel.reg
+    params = [(p.id, p.group) for p in reg if ui_routing.desk_target(p)]
+    values = reg.snapshot()
+    defaults: dict = {}
+    if lib is not None and lib.reg is not None:
+        for g in PERFORMANCE_GROUPS:
+            defaults.update(lib.defaults(g))
+    routed = {b.target for b in table.routes() if b.enabled}
+    routed |= {s.base for m in table.macros.values() for s in m.subs if s.base}
+    on_desk = {b.target for b in table.desk() if b.enabled}
+    # (plan 33 T7: whether the faces show a picture is the graph's wire)
+    spec = panel.graph_now()[1] if hasattr(panel, "graph_now") else None
+    media = learn.faces_media(spec, getattr(getattr(panel, "view", None), "switch", None))
+    # (plan 36 T4: a look-back's and the dream's knobs show while drawn)
+    out = learn.ranked(params, values, defaults, routed, on_desk, media=media,
+                       drawn=learn.drawn_of(spec))
+    st["offer"] = (key, out)
+    return out
+
+
+def take(panel, pid: str) -> bool:
+    """The offer's item `pid` clicked: the picked control goes on it —
+    `Learn.map_picked`, the one road a click on a param's widget takes."""
+    lrn = getattr(panel, "learn", None)
+    if lrn is None or getattr(lrn, "control", None) is None:
+        return False
+    return lrn.map_picked(pid, apc40)
+
+
+def _offer_item(panel, pid: str, why: str, width: float) -> None:
+    p = panel.reg.get(pid)
+    name = (p.label if p is not None and p.label else pid)
+    if imgui.selectable(f"{ui.fit_text(name, max(0.0, width))}##offer.{pid}", False)[0]:
+        take(panel, pid)
+    lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+    _state(panel).setdefault("offer_rects", {})[pid] = (lo.x, lo.y, hi.x, hi.y)
+    if imgui.is_item_hovered():
+        ui.tooltip(f"put {getattr(picked(panel), 'glyph', '')} on {name}\n{pid} · {why}")
+
+
+def _offer_all(panel, used, rest) -> None:
+    """The chip's popup: this preset's params, then every other param a
+    menu per group."""
+    if not imgui.begin_popup("##offer_all"):
+        return
+    ui._micro("this preset", ui.DIM)
+    if not used:
+        imgui.text_disabled("nothing it moves, routes or switches on")
+    for pid, why in used:
+        p = panel.reg.get(pid)
+        if imgui.menu_item_simple(f"{p.label if p is not None else pid}   ({why})##all.{pid}"):
+            take(panel, pid)
+    imgui.separator()
+    for group, ids in rest:
+        if imgui.begin_menu(f"{group}##all.{group}"):
+            for pid in ids:
+                p = panel.reg.get(pid)
+                if imgui.menu_item_simple(f"{p.label if p is not None else pid}##all.{pid}"):
+                    take(panel, pid)
+            imgui.end_menu()
+    imgui.end_popup()
+
+
+def _offer(panel, table, origin, unit) -> None:
+    """The picked control's offer, in the `OFFER` ground: a chip that
+    opens every param, then this preset's params, ranked (`offer`); a
+    click on one maps the pick there. Drawn only while a click on a param
+    would map it (`picking`)."""
+    st = _state(panel)
+    for k in ("offer_rects", "offer_box", "offer_chip"):
+        st.pop(k, None)
+    c = picking(panel)
+    if c is None:
+        return
+    used, rest = offer(panel, table)
+    (ox, oy), (sx, sy) = origin, unit
+    x, y, w, h = OFFER
+    imgui.set_cursor_screen_pos(_v(ox + x * sx, oy + y * sy))
+    size = _v(w * sx, h * sy)
+    st["offer_drawn"] = [pid for pid, _why in used]
+    # compact inside: the small desk gives it about 107 × 79 px at the
+    # default control size, which must hold the head and three items
+    imgui.push_style_var(imgui.StyleVar_.window_padding, _v(*OFFER_PAD))
+    shown = imgui.begin_child("##offer", size, imgui.ChildFlags_.borders)
+    imgui.pop_style_var()
+    if not shown:
+        imgui.end_child()
+        return
+    lo = imgui.get_window_pos()
+    st["offer_box"] = (lo.x, lo.y, lo.x + size.x, lo.y + size.y)
+    imgui.push_font(ui._FONTS["ui"], LABEL_PX[0] if sx < LABEL_UNIT else label_px(sx))
+    imgui.push_style_var(imgui.StyleVar_.item_spacing, _v(*OFFER_SPACING))
+    try:
+        ui._micro(f"{c.glyph} on", ui.RED)
+        _offer_chip(panel)
+        _offer_all(panel, used, rest)
+        room_ = imgui.get_content_region_avail().x
+        if not used:
+            imgui.text_disabled(ui.fit_text("nothing of this preset's", room_))
+        for pid, why in used:
+            _offer_item(panel, pid, why, room_)
+    finally:
+        imgui.pop_style_var()
+        imgui.pop_font()
+        imgui.end_child()
+
+
+def _chip_width(label: str) -> float:
+    return imgui.calc_text_size(label.split("##")[0]).x + 2 * OFFER_CHIP_PAD[0]
+
+
+def _offer_chip(panel) -> None:
+    """The head's chip, beside "D5 ON" when it fits there: the long label,
+    else the short one, else the short one on a line of its own — never
+    wider than the room it is drawn in."""
+    after = imgui.get_item_rect_max().x + imgui.get_style().item_spacing.x
+    right = imgui.get_window_pos().x + imgui.get_window_width() - OFFER_PAD[0]
+    label = next((lb for lb in (OFFER_ALL, OFFER_SHORT) if after + _chip_width(lb) <= right),
+                 None)
+    if label is not None:
+        imgui.same_line()
+    else:
+        label = OFFER_SHORT
+    imgui.push_style_var(imgui.StyleVar_.frame_padding, _v(*OFFER_CHIP_PAD))
+    imgui.push_style_var(imgui.StyleVar_.frame_rounding, 999.0)
+    hit = imgui.button(f"{label}##offer")
+    imgui.pop_style_var(2)
+    a, b = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+    _state(panel)["offer_chip"] = (a.x, a.y, b.x, b.y)
+    if hit:
+        imgui.open_popup("##offer_all")
+    if imgui.is_item_hovered():
+        ui.tooltip("Every param: this preset's first, then the rest by group")
+
+
 def click(panel, table, c: apc40.Control, b: Binding | None) -> None:
     """A left click on a control of the desk.
 
@@ -305,6 +497,9 @@ def click(panel, table, c: apc40.Control, b: Binding | None) -> None:
        (the desk shrinks to its column and the pick is still framed)."""
     lrn = getattr(panel, "learn", None)
     if lrn is None:
+        return
+    if on_page(table, c):                   # neither learned nor picked (plan 31 §A)
+        lrn.said(f"{c.glyph}: {PAGE_OWNS}")
         return
     if getattr(lrn, "learning", None) is not None:
         if lrn.accepts(c.source):
@@ -358,19 +553,23 @@ def _hover(panel, table, c: apc40.Control, b: Binding | None) -> str:
 # ---------------------------------------------------------------- the room
 
 def room(display: tuple[float, float], panel_x: float | None,
-         sheet: tuple[float, float] | None) -> tuple[float, float, float, float]:
+         sheet: tuple[float, float] | None,
+         pad_h: float = 0.0) -> tuple[float, float, float, float]:
     """(x, y, w, h) of the desk window. `panel_x`: the panel's left edge,
     None while it is hidden. `sheet`: the cheat sheet's (w, h), None
-    while it is off.
+    while it is off. `pad_h`: the height of the pad diagram over it
+    (ui_pad.py), 0 while that is off.
 
     Bottom-left, `EDGE` from the window's edges. Its right edge is `EDGE`
     left of the panel, or of the window's right edge with the panel
     hidden; never narrower than `MIN_W`. The cheat sheet, when on: with
     the panel open the desk sits above it; with the panel hidden, beside
-    it, full height. As tall as there is room for, capped so a layout
-    unit is never taller than it is wide."""
+    it, full height. As tall as there is room for — under the pad
+    diagram, when that is up — capped so a layout unit is never taller
+    than it is wide."""
     dw, dh = display
     x, bottom = EDGE, dh - EDGE
+    top = EDGE + (pad_h + GAP if pad_h else 0.0)
     right = (dw if panel_x is None else panel_x) - EDGE
     if sheet is not None:
         if panel_x is None:
@@ -379,7 +578,7 @@ def room(display: tuple[float, float], panel_x: float | None,
             bottom -= sheet[1] + GAP
     w = max(MIN_W, right - x)
     unit = (w - 2 * PAD) / apc40.LAYOUT_W
-    h = max(MIN_H, min(bottom - EDGE, unit * apc40.LAYOUT_H + 2 * PAD + HEAD_H))
+    h = max(MIN_H, min(bottom - top, unit * apc40.LAYOUT_H + 2 * PAD + HEAD_H))
     w, h = float(int(w)), float(int(h))          # whole pixels, as imgui places a window
     return x, bottom - h, w, h
 
@@ -393,23 +592,48 @@ def _room(panel) -> tuple[float, float, float, float]:
     if panel.open:
         panel_x = getattr(panel, "_panel_x", None)
         if panel_x is None:
-            panel_x = display[0] - ui.PANEL_W - EDGE
+            panel_x = display[0] - ui.panel_w(display) - EDGE
     sheet = None
     if panel.cheatsheet:
         sheet = (getattr(panel, "_sheet_w", 0.0), getattr(panel, "_sheet_h", 0.0))
-    return room(display, panel_x, sheet)
+    # the pad diagram sits at the top of the same column, and is drawn
+    # before this (ui.Panel._draw), so its height is this frame's
+    pad_h = getattr(panel, "_pad_h", 0.0) if getattr(panel, "pad_diagram", False) else 0.0
+    return room(display, panel_x, sheet, pad_h)
 
 
 # ---------------------------------------------------------------- what a control says
 
+# What a few targets do, where their label alone does not say it on the
+# desk (the owner's findings, 2026-10-16): MASTER select and PAN only
+# matter in overlay mode, which config.toml's [output] overlay must allow;
+# STOP ALL resets the bands to the selected scene and a second press within
+# 8 s undoes it; QUANT walks the bank, not the preset list (the pad's B)
+DESK_WORDS = {
+    "overlay.on": "Overlay (if config allows)",
+    "overlay.passthrough": "Click-through (overlay)",
+    "scene.reset_all": "Reset all bands (again: undo)",
+    "preset.next": "Next bank preset",
+}
+# an enum `set` row whose choice's name alone does not say what the
+# button does: the word goes before the name (the track-select row, G7:
+# "band SUB" — the band strip the device knobs follow under SHIFT)
+SET_WORDS = {"band.select": "band"}
+
+
 def text(reg, b: Binding) -> str:
     """What a lit control does, in the panel's words (plan 17 fork 8): a
     `set` row on an enum → that value's name (the bank row reads the
-    presets' names, a scene pad the scene's); a `step` row → the label and
-    the step ("Brightness +3"); anything else → the param's label; a
+    presets' names, a scene pad the scene's; `SET_WORDS` puts a word
+    before it — "band SUB"); a `step` row → the label and the step
+    ("Brightness +3"); a toggle row on an enum, which steps it → the
+    label, the value now and "next" ("SUB Transfer: SQ · next"); a target
+    in `DESK_WORDS` → its words; anything else → the param's label; a
     target the registry lacks (or a param with no label) → the id. A bank
     pad whose slot is empty says nothing (`empty`): "" — it is drawn as a
     dark control."""
+    if getattr(b, "words", ""):             # a surface page's row: "L1·3"
+        return b.words
     p = reg.get(b.target)
     if p is None:
         return b.target
@@ -419,7 +643,12 @@ def text(reg, b: Binding) -> str:
         names = p.names
         i = round(b.value)
         if 0 <= i < len(names) and names[i]:
-            return str(names[i])
+            word = SET_WORDS.get(b.target)
+            return f"{word} {names[i]}" if word else str(names[i])
+    if b.op == "toggle" and p.kind is Kind.ENUM:
+        return f"{p.label or b.target}: {p.text()} · next"
+    if b.target in DESK_WORDS:
+        return DESK_WORDS[b.target]
     if b.op == "step":
         return f"{p.label or b.target} {b.value:+g}"
     return p.label or b.target
@@ -512,6 +741,8 @@ def label_px(unit: float) -> float:
 
 
 def _layer_word(table, b: Binding) -> str:
+    if getattr(b, "shade", None) is not None:
+        return "sequencer page"
     if b.layer is None:
         return "invariant"
     return f"{b.layer} layer"
@@ -545,19 +776,24 @@ def _led(panel, b: Binding) -> tuple[float, float, float] | None:
     if p is None or b.feedback != "led":
         return None
     try:
-        level = led_level(b, p)
+        shade = led_shade(b, p)
     except (TypeError, ValueError):
         return None
-    if not level:
+    if shade == "off":
         return None
-    if level == 1:
+    if shade == "held":
         filled = apc40.filled_of(b.number, int(b.on)) if b.kind == "note" else None
         rgb = _LED.get(filled) if filled is not None else None
         return None if rgb is None else tuple(FILLED * x for x in rgb)
-    # the clip grid shows the row's colour (green, red, yellow); every
-    # other button's LED is a plain on, drawn in the panel's red
+    # the clip grid shows the row's colour (green, red, yellow) — a page's
+    # shade its own (apc40.SHADE: the playhead yellow, a muted lane red);
+    # every other button's LED is a plain on, drawn in the panel's red,
+    # and a page's blink (a muted lane's scene) at `FILLED` strength
     grid = b.kind == "note" and b.number in apc40.N_CLIP
-    return _LED.get(int(b.on), _ON) if grid else _ON
+    v = int(b.on) if shade == "on" else apc40.shade_of(b.number, shade)
+    if grid:
+        return _LED.get(v if v is not None else int(b.on), _ON)
+    return _ON if shade in ("on", "hit") else tuple(FILLED * x for x in _ON)
 
 
 def _bright(led) -> bool:
@@ -803,9 +1039,25 @@ def _chip(panel) -> None:
     if ui.chip(f"{name}##desk"):
         _show_panel(panel, not panel.open)
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Hide the panel: the desk takes the whole window and every lit "
+        ui.tooltip("Hide the panel: the desk takes the whole window and every lit "
                           "control carries its name (H brings the panel back)"
                           if name == BIG else "Bring the panel back (H)")
+    imgui.same_line()
+    if ui.chip(f"{CLOSE}##desk"):
+        _close(panel)
+    if imgui.is_item_hovered():
+        ui.tooltip("Close the desk diagram (SYSTEM page: Desk diagram brings it back)")
+
+
+def _close(panel) -> None:
+    """Close the desk (`ui.desk` off); a hidden panel comes back with it,
+    so the window is never left empty."""
+    _show_panel(panel, True)
+    d = panel.reg.get("ui.desk")
+    if d is not None:
+        d.set(False)
+    else:
+        panel.desk = False
 
 
 def _header(panel, table) -> None:
@@ -816,7 +1068,7 @@ def _header(panel, table) -> None:
     desk), in place of the line's other words where there is not."""
     start = imgui.get_cursor_pos()
     full = imgui.get_content_region_avail().x
-    end = start.x + full - ui.chip_w(BIG) - 8        # where the words stop: the chip
+    end = start.x + full - ui.chip_w(BIG, CLOSE) - 8     # where the words stop: the chips
     imgui.set_cursor_pos(_v(start.x, start.y + 3))
     c = picked(panel) if table is not None else None
     line = can = None
@@ -830,7 +1082,7 @@ def _header(panel, table) -> None:
     if alone:
         imgui.text_colored(ui.RED if can else ui.DIM, ui.fit_text(line, end - start.x))
         if imgui.is_item_hovered():
-            imgui.set_tooltip(line)
+            ui.tooltip(line)
     else:
         ui._micro("apc40")
     if alone:
@@ -844,15 +1096,24 @@ def _header(panel, table) -> None:
         ui._micro(f"{table.layer} layer" + ("  ·  shift" if glob else ""),
                   ui.RED if glob else ui.DIM)
         if imgui.is_item_hovered():
-            imgui.set_tooltip("The layer that is up — SHIFT (⇧) latches it. Lit controls do "
+            ui.tooltip("The layer that is up — SHIFT (⇧) latches it. Lit controls do "
                               "something on it; dark ones do nothing.")
+        page = getattr(table, "page", None)
+        if page is not None and hasattr(page, "header"):     # the sequencer page (plan 31 §A)
+            imgui.same_line()
+            ui._micro(page.header(), ui.RED)
+            if imgui.is_item_hovered():
+                ui.tooltip("The sequencer page is up — SEND A lets it go. The clip "
+                                  "grid is the lanes' steps, scene 1–5 the lanes, clip stop "
+                                  "k the length.")
         imgui.same_line()
         room_ = end - imgui.get_cursor_pos_x()
         imgui.text_colored(ui.TEXT, ui.fit_text(_preset_name(panel), max(0.0, room_)))
         if line is not None:
             imgui.same_line(0, 20)
             imgui.text_colored(ui.RED if can else ui.DIM, line)
-    imgui.set_cursor_pos(_v(start.x + full - ui.chip_w(BIG if panel.open else PANEL), start.y))
+    imgui.set_cursor_pos(_v(start.x + full - ui.chip_w(BIG if panel.open else PANEL, CLOSE),
+                            start.y))
     _chip(panel)
     imgui.set_cursor_pos(start)          # the line is HEAD_H tall whatever is on it
     imgui.dummy(_v(1, HEAD_H - imgui.get_style().item_spacing.y))
@@ -911,8 +1172,12 @@ def _body(panel, table) -> None:
         x0, y0, x1, y1 = frame
         dl.add_rect(_v(x0 - 2, y0 - 2), _v(x1 + 2, y1 + 2), ui.u32(ui.RED), 4.0, 2.5)
     imgui.dummy(avail)
+    # the picked control's offer, over the empty ground it owns (`OFFER`):
+    # a child window of this one, so the desk's own hover and clicks are
+    # not this window's while the mouse is on it
+    _offer(panel, table, (origin.x, origin.y), (sx, sy))
     if tip is not None:
-        imgui.set_tooltip(tip)
+        ui.tooltip(tip)
     # the window is hit-tested: a left click on a control is `click`; on
     # the ground between the controls it lets the picked control go
     if hovered and imgui.is_mouse_clicked(0) and mouse.y >= origin.y:

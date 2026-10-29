@@ -16,7 +16,14 @@ from hyperspace.params import Kind
 
 @pytest.fixture()
 def rig(tmp_path):
-    return make(tmp_path)
+    reg, view, *rest = make(tmp_path)
+    # a file-path param, as `view.test_file` was until plan 32 took the one
+    # bitmap file away — the registry declares no TEXT param of its own now,
+    # so the kind is held to its contract on one declared here
+    view.test_file = ""
+    reg.text("view.test_file", "Test file", lambda: view.test_file,
+             lambda v: setattr(view, "test_file", v), group="view")
+    return (reg, view, *rest)
 
 
 def _frame(reg, *mods):
@@ -36,9 +43,9 @@ def test_new_params_exist_and_default_to_the_undriven_look(rig):
     for k in range(8):
         assert reg[f"pattern.mod.{k}"].value == 1.0
     assert reg["camera.pan.x"].value == 0.0 and reg["camera.pan.y"].value == 0.0
-    assert reg["view.bmp_file"].kind is Kind.TEXT
-    reg["camera.pan.x"].set_value(12.5)
-    assert view.pan[0] == 12.5
+    assert reg["view.test_file"].kind is Kind.TEXT
+    reg["camera.pan.x"].set_value(2.5)     # world units (plan 26 A2), ±12
+    assert view.pan[0] == 2.5
     reg["rot.rate.XY"].set_value(-2.0)   # signed: a plane can run backwards
     assert view.rate[0] == -2.0
 
@@ -73,21 +80,21 @@ def test_flags_say_what_a_param_is_for(rig):
     assert reg["preset.load.0"].modulatable     # a kick may load a preset
     assert not reg["camera.reset"].persist       # triggers never persist
     assert reg["view.bright"].persist and reg["view.bright"].modulatable
-    assert not reg["view.bmp_file"].modulatable
+    assert not reg["view.test_file"].modulatable
 
 
 def test_text_param_is_inert_on_every_numeric_surface(rig):
     reg, view, *_ = rig
-    p = reg["view.bmp_file"]
+    p = reg["view.test_file"]
     p.set("/tmp/x.png")
-    assert view.bmp_file == "/tmp/x.png" and p.text() == "/tmp/x.png"
+    assert view.test_file == "/tmp/x.png" and p.text() == "/tmp/x.png"
     assert p.norm == 0.0
     p.set_norm(1.0)
     p.step(3)
     p.toggle()
     p.modulate(0.5)
     reg.apply()
-    assert view.bmp_file == "/tmp/x.png" and not p.modulated
+    assert view.test_file == "/tmp/x.png" and not p.modulated
 
 
 # ---------------------------------------------------------------- persistence
@@ -95,23 +102,23 @@ def test_text_param_is_inert_on_every_numeric_surface(rig):
 def test_snapshot_and_restore_round_trip_through_the_registry(rig):
     reg, view, _control, _audio, _ = rig
     view.bright, view.shape, view.faces = 1.5, 7, True
-    reg["camera.pan.y"].set_value(-40.0)
+    reg["camera.pan.y"].set_value(-4.0)    # world units (plan 26 A2), ±12
     reg["band.2.atk"].set_norm(0.3)
-    reg["view.bmp_file"].set("a.png")
+    reg["view.test_file"].set("a.png")
     snap = reg.snapshot()
     for absent in ("band.sel.atk", "preset.select", "camera.reset", "rot.phase.XY"):
         assert absent not in snap, absent
     assert snap["view.bright"] == 1.5 and snap["view.shape"] == 7
-    assert snap["view.faces"] is True and snap["view.bmp_file"] == "a.png"
+    assert snap["view.faces"] is True and snap["view.test_file"] == "a.png"
     assert set(reg.snapshot("camera")) == {p.id for p in reg.group("camera") if p.persist}
     # scramble, restore, compare
-    view.bright, view.shape, view.faces, view.bmp_file = 0.4, 1, False, ""
+    view.bright, view.shape, view.faces, view.test_file = 0.4, 1, False, ""
     view.pan[1] = 0.0
     reg["band.2.atk"].set_norm(0.9)
     missing = reg.restore({**snap, "gone.param": 1})
     assert missing == ["gone.param"]
-    assert (view.bright, view.shape, view.faces, view.pan[1]) == (1.5, 7, True, -40.0)
-    assert view.bmp_file == "a.png"
+    assert (view.bright, view.shape, view.faces, view.pan[1]) == (1.5, 7, True, -4.0)
+    assert view.test_file == "a.png"
     assert reg["band.2.atk"].norm == pytest.approx(0.3, abs=1.0 / reg["band.2.atk"].steps)
     assert reg.snapshot() == snap
 

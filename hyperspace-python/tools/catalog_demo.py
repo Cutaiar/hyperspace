@@ -27,6 +27,8 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from hyperspace import geometry as G
+from hyperspace.graph import Wiring
+from hyperspace.graphmigrate import wired_wiring
 from hyperspace.patterns import NAMES as PATTERN_NAMES
 from hyperspace.render import Renderer
 from hyperspace.view import ViewState
@@ -129,6 +131,9 @@ class Stage:
         self.fbo.use()
         self.ctx.viewport = (0, 0, w, h)
         self.r = Renderer(self.ctx)
+        # plan 36 T3: a bare renderer draws the app's empty frame; the
+        # tool's own wiring is today's frame (render.render_offscreen's)
+        self.r.wiring = wired_wiring(Wiring())
 
     def shot(self, v: ViewState, t: float) -> Image.Image:
         self.fbo.use()

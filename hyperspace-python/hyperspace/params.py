@@ -55,8 +55,10 @@ fires on a rising edge.
 
 from __future__ import annotations
 
+import copy
 import math
-from collections.abc import Callable, Iterator
+import re
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -66,7 +68,7 @@ from .analyzer import CURVES, F_HI, F_LO, Q_HI, Q_LO
 from .bands import CEIL, NORMS, SHAPERS
 from .fx import FxState
 from .fx import declare as declare_fx
-from .geometry import PLANE_NAMES, SHAPES
+from .geometry import EYE_DISTANCE, EYE_FOV, PLANE_NAMES, SHAPES, pan_px_to_world
 from .ghost import GhostState
 from .ghost import register as declare_ghost
 from .lookback import (
@@ -81,13 +83,33 @@ from .lookback import (
     TINT_FROM,
     DreamState,
 )
+from .media import channels as media_channels
+from .media.transport import LOOPS as MEDIA_LOOPS
 from .tapers import Taper
 from .tapers import clamp as _clamp
+from .view import (
+    MATTE_FEATHER,
+    MATTE_FROM,
+    RESIZE_ASPECTS,
+    RESIZE_FILTERS,
+    RESIZE_FITS,
+    RESIZE_SIDES,
+    SEGMENT_FEATHER,
+    SEGMENT_LEARN,
+    SEGMENT_MODES,
+    SEGMENT_QUALITY,
+    CutState,
+    MatteState,
+    ResizeState,
+    SegmentState,
+)
 
 PATTERNS = patterns.NAMES   # the face patterns, in patterns.glsl's mode order
-INST_LAYOUT = ["GRID", "HEX", "RING"]   # render.inst_positions' layouts, in its order
+# field.py's layouts, in its order: three flat, then the six 3D lattices
+INST_LAYOUT = ["GRID", "HEX", "RING", "CUBIC", "BCC", "FCC", "HCP", "HEX PRISM", "DIAMOND"]
 INST_MOTION = ["STILL", "ORBIT", "WAVE", "RIPPLE"]
-BMP_PATHS = ["STILL", "ORBIT", "FIG-8", "SWAY"]
+MEDIA_PATHS = ["STILL", "ORBIT", "FIG-8", "SWAY"]   # the faces' media path (view.media_mode)
+BMP_ALPHA = "view.bmp_alpha"   # the one bitmap id kept: an alias of view.media_alpha
 PLANES = PLANE_NAMES   # the rotation planes' names, in geometry.PLANES's order
 
 RAW_STEPS = 100  # detents across an untapered continuous range
@@ -105,9 +127,26 @@ F_KEYS = 8
 # scene survives a preset load. Every persisted param is in exactly one
 # (tests/test_params.py walks the full registry); a group in neither
 # (`preset`, the bank) has no persisted params, and `rot.phase.*` is `persist=False`.
-PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "lfo", "macro")
+# `mod` (plan 28 N1): the modifier nodes' params, `mod.<n>.<p>` — the
+# preset's, declared while it holds the modifier (routing.declare_modifiers)
+# `env` and `seq` (plan 31): the envelopes' knobs and the sequencer's
+# pattern are the look's, like the LFOs' (decision 8: the pattern is the
+# preset's, `seq.run` and the playhead are not persisted at all)
+# `switch` (plan 33 S): each switch node's `select`, the preset's, declared
+# while its graph holds the switch (declare_switches)
+# `resize` (plan 34 Z): each resize node's size, aspect, fit, filter and
+# crop, the preset's, declared while its graph holds the entry (declare_resizes)
+# `matte` (plan 39 T2): each matte node's source, key, edge and feather, the
+# preset's, declared while its graph holds the entry (declare_mattes)
+# `cut` (plan 39 T3): each cut node's invert and amount, the preset's,
+# declared while its graph holds the entry (declare_cuts)
+# `segment` (plan 39 T4): each segment node's mode, level, feather, smooth,
+# switch and motion's sense and learn, the preset's, declared while its
+# graph holds the entry (declare_segments)
+PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "media", "backdrop",
+                      "switch", "resize", "matte", "cut", "segment", "lfo", "env", "seq", "macro", "mod")
 SESSION_GROUPS = ("tempo", "hands", "ghost", "band", "master", "scene", "audio", "output",
-                  "overlay", "ui", "desk")
+                  "overlay", "ui", "desk", "eye", "cloud")
 PARTS = {"performance": PERFORMANCE_GROUPS, "session": SESSION_GROUPS}
 
 # the reference's fader → rotation-rate factor (its PLANEDRIVE was
@@ -120,6 +159,17 @@ DRIVE = 3.2
 # legacy6 routes (routing.py) land today's rate without clamping. Wide for
 # a slider (RAW_STEPS detents of 1.33×); WP5a can give it a finer widget.
 ROT_RATE_MAX = CEIL * DRIVE * tapers.T_DRIVE.map(tapers.T_DRIVE.steps)
+
+# camera.pan's reach, world units (plan 26 A2). Chosen so a routed pan
+# travels as far as the old ±4000 px did on the 1080p screen
+# (geometry.PAN_REF_PX, 324 px a unit there: ±12.3): hands-orbit's push
+# of 0.1 moves the shape ±1.2 units (≈ ±390 px) for a hand across the box,
+# where it moved ±400 px
+PAN_RANGE = 12.0
+# the eye's ranges: a field of view from a long lens to a wide one, and a
+# distance from just outside a unit shape to far off
+EYE_FOV_RANGE = (10.0, 120.0)
+EYE_DISTANCE_RANGE = (1.5, 40.0)
 
 # modulation hysteresis: a toggle or trigger goes high above ON and low
 # below OFF; an enum or integer only moves once the target is this far
@@ -164,6 +214,11 @@ class Param:
     # (a bank pad: save the live state into an empty slot) — True when it
     # did something, so the new light blinks; None: a hold is a press
     held: Callable[[int], bool] | None = field(repr=False, default=None)
+    # ENUM: what a desk `set` button tapped while the desk's SAVE is held
+    # does with its choice (plan 24 C1: a bank pad saves the live state into
+    # its slot, filled or empty) — True when it saved, so the pad blinks;
+    # None: under SAVE the press is an ordinary press
+    save_into: Callable[[int], bool] | None = field(repr=False, default=None)
     # what the param is for
     persist: bool = True         # belongs in a snapshot: a preset or a project's session (part_of)
     modulatable: bool = True     # a lane may drive it
@@ -176,6 +231,10 @@ class Param:
     _disc: float | None = field(default=None, repr=False)   # last discrete effective
     _armed: bool = field(default=True, repr=False)          # trigger edge detector
     _bad: bool = field(default=False, repr=False)           # a non-finite value was dropped
+    # the frame mark this param last landed under (plan 28 N0): `apply`
+    # with the same mark again is a no-op, so `Router.modulate` can land a
+    # param something in the pass reads and `Registry.apply` skip it
+    _mark: int | None = field(default=None, repr=False)
 
     def __post_init__(self):
         if self.alias:
@@ -511,8 +570,19 @@ class Param:
             self._bad = True
         self._held = True
 
-    def apply(self) -> None:
-        """End of frame: write base + offsets to the object, or let go."""
+    def apply(self, mark: int | None = None) -> None:
+        """End of frame: write base + offsets to the object, or let go.
+
+        `mark` is the frame's (plan 28 N0, `Registry.frame`): a second call
+        under the mark this param already landed under does nothing — no
+        base restored twice, no offset doubled, no toggle flipped twice. So
+        `Router.modulate` lands a param a later node of the pass reads, and
+        `Registry.apply` lands every other one. None: no mark, today's call
+        (`Registry.remove`, a test)."""
+        if mark is not None:
+            if getattr(self, "_mark", None) == mark:
+                return
+            self._mark = mark
         if self._base is None:
             return
         held, mod = self._held, self._mod
@@ -535,7 +605,9 @@ class Param:
         target = self._base + mod
         if k is Kind.CONTINUOUS:
             target = target % 1.0 if self.wrap else _clamp(target, 0.0, 1.0)
-            if self.integer:
+            if self.integer and self.taper is not None:
+                self.put(self.taper.map(self._snap(target * self.steps)))
+            elif self.integer:
                 self.put(self._raw_value(self._snap(target * self.steps) / self.steps))
             else:
                 self.put(self._value_of_norm(target))
@@ -573,8 +645,66 @@ def part_of(p: Param) -> str | None:
     return None
 
 
+def instance_id(node: str, key: str, n: int = 1) -> str:
+    """The naming rule for a render node's params (plan 26 A0; ENGINEERING
+    §2, "Node instances"). `node` is the node's id prefix — ``fx.acid``
+    for an effect, ``ghost``, ``dream`` — and `key` the param's own name.
+    The first instance keeps today's id (``fx.acid.mix``); instance n ≥ 2
+    carries its number as a segment right after the prefix
+    (``fx.acid.2.mix``, ``ghost.2.alpha``). The first segment never
+    changes: it is the group, which decides whether the param is in a
+    preset (`part_of`), so a single-instance graph never migrates a preset
+    or a binding."""
+    if n < 1:
+        raise ValueError(f"instance numbers start at 1, not {n}")
+    return f"{node}.{key}" if n == 1 else f"{node}.{n}.{key}"
+
+
+def instance_of(pid: str, node: str) -> tuple[int, str] | None:
+    """`instance_id` backwards: (n, key) when `pid` is a param of some
+    instance of `node`, else None. A purely decimal segment right after
+    the prefix is the marker (n ≥ 2); no key and no effect file is ever
+    purely decimal (tests/test_params.py pins it), so today's ids all
+    read as the first instance."""
+    head = f"{node}."
+    if not pid.startswith(head):
+        return None
+    rest = pid[len(head):]
+    mark, dot, key = rest.partition(".")
+    if dot and mark.isdecimal() and key and int(mark) >= 2 and str(int(mark)) == mark:
+        return int(mark), key
+    # by design an explicit `.1.` (or `.02.`) is no marker: `instance_id`
+    # never writes one, so `fx.acid.1.mix` reads as instance 1, key `1.mix`
+    return (1, rest) if rest else None
+
+
+def is_instance_id(pid: str) -> bool:
+    """Is `pid` a param of an extra node instance — `fx.<file>.<n>.<key>`
+    or `ghost.<n>.<key>`, n ≥ 2 — one that exists only while a preset's
+    graph holds that instance (plan 26 A4)? A preset load sorts such ids
+    against the graph it lands; a show holds back the `ghost.<n>.*` ones
+    the registry lacks until a graph declares them."""
+    parts = pid.split(".")
+    if parts[0] == "fx" and len(parts) >= 4:
+        mark = parts[2]
+    elif parts[0] == "ghost" and len(parts) >= 3:
+        mark = parts[1]
+    else:
+        return False
+    return mark.isdecimal() and str(int(mark)) == mark and int(mark) >= 2
+
+
 class Registry:
     """An ordered map of Param by id."""
+
+    # class-level so a registry from before a hot reload has them (plan 28 N0):
+    # `serial` moves on every add and remove (the modulation patch's cache
+    # key, `Router.modgraph`); `frame` is the frame mark `Router.modulate`
+    # opens (`begin_frame`) and `landed` the mark `apply` lands under —
+    # the params the pass already landed are skipped — and closes
+    serial: int = 0
+    frame: int = 0
+    landed: int | None = None
 
     def __init__(self):
         self._p: dict[str, Param] = {}
@@ -606,6 +736,7 @@ class Registry:
         if p.id in self._p:
             raise ValueError(f"duplicate param id {p.id}")
         self._p[p.id] = p
+        self.serial += 1
         return p
 
     def __getitem__(self, pid: str) -> Param:
@@ -633,6 +764,8 @@ class Registry:
         """Drop a param (a band that was deleted). Bindings to it go dormant —
         every adapter already treats an unknown id as a no-op."""
         p = self._p.pop(pid, None)
+        if p is not None:
+            self.serial += 1
         if p is not None and p.modulated:
             p._held = False
             p.apply()            # hand the object its base back
@@ -643,19 +776,33 @@ class Registry:
 
     # ---- frame ----
 
+    def begin_frame(self) -> int:
+        """A new frame mark (plan 28 N0): `Router.modulate` lands the params
+        its pass reads under it, and the next `apply` skips those. Returns
+        the mark."""
+        self.frame += 1
+        self.landed = self.frame
+        return self.frame
+
     def apply(self) -> None:
-        """Once per frame, after every source has called modulate()."""
+        """Once per frame, after every source has called modulate(): base +
+        offsets onto every modulated param, in registry order — but for
+        those `Router.modulate` already landed under this frame's mark
+        (plan 28 N0: a param the pass reads lands before its reader), which
+        `Param.apply` skips. Closes the mark: an `apply` with no pass
+        before it lands everything, as before."""
         # over a copy: a modulated trigger may add or remove params
         # (a band layout change) while we are still walking the table.
         # `nonfinite`: the params that dropped a NaN / inf this frame (the
-        # stall log names each once, app.py)
+        # stall log names each once, app.py) — those the pass landed too
+        mark, self.landed = self.landed, None
         bad: list[str] = []
         for p in list(self._p.values()):
             if p._base is not None:
-                p.apply()
-                if getattr(p, "_bad", False):
-                    p._bad = False
-                    bad.append(p.id)
+                p.apply(mark)
+            if p._bad:
+                p._bad = False
+                bad.append(p.id)
         self.nonfinite = bad
 
     # ---- persistence: the one serialization every preset is made of ----
@@ -718,15 +865,18 @@ class Registry:
     def enum(self, pid, label, get, set, choices, *, group="", tip="",
              persist=True, modulatable=True, alias=False,
              has: Callable[[int], bool] | None = None,
-             held: Callable[[int], bool] | None = None) -> Param:
+             held: Callable[[int], bool] | None = None,
+             save_into: Callable[[int], bool] | None = None) -> Param:
         """`has`, if given, says which choices hold something — the enum's
         counterpart of `trigger(lit=)`: the param carries what its lights
         need (a filled bank slot), so an adapter learns nothing about what
         the choices are. Stored as `Param.has`. `held`, likewise, is what a
-        `set` button held midi.HOLD_S does with its choice (`Param.held`)."""
+        `set` button held midi.HOLD_S does with its choice (`Param.held`),
+        and `save_into` what its tap does while the desk's SAVE is held
+        (`Param.save_into`, plan 24 C1)."""
         return self.add(Param(pid, label, Kind.ENUM, get, set, group=group, tip=tip,
                               choices=choices, persist=persist, modulatable=modulatable,
-                              alias=alias, has=has, held=held))
+                              alias=alias, has=has, held=held, save_into=save_into))
 
     def toggle(self, pid, label, get, set, *, group="", tip="",
                persist=True, modulatable=True, alias=False) -> Param:
@@ -751,12 +901,546 @@ class Registry:
 
 # ---------------------------------------------------------------- builder
 
+# plan 26 A2: camera.pan is in world units (the shape's unit circumradius),
+# no longer logical px. A document saved since says so with this key (the
+# schema stays preset/2: `load_doc` ignores keys it does not know, so an
+# older build still loads the file — reading its pan as px); one without
+# it is a preset/2 file from before, its pan read in px and converted
+UNITS_KEY = "units"
+UNITS = {"camera.pan": "world"}
+PAN_IDS = ("camera.pan.x", "camera.pan.y")
+
+
+def pan_world(doc: dict) -> tuple[dict, bool]:
+    """A preset document — a whole preset (`preset.load_doc`) or a camera
+    module preset (`Library._apply_doc`, `Library.defaults`) — with its
+    camera.pan in world units (plan 26 A2):
+    a file without the `units` key stored logical px, which become world
+    units through the default eye on the 1080p screen
+    (`geometry.pan_px_to_world`), so the shape sits where it did there.
+    Only its values are converted: a route's or a desk row's depth and a
+    macro base subscriber's from / to are fractions of the param's range
+    (`Sub.at` lands a norm), and `params.PAN_RANGE` was chosen so that
+    range reaches as far on that screen as the old ±4000 px did (±12 units,
+    ±3888 px). Returns (a copy, whether anything changed); the document
+    itself when it is already in world units or names no pan value."""
+    units = doc.get(UNITS_KEY)
+    # a hand-edited non-object `units` is no marker: the pan is read in px
+    if isinstance(units, dict) and units.get("camera.pan") == "world":
+        return doc, False
+    values = doc.get("values")
+    if not isinstance(values, dict) or not any(k in values for k in PAN_IDS):
+        return doc, False
+    out = copy.deepcopy(doc)
+    changed = False
+    for pid in PAN_IDS:
+        v = out["values"].get(pid)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            new = pan_px_to_world(v)
+            changed |= new != v
+            out["values"][pid] = new
+    return out, changed
+
+
 def _attr(obj, name):
     return (lambda: getattr(obj, name)), (lambda v: setattr(obj, name, v))
 
 
 def _item(get_list, i):
     return (lambda: get_list()[i]), (lambda v: get_list().__setitem__(i, v))
+
+
+# ---- plan 33 S: the switches' picks ----
+SWITCH_GROUP = "switch"
+# off, then the eight inputs (R11: choice k is the input `in<k>`)
+SWITCH_CHOICES = ["off", *(str(i) for i in range(1, 9))]
+_SWITCH_ID = re.compile(r"(switch(?:\.(?:[2-9]|[1-9][0-9]+))?)\.select")
+
+
+def switch_id(name: str) -> str:
+    """The `select` param of switch node `name` (`switch.2` → `switch.2.select`)."""
+    return f"{name}.select"
+
+
+def is_switch_id(pid: str) -> bool:
+    """Is `pid` a switch's `select` — one that exists only while a preset's
+    graph holds that switch (plan 33 S)? A preset load sorts such ids
+    against the graph it lands, as it does an effect instance's."""
+    return bool(_SWITCH_ID.fullmatch(pid))
+
+
+def _switch_state(r: Registry) -> dict[str, int]:
+    """The picks the `select` params write, switch name → 0–8: the view
+    state's (`ViewState.switch`, which the renderer reads once a frame),
+    kept by `build_registry` as `r.switch_state`; a dict of the registry's
+    own for one built without a view (a test, a registry from before a hot
+    reload brought the switch)."""
+    state = getattr(r, "switch_state", None)
+    if not isinstance(state, dict):
+        state = r.switch_state = {}
+    return state
+
+
+def declare_switches(r: Registry, names: Iterable[str]) -> list[str]:
+    """The switches' params (plan 33 S), as `FxState.set_instances` and
+    `fx.declare` do the effect instances': `switch[.<n>].select` for each
+    switch `names` holds — an enum off / 1–8 (`SWITCH_CHOICES`), off when
+    first declared, group `switch` (a performance group: the preset's),
+    modulatable, so a route, a desk row, a macro, an LFO or a sequencer
+    step drives it like any param — and those of every switch no longer
+    named dropped (a route on one goes dormant, as for a deleted band). A
+    switch still named keeps its pick. Returns the ids that appeared or
+    went."""
+    state = _switch_state(r)
+    want = {switch_id(n): n for n in names}
+    changed: list[str] = []
+    for p in [p for p in r if p.group == SWITCH_GROUP and p.id not in want]:
+        r.remove(p.id)
+        state.pop(p.id[:-len(".select")], None)
+        changed.append(p.id)
+    for pid, name in want.items():
+        if pid in r:
+            continue
+        state[name] = 0
+        r.enum(pid, f"{name} select", (lambda n=name: int(state.get(n, 0))),
+               (lambda v, n=name: state.__setitem__(n, int(v))), SWITCH_CHOICES,
+               group=SWITCH_GROUP,
+               tip=f"Which of {name}'s eight inputs it passes on (in1 … in8), or off: "
+                   "the faces then show the pattern, the backdrop nothing. Only the "
+                   "picked input's picture is made.")
+        changed.append(pid)
+    return changed
+
+
+# ---- plan 34 Z: the resizes' values ----
+RESIZE_GROUP = "resize"
+_RESIZE_KEYS = ("size", "aspect", "fit", "filter", "crop_x", "crop_y", "crop_w", "crop_h")
+_RESIZE_ID = re.compile(r"resize(?:\.(?:[2-9]|[1-9][0-9]+))?\.(size|aspect|fit|filter|crop_x"
+                        r"|crop_y|crop_w|crop_h)")
+
+
+def resize_ids(name: str) -> list[str]:
+    """Resize node `name`'s params (`resize.2` → `resize.2.size` …), in order."""
+    return [f"{name}.{k}" for k in _RESIZE_KEYS]
+
+
+def is_resize_id(pid: str) -> bool:
+    """Is `pid` one of a resize's values — one that exists only while a
+    preset's graph holds that resize (plan 34 Z)? A preset load sorts such
+    ids against the graph it lands, as it does a switch's `select`."""
+    return bool(_RESIZE_ID.fullmatch(pid))
+
+
+def _resize_state(r: Registry) -> dict[str, ResizeState]:
+    """The states the resize params write, resize name → `ResizeState`: the
+    view state's (`ViewState.resize`, which the renderer reads once a
+    frame), kept by `build_registry` as `r.resize_state`; a dict of the
+    registry's own for one built without a view (as `_switch_state`)."""
+    state = getattr(r, "resize_state", None)
+    if not isinstance(state, dict):
+        state = r.resize_state = {}
+    return state
+
+
+_RESIZE_TIPS = {
+    "size": "The long side {name} makes its picture at, in pixels: what comes after "
+            "it (a delay, an effect) runs at that size.",
+    "aspect": "{name}'s shape: its input's aspect, or square.",
+    "fit": "How {name}'s crop is laid into its size: cover crops, contain "
+           "letterboxes, stretch fills.",
+    "filter": "How {name} samples its input: linear (mipmapped for a big "
+              "reduction), or nearest — hard pixels.",
+    "crop_x": "The centre of {name}'s crop across its input, 0 left … 1 right.",
+    "crop_y": "The centre of {name}'s crop down its input, 0 top … 1 bottom.",
+    "crop_w": "The width of {name}'s crop, a share of its input's.",
+    "crop_h": "The height of {name}'s crop, a share of its input's.",
+}
+
+
+def declare_resizes(r: Registry, names: Iterable[str]) -> list[str]:
+    """The resizes' params (plan 34 Z), as `declare_switches` does the
+    switches': for each resize `names` holds, `size` (an enum over
+    `RESIZE_SIDES`), `aspect`, `fit` and `filter` (enums), and the crop
+    (`crop_x`, `crop_y` 0–1; `crop_w`, `crop_h` 0.01–1) — group `resize`
+    (a performance group: the preset's), modulatable — over a
+    `ResizeState` made when first declared and kept while the name stays;
+    those of every resize no longer named dropped, with their states.
+    Returns the ids that appeared or went."""
+    state = _resize_state(r)
+    want = {n: resize_ids(n) for n in names}
+    keep = {pid for ids in want.values() for pid in ids}
+    changed: list[str] = []
+    for p in [p for p in r if p.group == RESIZE_GROUP and p.id not in keep]:
+        r.remove(p.id)
+        changed.append(p.id)
+    for name in [n for n in state if n not in want]:
+        del state[name]
+    enums = {"size": [str(s) for s in RESIZE_SIDES], "aspect": list(RESIZE_ASPECTS),
+             "fit": list(RESIZE_FITS), "filter": list(RESIZE_FILTERS)}
+    for name, ids in want.items():
+        st = state.get(name)
+        # (made only when missing — never by class: after a hot reload of
+        # `view` a live state is the old class's, and its params, bound to
+        # it, are kept below; replacing it would leave them writing a dead one)
+        if st is None:
+            st = state[name] = ResizeState()
+        for pid, key in zip(ids, _RESIZE_KEYS, strict=True):
+            if pid in r:
+                continue
+            label = f"{name} {key.replace('_', ' ')}"
+            tip = _RESIZE_TIPS[key].format(name=name)
+            if key in enums:
+                r.enum(pid, label, *_attr(st, key), enums[key], group=RESIZE_GROUP, tip=tip)
+            else:
+                lo = 0.0 if key in ("crop_x", "crop_y") else 0.01
+                r.continuous(pid, label, *_attr(st, key), lo=lo, hi=1.0,
+                             group=RESIZE_GROUP, tip=tip)
+            changed.append(pid)
+    return changed
+
+
+# ---- plan 39 T2: the mattes' values ----
+MATTE_GROUP = "matte"
+# `matte[.n].from` is the param; its state's field is `source` (`from` is a keyword)
+_MATTE_KEYS = ("from", "key", "soft", "invert", "feather", "hue", "sat")
+_MATTE_ATTR = {"from": "source"}
+_MATTE_ID = re.compile(r"matte(?:\.(?:[2-9]|[1-9][0-9]+))?\.(" + "|".join(_MATTE_KEYS) + ")")
+
+
+def matte_ids(name: str) -> list[str]:
+    """Matte node `name`'s params (`matte.2` → `matte.2.from` …), in order."""
+    return [f"{name}.{k}" for k in _MATTE_KEYS]
+
+
+def is_matte_id(pid: str) -> bool:
+    """Is `pid` one of a matte's values — one that exists only while a
+    preset's graph holds that matte (plan 39 T2)? A preset load sorts such
+    ids against the graph it lands, as it does a resize's."""
+    return bool(_MATTE_ID.fullmatch(pid))
+
+
+def _matte_state(r: Registry) -> dict[str, MatteState]:
+    """The states the matte params write, matte name → `MatteState`: the
+    view state's (`ViewState.mattes`, which the renderer reads once a
+    frame), kept by `build_registry` as `r.matte_state`; a dict of the
+    registry's own for one built without a view (as `_resize_state`)."""
+    state = getattr(r, "matte_state", None)
+    if not isinstance(state, dict):
+        state = r.matte_state = {}
+    return state
+
+
+_MATTE_TIPS = {
+    "from": "What makes a pixel of {name}'s picture pass: its brightness (luma), its "
+            "own coverage (alpha), or how near its colour is to {name}'s hue (chroma).",
+    "key": "Where a pixel of {name}'s picture starts to pass, 0–1: at or past it, it "
+           "passes.",
+    "soft": "The width of {name}'s edge either side of the key: 0 is hard, pass or not.",
+    "invert": "{name} passes what it would not, and the other way round.",
+    "feather": "A blur of {name}'s mask, in pixels: 0 keeps the edge as the key makes it.",
+    "hue": "The colour {name} keys on in chroma, round the wheel (0 red, 0.33 green, "
+           "0.67 blue).",
+    "sat": "How saturated the colour {name} keys on in chroma is: 0 keys the greys.",
+}
+
+
+def declare_mattes(r: Registry, names: Iterable[str]) -> list[str]:
+    """The mattes' params (plan 39 T2), as `declare_resizes` does the
+    resizes': for each matte `names` holds, `from` (an enum over
+    `MATTE_FROM`), `key` 0–1, `soft` 0–0.5, `invert`, `feather` 0–32 px and
+    the chroma key's `hue` and `sat` (0–1) — group `matte` (a performance
+    group: the preset's), modulatable — over a `MatteState` made when first
+    declared and kept while the name stays; those of every matte no longer
+    named dropped, with their states. Returns the ids that appeared or went."""
+    state = _matte_state(r)
+    want = {n: matte_ids(n) for n in names}
+    keep = {pid for ids in want.values() for pid in ids}
+    changed: list[str] = []
+    for p in [p for p in r if p.group == MATTE_GROUP and p.id not in keep]:
+        r.remove(p.id)
+        changed.append(p.id)
+    for name in [n for n in state if n not in want]:
+        del state[name]
+    for name, ids in want.items():
+        st = state.get(name)
+        # (made only when missing — a live state is kept across a hot
+        # reload of `view`, its params bound to it: `declare_resizes`')
+        if st is None:
+            st = state[name] = MatteState()
+        for pid, key in zip(ids, _MATTE_KEYS, strict=True):
+            if pid in r:
+                continue
+            label = f"{name} {key}"
+            tip = _MATTE_TIPS[key].format(name=name)
+            got = _attr(st, _MATTE_ATTR.get(key, key))
+            if key == "from":
+                r.enum(pid, label, *got, list(MATTE_FROM), group=MATTE_GROUP, tip=tip)
+            elif key == "invert":
+                r.toggle(pid, label, *got, group=MATTE_GROUP, tip=tip)
+            else:
+                hi = {"soft": 0.5, "feather": MATTE_FEATHER}.get(key, 1.0)
+                r.continuous(pid, label, *got, lo=0.0, hi=hi, group=MATTE_GROUP, tip=tip)
+            changed.append(pid)
+    return changed
+
+
+# ---- plan 39 T3: the cuts' values ----
+CUT_GROUP = "cut"
+_CUT_KEYS = ("invert", "amount")
+_CUT_ID = re.compile(r"cut(?:\.(?:[2-9]|[1-9][0-9]+))?\.(" + "|".join(_CUT_KEYS) + ")")
+
+
+def cut_ids(name: str) -> list[str]:
+    """Cut node `name`'s params (`cut.2` → `cut.2.invert`, `cut.2.amount`)."""
+    return [f"{name}.{k}" for k in _CUT_KEYS]
+
+
+def is_cut_id(pid: str) -> bool:
+    """Is `pid` one of a cut's values — one that exists only while a
+    preset's graph holds that cut (plan 39 T3)? A preset load sorts such ids
+    against the graph it lands, as it does a matte's."""
+    return bool(_CUT_ID.fullmatch(pid))
+
+
+def _cut_state(r: Registry) -> dict[str, CutState]:
+    """The states the cut params write, cut name → `CutState`: the view
+    state's (`ViewState.cuts`), kept by `build_registry` as `r.cut_state`; a
+    dict of the registry's own for one built without a view (as
+    `_matte_state`)."""
+    state = getattr(r, "cut_state", None)
+    if not isinstance(state, dict):
+        state = r.cut_state = {}
+    return state
+
+
+_CUT_TIPS = {
+    "invert": "{name} keeps the hole and cuts the rest: the picture shows where the mask "
+              "does not pass.",
+    "amount": "How far {name} cuts, 0–1: 1 cuts to nothing where the mask does not pass, "
+              "0.5 dims it by half, 0 leaves the picture whole.",
+}
+
+
+def declare_cuts(r: Registry, names: Iterable[str]) -> list[str]:
+    """The cuts' params (plan 39 T3), as `declare_mattes` does the mattes':
+    for each cut `names` holds, `invert` (off) and `amount` 0–1 (1) — group
+    `cut` (a performance group: the preset's), both modulatable — over a
+    `CutState` made when first declared and kept while the name stays;
+    those of every cut no longer named dropped, with their states. Returns
+    the ids that appeared or went."""
+    state = _cut_state(r)
+    want = {n: cut_ids(n) for n in names}
+    keep = {pid for ids in want.values() for pid in ids}
+    changed: list[str] = []
+    for p in [p for p in r if p.group == CUT_GROUP and p.id not in keep]:
+        r.remove(p.id)
+        changed.append(p.id)
+    for name in [n for n in state if n not in want]:
+        del state[name]
+    for name, ids in want.items():
+        st = state.get(name)
+        # (made only when missing — a live state is kept across a hot
+        # reload of `view`, its params bound to it: `declare_mattes`')
+        if st is None:
+            st = state[name] = CutState()
+        for pid, key in zip(ids, _CUT_KEYS, strict=True):
+            if pid in r:
+                continue
+            label = f"{name} {key}"
+            tip = _CUT_TIPS[key].format(name=name)
+            got = _attr(st, key)
+            if key == "invert":
+                r.toggle(pid, label, *got, group=CUT_GROUP, tip=tip)
+            else:
+                r.continuous(pid, label, *got, lo=0.0, hi=1.0, group=CUT_GROUP, tip=tip)
+            changed.append(pid)
+    return changed
+
+
+# ---- plan 39 T4: the segments' values ----
+SEGMENT_GROUP = "segment"
+_SEGMENT_KEYS = ("mode", "quality", "feather", "smooth", "on", "sense", "learn")
+_SEGMENT_ID = re.compile(r"segment(?:\.(?:[2-9]|[1-9][0-9]+))?\.("
+                         + "|".join(_SEGMENT_KEYS) + ")")
+
+
+def segment_ids(name: str) -> list[str]:
+    """Segment node `name`'s params (`segment.2` → `segment.2.mode` …), in order."""
+    return [f"{name}.{k}" for k in _SEGMENT_KEYS]
+
+
+def is_segment_id(pid: str) -> bool:
+    """Is `pid` one of a segment's values — one that exists only while a
+    preset's graph holds that segment (plan 39 T4)? A preset load sorts
+    such ids against the graph it lands, as it does a cut's."""
+    return bool(_SEGMENT_ID.fullmatch(pid))
+
+
+def _segment_state(r: Registry) -> dict[str, SegmentState]:
+    """The states the segment params write, segment name → `SegmentState`:
+    the view state's (`ViewState.segments`), kept by `build_registry` as
+    `r.segment_state`; a dict of the registry's own for one built without
+    a view (as `_cut_state`)."""
+    state = getattr(r, "segment_state", None)
+    if not isinstance(state, dict):
+        state = r.segment_state = {}
+    return state
+
+
+_SEGMENT_TIPS = {
+    "mode": "What {name} takes for its foreground: a person (a model on the Neural "
+            "Engine), what moves against a still camera (motion), or any subject (not in "
+            "this build).",
+    "quality": "The person model's level for {name}: fast (256×192 matte), balanced, or "
+               "accurate (finer edges, slower results).",
+    "feather": "A blur of {name}'s matte, in pixels: 0 keeps the model's own edge.",
+    "smooth": "How much of {name}'s last matte each new one keeps, 0–1: against flicker, "
+              "at the cost of a little more trail.",
+    "on": "{name} cuts its picture: off, its foreground is the picture whole, its "
+          "background and matte nothing, and its worker idle.",
+    "sense": "Motion: how far a pixel of {name}'s picture must differ from the background "
+             "it has learnt to be foreground, 0–1.",
+    "learn": "Motion: how many seconds a still thing takes to fade into {name}'s "
+             "background.",
+}
+
+
+def declare_segments(r: Registry, names: Iterable[str]) -> list[str]:
+    """The segments' params (plan 39 T4), as `declare_cuts` does the cuts':
+    for each segment `names` holds, `mode` (person / motion / subject, not
+    modulatable: a model is not started per frame), `quality` (fast /
+    balanced / accurate, not modulatable likewise), `feather` 0–32 px,
+    `smooth` 0–1, `on`, and motion's `sense` 0–1 and `learn` 0.1–30 s —
+    group `segment` (a performance group: the preset's) — over a
+    `SegmentState` made when first declared and kept while the name stays;
+    those of every segment no longer named dropped, with their states.
+    Returns the ids that appeared or went."""
+    state = _segment_state(r)
+    want = {n: segment_ids(n) for n in names}
+    keep = {pid for ids in want.values() for pid in ids}
+    changed: list[str] = []
+    for p in [p for p in r if p.group == SEGMENT_GROUP and p.id not in keep]:
+        r.remove(p.id)
+        changed.append(p.id)
+    for name in [n for n in state if n not in want]:
+        del state[name]
+    for name, ids in want.items():
+        st = state.get(name)
+        # (made only when missing — a live state is kept across a hot
+        # reload of `view`, its params bound to it: `declare_cuts`')
+        if st is None:
+            st = state[name] = SegmentState()
+        for pid, key in zip(ids, _SEGMENT_KEYS, strict=True):
+            if pid in r:
+                continue
+            label = f"{name} {key}"
+            tip = _SEGMENT_TIPS[key].format(name=name)
+            got = _attr(st, key)
+            if key in ("mode", "quality"):
+                choices = SEGMENT_MODES if key == "mode" else SEGMENT_QUALITY
+                r.enum(pid, label, *got, list(choices), group=SEGMENT_GROUP, tip=tip,
+                       modulatable=False)
+            elif key == "on":
+                r.toggle(pid, label, *got, group=SEGMENT_GROUP, tip=tip)
+            else:
+                lo, hi = {"feather": (0.0, SEGMENT_FEATHER),
+                          "learn": SEGMENT_LEARN}.get(key, (0.0, 1.0))
+                r.continuous(pid, label, *got, lo=lo, hi=hi, group=SEGMENT_GROUP, tip=tip)
+            changed.append(pid)
+    return changed
+
+
+# ---- plan 36 T4: the extra look-backs' values ----
+# `lookback.<n>` (n ≥ 2) has its own ring and trail: `dream.<n>.<key>` for
+# the look-back's own knobs (`lookback`'s are `dream.<key>`, as ever), in
+# the look-back's group, declared while the preset's graph holds the entry
+LOOKBACK_KEYS = ("echo_mix", "fade", "echoes", "gap", "darken", "contrast", "occlude", "res")
+_LOOKBACK_ID = re.compile(r"dream\.(?:[2-9]|[1-9][0-9]+)\.(" + "|".join(LOOKBACK_KEYS) + ")")
+
+
+def is_lookback_knob(pid: str) -> bool:
+    """Whether `dream.*` param `pid` is a look-back's — its ring and trail,
+    `dream.<key>` or `dream.<n>.<key>` for a key of `LOOKBACK_KEYS` — not the
+    dream node's own (plan 36 T4: `dream.on` gates the dream's alone)."""
+    parts = pid.split(".")
+    return parts[0] == "dream" and len(parts) >= 2 and parts[-1] in LOOKBACK_KEYS
+
+
+def lookback_ids(name: str) -> list[str]:
+    """Look-back `name`'s own params (`lookback.2` → `dream.2.echo_mix` …),
+    in order; `lookback`'s are the `dream.*` ones."""
+    rest = name.partition(".")[2]
+    return [f"dream.{rest}.{k}" for k in LOOKBACK_KEYS] if rest else [
+        f"dream.{k}" for k in LOOKBACK_KEYS]
+
+
+def is_lookback_id(pid: str) -> bool:
+    """Is `pid` one of an extra look-back's values (`dream.<n>.<key>`, n ≥
+    2) — one that exists only while a preset's graph holds that look-back
+    (plan 36 T4)? A preset load sorts such ids against the graph it lands,
+    as it does a resize's."""
+    return bool(_LOOKBACK_ID.fullmatch(pid))
+
+
+def _lookback_state(r: Registry) -> dict:
+    """The states the extra look-backs' params write, look-back name →
+    `DreamState`: the view state's (`ViewState.lookback`, which the
+    renderer reads once a frame), kept by `build_registry` as
+    `r.lookback_state`; a dict of the registry's own without one."""
+    state = getattr(r, "lookback_state", None)
+    if not isinstance(state, dict):
+        state = r.lookback_state = {}
+    return state
+
+
+def declare_lookbacks(r: Registry, names: Iterable[str]) -> list[str]:
+    """The extra look-backs' params (plan 36 T4), as `declare_resizes` does
+    the resizes': for each `lookback.<n>` (n ≥ 2) `names` holds, its own
+    echo brightness, fade, count, time apart, darken, contrast, shape-hides
+    and detail (`dream.<n>.<key>`, bounds and defaults `dream.<key>`'s),
+    group `dream`, over a `DreamState` made when first declared and kept
+    while the name stays; those of every one no longer named dropped.
+    Returns the ids that appeared or went."""
+    state = _lookback_state(r)
+    want = {n: lookback_ids(n) for n in names if n != "lookback"}
+    keep = {pid for ids in want.values() for pid in ids}
+    changed: list[str] = []
+    for p in [p for p in r if is_lookback_id(p.id) and p.id not in keep]:
+        r.remove(p.id)
+        changed.append(p.id)
+    for name in [n for n in state if n not in want]:
+        del state[name]
+    for name, ids in want.items():
+        st = state.get(name)
+        if st is None:
+            st = state[name] = DreamState()
+        for pid, key in zip(ids, LOOKBACK_KEYS, strict=True):
+            if pid in r:
+                continue
+            base = r.get(f"dream.{key}")
+            label = f"{name} {key.replace('_', ' ')}"
+            tip = (f"{name}'s own: " + base.tip) if base is not None and base.tip else (
+                f"{name}'s {key.replace('_', ' ')}.")
+            if key == "res":
+                r.enum(pid, label, *_attr(st, key), [str(v) for v in RES], group="dream",
+                       modulatable=False, tip=tip)
+            elif key == "echoes":
+                r.continuous(pid, label, *_attr(st, key), lo=0, hi=MAX_ECHOES, integer=True,
+                             group="dream", tip=tip)
+            elif key == "fade":
+                r.continuous(pid, label, *_attr(st, key), lo=FADE_LO, hi=FADE_HI, log=True,
+                             group="dream", tip=tip)
+            elif key == "gap":
+                r.continuous(pid, label, *_attr(st, key), lo=GAP_LO, hi=GAP_HI,
+                             group="dream", modulatable=False, tip=tip)
+            elif key == "contrast":
+                r.continuous(pid, label, *_attr(st, key), lo=0.5, hi=3.0, group="dream",
+                             tip=tip)
+            else:
+                r.continuous(pid, label, *_attr(st, key), lo=0.0, hi=1.0, group="dream",
+                             tip=tip)
+            changed.append(pid)
+    return changed
 
 
 def dream_half_life(k: float) -> int:
@@ -786,7 +1470,7 @@ def dream_speed_text(k: float) -> str:
 
 
 def build_registry(view, control, audio, bank=None, dream=None, fx=None,
-                   restart=None, ghost=None) -> Registry:
+                   restart=None, ghost=None, media=None) -> Registry:
     """Declare every parameter the surface owns.
 
     `audio` only needs a `.chain` attribute (tests pass a namespace); the
@@ -797,8 +1481,10 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     resolves with or without a panel. `dream` is the renderer's lookback
     state (lookback.DreamState); a fresh one stands in when there is no
     renderer, so the group is always declared; `fx` (fx.FxState, the
-    renderer's effect stack) likewise, and `ghost` (ghost.GhostState, the
-    renderer's ghost hands). `bank` is the open project
+    renderer's effects' values) likewise, and `ghost` (ghost.GhostState, the
+    renderer's ghost hands), and `media` (media.channels.MediaState, the
+    eight channels the ``media.*`` params write; kept as ``r.media``, the
+    one the preset's bins and the renderer read). `bank` is the open project
     (library.Project), whose preset slots the ``preset.*`` params
     load, save and cycle. `restart` is the host's request to
     restart the process (``app.restart``; app.py polls a flag) — a no-op
@@ -807,6 +1493,63 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     """
     r = Registry()
     dream = dream if dream is not None else DreamState()
+    media = media if media is not None else media_channels.MediaState()
+    r.media = media
+    # plan 33 S: the switches' picks live on the view state the renderer
+    # reads (`ViewState.switch`); their params come with the preset's graph
+    picks = getattr(view, "switch", None)
+    if not isinstance(picks, dict):
+        picks = {}
+        try:
+            view.switch = picks
+        except AttributeError:            # (a view without the field: the registry's own)
+            pass
+    r.switch_state = picks
+    # plan 34 Z: the resizes' values likewise (`ViewState.resize`)
+    sizes = getattr(view, "resize", None)
+    if not isinstance(sizes, dict):
+        sizes = {}
+        try:
+            view.resize = sizes
+        except AttributeError:            # (a view without the field: the registry's own)
+            pass
+    r.resize_state = sizes
+    # plan 39 T2: the mattes' values likewise (`ViewState.mattes`)
+    mattes = getattr(view, "mattes", None)
+    if not isinstance(mattes, dict):
+        mattes = {}
+        try:
+            view.mattes = mattes
+        except AttributeError:            # (a view without the field: the registry's own)
+            pass
+    r.matte_state = mattes
+    # plan 39 T3: the cuts' values likewise (`ViewState.cuts`)
+    cuts = getattr(view, "cuts", None)
+    if not isinstance(cuts, dict):
+        cuts = {}
+        try:
+            view.cuts = cuts
+        except AttributeError:            # (a view without the field: the registry's own)
+            pass
+    r.cut_state = cuts
+    # plan 39 T4: the segments' values likewise (`ViewState.segments`)
+    segments = getattr(view, "segments", None)
+    if not isinstance(segments, dict):
+        segments = {}
+        try:
+            view.segments = segments
+        except AttributeError:            # (a view without the field: the registry's own)
+            pass
+    r.segment_state = segments
+    # plan 36 T4: the extra look-backs' values likewise (`ViewState.lookback`)
+    rings = getattr(view, "lookback", None)
+    if not isinstance(rings, dict):
+        rings = {}
+        try:
+            view.lookback = rings
+        except AttributeError:            # (a view without the field: the registry's own)
+            pass
+    r.lookback_state = rings
     chain = lambda: audio.chain
     fmt_speed = lambda x: "stop" if x <= 0 else f"{x:.3f}" if x < 1 else f"{x:.2f}"
 
@@ -824,6 +1567,23 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                  tip=f"Rotate in the {name} plane")
     r.toggle("view.points", "Points", *_attr(view, "points"), group=g)
     r.toggle("view.lines", "Lines", *_attr(view, "lines"), group=g)
+    # plan 24 C2: a mix on the two layers that had none (decision 17), at 1
+    # — the picture as it was (decision 24); performance params, modulatable
+    r.continuous("view.points_alpha", "Points opacity", *_attr(view, "points_alpha"),
+                 lo=0.0, hi=1.0, fmt=lambda v: f"points {v:.2f}", group=g,
+                 tip="The points' opacity: 1 draws them as they always were, 0 not at all.")
+    r.continuous("view.lines_alpha", "Lines opacity", *_attr(view, "lines_alpha"),
+                 lo=0.0, hi=1.0, fmt=lambda v: f"lines {v:.2f}", group=g,
+                 tip="The lines' opacity: 1 draws them as they always were, 0 not at all.")
+    # plan 26 A2b (owner, 2026-10-14): off — strokes in world space, × the
+    # zoom (main's picture, decision 24); on — screen space, A2's fixed
+    # pixel weight. A performance switch like view.lines: in the preset,
+    # routable and modulatable
+    r.toggle("view.screen_strokes", "Screen strokes", *_attr(view, "screen_strokes"),
+             group=g,
+             tip="Off: the edges and the dots are drawn in world space — they grow and "
+                 "shrink with the shape as you zoom. On: screen space — they keep the "
+                 "same pixel weight whatever the zoom.")
     r.toggle("view.faces", "Faces", *_attr(view, "faces"), group=g,
              tip="Translucent fills on the true 2-faces, under the wireframe. "
                  "First build per shape takes a moment (extraction is cached).")
@@ -839,15 +1599,20 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                  "In window and fullscreen the picture is always opaque, on or off.")
     r.toggle("view.rotate", "Rotate", *_attr(view, "playing"), group=g)
     r.continuous("view.instances", "Instances", *_attr(view, "instances"),
-                 lo=0, hi=100, integer=True,
+                 taper=tapers.T_INSTANCES, lo=0, hi=tapers.T_INSTANCES.map(
+                     tapers.T_INSTANCES.steps), integer=True,
                  fmt=lambda v: f"{int(v)} instance(s)" if int(v) > 0 else "0 · nothing drawn",
                  group=g,
-                 tip="Synchronized copies, laid out as Layout says — scroll to zoom out "
-                     "over the field, right-drag to pan. 0 draws nothing: the ground, the "
-                     "echoes and the effects carry on.")
+                 tip="Synchronized copies, laid out as Layout says — one at a time to 64, "
+                     "then faster to 4096. Scroll to zoom out over the field, right-drag "
+                     "to pan; Fit frames it to the screen instead. 0 draws nothing: the "
+                     "ground, the echoes and the effects carry on.")
     r.enum("view.inst_layout", "Layout", *_attr(view, "inst_layout"), INST_LAYOUT,
-           group=g, tip="How the copies are laid out: a square grid, a honeycomb growing "
-                        "from the centre, or one ring.")
+           group=g, tip="How the copies are laid out. Flat: a square grid, a honeycomb "
+                        "growing from the centre, or one ring. 3D lattices, turned by the "
+                        "camera's yaw and pitch: cubic, body-centred cubic, face-centred "
+                        "cubic, hexagonal close-packed, stacked honeycombs (hex prism) "
+                        "and diamond — neighbours one cell apart in each.")
     r.enum("view.inst_motion", "Field motion", *_attr(view, "inst_motion"), INST_MOTION,
            group=g, tip="Trigonometric motion over the field of copies — each copy's phase "
                         "comes from its place in the layout, so the field moves as one "
@@ -856,25 +1621,51 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                  fmt=lambda v: f"amp {v:.2f}", group=g)
     r.continuous("view.inst_rate", "Field rate", *_attr(view, "inst_rate"), lo=0.0, hi=6.0,
                  fmt=lambda v: f"rate {v:.1f}", group=g)
+    r.toggle("view.inst_fit", "Fit", *_attr(view, "inst_fit"), group=g,
+             tip="Fit the field to the screen: every copy whole, none cut by the edge. A "
+                 "grid or honeycomb takes the rows and columns that suit the screen and "
+                 "fills it in even cells; zooming in snaps to whole cells and panning "
+                 "moves a cell at a time. A ring or a lattice is framed whole and centred.")
+    r.continuous("view.inst_spacing", "Spacing", *_attr(view, "inst_spacing"),
+                 lo=0.5, hi=4.0, log=True, fmt=lambda v: f"spacing {v:.2f}", group=g,
+                 tip="The room between neighbours, in cells: 1 is shoulder to shoulder; "
+                     "below 1 the copies overlap. With Fit on, more room makes each copy "
+                     "smaller in its cell.")
+    r.continuous("view.inst_persp", "Field depth", *_attr(view, "inst_persp"),
+                 lo=0.0, hi=1.0, fmt=lambda v: f"depth {v:.2f}", group=g,
+                 tip="A 3D lattice's own perspective: 0 every copy one size, 1 the "
+                     "nearest copies drawn 2.5× the middle's. Nearer copies draw over "
+                     "farther ones, which fade.")
     r.enum("view.pattern", "Pattern", *_attr(view, "pattern"), PATTERNS, group=g,
            tip="Face pattern — edit hyperspace/shaders/patterns.glsl while the app runs; "
                "it hot-reloads on save. Every pattern reads the same eight inputs: "
                + ", ".join(i.name for i in patterns.INPUTS) + ".")
     r.continuous("view.pattern_mix", "Pattern mix", *_attr(view, "pattern_mix"),
                  lo=0.0, hi=1.0, fmt=lambda v: f"mix {v:.2f}", group=g)
-    r.continuous("view.bmp_alpha", "Bitmap alpha", *_attr(view, "bmp_alpha"),
-                 lo=0.0, hi=1.0, fmt=lambda v: f"bitmap alpha {v:.2f}", group=g)
-    r.continuous("view.bmp_scale", "Bitmap size", *_attr(view, "bmp_scale"),
-                 lo=0.05, hi=2.0, fmt=lambda v: f"bitmap size {v:.2f}", group=g)
-    r.enum("view.bmp_mode", "Bitmap path", *_attr(view, "bmp_mode"), BMP_PATHS, group=g,
-           tip="The bitmap's own path about the face centre — independent of the "
+    # plan 32 (row 331): the faces draw a media channel where the one
+    # bitmap file was; alpha, size and path as the bitmap's were. Which
+    # channel is the graph's wire into `pattern.media` (plan 33 T7: no
+    # `view.media` — an old preset's is read as that wire, `graphmigrate`)
+    r.continuous("view.media_alpha", "Media alpha", *_attr(view, "media_alpha"),
+                 lo=0.0, hi=1.0, fmt=lambda v: f"media alpha {v:.2f}", group=g)
+    # the default desk's knob 7 (apc40.DEFAULT_MAP, a fresh preset's
+    # desk) is `view.bmp_alpha`: kept as a view onto `view.media_alpha`, so
+    # the row means what it always meant — the opacity of the picture on
+    # the faces. An alias: never saved (a preset writes view.media_alpha),
+    # and an old preset's value lands on the real one (preset.load_doc)
+    r.continuous(BMP_ALPHA, "Media alpha (knob 7)", *_attr(view, "media_alpha"),
+                 lo=0.0, hi=1.0, fmt=lambda v: f"media alpha {v:.2f}", group=g, alias=True,
+                 tip="The factory desk's knob 7 from before plan 32: Media alpha.")
+    r.aliases[BMP_ALPHA] = lambda p: r.get("view.media_alpha")
+    r.continuous("view.media_scale", "Media size", *_attr(view, "media_scale"),
+                 lo=0.05, hi=2.0, fmt=lambda v: f"media size {v:.2f}", group=g)
+    r.enum("view.media_mode", "Media path", *_attr(view, "media_mode"), MEDIA_PATHS, group=g,
+           tip="The media's own path about the face centre — independent of the "
                "instance-grid motion.")
-    r.continuous("view.bmp_amp", "Bitmap amp", *_attr(view, "bmp_amp"), lo=0.0, hi=0.5,
+    r.continuous("view.media_amp", "Media amp", *_attr(view, "media_amp"), lo=0.0, hi=0.5,
                  fmt=lambda v: f"amp {v:.2f}", group=g)
-    r.continuous("view.bmp_rate", "Bitmap rate", *_attr(view, "bmp_rate"), lo=0.0, hi=6.0,
+    r.continuous("view.media_rate", "Media rate", *_attr(view, "media_rate"), lo=0.0, hi=6.0,
                  fmt=lambda v: f"rate {v:.1f}", group=g)
-    r.text("view.bmp_file", "Bitmap file", *_attr(view, "bmp_file"), group=g,
-           tip="Image drawn over the face pattern; empty for none.")
     # the face pattern's eight inputs — what the shaders read as u_mod[8],
     # named by the convention in patterns.py (SCALE GLOW WARP SPEED COLOUR
     # SHARP HUE SPREAD). Base 1.0 is the un-driven look; a routed lane rides on it.
@@ -882,6 +1673,47 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
         r.continuous(f"pattern.mod.{k}", patterns.label(k),
                      *_item(lambda: view.pattern_mod, k), lo=0.0, hi=2.6,
                      fmt=lambda v: f"{v:.2f}", group="pattern", tip=patterns.tip(k))
+
+    # ---- the media channels (plan 32 C, media/channels.py): the bin entry
+    # on each, how it fits a frame, and its transport — all performance,
+    # all routable; the bins themselves are the preset's `media` section ----
+    g = "media"
+    fmt_rate = lambda v: "hold" if v == 0 else f"×{v:.2f}"
+    for c, ch in media.channels.items():
+        r.continuous(f"media.{c}.slot", f"{c.upper()} slot", *_attr(ch, "slot"),
+                     lo=0, hi=media_channels.BIN - 1, integer=True,
+                     fmt=lambda v: f"slot {int(v) + 1}", group=g,
+                     tip="Which of the channel's sixteen bin entries is on it; an empty "
+                         "entry, or a source not on this Mac, is black.")
+        r.enum(f"media.{c}.fit", f"{c.upper()} fit", *_attr(ch, "fit"),
+               list(media_channels.FITS), group=g,
+               tip="How the picture fills a frame of another shape: cover crops, "
+                   "contain letterboxes, stretch distorts.")
+        r.continuous(f"media.{c}.rate", f"{c.upper()} rate", *_attr(ch, "rate"),
+                     lo=-4.0, hi=4.0, fmt=fmt_rate, group=g,
+                     tip="× the clip's own speed; negative plays backwards, 0 holds. "
+                         "On a live feed, 0 freezes the frame.")
+        r.continuous(f"media.{c}.pos", f"{c.upper()} position", *_attr(ch, "pos"),
+                     lo=0.0, hi=1.0, fmt=lambda v: f"pos {v:.3f}", group=g,
+                     tip="The scrub: while it moves the playhead is put there; when it "
+                         "rests the clip plays on at the rate from where it was left.")
+        r.continuous(f"media.{c}.jog", f"{c.upper()} jog", *_attr(ch, "jog"),
+                     lo=-1.0, hi=1.0, fmt=lambda v: f"jog {v:+.2f}", group=g,
+                     tip="A push of playhead speed that coasts back to the rate, like a "
+                         "platter spun and let go — learn a relative encoder (the cue "
+                         "knob) to it.")
+        r.enum(f"media.{c}.loop", f"{c.upper()} loop", *_attr(ch, "loop"), list(MEDIA_LOOPS),
+               group=g, tip="At the clip's end: loop, play back (pingpong), or hold the "
+                            "last frame (once).")
+
+    # ---- the backdrop (plan 32 R, row 330): a picture under the scene ----
+    # (which is the graph's wire into `backdrop.image`: plan 33 T7 retired
+    # `backdrop.channel`, an old preset's read as that wire; plan 35 T3
+    # retired `backdrop.history` likewise — what the look-back records is
+    # the wire into `lookback.capture`, `graphmigrate.RETIRED`)
+    g = "backdrop"
+    r.continuous("backdrop.alpha", "Backdrop alpha", *_attr(view, "backdrop_alpha"),
+                 lo=0.0, hi=1.0, fmt=lambda v: f"backdrop {v:.2f}", group=g)
 
     # ---- rotation: per-plane rate and phase ----
     # rate multiplies dt·speed·RATE[p]; signed so a lane can spin a plane
@@ -921,17 +1753,30 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
 
     # ---- camera ----
     g = "camera"
-    r.continuous("camera.zoom", "Zoom", *_attr(view, "zoom"), lo=0.05, hi=40.0, log=True,
-                 fmt=lambda v: f"{v:.2f}×", group=g)
+    # the field of thousands needs far more zoom-out than one shape did: a
+    # 4096-copy grid at spacing 4 stands 184 screens tall, and 0.005 frames
+    # it (2026-10-21). The ends are geometric about 1×, so the knob's middle,
+    # a fader at noon and a level hand all sit at 1× — and the range's span
+    # (log: 0.005 … 200, 15.3 octaves) is the unit a push's depth is measured
+    # in, so the depths onto zoom moved with it (preset.py)
+    r.continuous("camera.zoom", "Zoom", *_attr(view, "zoom"), lo=0.005, hi=200.0, log=True,
+                 fmt=lambda v: f"{v:.2f}×" if v >= 0.1 else f"{v:.3f}×", group=g)
     r.continuous("camera.yaw", "Yaw", *_attr(view, "yaw"), lo=-math.pi, hi=math.pi,
                  wrap=True, fmt=lambda v: f"{math.degrees(v):.0f}°", group=g)
     # pitch wraps like yaw (2026-10-14): the camera is a turn of the points,
     # with no up vector to flip, so tumbling over the top is just more turn
     r.continuous("camera.pitch", "Pitch", *_attr(view, "pitch"), lo=-math.pi, hi=math.pi,
                  wrap=True, fmt=lambda v: f"{math.degrees(v):.0f}°", group=g)
+    # plan 26 A2: zoom and pan are the shape's world scale and position
+    # (geometry.model_matrix) — the hands stay where the performer is and
+    # only the shape grows or moves. Pan is in world units, the shape's
+    # unit circumradius (y positive down, as it always was); a preset/2
+    # file's px are converted at load (preset.pan_world)
     for i, axis in enumerate("xy"):
         r.continuous(f"camera.pan.{axis}", f"Pan {axis.upper()}", *_item(lambda: view.pan, i),
-                     lo=-4000.0, hi=4000.0, fmt=lambda v: f"{v:+.0f} px", group=g)
+                     lo=-PAN_RANGE, hi=PAN_RANGE, fmt=lambda v: f"{v:+.2f}", group=g,
+                     tip="Where the shape sits in the world, in shape radii (the "
+                         "shape's own size): x right, y down. The hands do not move.")
 
     def reset_view():
         view.ang = [0.0] * 6
@@ -942,6 +1787,47 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     r.trigger("camera.reset", "Reset view", reset_view, group=g,
               tip="Reset rotation phases, orbit, zoom and pan.")
 
+    # ---- the eye (plan 26 A2): the one fixed camera the shape (and, from
+    # A3, the hands) are seen through. Session, like the room it is framed
+    # on: a preset never moves it. The defaults are the old 3D divide, so
+    # the shape lands where it always did; not modulatable — the camera
+    # is the rig, the shape is what moves
+    g = "eye"
+    r.continuous("eye.fov", "Eye field of view", *_attr(view, "eye_fov"),
+                 lo=EYE_FOV_RANGE[0], hi=EYE_FOV_RANGE[1],
+                 fmt=lambda v: f"{v:.1f}°", group=g, modulatable=False,
+                 tip="How wide the eye sees, across the shorter side of the picture. "
+                     f"Wider shows more of the world, smaller; {EYE_FOV:.1f}° is the "
+                     "view the shape was always drawn in.")
+    r.continuous("eye.distance", "Eye distance", *_attr(view, "eye_distance"),
+                 lo=EYE_DISTANCE_RANGE[0], hi=EYE_DISTANCE_RANGE[1], log=True,
+                 fmt=lambda v: f"{v:.2f}", group=g, modulatable=False,
+                 tip="How far the eye stands from the centre of the world, in shape "
+                     "radii. Nearer: a stronger perspective and a bigger shape. "
+                     f"{EYE_DISTANCE:.2f} is the view the shape was always drawn in.")
+
+    # ---- the point clouds (plan 26 A4b): how a cloud device's points are
+    # drawn in the shared camera (graph.PointCloud). Session, like the
+    # hands' look: a cloud is the room's sensor, and a preset load never
+    # changes how it is shown. Nothing reads them until a `cloud` device
+    # is listed, so they move no picture of today's
+    g = "cloud"
+    r.continuous("cloud.size", "Cloud point size", *_attr(view, "cloud_size"),
+                 lo=0.5, hi=12.0, fmt=lambda v: f"{v:.1f} px", group=g,
+                 tip="Each point's radius on screen, in pixels, whatever its depth.")
+    r.continuous("cloud.scale", "Cloud scale", *_attr(view, "cloud_scale"),
+                 lo=0.01, hi=10.0, log=True, fmt=lambda v: f"{v:.2f}×", group=g,
+                 tip="The cloud's own units in the world's (the shape's radius is 1), "
+                     "about the world's centre.")
+    r.continuous("cloud.bright", "Cloud brightness", *_attr(view, "cloud_bright"),
+                 lo=0.0, hi=2.0, fmt=lambda v: f"{v:.2f}", group=g,
+                 tip="The points' colour × this; 0 draws them black (they still hide "
+                     "what is behind them).")
+    r.toggle("cloud.colors", "Cloud colours", *_attr(view, "cloud_colors"), group=g,
+             modulatable=False,
+             tip="The cloud's own colours, when its source has them; off, every point "
+                 "is white.")
+
     # ---- look-back: the frame history composited over the scene ----
     # lookback.py reads these every frame; the dream worker (WP6b) reads
     # the second half. Cadence and size rebuild the ring, so no lane drives
@@ -950,14 +1836,15 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     # the labels are the LOOKBACK page's sections (ui_lookback.py): "Echo …"
     # acts on the echoes, "Dream …" on the dream buffer, and the rest on both
     # (plan 20 WP4). Each tip opens with what the knob does.
-    r.toggle("dream.on", "Look-back", *_attr(dream, "on"), group=g,
-             tip="Echoes and the dream, on or off: the frame history composited "
-                 "under the picture — raw echoes, and the dreamed wake once a "
-                 "worker is attached.")
+    # plan 36 T4 (W4): the dream node's own — a look-back drawn is on
+    r.toggle("dream.on", "Dream on", *_attr(dream, "on"), group=g,
+             tip="The dream, on or off: on, the dream node dreams its picture (once a "
+                 "worker is attached); off, it passes the picture through untouched "
+                 "and the worker sleeps.")
     r.continuous("dream.mix", "Dream brightness", *_attr(dream, "mix"), lo=0.0, hi=1.0,
                  fmt=lambda v: f"{v:.2f}", group=g,
-                 tip="How bright the dream is under the picture: the dream buffer's "
-                     "weight in the composite.")
+                 tip="How bright the dream is over its picture: the dream buffer's "
+                     "weight, laid over what the dream node takes in.")
     r.continuous("dream.echo_mix", "Echo brightness", *_attr(dream, "echo_mix"), lo=0.0, hi=1.0,
                  fmt=lambda v: f"{v:.2f}", group=g,
                  tip="How bright the newest echo is; older ones fade from it by the "
@@ -1065,6 +1952,10 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     fx = fx if fx is not None else FxState()
     declare_fx(r, fx)
     fx.on_specs = lambda names: declare_fx(r, fx, names)
+    # the effects' state the fx.* params write, for whoever declares more:
+    # a preset's graph holding an effect twice (plan 26 A4,
+    # preset.GraphSection — `fx.acid.2.*`)
+    r.fx_state = fx
     # the ghost hands' display (ghost.py; the renderer's Ghost.state)
     declare_ghost(r, ghost if ghost is not None else GhostState())
 
@@ -1210,12 +2101,17 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                has=lambda k: 0 <= k < len(bank.bank) and bank.bank[k] is not None,
                # a pad held on an empty slot saves the live state into it
                # (2026-10-09, replacing the clip-stop SAVE AS bar); a filled
-               # slot is never written over — the press loaded it
-               held=bank.save_into,
-               tip="The show's twenty-four presets: F1–F8, then the desk's clip rows "
-                   "1, 4 and 5. Each one is the whole performance — the look, its "
-                   "routes, its LFOs and macros. Never the tempo, the hands or the "
-                   "analyzer. Hold an empty pad to save the live state into it.")
+               # slot held only loads — the press loaded it
+               held=bank.save_empty,
+               # SAVE held and a pad tapped (plan 24 C1): a new preset into
+               # that slot, filled or empty; the old preset stays listed
+               save_into=bank.save_into,
+               tip="The show's twenty-four pads: the desk's clip rows 1, 4 and 5, the "
+                   "first eight on F1–F8. Each one points at a preset — the whole "
+                   "performance: the look, its routes, its LFOs and macros, never the "
+                   "tempo, the hands or the analyzer. Hold SAVE (track 8's clip stop) "
+                   "and tap a pad to save the live state into it as a new preset, or "
+                   "hold an empty pad.")
         # the F-keys' slots have a load and a save trigger each; slots past
         # them are reached through `preset.select` and the page (plan 19
         # fork 1: no params added)
@@ -1229,27 +2125,27 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
         r.trigger("preset.save_new", "Save as a new preset", bank.save_new,
                   group=g, modulatable=False,
                   tip="Save the live state as a new preset, named from the loaded "
-                      "one (TRIP → TRIP 2), into the next empty slot. It never "
-                      "overwrites a preset. On the desk, hold an empty pad instead "
-                      "to choose the slot.")
+                      "one (moo → moo 2), into the next empty pad. It never "
+                      "overwrites a preset. On the desk, hold SAVE (track 8's clip "
+                      "stop) and tap a pad instead to choose the pad.")
         r.trigger("preset.next", "Next preset", lambda: bank.cycle(1), group=g)
         r.trigger("preset.prev", "Previous preset", lambda: bank.cycle(-1), group=g)
-        # the preset list, not the bank (2026-10-14): the pad's B / X step
-        # what the PRESETS page's drop-down lists, saved ones included
+        # the preset list, not the bank (2026-10-14): the pad's d-pad ← / →, held, step
+        # what the PRESETS page lists, saved ones included
         r.trigger("preset.list.next", "Next preset in the list", lambda: bank.walk(1),
                   group=g,
-                  tip="Load the next preset of the PRESETS page's list — every saved "
+                  tip="Load the next preset of the PRESETS page's list — every "
                       "preset by name, a new one included — wrapping at the end. "
-                      "The pad's B. The desk's QUANT walks the bank instead.")
+                      "The pad's d-pad →, held. The desk's QUANT walks the pads instead.")
         r.trigger("preset.list.prev", "Previous preset in the list", lambda: bank.walk(-1),
                   group=g,
                   tip="Load the previous preset of the PRESETS page's list, wrapping "
-                      "at the start. The pad's X.")
-        # home (plan 15 WP2, decision 27): the preset the show starts on.
-        # Lit while the show names one — the light the desk's OVERDUB shows
+                      "at the start. The pad's d-pad ←, held.")
+        # home (plan 15 WP2, decision 27): the show's startup preset. Lit
+        # while the show names one — the light the desk's OVERDUB shows
         r.trigger("preset.home", "Home", bank.home, group=g,
                   lit=lambda: bool(bank.startup),
-                  tip="Home: load the preset this show starts on — the Home key "
+                  tip="Home: load this show's startup preset — the Home key "
                       "(fn ← on a laptop) and OVERDUB (B11) on the desk. "
                       "Undo brings back what was up.")
 

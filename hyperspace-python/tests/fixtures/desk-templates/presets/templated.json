@@ -1,0 +1,18 @@
+{
+ "schema": "hyperspace.preset/2",
+ "name": "TEMPLATED",
+ "note": "plan 24 C3's fixture preset: the fixture shape template, D2 on the dream, K3 on the pattern mix, K2 left dark",
+ "values": {
+  "view.faces": true,
+  "dream.on": true
+ },
+ "routes": [],
+ "desk_template": "fixture shape",
+ "desk": [
+  {"source": "cc:*:17", "target": "dream.mix", "op": "abs", "feedback": "ring"},
+  {"source": "cc:0:50", "target": "view.pattern_mix", "op": "abs", "feedback": "ring"},
+  {"source": "cc:0:49", "dark": true}
+ ],
+ "macros": {},
+ "modules": {}
+}

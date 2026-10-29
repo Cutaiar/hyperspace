@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""The effect stack, offscreen: one shot per effect and one per factory preset.
+"""The effect stack, offscreen: one shot per effect.
 
 Renders a rotating 24-cell with face patterns through the real pipeline
-(render.py → fx.py), each factory effect alone at its defaults and then
-every factory fx preset (hyperspace/library/fx/), and writes them to
-docs/plans/assets/09-fx/ with a contact sheet. Then times the chain.
+(render.py → fx.py), each factory effect alone at its defaults, and
+writes them to docs/plans/assets/09-fx/ with a contact sheet. Then times
+the chain under Noita's heaviest trip stage (`HEAVY`). (Plan 40 T5: the
+fx module presets it also shot are retired outright, D6.)
 
     uv run python tools/fx_shots.py [--frames 60] [--only warp,acid]
 """
@@ -12,7 +13,6 @@ docs/plans/assets/09-fx/ with a contact sheet. Then times the chain.
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 import time
 from pathlib import Path
@@ -26,12 +26,16 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from hyperspace.fx import FxState
-from hyperspace.library import FACTORY
+from hyperspace.graphmigrate import wiring_of
 from hyperspace.render import Renderer
 from hyperspace.view import ViewState
 
 OUT = ROOT / "docs" / "plans" / "assets" / "09-fx"
 W, H = 960, 600
+# the chain's cost is timed under Noita's trip stages 0–3, "tripping balls"
+# (the values of the retired fx module preset of that name, plan 40 T5)
+HEAVY = {"warp": {"on": True, "amount": 1.1}, "tripcolour": {"on": True, "amount": 2.0},
+         "fractals": {"on": True, "amount": 2.9, "size": 1.0}}
 
 
 def view() -> ViewState:
@@ -50,6 +54,7 @@ def shot(ctx, fbo, values: dict, frames: int, scene: bool = True) -> np.ndarray:
         else:
             fx.values[name].update(v)
     r = Renderer(ctx, fx=fx)
+    r.wiring = wiring_of(fx)  # plan 33 R23: its run as a load lands it
     s = view()
     if not scene:
         s.lines = s.points = s.faces = False
@@ -63,18 +68,6 @@ def shot(ctx, fbo, values: dict, frames: int, scene: bool = True) -> np.ndarray:
         print("  errors:", errs)
     img = np.frombuffer(fbo.read(components=3), dtype=np.uint8).reshape(H, W, 3)[::-1]
     return img.copy()
-
-
-def preset_values(doc: dict) -> dict:
-    """A preset file's fx.* ids → shot()'s {effect: {key: v}} form."""
-    out: dict = {}
-    for pid, v in doc["values"].items():
-        parts = pid.split(".")
-        if len(parts) == 2:
-            out[parts[1]] = v
-        else:
-            out.setdefault(parts[1], {})[parts[2]] = v
-    return out
 
 
 def sheet(tiles: list[tuple[str, Path]], path: Path, cols: int = 4) -> None:
@@ -109,38 +102,26 @@ def main() -> None:
         Image.fromarray(shot(ctx, fbo, {name: {"on": True}}, a.frames)).save(p)
         tiles.append((name, p))
         print("wrote", p.relative_to(ROOT))
-    for f in sorted((FACTORY / "fx").glob("*.json")):
-        doc = json.loads(f.read_text())
-        if only and f.stem not in only:
-            continue
-        p = OUT / f"preset-{f.stem}.png"
-        Image.fromarray(shot(ctx, fbo, preset_values(doc), a.frames,
-                             scene=not doc.get("no_scene", False))).save(p)
-        tiles.append((doc["name"], p))
-        print("wrote", p.relative_to(ROOT))
     sheet(tiles, OUT / "sheet.png")
     print("wrote", (OUT / "sheet.png").relative_to(ROOT))
 
-    # the chain's cost: the heavy trip preset, render drained
-    heavy = FACTORY / "fx" / "noita-tripping-balls.json"
-    if heavy.exists():
-        vals = preset_values(json.loads(heavy.read_text()))
-        fx = FxState()
-        for name, v in vals.items():
-            if isinstance(v, dict):
-                fx.values[name].update(v)
-        for label, st in (("off", FxState()), ("tripping balls", fx)):
-            r = Renderer(ctx, fx=st)
-            s = view()
-            ts = []
-            for k in range(40):
-                fbo.use()
-                ctx.viewport = (0, 0, W, H)
-                t0 = time.perf_counter()
-                r.draw(s, W, H, t_now=k / 60)
-                ctx.finish()
-                ts.append(time.perf_counter() - t0)
-            print(f"frame {label}: {np.median(ts[10:]) * 1e3:.2f} ms at {W}×{H}")
+    # the chain's cost: the heavy trip stack, render drained
+    fx = FxState()
+    for name, v in HEAVY.items():
+        fx.values[name].update(v)
+    for label, st in (("off", FxState()), ("tripping balls", fx)):
+        r = Renderer(ctx, fx=st)
+        r.wiring = wiring_of(st)  # plan 33 R23: its run as a load lands it
+        s = view()
+        ts = []
+        for k in range(40):
+            fbo.use()
+            ctx.viewport = (0, 0, W, H)
+            t0 = time.perf_counter()
+            r.draw(s, W, H, t_now=k / 60)
+            ctx.finish()
+            ts.append(time.perf_counter() - t0)
+        print(f"frame {label}: {np.median(ts[10:]) * 1e3:.2f} ms at {W}×{H}")
 
 
 if __name__ == "__main__":

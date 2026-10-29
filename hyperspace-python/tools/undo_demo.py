@@ -11,7 +11,9 @@ footer shows, a redo, a save over a preset and a delete with the trash
 listed, and what `Undo.tick` costs a frame.
 
 It always runs on a fresh temp home of its own (`HYPERSPACE_HOME` is set
-here, before anything reads it): it cannot touch ~/Hyperspace.
+here, before anything reads it), seeded with the test corpus
+(`tests/conftest.py::seed`: the presets, the dream module presets and the
+party show, which the home then opens): it cannot touch ~/Hyperspace.
 
   uv run python tools/undo_demo.py [--out docs/plans/assets/15-safety-net/undo-demo.txt]
 """
@@ -45,9 +47,10 @@ for extra in (ROOT, ROOT / "tests"):
 
 import glfw
 import mido
+from conftest import seed
 from fake_hands import hand
 
-from hyperspace import hands, lfo, preset, tempo, undo
+from hyperspace import hands, lfo, tempo, undo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
@@ -127,13 +130,15 @@ class Tracker:
 
 
 def boot() -> SimpleNamespace:
-    """app.main's construction order, without the windows."""
+    """app.main's construction order, without the windows, over the temp
+    home seeded with the corpus (never over a file already there)."""
     r = SimpleNamespace(t=0.0)
     chain = Analyzer(Analyser())
     control = Control(chain)
     # no audio device: what the registry and the panel read off the engine
     audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
     view = ViewState()
+    seed(HOME)
     lib = Library(HOME, period=0.0)
     reg = build_registry(view, control, audio, lib.project, dream=DreamState(), fx=FxState(),
                          ghost=GhostState())
@@ -151,7 +156,6 @@ def boot() -> SimpleNamespace:
     lib.attach(reg)
     router = Router(reg, Bindings.load(bindings_path(HOME), legacy_midi=None))
     presets = Presets(lib, reg, router)
-    preset.migrate_home(lib, router)
     learn = Learn(reg, router.table, lane=router.lane)
     ports = Ports()
     midi = MidiIO(reg, router.table, inp=ports, out=ports, learner=learn)

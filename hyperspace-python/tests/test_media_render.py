@@ -1,0 +1,826 @@
+"""Plan 32 T6 — the render side of the media channels: `media_tex.MediaTextures`
+(the upload), the fitted `media.<c>` graph node, the backdrop under the scene,
+and the channels as wire ends.
+
+The channels are the real `MediaState` over fake sources (`Still`, `Late`,
+`OnGL`), opened by a fake opener: no file is read and no decode runs. The GL
+half draws on a standalone context and skips without one."""
+
+from __future__ import annotations
+
+import threading
+import time
+
+import numpy as np
+import pytest
+
+from hyperspace import graph as G
+from hyperspace.graphmigrate import wired_wiring
+from hyperspace.media import channels
+from hyperspace.media.channels import MediaState
+from hyperspace.media.frame import MediaFrame
+from hyperspace.outputs import Switches, View
+
+RED = (255, 0, 0)
+BLUE = (0, 0, 255)
+
+
+def _rgba(w: int, h: int, top=RED, bottom=None) -> np.ndarray:
+    """A w×h still, top row first: `top` above, `bottom` (default: `top`) below."""
+    px = np.zeros((h, w, 4), np.uint8)
+    px[..., 3] = 255
+    px[: h // 2, :, :3] = top
+    px[h // 2:, :, :3] = bottom if bottom is not None else top
+    return px
+
+
+class Still:
+    """A still that is there at once: the same frame every read."""
+
+    kind, timed, duration, status = "still", False, 0.0, "ready"
+
+    def __init__(self, pixels: np.ndarray):
+        self.f = MediaFrame(pixels, 1.0, 0)
+        self.reads = 0
+
+    def open(self) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+    def want(self, t: float) -> None:
+        pass
+
+    def latest(self):
+        self.reads += 1
+        return self.f
+
+
+class Late(Still):
+    """A still whose decode lands on another thread `delay` s after `start`:
+    None until then — the frame thread must draw on without it."""
+
+    def __init__(self, pixels: np.ndarray):
+        super().__init__(pixels)
+        self.ready: MediaFrame | None = None
+
+    def start(self, delay: float) -> threading.Thread:
+        def land():
+            time.sleep(delay)
+            self.ready = self.f
+        t = threading.Thread(target=land, name="media-fake-late", daemon=True)
+        t.start()
+        return t
+
+    def latest(self):
+        self.reads += 1
+        return self.ready
+
+
+def _media(**sources) -> MediaState:
+    """The eight channels with `sources` (channel → fake source) on slot 0."""
+    by_id = {f"file:/fake/{c}.png": s for c, s in sources.items()}
+    m = MediaState(opener=lambda sid, resolver: by_id[sid])
+    for c in sources:
+        m.assign(c, 0, f"file:/fake/{c}.png")
+    m.poll(0.0, 0.0)
+    return m
+
+
+def _view(**kw) -> View:
+    return View(Switches(**kw), (480, 320))
+
+
+def _names(g: G.Graph) -> list[str]:
+    return [n.name for n in g.order]
+
+
+# ---------------------------------------------------------------- no GL
+
+def test_the_graph_knows_the_channels_media_does():
+    """graph.py may not import the media package (the render stack's rule),
+    so it keeps the channel letters itself: the same eight, and the fit
+    modes `media_tex` draws are the channels' in order."""
+    from hyperspace import media_tex
+    from hyperspace.media import frame
+
+    assert G.MEDIA_CHANNELS == channels.CHANNELS
+    assert media_tex.FITS == channels.FITS
+    assert (media_tex.TEX_2D, media_tex.TEX_RECT) == (frame.TEX_2D, frame.TEX_RECT)
+    assert MediaFrame(None, 0.0, 1, texture=3, tex_size=(2, 2)).tex_target == frame.TEX_2D
+
+
+def test_no_backdrop_graph_unchanged():
+    """No backdrop: the default graph is exactly today's, for the default
+    views — node for node, in order — and `Wiring()` still compares equal
+    to the default (the renderer's graph key)."""
+    from wiredframe import Shows, graph
+
+    states = [{}, {"scene": False}, {"through": True}, {"hands": False},
+              {"scene": False, "through": True}]
+    one = G.build_graph([_view()], wired_wiring(G.Wiring()))
+    # (plan 36 T4: the old words' look-back off — none drawn)
+    assert _names(one) == ["pattern", "shape", "hands", "scene", "hands.layer", "shown(scene)",
+                           "output.1"]
+    for kw in states:
+        shows = [Shows(**kw), Shows()]
+        base = graph(shows)
+        off = graph(shows, G.Wiring(backdrop="", backdrop_history=False))
+        assert _names(off) == _names(base)
+        assert not any(isinstance(n, G.MediaNode) for n in base.order)
+    assert G.Wiring() == G.Wiring(backdrop="")
+
+
+def test_the_backdrop_wiring_is_checked():
+    for bad in ("i", "A", "media.a", 1):
+        with pytest.raises(ValueError, match="backdrop"):
+            G.Wiring(backdrop=bad)
+    with pytest.raises(ValueError, match="backdrop_history"):
+        G.Wiring(backdrop="a", backdrop_history="yes")
+
+
+def test_backdrop_history_toggle():
+    """With a backdrop the scene is laid over the channel (`backdrop`,
+    plan 35 T4's name for `grounded`) before the look-back, so the effects
+    bend both; the capture takes the scene alone with `backdrop_history`
+    off, the composite with it on — and the hands alone through the
+    effects have no backdrop."""
+    from wiredframe import Shows, graph
+
+    shows = [Shows(), Shows(scene=False, through=True)]
+    # (plan 36 T4: the look-back drawn — its trail added onto the backdrop's
+    # picture by `composite.2`, the through window's `composite` first)
+    off = graph(shows, G.Wiring(backdrop="a"), look="trail")
+    on = graph(shows, G.Wiring(backdrop="a", backdrop_history=True), look="trail")
+    for g in (off, on):
+        grounded = g.nodes["backdrop"]
+        assert isinstance(grounded, G.Composite) and grounded.blend == "over"
+        assert grounded.inputs["over"] is g.nodes["scene"]
+        media = grounded.inputs["under"]
+        assert isinstance(media, G.MediaNode) and media.name == "channel.a"
+        assert media.channel == "a" and media.alpha_of == "backdrop_alpha"
+        assert g.nodes["composite.2"].inputs["under"] is grounded
+        assert g.nodes["composite.2"].inputs["over"] is g.nodes["lookback"]
+        assert g.nodes["scene"].ground == 0.0        # see-through, laid over the backdrop
+        assert g.nodes["composite"].inputs["under"] is None
+    assert off.nodes["lookback(capture)"].inputs["image"].name == "scene"
+    assert on.nodes["lookback(capture)"].inputs["image"].name == "backdrop"
+    assert graph(shows).nodes["scene"].ground is None
+    # the history holding the hands: the hands laid onto what it captures
+    both = graph(shows, G.Wiring(backdrop="b", backdrop_history=True,
+                                 history="scene+hands"), look="trail")
+    held = both.nodes["lookback(capture)"].inputs["image"]
+    assert held.name == "composite" and held.inputs["under"].name == "backdrop"
+
+
+def test_the_channels_are_wire_ends():
+    """`media.a` … `media.h` leave a wire into any picture port; nothing
+    goes into one, and there is no ninth."""
+    ok = [G.Wire("media.c", "output.1.image"), G.Wire("media.a", "acid.image"),
+          G.Wire("media.h", "history.image"), G.Wire("media.b", "output.2.hands")]
+    for w in ok:
+        assert G.wire_error(w) is None, w
+    assert "no node" in G.wire_error(G.Wire("media.i", "output.1.image"))
+    assert "nothing is wired into it" in G.wire_error(G.Wire("scene", "media.a.image"))
+    assert G.wire_node_kind("media.d") == "media"
+    spec = G.read_graph({"wires": [{"from": "media.c", "to": "output.2.image"}]})
+    assert spec.notes == () and spec.wiring().wires == (G.Wire("media.c", "output.2.image"),)
+    g = G.build_graph([_view(), _view()], wired_wiring(spec.wiring()))
+    end = g.nodes["output.2"].inputs["image"]
+    assert isinstance(end, G.Shown) and end.inputs["image"].name == "channel.c"
+    assert isinstance(end.inputs["image"], G.MediaNode)
+    assert end.inputs["image"].alpha_of is None
+    # the backdrop's channel wired too: two nodes, the wire's at alpha 1
+    both = G.build_graph([_view()], wired_wiring(G.Wiring(
+        backdrop="c", wires=(G.Wire("media.c", "output.1.image"),))))
+    assert both.nodes["channel.c"].alpha_of == "backdrop_alpha"
+    assert both.nodes["channel.c(wire)"].alpha_of is None
+
+
+def test_fit_scales():
+    """The fit pass's uv scale (frame uv → picture uv about the centre):
+    cover crops (≤ 1), contain letterboxes (≥ 1), stretch is 1."""
+    from hyperspace.media_tex import fit_scale
+
+    assert fit_scale(0, (200, 100), (100, 100)) == pytest.approx((0.5, 1.0))   # cover
+    assert fit_scale(1, (200, 100), (100, 100)) == pytest.approx((1.0, 2.0))   # contain
+    assert fit_scale(2, (200, 100), (100, 100)) == (1.0, 1.0)                  # stretch
+    assert fit_scale(1, (100, 100), (100, 100)) == pytest.approx((1.0, 1.0))
+    assert fit_scale(7, (200, 100), (100, 100)) == pytest.approx((0.5, 1.0))   # unknown: cover
+
+
+# ---------------------------------------------------------------- GL
+
+moderngl = pytest.importorskip("moderngl")
+
+
+@pytest.fixture(scope="module")
+def ctx():
+    try:
+        c = moderngl.create_context(standalone=True)
+    except Exception as e:  # noqa: BLE001 — any GL failure means skip
+        pytest.skip(f"no standalone GL context available: {e}")
+    yield c
+
+
+def _fbo(ctx, w, h):
+    return ctx.framebuffer(color_attachments=[ctx.renderbuffer((w, h), 4)])
+
+
+def _px(f) -> np.ndarray:
+    w, h = f.size
+    return np.frombuffer(f.read(components=4), np.uint8).reshape(h, w, 4)[::-1].astype(int)
+
+
+def _renderer(ctx, media=None, wires=()):
+    from hyperspace.render import Renderer
+
+    r = Renderer(ctx)
+    r.ghost.state.on = False
+    r.media = media
+    # (plan 36 T3: the rig's words before the wired frame, kept for `_back`;
+    # the renderer takes them wired, as the migration writes them)
+    r.old_wiring = G.Wiring(wires=tuple(wires))
+    r.wiring = wired_wiring(r.old_wiring)
+    return r
+
+
+def _back(r, c: str = "a", history: bool = False, look: str = "off"):
+    """`r` with channel `c` wired under the scene (plan 33 R: the section's
+    `media.<c> → backdrop.image`, as `GraphSpec.wiring` lands it — not
+    `backdrop.channel`); "" unwires it. `history`: the look-back records the
+    backdrop too (plan 36 T3: a wire, `backdrop → lookback.image` — no
+    longer laid on per frame from `backdrop.history`). `look`: the old
+    words' look-back (plan 36 T4: "off" draws none, "trail" draws it)."""
+    from dataclasses import replace
+
+    r.old_wiring = replace(r.old_wiring, backdrop=c, backdrop_history=history and bool(c))
+    r.wiring = wired_wiring(r.old_wiring, look)
+    return r
+
+
+def _empty(**kw):
+    """A view with nothing of the shape drawn."""
+    from hyperspace.view import ViewState
+
+    return ViewState(lines=False, points=False, faces=False, **kw)
+
+
+def _shape(**kw):
+    from hyperspace.view import ViewState
+
+    return ViewState(shape=10, ang=[0.3, 0.7, 1.1, 0.5, 0.9, 1.3], yaw=0.4, pitch=0.25,
+                     faces=True, pattern=2, **kw)
+
+
+def _draw(ctx, r, s, size=(96, 64), views=None, frames=1):
+    vs = views or [View(Switches(), size, target=_fbo(ctx, *size))]
+    for k in range(frames):
+        r.draw_outputs(s, *size, 1.0, vs, t_now=2.0 + k / 60)
+    assert ctx.error == "GL_NO_ERROR"
+    return [_px(v.target) for v in vs]
+
+
+def test_upload_only_when_frame_moves(ctx):
+    from hyperspace.media_tex import MediaTextures
+
+    mt = MediaTextures(ctx)
+    f = MediaFrame(_rgba(8, 4), 1.0, 0)
+    a = mt.texture("a", f)
+    assert mt.texture("a", f) is a and mt.uploads == 1
+    assert a.size == (8, 4) and mt.flipped("a")
+    assert mt.texture("a", MediaFrame(_rgba(8, 4, BLUE), 1.5, 1)) is a and mt.uploads == 2
+    bigger = mt.texture("a", MediaFrame(_rgba(16, 8), 2.0, 2))     # a new size: a new texture
+    assert bigger.size == (16, 8) and mt.uploads == 3
+    assert mt.texture("a", None) is None and mt.uploads == 3
+    mt.release()
+    assert mt.texture("a", MediaFrame(_rgba(16, 8), 2.0, 2)) is not None and mt.uploads == 4
+    mt.release()
+
+
+def test_a_texture_frame_is_wrapped_never_uploaded(ctx):
+    """A GPU frame (Syphon's) is the source's own texture, wrapped
+    (`ctx.external_texture`), never copied; wrapping it again is free and
+    releasing the wrapper leaves the source's texture alone."""
+    from hyperspace.media_tex import MediaTextures
+
+    mt = MediaTextures(ctx)
+    own = ctx.texture((4, 2), 4, data=bytes([0, 255, 0, 255]) * 8)
+    f = MediaFrame(None, 1.0, 1, texture=own.glo, tex_size=(4, 2))
+    got = mt.texture("b", f)
+    assert got.glo == own.glo and mt.uploads == 0 and not mt.flipped("b")
+    assert mt.texture("b", MediaFrame(None, 1.1, 2, texture=own.glo, tex_size=(4, 2))) is got
+    mt.release()
+    assert np.frombuffer(own.read(), np.uint8)[:4].tolist() == [0, 255, 0, 255]
+
+
+def test_unconsumed_channel_not_uploaded(ctx):
+    """Channel b is playing but nothing reads it: never read, never
+    uploaded — while the backdrop's channel a is, once a frame."""
+    a, b = Still(_rgba(16, 9)), Still(_rgba(16, 9, BLUE))
+    r = _renderer(ctx, _media(a=a, b=b))
+    _draw(ctx, r, _empty(), frames=3)
+    assert r._media_textures().uploads == 0 and a.reads == b.reads == 0
+    _draw(ctx, _back(r), _empty(), frames=3)
+    assert b.reads == 0 and a.reads == 3                 # read once a frame
+    assert r._media_textures().uploads == 1               # the frame never moved
+
+
+def test_backdrop_under_scene(ctx):
+    """A red still on channel a under the scene: with nothing of the shape
+    drawn the frame is the still; with the shape, its faces are laid over
+    it; at backdrop alpha 0.5, half red over the black ground."""
+    r = _back(_renderer(ctx, _media(a=Still(_rgba(16, 9)))))
+    (pic,) = _draw(ctx, r, _empty())
+    h, w = pic.shape[:2]
+    assert tuple(pic[h // 2, w // 2, :3]) == RED and (pic[..., :3] == RED).all()
+    assert r._graph.nodes["backdrop"] and "channel.a" in r._graph.timed
+    (shaped,) = _draw(ctx, r, _shape())
+    assert (shaped[..., :3] != RED).any(axis=-1).any()      # the faces over the red
+    assert (shaped[..., :3] == RED).all(axis=-1).any()      # and the still between them
+    (half,) = _draw(ctx, r, _empty(backdrop_alpha=0.5))
+    assert abs(half[h // 2, w // 2, 0] - 128) <= 1 and half[h // 2, w // 2, 1] == 0
+    # off again (unwired): the graph without it, the frame black
+    (none,) = _draw(ctx, _back(r, ""), _empty())
+    assert "backdrop" not in r._graph.nodes and (none[..., :3] == 0).all()
+    # (plan 33 T7: no `backdrop.channel` — the wire into `backdrop.image` is it)
+
+
+def test_backdrop_needs_the_channels(ctx):
+    """A renderer with no media state draws no backdrop. Plan 36 T3: the
+    wire builds its node (what is wired is built, never read from the
+    renderer's state), and it draws nothing."""
+    r = _back(_renderer(ctx, None))
+    (pic,) = _draw(ctx, r, _empty())
+    assert (pic[..., :3] == 0).all()
+
+
+def test_the_graph_is_rebuilt_only_when_the_backdrop_changes(ctx):
+    r = _back(_renderer(ctx, _media(a=Still(_rgba(16, 9)), b=Still(_rgba(16, 9, BLUE)))))
+    _draw(ctx, r, _empty())
+    g = r._graph
+    _draw(ctx, r, _empty(backdrop_alpha=0.3))
+    assert r._graph is g                                    # alpha is per frame
+    _draw(ctx, _back(r, "a", history=True, look="trail"), _empty())
+    # (plan 35 T4: what the look-back records is a wire of the graph's)
+    assert r._graph is not g
+    assert r._graph.nodes["lookback(capture)"].inputs["image"].name == "backdrop"
+    _draw(ctx, _back(r, "b"), _empty())
+    assert r._graph.nodes["backdrop"].inputs["under"].channel == "b"
+
+
+def test_media_wire_to_output(ctx):
+    """`media.c → output.1.image`: output 1 shows the channel, whatever the
+    scene draws; output 2 keeps its switches."""
+    m = _media(c=Still(_rgba(16, 9)))
+    m.channels["c"].fit = 2                                  # stretch: fills
+    r = _renderer(ctx, m, wires=[G.Wire("media.c", "output.1.image")])
+    size = (96, 64)
+    vs = [View(Switches(), size, target=_fbo(ctx, *size)),
+          View(Switches(), size, target=_fbo(ctx, *size))]
+    one, two = _draw(ctx, r, _shape(), views=vs, frames=2)
+    assert (one[..., :3] == RED).all()
+    assert not (two[..., :3] == RED).all(axis=-1).any()     # the shape on black
+
+
+def test_fit_modes(ctx):
+    """A 2:1 still (red over blue) in a 1:1 frame: contain leaves the top
+    rows black, cover does not (and crops the sides), stretch fills; the
+    still is the right way up in each."""
+    m = _media(c=Still(_rgba(64, 32, RED, BLUE)))
+    r = _renderer(ctx, m, wires=[G.Wire("media.c", "output.1.image")])
+    got = {}
+    for k, name in enumerate(channels.FITS):
+        m.channels["c"].fit = k
+        (got[name],) = _draw(ctx, r, _empty(), size=(64, 64))
+    contain, cover, stretch = got["contain"], got["cover"], got["stretch"]
+    assert (contain[:8, :, :3] == 0).all() and (contain[-8:, :, :3] == 0).all()
+    assert tuple(contain[20, 32, :3]) == RED and tuple(contain[44, 32, :3]) == BLUE
+    assert tuple(cover[0, 32, :3]) == RED and tuple(cover[63, 32, :3]) == BLUE
+    assert tuple(stretch[0, 0, :3]) == RED and tuple(stretch[63, 63, :3]) == BLUE
+    assert ((stretch[:, :, :3] == RED).all(-1) | (stretch[:, :, :3] == BLUE).all(-1)).mean() > 0.95
+
+
+def test_a_texture_frame_through_the_fit_pass(ctx):
+    """A source with `gl_poll` (Syphon) is asked through it — once a frame,
+    on the frame thread — and never through `latest`; its texture is in
+    GL's row order (row 0 at the bottom), drawn as it is."""
+    own = ctx.texture((8, 4), 4)
+    rows = np.zeros((4, 8, 4), np.uint8)
+    rows[..., 3] = 255
+    rows[:2, :, 2] = 255                 # GL rows 0–1 (the bottom): blue
+    rows[2:, :, 0] = 255                 # rows 2–3 (the top): red
+    own.write(rows.tobytes())
+
+    class OnGL(Still):
+        def __init__(self):
+            super().__init__(_rgba(2, 2))
+            self.polls = 0
+
+        def gl_poll(self):
+            self.polls += 1
+            return MediaFrame(None, 1.0, 1, texture=own.glo, tex_size=(8, 4))
+
+    src = OnGL()
+    m = _media(d=src)
+    m.channels["d"].fit = 2
+    r = _renderer(ctx, m, wires=[G.Wire("media.d", "output.1.image")])
+    (pic,) = _draw(ctx, r, _empty(), size=(32, 32), frames=3)
+    assert src.polls == 3 and src.reads == 0 and r._media_textures().uploads == 0
+    assert tuple(pic[0, 16, :3]) == RED and tuple(pic[31, 16, :3]) == BLUE
+
+
+@pytest.mark.skipif(not __import__("importlib").util.find_spec("syphon"),
+                    reason="syphon-python is not installed")
+def test_a_syphon_frame_samples_through_the_fit_pass(ctx):
+    """Syphon's texture as the server publishes it, sampled by the fit
+    pass: its colours land, the way up GL's (row 0 at the bottom). The
+    spike read it as 2D; it is a rectangle (an IOSurface's), so it is
+    blitted into the channel's own 2D texture on the GPU, never uploaded."""
+    import gc
+
+    import syphon
+    from test_media_live import _gl_context
+
+    from hyperspace.media.frame import TEX_RECT
+    from hyperspace.media.source import READY
+    from hyperspace.media.syphon import SyphonKind
+
+    made = _gl_context()
+    if made is None:
+        pytest.skip("no GL context")
+    glfw, win, gctx = made
+    w, h = 64, 32
+    tex = gctx.texture((w, h), 4)
+    fbo = gctx.framebuffer([tex])
+    fbo.use()
+    gctx.clear(1.0, 0.0, 0.0, 1.0, viewport=(0, h // 2, w, h // 2))   # the top: red
+    gctx.clear(0.0, 0.0, 1.0, 1.0, viewport=(0, 0, w, h // 2))        # the bottom: blue
+    gctx.finish()
+    srv = syphon.SyphonOpenGLServer("hs-t6-fit")
+    src = f = r = m = None
+    k = SyphonKind("syphon", {})
+    k.open()
+    try:
+        src = None
+        t0 = time.monotonic()
+        while src is None and time.monotonic() - t0 < 6.0:
+            srv.publish_frame_texture(tex.glo, size=(w, h))
+            glfw.poll_events()
+            k.poll(0.016, time.monotonic())
+            src = next((s for sid, s in k.media_sources().items()
+                        if sid.endswith("/hs-t6-fit")), None)
+            time.sleep(0.016)
+        assert src is not None, k.media_sources()
+        src.open()
+        f = None
+        t0 = time.monotonic()
+        while f is None and time.monotonic() - t0 < 3.0:
+            srv.publish_frame_texture(tex.glo, size=(w, h))
+            f = src.gl_poll()
+            time.sleep(0.016)
+        assert f is not None and src.status == READY
+        assert f.tex_target == TEX_RECT                 # an IOSurface's: not 2D
+
+        class Feed:
+            kind, timed, duration, status = "syphon", False, 0.0, READY
+
+            def open(self):
+                pass
+
+            def close(self):
+                pass
+
+            def want(self, t):
+                pass
+
+            def latest(self):
+                return None
+
+            def gl_poll(self):
+                return src.gl_poll()
+
+        m = _media(e=Feed())
+        m.channels["e"].fit = 2
+        r = _renderer(gctx, m, wires=[G.Wire("media.e", "output.1.image")])
+        out = gctx.framebuffer(color_attachments=[gctx.renderbuffer((32, 32), 4)])
+        vs = [View(Switches(), (32, 32), target=out)]
+        errors = []
+        for k_ in range(3):
+            srv.publish_frame_texture(tex.glo, size=(w, h))
+            _ = gctx.error             # (what Syphon's own calls left: not the frame's)
+            r.draw_outputs(_empty(), 32, 32, 1.0, vs, t_now=2.0 + k_ / 60)
+            errors.append(gctx.error)
+        assert errors == ["GL_NO_ERROR"] * 3
+        pic = _px(out)
+        assert tuple(pic[2, 16, :3]) == RED and tuple(pic[29, 16, :3]) == BLUE
+        mt = r._media_textures()
+        assert mt.uploads == 0 and mt.blits >= 1 and mt.error == ""
+        src.close()
+        src.shut()
+    finally:
+        k.close()
+        srv.stop()
+        # everything holding the window's GL — Syphon's client, server and
+        # image, the renderer — freed while its context is still current:
+        # freed later, their deletes would land in whatever context is
+        # current then (the module's: GL_INVALID_VALUE in the next test)
+        if r is not None:
+            r._media_textures().release()
+        src = f = r = m = srv = k = None
+        gc.collect()
+        gctx.release()
+        glfw.destroy_window(win)
+        # the window's context was current: the module's is again, for the
+        # tests after this one, in any order
+        ctx.__enter__()
+
+
+def test_render_thread_never_waits(ctx):
+    """A still whose decode lands 0.3 s from now: twenty frames are drawn
+    before it does, black under the scene, none waiting for it — then the
+    still shows."""
+    late = Late(_rgba(16, 9))
+    r = _back(_renderer(ctx, _media(a=late)))
+    s = _empty()
+    _draw(ctx, r, s)                                    # programs built, graph made
+    t0 = time.perf_counter()
+    late.start(0.3)
+    for _ in range(20):
+        (pic,) = _draw(ctx, r, s)
+    took = time.perf_counter() - t0
+    assert took < 0.3, took
+    assert late.ready is None and (pic[..., :3] == 0).all()
+    deadline = time.monotonic() + 3.0
+    while late.ready is None and time.monotonic() < deadline:
+        time.sleep(0.01)
+    (pic,) = _draw(ctx, r, s)
+    assert (pic[..., :3] == RED).all()
+
+
+# ---------------------------------------------------------------- an effect after the scene
+
+def test_an_effect_after_the_scene_sits_after_the_backdrop_too():
+    """D1's `after: scene` (the acid-scene fixture's placement) over a
+    backdrop sits after `grounded` — the scene laid over the channel — so
+    it bends both rather than folding the see-through scene opaque; with no
+    backdrop the graph is the base's, node for node."""
+    placed = (G.EffectAt("acid", 2, after="scene"),)
+    effects = ("acid", "acid.2")
+    vs = [_view()]
+    # (plan 36 T4: the look-back drawn, the old words' on)
+    base = G.build_graph(vs, wired_wiring(G.Wiring(placed=placed), "trail"), effects=effects)
+    assert base.nodes["acid.2"].inputs["image"] is base.nodes["scene"]
+    on = G.build_graph(vs, wired_wiring(G.Wiring(placed=placed, backdrop="a"), "trail"),
+                       effects=effects)
+    a2 = on.nodes["acid.2"]
+    assert a2.inputs["image"] is on.nodes["backdrop"]
+    assert on.nodes["backdrop"].inputs["over"] is on.nodes["scene"]
+    assert on.nodes["composite"].inputs["under"] is a2
+    assert on.nodes["lookback(capture)"].inputs["image"] is on.nodes["scene"]   # the scene alone
+    hist = G.build_graph(vs, wired_wiring(G.Wiring(placed=placed, backdrop="a",
+                                                   backdrop_history=True), "trail"),
+                         effects=effects)
+    assert hist.nodes["lookback(capture)"].inputs["image"] is hist.nodes["acid.2"]
+    off = G.build_graph(vs, wired_wiring(G.Wiring(placed=placed, backdrop=""), "trail"),
+                        effects=effects)
+    assert _names(off) == _names(base)
+
+
+def test_the_backdrop_shows_through_an_effect_after_the_scene(ctx):
+    """A red still under the scene with a second acid after the scene: the
+    effect runs, and its picture still carries the red — bent, not
+    covered by an opaque fold of the scene."""
+    r = _renderer(ctx, _media(a=Still(_rgba(16, 9))))
+    st = r.fx.state
+    st.set_instances({"acid": 2})
+    st.values["acid.2"].update(on=True, mix=1.0, twist=1.5, bend=0.05)
+    assert not r.fx.compile_all()
+    r.wiring = wired_wiring(G.Wiring(placed=(G.EffectAt("acid", 2, after="scene"),), backdrop="a"))
+
+    def red(pic):
+        return ((pic[..., 0] > 200) & (pic[..., 1] < 60) & (pic[..., 2] < 60)).mean()
+
+    (pic,) = _draw(ctx, r, _empty(), frames=2)
+    assert "acid.2" in r.stats["effects"]
+    assert r._graph.nodes["acid.2"].inputs["image"] is r._graph.nodes["backdrop"]
+    assert red(pic) > 0.5, red(pic)
+    (shaped,) = _draw(ctx, r, _shape(), frames=2)
+    assert "acid.2" in r.stats["effects"] and red(shaped) > 0.2, red(shaped)
+
+
+def test_a_composite_lays_the_scene_and_its_effect_over_the_media(ctx):
+    """A red still into a composite's `under`, the scene into its `over`:
+    with nothing of the shape drawn the frame is the still (the scene laid
+    over is see-through, not an opaque black that covers it); with the
+    shape, its faces cover the still only where they draw. The same through
+    an effect at full mix (a trigger pulled): its pass keeps the scene's
+    see-through ground, so the still is never blacked out."""
+    r = _renderer(ctx, _media(a=Still(_rgba(16, 9))))
+    st = r.fx.state
+    st.values["kaleido"].update(on=True, mix=1.0)
+    assert not r.fx.compile_all()
+
+    def red(pic):
+        return ((pic[..., 0] > 200) & (pic[..., 1] < 60) & (pic[..., 2] < 60)).mean()
+
+    def wire(*pairs, nodes=({"kind": "composite"},)):
+        return G.read_graph({"frame": "wired", "nodes": list(nodes),
+                             "wires": [{"from": a, "to": b} for a, b in pairs]}).wiring()
+
+    r.wiring = wired_wiring(wire(("shape", "scene.geometry"), ("channel.a", "composite.under"),
+                    ("scene", "composite.over"), ("composite", "output.all.image")))
+    (pic,) = _draw(ctx, r, _empty())
+    assert red(pic) == 1.0, red(pic)
+    (shaped,) = _draw(ctx, r, _shape())
+    assert 0.2 < red(shaped) < 1.0, red(shaped)              # the faces over the still
+    r.wiring = wired_wiring(wire(("shape", "scene.geometry"), ("channel.a", "composite.under"),
+                    ("scene", "kaleido.image"), ("kaleido", "composite.over"),
+                    ("composite", "output.all.image"),
+                    nodes=({"kind": "composite"}, {"kind": "effect", "file": "kaleido"})))
+    (pic,) = _draw(ctx, r, _empty(), frames=2)
+    assert "kaleido" in r.stats["effects"] and red(pic) == 1.0, red(pic)
+    (shaped,) = _draw(ctx, r, _shape(), frames=2)
+    assert "kaleido" in r.stats["effects"] and 0.2 < red(shaped) < 1.0, red(shaped)
+
+
+def test_a_half_transparent_scene_over_white_is_honest_on_an_opaque_window(ctx):
+    """Plan 39 T1 (alpha is honest; spike findings §1d): the scene's
+    translucent faces laid into a composite's `over` (so the scene clears
+    to a zero ground, PR #240) over a white still, on an opaque window.
+    `view.cut_through` is the see-through window's blend, not a ground's:
+    on and off draw the same picture, and that picture is the premultiplied
+    over of the scene drawn alone — `face + white × (1 − face.a)` — never
+    brighter (a squared alpha would let too much white through)."""
+    white = (255, 255, 255)
+    r = _renderer(ctx, _media(a=Still(_rgba(16, 9, white))))
+    assert r.bg_alpha == 1.0                                  # an opaque window
+    r.wiring = wired_wiring(G.read_graph({
+        "frame": "wired", "nodes": [{"kind": "composite"}],
+        "wires": [{"from": a, "to": b} for a, b in (
+            ("shape", "scene.geometry"), ("channel.a", "composite.under"),
+            ("scene", "composite.over"), ("composite", "output.all.image"))]}).wiring())
+    pics, faces = {}, {}
+    for cut in (False, True):
+        (pic,) = _draw(ctx, r, _shape(lines=False, points=False, cut_through=cut))
+        pics[cut] = pic
+        w, h = r.scene.tex.size
+        faces[cut] = np.frombuffer(r.scene.tex.read(), np.uint8).reshape(h, w, 4)[::-1] \
+            .astype(int)
+    face = faces[False]                                       # the honest blend's scene
+    a = face[..., 3]
+    seen = (a > 8) & (a < 247)                                # where a face is part there
+    assert seen.mean() > 0.05, seen.mean()
+    # (a) the switch changes nothing on an opaque window, the scene included
+    assert np.abs(faces[True] - face).max() <= 1
+    assert np.abs(pics[True] - pics[False]).max() <= 1
+    # (b) the composite is the premultiplied over of that scene on white:
+    # everywhere a face is, and at the faces' centre (the frame's middle)
+    want = np.clip(face[..., :3] + (255 - a)[..., None], 0, 255)
+    cy, cx = face.shape[0] // 2, face.shape[1] // 2
+    assert seen[cy, cx], a[cy, cx]
+    for cut in (False, True):
+        err = np.abs(pics[cut][..., :3] - want).max(axis=-1)
+        assert err[seen].max() <= 3, (cut, err[seen].max())
+        assert err[cy, cx] <= 3, (cut, err[cy, cx])
+    assert ctx.error == "GL_NO_ERROR"
+
+
+# ---------------------------------------------------------------- the echoes over a backdrop
+
+def _trails(ctx, r, s_on, s_off):
+    """`s_on` (the shape) drawn four frames with the echoes on, then a
+    frame of `s_off` (nothing of it drawn): what is left is the echoes."""
+    st = r.lookback.state
+    st.on, st.echoes, st.gap, st.echo_mix, st.fade = True, 4, 0.0, 1.0, 10.0
+    # (plan 36 T4: the look-back drawn, as the old words with it on)
+    r.wiring = wired_wiring(r.old_wiring, "trail")
+    size = (96, 64)
+    v = View(Switches(), size, target=_fbo(ctx, *size))
+    for k in range(4):
+        r.draw_outputs(s_on, *size, 1.0, [v], t_now=2.0 + k / 60)
+    r.draw_outputs(s_off, *size, 1.0, [v], t_now=2.0 + 4 / 60)
+    assert ctx.error == "GL_NO_ERROR"
+    return _px(v.target)
+
+
+def test_a_static_backdrop_in_the_history_keeps_its_brightness(ctx):
+    """Re-review: with `backdrop.history` on, the echoes hold the backdrop
+    too, so the history occludes from its own input (the scene over the
+    backdrop): a still mid-blue backdrop under an empty scene stays at its
+    own blue over 60 frames at the default echo settings — it must not
+    add onto itself and wash to white. Off, it is the still's blue too."""
+    blue = 120
+    got = {}
+    for history in (False, True):
+        r = _back(_renderer(ctx, _media(a=Still(_rgba(16, 9, (0, 0, blue))))),
+                  history=history)
+        r.lookback.state.on = True                      # the default echoes
+        r.wiring = wired_wiring(r.old_wiring, "trail")  # (plan 36 T4: drawn)
+        size = (96, 64)
+        v = View(Switches(), size, target=_fbo(ctx, *size))
+        for k in range(60):
+            r.draw_outputs(_empty(backdrop_history=history), *size, 1.0, [v],
+                           t_now=2.0 + k / 60)
+        assert ctx.error == "GL_NO_ERROR"
+        pic = _px(v.target)
+        got[history] = int(pic[..., 2].max())
+        assert abs(got[history] - blue) <= 3, (history, got[history])
+        assert abs(int(pic[..., 2].min()) - blue) <= 3, (history, pic[..., 2].min())
+        # on, the history occludes from its own input; off, from the scene
+        occ = r._graph.nodes["lookback"].inputs["occluder"]
+        assert occ.name == ("backdrop" if history else "scene")
+    assert abs(got[True] - got[False]) <= 3, got
+
+
+def test_the_echoes_show_over_a_bright_backdrop(ctx):
+    """Final review B-I1: with `backdrop.history` off the echoes and the
+    dream are drawn over the backdrop. The wake is occluded by the scene
+    alone — never by the backdrop's brightness, which (a blue still at
+    200) would cover every trail."""
+    history = False
+    r = _back(_renderer(ctx, _media(a=Still(_rgba(16, 9, (0, 0, 200))))))
+    pic = _trails(ctx, r, _shape(backdrop_history=history),
+                  _empty(backdrop_history=history))
+    assert (pic[..., 2] >= 199).all()                        # the backdrop everywhere
+    trail = (pic[..., :2] > 8).any(axis=-1).sum()
+    assert trail > 20, trail                                 # and the echoes over it
+    # the same trails as with no backdrop at all: where they are, not hidden
+    bare = _trails(ctx, _renderer(ctx, _media(a=Still(_rgba(16, 9, (0, 0, 200))))),
+                   _shape(), _empty())
+    assert abs(int((bare[..., :2] > 8).any(axis=-1).sum()) - int(trail)) <= trail // 4
+
+
+def test_a_frozen_rectangle_frame_is_never_copied_again(ctx):
+    """Final review (T8 M2, B-M5): a Syphon channel frozen at rate 0 holds
+    one frame (`MediaState.frame` returns `held`), and the channel's own 2D
+    copy of a rectangle frame is made only when (texture, frame, t) moves
+    — so the frozen picture holds, however long the server keeps writing
+    its surface. Only a fresh `MediaTextures` (a renderer reload) copies
+    the held name again."""
+    from hyperspace.media_tex import TEX_RECT, MediaTextures, _Slot
+
+    mt = MediaTextures(ctx)
+    held = MediaFrame(None, 1.0, 7, texture=99, tex_size=(4, 2), tex_target=TEX_RECT)
+    slot = mt._slots.setdefault("e", _Slot())
+    copy = mt._owned(slot, (4, 2))
+    slot.key = ("rect", 99, 7, 1.0)                 # what the freeze's one blit left
+    for _ in range(5):
+        assert mt.texture("e", held) is copy
+    assert mt.blits == 0 and mt.uploads == 0
+    mt.release()
+
+
+# ---------------------------------------------------------------- the MEDIA page's previews
+
+class Playing(Still):
+    """A clip playing: a new 1280×720 frame on every read."""
+
+    def __init__(self):
+        super().__init__(_rgba(1280, 720))
+        self.n = 0
+
+    def latest(self):
+        self.reads += 1
+        self.n += 1
+        return MediaFrame(self.f.pixels, 1.0 + self.n / 60, self.n)
+
+
+def test_the_media_page_previews_cost_two_small_uploads_a_frame(ctx):
+    """Final review B-I2: with the MEDIA page open and eight clips playing
+    that nothing on the outputs reads, at most `PREVIEWS_PER_FRAME` (2)
+    previews are uploaded a frame, each at most `PREVIEW_W` wide — never
+    the full frame — each channel at most `PREVIEW_HZ` a second, round
+    robin so every one shows. A channel the frame reads (the backdrop's)
+    keeps its own upload, and the page shows that texture."""
+    from hyperspace.media_tex import PREVIEW_W
+    from hyperspace.render import PREVIEW_HZ, PREVIEWS_PER_FRAME
+
+    fakes = {c: Playing() for c in channels.CHANNELS}
+    r = _renderer(ctx, _media(**fakes))
+    mt = r._media_textures()
+    seen: set[str] = set()
+    per_frame = []
+    t0 = time.monotonic()
+    for _ in range(12):
+        was = mt.uploads + mt.previews
+        r.media_watch = set(channels.CHANNELS)
+        _draw(ctx, r, _empty())
+        per_frame.append(mt.uploads + mt.previews - was)
+        seen |= {c for c in channels.CHANNELS if r.media_shown(c) is not None}
+        time.sleep(0.02)
+    took = time.monotonic() - t0
+    assert max(per_frame) <= PREVIEWS_PER_FRAME and mt.uploads == 0, per_frame
+    assert mt.preview_bytes_max <= PREVIEW_W * (PREVIEW_W * 720 // 1280 + 1) * 4
+    assert seen == set(channels.CHANNELS)
+    assert mt.previews <= len(channels.CHANNELS) * (took * PREVIEW_HZ + 1)
+    tex, flipped = r.media_shown("a")
+    assert tex.size[0] <= PREVIEW_W and flipped
+    # channel a under the scene: read and uploaded in full as the frame
+    # needs it, and that is what the page shows
+    r.media_watch = set(channels.CHANNELS)
+    _draw(ctx, _back(r), _empty())
+    tex, _ = r.media_shown("a")
+    assert tex.size == (1280, 720) and mt.uploads == 1
+    mt.release()

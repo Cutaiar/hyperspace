@@ -11,13 +11,113 @@ V3). render.py re-exports it.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 
-from .geometry import RATE, rot_matrix
+from .geometry import EYE_DISTANCE, EYE_FOV, RATE, rot_matrix
 
 N_MOD = 8   # pattern.mod.* inputs the face shader reads as u_mod[N_MOD]
 RED = (1.0, 43 / 255, 43 / 255)   # the points' colour, and the panel's one accent (ui.RED)
+
+# plan 34 Z (row 368): a resize node's choices — the long side it makes its
+# picture at (`resize[.n].size`, an index: 4 is 256), the shape (the input's
+# aspect, or square), how the crop is laid into that size (`media_tex.FITS`'
+# order: a test holds them equal; written out, as this module imports no
+# media module) and the filter it samples with
+RESIZE_SIDES = (16, 32, 64, 128, 256, 512, 1024, 2048)
+RESIZE_ASPECTS = ("input", "square")
+RESIZE_FITS = ("cover", "contain", "stretch")
+RESIZE_FILTERS = ("linear", "nearest")
+
+
+@dataclass
+class ResizeState:
+    """One resize node's values (plan 34 Z, `resize[.n].*`: params.declare_resizes),
+    read once a frame by the renderer (`ViewState.resize`, `graph.Frame.resizes`):
+    indexes into `RESIZE_SIDES`, `RESIZE_ASPECTS`, `RESIZE_FITS` and
+    `RESIZE_FILTERS`, and the crop — a normalised rect of the input, its centre
+    (`crop_x`, `crop_y`, from the top left) and its size. A value, never a rebuild."""
+
+    size: int = 4
+    aspect: int = 0
+    fit: int = 0
+    filter: int = 0
+    crop_x: float = 0.5
+    crop_y: float = 0.5
+    crop_w: float = 1.0
+    crop_h: float = 1.0
+
+
+# plan 39 T2 (W2): a matte's sources — what makes a pixel pass: its
+# brightness, its own coverage (how a cut picture becomes a mask again), or
+# its closeness to a keyed hue (a chroma key)
+MATTE_FROM = ("luma", "alpha", "chroma")
+MATTE_FEATHER = 32.0      # the most px a matte's feather blurs its mask by
+
+
+@dataclass
+class MatteState:
+    """One matte node's values (plan 39 T2, `matte[.n].*`: params.declare_mattes),
+    read once a frame by the renderer (`ViewState.mattes`, `graph.Frame.mattes`):
+    `source` an index into `MATTE_FROM` (`matte.from`), `key` where a pixel starts
+    to pass, `soft` the edge's width about it (0 hard), `invert`, `feather` a
+    blur of the mask in px, and the keyed colour a chroma matte measures from
+    (`hue` 0–1 round the wheel, `sat`). The defaults make a wired matte on a
+    plain picture pass its bright half, hard-edged. A value, never a rebuild."""
+
+    source: int = 0
+    key: float = 0.5
+    soft: float = 0.0
+    invert: bool = False
+    feather: float = 0.0
+    hue: float = 1.0 / 3.0
+    sat: float = 1.0
+
+
+@dataclass
+class CutState:
+    """One cut node's values (plan 39 T3, `cut[.n].*`: params.declare_cuts),
+    read once a frame by the renderer (`ViewState.cuts`, `graph.Frame.cuts`):
+    `invert` keeps the hole and cuts the rest; `amount` how far the cut goes,
+    0–1 — the cut-away part is the picture × (1 − amount): 1 cuts it to
+    nothing, 0.5 dims it by half, 0 leaves the picture whole. The defaults
+    cut fully where the mask does not pass. A value, never a rebuild."""
+
+    invert: bool = False
+    amount: float = 1.0
+
+
+# plan 39 T4 (W4): a segment's modes — a person model (the worker's), a
+# background model (motion: GLSL on the frame thread), and any subject
+# (declared, refused in words until a later build) — and the model's levels
+SEGMENT_MODES = ("person", "motion", "subject")
+SEGMENT_QUALITY = ("fast", "balanced", "accurate")
+SEGMENT_FEATHER = 32.0    # the most px a segment's feather blurs its matte by
+SEGMENT_LEARN = (0.1, 30.0)   # motion's learn: seconds for a still thing to fade in
+
+
+@dataclass
+class SegmentState:
+    """One segment node's values (plan 39 T4, `segment[.n].*`:
+    params.declare_segments), read once a frame by the renderer
+    (`ViewState.segments`, `graph.Frame.segments`): `mode` an index into
+    `SEGMENT_MODES`, `quality` into `SEGMENT_QUALITY` (the model's level),
+    `feather` a blur of the matte in px, `smooth` 0–1 how much of the last
+    matte each new one keeps (against flicker; 0 the model's matte as it
+    is), `on` (off: the input whole on `fg`, nothing on `bg` and `mask`, the
+    worker idle), and motion's `sense` (how far a pixel must differ from
+    the background to be foreground, 0–1) and `learn` (seconds for a still
+    thing to fade into the background). The defaults add nothing to the
+    model's own matte. A value, never a rebuild."""
+
+    mode: int = 0
+    quality: int = 0
+    feather: float = 0.0
+    smooth: float = 0.0
+    on: bool = True
+    sense: float = 0.1
+    learn: float = 3.0
 
 
 @dataclass
@@ -30,6 +130,17 @@ class ViewState:
     bright: float = 1.0
     points: bool = True
     lines: bool = True
+    # the layers' opacities (plan 24 C2): 1 is the picture as it was before
+    # them, 0 draws the layer fully transparent; each multiplies the alpha
+    # draw_scene already gives an edge or a point
+    lines_alpha: float = 1.0
+    points_alpha: float = 1.0
+    # plan 26 A2b (owner, 2026-10-14): where the strokes' weight lives.
+    # False (the default) — world space: the line width and the point
+    # radius are × camera.zoom, so a stroke grows and shrinks with the shape
+    # (the pre-A2 feel). True — screen space: they keep their pixel weight
+    # whatever the zoom (A2's behaviour)
+    screen_strokes: bool = False
     playing: bool = True
     planes: list[bool] = field(default_factory=lambda: [False, False, True, True, False, False])
     ang: list[float] = field(default_factory=lambda: [0.0] * 6)
@@ -40,21 +151,68 @@ class ViewState:
     held: bool = False           # whether body is the held pose (three_d, as integrate last saw it)
     body: object = None          # a 4D shape's turn before its angles (4×4), None for none
     cut_through: bool = True     # overlay only: fills lower the window's alpha (render.py)
-    zoom: float = 1.0            # camera magnification about the view centre
-    pan: list[float] = field(default_factory=lambda: [0.0, 0.0])  # logical px
+    # plan 26 A2: camera.zoom / camera.pan are the shape's world transform
+    # (geometry.model_matrix): its scale about the world origin and its
+    # position in world units (the unit circumradius; pan.y positive down)
+    zoom: float = 1.0
+    pan: list[float] = field(default_factory=lambda: [0.0, 0.0])
+    # the eye (eye.* — session): the one fixed camera, framed on the Leap
+    # box; the defaults are project_h's divide (geometry.EYE_FOV / EYE_DISTANCE)
+    eye_fov: float = EYE_FOV           # degrees across the shorter side
+    eye_distance: float = EYE_DISTANCE  # world units from the origin
+    # the point clouds (cloud.* — session; plan 26 A4b, graph.PointCloud):
+    # how a recorded or live cloud is drawn in the shared camera. Nothing
+    # reads them until a `cloud` device is listed
+    cloud_size: float = 2.0      # a point's radius, logical px
+    cloud_scale: float = 0.3     # the cloud's units → world units (shape radii)
+    cloud_bright: float = 1.0    # × the point's colour
+    cloud_colors: bool = True    # the cloud's own colours; off (or none): white
     instances: int = 1           # synchronized copies, laid out by inst_layout; 0 draws nothing
-    inst_layout: int = 0         # 0 grid, 1 hex (a honeycomb spiral), 2 ring (render.inst_positions)
+    # 0 grid, 1 hex (a honeycomb spiral), 2 ring; 3–8 the 3D lattices: cubic,
+    # bcc, fcc, hcp, hex prism, diamond (field.py)
+    inst_layout: int = 0
+    inst_fit: bool = False       # fit the field to the screen, whole copies only (field.py)
+    inst_spacing: float = 1.0    # neighbour spacing, in cells
+    inst_persp: float = 0.5      # a 3D lattice's own perspective: 0 flat … 1 deep
     inst_motion: int = 0         # field motion: 0 still, 1 orbit, 2 wave, 3 ripple
     inst_amp: float = 0.25       # motion amplitude, fraction of a cell (the neighbour spacing)
     inst_rate: float = 1.0       # motion angular rate, rad/s
     pattern: int = 0             # face pattern mode (0 = flat fill)
     pattern_mix: float = 1.0     # flat ↔ pattern blend
-    bmp_file: str = ""           # bitmap layer over the face pattern, "" = none
-    bmp_alpha: float = 1.0       # bitmap opacity fader
-    bmp_scale: float = 0.9       # bitmap width, face-UV units (face spans 1.0)
-    bmp_mode: int = 0            # bitmap path: 0 still, 1 orbit, 2 fig-8, 3 sway
-    bmp_amp: float = 0.15        # path amplitude about the face centre, UV units
-    bmp_rate: float = 1.0        # path angular rate, rad/s
+    # plan 32 (row 331): a media channel over the face pattern, where the
+    # one bitmap file (view.bmp_*) was; the same alpha, size and path. Which
+    # channel is the preset graph's wire into `pattern.media` (plan 33 T7:
+    # `view.media` is retired)
+    media_alpha: float = 1.0     # its opacity fader
+    media_scale: float = 0.9     # its width, face-UV units (face spans 1.0)
+    media_mode: int = 0          # its path: 0 still, 1 orbit, 2 fig-8, 3 sway
+    media_amp: float = 0.15      # path amplitude about the face centre, UV units
+    media_rate: float = 1.0      # path angular rate, rad/s
+    # the backdrop (row 330): a picture under the scene — which one is the
+    # preset graph's wire into `backdrop.image` (plan 33 T7: `backdrop.channel`
+    # is retired)
+    backdrop_alpha: float = 1.0
+    backdrop_history: bool = False   # the look-back captures the backdrop too
+    # plan 33 S: each switch node's pick (`switch[.n].select`, declared from
+    # the preset's graph: params.declare_switches) — switch name → 0 off,
+    # 1–8 its input; read once a frame by the renderer
+    switch: dict[str, int] = field(default_factory=dict)
+    # plan 34 Z: each resize node's values (`resize[.n].*`, declared from the
+    # preset's graph: params.declare_resizes) — resize name → its state
+    resize: dict[str, ResizeState] = field(default_factory=dict)
+    # plan 39 T2: each matte node's values (`matte[.n].*`, declared from the
+    # preset's graph: params.declare_mattes) — matte name → its state
+    mattes: dict[str, MatteState] = field(default_factory=dict)
+    # plan 39 T3: each cut node's values (`cut[.n].*`, declared from the
+    # preset's graph: params.declare_cuts) — cut name → its state
+    cuts: dict[str, CutState] = field(default_factory=dict)
+    # plan 39 T4: each segment node's values (`segment[.n].*`, declared from
+    # the preset's graph: params.declare_segments) — segment name → its state
+    segments: dict[str, SegmentState] = field(default_factory=dict)
+    # plan 36 T4: each extra look-back's values (`dream.<n>.*`, declared from
+    # the preset's graph: params.declare_lookbacks) — `lookback.<n>` → its
+    # `lookback.DreamState` (`lookback`'s are the renderer's own, `dream.*`)
+    lookback: dict[str, Any] = field(default_factory=dict)
     # modulation targets (params.py rot.rate.* / pattern.mod.*): per-plane
     # rate multipliers and the face patterns' inputs — 1.0 is the undriven
     # look; an audio lane routed to them (routing.py) is what the reference

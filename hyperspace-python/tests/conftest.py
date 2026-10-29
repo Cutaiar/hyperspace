@@ -11,8 +11,82 @@ test that proves a rule about the owner's files "on a copy".
 """
 
 import os
+from pathlib import Path
 
 import pytest
+
+# ---------------------------------------------------------------- test tiers
+# A bare `pytest` runs the fast tier in parallel (pyproject addopts:
+# -n auto -m "not golden and not slow and not live"); `pytest --all` runs
+# everything. The markers are applied here, by name, so no test file carries
+# them: re-measure with `pytest --all --durations=60` and edit these tables
+# when a test is added or its time changes.
+
+_FAST = "not golden and not slow and not live"      # = pyproject's addopts -m
+_GOLDEN_FILES = {"test_golden_frames.py"}
+# whole files: torch on MPS, or loopbacks with multi-second timeouts
+_LIVE_FILES = {"test_media_live.py", "test_media_publish.py"}
+_SLOW_FILES = {"test_dream.py"}
+# single tests, "file::function" (any parametrisation)
+_LIVE_TESTS = {
+    "test_media_render.py::test_a_syphon_frame_samples_through_the_fit_pass",
+    "test_media_core.py::test_bad_file_is_an_error",      # polls; fails under load
+    # plan 39 T4: the real segment backends, once each on a synthetic frame
+    # (one worker at a time: torch must not share MPS with another test)
+    "test_segment.py::test_vision_runs_once_on_a_synthetic_frame",
+    "test_segment.py::test_torch_runs_once_on_a_synthetic_frame",
+}
+_SLOW_TESTS = {
+    "test_media_core.py::test_heic_opens",
+    "test_media_channels.py::test_close_with_a_hung_source_returns_within_two_seconds",
+    "test_media_channels.py::test_rapid_switching_with_slow_closes_stays_fast_and_balances",
+    "test_media_channels.py::test_a_video_stuck_opening_never_jams_the_closer",
+    "test_media_channels.py::test_a_slow_close_never_holds_the_frame_thread",
+    "test_graph_free.py::test_every_old_preset_saves_as_six_and_is_a_fixed_point",
+    "test_undo.py::test_an_idle_app_makes_no_step",
+    "test_undo.py::test_a_performers_round_off_lights_no_dot",
+    "test_graph_areas.py::test_every_node_has_one_area_and_the_three_concerns_are_separate",
+    "test_ghost.py::test_tethers_draw_only_when_toggled_and_keep_the_alpha",
+    "test_ghost.py::test_a_style_never_draws_the_guide",
+    "test_analyzer.py::test_manual_normalisation_makes_trim_monotonic",
+    "test_geometry.py::test_warm_all_fills_every_shapes_caches",
+    "test_app_boundary.py::test_the_app_exits_within_two_seconds_with_reads_and_a_transcode_stuck",
+    "test_graph_legible.py::test_every_node_has_a_label_and_a_hover",
+    "test_routing.py::test_every_factory_preset_lands_the_same_values_one_frame_earlier",
+    "test_graph_delay.py::test_nothing_of_plan_33_has_an_own_size",
+    "test_plan12_presets.py::test_each_hand_axis_moves_its_target_as_the_table_says",
+    "test_migrate_library.py::test_the_real_picture_check_passes_an_old_preset",
+    "test_watchdog.py::test_a_stall_that_holds_the_gil_is_caught_by_the_c_backstop",
+    "test_render.py::test_nothing_aimed_at_the_faces_is_the_old_frame_exactly",
+    "test_render.py::test_every_layout_and_motion_draws_any_count",
+    "test_desk_coverage.py::test_the_committed_report_is_fresh_and_regenerates_byte_identical",
+    "test_presets.py::test_each_orbit_axis_moves_its_camera_param_as_its_row_says",
+}
+
+
+def pytest_addoption(parser):
+    parser.addoption("--all", action="store_true",
+                     help="run every tier (golden, slow, live), not just the fast one")
+
+
+def pytest_configure(config):
+    # (an explicit `-m` with --all still wins: only the default is lifted)
+    if config.getoption("--all") and config.option.markexpr == _FAST:
+        config.option.markexpr = ""
+
+
+def pytest_collection_modifyitems(config, items):
+    for item in items:
+        path = item.path.name
+        key = f"{path}::{item.originalname or item.name}"
+        if path in _GOLDEN_FILES:
+            item.add_marker(pytest.mark.golden)
+        if path in _LIVE_FILES or key in _LIVE_TESTS:
+            item.add_marker(pytest.mark.live)
+            # loopbacks share global Syphon / NDI names: one worker at a time
+            item.add_marker(pytest.mark.xdist_group("live"))
+        if path in _SLOW_FILES or key in _SLOW_TESTS:
+            item.add_marker(pytest.mark.slow)
 
 
 @pytest.fixture(autouse=True)
@@ -48,6 +122,46 @@ def _no_real_midi(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _renderers_draw_todays_frame(request, monkeypatch):
+    """Plan 36 T3 (W3): the app's `Renderer` starts on the empty frame
+    (`graph.EMPTY`, black) until a preset's graph lands. The tests' bare
+    renderers draw a scene to look at, so here — the tests' word, never the
+    app's — a new one is handed today's frame as the one-way migration
+    writes it for a section-less old preset (`graphmigrate.wired_wiring(
+    Wiring())`). A test marked `empty_frame` gets the app's own."""
+    if request.node.get_closest_marker("empty_frame") is not None:
+        return
+    from hyperspace import render
+    from hyperspace.graph import Wiring
+    from hyperspace.graphmigrate import look_of, wired_wiring
+
+    init = render.Renderer.__init__
+
+    def today(self, *a, **k):
+        init(self, *a, **k)
+        # (plan 36 T4: its look-back as the old words had it — drawn while
+        # `dream.on` was on, with the dream while its mix is above 0)
+        st = self.lookback.state
+        self.wiring = wired_wiring(Wiring(), look_of({"dream.on": bool(st.on),
+                                                      "dream.mix": st.mix}))
+
+    monkeypatch.setattr(render.Renderer, "__init__", today)
+
+
+@pytest.fixture(autouse=True)
+def _graph_page_starts_on_the_full_canvas(request, monkeypatch):
+    """Plan 36 T6 (D4): the GRAPH page's **preset only** chip starts lit in
+    the app, hiding the controllers and modulation. The page tests look at
+    the whole canvas, so theirs starts off; tests/test_graph_preset_only.py
+    turns it back on."""
+    from hyperspace import ui_graph
+
+    if request.node.name == "test_default_is_on":
+        return
+    monkeypatch.setattr(ui_graph, "PRESET_ONLY", False)
+
+
+@pytest.fixture(autouse=True)
 def _no_undo_left_installed():
     """`undo.install` is one per process (the app has one Undo): a test
     that installs one must not leave it for the next test's push sites."""
@@ -59,13 +173,49 @@ def _no_undo_left_installed():
 
 def opened_last(home, show: str = "house"):
     """A home whose last opened show is `show` (library.LAST_SHOW) — what
-    the tests written against the house moods, the factory default until
-    plan 14 WP3 made the party show the one a fresh home opens, stand on."""
+    the tests written against the house moods, the default show until plan
+    14 WP3 made the party show the one a fresh home opened, stand on."""
     from pathlib import Path
 
     home = Path(home)
     home.mkdir(parents=True, exist_ok=True)
     (home / "last_show").write_text(f"{show}\n")
+    return home
+
+
+# ------------------------------------------------ the corpus: what the build once shipped
+
+CORPUS = Path(__file__).resolve().parent / "corpus"
+# the groups the corpus holds: the twenty-five presets, the three dream
+# module presets, and the two shows (party, house) whose banks name them
+CORPUS_GROUPS = ("presets", "dream", "projects")
+
+
+def seed(home, *groups: str, last_show: str | None = "party"):
+    """Copy the corpus into `home` — every file of each group in `groups`
+    (all of CORPUS_GROUPS by default), never over a file already there —
+    and, unless `last_show` is None, name the show a launch opens
+    (`library.LAST_SHOW`) when nothing names one yet. Returns `home`.
+
+    The library has one tier since 2026-10-28: nothing ships with the app,
+    a fresh home is empty and opens an unsaved show. The tests written
+    against the shipped presets (TUMBLE, WAKE, the party show's bank…)
+    stand on this seed instead — `boot_home` seeds by default."""
+    import shutil
+
+    home = Path(home)
+    for group in groups or CORPUS_GROUPS:
+        src = CORPUS / group
+        if not src.is_dir():
+            raise FileNotFoundError(f"no corpus group {group!r} under {CORPUS}")
+        dst = home / group
+        dst.mkdir(parents=True, exist_ok=True)
+        for f in sorted(src.glob("*.json")):
+            if not (dst / f.name).exists():
+                shutil.copyfile(f, dst / f.name)
+    mark = home / "last_show"
+    if last_show and "projects" in (groups or CORPUS_GROUPS) and not mark.exists():
+        mark.write_text(f"{last_show}\n")
     return home
 
 
@@ -96,10 +246,12 @@ def old_shape_pads() -> list[dict]:
         for row in range(2) for k in range(8))
 
 
-def boot_home(home):
-    """The app's construction order (app.main), headless, over `home` as it
-    is: the library, the registry, the table from `<home>/bindings.json`,
-    the router, the presets, the launch's migration and the startup preset."""
+def boot_home(home, *, corpus: bool = True):
+    """The app's construction order (app.main), headless, over `home` —
+    seeded with the corpus first unless `corpus` is off (`seed`: the
+    shipped presets and the party show, which a fresh home then opens as
+    it did until 2026-10-28): the library, the registry, the table from
+    `<home>/bindings.json`, the router, the presets and the startup preset."""
     from types import SimpleNamespace
 
     from hyperspace import lfo, preset, routing, tempo
@@ -112,6 +264,8 @@ def boot_home(home):
     from hyperspace.params import build_registry
     from hyperspace.view import ViewState
 
+    if corpus:
+        seed(home)
     chain = Analyzer(Analyser())
     control = Control(chain)
     view = ViewState()
@@ -130,7 +284,6 @@ def boot_home(home):
     lib.attach(reg)
     router = routing.Router(reg, table)
     presets = preset.Presets(lib, reg, router)
-    preset.migrate_home(lib, router)
     lib.project.load_startup()
     return SimpleNamespace(lib=lib, reg=reg, view=view, control=control, chain=chain,
                            router=router, presets=presets, clock=clock, home=home)
@@ -144,12 +297,13 @@ def _with_old_pads(path, re_aimed: dict | None = None) -> None:
     pads (WP2) they are written in, in the kind's own text."""
     import json
 
-    from hyperspace import preset
+    from hyperspace import apc40, preset
 
     doc = json.loads(path.read_text())
     # (the fresh layer's device knobs, apc40.SCENE, came with plan 19 WP3:
     # a preset saved before it had none — its knobs dark, or what was learned)
-    scene = preset.desk_json(b for b in preset.fresh_desk() if preset._is_device_knob(b))
+    scene = preset.desk_json(b for b in preset.fresh_desk()
+                             if b.kind == "cc" and b.number in apc40.DEVICE_KNOBS)
     desk = [row for row in doc.get("desk") or [] if row not in scene]
     have = {row["source"] for row in desk}
     want = [re_aimed if re_aimed and row["source"] == re_aimed["source"] else row

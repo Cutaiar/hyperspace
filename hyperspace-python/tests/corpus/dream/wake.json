@@ -1,0 +1,31 @@
+{
+ "schema": "hyperspace.preset/1",
+ "group": "dream",
+ "name": "wake",
+ "note": "Plan 12's party-wake scene, re-tuned in plan 14 WP6 so the wake reads: 24 echoes every 50 ms (the trail reaches 1.2 s back), each halving in 0.6 s, the render covering them lightly (occlude 0.3), and the dream buffer at half opacity on the classic conv3_3 swirl. Echo mix, fade, hue and dream mix sit at the bases the party-wake preset's routes push from. Plan 36 T4: these are values only — `dream.on` is the dream node's switch, and a group preset cannot draw or remove a look-back or a dream (the preset's graph does, on GRAPH).",
+ "values": {
+  "dream.on": true,
+  "dream.mix": 0.5,
+  "dream.echo_mix": 0.6,
+  "dream.fade": 0.6,
+  "dream.darken": 0.0,
+  "dream.contrast": 1.0,
+  "dream.occlude": 0.3,
+  "dream.hue": 0.0,
+  "dream.sat": 1.2,
+  "dream.tint": 0.0,
+  "dream.tint_from": 0,
+  "dream.tint_hue": 200.0,
+  "dream.tint_sat": 1.0,
+  "dream.echoes": 24,
+  "dream.gap": 0.05,
+  "dream.res": 2,
+  "dream.steps": 2,
+  "dream.step": 0.03,
+  "dream.k": 0.08,
+  "dream.layer": 1,
+  "dream.octaves": 1,
+  "dream.mask_decay": 0.98,
+  "dream.jitter": 8
+ }
+}

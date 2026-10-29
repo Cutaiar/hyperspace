@@ -17,8 +17,8 @@ plain assignment of the line, an exact comparison of the signature,
 
 It builds the app's objects the way `tools/undo_demo.py` does — no
 window, synthetic hands — on a fresh temp home of its own (`undo_demo`
-sets `HYPERSPACE_HOME` on import, before anything reads it): it cannot
-touch ~/Hyperspace.
+sets `HYPERSPACE_HOME` on import, before anything reads it, and seeds it
+with the test corpus): it cannot touch ~/Hyperspace.
 
   uv run python tools/followups_demo.py [--out docs/plans/assets/16-paper-cuts/followups-demo.txt]
 """
@@ -101,7 +101,8 @@ def round_off(r) -> None:
     lib, reg = r.lib, r.reg
     say()
     say("2. The preset's dirty dot after two hands have been through the box")
-    say("   (each factory preset loaded, 2 s of hands on its own routes, the hands gone)")
+    say("   (each preset of the library loaded, 2 s of hands on its own routes, the hands "
+        "gone)")
     shown = 0
     names = lib.list(PRESETS)
     for name in names:
@@ -131,7 +132,7 @@ def round_off(r) -> None:
         p.step(1 if p.position() < p.steps else -1)
         say(f"     one detent of {pid} ({p.fmt(was)} -> {p.fmt(p.base)}):  "
             f"{'unsaved •' if lib.is_dirty(PRESETS) else 'clean'}")
-    say(f"   {shown} of {len(names)} factory presets had a base moved by these hands; "
+    say(f"   {shown} of {len(names)} presets had a base moved by these hands; "
         f"every other one read clean before and after")
 
 

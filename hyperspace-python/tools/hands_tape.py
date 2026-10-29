@@ -126,6 +126,7 @@ def _shots(args) -> None:
     from PIL import Image
 
     from hyperspace.fx import FxState
+    from hyperspace.graphmigrate import wiring_of
     from hyperspace.hands import HandSettings, HandsIO
     from hyperspace.render import Renderer
     from hyperspace.view import ViewState
@@ -139,6 +140,7 @@ def _shots(args) -> None:
     for name in filter(None, args.fx.split(",")):
         fx.values[name]["on"] = True
     r = Renderer(ctx, fx=fx)
+    r.wiring = wiring_of(fx)  # plan 33 R23: its run as a load lands it
     r.ghost.state.on, r.ghost.source = True, io
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((w, h))])
     s = ViewState(ang=[0.3, 0.7, 1.1, 0.5, 0.9, 1.3], yaw=0.4, pitch=0.25, faces=True)

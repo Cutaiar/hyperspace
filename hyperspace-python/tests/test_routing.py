@@ -21,20 +21,20 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from conftest import OWNER_PAD, OWNER_ROW, boot_home, far_pads, old_shape_pads, tree
+from conftest import CORPUS, OWNER_PAD, OWNER_ROW, boot_home, far_pads, old_shape_pads, seed, tree
 from legacy_chain import LegacyChain  # tests/legacy_chain.py — the frozen reference
 from test_analyzer import fixture_wavs, frames  # noqa: F401 — the fixture, re-exported
 
-from hyperspace import apc40, hands, lfo, preset, routing, tempo
+from hyperspace import apc40, envelope, hands, lfo, preset, routing, sequencer, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer, legacy_layout
 from hyperspace.bands import BANDS, CEIL, default_params
 from hyperspace.control import Control
 from hyperspace.geometry import RATE
-from hyperspace.library import FACTORY, Library
+from hyperspace.library import Library
 from hyperspace.offline import load_wav
 from hyperspace.overlay import Output
-from hyperspace.params import DRIVE, PLANES, ROT_RATE_MAX, build_registry, part_of
+from hyperspace.params import DRIVE, PLANES, ROT_RATE_MAX, Kind, build_registry, part_of
 from hyperspace.routing import (
     MOD_OPS,
     PATTERN_DEPTH,
@@ -80,20 +80,37 @@ def rig(sr: float = 48_000.0, tmp_path: Path | None = None, full: bool = False):
         Output(None, None).register(reg)
         clock = tempo.Clock(now=lambda: 0.0)
         tempo.register(reg, clock)
-        lfo.register(reg, lfo.LFOs(), clock)
+        lfos = lfo.LFOs(seed=1)
+        lfo.register(reg, lfos, clock)
+        # plan 31: the envelopes and the sequencer (seq-demo's ids)
+        envelope.register(reg, envelope.Envelopes(), clock)
+        sequencer.register(reg, sequencer.Sequencer(), clock)
         hands.register(reg, hands.HandSettings.from_config({}))  # the global track knobs
     return SimpleNamespace(reg=reg, view=view, control=control, audio=audio, chain=chain,
-                           lib=lib)
+                           lib=lib, lfos=lfos if full else None, clock=clock if full else None)
+
+
+def corpus_doc(stem: str) -> dict:
+    """A preset of the corpus (tests/corpus/presets: the files the build
+    shipped until the library went one-tier, 2026-10-28), as its /7 file
+    reads — test data the app never sees."""
+    return json.loads((CORPUS / "presets" / f"{stem}.json").read_text())
+
+
+def corpus_stems() -> list[str]:
+    """Every corpus preset by file stem (`legacy6`, `party-trip`, …)."""
+    return sorted(f.stem for f in (CORPUS / "presets").glob("*.json"))
 
 
 def legacy6(router: Router) -> list[str]:
-    """The legacy6 preset onto the table and the registry: its routes and
-    its bases, as the code that generates library/presets/legacy6.json
-    writes them (`preset.generated`; the file is pinned to it by
-    test_presets.py). Returns the ids the registry lacks."""
-    doc = preset.generated("legacy6")
+    """The legacy6 preset onto the table and the registry: its routes, and
+    of its values the bases this registry has (the corpus file is the whole
+    /7 performance — LFOs, envelopes, the sequencer — which a bare rig has
+    no params for). Returns the route targets the registry lacks."""
+    doc = corpus_doc("legacy6")
     router.table.set_routes(Binding.from_json(d) for d in doc["routes"])
-    return router.reg.restore(doc["values"])
+    router.reg.restore({k: v for k, v in doc["values"].items() if k in router.reg})
+    return [d["target"] for d in doc["routes"] if d["target"] not in router.reg]
 
 
 def load_preset(r, router: Router, name: str) -> list[str]:
@@ -103,19 +120,6 @@ def load_preset(r, router: Router, name: str) -> list[str]:
     from hyperspace.preset import Presets
 
     return Presets(r.lib, r.reg, router).load(name)
-
-
-def migrate_home(home: Path, table: Bindings) -> list[str]:
-    """The first launch over `table` (read from `home`'s bindings.json):
-    the library, the registry, a Router and `Presets` as app.main builds
-    them, then plan 13's migration (`preset.migrate_home`)."""
-    from hyperspace.preset import Presets
-    from hyperspace.preset import migrate_home as run
-
-    r = rig(tmp_path=home, full=True)
-    router = Router(r.reg, table)
-    Presets(r.lib, r.reg, router)
-    return run(r.lib, router)
 
 
 def session_rows() -> list[Binding]:
@@ -289,8 +293,8 @@ def test_rot_rate_range_holds_the_reference_drive():
     r = rig()
     p = r.reg["rot.rate.ZW"]
     assert (p.lo, p.hi) == (-ROT_RATE_MAX, ROT_RATE_MAX)
-    router = Router(r.reg, Bindings(routing.legacy6_routes()))
-    assert r.reg.restore(preset.legacy6_values()) == []
+    router = Router(r.reg, Bindings())
+    assert legacy6(router) == []
     r.chain.out[:] = CEIL
     r.chain.gain = 8.0
     router.modulate(r.chain)
@@ -440,26 +444,31 @@ def test_old_midi_map_migrates_into_bindings_json(tmp_path, capsys):
     assert t.for_param("view.lines").op == "toggle"
     assert len(t.of("key")) == len(routing.keymap()) and t.mods() == []
     # the knob on the preset layer is a preset's row: the file keeps the
-    # session's, and the table carries it for the migration (preset.migrate_home)
+    # session's rows only (plan 13's first-launch migration, which wrote the
+    # carried rows into a preset, went with the two-tier library, 2026-10-28)
     assert {"source": "cc:0:87", "target": "view.inst_amp", "op": "abs",
             "layer": "preset"} in t.carried.desk
-    migrate_home(tmp_path, t)                           # the first launch writes it
-    assert path.exists() and "cc:0:87" not in path.read_text() and t.carried is None
-    kept = json.loads((tmp_path / "presets" / "migrated.json").read_text())
-    assert {"source": "cc:0:87", "target": "view.inst_amp", "op": "abs"} in kept["desk"]
-    assert len(kept["routes"]) == 12                     # the lane rows it played
+    t.write()
+    assert path.exists() and "cc:0:87" not in path.read_text()
     legacy.unlink()
     # the old map had no OVERDUB row and the note is free: the next load
     # adds home there, as it does to any older file (plan 15 WP2), and the
     # bank's sixteen pads on clip rows 4 and 5 (plan 19 WP2), and nothing
-    # else moves (the clip-stop SAVE AS bar, retired 2026-10-09, is not added)
+    # else moves (the clip-stop SAVE AS bar, retired 2026-10-09, is not added);
+    # plan 24 C1: the four invariant render toggles and SAVE, likewise
     again = Bindings.load(path, legacy_midi=legacy)
     far = [f"note:{ch}:{n}" for n, ch in apc40.BANK_PADS[routing.F_KEYS:]]
+    c1 = [(s, pid) for s, pid, *_ in sorted(routing.TOGGLE_DESK_ROWS)] + [
+        (f"note:7:{apc40.N_CLIPSTOP}", routing.SAVE_PARAM)]
+    send_a = routing.SEQ_PAGE_SOURCE                    # plan 31 §A: the sequencer page
     assert again.notes == [
         f"added note:0:{apc40.N_OVERDUB} → preset.home (the APC40 map of plan 15)",
-        *[f"added {s} → preset.select (the APC40 map of plan 19)" for s in far]]
+        *[f"added {s} → preset.select (the APC40 map of plan 19)" for s in far],
+        *[f"added {s} → {pid} (the APC40 map of plan 24)" for s, pid in c1],
+        f"added {send_a} → seq.page (the APC40 map of plan 31)"]
     assert [b for b in again.to_json()["bindings"]
-            if b["source"] not in (f"note:0:{apc40.N_OVERDUB}", *far)] \
+            if b["source"] not in (f"note:0:{apc40.N_OVERDUB}", *far, *(s for s, _ in c1),
+                                   send_a)] \
         == t.to_json()["bindings"]
     assert Bindings.load(path, legacy_midi=legacy).to_json() == again.to_json()
     # without either file: the factory table, nothing written
@@ -482,10 +491,11 @@ def test_factory_table_binds_only_real_params(tmp_path):
     # + R, F1–F8, ⇧F1–F8 (plan 11), + undo and redo on ⌘ and Ctrl (plan 15 WP1),
     # + Home (plan 15 WP2)
     assert len(t.of("key")) == 25 + 17 + 4 + 1
-    assert len(t.of("pad")) == 9 and len(t.of("hat")) == 4     # BACK free, START saves
-    assert len(t.midi()) == 113 + 6 + 1 + 4 and t.mods() == []   # + SHIFT, the global track
+    assert len(t.of("pad")) == 10 and len(t.of("hat")) == 4    # BACK taps, START saves
+    assert len(t.midi()) == 113 + 6 + 1 + 4 + 1 + 1 and t.mods() == []   # + SHIFT, the global track
     # knobs, OVERDUB (plan 15 WP2) (the clip-stop row's eight, plan 15 WP4,
-    # retired 2026-10-09),
+    # retired 2026-10-09), SAVE on track 8's clip stop (plan 24 C1),
+    # SEND A, the sequencer page's latch (plan 31 §A),
     # the preset layer's four SCENE device knobs (plan 19 WP3; the sixteen
     # bank pads of plan 19 WP2 took the sixteen shape pads' place);
     # no performer rows: the house presets carry the lane rows (plan 13 WP5)
@@ -526,7 +536,6 @@ def test_factory_files_match_the_code():
     t = Bindings.from_json(doc)
     assert not t.migrated and not t.changed and t.dropped == []
     assert all(routing.is_session_row(b) for b in t.bindings) and t.macros == {}
-    assert not (FACTORY / "bindings").exists()
 
 
 # -------------------------------------------------------------- adapters
@@ -661,7 +670,7 @@ def test_pad_adapter_routes_buttons_and_hat(tmp_path):
     router.pad(pad)
     assert r.view.shape == 6 and r.view.lines is not lines
     assert r.reg["view.bright"].position() == p0 + 3
-    assert r.reg["view.speed"].position() == s0 - 4
+    assert r.reg["view.speed"].position() == s0      # ← walks the list, held only
     r.view.yaw = 1.0
     pad.hits, pad.hat = {gamepad.LSTICK}, 0
     router.pad(pad)
@@ -897,6 +906,7 @@ def test_the_legacy6_preset_replaces_routes_and_lands_bases(tmp_path):
     the zeros the parity anchor needs — and leaves the input rows alone."""
     from hyperspace.preset import Presets
 
+    seed(tmp_path)
     r = rig(tmp_path=tmp_path, full=True)
     router = Router(r.reg, house())
     presets = Presets(r.lib, r.reg, router)
@@ -914,8 +924,7 @@ def test_the_legacy6_preset_replaces_routes_and_lands_bases(tmp_path):
     assert router.table.dropped == []
     # the table's rows are the file's copies: editing one edits no preset
     router.table.mods()[0].value = 99
-    assert preset.generated("legacy6")["routes"][0]["value"] == BANDS[0].dir * ROT_DEPTH
-    assert not r.lib.is_factory("presets", "nope") and r.lib.is_factory("presets", "legacy6")
+    assert r.lib.read("presets", "legacy6")["routes"][0]["value"] == BANDS[0].dir * ROT_DEPTH
 
 
 def test_midi_view_shares_the_table(tmp_path):
@@ -932,7 +941,7 @@ def test_midi_view_shares_the_table(tmp_path):
 
     t = Bindings.factory(path=bindings_path(tmp_path))
     m = MidiIO(rig(tmp_path=tmp_path, full=True).reg, t, inp=Quiet(), out=Quiet())
-    assert len(m.bindings) == 113 + 6 + 1 + 4 and all(b.is_midi for b in m.bindings)
+    assert len(m.bindings) == 113 + 6 + 1 + 4 + 1 + 1 and all(b.is_midi for b in m.bindings)
     m.table.bind(Binding("cc:0:99", "view.zoom", "abs"))
     assert m.table.for_param("view.zoom").number == 99
     again = Bindings.load(bindings_path(tmp_path))
@@ -992,14 +1001,15 @@ def test_only_fed_sources_can_gate_a_row():
 
 
 @pytest.mark.parametrize("name", ["hands-play", "hands-pinch", "hands-fx"])
-def test_the_hand_presets_name_params_and_lanes_that_exist(name):
+def test_the_hand_presets_name_params_and_lanes_that_exist(tmp_path, name):
     """A preset whose target was renamed loads silently and does nothing.
-    These are shipped, so check every row lands somewhere real — by name
-    (decision register row 20): an axis of the default layout, a gate one
-    of its switches."""
+    These shipped (the corpus keeps them), so check every row lands
+    somewhere real — by name (decision register row 20): an axis of the
+    default layout, a gate one of its switches."""
     from hyperspace.hands import PINCHES, SIDES, HandSettings, Layout
 
-    r = rig(full=True)
+    seed(tmp_path)
+    r = rig(tmp_path=tmp_path, full=True)
     router = Router(r.reg, Bindings())
     assert load_preset(r, router, name) == []      # no unknown target ids
     rows = router.table.routes()
@@ -1019,11 +1029,12 @@ def test_the_hand_presets_name_params_and_lanes_that_exist(name):
 
 
 @pytest.mark.parametrize("name", ["hands-play", "hands-pinch", "hands-fx"])
-def test_the_hand_presets_reach_both_ends_of_their_targets(name):
+def test_the_hand_presets_reach_both_ends_of_their_targets(tmp_path, name):
     """A hand row with no depth of its own means the whole control: the
     hand's 0 and 1 are the fader's end stops, whatever the taper. (They
     were `replace` rows once, which cap a 0–1 hand at the *value* 1.)"""
-    r = rig(full=True)
+    seed(tmp_path)
+    r = rig(tmp_path=tmp_path, full=True)
     router = Router(r.reg, Bindings())
     router.names["hand"] = hands.Layout(hands.HandSettings.from_config({}).axes).index
     load_preset(r, router, name)
@@ -1271,127 +1282,6 @@ def test_audit_4_a_hand_cannot_own_a_target_twice():
 
 
 # ----------------------------------------------------------- schema 1 → 2
-
-V1_FILE = {
-    "schema": "hyperspace.bindings/1", "profile": "apc40",
-    "bindings": [
-        {"source": "key:RIGHT", "target": "view.shape", "op": "step"},
-        {"source": "cc:0:48", "target": "view.bright", "op": "abs", "feedback": "ring"},
-        # the three APC40 buttons plan 09 WP4 moves, as the old factory map had them
-        {"source": "note:0:99", "target": "theme.next", "op": "toggle", "feedback": "led"},
-        {"source": "note:0:100", "target": "view.shape", "op": "step", "value": 1,
-         "feedback": "led"},
-        {"source": "note:0:101", "target": "view.shape", "op": "step", "value": -1,
-         "feedback": "led"},
-        {"source": "lane:0", "target": "pattern.mod.0", "op": "mod", "value": 0.5},
-        {"source": "hand:3", "target": "view.inst_amp", "op": "mod", "value": 0.4},   # L roll
-        {"source": "hand:1", "target": "view.speed", "op": "mod", "value": 0.4},      # L y
-        {"source": "hand:7", "target": "view.depth4", "op": "span"},
-        {"source": "hand:7", "target": "camera.zoom", "op": "abs", "pickup": False,
-         "when": "hand:18"},
-        {"source": "lane:1", "target": "rot.rate.XY", "op": "replace", "value": 8.32,
-         "scale": "master.gain"},
-        {"source": "hand:2", "target": "view.depth4", "op": "span"},             # 2nd owner
-        {"source": "lfo:0", "target": "fx.mix", "op": "mod", "value": 0.3},
-    ],
-    "values": {"pattern.mod.0": 0.0},
-}
-
-
-def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsys):
-    """The plan's migration table, on a hand-written v1 file: mod → push
-    (resting where the source does — no table of rests here), span →
-    position, a lane-scheme abs → position at depth 1 with pickup
-    forgotten, replace dropped, a second owner dropped, the APC40 buttons
-    WP4 moved remapped — each dropped or changed row on stderr — and
-    written back at schema 2, after which the file rules and nothing is
-    said again."""
-    from hyperspace import apc40
-
-    assert (apc40.N_TAP, apc40.N_NUDGE_P, apc40.N_NUDGE_M) == (99, 100, 101)
-    path = bindings_path(tmp_path)
-    path.write_text(json.dumps(V1_FILE))
-    t = Bindings.load(path, legacy_midi=None)
-    # the file holds performer rows, a preset's: the load leaves it for the
-    # first-launch migration, which moves them and only then rewrites it
-    assert capsys.readouterr().err == "" and json.loads(path.read_text()) == V1_FILE
-    assert t.carried is not None and t.carried.values == {"pattern.mod.0": 0.0}
-    migrate_home(tmp_path, t)
-    err = capsys.readouterr().err
-    assert t.migrated and not t.error
-    assert "dropped lane:1 → rot.rate.XY (replace)" in err
-    assert "dropped hand:2 → view.depth4: view.depth4 is already performed by hand 7" in err
-    assert "remapped note:0:99: theme.next → tempo.tap" in err
-    assert "remapped note:0:100: view.shape → tempo.nudge" in err
-    assert f"added note:0:{apc40.N_METRO} → lfo.trigger" in err
-    assert f"added note:0:{apc40.N_QUANT} → preset.next" in err
-    assert "added key:B → tempo.tap" in err and "added key:SHIFT+B → lfo.trigger" in err
-    assert "added key:F1 → preset.load.0" in err and "added key:SHIFT+F8 → preset.save.7" in err
-    assert "added key:SUPER+Z → edit.undo" in err and "added key:CONTROL+SHIFT+Z → edit.redo" in err
-    # 7 + the 17 keys of plan 11 + the desk's sort and its 25 global rows and SHIFT (plan 13)
-    # + the 4 undo and redo keys of plan 15, + OVERDUB and the Home key (plan 15 WP2)
-    assert f"added note:0:{apc40.N_OVERDUB} → preset.home (the APC40 map of plan 15)" in err
-    assert "added key:HOME → preset.home" in err
-    # (the clip-stop row's eight of plan 15 WP4 are retired: never added —
-    # the one save-as row added is START's, on the pad)
-    assert f"note:0:{apc40.N_CLIPSTOP}" not in err
-    assert "added pad:MENU → preset.save_new (the pad layout of 2026-10-14)" in err
-    # + the bank's sixteen pads on clip rows 4 and 5 (plan 19 WP2)
-    assert f"added note:7:{apc40.N_CLIP[4]} → preset.select (the APC40 map of plan 19)" in err
-    assert f"migrated {path} to {SCHEMA} (2 rows dropped, 73 rows changed)" in err
-    rows = {(b.source, b.target): b for b in t.bindings}
-    assert rows[("key:RIGHT", "view.shape")].op == "step"
-    assert rows[("cc:0:48", "view.bright")].op == "abs"                       # MIDI keeps abs
-    for src, tgt in (("lane:0", "pattern.mod.0"), ("hand:3", "view.inst_amp"),
-                     ("hand:1", "view.speed"), ("lfo:0", "fx.mix")):
-        assert (rows[(src, tgt)].op, rows[(src, tgt)].rest) == ("push", None), src
-    assert rows[("hand:3", "view.inst_amp")].value == 0.4
-    assert rows[("hand:7", "view.depth4")].op == "position"
-    z = rows[("hand:7", "camera.zoom")]
-    assert (z.op, z.value, z.when) == ("position", 1.0, "hand:18")
-    assert "pickup" not in z.to_json()                         # dropped with the abs op
-    assert ("lane:1", "rot.rate.XY") not in rows and ("hand:2", "view.depth4") not in rows
-    assert [b.source for b, _ in t.dropped] == ["hand:2"]
-    # + the moved keys of plan 11, the desk's sort, the undo keys of plan 15,
-    # OVERDUB and the Home key (plan 15 WP2) (the clip-stop row of plan 15
-    # WP4 is retired), the bank's sixteen pads on clip rows 4 and 5 (plan 19
-    # WP2), START's hold-to-save (the pad layout of 2026-10-14)
-    assert len(t.notes) == 9 + 17 + 26 + 4 + 2 + 16 + 1
-    # the APC40 rows: the old factory rows swapped for the new, the LED kept
-    tap = rows[("note:0:99", "tempo.tap")]
-    assert (tap.op, tap.feedback) == ("toggle", "led") and ("note:0:99", "theme.next") not in rows
-    assert (rows[("note:0:100", "tempo.nudge")].value, rows[("note:0:101", "tempo.nudge")].value) == (1, -1)
-    assert rows[(f"note:0:{apc40.N_METRO}", "lfo.trigger")].feedback == "led"
-    assert rows[(f"note:0:{apc40.N_QUANT}", "preset.next")].op == "toggle"
-    # written back once, the session's rows only, with the file as it was
-    # kept beside it (audit R12); its routes and values are a preset's now
-    # (MIGRATED: this home has no project); the second load is quiet
-    doc = json.loads(path.read_text())
-    assert doc["schema"] == SCHEMA and doc == t.to_json() and t.carried is None
-    bak = path.with_name("bindings.json.bak-v1")
-    assert json.loads(bak.read_text()) == V1_FILE and "kept as bindings.json.bak-v1" in err
-    kept = json.loads((tmp_path / "presets" / "migrated.json").read_text())
-    assert {(d["source"], d["target"]) for d in kept["routes"]} >= {
-        ("lane:0", "pattern.mod.0"), ("hand:right.y", "camera.zoom"), ("lfo:0", "fx.mix")}
-    assert kept["values"]["pattern.mod.0"] == 0.0
-    again = Bindings.load(path, legacy_midi=None)
-    assert not again.migrated and again.to_json() == t.to_json() and again.carried is None
-    assert capsys.readouterr().err == ""
-    # a v1 routing preset in the home is a preset now, through the same
-    # reading (the ops renamed, the second owner kept after the first so
-    # nothing is lost and the first still wins at load); the file stays
-    d = tmp_path / "bindings"
-    d.mkdir()
-    (d / "old.json").write_text(json.dumps(V1_FILE))
-    from hyperspace.preset import migrate_routing_presets
-    notes = migrate_routing_presets(tmp_path)
-    assert any("bindings/old.json → preset 'old'" in n for n in notes)
-    old = json.loads((tmp_path / "presets" / "old.json").read_text())
-    assert {r_["op"] for r_ in old["routes"]} == {"push", "position"}
-    assert old["routes"][-1]["source"] == "hand:left.z" and "desk" not in old   # hand:2, named
-    assert any("hand address(es) named by the default layout" in n for n in notes)
-    assert json.loads((d / "old.json").read_text()) == V1_FILE          # untouched
-
 
 def test_a_backup_is_kept_before_every_rewrite_and_never_over_a_hand_made_one(tmp_path, capsys,
                                                                               monkeypatch):
@@ -1645,15 +1535,17 @@ def test_an_older_file_gets_home_where_it_is_free(tmp_path, capsys):
     assert len(list((tmp_path / "a").glob("bindings.json.bak-*"))) == 1
     assert capsys.readouterr().err == ""
     # the owner's own rows on OVERDUB and on Home stay, and nothing is added or written
+    # (view.plane.ZW: no session row of its own — view.lines has the
+    # invariant render toggle since plan 24 C1)
     path = write(tmp_path / "b",
-                 Binding(over, "view.lines", "toggle", feedback="led"),
+                 Binding(over, "view.plane.ZW", "toggle", feedback="led"),
                  Binding(key, "camera.reset", "fire"))
     before = path.read_text()
     t = Bindings.load(path, legacy_midi=None)
     assert t.notes == [] and path.read_text() == before
     assert not list((tmp_path / "b").glob("bindings.json.bak-*"))
     assert not [b for b in t.bindings if b.target == "preset.home"]
-    assert t.for_param("view.lines").source == over
+    assert t.for_param("view.plane.ZW").source == over
 
 
 def test_the_clip_stop_save_bar_is_retired_and_the_row_freed(tmp_path, capsys):
@@ -1662,13 +1554,19 @@ def test_the_clip_stop_save_bar_is_retired_and_the_row_freed(tmp_path, capsys):
     eight factory rows loses exactly those on its next load — each said,
     the old file kept whole beside it — and the next load is quiet; the
     row is then free (dark, for Learn). A row the owner put on a clip-stop
-    button is kept; a file without the bar gains nothing there."""
+    button is kept; a file without the bar gains nothing there. Since plan
+    24 C1 track 8's clip stop is the desk's SAVE (decision 18): the other
+    seven stay free."""
     stop = apc40.N_CLIPSTOP
     bar = [f"note:{k}:{stop}" for k in range(8)]
+    free = bar[:7]
     for s in bar:
         assert (s, "preset.save_new", "hold", 1.0) in routing.RETIRED_ROWS
+    for s in free:
         assert not [r for r in routing.APC_NEW_ROWS if r[0] == s]
-    assert not [b for b in session_rows() if b.source in bar]
+    assert [r[:3] for r in routing.APC_NEW_ROWS if r[0] == bar[7]] \
+        == [(bar[7], routing.SAVE_PARAM, "momentary")]
+    assert [b.target for b in session_rows() if b.source in bar] == [routing.SAVE_PARAM]
 
     def write(home, *mine):
         path = bindings_path(home)
@@ -1683,7 +1581,7 @@ def test_the_clip_stop_save_bar_is_retired_and_the_row_freed(tmp_path, capsys):
     assert t.notes == [f"removed {s} → preset.save_new (the clip-stop SAVE AS bar is retired: "
                        "hold an empty bank pad to save into it; the row is free)" for s in bar]
     assert f"updated {path} (8 rows changed)" in capsys.readouterr().err
-    assert not [b for b in t.bindings if b.source in bar]
+    assert [b.target for b in t.bindings if b.source in bar] == [routing.SAVE_PARAM]
     (bak,) = (tmp_path / "a").glob("bindings.json.bak-*")
     assert bak.name == "bindings.json.bak-v3" and bak.read_text() == before
     after = path.read_text()
@@ -1703,7 +1601,7 @@ def test_the_clip_stop_save_bar_is_retired_and_the_row_freed(tmp_path, capsys):
     before = path.read_text()
     t = Bindings.load(path, legacy_midi=None)
     assert t.notes == [] and path.read_text() == before
-    assert not [b for b in t.bindings if b.source in bar]
+    assert not [b for b in t.bindings if b.source in free]
 
 
 def test_an_old_crossfader_row_moves_to_the_dim_with_a_backup(tmp_path, capsys):
@@ -1765,13 +1663,14 @@ def test_a_theme_row_in_an_old_bindings_file_is_remapped_to_the_preset_bank(tmp_
     next load is quiet."""
     path = bindings_path(tmp_path)
     old = {"preset.select": "theme.select", "preset.next": "theme.next",
-           "preset.list.next": "theme.next",             # the pad's B, as it was then
            **{f"preset.{w}.{k}": f"theme.{w}.{k}" for w in ("load", "save")
               for k in range(routing.F_KEYS)}}
     rows = []
     for b in session_rows():
         d = b.to_json()
         d["target"] = old.get(d["target"], d["target"])
+        if d["source"] == "pad:B":                    # the pad's B, as it was then
+            d.update(target="theme.next", op="fire")
         rows.append(d)
     rows.append({"source": "note:0:87", "target": "theme.prev", "op": "toggle"})   # the user's
     path.write_text(json.dumps({"schema": SCHEMA, "profile": "apc40", "bindings": rows}))
@@ -1779,15 +1678,15 @@ def test_a_theme_row_in_an_old_bindings_file_is_remapped_to_the_preset_bank(tmp_
     err = capsys.readouterr().err
     by = {b.source: b.target for b in t.bindings}
     assert by["key:F1"] == "preset.load.0" and by["key:SHIFT+F8"] == "preset.save.7"
-    assert by[f"note:0:{apc40.N_QUANT}"] == "preset.next" and by["pad:B"] == "preset.list.next"
+    assert by[f"note:0:{apc40.N_QUANT}"] == "preset.next" and by["pad:B"] == "view.points"
     assert by["note:0:87"] == "preset.prev"
     assert [b.target for b in t.bindings if b.source == f"note:2:{apc40.N_CLIP[0]}"] \
         == ["preset.select"]
     assert not any(b.target.startswith("theme.") for b in t.bindings)
     assert "remapped key:F3: theme.load.2 → preset.load.2 (the preset bank of plan 13)" in err
     n = len(t.notes)
-    # F-keys, clip row, QUANT, pad B (straight onto the preset list,
-    # PAD_REMAP), the user's — and clip rows 4 and 5,
+    # F-keys, clip row, QUANT, pad B (straight onto the newest layout's
+    # points, PAD_REMAP), the user's — and clip rows 4 and 5,
     # which this table (today's session rows, theme-named) already holds
     assert n == 16 + 24 + 1 + 1 + 1
     assert all(note.startswith("remapped") for note in t.notes)
@@ -1810,17 +1709,19 @@ def test_a_user_row_on_a_moved_apc_note_is_kept():
     assert (f"note:0:{apc40.N_NUDGE_P}", "tempo.nudge") in by
     assert (f"note:0:{apc40.N_METRO}", "view.lines") in by
     assert ("key:B", "view.points") in by and ("key:SHIFT+B", "lfo.trigger") in by
-    assert not any(b.target == "tempo.tap" for b in out)
+    assert not any(b.target == "tempo.tap" for b in out if b.source != "pad:VIEW")
     assert not any(b.source == f"note:0:{apc40.N_QUANT}" for b in out)   # no QUANT row added
     # the free OVERDUB gets home (plan 15 WP2); + R and the F-keys (plan 11),
     # + undo and redo and the Home key (plan 15)
     assert (f"note:0:{apc40.N_OVERDUB}", "preset.home") in by
     # + the clip-stop row's eight (plan 15 WP4), + the bank's sixteen pads
-    # on clip rows 4 and 5 (plan 19 WP2), + START's hold-to-save (the pad
-    # layout of 2026-10-14)
-    assert ("pad:MENU", "preset.save_new") in by
+    # on clip rows 4 and 5 (plan 19 WP2), + the four invariant render
+    # toggles and SAVE (plan 24 C1), + START's hold-to-save (the pad
+    # layout of 2026-10-14), + BACK's tap tempo (2026-10-29), + SEND A's
+    # sequencer page (plan 31 §A)
+    assert ("pad:MENU", "preset.save_new") in by and ("pad:VIEW", "tempo.tap") in by
     assert [n.split(" ")[0] for n in notes] == (["remapped", "added"]
-                                                + ["added"] * (17 + 4 + 2 + 16 + 1))
+                                                + ["added"] * (17 + 4 + 2 + 16 + 5 + 1 + 1 + 1))
     # and a second pass has nothing to do
     again, notes2 = routing.remap_factory(out)
     assert notes2 == [] and [b.source for b in again] == [b.source for b in out]
@@ -1847,12 +1748,13 @@ def test_a_schema_2_file_gets_the_moved_factory_rows_once(tmp_path, capsys):
     path.write_text(json.dumps({"schema": SCHEMA, "profile": "apc40", "bindings": rows}))
     t = Bindings.load(path, legacy_midi=None)
     err = capsys.readouterr().err
-    assert not t.migrated and not t.error and len(t.notes) == 7
+    assert not t.migrated and not t.error and len(t.notes) == 8
     assert f"remapped note:0:{apc40.N_TAP}: theme.next → tempo.tap" in err
     assert f"added note:0:{apc40.N_METRO} → lfo.trigger" in err
     assert f"added note:0:{apc40.N_QUANT} → preset.next" in err
     assert "added key:B → tempo.tap" in err and "added key:SHIFT+B → lfo.trigger" in err
-    assert f"bindings: updated {path} (7 rows changed)" in err
+    assert "added pad:VIEW → tempo.tap" in err                    # BACK (2026-10-29)
+    assert f"bindings: updated {path} (8 rows changed)" in err
     by = {(b.source, b.target): b for b in t.bindings}
     assert by[(f"note:0:{apc40.N_TAP}", "tempo.tap")].feedback == "led"
     assert (by[(f"note:0:{apc40.N_NUDGE_P}", "tempo.nudge")].value,
@@ -1884,14 +1786,14 @@ def test_rests_are_read_through_rest_of():
     assert router.rest_of("hand:9") == 0.0 and router.rest_of("hand:x") == 0.0
 
 
-def test_a_macro_owned_by_a_hand_scales_a_lanes_push_one_frame_later():
-    """Chaining, not stacking (plan 09, decision 7): `hand:0` positions
+def test_a_macro_owned_by_a_hand_scales_a_lanes_push_the_same_frame():
+    """Chaining, not stacking (plan 09, decision 7 of plan 09), in
+    dependency order (plan 28 N0, decision 7): `hand:0` positions
     `macro.2`, and `lane:0` pushes brightness at a depth × macro.2. The
-    modulation pass reads a scale param's *effective* value — what the
-    last apply() wrote — so the hand lands on the macro this frame and
-    reaches brightness on the next, and when the hand leaves the macro's
-    base is back a frame before the push is. The one-frame lag every
-    modulated value has; the model's documented cost of a chain."""
+    pass runs the macro's node first and lands it, so the push reads the
+    macro's effective value **this frame** — the hand reaches brightness
+    the frame it lands on the macro, and when the hand leaves, the macro's
+    base and the push's return come back together. No lag."""
     r = rig()
     bright, macro = r.reg["view.bright"], r.reg["macro.2"]
     bright.set_value(1.0)
@@ -1906,17 +1808,16 @@ def test_a_macro_owned_by_a_hand_scales_a_lanes_push_one_frame_later():
     router.feed("hand", [0.6])
     router.modulate(r.chain)
     r.reg.apply()
-    # frame 1: the macro reads the hand; brightness was pushed × the macro's
-    # value going in — its untouched base of 1
+    # frame 1: the macro reads the hand, and brightness is pushed × 0.6 already
     assert macro.modulated and macro.value == pytest.approx(0.6) and macro.base == 1.0
-    assert bright.modulated and r.view.bright == at(0.5 * 1.0 * 0.5)
+    assert bright.modulated and r.view.bright == at(0.5 * 0.6 * 0.5)
     router.modulate(r.chain)
     r.reg.apply()
-    assert r.view.bright == at(0.5 * 0.6 * 0.5)      # frame 2: × 0.6
+    assert r.view.bright == at(0.5 * 0.6 * 0.5)      # frame 2: still × 0.6
     router.feed("hand", [0.2])
     router.modulate(r.chain)
     r.reg.apply()
-    assert macro.value == pytest.approx(0.2) and r.view.bright == at(0.5 * 0.6 * 0.5)
+    assert macro.value == pytest.approx(0.2) and r.view.bright == at(0.5 * 0.2 * 0.5)
     router.modulate(r.chain)
     r.reg.apply()
     assert r.view.bright == at(0.5 * 0.2 * 0.5)
@@ -1924,7 +1825,7 @@ def test_a_macro_owned_by_a_hand_scales_a_lanes_push_one_frame_later():
     router.modulate(r.chain)
     r.reg.apply()
     assert not macro.modulated and macro.value == 1.0
-    assert r.view.bright == at(0.5 * 0.2 * 0.5)      # …the push still × 0.2 this frame
+    assert r.view.bright == at(0.5 * 1.0 * 0.5)      # …and the push is × 1 this frame
     router.modulate(r.chain)
     r.reg.apply()
     assert r.view.bright == at(0.5 * 1.0 * 0.5)
@@ -1933,26 +1834,25 @@ def test_a_macro_owned_by_a_hand_scales_a_lanes_push_one_frame_later():
 
 # ------------------------------------------------------------- plan 09 WP5
 
-def test_every_factory_preset_names_real_params_with_one_owner(tmp_path):
-    """The routes the preset generator writes (`preset.FACTORY_PRESETS`)
-    land on params the full registry has, modulatable, with a scale it has
-    too, and one owner per target — the check the shipped files are held to."""
+def test_every_corpus_preset_names_real_params_with_one_owner(tmp_path):
+    """The routes of every corpus preset (the files the build shipped, held
+    to this check while it did) land on params the full registry has,
+    modulatable, with a scale it has too, and one owner per target."""
+    from hyperspace.graphmigrate import retired  # (plan 33 T7: read as wires)
+
     r = rig(tmp_path=tmp_path, full=True)
     ids = set(r.reg.ids())
-    for name, spec in preset.FACTORY_PRESETS.items():
-        routes = spec.routes()
+    stems = corpus_stems()
+    assert "legacy6" in stems and "lfo-breathe" in stems and "party-tumble" in stems
+    for name in stems:
+        doc = corpus_doc(name)
+        routes = [Binding.from_json(d) for d in doc["routes"]]
         for b in routes:
             assert b.target in ids and r.reg[b.target].modulatable, (name, b)
             assert b.scale is None or b.scale in ids, (name, b)
             assert b.is_performer, (name, b)
         assert routing.referee(routes)[1] == [], name
-        if spec.values is not None:
-            assert set(preset.generated(name)["values"]) <= ids, name
-    assert set(preset.FACTORY_PRESETS) == {*preset.HOUSE,
-        "legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play", "hands-orbit",
-        "party-tumble", "party-faces", "party-field", "party-wake", "party-trip",
-        "party-acid", "party-mandala", "party-noita", "party-tracer"}
-    assert (preset.FACTORY_DIR / "lfo-breathe.json").exists()
+        assert {v for v in doc["values"] if not retired(v)} <= ids, name
 
 
 def test_a_converted_presets_values_are_bases_a_preset_would_save(tmp_path):
@@ -1960,12 +1860,14 @@ def test_a_converted_presets_values_are_bases_a_preset_would_save(tmp_path):
     R1, decided (c)): a routing preset could set any base its rows assume;
     made presets (plan 13 WP5), every id in their `values` is a real,
     persisted, non-alias performance param — a base a preset save writes."""
+    from hyperspace.graphmigrate import retired  # (plan 33 T7: read as wires)
+
     r = rig(tmp_path=tmp_path, full=True)
     ids = set(r.reg.ids())
-    made = [k for k, s in preset.FACTORY_PRESETS.items() if s.values is not None]
-    assert made
-    for key in made:
-        for pid in json.loads((preset.FACTORY_DIR / f"{key}.json").read_text())["values"]:
+    for key in corpus_stems():
+        for pid in corpus_doc(key)["values"]:
+            if retired(pid):
+                continue
             assert pid in ids, (key, pid)
             p = r.reg[pid]
             assert p.persist and not p.alias and part_of(p) == "performance", (key, pid)
@@ -1978,6 +1880,7 @@ def test_lfo_breathe_is_the_chain_the_plan_draws(tmp_path):
     moves; LFO 2 at a quarter pushes the fx mix through macro 1. Run with
     the real clock and LFOs at 120 BPM: a bar-long sine peaks one beat
     after the downbeat."""
+    seed(tmp_path)
     r = rig(tmp_path=tmp_path, full=True)
     reg = r.reg
     router = Router(reg, Bindings())
@@ -2330,7 +2233,9 @@ def test_the_old_shape_pads_are_swapped_and_a_changed_row_is_left_alone(tmp_path
     far = far_pads()
     pads = old_shape_pads()
     assert [p["source"] for p in pads] == far
-    assert set(routing.RETIRED_DESK_ROWS) == set(routing.BANK_REMAP) == {
+    # (+ the four render toggles plan 24 C1 made invariant)
+    assert set(routing.RETIRED_DESK_ROWS) - routing.TOGGLE_DESK_ROWS \
+        == set(routing.BANK_REMAP) == {
         (p["source"], "view.shape", "set", float(p.get("value", 1.0)))
         for p in pads}
     assert [routing.BANK_REMAP[(s, "view.shape", "set", float(k))]
@@ -2386,3 +2291,441 @@ def test_the_old_shape_pads_are_swapped_and_a_changed_row_is_left_alone(tmp_path
     out, notes = routing.remap_factory([wild])
     added = [b.source for b in out if b.target == "preset.select"]
     assert added == far[:8] and wild in out
+
+
+# ---------------------------------------------------------------- plan 27 B6: the general qualifier
+
+def test_the_qualifier_is_general_any_scheme_takes_a_role():
+    """Plan 27 B6 (the general qualifier): a source head may carry
+    ``@<role>`` for any scheme, not only MIDI's. The base scheme, the
+    role, the bare source and whether it is continuous read the same way
+    for a second pad's rows as for a second desk's; an unqualified row
+    means the scheme's primary device — the first one listed."""
+    assert routing.base_scheme("axis@p2") == "axis"
+    assert routing.base_scheme("pad@p2") == "pad"
+    assert routing.base_scheme("hat@p2") == "hat"
+    assert routing.base_scheme("axis") == "axis"
+    b = Binding("pad@p2:A", "view.faces", "toggle")
+    assert (b.scheme, b.device, b.bare, b.parts) == ("pad", "p2", "pad:A", ["A"])
+    a = Binding("axis@p2:LX", "view.inst_amp", "push", 0.25)
+    assert (a.scheme, a.device, a.bare, a.is_performer) == ("axis", "p2", "axis:LX", True)
+    assert a.head == "axis@p2" and Binding("axis:LX", "x", "push").head == "axis"
+    assert routing.is_continuous("axis@p2") and not routing.is_continuous("pad@p2")
+    assert not routing.is_continuous("hat@p2")
+    plain = Binding("pad:A", "view.faces", "toggle")
+    assert plain.device == "" and plain.bare == "pad:A"
+    # the qualified head is its own Router key: a lane, a label, a rest
+    assert routing.qualified("axis", "p2") == "axis@p2" and routing.qualified("axis", "") == "axis"
+    # the MIDI cases, as B2 built them (copied from test_device_inputs)
+    m = Binding("cc@launch:0:7", "view.bright", "abs")
+    assert (m.scheme, m.kind, m.device, m.channel, m.number) == ("cc", "cc", "launch", 0, 7)
+    assert m.is_midi and not m.is_performer and m.bare == "cc:0:7"
+    assert m.describe() == "MIDI CC 7 ch1 on launch"
+    assert routing.base_scheme("cc@launch") == "cc"
+    assert not routing.is_continuous("cc@launch") and not routing.is_continuous("pad")
+    # a qualified non-MIDI row never looks like a desk's
+    assert not b.is_midi and b.kind is None and not b.overlaps(Binding("pad:A", "x"))
+    # the row says whose it is
+    assert "on p2" in a.describe() and "on p2" in b.describe()
+    assert "on p2" not in plain.describe()
+
+
+def test_an_unqualified_pad_row_is_the_primary_pads():
+    """`Bindings.primaries` (scheme → role, the registry's `primaries`):
+    an unqualified non-MIDI row is the first listed device's that
+    publishes its scheme; a qualified one its qualifier's. MIDI keeps
+    `midi_roles` exactly as B2 built it."""
+    t = Bindings([Binding("pad:A", "view.faces", "toggle"),
+                  Binding("pad@p2:A", "view.points", "toggle"),
+                  Binding("cc:0:7", "view.speed", "abs")])
+    assert t.role_of(t.bindings[1]) == "p2"
+    assert t.role_of(t.bindings[0]) == ""                 # a bare table: told none
+    t.primaries = {"axis": "pad", "pad": "pad", "hat": "pad"}
+    t.midi_roles = ("apc40",)
+    assert t.role_of(t.bindings[0]) == "pad" and t.role_of(t.bindings[1]) == "p2"
+    assert t.role_of(t.bindings[2]) == "apc40"            # MIDI: the first MIDI role, as ever
+
+
+class TwoPadsPad(FakePad):
+    """FakePad with edges and a publish, so a frame can be held."""
+
+    def __init__(self):
+        super().__init__()
+        self.prev: set[int] = set()
+
+    def publish(self, router, scheme="axis"):
+        from hyperspace import gamepad
+        gamepad.publish(router, scheme)
+
+    def pressed(self, b: int) -> bool:
+        return b in self.hits and b not in self.prev
+
+    def down(self, b: int) -> bool:
+        return b in self.hits
+
+    def lanes(self) -> list[float]:
+        return [0.5, 0.5, 0.5, 0.5, 0.0, 1.0]
+
+
+def test_the_router_keeps_two_pads_apart(tmp_path):
+    """`Router.pad(…, role=)`: a second pad feeds `axis@p2`, publishes its
+    labels there, and fires only its own qualified rows; the primary's
+    unqualified rows hear only the primary pad. One feel for every pad."""
+    from hyperspace import gamepad as gp
+
+    r = rig(tmp_path=tmp_path, full=True)
+    table = Bindings([Binding("pad:A", "view.faces", "toggle"),
+                      Binding("pad@p2:A", "view.points", "toggle")])
+    router = Router(r.reg, table)
+    one, two = TwoPadsPad(), TwoPadsPad()
+    faces, points = r.reg["view.faces"].value, r.reg["view.points"].value
+    two.hits = {gp.A}
+    router.pad(one, now=0.0)
+    router.pad(two, now=0.0, role="p2")
+    assert r.reg["view.faces"].value == faces and r.reg["view.points"].value != points
+    assert router.labels["axis@p2"] == list(gp.LANE_LABELS) and "axis" in router.labels
+    assert float(router.feeds["axis@p2"][5]) == 1.0
+    assert router.lane("axis@p2:RT") == ("axis@p2", 5)
+    points = r.reg["view.points"].value
+    one.hits = {gp.A}
+    two.prev = {gp.A}
+    router.pad(one, now=0.1)
+    router.pad(two, now=0.1, role="p2")
+    assert r.reg["view.faces"].value != faces and r.reg["view.points"].value == points
+    two.on = False
+    router.pad(two, now=0.2, role="p2")
+    assert router.feeds["axis@p2"] is None and router.feeds["axis"] is not None
+    # the pad's feel is one set, applied to every pad
+    assert router.source_feel("axis@p2") == router.source_feel("axis")
+    a2 = Binding("axis@p2:LX", "view.inst_amp", "push", 0.25)
+    assert router.feel_of(a2) == router.source_feel("axis")
+    # the primary's camera job counts only its own axes as claimed
+    table.add(a2)
+    assert router.claimed("axis") == set() and router.claimed("axis@p2") == {0}
+
+
+def test_each_pad_times_its_own_holds(tmp_path):
+    """A `hold` row on each pad's START: held past HOLD_S only the held
+    pad's target fires, and a press on one pad never resets the other's
+    timer."""
+    from hyperspace import gamepad as gp
+
+    r = rig(tmp_path=tmp_path, full=True)
+    fired: list[str] = []
+    r.reg.trigger("t.one", "one", lambda: fired.append("one"))
+    r.reg.trigger("t.two", "two", lambda: fired.append("two"))
+    table = Bindings([Binding("pad:MENU", "t.one", "hold"),
+                      Binding("pad@p2:MENU", "t.two", "hold")])
+    router = Router(r.reg, table)
+    one, two = TwoPadsPad(), TwoPadsPad()
+    one.hits = {gp.MENU}
+    router.pad(one, now=0.0)
+    router.pad(two, now=0.0, role="p2")
+    one.prev = {gp.MENU}
+    two.hits = {gp.MENU}                                  # p2 pressed later
+    router.pad(one, now=0.3)
+    router.pad(two, now=0.3, role="p2")
+    two.prev = {gp.MENU}
+    router.pad(one, now=routing.HOLD_S + 0.01)
+    router.pad(two, now=routing.HOLD_S + 0.01, role="p2")
+    assert fired == ["one"]                               # p2's press did not reset pad's
+    router.pad(one, now=0.3 + routing.HOLD_S + 0.01)
+    router.pad(two, now=0.3 + routing.HOLD_S + 0.01, role="p2")
+    assert fired == ["one", "two"]
+
+
+def test_a_row_qualified_with_the_primary_pads_own_role_is_its(tmp_path):
+    """As a desk's `serves`: `pad@pad:A` (the primary named) fires on the
+    primary pad, and `axis@pad:LX` reads the primary's lanes."""
+    from hyperspace import gamepad as gp
+
+    r = rig(tmp_path=tmp_path, full=True)
+    table = Bindings([Binding("pad@pad:A", "view.faces", "toggle"),
+                      Binding("axis@pad:RT", "view.inst_amp", "position", 1.0)])
+    table.primaries = {"axis": "pad", "pad": "pad", "hat": "pad"}
+    router = Router(r.reg, table)
+    one, two = TwoPadsPad(), TwoPadsPad()
+    faces = r.reg["view.faces"].value
+    two.hits = {gp.A}
+    router.pad(two, now=0.0, role="p2")
+    assert r.reg["view.faces"].value == faces             # not the second pad's
+    one.hits = {gp.A}
+    router.pad(one, now=0.0)
+    assert r.reg["view.faces"].value != faces
+    assert router.lane("axis@pad:RT") == ("axis", 5)
+    assert router.claimed("axis") == {5}
+    router.modulate()
+    r.reg.apply()
+    amp = r.reg["view.inst_amp"]
+    assert amp.value == pytest.approx(amp.hi)             # TwoPadsPad's RT is all the way
+
+
+# ------------------------------------------------------------- plan 28 N0
+
+def _lagged_modulate(self: Router, analyzer=None, dt: float | None = None) -> None:
+    """The base build's `Router.modulate` (5d18192, before plan 28 N0),
+    verbatim but for living here: every enabled performer row in table
+    order, a `scale` and a macro's depth subscriber read at what the last
+    `reg.apply()` wrote — the one-frame lag decision 7 removes. Kept for
+    one test only (`test_every_factory_preset_lands_the_same_values_one_frame_earlier`),
+    the reference the new pass is held to; a test file, so the boundary
+    walk (`test_only_router_modulate_calls_param_modulate`, the package
+    only) never sees its `p.modulate`."""
+    from hyperspace.routing import _NO_LANES
+
+    dt = 1 / 60 if dt is None else dt
+    movers = self.__dict__.setdefault("_lagged_movers", {})
+    moved: set = set()
+    lanes = None if analyzer is None else analyzer.lanes / CEIL
+    names = self.names
+    cache = self.__dict__.get("_lanes", _NO_LANES)
+    for b in self.table.mods():
+        hit = cache.get(b.source)
+        if hit is None or names.get(hit[0]) is not hit[1]:
+            hit = self._resolve_lane(b.source)
+            cache = self.__dict__["_lanes"]
+        scheme, _, i = hit
+        vec = lanes if scheme == "lane" else self.feeds.get(scheme)
+        if vec is None or not 0 <= i < len(vec):
+            continue
+        u = float(vec[i])
+        if math.isnan(u):
+            continue
+        if not self.gated(b):
+            continue
+        p = self.reg.get(b.target)
+        if p is None:
+            continue
+        depth = b.value
+        if b.scale is not None:
+            sp = self.reg.get(b.scale)
+            if sp is None:
+                continue
+            depth *= float(sp.value)
+        dormant = False
+        for mid, s in self.table.depth_subs(b):
+            mp = self.reg.get(mid)
+            if mp is None:
+                dormant = True
+                break
+            depth *= s.at(float(mp.value))
+        if dormant:
+            continue
+        m = self.feel_of(b)
+        if m.on:
+            u = self._move(b, m, u, p, depth, dt, movers)
+            moved.add((b.source, b.target))
+        if b.op == "push":
+            rest = b.rest if b.rest is not None else self.rest_of(b.source)
+            x = depth * (u - rest)
+        else:
+            if p.kind is Kind.TEXT or not p.modulatable:
+                continue
+            x = min(1.0, max(0.0, depth * u)) - p.norm
+        p.modulate(x)
+    for key in [k for k in movers if k not in moved]:
+        del movers[key]
+
+
+TAPE_FRAMES = 90
+TAPE_DT = 1 / 60
+
+
+def _hand_tape(lay, k: int) -> tuple[list[float], list[float]]:
+    """A synthetic hand tape, frame `k`: every axis a slow sine of its own
+    (rates and phases apart, so no two lanes move together), each hand
+    present, each pinch switch on for a stretch and off for another — and
+    the two-hand pair lanes the same way. Deterministic: both builds see
+    the same frames."""
+    from hyperspace.hands import PINCHES, SIDES
+
+    t = k * TAPE_DT
+    axes = [0.5 + 0.45 * math.sin(2 * math.pi * (0.35 + 0.11 * i) * t + 0.7 * i)
+            for i in range(lay.n_axes)]
+    presence = [1.0] * len(SIDES)
+    gates = [1.0 if ((k // (11 + 3 * i)) % 2 == 0) else 0.0
+             for i in range(len(SIDES) * len(PINCHES))]
+    pair = [0.5 + 0.4 * math.sin(2 * math.pi * 0.27 * t + j) for j in range(len(lay.pair_index))]
+    return axes + presence + gates, pair
+
+
+def _lag_of(table: Bindings) -> tuple[dict[str, int], dict[int, int]]:
+    """How many frames late the base build lands each param and each LFO's
+    output, from the table alone (not modgraph.py): a param read in the pass
+    — a `scale`, a macro behind a depth subscriber, an LFO's knob — that a
+    performer moves reaches its reader one frame late, and a chain of them
+    adds up. Params no row reaches are 0."""
+    rows = table.mods()
+    moved = {b.target for b in rows}
+    knobs = ("shape", "rate", "sync", "depth", "phase", "reset")
+    lag_p: dict[str, int] = {}
+    lag_l: dict[int, int] = {}
+    for _ in range(8):                                   # to the fixpoint (no loops here)
+        for i in range(4):
+            reads = [f"lfo.{i + 1}.{k}" for k in knobs] + ["lfo.trigger"]
+            lag_l[i] = max([lag_p.get(r, 0) + 1 for r in reads if r in moved] or [0])
+        for b in rows:
+            src = 0
+            if b.source.startswith("lfo:"):
+                src = lag_l.get(int(b.source.split(":")[1]), 0)
+            reads = ([b.scale] if b.scale else []) + [mid for mid, _ in table.depth_subs(b)]
+            lag = max([src] + [lag_p.get(r, 0) + 1 for r in reads if r in moved])
+            lag_p[b.target] = max(lag_p.get(b.target, 0), lag)
+    return lag_p, lag_l
+
+
+def _play_tape(tmp_path: Path, name: str, *, lagged: bool):
+    """Preset `name` through a scratch library, the hand tape and the
+    analyzer's lanes fed, LFO 1 on, for TAPE_FRAMES frames. What a lagged
+    read multiplies is held still, so a lagged param's sequence moves only
+    with the value it was late on and the shift is exact: the analyzer's
+    lanes are held, each at its own level (a lane row scaled by a gain a
+    hand rides — party-tumble's — moves with the hand alone), and LFO 1 is
+    a square wave at 0.01 Hz, +1 over the whole tape (party-trip's and
+    lfo-breathe's LFO chains move with the hand on its depth alone). The
+    hands move every frame. Run as app.frame runs steps 3 and 9–11: on the base
+    build's arithmetic (`lagged`: the LFOs stepped and published, then
+    `_lagged_modulate`, then `reg.apply`) or on today's (the LFOs step
+    inside `Router.modulate`). Every modulatable param's effective value and
+    every LFO's output, per frame."""
+    from hyperspace.hands import HandSettings, Layout
+
+    seed(tmp_path)
+    r = rig(tmp_path=tmp_path, full=True)
+    router = Router(r.reg, Bindings())
+    assert load_preset(r, router, name) == []
+    lfos, clock = r.lfos, r.clock
+    reg = r.reg
+    reg["lfo.1.sync"].set(0)
+    reg["lfo.1.shape"].set(lfo.SHAPES.index("square"))
+    reg["lfo.1.rate"].set(0.01)
+    reg["lfo.1.phase"].set(0.0)
+    reg["lfo.1.depth"].set(0.8)
+    lay = Layout(HandSettings.from_config({}).axes)
+    router.names["hand"] = lay.index
+    router.names["hands"] = lay.pair_index
+    hand0, _ = _hand_tape(lay, 0)
+    router.rests["hand"] = [0.5] * lay.n_axes + [0.0] * (len(hand0) - lay.n_axes)
+    if not lagged:
+        router.use_lfos(lfos, clock)
+    params = [p for p in reg if p.modulatable]
+    seq: dict[str, list] = {p.id: [] for p in params}
+    outs: list[list[float]] = []
+    for k in range(TAPE_FRAMES):
+        t = 1.0 + k * TAPE_DT
+        clock.tick(t)
+        router.follow_macros()
+        hand, pair = _hand_tape(lay, k)
+        router.feed("hand", hand)
+        router.feed("hands", pair)
+        r.chain.out[:] = [CEIL * (0.5 + 0.4 * math.sin(1.3 * j)) for j in range(len(r.chain.out))]
+        if lagged:
+            lfos.step(TAPE_DT, t, clock)
+            lfos.publish(router)
+            _lagged_modulate(router, r.chain, TAPE_DT)
+        else:
+            router.modulate(r.chain, TAPE_DT, now=t)
+        reg.apply()
+        for p in params:
+            seq[p.id].append(p.get())
+        outs.append(list(lfos.outputs))
+    return seq, outs, router.table
+
+
+def test_every_factory_preset_lands_the_same_values_one_frame_earlier(tmp_path):
+    """Decision 7, the gate on the lag's removal: every corpus preset (the
+    ones the build shipped), played through a scratch library with the synthetic hand tape, the
+    analyzer's lanes and LFO 1 on, lands every modulatable param on the
+    same value as the base build's arithmetic (`_lagged_modulate`, the
+    reference kept for this test) — at the same frame for every param
+    whose value no lagged read reaches (most of them, every one no
+    performer moves among them), and exactly as many frames earlier as
+    the base build was late for the rest (`_lag_of`: an LFO whose depth a
+    hand owns, and what that LFO drives). A sequence that differs in any
+    other way is a value the change moved, not its timing."""
+    shifted_somewhere = []
+    for name in corpus_stems():
+        old, old_out, table = _play_tape(tmp_path / f"{name}-old", name, lagged=True)
+        new, new_out, _ = _play_tape(tmp_path / f"{name}-new", name, lagged=False)
+        lag_p, lag_l = _lag_of(table)
+        for pid, seq in new.items():
+            k = lag_p.get(pid, 0)
+            assert seq[:TAPE_FRAMES - k] == old[pid][k:], (name, pid, k)
+            if k and len(set(seq)) > 1:
+                shifted_somewhere.append((name, pid))
+        for i in range(len(new_out[0])):                 # every LFO steps, cables or none
+            k = lag_l.get(i, 0)
+            assert [o[i] for o in new_out][:TAPE_FRAMES - k] == \
+                [o[i] for o in old_out][k:], (name, i, k)
+            assert len({o[i] for o in new_out}) > 1 or i > 0 or k == 0, (name, i)
+    # not vacuous: the two presets whose hand owns LFO 1's depth moved
+    # what that LFO drives, one frame earlier
+    assert ("party-trip", "camera.zoom") in shifted_somewhere
+    assert ("lfo-breathe", "view.bright") in shifted_somewhere
+    assert ("party-tumble", "rot.rate.ZW") in shifted_somewhere   # the scale path
+
+
+def test_a_cycle_without_a_delay_disables_its_last_cable_with_a_note(tmp_path):
+    """Decision 7: a loop closes only through a delay modifier. LFO 1
+    pushes LFO 2's rate and LFO 2 pushes LFO 1's depth: the later cable in
+    table order is kept off — its row still in the table, enabled, saved
+    as written — with a note ROUTING's head shows; the rest of the patch
+    runs. Take the loop away and the cable runs again, no note."""
+    r = rig(tmp_path=tmp_path, full=True)
+    first = Binding("lfo:0", "lfo.2.rate", "push", 0.5)
+    second = Binding("lfo:1", "lfo.1.depth", "push", 0.5)
+    other = Binding("lane:0", "view.bright", "push", 0.5)
+    table = Bindings([first, other, second])
+    router = Router(r.reg, table)
+    router.use_lfos(r.lfos, r.clock)
+    assert router.modgraph_cut == {("lfo:1", "lfo.1.depth")}
+    (note,) = router.modgraph_notes
+    assert note == ("loop: lfo:0 → lfo.2.rate → lfo:1 → lfo.1.depth → lfo:0 needs a delay"
+                    " — lfo:1 → lfo.1.depth is off until it has one")
+    assert second in table.routes() and second.enabled          # nothing removed
+    assert [d["target"] for d in (b.to_json() for b in table.routes())] == [
+        "lfo.2.rate", "view.bright", "lfo.1.depth"]
+    depth, rate, bright = r.reg["lfo.1.depth"], r.reg["lfo.2.rate"], r.reg["view.bright"]
+    r.lfos[0].shape = r.lfos[1].shape = lfo.SHAPES.index("square")
+    r.chain.out[:] = 0
+    r.chain.out[0] = CEIL * 0.5
+    router.modulate(r.chain, 1 / 60, now=1.0)
+    r.reg.apply()
+    assert rate.modulated and not depth.modulated               # the cut cable never ran
+    assert bright.modulated                                     # the rest of the patch did
+    # in the file as written: a preset saved now carries the row
+    assert any(d == second.to_json() for d in (b.to_json() for b in table.routes()))
+    table.remove(first)                                         # no loop: it runs
+    assert router.modgraph_cut == set() and router.modgraph_notes == []
+    router.modulate(r.chain, 1 / 60, now=1.0 + 1 / 60)
+    r.reg.apply()
+    assert depth.modulated
+
+
+def test_sinks_still_send_after_apply(tmp_path):
+    """The sinks read this frame's effective values after `reg.apply()`,
+    as before (ARCHITECTURE §2 step 12): a param the pass lands early
+    (LFO 1's depth, which LFO 1 reads) and a param `reg.apply` lands (the
+    brightness LFO 1 pushes) both reach a sink row at this frame's value."""
+    r = rig(tmp_path=tmp_path, full=True)
+    table = Bindings([Binding("hand:0", "lfo.1.depth", "position"),
+                      Binding("lfo:0", "view.bright", "push", 0.5),
+                      Binding("param:lfo.1.depth", routing.sink_target("daw", 0), "send"),
+                      Binding("param:view.bright", routing.sink_target("daw", 1), "send")])
+    router = Router(r.reg, table)
+    router.use_lfos(r.lfos, r.clock)
+    one = r.lfos[0]
+    one.shape, one.sync, one.phase = lfo.SHAPES.index("square"), 0, 0.0
+    depth, bright = r.reg["lfo.1.depth"], r.reg["view.bright"]
+    bright.set_value(0.5)
+    router.feed("hand", [0.6])
+    r.clock.tick(1.0)
+    router.modulate(None, 1 / 60, now=1.0)
+    landed_early = depth.value
+    r.reg.apply()
+    sent = routing.sink_values(table.sinks("daw"), r.reg)
+    assert landed_early == pytest.approx(0.6)                   # in the pass, before LFO 1
+    assert r.lfos.outputs[0] == pytest.approx(0.5 + 0.5 * 0.6)  # LFO 1 read it this frame
+    assert sent[0] == pytest.approx(depth.eff_norm) and sent[0] == pytest.approx(0.6)
+    assert sent[1] == pytest.approx(bright.eff_norm)            # this frame's push, after apply
+    assert bright.value != pytest.approx(0.5)

@@ -1,10 +1,53 @@
 # Decision register — the open decisions
 
 Rows 34–88 were each decided during an unattended build on 2026-10-04,
-and rows 89–108 during plan 22's run on 2026-10-06: the build took its own
-recommendation and built it. Every one is in the app now (rows 89–108 on
-`plan-22-integration`, until the owner merges it) and waits for the owner
-to say **keep** or **overturn**. Each row
+rows 89–108 during plan 22's run on 2026-10-06, rows 110–139 during
+plan 24's run, rows 140–168 during plan 27's run and rows 169–209
+during plan 26's run on 2026-10-14, rows 210–213 during plan 27's B6
+(several gamepads at once) on 2026-10-15, rows 214–232 during plan 30's
+run (shader nodes) and rows 233–277 during plan 28's run (the node
+editor) on 2026-10-17, rows 278–290 in plan 28's N7 (a legible graph)
+and rows 291–298 in plan 30's N8 (the palette as compression)
+and rows 299–310 in plan 28's N9 (the graph by concern)
+on 2026-10-20: the build took its own
+recommendation and built it. Rows 311–320 (plan 31, the step sequencer)
+and 321–339 (plan 32, media) are different: the owner **accepted them as
+recommended on 2026-10-22, before their builds**; each is answered
+"(rec) — accepted 2026-10-22" (or "owner") and says what was built
+against it, kept here so the build's own choices inside each can still
+be overturned (the two plans land together on `plan-31-32-integration`;
+row 317's page on `plan-31-a1`). Row 340 is the owner's 2026-10-23
+answer on how the two combine. Rows 341–352 (plan 33, the free graph) are
+the same kind as 311–339: the owner answered 341, 342, 346, 348 and 350 in
+his own words on 2026-10-24 and accepted the rest as recommended, before
+the build (on `plan-33-free-graph`, PR #235, into `plan-31-32-integration`).
+Rows 353–371 (plan 34, feedback) are the same kind: the owner said "build"
+on 2026-10-24, after seeing the options, and that took every recommendation
+as given. Rows 353 ("build A"), 359 ("with the loop refusal fix"), 360 ("i
+also want to be able to do b") and 368 ("avoid writing a 1080p buffer into
+all the faces") carry his words; the rest are "(rec) — accepted
+2026-10-24" (on `plan-34-feedback`, PR #236; built in two halves around
+plan 35). Three are written as built under plan 35: 359, 370 and 371.
+Rows 372–393 (plan 35, the free frame) are the same kind: the owner
+answered 373, 374 and 387 on 2026-10-24 and accepted the rest as
+recommended, before the build (on `plan-34-feedback`, PR #236). Row 394
+is the owner's own, 2026-10-25: every save on the newest schema, which
+supersedes the save side of rows 319, 340, 347 and 385 and ruling R10
+(on `preset-schema-6`).
+Rows 396–400 (plan 36, the WYSIWYG graph) are the plan's D1–D5, accepted by the owner as recommended on 2026-10-26, before the build; rows 401–416 are the controller's rulings during that build (two of them the owner's words, 409 and 412) and are answered "controller — 2026-10-26" (on `plan-36-build`).
+Rows 417–500 are plans 37, 38 and 39's, run in parallel on 2026-10-27 and integrated on `plan-37-38-39-integration` (one final PR into `main`): plan 37 took 417–429 and 460, plan 38 430–439 and 461–470, plan 39 440–459 and 471–497, each overflowing its assigned range into the first free numbers; 498–500 are the integrator's, taken at the plan 37 merge.
+Rows 417–429 and 460 (plan 37, nodes as pictures and the faces) were written during the 2026-10-27 run, in the owner's absence. 417 is the plan's D1, the list of face patterns that stay, and it is **open** until the owner names the list. 418–421 are D2–D5, "(rec) — accepted by the controller 2026-10-27". 422–429 and 460 are the controller's rulings during the build, answered "controller — 2026-10-27". The plan needed one row more than its thirteen, so it took 460. They were built on `plan-37-pictures`.
+Rows 430–439 and 461–470 (plan 38, hold the projector) are the plan's D1–D5 (430–434), taken as recommended and accepted by the controller on 2026-10-27 for the owner to keep or overturn, then the controller's rulings during its build (on `plan-38-hold`); the plan overflowed its ten rows into 461–470.
+Rows 440–447 (plan 39, vision) are the plan's eight decisions, every one the owner's on 2026-10-27, before the build; rows 448–459 and 471–497 are the controller's rulings during that build, answered "controller — 2026-10-27" (twenty rows were assigned, 440–459; the overflow starts at 471, after plan 37's 460 and plan 38's 461–470; on `plan-39-vision`; three of them, 459, 495 and 496, are the seams with plan 38's hold, settled on `plan-37-38-39-integration`).
+Rows 501–536 (plan 40, patches) were written during its run on 2026-10-27 and 2026-10-28, on `plan-40-build`: 501–510 are the plan's D1–D10, every one the owner's on 2026-10-27, before the build; 511–536 are the controller's rulings during the build, answered "controller — 2026-10-27", except 521 and 524, which are **pending the owner** (the schema of a save with no group, and a take-over chip for "wire as saved"). The plan was assigned 471–495, which plans 37–39 had taken, so it took the next free, 501–525, and overflowed into 526–536.
+
+Rows 538–541 are the owner's own answers of 2026-10-28, on `worktree-presets-one-tier` (the library goes one-tier: no factory presets, a flat PRESETS page, one show line). Hand check 403.
+Every other one is in the app now (rows 110–213
+on `plan-24-26-27-integration`, rows from 214 on `plan-28-30-integration`,
+until the owner merges them) and waits
+for the
+owner to say **keep** or **overturn**. Row 109 is the owner's own (plan
+25). Each row
 says what was built (what you will see or feel), the other option(s), what
 it costs to reverse, the known rough edge, and the hand check that lets you
 judge it. The checks are numbered in
@@ -29,9 +72,9 @@ here; overturn → the change, then the same.
 | 39 | Camera moves are undo steps | — | |
 | 40 | Home may be fired by a performer; dim may not | 54, 55 | |
 | 41 | The dim in overlay fades alpha too | — | |
-| 42 | Save-as hold: how it fires and lights | 56 | |
+| 42 | Save-as hold: how it fires and lights — the clip-stop bar **superseded** (#158; clip stop 8 is SAVE, row 110) | 56 | superseded in part |
 | 43 | A paused drag is two undo steps | 48 | |
-| 44 | A load releases only faders it moved | 55 | |
+| 44 | A load releases only faders it moved — for the preset's faders **superseded by row 112** | 55 | superseded in part |
 | 45 | FX chip: dot switches, name opens; three a row | 59 | |
 | 46 | An idle effect's faders dimmed but live | 60 | |
 | 47 | Instances reach zero from slider and K3 | 62 | |
@@ -47,8 +90,8 @@ here; overturn → the change, then the same.
 | 57 | The big on-screen desk and its names | 69 | |
 | 58 | Click a desk control, then a param | 70 | |
 | 59 | One Unbind removes desk rows and routes | 64 | |
-| 60 | "Learn desk" and "Learn hand ▸ left / right" | 66–68 | |
-| 61 | Session controls work through a desk learn | 65 | |
+| 60 | "Learn desk" and "Learn hand ▸ left / right" (what it waits for comes from the device registry since plan 27: rows 151, 158) | 66–68 | |
+| 61 | Session controls work through a desk learn (its list changed in plan 24: S1–S8 left it; SAVE and the four toggles joined) | 65 | |
 | 62 | One road onto the desk, no APC40 needed | 70 | |
 | 63 | The ROUTING filter: only you clear it | 71 | |
 | 64 | Two hand-Learn details left alone | 66 | |
@@ -60,13 +103,13 @@ here; overturn → the change, then the same.
 | 70 | Dream "speed" is `dream.k`, in frames | 96 | |
 | 71 | Instance layouts: grid, honeycomb, ring | 97 | |
 | 72 | The bank of twenty-four | 81, 83 | |
-| 73 | Clip rows 4–5 are the bank; their lights | 82–84 | |
+| 73 | Clip rows 4–5 are the bank; their lights (its diagram's clip-stop row and toggle column are out of date: rows 110, 113) | 82–84 | |
 | 74 | No backup, no rewrite of `bindings.json` | 84, 57 | |
 | 75 | Device knobs only where they do something | 85 | |
 | 76 | Hide, rename and the trash | 86–88 | |
 | 77 | The red dot and "save copy" | 89 | |
 | 78 | The home in git — **superseded by row 109** (removed in plan 25) | 90 | superseded |
-| 79 | Where "hands through effects" puts the hands | 102, 103 | |
+| 79 | Where "hands through effects" puts the hands — **superseded in part by rows 193, 194** (plan 26: the switches are the default graph's wiring; the history is wiring) | 102, 103 | superseded in part |
 | 80 | The guide and labels are never bent | 103 | |
 | 81 | Output switches are rig settings | 101, 104 | |
 | 82 | Another shape is letterboxed | 106 | |
@@ -97,6 +140,438 @@ here; overturn → the change, then the same.
 | 107 | The house presets' routes generated from code | 132 | |
 | 108 | Macro candidates in `shared/` (folder **superseded by row 109**); per-band gain as depth | 133–136 | |
 | 109 | Plan 25: presets shared through a cloud-synced folder (`[library] path`), D1–D8 | 139–143 | **owner, 2026-10-14** |
+| 110 | SAVE is track 8's clip stop, held, on `desk.save` | 148 | |
+| 111 | The two-handed save names from the loaded preset; the pad blinks | 148 | |
+| 112 | A load lets go of every preset fader and darkens the whole desk (row 44 changed) | 150, 153 | |
+| 113 | Factory files keep the toggle rows; a load drops them quietly | 149 | |
+| 114 | The desk log: the last twenty presses on SYSTEM | 151 | |
+| 115 | The band audio strip on the SHIFT-layer faders (amends D6) | 153 | |
+| 116 | A layer switch re-arms every layered fader from where it is | 153 | |
+| 117 | `view.lines_alpha` and `view.points_alpha` | 154 | |
+| 118 | Fader rows in a preset's desk: `track_fader`, `knob_desk(faders=)` | 152 | |
+| 119 | An older `bindings.json` moves the fader rows to SHIFT once | 153 | |
+| 120 | What makes a desk control "dead" (`learn.cannot_show`) | 155 | |
+| 121 | The coverage counts 38 preset-layer controls | 155 | |
+| 122 | Desk templates: the file format, overrides and dark rows | 156 | |
+| 123 | Click a control: this preset's params first, in four tiers | 157 | |
+| 124 | The dance lanes after the switches; `hands:` its own scheme | 158, 162 | |
+| 125 | Curl and spread: what they measure | 159, 160 | |
+| 126 | Energy: mean speed, fast up, slow down | 159 | |
+| 127 | Flick: a spike past 1500 mm/s that decays | 161 | |
+| 128 | Gap and twist | 162 | |
+| 129 | The dance sources and the grab: no settings, no DAW, no hand Learn | 158, 164 | |
+| 130 | The dance column and the grab glyph on the HANDS page | 158, 163 | |
+| 131 | The grab: mean curl, closes past 0.65, opens under 0.45 | 163, 164 | |
+| 132 | The grab lanes after the dance lanes; gates after the pinches | 163 | |
+| 133 | Hands on the projector: the SETUP.md line, not the home's file | 165 | |
+| 134 | The palette's ids are `fx.palette.*` | 166 | |
+| 135 | The `@mix` directive; the palette starts at mix 0 — "no identity exists" **superseded in part** (row 291) | 166 | superseded in part |
+| 136 | The palette's params: mode, anchors, twelve anchor values — `mode` as a number **superseded in part** (row 296) | 166, 167 | superseded in part |
+| 137 | The palette at `@order 95` | — | |
+| 138 | The fold over the absolute hue wheel; linear sat and val — `centre`/`width` and `_lo`/`_hi` **superseded** (rows 291–294) | 166 | superseded in part |
+| 139 | The FX page repacked; strip rows packed by name — the palette's rows **superseded in part** (row 297) | 167 | superseded in part |
+| 140 | `[[devices]]`; the old tables translated with a note each | 168, 169 | |
+| 141 | Today's devices keep their schemes; two never feed one Router key (since B6: a second pad opens under its role, rows 210–213; a second hands device is still refused) | 174, 219 | |
+| 142 | The `Device` protocol, one `Port`, four status words | 170 | |
+| 143 | The devices own today's adapters; the hands read in the feed slot | 168, 180 | |
+| 144 | Open behind the entry, retry a failed open, close last-listed-first | 170–172, 175 | |
+| 145 | `config.toml` watched every 30 frames; a bad edit keeps the old list | 173 | |
+| 146 | The SYSTEM page: one line per device | 168 | |
+| 147 | A second desk's rows are `cc@<role>:…`; who owns the unqualified rows | 176, 177 | |
+| 148 | SHIFT is the first desk's; other desks have their own layer, no SHIFT | 177 | |
+| 149 | The `generic` MIDI profile | 176 | |
+| 150 | Continuous = not a row kind; schemes and their order from the registry | 178 | |
+| 151 | What a Learn waits for is each device's `wants` | 178, 186 | |
+| 152 | The pad is a device; it runs the sticks' camera job | 179 | |
+| 153 | The hands' device in `hands/device.py` | 180 | |
+| 154 | One knob per param per desk | 176 | |
+| 155 | The sink row: `param:<id>` / `lane:<i>` → `<role>:<channel>`, the session's | 181, 183 | |
+| 156 | `[bridge] send` becomes sink rows once (`sinks_seeded`) | 182 | |
+| 157 | The hands' DAW out is the `hands-daw` sink | 184, 185 | |
+| 158 | Learn sink ▸ lands at once, in the session | 183 | |
+| 159 | The bridge in two halves; `ext` labels and rests | 181, 182 | |
+| 160 | A sink's line says `n sinks` | 182, 184 | |
+| 161 | An OSC role is its scheme; hits are rows under it | 186, 187 | |
+| 162 | OSC values: first number, range, NaN until heard, held while lost | 188 | |
+| 163 | OSC hits: velocity is the first number | 187 | |
+| 164 | The OSC socket read in `poll`; UDP 0.0.0.0:9000 | 186, 189 | |
+| 165 | `devices.PointCloud` | 190, 216 | |
+| 166 | Clouds on the registry, not the Router (drawn by plan 26's `cloud` node, rows 204–209) | 190, 216 | |
+| 167 | The cloud file: version-1 `.npz` | 190 | |
+| 168 | The cloud device plays at its own rate | 190 | |
+| 169 | The instance marker: a number after the prefix (`fx.acid.2.mix`) | 193 | |
+| 170 | Goldens: eight output states as eight outputs of one frame, and output 1 alone | 191, 192 | |
+| 171 | LFOs and analyzer at rest in the goldens | 191 | |
+| 172 | "Hands present" in the goldens: one fixed pose, the ghost on | 191 | |
+| 173 | The 1080p-cap golden: party-trip at 2× HiDPI | 191 | |
+| 174 | GPU time per node: read 3 frames late, a median of 60 | 194 | |
+| 175 | The golden tool's one GL context | 191 | |
+| 176 | The FX node is the chain, one per pipeline, the pipeline's end — **superseded by rows 214, 215** (plan 30: each effect is its own node; `Fx` is the end only) | 194 | superseded |
+| 177 | The history as two nodes, `history` and `capture` | 194 | |
+| 178 | The Output node is `_compose` | 194, 195 | |
+| 179 | Nodes and ports: made images pulled, painted images drawn into the consumer | 194 | |
+| 180 | The default graph keyed by switches, wiring and clouds; reused (plan 30 adds the effect list and the placements to the key: rows 215, 219) | 194, 195 | |
+| 181 | The cover mask as a Layer node | 194 | |
+| 182 | The eye: `eye.fov`, `eye.distance`, session, the old divide | 196 | |
+| 183 | `camera.pan` in world units (±12), marked by `units`, through 1080p | 199, 201 | |
+| 184 | `camera.zoom` the shape's world scale; copies in the world (its stroke sentence superseded by row 189) | 197 | |
+| 185 | The shape's depth: never against itself; alpha > 0.25 written after | 205 | |
+| 186 | Point quads a whole number of pixels | 196 | |
+| 187 | The Leap calibration: `units` in `hands.json` /3, a 16:9 fit | 202, 203 | |
+| 188 | A stroke end behind the eye is slid in front | 197 | |
+| 189 | Strokes in world space by default; screen space the switch (the toggle is the owner's) | 198 | |
+| 190 | `view.screen_strokes`: a performance toggle, modulatable | 198 | |
+| 191 | Hands inside the scene are solid (`ghost.alpha` not applied) | 204, 205 | |
+| 192 | The depth-aware composite: a 0.05-radius bias | 207 | |
+| 193 | The OUTPUT switches are wiring; through stands down per frame | 195, 208 | |
+| 194 | `Wiring`: hands, blend, history — renderer-wide | 206, 209 | |
+| 195 | The hands node `ghost` and its layer `hands`; time by the consumer edge | 210, 213 | |
+| 196 | The preset's `graph` section: the nodes that differ, one object each (an effect's `after` / `into` and a placed instance 1: row 219) — "wiring choices, not a graph" **superseded in part by rows 263, 266** (plan 28: a wire list, outputs as nodes) | 211 | superseded in part |
+| 197 | An unreadable section: a note, the default graph, kept as written; `cloud` unknown — "the whole section falls back" **superseded in part by row 221** (a refused placement costs only that effect its place) | 211 | |
+| 198 | Instances as built: `fx.<file>.<n>`, `ghost.<n>`, `hands.<n>` | 212, 213 | |
+| 199 | A second hands node is its own `Ghost` over its own state | 213 | |
+| 200 | Where two hands nodes go | 213 | |
+| 201 | Hands as lines: the meshes' edges | 214 | |
+| 202 | The OUTPUT and LOOKBACK pages say the wiring in words | 215 | |
+| 203 | Undoing a load puts the graph back first | 211 | |
+| 204 | A point cloud is solid geometry in the scene | 216 | |
+| 205 | The cloud's transform: one scale, `cloud.scale` 0.3 | 216 | |
+| 206 | `cloud.*` a session group | 217 | |
+| 207 | A listed `cloud` device adds its node to the scene | 216, 218 | |
+| 208 | The cloud buffer uploaded on a new (frame, time) | 218 | |
+| 209 | The cloud's draw is its own SYSTEM line | 218 | |
+| 210 | The device qualifier is general: any scheme takes `@<role>`; an unqualified row is the primary device's | 219 | |
+| 211 | A joystick per pad device (next free, or pinned); one USB reader, lent to the first `usb = true` pad with no GLFW joystick, sticky | 219 | |
+| 212 | The camera job and the factory pad rows are the primary pad's; a second pad starts with no rows; one feel | 219 | |
+| 213 | The hands stay single: a second hands entry is refused | 174 | |
+| 214 | The pipeline end keeps the name `Fx`; its own line reads 0.00 | 220 | |
+| 215 | An off effect is read through: no pass, no texture, no rebuild | 221 | |
+| 216 | The effects' pool: two half-float textures plus one per held picture | 222 | |
+| 217 | An effect node's name: `acid` in the scene's pipeline, `acid(scene+hands)` in the others | 220, 222 | |
+| 218 | SYSTEM: a line only for an effect that ran | 220 | |
+| 219 | The placement keys `after` and `into`; a placed instance 1 | 223, 224 | |
+| 220 | The placeable names and which key each takes | 225 | |
+| 221 | A refused placement costs only that effect its place; loops refused twice (two drafts folded) | 225 | |
+| 222 | A placement on a missing node is dormant, said in words | 226 | |
+| 223 | How an effect sits on an edge; the presenter gets the folded picture | 223, 224, 227 | |
+| 224 | The words: "on the hands", "before the history", "on output 2 only" | 228 | |
+| 225 | The three proof fixtures' extra values | 223, 224, 227 | |
+| 226 | A placed chip in a grid of its own, its place after its name | 229 | |
+| 227 | The FX status line adds "· N placed" | 229 | |
+| 228 | Two vocabularies: the chip's and OUTPUT's | 228, 229 | |
+| 229 | A dormant placement still shows as placed | 229 | |
+| 230 | A placed effect aimed at the faces says "on the faces" | 230 | |
+| 231 | The `VALUE` port: a fourth type, used by no node | — | |
+| 232 | The faces target stays an inner chain (the lift as the other option) | 230 | |
+| 233 | `modgraph.py`'s types: nodes by address or param id, an edge per port | — | |
+| 234 | Only the params a later node reads land in the pass; the frame's mark | 232 | |
+| 235 | The patch cached on a key built once a frame (about 5 µs a frame dearer) | — | |
+| 236 | A loop through no delay: its last cable off, a note, the row kept (two drafts folded) | 233 | |
+| 237 | A delay closing a loop runs first, one frame late (two drafts folded) | 234 | |
+| 238 | The LFOs step inside the pass, every one a node | 232, 235 | |
+| 239 | The equivalence oracle: the base's `modulate`, verbatim, in the test | — | |
+| 240 | The six modifier kinds and their params | 236 | |
+| 241 | The lane `mod:<n>`; a modifier whose input is not live reads NaN | 237 | |
+| 242 | Modifier ids one past the highest; a removal leaves its routes dormant | 237 | |
+| 243 | A modifier's params in its entry only, never in `values` | 238, 260 | |
+| 244 | A template's modifiers: overridden by id, a save writes what differs | 239 | |
+| 245 | The modifiers one undo part of the table | 240 | |
+| 246 | Learn takes a `mod:` lane only when armed for anything | — | |
+| 247 | The MODIFIERS strip between the routes and the desk — not drawn on ROUTING since N7: **superseded in part** (rows 288, 289) | 241 | superseded in part |
+| 248 | Node and pin ids: strings with a kind prefix (the `layout` keys) | 244 | |
+| 249 | Params on the render node that owns them (`OWNERS`) | 243 | |
+| 250 | What the canvas draws: modulatable params and row targets; no sinks — its timing **superseded in part** (row 290) | 242, 245 | superseded in part |
+| 251 | Positions: the preset's map and the show's; a drop dirties; tidy one undo step — tidy's behaviour **superseded in part** (row 285) | 244 | superseded in part |
+| 252 | The tidy columns — a collapsed node's height **superseded in part** (row 278); the columns by kind **superseded** by the areas (row 299) | 244 | superseded in part |
+| 253 | The editor context on the panel, closed before imgui | 246 | |
+| 254 | The selection pane below the canvas; **beside** for a column — the chip **superseded** (row 286) | 245 | superseded in part |
+| 255 | A cable into `mod` is the row a Learn would make | 247, 248 | |
+| 256 | A cable into `base`: desk or pad setters only; the refusal words | 248 | |
+| 257 | A cable's end moved input pin to input pin | 247 | |
+| 258 | A free modifier dropped on a cable is inserted | 247, 249 | |
+| 259 | The node picker: modifiers by kind, idle macros | 249, 250 | |
+| 260 | A macro onto `mod` is refused | 248 | |
+| 261 | A macro node's delete clears its label and subscribers | 250 | |
+| 262 | Cable deletes: the preset's go, the session's refused | 250, 258 | |
+| 263 | The wire list: `{"from", "to"}` in `wires` | 251, 252 | |
+| 264 | A preset wires image ports only; a hands node's place is its `into` | 253 | |
+| 265 | D1's `after` / `into` are wires written short | 251 | |
+| 266 | Outputs as nodes: a wire overrides that port alone (a through output's hands folded in) | 252, 254 | |
+| 267 | A refused wire: a note and that port's default | 253 | |
+| 268 | The render picker; every edit read back before it lands (N3's seam folded in) | 251, 255 | |
+| 269 | The two wire fixtures' look | 252 | |
+| 270 | The APC40 as two nodes; a SHIFT-node drag into `base` refused | 256 | |
+| 271 | The desk's port groups | 256 | |
+| 272 | The SHIFT latch read from the table each frame | 256 | |
+| 273 | A layered row on an invariant control drawn off on *apc40* | — | |
+| 274 | A desk template as a subgraph node; an edit inside an override (two drafts folded) — its collapsed port list **superseded in part** (row 278) | 257 | superseded in part |
+| 275 | A missing role is a grey placeholder | 258 | |
+| 276 | The hands node's groups: axes, pinches, grab, presence, dance | 256 | |
+| 277 | An older build and this run's keys: both Macs on this build before sharing | 259 | |
+| 278 | A collapsed node's lines: what it holds, how much is patched, its live reading | 261 | |
+| 279 | One in and one out stub a node; a render cable to a collapsed node's stub | 261 | |
+| 280 | A bundle per node pair, as thick as it is many (capped), its hover the first ten | 261, 262 | |
+| 281 | A bundle selected lists its rows; its Delete refused in words | 262 | |
+| 282 | The collapse state is the page's, saved nowhere | 261 | |
+| 283 | A drag onto a collapsed node's stub opens a picker of its ports | 263 | |
+| 284 | Learn from a node's right-click, per param | 263 | |
+| 285 | Tidy collapses everything, lays it out again and says what it did — into the areas, its words **superseded in part** (row 304) | 264, 274 | superseded in part |
+| 286 | The details chip only with a selection on a narrow page | 264 | |
+| 287 | Expand all / collapse all; "patched only" within an expanded node | 262 | |
+| 288 | ROUTING's pointer line; "Route a lane here…" opens GRAPH | 266 | |
+| 289 | A modifier node's side pane: the MODIFIERS strip's block, stacked | 265 | |
+| 290 | A collapsed node reads only what its lines show; wiring and columns kept (the areas' layout since N9, row 299) | 261 | |
+| 291 | The slice: `hue_from` → `hue_to` up the wheel, turned by a wrapping `hue_turn`; from = to one hue, 0 → 360 the whole wheel | 267, 269 | |
+| 292 | The hue map: the old fold up to 180°, sliding to the identity at 360° | 267, 268 | |
+| 293 | Saturation and value mapped linearly, never clamped | 267, 268 | |
+| 294 | `from` above `to` inverts (sat or val) | 269 | |
+| 295 | `centre`/`width` and `_lo`/`_hi` read as the slice on load (values, routes, desk rows, macros); a note only when the palette shows | 271 | |
+| 296 | `// @param choice [a\|b] n "Label"`: a discrete param, drawn as a picker | 270 | |
+| 297 | The strip: mode picker, "compress into" line, hue / sat / val rows `from → to` (the hue row's turn beside), a hue bar | 270 | |
+| 298 | The gradient map kept as the second mode | 270 | |
+| 299 | Five areas left to right: controllers → audio → modulation → geometry → shaders | 272 | |
+| 300 | The audio before the modulation; the LFOs are modulation | 272 | |
+| 301 | Each area's title: faint words on the canvas, no node | 272 | |
+| 302 | The idle rule by kind: macros, LFOs, group nodes, lost devices | 273 | |
+| 303 | The small "other" area under the audio | 272 | |
+| 304 | One idle line an area; its + shows them; tidy closes it | 273, 274 | |
+| 305 | An off effect with no cable is idle; a through wire spans the hidden run | 275 | |
+| 306 | The shaders' chain wraps in rows of four (Z order) | 276 | |
+| 307 | Frame an area: five chips on the head, or a click on its title | 276 | |
+| 308 | The modulation and the audio laid out by their own depth | 272 | |
+| 309 | Titles never under 12 px on screen; a short word when needed | 272 | |
+| 310 | Open question: GRAPH asking for the whole control window (not built) | — | owner's call |
+| 311 | N LFOs, cap 16, removable by stable id (replaces "Four LFOs") | 280 | (rec) — accepted 2026-10-22 |
+| 312 | Envelopes: AHDSR, gate and one-shot; hold 0, legato, seconds, one curve | 282 | (rec) — accepted 2026-10-22 |
+| 313 | Envelopes 1–5 always there, each its lane's; extras to 16 | 281, 284 | (rec) — accepted 2026-10-22 |
+| 314 | Steps as registry params | 281, 286 | (rec) — accepted 2026-10-22 |
+| 315 | Per step on/off only (stored as velocity); one global swing; a global gate built beside | 282 | (rec) — accepted 2026-10-22 |
+| 316 | One global span (½–4 bars) and a global length 1–8 | 281, 289 | (rec) — accepted 2026-10-22 |
+| 317 | The APC40 page on SEND A, latched (on `plan-31-a1`) | 286–295 | (rec) — accepted 2026-10-22 |
+| 318 | The pattern in the preset; `run` not | 282 | (rec) — accepted 2026-10-22 |
+| 319 | Conditional `hyperspace.preset/3` (save side superseded by 394) | 285 | (rec) — accepted 2026-10-22 |
+| 320 | A1 only after Dylan agrees (built on `plan-31-a1`, waiting) | 286–295 | (rec) — accepted 2026-10-22 |
+| 321 | Eight fixed channels `a`–`h` | 303 | (rec) — accepted 2026-10-22 |
+| 322 | A bin of ≤ 16 sources plus a `slot` param | 296, 298 | (rec) — accepted 2026-10-22 |
+| 323 | Bins live in the preset | 301 | (rec) — accepted 2026-10-22 |
+| 324 | Source ids and places; a missing source is black plus the banner | 300–302 | (rec) — accepted 2026-10-22 |
+| 325 | Live kinds are device-registry kinds that discover feeds | 304, 305, 311, 313 | (rec) — accepted 2026-10-22 |
+| 326 | The transport: pos latch, rate −4…+4, jog with coast, three loop modes | 298, 299 | (rec) — accepted 2026-10-22 |
+| 327 | Scrub proxies for clips ≤ 10 minutes (own worker) | 298 | (rec) — accepted 2026-10-22 |
+| 328 | Threads: a pool, a thread per blocking source, the render thread only uploads | 302, 303 | (rec) — accepted 2026-10-22 |
+| 329 | Caps 1080p files / 720p live; upload only consumed, new frames | 303 | (rec) — accepted 2026-10-22 |
+| 330 | Backdrop under the scene, before history and effects; history off | 296 | (rec) — accepted 2026-10-22 |
+| 331 | Faces read a channel; `view.bmp_*` dropped with a note; K7 kept by an alias | 297, 314 | (rec) — accepted 2026-10-22 |
+| 332 | Every effect gets an `aux` input; `displace` and `blend` | 297 | (rec) — accepted 2026-10-22 |
+| 333 | The phone's own page is V2; an NDI camera app in V1 | 312 | owner — 2026-10-22 |
+| 334 | Phone join (V2): a token in the QR, ≤ 4, approved on the host | — | (rec), not built — 2026-10-22 |
+| 335 | Resolume / TouchDesigner both ways in V1; publishers are SYSTEM lines | 304–310 | owner — 2026-10-22 |
+| 336 | Dependencies: `av`, `pillow-heif`, `syphon-python`, `cyndilib` (+ avfoundation) | 311 | (rec) — accepted 2026-10-22 |
+| 337 | Conditional preset `/4` = `/3` + media (a media value, bin, or route / desk row / modifier / macro / wire naming a media id); both Macs on the merged build | 301, 317 | (rec) — accepted 2026-10-22 |
+| 338 | Base `plan-28-30-integration` | — | (rec) — accepted 2026-10-22 |
+| 339 | No desk or APC40 default bindings; Learn for all | 299 | (rec) — accepted 2026-10-22 |
+| 340 | Plans 31 and 32 together: one schema ladder `/4` = `/3` + media; land together; "at its default" is the library's (D1's lowest-schema save superseded by 394) | 317 | owner — 2026-10-23 |
+| 341 | Retire the FX stack: no `order`, no `target`; effects edited on GRAPH | 318, 320 | owner — 2026-10-24 |
+| 342 | One picture input for all faces (`shape.faces`); per instance is next | 318 | owner — 2026-10-24 |
+| 343 | The run is wires `frame → … → fx.image`, drawn by every pipeline | 320, 322 | (rec) — accepted 2026-10-24 |
+| 344 | A `pattern` node with a `media` input replaces `view.media` | 318, 323 | (rec) — accepted 2026-10-24 |
+| 345 | A `backdrop` node with an `image` input replaces `backdrop.channel` | 318 | (rec) — accepted 2026-10-24 |
+| 346 | The migration keeps only effects that are on (mix > 0), and those something drives | 322 | owner — 2026-10-24 |
+| 347 | Save writes the lowest schema that loses nothing; `/5` only when `/4` cannot say it (superseded by 394) | 322, 328 | (rec) — accepted 2026-10-24 |
+| 348 | The FX page stays as a browser of the graph's effect nodes | 321, 327 | owner — 2026-10-24 |
+| 349 | An unreached effect is kept, drawn faint, never run. Amended 2026-10-24 (the owner's glimmer): a section with a `frame` run shortens no wire to a D1 placement, so an effect with an input and no output is unreached and not drawn; explicit `after` / `into` entries still place; a pre-33 section's shortened wires migrate to explicit entries | 325, 326 | (rec) — accepted 2026-10-24 |
+| 350 | A switch node; a route on `view.media` / `backdrop.channel` migrates to one | 319 | owner — 2026-10-24 |
+| 351 | *Superseded by 372.* The default graph keeps plan 32's compositing order | 322 | (rec) — accepted 2026-10-24 |
+| 352 | The switch is a cut, eight inputs, only the selected one runs | 319, 324 | (rec) — accepted 2026-10-24 |
+| 353 | A `delay` picture node, z⁻¹: its picture is last frame's input; a loop through one is legal | 332, 333 | owner — 2026-10-24: "build A" |
+| 354 | Delay buffers are the renderer's: a half-float ping-pong pair per delay name, kept across rebuilds, not loads (a preset load resets them: final review R19), released `SIZED_KEEP_FRAMES` frames after it leaves | 339, 340 | (rec) — accepted 2026-10-24 |
+| 355 | A delay has no params: decay, mix and tint are an effect's or a composite's after it | 333 | (rec) — accepted 2026-10-24 |
+| 356 | Strict z⁻¹: reads nothing on the first frame and after a frame its input read nothing; a size change loses no frame | 332, 339 | (rec) — accepted 2026-10-24 |
+| 357 | A delay holds its input at the input's own size, else the frame's | 337, 338 | (rec) — accepted 2026-10-24 |
+| 358 | A picture of its own size is fitted into a consumer of another shape by cover, about the centre | 335, 337 | (rec) — accepted 2026-10-24 |
+| 359 | The loop refusal at read: a loop through the faces, the backdrop or the frame is refused in words that point at a delay. *Superseded in a wired frame by 393 (`HIDDEN_EDGES`)* | 334 | owner — 2026-10-24: "with the loop refusal fix" (words rec) |
+| 360 | Echoes and the dream are declared by a node entry (`{"kind": "echo", "index": k}`, `{"kind": "dream"}`) | 335, 336 | owner — 2026-10-24: "i also want to be able to do b" (entry rec) |
+| 361 | An echo the ring does not hold reads nothing: before k commits, after the ring is remade, with no ring; the dream before its worker's first result | 335, 336 | (rec) — accepted 2026-10-24 |
+| 362 | The ring keeps capturing while the graph reads an echo or the dream, with the look-back off | 335 | (rec) — accepted 2026-10-24 |
+| 363 | Echoes are what the capture holds, at the ring's size, cadence and 8 bits, said in the node's words | 335, 340 | (rec) — accepted 2026-10-24 |
+| 364 | The downsampler is named `resize` | — | (rec) — accepted 2026-10-24 |
+| 365 | Resize size: the long side in pixels, 16–2048 in powers of two, `input` or `square`, never a factor | 337, 339 | (rec) — accepted 2026-10-24 |
+| 366 | Resize crop: centre x, y and width, height, normalised, modulatable; past the edge transparent; `fit` fills the output | 337 | (rec) — accepted 2026-10-24 |
+| 367 | Resize filter: `linear` (trilinear from mipmaps past a 2× shrink) or `nearest` (kept when laid on a bigger consumer) | 337 | (rec) — accepted 2026-10-24 |
+| 368 | A resize's, a delay's and an echo's size is their own, breaking "the consumer decides" on purpose; an effect after one runs at its size | 337, 338, 340 | owner — 2026-10-24: "avoid writing a 1080p buffer into all the faces" (effect rule rec) |
+| 369 | Resize params are per instance, declared from the graph (`params.declare_resizes`), group `resize`, a preset's values, no module | 337 | (rec) — accepted 2026-10-24 |
+| 370 | GRAPH: delay in MEDIA, echo and dream in LOOK-BACK, resize in EFFECTS or MEDIA by what it is made of (under 389), the cable into a delay a return by design, a resize's params side-panel rows | 334, 338 | (rec) — accepted 2026-10-24 |
+| 371 | The schema: plan 34's words are `/5` words, a wired frame that round-trips saves `/5`, one that needs plan 35's vocabulary `/6` (amended by 385) | 341, 352 | (rec) — accepted 2026-10-24 |
+| 372 | The frame is wires: every node of the frame is ordinary, `"frame": "wired"`, nothing is built that no wire or entry says | 343, 344 | owner — 2026-10-24 |
+| 373 | The vocabulary: labels, hovers and **ids** in the owner's primitives (`ghost` → `hands`, `history` → `lookback`, …); params keep their ids | 345, 350 | owner — 2026-10-24: "approve, but rename ids too" |
+| 374 | The per-output switches: picture and hands are each window's mutes, "through" is wiring, a preset wires All outputs once | 346, 347, 348 | owner — 2026-10-24: as proposed |
+| 375 | All outputs (`output.all`): what every output shows unless its own port is wired | 344, 345 | (rec) — accepted 2026-10-24 |
+| 376 | An unwired output shows its ground: black, or see-through in overlay | 342, 344 | (rec) — accepted 2026-10-24 |
+| 377 | No pipelines: an effect on a second picture is a `copy` with the instance's knobs and clock | 348 | (rec) — accepted 2026-10-24 |
+| 378 | The stand-down is kept for a copy chain over a hands composite | 348, 351 | (rec) — accepted 2026-10-24 |
+| 379 | The direct paint is kept; users counted per frame through the mutes; mutes never rebuild | 351 | (rec) — accepted 2026-10-24 |
+| 380 | Hands: any hands node may have a layer and a guide; `hands.n → scene.geometry` puts it in the scene | 347, 348 | (rec) — accepted 2026-10-24 |
+| 381 | The look-back is one node (`lookback`) with `image`, `capture`, `occluder`; the capture is a sink; `holds` and `backdrop.history` retire | 349 | (rec) — accepted 2026-10-24 |
+| 382 | The backdrop lays `backdrop.scene` over `backdrop.image`; a scene it reads is drawn see-through (widened to a composite's `over` by 395) | 345 | (rec) — accepted 2026-10-24 |
+| 383 | Migration writes today's default frame once into All outputs; D1 placements stay entries | 345 | (rec) — accepted 2026-10-24 |
+| 384 | Below `/6` by round trip: a wired frame saves in the old words when it is exactly what `frame_wires` writes | 352 | (rec) — accepted 2026-10-24 |
+| 385 | The schema is `hyperspace.preset/6`; a save writes the lowest schema that loses nothing (R10), and below `/6` the GRAPH layout in the canvas's old ids (final review R15) — the save side superseded by 394 | 352 | (rec) — accepted 2026-10-24 |
+| 386 | The new preset: fresh values, routes cleared, the desk written as the factory layer, `untitled` and unsaved | 342 | (rec) — accepted 2026-10-24 |
+| 387 | What a new preset's "empty" is: only the outputs, nothing wired, plus a "scene starter" item | 342 | owner — 2026-10-24: as proposed |
+| 388 | GRAPH deletes everything: the refusals left are type errors, loops and the rig's own nodes | 343 | (rec) — accepted 2026-10-24 |
+| 389 | Canvas areas by primitive: MEDIA, SCENE, LOOK-BACK, EFFECTS, OUTPUTS | 350 | (rec) — accepted 2026-10-24 |
+| 390 | OUTPUT and LOOKBACK are views that edit wires | 346, 349 | (rec) — accepted 2026-10-24 |
+| 391 | Point clouds stay the rig's, drawn in every scene | — | (rec) — accepted 2026-10-24 |
+| 392 | The golden states as wiring: the tool writes each state's wires with the mutes all on | — | (rec) — accepted 2026-10-24 |
+| 393 | Plan 34's frame words retired: `FRAME_SOURCE_REFUSAL`, `LOOP_FRAME`; `FRAME_EDGES` becomes `HIDDEN_EDGES` | — | (rec) — accepted 2026-10-24 |
+| 394 | Every save is the newest schema (`hyperspace.preset/6`); old schemas load but are never written; the library is migrated once (`tools/migrate_library.py`) | 353 | owner — 2026-10-25: "We don't plan on having long-term support for old schemas … You can assume that anytime we update a schema, both machines will comply with that." |
+| 395 | A picture laid over another — a composite's `over` (blend over or depth) or the backdrop's scene, straight or through effects — keeps its see-through ground: the scene clears to alpha 0, the effects between keep their own alpha | — | owner — 2026-10-25: "build the proper fix" |
+| 396 | D1: All outputs stays as an explicit bus of drawn, rig-owned cables (`output.all.<port> → output.N.<port>`), not deleted | 359–361 | owner — 2026-10-26: accepted as recommended |
+| 397 | D2: one live dream at a time; a second is refused in words | 365, 366 | owner — 2026-10-26: accepted as recommended |
+| 398 | D3: the look-back outputs its trail only; a composite lays it over the picture | 363, 364 | owner — 2026-10-26: accepted as recommended |
+| 399 | D4: "preset only" is on by default for every preset, rig and controller nodes one click away | 367 | owner — 2026-10-26: accepted as recommended |
+| 400 | D5: the factory presets and the Drive library migrate to `/7` in one go, with the same backup, both Macs on this build | 368 | owner — 2026-10-26: accepted as recommended |
+| 401 | The factory `/7` files are regenerated at T4 from their pre-T3 `/6` originals | — | controller — 2026-10-26 |
+| 402 | "No `/6` reader" means no fill-in and no `/6` saves; reading `/4`–`/6` stays as the explicit one-way migration to `/7`, with a note on load | 368 | controller — 2026-10-26 |
+| 403 | The build never runs `migrate_library` on `~/Hyperspace` or the Drive library | 368 | controller — 2026-10-26 |
+| 404 | Plan 36's tasks run one after another, one implementer and one reviewer each | — | controller — 2026-10-26 |
+| 405 | The WYSIWYG rule beats "goldens unmoved": the stand-down is deleted, and a hands mute acts on the hands layer's input | 359, 369 | controller — 2026-10-26 |
+| 406 | `through-one-output|present|scene+through` is re-recorded | 369 | controller — 2026-10-26 |
+| 407 | A cut hidden-edge wire stays cut: the `/7` gate closes the `/6` re-migration on every load | 360 | controller — 2026-10-26 |
+| 408 | The four placement goldens are accepted: `palette-glass` and three `wired-outputs` states | 369 | controller — 2026-10-26 |
+| 409 | Implementers skip the full suite; the controller runs it once before the final review | — | owner — 2026-10-26: "tell implementers to skip the full suite" |
+| 410 | The golden speed-ups start at T4's implementer head and merge back into the build | — | controller — 2026-10-26 |
+| 411 | The new preset's chain is exactly `shape → scene → output.all.image`, plain faces | 362, 363 | controller — 2026-10-26 |
+| 412 | Dream fidelity is deferred: the migrated dream dreams the look-back's occluded trail, and D is not occluded by the shape | 366 | owner — 2026-10-26: deferred; finish and merge plan 36 first |
+| 413 | "Preset only" shows whatever is cabled to the section, of any kind | 367 | controller — 2026-10-26 |
+| 414 | The goldens re-recorded in the build: 9 of 757 | 369 | controller — 2026-10-26 |
+| 415 | Plan 37 is nodes as pictures, and the faces | — | owner — 2026-10-26 |
+| 416 | Plan 36's known follow-ups are recorded, not built | — | controller — 2026-10-26 |
+| 417 | Plan 37 D1: the list of face patterns is the owner's; nothing is dropped until he names it (with it: renumber or tombstones; the `preset.py` edit) | 375 | **open** |
+| 418 | Plan 37 D2: the thumbnail is always drawn, collapsed or expanded | 372 | (rec) — accepted by the controller 2026-10-27 |
+| 419 | Plan 37 D3: picture cables are plain red; the tint sits behind a head switch | 370 | (rec) — accepted by the controller 2026-10-27 |
+| 420 | Plan 37 D4: faces per instance come after this plan | — | (rec) — accepted by the controller 2026-10-27 |
+| 421 | Plan 37 D5: the backward wire is fixed by the area rules, not by re-laying the preset | 376 | (rec) — accepted by the controller 2026-10-27 |
+| 422 | A thumbnail is 192 texels on its long side, made by one 4×4-tap downsample pass, not mipmaps | 370 | controller — 2026-10-27 |
+| 423 | A thumbnail is dropped after a second unwanted; a node that made nothing is dimmed, then black a second later | 370, 374 | controller — 2026-10-27 |
+| 424 | How a node that makes no picture shows one: one table (`graphview.THUMBS`) | 370 | controller — 2026-10-27 |
+| 425 | A picture node's box is the node's width at 16:9, whatever the picture's shape | 372 | controller — 2026-10-27 |
+| 426 | What a thumbnail costs, by kind, and how the ask stays out of the frame | 371, 374 | controller — 2026-10-27 |
+| 427 | Hovering a thumbnail gives the node's lines, the picture's size and its GPU time | 373 | controller — 2026-10-27 |
+| 428 | The tint leans red by at most 20°, read asynchronously; its switch is off by default and kept on the page | 370, 371 | controller — 2026-10-27 |
+| 429 | The area rule: an effect is laid in the leftmost area of its consumers that is not left of what feeds it | 376 | controller — 2026-10-27 |
+| 430 | Plan 38 D1: Take is a hard cut, not a crossfade | 379 | (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn |
+| 431 | Plan 38 D2: the turn is one for both; speed and the planes are not held | 377, 383 | (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn |
+| 432 | Plan 38 D3: Drop puts back the preset's part, not the rig | 380 | (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn |
+| 433 | Plan 38 D4: the preview shows only behind GRAPH | 377, 382 | (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn |
+| 434 | Plan 38 D5: a hold holds every output | 377 | (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn |
+| 435 | The held copy carries the rig's bus cables (plan 36) | 378, 380 | controller — 2026-10-27 |
+| 436 | The preview renderer reads the show's cables, never a default | 378 | controller — 2026-10-27 |
+| 437 | Clouds and the effect files present are one for both | 382 | controller — 2026-10-27 |
+| 438 | Drop also puts back what the show's mark carries, a desk learn among it | 380, 381 | controller — 2026-10-27 |
+| 439 | What Drop's one undo step puts back, and what it leaves | 380 | controller — 2026-10-27 |
+| 440 | Plan 39 D1: a mask is its own wire, with converters `matte` (picture → mask) and `cut` (picture + mask → picture); never in alpha | 388, 389 | owner — 2026-10-27: "Alpha is: how transparent is this thing? A mask means that I have a pattern here" |
+| 441 | Plan 39 D2: a mask wired where a picture is taken reads white where it passes, black elsewhere; one-way | 389 | owner — 2026-10-27 |
+| 442 | Plan 39 D3: `segment` makes two pictures, `fg` and `bg`, and its matte as `segment.mask`; picture → mask is `matte` | 384 | owner — 2026-10-27: "have those two things come out of that node as two bitmaps" |
+| 443 | Plan 39 D4: Apple Vision first, torchvision behind the same node | 384, 385 | owner — 2026-10-27 |
+| 444 | Plan 39 D5: person and motion in this build; subject after | 384, 387 | owner — 2026-10-27 |
+| 445 | Plan 39 D6: `cut` first; no `mask` port on `composite` until the machine asks | 388 | owner — 2026-10-27 |
+| 446 | Plan 39 D7: `edges` an effect file, ahead of the plan | 390 | owner — 2026-10-27 |
+| 447 | Plan 39 D8: plan 39 in parallel with plans 37 and 38 | — | owner — 2026-10-27 |
+| 448 | The cut-through blend is a window's, not a laid-over ground's; eight backdrop goldens re-recorded | 393 | controller — 2026-10-27 |
+| 449 | `edges`: Sobel on luma, threshold a ramp, glow a second ring, direction a full-angle hue | 390 | controller — 2026-10-27 |
+| 450 | `edges` source mode keeps the source's alpha (`src × m`) | 390 | controller — 2026-10-27 |
+| 451 | `edges.glsl` carries `@order 75` | — | controller — 2026-10-27 |
+| 452 | A new matte: luma, key 0.5, hard, no feather; chroma starts on green | 388, 389 | controller — 2026-10-27 |
+| 453 | The promotion is one `MaskPicture` render node per mask, at the consumer's size by cover | 389 | controller — 2026-10-27 |
+| 454 | A mask port gets the mask refitted by cover to the frame's size; the promotion and the cut fit the native mask | 388 | controller — 2026-10-27 |
+| 455 | The matte's feather: two separable Gaussian passes, R8 | 386, 388 | controller — 2026-10-27 |
+| 456 | Matte luma is Rec. 709 premultiplied; chroma a distance between HSV chroma vectors | 388 | controller — 2026-10-27 |
+| 457 | `scene.cover` is not promoted | — | controller — 2026-10-27 |
+| 458 | The picture → mask refusal names the matte | — | controller — 2026-10-27 |
+| 459 | `masks` hot for hot reload; `segment` cold | 389 | controller — 2026-10-27 |
+| 460 | The faces judged from sheets; "nearest kept" a ranked list per mode; the migration map generated and tested | 375 | controller — 2026-10-27 |
+| 461 | The hold chips sit first on GRAPH's head | 377, 378 | controller — 2026-10-27 |
+| 462 | A landing while held keeps the held program's nodes | 377, 378 | controller — 2026-10-27 |
+| 463 | The program's kept params are not the preset's | 378 | controller — 2026-10-27 |
+| 464 | An undo mark made while held records the landed graph's own instances | 380 | controller — 2026-10-27 |
+| 465 | A load's delay reset while held is the preview's | 379 | controller — 2026-10-27 |
+| 466 | The canvas reads the preview's graph while held | 378 | controller — 2026-10-27 |
+| 467 | The preview is drawn with output 1's switches, at full dim | 377 | controller — 2026-10-27 |
+| 468 | The preview renderer lives for the session; its sub-objects are not hot-reload targets | 382 | controller — 2026-10-27 |
+| 469 | The PROJECTOR inset draws on imgui's foreground list | 377 | controller — 2026-10-27 |
+| 470 | The plan 39 seam: no segment workers in the preview | — | controller — 2026-10-27 |
+| 471 | Wired fixtures get goldens and no frame-signature case (`edges-scene`, `mask-as-picture`, `cut-out`, `segment-motion`) | — | controller — 2026-10-27 |
+| 472 | `matte`, `cut`, `segment` are their own performance groups, out of the module overview | — | controller — 2026-10-27 |
+| 473 | `cut.amount` scales the cut-away part, colour and alpha together | 388 | controller — 2026-10-27 |
+| 474 | The flip flag (`rows_top_first`, `graph.mask_of`) honoured by every mask pass | 384, 388 | controller — 2026-10-27 |
+| 475 | A cut makes its picture into a target of its own | — | controller — 2026-10-27 |
+| 476 | No mask, or a mask making nothing: the cut is its picture through, byte-identical | 388 | controller — 2026-10-27 |
+| 477 | A cut and a segment pass laid-over-ness through, as an effect does | 384, 388 | controller — 2026-10-27 |
+| 478 | A new segment: person, fast, feather 0, smooth 0, on, sense 0.1, learn 3 s | 385, 386 | controller — 2026-10-27 |
+| 479 | The segment's said line and its rate | 385 | controller — 2026-10-27 |
+| 480 | Vision's matte resampled to the frame's aspect in the worker | 384 | controller — 2026-10-27 |
+| 481 | The CPU-frame shortcut's condition: a channel with pixels, cover fit, no `alpha_of` | 384, 391 | controller — 2026-10-27 |
+| 482 | Motion: `smoothstep(sense ± 0.04)` on the largest channel's difference; `learn` in seconds | 387 | controller — 2026-10-27 |
+| 483 | A backend error passes the picture through whole until the next good result | 392 | controller — 2026-10-27 |
+| 484 | Only the program renderer runs segment workers; the preview passes person through | 384 | controller — 2026-10-27 |
+| 485 | The torch weights in `<library home>/weights`, then the hub cache, else downloaded; `[segment]` read as it stands | — | controller — 2026-10-27 |
+| 486 | `subject` declared and refused in words | — | controller — 2026-10-27 |
+| 487 | `segment.fg`/`.bg` cut at the frame's size | — | controller — 2026-10-27 |
+| 488 | The smoothed matte kept in float, `smooth` under 0.99 | 386 | controller — 2026-10-27 |
+| 489 | The picker's media ▸ (segment) and masks ▸ (matte, cut) | 384 | controller — 2026-10-27 |
+| 490 | The cut-out starter: new segment and composite each time, never refused, says what it replaced | 384 | controller — 2026-10-27 |
+| 491 | The scene-chain starter names what it replaced | — | controller — 2026-10-27 |
+| 492 | A mask maker's cable is purple whatever port takes it | 389 | controller — 2026-10-27 |
+| 493 | Every segment instance draws its three pins | 384, 391 | controller — 2026-10-27 |
+| 494 | An unbuilt matte, cut or segment says its state in words | — | controller — 2026-10-27 |
+| 495 | The three declares settle through the hold (`_settle`, `hold.keep`, `PROGRAM_IDS`) | 384 | controller — 2026-10-27 |
+| 496 | A held matte, cut or segment keeps its knobs for the projector (`HELD_GROUPS`) | 384 | controller — 2026-10-27 |
+| 497 | A removed segment's worker is stopped without waiting; one exit deadline | 392 | controller — 2026-10-27 |
+| 498 | While held, the GRAPH page's thumbnails, their hues and their GPU times are the preview renderer's | 378 | controller — 2026-10-27 |
+| 499 | While held, output 1's thumbnail is the program's picture (the PROJECTOR inset's), not the preview's | 378 | controller — 2026-10-27 |
+| 500 | A cut shows its picture on GRAPH; a matte and a segment stay text | — | controller — 2026-10-27 |
+| 501 | Plan 40 D1: the new thing is a patch; `patch.py` renamed `modgraph.py` | — | owner — 2026-10-27: "Calling this a patch and renaming the other module is fine." |
+| 502 | Plan 40 D2: host ports land as open pins, spliced, or by one press of wire as saved; never attached by themselves | 395, 396 | owner — 2026-10-27 |
+| 503 | Plan 40 D3: conflicts asked in one sheet, the patch or the preset per row | 397 | owner — 2026-10-27: "choose a resolution for each one: the patch or the existing preset" |
+| 504 | Plan 40 D4: a group saved and folded until `+`, the one sanctioned exception to no hidden edges | 394 | owner — 2026-10-27: "an explicit place where we want to … encapsulate complexity" |
+| 505 | Plan 40 D5: a patch holds only its boundary; it drives a host param, never sets one | 395 | owner — 2026-10-27 |
+| 506 | Plan 40 D6: the fx module presets retired outright, nothing converted | 400 | owner — 2026-10-27: "retired outright" |
+| 507 | Plan 40 D7: `groups` is `/8`; no key, no groups | 394 | owner — 2026-10-27 |
+| 508 | Plan 40 D8: browser and spawn on the control window only | — | owner — 2026-10-27 |
+| 509 | Plan 40 D9: every conflict row starts on the patch, with keep all existing | 397 | owner — 2026-10-27 |
+| 510 | Plan 40 D10: the FX page stays; only the module presets go | 400 | owner — 2026-10-27: "I meant only the module presets." |
+| 511 | The rename covers `modgraph`'s types and private names too | — | controller — 2026-10-27 |
+| 512 | A patch's envelopes are 6 and up in the file; the example's lane is `mod:1` | — | controller — 2026-10-27 |
+| 513 | A host macro is in use by a label, subscriber or row, never its value | 397 | controller — 2026-10-27 |
+| 514 | What a conflict is; a hand read through a modifier is none (for the owner) | 397, 401 | controller — 2026-10-27 |
+| 515 | What a lift writes: `(doc, refused)`, port ids and `was`, value ports derived | 395 | controller — 2026-10-27 |
+| 516 | A hidden factory patch in `hidden.json` under `"patches"` | 395 | controller — 2026-10-27 |
+| 517 | Group moves a member from another group, never nests, numbers past the highest | 394 | controller — 2026-10-27 |
+| 518 | Open / fold is a preset edit, one undo step | 394 | controller — 2026-10-27 |
+| 519 | A deleted member leaves its group lazily | 394 | controller — 2026-10-27 |
+| 520 | Leaves when wholly outside; the folded node drags all; several leavers one step; a stub drop refused | 394 | controller — 2026-10-27 |
+| 521 | A save with no group stays `/7`; `/8` only with a group (controller recommends every save `/8`, row 394) | 394 | **pending the owner** |
+| 522 | The folded node's pins: picture pins, out lanes, param rows, modifier inputs | 394 | controller — 2026-10-27 |
+| 523 | A spawn's open pins and rename map last the session | 395 | controller — 2026-10-27 |
+| 524 | Wire as saved takes only free ports; a take-over chip? | 395 | **pending the owner** |
+| 525 | Save as patch refuses a bad member or another patch's name; one step for `patch`; update beside it | 395 | controller — 2026-10-27 |
+| 526 | A kept row stored with its words; a stale landing refused | 397, 401 | controller — 2026-10-27 |
+| 527 | `Learn.hold` while the sheet is up | 397 | controller — 2026-10-27 |
+| 528 | The wants at a spawn, in the sheet and on the head after | 399 | controller — 2026-10-27 |
+| 529 | **patches** first on GRAPH's head; the drop target a picture cable of the section | 395, 396 | controller — 2026-10-27 |
+| 530 | The arrival: an error is no coming or going; the launch says nothing | 398 | controller — 2026-10-27 |
+| 531 | What `wants` counts, and whose device a row is | 398, 399 | controller — 2026-10-27 |
+| 532 | The words of a row; a missing desk's glyphs | 398 | controller — 2026-10-27 |
+| 533 | The FX page's own fx module strip hidden, not the page | 400 | controller — 2026-10-27 |
+| 534 | A retired module group named; its label loads quietly | 400 | controller — 2026-10-27 |
+| 535 | The party generator keeps the fx families' values inline | — | controller — 2026-10-27 |
+| 536 | Plan 38's PROJECTOR inset fix rides on plan 40's PR | 377 | controller — 2026-10-27 |
+| 537 | A macro's new base subscriber has a throw (from where the param sits to its fader's end); Route from ▸ is one submenu per kind, the macros among them | 402 | owner — 2026-10-28 |
+| 538 | One tier: hidden presets deleted outright, the factory concept removed, every preset deletable | 403 | owner — 2026-10-28 |
+| 539 | The PRESETS page is a flat list: no bank pills, starts-on, preset drop-down or module-preset fold | 403 | owner — 2026-10-28 |
+| 540 | Module presets' UI leaves the PRESETS page; the concept stays for now (to become patches) | 403 | owner — 2026-10-28 |
+| 541 | The show block is one line that says what a show is; the pads are set on the desk only | 403 | owner — 2026-10-28 |
 
 "—": no hand check shows it; tests only.
 
@@ -192,6 +667,11 @@ here; overturn → the change, then the same.
 
 ### 42. The save-as hold on the clip-stop row
 
+- **Superseded in part.** The clip-stop SAVE AS bar was retired on
+  2026-10-09 (#158: an empty bank pad held saves into it), and since plan
+  24 track 8's clip stop is the desk's SAVE (row 110). The `hold` op, its
+  bar of lit buttons and the blink stay for a row you learn. Kept here as
+  history.
 - **Built.** Holding any of the eight clip-stop buttons for 0.6 s saves the
   live look as a new preset ("TRIP" → "TRIP 2") into the next empty bank
   slot, while you are still holding. The eight act as one bar: two fingers
@@ -229,6 +709,9 @@ here; overturn → the change, then the same.
 
 ### 44. A preset load releases only the faders whose parameter it moved
 
+- **Superseded in part by row 112** (plan 24): a fader the new preset
+  binds now always lets go on a load. The session's faders — the
+  crossfader, MASTER, and the band strip under SHIFT — keep this rule.
 - **Built.** A fader "has" its parameter once moved onto its value (soft
   pickup). A preset load makes a fader let go only if the load moved its
   parameter, the parameter is gone, the fader has never been moved, or
@@ -424,7 +907,8 @@ here; overturn → the change, then the same.
 - **Built.** A factory preset in the list, on no F-key. Right hand:
   sideways orbits up to a quarter turn each way; fingers up tip the camera
   to look down (±44°). Left hand: sideways and reaching in pan; raising it
-  zooms in, to 2.2× at the top (depth 0.12). A level, low or absent hand
+  zooms in, to 2.2× at the top (depth 0.0757, the 0.12 of before zoom's
+  range widened on 2026-10-21 — the same 2.2×). A level, low or absent hand
   adds nothing. The two-hand "steering wheel" (the hands measured against
   each other) is not built.
 - **Other options.** No preset; the steering wheel (two new axes, against
@@ -432,7 +916,8 @@ here; overturn → the change, then the same.
 - **To reverse.** Hide it from the list, or delete its entry; the depths
   are the five numbers in `preset.hands_orbit_routes`.
 - **Rough edge.** Nobody has played it; directions and depths are a first
-  cut.
+  cut. Since plan 26 the pan and the zoom move only the shape, in the
+  world (rows 183, 184; check 200); the ghost hands stay put.
 - **Judge it.** Check 80.
 
 ## Learn, Unbind and the on-screen desk
@@ -489,6 +974,11 @@ here; overturn → the change, then the same.
 
 ### 60. "Learn desk" and "Learn hand ▸ left / right"
 
+- **Changed in plan 27.** What a Learn can wait for is no longer the
+  fixed `learn.WANTS`: it is "desk" plus each listed device's `wants`
+  (row 151), so the menu also offers "Learn <role>" for a new device and
+  **Learn sink ▸** (row 158). Learn desk completes from any listed MIDI
+  desk. The rule itself stands.
 - **Built.** A Learn says what it waits for. **Learn desk** completes only
   from a knob, button or a click on the on-screen desk; **Learn hand ▸
   left** only from the left hand. Anything else does its own job meanwhile.
@@ -504,6 +994,11 @@ here; overturn → the change, then the same.
 
 ### 61. The session's controls work through an armed desk learn
 
+- **Changed in plan 24.** The diagram below is from before it: S1–S8 are
+  now the preset's (learnable; under SHIFT the band strip, row 115), clip
+  stops 1–7 are free and clip stop 8 is SAVE (row 110), and scene launch
+  1–4 (points, lines, faces, rotate) are invariant (decision 18). The
+  rule itself stands.
 - **Built.** With "Learn desk" armed, a session control (below) is not a
   candidate: it does its own job and the learn stays armed. A refusal
   also leaves the learn armed.
@@ -704,6 +1199,10 @@ here; overturn → the change, then the same.
 
 ### 73. Clip rows 4–5 are the bank, and how the bank lights
 
+- **Note (plan 24).** In the diagram below, column 9's Points, Lines,
+  Faces and Rotate are now invariant (the same under SHIFT), and the G6
+  row is no longer a SAVE AS bar: clip stops 1–7 are free and clip stop
+  8 is SAVE (rows 110, 113). The bank itself is unchanged.
 - **Built.** Rows 4–5 load slots 9–24 on both layers (invariant). A bank
   pad is green when its preset is loaded, amber (Akai velocity 5) when its
   slot is filled, dark when empty. The sixteen shape pads older presets
@@ -817,6 +1316,13 @@ here; overturn → the change, then the same.
 
 ### 79. Where "hands through effects" puts the hands
 
+- **Superseded in part by rows 193 and 194** (plan 26, 2026-10-14): the
+  frame is a render graph, `Renderer._pipeline` is gone, and the
+  switches below are the default graph's wiring (`graph.default_graph`);
+  the history is wiring — it holds the scene by default, as below, and
+  the scene with the hands when a preset's `graph` section says so; and
+  the hands can also be drawn inside the scene (row 191). With the
+  default graph every picture below is as it was. Kept here as history.
 - **Built.** With an output's "through effects" tick on, its hands go in
   after the look-back composite and before the first effect, so the
   effects bend them. The echoes and the dream are captured from the scene
@@ -1419,3 +1925,7343 @@ Stream B; the pictures are in
 - **Also built.** Library writes are atomic (temp file, then replace),
   and a cloud client's conflict copy is listed under its own file stem.
 - **Judge it.** Checks 139–143.
+
+## The party fixes (plan 24)
+
+Built in plan 24's run on 2026-10-14
+([`plans/24-party-fixes.md`](plans/24-party-fixes.md)), on
+`plan-24-26-27-integration` until the owner merges it. The owner's own
+decisions for this plan (17–21, 23 and 24 of the launch prompt) are in
+[`DECISIONS.md`](DECISIONS.md) with Who "owner"; these rows are what the
+build chose where those left a choice open. No preset was edited or
+added: every proof is a fixture under `tests/fixtures/`.
+
+### 110. SAVE is track 8's clip stop, a held button on `desk.save`
+
+- **Built.** Track 8's clip stop (G6·8) is the desk's **SAVE**: hold it
+  and tap a bank pad (clip rows 1, 4, 5) to save the live state into that
+  pad's slot. It is one invariant row (`apc40.SAVE`), the same on both
+  layers, lit while held: a `momentary` row on a session param,
+  `desk.save` ("Save", never saved, not modulatable). So the on-screen
+  desk draws it, and a device that takes the adapter over carries it as
+  a port. A reconnect lets go of it, so a note-off lost to a pulled cable
+  cannot turn the next pad press into a save. It can never be latched:
+  it is no desk target on ROUTING, "Learn desk" and "Learn pad" refuse it
+  in words, and any row on it that is not `momentary` is refused (a
+  hand-edited `bindings.json` loses such a row with a note and is written
+  back once). A `bindings.json` gains the row once, only where nothing
+  already uses clip stop 8; where the owner's row holds it, every launch
+  says "SAVE not added: note:7:52 is yours (…)" on stderr and the SYSTEM
+  page, and the file is not touched. Clip stops 1–7 stay free for Learn.
+- **Other options.** Another free button (the working plan's open
+  question): a clip stop is the nearest free button to the pads, and
+  track 8's is at the end of the row. SAVE as a modifier read inside the
+  adapter, with no param: the panel could not show it.
+- **To reverse.** One row in `apc40.DEFAULT_MAP` and one in
+  `routing.APC_NEW_ROWS` (move it to another note), or drop both.
+- **Rough edge.** An owner's row on clip stop 8 in a preset's desk is
+  dropped at load with D6's note. Never on the APC40.
+- **Judge it.** Check 148.
+
+### 111. The two-handed save names the new preset from the loaded one, and blinks the pad
+
+- **Built.** On a filled pad the new preset is named from the **loaded**
+  preset, as `save_new` names them (TRIP → TRIP 2, counted against every
+  file, listed name and bank name), not from the preset the slot held.
+  The footer says "saved TRIP 3 → slot 11 (TRIP 2 is still in the preset
+  list)". The tapped pad blinks for 1.5 s (`midi.BLINK_S`) and then
+  shows green as the loaded slot. A save the show file could not take
+  blinks nothing and the desk log says "did not land there"; the preset
+  is still saved and in the list. A tap under SAVE never loads the pad
+  and never starts its hold.
+- **Other options.** Name it from the slot's old preset (FIELD → FIELD 2
+  on F3): reads well when that preset was loaded, but differs from every
+  other save on the desk.
+- **To reverse.** One line in `library.Project._save_new` (the name
+  passed to `next_name`).
+- **Rough edge.** The blink velocity (`apc40.blink_of`) has never been
+  seen on the mk1.
+- **Judge it.** Check 148.
+
+### 112. Every load lets go of every fader the preset binds, and darkens the whole desk (row 44 changed)
+
+- **Built.** A load re-arms soft pickup on **every fader the new preset's
+  desk binds** (a preset-layer row), whether or not the load moved its
+  param, so each picks up from the new preset the same way every time. A
+  fresh row starts from where its fader physically is (the last value it
+  sent, `MidiIO._hw`), so a fader already on the value catches on its
+  first move. The session's faders (the crossfader's dim, MASTER, and the
+  audio strip under SHIFT) keep row 44's rule, since a preset never moves
+  their params (D9). On every load and at power-up, every control of the
+  APC40's layout that no active row draws is sent dark
+  (`MidiIO._dark_desk`), not only the controls a row once named.
+- **Other options.** Row 44 as it was. The dark pass on SHIFT as well
+  (about a hundred more messages per press).
+- **To reverse.** One condition (`b.layer == "preset"`) and one call
+  (`_dark_desk`) in `MidiIO.redraw`.
+- **Rough edge.** A fader nobody has moved since launch or a reconnect
+  has no position: its first move after a load must land within the
+  pickup tolerance, or wait to cross the value. Whether the mk1 keeps up
+  with the dark pass (about 100 messages a load) is unknown.
+- **Judge it.** Checks 150 and 153 (and 55 (e) for the session faders).
+
+### 113. The factory files keep the four toggle rows; a load drops them quietly
+
+- **Built.** No file under `hyperspace/library/` changed in this run
+  (decision 23), so the factory presets still carry the four render
+  toggle rows on scene launch 1–4. The generator keeps writing them
+  (`preset.file_desk` is the fresh desk plus those rows). A load drops
+  those four exact rows **without a note** (`routing.TOGGLE_DESK_ROWS`,
+  part of `RETIRED_DESK_ROWS`), as plan 19 did with the shape pads,
+  because the session's invariant rows do the job; an owner's other row
+  on scene launch 1–4 drops **with** D6's note. The preset is not dirty
+  after the load.
+- **Other options.** Regenerate the factory files without the rows
+  (forbidden this run). Drop them with a note (twenty-three factory
+  presets would each say so on every load).
+- **To reverse.** After the creative pass, point `Factory.desk` and
+  `write_factory` at `fresh_desk` and run `python -m hyperspace.preset`.
+- **Rough edge.** Until then the factory files and the loaded desk differ
+  by four rows.
+- **Judge it.** Check 149.
+
+### 114. The desk log: the last twenty presses on the SYSTEM page
+
+- **Built.** The SYSTEM page, under **midi**, has a fold "desk log — the
+  last N presses". Each line has the time, the control in the desk's
+  words ("G1·5 (clip 1·5)"), what the press did ("Preset → TRIP",
+  "saved into slot 15: TRIP 2", "nothing (no row on the preset layer)",
+  "held: nothing saved (a filled pad only loads)") and the layer it was
+  read on (preset, global, or both for an invariant control). Newest
+  first, twenty kept (`midi.DESK_LOG_SIZE`). Button presses, holds that
+  fired and two-handed saves are logged; knob and fader moves and
+  releases are not.
+- **Other options.** Log knob moves too, collapsed per control; show it
+  on ROUTING; write it to a file.
+- **To reverse.** `midi.DeskLog` and `Panel._desk_log`.
+- **Rough edge.** In memory only, lost at a restart. With no APC40 there
+  is no log.
+- **Judge it.** Check 151.
+
+### 115. The band audio strip is on the SHIFT-layer faders, not the knobs (amends D6)
+
+- **Built.** With SHIFT latched, track faders S1–S6 are the six bands'
+  post-drive, S7 `master.dyn` and S8 `master.trim` (`apc40.SHIFT_FADERS`,
+  global-layer rows). With SHIFT up, S1–S8 are the loaded preset's.
+  MASTER and the crossfader stay invariant.
+- **Other options.** The SHIFT-layer track knobs 6–8 and the device
+  knobs: endless, so no pickup, but eight audio params do not fit on the
+  free knobs.
+- **To reverse.** Drop `layer=G` from the eight rows, invert
+  `routing.FADER_SHIFT_ROWS`, regenerate `bindings.default.json`.
+- **Rough edge.** Under SHIFT a fader rarely sits where its band is, so
+  the first pull after a latch does nothing until it reaches the value.
+- **Judge it.** Check 153.
+
+### 116. A layer switch re-arms every layered fader from where it physically is
+
+- **Built.** One fader now serves two params. On every SHIFT latch or
+  unlatch, each layered fader row takes the fader's last physical
+  position and is caught only when its param already sits within the
+  pickup tolerance (1.5/127); otherwise it waits to cross the value. A
+  fader moved on one layer never jumps the other layer's param. On a
+  load, row 112's rule decides.
+- **Other options.** Keep each row's catch across the switch (the fader
+  then jumps the other layer's param on its first move); uncatch with no
+  position (a fader already on the value would need a crossing).
+- **To reverse.** The `switch` block in `MidiIO.redraw`.
+- **Rough edge.** A fader not moved since launch or a reconnect has no
+  position and catches only on a move that lands on the value; a stale
+  position is never taken for a crossing.
+- **Judge it.** Check 153.
+
+### 117. Lines and points opacity: `view.lines_alpha`, `view.points_alpha`
+
+- **Built.** Two 0–1 params in the `view` group (performance, saved in
+  presets, modulatable), both 1 by default. Each multiplies the alpha
+  `draw_scene` already gives an edge or a point, after the existing
+  floor, so 1 is the picture as it was and 0 takes the layer away. A pair
+  of sliders on the VIEW page ("Points opacity", "Lines opacity"). No
+  desk row and no preset value; a preset that lacks them loads them at 1.
+- **Other options.** Ids `view.lines.opacity`; an opacity uniform in the
+  shaders; the factor before the floor (0 would leave a faint layer).
+- **To reverse.** The two params, the two `ViewState` fields, the two
+  factors in `render.py`, the slider row.
+- **Rough edge.** The render graph's rewrite of `draw_scene` must keep
+  the two factors.
+- **Judge it.** Check 154.
+
+### 118. Fader rows in a preset's desk: `preset.track_fader` and `knob_desk(…, faders=)`
+
+- **Built.** `track_fader(k, target)` is track fader k on the preset
+  layer (absolute, soft pickup, no light). `knob_desk(targets,
+  faders=())` puts `faders[k]` on fader k + 1, None leaving it dark. The
+  default adds nothing, so every factory desk is as it was; `fresh_desk`
+  and `file_desk` bind no fader. Fader rows load, save and redraw like
+  knob rows: nothing new in the file format. A fader on the preset layer
+  is learnable like a knob.
+- **Other options.** A separate `fader_desk(...)` beside `knob_desk`.
+- **To reverse.** The helper and the parameter.
+- **Rough edge.** No factory preset uses it (decision 23): every one
+  leaves S1–S8 dark until the owner authors fader sets.
+- **Judge it.** Check 152.
+
+### 119. An older `bindings.json` moves its eight fader rows to SHIFT once, with a backup
+
+- **Built.** On load, `routing.remap_factory` gives each exact old
+  invariant fader row (`FADER_SHIFT_ROWS`) the global layer, with the
+  note "moved cc:k:7 → band.k.post to the SHIFT layer (…)". The file is
+  backed up (`bindings.json.bak-v3`) and written back once; the next
+  load is quiet. A fader row the owner changed stays invariant, so that
+  fader stays the owner's on both layers, and a preset row on it drops
+  with D6's note.
+- **Other options.** Drop the old rows and add new ones (two changes in
+  the note, and an owner's flags lost).
+- **To reverse.** `FADER_SHIFT_ROWS` and its branch in `remap_factory`.
+- **Rough edge.** The first remap that changes only a row's layer, so
+  its note says "moved", not "remapped".
+- **Judge it.** Check 153 (the first launch's SYSTEM line).
+
+### 120. What makes a desk control "dead": `learn.cannot_show`
+
+- **Built.** A control is **dead** when the loaded preset has a row on it
+  but cannot show that row's param, read from the preset's bases (not
+  the live frame): the pattern params and `view.pattern_mix` with the
+  faces off; `view.bmp_*` with the faces off or no bitmap file; points or
+  lines opacity with that layer off; `fx.mix` with the effects off; an
+  effect's param with the effects or that effect off; `dream.*` with the
+  look-back off; `rot.rate.*` and `view.plane.*` with rotation off; a
+  param the registry lacks. Today this makes K7 (`view.bmp_alpha`) dead
+  on every factory preset, and K4 / D4 dead where the faces are off.
+- **Other options.** Judge the live frame (could not be committed); more
+  groups (zero instances, a dream knob at mix 0, an unread LFO); no
+  bitmap rule (K7 would read as mapped).
+- **To reverse.** Edit `learn.cannot_show` and rerun
+  `tools/desk_coverage.py`.
+- **Rough edge.** The render toggles are invariant, so Faces is one
+  button away: a pattern knob on a faces-off preset is "dead" until it
+  is pressed.
+- **Judge it.** Check 155.
+
+### 121. The preset layer the coverage counts: 38 controls
+
+- **Built.** D1–D8, K1–K8 and S1–S8, plus every other control the
+  factory map gives a preset-layer row (grid motion G3·5–8, the planes
+  G8·1–6, the view reset G5·9, the cue knob, ▲ ▼), less any control the
+  session holds on both layers. A preset row on another control is
+  listed apart.
+- **Other options.** Every control the preset layer could take (about
+  70: the bar out of reach); only the three strips (24).
+- **To reverse.** `layer_controls` in `tools/desk_coverage.py`.
+- **Rough edge.** The set comes from the factory session, not the
+  owner's `bindings.json`.
+- **Judge it.** Check 155.
+
+### 122. Desk templates: `hyperspace.desk/1` files in the `desk` group; a preset names one and keeps its overrides
+
+- **Built.** A template is `<library>/desk/<slug>.json`:
+  `{"schema": "hyperspace.desk/1", "name", "note"?, "desk": [rows]}`.
+  The factory has no templates (the folder `hyperspace/library/desk/`
+  need not exist: the group lists none without it); the owner's live in the library, so a shared
+  `[library] path` shares them. A preset names one with `"desk_template":
+  "<name>"`, and its `"desk"` then holds only overrides: an override row
+  replaces every template row on the same control, and a dark row
+  (`{"source": …, "dark": true}`) leaves a template control unmapped. A
+  load expands it (template rows not overridden, then the overrides); a
+  save writes the name plus the live rows that differ from the template
+  **as the load read it**, so a template edited on disk never turns into
+  overrides that undo it. A missing template is a note and the overrides
+  alone. A preset with no `desk_template` takes exactly the old path.
+  Templates are never applied as module presets of the `desk` param
+  group.
+- **Other options.** A folder named apart (`desk-templates/`); a
+  `Library.kind`; overrides keyed by glyph; the whole expanded desk
+  saved (a template fix would then not reach its presets).
+- **To reverse.** The template branch in `Presets.load_doc` and
+  `_desk_part`, the helpers in `preset.py`, `Library.desk_template`. A
+  preset naming a template would need its desk expanded first.
+- **Rough edge.** No UI writes or edits a template. Editing one on disk
+  does not re-apply a loaded preset: reload it. Two spellings of one
+  knob (`cc:*:16`, `cc:0:16`) lose the any-channel one on a round trip.
+  An older build ignores `desk_template` and refuses a dark row.
+- **Judge it.** Check 156.
+
+### 123. Click a control: this preset's params first, ranked
+
+- **Built.** While a mappable control is picked, the desk lists this
+  preset's params on its empty ground under the transport row
+  (`ui_desk.OFFER`; a test proves it covers no control). `learn.ranked`
+  orders them in four tiers: **routed** (a route or macro moves it),
+  **moved** (its base is off the group default), **on** (its effect,
+  the look-back, the faces, the points or the lines are on), **on the
+  desk**. A dead param is never offered as one of the preset's own. A
+  chip, "all params ▾" ("all ▾" on the small desk), opens a popup with
+  the same list and a menu per group of the rest. A click maps the
+  control there through `Learn.map_picked`, as a click on the page does.
+- **Other options.** A popup that opens on the pick (it would block the
+  second click plan 17 relies on); a block on the page; other tier
+  orders.
+- **To reverse.** Drop `_offer` from `ui_desk._body`.
+- **Rough edge.** At the default window size the list is about
+  107 × 79 px, five items at a time. The "on" tier includes an effect's
+  `.blend`, `.order` and `.target`. The list is ranked at the moment of
+  the pick.
+- **Judge it.** Check 157.
+
+### 124. The dance lanes go after the switches; `hands:` is a scheme of its own
+
+- **Built.** Each hand gets eight `hand:` lanes — `curl.thumb` …
+  `curl.pinky`, `spread`, `energy`, `flick` — after the eight pinch
+  switches, so every older lane keeps its index (a saved `hand:9` still
+  reads the same roll). `hands:gap` and `hands:twist` are a second
+  scheme, `hands`, with its own vector, labels, rests (0, 0.5) and no
+  gates. Only the pinches and the grab (row 132) are gates; a flick
+  spikes and decays and is not one. The ROUTING page offers them by name
+  ("hand R curl ind", "hands gap").
+- **Other options.** The pair in the `hand` vector (`hand:both.gap`);
+  the new lanes before the switches (every numeric `hand:<i>` past the
+  axes would move).
+- **To reverse.** The lane order is `addresses` and `Layout`; presets
+  name lanes by name, so a reorder costs only numeric addresses.
+- **Rough edge.** The hand tests that pinned 22 lanes now read 40 (with
+  the grab).
+- **Judge it.** Checks 158 and 162.
+
+### 125. Curl is the summed bend of a finger's joints; spread is the index–pinky fan
+
+- **Built.** `curl.<digit>`: the angles between each bone and the next,
+  summed, 20° → 0 … 220° → 1 for a finger, 10° → 0 … 80° → 1 for the
+  thumb. `spread`: the angle between the index's and the pinky's first
+  bones in the palm's plane, 10° → 0 … 60° → 1; a finger bent down at the
+  knuckle makes it 0 (a fist does not fan). Both slewed 0.05 s; both
+  need the skeleton, and read nothing without one.
+- **Other options.** The SDK's one grab number per hand; fingertip to
+  palm distance (mixes curl with spread); tip-to-tip distance for spread.
+- **To reverse.** Constants in `hands/core.py` (`CURL_RANGE`,
+  `CURL_RANGE_FINGER`, `SPREAD_RANGE`, `SPREAD_MIN_FLAT`, `CURL_S`).
+- **Rough edge.** Tuned on synthetic hands: a relaxed real hand may idle
+  above 0 and a real fist may stop short of 1. A middle finger crossing
+  is invisible to spread.
+- **Judge it.** Checks 159 and 160.
+
+### 126. Energy is the mean speed of the palm and the five tips, fast up, slow down
+
+- **Built.** On each tracking frame the speed of the palm and each
+  fingertip, averaged: 60 mm/s → 0 (above a still hand's jitter) …
+  1000 mm/s → 1, then a slew with 0.06 s attack and 0.5 s decay, so a
+  burst of dancing lingers. With no skeleton, the palm alone. A frame
+  that measures no speed lets it fall.
+- **Other options.** The peak speed (one finger dominates); the palm
+  only; a longer window.
+- **To reverse.** `ENERGY_RANGE`, `ENERGY_ATTACK_S`, `ENERGY_DECAY_S`,
+  `SPEED_GAP_S`.
+- **Rough edge.** The floor is a guess at the camera's jitter.
+- **Judge it.** Check 159.
+
+### 127. A flick is the fastest tip passing 1500 mm/s; it spikes and decays
+
+- **Built.** Until a trigger kind exists, `hand:<side>.flick` is a lane:
+  0 at rest; when the fastest fingertip (the palm with no skeleton)
+  reaches 1500 mm/s it jumps to speed / 3000 mm/s (at most 1), holds the
+  peak while the move lasts, then decays with τ = 0.15 s. No new hit
+  until the speed falls under 700 mm/s; over 10000 mm/s is a tracking
+  jump and ignored; a hand entering the box never flicks on its first
+  frame.
+- **Other options.** Acceleration (noisier); fingertips relative to the
+  palm (a whole-hand snap would not count); a hold-then-drop shape.
+- **To reverse.** `FLICK_ON`, `FLICK_OFF`, `FLICK_FULL`, `FLICK_CEILING`,
+  `FLICK_DECAY_S`.
+- **Rough edge.** Any fast move is a flick, so energy and flick fire
+  together on big moves (closing a fist fast included).
+- **Judge it.** Check 161.
+
+### 128. Gap is the palms' distance; twist is the right hand's roll less the left's
+
+- **Built.** `hands:gap`: 60 mm → 0 … 600 mm → 1. `hands:twist`: right
+  roll − left roll, wrapped, ±90° → 0 … 1, so mirror-image hands (both
+  palms down, a clap) read 0.5 and turning a wheel clockwise reads up.
+  Both slewed 0.05 s; both read nothing unless both hands are in.
+- **Other options.** The full relative rotation (loses direction); the
+  roll difference in room terms (a clap would read ±180°).
+- **To reverse.** `GAP_RANGE`, `TWIST_FULL`, `PAIR_S`, `PAIR_RESTS`.
+- **Rough edge.** Twist reads roll only; past a quarter turn each way it
+  wraps.
+- **Judge it.** Check 162.
+
+### 129. The dance sources and the grab have no settings, no DAW output and no hand Learn
+
+- **Built.** None of the new hand sources is a registry param (no dead
+  zone, curve, attack or rest of its own), none sends to the DAW port,
+  and a hand Learn still lands only an axis: a dance source is picked on
+  the ROUTING page (source combo), the grab as a row's gate there or
+  from a param's "Gate: … ▸". A Learn made while holding a fist writes no
+  grab gate (`held_gate` offers only a held pinch).
+- **Other options.** Each as a full axis with settings, MIDI out and
+  Learn; grab thresholds as `hands.*` params; a held grab offered by
+  `held_gate`, so a fist and a turn would write a grab mapping in one
+  gesture.
+- **To reverse.** Additive each.
+- **Rough edge.** Their feel is fixed in code; a route's own motion
+  (route motion, PR #162) can still shape one per row. A grab mapping
+  takes three ROUTING-page edits per row.
+- **Judge it.** Checks 158 and 164.
+
+### 130. The HANDS page shows the dance sources in a column beside the axes, the grab on each curl row
+
+- **Built.** A 220 px column right of the axis rows (which are that much
+  shorter): per hand five curl bars ending in "grab ●" / "grab ○", then
+  spread, energy and flick; then gap and twist (with a middle tick).
+  Hollow while a source reads nothing; hover for the address and value,
+  and on the grab the live fist level against its two thresholds. Beside
+  the rows, not under them: the page is already the window's height.
+- **Other options.** A folded header (still one line too many); the grab
+  beside the pinch switches (hidden when they are off, and taller than
+  the box).
+- **To reverse.** `panel._dance`, `panel._grab`, two lines in `_axes`.
+- **Rough edge.** The bars are small (16 px).
+- **Judge it.** Checks 158 and 163.
+
+### 131. The grab: the four fingers' mean curl, closing past 0.65, letting go under 0.45
+
+- **Built.** `hand:<side>.grab` is 1 while the hand is a fist: the mean
+  of the index, middle, ring and pinky raw curls (the thumb left out, so
+  a fist with the thumb out or tucked both count), through the pinches'
+  `Gate`: it closes once the fist passes 0.65, opens only under 0.45,
+  and an edge must hold 0.05 s. A hand leaving the box drops it at once.
+  With no skeleton it never closes.
+- **Other options.** The SDK's grab number; the minimum of the four
+  curls (one badly tracked finger would stop a fist); the smoothed
+  curls (more lag).
+- **To reverse.** `GRAB_FINGERS`, `GRAB_CLOSE`, `GRAB_OPEN`,
+  `GRAB_HOLD_S`, `fist`.
+- **Rough edge.** Tuned on synthetic hands; 0.65 is low on purpose
+  because a real fist may not read 1. Closing fast also fires flick and
+  energy.
+- **Judge it.** Checks 163 and 164.
+
+### 132. The grab lanes go after the dance lanes; the grab gates after the pinches
+
+- **Built.** `hand:left.grab` and `hand:right.grab` ("L grab", "R grab")
+  come after the sixteen dance lanes, so the `hand` vector is 40 lanes
+  and no older lane moves. The published gates are the eight pinches,
+  then the two grabs, so the ROUTING gate combo and "Gate: … ▸" offer
+  them and a row reads "… positions while R grab". The grab lives in
+  `HandsIO.grab`, not the pinches' dict, so the ghost hands and the probe
+  read what they did.
+- **Other options.** The grab beside the pinches (moves every dance lane).
+- **To reverse.** `grab_name`, the `grab` map in `Layout`, `HandsIO.grab`.
+- **Rough edge.** None known.
+- **Judge it.** Check 163.
+
+### 133. "Hands on the main projection" is the SETUP.md example, not a file in the home
+
+- **Built.** Each output's `hands` switch already defaults on, so the
+  projector shows the hands with no edit. SETUP.md's projector entry
+  says `hands = true` outright, with a sentence. The rig's own
+  `~/Hyperspace/config.toml.rig` is the owner's file, outside the repo,
+  and this run never touches the home: the owner adds the line there.
+- **Other options.** A `config.toml.rig` example in the repo.
+- **To reverse.** Delete the line and the sentence.
+- **Rough edge.** It changes nothing until something says
+  `hands = false`.
+- **Judge it.** Check 165.
+
+### 134. The palette's ids are `fx.palette.*`, not `palette.*`
+
+- **Built.** The palette fold is an effect file,
+  `shaders/fx/palette.glsl`, so its params are `fx.palette.*`, it is a
+  chip on the FX page, and the desk, hands, LFOs and bands reach it as
+  any effect.
+- **Other options.** A core `palette.*` group (the working plan's ids).
+- **To reverse.** Rename the ids (cheap while no preset uses them).
+- **Rough edge.** The ids differ from the working plan's.
+- **Judge it.** Check 166.
+
+### 135. A new `// @mix` directive: the palette starts at mix 0
+
+- **Superseded in part by row 291** (plan 30 N8, 2026-10-20): the slice's
+  defaults (the whole cylinder) are the identity now, so "none exists"
+  below no longer holds; the palette still starts at mix 0.
+
+- **Built.** `fx.py` reads `// @mix <value>` as an effect's default
+  wet/dry (1 when absent, so every other effect is as it was). The
+  palette says `@mix 0`: switching it on changes nothing until its mix is
+  raised.
+- **Other options.** Mix 1 and neutral fold defaults: the fold at width
+  360 is not the identity, so none exists.
+- **To reverse.** Delete the directive; "on" would then fold the picture.
+- **Rough edge.** "On" with no change can look broken; the tip says "Mix
+  0 leaves the picture alone".
+- **Judge it.** Check 166.
+
+### 136. The palette's params: `mode` 0 / 1, an `anchors` count, twelve anchor values
+
+- **Superseded in part by row 296** (plan 30 N8, 2026-10-20): `mode` is a
+  `@param choice` (compress / gradient) drawn as a picker; its values are
+  still 0 and 1, so a saved `mode` loads as it was. The anchors are
+  unchanged.
+
+- **Built.** `mode` is a whole number, 0 (fold) or 1 (gradient map),
+  because the `@param` form has no list. The ramp is up to four anchor
+  colours, each `a<n>_hue` (degrees, wraps), `_sat` and `_val`, and
+  `anchors` (2–4) says how many are used, dark to light, evenly spaced
+  on brightness. The default is a grey ramp (values 0, 0.333, 0.667, 1).
+- **Other options.** RGB triples; one saturation for all (8 params); a
+  list form added to `fx.py`.
+- **To reverse.** Rename the params (breaks saved palettes).
+- **Rough edge.** Twenty params of its own.
+- **Judge it.** Checks 166 and 167.
+
+### 137. The palette is `@order 95`, last but with room after it
+
+- **Built.** The palette sits after every other effect (the next highest
+  factory order is 85), and a chip dragged to the end needs only one
+  order rewritten.
+- **Other options.** 99.
+- **To reverse.** The header line.
+- **Judge it.** — (tests only).
+
+### 138. The fold is a triangle over the absolute hue wheel; saturation and value are linear
+
+- **Superseded in part by rows 291–294** (plan 30 N8, 2026-10-20):
+  `centre`/`width` became the slice's ends `hue_from`/`hue_to` (and the
+  turn `hue_turn`), and `sat_lo`/`_hi`, `val_lo`/`_hi` became
+  `_from`/`_to`. The triangle is kept for arcs up to 180° (bit for bit:
+  the D1 frames did not move), and the linear sat and val and the alpha
+  scaling stand.
+
+- **Built.** Red folds to one end of the slice and cyan to the other,
+  centred on `centre`, `width` wide: neighbouring hues stay neighbours,
+  no seam. Saturation and value are rescaled linearly into `sat_lo`–
+  `sat_hi` and `val_lo`–`val_hi`, so a raised `val_lo` lifts black to
+  grey, and a grey pixel (hue 0) lands on the slice's edge once `sat_lo`
+  is above 0. On a see-through ground (overlay, faces) the result is
+  scaled by the pixel's alpha, so a raised floor never lights what was
+  clear.
+- **Other options.** A fold relative to the picture's mean hue; a gamma
+  on value.
+- **To reverse.** A few lines of `palette.glsl`.
+- **Rough edge.** Never seen on a projector.
+- **Judge it.** Check 166.
+
+### 139. The FX page is repacked to fit a thirteenth chip and the palette's strip
+
+- **Superseded in part by row 297** (plan 30 N8, 2026-10-20): the palette's
+  rows are mode (a picker), hue, sat and val, each `from → to`; the packing
+  by name gained `_from`/`_to`.
+
+- **Built.** Three chips a row as before (row 45); the gaps around the
+  chips and under the strip header are gone, which wins back the room a
+  fifth row of chips needs. The strip packs `_lo`/`_hi` and
+  `_hue`/`_sat`/`_val` params onto one row by name (`ui_fx.strip_rows`),
+  and the palette shows only the open mode's rows
+  (`ui_fx.HIDDEN_BY_MODE`); the hidden params stay declared and routable.
+- **Other options.** Four chips a row (names cut); an `@group` tag in
+  `fx.py`.
+- **To reverse.** Restore the spacing; delete `strip_rows`.
+- **Rough edge.** The page fits with 7 px to spare at worst; the chips
+  sit closer to the status lines; a route on a hidden row cannot be seen
+  on the strip until the mode flips.
+- **Judge it.** Check 167.
+
+## The device registry (plan 27)
+
+Built in plan 27's run on 2026-10-14
+([`plans/27-device-registry.md`](plans/27-device-registry.md)), on
+`plan-24-26-27-integration` until the owner merges it. The owner's own
+decisions for this plan (10–14 and 16 of the launch prompt: the
+registry's shape, roles not serials, two input ports per param, values
+and triggers, a device's layers, the processes) are in
+[`DECISIONS.md`](DECISIONS.md) with Who "owner"; these rows are what the
+build chose where those left a choice open — the `[[devices]]` keys, the
+MIDI qualifier, the sink row, the OSC addresses and the cloud file among
+them. No preset was edited or added.
+
+### 140. `[[devices]]`: the rig's devices as a list of tables; the old tables translated
+
+- **Built.** `config.toml` may list the rig's devices as `[[devices]]`
+  tables, each with `role` (a name without `:`, unique), `kind` (`midi`,
+  `gamepad`, `hands`, `bridge`, `midi-out`, `osc`, `cloud`), `enabled`
+  (default true) and the kind's own keys — the keys the old `[midi]`,
+  `[gamepad]`, `[hands]` and `[bridge]` tables hold, with the same
+  defaults. **A config with no list keeps working unedited**: the four old
+  tables become the equivalent entries at load, in today's poll order —
+  `pad` (gamepad), `apc40` (midi; the profile's name), `leap` (hands),
+  `bridge` — with one note per table the file holds ("config: [midi] is
+  now a [[devices]] entry (role = 'apc40', kind = 'midi') — see
+  config.py"), on stderr and the SYSTEM page. With a list, the list says
+  and each old table is ignored with a note. The first entry of each old
+  kind is folded back into its table, so `cfg["midi"]` (the binding
+  file's profile) and `cfg["hands"]` (the hands setup) say what the entry
+  says. An entry with a bad or duplicate role, or no kind, is dropped
+  with a note; an `enabled` that is not true or false is true; an unknown
+  kind is kept as an `error: unknown kind` line. `[dream]` stays a table:
+  the worker has no sources and no sinks.
+- **Other options.** A list only, the old tables an error (breaks every
+  rig config, `config.toml.rig` included); translate silently (the file
+  never catches up); roles `midi` / `gamepad` / `hands` instead of
+  `apc40` / `pad` / `leap`.
+- **To reverse.** `config._translate` and `config.DEVICE_TABLES`; the
+  notes are strings.
+- **Rough edge.** An un-renamed rig config prints a note per old table on
+  every launch, by design. A list with no `hands` entry leaves the hands
+  settings registered from the defaults, so the HANDS page says "tracker
+  off".
+- **Judge it.** Checks 168 and 169.
+
+### 141. Today's devices keep their schemes behind their roles; two devices never feed one scheme
+
+- **Changed in B6.** The registry claims (scheme, role), not scheme
+  (row 210): a second **pad** is no longer refused — it opens and
+  publishes under its role (`axis@p2`, `pad@p2:A`), so it still never
+  feeds the first pad's key. The refusal stands for a kind that cannot
+  qualify: a second **hands** device is `error: feeds 'hand', which leap
+  already feeds — not opened` (row 213). A role listed twice is refused
+  by the registry too. The rest of the row stands.
+- **Built.** "The role is the scheme" holds for a *new* device (an OSC
+  phone publishes `phone:x`). Today's four keep the schemes their rows
+  already name: an entry's `role` names the device (the SYSTEM line, the
+  notes, a MIDI row's qualifier) and the device class's `schemes` say
+  which Router keys it publishes — `axis` / `pad` / `hat` (the pad),
+  `hand` / `hands` (the hands), `ext` (the bridge), `cc` / `note` /
+  `pitch` (MIDI) — so a preset names a scheme and every existing row is
+  unchanged whatever the entry is called. `feeds` is the subset fed as
+  continuous vectors. Every `Port` carries its `scheme` and `address`
+  (`axis:LX`, `hand:right.roll`, `cc:0:48`), so plan 28 can build a cable
+  from a port. A second **enabled** entry whose kind would feed a scheme
+  an earlier enabled entry already feeds is refused — `error: feeds
+  'axis', which pad already feeds — not opened`, one note naming both
+  roles — and comes up when the first leaves the list. A kind that feeds
+  nothing (MIDI: its messages are rows) is never refused, so two desks
+  both open.
+- **Other options.** The role as the scheme for today's devices too
+  (every preset and `bindings.json` rewritten to `leap:right.roll`); let
+  the last entry win silently (the Router's feed overwrites); refuse in
+  `config` (which does not know a kind's schemes).
+- **To reverse.** `Device.schemes` / `feeds` are class tuples;
+  `RefusedDevice` and the `claimed` map in `devices.make` are twenty
+  lines.
+- **Rough edge.** A refused entry is an `error:` line, not `off`, so the
+  reason shows.
+- **Judge it.** Check 174.
+
+### 142. The `Device` protocol: open, poll, learn, act, feed, send, close; one `Port`; four status words
+
+- **Built.** `devices.Device` (a runtime-checkable protocol): `role`,
+  `kind`, `schemes`, `feeds`, `layers`, `wants`, `status`, `last`,
+  `sources`, `sinks`, `open()`, `poll(dt, now)`, `learn(learn) -> bool`,
+  `act(router)`, `feed(router)`, `send(reg, analyzer)`, `close()`,
+  `targets()`. One `Port` type — name, label, kind (`value`, `trigger`,
+  or `cloud`), rest, bipolar, velocity, group, layer, scheme — is the
+  node editor's description of a device (plan 28), with no second one.
+  The registry's frame slots: the **scene-setter slot** runs each open
+  device's `poll` (the hardware read; MIDI applies its rows here), then
+  `learn` (an armed Learn is offered a moved axis or a pressed button),
+  then `act` (the rest of the frame's rows: the pad's, an OSC device's
+  hits); the **feed slot** runs `feed`; the **sink slot**, after
+  `reg.apply`, runs `send`. Status is `connected`, `lost` (the hardware is
+  not there; the device looks for it itself), `off` or `error: <why>`.
+  The registry retries only an `open` that raised; a `lost` device
+  reconnects on its own schedule and is never closed or reopened by the
+  registry. A `poll` that raises skips that device's `learn` and `act`
+  for the frame; its error stands until the next clean poll and the
+  first error of the frame goes to the hot-reload toast.
+- **Other options.** One `poll(dt, now, router, learn)` call (what
+  `HandsIO.poll` is); a status enum.
+- **To reverse.** The protocol is one class; the slots are three
+  registry methods.
+- **Rough edge.** `learn` and `act` are steps a device's user never sees;
+  the hands complete a hand Learn inside their feed-slot call, MIDI
+  inside its `poll`.
+- **Judge it.** Check 170.
+
+### 143. The devices own today's adapters; the hands' one call runs in the feed slot
+
+- **Built.** `MidiDevice`, `PadDevice`, `hands.device.HandsDevice` and
+  `BridgeDevice` own a `MidiIO`, `Pad`, `HandsIO` and `Bridge`, built in
+  `open()` (each adapter module imported there, so `import
+  hyperspace.app` imports none of `midi`, `bridge`, `dream`, `osc`,
+  `leap`, `torch`, `pythonosc`). Those objects are still what the panel
+  holds and the ghost renderer reads: a registry listener in `app.main`
+  re-points `panel.midi`, `panel.pad`, `panel.hands` and
+  `renderer.ghost.source` whenever the list changes. The hands device
+  makes the instrument's one call, `HandsIO.poll(dt, learn, router)`, from
+  the **feed** slot, so the hands' tracker read now runs after
+  `output.apply`, the mouse and the audio step rather than before them;
+  nothing in between reads the `hand` feed.
+- **Other options.** Split `HandsIO.poll` so the read is in the
+  scene-setter slot (a change to the liftable `hands/core.py`).
+- **To reverse.** Call the hands from `poll`; a few lines.
+- **Rough edge.** The hands device's status passes the tracker's own
+  words through: an unplugged camera reads `error: no camera` and a
+  stopped service `error: service lost` — though the Leap thread
+  reconnects by itself — and only "connecting" or a tape not yet started
+  reads `lost`.
+- **Judge it.** Checks 168 and 180.
+
+### 144. The registry: open behind the entry, retry a failed open on the Ports schedule, close last-listed-first
+
+- **Built.** `DeviceRegistry` makes one device per checked entry (`off`
+  for `enabled = false`: listed, never opened, its adapter never
+  imported).
+  `open_all` opens each; one whose `open` raises is `error: …`, said once
+  on stderr and in the config notes in the old gates' words (`"hands:
+  …"`), and tried again on the MIDI desk's schedule — every 2 s for five
+  misses, then every 10 s (`devices.retry_after`, held equal to
+  `midi.retry_after` by a test); the frame it opens it is polled and the
+  listeners run. `close()` closes every device last listed first,
+  best-effort; `Host.adapters == (devices, dream_io)` is the one close
+  list for a quit and ⌘R, and the pad is on it now (`Pad.close` stops and
+  joins its USB reader, at most 0.5 s).
+- **Other options.** Each device retries itself (every device a clock of
+  its own); close in list order.
+- **To reverse.** The schedule is three constants; the close order one
+  `reversed`.
+- **Rough edge.** A device whose `poll` raises every frame (a hot-reload
+  bug) is never closed and reopened: it stays red on its line and the
+  toast until the file is fixed.
+- **Judge it.** Checks 170, 171, 172 and 175.
+
+### 145. `config.toml` is watched every 30 frames; only the device list is re-read; a bad edit keeps the old list
+
+- **Built.** Every 30 frames (`devices.WATCH_FRAMES`, the shaders'
+  cadence) the registry stats `<home>/config.toml`; when its mtime moved
+  it re-reads the `[[devices]]` list only (`config.read_devices`). Any
+  problem — a parse error, an entry that would be dropped — is one note
+  ("config: [[devices]] not applied — … — the old list stands") and
+  nothing changes. Otherwise an unchanged entry keeps its device, a
+  changed one is closed and opened again ("devices: apc40 changed —
+  reopened"), a new role opens ("added"), a role that left closes
+  ("removed"), and the order becomes the list's. A file with no list
+  re-reads as the old tables translated.
+- **Other options.** Reload the whole config (the outputs, the library
+  path and the windows are not hot-pluggable); apply the good entries of
+  a partly bad edit.
+- **To reverse.** `watch` / `apply`; `WATCH_FRAMES`.
+- **Rough edge.** A changed entry is reopened whole: an edit to the
+  `apc40` entry re-sends the power-up and redraws the desk. An editor
+  that saves in two steps may land a parse error (a note) and then the
+  good list.
+- **Judge it.** Check 173.
+
+### 146. The SYSTEM page: one line per device
+
+- **Built.** A **devices** section above **midi**, one line per listed
+  device in list order: `role · kind · status · n sources · last` —
+  MIDI's `last` is the port, the binding count and the last message; the
+  pad's road and USB name; the hands' last DAW message or tracker status;
+  the bridge's port, encoding, lanes and sent count; a sink's starts with
+  `n sinks` (row 160). `error: …` lines are in the warning colour, `lost`
+  in the dimmed colour of a normal line. "no devices — [[devices]] in
+  config.toml" for an empty list. The old MIDI and bridge lines are gone;
+  the HANDS page keeps its own status.
+- **Other options.** Keep the old lines beside the new ones.
+- **To reverse.** `ui.device_lines` and `Panel._device_lines`.
+- **Rough edge.** A bridge's line is long; `lost` is not a warning, so an
+  unplugged desk does not stand out.
+- **Judge it.** Check 168.
+
+### 147. A second desk's rows are `cc@<role>:<ch>:<n>`; the unqualified rows are the desk the table was written for
+
+- **Built.** Every `[[devices]]` MIDI entry is its own desk. One MIDI role
+  reads the unqualified rows — every row in `bindings.json` and every
+  preset written before plan 27 (`cc:0:48`, `note:0:98`, `pitch:0`), so
+  nothing moves: the first MIDI entry whose `profile` is the binding
+  table's (`bindings.json`'s `"profile"`, `apc40` by default), else the
+  first MIDI entry listed (`DeviceRegistry.midi_roles`). Any other desk's
+  rows carry its role after `@` on the kind: `cc@launch:0:21`,
+  `note@launch:0:40`, `pitch@launch:3`. The qualifier adds no `:`, so
+  everything that splits a source at its first `:` is untouched. Learn
+  desk on the second desk writes the qualified form; ROUTING and the
+  footer say "MIDI CC 21 ch1 on launch".
+- **Other options.** `<role>:cc:<ch>:<n>` (adds a `:`); the role inside
+  the channel field; every row qualified (rewrites every preset and
+  `bindings.json`); "the first MIDI entry listed" without the profile
+  test (a generic box listed above the APC40 would take its rows and
+  SHIFT).
+- **To reverse.** `routing.QUALIFIER`, `base_scheme`, `Binding.device` /
+  `bare`, the table's `serves`: an hour; nothing on disk uses the form
+  until a learn on a second desk.
+- **Rough edge.** A hand-written `cc@apc40:…` (the owning role named)
+  acts as that desk's but is a different control from its unqualified
+  twin to `overlaps` and the invariant check. Two APC40-profile desks:
+  the first listed owns the unqualified rows.
+- **Judge it.** Checks 176 and 177.
+
+### 148. SHIFT is the first desk's latch; every other desk has a layer of its own and no SHIFT
+
+- **Built.** `Bindings.layer` stays the owning desk's layer, the one
+  `desk.shift` reads and SHIFT toggles; every other MIDI role has its own
+  in `Bindings.layers` (`layer_of(role)`, `set_layer(layer, role)`,
+  `toggle_layer(role)`), the preset layer until something latches it.
+  Learn's refusal on the global layer (D5) is per desk: with the APC40 on
+  SHIFT a knob on the second desk still learns into the preset and its
+  rows still act. A preset load drops **every** desk to the preset layer
+  (D4); D12 holds per desk; each desk's latch changes are counted on
+  their own (`layer_serial_of`), so the APC40's SHIFT re-arms the APC40's
+  faders only (D7). `MidiDevice.layers` says what a desk exposes for plan
+  28: `("preset", "global")` for the owning APC40, `("preset",)` for any
+  other.
+- **Other options.** One layer for every desk (the APC40's SHIFT would
+  blank the second desk's preset rows); a latch param and a SHIFT row per
+  APC40-profile desk (deferred: "a second desk has its own, or none").
+- **To reverse.** `layers` / `layer_of` and the `role` argument on four
+  methods.
+- **Rough edge.** A second APC40 gets its power-up and the lights of its
+  own rows but no SHIFT: its SHIFT button is an ordinary unmapped note.
+- **Judge it.** Check 177.
+
+### 149. The `generic` MIDI profile: plain CC, note and pitch, nothing sent back, a `port` required
+
+- **Built.** `hyperspace/generic.py`, a profile beside `apc40.py`:
+  `PORT_MATCH = None` (the entry must name its `port`; without one the
+  line reads `error: ValueError: the generic profile matches no port by
+  itself …`, never the first port that happens to be there), `FEEDBACK =
+  False` (the device is sent nothing: no power-up, ring, LED or leave),
+  every CC absolute with soft pickup, a note a toggle, pitch an absolute
+  14-bit fader, no layout (its line counts 0 sources; the on-screen desk
+  stays the APC40's), no factory rows. A `profile` the registry does not
+  know is an error line ("no MIDI profile 'akai'; one of apc40,
+  generic"). The entry's profile is the desk's: `bindings.json`'s
+  `"profile"` only says which profile the file's unqualified rows were
+  written for.
+- **Other options.** Echo values back as CC (a box that echoes would
+  loop); take the first port when none is named (would grab the APC40);
+  separate "generic pads" and "generic CC" profiles.
+- **To reverse.** One module, one `midi.PROFILES` entry, one gate in
+  `MidiIO._send`.
+- **Rough edge.** A relative encoder on a generic box learns as `abs`;
+  change its op on ROUTING.
+- **Judge it.** Check 176.
+
+### 150. A continuous source is "not a row kind"; the registry says which schemes there are and in what order
+
+- **Built.** `routing.LANE_SCHEMES`, `ui_routing.SOURCE_ORDER` and
+  `learn.WANTS` are gone. A row's shape is judged by
+  `routing.is_continuous(scheme)`: anything but the kinds the table
+  dispatches itself (`ROW_SCHEMES`: `key`, `pad`, `hat`, `cc`, `note`,
+  `pitch`). So a preset route on a device this rig lacks (`phone:x`,
+  `wand1:tilt`) is a dormant performer, never dropped (decision 11).
+  *Which* schemes exist and in what order a page offers them is the
+  registry's, handed to the Router as an argument (`Router.use`):
+  `continuous_schemes()` is `lane`, `lfo`, then each listed device's
+  `feeds` in list order (an `off` device's too). The referee's row
+  schemes are extended the same way (`DeviceRegistry.row_schemes`). With
+  no registry (a bare router), `lane` and `lfo` then whatever has been
+  fed.
+- **Other options.** A module-level tuple the registry appends to;
+  `is_performer` asking the registry (a `Binding` has no table); keep
+  `SOURCE_ORDER`'s order (`hand` before `lfo`).
+- **To reverse.** `is_continuous` back to a tuple test; `Router.schemes`
+  back to a tuple: minutes each.
+- **Rough edge.** A typo'd scheme in a preset route (`hnad:right.roll`)
+  is kept as a dormant performer, not dropped with a note. The ROUTING
+  combo now lists the LFOs before the hands and the pad.
+- **Judge it.** Check 178.
+
+### 151. What a Learn can wait for is each device's `wants`; "desk" is always there
+
+- **Built.** `Device.wants`: a MIDI desk `("desk",)` (one want; whichever
+  desk moves first completes it, and the row says which), the pad
+  `("pad",)`, the hands `("hand:left", "hand:right")`, and by default a
+  device that feeds, its role. `Learn.wants()` is `desk` (the on-screen
+  desk completes it with no MIDI device at all) then the registry's, in
+  list order, `off` devices included (the learn completes once the device
+  is on); `Learn.arm` refuses a want not in it. The param menu keeps
+  Learn desk, Learn hand ▸ and Learn pad on their old conditions and adds
+  "Learn <role>" on a modulatable param for any other want (an OSC phone:
+  "Learn phone"). With no registry, today's four (`learn.BARE_WANTS`).
+- **Other options.** One want per MIDI role (`desk@launch`: you would
+  have to say which desk before touching it); only open devices' wants.
+- **To reverse.** One property per class, `DeviceRegistry.wants`,
+  `Learn.wants`.
+- **Rough edge.** The bridge feeds `ext` but has `wants = ()` (it has no
+  `learn`), so no "Learn bridge" item is offered, on or off; fixed in the
+  review pass. A new device's item completes only through that device's
+  own `learn`.
+- **Judge it.** Checks 178 and 186.
+
+### 152. The pad is a device: it publishes its axes and runs the sticks' camera job itself
+
+- **Built.** `gamepad.Pad` has `open()`, a `status` (`connected` /
+  `lost`, never an error) and `publish(router)` (the `axis` names, labels
+  and rests; `Router._publish_axes` is gone). The sticks' default camera
+  job moved from `app.frame` to `gamepad.steer(pad, router, reg, dt)`,
+  run by `PadDevice.act` right after the pad's rows: the same constants,
+  the same `router.claimed("axis")` and the pad's feel through
+  `router.felt` (`desk.pad.*`, unchanged on purpose). It now runs before
+  the MIDI desk's rows in the scene-setter slot; both write the bases of
+  independent params by relative moves.
+- **Other options.** Keep the job in `app.frame`; run it in the device's
+  `poll` (which is handed no router).
+- **To reverse.** Move `steer`'s body back into `frame`; restore
+  `_publish_axes`.
+- **Rough edge.** A route on `axis:LX` added before the pad ever
+  published is not "claimed" for that one frame (no pad, no job anyway).
+- **Judge it.** Check 179.
+
+### 153. The hands' device is `hands/device.py`; the kinds table looks it up lazily
+
+- **Built.** `HandsDevice` lives in `hands/device.py`, a `devices.Base`
+  subclass beside `hands/panel.py`, so `hands/core.py`, `signal.py` and
+  `tape.py` still import nothing from the host and
+  `tests/test_hands_boundary.py`'s host-reaching list is `["device.py",
+  "panel.py"]`. Its `schemes` and `feeds` are `hand` and `hands`; its
+  ports read every count from `Layout` (axes, switches, presence, dance
+  under `hand`; gap and twist under `hands`), so plan 24's new lanes
+  needed no edit. Because it imports `devices`, `devices.kinds()` imports
+  it when asked (`devices.KINDS` and `devices.HandsDevice` read through a
+  module `__getattr__`). `hotreload.MODULES` gains `hands.device` after
+  `devices`.
+- **Other options.** Duck-type the protocol without `Base`; import
+  `hands.device` at the bottom of `devices.py` (a circular import).
+- **To reverse.** Move the class back; `KINDS` a dict again.
+- **Rough edge.** `devices.KINDS` is built on each access (cheap).
+- **Judge it.** Check 180.
+
+### 154. One knob per param per desk
+
+- **Built.** A desk learn still replaces the param's previous knob on
+  the same layer, but only on the **same desk**: learning
+  `view.inst_amp` on the second desk leaves the APC40's knob on it alone.
+- **Other options.** One knob per param across every desk (a learn on
+  the second desk would silently unmap the APC40's).
+- **To reverse.** One condition in `Bindings.bind`.
+- **Rough edge.** Two knobs on two desks drive one param, last touch wins
+  (scene-setters, as two rows always could).
+- **Judge it.** Check 176.
+
+### 155. The sink row: a param or a lane, sent to `<role>:<channel>`, in the session
+
+- **Built.** A param routed *out* is one more row in the one table:
+  `{"source": "param:view.bright", "target": "bridge:3", "op": "send"}`
+  (`routing.SINK_OP`). Its source is `param:<id>` (the **effective**
+  norm, base plus this frame's modulation, read after `reg.apply`),
+  `lane:<i>` (as a route reads it, `lane / CEIL`) or `lane:*` (every
+  analyzer lane from the row's channel on); its target is a device's sink
+  port, `<role>:<channel>`. It is a **session** row (`bindings.json`:
+  sinks are rig, D1 / D9), never a performer (no `Owned`, no Replace /
+  Keep, the modulation pass never reads it) and never in a preset; the
+  referee checks only its form (`sink_refusal`). What a sink sends is
+  `routing.sink_values(rows, reg, analyzer)` over the enabled rows on its
+  role; an explicit row wins its channel over a `lane:*`. A trigger, or
+  an id the registry lacks, reads 0.
+- **Other options.** A separate `sinks` list in `bindings.json`; the op
+  named `sink` or `out`; the sink port as the source and the param as
+  the target; sink rows in the preset.
+- **To reverse.** `SINK_OP`, `Binding.is_sink`, `sink_refusal`,
+  `sink_values`, `Bindings.sinks`, the referee's branch: an hour.
+- **Rough edge.** A `lane:*` row's width is the live band layout's; a
+  later explicit row hides the star's lane on its channel. A param's
+  alias (`band.sel.*`) can be sent and follows the selection.
+- **Judge it.** Checks 181 and 183.
+
+### 156. `[bridge] send` becomes sink rows once, marked in `bindings.json`
+
+- **Built.** When the registry is built, and whenever the list is
+  re-applied, every **enabled** entry with a `send` list — the bridge's
+  default `["lane:*"]` included — whose role has no sink row at all gets
+  the list as rows (slot k → `<role>:<k>`; `lane:*` one row taking the
+  default layout's 6 channels before the next entry), written to
+  `bindings.json` with one note: "bindings: [bridge] send is now sink
+  rows in bindings.json (lane:* → bridge:0, param:view.bright → bridge:6)
+  — the rows say from here on; edit them on ROUTING (sinks)". The
+  translation is marked done in `bindings.json` itself, `"sinks_seeded":
+  ["bridge"]` (written only when non-empty, so a file with none is
+  byte-identical): a role in it is never seeded again, so rows deleted on
+  ROUTING never come back. An entry it cannot translate (`ext:3`) is its
+  own note; an off bridge seeds nothing. A `Bridge` made on its own
+  (tests, tools) still sends its `send` list.
+- **Other options.** Translate on every launch (the key would beat the
+  owner's ROUTING edits for ever); keep `send` as the truth and show it
+  read-only; mark it done by consuming the config key.
+- **To reverse.** `DeviceRegistry._seed_sinks` and
+  `routing.sink_rows_from_send`.
+- **Rough edge.** Editing `[bridge] send` after the first launch does
+  nothing (remove the role from `"sinks_seeded"` to translate again). An
+  entry after `lane:*` lands at channel 6 whatever the rig's band count,
+  so a DAW mapping may need one move.
+- **Judge it.** Check 182.
+
+### 157. The hands' DAW out is a `midi-out` sink, `hands-daw`; `HandsIO` makes the messages and opens no port
+
+- **Built.** `hands/core.py` no longer opens a MIDI port: `HandsIO.poll`
+  makes the frame's DAW messages exactly as before (per-axis CC, 14-bit,
+  pitch or pressure, presence and pinch notes, rate-limited, solo) and
+  leaves them in `HandsIO.outbox` for a carrier (`HandsIO.carry`);
+  `HandsIO.resync()` gives the notes that are on for a port that came
+  back. The port moved to `bridge.OutPort`. The device is
+  `devices.MidiOutDevice` (`kind = "midi-out"`): its `poll` looks for a
+  lost port again and, on a reconnect, queues the resync before the
+  hands' frame; its `send` (after `reg.apply`) sends the resync, the
+  carried messages, then any sink rows on its role (encoded as the
+  bridge's lanes). **`[hands] out` keeps working**: at load the first
+  enabled hands entry whose `out` names a port gets an entry right after
+  it — `role = "hands-daw"`, `kind = "midi-out"`, `port = <out>`,
+  `carries = <hands role>` — unless the list already has a `midi-out`
+  carrying that role; one note when the file wrote `out` itself, none for
+  the default.
+- **Other options.** Keep the port in `HandsIO` with the sink only owning
+  it; move the whole DAW encoding out of `hands/` (it reads the axes'
+  settings; a liftable instrument that makes its MIDI is more useful);
+  send from the feed slot.
+- **To reverse.** Put `_open` / `_send` and the reconnect fields back in
+  `HandsIO`; drop `config._daw` and the kind.
+- **Rough edge.** The messages leave a millisecond or so later than
+  before, in the sink slot. A rig with the hands off gets no `hands-daw`
+  entry until a live edit turns them on. Tools that build a `HandsIO`
+  with no `out` no longer make a "Hyperspace Hands" port.
+- **Judge it.** Checks 184 and 185.
+
+### 158. "Learn sink ▸ <role>:<channel>" lands at once, in the session
+
+- **Built.** A param's right-click menu has **Learn sink ▸**, listing
+  every sink port the rig's devices offer (`bridge:3 · pitch ch4`), on
+  any param but a trigger. A pick lands immediately — nothing on a sink
+  moves to complete it — through `Learn.learn_sink`: the row `param:<id>
+  → <port>` is added and `bindings.json` written now, with no undo step
+  and no preset dirt (like Learn pad). It takes the port from whatever
+  sent on it ("…; param:view.bright let go"); a param may go out on
+  several ports. Never a Replace / Keep question. The menu's bound lines
+  list the param's sink rows dim, and Unbind never removes them. ROUTING
+  has a **sinks** section after the session's (a checkbox and a ×, both
+  writing the file).
+- **Other options.** Arm and wait like the other learns; a sink picker
+  page; an undo step.
+- **To reverse.** `Learn.learn_sink` / `sinks`, `ui.sink_items`, the menu
+  block, `ui_routing.sinks`.
+- **Rough edge.** An `off` sink offers no ports, so nothing can be
+  learned onto it until it is on. A pitch-encoded sink lists sixteen
+  ports.
+- **Judge it.** Check 183.
+
+### 159. The bridge is one device with two halves; `ext` publishes its labels and rests
+
+- **Built.** `BridgeDevice.poll` looks for its ports again (scene-setter
+  slot); `feed` receives the inbound lanes as `ext` and publishes their
+  labels ("ext 0" …) and rests (0); `send`, after `reg.apply`, sends the
+  sink rows on its role through `bridge.Sender` (per channel: quantise,
+  change-gate, rate-limit, encode), shared with `midi-out`. So a sent
+  param is this frame's effective value, no longer a frame behind, and
+  `ui_routing.N_EXT` is gone: the ROUTING combo offers the lanes the
+  bridge publishes (and, for a scheme nobody publishes, up to the highest
+  lane a row names).
+- **Other options.** Labels as the wire ("pitch ch4"), which would change
+  every `ext` route's words.
+- **To reverse.** `Bridge.publish` and one line in the ROUTING combo.
+- **Rough edge.** The combo reads "ext ext 0" (scheme, then label), as
+  the LFOs read "lfo LFO 1".
+- **Judge it.** Checks 181 and 182.
+
+### 160. A sink's SYSTEM line starts its last part with `n sinks`
+
+- **Built.** A device with sink ports shows the number of **enabled**
+  sink rows on its role first: `bridge · bridge · connected · 16 sources
+  · 2 sinks · IAC Driver Bus 1 · pitch, 16 lanes · 41 sent`; `hands-daw ·
+  midi-out · connected · 0 sources · 0 sinks · Hyperspace Hands · leap's
+  DAW out · cc 102 = 64 ch16`.
+- **Other options.** A sixth field on every line; counting sink ports
+  (sixteen on any pitch bridge, saying nothing).
+- **To reverse.** Four lines in `DeviceRegistry.lines`.
+- **Rough edge.** `hands-daw` reads `0 sinks` while it carries the hands
+  (the words after it say so).
+- **Judge it.** Checks 182 and 184.
+
+### 161. An OSC device's role is its scheme; an address is a source name; its hits are rows under the same scheme
+
+- **Built.** `kind = "osc"` with `role = "phone"` feeds the scheme
+  `phone`: `axes = ["/x", "/y"]` are `phone:x`, `phone:y` (the address
+  without its leading `/`; a deeper path kept, `/1/fader3` →
+  `phone:1/fader3`), published with names, labels and rests, so a route
+  names them like `hand:right.roll` and ROUTING and "Learn phone" offer
+  them. `hits = ["/hit"]` are triggers under the **same** scheme
+  (`phone:hit`), delivered as rows like a pad button's. A device says
+  which schemes it delivers rows under (`Base.rows`) and what an entry
+  would publish before it is made (`Base.publishes`), so a second feeder
+  of `phone` is refused and an `off` OSC entry still lists its scheme (a
+  row on it waits). A role that is a row kind or a built-in scheme
+  (`key`, `pad`, `hat`, `cc`, `note`, `pitch`, `lane`, `lfo`, `cloud`) is
+  an error line on open.
+- **Other options.** `osc:<role>.<name>` (the launch prompt's text: one
+  `osc` scheme for every OSC device, so two phones would share one
+  vector); hits under a scheme of their own (`hit@phone:…`: a Learn armed
+  for `phone` could not take a hit); hits as a fed 0/1 lane (no velocity,
+  against decision 13).
+- **To reverse.** `OscDevice.publishes` / `rows` and the read in
+  `DeviceRegistry.row_schemes`: an hour.
+- **Rough edge.** Because `phone` is fed and a row scheme, the referee
+  accepts any op on a `phone:` row. A hit row in `bindings.json` waits
+  while its device is not listed; re-enabling it on ROUTING then is
+  refused ("'fire' is not an op for a phone source") until the phone is
+  listed (even off).
+- **Judge it.** Checks 186 and 187.
+
+### 162. OSC values: the first number, the entry's range onto 0–1; nothing until heard; held while lost
+
+- **Built.** An axis's value is the message's first number (a bool, a
+  string or a NaN is skipped) — only the first: an XY pad's second value
+  is not read — mapped from `range` (default `[0, 1]`) onto 0–1 and
+  clamped. An axis no message has reached reads NaN, so its routes stay
+  dormant and nothing moves at launch. The device is `connected` while
+  any message arrived within `timeout` (5 s), `lost` before the first and
+  after a silence; while lost the axes **hold** their last values (`hold
+  = true`: a phone app sends only on change, so a fader left alone must
+  not snap back), and `hold = false` lets the routes go. Closing the
+  device takes its scheme off the router (vector, labels, names, rests).
+  A `timeout`, `range` or `rest` of the wrong kind is an error line.
+- **Other options.** Let routes go when lost, always; a 2 s timeout (the
+  line would flicker between touches); the rest instead of NaN before the
+  first message (a `position` route would move its param at launch).
+- **To reverse.** `TIMEOUT_S`, `hold`, the NaN fill: minutes.
+- **Rough edge.** With `hold = true` a phone that leaves the network
+  leaves its routes where they were (the line says `lost`). An app that
+  streams continuously is never `lost`.
+- **Judge it.** Check 188.
+
+### 163. An OSC hit: its velocity is the first number; a press is a velocity above 0
+
+- **Built.** A hit's velocity is the message's first number clamped to
+  0–1 (`range` is the axes' only), 1 when the message has none. Its rows
+  act as a pad button's when the velocity is above 0 (`fire`, `toggle`,
+  `step`, `set`); `abs` lands the velocity itself; `momentary` holds a
+  toggle while the velocity is above 0 and lets go at 0; `hold` does
+  nothing (a hit has no duration). A Learn armed for the role takes the
+  next hit above 0 as a button row in `bindings.json`
+  (`Learn.learn_pad_button`, as a pad button) and holds that frame's rows
+  back; else the first axis moved 0.25 from its rest as a route.
+- **Other options.** Velocity on 0–127 like MIDI; hit rows in the
+  preset; a timed `hold`.
+- **To reverse.** `osc.fire`.
+- **Rough edge.** A velocity above 1 clamps; a learned step on a fader
+  always steps up.
+- **Judge it.** Check 187.
+
+### 164. The OSC socket is read in `poll`, non-blocking, with no thread; UDP `0.0.0.0:9000` by default
+
+- **Built.** `osc.Server` binds a UDP socket on the entry's `host:port`
+  (every interface by default, so a phone on the LAN reaches it, port
+  9000) and the device's `poll` reads every datagram waiting, at most 512
+  a frame; `pythonosc` parses each (a bundle's messages in order), and a
+  datagram that is not OSC is counted on the line ("… · 3 not OSC"). A
+  port another program holds is an error line and one note, retried on
+  the registry's schedule. `pythonosc` is imported only in `Server`;
+  `hyperspace.osc` itself is imported whenever the registry looks a kind
+  up, so an `off` OSC entry still lists its scheme.
+- **Other options.** `pythonosc`'s threading server and a dispatcher (a
+  thread, a lock and a queue per device, and tests that race it); import
+  `osc.py` only when an entry names the kind.
+- **To reverse.** `Server` is forty lines.
+- **Rough edge.** macOS asks once whether Python may accept incoming
+  connections the first time it binds `0.0.0.0`; denied, nothing ever
+  arrives and the line stays `lost`.
+- **Judge it.** Checks 186 and 189.
+
+### 165. `devices.PointCloud`: a read-only N×3 float32 buffer, the frame clock's time, a counting frame id, bounds, optional colours
+
+- **Built.** `PointCloud(points, t, frame, colors=None)`, frozen:
+  `points` N×3 float32, C-contiguous and read-only (`ctx.buffer(points)`
+  uploads it as it is; a caller's writeable array is copied), `t` the
+  frame clock's `now` when it was published, `frame` an id counting up
+  from 0 while the device is open (a reader uploads only when it moved),
+  `bounds` a read-only 2×3 box (zeros for an empty cloud), `colors` None
+  or N×3 RGB 0–1. Units are the publisher's.
+- **Other options.** `t` as the recording's own time; `frame` as the
+  index into the file (repeats on a loop); N×4 points.
+- **To reverse.** One dataclass.
+- **Rough edge.** Points are expected finite: a NaN point gives NaN
+  bounds (plan 29's sensors must filter, or `bounds` moves to
+  `nanmin` / `nanmax`).
+- **Judge it.** Check 190; check 216 for plan 26's `cloud` node, which
+  draws it.
+
+### 166. Clouds are on the registry, not the Router: `DeviceRegistry.clouds` as `cloud:<role>`
+
+- **Built.** A device that publishes a cloud holds its latest frame;
+  `DeviceRegistry.clouds` maps `cloud:<role>` to it for every **open**
+  device that has one, in list order — what plan 26's point-cloud node
+  (`graph.PointCloud`, rows 204–209) reads (`cloud:scan`). No `cloud`
+  scheme reaches the Router, the referee
+  or a Learn. The cloud device's one `Port` has `kind = "cloud"`. A
+  closed or removed device's cloud is gone from the map at once.
+- **Other options.** `Router.feed("cloud", …)` (the Router holds float
+  vectors per scheme); a stored map filled in the feed slot.
+- **To reverse.** One property.
+- **Rough edge.** The map is rebuilt on each read (cheap).
+- **Judge it.** Checks 190, 216.
+
+### 167. The cloud file: a version-1 `.npz` — rate, ragged offsets, concatenated points, optional colours
+
+- **Built.** `devices.write_clouds(path, frames, rate, colors=None)`
+  writes `version` (1), `rate` (frames per second), `offsets` (F + 1:
+  frame i is `points[offsets[i]:offsets[i+1]]`, so frames may differ in
+  size) and `points` (M×3 float32), plus `colors` when given;
+  `read_clouds` checks every key and shape and refuses another version,
+  offsets that do not walk the points or a rate that is not positive, as
+  an error the device's line shows. The fixture
+  `tests/fixtures/clouds/knot.npz` is a (2, 3) torus knot turning about
+  its vertical axis, 16 frames at 12 fps, 96 + 8i points on frame i,
+  coloured by height, written by `tools/cloud_fixture.py` with no random
+  numbers and no clock.
+- **Other options.** A fixed N per frame; PLY or PCD; one `.npy` per
+  frame in a folder.
+- **To reverse.** Two functions; nothing outside the tests reads the
+  format yet.
+- **Rough edge.** No per-frame timestamps: a recording plays at one rate
+  (a later version may add `times`; version-1 readers ignore unknown
+  keys).
+- **Judge it.** Check 190.
+
+### 168. The `cloud` device plays at its own rate against the frame clock; `file` is the home's
+
+- **Built.** `kind = "cloud"` with `file` (required; relative to the
+  home), `rate` (default the file's) and `loop` (default true; false
+  holds the last frame). Polled at `now` it shows recorded frame
+  `floor((now − start) · rate)`, so it plays at 12 fps whatever the app's
+  frame rate. `connected` while the file is loaded; a missing or bad
+  file, or a bad `rate`, is `error: …` with one note and retried, so a
+  file copied in later comes up with no relaunch. The line: `scan · cloud
+  · connected · 1 source · knot.npz · frame 7/16 · 144 points · 12 fps`.
+- **Other options.** One recorded frame per app frame; resolve `file` in
+  `config.py`.
+- **To reverse.** One class.
+- **Rough edge.** The file is read whole at open; a recording changed on
+  disk is not re-read until its entry changes or the app restarts.
+- **Judge it.** Check 190.
+
+### 210. The device qualifier is general: any scheme takes `@<role>`; an unqualified row is the primary device's
+
+- **Built.** A row's source may carry `@<role>` on any scheme, not only
+  MIDI's (`pad@p2:A`, `hat@p2:UP`, `axis@p2:LX`): `routing.base_scheme`,
+  `Binding.device`, `Binding.bare`, `is_continuous` read it the same way
+  for every scheme, and the qualified head (`axis@p2`) is its own Router
+  key — its own feed, labels, rests and names — so two pads never
+  overwrite each other. An unqualified row means the scheme's primary
+  device: MIDI's by B2's rule, unchanged to the byte (`midi_roles`: the
+  desk whose profile wrote the table, else the first listed); every
+  other scheme's by list order, the first enabled entry of its kind
+  (`devices.primaries_of`, `DeviceRegistry.primaries`, told to the table
+  as `Bindings.primaries`). No file migrates: every `pad:A`, `axis:LX`,
+  `hat:UP` written before means the first pad. A qualified row's line
+  says whose it is ("left stick X on p2 pushes +0.25"; "pad A on p2").
+- **Other options.** A role-named scheme per pad (`p2:A`, as an OSC
+  device's — but then a second pad's rows look nothing like the first's
+  and Learn, the remap and the camera job would each need a branch); the
+  primary chosen by a key (`primary = true`) rather than list order;
+  migrating old rows to `pad@pad:A`.
+- **To reverse.** `base_scheme` back to its MIDI-only test and
+  `Binding.device` with it; the pad's role then has no way into a row.
+- **Rough edge.** Swapping the two pad entries swaps
+  which pad the bare rows mean; the second pad's qualified rows go
+  dormant when it becomes the primary. A role containing `@` would read
+  as a qualifier (config does not refuse one).
+- **Judge it.** Check 219.
+
+### 211. A joystick per pad device, the next free one or pinned; one USB reader, lent to the first `usb = true` pad with no GLFW joystick
+
+- **Built.** Each pad device reads its own controller. The pads share
+  one `gamepad.Claims` on the registry's context (`Context.pads`): a pad
+  takes the next present GLFW joystick no other pad has taken, in list
+  order (the devices poll in list order, so the first pad takes the
+  first). An entry's `joystick = n` (0–15, checked in `config.py`; a bad
+  value is a note and dropped) pins it: it reads only that index, waits
+  for it (`lost · waiting for joystick 1`), and no unpinned pad takes it.
+  An unpinned pad whose joystick leaves reads `lost`, lets the index go,
+  and takes the next free one that appears. The SYSTEM line names the
+  joystick read (`glfw 1`); two entries pinned to one index: the second
+  is dropped with a note. **The libusb reader is one, lent, not owned**
+  (the owner's amendment): one `UsbPad` (`Claims.reader`), lent each
+  poll to the pad that holds it while that pad still has `usb` on and no
+  GLFW joystick (**sticky**), else to the first `usb = true` pad in list
+  order with no GLFW joystick; a pad that finds a GLFW joystick hands it
+  back that poll. With both entries at the default `usb = true` the
+  Bluetooth pad reads GLFW and the Afterglow on `p2` reads USB; the
+  first pad's line says `usb: lent to p2` (no note while the reader is
+  idle). It closes when the last pad that could borrow it closes. A pad
+  no device attached (a tool, a test) reads the first present joystick
+  and its own reader, as before.
+- **Other options.** Match a pad to its entry by GUID or name (GLFW
+  reports both; a re-paired Bluetooth pad keeps its GUID) — plan 28/29's
+  device identity; the reader owned by the first `usb = true` entry (as
+  first built: the defaults then never read a wired pad on the second
+  entry); re-deciding the lend from list order every poll (not sticky: a
+  pad listed earlier that loses its Bluetooth pad would take the wired
+  pad from the second); one USB reader per entry (two wired pads —
+  `UsbPad` takes the first 360 pad it finds, so two readers would fight
+  for one).
+- **To reverse.** `Pad._find` back to "the first present joystick" and
+  `Pad.attach` out of `PadDevice.open`: about forty lines.
+- **Rough edge.** Only one wired 360 pad is ever read; sticky means a
+  pad listed earlier that loses its GLFW joystick reads `lost · usb:
+  lent to p2` rather than taking the wired pad. GLFW's index for a pad can change across a reconnect, so a
+  pinned pad may wait for an index its controller no longer has.
+- **Judge it.** Check 219.
+
+### 212. The camera job and the factory pad rows are the primary pad's; a second pad starts with no rows; one feel
+
+- **Built.** Defaults author no look (decision 24): the sticks' default
+  camera job (`gamepad.steer`) runs for the primary pad only — a second
+  pad's unrouted sticks and triggers do nothing until a route names
+  them. The factory pad rows (`bindings.default.json`) and `PAD_REMAP` /
+  `PAD_NEW_ROWS` are unqualified, so the primary's; a second pad starts
+  with no rows and gets them from Learn pad (it completes on whichever
+  pad moves first), **Learn p2** (the second pad's own want: only it
+  completes it, so it can be learned onto with the first unplugged) or
+  ROUTING. The pad's feel, the five
+  `desk.pad.*` session params, is one set applied to every pad
+  (`Router.source_feel` reads any `axis@<role>` as `axis`).
+- **Other options.** Copy the factory rows for each pad (two pads would
+  both flip faces on A); run the camera job on every pad (two sticks on
+  one camera); a feel per pad (`desk.pad.<role>.*` — more session params
+  on SYSTEM for a case not yet played).
+- **To reverse.** The `if q:` branch in `PadDevice.act`; per-pad feel is
+  a new set of params and a role key in `Router.source_feel`.
+- **Rough edge.** Per-pad feel is plan 28/29's. "Learn p2" is offered
+  only on a param a lane can drive (`p.modulatable`), as every "Learn
+  <role>" item.
+- **Judge it.** Check 219.
+
+### 213. The hands stay single: a second hands entry is refused
+
+- **Built.** The hands kind is not `repeatable`: a second enabled hands
+  entry is refused as in B1 (`error: feeds 'hand', which leap already
+  feeds — not opened`, one note) and comes up when the first leaves the
+  list. Their forty named lanes, the pair scheme `hands`, the HANDS page,
+  the ghost and the calibration are all one tracker's; two Leaps are
+  plan 29's.
+- **Other options.** Qualify the hands too (`hand@leap2:right.roll`):
+  the Router would take it, the HANDS page, the ghost and the
+  calibration would not.
+- **To reverse.** `repeatable = True` on `HandsDevice`, then a page, a
+  ghost and a calibration per tracker.
+- **Rough edge.** None new: the refusal is B1's.
+- **Judge it.** Check 174.
+
+## The render graph (plan 26)
+
+Built in plan 26's run on 2026-10-14
+([`plans/26-render-graph.md`](plans/26-render-graph.md)), on
+`plan-24-26-27-integration` until the owner merges it. The owner's own
+decisions for this plan (1–9, 15, the render parts of 16, and 22–24 of
+the launch prompt: the four node kinds, the hands in the scene or as a
+layer, the shape's transform and the fixed eye, real depth for lines and
+points, the history as wiring, step 0 first, no GLSL in the graph; and
+the stroke-space toggle of 2026-10-14) are in
+[`DECISIONS.md`](DECISIONS.md) with Who "owner"; these rows are what the
+build chose where those left a choice open — the golden rig, the timer,
+the instance marker, the node and port design, the eye's ids and
+defaults, how the pan migrates, the in-scene alpha rule, the
+depth-aware threshold, the graph JSON's shape, the cloud's transform
+among them. No preset was edited or added: no factory preset carries a
+`graph` section, and every proof is a fixture under `tests/fixtures/`.
+
+### 169. The instance marker for an extra render node is its number right after the node's prefix (`fx.acid.2.mix`)
+
+- **Built.** `params.instance_id(node, key, n)` and
+  `params.instance_of(pid, node)`. Instance 1 keeps today's id
+  (`fx.acid.mix`, `ghost.alpha`, `dream.mix`); instance n ≥ 2 is
+  `<node>.<n>.<key>` (`fx.acid.2.mix`, `ghost.2.alpha`). The first
+  segment — the group, which decides whether a param is in a preset —
+  never changes, so an extra instance lands in the same part of a preset
+  as its first, and no preset or binding migrates for a single-instance
+  graph. The rule is written in ENGINEERING §2. The owner sees these ids
+  in ROUTING, learn lines and preset files once a preset's graph adds a
+  second instance (row 198).
+- **Other options.** `fx.acid#2.mix` / `fx.acid@2.mix` (a new character
+  every OSC address, file name and binding would have to accept);
+  `fx.acid_2.mix` (collides with an effect file named `acid_2`);
+  `fx2.acid.mix` (a new first segment: changes the group).
+- **To reverse.** Two functions and a paragraph — but now a migration of
+  every saved id that carries a marker.
+- **Rough edge.** A purely decimal segment after the prefix is the
+  marker, so no effect file and no `@param` key may be digits alone
+  (refused at the source since row 198). It looks like the collection
+  indices `band.2.trim` / `pattern.mod.3`, which are not node instances:
+  `instance_of` is asked only about node prefixes.
+- **Judge it.** Check 193.
+
+### 170. Golden frames: the eight output states as eight outputs of one frame, and output 1 alone
+
+- **Built.** Per preset and hand state, one rig draws all eight
+  `Switches` states as eight views of one `draw_outputs` call — output 1
+  4× MSAA like the window, the other seven plain targets — at 960×600,
+  dpr 1, after 8 frames at 1/60 s on a pinned clock. Because a pipeline
+  shared by two views goes through a frame texture, `solo` adds output 1
+  alone (drawn direct) for every preset × hands, and
+  `solo-scene+hands+through` the same for the six presets with an
+  effect on. The full-resolution frame's SHA-256 is compared exactly; a
+  quarter-size PNG is for a person. 427 goldens at A0, 556 today (row
+  list in the plan file).
+- **Other options.** One rig per state (368 rigs, about 45 s, every
+  frame direct); single-sample output 1 (unlike the window).
+- **To reverse.** `_shoot`'s view list and one re-record: every golden
+  moves.
+- **Rough edge.** The direct MSAA path and the texture path are not
+  bit-identical in general (three hands-absent solo frames differ from
+  their eight-output twin by 1 LSB in one pixel); both are pinned. The
+  goldens prove pixels only on "Apple M3 Max": anywhere else the test
+  skips.
+- **Judge it.** Checks 191, 192.
+
+### 171. "LFOs and analyzer at rest" in the goldens means never stepped and never fed
+
+- **Built.** The golden rigs declare `lfo.*` / `tempo.*` (so presets
+  load them) but never step the LFOs and never feed an analyzer or LFO
+  lane: every param sits at its base plus the hand rows.
+- **Other options.** Step the LFOs at a pinned phase 0 (the LFO maths and
+  a random LFO's seed in every golden); publish rest values explicitly.
+- **To reverse.** `lfos.step/publish` in `Rig.frame` and a re-record.
+- **Rough edge.** lfo-breathe's golden is its bases, not its breathing.
+- **Judge it.** Check 191.
+
+### 172. "Hands present" in the goldens is one fixed two-hand pose with the ghost on
+
+- **Built.** `tests/fake_hands.py` at test_ghost's pose (left open at
+  (−90, 210, 0) mm, right fist at (90, 200, 10)), polled fresh each frame
+  through the real `HandsIO` (One Euro, dead zone, follower), full frames
+  with skeletons, so the preset's hand rows move and the hands draw.
+  `ghost.on` is set in every rig (a session param no preset carries);
+  "present with the ghost off" is the hands-absent picture.
+- **Other options.** Several poses per preset (multiplies the count); the
+  ghost at its session default, off (the hands' states never reached).
+- **To reverse.** Extend `FakeHands` / `HANDS` and re-record.
+- **Rough edge.** One pose: a hand row's full throw is not covered by a
+  golden (`tools/preset_shots.py`'s sweeps cover it numerically).
+- **Judge it.** Check 191.
+
+### 173. The 1080p-cap golden is party-trip on a 2× HiDPI 1080p screen
+
+- **Built.** One golden: party-trip, hands present, `scene+hands`, a
+  3840×2160 output at dpr 2 (1920×1080 logical) under `max_frame =
+  (1920, 1080)`: the frame is drawn at 1920×1080 and shown scaled. Every
+  other golden also runs under the 1080p cap (the app's default), which
+  does nothing at 960×600.
+- **Other options.** An output of exactly 1920×1080 (the cap does
+  nothing there); a preset without effects.
+- **To reverse.** `CAP` in the tool and a re-record.
+- **Rough edge.** One preset and one state at the cap; hashing one 33 MB frame.
+- **Judge it.** Check 191.
+
+### 174. GPU time per node: one query each, read 3 frames late, a median over 60 frames
+
+- **Built.** `render.PassTimer`: one `GL_TIME_ELAPSED` query per node a
+  frame (queries never nest; a node that runs several times a frame is
+  summed, one that did not run counts 0), read `LAG` = 3 frames later so
+  the CPU never waits on the GPU, kept as a rolling median over `WINDOW`
+  = 60 frames in `stats["gpu_ms"]`; `stats["gpu_note"]` says why there
+  are none ("no GPU timer queries on this context …"). The SYSTEM page:
+  "gpu per node, ms (median of the last frames):" and one line per node,
+  in the graph's order. A0 built six fixed passes (scene, cover, hands,
+  lookback, fx, compose); A1 made it one line per node, named by the
+  graph, a node that leaves the graph leaving the list.
+- **Other options.** One dot-separated line (the prompt's example text);
+  nested queries per pipeline (GL forbids nesting); reading each query
+  at once (stalls the CPU every frame).
+- **To reverse.** Local to `PassTimer` and `Panel.gpu_lines`.
+- **Rough edge.** Apple's driver reports some tiny nodes as 0.00 ms; the
+  figures are GPU time only, not the CPU's time to issue the work; the
+  lines show the medians, no history.
+- **Judge it.** Check 194.
+
+### 175. The golden tool keeps one standalone GL context for the process
+
+- **Built.** `tools/golden_frames.context()` makes one standalone context
+  with `gc_mode = "auto"` and collects each rig's objects after it;
+  `tests/test_golden_frames.py` uses the same context.
+- **Other options.** A fresh context per rig (cleanest, but `release()`
+  left no context current and broke the GL tests after it).
+- **To reverse.** Local to the tool.
+- **Rough edge.** None seen: the hashes are identical to a per-rig
+  recording.
+- **Judge it.** Check 191.
+
+### 176. The FX node is the chain, one per pipeline, and the end of its pipeline
+
+- **Superseded by rows 214 and 215** (plan 30, 2026-10-17): every effect
+  instance is now its own `Effect` node, the chain a run of them in each
+  pipeline, and `Fx` the thin pipeline end that keeps the jobs below
+  (where the picture lands, the stand-down, the error path). Kept here
+  as history.
+- **Built.** `graph.Fx` wraps `fx.FxChain`: it paints its input into the
+  chain's first half-float texture and the last effect writes the
+  destination; with no effect on it paints its input straight through.
+  The default pipelines are three `Fx` nodes over the one chain (`fx`,
+  `fx(scene+hands)`, `fx(hands)`), the effects' order inside each as
+  before. As a pipeline's end it decides where the picture lands:
+  straight into the one output that takes it when that output is at the
+  frame's size, unflipped and on this context; otherwise once into a
+  frame texture every output of it shows. The owner sees one SYSTEM line
+  per chain node, 0.00 when its pipeline did not run.
+- **Other options.** One FX node shared by the pipelines (the chain's
+  ping-pong textures are shared state: two pipelines cannot interleave
+  through one node); an FX node only while an effect is on (a rebuild on
+  every `fx.on`, a line that comes and goes); the direct-or-texture
+  choice on the Output node (two outputs would each need to know the
+  other).
+- **To reverse.** Local to `graph.Fx` and `default_graph`.
+- **Rough edge.** A `fx(scene+hands)` or `fx(hands)` node is in the
+  graph (and on SYSTEM at 0.00) whenever an output has hands-through on,
+  with no effect on or no hand showing. These three are one chain, not
+  instances, so their names are not param prefixes (`fx(…)`, never
+  `fx.<x>`).
+- **Judge it.** Check 194.
+
+### 177. The history is two nodes: `history` (the echoes and the dream over its input) and `capture` (the ring)
+
+- **Built.** `graph.History` lays its input over the echoes and the
+  dream, occluded by its `cover` port (a copy with the look-back off),
+  and moves the echoes' clock and pulls a finished dream once a frame.
+  `graph.Capture` puts its `image` port — what the wiring says (row 194)
+  — into the ring exactly once a frame, after every pipeline end. Two
+  nodes, because the composite must read the ring before the frame's
+  capture changes it, and runs once per pipeline.
+- **Other options.** One node with a two-phase contract (a second
+  evaluator phase for one node); the capture inside the history's run
+  (the composite would see the current frame as an echo: every echo
+  golden moves); the capture by the Output node (several outputs would
+  capture several times).
+- **To reverse.** Merge the classes and add a second phase to
+  `Graph.evaluate`; no pixel changes.
+- **Rough edge.** `history`'s GPU line sums its composites for every
+  pipeline of the frame.
+- **Judge it.** Check 194.
+
+### 178. The Output node is `Renderer._compose`, one per view, after the capture
+
+- **Built.** `graph.Output` calls `_compose` for its view: its picture
+  (1:1, scaled into `outputs.fit`'s rect, or already there when drawn
+  direct), the hands over it, the readout, the flips, the dim (master ×
+  its own), or the five-step `outputs.Handoff` for a presenter. Named
+  `output.N` after the `output.N.*` params; one SYSTEM line each.
+- **Other options.** `_compose` moved into graph.py (it needs `Handoff`,
+  `fit`, `_show`, `dim_pass`, still the renderer's); one Output node for
+  all views (no per-output timing).
+- **To reverse.** Trivial: the node is a wrapper.
+- **Rough edge.** Which pipeline end feeds it is settled per frame
+  (`Output.settle`, row 193).
+- **Judge it.** Checks 194, 195.
+
+### 179. Nodes and ports: made images are pulled by their consumers; painted images draw into the consumer's framebuffer
+
+- **Built.** `graph.Node` has a unique `name` (the SYSTEM line, the
+  timer's key), typed input ports (`INPUTS`: `image`, `mask`,
+  `geometry`), one `OUTPUT` type, `after` dependencies, and `run(frame)`.
+  A Scene or Layer *makes* a texture (`image`, and `depth` beside it); a
+  History, Composite or FX *paints* (`paint(frame, dst)`) into the
+  framebuffer its consumer hands it — so the look-back composites
+  straight into the chain's half-float input and the chain into the
+  window, as before. Any image feeds any image port (the default `paint`
+  shows a made texture 1:1); a consumer that needs a painted node as a
+  texture gets it materialised once a frame (`Composite.image`).
+  Geometries are drawn by their scene or layer. The graph refuses a
+  wrong port type, an unknown port, a dependency outside it and a
+  duplicate name when it is built. Method names: `run`, `paint`, `draw`,
+  `image`, `depth` — never `apply`, `modulate`, `snapshot`, `set_value`
+  (pinned by `tests/test_graph.py`).
+- **Other options.** Every node materialises a texture (an RGBA8 texture
+  between the look-back and the half-float chain quantises the picture:
+  goldens move); a `Port` object per connection (more machinery than the
+  nodes need; plan 28's editor can add it).
+- **To reverse.** The pull is inside three `paint` methods; a
+  materialising design replaces them and re-records goldens.
+- **Rough edge.** A painted node can run more than once a frame (the
+  history for two pipelines), by design; its GPU line sums them.
+- **Judge it.** Check 194.
+
+### 180. The default graph is keyed by the views' switches, the wiring and the listed clouds; the last one is reused
+
+- **Amended by plan 30** (rows 215, 219): the key also holds the effect
+  stack's list in order (`FxState.names()`: an order, an instance or a
+  file changed rebuilds, a toggle does not) and the preset's placements
+  (`Wiring.placed`).
+- **Built.** `graph.graph_key(views)` is each view's (scene, hands,
+  through); `Renderer._graph_for` keeps the last graph and builds a new
+  one only when that key, `Renderer.wiring` (row 194) or the listed
+  `cloud` roles (row 207) change — a switch toggled, an output opened or
+  closed, a preset with another graph, a cloud listed. Size, flips, dim,
+  a presenter and the cap are read when the nodes run; which pipelines
+  run is settled per frame after the hands' layer drew. `on_reload`
+  drops the graph so a saved graph.py rebuilds it from the new classes.
+- **Other options.** Key on `fx.active()` and hand visibility too (a
+  rebuild on every hand that enters the box and every effect toggle; the
+  SYSTEM lines would flicker); a cache of every graph seen.
+- **To reverse.** Local to `_graph_for` and `graph_key`.
+- **Rough edge.** `FxChain.tick` (the effect folder's 30-frame watch)
+  runs at the top of the frame, before the scene: an effect file saved to
+  disk lands on the faces' picture on the poll frame itself rather than
+  the next.
+- **Judge it.** Checks 194, 195.
+
+### 181. The cover mask is a Layer node of the scene's faces, wired to the history
+
+- **Built.** `graph.Cover` draws the faces' coverage mask
+  (`Renderer._draw_cover`) only while the look-back occludes, from the
+  face buffer the scene pass left, into the history's `cover` port
+  (type `mask`). Its SYSTEM line stays `cover`.
+- **Other options.** The cover inside the Scene node (its line merged
+  into `scene`); drawn by the History node (a history that draws
+  geometry).
+- **To reverse.** Local.
+- **Rough edge.** It depends on the scene node (the face buffer), not on
+  the shape geometry in the shared camera.
+- **Judge it.** Check 194.
+
+### 182. The eye: `eye.fov` and `eye.distance`, session params whose defaults are the old 3D divide
+
+- **Built.** A fixed perspective camera on the world's +z axis looking at
+  the origin, y up (`geometry.eye_matrix`). `eye.fov` = 47.6°
+  (`geometry.EYE_FOV`) across the picture's **shorter** side (the longer
+  side sees more, as `project_h`'s `min(w, h)·0.30` did); `eye.distance`
+  = 3.78 shape radii (`EYE_DISTANCE` = CAM3 / 0.9). Ranges 10–120° and
+  1.5–40 (log). Group `eye`, a session group: no preset moves it, the
+  show saves it. Not modulatable (the camera is the rig; the shape is
+  what moves). Clip planes 0.05 / 1000 (`EYE_NEAR` / `EYE_FAR`: depth
+  only). On the CAMERA page under "eye" ("the room's camera, not the
+  preset's"). With the defaults, zoom 1 and pan 0, the largest vertex
+  error against `project_h` is 2.3e-13 px in float64 and 1.1e-4 px in
+  float32, against a bar of 0.5 px.
+- **Other options.** The fov on the vertical (would not reproduce
+  `project_h` on a portrait output); an eye position / target / up set
+  (more knobs than a fixed camera needs); modulatable (a lane would swing
+  the whole room).
+- **To reverse.** Local: two params, `eye_matrix`'s arguments.
+- **Rough edge.** Moving the eye off its defaults moves the whole
+  picture (no golden covers it). Past zoom ≈ 3.8 the eye is inside the
+  shape (row 188).
+- **Judge it.** Check 196.
+
+### 183. `camera.pan` is in world units (±12 shape radii), marked by a `units` key, converted through the 1080p screen
+
+- **Built.** `camera.pan.x/y` are the shape's world position in shape
+  radii (`geometry.model_matrix`), y positive **down** the screen as it
+  always was (stored and routed pans keep their direction). Range
+  ±`params.PAN_RANGE` = ±12, shown `+0.00`. A document **without**
+  `"units": {"camera.pan": "world"}` stored logical px and is divided by
+  `geometry.PAN_REF_PX` = 324 px a unit (the default eye's px per unit at
+  1080p, the render cap and the party projector) at load, silently —
+  presets (`preset.load_doc` step 0), camera module presets and
+  `camera/default.json` alike (`params.pan_world`); every save writes the
+  key. The schema stays `hyperspace.preset/2`. Only `values` convert
+  (route and desk depths are fractions of the range); ±12 keeps a routed
+  pan as far as ±4000 px went at 1080p — `hands-orbit`'s push of 0.1
+  moves the shape ±1.2 radii (≈ ±390 px at 1080p; ±400 before). The
+  mouse drag pans by cursor px / px-per-unit and the wheel zooms about
+  the point under the cursor (`app._px_per_unit`).
+- **Other options.** A schema bump to preset/3 (an older build would
+  refuse every new file); the reference screen = the window at load (a
+  preset would land differently per screen); the golden size 960×600;
+  pan.y positive up (every stored pan.y flips); converting route depths.
+- **To reverse.** `pan_world` and the range; a world-unit file needs the
+  opposite conversion (the key says which it is).
+- **Rough edge.** **A converted pan is exact only on 1080p**: on the
+  laptop window an old preset's shape sits proportionally nearer the
+  centre (party-mandala's 190 px is 0.59 radii: 105 px at 960×600). A
+  pan is exact at depth 0; off-centre the shape is seen a little from
+  the side.
+- **Judge it.** Checks 199, 201.
+
+### 184. `camera.zoom` is the shape's world scale; copies live in the world
+
+- **Built.** `model_matrix` scales the shape about the world origin
+  (the whole-frame 2D zoom is gone). Copies are in the world: a cell is
+  `render.CELL` = 2.4 radii (the old `0.72·min(w, h)` px through the
+  default eye), offsets before the zoom, so a field is scaled and moved
+  as one and at zoom 1 is spaced exactly as before at depth 0. A scaled
+  shape has its own perspective (a small zoom is flatter, a big one
+  deeper); off-centre copies are seen slightly from the side. **The
+  strokes' weight is row 189's**: A2 built "strokes and dots keep their
+  pixel weight", which since A2b is true only with Screen strokes on;
+  by default they scale with the zoom as before plan 26.
+- **Other options.** Copies as screen-space tiles after the projection
+  (the old picture exactly, but not in the world the hands join); the
+  cell fixed in the world with the zoom only on each copy (zooming out
+  would spread a field apart).
+- **To reverse.** The cell offsets inside `u_model` vs outside.
+- **Rough edge.** A zoom route (hands-orbit, party-trip's LFO) changes
+  the shape's perspective as well as its size.
+- **Judge it.** Check 197.
+
+### 185. The shape's depth: never tested against itself; its visible surface (alpha > 0.25) written after its colour
+
+- **Built.** `SceneTarget` has a depth attachment. `draw_scene` draws
+  faces, edges and points painter-sorted as before, depth-tested against
+  whatever solid geometry is already there (the hands, a cloud) with
+  depth writes off; then `Renderer._depth_pass` draws them again writing
+  depth only (colour untouched) for fragments whose alpha is over
+  `render.DEPTH_ALPHA` = **0.25**. A draw that cannot reach it is
+  skipped. The colour is byte-identical with or without the attachment.
+- **Other options.** Depth writes in the colour pass (edges crossing in
+  the painter sort's wrong order would cut each other); threshold 0.1
+  (bright fills would hide a hand behind a barely visible face) or 0.5
+  (only the nearest edges would count).
+- **To reverse.** One constant; the pass is one method.
+- **Rough edge.** The depth pass re-draws edges, points and bright fills
+  on almost every frame (measured within run-to-run noise on the M3
+  Max). Bright fills (alpha up to ~0.36 at bright 2) do write depth.
+- **Judge it.** Check 205.
+
+### 186. Point quads are a whole number of pixels across
+
+- **Built.** `draw_scene` rounds each point's diameter to whole
+  framebuffer pixels (`floor(2r + 0.5) / 2`): Apple's driver rounded
+  `gl_PointSize`, and with the rounding the quads draw the old sprites'
+  frames byte for byte.
+- **Other options.** The true fractional size (every points-on golden
+  moves; dots a little bigger).
+- **To reverse.** One line.
+- **Rough edge.** Dots change size in one-pixel steps with depth, as
+  they did.
+- **Judge it.** Check 196.
+
+### 187. The Leap calibration: `units` in `hands.json` /3, "from the box" by default, fitted into a 16:9 picture of the eye
+
+- **Built.** `hands.core.Units(mm, origin, tilt)` in `hands.json` beside
+  the ranges and the box: `"units": {"mm": null, "origin": null, "tilt":
+  32.0}`. A Leap point lands at `world = R_x(tilt) · (stage(p) − c) / mm`
+  (`ghost.calibration`). `mm` null → the scale at which the padded palm
+  box fits, every corner, into the eye's frame of a **16:9** reference
+  picture (`ghost.CAL_ASPECT`, the party projector, as `PAN_REF_PX` and
+  the 1080p cap), as tightly as the old ghost camera framed it there;
+  `origin` null → the padded box's centre; `tilt` 32° (the old ghost
+  camera's elevation). Measured with the goldens' hands: within 4 px of
+  the old camera at 960×600 and 9 px at 1080p. `CAL_SCHEMA` =
+  `hyperspace.hands/3`: an older file is read as it is and kept as
+  `hands.json.bak-v2` (or `-v1`) by the first save. A bad entry is "from
+  the box" with one stderr line. Not editable in the UI. (A2 built the
+  entry and a fit to the shorter side's square; A3 changed the fit to
+  16:9 when it drew the hands through it — the square had drawn them two
+  thirds the size.)
+- **Other options.** The fit to each output's aspect (as the old camera
+  did: the hands' size relative to the shape would then change with the
+  window, which the shared world forbids); the square on the shorter
+  side; a full 4×4 in the file (opaque to edit); an anisotropic map that
+  reproduces the old camera exactly (it would squash the hands' depth in
+  the world).
+- **To reverse.** One constant (and the fit's two tangents); local to
+  `Units`, `calibration`, `save_calibration`.
+- **Rough edge.** On a portrait or square output the box is wider than
+  the frame: a hand at its left or right edge leaves the picture. The
+  perspective is the eye's 47.6° across the shorter side, not the old
+  camera's 38° vertical: fingers nearer the eye are a touch bigger. This
+  is why A3's 122 hands goldens moved.
+- **Judge it.** Checks 202, 203.
+
+### 188. A stroke end behind the eye is slid to just in front of it
+
+- **Built.** In `LINE_VS` an edge end with clip w below `EYE_W` (1.2 ×
+  `EYE_NEAR`) is moved along the edge to w = `EYE_W`; an edge wholly
+  behind is dropped; a point behind the eye is dropped. Faces are clipped
+  by the GPU.
+- **Other options.** Let the GPU clip the expanded quad (an end behind the
+  eye projects to the wrong side and the quad sweeps the screen).
+- **To reverse.** Local to the shader.
+- **Rough edge.** Reachable only past zoom ≈ 3.8 (the eye inside the
+  shape).
+- **Judge it.** Check 197.
+
+### 189. Strokes in world space by default; screen space is the switch
+
+- **Built.** The owner asked for the toggle on 2026-10-14 (DECISIONS,
+  owner); the default is the build's. With `view.screen_strokes` off (the
+  default) the edges' width and the dots' radius are × `camera.zoom`
+  again — the pre-A2 formula and nothing else: the width × zoom before
+  the 1 px floor (the sub-pixel part folded into alpha, so a zoomed-out
+  field's far edges fade as they did on `main`), the radius × zoom before
+  the whole-pixel rounding. Strokes grow and shrink with the shape; the
+  zoomed-out factory looks (ember-orbit 0.5, hex-engine 0.4, party-field
+  0.42) are back to their pre-A2 weight. On, they are A2's: the same
+  pixel weight whatever the zoom. At `camera.zoom = 1` both draw the
+  same frame byte for byte. The shape's strokes only: the hands' tubes
+  are world-sized (`ghost.WIRE_R`, `BONE_R`) and never follow the zoom,
+  and hand lines (row 201) are always one pixel. **This row supersedes
+  the sentence "strokes and dots keep their pixel weight" of A2's zoom
+  row (row 184).**
+- **Other options.** Screen space as the default (A2's goldens kept; the
+  zoomed-out looks 2–2.5× heavier than on `main`, the rough edge the
+  owner did not want by default); true perspective width (a stroke a
+  world size, thicker at its near end: every frame with strokes moves,
+  zoom 1 included, and it is a shader change); a 0–1 blend between the
+  two.
+- **To reverse.** One default (`ViewState.screen_strokes`) and 218 frames
+  re-recorded; or the switch removed (one line, one param, one checkbox).
+- **Rough edge.** A2's goldens at zoom ≠ 1 moved a second time (218 of
+  556). At a big zoom (party-tumble 1.3, party-acid 1.1) edges are
+  fatter, and zoomed far out the far edges fold into alpha and a field
+  looks fainter — as on `main`. A preset saved before A2b has no key and
+  loads world space. At zoom 1 the switch shows nothing (a routed zoom
+  makes it live, so it is not a learn "cannot show" rule).
+- **Judge it.** Check 198.
+
+### 190. The stroke switch's form: `view.screen_strokes`, a performance toggle, routable and modulatable
+
+- **Built.** `view.screen_strokes` ("Screen strokes"), a toggle in group
+  `view`: in every saved preset's `values`; a file without it loads off
+  (world space), so the new switch is off by default (decision 24).
+  Routable and modulatable like `view.lines` and `view.cut_through`. On
+  the VIEW page under the points and lines opacity sliders, one checkbox
+  with a tip; no desk or pad default. `learn.cannot_show` calls it dead
+  ("points and lines off") while both are off.
+- **Other options.** An enum `view.stroke_space` (world / screen: its
+  default would be index 0 of an enum, not a switch off); a session param
+  (it would not travel with a look); not modulatable.
+- **To reverse.** Local (the id lives in `params.py`, `view.py`, `ui.py`,
+  `render.py`, the tests).
+- **Rough edge.** A modulated flip mid-zoom jumps the stroke weight in one
+  frame (as flipping `view.lines` does).
+- **Judge it.** Check 198.
+
+### 191. Hands inside the scene are solid: `ghost.alpha` is not applied there
+
+- **Built.** With the hands in the scene the scene draws them first
+  (`Ghost.draw_solid`: the style's parts, depth test and write on,
+  premultiplied over the cleared ground), then the see-through shape
+  painter-sorted and depth-tested against them. A hand in front of the
+  shape hides it; behind it, the shape's strokes and fills lie over it.
+  `ghost.alpha` still sets the hands' *layer*; inside the scene they are
+  at full opacity, each still premultiplied by its fade (see-through for
+  its 0.1 s fade-in and 0.3 s fade-out). The guide and the tethers never
+  go into the scene: they are the readout, laid on at the outputs.
+- **Other options.** The hands sorted as one see-through object among the
+  shape's faces (the shape's draws split around each hand, a pass per
+  hand); order-independent transparency (deferred by decision 3).
+- **To reverse.** Local to `Ghost.draw_solid` and `graph.Scene.run`.
+- **Rough edge.** A fading hand writes depth at any fade, so for its
+  fade-out it cuts the shape behind it while already faint. `ghost.alpha`
+  does nothing to in-scene hands **except at exactly 0**, which removes
+  them from the scene too (0 = "no hands anywhere"); 0.01 shows them
+  fully solid. With the look-back on (party-wake, party-tracer) in-scene
+  hands are in the history: their echoes stack and a held hand saturates
+  towards white.
+- **Judge it.** Checks 204, 205.
+
+### 192. The depth-aware composite hides a layer texel where the scene's visible surface is nearer by more than 0.05 shape radii
+
+- **Built.** `render.LAYER_FS` / `Renderer.lay(blend="depth")`: both
+  depths linearised through the eye's clip planes; a layer texel is
+  dropped (the picture under it shows) where the scene wrote depth (its
+  visible surface, row 185) nearer than the layer's by more than
+  `render.LAYER_DEPTH_BIAS` = 0.05 world units (about 8–10 mm of hand at
+  the default calibration). Where the scene wrote no depth, or the
+  layer's resolved depth is the far plane, the layer shows. Used by the
+  through composites, the history's composite and an output's
+  hands-over when the layer is laid `depth`. The scene's depth is
+  resolved out of its MSAA target on the first ask of a frame
+  (`SceneTarget.depth_texture`, made lazily: nothing is allocated unless
+  a depth-aware node exists).
+- **Other options.** Compare raw window depths (a bias not in world
+  units); a soft fade over a depth range (wider halos); hide on the
+  far-plane silhouette too (measured: 29–48 rim pixels hidden with the
+  hands wholly in front).
+- **To reverse.** One constant; two lines of shader.
+- **Rough edge.** Silhouette pixels use one depth sample of four: where a
+  hand passes behind an edge the boundary is a 1 px stair-step, and a
+  hand behind the shape keeps a 1 px rim. A presenter output lays a
+  depth-aware layer plain over (the depths stay in output 1's context);
+  "add" does reach a presenter (`Handoff.blend`).
+- **Judge it.** Check 207.
+
+### 193. The OUTPUT switches are the default graph's wiring; a through pipeline "stands down" per frame
+
+- **Built.** `graph.default_graph(views, wiring)` wires each output from
+  its switches: `image` = the SCENE chain (scene on), `fx(scene+hands)`
+  (scene, hands and through: the hands' layer composited onto the
+  history before the effects), `fx(hands)` (scene off, hands and
+  through), or nothing (the ground); `hands` = the layer laid over at the
+  output (hands on, through off); `readout` = the layer's readout while
+  hands is on. `outputs.route`'s per-frame collapse — no effect on, or no
+  hand drawn: through is hands over — is wiring too: a through `Fx` node
+  carries a `fallback` and is `bent` only while an effect is on and its
+  layer drew; otherwise its outputs take the fallback with the layer over
+  (`Output.settle`). `outputs.route` stays the pure table, and the golden
+  tool asserts the graph's settled route equals it for every default
+  state.
+- **Other options.** Through as a static wire that always runs the
+  composite (pixels move for letterboxed, flipped and overlay outputs,
+  and two outputs differing only by through would run the chain twice);
+  a new per-output "hands in the scene" switch (output params and a
+  session decision; a preset's graph does it instead).
+- **To reverse.** Local to `default_graph`, `Fx.bent`, `Output.settle`.
+- **Rough edge.** The collapse is still a per-frame decision; a node
+  editor (plan 28) will have to show a through wire that is sometimes not
+  taken.
+- **Judge it.** Checks 195, 208.
+
+### 194. `Wiring`: where the hands are drawn, how their layer is laid on, what the history holds — renderer-wide, the default today's
+
+- **Built.** `graph.Wiring(hands="layer"|"scene", blend="over"|"add"|"depth",
+  history="scene"|"scene+hands")` (plus `draw` and `extra`, row 200),
+  held by `Renderer.wiring`; the default `Wiring()` is today's frame and
+  the graph is rebuilt when it changes. Only a preset's `graph` section
+  sets it (row 196); the golden tool and the tests set it directly.
+  `hands="scene"`: an output showing the scene shows the hands in it (no
+  layer over it, no SCENE+HANDS pipeline); an output with the scene off
+  still gets the hands' layer, over or through — decision 3's projector
+  and glass with one `Wiring`. `history="scene+hands"`: the capture takes
+  the layer laid on the scene (`composite(history)`, materialised once a
+  frame); with the hands in the scene the scene already holds them, so no
+  such composite is built.
+- **Other options.** Per-output wiring (the history and the scene are
+  shared: only the blend could be per output); a `render.*` param per
+  choice (the wiring in the registry and presets before the graph JSON
+  existed).
+- **To reverse.** Local; the dataclass is the seam the graph JSON fills.
+- **Rough edge.** With the hands in the scene an output's **hands** switch
+  no longer removes them from that output's scene (it wires only the
+  readout and, scene off, the layer); there is no "scene without hands"
+  for the history in that wiring.
+- **Judge it.** Checks 206, 209.
+
+### 195. The hands node is `ghost` (geometry) feeding the `hands` layer; its time is decided by the consumer edge
+
+- **Built.** The default graph has a geometry node `ghost` (the `ghost.*`
+  params' node; a second is `ghost.2`) before the scene, settled once a
+  frame (`Ghost.settle`); the hands' layer keeps its name and SYSTEM line
+  `hands`. A hands node is never timed itself (`Hands.TIMED` is False):
+  `Graph.timed` lists every node that times itself plus every solid
+  geometry a scene draws, timed under its own name inside the scene's
+  draw. So the default SYSTEM lines are unchanged (`scene cover hands
+  history fx capture output.1`); with the hands in the scene `ghost`
+  comes before `scene` (and `readout` when the readout is drawn alone);
+  one hands node feeding a scene and a layer has its own line (its
+  in-scene draws) beside the layer's. (A3 set the timing on the node
+  from the scene that held it; A4 moved it to the consumer edge, so the
+  same node object in two graphs is never changed by either.)
+- **Other options.** Name the geometry `hands` and the layer
+  `layer(hands)` (renames today's line); always time `ghost` (a dead
+  0.00 line in the default graph); a line per consumer edge (`ghost→hands`
+  as well as `ghost→scene`).
+- **To reverse.** Names, and two lines in `Graph.timed`.
+- **Rough edge.** The layer's draw of a node that is also in the scene is
+  counted in the layer's line, not the node's.
+- **Judge it.** Checks 210, 213.
+
+### 196. The preset's `graph` section lists the nodes that differ from the default graph, one JSON object per node
+
+- **Amended by row 219** (plan 30): an `effect` entry may also carry
+  `after` or `into` (a placement), and a placed entry may name instance
+  1; an unplaced one still needs `instance` ≥ 2.
+- **Built.** A preset may carry `"graph": {"nodes": [...]}`
+  (`graph.GraphSpec`, `graph.read_graph`, `preset.GraphSection`). Each
+  entry names its `kind` and, for a second or later node, its
+  `instance`; the rest is its wiring — `hands`: `into` (`layer` |
+  `scene`), `draw` (`solid` | `lines`), `laid` (`over` | `add` |
+  `depth`, only on the node that makes the layer); `effect`: `file` and
+  `instance` ≥ 2 (instance 1 is the file itself); `history`: `holds`
+  (`scene` | `scene+hands`). A node that is the default is left out, so
+  `{"nodes": []}` and no section both mean the default graph. A save
+  writes the section in a fixed order (hands by instance, effects by
+  file and instance, the history, later kinds), one node per line,
+  before `values`. Nothing that is a param goes in it. The owner sees a
+  `graph` block only in a preset that has one — none in any factory
+  file. Example: `tests/fixtures/presets/hands-lines.json`.
+- **Other options.** A full node-and-edge list (`{"nodes": {...},
+  "wires": [...]}`): what plan 28's editor will want, but today only the
+  default graph's builder exists, so most of it would be re-derived and
+  every file long; a flat object of the `Wiring`'s fields (shorter, but
+  it cannot name instances or a later kind).
+- **To reverse.** Local to `read_graph` / `GraphSpec.to_json` and
+  `GraphSection`; no factory file carries a section.
+- **Superseded in part by rows 263 and 266** (plan 28, 2026-10-17): the
+  section may now carry a wire list beside its nodes, and the outputs are
+  nodes a wire may feed, so a preset can say which output gets which
+  hands node and which effects it alone takes; an output no wire names
+  keeps the session's switches. The rough edge below is closed for the
+  outputs; at most one hands node still makes the layer.
+- **Rough edge.** The section is wiring choices for the default graph,
+  not a graph: the outputs still come from the OUTPUT page's switches,
+  so a preset cannot say which output gets which hands node; at most one
+  hands node makes the layer. Keys are strict: a key this build does not
+  know makes the section unreadable (row 197).
+- **Judge it.** Check 211.
+
+### 197. A section this build cannot read is a note and the default graph, kept as the file had it
+
+- **Superseded in part by row 221** (plan 30): a placement this build
+  cannot honour — both keys, a non-string, an unknown name, a loop — is
+  a note ending "; the default placement" and costs only that effect its
+  place; the rest of the section lands. Every other unreadable section
+  still falls back whole, as below.
+- **Built.** An unknown node kind, a value out of its choices, a key a
+  node does not take, two nodes of one instance, two layers, `laid` on a
+  node that makes no layer: one note on the preset strip ("graph:
+  unknown node kind 'teapot' (this build knows effect, hands, history);
+  the default graph"), and the values, routes and desk land as ever. The
+  section is kept verbatim and written back on save, so a preset written
+  by a later build survives a save in this one. **A `cloud` kind is such
+  an unknown kind in this run**: point clouds follow the device list
+  (row 207), not the preset's graph, until plan 28 (the orchestrator's
+  ruling; no `cloud` entry in `graph.NODE_KINDS`). The whole section
+  falls back, never part of it. A load sorts instance ids against the
+  graph it lands, and any raise between landing the graph and the values
+  puts the old graph back with its instances' values.
+- **Other options.** Drop only the bad node (a partial graph the author
+  never wrote); drop the section on save (loses a newer build's work).
+- **To reverse.** One branch in `GraphSection.read`.
+- **Rough edge.** A preset whose section fell back is not marked dirty
+  and saves it back unread; the note is the only sign. A refused load
+  still pushes a no-op undo step.
+- **Judge it.** Check 211.
+
+### 198. Instances as built: `fx.<file>.<n>.*` for an effect, `ghost.<n>.*` for a hands node, its layer `hands.<n>`
+
+- **Built.** Row 169's rule, used. A second acid is the effect named
+  `acid.2` in `FxState` (`set_instances`; the acid file's spec, labelled
+  "Acid 2"), so its params are `fx.acid.2.on/mix/speed/blend/order/target/…`
+  ("Acid 2 mix" on ROUTING and in learn lines), performance params in a
+  preset's `values`, with its own clock and order, run on the file's one
+  compiled program. A second hands node is `ghost.2` with
+  `ghost.2.on/alpha/mirror/guide/tethers/style` ("Ghost 2 opacity"),
+  session params like `ghost.*`; its layer is `hands.2` and its lone
+  readout `readout.2` on SYSTEM. Re-declaring an effect file drops only
+  its own ids, never an instance's; `fx.parse` refuses a purely decimal
+  `@param` key and `FxState.load` an effect file whose stem has a dot or
+  is digits alone (`acid.2.glsl`).
+- **Other options.** An instance as its own effect file (a copy to keep
+  in step); a per-instance prefix group (`fx2.acid.mix`: rejected,
+  row 169).
+- **To reverse.** `FxState.set_instances` and `ghost.prefix`; cheap
+  before an owner preset uses `fx.acid.2`.
+- **Rough edge.** An `fx` module preset saved while a second acid exists
+  holds `fx.acid.2.*`; loaded where the graph has one acid it says
+  "unknown id(s)". A second instance of an effect not on disk waits for
+  the file. `ghost.2.*` are session params, and a show opens before its
+  startup preset declares the node: the show holds them back
+  (`Project._held_back`, neither reported unknown nor counted dirty) and
+  `GraphSection` seeds the node from the open show once per show
+  opened, so the glass comes up as saved.
+- **Judge it.** Checks 212, 213.
+
+### 199. A second hands node is its own `Ghost` over its own `GhostState`, kept while the app runs
+
+- **Built.** `preset.GraphSection` declares `ghost.2.*` on a `GhostState`
+  it keeps for the run and hands to the renderer
+  (`Renderer.ghost_states`); `Renderer.ghost_of("ghost.2")` makes a
+  `Ghost` over it on first use, following the first ghost's tracker and
+  routing table. The graph's `Hands`, `HandsLayer` and `Readout` nodes
+  draw through their own node's Ghost, and each Output lays its own
+  layer's and readout's. A graph that no longer holds `ghost.2` releases
+  its Ghost (`Renderer.drop_ghosts`, also on a hot reload); a preset that
+  brings the node back finds its settings as they were.
+- **Other options.** The state owned by the renderer (the registry would
+  need the render stack to declare `ghost.2.*`, which it must not); a
+  fresh state per load (the glass's mirror and style lost at every
+  preset change).
+- **To reverse.** Local to `GraphSection.land`, `Renderer.ghost_of`.
+- **Rough edge.** `ghost.2.on` starts off (decision 24): a preset that
+  adds the node shows nothing on the glass until the show switches it
+  on. The HANDS page shows `ghost.*` only; `ghost.2.*` are reached from
+  ROUTING, Learn and the desk (plan 28).
+- **Judge it.** Check 213.
+
+### 200. Where two hands nodes go: every `into: "scene"` node in the scene; the `into: "layer"` node (else the first) on the outputs without the hands in their scene
+
+- **Built.** `graph.default_graph` with `Wiring.extra`: the scene draws
+  every in-scene hands node (solid first); the layer is drawn from the
+  node `into` "layer", else from the first (`Wiring.layer_node`), laid
+  over or through on every output whose hands switch is on and whose
+  scene does not hold hands. An output showing the scene with hands in it
+  takes the first in-scene node's readout; one taking the layer, the
+  layer's. So `ghost` in the scene and `ghost.2` the layer: the projector
+  (scene + hands) shows `ghost` in its scene; the glass (scene off, hands
+  on) shows `ghost.2`'s own picture — its style, opacity, mirror and
+  guide.
+- **Other options.** Both nodes on every output (the projector would show
+  the hands twice); a per-output choice of node (output params, a session
+  decision: plan 28).
+- **To reverse.** Local to `default_graph`.
+- **Rough edge.** A glass that shows the scene too gets the scene's hands,
+  not the second node: its scene switch must be off.
+- **Judge it.** Check 213.
+
+### 201. "Hands as lines" is a hands node's `draw: "lines"`: the style's own meshes drawn as edges
+
+- **Built.** A hands node drawn `lines` (`HandsAt.draw`, the JSON's
+  `draw`): `Ghost.draw_solid(…, lines=True)` and `Ghost.layer(…,
+  lines=True)` draw the style's spheres, capsules and palm as their
+  triangles' edges (`ghost.Geometry.draw(lines=)` sets `ctx.wireframe`
+  and puts it back), one pixel wide, depth-tested and depth-writing as
+  ever; the guide stays solid. A node setting in the preset's graph, not
+  a param (`ghost.style` is the session's, so a preset could not say
+  "lines" through it). Default `solid`.
+- **Other options.** A sixth `ghost.style`, LINES (a session param: a
+  preset could not choose it); quads for the bones like the shape's
+  edges (a real line width; a new draw path).
+- **To reverse.** Remove `draw` from `HandsAt` and the `lines` keyword.
+- **Rough edge.** Wireframe lines are one pixel whatever the dpr (core GL
+  has no wide lines): thin on a 2× screen. The capsules' tessellation
+  shows as a dense hatching, not a skeleton of bone lines — the owner
+  judges whether this is "lines" (plan 28 / H3).
+- **Judge it.** Check 214.
+
+### 202. The OUTPUT and LOOKBACK pages say the wiring in words, on lines they already had
+
+- **Built.** The OUTPUT page's "shows:" line says the wiring under a
+  preset's graph (`ui.output_shows(…, wiring)`): an output whose scene
+  holds the hands "scene + hands: in the scene as lines" (whatever its
+  hands switch: the scene holds them anyway), a layer on its node when
+  there are two ("hands through the effects (2)"), "as lines", "·
+  depth-aware" / "· added". With the default graph the words are
+  unchanged. Its hover gives `hands: in the scene · …`
+  (`graph.hands_words`) and the loaded graph in one line (`graph: hands
+  1 in the scene as lines · history with the hands`,
+  `graph.graph_words`). The LOOKBACK page says `history: the scene` or
+  `history: the scene · with the hands` under its switch
+  (`ui_lookback.history_line`, since plan 35 `capture_line` and `draws_over_line`). No editor (plan 28); the existing
+  switches still set the default graph's wiring.
+- **Other options.** A line per output of its own (four outputs overflow
+  the control window); the whole graph as a line on the page (the same).
+- **To reverse.** Local to `output_shows` and the two pages.
+- **Rough edge.** After a hot reload of graph.py the held `Wiring` is the
+  old module's class until the next preset load (harmless today). The
+  full graph line is on a hover only; a hidden layer node is named by
+  number ("hands 2").
+- **Judge it.** Check 215.
+
+### 203. Undoing a load puts the loaded preset's graph back first
+
+- **Built.** `library.Marks.take` carries `GraphSection.mark()` (the spec
+  and the section as read); `Marks.before` lands it again before the
+  values, so undoing the load of a preset with a second acid removes
+  `fx.acid.2.*` and redo brings them back with their values. A load
+  refused for a value puts the graph that was there back, with its
+  instances' values.
+- **Other options.** None worth it: without it an undo would put values
+  on params that no longer exist.
+- **To reverse.** Two lines in `Marks`.
+- **Rough edge.** None known.
+- **Judge it.** Check 211.
+
+### 204. A point cloud is solid geometry in the scene: opaque round dots, depth written, before the see-through shape
+
+- **Built.** `graph.PointCloud` draws the latest frame of `cloud:<role>`
+  (`DeviceRegistry.clouds`, row 166) through the eye as one instanced
+  quad per point (`CLOUD_VS` is A2's point-quad arithmetic), a hard round
+  dot, alpha 1, depth tested and written. It is `SOLID`, so the scene
+  draws it with the hands, before the shape: the shape's strokes in front
+  of a point lie over it, and a point in front hides the strokes behind
+  it. A dot is a whole number of framebuffer pixels across (row 186); a
+  point behind the eye is dropped.
+- **Other options.** See-through points sorted with the shape (a per-frame
+  CPU sort of N points; plan 29's sensors publish 10⁵); soft-edged
+  blended dots (the rim either cuts the shape or is hidden by it); GL
+  point sprites (no real depth size control).
+- **To reverse.** Local to `PointCloud.draw` / `CLOUD_FS`.
+- **Rough edge.** Hard edges (MSAA smooths them on output 1; plain outputs
+  show stair-steps). A point is the same size in pixels at any depth.
+- **Judge it.** Check 216.
+
+### 205. The cloud's world transform is one uniform scale about the world origin (`cloud.scale`, default 0.3), not the shape's camera
+
+- **Built.** `u_model = diag(k, k, k, 1)` with `k = cloud.scale` (0.01–10,
+  log, default 0.3: the fixture knot's ±3 units land at ±0.9 shape radii,
+  the shape's size; a Kinect's metres at 0.3 would make a 2 m person 0.6
+  radii). The shape's `camera.zoom/pan` and `rot.*` do not move the cloud
+  (they are the shape's transform, decision 4); the eye does.
+- **Other options.** Fit the cloud's `bounds` into the unit sphere each
+  frame (the scale would breathe with a live sensor's noise); the shape's
+  model matrix (the cloud would tumble with the shape); a full position
+  and rotation (`cloud.pan.*`, `cloud.yaw`: plan 29's sensor calibration).
+- **To reverse.** One param and one matrix.
+- **Rough edge.** No offset or rotation: a sensor's cloud centred away
+  from its origin sits off-centre until plan 29 calibrates it.
+- **Judge it.** Check 216.
+
+### 206. `cloud.*` is a session group: size, scale, brightness, the cloud's own colours
+
+- **Built.** `cloud.size` ("Cloud point size": radius in logical px,
+  0.5–12, default 2), `cloud.scale` (row 205), `cloud.bright` (× the
+  colour, 0–2, default 1), `cloud.colors` (toggle, default on: the
+  source's colours; off, or a source with none, white). In
+  `params.SESSION_GROUPS` (the cloud is the room's sensor; a preset load
+  never changes how it is shown), on `ViewState.cloud_*`. Size, scale and
+  brightness are modulatable; the colours toggle is not. Every cloud node
+  reads them.
+- **Other options.** Performance params (a preset would carry the look
+  of a sensor it may not have); a hue or tint param (a look: the creative
+  pass).
+- **To reverse.** Local to `params.build_registry`'s block and four
+  `ViewState` fields.
+- **Rough edge.** No panel row: Learn and ROUTING reach them. A second
+  cloud node (`cloud.2`) shares them.
+- **Judge it.** Check 217.
+
+### 207. The renderer is handed the device registry; a *listed* `cloud` device adds its node to the default scene
+
+- **Built.** `Renderer.cloud_source` (one line in `app.main`:
+  `renderer.cloud_source = rig`). `graph.cloud_roles(source)` reads the
+  roles of the devices whose `kind` is `cloud` (duck-typed: `graph.py`
+  never imports `devices`), `Renderer._graph_for` keys the graph on them
+  (row 180), and `default_graph(views, wiring, clouds)` adds one
+  `PointCloud` per role (`cloud`, `cloud.2`, …) as the scene's first
+  geometries. A listed device whose file is missing, not yet polled or
+  closed keeps its node, which draws nothing — so a recording copied in
+  later shows with no graph change. With no `cloud` entry the graph is
+  the one before, node for node.
+- **Other options.** Key on the clouds *present* (a rebuild whenever a
+  device drops or returns); any device with a `Port(kind="cloud")` (plan
+  29's sensor kinds would add themselves, but every device is asked for
+  its ports each frame); a `cloud` kind in the preset's graph (ruled out
+  for this run, row 197).
+- **To reverse.** Local to `cloud_roles` and `_graph_for`.
+- **Rough edge.** Only devices of kind `cloud` are found: plan 29's sensor
+  kinds must be added to `cloud_roles` (one line) or move it to the ports.
+- **Judge it.** Checks 216, 218.
+
+### 208. The cloud's buffer is uploaded on a new (frame id, publish time); its GL objects live on the renderer
+
+- **Built.** `graph._CloudGL` (on `Renderer._cloud_gl`, made on the first
+  cloud drawn) holds the program, the quad's corners and, per node, a
+  points buffer, a colours buffer and a vertex array. It writes the
+  read-only float32 points only when `(cloud.frame, cloud.t)` moved — the
+  publish time too, because a re-opened device counts its frames from 0
+  again. A graph rebuilt for new switches re-uploads nothing;
+  `Renderer.on_reload` releases them.
+- **Other options.** Key on `frame` alone (a re-opened device's frame 0
+  taken for the old one); buffers on the node (released or leaked on
+  every rebuild).
+- **To reverse.** Local.
+- **Rough edge.** A node removed from the graph (its device unlisted)
+  keeps its buffers until the next reload.
+- **Judge it.** Check 218.
+
+### 209. The cloud's draw is its own SYSTEM line, named after the node
+
+- **Built.** The scene times each solid geometry under its node's name
+  (row 195), so the SYSTEM page reads `cloud` (then `ghost` when the
+  hands are in the scene) before `scene`. `stats["clouds"]` holds each
+  cloud node's drawn point count this frame; a draw that raises is
+  `stats["cloud_error"]` and the scene goes on.
+- **Other options.** The cloud's time inside `scene`'s line (no way to
+  see its cost).
+- **To reverse.** Local to `Scene.run` and `Graph.timed`.
+- **Rough edge.** `cloud_error` is on no page (the device's own SYSTEM
+  line says whether it is `connected`).
+- **Judge it.** Check 218.
+
+## Shader nodes (plan 30)
+
+Built in plan 30's run on 2026-10-17
+([`plans/30-shader-nodes.md`](plans/30-shader-nodes.md)), on
+`plan-28-30-integration` until the owner merges it. The owner's own
+decisions for this plan (1–5 and the render parts of 16 of the launch
+prompt: shaders are nodes, the palette moved first, the auxiliary ports
+designed and not built, no preset edited, the default graph
+pixel-identical) are in [`DECISIONS.md`](DECISIONS.md) with Who
+"owner"; these rows are what the build chose where those left a choice
+open — the end node's name, how an off effect is skipped, the texture
+pool, the placement keys and their vocabulary, refusals and dormancy,
+the words, the FX page's placed chips, the `VALUE` port's shape and the
+faces target. No preset was edited or added: every proof is a fixture
+under `tests/fixtures/presets/`.
+
+### 214. The pipeline end keeps the class name `Fx`, its node names and its SYSTEM lines
+
+- **Built.** `graph.Fx` is now the thin end of a pipeline: its input is
+  the last effect of its run, its `paint` paints that input (moving the
+  clocks once and counting `chain_runs`), and its `run` keeps every job
+  it had — straight into the one output at the frame's size, unflipped
+  and on this context, else the pipeline's frame texture; `bent` /
+  `fallback` through `Fx.source` / `Fx.layer`; a raise marking the
+  views. The nodes are still `fx`, `fx(scene+hands)`, `fx(hands)`, and
+  SYSTEM keeps their lines. The owner sees the `fx` line at **0.00**:
+  the end runs no pass of its own, and the effects' time moved to their
+  own lines just above it.
+- **Other options.** A new class (`End`, `Pipeline`) with `Fx` gone or an
+  alias: every test, tool and document naming `fx` / `Fx` changes, and
+  the golden manifest's recorded `nodes` lists would move.
+- **To reverse.** Rename the class and `FX_NAMES`; re-record the
+  manifest's `nodes` lists (no pixel moves).
+- **Rough edge.** 0.00 on `fx` does not mean the effects cost nothing:
+  their cost is on their own lines (`acid`, `huecycle` …).
+- **Judge it.** Check 220.
+
+### 215. An off effect is read through by its consumer: no pass, no texture, no change to the graph
+
+- **Built.** An `Effect` not in `FxState.chain(FRAME)` this frame
+  (switched off, mix 0, the stack bypassed, aimed at the faces) or whose
+  file never compiled paints its input straight into its consumer's
+  framebuffer, and its `image` is its input's. Every instance is in
+  every run, on or off (the run is `FxState.names()`), so switching a
+  chip on or off rebuilds nothing: `Renderer._graph_for` rebuilds only
+  when the list in order changes (an order, an instance, a file).
+  Retargeting an effect to the faces rebuilds nothing either. Measured
+  on party-acid: four passes a frame for the four on effects, none for
+  the nine off.
+- **Other options.** Rewire the edge around an off node each frame (the
+  graph's shape follows the chips); a run holding only the on effects (a
+  rebuild on every toggle).
+- **To reverse.** `Effect.paint` / `image` and `_graph_for`'s key.
+- **Rough edge.** Thirteen effect nodes per pipeline whatever is on (up
+  to 39 with the three pipelines), seen only in `repr(graph)` and on the
+  GRAPH page. A file that fails to compile reads through instead of the
+  old block's copy through a half-float texture (the same picture
+  within half-float rounding).
+- **Judge it.** Check 221.
+
+### 216. The effects' pool is the chain's half-float textures: two, plus one per held picture, sized by the graph
+
+- **Built.** `FxChain.pool(size, n)` hands out the chain's `f2` textures
+  (the faces' chain's `begin` hands out the pool's first framebuffer, asking for at least the textures it already holds, two at the least). `Graph.pool` is 0
+  with no effect node, else 2 plus one per effect read by more than one
+  node — and, since D1, one per placed effect that folds a made texture
+  or an output's frame. A straight run alternates the two however long
+  it is. A held picture is made once (`Effect._make(frame, avoid=dst)`,
+  `graph._spare`: never the consumer's target, never a texture already
+  held) and shown 1:1 into each reader. A graph that needs fewer
+  textures releases the pool (`FxChain.fit_pool`); a size change makes
+  all of them again; the pool grows by one if none is free.
+- **Other options.** A pool owned by the graph object (the renderer's
+  release paths and the hot-reload hooks would need it too); a texture
+  per effect (13 × 3 half-float frames).
+- **To reverse.** Local to `FxChain.pool`, `graph._spare`, `Graph.pool`.
+- **Rough edge.** A held picture costs one copy more than a direct pass,
+  and its second reader sees the half-float texture. The `avoid` rule is
+  load-bearing: a held texture shown into itself is a GL feedback loop
+  (pinned by
+  `tests/test_graph_effects.py::test_a_held_effect_read_through_the_pool_is_never_its_consumers_target`).
+- **Judge it.** Check 222.
+
+### 217. An effect's node is named by the effect in the scene's pipeline and with the pipeline's suffix in the others
+
+- **Built.** `graph.effect_node_name`: `acid`, `acid.2`, `palette` in the
+  scene's pipeline — the SYSTEM line and the word a placement names —
+  and `acid(scene+hands)`, `acid(hands)` in the others, as the ends are
+  named. An effect whose name another node has (a `scene.glsl`, a
+  `capture.glsl`, `output.2`, or `fx` against the ends) takes the
+  params' prefix: `fx.scene`, `fx.fx(scene+hands)`.
+- **Other options.** `fx.<name>` for every effect node (unambiguous, but
+  not the word the design and the placements use); one node shared by
+  the pipelines (the passes differ per pipeline).
+- **To reverse.** `effect_node_name` and the collision rule in
+  `default_graph`.
+- **Rough edge.** With the hands through and two pipelines running,
+  SYSTEM shows `acid` and `acid(scene+hands)`: correct, but two lines for
+  one chip.
+- **Judge it.** Checks 220, 222.
+
+### 218. SYSTEM shows a line only for an effect that ran a pass that frame
+
+- **Built.** `Effect.TIMED` is False, so `Graph.timed` (and the golden
+  manifest's recorded `nodes`) are as before; `Graph.timed_in(frame)`
+  adds the effects that ran (`frame.stats["effects"]`) in their places,
+  and the renderer hands that to the timer. An effect switched off drops
+  its line once its last timed frame is read back (`PassTimer.LAG`, a
+  few frames).
+- **Other options.** A line for every effect node, 0.00 when off (13 to
+  39 dead lines).
+- **To reverse.** `Effect.TIMED = True` and `end_frame(graph.timed)`.
+- **Rough edge.** On Apple's tile GPU a timer query is charged when a
+  render pass is flushed, so a line can carry its input's work or read
+  0.00: the lines are indicative, not an exact split (party-acid: the
+  old `fx` line 0.225 ms, the new lines summing to 0.089 ms, wall time
+  the same within noise; the review pass measured 0.225 against 0.078
+  ms, and the frame's wall time 1.34 → 1.44 ms median, about +0.1 ms,
+  inside the base's spread but higher in two rounds of three). Each on
+  effect's `FxChain._program` is assembled twice a frame (`ready`, then
+  `run_one`): string work and a compare, never a compile — a per-frame
+  cache would need a frame counter the tests' direct calls never tick.
+- **Judge it.** Check 220.
+
+### 219. The placement keys are `after` and `into`, both kept
+
+- **Built.** An effect entry in a preset's `graph` section may carry
+  `"after": "<node>"` — on that node's picture, every consumer of it
+  reading the effect — or `"into": "<node>"` — on that node's `image`
+  input alone — never both. A placed effect may name instance 1
+  (`{"kind": "effect", "file": "palette", "after": "hands"}`), which
+  takes the file itself out of the chain; an unplaced instance 1 is
+  still refused ("2 or more"). The section writes instance 1 by its file
+  alone and an extra instance with `instance`. The owner sees nothing in
+  a factory preset; the three fixtures use one key each.
+- **Other options.** One key with a port suffix (`"at":
+  "output.2.image"`): it reads less plainly and needs a port vocabulary
+  plan 28's wires bring anyway; `after` alone, `into: output.2` written
+  `after: output.2`.
+- **To reverse.** `EffectAt`, `_effect_entry`, `GraphSpec.to_json`, the
+  three fixtures; plan 28's wires read both keys.
+- **Rough edge.** `after: "output.<n>"` is accepted and means the same
+  as `into` (an output has no picture of its own to come after); both
+  are written back as the file had them. A build from before plans 28 and 30
+  refuses either key and opens the preset as the default graph with a
+  note (row 277).
+- **Judge it.** Checks 223, 224.
+
+### 220. The placeable names, and which key each takes
+
+- **Built.** `scene`, `hands`, `hands.<n>` (n ≥ 2), `history`,
+  `output.<n>` (n ≥ 1) and an effect instance this build has (a file on
+  disk, or an extra instance the same section declares). `into` takes
+  only the history, an output or an effect: the scene's and a layer's
+  inputs are geometry, so `into: "scene"` is refused with "its inputs
+  are geometry, not a picture: after 'scene' folds its picture". An
+  effect cannot sit after or into itself. The note: `graph: palette after
+  'teapot' — this build places after scene, hands, hands.2 …, history,
+  output.1 …, or an effect; the default placement` (for `into`:
+  "history, output.1 …, or an effect").
+- **Other options.** One list for both keys, `into: scene` meaning
+  `after: scene` (hides a mistake).
+- **To reverse.** `placement_error`, `_PLACE_NODE` / `_PLACE_EFFECT`,
+  `PLACE_WORDS`.
+- **Rough edge.** `hands.<n>` is honoured only on the node that makes
+  the layer (one layer per graph); otherwise the effect is dormant ("no
+  hands.2 layer this frame"). Read with no list of files
+  (`read_graph(section)` alone) any well-formed effect name passes and a
+  missing file is dormant at build.
+- **Judge it.** Check 225.
+
+### 221. A refused placement costs only that effect its place; a loop is refused at read and again at build
+
+Folds two of D1's drafts: the refusals, and the loops.
+
+- **Built.** Both keys at once, a non-string (an explicit `null`
+  included), a name outside the vocabulary, or a placement that makes a
+  loop each give one note on the preset strip ending "; the default
+  placement", and that effect goes back to the chain: an extra instance
+  at its order, instance 1 as the file. The rest of the graph lands,
+  and the section is kept as the file had it. A loop is found by
+  following each placed effect's target through the others
+  (`graph.placement_loops`): every effect on it gets `palette after
+  'acid.2' — that makes a loop (palette after acid.2 into palette)`.
+  `default_graph` checks again (`Graph.notes`) and `Graph.insert` refuses
+  an edge whose consumer is upstream, so a hand-built `Wiring` cannot
+  loop either. `read_graph` returns the notes in `GraphSpec.notes`;
+  `GraphSection.read` passes it the effect files on disk. Anything else
+  unreadable is still row 197's note and the default graph.
+- **Other options.** Treat a bad placement like any unreadable section
+  (the whole section dropped, the hands' wiring lost for one typo);
+  detect loops only at build, through the sort.
+- **To reverse.** `_effect_entry`'s return, `read_graph`'s notes,
+  `GraphSection.read`, `placement_loops` and its two callers.
+- **Rough edge.** A save writes the refused placement back unchanged (by
+  design: fix it in the JSON or on plan 28's GRAPH page). Every member of
+  a loop is refused, not only the last named. An explicit `null` is
+  refused in Python's words: the note reads `palette after None — …`
+  where the file says `null` (cosmetic).
+- **Judge it.** Check 225.
+
+### 222. A placement on a node the built graph lacks is dormant: no node, said in words
+
+- **Built.** `default_graph` builds no node for a placed effect whose
+  target is absent this frame and says why in `Graph.dormant`: `palette
+  after hands — no hands layer this frame`, `palette.2 into output.3 —
+  no output 3 this frame`, `… — output 2 shows no picture this frame`,
+  `… — no kaleido effect in this build`, `warp after palette — palette
+  is dormant this frame`. It does not fall back into the chain. The
+  OUTPUT page lists `dormant: …` under the output blocks
+  (`ui.dormant_lines`) and the "shows:" hover uses `graph_words(spec,
+  graph.dormant)`. The graph is rebuilt when the switches change, so the
+  node comes back as soon as its target exists.
+- **Other options.** Put a dormant effect back in the chain (it would
+  bend the whole picture where the preset said the hands only); keep a
+  node with no input.
+- **To reverse.** `_place_one`'s returns and `Graph.dormant`.
+- **Rough edge.** Dormancy follows the switches, not "a hand is in the
+  box": with the hands switch on and no hand, the node exists and has
+  nothing to fold (no pass). A build from before plans 28 and 30 refuses the placement keys and opens such a preset as the default graph with a note (row 277).
+- **Judge it.** Check 226.
+
+### 223. How an effect sits on an edge: folded once in `run` after a texture, folded by the output into an output, the presenter given the folded picture
+
+- **Built.**
+  - After the scene or a hands layer, or after such an effect, the
+    effect folds that texture once in its own `run`, before any pipeline
+    paints, into a held pool texture (`Effect.makes`, `_made`); every
+    consumer reads that picture, and a source with no picture this frame
+    leaves it none.
+  - On a layer (`Effect.see_through`, walked back to the source, so no
+    edge carries it) the pass runs with `u_opaque = 0`, so a see-through
+    pixel stays see-through, and it is laid on at the layer's
+    `ghost.alpha` with the layer's depth (`Renderer.lay`). The layer's
+    readout is split always: the guide and labels are never folded.
+  - Into an output: `Output.folds` folds the frame texture the output
+    settled on into a held pool texture and shows it; that pipeline is
+    never painted direct.
+  - After or into a painted node (the history, an effect of the run):
+    D0's paint path, held with two readers. `after` rewires every image
+    port but those that read something else of the node (`Node.REFS`:
+    the face buffer, a depth, the readout). After an effect of the run,
+    one placed node per pipeline. A placed node is listed after its
+    source, so SYSTEM shows it under it.
+  - **Presenters** (every output after the first): an output laying a
+    folded layer hands `_compose` the folded texture, so `Handoff.hands`
+    is folded, at its own Ghost's opacity (`Effect.ghost`: ghost 2's for
+    `hands.2`); an output folded by `into` hands its presenter the folded
+    frame.
+  - **`fx_on`** is "an effect of a chain run is on" (`chain(FRAME)` less
+    `Graph.placed_names`): with only placed effects on, a through output
+    stands down as with none.
+- **Other options.** Paint the layer through the effect on demand at
+  each consumer (a pass per consumer, or D0's aliasing risk from a
+  `lay`); an output-fold node that re-runs the pipeline (two chain runs).
+- **To reverse.** `Effect.run` / `_made` / `fold` / `_one`,
+  `Output.folds` / `run`, `Fx.run`'s direct test, `Graph.pool`,
+  `Graph.insert`, `Renderer._compose`'s `hands_tex`.
+- **Rough edge.** A presenter's `Handoff.frame` / `hands` may be a
+  half-float pool texture wrapped "f1" (plan 26's contract widened, the
+  docstring says so): proven by texture identity in the tests, never on
+  a real second window. `into: output.<n>` on a **through** output that
+  stands down this frame (no effect of its run on, or no hand drawn):
+  when the output falls back to its ground, the fold has nothing to fold
+  and is skipped, and the review pass's fixes (#221) say so as a dormant
+  word for that frame — `palette into output 2 — output 2 stands down
+  this frame` (`Graph.stood`), on OUTPUT's dormant lines and the FX
+  page's chip; when it falls back to the scene pipeline, the fold does
+  run, on the scene alone — the hands laid over at the output are not
+  folded — and nothing says so. A glass on `hands+through` with the chain
+  switched off live is the reachable case: the palette stops folding the
+  hands there.
+- **Judge it.** Checks 223, 224, 227.
+
+### 224. The words: "on the hands", "before the history", "on output 2 only"
+
+- **Built.** `graph.placement_words`: after the hands `palette on the
+  hands` (`on hands 2`); after the scene `acid 2 before the history`
+  (the history and the capture both read it); into the history `acid 2
+  into the history only`; after it `palette after the history`; an
+  output `palette 2 on output 2 only`; after an effect `palette after
+  acid 2`; into one `palette before warp`. `graph_words` appends them,
+  or the dormant words. The OUTPUT "shows:" line adds the placements on
+  what that output shows (`· palette 2 on this output only` for its own
+  fold); LOOKBACK's history line adds those on the history's way in or
+  after it.
+- **Other options.** The node words as written (`after scene`, `into
+  output.2`): less readable at distance.
+- **To reverse.** `placement_words`, `output_placement_words`,
+  `history_words`.
+- **Rough edge.** LOOKBACK reads `history: the scene · acid 2 before the
+  history` (a little redundant); a placed extra instance still counts in
+  `palette ×2` on the graph line.
+- **Judge it.** Check 228.
+
+### 225. The three proof fixtures and their extra values
+
+- **Built.** Each fixture is a factory preset's `values`, `routes` and
+  `macros`, with no `desk` or `modules` (like `hands-lines`), plus:
+  `palette-hands.json` — party-tracer, the palette `after: "hands"`, on,
+  mix 1, centre 200, width 60 (hue 170 → 230 since N8, row 295), and `fx.on: true` (party-tracer bypasses
+  the stack, so the palette would never run); `palette-glass.json` —
+  party-acid, the palette `into: "output.2"` with the same values, so
+  the output visibly folds; `acid-scene.json` — party-mandala, a second
+  acid `after: "scene"` with party-acid's acid (bend 0.04, twist 0.9,
+  reach 10, breathe 0.35), on, mix 1, and `dream.on: true`
+  (party-mandala has the look-back off, and "the echoes hold the bent
+  scene" needs echoes). 24 goldens, recorded once.
+- **Other options.** The default palette (width 360, which barely shows);
+  the look-back left off in acid-scene (nothing of the capture shown).
+- **To reverse.** Edit the fixtures and re-record their goldens
+  (`--only`).
+- **Rough edge.** No desk, so a fixture loaded at the machine has no
+  APC40 rows (the desk is Dylan's). No fixture places two instances of one file (check 231 uses a hand-made variant; no test loads that configuration). `palette-glass` folds output 2,
+  which on the testing guide's rig (D1: the glass output 1) is the
+  projector.
+- **Judge it.** Checks 223, 224, 227.
+
+### 226. A placed effect's chip sits in a grid of its own, its place after its name
+
+- **Built.** The FX page still edits the default chain. An effect the
+  loaded preset places leaves the chain's grid for a second grid under
+  it, three to a row: `Warp · after hands`, `Palette · into output 2`,
+  `Acid 2 · after scene`, cut with an ellipsis to fit
+  (`ui_fx.placed_label`). The name's hover has the place whole, "placed
+  by the preset's graph, not in the chain: moved in the preset's JSON,
+  not by a drag", and `dormant: …` when the built graph has it dormant.
+  It is no drag source and no drop target, and a drop among the chain's
+  chips never rewrites a placed effect's order (`_drop` works over the
+  chain). Its LED switches it; its name opens its strip, whose title
+  hover reads `warp.glsl · after hands` in place of `#20`. The words
+  come from `graph.placed_chips(spec)`. Two grids of a and b chips take
+  at most one row more than one of a + b: the page never scrolls at the
+  control size.
+- **Other options.** One chip to a row with the words beside it (the
+  first build: it scrolled with three placed effects); the chip in its
+  grid place with a mark and the place on hover only (unreadable at
+  distance, and it looks reorderable).
+- **To reverse.** `ui_fx.page`'s second grid, `_chip(place=, dormant=)`,
+  `placed_label`, `_drop(placed=)`.
+- **Rough edge.** A long label and place is cut (`Kaleidoscope ·
+  aft…`). The page reads the preset's spec (`Panel.graph_now`), not the
+  built graph: a placement refused only at build would still show as
+  placed (none reaches it: `read_graph` refuses loops first).
+- **Judge it.** Check 229.
+
+### 227. The FX status line keeps the chain's labels and adds the count of placed effects that run
+
+- **Built.** Under the bypass, the running chain's labels without the
+  placed effects, then ` · N placed`: `Acid → Palette · 1 placed`, or
+  `nothing in the chain · 1 placed`. N counts placed effects that are on
+  (mix above 0), aimed at the frame and not dormant in the built graph.
+  With nothing placed the line is byte-identical to before.
+- **Other options.** The prompt's literal `3 in the chain · 1 placed`
+  (drops the labels the line has always shown and the FX tests assert).
+- **To reverse.** `ui_fx._status`.
+- **Rough edge.** The count says how many, not which (the placed grid
+  says which).
+- **Judge it.** Check 229.
+
+### 228. The chip's place words and OUTPUT's placement words are two vocabularies
+
+- **Built.** The FX chip (`graph.placed_chips`) uses the key and the
+  node — `after hands`, `into output 2`, `after scene`, `into history`,
+  `after acid 2` — the edit view, worded like the JSON. OUTPUT's
+  "shows:" line and LOOKBACK (`graph.placement_words`, row 224) say
+  what the picture gets — `palette on the hands`, `acid 2 before the
+  history`, `palette 2 on output 2 only` — the show view. Plan 28's N4
+  extends `placed_chips` for wires.
+- **Other options.** One vocabulary (`palette on the hands` is too long
+  for a chip; `after hands` reads poorly on the output line).
+- **To reverse.** Have `placed_chips` call `placement_words`.
+- **Rough edge.** One placement reads two ways on two pages.
+- **Judge it.** Checks 228, 229.
+
+### 229. A dormant placement still shows as placed, said only in the hover and the count
+
+- **Built.** A placed effect whose node the built graph lacks this frame
+  keeps its chip in the placed grid with the same words; its LED and
+  strip still work. Its hover adds `dormant: palette after hands — no
+  hands layer this frame`, and the status count leaves it out. OUTPUT's
+  `dormant:` lines (row 222) say it in full.
+- **Other options.** Dim the chip or add `(dormant)` to its label (the
+  label is already cut at three to a row); hide the chip (then it
+  cannot be switched or edited until its node comes back).
+- **To reverse.** Pass `dormant` into the label in `_chip`.
+- **Rough edge.** A lit chip can run nothing, with only the count and
+  the hover saying so.
+- **Judge it.** Check 229 (with every output's hands switch off).
+
+### 230. A placed effect aimed at the faces says "on the faces" and is not counted as placed
+
+- **Built.** An effect both placed and aimed at the faces runs in the
+  faces' chain, not on its edge (row 232). Its chip reads `Warp · on the
+  faces`, its hover "placed after hands, aimed at the faces: it runs in
+  the faces' chain", the status count leaves it out and the faces row
+  lists it.
+- **Other options.** Refuse the placement at load when the effect is
+  aimed at the faces (but `target` is a param a person can change at any
+  time: a load-time check on a live value).
+- **To reverse.** `_chip`'s words and `_status`'s count filter.
+- **Rough edge.** The preset says `after hands`; the chip does not.
+- **Judge it.** Check 230.
+
+### 231. The `VALUE` port: a fourth type, named, used by no node
+
+- **Built.** `graph.VALUE = "value"` beside `IMAGE`, `MASK` and
+  `GEOMETRY` (`graph.PORT_TYPES` holds the four): a scalar or a small
+  float vector a node publishes once a frame. Its docstring names its
+  two uses — the palette's `palette` value out (centre, width, the sat
+  and val ranges, the ramp's anchors; its slice's ends since N8, row
+  291) for a lights sink (plan 29), and
+  an image-in `sample` port on the palette that would set its params
+  from a bitmap. No node publishes or reads one (a test walks every
+  `Node` class and the built default graph). `modgraph.RENDER_VALUE =
+  "value"` names it on the modulation side, as a future source whose id
+  is the node's port (`palette:palette`); `modgraph.py` stays a leaf.
+  `Node.__init__` already type-checks a wired port, so the first node to
+  declare one wires like any other. Nothing to see.
+- **Other options.** A typed shape (a `ValuePort(n, names)` naming the
+  vector's fields); deferring the type to plan 29. Both rejected for
+  now: built with nothing to read them.
+- **To reverse.** Delete `VALUE`, `PORT_TYPES` and `RENDER_VALUE`
+  (nothing reads them).
+- **Rough edge.** The vector's layout (which float is the centre) is
+  undecided until a node publishes one.
+- **Judge it.** None at the machine: nothing is drawn.
+
+### 232. The faces target stays an inner chain
+
+- **Built.** `target = faces` still runs inside the shape's face drawing
+  (`render.face_fx`, `FxChain.run`), not on a graph edge. The
+  `fx.<name>.target` tip (an ONTO chip's hover) ends: "On the faces it
+  runs inside the shape's face drawing: the one shader run the render
+  graph does not show, and a placement in the preset's graph does not
+  move it." An effect both placed and aimed at the faces runs there
+  (row 230).
+- **Other options.** The lift, "faces as a layer": the shape's faces
+  drawn to a texture of their own, an image edge where any effect can
+  be placed — a change to the scene's drawing that puts the face pass's
+  translucency and depth at stake.
+- **To reverse.** Build the lift (a plan of its own).
+- **Rough edge.** The graph and the GRAPH page do not show this one
+  shader run; SYSTEM times it inside `scene`. Placement is not checked
+  against `target`.
+- **Judge it.** Check 230.
+
+## The node editor (plan 28)
+
+Rows 278–290, plan 28's N7 (2026-10-20), are under "A legible graph"
+below.
+
+Built in plan 28's run on 2026-10-17
+([`plans/28-node-editor.md`](plans/28-node-editor.md)), on
+`plan-28-30-integration` until the owner merges it. The owner's own
+decisions for this plan (6–16 of the launch prompt: one editor for both
+graphs, dependency order removing the lag, modifiers in the preset, two
+ports per param, values and triggers, roles not serials, the APC40 as
+two nodes, both graphs as plain JSON, no GLSL in the graph,
+`imgui_node_editor`, the processes) are in [`DECISIONS.md`](DECISIONS.md)
+with Who "owner"; these rows are what the build chose where those left a
+choice open — the patch's types and order, the frame's mark, loops and
+the delay, each modifier kind's params, the `mod` lane, where positions
+live, what the canvas draws and how a drag lands, the wire list, outputs
+as nodes, the APC40's two nodes, placeholders — and one compatibility
+fact the review pass found (277). No preset was edited or added: every
+proof is a fixture under `tests/fixtures/`. Folds: N0's "a delay's
+place" and "a delay closing a loop" are row 237; N0's "a loop of
+modifiers alone" is in row 236; N3's "the seam with N4" is in row 268;
+N4's "a hands wire on a through output" is in row 266; N5's "an edit
+inside a template" is in row 274.
+
+### 233. `modgraph.py`'s types: nodes by address or param id, an edge per port
+
+- **Built.** `ModNode(id, kind, delay=False)`, kinds `source lfo
+  modifier macro param`; a source's, an LFO's or a modifier's id is the
+  address a row names (`lane:0`, `lfo:0`, `mod:3`, `hand:right.y`), a
+  param's or a macro's its param id — an address has a `:`, an id never
+  does. `ModEdge(src, dst, port, cable, enabled)`, ports `mod`, `when`
+  (a row's gate orders before the row: a gate on an `lfo:` lane needs
+  it), `depth`, `base`, `in`, and every LFO knob `shape rate sync depth
+  phase reset` plus `trigger` (`lfo.trigger` → every LFO); a modifier's
+  own param edge is named by its param. `cable` is the route's `(source,
+  target)`. `order` is a stable DFS post-order (dependencies first, ties
+  in insertion order); `cycles` lists every elementary loop once (capped
+  at 256).
+- **Other options.** Nodes as a list; a gate folded into the `mod`
+  edge; only `depth / rate / phase` as LFO ports (the prompt's list).
+- **To reverse.** Small: `modgraph.py` is data; the GRAPH page draws from
+  the table, not from it.
+- **Rough edge.** A switched-off row is in the patch as disabled edges
+  (not run); a cable cut by a loop looks the same in the patch.
+- **Judge it.** Tests only.
+
+### 234. Only the params a later node reads land in the pass; `Param.apply` is idempotent by a frame mark
+
+- **Built.** `Router.modulate` lands (`Param.apply`) only a param that a
+  later node of the pass reads — a `scale`, a macro behind a depth
+  subscriber, an LFO knob, a modifier's own param. Every other param
+  lands in `reg.apply()` exactly as before, in registry order.
+  `Registry.begin_frame()` opens a mark (`Registry.frame`,
+  `Registry.landed`); `Param.apply(mark)` returns at once under a mark
+  it has seen; `Registry.apply()` passes the mark and closes it, so an
+  `apply()` with no pass before it (tests, `Registry.remove`) lands
+  everything. `Registry.nonfinite` also names a param that dropped a NaN
+  inside the pass. The owner feels it as "a frame earlier" where a value
+  was read stale, nothing else.
+- **Other options.** Land every param node in the pass (a leaf trigger —
+  a band-layout change, `preset.select` — would fire mid-pass, in patch
+  order); a per-param flag cleared by `Registry.apply`.
+- **To reverse.** One condition in `_rebuild_modgraph` (land always).
+- **Rough edge.** A read param lands in patch order, not registry order:
+  the same value at another moment in the frame. A test that calls
+  `p.apply()` by hand between `modulate` and `reg.apply()` on such a
+  param lets it go.
+- **Judge it.** Check 232.
+
+### 235. The patch is cached on a key built once a frame
+
+- **Built.** `Router.modgraph` is rebuilt when `_modgraph_key` moves: every
+  performer row by identity and its `source target op enabled scale
+  when`, `macros_serial`, every macro subscriber (identity, `depth`,
+  `base`), the modifiers' `(id, kind, inputs)`, the LFO count and
+  `Registry.serial` (new: moves on every `add` / `remove`). A row's
+  `value`, `rest`, `motion` and a subscriber's range are read live.
+- **Other options.** A serial bumped by every table edit door (the table
+  is also mutated in place, by ROUTING and by tests: a missed door would
+  run a stale patch).
+- **To reverse.** `_modgraph_key`.
+- **Rough edge.** `Router.modulate` costs about 5 µs a frame more:
+  31.4 / 30.5 µs on the base, 37.2 / 35.0 µs now (party-trip, 21 routes,
+  the hand tape, 2000 frames × 5 rounds, twice), mostly this tuple and
+  undo's fingerprint of the modifiers — 0.2% of a 60 Hz frame. A table
+  replaced by an identical one at the same `id` would not rebuild
+  (vanishingly unlikely).
+- **Judge it.** Tests only.
+
+### 236. A loop through no delay keeps its last cable off, with a note; the row stays
+
+Folds N0's "a loop of modifiers alone".
+
+- **Built.** A loop that passes through no `delay` modifier is broken at
+  its **last cable in table order** among those on it: that cable's
+  edges are disabled in the patch, the row stays in the table, enabled,
+  and saves as written. One note per cut under ROUTING's head, in the
+  warning colour, while the loop stands: `loop: lfo:0 → lfo.2.rate →
+  lfo:1 → lfo.1.depth → lfo:0 needs a delay — lfo:1 → lfo.1.depth is off
+  until it has one`. A loop of modifiers alone (no cable on it) keeps the
+  last modifier's input on the loop off, in id order — that modifier is
+  dormant — with `loop: mod:1 → mod:2 → mod:1 needs a delay — mod.2's
+  input mod:1 is off until it has one`. Loops are cut one at a time and
+  listed again after each cut. A macro's base subscriber never closes a
+  loop (a scene-setter at step 3). GRAPH's hover on the cut cable says
+  "off: a loop needs a delay".
+- **Other options.** Switch the row off in the table (the preset dirty,
+  `enabled: false` saved); the note in `table.notes` (cleared by any
+  edit while the loop stands); labels in the note; cut the loop's first
+  input.
+- **To reverse.** `_rebuild_modgraph`'s loop; two lines in `ui_routing.head`.
+- **Rough edge.** The row's checkbox still reads on; the modifier's input
+  combo still shows the cut input. The note uses node ids, not labels.
+  An LFO owning its own depth, which ran before with a frame of lag, is
+  refused until a delay sits in it.
+- **Judge it.** Check 233.
+
+### 237. A delay orders like any node unless it closes a loop; then it runs first, one frame late
+
+Folds N0's two delay drafts.
+
+- **Built.** An edge into a delay orders like any other (a plain delay
+  runs after its input and uses N1's stateful step: its rest first, then
+  one frame late), unless the delay reaches that edge's source again
+  (`modgraph.ordering`): then the edge does not order, the delay runs
+  first and emits its input's lane as it stood — last frame's — so a
+  loop through it is exactly one frame late; on the loop's first frame
+  it emits its rest (0). `cycles` lists no loop through a delay.
+- **Other options.** Every edge into a delay non-ordering (a delay on a
+  computed lane, stepped statefully, would be two frames late); a
+  loop-closing delay that reads NaN when its other source goes (the
+  loop could never restart).
+- **To reverse.** `modgraph.ordering` and `_step_modifier`'s `early`.
+- **Rough edge.** If the loop's other source goes away the early delay
+  emits its rest, not NaN; it passes ±inf through (harmless:
+  `Param.modulate` drops non-finite, and a modifier reading it drops its
+  memory).
+- **Judge it.** Check 234.
+
+### 238. The LFOs step inside the pass, every one a node
+
+- **Built.** `Router.use_lfos(lfos, clock)` (`app.main`, once);
+  `Router.modulate(analyzer, dt, now)` calls `LFOs.begin` (a held
+  trigger lands) and `LFOs.publish`, then `LFOs.step_one` at each LFO's
+  node. Every LFO is a node whether or not a cable touches it, so each
+  steps once a frame, in index order unless a dependency says otherwise
+  (a random LFO's draws follow that order). A per-LFO reset is held for
+  the next step only if that LFO has already stepped at this time
+  (`LFO.at`), so a reset fired earlier in the pass lands at phase 0 the
+  same frame. `LFOs.step` is `begin` + every `step_one`, for a caller
+  with no router; a bare `Router` steps no LFO. `app.frame` no longer
+  steps or publishes them (`ORDER` lost its two entries).
+- **Other options.** The bank passed to every `modulate` call.
+- **To reverse.** `app.frame` back to `lfos.step` / `publish` before
+  `router.modulate`; `use_lfos` dropped.
+- **Rough edge.** `tools/preset_shots.py`, `tools/undo_demo.py` and
+  `tools/faces_page_shots.py` keep the old frame shape (the LFOs stepped
+  outside, no `use_lfos`): they lag a frame on an LFO-on-LFO patch,
+  harmless for stills, never a double step. A hot reload of `routing`
+  into an `app.py` from before this run keeps the old order.
+- **Judge it.** Checks 232, 235.
+
+### 239. The equivalence proof's oracle is the base build's `modulate`, verbatim, in the test file
+
+- **Built.** `tests/test_routing.py::_lagged_modulate` is the base
+  build's `Router.modulate` (5d18192) copied verbatim, checked bit for
+  bit against the real base over all 23 factory presets before the
+  change. `test_every_factory_preset_lands_the_same_values_one_frame_earlier`
+  plays every factory preset with the synthetic hand tape on both and
+  asserts every modulatable param and every LFO output identical, or
+  shifted exactly by the base's computed lag (`_lag_of`). The lanes are
+  held and LFO 1 is a held square wave, so a lagged term times a moving
+  one cannot blur the shift. Three named pairs keep it from being
+  vacuous: party-trip's `camera.zoom`, lfo-breathe's `view.bright`,
+  party-tumble's `rot.rate.ZW` (the `scale` path).
+- **Other options.** A test-only flag in `Router.modulate` (a second
+  `p.modulate` call site, which the boundary walk forbids); a committed
+  recording (large, and it could not follow a helper's change).
+- **To reverse.** Delete the function and the test.
+- **Rough edge.** It shares the Router's helpers (`_resolve_lane`,
+  `gated`, `rest_of`, `feel_of`, `_move`), so it proves timing and
+  order, not the helpers. No factory preset carries a modifier or a
+  delay: those are proven by `test_modgraph` and `test_modifiers` only.
+- **Judge it.** Tests only.
+
+### 240. The six modifier kinds and their params
+
+- **Built.** Each param a registry param `mod.<n>.<p>` (group `mod`,
+  performance, modulatable). `curve`: `shape` −1…1 (y = x^(4^shape):
+  0 straight, +1 x⁴, −1 x^¼; input clamped 0…1), `invert`. `scale`:
+  `mul` −4…4 (1), `offset` −1…1 (0), `clamp` (on by default: held in
+  0…1). `smooth`: `attack` 0…2 s (0.05), `release` 0…4 s (0.35),
+  `spring` (off) — `motion.follow` about 0; spring on is a
+  `motion.spring` with ω = 1/attack, damping 0.6; the first reading is
+  taken as it is. `combine`: `how` add · mul · min · max · cross (add),
+  `balance` 0…1 (0.5, the crossfade only). `threshold`: `on` 0.6, `off`
+  0.4 (an off above on reads as on), `hold` 0…2 s (0.1): 1 on the rising
+  edge and while the hold lasts, again only after falling under `off`.
+  `delay`: no params, last frame's input, 0 on its first frame.
+- **Other options.** An S-shaped curve as well as the exponent; a spring
+  with its own Hz and damping; add clamped to 0…1.
+- **To reverse.** Small: `modifiers.PARAMS` and the kind functions; a
+  preset holding a param that goes away keeps loading.
+- **Rough edge.** A spring smooth has no release; a combine `add` can
+  exceed 1 (a `position` route clamps it, a `push` does not).
+- **Judge it.** Check 236.
+
+### 241. A modifier's lane is `mod:<n>`; a modifier whose input is not live reads NaN
+
+- **Built.** Modifier `mod.<n>` publishes lane `mod:<n>` (the lane index
+  is n; index 0 unused, never offered), labelled `<n> <kind>` ("mod 2
+  combine" on ROUTING), rest 0, its signal kind in
+  `Router.lane_kinds["mod"]` ("trigger" for a threshold, whose lane is
+  also a gate a route's `when` may wait on). A modifier whose input is
+  not live this frame — a scheme never fed, a name the rig lacks, an
+  input not chosen, a hand out of the box — is dormant: its lane reads
+  NaN, so a route on it lets go and the base returns, as on that source;
+  its memory starts afresh when the input comes back. A non-finite
+  output counts as dormant for that frame.
+- **Other options.** A dormant lane at its rest 0 (the prompt's words: a
+  `position` route would pin its target at 0); a names map
+  (`mod:smooth1`).
+- **To reverse.** One line in `Router._step_modifier`.
+- **Rough edge.** A combine with one dormant input is wholly dormant. On
+  its input's return a threshold already above `on` fires at once (a
+  hand re-entering the box hot is a rising edge), and a smooth takes its
+  first reading as it is, with no glide in.
+- **Judge it.** Check 237.
+
+### 242. Ids are one past the highest; a removal leaves its routes dormant
+
+- **Built.** `modifiers.next_id` is one past the highest id held, so a
+  removed modifier's number is not reused while a higher one stands.
+  Removing a modifier drops its params; a route on its lane stays,
+  dormant (a load drops such a route with a note instead).
+- **Other options.** The lowest free number; removing the routes on its
+  lane with it.
+- **To reverse.** `next_id` / `Bindings.remove_modifier`.
+- **Rough edge.** Removing the highest and adding again reuses its
+  number, and a dormant route left on that lane wakes on the new node.
+- **Judge it.** Check 237.
+
+### 243. A modifier's params live in its entry only, at their bases
+
+- **Built.** `{"id", "kind", "in", <params>}` (an enum by name, a toggle
+  as a bool), at their bases (a performer riding one never reaches the
+  file). `values` leaves out every `mod.*` id, and a `mod.*` id written
+  into `values` by hand is ignored with a note. The `modifiers` key is
+  written only when there is one, so an older preset saves byte for byte
+  as before. `mod` is a performance group with no module presets
+  (`preset.NO_MODULE`, beside `macro`; the PRESETS overview leaves it
+  out).
+- **Other options.** The params in `values` too.
+- **To reverse.** `Presets._values`.
+- **Rough edge.** None known.
+- **Judge it.** Checks 238, 260.
+
+### 244. A desk template's modifiers: the preset's override by id; a save writes only what differs
+
+- **Built.** A preset that names a template lands the template's
+  modifiers with its own overriding by id (the merged set held and drawn
+  in id order), and a save writes only the entries that differ from the
+  template's as the load read them (the desk's `compact_desk` rule), so
+  a fix to the template reaches every preset that uses it at the next
+  load.
+- **Other options.** A save writing the whole list (a template fix would
+  never reach a preset saved once).
+- **To reverse.** `Presets._modifiers_part`.
+- **Rough edge.** A template's modifier the preset removed comes back at
+  the next load: there is no "none" entry.
+- **Judge it.** Check 239.
+
+### 245. The modifiers and their params are one undo part of the table
+
+- **Built.** `undo.TABLE_GROUPS = ("mod",)`: the modifiers are watched as
+  one table part, their params not as bases, so adding, removing, an
+  input picked and a param's drag are each a step, and a restore puts
+  the node and its params back together (`Bindings.set_modifiers`). The
+  strip's +, × and input combos push named steps ("add modifier
+  smooth", "delete modifier mod.2", "modifier input mod.2"); an input
+  pick replaces the modifier whole, and picking the input it already
+  reads is no step.
+- **Other options.** The params watched as bases (adding a modifier, a
+  new id, would be no step).
+- **To reverse.** `undo.TABLE_GROUPS`.
+- **Rough edge.** A restore re-declares every `mod.*` param (a performer
+  riding one picks it up again next frame).
+- **Judge it.** Check 240.
+
+### 246. Learn takes a `mod:` lane only when armed for anything or for "mod"
+
+- **Built.** `Learn.accepts` takes a `mod:` lane for a learn armed with
+  no `want` or for "mod", never a desk, pad, hand or role learn;
+  `learn_source("mod:1")` lands a push or position route like a hand
+  axis. No "Learn modifier" menu entry: nothing physical moves a
+  modifier. (On GRAPH a modifier's lane is dragged onto a `mod` stub
+  instead.)
+- **Other options.** A "Learn modifier" entry that waits for a
+  modifier's output to move.
+- **To reverse.** Two lines in `Learn.accepts`.
+- **Rough edge.** None known.
+- **Judge it.** Tests only (`tests/test_modifiers.py::test_learn_takes_a_mod_lane_as_a_continuous_source`).
+
+### 247. The MODIFIERS strip sits between the routes and the desk, a line and a params line each
+
+- **Built.** A title with a kind combo and **+ modifier** flush right;
+  per modifier `MOD n`, its kind, an input combo per input (the route
+  sources plus the other modifiers' lanes, never its own), the live
+  output bar and number ("dormant" while not live), ×; a second line of
+  its params as the panel's own widgets (slider, checkbox, combo), so
+  Learn, "Route a lane here…" and base → effective come with them. The
+  kind is fixed once added. The page filter matches a modifier by id,
+  "mod n", kind and inputs.
+- **Other options.** A kind combo per modifier (changed in place); the
+  strip under the macros.
+- **To reverse.** `ui_routing.modifiers`.
+- **Rough edge.** Three params on the narrow panel make short sliders;
+  no live bar of the inputs.
+- **Judge it.** Check 241.
+- **Superseded in part by rows 288 and 289** (plan 28 N7, 2026-10-20):
+  the strip is no longer drawn on ROUTING (its pointer line to GRAPH is
+  there); its per-modifier block (`ui_routing.modifier_block`) is the
+  editor of a selected modifier node in GRAPH's side pane, stacked, and
+  a modifier is added from GRAPH's right-click picker. `ui_routing.modifiers`
+  itself is unchanged.
+
+### 248. Node and pin ids are strings with a kind prefix; the widget's integers are a per-panel map
+
+- **Built.** Nodes `device:<role>` (`device:<role>/global` for the SHIFT
+  node), `template:<name>`, `source:<scheme>`, `analyzer`, `lfo.<n>`,
+  `mod.<n>`, `macro.<n>`, `render:<node>` (`render:eye`,
+  `render:output.<n>`), `group:<group>`. Pins `out:<address>`,
+  `base:` / `mod:` / `depth:<pid>`, `in:<mod id>.<k>`, `bus:<macro id>`,
+  `rin:<node>/<port>`, `rout:<node>`. The node ids are the `layout` keys
+  the owner sees in a preset or show file. `ui_graph` maps each string to
+  a stable int for the editor.
+- **Other options.** Strings hashed to ints (collisions); bare names
+  (`shape`, which clashes with the band `scene` group).
+- **To reverse.** The layout keys change: a saved `layout` would need
+  migrating.
+- **Rough edge.** A render node a later plan renames loses its saved
+  position.
+- **Judge it.** Check 244.
+
+### 249. Params sit on the render node that owns them by one table; the rest a node per group
+
+- **Built.** `graphview.OWNERS`: `view` / `rot` / `pattern` → `shape`;
+  `ghost[.<n>]` → that hands node; `cloud` → the first point cloud;
+  `dream` → `history`; `fx.<effect>.*` → that effect's node in the
+  scene's pipeline (else its first), `fx.on` / `mix` / `select` → `fx`;
+  `camera` / `eye` → `render:eye` (the shared camera, no image port);
+  `output.<n>.*` → that output. Every other group, and a mapped one
+  whose node is not in this frame's graph, is `group:<group>`. `lfo.<n>.*`
+  sit on their LFO, `mod.<n>.*` on their modifier, `macro.<n>` on its
+  bus node.
+- **Other options.** One "misc" node; the camera on `shape`.
+- **To reverse.** One dict.
+- **Rough edge.** With no render graph yet (before the first frame, or
+  headless) everything falls to group nodes. Effects in the other
+  pipelines (`acid(hands)`) carry no params.
+- **Judge it.** Check 243.
+
+### 250. The canvas draws every modulatable param and every row's target; setters into `base`; no sinks
+
+- **Built.** Param ports are every modulatable non-alias param plus any
+  param a route, a desk / pad / key row or a macro sub names. Desk, pad
+  and key rows are `setter` cables into `base` (keys from a grey
+  `source:key` node). A route's `scale` and `when` are said on its
+  hover, not drawn (a param has no output pin). Sink rows are not drawn.
+  Only macros with subs, a label or a cable get a node.
+- **Other options.** Every param (~700 ports); only the routes.
+- **To reverse.** The filters in `graphview.build`.
+- **Rough edge.** The APC40's ~100 desk rows make many base cables,
+  faint while idle. Setters are faint, not dashed (`ed.link` draws no
+  dash): only the square `base` stub tells one from a route. The page
+  costs 2.78 ms median at 960 × 900 on party-trip (55 nodes, 239
+  cables, patched only; about 3.8 ms with every node expanded,
+  headless); `route_said` runs per route per frame and `key` builds a
+  tuple over every binding each frame.
+- **Judge it.** Checks 242, 245.
+- **Superseded in part by row 290** (plan 28 N7, 2026-10-20): every node
+  now starts collapsed, a value / trigger cable with a collapsed end is
+  folded into one wire a node pair (row 280), and the page draws in
+  1.27 ms median on party-trip at 960 × 900 (64 wires for 238 cables);
+  "patched only" is the view inside an expanded node (row 287).
+
+### 251. Positions: the preset's map for the look's nodes, the show's for the rig's; a drop dirties; tidy forgets
+
+- **Built.** `preset["layout"]` holds the modifiers, macros, every render
+  node but the outputs (`render:eye` among them: its ports are
+  performance params) and performance-group nodes; the show's `layout`
+  the devices, sources, the analyzer, the LFOs, the outputs and
+  session-group nodes (`graphview.home`). Whole canvas units, written
+  sorted, one node a line, only for a node the owner dropped (on mouse
+  release); auto-placed nodes are never written. The preset's map is in
+  its `signature()` and the show's in `Project.is_dirty`, so a drop
+  dirties. **Tidy** deletes the canvas's nodes from both maps and lays
+  everything out again, with no confirmation and as one undo step ("tidy
+  the graph"; redo puts the tidy back). The library's marks carry both
+  maps, so undoing a load puts the earlier positions back. An unreadable
+  entry is dropped with a note; no key, no note and no dirt.
+- **Superseded in part by row 285** (plan 28 N7, 2026-10-20): tidy also
+  collapses every node, frames the canvas and says what it did ("laid
+  out 55 nodes, every one collapsed", or "already tidy").
+- **Other options.** Everything in the preset; auto positions written
+  too (noisy diffs).
+- **To reverse.** `graphview.home`, `Presets.layout`, `Project.layout`.
+- **Rough edge.** A drag on its own is not an undo step: positions come
+  back only with the undo of a load or a tidy. Undoing an earlier load in
+  the same show also puts the show's positions back as they were then,
+  losing a later drag of a rig node.
+- **Judge it.** Check 244.
+
+### 252. The tidy columns: sources, LFOs, modifiers, macros, groups, the render graph by depth, outputs
+
+- **Built.** Left to right: sources (devices, the template, keys, the
+  analyzer) 0, LFOs 1, modifiers 2, macros 3, param-group nodes 4, render
+  nodes from 5 by their depth in the render graph, outputs last; stacked
+  down each column by estimated height (a node's own expand and folds
+  counted, so expanding one pushes the unplaced nodes under it down).
+  Placed nodes take no room; dropping a node re-stacks the rest of its
+  column.
+- **Superseded in part by row 278** (plan 28 N7, 2026-10-20): a collapsed
+  node (the default) takes its title and its lines' room, an expanded
+  one its ports' and its chip line's.
+- **Superseded by row 299** (plan 28 N9, 2026-10-20): the columns are the
+  concern areas' (controllers → audio → modulation → geometry →
+  shaders), not the kinds'; `graphview.COLUMN` is gone.
+- **Other options.** One render column.
+- **To reverse.** `graphview.COLUMN` / `_columns`.
+- **Rough edge.** Thirteen effects a pipeline make a wide canvas; port
+  positions are estimated, not measured.
+- **Judge it.** Check 244.
+
+### 253. The editor context lives on the panel; `Panel.close` destroys it
+
+- **Built.** `panel._graph["editor"]` is made on the page's first draw
+  (`Config.settings_file = ""`: no `NodeEditor.json` anywhere). A hot
+  reload of `ui_graph` keeps it, so no second context is made.
+  `Panel.close()` → `ui_graph.close` runs at quit and in ⌘R's close list
+  (`close_all(…, panel, …)`) before imgui shuts down; twice is safe.
+- **Other options.** Destroy and recreate on reload (selection and zoom
+  lost).
+- **To reverse.** `ui_graph._state` / `close`.
+- **Rough edge.** A reload of `ui.py` re-classes the Panel and the state
+  survives it too. The test rig closes the panel in its teardown.
+- **Judge it.** Check 246.
+
+### 254. The selection pane goes below the canvas; **beside** or a wide page puts it in a side column
+
+- **Built.** CONTROLS is `ui.PANEL_W` 540 px wide, so the page is about
+  420 px: the ROUTING row or effect strip of the selection shows in a
+  240 px pane under the canvas by default. The head's **beside** chip,
+  or a page at least 720 px wide (CONTROLS widened by hand), puts it in a
+  320 px column beside. The effect strip is `ui_fx.strip(panel, name)`,
+  factored out of the FX page unchanged.
+- **Other options.** Always beside (a canvas about 100 px wide at the
+  default size); a lower threshold (the same).
+- **Superseded by row 286** (plan 28 N7, 2026-10-20): the **beside** chip
+  is gone; **details beside / below** shows only while something is
+  selected on a page narrower than 720 px.
+- **To reverse.** `ui_graph.page`'s `wide`.
+- **Rough edge.** The selection is read a frame late (last frame's
+  canvas).
+- **Judge it.** Check 245.
+
+### 255. A cable into `mod` makes the row a Learn would make (`learn.row_for`)
+
+- **Built.** A source dropped on a param's round `mod` stub is
+  `Bindings.add` of the row `learn.row_for` returns (`Learn._row`'s
+  table moved to module level, unchanged): a **push** when the source is
+  centred (the device port's `bipolar`: a hand's roll, a stick) or the
+  param is centred on zero — a hand's at `hands.learn_depth`, any other
+  at `PUSH_DEPTH` — otherwise the **position** fader at depth 1. A taken
+  param is `Ask`: ROUTING's Replace / Keep (`ui_routing.ask`), Replace
+  calling `replace_owner`. A desk knob, a pad button or a key on `mod` is
+  refused: "a desk knob sets a base, not a performer; aim at base".
+- **Other options.** The prompt's rule: push only for a hand axis, else
+  position at 1 (a band would land on a centred `rot.rate.*` as a fader
+  pinned at one end).
+- **To reverse.** `Edit.route_for` builds its own row.
+- **Rough edge.** A source the device registry does not list (no tracker
+  connected) is never read as centred: its cable lands as position
+  unless the param is centred.
+- **Judge it.** Checks 247, 248.
+
+### 256. A cable into `base` is a desk or pad setter through the learns' own roads; the rest refused in words
+
+- **Built.** A desk control (`cc` / `note` / `pitch`, any qualifier) on a
+  `base` stub goes through a private `Learn(...).learn_control`: a
+  preset-layer `abs` row (a `toggle` for a note or a trigger param),
+  `bind(write=False)`, the same refusals (an invariant control, the
+  global layer, SAVE). A pad button or the D-pad goes through
+  `Learn.learn_pad_button`: the session's row, `bindings.json` written,
+  no undo step — as the pad learn. A hand: "a hand sets no base; aim at
+  mod" (and "a band", "an LFO", "a modifier", "a stick" with their own
+  noun). A key: "keys are the session's rows: map them on ROUTING".
+- **Other options.** The prompt's row for a pad, `Binding(src, pid,
+  "abs", layer="preset")`: an `abs` on a button does nothing useful, and
+  `is_session_row` would class it as the session's anyway.
+- **To reverse.** `Edit._setter`.
+- **Rough edge.** A pad setter is written at once and not undoable. The
+  private Learn's "learned …" words are not shown; only refusals reach
+  the head.
+- **Judge it.** Check 248.
+
+### 257. A cable's end is moved by a drag from where it lands, input pin to input pin
+
+- **Built.** The widget cannot pick up a link, so a drag that starts on a
+  **patched input pin** (a route's `mod` stub, a modifier's `in`) and
+  ends on another input pin moves that cable: a route by
+  `move_route(target=…)` (same op and depth, its macro depth
+  subscribers follow; a taken param asks, Replace being
+  `replace_owner(row, target=…)`), a modifier input to the other
+  modifier's input. Between two input pins with no cable: "join an output
+  to an input". The move picks up the performer, never a sleeping row.
+- **Other options.** Ctrl-drag; a "move to…" item on the cable's menu.
+- **To reverse.** `Edit.move`.
+- **Rough edge.** The source end cannot be moved by a drag: delete and
+  draw again, or insert a modifier.
+- **Judge it.** Check 247.
+
+### 258. A free modifier let go over a cable is inserted into it
+
+- **Built.** When a **modifier node with no cables** is dropped, its
+  centre is tested against every route and modifier-input cable on the
+  cubic the widget draws (handles at `link_strength` 100 canvas units,
+  sampled 16 times: `graphview.bezier`, `cable_near`). Within 14 canvas
+  units it is inserted (`Edit.insert_modifier`): the cable's source
+  becomes its first input, its lane the cable's new source
+  (`move_route`, op and depth kept), and a push keeps its old source's
+  rest (`Router.rest_of`), so a centred hand stays centred through a
+  smooth. A cable's right-click **insert ▸ <kind>** does the same with a
+  new modifier; either is one undo step.
+- **Other options.** The mouse position rather than the node's centre;
+  the widget's own hovered link (the dragged node covers the cable).
+- **To reverse.** `ui_graph.dropped` and `_moved`'s two lines.
+- **Rough edge.** Pin positions are last frame's pin centres. A modifier
+  already patched is never inserted by a drop: unpatch it, or use
+  **insert**.
+- **Judge it.** Checks 247, 249.
+
+### 259. The node picker: modifiers by kind, idle macros; delete for a modifier or macro node
+
+- **Built.** Right-click the empty canvas: **modifier ▸ curve · scale ·
+  smooth · combine · threshold · delay** (`Bindings.add_modifier`) and
+  **macro ▸** the idle macros (every macro is already a node — its knob
+  is modulatable — so picking one labels it "macro N", and ROUTING's
+  strip names it too). The node lands where the menu opened, saved in
+  the preset's layout. A modifier or macro node goes by its right-click
+  **delete** or the Delete key; the rig's nodes are refused ("<label>:
+  the rig's, not the preset's").
+- **Other options.** Hide idle macros; the picker on a drag into empty
+  space (`query_new_node`).
+- **To reverse.** `ui_graph.picker` / `macros_free`, `Edit.show_macro`.
+- **Rough edge.** The "macro N" label dirties the preset.
+- **Judge it.** Checks 249, 250.
+
+### 260. A macro dragged onto `mod` is refused in words
+
+- **Built.** A cable from a macro's `bus` onto a param's `mod` stub is
+  refused: "a macro sets a base or scales a depth; aim at base or a
+  depth stub". A macro lands only on a `base` stub (a base subscriber)
+  or a route's `depth` stub (a depth subscriber).
+- **Why.** No Router scheme publishes a macro's knob, so a route sourced
+  from a macro would sit dormant for ever; the design's own "drag from a
+  macro → a `Sub`" is what is built.
+- **Other options.** A route sourced from a macro, through a new `macro`
+  lane fed by `follow_macros`.
+- **To reverse.** Moderate: publish the macros as a lane, then drop the
+  `MACRO_NO_MOD` branch in `Edit._macro_refusal`.
+- **Rough edge.** One knob that both sets a base and drives a
+  modulation needs two subscribers, or the desk knob routed itself.
+- **Judge it.** Check 248.
+
+### 261. Deleting a macro node clears its label and every subscriber; the knob stays
+
+- **Built.** A macro node's delete (the key, or its right-click
+  **delete**) rewrites the table's macros without it
+  (`set_macros(macros_doc() minus it)`): its label and every subscriber
+  go; the knob, one of the rig's eight `macro.*` params, stays. One undo
+  step ("delete node macro.N"). ROUTING's macro strip then shows the
+  knob with no label and no subscribers.
+- **Other options.** Refuse it, as for the rig's other nodes; remove only
+  the subscribers and keep the label.
+- **To reverse.** One branch in `Edit.remove_value_node`.
+- **Rough edge.** A label the owner typed is lost with it (⌘Z brings it
+  back).
+- **Judge it.** Check 250 (its third step: the node delete).
+
+### 262. Deleting a cable: the preset's go, the session's are refused
+
+- **Built.** The Delete key on a selected cable, or the cable's
+  **delete**: a route is `remove`d (its depth subscribers with it); a
+  preset-layer desk row is removed and the desk redrawn; a macro
+  subscriber leaves its macro; a modifier input is unset. A session
+  row's cable (keys, the pad, an invariant or global-layer desk row:
+  `is_session_row`) is refused: "<source> is the session's
+  (bindings.json): edit it on ROUTING". Each edit is one named undo step
+  ("delete cable …", "connect … → …", "insert smooth into …"). In a
+  delete of several things at once, the first refusal's words stay on the
+  head.
+- **Other options.** Let the canvas edit `bindings.json` too.
+- **To reverse.** `Edit.disconnect_value`, `ui_graph._value_cut`.
+- **Rough edge.** None known.
+- **Judge it.** Checks 250, 258.
+
+### 263. The wire list: `{"from": "<node>", "to": "<node>.<port>"}` in a `wires` list beside `nodes`
+
+- **Built.** The preset's `graph` section takes `wires` beside `nodes`.
+  `from` is a node's name, meaning its one output (`scene`, `hands`,
+  `hands.2`, `history`, an effect instance `palette` / `acid.2`, a
+  composite); `to` is `<node>.<port>` (`output.2.hands`, `acid.2.image`,
+  `history.image`, `composite.over`). Kept in the file's order and
+  written back so, one wire a line (`preset.dumps`); a section with no
+  wires writes no key. `GraphSpec.wires` holds the list as read.
+- **Other options.** Wires nested on each node (`"inputs": {"image":
+  "history"}`: shorter for effects, but outputs are not in `nodes`);
+  `to` as two keys.
+- **To reverse.** `Wire`, `_read_wires`, `GraphSpec.to_json`,
+  `preset.dumps`, the two fixtures.
+- **Rough edge.** A list's order has no meaning, but two specs differing
+  only in order compare unequal (a rebuild, nothing more). An older
+  build refuses the key (row 277).
+- **Judge it.** Checks 251, 252.
+
+### 264. A preset may wire image ports only; a hands node's place stays its `into`
+
+- **Built.** Wireable: `output.<n>.image`, `.hands` and `.readout`;
+  `history.image`; an effect's `image`; a composite's `under` and `over`.
+  Geometry and mask ports are typed, so a wrong drag can say why, but
+  are not wireable: `ghost → scene.geometry` gives "a hands node's place
+  is its into (ghost into scene or layer), not a wire"; `cover → …`
+  "the cover is the history's own". On the canvas a geometry cable from a
+  hands node into the scene or the layer **does** land: it sets that
+  node's `into` (A4's JSON). `output.<n>.readout` takes only a hands
+  layer; a composite cannot take the history `over` (it paints into what
+  reads it); an output's `depth` follows the blend.
+- **Other options.** Geometry wires in the JSON (two spellings of A4's
+  `into`); a wireable depth port.
+- **To reverse.** `WIRE_TAKES` / `WIRE_MAKES` in `graph.py`.
+- **Rough edge.** Two spellings of "hands in the scene": a geometry drag
+  on the canvas and `into` in the JSON (the canvas writes the JSON's).
+- **Judge it.** Check 253.
+
+### 265. D1's `after` / `into` are wires written short; a D1-only section stays short
+
+- **Built.** `after X` is the wire `X → E.image`, `into Y` is `E →
+  Y.image` (`GraphSpec.all_wires`, `d1_wires`). Back the other way
+  (`split_wires`): an effect fed by one wire and wired into nothing is
+  `after` its source; fed by none and wired into one output's or the
+  history's `image`, `into` it; anything else is an explicit edge (it
+  reads exactly its source, only the named ports read it). A D1-only
+  section is written short, byte for byte; a section read as wires is
+  written as wires; an edit on the canvas writes wires, dropping a D1
+  placement it replaces (an extra instance stays in the chain).
+- **Other options.** Normalise every section to one form on save (a
+  hand-written file re-spelled; D1's three fixtures would change).
+- **To reverse.** `split_wires`, `d1_wires`, `graphview._unplace`.
+- **Rough edge.** D1's `into: <effect>` has no wire spelling (`palette →
+  warp.image` reads as "warp after palette") and stays short. A wire into
+  an effect's image and D1's `after` on that effect are two wires into
+  one port, refused.
+- **Judge it.** Check 251.
+
+### 266. Outputs as nodes: a wire overrides that port alone; the guide goes with the hands shown
+
+Folds N4's "a hands wire on a through output".
+
+- **Built.** `output.<n>.image` ← S: the output shows S through an end of
+  its own (`graph.Wired`, `wire(output.<n>)`, painted straight into the
+  output when it can), ignoring its scene and through switches; if its
+  `hands` port was empty, its readout goes too unless the readout is
+  wired. `.hands` ← S: S laid over, depth-aware when the blend is depth,
+  the layer's guide with it if the output had none; on a **through**
+  output the output's picture moves to the end the hands were laid onto
+  (the scene's end, or the ground) and only the wired node is laid
+  over, so the hands are never drawn twice; a non-layer on `.hands` (the
+  scene, a composite, an effect) is laid as its own picture, never
+  through hands 1's ghost; `history → *.hands` is refused.
+  `.readout` ← layer: that layer's guide. An output no wire names is
+  node for node the default graph's, following the session's switches; a
+  load never writes a switch. The wires ride in `Wiring`, so
+  `Renderer._graph_for` rebuilds when they change.
+- **Other options.** Keep an image-wired output's switch-derived hands
+  and readout (a guide on a picture with no hands); let the image wire
+  take `hands` too; lay a wired layer through the chain (a pipeline per
+  wired layer); refuse a hands wire on a through output.
+- **To reverse.** `_Wiring._put`, `Wired`, `Output.run`'s `laid_node`.
+- **Rough edge.** On a through output the effects no longer bend the
+  hands while a hands wire is on it (the wire wins). A wired output's
+  golden route reads `none` (with a `"wired"` key naming its source);
+  `stats["routes"]` keys it `"wire(output.2)"`.
+- **Judge it.** Checks 252, 254.
+
+### 267. A refused wire is a note and that port's default; a malformed one the default graph
+
+- **Built.** `graph: wire <from> → <to> — <why>; the default wiring`,
+  that wire left out, its port at its default (or D1's placement), the
+  rest standing, the section kept as written. The reasons: no such node
+  ("a wire leaves scene, hands …, history, an effect or a composite"),
+  no such effect in this build, an output as a source ("it makes nothing
+  to wire on"), no such port ("it takes image, hands, readout"), a type
+  mismatch ("ghost makes geometry, output.1.image takes a picture"), no
+  such layer, a readout from a non-layer, a D1 placement already there
+  ("one place"), two wires into one port ("it keeps its default"), an
+  effect with no wire in and several out, a loop ("that makes a loop
+  (palette → acid.2 → palette)"). A malformed wire (not two strings, or
+  the same twice) is a `GraphError`: the default graph, as A4 does. A
+  wire on a node this frame lacks is dormant
+  (`Graph.dormant`: "wire hands → output.3.hands — no output 3 this
+  frame"), on OUTPUT's dormant lines and in the graph words.
+- **Other options.** Drop the whole graph on any refused wire.
+- **To reverse.** `wire_error`, `_read_wires`, `GraphSection.read`'s
+  suffix.
+- **Rough edge.** Every wire into a doubly wired port is refused, not
+  only the later one; every wire on a loop.
+- **Judge it.** Check 253.
+
+### 268. The render picker; every render edit read back through `read_graph` before it lands
+
+Folds N3's "the seam with N4".
+
+- **Built.** Right-click the canvas: **effect ▸** one item per effect
+  file (`EffectAt(file, n + 1)`, its `fx.<file>.<n+1>.*` at their
+  defaults, the instance in the chain at its order), **hands**
+  (`HandsAt(n + 1)`), **composite** (`CompositeAt(n + 1)`, blend over,
+  built once a wire feeds it). A render node's menu: delete; `draw
+  solid` / `draw lines`; `laid over` / `add` / `depth`. Delete on a wire
+  unwires it; on a default cable: "… is the default graph's: no wire
+  says it (wire something else into … to replace it)". A node delete
+  removes an extra effect instance, hands node or composite with every
+  wire on it; instance 1 of an effect, hands 1, the scene, the history
+  and the outputs stay, each with words. Every edit is a new section
+  read back through `read_graph` with the build's files: a note is the
+  refusal and nothing changes; else one undo step (`undo.push(label,
+  load=True)`), then `GraphSection.land` (the preset dirty, the renderer
+  handed the wiring); an edit that empties the section lands none. The
+  page dispatches a drag by its pins' type (`ui_graph.CREATE`) and a
+  delete by the cable's or node's kind (`DELETE`, `DELETE_NODE`); value
+  and trigger edits go through `_act`, render edits through
+  `render_edit`, whose step is pushed only once an edit is accepted. The
+  head says the last edit's words until the next edit or refusal.
+- **Other options.** A picker of instances already declared; edits that
+  write the spec directly (two paths for refusals).
+- **To reverse.** `graphview`'s render edits and `ui_graph`'s.
+- **Rough edge.** A loaded section that carried a refused wire or
+  placement is kept, but the first canvas edit writes the accepted spec
+  and drops the refused part. A drag's red words are a tooltip, not a
+  note.
+- **Judge it.** Checks 251, 255.
+
+### 269. The two wire fixtures' look
+
+- **Built.** `hands-glass-only.json`: hands-lines' values, `ghost` drawn
+  in the scene **as lines** so the solid `ghost.2` layer reads apart;
+  `ghost.2` is the layer, wired to `output.2.hands`. `wired-outputs.json`:
+  palette-glass's values (party-acid, the palette at centre 200, width
+  60 — hue 170 → 230 since N8, row 295) plus `fx.acid.2.*` (on, mix 1, bend 0.06, twist 1.6, reach 6,
+  breathe 0.5); the palette wired into `output.1.image`, acid 2 after the
+  history into `output.2.image`. `tools/golden_frames.py` switches on any
+  `ghost.<n>.on` a fixture's graph declares (session state no preset
+  carries).
+- **Other options.** Ghost 1 solid in the scene (the two hands alike in
+  the golden).
+- **To reverse.** Re-record the two fixtures (`--only`).
+- **Rough edge.** At the machine `ghost.2.on` starts off: switch it on on
+  HANDS. Hands 2 is also on any output whose switches lay a layer with
+  the scene off (A4's one-layer rule). The name assumes the glass is
+  output 2; on the hand checks' two-screen rig (101) the glass is output
+  1.
+- **Judge it.** Check 252.
+
+### 270. The APC40 is two nodes: `device:apc40` with every control, `device:apc40/global` without the invariant ones
+
+- **Built.** A device whose `layers` has two or more entries (today the
+  first MIDI role's APC40: `("preset", "global")`) is one node per layer
+  (`graphview.device_nodes`). *apc40* keeps N2's id and name, carries
+  every control of the layout, the invariant ones included, and draws the
+  preset layer's rows and the invariant rows; *apc40 (SHIFT)*
+  (`device:apc40/global`) carries every control but the invariant ones
+  and draws the global layer's (`bindings.json`). "Invariant" is the
+  table's own `Bindings.is_invariant(Binding(control, ""))`: SHIFT plus
+  the control of any enabled layer-None row; nothing is listed by hand.
+  The first node's pins stay `out:<address>`, the SHIFT node's
+  `out:<address>|global`. Both ids are the show's layout keys. A drag
+  from a SHIFT-node port into `base` is refused whatever the latch
+  ("<addr> on the SHIFT node is the session's (bindings.json): map it on
+  ROUTING"): the global layer is never a Learn target (D5).
+- **Other options.** One node with a layer toggle (decision 12 rejects a
+  layer view); ids `device:apc40.shift`.
+- **To reverse.** `device_nodes` returns one node; the SHIFT node's
+  saved position is dropped as an unknown id.
+- **Rough edge.** The global layer's rows are edited on ROUTING only.
+- **Judge it.** Check 256.
+
+### 271. The desk's port groups
+
+- **Built.** On each desk node, in this order: `invariant` (first node
+  only), `track knobs`, `device knobs`, `knobs` (the cue level),
+  `faders` (track faders, MASTER, the crossfader when not invariant),
+  `clip grid` (the field and the scene column), `buttons`, from the
+  profile's control kind (`Port.group`) with knobs split by Akai's name;
+  inside a group, the layout's order. A generic desk (one layer, no
+  layout) has no ports, as before.
+- **Other options.** The raw kinds (N2's `knob`, `fader`, `grid`,
+  `button`); the glyph rows.
+- **To reverse.** `graphview.desk_group` / `DESK_GROUPS`.
+- **Rough edge.** An invariant fader (the crossfader) sits in
+  `invariant`, not `faders`.
+- **Judge it.** Check 256.
+
+### 272. The SHIFT latch is read from the table (`Bindings.layer_of`) each frame
+
+- **Built.** `MidiIO` reads `Bindings.layer_of(role)`, which `desk.shift`
+  sets, and the page reads the same value: each frame `graphview.refresh`
+  sets each layered node's `up` and each port's (an invariant port is
+  always up). A cable from a port whose layer is down is dormant
+  (faint); the down node's title and ports are faint, an up layer's
+  ports bright, invariant ports dim as ever. A flip rebuilds nothing.
+- **Other options.** `desk.shift` from the registry (the first role
+  only); an `up_layer` on `MidiDevice` (`devices.py` was not needed).
+- **To reverse.** The block at the top of `refresh`.
+- **Rough edge.** A second MIDI desk with no latch is one node and never
+  faint.
+- **Judge it.** Check 256.
+
+### 273. A layered row on an invariant control is drawn off, on *apc40*'s invariant port
+
+- **Built.** A preset- or global-layer row whose control is invariant
+  never acts and never lights (D6). Its cable is `off` (dormant), its
+  hover says "(under an invariant control)", and it leaves that
+  control's port on *apc40*, in `invariant` — never a port on the SHIFT
+  node — so "invariant controls on *APC40* only" holds even for it.
+- **Other options.** Hide it.
+- **To reverse.** The `shadowed` line in `build`.
+- **Rough edge.** None known (no factory row is shadowed today).
+- **Judge it.** Tests only
+  (`tests/test_graphview_devices.py::test_a_shadowed_layered_row_leaves_the_invariant_port_on_the_first_node`).
+
+### 274. A desk template is a subgraph node; an edit inside is an override
+
+Folds N5's "an edit inside a template is an override".
+
+- **Built.** When the loaded preset names a `desk_template`, the page
+  passes the template's rows as the load expanded them
+  (`Presets.template_at_load()`, what a save compacts against). `build`
+  draws one node, `template:<name>` (column 0, saved in the **preset's**
+  layout), a port per template row ("<control> → <target>"). A live
+  preset-layer row still the template's (same control, target, op and
+  value) is a cable from it (`VCable.inside`); an override, or a row on a
+  control the template does not map, hangs off *apc40*; an overridden or
+  darkened template control is a port with no cable. Every template
+  node starts collapsed (its ports listed, none of its cables drawn); its
+  **+** opens it, **−** closes it. **Superseded in part by row 278**
+  (plan 28 N7, 2026-10-20): collapsed, it lists no port either — "<n>
+  mapped controls" — like every node; its open state is every node's
+  expanded set (row 282). Deleting a template row's cable is
+  `table.remove` (the save writes a dark row); dragging a template port
+  onto a `base` stub is the desk learn (the save writes an override).
+  The template file is never written.
+- **Other options.** Collapsed, one bundled cable per target node; the
+  overrides inside the subgraph too; template-level edits rewriting the
+  file (shared by every preset that names it).
+- **To reverse.** The template block in `build`, `template_of`,
+  `drawn_cable`.
+- **Rough edge.** While collapsed, the params its rows set show a
+  patched `base` stub with no visible cable (the stub's hover: "set by
+  desk template <name> (collapsed: + shows it)"). After an edit the cable
+  jumps from the template node to *apc40* — honest (it is an override
+  now), but it can surprise.
+- **Judge it.** Check 257.
+
+### 275. A role this rig lists no device for is a grey placeholder `device:<role>`
+
+- **Built.** A row from a role with no listed device draws from a grey
+  node `device:<role>` (`placeholder`, status "not in this rig: its
+  cables wait for it"), its cables dormant. The role: the row's
+  qualifier (`axis@p2` → `p2`); for an unqualified MIDI row the desk's
+  first role; else the kind's usual role from `config.py`'s example list
+  (`hand` / `hands` → `leap`, `axis` / `pad` / `hat` → `pad`, `cc` /
+  `note` / `pitch` → `apc40`); else the scheme. The id is the real
+  device's, so a device of that role arriving takes the placeholder's
+  saved position. Keys stay their own `source:key` node. Fixed on the
+  way: N2 drew a qualified MIDI row with no such device from the first
+  desk's node.
+- **Other options.** N2's `source:<scheme>` nodes.
+- **To reverse.** The placeholder branch in `source_pin`, `SCHEME_ROLE`
+  / `NO_DEVICE`.
+- **Rough edge.** With no desk listed there is one placeholder, not two:
+  its preset- and global-layer rows on one control share one pin.
+  `SCHEME_ROLE` guesses from `config.py`'s example names: a rig that
+  names its hands role otherwise gets a placeholder `leap`, and the real
+  device takes its own id.
+- **Judge it.** Check 258.
+
+### 276. The hands node's groups: axes, pinches, grab, presence, dance
+
+- **Built.** `hands/device.py`'s own groups, except that its `switches`
+  are told apart by address: a `.grab` port in `grab`, every other
+  switch in `pinches`; the device's order. Nothing in the hands package
+  changed (`tests/test_hands_boundary.py` untouched).
+- **Other options.** The two groups added in `hands/device.py` itself.
+- **To reverse.** `graphview.hand_group`.
+- **Rough edge.** `presence` is a fifth group the design did not name.
+- **Judge it.** Check 256.
+
+### 277. A build from before this run reads this run's presets only in part: placements and wires are a note, modifiers and positions are lost on its save
+
+- **Found by the review pass**, not chosen: no code can fix it, because
+  the old build is what reads the file.
+- **Built.** Nothing in this build: the keys are additive and no schema
+  was bumped (`hyperspace.preset/2`). What an older build (the base,
+  5d18192, or the other Mac if it is behind) does with a preset saved
+  here: a `graph` section with a placement (`after` / `into`, plan 30)
+  or a `wires` list is refused whole by its strict reader — the preset
+  opens as the default graph with one note (`graph: effect node: no key
+  'after' (it takes instance, file); the default graph`, `graph: no key
+  'wires' (it takes nodes); the default graph`), plus an unknown-id note
+  for each extra instance's params; the section survives a save there.
+  `modifiers` and `layout` are ignored **with no note**, and a save on
+  that build **drops** both; a route on `mod:<n>` is a dormant row
+  there. Everything else (values, routes, desk, macros) lands as before.
+- **Other options.** A schema bump to `hyperspace.preset/3` (an older
+  build would then refuse the whole file); writing the old short form
+  where it can (it cannot for wires or modifiers).
+- **To reverse.** n/a: it is how the base build reads.
+- **Rough edge.** The shared library (plan 25) syncs presets between two
+  Macs: **update both Macs to this build before sharing patches**, and
+  never save a preset with modifiers or positions on an older one. Rows
+  219 and 222 (the placement keys) carry the same caveat.
+- **Judge it.** Check 259.
+
+## A legible graph (plan 28, N7)
+
+Built on 2026-10-20 after the owner's first look at the GRAPH page
+("very messy … borderline illegible with the APC40 alone … I clicked
+the tidy button, and nothing happened … I clicked the beside toggle,
+and I don't know if it did anything"). The owner's three decisions —
+every node collapsed by default, one wire between two nodes while either
+end is collapsed, GRAPH takes the routes and the modifiers from ROUTING
+now (ROUTING keeps its desk, macros, session and sinks until it is
+retired) — are in [`DECISIONS.md`](DECISIONS.md) "UI" with Who "owner
+(2026-10-20)"; these rows are what the build chose where those left a
+choice open. It supersedes parts of rows 250, 251, 252, 254 and 274
+(marked there). Measured on party-trip at the control window's
+960 × 900 (55 nodes, 238 cables): the page draws in **1.27 ms** median
+collapsed (64 wires), 2.66 ms with every node expanded, against N2's
+2.32–2.78 ms. No preset was edited or added; `apc40.py`, `midi.py` and
+ROUTING's desk, macros, session and sinks sections are untouched.
+
+### 278. A collapsed node's lines: what it holds, how much is patched, its live reading
+
+- **Built.** Under the title, at most five lines (`graphview.summary`),
+  the same count every frame: a device "137 ports · 97 patched", its
+  loudest patched port ("> right y 0.83", else "nothing live"), its
+  layer and whether it is up (*apc40*: "preset layer · up"), "not in this
+  rig" for a placeholder or the device's status while it is grey; the
+  analyzer "6 bands · 6 patched" and its loudest; an LFO "out 0.42" and
+  its knobs; a modifier its kind and output ("smooth · out 0.42"), its
+  inputs, its params; a macro its knob and its subscribers; a render,
+  output or group node "51 params · 32 patched", its picture ports, its
+  loudest patched param; a desk template its mapped controls. No row
+  per port.
+- **Other options.** Only the title (nothing to read at a glance); the
+  first five patched ports (as long as the APC40's list, cut).
+- **To reverse.** `graphview.summary`.
+- **Rough edge.** "Loudest" is by |reading| of a patched port, so a knob
+  parked at 1.0 wins over a moving one. A line longer than the node is
+  cut with "…".
+- **Judge it.** Check 261.
+
+### 279. One in and one out stub a node; a render cable to a collapsed node's stub
+
+- **Built.** Every node with an input port has an ``in`` stub
+  (`nin:<node>`) at the left of its title line, every node with an output
+  port an ``out`` stub (`nout:<node>`) at the right, expanded or not; a
+  stub is lit while any cable touches the node. Bundles end on stubs.
+  A render cable (image / geometry / mask) stays one wire each, its end
+  on a collapsed node moved to that node's stub.
+- **Other options.** Stubs only while collapsed (a bundle from a
+  collapsed node into an expanded one would then have no end on the
+  expanded side).
+- **To reverse.** `ui_graph._node`, `graphview.wiring`.
+- **Rough edge.** Two render cables between the same two collapsed nodes
+  draw on top of each other.
+- **Judge it.** Check 261.
+
+### 280. A bundle: one per (source node, target node), as thick as it is many, its hover the first ten
+
+- **Built.** `graphview.wiring` folds every value and trigger cable with
+  a collapsed end into one `VBundle` per (source node, target node):
+  trigger-coloured when every cable is a trigger, else value-coloured;
+  its reading the largest live |reading|; faint while every cable is
+  dormant. Its line is 2.5 px for one cable plus 0.5 px a cable, capped
+  at 7 px (ten cables or more). Hover: "<source> → <target>", "<n>
+  cables: <source port> → <param>, …" — the first ten, then "+ k more" —
+  and the reading.
+- **Other options.** One bundle per pair and type (two wires where a
+  desk sets triggers and values on one node); thickness by the reading
+  (a bundle's many readings in one number).
+- **To reverse.** `graphview.wiring`, `ui_graph.bundle_thickness`.
+- **Rough edge.** The APC40 is still two nodes (owner decision 12), so
+  the desk reaches a node over two wires when both layers map into it,
+  and the two fan out one wire per node they map into: 19 bundles on
+  party-trip (*apc40* 14, *apc40 (SHIFT)* 5), most into group nodes
+  (`band`, `preset`, `master`, `tempo` …), three into render nodes
+  (`shape`, `fx`, `eye`). The key node fans out to about ten group
+  nodes. A bundle at the cap does not thicken with one more cable: its
+  hover's count does.
+- **Judge it.** Checks 261, 262.
+
+### 281. A bundle selected lists its rows; its Delete is refused in words
+
+- **Built.** A selected bundle's side pane lists every route in it as
+  ROUTING's own row (`ui_routing._row`, the one table: its widgets, its
+  ×), and the other cables (desk rows, subscribers) as a line each.
+  Delete on a bundle keeps it and says "expand a node to edit its
+  cables"; its right-click offers "expand both ends".
+- **Other options.** Delete removes every cable in it (one keystroke for
+  two dozen rows).
+- **To reverse.** `ui_graph._side`, `ui_graph.delete_bundle`.
+- **Rough edge.** A desk row in a bundle has no editor in the pane
+  (ROUTING's desk section edits it): a bundle of setters (the APC40's,
+  the keys') lists its cables as text lines ("<control> → <param>
+  <op>"), only its routes as rows.
+- **Judge it.** Check 262.
+
+### 282. The collapse state is the page's, saved nowhere
+
+- **Built.** Which nodes are expanded is UI state on the panel
+  (`ui_graph._state(panel)["open"]`): not in the preset, not in the
+  show's `layout`, not an undo step; every node is collapsed at launch,
+  a hot reload keeps the set, and so does a preset load (a node of the
+  same id stays expanded); a tidy clears it. A desk template's "open" is
+  the same set.
+- **Other options.** In the show's `layout` beside the rig's positions
+  (a show that opens half-expanded is the mess the owner described).
+- **To reverse.** Carry the set in the show's map (`Project.layout`,
+  `graphview.split`).
+- **Rough edge.** Expanding a node pushes the unplaced nodes under it
+  down; a node the owner placed stays and may be overlapped.
+- **Judge it.** Check 261.
+
+### 283. A drag onto a collapsed node's stub opens a picker of its ports
+
+- **Built.** A cable dragged from a port onto a collapsed node's ``in``
+  stub (or from an input onto an ``out`` stub) says "let go: pick one of
+  <node>'s ports" while held; let go, a menu lists that node's pins it
+  can land on — each param's `mod` / `base` / `depth` stub, a modifier's
+  inputs, a render port — by port group when there are more than twelve,
+  only the ones `Edit.refusal` lets through ("nothing on <node> takes it:
+  <first refusal>" when none), each "<port> · <stub>" ("Brightness ·
+  mod"). A collapsed node with exactly one output pin (a modifier, an
+  LFO, a macro) has an ``out`` stub that stands for that pin
+  (`graphview.stub_pin`), so a collapsed modifier's out dropped on
+  another collapsed node's in opens that node's picker. The pin picked goes through
+  `Edit.connect` unchanged (one undo step; Replace / Keep when taken), a
+  render one through `Edit.wire`. A drag between two stubs neither of
+  which stands for one output (a device's out onto a render node's in),
+  or onto the wrong side, is refused red in words.
+- **Other options.** A two-level menu for stub to stub (every source
+  port × every target pin: hundreds of refusal checks); expand on drop.
+- **To reverse.** `ui_graph._stub_drag`, `open_land`, `land`,
+  `graphview.land_choices`.
+- **Rough edge.** A render node lists its picture ports among its params'
+  stubs; the menu is long on the shape (about fifty params).
+- **Judge it.** Check 263.
+
+### 284. Learn from a node's right-click, per param
+
+- **Built.** Right-click any node: expand / collapse, then **learn ▸**
+  its params by port group, each opening N3's pin menu (the param menu's
+  own Learn items, `Panel._ctx_learn_block`), so a collapsed render node
+  is learned without expanding.
+- **Other options.** Only on an expanded node's `mod` pin (N3's).
+- **To reverse.** `ui_graph._node_menu`, `learn_params`.
+- **Rough edge.** Three menu levels on the shape.
+- **Judge it.** Check 263.
+
+### 285. Tidy collapses everything, lays it out again and says what it did
+
+- **Built.** **tidy** collapses every node, forgets every position in
+  both maps (one undo step, as before), lays every node out again by
+  column, frames the canvas on them, and the head says "laid out 55
+  nodes, every one collapsed" — or "already tidy" when no node moved
+  and none was expanded.
+- **Other options.** Keep the expanded nodes expanded (the owner's
+  "nothing happened" came from a tidy that changed nothing visible).
+- **To reverse.** `ui_graph.tidy`.
+- **Rough edge.** The undo puts the positions back, not the expanded
+  nodes.
+- **Superseded in part by row 304** (plan 28 N9): tidy lays every node
+  out in its area, closes the idle lines, and says "laid out 31 nodes in
+  6 areas, every one collapsed · 22 idle off the canvas".
+- **Judge it.** Checks 264, 274.
+
+### 286. The details chip: only with a selection on a narrow page, named by what it does
+
+- **Built.** The **beside** chip is gone. While something is selected
+  and the page is narrower than 720 px, the head has **details beside**
+  (the details are under the canvas) or **details below** (they are
+  beside); with nothing selected there is no chip; at 720 px or more the
+  details sit beside with no chip.
+- **Other options.** Always beside (a canvas about 100 px wide at the
+  panel's size).
+- **To reverse.** `ui_graph.beside_chip`.
+- **Rough edge.** The choice is kept while nothing is selected.
+- **Judge it.** Check 264.
+
+### 287. Expand all / collapse all; "patched only" within an expanded node
+
+- **Built.** The head's first chip is **expand all** (every node
+  collapsed or some) or **collapse all** (any expanded). Inside an
+  expanded node N2's view holds: the page's **patched only** chip
+  (default on) and the node's own **all ports / patched only** chip,
+  and its port groups fold.
+- **Other options.** "patched only" as the collapsed view (N2's).
+- **To reverse.** `ui_graph._head`, `_node`.
+- **Rough edge.** Expand all draws every patched port of every node
+  (2.66 ms on party-trip).
+- **Judge it.** Check 262.
+
+### 288. ROUTING's pointer line; "Route a lane here…" opens GRAPH
+
+- **Built.** Where ROUTING's counts line, its route rows, its "+ route"
+  and its MODIFIERS strip were, one dim line: "routes and modifiers: the
+  GRAPH page" (a click opens GRAPH), with the filter field beside it; the
+  filter now counts and filters the desk, the macros, the session and
+  the sinks only. The routes' and the modifiers' functions stay in
+  `ui_routing` (`add_route`, `_row`, `_sources`, `_targets`,
+  `add_modifier`, `set_modifier_input`, `remove_modifier`,
+  `modifiers`). The param menu's "Route a lane here…" adds the route as
+  before and opens GRAPH instead of ROUTING.
+- **Other options.** A route list on GRAPH's side pane while nothing is
+  selected (a second route page); leave ROUTING's rows until it is
+  retired (two pages editing the routes).
+- **To reverse.** The pointer block in `ui_routing.page` (the two
+  sections were a few lines there).
+- **Rough edge.** "+ route" is gone: a new route is a drag on the
+  canvas, a Learn, or "Route a lane here…" (which selects the new route
+  on GRAPH, its row first in the pane). While the filter holds text its
+  red "n of m rows" takes the pointer's place.
+- **Judge it.** Check 266.
+
+### 289. A modifier node's side pane is the MODIFIERS strip's block, stacked
+
+- **Built.** Selecting a modifier node shows its editor in the side
+  pane: `ui_routing.modifier_block` (the strip's own per-modifier block,
+  factored out of `modifiers` unchanged for the strip) drawn stacked for
+  the 320 px column: its output bar, each input's source combo on a line,
+  each param under it, "× remove".
+- **Other options.** The strip's one-line layout (cut at 320 px).
+- **To reverse.** `modifier_block(stacked=…)`.
+- **Rough edge.** None known.
+- **Judge it.** Check 265.
+
+### 290. A collapsed node reads only what its lines show; the wiring and the columns are kept
+
+- **Built.** `graphview.refresh` skips the unpatched input ports of a
+  collapsed node (its lines never show them); the page keeps
+  `graphview.wiring`'s answer while the view and the expanded set hold
+  (only the bundles' readings move a frame) and the column layout while
+  the view, the expanded set, the folds and the stored positions hold;
+  `View.node` is a dict lookup.
+- **Other options.** Recompute every frame (2.2 ms collapsed).
+- **To reverse.** `ui_graph._wiring`, `_place`'s cache, `refresh`'s
+  `collapsed`.
+- **Rough edge.** A port's hover on a collapsed node is not reachable,
+  so its stale reading is never seen.
+- **Since N9** the cached layout is the areas' (`ui_graph.areas_of`),
+  its key the open idle lines too (row 299).
+- **Judge it.** Check 261.
+
+## The palette as compression (plan 30, N8)
+
+Built on 2026-10-20 after the owner's second look at the palette: "What I
+want this to be is a color compression transform. It is definitionally
+mapping the space of the HSV cylinder onto a bounded subspace of that
+cylinder" — a start and a stop angle, a start and a stop saturation, a
+start and a stop value — and "one of the mode controls is like a slider,
+but it's really a discrete picker". The owner's decision is in
+[`DECISIONS.md`](DECISIONS.md) "Effects and the look-back" with Who
+"owner (2026-10-20)"; these rows are what the build chose where it left
+a choice open. They supersede rows 138 and parts of 135, 136 and 139
+(marked there). No factory preset turns the palette on, so no factory
+golden moved; the three fixtures that do (`palette-hands`,
+`palette-glass`, `wired-outputs`) were converted to the slice's keys and
+their frames match as recorded.
+
+### 291. The slice: `hue_from` → `hue_to` up the wheel; from = to is one hue, 0 → 360 the whole wheel
+
+- **Built.** Seven params name the slice: `hue_from`, `hue_to` (degrees,
+  0–360), `hue_turn` (degrees, wraps), `sat_from`, `sat_to`, `val_from`,
+  `val_to` (0–1). The arc runs from `hue_from` *up* the wheel to
+  `hue_to`, through 360 when `to` is below `from` (350 → 10 is the 20° of
+  reds either side of 0); `from = to` is one hue; 0 → 360 is the whole
+  wheel. `hue_turn` is added to both ends: it turns the whole slice round
+  the wheel and keeps its width, wrapping as the old `centre` did, so a
+  hand or a lane sweeping the hue rides it (a converted centre route
+  lands there). The defaults are the whole cylinder (0 → 360, turn 0,
+  0 → 1, 0 → 1), so switched on at mix 1 the picture is as it was on an
+  opaque ground (a test; on a see-through ground — the overlay, the
+  faces — the colour is premultiplied and the pass scales it by alpha
+  once more, so a part-clear pixel darkens). The ends do not wrap: 360
+  must stay 360, or the whole wheel would read as one hue.
+- **Other options.** The short way round (350 → 10 and 10 → 350 the same
+  arc; no arc over 180° could be set); wrapping hue params with `from = to`
+  as the whole wheel (a single hue then needs two different numbers).
+- **To reverse.** The arc line in `palette.glsl`, the params' header.
+- **Rough edge.** A route on one end alone clamps at 0 / 360 (the ends do
+  not wrap): to move the slice round, route the turn, not an end.
+- **Judge it.** Checks 267, 269.
+
+### 292. The hue map: the old fold up to 180°, sliding to the identity at 360°
+
+- **Built.** A seamless map from the whole wheel onto an arc must fold
+  (a map that went once round the wheel onto a partial arc would tear at
+  red), and a map that is the identity at 360° cannot fold — so the
+  palette keeps the triangle fold for arcs up to 180° (red lands on
+  `from`, cyan on `to`, every hue between; "derivations on yellow"), and
+  above 180° the fold's peak slides from cyan towards the far side of red
+  (`smoothstep(180, 360, arc)`) until at 360° the climb is the whole
+  wheel and the map the identity. Up to 180° the expression is the old
+  one to the bit: the palette fixtures' frames did not move.
+- **Other options.** A linear map (`from + hue × arc`): the identity at
+  360°, but a seam through every red in the picture for any narrower arc;
+  the fold at every width (no identity: the defaults would change the
+  picture).
+- **To reverse.** The `if (arc > 180.0)` block in `palette.glsl`.
+- **Rough edge.** Near 360° the return from the far red runs through a
+  narrow band of input hues just below 360 (at 350° wide, the last few
+  degrees of magenta-red carry a short rainbow back to `from`); never
+  seen on a projector.
+- **Judge it.** Checks 267, 268.
+
+### 293. Saturation and value are mapped linearly, never clamped
+
+- **Built.** Saturation 0–1 lands linearly on `sat_from` → `sat_to`,
+  value 0–1 on `val_from` → `val_to` (`mix(from, to, x)`): the whole
+  input range lands inside the slice and uses all of it, so a red slice
+  with val 0.3 → 1 lifts black to a dark red and keeps white white. On a
+  see-through ground the result is still scaled by the pixel's alpha.
+- **Other options.** A clamp (cuts detail off at both ends; the owner
+  asked for a map); a curve (gamma) on value.
+- **To reverse.** The `mix` calls in `palette.glsl`.
+- **Rough edge.** A grey pixel has no hue (it reads as red), so once
+  `sat_from` is above 0 a grey wireframe takes the slice's `from` colour.
+- **Judge it.** Checks 267, 268.
+
+### 294. `from` above `to` inverts
+
+- **Built.** `sat_from > sat_to` or `val_from > val_to` is legal and
+  inverts that axis: `val 1 → 0.2` turns the darkest pixel the brightest
+  and the brightest a dim one (a test). Nothing refuses it.
+- **Other options.** Sort the two ends (no inversion; one less knob's
+  meaning).
+- **To reverse.** Swap the ends in `palette.glsl` when from > to.
+- **Rough edge.** On the overlay a black ground inverted to bright stays
+  clear (alpha scales it), so the inversion shows on the shape only.
+- **Judge it.** Check 269.
+
+### 295. Old documents are read as the slice on load
+
+- **Built.** `palettecompat.palette_slice` (a leaf module: plain dicts)
+  reads a document carrying the fold's ids (any instance,
+  `fx.palette.2.*` too) in the slice's: `hue_from` = centre − width/2 and
+  `hue_to` = centre + width/2, wrapped into 0–360 (centre 200 width 60 →
+  170 → 230; width 360 → 0 → 360), turn 0, a missing one at its old
+  default (centre 0, width 360); `sat_lo/_hi`, `val_lo/_hi` renamed
+  `_from/_to`; an id already in the new form wins. When something sets
+  the centre outright (a `position` route or a macro's base subscriber on
+  it) the arc is laid about 0 and `hue_turn` holds the centre (centre 200
+  width 60 → 330 → 30 turned 200), so those rows move to the turn as they
+  are. Routes and desk rows: a rename moves the row; any row on the
+  centre goes to `hue_turn` (it wraps, so a push through a full turn
+  keeps the arc's width — a test); a push on the width becomes half of it
+  apart on each end (it widens). Macros: base and depth subscribers on
+  the renamed ids follow; a depth subscriber on the centre's route
+  follows it to the turn; one on the width's push is split into one per
+  end (its from/to scale each half alike); a base subscriber on the width
+  is converted about the document's centre when both ends stay inside
+  0–360 over its travel, else dropped with a note. It runs on every
+  whole-preset load (`Presets.load_doc`, beside plan 26's `pan_world`)
+  and every `fx` module load (`library._module_values`), silently; the
+  next save writes the new keys. A note only when the palette would show
+  the change — on with mix above 0 in compress mode, or a row naming it —
+  and the fold was wider than 180°: at 360° "the old fold doubled the
+  whole wheel; its slice 0 → 360 now leaves the colours as they are".
+  Every preset saved before carries the palette's ids at their defaults
+  with it off (a save writes every base): those load with no note and
+  no dot (a test on a full snapshot).
+- **Other options.** A `units`-style marker (no need: the old ids are
+  unambiguous); rewrite the files at launch (`migrate_home`).
+- **To reverse.** The two call sites and the function.
+- **Rough edge.** A non-push row on the width is kept dormant with a
+  note (no single slice param takes it whole), and a width base
+  subscriber crossing 0 / 360 is dropped with a note. A wide old fold
+  (over 180°) looks different; the note says so. Nothing in the library
+  carried the old ids (no factory preset turns the palette on).
+- **Judge it.** Check 271.
+
+### 296. `// @param choice [a|b] n "Label"`: a discrete param, drawn as a picker
+
+- **Built.** An effect file may declare `uniform int u_mode; // @param
+  choice [compress|gradient] 0 "Mode" tip`: the names in brackets, `|`
+  between them, the default's index. `fx.declare` makes it an enum
+  (`Kind.ENUM`), so the strip draws a combo, a desk knob steps through
+  its choices, a route can switch it, and its readout is the choice's
+  name; the uniform gets the index. A float uniform, fewer than two
+  choices or a repeated name is refused with the line. The palette's
+  `mode` is the only one; every other effect file is unchanged.
+- **Other options.** A combo for any integer param of two or three
+  values (guessing); chips instead of a combo.
+- **To reverse.** The `_CHOICE` form in `fx.parse` and the enum branch
+  of `declare`; the palette's header back to `@param 0 1 0`.
+- **Rough edge.** A choice name with `|` or `]` in it cannot be written.
+- **Judge it.** Check 270.
+
+### 297. The strip: mode picker, "compress into" line, hue / sat / val rows `from → to`
+
+- **Built.** The palette's strip in compress mode reads: **mode** (a
+  combo, its label opening the param menu as a row's does), a faint line
+  in the owner's words — `compress into: hue 170° → 230° · sat 0.00 →
+  1.00 · val 0.00 → 1.00` (`turned 90°` after the hue when turned) — then
+  **hue**, **sat** and **val**, each one row of two sliders with `→`
+  between them, the hue row with the small turn slider at its end and a
+  thin bar of the slice's colours (as turned) under it. The packing by
+  name (row 139) gained `_from`/`_to`, which is why `sat_lo`/`_hi` and
+  `val_lo`/`_hi` were renamed (every row of the slice reads the same
+  way). Gradient mode shows mode, anchors and the four anchor rows as
+  before (`HIDDEN_BY_MODE`).
+- **Other options.** Keep `_lo`/`_hi` for sat and val (two words for one
+  idea on one strip); a hue wheel instead of the bar (more drawing for
+  the same information).
+- **To reverse.** `ui_fx.strip`'s choice and pair branches,
+  `compress_line`, `_hue_bar`.
+- **Rough edge.** The bar shows the arc's hues at full saturation and
+  brightness, not the slice's sat and val.
+- **Judge it.** Check 270.
+
+### 298. The gradient map is kept as the second mode
+
+- **Built.** The owner's words describe the compression; the gradient
+  map (brightness through two to four anchor colours) is a different
+  transform — it throws the picture's hues away and paints by
+  brightness — so it stays, as the picker's second choice, unchanged.
+- **Other options.** Remove it (sunset-style ramps lost; `fx` presets
+  that use it would load as compression).
+- **To reverse.** Delete the mode and its fourteen params.
+- **Rough edge.** None known.
+- **Judge it.** Check 270.
+
+## The graph by concern (plan 28, N9)
+
+Built on 2026-10-20 after the owner's second look at the GRAPH page
+("The graph looks better. The graph needs to be organized better in
+terms of the concerns: all things audio need to live in one area; all
+things geometry should be grouped in another area; all things shader
+should be grouped in another area. Currently, they all sit clustered
+together in some pattern that I don't really understand. Also, there
+are macros sitting there that don't connect to anything."). The owner's
+decision — the canvas organised by concern, a macro with nothing in and
+nothing out not drawn by default — is in [`DECISIONS.md`](DECISIONS.md)
+"UI" with Who "owner (2026-10-20)"; these rows are what the build chose
+where it left a choice open. It supersedes parts of rows 252, 285 and
+290 (marked there). Review round 1 added the off effects to the idle rule
+(row 305), the shaders' wrap (306), the area chips (307), the depths
+inside the modulation and the audio (308) and the titles' floor (309),
+and asks the owner one question (310). Measured on party-trip in the
+real app at the control window's 960 × 900 after round 1 (53 nodes, 31
+drawn, 22 idle; 50 wires, 233 cables; the canvas 10 columns, the
+shaders 4 in 2 rows): the page draws in **1.42 ms** median collapsed,
+1.71 ms with the whole canvas framed (6.7×), 1.59 ms on SHADERS framed,
+1.61 ms after a tidy (N7: 1.27 ms). On every factory preset, and on
+party-trip with the whole effect chain wired as each graph fixture says,
+no drawn wire runs back or within a column but the shaders' row
+returns. No preset was edited or added; `apc40.py`, `midi.py` and
+ROUTING's desk section are untouched.
+
+### 299. Five areas, left to right: controllers → audio → modulation → geometry → shaders
+
+- **Built.** `graphview.auto_layout` (now `layout`) lays the canvas in
+  areas, each its own columns: **controllers** (the devices, the keys, a
+  placeholder, a desk template) one column; **audio** (the analyzer, the
+  band, tempo, master, audio and scene params' nodes) one; **modulation**
+  (the LFOs, the modifiers, the macros, the `lfo.trigger` group) one;
+  **geometry** (the shape, the hands, a cloud, the camera's *eye*, and
+  the scene, its cover and the hands' layer that draw them) and
+  **shaders** (the capture, the history, the effects, the composites,
+  the outputs last) each as many columns as their render nodes are deep
+  in the render graph, counted from the area's shallowest. A node's area
+  is one table, `graphview.AREA` (by kind, by `group:<g>`, by render
+  class — `area_of`). Saved positions still win (the `layout` keys, the
+  undo marks); a placed node takes no room. On party-trip: controllers
+  column 0, audio 1, modulation 2, geometry 3–5, shaders 6–12 (headless
+  graph; the real app's 14-effect chain runs to column 22).
+- **Other options.** Top to bottom bands (the page is tall and narrow,
+  but the widget draws every wire from a node's right to the next node's
+  left, so a band below its source reads as a loop back); N2's columns
+  by kind (the "pattern I don't really understand").
+- **To reverse.** `graphview.AREA`, `AREAS`, `_columns`, `layout`.
+- **Rough edge.** ~~The shaders area is as wide as the scene pipeline is
+  long~~ — built in review round 1: the chain wraps in rows of four and
+  the off effects are idle (rows 305, 306); the canvas is 10 columns.
+- **Judge it.** Check 272.
+
+### 300. The audio before the modulation; the LFOs are modulation
+
+- **Built.** The audio is the second area, before the modulation: the
+  analyzer is a source the modulation reads (a band into a modifier, a
+  band onto an LFO's rate) as well as the look, so its wires run right;
+  the audio's params (bands, tempo, master, the band scenes) are set
+  only by the controllers, from its left. The LFOs sit with the
+  modifiers and the macros in **modulation**: each is a source like a
+  modifier, and its tempo sync is a knob, not a cable from the audio.
+- **Other options.** The brief's sketch, modulation before the audio (a
+  band into a modifier would then run back); the LFOs in the audio as
+  tempo-synced sources.
+- **To reverse.** `AREAS`' order; `AREA["lfo"]`.
+- **Rough edge.** A route from an LFO or a macro onto a band's param
+  would run back (none in a factory preset).
+- **Judge it.** Check 272.
+
+### 301. Each area's title: faint words on the canvas, no node
+
+- **Built.** **CONTROLLERS**, **AUDIO**, **OTHER**, **MODULATION**,
+  **GEOMETRY**, **SHADERS** drawn on the canvas's own draw list over each
+  area's first column, in a title row above its nodes (`TITLE_H`), at
+  30 % of the text colour, before the nodes (behind them); 30 canvas
+  units tall at full zoom, kept 18 px on screen while zoomed out
+  (`ui_graph.title_size`), never wider than its area's columns. Nothing
+  to select, drag or delete.
+- **Other options.** A node-editor group node (selectable and draggable,
+  and a drag would move it off its area).
+- **To reverse.** `ui_graph._titles`, `titles`, `title_size`.
+- **Rough edge.** The titles stay at the auto layout's place when you
+  drag boxes away. (A long title's shrinking is row 309's: a floor and
+  a short word.)
+- **Judge it.** Check 272.
+
+### 302. The idle rule, by kind: macros, LFOs, group nodes and lost devices
+
+- **Built.** A node is idle (`graphview.is_idle`, `VNode.idle`) when no
+  cable starts or ends on it and no route names one of its params as a
+  `scale` or one of its sources as a `when`; and then: a **macro** only
+  while it has no label and no subscriber; an **LFO** and a **group
+  node** on that alone; a **device** only while lost (grey, not a
+  placeholder — a connected device is drawn even unmapped, it says the
+  rig has it). Never idle: a modifier (one just picked waits to be
+  dropped on a cable), the analyzer, a render node, an output, the keys,
+  a desk template, a placeholder (it has rows). An idle node is not
+  drawn and takes no room. On the factory presets: 8 idle macros on
+  every preset but lfo-breathe (7), 4 idle LFOs (party-trip 3,
+  lfo-breathe 2), the *cloud* group (no point cloud in the default
+  graph); in the real app also the disabled bridge.
+- **Other options.** Macros only (the owner's words; but the unpatched
+  LFOs and the cloud group sat there the same way).
+- **To reverse.** `graphview.IDLE_KINDS`, `is_idle`.
+- **Rough edge.** An unpatched LFO still runs; hidden, its knobs are
+  out of sight (the LFO page keeps them). An effect switched off is idle
+  by row 305's rule. The idle words name an off device ("1 off device":
+  its status says off) apart from a lost one.
+- **Judge it.** Check 273.
+
+### 303. The small "other" area under the audio
+
+- **Built.** A group no area claims — `preset`, `ui`, `desk` and the
+  *missing params* node — goes to **other**, titled under the audio's
+  last box in the audio's column, so the keys' and the desk's wires into
+  it run right from the controllers.
+- **Other options.** A column of its own after the controllers (between
+  them and the audio); the far right (its wires across the canvas).
+- **To reverse.** `graphview.SHARES`, `AREA`'s default.
+- **Rough edge.** The *missing params* node holds `audio.play` /
+  `stop` / `restart` (no param in this build) under OTHER, not AUDIO.
+- **Judge it.** Check 272.
+
+### 304. One idle line an area; its + shows them; tidy closes it
+
+- **Built.** An area with idle nodes draws one small box under its
+  nodes in its first column, saying what it holds ("8 idle macros · 3
+  idle LFOs" under MODULATION, "1 idle param group" under GEOMETRY,
+  "1 lost device" under CONTROLLERS); its **+** draws them under it,
+  stacked, so one can be patched; **−** takes them off. A macro patched
+  leaves the line and is drawn as any node; unpatched, it goes back. The
+  open lines are UI state (`st["idle_open"]`), saved nowhere. The
+  picker's **macro ▸** still offers every idle macro; one picked gets a
+  label, so it is drawn with the line shut. The head counts "31 nodes
+  (22 idle)" (party-trip in the app, after round 1). **tidy** also closes
+  the lines and says "laid out 31 nodes in 6 areas, every one collapsed
+  · 22 idle off the canvas". An idle node is given no place on the
+  canvas while it is not drawn.
+- **Other options.** One collapsed "macros" node holding the idle ones
+  as ports; a line drawn as text with no box.
+- **To reverse.** `ui_graph._idle_line`, `drawn_node`, `toggle_idle`,
+  `tidied`.
+- **Rough edge.** The line is a box of the editor: it can be dragged,
+  but its place is not saved and it goes back on the next layout change.
+- **Judge it.** Checks 273, 274.
+
+### 305. An effect switched off with no cable is idle; a through wire spans the hidden run
+
+- **Built.** (Review round 1.) An effect node is idle while its
+  `fx.<effect>.on` is false when the view is built and no value cable
+  (a route, a desk / pad / key row, a macro subscriber) reaches any node
+  of that effect — so a pad that toggles an effect keeps it drawn. Its
+  render cables do not count. Not `Effect.on(frame)`: a mix at 0 or the
+  stack bypassed would reshape the chain mid-show. `graphview.key` holds
+  every effect's on switch, so turning one on from the FX page draws it
+  next frame. The chain gets a **through wire** (`graphview.throughs`,
+  kind `through`, half-faint, image-coloured) from the node before each
+  hidden run to the next drawn node; its hover names the effects it
+  passes; it is no render edge — Delete on it is refused in words ("a
+  through wire stands for off effects: turn one on (FX) or open the off
+  effects line to edit its cables"), a modifier dropped on it does
+  nothing. SHADERS' idle line says "9 off effects" (party-trip in the
+  app: plasma, kaleido, zoomblur and huecycle on, the other nine off);
+  its **+** lays the whole chain out again with no through wire.
+- **Other options.** `Effect.on(frame)` (moves with the mix and the
+  bypass); keep every effect drawn (the 23-column canvas).
+- **To reverse.** `graphview.effect_off`, `effect_switches`, `throughs`;
+  `build`'s `cabled` set.
+- **Rough edge.** An effect switched on from the FX page moves the chain
+  under the owner's eyes (the layout re-stacks): the price of a canvas
+  that shows only what runs.
+- **Judge it.** Check 275.
+
+### 306. The shaders' chain wraps in rows of four (Z order)
+
+- **Built.** (Review round 1.) Inside SHADERS the chain's depths wrap
+  into rows of `SHADER_ROW` = 4 columns, every row left to right, each
+  row starting under the tallest column of the one before. The only
+  wires that run back are the row returns — a cable from one row to a
+  later one (`graphview.returns`), which the no-back-wire test excuses
+  and nothing else. On party-trip in the app the canvas is 10 columns
+  (was 23), the shaders 4 columns in 2 rows, the whole canvas framed at
+  about 6.7× (was 16×).
+- **Other options.** Snake rows (every other row right to left: half the
+  wires loop back over their own nodes); no wrap.
+- **To reverse.** `graphview.SHADER_ROW`, `_grid`.
+- **Rough edge.** A row return crosses its row from right to left; with
+  two pipelines (the scene's and the scene + hands') two of them do.
+- **Judge it.** Check 276.
+
+### 307. Frame an area: five chips on the head, or a click on its title
+
+- **Built.** (Review round 1.) Under the head's first line,
+  **CONTROLLERS · AUDIO · MODULATION · GEOMETRY · SHADERS** as chips
+  (wrapped to the page); a click frames the canvas on that area's drawn
+  boxes and its idle line (`ui_graph.frame_area`: they are selected, the
+  view brought to them, the selection cleared). A click on the canvas
+  background inside an area's title does the same (`_title_click`). This
+  is how "at a glance" holds on a page about 390 px wide.
+- **Other options.** A minimap; the editor's own "frame selection" key
+  (F) only.
+- **To reverse.** `ui_graph._area_chips`, `frame_area`, `_title_click`.
+- **Rough edge.** Framing clears whatever was selected.
+- **Judge it.** Check 276.
+
+### 308. The modulation and the audio laid out by their own depth
+
+- **Built.** (Review round 1.) Every area is laid out by depth over its
+  own cables, as the render nodes always were (`graphview._depths`: the
+  longest path over the cables between the area's drawn nodes, a loop's
+  closing cable left out). In MODULATION an LFO or a macro fed by
+  nothing is at 0, a modifier one past what feeds it, an LFO whose depth
+  another LFO drives one past it, an LFO whose rate a macro sets one
+  past the macro; in AUDIO a band group fed by the analyzer one past it.
+  So an LFO → modifier, a smooth → combine (check 265) and a macro → LFO
+  knob cable run right instead of looping within one column.
+- **Other options.** One column per kind inside the modulation (LFOs,
+  modifiers, macros: a macro into an LFO would still run back).
+- **To reverse.** `graphview._depths`, `_grid`.
+- **Rough edge.** A loop (two LFOs on each other's depth) draws its
+  closing cable back.
+- **Judge it.** Check 272.
+
+### 309. Titles: never under 12 px on screen; a short word when the long one will not fit
+
+- **Built.** (Review round 1.) A title may be as wide as the distance to
+  the next title on its row (`ui_graph.title_room`); its size is 30
+  canvas units, kept 18 px on screen zoomed out, held to that room — and
+  never under 12 px on screen: when the word will not fit at that it
+  falls back to a short one (CTRL, AUD, OTH, MOD, GEO, SHD;
+  `graphview.SHORT_TITLES`). On the whole canvas framed (6.7×) the head
+  reads CTRL · AUDIO · MOD · GEOMETRY · SHADERS.
+- **Other options.** Two-line titles; staggered rows.
+- **To reverse.** `ui_graph.title_fit`, `title_room`, `TITLE_FLOOR`.
+- **Rough edge.** OTHER, on its own row under AUDIO, is held to one
+  column.
+- **Judge it.** Check 272.
+
+### 310. Open question for the owner (not built): GRAPH asking for the whole control window
+
+- **The question.** With the areas, the wrap and the chips, the whole
+  canvas framed still sits at about 6.7× on CONTROLS' 540 px panel (a
+  canvas about 390 px wide): the titles read, the boxes' words do not.
+  The only way the whole canvas reads at the zoom a box's title needs
+  is for GRAPH to take the control window's full width (960 px, about
+  2.5× more canvas) — the desk and the cheat sheet would give way while
+  GRAPH is open.
+- **Built.** Nothing: the panel's width is `ui.PANEL_W`, shared by every
+  page; widening CONTROLS by hand works today.
+- **Other options.** Keep the panel; a GRAPH window of its own.
+- **Judge it.** The owner's call.
+
+## The step sequencer (plan 31)
+
+Plan 31 ([`plans/31-step-sequencer.md`](plans/31-step-sequencer.md))
+was designed on 2026-10-22 and its ten decisions were put to the owner
+with a recommended answer each; **the owner accepted all ten as
+recommended the same day**, and the build followed them. These rows say
+what was built against each and where the build chose inside one; the
+settled rule is in [`DECISIONS.md`](DECISIONS.md) "Tempo, LFOs and the
+sequencer", "Library and persistence" and "Presets and the desk" with
+Who "owner (plan 31 decision N)". Everything but A1 is on
+`plan-31-integration` (c81a9d9, 2582 tests passed); **A1, the APC40 page,
+is on `plan-31-a1` and waits for Dylan**. No golden moved; 25 new ones
+are `seq-demo`'s (621).
+
+### 311. N LFOs, cap 16, removable by stable id
+
+- **Answer.** (rec) — accepted 2026-10-22. Replaces DECISIONS' "Four
+  LFOs".
+- **Built.** `modbank.Bank`, with `lfo.LFOs` its first kind: four LFOs by
+  default, `+ lfo` / `×` on the LFO page and the GRAPH picker / delete;
+  ids one past the highest, never compacted (LFO 3 stays `lfo:2` with
+  LFO 2 gone; the gap's lane NaN, a route on it dormant); the cap 16
+  voices, a file's ids 1–64; `"lfos"` in the preset only when not
+  `[1, 2, 3, 4]`; membership an undo part, restored before the bases.
+- **Other options.** A fixed larger N (16 always there: longer menus, and
+  every preset carrying twelve idle LFOs); compacting ids (every route
+  above a removed LFO would move).
+- **To reverse.** `lfo.N` and `modbank.MAX`; the page's chips.
+- **Rough edge.** A removed *top* id is reused by the next add, and a
+  route left on it comes back to life (the rule protects only ids below a
+  standing voice). Frame time at 16 is not measured.
+- **Judge it.** Check 280.
+
+### 312. Envelopes: AHDSR, gate and one-shot
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `envelope.Envelope`: attack, hold, decay, sustain, release
+  (the voice's attribute is `rel`), log 1 ms – 8 s, hold's bottom 0 (so
+  ADSR by default); `mode` gate · one-shot; `sync` s · beats (beats ×
+  60 / bpm, read each step); `retrig` legato (default) · reset; one
+  `curve` −1…1 (the modifiers' `x ** 4 ** curve`); `amount`, `velocity`
+  sensitivity. Event-driven: a fire is stamped (`at=`) and rendered by a
+  closed form, so a sub-frame step is exact; an unstamped fire lands at
+  the next step at level 0. `gate=` (seconds) auto-releases a note,
+  tokened so a later note is never cut short.
+- **Other options.** ADSR without hold; a per-stage curve; a delay stage
+  before the attack.
+- **To reverse.** `envelope.KNOBS`, `declare`.
+- **Rough edge.** Two lanes pointed at one envelope share one voice:
+  they re-attack it (legato) rather than layer.
+- **Judge it.** Check 282.
+
+### 313. Envelopes 1–5 always there, each its lane's; extras to 16
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `Envelopes` always holds 1–5 (`LANE_ENVS`): the constructor
+  adds them, `remove` refuses them (the SEQ page and GRAPH say so), and
+  `parse` re-adds them (a hand-edited `"envs": [6]` loads 1–6). Extras
+  6… up to 16 voices; `"envs"` is written only with extras. **Built
+  beyond**: a lane may be pointed at any envelope (`seq.<l>.env`, default
+  its own, not modulatable), from the SEQ page's picker or by dragging
+  its `lane` cable on GRAPH; one pointed at a removed extra fires nothing
+  and its picker shows the warning colour.
+- **Other options.** No envelopes in a fresh preset, a lane making one on
+  first use (the designs differed); a fixed lane → envelope binding.
+- **To reverse.** `LANE_ENVS`; `seq.<l>.env`.
+- **Rough edge.** A lane on a removed extra is said only on the SEQ page's
+  picker; GRAPH draws no cable for it.
+- **Judge it.** Checks 281, 284.
+
+### 314. Steps as registry params
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `seq.<l>.<s>`, 40 toggles in group `seq`, each a view of a
+  float (on keeps a velocity it has). The SEQ page's cells, Learn, undo
+  (taps inside undo's settle merge), the preset, a performer and, on
+  `plan-31-a1`, the APC40's clip grid all write the same params.
+- **Other options.** A data blob per pattern (smaller registry; no Learn,
+  no ownership, its own undo and LED code).
+- **To reverse.** `sequencer.register`.
+- **Rough edge.** The sequencer adds 57 params (40 steps, 5 mutes, 5 lane
+  envelopes, span, length, swing, gate, run, step, restart): Learn menus
+  and target combos are longer.
+- **Judge it.** Checks 281, 286.
+
+### 315. Per step on/off only; one global swing
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** On/off per step, stored as a velocity (0 off, > 0 its
+  velocity; the toggle writes 1.0) so velocity can come without a new
+  file format; swing 0–0.5 of a step on every odd step. **Built beside
+  it: a global gate length**, `seq.gate` 0.05–1 of a step (default 0.5),
+  the decision having put gate length "later": without it a gate-mode
+  envelope fired by a step held its sustain until the transport stopped.
+  One-shots ignore it.
+- **Other options.** No gate (gate-mode lanes useless on the grid; only
+  one-shots would play notes); a per-step gate now.
+- **To reverse.** `Sequencer.gate_seconds`, `seq.gate`.
+- **Rough edge.** `seq.gate` is not on the SEQ page: ROUTING, GRAPH or a
+  Learn reach it.
+- **Judge it.** Check 282.
+
+### 316. One global span and a global length 1–8
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `seq.span` ½ bar · 1 bar (default) · 2 bars · 4 bars (16ths,
+  8ths, quarters, halves); `seq.length` 1–8, set from the SEQ page's
+  step numbers or (on `plan-31-a1`) clip stop k; columns past it dimmed
+  and inert on screen, dark and inert on the desk. A span change
+  re-anchors and starts at the next boundary.
+- **Other options.** Per-lane length (polymeter); 16- and 32-step pages.
+- **To reverse.** `sequencer.SPANS`, `seq.length`.
+- **Rough edge.** None known.
+- **Judge it.** Checks 281, 289.
+
+### 317. The APC40 page on SEND A, latched
+
+- **Answer.** (rec) — accepted 2026-10-22. **Built on `plan-31-a1`,
+  pending Dylan (row 320).**
+- **Built.** `seq.page` on SEND A (note 0x58), an invariant session
+  toggle; a surface page whose in-memory rows shadow clip rows 1–5, clip
+  stop 1–8 and scene launch 1–5 on both layers, invariant rows included
+  (so the bank pads, SAVE and scene 1–4's render toggles are shadowed
+  while it is up, amending D6); a preset load leaves it up; going up
+  drops hold timers on its controls; leaving relights the desk from the
+  params; `led_shade` + `apc40.SHADE` light it; `seq.select` holds the
+  lane; the on-screen desk's header reads "SEQ · lane 2 · L=8". An older
+  `bindings.json` gets the row through `APC_NEW_ROWS`, or a note at
+  launch when SEND A is the owner's.
+- **Other options.** Holding CLIP/TRACK (momentary, a hand tied up); a
+  third layer (invariant rows would beat it; layers spread into Learn,
+  desks and GRAPH).
+- **To reverse.** The `seq.page` row in `apc40.DEFAULT_MAP`; `seq_page.py`.
+- **Rough edge.** The page is the first MIDI role's only; the header has no
+  span; nothing has run on an mk1 (yellow over green, the mute blink,
+  Generic mode).
+- **Judge it.** Checks 286–295.
+
+### 318. The pattern in the preset; `run` not
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `seq` and `env` in `PERFORMANCE_GROUPS`; `seq.run`,
+  `seq.step` and `env.<n>.gate` `persist=False`. Pattern slots are `seq`
+  module presets (the SEQ page's ◀ preset ▶). The factory `seq-demo`
+  loads stopped and plays once run is pressed; its goldens are drawn
+  with run pressed by the golden rig.
+- **Other options.** `run` in the preset (a load would start or stop the
+  pattern mid-set).
+- **To reverse.** `persist=False` on `seq.run`.
+- **Rough edge.** Stopping releases every lane's envelope, even one held
+  open through its `gate` param.
+- **Judge it.** Check 282.
+
+### 319. Conditional `hyperspace.preset/3`
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `preset.schema_of`: `/3` when the document has a bank key
+  (`lfos`, `envs`), an `env.*` / `seq.*` value, or a route, modifier or
+  macro on `env` / `seq`; else `/2` with every `env.*` / `seq.*` value
+  left out (all at their load defaults, floats to 1e-9), byte for byte
+  an older registry's file. Load takes `(2, 3)`. ENGINEERING says both
+  Macs on one library must run this build.
+- **Other options.** Always `/3` (every preset refused by an older build
+  at once); never bump (an older build re-saving drops the pattern
+  silently).
+- **To reverse.** `schema_of`, `VERSIONS`.
+- **Rough edge.** An older build's refusal speaks of the schema, not the
+  sequencer.
+- **Judge it.** Check 285.
+
+### 320. A1 only after Dylan agrees
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** A1 was built and tested (`tests/test_seq_page.py`, 14 tests)
+  on its own branch, `plan-31-a1`, which took `plan-31-integration` in but
+  was not taken into it; nothing else waits on it — the SEQ page gives the
+  whole feature without the hardware. A2 (D5–D8 as the selected lane's
+  AHDSR) is not built.
+- **Other options.** Land A1 with the rest and let Dylan review after.
+- **To reverse.** Bring `plan-31-a1` in once Dylan agrees.
+- **Rough edge.** `plan-31-a1` drifts from the integration branch until
+  it lands; it touches `routing.dispatch` / `active`, `midi.py`,
+  `apc40.DEFAULT_MAP` and `ui_desk`.
+- **Judge it.** Checks 286–295, with Dylan.
+
+## Plan 32 — media (rows 321–339)
+
+Rows 321–339 were answered by the owner on 2026-10-22, in the session that
+designed plan 32, before the build: "(rec)" is the recommendation accepted,
+"(owner)" the owner's own. Each row says what the build did; "Rough edge"
+and "Judge it" are for the hand checks of group AA (checks 296–316).
+These rows follow plan 31's rows 311–320; the two plans land together on
+`plan-31-32-integration` (row 340).
+
+### 321. Eight fixed channels, `a`–`h`
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `media.channels.CHANNELS = "abcdefgh"`; each channel has six
+  params in the `media` group (`media.<c>.slot / fit / rate / pos / jog /
+  loop`, 48 in all), all routable, all Learn targets, none with a desk
+  default. The group is a performance group, so the presets page's module
+  overview leaves it out (a channel's values mean nothing without its bin).
+- **Other options.** Channels added and removed like LFOs (plan 31's
+  bank); sixteen channels.
+- **To reverse.** `channels.CHANNELS`, `params.build_registry`, the MEDIA
+  page's eight columns, `graph.MEDIA_CHANNELS` (a test holds the two
+  constants equal).
+- **Rough edge.** Unused empty channels sit on GRAPH's idle line ("8 empty
+  channels"); eight 45 px columns are tight on the panel.
+- **Judge it.** Check 303.
+
+### 322. A channel's choice is a bin of ≤ 16 sources plus a `slot` param
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `media.<c>.slot` is a discrete 0–15 param; the bin is
+  `BIN = 16` ids, an empty entry or a missing source reads black. Switching
+  is a param, so Learn, the pad, the APC40, the sequencer, a macro, an LFO
+  and undo all switch it. The MEDIA page assigns (library pick, then a
+  cell), cues (a cell with no pick writes the slot) and empties (right
+  click); a bin edit is one undo step.
+- **Other options.** A channel holding one source with no bin; a longer
+  bin.
+- **To reverse.** `channels.BIN`, the slot param's range, the page's bin
+  cells.
+- **Rough edge.** A bin edit made any way but the MEDIA page (a script) is
+  not an undo step.
+- **Judge it.** Checks 296, 298.
+
+### 323. Bins live in the preset
+
+- **Answer.** (rec) — accepted 2026-10-22. "Source lists in the preset are
+  fine."
+- **Built.** A `media` section, `{"channels": {"a": [id | null, …≤16],
+  …}}`, one channel to a line. The bins are part of the dirty dot's
+  signature and of `Presets.same`, and `library.Marks` carries them, so an
+  undo of a load puts them back. A bad id in a file is a note and the entry
+  is dropped; the bins land after the values.
+- **Other options.** Bins in the show or the session (the rig), not the
+  preset.
+- **To reverse.** `preset.document`, `MediaState.to_json / from_json`,
+  `library.Marks`.
+- **Rough edge.** A preset names a place (`local:`, `camera:`) another Mac
+  may lack: the banner says so, the channel shows black.
+- **Judge it.** Check 301.
+
+### 324. Source ids and places
+
+- **Answer.** (rec) — accepted 2026-10-22: `shared:`, `local:`, `file:`,
+  the live kinds; a missing source is black plus the banner.
+- **Built.** `shared:<rel>` (`<library>/media/`), `local:<rel>`
+  (`<home>/media/`), `file:<abs>`, `camera:<name>`, `syphon:<app>/<server>`,
+  `ndi:<stream>` (`ndi:HOST (stream)` when two hosts send one name);
+  `phone:` is parsed and never opened. The MEDIA page's banner lists the
+  ids the loaded preset names that this Mac lacks, three lines and "and n
+  more". A file that is deleted, renamed or replaced mid-show turns its
+  channel black and `missing` (a new mtime reloads it); a placeholder is
+  `fetching` — black, never opened (a read would block until the download
+  lands), out of the banner, opened within a second of the scan that says
+  `ready` (final review A-I1); a junk file is `error: …`; none of it
+  reaches the frame thread. **Copy to shared** turns a `local:` or `file:` pick into a
+  `shared:` one.
+- **Other options.** Content hashes instead of paths; a manifest.
+- **To reverse.** `media.ids`, `MediaFolder`, the banner in `ui_media`.
+- **Rough edge.** A renamed file is a new id (the old bin entry goes
+  missing); `file:` ids are absolute and so never portable.
+- **Judge it.** Checks 300, 301, 302.
+
+### 325. Live kinds are device-registry kinds that discover feeds
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `ndi`, `syphon` and `camera` are `devices.kinds()` entries on
+  `media.live.LiveKind`; an entry in `[[devices]]` turns one on (the
+  factory template lists all three, commented, `enabled = true`). A kind's
+  `media_sources()` is the dict its last scan published, and
+  `DeviceRegistry.media_feeds()` merges the open devices'. Status
+  `connected — n feeds`, `lost`, or `error: …`; the registry's retry and
+  config watch come free. The kind's name for its feed map is
+  `media_sources`, not the design's `feeds`, which `devices.Base` already
+  uses for the Router schemes a device feeds (ruling during the build).
+  A feed that vanishes is held `lost` and found again with no relaunch; a
+  channel follows a device remade by a `config.toml` edit.
+- **Other options.** A separate "media sources" registry beside devices.
+- **To reverse.** `media.live`, `devices.kinds`, `DeviceRegistry.media_feeds`.
+- **Rough edge.** A GRAPH device node is grey unless its status starts with
+  `connected` (changed from "connected"); the camera kind lists Continuity
+  Camera.
+- **Judge it.** Checks 304, 305, 311, 313, 316.
+
+### 326. The transport: `pos` latch scrub, `rate` −4…+4, `jog` a push with coast, `loop` three modes, rate 0 freezes a live feed
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `media.transport.Transport`: speed = `rate + coast`, where only
+  `coast` (target 8 × `jog`) springs (`motion.spring`, 2 Hz); a `rate`
+  change acts at once (ruling: "× native speed" and "jog coasts back to
+  rate" together). While `pos` moves, the playhead is put there; at rest it
+  runs on. `loop` / `pingpong` / `once` (the last holds its last frame).
+  On a live feed `rate` 0 freezes the frame. The playhead is a readout on
+  the MEDIA page and GRAPH, never a param. A channel with no consumer still
+  plays but is not uploaded.
+- **Other options.** `pos` as an absolute param only; jog as a speed
+  multiplier; a rate that springs too.
+- **To reverse.** `Transport.step`, `JOG_GAIN`, `JOG_HZ` in `transport.py`.
+- **Rough edge.** Rate 0 freezes an NDI or camera feed exactly, and a Syphon
+  channel holds too — its copy of the held frame is made only when the
+  frame moves — except across a renderer hot reload, which copies the held
+  texture name again (check 315). A frozen live channel says `frozen`. `once` never re-arms by itself (a new scrub moves it);
+  a proxy retimes VFR clips; scrubbing a clip without a proxy is coarse
+  (keyframes).
+- **Judge it.** Checks 298, 299, 315.
+
+### 327. Scrub proxies for clips ≤ 10 minutes
+
+- **Answer.** (rec) — accepted 2026-10-22. "I can't imagine we'd have
+  longer clips than that."
+- **Built.** A clip of ≤ 600 s gets an MJPEG proxy (≤ 1280×720) in
+  `<home>/media-cache/proxies/`, never the shared folder, made the first
+  time the clip is opened. The build gave it a single cancellable worker of
+  its own (`media-proxy`) instead of the pool: a transcode cannot be
+  cancelled on the pool and would hold a worker through an app exit. Until
+  it exists the original plays forward only; the proxy is picked up at the
+  next open.
+- **Other options.** Transcode at add time; HAP/ProRes proxies; no proxy.
+- **To reverse.** `media.proxy`, `video.VideoSource` (`read_path`).
+- **Rough edge.** A failed proxy is retried at every open; clips over 10
+  minutes scrub by keyframe, always.
+- **Judge it.** Check 298.
+
+### 328. Threads: a pool for jobs that end, a thread per blocking source, the render thread only uploads
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `media.pool` (3 workers) for still decode, folder scans, live
+  discovery and joins, and `media-thumb` (1 worker, at most 16 jobs
+  waiting, the oldest dropped) for thumbnails; all daemon threads
+  (`pool.DaemonExecutor`: `concurrent.futures` joins its own at
+  interpreter exit, so one stuck read held Quit — final review A-I1); a
+  thread of its own per video
+  (`media-video-<name>`), live feed (`media-live-<id>`), NDI out
+  (`media-ndi-out-<name>`), plus `media-proxy`, `media-closer` (a dropped
+  source is closed there, so a close stuck in a cloud download cannot
+  freeze the frame), `media-discover-syphon` and the folder's probe
+  threads. `MediaState.poll` steps transports and opens/queues closes;
+  `MediaTextures` uploads. Tests: a fake adapter sleeping 200 ms leaves the
+  frame untouched; 500 rapid switches balance opens and closes and leave one
+  thread; app exit joins everything within 2 s — one deadline shared by
+  every close (`pool.begin_exit` / `left`), proved in a subprocess with
+  every pool worker stuck in a read, a transcode running and a video stuck
+  opening; a huge image reads None until ready.
+- **Other options.** One pool for all (a blocking read starves it);
+  asyncio.
+- **To reverse.** The adapters' thread starts, `Closer`.
+- **Rough edge.** Syphon's client release runs on the frame thread. A
+  video's close waits 1 s at most and abandons a thread stuck opening; a
+  close of another kind hung for good still blocks later closes (leak, not
+  stall).
+- **Judge it.** Checks 302, 303.
+
+### 329. Caps: 1080p files, 720p live; upload only consumed channels with a new frame
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `CAP_FILE` 1920×1080, `CAP_LIVE` 1280×720, aspect kept, on the
+  decoding thread. `MediaTextures.texture` writes only for a channel a
+  consumer reads this frame whose `(frame, t)` moved. Syphon textures
+  arrive at the server's size and are sampled scaled (a cap would need a
+  GPU pass). The MEDIA page's preview of a channel nothing reads is a copy
+  at most 320 px wide, each at most 10 a second and two a frame, round
+  robin (final review B-I2); a channel the frame reads shows its own
+  texture.
+- **Other options.** Resize on the GPU; a lower file cap.
+- **To reverse.** `frame.CAP_FILE`, `CAP_LIVE`.
+- **Rough edge.** Eight consumed 1080p channels at 30 fps is ~2 GB/s of
+  texture writes; never measured in a show.
+- **Judge it.** Check 303.
+
+### 330. Backdrop under the scene, before the history and the effects; `backdrop.history` off by default; plan 33 settles the order
+
+- **Answer.** (rec) — accepted 2026-10-22. "Stopgap is fine."
+- **Built.** `backdrop.channel` (off / a–h), `backdrop.alpha`,
+  `backdrop.history`. The scene clears to alpha 0 and is laid over the
+  channel (`grounded`); echoes and the dream are drawn over the backdrop.
+  With `history` off they are held back by the scene alone (the history's
+  `occluder` port — not by the backdrop's brightness, which hid them;
+  final review B-I1). With `history` on the capture takes the composite,
+  so the echoes hold the backdrop too and the history occludes from its own
+  picture as before: occluded by the scene alone, a still backdrop added
+  onto itself and washed to white (re-review). So with `history` on, the
+  shape's echoes show over the backdrop's dark areas only. An effect placed
+  `after scene` is retargeted to the backdrop's composite. The hands-only
+  pipeline has none. With no backdrop the graph is unchanged node for node.
+- **Other options.** The backdrop inside the history by default; a
+  backdrop per output.
+- **To reverse.** `graph.default_graph`'s `grounded`, `Renderer.scene_ground`.
+- **Rough edge.** With `history` off, echoes are not bent by an effect
+  placed after the scene; with `cut_through` on and a backdrop, faint fills
+  let the backdrop show through (never eyeballed).
+- **Judge it.** Check 296.
+
+### 331. Faces read a channel (`view.media`); `view.bmp_*` dropped on load with a note
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `view.media` (off / a–h) and `view.media_alpha / scale / mode /
+  amp / rate` with the old meaning; the faces read the channel's raw
+  texture, aspect kept. An old preset's non-empty `view.bmp_file` is
+  dropped with `bitmap file <path> is no longer read: put it on a media
+  channel`. Ruling: the APC40's factory knob 7 (`cc:0:54 → view.bmp_alpha`)
+  keeps working because `view.bmp_alpha` is a hidden alias of
+  `view.media_alpha`: an old preset's value lands on `media_alpha`
+  (the file's own `view.media_alpha` wins); row 339 forbids new defaults,
+  not the keeping of existing ones.
+- **Other options.** Retire the knob (free K7); keep a bitmap page beside.
+- **To reverse.** `params` (the alias rule), `preset` (the load note).
+- **Rough edge.** The alias shows as its own port on GRAPH's shape node,
+  like the `band.sel.*` aliases.
+- **Judge it.** Checks 297, 314.
+
+### 332. Every effect gets an optional `aux` input; `displace` and `blend`
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `Effect.INPUTS = {"image", "aux"}`; `_lib.glsl` has `u_aux`,
+  `u_aux_on`, `u_aux_size`, `aux(uv)`, `aux_luma(uv)`; unwired is
+  transparent black. Any `IMAGE` node may feed it (a channel, the scene,
+  the history, another effect), by a wire `{"from": "media.a", "to":
+  "acid.2.aux"}`; a loop or a missing end is dormant with words. `displace`
+  (luma or red/green moves the picture; amount, mode, angle) and `blend`
+  (over, multiply, screen, difference, luma key; key, soft; mix = amount).
+  No factory preset uses them. Goldens `displace-luma`, `blend-luma-key`.
+- **Other options.** Effects named per input; N aux ports.
+- **To reverse.** `graph.Effect.INPUTS`, `fx.py` uniforms, the two shader
+  files.
+- **Rough edge.** Adding two effect files adds `fx.displace.*` / `fx.blend.*`
+  lines to every saved preset (see row 337); an aux from an in-run effect
+  reads the scene pipeline's node.
+- **Judge it.** Check 297.
+
+### 333. The phone's own HTTPS page is V2; V1 leaves the door open for an NDI camera app
+
+- **Answer.** (owner) — 2026-10-22. Its check with a real phone comes after
+  the sprint.
+- **Built.** Nothing for phones but the `phone:` id, parsed and never
+  opened, and never listed missing. A phone running an NDI camera app is an
+  `ndi:` source.
+- **Other options.** The HTTPS/WebRTC page (the design in the plan file, §P).
+- **To reverse.** n/a (V2 adds the adapter and a kind).
+- **Rough edge.** The NDI-camera-app road has never been tried with a real
+  phone.
+- **Judge it.** Check 312.
+
+### 334. Phone join (V2): a per-rig token in the QR, at most 4, each approved on the host
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** Not built (V2).
+- **Other options.** Open join; a PIN per session.
+- **To reverse.** n/a.
+- **Rough edge.** n/a.
+- **Judge it.** No check; V2.
+
+### 335. Resolume / TouchDesigner both ways in V1: NDI in, Syphon in, Syphon out, NDI out; publish-only outputs
+
+- **Answer.** (owner) — 2026-10-22.
+- **Built.** In: `ndi` (with `extra_ips`) and `syphon` kinds (row 325). Out:
+  `[output]` / `[[output.screens]]` take `syphon = "<name>"`, `ndi =
+  "<name>"` and `window = false`. Syphon out hands the texture over on the
+  frame thread (0 ms); NDI out reads back through two pixel-pack buffers
+  and sends on its own thread (~4 ms of frame time at 1080p), dropping a
+  frame when the sender is busy. A window publishes at the render cap, so
+  a retina window is not a 4K stream. Rulings: publishers are SYSTEM lines
+  (`<kind> out <name> — <fps> fps, readback <ms> ms`), not registry sinks;
+  output 1 cannot be publish-only (it holds the GL context and paces the
+  loop): `window = false` there is a note. `extra_ips` goes through an
+  app-owned `<home>/ndi/ndi-config.v1.json` (`NDI_CONFIG_DIR` set before
+  `cyndilib` loads), because `cyndilib` hard-codes the finder's extra IPs.
+  Syphon in is a `GL_TEXTURE_RECTANGLE`, copied on the GPU into a 2D
+  texture.
+- **Other options.** A registry sink per publisher; NDI|HX; a Syphon
+  Metal server; clocking the NDI sender.
+- **To reverse.** `media.publish`, `config` (the three keys),
+  `render._publish`.
+- **Rough edge.** `extra_ips` is unverified (the status says so); a change
+  after `cyndilib` loaded needs a restart; the NDI copy is 4 ms of a 16 ms
+  frame; a hand-edited `window = false` on output 1 is refused.
+- **Judge it.** Checks 304–310.
+
+### 336. Dependencies: `av`, `pillow-heif`, `syphon-python`, `cyndilib` in the default install, each imported only when used
+
+- **Answer.** (rec) — accepted 2026-10-22; the phone's (`aiohttp`,
+  `aiortc`, `segno`) come with V2.
+- **Built.** `pyproject.toml`: `av>=19`, `pillow-heif>=1.8`,
+  `syphon-python[opengl]>=0.2` (macOS only; the extra is PyOpenGL, already a
+  dependency, which Syphon's GL server needs), `cyndilib>=0.1.3` (its macOS
+  wheel carries `libndi`; check the NDI SDK's licence before shipping a
+  build), and, beyond the row, `pyobjc-framework-avfoundation` (macOS only,
+  for the camera list). `import hyperspace.app` imports none of `av`,
+  `pillow_heif`, `syphon`, `cyndilib`, `AVFoundation` (a boundary test).
+- **Other options.** Optional extras; a separate install step.
+- **To reverse.** `pyproject.toml`, `uv lock`.
+- **Rough edge.** `uv sync` pulls four more wheels (a heavier first launch).
+- **Judge it.** Check 311 (a fresh `uv sync` on the other Mac).
+
+### 337. Conditional preset `hyperspace.preset/4`, after plan 31's `/3`
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** A preset is saved `/4` only when its document has a `media`
+  section with an id, any `media.*`, `backdrop.*` or `view.media*` value
+  away from its default, or a route, desk row, modifier, macro or graph
+  wire naming a media id. `/4` is `/3` plus media (row 340): a `/4` file
+  carries every value, plan 31's envelopes and pattern too; every other
+  preset is `/3` or `/2` by plan 31's rule (row 319), without the media
+  values. Load accepts 2, 3 and 4. **Both Macs sharing a library must run
+  the merged build** to load a `/4` file; an older build refuses it.
+- **Other options.** Always write `/4`.
+- **To reverse.** `preset.uses_media`, `MEDIA_SCHEMA`.
+- **Rough edge.** "Every other preset is byte for byte the file it was"
+  holds except for the added `fx.displace.*` / `fx.blend.*` value lines
+  (two new effect files; plan 30's palette did the same): the test ignores
+  them. A `/4` file read by an older build is the cross-build question
+  hand check 301 asks.
+- **Judge it.** Check 301.
+
+### 338. Base `plan-28-30-integration`, taking it in as it moves
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** Built on `plan-28-30-integration` @ 1a5cc2e. Nothing taken in
+  during the build.
+- **Other options.** Wait for #224 to merge.
+- **To reverse.** n/a.
+- **Rough edge.** It lands with plan 31 (`plan-31-32-integration`, row
+  340). No schema, register row or hand check renumbered; only the
+  TESTING-GUIDE ids moved (plan 32's L139–L145 became L145–L151).
+- **Judge it.** n/a.
+
+### 339. No desk or APC40 default bindings; Learn for all
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** No factory row, desk template or APC40 mapping was added;
+  `apc40.py` and `midi.py` are untouched. Every channel param is a Learn
+  target; the MEDIA page suggests Learning the cue knob to
+  `media.<c>.jog`. K7's existing row survives through an alias (row 331).
+- **Other options.** Defaults on the clip grid; the cue knob bound to the
+  selected channel's jog.
+- **To reverse.** n/a (add rows to a profile).
+- **Rough edge.** Nothing moves a channel until a performer Learns it.
+- **Judge it.** Check 299.
+
+## Plans 31 and 32 together (row 340)
+
+### 340. One schema ladder: `/4` = `/3` + media; the two land together
+
+- **Superseded (save side) by row 394**, 2026-10-25: a save writes `/6`,
+  never the lowest schema; the ladder is read, not written.
+- **Answer.** owner — 2026-10-23 (D1–D3 of
+  [`plans/assets/32-media/merge-31-32.md`](plans/assets/32-media/merge-31-32.md)).
+- **Built.** One rule, `preset.schema_of`, picks what a save writes, the
+  lowest schema that loses nothing: `/4` when the preset uses media
+  (`uses_media`: a bin, a media-family value off its default, or a row or
+  wire naming a media id), else `/3` by row 319's rule, else `/2`.
+  `VERSIONS = (2, 3, 4)`. A `/2` file carries neither family's values, a
+  `/3` the envelopes' and the sequencer's but no media value and no
+  `media` key, a `/4` everything plus the bins. The factory presets
+  (`preset.generated`) go through the same rule. "At its default" is
+  plan 31's test for both families: what a load lands for the value
+  missing (`Library.defaults`, the group's default module over the build
+  values), to a float's hair. Plans 31 and 32 land together, on
+  `plan-31-32-integration`, so no build reads `/4` without `/3`.
+- **Other options.** One schema per combination (`/3` sequencer, `/4`
+  media, `/5` both), or a list of required features in the file.
+- **To reverse.** `preset.schema_of`, `Presets.document`'s strip.
+- **Rough edge.** A Mac still on `plan-32-media` alone reads `/4` but
+  not `/3`: it would load a merged-build `/4` that carries a pattern and
+  drop the pattern on a re-save. Never run that branch against the shared
+  library once the merged build has saved.
+- **Judge it.** Check 317.
+
+## Plan 33 — the free graph (rows 341–352)
+
+Rows 341–352 were answered by the owner on 2026-10-24, in the session that
+designed plan 33, before the build: "(owner)" is his own answer, quoted,
+"(rec)" a recommendation he accepted ("accept the rest of the recs, start
+building"). Each row says what the build did; "Rough edge" and "Judge it"
+are for the hand checks of group AC (checks 318–328). The ledger's
+rulings R1–R29 are folded into "Built" where they changed what you see.
+The plan lands on `plan-31-32-integration` (PR #235).
+
+### 341. Retire the FX stack: no `order`, no `target`, effects are edited on GRAPH
+
+- **Answer.** (owner) — 2026-10-24: "Retire the main chain fx stack, we can
+  edit it directly in the graph."
+- **Built.** `fx.<n>.order`, `fx.<n>.target` and `fx.select` are not
+  params (`fx.RESERVED` keeps `order` and `target` as names, so an old
+  preset's ids are not read as uniforms). `TARGETS`, `FRAME`, `FACES`,
+  `chain()`, `FxChain.run`, the faces chain (`face_fx`) and the order-built
+  fallback run are gone; `Wiring.run is None` is the empty run (R23).
+  `@order` in an effect file is parsed and read only by the migration.
+  An old preset's orders and targets are read as wires on load
+  (`graphmigrate.migrate`) and, on a save below `/5`, written back where
+  the base build put them (`with_retired`). Three demo tools of the
+  retired UI and 30 stack-only tests were deleted.
+- **Other options.** Keep the stack as the default run and let the graph
+  add branches beside it.
+- **To reverse.** Large: the T3 run-from-wires and T7 removals. The
+  migration's inverse (`legacy_values`) is the way back to `order`.
+- **Rough edge.** A pad or key that switches on an effect in no run does
+  nothing (R13) and a later save is `/5`. An fx module load replaces the
+  run rather than appending (R12).
+- **Judge it.** Checks 318, 320.
+
+### 342. One picture input for all faces: `shape.faces`
+
+- **Answer.** (owner) — 2026-10-24: "I'm fine with one input for all faces
+  right now, per instance is the next place I would go with this though."
+- **Built.** `Shape.INPUTS = {"faces": IMAGE}`. Unwired, or fed straight
+  from `pattern`, the faces draw per face with no 1024² pass (every
+  golden without a face effect). Through effects from `pattern`: the old
+  ping-pong into `face_pic` (1024²). From anything else: that picture at
+  1024² as `u_pic`, mapped per face or in screen space by `fx.face_map`.
+  A source that reads nothing (a lost channel) makes the faces show the
+  pattern for that frame. 24 goldens added (`media-chain-faces` and the
+  two beside it).
+- **Other options.** A picture per shape instance now.
+- **To reverse.** n/a (a later plan adds `shape.faces.<k>`; the port name
+  leaves room).
+- **Rough edge.** Every face shows face 0's pattern phase when a picture
+  is wired in, as it did with an effect aimed at the faces.
+- **Judge it.** Check 318.
+
+### 343. The run is wires from `frame` to `fx.image`, drawn by every pipeline
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `Wiring.run`, from `graph.run_of`; every pipeline (scene,
+  scene+hands, hands) draws the same run on its own picture, as each drew
+  the chain. An effect in no run and on no reached branch has no node.
+  A run member whose file is gone reads through and says so
+  (`Graph.dormant`). The graph's rebuild key takes the effect files
+  present, not their order. Into `fx.image` only from `frame` or an effect
+  chain leading back to it; anything else is refused in words.
+- **Other options.** A run per pipeline in the preset.
+- **To reverse.** `Wiring.run`, `default_graph`'s run, `wire_error`.
+- **Rough edge.** An emptied run keeps its bare `frame → fx.image` wire
+  (R9), and deleting that wire is refused (R20), so "no run" is never
+  expressible; an empty run is the same picture.
+- **Judge it.** Checks 320, 322.
+
+### 344. A `pattern` node with a `media` input replaces `view.media`; `shape.faces` unwired draws as today
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `graph.PatternNode`. A channel straight into `pattern.media`
+  is read raw (`Renderer._channel_layer`), as `view.media` was, so
+  `faces-media`'s graph and goldens are unchanged; a branch is made at
+  its head's size and keeps the channel's aspect. `view.media_alpha /
+  scale / mode / amp / rate` stay params. `view.media` is not a param;
+  its readers (`render._face_media`, the FACES and MEDIA pages, Learn)
+  follow the wires, through a switch's pick.
+- **Other options.** The media layer dropped for a composite over the
+  pattern (loses the layer's scale and orbit).
+- **To reverse.** `PatternNode`, `render._face_media`.
+- **Rough edge.** The MEDIA page's faces picker is read-only words
+  ("channel C (switch)", "wired on GRAPH"); the choice is made on GRAPH or
+  by a knob on a switch.
+- **Judge it.** Checks 318, 323.
+
+### 345. A `backdrop` node with an `image` input replaces `backdrop.channel`; `backdrop.alpha` and `backdrop.history` stay params
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `graph.BackdropNode`, the sink. A channel straight in becomes
+  `Wiring.backdrop` and is plan 32's `MediaNode` under the scene, byte for
+  byte; a branch is laid under the scene in `grounded` by
+  `Composite(under_alpha_of="backdrop_alpha")` at the frame size.
+  `backdrop.*` params belong to the `backdrop` node on GRAPH.
+- **Other options.** Keep `backdrop.channel` as a param beside the wire.
+- **To reverse.** `BackdropNode`, `Composite.under_alpha_of`.
+- **Rough edge.** A backdrop branch has one extra reader, so one extra
+  pool texture a frame.
+- **Judge it.** Check 318.
+
+### 346. The migration keeps only the effects that are on (mix > 0), and the ones something drives
+
+- **Answer.** (owner) — 2026-10-24: "effects that are toggled off right now
+  really are not used in any presets." The driven-at-mix-0 clause is the
+  build's ruling R5, taken for `dial`.
+- **Built.** An effect joins the run when it is `on` and (`mix > 0` or an
+  id of its own is driven by a route, desk row, macro, modifier or step).
+  `presets/dial.json` has `acid`, `huecycle` and `kaleido` on at mix 0,
+  pushed up by axis routes; they stay. An effect that is off stays out and
+  a load note says so when something drives it. A test fails the build if
+  a library preset routes an effect the migration leaves out
+  (`test_no_library_preset_routes_an_effect_it_leaves_out`). All 661
+  goldens before the plan are unmoved.
+- **Other options.** Keep every effect, off ones read through (an idle node
+  each); keep only the on, mix > 0 ones and lose `dial`'s three.
+- **To reverse.** `graphmigrate.migrate`'s membership rule.
+- **Rough edge.** A person's own preset that drives an effect which was
+  off loses it, with a note.
+- **Judge it.** Check 322.
+
+### 347. Save writes the lowest schema that loses nothing; `/5` only for a graph `/4` cannot say
+
+- **Superseded by row 394**, 2026-10-25: every save is `/6`; `schema_of`,
+  `needs_free`, `legacy_section` and `legacy_values` are gone.
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `preset.schema_of` writes `/5` (`FREE_SCHEMA`, `VERSIONS =
+  (2, 3, 4, 5)`) when `graphmigrate.needs_free` says the graph uses a word
+  `/4` cannot: a branch, a switch, an unwired node, an effect on outside
+  every run, a faces run `/4` cannot order. Otherwise the section is
+  stripped of plan-33 words (`legacy_section`) and `legacy_values` lays
+  the orders, targets and channel choices back, so a build from before the
+  plan never meets `frame` or `fx.image` (R10). An untouched `/4`, `/3` or
+  `/2` saves byte-identical (38 sources in
+  `tests/fixtures/plan33-v4-saves/`). **Both Macs must run this build**
+  before a `/5` file is saved; an older build refuses it.
+- **Other options.** Always `/5` (both Macs update at once).
+- **To reverse.** `preset.schema_of`, `graphmigrate.legacy_values`.
+- **Rough edge.** A person's own preset that drives a channel choice
+  becomes a switch and saves `/5` on its first re-save (R19); none is in
+  the library. A `/4` save after a reorder writes the moved effect's
+  `order` as an int among floats.
+- **Judge it.** Checks 322, 328.
+
+### 348. The FX page stays as a browser of the effect nodes in the graph
+
+- **Answer.** (owner) — 2026-10-24: "a kind of dynamic representation of
+  the things that are in the graph. It's kind of like a file explorer way
+  of exploring what is in the graph."
+- **Built.** `ui_fx.groups(spec)`: **Run**, **→ faces**, **→ pattern
+  media**, **→ backdrop**, **→ output N**, **→ <effect> aux**, any other
+  end, **reaches nothing** last; an effect that ends in two places is
+  listed in each. A row is a name, an `on` check, a small `mix` and a
+  state word; a click opens the strip, **Show on GRAPH**
+  (`ui_graph.select_effect`) selects and centres the node. The selection
+  (`Panel.fx_selected`) is shared with GRAPH's side pane. The head keeps
+  `fx.on` and `fx.mix`; the `→ faces` header carries `fx.face_map`. The
+  page adds, removes, wires and reorders nothing.
+- **Other options.** Remove the page; the strip in GRAPH's side pane only.
+- **To reverse.** `ui_fx.page`, `ui_fx.groups`.
+- **Rough edge.** `groups()` is computed twice a frame on the page and
+  again in GRAPH's side pane; with a big graph the list is long.
+- **Judge it.** Checks 321, 327.
+
+### 349. An unreached effect is kept in the preset, drawn faint, never run
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `graph.reaches(spec)`; an effect, composite or switch with no
+  path to a sink has no render node and is drawn faint on GRAPH with
+  "reaches nothing" (`REACHES_NOTHING`). The right-click picker adds
+  effects and switches this way; an added or inserted effect is instance
+  1 when nothing holds it, else the lowest free instance, and starts on
+  (R25). An instance 1 taken out of the run is kept as `{"kind":
+  "effect", "file": f}` (R21) and the section is `/5` while the effect is
+  on; switched off, it saves below `/5` again (R26).
+- **Other options.** Drop it on save.
+- **To reverse.** `graph.reaches`, `graphview.unreached`, R21's node form,
+  `graphview._new_instance` / `_switch_on` (R25).
+- **Rough edge.** An effect added or inserted shows at once (R25): switch
+  it off if it was meant to wait.
+- **Judge it.** Checks 325, 326.
+
+### 350. A switch node in this plan: eight inputs, `switch.select` modulatable; a route on `view.media` or `backdrop.channel` migrates to one
+
+- **Answer.** (owner) — 2026-10-24: "If a switch node would be the right
+  solution for long-term use, it can be added to this plan."
+- **Built.** `graph.SwitchNode` (`switch`, `switch.2`, …), `in1` … `in8`;
+  `params.declare_switches` declares `switch[.n].select` (off, 1–8,
+  modulatable, group `switch`) from the graph's switches; the picks live in
+  `ViewState.switch`. A driven `view.media` or `backdrop.channel` loads as
+  `media.a … media.h` into a switch, the switch into `pattern.media` (or
+  `backdrop.image`), the pick at the old value, the rows retargeted to
+  `switch.select` (R14, R19). The switch sits in the MEDIA area. On
+  GRAPH the picker's "switch over the channels ▸ faces media / backdrop"
+  builds the same wires in one undo step, `select` at the channel that fed
+  the port, else 1 (R28, `Edit.switch_channels`).
+- **Other options.** No switch; such routes dropped.
+- **To reverse.** `SwitchNode`, `declare_switches`, the migration's switch
+  half, `graphview.render_channel_switch`.
+- **Rough edge.** A registry from before a hot reload into this build has
+  no `switch_state`, so switches read off until a restart (R24; dev only).
+- **Judge it.** Check 319.
+
+### 351. The default graph keeps plan 32's compositing order
+
+*Superseded by row 372 (plan 35): there is no default graph; the order is the wires `graphmigrate.frame_wires` writes for an old preset, and no golden moved.*
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** Nothing moved: the backdrop is under the scene, before the
+  history and the effects, and every golden before the plan is unmoved.
+  Changing the order is now a graph edit.
+- **Other options.** Settle the order in this plan.
+- **To reverse.** n/a.
+- **Rough edge.** The backdrop's place in the look-back is still plan 32's
+  stopgap (row 330) until the compositing session.
+- **Judge it.** Check 322 (an old party preset looks the same).
+
+### 352. The switch is a cut, eight inputs, only the selected one runs
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** No pass and no texture of its own; `Graph.pulled(frame)` walks
+  back from every node with no readers following only each switch's pick;
+  `Graph.evaluate` skips a `MAKES` node or `Effect` that is not pulled, and
+  a channel no picked path reads is not uploaded. Changing `select`
+  rebuilds nothing (a cache of 256 pick-tuples). A pick of off, or on an
+  unwired input, reads nothing: the faces show the pattern, the backdrop
+  shows nothing. 8 goldens (`switch-faces`). A texture made at another
+  size is kept `render.SIZED_KEEP_FRAMES` (30) frames after its last use,
+  so a switch flicked every frame between branches of other sizes
+  allocates nothing per flick (R29).
+- **Other options.** A crossfade time; a variable input count.
+- **To reverse.** `SwitchNode`, `Graph.pulled`.
+- **Rough edge.** An unpulled effect's clock stands still, where a wired
+  effect whose picture is not made keeps running (R17); `pulled` treats an
+  `after`-only reader as a root; up to a few idle sized textures are held
+  half a second (R29).
+- **Judge it.** Checks 319, 324.
+
+## Plan 34 — feedback (rows 353–371)
+
+Rows 353–371 were decided with the owner on 2026-10-24, the day he asked
+for recursive rendering: he saw the options (A, a `delay` node; B, the
+look-back's frames as sources), said "yeah build A with the loop refusal
+fix. i also want to be able to do b. also, we should be able to downsample
+arbitrarily, so add a downsampler node as well", and then "build". Four
+rows carry his words (353, 359, 360, 368); the rest are recommendations the
+build took, "(rec) — accepted 2026-10-24". Each row says what the build
+did; "Rough edge" and "Judge it" are for the hand checks of group AD
+(checks 332–341), which run with plan 35's group AE. The build ledger's
+rulings are folded into "Built" where they changed what you see: R3, R4,
+R5, R6, R7, R9, R11, R12, R13 (plan 34's own numbering; plan 35 has its
+own). The plan was built in two halves around plan 35 (T1–T3, the pause,
+T4–T6 on plan 35's wired frame), on `plan-34-feedback` (PR #236). Rows 359,
+370 and 371 are written as built under plan 35.
+
+### 353. A `delay` picture node, z⁻¹
+
+- **Answer.** (owner) — 2026-10-24: "yeah build A with the loop refusal
+  fix."
+- **Built.** `graph.Delay`: a picture node with no inputs whose picture is
+  what came into its `image` last frame, written by its other half,
+  `graph.DelayWrite` (`delay(write)` on SYSTEM). A loop drawn through one is
+  legal, so `scene → delay → shape.faces` is the infinite mirror. In a
+  wired frame `_Build.build` adds the write of every delay the wires reach,
+  before the internal `Capture`. Instance names `delay`, `delay.2` ….
+  `tests/test_graph_delay.py::{test_a_delay_shows_last_frames_picture,test_the_delay_write_runs_before_the_capture,test_the_delay_nodes_say_what_they_are}`,
+  `tests/test_graph_feedback.py::{test_a_loop_through_a_delay_is_legal,test_a_delay_into_itself_is_still_refused,test_a_delay_reaches_only_when_read}`;
+  16 goldens: `delay-faces` and `delay-trails`.
+  R6: `delay-trails` was rebuilt so it shows a trail (`delay → zoomblur.2 →
+  palette.2`, val slice 0.6, added over the scene, into the delay and out),
+  `::test_the_trails_show_and_fade`.
+- **Other options.** Look-back frames only (B alone); a `feedback` flag on
+  the faces.
+- **To reverse.** Delete `Delay`, `DelayWrite`, `DelayAt` and
+  `Renderer.delay_pair`; nothing else depends on them but the fixtures.
+- **Rough edge.** Feedback through the scene is 8-bit (the scene's target
+  is RGBA8). The faces show an opaque picture fully: last frame's black
+  background shows as black faces.
+- **Judge it.** Checks 332, 333.
+
+### 354. Delay buffers are the renderer's
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `render.DelayPair`: two RGBA half-float pictures per delay
+  name, `Renderer.delay_pair(name)`; `Renderer._turn_delays(graph)` swaps
+  them at the frame's start; kept by name across graph rebuilds; released
+  `SIZED_KEEP_FRAMES` (30) frames after the delay leaves the graph
+  (`tests/test_graph_delay.py::{test_a_delay_ping_pongs_half_float,test_a_graph_rebuild_keeps_the_delay,test_a_delay_leaving_the_graph_is_released}`).
+  R5: `PassTimer` treats a time query inside another as a no-op, because GL
+  allows one active query and `delay(write)` wraps the effect passes it
+  paints (`::test_a_query_inside_another_is_a_no_op`).
+- **Other options.** RGBA8 buffers (a decay below 1 sticks); one pair per
+  graph (an edit elsewhere would cut the feedback).
+- **To reverse.** `DelayPair`'s dtype and key.
+- **Rough edge.** `delay(write)`'s SYSTEM time includes the effects painted
+  inside it (R5). A 1080p delay is 2 × 16.6 MB.
+- **Judge it.** Checks 339, 340.
+
+### 355. A delay has no params
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `Delay.INPUTS` is empty and the entry is `{"kind": "delay"}`;
+  decay, mix and tint are an effect's or a composite's after it, the fit a
+  resize's before it (`tests/test_graph_delay.py::test_the_delay_nodes_say_what_they_are`,
+  `tests/test_graph_feedback.py::test_the_new_kinds_read_and_round_trip`).
+  The `delay-trails` fixture is exactly this: the decay is palette.2's val
+  slice.
+- **Other options.** `delay.mix`, `delay.decay`, `delay.fit` params.
+- **To reverse.** Add the params to `Delay` and declare them.
+- **Rough edge.** A decay is two nodes, not a knob on the delay.
+- **Judge it.** Check 333.
+
+### 356. Strict z⁻¹
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** The delay reads nothing on the first frame and after a frame
+  in which its input was not written, so the faces show the pattern (the
+  faces-unwired frame, pixel for pixel), an output its ground. A size
+  change remakes only the write side, so no frame is lost. R7 (over the
+  brief): a `DelayWrite` whose input read nothing leaves the pair
+  unwritten, and the delay reads nothing next frame: the pattern, not
+  black, plan 33's rule for a source that reads nothing
+  (`tests/test_graph_delay.py::{test_the_first_frame_reads_nothing_and_the_faces_show_the_pattern,test_a_delay_whose_input_read_nothing_reads_nothing,test_a_size_change_loses_no_frame}`).
+- **Other options.** Hold the last picture while the input is absent (a
+  freeze).
+- **To reverse.** `DelayWrite.run`'s leave-unwritten branch.
+- **Rough edge.** A feed lost to a delay costs one frame of pattern before
+  the faces settle (R7).
+- **Judge it.** Checks 332 (the empty delay), 339.
+
+### 357. A delay holds its input at the input's own size, else the frame's
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `DelayWrite.held(frame)`: the input's `own_size`, else
+  `frame.root.size`; `size_for("image")` says so, so an effect or a resize
+  upstream makes its picture at that size
+  (`tests/test_graph_resize.py::test_a_delay_through_a_resize_holds_a_small_buffer`).
+- **Other options.** Always the frame's; always `FACE_PIC`².
+- **To reverse.** `DelayWrite.held`.
+- **Rough edge.** A delay's size follows its input, so a new input size remakes the write side.
+- **Judge it.** Checks 337, 338.
+
+### 358. A picture of its own size is fitted into another shape by cover
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `graph.OWN_FIT = 0` (cover, about the centre) through
+  `Renderer._refit`, used by `Delay.paint`/`image`, the echoes and the
+  resize; another fit is a resize's `fit`
+  (`tests/test_graph_delay.py::{test_own_fit_is_cover,test_refit_cover_and_contain}`,
+  `tests/test_graph_echo.py::test_an_echo_on_the_faces_is_fitted`). The
+  refit program draws a crop past the source's edge as transparent black
+  (R12); the earlier callers' crops lie inside [0,1] and did not move.
+- **Other options.** Stretch; a fit per consumer port.
+- **To reverse.** `OWN_FIT`.
+- **Rough edge.** A square delay on a wide output is cropped at the sides.
+- **Judge it.** Checks 335, 337.
+
+### 359. The loop refusal at read (as built by T1; superseded in a wired frame by 393)
+
+- **Answer.** (owner) — 2026-10-24: "with the loop refusal fix." The words
+  and the order rule are recommendations, accepted.
+- **Built.** `graph.sink_loops` walks the wires in the section's order over
+  hidden edges that no wire says. For an old section (outside a wired
+  frame) these are `FRAME_EDGES` (the faces drawn in the scene, the pattern
+  under the faces, the history over the scene and the backdrop, `frame` the
+  history's picture); an edge into a delay is no dependency; the later wire
+  is the one refused, and `loop_words` names the faces, the backdrop or
+  the frame and says to wire it through a delay (`LOOP_FACES`,
+  `LOOP_BACKDROP`, `LOOP_FRAME`). R3: where a wire out of `frame` also
+  closes a loop, the loop words win over `FRAME_SOURCE_REFUSAL`
+  (`tests/test_graph_feedback.py::{test_each_sink_loop_is_refused_at_read,test_the_later_wire_closing_a_sink_loop_is_the_one_refused,test_loop_words_name_the_hidden_edge}`,
+  `tests/test_graph_edit.py::test_a_sink_loop_drag_is_refused_in_words`).
+  **Under plan 35 (row 393)** `FRAME_EDGES` is superseded in a wired frame
+  by `HIDDEN_EDGES`, two edges (the wires say the rest), and an explicit
+  loop refuses every wire on it (plan 35 R5); `FRAME_EDGES`,
+  `FRAME_SOURCE_REFUSAL` and `LOOP_FRAME` stand only for reading an old
+  section before it migrates. "Point at a delay" is `LOOP_FACES` and
+  `LOOP_BACKDROP` for the faces and the backdrop, and (T5) `LOOP_PLAIN` for
+  a wired frame's other loops
+  (`tests/test_graph_edit.py::test_a_plain_loop_drag_points_at_a_delay`,
+  `tests/test_graph_wired.py::{test_loops_in_a_wired_frame_keep_plan_34s_words,test_loop_words_in_a_wired_frame}`).
+- **Other options.** Refuse every wire on the loop, as `wire_loops` does.
+- **To reverse.** `sink_loops`, `loop_words`, `_read_wires`.
+- **Rough edge.** The check is conservative on an old section: a wire
+  that would loop on the scene's pipeline is refused even if the only
+  output is the hands-only pipeline. `FRAME_EDGES` is kept for the old
+  section's read, not removed.
+- **Judge it.** Check 334.
+
+### 360. Echoes and the dream are declared by a node entry
+
+- **Answer.** (owner) — 2026-10-24: "i also want to be able to do b." The
+  entry shape is a recommendation, accepted.
+- **Built.** `{"kind": "echo", "index": k}` (k from 1 to
+  `lookback.MAX_ECHOES`, 32) and `{"kind": "dream"}`; `graph.EchoAt`,
+  `DreamAt`, `DECLARED`; two of one instance, or an index out of range, are
+  unreadable in words; a wire into an undeclared one is refused
+  (`tests/test_graph_feedback.py::{test_the_new_kinds_read_and_round_trip,test_the_new_names_are_reserved_kinds,test_a_wire_into_an_undeclared_node_is_refused,test_an_echo_index_out_of_range_is_unreadable,test_two_of_one_instance_are_unreadable}`).
+  GRAPH adds them from look-back ▸ and draws a second add of the same
+  disabled.
+- **Other options.** Undeclared wire names like `channel.a`.
+- **To reverse.** `EchoAt`, `DreamAt`, the picker items.
+- **Rough edge.** Thirty-two echo items on the picker.
+- **Judge it.** Checks 335, 336.
+
+### 361. An echo the ring does not hold reads nothing
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `Lookback.echo_slot(k)` is None before k commits, after the
+  ring is remade, or with no ring; R9: also while `dream.res` differs from
+  the ring's, because the ring is remade inside the capture, after the
+  echoes are read, so a resolution change costs one frame of no echo. The
+  dream reads nothing until its worker's first result, with the words "no
+  dream worker: reads nothing" when there is none. A failed remake that
+  released the ring reads nothing, not an error
+  (`tests/test_graph_echo.py::{test_an_echo_past_the_ring_reads_nothing,test_a_res_change_empties_the_echoes,test_a_res_change_to_the_same_size_keeps_the_echoes,test_the_dream_reads_nothing_until_written,test_an_echo_into_hands_reads_nothing_when_the_ring_failed_to_rebuild}`).
+- **Other options.** Hold the oldest; opaque black.
+- **To reverse.** `Lookback.echo_slot`.
+- **Rough edge.** One frame of nothing on a resolution change.
+- **Judge it.** Checks 335, 336.
+
+### 362. The ring keeps capturing while the graph reads an echo or the dream
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `Graph.reads_ring` (any ring node reached) sets
+  `Lookback.keep`, so the capture runs with the look-back off; the wake
+  shows only with `dream.on`
+  (`tests/test_graph_echo.py::test_the_ring_keeps_capturing_for_an_echo_with_the_look_back_off`).
+  R11: an echo wired to an output's `hands` is ordered before the capture
+  (it joins the capture's `after`) like one at its `image`, so it shows
+  the frame before, not the frame being drawn
+  (`::test_an_echo_into_an_outputs_hands_reads_last_frames_capture`,
+  `::test_an_echo_read_this_frame_is_last_frames_capture`).
+- **Other options.** An echo needs `dream.on`.
+- **To reverse.** `Graph.reads_ring`, `Lookback.keep`.
+- **Rough edge.** An echo cannot go to an output's `guide` (that port takes
+  a hands layer's guide; refused at read).
+- **Judge it.** Check 335.
+
+### 363. Echoes are what the capture holds, said in the node's words
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** The ring stays one RGBA8 atlas at `dream.res` on its short
+  side, committed every `dream.gap`; the node's `said` gives the size and
+  cadence, and what the capture records ("the scene", "the scene + hands"
+  when both are captured, R10)
+  (`tests/test_graph_echo.py::{test_the_echo_nodes_say_what_they_are,test_echo_words_say_size_and_cadence,test_echo_k_is_the_kth_newest_capture,test_the_echo_faces_fixture_shows_the_ring}`;
+  8 goldens, `echo-faces`).
+- **Other options.** A ring of their own at the frame's size.
+- **To reverse.** `_RingNode.run`'s words, the atlas.
+- **Rough edge.** 8-bit and low-resolution; a full-resolution history is a
+  delay chain.
+- **Judge it.** Checks 335, 340.
+
+### 364. The downsampler is named `resize`
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** Kind `resize`, reserved (`tests/test_graph_feedback.py::test_the_new_names_are_reserved_kinds`).
+  Not `scale` (GRAPH's value modifier), not `crop` (a param of it).
+- **Other options.** `downsample`, `scale`, `crop`.
+- **To reverse.** The kind's name in `RESERVED` and `NODE_KINDS`.
+- **Rough edge.** It also makes things bigger.
+- **Judge it.** —
+
+### 365. Resize size: the long side in pixels, stepped
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `view.RESIZE_SIDES = (16, … 2048)` (default 256), `aspect`
+  `input` or `square`; `graph.resize_size(side, aspect, src)`; never a
+  factor of the input
+  (`tests/test_graph_resize.py::{test_resize_size_model,test_a_resize_makes_its_own_size,test_a_size_step_reallocates_once_each_way}`).
+- **Other options.** Width × height free; a factor; an aspect following
+  the crop.
+- **To reverse.** `RESIZE_SIDES`, `resize_size`.
+- **Rough edge.** A route on `size` steps through eight sizes and remakes
+  the delay pair and effect pools after the resize at each step, bounded
+  by `SIZED_KEEP_FRAMES`.
+- **Judge it.** Checks 337, 339.
+
+### 366. Resize crop: a centre and a size, past the edge transparent
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `crop_x`, `crop_y` (centre, y from the top) and `crop_w`,
+  `crop_h` (0.01–1) on the input; `fit` is `cover`, `contain` or `stretch`
+  (`view.RESIZE_FITS` equal to `media_tex.FITS`). R12: `REFIT_FS` draws a
+  crop past the edge as transparent black. A crop is a value, not the
+  graph: changing it builds no new graph
+  (`tests/test_graph_resize.py::{test_the_crop_takes_the_rect,test_a_crop_past_the_edge_is_transparent,test_a_crop_change_is_a_value_never_a_rebuild,test_the_fits_are_the_media_fits}`;
+  8 goldens, `resize-crop`).
+- **Other options.** A corner rect (a zoom would need two routes).
+- **To reverse.** `ResizeNode.made` and `REFIT_FS`.
+- **Rough edge.** A crop of 0.01 magnifies a hundred times, in hard
+  pixels if `nearest`.
+- **Judge it.** Check 337.
+
+### 367. Resize filter: `linear` or `nearest`
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `linear` samples bilinearly and, past a 2× shrink on either
+  axis, builds the input's mipmaps and samples trilinearly through a
+  sampler object; `nearest` samples nearest, unmipmapped, and stays nearest
+  when laid on a bigger consumer
+  (`tests/test_graph_resize.py::{test_nearest_keeps_hard_pixels,test_linear_mipmaps_a_big_reduction}`).
+- **Other options.** Always linear, no mipmaps.
+- **To reverse.** `ResizeNode.made`'s filter branch.
+- **Rough edge.** A mipmapped shrink leaves the input's mip levels (the
+  scene's, a pool texture's) allocated.
+- **Judge it.** Check 337.
+
+### 368. A resize's, a delay's and an echo's size is their own
+
+- **Answer.** (owner) — 2026-10-24: "we should be able to downsample
+  arbitrarily … so we can avoid writing a 1080p buffer into all the faces
+  for no reason." The effect rule is a recommendation, accepted.
+- **Built.** `Node.own_size(frame)` is None for every node of plan 33 and
+  earlier; a delay, an echo, the dream and a resize have one. `size_for`
+  asks an input for its own size; an `Effect` after one runs at it
+  (`Effect.own_size`, its pool keyed by that size); a consumer of another
+  shape gets cover. Nothing earlier has an own size, so no earlier golden
+  runs the new path (`tests/test_graph_delay.py::test_nothing_of_plan_33_has_an_own_size`;
+  `tests/test_graph_resize.py::{test_an_effect_after_a_resize_runs_at_its_size,test_a_delay_through_a_resize_holds_a_small_buffer,test_two_consumers_of_one_resize_refit_from_the_one_small_picture}`).
+- **Other options.** The effect at its consumer's size (the saving lost
+  after the resize).
+- **To reverse.** `own_size` on each node.
+- **Rough edge.** An effect after an own-sized node runs small even where
+  you wanted it big.
+- **Judge it.** Checks 337, 338, 340.
+
+### 369. Resize params are per instance, declared from the graph
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `params.declare_resizes(reg, names)`, called from the
+  section's entries (reached or not), group `resize`, ids
+  `resize[.n].size` … `crop_h`, all modulatable, saved as a preset's values
+  (`tests/test_presets.py::test_resize_values_save_and_load_with_the_preset`),
+  in no module and out of a new preset
+  (`::test_a_new_preset_carries_no_resize_values`). A name that leaves the
+  section drops its params and state; a live state survives a hot reload
+  of `view` (fix round 1)
+  (`tests/test_graph_resize.py::{test_declare_resizes_comes_and_goes,test_the_registry_writes_the_view_states_resizes,test_resize_knobs_survive_a_hot_reload_of_view}`).
+- **Other options.** Params of the node's kind rather than per instance.
+- **To reverse.** `declare_resizes`, `RESIZE_GROUP`.
+- **Rough edge.** An unwired resize keeps its knobs while its entry does.
+- **Judge it.** Check 337.
+
+### 370. GRAPH: where the new nodes sit, as built under row 389
+
+- **Answer.** (rec) — accepted 2026-10-24. *Amended for plan 35's row 389
+  (areas by primitive).*
+- **Built.** The delay in MEDIA, beside the channels (a picture that
+  starts a branch); `echo.k` and the dream in LOOK-BACK; the resize in
+  EFFECTS, or in MEDIA when `media_made` says it is made of the media
+  alone (T4's R13 put the real `ResizeNode` in `MEDIA_MADE` and deleted
+  GRAPH's stand-in class). The cable into a delay's image runs back by
+  design, as the one into `lookback.capture` does. A delay's `image` port
+  is the pin `rin:<delay>/image`; `delay(write)` is not drawn. A resize's
+  eight params are side-panel rows through `OWNERS["resize"]`; a node's
+  `said` is its summary's first line (T5)
+  (`tests/test_graph_areas.py::{test_the_areas_run_by_primitive,test_a_resize_sits_by_what_it_is_made_of}`,
+  `tests/test_graph_legible.py::test_a_resize_nodes_params_are_rows_in_the_side_panel`,
+  `tests/test_graphview.py::test_a_render_nodes_said_is_its_first_line`,
+  `tests/test_graph_edit.py::test_the_picker_groups_by_primitive`).
+- **Other options.** All in MEDIA; a resize always in EFFECTS.
+- **To reverse.** `graphview.AREAS`, `MEDIA_MADE`, `OWNERS`.
+- **Rough edge.** A delay and a resize have no page.
+- **Judge it.** Checks 334, 338.
+
+### 371. The schema: plan 34's words are `/5` words (amended by 385)
+
+- **Answer.** (rec) — accepted 2026-10-24. *Amended by plan 35's row 385
+  (R10).*
+- **Built.** `graphmigrate.uses_free_words` is true for a delay, resize,
+  echo or dream, and `legacy_values` returns None for them (R4), so such a
+  preset cannot be written below `/5`. `/6` exists since plan 35: a wired
+  frame that round-trips through the old words (`graphmigrate.unwired`)
+  saves `/5`, one that needs plan 35's vocabulary saves `/6`. A plan 33
+  build reads the `/5` file with a note ("unknown node kind 'delay'"),
+  draws its default graph and loses the run and every branch for that
+  load; it refuses a `/6` file by the ladder's words. Fixtures:
+  `delay-faces`, `delay-trails`, `echo-faces` are `/5`, `resize-faces` and
+  `resize-crop` are `/6`
+  (`tests/test_graph_feedback.py::test_the_new_words_are_v5_only`,
+  `tests/test_presets.py::test_resize_values_save_and_load_with_the_preset`).
+- **Other options.** `/6` for plan 34 alone, with its own ladder refusal.
+- **To reverse.** `uses_free_words`.
+- **Rough edge.** Both Macs on this build before anyone saves a delay, a
+  resize, an echo or the dream.
+- **Judge it.** Checks 341, 352.
+
+## Plan 35 — the free frame (rows 372–393)
+
+Rows 372–393 were put to the owner on 2026-10-24, in the session that
+designed plan 35, before the build: three were answered in his own words
+(373 "approve, but rename ids too", 374 and 387 "as proposed") and the
+rest are recommendations the build took ("(rec)"). Each row says what the
+build did; "Rough edge" and "Judge it" are for the hand checks of group
+AE (checks 342–352). The ledger's rulings R1–R17 are folded into "Built"
+where they changed what you see. The plan is built on `plan-34-feedback`
+(PR #236); plan 34 was paused after its T3 and resumed on this model
+(rows 353–371 above, now built; 757 goldens with its T4).
+Row 351 ("the default graph keeps plan 32's compositing order") is
+**superseded by 372**: there is no default graph to keep, and the order is
+the wires `frame_wires` writes for an old preset. Plan 34's row 359 names
+`FRAME_EDGES`; row 393 supersedes it.
+
+### 372. The frame is wires: every node of the frame is ordinary
+
+- **Answer.** (owner) — 2026-10-24: "There's no point in having all of
+  these things be in some 'default graph.' If I can't make them go away,
+  it sounds like … we haven't actually made this thing a free graph yet."
+- **Built.** A section says `"frame": "wired"`; `graph.build_graph` builds
+  only what a wire or entry reaches (`graph.reaches`, from every output
+  port, `output.all`'s and `lookback.capture`). `frame`, `fx`, `grounded`,
+  `capture`, `cover` and the pipelines are not nodes; `default_graph`,
+  `Fx`, `Wired` and `PLUMBING` are deleted. Every section a load reads
+  becomes one (`graphmigrate.migrate`). A blank frame builds no scene pass
+  (`tests/test_graph_frame.py::test_nothing_unreached_is_built`).
+- **Other options.** Keep the default graph and free only some nodes.
+- **To reverse.** Not locally: the whole of T1–T5.
+- **Rough edge.** A preset the other Mac reads below `/6` must round-trip
+  (row 384).
+- **Judge it.** Checks 343, 344.
+
+### 373. The vocabulary: names a performer reads, and the ids too
+
+- **Answer.** (owner) — 2026-10-24: "approve, but rename ids too."
+- **Built.** Every node has a label and a one-line hover
+  (`graphview.LABELS`, `HOVERS`, `label_of`, `hover_of`;
+  `tests/test_graph_legible.py::test_every_node_has_a_label_and_a_hover`).
+  The ids: `ghost` → `hands`, the hands layer → `hands.layer`, `readout`
+  → `hands.guide`, `history` → `lookback` (with `capture` merged in),
+  `media.<c>` → `channel.<c>`, `output.N.readout` → `output.N.guide`,
+  `render:eye` → `render:camera`. Params keep their ids
+  (`graph.param_prefix`). Old ids are read for good and renamed on load
+  (`graphmigrate.renamed`); an old id in a wired frame is refused in
+  words. Saved canvas positions follow the rename (R14,
+  `graphmigrate.renamed_layout`,
+  `tests/test_graphview.py::test_old_layout_positions_follow_the_renamed_ids`).
+  `tests/test_graph_wired.py::{test_the_ids_map_both_ways,test_a_nodes_params_keep_their_prefix,test_an_old_id_in_a_wired_frame_is_refused}`.
+- **Other options.** Rename labels only; keep `ghost` and `history`.
+- **To reverse.** `NEW_IDS` / `OLD_IDS` and `renamed`, but a `/6` file
+  already saved keeps the new ids.
+- **Rough edge.** `hands` meant the layer before and means the geometry
+  now: a missed rename would swap the two silently. A hand-written
+  section in the old ids in a wired frame is refused, not read.
+- **Judge it.** Checks 350, 345.
+
+### 374. The per-output switches: picture and hands are mutes, "through" is wiring
+
+- **Answer.** (owner) — 2026-10-24: approved as proposed.
+- **Built.** `output.N.scene` (labelled **picture**) and `output.N.hands`
+  are the rig's own on/off per window, from the config, never in a
+  preset, learnable, and they never rebuild the graph
+  (`tests/test_graph_frame.py::{test_a_mute_ignores_its_port,test_a_mute_never_rebuilds}`,
+  `tests/test_overlay.py::test_output_switches_are_picture_and_hands`,
+  `tests/test_ui_output.py::test_the_mutes_are_not_the_preset`).
+  `output.N.through` is gone; a config's `through` is noted once
+  (`tests/test_config.py::test_a_through_key_is_said_once`). Through is a
+  composite before the effects, wired (row 377) and set from OUTPUT
+  (`graphview.set_through`). R9: **a hands mute wins over a stand-down**
+  (`tests/test_graph_frame.py::test_a_hands_mute_wins_over_a_stand_down`).
+- **Other options.** The switches as wires in the preset (a laptop preset
+  would leave the glass black on the rig); the switches kept building
+  structure.
+- **To reverse.** `overlay.register_switches` and `Output.settle`.
+- **Rough edge.** **Two owner notes.** A picture mute hides the through
+  picture, so a migrated preset with hands through the effects and the
+  picture muted shows nothing (the old HANDS route is not a mute). And a
+  picture mute on an in-scene preset shows the ground and the guide, not
+  the hands layer. No rig config mutes a picture today.
+- **Judge it.** Checks 346, 347, 348.
+
+### 375. All outputs (`output.all`)
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** A node with the output ports (`image`, `hands`, `guide`),
+  no params, always on the canvas. An output whose own port has no wire
+  shows `output.all`'s. An old preset's frame is written there once, so
+  it looks the same on the laptop (one window) and the rig (two)
+  (`tests/test_graph_wired.py::test_reach_runs_from_the_outputs_and_the_capture`).
+  Two outputs showing one picture share one end
+  (`test_graph_frame.py::test_one_end_for_two_outputs_of_one_picture_is_built_once`).
+- **Other options.** Every output wired one by one (`output.1` …
+  `output.4`).
+- **To reverse.** `ALL_OUTPUTS`, `output_wires`.
+- **Rough edge.** R12: a wire into `output.N` past the window count
+  builds nothing and says "no output 3 this frame"; it does nothing until
+  that window opens.
+- **Judge it.** Checks 344, 345.
+
+### 376. An unwired output shows its ground
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** Black on an opaque window, see-through in overlay (today's
+  clear, `(0, 0, 0, View.bg_alpha)`). `ground` is also a source word
+  that goes only into output ports: `ground → output.2.image` makes that
+  window show nothing although All outputs has something. R13: it is
+  drawn on GRAPH as a small "Ground" node and deletes
+  (`tests/test_graph_edit.py::{test_a_ground_wire_is_drawn,test_a_ground_wire_deletes}`;
+  `tests/test_graph_wired.py::test_ground_goes_only_into_outputs`).
+- **Other options.** Always opaque black.
+- **To reverse.** `GROUND`, `graphview.GroundNode`.
+- **Rough edge.** The Ground node has no params; it is a canvas stand-in, never built.
+- **Judge it.** Checks 342, 344.
+
+### 377. No pipelines: an effect on a second picture is a `copy`
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `graph.Copy` (`copy`, `copy.2` …, entry
+  `{"kind": "copy", "of": "acid"}`) draws an instance on another picture
+  with its own `image` and `aux` and the instance's knobs and clock. It
+  replaces the per-pipeline run (`acid(scene+hands)`) and is what
+  "hands through the effects" writes
+  (`tests/test_graph_frame.py::{test_a_copy_reads_its_originals_knobs,test_two_throughs_take_their_own_instances}`).
+  R16: deleting an effect deletes its copies in the same landing and says
+  so (`tests/test_graph_edit.py::test_deleting_an_effect_takes_its_copies`).
+  R15: an effect with no input is drawn faint, keeps its outs and reads
+  nothing; only type errors and loops refuse
+  (`test_unwiring_an_effects_only_input_leaves_it_faint_with_its_outs`).
+- **Other options.** A second instance with routes linking its params
+  (two clocks).
+- **To reverse.** `Copy`, `CopyAt`.
+- **Rough edge.** A copy of an effect that is deleted by hand-editing a
+  file is a note and dropped (`COPY_BAD_OF`).
+- **Judge it.** Check 348.
+
+### 378. The stand-down is kept for a copy chain over a hands composite
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `graph.Shown.fallback` and `Output.settle`: an output whose
+  picture is a chain of copies over a hands composite shows the originals
+  over the composite's `under`, with the layer laid at the output, while
+  the copies bend nothing (no copy live, or no hand drawn). It keeps the
+  fast path and every golden
+  (`tests/test_graph_frame.py::test_a_copy_chain_stands_down`,
+  `tests/test_graph.py::test_a_through_output_is_a_composite_its_end_and_a_stand_down`).
+- **Other options.** Always draw the composite (a pass more; the through
+  goldens at risk).
+- **To reverse.** `Shown.fallback`.
+- **Rough edge.** A composite of a hands layer with no copies stands down
+  too (T2); the look is the same.
+- **Judge it.** Checks 348, 351.
+
+### 379. The direct paint is kept; mutes never rebuild
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `Shown.run` paints straight into a window when one output
+  uses it, counting users per frame through the mutes (`Frame.users`).
+  A mute is read each frame; no graph is rebuilt for it.
+- **Other options.** Rebuild on a mute (the old `Switches` key).
+- **To reverse.** `Frame.users`, `graph_key`.
+- **Rough edge.** The hands layer is built and drawn while All outputs
+  wires it, even when every window mutes the hands (T4).
+- **Judge it.** Check 351.
+
+### 380. Hands: any hands node may have a layer and a guide
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `hands.n.layer` draws `hands.n`; `hands.n.guide` is its
+  readout; `hands.n → scene.geometry` puts the hands in the scene. The
+  guide splits out when the hands are in the scene or an effect is on the
+  layer (`HandsLayer.split`, "always" or "downstream"). `laid` is read on
+  any one hands entry
+  (`tests/test_graph_frame.py::test_laid_on_a_second_hands_entry_reads_in_a_wired_frame`,
+  `::test_the_hands_guide_is_its_layers_own_while_the_layer_is_built`).
+- **Other options.** One hands node makes the layer.
+- **To reverse.** `HandsLayer.split`.
+- **Rough edge.** Two `laid` entries are refused.
+- **Judge it.** Checks 347, 348.
+
+### 381. The look-back is one node; the capture is a sink
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `lookback` ("Look-back") has `image`, `capture` and
+  `occluder`. What is wired into `lookback.capture` runs even when no
+  output shows the look-back (R6: it is written for the next frame, like
+  a delay, so it closes no loop). `holds` and `backdrop.history` retire
+  into the capture wire; a route or desk row driving `backdrop.history`
+  is dropped with a note
+  (`tests/test_graph_migrate.py::{test_backdrop_history_and_holds_become_the_capture_wire,test_a_driven_backdrop_history_is_dropped_with_a_note,test_no_library_preset_drives_backdrop_history}`).
+  LOOKBACK's "records" combo writes the wire
+  (`tests/test_ui_lookback.py::test_records_says_and_sets_the_capture`);
+  the internal `Capture` runs once after every end
+  (`tests/test_graph_frame.py::test_the_capture_runs_once_after_every_end`).
+- **Other options.** Keep `backdrop.history` as a look-back param.
+- **To reverse.** `graphmigrate.RETIRED`.
+- **Rough edge.** "records: Composite" for a capture through a
+  composite; the longer words are on hover.
+- **Judge it.** Check 349.
+
+### 382. The backdrop lays `backdrop.scene` over `backdrop.image`
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `grounded` is merged into the backdrop: a composite of the
+  scene over its picture at `backdrop.alpha`. A scene a backdrop reads is
+  drawn see-through
+  (`tests/test_graph_frame.py::test_a_scene_on_a_backdrop_is_drawn_see_through`).
+  A channel wired straight in keeps plan 32's path byte for byte.
+- **Other options.** A plain composite with an alpha param.
+- **To reverse.** The backdrop case in `_Build`.
+- **Rough edge.** The backdrop's place in the look-back is still plan
+  32's stopgap order (row 330); it is now a wire edit.
+- **Judge it.** Check 345.
+
+### 383. Migration writes today's default frame for the default switches
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `graphmigrate.migrate` writes the frame `default_graph` built
+  for the default switches once into All outputs (`frame_wires`), keeps a
+  section's own output wires as overrides, and leaves D1 placements as
+  entries placed on the built graph. Proved node for node by
+  `graph.signature` over 125 cases
+  (`tests/test_graph_frame.py::test_the_wired_frame_builds_what_default_graph_builds`
+  against `tests/fixtures/frame-signatures.json`) and by every golden
+  (`tests/test_graph_migrate.py::test_every_section_loads_as_a_wired_frame`,
+  46 cases).
+- **Other options.** Migrate each output on its own.
+- **To reverse.** `graphmigrate.wired_section`.
+- **Rough edge.** The signature keeps only the nodes a frame can show
+  (R8); a difference in a node nothing reads is not seen by it.
+- **Judge it.** Check 345.
+
+### 384. Below `/6` by round trip
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `graphmigrate.unwired` takes a wired frame back to the old
+  words (the run as `frame → … → fx.image`, `holds`, `into`, every id
+  mapped back) and `legacy_section` / `legacy_values` use it. It is the
+  round trip only when writing it forward again reads to the same section.
+  An untouched `/4` preset saves byte for byte
+  (`tests/test_graph_free.py::test_an_untouched_v4_preset_saves_byte_identical`,
+  38 sources); `test_the_round_trip_is_canonical`. A GRAPH edit lands the
+  wires in the canonical order so an edit back to a migrated frame
+  round-trips again.
+- **Other options.** Every wired preset saves `/6`.
+- **To reverse.** `unwired`.
+- **Rough edge.** The capture composite's slot in `_frame_order` is the
+  implementer's reading of the order.
+- **Judge it.** Check 352.
+
+### 385. The schema is `hyperspace.preset/6`
+
+- **Superseded (save side) by row 394**, 2026-10-25: R10's lowest-schema
+  save and R15's old canvas ids below `/6` are gone — every save is `/6`
+  in today's ids; `/6` itself, `VERSIONS` and the refusal by an older
+  build stand.
+- **Answer.** (rec) — accepted 2026-10-24. R10 amends it.
+- **Built.** `preset.WIRED_SCHEMA` is `/6`; `VERSIONS` is
+  `(2, 3, 4, 5, 6)`; a plan 33/34 build refuses a `/6` file by its
+  ladder's words (`tests/test_graph_migrate.py::test_v6_is_refused_by_the_ladder_below`).
+  **R10, superseding the first design's "nothing writes `/5` again":** a
+  save writes the lowest schema that loses nothing, so a section whose
+  wired frame `unwired` round-trips into `/5` words saves as `/5`, and
+  `/6` only when the new vocabulary is needed (a ground wire, a through, a
+  hands node moved out of the default). That keeps the other Mac working
+  on re-saves of `displace-moo`, `glimmer-bug` and `moo`
+  (`tests/test_graph_free.py::test_an_untouched_v5_preset_saves_byte_identical`,
+  5 sources in `tests/fixtures/plan35-v5-saves/`;
+  `tests/test_presets.py::test_a_wired_preset_saves_as_v6`;
+  `tests/test_ui_output.py::test_a_picture_put_back_saves_in_the_lowest_schema`).
+  The owner's 58 Drive presets re-save byte-identically. The `frame` key
+  stays as the section's marker.
+- **Other options.** Stay `/5` with the marker alone (a plan 34 build
+  would load the values over its default frame, and could read `hands`
+  the geometry as `hands` the layer).
+- **To reverse.** `WIRED_SCHEMA`, `schema_of`.
+- **Rough edge.** A `/5` file keeps the old ids on disk and still loads.
+  Both Macs must be on this build before anyone saves a `/6` file.
+- **Judge it.** Check 352.
+
+### 386. The new preset
+
+- **Answer.** (rec) — accepted 2026-10-24 (the owner chose the button;
+  the details are the build's).
+- **Built.** `Presets.new` (`preset.UNTITLED_PRESET`, `NEW_SAID`): the
+  library's fresh values (as `Project.new`), routes cleared, the desk
+  written as the factory preset layer, the session untouched, named
+  `untitled`, dirty with no path, one undo step
+  (`tests/test_presets.py::{test_a_new_preset_is_factory_values_and_nothing_wired,test_a_new_preset_does_not_depend_on_what_was_loaded,test_a_new_preset_undoes_in_one_step,test_a_new_preset_saves_and_loads_back_empty}`).
+  A **new** chip before **save** on the PRESET strip
+  (`tests/test_ui_presets.py::test_the_strip_has_a_new_chip`).
+- **Other options.** A menu entry; clearing the session too.
+- **To reverse.** `Presets.new`, the chip.
+- **Rough edge.** A user preset literally named `untitled` makes save
+  overwrite instead of asking for a name; `as…` prefills `untitled`;
+  `new` calls the library's private `_apply_doc` and `_landed`.
+- **Judge it.** Check 342.
+
+### 387. What a new preset's "empty" is
+
+- **Answer.** (owner) — 2026-10-24: approved as proposed.
+- **Built.** `{"frame": "wired"}`: the outputs and All outputs, nothing
+  wired, so it draws black
+  (`tests/test_presets.py::test_a_new_preset_draws_black`,
+  `tests/test_graph_areas.py::test_a_blank_preset_draws_only_the_outputs`).
+  The picker's top-level **scene starter** wires `shape → scene → All
+  outputs` in one step
+  (`tests/test_graph_edit.py::test_the_starter_wires_the_scene_to_all_outputs`).
+  Empty channels sit on MEDIA's idle line. The desk is written
+  explicitly (`fresh_desk()`), since a file with no `desk` key gets the
+  factory layer and `"desk": []` an empty one.
+- **Other options.** Start with the scene starter already wired; start
+  with the last preset's graph.
+- **To reverse.** `graphview.render_starter`.
+- **Rough edge.** None known.
+- **Judge it.** Check 342.
+
+### 388. GRAPH deletes everything
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** The refusals left are type errors, loops, the camera and a
+  cloud (`NOT_REMOVABLE`). Deleting a window unwires it. `PLUMBING`,
+  `RUN_KEPT` (plan 33 R20), `FEEDS_NO_DELETE` and `FrameNode` are
+  deleted. Deleting an effect closes the chain over it; a node that loses
+  its last wire stays, faint, as an entry
+  (`tests/test_graph_edit.py::{test_every_frame_node_and_wire_deletes,test_the_owners_sequence,test_deleting_a_window_unwires_it}`;
+  `tests/test_graphview.py::test_no_plumbing_words_remain`).
+- **Other options.** Keep some plumbing (the capture, `fx`).
+- **To reverse.** `graphview.render_unwire` and `render_drop`.
+- **Rough edge.** A node that loses its last wire stays, faint, until it is deleted
+  too.
+- **Judge it.** Check 343.
+
+### 389. Canvas areas by primitive
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `graphview.AREAS`: CONTROLLERS, AUDIO, MODULATION, MEDIA,
+  SCENE, LOOK-BACK, EFFECTS, OUTPUTS. The picker groups the same way
+  (`tests/test_graph_areas.py::test_the_areas_run_by_primitive`,
+  `tests/test_graph_edit.py::test_the_picker_groups_by_primitive`).
+- **Other options.** Keep GEOMETRY and SHADERS.
+- **To reverse.** `AREAS`, `PICKER_GROUPS`.
+- **Rough edge.** The effects area wraps into rows of four.
+- **Judge it.** Check 350.
+
+### 390. OUTPUT and LOOKBACK are views that edit wires
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** Each window's `shows:` combo ("as All outputs", "nothing",
+  the graph's pictures in area order, and every channel with a source,
+  R17) wires or unwires; its mutes; "hands through the effects"
+  (`graphview.set_through`, refused with a reason when it cannot be
+  honoured); LOOKBACK's "records" combo. One undo step each
+  (`tests/test_ui_output.py::{test_the_combo_offers_the_graphs_pictures_in_area_order,test_output_offers_a_channel_with_a_source_and_picking_wires_it,test_picking_a_picture_wires_the_output,test_through_writes_the_wiring,test_through_needs_a_hands_layer_over_all_outputs}`).
+- **Other options.** Leave the pages as the rig's switches.
+- **To reverse.** `ui.Panel._output_blocks`, `ui_lookback._records_row`.
+- **Rough edge.** The OUTPUT block spacing is tighter (4, was 7) so four
+  outputs fit; through is refused with the window's own picture.
+- **Judge it.** Checks 346, 349.
+
+### 391. Point clouds stay the rig's
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `build_graph(views, wiring, clouds, …)` draws the listed
+  cloud devices in every scene. They are not wired
+  (`tests/test_graph_frame.py::test_the_proof_covers_one_window_and_the_clouds`).
+- **Other options.** A cloud as a wired geometry (a preset naming a
+  device one Mac lacks).
+- **To reverse.** `_Build`'s scene case.
+- **Rough edge.** A cloud cannot be removed from a scene on GRAPH
+  (`NOT_REMOVABLE`).
+- **Judge it.** —
+
+### 392. The golden states as wiring
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `tools/golden_frames.py` writes each state's per-output
+  wires (`graphmigrate.output_wires`) with the window mutes all on
+  (`View(Switches(), …)`); the mutes have tests of their own (row 374).
+  Three `/6` fixtures (`blank-frame`, `channel-out-only`,
+  `through-one-output`), 24 new goldens (741), the 717 before unmoved
+  (`tests/test_golden_frames.py::test_renaming_moved_no_golden`,
+  `tests/test_graph_frame.py::test_output_wires_for_each_state`).
+- **Other options.** Keep the switches in the tool and re-record.
+- **To reverse.** `golden_frames.rig_section`.
+- **Rough edge.** R11: a through state applies the OUTPUT toggle only
+  where All outputs already lays the hands.
+- **Judge it.** —
+
+### 393. Plan 34's frame words retired
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `FRAME_SOURCE_REFUSAL` and `LOOP_FRAME` are not read in a
+  wired frame (there is no `frame`); `FRAME_EDGES` is replaced there by
+  `graph.HIDDEN_EDGES = (("shape", "pattern"), ("lookback", "scene"))`.
+  `LOOP_FACES` and `LOOP_BACKDROP` keep their words and now also name
+  explicit loops through `scene.geometry` and `backdrop.scene`
+  (`tests/test_graph_wired.py::{test_loops_in_a_wired_frame_keep_plan_34s_words,test_loop_words_in_a_wired_frame}`).
+  This supersedes the `FRAME_EDGES` of plan 34's row 359; plan 34's own
+  `delay`, `resize`, `echo.k` and `dream` ids do not clash with V2.
+- **Other options.** Keep `frame` as a hidden node for the loop check.
+- **To reverse.** `HIDDEN_EDGES`, `loop_words`.
+- **Rough edge.** `FRAME_EDGES` is kept, for reading an old section before
+  it migrates (`graph.sink_loops(wires, wired=False)` walks it when the
+  section is not a wired frame). Plan 34's T4 did not remove it, as this
+  row first said it would.
+- **Judge it.** —
+
+### 394. Every save is the newest schema
+
+- **Answer.** owner — 2026-10-25, in his words: "We don't plan on having
+  long-term support for old schemas. We're more doing this because it
+  makes it easier for us to quickly iterate. You can assume that anytime
+  we update a schema, both machines will comply with that." He wants every
+  preset in his library on the newest schema, so old-schema files stop
+  circulating. **Supersedes** D1's save rule (row 340: the lowest schema
+  that loses nothing), row 319's conditional `/3`, row 347, ruling R10
+  and row 385's save side, and R15 (the GRAPH layout in the canvas's old
+  ids below `/6`).
+- **Built.** `Presets.document` always writes `hyperspace.preset/6`
+  (`WIRED_SCHEMA`) in today's words: the wired frame the load or GRAPH
+  landed (with nothing loaded, `graphmigrate.wired_of(Wiring())`, the
+  factory frame), today's node and canvas ids, every value the registry
+  holds (media, envelopes and sequencer included) and the `media` section,
+  no retired id. Every reader stays: `VERSIONS = (2, 3, 4, 5, 6)`, each
+  migrated on load. Removed as save-only: `preset.schema_of`,
+  `uses_media`, `build_default`, `MEDIA_DEFAULTS`, `Presets._five_section`
+  and `_at_default`, `GraphSection.held`/`five`/`held_values`, the load's
+  `/5` re-read and kept file layout; `graphmigrate.legacy_values`,
+  `legacy_section`, `unwired`, `needs_free`, `says_free`,
+  `uses_free_words`, `has_frame_run`, `with_retired`, `with_history`,
+  `reordered`, `old_layout`, `old_canvas_id`. `renamed_layout` now drops
+  a dissolved node's position (`render:frame`, `render:fx`,
+  `render:capture` …), so a layout read back from a `/6` is the identity.
+  The factory files keep the schema they were made in
+  (`preset.factory_schema`, the generator's: the build's own stock).
+  `hyperspace/headless.py` holds the app's preset half (`make_app`,
+  moved from the tests) and `resave`, the one road a file takes;
+  `tools/migrate_library.py` rewrites a library through it — a dry run by
+  default; `--apply` backs the folder up to
+  `~/Hyperspace/library-backup-<stamp>/` first and writes only a preset
+  that loads, whose `/6` is a fixed point and that draws the same picture
+  on the golden rig (`golden_frames.picture`), unless `--force NAME`.
+  Tests: `tests/test_graph_free.py::test_every_old_preset_saves_as_six_and_is_a_fixed_point`
+  (every factory preset and fixture, `/2`–`/6`, the older builds' recorded
+  saves in `plan33-v4-saves/` and `plan35-v5-saves/` among them),
+  `tests/test_golden_frames.py::test_every_preset_resaved_as_six_draws_its_goldens`
+  (each factory preset and fixture's `/6` draws exactly its goldens),
+  `tests/test_migrate_library.py`; the byte-identical-to-an-older-build
+  tests they replace are gone.
+- **Other options.** Keep the ladder (R10) and migrate nothing; or write
+  `/6` only on an edit and leave untouched files as they are.
+- **To reverse.** `Presets.document` (the schema and the graph it
+  writes); the removed functions are in git history before this row.
+- **Rough edge.** A Mac on an older build refuses every file this build
+  saves, even an untouched one. A migrated file differs from the old one
+  wherever this build's load already differed: desk rows on the invariant
+  controls (the shape pads, the render toggles) left out, the retired
+  values and `view.bmp_*` ids left out, a macro's base subscriber's value
+  written where it landed over `values`, `camera.pan` in world units —
+  none changes the picture. The factory files stay `/2` (seq-demo `/3`).
+- **Judge it.** Check 353.
+
+### 395. A picture laid over keeps its see-through ground
+
+- **Answer.** owner — 2026-10-25. Wiring media into a composite's `under`
+  and the scene into its `over` showed one picture or the other, never
+  both, and a trigger raising the mix of an effect between the scene and
+  the composite blacked the media out. Asked for the proper fix.
+- **Why it happened.** Nothing that reached `over` was ever see-through on
+  an opaque window: the scene cleared to the window's ground (alpha 1)
+  unless it was wired straight into `backdrop.scene` (row 382), and every
+  effect pass wrote alpha 1 (`fx.FS_TAIL`, `u_opaque`, plan 14 WP1). An
+  effect at mix 0 is not live and reads through, so the scene's own
+  ground showed; above 0 its pass ran and covered the `under` wherever the
+  shape drew nothing. "over" was "replace".
+- **Built.** `_Build.laid_over(name)`: a picture wired into
+  `backdrop.scene`, or into the `over` of a composite whose blend reads its
+  alpha (over, depth — not "add", where black adds nothing), straight or
+  through effects. A scene laid over is built with `ground` 0 (row 382's
+  rule, widened); each wired effect on such a path is `Effect.laid_over`,
+  so `see_through` and its pass keeps its own alpha (`u_opaque` 0, as an
+  effect on a hands' layer already did; `_pass` now honours `see_through`
+  as `_one` did). Every other effect keeps the window's opaque ground, and
+  the output still lays its picture opaque on the window. Tests:
+  `tests/test_graph_frame.py::test_a_scene_laid_over_by_a_composite_is_drawn_see_through`,
+  `tests/test_media_render.py::test_a_composite_lays_the_scene_and_its_effect_over_the_media`
+  (a red still stays red wherever the shape draws nothing, an effect at
+  full mix included — 0% red before). No golden moved.
+- **Other options.** Use the composite's "add" blend (both show, the
+  scene's black adds nothing, but dark geometry lets the media through);
+  or rewire through `backdrop.scene` (no effect between).
+- **To reverse.** `_Build.laid_over` and `Effect.laid_over`.
+- **Rough edge.** A scene laid over is see-through for every node that
+  reads it (one texture), as one on the backdrop already was. Copies and
+  switches between the scene and the composite are not followed: only
+  effects.
+- **Judge it.** Media into a composite's `under`, the scene into its `over`
+  (through an effect): both show; pull the trigger on the effect's mix and
+  the media stays.
+
+## Plan 36 — the WYSIWYG graph (rows 396–416)
+
+Rows 396–400 are the plan's D1–D5, put to the owner and accepted as recommended on 2026-10-26, before the build. Rows 401–416 are the controller's rulings during the build and the owner's words on it (409, 412, 415); each says what the build did. Built on `plan-36-build` ([`plans/36-wysiwyg-graph.md`](plans/36-wysiwyg-graph.md); hand checks 354–369, group AG).
+
+### 396. D1: All outputs stays as an explicit bus of drawn, rig-owned cables (`output.all.<port> → output.N.<port>`), not deleted
+
+- **Answer.** owner — 2026-10-26: accepted as recommended. Asked in plan 36 D1: keep All outputs as a bus or delete it and wire each window. Accepted as recommended: one preset still works on the laptop and the rig, and every cable is visible.
+- **Built.** `graph.RigWires`, `graph.bus_wire`, `graph.window_ports`: one cable per window and port (image, hands, guide, depth: four bus ports), present by default, drawn on GRAPH, cut by Delete, re-added by dragging from All outputs' pin onto the window's same port, saved in the show (`library.Project.rig`, key `"rig"`, written only when something is cut) and undone with the app's undo. A window's port is its own wire, else the standing bus cable, else nothing. A bus cable carries no inserted effect (refused in words). Tests: `tests/test_plan36_bus.py`.
+- **Other options.** Delete All outputs and wire each window.
+- **To reverse.** `graph.window_ports` and the rig's persistence (the `rig` key).
+- **Rough edge.** A cut is the show's, not the preset's: the same preset in another show has its cables.
+- **Judge it.** Checks 359–361.
+
+### 397. D2: one live dream at a time; a second is refused in words
+
+- **Answer.** owner — 2026-10-26: accepted as recommended. Asked in plan 36 D2: one dream worker or several sharing it. Accepted as recommended: the worker is one GPU job and several would split the frame rate.
+- **Built.** A second reached `dream` node is refused in words at read (`tests/test_plan36_lookback_dream.py::test_a_second_dream_is_refused_in_words`). `dream.on` off passes the input through and the worker does not run.
+- **Other options.** Several dreams sharing the worker.
+- **To reverse.** The refusal in `graph.py`.
+- **Rough edge.** A refused second dream is an unreached node, drawn faint.
+- **Judge it.** Check 365.
+
+### 398. D3: the look-back outputs its trail only; a composite lays it over the picture
+
+- **Answer.** owner — 2026-10-26: accepted as recommended. Asked in plan 36 D3: the look-back's trail only, or also "trail over input". Accepted as recommended: WYSIWYG, and the starters add the composite for you.
+- **Built.** `lookback` outputs the age-weighted trail as a premultiplied picture with alpha and nothing else; the tracers starters wire `scene → lookback → composite (over scene)`. Old presets migrate to that chain.
+- **Other options.** A "trail over input" output on the look-back.
+- **To reverse.** `graph.LookbackAt`'s outputs and `graphview.STARTERS`.
+- **Rough edge.** The common case needs a composite on the canvas.
+- **Judge it.** Checks 363, 364.
+
+### 399. D4: "preset only" is on by default for every preset, rig and controller nodes one click away
+
+- **Answer.** owner — 2026-10-26: accepted as recommended. Asked in plan 36 D4: on for every preset or only new ones. Accepted as recommended.
+- **Built.** `graphview.preset_only(view)`; a chip on GRAPH's head, state `st["preset_only"]` (default `ui_graph.PRESET_ONLY`), not keyed to the preset, so it survives loads and hot reload. Row 413 says what it hides.
+- **Other options.** On only for new presets.
+- **To reverse.** `ui_graph.PRESET_ONLY`.
+- **Rough edge.** A factory preset opens with fewer nodes than before; the chip brings the rest back.
+- **Judge it.** Check 367.
+
+### 400. D5: the factory presets and the Drive library migrate to `/7` in one go, with the same backup, both Macs on this build
+
+- **Answer.** owner — 2026-10-26: accepted as recommended. Asked in plan 36 D5. Accepted as recommended; it follows row 394 (no old-schema support).
+- **Built.** `hyperspace.preset/7`; `tools/migrate_library.py` rewrites each preset to the explicit graph it drew, proved by `graph.signature` and the goldens. The 25 factory `/7` files are regenerated (row 401); the owner's library is migrated at the hand check, not by the build (row 403).
+- **Other options.** Migrate on load for ever.
+- **To reverse.** `preset.WIRED_SCHEMA`, `migrate_library`.
+- **Rough edge.** An older build refuses a `/7` file: both Macs update together.
+- **Judge it.** Check 368.
+
+### 401. The factory `/7` files are regenerated at T4 from their pre-T3 `/6` originals
+
+- **Answer.** controller — 2026-10-26. `/7` is unreleased during the build, so T4 could change what a `/7` look-back means; the files T3 wrote held the old coupled look-back.
+- **Built.** The 25 factory `/7` files were regenerated by re-running the migration from their `/6` originals at f1c2846; the sources are kept in `tests/fixtures/factory-sources/`.
+- **Other options.** Keep the T3 files and add a second migration.
+- **To reverse.** Re-run `migrate_library.py --library tests/fixtures/factory-sources --to hyperspace/library/presets`. Cost if wrong: one regenerate step redone.
+- **Rough edge.** None.
+- **Judge it.** —
+
+### 402. "No `/6` reader" means no fill-in and no `/6` saves; reading `/4`–`/6` stays as the explicit one-way migration to `/7`, with a note on load
+
+- **Answer.** controller — 2026-10-26. The spec's W3 said no `/6` reader; the build plan said migrate on load. `migrate_library` and the old fixtures need the reader.
+- **Built.** `graphmigrate` reads older schemas into `/7` once and says so on load; nothing older is written.
+- **Other options.** A tool-only reader.
+- **To reverse.** Delete the load-time path. Cost if wrong: a little migration code kept that could have been tool-only.
+- **Rough edge.** None.
+- **Judge it.** Check 368.
+
+### 403. The build never runs `migrate_library` on `~/Hyperspace` or the Drive library
+
+- **Answer.** controller — 2026-10-26. That data is the owner's and outside the worktree.
+- **Built.** Hand check 368 is the run.
+- **Other options.** The build runs it.
+- **To reverse.** Cost if wrong: the owner runs one command.
+- **Rough edge.** None.
+- **Judge it.** Check 368.
+
+### 404. Plan 36's tasks run one after another, one implementer and one reviewer each
+
+- **Answer.** controller — 2026-10-26. No parallel implementers on one branch.
+- **Built.** T1–T7 in order; T5's review overlapped T6's implementer (row 411), T7 overlapped T6's review.
+- **Other options.** Parallel implementers.
+- **To reverse.** Cost if wrong: wall-clock only.
+- **Rough edge.** None.
+- **Judge it.** —
+
+### 405. The WYSIWYG rule beats "goldens unmoved": the stand-down is deleted, and a hands mute acts on the hands layer's input
+
+- **Answer.** controller — 2026-10-26. T1's reviewer found the stand-down (`Output.settle`, `Shown.fallback`, bent) was not confined to the mutes: it fired when a hand was absent or no effect was live, painting a chain clean with no drawn wiring. This supersedes an earlier ruling to keep it as the mutes' mechanism.
+- **Built.** The stand-down is gone. A window's hands mute removes the hands layer from that window's chain (a mute, not a rewire). Re-recorded: `party-trip`, `party-noita` and `lfo-breathe` at `|absent|hands+through`; the two resize ones are held by the mute.
+- **Other options.** Keep the stand-down.
+- **To reverse.** Revert the three pictures. Cost if wrong: the owner rejects up to five re-recorded pictures at the hand checks.
+- **Rough edge.** A muted window whose through composite is shared with an unmuted sibling still shows hands (one composite).
+- **Judge it.** Check 369.
+
+### 406. `through-one-output|present|scene+through` is re-recorded
+
+- **Answer.** controller — 2026-10-26. Its old golden drew hands with the hands mute on, which breaks the rule that a mute removes the hands (R9).
+- **Built.** The new frame is byte-identical to the fixture's own `scene` golden, which proves the mute.
+- **Other options.** Keep the old picture.
+- **To reverse.** One picture reverted.
+- **Rough edge.** None.
+- **Judge it.** Check 369.
+
+### 407. A cut hidden-edge wire stays cut: the `/7` gate closes the `/6` re-migration on every load
+
+- **Answer.** controller — 2026-10-26. T2 noted a `/6` file is re-migrated on every load, so a cut hidden-edge wire came back.
+- **Built.** T3 gates on `/7`; a test cuts a migrated wire, saves, reloads, and it stays cut.
+- **Other options.** Leave it for the final wave.
+- **To reverse.** None; it was on T3's path.
+- **Rough edge.** None.
+- **Judge it.** Check 360.
+
+### 408. The four placement goldens are accepted: `palette-glass` and three `wired-outputs` states
+
+- **Answer.** controller — 2026-10-26. A placement on a window's shared picture was not a wire; the explicit wire the canvas draws is. The reviewer confirmed the diffs are sub-pixel: 104 of 36000 thumbnail pixels, mean 0.18.
+- **Built.** `palette-glass|…|scene+hands+through`; `wired-outputs|…|scene+hands`, `|scene` and `|scene+through`.
+- **Other options.** Keep the old four.
+- **To reverse.** Cost if wrong: four fixtures reverted.
+- **Rough edge.** None.
+- **Judge it.** Check 369.
+
+### 409. Implementers skip the full suite; the controller runs it once before the final review
+
+- **Answer.** owner — 2026-10-26: "tell implementers to skip the full suite". From T3 the covering tests, the goldens and ruff; from T4 the fast tier, `--all -m golden` and ruff.
+- **Built.** Test tiers (PR #243) and the golden speed-ups are in the build. The final full run also checks `test_desk_coverage::test_the_committed_report_is_fresh`.
+- **Other options.** Run the full suite on every task.
+- **To reverse.** Cost if wrong: a cross-file regression found late and fixed in the final wave.
+- **Rough edge.** None.
+- **Judge it.** —
+
+### 410. The golden speed-ups start at T4's implementer head and merge back into the build
+
+- **Answer.** controller — 2026-10-26. Goldens run with no dream worker, so a T4 fix round cannot move them.
+- **Built.** Branch `golden-speedups` (5864615): one golden test per rig job, hashes not held pixels, a shader-program pool in `tools/golden_frames.py`; goldens 12–14 s and 0.33 GB (were 32–64 s and 2 GB), 128 tests; all 757 digests match; nothing under `hyperspace/` changed.
+- **Other options.** Wait for T4's review.
+- **To reverse.** Cost if wrong: one merge conflict in `tests/golden`.
+- **Rough edge.** None.
+- **Judge it.** —
+
+### 411. The new preset's chain is exactly `shape → scene → output.all.image`, plain faces
+
+- **Answer.** controller — 2026-10-26. The owner's words: "basic geometry routed into a scene, the scene into the output".
+- **Built.** `Presets.new` lays that chain where GRAPH is looking; the pattern is one visible drag away. T5's review ran alongside T6's implementer, the owner wanting it merged soon.
+- **Other options.** Wire the pattern into the faces too.
+- **To reverse.** Cost if wrong: one wire added to the starter.
+- **Rough edge.** The scene-chain starter drops whatever already fed All outputs' image without saying so.
+- **Judge it.** Checks 362, 363.
+
+### 412. Dream fidelity is deferred: the migrated dream dreams the look-back's occluded trail, and D is not occluded by the shape
+
+- **Answer.** owner — 2026-10-26: deferred; finish and merge plan 36 first. T4's reviewer showed no drawn wiring of `scene → lookback → dream → composite` reproduces the old look exactly.
+- **Built.** The spec's three-node chain is kept. `party-wake` with the worker live looks different from `/6`. Plan 34's `dream → X` now reads trail + D.
+- **Other options.** A separate dream `submit` port apart from the picture it lays over, and an occluder after the dream (the follow-up).
+- **To reverse.** That port and that occluder. Cost if wrong: `party-wake` looks different live until then.
+- **Rough edge.** The old look is not reproduced.
+- **Judge it.** Check 366.
+
+### 413. "Preset only" shows whatever is cabled to the section, of any kind
+
+- **Answer.** controller — 2026-10-26. T6's implementer first hid controllers and modulation even when cabled to a section node (a `PRESET_HIDES` list), against its brief; the controller's T6 fix (1810314) reversed it.
+- **Built.** Shown: the section's nodes, every node with a cable to one of them whatever its kind (an LFO routed to an effect, a controller bound to a param, so a moving param shows its source), and the output nodes the shown outputs reach, so the bus carries the windows in. Controllers, modulation and macros with no cable to the section are hidden, as are group nodes and the camera. Nothing is mutated or laid out again.
+- **Other options.** Hide controllers and modulation always (the implementer's first cut).
+- **To reverse.** `graphview.preset_only`.
+- **Rough edge.** Group nodes and the camera hide unless cabled to a section node, so a param-bearing group vanishes in the default view.
+- **Judge it.** Check 367.
+
+### 414. The goldens re-recorded in the build: 9 of 757
+
+- **Answer.** controller — 2026-10-26. T1 four, T3 four, T4 one (rows 405, 406, 408 and the one here).
+- **Built.** T4: `wired-outputs|present|scene+hands+through` moved 6029 pixels by 1/255 because `history → acid.2` read the off look-back's copy pass and now reads `scene → acid.2`. The other 748 did not move; all 125 frame signatures were re-recorded for the new ids.
+- **Other options.** None.
+- **To reverse.** Each reverts by git.
+- **Rough edge.** None.
+- **Judge it.** Check 369.
+
+### 415. Plan 37 is nodes as pictures, and the faces
+
+- **Answer.** owner — 2026-10-26. FL Patcher-style nodes shown as the picture they make; face shaders consolidated and faces as a target like any other.
+- **Built.** Not built. The `acid-scene` preset drawing a wire backwards (area rules) goes there.
+- **Other options.** Fold it into plan 36.
+- **To reverse.** None.
+- **Rough edge.** None.
+- **Judge it.** —
+
+### 416. Plan 36's known follow-ups are recorded, not built
+
+- **Answer.** controller — 2026-10-26. Reviewer minors that do not change what runs.
+- **Built.** Listed in `plans/36-wysiwyg-graph.md` under "Known follow-ups": dead placement plumbing, `tools/outputs_shots.py:89`, the manifest's stale route words, duplicate helpers.
+- **Other options.** Fix them in the final wave.
+- **To reverse.** None.
+- **Rough edge.** None.
+- **Judge it.** —
+
+## Plans 37, 38 and 39 — pictures, the hold, vision (rows 417–500)
+
+The three plans ran in parallel on 2026-10-27, each on its own branch, and were integrated on `plan-37-38-39-integration` (plan 38, then plan 39, then plan 37). Their rows are in numeric order below; each plan's own note first.
+
+**Plan 37 — nodes as pictures, and the faces (rows 417–429, 460).** Rows 417–421 are the plan's D1–D5. D1 is **open**: the list of face patterns that stay is the owner's, and nothing is dropped until he names it. The controller accepted D2–D5 as recommended on 2026-10-27, in the owner's absence (the run's ruling 5). Rows 422–429 and 460 are the controller's rulings during the build. The plan was given thirteen rows (417–429) and needed fourteen, so the last one is 460, the first free number after plan 39's range. Built on `plan-37-pictures` ([`plans/37-pictures-and-faces.md`](plans/37-pictures-and-faces.md); hand checks 370–376, group AH). P1 and P3 are built. P2 is a dry run: the sheets and the migration map are in [`plans/assets/37-faces/`](plans/assets/37-faces/), and no shader, preset or golden has changed.
+
+**Plan 38 — hold the projector (rows 430–439, 461–470).** Rows 430–434 are the plan's D1–D5, answered by the build's recommendation; the owner did not see them before the build, so each is "(rec) — accepted by the controller 2026-10-27" and is the owner's to keep or overturn. Rows 435–439 and 461–470 are the controller's rulings during the build (tasks B1–B3); the plan needed more than its ten rows, so it took 461 onward (after plan 39's range, 440–459, and plan 37's overflow row 460). Built on `plan-38-hold` ([`plans/38-hold.md`](plans/38-hold.md); hand checks 377–383, group AI).
+
+**Plan 39 — vision (rows 440–459, 471–497).** Rows 440–447 are the plan's eight decisions, every one **the owner's, 2026-10-27**, before the build ([`plans/39-vision.md`](plans/39-vision.md)); each says what was built against it. Rows 448–459 and 471–497 are the controller's rulings during the build (twenty rows were assigned; the overflow starts at 471 because plan 37 took 460 and plan 38 461–470). Built on `plan-39-vision` (tasks T0–T5, PRs #254, #252, #256, #260, #265, #267); rows 459, 495 and 496 are the seams where plan 38's hold met plan 39's nodes, settled on `plan-37-38-39-integration` (2b185ea). Hand checks 384–393, group AJ.
+
+**The integration (rows 498–500).** Taken by the integrator at the plan 37 merge, where plan 37's thumbnails met plan 38's preview renderer (498, 499) and plan 39's kinds (500).
+
+Plan 40's rows (501–536) follow, in their own section at the end.
+
+### 417. Plan 37 D1: the list of face patterns is the owner's; nothing is dropped until he names it
+
+- **Answer.** owner — 2026-10-27: **"For now, we're going to keep all of the face shaders. We're going to tell you to drop them in the future at our discretion."** All 17 stay; P2 does not run until the owner names a list. The sheets, the migration map and the two questions below stay ready for that day.
+- **Built.** A dry run (PR #250). `tools/faces_sheets.py` draws every mode on a preset's shape the way a show draws it: `docs/plans/assets/37-faces/sheet.png` is all 17 on `party-faces`' tesseract, `heart-sheet.png` is all 17 on `plasma-heart`'s Heart, and there is one `<NAME>.png` per mode. `migration-map.md` records which presets show each mode and the ranked "nearest kept" for each (row 460). No factory preset or fixture shows PLAID, BLOOM, METER, PULSE, MARBLE, TRUCHET or KALEIDO, so dropping any of those moves no golden and edits no preset. Nothing in `patterns.glsl`, `patterns.MODES`, the FACES page or any preset has changed.
+- **What the owner decides with the list.** Two questions come with it (the run's ruling 10):
+  - **(a) The index.** A preset stores `view.pattern` as an index (`patterns.py`: "appended, never inserted"). Dropping modes either *renumbers*, which rewrites every preset's value through an old-to-new table and makes an older build read the wrong pattern, so both Macs must be on this build and the library migrated with a backup; or keeps the retired indices as *tombstones*, which the enum, the FACES page and the desk knob skip and which a load maps to the nearest kept mode with a note. Tombstones need no schema change. The controller leans to tombstones.
+  - **(b) The `preset.py` edit.** The migration needs `hyperspace/preset.py`, which writes `view_pattern=` for four factory presets, and `tests/fixtures/factory-sources/presets/`. Plan 37's ownership row gives it neither. The controller allows that edit when P2 runs.
+- **Other options.** Drop the seven modes no preset shows without asking; keep all 17.
+- **To reverse.** P2 has not run, so there is nothing to reverse. Once it runs, the steps are listed in the plan's "What changed in the build".
+- **Rough edge.** The sheets are stills, so METER, PULSE and SPEED's motion only shows on the FACES page with music. Three frames in, the tesseract is still nearly face-on.
+- **Judge it.** Check 375.
+
+### 418. Plan 37 D2: the thumbnail is always drawn, collapsed or expanded
+
+- **Answer.** (rec) — accepted by the controller 2026-10-27. Asked in plan 37 D2: thumbnails always, or only on collapsed nodes. Recommended "always", because the picture is the node's identity.
+- **Built.** Every picture node draws its picture right after the title line. Collapsed, the node is the title and the picture, and its N7 summary lines move into the hover (row 427). Expanded, it is the title, the picture and then the ports. `graphview.height` counts the box both ways, so nothing below it is overlapped.
+- **Other options.** Only on collapsed nodes, with expanded nodes showing ports only.
+- **To reverse.** The order in `ui_graph._node` and the `thumb` term in `graphview.height`.
+- **Rough edge.** A collapsed picture node no longer shows its N7 lines on the canvas. They are only in the hover.
+- **Judge it.** Check 372.
+
+### 419. Plan 37 D3: picture cables are plain red; the tint sits behind a head switch
+
+- **Answer.** (rec) — accepted by the controller 2026-10-27. Asked in plan 37 D3: tint picture cables by what flows, or keep them plain red. Recommended plain red first, with the tint behind a switch on the head so the owner can judge it by eye.
+- **Built.** The chip `pictures · tint cables` is last on the GRAPH head and off by default (row 428). Lit, each picture cable's red leans by the hue of the picture its maker draws. `ui_graph.COLOURS` is unchanged.
+- **Other options.** Always tint; never tint.
+- **To reverse.** One `setdefault` (lit by default), or delete `_tint_chip`.
+- **Rough edge.** See row 428.
+- **Judge it.** Check 370 (the tint step).
+
+### 420. Plan 37 D4: faces per instance come after this plan
+
+- **Answer.** (rec) — accepted by the controller 2026-10-27. Asked in plan 37 D4: faces per instance in this plan, or after. Recommended after, because it is a `graph.py` change that collides with plan 39's work there.
+- **Built.** Nothing. `shape.faces` still takes one picture for every drawn instance.
+- **Other options.** A `shape.faces.<k>` port per drawn instance in this plan.
+- **To reverse.** It is a later plan's work.
+- **Rough edge.** A kaleido branch cannot land on copy 1 and the pattern on copy 2.
+- **Judge it.** —
+
+### 421. Plan 37 D5: the backward wire is fixed by the area rules, not by re-laying the preset
+
+- **Answer.** (rec) — accepted by the controller 2026-10-27. Asked in plan 37 D5: fix the backward wire through the area rules or through the preset. Recommended the rules: "a node whose only consumers are in one area is laid in that area". As built, the rule is extended for a node whose consumers are in several areas (row 429, the run's ruling 11).
+- **Built.** `graphview.laid_areas`, applied in `graphview.build`. In the `acid-scene` fixture, acid.2 now stands in LOOK-BACK, left of the look-back, and every cable out of it runs right. `tests/test_graph_areas.py::test_no_cable_runs_backwards_across_areas` sweeps every factory preset (25) and every graph fixture (22). No preset was edited: `acid-scene` is a test fixture, not a factory preset.
+- **Other options.** Re-lay `acid-scene` by hand.
+- **To reverse.** One function, `graphview.laid_areas`, and its call in `build`.
+- **Rough edge.** See row 429.
+- **Judge it.** Check 376.
+
+### 422. A thumbnail is 192 texels on its long side, made by one 4×4-tap downsample pass, not mipmaps
+
+- **Answer.** controller — 2026-10-27. P1 says "mipmapped". `build_mipmaps` on a frame-owned texture switches its min filter for every later sample of that texture, which is a golden risk, and it would build a full mip chain on a 1080p target per node per frame.
+- **Built.** `outputs.THUMB_PX = 192`, at the picture's own aspect (`thumb_size`). Each node gets one draw of `THUMB_FS`: sixteen bilinear taps over one thumbnail texel's footprint, through a sampler of its own, written opaque (the picture over black). `outputs.PreviewTextures` keeps the textures. It sits beside `Preview` and knows nothing of the graph, importing only `moderngl` and `glsl`. `render.thumb_source` works out what each wanted name's picture is, and `Renderer._thumbnails` calls it last in `_for_the_panel`. The renderer holds one `Renderer.thumbs`, made again after a hot reload, and the page reads it as `panel.renderer.thumbs`.
+- **Other options.** Mipmaps; `copy_framebuffer`, a nearest blit that aliases badly at 10:1; a second, chained half-size pass.
+- **To reverse.** One shader string and one constant in `outputs.py`.
+- **Rough edge.** At 10:1 the coverage can shimmer on fine line art. The picture's alpha is dropped on the thumbnail, so a see-through layer reads as it would on a black window.
+- **Judge it.** Check 370.
+
+### 423. A thumbnail is dropped after a second unwanted; a node that made nothing is dimmed, then black a second later
+
+- **Answer.** controller — 2026-10-27.
+- **Built.** `THUMB_DROP_S = 1.0`: a name not wanted for a second is forgotten and its texture freed. `THUMB_BLACK_S = 1.0`. `PreviewTextures.shade` is 1 when the renderer copied the node in the last frame, 0.45 (`DIM`) while the last copy is less than a second old, and 0 after that. The page multiplies the picture by this number; nothing is copied for it. A node that stops drawing (switched off behind a switch, a hand that leaves, unwired) goes grey at once and black after a second. A node panned off screen has its texture freed a second later.
+- **Other options.** Hold the last picture for ever; drop at once, which flickers while panning; keep it longer.
+- **To reverse.** Three constants.
+- **Rough edge.** A node wanted for the first time shows a black box for one frame. Output 1's picture is the page's `Preview`, which has no age, so it never dims (row 424).
+- **Judge it.** Checks 370, 374.
+
+### 424. How a node that makes no picture shows one: one table
+
+- **Answer.** controller — 2026-10-27.
+- **Built.** `graphview.THUMBS` maps each kind to how its picture is shown:
+  - `picture`: every picture kind (channel, pattern, scene, backdrop, composite, switch, delay, resize, lookback, echo, dream, effect, copy, hands layer, guide).
+  - `scene`: the shape and a cloud show the first scene that draws them, faint (`ui_graph.FAINT_PIC = 0.4`).
+  - `layer`: a hands node shows the first hands layer that draws it, else the scene it is in, not faint.
+  - `window`: output 1 shows the page's existing `Preview`, wanted only while its node is on screen. Any other output shows the `Handoff.frame` its presenter is handed (no readback, the hands not laid on), or a publish-only output's own target.
+
+  All outputs, the camera, the ground and the whole modulation side stay text. A kind the table does not name whose `OUTPUT` is `IMAGE` is a `picture` (`graphview.thumb_of`). That is the seam for plan 39's `segment`, `matte` and `cut`, with no code written for plan 39.
+- **Other options.** Show output N≥2 by the end's frame texture (before the fold); show All outputs as its `image` wire's picture.
+- **To reverse.** The table entries in `graphview.py` and the matching branch in `render.thumb_source`.
+- **Rough edge.** Output 1 never dims. Outputs 2–4 show their window's picture without the hands and the readout laid on.
+- **Judge it.** Check 370.
+
+### 425. A picture node's box is the node's width at 16:9, whatever the picture's shape
+
+- **Answer.** controller — 2026-10-27.
+- **Built.** `graphview.THUMB_H = 134` canvas units (190 × 1.25 × 9/16). The picture is fitted whole inside and letterboxed on black, so the layout never moves when a picture's size changes.
+- **Other options.** The box at the picture's own aspect. A portrait channel would then push its column down, and the layout would move whenever a window resized.
+- **To reverse.** The `thumb` height in `graphview.height` and in `ui_graph._thumb`.
+- **Rough edge.** Picture nodes laid out automatically moved once, because their height changed. Stored positions did not move. A faint node's title is still faint.
+- **Judge it.** Check 372.
+
+### 426. What a thumbnail costs, by kind, and how the ask stays out of the frame
+
+- **Answer.** controller — 2026-10-27.
+- **Built.**
+  - **One blit** (the 192-texel pass) for a node that already made a texture this frame: the scene, a hands layer, a channel's fit, the pattern, a look-back's trail or a dream bound by a consumer, an effect held for two readers, a composite made into a texture, a window's handoff.
+  - **A full-size repaint, then the blit** for a node that painted straight into its consumer: an effect with one reader, a switch, a delay or echo laid by cover, a resize, a composite or look-back painted direct. Each such node holds a full-size frame target while it is wanted, about 8 MB per node at 1080p RGBA8 and twice that for a half-float one.
+  - **Who is asked.** Only wanted nodes (on screen, drawn). Nothing behind an unpicked switch input: every kind is checked against `Graph.pulled` before anything is read (a review fix). Nothing that reads nothing.
+  - **Out of the frame.** During the asks the GPU timer is muted and the frame's `stats` are restored afterwards. The outputs are byte-identical with every node wanted and with none (tested over delay, look-back, switch, effect and composite chains). When anything was copied, `_thumbnails` flushes the render context (`glFlush`).
+  - **On SYSTEM:** `thumbnails · N copied · K repainted · M kept`.
+- **Other options.** Paint at the thumbnail's size (`Frame.at`). That is cheaper but gives a different picture (a see-through ground).
+- **To reverse.** One branch per kind in `render.thumb_source`.
+- **Rough edge.** A look-back asked after the frame's capture includes this frame's commit. An echo whose slot was just rewritten reads nothing and dims. The cost on the show Mac has not been measured.
+- **Judge it.** Checks 371, 374.
+
+### 427. Hovering a thumbnail gives the node's lines, the picture's size and its GPU time
+
+- **Answer.** controller — 2026-10-27.
+- **Built.** `graphview.picture_hover`, called from `ui_graph.thumb_tip`, gives these lines in order:
+  1. The node's title.
+  2. `graphview.summary`'s lines: param counts, "N picture ports", the node's `said`, a switch's "picks inK", "reaches nothing".
+  3. `W×H picture`, the size of the last copy (`VNode.picture`; output 1 takes the `Preview`'s size).
+  4. `gpu N.NN ms`, SYSTEM's rolling median, looked up by the render node's name.
+  5. The node's status, when it has one.
+
+  A line with nothing behind it is left out. The tooltip shows only while the pointer is on the picture. On the title, the old hover is unchanged.
+- **Other options.** Hover on the whole node; the summary drawn under the thumbnail, which takes back the room the picture was given.
+- **To reverse.** One branch in `ui_graph._hover`, or the lines in `picture_hover`.
+- **Rough edge.** A geometry shown as its scene's picture has a time line only when it is timed under its own name. An effect that ran no pass this frame has no time line. A faint node's picture says "reaches nothing", but not `FAINT_TIP`'s advice, which its title still gives. That the hover works inside `imgui_node_editor` is only shown headless, through a stand-in.
+- **Judge it.** Check 373.
+
+### 428. The tint leans red by at most 20°, continuously; it is read from the thumbnail asynchronously, and its switch is off by default and kept on the page
+
+- **Answer.** controller — 2026-10-27. Revised in review: the first cut used a blocking `tex.read()`, effectively a `ctx.finish()` on every reading frame, and its linear arc flipped at cyan.
+- **Built.**
+  - **The formula.** `ui_graph.tint(hue, strength)` moves red's hue by `TINT_SPAN` (20°) × sin(2π·(hue − red)) × min(1, strength / `TINT_FULL` (0.25)), keeping red's saturation and value. The yellow-green half leans orange and the blue-violet half leans rose. Red, cyan and grey pictures give no lean. The tint stays more than 10° from the trigger's amber and 60° from the mask's purple.
+  - **The hue.** `outputs.dominant_hue` is a chroma-weighted circular mean. Each frame the switch is lit, `PreviewTextures.begin_frame` first collects the hue started the frame before (a 1 KB pixel buffer), then starts at most one new one: the oldest thumbnail whose hue is at least a second old (`HUE_EVERY_S`) gets one `THUMB_FS` pass into a 16×16 target and `fbo.read_into(buffer)`. No texture is ever `read()`, and that is tested.
+  - **The switch.** `st["tint"]` is page state, like `patched_only` and `backdrop`. It is off by default and saved with neither the preset nor the show (tested). Reads stop the frame it goes off. The chip is last on the head, so plan 38's hold chips land before it in a one-line merge.
+- **Other options.** An RGB mix with the picture's colour (a blue picture would make a purple cable, the mask's colour); the full hue; a preset value or a `config.toml` key for the switch.
+- **To reverse.** Two constants, or `tint` itself; one `setdefault` for the switch.
+- **Rough edge.** A ±20° lean is subtle by design, and a red picture and a cyan one both leave the cable plain red. The hue lags the picture by a frame plus up to a second. The switch has to be lit again after every launch. Bundles (value and trigger) are never tinted.
+- **Judge it.** Checks 370 (the tint step), 371.
+
+### 429. The area rule: an effect is laid in the leftmost area of its consumers that is not left of what feeds it
+
+- **Answer.** controller — 2026-10-27 (the run's ruling 11). The brief's tie-break was "a node with consumers in several areas keeps today's area". That cannot fix P3's own wire: in `acid-scene`, acid.2 feeds the look-back's `image` and `occluder` *and* a composite's `under` in EFFECTS.
+- **Built.** In `graphview.laid_areas`, only EFFECTS-area frame nodes move (an effect, copy, composite or resize). Such a node whose consumers sit left of the effects is laid in the leftmost consumer area that its feeds allow. These do not count as consumers:
+  - a kept cable (into a look-back's or delay's `image`, or an old D1 `after`);
+  - a consumer left of what feeds the node (a return by design);
+  - a consumer of no area.
+
+  A chain moves as a whole. A node whose consumers all sit to its right (the usual case, into OUTPUTS) never moves. When there is one consumer area left of EFFECTS, the result is the same as D5's. The rule names a node's *area*, never its *position*: `layout` skips every saved position, and no layout runs by itself (`test_auto_layout_stacks_each_area_and_keeps_saved_positions`). The reviewer traced that the rule cannot place a node left of its feeders and cannot loop.
+- **Other options.** D5 read literally (one consumer area only), which leaves the wire backwards; move every kind by the rule, which would carry LFOs into the scene.
+- **To reverse.** Restrict `laid_areas` to nodes whose counted consumers share one area, or drop its call in `build`. Cost if wrong: one cable drawn backwards on one fixture.
+- **Rough edge.** A moved effect takes its area's chips and frame with it. A preset saved before plan 37 with an acid.2-style effect placed in the EFFECTS region keeps that position, but its area is now LOOK-BACK, so LOOK-BACK's frame reaches over to it until **tidy**. A moved effect does not wrap in the effects' rows of four.
+- **Judge it.** Check 376.
+
+### 430. Plan 38 D1: Take is a hard cut, not a crossfade
+
+- **Answer.** (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn. Asked in plan 38 D1: a cut, or a crossfade over `output.take_fade` seconds.
+- **Built.** **take** (the chip, or `output.take` on a desk button) lets the hold go and the next frame draws every output from what is landed. The look-back's trails carry on through the cut, because they belong to the program's renderer.
+- **Other options.** A crossfade: both renderers draw to the outputs for the fade's length, with a mix pass at the end of the program.
+- **To reverse.** A small follow-up: an `output.take_fade` param, the preview drawn at output size during the fade, one mix pass in `app._draw_render`.
+- **Rough edge.** A cut between two very different looks can read as harsh in the room.
+- **Judge it.** Check 379.
+
+### 431. Plan 38 D2: the turn is one for both; speed and the planes are not held
+
+- **Answer.** (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn. Asked in plan 38 D2: hold the turn as well (a second integrator for the program).
+- **Built.** `rot.*`, `view.three_d`, `view.speed` and `view.plane.*` are out of the held set (`hold.ONE_FOR_BOTH`, `ONE_FOR_BOTH_PREFIXES`). The angles are integrated once a frame, before either draw, so turning speed or a plane knob during a hold changes the projector's turn too, and does not count on the red `HELD` line. (Speed and the planes were held in the first cut; B3's review moved them out: they are the integrator's, not the look's.)
+- **Other options.** A second `ViewState` integration for the program, so a speed or plane change waits for Take.
+- **To reverse.** Moderate: a second integrator, and the 3D switch's pose logic made to run twice.
+- **Rough edge.** A speed or plane change made while building the next look is seen in the room at once.
+- **Judge it.** Checks 377, 383.
+
+### 432. Plan 38 D3: Drop puts back the preset's part, not the rig
+
+- **Answer.** (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn. Asked in plan 38 D3: Drop restores the preset's part only, or everything since HOLD, rig included.
+- **Built.** Drop is one `Undo.revert` to the hold point, cut down by `hold._preset_part` to the performance groups: the rig's params (`eye.*`, output, hands feel, tempo) stay as they are now. Row 439 lists what is put back.
+- **Other options.** Everything since HOLD, rig included.
+- **To reverse.** Cheap: `hold._preset_part`.
+- **Rough edge.** The rig's drawn cables are part of "the graph", not the rig's params, so Drop puts them back (row 438).
+- **Judge it.** Check 380.
+
+### 433. Plan 38 D4: the preview shows only behind GRAPH
+
+- **Answer.** (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn. Asked in plan 38 D4: preview only behind GRAPH, or also on its own window or screen.
+- **Built.** The preview is drawn only on frames where the GRAPH page shows it (`preview.want()` comes only from `ui_graph._backdrop`, which a hold forces on). With the page closed a hold costs one compare per held param.
+- **Other options.** An output marked "preview", excluded from the program.
+- **To reverse.** Moderate: a preview output slot on plan 36's explicit outputs.
+- **Rough edge.** The operator has to be on GRAPH to see what TAKE will put up.
+- **Judge it.** Checks 377, 382.
+
+### 434. Plan 38 D5: a hold holds every output
+
+- **Answer.** (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn. Asked in plan 38 D5: every output, or per output (the laptop's output 1 follows the edits while the projector holds).
+- **Built.** One `draw_outputs` runs inside `Hold.program`, so every window and every publish-only output (Syphon, NDI) shows the program. The PROJECTOR inset on GRAPH is the laptop's view of the room.
+- **Other options.** Per output: a program per window.
+- **To reverse.** Large: two programs at once.
+- **Rough edge.** The laptop's own window shows the program too while held.
+- **Judge it.** Check 377.
+
+### 435. The held copy carries the rig's bus cables (plan 36)
+
+- **Answer.** controller — 2026-10-27 (B1). At HOLD the hold keeps the wiring (`Renderer.wiring`), the rig's bus cables (`graph.RigWires` from the renderer's `rig_source`, the open show) and the extra hands states. The program draw hands the renderer a stand-in `rig_source` (`hold._HeldRig`) holding the cables as they stood; a cable cut or joined during the hold counts as "the graph changed" (`Hold.rewired`).
+- **Built.** Cutting a bus cable from All outputs into a window, or joining one, during a hold shows only in the preview behind GRAPH. The projector keeps the cable as it was until TAKE. Tests: `tests/test_hold.py::test_a_bus_cable_cut_after_the_hold_stays_off_the_projector` and its GL twin.
+- **Other options.** Treat the bus as the rig and leave it shared: a cut would go straight to the projector, the "scene built in front of the room" the hold exists to prevent.
+- **To reverse.** Cheap: drop the `rig_source` swap in `Hold.program`.
+- **Rough edge.** None known. The spec's claim that the first cut "works the same once plan 36 makes the graph explicit" was not quite true; this row is the fix.
+- **Judge it.** Checks 378, 380.
+
+### 436. The preview renderer reads the show's cables, never a default
+
+- **Answer.** controller — 2026-10-27 (B1). `hold.mirror` hands the preview renderer `rig_source` along with media, clouds, bands, hands and wiring (`hold.MIRRORED`). Without it the preview had `rig_source=None`, which `graph.rig_of` reads as every bus cable standing: a wire filled in, against plan 36's rule.
+- **Built.** A window whose bus cable the show has cut is black in the preview, as on the projector, rather than showing All outputs.
+- **Other options.** None: this is the rule.
+- **To reverse.** Do not.
+- **Rough edge.** None.
+- **Judge it.** Check 378.
+
+### 437. Clouds and the effect files present are one for both
+
+- **Answer.** controller — 2026-10-27 (B1). `cloud_source` is the device registry (the room) and the effect files present on disk are the disk; neither is the look, so the program and the preview share both. The effect *instances* a landing would remove are kept for the program (row 462).
+- **Built.** A cloud device listed, or an effect file added or removed on disk during a hold, rebuilds the program's graph too.
+- **Other options.** Snapshot both at HOLD. A removed effect file cannot be drawn anyway (its program is gone), so holding the set buys little.
+- **To reverse.** Moderate: a `cloud_source` stand-in like the rig's, and the files frozen for the program's key.
+- **Rough edge.** Saving an effect file during a show changes the projector even while held.
+- **Judge it.** Check 382.
+
+### 438. Drop also puts back what the show's mark carries, a desk learn among it
+
+- **Answer.** controller — 2026-10-27 (B1, B2, B3). Drop goes back through `Undo.revert`, whose checkpoint takes the show's mark; since plan 36 T1 that mark carries the rig's bus cables, the GRAPH layout of the rig's nodes and the show itself. D3's "not the rig" (row 432) filters the rig's *params*, not these. A desk learn made during the hold lands in the preset's desk layer, so Drop takes it back too.
+- **Built.** After DROP the canvas matches the projector exactly, cables included: a bus cable cut during the hold stands again. A button learned during the hold (say `output.take`) is unlearned by Drop; ⌘Z brings the cut and the learn back. Opening a show during a hold and then dropping reopens the earlier show.
+- **Other options.** Keep the cut, the layout and the learn through Drop as "rig"; the projector would then change at Drop, against "the projector never moved". Or leave the show mark out of `_preset_part`.
+- **To reverse.** Moderate: filter the show mark's slots (or the desk layer) out of `_preset_part`.
+- **Rough edge.** The learn is the surprise: learn hold and take onto the desk *before* holding (check 381 says so).
+- **Judge it.** Checks 380, 381.
+
+### 439. What Drop's one undo step puts back, and what it leaves
+
+- **Answer.** controller — 2026-10-27 (B2). Drop is one `Undo.revert` to the hold point's checkpoint, cut down to the preset's part. It puts back the performance values, the graph (the preset's section and, through the show's mark, the rig's bus cables), the routes, the desk's preset layer, the macros, and the loaded preset's name and with it the dirty dot: if TUMBLE was clean at HOLD it is TUMBLE and clean after Drop, even if TRIP was loaded and edited in between. It leaves the rig's params as they are now. One ⌘Z after Drop brings back the whole dropped state: the other preset, its edits, its dirty dot and its graph.
+- **Built.** After DROP the PRESET strip names the preset the projector is showing, its dot as at HOLD; one ⌘Z returns to exactly where the operator was before Drop. Test: `tests/test_hold.py::test_drop_after_a_whole_new_look_is_one_undo_step_back_and_one_forward`.
+- **Other options.** Restore only the held params and the wiring: the canvas would then name one preset while the projector showed another.
+- **To reverse.** Moderate: narrow `_preset_part`, or skip the marks in `Undo.revert`.
+- **Rough edge.** Row 438's learn.
+- **Judge it.** Check 380.
+
+### 440. Plan 39 D1: a mask is its own wire (`mask`), with explicit converters — `matte` (picture → mask) and `cut` (picture + mask → picture); a mask never rides in alpha
+
+- **Answer.** owner — 2026-10-27: "Alpha is: how transparent is this thing? A mask means that I have a pattern here … Either the pixel passes, or it doesn't. I don't necessarily want to ride on alpha to make that happen."
+- **Built.** `graph.MASK` is a one-channel 8-bit (R8) texture at its maker's size: 1 passes, 0 does not, a value between only at an edge a feather or softness asked for. Its makers: `matte[.n]`, `segment[.n].mask`, `scene.cover`. Its takers: `cut[.n].mask`, `lookback.cover`, and any picture port through the promotion (row 441). No pass writes a mask into a picture's alpha except `cut` and `segment.fg`/`.bg`, whose job that is. `hyperspace/masks.py` holds the passes (`MATTE_FS`, `BLUR_FS`, `PROMOTE_FS`, `CUT_FS`, `MOTION_FS`, `LEARN_FS`, `DOWN_FS`, `MaskPasses`). Tests: `tests/test_graph_masks.py`, `tests/test_graph_cut.py`.
+- **Other options.** A mask as a picture's alpha (the reading the owner rejected); a `mask` port on `composite` (row 445).
+- **To reverse.** Not cheap: three node kinds and a port type's meaning.
+- **Rough edge.** Two nodes (`cut` then `composite`) where one might do (row 445).
+- **Judge it.** Checks 388, 389.
+
+### 441. Plan 39 D2: a mask may be wired where a picture is taken — white where it passes, black elsewhere; one-way, the reverse is always a `matte`
+
+- **Answer.** owner — 2026-10-27: yes.
+- **Built.** `_wired_error` accepts a mask maker into any `image` port; a picture into a mask port is refused in words that name the converter (row 458). The consumer reads the mask through one `graph.MaskPicture` per mask node (row 453): opaque white where it passes, opaque black elsewhere, fitted by cover at the consumer's size. A mask port (`lookback.cover`, `cut.mask`) takes the mask itself, never the promoted picture.
+- **Other options.** No promotion: a mask is seen only through a cut.
+- **To reverse.** Delete `_Build._taken` and `MaskPicture`; the type rule refuses mask → picture again.
+- **Rough edge.** A promoted mask wired into `composite.over` or `lookback.occluder` is an opaque picture everywhere, so it covers what is under it: it is not a cut. To cut, wire the mask into `cut.mask`.
+- **Judge it.** Check 389.
+
+### 442. Plan 39 D3: `segment` takes any picture and makes two, `segment.fg` and `segment.bg`; its matte is a third pin, `segment.mask`; picture → mask is the separate `matte`
+
+- **Answer.** owner — 2026-10-27: "I can take an arbitrary bitmap and do foreground/background segmentation on that, and then have those two things come out of that node as two bitmaps. A separate node could handle the conversion of a bitmap into a mask."
+- **Built.** `segment[.n]` (`graph.SegmentAt`, `SegmentNode`, `SegmentPin`): one `image` in; pins `fg` and `bg` (pictures, each one `CUT_FS` pass over the input by the matte, made at the frame's size: row 487) and `mask` (the matte at the model's size). The bare `segment` is not a source: a wire from it is refused in its pins' words. `segment.N`'s pins are matched by `graph.segment_pin` and drawn on GRAPH for every instance (row 493). Several segments are several workers.
+- **Other options.** One output and a separate cut (fg and bg wired by hand).
+- **To reverse.** The pins and `SegmentPin`.
+- **Rough edge.** Before the first matte, `fg` is the input whole and `bg` reads nothing.
+- **Judge it.** Check 384.
+
+### 443. Plan 39 D4: the backend is Apple Vision first (the Neural Engine); torchvision behind the same node as the fallback
+
+- **Answer.** owner — 2026-10-27: yes.
+- **Built.** `segment.pick_backend(cfg)` reads `[segment] backend` (`"auto"`: Vision on macOS, else torch; `"vision"`; `"torch"`), finding the library with `find_spec` without importing it; a missing library is a reason string on the node and starts no thread. `VisionBackend`: `VNGeneratePersonSegmentationRequest` through pyobjc, one request per quality level, the `L008` pixel buffer read into numpy (resampled to the frame's aspect: row 480). `TorchBackend`: LR-ASPP MobileNetV3, class 15, fp16 on MPS, one model shared per device and dtype (weights: row 485). New dependency `pyobjc-framework-vision>=12.2 ; sys_platform == 'darwin'` (it pulls in `pyobjc-framework-coreml`): `uv sync` on both Macs.
+- **Other options.** torch only (no new dependency; shares MPS with the dream).
+- **To reverse.** `pick_backend`'s auto rule.
+- **Rough edge.** The live tests run each backend once on a synthetic frame; no real person has been segmented.
+- **Judge it.** Checks 384, 385.
+
+### 444. Plan 39 D5: the modes in this build are person and motion (a background model); subject after
+
+- **Answer.** owner — 2026-10-27: yes.
+- **Built.** `segment.mode` is a choice person / motion / subject, not modulatable. Person runs the worker; motion is two GLSL passes on the frame thread with no model (row 482); subject is declared and refused in words (row 486).
+- **Other options.** Subject now (Vision's subject lift, 11 ms in the spike).
+- **To reverse.** A later build adds the subject backend mode.
+- **Rough edge.** Motion keys shadows and the projector's own light.
+- **Judge it.** Checks 384, 387.
+
+### 445. Plan 39 D6: `cut` first; a `mask` port on `composite` only if the two-node wiring feels like one too many at the machine
+
+- **Answer.** owner — 2026-10-27: cut first.
+- **Built.** `cut[.n]` (`graph.CutAt`, `CutNode`): `image` and `mask` in, a picture out. `composite` is unchanged. The owner's case is `fg → cut.image`, `mask → cut.mask`, `cut → composite.over`, `bg → composite.under`; the cut-out starter (row 490) wires the shorter `segment.fg → composite.over`.
+- **Other options.** A `mask` port on `composite`.
+- **To reverse.** Add the port later; nothing to undo.
+- **Rough edge.** Cutting a picture onto another takes two nodes.
+- **Judge it.** Check 388.
+
+### 446. Plan 39 D7: `edges` is an effect file, ahead of the plan
+
+- **Answer.** owner — 2026-10-27: yes (T0).
+- **Built.** `hyperspace/shaders/fx/edges.glsl`: no Python; on the FX page and in the picker like any effect, off until switched on. Rows 449–451 are its build. Fixture `edges-scene` (8 goldens). T0 stands alone and may go to `main` on its own.
+- **Other options.** A Canny-style chain (blur → gradient → thin → hysteresis): not in this plan.
+- **To reverse.** Delete the file.
+- **Rough edge.** A thin line gives two edges (a doubled outline).
+- **Judge it.** Check 390.
+
+### 447. Plan 39 D8: plan 39 runs in parallel with plans 37 and 38, each on its own branch
+
+- **Answer.** owner — 2026-10-27: parallel (it was "before plans 37 and 38").
+- **Built.** `plan-39-vision`, merged into `plan-37-38-39-integration` second (after plan 38, before plan 37), under the file-ownership table in [`plans/37-38-39-orchestrator-prompt.md`](plans/37-38-39-orchestrator-prompt.md).
+- **Other options.** Plan 39 first, alone.
+- **To reverse.** None.
+- **Rough edge.** The seams with plan 38 (rows 484, 495, 496) were settled at the integration merge, not on the plan branch.
+- **Judge it.** —
+
+### 448. The cut-through blend is a window's, not a laid-over ground's; eight backdrop goldens re-recorded
+
+- **Answer.** controller — 2026-10-27 (T1; ruling 9 of the run). The spec's first risk: "alpha must be honest" before cut pictures land on composites.
+- **Built.** `render.draw_scene` picks the plain blend (alpha a² + (1 − a)·dst, the cut-through) only when the *window* is see-through (`Renderer.bg_alpha < 1`, overlay mode); a scene cleared to a zero ground (laid into a composite's `over`, PR #240, or over the backdrop, plan 32 R) always takes the separate blend, so its picture is honest premultiplied data. On an opaque window `view.cut_through` changes nothing now. Eight fixture goldens moved: `backdrop-still|present|*` and `media-chain-backdrop|present|*` (scene, scene+through, scene+hands, scene+hands+through). The old frames squared the faces' alpha and washed them toward white over the backdrop; the new ones draw them at their own opacity. No factory preset moved (none wires `backdrop.scene`); `GOLDENS_DIGEST` re-pinned. Test: `tests/test_media_render.py::test_a_half_transparent_scene_over_white_is_honest_on_an_opaque_window`.
+- **Other options.** Keep the squared alpha (a known lie `cut` and `matte` would inherit); fix only the composite path (two rules for one ground).
+- **To reverse.** One condition in `draw_scene`; the eight goldens move back.
+- **Rough edge.** In overlay mode with cut-through on, a laid-over scene's alpha is still squared, as the spec asks; `cut`/`matte` inherit that there. An owner's Drive preset that lays a scene over the backdrop or into a composite's `over` looks different on an opaque window (the intended change).
+- **Judge it.** Check 393.
+
+### 449. `edges`: a 3×3 Sobel on luma, the threshold a ramp, the glow a second ring, the direction a full-angle hue
+
+- **Answer.** controller — 2026-10-27 (T0).
+- **Built.** Eight taps 1 px out on `luma(src.rgb)` (premultiplied, so a see-through pixel reads dark), through `src()` (mirrored past the border, so the frame's edge is no edge); the gradient divided by 4 (a hard black → white step is 1). **Threshold** (0–1, 0.2) is `clamp((|g| − t)/(1 − t), 0, 1)`. **Glow** (0–4, 0) is a second Sobel 3 px out added at `glow/4` (at 4 a hard edge lights 6 columns, not 2). **Colour** white / source / direction: direction is `hsv(fract(atan(gy, gx)/TAU), 1, 1)` (red for dark → light pointing right, chartreuse up, cyan left, violet down), the glow ring taking the line's hue. Tests: `tests/test_fx_edges.py` (15).
+- **Other options.** A gate threshold; hue by the axial angle (a thin line's two sides one hue); a separable blur for the glow.
+- **To reverse.** Edit the file (it hot-reloads); only the `edges-scene` goldens re-record.
+- **Rough edge.** A thin bright line reads as a doubled outline, its two sides opposite hues in direction mode; no pre-blur, so camera noise depends on the threshold.
+- **Judge it.** Check 390.
+
+### 450. `edges` source mode keeps the source's alpha: `src × m`
+
+- **Answer.** controller — 2026-10-27 (T0; the reviewer left it as a taste call for the owner).
+- **Built.** Source mode writes `src(uv) × m`, alpha included; the spec named `src.rgb × m` and no alpha. On a dark edge with something under it, the line is an opaque black line (honest coverage).
+- **Other options.** `vec4(src(uv).rgb * m, 0.0)`: the line as light, the alpha tail lifting alpha to max(rgb), so a black source edge is transparent.
+- **To reverse.** One line of `edges.glsl`.
+- **Rough edge.** The opaque black line may surprise.
+- **Judge it.** Check 390 (step 4).
+
+### 451. `edges.glsl` carries `// @order 75`
+
+- **Answer.** controller — 2026-10-27 (T0).
+- **Built.** `test_an_effect_file_with_an_order_line_still_parses` holds every factory file to an order line; 75 sits between glimmer (70) and tripcolour (80). Only the old-preset migration reads it, and no old preset names `fx.edges.*`.
+- **Other options.** No line (the default 50) and that test relaxed.
+- **To reverse.** Delete the line, relax the test.
+- **Rough edge.** None.
+- **Judge it.** —
+
+### 452. A new matte passes the bright half, hard-edged: luma, key 0.5, soft 0, no invert, no feather; the chroma key starts on green
+
+- **Answer.** controller — 2026-10-27 (T2). A new node has no "today's picture" to keep; these defaults do something on any plain picture the moment it is wired.
+- **Built.** `view.MatteState()`: `matte.from` luma, `matte.key` 0.5, `matte.soft` 0, `matte.invert` off, `matte.feather` 0, `matte.hue` 1/3 (green), `matte.sat` 1. Ranges: key 0–1, soft 0–0.5, feather 0–32 px, hue and sat 0–1. Group `matte`, the preset's; every param modulatable (`params.declare_mattes`).
+- **Other options.** Key 0 (everything passes until a knob moves); chroma by default (a green screen); a small default feather.
+- **To reverse.** One dataclass default; a saved preset carries its own values.
+- **Rough edge.** Luma at 0.5 on a dark camera may pass nothing: the output is black until the key comes down.
+- **Judge it.** Checks 388, 389.
+
+### 453. The promotion is a render node per mask, `<mask>(picture)`: RGBA8, opaque, at the consumer's size, the mask fitted by cover
+
+- **Answer.** controller — 2026-10-27 (T2). The build plan named `Node.picture_of_mask`; `graph.Node.__init__` type-checks every port, so a build-time node fits the code better (the plan allowed "the shape that fits the code").
+- **Built.** `_Build._taken` reads a mask wired into an `IMAGE` port (every `_from`, an effect's `aux`, each window's ports) through one `graph.MaskPicture` per mask node: no GRAPH node, no wire of its own, untimed. It paints `PROMOTE_FS` from the mask's native size (`graph.mask_of`, the flip honoured: row 474) into an RGBA8 frame target, white (1,1,1,1) where it passes and (0,0,0,1) elsewhere. `MaskPicture` has no `own_size`: it is frame-sized.
+- **Other options.** `Node.picture_of_mask` asked at every picture-port read site; a picture-shaped `image()` on each mask node, which a mask port would then undo.
+- **To reverse.** Delete `_taken` and `MaskPicture`.
+- **Rough edge.** While the mask reads nothing the promoted picture is the ground `(0,0,0,bg_alpha)`, not opaque black.
+- **Judge it.** Check 389.
+
+### 454. A mask port gets the mask refitted by cover to the frame's size; the promotion and the cut fit the native mask themselves
+
+- **Answer.** controller with the reviewer — 2026-10-27 (T2 review, Important 1). `lookback.cover` fetches its mask 1:1 by the frame's pixel, so an own-sized mask (a matte after a resize) landed in a corner, and the promoted, cut and cover readings of one mask disagreed.
+- **Built.** `graph.mask_port(node, frame)` (used by `MatteNode.image` and `SegmentNode.image`) refits a mask whose size is not the frame's by cover into an R8 `<name>#fit` (`MaskPasses.fit`, once a frame, turned when the maker's rows are top first). `MatteNode.native` is the mask at its own size; `MaskPicture` promotes from `native`; `CUT_FS` takes `u_scale = cover_scale(mask, picture)`. A mask lands in the same place on every consumer. `MatteNode.own_size` passes its input's own size through. Tests: `test_an_own_sized_mask_lands_on_the_cover_where_its_picture_shows_it`, `test_the_cut_pass_fits_its_mask_by_cover`.
+- **Other options.** Make every mask frame-sized at its maker (a model's 256-wide matte upscaled on the frame thread every frame).
+- **To reverse.** `mask_port` returns the native mask.
+- **Rough edge.** One more R8 pass a frame per mask that a mask port reads at another size.
+- **Judge it.** Check 388.
+
+### 455. The matte's feather is two Gaussian passes (across, then down) through an R8 half-way texture, up to 65 taps each
+
+- **Answer.** controller — 2026-10-27 (T2). W2: "two chained passes inside the node, separable".
+- **Built.** `masks.BLUR_FS`: radius `matte.feather` px (≤ 32), sigma radius/2, taps held inside the edge texels; `(<name>#mask/blur, size)` then back into `(<name>#mask, size)`; only when feather > 0. The segment's feather uses the same passes (`MaskPasses.feather`), redone only when the result or the radius changes.
+- **Other options.** A box or mipmap blur (cheaper at large radii); feather by dilation.
+- **To reverse.** Swap the shader; the keys stay.
+- **Rough edge.** 8-bit, so a wide feather's tail steps in 1/255; a feather widens a hard mask both ways. The cost on the show Mac is unmeasured (≤ 65 reads a pixel a pass at 720p and 32 px).
+- **Judge it.** Checks 386, 388.
+
+### 456. Luma is Rec. 709 on the premultiplied colour; chroma is the distance between HSV chroma vectors
+
+- **Answer.** controller — 2026-10-27 (T2), inside the spec's "distance from `matte.hue` at `matte.sat`".
+- **Built.** `MATTE_FS`: **luma** `dot(rgb, (0.2126, 0.7152, 0.0722))` of the premultiplied colour (a transparent pixel is dark); **alpha** the picture's own `a`; **chroma** unpremultiplied → HSV, `v = (1 − min(|c − k|, 1))·a` with `c = s·(cos 2πh, sin 2πh)` and `k` the key's vector at `matte.hue`, `matte.sat`. A pixel passes where `v ≥ key`; `soft` > 0 gives `smoothstep(key ± soft)`.
+- **Other options.** Luma unpremultiplied; YCbCr or Lab distance; a separate tolerance knob.
+- **To reverse.** The shader alone; the params keep their meaning.
+- **Rough edge.** Chroma ignores value (a dark green keys like a bright one); greys pass only when `sat` is low.
+- **Judge it.** Check 388.
+
+### 457. `scene.cover` stays a pin into `lookback.cover` alone and is not promoted
+
+- **Answer.** controller — 2026-10-27 (T2): "no node of plan 36 or earlier changes".
+- **Built.** The pin rule runs before the type rule, so `scene.cover → output.1.image` is still refused in the pin's words. Only a matte or a segment's mask is promoted.
+- **Other options.** Promote the cover too (`Cover` would have to draw whenever a picture port reads it).
+- **To reverse.** Let the pin go to an image port and make `Cover.run` draw when read.
+- **Rough edge.** The faces' cover mask cannot be seen on a window.
+- **Judge it.** —
+
+### 458. The picture → mask refusal names the converter
+
+- **Answer.** controller — 2026-10-27 (T2; W1's words).
+- **Built.** `graph.PICTURE_INTO_MASK`: "`x` makes a picture, `y.mask` takes a mask — put a matte between". `test_plan36_edges`' expected note gains the tail.
+- **Other options.** The old words.
+- **To reverse.** One string.
+- **Rough edge.** None.
+- **Judge it.** —
+
+### 459. `masks` is hot for hot reload; `segment` stays cold
+
+- **Answer.** controller — 2026-10-27 (ruling 14; T2 left `masks` cold because `hotreload.py` is plan 38's file).
+- **Built.** `hotreload.MODULES` holds `"masks"` after `glsl` and before `render`; `Renderer.on_reload` releases the cached `MaskPasses`, so a saved `masks.py` takes effect on the next frame. `segment` is left off, like `app`: its worker threads outlive a reload, so a re-executed copy would be a second module beside the live workers. `tests/test_hotreload.py`'s `cold` lists `segment` with that reason.
+- **Other options.** `segment` on `MODULES` (the workers keep their old class while new nodes use the new one).
+- **To reverse.** One line in each of two files.
+- **Rough edge.** An edit to `segment.py` needs a restart.
+- **Judge it.** Check 389 (the last step).
+
+### 460. The owner judges the faces from sheets; "nearest kept" is a ranked list per mode; the migration map is generated and tested
+
+- **Answer.** controller — 2026-10-27. This is row 417's dry run. Numbered 460 because plan 37's range (417–429) holds thirteen rows.
+- **Built.**
+  - **The sheets.** `tools/faces_sheets.py` is a tool of its own. It is not `tools/preset_shots.py`, which is a hand-pose tool with no mode axis. Each tile is the preset loaded through the real `Presets` over a scratch home (the golden rig), with its own `pattern → shape.faces` wire, the hands absent, `view.pattern` set to the mode, the mix at 1.0, and the eight inputs at the factory depth on plan 22's medium passage. It is read three frames in, and the tile is the middle 480×300 at full resolution. The Heart sheet is lit at `view.bright` 2.5.
+  - **Nearest kept.** `faces_sheets.NEAREST` gives each mode three others, nearest first, each with a reason. They are ranked by structure on the face first (radial, straight lattice, cell lattice, flowing field, band reader), then palette and light, then motion. `nearest_kept(mode, kept)` takes the first kept name in that list, else the first kept mode in `NAMES` order other than FLAT. So any list the owner names answers "dropped → nearest kept" without a second judgement.
+  - **The map.** `docs/plans/assets/37-faces/migration-map.md` is written by `--map`, never by hand. For each mode it gives the presets that show it, split into on screen, faces off and unwired, as every factory preset and fixture lands through the real loader. `tests/test_faces_map.py::test_the_map_matches_every_preset_and_fixture_as_loaded` (fast tier) holds the map to the presets.
+- **Other options.** A pixel distance between tiles, which ranks by colour and misses structure; the owner naming each replacement himself; a hand-written map.
+- **To reverse.** Edit `NEAREST` and re-run `--map`, or the owner names the replacements. Delete the test and the map becomes a snapshot.
+- **Rough edge.** The ranking reflects the controller's eye on the sheets and the shader source, not the owner's. Any preset edit that changes a mode or the faces wire needs a `--map` re-run in the same commit.
+- **Judge it.** Check 375.
+
+### 461. The hold chips sit first on GRAPH's head
+
+- **Answer.** controller — 2026-10-27 (B1). First on the head, before plan 36's chips: **hold**, or while held a lit **held** then **take** · **drop**; after them collapse/expand, patched only, tidy, **preset only** and output behind. The red `HELD m:ss — …` line goes under the area chips, above the note / last edit / hint line.
+- **Built.** A hold is the first thing the eye meets on GRAPH; plan 36's chips keep their order and `· N hidden` stays in the counts.
+- **Other options.** After **preset only**, or on their own line above the head.
+- **To reverse.** Cheap: one `_hold_chips(panel)` call in `ui_graph._head`.
+- **Rough edge.** On a narrow page three more chips push the counts text right, where `ui.fit_text` cuts it.
+- **Judge it.** Checks 377, 378.
+
+### 462. A landing while held keeps the held program's nodes
+
+- **Answer.** controller — 2026-10-27 (B3's Critical; ruling 12). Every `GraphSection` landing (a load, a GRAPH edit, an undo) settles the effect instances, switch picks, resizes and extra look-backs to its graph, which stripped the program's. Now `GraphSection._settle` asks the hold's `keep(kind, names)` for each kind; while held that returns the landed names plus the program's, snapshotted at engage (`GraphSection.names()`). Take releases the hook and settles to the live graph; Drop releases it before its revert lands the hold point. Ruling 12 allowed plan 38 this edit to `preset.py`'s land block.
+- **Built.** With the projector held, **new**, loading another preset, deleting an effect or switch on GRAPH, or ⌘Z leave the projector's look whole: effects still drawn, switch picks kept, effect clocks running on. After Take the program's effects are gone if the new look lacks them; if it has them, their clocks carry on mid-stride. Tests: `test_a_landing_while_held_keeps_the_programs_effects_switches_and_resizes`, `test_on_gl_a_blank_graph_landed_while_held_leaves_the_projector_whole`, `test_an_effects_clock_runs_on_through_hold_land_and_take`, `test_drop_after_a_landing_while_held_brings_the_programs_nodes_back_whole`.
+- **Other options.** A second `FxState` and registry slice for the program (large); refuse landings while held (defeats the point).
+- **To reverse.** Cheap: the hook defaults to none, and removing the hold removes it.
+- **Rough edge.** While held, the kept instances' params still exist in the registry, so they show on the EFFECTS and desk pages and can be learned; GRAPH does not draw them. An effect deleted during the hold and added again before Take gets the program's kept values, not its defaults. The program graph rebuilds (losslessly) whenever a landing changes the effect set, which corrects B1's note that it "never rebuilds while held". Plan 39's mattes, cuts and segments must join the same hook at integration (the list is in `plans/38-hold.md`).
+- **Judge it.** Checks 377, 378.
+
+### 463. The program's kept params are not the preset's
+
+- **Answer.** controller — 2026-10-27 (B3; ruling 12b). `Presets._values` leaves out `Hold.program_only()`, the kept instances the live graph lacks; `program_only` reads `hold.PROGRAM_IDS` (kind → ids) and raises `KeyError` for a kind it does not know, so a new kind cannot slip into a save silently.
+- **Built.** Saving during a hold writes only the live graph's values; the dirty dot does not light, or go out, for the projector's leftovers, nor change at Take.
+- **Other options.** Let a save write them: the next load would carry values for nodes the graph lacks, dead ids in the owner's library.
+- **To reverse.** Cheap: drop the filter.
+- **Rough edge.** None known.
+- **Judge it.** Check 378 (save during a hold, then reload).
+
+### 464. An undo mark made while held records the landed graph's own instances
+
+- **Answer.** controller — 2026-10-27 (B3's verification). `GraphSection.mark()` records `spec.effect_names()` while a hold is on and a spec has landed, not `FxState.held` (which then includes the program's kept instances). Unheld the two are equal (plan 36 T3).
+- **Built.** After Take, ⌘Z of a step made during the hold lands exactly that step's graph; no program-only effect comes back, and a save carries no dead id. Test: `test_an_undo_after_take_brings_no_program_only_instance_back`.
+- **Other options.** Have `put` clip the mark to the landed spec's names when no hold is on (equivalent).
+- **To reverse.** Cheap.
+- **Rough edge.** None known.
+- **Judge it.** Check 380.
+
+### 465. A load's delay reset while held is the preview's
+
+- **Answer.** controller — 2026-10-27 (B3; ruling 12). `Presets.load`'s delay reset (R19) goes to the hold while held (`GraphSection.hold.reset_delays`): the preview renderer's delays are reset and the hold marks itself "loaded". At Take, if a load happened, the projector's renderer is reset.
+- **Built.** Loading during a hold no longer cuts the projector's echo or delay trails; the preview starts empty, as a load should. Take after a load starts the projector's delays empty; Take without one keeps them. Test: `test_a_load_while_held_resets_the_previews_delays_and_the_projectors_at_take`.
+- **Other options.** Never reset at Take: the old preset's trail would bleed into the new look.
+- **To reverse.** Cheap.
+- **Rough edge.** A load made before the preview renderer exists (GRAPH never opened) resets nothing until Take.
+- **Judge it.** Check 379.
+
+### 466. The canvas reads the preview's graph while held
+
+- **Answer.** controller — 2026-10-27 (B3; ruling 13). `hold.canvas_renderer(panel)` returns the preview renderer while held and drawn, otherwise the panel's own; `ui_graph`'s `view_of`, `render_edit` and `_edit` and `ui.py`'s `graph_words` and `dormant_lines` read `_graph` through it.
+- **Built.** While held, nodes added on GRAPH get real refs, and the dormant and refusal lines describe the preview (what TAKE puts up), not the projector. Test: `test_the_canvas_reads_the_previews_graph_while_held`.
+- **Other options.** None worth it.
+- **To reverse.** Cheap.
+- **Rough edge.** Until the preview has been drawn once (the first frame with GRAPH showing) the canvas reads the held graph. Plan 37's thumbnails read through the same helper since the plan 37 merge (row 498).
+- **Judge it.** Check 378.
+
+### 467. The preview is drawn with output 1's switches, at full dim
+
+- **Answer.** controller — 2026-10-27 (B3). `app._draw_preview` passes output 1's mutes and flips, with dim forced to 1.0 (the first cut used `Switches()` defaults).
+- **Built.** The backdrop while held is oriented and muted like the unheld backdrop (output 1), without the room's dim.
+- **Other options.** `Switches()` defaults, or output 1's dim too.
+- **To reverse.** One line in `app._draw_preview`.
+- **Rough edge.** A flip set for a Pepper's Ghost glass shows mirrored on the laptop; the unheld backdrop already does this.
+- **Judge it.** Check 377.
+
+### 468. The preview renderer lives for the session; its sub-objects are not hot-reload targets
+
+- **Answer.** controller — 2026-10-27 (B3, recorded, not changed). The preview renderer is made on first use and kept after Take (its GL objects stay). It joins the hot-reload targets once made, but its sub-objects (its `Fx` chain, look-back, ghosts) are not targets, so a reload of `fx.py` updates them only on the main renderer.
+- **Built.** Nothing new: the first cut's behaviour.
+- **Other options.** Release it at Take or Drop, or add its sub-objects to the targets list (small).
+- **To reverse.** Small.
+- **Rough edge.** After a hot reload of an effect module during a hold, the preview may draw the old code until restart.
+- **Judge it.** Check 382.
+
+### 469. The PROJECTOR inset draws on imgui's foreground list
+
+- **Answer.** controller — 2026-10-27 (B3, recorded, not changed). `ui_graph._monitor` draws on the foreground draw list, so the inset sits over popups and menus opened on the canvas (the node picker, context menus) in its corner. The window's draw list would put it under the node editor's child canvas.
+- **Built.** The inset is always visible while held, over anything in the top-right corner.
+- **Other options.** Draw it inside the editor's canvas as a suspended overlay (moderate).
+- **To reverse.** Moderate.
+- **Rough edge.** A picker opened near the top right while held is partly hidden.
+- **Judge it.** Check 377 (open the node picker near the top right while held).
+
+### 470. The plan 39 seam: no segment workers in the preview
+
+- **Answer.** controller — 2026-10-27 (ruling 13). The preview renderer gets no segment workers: a `segment` node in the preview passes through and says "no worker in the preview". `Renderer.close` closes only the workers it made (the preview shares media, hands, look-back and fx state with the main renderer), and the app's close list adds the preview's close. Plan 39 T4 builds this; plan 38 changes nothing for it.
+- **Built.** Nothing in plan 38.
+- **Other options.** A second worker for the preview (twice the GPU cost).
+- **To reverse.** Plan 39's.
+- **Rough edge.** A segment-based look shows unsegmented in the preview until Take.
+- **Judge it.** Plan 39's AJ checks, with a hold on.
+
+### 471. A wired fixture gets goldens and no frame-signature case: `edges-scene`, `mask-as-picture`, `cut-out`, `segment-motion`
+
+- **Answer.** controller — 2026-10-27 (T0, T2, T3, T4). `tools/golden_frames.signature_keys` leaves out every `WIRED_FIXTURES` slug: a `/7` wired frame has no old section to prove a signature against (as `channel-out-only` and `resize-crop` have none), and its states are drawn as the windows' mutes.
+- **Built.** The four fixtures are in `WIRED_FIXTURES` (the three with a still also in `MEDIA_FIXTURES`), 8 goldens each (789 in all: 757 + 32); `tests/fixtures/frame-signatures.json` is unchanged (125 cases, none lost, none added). Each test file pins its built graph's shape instead (`test_graph_masks`, `test_graph_cut`, `test_graph_segment`). `segment-motion`'s "two stills" is the scene's motion over the one still in `tests/golden/media` (the rig has no media transport); the literal two-stills case is the GL test `test_motion_on_two_stills_makes_the_moved_region_foreground`. `test_graph_free`'s schema ladder tolerates `/7` among the fixtures.
+- **Other options.** A signature-key form for wired fixtures; a second still and a transport in the rig.
+- **To reverse.** That form, recorded with `--signatures`.
+- **Rough edge.** The build plan's "the frame-signature fixture gains its case(s)" and "two stills" are not met as worded.
+- **Judge it.** —
+
+### 472. `matte`, `cut` and `segment` are performance groups of their own, left out of the module overview, as `resize` is
+
+- **Answer.** controller — 2026-10-27 (T2, T3, T4). Their values mean nothing without the preset's graph.
+- **Built.** `params.PERFORMANCE_GROUPS` gains `matte`, `cut`, `segment` after `resize`; `preset.NO_MODULE` gains them; a load defers their values until the graph has landed; a new preset leaves them out. `ui_presets.OVERVIEW_GROUPS` excludes them — one word each in a file outside the ownership table.
+- **Other options.** Show them as module groups.
+- **To reverse.** One word in each tuple.
+- **Rough edge.** None.
+- **Judge it.** —
+
+### 473. `cut.amount` scales the cut-away part, colour and alpha together: `picture × (1 − amount)`
+
+- **Answer.** controller — 2026-10-27 (T3). W3: "1 cuts to nothing, 0.5 dims the cut part".
+- **Built.** `CUT_FS` writes `src × mix(1, m, amount)` (`m` inverted on `cut.invert`). Where the mask fails the pixel is `src × (1 − amount)`; premultiplied, so rgb and alpha scale together. At 0.5 over a composite that is a 50/50 mix with what is under; at 0 the picture is whole. Defaults: invert off, amount 1 (0–1, modulatable).
+- **Other options.** Dim the colour only and keep alpha; `amount` as a threshold on the mask.
+- **To reverse.** One line of `CUT_FS`.
+- **Rough edge.** Straight into a window, "dims" reads as darker; over a composite, as half see-through.
+- **Judge it.** Check 388.
+
+### 474. The flip flag: a mask maker may say `rows_top_first(frame)`; every pass that samples a mask honours it through `graph.mask_of`
+
+- **Answer.** controller — 2026-10-27 (T3 defined it, T4 honoured it everywhere; the spec's orientation risk).
+- **Built.** `graph.mask_of(node, frame) -> (texture, flipped)`; `SegmentNode.rows_top_first` is True in person mode (a CPU array uploaded as it is) and False in motion mode (a GL pass); every GL-made mask is bottom-first and never flipped. `CUT_FS` and `PROMOTE_FS` take `u_flip`; `MaskPasses.cut/promote/fit(flip=)`; `MaskPicture` and `mask_port` read `mask_of`. The readback hands the worker `buf[::-1]`, so a model always sees an upright frame. Tested on a cut, a window and `lookback.cover` (`test_a_rows_top_first_matte_lands_the_right_way_up_everywhere`).
+- **Other options.** Flip the array on the CPU before upload and drop the flag (one copy per result).
+- **To reverse.** Upload `mask[::-1]` and return False; the flag's passes stay harmless.
+- **Rough edge.** None known.
+- **Judge it.** Checks 384, 388.
+
+### 475. A cut makes its picture once a frame into a target of its own; it never cuts straight into the consumer's framebuffer
+
+- **Answer.** controller — 2026-10-27 (T3).
+- **Built.** `CutNode.made` runs one pass into an RGBA8 `<name>#cut` at the frame's size (or `(<name>#cut, size)` at its own); `image` returns it, `paint` shows it 1:1 or lays it in by cover. An own-sized cut is refitted once a frame into a half-float `<name>#fit`, as an effect's is. The pass never reads the texture it writes. Timed under the cut's name alone.
+- **Other options.** Cut straight into `dst` when the sizes match (one copy saved, a pool texture at risk).
+- **To reverse.** A direct path in `paint`.
+- **Rough edge.** One extra frame-sized RGBA8 target and copy per cut.
+- **Judge it.** — (the SYSTEM page's `cut` line)
+
+### 476. With no mask, or a mask making nothing, a cut is its picture through, byte-identical; fed no picture it is dormant
+
+- **Answer.** controller — 2026-10-27 (T3). W2/W3: "a cut fed by it shows its picture whole"; "no mask wired: the picture through, untouched".
+- **Built.** No pass and no `#cut` target: `image` and `paint` are the input's own (a test compares bytes). The node says "no mask wired: its picture through, whole", "matte makes nothing: its picture through, whole" or "cut by matte" (with "· inverted", "· amount 0.50"). A cut with nothing in `image` is not built: "cut is fed by nothing here: wire its image".
+- **Other options.** With no mask, cut everything.
+- **To reverse.** One branch in `CutNode.cuts`.
+- **Rough edge.** None.
+- **Judge it.** Check 388.
+
+### 477. A cut and a segment pass laid-over-ness through, as an effect does
+
+- **Answer.** controller with the reviewer — 2026-10-27 (T3 review; T4 review, Important 2). Inserting a cut or a segment must not change the picture where nothing is cut — the owner's `fg → cut → composite.over` case.
+- **Built.** `_Build.laid_over` recurses through `cut.image` and, when `<seg>.fg` or `.bg` is laid over, through `segment[.n].image` (the mask ports are not picture paths). So `scene → kaleido → cut → composite.over` clears the scene to a zero ground and the scene under shows through the kaleidoscope's empty space; a cut or a segment straight into an output lays nothing over. The `cut-out` goldens were re-recorded within T3 (a fixture of the same task); none of the 773 before moved.
+- **Other options.** `laid_over` following effects only (inserting a cut turns the kept area's ground opaque).
+- **To reverse.** Drop the two clauses; re-record `cut-out`.
+- **Rough edge.** One node, one ground: a scene also wired elsewhere (as in `cut-out`, where it is the under too) is see-through everywhere it is drawn. `laid_over` still does not see through `copy`, `resize` or `delay`.
+- **Judge it.** Checks 384, 388.
+
+### 478. A new segment's values add nothing to the model's own matte
+
+- **Answer.** controller — 2026-10-27 (T4).
+- **Built.** `view.SegmentState()`: `segment.mode` person (person / motion / subject, not modulatable), `.quality` fast (fast / balanced / accurate, not modulatable: a lane must not restart a model each frame), `.feather` 0 px (0–32), `.smooth` 0 (0–1), `.on` on, `.sense` 0.1 (0–1), `.learn` 3 s (0.1–30); the last five modulatable. Group `segment`, the preset's.
+- **Other options.** A 2 px default feather; smooth about 0.3; quality modulatable.
+- **To reverse.** One default or one `modulatable=` flag.
+- **Rough edge.** The fast matte at feather 0 may show a soft, slightly stepped edge on a projector.
+- **Judge it.** Checks 385, 386.
+
+### 479. The segment says `<w>×<h> · <backend> <level> · a frame or two late · <n> fps`
+
+- **Answer.** controller — 2026-10-27 (T4), the spec's wording.
+- **Built.** `SegmentWorker.said()`: e.g. `256×144 · Vision fast · a frame or two late · 29 fps`, the size the matte as uploaded (row 480), the rate the results a second over the last 2 s. `loading Vision …` and `waiting for Vision fast` before the first result; an error, a reason, off, `no frame on channel a`, `no worker in the preview`, subject: each with ": its picture through, whole". Motion: `64×48 · motion · sense 0.10 · learns in 3 s`. Drops are counted, not said.
+- **Other options.** The model's raw size; the drops; the latency in frames.
+- **To reverse.** One f-string.
+- **Rough edge.** It says 256×144 where the spec says 256×192.
+- **Judge it.** Check 385.
+
+### 480. Vision's matte is resampled to the frame's aspect in the worker
+
+- **Answer.** controller — 2026-10-27 (T4), from the spike run again on a 640×360 frame (the reviewer confirmed it): Vision's person matte is a fixed size per level (256×192, 512×384, 2016×1512), 4:3 (3:4 for a portrait input), stretched over the whole image. Every mask consumer fits by cover, so a 4:3 matte over a 16:9 picture would land beside the person.
+- **Built.** `VisionBackend.run` resamples bilinearly (PIL, on the worker's thread) to the frame's aspect at the matte's width: 256×144 for 16:9. The torch matte is already at the input's aspect.
+- **Other options.** Resample on the GPU; a stretch fit for this one mask in its consumers.
+- **To reverse.** Drop the resample (and add a per-mask fit mode).
+- **Rough edge.** On a frame much wider than 16:9 the vertical resolution drops.
+- **Judge it.** Check 384.
+
+### 481. The CPU-frame shortcut: taken when the wire into `segment.image` comes straight from a channel whose newest frame has pixels, fitted by cover, with no `alpha_of`
+
+- **Answer.** controller — 2026-10-27 (T4), inside W4. The shortcut changes where the worker reads, never what is wired.
+- **Built.** `SegmentNode._feed` submits the channel's own array (`Renderer.media_now(c)`: the `MediaFrame` uploaded this frame, and the channel's fit) when the input is a `MediaNode` with no `alpha_of`, the frame's `pixels` are not None (a camera, NDI) and the fit is cover. Anything else (Syphon, contain or stretch, any other picture) goes through `MaskPasses.readback`: a trilinear downsample to the backend's input size (Vision long side 640/960/1280, torch short side 240/360/480) and one `read_into`. It submits only when the input moved (a channel's frame id or the level; any other picture every frame) and only while the worker has nothing waiting (`worker.wants()`). Each path is counted (`SegmentNode.taken`).
+- **Other options.** The shortcut for every fit, with a per-mask fit mode; a readback every frame.
+- **To reverse.** One condition in `_feed`.
+- **Rough edge.** A camera on contain or stretch pays the readback (unmeasured); a still is segmented once per level, so a backend error on that one submit is not retried until the frame or the level moves.
+- **Judge it.** Checks 384, 391.
+
+### 482. Motion mode: `smoothstep(sense ± 0.04)` on the largest channel's difference; `learn` is a time constant in seconds
+
+- **Answer.** controller — 2026-10-27 (T4). The spec gives `smoothstep(t − s, t + s, |frame − bg|)` with `sense` as t and no s; check 387 reads "stand still for `segment.learn` seconds".
+- **Built.** `MOTION_FS`: `d = max(|Δr|, |Δg|, |Δb|, |Δa|)` of the premultiplied picture against the background, the matte `smoothstep(sense − 0.04, sense + 0.04, d)` (`masks.MOTION_SOFT`). `LEARN_FS`: `bg ← mix(bg, picture, k)`, `k = 1 − exp(−dt/learn)`, dt clamped to 0–0.25 s. The background is a half-float pair (`Renderer.motion_pair(name)`, a `DelayPair`) at the frame's size; the first frame, or a new size, is learnt whole. On the frame thread, no worker; it runs in the preview too, on the preview's own model.
+- **Other options.** A luma difference; a `segment.soft` param; `learn` as a per-frame rate.
+- **To reverse.** One constant or one shader line.
+- **Rough edge.** It keys shadows, the projector's own light and a party light sweeping the room until it learns; in `segment-motion` the polytope's animated pattern is all motion.
+- **Judge it.** Check 387.
+
+### 483. A backend error mid-show passes the picture through whole until the next good result
+
+- **Answer.** controller — 2026-10-27 (T4). W4: "errors in words, never a crash".
+- **Built.** An exception in `backend.run` is caught on the worker's thread into `.error`; the worker lives on. While it is set the node makes no matte: `fg` is the input whole, `bg` and `mask` nothing, the error said; the next good result clears it. A backend that will not open is a permanent reason (`Vision would not open: …`); a missing library starts no thread. A channel that loses its feed says `no frame on channel a: its picture through, whole` and resumes when the frame id moves.
+- **Other options.** Keep the last good matte through an error (stale on a moving dancer).
+- **To reverse.** One branch in `SegmentNode._make`.
+- **Rough edge.** A backend failing every other frame flickers between cut and whole.
+- **Judge it.** Check 392.
+
+### 484. Only the program renderer runs segment workers; the hold's preview passes a person segment through
+
+- **Answer.** controller — 2026-10-27 (ruling 13 of the run, B3's seam with plan 38).
+- **Built.** `Renderer.segment_cfg` defaults to None and `segmenter(name)` returns None on such a renderer; `app.py` sets it on the program renderer only (`renderer.segment_cfg = cfg.get("segment", {})`). A person segment with no worker says `no worker in the preview: its picture through, whole`; motion runs in the preview on its own background. `Renderer.close()` closes only its own workers; the app's close list holds `segmenters` beside the dream's (at quit and restart). A worker is kept by node name across rebuilds and stopped `SIZED_KEEP_FRAMES` (30) frames after no graph holds its node (`_tend_segments`).
+- **Other options.** Share the program's results with the preview (no hand-over exists); no motion in the preview either.
+- **To reverse.** Hand the preview the program's `segment_cfg` (the workers double).
+- **Rough edge.** A held program and its preview differ by design: the preview shows the person uncut.
+- **Judge it.** Check 384 (the hold step).
+
+### 485. The torch backend's weights live in `<library home>/weights`, then torch's hub cache, else they are downloaded; `[segment]` is read as it stands
+
+- **Answer.** controller — 2026-10-27 (T4), W4's "like the dream's".
+- **Built.** `segment.find_weights` looks for `lraspp_mobilenet_v3_large-d234d4ea.pth` (13 MB) in `[segment] weights_dir` (default `<library home>/weights`), then in `torch.hub.get_dir()/checkpoints`; else it downloads into the first, after `segment: downloading … to …` on stderr. It is built with `weights=None, weights_backbone=None` and the state loaded, so no ImageNet backbone is fetched; fp16 on MPS, else fp32 on CPU; `[segment] device` overrides. `config.py` is untouched: `[segment]` (`backend`, `weights_dir`, `device`) is an unknown section kept as a dict, documented in `segment.py`'s docstring and [`SETUP.md`](SETUP.md).
+- **Other options.** Ship the weights in the repo; `[segment]` in `config.DEFAULTS`.
+- **To reverse.** One path function.
+- **Rough edge.** The torch backend shares MPS with the dream and the renderer; `auto` picks Vision on macOS, so torch runs only when asked for.
+- **Judge it.** —
+
+### 486. `subject` is declared in the mode choice and refused in words
+
+- **Answer.** controller — 2026-10-27 (T4), from row 444.
+- **Built.** `segment.mode` choice 2 is `subject`; the node makes no matte, feeds no worker and says `subject is not in this build: its picture through, whole (person or motion for now)`.
+- **Other options.** Hide the choice; fall back to person.
+- **To reverse.** A later build adds `VNGenerateForegroundInstanceMaskRequest` as a backend mode.
+- **Rough edge.** None.
+- **Judge it.** —
+
+### 487. `segment.fg` and `.bg` are cut at the frame's size; the input is read through `OWN_FIT`
+
+- **Answer.** controller with the reviewer — 2026-10-27 (T4 review). W4 says "at the input's size".
+- **Built.** `SegmentPin.made` makes `<name>#cut` at `frame.size` (or a sized frame's, e.g. the faces' `FACE_PIC`), reading its input as `picture(frame, src)` (an own-sized input fitted by `OWN_FIT`), the matte fitted by cover. `SegmentPin` and `SegmentNode` have no `own_size` (an override broke `test_nothing_of_plan_33_has_an_own_size`, and no mask consumer reads one; the matte's own size is `native`).
+- **Other options.** Port `CutNode`'s own-size path (cut at the input's size, then refit).
+- **To reverse.** That port.
+- **Rough edge.** An own-sized input (a resize, a delay) loses its own resolution past the segment.
+- **Judge it.** —
+
+### 488. The smoothed matte is kept in float; `smooth` is held under 0.99
+
+- **Answer.** controller with the reviewer — 2026-10-27 (T4 review, Important 1). Re-quantising to 8 bits each result left a permanent ghost (about 50/255) near smooth 1.
+- **Built.** `SegmentNode._prev` is float32, mixed per result `prev·k + new·(1 − k)`, uploaded as `round(prev)`; `k` ≤ 0.99. Test: `test_smooth_near_one_still_reaches_the_new_matte`.
+- **Other options.** Nudge each 8-bit step by at least one unit.
+- **To reverse.** One block in `_pull`.
+- **Rough edge.** At 0.99 a full fade takes about 20 s at 30 results a second.
+- **Judge it.** Check 386.
+
+### 489. The picker gets a media ▸ group holding the segment and a masks ▸ group holding the matte and the cut
+
+- **Answer.** controller — 2026-10-27 (T5). W6: "under MEDIA (`segment`) and a new MASKS group"; the picker had no MEDIA heading (the channels' switch sits under pictures ▸).
+- **Built.** `graphview.PICKER_GROUP`: segment → media, matte and cut → masks; the menu reads starters ▸ scene ▸ look-back ▸ pictures ▸ media ▸ masks ▸ effects ▸ copy of ▸. Each item adds an unwired node in one undo step, one past the highest instance declared (`_next`), with words from `ADD_SAID` ("segment added: wire a picture into segment.image — its pins are segment.fg, segment.bg and segment.mask").
+- **Other options.** The segment under pictures ▸ with the channels' switch; that switch moved to media ▸ too.
+- **To reverse.** One word in `PICKER_GROUP`.
+- **Rough edge.** media ▸ holds one item. `ui_graph.render_picker`'s docstring does not list media ▸ or masks ▸ yet (plan 37/38's file).
+- **Judge it.** Check 384 (the canvas steps).
+
+### 490. The cut-out starter: a new segment and a new composite each time, never refused, taking All outputs' picture and saying what fed it
+
+- **Answer.** controller — 2026-10-27 (T5), W6's four wires.
+- **Built.** `STARTERS` gains `cut-out`, one undo step: a new `segment[.n]` and `composite[.n]` (blend over), `channel.a → <seg>.image`, `<seg>.fg → <comp>.over`, `scene → <comp>.under`, `<comp> → output.all.image`, laid left to right from the click (the scene first if it is new). Its words add " — in place of X into All outputs" and, when no shape feeds the scene, " — left unwired: scene.geometry (wire a shape in: the scene draws nothing)". It adds no shape: a fifth wire would be a fill-in.
+- **Other options.** Reuse a segment or composite; refuse when All outputs is fed; add `shape → scene.geometry` on a blank preset.
+- **To reverse.** One branch in `render_starter`, one `STARTERS` entry.
+- **Rough edge.** Channel a is fixed; on a blank preset the scene is empty until a shape is wired.
+- **Judge it.** Check 384.
+
+### 491. The scene-chain starter names what it replaced
+
+- **Answer.** controller — 2026-10-27 (T5; plan 36's known follow-up).
+- **Built.** `STARTER_SAID` gains `STARTER_REPLACED` (" — in place of channel.b into All outputs") when something other than the scene fed All outputs' picture (`_was_into`, shared with the cut-out).
+- **Other options.** Leave it to plan 36's follow-ups.
+- **To reverse.** Drop the suffix.
+- **Rough edge.** None.
+- **Judge it.** —
+
+### 492. A cable is purple (MASK) when its maker makes a mask, whatever port takes it
+
+- **Answer.** controller — 2026-10-27 (T5). W6: "a promoted mask cable is drawn purple into a red port".
+- **Built.** In `graphview.build` a section wire's `VCable.type` is MASK when its source pin is a mask (`matte`, `segment[.n].mask`, `scene.cover`), else the destination port's type. `ui_graph.COLOURS` is unchanged. The backward-wire rule (`returns`) accepts IMAGE or MASK, so a promoted mask into a port left of it runs back as a picture does.
+- **Other options.** A separate colour field on `VCable` (a `ui_graph` change).
+- **To reverse.** One line.
+- **Rough edge.** A promoted mask cable has no "insert effect ▸" or "starters ▸", and an effect dropped onto it is not placed: both `graphview._cable_ends` (which refused these before T5) and `ui_graph`'s `c.type == IMAGE` checks would have to change. Meanwhile wire the matte into an effect's `image` by hand.
+- **Judge it.** Check 389.
+
+### 493. Every segment instance draws its three pins
+
+- **Answer.** controller — 2026-10-27 (T5, from T4's review: "GRAPH is the whole truth").
+- **Built.** A `segment` case in `graphview.build` adds `rout:<name>.fg`, `.bg`, `.mask` (types from `graph.SEGMENT_PINS`) on every segment node; the `PINS` loop skips segments, so instance 1 keeps its ports and order. Before T5 a wire from `segment.2.fg` built and rendered but its cable was not drawn.
+- **Other options.** List `segment.2` and up in `graph.PINS` (unbounded).
+- **To reverse.** The case.
+- **Rough edge.** None.
+- **Judge it.** Checks 384, 391.
+
+### 494. A matte, cut or segment the renderer built none of says its state in words
+
+- **Answer.** controller — 2026-10-27 (T5). A built node sets its own `said`; only a stand-in had nothing.
+- **Built.** `graphview._stand_in` sets `said` from the section's wires (`STAND_IN_SAID`): matte "nothing wired into its image: no mask" or "a mask of channel.a's picture"; cut "nothing wired into its image: no picture", "no mask wired: its picture through, whole" or "channel.b cut by matte"; segment "nothing wired into its image: no worker runs" or "channel.c into it: no worker runs until it is reached". "Whole", not the brief's "untouched", to match the built nodes.
+- **Other options.** "Through, untouched".
+- **To reverse.** Drop the call.
+- **Rough edge.** A source is named by its wire id, not the channel's slot name.
+- **Judge it.** —
+
+### 495. The three declares settle through the hold: `_settle`, `hold.keep`, `PROGRAM_IDS`
+
+- **Answer.** controller — 2026-10-27 (rulings 12 and 12b of the run: plan 38 moved every settling into `GraphSection._settle` through `hold.keep`).
+- **Built.** `GraphSection.land` calls only `_settle(spec)`; `declare_mattes`, `declare_cuts` and `declare_segments` run there after `declare_resizes`, each reading `names["matte"|"cut"|"segment"]` after `hold.keep`, so a load or a GRAPH edit while held keeps the program's nodes. `hold.PROGRAM_IDS` gains `matte_ids`, `cut_ids`, `segment_ids`, so a save while held writes none of the ids kept only for the projector. Tests in `tests/test_hold.py` (a blank landing while held keeps the three; Drop brings them back; every kind `names()` settles has its program ids).
+- **Other options.** None that keeps the hold whole.
+- **To reverse.** With the hold.
+- **Rough edge.** No GL test runs a segment worker under a hold (the headless hold rig has no Renderer); the worker stays because the held wiring keeps its node drawn (the code was read, not tested).
+- **Judge it.** Check 384 (the hold step).
+
+### 496. A held matte, cut or segment keeps its knobs for the projector (`HELD_GROUPS`)
+
+- **Answer.** controller — 2026-10-27 (ruling 14; the integrator's own, the brief did not name it).
+- **Built.** `hold.HELD_GROUPS` gains `matte`, `cut`, `segment`, as `resize` was: while held, a key, amount, feather or smooth turned on a node the program shows changes only the preview; the head's red line counts them as changed. Test: `test_a_knob_turned_on_a_held_matte_cut_or_segment_stays_off_the_projector`.
+- **Other options.** One value for both (a knob turned while held moves the projector).
+- **To reverse.** Drop the three names.
+- **Rough edge.** `segment.mode` and `.quality` are held too; the program's worker reads the held value in the program draw. Nobody has watched a mode switch while held.
+- **Judge it.** Check 384 (the hold step).
+
+### 497. A removed segment's worker is stopped without waiting; at exit every worker is joined against one deadline
+
+- **Answer.** controller with the reviewer — 2026-10-27 (T4 review minors).
+- **Built.** `_tend_segments` calls `SegmentWorker.stop()`, which never waits: the thread ends after any run in hand and closes its backend itself (in `_run`'s `finally`); stopped workers are kept until their threads end. `Renderer.close(timeout=1.0)` stops every worker, the earlier-stopped included, and joins them against one shared deadline. The two real-backend tests are in the live tier by name (`tests/conftest.py`'s `_LIVE_TESTS`, `xdist_group("live")`).
+- **Other options.** Join on the frame thread (a stall of up to a second).
+- **To reverse.** `_tend_segments` calls `close`.
+- **Rough edge.** None known.
+- **Judge it.** Check 392.
+
+### 498. While held, the GRAPH page's thumbnails, their hues and their GPU times are the preview renderer's
+
+- **Answer.** controller — 2026-10-27, at the plan 37 merge (B3's I2, ruling 13: plan 37's thumbnails read through `hold.canvas_renderer`).
+- **Built.** `ui_graph.picture_sources(panel)` gives the canvas its thumbnails, output 1's picture and the hover's GPU medians, all from `hold.canvas_renderer(panel)`. While the projector is held and the preview has been drawn, the page wants its nodes from the preview renderer's own `PreviewTextures` (made by its constructor; `hold.MIRRORED` hands no `thumbs` over), so each node shows what TAKE would put up; the main renderer copies none, and its old thumbnails drop after a second unwanted. The tint's hue reads and SYSTEM's `thumbnails · …` line follow the same renderer. After Take or Drop the main renderer's come back. A hold with GRAPH closed draws no preview and makes no thumbnail. Tests: `tests/test_hold_thumbnails.py` (headless and on GL).
+- **Other options.** Keep the main renderer's thumbnails while held (every node would show the projector, the opposite of the graph drawn on the canvas).
+- **To reverse.** One line in `picture_sources`.
+- **Rough edge.** The first frame after HOLD, before the preview has been drawn, still reads the main renderer (row 466's edge); the preview renderer's thumbnails stay allocated after Take until a second unwanted. While held two sets of thumbnails can exist for that second.
+- **Judge it.** Check 378 (step 5).
+
+### 499. While held, output 1's thumbnail is the program's picture (the PROJECTOR inset's), not the preview's
+
+- **Answer.** controller — 2026-10-27, at the plan 37 merge.
+- **Built.** Output 1's node draws `panel.preview` when nothing is held (the backdrop's picture, plan 37 C1). While held, `panel.preview` carries the preview, so output 1's node draws `panel.monitor` instead: the picture the PROJECTOR inset shows, which is what output 1 (the projector) is showing. Every other node shows the preview's picture (row 498). Test: `test_the_picture_sources_follow_the_canvas_renderer`.
+- **Other options.** Output 1's node showing the preview like every other node (it would claim the projector shows what it does not).
+- **To reverse.** One line in `picture_sources`.
+- **Rough edge.** Outputs 2–4's nodes show their `Handoff.frame` from the canvas's renderer, so while held they show the preview's frame, not what their screens show; only output 1 has a program picture on the page.
+- **Judge it.** Check 378 (step 5).
+
+### 500. A cut shows its picture on GRAPH; a matte and a segment stay text
+
+- **Answer.** controller — 2026-10-27, at the plan 37 merge (plan 37's thumbnail table met plan 39's three kinds).
+- **Built.** `graphview.THUMBS` names `cut` (its picture). A `matte` makes a mask and a `segment`'s own output is its matte (`SegmentNode.OUTPUT` is `MASK`; its `fg` and `bg` are pins on the one node), so both stay text, with their said lines, as `thumb_of`'s fallback already gave. `test_every_picture_kind_has_a_thumbnail_and_the_modulation_side_none` skips the segment's pins as it skips the scene's depth pin, and asserts the two text kinds.
+- **Other options.** A segment drawn as its foreground (`segment.fg`'s picture), a matte as its mask in white on black (each a `THUMBS` entry and a `render.thumb_source` case; nothing else changes).
+- **To reverse.** One table entry each.
+- **Rough edge.** The node that cuts a dancer out shows no picture on GRAPH; its fg and bg are seen only where they are wired.
+- **Judge it.** —
+
+## Plan 40 — patches (rows 501–536)
+
+Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, before the build ([`plans/40-patches.md`](plans/40-patches.md)); each says what was built against his words. Rows 511–536 are the controller's rulings during the build (2026-10-27 and 2026-10-28, on `plan-40-build`: T0–T5, PRs #269, #274, #272, #271, #276, #277, and the review fixes, #278), each the owner's to keep or overturn; the sub-agents' drafts that were one choice are merged into one row. Two are **pending the owner**: 521 (the schema of a save with no group) and 524 (a take-over chip for "wire as saved"). The plan was assigned 471–495; plans 37–39 and PR #275 had taken through 500, so it took 501–525 and overflowed into 526–536. Hand checks 394–401, group AK.
+
+### 501. Plan 40 D1: the new thing is a **patch**; `patch.py` is renamed `modgraph.py`
+
+- **Answer.** owner — 2026-10-27: "Calling this a patch and renaming the other module is fine."
+- **Built.** T0 (PR #269): `hyperspace/modgraph.py` (the modulation graph as data and its order, plan 28 N0), `tests/test_modgraph.py`; `Router.build_modgraph`, `.modgraph`, `.modgraph_notes`, `.modgraph_cut`; `hotreload.MODULES` names `modgraph`. "k patched" on a node summary stays: it is the same sense. Row 511 says how far the rename went.
+- **Other options.** Another noun (block, rack, module, macro-node).
+- **To reverse.** A sed; nothing persists the names.
+- **Rough edge.** Prose in comments that says "the modulation patch" is unchanged.
+- **Judge it.** — (the suite unmoved).
+
+### 502. Plan 40 D2: a spawn's host ports land as open pins, or spliced on a cable, or wired by one press of **wire as saved** — never attached by themselves
+
+- **Answer.** owner — 2026-10-27: as recommended.
+- **Built.** `Edit.spawn` lands only the patch's own wires (`patches.spawn` emits only wires with both ends members, and `patches.check` refuses any wire with an end outside the patch: "wire scene → acid.image crosses the edge: a port says it"). The host ports are open pins on the folded group node, "in · open (was scene)". Dropped from the browser on a picture cable whose type matches the patch's one inlet and one outlet, the patch is spliced in (the cable removed, two added, one step). The side pane's **wire as saved** lands each `was` cable whose node the preset has and whose port is free, one step, and refuses the rest in words (row 524). Tests: `tests/test_graph_groups.py::test_spawn_lands_through_the_doors_as_one_step_and_one_undo_takes_it_all` (the section's wires are the host's plus the patch's two), `::test_splice_on_a_cable_lands_the_patch_in_the_run_in_one_step`, `::test_wire_as_saved_wires_the_free_ports_and_refuses_a_taken_one`.
+- **Other options.** Attach by the saved names when the host has them (a hidden edge by another name); open pins only.
+- **To reverse.** Not cheap: it is the plan 36 rule.
+- **Rough edge.** Rows 523 and 524.
+- **Judge it.** Checks 395, 396.
+
+### 503. Plan 40 D3: a spawn's conflicts are asked, in one sheet: the patch or the existing preset, per row
+
+- **Answer.** owner — 2026-10-27: "a pop-up that says, hey, these are the conflicts; choose a resolution for each one: the patch or the existing preset."
+- **Built.** `ui_routing.modal` draws the sheet first, in the Replace / Keep popup: one row per conflict ("K1: `fx.acid.2.speed` (the patch) or `view.bright` (the preset)"), **keep all existing**, **take all**, the patch's wants beneath, **Spawn** / **Cancel**. Spawn lands the whole landing with the answers as one undo step; a row the preset keeps is not added and is listed on the group as "K1 kept by the preset" (row 526); Cancel lands nothing and pushes no step. While it is up nothing learns (row 527). The kinds of conflict are row 514's. Tests: `tests/test_ui_routing.py::test_the_conflict_sheet_asks_per_row_preselected_to_the_patch`, `::test_the_sheet_is_drawn_ahead_of_a_replace_question_up_with_it`.
+- **Other options.** The patch wins, said (the recommendation); the host wins, said.
+- **To reverse.** Medium: the sheet and the `choices` path through `Edit._spawn_rows`.
+- **Rough edge.** A spawn of a cut back into its own preset lists every shared hand axis (row 514).
+- **Judge it.** Check 397.
+
+### 504. Plan 40 D4: a group is saved in the preset and drawn folded until `+` — the one sanctioned exception to "no hidden edges"
+
+- **Answer.** owner — 2026-10-27: "a good middle ground. I know it goes against the no hidden edges rule, but this is an explicit place where we want to say, okay, we want to encapsulate complexity."
+- **Built.** `groups` in the preset after `layout` (`preset.GROUPS_KEY`: `{"id": "group.1", "name", "patch"?, "nodes", "open"}`). Folded, the group is one node at its members' top-left: its name, one pin per crossing picture cable and one row per boundary param (row 522), its status line, plan 37's thumbnail of its last picture outlet. Its internal cables are not drawn; `+` opens it in place, a tinted region with the members at their own positions and every cable drawn. The renderer never hears the word: `graph.build_graph`, the signature and the goldens see the flat graph (a grouped twin of every preset with a main run builds the same signature and draws the same goldens). Nothing else hides a cable. Tests: `tests/test_graph_groups.py::test_a_folded_group_hides_its_members_and_inside_cables_and_reends_the_rest` (folded drawn + hidden = open = ungrouped), `::test_a_grouped_preset_builds_the_graph_of_its_ungrouped_twin`, `::test_graph_and_render_never_hear_the_word`, `tests/test_golden_frames.py::test_every_preset_with_its_main_run_grouped_draws_its_goldens`.
+- **Other options.** A session-only fold saved nowhere, like a collapsed node.
+- **To reverse.** Medium: the key and the drawing.
+- **Rough edge.** The head's "N hidden" count includes a folded group's members.
+- **Judge it.** Check 394.
+
+### 505. Plan 40 D5: a patch holds only its boundary — it drives a host param through a port, it never sets one
+
+- **Answer.** owner — 2026-10-27: as recommended.
+- **Built.** `lift` keeps only its members' values; `check` refuses a host param's value in words; `spawn` keeps only members' values whatever the file says. Tests: `tests/test_patches.py::test_spawn_lands_only_the_members_values`, `::test_check_refuses_each_refusable_thing_in_words`.
+- **Other options.** Carry host values too (`view.bright: 0.8` in the patch): a preset, not a patch.
+- **To reverse.** Small.
+- **Rough edge.** None known.
+- **Judge it.** Check 395.
+
+### 506. Plan 40 D6: the fx module presets are retired outright; nothing converted
+
+- **Answer.** owner — 2026-10-27: "I don't want factory patches from the 6 FX module presets … The FX module should probably be retired outright. It is not a useful representation of shaders anymore."
+- **Built.** T5 (PR #271): the six `hyperspace/library/fx/*.json`, `Presets._fx_module`, `_watch_fx_modules`, `graphmigrate.module_runs` and its helpers are gone; "more · module presets" has no fx row; `Library.defaults("fx")` is the fresh values. An `fx` label in an old file loads quietly and the next save drops it. Rows 533–535 are the build's choices inside it. Tests: `tests/test_presets.py::test_the_fx_presets_are_retired`, `::test_an_old_fx_label_loads_quietly_and_saves_without_it`.
+- **Other options.** Convert the six to factory patches (the recommendation).
+- **To reverse.** A revert of T5 (the six files are in git).
+- **Rough edge.** A user's fx module files on the Drive stay on disk, unreachable.
+- **Judge it.** Check 400.
+
+### 507. Plan 40 D7: `groups` is schema `/8`; the migration is "no key, no groups"
+
+- **Answer.** owner — 2026-10-27: as recommended ("whichever of 37B and this lands second takes `/9`"). 37B took no schema, so `groups` is `/8` (the run's ruling 13).
+- **Built.** `preset.VERSIONS` is 2–8; `graphmigrate.groups_of` reads a file with no key as no groups; a `/9` file is refused. **When** `/8` is written is row 521 (pending the owner). An older build refuses an `/8` file outright ("is not a hyperspace.preset"), so both Macs run this build before a grouped preset is shared. Test: `tests/test_graph_groups.py::test_the_schema_is_eight_and_the_key_absent_is_no_groups`.
+- **Other options.** —
+- **To reverse.** —
+- **Rough edge.** Row 521.
+- **Judge it.** Check 394 (step 10).
+
+### 508. Plan 40 D8: the browser and spawn are the control window's only; nothing on the desk
+
+- **Answer.** owner — 2026-10-27: "control window only."
+- **Built.** No desk row, no pad, no `apc40.py`, `midi.py`, `bindings.default.json` or `ui_desk*.py` change.
+- **Other options.** A bank of patches on the APC40's pads.
+- **To reverse.** A new plan (Dylan's files).
+- **Rough edge.** None.
+- **Judge it.** —
+
+### 509. Plan 40 D9: every conflict row starts on the patch, with one **keep all existing**
+
+- **Answer.** owner — 2026-10-27: as recommended.
+- **Built.** The sheet opens with every row on "the patch"; **keep all existing** flips every row to the preset, **take all** back; a row with no answer lands as the patch. Test: `test_the_conflict_sheet_asks_per_row_preselected_to_the_patch`.
+- **Other options.** Preselected to the preset; unselected.
+- **To reverse.** One line in `ui_graph.spawn`.
+- **Rough edge.** None known.
+- **Judge it.** Check 397.
+
+### 510. Plan 40 D10: the FX page stays; only the module presets go
+
+- **Answer.** owner — 2026-10-27: "I meant only the module presets. I forgot that we did a UI pass on the FX tab a while ago."
+- **Built.** `ui_fx.py` is untouched: the browser of the graph's effect nodes by where each ends, its strip, `Panel.fx_selected`. The one module-preset strip it drew is hidden (row 533).
+- **Other options.** The page goes too.
+- **To reverse.** —
+- **Rough edge.** Row 533.
+- **Judge it.** Check 400.
+
+### 511. The rename covers `modgraph`'s types and private names, not only the four symbols listed
+
+- **Answer.** controller — 2026-10-27 (T0's draft, the run's rulings 4–6).
+- **Built.** `Patch` / `PatchNode` / `PatchEdge` → `ModGraph` / `ModNode` / `ModEdge`; `Router.patch_cut` → `modgraph_cut`; `_patch_key`, `_rebuild_patch` and the cache keys → `_modgraph_*`; two test names. The live docs (ARCHITECTURE, ENGINEERING, DECISIONS, this register, plan 28's two pages) got a sed inside backtick spans; the run records under `plans/assets/28-30-run/` keep the old names. The module's docstring says it "was named `patch`" without the file name, so the build plan's proof grep (`patch\.py|patchmod`) stays empty. Nothing visible.
+- **Other options.** Only the four symbols, leaving a class `Patch` beside plan 40's patches.
+- **To reverse.** A sed.
+- **Rough edge.** `Router.modgraph` (a property) shares the module's name; safe (deferred annotations), tested.
+- **Judge it.** —
+
+### 512. A patch's envelopes are 6 and up, in the file too; the example's lane is `mod:1`
+
+- **Answer.** controller — 2026-10-27 (T1).
+- **Built.** Envelopes 1–5 are every preset's (the sequencer's lanes), so `lift` names a patch's envelopes from `env.6` and `check` refuses an `envs` entry 1–5 in words; spawned, an envelope takes the host bank's next id, never below 6. The spec's example routed `mod:0` from `mod.1`; a modifier's lane is `mod:<n>` for `mod.<n>`, so the fixture `tests/fixtures/patches/acid-wash.json` says `mod:1` (the spec is corrected).
+- **Other options.** `env.1`… in the file, mapped at spawn.
+- **To reverse.** `patches.FIRST_ENV` and one test.
+- **Rough edge.** None.
+- **Judge it.** — (`tests/test_patches.py::test_lift_renames_to_the_lowest_ids_and_rebases_the_layout`).
+
+### 513. A host's macro is "in use" by a label, a subscriber or a row onto it — never by its value
+
+- **Answer.** controller — 2026-10-27 (T1).
+- **Built.** A patch's `macro.2` keeps its number in a host that does not use it, else takes the lowest free of the eight; with none free, the footer says "macro.2: no free macro — its subscribers not spawned" and its value, subscribers and rows stay out while the rest spawns. A value alone does not count: every factory preset holds `macro.1..8 = 1.0`. Test: `tests/test_patches.py::test_a_macro_with_no_free_number_is_a_note_and_the_rest_spawns`.
+- **Other options.** A value off its default counts; a subscriber only.
+- **To reverse.** `Host.of`'s used set.
+- **Rough edge.** A host macro moved by hand but with no subscriber or label is taken.
+- **Judge it.** Check 397 (step 6).
+
+### 514. What is a conflict: a desk control by overlap, a hand or stick axis that already drives another param, a param another performer owns — and a hand read through a modifier is none
+
+- **Answer.** controller — 2026-10-27 (T1, with the reviewer). **For the owner** on the modifier case.
+- **Built.** `cc:` / `note:` / `pitch:` rows: a **desk** conflict when a host preset-layer row overlaps (`Binding.overlaps`: device, kind, number, channel). `hand:` and `axis:` rows (`patches.ONE_OWNER`): a **source** conflict when a host route reads the same source onto another param (Learn's "one axis, one param"). Any route onto a param the host's `Bindings.owner` already has: a **target** conflict. Every other scheme (a band, an LFO, `lane:`, OSC) may drive any number of params. A row has at most one conflict. **A one-owner source read through a modifier input is never a conflict**: acid-wash's `smooth` reads `hand:right.y`, and spawned into party-noita, where `hand:right.y` drives warp's amount, the sheet lists only K1 — though the spec's D3 example names "`hand:right.y` already owns a param". The lowest free instance may wake a host's dormant rows left on a removed instance's params (as `_new_instance` does on the canvas), unsaid.
+- **Other options.** Check modifier inputs on `ONE_OWNER` schemes too (a few lines in `spawn`), if "one axis, one meaning" is meant; every continuous scheme one-owner; hands only.
+- **To reverse.** `ONE_OWNER`, and the modifier case in `spawn`.
+- **Rough edge.** A noita cut spawned back into party-noita lists every shared hand axis: correct by the rule, a noisy sheet.
+- **Judge it.** Checks 397 (step 5), 401.
+
+### 515. What a lift writes: `(doc, refused)`, port ids and `was`, value ports derived at read
+
+- **Answer.** controller — 2026-10-27 (T1).
+- **Built.** `lift(spec, table, values, layout, ids) → (doc, refused)`: the file's dict (name and note empty, the form fills them) and the refusals in words; its third argument is the registry's performance snapshot, so it stays pure. Inlets are `in`, `in.2`…, outlets `out`, `out.2`… in wire order, one per crossing cable; an inlet's `was` is the source's name, an outlet's the port it went into. The value crossings are derived at `read` as `value.<k>` ports, not stored. An extra hands entry's `laid` is not carried (the host's frame has one); a `copy` goes only with its original.
+- **Other options.** A dataclass; refusals inside the doc.
+- **To reverse.** Cheap (T3's call sites).
+- **Rough edge.** `wants` leaves out a row's `when` gate source.
+- **Judge it.** Check 395.
+
+### 516. A hidden factory patch lives in `hidden.json` under `"patches"`
+
+- **Answer.** controller — 2026-10-27 (T1).
+- **Built.** `Library.hide` / `unhide` / `rename` take the patches' kind (`HIDEABLE`); × on a factory patch hides its stem in `hidden.json`'s `"patches"` list, written only when non-empty (a home that hides none writes exactly the old file); rename takes a user patch, less the show repoint. No factory patch ships yet.
+- **Other options.** A second file.
+- **To reverse.** Small.
+- **Rough edge.** An older build that rewrites `hidden.json` drops the key (both Macs update together).
+- **Judge it.** Check 395 (step 7).
+
+### 517. Group: a member of another group moves to the new one, said; a group never holds a group; ids are one past the highest
+
+- **Answer.** controller — 2026-10-27 (T2; the review fixes, 2026-10-27).
+- **Built.** A selected node already in a group leaves it for the new one ("doublevision left group 1 for this group"); a group left empty goes. A folded group's node in the selection is refused ("group.2 is a group: a group holds nodes, not groups; left out"); an open region's title is simply not in the selection. On load a node named by two groups stays in the first, said. The id is `group.<n>`, n one past the highest held (the modifiers' rule), named "group n"; ungrouping the highest lets its number come back. With no bank (a test's bare router), the voices a group may hold are the registry's (`graphview.bank_ids`).
+- **Other options.** Refuse the node; a high-water mark that never reuses a number in a session (`modbank`'s rule).
+- **To reverse.** Small (`Edit.group`'s loop; one line for the numbering).
+- **Rough edge.** Grouping a whole group plus one node moves every member and removes the old group, in one step.
+- **Judge it.** Check 394 (steps 1, 5, 6).
+
+### 518. Open / fold is a preset edit: one undo step, the dirty dot lights
+
+- **Answer.** controller — 2026-10-27 (T2).
+- **Built.** `open` is saved in the group's entry (D7's shape), so `+` / `−` is one step and dirties the preset, as dropping a node does; a preset saves with whichever groups were open.
+- **Other options.** `open` as page state, saving only `false` (a second state beside the file; "folded until `+`" a lie on reload).
+- **To reverse.** Small.
+- **Rough edge.** Looking inside a group and folding it again leaves the preset clean only through ⌘Z.
+- **Judge it.** Check 394 (step 3).
+
+### 519. A member deleted while grouped leaves the group lazily
+
+- **Answer.** controller — 2026-10-27 (T2).
+- **Built.** Deleting a member does not edit `groups`; the canvas ignores a member the preset no longer holds and a save leaves it out (`Presets.live_groups`), with any group left empty. ⌘Z brings the node back into its group, a modifier too.
+- **Other options.** Edit the list in the delete's step (a value node's delete pushes no marks, so its undo would lose the membership).
+- **To reverse.** Medium.
+- **Rough edge.** The in-memory list can name a deleted node until a save or a load.
+- **Judge it.** Check 394 (step 7).
+
+### 520. The group by the mouse: a member leaves when dropped wholly outside; the folded node drags every member; several leavers are one step; a stub drop is refused
+
+- **Answer.** controller — 2026-10-27 (T2; the review fixes).
+- **Built.** A member dropped with its rect **wholly** outside the region as it stood before the drag leaves the group, at its new place; overlapping keeps it in and the region grows. The folded node has no position of its own (D4): dragging it moves every member by the delta, as the open region's title does, one step. Several members dragged out together are one step ("2 nodes leave noita core"). A cable dropped on a folded group's stub is refused while held: "noita core is folded: drop it on one of its pins, or open it (+)". Tests: `tests/test_graph_groups.py::test_a_member_dragged_out_leaves_the_group`, `::test_a_drag_of_the_folded_node_moves_every_member`, `::test_two_members_dragged_out_together_leave_in_one_step`, `::test_a_drop_on_a_folded_groups_stub_is_refused_in_words`.
+- **Other options.** Any part outside; the centre outside; a folded node that cannot be moved; the group's ports offered through the stub.
+- **To reverse.** Small each.
+- **Rough edge.** A large region needs a long drag to leave; leavers from two open groups in one drop are one step.
+- **Judge it.** Check 394 (steps 4, 8).
+
+### 521. A save with no group stays `/7`; `/8` only when a group exists — **pending the owner**
+
+- **Answer.** **pending the owner.** Built as T2's ruling (the build plan's "a preset without `groups` saves byte for byte as before" and "the factory presets and the library are not rewritten"). The controller recommends the other way: row 394, the owner's own of 2026-10-25, is "every save is the newest schema; migrate the library forward", and D7 cites it — so every save would write `/8`, reading `/7` the identity, the factory files and the Drive library migrated by `tools/migrate_library.py` as plan 36 did (a schema-line rewrite, backups as before).
+- **Built.** `Presets.document` writes `groups` and `hyperspace.preset/8` only when a live group exists; otherwise the file is `/7` byte for byte, so no factory file and no library file moved. This partly revives "the lowest schema that loses nothing" (R10), which row 394 superseded.
+- **Other options.** Every save `/8` (the recommendation): every preset's first line changes on its next save, and the factory resave test moves with it.
+- **To reverse.** One rule in `Presets.document`, then a migration run over the factory files and the library.
+- **Rough edge.** Until the owner answers, a preset's schema line says whether it has a group.
+- **Judge it.** Check 394 (step 10).
+
+### 522. The folded node's pins: one per crossing picture cable, one out pin per member lane leaving, one row per boundary param and per modifier input read from outside
+
+- **Answer.** controller — 2026-10-27 (T2).
+- **Built.** In order: a typed pin per picture cable into a member (keyed by the member's port), one per picture cable out, an out pin per member lane or macro bus leaving, then a row per member param a rig row or crossing route lands on, and a row per member modifier input read from outside. The spec named picture pins and param rows; the rest make "folded + hidden = open = ungrouped" hold for every cable. Value cables to a collapsed far end bundle per (node, pin), so each row keeps its wire. A drag onto a group pin lands on the member's pin behind it (`real_pin`).
+- **Other options.** Value cables leaving a member go to the group's out stub.
+- **To reverse.** Small.
+- **Rough edge.** A param row's one pin stands for both its `base` and `mod` stubs and lands on `mod`, so a desk knob dropped there is refused ("sets a base, not a performer"): open the group to aim at `base`.
+- **Judge it.** Check 394 (step 2).
+
+### 523. A spawn's open pins and rename map last the session; a save drops them
+
+- **Answer.** controller — 2026-10-27 (T3). **For the owner** to see: P2 says "one pin per host port … or open".
+- **Built.** `Edit.spawn` puts the landing's `ports` and `renames` on the live group entry; the folded node draws each still-open port ("in · open (was scene)") and the hover says "spawned as acid → acid.2 …". Undo carries both. `preset.group_entry` writes neither, so after a reload a group whose pins were never wired shows no open pins and no **wire as saved** chip; `+` shows the member's own ports.
+- **Other options.** Keep them in the panel's state (undo would not follow); save them in the preset (a new key, the "where it was" data plan 36 rules out).
+- **To reverse.** Small: two keys and one reader.
+- **Rough edge.** As said: the chip is gone after a reload.
+- **Judge it.** Check 395 (step 4).
+
+### 524. **Wire as saved** takes only free ports and never takes one over — whether a take-over chip should exist is **pending the owner**
+
+- **Answer.** **pending the owner** on the take-over chip. Built (T3) as D2 says: "if the host has those nodes and the ports are free, refused in words otherwise." The reviewers agree refusing is right under D2; a press that silently cut the host's run would be a hidden edit.
+- **Built.** An inlet lands when the preset has its `was` node (the rig's outputs, channels, camera and clouds always count); an outlet when nothing is wired into its `was` port yet (`scene.geometry`, which takes many, excepted). Every other pin is refused in words — "output.all.image is taken", "no node tripcolour" — the whole press one undo step; the chip hides once no pin is open. In `party-trip` the patch's out → `output.all.image` is refused while huecycle feeds it.
+- **Other options.** A second, explicit chip: "wire as saved, replacing huecycle → All outputs", one press, its result drawn. Without it, in every host whose run already feeds All outputs (most), the outlet always refuses and splice is the real path.
+- **To reverse.** One line in `Edit.wire_as_saved` (or a new chip).
+- **Rough edge.** As said.
+- **Judge it.** Check 395 (step 5).
+
+### 525. Save as patch: refused on a member a patch may not hold or on another patch's name; one undo step for the group's `patch`; **update patch** beside it
+
+- **Answer.** controller — 2026-10-27 (T3; the review fixes).
+- **Built.** `Edit.save_patch` asks `patches.select` first: a refusal (a hand-edited group holding `scene`) is shown and nothing is written. A host macro's subscriber on a member does not block; it is said after "saved X as a patch". A name whose slug is already a patch's — yours or a factory one — is refused unless the group is that patch's: "a patch named acid wash exists — Update patch, or another name". The write is `<library>/patches/<slug>.json` alone (atomic, the old text trashed if it changed); setting the group's `patch` is one step ("save <group> as patch <name>"), so the preset's dot lights; ⌘Z gives the old provenance back and leaves the file. A group with a `patch` shows **update patch** beside **save as patch…**, on the side pane and its menu.
+- **Other options.** Block on every word `lift` returns; let a fresh group shadow a factory patch; take "acid wash 2" as presets do; update only.
+- **To reverse.** Small each.
+- **Rough edge.** A × hidden factory patch still blocks its name, and the words do not say it is hidden.
+- **Judge it.** Check 395 (steps 1, 6).
+
+### 526. The landing: a kept row is stored with its words; a landing whose ids were taken while the sheet was up is refused
+
+- **Answer.** controller — 2026-10-27 (T3).
+- **Built.** A `kept_by_host` entry is the patch's row after renames plus its control in words (`{"source": "cc:0:48", "target": "fx.acid.2.speed", …, "words": "K1"}`), saved in the group's entry, so the node says "K1 kept by the preset", not "CC 48 ch1". `Edit._spawn_refusal` checks the landing's render names, modifier ids and voices are still free at the press; if not, "the preset changed while the sheet was up: spawn X again", nothing lands, no step — which also makes a second Spawn of the same landing harmless.
+- **Other options.** Store the conflict kind too; recompute the landing at the press and map the answers.
+- **To reverse.** Small.
+- **Rough edge.** A kept row is information only: nothing offers to take it later.
+- **Judge it.** Checks 397, 401.
+
+### 527. While the sheet is up, `Learn.hold`: no source completes a learn, and an armed learn waits
+
+- **Answer.** controller — 2026-10-27 (T3).
+- **Built.** `Learn.accepts` says no while held, which every completer asks (hands, desk, pad, OSC, the desk diagram); `ui_routing.modal` keeps the flag in step each frame and `settle_sheet` releases it. Replace / Keep's own way (clearing `learning`) would cancel the user's armed learn.
+- **Other options.** Cancel the armed learn when the sheet opens.
+- **To reverse.** Small.
+- **Rough edge.** None.
+- **Judge it.** Check 397 (step 3).
+
+### 528. The wants at a spawn: the sheet lists them; after the landing the head says what waits, less a row the preset kept
+
+- **Answer.** controller — 2026-10-27 (T3; the review fixes, the plan review's one Important).
+- **Built.** `ui_routing.sheet_wants` runs `devices.wants` over the landing's own rows against the rig: "apc40 (lost): K1", "leap (not in this rig): right hand y". The sheet shows them under the conflicts; after any spawn or splice lands, the head reads "spawned acid wash: …; waits for leap (not in this rig): right hand y", leaving out a row the sheet kept for the preset; nothing is added when every wanted device is connected. The spec's "2 rows wait for leap" became the rows' words, as everywhere else.
+- **Other options.** A count per role; the whole landing's wants, kept rows included.
+- **To reverse.** Small.
+- **Rough edge.** A spawn that raised the sheet says the wants twice; a cancelled spawn says none.
+- **Judge it.** Check 399.
+
+### 529. The browser: **patches** first on GRAPH's head; a dragged patch's drop target is a picture cable of the section
+
+- **Answer.** controller — 2026-10-27 (T3).
+- **Built.** The spec put the chip "beside **new** and the starters"; GRAPH's head has neither (**new** is on the PRESET strip, the starters in the picker), so **patches** is the head's first chip after plan 38's hold chips. Its popup lists each patch with its note and its boundary in words; a click spawns at the canvas's centre, and the canvas's right-click picker has **spawn ▸** (at the click) when a patch exists. Dragged from the popup, the nearest picture cable lights when the patch has exactly one inlet and one outlet of its type and the cable is the section's (not the rig's bus); otherwise the hover says why ("x has 2 picture inlets and 1 outlet: a splice needs one of each"). Letting go on a lit cable splices; anywhere else, nothing.
+- **Other options.** After the tint chip, or on the PRESET strip; an imgui drop target (the editor's links take no payload).
+- **To reverse.** One line (the chip's place).
+- **Rough edge.** The head grows by a chip on a narrow panel; the drag gesture is not driven by a test.
+- **Judge it.** Checks 395, 396.
+
+### 530. The arrival: an error is no coming or going; the launch says nothing
+
+- **Answer.** controller — 2026-10-27 (T4).
+- **Built.** The registry's status comparison ignores an error on an open device (a poll that raised), so a flaky adapter never flaps the footer; its SYSTEM line still says it. A device whose `open()` raised counts as lost while retried, so the open that succeeds is said ("apc40 connected — n controls live"); `wants` reads an error as lost. `open_all` records every status silently, so a launch with the desk plugged in says nothing; a device removed from `config.toml` keeps its old "devices: x removed" note; one added says its status.
+- **Other options.** Say every status change; an `error` want state; say every connected device at launch.
+- **To reverse.** Small.
+- **Rough edge.** A device stuck in an adapter error reads lost and says nothing when the error starts. Two devices reopening through the retry path in one frame still tell the listeners twice (the retry path's own `_changed`, older than this plan).
+- **Judge it.** Check 398 (step 6).
+
+### 531. What `wants` counts, and whose device a row is
+
+- **Answer.** controller — 2026-10-27 (T4; after review).
+- **Built.** Enabled performer routes, enabled preset-layer desk rows and modifier inputs count; never a session row or a disabled one; several rows on one control are one ("K1" once). The role: the row's `@role`; else, for MIDI, the first MIDI role; else the scheme's primary (`DeviceRegistry.primaries()`); else the first listed device publishing the scheme, an off one included; else `SCHEME_ROLE`'s usual name — the canvas placeholder's own order, so hands listed off as `hands1` are wanted as "hands1 (off)", not a phantom "leap (not in this rig)".
+- **Other options.** `SCHEME_ROLE` straight after the MIDI rule (the spec's literal sentence); count disabled or session rows.
+- **To reverse.** Small (`devices._rows_of`, two lookups).
+- **Rough edge.** A `when` gate on another device's source is not counted.
+- **Judge it.** Checks 398, 399.
+
+### 532. The words of a row, and a desk's glyphs for a desk the rig lacks
+
+- **Answer.** controller — 2026-10-27 (T4).
+- **Built.** `routing.row_words`: "right hand y", "hands gap", "band 1", "pad A", "d-pad up", "axis LX", "CC 48 ch1", "note 53 any ch", "pitch bend ch3", "LFO 1", "env 2", "seq lane 4", "mod.3", an OSC address as itself; the caller's names first. A row on a listed desk takes that desk's glyphs ("K1", "D3"); on a desk the rig lacks, only the first role's unqualified rows take the table's profile, so an unplugged APC40 still reads "K1", while `cc@launch:0:7` reads "CC 7 ch1". `graphview.cable_words` calls it, so a cable with no port name reads "right hand y" where it read `hand:right.y`.
+- **Other options.** Always the APC40's glyphs; never glyphs for a missing desk.
+- **To reverse.** Small.
+- **Rough edge.** "axis LX", not "left stick x" (the pad's names live in `gamepad.py`, which imports glfw).
+- **Judge it.** Check 398 (step 3).
+
+### 533. The FX page's own fx module strip is hidden, not the page
+
+- **Answer.** controller — 2026-10-27 (T5, the run's ruling 9).
+- **Built.** P5 said nothing on the FX page referred to the module presets; `ui_fx.page` draws `panel._section("effects", "fx", …)`, whose strip under the title (◀ name ▶ · save · as… · reset) is the fx module-preset strip. D6 retires the mechanism and D10 keeps the page, so `ui_presets.strip` draws nothing for a retired group and `ui_fx.py` is not edited. The page's tests pass unchanged.
+- **Other options.** Keep the strip (the retired mechanism reachable: "save as" would write `<library>/fx/<name>.json`); ask the owner first.
+- **To reverse.** One condition in `ui_presets.strip`.
+- **Rough edge.** The effect list sits one line higher.
+- **Judge it.** Check 400.
+
+### 534. A retired module group is named (`library.RETIRED_MODULES`), and its label in an old file loads quietly
+
+- **Answer.** controller — 2026-10-27 (T5, the run's ruling 10).
+- **Built.** `library.RETIRED_MODULES = ("fx",)`: `groups()` leaves it out, `default_name` is None for it, `preset` reads the same tuple. Inferring "no folder, no group" would have dropped `view`, `rot` and `camera`, which have no factory folder and keep their strips. An old `<library>/fx/` folder is ignored, its files untouched. A preset that names `"modules": {"fx": "trip"}` loads with no note (`lib.current("fx")` reads "trip" until the next load, drawn nowhere) and saves without it.
+- **Other options.** Filter at the fold only; drop folderless groups; drop the label silently.
+- **To reverse.** Empty the tuple.
+- **Rough edge.** User fx module files on the Drive are unreachable from the UI.
+- **Judge it.** Check 400.
+
+### 535. The party generator keeps the three fx families' values inline
+
+- **Answer.** controller — 2026-10-27 (T5, the run's ruling 11).
+- **Built.** `preset.ACID_FX`, `MANDALA_FX`, `NOITA_FX` hold exactly what the retired files held (mandala's old `fx.kaleido.order: 8` included), so `write_factory` is byte-identical; `tools/fx_shots.py` times the "tripping balls" values inline.
+- **Other options.** Fold them into each `party_*_values` (loses the family's name).
+- **To reverse.** —
+- **Rough edge.** `party-acid` and `party-mandala`'s notes still say "the `acid` / `mandala` fx module preset": preset data, reworded at the next factory regeneration.
+- **Judge it.** —
+
+### 536. Plan 38's PROJECTOR inset fix rides on plan 40's PR
+
+- **Answer.** controller — 2026-10-27 (the run's ruling 22).
+- **Built.** `ui_graph._monitor` called `add_rect(…, 0.0, 0, 2.0)`; imgui_bundle's order is `rounding, thickness, flags`, so the float landed in `flags` and raised a TypeError the first time the inset drew: the inset never drew on `main` (since #270). Fixed to `(…, 0.0, 2.0)` in its own commit (86795d5) with a stub-texture test, `tests/test_hold.py::test_the_projector_inset_draws_framed_while_held`; said in the PR body.
+- **Other options.** Cherry-pick it to `main` alone, sooner.
+- **To reverse.** —
+- **Rough edge.** None.
+- **Judge it.** Check 377.
+
+### 537. A macro's new base subscriber has a throw; Route from ▸ is one submenu per kind, the macros among them
+
+- **Answer.** owner — 2026-10-28: "by default when you wire up a macro,
+  the From and To parameters start at the same value so there's actually
+  no range of motion. That's not right"; and the param menu's Route from
+  "should probably include the macros as well … instead of listing all
+  the LFOs and envelopes together, it should have an LFO thing you can
+  mouse over, a macro thing you can mouse over, and an envelope thing …
+  because you can have up to six … we might add more things to route
+  from".
+- **Built.** `routing.base_sub(p)`: the base subscriber a macro's cable
+  makes on `p` runs `from` where the param sits `to` 1 — or to 0 when it
+  already sits at 1 — so the knob moves the param from the day it lands
+  (at 0 the scene as designed, at 1 the fader's end). `Edit.subscribe`
+  (a `bus:` → `base:` cable on GRAPH) and ROUTING's **+ base** chip both
+  take it; before, both set `from = to` where the param sat ("so adding
+  it moves nothing"), and the macro moved nothing ever until both ends
+  were set by hand — the owner's "Tracer Macro Test", whose macro `test`
+  had three base subscribers all with `from = to`. The ends stay the
+  performer's to edit on ROUTING's subscriber line; a depth subscriber is
+  0…1 as before. Presets already saved with `from = to` are left as they
+  are: a file's ends are a design, not a default.
+  **Route from ▸** (`ui_graph.route_from_menu`) is now **LFO ▸** (the
+  bank's voices, then new LFO), **envelope ▸** (the envelopes, then new
+  envelope) and **macro ▸** (the rig's eight knobs by ROUTING's label,
+  else "macro 3"); `SECTIONS` / `SECTION_WORDS` hold the order and the
+  titles, so another kind of source is one more section. The bank
+  sections come on a modulatable param that is no trigger, as before;
+  macro ▸ on any param a base subscriber may name (`routing.base_refusal`:
+  a persisted performance param, not an alias, not a macro, no text) —
+  modulatable or not, a base subscriber being no route. A macro pick is
+  the cable a drag on GRAPH makes, `bus:macro.N` → `base:<param>`
+  (`Edit.connect_value` → `subscribe`), under `connect`'s undo label; an
+  idle macro is labelled first (`Edit.show_macro`, as the canvas's picker
+  labels it) in the same step. A macro already setting the param is
+  checked and a click does nothing. Tests:
+  `tests/test_macros.py::test_a_new_base_subscriber_runs_from_where_the_param_sits_to_the_end_of_its_fader`,
+  `tests/test_graph_edit.py::test_route_from_lists_the_macros_on_a_param_a_base_subscriber_may_name`,
+  `…::test_route_from_a_macro_makes_the_base_subscriber_a_graph_cable_makes`.
+- **Other options.** The whole fader, 0 → 1, for every new base
+  subscriber (loses the designed value at the macro's 0); a `from`/`to`
+  that keeps the param still at the macro's current position (not
+  predictable); the macros listed flat among the voices; a "new macro"
+  item that takes the next idle knob (a performer wants a numbered knob,
+  the desk's).
+- **To reverse.** `routing.base_sub`; `ui_graph.route_from_items`
+  (`SECTIONS`), `route_from` (the `bus:` branch).
+- **Rough edge.** A macro that sits at 1 (its default) lands its new
+  subscriber's param at the fader's end on the next frame — the wiring
+  is visible at once, and the knob turned down brings the scene back. A
+  param at 0.98 gets a throw of 0.02 up: the ends are there to edit.
+- **Judge it.** Check 402.
+
+### 538. One tier: hidden presets are deleted outright and the factory concept is removed
+
+- **Answer.** owner — 2026-10-28: no factory presets, no hidden presets, no two-tier library, and no hard-coded presets anywhere in the application; every preset is deletable.
+- **Built.** `Library(home_dir, machine=, period=)` has one root. `hyperspace/library/` (the shipped presets, the band and dream module presets, the `party` and `house` shows) left the app, with the generator in `preset.py` and plan 13's migration; the hidden list (`hidden.json`) and `Library.hide` / `unhide` / `is_factory` went with them. `delete` and `rename` work on every preset. The shipped presets live in `tests/corpus/` as test data the app never reads. A fresh library opens an unsaved show called `untitled` with an empty bank and nothing loaded; a save over a name writes over that name's file.
+- **Other options.** Keep the factory tier and hide it from the list; keep the generator for a "restore defaults" command.
+- **To reverse.** Restore the generator and `Library.factory` from the commit before the change.
+- **Rough edge.** A new machine starts empty until the shared Drive library is mounted.
+- **Judge it.** Check 403.
+
+### 539. The PRESETS page is a flat list: no bank pills, no starts-on, no drop-down, no module-preset fold
+
+- **Answer.** owner — 2026-10-28.
+- **Built.** `ui_presets.page` draws the strip (◀ name ● ▶ · new · save · as…), a list filling the page with every preset (click loads; `rename` and `×` chips), the trash foot while the trash holds something, a patches fold and the show line. The sixteen bank pills, the "starts on" picker, the preset drop-down and the module-preset fold are gone, with their helpers (`show_block`, `preset_bank`, `starts_on`, `overview` and the rest).
+- **Other options.** Keep the pills as a second view of the bank.
+- **To reverse.** Restore the removed functions from the commit before the change.
+- **Rough edge.** Nothing on the panel sets a show's startup preset; the file field is still read and written, and Home still loads it.
+- **Judge it.** Check 403.
+
+### 540. Module presets' UI leaves the PRESETS page; the concept stays for now
+
+- **Answer.** owner — 2026-10-28: module presets are to become patches later.
+- **Built.** The PRESETS page no longer lists module presets. The concept stays in `library` and in the files, and each module's strip (band, pattern, …) keeps its own popup list, with × and reset, on its own page.
+- **Other options.** Remove module presets now and fold them into patches.
+- **To reverse.** Put the fold back in `ui_presets.page`.
+- **Rough edge.** Module presets can no longer be seen together; the dream and band module presets that shipped now live in `tests/corpus/` only.
+- **Judge it.** Check 403.
+
+### 541. The show block is one line that says what a show is; the pads are set on the desk only
+
+- **Answer.** owner — 2026-10-28.
+- **Built.** `ui_presets.show_line`: "show · the desk's pads, the session, the rig's wires", then the show's name, a red ● while it has unsaved changes, `open ▾` (the library's shows), `save`, `as…` and `new`. The bank stays twenty-four pads for the desk and the F-keys, and the page has no UI for it.
+- **Other options.** Keep the pill row for the bank on the page.
+- **To reverse.** Restore `show_block` and `preset_bank`.
+- **Rough edge.** The only way to see which preset a pad holds is the desk's LEDs.
+- **Judge it.** Check 403.

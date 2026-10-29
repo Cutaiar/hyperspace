@@ -230,7 +230,13 @@ def test_every_package_module_but_the_cold_core_is_watched():
             names.add(".".join(parts))
     # offline is the tests' oracle harness; watchdog is cold like app — it
     # must outlive whatever a reload does, being what diagnoses a freeze
-    cold = {"app", "hotreload", "offline", "watchdog"}
+    # headless (row 394) is the tests' and tools/migrate_library.py's app,
+    # never the running app's
+    # pinch is cold too: its AppKit monitor adds to the module it was made
+    # in, so a reloaded copy would sum nothing
+    # segment (plan 39 T4) is cold: a worker module, its threads outlive a
+    # reload (masks went on MODULES, before render, at the 37/38/39 integration)
+    cold = {"app", "hotreload", "offline", "watchdog", "headless", "pinch", "segment"}
     assert names - cold == set(_watched()), sorted((names - cold) ^ set(_watched()))
 
 

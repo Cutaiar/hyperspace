@@ -64,10 +64,21 @@ def test_core_does_not_import_the_worker():
         importlib.import_module(m)
     assert "hyperspace.dream" not in sys.modules
     # no module under hyperspace/ imports torch at the top except dream.py
+    # (plan 39 T4: segment.py's torch backend imports it inside its own
+    # functions, in the worker's first job — never at its module's top)
+    import ast
     from pathlib import Path
 
     for f in (Path(__file__).parents[1] / "hyperspace").glob("*.py"):
         if f.name == "dream.py":
+            continue
+        if f.name == "segment.py":
+            top = [a.name for n in ast.parse(f.read_text()).body
+                   if isinstance(n, ast.Import | ast.ImportFrom)
+                   for a in n.names] + [n.module or "" for n in ast.parse(f.read_text()).body
+                                        if isinstance(n, ast.ImportFrom)]
+            assert not [m for m in top if m.split(".")[0] in ("torch", "torchvision",
+                                                               "Vision", "Quartz")], top
             continue
         assert "import torch" not in f.read_text(), f.name
 
@@ -407,8 +418,9 @@ def test_a_layer_change_reads_no_weights_twice(dream_mod, monkeypatch, tmp_path)
 
 @pytest.mark.slow
 def test_end_to_end_offscreen(dream_mod, tmp_path):
-    """Renderer + Lookback + DreamWorker on a rotating 24-cell at the spike's
-    defaults: the dream layer shows, the black ground stays black."""
+    """Renderer + the dream node + DreamWorker on a rotating 24-cell at the
+    spike's defaults (plan 36 T4: `scene → dream → output.all.image`, no
+    look-back anywhere): the dream shows, the black ground stays black."""
     torch = pytest.importorskip("torch")
     moderngl = pytest.importorskip("moderngl")
     if not torch.backends.mps.is_available():
@@ -423,9 +435,17 @@ def test_end_to_end_offscreen(dream_mod, tmp_path):
 
     W, H = 1280, 820
 
+    from hyperspace import graph as G
+
+    alone = G.read_graph({"frame": "wired", "nodes": [{"kind": "dream"}], "wires": [
+        {"from": "shape", "to": "scene.geometry"}, {"from": "scene", "to": "dream.image"},
+        {"from": "dream", "to": "output.all.image"}]})
+    assert not alone.notes, alone.notes
+
     def rig(dream):
         fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H))])
         r = Renderer(ctx, dream)
+        r.wiring = alone.wiring()
         s = ViewState(shape=10, faces=True, pattern=2, bright=1.3, speed=3.0)
         s.ang = [0.3, 0.7, 1.1, 0.5, 0.9, 1.3]
         s.yaw, s.pitch = 0.4, 0.25
@@ -447,12 +467,12 @@ def test_end_to_end_offscreen(dream_mod, tmp_path):
     reg = registry(d)
     w = dream_mod.DreamWorker(reg, {"enabled": True, "weights_dir": str(tmp_path)})
     try:
-        r.lookback.source = w
+        r.dreamer.source = w
         with_dream = run(fbo, r, s, w)
         st = w.stats()
         print(f"\ndream: {w.status()}")
         assert w.error == "" and w.layer == "conv3_3" and w.nan_resets == 0
-        assert r.lookback.dream_frame >= 85 and w.calls >= 85
+        assert r.dreamer.dream_frame >= 85 and w.calls >= 85
         assert st["ms"] < 60.0
     finally:
         w.close()
@@ -463,8 +483,6 @@ def test_end_to_end_offscreen(dream_mod, tmp_path):
     a, b = with_dream[..., :3].astype(int), tracer_only[..., :3].astype(int)
     diff = np.abs(a - b)
     assert diff.mean() > 1.0, f"the dream layer must contribute ({diff.mean():.2f})"
-    # the additive wake only ever adds
-    assert (a >= b - 1).mean() > 0.999
     # the black ground stays black: the mask keeps the dream off it
     for corner in (with_dream[:16, :16], with_dream[:16, -16:], with_dream[-16:, :16],
                    with_dream[-16:, -16:]):

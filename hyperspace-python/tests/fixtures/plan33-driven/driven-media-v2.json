@@ -1,0 +1,6 @@
+{"schema": "hyperspace.preset/2", "name": "driven-media-v2",
+ "values": {"view.media": 2},
+ "routes": [{"source": "lane:0", "target": "view.media", "op": "push", "value": 0.5}],
+ "desk": [],
+ "macros": {},
+ "modules": {}}

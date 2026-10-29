@@ -432,7 +432,8 @@ def _slots(*names, missing=()):
 
 
 def test_the_output_switches_are_rig_settings():
-    """Fork F4: output.N.scene / .hands / .through / .dim are rig settings —
+    """Fork F4: output.N.scene / .hands / .dim are rig settings (plan 35 T4:
+    the two mutes, no `.through`) —
     group `output` (the session's), never persisted (no preset, show or
     undo step holds them: `undo.watched` needs persist), not modulatable
     (no lane rides them) — and they write the output's `Switches`, which
@@ -446,9 +447,9 @@ def test_the_output_switches_are_rig_settings():
     reg = _registry()
     slots = _slots("glass", "projector", "wall", missing=(2,))
     ids = register_switches(reg, slots)
-    assert ids == ["output.1.scene", "output.1.hands", "output.1.through", "output.1.flip_x",
+    assert ids == ["output.1.scene", "output.1.hands", "output.1.flip_x",
                    "output.1.flip_y", "output.1.dim",
-                   "output.3.scene", "output.3.hands", "output.3.through", "output.3.flip_x",
+                   "output.3.scene", "output.3.hands", "output.3.flip_x",
                    "output.3.flip_y", "output.3.dim"]
     assert not any(p.id.startswith("output.2.") for p in reg)       # not opened: none
     for pid in ids:
@@ -458,14 +459,13 @@ def test_the_output_switches_are_rig_settings():
     assert not any(pid in reg.snapshot() for pid in ids)
     assert not any(pid in reg.snapshot(part="session") for pid in ids)
     assert reg["output.1.scene"].kind is Kind.TOGGLE and reg["output.1.dim"].kind is Kind.CONTINUOUS
-    assert reg["output.1.scene"].label == "Glass scene"
-    assert reg["output.3.through"].label == "Wall hands through effects"
+    assert reg["output.1.scene"].label == "Glass picture"
+    assert reg["output.3.hands"].label == "Wall hands"
     # they write the Switches the app hands the renderer
     sw = slots[2].switches
     reg["output.3.scene"].set(False)
-    reg["output.3.through"].set(True)
     reg["output.3.dim"].set(0.25)
-    assert (sw.scene, sw.hands, sw.through, sw.dim) == (False, True, True, 0.25)
+    assert (sw.scene, sw.hands, sw.dim) == (False, True, 0.25)
     reg["output.3.dim"].set(4.0)
     assert sw.dim == 1.0 and reg["output.3.dim"].text() == "100%"
     reg["output.3.dim"].set(0.0)
@@ -486,17 +486,31 @@ def test_one_output_has_no_dim_of_its_own():
 
     reg = _registry()
     assert register_switches(reg, _slots("")) == [
-        "output.1.scene", "output.1.hands", "output.1.through", "output.1.flip_x",
-        "output.1.flip_y"]
+        "output.1.scene", "output.1.hands", "output.1.flip_x", "output.1.flip_y"]
     assert "output.1.dim" not in reg
-    assert [reg[f"output.1.{k}"].label for k in ("scene", "hands", "through")] == [
-        "Scene", "Hands", "Hands through effects"]
+    assert [reg[f"output.1.{k}"].label for k in ("scene", "hands")] == ["Picture", "Hands"]
     # …unless a one-entry list gave it a launch dim: then it has its fader
     one = _slots("glass")
     one[0].switches.dim = 0.5
     reg = _registry()
     assert register_switches(reg, one)[-1] == "output.1.dim"
     assert reg["output.1.dim"].value == 0.5 and reg["output.1.dim"].label == "Dim"
+
+
+def test_output_switches_are_picture_and_hands():
+    """Plan 35 O (row 374): a window's two mutes — `output.N.scene`
+    (labelled "picture": the id is kept for the bindings) and `.hands` —
+    with its mirror, and no `.through`: "hands through the effects" is the
+    preset's wiring now. A mute says what it ignores."""
+    from hyperspace.overlay import register_switches
+
+    reg = _registry()
+    assert register_switches(reg, _slots("")) == [
+        "output.1.scene", "output.1.hands", "output.1.flip_x", "output.1.flip_y"]
+    assert reg["output.1.scene"].label == "Picture"
+    assert "output.1.through" not in reg
+    assert "Off: this window ignores the picture wired into it" in reg["output.1.scene"].tip
+    assert "mute" in reg["output.1.hands"].tip
 
 
 def test_the_render_cap_is_an_output_param_1080p_by_default(rig):

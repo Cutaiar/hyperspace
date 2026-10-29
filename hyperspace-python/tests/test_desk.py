@@ -82,7 +82,7 @@ def test_shift_release_never_reevaluates_a_held_button(rig):
     across a SHIFT press releases on the row it pressed, and the global
     row on the same button never hears the release."""
     t, view = rig.midi.table, rig.view
-    n = apc40.N_SCENE[0]
+    n = apc40.N_SCENE[4]            # scene launch 1–4 are invariant since plan 24 C1
     t.set_desk([Binding(f"note:0:{n}", "view.points", "momentary", feedback="led")])
     t.bindings.append(Binding(f"note:0:{n}", "view.lines", "momentary", feedback="led",
                               layer="global"))
@@ -144,20 +144,20 @@ def test_a_layer_switch_rebases_the_knobs_and_leaves_the_faders_to_pick_up(rig):
 
 def test_a_preset_load_clears_the_faders_catch(rig):
     t, reg = rig.midi.table, rig.reg
-    post = reg["band.2.post"]
+    post = reg["master.gain"]
     post.set_norm(0.5)
     rig.midi.poll()
-    push(rig, cc(apc40.CC_FADER, 64, channel=2))
-    fader = row(rig, "band.2.post")
+    push(rig, cc(apc40.CC_MASTER, 64))
+    fader = row(rig, "master.gain")
     assert fader.caught
     post.set_norm(0.9)            # the load moves the base under the fader …
     t.set_desk(t.desk())          # … and replaces the desk
     rig.midi.poll()
     assert not fader.caught
     assert all(b.caught for b in t.active() if b.feedback == "ring")   # the knobs re-based
-    push(rig, cc(apc40.CC_FADER, 30, channel=2))  # far below the new base: nothing
+    push(rig, cc(apc40.CC_MASTER, 30))  # far below the new base: nothing
     assert post.norm == pytest.approx(0.9, abs=PICKUP_TOL)
-    push(rig, cc(apc40.CC_FADER, 127, channel=2))  # swept through it: caught
+    push(rig, cc(apc40.CC_MASTER, 127))  # swept through it: caught
     assert post.norm == pytest.approx(1.0)
 
 
@@ -224,10 +224,10 @@ def test_a_desk_edit_on_the_page_redraws_and_keeps_the_faders_catch(rig):
     from hyperspace import ui_routing
 
     t, reg = rig.midi.table, rig.reg
-    reg["band.2.post"].set_norm(0.5)
+    reg["master.gain"].set_norm(0.5)
     rig.midi.poll()
-    push(rig, cc(apc40.CC_FADER, 64, channel=2))
-    fader = row(rig, "band.2.post")
+    push(rig, cc(apc40.CC_MASTER, 64))
+    fader = row(rig, "master.gain")
     assert fader.caught
     knob = next(b for b in t.desk() if b.number == 0x30)
     rig.out.sent.clear()
@@ -236,8 +236,8 @@ def test_a_desk_edit_on_the_page_redraws_and_keeps_the_faders_catch(rig):
     rig.midi.poll()
     assert fader.caught                                          # still caught
     assert sent_cc(rig, 0x30) == [round(reg["view.speed"].norm * 127)]   # redrawn
-    push(rig, cc(apc40.CC_FADER, 30, channel=2))
-    assert reg["band.2.post"].norm == pytest.approx(30 / 127, abs=PICKUP_TOL)
+    push(rig, cc(apc40.CC_MASTER, 30))
+    assert reg["master.gain"].norm == pytest.approx(30 / 127, abs=PICKUP_TOL)
 
 
 def test_a_control_that_loses_its_row_goes_dark(rig):
@@ -247,21 +247,23 @@ def test_a_control_that_loses_its_row_goes_dark(rig):
     from hyperspace import ui_routing
 
     t, view = rig.midi.table, rig.view
-    points, knob6 = apc40.N_SCENE[0], 0x35         # view.points, view.inst_rate: preset-only
-    view.points = True
+    # view.plane.ZW (activator 1) and view.inst_rate: preset-only (the
+    # render toggles on scene launch 1–4 are invariant since plan 24 C1)
+    points, knob6 = apc40.N_ACTIVATOR, 0x35
+    rig.reg["view.plane.ZW"].set(True)
     rig.midi.poll()
     assert sent_notes(rig, points)[-1] > 0                           # lit
     assert sent_cc(rig, knob6 + 8)[-1] != apc40.RING_OFF             # a ring style
     # a preset load whose desk leaves both unmapped
     rig.out.sent.clear()
-    t.set_desk([{"source": f"note:0:{apc40.N_SCENE[2]}", "target": "view.faces",
+    t.set_desk([{"source": f"note:0:{apc40.N_SCENE[4]}", "target": "view.faces",
                  "op": "toggle", "feedback": "led", "on": 1}])
     rig.midi.poll()
     assert sent_notes(rig, points) == [0]
     assert sent_cc(rig, knob6 + 8) == [apc40.RING_OFF]
     view.faces = True
     rig.midi.poll()
-    faces = apc40.N_SCENE[2]
+    faces = apc40.N_SCENE[4]
     assert sent_notes(rig, faces)[-1] == 1
     # the page's × on the one row left
     rig.out.sent.clear()
@@ -306,23 +308,26 @@ def test_an_unmapped_control_is_dark_and_does_nothing(rig):
     push(rig, cc(0x35, 3), cc(0x35, 125))
     assert reg["view.inst_rate"].norm == pytest.approx(rate)
     # and the preset's buttons: dark under SHIFT, and a press does nothing
-    assert sent_notes(rig, apc40.N_SCENE[2])[-1] == 0
-    faces = rig.view.faces
-    push(rig, note(apc40.N_SCENE[2]), note(apc40.N_SCENE[2], 0))
-    assert rig.view.faces == faces
+    # (activator 1, view.plane.ZW: the render toggles on scene launch 1–4
+    # are invariant since plan 24 C1)
+    assert sent_notes(rig, apc40.N_ACTIVATOR)[-1] == 0
+    plane = rig.reg["view.plane.ZW"].value
+    push(rig, note(apc40.N_ACTIVATOR), note(apc40.N_ACTIVATOR, 0))
+    assert rig.reg["view.plane.ZW"].value == plane
 
 
 def test_invariant_controls_mean_one_thing_on_both_layers(rig):
     t, reg, clock = rig.midi.table, rig.reg, rig.clock
-    t.bindings.append(Binding("cc:2:7", "view.speed", "abs", layer="global"))   # can't act
+    # MASTER (track faders S1–S8 are layered since plan 24 C2, decision 17)
+    t.bindings.append(Binding("cc:0:14", "view.speed", "abs", layer="global"))  # can't act
     speed = reg["view.speed"].norm
     for layer in ("preset", "global"):
         assert t.layer == layer
         for x in rig.midi.bindings:
             x.pickup = False
         v = 20 if layer == "preset" else 100
-        push(rig, cc(apc40.CC_FADER, v, channel=2))
-        assert reg["band.2.post"].norm == pytest.approx(v / 127, abs=PICKUP_TOL), layer
+        push(rig, cc(apc40.CC_MASTER, v))
+        assert reg["master.gain"].norm == pytest.approx(v / 127, abs=PICKUP_TOL), layer
         assert reg["view.speed"].norm == pytest.approx(speed), layer
         clock.tick(10.0 * (layer == "global") + 1.0)
         push(rig, note(apc40.N_METRO), note(apc40.N_METRO, 0))            # the LFO trigger
@@ -333,24 +338,25 @@ def test_invariant_controls_mean_one_thing_on_both_layers(rig):
         shift(rig)
     # the invariant set is the table's layer-None rows, and SHIFT
     assert t.is_invariant(Binding("note:0:98", "x", "toggle"))
-    assert t.is_invariant(Binding("cc:5:7", "x", "abs"))
+    assert t.is_invariant(Binding("cc:0:14", "x", "abs"))          # MASTER
+    assert not t.is_invariant(Binding("cc:5:7", "x", "abs"))      # S6: layered (decision 17)
     assert not t.is_invariant(Binding("cc:0:48", "x", "abs"))
 
 
 def test_a_desk_row_on_an_invariant_control_is_dropped_with_a_note(rig):
     t = rig.midi.table
     notes = t.set_desk([
-        {"source": "cc:0:7", "target": "view.speed", "op": "abs"},          # fader 1
+        {"source": "cc:0:14", "target": "view.speed", "op": "abs"},         # MASTER
         {"source": f"note:0:{SHIFT}", "target": "view.faces", "op": "toggle"},  # SHIFT
         {"source": "key:Z", "target": "view.faces", "op": "toggle"},        # not the desk's
         {"source": "cc:0:16", "target": "view.speed", "op": "abs", "layer": "global"},
     ])
     assert len(notes) == 3
-    assert "cc:0:7 → view.speed" in notes[0] and "invariant" in notes[0]
+    assert "cc:0:14 → view.speed" in notes[0] and "invariant" in notes[0]
     assert f"note:0:{SHIFT}" in notes[1] and "invariant" in notes[1]
     assert "key:Z" in notes[2] and "not a desk control" in notes[2]
     assert [(b.source, b.layer) for b in t.desk()] == [("cc:0:16", "preset")]  # layer forced
-    assert row(rig, "band.0.post").source == "cc:0:7"                          # untouched
+    assert row(rig, "master.gain").source == "cc:0:14"                         # untouched
 
 
 # ---------------------------------------------------------- the sorted map
@@ -406,8 +412,12 @@ def _layer_by_plan(source: str) -> str | None:
             return "global"
         if num in a.TRACK_KNOBS or num == a.CC_CUE:
             return "preset"
-        return None                                        # faders, MASTER, crossfader
+        if num == a.CC_FADER:
+            return "global"     # S1–S8: the audio strip under SHIFT (plan 24 C2, decision 17)
+        return None                                        # MASTER, crossfader
     ch = int(ch)
+    if num in a.N_SCENE[:4]:
+        return None             # the render toggles: invariant since plan 24 C1 (decision 18)
     if num == a.N_CLIP[1] or (num == a.N_CLIP[2] and ch < 3):
         return "global"                                    # the band scenes
     if (num in (a.N_ACTIVATOR, *a.N_SCENE, a.N_UP, a.N_DOWN)
@@ -444,7 +454,10 @@ def test_the_default_map_is_sorted_as_plan_13_says():
         (routing.SHIFT_SOURCE, routing.SHIFT_PARAM, None),
         # clip rows 4 and 5: the bank's slots 9–24, invariant (plan 19 WP2)
         *[(s, "preset.select", None) for s in far],
-        (f"note:0:{apc40.N_OVERDUB}", "preset.home", None)]   # home (plan 15 WP2)
+        # SAVE on track 8's clip stop, invariant (plan 24 C1, decision 18)
+        (f"note:7:{apc40.N_CLIPSTOP}", routing.SAVE_PARAM, None),
+        (f"note:0:{apc40.N_OVERDUB}", "preset.home", None),   # home (plan 15 WP2)
+        (routing.SEQ_PAGE_SOURCE, routing.SEQ_PAGE_PARAM, None)]  # SEND A (plan 31 §A)
     assert not [b for b in rows if b.layer == "global" and b.number in (0x35, 0x36, 0x37)
                 and b.kind == "cc"]
     # the preset layer's device knobs: SCENE on 1–4, 5–8 dark (plan 19 WP3)
@@ -462,56 +475,49 @@ def test_the_default_map_is_sorted_as_plan_13_says():
             "layer": "global"} in doc["bindings"]
 
 
-def test_an_old_bindings_file_gets_its_layers_once_with_a_backup(tmp_path, capsys):
+def test_an_old_bindings_file_is_sorted_in_memory_and_its_preset_rows_carried(tmp_path, capsys):
+    """A schema-2 `bindings.json` (every row, no layers) loads sorted in
+    memory: the session's rows on their layers, the preset-layer rows
+    carried off the table (`carried`), a row of mine on an invariant
+    control kept invariant, one on SHIFT's note dropped with a note. The
+    file itself is left alone (plan 13's first-launch rewrite is gone with
+    the two-tier library, 2026-10-28)."""
     path = bindings_path(tmp_path)
     hand = path.with_name("bindings.json.bak-mine")
     hand.write_text("mine")
     v2 = {"schema": routing.SCHEMA_V2, "profile": "apc40",      # every row: the preset layer too
           "bindings": [b.to_json() for b in Bindings.factory().bindings]}
-    v2["schema"] = routing.SCHEMA_V2
     new = {"hands.smooth", "hands.response", "hands.catch", "hands.sel.return", "tempo.bpm",
            routing.SHIFT_PARAM}
     v2["bindings"] = [{k: v for k, v in b.items() if k != "layer"} for b in v2["bindings"]
                       if b["target"] not in new]
     v2["bindings"] += [
-        {"source": "cc:0:7", "target": "view.speed", "op": "abs"},          # on fader 1
+        {"source": "cc:0:14", "target": "view.speed", "op": "abs"},         # on MASTER
         {"source": "cc:0:87", "target": "view.inst_amp", "op": "abs"},      # a knob of mine
         {"source": f"note:0:{SHIFT}", "target": "view.points", "op": "toggle"},  # on SHIFT
     ]
     v2["bindings"] = [b for b in v2["bindings"]
-                      if not (b["source"] == "cc:0:7" and b["target"] == "band.0.post")]
-    path.write_text(json.dumps(v2))
+                      if not (b["source"] == "cc:0:14" and b["target"] == "master.gain")]
+    text = json.dumps(v2)
+    path.write_text(text)
     t = Bindings.load(path, legacy_midi=None)
-    # the sort is in memory; the file, holding preset-layer rows, is the
-    # first-launch migration's to rewrite (plan 13 WP5): it keeps them in
-    # a preset first, then backs the file up and writes the session's part
     assert capsys.readouterr().err == "" and t.carried is not None
-    from test_routing import migrate_home
-    migrate_home(tmp_path, t)
-    err = capsys.readouterr().err
     layer = {(b.source, b.target): b.layer for b in t.midi()}
     assert layer[("cc:*:16", "band.sel.trim")] == "global"        # identical: the factory's
-    assert layer[("cc:0:48", "view.bright")] == "preset"
     assert layer[(f"note:0:{apc40.N_TAP}", "tempo.tap")] is None
-    assert layer[("cc:0:7", "view.speed")] is None                # mine, on an invariant control
-    assert layer[("cc:0:87", "view.inst_amp")] == "preset"        # mine, anywhere else
+    assert layer[("cc:0:14", "view.speed")] is None               # mine, on an invariant control
+    carried = {(d["source"], d["target"]) for d in t.carried.desk or []}
+    assert ("cc:0:48", "view.bright") in carried                   # the preset layer: carried
+    assert ("cc:0:87", "view.inst_amp") in carried                 # mine, anywhere else
     for pid in new:                                               # the global rows and SHIFT added
         assert any(b.target == pid for b in t.midi()), pid
     # a row of mine on SHIFT's note would keep the latch off: dropped, noted
     # (review of PR #63), and SHIFT is the latch
     assert [b.target for b in t.dispatch("note", 0, SHIFT)] == [routing.SHIFT_PARAM]
     assert any("SHIFT is the desk's layer latch" in n for n in t.notes)
-    assert "sorted" in err and "kept as bindings.json.bak-v2" in err
-    assert json.loads(path.with_name("bindings.json.bak-v2").read_text()) == v2
-    assert hand.read_text() == "mine"
-    doc = json.loads(path.read_text())
-    assert doc["schema"] == routing.SCHEMA and doc == t.to_json()
-    # once: the second load finds a schema-3 file and says nothing
-    again = Bindings.load(path, legacy_midi=None)
-    assert again.to_json() == t.to_json() and not again.changed
-    assert capsys.readouterr().err == ""
+    assert path.read_text() == text and hand.read_text() == "mine"   # nothing written
     assert sorted(p.name for p in tmp_path.glob("bindings.json.bak-*")) == [
-        "bindings.json.bak-mine", "bindings.json.bak-v2"]
+        "bindings.json.bak-mine"]
 
 
 # ------------------------------------------------------ plan 15 WP1: undo
@@ -528,11 +534,11 @@ def test_undoing_a_desk_row_redraws_and_keeps_the_layer_and_the_faders_catch(tmp
 
     r = boot(tmp_path / "home")
     t, reg, u = r.table, r.reg, r.undo
-    reg["band.2.post"].set_norm(0.5)
+    reg["master.gain"].set_norm(0.5)
     frames(r)
-    r.inp.queue.append(cc(apc40.CC_FADER, 64, channel=2))
+    r.inp.queue.append(cc(apc40.CC_MASTER, 64))
     frames(r)
-    fader = next(b for b in t.midi() if b.target == "band.2.post")
+    fader = next(b for b in t.midi() if b.target == "master.gain")
     assert fader.caught and fader.layer is None
     settle(r)
     u.clear()
@@ -555,9 +561,9 @@ def test_undoing_a_desk_row_redraws_and_keeps_the_layer_and_the_faders_catch(tmp
     assert t.layer == "global" and fader.caught
     frames(r)                                          # the adapter follows: a redraw…
     assert r.out.sent and t.layer == "global" and fader.caught      # …and nothing dropped
-    r.inp.queue.append(cc(apc40.CC_FADER, 30, channel=2))
+    r.inp.queue.append(cc(apc40.CC_MASTER, 30))
     frames(r)
-    assert reg["band.2.post"].norm == pytest.approx(30 / 127, abs=PICKUP_TOL)   # still caught
+    assert reg["master.gain"].norm == pytest.approx(30 / 127, abs=PICKUP_TOL)   # still caught
     # back on the preset layer the restored knob is drawn again
     r.inp.queue += [note(SHIFT), note(SHIFT, 0)]
     r.out.sent.clear()
@@ -569,7 +575,7 @@ def test_undoing_a_desk_row_redraws_and_keeps_the_layer_and_the_faders_catch(tmp
     r.inp.queue += [note(SHIFT), note(SHIFT, 0)]
     frames(r)
     assert t.layer == "global"
-    reg["band.2.post"].set_norm(0.9)
+    reg["master.gain"].set_norm(0.9)
     t.set_desk(t.desk())
     frames(r)
     assert t.layer == "preset" and t.desk_serial == serials[0] + 1 and not fader.caught
@@ -634,14 +640,19 @@ def test_overdub_is_home_on_both_layers_and_is_lit(rig):
 
 def test_the_clip_stop_row_is_free(rig):
     """2026-10-09: the clip-stop SAVE AS bar is retired — an empty bank pad
-    held saves into its own slot — so the eight clip-stop buttons have no
-    row on either layer: dark, doing nothing, and open to Learn (not
-    invariant) for toggles and the like."""
+    held saves into its own slot — so the clip-stop buttons have no row on
+    either layer: dark, doing nothing, and open to Learn (not invariant)
+    for toggles and the like. Since plan 24 C1 (decision 18) track 8's is
+    the desk's SAVE, invariant (tests/test_desk_trust.py); the other seven
+    stay free."""
     t, n = rig.midi.table, apc40.N_CLIPSTOP
+    assert apc40.SAVE == (n, 7)
+    (save,) = t.route("note", 7, n)
+    assert (save.target, save.layer) == (routing.SAVE_PARAM, None)
     for under_shift in (False, True):
         if under_shift:
             shift(rig)
-        for k in range(8):
+        for k in range(7):
             assert t.route("note", k, n) == [] and t.dispatch("note", k, n) == []
             assert not t.is_invariant(Binding(f"note:{k}:{n}", "view.points", "toggle",
                                               layer="preset"))
@@ -845,7 +856,7 @@ def test_the_bank_pads_are_invariant(rig):
     assert notes == [f"dropped note:{ch}:{n} → view.points: that control is invariant, the "
                      "session's (plan 13 D6)" for _k, (n, ch) in want]
     assert [(b.to_json(), b.layer) for b in t.midi() if b.layer != "preset"] == rows
-    # no factory preset's desk names a pad of rows 4 or 5
+    # no corpus preset's desk names a pad of rows 4 or 5
     for name in lib.list("presets"):
         desk = lib.read("presets", name).get("desk") or []
         assert not [d for d in desk if d["source"].startswith("note:")

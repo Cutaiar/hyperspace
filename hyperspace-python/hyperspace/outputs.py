@@ -1,16 +1,25 @@
 """The render outputs, as the renderer sees them (plan 21 WP1).
 
 One frame is drawn per loop; each output — a window on its own screen,
-or an offscreen target standing in for one — shows that frame through
-its own switches: the scene on or off, the hands on or off, and its own
-dim. This module is the pure half of that: what an output asks for
-(`Switches`), which pipeline gives it (`route`), where the frame sits in
-an output of another shape (`fit`), and the one-frame record the
-renderer fills in for an output (`View`, with `Handoff` for an output in
-another window's context). `Renderer.draw_outputs` (render.py) does the
+or an offscreen target standing in for one — shows what the preset's
+graph wires into it (plan 35: its own wires; plan 36 T1, else All
+outputs' by the rig's bus cable into that port, `graph.window_ports`) through
+its window's two mutes, the picture and the hands, with its mirror and
+its own dim. A mute is the window's, never the preset's structure: off,
+the window ignores the picture (or the hands and the guide) wired into
+it and shows its ground, the hands over — it builds nothing, so it never
+rebuilds the graph (row 374). "Hands through the effects" is wiring in
+the preset, not a switch (plan 35 O). This module is the pure half of
+that: what a window's mutes are (`Switches`), where the frame sits in an
+output of another shape (`fit`), and the one-frame record the renderer
+fills in for an output (`View`, with `Handoff` for an output in another
+window's context). `Renderer.draw_outputs` (render.py) does the
 drawing. WP3 adds the rig's side: `Slot`, one listed output for the run
 (app.py fills it from `[[output.screens]]`), and `Presenter`, which shows
-a `Handoff` in another window's context.
+a `Handoff` in another window's context. Plan 32 T9 adds `Offscreen`, a
+texture-backed target on the renderer's context: a publish-only output
+(`window = false`) is drawn into one, and a published output with a
+window has one as its `tap`, the copy its publishers are handed.
 
 Render stack (ARCHITECTURE §3): it only reads. This module imports
 moderngl and glsl at most — never app, ui or params — and the
@@ -19,6 +28,8 @@ moderngl and glsl at most — never app, ui or params — and the
 
 from __future__ import annotations
 
+import math
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -28,21 +39,18 @@ from .glsl import QUAD_VS
 
 MAX_OUTPUTS = 4
 
-# pipeline keys, in run order: the scene through the look-back and the
-# effects; the scene with the hands laid on before the effects (WP2); the
-# hands alone through the effects (WP2)
-SCENE, SCENE_HANDS, HANDS = 0, 1, 2
-PIPELINES = (SCENE, SCENE_HANDS, HANDS)
-NAMES = {SCENE: "SCENE", SCENE_HANDS: "SCENE+HANDS", HANDS: "HANDS"}
-
 
 @dataclass
 class Switches:
-    """What one output shows — what the output.N.* params write (WP4)."""
+    """One window's mutes and its own look — what the output.N.* params
+    write (WP4). Plan 35 O (row 374): `scene` is the picture mute (off: the
+    window ignores the picture wired into it), `hands` the hands mute (off:
+    it ignores the hands and the guide); read by its `Output` each frame,
+    never a rebuild. The through switch is gone: "hands through the
+    effects" is the preset's wiring."""
 
-    scene: bool = True
+    scene: bool = True         # the picture (its label "picture"; the id is kept)
     hands: bool = True
-    through: bool = False      # hands through effects (WP2)
     dim: float = 1.0           # this output's own dim, times the master's
     # plan 23 WP1: this output's picture mirrored as its last step, inside
     # the fit rect — the frame, the hands laid after and the readout alike,
@@ -50,31 +58,6 @@ class Switches:
     # whole rect and needs none). Off, the output is bit-identical
     flip_x: bool = False       # left-right
     flip_y: bool = False       # top-bottom
-
-
-def route(sw: Switches, fx_active: bool, hands_visible: bool) -> tuple[int | None, bool]:
-    """(pipeline key, or None for the ground; hands composited after).
-
-    `hands_visible` is "the ghost hands are on and a hand shows this
-    frame" (`Ghost.layer` drew); the hands are *shown* on this output when
-    its own hands switch is on too (fork F7).
-
-    | scene | hands shown | through and an effect on | pipeline    | hands after |
-    |  on   |    no       |          —               | SCENE       | no          |
-    |  on   |    yes      |          no              | SCENE       | yes         |
-    |  on   |    yes      |          yes             | SCENE_HANDS | no          |
-    |  off  |    no       |          —               | None        | no          |
-    |  off  |    yes      |          no              | None        | yes         |
-    |  off  |    yes      |          yes             | HANDS       | no          |
-
-    So with no effect on, or no hand shown, the through switch changes
-    nothing: every output is SCENE or the ground (WP2; fork F2 makes
-    "scene off, hands through" the hands alone through the chain)."""
-    shown = bool(sw.hands) and bool(hands_visible)
-    through = shown and bool(sw.through) and bool(fx_active)
-    if sw.scene:
-        return (SCENE_HANDS, False) if through else (SCENE, shown)
-    return (HANDS, False) if through else (None, shown)
 
 
 def capped(size: tuple[int, int], cap: tuple[int, int] | None) -> tuple[int, int]:
@@ -115,13 +98,15 @@ class Handoff:
     this order:
 
     1. clears its framebuffer to (0, 0, 0, `bg_alpha`);
-    2. draws `frame` (RGBA8, `frame_size`, premultiplied, LINEAR) into
+    2. draws `frame` (RGBA8 or half float, below; `frame_size`, premultiplied, LINEAR) into
        `rect` (in its framebuffer, the view's `viewport` included) — 1:1 when `rect`'s size is `frame_size`, else scaled; with
        `bg_alpha` 1 it writes alpha 1. `frame` None: the ground only;
     3. lays `hands` (the hands' layer, premultiplied, frame-sized) over the
        same `rect` at `alpha`: colour ONE / ONE_MINUS_SRC_ALPHA, and alpha
        ZERO / ONE on an opaque ground (`bg_alpha` 1) — `Ghost.composite`'s
-       blend. None: no hands after the effects on this output;
+       blend; with `blend` "add" (plan 26 A3) colour ONE / ONE instead, and
+       alpha ONE / ONE_MINUS_SRC_ALPHA on a see-through ground. None: no
+       hands after the effects on this output;
     4. lays `readout` (the guide and the tethers' labels when they are a
        layer of their own, WP2 — on every output that shows the hands,
        over or through) into `rect` the same way. None: nothing;
@@ -131,7 +116,14 @@ class Handoff:
 
     The textures are valid until the next `draw_outputs`; the renderer's
     context must be flushed (`glFlush`) before the presenter's samples
-    them (plan §1: otherwise it sees last frame's)."""
+    them (plan §1: otherwise it sees last frame's).
+
+    Plan 30 D1: `frame` or `hands` may be a half-float texture of the
+    effects' pool rather than RGBA8 — an output's frame through an effect
+    placed into it, the hands' layer through one placed after the hands.
+    The presenter wraps every name as "f1" (`Presenter._ext`); that
+    declares the wrapper's dtype only, and a shader samples the texture
+    by its name whatever its real format, so the picture is right."""
 
     frame: moderngl.Texture | None
     frame_size: tuple[int, int]
@@ -142,6 +134,7 @@ class Handoff:
     factor: float = 1.0
     bg_alpha: float = 1.0
     flip: tuple[bool, bool] = (False, False)   # plan 23 WP1: steps 2–4 mirrored in `rect`
+    blend: str = "over"                        # plan 26 A3: step 3's blend, "over" or "add"
 
     @staticmethod
     def name(tex: moderngl.Texture | None) -> int | None:
@@ -174,6 +167,13 @@ class View:
     viewport: tuple[int, int, int, int] | None = None
     handoff: Handoff | None = None              # set by draw_outputs for a presenter
     exc: BaseException | None = field(default=None, repr=False)   # what set `error`
+    # plan 32 T9: this output's publishers (media/publish.py), each handed
+    # its picture once the frame is drawn — `target`'s own texture when it
+    # is an `Offscreen`'s, else a copy in `tap` (an `Offscreen`): a
+    # window's framebuffer resolved into it, a presenter's hand-off
+    # presented into it on the renderer's context
+    publish: list = field(default_factory=list)
+    tap: Any = None
 
     @property
     def rect(self) -> tuple[int, int, int, int]:
@@ -196,7 +196,12 @@ class Slot:
     `Presenter` (outputs after the first), `error` the last present that
     raised ("" once one succeeds), `size` its framebuffer at the last frame.
     The app fills it; the renderer never sees it, only the `View` built
-    from it each frame."""
+    from it each frame.
+
+    Plan 32 T9: `syphon` / `ndi` are the names it is published under ("" =
+    not), `publishers` the publishers made for them, `window` false for a
+    publish-only output — no window ever, drawn into `offscreen`; a
+    published output with a window copies its picture into `tap`."""
 
     n: int
     name: str = ""
@@ -209,6 +214,12 @@ class Slot:
     presenter: Any = None
     error: str = ""
     size: tuple[int, int] = (0, 0)
+    window: bool = True
+    syphon: str = ""
+    ndi: str = ""
+    publishers: list = field(default_factory=list)
+    offscreen: Any = None
+    tap: Any = None
 
     @property
     def label(self) -> str:
@@ -217,7 +228,451 @@ class Slot:
 
     @property
     def opened(self) -> bool:
+        """It has a window (a publish-only output never has)."""
         return self.win is not None
+
+    @property
+    def publish_only(self) -> bool:
+        return not self.window
+
+    @property
+    def drawn(self) -> bool:
+        """It gets a picture each frame: a window, or publish-only with
+        something to publish (`missing` says why one is not)."""
+        return self.opened or (self.publish_only and not self.missing)
+
+
+class Offscreen:
+    """An RGBA8 texture and its framebuffer on the renderer's context,
+    made at the size `fit` asks for and made again when that changes
+    (plan 32 T9): a publish-only output's target, a published window's
+    tap. `tex` is what a publisher is handed."""
+
+    def __init__(self, ctx: moderngl.Context):
+        self.ctx = ctx
+        self.tex: moderngl.Texture | None = None
+        self.fbo: moderngl.Framebuffer | None = None
+
+    @property
+    def size(self) -> tuple[int, int] | None:
+        return None if self.tex is None else tuple(self.tex.size)
+
+    def fit(self, size: tuple[int, int]) -> moderngl.Framebuffer:
+        size = (max(int(size[0]), 1), max(int(size[1]), 1))
+        if self.fbo is None or self.size != size:
+            self.release()
+            tex = self.ctx.texture(size, 4)
+            try:
+                self.fbo = self.ctx.framebuffer(color_attachments=[tex])
+            except Exception:
+                tex.release()
+                raise
+            self.tex = tex
+        return self.fbo
+
+    def release(self) -> None:
+        """Free both; a bound framebuffer is never released (moderngl
+        rebinds it after the next one is made: GL_INVALID_OPERATION), so
+        the default framebuffer is bound first when it is this one."""
+        fbo, tex, self.fbo, self.tex = self.fbo, self.tex, None, None
+        if fbo is not None:
+            try:
+                if self.ctx.fbo is fbo:
+                    self.ctx.screen.use()
+                fbo.release()
+            except Exception:  # noqa: BLE001, S110 — teardown is best-effort
+                pass
+        if tex is not None:
+            try:
+                tex.release()
+            except Exception:  # noqa: BLE001, S110 — teardown is best-effort
+                pass
+
+
+
+class Preview:
+    """Output 1's picture for the control window (2026-10-26: the GRAPH
+    page's backdrop): a publisher in shape — `_draw_render` adds it to
+    output 1's view, with this tap when the window has none of its own, on
+    a frame after the page `want`ed it — that keeps the texture it is
+    handed. Wanted only while the page draws it, so a closed page costs no
+    copy. `tex` is a texture of the render context, which the control
+    window's shares; None before the first picture."""
+
+    kind = "preview"
+    name = ""
+    status = "waiting"
+    fps = 0.0
+    readback_ms = 0.0
+
+    def __init__(self, ctx: moderngl.Context | None = None):
+        self.tap = Offscreen(ctx) if ctx is not None else None
+        self.tex: Any = None
+        self.wanted = False
+
+    def want(self) -> None:
+        """The page draws the picture this frame: copy it next frame."""
+        self.wanted = True
+
+    def take(self) -> bool:
+        """Was it wanted since the last frame? (and forget the wish)"""
+        wanted, self.wanted = self.wanted, False
+        return wanted
+
+    def publish(self, tex, t: float) -> None:
+        self.tex, self.status = tex, "sending"
+
+    def fail(self, why: str) -> None:
+        self.tex, self.status = None, f"error: {why}"
+
+    def close(self) -> None:
+        self.tex = None
+        if self.tap is not None:
+            self.tap.release()
+
+# ---------------------------------------------------------------- plan 37 C1: the thumbnails
+
+# the long side of a node's thumbnail on GRAPH, in texels (P1)
+THUMB_PX = 192
+# a thumbnail not wanted for this long is dropped (its texture freed)
+THUMB_DROP_S = 1.0
+# a node that made nothing this long shows black (dimmed before that)
+THUMB_BLACK_S = 1.0
+# the downsample pass (plan 37 C1): 4×4 bilinear taps over the footprint
+# of one thumbnail texel — each tap averages 2×2 source texels, so a
+# 1920-wide picture's ten texels a thumbnail texel are read eight across,
+# in one draw, with no mipmap built on (and no filter changed on) a
+# texture the frame owns. Written opaque: the picture over black, so a
+# see-through layer reads on the node as it would on a black window
+THUMB_FS = """
+#version 330
+in vec2 v_uv;
+uniform sampler2D u_src;
+uniform vec2 u_step;          // one thumbnail texel, in the source's uv
+out vec4 f_color;
+void main() {
+    vec4 c = vec4(0.0);
+    for (int j = 0; j < 4; ++j)
+        for (int i = 0; i < 4; ++i)
+            c += texture(u_src, v_uv + (vec2(i, j) - 1.5) * 0.25 * u_step);
+    f_color = vec4(c.rgb / 16.0, 1.0);
+}
+"""
+
+
+# plan 37 C2 (D3): a thumbnail's dominant hue, for the GRAPH head's
+# **pictures · tint cables** switch — read from the thumbnail (never the
+# full picture) at most once a second a node, at most one node a frame,
+# only while the page asks (`want_hues`): the thumbnail downsampled to
+# `HUE_GRID` × `HUE_GRID` by `THUMB_FS`, copied into a pixel buffer, read
+# from it the next frame (never a stall on the GPU) and weighed
+HUE_EVERY_S = 1.0
+HUE_GRID = 16
+
+
+def dominant_hue(data: bytes, size: tuple[int, int], grid: int = HUE_GRID
+                 ) -> tuple[float, float]:
+    """The dominant hue of an RGBA8 picture (`data`, rows of `size` (w, h)
+    texels): (hue in turns, 0 red · ⅓ green · ⅔ blue; how strongly, 0–1).
+    Each texel of a strided `grid` × `grid` sample is a vector in the hue
+    plane (x = r − (g + b)/2, y = √3/2 (g − b): its length is its chroma),
+    and the hue is their sum's angle — a mean weighted by chroma, so grey,
+    black and white texels weigh nothing. How strongly is the sum's length
+    over the texels weighed: 0 for a grey picture (no hue: the cable stays
+    plain red), up to 1 for one pure colour."""
+    w, h = max(int(size[0]), 1), max(int(size[1]), 1)
+    sx, sy = max(1, w // grid), max(1, h // grid)
+    x = y = 0.0
+    n = 0
+    k = math.sqrt(3.0) / 2.0
+    for row in range(sy // 2, h, sy):
+        base = row * w * 4
+        for col in range(sx // 2, w, sx):
+            i = base + col * 4
+            if i + 2 >= len(data):
+                break
+            r, g, b = data[i] / 255.0, data[i + 1] / 255.0, data[i + 2] / 255.0
+            x += r - (g + b) / 2.0
+            y += k * (g - b)
+            n += 1
+    if n == 0:
+        return 0.0, 0.0
+    strength = math.hypot(x, y) / n
+    if strength < 1e-6:
+        return 0.0, 0.0
+    return (math.atan2(y, x) / (2.0 * math.pi)) % 1.0, min(1.0, strength)
+
+
+def thumb_size(src: tuple[int, int], px: int = THUMB_PX) -> tuple[int, int]:
+    """A thumbnail's size for a picture of size `src`: its long side `px`,
+    the picture's aspect (never under one texel, never above the source)."""
+    w, h = max(int(src[0]), 1), max(int(src[1]), 1)
+    k = min(px / max(w, h), 1.0)
+    return max(1, round(w * k)), max(1, round(h * k))
+
+
+class PreviewTextures:
+    """The GRAPH page's thumbnails (plan 37 C1, P1): a small texture per
+    node name, its long side `THUMB_PX`, the picture's aspect — `Preview`'s
+    pattern, one per node. The page `want`s, each frame it draws, the
+    names it has on screen (each with how its picture is found:
+    `graphview.THUMBS`); the renderer, at the end of its next frame
+    (`Renderer._for_the_panel`), `take`s the wish and `put`s each wanted
+    node's picture, which one downsample pass (`THUMB_FS`) copies into
+    that node's texture, and calls `end_frame`. A name not wanted for
+    `THUMB_DROP_S` is dropped and its texture freed, so a node off screen,
+    hidden or collapsed off the canvas costs nothing after a second.
+
+    A node wanted that made nothing this frame keeps its last thumbnail:
+    `shade(name)` is 1 when it was copied the renderer's last frame, `DIM`
+    while it is less than `THUMB_BLACK_S` old, 0 (black) after — a number
+    the page multiplies the picture by, never a copy. `count` is the
+    copies the last frame made (the SYSTEM line), `repainted` how many of
+    them were of a picture the frame had not made (a node that paints into
+    its consumer, painted again at the frame's size for its thumbnail),
+    `kept` the thumbnail textures held. The textures are the render context's, which the control
+    window's shares, as `Preview`'s is; with no context (a test, a
+    stand-in) `put` keeps only the name and the time."""
+
+    DIM = 0.45
+
+    def __init__(self, ctx: moderngl.Context | None = None, clock=None):
+        self.ctx = ctx
+        self.clock = clock if clock is not None else time.monotonic
+        self.wanted: dict[str, str] = {}
+        self.asked: dict[str, float] = {}       # name → when it was last wanted
+        self.made: dict[str, float] = {}        # name → when it was last copied
+        self.tex: dict[str, Any] = {}           # name → (texture, framebuffer)
+        self.sizes: dict[str, tuple[int, int]] = {}   # name → the picture's own size
+        self.frame = 0                          # the renderer's frames ended
+        self.made_in: dict[str, int] = {}       # name → the frame it was last copied in
+        self.count = 0
+        self.repainted = 0
+        self.error = ""
+        self._prog = self._vao = self._sampler = None
+        # plan 37 C2: each name's dominant hue (`dominant_hue`) and when it
+        # was read; when the page last asked for hues (`want_hues`)
+        self.hues: dict[str, tuple[float, float]] = {}
+        self.hue_at: dict[str, float] = {}
+        self.hue_asked: float | None = None
+        self.hue_reads = 0
+        self._hue_pending = None                # (name, pixel buffer) started last frame
+        self._hue_target = self._hue_buf = None
+
+    # ---- the page's side
+
+    def want(self, ids) -> None:
+        """The page draws these nodes this frame: copy each next frame.
+        `ids` names → how (a mapping), or names (each "picture")."""
+        now = self.clock()
+        items = ids.items() if hasattr(ids, "items") else ((i, "picture") for i in ids)
+        for name, how in items:
+            self.wanted[name] = how
+            self.asked[name] = now
+
+    def get(self, name: str):
+        """`name`'s thumbnail texture, or None (never copied, or dropped)."""
+        got = self.tex.get(name)
+        return got[0] if got is not None else None
+
+    def size_of(self, name: str) -> tuple[int, int] | None:
+        """The size of the picture `name`'s thumbnail was last copied from."""
+        return self.sizes.get(name)
+
+    def shade(self, name: str) -> float:
+        """1 copied the last frame; `DIM` while the last copy is under
+        `THUMB_BLACK_S` old; 0 after that, or never copied."""
+        if self.made_in.get(name) == self.frame and self.frame:
+            return 1.0
+        at = self.made.get(name)
+        if at is None or self.clock() - at >= THUMB_BLACK_S:
+            return 0.0
+        return self.DIM
+
+    @property
+    def kept(self) -> int:
+        """The thumbnails held: a texture each (with no context, a picture
+        size each — a node copied at least once and not dropped)."""
+        return len(self.tex) if self.ctx is not None else len(self.sizes)
+
+    def want_hues(self) -> None:
+        """The page tints its picture cables (plan 37 C2): keep reading the
+        thumbnails' hues — one a frame, each at most once a second — until
+        it has not asked for `THUMB_DROP_S`."""
+        self.hue_asked = self.clock()
+
+    def stop_hues(self) -> None:
+        """The switch went off: no hue started from the next frame on."""
+        self.hue_asked = None
+
+    def hue(self, name: str) -> tuple[float, float] | None:
+        """`name`'s dominant hue as last read ((hue, strength): `dominant_hue`),
+        or None: never read, or dropped."""
+        return self.hues.get(name)
+
+    # ---- the renderer's side
+
+    def take(self) -> dict[str, str]:
+        """What was wanted since the last frame (and forget the wish)."""
+        wanted, self.wanted = self.wanted, {}
+        return wanted
+
+    def begin_frame(self) -> None:
+        """A frame's copies start: none counted yet."""
+        self.frame += 1
+        self.count = self.repainted = 0
+        self._read_hue()
+
+    def _read_hue(self) -> None:
+        """Plan 37 C2: the thumbnails' hues, read without waiting on the
+        GPU. First the hue started last frame is collected: its 16×16
+        downsample, copied into a pixel buffer (`read_into`, asynchronous)
+        a frame ago, is read from that buffer — long since filled — and
+        weighed (`dominant_hue`). Then, while the page asks (`want_hues`),
+        the one thumbnail whose hue is oldest, and at least `HUE_EVERY_S`
+        old, is started: one `THUMB_FS` pass into a `HUE_GRID`² target and
+        its `read_into` the buffer. Never a texture's `read()` (that would
+        stall the frame on the GPU's work). Never raises."""
+        try:
+            self._hue_collect()
+        except Exception as e:  # noqa: BLE001 — a hue is a nicety
+            self.error = f"hue: {type(e).__name__}: {e}"[:120]
+        if self.hue_asked is None or self.clock() - self.hue_asked >= THUMB_DROP_S:
+            return
+        now = self.clock()
+        due = [(self.hue_at.get(n, -math.inf), n) for n in self.tex
+               if now - self.hue_at.get(n, -math.inf) >= HUE_EVERY_S]
+        if not due:
+            return
+        _, name = min(due)
+        self.hue_at[name] = now
+        try:
+            self._hue_start(name)
+        except Exception as e:  # noqa: BLE001 — a hue is a nicety
+            self.error = f"hue {name}: {type(e).__name__}: {e}"[:120]
+
+    def _hue_collect(self) -> None:
+        """The hue started last frame, read from its pixel buffer."""
+        got, self._hue_pending = self._hue_pending, None
+        if got is None:
+            return
+        name, buf = got
+        data = buf.read()
+        if name in self.tex:                    # (not dropped since)
+            self.hues[name] = dominant_hue(data, (HUE_GRID, HUE_GRID))
+        self.hue_reads += 1
+
+    def _hue_start(self, name: str) -> None:
+        """`name`'s thumbnail downsampled to `HUE_GRID`² and copied into the
+        pixel buffer, asynchronously: collected next frame."""
+        if self.ctx is None:
+            return
+        if self._hue_target is None:
+            tex = self.ctx.texture((HUE_GRID, HUE_GRID), 4)
+            self._hue_target = (tex, self.ctx.framebuffer(color_attachments=[tex]))
+            self._hue_buf = self.ctx.buffer(reserve=HUE_GRID * HUE_GRID * 4)
+        tex, fbo = self._hue_target
+        self._pass(self.tex[name][0], tex, fbo)
+        fbo.read_into(self._hue_buf, components=4)
+        self._hue_pending = (name, self._hue_buf)
+
+    def put(self, name: str, src, repainted: bool = False) -> bool:
+        """`src` (a texture of the render context) copied into `name`'s
+        thumbnail by one downsample pass; True when it was. `repainted`: the
+        frame had not made `src`, it was painted for this (`repainted`).
+        A pass that raises leaves the last thumbnail (`error` says why)."""
+        try:
+            size = tuple(int(v) for v in src.size)
+            if self.ctx is not None:
+                self._copy(name, src, size)
+        except Exception as e:  # noqa: BLE001 — a thumbnail must not take the frame down
+            self.error = f"{type(e).__name__}: {e}"[:120]
+            return False
+        self.sizes[name] = size
+        self.made[name] = self.clock()
+        self.made_in[name] = self.frame
+        self.count += 1
+        self.repainted += bool(repainted)
+        return True
+
+    def end_frame(self) -> None:
+        """Drop every name not wanted for `THUMB_DROP_S` (its texture freed)."""
+        now = self.clock()
+        for name in [n for n, at in self.asked.items() if now - at >= THUMB_DROP_S]:
+            self.drop(name)
+
+    def drop(self, name: str) -> None:
+        for d in (self.asked, self.made, self.sizes, self.made_in, self.wanted,
+                  self.hues, self.hue_at):
+            d.pop(name, None)
+        got = self.tex.pop(name, None)
+        if got is not None:
+            for res in (got[1], got[0]):
+                try:
+                    res.release()
+                except Exception:  # noqa: BLE001, S110 — teardown is best-effort
+                    pass
+
+    def close(self) -> None:
+        for name in list(self.tex) + list(self.asked):
+            self.drop(name)
+        held = (*reversed(self._hue_target or ()), self._hue_buf)
+        self._hue_target = self._hue_buf = self._hue_pending = None
+        for res in (self._vao, self._prog, self._sampler, *held):
+            if res is not None:
+                try:
+                    res.release()
+                except Exception:  # noqa: BLE001, S110 — teardown is best-effort
+                    pass
+        self._prog = self._vao = self._sampler = None
+
+    def _target(self, name: str, size: tuple[int, int]):
+        want = thumb_size(size)
+        got = self.tex.get(name)
+        if got is not None and tuple(got[0].size) == want:
+            return got
+        if got is not None:
+            self.tex.pop(name)
+            for res in (got[1], got[0]):
+                res.release()
+        tex = self.ctx.texture(want, 4)
+        tex.filter = (moderngl.LINEAR, moderngl.LINEAR)
+        tex.repeat_x = tex.repeat_y = False
+        try:
+            fbo = self.ctx.framebuffer(color_attachments=[tex])
+        except Exception:
+            tex.release()
+            raise
+        got = self.tex[name] = (tex, fbo)
+        return got
+
+    def _copy(self, name: str, src, size: tuple[int, int]) -> None:
+        tex, fbo = self._target(name, size)
+        self._pass(src, tex, fbo)
+
+    def _pass(self, src, tex, fbo) -> None:
+        """One `THUMB_FS` pass: `src` downsampled into `tex` (`fbo`'s)."""
+        ctx = self.ctx
+        if self._prog is None:
+            self._prog = ctx.program(vertex_shader=QUAD_VS, fragment_shader=THUMB_FS)
+            self._vao = ctx.vertex_array(self._prog, [])
+            # a sampler of our own: the source's filter (NEAREST on a
+            # texelFetch target) is never changed, and taps blend
+            self._sampler = ctx.sampler(filter=(moderngl.LINEAR, moderngl.LINEAR),
+                                        repeat_x=False, repeat_y=False)
+        fbo.use()
+        ctx.viewport = (0, 0, *tex.size)
+        blend = moderngl.BLEND
+        ctx.disable(blend)
+        try:
+            src.use(location=0)
+            self._sampler.use(location=0)
+            self._prog["u_src"].value = 0
+            self._prog["u_step"].value = (1.0 / tex.size[0], 1.0 / tex.size[1])
+            self._vao.render(moderngl.TRIANGLES, vertices=3)
+        finally:
+            self._sampler.clear(location=0)
+            ctx.enable(blend)
 
 
 # a frame texture or a layer into a rect of a presenter's framebuffer:
@@ -343,14 +798,15 @@ class Presenter:
                 prog["u_k"].value = 1.0
                 prog["u_opaque"].value = int(opaque)
                 vao.render(moderngl.TRIANGLES, vertices=3)
-            for layer in (ho.hands, ho.readout):                                # 3, 4
+            add = getattr(ho, "blend", "over") == "add"
+            for layer, plus in ((ho.hands, add), (ho.readout, False)):          # 3, 4
                 if layer is None or rect[2] <= 0 or rect[3] <= 0:
                     continue
                 ctx.viewport = rect
                 ctx.enable(moderngl.BLEND)
-                ctx.blend_func = ((moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA, moderngl.ZERO,
-                                   moderngl.ONE) if opaque else
-                                  (moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA, moderngl.ONE,
+                rgb = moderngl.ONE if plus else moderngl.ONE_MINUS_SRC_ALPHA
+                ctx.blend_func = ((moderngl.ONE, rgb, moderngl.ZERO, moderngl.ONE) if opaque else
+                                  (moderngl.ONE, rgb, moderngl.ONE,
                                    moderngl.ONE_MINUS_SRC_ALPHA))
                 self._wrap(layer).use(location=0)
                 prog["u_scaled"].value = 1          # as Ghost.composite samples it

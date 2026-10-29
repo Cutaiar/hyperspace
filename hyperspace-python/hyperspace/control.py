@@ -7,17 +7,19 @@ Reset-all is guarded by an 8 s undo (the button relabels itself) whose
 snapshot is discarded on a scene change because it belongs to the old
 scene. Knob edits and transfer changes never move the scene selection.
 
-A scene *is* a band preset (plan 11, audit A1): the eleven files in
-library/band/*.json, named here in combo order (SCENES) because the APC40's
-clip grid and every saved project address them by index. The combo, the
-grid and Reset re-tune whatever bands are loaded from the scene's values
-— through the registry when one is attached (a base write, as a strip
-load is, so a knob a performer holds keeps its offset and the strip reads
+A scene is a band preset's document (plan 11, audit A1): the eleven files
+in hyperspace/scenes/band/*.json — code data, shipped with the build and
+never a library preset (2026-10-28: the library has one tier, the
+user's) — named here in combo order (SCENES) because the APC40's clip
+grid and every saved project address them by index. The combo, the grid
+and Reset re-tune whatever bands are loaded from the scene's values —
+through the registry when one is attached (a base write, as a strip load
+is, so a knob a performer holds keeps its offset and the strip reads
 clean at once), else straight onto the analyzer's Params — and tell the
-library which scene is current;
-a load from the preset strip (Library.load) goes the other way, layout
-included, and tells the combo. With no library attached the factory file
-is read directly (library.factory_doc), so the headless tests need none.
+library which scene is current; a load from the band strip (Library.load,
+the user's own band presets) goes the other way, layout included, and
+tells the combo when its name is a scene's. The scene files are read
+without a library (library.scene_doc), so the headless tests need none.
 
 The analyzer has N bands (plan 07), so the panel also adds, removes and
 moves them and applies a preset's layout. Every one of those changes the
@@ -32,12 +34,15 @@ from __future__ import annotations
 
 import time
 from dataclasses import replace
+from pathlib import Path
 
 from .analyzer import Analyzer, scene_strip
-from .library import LibraryError, factory_doc
+from .library import scene_doc, slug
 
 UNDO_S = 8.0
 BAND_GROUP = "band"
+# the scene files: code data beside this module, never a library preset
+SCENES_DIR = Path(__file__).with_name("scenes") / BAND_GROUP
 # the scenes, in combo order — the index is what scene.select, the APC40's
 # clip grid and a project's values hold, so this list is append-only
 SCENES = ("Balanced", "Kick & Sizzle", "Glacial Drift", "Strobe Cage", "Bass Engine",
@@ -49,7 +54,7 @@ class Control:
     def __init__(self, chain: Analyzer, clock=time.monotonic, library=None):
         self.chain = chain
         self.clock = clock
-        self.library = library   # reads the scenes (user shadows honoured); None → factory files
+        self.library = library   # told which scene is current; None in the headless tests
         self.selb = 0            # band whose strip is open
         self.scene = 0           # the live scene — source of truth for resets
         self.on_layout = None    # rebuilds the band.* params; set by build_registry
@@ -109,18 +114,10 @@ class Control:
         return list(SCENES)
 
     def scene_doc(self) -> dict:
-        """The selected scene's band preset — the user's file if one shadows
-        the factory's, else the factory's (a missing or broken file falls
-        back to the factory copy and is reported on the library)."""
-        name = SCENES[self.scene]
-        lib = self.library
-        if lib is None:
-            return factory_doc(BAND_GROUP, name)
-        try:
-            return lib.read(BAND_GROUP, name)
-        except LibraryError as e:
-            lib.error = f"library: {e}"
-            return factory_doc(BAND_GROUP, name, lib.factory)
+        """The selected scene's document: its file under `SCENES_DIR`, by the
+        scene's slug (library.scene_doc; a LibraryError for a file that is
+        missing or broken — the build's own data, so never in practice)."""
+        return scene_doc(SCENES_DIR / f"{slug(SCENES[self.scene])}.json")
 
     def scene_values(self) -> dict:
         """The scene's values, filled in the way a strip load fills a

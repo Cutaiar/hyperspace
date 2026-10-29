@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import mido
 import pytest
+from conftest import seed
 
 from hyperspace import apc40, hands, lfo, tempo
 from hyperspace.analysis import Analyser
@@ -50,6 +51,7 @@ def rig(tmp_path):
     control = Control(chain)
     audio = SimpleNamespace(chain=chain)
     view = ViewState()
+    seed(tmp_path)              # the corpus: the party show's bank, TUMBLE first
     lib = Library(tmp_path)
     presets = lib.project
     reg = build_registry(view, control, audio, presets)
@@ -184,6 +186,7 @@ def test_relative_encoder_steps_shape(rig):
 def test_faders_on_channels_pick_their_band(rig):
     for x in rig.midi.bindings:
         x.pickup = False
+    shift(rig)                  # the audio strip is the SHIFT layer's (plan 24 C2, decision 17)
     push(rig, cc(apc40.CC_FADER, 0, channel=2))
     assert rig.audio.chain.params[2].post == 0.0
     assert rig.audio.chain.params[1].post == 1.0
@@ -446,7 +449,8 @@ def test_unbind_removes_only_preset_layer_rows_and_writes_no_file(rig):
     assert rig.view.bright == pytest.approx(lib.read("presets", "BIG BLUE WAVE")["values"]
                                             .get("view.bright", 1.0))
     # the session's rows: refused, kept
-    for pid, why in (("band.0.post", "invariant"), ("band.sel.trim", "global layer")):
+    for pid, why in (("master.gain", "invariant"), ("band.0.post", "global layer"),
+                     ("band.sel.trim", "global layer")):
         m.unbind(pid)
         assert m.learner.refused and why in m.learner.last, pid
         assert m.table.for_param(pid) is not None, pid
@@ -491,10 +495,12 @@ def test_a_knob_bump_during_a_hand_learn_does_its_own_job(rig):
     low = bright.norm
     push(rig, cc(0x30, 110))
     assert bright.norm > low and bright.norm == pytest.approx(110 / 127, abs=0.02)
-    lines = rig.view.lines
-    pad = next(b for b in m.table.desk() if b.target == "view.lines" and b.kind == "note")
+    # a preset-layer pad (activator 1; the render toggles are invariant
+    # since plan 24 C1)
+    plane = rig.reg["view.plane.ZW"].value
+    pad = next(b for b in m.table.desk() if b.target == "view.plane.ZW" and b.kind == "note")
     push(rig, note(pad.number, channel=pad.channel or 0), note(pad.number, 0, channel=pad.channel or 0))
-    assert rig.view.lines != lines
+    assert rig.reg["view.plane.ZW"].value != plane
     assert lrn.learning == "view.depth4" and lrn.want == "hand:left" and not lrn.refused
     assert [(b.to_json(), b.layer) for b in m.table.bindings] == rows
     # the hand then completes it; the knob had no part in it
@@ -516,10 +522,10 @@ def test_an_invariant_control_works_through_a_desk_learn(rig):
         x.pickup = False
     rows = [(b.to_json(), b.layer) for b in m.table.bindings]
     lrn.arm("view.depth4", "desk")
-    post = reg["band.2.post"]
-    push(rig, cc(apc40.CC_FADER, 0, channel=2))              # S3: a fader's jitter
+    post = reg["master.gain"]                                # MASTER (S1–S8 are layered, C2)
+    push(rig, cc(apc40.CC_MASTER, 0))                        # a fader's jitter
     low = post.norm
-    push(rig, cc(apc40.CC_FADER, 127, channel=2))
+    push(rig, cc(apc40.CC_MASTER, 127))
     assert post.norm > low
     assert lrn.learning == "view.depth4" and not lrn.refused and lrn.last == ""
     shift(rig)                                               # SHIFT latches through it
@@ -652,10 +658,14 @@ def test_the_crossfader_dims_with_soft_pickup(rig):
 # ------------------------------------------- plan 15 WP4: the hold, the bar, the blink
 
 STOP = apc40.N_CLIPSTOP
+# the bar's buttons: clip stops 1–7 — track 8's is the desk's SAVE since
+# plan 24 C1 (decision 18), invariant, so no bar takes it
+BAR = range(7)
 
 
 def bar_rig(rig):
-    """The rig with a clock the test moves, the clip-stop row learned as a
+    """The rig with a clock the test moves, the clip-stop row (less SAVE's
+    button) learned as a
     SAVE AS bar (the factory map's until 2026-10-09; the op is the table's
     for any buttons an owner puts on it), and a counter on the bar's
     target: `fires` grows by one each time `preset.save_new` fires (the
@@ -663,7 +673,7 @@ def bar_rig(rig):
     from hyperspace import midi
 
     assert not [b for b in rig.midi.bindings if b.op == "hold"]   # none in the factory map
-    for k in range(8):
+    for k in BAR:
         rig.midi.table.bindings.append(
             Binding(f"note:{k}:{STOP}", "preset.save_new", "hold", feedback="led"))
     t = [0.0]
@@ -696,7 +706,7 @@ def test_a_hold_fires_once_at_the_hold_time_while_held(rig):
     lib, pr = rig.presets.lib, rig.presets
     rows = [b for b in rig.midi.bindings if b.op == "hold"]
     assert [(b.source, b.target, b.layer) for b in rows] \
-        == [(f"note:{k}:{STOP}", "preset.save_new", None) for k in range(8)]
+        == [(f"note:{k}:{STOP}", "preset.save_new", None) for k in BAR]
     pr.clear_slot(5)
     push(rig, note(apc40.N_CLIP[0], channel=4), note(apc40.N_CLIP[0], 0, channel=4))
     assert lib.current("presets") == "TRIP"
@@ -775,7 +785,7 @@ def test_the_bar_is_one_control(rig):
     # the same press on either layer (invariant), and SHIFT's state at the
     # press is what counts (D12)
     shift(rig)
-    at(10.0, note(STOP, channel=7))
+    at(10.0, note(STOP, channel=5))
     at(10.7)
     assert len(fires) == 3
 
@@ -797,53 +807,53 @@ def test_the_bar_lights_while_held_and_the_new_slots_pad_blinks(rig):
     assert apc40.blink_of(apc40.N_OVERDUB, 1) == 2
     pr.clear_slot(5)
     push(rig, note(pad, channel=4), note(pad, 0, channel=4))        # TRIP: pad 5 green
-    assert all(leds(rig, STOP, k)[-1] == 0 for k in range(8))       # dark at rest
+    assert all(leds(rig, STOP, k)[-1] == 0 for k in BAR)       # dark at rest
     assert leds(rig, pad, 4)[-1] == apc40.GREEN and leds(rig, pad, 5)[-1] == 0
     # a tap: the whole bar for as long as it lasts
     mark = len(rig.out.sent)
     at(0.0, note(STOP, channel=3))
-    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1]] * 8
+    assert [leds(rig, STOP, k, mark) for k in BAR] == [[1]] * len(BAR)
     at(0.2, note(STOP, 0, channel=3))
-    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 0]] * 8
+    assert [leds(rig, STOP, k, mark) for k in BAR] == [[1, 0]] * len(BAR)
     # two held, one let go: lit until the last is up
     mark = len(rig.out.sent)
     at(1.0, note(STOP, channel=0), note(STOP, channel=1))
     at(1.2, note(STOP, 0, channel=0))
-    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1]] * 8
+    assert [leds(rig, STOP, k, mark) for k in BAR] == [[1]] * len(BAR)
     at(1.4, note(STOP, 0, channel=1))
-    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 0]] * 8
+    assert [leds(rig, STOP, k, mark) for k in BAR] == [[1, 0]] * len(BAR)
     # the hold: lit, then on the save the bar and pad 6 blink
     mark = len(rig.out.sent)
     at(2.0, note(STOP, channel=3))
     at(2.5)
-    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1]] * 8
+    assert [leds(rig, STOP, k, mark) for k in BAR] == [[1]] * len(BAR)
     assert leds(rig, pad, 5, mark) == []
     at(2.65)
     assert fires == [2.65] and pr.bank[5] == "TRIP 2" and pr.active == 5
-    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 2]] * 8
+    assert [leds(rig, STOP, k, mark) for k in BAR] == [[1, 2]] * len(BAR)
     assert leds(rig, pad, 5, mark) == [apc40.GREEN_BLINK]           # the new slot's pad
     assert leds(rig, pad, 4, mark) == [apc40.YELLOW]     # TRIP's pad: filled, not loaded
     assert [leds(rig, pad, k, mark) for k in (0, 1, 2, 3, 6, 7)] == [[]] * 6   # no other pad
     at(3.0, note(STOP, 0, channel=3))                               # letting go changes nothing
     at(2.65 + midi.BLINK_S - 0.01)
-    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 2]] * 8
+    assert [leds(rig, STOP, k, mark) for k in BAR] == [[1, 2]] * len(BAR)
     assert leds(rig, pad, 5, mark) == [apc40.GREEN_BLINK]
     at(2.65 + midi.BLINK_S)                                         # the time is up
-    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 2, 0]] * 8
+    assert [leds(rig, STOP, k, mark) for k in BAR] == [[1, 2, 0]] * len(BAR)
     assert leds(rig, pad, 5, mark) == [apc40.GREEN_BLINK, apc40.GREEN]
     at(9.0)
-    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 2, 0]] * 8
+    assert [leds(rig, STOP, k, mark) for k in BAR] == [[1, 2, 0]] * len(BAR)
     # a button kept down through the blink: the bar still goes dark after it
     mark = len(rig.out.sent)
     pr.clear_slot(1)
-    at(10.0, note(STOP, channel=7))
+    at(10.0, note(STOP, channel=6))
     at(10.65)
     at(10.65 + midi.BLINK_S)
     assert pr.bank[1] == "TRIP 3"
-    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 2, 0]] * 8
+    assert [leds(rig, STOP, k, mark) for k in BAR] == [[1, 2, 0]] * len(BAR)
     # (the cleared slot's pad went from amber to dark first: plan 19 WP2)
     assert leds(rig, pad, 1, mark) == [0, apc40.GREEN_BLINK, apc40.GREEN]
-    at(12.5, note(STOP, 0, channel=7))
+    at(12.5, note(STOP, 0, channel=6))
     # a full bank: only the bar blinks — no pad came on (plan 19 WP1: the
     # bank is twenty-four, so the far slots are filled first)
     for k in range(8, len(pr.bank)):
@@ -854,7 +864,7 @@ def test_the_bar_lights_while_held_and_the_new_slots_pad_blinks(rig):
     at(20.0, note(STOP, channel=0))
     at(20.65)
     assert pr.lib.warning == "saved TRIP 4 — the bank is full: it is in the preset list"
-    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 2]] * 8
+    assert [leds(rig, STOP, k, mark) for k in BAR] == [[1, 2]] * len(BAR)
     assert [m.velocity for m in rig.out.sent[mark:]                 # TRIP 3's pad: amber
             if m.type == "note_on" and m.note == pad] == [apc40.YELLOW]
     # a fire that answers False did nothing (a save that failed): the bar
@@ -870,7 +880,7 @@ def test_the_bar_lights_while_held_and_the_new_slots_pad_blinks(rig):
         at(31.65)
         at(33.0, note(STOP, 0, channel=2))
     assert len(fires) == count + 1 and "disk full" in pr.bank_error
-    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 0]] * 8
+    assert [leds(rig, STOP, k, mark) for k in BAR] == [[1, 0]] * len(BAR)
     assert [m.velocity for m in rig.out.sent[mark:]
             if m.type == "note_on" and m.note == pad] == []
     at(40.0, note(STOP, channel=0))
@@ -878,9 +888,9 @@ def test_the_bar_lights_while_held_and_the_new_slots_pad_blinks(rig):
     # a redraw mid-blink (a layer switch) re-sends the blink, not the state
     mark = len(rig.out.sent)
     shift(rig)
-    assert [leds(rig, STOP, k, mark)[-1] for k in range(8)] == [2] * 8
+    assert [leds(rig, STOP, k, mark)[-1] for k in BAR] == [2] * len(BAR)
     at(40.65 + midi.BLINK_S, note(STOP, 0, channel=0))
-    assert [leds(rig, STOP, k, mark)[-1] for k in range(8)] == [0] * 8
+    assert [leds(rig, STOP, k, mark)[-1] for k in BAR] == [0] * len(BAR)
 
 
 # ------------------------------------------- plan 18 WP2: knob smoothing
@@ -1363,7 +1373,7 @@ def test_save_as_blinks_the_new_pad_on_row_four(rig):
     assert fires == [1.65] and pr.bank[9] == "TRIP 2" and pr.active == 9
     assert pr.lib.status == "saved TRIP 2 → slot 10"
     assert leds(rig, n10, ch10, mark) == [apc40.GREEN_BLINK]        # the new slot's pad
-    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 2]] * 8     # and the bar
+    assert [leds(rig, STOP, k, mark) for k in BAR] == [[1, 2]] * len(BAR)     # and the bar
     assert leds(rig, pad, 4, mark) == [apc40.YELLOW]                # TRIP: filled, not loaded
     others = [k for k in range(24) if k not in (4, 9)]
     assert [leds(rig, *apc40.BANK_PADS[k], mark) for k in others] == [[]] * 22
@@ -1371,7 +1381,7 @@ def test_save_as_blinks_the_new_pad_on_row_four(rig):
     assert leds(rig, n10, ch10, mark) == [apc40.GREEN_BLINK]
     at(1.65 + midi.BLINK_S)
     assert leds(rig, n10, ch10, mark) == [apc40.GREEN_BLINK, apc40.GREEN]
-    assert [leds(rig, STOP, k, mark) for k in range(8)] == [[1, 2, 0]] * 8
+    assert [leds(rig, STOP, k, mark) for k in BAR] == [[1, 2, 0]] * len(BAR)
     # under SHIFT: the bar and the bank are invariant — slot 11, row 4 pad 3
     shift(rig)
     n11, ch11 = apc40.BANK_PADS[10]
@@ -1441,7 +1451,9 @@ def test_holding_an_empty_bank_pad_saves_into_that_slot(rig):
 
     lib, pr = rig.presets.lib, rig.presets
     pad = apc40.N_CLIP[0]
-    assert not [b for b in rig.midi.bindings if b.kind == "note" and b.number == STOP]  # free
+    # free but for SAVE on track 8's (plan 24 C1, decision 18)
+    assert [b.target for b in rig.midi.bindings if b.kind == "note" and b.number == STOP] \
+        == ["desk.save"]
     assert [b.target for b in rig.midi.table.route("note", 5, pad)] == ["preset.select"]
     push(rig, note(pad, channel=4), note(pad, 0, channel=4))                # TRIP
     pr.clear_slot(5)

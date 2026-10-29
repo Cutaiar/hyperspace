@@ -1,0 +1,31 @@
+{
+ "schema": "hyperspace.preset/1",
+ "group": "dream",
+ "name": "tracer-only",
+ "note": "Echoes alone: the dream off (mix 0). Plan 36 T4: these are values only — `dream.on` is the dream node's switch, and a group preset cannot draw or remove a look-back or a dream (the preset's graph does, on GRAPH).",
+ "values": {
+  "dream.on": false,
+  "dream.mix": 0.0,
+  "dream.echo_mix": 0.6,
+  "dream.fade": 0.1096,
+  "dream.darken": 0.3,
+  "dream.contrast": 1.0,
+  "dream.occlude": 1.0,
+  "dream.hue": 0.0,
+  "dream.sat": 1.0,
+  "dream.tint": 0.0,
+  "dream.tint_from": 0,
+  "dream.tint_hue": 200.0,
+  "dream.tint_sat": 1.0,
+  "dream.echoes": 8,
+  "dream.gap": 0.033333,
+  "dream.res": 2,
+  "dream.steps": 2,
+  "dream.step": 0.03,
+  "dream.k": 0.08,
+  "dream.layer": 1,
+  "dream.octaves": 0,
+  "dream.mask_decay": 0.97,
+  "dream.jitter": 8
+ }
+}

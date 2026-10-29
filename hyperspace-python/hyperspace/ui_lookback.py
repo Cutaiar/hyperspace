@@ -25,7 +25,8 @@ from __future__ import annotations
 
 from imgui_bundle import imgui
 
-from . import ui
+from . import graphview, ui
+from .graph import lookback_words
 from .lookback import LAYER_INFO, LAYERS, RES, tint_colour
 from .params import Kind
 
@@ -54,7 +55,6 @@ SHORT = {"dream.echo_mix": "brightness", "dream.fade": "fade time", "dream.echoe
 LABEL_W = 94        # a cell's label column: "SHAPE HIDES", the longest, is 88 px
 LAYER_POPUP_H = 520  # the layer menu's most height before it scrolls, px
 THUMB_H = 48        # thumbnail height, px; width follows the echo's aspect
-TIP_W = 380         # this page's own hovers wrap at this width (a set_tooltip line does not)
 STATUS_LINES = 3   # the worker's status is at most this tall; the rest is on its hover
 
 
@@ -70,40 +70,89 @@ def page(panel, dt: float) -> None:
     r = panel.reg
     st = r["dream.on"]
     lb = getattr(panel.renderer, "lookback", None)
+    dr = getattr(panel.renderer, "dreamer", None)       # plan 36 T4: the dream node's
 
-    panel._section("look-back", "dream", note=_worker_note(lb))
+    panel._section("look-back", "dream", note=_worker_note(dr))
     panel._check("dream.on")
-    status = _status(lb, bool(st.base))
+    status = _status(lb, dr, bool(st.base))
     imgui.same_line(imgui.get_content_region_avail().x - imgui.calc_text_size(status).x)
     imgui.align_text_to_frame_padding()
     imgui.text_disabled(status)
     if getattr(lb, "error", ""):
         imgui.text_colored(ui.WARN, f"GLSL: {lb.error} — on the shipped helpers")
-    imgui.spacing()
+    # plan 35 U: what the look-back records — a combo of the graph's
+    # pictures setting the wire into `lookback.image` (plan 36 T4), one GRAPH edit
+    # (`graphview.set_picture`) — and what it draws over, in words, beside it
+    _records_row(panel)
 
     panel._section("echoes", note=_trail_note(r))
     _cells(panel, lb, "##echoes", SECTIONS["echoes"])
-    _thumbnails(panel, lb)
+    _thumbnails(panel, lb, dr)
     imgui.spacing()
 
     panel._section("dream", note=NOTES["dream"])
-    _worker_line(panel, lb)
+    _worker_line(panel, dr)
     _layer_menu(panel)
-    _cells(panel, lb, "##dream", [pid for pid in SECTIONS["dream"] if pid != "dream.layer"])
+    _cells(panel, dr, "##dream", [pid for pid in SECTIONS["dream"] if pid != "dream.layer"])
     imgui.spacing()
 
     panel._section("both", note=NOTES["both"])
     _cells(panel, lb, "##both", SECTIONS["both"])
 
 
-def _say(text: str) -> None:
-    """A hover that wraps: a layer's, the swatch's and the worker's whole
-    status are longer than a tooltip's one line can be wide."""
-    if imgui.begin_tooltip():
-        imgui.push_text_wrap_pos(TIP_W)
-        imgui.text_unformatted(text)
-        imgui.pop_text_wrap_pos()
-        imgui.end_tooltip()
+CAPTURE = "lookback.image"            # plan 36 T4: what it records is its image
+RECORDS_NOTHING = "nothing — the echoes fade"
+RECORDS_TIP = ("what the look-back records: the picture wired into lookback.image — "
+               "the echoes are made of it (a GRAPH edit, one undo step)")
+
+
+def capture_line(spec) -> str:
+    """The LOOKBACK page's "records:" (plan 35 U): the source wired into
+    `lookback.image` by its title (`graphview.picture_label`: "Scene"),
+    or "nothing — the echoes fade" with no wire there. `spec` is the
+    loaded preset's graph (`graphview.page_spec`: None is the empty
+    frame, plan 36 T3)."""
+    spec = graphview.page_spec(spec)
+    now = graphview.picture_now(spec, CAPTURE)
+    return "records: " + (RECORDS_NOTHING if now == graphview.NOTHING
+                          else graphview.picture_label(spec, now))
+
+
+def draws_over_line(spec) -> str:
+    """"draws over: <the picture under it>" — words alone (plan 35 U; plan
+    36 T4: the `under` of the composite its trail, or a dream of it, is
+    laid into — D3: the look-back lays itself over nothing)."""
+    spec = graphview.page_spec(spec)
+    wires = list(spec.wires) if spec is not None else []
+    trail = {"lookback"} | {w.node for w in wires if w.src == "lookback" and w.port == "image"
+                            and w.node == "dream"}
+    comp = next((w.node for w in wires if w.src in trail and w.port == "over"), None)
+    now = graphview.picture_now(spec, f"{comp}.under") if comp else graphview.NOTHING
+    return "draws over: " + (graphview.NOTHING if now == graphview.NOTHING
+                             else graphview.picture_label(spec, now))
+
+
+def _records_row(panel) -> None:
+    """The records combo, half the row, and "draws over:" beside it; the
+    last edit's words under them while there are any."""
+    now = getattr(panel, "graph_now", None)
+    try:
+        spec = now()[1] if now is not None else None
+    except (AttributeError, TypeError):     # a stand-in renderer or library: no graph
+        spec = None
+    frame = graphview.page_spec(spec)
+    width = imgui.get_content_region_avail().x * 0.55
+    # (the hover: the longer words — "with the hands", a placed effect)
+    tip = RECORDS_TIP if frame is None else f"{lookback_words(frame.wiring())}\n\n{RECORDS_TIP}"
+    panel._picture_combo(frame, CAPTURE, capture_line(frame), width, False, tip,
+                         key="lookback_said")
+    imgui.same_line()
+    imgui.align_text_to_frame_padding()
+    over = draws_over_line(frame)
+    imgui.text_disabled(ui.fit_text(over, imgui.get_content_region_avail().x))
+    panel._edit_said("lookback_said")
+
+
 
 
 def _cells(panel, lb, table: str, ids) -> None:
@@ -168,7 +217,7 @@ def _layer_menu(panel) -> None:
         # menu and the learn outline (open, the popup is the last window)
         if imgui.is_item_hovered() and now in LAYER_INFO:
             net, _, long = LAYER_INFO[now]
-            _say(f"{now} · {net}\n\n{long}\n\n{a.tip}")
+            ui.tooltip(f"{now} · {net}\n\n{long}\n\n{a.tip}")
         panel._ctx(a)
         panel._learn_frame(a)
         panel._mod_dot(p)
@@ -185,7 +234,7 @@ def _layer_menu(panel) -> None:
             if imgui.selectable(f"{name}##layer.{name}", chosen)[0] and not chosen:
                 p.set(k)
             if imgui.is_item_hovered():
-                _say(f"{name} · {net}\n\n{long}")
+                ui.tooltip(f"{name} · {net}\n\n{long}")
             if chosen and imgui.is_window_appearing():
                 imgui.set_item_default_focus()
                 imgui.set_scroll_here_y()
@@ -205,15 +254,16 @@ def _trail_note(r) -> str:
     return f"{n} × {gap * 1000:.0f} ms · the trail reaches {n * gap:.2f} s"
 
 
-def _status(lb, on: bool) -> str:
+def _status(lb, dr, on: bool) -> str:
+    """The page's status: the echoes held, and the dream (plan 36 T4:
+    `dream.on` is the dream's — off, it passes its picture through)."""
     if lb is None:
         return "no renderer"
-    if not on:
-        return "off"
+    dream = ("dream off" if not on else
+             "dream" if getattr(dr, "dream_frame", -1) >= 0 else "no dream")
     if lb.atlas is None:
-        return getattr(lb, "ring_error", "") or "starting"
+        return f"{getattr(lb, 'ring_error', '') or 'no echoes'} · {dream}"
     n = len(lb.thumbnails())
-    dream = "dream" if lb.dream_frame >= 0 else "no dream"
     return f"{n} echo(es) · {dream}"
 
 
@@ -237,11 +287,11 @@ def _tint_swatch(panel, lb) -> None:
     if imgui.is_item_hovered():
         if not scene:
             says = "the colour chosen (tint hue, tint sat)"
-        elif getattr(lb, "scene_mean", None):
+        elif getattr(lb, "input_mean", None):
             says = "the scene's mean hue"
         else:
             says = "the scene's mean hue — nothing captured yet"
-        _say(f"The colour the dream is tinted towards: {says}.")
+        ui.tooltip(f"The colour the dream is tinted towards: {says}.")
 
 
 def _worker(lb):
@@ -302,7 +352,7 @@ def _worker_line(panel, lb) -> None:
     imgui.text_wrapped(shown)
     imgui.pop_style_color()
     if shown != full and imgui.is_item_hovered():
-        _say(full)
+        ui.tooltip(full)
 
 
 def _echo_text(lb) -> str:
@@ -312,14 +362,15 @@ def _echo_text(lb) -> str:
     return f"{w}×{h} px"
 
 
-def _thumbnails(panel, lb) -> None:
+def _thumbnails(panel, lb, dr=None) -> None:
     """The echoes newest first, then the dream buffer: what the composite
     sees this frame, with each one's age and weight on hover."""
     if lb is None or lb.atlas is None:
-        imgui.text_disabled("no history yet — turn look-back on")
+        imgui.text_disabled("no history yet — wire a look-back on GRAPH")
         return
     thumbs = lb.thumbnails()
-    if not thumbs and lb.dream_frame < 0:
+    dreamt = dr is not None and dr.dream is not None and dr.dream_frame >= 0
+    if not thumbs and not dreamt:
         imgui.text_disabled("nothing captured yet")
         return
     ew, eh = lb.echo
@@ -327,7 +378,7 @@ def _thumbnails(panel, lb) -> None:
     tex = imgui.ImTextureRef(lb.atlas.glo)
     origin = imgui.get_cursor_screen_pos()
     # as many as fit on one line, room kept for the dream and a "+n"
-    avail = imgui.get_content_region_avail().x - 30 - (size.x + 8 if lb.dream_frame >= 0 else 0)
+    avail = imgui.get_content_region_avail().x - 30 - (size.x + 8 if dreamt else 0)
     fit = max(1, int(avail // (size.x + 3)))
     shown = thumbs[:fit]
     for k, t in enumerate(shown):
@@ -335,18 +386,18 @@ def _thumbnails(panel, lb) -> None:
             imgui.same_line(0, 3)
         imgui.image(tex, size, imgui.ImVec2(*t["uv0"]), imgui.ImVec2(*t["uv1"]))
         if imgui.is_item_hovered():
-            imgui.set_tooltip(f"echo {k + 1} · {t['age'] * 1000:.0f} ms old · weight "
+            ui.tooltip(f"echo {k + 1} · {t['age'] * 1000:.0f} ms old · weight "
                               f"{t['weight']:.3f}")
     if len(thumbs) > fit:
         imgui.same_line(0, 3)
         imgui.text_disabled(f"+{len(thumbs) - fit}")
-    if lb.dream_frame >= 0:
+    if dreamt:
         if shown:
             imgui.same_line(0, 8)
-        imgui.image(imgui.ImTextureRef(lb.dream.glo), size, imgui.ImVec2(0, 1),
+        imgui.image(imgui.ImTextureRef(dr.dream.glo), size, imgui.ImVec2(0, 1),
                     imgui.ImVec2(1, 0))
         if imgui.is_item_hovered():
-            imgui.set_tooltip(f"dream buffer · answers frame {lb.dream_frame}")
+            ui.tooltip(f"dream buffer · answers frame {dr.dream_frame}")
     # a hairline under the row: newest at the left, the dream at the end
     r1 = imgui.get_item_rect_max()
     dl = imgui.get_window_draw_list()
