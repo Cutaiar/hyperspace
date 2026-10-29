@@ -35,7 +35,7 @@ The feel chip (motion.py) cycles auto → follow → spring → still: auto is
 the source's own feel (the pad's, for a stick), still is none at all, and
 follow / spring are the row's own, with their two knobs on a third line —
 attack and release about rest, or a spring's Hz and damping ratio and
-the spring itself beside them, drawn and plucked (ui_spring).
+its curve beside them, position over time (ui_spring).
 
 The target is a searchable combo over every modulatable param, grouped
 by registry group; depth is signed — ±1 in norm units for `push` (1 puts
@@ -171,7 +171,8 @@ POINTER_TIP = ("The routes and the modifiers are edited on the GRAPH page now �
 FEEL_CYCLE = (None, "follow", "spring", "off")
 FEEL_CHIP = {None: "auto", "follow": "follow", "spring": "spring", "off": "still"}
 FEEL_W = 112.0           # each of the feel line's two knobs
-SPRING_W = 120.0         # the spring feel's picture beside them (ui_spring)
+SPRING_W = 120.0         # the spring feel's curve beside them (ui_spring)
+SPRING_H = 40.0
 NO_MATCH = "no row matches"
 
 
@@ -1035,7 +1036,7 @@ def _feel_chip(router: Router, b: Binding, width: float) -> None:
 
 def _feel_line(b: Binding) -> None:
     """Two knobs for the row's own feel: attack / release, or Hz / damping
-    and the spring they make, drawn (ui_spring)."""
+    and the spring's curve beside them (ui_spring)."""
     m = b.motion
     imgui.dummy(imgui.ImVec2(18, 0))
     imgui.same_line()
@@ -1062,9 +1063,9 @@ def _feel_line(b: Binding) -> None:
         if imgui.is_item_hovered():
             ui.tooltip(tip + "\nctrl-click to type")
     imgui.pop_font()
-    if m.mode == "spring":                        # the feel itself, as a spring
+    if m.mode == "spring":                        # the feel itself, as its curve
         imgui.same_line()
-        ui_spring.draw(m.hz, m.damp, SPRING_W)
+        ui_spring.draw(m.hz, m.damp, SPRING_W, SPRING_H)
 
 
 def _live_bar(panel, router: Router, b: Binding, p: Param | None) -> None:

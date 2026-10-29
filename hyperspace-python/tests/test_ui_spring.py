@@ -1,42 +1,44 @@
-"""The spring feel's picture (ui_spring): the pluck is motion.spring's
-own response, held then released, and the coil spans wall to mass."""
+"""The spring feel's curve (ui_spring): motion.spring's own step response
+across a time axis fitted to the spring, and a playhead that loops it."""
 
 import math
 
 import pytest
 
-from hyperspace import motion, ui_spring
-from hyperspace.ui_spring import HOLD, PERIOD_MAX, PERIOD_MIN, coil, period, pose, settle
+from hyperspace import motion
+from hyperspace.ui_spring import (PAUSE, RING_CYCLES, WINDOW_MIN, curve, playhead,
+                                  position, settle, window)
 
 
-def test_the_mass_is_held_out_then_released_along_the_spring():
+def test_the_curve_is_the_feels_own_step_response():
     hz, damp = 2.0, 0.5
-    assert pose(0.0, hz, damp) == 1.0
-    assert pose(HOLD * 0.9, hz, damp) == 1.0
-    s = 0.2
-    x, _ = motion.spring(1.0, 0.0, 0.0, s, hz, damp)
-    assert pose(HOLD + s, hz, damp) == pytest.approx(x)
+    assert position(0.0, hz, damp) == 0.0
+    x, _ = motion.spring(0.0, 0.0, 1.0, 0.2, hz, damp)
+    assert position(0.2, hz, damp) == pytest.approx(x)
+    pts = curve(hz, damp, 16)
+    assert len(pts) == 17 and pts[0] == (0.0, 0.0)
+    assert pts[-1][0] == pytest.approx(window(hz, damp))
 
 
-def test_below_critical_it_rings_past_rest_and_at_critical_it_does_not():
-    ts = [HOLD + i * 0.01 for i in range(1, 300)]
-    assert min(pose(t, 1.5, 0.3) for t in ts) < -0.2
-    assert min(pose(t, 1.5, 1.0) for t in ts) > -1e-6
-    assert min(pose(t, 1.5, 2.5) for t in ts) > -1e-6
+def test_below_critical_it_overshoots_and_at_or_above_it_does_not():
+    assert max(y for _, y in curve(1.5, 0.3)) > 1.2
+    assert max(y for _, y in curve(1.5, 1.0)) <= 1.0 + 1e-9
+    assert max(y for _, y in curve(1.5, 2.5)) <= 1.0 + 1e-9
+    assert abs(curve(1.5, 1.0)[-1][1] - 1.0) < 0.03       # settled by the axis' end
 
 
-def test_the_pluck_repeats_within_its_bounds():
-    for hz, damp in ((0.1, 0.0), (0.1, 3.0), (12.0, 1.0), (2.0, 0.6)):
-        p = period(hz, damp)
-        assert PERIOD_MIN <= p <= PERIOD_MAX
-        assert pose(0.3, hz, damp) == pytest.approx(pose(0.3 + p, hz, damp))
+def test_the_time_axis_fits_the_spring():
+    assert window(4.0, 1.0) < window(1.0, 1.0)            # tighter settles sooner
+    assert window(2.0, 3.0) > window(2.0, 1.0)            # overdamped creeps
     assert math.isinf(settle(2.0, 0.0))
-    assert settle(4.0, 1.0) < settle(1.0, 1.0)        # tighter settles sooner
-    assert settle(2.0, 3.0) > settle(2.0, 1.0)        # overdamped creeps
+    assert window(2.0, 0.0) == pytest.approx(RING_CYCLES / 2.0)   # rings: a few cycles
+    assert window(motion.HZ_MAX, 1.0) >= WINDOW_MIN
 
 
-def test_the_coil_runs_from_the_wall_to_the_mass_within_its_amplitude():
-    pts = coil(10.0, 90.0, 20.0, 5.0)
-    assert pts[0] == (10.0, 20.0) and pts[-1] == (90.0, 20.0)
-    assert all(15.0 - 1e-9 <= y <= 25.0 + 1e-9 for _, y in pts)
-    assert len(pts) > ui_spring.TURNS * ui_spring.COIL_SAMPLES
+def test_the_playhead_sweeps_then_rests_then_sweeps_again():
+    hz, damp = 2.0, 1.0
+    w = window(hz, damp)
+    assert playhead(0.0, hz, damp) == 0.0
+    assert playhead(w / 2, hz, damp) == pytest.approx(w / 2)
+    assert playhead(w + PAUSE / 2, hz, damp) == pytest.approx(w)
+    assert playhead(w + PAUSE + 0.01, hz, damp) == pytest.approx(0.01)
