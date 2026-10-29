@@ -42,6 +42,7 @@ Rows 440–447 (plan 39, vision) are the plan's eight decisions, every one the o
 Rows 501–536 (plan 40, patches) were written during its run on 2026-10-27 and 2026-10-28, on `plan-40-build`: 501–510 are the plan's D1–D10, every one the owner's on 2026-10-27, before the build; 511–536 are the controller's rulings during the build, answered "controller — 2026-10-27", except 521 and 524, which are **pending the owner** (the schema of a save with no group, and a take-over chip for "wire as saved"). The plan was assigned 471–495, which plans 37–39 had taken, so it took the next free, 501–525, and overflowed into 526–536.
 
 Rows 538–541 are the owner's own answers of 2026-10-28, on `worktree-presets-one-tier` (the library goes one-tier: no factory presets, a flat PRESETS page, one show line). Hand check 403.
+Row 542 is the owner's of 2026-10-29, on `pad-dial-in-preset` (the gamepad dial's readings go to the preset and onto the pad node). Hand check 404.
 Every other one is in the app now (rows 110–213
 on `plan-24-26-27-integration`, rows from 214 on `plan-28-30-integration`,
 until the owner merges them) and waits
@@ -572,6 +573,7 @@ here; overturn → the change, then the same.
 | 539 | The PRESETS page is a flat list: no bank pills, starts-on, preset drop-down or module-preset fold | 403 | owner — 2026-10-28 |
 | 540 | Module presets' UI leaves the PRESETS page; the concept stays for now (to become patches) | 403 | owner — 2026-10-28 |
 | 541 | The show block is one line that says what a show is; the pads are set on the desk only | 403 | owner — 2026-10-28 |
+| 542 | The dial's readings (petal / blend) are the preset's, and the pad node on GRAPH shows them | 404 | owner — 2026-10-29 |
 
 "—": no hand check shows it; tests only.
 
@@ -9265,3 +9267,12 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
 - **To reverse.** Restore `show_block` and `preset_bank`.
 - **Rough edge.** The only way to see which preset a pad holds is the desk's LEDs.
 - **Judge it.** Check 403.
+
+### 542. The dial's readings (petal / blend) are the preset's, and the pad node on GRAPH shows them
+
+- **Answer.** owner — 2026-10-29: "if this is in the graph, it should be treated like the rest of the settings and be saved in the preset"; and the readings belong "in the gamepad visual itself / in the detail view of the pad node".
+- **Built.** `pad.dial.left` / `pad.dial.right` / `pad.dial.swap` (`app._register_dial`) in a new performance group, `pad` (`params.PERFORMANCE_GROUPS`), over one dict every pad reads (`devices.Context.dial_modes`), registered before the library attaches whether or not a pad is connected. The config's `dial_left` / `dial_right` are the launch readings (`app._dial_launch`), so what a preset naming none gets. The faces, the readings and the swap moved from SYSTEM to the pad node's details (`ui_graph._node_side` → `Panel._dials`, a narrow layout under `DIAL_WIDE`); on the pad's picture a dialed stick shows its sectors and its X / Y read "Left dial · petal" (`ui_pad.dialed`, `says`).
+- **Other options.** Keep them the session's (`desk.pad.dial.*`, saved with the show), as the sticks' feel is (row 212); a reading per route rather than per stick.
+- **To reverse.** Put the three ids back in `desk` with `persist=False`, register them after the devices, and draw `_dials` on SYSTEM again.
+- **Rough edge.** Every pad reads the same pair — a second pad (`axis@p2:*`) cannot read its sticks differently from the first. A reading is not a port on the pad node; it is set in its details, not wired.
+- **Judge it.** Check 404.

@@ -1,9 +1,11 @@
-"""The sticks as dials (gamepad.dial, a prototype): a stick's angle picks
+"""The sticks as dials (gamepad.dial, plan 28): a stick's angle picks
 one of eight sectors clockwise from straight up, its distance from centre
 is how far that sector's `axis` lane reads — petal (hard sectors, a sticky
-border) or blend (neighbours crossfade) — and a route on a dial lane plays
-like any other `axis` route, taking its whole stick off the camera job."""
+border) or blend (neighbours crossfade), the preset's (`pad.dial.*`) — and
+a route on a dial lane plays like any other `axis` route, taking its whole
+stick off the camera job. The pad node on GRAPH draws the dials."""
 
+import json
 import math
 
 import pytest
@@ -13,6 +15,7 @@ from test_routing import rig as full_rig
 
 import hyperspace.gamepad as gp
 from hyperspace import app
+from hyperspace.library import Library
 from hyperspace.params import Registry
 from hyperspace.preset import Presets
 from hyperspace.routing import Binding, Bindings, Router
@@ -156,30 +159,40 @@ def test_the_dial_preset_fills_both_clocks(tmp_path):
     assert router.table.owner("fx.wobble.amount").source == "axis:L.NE"
 
 
-# ---- the session params ----
+# ---- the readings: the preset's ----
 
-def test_the_readings_are_session_params_and_swap():
-    reg, pad = Registry(), gp.Pad()
-    app._register_dial(reg, pad)
-    assert pad.dial_modes == gp.DIAL_DEFAULT
-    reg["desk.pad.dial.left"].set(1)
-    assert pad.dial_modes["L"] == "blend"
-    reg["desk.pad.dial.swap"].fire()
-    assert pad.dial_modes == {"L": "blend", "R": "blend"}
-    reg["desk.pad.dial.right"].set(0)
-    reg["desk.pad.dial.swap"].fire()
-    assert pad.dial_modes == {"L": "petal", "R": "blend"}
-    assert not reg["desk.pad.dial.left"].persist
+def test_the_readings_are_the_presets_and_swap():
+    """`pad.dial.left` / `.right` are the preset's (group `pad`, persisted,
+    performance): they write the one dict the pads read, and the swap
+    trades them through the params, so it is an edit like any other."""
+    from hyperspace.params import part_of
+
+    reg, modes = Registry(), dict(gp.DIAL_DEFAULT)
+    app._register_dial(reg, modes)
+    left = reg["pad.dial.left"]
+    assert left.persist and part_of(left) == "performance" and not left.modulatable
+    left.set(1)
+    assert modes["L"] == "blend"
+    reg["pad.dial.swap"].fire()
+    assert modes == {"L": "blend", "R": "blend"}
+    reg["pad.dial.right"].set(0)
+    reg["pad.dial.swap"].fire()
+    assert modes == {"L": "petal", "R": "blend"}
+    assert "pad.dial.left" in reg.snapshot(part="performance")
+    assert "pad.dial.left" not in reg.snapshot(part="session")
 
 
 def test_config_picks_where_each_stick_starts():
     """The gamepad entry's `dial_left` / `dial_right` (plan 27's
-    [[devices]]; the old [gamepad] table's keys translate) set where each
-    stick's reading starts; a value that is no reading leaves the default."""
+    [[devices]]; the old [gamepad] table's keys translate) are the launch
+    readings — the fresh values a preset naming none gets; a value that is
+    no reading leaves the default. A pad opened alone still seeds itself."""
     from hyperspace import config, devices
 
     entry = {"role": "pad", "kind": "gamepad", **config._kind_defaults("gamepad"),
              "dial_left": "blend", "dial_right": "nonsense"}
+    assert app._dial_launch({"devices": [entry]}) == {"L": "blend", "R": "blend"}
+    assert app._dial_launch({}) == gp.DIAL_DEFAULT
     dev = devices.make(entry)
     dev.open()
     try:
@@ -189,69 +202,182 @@ def test_config_picks_where_each_stick_starts():
     assert config._kind_defaults("gamepad")["dial_left"] == "petal"
 
 
-def test_the_readings_follow_the_current_pad():
-    """In the app the readings sit on whichever pad is the primary now
-    (the device registry may replace it on a config edit): a callable."""
-    reg, pads = Registry(), [gp.Pad()]
-    app._register_dial(reg, lambda: pads[-1])
-    reg["desk.pad.dial.left"].set(1)
-    pads.append(gp.Pad())
-    assert reg["desk.pad.dial.left"].value == 0          # the new pad's own reading
-    reg["desk.pad.dial.swap"].fire()
-    assert pads[-1].dial_modes == {"L": "blend", "R": "petal"} and pads[0].dial_modes["L"] == "blend"
+def test_every_pad_reads_the_registrys_readings():
+    """In the app every pad reads the one dict the params write
+    (`devices.Context.dial_modes`): a pad that opens later, or again after
+    a config edit, reads what the preset says — its entry's keys do not
+    put it back."""
+    from hyperspace import config, devices
+
+    modes = {"L": "blend", "R": "petal"}
+    reg = Registry()
+    app._register_dial(reg, modes)
+    entry = {"role": "pad", "kind": "gamepad", **config._kind_defaults("gamepad")}
+    ctx = devices.Context(dial_modes=modes)
+    first = devices.make(entry, ctx)
+    first.open()
+    reg["pad.dial.right"].set(1)
+    second = devices.make(entry, ctx)
+    second.open()
+    try:
+        assert first.io.dial_modes is modes and second.io.dial_modes is modes
+        assert second.io.dial_modes == {"L": "blend", "R": "blend"}
+    finally:
+        first.close()
+        second.close()
 
 
-# ---- the panel ----
+def _preset_rig(tmp_path, modes):
+    """A registry with the readings registered before attach, as app.main
+    has them — so the launch readings are the fresh values — a router and
+    the presets, over a throwaway home."""
+    r = full_rig()
+    lib = Library(tmp_path)
+    app._register_dial(r.reg, modes)
+    lib.attach(r.reg)
+    router = Router(r.reg, Bindings())
+    return r.reg, router, Presets(lib, r.reg, router)
 
-def test_the_system_page_draws_both_clocks(tmp_path, monkeypatch):
+
+def test_a_preset_keeps_its_readings(tmp_path):
+    """Saved with the preset and put back by its load, whatever was set in
+    between; a preset that names none gets the launch readings."""
+    modes = dict(gp.DIAL_DEFAULT)
+    reg, _, presets = _preset_rig(tmp_path / "home", modes)
+    plain = presets.save_as("PLAIN")                   # the launch readings
+    reg["pad.dial.left"].set(1)
+    reg["pad.dial.right"].set(0)
+    path = presets.save_as("FLIPPED")
+    values = json.loads(path.read_text())["values"]
+    assert values["pad.dial.left"] == 1 and values["pad.dial.right"] == 0
+    reg["pad.dial.swap"].fire()
+    assert presets.load("FLIPPED") == []
+    assert modes == {"L": "blend", "R": "petal"}
+    assert presets.load("PLAIN") == [] and modes == gp.DIAL_DEFAULT
+    # a file that names no reading: the launch readings, not the last preset's
+    doc = json.loads(plain.read_text())
+    for k in ("pad.dial.left", "pad.dial.right"):
+        doc["values"].pop(k)
+    (plain.parent / "bare.json").write_text(json.dumps({**doc, "name": "BARE"}))
+    presets.load("FLIPPED")
+    assert presets.load("BARE") == [] and modes == gp.DIAL_DEFAULT
+
+
+def test_a_reading_is_one_undo_step(tmp_path):
+    """Picking a reading, or the swap, is a step undo takes back."""
+    from test_undo import boot, frames, settle
+
+    r = boot(tmp_path / "home")
+    modes = dict(gp.DIAL_DEFAULT)
+    app._register_dial(r.reg, modes)
+    frames(r, 2)
+    settle(r)
+    n = len(r.undo.stack)
+    r.reg["pad.dial.swap"].fire()
+    settle(r)
+    assert modes == {"L": "blend", "R": "petal"} and len(r.undo.stack) == n + 1
+    assert r.undo.undo() is True
+    assert modes == gp.DIAL_DEFAULT
+
+
+# ---- the panel: the pad node on GRAPH ----
+
+def _side(panel, nid="device:pad"):
+    from imgui_bundle import imgui
+    from test_ui_shell import frame
+
+    from hyperspace import graphview, ui_graph
+    frame(panel, "graph")
+    st = ui_graph._state(panel)
+    imgui.new_frame()
+    imgui.begin("side")
+    ui_graph._side(panel, st, st["view"], ("node", graphview.VNode(nid, "device", nid[7:])))
+    imgui.end()
+    imgui.end_frame()
+
+
+def test_the_pad_nodes_details_draw_both_clocks(tmp_path, monkeypatch):
+    """The pad node's details draw the pad, then both sticks' faces and
+    their readings; another device's do not. SYSTEM keeps only the feel."""
     from test_ui_shell import build_rig, frame
 
     from hyperspace.ui import Panel
-    faces = []
-    draw = Panel._dial
+    faces, rows = [], []
+    draw, row = Panel._dial, Panel._row
     monkeypatch.setattr(Panel, "_dial", lambda self, vals, names, *a:
                         faces.append((list(vals), names)) or draw(self, vals, names, *a))
+    monkeypatch.setattr(Panel, "_row", lambda self, pid, *a, **kw:
+                        rows.append(pid) or row(self, pid, *a, **kw))
     with build_rig(tmp_path) as r:
+        seed(r.lib.home)
         pad = ScriptedPad()
         r.panel.pad = pad
-        app._register_dial(r.reg, pad)
-        frame(r.panel, "system")                 # no dial routes: the hint
+        app._register_dial(r.reg, pad.dial_modes)
         assert [k for k in Presets(r.lib, r.reg, r.router).load("DIAL")
                 if not k.startswith(("env.", "seq."))] == []  # (plan 36 T3: the `/7`'s envelope ids, this rig has none)
         x, y = at(100)
         pad.frame(axes=[x, -y, -x, y, -1.0, -1.0])
-        for _ in range(2):
-            frame(r.panel, "system")
+        _side(r.panel)
         left, right = faces[-2:]
         assert left[1][0] == "Wobble speed" and right[1][0] == "4D depth"
         assert left[0][2] > 0 and right[0][6] > 0   # 100°: E on the left, W on the right
-        pad.source = None                        # unplugged: empty faces
+        assert {"pad.dial.left", "pad.dial.right"} <= set(rows)
+        faces.clear()
+        _side(r.panel, "device:apc40")
+        assert faces == []
+        rows.clear()
         frame(r.panel, "system")
-        assert faces[-1][0] == [0.0] * gp.DIAL
+        assert "desk.pad.feel" in rows and not any(p.startswith("pad.dial") for p in rows)
+        assert faces == []
 
 
-def test_picking_a_reading_on_the_panel_sets_it(tmp_path, monkeypatch):
-    """The readings, and the stick feel above them, are enums: the panel
-    offers their choices, and picking one sets it — it once drew them as
-    sliders, whose write (`set_value`) an enum refuses with a TypeError."""
+def test_picking_a_reading_on_the_pad_node_sets_it(tmp_path, monkeypatch):
+    """The readings are enums: the pad node offers their choices, and
+    picking one sets it (an enum row is a combo, never a slider)."""
     from imgui_bundle import imgui
-    from test_ui_shell import build_rig, frame
+    from test_ui_shell import build_rig
 
-    pick = {"desk.pad.dial.left": 1, "desk.pad.dial.right": 0, "desk.pad.feel": 2}
+    pick = {"pad.dial.left": 1, "pad.dial.right": 0}
 
     def chosen(label, cur, *a, **kw):
         pid = label.rpartition("##")[2]
         return (pid in pick, pick.get(pid, cur))
 
-    def slid(label, v, *a, **kw):
-        return (label.rpartition("##")[2] in pick, 1.0)
-
     monkeypatch.setattr(imgui, "combo", chosen)
-    monkeypatch.setattr(imgui, "slider_float", slid)
     with build_rig(tmp_path) as r:
         pad = ScriptedPad()
         r.panel.pad = pad
-        app._register_dial(r.reg, pad)
-        frame(r.panel, "system")
+        app._register_dial(r.reg, pad.dial_modes)
+        _side(r.panel)
         assert pad.dial_modes == {"L": "blend", "R": "petal"}
+
+
+def test_the_stick_feel_is_picked_on_system(tmp_path, monkeypatch):
+    """The stick feel stays the session's, on SYSTEM: an enum, so a combo."""
+    from imgui_bundle import imgui
+    from test_ui_shell import build_rig, frame
+
+    monkeypatch.setattr(imgui, "combo", lambda label, cur, *a, **kw: (
+        label.endswith("##desk.pad.feel"), 2 if label.endswith("##desk.pad.feel") else cur))
+    with build_rig(tmp_path) as r:
+        frame(r.panel, "system")
         assert r.reg["desk.pad.feel"].text() == "spring"
+
+
+def test_the_pad_picture_shows_a_dialed_stick(tmp_path):
+    """On the pad's picture a stick a route reads as a dial says so: its
+    X and Y read "Left dial · petal" instead of the orbit they no longer
+    drive; the other stick keeps its camera job's words."""
+    from test_ui_shell import build_rig
+
+    from hyperspace import ui_pad
+    with build_rig(tmp_path) as r:
+        app._register_dial(r.reg, dict(gp.DIAL_DEFAULT))
+        r.router.table.add(Binding("axis:L.E", "view.inst_amp", "push", 1.0))
+        _side(r.panel)
+        lx, rx = gp.control("axis:LX"), gp.control("axis:RX")
+        assert ui_pad.says(r.panel, lx, None) == "Left dial · petal"
+        assert ui_pad.says(r.panel, rx, None) == ui_pad.BUILT_IN["axis:RX"]
+        assert "read as a dial (petal)" in ui_pad.label(r.panel, lx, None)
+        r.reg["pad.dial.left"].set(1)
+        assert ui_pad.says(r.panel, lx, None) == "Left dial · blend"

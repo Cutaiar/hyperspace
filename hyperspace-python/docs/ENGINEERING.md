@@ -2013,12 +2013,30 @@ nothing while the stick is let go. A route on any dial lane takes its
 whole stick off the camera job. Two readings, per stick: **petal** (hard
 sectors, the whole push to the one pointed into, a sticky border) and
 **blend** (each lane a triangle about its own direction, so a sweep round
-the rim crossfades one route into the next). The gamepad entry's `dial_left` /
-`dial_right` (`[[devices]]`, or the old `[gamepad]` table) set where a launch starts (petal / blend); SYSTEM → gamepad
-draws both faces, names each sector's route, and has the two readings and
-**Swap dials** (`desk.pad.dial.*`, never saved). The **DIAL** factory
-preset fills both clocks. With a Learn armed for the pad, a stick that
-already has a dial route learns the sector it points into.
+the rim crossfades one route into the next).
+
+**The readings are the preset's** (`pad.dial.left` / `pad.dial.right`,
+group `pad`, `params.PERFORMANCE_GROUPS`): saved in its `values` and put
+back by its load, like its routes — a reading changes what those routes
+do, so the two travel together. **Swap dials** (`pad.dial.swap`) trades
+them, an edit undo takes back. Every pad reads the one pair the params
+write (`devices.Context.dial_modes`), so a pad that opens later, or again
+after a config edit, reads as the preset says. The gamepad entry's
+`dial_left` / `dial_right` (`[[devices]]`, or the old `[gamepad]` table)
+are the launch readings (`app._dial_launch`): the fresh values, so what a
+preset that names none gets. The readings are registered whether or not
+a pad is connected.
+
+**Where they show**: the GRAPH page's pad node. Selected, its details draw
+the pad's picture, then both sticks' faces — each sector filled to how
+far it reads, named by its route's param — and the two readings and the
+swap. On the pad's picture (there and in the floating pad window) a
+stick a route reads as a dial shows its eight sectors in its well, and
+its X and Y read "Left dial · petal" in grey instead of the orbit they no
+longer drive. SYSTEM → gamepad keeps the sticks' feel, the rig's. The
+DIAL preset (`tests/corpus/presets/dial.json`; copy it into your
+library's `presets/`) fills both clocks. With a Learn armed for the pad,
+a stick that already has a dial route learns the sector it points into.
 
 ## 8. The APC40
 
@@ -2360,7 +2378,7 @@ how in its side pane, a cable from it onto acid's `fx.acid.mix` mod.
 
 A **preset** (`presets/<slug>.json`) is one whole performance moment:
 the performance groups' values (`view rot camera pattern dream fx lfo
-macro mod`, `params.PERFORMANCE_GROUPS`), the performer routes, the
+macro pad mod`, `params.PERFORMANCE_GROUPS`), the performer routes, the
 desk's preset layer, the macros and the module labels — and, when it has
 them, a `graph` section (§2: its nodes and, since plan 28, its `wires`),
 its `modifiers` (after `routes`: one entry each, `{"id": "mod.1",

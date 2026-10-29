@@ -22,6 +22,10 @@ What is lit is what a control **does**:
   depth). Such a lane is lit with its label in grey — nothing in the
   table, nothing to unbind, the app's own hand on it, as a grey label on
   the desk is a row that is the session's;
+* a stick a route reads as a dial (``axis:L.NE`` …, plan 28) shows its
+  eight sectors in its well, each filled to how far it reads, and its X
+  and Y say "Left dial · petal" in grey: off the camera job, the reading
+  the preset's (`pad.dial.*`);
 * every other control is dark: its glyph only.
 
 Pad rows are the session's, not a layer's (`learn.learn_pad_button`), so
@@ -46,6 +50,8 @@ SYSTEM page, beside the desk's switch) hides it.
 """
 
 from __future__ import annotations
+
+import math
 
 from imgui_bundle import imgui
 
@@ -111,12 +117,45 @@ def _key(table) -> tuple:
             tuple(b.source for b in table.of(*SCHEMES)))
 
 
+def dialed(table) -> set[str]:
+    """The sticks ("L", "R") an enabled route reads as a dial
+    (``axis:L.NE`` …, gamepad.DIAL_LANES): their X and Y are off the
+    camera job, as `gamepad.claims` has it."""
+    out = set()
+    for b in table.of("axis"):
+        stick, dot, sector = b.source.partition(":")[2].partition(".")
+        if b.enabled and dot and stick in gamepad.DIAL_STICKS and sector in gamepad.COMPASS:
+            out.add(stick)
+    return out
+
+
 def rows_cached(panel, table) -> dict[str, Binding]:
     st = _state(panel)
     key = _key(table)
     if st.get("key") != key or st.get("table") is not table:
-        st.update(key=key, table=table, rows=rows(table))
+        st.update(key=key, table=table, rows=rows(table), dialed=dialed(table))
     return st["rows"]
+
+
+def _stick_of(c: gamepad.Control) -> str | None:
+    """The dial stick ("L", "R") a control belongs to: its well, or its X / Y lane."""
+    if c.kind == "stick":
+        return "L" if c.glyph == "LS" else "R"
+    if c.kind == "axis" and c.address in ("LX", "LY", "RX", "RY"):
+        return c.address[0]
+    return None
+
+
+def _dial_of(panel, c: gamepad.Control) -> str | None:
+    """The stick this control is part of, when a route reads it as a dial."""
+    stick = _stick_of(c)
+    return stick if stick is not None and stick in _state(panel).get("dialed", ()) else None
+
+
+def _mode(panel, stick: str) -> str:
+    """A stick's dial reading as its param says (`pad.dial.*`), "" without one."""
+    p = panel.reg.get(f"pad.dial.{'left' if stick == 'L' else 'right'}")
+    return p.text() if p is not None else ""
 
 
 # ---------------------------------------------------------------- the room
@@ -190,10 +229,15 @@ def _stick(pad, c: gamepad.Control) -> tuple[float, float]:
 
 def says(panel, c: gamepad.Control, b: Binding | None) -> str:
     """What a lit control does: its row's param in the panel's words
-    (`ui_desk.text`), else the built-in meaning of a free axis
+    (`ui_desk.text`), else — an X or Y of a stick a route reads as a dial —
+    "Left dial · petal", else the built-in meaning of a free axis
     (`BUILT_IN`), else "" — a dark control."""
     if b is not None:
         return ui_desk.text(panel.reg, b)
+    stick = _dial_of(panel, c)
+    if stick is not None and c.kind == "axis":
+        side = "Left" if stick == "L" else "Right"
+        return f"{side} dial · {_mode(panel, stick)}"
     return BUILT_IN.get(c.source, "")
 
 
@@ -206,6 +250,11 @@ def label(panel, c: gamepad.Control, b: Binding | None) -> str:
     if b is not None:
         return (f"{c.glyph} · {b.target} · {said} · {b.describe()}\n{c.name}"
                 f"\n{learn} to move it")
+    stick = _dial_of(panel, c)
+    if stick is not None:
+        return (f"{c.glyph} · read as a dial ({_mode(panel, stick)}): its routes are "
+                f"axis:{stick}.N … axis:{stick}.NW, off the camera\n{c.name}"
+                f"\nthe GRAPH page's pad node: each sector's param, and the reading")
     if said:
         return (f"{c.glyph} · {said} — the app's own, no row in the table\n{c.name}"
                 f"\n{learn} to take it over")
@@ -238,9 +287,25 @@ def _lane_bar(dl, c: gamepad.Control, pad, x0: float, y0: float, x1: float, y1: 
 
 
 def _well(dl, pad, c: gamepad.Control, cx: float, cy: float, r: float,
-          edge: int, on: bool) -> None:
-    """A stick well: the ring, its centre, and the stick in it."""
+          edge: int, on: bool, dial: str | None = None) -> None:
+    """A stick well: the ring, its centre, and the stick in it. A stick read
+    as a dial (`dial`, its "L" / "R") shows its eight sectors, each filled
+    out to how far it reads (`Pad.dials`)."""
     dl.add_circle_filled(_v(cx, cy), r, ui.u32(_WELL))
+    if dial is not None:
+        n, step = gamepad.DIAL, 2 * math.pi / gamepad.DIAL
+        j = list(gamepad.DIAL_STICKS).index(dial)
+        vals = pad.dials()[j * n:(j + 1) * n] if pad is not None else [0.0] * n
+        for k in range(n):
+            a0, a1 = (k - 0.5) * step - math.pi / 2, (k + 0.5) * step - math.pi / 2
+            if vals[k] > 0.002:
+                dl.path_clear()
+                dl.path_line_to(_v(cx, cy))
+                dl.path_arc_to(_v(cx, cy), r * min(vals[k], 1.0), a0, a1, 8)
+                dl.path_fill_convex(ui.u32(imgui.ImVec4(ui.FILL.x, ui.FILL.y, ui.FILL.z,
+                                                        0.25 + 0.6 * vals[k])))
+            dl.add_line(_v(cx, cy), _v(cx + r * math.cos(a0), cy + r * math.sin(a0)),
+                        ui.u32(ui.LINE), 1.0)
     dl.add_circle(_v(cx, cy), r, edge)
     dx, dy = _stick(pad, c)
     knob = max(3.0, r * 0.34)
@@ -263,7 +328,8 @@ def _draw(panel, dl, pad, c: gamepad.Control, b: Binding | None, said: str,
         ui_desk._text(dl, c.glyph, cx, cy, ui.u32(_BLACK) if down else ink, x1 - x0 - 2)
     elif c.kind == "stick":
         r = min((x1 - x0) / 2, (y1 - y0) / 2) - 1
-        _well(dl, pad, c, cx, y0 + r + 1, r, ui.u32(ui.RED) if down else edge, on)
+        _well(dl, pad, c, cx, y0 + r + 1, r, ui.u32(ui.RED) if down else edge, on,
+              _dial_of(panel, c))
         ui_desk._text(dl, c.glyph, cx, y1 - 5, ink, x1 - x0)
     else:
         gw = imgui.calc_text_size(f"{c.glyph} ").x
@@ -305,7 +371,8 @@ def _draw_big(panel, dl, pad, c: gamepad.Control, b: Binding | None, said: str,
         lines = ui_desk.LABEL_LINES
         r = max(4.0, min((y1 - y0 - lines * lh - 4) / 2, 0.42 * (x1 - x0)))
         dl.add_text(_v(x0 + 1, y0), small, c.glyph)
-        _well(dl, pad, c, cx, y0 + r + 1, r, ui.u32(ui.RED) if down else edge, on)
+        _well(dl, pad, c, cx, y0 + r + 1, r, ui.u32(ui.RED) if down else edge, on,
+              _dial_of(panel, c))
         return ui_desk._Job(said, x0 + 1, y0 + 2 * r + 4, x1 - 1, y1, lines, ink,
                             "top") if on else None
     # an axis lane: the glyph, the bar on its line, the label under both

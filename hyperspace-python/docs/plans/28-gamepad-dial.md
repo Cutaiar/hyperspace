@@ -35,9 +35,13 @@ always knows where it is by feel: centre is home.
   it points into (`gamepad.learn_from`'s `dials`). A stick with no dial
   route learns `LX` / `LY` as before. So the first dial route comes from
   a preset or the ROUTING page, and Learn fills in the rest.
-- SYSTEM → gamepad draws both faces: each sector filled out to how far
-  it reads, named by the param its route drives, the stick as a white
-  dot. Under them are the two readings and **Swap dials**.
+- The GRAPH page's **pad node** draws both faces in its details, under
+  the pad's picture: each sector filled out to how far it reads, named by
+  the param its route drives, the stick as a white dot. Under them are
+  the two readings and **Swap dials**. On the picture itself a dialed
+  stick shows its sectors in its well, and its X / Y read "Left dial ·
+  petal" instead of the orbit (2026-10-29; until then the faces were on
+  SYSTEM).
 
 ## The two readings
 
@@ -49,11 +53,20 @@ There is one reading per stick, switched live:
 | **petal** | the whole radius in the sector the stick points into, 0 in every other; a border is sticky (`DIAL_STICKY`, 15 % of a sector) so a stick held on one does not flicker | eight separate buttons with depth: crossing a border is a cut from one parameter to the next |
 | **blend** | a triangle about each sector's own direction: on a sector's centre it has the whole radius, halfway to the next the two share it | a crossfade: a sweep round the rim morphs one parameter into the next, and the lanes always add up to the radius |
 
-They start as the gamepad entry's `dial_left = "petal"` and `dial_right = "blend"`
-(a `[[devices]]` entry, or the old `[gamepad]` table).
-**Swap dials** (`desk.pad.dial.swap`) trades them, so the same routes can
-be felt both ways. Learn pad can put it on BACK (`pad:VIEW`), which is
-free.
+**The readings are the preset's** (2026-10-29, the owner's: "if this is
+in the graph, it should be treated like the rest of the settings and be
+saved in the preset"). `pad.dial.left` / `pad.dial.right` are in the
+`pad` group, a performance group: saved in the preset's `values`, put
+back by its load. A reading changes what the preset's own `axis:L.*` /
+`axis:R.*` routes do, so it travels with them; the sticks' *feel*
+(`desk.pad.*`) is about the hardware and stays the rig's. Until then the
+readings were `desk.pad.dial.*`, never saved. The gamepad entry's
+`dial_left = "petal"` / `dial_right = "blend"` (a `[[devices]]` entry, or
+the old `[gamepad]` table) are now the launch readings, which a preset
+that names none gets. **Swap dials** (`pad.dial.swap`) trades them, so
+the same routes can be felt both ways — an edit, which undo takes back
+and a save keeps. BACK (`pad:VIEW`) taps the tempo now; Learn pad can put
+the swap on SHARE.
 
 ## The DIAL preset
 
@@ -79,11 +92,14 @@ The depths in the file are first guesses.
 pad whose sticks follow a script, on a simulated 30 fps clock. The script
 is: a push up and let go, a slow lap of the rim on each stick, a stick
 shaking ±4° on the N | NE border, then the readings swapped and the left
-stick's lap again. Its output is in
+stick's lap again. Since 2026-10-29 it shows the faces where they now
+are, in the GRAPH page's pad node details, and ends with a save and two
+loads in the running app. Its output is in
 [`assets/28-gamepad-dial/`](assets/28-gamepad-dial/): `dial.mp4` (scene
 beside the faces), `dial-sheet.png`, `dial-traces.png` (each lane and the
-param it pushes), `dial-borders.png`, `dial-trace.csv` and
-`dial-timing.txt`.
+param it pushes), `dial-borders.png`, `dial-trace.csv`,
+`dial-timing.txt`, and `dial-pad-node.png` (the pad node's details, the
+pad's picture on top: `--still`).
 
 What it showed (2026-10-17):
 
@@ -107,6 +123,21 @@ What it showed (2026-10-17):
 - **Fixed on the way:** the first recording showed the rim labels of the
   two faces colliding and both wobble sectors cut to "Wobbl…". The faces
   now stack, each with a legend.
+
+Again on 2026-10-29, after the readings moved to the preset and the
+faces to the pad node:
+
+- **The readings are the preset's, in the running app.** After the
+  script left them swapped (left blend, right petal), the live state was
+  saved as DIAL SWAPPED; loading DIAL put petal / blend back, loading
+  DIAL SWAPPED put blend / petal back — what the pad read and what the
+  params said agreed each time (`dial-timing.txt`).
+- **Every sector, the camera, the borders and the cost** came out as on
+  2026-10-17: the camera did not move, petal held its border, the dial
+  costs under 8 µs a frame.
+- **Fixed on the way:** the pad node's details pane is narrow, and the
+  faces' side-by-side legend cut every name to "Wo…"; under `DIAL_WIDE`
+  the legend now goes under the face, names in full.
 
 It cannot show how a stick feels in the hand. That is the list below.
 

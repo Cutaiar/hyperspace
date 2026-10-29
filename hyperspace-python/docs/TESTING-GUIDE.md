@@ -539,6 +539,7 @@ second or more goes in the tables at the top of `tests/conftest.py`.
 | F4 | Momentary and hold on a pad button | 2f | gamepad | 147 |
 | F5 | The pad after a restart, and its sticks | 2f | gamepad | 171, 179 |
 | F6 | Two pads at once | 2f | the Xbox pad (Bluetooth), the wired pad, the copy | 219 |
+| F7 | The sticks' dials: a preset keeps petal / blend | 2f | gamepad | 404 |
 | G1 | A second MIDI controller learned onto a knob | 2g | APC40, a second MIDI controller, the copy | 176 |
 | G2 | SHIFT is the APC40's | 2g | APC40, a second MIDI controller, the copy | 177 |
 | G3 | A phone's fader moves a setting | 2g | a phone on the same Wi-Fi, the copy | 186 |
@@ -7947,6 +7948,28 @@ the Xbox pad off, `pad` takes the wired pad; one press does both pads' jobs; the
 wired pad's stick turns the camera.
 
 *(check 219)*
+
+#### F7. The sticks' dials: a preset keeps petal / blend
+
+**Needs:** the Xbox pad, and `tests/corpus/presets/dial.json` copied into
+the library's `presets/`. Plan 28.
+
+**Do:** load DIAL. Open GRAPH and click the **pad** node. Move each stick
+round the rim and watch its details. Set Left dial to blend and Right
+dial to petal, save the preset as a new one, load another, then the new
+one. Press ⌘Z. Open SYSTEM → gamepad.
+
+**Right if:** the pad node's details show both sticks as clock faces,
+each slice named in full and filling as you push; on the pad's picture
+the sticks show their slices and read "Left dial · …" instead of the
+orbit. The new preset comes back with left blend and right petal; DIAL
+with petal / blend. ⌘Z undoes the last change. SYSTEM shows only the
+sticks' feel.
+
+**Wrong if:** a preset comes back with the readings of the one before;
+a stick still orbits the camera while it is a dial.
+
+*(check 404)*
 
 ## (g) A second controller, a phone (OSC)
 

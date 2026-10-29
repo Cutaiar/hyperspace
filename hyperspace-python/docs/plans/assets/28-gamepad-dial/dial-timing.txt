@@ -1,9 +1,9 @@
 the dial's own cost (Pad.lanes with both sticks moving, every call recomputes):
-  5.9 µs per frame on this machine — 0.04 % of a 60 Hz frame
+  7.6 µs per frame on this machine — 0.05 % of a 60 Hz frame
 
 the app's frames during the recording (Xvfb + llvmpipe software GL, so this
 is the CPU rasterizer, not the Mac's GPU — the dial's share is the line above):
-  1081 frames, median 311 ms, p95 413 ms
+  1081 frames, median 371 ms, p95 540 ms
 
 the sticks' camera job while both sticks are dials (largest move from the
 first frame; 0 means the routes claimed the sticks):
@@ -13,3 +13,8 @@ first frame; 0 means the routes claimed the sticks):
   rot.rate.XW    0.000000
   rot.rate.YW    0.000000
   rot.rate.ZW    0.000000
+
+the readings are the preset's (in the app: save, load, load again):
+  after the script (swapped)   pad reads L blend, R petal  ·  params say blend, petal
+  DIAL loaded                  pad reads L petal, R blend  ·  params say petal, blend
+  DIAL SWAPPED loaded          pad reads L blend, R petal  ·  params say blend, petal

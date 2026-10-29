@@ -143,8 +143,13 @@ F_KEYS = 8
 # `segment` (plan 39 T4): each segment node's mode, level, feather, smooth,
 # switch and motion's sense and learn, the preset's, declared while its
 # graph holds the entry (declare_segments)
+# `pad` (plan 28): how each stick reads as a dial, petal or blend
+# (`pad.dial.left` / `.right`, app._register_dial) — the preset's, since it
+# changes what the preset's own `axis:L.*` / `axis:R.*` routes do. The
+# pad's feel (`desk.pad.*`) is the rig's and stays in `desk`
 PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "media", "backdrop",
-                      "switch", "resize", "matte", "cut", "segment", "lfo", "env", "seq", "macro", "mod")
+                      "switch", "resize", "matte", "cut", "segment", "lfo", "env", "seq", "macro",
+                      "pad", "mod")
 SESSION_GROUPS = ("tempo", "hands", "ghost", "band", "master", "scene", "audio", "output",
                   "overlay", "ui", "desk", "eye", "cloud")
 PARTS = {"performance": PERFORMANCE_GROUPS, "session": SESSION_GROUPS}
