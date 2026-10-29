@@ -134,7 +134,7 @@ faces to the pad node:
   params said agreed each time (`dial-timing.txt`).
 - **Every sector, the camera, the borders and the cost** came out as on
   2026-10-17: the camera did not move, petal held its border, the dial
-  costs about 7 µs a frame.
+  costs under 8 µs a frame.
 - **Fixed on the way:** the pad node's details pane is narrow, and the
   faces' side-by-side legend cut every name to "Wo…"; under `DIAL_WIDE`
   the legend now goes under the face, names in full.
