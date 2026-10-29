@@ -6216,11 +6216,9 @@ geometry cable, "… is no picture cable" beside the pointer, which
 otherwise reads "let go: <node> onto <a> →
 <b>"; nothing lights over empty canvas; let go, the effect sits in the
 run, the cable's picture into its `image`, its output into `wobble`.
-Through all of (1) the node's border is faint gold, solid gold while a
-cable is lit. (2) from the first movement the pointer says "hold ⌘ …",
-the border stays as it was, nothing lights, and the node only moves.
-(3) with ⌘ its border goes faint gold, then solid over a lit cable, the other cables dim, a dotted red
-wire shows `acid` straight to All outputs; let go, the run is `lookback →
+(2) from the first movement the pointer says "hold ⌘ …", nothing lights
+or dims, and the node only moves. (3) with ⌘ a cable lights gold and the
+others dim; let go, the run is `lookback →
 wobble → acid → …`; ⌘Z puts it back in one press. (4) a menu "put <node>
 onto" names both; the pick takes it; Escape leaves both as they were.
 (5) the LFO now drives the param directly. (6) the box lights cables, not

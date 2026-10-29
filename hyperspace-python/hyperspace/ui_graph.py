@@ -106,11 +106,9 @@ beside the pointer, which otherwise says what letting go does;
 nothing lit, nothing happens. Two cables as near: a chooser names each
 ("Look-back → Acid") and the pick takes it (`st["onto"]`, `put_onto`). An
 effect already wired only moves on the canvas — unless ⌘ is held: then
-its border is lit, its own cables dim, a dotted wire in its cable's colour shows the
-chain closed over it, and let go on a lit cable it moves there (reordering the run).
-Without ⌘ the pointer says to hold it from the drag's start. A dragged
-node that a drop can move — free, or wired with ⌘ — is **hot**: its
-border faint gold, solid gold while a cable is lit for it. A free modifier goes
+it lights a cable as a free one does, and let go on it moves there (out
+of its place, its chain closed over it: reordering the run). Without ⌘
+the pointer says to hold it from the drag's start. A free modifier goes
 onto a route or a modifier's input the same way; several nodes dragged
 together only move. A compile error colours an effect
 node's title and is its hover (`effect_errors`). The selected effect is
@@ -171,7 +169,6 @@ the preset's and the show's, never a NodeEditor.json beside the app.
 from __future__ import annotations
 
 import colorsys
-import itertools
 import json
 import math
 import sys
@@ -1385,13 +1382,10 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     singles, bundles = _wiring(st, view)
     st["tints"] = cable_tints(st, view)     # plan 37 C2: the through wires known
     wires = 0
-    ends = {}
     for c, a, b in singles:
         if a in drawn and b in drawn:
             _cable(st, c, a, b)
-            ends[c.id] = (a, b)
             wires += 1
-    _ghosts(st, view, ends)
     st["bundles"] = {}
     for b in bundles:
         if b.src_port in drawn and b.dst_port in drawn:
@@ -2151,10 +2145,7 @@ PATCH_DRAG = "PATCH"                 # a browser line's drag payload: the patch'
 PATCHES_POPUP = "##graph.patches"
 DROP_COLOUR = imgui.ImVec4(1.0, 0.86, 0.35, 1.0)    # the cable a dragged patch would splice into
 DROP_WIRE = 6.0
-LIT_ALPHA = 0.45        # a hot node's border while no cable is lit for it
 SPOT_ALPHA = 0.15       # every other cable while a hot node is dragged (refused, its own)
-GHOST_GAP, GHOST_DOT = 9.0, 1.8     # the dotted join its chain closes over it with
-HOT_OUT, HOT_LINE = 4.0, 3.0    # a hot node's outline: how far outside its edge, how thick
 PATCHES_TIP = ("The patches: a click spawns one at the canvas's centre, its pins open — "
                "nothing wired to this preset. Drag one onto a picture cable to splice it in")
 NO_PATCHES = "no patches yet — a group's menu: save as patch…"
@@ -2711,42 +2702,6 @@ def _cable(st: dict, c: graphview.VCable, a: str | None = None, b: str | None = 
             col = imgui.ImVec4(col.x, col.y, col.z, min(col.w, SPOT_ALPHA))
     ed.link(ed.LinkId(_id(st, "c:" + c.id)), ed.PinId(_id(st, a or c.src_port)),
             ed.PinId(_id(st, b or c.dst_port)), col, thick)
-
-
-def _ghosts(st: dict, view: graphview.View, ends: dict) -> None:
-    """A lifted effect's chain closed over it (`onto_plan`'s ``ghost``): a
-    dotted wire, in the colour of what it carries, from what feeds its
-    picture to each port it feeds — a cable that will be there once it is
-    let go, between the pins those cables are drawn to. Dots on the
-    widget's own curve (`graphview.bezier`): its links are never dotted."""
-    lit = st.get("onto_lit")
-    pins = st["pin_xy"]
-    dl = imgui.get_window_draw_list()
-    for i, o in (lit or {}).get("ghost", ()):
-        if i not in ends or o not in ends:
-            continue
-        a, b = pins.get(ends[i][0]), pins.get(ends[o][1])
-        c = next((x for x in view.cables if x.id == i), None)
-        if a is None or b is None or c is None:
-            continue
-        k = COLOURS.get(c.type, ui.DIM)
-        col = imgui.get_color_u32(imgui.ImVec4(k.x, k.y, k.z, 1.0))
-        for x, y in dots(graphview.bezier(a, b, steps=64), GHOST_GAP):
-            dl.add_circle_filled(imgui.ImVec2(x, y), GHOST_DOT, col)
-
-
-def dots(pts, gap: float) -> list[tuple[float, float]]:
-    """Points every `gap` (canvas units) along the polyline `pts`, its
-    first point first."""
-    out, left = [pts[0]], gap
-    for (x0, y0), (x1, y1) in itertools.pairwise(pts):
-        seg = math.hypot(x1 - x0, y1 - y0)
-        t = left
-        while t <= seg:
-            out.append((x0 + (x1 - x0) * t / seg, y0 + (y1 - y0) * t / seg))
-            t += gap
-        left = t - seg
-    return out
 
 
 def bundle_thickness(count: int) -> float:
@@ -3911,15 +3866,13 @@ def onto_plan(panel, view: graphview.View, nid: str, centre, size=None,
     lights (`_drag_preview`) and what the drop does (`dropped`), so the two
     never disagree. None: a node no drop moves (not an effect, a wired
     modifier). Else ``{"node", "hot", "lift", "lit", "best", "tie",
-    "refused", "leaving", "ghost", "hint"}``: `hot`, whether a drop can do
-    anything (a free node, or a wired effect with ⌘ — its border says so
-    while it is dragged); the cables it may go
+    "refused", "hint"}``: `hot`, whether a drop can do anything (a free
+    node, or a wired effect with ⌘: the cables dim around it while it is
+    dragged); the cables it may go
     onto through its box, nearest its centre first (`lit`), the one it will (`best`),
     the cables as near as that one when there are two or more (`tie`: the
     chooser's), the render cables under it it may not go onto with why
-    (`refused`); for a wired effect lifted with ⌘, its own cables
-    (`leaving`) and the joins its chain closes over it with — (cable into
-    its picture, cable out) pairs (`ghost`). `hint`: a wired effect
+    (`refused`); `lift`, a wired effect lifted with ⌘. `hint`: a wired effect
     dragged without ⌘ — ``"over"`` a cable it could go onto, else
     ``"away"`` (the drag says to hold ⌘ either way)."""
     n = view.node(nid)
@@ -3943,7 +3896,7 @@ def onto_plan(panel, view: graphview.View, nid: str, centre, size=None,
     else:
         return None
     plan = {"node": nid, "hot": not mine or lift, "lift": False, "lit": [], "best": None,
-            "tie": [], "refused": {}, "leaving": [], "ghost": [], "hint": ""}
+            "tie": [], "refused": {}, "hint": ""}
     if mine and not lift:
         plan["hint"] = "over" if ok else "away"
         return plan
@@ -3953,13 +3906,7 @@ def onto_plan(panel, view: graphview.View, nid: str, centre, size=None,
         plan["best"] = ok[0][1].id
         tie = [c.id for d, c in ok if d - ok[0][0] < ONTO_TIE]
         plan["tie"] = tie if len(tie) > 1 else []
-    if mine:
-        plan["lift"] = True
-        plan["leaving"] = [c.id for c in mine]
-        into = [c for c in mine if graphview.node_of(view, c.dst_port) == nid
-                and (hit := view.owner(c.dst_port)) is not None and hit[1].name == "image"]
-        outs = [c for c in mine if graphview.node_of(view, c.src_port) == nid]
-        plan["ghost"] = [(i.id, o.id) for i in into[:1] for o in outs]
+    plan["lift"] = bool(mine)
     return plan
 
 
@@ -3994,7 +3941,7 @@ def drag_words(view: graphview.View, plan: dict) -> str:
 def _drag_preview(panel, st: dict, view: graphview.View) -> None:
     """While one effect or modifier node is dragged: what letting it go
     would do (`onto_plan`), kept in `st["onto_lit"]` for the cables drawn
-    this frame, its outline drawn and its words said beside the pointer.
+    this frame, and its words said beside the pointer.
     The node is the one the mouse went down on (`st["press"]`), where it
     is now its place then plus how far the pointer has come — never a
     guess from which positions changed. Nothing while several selected
@@ -4016,8 +3963,6 @@ def _drag_preview(panel, st: dict, view: graphview.View) -> None:
     if plan is None:
         return
     st["onto_lit"] = plan
-    if plan["hot"]:
-        _hot_outline(plan, (x, y), (size.x, size.y))
     words = drag_words(view, plan)
     if words:
         _drag_tip(words)
@@ -4043,19 +3988,6 @@ def _with_others(st: dict, nid: str) -> bool:
     sel = ed.get_selected_nodes()
     k = _id(st, "n:" + nid)
     return len(sel) > 1 and any(x.id() == k for x in sel)
-
-
-def _hot_outline(plan: dict, at, size) -> None:
-    """A hot node's outline (`onto_plan`'s ``hot``): gold just outside its
-    edge — solid while a cable is lit for it, faint while none is — drawn
-    by the page, as the editor paints a selected node's own border last."""
-    k = DROP_COLOUR if plan["best"] is not None else imgui.ImVec4(
-        DROP_COLOUR.x, DROP_COLOUR.y, DROP_COLOUR.z, LIT_ALPHA)
-    r = ed.get_style().node_rounding
-    imgui.get_window_draw_list().add_rect(
-        imgui.ImVec2(at[0] - HOT_OUT, at[1] - HOT_OUT),
-        imgui.ImVec2(at[0] + size[0] + HOT_OUT, at[1] + size[1] + HOT_OUT),
-        imgui.get_color_u32(k), r + HOT_OUT, HOT_LINE)
 
 
 def put_onto(panel, view: graphview.View, nid: str,

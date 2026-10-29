@@ -904,12 +904,9 @@ error skips the pass.
   rest, the reason beside the pointer, which otherwise says what letting
   go does; nothing lit, nothing happens. Two cables as near as each other open a chooser. An effect
   already wired only moves on the canvas; **⌘-drag** lifts it out of its
-  chain — its border lit, its cables dimmed, a dotted wire in the
-  cable's own colour where the chain will close — and let go on a lit cable it moves there (one undo
-  step: reordering the run). Without ⌘ the pointer says "hold ⌘" from
-  the moment the drag starts. A dragged node a drop can move — free, or
-  wired with ⌘ — is **hot**: its border is faint gold, solid gold while
-  a cable is lit for it; a wired one without ⌘ keeps its own border. A
+  chain: it lights a cable as a free one does, and let go on it moves
+  there (one undo step: reordering the run). Without ⌘ the pointer says
+  "hold ⌘" from the moment the drag starts, and nothing dims. A
   free modifier drops onto a route or a modifier input the same way, and
   deleting a modifier wires what fed it on to what it fed.
   **Option-drag** on the background box-selects cables (a plain box

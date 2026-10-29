@@ -5055,11 +5055,9 @@ the Shape node is selected, or anything on an output changing when it is.
 nearest its middle is thick gold and every other cable dims;
 words beside the pointer say what letting go will do (over the geometry
 cable alone, why it cannot go there); let go, the effect
-is in the run; all the while its border is faint gold, solid gold when a
-cable is lit. (2) from the first movement the words say "hold ⌘ …",
-nothing lights, the border stays as it was, and the node just moves.
-(3) with ⌘ the node's border goes gold, the other cables dim
-and a dotted red line shows how the run will close up; let go, `wobble`
+is in the run. (2) from the first movement the words say "hold ⌘ …",
+nothing lights or dims, and the node just moves. (3) with ⌘ a cable
+lights gold and the others dim; let go, `wobble`
 moves before `acid`; one ⌘Z undoes it. (4) the LFO drives the param
 directly. (5) the box picks cables, Delete removes them, ⌘Z restores them.
 

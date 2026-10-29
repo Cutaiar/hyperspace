@@ -609,10 +609,7 @@ def test_the_drag_plan_lights_what_the_drop_will_do(rig):
     assert ui_graph.dropped(rig.panel, view, "render:acid", (900.0, 0.0)) is None
     assert G.run_back(gs.spec, "output.all.image") == ("acid", "wobble.2")
     lifted = ui_graph.onto_plan(rig.panel, view, "render:acid", (900.0, 0.0), lift=True)
-    mine = {c.id for c in view.cables_of("render:acid")}
-    assert lifted["lift"] and lifted["best"] == last.id and set(lifted["leaving"]) == mine
-    (i, o), = lifted["ghost"]
-    assert i in mine and o in mine and i != o
+    assert lifted["lift"] and lifted["best"] == last.id
     assert "out of its chain" in ui_graph.drag_words(view, lifted)
     assert ui_graph.dropped(rig.panel, view, "render:acid", (900.0, 0.0), lift=True) is last
     assert G.run_back(gs.spec, "output.all.image") == ("wobble.2", "acid")
@@ -639,8 +636,7 @@ def test_a_lifted_drag_draws_its_lit_cable_border_and_join(rig, monkeypatch):
     st, view, _ = _two_cable_rig(rig)
     drawn = [c for c in view.cables if c.type == graphview.IMAGE]
     plan = {"node": "render:wobble.2", "hot": True, "lift": True, "lit": [drawn[0].id],
-            "best": drawn[0].id, "tie": [], "refused": {}, "leaving": [drawn[1].id],
-            "ghost": [(drawn[0].id, drawn[1].id)], "hint": ""}
+            "best": drawn[0].id, "tie": [], "refused": {}, "hint": ""}
     asked = []
     monkeypatch.setattr(ui_graph, "onto_plan", lambda *a, **k: asked.append(a[3]) or plan)
     monkeypatch.setattr(imgui, "is_mouse_down", lambda *a: True)
@@ -664,14 +660,6 @@ def test_a_lifted_drag_draws_its_lit_cable_border_and_join(rig, monkeypatch):
     frame(rig.panel, "graph")
     assert st["onto_lit"] is None and st["press"] is None
     imgui.get_io().add_mouse_pos_event(-1.0, -1.0)
-
-
-def test_the_join_is_dotted_evenly_along_its_curve():
-    """The dotted wire a lifted node's chain will close with: a dot every
-    `gap` along the curve, the first at its start, never past its end."""
-    pts = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0)]
-    got = ui_graph.dots(pts, 4.0)
-    assert got == [(0.0, 0.0), (4.0, 0.0), (8.0, 0.0), (10.0, 2.0), (10.0, 6.0), (10.0, 10.0)]
 
 
 def test_create_and_delete_open_only_in_the_typed_dispatch():
