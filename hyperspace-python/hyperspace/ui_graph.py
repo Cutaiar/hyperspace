@@ -78,7 +78,8 @@ the scene or the layer is where that node is drawn. Right-click the
 canvas for the picker (an effect instance, a hands node, a composite);
 right-click a render node to delete it, draw its hands as lines or set
 a composite's blend;
-Delete takes a selected render cable or node out of the graph. A box
+Delete — or ⌫, a Mac's delete key — takes a selected render cable or
+node out of the graph, with the canvas focused (`_delete_key`). A box
 dragged on the background selects the nodes in it; with ⌥ (Option) held,
 the cables it touches instead (the widget's own link select: nodes and
 cables are never selected together), so Delete takes many cables at once. Each
@@ -268,6 +269,13 @@ MONITOR_TIP = "What the projector shows: the held look. TAKE puts the preview be
 # drawn at `FAINT_PIC` of its brightness (`graphview.THUMB_FAINT`)
 FAINT_PIC = 0.4
 THUMB_GROUND = (0.0, 0.0, 0.0, 1.0)    # the box before (or without) a picture
+# the shape node's side panel: the polytope alone, as white lines on black
+# (`_wireframe`, drawn by the renderer: `Renderer.want_wire`) — the shape as
+# it turns now, without the scene's faces, points, pattern or effects; a
+# square this wide (capped) at the top
+WIRE_MAX = 260.0         # px: the square's side at most
+WIRE_TIP = ("The shape alone, live: its edges at the angles it is drawn at — no faces, "
+            "points, pattern or effects")
 # plan 37 C2 (D3): the head's **pictures · tint cables** switch, off by
 # default (plain red), page state only — never the preset's or the show's.
 # Lit, a picture cable's red leans by its maker's dominant hue
@@ -873,6 +881,18 @@ def escaped() -> bool:
             and not imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id))
 
 
+DELETE_KEYS = (imgui.Key.delete, imgui.Key.backspace)     # ⌫ is a Mac's "delete"
+
+
+def delete_pressed() -> bool:
+    """Delete or ⌫ pressed this frame, and nothing else wants it: no text
+    field being typed in, no control held, no popup open."""
+    return (any(imgui.is_key_pressed(k, False) for k in DELETE_KEYS)
+            and not imgui.get_io().want_text_input
+            and not imgui.is_any_item_active()
+            and not imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id))
+
+
 def _select(st: dict, view: graphview.View) -> None:
     """Inside the editor, the nodes drawn: the selection `select_effect` (or
     the FX page) asked for, selected and brought on screen; a frame node
@@ -1393,6 +1413,7 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
         frame_area(st, view, area)
     _title_click(st)
     _create(panel, st, view)
+    _delete_key()
     _delete(panel, st, view)
     _menus(panel, st, view)
     _hover(st, view, panel)
@@ -3135,6 +3156,8 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
             ui_routing.remove_modifier(panel, m.id)
         return
     ui._micro(n.kind)
+    if isinstance(n.ref, rgraph.Shape):
+        _wireframe(panel)
     # plan 35 G (V2): a frame node's header says its id and its params' prefix
     imgui.text(graphview.side_head(n) if n.kind in graphview.FRAME_VKINDS else n.label)
     if n.status:
@@ -3149,6 +3172,41 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
     for port in n.ports:
         if port.patched:
             imgui.text_disabled(f"{port.name}: {_said(port.live)}")
+
+
+def wire_px(side: float, fb_scale: float) -> int:
+    """The wireframe's square in framebuffer px: the box's logical `side`
+    × the window's framebuffer scale (2 on a Retina screen), so it is drawn
+    1:1 and stays sharp."""
+    return max(16, round(side * max(fb_scale, 1.0)))
+
+
+def _wireframe(panel) -> None:
+    """The shape node's side panel: a black square as wide as the column
+    (at most `WIRE_MAX`) holding the renderer's wireframe of the shape
+    (`Renderer.want_wire`: the edges alone, drawn on the GPU at the end of
+    each frame while this asks) — the renderer the canvas reads
+    (`holdmod.canvas_renderer`: held, the preview's, as the sliders under
+    it are). Black until its first picture, or with no renderer."""
+    side = min(imgui.get_content_region_avail().x, WIRE_MAX)
+    if side < 16.0:
+        return
+    p0 = imgui.get_cursor_screen_pos()
+    imgui.dummy(imgui.ImVec2(side, side))
+    if imgui.is_item_hovered():
+        ui.tooltip(WIRE_TIP)
+    p1 = imgui.ImVec2(p0.x + side, p0.y + side)
+    dl = imgui.get_window_draw_list()
+    dl.add_rect_filled(p0, p1, ui.u32(imgui.ImVec4(*THUMB_GROUND)))
+    r = holdmod.canvas_renderer(panel)
+    if r is None or not hasattr(r, "want_wire"):
+        return
+    r.want_wire(wire_px(side, imgui.get_io().display_framebuffer_scale.x))
+    tex = r.wire_texture()
+    if tex is None or getattr(tex, "glo", 0) == 0:
+        return
+    dl.add_image(imgui.ImTextureRef(tex.glo), p0, p1,
+                 imgui.ImVec2(0, 1), imgui.ImVec2(1, 0))      # GL's rows: upside down in v
 
 
 # ---------------------------------------------------------------- a node's controls (2026-10-24)
@@ -4246,6 +4304,18 @@ def delete_through(st: dict) -> str:
     ed.reject_deleted_item()
     _note(st, THROUGH_NO_DELETE)
     return THROUGH_NO_DELETE
+
+
+def _delete_key() -> None:
+    """Inside the editor: Delete or ⌫ with the canvas focused queues the
+    selection for `_delete` (next frame's query). The editor answers only
+    Delete — fn+⌫ on a Mac — and only with the pointer over the canvas."""
+    if not (delete_pressed() and imgui.is_window_focused()):
+        return
+    for nk in ed.get_selected_nodes():
+        ed.delete_node(nk)
+    for lk in ed.get_selected_links():
+        ed.delete_link(lk)
 
 
 def _delete(panel, st: dict, view: graphview.View) -> None:

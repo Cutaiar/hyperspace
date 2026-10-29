@@ -167,6 +167,8 @@ def shots(name: str, speed: bool = False, closed: bool = False) -> None:
     from PIL import Image, ImageDraw, ImageFont
 
     from hyperspace.app import CONTROL_SIZE
+    from hyperspace.graph import Wiring
+    from hyperspace.graphmigrate import look_of, wired_wiring
     from hyperspace.render import Renderer
     from hyperspace.ui import PAGE_KEYS, Panel, apply_style, load_fonts
 
@@ -196,6 +198,11 @@ def shots(name: str, speed: bool = False, closed: bool = False) -> None:
     view.shape = 3
     view.ang = [0.3, 0.7, 1.1, 0.5, 0.9, 1.3]
     reg["dream.on"].set(True)
+    # plan 36 T3: a bare renderer draws the app's empty frame; the tool's
+    # own wiring is today's frame, the look-back on (plan 36 T4: the echoes
+    # and the dream, as an old file with `dream.on` drew them)
+    renderer.wiring = wired_wiring(Wiring(), look_of({"dream.on": True,
+                                                      "dream.mix": reg["dream.mix"].value}))
     renderer.dreamer.source = StandIn(reg)
     scene_tex = ctx.texture(RENDER_SIZE, 4)
     scene_fbo = ctx.framebuffer(color_attachments=[scene_tex])
@@ -316,7 +323,7 @@ def shots(name: str, speed: bool = False, closed: bool = False) -> None:
     draw(40)
     lb = renderer.lookback
     what = (f"{len(lb.thumbnails())} echoes at {lb.echo[0]}×{lb.echo[1]}, the stand-in's "
-            f"frame {lb.dream_frame} as the dream")
+            f"frame {renderer.dreamer.dream_frame} as the dream")
     try:
         if speed:
             speed_sheet()

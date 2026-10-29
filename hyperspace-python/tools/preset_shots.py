@@ -220,6 +220,9 @@ class Stage:
         self.clock.trigger(0.0)
         self.renderer = Renderer(ctx, dream=self.dream, fx=self.fx) if ctx is not None else None
         if self.renderer is not None:
+            # plan 36 T3: a bare renderer draws the app's empty frame; the
+            # preset's graph onto it, as app.py attaches it
+            presets.graph.attach(self.renderer)
             errs = self.renderer.fx.compile_all()     # before any frame: a broken shader is a stop
             if errs:
                 raise RuntimeError(f"fx shaders failed to build: {errs}")
