@@ -2130,17 +2130,17 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                       "stop) and tap a pad instead to choose the pad.")
         r.trigger("preset.next", "Next preset", lambda: bank.cycle(1), group=g)
         r.trigger("preset.prev", "Previous preset", lambda: bank.cycle(-1), group=g)
-        # the preset list, not the bank (2026-10-14): the pad's B / X step
+        # the preset list, not the bank (2026-10-14): the pad's d-pad ← / →, held, step
         # what the PRESETS page lists, saved ones included
         r.trigger("preset.list.next", "Next preset in the list", lambda: bank.walk(1),
                   group=g,
                   tip="Load the next preset of the PRESETS page's list — every "
                       "preset by name, a new one included — wrapping at the end. "
-                      "The pad's B. The desk's QUANT walks the pads instead.")
+                      "The pad's d-pad →, held. The desk's QUANT walks the pads instead.")
         r.trigger("preset.list.prev", "Previous preset in the list", lambda: bank.walk(-1),
                   group=g,
                   tip="Load the previous preset of the PRESETS page's list, wrapping "
-                      "at the start. The pad's X.")
+                      "at the start. The pad's d-pad ←, held.")
         # home (plan 15 WP2, decision 27): the show's startup preset. Lit
         # while the show names one — the light the desk's OVERDUB shows
         r.trigger("preset.home", "Home", bank.home, group=g,
