@@ -100,7 +100,7 @@ dormant no-ops.
 Either op's reading first travels with the row's *feel* (`motion`,
 motion.py): ``follow`` — the analyzer's own asymmetric envelope, attack
 away from the source's rest and release back toward it — or ``spring``,
-a damped spring (Hz, damping ratio). A row with no feel of its own takes
+a damped spring (perceptual duration, bounce). A row with no feel of its own takes
 its source's (`Router.feel_of`): for the pad's `axis` lanes the session's
 `desk.pad.*`, which the sticks' default camera job reads too
 (`Router.felt`); none for every other source. A row's follower starts
@@ -1683,10 +1683,13 @@ def declare_modifiers(reg: Registry, mods: Iterable[Modifier]) -> None:
 
 
 PAD_FEEL = "desk.pad"     # the pad's feel: PAD_FEEL + ".feel" / ".attack" / …
+CUSTOM = "custom"         # a spring preset combo's last choice: knobs that are no preset
 
 
 def _register_pad_feel(reg: Registry, table: Bindings) -> None:
-    """The pad's feel as five session params over `table.pad_feel`: the
+    """The pad's feel as six session params over `table.pad_feel` (the
+    mode; follow's attack and release; a spring's preset, perceptual
+    duration and bounce): the
     motion an `axis` lane travels with when its row names none, and the
     sticks' default camera job's (motion.py). Off, a stick is as it reads."""
     if f"{PAD_FEEL}.feel" in reg:
@@ -1723,16 +1726,35 @@ def _register_pad_feel(reg: Registry, table: Bindings) -> None:
                    group="desk", modulatable=False, fmt=ms,
                    tip="follow: how long a stick takes going back toward rest (63 %) — "
                        "long, and the spring's snap becomes a glide.")
-    reg.continuous(f"{PAD_FEEL}.hz", "Stick spring", get("hz"),
-                   put("hz", motion.HZ_MIN, motion.HZ_MAX), lo=motion.HZ_MIN,
-                   hi=motion.HZ_MAX, log=True, group="desk", modulatable=False,
-                   fmt=lambda v: f"{v:.2f} Hz",
-                   tip="spring: its natural frequency — low is lazy, high is tight.")
-    reg.continuous(f"{PAD_FEEL}.damp", "Stick damping", get("damp"),
-                   put("damp", 0.0, motion.DAMP_MAX), lo=0.0, hi=motion.DAMP_MAX,
-                   group="desk", modulatable=False, fmt=lambda v: f"ζ {v:.2f}",
-                   tip="spring: the damping ratio. 1 arrives fastest without "
-                       "overshoot; below 1 it overshoots and rings; above, it creeps.")
+    springs = [*motion.SPRINGS, CUSTOM]
+
+    def spring_get():
+        m = getattr(table, "pad_feel", OFF)
+        name = motion.spring_name(m.dur, m.bounce)
+        return springs.index(name if name is not None else CUSTOM)
+
+    def spring_set(i):
+        name = springs[int(i) % len(springs)]
+        if name != CUSTOM:              # custom: the knobs as they are
+            dur, bounce = motion.SPRINGS[name]
+            table.pad_feel = replace(getattr(table, "pad_feel", OFF), dur=dur, bounce=bounce)
+
+    # derived from duration and bounce, which persist: it does not
+    reg.enum(f"{PAD_FEEL}.spring", "Stick spring", spring_get, spring_set, springs,
+             group="desk", modulatable=False, persist=False,
+             tip="spring: a named spring — sets the duration and bounce below; "
+                 "custom once either is moved off one.")
+    reg.continuous(f"{PAD_FEEL}.duration", "Stick duration", get("dur"),
+                   put("dur", motion.DUR_MIN, motion.DUR_MAX), lo=motion.DUR_MIN,
+                   hi=motion.DUR_MAX, log=True, group="desk", modulatable=False, fmt=ms,
+                   tip="spring: its perceptual duration — how long a move feels; "
+                       "short is tight, long is lazy.")
+    reg.continuous(f"{PAD_FEEL}.bounce", "Stick bounce", get("bounce"),
+                   put("bounce", motion.BOUNCE_MIN, motion.BOUNCE_MAX),
+                   lo=motion.BOUNCE_MIN, hi=motion.BOUNCE_MAX, group="desk",
+                   modulatable=False, fmt=lambda v: f"{v * 100:.0f} %",
+                   tip="spring: 0 arrives fastest without overshoot; above 0 it "
+                       "overshoots and rings; below 0 it creeps.")
 
 
 def legacy_planedrive(lanes, gain: float = 1.0) -> np.ndarray:
@@ -3036,6 +3058,20 @@ class Router:
             fs = felt[scheme] = [Follower(v) for v in values]
         return [f.step(v, dt, m, rests[i] if i < len(rests) else 0.0)
                 for i, (f, v) in enumerate(zip(fs, values))]
+
+    def felt_now(self, b: Binding) -> float | None:
+        """Row `b`'s reading after its feel, as the last `modulate` left
+        it — what the panel's live plot draws (ui_feel); None while the row
+        has no follower (no feel, or it did not act)."""
+        f = self.__dict__.get("_movers", {}).get((b.source, b.target))
+        return None if f is None else f.x
+
+    def felt_lanes(self, scheme: str) -> list[float] | None:
+        """`scheme`'s lanes after its own feel, as the last `felt` left
+        them (the pad's camera job; the SYSTEM page's plot); None while
+        that feel is off or nothing has run it."""
+        fs = self.__dict__.get("_felt", {}).get(scheme)
+        return None if fs is None else [f.x for f in fs]
 
     def _move(self, b: Binding, m: Motion, u: float, p: Param, depth: float,
               dt: float, movers: dict) -> float:

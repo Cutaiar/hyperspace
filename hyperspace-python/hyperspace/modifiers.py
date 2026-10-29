@@ -50,7 +50,7 @@ VALUE, TRIGGER = "value", "trigger"     # the two signal kinds (decision 10)
 OUT = {"threshold": TRIGGER}            # every other kind's output is a value
 REST = 0.0                  # where every modifier's lane rests (`Router.rests`)
 CURVE_POW = 4.0             # `curve`'s shape ±1 is an exponent of 4^±1
-SPRING_DAMP = 0.6           # `smooth` with spring on: motion.Motion's damping ratio
+SPRING_BOUNCE = 0.4         # `smooth` with spring on: motion.Motion's bounce (ζ 0.6)
 
 
 @dataclass(frozen=True)
@@ -246,12 +246,11 @@ def _scale(x: float, p: dict) -> float:
 def smooth_motion(p: dict) -> Motion:
     """`smooth`'s feel from its params: the follower on attack / release,
     or with spring on a spring whose speed is attack's (ω = 1 / attack,
-    its time feel) at SPRING_DAMP. What it steps, and what the panel
-    plots (ui_feel)."""
+    its time feel: a perceptual duration of 2π·attack) at SPRING_BOUNCE.
+    What it steps, and what the panel plots (ui_feel)."""
     atk, rel = max(0.0, p.get("attack", 0.0)), max(0.0, p.get("release", 0.0))
     if p.get("spring", 0.0) >= 0.5:
-        hz = 0.0 if atk <= 0 else 1.0 / (2 * math.pi * atk)
-        return Motion("spring", hz=hz, damp=SPRING_DAMP)
+        return Motion("spring", dur=2 * math.pi * atk, bounce=SPRING_BOUNCE)
     return Motion("follow", atk=atk, rel=rel)
 
 

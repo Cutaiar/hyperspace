@@ -22,6 +22,12 @@ from hyperspace.ui_routing import next_feel
 DT = 1 / 60
 
 
+def _spring(hz: float, damp: float) -> Motion:
+    """A spring by the kernel's numbers, in the perceptual knobs it stores."""
+    dur, bounce = motion.spring_feel(hz, damp)
+    return Motion("spring", dur=dur, bounce=bounce)
+
+
 class ScriptedPad(gp.Pad):
     def __init__(self):
         super().__init__()
@@ -113,7 +119,7 @@ def test_the_spring_shaper_is_motion_spring():
 # ---- what a feel does to a jump (the panel's plot, ui_feel) ----
 
 def test_a_response_is_the_kernel_stepped_once_over_the_whole_time():
-    sp, fo = Motion("spring", hz=2.0, damp=0.5), Motion("follow", atk=0.1, rel=0.4)
+    sp, fo = _spring(2.0, 0.5), Motion("follow", atk=0.1, rel=0.4)
     assert motion.response(sp, 0.3) == pytest.approx(spring(0.0, 0.0, 1.0, 0.3, 2.0, 0.5)[0])
     assert motion.response(fo, 0.3) == pytest.approx(1 - math.exp(-0.3 / 0.1))
     # home: back toward rest on the release
@@ -130,22 +136,59 @@ def test_settle_is_when_a_jump_stays_within_the_band():
     fo = Motion("follow", atk=0.1, rel=0.4)
     assert motion.settle(fo) == pytest.approx(0.1 * math.log(1 / motion.BAND))
     assert motion.settle(fo, home=True) == pytest.approx(0.4 * math.log(1 / motion.BAND))
-    for m in (Motion("spring", hz=1.5, damp=0.3), Motion("spring", hz=1.5, damp=1.0),
-              Motion("spring", hz=1.5, damp=2.5)):
+    for m in (_spring(1.5, 0.3), _spring(1.5, 1.0),
+              _spring(1.5, 2.5)):
         st = motion.settle(m)
         tail = [abs(motion.response(m, st + k * 0.01) - 1) for k in range(200)]
         assert max(tail) <= motion.BAND + 1e-9              # stays in, from then on
         assert abs(motion.response(m, st * 0.9) - 1) > motion.BAND or m.damp >= 1
-    assert motion.settle(Motion("spring", hz=4, damp=1)) < motion.settle(Motion("spring", hz=1, damp=1))
-    assert math.isinf(motion.settle(Motion("spring", hz=2.0, damp=0.0)))
+    assert motion.settle(_spring(4, 1)) < motion.settle(_spring(1, 1))
+    assert math.isinf(motion.settle(_spring(2.0, 0.0)))
     assert motion.settle(OFF) == 0.0
+
+
+# ---- the perceptual spring: duration and bounce (Apple's model) ----
+
+def test_duration_and_bounce_are_exactly_a_frequency_and_a_damping_ratio():
+    assert motion.spring_hz(0.5, 0.0) == (2.0, 1.0)              # no bounce: critical
+    assert motion.spring_hz(0.5, 0.3) == pytest.approx((2.0, 0.7))
+    assert motion.spring_hz(0.5, -0.5) == pytest.approx((2.0, 2.0))   # creeps
+    for dur, bounce in ((0.3, 0.15), (1.2, 0.0), (0.8, -0.4), (2.0, 0.9)):
+        assert motion.spring_feel(*motion.spring_hz(dur, bounce)) == \
+            pytest.approx((dur, bounce))
+    m = Motion("spring", dur=0.5, bounce=0.3)
+    assert (m.hz, m.damp) == pytest.approx((2.0, 0.7))
+    assert Motion().hz == pytest.approx(1.5) and Motion().damp == pytest.approx(0.6)
+
+
+def test_the_named_springs_and_custom():
+    assert motion.spring_name(*motion.SPRINGS["smooth"]) == "smooth"
+    assert motion.spring_name(0.5, 0.31) is None
+    assert set(motion.SPRINGS) >= {"smooth", "snappy", "bouncy"}
+    for dur, bounce in motion.SPRINGS.values():
+        assert motion.DUR_MIN <= dur <= motion.DUR_MAX
+        assert motion.BOUNCE_MIN <= bounce <= motion.BOUNCE_MAX
+    assert Motion("spring", dur=0.5, bounce=0.3).describe() == "spring bouncy"
+    assert Motion("spring", dur=0.4, bounce=0.2).describe() == "spring 400 ms, bounce 20 %"
+
+
+def test_a_spring_written_as_hz_and_damping_reads_as_the_same_spring():
+    old = Motion.from_json({"mode": "spring", "hz": 2.0, "damp": 0.7})
+    assert (old.dur, old.bounce) == pytest.approx((0.5, 0.3))
+    assert (old.hz, old.damp) == pytest.approx((2.0, 0.7))
+    assert old.to_json() == {"mode": "spring", "dur": pytest.approx(0.5),
+                             "bounce": pytest.approx(0.3)}
+    # the new knobs win over stale ones beside them
+    both = Motion.from_json({"mode": "spring", "dur": 1.0, "bounce": 0.0, "hz": 9})
+    assert (both.dur, both.bounce) == (1.0, 0.0)
 
 
 # ---- the feel on file ----
 
 def test_motion_files_only_the_knobs_its_mode_reads():
     assert Motion("follow", 0.01, 0.5).to_json() == {"mode": "follow", "atk": 0.01, "rel": 0.5}
-    assert Motion("spring", hz=3, damp=0.4).to_json() == {"mode": "spring", "hz": 3, "damp": 0.4}
+    assert Motion("spring", dur=0.5, bounce=0.3).to_json() == \
+        {"mode": "spring", "dur": 0.5, "bounce": 0.3}
     assert Motion.from_json({"mode": "wobble", "zzz": 1}) == OFF
     assert Motion.from_json(None) is None
 
@@ -153,9 +196,9 @@ def test_motion_files_only_the_knobs_its_mode_reads():
 def test_a_route_rows_motion_round_trips_and_is_absent_by_default():
     b = Binding("axis:LX", "view.inst_amp", "push", 0.5)
     assert "motion" not in b.to_json()
-    b.motion = Motion("spring", hz=2.0, damp=0.5)
+    b.motion = Motion("spring", dur=0.5, bounce=0.5)
     d = b.to_json()
-    assert d["motion"] == {"mode": "spring", "hz": 2.0, "damp": 0.5}
+    assert d["motion"] == {"mode": "spring", "dur": 0.5, "bounce": 0.5}
     back = Binding.from_json(d)
     assert back.motion == b.motion and back == b
     assert Binding.from_json({**d, "motion": {"mode": "off"}}).motion == OFF
@@ -211,7 +254,7 @@ def test_a_follow_row_glides_out_and_home_at_its_own_times(rig):
 
 
 def test_a_spring_row_overshoots_and_settles(rig):
-    p = _push(rig, Motion("spring", hz=2.0, damp=0.2))
+    p = _push(rig, _spring(2.0, 0.2))
     p.set_norm(0.2)
     seen = []
     for _ in range(240):
@@ -244,18 +287,26 @@ def test_a_position_row_glides_in_from_the_base(rig):
 
 # ---- the pad's feel ----
 
-def test_the_pad_feel_is_five_session_params_over_the_table(rig):
+def test_the_pad_feel_is_six_session_params_over_the_table(rig):
     reg, t = rig.reg, rig.table
     assert t.pad_feel == OFF
     reg["desk.pad.feel"].set(motion.MODES.index("spring"))
-    reg["desk.pad.hz"].set(4.0)
-    reg["desk.pad.damp"].set(0.3)
+    reg["desk.pad.duration"].set(0.25)
+    reg["desk.pad.bounce"].set(0.3)
     reg["desk.pad.attack"].set(0.01)
     reg["desk.pad.release"].set(9.0)     # clamped to the throw
-    assert t.pad_feel == Motion("spring", atk=0.01, rel=motion.REL_MAX, hz=4.0, damp=0.3)
-    for k in ("feel", "attack", "release", "hz", "damp"):
+    assert t.pad_feel == Motion("spring", atk=0.01, rel=motion.REL_MAX, dur=0.25, bounce=0.3)
+    for k in ("feel", "attack", "release", "duration", "bounce"):
         p = reg[f"desk.pad.{k}"]
         assert p.group == "desk" and not p.modulatable and p.persist
+    # the preset: derived from duration and bounce, so it does not persist
+    spring = reg["desk.pad.spring"]
+    assert spring.text() == "custom" and not spring.persist
+    spring.set(list(motion.SPRINGS).index("bouncy"))
+    assert (t.pad_feel.dur, t.pad_feel.bounce) == motion.SPRINGS["bouncy"]
+    assert spring.text() == "bouncy"
+    reg["desk.pad.bounce"].set(0.31)     # moved off it
+    assert spring.text() == "custom"
 
 
 def test_an_axis_row_takes_the_pads_feel_unless_it_has_its_own(rig):

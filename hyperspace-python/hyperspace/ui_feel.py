@@ -1,193 +1,188 @@
-"""A feel drawn as its curve — position over time.
+"""A feel drawn live — the reading, and what the feel makes of it, over time.
 
-Wherever the panel sets a feel (motion.py) a small plot sits beside its
-knobs: a route row's own feel (ui_routing._feel_line), a smooth
-modifier's in GRAPH's side pane (ui_routing.modifier_block), the
-gamepad's stick feel on the SYSTEM page (ui). The curve is where a
-reading goes under that feel, its target dashed behind it —
-motion.response, the feel's own kernels, so the plot is what the Router
-does to a reading:
+Wherever the panel sets a feel (motion.py) a plot sits with its knobs: a
+route row's own feel (ui_routing._feel_line), a smooth modifier's in
+GRAPH's side pane (ui_routing.modifier_block), the gamepad's stick feel
+on the SYSTEM page (ui). It scrolls the last few seconds, newest at the
+right: the source's reading as it comes, dim, and the reading after the
+feel, white — what the Router hands on, read from the Router itself
+(`Router.felt_now` for a row, the modifier's output lane for a smooth,
+`Router.felt_lanes` for the pad). Move the stick and the plot is the feel
+working on it: a spring's overshoot and ring, follow's attack out and
+release home. A gap is where the source was not live.
 
-  spring   a step: the reading jumps 0 → 1 and the spring carries it.
-           Below ζ 1 it overshoots and rings, at 1 it lands, above it
-           creeps.
-  follow   a push and a let-go: the reading jumps to 1 and the attack
-           carries it out, then drops back to rest and the release
-           brings it home — one edge per knob.
-
-A red playhead sweeps the curve on a loop with a dot riding it; the
-SYSTEM page's larger plot adds a square travelling a dashed track below,
-at that position. The time axis fits the feel — out to where it has
-settled, its length written at the bottom right — so a lazy and a tight
-feel both read as a shape, and the number says which is which.
-
-The geometry is pure (`let_go`, `window`, `position`, `curve`,
-`playhead`) so tests read it with no imgui; `draw` is the one function
-that touches a draw list. No state: the playhead is the imgui clock
-modulo the loop.
+The panel samples as it draws (`sample`: one Trace per plot, held on the
+panel), so a plot fills while it is on screen and the Router keeps
+nothing for it. The span fits the feel — twice its settle time
+(motion.settle), within SPAN_MIN … SPAN_MAX — so a lazy feel and a tight
+one both have room to finish. `span`, `Trace` and `busiest` are pure;
+`draw` is the one function that touches a draw list.
 """
 
 from __future__ import annotations
 
 import math
-from functools import lru_cache
+from collections import deque
 
 from imgui_bundle import imgui
 
 from . import motion, ui
 from .motion import Motion
 
-SAMPLES = 64           # points along the curve
-PAUSE = 0.5            # s the playhead rests at the end before it sweeps again
-WINDOW_MIN = 0.05      # s, the shortest time axis
-RING_CYCLES = 6        # an undamped spring never settles: show this many cycles
-DASH = 4.0             # px, the target's dashes
-CURVE = imgui.ImVec4(0.92, 0.92, 0.92, 1.0)
+SPAN_MIN, SPAN_MAX = 2.0, 8.0     # s of history a plot shows
+RING_CYCLES = 3        # an undamped spring never settles: this many of its periods
+MAX_SAMPLES = int(SPAN_MAX * 120)  # a trace's memory, at up to 120 frames a second
+TRACES = "_feel_traces"            # the panel's dict of them
+KEEP = 64              # past this many traces, the ones not sampled lately go
+FELT = imgui.ImVec4(0.92, 0.92, 0.92, 1.0)
+READ = imgui.ImVec4(0.92, 0.92, 0.92, 0.32)
 
 
-def _edges(m: Motion) -> tuple[float, float]:
-    """follow's plot: how long the push holds, how long after the let-go
-    it runs — each to its edge's settle, and at least a third of the plot,
-    so an instant edge still shows its plateau. Both instant: WINDOW_MIN
-    halved."""
-    out, home = motion.settle(m), motion.settle(m, home=True)
-    if out + home <= 0:
-        return WINDOW_MIN / 2, WINDOW_MIN / 2
-    third = (out + home) / 3
-    return max(out, third), max(home, third)
-
-
-def let_go(m: Motion) -> float | None:
-    """When the reading drops back to rest on the plot: follow's push
-    holds until its attack has arrived. A spring's is a step: never."""
-    return _edges(m)[0] if m.mode == "follow" else None
-
-
-def window(m: Motion) -> float:
-    """The time axis, s: out to where the feel has settled. A spring: at
-    most RING_CYCLES of its own period (undamped, it never settles)."""
+def span(m: Motion) -> float:
+    """Seconds of history for this feel: twice how long it takes to settle
+    (follow: out and home), within SPAN_MIN … SPAN_MAX."""
     if m.mode == "follow":
-        return sum(_edges(m))
-    if m.mode == "spring" and m.hz > 0:
-        return max(min(motion.settle(m), RING_CYCLES / m.hz), WINDOW_MIN)
-    return WINDOW_MIN
+        s = motion.settle(m) + motion.settle(m, home=True)
+    elif m.mode == "spring":
+        s = motion.settle(m)
+        if math.isinf(s):
+            s = RING_CYCLES * m.dur
+    else:
+        s = 0.0
+    return min(max(2 * s, SPAN_MIN), SPAN_MAX)
 
 
-def target(m: Motion, t: float) -> float:
-    """The reading itself at t: 1 from the jump, 0 again after the let-go."""
-    g = let_go(m)
-    return 1.0 if g is None or t < g else 0.0
+class Trace:
+    """One plot's samples, oldest first: (time, reading, felt), NaN where
+    the source was not live."""
+
+    __slots__ = ("pts",)
+
+    def __init__(self):
+        self.pts: deque = deque(maxlen=MAX_SAMPLES)
+
+    def push(self, now: float, raw: float | None, felt: float | None) -> None:
+        r = math.nan if raw is None else float(raw)
+        f = math.nan if felt is None else float(felt)
+        if self.pts and now <= self.pts[-1][0]:     # drawn twice in a frame: one sample
+            self.pts[-1] = (now, r, f)
+            return
+        self.pts.append((now, r, f))
+        while self.pts and self.pts[0][0] < now - SPAN_MAX:
+            self.pts.popleft()
+
+    def since(self, now: float, s: float) -> list[tuple[float, float, float]]:
+        """The samples of the last `s` seconds."""
+        return [p for p in self.pts if p[0] >= now - s]
+
+    @property
+    def last(self) -> float:
+        return self.pts[-1][0] if self.pts else -math.inf
 
 
-def position(m: Motion, t: float) -> float:
-    """Where the feel has carried the reading by t (motion.response)."""
-    g = let_go(m)
-    if g is None or t <= g:
-        return motion.response(m, t)
-    return motion.response(m, t - g, x=motion.response(m, g), target=0.0)
+def sample(panel, key, raw: float | None, felt: float | None,
+           now: float | None = None) -> Trace:
+    """This frame's reading and felt value into the panel's trace for
+    `key` (made on first sight). Traces not sampled for SPAN_MAX go once
+    there are more than KEEP."""
+    now = imgui.get_time() if now is None else now
+    store = panel.__dict__.setdefault(TRACES, {})
+    tr = store.get(key)
+    if not isinstance(tr, Trace):                # new, or from before a hot reload
+        if len(store) >= KEEP:
+            for k in [k for k, t in store.items() if t.last < now - SPAN_MAX]:
+                del store[k]
+        tr = store[key] = Trace()
+    tr.push(now, raw, felt)
+    return tr
 
 
-@lru_cache(maxsize=256)    # drawn every frame; the knobs change rarely
-def curve(m: Motion, n: int = SAMPLES) -> tuple[tuple[float, float], ...]:
-    """(t, position) at n + 1 evenly spaced times across the window."""
-    w = window(m)
-    return tuple((w * i / n, position(m, w * i / n)) for i in range(n + 1))
+def busiest(traces: list[Trace], now: float, s: float) -> int:
+    """Which trace moved most in the last `s` seconds (its reading's range):
+    the pad's plot shows that stick. The first on a tie, or all still."""
+    best, at = -1.0, 0
+    for i, tr in enumerate(traces):
+        vals = [r for _, r, _ in tr.since(now, s) if math.isfinite(r)]
+        rng = max(vals) - min(vals) if vals else 0.0
+        if rng > best + 1e-6:
+            best, at = rng, i
+    return at
 
 
-def playhead(clock: float, m: Motion) -> float:
-    """The playhead's time on the axis at this clock time: a sweep across
-    the window, a PAUSE at its end, again."""
-    w = window(m)
-    return min(clock % (w + PAUSE), w)
-
-
-def describe(m: Motion) -> str:
-    """The plot's tooltip: the feel, what the curve is, how it lands."""
-    pts = curve(m)
+def describe(m: Motion, s: float) -> str:
+    """The plot's tooltip: the feel, what the two lines are, how it lands."""
     if m.mode == "follow":
-        out, home = motion.settle(m), motion.settle(m, home=True)
-        return (f"Follow, attack {m.atk * 1000:.0f} ms, release {m.rel * 1000:.0f} ms: a "
-                "reading pushed from rest to 1 and let go, dashed, and where the feel "
-                f"carries it. It arrives in about {out:.2f} s and comes home in about "
-                f"{home:.2f} s.")
-    st = motion.settle(m)
-    peak = max(y for _, y in pts)
-    return (f"Spring, {m.hz:.2f} Hz, ζ {m.damp:.2f}: a reading that jumps from 0 to 1, "
-            "dashed, and where the spring carries it. "
-            + ("Undamped, it rings forever." if math.isinf(st) else
-               (f"It overshoots {100 * (peak - 1):.0f} % and " if peak > 1.005 else "It ")
-               + f"settles in about {st:.2f} s."))
+        lands = (f"It arrives in about {motion.settle(m):.2f} s and comes home in about "
+                 f"{motion.settle(m, home=True):.2f} s.")
+    else:
+        st = motion.settle(m)
+        lands = ("With no damping it rings forever." if math.isinf(st) else
+                 f"It settles in about {st:.2f} s.")
+    return (f"{m.describe()[0].upper()}{m.describe()[1:]}, live: the last {s:.0f} s, newest "
+            "at the right. Dim: the reading as it comes. White: after the feel — what "
+            f"the param gets. {lands}")
 
 
-def _dashed(dl, a: imgui.ImVec2, b: imgui.ImVec2, col: int) -> None:
-    """A dashed line, horizontal or vertical."""
-    length = math.hypot(b.x - a.x, b.y - a.y)
-    if length <= 0:
-        return
-    ux, uy = (b.x - a.x) / length, (b.y - a.y) / length
-    d = 0.0
-    while d < length:
-        e = min(d + DASH, length)
-        dl.add_line(imgui.ImVec2(a.x + ux * d, a.y + uy * d),
-                    imgui.ImVec2(a.x + ux * e, a.y + uy * e), col, 1.0)
-        d += 2 * DASH
+def _lines(dl, pts: list[imgui.ImVec2 | None], col: int, thick: float) -> None:
+    """A polyline broken at each None (a gap where nothing was live)."""
+    run: list[imgui.ImVec2] = []
+    for p in [*pts, None]:
+        if p is not None:
+            run.append(p)
+            continue
+        if len(run) > 1:
+            dl.add_polyline(run, col, thick, 0)
+        run = []
 
 
-def draw(m: Motion, width: float, height: float, track: bool = False) -> None:
-    """The plot, `width` × `height` px at the cursor, as one item (a
-    feel that is off draws nothing); with `track`, a square travelling a
-    dashed track under it, inside the same height."""
+def draw(m: Motion, trace: Trace | None, width: float, height: float,
+         title: str = "") -> None:
+    """The live plot, `width` × `height` px at the cursor, as one item (a
+    feel that is off draws nothing); `title` in its top left."""
     if not m.on:
         return
     o = imgui.get_cursor_screen_pos()
     dl = imgui.get_window_draw_list()
-    axis, faint, red, line = (ui.u32(ui.LINE), ui.u32(ui.FAINT), ui.u32(ui.RED),
-                              ui.u32(CURVE))
-    th = min(18.0, height * 0.3) if track else 0.0     # the track's band
+    axis, faint = ui.u32(ui.LINE), ui.u32(ui.FAINT)
+    now = imgui.get_time()
+    s = span(m)
     pad = 3.0
     x0, x1 = o.x + pad, o.x + width - pad
-    y0, y1 = o.y + pad, o.y + height - pad - th
-    pts = curve(m)
-    w = pts[-1][0]
-    lo = min(0.0, min(y for _, y in pts))
-    hi = max(1.0, max(y for _, y in pts))
+    y0, y1 = o.y + pad, o.y + height - pad
+    pts = trace.since(now, s) if trace is not None else []
+    vals = [v for _, r, f in pts for v in (r, f) if math.isfinite(v)]
+    lo, hi = min([0.0, *vals]), max([1.0, *vals])
     lo, hi = lo - 0.06 * (hi - lo), hi + 0.06 * (hi - lo)
 
-    def at(t: float, y: float) -> imgui.ImVec2:
-        return imgui.ImVec2(x0 + (x1 - x0) * t / w, y1 - (y1 - y0) * (y - lo) / (hi - lo))
+    def at(t: float, y: float) -> imgui.ImVec2 | None:
+        if not math.isfinite(y):
+            return None
+        return imgui.ImVec2(x1 - (x1 - x0) * (now - t) / s,
+                            y1 - (y1 - y0) * (y - lo) / (hi - lo))
 
-    # the axes, the reading dashed (a step, or a push and its let-go), the curve
-    base = at(0.0, 0.0).y
-    dl.add_line(imgui.ImVec2(x0, y0), imgui.ImVec2(x0, y1), axis, 1.0)
-    dl.add_line(imgui.ImVec2(x0, base), imgui.ImVec2(x1, base), axis, 1.0)
-    g = let_go(m)
-    _dashed(dl, at(0.0, 1.0), at(w if g is None else g, 1.0), axis)
-    if g is not None:
-        _dashed(dl, at(g, 1.0), at(g, 0.0), axis)
-    dl.add_polyline([at(t, y) for t, y in pts], line, 1.5, 0)
-    # the playhead and where the curve is under it
-    t = playhead(imgui.get_time(), m)
-    y = position(m, t)
-    p = at(t, y)
-    dl.add_line(imgui.ImVec2(p.x, y0), imgui.ImVec2(p.x, y1), red, 1.0)
-    dl.add_circle_filled(p, 2.5, line)
-    label = f"{w:.2f} s" if w < 10 else f"{w:.0f} s"
+    dl.add_rect(imgui.ImVec2(o.x, o.y), imgui.ImVec2(o.x + width, o.y + height), axis, 4.0)
+    for level in (0.0, 1.0):                     # the reading's range, dotted faintly
+        y = y1 - (y1 - y0) * (level - lo) / (hi - lo)
+        x = x0
+        while x < x1:
+            dl.add_line(imgui.ImVec2(x, y), imgui.ImVec2(min(x + 2, x1), y), axis, 1.0)
+            x += 6
+    _lines(dl, [at(t, r) for t, r, _ in pts], ui.u32(READ), 1.0)
+    _lines(dl, [at(t, f) for t, _, f in pts], ui.u32(FELT), 1.5)
+    head = at(*pts[-1][::2]) if pts else None   # the newest felt value
+    if head is not None:
+        dl.add_circle_filled(head, 2.5, ui.u32(ui.RED))
+    if title:
+        dl.add_text(imgui.ImVec2(x0 + 2, y0), faint, title)
+    if not vals:
+        note = "not live"
+        sz = imgui.calc_text_size(note)
+        dl.add_text(imgui.ImVec2(o.x + (width - sz.x) / 2, o.y + (height - sz.y) / 2),
+                    faint, note)
+    label = f"{s:.0f} s"
     sz = imgui.calc_text_size(label)
-    # bottom right: a spring has risen by then; a follow's release has come
-    # home, so its label goes top right
-    ly = base - sz.y - 1 if g is None else y0
     if sz.y < (y1 - y0) * 0.6:
-        dl.add_text(imgui.ImVec2(x1 - sz.x, ly), faint, label)
-    if track:
-        # the square: rest at the left, the target near the right, so an
-        # overshoot carries it past and back
-        cy = y1 + pad + th / 2
-        s = th - 4
-        ta, tb = x0 + s / 2, x1 - s / 2
-        _dashed(dl, imgui.ImVec2(x0, cy), imgui.ImVec2(x1, cy), axis)
-        sx = ta + (y - lo) * (tb - ta) / (hi - lo)
-        dl.add_rect(imgui.ImVec2(sx - s / 2, cy - s / 2), imgui.ImVec2(sx + s / 2, cy + s / 2),
-                    line, 0.0, 1.5)
+        dl.add_text(imgui.ImVec2(x1 - sz.x - 2, y1 - sz.y), faint, label)
     imgui.dummy(imgui.ImVec2(width, height))
     if imgui.is_item_hovered():
-        ui.tooltip(describe(m))
+        ui.tooltip(describe(m, s))

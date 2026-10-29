@@ -20,10 +20,14 @@ the `axis` lanes — the same knobs drive the sticks' default camera job.
            About rest, not up / down, so a centred stick is fast out and
            slow home in either direction; at rest 0 it is the analyzer's
            ``u > env`` exactly.
-  spring   a mass on a spring toward the reading: `hz` its natural
-           frequency, `damp` the damping ratio (1 critical — the fastest
-           arrival with no overshoot; below 1 it overshoots and rings,
-           above 1 it creeps).
+  spring   a mass on a spring toward the reading, set the way Apple's
+           springs are (WWDC23, "Animate with springs"): `dur` its
+           perceptual duration — the undamped period, how long it feels
+           — and `bounce`, 0 the fastest arrival with no overshoot,
+           above 0 it overshoots and rings (toward 1, forever), below 0
+           it creeps. Exactly a natural frequency and a damping ratio
+           (`hz` = 1 / dur; `damp` = 1 − bounce, or 1 / (1 + bounce)
+           below 0), which the kernel runs on. SPRINGS names a few.
 
 Times are seconds, τ the one-pole's time constant (63 % of the way in τ).
 
@@ -42,8 +46,19 @@ MODES = ("off", "follow", "spring")
 
 ATK_MAX = 2.0        # s — the panel's throws; a file may hold more
 REL_MAX = 4.0
-HZ_MIN, HZ_MAX = 0.1, 12.0
+HZ_MIN, HZ_MAX = 0.1, 12.0       # the kernel's; a file's hz / damp convert (Motion.from_json)
 DAMP_MAX = 3.0
+DUR_MIN, DUR_MAX = 0.05, 4.0     # s — the panel's spring throws; 1 / HZ_MAX … under 1 / HZ_MIN
+BOUNCE_MIN, BOUNCE_MAX = -0.75, 0.95     # ζ 4 … ζ 0.05
+# the named springs: perceptual duration (s), bounce. Apple's smooth and
+# bouncy, a snappier snappy, and two slower ends of the range
+SPRINGS = {
+    "snappy": (0.3, 0.15),
+    "smooth": (0.5, 0.0),
+    "bouncy": (0.5, 0.3),
+    "wobbly": (0.8, 0.6),
+    "lazy": (1.2, 0.0),
+}
 SETTLE = 1e-4       # a Follower this close to its target, and this slow, lands
 _CRIT = 1e-6         # |damp − 1| under this is critical damping
 BAND = 0.02          # `settle`: within this of where it is going counts as arrived
@@ -99,6 +114,29 @@ def spring(x: float, v: float, target: float, dt: float, hz: float,
 
 # ---------------------------------------------------------------- feel
 
+def spring_hz(dur: float, bounce: float) -> tuple[float, float]:
+    """A perceptual duration and a bounce as the kernel's (hz, damp)."""
+    hz = 0.0 if dur <= 0 else 1.0 / dur
+    damp = 1.0 - bounce if bounce >= 0 else 1.0 / max(1.0 + bounce, 1e-6)
+    return hz, damp
+
+
+def spring_feel(hz: float, damp: float) -> tuple[float, float]:
+    """The kernel's (hz, damp) as a perceptual duration and a bounce —
+    `spring_hz` inverted, for a file written with hz / damp."""
+    dur = 1.0 / hz if hz > 0 else DUR_MAX
+    bounce = 1.0 - damp if damp <= 1 else 1.0 / damp - 1.0
+    return dur, bounce
+
+
+def spring_name(dur: float, bounce: float) -> str | None:
+    """The SPRINGS entry these knobs are, None when they are no preset."""
+    for name, (d, b) in SPRINGS.items():
+        if abs(d - dur) < 1e-3 and abs(b - bounce) < 1e-3:
+            return name
+    return None
+
+
 @dataclass(frozen=True)
 class Motion:
     """A feel, as a route row or the pad's session setting holds it."""
@@ -106,29 +144,44 @@ class Motion:
     mode: str = "follow"
     atk: float = 0.02     # follow: s, away from rest
     rel: float = 0.35     # follow: s, back toward rest
-    hz: float = 1.5       # spring: natural frequency
-    damp: float = 0.6     # spring: damping ratio, 1 critical
+    dur: float = 2 / 3    # spring: perceptual duration, s (1.5 Hz)
+    bounce: float = 0.4   # spring: 0 none, toward 1 rings, below 0 creeps (ζ 0.6)
 
     @property
     def on(self) -> bool:
         return self.mode in ("follow", "spring")
 
+    @property
+    def hz(self) -> float:
+        """The spring's natural frequency, what the kernel runs on."""
+        return spring_hz(self.dur, self.bounce)[0]
+
+    @property
+    def damp(self) -> float:
+        """The spring's damping ratio, what the kernel runs on."""
+        return spring_hz(self.dur, self.bounce)[1]
+
     def to_json(self) -> dict:
         """The mode and the knobs it reads — the other mode's stay out of the file."""
         d = asdict(self)
-        keep = {"follow": ("atk", "rel"), "spring": ("hz", "damp")}.get(self.mode, ())
+        keep = {"follow": ("atk", "rel"), "spring": ("dur", "bounce")}.get(self.mode, ())
         return {k: v for k, v in d.items() if k == "mode" or k in keep}
 
     @classmethod
     def from_json(cls, d) -> Motion | None:
         """A file's motion: a dict, or None. An unknown mode reads as off,
-        unknown keys are ignored, a missing knob takes its default."""
+        unknown keys are ignored, a missing knob takes its default. A
+        spring written as hz / damp (before the perceptual knobs) reads as
+        the same spring."""
         if d is None:
             return None
         if isinstance(d, Motion):
             return d
         names = {f.name for f in fields(cls)}
         kw = {k: (str(v) if k == "mode" else float(v)) for k, v in d.items() if k in names}
+        if ("hz" in d or "damp" in d) and not ("dur" in kw or "bounce" in kw):
+            kw["dur"], kw["bounce"] = spring_feel(float(d.get("hz", 1.5)),
+                                                  float(d.get("damp", 0.6)))
         if kw.get("mode") not in MODES:
             kw["mode"] = "off"
         return cls(**kw)
@@ -137,7 +190,9 @@ class Motion:
         if self.mode == "follow":
             return f"follow {self.atk * 1000:.0f}/{self.rel * 1000:.0f} ms"
         if self.mode == "spring":
-            return f"spring {self.hz:.2g} Hz ζ{self.damp:.2g}"
+            name = spring_name(self.dur, self.bounce)
+            return (f"spring {name}" if name else
+                    f"spring {self.dur * 1000:.0f} ms, bounce {self.bounce * 100:.0f} %")
         return "no motion"
 
 
