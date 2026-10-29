@@ -400,6 +400,7 @@ second or more goes in the tables at the top of `tests/conftest.py`.
 | L194 | The same patch twice in one preset (plan 40) | 1 | laptop, the copy | 401 |
 | L195 | A macro wired from the param menu moves the param (row 537) | 1 | laptop | 402 |
 | L196 | The PRESETS page is the library (plan 41) | 1 | laptop, the copy | 403 |
+| L197 | The shape node's details show its wireframe | 1 | laptop | — |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -4994,6 +4995,37 @@ a pad that loads nothing.
 show file; remove them with × if you do not want them.
 
 *(check 403)*
+
+## The shape's wireframe (L197)
+
+#### L197. The shape node's details show its wireframe
+
+**Needs:** laptop.
+
+**Do:**
+1. Load a preset with a 4D shape (the 24-cell, the tesseract) and open
+   GRAPH. Click the **Shape** node. Watch the top of its details and the
+   frame rate on SYSTEM.
+2. Change the shape (VIEW, or the details' own **shape** row) to the
+   120-cell, then the rectified 600-cell, then a 3D one (the cube).
+3. Turn the brightness down, switch faces and points on, zoom the camera.
+4. Click another node, then wait a second.
+
+**Right if:** (1) a black square at the top of the details holds the
+shape alone in white lines, sharp, turning as the projector's shape turns,
+nearer edges brighter; the Shape node on the canvas still shows its faint
+scene picture; the frame rate is what it was before the click. (2) the
+square follows each shape at once, the dense ones included, with no
+stutter. (3) the square does not change: no faces, no red points, the same
+size and brightness. (4) the square is gone with the details.
+
+**Wrong if:** a square that stays black, a picture upside down or a frame
+behind the canvas, faces or points in it, a dip in the frame rate while
+the Shape node is selected, or anything on an output changing when it is.
+
+**Changes:** nothing.
+
+*(automated: `tests/test_shape_wire.py`)*
 
 # Part 2 — tests that need hardware
 

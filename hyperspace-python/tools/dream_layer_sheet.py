@@ -41,6 +41,8 @@ def rendered(res: int):
     import moderngl
     from PIL import Image
 
+    from hyperspace.graph import Wiring
+    from hyperspace.graphmigrate import wired_wiring
     from hyperspace.lookback import DreamState, echo_size
     from hyperspace.render import Renderer
     from hyperspace.view import ViewState
@@ -48,6 +50,9 @@ def rendered(res: int):
     ctx = moderngl.create_context(standalone=True)
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H))])
     r = Renderer(ctx, DreamState(on=False))
+    # plan 36 T3: a bare renderer draws the app's empty frame; the
+    # tool's own wiring is today's frame (render.render_offscreen's)
+    r.wiring = wired_wiring(Wiring())
     s = ViewState(shape=10, faces=True, pattern=2, bright=1.3, speed=3.0)
     s.ang = [0.3, 0.7, 1.1, 0.5, 0.9, 1.3]
     s.yaw, s.pitch = 0.4, 0.25

@@ -987,9 +987,10 @@ _SYMBOLS = {"←": "LEFT", "→": "RIGHT", "↑": "UP", "↓": "DOWN", "space": 
             "?": "SLASH", "Esc": "ESCAPE", "Cmd+R": "SUPER+R", "Cmd+Z": "SUPER+Z",
             "Cmd+[": "SUPER+LEFT_BRACKET",
             "Home": "HOME"}
-_PADS = {"pad X / B": ["X", "B"], "pad A Y": ["A", "Y"], "LB / RB": ["LB", "RB"],
-         "sticks": ["LSTICK", "RSTICK"], "hold START": ["MENU"]}
-_MOUSE = {"drag", "⇧drag", "scroll", "right-click", "d-pad", "LT / RT",
+_PADS = {"pad A Y · B X": ["A", "Y", "B", "X"], "pad BACK": ["VIEW"],
+         "LB / RB": ["LB", "RB"], "sticks": ["LSTICK", "RSTICK"], "hold START": ["MENU"]}
+_HATS = {"hold d-pad ← / →", "d-pad ↑ / ↓"}
+_MOUSE = {"drag", "⇧drag", "scroll", "right-click", *_HATS, "LT / RT",
           "APC40"}                                   # the desk's glyph legend, not a key
 
 
@@ -1030,7 +1031,7 @@ def test_the_cheat_sheet_matches_the_tables_and_the_loop_keys():
     assert not sheet_keys - known, "the sheet names keys nothing handles"
     table_pads = {b.source.split(":", 1)[1] for b in padmap() if b.scheme == "pad"}
     assert table_pads == sheet_pads
-    assert any(b.scheme == "hat" for b in padmap()) and any(c == "d-pad" for c, _ in CHEATSHEET)
+    assert any(b.scheme == "hat" for b in padmap()) and _HATS <= {c for c, _ in CHEATSHEET}
 
 
 def _windows(monkeypatch) -> list[str]:
