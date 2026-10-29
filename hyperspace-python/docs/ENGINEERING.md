@@ -892,13 +892,25 @@ error skips the pass.
   the faces row are gone.
 - **Adding, wiring and ordering are on GRAPH.** The right-click picker
   adds an effect (`acid.2`, …) or a switch **unwired**, faint and "reaches
-  nothing", where the menu opened. An effect dropped on a render cable is
-  **inserted** into it (`graphview.Edit.insert_effect(cable, file)`; the
-  cable's right-click menu offers "insert effect ▸ <file>"). Dragging an
-  effect already in the graph onto another cable moves it
-  (`Edit.place_effect(cable, name)`: lifted out, the run closes over the
-  gap, put on the cable; one undo step; a drop on its own cable or on
-  empty canvas does nothing). Deleting a run cable lifts the effect it
+  nothing", where the menu opened. A free effect dropped on a picture
+  cable is **inserted** into it — the cable's picture into its `image`
+  port, its output on into the port the cable fed (`Edit.place_effect`;
+  the cable's right-click menu offers "insert effect ▸ <file>"). While a
+  node is dragged the canvas shows what letting go will do
+  (`ui_graph.onto_plan`): the cable it will go onto — of those through
+  its box, the one nearest its centre — is thick gold; every other cable
+  dims (a spotlight: picture cables are
+  already red, trigger cables orange). One it may not take dims with the
+  rest, the reason beside the pointer, which otherwise says what letting
+  go does; nothing lit, nothing happens. Two cables as near as each other open a chooser. An effect
+  already wired only moves on the canvas; **⌘-drag** lifts it out of its
+  chain: it lights a cable as a free one does, and let go on it moves
+  there (one undo step: reordering the run). Without ⌘ the pointer says
+  "hold ⌘" from the moment the drag starts, and nothing dims. A
+  free modifier drops onto a route or a modifier input the same way, and
+  deleting a modifier wires what fed it on to what it fed.
+  **Option-drag** on the background box-selects cables (a plain box
+  selects nodes; the two are never selected together). Deleting a run cable lifts the effect it
   led into; deleting the last `frame → fx.image` is refused. An instance 1
   taken out of the run is kept unwired (`{"kind": "effect", "file": f}`),
   faint, and the section saves `/5`.

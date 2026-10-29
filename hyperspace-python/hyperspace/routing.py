@@ -2708,9 +2708,28 @@ class Bindings:
         return self.set_modifiers(docs, reg)
 
     def remove_modifier(self, mid: str, reg: Registry | None = None) -> None:
-        """Take a modifier out, its params with it; a route on its lane
-        stays, dormant, until it is removed or the id comes back."""
-        self.set_modifiers([d for d in self.modifiers_doc(reg) if d["id"] != mid], reg)
+        """Take a modifier out, its params with it, and close the chain
+        over it (2026-10-29: as deleting an effect does): what fed its
+        first input now feeds whatever read its lane — a route through
+        `move_route` (op, depth and depth subscribers kept), another
+        modifier's input in place. With nothing in its first input, a
+        route on its lane stays, dormant, until it is removed or the id
+        comes back — as it does when the modifier changes the signal's
+        kind (a threshold makes a trigger of a value: what read the
+        trigger is not handed the value)."""
+        m = self.modifier(mid)
+        src = m.inputs[0] if m is not None and m.inputs else ""
+        same = m is not None and modifiers.OUT.get(m.kind, modifiers.VALUE) == modifiers.VALUE
+        lanes = {x.id: x.address for x in self.modifiers}
+        docs = [d for d in self.modifiers_doc(reg) if d["id"] != mid]
+        if src and same and src != m.address:
+            for b in [b for b in self.bindings if b.source == m.address]:
+                self.move_route(b, source=src)
+            for d in docs:      # (never a modifier onto its own lane: a loop through it)
+                own = lanes.get(d["id"])
+                d["in"] = [src if a == m.address and src != own else
+                           None if a == m.address else a for a in d["in"]]
+        self.set_modifiers(docs, reg)
 
 
 # ---------------------------------------------------------------- router
