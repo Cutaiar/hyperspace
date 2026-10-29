@@ -106,7 +106,9 @@ def test_presets_load():
 
 @pytest.fixture(scope="module")
 def fixture_wavs():
-    if not (FIXTURES / "gate-prover.wav").exists():
+    # (all three: another worker may be generating them; each lands whole)
+    if not all((FIXTURES / n).exists() for n in ("gate-prover.wav", "brickwalled.wav",
+                                                 "sweep.wav")):
         subprocess.run(
             [sys.executable, str(ROOT / "tools" / "gen_test_audio.py"), "--out", str(FIXTURES)],
             check=True,
