@@ -64,8 +64,8 @@ canvas the node picker (a modifier of each kind, a macro, and since plan
 macro, LFO or extra envelope node delete (an LFO or envelope through its
 bank, one undo step; a lane envelope 1–5 refused). A sequencer lane's
 envelope binding is a ``lane`` cable: it is never deleted, only rebound
-(a lane's pin dragged onto an envelope's ``fire`` base stub). A modifier node dropped onto a cable is inserted into
-it (`dropped`). **The seam with N4** (render edits): `_create` and
+(a lane's pin dragged onto an envelope's ``fire`` base stub). A free modifier node dropped onto a lit cable is
+inserted into it (`dropped`). **The seam with N4** (render edits): `_create` and
 `_delete` dispatch by the pins' type through `CREATE` / `DELETE`; value and
 trigger cables are this file's handlers, image / geometry / mask N4's.
 
@@ -95,11 +95,19 @@ opened (`add_render`): faint, "reaches nothing", until it is wired in. A
 render cable's menu offers "insert effect ▸ <file>" (`insert_effect`); a
 free effect node let go on a picture cable is inserted into it
 (`dropped`, `Edit.place_effect`): the cable's picture into its ``image``
-port, its output on into whichever port the cable fed. A cable is under
-the node when it runs through the node's box (a free node's: an effect
-already wired moves only when its centre lands on one); with more than one under
-it, a chooser names each ("Look-back → Acid") and the pick takes it
-(`st["onto"]`, `put_onto`) — a modifier the same. A compile error colours an effect
+port, its output on into whichever port the cable fed. **The drag shows
+what the drop will do** (2026-10-29, `onto_plan`, `_drag_preview`): the
+cable under the node's centre it will go onto is drawn thick in the drop
+colour, other cables it could take faint in it, one it may not take red
+with the reason beside the pointer, which also says what letting go does;
+nothing lit, nothing happens. Two cables as near: a chooser names each
+("Look-back → Acid") and the pick takes it (`st["onto"]`, `put_onto`). An
+effect already wired only moves on the canvas — unless ⌘ is held: then
+its border is lit, its own cables fade, a thin join shows its chain closed
+over it, and let go on a lit cable it moves there (reordering the run).
+Over a cable without ⌘, the pointer says to hold it. A free modifier goes
+onto a route or a modifier's input the same way; several nodes dragged
+together only move. A compile error colours an effect
 node's title and is its hover (`effect_errors`). The selected effect is
 the panel's one selection, shared with the FX page (`Panel.fx_selected`,
 `share`, `select_effect`).
@@ -313,6 +321,7 @@ def _state(panel) -> dict:
     # patch form (``[group id, name, note]``), the browser's listing
     st.setdefault("patch_drag", None)
     st.setdefault("drop_cable", None)
+    st.setdefault("onto_lit", None)         # 2026-10-29: a dragged node's `onto_plan`
     st.setdefault("drop_why", "")
     st.setdefault("patch_form", None)
     st.setdefault("patch_list", None)
@@ -1280,10 +1289,12 @@ def _moved(panel, st: dict, view: graphview.View) -> None:
         if m is not None:
             px, py = panned(st)                 # saved in layout units, not panned ones
             m[n.id] = [round(now[0] - px), round(now[1] - py)]
-        if n.kind == "modifier" or isinstance(n.ref, Effect):   # (plan 33 U: an effect too)
+        # (plan 33 U: an effect too; 2026-10-29: one node let go alone, as
+        # the drag lit it — several moved together only move)
+        if len(moves) == 1 and (n.kind == "modifier" or isinstance(n.ref, Effect)):
             size = ed.get_node_size(ed.NodeId(_id(st, "n:" + n.id)))
             dropped(panel, view, n.id, (now[0] + size.x / 2, now[1] + size.y / 2),
-                    (size.x, size.y))
+                    lift_held())
 
 
 def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
@@ -1317,9 +1328,16 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
             _region(st, g)
     st["errors"] = effect_errors(panel, view)
     drawn: set[str] = set()
+    lit = st.get("onto_lit")            # last frame's drag: a lifted node's border lit
     for n in view.nodes:
         if drawn_node(st, n):
+            lifted = lit is not None and lit["lift"] and lit["node"] == n.id
+            if lifted:
+                for k in LIFT_BORDERS:
+                    ed.push_style_color(k, DROP_COLOUR)
             _node(st, n, drawn)
+            if lifted:
+                ed.pop_style_color(len(LIFT_BORDERS))
     for g in view.groups:               # plan 40 T2: a folded group's node, an open one's title
         if g.open:
             _region_title(panel, st, g)
@@ -1339,14 +1357,18 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
             continue
         _idle_line(st, view, area, ids)
     _drop_target(panel, st, view)       # plan 40 T3: a dragged patch's cable, lit below
+    _drag_preview(panel, st, view)      # 2026-10-29: a dragged node's cable, lit below
     # plan 28 N7: one wire per node pair while either end is collapsed
     singles, bundles = _wiring(st, view)
     st["tints"] = cable_tints(st, view)     # plan 37 C2: the through wires known
     wires = 0
+    ends = {}
     for c, a, b in singles:
         if a in drawn and b in drawn:
             _cable(st, c, a, b)
+            ends[c.id] = (a, b)
             wires += 1
+    _ghosts(st, ends)
     st["bundles"] = {}
     for b in bundles:
         if b.src_port in drawn and b.dst_port in drawn:
@@ -2105,6 +2127,11 @@ PATCH_DRAG = "PATCH"                 # a browser line's drag payload: the patch'
 PATCHES_POPUP = "##graph.patches"
 DROP_COLOUR = imgui.ImVec4(1.0, 0.86, 0.35, 1.0)    # the cable a dragged patch would splice into
 DROP_WIRE = 6.0
+LIT_ALPHA = 0.45        # a cable the dragged node could go onto, not the one it will
+LEAVING_ALPHA = 0.2     # a lifted node's own cables: they go when it is let go
+GHOST_WIRE = 2.0        # the join its chain closes over it with
+LIFT_BORDERS = (ed.StyleColor.node_border, ed.StyleColor.sel_node_border,
+                ed.StyleColor.hov_node_border)
 PATCHES_TIP = ("The patches: a click spawns one at the canvas's centre, its pins open — "
                "nothing wired to this preset. Drag one onto a picture cable to splice it in")
 NO_PATCHES = "no patches yet — a group's menu: save as patch…"
@@ -2653,8 +2680,30 @@ def _cable(st: dict, c: graphview.VCable, a: str | None = None, b: str | None = 
         thick = WIRE
     if st.get("drop_cable") == c.id:        # plan 40 T3: a dragged patch would splice here
         col, thick = DROP_COLOUR, DROP_WIRE
+    lit = st.get("onto_lit")                # 2026-10-29: a dragged node, what it would do
+    if lit is not None:
+        if c.id == lit["best"] or c.id in lit["tie"]:
+            col, thick = DROP_COLOUR, DROP_WIRE
+        elif c.id in lit["lit"]:
+            col, thick = imgui.ImVec4(DROP_COLOUR.x, DROP_COLOUR.y, DROP_COLOUR.z, LIT_ALPHA), WIRE
+        elif c.id in lit["refused"]:
+            col = imgui.ImVec4(*REFUSED_RGB)
+        elif c.id in lit["leaving"]:
+            col = imgui.ImVec4(col.x, col.y, col.z, LEAVING_ALPHA)
     ed.link(ed.LinkId(_id(st, "c:" + c.id)), ed.PinId(_id(st, a or c.src_port)),
             ed.PinId(_id(st, b or c.dst_port)), col, thick)
+
+
+def _ghosts(st: dict, ends: dict) -> None:
+    """A lifted effect's chain closed over it (`onto_plan`'s ``ghost``): a
+    thin drop-coloured wire from what feeds its picture to each port it
+    feeds, drawn between the pins those cables are drawn to."""
+    lit = st.get("onto_lit")
+    for i, o in (lit or {}).get("ghost", ()):
+        if i in ends and o in ends:
+            ed.link(ed.LinkId(_id(st, f"g:{i}>{o}")), ed.PinId(_id(st, ends[i][0])),
+                    ed.PinId(_id(st, ends[o][1])),
+                    imgui.ImVec4(DROP_COLOUR.x, DROP_COLOUR.y, DROP_COLOUR.z, LIT_ALPHA), GHOST_WIRE)
 
 
 def bundle_thickness(count: int) -> float:
@@ -3376,8 +3425,9 @@ def timing_line(panel) -> str:
 # a `graphview.Refusal` the head's note. The canvas's gestures below call
 # them; `CREATE` / `DELETE` are the dispatch by type N4 extends.
 
-EDIT_HINT = ("drag pin to pin: a cable  ·  right-click: Learn, insert, add  ·  "
-             "drag a box: nodes, Option-drag: cables  ·  Delete: the selection")
+EDIT_HINT = ("drag pin to pin: a cable  ·  drop a node on a lit cable: into it "
+             "(⌘-drag one already wired)  ·  Option-drag: select cables  ·  "
+             "right-click: Learn, insert, add  ·  Delete: the selection")
 MENU = "##graph.menu"
 REFUSED_RGB = (1.0, 0.45, 0.35, 1.0)       # ui.WARN: a drag the table would refuse
 
@@ -3744,54 +3794,142 @@ def route_from_menu(panel, p) -> None:
 
 
 def dropped(panel, view: graphview.View, nid: str, centre,
-            size=None) -> graphview.VCable | None:
-    """A modifier node let go at `centre` (canvas units; `size` its box):
-    if it is still free — no cable in or out — and lands on a route or a
-    modifier's input cable (`graphview.cables_near`, by the curve the
-    widget draws, through the node's box), it is inserted there. Plan 33
-    U: an effect node let go on a picture cable is put onto it the same
-    way (`Edit.place_effect`, one undo step) — the cable's picture into
-    its ``image`` port, its output on into the port the cable fed; a free
-    one (in the section, no cable in or out) inserted; (R22) one already
-    wired moved there, out of its place, the wires either side of it
-    closed over it: reordering the run is dragging a node to another
-    cable. Its own cables (any pipeline's node of it) are passed over, so
-    a node let go where it was, or on nothing, stays. More than one cable
-    under it (2026-10-29): a chooser opens (`st["onto"]`, `put_onto`) and
-    nothing changes until one is picked. Returns the cable it went into,
-    or None."""
-    cands = onto_choices(panel, view, nid, centre, size)
-    if not cands:
+            lift: bool = False) -> graphview.VCable | None:
+    """A node let go at `centre` (canvas units): what `onto_plan` lit while
+    it was dragged happens. A free effect goes onto the brightest picture
+    cable under its centre (`Edit.place_effect`, one undo step) — the
+    cable's picture into its ``image`` port, its output on into the port
+    the cable fed — a free modifier onto the brightest route or input
+    (`insert_modifier`). An effect already wired is only moved when `lift`
+    (⌘ held as it is let go: 2026-10-29): out of its place, the wires
+    either side of it closed over it, onto the cable — reordering the run;
+    without ⌘ a drag only moves it on the canvas. Two cables as near as
+    each other: a chooser opens (`st["onto"]`, `put_onto`) and nothing
+    changes until one is picked. Returns the cable it went into, or None."""
+    plan = onto_plan(panel, view, nid, centre, lift)
+    if plan is None or plan["best"] is None:
         return None
-    if len(cands) > 1:
-        _state(panel)["onto"] = {"node": nid, "cables": [c.id for c in cands], "open": True}
+    if plan["tie"]:
+        _state(panel)["onto"] = {"node": nid, "cables": plan["tie"], "open": True}
         return None
-    return put_onto(panel, view, nid, cands[0])
+    c = next((x for x in view.cables if x.id == plan["best"]), None)
+    return None if c is None else put_onto(panel, view, nid, c)
 
 
-def onto_choices(panel, view: graphview.View, nid: str, centre,
-                 size=None) -> list[graphview.VCable]:
-    """The cables node `nid`, let go at `centre`, may go onto, nearest
-    first: picture cables of the section for an effect (not the rig's bus,
-    not its own), value cables for a free modifier. A free node takes a
-    cable through its box; an effect already wired only one its centre
-    is let go on."""
+ONTO_TIE = 1.0          # canvas units: two cables this near each other's distance are a tie
+
+
+def onto_plan(panel, view: graphview.View, nid: str, centre, lift: bool = False) -> dict | None:
+    """What letting node `nid` go at `centre` would do — what the drag
+    lights (`_drag_preview`) and what the drop does (`dropped`), so the two
+    never disagree. None: nothing. Else ``{"node", "lift", "lit", "best",
+    "tie", "refused", "leaving", "ghost", "hint"}``: the cables it may go
+    onto under its centre, nearest first (`lit`), the one it will (`best`),
+    the cables as near as that one when there are two or more (`tie`: the
+    chooser's), the render cables under it it may not go onto with why
+    (`refused`); for a wired effect lifted with ⌘, its own cables
+    (`leaving`) and the joins its chain closes over it with — (cable into
+    its picture, cable out) pairs (`ghost`). `hint`: a wired effect over a
+    cable it could go onto, ⌘ not held (the drag says to hold it)."""
     n = view.node(nid)
     if n is None:
-        return []
+        return None
     pins = _state(panel)["pin_xy"]
+    mine = view.cables_of(nid)
     if n.kind == "render" and isinstance(n.ref, Effect):
         e = render_edit(panel)
-        # (one already wired moves only when its centre is let go on the
-        # cable: a nudge of a node in its run must not move it to another)
-        box = None if view.cables_of(nid) else size
-        return [c for c in graphview.cables_near(view, pins, centre, kinds=("render",),
-                                                 skip={nid}, size=box)
-                if c.type == graphview.IMAGE
-                and (e is None or graphview.onto_refusal(e, c) is None)]
-    if n.kind != "modifier" or view.cables_of(nid):
-        return []
-    return graphview.cables_near(view, pins, centre, skip=(nid,), size=size)
+        ok, refused = [], {}
+        for d, c in graphview.cables_near(view, pins, centre, kinds=("render",), skip={nid}):
+            why = (graphview.onto_refusal(e, c) if e is not None
+                   else None if c.type == graphview.IMAGE else "no picture cable")
+            if why is None:
+                ok.append((d, c))
+            else:
+                refused[c.id] = why
+    elif n.kind == "modifier" and not mine:     # (a wired modifier is not lifted)
+        ok, refused = graphview.cables_near(view, pins, centre, skip=(nid,)), {}
+    else:
+        return None
+    plan = {"node": nid, "lift": False, "lit": [], "best": None, "tie": [], "refused": {},
+            "leaving": [], "ghost": [], "hint": False}
+    if mine and not lift:
+        plan["hint"] = bool(ok)
+        return plan if ok else None
+    if not ok and not refused:
+        return None
+    plan["lit"] = [c.id for _, c in ok]
+    plan["refused"] = refused
+    if ok:
+        plan["best"] = ok[0][1].id
+        tie = [c.id for d, c in ok if d - ok[0][0] < ONTO_TIE]
+        plan["tie"] = tie if len(tie) > 1 else []
+    if mine:
+        plan["lift"] = True
+        plan["leaving"] = [c.id for c in mine]
+        into = [c for c in mine if graphview.node_of(view, c.dst_port) == nid
+                and (hit := view.owner(c.dst_port)) is not None and hit[1].name == "image"]
+        outs = [c for c in mine if graphview.node_of(view, c.src_port) == nid]
+        plan["ghost"] = [(i.id, o.id) for i in into[:1] for o in outs]
+    return plan
+
+
+def lift_held() -> bool:
+    """⌘ (or Ctrl) held: a wired effect's drag lifts it out of its chain."""
+    io = imgui.get_io()
+    return bool(io.key_ctrl or io.key_super)
+
+
+ONTO_TIP = "let go: {node} onto {cable}"
+LIFT_ONTO_TIP = "let go: {node} out of its chain, onto {cable}"
+ONTO_TIE_TIP = "let go: pick which cable {node} goes onto"
+LIFT_HINT = "hold ⌘ to move {node} out of its chain and onto this cable"
+
+
+def drag_words(view: graphview.View, plan: dict) -> str:
+    """What the drag's tooltip says for `plan` (`onto_plan`)."""
+    n = view.node(plan["node"])
+    node = n.label if n is not None else plan["node"]
+    if plan["hint"]:
+        return LIFT_HINT.format(node=node)
+    if plan["tie"]:
+        return ONTO_TIE_TIP.format(node=node)
+    if plan["best"] is not None:
+        c = next((x for x in view.cables if x.id == plan["best"]), None)
+        words = graphview.onto_words(view, c) if c is not None else plan["best"]
+        return (LIFT_ONTO_TIP if plan["lift"] else ONTO_TIP).format(node=node, cable=words)
+    return next(iter(plan["refused"].values()), "")
+
+
+def _drag_preview(panel, st: dict, view: graphview.View) -> None:
+    """While one effect or modifier node is dragged: what letting it go
+    would do (`onto_plan`), kept in `st["onto_lit"]` for the cables and
+    the node's border drawn this frame and next, and said beside the
+    pointer. Nothing while several nodes move together."""
+    st["onto_lit"] = None
+    if not imgui.is_mouse_down(imgui.MouseButton_.left) or st.get("patch_drag"):
+        return
+    applied = st["applied"]
+    moved = []
+    for n in view.nodes:
+        was = applied.get(n.id)
+        if was is None or not drawn_node(st, n):
+            continue
+        p = ed.get_node_position(ed.NodeId(_id(st, "n:" + n.id)))
+        if (round(p.x), round(p.y)) != (round(was[0]), round(was[1])):
+            moved.append((n, p))
+            if len(moved) > 1:
+                return
+    if len(moved) != 1:
+        return
+    n, p = moved[0]
+    size = ed.get_node_size(ed.NodeId(_id(st, "n:" + n.id)))
+    plan = onto_plan(panel, view, n.id, (p.x + size.x / 2, p.y + size.y / 2), lift_held())
+    if plan is None:
+        return
+    st["onto_lit"] = plan
+    words = drag_words(view, plan)
+    if words:
+        _drag_tip(words)
 
 
 def put_onto(panel, view: graphview.View, nid: str,

@@ -4647,41 +4647,17 @@ def _seg_dist(p, a, b) -> float:
     return math.hypot(p[0] - (a[0] + t * ax), p[1] - (a[1] + t * ay))
 
 
-def _seg_hits_box(a, b, lo, hi) -> bool:
-    """Does the segment `a`–`b` pass through the box `lo`–`hi` (Liang–Barsky)?"""
-    t0, t1 = 0.0, 1.0
-    dx, dy = b[0] - a[0], b[1] - a[1]
-    for p, q in ((-dx, a[0] - lo[0]), (dx, hi[0] - a[0]), (-dy, a[1] - lo[1]), (dy, hi[1] - a[1])):
-        if p == 0:
-            if q < 0:
-                return False
-            continue
-        r = q / p
-        if p < 0:
-            t0 = max(t0, r)
-        else:
-            t1 = min(t1, r)
-        if t0 > t1:
-            return False
-    return True
-
-
 def cables_near(view: View, pins: Mapping[str, tuple], point, within: float = NEAR,
-                kinds=("route", "input"), skip: Iterable[str] = (),
-                size: tuple[float, float] | None = None) -> list[VCable]:
-    """Every cable of `kinds` under a node dropped at `point` (its centre,
-    canvas units), nearest first, by the curve the widget draws between
-    its pins' positions (`pins`: pin → (x, y), as the page last drew
-    them): within `within` of the point, or — given the node's `size` —
-    through its box (grown by `within`). A cable into or out of a node in
+                kinds=("route", "input"), skip: Iterable[str] = ()
+                ) -> list[tuple[float, VCable]]:
+    """Every cable of `kinds` within `within` of `point` (canvas units: a
+    dragged node's centre), as (distance, cable), nearest first — by the
+    curve the widget draws between its pins' positions (`pins`: pin →
+    (x, y), as the page last drew them). A cable into or out of a node in
     `skip` (the node being dropped) is passed over. A render cable with a
     collapsed end is drawn to that node's stub (plan 28 N7), so the stub's
     position stands for the pin it does not draw."""
     skip = set(skip)
-    box = None
-    if size is not None:
-        hw, hh = size[0] / 2 + within, size[1] / 2 + within
-        box = ((point[0] - hw, point[1] - hh), (point[0] + hw, point[1] + hh))
     hits = []
     for c in view.cables:
         if c.kind not in kinds:
@@ -4693,11 +4669,10 @@ def cables_near(view: View, pins: Mapping[str, tuple], point, within: float = NE
             b = b or pins.get(stub_in(d))
         if a is None or b is None or {s, d} & skip:
             continue
-        segs = list(itertools.pairwise(bezier(a, b)))
-        dist = min(_seg_dist(point, p, q) for p, q in segs)
-        if dist < within or (box is not None and any(_seg_hits_box(p, q, *box) for p, q in segs)):
+        dist = min(_seg_dist(point, p, q) for p, q in itertools.pairwise(bezier(a, b)))
+        if dist < within:
             hits.append((dist, c))
-    return [c for _, c in sorted(hits, key=lambda h: h[0])]
+    return sorted(hits, key=lambda h: h[0])
 
 
 def cable_near(view: View, pins: Mapping[str, tuple], point, within: float = NEAR,
@@ -4705,7 +4680,7 @@ def cable_near(view: View, pins: Mapping[str, tuple], point, within: float = NEA
     """The cable of `kinds` nearest `point` (canvas units) within
     `within` (`cables_near`'s first); None."""
     near = cables_near(view, pins, point, within, kinds, skip)
-    return near[0] if near else None
+    return near[0][1] if near else None
 
 
 def onto_words(view: View, c: VCable) -> str:

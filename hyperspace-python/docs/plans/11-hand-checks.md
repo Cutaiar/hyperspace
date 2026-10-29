@@ -5,7 +5,7 @@ Each gives the steps, what passes, what fails and where in the code a
 failure points, and the headless tests that show what "right" looks
 like. [`../TESTING-GUIDE.md`](../TESTING-GUIDE.md) is the plain-language
 version, ordered by device, and the place to start; it cites these
-numbers. They run 1–403 (group AD (332–341) is plan 34's, feedback, on `plan-34-feedback` (PR #236), and runs with group AE); group Y (232–266, 272–276) is plan 28's (261–266 its N7,
+numbers. They run 1–404 (group AD (332–341) is plan 34's, feedback, on `plan-34-feedback` (PR #236), and runs with group AE); group Y (232–266, 272–276) is plan 28's (261–266 its N7,
 272–276 its N9), 267–271, plan 30's N8 (the palette as compression), are at
 the end of group X, and group Z (277–295) is two parts: 277–279 the
 instanced field from `main`, renumbered from its 144–146 when main was
@@ -13,7 +13,7 @@ merged in, and 280–295 plan 31's (286–295 the APC40 page, on
 `plan-31-a1`); group AA (296–316) is plan 32's, and 317 the two plans
 together; group AC (318–331) is plan 33's, the free graph, on
 `plan-33-free-graph`; group AE (342–352) is plan 35's, the free frame,
-on `plan-34-feedback` (PR #236). Past 352: check 353 (group AF) is row 394's, group AG (354–369) is plan 36's, the WYSIWYG graph, and groups AH (370–376), AI (377–383) and AJ (384–393) are plans 37's (nodes as pictures, and the faces), 38's (hold the projector) and 39's (vision), run together and integrated on `plan-37-38-39-integration`. Group AK (394–401) is plan 40's, patches, on `plan-40-build`; check 402 (group AL) is the macro's throw; check 403 (group AM) is the one-tier library and the PRESETS page, on `worktree-presets-one-tier`.
+on `plan-34-feedback` (PR #236). Past 352: check 353 (group AF) is row 394's, group AG (354–369) is plan 36's, the WYSIWYG graph, and groups AH (370–376), AI (377–383) and AJ (384–393) are plans 37's (nodes as pictures, and the faces), 38's (hold the projector) and 39's (vision), run together and integrated on `plan-37-38-39-integration`. Group AK (394–401) is plan 40's, patches, on `plan-40-build`; check 402 (group AL) is the macro's throw; check 403 (group AM) is the one-tier library and the PRESETS page, on `worktree-presets-one-tier`. Check 404 (group AN) is dropping a node on a cable: the drag that shows what the drop will do, ⌘ to move a wired effect, a modifier's delete closing its chain, and Option-drag selecting cables.
 
 ## Before you start
 
@@ -6188,6 +6188,44 @@ chips, no pick. (5) a new show is called `untitled` with an empty bank.
 fold on the page (`ui_presets.page` drawing the removed blocks); a row
 that cannot be renamed or deleted (`Library.rename` / `delete` refusing);
 a pad that loads nothing (`Library.bank` / `preset.load.k`).
+
+## AN. Dropping a node on a cable
+
+The owner, 2026-10-29: a node let go on a cable goes into it, its input
+the cable's picture (or reading) and its output on to where the cable
+went; the drag shows what will happen before the mouse lets go; an effect
+already wired moves only with ⌘ held; deleting a modifier wires what fed
+it on to what it fed; Option-drag selects cables.
+
+**404. The drag shows what the drop will do.** (laptop, GRAPH; a preset with a run of two effects, say `lookback → acid → wobble → All outputs`)
+Headless: `tests/test_graph_edit.py` (`onto_plan`, `dropped`, the drawn drag).
+1. Right-click the canvas and add an effect: it is free, faint. Drag it
+   slowly across the canvas, over the run's cables and over the shape's
+   geometry cable, then let go with its centre on `acid → wobble`.
+2. Drag `wobble` (wired) over `lookback → acid` and let go, no key held.
+3. Drag `wobble` again, hold ⌘ before letting go over `lookback → acid`;
+   let go. Press ⌘Z.
+4. Lay two cables over each other and let a free effect go on both.
+5. Wire an LFO through a Smooth modifier into a param; select the Smooth
+   and press Delete.
+6. Option-drag a box across three cables on the background; press Delete;
+   press ⌘Z.
+*Pass:* (1) the cable under the node's centre is thick and gold, another
+near one faint gold, the geometry cable red with "… is no picture cable"
+beside the pointer, which otherwise reads "let go: <node> onto <a> →
+<b>"; nothing lights over empty canvas; let go, the effect sits in the
+run, the cable's picture into its `image`, its output into `wobble`.
+(2) the pointer says "hold ⌘ …", nothing lights, and the node only moves.
+(3) with ⌘ its border goes gold, its own cables fade, a thin gold join
+shows `acid` straight to All outputs; let go, the run is `lookback →
+wobble → acid → …`; ⌘Z puts it back in one press. (4) a menu "put <node>
+onto" names both; the pick takes it; Escape leaves both as they were.
+(5) the LFO now drives the param directly. (6) the box lights cables, not
+nodes; Delete takes all three; ⌘Z brings them back.
+*Fail:* a drop that does something the drag did not light, or lights
+something and does nothing (`ui_graph.onto_plan` / `dropped`); ⌘ toggling
+the node's selection or not lifting it (`lift_held`); the param left
+still after (5) (`Bindings.remove_modifier`).
 
 ## What no test covers
 
