@@ -265,9 +265,8 @@ and ends on the 28-unit artboard; `FLOW_R` their end radius). **Flow
 mark** is the mark as drawn, five stadium outlines in the z = 0 plane,
 one face each. **Flow capsules** lifts each bar into a capsule round its
 own axis. Neither draws points. They need nothing of their own from the
-renderer: `fx.face_map` "across" lays one picture through the mark's
-five bars, as on any shape, and the depth cue's floor keeps the flat
-mark at full weight face-on (§1, the depth cue)
+renderer: the depth cue's floor keeps the flat mark at full weight
+face-on (§1, the depth cue)
 (`tests/test_catalog.py::test_the_flow_mark_is_five_stadia_as_the_svg_draws_them`,
 `::test_the_flow_capsules_are_the_marks_bars_lifted`).
 A browser prototype of their looks (flat ↔ capsules, materials,
@@ -933,14 +932,8 @@ error skips the pass.
   from `pattern` through effects, the pattern is painted into the first
   half-float texture, the effects run in turn and the last writes the
   1024² `face_pic` (`graph.FACE_PIC`); wired from anything else that
-  picture is `u_pic`. `fx.face_map` says how the faces show it: per
-  face (every face the whole picture), screen (the faces windows onto a
-  picture that stays still), or across (one picture laid over the whole
-  shape from the front and pinned to it: `geometry.shape_uvs`, each face
-  corner's place in the shape's front view at rest, its widest extent 0
-  to 1). Across also lays a pattern wired straight in over the shape
-  (`tests/test_catalog.py::test_across_the_shape_is_its_own_front_view`,
-  `tests/test_render.py::test_across_the_shape_feeds_the_faces_the_shapes_own_uvs`). The faces are translucent, so an effect reads faint
+  picture is `u_pic`. `fx.face_map` (per face, or screen) says how the
+  faces show it. The faces are translucent, so an effect reads faint
   there; Brightness lifts them. With a picture wired in, every face
   shows face 0's pattern phase; the echoes and the dream carry the
   faces' picture, never the frame's effects. The faces' effects are graph

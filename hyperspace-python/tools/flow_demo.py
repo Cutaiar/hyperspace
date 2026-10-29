@@ -19,7 +19,6 @@ import subprocess
 from catalog_demo import FPS, OUT, H, Segment, Stage, W, caption
 
 from hyperspace import geometry as G
-from hyperspace.fx import ACROSS, PER_FACE
 from hyperspace.patterns import NAMES as PATTERN_NAMES
 from hyperspace.view import ViewState
 
@@ -35,9 +34,7 @@ def walk_patterns(v, u):
 
 def walk_caption(u: float) -> tuple[str, str]:
     name = WALK[min(int(u * len(WALK)), len(WALK) - 1)]
-    sub = (f"pattern {name} · Faces show: across — one picture laid over the "
-           "shape, through the five bars")
-    return ("Face patterns through the mark", sub)
+    return ("Face patterns on the mark", f"pattern {name} · each bar its own face")
 
 
 def sway(amp: float, rate: float):
@@ -47,9 +44,8 @@ def sway(amp: float, rate: float):
     return each
 
 
-def segments() -> list[tuple[Segment, int]]:
-    """Each segment, with how its faces show their pattern (fx.face_map)."""
-    segs = [
+def segments() -> list[Segment]:
+    return [
         Segment("Flow mark", "vector · five stadia read off wisprflow.ai's SVG, "
                 "drawn as the mark is drawn", 4.0,
                 {"shape": MARK, "bright": 1.3, "speed": 0.0}, planes=STILL),
@@ -63,8 +59,7 @@ def segments() -> list[tuple[Segment, int]]:
         Segment("Flow capsules", "each bar lifted into a capsule round its own axis", 7.0,
                 {"shape": CAPS, "bright": 1.3, "speed": 0.0},
                 each=sway(0.9, 1.0), planes=STILL),
-        Segment("Flow capsules · tumbling", "faces on, pattern BLOOM across the shape: "
-                "pinned to it, it turns with the capsules", 8.0,
+        Segment("Flow capsules · tumbling", "faces on, pattern BLOOM", 8.0,
                 {"shape": CAPS, "faces": True, "bright": 1.6, "speed": 0.5,
                  "pattern": PATTERN_NAMES.index("BLOOM")},
                 planes=[False, True, True, False, False, False]),   # a 3D shape: 3D planes
@@ -74,8 +69,6 @@ def segments() -> list[tuple[Segment, int]]:
                  "inst_motion": 3, "inst_amp": 0.3, "zoom": 0.45},
                 each=sway(0.7, 1.0), planes=STILL),
     ]
-    across = {2, 4}     # the patterns through the mark, the capsules tumbling
-    return [(s, ACROSS if k in across else PER_FACE) for k, s in enumerate(segs)]
 
 
 def run() -> None:
@@ -90,8 +83,7 @@ def run() -> None:
          "slow", "-crf", "27", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
          str(out)], stdin=subprocess.PIPE)
     t = 0.0
-    for k, (seg, face_map) in enumerate(segs, 1):
-        stage.r.fx.state.face_map = face_map
+    for k, seg in enumerate(segs, 1):
         v = ViewState(**seg.view)
         v.planes = list(seg.planes)
         v.ang = [0.0] * 6

@@ -322,23 +322,3 @@ def test_the_flow_capsules_are_the_marks_bars_lifted():
     assert np.allclose(V[:, :2].max(0), mark["V"][:, :2].max(0))
     width = _bars(mark["V"], G.faces(FLOW_MARK))[0][1]
     assert np.ptp(V[:, 2]) == pytest.approx(width)
-
-
-# ---------------------------------------- one picture across the shape
-
-@pytest.mark.parametrize("name", ["Flow mark", "Cube", "Tesseract", "Torus", "Flow capsules"])
-def test_across_the_shape_is_its_own_front_view(name):
-    # fx.face_map "across": each face corner's UV is where it sits in the
-    # shape's front view at rest — one affine map for the whole shape,
-    # square, its widest extent filling 0 to 1 — for any shape, not one kind
-    i = BY_NAME[name]
-    V, T = G.geom(i)["V"], G.face_triangles(i)
-    uv = G.shape_uvs(i)
-    assert uv.shape == (len(T) * 3, 2) == G.face_uvs(i).shape
-    xy = V[T[:, :3].reshape(-1), :2]
-    A = np.hstack([xy, np.ones((len(xy), 1))])
-    fit = np.linalg.lstsq(A, uv, rcond=None)[0]
-    assert np.allclose(A @ fit, uv)
-    assert fit[0, 0] > 0 and fit[0, 0] == pytest.approx(fit[1, 1]) and abs(fit[0, 1]) < 1e-12
-    assert uv.min() >= -1e-12 and uv.max() <= 1 + 1e-12
-    assert max(np.ptp(uv[:, 0]), np.ptp(uv[:, 1])) == pytest.approx(1.0)

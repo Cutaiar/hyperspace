@@ -90,19 +90,6 @@ def test_the_depth_floor_leaves_a_deep_shape_as_it_was(ctx, monkeypatch):
     assert np.array_equal(render_offscreen(s, w=300, h=200, ctx=ctx), with_floor)
 
 
-def test_across_the_shape_feeds_the_faces_the_shapes_own_uvs(ctx):
-    # fx.face_map "across" hands the face pass shape_uvs, per face face_uvs
-    from hyperspace import geometry
-    from hyperspace.fx import ACROSS, PER_FACE, SCREEN
-    from hyperspace.render import Renderer
-    r = Renderer(ctx)
-    i = next(k for k, s in enumerate(SHAPES) if s.name == "Flow mark")
-    for mode, want in ((PER_FACE, geometry.face_uvs), (SCREEN, geometry.face_uvs),
-                       (ACROSS, geometry.shape_uvs)):
-        r.fx.state.face_map = mode
-        assert np.array_equal(r._face_uv(i), want(i))
-
-
 def test_pixels_land_on_projection(ctx):
     """Bright pixels must appear at the projected vertex positions of the
     golden view — ties the raster output to the parity-proven transform."""

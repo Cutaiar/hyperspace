@@ -118,22 +118,20 @@ prisms:
   plane, one face each.
 - **Flow capsules** (101) lifts each bar into a capsule.
 
-Two renderer changes came with it, both for every shape, not the mark
-alone:
+One renderer change came with it, for every shape, not the mark alone:
+**the depth cue's floor** (`render.DEPTH_FLOOR`). The cue spreads over a
+shape's own depth, which is nothing for a shape flat toward the eye (the
+Orbit face-on, the flat mark), so those drew at their dimmest. The cue
+now never spreads over less than 1.0; a deeper pose draws as before.
 
-- **`fx.face_map` "across".** Besides per face and screen, a picture
-  (or a pattern wired straight in) can be laid over the whole shape from
-  the front and pinned to it, so it turns with the shape
-  (`geometry.shape_uvs`). On the flat mark that is one picture through
-  the five bars.
-- **The depth cue's floor** (`render.DEPTH_FLOOR`). The cue spreads over
-  a shape's own depth, which is nothing for a shape flat toward the eye
-  (the Orbit face-on, the flat mark), so those drew at their dimmest. The
-  cue now never spreads over less than 1.0; a deeper pose draws as before.
+One picture laid across a whole shape (on the flat mark, through all
+five bars) was tried as a third `fx.face_map` choice and left out for
+now: today a pattern or picture sits per face, so each bar carries its
+own.
 
 Neither form draws points.
 
-![The Flow mark with the PLAID pattern through its bars; the capsules with BLOOM, turned](assets/28-catalog/flow-mark-and-capsules.png)
+![The Flow mark with the PLAID pattern on its bars; the capsules with BLOOM, turned](assets/28-catalog/flow-mark-and-capsules.png)
 
 [`flow-demo.mp4`](assets/28-catalog/flow-demo.mp4) (45 s, `tools/flow_demo.py`, the real
 renderer offscreen) shows the mark face-on and turning, eight face patterns

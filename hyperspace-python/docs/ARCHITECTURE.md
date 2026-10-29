@@ -1603,8 +1603,8 @@ a `graph.Effect` node where the preset's graph wires it (the run
 `frame → … → fx.image`, a branch onto `shape.faces`, `pattern.media`,
 `backdrop.image`, an output or an `aux`), running its pass
 (`FxChain.run_one`) when `FxState.live` says so and reading through when
-not. `fx.face_map` says whether the faces show a wired picture per face,
-in screen space, or across the whole shape (`geometry.shape_uvs`). The FX page lists the graph's effect nodes, grouped
+not. `fx.face_map` says whether the faces show a wired picture per face
+or in screen space. The FX page lists the graph's effect nodes, grouped
 by where each ends, and edits no structure; GRAPH does that (§2, "The
 free graph").
 

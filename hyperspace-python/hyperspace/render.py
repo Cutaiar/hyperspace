@@ -120,7 +120,7 @@ from .field import (  # noqa: F401 — re-exported: the layouts were render.py's
     inst_positions,
 )
 from .field import is_3d as is_3d_layout
-from .fx import ACROSS, SCREEN, FxChain, FxState
+from .fx import SCREEN, FxChain, FxState
 from .geometry import (
     EYE_DISTANCE,
     EYE_FAR,
@@ -132,7 +132,6 @@ from .geometry import (
     face_uvs,
     geom,
     model_matrix,
-    shape_uvs,
     shape_world,
 )
 from .ghost import Ghost, GhostState
@@ -3026,17 +3025,6 @@ class Renderer:
         g = getattr(self, "scene_ground", None)
         return float(g) if g is not None else float(getattr(self, "bg_alpha", 1.0))
 
-    def _face_map(self) -> int:
-        """`fx.face_map`: per face, screen or across the shape."""
-        return int(getattr(self.fx.state, "face_map", 0))
-
-    def _face_uv(self, shape: int) -> np.ndarray:
-        """The faces' UVs for this frame: each face's own (`face_uvs`, every
-        face the whole picture), or across the shape the shape's own front
-        view (`shape_uvs`, one picture pinned to the shape) — for a picture
-        wired into the faces and a pattern wired straight in alike."""
-        return shape_uvs(shape) if self._face_map() == ACROSS else face_uvs(shape)
-
     def draw_scene(
         self, s: ViewState, w: int, h: int, dpr: float = 1.0,
         t_now: float | None = None, clear: bool = True,
@@ -3224,7 +3212,7 @@ class Renderer:
                     to = tris[torder]
                     if st is not None:
                         fa = fa * st["f_alpha"][to[:, 3]]
-                    uv = self._face_uv(s.shape).reshape(-1, 3, 2)[torder]
+                    uv = face_uvs(s.shape).reshape(-1, 3, 2)[torder]
                     fverts = np.empty((len(tris) * 3, 8), dtype=np.float32)
                     for corner in range(3):
                         fverts[corner::3, 0:3] = P[to[:, corner]]
@@ -3254,7 +3242,7 @@ class Renderer:
                         p["u_pic_on"].value = 0
                     else:
                         pic.use(location=1)
-                        screen = self._face_map() == SCREEN
+                        screen = int(getattr(self.fx.state, "face_map", 0)) == SCREEN
                         p["u_pic_on"].value = 2 if screen else 1
                         p["u_pic_fb"].value = tuple(float(x) for x in self.scene.size)
                     self._fvao.render(moderngl.TRIANGLES, vertices=len(fverts), instances=copies)

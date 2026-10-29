@@ -1927,29 +1927,6 @@ def _face_uvs_build(i: int) -> np.ndarray:
     return uv
 
 
-_shape_uv_cache: dict[int, np.ndarray] = {}
-
-
-def shape_uvs(i: int) -> np.ndarray:
-    """UVs across the whole shape for face_triangles(i), in face_uvs'
-    layout: float64 (T*3, 2) in [0,1]. Each corner's place in the shape's
-    own front view (x, y at rest), the shape's widest extent spanning 0
-    to 1 about the centre of its box, so one picture is laid over the
-    shape from the front and turns with it (fx.face_map "across")."""
-    uv = _shape_uv_cache.get(i)
-    if uv is not None:
-        return uv
-    with _lock(i):
-        if i not in _shape_uv_cache:
-            xy = geom(i)["V"][:, :2]
-            lo, hi = xy.min(axis=0), xy.max(axis=0)
-            span = max(float((hi - lo).max()), 1e-9)
-            at = (xy - (lo + hi) / 2) / span + 0.5
-            corners = face_triangles(i)[:, :3].reshape(-1)
-            _shape_uv_cache[i] = at[corners]
-        return _shape_uv_cache[i]
-
-
 def warm(i: int) -> None:
     """Fill every per-shape cache the renderer reads for shape i: geom,
     faces, face_triangles, face_uvs."""
