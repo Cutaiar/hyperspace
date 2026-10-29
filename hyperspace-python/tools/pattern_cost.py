@@ -27,6 +27,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from hyperspace.geometry import SHAPES
+from hyperspace.graph import Wiring
+from hyperspace.graphmigrate import wired_wiring
 from hyperspace.patterns import MODES
 from hyperspace.render import Renderer
 from hyperspace.view import ViewState
@@ -43,6 +45,9 @@ def main() -> int:
     args = ap.parse_args()
     ctx = moderngl.create_context(standalone=True)
     r = Renderer(ctx)
+    # plan 36 T3: a bare renderer draws the app's empty frame; the
+    # tool's own wiring is today's frame (render.render_offscreen's)
+    r.wiring = wired_wiring(Wiring())
     r.bands = LOUD
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer(SIZE)])
     shapes = [next(i for i, s in enumerate(SHAPES) if s.name == n) for n in SHAPE_NAMES]
