@@ -1174,6 +1174,9 @@ def test_dragging_a_run_member_onto_another_cable_moves_it(rig, monkeypatch):
     # on its own cables (lookback → acid, acid → wobble), and on nothing: no change
     assert ui_graph.dropped(rig.panel, view, "render:acid", (200.0, 0.0)) is None
     assert ui_graph.dropped(rig.panel, view, "render:acid", (500.0, 900.0)) is None
+    # a wired node's box over a cable is not enough: only its centre moves it
+    assert ui_graph.dropped(rig.panel, view, "render:acid", (500.0, 900.0),
+                            (2000.0, 2000.0)) is None
     assert G.run_back(gs.spec, "output.all.image") == ("acid", "wobble")
     assert pushed == []
     cable = next(c for c in view.cables if c.dst_port == "rin:output.all/image")

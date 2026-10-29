@@ -96,7 +96,8 @@ render cable's menu offers "insert effect ▸ <file>" (`insert_effect`); a
 free effect node let go on a picture cable is inserted into it
 (`dropped`, `Edit.place_effect`): the cable's picture into its ``image``
 port, its output on into whichever port the cable fed. A cable is under
-the node when it runs through the node's box; with more than one under
+the node when it runs through the node's box (a free node's: an effect
+already wired moves only when its centre lands on one); with more than one under
 it, a chooser names each ("Look-back → Acid") and the pick takes it
 (`st["onto"]`, `put_onto`) — a modifier the same. A compile error colours an effect
 node's title and is its hover (`effect_errors`). The selected effect is
@@ -3772,15 +3773,20 @@ def onto_choices(panel, view: graphview.View, nid: str, centre,
                  size=None) -> list[graphview.VCable]:
     """The cables node `nid`, let go at `centre`, may go onto, nearest
     first: picture cables of the section for an effect (not the rig's bus,
-    not its own), value cables for a free modifier."""
+    not its own), value cables for a free modifier. A free node takes a
+    cable through its box; an effect already wired only one its centre
+    is let go on."""
     n = view.node(nid)
     if n is None:
         return []
     pins = _state(panel)["pin_xy"]
     if n.kind == "render" and isinstance(n.ref, Effect):
         e = render_edit(panel)
+        # (one already wired moves only when its centre is let go on the
+        # cable: a nudge of a node in its run must not move it to another)
+        box = None if view.cables_of(nid) else size
         return [c for c in graphview.cables_near(view, pins, centre, kinds=("render",),
-                                                 skip={nid}, size=size)
+                                                 skip={nid}, size=box)
                 if c.type == graphview.IMAGE
                 and (e is None or graphview.onto_refusal(e, c) is None)]
     if n.kind != "modifier" or view.cables_of(nid):
