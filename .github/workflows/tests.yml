@@ -1,0 +1,64 @@
+# The Python app's lint and fast test tier on every pull request and every
+# push to main (hyperspace-python/docs/ENGINEERING.md §16, "CI"). The job is
+# named `tests` so a ruleset on main can require it by that name.
+#
+# Linux, not macOS: the same suite for a tenth of the minutes, and a macOS
+# runner has no GPU or Ultraleap SDK either. GL draws through Mesa's
+# software rasteriser under Xvfb; the tests that only the Mac can judge
+# (golden frames on "Apple M3 Max", frame-rate floors) skip themselves.
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: hyperspace-python
+    env:
+      # no Ultraleap SDK to build leapc-cffi against, and Linux torch wheels
+      # pull gigabytes of CUDA no fast-tier test imports (pyproject's groups)
+      UV_NO_GROUP: hands dream
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: System libraries
+        # ALSA headers to build python-rtmidi; PortAudio for sounddevice's
+        # import; Mesa + Xvfb for GL and GLFW; libgl-dev for the unversioned
+        # libGL.so moderngl's loader opens; DejaVu, the fonts ui.py falls
+        # back to off the Mac
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libasound2-dev libportaudio2 libgl-dev libgl1-mesa-dri libglx-mesa0 \
+            libegl1 xvfb xauth fonts-dejavu-core
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: hyperspace-python/uv.lock
+
+      - name: Sync
+        run: uv sync --locked
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Fast tier
+        # --timeout: a hung test fails and names itself; a crashed worker
+        # fails the run at once (xdist's replacement worker can stall the
+        # loadgroup scheduler at 99 %)
+        run: >
+          xvfb-run -a -s "-screen 0 1920x1080x24"
+          uv run pytest -q --timeout 120 --max-worker-restart=0 --durations=20
