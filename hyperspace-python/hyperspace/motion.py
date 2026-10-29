@@ -59,6 +59,7 @@ SPRINGS = {
     "wobbly": (0.8, 0.6),
     "lazy": (1.2, 0.0),
 }
+CUSTOM = "custom"         # knobs that are no named spring, as a preset combo reads them
 SETTLE = 1e-4       # a Follower this close to its target, and this slow, lands
 _CRIT = 1e-6         # |damp − 1| under this is critical damping
 BAND = 0.02          # `settle`: within this of where it is going counts as arrived

@@ -264,7 +264,7 @@ import numpy as np
 from . import apc40, envelope, lfo, modgraph, modifiers, motion, seq_page
 from .bands import BANDS, CEIL
 from .modifiers import Modifier, ModState
-from .motion import OFF, Follower, Motion
+from .motion import CUSTOM, OFF, Follower, Motion
 from .params import (
     DRIVE,
     F_KEYS,
@@ -1683,7 +1683,6 @@ def declare_modifiers(reg: Registry, mods: Iterable[Modifier]) -> None:
 
 
 PAD_FEEL = "desk.pad"     # the pad's feel: PAD_FEEL + ".feel" / ".attack" / …
-CUSTOM = "custom"         # a spring preset combo's last choice: knobs that are no preset
 
 
 def _register_pad_feel(reg: Registry, table: Bindings) -> None:

@@ -18,22 +18,18 @@ from hyperspace.motion import Motion
 from hyperspace.routing import Binding, Bindings, Router
 from hyperspace.ui import Panel
 from hyperspace.ui_feel import (
-    JUMP,
     KEEP,
-    PAUSE,
     RING_CYCLES,
     SPAN_MAX,
     SPAN_MIN,
-    STALE,
     TRACES,
     WINDOW_MIN,
     Trace,
     busiest,
     curve,
-    head,
     let_go,
-    playhead,
     position,
+    presets_axis,
     sample,
     span,
     target,
@@ -88,55 +84,44 @@ def test_the_shapes_axis_fits_the_feel():
     assert window(Motion("spring", dur=0.5, bounce=1.0)) == pytest.approx(RING_CYCLES * 0.5)
 
 
-def test_the_idle_playhead_sweeps_then_rests_then_sweeps_again():
-    w = window(SPRING)
-    assert playhead(0.0, SPRING) == 0.0
-    assert playhead(w / 2, SPRING) == pytest.approx(w / 2)
-    assert playhead(w + PAUSE / 2, SPRING) == pytest.approx(w)
-    assert playhead(w + PAUSE + 0.01, SPRING) == pytest.approx(0.01)
+def test_a_curve_runs_out_to_a_given_end_past_its_window():
+    pts = curve(SPRING, 16, end=2.0)
+    assert pts[-1][0] == pytest.approx(2.0)
+    assert pts[-1][1] == pytest.approx(1.0, abs=motion.BAND)     # settled by then
 
 
-# ---- the live dot on the shape ----
+# ---- the spring picker ----
 
-def _trace(readings, rest=0.5, dt=DT) -> Trace:
-    tr = Trace()
-    for k, u in enumerate(readings):
-        tr.push(k * dt, u, u, rest)
-    return tr
-
-
-def test_a_jump_starts_the_dot_and_a_slow_move_does_not():
-    tr = _trace([0.5, 0.5, 1.0, 1.0, 1.0])
-    assert tr.jump == pytest.approx(2 * DT) and not tr.home
-    now = 4 * DT
-    assert head(SPRING, tr, now) == pytest.approx(2 * DT)     # the time since the jump
-    slow = _trace([0.5 + JUMP / 2 * k for k in range(10)])
-    assert slow.jump is None
-    assert head(SPRING, slow, 9 * DT) == pytest.approx(window(SPRING))   # settled: the end
-    tr.push(10.0, 1.0, 1.0, 0.5)              # long after, still held: the end
-    assert head(SPRING, tr, 10.0) == pytest.approx(window(SPRING))
+def test_the_pickers_axis_is_the_slowest_presets_window():
+    windows = [window(Motion("spring", dur=d, bounce=b)) for d, b in motion.SPRINGS.values()]
+    assert presets_axis() == pytest.approx(max(windows))
+    snappy = curve(Motion("spring", dur=0.3, bounce=0.15), 32, end=presets_axis())
+    lazy = curve(Motion("spring", dur=1.2, bounce=0.0), 32, end=presets_axis())
+    halfway = 8                               # a quarter along the shared axis
+    assert snappy[halfway][1] > lazy[halfway][1]     # snappy lands earlier than lazy
 
 
-def test_on_follow_a_push_holds_at_the_let_go_and_a_fall_home_runs_the_release():
-    g = let_go(FOLLOW)
-    pushed = _trace([0.5, 1.0, *[1.0] * 200])
-    assert head(FOLLOW, pushed, 2 * DT) == pytest.approx(DT)
-    assert head(FOLLOW, pushed, 201 * DT) == pytest.approx(g)   # held out: parked at the let-go
-    home = _trace([0.5, 1.0, *[1.0] * 30, 0.5, 0.5])
-    assert home.home
-    assert head(FOLLOW, home, 33 * DT) == pytest.approx(g + DT)
-    held = _trace([1.0, 1.0])                 # seen held out, no jump: at the let-go
-    assert head(FOLLOW, held, DT) == pytest.approx(g)
-
-
-def test_not_live_the_shape_sweeps_on_its_own():
-    assert head(SPRING, None, 1.0) is None
-    tr = _trace([0.5, 1.0])
-    assert head(SPRING, tr, DT + STALE + 0.01) is None         # stale
-    tr.push(2 * DT, None, None, 0.5)
-    assert head(SPRING, tr, 2 * DT) is None                     # the source went away
-    tr.push(3 * DT, 0.0, 0.0, 0.5)            # back: no jump from before the gap
-    assert tr.jump == pytest.approx(DT)
+def test_the_spring_picker_draws_each_preset_and_returns_the_one_picked(tmp_path, monkeypatch):
+    """The open list: one row per preset, each a selectable with the
+    preset's curve drawn on it; picking one returns its name."""
+    shapes, opened = [], []
+    want = list(motion.SPRINGS).index("wobbly")
+    rows = iter(range(100))
+    monkeypatch.setattr(imgui, "begin_combo", lambda label, preview, *a: opened.append(preview) or True)
+    monkeypatch.setattr(imgui, "end_combo", lambda: None)
+    monkeypatch.setattr(imgui, "selectable", lambda *a, **k: (next(rows) == want, False))
+    real = ui_feel._shape_at
+    monkeypatch.setattr(ui_feel, "_shape_at",
+                        lambda dl, m, *a, **k: shapes.append((m, k)) or real(dl, m, *a, **k))
+    with build_rig(tmp_path):                  # an imgui context, the panel's fonts
+        imgui.new_frame()
+        imgui.begin("pick")
+        got = ui_feel.spring_picker("##spring", Motion("spring", dur=0.5, bounce=0.3), 96.0)
+        imgui.end()
+        imgui.end_frame()
+    assert got == "wobbly" and opened == ["bouncy"]        # closed, it reads the preset
+    assert [(m.dur, m.bounce) for m, _ in shapes] == list(motion.SPRINGS.values())
+    assert all(k == {"end": presets_axis(), "label": False} for _, k in shapes)
 
 
 # ---- the live plot's span, the trace ----

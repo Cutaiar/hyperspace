@@ -2493,11 +2493,16 @@ class Panel:
                    if plotted else -1)          # a control's width, after its label
             mode = self.reg["desk.pad.feel"].text()
             imgui.begin_group()
-            if mode == "spring" and "desk.pad.spring" in self.reg:
+            if mode == "spring" and feel is not None and "desk.pad.spring" in self.reg:
                 feel_w = max(ctl * 0.45, 60.0)
                 self._row("desk.pad.feel", feel_w)
                 imgui.same_line()
-                self._combo("desk.pad.spring", ctl - feel_w - sp)
+                spring = self.reg["desk.pad.spring"]      # its presets drawn as their curves
+                picked = ui_feel.spring_picker("##desk.pad.spring", feel, ctl - feel_w - sp)
+                self._tip(spring)
+                self._ctx(spring)
+                if picked is not None:
+                    spring.set(spring.names.index(picked))
             else:
                 self._row("desk.pad.feel", ctl)
             for k in {"follow": ("attack", "release"),
@@ -2517,16 +2522,14 @@ class Panel:
         axis lane sampled each frame — as the pad reads it (`router.feeds`)
         and after the feel (`Router.felt_lanes`, the camera job's
         followers) — and the one that moved most lately drawn, named in its
-        corner, its dot riding the shape."""
+        corner."""
         router = self.router
         raws = router.feeds.get("axis")
         felts = router.felt_lanes("axis")
-        rests = router.rests.get("axis") or []
         n = max(len(raws) if raws is not None else 0, len(felts or ()))
         traces = [ui_feel.sample(self, ("pad", i),
                                  float(raws[i]) if raws is not None and i < len(raws) else None,
-                                 felts[i] if felts is not None and i < len(felts) else None,
-                                 rests[i] if i < len(rests) else None)
+                                 felts[i] if felts is not None and i < len(felts) else None)
                   for i in range(n)]
         if not traces:
             ui_feel.draw(feel, None, width, height, stacked=True)

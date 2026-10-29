@@ -16,12 +16,8 @@ own kernels.
            carries it out, then drops back to rest and the release
            brings it home — one edge per knob.
 
-Its red playhead is the live feel on that shape (`head`): the time since
-the reading last jumped, so a flick of the stick sends the dot along the
-curve as the param travels — from the start for a jump (follow: a push
-away from rest; held at the let-go while the push is held), from the
-let-go for a fall back toward rest; at the end once it has settled.
-While nothing is live it sweeps the shape on its own, grey.
+It is static — a picture of the knobs, which moves only as they do;
+what the stick is doing is the live plot's.
 
 **The live plot** (`live`) scrolls the last few seconds, newest at the
 right: the reading as it comes, dim, and after the feel, white — what
@@ -30,10 +26,10 @@ a row, the modifier's output lane for a smooth, `Router.felt_lanes` for
 the pad). A gap is where the source was not live.
 
 The panel samples as it draws (`sample`: one Trace per plot, held on the
-panel; it notes the reading's jumps), so the live parts fill while they
-are on screen and the Router keeps nothing for them. The shape's time
-axis fits the feel (`window`, out to where it has settled) and the live
-plot shows twice that (`span`), so a lazy feel and a tight one both read.
+panel), so a live plot fills while it is on screen and the Router keeps
+nothing for it. The shape's time axis fits the feel (`window`, out to
+where it has settled) and the live plot shows twice that (`span`), so a
+lazy feel and a tight one both read.
 Everything but `shape`, `live` and `draw` is pure.
 """
 
@@ -49,16 +45,15 @@ from . import motion, ui
 from .motion import Motion
 
 SAMPLES = 64           # points along the shape
-PAUSE = 0.5            # s the idle playhead rests at the shape's end before it sweeps again
 WINDOW_MIN = 0.05      # s, the shape's shortest time axis
 RING_CYCLES = 6        # an undamped spring never settles: the shape shows this many periods
 SPAN_MIN, SPAN_MAX = 2.0, 8.0     # s of history the live plot shows
 MAX_SAMPLES = int(SPAN_MAX * 120)  # a trace's memory, at up to 120 frames a second
 TRACES = "_feel_traces"            # the panel's dict of them
 KEEP = 64              # past this many traces, the ones not sampled lately go
-JUMP = 0.04            # a reading moving this much in a frame has jumped: the dot starts over
-STALE = 0.25           # s without a live sample and the shape's playhead sweeps on its own
 SHAPE_W = 140.0        # the shape beside the live plot, px at most
+THUMB_W, THUMB_H = 64.0, 32.0      # a preset's shape in the spring picker
+PICK_W = 250.0         # the spring picker's list, px at least: a thumbnail, a name, its knobs
 DASH = 4.0             # px, the reading's dashes on the shape
 FELT = imgui.ImVec4(0.92, 0.92, 0.92, 1.0)
 READ = imgui.ImVec4(0.92, 0.92, 0.92, 0.32)
@@ -110,17 +105,19 @@ def position(m: Motion, t: float) -> float:
 
 
 @lru_cache(maxsize=256)    # drawn every frame; the knobs change rarely
-def curve(m: Motion, n: int = SAMPLES) -> tuple[tuple[float, float], ...]:
-    """(t, position) at n + 1 evenly spaced times across the window."""
-    w = window(m)
+def curve(m: Motion, n: int = SAMPLES,
+          end: float | None = None) -> tuple[tuple[float, float], ...]:
+    """(t, position) at n + 1 evenly spaced times across the window, or
+    out to `end` (the spring picker's shared axis)."""
+    w = window(m) if end is None else end
     return tuple((w * i / n, position(m, w * i / n)) for i in range(n + 1))
 
 
-def playhead(clock: float, m: Motion) -> float:
-    """The idle playhead's time on the shape at this clock time: a sweep
-    across the window, a PAUSE at its end, again."""
-    w = window(m)
-    return min(clock % (w + PAUSE), w)
+@lru_cache(maxsize=1)
+def presets_axis() -> float:
+    """The spring picker's one time axis: the slowest preset's window, so
+    each thumbnail shows how soon its spring lands beside the others."""
+    return max(window(Motion("spring", dur=d, bounce=b)) for d, b in motion.SPRINGS.values())
 
 
 # ---- the live feel ----
@@ -133,30 +130,16 @@ def span(m: Motion) -> float:
 
 class Trace:
     """One plot's samples, oldest first: (time, reading, felt), NaN where
-    the source was not live; and the reading's last jump — when, and
-    whether it fell back toward rest (`home`)."""
+    the source was not live."""
 
-    __slots__ = ("home", "jump", "prev", "pts", "rest")
+    __slots__ = ("pts",)
 
     def __init__(self):
         self.pts: deque = deque(maxlen=MAX_SAMPLES)
-        self.jump: float | None = None
-        self.home = False
-        self.prev: float | None = None      # the last live reading
-        self.rest: float | None = None
 
-    def push(self, now: float, raw: float | None, felt: float | None,
-             rest: float | None = None) -> None:
+    def push(self, now: float, raw: float | None, felt: float | None) -> None:
         r = math.nan if raw is None else float(raw)
         f = math.nan if felt is None else float(felt)
-        self.rest = rest
-        if math.isfinite(r):
-            if self.prev is not None and abs(r - self.prev) >= JUMP:
-                self.jump = now
-                self.home = rest is not None and abs(r - rest) < abs(self.prev - rest)
-            self.prev = r
-        else:
-            self.prev = None                # back after a gap: no jump from before it
         if self.pts and now <= self.pts[-1][0]:     # drawn twice in a frame: one sample
             self.pts[-1] = (now, r, f)
             return
@@ -168,40 +151,16 @@ class Trace:
         """The samples of the last `s` seconds."""
         return [p for p in self.pts if p[0] >= now - s]
 
-    def live(self, now: float) -> bool:
-        """A live reading sampled within STALE."""
-        return bool(self.pts) and math.isfinite(self.pts[-1][1]) \
-            and now - self.pts[-1][0] <= STALE
-
     @property
     def last(self) -> float:
         return self.pts[-1][0] if self.pts else -math.inf
 
 
-def head(m: Motion, trace: Trace | None, now: float) -> float | None:
-    """Where the live feel is on the shape's time axis: the time since the
-    reading last jumped — from the start for a jump (follow: a push away
-    from rest, held at the let-go while the push is held), from the let-go
-    for a fall back toward rest — and the end once settled. None while the
-    reading is not live: the shape's playhead sweeps on its own."""
-    if trace is None or not trace.live(now):
-        return None
-    w, g = window(m), let_go(m)
-    if trace.jump is None:                      # no jump seen: where it rests
-        held = (g is not None and trace.rest is not None and trace.prev is not None
-                and abs(trace.prev - trace.rest) >= JUMP)
-        return g if held else w
-    since = now - trace.jump
-    if g is None:
-        return min(since, w)
-    return min(g + since, w) if trace.home else min(since, g)
-
-
 def sample(panel, key, raw: float | None, felt: float | None,
-           rest: float | None = None, now: float | None = None) -> Trace:
-    """This frame's reading and felt value (and the reading's rest, for
-    follow's direction) into the panel's trace for `key`, made on first
-    sight. Traces not sampled for SPAN_MAX go once there are KEEP."""
+           now: float | None = None) -> Trace:
+    """This frame's reading and felt value into the panel's trace for
+    `key`, made on first sight. Traces not sampled for SPAN_MAX go once
+    there are KEEP."""
     now = imgui.get_time() if now is None else now
     store = panel.__dict__.setdefault(TRACES, {})
     tr = store.get(key)
@@ -210,7 +169,7 @@ def sample(panel, key, raw: float | None, felt: float | None,
             for k in [k for k, t in store.items() if t.last < now - SPAN_MAX]:
                 del store[k]
         tr = store[key] = Trace()
-    tr.push(now, raw, felt, rest)
+    tr.push(now, raw, felt)
     return tr
 
 
@@ -248,10 +207,7 @@ def _named(m: Motion) -> str:
 def describe_shape(m: Motion) -> str:
     what = ("a reading pushed from rest to 1 and let go" if m.mode == "follow" else
             "a reading that jumps from 0 to 1")
-    return (f"{_named(m)}: {what}, dashed, and where the feel carries it. "
-            f"{_lands(m)} The red dot is the live feel on this shape — move the "
-            "source and it runs from each jump; grey, it sweeps on its own while "
-            "nothing is live.")
+    return f"{_named(m)}: {what}, dashed, and where the feel carries it. {_lands(m)}"
 
 
 def describe_live(m: Motion, s: float) -> str:
@@ -288,53 +244,81 @@ def _lines(dl, pts: list[imgui.ImVec2 | None], col: int, thick: float) -> None:
         run = []
 
 
-def shape(m: Motion, trace: Trace | None, width: float, height: float) -> None:
-    """The feel's shape, `width` × `height` px at the cursor, as one item,
-    the live feel's dot on it (`head`)."""
-    o = imgui.get_cursor_screen_pos()
-    dl = imgui.get_window_draw_list()
+def _shape_at(dl, m: Motion, x: float, y: float, width: float, height: float,
+              end: float | None = None, label: bool = True) -> None:
+    """The shape drawn into `dl` at (x, y): the axes, the reading dashed (a
+    step, or a push and its let-go), the curve — out to `end` when given —
+    and, with `label`, the axis' length."""
     axis, faint, line = ui.u32(ui.LINE), ui.u32(ui.FAINT), ui.u32(FELT)
     pad = 3.0
-    x0, x1 = o.x + pad, o.x + width - pad
-    y0, y1 = o.y + pad, o.y + height - pad
-    pts = curve(m)
+    x0, x1 = x + pad, x + width - pad
+    y0, y1 = y + pad, y + height - pad
+    pts = curve(m, end=end)
     w = pts[-1][0]
-    lo = min(0.0, min(y for _, y in pts))
-    hi = max(1.0, max(y for _, y in pts))
+    lo = min(0.0, min(v for _, v in pts))
+    hi = max(1.0, max(v for _, v in pts))
     lo, hi = lo - 0.06 * (hi - lo), hi + 0.06 * (hi - lo)
 
-    def at(t: float, y: float) -> imgui.ImVec2:
-        return imgui.ImVec2(x0 + (x1 - x0) * t / w, y1 - (y1 - y0) * (y - lo) / (hi - lo))
+    def at(t: float, v: float) -> imgui.ImVec2:
+        return imgui.ImVec2(x0 + (x1 - x0) * t / w, y1 - (y1 - y0) * (v - lo) / (hi - lo))
 
-    # the axes, the reading dashed (a step, or a push and its let-go), the curve
     base = at(0.0, 0.0).y
     dl.add_line(imgui.ImVec2(x0, y0), imgui.ImVec2(x0, y1), axis, 1.0)
     dl.add_line(imgui.ImVec2(x0, base), imgui.ImVec2(x1, base), axis, 1.0)
     g = let_go(m)
-    _dashed(dl, at(0.0, 1.0), at(w if g is None else g, 1.0), axis)
-    if g is not None:
+    _dashed(dl, at(0.0, 1.0), at(w if g is None else min(g, w), 1.0), axis)
+    if g is not None and g < w:
         _dashed(dl, at(g, 1.0), at(g, 0.0), axis)
-    dl.add_polyline([at(t, y) for t, y in pts], line, 1.5, 0)
-    # the playhead: the live feel on the shape, else its own sweep, grey
-    now = imgui.get_time()
-    t = head(m, trace, now)
-    on = t is not None
-    if not on:
-        t = playhead(now, m)
-    p = at(t, position(m, t))
-    dl.add_line(imgui.ImVec2(p.x, y0), imgui.ImVec2(p.x, y1),
-                ui.u32(ui.RED if on else ui.FAINT), 1.0)
-    dl.add_circle_filled(p, 2.5, ui.u32(ui.RED) if on else line)
-    label = f"{w:.2f} s" if w < 10 else f"{w:.0f} s"
-    sz = imgui.calc_text_size(label)
+    dl.add_polyline([at(t, v) for t, v in pts], line, 1.5, 0)
+    if not label:
+        return
+    text = f"{w:.2f} s" if w < 10 else f"{w:.0f} s"
+    sz = imgui.calc_text_size(text)
     # bottom right: a spring has risen by then; a follow's release has come
     # home, so its label goes top right
     ly = base - sz.y - 1 if g is None else y0
     if sz.y < (y1 - y0) * 0.6 and sz.x < (x1 - x0) * 0.5:
-        dl.add_text(imgui.ImVec2(x1 - sz.x, ly), faint, label)
+        dl.add_text(imgui.ImVec2(x1 - sz.x, ly), faint, text)
+
+
+def shape(m: Motion, width: float, height: float) -> None:
+    """The feel's shape, `width` × `height` px at the cursor, as one item."""
+    o = imgui.get_cursor_screen_pos()
+    _shape_at(imgui.get_window_draw_list(), m, o.x, o.y, width, height)
     imgui.dummy(imgui.ImVec2(width, height))
     if imgui.is_item_hovered():
         ui.tooltip(describe_shape(m))
+
+
+def spring_picker(label: str, m: Motion, width: float) -> str | None:
+    """A spring preset combo, `width` wide, whose list draws each preset's
+    shape beside its name and knobs, all on one time axis (`presets_axis`),
+    so what is picked can be seen: snappy lands early, lazy late, wobbly
+    rings. Closed, it reads the preset `m` is, or custom. Returns the name
+    picked this frame, None while none was."""
+    name = motion.spring_name(m.dur, m.bounce)
+    picked = None
+    imgui.set_next_window_size_constraints(imgui.ImVec2(max(PICK_W, width), 0.0),
+                                           imgui.ImVec2(1e9, 1e9))
+    imgui.set_next_item_width(width)
+    if imgui.begin_combo(label, name or motion.CUSTOM):
+        dl = imgui.get_window_draw_list()
+        end = presets_axis()
+        fh = imgui.get_text_line_height()
+        for nm, (dur, bounce) in motion.SPRINGS.items():
+            imgui.push_id(nm)
+            o = imgui.get_cursor_screen_pos()
+            if imgui.selectable("##pick", nm == name, 0, imgui.ImVec2(0.0, THUMB_H))[0]:
+                picked = nm
+            _shape_at(dl, Motion("spring", dur=dur, bounce=bounce), o.x, o.y, THUMB_W, THUMB_H,
+                      end=end, label=False)
+            tx = o.x + THUMB_W + 10
+            dl.add_text(imgui.ImVec2(tx, o.y + THUMB_H / 2 - fh), ui.u32(ui.TEXT), nm)
+            dl.add_text(imgui.ImVec2(tx, o.y + THUMB_H / 2), ui.u32(ui.FAINT),
+                        f"{dur * 1000:.0f} ms · bounce {bounce * 100:.0f} %")
+            imgui.pop_id()
+        imgui.end_combo()
+    return picked
 
 
 def live(m: Motion, trace: Trace | None, width: float, height: float,
@@ -400,11 +384,11 @@ def draw(m: Motion, trace: Trace | None, width: float, height: float,
     imgui.begin_group()
     if stacked:
         h = (height - sp.y) / 2
-        shape(m, trace, width, h)
+        shape(m, width, h)
         live(m, trace, width, h, title)
     else:
         w = min(SHAPE_W, width * 0.4)
-        shape(m, trace, w, height)
+        shape(m, w, height)
         imgui.same_line()
         live(m, trace, width - w - sp.x, height, title)
     imgui.end_group()
