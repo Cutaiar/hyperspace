@@ -14,6 +14,11 @@ Review the current branch before it merges, the way PR #289 was reviewed:
 The checklist is [`REVIEW.md`](../../../REVIEW.md) at the repo root. Read
 it first.
 
+It runs when asked, in a session on the branch. Running it on every PR,
+unattended, is an idea in `hyperspace-python/docs/CHECKPOINT.md` under
+"Ideas for later": the ways to trigger it, and the PR mode it would need
+(post the findings as one comment, no pushes).
+
 ## 1. Fix the scope
 
 - Run `git fetch origin main`. The base is `git merge-base HEAD
