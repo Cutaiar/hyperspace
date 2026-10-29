@@ -5019,8 +5019,8 @@ show file; remove them with × if you do not want them.
 5. Hold Option and drag a box across three cables; press Delete, then
    ⌘Z.
 
-**Right if:** (1) while dragging, every cable the node covers is faint
-gold, the one nearest its middle thick gold, and every other cable dims;
+**Right if:** (1) while dragging, of the cables the node covers, the one
+nearest its middle is thick gold and every other cable dims;
 words beside the pointer say what letting go will do (over the geometry
 cable alone, why it cannot go there); let go, the effect
 is in the run; all the while its border is faint gold, solid gold when a

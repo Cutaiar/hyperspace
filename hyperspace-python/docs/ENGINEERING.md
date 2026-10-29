@@ -897,9 +897,9 @@ error skips the pass.
   port, its output on into the port the cable fed (`Edit.place_effect`;
   the cable's right-click menu offers "insert effect ▸ <file>"). While a
   node is dragged the canvas shows what letting go will do
-  (`ui_graph.onto_plan`): every cable through its box it could go onto
-  is faint gold, and the one nearest its centre — where it will go — is
-  thick gold; every other cable dims (a spotlight: picture cables are
+  (`ui_graph.onto_plan`): the cable it will go onto — of those through
+  its box, the one nearest its centre — is thick gold; every other cable
+  dims (a spotlight: picture cables are
   already red, trigger cables orange). One it may not take dims with the
   rest, the reason beside the pointer, which otherwise says what letting
   go does; nothing lit, nothing happens. Two cables as near as each other open a chooser. An effect

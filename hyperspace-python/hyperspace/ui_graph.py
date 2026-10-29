@@ -96,10 +96,10 @@ render cable's menu offers "insert effect ▸ <file>" (`insert_effect`); a
 free effect node let go on a picture cable is inserted into it
 (`dropped`, `Edit.place_effect`): the cable's picture into its ``image``
 port, its output on into whichever port the cable fed. **The drag shows
-what the drop will do** (2026-10-29, `onto_plan`, `_drag_preview`): every
-cable through the node's box it could go onto is drawn faint in the drop
-colour, and the one nearest its centre — where it will go — thick; every
-other cable dims (a spotlight: a picture cable is already red, a trigger
+what the drop will do** (2026-10-29, `onto_plan`, `_drag_preview`): the
+cable it will go onto — of those through the node's box, the one nearest
+its centre — is drawn thick in the drop colour, and every other cable
+dims (a spotlight: a picture cable is already red, a trigger
 already orange). One it may not take dims with the rest, the reason
 beside the pointer, which otherwise says what letting go does;
 nothing lit, nothing happens. Two cables as near: a chooser names each
@@ -2691,9 +2691,7 @@ def _cable(st: dict, c: graphview.VCable, a: str | None = None, b: str | None = 
     if lit is not None and lit.get("hot"):
         if c.id == lit["best"] or c.id in lit["tie"]:
             col, thick = DROP_COLOUR, DROP_WIRE
-        elif c.id in lit["lit"]:
-            col, thick = imgui.ImVec4(DROP_COLOUR.x, DROP_COLOUR.y, DROP_COLOUR.z, LIT_ALPHA), WIRE
-        else:                               # every other cable, refused or its own, dim
+        else:                               # every other cable dims, whatever it is
             col = imgui.ImVec4(col.x, col.y, col.z, min(col.w, SPOT_ALPHA))
     ed.link(ed.LinkId(_id(st, "c:" + c.id)), ed.PinId(_id(st, a or c.src_port)),
             ed.PinId(_id(st, b or c.dst_port)), col, thick)

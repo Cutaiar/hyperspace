@@ -6210,8 +6210,8 @@ Headless: `tests/test_graph_edit.py` (`onto_plan`, `dropped`, the drawn drag).
    and press Delete.
 6. Option-drag a box across three cables on the background; press Delete;
    press ⌘Z.
-*Pass:* (1) every cable the node's box crosses is faint gold and the one
-nearest its centre thick gold, every other cable dim; over only the
+*Pass:* (1) of the cables the node's box crosses, the one nearest its
+centre is thick gold and every other cable dims; over only the
 geometry cable, "… is no picture cable" beside the pointer, which
 otherwise reads "let go: <node> onto <a> →
 <b>"; nothing lights over empty canvas; let go, the effect sits in the
