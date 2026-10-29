@@ -153,7 +153,7 @@ def register(reg, clock: Clock) -> None:
     reg.continuous(f"{GROUP}.bpm", "BPM", lambda: clock.bpm,
                    lambda v: clock.set_bpm(float(v)), lo=BPM_LO, hi=BPM_HI,
                    fmt=lambda v: f"{v:.1f} BPM", group=GROUP,
-                   tip="The clock's tempo. Tap it (B, the APC's TAP TEMPO) or set it "
+                   tip="The clock's tempo. Tap it (B, the pad's BACK, the APC's TAP TEMPO) or set it "
                        "here; a change keeps every synced LFO where it is and only "
                        "alters its rate.")
     # not modulatable (decision register row 2, option c): a performer on

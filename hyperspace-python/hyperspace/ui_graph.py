@@ -78,7 +78,8 @@ the scene or the layer is where that node is drawn. Right-click the
 canvas for the picker (an effect instance, a hands node, a composite);
 right-click a render node to delete it, draw its hands as lines or set
 a composite's blend;
-Delete takes a selected render cable or node out of the graph. Each
+Delete — or ⌫, a Mac's delete key — takes a selected render cable or
+node out of the graph, with the canvas focused (`_delete_key`). Each
 edit is one undo step and dirties the preset; the renderer builds the
 graph again from it. Render edits do not go through N3's `_act`:
 their handlers (`_create_render`, `_delete_render_cable`,
@@ -857,6 +858,18 @@ def escaped() -> bool:
             and not imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id))
 
 
+DELETE_KEYS = (imgui.Key.delete, imgui.Key.backspace)     # ⌫ is a Mac's "delete"
+
+
+def delete_pressed() -> bool:
+    """Delete or ⌫ pressed this frame, and nothing else wants it: no text
+    field being typed in, no control held, no popup open."""
+    return (any(imgui.is_key_pressed(k, False) for k in DELETE_KEYS)
+            and not imgui.get_io().want_text_input
+            and not imgui.is_any_item_active()
+            and not imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id))
+
+
 def _select(st: dict, view: graphview.View) -> None:
     """Inside the editor, the nodes drawn: the selection `select_effect` (or
     the FX page) asked for, selected and brought on screen; a frame node
@@ -1361,6 +1374,7 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
         frame_area(st, view, area)
     _title_click(st)
     _create(panel, st, view)
+    _delete_key()
     _delete(panel, st, view)
     _menus(panel, st, view)
     _hover(st, view, panel)
@@ -4052,6 +4066,18 @@ def delete_through(st: dict) -> str:
     ed.reject_deleted_item()
     _note(st, THROUGH_NO_DELETE)
     return THROUGH_NO_DELETE
+
+
+def _delete_key() -> None:
+    """Inside the editor: Delete or ⌫ with the canvas focused queues the
+    selection for `_delete` (next frame's query). The editor answers only
+    Delete — fn+⌫ on a Mac — and only with the pointer over the canvas."""
+    if not (delete_pressed() and imgui.is_window_focused()):
+        return
+    for nk in ed.get_selected_nodes():
+        ed.delete_node(nk)
+    for lk in ed.get_selected_links():
+        ed.delete_link(lk)
 
 
 def _delete(panel, st: dict, view: graphview.View) -> None:
