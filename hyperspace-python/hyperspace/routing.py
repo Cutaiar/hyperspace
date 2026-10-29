@@ -2652,8 +2652,10 @@ class Bindings:
         if src and src != m.address:
             for b in [b for b in self.bindings if b.source == m.address]:
                 self.move_route(b, source=src)
-            for d in docs:
-                d["in"] = [src if a == m.address else a for a in d["in"]]
+            for d in docs:      # (never a modifier onto its own lane: a loop through it)
+                own = f"{modifiers.SCHEME}:{modifiers.number(d['id'])}"
+                d["in"] = [src if a == m.address and src != own else
+                           None if a == m.address else a for a in d["in"]]
         self.set_modifiers(docs, reg)
 
 

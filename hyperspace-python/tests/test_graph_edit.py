@@ -447,6 +447,12 @@ def test_nodes_the_picker_adds_and_delete_removes(rig):
     dormant = table.add(Binding(m3.address, q.id, "position", 0.5))
     ui_graph.remove_node(panel, m3.id)
     assert table.modifier(m3.id) is None and dormant.source == m3.address
+    # a loop through it (a → b → a): b is never left reading its own lane
+    a = table.add_modifier("smooth", (), rig.panel.reg)
+    b = table.add_modifier("smooth", (a.address,), rig.panel.reg)
+    table.set_modifier_input(a.id, 0, b.address, rig.panel.reg)
+    ui_graph.remove_node(panel, a.id)
+    assert table.modifier(b.id).inputs[0] == ""
     ui_graph.remove_node(panel, "macro.7")
     assert "macro.7" not in table.macros
     assert ui_graph.remove_node(panel, graphview.ANALYZER) == graphview.NOT_REMOVABLE.format(

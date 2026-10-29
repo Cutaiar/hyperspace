@@ -5655,6 +5655,12 @@ def splice_target(edit: Edit, cable, name: str, ports) -> str | None:
     return splice_refusal(name, ports, getattr(cable, "type", IMAGE) or IMAGE)
 
 
+def onto_refusal(edit: Edit, cable) -> str | None:
+    """Why an effect may not go onto `cable` (the rig's bus, no picture
+    cable: `_cable_ends`' rule), or None."""
+    return _cable_ends(edit, cable)[2]
+
+
 def _splice(doc: dict, s: str, d: str, into: str, out: str) -> None:
     """Plan 40 T3 (D2): a patch onto the cable `s → d` in section `doc`, as
     `_onto` puts one effect there — `s → into` (the patch's inlet, a member

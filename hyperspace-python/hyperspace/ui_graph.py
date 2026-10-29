@@ -3782,7 +3782,7 @@ def onto_choices(panel, view: graphview.View, nid: str, centre,
         return [c for c in graphview.cables_near(view, pins, centre, kinds=("render",),
                                                  skip={nid}, size=size)
                 if c.type == graphview.IMAGE
-                and (e is None or graphview._cable_ends(e, c)[2] is None)]
+                and (e is None or graphview.onto_refusal(e, c) is None)]
     if n.kind != "modifier" or view.cables_of(nid):
         return []
     return graphview.cables_near(view, pins, centre, skip=(nid,), size=size)
