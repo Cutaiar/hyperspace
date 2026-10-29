@@ -4003,8 +4003,8 @@ DELETE = {"route": _value_cut, "setter": _value_cut, "sub": _value_cut,
 
 def _value_node_cut(panel, st: dict, view: graphview.View, n: graphview.VNode) -> None:
     """Delete pressed on a modifier or a macro node: it goes, without its
-    cables (`accept_deleted_item(False)`): a route on a removed modifier's
-    lane stays, dormant, as on ROUTING."""
+    cables (`accept_deleted_item(False)`): a removed modifier's chain is
+    closed over it — what fed it now feeds what it fed — as on ROUTING."""
     if ed.accept_deleted_item(False):
         remove_node(panel, n.id)
 

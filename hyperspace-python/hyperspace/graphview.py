@@ -4083,8 +4083,8 @@ class Edit:
         return m
 
     def remove_node(self, nid: str):
-        """Delete a node: a modifier (`remove_modifier`: its params go, a
-        route on its lane stays, dormant); a macro (its label and every
+        """Delete a node: a modifier (`remove_modifier`: its params go,
+        what fed it wired on to whatever read it); a macro (its label and every
         subscriber go — the knob stays: the eight are the rig's); a render
         node is N4's (`remove_render_node`); anything else is the rig's (a
         device, the analyzer, an LFO, a group) and is refused."""

@@ -433,8 +433,20 @@ def test_nodes_the_picker_adds_and_delete_removes(rig):
     p = free_param(rig, centred=False)
     route = e.connect(f"out:{m.address}", f"mod:{p.id}")
     assert route.source == m.address
+    # a second modifier reading the first, to see it bridged too
+    m2 = table.add_modifier("smooth", (m.address,), rig.panel.reg)
     ui_graph.remove_node(panel, m.id)
+    # deleting it closes the chain over it: what fed its first input feeds
+    # what read it — the route and the other modifier's input
     assert table.modifier(m.id) is None and route in table.bindings
+    assert route.source == "lane:0" and route.target == p.id
+    assert table.modifier(m2.id).inputs[0] == "lane:0"
+    # with nothing in its first input, a route on its lane is left dormant
+    m3 = table.add_modifier("smooth", (), rig.panel.reg)
+    q = free_param(rig, centred=False)
+    dormant = table.add(Binding(m3.address, q.id, "position", 0.5))
+    ui_graph.remove_node(panel, m3.id)
+    assert table.modifier(m3.id) is None and dormant.source == m3.address
     ui_graph.remove_node(panel, "macro.7")
     assert "macro.7" not in table.macros
     assert ui_graph.remove_node(panel, graphview.ANALYZER) == graphview.NOT_REMOVABLE.format(
