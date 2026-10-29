@@ -6215,8 +6215,10 @@ nearest its centre thick gold, the geometry cable red with "… is no picture ca
 beside the pointer, which otherwise reads "let go: <node> onto <a> →
 <b>"; nothing lights over empty canvas; let go, the effect sits in the
 run, the cable's picture into its `image`, its output into `wobble`.
-(2) the pointer says "hold ⌘ …", nothing lights, and the node only moves.
-(3) with ⌘ its border goes gold, its own cables fade, a thin gold join
+Through all of (1) the node's border is faint gold, solid gold while a
+cable is lit. (2) from the first movement the pointer says "hold ⌘ …",
+the border stays as it was, nothing lights, and the node only moves.
+(3) with ⌘ its border goes faint gold, then solid over a lit cable, its own cables fade, a thin gold join
 shows `acid` straight to All outputs; let go, the run is `lookback →
 wobble → acid → …`; ⌘Z puts it back in one press. (4) a menu "put <node>
 onto" names both; the pick takes it; Escape leaves both as they were.

@@ -105,7 +105,9 @@ nothing lit, nothing happens. Two cables as near: a chooser names each
 effect already wired only moves on the canvas — unless ⌘ is held: then
 its border is lit, its own cables fade, a thin join shows its chain closed
 over it, and let go on a lit cable it moves there (reordering the run).
-Over a cable without ⌘, the pointer says to hold it. A free modifier goes
+Without ⌘ the pointer says to hold it from the drag's start. A dragged
+node that a drop can move — free, or wired with ⌘ — is **hot**: its
+border faint gold, solid gold while a cable is lit for it. A free modifier goes
 onto a route or a modifier's input the same way; several nodes dragged
 together only move. A compile error colours an effect
 node's title and is its hover (`effect_errors`). The selected effect is
@@ -1328,16 +1330,18 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
             _region(st, g)
     st["errors"] = effect_errors(panel, view)
     drawn: set[str] = set()
-    lit = st.get("onto_lit")            # last frame's drag: a lifted node's border lit
+    lit = st.get("onto_lit")            # last frame's drag: a hot node's border lit
     for n in view.nodes:
         if drawn_node(st, n):
-            lifted = lit is not None and lit["lift"] and lit["node"] == n.id
-            if lifted:
-                for k in LIFT_BORDERS:
-                    ed.push_style_color(k, DROP_COLOUR)
+            hot = lit is not None and lit.get("hot") and lit["node"] == n.id
+            if hot:
+                k = DROP_COLOUR if lit["best"] is not None else imgui.ImVec4(
+                    DROP_COLOUR.x, DROP_COLOUR.y, DROP_COLOUR.z, LIT_ALPHA)
+                for b in HOT_BORDERS:
+                    ed.push_style_color(b, k)
             _node(st, n, drawn)
-            if lifted:
-                ed.pop_style_color(len(LIFT_BORDERS))
+            if hot:
+                ed.pop_style_color(len(HOT_BORDERS))
     for g in view.groups:               # plan 40 T2: a folded group's node, an open one's title
         if g.open:
             _region_title(panel, st, g)
@@ -2130,7 +2134,7 @@ DROP_WIRE = 6.0
 LIT_ALPHA = 0.45        # a cable the dragged node could go onto, not the one it will
 LEAVING_ALPHA = 0.2     # a lifted node's own cables: they go when it is let go
 GHOST_WIRE = 2.0        # the join its chain closes over it with
-LIFT_BORDERS = (ed.StyleColor.node_border, ed.StyleColor.sel_node_border,
+HOT_BORDERS = (ed.StyleColor.node_border, ed.StyleColor.sel_node_border,
                 ed.StyleColor.hov_node_border)
 PATCHES_TIP = ("The patches: a click spawns one at the canvas's centre, its pins open — "
                "nothing wired to this preset. Drag one onto a picture cable to splice it in")
@@ -3826,15 +3830,19 @@ def onto_plan(panel, view: graphview.View, nid: str, centre, size=None,
               lift: bool = False) -> dict | None:
     """What letting node `nid` (its box `size`) go at `centre` would do — what the drag
     lights (`_drag_preview`) and what the drop does (`dropped`), so the two
-    never disagree. None: nothing. Else ``{"node", "lift", "lit", "best",
-    "tie", "refused", "leaving", "ghost", "hint"}``: the cables it may go
+    never disagree. None: a node no drop moves (not an effect, a wired
+    modifier). Else ``{"node", "hot", "lift", "lit", "best", "tie",
+    "refused", "leaving", "ghost", "hint"}``: `hot`, whether a drop can do
+    anything (a free node, or a wired effect with ⌘ — its border says so
+    while it is dragged); the cables it may go
     onto through its box, nearest its centre first (`lit`), the one it will (`best`),
     the cables as near as that one when there are two or more (`tie`: the
     chooser's), the render cables under it it may not go onto with why
     (`refused`); for a wired effect lifted with ⌘, its own cables
     (`leaving`) and the joins its chain closes over it with — (cable into
-    its picture, cable out) pairs (`ghost`). `hint`: a wired effect over a
-    cable it could go onto, ⌘ not held (the drag says to hold it)."""
+    its picture, cable out) pairs (`ghost`). `hint`: a wired effect
+    dragged without ⌘ — ``"over"`` a cable it could go onto, else
+    ``"away"`` (the drag says to hold ⌘ either way)."""
     n = view.node(nid)
     if n is None:
         return None
@@ -3855,13 +3863,11 @@ def onto_plan(panel, view: graphview.View, nid: str, centre, size=None,
         ok, refused = graphview.cables_near(view, pins, centre, skip=(nid,), size=size), {}
     else:
         return None
-    plan = {"node": nid, "lift": False, "lit": [], "best": None, "tie": [], "refused": {},
-            "leaving": [], "ghost": [], "hint": False}
+    plan = {"node": nid, "hot": not mine or lift, "lift": False, "lit": [], "best": None,
+            "tie": [], "refused": {}, "leaving": [], "ghost": [], "hint": ""}
     if mine and not lift:
-        plan["hint"] = bool(ok)
-        return plan if ok else None
-    if not ok and not refused:
-        return None
+        plan["hint"] = "over" if ok else "away"
+        return plan
     plan["lit"] = [c.id for _, c in ok]
     plan["refused"] = refused
     if ok:
@@ -3888,6 +3894,7 @@ ONTO_TIP = "let go: {node} onto {cable}"
 LIFT_ONTO_TIP = "let go: {node} out of its chain, onto {cable}"
 ONTO_TIE_TIP = "let go: pick which cable {node} goes onto"
 LIFT_HINT = "hold ⌘ to move {node} out of its chain and onto this cable"
+LIFT_AWAY = "hold ⌘ to lift {node} out of its chain, then let go on a cable"
 
 
 def drag_words(view: graphview.View, plan: dict) -> str:
@@ -3895,7 +3902,7 @@ def drag_words(view: graphview.View, plan: dict) -> str:
     n = view.node(plan["node"])
     node = n.label if n is not None else plan["node"]
     if plan["hint"]:
-        return LIFT_HINT.format(node=node)
+        return (LIFT_HINT if plan["hint"] == "over" else LIFT_AWAY).format(node=node)
     if plan["tie"]:
         return ONTO_TIE_TIP.format(node=node)
     if plan["best"] is not None:

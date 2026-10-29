@@ -585,9 +585,16 @@ def test_the_drag_plan_lights_what_the_drop_will_do(rig):
     both = ui_graph.onto_plan(rig.panel, view, "render:wobble.2", (420.0, 60.0), (400.0, 160.0))
     assert both["best"] == out.id and set(both["lit"]) == {out.id, into.id}
     assert ui_graph.drag_words(view, free).startswith("let go: ")
-    assert ui_graph.onto_plan(rig.panel, view, "render:wobble.2", (500.0, 900.0)) is None
-    # acid, wired, over the lookback's cable into it is its own: nothing
-    assert ui_graph.onto_plan(rig.panel, view, "render:acid", (200.0, 0.0)) is None
+    assert free["hot"]                      # a free node: its border says a drop can land
+    # over nothing: still hot, nothing lit, nothing said
+    away = ui_graph.onto_plan(rig.panel, view, "render:wobble.2", (500.0, 900.0))
+    assert away["hot"] and away["best"] is None and ui_graph.drag_words(view, away) == ""
+    # acid, wired, without ⌘: not hot, and taught ⌘ from the drag's start —
+    # here over only its own cable
+    own = ui_graph.onto_plan(rig.panel, view, "render:acid", (200.0, 0.0))
+    assert not own["hot"] and own["hint"] == "away" and own["best"] is None
+    assert "hold ⌘ to lift" in ui_graph.drag_words(view, own)
+    assert ui_graph.onto_plan(rig.panel, view, "render:acid", (200.0, 0.0), lift=True)["hot"]
     # wobble.2 wired in after acid; acid over wobble.2's cable to the output
     assert ui_graph.put_onto(rig.panel, view, "render:wobble.2", out) is out
     frame(rig.panel, "graph")
@@ -597,7 +604,7 @@ def test_the_drag_plan_lights_what_the_drop_will_do(rig):
     st["pin_xy"][graphview.stub_in("render:output.all")] = (1000.0, 0.0)
     last = next(c for c in view.cables if c.dst_port == "rin:output.all/image")
     still = ui_graph.onto_plan(rig.panel, view, "render:acid", (900.0, 0.0))
-    assert still["hint"] and still["best"] is None and not still["lit"]
+    assert still["hint"] == "over" and still["best"] is None and not still["lit"]
     assert "hold ⌘" in ui_graph.drag_words(view, still)
     assert ui_graph.dropped(rig.panel, view, "render:acid", (900.0, 0.0)) is None
     assert G.run_back(gs.spec, "output.all.image") == ("acid", "wobble.2")
@@ -630,9 +637,9 @@ def test_a_lifted_drag_draws_its_lit_cable_border_and_join(rig, monkeypatch):
     from imgui_bundle import imgui
     st, view, _ = _two_cable_rig(rig)
     drawn = [c for c in view.cables if c.type == graphview.IMAGE]
-    plan = {"node": "render:wobble.2", "lift": True, "lit": [drawn[0].id],
+    plan = {"node": "render:wobble.2", "hot": True, "lift": True, "lit": [drawn[0].id],
             "best": drawn[0].id, "tie": [], "refused": {}, "leaving": [drawn[1].id],
-            "ghost": [(drawn[0].id, drawn[1].id)], "hint": False}
+            "ghost": [(drawn[0].id, drawn[1].id)], "hint": ""}
     monkeypatch.setattr(ui_graph, "onto_plan", lambda *a, **k: plan)
     monkeypatch.setattr(imgui, "is_mouse_down", lambda *a: True)
     said = []
