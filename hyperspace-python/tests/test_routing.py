@@ -491,7 +491,7 @@ def test_factory_table_binds_only_real_params(tmp_path):
     # + R, F1–F8, ⇧F1–F8 (plan 11), + undo and redo on ⌘ and Ctrl (plan 15 WP1),
     # + Home (plan 15 WP2)
     assert len(t.of("key")) == 25 + 17 + 4 + 1
-    assert len(t.of("pad")) == 9 and len(t.of("hat")) == 4     # BACK free, START saves
+    assert len(t.of("pad")) == 10 and len(t.of("hat")) == 4    # BACK undoes, START saves
     assert len(t.midi()) == 113 + 6 + 1 + 4 + 1 + 1 and t.mods() == []   # + SHIFT, the global track
     # knobs, OVERDUB (plan 15 WP2) (the clip-stop row's eight, plan 15 WP4,
     # retired 2026-10-09), SAVE on track 8's clip stop (plan 24 C1),
@@ -670,7 +670,7 @@ def test_pad_adapter_routes_buttons_and_hat(tmp_path):
     router.pad(pad)
     assert r.view.shape == 6 and r.view.lines is not lines
     assert r.reg["view.bright"].position() == p0 + 3
-    assert r.reg["view.speed"].position() == s0 - 4
+    assert r.reg["view.speed"].position() == s0      # ← walks the list, held only
     r.view.yaw = 1.0
     pad.hits, pad.hat = {gamepad.LSTICK}, 0
     router.pad(pad)
@@ -1663,13 +1663,14 @@ def test_a_theme_row_in_an_old_bindings_file_is_remapped_to_the_preset_bank(tmp_
     next load is quiet."""
     path = bindings_path(tmp_path)
     old = {"preset.select": "theme.select", "preset.next": "theme.next",
-           "preset.list.next": "theme.next",             # the pad's B, as it was then
            **{f"preset.{w}.{k}": f"theme.{w}.{k}" for w in ("load", "save")
               for k in range(routing.F_KEYS)}}
     rows = []
     for b in session_rows():
         d = b.to_json()
         d["target"] = old.get(d["target"], d["target"])
+        if d["source"] == "pad:B":                    # the pad's B, as it was then
+            d.update(target="theme.next", op="fire")
         rows.append(d)
     rows.append({"source": "note:0:87", "target": "theme.prev", "op": "toggle"})   # the user's
     path.write_text(json.dumps({"schema": SCHEMA, "profile": "apc40", "bindings": rows}))
@@ -1677,15 +1678,15 @@ def test_a_theme_row_in_an_old_bindings_file_is_remapped_to_the_preset_bank(tmp_
     err = capsys.readouterr().err
     by = {b.source: b.target for b in t.bindings}
     assert by["key:F1"] == "preset.load.0" and by["key:SHIFT+F8"] == "preset.save.7"
-    assert by[f"note:0:{apc40.N_QUANT}"] == "preset.next" and by["pad:B"] == "preset.list.next"
+    assert by[f"note:0:{apc40.N_QUANT}"] == "preset.next" and by["pad:B"] == "view.points"
     assert by["note:0:87"] == "preset.prev"
     assert [b.target for b in t.bindings if b.source == f"note:2:{apc40.N_CLIP[0]}"] \
         == ["preset.select"]
     assert not any(b.target.startswith("theme.") for b in t.bindings)
     assert "remapped key:F3: theme.load.2 → preset.load.2 (the preset bank of plan 13)" in err
     n = len(t.notes)
-    # F-keys, clip row, QUANT, pad B (straight onto the preset list,
-    # PAD_REMAP), the user's — and clip rows 4 and 5,
+    # F-keys, clip row, QUANT, pad B (straight onto the newest layout's
+    # points, PAD_REMAP), the user's — and clip rows 4 and 5,
     # which this table (today's session rows, theme-named) already holds
     assert n == 16 + 24 + 1 + 1 + 1
     assert all(note.startswith("remapped") for note in t.notes)
@@ -1716,10 +1717,11 @@ def test_a_user_row_on_a_moved_apc_note_is_kept():
     # + the clip-stop row's eight (plan 15 WP4), + the bank's sixteen pads
     # on clip rows 4 and 5 (plan 19 WP2), + the four invariant render
     # toggles and SAVE (plan 24 C1), + START's hold-to-save (the pad
-    # layout of 2026-10-14), + SEND A's sequencer page (plan 31 §A)
-    assert ("pad:MENU", "preset.save_new") in by
+    # layout of 2026-10-14), + BACK's undo (2026-10-29), + SEND A's
+    # sequencer page (plan 31 §A)
+    assert ("pad:MENU", "preset.save_new") in by and ("pad:VIEW", "edit.undo") in by
     assert [n.split(" ")[0] for n in notes] == (["remapped", "added"]
-                                                + ["added"] * (17 + 4 + 2 + 16 + 5 + 1 + 1))
+                                                + ["added"] * (17 + 4 + 2 + 16 + 5 + 1 + 1 + 1))
     # and a second pass has nothing to do
     again, notes2 = routing.remap_factory(out)
     assert notes2 == [] and [b.source for b in again] == [b.source for b in out]

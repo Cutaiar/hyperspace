@@ -94,9 +94,9 @@ def test_a_free_axis_says_what_the_app_does_with_it(rig):
 
 def test_a_control_with_nothing_on_it_is_dark(rig):
     panel = rig.panel
-    back = next(c for c in gamepad.LAYOUT if c.source == "pad:VIEW")
-    assert ui_pad.says(panel, back, None) == ""
-    assert "free" in ui_pad.label(panel, back, None)
+    share = next(c for c in gamepad.LAYOUT if c.source == "pad:SHARE")
+    assert ui_pad.says(panel, share, None) == ""
+    assert "free" in ui_pad.label(panel, share, None)
 
 
 def test_the_hover_names_glyph_param_and_source(rig):

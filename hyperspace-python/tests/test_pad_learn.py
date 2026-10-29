@@ -244,9 +244,10 @@ def test_a_stick_never_ends_a_learn_on_a_setting_it_cannot_drive(rig):
 def test_an_older_files_pad_rows_move_to_the_new_layout_and_the_owners_stay(tmp_path):
     """The old factory pad rows (A rotate, X points, Y faces, START the
     sheet, BACK the panel, the right-stick click the camera) move to the
-    layout of 2026-10-14 — BACK free, START's sheet gone and its
-    hold-to-save in its place (PAD_NEW_ROWS); a row the owner learned
-    onto a button stays; a second load changes nothing."""
+    layout of 2026-10-14 — BACK's panel gone, START's sheet gone and its
+    hold-to-save in its place (PAD_NEW_ROWS) — and on to 2026-10-29's
+    where it moved again (X screen strokes, BACK undo); a row the owner
+    learned onto a button stays; a second load changes nothing."""
     old = [Binding("pad:A", "view.rotate", "toggle"), Binding("pad:X", "view.points", "toggle"),
            Binding("pad:Y", "view.faces", "toggle"), Binding("pad:MENU", "ui.cheatsheet", "toggle"),
            Binding("pad:VIEW", "ui.panel", "toggle"),
@@ -258,22 +259,24 @@ def test_an_older_files_pad_rows_move_to_the_new_layout_and_the_owners_stay(tmp_
     t = Bindings.load(path, legacy_midi=None)
     rows = {b.source: (b.target, b.op) for b in t.of("pad", "hat")}
     assert rows["pad:A"] == ("view.faces", "toggle")
-    assert rows["pad:X"] == ("preset.list.prev", "fire")      # straight to the newest
+    assert rows["pad:X"] == ("view.screen_strokes", "toggle")   # straight to the newest
     assert rows["pad:Y"] == ("view.lines", "toggle")
     assert rows["pad:MENU"] == ("preset.save_new", "hold")   # the sheet's row gone
-    assert "pad:VIEW" not in rows
+    assert rows["pad:VIEW"] == ("edit.undo", "fire")          # the panel's row gone
     assert rows["pad:LSTICK"] == ("camera.reset", "fire")
     assert rows["pad:RSTICK"] == ("rot.reset_w", "fire")
     assert rows["hat:UP"] == ("fx.wobble.freq", "step")
-    assert sum("the pad layout of 2026-10-14" in n for n in t.notes) == 7
+    assert sum("the pad layout of 2026-10-14" in n for n in t.notes) == 6
+    assert sum("the pad layout of 2026-10-29" in n for n in t.notes) == 2
     after = path.read_text()
     again = Bindings.load(path, legacy_midi=None)
     assert not again.notes and path.read_text() == after
 
 
-def test_the_pads_bank_rows_move_onto_the_preset_list(tmp_path):
+def test_the_pads_bank_rows_move_straight_to_the_newest_layout(tmp_path):
     """B / X's factory rows on the bank (`preset.next` / `prev`, and B's
-    `theme.next` from before plan 13) move to the list's triggers, noted;
+    `theme.next` from before plan 13) move to points and screen strokes,
+    noted;
     the same targets on another button or op — the owner's — stay, and the
     APC40's QUANT keeps the bank; a second load changes nothing."""
     for b_row in (Binding("pad:B", "preset.next", "fire"),
@@ -285,35 +288,66 @@ def test_the_pads_bank_rows_move_onto_the_preset_list(tmp_path):
         Bindings(old, path=path).write()
         t = Bindings.load(path, legacy_midi=None)
         rows = {b.source: (b.target, b.op) for b in t.of("pad", "hat")}
-        assert rows["pad:B"] == ("preset.list.next", "fire")
-        assert rows["pad:X"] == ("preset.list.prev", "fire")
+        assert rows["pad:B"] == ("view.points", "toggle")
+        assert rows["pad:X"] == ("view.screen_strokes", "toggle")
         assert rows["pad:LB"] == ("preset.next", "fire")
         assert rows["pad:RB"] == ("preset.prev", "hold")
         assert rows["pad:MENU"] == ("preset.save_new", "hold")      # added, not held
-        assert sum("the pad layout of 2026-10-14" in n for n in t.notes) == 3
+        assert rows["pad:VIEW"] == ("edit.undo", "fire")            # added
+        assert sum("the pad layout of 2026-10-14" in n for n in t.notes) == 1
+        assert sum("the pad layout of 2026-10-29" in n for n in t.notes) == 3
         after = path.read_text()
         again = Bindings.load(path, legacy_midi=None)
         assert not again.notes and path.read_text() == after
 
 
-def test_the_factory_pad_walks_the_list_and_the_desk_the_bank():
-    """The factory rows: the pad's B / X on the list's triggers, the
+def test_the_10_14_layout_moves_the_walk_onto_the_held_d_pad(tmp_path):
+    """2026-10-29: the layout of 2026-10-14 (B / X walk the list, the
+    d-pad's ← / → step the speed) moves the walk onto ← / → held, B / X
+    onto points and screen strokes, and adds BACK's undo; a d-pad row the
+    owner changed stays; a second load changes nothing."""
+    old = [Binding("pad:B", "preset.list.next", "fire"),
+           Binding("pad:X", "preset.list.prev", "fire"),
+           Binding("hat:LEFT", "view.speed", "step", -4),
+           Binding("hat:RIGHT", "view.speed", "step", 2),           # the owner's
+           Binding("pad:MENU", "preset.save_new", "hold")]
+    path = tmp_path / "bindings.json"
+    Bindings(old, path=path).write()
+    t = Bindings.load(path, legacy_midi=None)
+    rows = {b.source: (b.target, b.op, b.value) for b in t.of("pad", "hat")}
+    assert rows["pad:B"] == ("view.points", "toggle", 1.0)
+    assert rows["pad:X"] == ("view.screen_strokes", "toggle", 1.0)
+    assert rows["hat:LEFT"] == ("preset.list.prev", "hold", 1.0)
+    assert rows["hat:RIGHT"] == ("view.speed", "step", 2.0)
+    assert rows["pad:VIEW"] == ("edit.undo", "fire", 1.0)
+    assert sum("the pad layout of 2026-10-29" in n for n in t.notes) == 4
+    after = path.read_text()
+    again = Bindings.load(path, legacy_midi=None)
+    assert not again.notes and path.read_text() == after
+
+
+def test_the_factory_pad_walks_the_list_held_and_the_desk_the_bank():
+    """The factory rows: the d-pad's ← / → held on the list's triggers
+    (a brush does nothing), B / X on points and screen strokes, the
     APC40's QUANT still on the bank's `preset.next`."""
     from hyperspace import apc40
     from hyperspace.routing import factory_desk, padmap
 
-    pad = {b.source: b.target for b in padmap()}
-    assert pad["pad:B"] == "preset.list.next" and pad["pad:X"] == "preset.list.prev"
+    pad = {b.source: (b.target, b.op) for b in padmap()}
+    assert pad["hat:LEFT"] == ("preset.list.prev", "hold")
+    assert pad["hat:RIGHT"] == ("preset.list.next", "hold")
+    assert pad["pad:B"] == ("view.points", "toggle")
+    assert pad["pad:X"] == ("view.screen_strokes", "toggle")
     assert any(b.source == f"note:0:{apc40.N_QUANT}" and b.target == "preset.next"
                for b in factory_desk())
 
 
-def test_held_start_saves_a_new_preset_and_back_is_free(rig):
+def test_held_start_saves_a_new_preset_and_back_undoes(rig):
     """START carries the factory's hold-to-save and fires it once the
-    button has been down HOLD_S; BACK is left unbound (2026-10-14)."""
+    button has been down HOLD_S; BACK undoes (2026-10-29)."""
     rows = {b.source: (b.target, b.op) for b in routing.padmap()}
     assert rows["pad:MENU"] == ("preset.save_new", "hold")
-    assert "pad:VIEW" not in rows
+    assert rows["pad:VIEW"] == ("edit.undo", "fire")
     pad, r = ScriptedPad(), rig.router
     saved = []
     rig.reg["preset.save_new"].fire = lambda: saved.append(1)
@@ -359,7 +393,7 @@ def test_learn_on_a_second_pad_writes_its_qualified_rows(rig):
     two.frame(held={gp.A})
     assert gp.learn_from(two, lrn, role="p2") is True
     assert [(b.source, b.op) for b in t.bindings if b.target == "view.points"
-            and b.source.startswith("pad")] == [("pad@p2:A", "toggle")]
+            and b.source.startswith("pad@")] == [("pad@p2:A", "toggle")]
     assert any(d.get("source") == "pad@p2:A" for d in on_file(rig.path))   # the session's
     assert any(b.source == "pad:A" for b in t.bindings)                   # the primary's stays
     lrn.arm("camera.yaw", "pad")
@@ -443,7 +477,7 @@ def test_learn_p2_completes_only_from_the_second_pad(rig):
     two.frame(held={gp.A})
     assert gp.learn_from(two, lrn, role="p2") is True
     assert [b.source for b in t.bindings if b.target == "view.points"
-            and b.source.startswith("pad")] == ["pad@p2:A"]
+            and b.source.startswith("pad@")] == ["pad@p2:A"]
     assert lrn.accepts("pad@p2:A") is False                 # (it landed: nothing armed)
     lrn.arm("view.points", "p2")
     assert lrn.accepts("pad@p2:B") and lrn.accepts("axis@p2:LX")

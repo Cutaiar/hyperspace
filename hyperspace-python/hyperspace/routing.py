@@ -546,16 +546,28 @@ THEME_TO_PRESET = {
 # written before `padmap` gained it never gained it either (no pad row
 # was ever added to an existing file), which read as a pad whose buttons
 # the map could not find. PAD_NEW_ROWS adds it instead.
+# 2026-10-29: the preset walk leaves the face buttons, where a thumb
+# brushing B or X threw the live look away, for the d-pad's ← / → held
+# HOLD_S; speed leaves the pad. B takes points, X screen strokes, and BACK
+# undo (PAD_NEW_ROWS) — a load is one undo step. Every older B / X form
+# above maps straight to the newest.
+PRESET_WALK_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float]] = {
+    ("pad:B", "preset.list.next", "fire", 1.0): ("view.points", "toggle", 1.0),
+    ("pad:X", "preset.list.prev", "fire", 1.0): ("view.screen_strokes", "toggle", 1.0),
+    ("hat:LEFT", "view.speed", "step", -4.0): ("preset.list.prev", "hold", 1.0),
+    ("hat:RIGHT", "view.speed", "step", 4.0): ("preset.list.next", "hold", 1.0),
+}
 PAD_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float] | None] = {
     ("pad:RSTICK", "camera.reset", "fire", 1.0): ("rot.reset_w", "fire", 1.0),
     ("pad:VIEW", "ui.panel", "toggle", 1.0): None,
     ("pad:A", "view.rotate", "toggle", 1.0): ("view.faces", "toggle", 1.0),
-    ("pad:X", "view.points", "toggle", 1.0): ("preset.list.prev", "fire", 1.0),
-    ("pad:X", "preset.prev", "fire", 1.0): ("preset.list.prev", "fire", 1.0),
-    ("pad:B", "preset.next", "fire", 1.0): ("preset.list.next", "fire", 1.0),
-    ("pad:B", "theme.next", "fire", 1.0): ("preset.list.next", "fire", 1.0),
+    ("pad:X", "view.points", "toggle", 1.0): ("view.screen_strokes", "toggle", 1.0),
+    ("pad:X", "preset.prev", "fire", 1.0): ("view.screen_strokes", "toggle", 1.0),
+    ("pad:B", "preset.next", "fire", 1.0): ("view.points", "toggle", 1.0),
+    ("pad:B", "theme.next", "fire", 1.0): ("view.points", "toggle", 1.0),
     ("pad:Y", "view.faces", "toggle", 1.0): ("view.lines", "toggle", 1.0),
     ("pad:MENU", "ui.cheatsheet", "toggle", 1.0): None,
+    **PRESET_WALK_REMAP,
 }
 # Pad rows added where nothing uses the button, as (source, target, op,
 # value) — the pad's APC_NEW_ROWS. Until 2026-10-14 a row `padmap` gained
@@ -566,6 +578,7 @@ PAD_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float] | None] = {
 # second load finds the source taken.
 PAD_NEW_ROWS = (
     ("pad:MENU", "preset.save_new", "hold", 1.0),
+    ("pad:VIEW", "edit.undo", "fire", 1.0),                 # 2026-10-29
 )
 KEY_NEW_ROWS = (
     ("key:B", "tempo.tap", "fire", 1.0),
@@ -1087,22 +1100,24 @@ def keymap() -> list[Binding]:
 
 
 def padmap() -> list[Binding]:
-    """Xbox-layout gamepad buttons and the d-pad. B / X step the preset
-    list — the PRESETS page's list, by name, a new save included
-    (`Project.walk`), not the bank the desk walks — A / Y the faces and
-    lines; the left-stick click resets the camera, the right-stick click
-    the 4D spin; START (``pad:MENU``) held HOLD_S saves the live state as
-    a new preset, and BACK (``pad:VIEW``) is free — Learn pad puts
-    anything on it (2026-10-14, the owner's layout — PAD_REMAP moves an
-    older file's, PAD_NEW_ROWS adds what it never held)."""
+    """Xbox-layout gamepad buttons and the d-pad. The d-pad's ← / → held
+    HOLD_S step the preset list — the PRESETS page's list, by name, a new
+    save included (`Project.walk`), not the bank the desk walks; a brush
+    does nothing (2026-10-29: on B / X a stray press threw the look away).
+    A / Y the faces and lines, B / X the points and screen strokes, ↑ / ↓
+    the brightness; the left-stick click resets the camera, the
+    right-stick click the 4D spin; START (``pad:MENU``) held HOLD_S saves
+    the live state as a new preset, and BACK (``pad:VIEW``) undoes (the
+    owner's layout — PAD_REMAP moves an older file's, PAD_NEW_ROWS adds
+    what it never held)."""
     rows = [
-        ("pad:A", "view.faces", "toggle"), ("pad:B", "preset.list.next", "fire"),
-        ("pad:X", "preset.list.prev", "fire"), ("pad:Y", "view.lines", "toggle"),
-        ("pad:MENU", "preset.save_new", "hold"),
+        ("pad:A", "view.faces", "toggle"), ("pad:B", "view.points", "toggle"),
+        ("pad:X", "view.screen_strokes", "toggle"), ("pad:Y", "view.lines", "toggle"),
+        ("pad:MENU", "preset.save_new", "hold"), ("pad:VIEW", "edit.undo", "fire"),
         ("pad:LB", "view.shape", "step", -1), ("pad:RB", "view.shape", "step", 1),
         ("pad:LSTICK", "camera.reset", "fire"), ("pad:RSTICK", "rot.reset_w", "fire"),
         ("hat:UP", "view.bright", "step", 3), ("hat:DOWN", "view.bright", "step", -3),
-        ("hat:LEFT", "view.speed", "step", -4), ("hat:RIGHT", "view.speed", "step", 4),
+        ("hat:LEFT", "preset.list.prev", "hold"), ("hat:RIGHT", "preset.list.next", "hold"),
     ]
     return [Binding(src, pid, op, *arg) for src, pid, op, *arg in rows]
 
@@ -1272,7 +1287,8 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
     since plan 13 WP2, any row on a ``theme.*`` param moved to the
     ``preset.*`` param of the same slot (THEME_TO_PRESET); the pad's four
     old factory rows (and B / X's bank rows) moved to the layout of
-    2026-10-14 (PAD_REMAP); the track faders' eight invariant audio rows
+    2026-10-14, and the preset walk to the d-pad held (2026-10-29)
+    (PAD_REMAP); the track faders' eight invariant audio rows
     moved to the SHIFT layer (FADER_SHIFT_ROWS, plan 24 C2).
     Idempotent: a second pass finds every old row gone
     and every source taken. Returns (rows, a note per change).
@@ -1313,8 +1329,10 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
                              "2026-10-14: the button is free)")
                 continue
             target, op, value = hit
+            when = ("2026-10-29" if hit in PRESET_WALK_REMAP.values()
+                    else "2026-10-14")
             notes.append(f"remapped {b.source}: {b.target} → {target} (the pad layout "
-                         "of 2026-10-14)")
+                         f"of {when})")
             b = replace(b, target=target, op=op, value=value)
         elif b.target in THEME_TO_PRESET:
             target = THEME_TO_PRESET[b.target]
@@ -1336,7 +1354,8 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
         if source in used:
             continue
         out.append(Binding(source, target, op, value))
-        notes.append(f"added {source} → {target} (the pad layout of 2026-10-14)")
+        when = "2026-10-29" if target == "edit.undo" else "2026-10-14"
+        notes.append(f"added {source} → {target} (the pad layout of {when})")
     # a key row is taken by its chord, however its modifiers are ordered:
     # "key:SUPER+SHIFT+Z" holds ⌘⇧Z as "key:SHIFT+SUPER+Z" does
     chords = {(b.key_name, b.modifiers) for b in out if b.scheme == "key"}
