@@ -115,16 +115,23 @@ wisprflow.ai's own SVG (`geometry.FLOW_BARS`). It comes in two forms,
 prisms:
 
 - **Flow mark** (100) is the mark as drawn: five stadium outlines in one
-  plane, one face each. Its face UVs are the mark's own plane, so a face
-  pattern or a bitmap reads as one picture through the five bars.
-- **Flow capsules** (101) lifts each bar into a capsule. Its face UVs
-  wrap each bar (u round it, v along it), so a pattern turns with the bar
-  instead of tiling every quad.
+  plane, one face each.
+- **Flow capsules** (101) lifts each bar into a capsule.
 
-The renderer needed one change: a plane figure has no depth of its own,
-so its depth cue now spans the unit sphere back from its nearest point
-(`"flat"`). Face-on it draws at full weight, and a tilt dims its far
-side. Neither form draws points.
+Two renderer changes came with it, both for every shape, not the mark
+alone:
+
+- **`fx.face_map` "across".** Besides per face and screen, a picture
+  (or a pattern wired straight in) can be laid over the whole shape from
+  the front and pinned to it, so it turns with the shape
+  (`geometry.shape_uvs`). On the flat mark that is one picture through
+  the five bars.
+- **The depth cue's floor** (`render.DEPTH_FLOOR`). The cue spreads over
+  a shape's own depth, which is nothing for a shape flat toward the eye
+  (the Orbit face-on, the flat mark), so those drew at their dimmest. The
+  cue now never spreads over less than 1.0; a deeper pose draws as before.
+
+Neither form draws points.
 
 ![The Flow mark with the PLAID pattern through its bars; the capsules with BLOOM, turned](assets/28-catalog/flow-mark-and-capsules.png)
 

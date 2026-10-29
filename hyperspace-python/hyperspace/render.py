@@ -120,7 +120,7 @@ from .field import (  # noqa: F401 — re-exported: the layouts were render.py's
     inst_positions,
 )
 from .field import is_3d as is_3d_layout
-from .fx import SCREEN, FxChain, FxState
+from .fx import ACROSS, SCREEN, FxChain, FxState
 from .geometry import (
     EYE_DISTANCE,
     EYE_FAR,
@@ -132,6 +132,7 @@ from .geometry import (
     face_uvs,
     geom,
     model_matrix,
+    shape_uvs,
     shape_world,
 )
 from .ghost import Ghost, GhostState
@@ -187,6 +188,13 @@ SIZED_KEEP_FRAMES = 30
 PATTERNS_GLSL = Path(__file__).parent / "shaders" / "patterns.glsl"
 
 BG = (0.0, 0.0, 0.0)
+
+# the least depth the cue spreads over (draw_scene), in the shapes' unit
+# (circumradius 1): a shape thinner than this toward the eye — flat, or
+# turned flat — is cued over this much from its nearest point instead of
+# over its own sliver. Over 40 random poses of every shape, 12 shapes are
+# ever thinner and 1.2 % of poses
+DEPTH_FLOOR = 1.0
 
 # FACE_PIC (graph.py's, imported above): the side, in texels, of the
 # picture the faces show while something other than the pattern is wired
@@ -3018,6 +3026,17 @@ class Renderer:
         g = getattr(self, "scene_ground", None)
         return float(g) if g is not None else float(getattr(self, "bg_alpha", 1.0))
 
+    def _face_map(self) -> int:
+        """`fx.face_map`: per face, screen or across the shape."""
+        return int(getattr(self.fx.state, "face_map", 0))
+
+    def _face_uv(self, shape: int) -> np.ndarray:
+        """The faces' UVs for this frame: each face's own (`face_uvs`, every
+        face the whole picture), or across the shape the shape's own front
+        view (`shape_uvs`, one picture pinned to the shape) — for a picture
+        wired into the faces and a pattern wired straight in alike."""
+        return shape_uvs(shape) if self._face_map() == ACROSS else face_uvs(shape)
+
     def draw_scene(
         self, s: ViewState, w: int, h: int, dpr: float = 1.0,
         t_now: float | None = None, clear: bool = True,
@@ -3079,12 +3098,14 @@ class Renderer:
 
         near, far = pd.min(), pd.max()
         span = max(far - near, 1e-6)
-        if g.get("flat"):
-            # a flat vector (the Flow mark) has no depth of its own, so its
-            # own span would put it at the cue's dimmest face-on: the cue
-            # spans the unit sphere's diameter back from its nearest point,
-            # so face-on it draws at full weight and a tilt dims its far side
-            near, span = far - 2.0, 2.0
+        if span < DEPTH_FLOOR:
+            # a shape turned flat toward the eye (the Orbit face-on, the Flow
+            # mark) has almost no depth, and stretching that sliver over the
+            # whole cue would put it at its dimmest: the cue never spans less
+            # than DEPTH_FLOOR back from the nearest point. Face-on it draws
+            # at full weight, a tilt dims its far side; a shape any deeper
+            # draws as it always did
+            near, span = far - DEPTH_FLOOR, DEPTH_FLOOR
         E = g["E"]
         edepth = (pd[E[:, 0]] + pd[E[:, 1]]) * 0.5
         order = np.argsort(edepth, kind="stable")  # painter: far first
@@ -3203,7 +3224,7 @@ class Renderer:
                     to = tris[torder]
                     if st is not None:
                         fa = fa * st["f_alpha"][to[:, 3]]
-                    uv = face_uvs(s.shape).reshape(-1, 3, 2)[torder]
+                    uv = self._face_uv(s.shape).reshape(-1, 3, 2)[torder]
                     fverts = np.empty((len(tris) * 3, 8), dtype=np.float32)
                     for corner in range(3):
                         fverts[corner::3, 0:3] = P[to[:, corner]]
@@ -3233,7 +3254,7 @@ class Renderer:
                         p["u_pic_on"].value = 0
                     else:
                         pic.use(location=1)
-                        screen = int(getattr(self.fx.state, "face_map", 0)) == SCREEN
+                        screen = self._face_map() == SCREEN
                         p["u_pic_on"].value = 2 if screen else 1
                         p["u_pic_fb"].value = tuple(float(x) for x in self.scene.size)
                     self._fvao.render(moderngl.TRIANGLES, vertices=len(fverts), instances=copies)

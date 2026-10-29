@@ -697,13 +697,13 @@
   "n": 130,
   "m": 130,
   "faces": 5,
-  "sha256": "b2fa5f4962f6f67c9de31bbfb8b73fb84f4235c82386e45db1eacff39f89c07f"
+  "sha256": "2844a9eed1b2868bb864913ab08caed3adec403f115dfd863b948a44dea292b4"
  },
  "100": {
   "name": "Flow capsules",
   "n": 970,
   "m": 2000,
   "faces": 1040,
-  "sha256": "9b0df510973f0a47c0b3bc45efcc518d39ffb8f3a9d7cda566a9fa7cbc15db59"
+  "sha256": "af8dbd44e3df7f99bcb6924b562a8b39239a30e3fb048816dfa15fd341fbf62d"
  }
 }

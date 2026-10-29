@@ -73,7 +73,15 @@ writes the result back, so `ViewState.ang`, the integrator and every
 `rot.*` param are untouched. A 3D shape's depth cue (`pd`: the line
 fade, width and draw order) reads its depth toward the 3D camera —
 `geometry.view_depth`, z after the camera's yaw and pitch — since its w
-is 0. On the VIEW page the header says 3D or 4D, the Shape menu lists
+is 0. The cue spreads over the shape's own depth, nearest to farthest,
+but never over less than `render.DEPTH_FLOOR` (1.0, in the shapes' unit):
+a shape turned flat toward the eye (the Orbit face-on, the Flow mark)
+is cued over that much from its nearest point, so it draws at full
+weight instead of its dimmest, and a tilt dims its far side. Over 40
+random poses of every shape, 12 shapes are ever thinner than the floor,
+in 1.2 % of poses; any deeper pose draws as it always did
+(`tests/test_render.py::test_a_shape_flat_toward_the_eye_draws_at_full_weight`,
+`::test_the_depth_floor_leaves_a_deep_shape_as_it_was`). On the VIEW page the header says 3D or 4D, the Shape menu lists
 the 4D shapes and then the 3D ones under their own headings (the index
 stays the identity), and the W plane keys dim while they can do nothing.
 
@@ -256,15 +264,12 @@ taken from wisprflow.ai's SVG (`geometry.FLOW_BARS`, each bar's centre
 and ends on the 28-unit artboard; `FLOW_R` their end radius). **Flow
 mark** is the mark as drawn, five stadium outlines in the z = 0 plane,
 one face each. **Flow capsules** lifts each bar into a capsule round its
-own axis. Neither draws points. Each builder gives its own face UVs
-(`"FUV"`, which `face_uvs` uses as given). The mark's are its own plane,
-so a face pattern or a bitmap shows through the five bars as one picture.
-The capsules' wrap each bar, u round it and v along it. A plane figure
-has no depth of its own, so its depth cue (`"flat"`) spans the unit
-sphere's diameter back from its nearest point. Face-on it draws at full
-weight, and a tilt dims its far side
-(`tests/test_catalog.py::test_the_flow_mark_is_five_stadia_as_the_svg_draws_them`
-and the two after it, `tests/test_render.py::test_a_flat_vector_draws_at_full_weight_face_on`).
+own axis. Neither draws points. They need nothing of their own from the
+renderer: `fx.face_map` "across" lays one picture through the mark's
+five bars, as on any shape, and the depth cue's floor keeps the flat
+mark at full weight face-on (§1, the depth cue)
+(`tests/test_catalog.py::test_the_flow_mark_is_five_stadia_as_the_svg_draws_them`,
+`::test_the_flow_capsules_are_the_marks_bars_lifted`).
 A browser prototype of their looks (flat ↔ capsules, materials,
 textures, bars moving to audio) is in
 [`prototypes/subjects/`](../../prototypes/subjects/).
@@ -928,8 +933,14 @@ error skips the pass.
   from `pattern` through effects, the pattern is painted into the first
   half-float texture, the effects run in turn and the last writes the
   1024² `face_pic` (`graph.FACE_PIC`); wired from anything else that
-  picture is `u_pic`. `fx.face_map` (per face, or screen) says how the
-  faces show it. The faces are translucent, so an effect reads faint
+  picture is `u_pic`. `fx.face_map` says how the faces show it: per
+  face (every face the whole picture), screen (the faces windows onto a
+  picture that stays still), or across (one picture laid over the whole
+  shape from the front and pinned to it: `geometry.shape_uvs`, each face
+  corner's place in the shape's front view at rest, its widest extent 0
+  to 1). Across also lays a pattern wired straight in over the shape
+  (`tests/test_catalog.py::test_across_the_shape_is_its_own_front_view`,
+  `tests/test_render.py::test_across_the_shape_feeds_the_faces_the_shapes_own_uvs`). The faces are translucent, so an effect reads faint
   there; Brightness lifts them. With a picture wired in, every face
   shows face 0's pattern phase; the echoes and the dream carry the
   faces' picture, never the frame's effects. The faces' effects are graph

@@ -71,8 +71,8 @@ from .glsl import QUAD_VS, common, common_mtime, gl_error
 FX_DIR = Path(__file__).parent / "shaders" / "fx"
 LIB_FILE = "_lib.glsl"          # helpers prepended to every effect; not an effect
 BLENDS = ["mix", "add", "screen", "multiply"]
-FACE_MAPS = ["per face", "screen"]   # fx.face_map's choices: how the faces show their picture
-PER_FACE, SCREEN = 0, 1
+FACE_MAPS = ["per face", "screen", "across"]   # fx.face_map's choices: how the faces show it
+PER_FACE, SCREEN, ACROSS = 0, 1, 2
 # the per-effect params' names — and `order` / `target`, retired (plan 33)
 # but still in old presets as `fx.<n>.order`: a uniform of either name
 # would read as the retired id, so neither is ever a key
@@ -485,7 +485,9 @@ def declare(r, fx: FxState, names: set[str] | None = None) -> None:
                tip="How a picture wired into the faces sits on the shape: per face, every "
                    "face carries the whole picture and it turns with the shape; screen, "
                    "the faces are windows onto one picture that stays still while the "
-                   "shape moves across it.")
+                   "shape moves across it; across, one picture laid over the whole shape "
+                   "from the front, pinned to it, so it turns with the shape. Across "
+                   "lays a pattern wired straight in over the shape the same way.")
         names = set(fx.specs)
     for name in sorted(names):
         # this effect's own ids, `fx.<name>.<key>` (a key has no dot) —

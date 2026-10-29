@@ -1200,9 +1200,7 @@ def _flow_bars():
 
 def _build_flow_mark(n_cap: int = 12) -> dict:
     """The mark as drawn: five stadium outlines in the z = 0 plane, each one
-    face. A flat vector, so its face UVs are the mark's own plane — a face
-    pattern or a bitmap shows through the five bars as one picture — and
-    it draws no points: its outline's samples are not corners."""
+    face. It draws no points: its outline's samples are not corners."""
     V: list = []
     E: list = []
     F: list = []
@@ -1215,20 +1213,14 @@ def _build_flow_mark(n_cap: int = 12) -> dict:
         V.extend([px, py, 0.0, 0.0] for px, py in ring)
         E.extend([off + k, off + (k + 1) % len(ring)] for k in range(len(ring)))
         F.append(list(range(off, off + len(ring))))
-    P = np.asarray(V)[:, :2]
-    lo, span = P.min(axis=0), np.ptp(P, axis=0).max()
-    uv = (P - lo) / span + (1.0 - np.ptp(P, axis=0) / span) / 2   # centred, square
-    return {"V": V, "E": E, "F": F, "FUV": [uv[c].tolist() for c in F], "curve": True,
-            "flat": True}
+    return {"V": V, "E": E, "F": F, "curve": True}
 
 
 def _build_flow_capsules(m: int = 16, n_cap: int = 6) -> dict:
     """The mark lifted into 3D: each bar a capsule round its own axis —
     a hemisphere, the cylinder between the ends' centres, a hemisphere —
-    m segments round and n_cap rings over each end. Its face UVs wrap each
-    capsule: u round the bar, v along it, so a pattern turns with the bar
-    instead of tiling every quad."""
-    parts, fuv = [], []
+    m segments round and n_cap rings over each end."""
+    parts = []
     for x, y0, y1 in _flow_bars():
         prof = [(FLOW_R * math.sin(p), y0 - FLOW_R * math.cos(p))
                 for p in (math.pi / 2 * k / n_cap for k in range(n_cap + 1))]
@@ -1236,22 +1228,10 @@ def _build_flow_capsules(m: int = 16, n_cap: int = 6) -> dict:
                  for p in (math.pi / 2 * (1 + k / n_cap) for k in range(n_cap + 1))]
         grid = [[(x + rho * math.cos(a), y, rho * math.sin(a)) for rho, y in prof]
                 for a in (2 * math.pi * j / m for j in range(m))]
-        g = _mesh3(grid, wrap_u=True, wrap_v=False)[0]
-        Vb = np.asarray(g["V"])
-        lo, hi = y0 - FLOW_R, y1 + FLOW_R
-        for cyc in g["F"]:
-            P = Vb[cyc]
-            rho = np.hypot(P[:, 0] - x, P[:, 2])
-            u = (np.arctan2(P[:, 2], P[:, 0] - x) / (2 * math.pi)) % 1.0
-            side = rho > 1e-9
-            if side.any() and np.ptp(u[side]) > 0.5:   # the seam: 0 is 1 there
-                u = np.where(u < 0.5, u + 1.0, u)
-            u = np.where(side, u, u[side].mean())      # a pole takes its quad's angle
-            fuv.append(np.stack([u, (P[:, 1] - lo) / (hi - lo)], axis=1).tolist())
-        parts.append(g)
+        parts.append(_mesh3(grid, wrap_u=True, wrap_v=False)[0])
     # a smooth surface's samples are not corners: drawn without points,
     # which would bunch into a blot at each pole
-    return {**_merge(parts), "FUV": fuv, "curve": True}
+    return {**_merge(parts), "curve": True}
 
 
 def _kepler_layers() -> tuple:
@@ -1576,10 +1556,6 @@ def _geom_build(i: int) -> dict:
         out["F"] = g["F"]
     if g.get("curve"):  # a curve's samples are not corners: no points drawn
         out["curve"] = True
-    if g.get("flat"):  # a plane figure: the depth cue spans the unit sphere (render)
-        out["flat"] = True
-    if "FUV" in g:  # a face's UVs given by its builder (a vector subject's)
-        out["FUV"] = g["FUV"]
     if "layers" in g:  # a scene: whose rows are whose, and how each draws
         out.update(_scene_style(g["layers"], len(g["V"]), len(g["E"]), len(g["F"])))
     return out
@@ -1920,8 +1896,7 @@ def face_uvs(i: int) -> np.ndarray:
     the circumradius spans 0.5 about a (0.5, 0.5) centre with CCW winding.
     Congruent faces therefore carry identical UV polygons (up to the cycle's
     n-fold starting rotation), which is what makes one pattern land with the
-    same scale and framing on every face. A builder that gives its own
-    ("FUV": the vector subjects) has them used as given.
+    same scale and framing on every face.
     """
     uv = _uv_cache.get(i)
     if uv is not None:
@@ -1936,11 +1911,7 @@ def _face_uvs_build(i: int) -> np.ndarray:
     g = geom(i)
     V = g["V"]
     per_face: list[np.ndarray] = []
-    if "FUV" in g:
-        # the builder's own: one picture across a flat mark, a wrap round a
-        # capsule — each corner's UV, in its face cycle's order
-        per_face = [np.asarray(f, dtype=np.float64) for f in g["FUV"]]
-    for cyc in faces(i)[len(per_face):]:
+    for cyc in faces(i):
         xy = _face_xy(V[np.asarray(cyc)])   # the face in its own CCW 2-plane basis
         r = np.linalg.norm(xy, axis=1).max()
         per_face.append(xy / (2 * r) + 0.5)
@@ -1954,6 +1925,29 @@ def _face_uvs_build(i: int) -> np.ndarray:
         uv[t_i * 3 + 1] = fuv[pos[int(b)]]
         uv[t_i * 3 + 2] = fuv[pos[int(c)]]
     return uv
+
+
+_shape_uv_cache: dict[int, np.ndarray] = {}
+
+
+def shape_uvs(i: int) -> np.ndarray:
+    """UVs across the whole shape for face_triangles(i), in face_uvs'
+    layout: float64 (T*3, 2) in [0,1]. Each corner's place in the shape's
+    own front view (x, y at rest), the shape's widest extent spanning 0
+    to 1 about the centre of its box, so one picture is laid over the
+    shape from the front and turns with it (fx.face_map "across")."""
+    uv = _shape_uv_cache.get(i)
+    if uv is not None:
+        return uv
+    with _lock(i):
+        if i not in _shape_uv_cache:
+            xy = geom(i)["V"][:, :2]
+            lo, hi = xy.min(axis=0), xy.max(axis=0)
+            span = max(float((hi - lo).max()), 1e-9)
+            at = (xy - (lo + hi) / 2) / span + 0.5
+            corners = face_triangles(i)[:, :3].reshape(-1)
+            _shape_uv_cache[i] = at[corners]
+        return _shape_uv_cache[i]
 
 
 def warm(i: int) -> None:
