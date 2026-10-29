@@ -158,6 +158,11 @@ def test_duration_and_bounce_are_exactly_a_frequency_and_a_damping_ratio():
             pytest.approx((dur, bounce))
     m = Motion("spring", dur=0.5, bounce=0.3)
     assert (m.hz, m.damp) == pytest.approx((2.0, 0.7))
+    # no frequency is no motion, both ways: duration 0
+    assert motion.spring_feel(0.0, 0.7) == (0.0, pytest.approx(0.3))
+    assert motion.spring_hz(0.0, 0.3)[0] == 0.0
+    # every spring the old Hz knob reached (0.1–12 Hz) is a duration the panel holds
+    assert motion.DUR_MIN <= 1 / 12 and 1 / 0.1 <= motion.DUR_MAX
     assert Motion().hz == pytest.approx(1.5) and Motion().damp == pytest.approx(0.6)
 
 
@@ -181,6 +186,24 @@ def test_a_spring_written_as_hz_and_damping_reads_as_the_same_spring():
     # the new knobs win over stale ones beside them
     both = Motion.from_json({"mode": "spring", "dur": 1.0, "bounce": 0.0, "hz": 9})
     assert (both.dur, both.bounce) == (1.0, 0.0)
+
+
+def test_an_old_shows_stick_spring_ids_read_as_todays():
+    """A show saved before 2026-10-29 holds `desk.pad.hz` / `.damp`; its
+    session reads them as today's duration and bounce, each on its own."""
+    from hyperspace import routing
+    old = {"desk.pad.hz": 2.0, "desk.pad.damp": 0.7, "desk.pad.feel": 2, "view.bright": 0.4}
+    new = routing.renamed_session(old)
+    assert new == {"desk.pad.duration": pytest.approx(0.5), "desk.pad.bounce": pytest.approx(0.3),
+                   "desk.pad.feel": 2, "view.bright": 0.4}
+    assert "desk.pad.hz" in old                                   # left as it was
+    assert routing.renamed_session({"desk.pad.damp": 2.0}) == \
+        {"desk.pad.bounce": pytest.approx(-0.5)}                  # creeps: below 0
+    assert routing.renamed_session({"desk.pad.hz": 2.0, "desk.pad.duration": 1.0}) == \
+        {"desk.pad.duration": 1.0}                                # today's wins
+    assert routing.renamed_session({"desk.pad.damp": "loose"}) == {}
+    same = {"view.bright": 0.4}
+    assert routing.renamed_session(same) is same
 
 
 # ---- the feel on file ----
@@ -274,6 +297,27 @@ def test_a_row_that_stops_acting_starts_afresh_from_rest(rig):
     assert rig.router._movers == {}
     _frame(rig, 1.0)                     # back: glides in from the base again
     assert p.eff_norm == pytest.approx(0.2 + pole(0.5, 1.0, DT, 0.5) - 0.5)
+
+
+def test_a_row_that_does_not_act_has_no_felt_value(rig):
+    """`Router.felt_now`, what the panel's live plot reads: the row's
+    follower after this frame's pass, None for a row that did not act —
+    disabled, or its gate shut — and for one with no feel."""
+    p = _push(rig, Motion("follow", atk=0.2, rel=0.2))
+    b = rig.table.routes()[-1]
+    _frame(rig, 0.9)
+    assert rig.router.felt_now(b) == pytest.approx(pole(0.5, 0.9, DT, 0.2))
+    b.enabled = False
+    _frame(rig, 0.9)
+    assert rig.router.felt_now(b) is None
+    b.enabled, b.when = True, "lfo:1"     # gated on a lane that reads off
+    rig.router.feed("lfo", [0.9, 0.0])
+    rig.router.modulate(None, DT)
+    assert rig.router.felt_now(b) is None
+    plain = Binding("lfo:0", "view.bright", "push", 1.0)
+    rig.table.add(plain)
+    _frame(rig, 0.9)
+    assert rig.router.felt_now(plain) is None and p is not None
 
 
 def test_a_position_row_glides_in_from_the_base(rig):

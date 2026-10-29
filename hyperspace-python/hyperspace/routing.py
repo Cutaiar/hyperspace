@@ -1756,6 +1756,34 @@ def _register_pad_feel(reg: Registry, table: Bindings) -> None:
                        "overshoots and rings; below 0 it creeps.")
 
 
+
+# the stick spring's session params before 2026-10-29 — a natural frequency
+# and a damping ratio: an old show's values read as the perceptual knobs
+# (`renamed_session`), and its file is kept before a save drops them
+# (library.SPRING_BACKUP)
+PAD_FEEL_OLD = (f"{PAD_FEEL}.hz", f"{PAD_FEEL}.damp")
+
+
+def renamed_session(session: dict) -> dict:
+    """A show's session with the stick spring's old values (`desk.pad.hz`,
+    `desk.pad.damp`) as today's `desk.pad.duration` and `desk.pad.bounce`,
+    each on its own and exactly (`motion.spring_feel`); a value the
+    session already holds under today's id wins, one that is no number is
+    dropped. The session given is left as it is."""
+    hz_id, damp_id = PAD_FEEL_OLD
+    if hz_id not in session and damp_id not in session:
+        return session
+    out = {k: v for k, v in session.items() if k not in PAD_FEEL_OLD}
+    for old, new, part in ((hz_id, f"{PAD_FEEL}.duration", 0), (damp_id, f"{PAD_FEEL}.bounce", 1)):
+        if old not in session or new in out:
+            continue
+        try:
+            v = float(session[old])
+        except (TypeError, ValueError):
+            continue
+        out[new] = motion.spring_feel(v, 1.0)[0] if part == 0 else motion.spring_feel(1.0, v)[1]
+    return out
+
 def legacy_planedrive(lanes, gain: float = 1.0) -> np.ndarray:
     """The reference's PLANEDRIVE from six lanes — what the legacy6 routes
     must land on rot.rate.* (tests/test_core.py computes it from the

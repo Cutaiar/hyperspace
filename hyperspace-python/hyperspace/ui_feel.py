@@ -29,8 +29,9 @@ The panel samples as it draws (`sample`: one Trace per plot, held on the
 panel), so a live plot fills while it is on screen and the Router keeps
 nothing for it. The shape's time axis fits the feel (`window`, out to
 where it has settled) and the live plot shows twice that (`span`), so a
-lazy feel and a tight one both read.
-Everything but `shape`, `live` and `draw` is pure.
+lazy feel and a tight one both read. The geometry (`window`, `curve`,
+`span`, `Trace`, `busiest`) is pure; `sample` keeps the traces on the
+panel; the rest draws.
 """
 
 from __future__ import annotations
@@ -148,8 +149,15 @@ class Trace:
             self.pts.popleft()
 
     def since(self, now: float, s: float) -> list[tuple[float, float, float]]:
-        """The samples of the last `s` seconds."""
-        return [p for p in self.pts if p[0] >= now - s]
+        """The samples of the last `s` seconds, oldest first — read from the
+        newest back, so a short span costs what it shows."""
+        out = []
+        for p in reversed(self.pts):
+            if p[0] < now - s:
+                break
+            out.append(p)
+        out.reverse()
+        return out
 
     @property
     def last(self) -> float:

@@ -46,9 +46,9 @@ MODES = ("off", "follow", "spring")
 
 ATK_MAX = 2.0        # s — the panel's throws; a file may hold more
 REL_MAX = 4.0
-HZ_MIN, HZ_MAX = 0.1, 12.0       # the kernel's; a file's hz / damp convert (Motion.from_json)
-DAMP_MAX = 3.0
-DUR_MIN, DUR_MAX = 0.05, 4.0     # s — the panel's spring throws; 1 / HZ_MAX … under 1 / HZ_MIN
+# s — the panel's spring throws: 20 Hz … 0.1 Hz, the slowest the Hz knob
+# before 2026-10-29 reached, so an old file's spring still reads as it was
+DUR_MIN, DUR_MAX = 0.05, 10.0
 BOUNCE_MIN, BOUNCE_MAX = -0.75, 0.95     # ζ 4 … ζ 0.05
 # the named springs: perceptual duration (s), bounce. Apple's smooth and
 # bouncy, a snappier snappy, and two slower ends of the range
@@ -125,7 +125,7 @@ def spring_hz(dur: float, bounce: float) -> tuple[float, float]:
 def spring_feel(hz: float, damp: float) -> tuple[float, float]:
     """The kernel's (hz, damp) as a perceptual duration and a bounce —
     `spring_hz` inverted, for a file written with hz / damp."""
-    dur = 1.0 / hz if hz > 0 else DUR_MAX
+    dur = 1.0 / hz if hz > 0 else 0.0          # no frequency: no motion, as duration 0 is
     bounce = 1.0 - damp if damp <= 1 else 1.0 / damp - 1.0
     return dur, bounce
 

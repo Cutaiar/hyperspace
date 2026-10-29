@@ -1040,7 +1040,8 @@ def _feel_chip(router: Router, b: Binding, width: float) -> None:
         ui.tooltip("Feel: how the reading travels before it acts\n"
                           "follow  the analyzer's envelope: attack away from rest,\n"
                           "        release back toward it, so a stick let go glides home\n"
-                          "spring  a damped spring toward the reading, rings below 1\n"
+                          "spring  a damped spring toward the reading: bounce 0 lands,\n"
+                          "        above it overshoots and rings, below it creeps\n"
                           f"now: {now}\n"
                           "click to cycle auto, follow, spring, still")
 

@@ -1,7 +1,6 @@
 """A feel drawn (ui_feel): its shape — motion.response across a time axis
-fitted to the feel, a spring's step, a follow's push and let-go — with the
-live feel's dot riding it from each jump of the reading; and the feel
-working live, the reading and what the feel makes of it, sampled from the
+fitted to the feel, a spring's step, a follow's push and let-go — static,
+and the spring presets' picker drawing each one's; and the feel working live, the reading and what the feel makes of it, sampled from the
 Router as the panel draws — a route row's own feel, a smooth modifier's,
 the pad's. The panel still fits its window."""
 
