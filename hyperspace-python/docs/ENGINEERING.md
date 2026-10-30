@@ -1686,7 +1686,7 @@ the panel at 540 and the desk takes what is left.
 
 Its fit at the control size is held by
 `tests/test_ui_patterns.py::test_the_page_fits_with_every_row_driven_and_flat_or_the_longest_mode`,
-but in font metrics that are not the Mac's (hand check 120).
+in the bundled fonts' metrics, which are the Mac's too (§16).
 
 **The GRAPH page** (`ui_graph.py` over the model `graphview.py`, plan
 28; `imgui_bundle.imgui_node_editor`, its settings file off). One canvas
@@ -2924,11 +2924,14 @@ uv run ruff check .
 - The patterns: `tests/test_patterns.py` holds the shader to
   `patterns.py`'s table and checks every input moves every mode;
   `test_the_face_shaders_pass_the_reference_compiler` runs
-  `glslangValidator` and skips where it is missing. Fit tests measure in
-  this machine's font metrics. Off the Mac `ui.py` falls back to DejaVu,
-  which is wider: a test that holds a line whole (or every desk glyph
-  drawn) holds it on the Mac and accepts the fitted form elsewhere
-  (`tests/fonts.py`: `MAC_FONTS`, `as_drawn`).
+  `glslangValidator` and skips where it is missing.
+- The fonts: the panel draws only the faces in `hyperspace/fonts/`
+  (Inter Medium for words, Inter Bold for the tracked labels, JetBrains
+  Mono SemiBold for numbers, DejaVu Sans merged behind all three for
+  the symbols they lack; its README has sources and licences), never a
+  system font, so a fit test measures the same on the Mac and in CI and
+  holds every line whole everywhere. A fit test that breaks is fixed in
+  the layout, not loosened. `ghost.py`'s labels use the same Inter Bold.
 - The golden frames: `tests/test_golden_frames.py` compares 596
   full-resolution frames — every corpus preset in every output state,
   hands absent and present, the other wirings, the fixture presets and a
@@ -3014,7 +3017,7 @@ four cores.
   same run on a Linux machine:
 
   ```bash
-  sudo apt-get install libasound2-dev libportaudio2 libgl-dev xvfb fonts-dejavu-core glslang-tools
+  sudo apt-get install libasound2-dev libportaudio2 libgl-dev xvfb glslang-tools
   export UV_NO_GROUP="hands dream"
   uv sync --locked
   xvfb-run -a uv run pytest -q --timeout 120
@@ -3081,9 +3084,9 @@ What only a person at the machine can check is
 - **On a 3D shape, the W planes' readouts keep counting**: `rot.phase.*`
   and ROUTING show the W planes turning though the shape does not; only
   the VIEW page's dimmed W keys say they do nothing.
-- **The FACES page's fit and `patterns.glsl` on Apple's GL are
-  unverified**: both were checked only in a container with Mesa and
-  other font metrics (hand checks 120, 121).
+- **`patterns.glsl` on Apple's GL is unverified**: it was checked only
+  in a container with Mesa (hand check 121). The FACES page's fit is
+  held in the bundled fonts, the same on the Mac (§16).
 - The amber "filled" pad light and the save-as blink use Akai's
   documented velocities and have not been confirmed on an APC40 mk1.
 - Open findings in [`AUDIT-2026-09.md`](AUDIT-2026-09.md): R13, R14,

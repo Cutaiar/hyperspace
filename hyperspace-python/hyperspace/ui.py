@@ -121,33 +121,25 @@ RAIL_DOT_R = 5.0
 # moving number does not jitter), BIG for the signature cell-count
 # readout. With the 1.92 dynamic atlas each face renders at every size.
 #
-# Weight is what makes type read at a distance. The SF faces are variable
-# fonts and FreeType picks a named instance from the high 16 bits of the
-# face index: SF Rounded's list runs Ultrathin … Black, so 6 is Medium and
-# 8 Bold; SF Mono's runs Light … Heavy, so 4 is Semibold.
+# The faces ship in hyperspace/fonts/ (its README: sources, licences), so
+# the panel draws, and the tests measure, the same on every machine.
+# Weight is what makes type read at a distance: Inter Medium for words,
+# Bold for the small labels, JetBrains Mono SemiBold for numbers.
 
 FONT_BASE = 16.0
 FONT_MICRO = 12.5
 FONT_NUM = 16.0
 FONT_BIG = 52.0
 
-_SF_ROUNDED = "/System/Library/Fonts/SFNSRounded.ttf"
-_SF_MONO = "/System/Library/Fonts/SFNSMono.ttf"
+_FONT_DIR = os.path.join(os.path.dirname(__file__), "fonts")
 # (path, face index) per role; the first that exists wins
 _FONT_CANDIDATES = {
-    "ui": [(_SF_ROUNDED, 6 << 16), ("/System/Library/Fonts/Avenir Next.ttc", 5),
-           ("C:/Windows/Fonts/seguisb.ttf", 0),
-           ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 0)],
-    "micro": [(_SF_ROUNDED, 8 << 16), ("/System/Library/Fonts/Avenir Next.ttc", 0),
-              ("C:/Windows/Fonts/segoeuib.ttf", 0),
-              ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 0)],
-    "num": [(_SF_MONO, 4 << 16), ("/System/Library/Fonts/Menlo.ttc", 1),
-            ("C:/Windows/Fonts/consolab.ttf", 0),
-            ("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", 0)],
+    "ui": [(os.path.join(_FONT_DIR, "Inter-Medium.ttf"), 0)],
+    "micro": [(os.path.join(_FONT_DIR, "Inter-Bold.ttf"), 0)],
+    "num": [(os.path.join(_FONT_DIR, "JetBrainsMono-SemiBold.ttf"), 0)],
 }
-# glyphs a face lacks (arrows, ⇧, ●, ×) come from these, merged in behind it
-_FALLBACKS = [(_SF_MONO, 3 << 16), ("/System/Library/Fonts/Menlo.ttc", 0),
-              ("/System/Library/Fonts/Apple Symbols.ttf", 0)]
+# glyphs a face lacks (planet symbols, ⊂, ◌, ▾) come from these, merged in behind it
+_FALLBACKS = [(os.path.join(_FONT_DIR, "DejaVuSans.ttf"), 0)]
 
 _FONTS: dict[str, imgui.ImFont | None] = {"ui": None, "micro": None, "num": None}
 

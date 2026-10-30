@@ -14,7 +14,6 @@ import json
 from dataclasses import replace
 
 import pytest
-from fonts import as_drawn
 from imgui_bundle import imgui
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
@@ -552,7 +551,7 @@ def test_the_routing_page_is_one_page_over_the_loaded_preset(rig, tmp_path, monk
     assert "bindings" not in lib.kinds                         # no routing-preset strip
     # the routes: a pointer to GRAPH (plan 28 N7), where each row is drawn —
     # with the macro's chip
-    assert as_drawn(texts, ui_routing.POINTER) and "× macro.1" not in texts
+    assert ui_routing.POINTER in texts and "× macro.1" not in texts
     rows(panel)
     assert "view.bright" in previews and "× macro.1" in texts
     # the desk: its rows by glyph (plan 14 WP7: D1 is device knob 1, G5·9
@@ -927,7 +926,7 @@ def test_a_filtered_page_draws_only_matching_lines_and_keeps_its_ids(rig, monkey
     assert texts.count(ui_routing.NO_MATCH) == 1
     assert "invariant · both layers" not in texts
     assert f"3 of {total} rows" in texts
-    assert not as_drawn(texts, ui_routing.POINTER)           # the unfiltered line is gone
+    assert ui_routing.POINTER not in texts          # the unfiltered line is gone
     dup = {i for i in ids if ids.count(i) > 1}
     assert len(ids) > 12 and not dup, f"conflicting ids {sorted(dup)}"
     # × on a filtered desk line (D4): that row goes, D3 stays
@@ -963,7 +962,7 @@ def test_a_filtered_page_draws_only_matching_lines_and_keeps_its_ids(rig, monkey
         lst.clear()
     frame(panel)
     assert drawn == [] and len(knobs) == 8 and len(table.routes()) == len(routes)
-    assert ui_routing.NO_MATCH not in texts and as_drawn(texts, ui_routing.POINTER)
+    assert ui_routing.NO_MATCH not in texts and ui_routing.POINTER in texts
 
 
 def test_the_filter_is_ui_state(rig, tmp_path):
@@ -1114,7 +1113,7 @@ def test_a_line_in_use_is_not_filtered_away_under_the_hand(rig, monkeypatch):
     frame(panel)
     assert len(knobs) == 8 and "×##find" not in chips and "+ route" not in chips  # (N7)
     assert not any(t.endswith(" rows") for t in texts)
-    assert as_drawn(texts, ui_routing.POINTER)          # N7: the unfiltered line
+    assert ui_routing.POINTER in texts           # N7: the unfiltered line
 
 
 # ------------------------------------------- plan 17 WP4: the picked control's line
