@@ -475,6 +475,29 @@ def screens(cfg: dict) -> list[dict]:
              **{k: oc[k] for k in PUBLISH_KEYS if isinstance(oc.get(k), str)}}]
 
 
+LAPTOP_NOTE = ("laptop: output 1 is a plain window on this screen — no fullscreen, no "
+               "overlay at launch, no later outputs; the windows open at their default "
+               "spots and where they are is not remembered")
+
+
+def laptop(cfg: dict) -> None:
+    """`hyperspace --laptop`: the rig's config read for a machine with no
+    projector — one plain render window and the controls on the one
+    screen, so a config made for the rig cannot cover the laptop black.
+    In place: output 1 neither fullscreen nor floated as the overlay at
+    launch (T and the panel still can), both windows on the primary
+    screen, every later output dropped. Publishing (syphon / ndi) and
+    output 1's switches stand. Said once in the notes."""
+    oc = cfg.get("output")
+    if not isinstance(oc, dict):
+        oc = cfg["output"] = {}
+    first = screens(cfg)[0]
+    if isinstance(oc.get("screens"), list):
+        oc["screens"] = [{**first, "monitor": -1, "fullscreen": False, "window": True}]
+    oc.update(monitor=-1, control_monitor=-1, fullscreen=False, on_start=False)
+    _note(cfg, LAPTOP_NOTE)
+
+
 def _kind_defaults(kind: str) -> dict:
     """The keys an entry of `kind` carries beyond role / kind / enabled,
     with their defaults: the old table's *defaults* (DEFAULTS, the hands'

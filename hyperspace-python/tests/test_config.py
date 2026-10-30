@@ -408,3 +408,41 @@ def test_read_devices_reports_problems_and_prints_nothing(tmp_path, capsys):
     assert [e["role"] for e in entries] == ["a"] and problems == []
     assert "[midi] must be a table" in config.load(p)["error"]
     assert capsys.readouterr().err == ""
+
+
+def test_laptop_reads_a_rig_config_for_one_screen(tmp_path, capsys):
+    """`hyperspace --laptop`: a config made for the projector rig must
+    not cover the laptop black — output 1 a plain window, no overlay at
+    launch, both windows on the primary screen, later outputs dropped;
+    publishing stands, and it is said once."""
+    p = tmp_path / "config.toml"
+    p.write_text('[output]\noverlay = true\non_start = true\ncontrol_monitor = 1\n'
+                 '[[output.screens]]\nname = "glass"\nmonitor = 1\nfullscreen = true\n'
+                 'syphon = "Glass"\n'
+                 '[[output.screens]]\nname = "projector"\nmonitor = 2\nfullscreen = true\n')
+    cfg = config.load(p)
+    capsys.readouterr()
+    config.laptop(cfg)
+    oc = cfg["output"]
+    (one,) = config.screens(cfg)
+    assert one == {**config.SCREEN, "name": "glass", "syphon": "Glass"}
+    assert (oc["monitor"], oc["control_monitor"], oc["fullscreen"], oc["on_start"]) \
+        == (-1, -1, False, False)
+    assert oc["overlay"] is True                       # T can still float it
+    assert cfg["notes"][-1] == config.LAPTOP_NOTE
+    assert capsys.readouterr().err.strip() == config.LAPTOP_NOTE
+    # no list: the scalar keys alone; any cfg, never a dead launch
+    p.write_text('[output]\nmonitor = 1\nfullscreen = true\n')
+    cfg = config.load(p)
+    config.laptop(cfg)
+    assert config.screens(cfg) == [config.SCREEN] and "screens" not in cfg["output"]
+    for odd in ({}, {"output": 3}):
+        config.laptop(odd)
+        assert config.screens(odd) == [config.SCREEN]
+
+
+def test_the_laptop_flag_and_its_alias():
+    from hyperspace.app import _args
+
+    assert not _args([]).laptop
+    assert _args(["--laptop"]).laptop and _args(["--single"]).laptop

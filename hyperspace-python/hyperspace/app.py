@@ -10,7 +10,8 @@ imgui context and GlfwRenderer. Keys are polled, not callback-driven, so
 they work from whichever window is focused (the control window defers to
 imgui while it is typing); the mouse orbits, pans and zooms in the render
 window only. overlay.py owns where the render window goes (screen,
-fullscreen, overlay) through the output.* params.
+fullscreen, overlay) through the output.* params. ``hyperspace --laptop``
+(or ``--single``) launches for one screen with no projector (config.laptop).
 
   ← / →  shape      space  pause      P  points     R  reset view
   [ / ]  brightness , / .  speed      1–6  planes   H  panel
@@ -49,6 +50,7 @@ it calls.
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import os
 import shutil
@@ -1293,15 +1295,33 @@ def _hot_error_toast(msg: str) -> None:
     imgui.end()
 
 
-def main() -> None:
+def _args(argv: list[str] | None = None) -> argparse.Namespace:
+    """The command line. ``--laptop`` (or ``--single``): no projector on
+    this machine — config.laptop reads the rig's config for one screen."""
+    p = argparse.ArgumentParser(prog="hyperspace", description="Real-time 4D polytope visualizer.")
+    p.add_argument("--laptop", "--single", action="store_true",
+                   help="one screen, no projector: the render output is a plain window "
+                        "(no fullscreen, no overlay, no later outputs) and the controls "
+                        "come to the front; the rig's remembered window spots are "
+                        "neither used nor overwritten")
+    return p.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = _args(argv)                    # before GLFW: --help prints and exits here
     if not glfw.init():
         raise SystemExit("GLFW failed to initialise")
     cfg = config.load()                   # before the windows: [output] overlay is a creation hint
+    if args.laptop:
+        config.laptop(cfg)
     home = library_home()                 # the folder config.load has just ensured
     # the render outputs (plan 21 WP3: one per [[output.screens]] entry, one
-    # with no list) and the controls; output 1's window is the render window
-    slots, ctrl_win = _windows(_overlay_allowed(cfg), cfg, home)
+    # with no list) and the controls; output 1's window is the render window.
+    # On a laptop the rig's windows.json is not read: its spots are the rig's
+    slots, ctrl_win = _windows(_overlay_allowed(cfg), cfg, None if args.laptop else home)
     render_win = slots[0].win
+    if args.laptop:
+        glfw.focus_window(ctrl_win)       # the controls in front of the render window
 
     # the render side: moderngl on output 1's context, vsynced — it renders
     # every output's frame (fork F12) and paces the loop (fork F6)
@@ -1605,6 +1625,8 @@ def main() -> None:
         return [*(sl.win for sl in slots[1:]), ctrl_win, render_win]
 
     def save_windows() -> None:           # both exits: quit below, ⌘R in _restart
+        if args.laptop:                   # the rig's spots are kept for the rig
+            return
         _save_windows(home, render_win, ctrl_win, output, [sl.output for sl in slots[1:]])
 
     host = Host(reg=reg, view=s, control=control, audio=audio, router=router,
