@@ -50,3 +50,18 @@ def test_a_control_not_drawn_is_named_in_the_error(view_page):
     d.run(d.wait(2))
     with pytest.raises(KeyError, match="view.inst_persp"):
         d.rect("view.inst_persp")
+
+
+def test_a_control_that_went_away_is_not_found_where_it_was(view_page):
+    """A control drawn once and then no longer (a lattice's depth, gone
+    with the lattice) is missing, not found at its old place — where
+    another control may be drawn now."""
+    r, d = view_page
+    r.view.instances, r.view.inst_layout = 12, NAMES.index("FCC")
+    d.run(d.wait(2))
+    assert d.rect("view.inst_persp")
+    r.view.inst_layout = NAMES.index("GRID")              # the depth slider goes
+    d.run(d.wait(2))
+    with pytest.raises(KeyError, match="view.inst_persp"):
+        d.rect("view.inst_persp")
+    assert d.rect("view.inst_spacing")                    # what is drawn still is

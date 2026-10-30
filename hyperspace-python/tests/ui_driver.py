@@ -44,7 +44,9 @@ WIDGETS = ("button", "small_button", "invisible_button", "checkbox", "combo", "b
 class Driver:
     def __init__(self, step: Callable[[], None] | None = None):
         self.step = step
-        self.rects: dict[str, Rect] = {}
+        # every control drawn, by id and label: (its rect, imgui's frame count
+        # when drawn) — only the latest frame's are there now
+        self.drawn: dict[str, tuple[Rect, int]] = {}
         self.mouse = (-1.0, -1.0)
 
     # ---- finding controls ----
@@ -62,24 +64,32 @@ class Driver:
             patch(imgui, name, self._wrap(real))
 
     def _wrap(self, real):
-        rects = self.rects
+        seen = self.drawn
 
         def drawn(label, *a, **k):
             out = real(label, *a, **k)
             lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
-            r = (lo.x, lo.y, hi.x, hi.y)
-            rects[label] = r
+            r = ((lo.x, lo.y, hi.x, hi.y), imgui.get_frame_count())
+            seen[label] = r
             if "##" in label:
-                rects[label.split("##", 1)[1]] = r
+                seen[label.split("##", 1)[1]] = r
             return out
         return drawn
 
+    @property
+    def rects(self) -> dict[str, Rect]:
+        """The controls the latest frame drew: one drawn earlier and not
+        since is gone, not found where it was (another may be there now)."""
+        last = max((f for _, f in self.drawn.values()), default=0)
+        return {k: r for k, (r, f) in self.drawn.items() if f == last}
+
     def rect(self, key: str) -> Rect:
+        rects = self.rects
         try:
-            return self.rects[key]
+            return rects[key]
         except KeyError:
             raise KeyError(f"no control {key!r} drawn last frame "
-                           f"(drawn: {', '.join(sorted(self.rects)[:12])}…)") from None
+                           f"(drawn: {', '.join(sorted(rects)[:12])}…)") from None
 
     def centre(self, key: str) -> tuple[float, float]:
         x0, y0, x1, y1 = self.rect(key)

@@ -36,20 +36,29 @@ export UV_NO_GROUP="hands dream"
 cd "$CLAUDE_PROJECT_DIR/hyperspace-python"
 uv sync --locked
 
-# a live server only: a killed one can linger as a zombie
-if ! pgrep -x -r R,S,D Xvfb >/dev/null; then
+# :99 answers: a server accepts a connection on its socket. Not "an Xvfb
+# runs" — one on another display, or a socket a dead server left, is not :99
+display_up() {
+  python3 -c 'import socket; socket.socket(socket.AF_UNIX).connect("/tmp/.X11-unix/X99")' \
+    2>/dev/null
+}
+
+if ! display_up; then
+  pkill -f '^Xvfb :99( |$)' 2>/dev/null || true          # a :99 server that stopped answering
   # a cached container can keep the lock of a server that is gone
   rm -f /tmp/.X99-lock /tmp/.X11-unix/X99
   setsid nohup Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp >/dev/null 2>&1 &
   for _ in $(seq 50); do
-    [ -e /tmp/.X11-unix/X99 ] && break
+    display_up && break
     sleep 0.1
   done
 fi
 
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
-  {
-    echo 'export UV_NO_GROUP="hands dream"'
-    echo 'export DISPLAY=:99'
-  } >> "$CLAUDE_ENV_FILE"
+  echo 'export UV_NO_GROUP="hands dream"' >> "$CLAUDE_ENV_FILE"
+  if display_up; then
+    echo 'export DISPLAY=:99' >> "$CLAUDE_ENV_FILE"
+  else
+    echo "session-start: Xvfb did not answer on :99; GL tests need a display" >&2
+  fi
 fi
