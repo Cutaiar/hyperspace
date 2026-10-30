@@ -200,11 +200,11 @@ def _banner(state) -> None:
         return
     ui._micro("this preset relies on sources this Mac lacks", ui.WARN)
     w = imgui.get_content_region_avail().x
+    tail = " — shows black"     # the heading says why; a long id is fitted, never this
     for sid in gone[:BANNER_LINES]:
-        line = f"{sid} — not on this Mac: shows black"
-        imgui.text_colored(ui.WARN, ui.fit_text(line, w))
+        imgui.text_colored(ui.WARN, ui.fit_text(sid, w - imgui.calc_text_size(tail).x) + tail)
         if imgui.is_item_hovered():
-            ui.tooltip(line)
+            ui.tooltip(f"{sid} — not on this Mac: shows black")
     more = len(gone) - BANNER_LINES
     if more > 0:
         imgui.text_disabled(f"and {more} more — each shows black")
