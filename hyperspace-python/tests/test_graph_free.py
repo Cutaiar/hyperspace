@@ -120,7 +120,7 @@ def test_a_switch_is_a_node_kind_that_may_stand_alone():
 
 ROOT = Path(__file__).resolve().parents[1]
 SAVES = ROOT / "tests" / "fixtures" / "plan33-v4-saves"
-# plan 36 T3: the factory presets' sources (the factory files are their `/7`)
+# plan 36 T3: the corpus presets' sources (the corpus files are their `/7`)
 LIBRARY = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
 SOURCES = {"presets": ROOT / "tests" / "fixtures" / "presets",
            "merge-31-32": ROOT / "tests" / "fixtures" / "merge-31-32",
@@ -157,12 +157,12 @@ def test_the_wiring_holds_the_run_and_leaves_its_wires_out():
 
 def old_sources() -> list[tuple[str, Path]]:
     """Every preset file this tree holds in an older schema or the newest,
-    as (kind, path): the factory's sources (dial's too), every fixture under
+    as (kind, path): the corpus's sources (dial's too), every fixture under
     tests/fixtures/presets/, merge-31-32/, old-canvas-layout/ and
     plan33-driven/, and the bytes older builds saved, kept from the
     byte-identical tests row 394 retired (plan33-v4-saves/: the base build's
     `/2`–`/4` saves; plan35-v5-saves/: plan 33/34's `/5`) — `/2` to `/6`."""
-    out = [("factory", p) for p in sorted(LIBRARY.glob("*.json"))]
+    out = [("source", p) for p in sorted(LIBRARY.glob("*.json"))]
     for kind, folder in {**SOURCES, "driven": DRIVEN, "v4-saves": SAVES,
                          "v5-saves": V5_SAVES}.items():
         out += [(kind, p) for p in sorted(folder.glob("*.json"))]
@@ -175,9 +175,12 @@ V5_SAVES = ROOT / "tests" / "fixtures" / "plan35-v5-saves"
 
 
 def test_every_schema_is_among_the_sources():
-    """The sources cover the whole ladder a load still reads: `/2` to `/6`."""
+    """The sources cover the whole ladder a load still reads: `/2` to `/6`
+    — and (plan 39) the newest, `/7`: T0's `edges-scene` and T2's
+    `mask-as-picture`, fixtures written in today's schema (a `matte` no
+    older schema has words for) — a fixed point like any save."""
     schemas = {json.loads(p.read_text())["schema"] for _, p in old_sources()}
-    assert schemas == {f"hyperspace.preset/{n}" for n in (2, 3, 4, 5, 6)}
+    assert schemas == {f"hyperspace.preset/{n}" for n in (2, 3, 4, 5, 6, 7)}
     assert len(old_sources()) >= 95
 
 
@@ -197,7 +200,7 @@ def _six(raw: bytes, name: str) -> dict:
 
 def test_every_old_preset_saves_as_six_and_is_a_fixed_point(tmp_path):
     """Row 394 (the owner, 2026-10-25: both Macs always on the newest
-    schema): every preset — the factory's and every fixture, `/2` to `/6`
+    schema): every preset — the corpus's sources and every fixture, `/2` to `/6`
     — loaded into a scratch library and saved untouched is
     `hyperspace.preset/6`, its graph the wired frame, no retired id in its
     values and its GRAPH layout in today's canvas ids; and that `/6`,
@@ -281,7 +284,7 @@ def test_an_edited_frame_saves_as_six_as_edited(tmp_path):
         assert "backdrop.history" not in doc["values"], name
 
 
-def test_an_untouched_factory_preset_saves_as_its_load(tmp_path):
+def test_an_untouched_corpus_preset_saves_as_its_load(tmp_path):
     """Row 394: party-trip untouched saves `/6`, its graph exactly the wired
     frame the load landed (`free_doc`) — the frame is the save."""
     from test_plan31_wiring import make_app
@@ -294,144 +297,20 @@ def test_an_untouched_factory_preset_saves_as_its_load(tmp_path):
 
 
 def saved_bytes(home: Path, kind: str, path: Path) -> bytes:
-    """`path` loaded into a scratch library at `home` (a fixture copied in
-    as a user's preset; a factory one by name) and saved untouched under
-    the name it loaded as: the bytes on disk (`headless.resave`, the road
+    """`path` loaded into a scratch library at `home` (copied in as a
+    preset of its own, whatever `kind`) and saved untouched under the name
+    it loaded as: the bytes on disk (`headless.resave`, the road
     tools/migrate_library.py takes)."""
     from hyperspace import headless
 
-    raw, _, _ = headless.resave(path, home, factory=kind == "factory")
+    raw, _, _ = headless.resave(path, home)
     return raw
-
-
-def _module_run(app, module: str) -> tuple[str, ...]:
-    """The run an fx module says alone: its values over the fx group's
-    defaults, read as the migration reads a preset's."""
-    from hyperspace import graphmigrate as M
-    from hyperspace.library import _module_values
-
-    doc = app.lib.read("fx", module)
-    # (plan 36 T3: unfiltered — an effect the loaded graph does not name has
-    # no param yet, and the module's values still say it)
-    values = {**app.lib.defaults("fx"), **_module_values("fx", doc)}
-    out, _ = M.migrate({"values": values}, app.presets.graph.specs())
-    return main_run(G.read_graph(out["graph"]))
 
 
 def main_run(spec) -> tuple[str, ...]:
     """The main run of a wired frame (plan 35 T3: every load's): the
     effects from the look-back into All outputs."""
     return G.run_back(spec, "output.all.image")
-
-
-def test_loading_an_fx_module_replaces_the_run(tmp_path):
-    """R12: a party preset, then the mandala module — the graph's main run
-    is mandala's (its effects on, in its order), not the preset's; the
-    module's values landed; the save says it in /4 terms."""
-    from test_plan31_wiring import make_app
-
-    app = make_app(tmp_path)
-    app.lib.load("presets", "party-acid")
-    gs = app.presets.graph
-    acid_run = main_run(gs.spec)
-    want = _module_run(app, "mandala")
-    assert want and want != acid_run and {"plasma", "kaleido"} <= set(want)
-    app.lib.load("fx", "mandala")
-    assert main_run(gs.spec) == want
-    # (its order is no param since T7, and no save writes one: row 394)
-    assert app.lib.current("fx") == "mandala" and "fx.kaleido.order" not in app.reg
-    # the save is `/6`, the module's run in its frame
-    doc = app.presets.document("after")
-    assert doc["schema"] == "hyperspace.preset/7"
-    assert main_run(G.read_graph(doc["graph"])) == want
-    assert "fx.kaleido.order" not in doc["values"]
-
-
-def test_loading_an_fx_module_keeps_branches(tmp_path):
-    """R12: a section with a branch (`media.a → acid.2 → output.2.image`)
-    and a run, then a module — the run is the module's and the branch, its
-    node and every other wire stay."""
-    from test_plan31_wiring import make_app
-
-    app = make_app(tmp_path)
-    branch = [("media.a", "acid.2.image"), ("acid.2", "output.2.image")]
-    doc = {"schema": "hyperspace.preset/4", "name": "t",
-           "graph": section(*branch, ("frame", "warp.image"), ("warp", "fx.image"),
-                            nodes=[{"kind": "effect", "file": "acid", "instance": 2}]),
-           "values": {"fx.acid.2.on": True, "fx.warp.on": True}}
-    assert app.presets.load_doc(doc) == []
-    gs = app.presets.graph
-    assert main_run(gs.spec) == ("warp",)
-    app.lib.load("fx", "mandala")
-    assert main_run(gs.spec) == _module_run(app, "mandala")
-    for a, b in branch:                                 # (in the new ids: plan 35 V2)
-        assert G.Wire(G.new_id(a), b) in gs.spec.wires
-    assert {"kind": "effect", "file": "acid", "instance": 2} in gs.free_doc()["nodes"]
-    assert G.Wire("warp", "output.all.image") not in gs.spec.wires
-
-
-def test_a_module_lands_its_run_over_a_refused_wire_and_says_when_it_cannot(tmp_path):
-    """A loaded graph with a refused wire (said at its load) still takes an
-    fx module's run, the refused wire kept in the section as the file had
-    it; a graph this build cannot read at all takes none, and a note says
-    so plainly."""
-    from test_plan31_wiring import make_app
-
-    app = make_app(tmp_path)
-    doc = {"schema": "hyperspace.preset/4", "name": "t", "values": {"fx.warp.on": True},
-           "graph": section(("frame", "warp.image"), ("warp", "fx.image"),
-                            ("ghost", "output.1.image"))}
-    app.presets.load_doc(doc)
-    # (plan 35 V2: the old `ghost` is `hands` now, said as such)
-    assert any("hands makes geometry" in n for n in app.presets.notes), app.presets.notes
-    gs = app.presets.graph
-    app.lib.load("fx", "mandala")
-    assert main_run(gs.spec) == _module_run(app, "mandala")
-    # (plan 36 T3: a refused wire of a `/7` is dropped, not kept)
-    assert {"from": "hands", "to": "output.1.image"} not in gs.free_doc()["wires"]
-    app.presets.load_doc({"schema": "hyperspace.preset/4", "name": "u", "values": {},
-                          "graph": {"nodes": [{"kind": "teapot"}]}})
-    app.lib.load("fx", "mandala")
-    assert gs.spec is None
-    assert app.presets.notes[-1] == ("fx module mandala: its run is not applied — the "
-                                     "preset's graph is not one this build reads")
-
-
-def test_the_module_hook_survives_a_hot_reload(tmp_path):
-    """A `Presets` re-classed by a hot reload is never re-initialised (and a
-    Library from before has no apply hooks): the next preset load registers
-    the fx module hook again, so a module after it still replaces the run."""
-    from test_plan31_wiring import make_app
-
-    app = make_app(tmp_path)
-    app.lib.__dict__.pop("_apply_hooks", None)          # as before the hook existed
-    app.lib.load("presets", "party-acid")
-    app.lib.load("fx", "mandala")
-    assert main_run(app.presets.graph.spec) == _module_run(app, "mandala")
-
-
-def test_a_module_load_keeps_a_faces_run_that_shares_an_effect(tmp_path):
-    """Final review (1): a faces run `pattern → acid → shape.faces`, then
-    the `acid` module (acid on, no faces run of its own). The faces run
-    keeps acid; the main run is the module's minus acid, closed over the
-    gap; no wire is refused and no note is lost."""
-    from test_plan31_wiring import make_app
-
-    app = make_app(tmp_path)
-    doc = {"schema": "hyperspace.preset/5", "name": "t",
-           "graph": section(("frame", "fx.image"), ("pattern", "acid.image"),
-                            ("acid", "shape.faces")),
-           "values": {"fx.acid.on": True}}
-    assert app.presets.load_doc(doc) == []
-    gs = app.presets.graph
-    assert G.run_of(gs.spec, "pattern", "shape.faces") == ("acid",)
-    want = tuple(n for n in _module_run(app, "acid") if n != "acid")
-    assert want and "acid" in _module_run(app, "acid")
-    app.lib.load("fx", "acid")
-    assert G.run_of(gs.spec, "pattern", "shape.faces") == ("acid",)
-    assert main_run(gs.spec) == want
-    assert gs.spec.notes == ()
-    assert app.presets.notes == []
 
 
 MISSING_RUN = (("frame", "foo.image"), ("foo", "acid.image"), ("acid", "fx.image"))
@@ -554,16 +433,6 @@ def _effect_nodes(g) -> list:
 
 
 moderngl = pytest.importorskip("moderngl")
-
-
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-    c.release()
 
 
 def test_only_wired_effects_have_nodes(ctx, tmp_path):

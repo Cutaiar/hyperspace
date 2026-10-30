@@ -118,16 +118,6 @@ def test_the_cloud_params_are_session_and_default_to_a_cloud_at_the_shapes_size(
 moderngl = pytest.importorskip("moderngl")
 
 
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-    c.release()
-
-
 def _view(**kw) -> ViewState:
     s = ViewState(instances=0)          # no shape: the cloud alone on the ground
     for k, v in kw.items():

@@ -27,6 +27,8 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from hyperspace import geometry as G
+from hyperspace.graph import Wiring
+from hyperspace.graphmigrate import wired_wiring
 from hyperspace.patterns import NAMES as PATTERN_NAMES
 from hyperspace.render import Renderer
 from hyperspace.view import ViewState
@@ -129,6 +131,9 @@ class Stage:
         self.fbo.use()
         self.ctx.viewport = (0, 0, w, h)
         self.r = Renderer(self.ctx)
+        # plan 36 T3: a bare renderer draws the app's empty frame; the
+        # tool's own wiring is today's frame (render.render_offscreen's)
+        self.r.wiring = wired_wiring(Wiring())
 
     def shot(self, v: ViewState, t: float) -> Image.Image:
         self.fbo.use()
@@ -151,6 +156,16 @@ def caption(im: Image.Image, title: str, sub: str, k: int, n: int) -> Image.Imag
     return im
 
 
+def encoder(path: Path) -> subprocess.Popen:
+    """An ffmpeg pipe taking W×H RGB frames at FPS into the mp4 at `path`:
+    the one set of encoder settings every demo video here is made with."""
+    return subprocess.Popen(
+        ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
+         "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-preset",
+         "slow", "-crf", "27", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+         str(path)], stdin=subprocess.PIPE)
+
+
 def run(video: bool) -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     stage = Stage()
@@ -159,11 +174,7 @@ def run(video: bool) -> None:
     if video:
         if shutil.which("ffmpeg") is None:
             raise SystemExit("ffmpeg is not on the PATH (or pass --no-video)")
-        ff = subprocess.Popen(
-            ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
-             "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-preset",
-             "slow", "-crf", "27", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
-             str(OUT / "demo.mp4")], stdin=subprocess.PIPE)
+        ff = encoder(OUT / "demo.mp4")
     t = 0.0
     for k, seg in enumerate(segs, 1):
         v = ViewState(**seg.view)

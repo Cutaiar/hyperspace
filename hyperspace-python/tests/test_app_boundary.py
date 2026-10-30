@@ -12,6 +12,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from conftest import seed
 
 from hyperspace import app, config, devices
 from hyperspace.analysis import Analyser
@@ -28,7 +29,8 @@ import sys
 import hyperspace.app
 gated = ("hyperspace.midi", "hyperspace.bridge", "hyperspace.dream", "hyperspace.osc",
          "leap", "torch", "pythonosc",
-         "av", "pillow_heif", "syphon", "cyndilib", "AVFoundation")
+         "av", "pillow_heif", "syphon", "cyndilib", "AVFoundation",
+         "hyperspace.segment", "Vision", "Vision._Vision", "CoreML", "torchvision")
 print(sorted(m for m in gated if m in sys.modules), "hyperspace.hands" in sys.modules)
 """
 
@@ -41,7 +43,10 @@ def test_importing_app_leaves_every_gated_adapter_unimported():
     same way before they exist). The hands *package* is the one exception,
     on purpose: its settings register and its page draws whether or not
     the tracker is on (`_hand_settings`, `ui.py`), and `hands/core.py`
-    imports `leap` only inside `LeapSource`. In a subprocess, because this
+    imports `leap` only inside `LeapSource`. Plan 39 T4: nor the segment
+    worker (`segment.py`, imported by the renderer on a segment's first
+    need), Apple Vision through pyobjc, or torchvision — each imported
+    inside the worker's first job. In a subprocess, because this
     test session has long since imported them all itself."""
     out = subprocess.run([sys.executable, "-c", IMPORT_SCRIPT], capture_output=True, text=True,
                          check=False, cwd=str(Path(__file__).parents[1]), timeout=120)
@@ -965,7 +970,7 @@ def _launch(home):
     """`app.main`'s order around the desk's table, headless: the table is
     read and `_desk_table` called before the library attaches, the router
     and the presets after, then the show's startup preset."""
-    from hyperspace import lfo, preset, tempo
+    from hyperspace import lfo, tempo
     from hyperspace.library import Library
     from hyperspace.preset import Presets
     from hyperspace.routing import Bindings, Router, bindings_path
@@ -979,7 +984,7 @@ def _launch(home):
     clock = tempo.Clock(now=lambda: 0.0)
     tempo.register(reg, clock)
     lfo.register(reg, lfo.LFOs(), clock)
-    # plan 31, as app.main (plan 36 T3: the factory `/7` files hold their values)
+    # plan 31, as app.main (plan 36 T3: the `/7` files hold their values)
     from hyperspace import envelope, sequencer
 
     envelope.register(reg, envelope.Envelopes(), clock)
@@ -988,14 +993,13 @@ def _launch(home):
     lib.attach(reg)
     router = Router(reg, table)
     Presets(lib, reg, router)
-    preset.migrate_home(lib, router)
     lib.project.load_startup()
     return SimpleNamespace(lib=lib, reg=reg, table=table, show=lib.project)
 
 
 def test_the_app_starts_with_knob_smoothing_at_80_ms_and_a_show_keeps_its_own(tmp_path):
     """Fork 12 as settled: a bare table is at 0 and the app's is at
-    `routing.SLEW_DEFAULT_S` before the show lands. A factory show, which
+    `routing.SLEW_DEFAULT_S` before the show lands. The party show, which
     names no smoothing, opens at 80 ms and is not unsaved because of it;
     a show that saved a number keeps it — 0 included — with no unknown-id
     warning, since the param exists when the session values land (`main`
@@ -1011,10 +1015,10 @@ def test_the_app_starts_with_knob_smoothing_at_80_ms_and_a_show_keeps_its_own(tm
     assert 0 < src.index("_desk_table(reg, Bindings.load(") < src.index("library.attach(reg)")
     assert src.index("library.attach(reg)") < src.index("Router(reg, table)")
 
-    home = tmp_path / "home"
-    r = _launch(home)                                   # a fresh home: the factory party show
+    home = seed(tmp_path / "home")                      # the corpus: the party show opens
+    r = _launch(home)
     slew = r.reg["desk.slew"]
-    assert r.show.name == "party" and r.show.factory
+    assert r.show.name == "party"
     assert r.table.slew == 0.08 and slew.text() == "80 ms"
     assert not r.show.is_dirty() and not r.lib.is_dirty("desk") and not r.lib.warning
     assert r.show.session["desk.slew"] == 0.08          # the reference the dot compares with
@@ -1027,7 +1031,7 @@ def test_the_app_starts_with_knob_smoothing_at_80_ms_and_a_show_keeps_its_own(tm
     assert not r.show.is_dirty()
 
     r = _launch(home)                                   # the next launch opens that show
-    assert r.show.name == "mine" and not r.show.factory
+    assert r.show.name == "mine"
     assert r.table.slew == 0.0 and r.reg["desk.slew"].text() == "off"
     assert not r.show.is_dirty() and not r.lib.warning
     r.reg["desk.slew"].set(0.2)

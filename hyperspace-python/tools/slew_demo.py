@@ -20,8 +20,9 @@ off and at 80 ms.
 
 Every number is the adapter's own, read off the registry after each
 `MidiIO.poll()`. It always runs on fresh temp homes of its own
-(`HYPERSPACE_HOME` is set here, before anything reads it): it cannot
-touch ~/Hyperspace. What it cannot show is the desk: whether the APC40's
+(`HYPERSPACE_HOME` is set here, before anything reads it), each seeded
+with the test corpus (`tests/conftest.py::seed`: TRIP is one of its
+presets): it cannot touch ~/Hyperspace. What it cannot show is the desk: whether the APC40's
 encoder re-bases cleanly with a value in flight, and how 80 ms feels.
 
   uv run python tools/slew_demo.py \\
@@ -40,12 +41,14 @@ from types import SimpleNamespace
 os.environ["HYPERSPACE_HOME"] = str(Path(tempfile.mkdtemp(prefix="hyperspace-slew-demo-")) / "x")
 
 ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+for _p in (ROOT, ROOT / "tests"):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
 
 import mido
+from conftest import seed
 
-from hyperspace import apc40, lfo, preset, routing, tempo, undo
+from hyperspace import apc40, lfo, routing, tempo, undo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
@@ -102,6 +105,7 @@ def build(seconds: float) -> SimpleNamespace:
     control = Control(chain)
     audio = SimpleNamespace(chain=chain, on=True)
     view = ViewState()
+    seed(home)
     lib = Library(home, period=0.0)
     reg = build_registry(view, control, audio, lib.project, dream=DreamState(), fx=FxState())
     lib.on_layout("band", control.apply_layout)
@@ -116,7 +120,6 @@ def build(seconds: float) -> SimpleNamespace:
     lib.attach(reg)
     router = Router(reg, table)
     presets = Presets(lib, reg, router)
-    preset.migrate_home(lib, router)
     inp, out = FakeIn(), FakeOut()
     midi = MidiIO(reg, table, inp=inp, out=out, clock=lambda: r.t)
     lib.project.load_startup()

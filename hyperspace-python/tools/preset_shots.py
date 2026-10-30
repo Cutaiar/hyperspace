@@ -2,9 +2,10 @@
 """Plan 12 — the party presets, offscreen: each preset's look under a set
 of hand poses, and the sweep tables the plan cites.
 
-Every ``party-*`` preset (``library/presets/``) is loaded through the real
-``Presets`` over a ``Router`` — its values and its routes in one
-load, as its F-key does — and two fake hands are driven through the real ``HandsIO`` chain
+Every ``party-*`` preset of the test corpus (``tests/corpus/presets/``, copied
+into a scratch library home) is loaded through the real ``Presets`` over a
+``Router`` — its values and its routes in one load, as its pad does — and
+two fake hands are driven through the real ``HandsIO`` chain
 (range → One Euro → dead zone → follower) at a handful of poses, each held
 for a second and a half before the frame is taken. No audio source: the
 lane rows are quiet, so what the shots show is the hands alone over the
@@ -24,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -37,22 +39,24 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from hyperspace import lfo, tempo
+from hyperspace import envelope, lfo, sequencer, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer, legacy_layout
 from hyperspace.bands import default_params
 from hyperspace.control import Control
 from hyperspace.fx import FxState
 from hyperspace.hands import HandSettings, HandsIO
-from hyperspace.hands.core import PINCHES, default_range
-from hyperspace.library import Library
+from hyperspace.hands.core import DEFAULT_DOFS, PINCHES, default_range
+from hyperspace.library import PRESETS, Library
 from hyperspace.lookback import DreamState
 from hyperspace.params import Kind, build_registry
-from hyperspace.preset import FACTORY_PRESETS, HAND_AXES, Presets
+from hyperspace.preset import Presets
 from hyperspace.render import Renderer, ViewState
 from hyperspace.routing import Bindings, Router
 
 OUT = ROOT / "docs" / "plans" / "assets" / "12-presets"
+CORPUS = ROOT / "tests" / "corpus" / "presets"      # the presets, as test data
+HAND_AXES = tuple(DEFAULT_DOFS)                       # x y z roll pitch yaw
 W, H = 960, 600
 DT = 1 / 60
 SETTLE = 90            # frames a pose is held before the frame is taken
@@ -188,22 +192,37 @@ class Stage:
         self.lfos = lfo.LFOs()
         tempo.register(self.reg, self.clock)
         lfo.register(self.reg, self.lfos, self.clock)
+        # plan 31: a /7 file carries the envelopes' and the sequencer's values
+        envs, seq = envelope.Envelopes(), sequencer.Sequencer()
+        envelope.register(self.reg, envs, self.clock)
+        sequencer.register(self.reg, seq, self.clock)
         # the preset through the one loader (plan 13 WP2), over a throwaway
-        # library home so nothing touches ~/Hyperspace
+        # library home holding the corpus, so nothing touches ~/Hyperspace
         self._home = tempfile.TemporaryDirectory()
+        own = Path(self._home.name) / PRESETS
+        own.mkdir()
+        for f in sorted(CORPUS.glob("*.json")):
+            shutil.copyfile(f, own / f.name)
         lib = Library(Path(self._home.name))
         lib.attach(self.reg)
         self.router = Router(self.reg, Bindings())
+        self.router.use_bank(envs, self.clock)
+        self.router.use_sequencer(seq, envs, self.clock)
         presets = Presets(lib, self.reg, self.router)
         missing = presets.load(load or name.split("-", 1)[1].upper())
         assert not missing and not presets.notes and not self.router.table.dropped, (
             name, missing, presets.notes)
+        # the preset's own routes: the table was empty before the load
+        self.routes = list(self.router.table.routes())
         self.src = DictSource(lambda: self.t)
         self.io = HandsIO(HandSettings.from_config(), {"enabled": True}, source=self.src,
                           out=NullOut(), clock=lambda: self.t)
         self.clock.trigger(0.0)
         self.renderer = Renderer(ctx, dream=self.dream, fx=self.fx) if ctx is not None else None
         if self.renderer is not None:
+            # plan 36 T3: a bare renderer draws the app's empty frame; the
+            # preset's graph onto it, as app.py attaches it
+            presets.graph.attach(self.renderer)
             errs = self.renderer.fx.compile_all()     # before any frame: a broken shader is a stop
             if errs:
                 raise RuntimeError(f"fx shaders failed to build: {errs}")
@@ -253,7 +272,7 @@ def fmt(p, v) -> str:
 def sweep(name: str, frames: int) -> str:
     """Every hand row of the preset across its axis's throw — the markdown
     table the plan cites. A fresh stage per reading, so nothing carries."""
-    rows = [b for b in FACTORY_PRESETS[name].routes() if b.scheme == "hand"]
+    rows = [b for b in Stage(name).routes if b.scheme == "hand"]
     us = (0.0, 0.25, 0.5, 0.75, 1.0)
     intro = ("Each cell is the target's value after the hand has held that position "
              f"for {frames} frames ({frames / 60:.1f} s) through the real hand chain "

@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from hyperspace import devices, envelope, lfo, patch, routing, sequencer, undo
+from hyperspace import devices, envelope, lfo, modgraph, routing, sequencer, undo
 from hyperspace.envelope import Envelopes
 from hyperspace.lfo import LFOs
 from hyperspace.params import PERFORMANCE_GROUPS, Registry
@@ -67,9 +67,9 @@ def one_shot(r, n: int, attack=0.1, decay=0.2, release=0.3) -> None:
 
 def test_the_kinds_and_schemes_are_registered():
     assert routing.BANKS["env"] is Envelopes and routing.BANKS["lfo"] is LFOs
-    assert "env" in patch.KINDS and Envelopes.KNOBS == patch.ENV_KNOBS
-    assert set(patch.ENV_KNOBS) <= set(patch.PORTS)
-    assert len(set(patch.PORTS)) == len(patch.PORTS)
+    assert "env" in modgraph.KINDS and Envelopes.KNOBS == modgraph.ENV_KNOBS
+    assert set(modgraph.ENV_KNOBS) <= set(modgraph.PORTS)
+    assert len(set(modgraph.PORTS)) == len(modgraph.PORTS)
     assert devices.BUILTIN_SCHEMES == routing.BUILTIN_LANES == ("lane", "lfo", "env", "seq")
     assert {"env", "seq"} <= set(PERFORMANCE_GROUPS)
     r = rig()
@@ -230,7 +230,7 @@ def test_a_route_onto_an_envelopes_fire_starts_it_this_frame():
 def test_an_extra_envelope_routes_and_goes_dormant_when_removed():
     r = rig([Binding("env:5", "t.x", "push", 1.0)])
     frame(r, 0.5)
-    assert "env:5" not in r.router.patch.nodes or r.router.patch.nodes["env:5"].kind == "env"
+    assert "env:5" not in r.router.modgraph.nodes or r.router.modgraph.nodes["env:5"].kind == "env"
     assert ("bank", "env", 5) not in r.router.__dict__["_plan"]
     assert r.envs.add() == 6 and "env.6.attack" in r.reg
     r.reg["env.6.attack"].set(0.1)
@@ -397,12 +397,18 @@ def app(tmp_path):
 
 
 def make_app(tmp_path, plan31: bool = True):
-    """The app's registry, library, router and presets; `plan31` False is
-    a build from before plan 31 — no envelopes, no sequencer. (Row 394:
+    """The app's registry, library, router and presets over `tmp_path`,
+    seeded with the corpus first (conftest.seed: the presets the build once
+    shipped, the dream module presets and the party show, so the home is
+    the one these tests were written on); `plan31` False is a build from
+    before plan 31 — no envelopes, no sequencer. (Row 394:
     `hyperspace.headless.make_app`, so tools/migrate_library.py saves
     through the same app without importing a test.)"""
+    from conftest import seed
+
     from hyperspace import headless
 
+    seed(tmp_path)
     return headless.make_app(tmp_path, plan31)
 
 
@@ -559,7 +565,7 @@ def test_this_build_reads_every_old_schema_and_an_older_build_refuses_a_6(app):
     from hyperspace import preset
     from hyperspace.library import LibraryError
 
-    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7)   # (plan 35: /6 the wired frame; plan 36 T3: /7)
+    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7, 8)   # (plan 35: /6; plan 36 T3: /7; plan 40 T2: /8)
     app.reg["view.bright"].set(1.5)
     doc = {k: v for k, v in app.presets.document("p").items() if k != "graph"}
     doc["values"] = {k: v for k, v in doc["values"].items()
@@ -582,10 +588,10 @@ def test_this_build_reads_every_old_schema_and_an_older_build_refuses_a_6(app):
         kinds["presets"] = replace(kinds["presets"], versions=preset.VERSIONS)
 
 
-# ---- plan 31 P: the factory seq-demo ----
+# ---- plan 31 P: the corpus's seq-demo ----
 
 def test_seq_demo_is_the_pattern_and_plays_once_play_is_pressed(app):
-    """The factory seq-demo: kick 1 and 5, snare 3 and 7, hats on every
+    """The corpus's seq-demo: kick 1 and 5, snare 3 and 7, hats on every
     step at half a bar, one-shot envelopes on brightness, zoom and the
     deconverge. It loads stopped (decision 8); with play pressed at the
     golden rig's clock — triggered at T0 = 2.0, play and a restart on the
@@ -593,10 +599,11 @@ def test_seq_demo_is_the_pattern_and_plays_once_play_is_pressed(app):
     kick; the hat that fired with it (70 ms) is over and the snare (step 3,
     at 2.267) is still to come. tools/golden_frames.py draws that frame;
     two more 16ths on, the snare and the hat of step 3 are mid-hit too."""
-    from hyperspace import preset
+    import json
 
-    doc = preset.generated("seq-demo")
-    assert doc["schema"] == V3
+    from conftest import CORPUS
+
+    doc = json.loads((CORPUS / "presets" / "seq-demo.json").read_text())
     on = {(ln, s) for ln in range(1, 6) for s in range(1, 9)
           if doc["values"].get(f"seq.{ln}.{s}")}
     assert on == {(1, 1), (1, 5), (2, 3), (2, 7), *((3, s) for s in range(1, 9))}

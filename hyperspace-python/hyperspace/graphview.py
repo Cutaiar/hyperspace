@@ -4,7 +4,7 @@ ports and cables, built from the live objects and drawn by ui_graph.py.
 Nothing here draws. `build` reads the binding
 table (`routing.Bindings`: the routes, the desk / pad / key rows, the
 macros, the modifiers), the registry (every param a cable can reach), the
-Router (the source lanes' names and readings, the LFOs, the loops `patch`
+Router (the source lanes' names and readings, the LFOs, the loops `modgraph`
 keeps off), the device registry (`devices.DeviceRegistry`: one node per
 listed device, its ports its `Device.sources` in their port groups) and
 the render graph the renderer last built (`graph.Graph`: its nodes, their
@@ -106,10 +106,10 @@ unused macro, an unpatched LFO, a group node no cable reaches, a lost
 device with no rows) is not drawn: its area shows one "n idle" line in
 its place that expands to show them.
 
-Imports `routing`, `params`, `graph`, `patch`, `modifiers` — the device
+Imports `routing`, `params`, `graph`, `modgraph`, `modifiers` — the device
 registry is handed in and read through `devices.Device`'s protocol
-(`role`, `kind`, `status`, `sources`, `schemes`), so nothing of
-`devices.py` is imported — and never imgui (tests/test_graphview.py
+(`role`, `kind`, `status`, `sources`, `schemes`), so of
+`devices.py` only its `SCHEME_ROLE` table is imported — and never imgui (tests/test_graphview.py
 holds it)."""
 
 from __future__ import annotations
@@ -123,11 +123,11 @@ from typing import Any
 
 from . import envelope as envmod
 from . import graph as rgraph
-from . import graphmigrate, modbank
+from . import graphmigrate, modbank, modgraph, patches
 from . import learn as learnmod
 from . import modifiers as modmod
-from . import patch as patchmod
 from . import sequencer as seqmod
+from .devices import SCHEME_ROLE  # plan 40 T4: the table lives in devices; read here
 from .params import PERFORMANCE_GROUPS, Kind, Param, Registry
 from .routing import (
     MOD_OPS,
@@ -140,9 +140,11 @@ from .routing import (
     Sub,
     base_refusal,
     base_scheme,
+    base_sub,
     is_continuous,
     is_macro,
     is_session_row,
+    row_words,
 )
 
 # signal kinds a port and a cable carry (decision 10: values and triggers;
@@ -182,8 +184,8 @@ def voice_of(nid: str) -> tuple[str, int] | None:
     if scheme in BANK_SCHEMES and dot and n.isdecimal() and int(n) >= 1:
         return scheme, int(n)
     return None
-# the LFO's knobs, in the order its node lists them (patch.py's ports)
-LFO_KNOBS = patchmod.LFO_KNOBS
+# the LFO's knobs, in the order its node lists them (modgraph.py's ports)
+LFO_KNOBS = modgraph.LFO_KNOBS
 # setter ops that move a param in steps or fire it: a trigger cable
 TRIGGER_OPS = ("fire", "toggle", "step", "set", "momentary", "hold")
 
@@ -257,6 +259,14 @@ class VNode:
     # that no path leads from to a sink (`graph.reaches`): kept, never run,
     # drawn faint with the line "reaches nothing" — never idle
     faint: bool = False
+    # plan 37 C1 (P1): how this node's thumbnail is found (`THUMBS`' word:
+    # "picture", "scene", "layer", "window"), None for a node that stays
+    # text (the modulation side, a group, the camera); and the size of the
+    # picture its thumbnail was last copied from (the page sets it each
+    # frame from `outputs.PreviewTextures.size_of`: C2's hover says it),
+    # None before the first copy
+    thumb: str | None = None
+    picture: tuple[int, int] | None = None
 
     def port(self, pid: str) -> VPort | None:
         return next((p for p in self.ports if p.id == pid), None)
@@ -268,7 +278,7 @@ class VCable:
     stands for (the `Binding`, (macro id, `Sub`), (`Modifier`, input
     index), (source node, node, port) for a render edge); `off` a cable
     that cannot act whatever its source reads (a disabled row, a target no
-    registry holds or no performer may drive, a cable `Router.patch` keeps
+    registry holds or no performer may drive, a cable `Router.modgraph` keeps
     off to break a loop, a depth subscriber on a route that is not there);
     `dormant` that, or a source not live this frame. `depth` the route's
     effective depth (`value × scale × Π depth subs`); `label` what the
@@ -298,6 +308,12 @@ class View:
     cables: list[VCable] = field(default_factory=list)
     spec: Any = None                 # the preset's graph spec (graph.GraphSpec | None)
     pins: dict[str, tuple[str, str]] = field(default_factory=dict)   # pin → (node, port)
+    # plan 40 T2: the preset's groups on the canvas (`attach_groups`)
+    groups: list = field(default_factory=list)
+
+    def group(self, gid: str):
+        """Group `gid` (a `VGroup`), or None."""
+        return next((g for g in self.groups if g.id == gid), None)
 
     def node(self, nid: str) -> VNode | None:
         # by an index kept while the node list is the same list of the same
@@ -400,11 +416,20 @@ def _resize_owner(pid: str, ctx: _Ctx) -> str | None:
 OWNERS: dict[str, str | Callable[[str, _Ctx], str | None]] = {
     "view": _view_owner,
     "rot": "shape",
-    "pattern": "shape",
+    # the faces pattern's eight inputs (`pattern.mod.k`: scale, glow, warp,
+    # speed, colour, sharp …) on the pattern node, with its selector, its mix
+    # and its media (2026-10-27: they sat on the shape's pane, out of reach)
+    "pattern": "pattern",
     # plan 33 U: the backdrop's params on its node, a switch's pick on its switch
     "backdrop": "backdrop",
     "switch": _switch_owner,
     "resize": _resize_owner,
+    # plan 39 T2: `matte[.<n>].<key>` on its matte's node (the resize's rule)
+    "matte": _resize_owner,
+    # plan 39 T3: `cut[.<n>].<key>` on its cut's node (the resize's rule)
+    "cut": _resize_owner,
+    # plan 39 T4: `segment[.<n>].<key>` on its segment's node (the resize's rule)
+    "segment": _resize_owner,
     "ghost": _hands_owner,
     "cloud": _cloud_owner,
     "dream": rgraph.LOOKBACK,
@@ -632,8 +657,7 @@ DESK_GROUPS = (INVARIANT, "track knobs", "device knobs", "knobs", "faders", "cli
 # a role-less row's role when no listed device publishes its scheme: the
 # rig's usual name for the kind behind it (config.py's example list); a
 # scheme not here is a role of its own (an OSC device's scheme is its role)
-SCHEME_ROLE = {"hand": "leap", "hands": "leap", "axis": "pad", "pad": "pad", "hat": "pad",
-               "cc": "apc40", "note": "apc40", "pitch": "apc40"}
+# — `SCHEME_ROLE`, devices.py's since plan 40 T4 (imported above)
 # schemes that are no device's: the keyboard, the built-in lanes, the modifiers
 NO_DEVICE = ("key", "lane", "lfo", "env", SEQ, modmod.SCHEME)
 PLACEHOLDER_STATUS = "not in this rig: its cables wait for it"
@@ -764,6 +788,7 @@ LABELS: dict[str, str] = {
     "backdrop": "Backdrop", "lookback": "Look-back", "pattern": "Faces pattern",
     "channel": "Channel", "composite": "Composite", "switch": "Switch", "delay": "Delay",
     "resize": "Resize", "echo": "Echo", "dream": "Dream", "copy": "copy of",
+    "matte": "Matte", "cut": "Cut", "segment": "Segment",
     "output": "Output", rgraph.ALL_OUTPUTS: "All outputs", rgraph.GROUND: "Ground",
 }
 # … and its hover, one line (V's hover column; an effect says its file's
@@ -789,6 +814,12 @@ HOVERS: dict[str, str] = {
     "switch": "Picks one of eight.",
     "delay": "Last frame's picture.",
     "resize": "A crop at its own size.",
+    "matte": ("Makes a mask of its picture — by brightness, coverage or a keyed hue. Wired "
+              "where a picture goes, the mask shows white where it passes."),
+    "cut": ("Cuts its picture by a mask: the picture where the mask passes, see-through "
+            "elsewhere. Lay it over another picture to show that one through the hole."),
+    "segment": ("Cuts its picture into a foreground and a background — a person, or what "
+                "moves — with the matte between them as a mask."),
     "echo": "The k-th newest look-back frame.",
     "dream": "The dream buffer.",
     "output": "A window: shows its picture, the hands over it, the guide over all.",
@@ -820,7 +851,9 @@ CLOUD_INTO_SCENE = "{cloud} is a cloud device: its one wire is into scene.geomet
 # undo step, every node and cable ordinary after it. (key, the item's words)
 STARTERS = (("scene", "scene chain"), ("tracers", "tracers"),
             ("tracers+dream", "tracers + dream"), ("dream", "dream on a picture"),
-            ("backdrop", "channel to backdrop"))
+            ("backdrop", "channel to backdrop"),
+            # plan 39 T5 (W6): channel a segmented, its foreground over the scene
+            ("cut-out", "cut-out"))
 # the starters a picture cable's menu offers, that cable their picture
 CABLE_STARTERS = ("tracers", "tracers+dream", "dream")
 # the scene chain: a new preset's whole section and the first starter —
@@ -828,12 +861,60 @@ CABLE_STARTERS = ("tracers", "tracers+dream", "dream")
 SCENE_CHAIN = (("shape", "scene.geometry"), ("scene", f"{rgraph.ALL_OUTPUTS}.image"))
 NEW_CHAIN = ("shape", "scene", rgraph.ALL_OUTPUTS)   # its nodes, left to right
 STARTER_SAID = "scene chain: shape → scene → All outputs"
+# plan 39 T5 (plan 36's follow-up): a starter that takes All outputs'
+# picture says what fed it before — its words' tail
+STARTER_REPLACED = " — in place of {was} into All outputs"
+# plan 39 T5 (W6): the cut-out starter's words, and the scene it lays the
+# foreground over drawing nothing until a shape is wired in
+CUT_OUT_SAID = ("cut-out: {feed} → {seg}.image, {seg}.fg over the scene in {comp} "
+                "→ All outputs")
+CUT_OUT_NO_SHAPE = " — left unwired: scene.geometry (wire a shape in: the scene draws nothing)"
 NO_STARTER = "no starter {which!r}: the starters are " + ", ".join(w for _, w in STARTERS)
 NO_CABLE_STARTER = "{label} starts from no cable: pick it from the canvas's starters"
 IN_ALREADY = "{label} is in the graph already"
 NOTHING_TO_DELETE = "nothing to delete: {what} has no wires"
 NO_SUCH_WIRE = "{wire}: no such wire"
 NO_SUCH_COPY = "copy of {of}: no such effect instance in the graph"
+
+
+# plan 37 C1 (P1, the one table): how each canvas kind's thumbnail is
+# found — "picture": the picture the node makes (`graph.picture`);
+# "scene": a geometry, which makes draw calls, not a picture — the scene
+# that draws it, faint (`THUMB_FAINT`); "layer": a hands node — its hands
+# layer, else the scene it is drawn in; "window": an output — what the
+# window shows (output 1 the page's `outputs.Preview`, any other its
+# presenter's picture: `render.thumb_source`). A kind missing here whose
+# node's output is a picture (a kind added later: plan 39's) is a
+# "picture" too (`thumb_of`); the rest (All outputs, the camera, ground,
+# the modulation side) stay text.
+PICTURE, SCENE_PIC, LAYER_PIC, WINDOW_PIC = "picture", "scene", "layer", "window"
+THUMBS: dict[str, str] = {
+    "channel": PICTURE, "pattern": PICTURE, "scene": PICTURE, "backdrop": PICTURE,
+    "composite": PICTURE, "switch": PICTURE, "delay": PICTURE, "resize": PICTURE,
+    "lookback": PICTURE, "echo": PICTURE, "dream": PICTURE, "effect": PICTURE,
+    "copy": PICTURE, "layer": PICTURE, "guide": PICTURE,
+    # plan 39 at the plan 37 merge: a cut is its picture; a matte (a mask)
+    # and a segment (its own picture is its matte; fg, bg are its pins) are text
+    "cut": PICTURE,
+    "shape": SCENE_PIC, "cloud": SCENE_PIC, "hands": LAYER_PIC,
+    "output": WINDOW_PIC,
+}
+THUMB_FAINT = frozenset({SCENE_PIC})     # drawn faint (`ui_graph.FAINT_PIC`)
+# the thumbnail's box on a node, canvas units: the node's inner width
+# (`ui_graph.NODE_W`, 190 × SCALE) at 16:9 — a picture of another aspect
+# is fitted inside it, so the layout never moves with a picture's size
+THUMB_H = float(round(190 * 1.25 * 9 / 16))
+
+
+def thumb_of(name: str, ref=None) -> str | None:
+    """How canvas node `name`'s thumbnail is found (`THUMBS`), its render
+    node `ref` deciding for a kind the table does not name; None: text."""
+    kind = kind_of(name)
+    if kind in THUMBS:
+        return THUMBS[kind]
+    if kind in (None, CAMERA, rgraph.ALL_OUTPUTS, rgraph.GROUND):
+        return None
+    return PICTURE if getattr(ref, "OUTPUT", None) == IMAGE else None
 
 
 def kind_of(name: str) -> str | None:
@@ -1038,6 +1119,7 @@ FRAME_CLASS: dict[str, type] = {
     "pattern": rgraph.PatternNode, "channel": rgraph.MediaNode, "effect": rgraph.Effect,
     "copy": rgraph.Copy, "composite": rgraph.Composite, "switch": rgraph.SwitchNode,
     "delay": rgraph.Delay, "resize": rgraph.ResizeNode, "echo": rgraph.EchoNode,
+    "matte": rgraph.MatteNode, "cut": rgraph.CutNode, "segment": rgraph.SegmentNode,
     "dream": rgraph.DreamNode, "output": rgraph.Output, rgraph.ALL_OUTPUTS: rgraph.Output,
     rgraph.GROUND: GroundNode,
 }
@@ -1072,7 +1154,40 @@ def _stand_in(name: str, spec=None) -> rgraph.Node | None:
         return rgraph.Output(name, int(rest) - 1 if rest.isdecimal() else -1)
     if kind == CAMERA:
         return None
-    return FRAME_CLASS[kind](name)
+    r = FRAME_CLASS[kind](name)
+    if kind in STAND_IN_SAID:                        # plan 39 T5: its body line, in words
+        into = {w.port: w.src for w in (spec.all_wires() if spec is not None else ())
+                if w.node == name}
+        r.said = STAND_IN_SAID[kind](name, into)
+    return r
+
+
+def _matte_said(name: str, into: dict[str, str]) -> str:
+    src = into.get("image")
+    return f"a mask of {src}'s picture" if src else MATTE_UNWIRED
+
+
+def _cut_said(name: str, into: dict[str, str]) -> str:
+    if "image" not in into:
+        return CUT_NO_PICTURE
+    m = into.get("mask")
+    return f"{into['image']} cut by {m}" if m else CUT_NO_MASK
+
+
+def _segment_said(name: str, into: dict[str, str]) -> str:
+    src = into.get("image")
+    return f"{src} into it: no worker runs until it is reached" if src else SEGMENT_UNWIRED
+
+
+# plan 39 T5 (W6): what a matte, a cut or a segment the renderer built
+# none of says (`summary` reads `said`): unwired, or wired but reached by
+# nothing — a built one says its own (`graph.MatteNode.run` …)
+MATTE_UNWIRED = "nothing wired into its image: no mask"
+CUT_NO_PICTURE = "nothing wired into its image: no picture"
+CUT_NO_MASK = "no mask wired: its picture through, whole"
+SEGMENT_UNWIRED = "nothing wired into its image: no worker runs"
+STAND_IN_SAID: dict[str, Callable[[str, dict[str, str]], str]] = {
+    "matte": _matte_said, "cut": _cut_said, "segment": _segment_said}
 
 
 def _built(rnodes: Iterable[rgraph.Node]) -> dict[str, rgraph.Node]:
@@ -1157,7 +1272,8 @@ def media_made(r) -> bool:
 
 def build(table: Bindings, reg: Registry, router: Router | None = None, devices=None,
           render_graph: rgraph.Graph | None = None, spec=None, *, lanes=None,
-          bands: Iterable[str] | None = None, template=None, slots=(), rig=None) -> View:
+          bands: Iterable[str] | None = None, template=None, slots=(), rig=None,
+          groups=None) -> View:
     """The view of `table`, `reg`, `router`, the device registry `devices`
     and the render graph `render_graph` (the renderer's last), with the
     preset's graph `spec` kept on the view. `lanes` are the analyzer's
@@ -1167,7 +1283,8 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     names none; `slots` the rig's outputs (each with `n` and `name`: a
     window's title is its config name, plan 35 G); `rig` the rig's own
     wires (plan 36 T1, `graph.RigWires`: the bus cables drawn), else the
-    render graph's — what it was built with."""
+    render graph's — what it was built with; `groups` the preset's groups
+    (plan 40 T2, `preset.GROUPS_KEY` entries: `View.groups`)."""
     view = View(spec=spec)
     if rig is None:
         rig = getattr(render_graph, "rig", None)
@@ -1407,6 +1524,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                  "output" if kind in ("output", rgraph.ALL_OUTPUTS) else "render")
         of = copies.get(name, "")
         n = add_node(VNode(f"render:{name}", vkind, label_of(name, slots, of=of), ref=r,
+                           thumb=thumb_of(name, r),
                            status=hover_of(name, slots, of=of,
                                            tip=_tip(reg, name) if kind == "effect" else "")))
         for port, typ in _takes(kind).items():
@@ -1417,8 +1535,11 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         if kind == rgraph.ALL_OUTPUTS:           # plan 36 T1: the bus's pins, one a port
             for port in rgraph.BUS_PORTS:
                 add_port(n, VPort(f"rout:{name}.{port}", port, OUT, IMAGE))
+        if kind == "segment":                    # plan 39 T5: every instance's three pins
+            for p, typ in rgraph.SEGMENT_PINS.items():
+                add_port(n, VPort(f"rout:{name}.{p}", p, OUT, typ))
         for pin, owner in rgraph.PINS.items():   # plan 36 T2: the scene's cover and depth
-            if owner == name:
+            if owner == name and kind != "segment":
                 typ = rgraph.WIRED_MAKES[kind_of(pin)]
                 add_port(n, VPort(f"rout:{pin}", pin.rpartition(".")[2], OUT, typ))
         if kind == "lookback":                   # plan 36 T4: its own frames, pins
@@ -1500,9 +1621,15 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     for n in nodes.values():
         if n.kind == "macro":
             n.ports.sort(key=lambda q: q.direction == OUT)
+    # the faces pattern's params in one run: the selector, the mix and the
+    # eight inputs (`_sub_group`'s "pattern"), then its media (2026-10-27)
+    pat = nodes.get("render:pattern")
+    if pat is not None:
+        pat.ports.sort(key=lambda q: (q.param is not None,
+                                      q.param is not None and q.group != "pattern"))
 
     # ---- the cables ----
-    cut = set(getattr(router, "patch_cut", ()) or ()) if router is not None else set()
+    cut = set(getattr(router, "modgraph_cut", ()) or ()) if router is not None else set()
     ids: dict[str, int] = {}
 
     def cable_id(base: str) -> str:
@@ -1596,8 +1723,11 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                 and w.node not in windows)
         said = (f"no {w.node} this frame" if shut else
                 f"{lay} {D1_AFTER} {w.src}: what reads {w.src} reads it" if lay else "")
+        # plan 39 T5 (W6): a cable whose maker makes a mask is a mask cable
+        # (purple), whatever port takes it — promoted into a picture port too
+        typ = MASK if pin_type.get(src) == MASK else _takes(kind_of(w.node)).get(w.port, IMAGE)
         view.cables.append(VCable(cable_id(f"wire:{w.src}>{w.node}/{w.port}"), src, dst,
-                                  _takes(kind_of(w.node)).get(w.port, IMAGE), ref=w,
+                                  typ, ref=w,
                                   kind="render", dormant=shut, off=shut, label=said))
     # plan 36 T1 (W1, D1): the rig's bus cables, `output.all.<port> →
     # output.<n>.<port>` — each standing one the show has not cut, into
@@ -1670,7 +1800,11 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             or (n.kind != "channel" and is_idle(n, macros, named))
             or (n.kind == "render" and effect_off(n, reg) and n.ref.effect not in cabled))
     view.nodes = list(nodes.values())
+    # plan 37 P3: an effect is laid where its consumers are (`laid_areas`)
+    for nid, area in laid_areas(view).items():
+        nodes[nid].area = area
     _columns(view, render_graph)
+    attach_groups(view, groups, table)      # plan 40 T2: after the nodes and cables
     refresh(view, reg, router, lanes)
     return view
 
@@ -1717,6 +1851,12 @@ def _sub_group(pid: str, p: Param | None) -> str:
     if p.group in ("fx", "ghost", "output"):
         seg = pid.split(".")
         return ".".join(seg[:2]) if len(seg) > 2 else p.group
+    if p.group == "view":           # the pattern node's (`_view_owner`), 2026-10-27
+        key = pid.partition(".")[2]
+        if key.startswith("pattern"):
+            return "pattern"        # the selector and the mix, with the eight inputs
+        if key.startswith("media_"):
+            return "media"
     return p.group
 
 
@@ -1736,7 +1876,7 @@ def refresh(view: View, reg: Registry, router: Router | None, lanes=None,
     says true for (plan 28 N7) reads only what its lines show — its
     patched ports, its outputs and a macro's knob — not every port."""
     table = getattr(router, "table", None) if router is not None else None
-    cut = set(getattr(router, "patch_cut", ()) or ()) if router is not None else set()
+    cut = set(getattr(router, "modgraph_cut", ()) or ()) if router is not None else set()
     layer_of = getattr(table, "layer_of", None)
     for n in view.nodes:
         if n.layer and layer_of is not None:      # plan 28 N5: the latch, read each frame
@@ -1798,7 +1938,7 @@ def key(table: Bindings, reg: Registry, router: Router | None, devices,
             getattr(table, "modifiers_serial", 0), getattr(reg, "serial", len(reg)),
             devs, id(render_graph), id(spec), len(labels.get("lane") or ()),
             tuple(labels.get("lfo") or ()), tuple(labels.get("env") or ()),
-            frozenset(getattr(router, "patch_cut", ()) or ()) if router is not None else (),
+            frozenset(getattr(router, "modgraph_cut", ()) or ()) if router is not None else (),
             effect_switches(reg), seq_key(reg), channel_bins(reg))
 
 
@@ -1928,6 +2068,89 @@ def area_of(n: VNode) -> str:
                 return AREA[cls.__name__]
         return EFFECTS_AREA
     return AREA.get(n.kind, OTHER)
+
+
+def area_column(area: str) -> int | None:
+    """Area `area`'s place left to right (`AREAS`; an area drawn under
+    another's, `SHARES`, at that one's); None for an area of no column."""
+    area = SHARES.get(area, area)
+    return AREAS.index(area) if area in AREAS else None
+
+
+def laid_areas(view: View) -> dict[str, str]:
+    """Plan 37 P3, D5 (the rules): the nodes `area_of` lays in the effects
+    that are laid where their consumers are instead, so no cable runs back
+    across areas — by node id, the area each is laid in.
+
+    An effect, copy, composite or resize (a node of the frame `area_of`
+    gives the effects) whose consumers sit left of the effects is laid in
+    the leftmost of their areas that is not left of what feeds it: with
+    one consumer area that is D5's rule (`acid-scene`'s acid.2, between
+    the scene and the look-back, is the look-back's), with several the
+    leftmost (acid.2 also feeds a composite: it still sits in LOOK-BACK, so
+    that cable runs right). Tie-breaks: a consumer left of what feeds the
+    node (a picture of the scene taken back into a switch) is a return by
+    design and does not count; neither does a cable kept for the next
+    frame (`kept`: into a look-back's or a delay's `image`) — such a cable
+    is not counted as a consumer but still counts in `makers`, as a feed
+    bounding its taker from the left, so "not left of what feeds it"
+    holds across every drawn cable, kept ones included; a consumer of
+    no area is not counted; a chain whose only consumer is in another area
+    goes there whole (consumers first, to a fixed point); what feeds the
+    node bounds it from the left (a node of the chain at the earliest
+    area its own feeds allow). A node with no consumer left of the
+    effects keeps the effects.
+
+    Plan 36's rule holds: this names an *area*, the one `layout` lays an
+    unplaced node in — a node with a saved position keeps it (`layout`
+    skips what `placed` holds), nothing re-lays on a later frame, and a
+    tidy lays out by the same areas. To reverse: drop the call in `build`."""
+    by = {n.id: n for n in view.nodes}
+    col = {k: area_column(n.area) for k, n in by.items()}
+    free = [k for k, n in by.items() if n.kind in FRAME_VKINDS and n.area == EFFECTS_AREA]
+    if not free:
+        return {}
+    makers: dict[str, list[str]] = {}
+    takers: dict[str, list[str]] = {}
+    for c in view.cables:
+        a, b = node_of(view, c.src_port), node_of(view, c.dst_port)
+        if a == b or a not in by or b not in by:
+            continue
+        makers.setdefault(b, []).append(a)
+        if not kept(c, by[b]):
+            takers.setdefault(a, []).append(b)
+    movable = set(free)
+    # The caps (len(free) + 1 passes each): a pass carries a change one more
+    # node along a chain, so for any chain without a loop — all a built
+    # graph can hold (a loop closes only through a kept cable, which is no
+    # consumer here) — both passes settle before the cap. Should a cap be
+    # hit, the result is partial: some nodes not yet where the rule would
+    # lay them (never a saved position moved; only areas named).
+    # the earliest column each may sit at: past every fixed node feeding it
+    lo = dict.fromkeys(free, 0)
+    for _ in range(len(free) + 1):
+        moved = False
+        for k in free:
+            feeds = [lo[m] if m in movable else col[m] for m in makers.get(k, ())]
+            v = max((f for f in feeds if f is not None), default=0)
+            if v > lo[k]:
+                lo[k], moved = v, True
+        if not moved:
+            break
+    # where each is laid: the leftmost of its consumers' (as laid) not left of `lo`
+    home = {k: col[k] for k in free}
+    at = dict(home)
+    for _ in range(len(free) + 1):
+        moved = False
+        for k in free:
+            seen = [at[t] if t in movable else col[t] for t in takers.get(k, ())]
+            seen = [s for s in seen if s is not None and s >= lo[k]]
+            v = min(seen) if seen and min(seen) < home[k] else home[k]
+            if v != at[k]:
+                at[k], moved = v, True
+        if not moved:
+            break
+    return {k: AREAS[at[k]] for k in free if at[k] != home[k]}
 
 
 # which kinds may sit idle (`is_idle`): a node of any other kind is always
@@ -2235,19 +2458,23 @@ def returns(view: View, lay: Layout) -> set[str]:
         a, b = view.node(node_of(view, c.src_port)), view.node(node_of(view, c.dst_port))
         if a is None or b is None:
             continue
-        # (plan 36 T4: what a look-back records is its `image`)
-        kept = (isinstance(b.ref, (rgraph.Delay, rgraph.History))
-                and c.dst_port.endswith("/image"))
-        # (an old preset's D1 `after X` effect, drawn where X's readers read
-        # it: it sits with the effects, its reader may sit left of them)
-        kept = kept or (c.kind == "render" and f" {D1_AFTER} " in c.label)
         wrapped = (a.area == b.area == EFFECTS_AREA
                    and lay.rows.get(b.id, 0) > lay.rows.get(a.id, 0))
         taken = (order.get(a.area, 0) > order.get(b.area, 0) and isinstance(b.ref, TAKEN_BACK)
-                 and c.type == IMAGE)
-        if kept or wrapped or taken:
+                 and c.type in (IMAGE, MASK))     # (plan 39 T5: a promoted mask too)
+        if kept(c, b) or wrapped or taken:
             out.add(c.id)
     return out
+
+
+def kept(c: VCable, b: VNode) -> bool:
+    """Is cable `c` (into node `b`) what is kept for the frames after — a
+    loop by design, drawn back where its ring or its delay sits (`returns`)?
+    Plan 36 T4: what a look-back records is its `image`, as a delay's; an
+    old preset's D1 `after X` effect is drawn where X's readers read it."""
+    if isinstance(b.ref, (rgraph.Delay, rgraph.History)) and c.dst_port.endswith("/image"):
+        return True
+    return c.kind == "render" and f" {D1_AFTER} " in c.label
 
 def visible(n: VNode, full: bool, folds=frozenset()) -> list[VPort]:
     """The ports node `n` draws: a patched port and a render port always;
@@ -2268,12 +2495,14 @@ def height(n: VNode, full: bool = False, folds=frozenset(), collapsed: bool = Fa
     """A node's height as auto_layout stacks it: its title, the ports it
     shows (`visible`) and, expanded, a line per port group — or, while it
     is `collapsed` (plan 28 N7), its title and its lines (`summary`)."""
+    pic = THUMB_H if n.thumb is not None else 0.0    # plan 37 C1 (D2): always
     if collapsed:
-        return HEAD_H + ROW_H * len(summary(n))
+        # (a picture node's lines are its hover's: plan 37 P1)
+        return HEAD_H + (pic if n.thumb is not None else ROW_H * len(summary(n)))
     rows = len(visible(n, full, folds))
     if grouped(n, full):
         rows += len({p.group for p in n.ports})
-    return HEAD_H + ROW_H * rows
+    return HEAD_H + pic + ROW_H * rows
 
 
 def layout(view: View, placed: Mapping[str, Any] | None = None,
@@ -2387,6 +2616,9 @@ def preset_only(view: View) -> frozenset[str]:
             if x in section and y in have:
                 shown.add(y)
     shown |= {nid for nid, n in have.items() if n.kind == "output"}
+    # plan 40 T2: a group's members are the preset's (a group holds nothing
+    # of the rig's: `patches.select`), so a group is drawn, open or folded
+    shown |= {n.id for g in view.groups for n in g.members}
     return frozenset(shown)
 
 
@@ -2532,6 +2764,22 @@ def summary(n: VNode) -> list[str]:
     return lines[:SUMMARY_LINES]
 
 
+def picture_hover(n: VNode, gpu_ms: float | None = None) -> str:
+    """What hovering a picture node's thumbnail says (plan 37 C2, P1): its
+    title, then the lines a collapsed text node shows under its title
+    (`summary`: param counts, picture ports, the node's own words, a
+    switch's pick, "reaches nothing"), then the size of the picture its
+    thumbnail was copied from (`VNode.picture`, "1920×1080 picture"), then,
+    for a node the GPU timer times, its time (the SYSTEM page's rolling
+    median, "gpu 0.42 ms"). A line it has nothing for is left out."""
+    lines = [n.label, *summary(n)]
+    if n.picture is not None:
+        lines.append(f"{n.picture[0]}×{n.picture[1]} picture")
+    if gpu_ms is not None:
+        lines.append(f"gpu {gpu_ms:.2f} ms")
+    return "\n".join(lines)
+
+
 def switch_pick(n: VNode) -> str:
     """A switch node's pick in words, from its `select` port's reading
     (the owner, 2026-10-24: the canvas says which input passes): "picks
@@ -2557,6 +2805,10 @@ class VBundle:
     cables: list[VCable] = field(default_factory=list)
     live: float | None = None
     dormant: bool = False
+    # plan 40 T2: a folded group's end is its boundary pin (a param's row,
+    # a lane's out), not a stub: "" for a node's stub
+    out_pin: str = ""
+    in_pin: str = ""
 
     @property
     def count(self) -> int:
@@ -2564,11 +2816,11 @@ class VBundle:
 
     @property
     def src_port(self) -> str:
-        return stub_out(self.src)
+        return self.out_pin or stub_out(self.src)
 
     @property
     def dst_port(self) -> str:
-        return stub_in(self.dst)
+        return self.in_pin or stub_in(self.dst)
 
 
 def node_of(view: View, pin: str) -> str:
@@ -2579,7 +2831,8 @@ def node_of(view: View, pin: str) -> str:
 def wiring(view: View, collapsed: Callable[[str], bool],
            drawn: Callable[[VCable], bool] | None = None,
            shown: Callable[[str], bool] | None = None,
-           extra: Iterable[VCable] = ()
+           extra: Iterable[VCable] = (),
+           folded: Mapping[str, Any] | None = None
            ) -> tuple[list[tuple[VCable, str, str]], list[VBundle]]:
     """What the canvas draws this frame for `view`: the cables drawn one
     wire each, as (cable, the pin it leaves, the pin it lands on), and the
@@ -2591,26 +2844,47 @@ def wiring(view: View, collapsed: Callable[[str], bool],
     `shown(node id)` False for either end (plan 28 N9: an idle node is not
     drawn); `extra` are the through wires over hidden effects, drawn as
     render cables are. Bundles are in the order of their first cable;
-    their readings are this frame's."""
+    their readings are this frame's.
+
+    Plan 40 T2 (D4): `folded` (`folded(view)`: a folded group's member id
+    → its `VGroup`) — a cable with both ends inside one folded group is not
+    drawn (the one place a cable is folded away, the owner's); a cable with
+    one end inside is re-ended at the group node, at the boundary pin its
+    `ends` say (else the group's stub), as an expanded end: a render cable
+    one wire to its typed pin, a value cable bundled per (node, pin) when
+    its other end is collapsed, so each row keeps its own wire."""
     singles: list[tuple[VCable, str, str]] = []
-    pairs: dict[tuple[str, str], VBundle] = {}
+    pairs: dict[tuple[str, str, str, str], VBundle] = {}
     for c in (*view.cables, *extra):
         if drawn is not None and not drawn(c):
             continue
         s, d = node_of(view, c.src_port), node_of(view, c.dst_port)
+        gs = folded.get(s) if folded else None
+        gd = folded.get(d) if folded else None
+        if gs is not None and gs is gd:
+            continue                        # D4: inside a folded group
+        a, z = "", ""                       # a folded group's pins, when an end is one
+        if gs is not None:
+            s, a = gs.id, gs.ends.get(c.id, (None, None))[0] or stub_out(gs.id)
+        if gd is not None:
+            d, z = gd.id, gd.ends.get(c.id, (None, None))[1] or stub_in(gd.id)
         if shown is not None and not (shown(s) and shown(d)):
             continue
-        shut_s, shut_d = collapsed(s), collapsed(d)
+        shut_s = not a and collapsed(s)
+        shut_d = not z and collapsed(d)
+        src = a or (stub_out(s) if shut_s else c.src_port)
+        dst = z or (stub_in(d) if shut_d else c.dst_port)
         if c.kind in ("render", THROUGH) or c.type in RENDER_TYPES:
-            singles.append((c, stub_out(s) if shut_s else c.src_port,
-                            stub_in(d) if shut_d else c.dst_port))
+            singles.append((c, src, dst))
         elif shut_s or shut_d:
-            b = pairs.get((s, d))
+            k = (s, d, a, z)
+            b = pairs.get(k)
             if b is None:
-                b = pairs[(s, d)] = VBundle(f"bundle:{s}>{d}", s, d)
+                bid = f"bundle:{a or s}>{z or d}"
+                b = pairs[k] = VBundle(bid, s, d, out_pin=a, in_pin=z)
             b.cables.append(c)
         else:
-            singles.append((c, c.src_port, c.dst_port))
+            singles.append((c, a or c.src_port, z or c.dst_port))
     for b in pairs.values():
         b.type = TRIGGER if all(c.type == TRIGGER for c in b.cables) else VALUE
     bundles = list(pairs.values())
@@ -2631,7 +2905,8 @@ def readings(bundles: Iterable[VBundle]) -> None:
 def cable_words(view: View, c: VCable) -> str:
     """One cable as a bundle's hover lists it: "<source port> → <param>"."""
     src, dst = view.owner(c.src_port), view.owner(c.dst_port)
-    a = src[1].name if src and src[1] else (c.addr or c.src_port)
+    port = src[1] if src and src[1] else None     # plan 40 T4: the row's words, the port's first
+    a = row_words(c.addr or c.src_port, lambda _s: port.name if port is not None else None)
     b = (dst[1].param or dst[1].name) if dst and dst[1] else c.dst_port.partition(":")[2]
     return f"{a} → {b}"
 
@@ -2688,6 +2963,441 @@ def land_choices(view: View, edit, fixed: str, nid: str
             out.append((pin, label, port.group, why))
     return out
 
+
+
+# ---------------------------------------------------------------- groups (plan 40 T2)
+#
+# P2, D4 (the owner's, 2026-10-27: "Saved, folded until `+` … an explicit
+# place where we want to say, okay, we want to encapsulate complexity" —
+# the one sanctioned exception to plan 36's no-hidden-edge rule). A group
+# is a region of the loaded preset — the preset's `groups` entries — drawn
+# on GRAPH as one node: folded, its members are not drawn and neither is
+# a cable with both ends inside; every cable with one end inside is drawn
+# re-ended at the group node — a picture cable at one typed pin each, a
+# rig row or a crossing route at its member param's row, a member's lane
+# going out at one pin per lane — so nothing that crosses the edge is
+# folded away. Open, every member and cable is drawn as if there were no
+# group, inside a titled region. What crosses is `patches`' classifier
+# (`select`, `crossing`, `side`, `sub_side`, `input_side`): the pins a
+# folded group shows are the ports a patch saved from it would have.
+# Presentation only: the renderer never hears the word.
+
+GROUP_IN, GROUP_OUT = "gin", "gout"      # a group node's boundary pins
+NOTHING_TO_GROUP = "nothing to group"
+NO_GROUP = "no group {gid}"
+NO_PRESET_GROUPS = "no preset is loaded: nothing to group"
+GROUP_NEEDS_NAME = "a group needs a name"
+GROUP_MOVED = "{node} left {other} for this group"
+GROUPED = "grouped {n} node{s} as {name}"
+UNGROUPED = "{name} taken apart: its {n} node{s} stay where they are"
+LEFT_GROUP = "{node} left {name}"
+LEFT_EMPTY = "{node} left {name}, the last of it: the group is gone"
+GROUP_NO_DELETE = ("{name} is a group: Ungroup it from its menu (its nodes stay), or open it "
+                   "and delete its nodes")
+# plan 40 T3: a patch spawned, spliced, wired as saved; a group saved as one
+PATCH_SIDE, PRESET_SIDE = "patch", "preset"     # a conflict's two answers (the sheet's, D3)
+NO_PRESET_SPAWN = "no preset is loaded: nothing to spawn into"
+SPAWN_STALE = "the preset changed while the sheet was up: spawn {name} again"
+SPAWNED = "spawned {name}: {n} node{s}, its pins open — nothing wired to the preset"
+SPLICED = "spliced {name} into {s} → {d}"
+KEPT_SAID = "{n} row{s} kept by the preset"
+WIRED_AS_SAVED = "wired as saved: {wires}"
+PORT_TAKEN = "{port} is taken"
+NO_HOST_NODE = "no node {name}"
+NO_WAS = "{port}: the patch says nothing it was wired to"
+NOTHING_OPEN = "no pin of {name} is open"
+SAVED_PATCH = "saved {name} as a patch"
+UPDATED_PATCH = "updated patch {name}"
+PATCH_NEEDS_NAME = "a patch needs a name"
+PATCH_EXISTS = "a patch named {name} exists — Update patch, or another name"
+RIG_KINDS = ("output", "channel", "camera", "cloud")   # always there: the rig's own nodes
+
+
+def group_pin(gid: str, direction: str, key: str) -> str:
+    """A group node's boundary pin: ``gin:group.1/<key>`` (into the group:
+    a member's port, a param row, a modifier input), ``gout:group.1/<key>``
+    (out of it: a member's picture, a member's lane)."""
+    return f"{GROUP_IN if direction == IN else GROUP_OUT}:{gid}/{key}"
+
+
+def is_group_pin(pin: str) -> bool:
+    return pin_kind(pin) in (GROUP_IN, GROUP_OUT)
+
+
+@dataclass
+class VGroup:
+    """One group of the loaded preset on the canvas (plan 40 T2): its `id`
+    (``group.<n>``), `name`, provenance `patch` (the slug it was spawned
+    from, or None), its entry's canvas ids (`nodes`) and the view's nodes of
+    the ones a group may hold and the view has (`members`), whether it is
+    `open`. Its boundary: `ports` — the group node's pins, in drawing order
+    (each picture cable into a member, typed; each out of one; each member
+    lane going out; each member param a rig row or a crossing route lands
+    on, and each member modifier's input read from outside) — `ends`, each
+    crossing cable's id → the group pins it is re-ended at while folded
+    (source, target; None where that end is outside), `inside` the cables
+    with both ends inside (not drawn while folded), `real` each pin → the
+    member pin it stands for (a drag onto it lands there), `rows` each pin
+    → the cables at it, `thumb` the member whose picture is its last
+    picture outlet (plan 37's thumbnail on the folded node), and
+    `kept_by_host` (plan 40 T3: the rows a spawn's conflict sheet gave the
+    preset — drawn when present)."""
+
+    id: str
+    name: str
+    nodes: list[str] = field(default_factory=list)
+    members: list[VNode] = field(default_factory=list)
+    open: bool = False
+    patch: str | None = None
+    ports: list[VPort] = field(default_factory=list)
+    ends: dict[str, tuple[str | None, str | None]] = field(default_factory=dict)
+    inside: frozenset[str] = frozenset()
+    real: dict[str, str] = field(default_factory=dict)
+    rows: dict[str, list[VCable]] = field(default_factory=dict)
+    thumb: str | None = None
+    kept_by_host: list = field(default_factory=list)
+
+    @property
+    def ids(self) -> frozenset[str]:
+        """The member node ids."""
+        return frozenset(n.id for n in self.members)
+
+    def port(self, pin: str) -> VPort | None:
+        return next((p for p in self.ports if p.id == pin), None)
+
+    def rect(self, positions: Mapping[str, Any], size: Callable[[str], tuple[float, float]]
+             ) -> tuple[float, float, float, float] | None:
+        """The members' bounding rect (x0, y0, x1, y1) from their
+        `positions` (node id → (x, y)) and `size(node id)` → (w, h); None
+        with no member placed. A group has no position of its own (D4: the
+        layout keeps its members')."""
+        boxes = []
+        for n in self.members:
+            xy = positions.get(n.id)
+            if xy is None:
+                continue
+            w, h = size(n.id)
+            boxes.append((float(xy[0]), float(xy[1]), float(xy[0]) + w, float(xy[1]) + h))
+        if not boxes:
+            return None
+        return (min(b[0] for b in boxes), min(b[1] for b in boxes),
+                max(b[2] for b in boxes), max(b[3] for b in boxes))
+
+
+def region(rect: tuple[float, float, float, float] | None, margin: float = GAP
+           ) -> tuple[float, float, float, float] | None:
+    """An open group's region round its members' `rect`: `margin` (`GAP`)
+    on every side."""
+    if rect is None:
+        return None
+    x0, y0, x1, y1 = rect
+    return (x0 - margin, y0 - margin, x1 + margin, y1 + margin)
+
+
+def leaves(area: tuple[float, float, float, float] | None,
+           box: tuple[float, float, float, float]) -> bool:
+    """Does node rect `box` lie wholly outside region `area` (plan 40 T2:
+    a member dragged so — **ungroup one**)? Touching or overlapping it is
+    still inside: the region grows to hold it."""
+    if area is None:
+        return False
+    return box[2] < area[0] or box[0] > area[2] or box[3] < area[1] or box[1] > area[3]
+
+
+def folded(view: View) -> dict[str, VGroup]:
+    """Each member node id of a folded group → its group (`wiring`'s
+    `folded`; the page leaves those nodes off the canvas)."""
+    return {n.id: g for g in view.groups if not g.open for n in g.members}
+
+
+def attach_groups(view: View, entries, table) -> None:
+    """`view.groups` from the preset's `groups` entries (plan 40 T2): each
+    entry's members the view has and a group may hold (`patches.select`; a
+    node already in an earlier group stays there), its boundary classified
+    over the view's cables by `patches`' rule. A group with no member left
+    (its nodes deleted since: the save leaves them out) is not drawn."""
+    view.groups = []
+    have = {n.id: n for n in view.nodes}
+    taken: set[str] = set()
+    for e in entries or ():
+        if not isinstance(e, Mapping) or not isinstance(e.get("id"), str):
+            continue
+        ids = [x for x in e.get("nodes") or () if isinstance(x, str)]
+        mem, _ = patches.select(view.spec, table, ids)
+        ok = set(mem.canvas())
+        keep = [cid for cid in dict.fromkeys(ids) if cid in ok and cid in have
+                and cid not in taken]
+        if not keep:
+            continue
+        taken |= set(keep)
+        g = VGroup(e["id"], str(e.get("name") or e["id"]), list(ids), [have[c] for c in keep],
+                   open=bool(e.get("open")), patch=e.get("patch") or None,
+                   kept_by_host=list(e.get("kept_by_host") or ()))
+        mem, _ = patches.select(view.spec, table, keep)
+        _boundary(view, g, mem)
+        _open_pins(view, g, e)              # plan 40 T3: a spawn's host ports, still open
+        view.groups.append(g)
+
+
+def _boundary(view: View, g: VGroup, mem) -> None:
+    """Group `g`'s pins, re-endings and inside cables (`attach_groups`)."""
+    where_w = {(w.src, w.dst): where for w, where in patches.crossing(view.spec, mem.render)}
+    ins: dict[str, VPort] = {}      # picture inlets by the member port they go into
+    outs: dict[str, VPort] = {}     # picture outlets by cable
+    lanes: dict[str, VPort] = {}    # member lanes going out, by their pin
+    rows: dict[str, VPort] = {}     # rows into a member param or input, by key
+    inside: set[str] = set()
+
+    def pin_for(store: dict, key: str, direction: str, name: str, typ: str,
+                real: str, param: str | None = None) -> str:
+        port = store.get(key)
+        if port is None:
+            pin = group_pin(g.id, direction, key)
+            port = store[key] = VPort(pin, name, direction, typ, patched=True, param=param)
+            g.real[pin] = real
+        return port.id
+
+    def label(pin: str) -> str:
+        hit = view.owner(pin)
+        if hit is None or hit[1] is None:
+            return pin.partition(":")[2] or pin
+        return f"{hit[0].label} {hit[1].name}"
+
+    for c in view.cables:
+        if c.kind == "render":
+            w = c.ref
+            where = where_w.get((getattr(w, "src", None), getattr(w, "dst", None)))
+            if where == patches.INSIDE:
+                inside.add(c.id)
+            elif where == patches.INTO:
+                key = c.dst_port.partition(":")[2]
+                g.ends[c.id] = (None, pin_for(ins, key, IN, f"{label(c.dst_port)} ← {w.src}",
+                                              c.type, c.dst_port))
+            elif where == patches.OUT:
+                g.ends[c.id] = (pin_for(outs, c.id, OUT, f"{w.src} → {w.dst}", c.type,
+                                        c.src_port), None)
+            continue
+        side = None
+        if c.kind in ("route", "setter") and isinstance(c.ref, Binding):
+            b = c.ref
+            if patches.touches(mem, b.source, b.target):
+                side = patches.side(mem, b.source, b.target)
+        elif c.kind == "sub":
+            mid, s = c.ref
+            side = patches.sub_side(mem, mid, s.base if s.depth is None else s.depth[1])
+        elif c.kind == "input":
+            m, _k = c.ref
+            side = patches.input_side(mem, m.id, c.addr)
+        elif c.kind == "lane":
+            _li, env = c.ref
+            pid = f"{envmod.GROUP}.{env}.fire"
+            if patches.touches(mem, c.addr, pid):
+                side = patches.side(mem, c.addr, pid)
+        if side is None:
+            continue
+        if side == patches.INSIDE:
+            inside.add(c.id)
+        elif side == patches.OUT:
+            g.ends[c.id] = (pin_for(lanes, c.src_port, OUT, label(c.src_port), c.type,
+                                    c.src_port), None)
+        else:                       # a rig row, or a host lane / macro onto a member
+            hit = view.owner(c.dst_port)
+            param = hit[1].param if hit is not None and hit[1] is not None else None
+            key = f"param:{param}" if param else c.dst_port
+            name = (hit[1].name if hit is not None and hit[1] is not None else c.dst_port)
+            real = f"{MOD}:{param}" if param else c.dst_port
+            g.ends[c.id] = (None, pin_for(rows, key, IN, name, c.type, real, param))
+    g.ports = [*ins.values(), *outs.values(), *lanes.values(), *rows.values()]
+    g.inside = frozenset(inside)
+    by_id = {c.id: c for c in view.cables}
+    for cid, (a, b) in g.ends.items():
+        g.rows.setdefault(a or b, []).append(by_id[cid])
+    pics = [p for p in outs.values() if p.type == IMAGE]
+    if pics:
+        src = g.real[pics[-1].id]
+        g.thumb = view.pins.get(src, ("",))[0] or None
+
+
+def group_words(view: View, g: VGroup) -> list[str]:
+    """A group's boundary in words (the side pane, the hover): its picture
+    pins by type ("in: picture · out: picture"), then each row's cables as
+    a bundle lists them ("cc:0:48 → fx.acid.2.speed")."""
+    noun = {IMAGE: "picture", GEOMETRY: "geometry", MASK: "mask"}
+    pics = [p for p in g.ports if p.type in RENDER_TYPES]
+    lines = []
+    if pics:
+        lines.append(" · ".join(f"{'in' if p.direction == IN else 'out'}: {noun[p.type]}"
+                                for p in pics))
+    for p in g.ports:
+        if p.type in RENDER_TYPES:
+            continue
+        lines += [cable_words(view, c) for c in g.rows.get(p.id, ())]
+    return lines
+
+
+def group_of(view: View, nid: str) -> VGroup | None:
+    """The group node `nid` is a member of, or None."""
+    return next((g for g in view.groups if nid in g.ids), None)
+
+
+def group_params(g: VGroup) -> list[str]:
+    """The ids group `g`'s members' params live under — a render node's
+    param prefix (``fx.acid.2``, ``ghost.2``), a modifier's, a voice's, a
+    macro's id — what `devices.wants_for` keeps a group's rows by (plan 40
+    P4: the group node's status line)."""
+    out = []
+    for n in g.members:
+        name = n.id.partition(":")[2] if n.id.startswith("render:") else ""
+        out.append(rgraph.param_prefix(name) if name else n.id)
+    return out
+
+
+def kept_words(row: Any) -> str:
+    """A row a spawn's conflict sheet kept for the preset (plan 40 T3's
+    `kept_by_host` entries), in words: "K1 kept by the preset" — the
+    entry's own `words` (the control as the sheet said it: a desk knob by
+    its glyph) where it has them."""
+    if isinstance(row, Mapping):
+        said = row.get("words")
+        if isinstance(said, str) and said:
+            return f"{said} kept by the preset"
+        src = row.get("source") or row.get("control_or_source") or "?"
+        return f"{row_words(str(src))} kept by the preset"
+    return f"{row} kept by the preset"
+
+
+# ---- plan 40 T3: a spawn's open pins, a patch's boundary in words ----
+
+PICTURE_NOUNS = {IMAGE: "picture", GEOMETRY: "geometry", MASK: "mask"}
+OPEN_PIN = "{id} · open (was {was})"
+
+
+def _members_named(entry: Mapping) -> set[str]:
+    """The render node names a group entry holds (``render:acid.2`` → ``acid.2``)."""
+    return {cid.partition(":")[2] for cid in entry.get("nodes") or ()
+            if isinstance(cid, str) and cid.startswith("render:")}
+
+
+def open_ports(spec, entry: Mapping) -> list[dict]:
+    """Plan 40 T3 (D2): the host ports a spawn left open on group `entry`
+    (its session-only ``ports``, `patches.Landing.ports` as landed — never
+    saved) that are open still: an inlet whose member port nothing is
+    wired into, an outlet whose member sends nothing out of the group.
+    Picture, geometry and mask ports only (a value port is a row, landed
+    or kept with the rows). Pure."""
+    ports = entry.get("ports") if isinstance(entry, Mapping) else None
+    if not ports:
+        return []
+    wires = list(spec.all_wires()) if spec is not None else []
+    inside = _members_named(entry)
+    out = []
+    for p in ports:
+        if not isinstance(p, Mapping) or p.get("type") not in RENDER_TYPES:
+            continue
+        if isinstance(p.get("to"), str):
+            free = not any(w.dst == p["to"] for w in wires)
+        elif isinstance(p.get("from"), str):
+            free = not any(w.src == p["from"] and w.node not in inside for w in wires)
+        else:
+            free = False
+        if free:
+            out.append(dict(p))
+    return out
+
+
+def _open_pins(view: View, g: VGroup, entry: Mapping) -> None:
+    """Group `g`'s open pins (plan 40 T3, D2: "every host port is an open
+    pin on the group node"): one per `open_ports` entry, typed, its drag
+    landing on the member's own port (`real`) — appended to its pins."""
+    for p in open_ports(view.spec, entry):
+        if "to" in p:
+            node, _, port = p["to"].rpartition(".")
+            pin, real, direction = (group_pin(g.id, IN, f"open:{p['id']}"),
+                                    f"rin:{node}/{port}", IN)
+        else:
+            pin, real, direction = (group_pin(g.id, OUT, f"open:{p['id']}"),
+                                    f"rout:{p['from']}", OUT)
+        if g.port(pin) is not None:
+            continue
+        g.ports.append(VPort(pin, OPEN_PIN.format(id=p["id"], was=p.get("was", "?")),
+                             direction, p["type"]))
+        g.real[pin] = real
+
+
+def patch_pins(ports: Iterable[Mapping]) -> tuple[list[dict], list[dict]]:
+    """A patch's picture / geometry / mask ports: (inlets, outlets)."""
+    ins = [dict(p) for p in ports if isinstance(p, Mapping) and p.get("type") in RENDER_TYPES
+           and isinstance(p.get("to"), str)]
+    outs = [dict(p) for p in ports if isinstance(p, Mapping) and p.get("type") in RENDER_TYPES
+            and isinstance(p.get("from"), str)]
+    return ins, outs
+
+
+SPLICE_ONE = ("{name} has {i} picture inlet{si} and {o} outlet{so}: a splice needs one of "
+              "each")
+SPLICE_TYPE = "{name}'s pins carry {have}: that cable carries {want}"
+
+
+def splice_refusal(name: str, ports: Iterable[Mapping], typ: str = IMAGE) -> str | None:
+    """Can a patch with `ports` be dropped on a cable of type `typ` (plan 40
+    T3, D2's splice)? Exactly one inlet and one outlet, both `typ`; else
+    the words why not."""
+    ins, outs = patch_pins(ports)
+    if len(ins) != 1 or len(outs) != 1:
+        return SPLICE_ONE.format(name=name, i=len(ins), si="" if len(ins) == 1 else "s",
+                                 o=len(outs), so="" if len(outs) == 1 else "s")
+    if ins[0]["type"] != typ or outs[0]["type"] != typ:
+        have = " and ".join(dict.fromkeys(PICTURE_NOUNS.get(p["type"], p["type"])
+                                          for p in (ins[0], outs[0])))
+        return SPLICE_TYPE.format(name=name, have=have, want=PICTURE_NOUNS.get(typ, typ))
+    return None
+
+
+def patch_words(doc: Mapping, names: Callable[[str], str | None] | None = None) -> str:
+    """A patch's boundary in words, for the browser (plan 40 T3): "in:
+    picture · out: picture · wants: K1, right hand y, band 1" — its picture
+    ports by direction and type, then every rig-side source its rows and
+    modifiers read, once, in `routing.row_words`' words (`names`: the
+    desk's glyph, as `cable_words` passes the port's name). Pure."""
+    p = patches.read(doc)
+    ins, outs = patch_pins(p.ports)
+    parts = [f"in: {PICTURE_NOUNS[x['type']]}" for x in ins]
+    parts += [f"out: {PICTURE_NOUNS[x['type']]}" for x in outs]
+    own = p.members
+    wants: list[str] = []
+    srcs = [r.get("source") for r in (*p.routes, *p.desk)]
+    for m in p.modifiers:
+        ins_ = m.get("in")
+        srcs += [ins_] if isinstance(ins_, str) else list(ins_ or ())
+    for src in srcs:
+        if not isinstance(src, str) or not src or not patches.is_rig_source(src):
+            continue
+        if own.own_lane(src) or is_macro(src):
+            continue
+        w = row_words(src, names)
+        if w not in wants:
+            wants.append(w)
+    if wants:
+        parts.append("wants: " + ", ".join(wants))
+    return " · ".join(parts)
+
+
+def view_group_of_pin(view: View, pin: str) -> VGroup | None:
+    """The group a boundary pin (``gin:group.1/…``) is on, or None."""
+    if not is_group_pin(pin):
+        return None
+    return view.group(pin.partition(":")[2].partition("/")[0])
+
+
+def real_pin(view: View, pin: str) -> str:
+    """What a folded group's boundary pin stands for in a drag (plan 40
+    T2): the member pin behind it (a member's picture port, a param's
+    ``mod`` stub, a modifier's input, a member's lane); any other pin is
+    itself."""
+    if not is_group_pin(pin):
+        return pin
+    g = view.group(pin.partition(":")[2].partition("/")[0])
+    return g.real.get(pin, pin) if g is not None else pin
 
 
 # ---------------------------------------------------------------- editing (plan 28 N3)
@@ -2830,6 +3540,10 @@ class Edit:
         # plan 36 T1: the open show, which holds the rig's own wires (its
         # `rig`, `graph.RigWires`): a bus cable cut or joined lands there
         self.show = None
+        # plan 40 T2: the loaded `preset.Presets`, whose `groups` and
+        # `layout` the group verbs edit (None: no group verb lands)
+        self.presets = None
+        self.spawned = None     # plan 40 T3: the group entry the last spawn landed
 
     # ---- the render graph (plan 28 N4): each returns None (done; its
     # words in `said`) or a refusal in words, nothing changed ----
@@ -3187,13 +3901,12 @@ class Edit:
                      if b.source == addr and b.target == p.id), None)
 
     def subscribe(self, mid: str, kind: str, pid: str) -> Sub:
-        """A macro's cable: into `pid`'s base (a base subscriber, from = to
-        = where the param sits, so adding it moves nothing — ROUTING's
+        """A macro's cable: into `pid`'s base (a base subscriber from where
+        the param sits to its fader's end, `routing.base_sub` — ROUTING's
         "+ base") or onto the depth of the route landing on `pid` (a depth
         subscriber over 0…1 — ROUTING's "+ depth")."""
         if kind == BASE:
-            p = self._param(pid)
-            s = Sub(base=p.id, lo=p.norm, hi=p.norm)
+            s = base_sub(self._param(pid))
         else:
             r = self._route_on(pid)
             s = Sub(depth=(r.source, r.target), lo=0.0, hi=1.0)
@@ -3370,8 +4083,8 @@ class Edit:
         return m
 
     def remove_node(self, nid: str):
-        """Delete a node: a modifier (`remove_modifier`: its params go, a
-        route on its lane stays, dormant); a macro (its label and every
+        """Delete a node: a modifier (`remove_modifier`: its params go,
+        what fed it wired on to whatever read it); a macro (its label and every
         subscriber go — the knob stays: the eight are the rig's); a render
         node is N4's (`remove_render_node`); anything else is the rig's (a
         device, the analyzer, an LFO, a group) and is refused."""
@@ -3430,6 +4143,480 @@ class Edit:
                 {k: v for k, v in self.table.macros_doc().items() if k != nid}, self.reg)
         return Refusal(NOT_REMOVABLE.format(label=node.label if node is not None else nid))
 
+    # ---- plan 40 T2: groups (P2, D4) — a fold of the canvas and a list in
+    # the preset (`self.presets.groups`, its `layout`), each verb one undo
+    # step: `push(label)` (the page's `undo.push(label, load=True)`: the
+    # library's marks carry the groups and the layout) before the first
+    # write. Returns a refusal in words, or None (its words in `said`) ----
+
+    def _groups(self) -> list[dict] | None:
+        pre = getattr(self, "presets", None)
+        if pre is None:
+            return None
+        if getattr(pre, "groups", None) is None:
+            pre.groups = []
+        return pre.groups
+
+    def _group(self, gid: str) -> dict | None:
+        return next((g for g in self._groups() or () if g.get("id") == gid), None)
+
+    def _step(self, label: str) -> None:
+        if self.push is not None:
+            self.push(label)
+
+    def land_group(self, entry: Mapping) -> dict:
+        """Add group `entry` (``{"name"?, "patch"?, "nodes", "open"?}`` — a
+        `patches.Landing.group`, or Group's own) to the preset as
+        ``group.<n>``, n one past the highest held (the modifier rule), named
+        "group <n>" when it has no name; folded unless it says open. Pushes
+        no undo step: the caller's verb has (Group's below; plan 40 T3's
+        spawn, whose landing is one step). Returns the entry as landed."""
+        groups = self._groups()
+        if groups is None:
+            raise ValueError(NO_PRESET_GROUPS)
+        n = max((graphmigrate.group_number(g.get("id")) for g in groups), default=0) + 1
+        g = {"id": f"group.{n}", "name": str(entry.get("name") or f"group {n}")}
+        if entry.get("patch"):
+            g["patch"] = str(entry["patch"])
+        g["nodes"] = list(dict.fromkeys(entry.get("nodes") or ()))
+        g["open"] = bool(entry.get("open"))
+        if entry.get("kept_by_host"):
+            g["kept_by_host"] = list(entry["kept_by_host"])
+        groups.append(g)
+        return g
+
+    def group(self, ids: Iterable[str], name: str | None = None
+              ) -> tuple[dict | None, list[str]]:
+        """Group (right-click with nodes selected): of canvas ids `ids`, the
+        ones a group may hold (`patches.select`: the lift's rule) made one
+        group, folded, named "group <n>" — one undo step. Returns (the
+        entry, or None when nothing was grouped; the words for what was
+        left out: "scene is the frame's; left out", a node another group
+        held moved here, said; "nothing to group"). A node is in one group
+        at most: grouping a member of another moves it (an emptied group
+        goes); a group holds nodes, never a group."""
+        groups = self._groups()
+        if groups is None:
+            return None, [NO_PRESET_GROUPS]
+        ids = list(dict.fromkeys(ids))
+        mem, refused = patches.select(getattr(self.graph, "spec", None), self.table, ids)
+        ok = set(mem.canvas())
+        keep = [cid for cid in ids if cid in ok]
+        if not keep:
+            return None, [*refused, NOTHING_TO_GROUP]
+        self._step(f"group {len(keep)} nodes")
+        said = list(refused)
+        for g in list(groups):
+            gone = [cid for cid in g["nodes"] if cid in keep]
+            if not gone:
+                continue
+            said += [GROUP_MOVED.format(node=cid.removeprefix("render:"), other=g["name"])
+                     for cid in gone]
+            g["nodes"] = [cid for cid in g["nodes"] if cid not in keep]
+            if not g["nodes"]:
+                groups.remove(g)
+        entry = self.land_group({"name": name, "nodes": keep})
+        self.said = GROUPED.format(n=len(keep), s="" if len(keep) == 1 else "s",
+                                   name=entry["name"])
+        return entry, said
+
+    def ungroup(self, gid: str) -> str | None:
+        """Ungroup: the entry taken out of the list, nothing else — every
+        node, cable and position stays. One undo step."""
+        g = self._group(gid)
+        if g is None:
+            return NO_GROUP.format(gid=gid)
+        self._step(f"ungroup {g['name']}")
+        self._groups().remove(g)
+        k = len(g["nodes"])
+        self.said = UNGROUPED.format(name=g["name"], n=k, s="" if k == 1 else "s")
+        return None
+
+    def rename_group(self, gid: str, name: str) -> str | None:
+        """Rename… (the side pane's name, Enter): one undo step; an empty
+        name is refused, the same name does nothing."""
+        g = self._group(gid)
+        if g is None:
+            return NO_GROUP.format(gid=gid)
+        name = str(name).strip()
+        if not name:
+            return GROUP_NEEDS_NAME
+        if name == g["name"]:
+            return None
+        self._step(f"rename {g['name']} to {name}")
+        g["name"] = name
+        self.said = f"renamed to {name}"
+        return None
+
+    def set_open(self, gid: str, on: bool) -> str | None:
+        """Open (`+`) or Fold (`-`): the entry's `open`, saved with the
+        preset (D4: "saved, folded until +"), so one undo step and the
+        preset dirty, as a node moved is."""
+        g = self._group(gid)
+        if g is None:
+            return NO_GROUP.format(gid=gid)
+        if bool(g.get("open")) == bool(on):
+            return None
+        self._step(f"{'open' if on else 'fold'} {g['name']}")
+        g["open"] = bool(on)
+        return None
+
+    def move_group(self, gid: str, delta: tuple[float, float],
+                   positions: Mapping[str, Any]) -> str | None:
+        """The region's title (or the folded node) dragged by `delta`: every
+        member moved by it — each one's position (`positions`: member id →
+        where it sits now, layout units) written into the preset's layout,
+        one undo step. A group has no position of its own."""
+        g = self._group(gid)
+        if g is None:
+            return NO_GROUP.format(gid=gid)
+        dx, dy = float(delta[0]), float(delta[1])
+        if not (dx or dy):
+            return None
+        lay = getattr(self.presets, "layout", None)
+        if lay is None:
+            lay = self.presets.layout = {}
+        self._step(f"move {g['name']}")
+        for cid in g["nodes"]:
+            xy = positions.get(cid)
+            if xy is not None:
+                lay[cid] = [round(float(xy[0]) + dx), round(float(xy[1]) + dy)]
+        return None
+
+    def leave_group(self, gid: str, nid: str, at: tuple[float, float] | None = None
+                    ) -> str | None:
+        """A member dragged out of its region (**ungroup one**): its id taken
+        from the list — and, with `at`, its new position written — one undo
+        step; the last member leaving takes the group with it, said."""
+        return self.leave_groups([(gid, nid, at)])
+
+    def leave_groups(self, moves: Iterable[tuple[str, str, tuple[float, float] | None]]
+                     ) -> str | None:
+        """Several members dragged out of their regions at once — each
+        ``(group id, node id, at)`` — as **one** undo step (plan 40 review
+        fix: one gesture, one ⌘Z): each id taken from its list and its new
+        position written; a group its last member leaves goes, said."""
+        todo: list[tuple[dict, str, Any]] = []
+        for gid, nid, at in moves:
+            g = self._group(gid)
+            if g is None:
+                return NO_GROUP.format(gid=gid)
+            if nid in g["nodes"] and not any(t[1] == nid for t in todo):
+                todo.append((g, nid, at))
+        if not todo:
+            return None
+        hit = list({id(g): g for g, _, _ in todo}.values())
+        self._step(f"{todo[0][1]} leaves {hit[0]['name']}" if len(todo) == 1 else
+                   f"{len(todo)} nodes leave {', '.join(g['name'] for g in hit)}")
+        lay = getattr(self.presets, "layout", None)
+        for g, nid, at in todo:
+            g["nodes"] = [cid for cid in g["nodes"] if cid != nid]
+            if at is not None:
+                if lay is None:
+                    lay = self.presets.layout = {}
+                lay[nid] = [round(float(at[0])), round(float(at[1]))]
+        said = []
+        for g in hit:
+            node = ", ".join(nid.removeprefix("render:") for gg, nid, _ in todo if gg is g)
+            if not g["nodes"]:
+                self._groups().remove(g)
+                said.append(LEFT_EMPTY.format(node=node, name=g["name"]))
+            else:
+                said.append(LEFT_GROUP.format(node=node, name=g["name"]))
+        self.said = "; ".join(said)
+        return None
+
+    # ---- plan 40 T3: patches (P3, D2, D3, D9) — a spawn is a fragment of a
+    # preset load through today's doors, in load order, one undo step:
+    # `push(label)` once, before the first write, and nothing else pushes
+    # (`_land` is run with the push held). Each returns a refusal in words,
+    # nothing changed, or None (its words in `said`) ----
+
+    def _spawn_refusal(self, landing) -> str | None:
+        """Whether `landing` (a `patches.Landing` read off the preset as it
+        stood) still lands as it says: its render names free, its modifier
+        ids the next ones, its voices free in banks there are — else the
+        words (the preset moved under the sheet; nothing is written)."""
+        if self.graph is None or self.presets is None or self.table is None:
+            return NO_PRESET_SPAWN
+        name = landing.group.get("name") or "the patch"
+        have = patches.spec_names(getattr(self.graph, "spec", None))
+        if any(c.startswith("render:") and c[7:] in have for c in landing.group.get("nodes", ())):
+            return SPAWN_STALE.format(name=name)
+        held = {m.id for m in getattr(self.table, "modifiers", ())}
+        if any(d.get("id") in held for d in landing.modifiers):
+            return SPAWN_STALE.format(name=name)
+        for scheme, ids in (("lfo", landing.lfos), ("env", landing.envs)):
+            if not ids:
+                continue
+            bank = bank_of(self.router, scheme)
+            if bank is None:
+                return NO_BANK.format(what=BANK_WORDS[scheme][0])
+            if any(n in bank for n in ids):
+                return SPAWN_STALE.format(name=name)
+        return None
+
+    def _land_quiet(self, doc: dict, label: str, said: str) -> str | None:
+        """`_land` with no undo step of its own (the verb pushed one)."""
+        push, self.push = self.push, None
+        try:
+            return _land(self, doc, label, said)
+        finally:
+            self.push = push
+
+    def spawn(self, landing, choices: Mapping[int, str] | None = None,
+              splice=None) -> str | None:
+        """Land `landing` (`patches.spawn`'s, plan 40 P3) as **one undo
+        step**, through the doors a preset load uses, in its order:
+
+        1. the section re-read with the patch's nodes and its own wires (and,
+           with `splice` — a picture cable `a → b.port` — the cable taken out
+           and `a → <inlet>`, `<outlet> → b.port` put in, `render_insert`'s
+           shape) and landed (`gs.land`), so its params exist;
+        2. its voices (`bank.add(n)`), its modifiers (`add_modifier`), its
+           values (`lib.restore`);
+        3. each route (`Bindings.add`; where the sheet answered the patch,
+           `replace_owner` — a one-owner source's other rows let go first,
+           one axis one param — and where it answered the preset, nothing:
+           the row kept in the group's `kept_by_host`, said), each desk row
+           (`bind(write=False)`, the same choice), the subscribers
+           (`set_macros`, merged);
+        4. the group (`land_group`, its open ports and rename map kept on
+           the live entry for the session — never saved) and its layout at
+           the drop point; the desk redrawn.
+
+        `choices`: conflict index → ``"patch"`` or ``"preset"`` (D9: a row
+        not answered is the patch's). Nothing is attached by itself (D2):
+        with no `splice` every host port is an open pin. No file is written."""
+        why = self._spawn_refusal(landing)
+        if why is not None:
+            return why
+        name = landing.group.get("name") or "patch"
+        doc = _doc(self)
+        doc["nodes"] = [*doc.get("nodes", []), *copy.deepcopy(list(landing.nodes))]
+        doc["wires"] = [*doc.get("wires", []), *copy.deepcopy(list(landing.wires))]
+        ends = None
+        if splice is not None:
+            s, d, why = _cable_ends(self, splice)
+            if why is not None:
+                return why
+            why = splice_refusal(name, landing.ports, IMAGE)
+            if why is not None:
+                return why
+            ins, outs = patch_pins(landing.ports)
+            ends = (s, d, ins[0]["to"], outs[0]["from"])
+            _splice(doc, *ends)
+        label = (f"spawn {name}" if ends is None
+                 else f"splice {name} into {ends[0]} → {ends[1]}")
+        why = _land(self, doc, label, "", dry=True)
+        if why is not None:
+            return why
+        self._step(label)
+        why = self._land_quiet(doc, label, "")
+        if why is not None:
+            # unreachable in practice: the dry run read this same doc (already
+            # normalised by it) over the same files and said it lands. Were it
+            # reached, nothing has been written yet, so the step just pushed
+            # closes with nothing to put back and `Undo._close` takes it off
+            # the stack (tests/test_graph_groups.py proves it)
+            return why
+        table, reg = self.table, self.reg
+        notes = list(landing.notes)
+        for scheme, ids in (("lfo", landing.lfos), ("env", landing.envs)):
+            bank = bank_of(self.router, scheme)
+            for n in ids:
+                bank.add(n)
+        for d in landing.modifiers:
+            m = modmod.Modifier.from_json(dict(d))
+            got = table.add_modifier(m.kind, m.inputs, reg, **m.params)
+            if got is None or got.id != m.id:          # (the refusal above rules it out)
+                notes.append(f"{m.id} landed as {getattr(got, 'id', '?')}")
+        lib = getattr(self.presets, "lib", None)
+        if landing.values and lib is not None:
+            missing = lib.restore(dict(landing.values))
+            if missing:
+                notes.append(f"{len(missing)} value(s) for no param: " + ", ".join(missing[:4]))
+        kept = self._spawn_rows(landing, choices or {}, notes)
+        if landing.macros:
+            notes += table.set_macros({**table.macros_doc(), **copy.deepcopy(landing.macros)},
+                                      reg)
+        lay = getattr(self.presets, "layout", None)
+        if lay is None:
+            lay = self.presets.layout = {}
+        for cid, xy in landing.layout.items():
+            lay[cid] = [round(float(xy[0])), round(float(xy[1]))]
+        entry = self.land_group({**landing.group, "kept_by_host": kept})
+        if ends is None and landing.ports:
+            entry["ports"] = copy.deepcopy([dict(p) for p in landing.ports])
+        if landing.renames:
+            entry["renames"] = dict(landing.renames)
+        table.redraw_serial = getattr(table, "redraw_serial", 0) + 1
+        self.spawned = entry
+        k = len(landing.group.get("nodes", ()))
+        said = (SPLICED.format(name=entry["name"], s=ends[0], d=ends[1]) if ends is not None
+                else SPAWNED.format(name=entry["name"], n=k, s="" if k == 1 else "s"))
+        if kept:
+            said += " · " + KEPT_SAID.format(n=len(kept), s="" if len(kept) == 1 else "s")
+        self.said = "; ".join([said, *notes])
+        return None
+
+    def _spawn_rows(self, landing, choices: Mapping[int, str], notes: list[str]) -> list[dict]:
+        """`spawn`'s step 3: the routes and the desk rows through the
+        table's doors, each conflict as the sheet answered it. Returns the
+        rows kept for the preset (`kept_by_host`: the row as the patch had
+        it, renamed, and the control in `words`)."""
+        table = self.table
+        conflicts = list(landing.conflicts)
+        glyph = getattr(self.profile, "glyph", None)
+
+        def answer(row: Mapping, kinds: tuple[str, ...]):
+            for k, c in enumerate(conflicts):
+                if c.kind in kinds and c.row == dict(row):
+                    return c, choices.get(k, PATCH_SIDE)
+            return None, None
+
+        def keep(c) -> dict:
+            words = row_words(str(c.row.get("source", c.control_or_source)),
+                              glyph if Binding(str(c.row.get("source", "")), "").is_midi
+                              else None)
+            return {**copy.deepcopy(c.row), "words": words}
+
+        kept: list[dict] = []
+        for r in landing.routes:
+            b = Binding.from_json(dict(r))
+            c, which = answer(r, ("source", "target"))
+            if which == PRESET_SIDE:
+                kept.append(keep(c))
+                continue
+            try:
+                if c is None:
+                    table.add(b)
+                    continue
+                if c.kind == "source":      # one axis, one param (`Learn._place`)
+                    why = table.refusal(b)  # asked first: the host's rows go only
+                    if why is not None:     # once the patch's is sure to land
+                        raise ValueError(why)
+                    for x in [x for x in table.routes()
+                              if x.source == b.source and x.target != b.target]:
+                        table.remove(x)
+                table.replace_owner(b)
+            except Owned as e:              # (a performer the Landing did not see)
+                kept.append({**copy.deepcopy(dict(r)), "words": row_words(b.source)})
+                notes.append(str(e))
+            except ValueError as e:
+                notes.append(f"{b.source} → {b.target}: {e}")
+        for r in landing.desk:
+            b = Binding.from_json({**dict(r), "layer": "preset"})
+            c, which = answer(r, ("desk",))
+            if which == PRESET_SIDE:
+                kept.append(keep(c))
+                continue
+            try:
+                table.bind(b, write=False)
+            except ValueError as e:
+                notes.append(f"{b.source} → {b.target}: {e}")
+        return kept
+
+    def splice(self, landing, cable, choices: Mapping[int, str] | None = None) -> str | None:
+        """A patch dropped on picture cable `cable` (plan 40 T3, D2): `spawn`
+        with the cable taken out and the patch's one inlet and one outlet
+        wired either side of it, in the same undo step."""
+        return self.spawn(landing, choices, splice=cable)
+
+    def wire_as_saved(self, gid: str) -> str | None:
+        """**wire as saved** (plan 40 T3, D2): each open pin of group `gid`
+        whose `was` names a node the preset has, with that port free, wired
+        as the patch was saved — an inlet `was → <member port>`, an outlet
+        `<member> → was` — all in **one undo step**; every other pin
+        refused in words ("output.all.image is taken", "no node
+        tripcolour"). Returns the refusals joined (None: every pin wired);
+        what landed is `said`."""
+        g = self._group(gid)
+        if g is None:
+            return NO_GROUP.format(gid=gid)
+        spec = getattr(self.graph, "spec", None)
+        ports = open_ports(spec, g)
+        if not ports:
+            return NOTHING_OPEN.format(name=g["name"])
+        doc = _doc(self)
+        have = set(frame_names(spec))
+        into = {x["to"] for x in doc.get("wires", [])}
+        refused, wired = [], []
+        for p in ports:
+            was = p.get("was")
+            if not isinstance(was, str) or not was:
+                refused.append(NO_WAS.format(port=p.get("id")))
+                continue
+            if "to" in p:
+                node = rgraph.pin_node(was) or was
+                w = {"from": was, "to": p["to"]}
+            else:
+                node = was.rpartition(".")[0]
+                w = {"from": p["from"], "to": was}
+                if was in into and was not in rgraph.MANY_PORTS:
+                    refused.append(PORT_TAKEN.format(port=was))
+                    continue
+            if node not in have and kind_of(node) not in RIG_KINDS:
+                refused.append(NO_HOST_NODE.format(name=node))
+                continue
+            trial = copy.deepcopy(doc)
+            trial["wires"] = [*trial.get("wires", []), w]
+            why = _land(self, trial, "", "", dry=True)
+            if why is not None:
+                refused.append(f"{w['from']} → {w['to']}: {why}")
+                continue
+            doc = trial
+            into.add(w["to"])
+            wired.append(f"{w['from']} → {w['to']}")
+        why = "; ".join(refused) if refused else None
+        if not wired:
+            return why
+        label = f"wire {g['name']} as saved"
+        self._step(label)
+        landed = self._land_quiet(doc, label, WIRED_AS_SAVED.format(wires=", ".join(wired)))
+        return landed or why
+
+    def save_patch(self, gid: str, name: str, note: str = "") -> str | None:
+        """**Save as patch…** / **Update patch** (plan 40 T3, P3): group
+        `gid` cut out of the loaded preset (`patches.lift` over
+        `Presets.parts()`), named, and written as ``<library>/patches/<slug>.json``
+        (`Library.save_patch`: an older text of it to the trash) — that
+        file and nothing else. A member the lift's rule refuses (a
+        hand-edited file can hold one) refuses the save, in its words,
+        nothing written; a host macro's subscriber left behind is said.
+        The group's `patch` then names the slug: a preset edit, one undo
+        step, the dirty dot lit."""
+        g = self._group(gid)
+        if g is None:
+            return NO_GROUP.format(gid=gid)
+        name = str(name or "").strip()
+        if not name:
+            return PATCH_NEEDS_NAME
+        stem = patches.slug(name)
+        lib = getattr(self.presets, "lib", None)
+        if (g.get("patch") != stem and lib is not None
+                and lib.path_of("patches", stem) is not None):     # (library.PATCHES)
+            # (review fix) another patch has this file: Save as never replaces it
+            return PATCH_EXISTS.format(name=name)
+        spec, table, values, layout = self.presets.parts()
+        _, refused = patches.select(spec, table, g["nodes"])
+        if refused:
+            return "; ".join(refused)
+        doc, said = patches.lift(spec, table, values, layout, g["nodes"])
+        doc["name"], doc["note"] = name, str(note or "").strip()
+        try:
+            path = self.presets.lib.save_patch(doc)
+        except Exception as e:  # noqa: BLE001 — LibraryError, OSError: said, nothing landed
+            return str(e)
+        stem = path.name[:-5]
+        update = g.get("patch") == stem
+        if g.get("patch") != stem:
+            self._step(f"save {g['name']} as patch {name}")
+            g["patch"] = stem
+        self.said = "; ".join([(UPDATED_PATCH if update else SAVED_PATCH).format(name=name),
+                               *said])
+        return None
+
 
 # ---- a node dropped onto a cable: the geometry ----
 
@@ -3460,16 +4647,43 @@ def _seg_dist(p, a, b) -> float:
     return math.hypot(p[0] - (a[0] + t * ax), p[1] - (a[1] + t * ay))
 
 
-def cable_near(view: View, pins: Mapping[str, tuple], point, within: float = NEAR,
-               kinds=("route", "input"), skip: Iterable[str] = ()) -> VCable | None:
-    """The cable of `kinds` nearest `point` (canvas units) within
-    `within`, by the curve the widget draws between its pins' positions
-    (`pins`: pin → (x, y), as the page last drew them); None. A cable into
-    or out of a node in `skip` (the node being dropped) is passed over. A
-    render cable with a collapsed end is drawn to that node's stub (plan 28
-    N7), so the stub's position stands for the pin it does not draw."""
+def _seg_hits_box(a, b, lo, hi) -> bool:
+    """Does the segment `a`–`b` pass through the box `lo`–`hi` (Liang–Barsky)?"""
+    t0, t1 = 0.0, 1.0
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    for p, q in ((-dx, a[0] - lo[0]), (dx, hi[0] - a[0]), (-dy, a[1] - lo[1]), (dy, hi[1] - a[1])):
+        if p == 0:
+            if q < 0:
+                return False
+            continue
+        r = q / p
+        if p < 0:
+            t0 = max(t0, r)
+        else:
+            t1 = min(t1, r)
+        if t0 > t1:
+            return False
+    return True
+
+
+def cables_near(view: View, pins: Mapping[str, tuple], point, within: float = NEAR,
+                kinds=("route", "input"), skip: Iterable[str] = (),
+                size: tuple[float, float] | None = None) -> list[tuple[float, VCable]]:
+    """Every cable of `kinds` under a dragged node centred on `point`
+    (canvas units), as (distance from the centre, cable), nearest first —
+    by the curve the widget draws between its pins' positions (`pins`: pin
+    → (x, y), as the page last drew them): within `within` of the centre,
+    or — given the node's `size` — through its box (grown by `within`). A
+    cable into or out of a node in `skip` (the node being dropped) is
+    passed over. A render cable with a collapsed end is drawn to that
+    node's stub (plan 28 N7), so the stub's position stands for the pin it
+    does not draw."""
     skip = set(skip)
-    best, dist = None, within
+    box = None
+    if size is not None:
+        hw, hh = size[0] / 2 + within, size[1] / 2 + within
+        box = ((point[0] - hw, point[1] - hh), (point[0] + hw, point[1] + hh))
+    hits = []
     for c in view.cables:
         if c.kind not in kinds:
             continue
@@ -3480,11 +4694,33 @@ def cable_near(view: View, pins: Mapping[str, tuple], point, within: float = NEA
             b = b or pins.get(stub_in(d))
         if a is None or b is None or {s, d} & skip:
             continue
-        pts = bezier(a, b)
-        d = min(_seg_dist(point, a, b) for a, b in itertools.pairwise(pts))
-        if d < dist:
-            best, dist = c, d
-    return best
+        segs = list(itertools.pairwise(bezier(a, b)))
+        dist = min(_seg_dist(point, p, q) for p, q in segs)
+        if dist < within or (box is not None and any(_seg_hits_box(p, q, *box) for p, q in segs)):
+            hits.append((dist, c))
+    return sorted(hits, key=lambda h: h[0])
+
+
+def cable_near(view: View, pins: Mapping[str, tuple], point, within: float = NEAR,
+               kinds=("route", "input"), skip: Iterable[str] = ()) -> VCable | None:
+    """The cable of `kinds` nearest `point` (canvas units) within
+    `within` (`cables_near`'s first); None."""
+    near = cables_near(view, pins, point, within, kinds, skip)
+    return near[0][1] if near else None
+
+
+def onto_words(view: View, c: VCable) -> str:
+    """A cable as a chooser names it: "Look-back → Acid", the input's port
+    said when it is not the picture (``· aux``) or the cable is a value's."""
+    def side(pin: str) -> tuple[str, str]:
+        hit = view.owner(pin)
+        if hit is not None:
+            return hit[0].label, hit[1].name if hit[1] is not None else ""
+        n = view.node(node_of(view, pin))
+        return (n.label if n is not None else pin), ""
+    src, _ = side(c.src_port)
+    dst, port = side(c.dst_port)
+    return f"{src} → {dst}" + (f" · {port}" if port and port != "image" else "")
 
 
 # ---------------------------------------------------------------- render edits (plan 28 N4)
@@ -3547,6 +4783,10 @@ PICKER_GROUP: dict[str, str] = {
     "lookback": "look-back", "echo": "look-back", "dream": "look-back",
     "pattern": "pictures", "composite": "pictures", "switch": "pictures",
     "channels": "pictures", "resize": "pictures", "delay": "pictures",
+    # plan 39 T5 (W6): the segment under media ▸ (what a channel's picture
+    # is cut into), the mask nodes in their own group, masks ▸
+    "segment": "media",
+    "matte": "masks", "cut": "masks",
     "effect": "effects",
     "copy": "copy of",
 }
@@ -3570,7 +4810,8 @@ def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
     scene, the shape, hands, a hands layer, a hands guide, the backdrop);
     look-back ▸ (the look-back, plan 34's look-back frames echo.1 … echo.32
     and the dream); pictures ▸ (the faces pattern, a composite, a switch,
-    R28's switch over the channels, plan 34's resize and delay); every
+    R28's switch over the channels, plan 34's resize and delay); media ▸
+    (plan 39's segment); masks ▸ (plan 39's matte and cut); every
     effect file this build has; and a copy of each effect instance in the
     section."""
     gs = edit.graph
@@ -3587,6 +4828,8 @@ def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
             ("switch", None, "switch"),
             *(("channels", port, label) for port, label in CHANNEL_SWITCH_PORTS),
             ("resize", None, "resize"), ("delay", None, "delay")]
+    # plan 39 T5 (W6): media ▸ the segment; masks ▸ the matte and the cut
+    out += [("segment", None, "segment"), ("matte", None, "matte"), ("cut", None, "cut")]
     out += [("effect", f, f) for f in sorted(files or ())]
     out += [("copy", name, f"copy of {name}") for name in _instances(spec)]
     return out
@@ -3796,7 +5039,7 @@ def _node_name(e: dict) -> str | None:
         return f"echo.{e.get('index')}"
     if kind in rgraph.FRAME_KINDS or kind == "dream":
         return kind
-    if kind in ("composite", "switch", "delay", "resize", "copy"):
+    if kind in ("composite", "switch", "delay", "resize", "copy", "matte", "cut", "segment"):
         return kind if n == 1 else f"{kind}.{n}"
     return None
 
@@ -4027,6 +5270,17 @@ def _next(spec, kind: str) -> int:
                default=0) + 1
 
 
+# plan 39 T5 (W6): what adding each of plan 39's nodes says
+ADD_SAID = {
+    "matte": ("{name} added: wire a picture into {name}.image — it makes a mask of it "
+              "({name}.from, {name}.key)"),
+    "cut": ("{name} added: wire a picture into {name}.image and a mask into {name}.mask — "
+            "the picture where the mask passes, see-through elsewhere"),
+    "segment": ("{name} added: wire a picture into {name}.image — its pins are {name}.fg, "
+                "{name}.bg and {name}.mask"),
+}
+
+
 def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> str | None:
     edit.placed = ()
     if kind == "starter":
@@ -4113,6 +5367,12 @@ def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> st
                else f"it makes it at {name}.size")
         return _land(edit, doc, f"add {name}",
                      f"{name} added: wire a picture into {name}.image — {how}")
+    if kind in ADD_SAID:                         # plan 39 T5 (W6)
+        at = {"matte": rgraph.MatteAt, "cut": rgraph.CutAt,
+              "segment": rgraph.SegmentAt}[kind](_next(spec, kind))
+        doc["nodes"].append(at.to_json())
+        name = edit.added = at.name
+        return _land(edit, doc, f"add {name}", ADD_SAID[kind].format(name=name))
     if kind == "echo":
         # plan 36 T4: an echo is the look-back's own output — its pin; the
         # item adds the look-back when the section has none
@@ -4160,6 +5420,12 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
     - **dream**: `picture → dream.image`, `→ composite.under`, `dream →
       composite.over` (blend over: the dream is its picture, dreamed).
     - **backdrop**: a backdrop, `channel.a → backdrop.image`.
+    - **cut-out** (plan 39 T5, W6): a new segment and a new composite,
+      `channel.a → segment.image`, `segment.fg → composite.over`, `scene →
+      composite.under`, `composite → output.all.image` — never refused.
+
+    The scene chain and the cut-out take All outputs' picture: the words
+    name what fed it before (`STARTER_REPLACED`).
 
     The picture is `cable`'s source and the composite goes where the cable
     went; with no cable, the scene, the composite into the one picture
@@ -4181,13 +5447,38 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
             return why
     doc = _with_frame(_doc(edit))
     before = _named(doc)
+    all_in = f"{rgraph.ALL_OUTPUTS}.image"
     if which == "scene":
-        wires = [x for x in doc.get("wires", []) if x["to"] != f"{rgraph.ALL_OUTPUTS}.image"]
+        was = _was_into(doc, all_in, "scene")
+        wires = [x for x in doc.get("wires", []) if x["to"] != all_in]
         for a, b in SCENE_CHAIN:
             if {"from": a, "to": b} not in wires:
                 wires.append({"from": a, "to": b})
         doc["wires"] = wires
-        return _started(edit, doc, before, "shape", "scene", label=label, said=STARTER_SAID)
+        return _started(edit, doc, before, "shape", "scene", label=label,
+                        said=STARTER_SAID + was)
+    if which == "cut-out":
+        # plan 39 T5 (W6): `channel.a → segment.image`, `segment.fg →
+        # composite.over`, `scene → composite.under`, `composite →
+        # output.all.image` — a new segment and a new composite (never
+        # refused: there may be many of each), in place of what fed All
+        # outputs' picture, said
+        spec = _spec(edit)
+        feed = rgraph.channel_name(rgraph.MEDIA_CHANNELS[0])
+        seg = rgraph.SegmentAt(_next(spec, "segment"))
+        comp = rgraph.CompositeAt(_next(spec, "composite"), "over")
+        was = _was_into(doc, all_in, comp.name)
+        wires = [x for x in doc.get("wires", []) if x["to"] != all_in]
+        wires += [{"from": a, "to": b} for a, b in (
+            (feed, f"{seg.name}.image"), (f"{seg.name}.fg", f"{comp.name}.over"),
+            ("scene", f"{comp.name}.under"), (comp.name, all_in))]
+        doc["wires"] = wires
+        doc["nodes"] += [seg.to_json(), comp.to_json()]
+        shaped = any(x["to"] == "scene.geometry" for x in wires)
+        said = (CUT_OUT_SAID.format(feed=feed, seg=seg.name, comp=comp.name) + was
+                + ("" if shaped else CUT_OUT_NO_SHAPE))
+        return _started(edit, doc, before, "scene", seg.name, comp.name, label=label,
+                        said=said)
     if which == "backdrop":
         if "backdrop" in before:
             return IN_ALREADY.format(label=label_of("backdrop"))
@@ -4239,6 +5530,15 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
             + (" — left unwired: " + "; ".join(unwired) if unwired else ""))
     order = (*(["lookback"] if looks else []), *(["dream"] if dreams else []), comp.name)
     return _started(edit, doc, before, *order, label=label, said=said)
+
+
+def _was_into(doc: dict, port: str, keep: str) -> str:
+    """`STARTER_REPLACED`'s words for what fed `port` in section `doc`
+    before a starter takes it (plan 39 T5, plan 36's follow-up), but
+    `keep` — the starter's own feed, when it was already there; "" when
+    nothing else fed it."""
+    was = [x["from"] for x in doc.get("wires", []) if x["to"] == port and x["from"] != keep]
+    return STARTER_REPLACED.format(was=", ".join(was)) if was else ""
 
 
 def _picture_port(port: str) -> bool:
@@ -4343,6 +5643,41 @@ def _onto(doc: dict, s: str, d: str, name: str) -> None:
     else:
         kept = [x for x in wires if x["to"] != d]
     doc["wires"] = kept + [{"from": s, "to": f"{name}.image"}, {"from": name, "to": d}]
+
+
+def splice_target(edit: Edit, cable, name: str, ports) -> str | None:
+    """May a patch named `name` with `ports` be spliced into `cable` (plan 40
+    T3: a browser line dropped on it)? A picture cable of the section
+    (`_cable_ends`' rule: not the rig's bus) and the patch's one inlet and
+    one outlet of that type (`splice_refusal`); else the words why not."""
+    _, _, why = _cable_ends(edit, cable)
+    if why is not None:
+        return why
+    return splice_refusal(name, ports, getattr(cable, "type", IMAGE) or IMAGE)
+
+
+def onto_refusal(edit: Edit, cable) -> str | None:
+    """Why an effect may not go onto `cable` (the rig's bus, no picture
+    cable: `_cable_ends`' rule), or None."""
+    return _cable_ends(edit, cable)[2]
+
+
+def _splice(doc: dict, s: str, d: str, into: str, out: str) -> None:
+    """Plan 40 T3 (D2): a patch onto the cable `s → d` in section `doc`, as
+    `_onto` puts one effect there — `s → into` (the patch's inlet, a member
+    port), `out → d` (its outlet, a member) — whatever went into `d` before
+    (the wire, or a D1 placement into its port) replaced."""
+    def into_d(n: str, key: str, where: str) -> bool:
+        if key == "after" and not where.startswith("output."):
+            return f"{n}.image" == d
+        return f"{where}.image" == d
+    _unplace(doc, into_d)
+    wires = doc.get("wires", [])
+    if d in rgraph.MANY_PORTS:
+        kept = [x for x in wires if (x["from"], x["to"]) != (s, d)]
+    else:
+        kept = [x for x in wires if x["to"] != d]
+    doc["wires"] = kept + [{"from": s, "to": into}, {"from": out, "to": d}]
 
 
 def _cable_ends(edit: Edit, cable) -> tuple[str | None, str | None, str | None]:

@@ -33,8 +33,11 @@ The routes. Rows are the router's `push` / `position` routes from
 
 The feel chip (motion.py) cycles auto → follow → spring → still: auto is
 the source's own feel (the pad's, for a stick), still is none at all, and
-follow / spring are the row's own, with their two knobs on a third line —
-attack and release about rest, or a spring's Hz and damping ratio.
+follow / spring are the row's own, with their knobs on a third line —
+attack and release about rest, or a spring's preset, perceptual duration
+and bounce — and on a fourth, the row's width, its shape and the feel
+working live beside it: the reading and what the feel makes of it
+(ui_feel).
 
 The target is a searchable combo over every modulatable param, grouped
 by registry group; depth is signed — ±1 in norm units for `push` (1 puts
@@ -120,12 +123,12 @@ from dataclasses import replace
 
 from imgui_bundle import imgui
 
-from . import apc40, motion, ui, ui_presets, undo
+from . import apc40, motion, ui, ui_feel, ui_presets, undo
 from .bands import CEIL
 from .library import PRESETS
 from .modifiers import KINDS as MOD_KINDS
 from .modifiers import PARAMS as MOD_PARAMS
-from .modifiers import Modifier
+from .modifiers import Modifier, smooth_motion
 from .motion import Motion
 from .params import Kind, Param, part_of
 from .routing import (
@@ -137,6 +140,7 @@ from .routing import (
     Router,
     Sub,
     base_refusal,
+    base_sub,
     factory_desk,
 )
 
@@ -168,7 +172,10 @@ POINTER_TIP = ("The routes and the modifiers are edited on the GRAPH page now �
 # auto is the source's own feel (Router.feel_of), still turns even that off
 FEEL_CYCLE = (None, "follow", "spring", "off")
 FEEL_CHIP = {None: "auto", "follow": "follow", "spring": "spring", "off": "still"}
-FEEL_W = 112.0           # each of the feel line's two knobs
+FEEL_W = 112.0           # each of the feel line's two knobs, at most
+SPRING_W = 96.0          # a spring's preset combo before them, at most
+FEEL_PLOT_H = 44.0       # the feel's live plot, the line under them, the row's width
+SMOOTH_PLOT_H = 56.0     # a smooth modifier's, under its params in GRAPH's side pane
 NO_MATCH = "no row matches"
 
 
@@ -442,34 +449,200 @@ def answer(panel, replace_it: bool) -> None:
     q[2](replace_it)
 
 
+# ---- plan 40 T3: the conflict sheet (D3, D9) — a spawn's second question ----
+#
+# `panel.spawn_question = (landing, choices, on_spawn, on_cancel)`: a
+# `patches.Landing` whose rig rows collide with the preset, the answer per
+# conflict (index → "patch" / "preset", every row the patch's at first, D9),
+# and what Spawn (`on_spawn(choices)`) and Cancel (`on_cancel()`) do. The
+# same modal draws it, ahead of the Replace / Keep question, wider. While it
+# is up the hands learn nothing (`Learn.hold`, kept in step every frame).
+
+SHEET_W = 560.0
+SHEET_TIP = ("Each row: which keeps this control — the patch's row, or the one the preset "
+             "has. A row the preset keeps is not added; the group says so")
+
+
+def sheet(panel):
+    """(landing, choices) of the conflict sheet up now, or None."""
+    q = getattr(panel, "spawn_question", None)
+    return None if q is None else (q[0], q[1])
+
+
+def choose(panel, k: int, which: str) -> None:
+    """Row `k` of the sheet answered: ``"patch"`` or ``"preset"``."""
+    q = getattr(panel, "spawn_question", None)
+    if q is not None and 0 <= k < len(q[0].conflicts):
+        q[1][k] = which
+
+
+def keep_all(panel, which: str = "preset") -> None:
+    """**keep all existing** (every row to the preset) — or, with
+    ``"patch"``, **take all** (every row back to the patch)."""
+    q = getattr(panel, "spawn_question", None)
+    if q is not None:
+        for k in range(len(q[0].conflicts)):
+            q[1][k] = which
+
+
+def settle_sheet(panel, go: bool):
+    """**Spawn** (`go`: the whole landing with the answers, one undo step)
+    or **Cancel** (nothing lands, no undo step). The sheet goes first, so
+    the hands may learn again; returns what the answer returned."""
+    q = getattr(panel, "spawn_question", None)
+    if q is None:
+        return None
+    panel.spawn_question = None
+    lrn = getattr(panel, "learn", None)
+    if lrn is not None and hasattr(lrn, "hold"):
+        lrn.hold(False)
+    _landing, choices, on_spawn, on_cancel = q
+    return on_spawn(dict(choices)) if go else on_cancel()
+
+
+def conflict_words(c) -> tuple[str, str, str]:
+    """A conflict as the sheet says it (`patches.Conflict`): (what is
+    contested, the patch's side, the preset's side) — "K1", then
+    ``fx.acid.2.speed`` and ``view.bright``; a param a performer owns, then
+    each side's source in words."""
+    from .routing import row_words
+
+    def glyph(src: str) -> str | None:          # the desk's names, as the wants say them
+        return apc40.glyph(src) if Binding(src, "").is_midi else None
+    if c.kind == "target":
+        return (c.control_or_source, row_words(c.patch_target, glyph),
+                row_words(c.host_target, glyph))
+    return row_words(c.control_or_source, glyph), c.patch_target, c.host_target
+
+
+def sheet_wants(panel, landing, choices=None) -> list[str]:
+    """The patch's wants the rig lacks, one line per device role (plan 40
+    P4, T4's words over the landing's rows): "apc40 (lost): K1", "leap (not
+    in this rig): right hand y". With the sheet's `choices` (conflict index
+    → ``"patch"`` / ``"preset"``), a row the preset kept is not the patch's
+    and waits for nothing (what `land_spawn` says after the landing)."""
+    from types import SimpleNamespace
+
+    from . import devices
+    router = router_of(panel)
+    host = router.table if router is not None else None
+    kept = [(c.kind == "desk", dict(c.row)) for k, c in enumerate(landing.conflicts)
+            if (choices or {}).get(k) == "preset"]
+    rows = [Binding.from_json(dict(r)) for r in landing.routes
+            if (False, dict(r)) not in kept]
+    rows += [Binding.from_json({**dict(r), "layer": "preset"}) for r in landing.desk
+             if (True, dict(r)) not in kept]
+    mods = []
+    for d in landing.modifiers:
+        try:
+            mods.append(Modifier.from_json(dict(d)))
+        except (ValueError, TypeError):
+            continue
+    rows_only = SimpleNamespace(bindings=rows, modifiers=tuple(mods),
+                                profile=getattr(host, "profile", "apc40"),
+                                primary_role=getattr(host, "primary_role", lambda: ""))
+    return devices.want_lines(devices.wants(rows_only, getattr(panel, "devices", None)))
+
+
+def sheet_title(panel, landing) -> str:
+    """"spawn acid wash into party-trip"."""
+    lib = getattr(panel, "library", None)
+    into = (lib.current(PRESETS) if lib is not None else None) or "this preset"
+    return f"spawn {landing.group.get('name') or 'patch'} into {into}"
+
+
+def _sheet(panel, landing, choices) -> None:
+    """The sheet's body (inside the modal): the title, a row per conflict —
+    its words, then **the patch** / **the preset**, lit as answered — then
+    **keep all existing** and **take all**, the wants, **Spawn** / **Cancel**."""
+    ui._micro("conflicts")
+    imgui.text_wrapped(sheet_title(panel, landing))
+    imgui.text_disabled(f"{len(landing.conflicts)} control"
+                        f"{'' if len(landing.conflicts) == 1 else 's'} the preset already "
+                        "uses: which keeps each?")
+    if imgui.is_item_hovered():
+        ui.tooltip(SHEET_TIP)
+    imgui.spacing()
+    for k, c in enumerate(landing.conflicts):
+        what, mine, theirs = conflict_words(c)
+        imgui.text(f"{what}:")
+        imgui.same_line()
+        if ui.lit_chip(f"the patch: {mine}##sheet.{k}.patch", choices.get(k) != "preset"):
+            choose(panel, k, "patch")
+        imgui.same_line()
+        if ui.lit_chip(f"the preset: {theirs}##sheet.{k}.preset", choices.get(k) == "preset"):
+            choose(panel, k, "preset")
+    imgui.spacing()
+    if ui.chip("keep all existing##sheet"):
+        keep_all(panel, "preset")
+    if imgui.is_item_hovered():
+        ui.tooltip("Every row to the preset: the patch's rows on those controls are not added")
+    imgui.same_line()
+    if ui.chip("take all##sheet"):
+        keep_all(panel, "patch")
+    if imgui.is_item_hovered():
+        ui.tooltip("Every row back to the patch")
+    wants = sheet_wants(panel, landing)
+    if wants:
+        imgui.spacing()
+        ui._micro("waits for")
+        for line in wants:
+            imgui.text_colored(ui.WARN, line)
+    imgui.separator()
+    if ui.chip("Spawn##sheet"):
+        settle_sheet(panel, True)
+        imgui.close_current_popup()
+    if imgui.is_item_hovered():
+        ui.tooltip("Land the patch with these answers — one undo step")
+    imgui.same_line()
+    if ui.chip("Cancel##sheet"):
+        settle_sheet(panel, False)
+        imgui.close_current_popup()
+    if imgui.is_item_hovered():
+        ui.tooltip("Land nothing")
+
+
 def modal(panel) -> None:
     """The Replace / Keep modal, drawn by the panel every frame — before
     anything else it draws, so a question shows on any page, with the
     panel hidden or collapsed; a learn can come from anywhere. A question
-    withdrawn while the modal was up (a new learn armed) closes it."""
+    withdrawn while the modal was up (a new learn armed) closes it. Plan 40
+    T3: a spawn's conflict sheet (`panel.spawn_question`) is drawn first,
+    in the same popup, wider (`SHEET_W`); while it is up the shared
+    `Learn` is held (`Learn.hold`: the hands learn nothing)."""
     st = _state(panel)
+    sq = getattr(panel, "spawn_question", None)
+    lrn = getattr(panel, "learn", None)
+    if lrn is not None and hasattr(lrn, "hold"):
+        lrn.hold(sq is not None)
     q = _question(panel)
     st["modal"] = False                 # did the modal draw this frame (tests read it)
-    if q is None:
+    st["sheet"] = False                 # …and was it the spawn's sheet (plan 40 T3)
+    if q is None and sq is None:
         if imgui.is_popup_open(PROMPT):                  # stale: the question went away
             opened, _ = imgui.begin_popup_modal(PROMPT, None, imgui.WindowFlags_.no_title_bar)
             if opened:
                 imgui.close_current_popup()
                 imgui.end_popup()
         return
-    old, new, _ = q
-    router = router_of(panel)           # a question exists only over a table: never None
     if not imgui.is_popup_open(PROMPT):
         imgui.open_popup(PROMPT)
     vp = imgui.get_main_viewport()
     imgui.set_next_window_pos(vp.get_center(), imgui.Cond_.appearing, imgui.ImVec2(0.5, 0.5))
-    imgui.set_next_window_size(imgui.ImVec2(PROMPT_W, 0))
+    imgui.set_next_window_size(imgui.ImVec2(SHEET_W if sq is not None else PROMPT_W, 0))
     opened, _ = imgui.begin_popup_modal(
         PROMPT, None, imgui.WindowFlags_.no_saved_settings | imgui.WindowFlags_.no_resize
         | imgui.WindowFlags_.no_title_bar)
     st["modal"] = opened
     if not opened:
         return
+    if sq is not None:
+        st["sheet"] = True
+        _sheet(panel, sq[0], sq[1])
+        imgui.end_popup()
+        return
+    old, new, _ = q
+    router = router_of(panel)           # a question exists only over a table: never None
     p = panel.reg.get(new.target)
     label = p.label if p is not None else new.target
     who, asks = router.describe(old), router.describe(new)
@@ -600,7 +773,15 @@ def _gate_combo(router: Router, b: Binding, gates: list[tuple[str, str]], width:
 
 def _live(panel, router: Router, b: Binding) -> float | None:
     """The source's normalized reading this frame, None while it isn't live."""
-    scheme, i = router.lane(b.source)      # a number, or a name (`Router.names`)
+    return reading(panel, router, b.source)
+
+
+def reading(panel, router: Router, source: str) -> float | None:
+    """A source address's normalized reading this frame (a row's source, a
+    modifier's input), None while it isn't live."""
+    if not source:
+        return None
+    scheme, i = router.lane(source)        # a number, or a name (`Router.names`)
     if scheme == "lane":
         a = panel.audio
         if not getattr(a, "on", False) or not 0 <= i < a.chain.n:
@@ -827,8 +1008,8 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
         _gate_combo(router, b, gates, gate_w)
     imgui.same_line()
     _live_bar(panel, router, b, p)
-    if b.motion is not None and b.motion.on:      # line 3: the row's own feel
-        _feel_line(b)
+    if b.motion is not None and b.motion.on:      # lines 3–4: the row's own feel
+        _feel_line(panel, router, b)
     imgui.pop_id()
     return kill
 
@@ -859,39 +1040,62 @@ def _feel_chip(router: Router, b: Binding, width: float) -> None:
         ui.tooltip("Feel: how the reading travels before it acts\n"
                           "follow  the analyzer's envelope: attack away from rest,\n"
                           "        release back toward it, so a stick let go glides home\n"
-                          "spring  a damped spring toward the reading, rings below 1\n"
+                          "spring  a damped spring toward the reading: bounce 0 lands,\n"
+                          "        above it overshoots and rings, below it creeps\n"
                           f"now: {now}\n"
                           "click to cycle auto, follow, spring, still")
 
 
-def _feel_line(b: Binding) -> None:
-    """Two knobs for the row's own feel: attack / release, or Hz / damping."""
+def _feel_line(panel, router: Router, b: Binding) -> None:
+    """The row's own feel: its knobs — attack / release, or a spring's
+    preset, perceptual duration and bounce — then, a line of its own the
+    row's width, its shape and the feel working live beside it (ui_feel)."""
     m = b.motion
+    sp = imgui.get_style().item_spacing.x
     imgui.dummy(imgui.ImVec2(18, 0))
     imgui.same_line()
+    avail = imgui.get_content_region_avail().x
     if m.mode == "follow":
-        knobs = (("atk", 0.0, motion.ATK_MAX, "atk %.3f s", False,
-                  "Attack: seconds to go 63 % of the way away from rest"),
-                 ("rel", 0.0, motion.REL_MAX, "rel %.3f s", False,
-                  "Release: seconds to go 63 % of the way back toward rest"))
+        knobs = (("atk", 0.0, motion.ATK_MAX, 1000.0, "atk %.0f ms", False,
+                  "Attack: how long it takes to go 63 % of the way away from rest"),
+                 ("rel", 0.0, motion.REL_MAX, 1000.0, "rel %.0f ms", False,
+                  "Release: how long it takes to go 63 % of the way back toward rest"))
+        knob_w = min(FEEL_W, (avail - sp) / 2)
     else:
-        knobs = (("hz", motion.HZ_MIN, motion.HZ_MAX, "%.2f Hz", True,
-                  "Spring frequency: low is lazy, high is tight"),
-                 ("damp", 0.0, motion.DAMP_MAX, "damp %.2f", False,
-                  ("Damping ratio: 1 arrives fastest with no overshoot,\n"
-                   "below 1 overshoots and rings, above 1 creeps")))
+        knobs = (("dur", motion.DUR_MIN, motion.DUR_MAX, 1000.0, "%.0f ms", True,
+                  ("Perceptual duration: how long a move feels — short is tight, "
+                   "long is lazy")),
+                 ("bounce", motion.BOUNCE_MIN, motion.BOUNCE_MAX, 100.0, "bounce %.0f %%",
+                  False, ("Bounce: 0 arrives fastest with no overshoot,\n"
+                          "above 0 overshoots and rings, below 0 creeps")))
+        spring_w = min(SPRING_W, avail * 0.3)
+        knob_w = min(FEEL_W, (avail - spring_w - 2 * sp) / 2)
+        picked = ui_feel.spring_picker("##spring", m, spring_w)
+        if picked is not None:
+            dur, bounce = motion.SPRINGS[picked]
+            b.motion = m = replace(m, dur=dur, bounce=bounce)
+        if imgui.is_item_hovered():
+            ui.tooltip("A named spring, each drawn as its curve — sets the duration and "
+                       "bounce beside it; custom once either is moved off one")
+        imgui.same_line()
     imgui.push_font(ui._FONTS["num"], ui.FONT_NUM)
-    for j, (k, lo, hi, fmt, log, tip) in enumerate(knobs):
+    for j, (k, lo, hi, unit, fmt, log, tip) in enumerate(knobs):
         if j:
             imgui.same_line()
-        imgui.set_next_item_width(FEEL_W)
+        imgui.set_next_item_width(knob_w)
         flags = imgui.SliderFlags_.logarithmic if log else 0
-        changed, v = imgui.slider_float(f"##{k}", float(getattr(m, k)), lo, hi, fmt, flags)
+        changed, v = imgui.slider_float(f"##{k}", float(getattr(m, k)) * unit, lo * unit,
+                                        hi * unit, fmt, flags)
         if changed:
-            b.motion = m = replace(m, **{k: min(max(v, lo), hi)})
+            b.motion = m = replace(m, **{k: min(max(v / unit, lo), hi)})
         if imgui.is_item_hovered():
             ui.tooltip(tip + "\nctrl-click to type")
     imgui.pop_font()
+    imgui.dummy(imgui.ImVec2(18, 0))
+    imgui.same_line()
+    trace = ui_feel.sample(panel, ("route", b.source, b.target),
+                           _live(panel, router, b) if b.enabled else None, router.felt_now(b))
+    ui_feel.draw(m, trace, imgui.get_content_region_avail().x, FEEL_PLOT_H)
 
 
 def _live_bar(panel, router: Router, b: Binding, p: Param | None) -> None:
@@ -900,7 +1104,8 @@ def _live_bar(panel, router: Router, b: Binding, p: Param | None) -> None:
     h = imgui.get_frame_height()
     pos = imgui.get_cursor_screen_pos()
     dl = imgui.get_window_draw_list()
-    x0, y0, x1, y1 = pos.x, pos.y + 3, pos.x + BAR_W, pos.y + h - 3
+    bar_w = max(min(BAR_W, imgui.get_content_region_avail().x), 12.0)   # narrow: what is left
+    x0, y0, x1, y1 = pos.x, pos.y + 3, pos.x + bar_w, pos.y + h - 3
     dl.add_rect(imgui.ImVec2(x0, y0), imgui.ImVec2(x1, y1),
                 ui.u32(ui.LINE), 4.0)
     if u is not None:
@@ -911,7 +1116,7 @@ def _live_bar(panel, router: Router, b: Binding, p: Param | None) -> None:
         x = x0 + 1 + (x1 - x0 - 2) * p.eff_norm
         dl.add_line(imgui.ImVec2(x, y0), imgui.ImVec2(x, y1), ui.u32(ui.RED), 2.0)
         panel.ghosts += 1
-    imgui.dummy(imgui.ImVec2(BAR_W, h))
+    imgui.dummy(imgui.ImVec2(bar_w, h))
     if imgui.is_item_hovered():
         src = "not live" if u is None else f"{u:.2f}"
         tgt = "—" if p is None else (f"{p.text()} → {panel._eff_text(p)}" if p.modulated
@@ -965,7 +1170,7 @@ def head(panel, router: Router) -> None:
     for note in table.notes:
         imgui.text_disabled(note)
     # a loop no delay breaks (plan 28 N0): the cable the patch keeps off, while it stands
-    for note in getattr(router, "patch_notes", ()):
+    for note in getattr(router, "modgraph_notes", ()):
         imgui.text_colored(ui.WARN, note)
 
 
@@ -997,7 +1202,7 @@ def _preset_line(panel, pr, table) -> None:
                           "the session's controls, never learned (a learn is refused); "
                           "preset: the loaded preset's desk. A preset load drops to it.")
     imgui.same_line()
-    # the preset strip's own save chip: "save copy" on a factory preset,
+    # the preset strip's own save chip,
     # lit while there is something to save (plan 19 WP5)
     if lib is None:
         imgui.begin_disabled()
@@ -1345,8 +1550,8 @@ def macros(panel, router: Router) -> None:
         imgui.same_line()
         if ui.chip("+ base"):
             q = panel.reg.get("view.bright") or base_targets(panel)[0]
-            # from = to = where the param sits: adding it moves nothing
-            _macro(table, p.id).subs.append(Sub(base=q.id, lo=q.norm, hi=q.norm))
+            # from where the param sits to its fader's end (row 537)
+            _macro(table, p.id).subs.append(base_sub(q))
             _macros_edited(table)
         if imgui.is_item_hovered():
             ui.tooltip("A param whose base this knob sets")
@@ -1433,8 +1638,8 @@ def set_modifier_input(panel, mid: str, k: int, source: str) -> None:
 
 
 def remove_modifier(panel, mid: str) -> None:
-    """The ×: the modifier and its params go; a route on its lane stays,
-    dormant. One undo step."""
+    """The ×: the modifier and its params go, what fed it wired on to
+    what it fed (`Bindings.remove_modifier`). One undo step."""
     router = router_of(panel)
     undo.push(f"delete modifier {mid}")
     router.table.remove_modifier(mid, panel.reg)
@@ -1575,11 +1780,16 @@ def modifier_block(panel, router: Router, m: Modifier, stacked: bool = False) ->
                 panel._combo(pid, -1.0)
             else:
                 panel._slider(pid, -1.0)
+        if m.kind == "smooth":                  # its feel working live (ui_feel)
+            trace = ui_feel.sample(panel, ("mod", m.id), reading(panel, router, m.inputs[0]),
+                                   modifier_output(router, m.id))
+            ui_feel.draw(smooth_motion(m.params), trace, imgui.get_content_region_avail().x,
+                         SMOOTH_PLOT_H)
         imgui.push_style_color(imgui.Col_.text, ui.DIM)
         dead = ui.chip("× remove")
         imgui.pop_style_color()
         if imgui.is_item_hovered():
-            ui.tooltip("Remove this modifier — a route on it goes dormant")
+            ui.tooltip("Remove this modifier — what fed it is wired straight on to what it fed")
         imgui.pop_id()
         return dead
     imgui.same_line()
@@ -1590,7 +1800,7 @@ def modifier_block(panel, router: Router, m: Modifier, stacked: bool = False) ->
         dead = True
     imgui.pop_style_color()
     if imgui.is_item_hovered():
-        ui.tooltip("Remove this modifier — a route on it goes dormant")
+        ui.tooltip("Remove this modifier — what fed it is wired straight on to what it fed")
     specs = MOD_PARAMS[m.kind]
     if specs:
         imgui.dummy(imgui.ImVec2(MOD_ID_W, 0))

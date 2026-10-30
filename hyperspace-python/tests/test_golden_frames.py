@@ -1,7 +1,7 @@
 """Plan 26 A0: golden frames and GPU timing per pass.
 
 The goldens (`tests/golden/frames/frames.json`, written by
-`tools/golden_frames.py --record`) are every factory preset in each of
+`tools/golden_frames.py --record`) are every corpus preset in each of
 the eight output states, with the synthetic hands absent and present,
 plus one frame at the 1080p cap: a SHA-256 of the full-resolution RGBA
 frame each. The render test draws them all again and compares every
@@ -50,8 +50,8 @@ def _manifest() -> dict:
 
 # ---------------------------------------------------------------- no GL
 
-def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
-    """No preset or state is skipped silently: each factory preset has a
+def test_every_corpus_preset_has_every_state_recorded_and_nothing_else():
+    """No preset or state is skipped silently: each corpus preset has a
     golden for each of the eight `Switches` states, hands absent and
     present; the window's own frame alone (`solo`, the default state) for
     each, and alone through (`solo-scene+hands+through`) for each preset
@@ -63,7 +63,7 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
     `<wiring>/<state>`. Plan 26 A4b: the recorded point cloud listed as a
     `cloud` device, hands present, named `cloud/<state>`, and nothing
     else."""
-    from hyperspace.preset import FACTORY_PRESETS
+    FACTORY_PRESETS = _tool().CORPUS_PRESETS
 
     doc = _manifest()
     eight = [(a, b, c) for a in (True, False) for b in (True, False) for c in (False, True)]
@@ -106,22 +106,25 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
     clouded = {(p, "present", f"{name}/{s}") for name, c in doc["cloud_states"].items()
                for p in c["presets"] for s in c["states"]}
     # plan 26 A4: the proof presets, fixtures loaded through a scratch
-    # library (never factory presets), hands present, all eight states
+    # library (never corpus presets), hands present, all eight states
     fixture = {(p, f["hands"], s) for p, f in doc["fixture_states"].items() for s in f["states"]}
     assert (keys - capped - wired - clouded - fixture == want and wired <= keys
             and clouded <= keys and fixture <= keys)
     # (plan 30 D1: + 3 × 8, the three placement fixtures' eight states;
     # plan 28 N4: + 2 × 8, the two wire fixtures'; plan 31 P: seq-demo, a
-    # 24th factory preset and a 7th with an effect on; plan 32 T6: + 2 × 8,
+    # 24th corpus preset and a 7th with an effect on; plan 32 T6: + 2 × 8,
     # the two media fixtures'; plan 32 T7: + 3 × 8, the faces' and the aux's;
     # plan 33 T4: + 3 × 8, the faces', the backdrop's and the two sizes' branches;
     # plan 33 T5: + 8, the switch onto the faces; plan 34 T2: + 2 × 8, the
     # delay onto the faces and the trails' loop; plan 34 T3: + 8, an echo
     # onto the faces; plan 35 T3: + 3 × 8, the three wired frames; plan 34
-    # T4: + 2 × 8, the resize into a delay onto the faces and the crop)
+    # T4: + 2 × 8, the resize into a delay onto the faces and the crop;
+    # plan 39 T0: + 8, the scene through edges; plan 39 T2: + 8, a matte
+    # wired straight into All outputs; plan 39 T3: + 8, a cut over the scene;
+    # plan 39 T4: + 8, a motion segment's foreground)
     assert len(doc["goldens"]) == (24 * 2 * 9 + 7 * 2 + 1 + 24 * 5 + 2 + 2 * 2 + 8 + 3 * 8
                                    + 2 * 8 + 2 * 8 + 3 * 8 + 3 * 8 + 8 + 2 * 8 + 8 + 3 * 8
-                                   + 2 * 8)
+                                   + 2 * 8 + 8 + 8 + 8 + 8)
     # alone, the window's frame is drawn direct: the default state over a
     # shown hand is the scene with the hands over; through an effect, the
     # hands go into the chain
@@ -145,7 +148,7 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
             assert said[hands]["missing"] == [], slug
             assert said[hands]["hands_shown"] is (hands == "present"), slug
     # the fixtures: the tool's list, each a file under tests/fixtures/ and
-    # never a factory preset, loaded with nothing missing and no note — (plan
+    # never a corpus preset, loaded with nothing missing and no note — (plan
     # 36 T3) every fixture an old file, a migration input — its graph landed
     # as its `/7`
     tool = _tool()
@@ -163,7 +166,10 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
         # (the blank frame: the strip says it holds nothing, plan 36 T3)
         want = [NO_GRAPH_SAID] if slug == "blank-frame" else []
         assert said["missing"] == [] and said["notes"] == want, slug
-        no_hands = ("blank-frame", "channel-out-only")
+        # (plan 39 T2: the matte into All outputs wires no hands either;
+        # T3: nor the cut over the scene; T4: nor the motion segment)
+        no_hands = ("blank-frame", "channel-out-only", "mask-as-picture", "cut-out",
+                    "segment-motion")
         assert said["hands_shown"] is (slug not in no_hands), slug
         if slug == "blank-frame":
             assert all(n.startswith("output.") for n in said["nodes"]), said["nodes"]
@@ -184,14 +190,14 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
 
 
 def test_the_history_wiring_is_recorded_for_every_preset_with_the_look_back_on():
-    """The history-with-the-hands goldens cover exactly the factory presets
+    """The history-with-the-hands goldens cover exactly the corpus presets
     whose file draws a look-back (elsewhere the history holds nothing the
     picture shows, so the frame is the default one). Plan 36 T4: a
     look-back is drawn — a wire into `lookback.image` — where the old file
-    turned it on (`factory-sources`' `dream.on`)."""
-    from hyperspace.preset import FACTORY_PRESETS
+    turned it on (`factory-sources`' `dream.on`, the old files)."""
+    FACTORY_PRESETS = _tool().CORPUS_PRESETS
 
-    lib = ROOT / "hyperspace" / "library" / "presets"
+    lib = _tool().CORPUS
     drawn = [slug for slug in FACTORY_PRESETS
              if any(w.get("to") == "lookback.image" for w in json.loads(
                  (lib / f"{slug}.json").read_text())["graph"].get("wires", []))]
@@ -202,14 +208,17 @@ def test_the_history_wiring_is_recorded_for_every_preset_with_the_look_back_on()
 
 
 # the `goldens` list as T3 left it (sha256 of its JSON): plan 35 T4's
-# `--names` rewrites recorded node names only, never an entry. Plan 34 T4's
-# two fixtures' entries (`GOLDENS_SINCE`) are left out of the digest: the
-# 741 before them are the same list, byte for byte
+# `--names` rewrites recorded node names only, never an entry. The entries
+# of the fixtures named in `GOLDENS_SINCE`, added since the digest, are left
+# out of it: the 741 before them are the same list, byte for byte
 # Plan 36 T1 re-recorded four entries (the stand-down gone, a hands mute
 # inside a through chain: `party-trip`, `party-noita`, `lfo-breathe`
 # absent|hands+through and `through-one-output` present|scene+through) and
 # the route words of those presets' through states
-GOLDENS_SINCE = ("resize-faces", "resize-crop")
+# (plan 39 T0's `edges-scene`, T2's `mask-as-picture`, T3's `cut-out` and
+# T4's `segment-motion`: new pictures — none of the 741 moved)
+GOLDENS_SINCE = ("resize-faces", "resize-crop", "edges-scene", "mask-as-picture", "cut-out",
+                 "segment-motion")
 # (plan 36 T3: re-pinned for the four goldens re-recorded — palette-glass's
 # scene+hands+through and wired-outputs' scene+hands, scene, scene+through:
 # D1's `into output.N` sat on the window's shown picture, which no wire
@@ -218,7 +227,12 @@ GOLDENS_SINCE = ("resize-faces", "resize-crop")
 # scene+hands+through, 6029 px off by 1/255, mean 0.0029: its `history →
 # acid.2` read the off look-back's copy pass, which no drawn node makes; as
 # `scene → acid.2` the effect folds the scene's own texture)
-GOLDENS_DIGEST = "886d0ce807e1504b546a48adaccd08b1c6bc9fc70f4c7bccccb9e64b6cc704a1"
+# (plan 39 T1: re-pinned for eight goldens re-recorded — backdrop-still's and
+# media-chain-backdrop's present scene, scene+through, scene+hands,
+# scene+hands+through: the cut-through blend is the window's, so the scene
+# laid over the backdrop (zero ground, plan 32 R) no longer squares its alpha
+# and its faces no longer wash toward white; sha256 and png only)
+GOLDENS_DIGEST = "ac516263b005abff61c7cd0fc7cefe9f92bb44616aed1eb1dee3270781dbbd17"
 # the render names the pipelines' graph used, gone in plan 35 T4 (V2: the
 # render nodes are named in the new ids)
 OLD_RENDER_NAMES = ("ghost", "history", "readout", "capture", "cover", "grounded", "fx",
@@ -279,7 +293,17 @@ def ctx():
     yield c
     # its objects (gc_mode auto) are freed now, while it is still the
     # current context — never later, on some other module's
+    c.__enter__()
     gc.collect()
+
+
+@pytest.fixture(autouse=True)
+def _current(request):
+    """The tool's context current again before each test that draws on it:
+    a test on this worker since may have made and released its own
+    (tests/conftest.py's `ctx`), which leaves none current."""
+    if "ctx" in request.fixturenames:
+        request.getfixturevalue("ctx").__enter__()
 
 
 @pytest.fixture
@@ -327,7 +351,7 @@ def test_every_golden_belongs_to_one_of_the_tools_jobs():
 
 @pytest.mark.parametrize("job_id", _job_ids())
 def test_every_golden_frame_is_drawn_byte_for_byte(exact, job_id, tmp_path):
-    """Each factory preset in each state it reaches, hands absent and
+    """Each corpus preset in each state it reaches, hands absent and
     present, each fixture, and the cap frame — one job per test: every
     full-resolution frame's SHA-256 is its golden's, and the job drew
     exactly its golden entries. Each frame is hashed as it is read and its
@@ -357,7 +381,7 @@ _SHIPPED_FIXTURES = ("palette-glass", "palette-hands", "acid-scene", "wired-outp
 
 
 def _resave_sources() -> list[tuple[str, bool]]:
-    """Every factory preset and fixture, by the manifest (its `presets` and
+    """Every corpus preset and fixture, by the manifest (its `presets` and
     `fixtures` are the tool's lists: the no-GL test above)."""
     doc = _manifest()
     return [*((slug, True) for slug in doc["presets"]),
@@ -367,7 +391,7 @@ def _resave_sources() -> list[tuple[str, bool]]:
 @pytest.mark.parametrize("slug,factory", _resave_sources(),
                          ids=[slug for slug, _ in _resave_sources()])
 def test_every_preset_resaved_as_seven_draws_its_goldens(ctx, tmp_path, slug, factory):
-    """Row 394: every factory preset and every fixture, saved untouched as
+    """Row 394: every corpus preset and every fixture, saved untouched as
     `/7` (`headless.resave`, the road tools/migrate_library.py takes; plan
     36 T3) and drawn from that file on the golden rig (`picture`: hands
     present, the eight states as wiring), draws exactly its recorded
@@ -383,9 +407,9 @@ def test_every_preset_resaved_as_seven_draws_its_goldens(ctx, tmp_path, slug, fa
     doc = _manifest()
     tool = _tool()
     exact = tool.renderer_name(ctx) == doc["renderer"]
-    path = (tool.ROOT / "hyperspace" / "library" / "presets" / f"{slug}.json" if factory
+    path = (tool.CORPUS / f"{slug}.json" if factory
             else tool.FIXTURES / f"{slug}.json")
-    raw, _, _ = headless.resave(path, tmp_path / "resaved", factory=factory)
+    raw, _, _ = headless.resave(path, tmp_path / "resaved")
     seven = tmp_path / "seven" / f"{slug}.json"
     seven.parent.mkdir()
     seven.write_bytes(raw)
@@ -403,6 +427,51 @@ def test_every_preset_resaved_as_seven_draws_its_goldens(ctx, tmp_path, slug, fa
     assert got == want, slug
 
 
+def _grouped_sources() -> list[str]:
+    """Plan 40 T2: every corpus preset with a main run (the effects wired
+    one after another into All outputs' picture, T1's rule); the others —
+    tests/test_graph_groups.py names them — have nothing to group."""
+    from hyperspace import graph as G
+
+    out = []
+    for slug in _manifest()["presets"]:
+        doc = json.loads((_tool().CORPUS / f"{slug}.json").read_text())
+        if G.run_back(G.read_graph(doc["graph"]), "output.all.image"):
+            out.append(slug)
+    return out
+
+
+@pytest.mark.parametrize("slug", _grouped_sources())
+def test_every_preset_with_its_main_run_grouped_draws_its_goldens(ctx, tmp_path, slug):
+    """Plan 40 T2 (D4: the renderer learns nothing): each corpus preset
+    with its main run grouped — a grouped twin in a scratch library, `/8`,
+    never the corpus file — drawn on the golden rig (`picture`: hands
+    present, the eight states as wiring) draws exactly its recorded
+    goldens; on another renderer, exactly what the ungrouped file draws."""
+    from hyperspace import graph as G
+    from hyperspace import preset
+
+    doc = _manifest()
+    tool = _tool()
+    path = tool.CORPUS / f"{slug}.json"
+    src = json.loads(path.read_text())
+    run = G.run_back(G.read_graph(src["graph"]), "output.all.image")
+    twin = {**src, "schema": preset.GROUPS_SCHEMA,
+            "groups": [{"id": "group.1", "name": "main run",
+                        "nodes": [f"render:{n}" for n in run], "open": False}]}
+    grouped = tmp_path / "grouped" / f"{slug}.json"
+    grouped.parent.mkdir()
+    grouped.write_text(preset.dumps(twin))
+    got, notes = tool.picture(grouped, slug=slug)
+    assert not [n for n in notes if "group" in n], notes
+    if tool.renderer_name(ctx) == doc["renderer"]:
+        golden = {(e["preset"], e["hands"], e["state"]): e["sha256"] for e in doc["goldens"]}
+        want = [golden[(slug, "present", n)] for n, _ in tool.STATES]
+    else:
+        want, _ = tool.picture(path, slug=slug)
+    assert got == want, slug
+
+
 def test_a_value_moved_in_the_resaved_file_moves_the_picture(ctx, tmp_path):
     """The resave check can fail: party-trip, its `/7` brighter, is another
     picture."""
@@ -411,8 +480,8 @@ def test_a_value_moved_in_the_resaved_file_moves_the_picture(ctx, tmp_path):
     from hyperspace import headless
 
     tool = _tool()
-    path = tool.ROOT / "hyperspace" / "library" / "presets" / "party-trip.json"
-    raw, _, _ = headless.resave(path, tmp_path / "bright", factory=True)
+    path = tool.CORPUS / "party-trip.json"
+    raw, _, _ = headless.resave(path, tmp_path / "bright")
     bright = json.loads(raw)
     bright["values"]["view.bright"] = bright["values"]["view.bright"] * 0.5 + 0.1
     moved = tmp_path / "bright.json"

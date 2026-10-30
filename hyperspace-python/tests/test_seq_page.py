@@ -10,7 +10,8 @@ saved or learned. The sequencer is registered here by hand
 import pytest
 from test_midi import note, push, rig, shift  # noqa: F401 — the fixture
 
-from hyperspace import apc40, learn, midi, routing, seq_page, sequencer, ui_desk
+# (`ui` ahead of `ui_desk`: ui_desk imported cold trips ui_pad's `ui_desk.EDGE`)
+from hyperspace import apc40, learn, midi, routing, seq_page, sequencer, ui, ui_desk  # noqa: F401
 from hyperspace.routing import Binding, Bindings, bindings_path
 
 CLIP, SCENE, STOP, SEND_A = apc40.N_CLIP, apc40.N_SCENE, apc40.N_CLIPSTOP, apc40.N_SEND_A

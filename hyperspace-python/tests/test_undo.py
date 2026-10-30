@@ -19,9 +19,9 @@ from types import SimpleNamespace
 import mido
 import numpy as np
 import pytest
-from conftest import opened_last
+from conftest import opened_last, seed
 
-from hyperspace import devices, envelope, hands, lfo, preset, routing, sequencer, tempo, undo
+from hyperspace import devices, envelope, hands, lfo, routing, sequencer, tempo, undo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
@@ -60,8 +60,10 @@ class FakeOut:
 
 
 def boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None):
-    """app.main's construction order, headless, over `home` (a fresh one
-    opens the party show and its startup preset, TUMBLE)."""
+    """app.main's construction order, headless, over `home` — seeded with
+    the corpus first (conftest.seed: the shipped presets and the party
+    show, which the home then opens with its startup preset, TUMBLE)."""
+    seed(home)
     if show:
         opened_last(home, show)
     chain = Analyzer(Analyser())
@@ -101,7 +103,6 @@ def boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None):
                                                  desk=True, page=1))
     router = Router(reg, table)
     presets = Presets(lib, reg, router)
-    preset.migrate_home(lib, router)
     learn = Learn(reg, router.table, lane=router.lane)
     inp, out = FakeIn(), FakeOut()
     midi = MidiIO(reg, router.table, inp=inp, out=out, learner=learn)
@@ -459,7 +460,7 @@ def test_a_show_load_and_its_startup_preset_are_one_step(rig):
     reg, lib, pr = rig.reg, rig.lib, rig.lib.project
     reg["master.gain"].step(-3)                        # a session edit
     settle(rig)
-    party = (pr.name, list(pr.bank), pr.startup, pr.factory, pr.path, look(rig),
+    party = (pr.name, list(pr.bank), pr.startup, pr.path, look(rig),
              reg.snapshot(part="session"), lib.current(PRESETS), lib.current("band"))
     last = lib.last_show()
     pr.load("house")
@@ -468,9 +469,9 @@ def test_a_show_load_and_its_startup_preset_are_one_step(rig):
     assert pr.name == "house" and lib.current(PRESETS) != "TUMBLE"
     assert rig.undo.undo() and rig.undo.status == "undid show house"
     session = reg.snapshot(part="session")
-    assert (pr.name, list(pr.bank), pr.startup, pr.factory, pr.path) == party[:5]
-    assert same_look(look(rig), party[5]) and session == party[6]
-    assert (lib.current(PRESETS), lib.current("band")) == party[7:]
+    assert (pr.name, list(pr.bank), pr.startup, pr.path) == party[:4]
+    assert same_look(look(rig), party[4]) and session == party[5]
+    assert (lib.current(PRESETS), lib.current("band")) == party[6:]
     assert pr.active == 0 and lib.last_show() != last  # `last_show` is not rewritten
     assert rig.undo.redo()
     assert pr.name == "house" and pr.startup == lib.current(PRESETS)
@@ -620,7 +621,7 @@ def test_undo_writes_no_file_and_the_dirty_dot_is_honest(rig):
 
 def test_a_performers_round_off_lights_no_dot(rig):
     """Plan 16 WP7: a performer taking a param moves its base in the last
-    bits (plan 15 §1 row 2) and leaves it so. Every factory preset loaded,
+    bits (plan 15 §1 row 2) and leaves it so. Every corpus preset loaded,
     two hands through the box for two seconds with the lanes and the LFOs
     running, then gone: bases have moved, and no dot is lit — the
     preset's, a module preset's, the show's. One detent of one param
@@ -981,7 +982,7 @@ class _Hands:
 
 def test_an_idle_app_makes_no_step(tmp_path):
     """The real `app.frame` over the real objects, nobody touching
-    anything: every factory preset of the party show loaded in turn, each
+    anything: every corpus preset of the party show loaded in turn, each
     followed by five seconds of frames with the LFOs running and routed,
     the analyzer stepping on a synthetic signal that drives the lane
     routes, two hands moving through the box (and out of it, and back),

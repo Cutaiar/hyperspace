@@ -100,7 +100,7 @@ dormant no-ops.
 Either op's reading first travels with the row's *feel* (`motion`,
 motion.py): ``follow`` — the analyzer's own asymmetric envelope, attack
 away from the source's rest and release back toward it — or ``spring``,
-a damped spring (Hz, damping ratio). A row with no feel of its own takes
+a damped spring (perceptual duration, bounce). A row with no feel of its own takes
 its source's (`Router.feel_of`): for the pad's `axis` lanes the session's
 `desk.pad.*`, which the sticks' default camera job reads too
 (`Router.felt`); none for every other source. A row's follower starts
@@ -234,8 +234,8 @@ stand, each change noted. A changed file is backed up (`backup`) and
 written back once — except a file that still holds a preset's part
 (every file before plan 13 WP5: performer rows, preset-layer rows,
 `macros`, `values`), which keeps that part in `Bindings.carried` and is
-left for the first-launch migration (`preset.migrate_home`) to move into
-presets and only then rewrite. A schema this code doesn't know is left
+not rewritten on the read (plan 13 §6's first-launch migration moved that part into
+presets; it is retired since 2026-10-28, so the next write drops it). A schema this code doesn't know is left
 alone and reported, like a file that won't parse. `bindings_path(home)`
 says where the file lives; the app always passes the library home, and
 the working-directory default is for tests.
@@ -261,11 +261,10 @@ from pathlib import Path
 
 import numpy as np
 
-from . import apc40, envelope, lfo, modifiers, motion, seq_page
-from . import patch as patchmod
+from . import apc40, envelope, lfo, modgraph, modifiers, motion, seq_page
 from .bands import BANDS, CEIL
 from .modifiers import Modifier, ModState
-from .motion import OFF, Follower, Motion
+from .motion import CUSTOM, OFF, Follower, Motion
 from .params import (
     DRIVE,
     F_KEYS,
@@ -294,7 +293,7 @@ FACTORY_FILE = Path(__file__).with_name("bindings.default.json")
 # and its knob params ``<scheme>.<n>.<knob>`` (the class's KNOBS) and the
 # bank-wide ones (SHARED) feed it. Known here by class, so a bare router
 # (no bank handed in) still draws an LFO route's source as an LFO. A new
-# kind is one entry here, its scheme in patch.KINDS, and its instance
+# kind is one entry here, its scheme in modgraph.KINDS, and its instance
 # handed to `Router.use_bank`
 BANKS: dict[str, type] = {lfo.LFOs.SCHEME: lfo.LFOs,
                           envelope.Envelopes.SCHEME: envelope.Envelopes}
@@ -514,7 +513,7 @@ RETIRED_ROWS: frozenset[tuple[str, str, str, float]] = frozenset(
 # fire `edit.undo`, ⌘⇧Z / Ctrl+⇧Z fire `edit.redo` — a chord fires only
 # its own row (`Router.keys`).
 # Plan 15 WP2 adds Home (fn ← on a laptop; fork 7): it fires `preset.home`,
-# which loads the preset the show starts on.
+# which loads the show's startup preset.
 # F_KEYS (params): the F-key rows are the bank's first eight slots
 LOOP_KEY_ROWS = (
     ("R", "camera.reset", "fire"),
@@ -547,16 +546,29 @@ THEME_TO_PRESET = {
 # written before `padmap` gained it never gained it either (no pad row
 # was ever added to an existing file), which read as a pad whose buttons
 # the map could not find. PAD_NEW_ROWS adds it instead.
+# 2026-10-29: the preset walk leaves the face buttons, where a thumb
+# brushing B or X threw the live look away, for the d-pad's ← / → held
+# HOLD_S; speed leaves the pad. B takes points, X screen strokes, and BACK
+# tap tempo (PAD_NEW_ROWS) — the pad makes no edits worth an undo, and a
+# held ← / → makes a stray load rare. Every older B / X form above maps
+# straight to the newest.
+PRESET_WALK_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float]] = {
+    ("pad:B", "preset.list.next", "fire", 1.0): ("view.points", "toggle", 1.0),
+    ("pad:X", "preset.list.prev", "fire", 1.0): ("view.screen_strokes", "toggle", 1.0),
+    ("hat:LEFT", "view.speed", "step", -4.0): ("preset.list.prev", "hold", 1.0),
+    ("hat:RIGHT", "view.speed", "step", 4.0): ("preset.list.next", "hold", 1.0),
+}
 PAD_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float] | None] = {
     ("pad:RSTICK", "camera.reset", "fire", 1.0): ("rot.reset_w", "fire", 1.0),
     ("pad:VIEW", "ui.panel", "toggle", 1.0): None,
     ("pad:A", "view.rotate", "toggle", 1.0): ("view.faces", "toggle", 1.0),
-    ("pad:X", "view.points", "toggle", 1.0): ("preset.list.prev", "fire", 1.0),
-    ("pad:X", "preset.prev", "fire", 1.0): ("preset.list.prev", "fire", 1.0),
-    ("pad:B", "preset.next", "fire", 1.0): ("preset.list.next", "fire", 1.0),
-    ("pad:B", "theme.next", "fire", 1.0): ("preset.list.next", "fire", 1.0),
+    ("pad:X", "view.points", "toggle", 1.0): ("view.screen_strokes", "toggle", 1.0),
+    ("pad:X", "preset.prev", "fire", 1.0): ("view.screen_strokes", "toggle", 1.0),
+    ("pad:B", "preset.next", "fire", 1.0): ("view.points", "toggle", 1.0),
+    ("pad:B", "theme.next", "fire", 1.0): ("view.points", "toggle", 1.0),
     ("pad:Y", "view.faces", "toggle", 1.0): ("view.lines", "toggle", 1.0),
     ("pad:MENU", "ui.cheatsheet", "toggle", 1.0): None,
+    **PRESET_WALK_REMAP,
 }
 # Pad rows added where nothing uses the button, as (source, target, op,
 # value) — the pad's APC_NEW_ROWS. Until 2026-10-14 a row `padmap` gained
@@ -567,6 +579,7 @@ PAD_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float] | None] = {
 # second load finds the source taken.
 PAD_NEW_ROWS = (
     ("pad:MENU", "preset.save_new", "hold", 1.0),
+    ("pad:VIEW", "tempo.tap", "fire", 1.0),                 # 2026-10-29
 )
 KEY_NEW_ROWS = (
     ("key:B", "tempo.tap", "fire", 1.0),
@@ -856,6 +869,73 @@ class Binding:
 _SHIFT = Binding(SHIFT_SOURCE, SHIFT_PARAM, "toggle")    # the latch's control
 
 
+def row_words(row: Binding | str, names=None) -> str:
+    """A row's source in words (plan 40 T4): what a person calls the
+    control or the lane, without its device's role — the caller says the
+    role. `row` is a `Binding` or its source string. `names(bare source)`
+    is the caller's say first: the desk's glyph where a MIDI profile has
+    one (``cc:0:48`` → "K1", devices.wants hands it `apc40.glyph`), the
+    port's name on the canvas (graphview.cable_words); None or "" falls
+    through to the row's own words —
+
+      ``hand:right.y`` → "right hand y"    ``hands:gap`` → "hands gap"
+      ``lane:0`` → "band 1"                ``pad:A`` → "pad A"
+      ``hat:UP`` → "d-pad up"              ``axis@p2:LX`` → "axis LX"
+      ``cc:0:48`` → "CC 48 ch1"            ``pitch:*`` → "pitch bend any ch"
+      ``lfo:0`` → "LFO 1"                  ``mod:3`` → "mod.3"
+      ``osc1:/fader/1`` → "/fader/1"       anything else → the source
+
+    Pure: reads nothing but its arguments."""
+    source = row.source if isinstance(row, Binding) else str(row)
+    head, colon, addr = source.partition(":")
+    scheme = base_scheme(head)
+    bare = f"{scheme}:{addr}" if colon else scheme
+    if names is not None:
+        said = names(bare)
+        if said:
+            return str(said)
+    if not colon:
+        return source
+    if scheme == "hand":
+        side, _, rest = addr.partition(".")
+        if side in ("left", "right"):
+            return f"{side} hand {rest.replace('.', ' ')}".rstrip()
+        return f"hand {addr.replace('.', ' ')}"
+    if scheme == "hands":
+        return f"hands {addr.replace('.', ' ')}"
+    n = addr.split(":")[0]
+    k = int(n) + 1 if n.isdecimal() else None
+    if scheme == "lane":
+        return f"band {k}" if k is not None else f"band {addr}"
+    if scheme in ("lfo", "env"):
+        return f"{scheme.upper() if scheme == 'lfo' else scheme} {k if k is not None else addr}"
+    if scheme == "seq":
+        return f"seq lane {k}" if k is not None else f"seq {addr}"
+    if scheme == modifiers.SCHEME:
+        return modifiers.id_of(f"{scheme}:{addr}") or source
+    if scheme == "pad":
+        return f"pad {addr}"
+    if scheme == "hat":
+        return f"d-pad {addr.lower()}"
+    if scheme == "axis":
+        return f"axis {addr}"
+    if scheme == "key":
+        return f"key {addr}"
+    if scheme in MIDI_SCHEMES:
+        b = Binding(bare, "")
+        try:
+            ch = "any ch" if b.channel is None else f"ch{b.channel + 1}"
+            num = b.number
+        except ValueError:
+            return source
+        if scheme == "pitch":
+            return f"pitch bend {ch}"
+        return f"{'CC' if scheme == 'cc' else 'note'} {num} {ch}"
+    if addr.startswith("/"):            # an OSC address is itself (plan 27 B4)
+        return addr
+    return source
+
+
 def _macro_n(mid: str) -> int:
     tail = mid[len(MACRO_PREFIX):]
     return int(tail) if tail.isdigit() else 0
@@ -1021,22 +1101,24 @@ def keymap() -> list[Binding]:
 
 
 def padmap() -> list[Binding]:
-    """Xbox-layout gamepad buttons and the d-pad. B / X step the preset
-    list — the PRESETS page's drop-down, by name, a new save included
-    (`Project.walk`), not the bank the desk walks — A / Y the faces and
-    lines; the left-stick click resets the camera, the right-stick click
-    the 4D spin; START (``pad:MENU``) held HOLD_S saves the live state as
-    a new preset, and BACK (``pad:VIEW``) is free — Learn pad puts
-    anything on it (2026-10-14, the owner's layout — PAD_REMAP moves an
-    older file's, PAD_NEW_ROWS adds what it never held)."""
+    """Xbox-layout gamepad buttons and the d-pad. The d-pad's ← / → held
+    HOLD_S step the preset list — the PRESETS page's list, by name, a new
+    save included (`Project.walk`), not the bank the desk walks; a brush
+    does nothing (2026-10-29: on B / X a stray press threw the look away).
+    A / Y the faces and lines, B / X the points and screen strokes, ↑ / ↓
+    the brightness; the left-stick click resets the camera, the
+    right-stick click the 4D spin; START (``pad:MENU``) held HOLD_S saves
+    the live state as a new preset, and BACK (``pad:VIEW``) taps the tempo (the
+    owner's layout — PAD_REMAP moves an older file's, PAD_NEW_ROWS adds
+    what it never held)."""
     rows = [
-        ("pad:A", "view.faces", "toggle"), ("pad:B", "preset.list.next", "fire"),
-        ("pad:X", "preset.list.prev", "fire"), ("pad:Y", "view.lines", "toggle"),
-        ("pad:MENU", "preset.save_new", "hold"),
+        ("pad:A", "view.faces", "toggle"), ("pad:B", "view.points", "toggle"),
+        ("pad:X", "view.screen_strokes", "toggle"), ("pad:Y", "view.lines", "toggle"),
+        ("pad:MENU", "preset.save_new", "hold"), ("pad:VIEW", "tempo.tap", "fire"),
         ("pad:LB", "view.shape", "step", -1), ("pad:RB", "view.shape", "step", 1),
         ("pad:LSTICK", "camera.reset", "fire"), ("pad:RSTICK", "rot.reset_w", "fire"),
         ("hat:UP", "view.bright", "step", 3), ("hat:DOWN", "view.bright", "step", -3),
-        ("hat:LEFT", "view.speed", "step", -4), ("hat:RIGHT", "view.speed", "step", 4),
+        ("hat:LEFT", "preset.list.prev", "hold"), ("hat:RIGHT", "preset.list.next", "hold"),
     ]
     return [Binding(src, pid, op, *arg) for src, pid, op, *arg in rows]
 
@@ -1206,7 +1288,8 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
     since plan 13 WP2, any row on a ``theme.*`` param moved to the
     ``preset.*`` param of the same slot (THEME_TO_PRESET); the pad's four
     old factory rows (and B / X's bank rows) moved to the layout of
-    2026-10-14 (PAD_REMAP); the track faders' eight invariant audio rows
+    2026-10-14, and the preset walk to the d-pad held (2026-10-29)
+    (PAD_REMAP); the track faders' eight invariant audio rows
     moved to the SHIFT layer (FADER_SHIFT_ROWS, plan 24 C2).
     Idempotent: a second pass finds every old row gone
     and every source taken. Returns (rows, a note per change).
@@ -1247,8 +1330,10 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
                              "2026-10-14: the button is free)")
                 continue
             target, op, value = hit
+            when = ("2026-10-29" if hit in PRESET_WALK_REMAP.values()
+                    else "2026-10-14")
             notes.append(f"remapped {b.source}: {b.target} → {target} (the pad layout "
-                         "of 2026-10-14)")
+                         f"of {when})")
             b = replace(b, target=target, op=op, value=value)
         elif b.target in THEME_TO_PRESET:
             target = THEME_TO_PRESET[b.target]
@@ -1270,7 +1355,8 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
         if source in used:
             continue
         out.append(Binding(source, target, op, value))
-        notes.append(f"added {source} → {target} (the pad layout of 2026-10-14)")
+        when = "2026-10-29" if source == "pad:VIEW" else "2026-10-14"
+        notes.append(f"added {source} → {target} (the pad layout of {when})")
     # a key row is taken by its chord, however its modifiers are ordered:
     # "key:SUPER+SHIFT+Z" holds ⌘⇧Z as "key:SHIFT+SUPER+Z" does
     chords = {(b.key_name, b.modifiers) for b in out if b.scheme == "key"}
@@ -1321,6 +1407,19 @@ class Sub:
             dep = d["depth"]
             return cls(depth=(str(dep["source"]), str(dep["target"])), lo=lo, hi=hi)
         return cls(base=str(d["base"]), lo=lo, hi=hi)
+
+
+def base_sub(p) -> Sub:
+    """The base subscriber a macro's cable makes on param `p` (the owner,
+    2026-10-28, decision register row 537): `from` where the param sits,
+    `to` the top of its fader — or its bottom when it already sits at the
+    top — so the knob has a throw from the day it lands: at 0 the scene as
+    designed, at 1 the fader's end. (Before: `from = to` where the param
+    sat, "so adding it moves nothing" — and the macro moved nothing ever,
+    until both ends were set by hand.) The ends stay the performer's to
+    edit on ROUTING's subscriber line."""
+    at = float(p.norm)
+    return Sub(base=p.id, lo=at, hi=1.0 if at < 1.0 else 0.0)
 
 
 @dataclass
@@ -1607,7 +1706,9 @@ PAD_FEEL = "desk.pad"     # the pad's feel: PAD_FEEL + ".feel" / ".attack" / …
 
 
 def _register_pad_feel(reg: Registry, table: Bindings) -> None:
-    """The pad's feel as five session params over `table.pad_feel`: the
+    """The pad's feel as six session params over `table.pad_feel` (the
+    mode; follow's attack and release; a spring's preset, perceptual
+    duration and bounce): the
     motion an `axis` lane travels with when its row names none, and the
     sticks' default camera job's (motion.py). Off, a stick is as it reads."""
     if f"{PAD_FEEL}.feel" in reg:
@@ -1644,17 +1745,64 @@ def _register_pad_feel(reg: Registry, table: Bindings) -> None:
                    group="desk", modulatable=False, fmt=ms,
                    tip="follow: how long a stick takes going back toward rest (63 %) — "
                        "long, and the spring's snap becomes a glide.")
-    reg.continuous(f"{PAD_FEEL}.hz", "Stick spring", get("hz"),
-                   put("hz", motion.HZ_MIN, motion.HZ_MAX), lo=motion.HZ_MIN,
-                   hi=motion.HZ_MAX, log=True, group="desk", modulatable=False,
-                   fmt=lambda v: f"{v:.2f} Hz",
-                   tip="spring: its natural frequency — low is lazy, high is tight.")
-    reg.continuous(f"{PAD_FEEL}.damp", "Stick damping", get("damp"),
-                   put("damp", 0.0, motion.DAMP_MAX), lo=0.0, hi=motion.DAMP_MAX,
-                   group="desk", modulatable=False, fmt=lambda v: f"ζ {v:.2f}",
-                   tip="spring: the damping ratio. 1 arrives fastest without "
-                       "overshoot; below 1 it overshoots and rings; above, it creeps.")
+    springs = [*motion.SPRINGS, CUSTOM]
 
+    def spring_get():
+        m = getattr(table, "pad_feel", OFF)
+        name = motion.spring_name(m.dur, m.bounce)
+        return springs.index(name if name is not None else CUSTOM)
+
+    def spring_set(i):
+        name = springs[int(i) % len(springs)]
+        if name != CUSTOM:              # custom: the knobs as they are
+            dur, bounce = motion.SPRINGS[name]
+            table.pad_feel = replace(getattr(table, "pad_feel", OFF), dur=dur, bounce=bounce)
+
+    # derived from duration and bounce, which persist: it does not
+    reg.enum(f"{PAD_FEEL}.spring", "Stick spring", spring_get, spring_set, springs,
+             group="desk", modulatable=False, persist=False,
+             tip="spring: a named spring — sets the duration and bounce below; "
+                 "custom once either is moved off one.")
+    reg.continuous(f"{PAD_FEEL}.duration", "Stick duration", get("dur"),
+                   put("dur", motion.DUR_MIN, motion.DUR_MAX), lo=motion.DUR_MIN,
+                   hi=motion.DUR_MAX, log=True, group="desk", modulatable=False, fmt=ms,
+                   tip="spring: its perceptual duration — how long a move feels; "
+                       "short is tight, long is lazy.")
+    reg.continuous(f"{PAD_FEEL}.bounce", "Stick bounce", get("bounce"),
+                   put("bounce", motion.BOUNCE_MIN, motion.BOUNCE_MAX),
+                   lo=motion.BOUNCE_MIN, hi=motion.BOUNCE_MAX, group="desk",
+                   modulatable=False, fmt=lambda v: f"{v * 100:.0f} %",
+                   tip="spring: 0 arrives fastest without overshoot; above 0 it "
+                       "overshoots and rings; below 0 it creeps.")
+
+
+
+# the stick spring's session params before 2026-10-29 — a natural frequency
+# and a damping ratio: an old show's values read as the perceptual knobs
+# (`renamed_session`), and its file is kept before a save drops them
+# (library.SPRING_BACKUP)
+PAD_FEEL_OLD = (f"{PAD_FEEL}.hz", f"{PAD_FEEL}.damp")
+
+
+def renamed_session(session: dict) -> dict:
+    """A show's session with the stick spring's old values (`desk.pad.hz`,
+    `desk.pad.damp`) as today's `desk.pad.duration` and `desk.pad.bounce`,
+    each on its own and exactly (`motion.spring_feel`); a value the
+    session already holds under today's id wins, one that is no number is
+    dropped. The session given is left as it is."""
+    hz_id, damp_id = PAD_FEEL_OLD
+    if hz_id not in session and damp_id not in session:
+        return session
+    out = {k: v for k, v in session.items() if k not in PAD_FEEL_OLD}
+    for old, new, part in ((hz_id, f"{PAD_FEEL}.duration", 0), (damp_id, f"{PAD_FEEL}.bounce", 1)):
+        if old not in session or new in out:
+            continue
+        try:
+            v = float(session[old])
+        except (TypeError, ValueError):
+            continue
+        out[new] = motion.spring_feel(v, 1.0)[0] if part == 0 else motion.spring_feel(1.0, v)[1]
+    return out
 
 def legacy_planedrive(lanes, gain: float = 1.0) -> np.ndarray:
     """The reference's PLANEDRIVE from six lanes — what the legacy6 routes
@@ -1692,8 +1840,8 @@ class Carried:
     §6): its performer rows (the referee's refusals after them, so nothing
     is lost and the first still wins), its preset-layer MIDI rows (None:
     the file had none), its macros and its `values`. `Bindings.load` keeps
-    it; `preset.migrate_home` moves it into presets and then rewrites the
-    file without it."""
+    it in memory; nothing reads it since 2026-10-28 (plan 13 §6's migration
+    is retired), and the next write leaves it out."""
     routes: list[dict]
     desk: list[dict] | None
     macros: dict
@@ -1837,9 +1985,9 @@ class Bindings:
         A file that still holds a preset's part — performer rows,
         preset-layer MIDI rows, `macros`, `values` (every file before plan
         13 WP5) — keeps it in memory and in `carried`, and is **not**
-        rewritten here, whatever else changed: `preset.migrate_home` moves
-        that part into presets first and only then backs the file up and
-        rewrites it, so a crash in between loses nothing."""
+        rewritten here, whatever else changed (plan 13 §6's migration moved
+        that part into presets first; retired since 2026-10-28, the next write
+        drops it)."""
         if path is not None and path.exists():
             try:
                 data = json.loads(path.read_text())
@@ -1856,7 +2004,7 @@ class Bindings:
                 desk=[b.to_json() for b in t.desk()] or None,
                 macros=t.macros_doc(), values=dict(data.get("values") or {}))
             if not carried.empty or "values" in data or "macros" in data:
-                t.carried = carried              # preset.migrate_home writes the file
+                t.carried = carried              # kept in memory; the next write drops it
             elif t.migrated or t.changed or remapped:
                 bak = backup(path, t.read_at)
                 if bak is None:                          # no backup, no rewrite
@@ -2335,24 +2483,29 @@ class Bindings:
         scheme some device of this rig delivers as rows (`row_schemes`)?"""
         return is_continuous(b.scheme) and b.scheme not in getattr(self, "row_schemes", ())
 
+    def refusal(self, b: Binding) -> str | None:
+        """The words `_check` raises `ValueError` with for `b` whoever holds
+        its target — a sink's refusal, an op a continuous source has not, a
+        row no file may hold — or None. Read-only: a caller about to move
+        other rows for `b` asks first (plan 40's spawn: a one-owner
+        source's other rows go only once `b` is sure to land)."""
+        if b.is_sink:
+            return sink_refusal(b)
+        if self._lane_only(b) and b.op not in MOD_OPS:
+            return (f"{b.op!r} is not an op for a {b.scheme} source; "
+                    f"one of {', '.join(MOD_OPS)}")
+        return save_refusal(b)
+
     def _check(self, b: Binding) -> None:
         """The referee: a performer joining the table (or waking up) must
         find its target free, or held by itself. A continuous source has
         no other op — `abs` is MIDI's, the one path is Router.modulate. (A
         scheme a device delivers as rows — `row_schemes`, which the device
         registry extends through `Router.use` — is not continuous here.)"""
-        if b.is_sink:                # a value going out: no referee (plan 27 B3)
-            why = sink_refusal(b)
-            if why is not None:
-                raise ValueError(why)
-            return
-        if self._lane_only(b) and b.op not in MOD_OPS:
-            raise ValueError(f"{b.op!r} is not an op for a {b.scheme} source; "
-                             f"one of {', '.join(MOD_OPS)}")
-        why = save_refusal(b)
+        why = self.refusal(b)
         if why is not None:
             raise ValueError(why)
-        if not b.is_performer:
+        if b.is_sink or not b.is_performer:      # a value going out: no referee (plan 27 B3)
             return
         cur = next((x for x in self.bindings
                     if x is not b and x.is_performer and x.target == b.target), None)
@@ -2555,9 +2708,28 @@ class Bindings:
         return self.set_modifiers(docs, reg)
 
     def remove_modifier(self, mid: str, reg: Registry | None = None) -> None:
-        """Take a modifier out, its params with it; a route on its lane
-        stays, dormant, until it is removed or the id comes back."""
-        self.set_modifiers([d for d in self.modifiers_doc(reg) if d["id"] != mid], reg)
+        """Take a modifier out, its params with it, and close the chain
+        over it (2026-10-29: as deleting an effect does): what fed its
+        first input now feeds whatever read its lane — a route through
+        `move_route` (op, depth and depth subscribers kept), another
+        modifier's input in place. With nothing in its first input, a
+        route on its lane stays, dormant, until it is removed or the id
+        comes back — as it does when the modifier changes the signal's
+        kind (a threshold makes a trigger of a value: what read the
+        trigger is not handed the value)."""
+        m = self.modifier(mid)
+        src = m.inputs[0] if m is not None and m.inputs else ""
+        same = m is not None and modifiers.OUT.get(m.kind, modifiers.VALUE) == modifiers.VALUE
+        lanes = {x.id: x.address for x in self.modifiers}
+        docs = [d for d in self.modifiers_doc(reg) if d["id"] != mid]
+        if src and same and src != m.address:
+            for b in [b for b in self.bindings if b.source == m.address]:
+                self.move_route(b, source=src)
+            for d in docs:      # (never a modifier onto its own lane: a loop through it)
+                own = lanes.get(d["id"])
+                d["in"] = [src if a == m.address and src != own else
+                           None if a == m.address else a for a in d["in"]]
+        self.set_modifiers(docs, reg)
 
 
 # ---------------------------------------------------------------- router
@@ -2953,6 +3125,20 @@ class Router:
         return [f.step(v, dt, m, rests[i] if i < len(rests) else 0.0)
                 for i, (f, v) in enumerate(zip(fs, values))]
 
+    def felt_now(self, b: Binding) -> float | None:
+        """Row `b`'s reading after its feel, as the last `modulate` left
+        it — what the panel's live plot draws (ui_feel); None while the row
+        has no follower (no feel, or it did not act)."""
+        f = self.__dict__.get("_movers", {}).get((b.source, b.target))
+        return None if f is None else f.x
+
+    def felt_lanes(self, scheme: str) -> list[float] | None:
+        """`scheme`'s lanes after its own feel, as the last `felt` left
+        them (the pad's camera job; the SYSTEM page's plot); None while
+        that feel is off or nothing has run it."""
+        fs = self.__dict__.get("_felt", {}).get(scheme)
+        return None if fs is None else [f.x for f in fs]
+
     def _move(self, b: Binding, m: Motion, u: float, p: Param, depth: float,
               dt: float, movers: dict) -> float:
         """Row `b`'s reading `u` after its motion. A row's follower starts
@@ -3037,7 +3223,7 @@ class Router:
         """The banks handed in, by scheme, in the order they came."""
         return self.__dict__.get("banks") or {}
 
-    def _patch_key(self) -> tuple:
+    def _modgraph_key(self) -> tuple:
         """What the patch is made of — the performer rows (each by identity
         and the fields that make edges), the macros' subscribers, the
         modifiers (N1, when the table has them), each bank's ids (plan 31
@@ -3055,8 +3241,8 @@ class Router:
         return (id(t), rows, t.macros_serial, subs, mods, banks,
                 getattr(self.reg, "serial", 0))
 
-    def build_patch(self) -> patchmod.Patch:
-        """The modulation graph of this table (patch.py's nodes and edges):
+    def build_modgraph(self) -> modgraph.ModGraph:
+        """The modulation graph of this table (modgraph.py's nodes and edges):
         every bank voice (when the router steps the bank: each LFO, by id)
         and modifier first, in their
         order; then per route, in table order, its source, its gate, its
@@ -3066,8 +3252,8 @@ class Router:
         subscribers as `base` edges; each voice's knob params (and the
         bank-wide ones, ``lfo.trigger``) and each modifier's own params, where the patch
         holds them, into their node. A switched-off row's edges are drawn
-        disabled. No loop is cut here (`patch` does that)."""
-        g = patchmod.Patch()
+        disabled. No loop is cut here (`modgraph` does that)."""
+        g = modgraph.ModGraph()
         t = self.table
         for scheme, bank in self._banks().items():
             for n in bank.ids():
@@ -3125,34 +3311,34 @@ class Router:
         return g
 
     @property
-    def patch(self) -> patchmod.Patch:
-        """The table's modulation patch as `modulate` runs it: `build_patch`,
+    def modgraph(self) -> modgraph.ModGraph:
+        """The table's modulation patch as `modulate` runs it: `build_modgraph`,
         with every loop that passes through no delay modifier broken at its
         last cable in table order — that cable's edges disabled and a note
-        in `patch_notes` (ROUTING's head shows it), the row itself left in
-        the table and the file as it is. Cached: rebuilt when `_patch_key`
+        in `modgraph_notes` (ROUTING's head shows it), the row itself left in
+        the table and the file as it is. Cached: rebuilt when `_modgraph_key`
         moves (the table, the banks' ids, the registry's params), with the
         evaluation plan `modulate` walks."""
         d = self.__dict__
-        key = self._patch_key()
-        if d.get("_patch_seen") != key:
-            self._rebuild_patch(key)
-        return d["_patch"]
+        key = self._modgraph_key()
+        if d.get("_modgraph_seen") != key:
+            self._rebuild_modgraph(key)
+        return d["_modgraph"]
 
     @property
-    def patch_notes(self) -> list[str]:
+    def modgraph_notes(self) -> list[str]:
         """One note per cable the patch keeps off to break a loop."""
-        self.patch                                   # noqa: B018 — current
-        return self.__dict__["_patch_notes"]
+        self.modgraph                                # noqa: B018 — current
+        return self.__dict__["_modgraph_notes"]
 
     @property
-    def patch_cut(self) -> set[tuple[str, str]]:
+    def modgraph_cut(self) -> set[tuple[str, str]]:
         """The cables, ``(source, target)``, kept off to break a loop."""
-        self.patch                                   # noqa: B018 — current
-        return self.__dict__["_patch_cut"]
+        self.modgraph                                # noqa: B018 — current
+        return self.__dict__["_modgraph_cut"]
 
-    def _rebuild_patch(self, key: tuple) -> None:
-        g = self.build_patch()
+    def _rebuild_modgraph(self, key: tuple) -> None:
+        g = self.build_modgraph()
         t = self.table
         rank: dict[tuple[str, str], int] = {}
         for k, b in enumerate(t.bindings):
@@ -3165,13 +3351,13 @@ class Router:
         cut_in: set[tuple[str, str]] = set()     # (input address, modifier node) kept off
         notes: list[str] = []
         while True:
-            loops = patchmod.cycles(g)
+            loops = modgraph.cycles(g)
             if not loops:
                 break
             loop = loops[0]
             said = " → ".join([*loop, loop[0]])
             hops = set(zip(loop, [*loop[1:], loop[0]], strict=True))
-            on_loop = [e for e in patchmod.ordering(g) if (e.src, e.dst) in hops]
+            on_loop = [e for e in modgraph.ordering(g) if (e.src, e.dst) in hops]
             cables = {e.cable for e in on_loop if e.cable is not None}
             if cables:
                 # the loop's last cable in table order
@@ -3193,19 +3379,19 @@ class Router:
                          f"is off until it has one")
         # the evaluation plan: per node in order, what `modulate` does there
         banks = self._banks()
-        reads = {e.src for e in patchmod.ordering(g)}
+        reads = {e.src for e in modgraph.ordering(g)}
         by_target: dict[str, list] = {}
         for b in t.mods():
             if (b.source, b.target) not in cut:
                 by_target.setdefault(b.target, []).append((b, tuple(t.depth_subs(b))))
-        # a delay closing a loop runs before its input (`patch.ordering`):
+        # a delay closing a loop runs before its input (`modgraph.ordering`):
         # it emits that input's lane as it stands — last frame's value
         live = [e for e in g.edges if e.enabled and e.port == "in"]
-        ordered = {id(e) for e in patchmod.ordering(g)}
+        ordered = {id(e) for e in modgraph.ordering(g)}
         early = {e.dst for e in live if id(e) not in ordered}
         dormant = {node for _, node in cut_in}
         plan: list[tuple] = []
-        for node in patchmod.order(g):
+        for node in modgraph.order(g):
             if node.kind in banks:
                 i = int(node.id.split(":")[1])
                 if i + 1 in banks[node.kind]:          # a gap, or past the last: no voice
@@ -3219,8 +3405,8 @@ class Router:
                 if rows or land:
                     plan.append(("param", node.id, rows, land))
         d = self.__dict__
-        d["_patch"], d["_plan"], d["_patch_seen"] = g, plan, key
-        d["_patch_notes"], d["_patch_cut"] = notes, cut | cut_in
+        d["_modgraph"], d["_plan"], d["_modgraph_seen"] = g, plan, key
+        d["_modgraph_notes"], d["_modgraph_cut"] = notes, cut | cut_in
 
     # ---- the modifiers (plan 28 N1): their output lanes, ``mod:<n>`` ----
 
@@ -3251,7 +3437,7 @@ class Router:
         `early` (plan 28 N0): a delay that closes a loop, run before its
         input — it emits that input's lane as it stands, last frame's
         value, so the loop is exactly one frame late. `cut`: a modifier
-        whose input `patch` keeps off to break a loop with no delay: dormant."""
+        whose input `modgraph` keeps off to break a loop with no delay: dormant."""
         m = self.table.modifier(mid)
         vec = self.feeds.get(modifiers.SCHEME)
         if m is None or vec is None or not 0 <= m.n < len(vec):
@@ -3354,11 +3540,11 @@ class Router:
         (its lanes are then not a source). `dt` is the frame's, for the
         rows' motion (`feel_of`); None, a 60 Hz frame. A row that does not
         act this frame — its source not live, its gate shut — loses its
-        follower, and starts afresh. A cable `patch` keeps off to break a
+        follower, and starts afresh. A cable `modgraph` keeps off to break a
         loop does not run."""
         dt = 1 / 60 if dt is None else dt
         self._sync_modifiers()                   # plan 28 N1: the ``mod:<n>`` lanes
-        self.patch                                   # noqa: B018 — the cached plan, current
+        self.modgraph                                # noqa: B018 — the cached plan, current
         plan = self.__dict__["_plan"]
         begin = getattr(self.reg, "begin_frame", None)
         mark = begin() if begin is not None else None

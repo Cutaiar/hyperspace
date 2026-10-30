@@ -12,7 +12,7 @@ import json
 
 import numpy as np
 import pytest
-from test_camera import _draw, _rows, _view, ctx  # noqa: F401  (the GL context fixture)
+from test_camera import _draw, _rows, _view
 from test_presets import boot, boot_registry
 
 from hyperspace.geometry import geom, is_3d, view_angles, world_points
@@ -20,7 +20,7 @@ from hyperspace.params import part_of
 from hyperspace.view import ViewState
 
 
-def _strokes(ctx, monkeypatch, **kw):  # noqa: F811
+def _strokes(ctx, monkeypatch, **kw):
     """One draw: what it uploaded (test_camera._rows)."""
     return _rows(ctx, monkeypatch, _view(lines=True, **kw))
 
@@ -43,14 +43,14 @@ def test_the_switch_is_in_a_saved_preset_and_loads_back(tmp_path):
     path.write_text(json.dumps(doc))
     rig.presets.load_doc(doc, path)
     assert rig.view.screen_strokes is True
-    # a preset without the key (every factory file) lands world space
+    # a preset without the key (every corpus file) lands world space
     del doc["values"]["view.screen_strokes"]
     rig.presets.load_doc(doc, path)
     assert rig.view.screen_strokes is False
 
 
 @pytest.mark.parametrize("lines,points", [(True, True), (True, False), (False, True)])
-def test_at_zoom_1_both_modes_draw_the_same_frame(ctx, lines, points):  # noqa: F811
+def test_at_zoom_1_both_modes_draw_the_same_frame(ctx, lines, points):
     for shape in (0, 3):
         world, _ = _draw(ctx, _view(shape=shape, lines=lines, points=points, zoom=1.0))
         screen, _ = _draw(ctx, _view(shape=shape, lines=lines, points=points, zoom=1.0,
@@ -59,7 +59,7 @@ def test_at_zoom_1_both_modes_draw_the_same_frame(ctx, lines, points):  # noqa: 
 
 
 @pytest.mark.parametrize("zoom", [0.5, 2.0])
-def test_world_space_scales_the_width_and_radius_by_the_zoom(ctx, monkeypatch, zoom):  # noqa: F811
+def test_world_space_scales_the_width_and_radius_by_the_zoom(ctx, monkeypatch, zoom):
     """World space is the pre-A2 arithmetic: width × zoom before the 1 px
     floor (the sub-pixel part folded into alpha), radius × zoom before the
     whole-pixel rounding; screen space is the same at every zoom. On one
@@ -105,7 +105,7 @@ def test_world_space_scales_the_width_and_radius_by_the_zoom(ctx, monkeypatch, z
 
 
 @pytest.mark.parametrize("zoom", [0.5, 2.0])
-def test_on_the_fitted_field_the_shaders_scale_the_strokes(ctx, monkeypatch, zoom):  # noqa: F811
+def test_on_the_fitted_field_the_shaders_scale_the_strokes(ctx, monkeypatch, zoom):
     """On field.py's path (Fit, a 3D lattice) each copy has its own scale,
     the camera's zoom in it: the rows carry the reference's width and
     radius at scale 1 whatever the zoom, and LINE_VS / POINT_VS scale them

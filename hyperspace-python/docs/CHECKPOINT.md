@@ -19,14 +19,16 @@ and a projector. It is one Python process in `hyperspace-python/`.
   - [`ENGINEERING.md`](ENGINEERING.md): how each part behaves.
   - [`DECISIONS.md`](DECISIONS.md): the decisions in force, and what was
     decided not to build.
-  - [`DECISION-REGISTER.md`](DECISION-REGISTER.md): rows 34–310 (bar
+  - [`DECISION-REGISTER.md`](DECISION-REGISTER.md): rows 34–541 (bar
     109), built on a recommendation and waiting for the owner's keep or
-    overturn; row 109 records the owner's plan 25 answers.
+    overturn; row 109 records the owner's plan 25 answers, and some later
+    rows are the owner's own answers before a build (plan 40's 501–510
+    among them).
   - [`AUDIT-2026-09.md`](AUDIT-2026-09.md): the open defects.
   - [`TESTING-GUIDE.md`](TESTING-GUIDE.md): everything a person still has
     to test, in plain words, by hardware.
   - [`plans/11-hand-checks.md`](plans/11-hand-checks.md): the same checks,
-    numbered 1–276, with the automated test behind each.
+    numbered 1–403, with the automated test behind each.
   - [`plans/`](plans/README.md) `15-…` to `30-…`: what each plan built
     (plan 23 in part); plan 22 also has a ranked shortlist of new
     4-polytopes and macro candidates to audition; `24-party-wishlist.md`
@@ -66,25 +68,142 @@ clean, and 596 golden frames match on the gate Mac, every one recorded
 before unchanged. No preset was edited or added; `apc40.py` and
 `midi.py` (Dylan's desk work) untouched.
 
+**Plans 37, 38 and 39 are built** and integrated on
+`plan-37-38-39-integration` (2026-10-27: plan 38 first, then plan 39,
+then plan 37), which goes to `main` in one final PR the owner merges.
+They ran in parallel, one branch each.
+
+- **Plan 38, hold the projector** ([`plans/38-hold.md`](plans/38-hold.md)).
+  **hold** keeps every output on the wiring, the rig's bus cables and the
+  look as they were at the press, still live under the bands and LFOs,
+  while every edit (a GRAPH change, **new**, a load) lands as the preview
+  behind GRAPH's nodes, drawn by a second renderer only while the page
+  shows it, with a PROJECTOR inset of what the room sees. **take** cuts
+  to the preview; **drop** goes back to the hold point as one undo step
+  (the preset's part, not the rig). A landing during a hold keeps the
+  projector's effects, switches, resizes, mattes, cuts and segments; a
+  load's delay reset goes to the preview.
+- **Plan 39, vision** ([`plans/39-vision.md`](plans/39-vision.md), every
+  decision the owner's). `segment` takes any picture and puts out its
+  foreground, its background and its mask (Apple Vision on the Neural
+  Engine on a worker thread, torchvision behind it, a motion mode with no
+  model); `matte` (picture → mask) and `cut` (picture + mask → picture);
+  the mask its own purple wire that never rides in alpha, readable as a
+  white-on-black picture wherever a picture is taken; `edges` an effect
+  file; the cut-through blend made honest (eight backdrop fixture goldens
+  re-recorded for it); on GRAPH a media ▸ and a masks ▸ group and a
+  cut-out starter. The hold's preview runs no segment worker.
+- **Plan 37, nodes as pictures and the faces**
+  ([`plans/37-pictures-and-faces.md`](plans/37-pictures-and-faces.md)).
+  Every node that makes a picture is drawn as it on GRAPH, a thumbnail
+  made at the frame's end only for nodes on screen, moving no output
+  pixel; hovering it gives the node's lines, the size and the GPU time.
+  While the projector is held the thumbnails are the preview's, and
+  output 1's node shows the program's picture. A head chip, `pictures ·
+  tint cables`, is off by default and leans each picture cable's red by
+  what flows. An effect is laid in the area of its consumers, so
+  `acid-scene` draws forward. The faces are a dry run: sheets of all 17
+  modes and a generated migration map are in
+  [`plans/assets/37-faces/`](plans/assets/37-faces/); nothing is dropped
+  until the owner names the list.
+
+At the integration head the fast tier is 4227 passed, 2 skipped, the full suite 4450 passed,
+2 skipped (one load-flaky media test passes serially),
+and the goldens 136 passed over 789 pictures, none moved beyond the eight
+backdrop frames plan 39 re-recorded. `uv sync` on both Macs
+(`pyobjc-framework-vision`), and **both Macs on this build before a
+preset with `segment`, `matte` or `cut` is shared**: an older build reads
+such a section as black. No preset was edited or added.
+
+**Plan 40, patches, is built** on `plan-40-build`
+([`plans/40-patches.md`](plans/40-patches.md), every decision D1–D10 the
+owner's, 2026-10-27), cut from the plans 37–39 integration branch with
+`main` (PRs #270, #275) merged in; it goes to `main` in one final PR the
+owner merges. A **patch** is a group of GRAPH nodes saved with its
+boundary — the cables that cross its edge, a knob or a hand axis kept as
+the address it is, the scene in and the outputs out kept as typed ports
+with the name they were on — as `<library>/patches/<slug>.json`
+(`hyperspace.patch/1`, `patches.py`). **Group** folds selected nodes into
+one node on GRAPH (`+` opens it in place, a tinted region), saved in the
+preset's `groups` (`/8`): a fold of the canvas the renderer never sees,
+and the one sanctioned exception to "no hidden edges". **save as patch…**
+writes the file; the **patches** chip and **spawn ▸** land one in any
+preset under fresh ids as one undo step through the existing doors, its
+host ports open pins, or spliced in when dropped on a picture cable; a
+knob or hand that collides is asked in one sheet, every row starting on
+the patch. The devices the loaded preset wants and the rig lacks are said
+on the group, as **N devices missing** on GRAPH's head and the PRESET
+strip, and on SYSTEM; a device coming back is said in the footer. The fx
+module presets are retired outright (the FX page stays, less its module
+strip); `patch.py` is `modgraph.py`. Plan 38's PROJECTOR inset, which
+never drew on `main` (an `add_rect` TypeError), is fixed on the same
+branch. At e0675a6 the fast tier is 4320 passed, 2 skipped, the full suite
+4551 passed, 2 skipped, and the goldens 144 passed (8 new grouped-twin
+proofs), none moved. No preset was edited or added; Dylan's files are
+untouched.
+
+**Plan 41, the PRESETS page and one tier, is built** (2026-10-28,
+[`plans/41-presets-one-tier.md`](plans/41-presets-one-tier.md), every
+decision the owner's, from his ask of that day). The library has **one
+tier**: nothing ships with the app, nothing is "factory", nothing is
+hidden, every preset is listed, loaded, renamed and trashed alike, and a
+fresh library opens an unsaved `untitled` show on a blank preset. The
+twenty-five presets the build shipped, their generator and the `party` /
+`house` shows left the app; the files are the golden frames' corpus now
+(`tests/corpus/`, `tools/golden_frames.py` `CORPUS_PRESETS`, the test
+harness's `seed`), and the goldens' subjects and hashes are unchanged.
+The band scenes are code data (`hyperspace/scenes/band/`). The PRESETS
+page is the preset strip over a flat list of every preset (click loads;
+rename, ×), the trash at its foot, the patches fold and one line for the
+show (what it is, its name ●, open ▾, save, as…, new) — no pills, no
+"starts on", no drop-down, no module-preset fold. The pads are the desk's
+to set; `startup` stays in the show file for Home. The Drive library's
+`hidden.json` was deleted and the four unhidden shipped presets adopted
+as the owner's own, lower-cased (`dial`, `trip`, `plasma heart`,
+`seq-demo`). Dylan's files are untouched. **Both Macs on this build.**
+
 ## What is left
 
+- **Plan 37: the owner's list of face patterns** (register row 417, D1).
+  The sheets are in `plans/assets/37-faces/`. With the list, the owner
+  also says whether to renumber `view.pattern` or keep tombstones, and the
+  controller allows the `preset.py` edit. Then P2 runs: shaders and modes
+  dropped, presets migrated to their nearest kept mode with a note, and
+  only those presets' goldens re-recorded. Only the second half of check
+  375 waits for P2.
 - **The hand checks.** None has been run by a person. Start from
   [`TESTING-GUIDE.md`](TESTING-GUIDE.md), on a copy of `~/Hyperspace`;
   plans 24, 26 and 27 add checks 144–218, plans 30 and 28 checks
   220–276 (N8's palette as compression 267–271, N9's graph by concern
   272–276). Above all: a cable dragged on the GRAPH page (247), which no
-  test can do.
+  test can do. Plans 37, 38 and 39 add groups AH (370–376: the pictures
+  on GRAPH, their cost, the hover, the faces sheets, `acid-scene`), AI
+  (377–383: the hold on the rig with the projector up, take, drop, the
+  desk buttons, the preview's cost) and AJ (384–393: the camera, a
+  dancer, the party light, two cameras, an unplugged camera, and the
+  honest cut-through by eye). Plan 40 adds group AK (394–401: group and
+  ungroup, save and spawn, splice, the conflict sheet with the APC40, the
+  desk unplugged and plugged back, a rig without a Leap, the fx module
+  presets gone, a patch twice).
 - **The owner's keep or overturn** on register rows 34–310 (the answer
   sheet at the top of [`DECISION-REGISTER.md`](DECISION-REGISTER.md)),
   plans 30 and 28's being rows 214–310 (N7's 278–290, N8's 291–298, N9's
-  299–310).
+  299–310); and on rows 417–500, plans 37, 38 and 39's: plan 37's
+  417–429 and 460 (D1, 417, still open), plan 38's 430–439 (its D1–D5
+  are 430–434, taken as recommended) and 461–470, plan 39's 440–459 and
+  471–497 (440–447 the owner's own), and the integrator's 498–500; and
+  plan 40's 501–536 (501–510 its D1–D10, the owner's own; **521 and 524
+  pending the owner**: whether a preset with no group also saves as `/8`,
+  per row 394, and whether **wire as saved** gets a take-over chip).
 - **Both Macs on this build before sharing presets**: an older build
-  drops a preset's modifiers and positions when it saves (row 277).
-- **The owner's creative pass** on the new mechanisms, which no factory
-  preset uses yet: fader sets for S1–S8, hand mappings (the dance sources,
+  drops a preset's modifiers and positions when it saves (row 277), and
+  refuses a preset with a GRAPH group outright (plan 40's `groups` key,
+  `hyperspace.preset/8`).
+- **The owner's creative pass** on the new mechanisms, which few of his
+  presets use yet: fader sets for S1–S8, hand mappings (the dance sources,
   the grab), dance presets, palettes and where they sit, modifier
-  patches, desk templates, and the factory presets' graph wiring (hands
-  in the scene, as lines, in the history, on one output); touch shows.
+  patches, desk templates, and the presets' graph wiring (hands in the
+  scene, as lines, in the history, on one output); touch shows.
 - **Plan 29**, the devices: wands, drums, a Kinect or other depth sensor
   (the point-cloud node is ready for it), DMX / sACN lights, bulbs, a
   generic on-screen desk.
@@ -129,3 +248,27 @@ before unchanged. No preset was edited or added; `apc40.py` and
 - FL Studio does not fuse 14-bit MSB/LSB pairs in "Link to controller":
   the bridge needs a small FL MIDI script, or per-channel pitch bend.
 - An instanced GPU field (per-instance rotation phases, true instancing).
+- Tempo-synced springs: a spring feel's perceptual duration given in
+  beats (1/4, 1/2, 1 bar) from the tap-tempo clock, so its overshoot and
+  ring land on the beat. Perceptual duration is exactly one period of the
+  spring (`motion.spring_hz`: hz = 1 / duration), so a beat length is all
+  it needs; the file would store "in beats" beside the milliseconds.
+- `/deep-review` on every PR, unattended (`.claude/skills/deep-review`).
+  The skill first needs a PR mode: review, reproduce the findings, and
+  post them ranked as one PR comment, with no pushes. Three ways were
+  documented as of 2026-10-29:
+  - **A cloud scheduled task on a GitHub `pull_request` trigger**
+    (claude.ai/code/routines, or `/schedule`). Each PR starts a fresh
+    session at its head, on the owner's Claude account, with no API key.
+    It's a research preview, and whether skills load there is unconfirmed:
+    try one PR first.
+  - **A GitHub Actions workflow** (`anthropics/claude-code-action` with
+    `prompt: "/deep-review"`). It needs an `ANTHROPIC_API_KEY` secret, or a
+    `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token`, and costs Actions
+    minutes. Whether subagents run there is unconfirmed.
+  - **Anthropic's managed Code Review** (Team and Enterprise plans only).
+    It reads `REVIEW.md` from the base branch but runs no skills, so it
+    gives the checklist without the independent reviewer.
+
+  Separately: Devin Review's flags are not posted to GitHub with the
+  current settings, so a session can't read them.

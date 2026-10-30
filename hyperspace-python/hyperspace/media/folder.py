@@ -20,7 +20,7 @@ from concurrent.futures import Future
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import ids, pool, thumbs
+from . import pool, thumbs
 from .adapters import VIDEO_EXT
 from .source import FETCHING, MISSING, READY, error
 from .still import STILL_EXT
@@ -288,7 +288,7 @@ class MediaFolder:
     def _safe_scan(self) -> None:
         try:
             self.scan()
-        except Exception:  # noqa: BLE001 — a bad folder must not kill the watch
+        except Exception:  # noqa: BLE001, S110 — a bad folder must not kill the watch
             pass
 
     def stop(self) -> None:

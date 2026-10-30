@@ -29,6 +29,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from conftest import CORPUS
 from test_graph_json import Stub
 from test_presets import boot, put
 from wiredframe import Shows, Thru, graph, wire_switches
@@ -37,11 +38,13 @@ from hyperspace import graph as G
 from hyperspace import graphmigrate as M
 from hyperspace import preset
 from hyperspace.graphmigrate import wired_wiring
-from hyperspace.library import FACTORY, PRESETS
+from hyperspace.library import PRESETS
 from hyperspace.outputs import Switches, View
 
 S = Switches
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "presets"
+# the corpus presets' sources (plan 36 T3: the corpus files are their `/7`)
+SOURCES = Path(__file__).resolve().parent / "fixtures" / "factory-sources" / "presets"
 PLACED = ("palette-hands", "palette-glass", "acid-scene")
 RUN = ("warp", "acid", "acid.2", "palette", "palette.2")
 FILES = {"warp", "acid", "palette", "kaleido"}
@@ -231,16 +234,16 @@ def test_the_section_round_trips_with_its_placements(tmp_path):
     assert rig.reg["fx.acid.2.on"].value and rig.reg["dream.on"].value
 
 
-def test_no_factory_preset_changes_and_the_default_graph_is_identical():
-    """No library preset places an effect (or carries a graph); with no
+def test_no_corpus_preset_places_an_effect_and_the_default_graph_is_identical():
+    """No corpus preset places an effect (nor its source carries a graph); with no
     placement the frame is D0's — every effect in every run (the through
     outputs' copies too, plan 35 T4), no placed node, the readout split as
     before, the pool two — and a wiring whose placements were all refused
     builds the same graph."""
-    for path in sorted((FACTORY / "presets").glob("*.json")):      # (plan 36 T3: /7)
+    for path in sorted((CORPUS / "presets").glob("*.json")):          # (plan 36 T3: /7)
         nodes = json.loads(path.read_text())["graph"]["nodes"]
         assert not any(k in e for e in nodes for k in G.PLACE_KEYS), path.name
-    for path in sorted(preset.FACTORY_SOURCES.glob("*.json")):         # (their sources)
+    for path in sorted(SOURCES.glob("*.json")):                          # (their sources)
         assert "graph" not in json.loads(path.read_text()), path.name
     shows = [Shows(through=True), Shows(scene=False, through=True), Shows()]
     plain = graph(shows, G.Wiring(run=RUN), effects=RUN)     # (plan 33: by wires)
@@ -363,16 +366,6 @@ def test_the_words_say_the_placements():
 moderngl = pytest.importorskip("moderngl")
 
 
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-    c.release()
-
-
 def _palette(r, name="palette"):
     r.fx.state.values[name].update(on=True, mix=1.0, hue_from=170.0, hue_to=230.0)
 
@@ -434,7 +427,7 @@ def test_into_output_2_folds_one_output_only(ctx):
     output 2 folds that output's picture; output 1 is byte for byte the
     frame with no palette; the chain ran once."""
     import numpy as np
-    from test_outputs import keep_run, rig, run, views
+    from test_outputs import keep_run, rig, run, same_bytes, views
 
     def frame(placed: bool):
         r = rig(ctx, effects=("warp",), hands=False)
@@ -445,7 +438,7 @@ def test_into_output_2_folds_one_output_only(ctx):
 
     _, (a1, a2) = frame(False)
     r, (b1, b2) = frame(True)
-    assert np.array_equal(a1, b1) and np.array_equal(a1, a2)
+    assert same_bytes(ctx, a1, b1) and np.array_equal(a1, a2)
     assert not np.array_equal(a2, b2)
     assert r.stats["effects"] == ["warp", "palette"]
     # (plan 36 T3: the palette a wire into output 2's picture, no fold)
@@ -495,8 +488,7 @@ def test_a_presenter_lays_the_folded_hands_and_shows_the_folded_frame(ctx):
     hands 2, folded from that Ghost at its opacity; with the palette into
     output 2, output 2's hand-off frame is the folded one and output 1 is
     byte for byte the frame without it."""
-    import numpy as np
-    from test_outputs import H, W, keep_run, rig, run, views
+    from test_outputs import H, W, keep_run, rig, run, same_bytes, views
 
     from hyperspace.ghost import GhostState
 
@@ -548,7 +540,7 @@ def test_a_presenter_lays_the_folded_hands_and_shows_the_folded_frame(ctx):
 
     plain, a1, pa = frame(False)
     r, b1, pb = frame(True)
-    assert np.array_equal(a1, b1)
+    assert same_bytes(ctx, a1, b1)
     assert pb.handoff.frame is not None and pa.handoff.frame is not None
     assert "palette" in r.stats["effects"] and "palette" not in plain.stats["effects"]
 

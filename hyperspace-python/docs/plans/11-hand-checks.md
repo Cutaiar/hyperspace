@@ -5,7 +5,7 @@ Each gives the steps, what passes, what fails and where in the code a
 failure points, and the headless tests that show what "right" looks
 like. [`../TESTING-GUIDE.md`](../TESTING-GUIDE.md) is the plain-language
 version, ordered by device, and the place to start; it cites these
-numbers. They run 1–352 (group AD (332–341) is plan 34's, feedback, on `plan-34-feedback` (PR #236), and runs with group AE); group Y (232–266, 272–276) is plan 28's (261–266 its N7,
+numbers. They run 1–404 (group AD (332–341) is plan 34's, feedback, on `plan-34-feedback` (PR #236), and runs with group AE); group Y (232–266, 272–276) is plan 28's (261–266 its N7,
 272–276 its N9), 267–271, plan 30's N8 (the palette as compression), are at
 the end of group X, and group Z (277–295) is two parts: 277–279 the
 instanced field from `main`, renumbered from its 144–146 when main was
@@ -13,7 +13,7 @@ merged in, and 280–295 plan 31's (286–295 the APC40 page, on
 `plan-31-a1`); group AA (296–316) is plan 32's, and 317 the two plans
 together; group AC (318–331) is plan 33's, the free graph, on
 `plan-33-free-graph`; group AE (342–352) is plan 35's, the free frame,
-on `plan-34-feedback` (PR #236).
+on `plan-34-feedback` (PR #236). Past 352: check 353 (group AF) is row 394's, group AG (354–369) is plan 36's, the WYSIWYG graph, and groups AH (370–376), AI (377–383) and AJ (384–393) are plans 37's (nodes as pictures, and the faces), 38's (hold the projector) and 39's (vision), run together and integrated on `plan-37-38-39-integration`. Group AK (394–401) is plan 40's, patches, on `plan-40-build`; check 402 (group AL) is the macro's throw; check 403 (group AM) is the one-tier library and the PRESETS page, on `worktree-presets-one-tier`. Check 404 (group AN) is dropping a node on a cable: the drag that shows what the drop will do, ⌘ to move a wired effect, a modifier's delete closing its chain, and Option-drag selecting cables.
 
 ## Before you start
 
@@ -3358,7 +3358,7 @@ right-click the param → Route a lane here…, which opens GRAPH. ROUTING's
 desk, macros, session and sinks are as the checks say.
 
 **232. The lag is gone on a real LFO-on-LFO patch.**
-Headless: `tests/test_lfo.py::test_an_lfo_owning_another_lfos_depth_changes_its_output_the_same_frame`, `tests/test_routing.py::{test_every_factory_preset_lands_the_same_values_one_frame_earlier,test_a_macro_owned_by_a_hand_scales_a_lanes_push_the_same_frame}`, `tests/test_patch.py::test_a_param_the_pass_lands_is_applied_once_a_frame`.
+Headless: `tests/test_lfo.py::test_an_lfo_owning_another_lfos_depth_changes_its_output_the_same_frame`, `tests/test_routing.py::{test_every_factory_preset_lands_the_same_values_one_frame_earlier,test_a_macro_owned_by_a_hand_scales_a_lanes_push_the_same_frame}`, `tests/test_modgraph.py::test_a_param_the_pass_lands_is_applied_once_a_frame`.
 TRIP (F5); LFO page. Set LFO 2's depth to 0.5; on GRAPH drop *LFO 1*'s
 out stub on *LFO 2*'s in stub and pick its depth · mod, then click the
 wire and set the row's op to push. Watch LFO 2's scope, then SYSTEM's frame
@@ -3372,7 +3372,7 @@ mark; an LFO stepped twice: `use_lfos` and `app.frame` both stepping);
 it sticks after the hand leaves.
 
 **233. A loop is refused in words; the rest of the preset runs.**
-Headless: `tests/test_routing.py::test_a_cycle_without_a_delay_disables_its_last_cable_with_a_note`, `tests/test_patch.py::test_a_loop_of_modifiers_alone_keeps_its_last_input_off_with_a_note`.
+Headless: `tests/test_routing.py::test_a_cycle_without_a_delay_disables_its_last_cable_with_a_note`, `tests/test_modgraph.py::test_a_loop_of_modifiers_alone_keeps_its_last_input_off_with_a_note`.
 Any preset; GRAPH: drop *LFO 1*'s out stub on *LFO 2* and pick its rate
 · mod, then *LFO 2*'s out stub on *LFO 1* and pick its depth · mod (each
 row's op push, from its wire). Open ROUTING for its head; back on GRAPH
@@ -3387,7 +3387,7 @@ stutters (a loop run every frame); a row removed or switched off in the
 file.
 
 **234. A delay closes a loop.**
-Headless: `tests/test_patch.py::{test_cycles_finds_every_loop_and_none_through_a_delay,test_a_loop_through_a_delay_runs_exactly_one_frame_late}`, `tests/test_modifiers.py::test_delay_is_one_frame_late`.
+Headless: `tests/test_modgraph.py::{test_cycles_finds_every_loop_and_none_through_a_delay,test_a_loop_through_a_delay_runs_exactly_one_frame_late}`, `tests/test_modifiers.py::test_delay_is_one_frame_late`.
 GRAPH: right-click → modifier ▸ **delay**, input `LFO 1` in its editor;
 drop its out stub on *LFO 1*'s in stub and pick depth · mod (op push in
 the wire's row): LFO 1 riding its own depth one frame late.
@@ -5251,6 +5251,1025 @@ the placements, and the `acid.2` one by 1/255.
 *Fail:* a picture with hands where the mute is on, or one that moved
 visibly.
 
+## AH. Plan 37: nodes as pictures, and the faces
+
+Plan 37 as built is [`37-pictures-and-faces.md`](37-pictures-and-faces.md). On GRAPH, every node that makes a picture is drawn as that picture: a small live thumbnail is made only for nodes that are on screen and drawn. Hovering the picture gives the node's lines, the picture's size and its GPU time. A head chip, **pictures · tint cables**, is off by default and tints picture cables by what flows. An effect is laid in the area of its consumers, so `acid-scene` draws forward. The faces are a dry run: [`assets/37-faces/`](assets/37-faces/) holds a sheet of all 17 modes and the migration map, and nothing is dropped until the owner names the list.
+
+These checks need `plan-37-pictures`. Run them on the copy (`export HYPERSPACE_HOME=~/Hyperspace-try`). Register rows 417–429 and 460. None has been run by a person. No golden moved. Check 375's second half waits for the owner's list and for P2, which follows it.
+
+**370. Every picture node shows its picture.** (laptop, GRAPH, a party preset)
+Headless: `tests/test_thumbnails.py` (`test_the_page_draws_a_thumbnail_on_every_picture_node_collapsed_or_not`, `test_a_thumbnail_is_the_pictures_aspect_and_shows_it`, `test_every_picture_kind_has_a_thumbnail_and_the_modulation_side_none`); for the tint, `tests/test_graph_hover.py` (`test_lit_a_picture_cable_takes_its_makers_hue_and_off_it_is_red_again`, `test_the_tint_always_leaves_a_red`, `test_a_real_thumbnails_hue_is_its_pictures_a_frame_later_without_a_texture_read`).
+1. Load `party-trip` (or any party preset) and open GRAPH with **preset only** lit.
+2. Look at each node of the frame: the channel, the pattern, the scene, the effects, the composites, the look-back and the outputs.
+3. On FX, turn an effect's mix up and down.
+4. Light **pictures · tint cables** on the head. Wait a second or two, then turn it off again.
+*Pass:* every picture node's body is a small moving picture. An effect's picture differs from its input's and follows the mix. The shape shows the scene, faint. Output 1 shows the window, and output 2 shows its window without the hands laid on. With the switch lit, the picture cables out of a yellow-green picture lean orange and those out of a blue-violet picture lean rose. A red, cyan or grey picture's cables stay plain red. Every cable is still clearly red, and none looks like a trigger (amber) or a mask (purple). SYSTEM's fps is unchanged with the switch lit on a 20-node preset. With the switch off, every cable is plain red again.
+*Fail:* a black box on a node that draws: its kind is missing from `graphview.THUMBS`, or `render.thumb_source` returned None. A picture upside down: the GL row flip in `ui_graph._thumb`. A frozen picture: the page is not wanting it (`thumb_wants`). Cables that never change: no hues read, either because the thumbnails were never copied or because `want_hues` was not called. A cable that reads as amber or purple: `TINT_SPAN` is too wide.
+
+**371. What the thumbnails cost.** (the show Mac, GRAPH open, twenty nodes on screen)
+Headless: `tests/test_thumbnails.py` (`test_graph_picture_is_asked_only_for_the_wanted_nodes`, `test_the_outputs_are_byte_identical_with_and_without_thumbnails`, `test_a_node_behind_an_unpicked_switch_input_is_not_made`).
+1. With GRAPH closed, note SYSTEM's frame time and the GPU per-node lines.
+2. Open GRAPH and pan until about twenty picture nodes are on screen. Read SYSTEM again: the `thumbnails · N copied · K repainted · M kept` line and the frame time.
+3. Light **pictures · tint cables** and read the frame time once more.
+*Pass:* N is about twenty, the frame still runs at the show's rate, and the per-node GPU lines are unchanged by the thumbnails, with the tint on or off.
+*Fail:* frames dropped while K is high: painted-direct nodes are being repainted at full size (row 426), so try fewer on screen. GPU lines that grow with GRAPH open: the timer is not muted in `Renderer._thumbnails`. A stutter with the tint lit: the hue collect waiting on the GPU (row 428).
+
+**372. Collapse and expand: the thumbnail stays.** (laptop, GRAPH)
+Headless: `tests/test_thumbnails.py::test_the_page_draws_a_thumbnail_on_every_picture_node_collapsed_or_not` (its expanded half), `tests/test_graph_legible.py::test_every_node_starts_collapsed_with_at_most_five_lines` (the height).
+1. Expand an effect node with **+**, then collapse it.
+2. Do the same to a channel whose picture is portrait.
+*Pass:* expanded, the picture sits above the ports. Collapsed, the node is the title and the picture. Either way, the column below is not overlapped. The portrait picture is letterboxed in the same 16:9 box, and the layout does not move.
+*Fail:* the picture is gone when expanded (the order in `_node`). Nodes overlap (`graphview.height` and `_thumb`'s box disagree).
+
+**373. Hover a thumbnail: the node's lines, the size, the GPU time.** (laptop, GRAPH, a party preset)
+Headless: `tests/test_graph_hover.py` (`test_a_picture_nodes_hover_is_its_summary_its_size_and_its_gpu_time`, `test_the_page_finds_the_gpu_time_by_the_render_nodes_name`, `test_a_switch_and_an_unreached_node_say_so_on_hover`, `test_the_page_draws_with_the_switch_lit_and_a_thumbnail_hovered`).
+1. Load `party-trip` and open GRAPH.
+2. Rest the pointer on the scene node's picture, then on an effect's, then on output 2's.
+3. Rest it on the scene node's title.
+*Pass:* on a picture, a tooltip with the title, the node's lines ("4 picture ports", an effect's param counts), `1920×1080 picture` (the window's size), and `gpu 0.xx ms` matching SYSTEM's line for that node. On the title, the old hover (the status, or nothing).
+*Fail:*
+- No tooltip on the picture: `_thumb`'s `is_item_hovered` is not working inside the editor, or `st["thumb_hover"]` is being reset after the nodes are drawn. The fallback is to test the dummy's rect (`get_item_rect_min/max`) against `imgui.get_mouse_pos()` taken to canvas space (`ed.screen_to_canvas`).
+- No size line: `VNode.picture` is unset (`_want_thumbs`).
+- No GPU line on a timed node: the name differs from `thumb_name`. Compare with SYSTEM's lines.
+
+**374. Hidden: its thumbnail stops being made.** (laptop, GRAPH, SYSTEM)
+Headless: `tests/test_thumbnails.py` (`test_the_page_wants_the_picture_nodes_it_draws_on_screen`, `test_wanted_is_made_next_frame_and_dropped_after_a_second_unwanted`, `test_a_node_that_made_nothing_is_dimmed_then_black_after_a_second`).
+1. Turn **preset only** off, get many picture nodes on screen, and read SYSTEM's `thumbnails · N copied · K repainted · M kept`.
+2. Light **preset only**, or pan nodes off screen, and read the line again after a second.
+3. On a switch, pick another input and watch the node behind the input you left.
+*Pass:* N drops by the number of nodes no longer drawn, and M follows within a second. The node behind the unpicked input goes grey at once and black a second later. It comes back when you pick its input again.
+*Fail:* N unchanged: hidden nodes are still wanted (`drawn_node`, `thumb_wants`). M never falls: `end_frame` is not dropping. The unpicked node keeps moving: the `Graph.pulled` gate in `render.thumb_source`.
+
+**375. The faces: the owner's list, then the FACES page after P2.** (the laptop, then the show Mac)
+Headless: `tests/test_faces_map.py` (the map is current); after P2, `tests/test_patterns.py` (the kept modes' table, shader and pixels) and the re-recorded goldens named in P2's commit.
+1. Before P2, open `docs/plans/assets/37-faces/sheet.png` and `heart-sheet.png`, and the FACES page with music for METER, PULSE and SPEED. Name the modes to keep. With the list, answer row 417's two questions: renumber or tombstones, and the `preset.py` edit.
+2. Read `migration-map.md`'s "nearest kept" for the modes you drop and say whether each is right (row 460).
+3. After P2, open FACES. Only the kept modes' chips are there, in the old order, each with its swatch and its one line. The eight inputs' rows are unchanged.
+4. Load each preset that the map lists as *on screen* with a dropped mode. Each shows its nearest kept mode, and its card's note says "pattern X was retired; now Y".
+5. Turn the desk's pattern knob from end to end. It walks the kept modes only, with no blank stop.
+6. With both Macs updated, load a preset from the Drive library that was saved before P2 with a dropped mode. It shows the nearest kept mode, never white faces or the wrong pattern.
+*Pass:* every step as described. Until the list arrives, steps 1 and 2 are the whole check.
+*Fail:* a dropped mode's chip on FACES: `ui_patterns` still reads the full list. A preset on the wrong pattern: the indices shifted without the value remap (P2's index step). White faces: a stale index reached the shader's fallthrough `return vec4(1.0)`.
+
+**376. `acid-scene` on GRAPH: no cable runs backwards.** (laptop, a scratch home with no `[library]` and no devices)
+Headless: `tests/test_graph_areas.py` (`test_no_cable_runs_backwards_across_areas` over every factory preset and every graph fixture, `test_a_node_is_laid_where_its_consumers_are`, and `test_auto_layout_stacks_each_area_and_keeps_saved_positions`, which shows no layout runs by itself).
+1. Copy `tests/fixtures/presets/acid-scene.json` into the scratch home's `presets/`.
+2. Load it and open GRAPH. If anything was saved, press **tidy** once.
+3. Follow acid.2: from the scene into the look-back's picture and its occluder, and on to the composite.
+4. Drag acid.2 somewhere else, wait a few frames, then reload.
+5. This step shows a known rough edge. In a scratch copy of a user preset that has a saved position for an acid.2-style effect (placed in the EFFECTS region, feeding the look-back), click the LOOK-BACK chip or title.
+*Pass:* acid.2 stands in LOOK-BACK, left of the look-back. Every cable out of it runs left to right, and the EFFECTS area starts with the composite. After the drag it stays where it was dropped, through later frames and after the reload. In step 5, the saved effect keeps its position in the EFFECTS region but now belongs to LOOK-BACK, so LOOK-BACK's frame reaches over to it. Judge whether that reads acceptably. One **tidy** ends it (row 429).
+*Fail:* acid.2 in EFFECTS with a cable curling back into the look-back (`laid_areas` is not applied in `build`). A node that jumps back after a drag (a layout running by itself).
+
+## AI. Plan 38: hold the projector
+
+Plan 38 as built is [`38-hold.md`](38-hold.md): **hold** (first on GRAPH's
+head, or `output.hold` on a desk button) keeps every output on the wiring
+and the look as they were at the press, still moving with the music, while
+every edit lands as the preview behind GRAPH's nodes, with a red-framed
+PROJECTOR inset showing what the room sees; **take** cuts the preview onto
+the projector, **drop** goes back to the hold point as one undo step. On
+`plan-38-hold`, then `plan-37-38-39-integration`. Run on the copy
+(`export HYPERSPACE_HOME=~/Hyperspace-try`), after `uv sync`. No schema,
+preset or golden changes. Register rows 430–439 and 461–470. None of
+these has been run by a person; the headless tests are all in
+`tests/test_hold.py`.
+
+**377. Hold keeps the projector while a new preset is started.** (the rig,
+projector up, GRAPH open, music playing)
+Headless: `tests/test_hold.py::test_on_gl_the_program_draws_the_held_wiring_while_a_graph_edit_lands`,
+`::test_on_gl_the_projector_keeps_the_held_frame_while_the_preview_shows_the_edit`,
+`::test_on_gl_a_blank_graph_landed_while_held_leaves_the_projector_whole`,
+`::test_a_landing_while_held_keeps_the_programs_effects_switches_and_resizes`,
+`::test_the_program_draws_the_held_look_and_the_live_one_comes_back`,
+`::test_held_the_outputs_draw_the_program_and_the_preview_follows`,
+`::test_the_projector_inset_draws_framed_while_held` (plan 40's run fixed
+the inset's `add_rect` call, which raised a TypeError the first time the
+inset drew: on any build before that fix the inset is missing and the log
+says `TypeError: add_rect()`; register row 536).
+1. Load a moving look that has an effect and a switch (`party-trip`).
+2. Press **hold**, the first chip on GRAPH's head.
+3. Press **new** on the PRESET strip.
+4. Right-click near the canvas's top-right corner to open the node picker.
+
+*Pass:* the projector keeps the old look, its effect and switch pick
+included, and keeps moving with the music. GRAPH's backdrop shows the new
+preset's shape. The PROJECTOR inset, framed in red in the canvas's corner,
+shows the old look, oriented as output 1, and the head shows the red
+`HELD 0:0x — …` line. The inset sits over the picker in step 4 (row 469:
+known, judge whether it is in the way).
+*Fail:* the projector goes black, which points to `Hold.program` not being
+around `draw_outputs` in `app._draw_render`. The projector loses its
+effect or switch pick at **new**, which points to `GraphSection._settle`
+not asking `hold.keep` (`hold.section` unset in `app.main`). The inset is
+missing, which points to `monitor` not wanted, or output 1 not publishing
+into it.
+
+**378. Building a scene during a hold shows only behind GRAPH.** (same)
+Headless: `::test_on_gl_the_program_draws_the_held_wiring_while_a_graph_edit_lands`,
+`::test_a_bus_cable_cut_after_the_hold_stays_off_the_projector`,
+`::test_on_gl_a_bus_cable_cut_after_the_hold_stays_off_the_projector`,
+`::test_the_canvas_reads_the_previews_graph_while_held`,
+`::test_the_head_line_says_how_long_and_what_changed`; and
+`tests/test_hold_thumbnails.py` (step 5: the thumbnails while held).
+1. While held, wire shape → scene → All outputs.
+2. Insert an effect on the scene's cable; delete one the projector shows.
+3. Cut the bus cable into output 2's picture.
+4. Save the preview as a new preset; load it again after Take.
+5. Before Take, with GRAPH open, look at the nodes' pictures, then at
+   output 1's node beside the PROJECTOR inset.
+
+*Pass:* the backdrop shows the new scene with its effect, and the
+projector does not change, not even at the delete. The head line counts
+the changed settings and says "the graph changed". After step 3, output 2
+is black in the preview only. The dormant and refusal lines on GRAPH talk
+about the preview. The saved preset has no values for the projector's
+leftover effects (no note about unknown ids on reload). In step 5 the
+nodes' pictures show the preview (the new effect's node shows its own
+picture), while output 1's node shows the same picture as the PROJECTOR
+inset (rows 498, 499).
+*Fail:* the projector shows the edit, which points to the held wiring or
+held rig cables not applied in `Hold.program`. The preview still feeds
+output 2 after the cut, which points to `rig_source` missing from
+`hold.MIRRORED`. A new node shows a stand-in ref, which points to a read
+of `panel.renderer._graph` not going through `hold.canvas_renderer`. The
+reload notes unknown ids, which points to `Presets._values` not leaving
+out `Hold.program_only()`. Node pictures that show the projector's look in
+step 5 point to `ui_graph.picture_sources` not reading through
+`hold.canvas_renderer`.
+
+**379. Take cuts the preview onto the projector.** (same, look-back on)
+Headless: `::test_on_gl_the_program_draws_the_held_wiring_while_a_graph_edit_lands`
+(after Take the outputs show the edit's frame),
+`::test_take_lets_go_and_the_program_is_what_is_landed`,
+`::test_an_effects_clock_runs_on_through_hold_land_and_take`,
+`::test_a_load_while_held_resets_the_previews_delays_and_the_projectors_at_take`.
+1. After 378, turn the look-back on so that trails show.
+2. Press **take**.
+3. Hold a look with an echo, load another preset with GRAPH open, watch
+   the projector, then press **take**.
+
+*Pass:* the projector cuts to the new scene in one frame and the
+look-back's trails carry on through the cut; the red line goes and
+**hold** is back. In step 3 the projector's echo keeps trailing through
+the load, and starts empty only at Take. Say whether the cut reads as
+harsh (row 430).
+*Fail:* a frame of black or a flash, which points to a graph rebuild on
+the program renderer losing its frames. The trails restart, which points
+to the look-back's history cleared on a rebuild. The projector's echo
+cuts at the load, which points to `Presets.load`'s delay reset not going
+through `gs.hold`.
+
+**380. Drop goes back as one undo step.** (same)
+Headless: `::test_drop_after_a_whole_new_look_is_one_undo_step_back_and_one_forward`,
+`::test_drop_goes_back_to_the_hold_point_as_one_undo_step`,
+`::test_drop_puts_a_bus_cable_cut_during_the_hold_back`,
+`::test_drop_after_a_landing_while_held_brings_the_programs_nodes_back_whole`,
+`::test_an_undo_after_take_brings_no_program_only_instance_back`.
+1. Note the preset's name and dirty dot.
+2. Press **hold**.
+3. Turn three knobs, rewire on GRAPH and cut a bus cable.
+4. Load another preset from the strip and turn a knob on it.
+5. Dim the room (eye / output).
+6. Press **drop**.
+7. Press ⌘Z once.
+
+*Pass:* after step 6 the canvas, the knobs, the cut cable and the strip's
+name return to what the projector shows, and the dirty dot is as in step
+1. The projector never changes, and the dim from step 5 stays. After step
+7 the other preset comes back with its edits and its dirty dot in one
+press, and the dim still stays.
+*Fail:* the knobs stay moved: undo not handed to the hold (`Hold.undo`).
+The dim reverts: `hold._preset_part`. ⌘Z brings back only part of the
+state and needs a second press: Drop pushes more than one step.
+
+**381. The desk buttons light while held.** (the rig, APC40)
+Headless: `::test_learned_desk_buttons_light_while_held`,
+`::test_the_output_controls`.
+1. With no hold on, learn `output.hold` and `output.take` onto two free
+   desk buttons.
+2. Press the hold button.
+3. Press the take button.
+4. Hold again, then press **drop** on GRAPH.
+
+*Pass:* both LEDs are on while held, and dark after take and after drop.
+The press that learns a button does not hold. (A button learned *during*
+a hold is unlearned by Drop: row 438. Learn before holding.)
+*Fail:* the take LED stays dark while held, which points to its `lit=`
+callback not read by `routing.led_lit`. A learning press engages the hold.
+
+**382. The preview's cost while held.** (show Mac, GRAPH open, SYSTEM page)
+Headless: `::test_held_with_the_page_closed_draws_no_preview`,
+`::test_preview_size_keeps_the_aspect_under_both_caps`,
+`::test_the_preview_renderer_reads_what_the_main_one_does`.
+1. Hold with GRAPH open and note the FPS.
+2. Close GRAPH and note it again.
+3. Wire a Syphon or NDI input into the preview.
+
+*Pass:* the FPS drop with GRAPH open is acceptable; the preview is at
+most 1280 px on its long side. With GRAPH closed the FPS is as unheld. A
+Syphon/NDI input shows in the preview (it may stutter), and the
+projector's copy stays smooth.
+*Fail:* the FPS falls with the page closed, which points to
+`_draw_preview` running without `preview.take()`. The projector's Syphon
+input stutters, which points to the second read starving the first.
+
+**383. A band still pumps a held param.** (the rig, music)
+Headless: `::test_a_modulated_param_rides_its_held_base`,
+`::test_the_turns_speed_and_planes_are_not_held`.
+1. Route a band to `view.bright`.
+2. Press **hold**.
+3. Move `view.bright`'s base on the desk.
+4. Turn the speed knob.
+
+*Pass:* the projector keeps the held brightness and still pumps with the
+band. The preview shows the new base, pumping too. The speed change in
+step 4 turns both, and the red line does not count it (row 431).
+*Fail:* the projector stops pumping, which points to
+`hold.program_value` not adding this frame's offset. The projector jumps
+to the new base, which points to the param not held (`hold.held`).
+
+## AJ. Plan 39: vision
+
+Plan 39 as built is [`39-vision.md`](39-vision.md): `segment` (any picture
+in; `segment.fg`, `segment.bg` and `segment.mask` out; Apple Vision on the
+Neural Engine, torchvision behind it, a motion mode with no model),
+`matte` (picture → mask) and `cut` (picture + mask → picture), the mask its
+own purple wire that never rides in alpha (wired into a picture port it
+reads white where it passes, black elsewhere), `edges` as an effect file,
+and the cut-through blend made honest. On `plan-39-vision`. Run on the copy
+(`export HYPERSPACE_HOME=~/Hyperspace-try`), after **`uv sync`** (it adds
+`pyobjc-framework-vision` on macOS). The first camera open asks for camera
+permission: allow it. **A preset with `segment`, `matte` or `cut` reads as
+black with a note on an older build:** both Macs run this build before such
+a preset is shared. Register rows 440–459 and 471–497. None of these has
+been run by a person; the goldens were recorded on the build machine, and
+the two real-model tests ran once each on a synthetic frame. Until GRAPH's
+picker is in front of you, every node here can be added from right-click →
+**media ▸** (segment) or **masks ▸** (matte, cut), or as an entry in the
+preset's file (`{"kind": "segment"}`).
+
+**384. A webcam segmented by person: the dancer over the polytope, then the
+room with a person-shaped hole.** (the show Mac, the camera, the copy)
+Headless: `tests/test_graph_segment.py`
+(`test_fg_bg_and_mask_from_a_known_matte`,
+`test_a_rows_top_first_matte_lands_the_right_way_up_everywhere`,
+`test_the_shortcut_for_a_channel_with_pixels_and_the_readback_for_one_without`,
+`test_before_the_first_matte_fg_is_the_picture_whole`,
+`test_a_scene_through_a_segment_turned_off_shows_the_under`);
+`tests/test_plan39_graph.py` (`test_the_cut_out_on_the_scene_chain`,
+`test_a_second_cut_out_is_refused_nothing`,
+`test_every_segment_instance_draws_its_pins_and_their_cables`);
+`tests/test_segment.py::test_vision_runs_once_on_a_synthetic_frame` (live
+tier: `--all`). For the hold step: `tests/test_hold.py`
+(`test_a_landing_while_held_keeps_the_programs_mattes_cuts_and_segments`,
+`test_a_knob_turned_on_a_held_matte_cut_or_segment_stays_off_the_projector`,
+`test_drop_after_a_blank_landing_brings_the_mattes_cuts_and_segments_back`,
+`test_every_kind_a_landing_settles_has_its_program_ids`), on the
+integration branch.
+1. Put the camera on channel a (MEDIA).
+2. On GRAPH, in a preset with the scene chain, right-click empty canvas →
+   starters ▸ **cut-out**. A Segment and a Composite appear left to right
+   where you clicked, cabled `channel.a → segment.image`, `segment.fg →
+   composite.over`, `scene → composite.under`, `composite → All outputs`;
+   the status line says what fed All outputs before ("… — in place of scene
+   into All outputs"). Check the picker: **media ▸** lists segment, **masks
+   ▸** lists matte and cut.
+3. Stand in front of the camera.
+4. Rewire `segment.bg → composite.over`.
+5. Wire `segment.mask → output.2.image`.
+6. Turn `segment.on` off, then on.
+7. Starters ▸ cut-out again: `segment.2` and `composite.2` appear with
+   `segment.2`'s fg, bg and mask pins and their cables drawn. Undo once: the
+   second group is gone.
+8. (With plan 38 on the same build.) With step 3's look on the projector,
+   press HOLD, then New (a blank graph); turn a knob on the held segment;
+   press DROP; then HOLD, New, save to a scratch name, TAKE.
+*Pass:* at step 3 you are over the polytope and the room is gone; the cut
+sits on you, the right way up, not mirrored, not beside you, within a frame
+or two; the node says `256×144 · Vision fast · a frame or two late · ~30
+fps`. At step 4 the room shows with a person-shaped hole and the polytope
+through it. At step 5 output 2 shows your white silhouette on black. At
+step 6 the scene shows over the camera's room unchanged while off. At step
+7 every node and cable is visible, nothing refused, one undo per starter.
+At step 8 the projector keeps the cut person, live, until TAKE, the knob
+moves only the preview, DROP brings the three nodes back with their values,
+and the scratch save holds no `segment.*` ids when the live graph has none.
+*Fail:* upside down (the flip flag: rows 474, 480); squashed, offset or
+beside you (the aspect resample or the shortcut's cover condition: rows
+480, 481); the whole picture and the node waiting or in error (the backend:
+`[segment] backend`, the camera permission, `uv sync`); a segment.2 cable
+missing (row 493); the scene changing when `segment.on` goes off (row 477);
+at step 8 the projector going black or uncut at New (a declare outside
+`_settle`: row 495), a knob moving the projector (`HELD_GROUPS`: row 496)
+or the save writing the ids (`PROGRAM_IDS`: row 495).
+
+**385. `segment.quality` fast → balanced → accurate at the machine.** (the
+show Mac, the camera)
+Headless: `tests/test_graph_segment.py::test_the_shortcut_for_a_channel_with_pixels_and_the_readback_for_one_without`
+(a new level is a new submit); `tests/test_segment.py::test_the_levels_and_the_input_sizes`.
+1. With 384 running, step `segment.quality` through its three values.
+2. Watch the edge and the hair, the node's fps and the SYSTEM page's frame
+   time.
+*Pass:* each level gives a finer edge; the node's rate falls roughly as
+measured (Vision about 4 / 14 / 36 ms a frame: about 30 / 30 / 25 fps from a
+30 fps camera); the render's frame time does not move (the model runs on
+the Neural Engine, off the frame thread).
+*Fail:* the frame time rises with the level: the worker is blocking the
+frame thread, or the readback is taken every frame (row 481).
+
+**386. `segment.feather` and `segment.smooth` by eye: the halo and the
+flicker.** (the show Mac, the projector, the camera)
+Headless: `tests/test_segment.py` (the worker);
+`tests/test_graph_segment.py::test_smooth_near_one_still_reaches_the_new_matte`;
+no pixel test of the feather on a live matte (`tests/test_graph_masks.py::test_the_feather_widens_the_edge_in_one_channel`
+is the matte's).
+1. With 384 running, raise `segment.feather` from 0 to 8.
+2. Raise `segment.smooth` from 0 to 0.6 and wave a hand; then to 0.95, step
+   out of frame and wait.
+*Pass:* at 1 the edge softens, the steps of the 256-wide matte vanish and a
+halo widens; at 2 the flicker along the edge calms, at the cost of a
+trailing edge on fast moves, and at 0.95 you fade out fully within some
+seconds.
+*Fail:* the feather does nothing (the feather pass not reached); `smooth`
+leaves a frozen ghost where you stood (the matte re-quantised per result:
+row 488).
+
+**387. Motion mode on a still camera: the walker is foreground and fades in
+when still.** (the show Mac, the camera on a tripod)
+Headless: `tests/test_graph_segment.py::test_motion_on_two_stills_makes_the_moved_region_foreground`;
+the `segment-motion` goldens (`tests/golden/frames/png/0af84155993b2d4b.png`).
+1. With 384's wiring, set `segment.mode` to motion.
+2. Walk through the frame.
+3. Stand still for `segment.learn` seconds (3 by default).
+4. Move again. Then raise `segment.sense` a little.
+5. Turn a party light on and sweep it across the room.
+*Pass:* at 2 the walker is foreground and the still room is cut away; at 3
+you fade into the background over about `learn` seconds; at 4 you return at
+once, and a higher sense drops small changes (noise, shadows); at 5 the
+swept area is foreground until it is learnt (expected: row 482).
+*Fail:* everything foreground and staying so (the background not learning:
+`LEARN_FS`, `motion_pair` not turning); nothing ever foreground (`sense` too
+high, or the first frame learnt every frame).
+
+**388. A matte from luma on a still, a kaleido branch cut by it, over the
+scene: the owner's "image as a mask".** (the dev Mac, then the show Mac)
+Headless: `tests/test_graph_masks.py` (`test_luma_passes_the_bright_half`,
+`test_the_key_moves_where_a_pixel_passes`,
+`test_soft_widens_the_edge_and_invert_flips`,
+`test_the_feather_widens_the_edge_in_one_channel`,
+`test_an_asymmetric_picture_lands_the_right_way_up`,
+`test_an_own_sized_mask_lands_on_the_cover_where_its_picture_shows_it`);
+`tests/test_graph_cut.py` (`test_the_hole_is_transparent_before_any_composite`,
+`test_the_under_shows_through_the_hole`,
+`test_amount_a_half_dims_the_cut_part_by_half`,
+`test_invert_keeps_the_hole_and_cuts_the_rest`,
+`test_no_mask_is_the_picture_untouched`,
+`test_the_mask_of_an_asymmetric_picture_lands_on_the_right_rows`,
+`test_a_cut_is_transparent_to_laid_over_ness`,
+`test_the_under_shows_where_a_laid_over_scene_draws_nothing`); the
+`cut-out` goldens (`tests/golden/frames/png/a0abb485a6c1ca6a.png`).
+1. Load the `cut-out` fixture through a scratch library
+   (`tests/fixtures/presets/cut-out.json`; channel a is
+   `backdrop-still.png`). Every window shows the polytope; inside the
+   still's white disc (right of centre) it shows the scene through the
+   kaleidoscope instead.
+2. In your own preset do the same with any still from the media folder:
+   the still on channel a; from masks ▸ a matte and a cut, and a composite;
+   wire `channel.a → matte.image`, `matte → cut.mask`, `scene →
+   kaleido.image`, `kaleido → cut.image`, `cut → composite.over`, `scene →
+   composite.under`, `composite → output.all.image`.
+3. Turn `matte.key`: the kaleidoscope area follows the bright parts. Raise
+   `matte.soft`, then `matte.feather`: its edge greys, then softens. Set
+   `matte.from` to chroma and turn `matte.hue` onto a colour in the still.
+4. Turn `cut.amount` from 1 to 0.5.
+5. Turn on `cut.invert`.
+6. Unwire `matte → cut.mask`.
+7. Optional: wire `cut → output.2.image` instead of through the composite.
+*Pass:* the kaleidoscope shows only where the still is bright (or the keyed
+colour), the right way up; inside the disc the scene under it shows
+through the kaleidoscope's empty space, not black; at 4 the kaleidoscope
+comes back at half strength over the scene outside the bright parts; at 5
+it shows everywhere but the bright parts; at 6 it covers the whole window,
+untouched; at 7 output 2 shows the kaleidoscope in the bright parts and
+the window's black elsewhere. Every knob acts live, without a stutter.
+*Fail:* the cut area upside down or mirrored (a sampler flip: row 474);
+the scene not showing outside the bright parts (the cut not transparent,
+or the composite not "over"); the cut area stretched against the still
+(cover fit missing: row 454); black inside the disc (laid-over-ness not
+passed through the cut: row 477); a knob that does nothing (the value not
+landing in `ViewState.mattes` / `.cuts`); a stutter on the feather (the
+blur's cost: row 455).
+
+**389. A matte wired straight into an output shows white where it
+passes.** (the dev Mac)
+Headless: `tests/test_graph_masks.py`
+(`test_the_promotion_is_at_the_consumers_size_by_cover`,
+`test_the_promote_pass_fits_by_cover`); the `mask-as-picture` goldens
+(`tests/golden/frames/png/2e75409c8ea40738.png`);
+`tests/test_plan39_graph.py`
+(`test_a_promoted_mask_cable_is_purple_into_a_red_port`,
+`test_a_segment_s_mask_pin_is_purple_its_pictures_red`);
+`tests/test_hotreload.py` (the `MODULES` order and the cold set) for the
+last step.
+1. Load the `mask-as-picture` fixture through a scratch library
+   (`tests/fixtures/presets/`): channel a's `backdrop-still.png` → `matte`
+   (luma, key 0.95, feather 4) → `output.all.image`.
+2. Look at the cable from the Matte to All outputs; collapse the Matte.
+3. Wire `matte → acid.2.image` (acid.2 on) and acid.2 into the output
+   instead.
+4. Try to wire `channel.a` straight into a cut's `mask`.
+5. With the app running, change a comment in `hyperspace/masks.py` and
+   save.
+*Pass:* every window shows a soft white disc where the still's white
+circle is, on black, opaque, filling the window by cover, the disc on the
+right as in the still; the cable is purple end to end into All outputs'
+red image pin (channel a → matte.image red), and stays purple collapsed;
+the effect bends the disc as it would any picture; step 4 is refused in
+words ("… makes a picture, cut.mask takes a mask — put a matte between");
+at 5 no error line, and the matte keeps drawing. (A promoted mask wired
+into `lookback.occluder` or `composite.over` is an opaque picture
+everywhere, so it covers what is under it: that is not a cut — use `cut`.)
+*Fail:* a red-tinted or transparent picture (the promotion reading the
+mask's one channel as RGBA: row 453); a stretched disc (not cover); the
+wire refused (the type rule); a red cable (the cable typed by its port: row
+492); at 5 an import-order error (`masks` after `render` in
+`hotreload.MODULES`: row 459).
+
+**390. Edges on the scene, on the camera, and into a cut.** (the projector
+rig or the laptop, GRAPH page)
+Headless: `tests/test_fx_edges.py` (params, flat → black, a vertical edge,
+threshold, glow, direction hues);
+`tests/test_fx.py::test_each_effect_changes_the_frame[edges]` and
+`::test_every_effect_runs_on_the_face_target[edges]`; the `edges-scene`
+goldens (`tests/test_golden_frames.py`).
+1. Load any scene preset. On GRAPH wire `scene → edges → output.all.image`
+   and switch edges on (it is on the FX page like any effect). The
+   polytope's lines show as thin white outlines on black.
+2. Sweep **Threshold** 0 → 1: at 0 every soft gradient of the faces'
+   pattern shows; around 0.2 only the lines; near 1 almost nothing.
+3. Raise **Glow** to 4: each line gains a halo a few pixels wide, as bright
+   as the line.
+4. **Colour** → source: the outlines take the scene's colours (on a dark
+   edge with something under it, an opaque black line: row 450). →
+   direction: lines facing different ways turn different hues, and the hue
+   turns as the polytope rotates.
+5. Wire a camera channel into `edges` instead: the room's edges (door
+   frames, furniture, people's outlines) draw as lines, steady at the
+   default threshold.
+6. Wire `edges → matte (luma) → cut.mask`, with `pattern → cut.image`, into
+   an output: the pattern shows only along the lines.
+*Pass:* 1–6 as written, no GL error on the SYSTEM page, the frame rate
+unchanged (a 9-tap pass).
+*Fail:* a flat area that is not black (the threshold or the
+premultiplication); lines at the frame's border (`src()` mirroring broken);
+direction all one hue (the `atan` arguments swapped or the glow swamping
+it); camera edges sparkling everywhere (noise above the threshold: raise
+it; a pre-blur is the follow-up); in 6 the pattern everywhere (the matte
+reading alpha, not luma, or the promotion missing).
+
+**391. Two cameras, two segments: both run; the frame time on the show
+Mac.** (the show Mac, two cameras)
+Headless: `tests/test_graph_segment.py`
+(`test_a_removed_node_closes_its_worker`,
+`test_several_segments_are_several_workers`);
+`tests/test_plan39_graph.py::test_every_segment_instance_draws_its_pins_and_their_cables`.
+1. Camera 1 on channel a, camera 2 on channel b.
+2. Add `segment` and `segment.2` (media ▸ twice), with `channel.a →
+   segment.image` and `channel.b → segment.2.image`, each `fg` over the
+   scene on its own output.
+*Pass:* both cut their own person, each node says its own rate; the frame
+time stays within the show's budget (the SYSTEM page); two threads named
+`segment-segment` and `segment-segment.2` exist (Activity Monitor's sample,
+or `py-spy dump`).
+*Fail:* one starves (the Neural Engine is shared: read both rates); the
+frame time spikes (something reading back on the frame thread: row 481).
+
+**392. Unplug the camera mid-show: the node says so, the picture passes
+through whole, nothing crashes; plug it back and it resumes.** (the show
+Mac, the camera)
+Headless: `tests/test_graph_segment.py`
+(`test_a_channel_with_no_frame_says_so`,
+`test_an_error_mid_show_passes_the_picture_whole_and_says_it`);
+`tests/test_segment.py` (`test_an_error_is_said_and_the_next_result_clears_it`,
+`test_stop_never_waits_and_the_backend_closes_on_its_thread`).
+1. Run 384.
+2. Unplug the camera.
+3. Plug it back.
+4. Delete the segment node; then quit the app.
+*Pass:* at 2 the node says `no frame on channel a: its picture through,
+whole` and the output shows what channel a now gives (the empty channel's
+black), with no crash and no stall; at 3 the feed and the cut return within
+a second or two; at 4 the frame does not hitch and the app quits within a
+second or so.
+*Fail:* the app stalls (the worker or its close blocking: row 497); the
+last matte frozen over a black channel (the node not checking that its
+input reads: row 483); the cut not resuming (the frame-id "moved" check
+stuck).
+
+**393. A half-transparent face over a bright backdrop, cut-through on and
+off.** (the projector, an opaque window)
+Headless: `tests/test_media_render.py::test_a_half_transparent_scene_over_white_is_honest_on_an_opaque_window`;
+`tests/test_lookback.py` (`test_cut_through_never_cuts_an_opaque_ground`,
+`test_cut_through_still_cuts_in_overlay_mode`). Also open the eight
+re-recorded goldens (`backdrop-still` and `media-chain-backdrop` at
+`present|scene`, `scene+through`, `scene+hands`, `scene+hands+through`;
+`tests/golden/frames/frames.json` names them).
+1. Put a white or bright still on channel a. On GRAPH wire `channel.a →
+   composite.under`, `scene → composite.over`, `composite →
+   output.all.image`. For a second pass, put the same still on the
+   backdrop and wire `scene → backdrop.scene` explicitly.
+2. Faces on, lines and points off, a pattern with translucent fills.
+3. Flip `view.cut_through` on and off a few times on the projector.
+*Pass:* nothing changes; the faces sit over the white at their own
+opacity, their colour readable; the eight goldens show the faces at their
+own opacity over the backdrop, not washed toward white.
+*Fail:* the faces wash out toward white, or brighten with the switch on:
+the cut-through blend is being taken for a zero ground again
+(`render.draw_scene`'s blend choice: row 448).
+
+## AK. Plan 40: patches
+
+Plan 40 as built is [`40-patches.md`](40-patches.md): select nodes on GRAPH
+and **Group** them into one folded node whose pins are the cables crossing
+its edge (`+` opens it in place, a tinted region); **save as patch…** writes
+the group and its boundary to `<library>/patches/<slug>.json`; the
+**patches** chip on GRAPH's head (and the canvas's right-click **spawn ▸**)
+lands one in any preset under fresh ids as one undo step, its host ports
+open pins, or spliced in when dropped on a picture cable; a knob or hand
+that collides with the preset is asked in one sheet; the preset's wanted
+devices that the rig lacks are said on the group, on GRAPH's head, on the
+PRESET strip and on SYSTEM, and a device's arrival in the footer. The fx
+module presets are gone; the FX page stays. On `plan-40-build`. Run on the
+copy (`export HYPERSPACE_HOME=~/Hyperspace-try`) **with `[library] path`
+commented out in the copy's `config.toml`**, so a saved patch lands in
+`~/Hyperspace-try/patches/` and never on the Drive. A preset with a group is
+`hyperspace.preset/8`: an older build refuses it, so both Macs run this
+build before such a preset is shared. Register rows 501–536. None of these
+has been run by a person; the headless tests are mostly in
+`tests/test_graph_groups.py`, `tests/test_patches.py` and
+`tests/test_device_wants.py`.
+
+**394. Group and ungroup.** (laptop, GRAPH; the APC40 for step 2; the copy)
+Headless: `tests/test_graph_groups.py::test_group_from_a_selection_refuses_scene_and_keeps_the_rest`,
+`::test_the_right_click_menus_offer_group_with_two_nodes_selected`,
+`::test_a_folded_group_hides_its_members_and_inside_cables_and_reends_the_rest`,
+`::test_a_grouped_preset_builds_the_graph_of_its_ungrouped_twin`,
+`::test_rename_open_and_fold_are_each_one_step`,
+`::test_a_drag_of_the_title_moves_every_member_in_one_step`,
+`::test_a_drag_of_the_folded_node_moves_every_member`,
+`::test_a_member_dragged_out_leaves_the_group`,
+`::test_two_members_dragged_out_together_leave_in_one_step`,
+`::test_a_box_select_across_an_open_group_leaves_its_title_out_of_group`,
+`::test_signature_changes_when_a_group_is_made_and_a_save_drops_a_deleted_member`,
+`::test_a_drop_on_a_folded_groups_stub_is_refused_in_words`,
+`::test_ungroup_leaves_every_node_and_cable_where_it_was`,
+`::test_a_group_made_then_undone_is_gone_and_the_signature_is_back`,
+`::test_the_schema_is_eight_and_the_key_absent_is_no_groups`;
+`tests/test_golden_frames.py::test_every_preset_with_its_main_run_grouped_draws_its_goldens`
+(`--all`).
+1. Load `party-noita` and open GRAPH. Box-select `scene`, `warp`,
+   `doublevision` and `fractals`; right-click one of them → **group 4
+   nodes**.
+2. Hover the folded node's rows; turn D2 and D3 on the APC40 and watch
+   their wires; hover a row's pin.
+3. Press `+` on it; then `−`.
+4. Open it again. Drag its title bar; fold it and drag the folded node;
+   open it and drag one member far outside the tinted region; box-select
+   two members and drag them both out. Press ⌘Z after each.
+5. Box-select across the open group, its title included, and right-click
+   → **group n nodes**; ⌘Z.
+6. Select `doublevision` and one node outside the group → **group 2
+   nodes**; ⌘Z.
+7. Open the group, delete `fractals`, press ⌘Z, fold it.
+8. Drag a cable onto the folded node's `in` stub (not a pin).
+9. Right-click the group → **ungroup**; then ⌘Z.
+10. Save the preset as a copy and open its file; save another preset with
+    no group and open that.
+
+*Pass:* (1) one folded node "group 1" with a picture in, a picture out and
+one row per param that has a cable (D2, D3, D5–D8 and the hand axes); the
+head says "scene is the frame's; left out"; nothing on the projector
+moved. (2) each wire brightens with its knob and the pin's hover reads
+"D2 → fx.warp.amount". (3) `+` draws the three nodes at their own places
+in a tinted region titled "group 1", every cable between them drawn;
+the dirty dot lights (open / fold is a preset edit, row 518). (4) the
+members follow the mouse live in both drags; the dragged-out member
+leaves ("fractals left group 1") and the region shrinks; the two leave
+together; each ⌘Z puts back exactly one gesture. (5) no "is a group: …
+left out". (6) "doublevision left group 1 for this group". (7) while
+deleted the region holds two; after ⌘Z three, and folded the picture out
+is `fractals`'. (8) the drag shows red with "group 1 is folded: drop it on
+one of its pins, or open it (+)", and no empty picker opens. (9) every
+node and cable stays where it was, the projector unchanged. (10) the
+grouped copy is `hyperspace.preset/8` with `groups` after `layout`, one
+group a line; the other is `/7` (row 521, pending the owner).
+*Fail:* `scene` grouped: `patches.select` bypassed. A knob's wire ends on
+the in stub: the cable is missing from the group's `ends`. Members jump
+only on release: `_place_groups` did not run; the title snaps back: its
+target was recomputed from moving sizes. ⌘Z takes back one leaver at a
+time: `_moved` is not collecting them. "group.1 is a group" in step 5:
+`selected_ids`. `fractals` back but outside the group: the delete edited
+the list (row 519). An empty picker in step 8: `stub_refusal`. Anything
+moves on the projector: the renderer heard of a group (it must see the
+flat graph).
+
+**395. Save and spawn; wire as saved; the PRESETS fold.** (laptop, GRAPH
+and PRESETS; the copy)
+Headless: `tests/test_graph_groups.py::test_save_as_patch_writes_that_file_and_nothing_else`,
+`::test_save_as_patch_never_replaces_another_patch_of_that_name`,
+`::test_spawn_lands_through_the_doors_as_one_step_and_one_undo_takes_it_all`,
+`::test_a_spawn_with_a_voice_and_a_subscriber_is_one_step_through_the_banks`,
+`::test_wire_as_saved_wires_the_free_ports_and_refuses_a_taken_one`,
+`::test_wire_as_saved_refuses_a_node_the_preset_lacks`,
+`::test_the_browser_lists_each_patch_with_its_boundary_in_words`;
+`tests/test_ui_presets.py::test_the_patches_fold_lists_patches_hides_a_factory_one_and_renames_yours`;
+`tests/test_patches.py::test_spawn_lands_only_the_members_values`,
+`::test_patches_list_hide_and_rename_as_presets_do`.
+1. In `party-noita`, group `warp`, `doublevision` and `fractals` (394).
+   Select the group: its side pane has **save as patch…**. Press it, name
+   it "noita core", give a note, **Save**.
+2. Look in `~/Hyperspace-try/`: only `patches/noita-core.json` is new.
+3. Press **new** on the PRESET strip. Press **patches** on GRAPH's head and
+   read the list; then right-click the canvas to the right of the scene →
+   **spawn ▸** noita core.
+4. Hover the new group; press `+`, then `−`. Drag `scene` onto its `in`
+   pin and its `out` pin onto All outputs' `image`. Then ⌘Z three times.
+5. Press **new** again, spawn noita core, and press **wire as saved** on
+   its side pane. ⌘Z once.
+6. Group two nodes of any preset and **save as patch…** under the name
+   "noita core"; then, on `party-noita`'s first group, press **update
+   patch** and **Save**.
+7. On PRESETS open **patches** (after "more · module presets"): rename
+   noita core, then × it; reveal it in the trash.
+
+*Pass:* (1) the head says "saved noita core as a patch"; the preset's dot
+lights and **update patch** now shows beside **save as patch…**. (2)
+nothing else in the library or the home changed (no preset, no
+`bindings.json`). (3) the list shows "noita core", its note and its
+boundary in words ("in: picture · out: picture · wants: D2, D3, … right
+hand y …"); the spawn lands **folded** at the click, one group node with
+two open pins, "in · open (was scene)" and "out · open (was
+tripcolour.image)"; nothing new on the projector; the head says "spawned
+noita core: 3 nodes, its pins open — nothing wired to the preset";
+the preset's dot lights and no file is written. (4) the node reads
+"group · 3 nodes · from noita-core" (its hover has no "spawned as" line
+here: in a new preset no id moved); `+` shows the three in a tinted region; after the two drags the
+picture is noita's middle; the three ⌘Z take the two cables, then the
+whole group and everything it brought in one step. (5) the head says
+"wired as saved: scene → warp.image" and "no node tripcolour"; one ⌘Z
+removes the one press. (6) the save is refused, "a patch named noita core
+exists — Update patch, or another name", nothing written; update rewrites
+the file (the old text in the trash only if it changed). (7) a click on a
+name loads and spawns nothing; rename renames the file; × moves yours to
+the trash.
+*Fail:* a preset or `bindings.json` touched by the save or the spawn (a
+spawn writes no file); a host value changed by the spawn (D5: only the
+members' values land); the pins missing (the entry's `ports` lost, row
+523); **wire as saved** wiring a taken port (row 524 reversed); an
+existing patch replaced in step 6 (`Edit.save_patch`'s `PATCH_EXISTS`
+check skipped); a click in the fold spawning (`_list_row`'s pick not
+suppressed for PATCHES); more than one ⌘Z to take a spawn back (the
+spawn pushed twice).
+*After a reload* (save the spawned preset, load another, load it back)
+the group has no open pins and no **wire as saved** chip: as built (row
+523), for the owner to judge.
+
+**396. Splice.** (laptop, GRAPH, the projector or TV as a second window;
+the copy)
+Headless: `tests/test_graph_groups.py::test_splice_on_a_cable_lands_the_patch_in_the_run_in_one_step`,
+`::test_a_splice_that_raises_the_sheet_lands_the_splice_with_its_answers`,
+`::test_a_dragged_patch_lights_a_cable_it_can_splice_into_and_lands_on_release`.
+1. Load `party-trip`. Open **patches** on GRAPH's head and drag "noita
+   core" (395) from the popup over the canvas: hover several cables, then
+   let go on `scene → plasma.image`. (`party-trip` has no `trip` node: its
+   run is `scene → plasma → kaleido → zoomblur → huecycle → All outputs`.)
+2. Watch the projector; press ⌘Z.
+3. Save a two-in patch (a group whose members take two picture cables
+   from outside) and drag it onto the same cable.
+
+*Pass:* while dragged, the picture cable nearest the pointer lights and
+only picture cables of the preset's own section do (not the rig's bus);
+let go, the run reads `scene → warp → doublevision → fractals → plasma`,
+said on the head ("spliced noita core into scene → plasma.image"), seen on
+the projector; one ⌘Z puts the cable back. The two-in patch lights
+nothing and its hover says why ("… has 2 picture inlets and 1 outlet: a
+splice needs one of each").
+*Fail:* the popup closes when the drag starts (the drag source and popup
+interact: note it); the cable does not light (`graphview.cable_near` over
+last frame's pin positions); a splice takes two ⌘Z (the splice and the
+spawn pushed apart).
+
+**397. The knobs come with it, and the sheet asks.** (laptop and the
+APC40, GRAPH; the Leap if there is one; the copy)
+Headless: `tests/test_ui_routing.py::test_the_conflict_sheet_asks_per_row_preselected_to_the_patch`,
+`::test_the_sheet_is_drawn_ahead_of_a_replace_question_up_with_it`;
+`tests/test_patches.py::test_a_spawn_with_k1_already_mapped_lists_one_conflict_and_lands_nothing`,
+`::test_spawn_renames_the_modulation_by_the_hosts_rules`,
+`::test_a_macro_with_no_free_number_is_a_note_and_the_rest_spawns`,
+`::test_spawn_into_a_host_that_holds_warp_renames_every_reference`;
+`tests/test_graph_groups.py::test_a_second_spawn_takes_the_next_ids_and_its_kept_rows_are_said`.
+1. Copy `tests/fixtures/patches/acid-wash.json` into
+   `~/Hyperspace-try/patches/` (acid → wobble → delay, K1 on acid's speed,
+   the right hand's height through a `smooth` modifier onto wobble's
+   amount). Load `party-acid`, where K1 is `view.bright`, and spawn acid
+   wash.
+2. Read the sheet; press **Spawn**. Turn K1; then ⌘Z and turn K1 again.
+3. Spawn it again; while the sheet is up, arm **Learn hand** on any param
+   and move a hand (or turn a knob for a desk learn).
+4. Press **keep all existing**, then **Spawn**. Turn K1; hover the group.
+   Spawn a third time and press **Cancel**.
+5. Load `party-noita` (the right hand's height drives warp's amount there)
+   and spawn acid wash.
+6. On ROUTING give all eight macros a label, then spawn a patch that
+   carries `macro.2` (save one from a group whose member a macro
+   subscribes to).
+7. Save "noita core" from `party-noita` (395) and spawn it back into
+   `party-noita`.
+
+*Pass:* (1–2) the sheet lists "K1: `fx.acid.2.speed` (the patch) or
+`view.bright` (the preset)", the row preselected to the patch, with
+**keep all existing**, **take all**, the wants beneath (if a device is
+missing), **Spawn** and **Cancel**; after Spawn K1 turns acid.2's speed
+and its ring agrees; one ⌘Z takes the whole spawn back and K1 turns the
+brightness again. (3) nothing is learned while the sheet is up; the
+learn is still armed after it closes. (4) K1 still turns the brightness;
+the group says "K1 kept by the preset" (the head "1 row kept by the
+preset"); the hover lists the renames ("acid → acid.2 …"); Cancel lands
+nothing and pushes no undo step. (5) the sheet lists **only K1**: acid
+wash reads the hand through its modifier, and a modifier input is never
+a conflict as built (row 514 — the spec's own D3 example names this case:
+judge whether it should be one). (6) the footer says "macro.2: no free
+macro — its subscribers not spawned" and the rest lands. (7) the sheet
+lists the six desk knobs and every shared hand axis, each "the patch" or
+"the preset" (correct by "one axis, one param", and noisy: judge it).
+*Fail:* K1 wrong after Spawn (the `replace_owner` path, `Edit._spawn_rows`);
+a learn completes under the sheet (`Learn.hold` not set by `modal`); the
+kept row not said (`kept_by_host` not written); a hand axis missing in
+step 7 (`patches.ONE_OWNER`); the host's macro.2 loses its subscribers in
+step 6 (the used-macro rule, row 513).
+
+**398. Not connected, said.** (laptop and the APC40, the copy; GRAPH,
+PRESETS, SYSTEM)
+Headless: `tests/test_device_wants.py::test_the_chip_draws_on_the_graph_head_the_preset_strip_and_system`,
+`::test_the_chip_and_the_system_lines`,
+`::test_wants_for_keeps_the_rows_that_land_on_the_ids_and_want_words_say_them`,
+`::test_a_midi_device_coming_back_fires_the_listeners_once_and_the_hook_once`,
+`::test_the_hook_fires_once_per_change_with_the_count_and_never_when_steady`,
+`::test_an_error_is_no_coming_or_going_but_a_failed_open_that_succeeds_is`,
+`::test_row_words_say_a_control_as_a_person_does`;
+`tests/test_graph_groups.py::test_the_group_node_side_pane_hover_and_status_draw`.
+1. Save the `party-acid` preset with acid wash's group in it (397, step
+   2). Quit, unplug the APC40, relaunch and load it.
+2. Read the group node's status line; GRAPH's head; the PRESET strip;
+   SYSTEM.
+3. Hover **1 device missing** on GRAPH's head, then on the PRESET strip.
+4. Plug the desk in. Press nothing.
+5. Turn K1.
+6. (On the copy) list a desk whose port name is wrong, so SYSTEM shows
+   `error: …`; fix the name in `config.toml` and save it.
+
+*Pass:* (2) the group reads "waits for apc40 (lost): K1"; the head and the
+strip show **1 device missing**; SYSTEM reads "wanted by the preset:
+apc40 — lost; n controls wait". (3) both hovers read "apc40 (lost): K1,
+K2, …, + k more" in the desk's glyphs. (4) the footer says "apc40
+connected — n controls live" once (n every control the preset maps, about
+26 on a party preset), the rings light, the chip and the SYSTEM line go.
+(5) K1 turns acid.2's speed. (6) the footer says "<role> connected — n
+controls live" once and the desk works. With the APC40 unplugged every
+party preset shows **1 device missing**: correct, and constant on the
+laptop (judge it).
+*Fail:* nothing in the footer at (4): the registry's status event did not
+fire (`DeviceRegistry.poll`'s `_statuses`); said twice: a second hook in
+the frame; "CC 48 ch1" words: the profile lookup missed (row 532); the
+chip and the strip disagree: `ui_graph.panel_wants` not shared.
+
+**399. Not in this rig, said.** (the laptop config, no Leap listed; GRAPH)
+Headless: `tests/test_device_wants.py::test_hand_rows_on_a_rig_without_hands_want_leap_not_in_this_rig`,
+`::test_a_listed_hands_device_is_off_or_lost_or_connected`;
+`tests/test_graph_groups.py::test_a_spawn_with_no_conflict_lands_at_once`,
+`::test_a_spawn_whose_devices_are_all_there_says_no_wait`,
+`::test_a_row_the_sheet_kept_for_the_preset_waits_for_nothing`.
+1. On the laptop config with no hands device listed, load the preset of
+   398.
+2. Spawn acid wash into a preset where nothing collides (a **new** one).
+3. Spawn it into `party-acid`, press **keep all existing**, Spawn.
+
+*Pass:* (1) the group reads "waits for leap (not in this rig): right hand
+y" (with the APC40 plugged in, only the leap); the grey placeholder node
+is drawn as before. (2) no sheet; the head ends "…; waits for leap (not
+in this rig): right hand y". (3) the sheet lists the wants under the
+conflicts; after Spawn the head ends the same way and does **not** name
+K1 (a row the preset kept waits for nothing).
+*Fail:* no "waits for" after a spawn with no conflict (`land_spawn` not
+reached); K1 listed after keep-all (the `choices` filter in
+`ui_routing.sheet_wants`); "leap" named while the rig lists the hands
+under another role (row 531's role order).
+
+**400. The fx modules are gone; the FX page is not.** (laptop; PRESETS,
+FX)
+Headless: `tests/test_presets.py::test_the_fx_presets_are_retired`,
+`::test_an_old_fx_label_loads_quietly_and_saves_without_it`;
+`tests/test_ui_presets.py::test_more_opened_holds_a_strip_per_module_and_still_fits`;
+`tests/test_fx.py::test_the_page_draws_and_fits`;
+`tests/test_plan36_seven.py::test_every_factory_preset_is_its_sources_seven_and_round_trips`.
+1. PRESETS → **more · module presets**.
+2. The FX tab.
+3. Load every factory preset in turn (the bank, or the list with B / X on
+   the pad).
+4. Load a preset of yours saved before this build that names an fx module
+   (`"modules": {"fx": …}`), then save it.
+
+*Pass:* (1) no fx entry; `view`, `rot`, `camera`, `band`, `dream` … as
+before. (2) the page as before, except that the strip under its
+"effects" title (◀ name ▶ · save · as… · reset) is gone: the effect list
+and an open effect's strip are as they were. (3) no note in the footer
+for any. (4) it loads quietly and the saved file has no `fx` in
+`modules`.
+*Fail:* a strip under the FX page's title: `ui_presets.strip` is not
+leaving out `library.RETIRED_MODULES` (row 533); an fx entry in the fold:
+`Library.groups()`; a note on load: the label is not kept quietly (row
+534).
+
+**401. Twice.** (laptop, GRAPH; the copy)
+Headless: `tests/test_graph_groups.py::test_a_second_spawn_takes_the_next_ids_and_its_kept_rows_are_said`;
+`tests/test_patches.py::test_a_patch_twice_collides_with_itself_row_by_row`.
+1. Load `party-noita` and spawn "noita core" (395) twice: answer the
+   first sheet with **Spawn**; at the second press **keep all existing**,
+   then Spawn.
+2. Hover each group. Save the preset, load another, load it back, and
+   hover again.
+3. Load **new** and spawn noita core twice.
+
+*Pass:* (1) two groups, "group 1" and "group 2"; the first spawn's sheet
+lists the host's own rows on the three effects, the second's the first
+copy's. (2) the hovers list `warp → warp.2 …` and `warp → warp.3 …`; the
+second group says "n rows kept by the preset", and still does after the
+reload (the kept rows are saved; the rename lines are the session's and
+are gone, row 523). (3) the first copy keeps the bare names
+(`warp`, `doublevision`, `fractals`), the second takes `.2`.
+*Fail:* the second spawn reuses the first's ids (the instance rule over
+`host.names`); a kept row gone after the reload (`preset.group_entry`
+not writing `kept_by_host`).
+
+## AL. The macro's throw, and Route from ▸ by kind
+
+The owner, 2026-10-28 (decision register row 537): a base subscriber a
+macro's cable makes now runs from where the param sits to its fader's
+end, where before both ends sat on the param and the knob moved nothing;
+and the param menu's **Route from ▸** is one submenu per kind — **LFO ▸**,
+**envelope ▸**, **macro ▸** — so a macro can be put on a param without
+the canvas.
+
+**402. A macro wired from the menu moves the param.** (laptop, GRAPH)
+Headless: `tests/test_graph_edit.py::test_route_from_a_macro_makes_the_base_subscriber_a_graph_cable_makes`;
+`tests/test_macros.py::test_a_new_base_subscriber_runs_from_where_the_param_sits_to_the_end_of_its_fader`.
+1. Load **Tracer Macro Test** (or any preset) and open GRAPH. Open the
+   shape's panel, right-click the 4D depth slider → **Route from ▸**.
+2. Open each submenu in turn: **LFO ▸**, **envelope ▸**, **macro ▸**.
+   Pick **macro 2** (an unused knob).
+3. Open the macro 2 node and turn its knob from 0 to 1 and back. Then on
+   ROUTING find macro 2's subscriber line.
+4. Right-click the 4D depth slider → **Route from ▸ macro ▸** again. Then
+   ⌘Z twice.
+5. Right-click a param no lane may drive — the look-back's **gap**
+   slider (`dream.gap`, one of the owner's own targets in Tracer Macro
+   Test) → **Route from ▸**; and a session param (the BPM on the audio
+   page).
+
+*Pass:* (1) three entries, each with ▸, nothing else under Route from.
+(2) LFO ▸ lists the LFOs then "new LFO"; envelope ▸ the envelopes then
+"new envelope"; macro ▸ the eight knobs, the owner's `test` by its label,
+the rest "macro N". The pick lands a cable from macro 2's bus into the
+slider's base stub; the node is titled "macro 2". (3) the depth slider
+follows the knob — the scene's value at 0, the top of the fader at 1 —
+and the line reads `from <where it sat> to 1.00`. (4) macro 2 is
+checked; a click does nothing; the first ⌘Z takes the cable and the
+label back together, the second whatever came before. (5) only
+**macro ▸** for the first; no Route from at all for the BPM.
+*Fail:* a flat list under Route from (`route_from_menu` not opening
+`SECTIONS`); `from` and `to` equal on the new line (`Edit.subscribe` not
+on `routing.base_sub`); the knob moving nothing (`follow_macros` not
+re-landing: `macros_serial` not bumped); macro ▸ offered on the BPM
+(`base_refusal` not asked).
+
+## AM. One tier: the PRESETS page over the Drive library
+
+The owner, 2026-10-28 (decision register rows 538–541, plan 41): the
+library has one tier — no factory presets, no hidden list — and the
+PRESETS page is the list: the strip, a flat list of every preset, the
+trash at its foot, a patches fold and one show line.
+
+**403. The PRESETS page is the library.** (laptop, PRESETS; the copy, on the Drive library)
+Headless: `tests/test_ui_presets.py`; `tests/test_library.py`.
+1. Open PRESETS. Read the page top to bottom: the strip (◀ name ● ▶ ·
+   new · save · as…), then the list, then the patches fold, then the
+   show line.
+2. Click a preset in the list. Click **rename** on another, type a new
+   name, press Enter. Click **×** on a third.
+3. Open the **trash (n) ▸** line at the foot of the list and take the
+   third back.
+4. Open the **patches** fold: rename one, × one.
+5. Read the show line. Open **open ▾**, then press **as…**, name a show,
+   press **new**.
+6. Press F1–F8 and a clip-row pad on the desk, then hold an empty pad.
+
+*Pass:* (1) the list fills the page and holds every preset in the
+library, the owner's own and no others; the show line reads "show · the
+desk's pads, the session, the rig's wires", then the show's name, a red
+dot while it has unsaved changes, **open ▾**, **save**, **as…**,
+**new**. Nothing reads "starts on", "F1–F8", "show hidden", "factory" or
+"save copy", and no row is dim. (2) the click loads it and the strip
+names it; the rename sticks and the shows that name it follow; the × puts
+the file in the trash, not away. (3) it is back in the list. (4) the same
+chips, no pick. (5) a new show is called `untitled` with an empty bank.
+(6) the pads still load and save; a hold on an empty pad saves into it.
+*Fail:* a pill row, a "starts on" picker, a preset drop-down or a module
+fold on the page (`ui_presets.page` drawing the removed blocks); a row
+that cannot be renamed or deleted (`Library.rename` / `delete` refusing);
+a pad that loads nothing (`Library.bank` / `preset.load.k`).
+
+## AN. Dropping a node on a cable
+
+The owner, 2026-10-29: a node let go on a cable goes into it, its input
+the cable's picture (or reading) and its output on to where the cable
+went; the drag shows what will happen before the mouse lets go; an effect
+already wired moves only with ⌘ held; deleting a modifier wires what fed
+it on to what it fed; Option-drag selects cables.
+
+**404. The drag shows what the drop will do.** (laptop, GRAPH; a preset with a run of two effects, say `lookback → acid → wobble → All outputs`)
+Headless: `tests/test_graph_edit.py` (`onto_plan`, `dropped`, the drawn drag).
+1. Right-click the canvas and add an effect: it is free, faint. Drag it
+   slowly across the canvas, over the run's cables and over the shape's
+   geometry cable, then let go with `acid → wobble` the bright one.
+2. Drag `wobble` (wired) over `lookback → acid` and let go, no key held.
+3. Drag `wobble` again, hold ⌘ before letting go over `lookback → acid`;
+   let go. Press ⌘Z.
+4. Lay two cables over each other and let a free effect go on both.
+5. Wire an LFO through a Smooth modifier into a param; select the Smooth
+   and press Delete.
+6. Option-drag a box across three cables on the background; press Delete;
+   press ⌘Z.
+*Pass:* (1) of the cables the node's box crosses, the one nearest its
+centre is thick gold and every other cable dims; over only the
+geometry cable, "… is no picture cable" beside the pointer, which
+otherwise reads "let go: <node> onto <a> →
+<b>"; nothing lights over empty canvas; let go, the effect sits in the
+run, the cable's picture into its `image`, its output into `wobble`.
+(2) from the first movement the pointer says "hold ⌘ …", nothing lights
+or dims, and the node only moves. (3) with ⌘ a cable lights gold and the
+others dim; let go, the run is `lookback →
+wobble → acid → …`; ⌘Z puts it back in one press. (4) a menu "put <node>
+onto" names both; the pick takes it; Escape leaves both as they were.
+(5) the LFO now drives the param directly. (6) the box lights cables, not
+nodes; Delete takes all three; ⌘Z brings them back.
+*Fail:* a drop that does something the drag did not light, or lights
+something and does nothing (`ui_graph.onto_plan` / `dropped`); ⌘ toggling
+the node's selection or not lifting it (`lift_held`); the param left
+still after (5) (`Bindings.remove_modifier`).
+
+## AO. The Flow mark, and the depth cue's floor
+
+The owner, 2026-10-17 (decision register rows 542–543, PR #214): the
+Wispr Flow mark as the subject, flat and as capsules, and a depth cue
+that no longer leaves a plane figure facing the eye at its dimmest.
+
+**405. The Flow mark and the Flow capsules.** (laptop, VIEW)
+Headless: `tests/test_catalog.py`; `tests/test_render.py`.
+1. Open VIEW, open the Shape menu and scroll to the end of its 3D
+   section.
+2. Pick **Flow mark**. Stop every plane.
+3. Turn on Faces and pick the pattern PLAID.
+4. Pick **Flow capsules**, turn XZ and YZ on, and let it turn.
+5. Turn XW, YW and ZW on as well.
+
+*Pass:* (1) a **Vector marks** family last in 3D, holding Flow mark and
+Flow capsules. (2) the five bars of the Wispr Flow mark, white outlines
+at full weight, the outer two tallest, then the middle, the two short
+ones equal; no red points. (3) each bar carries its own pattern. (4)
+five round-ended capsules, wireframe, tumbling; no red points. (5) the
+capsules turn no differently: the W planes leave a 3D shape alone.
+*Fail:* no Vector marks family (`geometry.MENU`); a dim outline face-on
+(check 406's floor); points on either (`"curve"` lost in `geom`).
+
+**406. A plane figure facing the eye is at full weight.** (laptop, VIEW)
+Headless: `tests/test_render.py::test_a_shape_flat_toward_the_eye_draws_at_full_weight`.
+1. Pick **Flow mark**, every plane stopped, the camera at rest.
+2. Turn the camera's yaw slowly to one side and back.
+3. Pick **Orbit**. Stop every plane, then turn YZ until the ring faces
+   you as a circle.
+4. Pick **Heart**, then **Tesseract**, every plane stopped, the camera at rest.
+
+*Pass:* (1) the outlines as bright as any shape's nearest edge. (2) the
+far side dims as it turns away and comes back as it faces you again,
+with no jump. (3) the circle bright all round as it faces you, not dim.
+(4) each looks exactly as it did before this change: the Heart's
+back cap dimmer than its front, the tesseract's far cube dimmer than its near one.
+*Fail:* a dim mark or ring face-on (`render.DEPTH_FLOOR` not reached in
+`draw_scene`); a jump as the yaw passes face-on; the Heart's back cap or
+the tesseract brighter than before (the floor set too high: row 542's
+first try).
+
 ## What no test covers
 
 Only a person can settle these:
@@ -5377,3 +6396,11 @@ Only a person can settle these:
   headless and the pictures were recorded on the build machine;
 - the Drive library migrated to `/7` on both Macs (368): the tool's tests
   run on a scratch library, never the Drive sync or the other Mac.
+- nodes as pictures at the machine (370–376). The tests copy thumbnails on a standalone context and draw the page headless. Only a person can judge:
+  - how the thumbnails read at the canvas's zooms, and the faint shape (370);
+  - the tint by eye (370);
+  - the thumbnails' cost on the show Mac (371);
+  - the hover inside `imgui_node_editor` (373), which the tests drive through a stand-in;
+  - that the control window sees this frame's thumbnails (`_thumbnails` flushes);
+  - the face patterns themselves (375), which only the owner can name;
+  - the moved effect's area frame on a preset saved before plan 37 (376).

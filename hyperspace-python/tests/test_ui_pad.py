@@ -10,13 +10,13 @@ imgui, a library on tmp_path — no pad is plugged in anywhere here.
 
 from imgui_bundle import imgui
 from test_ui_shell import (
+    NARROW_CONTROL,
     frame,
     rig,  # noqa: F401 — the headless panel fixture
 )
 
 from hyperspace import apc40, gamepad, ui_desk, ui_pad
 from hyperspace.app import CONTROL_SIZE
-from test_ui_shell import NARROW_CONTROL
 from hyperspace.routing import Binding, padmap
 
 # ---------------------------------------------------------------- the layout
@@ -94,9 +94,9 @@ def test_a_free_axis_says_what_the_app_does_with_it(rig):
 
 def test_a_control_with_nothing_on_it_is_dark(rig):
     panel = rig.panel
-    back = next(c for c in gamepad.LAYOUT if c.source == "pad:VIEW")
-    assert ui_pad.says(panel, back, None) == ""
-    assert "free" in ui_pad.label(panel, back, None)
+    share = next(c for c in gamepad.LAYOUT if c.source == "pad:SHARE")
+    assert ui_pad.says(panel, share, None) == ""
+    assert "free" in ui_pad.label(panel, share, None)
 
 
 def test_the_hover_names_glyph_param_and_source(rig):

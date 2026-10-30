@@ -70,15 +70,14 @@ def make_app(home: Path, plan31: bool = True, *, machine: Path | None = None):
 SHARED_FOLDERS = ("desk", "fx", "dream", "band", "tempo")
 
 
-def resave(path: Path, scratch: Path, *, library: Path | None = None,
-           factory: bool = False) -> tuple[bytes, list[str], str]:
+def resave(path: Path, scratch: Path, *, library: Path | None = None
+           ) -> tuple[bytes, list[str], str]:
     """Preset file `path` loaded and saved untouched by the app (`make_app`)
-    in a scratch library at `scratch` — `path` copied in as a user's preset
-    (or, `factory`, loaded by name from the build's factory), with
-    `library`'s desk templates and module presets beside it when given:
-    (the bytes the save wrote, the load's notes, the name it loaded as).
-    Raises what the load raises (`LibraryError`) for a file that does not
-    load. `scratch` is created; nothing outside it is written."""
+    in a scratch library at `scratch` — `path` copied in as a preset of its
+    own, with `library`'s desk templates and module presets beside it when
+    given: (the bytes the save wrote, the load's notes, the name it loaded
+    as). Raises what the load raises (`LibraryError`) for a file that does
+    not load. `scratch` is created; nothing outside it is written."""
     scratch = Path(scratch)
     home, machine = scratch / "library", scratch / "machine"
     (home / preset.GROUP).mkdir(parents=True, exist_ok=True)
@@ -94,9 +93,8 @@ def resave(path: Path, scratch: Path, *, library: Path | None = None,
     try:
         # (copied under its slug: a file name the library would not write —
         # `factory--dial.json`, `My Look.json` — still loads by it)
-        stem = Path(path).stem if factory else slug(Path(path).stem)
-        if not factory:
-            shutil.copyfile(path, home / preset.GROUP / f"{stem}.json")
+        stem = slug(Path(path).stem)
+        shutil.copyfile(path, home / preset.GROUP / f"{stem}.json")
         app = make_app(home, machine=machine)
         app.lib.load(preset.GROUP, stem)
         name = app.lib.current(preset.GROUP) or stem

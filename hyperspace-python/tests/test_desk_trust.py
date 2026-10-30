@@ -2,7 +2,7 @@
 """Plan 24 C1 — the desk you can trust (decisions 18 and 23).
 
 Driven through `MidiIO` with the fake ports tests/test_midi.py injects (its
-rig is reused: a scratch library whose show is the factory party show):
+rig is reused: a scratch library seeded with the corpus, its show the party show):
 
 - **the two-handed save**: track 8's clip stop is SAVE (invariant); SAVE
   held and a bank pad tapped saves the live state into that pad's slot —
@@ -25,6 +25,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+from conftest import CORPUS
 from test_midi import cc, leds, note, push, rig, shift  # noqa: F401 — the fixture
 
 from hyperspace import apc40, midi, routing
@@ -66,9 +67,15 @@ def save_up():
     return note(STOP, 0, channel=SAVE_CH)
 
 
+# the preset files the seed put there (the corpus): not the owner's saves
+SEEDED = {p.name for p in (CORPUS / "presets").glob("*.json")}
+
+
 def user_files(lib) -> dict[str, bytes]:
+    """The presets saved since the seed: {file name: bytes}."""
     folder = lib.home / "presets"
-    return {p.name: p.read_bytes() for p in folder.glob("*.json")} if folder.is_dir() else {}
+    return {p.name: p.read_bytes() for p in folder.glob("*.json")
+            if p.name not in SEEDED} if folder.is_dir() else {}
 
 
 def trash(lib) -> list[str]:
@@ -220,7 +227,7 @@ def test_save_held_and_a_filled_pad_tapped_saves_a_new_preset_and_keeps_the_old(
     assert list(old) == ["trip-2.json"]
     gone = trash(lib)
     # the filled pad: slot 11, which holds TRIP 2 (a user preset) — and F3,
-    # which holds FIELD (a factory one)
+    # which holds FIELD (a shipped one)
     at(5.0, save_down())
     mark = len(rig.out.sent)
     n, ch = pad(10)
@@ -409,9 +416,9 @@ def test_the_render_toggles_are_invariant_and_their_leds_show_the_live_state(rig
 
 
 def test_an_older_presets_toggle_rows_drop_quietly_and_an_owners_row_with_a_note(rig):
-    """A preset saved before C1 holds the four factory toggle rows on its
-    desk (every factory file still does: decision 23, no library file is
-    rewritten). A load drops them without a note — the session's rows do
+    """A preset saved before C1 holds the four toggle rows on its desk
+    (the generator wrote them then). A load drops them without a note —
+    the session's rows do
     the same job (`routing.RETIRED_DESK_ROWS`) — and drops an owner's row
     on the SAVE button with the usual note. Loaded through a scratch
     library from tests/fixtures/desk-trust/."""
@@ -431,22 +438,6 @@ def test_an_older_presets_toggle_rows_drop_quietly_and_an_owners_row_with_a_note
     rig.midi.poll()
     assert [leds(rig, n)[-1] for _p, n in TOGGLES] == [1, 0, 1, 0]
     assert not lib.is_dirty("presets")
-
-
-def test_every_factory_file_still_holds_the_toggle_rows_and_loads_quietly(rig):
-    """Decision 23: every file under hyperspace/library/ is byte-identical,
-    so the factory presets still carry the four toggle rows (the generator
-    writes them: `preset.file_desk`); each loads with no desk note."""
-    from hyperspace import preset
-
-    lib = rig.presets.lib
-    rows = {(d["source"], d["target"]) for d in preset.desk_json(preset.file_desk())}
-    assert {(f"note:0:{n}", pid) for pid, n in TOGGLES} <= rows
-    assert not {(f"note:0:{n}", pid) for pid, n in TOGGLES} & {
-        (b.source, b.target) for b in preset.fresh_desk()}
-    for name in lib.list("presets"):
-        lib.presets.load(name)
-        assert lib.presets.desk_notes == [], name
 
 
 def test_a_session_file_gains_the_toggles_and_the_save_once(tmp_path):

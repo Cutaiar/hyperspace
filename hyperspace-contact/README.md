@@ -35,3 +35,10 @@ directory: with a Root Directory set, the CLI looks for `hyperspace-contact/`
 inside wherever it runs. The domain `hyperspace.cutaiar.io` (moved here from
 the `hyperspace` project) is attached to this project; also served at
 `hyperspace-contact.vercel.app`.
+A push that changes nothing under `hyperspace-contact/` since the project's last deploy
+is skipped: `vercel.json`'s `ignoreCommand` (Vercel's "Ignored Build Step")
+diffs this folder against `$VERCEL_GIT_PREVIOUS_SHA` and builds when it
+differs, or when there is no earlier deploy to compare with.
+Only `main` deploys at all: `git.deploymentEnabled` turns off Vercel's
+automatic deploys for every other branch, so a pull request gets no
+preview (run `vercel deploy` from the repository root for one).

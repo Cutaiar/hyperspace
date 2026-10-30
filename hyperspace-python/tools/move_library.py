@@ -3,30 +3,28 @@
 
     uv run python tools/move_library.py DEST [--from HOME] [--dry-run]
 
-Copies the library — ``presets/``, ``projects/``, every module-preset group
-folder (``fx/``, ``dream/``, ``band/`` …) and ``hidden.json`` — from HOME
-(default: ``$HYPERSPACE_HOME``, else ``~/Hyperspace``) into DEST, which it
-creates if missing. Then add the two lines it prints to HOME's config.toml
+Copies the library — ``presets/``, ``projects/`` and every module-preset
+group folder (``fx/``, ``dream/``, ``band/`` …) — from HOME (default:
+``$HYPERSPACE_HOME``, else ``~/Hyperspace``) into DEST, which it creates if
+missing. Then add the two lines it prints to HOME's config.toml
 and start Hyperspace: the library is read and written in DEST from then on.
 
 It never overwrites: a file DEST already has is left alone — identical is
 ``have``, different is ``KEPT THEIRS`` (yours stays in HOME, at the path it
-prints). ``hidden.json`` is a set, so DEST gets the union of both lists.
-The machine files (config.toml, bindings.json and its backups, hands.json,
+prints). The machine files (config.toml, bindings.json and its backups, hands.json,
 windows.json, last_show, logs, weights/), the trash, the legacy bindings/
-folder, backups, dot-files and ``.git`` stay behind. Nothing in HOME is
-deleted or edited, and config.toml is never touched.
+folder, backups, dot-files and ``.git`` stay behind — and so does a
+``hidden.json`` from before 2026-10-28 (the library has no hidden presets
+any more). Nothing in HOME is deleted or edited, and config.toml is never
+touched.
 """
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent.parent
-HIDDEN = "hidden.json"
-HIDDEN_SCHEMA = "hyperspace.hidden/1"
 # folders of the home that are not the library (D3), or not to be copied
 SKIP_DIRS = {"weights", "trash", "bindings"}
 
@@ -53,24 +51,10 @@ def files(root: Path) -> list[Path]:
     return out
 
 
-def _hidden(path: Path) -> list[str] | None:
-    """`hidden.json`'s stems, or None when there is no readable list."""
-    try:
-        doc = json.loads(path.read_text())
-    except (OSError, ValueError):
-        return None
-    stems = doc.get("presets") if isinstance(doc, dict) else None
-    if not isinstance(doc, dict) or doc.get("schema") != HIDDEN_SCHEMA or not isinstance(stems,
-                                                                                         list):
-        return None
-    return [s for s in stems if isinstance(s, str) and s]
-
-
 def move(dest: Path, home: Path, *, dry_run: bool = False,
          out=print) -> list[tuple[str, Path]]:
     """Copy `home`'s library into `dest`; returns (what happened, relative
-    path) per file — "copied", "have" or "KEPT THEIRS" — and per
-    ``hidden.json`` "hidden +N" / "hidden" (nothing to add)."""
+    path) per file — "copied", "have" or "KEPT THEIRS"."""
     if not home.is_dir():
         raise SystemExit(f"move_library: {home} is not a folder")
     if dest.resolve() == home.resolve():
@@ -95,29 +79,6 @@ def move(dest: Path, home: Path, *, dry_run: bool = False,
                 f.write(data)
         done.append(("copied", rel))
         out(f"copied      {rel}")
-    mine = _hidden(home / HIDDEN)
-    if mine is not None:
-        theirs_path = dest / HIDDEN
-        theirs = _hidden(theirs_path) if theirs_path.exists() else []
-        rel = Path(HIDDEN)
-        if theirs is None:
-            done.append(("KEPT THEIRS", rel))
-            out(f"KEPT THEIRS {HIDDEN} — not a {HIDDEN_SCHEMA} list there; yours stays at "
-                f"{home / HIDDEN}")
-        else:
-            added = sorted(set(mine) - set(theirs))
-            if added:
-                if not dry_run:
-                    tmp = theirs_path.with_name(f".{HIDDEN}.move.tmp")
-                    tmp.write_text(json.dumps({"schema": HIDDEN_SCHEMA,
-                                               "presets": sorted(set(mine) | set(theirs))},
-                                              indent=1) + "\n")
-                    tmp.replace(theirs_path)
-                done.append((f"hidden +{len(added)}", rel))
-                out(f"hidden      {HIDDEN} + {', '.join(added)}")
-            else:
-                done.append(("hidden", rel))
-                out(f"have        {HIDDEN}")
     return done
 
 
@@ -133,8 +94,7 @@ def main(argv: list[str] | None = None) -> int:
     done = move(dest, home, dry_run=a.dry_run)
     counts: dict[str, int] = {}
     for what, _ in done:
-        key = what.split(" ")[0] if what.startswith("hidden") else what
-        counts[key] = counts.get(key, 0) + 1
+        counts[what] = counts.get(what, 0) + 1
     print(("dry run: " if a.dry_run else "") + ", ".join(f"{n} {k}" for k, n in counts.items())
           if counts else "nothing to copy")
     print(f"\n{'Then' if a.dry_run else 'Now'} add these lines to {home / 'config.toml'} "

@@ -1,10 +1,10 @@
 """Plan 24 C6: the palette fold is an effect file (shaders/fx/palette.glsl).
 
 Everything here is the FX mechanism's own: ``fx.palette.*`` params, hot
-reload, module presets, routes. What a palette *looks* like is judged by
-eye; here the defaults must leave every frame byte-identical (stream A's
-goldens), a turned-up mix must change it, a route must move the mix, and
-a saved palette is an ``fx`` module preset in the library.
+reload, routes. What a palette *looks* like is judged by eye; here the
+defaults must leave every frame byte-identical (stream A's goldens), a
+turned-up mix must change it, and a route must move the mix. (Plan 40 T5:
+a saved palette was an ``fx`` module preset; those are retired, D6.)
 """
 
 import os
@@ -19,20 +19,9 @@ from hyperspace.fx import FX_DIR, FxChain, FxState
 from hyperspace.routing import Binding, Bindings, Router
 
 FIXTURES = Path(__file__).parent / "fixtures" / "palettes"
-LIBRARY_FX = Path(__file__).parent.parent / "hyperspace" / "library" / "fx"
 W, H = 320, 200
 
 moderngl = pytest.importorskip("moderngl")
-
-
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-    c.release()
 
 
 def state(tmp_path, *, palette: bool = True) -> FxState:
@@ -172,27 +161,6 @@ def test_every_palette_param_takes_a_route(tmp_path):
     assert st.values["palette"]["mix"] == pytest.approx(0.8)      # the route moved the mix
     assert st.values["palette"]["hue_from"] > 0.0
     assert reg["fx.palette.mix"].base == 0.0                      # non-destructive
-
-
-def test_a_saved_palette_is_an_fx_module_preset(ctx, tmp_path):
-    """The library already keeps `fx` presets; a palette is one (a fixture,
-    force-added: nothing ships in hyperspace/library/fx)."""
-    assert not list(LIBRARY_FX.glob("*palette*")) and not list(LIBRARY_FX.glob("sunset*"))
-    home = tmp_path / "home"
-    (home / "fx").mkdir(parents=True)
-    shutil.copy(FIXTURES / "fx" / "sunset.json", home / "fx" / "sunset.json")
-    reg, st, lib = _registry(home)
-    assert "sunset" in lib.list("fx")
-    base = frame(ctx, st)
-    assert lib.load("fx", "sunset") == []
-    v = st.values["palette"]
-    assert v["on"] and v["mix"] == 1.0 and v["mode"] == 1 and v["a1_hue"] == 270.0
-    assert np.abs(frame(ctx, st)[..., :3].astype(int) - base[..., :3]).sum() > W * H
-    # and a palette saved from the live state comes back through the same road
-    reg["fx.palette.a3_hue"].set(100.0)
-    lib.save_as("fx", "mine")
-    reg["fx.palette.a3_hue"].set(10.0)
-    assert lib.load("fx", "mine") == [] and st.values["palette"]["a3_hue"] == 100.0
 
 
 def test_a_raised_floor_does_not_light_a_see_through_ground(ctx, tmp_path):

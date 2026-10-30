@@ -86,3 +86,10 @@ not this directory: with a Root Directory set, the CLI looks for
 `hyperspacedemo.cutaiar.io` (`hyperspace.cutaiar.io` now belongs to
 [`../hyperspace-contact/`](../hyperspace-contact/)). `vercel.json` rewrites `/` → `/hyperspace.html` and sends the
 `Permissions-Policy` header that lets the deployed origin use the microphone.
+A push that changes nothing under `hyperspace-web/` since the project's last deploy
+is skipped: `vercel.json`'s `ignoreCommand` (Vercel's "Ignored Build Step")
+diffs this folder against `$VERCEL_GIT_PREVIOUS_SHA` and builds when it
+differs, or when there is no earlier deploy to compare with.
+Only `main` deploys at all: `git.deploymentEnabled` turns off Vercel's
+automatic deploys for every other branch, so a pull request gets no
+preview (run `vercel deploy` from the repository root for one).

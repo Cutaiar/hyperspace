@@ -56,7 +56,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 # pyGLFW and imgui_bundle each ship a libglfw; loading both trips ObjC class
@@ -78,6 +78,8 @@ from .audio import AudioEngine
 from .bands import CEIL
 from .control import Control
 from .geometry import EYE_DISTANCE, EYE_FOV, px_per_unit
+from .hold import Hold, preview_renderer, preview_size
+from .hold import register as register_hold
 from .hotreload import HotReloader
 from .learn import Learn
 from .library import Library, Marks
@@ -91,7 +93,7 @@ from .outputs import Offscreen, Presenter, Preview, Slot, Switches, View
 from .overlay import RENDER_DEFAULT, GlfwBackend, Output, register_switches, render_index
 from .params import Registry, build_registry
 from .pinch import install as install_pinch
-from .preset import Presets, migrate_home
+from .preset import Presets
 from .render import Renderer
 from .routing import SLEW_DEFAULT_S, Bindings, Router, bindings_path, register_desk
 from .ui import Panel, apply_style, load_fonts
@@ -597,7 +599,7 @@ def _bands(audio) -> tuple[float, ...]:
 
 
 def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
-                 preview=None) -> None:
+                 preview=None, hold=None, monitor=None) -> None:
     """One render frame onto every output (plan 21 WP3, "the frame in
     app.draw_render"):
 
@@ -621,7 +623,15 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
     as `Renderer.draw` raises it. `preview` (an `outputs.Preview`), when
     the GRAPH page asked for it, rides on output 1's view as one more
     publisher — through output 1's own tap, else its own — and is flushed
-    for the control window as a presenter's frame is."""
+    for the control window as a presenter's frame is.
+
+    Plan 38: with the projector held (`hold`, a `hold.Hold` that is on),
+    every output is the program — drawn inside `Hold.program`, the held
+    wiring and look on the renderer — and the page's backdrop is the
+    preview instead: the live wiring and look, drawn after the outputs by
+    the hold's own renderer into the preview's tap (`_draw_preview`).
+    Output 1 then rides `monitor` (another `Preview`, the page's inset of
+    what the projector shows) when the page asked for it."""
     first = slots[0]
     win = first.win
     glfw.make_context_current(win)
@@ -640,10 +650,14 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
     first.size = (fbw, fbh)
     later = [sl for sl in slots[1:] if sl.opened and sl.presenter is not None]
     offscreen = [sl for sl in slots[1:] if sl.publish_only and sl.offscreen is not None]
-    shown_to_panel = preview is not None and preview.take()
+    on_hold = hold is not None and bool(getattr(hold, "on", False))
+    wanted = preview is not None and preview.take()
+    shown_to_panel = wanted and not on_hold
+    watched = on_hold and monitor is not None and monitor.take()
     pubs, tap = first.publishers, first.tap
-    if shown_to_panel:
-        pubs, tap = [*pubs, preview], tap if tap is not None else preview.tap
+    if shown_to_panel or watched:
+        pv = preview if shown_to_panel else monitor
+        pubs, tap = [*pubs, pv], tap if tap is not None else pv.tap
     try:
         views = [View(first.switches, (fbw, fbh), target=ctx.screen,
                       bg_alpha=getattr(renderer, "bg_alpha", 1.0), viewport=(0, 0, fbw, fbh),
@@ -660,8 +674,14 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
                 sl.size = (int(pub_size[0]), int(pub_size[1]))
                 views.append(View(sl.switches, sl.size, target=sl.offscreen.fit(sl.size),
                                   publish=sl.publishers))
-        renderer.draw_outputs(s, max(w, 1), max(h, 1), fbw / max(w, 1), views)
-        if later or shown_to_panel:
+        if on_hold:
+            with hold.program(renderer):
+                renderer.draw_outputs(s, max(w, 1), max(h, 1), fbw / max(w, 1), views)
+        else:
+            renderer.draw_outputs(s, max(w, 1), max(h, 1), fbw / max(w, 1), views)
+        previewed = on_hold and wanted and _draw_preview(hold, renderer, ctx, s, (w, h),
+                                                         (fbw, fbh), preview, first.switches)
+        if later or shown_to_panel or watched or previewed:
             (flush or _gl_flush)()
         for sl, v in shown:
             try:
@@ -679,6 +699,37 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
     finally:
         glfw.make_context_current(win)
         glfw.swap_buffers(win)
+
+
+def _draw_preview(hold, renderer, ctx, s, logical: tuple[int, int], full: tuple[int, int],
+                  preview, switches: Switches | None = None) -> bool:
+    """Plan 38: the preview frame while the projector is held — the live
+    wiring and look, drawn by the hold's renderer (`Hold.draw_preview`)
+    into the preview's tap at `hold.preview_size` (output 1's framebuffer
+    `full` under the render cap, at most `PREVIEW_MAX` on its long side),
+    then handed to the preview as its picture. Output 1's window is bound
+    again after, with its viewport. True when drawn.
+
+    Plan 38 B3: drawn with output 1's `switches` (its mutes and flips, as
+    the unheld backdrop shows output 1) at full dim — the preview is the
+    look, the room's dim stays the projector's."""
+    tap = getattr(preview, "tap", None)
+    sw = replace(switches, dim=1.0) if switches is not None else Switches()
+    if tap is None:
+        return False
+    size = preview_size(full, getattr(renderer, "max_frame", None))
+    try:
+        drew = hold.draw_preview(s, logical[0], logical[1], size, tap.fit(size),
+                                 lambda sz, fbo: View(sw, sz, target=fbo,
+                                                      viewport=(0, 0, *sz)))
+    except Exception as e:  # noqa: BLE001 — the preview must not cost the program
+        hold.error, drew = _err("preview", e), False
+    finally:
+        ctx.screen.use()
+        ctx.viewport = (0, 0, *full)
+    if drew:
+        preview.publish(tap.tex, 0.0)
+    return drew
 
 
 def _desk_table(reg: Registry, table: Bindings) -> Bindings:
@@ -1334,6 +1385,10 @@ def main() -> None:
     # each opened output's switches (plan 21 WP4): rig settings, seeded
     # from the config's launch values already on the slots, never saved
     register_switches(reg, slots)
+    # plan 38: the projector held while the next look is built — rig
+    # controls beside the switches; its undo is handed over once it exists
+    hold = Hold(reg, renderer, make=lambda: preview_renderer(renderer))
+    register_hold(reg, hold, now=time.perf_counter)
     # one binding table for keys, pad, MIDI and lanes (an old midi_map.json
     # migrates) — read before attach for the same reason: the desk's
     # session param, `desk.slew`, is the table's, at the app's default
@@ -1351,6 +1406,8 @@ def main() -> None:
     panel.output = output
     panel.outputs = slots                  # the OUTPUT page: a block per output (plan 21 WP4)
     panel.preview = Preview(ctx)           # output 1 behind the GRAPH page (2026-10-26)
+    panel.monitor = Preview(ctx)           # plan 38: while held, the projector's inset there
+    panel.hold = hold
     router = Router(reg, table)
     router.use_lfos(lfos, clock)           # they step inside the pass (plan 28 N0)
     router.use_bank(envs, clock)           # …and so do the envelopes (plan 31)
@@ -1361,10 +1418,7 @@ def main() -> None:
     # plan 26 A4: a preset's graph section sets the renderer's wiring and
     # hands an extra hands node its own state (`Renderer.ghost_states`)
     presets.graph.attach(renderer)
-    # plan 13 §6, once: an older home's projects, routing presets and the
-    # preset part of bindings.json become presets (backups beside every
-    # rewritten file); a home already migrated finds nothing to do
-    migrate_home(library, router, cfg.get("hands"))   # hand lanes named by the rig's layout
+    hold.section = presets.graph           # plan 38 B3: landings keep the held program's nodes
     # one Learn over the live table, whatever the MIDI gate says: a knob
     # or a hand completes it, the panel's prompt settles what the referee
     # refused (learn.py; the band.sel.* rule is the registry's `real`)
@@ -1394,6 +1448,9 @@ def main() -> None:
     router.use(rig)
     learn.devices = rig
     rig.listeners.append(point_at_devices)
+    # plan 40 T4: a device coming or going, said in the footer with what it brings
+    rig.said = lambda role, was, now: library.say(
+        devices.arrival(router.table, rig, role, was, now) or None)
     point_at_devices()
     panel.devices = rig                        # the SYSTEM page's device lines
     panel.media = media                        # the MEDIA page: the folder and the channels
@@ -1405,6 +1462,8 @@ def main() -> None:
     dream_io, panel.dream_error = _open_dream(reg, cfg)
     if dream_io is not None:            # what the dream node dreams with (plan 36 T4)
         renderer.dreamer.source = dream_io
+    renderer.segment_cfg = cfg.get("segment", {})   # the segment workers' backend (plan 39 T4)
+    segmenters = _Closer(renderer.close)   # …closed with the adapters, at quit and restart
     # the sticks as dials (gamepad.dial, a prototype): session params on
     # whichever pad is the primary now
     _register_dial(reg, lambda: rig.adapter("gamepad"))
@@ -1430,6 +1489,7 @@ def main() -> None:
                          banks=lambda: router._banks())
     undo.install(undo_obj)             # what undo.push and the edit.* triggers reach
     panel.undo = undo_obj              # the footer's message slot
+    hold.undo = undo_obj               # Drop goes back to the hold's point through it
     # panel state and chain must stay one object even after source changes
     # the live objects that get re-classed on a hot reload; re-evaluated
     # each swap so recreated ones (the chain after a source attach) count
@@ -1466,6 +1526,8 @@ def main() -> None:
         (library.project, "library", "Project"),
         (marks, "library", "Marks"),
         (undo_obj, "undo", "Undo"),
+        (hold, "hold", "Hold"),             # plan 38, and its preview renderer once made
+        *([(hold.preview, "render", "Renderer")] if hold.preview is not None else []),
         (router, "routing", "Router"),
         (presets, "preset", "Presets"),
         (presets.graph, "preset", "GraphSection"),      # plan 26 A4
@@ -1499,7 +1561,8 @@ def main() -> None:
     def draw_render(dt: float) -> None:
         # every render output: output 1 drawn, the others presented, the
         # others swapped first and output 1 last (_draw_render)
-        _draw_render(renderer, ctx, s, slots, render_watch, preview=panel.preview)
+        _draw_render(renderer, ctx, s, slots, render_watch, preview=panel.preview,
+                     hold=hold, monitor=panel.monitor)
 
     def draw_panel(dt: float, fps: float) -> None:
         # the control window: black ground, then the imgui frame opened
@@ -1535,7 +1598,8 @@ def main() -> None:
     dream_check(library.current("presets"))     # the startup preset has already landed
 
     # both exits close the publishers, in output 1's context (plan 32 T9)
-    publishers = _Closer(lambda: (_close_publishers(render_win, slots), panel.preview.close()))
+    publishers = _Closer(lambda: (_close_publishers(render_win, slots), panel.preview.close(),
+                                          panel.monitor.close()))
 
     def all_windows() -> list:            # both exits destroy these before terminate
         return [*(sl.win for sl in slots[1:]), ctrl_win, render_win]
@@ -1548,7 +1612,7 @@ def main() -> None:
                 renderer=renderer, panel=panel, reloader=reloader,
                 draw_render=draw_render, draw_panel=draw_panel,
                 restart=lambda: _restart(audio, (watchdog, awake, panel, *host.adapters,
-                                                 publishers), impl,
+                                                 publishers, segmenters), impl,
                                          ctrl_win,
                                          save=save_windows, windows=all_windows()),
                 quit=lambda: glfw.set_window_should_close(render_win, True),
@@ -1599,7 +1663,7 @@ def main() -> None:
     _quiet(save_windows)      # where the windows are, for the next launch (placement.py)
     # the watchdog first: teardown is no stall; the panel before imgui goes
     # (its GRAPH page's node editor context, plan 28 N2)
-    close_all(audio, watchdog, awake, panel, *host.adapters, publishers)
+    close_all(audio, watchdog, awake, panel, *host.adapters, publishers, segmenters)
     impl.shutdown()
     _destroy_windows(all_windows())   # every window before terminate: the exit crash
     glfw.terminate()

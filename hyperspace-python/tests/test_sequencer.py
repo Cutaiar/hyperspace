@@ -8,6 +8,7 @@ of one bar (8ths, 2 steps a beat) a step is 0.25 s.
 
 import ast
 import importlib.util
+import itertools
 import random
 import sys
 from pathlib import Path
@@ -124,7 +125,7 @@ def test_set_bpm_mid_step_neither_skips_nor_doubles():
     assert times[:5] == pytest.approx([0.0, 0.25, 0.5, 0.75, 1.0])
     # step 5 is at beat 2.5: the 0.3 beat left at 1.1 s takes 0.12 s at 150
     assert times[5] == pytest.approx(1.22)
-    assert [b - a for a, b in zip(times[5:], times[6:])] == pytest.approx(
+    assert [b - a for a, b in itertools.pairwise(times[5:])] == pytest.approx(
         [0.2] * (len(times) - 6))
 
 

@@ -8,7 +8,10 @@
 
 Plan 24 C3 (decision 19). Each preset is loaded the way the app loads it —
 a headless registry, router and `Presets` over a **scratch** library home
-made for the run, never the owner's — and each control of the APC40's
+made for the run, never the owner's, holding the test corpus
+(`tests/corpus/presets`, the presets the build shipped until 2026-10-28,
+and `tests/corpus/dream`, the dream module presets they may name) — and
+each control of the APC40's
 preset layer (`layer_controls`) gets one of three words:
 
   mapped   an enabled preset-layer row is on it, and the preset can show
@@ -30,7 +33,7 @@ sorted or in the layout's order, so a second run is byte-identical.
 
 `--library DIR` copies DIR's ``presets/`` and ``desk/`` files into the
 scratch home first (DIR itself is only read), so the report covers that
-library's presets beside the factory's, desk templates included.
+library's presets beside the corpus's, desk templates included.
 """
 
 from __future__ import annotations
@@ -60,6 +63,8 @@ from hyperspace.routing import Binding, Bindings, Router
 from hyperspace.view import ViewState
 
 REPORT = ROOT / "docs" / "plans" / "assets" / "24-party-fixes" / "desk-coverage.md"
+CORPUS = ROOT / "tests" / "corpus"                   # the presets, as test data
+CORPUS_GROUPS = (PRESETS, "dream")                   # what the scratch home is seeded with
 BAR = 4                     # the owner's bar: at most this many dark or dead
 MAPPED, DARK, DEAD = "mapped", "dark", "dead"
 MARK = {MAPPED: "●", DARK: "·", DEAD: "✕"}
@@ -88,12 +93,12 @@ class Row:
 def layer_controls(table: Bindings | None = None) -> list[apc40.Control]:
     """The controls of the APC40's preset layer, in the layout's order:
     the device knobs D1–D8, the track knobs K1–K8 and the track faders
-    S1–S8 — the strips a preset's desk is for (`preset.knob_desk`,
-    `track_fader`) — and every other control the factory map gives a
+    S1–S8 — the strips a preset's desk is for (`preset.device_knob`,
+    `track_fader`) — and every other control the default map gives a
     preset-layer row (`apc40.DEFAULT_MAP`: the cue knob, the plane
     buttons, the grid-motion pads, ▲ ▼, the view reset), less any control
-    an invariant row of the session table holds (`table`, the factory one
-    when None). A free control no factory row names (clip stops 1–7,
+    an invariant row of the session table holds (`table`, the default one
+    when None). A free control no default row names (clip stops 1–7,
     clip row 2 on the preset layer) is not counted: a row a preset puts
     there is listed beside the table instead."""
     table = Bindings.factory() if table is None else table
@@ -129,7 +134,7 @@ def is_strip(c: apc40.Control) -> bool:
 def boot(home: Path) -> SimpleNamespace:
     """The app's construction order (app.main), headless, on `home` — a
     scratch folder: the library, the registry, the session table (the
-    factory's: the home has no bindings.json), the router and `Presets`."""
+    default: the home has no bindings.json), the router and `Presets`."""
     chain = Analyzer(Analyser())
     control = Control(chain)
     view = ViewState()
@@ -185,25 +190,31 @@ def _glyph_order(line: str) -> tuple[int, str]:
 
 
 def coverage(home: Path, library: Path | None = None) -> tuple[list[apc40.Control], list[Row]]:
-    """Every preset the scratch `home` lists (the factory's, and with
-    `library` that library's copied in), each a `Row`."""
+    """Every preset the scratch `home` lists (the corpus's, copied in, and
+    with `library` that library's too), each a `Row`."""
+    for group in CORPUS_GROUPS:
+        _copy_in(CORPUS / group, home / group)
     if library is not None:
         for group in (PRESETS, DESK):
-            src = library / group
-            if src.is_dir():
-                (home / group).mkdir(parents=True, exist_ok=True)
-                for f in sorted(src.glob("*.json")):
-                    shutil.copy(f, home / group / f.name)
+            _copy_in(library / group, home / group)
     rig = boot(home)
     controls = layer_controls(rig.table)
-    names = rig.lib.list(PRESETS, hidden=True)
+    names = rig.lib.list(PRESETS)
     return controls, [coverage_of(rig, n, controls) for n in names]
+
+
+def _copy_in(src: Path, dst: Path) -> None:
+    """Every `*.json` of `src` into `dst` (made if missing); `src` is only read."""
+    if src.is_dir():
+        dst.mkdir(parents=True, exist_ok=True)
+        for f in sorted(src.glob("*.json")):
+            shutil.copy(f, dst / f.name)
 
 
 # ---------------------------------------------------------------- the text
 
 def report(controls: list[apc40.Control], rows: list[Row],
-           source: str = "only the factory presets") -> str:
+           source: str = "only the corpus presets (tests/corpus/presets)") -> str:
     """The report as Markdown — the same text for the same presets, every run."""
     n = len(controls)
     out = [
@@ -214,7 +225,7 @@ def report(controls: list[apc40.Control], rows: list[Row],
          "hand: run `uv run python tools/desk_coverage.py`."),
         "",
         f"**The preset layer** is {n} controls: the device knobs D1–D8, the track knobs "
-        "K1–K8, the track faders S1–S8, and every other control the factory map gives a "
+        "K1–K8, the track faders S1–S8, and every other control the default map gives a "
         "preset-layer row (" + ", ".join(c.glyph for c in controls if not is_strip(c))
         + "), less any control the session holds on both layers. Each preset is loaded as "
         f"the app loads it, from a scratch library holding {source}.",
@@ -282,7 +293,7 @@ def build(library: Path | None = None) -> str:
                 os.environ["HYPERSPACE_HOME"] = before
     if library is None:
         return report(controls, rows)
-    return report(controls, rows, "the factory presets and a library's presets and desk "
+    return report(controls, rows, "the corpus presets and a library's presets and desk "
                                   "templates (copied in)")
 
 
@@ -302,7 +313,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="also report this library's presets (copied, never written)")
     args = ap.parse_args(argv)
     if args.check and (args.library is not None or args.stdout):
-        ap.error("--check compares the factory report with the committed file: "
+        ap.error("--check compares the corpus report with the committed file: "
                  "it takes neither --library nor --stdout")
     text = build(args.library)
     if args.stdout or args.library is not None:

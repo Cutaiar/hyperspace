@@ -13,8 +13,8 @@ source, the preset / bindings split, a route onto a missing modifier, the
 template override, the strip building "right hand energy, smoothed, times
 band 0, into acid mix" through the page's own functions, an older preset
 without the key, undo, and Learn. The presets are fixtures under
-tests/fixtures/modifiers/, loaded through a scratch library; no preset in
-hyperspace/library/ is touched.
+tests/fixtures/modifiers/, loaded through a scratch library beside the
+corpus's presets (tests/corpus, seeded).
 """
 
 import json
@@ -25,6 +25,7 @@ from types import SimpleNamespace as NS
 
 import numpy as np
 import pytest
+from fonts import as_drawn
 from imgui_bundle import imgui
 from test_presets import boot
 from test_ui_shell import frame
@@ -361,7 +362,7 @@ def test_a_template_may_carry_modifiers_and_a_preset_overrides_by_id(rig):
 
 
 def test_an_older_preset_without_the_key_loads_as_before(rig):
-    """Every factory preset has no `modifiers`: it loads with no note,
+    """Every corpus preset has no `modifiers`: it loads with no note,
     holds none, and saves without the key — the same document as the
     base build's (no `mod.*` id among its values)."""
     lib, presets, table = rig.lib, rig.presets, rig.router.table
@@ -521,7 +522,7 @@ def test_the_modifiers_strip_draws_its_blocks_and_routing_points_to_graph(
     texts.clear()
     ids.clear()
     frame(panel)
-    assert texts.index(ui_routing.POINTER) < texts.index("DESK  ·  PRESET LAYER")
+    assert texts.index(as_drawn(texts, ui_routing.POINTER)) < texts.index("DESK  ·  PRESET LAYER")
     assert "ROUTES" not in texts and "MODIFIERS" not in texts
     texts.clear()
     ids.clear()

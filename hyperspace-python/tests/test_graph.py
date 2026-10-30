@@ -70,7 +70,8 @@ def test_graph_imports_only_the_render_stack_and_names_no_write():
     (the rule `test_render.py` holds render.py to)."""
     tree = ast.parse(Path(G.__file__).read_text())
     banned = {"params", "routing", "library", "preset", "undo", "control", "app", "ui",
-              "overlay", "config", "midi", "bridge", "dream", "osc", "torch", "leap"}
+              "overlay", "config", "midi", "bridge", "dream", "osc", "torch", "leap",
+              "segment", "Vision"}
     for node in ast.walk(tree):
         names = []
         if isinstance(node, ast.ImportFrom):
@@ -337,16 +338,6 @@ def test_depth_aware_wiring_hands_each_composite_and_output_the_scenes_depth():
 # ---------------------------------------------------------------- GL
 
 moderngl = pytest.importorskip("moderngl")
-
-
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-    c.release()
 
 
 def test_the_graph_is_built_once_per_set_of_switches_and_reused(ctx):

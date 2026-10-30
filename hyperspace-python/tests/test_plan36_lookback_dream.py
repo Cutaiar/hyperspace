@@ -1,4 +1,4 @@
-# ruff: noqa: F811 — `ctx` is test_graph_faces' fixture, taken as each GL test's argument
+
 """Plan 36 T4 (W4, D2, D3): look-back and dream, two nodes.
 
 `lookback` is picture in → trail out: it records what is wired into its
@@ -23,7 +23,6 @@ from test_graph_faces import (
     _media,
     _px,
     _rgba,
-    ctx,  # noqa: F401 — the GL context fixture, taken as each GL test's argument
 )
 
 from hyperspace import graph as G
@@ -325,28 +324,6 @@ def test_the_seven_words_refuse_the_old_ports():
         f"wire echo.2 → output.2.image — {G.ECHO_IS_A_PIN.format(name='echo.2', k=2)}")
 
 
-def test_an_fx_module_before_any_preset_fills_nothing_in(tmp_path):
-    """The T3 review's leak: an fx module applied before any preset has
-    landed goes into the empty wired frame — none of today's frame (no
-    scene, no look-back) is filled in. The module's run goes nowhere (no
-    picture into All outputs to run on), and nothing else lands."""
-    from hyperspace.headless import make_app
-
-    app = make_app(tmp_path)
-    assert app.presets.graph.free_doc() is None
-    empty = G.read_graph({"frame": "wired"}).to_json()
-    on, specs = {"fx.on": True, "fx.plasma.on": True}, {"plasma": (10, 1.0)}
-    got, notes = M.module_runs(empty, on, specs)
-    # (the empty frame: nothing to run on — no wire, no node added)
-    assert G.read_graph(got).to_json() == empty and notes == []
-    old, _ = M.module_runs(None, on, specs)      # (the old words' path: today's frame)
-    assert ("plasma", "output.all.image") in [(w["from"], w["to"]) for w in old["wires"]]
-    assert any(w["to"] == "scene.geometry" for w in old["wires"]), "the leak's frame"
-    app.lib.load("fx", "mandala")
-    # (the run reached nothing: the frame stays the empty one, nothing landed)
-    assert app.presets.graph.free_doc() is None
-
-
 # ---------------------------------------------------------------- fix round 1: `dream.on`'s meaning
 
 def test_click_to_map_offers_a_migrated_tracers_trail_knobs():
@@ -356,12 +333,12 @@ def test_click_to_map_offers_a_migrated_tracers_trail_knobs():
     cannot show (no dream drawn). With no look-back drawn, the trail knobs
     are dead."""
     import json
-    from pathlib import Path
+
+    from conftest import CORPUS
 
     from hyperspace import learn
 
-    lib = Path(__file__).resolve().parents[1] / "hyperspace" / "library" / "presets"
-    doc = json.loads((lib / "party-tracer.json").read_text())
+    doc = json.loads((CORPUS / "presets" / "party-tracer.json").read_text())
     values = doc["values"]
     assert values["dream.on"] is False
     drawn = learn.drawn_of(G.read_graph(doc["graph"]))
@@ -380,28 +357,19 @@ def test_click_to_map_offers_a_migrated_tracers_trail_knobs():
     assert learn.cannot_show("dream.2.fade", values, drawn=drawn) == "no look-back"
 
 
-def test_a_routed_trail_knob_leaves_the_dream_alone():
-    """A routes-only file's route into a look-back's knob switches nothing
-    on (the trail needs no switch); one into the dream's own turns
-    `dream.on` on, as before."""
-    from hyperspace.preset import effects_on
-
-    assert effects_on([{"target": "dream.fade"}], {}) == {}
-    assert effects_on([{"target": "dream.echo_mix"}, {"target": "dream.2.gap"}], {}) == {}
-    assert effects_on([{"target": "dream.mix"}], {}) == {"dream.on": True}
-
-
 def test_the_tracer_only_group_preset_leaves_the_worker_idle(ctx, tmp_path):
     """The dream group's `tracer-only` (echoes alone, mix 0) says the dream
     off since plan 36 T4: applied over a frame drawing a dream, the dream
     passes through and the worker gets no submission; its note says a
     values-only preset draws no node."""
+    from conftest import seed
     from test_lookback import registry
 
     from hyperspace.library import Library
 
     d = DreamState(on=True)
     reg = registry(d)
+    seed(tmp_path, "dream")          # (the corpus's dream module presets)
     lib = Library(tmp_path, period=0.0)
     lib.attach(reg)
     assert lib.load("dream", "tracer-only") == [] and d.on is False

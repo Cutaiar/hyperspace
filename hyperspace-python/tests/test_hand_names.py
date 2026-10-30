@@ -120,9 +120,9 @@ def test_a_named_gate_opens_on_its_pinch(app):
         "hand:right.pinch.index")
 
 
-def test_the_default_addresses_are_the_generators():
-    """The names the factory generator and the migration write are the
-    default layout's (`hands.default_addresses`, `DEFAULTS`' dofs)."""
+def test_the_default_addresses_are_the_default_layouts():
+    """The names a hand route is written with are the default layout's
+    (`hands.default_addresses`, `DEFAULTS`' dofs)."""
     names = hands.default_addresses()
     assert names[:6] == [f"left.{a}" for a in hands.DEFAULTS["dofs"]]
     assert names[12:14] == ["left.present", "right.present"]

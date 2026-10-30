@@ -11,6 +11,7 @@ test that proves a rule about the owner's files "on a copy".
 """
 
 import os
+from pathlib import Path
 
 import pytest
 
@@ -30,6 +31,10 @@ _SLOW_FILES = {"test_dream.py"}
 _LIVE_TESTS = {
     "test_media_render.py::test_a_syphon_frame_samples_through_the_fit_pass",
     "test_media_core.py::test_bad_file_is_an_error",      # polls; fails under load
+    # plan 39 T4: the real segment backends, once each on a synthetic frame
+    # (one worker at a time: torch must not share MPS with another test)
+    "test_segment.py::test_vision_runs_once_on_a_synthetic_frame",
+    "test_segment.py::test_torch_runs_once_on_a_synthetic_frame",
 }
 _SLOW_TESTS = {
     "test_media_core.py::test_heic_opens",
@@ -82,6 +87,25 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.xdist_group("live"))
         if path in _SLOW_FILES or key in _SLOW_TESTS:
             item.add_marker(pytest.mark.slow)
+
+
+@pytest.fixture
+def ctx():
+    """A standalone GL context of the test's own, released after it (skips
+    where there is none). Per test, not per module: a Renderer has no
+    release, so whatever a test builds lives as long as the context — one
+    shared by a module grew a worker past 4 GB on Mesa's llvmpipe, which
+    holds textures in the process (CI's runner, 16 GB for four workers).
+    test_golden_frames.py and test_graph_frame.py keep their own, and make
+    it current again before each test: releasing this one leaves no context
+    current, and GL calls go to the current one."""
+    moderngl = pytest.importorskip("moderngl")
+    try:
+        c = moderngl.create_context(standalone=True)
+    except Exception as e:  # noqa: BLE001 — any GL failure means skip
+        pytest.skip(f"no standalone GL context available: {e}")
+    yield c
+    c.release()
 
 
 @pytest.fixture(autouse=True)
@@ -168,13 +192,49 @@ def _no_undo_left_installed():
 
 def opened_last(home, show: str = "house"):
     """A home whose last opened show is `show` (library.LAST_SHOW) — what
-    the tests written against the house moods, the factory default until
-    plan 14 WP3 made the party show the one a fresh home opens, stand on."""
+    the tests written against the house moods, the default show until plan
+    14 WP3 made the party show the one a fresh home opened, stand on."""
     from pathlib import Path
 
     home = Path(home)
     home.mkdir(parents=True, exist_ok=True)
     (home / "last_show").write_text(f"{show}\n")
+    return home
+
+
+# ------------------------------------------------ the corpus: what the build once shipped
+
+CORPUS = Path(__file__).resolve().parent / "corpus"
+# the groups the corpus holds: the twenty-five presets, the three dream
+# module presets, and the two shows (party, house) whose banks name them
+CORPUS_GROUPS = ("presets", "dream", "projects")
+
+
+def seed(home, *groups: str, last_show: str | None = "party"):
+    """Copy the corpus into `home` — every file of each group in `groups`
+    (all of CORPUS_GROUPS by default), never over a file already there —
+    and, unless `last_show` is None, name the show a launch opens
+    (`library.LAST_SHOW`) when nothing names one yet. Returns `home`.
+
+    The library has one tier since 2026-10-28: nothing ships with the app,
+    a fresh home is empty and opens an unsaved show. The tests written
+    against the shipped presets (TUMBLE, WAKE, the party show's bank…)
+    stand on this seed instead — `boot_home` seeds by default."""
+    import shutil
+
+    home = Path(home)
+    for group in groups or CORPUS_GROUPS:
+        src = CORPUS / group
+        if not src.is_dir():
+            raise FileNotFoundError(f"no corpus group {group!r} under {CORPUS}")
+        dst = home / group
+        dst.mkdir(parents=True, exist_ok=True)
+        for f in sorted(src.glob("*.json")):
+            if not (dst / f.name).exists():
+                shutil.copyfile(f, dst / f.name)
+    mark = home / "last_show"
+    if last_show and "projects" in (groups or CORPUS_GROUPS) and not mark.exists():
+        mark.write_text(f"{last_show}\n")
     return home
 
 
@@ -205,10 +265,12 @@ def old_shape_pads() -> list[dict]:
         for row in range(2) for k in range(8))
 
 
-def boot_home(home):
-    """The app's construction order (app.main), headless, over `home` as it
-    is: the library, the registry, the table from `<home>/bindings.json`,
-    the router, the presets, the launch's migration and the startup preset."""
+def boot_home(home, *, corpus: bool = True):
+    """The app's construction order (app.main), headless, over `home` —
+    seeded with the corpus first unless `corpus` is off (`seed`: the
+    shipped presets and the party show, which a fresh home then opens as
+    it did until 2026-10-28): the library, the registry, the table from
+    `<home>/bindings.json`, the router, the presets and the startup preset."""
     from types import SimpleNamespace
 
     from hyperspace import lfo, preset, routing, tempo
@@ -221,6 +283,8 @@ def boot_home(home):
     from hyperspace.params import build_registry
     from hyperspace.view import ViewState
 
+    if corpus:
+        seed(home)
     chain = Analyzer(Analyser())
     control = Control(chain)
     view = ViewState()
@@ -239,7 +303,6 @@ def boot_home(home):
     lib.attach(reg)
     router = routing.Router(reg, table)
     presets = preset.Presets(lib, reg, router)
-    preset.migrate_home(lib, router)
     lib.project.load_startup()
     return SimpleNamespace(lib=lib, reg=reg, view=view, control=control, chain=chain,
                            router=router, presets=presets, clock=clock, home=home)
@@ -253,12 +316,13 @@ def _with_old_pads(path, re_aimed: dict | None = None) -> None:
     pads (WP2) they are written in, in the kind's own text."""
     import json
 
-    from hyperspace import preset
+    from hyperspace import apc40, preset
 
     doc = json.loads(path.read_text())
     # (the fresh layer's device knobs, apc40.SCENE, came with plan 19 WP3:
     # a preset saved before it had none — its knobs dark, or what was learned)
-    scene = preset.desk_json(b for b in preset.fresh_desk() if preset._is_device_knob(b))
+    scene = preset.desk_json(b for b in preset.fresh_desk()
+                             if b.kind == "cc" and b.number in apc40.DEVICE_KNOBS)
     desk = [row for row in doc.get("desk") or [] if row not in scene]
     have = {row["source"] for row in desk}
     want = [re_aimed if re_aimed and row["source"] == re_aimed["source"] else row

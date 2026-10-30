@@ -1,4 +1,4 @@
-# ruff: noqa: F811 — `ctx` is test_graph_faces' fixture, taken as each GL test's argument
+
 """Plan 34 T4 — the resize (Z, row 368): a picture cropped and made at a size
 of its own, so a delay or an effect after it runs small — the owner's "no
 1080p buffer into the faces for no reason".
@@ -28,7 +28,6 @@ from test_graph_faces import (
     _media,
     _px,
     _rgba,
-    ctx,  # noqa: F401 — the GL context fixture, taken as each GL test's argument
 )
 from test_graph_wired import wired
 

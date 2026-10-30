@@ -1,8 +1,7 @@
 """Plan 24 C3 — desk templates (decision 19).
 
 A desk template is a named set of preset-layer rows in its own JSON, a file
-of the library's `desk` group (``hyperspace.desk/1``; the factory's
-hyperspace/library/desk/ ships empty, the user's lives in the library root,
+of the library's `desk` group (``hyperspace.desk/1``, in the library root,
 which plan 25's `[library] path` shares). A preset's desk is a template
 plus its own overrides: the file names the template (``desk_template``) and
 keeps only the overrides in ``desk``. Proven on a fixture template and a
@@ -15,7 +14,7 @@ scratch library:
 - a save writes the reference and the overrides again, never the expanded
   rows, and a fix to the template reaches every preset that names it;
 - a template the library lacks is a note, and the overrides alone;
-- a preset with a plain desk section — every factory one — loads and
+- a preset with a plain desk section — every corpus one — loads and
   saves exactly as before.
 """
 
@@ -27,7 +26,7 @@ import pytest
 from test_presets import boot
 
 from hyperspace import preset
-from hyperspace.library import DESK, DESK_SCHEMA, FACTORY, Library, LibraryError
+from hyperspace.library import DESK, DESK_SCHEMA, Library, LibraryError
 from hyperspace.preset import TEMPLATE_KEY, compact_desk, desk_json, expand_desk
 from hyperspace.routing import Binding
 
@@ -65,12 +64,11 @@ def desk_of(rig) -> list[dict]:
 
 # ---------------------------------------------------------------- the group
 
-def test_the_desk_group_ships_empty_and_lists_the_users_templates(rig):
-    """No factory template: hyperspace/library/desk/ has no file (git keeps
-    no empty folder, and the group needs none to list). A template in the
-    library root is listed and read; a file of another format is refused."""
+def test_the_desk_group_starts_empty_and_lists_the_users_templates(rig):
+    """No template ships (the group needs no folder to list). A template in
+    the library root is listed and read; a file of another format is
+    refused."""
     lib = rig.lib
-    assert not list((FACTORY / DESK).glob("*.json"))
     assert lib.list(DESK) == []
     put_fixtures(lib)
     assert lib.list(DESK) == ["fixture shape"]
@@ -210,13 +208,13 @@ def test_a_missing_template_is_a_note_and_the_overrides_alone(rig):
     assert saved[TEMPLATE_KEY] == "fixture shape" and saved["desk"] == EXPANDED[-2:]
 
 
-def test_every_factory_preset_loads_and_saves_its_plain_desk_as_before(rig):
-    """No factory preset names a template: each loads with no template
+def test_every_corpus_preset_loads_and_saves_its_plain_desk_as_before(rig):
+    """No corpus preset names a template: each loads with no template
     note, and what a save would write is its whole desk under ``desk``
     with no ``desk_template`` key, the keys in their order (row 394: the
     `/6` save's — the wired frame after the name, the bins last)."""
     lib = rig.lib
-    for path in sorted((FACTORY / "presets").glob("*.json")):
+    for path in sorted((lib.home / "presets").glob("*.json")):
         assert TEMPLATE_KEY not in json.loads(path.read_text()), path.name
     for name in lib.list("presets"):
         lib.presets.load(name)

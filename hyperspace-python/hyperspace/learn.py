@@ -394,7 +394,8 @@ class Learn:
         self.want: str | None = None   # what may complete `learning` (`wants`); None: anything
         self.control: str | None = None    # the picked desk control's source; None: none
         self.pending: tuple[Binding, Binding] | None = None
-        self.last = ""          # what the last learn did, for the status lines
+        self.held = False       # plan 40 T3: a spawn's sheet is up — nothing completes a learn
+        self.last = ""        # what the last learn did, for the status lines
         self.refused = False    # …and whether it was a refusal (drawn as a warning)
         self.said_n = 0         # how many times `last` was set: the same words twice are two
 
@@ -452,6 +453,14 @@ class Learn:
             self.control = None          # arming a param lets a picked control go
         self.armed_n = getattr(self, "armed_n", 0) + 1
 
+    def hold(self, on: bool = True) -> None:
+        """Plan 40 T3: while a spawn's conflict sheet is up (D3) no source
+        completes the armed learn — `accepts` says no to every one, so the
+        hands, a desk control, a pad or an OSC fader learn nothing, as
+        while the Replace / Keep prompt is up — and the learn stays armed
+        for after (`hold(False)`, the sheet answered)."""
+        self.held = bool(on)
+
     def take(self) -> str | None:
         """The armed id, cleared — an adapter about to complete the learn
         calls this first so nothing else can complete it too."""
@@ -471,6 +480,8 @@ class Learn:
         axis: it completes a learn armed for anything, or for "mod", and
         never a desk, pad or hand one."""
         if getattr(self, "learning", None) is None:
+            return False
+        if getattr(self, "held", False):         # plan 40 T3: a sheet is up (`hold`)
             return False
         want = getattr(self, "want", None)       # a Learn from before a hot reload: None
         if want is None:

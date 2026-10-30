@@ -64,7 +64,10 @@ def gl_error(e: Exception, names: dict[int, str]) -> str:
     lines = [ln.strip() for ln in str(e).splitlines() if ln.strip()]
     msg = next((ln for ln in lines if "ERROR" in ln.upper()), lines[-1] if lines else str(e))
     for k, name in names.items():
+        # Apple's compiler: "ERROR: 3:11: …"; Mesa's: "3:11(41): error: …"
         msg = re.sub(rf"ERROR:\s*{k}:(\d+):", lambda m, name=name: f"{name}{m.group(1)}:", msg)
+        msg = re.sub(rf"^{k}:(\d+)\(\d+\):\s*error:", lambda m, name=name: f"{name}{m.group(1)}:",
+                     msg)
     return msg[:200]
 
 

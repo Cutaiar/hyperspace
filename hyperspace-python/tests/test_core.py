@@ -90,12 +90,12 @@ def test_soft_ceil_properties():
 
 def test_presets_load():
     from hyperspace.analysis import Analyser
-    from hyperspace.control import SCENES
-    from hyperspace.library import factory_doc
+    from hyperspace.control import SCENES, SCENES_DIR
+    from hyperspace.library import scene_doc, slug
 
     chain = Analyzer(Analyser())
     for name in SCENES:
-        chain.apply_scene(factory_doc("band", name)["values"])
+        chain.apply_scene(scene_doc(SCENES_DIR / f"{slug(name)}.json")["values"])
         for p in chain.params:
             assert 0 <= p.fn < len(bands.SHAPERS)
             assert p.atk > 0 and p.dec > 0
@@ -106,7 +106,9 @@ def test_presets_load():
 
 @pytest.fixture(scope="module")
 def fixture_wavs():
-    if not (FIXTURES / "gate-prover.wav").exists():
+    # (all three: another worker may be generating them; each lands whole)
+    if not all((FIXTURES / n).exists() for n in ("gate-prover.wav", "brickwalled.wav",
+                                                 "sweep.wav")):
         subprocess.run(
             [sys.executable, str(ROOT / "tools" / "gen_test_audio.py"), "--out", str(FIXTURES)],
             check=True,

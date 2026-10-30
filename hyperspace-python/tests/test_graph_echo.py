@@ -1,4 +1,4 @@
-# ruff: noqa: F811 — `ctx` is test_graph_faces' fixture, taken as each GL test's argument
+
 """Plan 34 T3 — the look-back's frames as sources (E, rows 360–363):
 `echo.<k>`, the ring's k-th newest commit, and `dream`, the dream buffer,
 wireable into any picture port. Plan 36 T4: an echo is the look-back's own
@@ -33,7 +33,6 @@ from test_graph_faces import (
     _renderer,
     _rgba,
     _rig_frame,
-    ctx,  # noqa: F401 — the GL context fixture, taken as each GL test's argument
 )
 
 from hyperspace import graph as G

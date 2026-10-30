@@ -14,7 +14,7 @@ show them, and the chain a through wire over the off effects. The head's
 area chips and a click on a title frame an area.
 
 Headless, on N7's harness (tests/test_graph_legible.py): the shell's rig
-with a factory preset loaded through the scratch library, a render graph
+with a corpus preset loaded through the scratch library, a render graph
 built by `graph.default_graph` — party-trip's two-effect graph, and the
 real chain of every effect file this build has, wired by each graph
 fixture under tests/fixtures/presets — the APC40 as a real
@@ -27,6 +27,7 @@ from pathlib import Path
 from types import SimpleNamespace as NS
 
 import pytest
+from conftest import CORPUS, seed
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
 from test_graph_legible import party
@@ -41,8 +42,8 @@ from hyperspace.graphmigrate import Shows
 from hyperspace.outputs import Switches
 from hyperspace.routing import Binding
 
-FACTORY = sorted(p.stem for p in (Path(graphview.__file__).parent / "library" / "presets")
-                 .glob("*.json"))
+# the corpus: the presets the build once shipped (tests/corpus/presets, one tier)
+CORPUS_PRESETS = sorted(p.stem for p in (CORPUS / "presets").glob("*.json"))
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "presets"
 # (plan 33 T6: the `/5` fixtures — T4's and T5's proofs, a channel's own
 # shaders into the faces, the backdrop, a switch — are laid out with the rest)
@@ -58,11 +59,12 @@ CONCERNS = (graphview.AUDIO, graphview.SCENE_AREA, graphview.LOOKBACK_AREA, grap
 
 @pytest.fixture()
 def rig(shell_rig):  # noqa: F811
+    seed(shell_rig.lib.home)
     return shell_rig
 
 
 def load(rig, name, graph=None):
-    """Factory preset `name` on the page (party-trip's render graph and
+    """Corpus preset `name` on the page (party-trip's render graph and
     devices, `party`, or render graph `graph`), its state after two frames."""
     party(rig)
     if graph is not None:
@@ -143,7 +145,7 @@ def back_wires(view, idle_open=()):
 # ---------------------------------------------------------------- the areas
 
 def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
-    """Over every factory preset on party-trip's graph, and over party-trip
+    """Over every corpus preset on party-trip's graph, and over party-trip
     on the app's whole chain wired by each graph fixture: every node is in
     one area of `ORDER`, by the one table; the areas' columns run left to
     right and never share a column — but *other*, under the audio in its
@@ -161,7 +163,7 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
     (shaders); a picture the scene made, taken back into a switch with the
     media, runs back by design (`graphview.returns`)."""
     assert set(FREE) <= set(WIRED)
-    cases = [(name, None) for name in FACTORY]
+    cases = [(name, None) for name in CORPUS_PRESETS]
     cases += [("party-trip", f) for f in (None, *WIRED) if f not in FREE]
     cases += [(f, f) for f in FREE]
     for name, fixture in cases:
@@ -190,12 +192,10 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
             others = set().union(*(columns(view, b) for b in graphview.AREAS if b != a))
             assert not columns(view, a) & others, (name, a)
         # (plan 36 T3: acid-scene's `after: scene` is the wires it stood
-        # for — an effect between the scene and the look-back, in the
-        # effects' area, so its cable into the look-back runs back: a
-        # layout the areas do not yet place, noted for T5/T6)
-        back = {"wire:acid.2>lookback/image"} if fixture == "acid-scene" else set()
-        assert set(back_wires(view)) <= back, (name, fixture)
-        assert set(back_wires(view, graphview.AREAS)) <= back, (name, fixture)
+        # for — an effect between the scene and the look-back; plan 37 C3:
+        # laid in the look-back's area, `laid_areas`, so nothing runs back)
+        assert back_wires(view) == [], (name, fixture)
+        assert back_wires(view, graphview.AREAS) == [], (name, fixture)
     # what lands where, on party-trip's graph
     view = load(rig, "party-trip")["view"]
     area = {n.id: n.area for n in view.nodes}
@@ -625,6 +625,94 @@ def test_area_titles_draw(rig, monkeypatch):
         "CTRL", ui_graph.TITLE_FLOOR * 6.0)
 
 
+# ---------------------------------------------------------------- plan 37 P3
+
+def area_column(area):
+    """An area's place left to right on the canvas (`AREAS`; *other* in the
+    audio's column, `SHARES`)."""
+    return graphview.AREAS.index(graphview.SHARES.get(area, area))
+
+
+def backward_across_areas(view):
+    """The cables whose two ends sit in different areas, the maker's area
+    not left of the taker's — less the loops by design (`graphview.returns`:
+    what is kept for the next frame, into a look-back's or a delay's
+    `image`; a picture the scene made, taken back into the faces, the
+    pattern, the backdrop or a switch — `echo-faces`' look-back into
+    `shape.faces`)."""
+    by_design = graphview.returns(view, graphview.layout(view, collapsed=lambda nid: True))
+    out = []
+    for c in view.cables:
+        a = view.node(graphview.node_of(view, c.src_port))
+        b = view.node(graphview.node_of(view, c.dst_port))
+        if a is None or b is None or a.area == b.area or c.id in by_design:
+            continue
+        if area_column(a.area) >= area_column(b.area):
+            out.append(c.id)
+    return out
+
+
+@pytest.mark.parametrize("name", [*(("corpus", n) for n in CORPUS_PRESETS),
+                                  *(("fixture", n) for n in WIRED)],
+                         ids=lambda t: f"{t[0]}:{t[1]}")
+def test_no_cable_runs_backwards_across_areas(rig, name):
+    """Plan 37 P3, D5 (the rules): every corpus preset, and every graph
+    fixture, loaded as the preset on a fresh canvas (none carries a saved
+    position): no cable runs from an area into one left of it. Before C3,
+    `acid-scene` drew `wire:acid.2>lookback/occluder` from EFFECTS back
+    into LOOK-BACK — acid.2 sits between the scene and the look-back."""
+    where, preset = name
+    view = (load(rig, preset) if where == "corpus" else load_fixture(rig, preset))["view"]
+    assert backward_across_areas(view) == [], preset
+
+
+def test_a_node_is_laid_where_its_consumers_are(rig):
+    """Plan 37 C3: an effect whose consumers sit left of the effects is laid
+    in the leftmost of their areas that is not left of what feeds it —
+    acid.2 (the scene's picture, into the look-back and on into a
+    composite) in LOOK-BACK, at its first column; an effect fed by nothing
+    into the faces in SCENE; a chain of two into the look-back both in
+    LOOK-BACK; one fed by the look-back and kept into it (a loop by design)
+    stays with the effects. A saved position still wins (`layout`), and a
+    tidy lays it out by the same rule."""
+    st = load_fixture(rig, "acid-scene")
+    view = st["view"]
+    acid = view.node("render:acid.2")
+    assert acid.area == graphview.LOOKBACK_AREA
+    assert graphview.area_of(acid) == graphview.EFFECTS_AREA      # the table's is unchanged
+    assert acid.column < view.node("render:lookback").column
+    assert back_wires(view) == []
+    lay = ui_graph.areas_of(st, view)
+    assert lay.nodes["render:acid.2"][0] < lay.nodes["render:lookback"][0]
+    # a saved position wins: the rule names an area, it moves no placed node
+    rig.lib.presets.layout["render:acid.2"] = [4000, 4000]
+    frame(rig.panel, "graph")
+    assert st["applied"]["render:acid.2"] == (4000.0, 4000.0)
+
+    spec = G.read_graph({
+        "frame": "wired",
+        "nodes": [{"kind": "effect", "file": "acid", "instance": 2},
+                  {"kind": "effect", "file": "warp", "instance": 2},
+                  {"kind": "effect", "file": "palette", "instance": 2},
+                  {"kind": "effect", "file": "kaleido", "instance": 2}],
+        "wires": [{"from": "shape", "to": "scene.geometry"},
+                  {"from": "acid.2", "to": "shape.faces"},              # fed by nothing
+                  {"from": "scene", "to": "warp.2.image"},              # a chain of two
+                  {"from": "warp.2", "to": "palette.2.image"},
+                  {"from": "palette.2", "to": "lookback.occluder"},
+                  {"from": "lookback", "to": "kaleido.2.image"},        # kept: a loop
+                  {"from": "kaleido.2", "to": "lookback.image"},
+                  {"from": "kaleido.2", "to": "output.all.image"}]})
+    g = G.build_graph(views(Switches(), Switches()), spec.wiring(),
+                      effects=(*REAL, "acid.2", "warp.2", "palette.2", "kaleido.2"))
+    view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
+    area = {n.id: n.area for n in view.nodes}
+    assert area["render:acid.2"] == graphview.SCENE_AREA
+    assert area["render:warp.2"] == area["render:palette.2"] == graphview.LOOKBACK_AREA
+    assert area["render:kaleido.2"] == graphview.EFFECTS_AREA
+    assert not spec.notes and backward_across_areas(view) == []
+
+
 def test_the_areas_run_by_primitive(rig):
     """Plan 35 G: the areas by primitive, left to right — MEDIA, SCENE,
     LOOK-BACK, EFFECTS, OUTPUTS after the controllers, the audio and the
@@ -894,3 +982,58 @@ def test_esc_closes_the_details(rig):
     io.add_key_event(imgui.Key.escape, False)
     frame(rig.panel, "graph")
     assert ui_graph._selection(st, st["view"]) is None
+
+
+def _modifier_selected(rig):
+    """party-trip on the page with a new threshold modifier, selected: the
+    page's state and the modifier."""
+    st = load(rig, "party-trip")
+    m = ui_graph.add_modifier(rig.panel, "threshold")
+    frame(rig.panel, "graph")
+    st["select_node"] = m.id
+    frame(rig.panel, "graph")
+    frame(rig.panel, "graph")
+    assert ui_graph._selection(st, st["view"])[1].id == m.id
+    return st, m
+
+
+def _press(rig, key, focus=True):
+    """`key` pressed and let go on GRAPH, the canvas focused (`focus`: as a
+    click on it leaves it), then a frame for the editor's delete query."""
+    if focus:
+        page = next(w for w in imgui.get_current_context().windows if "##page" in w.name)
+        imgui.internal.focus_window(page)
+    io = imgui.get_io()
+    io.add_key_event(key, True)
+    frame(rig.panel, "graph")
+    io.add_key_event(key, False)
+    frame(rig.panel, "graph")
+    frame(rig.panel, "graph")
+
+
+@pytest.mark.parametrize("key", [imgui.Key.backspace, imgui.Key.delete])
+def test_delete_or_backspace_deletes_the_selected_node(rig, key):
+    """The owner, 2026-10-29: Delete with a node selected deletes it — a
+    Mac's delete key (⌫, Backspace to imgui) as well as fn+⌫, the pointer
+    anywhere."""
+    _, m = _modifier_selected(rig)
+    _press(rig, key)
+    assert rig.router.table.modifier(m.id) is None
+
+
+def test_backspace_off_the_canvas_deletes_nothing(rig):
+    """⌫ with the canvas not focused (a click on the rail took the keys) is
+    not GRAPH's: the node stays."""
+    _, m = _modifier_selected(rig)
+    rail = next(w for w in imgui.get_current_context().windows if "##rail" in w.name)
+    imgui.internal.focus_window(rail)
+    _press(rig, imgui.Key.backspace, focus=False)
+    assert rig.router.table.modifier(m.id) is not None
+
+
+def test_backspace_with_a_popup_open_deletes_nothing(rig, monkeypatch):
+    """⌫ while a menu is open is the menu's: the node stays."""
+    _, m = _modifier_selected(rig)
+    monkeypatch.setattr(imgui, "is_popup_open", lambda *a: True)
+    _press(rig, imgui.Key.backspace)
+    assert rig.router.table.modifier(m.id) is not None

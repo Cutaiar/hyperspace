@@ -8,6 +8,9 @@ The solids are appended after the Klein bottle (index is identity) and are
 own scale, weight, colour and spin (`geometry.shape_view`).
 """
 
+import re
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -278,3 +281,91 @@ def test_a_shape_that_is_not_a_scene_is_drawn_as_before():
             want[2] = G.view_depth(V, a, yaw, pitch)
         for got, w in zip(G.shape_view(i, ang, yaw, pitch), want):
             assert np.array_equal(got, w)
+
+
+# ------------------------------------------------------- vector subjects
+
+FLOW_MARK, FLOW_CAPS = BY_NAME["Flow mark"], BY_NAME["Flow capsules"]
+
+
+def _bars(V: np.ndarray, faces: list) -> list:
+    """Each bar's (x centre, width, height), left to right."""
+    out = []
+    for c in faces:
+        P = V[np.asarray(c)]
+        out.append((P[:, 0].mean(), np.ptp(P[:, 0]), np.ptp(P[:, 1])))
+    return sorted(out)
+
+
+FLOW_SVG = Path(__file__).parent / "fixtures" / "flow-mark.svg"
+
+
+def _svg_boxes(path: Path) -> list[tuple[float, float, float, float]]:
+    """Each path's box (x0, y0, x1, y1) in the SVG, left to right: the
+    mark's paths use only absolute M, C, H, V and Z, and a cubic's control
+    points lie inside the box of a stadium's quarter arcs, so every point
+    named counts."""
+    boxes = []
+    for d in re.findall(r' d="([^"]+)"', path.read_text()):
+        xs, ys, x, y = [], [], 0.0, 0.0
+        for cmd, args in re.findall(r"([MCHVZ])([^MCHVZ]*)", d):
+            v = [float(t) for t in re.findall(r"-?\d*\.?\d+", args)]
+            if cmd in "MC":
+                for k in range(0, len(v), 2):
+                    x, y = v[k], v[k + 1]
+                    xs.append(x)
+                    ys.append(y)
+            elif cmd == "H":
+                for x in v:
+                    xs.append(x)
+                    ys.append(y)
+            elif cmd == "V":
+                for y in v:
+                    xs.append(x)
+                    ys.append(y)
+        boxes.append((min(xs), min(ys), max(xs), max(ys)))
+    return sorted(boxes)
+
+
+def test_flow_bars_are_the_svgs_paths():
+    # FLOW_BARS is read off the mark's SVG (tests/fixtures/flow-mark.svg,
+    # as wisprflow.ai serves it, its round backdrop taken out): each bar's
+    # x centre, top and bottom, and the one end radius, half a bar's width
+    # (the SVG's first bar is 0.002 narrower than the other four; the mark
+    # takes their shared radius)
+    boxes = _svg_boxes(FLOW_SVG)
+    assert len(boxes) == len(G.FLOW_BARS) == 5
+    for (x0, y0, x1, y1), (cx, top, bot) in zip(boxes, G.FLOW_BARS):
+        assert (x0 + x1) / 2 == pytest.approx(cx, abs=1e-3)
+        assert (y0, y1) == pytest.approx((top, bot), abs=1e-3)
+        assert (x1 - x0) / 2 == pytest.approx(G.FLOW_R, abs=2.5e-3)
+
+
+def test_the_flow_mark_is_five_stadia_as_the_svg_draws_them():
+    # five bars of one width on one pitch, their heights the SVG's: the
+    # two outer bars tallest, then the middle one, the two short ones equal
+    g = G.geom(FLOW_MARK)
+    V, F = g["V"], G.faces(FLOW_MARK)
+    assert all(G.SHAPES[i].dims == 3 and G.SHAPES[i].family == "Vector marks"
+               for i in (FLOW_MARK, FLOW_CAPS))
+    assert len(F) == 5 and (V[:, 2] == 0).all() and g.get("curve")
+    bars = _bars(V, F)
+    widths = [b[1] for b in bars]
+    assert np.ptp(widths) < 1e-9
+    assert np.ptp(np.diff([b[0] for b in bars])) < 1e-3          # one pitch
+    h = [b[2] / widths[0] for b in bars]                          # height in widths
+    svg = [(y1 - y0) / (2 * G.FLOW_R) for _, y0, _, y1 in _svg_boxes(FLOW_SVG)]
+    assert h == pytest.approx(svg, abs=1e-3)
+    assert h[0] == pytest.approx(h[4], abs=0.01) and h[1] == pytest.approx(h[3])
+    assert h[0] > h[2] > h[1]
+
+
+def test_the_flow_capsules_are_the_marks_bars_lifted():
+    # each bar, seen face-on, has the flat mark's outline; in depth it is
+    # round, one bar's width deep
+    caps, mark = G.geom(FLOW_CAPS), G.geom(FLOW_MARK)
+    V = caps["V"]
+    assert np.allclose(V[:, :2].min(0), mark["V"][:, :2].min(0))
+    assert np.allclose(V[:, :2].max(0), mark["V"][:, :2].max(0))
+    width = _bars(mark["V"], G.faces(FLOW_MARK))[0][1]
+    assert np.ptp(V[:, 2]) == pytest.approx(width)

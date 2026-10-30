@@ -215,15 +215,6 @@ def test_fit_scales():
 moderngl = pytest.importorskip("moderngl")
 
 
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-
-
 def _fbo(ctx, w, h):
     return ctx.framebuffer(color_attachments=[ctx.renderbuffer((w, h), 4)])
 
@@ -643,6 +634,48 @@ def test_a_composite_lays_the_scene_and_its_effect_over_the_media(ctx):
     assert "kaleido" in r.stats["effects"] and red(pic) == 1.0, red(pic)
     (shaped,) = _draw(ctx, r, _shape(), frames=2)
     assert "kaleido" in r.stats["effects"] and 0.2 < red(shaped) < 1.0, red(shaped)
+
+
+def test_a_half_transparent_scene_over_white_is_honest_on_an_opaque_window(ctx):
+    """Plan 39 T1 (alpha is honest; spike findings §1d): the scene's
+    translucent faces laid into a composite's `over` (so the scene clears
+    to a zero ground, PR #240) over a white still, on an opaque window.
+    `view.cut_through` is the see-through window's blend, not a ground's:
+    on and off draw the same picture, and that picture is the premultiplied
+    over of the scene drawn alone — `face + white × (1 − face.a)` — never
+    brighter (a squared alpha would let too much white through)."""
+    white = (255, 255, 255)
+    r = _renderer(ctx, _media(a=Still(_rgba(16, 9, white))))
+    assert r.bg_alpha == 1.0                                  # an opaque window
+    r.wiring = wired_wiring(G.read_graph({
+        "frame": "wired", "nodes": [{"kind": "composite"}],
+        "wires": [{"from": a, "to": b} for a, b in (
+            ("shape", "scene.geometry"), ("channel.a", "composite.under"),
+            ("scene", "composite.over"), ("composite", "output.all.image"))]}).wiring())
+    pics, faces = {}, {}
+    for cut in (False, True):
+        (pic,) = _draw(ctx, r, _shape(lines=False, points=False, cut_through=cut))
+        pics[cut] = pic
+        w, h = r.scene.tex.size
+        faces[cut] = np.frombuffer(r.scene.tex.read(), np.uint8).reshape(h, w, 4)[::-1] \
+            .astype(int)
+    face = faces[False]                                       # the honest blend's scene
+    a = face[..., 3]
+    seen = (a > 8) & (a < 247)                                # where a face is part there
+    assert seen.mean() > 0.05, seen.mean()
+    # (a) the switch changes nothing on an opaque window, the scene included
+    assert np.abs(faces[True] - face).max() <= 1
+    assert np.abs(pics[True] - pics[False]).max() <= 1
+    # (b) the composite is the premultiplied over of that scene on white:
+    # everywhere a face is, and at the faces' centre (the frame's middle)
+    want = np.clip(face[..., :3] + (255 - a)[..., None], 0, 255)
+    cy, cx = face.shape[0] // 2, face.shape[1] // 2
+    assert seen[cy, cx], a[cy, cx]
+    for cut in (False, True):
+        err = np.abs(pics[cut][..., :3] - want).max(axis=-1)
+        assert err[seen].max() <= 3, (cut, err[seen].max())
+        assert err[cy, cx] <= 3, (cut, err[cy, cx])
+    assert ctx.error == "GL_NO_ERROR"
 
 
 # ---------------------------------------------------------------- the echoes over a backdrop

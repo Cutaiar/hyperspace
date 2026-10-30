@@ -13,9 +13,9 @@ import math
 import shutil
 from pathlib import Path
 
-import moderngl
 import numpy as np
 import pytest
+from conftest import CORPUS
 from test_presets import boot
 
 from hyperspace import geometry as G
@@ -147,12 +147,6 @@ def test_the_pan_range_keeps_a_routed_pan_as_far_as_it_was():
 
 
 # --------------------------------------------------------------- the renderer
-
-@pytest.fixture(scope="module")
-def ctx():
-    c = moderngl.create_context(standalone=True)
-    yield c
-    c.release()
 
 
 def _view(**kw) -> ViewState:
@@ -351,16 +345,16 @@ def test_pan_world_leaves_a_marked_or_panless_document_alone():
     assert old["values"]["camera.pan.x"] == 324.0      # a copy: the file's dict is untouched
 
 
-def test_every_factory_pan_lands_inside_the_new_range():
-    """The factory files keep their px (decision 23: byte-identical); each
+def test_every_corpus_pan_lands_inside_the_new_range():
+    """The corpus files keep their px as the build shipped them; each
     converts to a pan well inside ±PAN_RANGE (party-mandala's 190 px is
     0.59 of a radius)."""
-    for path in sorted((preset.FACTORY_DIR).glob("*.json")):
+    for path in sorted((CORPUS / "presets").glob("*.json")):
         doc, _ = preset.pan_world(json.loads(path.read_text()))
         for pid in preset.PAN_IDS:
             v = doc.get("values", {}).get(pid, 0.0)
             assert abs(v) < PAN_RANGE / 4, (path.name, pid, v)
-    mandala, _ = preset.pan_world(json.loads((preset.FACTORY_DIR / "party-mandala.json")
+    mandala, _ = preset.pan_world(json.loads((CORPUS / "presets" / "party-mandala.json")
                                              .read_text()))
     assert mandala["values"]["camera.pan.x"] == pytest.approx(190.0 / 324.0)
 
@@ -526,17 +520,6 @@ def test_a_camera_module_saved_now_says_its_pan_is_in_world_units(tmp_path):
     assert rig.view.pan[0] == pytest.approx(3.0) and not rig.lib.is_dirty("camera")
     # another group's module carries no marker
     assert preset.UNITS_KEY not in rig.lib.document("view", "V")
-
-
-def test_a_presets_json_theme_is_still_converted():
-    """`library.legacy_slot` (the old presets.json themes) writes no
-    marker, so its px pan is converted when the slot's preset loads."""
-    from hyperspace.library import legacy_slot
-
-    slot = legacy_slot({"name": "OLD", "view": {"pan": [190.0, -81.0], "zoom": 0.7}})
-    assert preset.UNITS_KEY not in slot and slot["values"]["camera.pan.x"] == 190.0
-    doc, changed = preset.pan_world(slot)
-    assert changed and doc["values"]["camera.pan.x"] == pytest.approx(190.0 / 324.0)
 
 
 def test_a_hand_edited_units_that_is_no_object_is_no_marker(tmp_path):

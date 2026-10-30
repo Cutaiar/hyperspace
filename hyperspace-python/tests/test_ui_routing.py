@@ -14,6 +14,7 @@ import json
 from dataclasses import replace
 
 import pytest
+from fonts import as_drawn
 from imgui_bundle import imgui
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
@@ -301,6 +302,108 @@ def test_the_replace_prompt_swaps_the_owner_or_leaves_the_table(rig, tmp_path, m
     panel.open = True
 
 
+def test_the_conflict_sheet_asks_per_row_preselected_to_the_patch(rig):
+    """Plan 40 T3 (D3, D9): a spawn whose K1 collides (acid-wash into
+    TRIP, where K1 is view.bright) puts up the conflict sheet in the
+    same modal, ahead of any Replace / Keep question: its title, one row
+    per conflict in words, every row on the patch; **keep all existing**
+    flips them, **take all** back; the wants the rig lacks beneath. While it
+    is up the hands learn nothing (the armed learn waits). **keep all
+    existing** + Spawn lands the patch with K1 left on brightness — the
+    patch's row not in the table, kept by the group and said; Cancel on a
+    second spawn lands nothing, not even an undo step."""
+    from test_graph_groups import state, watch, with_patch
+
+    from hyperspace import graphview, undo
+    from hyperspace.learn import Learn
+
+    panel, reg = rig.panel, rig.reg
+    table = rig.router.table
+    with_patch(rig)
+    rig.lib.load("presets", "TRIP")
+    frame(panel, "graph")
+    lrn = panel.learn = Learn(reg, table)
+    lrn.arm("view.speed")
+    assert ui_graph.spawn(panel, "acid-wash", (0.0, 0.0)) is None
+    landing, choices = ui_routing.sheet(panel)
+    assert choices == {0: "patch"}                                     # D9: the patch's
+    assert ui_routing.conflict_words(landing.conflicts[0]) == ("K1", "fx.acid.speed",
+                                                               "view.bright")
+    assert ui_routing.sheet_title(panel, landing) == "spawn acid wash into TRIP"   # (its name)
+    assert ui_routing.sheet_wants(panel, landing) == [
+        "apc40 (not in this rig): K1", "leap (not in this rig): right hand y"]
+    frame(panel)
+    st = ui_routing._state(panel)
+    assert st["modal"] and st["sheet"]
+    # the hands learn nothing while it is up: the learn stays armed, no row lands
+    assert lrn.held and not lrn.accepts("hand:right.x")
+    lrn.learn_source("hand:right.x")
+    assert lrn.learning == "view.speed" and table.owner("view.speed") is None
+    ui_routing.keep_all(panel)
+    assert ui_routing.sheet(panel)[1] == {0: "preset"}
+    ui_routing.keep_all(panel, "patch")                                # take all
+    assert ui_routing.sheet(panel)[1] == {0: "patch"}
+    ui_routing.choose(panel, 0, "preset")
+    assert ui_routing.sheet(panel)[1] == {0: "preset"}
+    u = watch(rig)
+    try:
+        n = len(u.stack)
+        assert ui_routing.settle_sheet(panel, True) is None             # Spawn
+        assert ui_routing.sheet(panel) is None and len(u.stack) == n + 1
+        assert not lrn.held and lrn.accepts("hand:right.x")
+        assert [b.target for b in table.desk() if b.source == "cc:0:48"] == ["view.bright"]
+        assert not [b for b in table.bindings if b.target == "fx.acid.speed" and b.is_midi]
+        (g,) = rig.lib.presets.groups
+        (kept,) = g["kept_by_host"]
+        assert graphview.kept_words(kept) == "K1 kept by the preset"
+        assert "1 row kept by the preset" in ui_graph._state(panel)["said"]
+        frame(panel)
+        assert not ui_routing._state(panel)["modal"]
+        # a second spawn, cancelled: nothing lands, no step
+        before = state(rig)
+        assert ui_graph.spawn(panel, "acid-wash", (0.0, 300.0)) is None
+        frame(panel)
+        assert ui_routing._state(panel)["sheet"]
+        assert ui_routing.settle_sheet(panel, False) is None
+        assert state(rig) == before and len(u.stack) == n + 1
+        assert ui_graph._state(panel)["said"] == "spawn of acid wash cancelled: nothing landed"
+    finally:
+        undo.install(None)
+
+
+def test_the_sheet_is_drawn_ahead_of_a_replace_question_up_with_it(rig, monkeypatch):
+    """Plan 40 T3 (D3): a Replace / Keep question and a spawn's conflict
+    sheet up together — the modal draws the sheet (its **Spawn**, not
+    **Replace**); once the sheet is answered the question comes next, in
+    the same modal, still unanswered."""
+    from test_graph_groups import with_patch
+
+    from hyperspace import ui
+    panel, table = rig.panel, rig.router.table
+    with_patch(rig)
+    rig.lib.load("presets", "TRIP")
+    frame(panel, "graph")
+    old = Binding("lfo:0", "view.speed", "push", 0.5)
+    new = Binding("lfo:1", "view.speed", "push", 0.5)
+    ui_routing.ask(panel, old, new, lambda: None)
+    assert ui_graph.spawn(panel, "acid-wash", (0.0, 0.0)) is None
+    drawn, real_chip = [], ui.chip
+    monkeypatch.setattr(ui_routing.ui, "chip", lambda label, *a, **k: (
+        drawn.append(label), real_chip(label, *a, **k))[1])
+    frame(panel)
+    st = ui_routing._state(panel)
+    assert st["modal"] and st["sheet"]
+    assert "Spawn##sheet" in drawn and "Replace" not in drawn
+    assert ui_routing.prompt(panel) is not None                        # still asking
+    ui_routing.settle_sheet(panel, False)
+    drawn.clear()
+    frame(panel)
+    assert st["modal"] and not st["sheet"]
+    assert "Replace" in drawn and "Spawn##sheet" not in drawn
+    ui_routing.answer(panel, False)
+    assert table.owner("view.speed") is None
+
+
 def test_the_scale_choices_leave_out_the_macros_and_a_macro_shows_its_owner(
         rig, tmp_path, monkeypatch):
     """Plan 13 §2.4: a macro scales a route as its depth subscriber, so the
@@ -449,7 +552,7 @@ def test_the_routing_page_is_one_page_over_the_loaded_preset(rig, tmp_path, monk
     assert "bindings" not in lib.kinds                         # no routing-preset strip
     # the routes: a pointer to GRAPH (plan 28 N7), where each row is drawn —
     # with the macro's chip
-    assert ui_routing.POINTER in texts and "× macro.1" not in texts
+    assert as_drawn(texts, ui_routing.POINTER) and "× macro.1" not in texts
     rows(panel)
     assert "view.bright" in previews and "× macro.1" in texts
     # the desk: its rows by glyph (plan 14 WP7: D1 is device knob 1, G5·9
@@ -516,7 +619,7 @@ def test_the_old_routing_presets_step_load_save_as_presets(rig, tmp_path):
     panel, lib = rig.panel, rig.panel.library
     router = rig.router                             # the one the rig's Presets loads into
     frame(panel, "routing")
-    assert lib.kinds == ("presets",)
+    assert lib.kinds == ("patches", "presets")     # plan 40 T1: patches are spawned
     listing = lib.list("presets")
     assert {"legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play"} <= set(listing)
     assert [k for k in lib.load("presets", "lfo-breathe")
@@ -824,7 +927,7 @@ def test_a_filtered_page_draws_only_matching_lines_and_keeps_its_ids(rig, monkey
     assert texts.count(ui_routing.NO_MATCH) == 1
     assert "invariant · both layers" not in texts
     assert f"3 of {total} rows" in texts
-    assert ui_routing.POINTER not in texts                   # the unfiltered line is gone
+    assert not as_drawn(texts, ui_routing.POINTER)           # the unfiltered line is gone
     dup = {i for i in ids if ids.count(i) > 1}
     assert len(ids) > 12 and not dup, f"conflicting ids {sorted(dup)}"
     # × on a filtered desk line (D4): that row goes, D3 stays
@@ -860,7 +963,7 @@ def test_a_filtered_page_draws_only_matching_lines_and_keeps_its_ids(rig, monkey
         lst.clear()
     frame(panel)
     assert drawn == [] and len(knobs) == 8 and len(table.routes()) == len(routes)
-    assert ui_routing.NO_MATCH not in texts and ui_routing.POINTER in texts
+    assert ui_routing.NO_MATCH not in texts and as_drawn(texts, ui_routing.POINTER)
 
 
 def test_the_filter_is_ui_state(rig, tmp_path):
@@ -1011,7 +1114,7 @@ def test_a_line_in_use_is_not_filtered_away_under_the_hand(rig, monkeypatch):
     frame(panel)
     assert len(knobs) == 8 and "×##find" not in chips and "+ route" not in chips  # (N7)
     assert not any(t.endswith(" rows") for t in texts)
-    assert ui_routing.POINTER in texts                  # N7: the unfiltered line
+    assert as_drawn(texts, ui_routing.POINTER)          # N7: the unfiltered line
 
 
 # ------------------------------------------- plan 17 WP4: the picked control's line
@@ -1214,40 +1317,43 @@ def test_a_desk_click_clears_a_filter_that_has_the_keyboard(rig, monkeypatch):
 def test_the_head_has_the_same_dot_and_label(rig, tmp_path):
     """Plan 19 WP5: ROUTING's head is the preset strip's save over the
     same preset — the same 12 px disc beside the name, the save chip lit
-    while dirty and saying "save copy" on a factory preset, "save" on
-    yours. Clicking it is `Library.overwrite`, as before."""
+    while dirty and reading "save" (one tier: every preset is yours).
+    Clicking it is `Library.overwrite`, as before."""
     from test_ui_shell import _click
 
     from hyperspace import ui
 
     panel, lib, reg = rig.panel, rig.lib, rig.reg
-    lib.load("presets", "TRIP")
+    lib.load("presets", "BIG BLUE WAVE")
+    path = tmp_path / "presets" / "big-blue-wave.json"
+    was = path.read_bytes()
     frame(panel, "routing")
     frame(panel)
     st = ui_presets._state(panel)
-    assert "head.dot" not in st["rects"] and st["save"]["head"] == ("save copy", False)
+    assert "head.dot" not in st["rects"] and st["save"]["head"] == ("save", False)
     reg["view.bright"].set(reg["view.bright"].value * 0.5 + 0.1)
     frame(panel)
     frame(panel)
     x0, y0, x1, y1 = st["rects"]["head.dot"]
     assert x1 - x0 == y1 - y0 == 2 * ui.DOT_R
-    assert st["save"]["head"] == ("save copy", True)
-    assert not (tmp_path / "presets" / "trip.json").exists()
+    assert st["save"]["head"] == ("save", True)
     _click(panel, st["rects"]["head.save"])
-    assert (tmp_path / "presets" / "trip.json").is_file() and not lib.is_dirty("presets")
+    assert path.read_bytes() != was and not lib.is_dirty("presets")
+    assert [t.name for t in lib.trash()] == ["BIG BLUE WAVE"]  # the old text, kept
     frame(panel)
     assert "head.dot" not in st["rects"] and st["save"]["head"] == ("save", False)
 
 
 def test_a_routes_own_feel_draws_its_line_with_its_own_ids(rig, tmp_path, monkeypatch):
     """A row with a feel of its own (motion.py) draws a third line — attack
-    and release, or Hz and damping — and every widget keeps its own id."""
+    and release, or a spring's preset, duration and bounce — then a fourth,
+    the feel live, and every widget keeps its own id."""
     from hyperspace.motion import Motion
     panel = rig.panel
     router = _with_router(rig, tmp_path)
     routes = router.table.routes()
     routes[0].motion = Motion("follow", 0.02, 0.4)
-    routes[1].motion = Motion("spring", hz=2.0, damp=0.5)
+    routes[1].motion = Motion("spring", dur=0.5, bounce=0.5)
     routes[2].motion = Motion("off")
     seen: list[str] = []
     ids: list[int] = []
@@ -1262,8 +1368,8 @@ def test_a_routes_own_feel_draws_its_line_with_its_own_ids(rig, tmp_path, monkey
     seen.clear()
     ids.clear()
     rows(panel)
-    assert {"##atk", "##rel", "##hz", "##damp"} <= set(seen)
-    assert seen.count("##atk") == 1 and seen.count("##hz") == 1   # only the rows with their own
+    assert {"##atk", "##rel", "##dur", "##bounce"} <= set(seen)
+    assert seen.count("##atk") == 1 and seen.count("##dur") == 1  # only the rows with their own
     assert len(ids) == len(set(ids))
 
 
@@ -1283,7 +1389,7 @@ def test_the_system_page_shows_the_sticks_feel(rig, tmp_path, monkeypatch):
     panel.reg["desk.pad.feel"].set(2)                                      # spring
     drawn.clear()
     frame(panel)
-    assert "desk.pad.hz" in drawn and "desk.pad.damp" in drawn
+    assert "desk.pad.duration" in drawn and "desk.pad.bounce" in drawn
     assert "desk.pad.release" not in drawn
 
 

@@ -410,6 +410,24 @@ class Undo:
         self._changed_at = self._now
         self._action_frame = self._frame
 
+    def checkpoint(self) -> State:
+        """The state as it is now, with what is loaded: a point a later
+        `revert` goes back to (plan 38: the hold's). An edit this frame's
+        tick has not seen closes its step first, so it is in the point."""
+        self._flush()
+        return self._take(marks=True)
+
+    def revert(self, state: State, label: str) -> None:
+        """Go back to `state` (a `checkpoint`'s, or one cut down from it)
+        as one replacing action: its step pushed first and carrying what is
+        loaded, so undoing it is undoing a load — every edit since comes
+        back. Only what differs is put back (`_restore`)."""
+        self.push(label, load=True)
+        left = self._restore(state, load=state.marks is not None)
+        self._say(label + (f" ({LEFT})" if left else ""))
+        self._fp = self._fingerprint()
+        self._absorb = ABSORB_FRAMES
+
     def undo(self) -> bool:
         """Take back the newest step that has something to put back.
         False: nothing to undo."""

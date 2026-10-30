@@ -53,6 +53,8 @@ explained in the [glossary](#glossary) at the end.
    A graph with a delay, resize, echo or dream saves `/5` where its frame
    round-trips, which a plan 33 build reads with a note, so both Macs must
    run that build before L167.
+   The hold entries (L179–L181, A48) are plan 38's: use branch
+   `plan-38-hold`, then `plan-37-38-39-integration`, until it is merged.
    Two windows open: the picture (the *render window*) and the *control
    window*. **Esc** quits.
 3. **Use the copy instead of the real home folder:** in the terminal,
@@ -155,6 +157,25 @@ changes brightness or volume instead).
     dream worker, L169 with the TV for two windows), then L173 with both
     Macs on `plan-36-build` last of all, since a `/7` file is refused by
     an older build (it supersedes L168's `/6`).
+21. Plan 37, nodes as pictures and the faces, on `plan-37-pictures`:
+    L174, L176 and L178 on the laptop, and L175 on the show Mac. L177's
+    first half, naming the face patterns to keep, is the owner's and can
+    happen any time. Its second half waits for the build that drops the
+    others.
+22. Plan 38, hold the projector: L179 and L180 on the laptop with a
+    second screen as the projector, L181 on the show Mac with music,
+    and A48 with the APC40 (Part 2).
+23. Plan 39, vision, after `uv sync` on `plan-39-vision`: L185 and L186
+    on the laptop first (a still and the camera, no person needed), then
+    L182 with the camera, L183 with a dancer on the projector, L184 with
+    the camera on a tripod and the party light, L187 on the show Mac with
+    two cameras, and L188 on the projector.
+24. Plan 40, patches, on `plan-40-build`, on the copy with its `[library]
+    path` commented out: L189 (group), then L190 (save and spawn), L191
+    (splice, with the TV or projector as a second window) and L193 (the fx
+    module presets gone) on the laptop; A49 then A50 with the APC40 (Part
+    2); then L192 (the laptop config, no Leap: it uses A49's patch) and
+    L194 (twice) last.
 
 ## Running the automated tests (tiers)
 
@@ -169,7 +190,9 @@ tiers that `tests/conftest.py` marks by name:
 - `slow`: about 1 s or more each (torch dream, undo, plan 12 presets,
   whole-library sweeps).
 - `live`: Syphon, NDI and file loopbacks with timeouts; they share global
-  names, so they run on one worker and can fail under heavy load.
+  names, so they run on one worker and can fail under heavy load. Plan
+  39's two real-model tests are here too (Apple Vision and torchvision,
+  once each on a made-up frame: `uv run pytest -q --all tests/test_segment.py`).
 
 `uv run pytest --all` runs every tier (about 50 s). Pick a tier with
 `-m golden`, `-m slow` or `-m live` (add `--all` or name the file), and
@@ -183,8 +206,8 @@ second or more goes in the tables at the top of `tests/conftest.py`.
 |---|---|---|---|---|
 | L1 | First launch updates the control-mapping file, with a backup | 1 | laptop, the copy | 57, 84, 81 |
 | L2 | Presets saved before load without a fuss | 1 | laptop, the copy | 83, 57 |
-| L3 | The page holds twenty-four presets | 1 | laptop, the copy | 81 |
-| L4 | The app starts, runs and quits; the keys | 1 | laptop | 1 |
+| L3 | The page holds twenty-four presets (superseded 2026-10-28) | 1 | laptop, the copy | 81 |
+| L4 | The app starts, runs and quits; the keys (superseded 2026-10-28) | 1 | laptop | 1 |
 | L5 | A config mistake is shown, not a crash | 1 | laptop | 2 |
 | L6 | Sound from the microphone | 1 | laptop, music or clapping | 3 |
 | L7 | Every page fits and reads from a distance | 1 | laptop | 4 |
@@ -210,19 +233,19 @@ second or more goes in the tables at the top of `tests/conftest.py`.
 | L27 | Instances down to zero | 1 | laptop | 62 |
 | L28 | Instance layouts | 1 | laptop | 97 |
 | L29 | Loading a preset resets everything it should | 1 | laptop | 38 |
-| L30 | What the show starts on | 1 | laptop | 40 |
+| L30 | What the show starts on (superseded 2026-10-28) | 1 | laptop | 40 |
 | L31 | Undo a slider drag | 1 | laptop | 48 |
 | L32 | Undo a preset load | 1 | laptop | 50 |
-| L33 | The Home key | 1 | laptop | 54 |
+| L33 | The Home key (superseded 2026-10-28) | 1 | laptop | 54 |
 | L34 | The key legend is off at launch | 1 | laptop | 58 |
 | L35 | One Unbind | 1 | laptop | 64 |
 | L36 | The right-click menu from labels and meters | 1 | laptop | 68 |
 | L37 | The big desk drawing | 1 | laptop | 69 |
 | L38 | The ROUTING filter | 1 | laptop | 71 |
-| L39 | Hide presets from the list | 1 | laptop, the copy | 86 |
-| L40 | Rename a preset | 1 | laptop, the copy | 87 |
+| L39 | Hide presets from the list (superseded 2026-10-28) | 1 | laptop, the copy | 86 |
+| L40 | Rename a preset (superseded 2026-10-28) | 1 | laptop, the copy | 87 |
 | L41 | The trash | 1 | laptop, the copy | 53, 88 |
-| L42 | The unsaved dot from a step back | 1 | laptop, the copy | 89 |
+| L42 | The unsaved dot from a step back (superseded 2026-10-28) | 1 | laptop, the copy | 89 |
 | L43 | The shared library folder | 1 | laptop, a second Mac, a shared cloud folder | 139–143 |
 | L44 | One output is as it was | 1 | laptop (recorded hands) | 99 |
 | L45 | The HANDS page explains a bad setting | 1 | laptop | 100 |
@@ -246,7 +269,7 @@ second or more goes in the tables at the top of `tests/conftest.py`.
 | L63 | Colour turning, faces apart, on the 120-cell | 1 | laptop | 124 |
 | L64 | MARBLE's frame rate | 1 | laptop | 130 |
 | L65 | KALEIDO and TRUCHET as art | 1 | laptop, music | 131 |
-| L66 | The factory presets with music | 1 | laptop, music | 132 |
+| L66 | The factory presets with music (superseded 2026-10-28) | 1 | laptop, music | 132 |
 | L67 | `legacy6` in silence | 1 | laptop, music | 137 |
 | L68 | WARP at full on HEX | 1 | laptop | 138 |
 | L69 | The palette fold | 1 | laptop (APC40 for the fader) | 166 |
@@ -354,6 +377,33 @@ second or more goes in the tables at the top of `tests/conftest.py`.
 | L171 | Tracers without the dream; the dream alone; `party-wake` live (plan 36) | 1 | laptop, the copy, the dream worker | 364-366 |
 | L172 | Preset only; the nine re-recorded goldens (plan 36) | 1 | laptop, the gate Mac | 367, 369 |
 | L173 | The libraries migrated to `/7`; both Macs on this build (plan 36) | 1 | two Macs, the shared library | 368 |
+| L174 | Every node shows its picture; the tint switch (plan 37) | 1 | laptop, the copy | 370 |
+| L175 | What the pictures cost; a hidden node stops being made (plan 37) | 1 | the show Mac, the copy | 371, 374 |
+| L176 | Expand and collapse; hover a picture (plan 37) | 1 | laptop, the copy | 372, 373 |
+| L177 | Pick the face patterns to keep; the FACES page after (plan 37) | 1 | laptop, then the show Mac, music | 375 |
+| L178 | `acid-scene` draws forward (plan 37) | 1 | laptop, a scratch home | 376 |
+| L179 | Hold, then build a new look behind GRAPH (plan 38) | 1 | laptop, a second screen, the copy, music | 377, 378 |
+| L180 | Take and drop (plan 38) | 1 | laptop, a second screen, the copy | 379, 380 |
+| L181 | What a hold costs; a band on a held setting (plan 38) | 1 | the show Mac, music, a Syphon or NDI source | 382, 383 |
+| L182 | A webcam cut by person; the cut-out starter; the quality levels (plan 39) | 1 | show Mac, a camera, the copy | 384, 385 |
+| L183 | The edge and the flicker, with a dancer (plan 39) | 1 | the projector, a camera, a dancer | 386 |
+| L184 | Motion on a still camera, and the party light (plan 39) | 1 | a camera on a tripod, a party light | 387 |
+| L185 | A still as a mask; a mask on a window (plan 39) | 1 | laptop, a still, the copy | 388, 389 |
+| L186 | Edges on the shape, on the camera, into a cut (plan 39) | 1 | laptop or the projector, a camera | 390 |
+| L187 | Two cameras, two segments; unplug a camera (plan 39) | 1 | show Mac, two cameras | 391, 392 |
+| L188 | A half-transparent face over a bright picture, cut-through on and off (plan 39) | 1 | the projector, a still, the gate Mac | 393 |
+| L189 | Group some nodes, open them, ungroup them (plan 40) | 1 | laptop, the copy | 394 |
+| L190 | Save a group as a patch; spawn it into a new preset; wire as saved (plan 40) | 1 | laptop, the copy | 395 |
+| L191 | Drop a patch on a cable (plan 40) | 1 | laptop, a second screen, the copy | 396 |
+| L192 | A preset that wants a Leap on a rig without one (plan 40) | 1 | laptop (no Leap listed), the copy | 399 |
+| L193 | The fx module presets are gone; the FX page is not (plan 40) | 1 | laptop | 400 |
+| L194 | The same patch twice in one preset (plan 40) | 1 | laptop, the copy | 401 |
+| L195 | A macro wired from the param menu moves the param (row 537) | 1 | laptop | 402 |
+| L196 | The PRESETS page is the library (plan 41) | 1 | laptop, the copy | 403 |
+| L197 | The shape node's details show its wireframe | 1 | laptop | — |
+| L198 | Drop a node on a cable: the drag shows what will happen, ⌘ for a wired effect | 1 | laptop | 404 |
+| L199 | The Flow mark and the Flow capsules (row 543) | 1 | laptop | 405 |
+| L200 | A flat shape facing you is at full brightness (row 542) | 1 | laptop | 406 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -365,7 +415,7 @@ second or more goes in the tables at the top of `tests/conftest.py`.
 | A9 | One knob, two directions | 2a | APC40 | 39 |
 | A10 | Undo a knob turn, and a load from the desk | 2a | APC40 | 49, 50 |
 | A11 | Undo a Learn and an Unbind | 2a | APC40 | 51 |
-| A12 | OVERDUB is Home | 2a | APC40 | 54 |
+| A12 | OVERDUB is Home (superseded 2026-10-28) | 2a | APC40 | 54 |
 | A13 | The crossfader is the master dimmer | 2a | APC40 | 55 |
 | A14 | Hold an empty pad to save a new preset into it | 2a | APC40, the copy | 56, 83 |
 | A15 | Pad rows 4 and 5 are presets | 2a | APC40, the copy | 82 |
@@ -401,6 +451,9 @@ second or more goes in the tables at the top of `tests/conftest.py`.
 | A45 | Switch the desk off and on with the pattern up | 2a | APC40, `plan-31-a1` | 294 |
 | A46 | SEND A after the desk fell back to Generic mode | 2a | APC40, `plan-31-a1` | 295 |
 | A47 | A switch over three channels on a knob, into the faces | 2a | APC40, the copy | 319 |
+| A48 | Hold and take on two desk buttons (plan 38) | 2a | APC40, the copy | 381 |
+| A49 | A patch brings its knob, and a sheet asks when the knob is taken (plan 40) | 2a | APC40, the copy | 397 |
+| A50 | The desk unplugged, said; plugged in, said (plan 40) | 2a | APC40, the copy | 398 |
 | B1 | Calibrate, and the box it draws | 2b | hand camera | 72, 15 |
 | B2 | The probe sees both hands | 2b | hand camera | 13 |
 | B3 | The HANDS page and which way is up | 2b | hand camera | 14, 4 |
@@ -596,6 +649,8 @@ old file to the trash.
 
 #### L3. The page holds twenty-four presets
 
+**Superseded (2026-10-28):** the PRESETS page has no bank pills or `more`; the pads are set on the desk only (check 403, L196).
+
 **Needs:** the copy.
 
 **Do:**
@@ -623,6 +678,8 @@ as `.bak-v2-bank8`.
 ## Starting, keys and settings
 
 #### L4. The app starts, runs and quits; the keys
+
+**Superseded (2026-10-28):** no party show ships or opens: a fresh library opens an unsaved show called `untitled` on a blank preset, and F1–F8 load the pads of your own library. The R, T, ⌘R and `/` steps still hold (check 403, L196).
 
 **Needs:** laptop.
 
@@ -1311,6 +1368,8 @@ look-back on (24 echoes, fade 0.60 s) with the dream, no extra step.
 
 #### L30. What the show starts on
 
+**Superseded (2026-10-28):** the PRESETS page has no "starts on" picker, no show "factory" tag and no shipped party or house show; the startup preset is read from the file and Home still loads it, but nothing on the panel sets it (L196).
+
 **Needs:** laptop.
 
 **Do:**
@@ -1377,6 +1436,8 @@ presses for one load; routes not back.
 *(check 50)*
 
 #### L33. The Home key (laptop part)
+
+**Superseded (2026-10-28):** the "set starts on to — (none)" steps are gone: nothing on the panel sets "starts on" any more, and no show ships with one. Home loads the show's startup preset when its file names one (L196).
 
 **Needs:** laptop. The APC40 part is A12.
 
@@ -1554,6 +1615,8 @@ Run L39–L42 in a terminal where `HYPERSPACE_HOME` points at the copy.
 
 #### L39. Hide presets from the list
 
+**Superseded (2026-10-28):** there is no hidden list, no `hidden.json` and no "show hidden": × puts any preset in the trash (L196).
+
 **Needs:** the copy.
 
 **Do:** PRESETS page → click the preset name → the list. Click × on
@@ -1578,6 +1641,8 @@ no preset '<name>'".
 *(check 86)*
 
 #### L40. Rename a preset
+
+**Superseded (2026-10-28):** there are no factory presets: rename works on every preset, and the list has no dim rows (L196).
 
 **Needs:** the copy; one of your presets on a slot in two of your shows.
 
@@ -1632,6 +1697,8 @@ click emptying the trash.
 *(check 53, 88)*
 
 #### L42. The unsaved dot from a step back
+
+**Superseded (2026-10-28):** there is no factory preset to load and no dim row or "save copy": use one of your own presets; the dot and the save chip are as described (L196).
 
 **Needs:** the copy.
 
@@ -2358,6 +2425,8 @@ always six-sided, whatever shape a face is.
 *(check 131)*
 
 #### L66. The factory presets with music
+
+**Superseded (2026-10-28):** no preset ships: the house and party presets live in `tests/corpus/` only. Run this with your own presets with faces on.
 
 **Needs:** laptop, music with quiet and loud passages.
 
@@ -3861,6 +3930,8 @@ picture is gone after the reload; the second Mac opens it.
 
 #### L153. The headline graph; reordering by dragging; the FX page on a branch
 
+**Superseded in part (2026-10-29):** dragging an effect that is already in the run onto another cable moves it only with ⌘ held (check 404, L198).
+
 **Needs:** laptop; a clip and a camera; the copy; branch
 `plan-33-free-graph`.
 
@@ -3888,6 +3959,8 @@ node duplicates, or the two pages disagree about which effect is open.
 *(checks 318, 320, 321)*
 
 #### L154. A drop beside a cable; a shader back into the faces on the layout
+
+**Superseded in part (2026-10-29):** a cable lights while a node is dragged over it and the drop lands only on a lit one; an effect already wired moves to another cable only with ⌘ held (check 404, L198).
 
 **Needs:** laptop; the copy; L153's graph.
 
@@ -4312,7 +4385,743 @@ changes when saved untouched.
 
 *(check 368)*
 
+## Plan 37: nodes as pictures, and the faces (L174-L178)
+
+On GRAPH, a node that makes a picture is now drawn as that picture: a
+small, live image under its title. The app only makes these images for
+the nodes you can see, so panning or hiding nodes makes them cheaper.
+
+Plan 37's tests: the fast tier is 4,035 passed (2 skipped) and the
+goldens 128 passed, with none of the 757 pictures moved.
+`tests/test_thumbnails.py`, `tests/test_graph_hover.py`,
+`tests/test_graph_areas.py` (the backward-wire sweep) and
+`tests/test_faces_map.py` are its own.
+
+The face patterns are not cut yet. The owner picks which stay (L177),
+and a later build drops the rest. The checks are 370–376 (group AH);
+register rows 417–429 and 460.
+
+#### L174. Every node shows its picture; the tint switch
+
+**Needs:** laptop; the copy.
+
+**Do:**
+1. Load `party-trip` and open GRAPH.
+2. Look at each node: the clip or camera, the pattern, the scene, the
+   effects, the composites, the look-back and the outputs.
+3. On FX, move an effect's mix up and down.
+4. Turn on **pictures · tint cables** at the right end of the GRAPH head
+   and wait a second or two. Then turn it off.
+
+**Right if:**
+- Every one of those nodes shows a small moving picture, and an effect's
+  picture changes as you move its mix.
+- The shape node shows the scene, faintly. Output 1 shows the window, and
+  output 2 shows its window without the hands.
+- With the switch on, the red cables lean slightly orange out of
+  yellow-green pictures and slightly pink out of blue-violet ones. They
+  stay plain red out of red, cyan or grey pictures, and every one still
+  reads as red.
+- With the switch off, every picture cable is plain red again.
+
+**Wrong if:** a black box on a node that is clearly drawing, an upside-down
+or frozen picture, or a cable that looks amber (a trigger's colour) or
+purple (a mask's).
+
+*(check 370)*
+
+#### L175. What the pictures cost; a hidden node stops being made
+
+**Needs:** the show Mac; the copy.
+
+**Do:**
+1. With GRAPH closed, note the frame time on SYSTEM.
+2. Open GRAPH and pan until about twenty picture nodes are on screen.
+   Read SYSTEM again: the frame time and the line `thumbnails · N copied ·
+   K repainted · M kept`.
+3. Turn on the tint and read the frame time once more.
+4. Turn **preset only** on (or pan nodes off screen) and read the line
+   again after a second.
+5. On a switch node, pick another input.
+
+**Right if:**
+- The show's frame rate holds with GRAPH open, with the tint on and off.
+- N is about the number of picture nodes you can see, and it falls when
+  nodes are hidden or off screen. M follows within a second.
+- The node behind the input you left greys at once, goes black a second
+  later, and comes back when you pick it again.
+
+**Wrong if:** dropped frames with GRAPH open; a count that does not fall
+when nodes go out of sight; a stutter only while the tint is on.
+
+*(checks 371, 374)*
+
+#### L176. Expand and collapse; hover a picture
+
+**Needs:** laptop; the copy.
+
+**Do:**
+1. On GRAPH, expand an effect node with **+**, then collapse it.
+2. Rest the pointer on the scene node's picture, then on an effect's, then
+   on output 2's.
+3. Rest it on a node's title.
+
+**Right if:**
+- Expanded, the picture sits above the ports. Collapsed, the node is just
+  its title and its picture. Nothing overlaps.
+- On a picture, a tooltip gives the node's lines, its size (such as
+  `1920×1080 picture`) and `gpu … ms`, the same time SYSTEM shows for
+  that node.
+- On the title, the hover is as it was before.
+
+**Wrong if:** the picture vanishes when expanded, nodes overlap, or no
+tooltip appears on the picture.
+
+*(checks 372, 373)*
+
+#### L177. Pick the face patterns to keep; the FACES page after
+
+**Needs:** laptop, then the show Mac; music (for METER, PULSE and SPEED).
+
+**Do:**
+1. Open `docs/plans/assets/37-faces/sheet.png` and `heart-sheet.png`.
+   Each shows all 17 patterns on a shape, as a show draws them.
+2. Play music on the FACES page to see the ones that move.
+3. Name the patterns to keep. Then read `migration-map.md`'s "nearest
+   kept" for the ones you drop, and say whether to renumber the patterns
+   or keep the retired numbers (register row 417).
+4. After the build that drops the others, open FACES, load each preset
+   the map says used a dropped pattern, and turn the desk's pattern knob
+   from end to end.
+
+**Right if:**
+- Before the build: you have a list, and the map's replacements read
+  right to you.
+- After it: FACES shows only the kept patterns, each preset that lost its
+  pattern shows the nearest one and says so in its card, and the knob
+  walks only the kept patterns.
+
+**Wrong if:** a dropped pattern still on FACES, a preset on the wrong
+pattern, or white faces.
+
+*(check 375)*
+
+#### L178. `acid-scene` draws forward
+
+**Needs:** laptop; a scratch home with no `[library]` and no devices.
+
+**Do:**
+1. Copy `tests/fixtures/presets/acid-scene.json` into the scratch home's
+   `presets/`, load it, and open GRAPH.
+2. Follow the effect acid.2 from the scene into the look-back and on to
+   the composite.
+3. Drag acid.2 elsewhere and reload.
+
+**Right if:** acid.2 sits in LOOK-BACK, left of the look-back, and every
+cable out of it runs left to right. After the drag it stays where you put
+it.
+
+**Wrong if:** a cable curls back into the look-back, or a node jumps back
+by itself.
+
+*(check 376)*
+
+## Plan 38: hold the projector (L179-L181)
+
+Plan 38 lets the person at the laptop build the next look without the
+room watching it being built. **hold** (the first chip on GRAPH's head)
+freezes what every screen shows: the projector keeps the look it had,
+still moving with the music, while everything you do afterwards appears
+only behind GRAPH's nodes (the *preview*). A small red-framed **PROJECTOR**
+picture in the canvas's corner shows what the room sees. **take** puts the
+preview on the projector; **drop** throws it away. Its tests are in
+`tests/test_hold.py` (32; the fast tier 3,990 passed, 2 skipped; no golden
+moved). The checks are 377-383 (group AI); the desk buttons are A48 in
+Part 2. These are best run with the projector or the TV as a second
+screen, so you can see the room's picture and the laptop's at once.
+
+#### L179. Hold, then build a new look behind GRAPH
+
+**Needs:** laptop; the TV or the projector as a second window; the copy;
+music.
+
+**Do:** load `party-trip`, open GRAPH, press **hold**, then press **new**
+on the PRESET strip. Wire shape → scene → All outputs, add an effect,
+delete one of the old look's effects, and cut the cable from All outputs
+into window 2. Open the node picker near the top-right corner. Save the
+preview as a new preset.
+
+**Right if:** the second screen keeps the `party-trip` look, effects and
+all, moving with the music, the whole time; behind GRAPH's nodes you see
+only your new look; the PROJECTOR inset shows the old look; the red
+`HELD 0:0x …` line counts your changes and says "the graph changed".
+(The inset covers the picker in its corner: that is known, say whether it
+is in the way.)
+
+**Wrong if:** the second screen changes at any step, goes black at
+**new**, or loses an effect when you delete one on GRAPH.
+
+*(checks 377, 378)*
+
+#### L180. Take and drop
+
+**Needs:** as L179, with the look-back on (trails).
+
+**Do:** after L179 press **take**. Then note the preset's name and dot,
+press **hold**, turn some knobs, rewire, load another preset and turn a
+knob on it, dim the room, and press **drop**; then ⌘Z once. Last, hold a
+look with an echo, load another preset, and press **take**.
+
+**Right if:** **take** cuts the second screen to the new look in one
+frame, with the trails carrying on. After **drop** the knobs, the canvas
+and the preset's name and dot are back to what the projector shows, the
+projector never changed, and the dim stayed; one ⌘Z brings the dropped
+work back. The echo keeps trailing through the load and starts empty at
+**take**. Say whether the cut feels harsh.
+
+**Wrong if:** a black frame or a flash at **take**, a knob that stays
+moved after **drop**, the dim undone by **drop**, ⌘Z needing two presses,
+or the echo cut at the load.
+
+*(checks 379, 380)*
+
+#### L181. What a hold costs; a band on a held setting
+
+**Needs:** the show Mac; music; a Syphon or NDI source if you have one.
+
+**Do:** route a band to the brightness (`view.bright`). Press **hold**,
+move the brightness on the panel, and turn the speed. Read the frame rate
+on the SYSTEM page with GRAPH open and with it closed. Wire a Syphon or
+NDI input into the preview.
+
+**Right if:** the projector keeps its brightness and still pumps with the
+band, the preview shows the new brightness pumping too; the speed turns
+both (that is by design) and is not counted on the red line. The frame
+rate drops a little with GRAPH open and not at all with it closed. The
+live input shows in the preview (a stutter is fine) and stays smooth on
+the projector.
+
+**Wrong if:** the projector stops pumping or jumps to the new
+brightness, the frame rate falls with GRAPH closed, or the projector's
+live input stutters.
+
+*(checks 382, 383)*
+
+## Plan 39: vision (L182-L188)
+
+Plan 39 lets a picture be cut into its foreground and its background:
+a **segment** node takes any picture (a camera above all) and puts out the
+person (`segment.fg`), the room without them (`segment.bg`) and the
+person's shape as a mask (`segment.mask`). A **matte** turns any picture
+into a mask (its bright parts, its coverage, or a colour), a **cut** cuts a
+picture by a mask, and **edges** is a new effect that draws a picture's
+outlines. A mask is a purple cable; wired straight into a window it shows
+white where it passes and black elsewhere. On `plan-39-vision`; run
+`uv sync` first (it adds Apple Vision's Python wrapper). The first time a
+camera opens, macOS asks whether the terminal may use it: allow it. A
+preset with a segment, matte or cut shows black on an older build, so
+**both Macs run this build before such a preset is shared**.
+
+Its tests: the fast tier is 4,105 passed (2 skipped) and the goldens 136
+passed over 789 pictures, 32 of them new and 8 re-recorded (the two
+backdrop fixtures, for the honest cut-through: L188). Its own files are
+`tests/test_fx_edges.py`, `tests/test_graph_masks.py`,
+`tests/test_graph_cut.py`, `tests/test_segment.py`,
+`tests/test_graph_segment.py` and `tests/test_plan39_graph.py`. Two tests
+run the real models once each on a made-up frame; they are in the `live`
+tier, so `uv run pytest -q` leaves them out: run them with
+`uv run pytest -q --all tests/test_segment.py` (Vision only on a Mac). The
+checks are 384-393 (group AJ). Find the new nodes on GRAPH's right-click
+menu: **media ▸** segment, **masks ▸** matte and cut, and starters ▸
+**cut-out**.
+
+#### L182. A webcam cut by person: you over the shape, then the room with your hole
+
+**Needs:** the show Mac (or the laptop) with a camera; the copy.
+
+**Do:** put the camera on channel a (MEDIA). On GRAPH right-click empty
+canvas → starters ▸ cut-out. Stand in front of the camera. Then rewire the
+segment's `bg` pin into the composite's `over` instead of `fg`; then wire
+the segment's `mask` pin to output 2. Step `segment.quality` through fast,
+balanced and accurate, watching the edge, the node's rate and the SYSTEM
+page's frame time. Turn `segment.on` off and on. Use the starter a second
+time, then undo. If plan 38's hold is on this build: HOLD, New, turn a knob
+on the segment, DROP.
+
+**Right if:** you stand over the turning shape with the room gone, the cut
+on you (not upside down, not beside you) a frame or two behind; the node
+says `256×144 · Vision fast · a frame or two late · ~30 fps`; `bg` shows
+the room with a person-shaped hole and the shape through it; output 2
+shows your white silhouette; each quality level gives a finer edge and the
+frame time does not move; off shows the picture unchanged; the second
+starter's nodes and cables are all drawn and one undo removes them; while
+held the projector does not change.
+
+**Wrong if:** the cut is upside down, squashed or beside you; the node
+waits for ever or shows an error (check `uv sync` and the camera
+permission); the frame time rises with the quality; a knob moves the
+projector while held.
+
+*(checks 384, 385)*
+
+#### L183. The edge and the flicker, with a dancer
+
+**Needs:** L182's set-up on the projector; a dancer.
+
+**Do:** with the dancer moving, raise `segment.feather` from 0 to 8, then
+`segment.smooth` from 0 to 0.6; then smooth to 0.95, have the dancer step
+out, and wait.
+
+**Right if:** the feather softens the edge and hides its steps; smooth
+calms the flicker along the edge, at the cost of a trail on fast moves; at
+0.95 the dancer still fades out completely after some seconds.
+
+**Wrong if:** the feather does nothing, or smooth leaves a frozen ghost
+where the dancer stood.
+
+*(check 386)*
+
+#### L184. Motion on a still camera, and the party light
+
+**Needs:** a camera on a tripod pointed at the room; L182's wiring; a party
+light.
+
+**Do:** set `segment.mode` to motion. Walk through the frame; stand still
+for three seconds (`segment.learn`); move again; raise `segment.sense` a
+little. Then sweep the party light across the room.
+
+**Right if:** the walker is cut out and the still room is gone; standing
+still you fade into the room over about three seconds and come back at
+once when you move; more sense ignores small flickers; the swept light
+counts as movement until it has been still for a moment (expected: motion
+cannot tell light from a person).
+
+**Wrong if:** everything stays cut out, or nothing ever is.
+
+*(check 387)*
+
+#### L185. A still as a mask; a mask on a window
+
+**Needs:** the laptop; the copy; a still with a clear bright shape in the
+media folder.
+
+**Do:** load the `cut-out` fixture through a scratch library
+(`tests/fixtures/presets/cut-out.json`), or build it: the still on channel
+a, from masks ▸ a matte and a cut, and a composite; wire `channel.a →
+matte.image`, `matte → cut.mask`, `scene → kaleido.image`, `kaleido →
+cut.image`, `cut → composite.over`, `scene → composite.under`, `composite →
+All outputs`. Turn `matte.key`, `matte.soft`, `matte.feather`; set
+`matte.from` to chroma and turn `matte.hue` onto a colour in the still.
+Turn `cut.amount` to 0.5; turn on `cut.invert`; unwire the mask. Then wire
+the matte straight into All outputs, look at its cable, and try to wire
+the still straight into the cut's mask.
+
+**Right if:** the kaleidoscope shows only where the still is bright (or
+the keyed colour), the right way up, with the shape showing through its
+empty parts; half amount brings it back at half strength elsewhere;
+invert swaps the two; no mask shows the kaleidoscope everywhere. The
+matte on a window is a soft white shape on black filling the window, its
+cable purple into the red pin; the picture into the mask is refused with
+"put a matte between".
+
+**Wrong if:** the cut area is upside down, mirrored or stretched against
+the still, black inside the bright shape, or a knob does nothing.
+
+*(checks 388, 389)*
+
+#### L186. Edges on the shape, on the camera, and into a cut
+
+**Needs:** the laptop or the projector; a camera for the second part.
+
+**Do:** wire `scene → edges → All outputs` and switch edges on. Sweep its
+threshold, raise its glow to 4, try its three colours. Then feed it the
+camera instead. Last, wire `edges → matte → cut.mask` with the pattern
+into the cut's picture.
+
+**Right if:** the shape's lines draw as thin white outlines on black; the
+threshold thins them to only the strong lines; the glow adds a halo; the
+direction colour turns as the shape turns; the room's door frames and
+people's outlines draw steadily from the camera; the pattern shows only
+along the lines.
+
+**Wrong if:** flat areas are not black, the frame's border draws as a
+line, or the camera's picture sparkles everywhere at the default
+threshold.
+
+*(check 390)*
+
+#### L187. Two cameras, two segments; unplug a camera
+
+**Needs:** the show Mac; two cameras.
+
+**Do:** camera 1 on channel a, camera 2 on channel b; add two segments
+(media ▸ twice), one fed by each, each `fg` over the shape on its own
+output; watch the SYSTEM page's frame time. Then unplug camera 1, plug it
+back, delete a segment, and quit.
+
+**Right if:** both cut their own person, each node shows its own rate,
+the frame time stays within the show's budget; unplugged, the node says
+`no frame on channel a: its picture through, whole` and nothing stalls;
+plugged back, the cut returns within a second or two; deleting a node and
+quitting do not hitch.
+
+**Wrong if:** one segment starves, the frame time spikes, the app stalls
+or the last cut stays frozen over a black channel.
+
+*(checks 391, 392)*
+
+#### L188. A half-transparent face over a bright picture, cut-through on and off
+
+**Needs:** the projector (an opaque window); a bright still; the gate Mac
+for the eight re-recorded goldens.
+
+**Do:** put the still on channel a; wire `channel.a → composite.under`,
+`scene → composite.over`, `composite → All outputs`; faces on, lines and
+points off, a pattern with see-through fills. Flip `view.cut_through` a
+few times. Again with the still on the backdrop and `scene →
+backdrop.scene` wired. Open the eight re-recorded goldens
+(`backdrop-still` and `media-chain-backdrop`, the `present` states).
+
+**Right if:** nothing changes when you flip it: the faces sit over the
+white at their own strength, their colour readable; the goldens show the
+same.
+
+**Wrong if:** the faces wash out toward white, or brighten with the switch
+on.
+
+*(check 393)*
+
+## Plan 40: patches (L189-L194)
+
+Plan 40 lets you keep a little machine you built on GRAPH and drop it into
+any other preset. Select some nodes and **Group** them: they fold into one
+box whose plugs are the cables that cross its edge (`+` opens it again).
+**Save as patch…** writes that group, with its knobs and hand moves, to its
+own file (`patches/` in the library). The **patches** chip on GRAPH's head,
+or right-click → **spawn ▸**, puts a copy into whatever preset is loaded,
+under new names so nothing clashes; its plugs start unplugged unless you
+drop it on a cable, which splices it in. If its knob is already used by the
+preset, a sheet asks which one wins. The app also says which devices a
+preset wants that are not plugged in, and says so again when one arrives.
+The old fx "module presets" are gone; the FX page stays.
+
+Run these on the copy (`export HYPERSPACE_HOME=~/Hyperspace-try`) with the
+`[library] path` line in the copy's `config.toml` commented out, so a
+saved patch stays on the copy and never reaches the shared Drive folder. A
+preset with a group is a new file version (`/8`) that an older build will
+not open, so **both Macs run this build before such a preset is shared**.
+Its tests: the fast tier is 4,320 passed (2 skipped), the goldens 144
+passed with none moved; its own files are `tests/test_patches.py`,
+`tests/test_graph_groups.py` and `tests/test_device_wants.py`. The checks
+are 394-401 (group AK); the two with the APC40 are A49 and A50 in Part 2.
+
+#### L189. Group some nodes, open them, ungroup them
+
+**Needs:** laptop; the copy.
+
+**Do:** load `party-noita`, open GRAPH, drag a box around `scene`, `warp`,
+`doublevision` and `fractals`, right-click one → **group 4 nodes**. Press
+the group's `+`, drag its title bar, drag one member far out of the tinted
+box, press ⌘Z; press `−`, drag the folded box, ⌘Z. Drop a cable on the
+folded box's plain `in` stub. Right-click it → **ungroup**. Save the preset
+as a copy and open the file in a text editor.
+
+**Right if:** `scene` is left out ("scene is the frame's; left out") and
+one box "group 1" appears with a picture in, a picture out and a row for
+each knob or hand that drives one of the three; nothing changes on the
+projector at any step; `+` shows the three where they were inside a tinted
+box; the members follow the title live; the dragged-out one leaves and one
+⌘Z brings it back; the stub drop goes red with "group 1 is folded: drop it
+on one of its pins, or open it (+)"; ungroup changes nothing but the box.
+The saved file says `hyperspace.preset/8` and has a `groups` line.
+
+**Wrong if:** `scene` joins the group, the picture changes, members jump
+only when you let go, one ⌘Z undoes two things, or an empty menu opens on
+the stub.
+
+*(check 394)*
+
+#### L190. Save a group as a patch; spawn it into a new preset; wire as saved
+
+**Needs:** laptop; the copy.
+
+**Do:** group `warp`, `doublevision` and `fractals` in `party-noita`,
+select the group and press **save as patch…** on its side panel; name it
+"noita core" and save. Look in `~/Hyperspace-try/patches/`. Press **new**,
+press **patches** on GRAPH's head and read the list, then right-click the
+canvas → **spawn ▸ noita core**. Drag `scene` onto the box's `in` plug and
+its `out` plug onto All outputs; then ⌘Z three times. Press **new** again,
+spawn it, and press **wire as saved**. Try to save another group under the
+same name. On PRESETS, open **patches**, rename it, then × it.
+
+**Right if:** only `noita-core.json` is new in the folder; the list shows
+its note and "in: picture · out: picture · wants: …"; the spawn is one
+folded box at the click with two plugs reading "open (was scene)" and
+"open (was tripcolour.image)", and nothing changes on screen until you
+plug it; plugged, the picture is noita's middle; three ⌘Z remove the two
+cables and then everything the spawn brought. **wire as saved** plugs the
+scene and says "no node tripcolour" for the other. The second save is
+refused ("a patch named noita core exists …"). A click on a name in the
+PRESETS fold does nothing; rename and × work.
+
+**Wrong if:** a preset or `bindings.json` changes when you spawn; the
+spawn takes more than one ⌘Z; wire as saved plugs into a socket that
+was already in use; the second save overwrites the first.
+
+*(check 395)*
+
+#### L191. Drop a patch on a cable
+
+**Needs:** laptop; the TV or the projector as a second window; the copy;
+the "noita core" patch from L190.
+
+**Do:** load `party-trip`, open **patches** on GRAPH's head and drag
+"noita core" out of the list over the canvas, then let go on the cable
+from `scene` into `plasma`. Watch the second screen. Press ⌘Z.
+
+**Right if:** while you drag, the cable under the pointer lights; on
+release the three effects sit between `scene` and `plasma` and the second
+screen shows them; one ⌘Z puts the cable back.
+
+**Wrong if:** the list closes as soon as you drag, no cable lights, or the
+splice takes two ⌘Z.
+
+*(check 396)*
+
+#### L192. A preset that wants a Leap on a rig without one
+
+**Needs:** laptop with no hands device in its `config.toml`; the copy; the
+acid wash patch (A49 copies it in).
+
+**Do:** load a preset with acid wash in it (A49), read the group's box and
+GRAPH's head. Press **new** and spawn acid wash; read the head's line.
+Then spawn it into `party-acid` and answer **keep all existing**, Spawn.
+
+**Right if:** the box says "waits for leap (not in this rig): right hand
+y" and the grey Leap placeholder is drawn as before; both spawns end their
+line "waits for leap (not in this rig): right hand y", and the second
+does not mention K1.
+
+**Wrong if:** a spawn says nothing about the Leap, or names K1 after you
+kept it for the preset.
+
+*(check 399)*
+
+#### L193. The fx module presets are gone; the FX page is not
+
+**Needs:** laptop.
+
+**Do:** PRESETS → **more · module presets**. Open the FX tab. Load every
+factory preset. Load one of your own presets from before this build that
+named an fx module, and save it.
+
+**Right if:** no fx entry under module presets; the FX page is as before
+except the small strip under its "effects" title (name, arrows, save,
+as…, reset) is gone; no preset puts a note in the footer; your old preset
+loads quietly and saves without the fx label.
+
+**Wrong if:** an fx strip or fx entry is still there, or a load says
+anything about fx.
+
+*(check 400)*
+
+#### L194. The same patch twice in one preset
+
+**Needs:** laptop; the copy; "noita core" from L190.
+
+**Do:** load `party-noita` and spawn "noita core" twice: Spawn at the
+first sheet, **keep all existing** at the second. Hover both groups. Save,
+load another preset, load it back. Then press **new** and spawn it twice.
+
+**Right if:** two boxes, "group 1" and "group 2"; their hovers say `warp →
+warp.2 …` and `warp → warp.3 …`; the second says "n rows kept by the
+preset", still after the reload. In the new preset the first copy keeps
+the plain names and the second gets `.2`.
+
+**Wrong if:** two copies share a name, or the kept rows are gone after
+the reload.
+
+*(check 401)*
+
+#### L195. A macro wired from the param menu moves the param
+
+**Needs:** laptop.
+
+**Do:** load any preset, open GRAPH and the shape's panel. Right-click the
+4D depth slider → **Route from ▸**, look under **LFO ▸**, **envelope ▸**
+and **macro ▸**, pick **macro 2**. Open the macro 2 node and turn its knob
+0 → 1 → 0. Right-click the slider → Route from ▸ macro ▸ again, then ⌘Z.
+Right-click the look-back's **gap** slider, then the BPM on the audio page.
+
+**Right if:** Route from holds just the three submenus; macro ▸ names the
+eight knobs (a labelled one by its label). The slider follows the knob —
+where it sat at 0, the top of its fader at 1 — and ROUTING's subscriber
+line reads `from <where it sat> to 1.00`. Macro 2 is checked the second
+time and a click does nothing; one ⌘Z takes the cable and the "macro 2"
+label back together. The gap slider (no lane may drive it) offers only
+macro ▸; the BPM has no Route from.
+
+**Wrong if:** a flat list of LFOs and envelopes; `from` equal to `to` on
+the new line; the knob moves nothing; macro ▸ on the BPM.
+
+*(check 402)*
+
+## One tier: the PRESETS page (L196; plan 41)
+
+#### L196. The PRESETS page is the library
+
+**Needs:** laptop, the copy (on the Drive library).
+
+**Do:**
+1. Open PRESETS. Read it top to bottom: the strip, the list, the patches
+   fold, the show line.
+2. Click a preset in the list. Click **rename** on another, type a name,
+   press Enter. Click **×** on a third.
+3. Open **trash (n) ▸** at the foot of the list and take the third back.
+4. Open the **patches** fold; rename one, × one.
+5. Open **open ▾** on the show line, then **as…**, name a show, and
+   **new**.
+6. On the desk press F1–F8 and a clip-row pad; hold an empty pad.
+
+**Right if:** (1) the strip reads ◀ name ● ▶ · new · save · as…; the list
+fills the page with every preset in the library and no others; the show
+line reads "show · the desk's pads, the session, the rig's wires", then
+the show's name, a red dot while unsaved, **open ▾**, **save**, **as…**,
+**new**. Nothing reads "starts on", "F1–F8", "show hidden", "factory" or
+"save copy", and no row is dim. (2) the click loads it and the strip
+names it; the rename sticks and the shows that name it follow; the × puts
+the file in the trash. (3) it is back in the list. (4) the same chips, no
+pick. (5) a new show is called `untitled` with an empty bank. (6) the
+pads still load and save; holding an empty pad saves into it.
+
+**Wrong if:** a pill row, a "starts on" picker, a preset drop-down or a
+module-preset fold on the page; a row that cannot be renamed or deleted;
+a pad that loads nothing.
+
+**Changes:** presets in your copy (renamed, trashed and restored), a new
+show file; remove them with × if you do not want them.
+
+*(check 403)*
+
+## The shape's wireframe (L197)
+
+#### L197. The shape node's details show its wireframe
+
+**Needs:** laptop.
+
+**Do:**
+1. Load a preset with a 4D shape (the 24-cell, the tesseract) and open
+   GRAPH. Click the **Shape** node. Watch the top of its details and the
+   frame rate on SYSTEM.
+2. Change the shape (VIEW, or the details' own **shape** row) to the
+   120-cell, then the rectified 600-cell, then a 3D one (the cube).
+3. Turn the brightness down, switch faces and points on, zoom the camera.
+4. Click another node, then wait a second.
+
+**Right if:** (1) a black square at the top of the details holds the
+shape alone in white lines, sharp, turning as the projector's shape turns,
+nearer edges brighter; the Shape node on the canvas still shows its faint
+scene picture; the frame rate is what it was before the click. (2) the
+square follows each shape at once, the dense ones included, with no
+stutter. (3) the square does not change: no faces, no red points, the same
+size and brightness. (4) the square is gone with the details.
+
+**Wrong if:** a square that stays black, a picture upside down or a frame
+behind the canvas, faces or points in it, a dip in the frame rate while
+the Shape node is selected, or anything on an output changing when it is.
+
+**Changes:** nothing.
+
+*(automated: `tests/test_shape_wire.py`)*
+
+## Dropping a node on a cable (L198)
+
+#### L198. Drop a node on a cable
+
+**Needs:** laptop; a preset with two effects in a row (for example
+`lookback → acid → wobble → All outputs`).
+
+**Do:**
+1. Right-click the canvas and add an effect. Drag it slowly over the
+   cables, including the shape's geometry cable, and let go with
+   `acid → wobble` the bright one.
+2. Drag `wobble` over `lookback → acid` and let go without any key.
+3. Drag `wobble` again, hold ⌘, and let go over `lookback → acid`. Press
+   ⌘Z.
+4. Wire an LFO through a Smooth modifier into a param, select the Smooth
+   and press Delete.
+5. Hold Option and drag a box across three cables; press Delete, then
+   ⌘Z.
+
+**Right if:** (1) while dragging, of the cables the node covers, the one
+nearest its middle is thick gold and every other cable dims;
+words beside the pointer say what letting go will do (over the geometry
+cable alone, why it cannot go there); let go, the effect
+is in the run. (2) from the first movement the words say "hold ⌘ …",
+nothing lights or dims, and the node just moves. (3) with ⌘ a cable
+lights gold and the others dim; let go, `wobble`
+moves before `acid`; one ⌘Z undoes it. (4) the LFO drives the param
+directly. (5) the box picks cables, Delete removes them, ⌘Z restores them.
+
+**Wrong if:** a drop does something the drag did not show, or the drag
+shows something and the drop does nothing; ⌘ does not lift the node; the
+param stops moving after (4).
+
+*(check 404)*
+
 # Part 2 — tests that need hardware
+
+## The Flow mark (L199–L200; rows 542–543)
+
+#### L199. The Flow mark and the Flow capsules
+
+**Needs:** laptop.
+
+**Do:**
+1. Open VIEW, open the Shape menu and scroll to the end of its 3D part.
+2. Pick **Flow mark** and stop every plane.
+3. Turn Faces on and pick the pattern PLAID.
+4. Pick **Flow capsules**, turn XZ and YZ on, and let it turn.
+5. Turn XW, YW and ZW on too.
+
+**Right if:** (1) a **Vector marks** group is last under 3D, holding Flow
+mark and Flow capsules. (2) the five bars of the Wispr Flow logo as white
+outlines, bright: the outer two tallest, then the middle one, the two
+short ones equal, and no red dots. (3) each bar carries its own pattern.
+(4) five round-ended capsules in wireframe, tumbling, no red dots. (5)
+the capsules turn no differently: the W planes leave a 3D shape alone.
+
+**Wrong if:** no Vector marks group; a dim logo facing you; red dots on
+either shape.
+
+**Changes:** nothing.
+
+*(check 405)*
+
+#### L200. A flat shape facing you is at full brightness
+
+**Needs:** laptop.
+
+**Do:**
+1. Pick **Flow mark**, every plane stopped, the camera at rest.
+2. Turn the camera slowly to one side and back.
+3. Pick **Orbit**, stop every plane, then turn YZ until the ring faces you
+   as a circle.
+4. Pick **Heart**, then **Tesseract**, every plane stopped, the camera at
+   rest.
+
+**Right if:** (1) the outlines are as bright as any shape's nearest edge.
+(2) the far side dims as it turns away and comes back as it faces you,
+with no jump. (3) the circle is bright all round as it faces you. (4)
+each looks as it did before: the Heart's back dimmer than its front, the
+tesseract's far cube dimmer than its near one.
+
+**Wrong if:** a dim logo or ring facing you; a jump as the camera passes
+face-on; the Heart's back or the tesseract brighter than before.
+
+**Changes:** nothing.
+
+*(check 406)*
 
 ## (a) The APC40
 
@@ -4564,6 +5373,8 @@ with its depth and gate; no preset file's time moved.
 *(check 51)*
 
 #### A12. OVERDUB is Home
+
+**Superseded (2026-10-28):** the "set starts on to none" steps are gone: nothing on the panel sets "starts on", and no show ships with one (L196).
 
 **Needs:** APC40. The laptop part is L33.
 
@@ -5320,6 +6131,77 @@ continuous knob are easy to land on.
 unpicked channel still uploading.
 
 *(check 319)*
+
+#### A48. Hold and take on two desk buttons
+
+**Needs:** the APC40; the copy; branch `plan-38-hold` (plan 38).
+
+**Do:** with no hold on, learn `output.hold` and `output.take` onto two
+free buttons. Press the hold button, then the take button. Hold again and
+press **drop** on GRAPH.
+
+**Right if:** both buttons light while held and go dark after take and
+after drop; the press that learns a button does not start a hold. Learn
+the buttons *before* holding: a button learned during a hold is unlearned
+by **drop** (register row 438).
+
+**Wrong if:** the take button stays dark while held, or a learning press
+starts a hold.
+
+*(check 381)*
+
+#### A49. A patch brings its knob, and a sheet asks when the knob is taken
+
+**Needs:** the APC40; the copy (with `[library] path` commented out);
+branch `plan-40-build` (plan 40).
+
+**Do:** copy `tests/fixtures/patches/acid-wash.json` from the repo into
+`~/Hyperspace-try/patches/` (acid, wobble and a delay; K1 on acid's speed;
+the right hand's height, smoothed, on wobble's amount). Load `party-acid`
+(where K1 is the brightness) and spawn acid wash from **patches** on
+GRAPH's head. Read the sheet; press **Spawn**; turn K1; ⌘Z; turn K1. Spawn
+again; while the sheet is up, arm a learn and move a hand or a knob. Press
+**keep all existing**, then **Spawn**; turn K1; hover the new box. Spawn
+once more and press **Cancel**. Then load `party-noita` and spawn it
+there.
+
+**Right if:** the sheet says "K1: fx.acid.2.speed (the patch) or
+view.bright (the preset)" with the patch chosen; after Spawn K1 turns the
+new acid's speed and its ring agrees; one ⌘Z takes the whole spawn back
+and K1 is the brightness again; nothing learns while the sheet is up;
+after **keep all existing** K1 stays the brightness and the box says "K1
+kept by the preset"; Cancel adds nothing. In `party-noita` the sheet
+lists only K1, even though the right hand's height already drives warp
+there: the patch reads the hand through its smoothing node, which counts
+as no clash today — say whether it should (register row 514).
+
+**Wrong if:** K1 does the wrong thing after Spawn, a learn completes
+under the sheet, undo takes more than one press, or "kept by the preset"
+is missing.
+
+*(check 397)*
+
+#### A50. The desk unplugged, said; plugged in, said
+
+**Needs:** the APC40; the copy; the preset saved in A49 with acid wash in
+it.
+
+**Do:** quit, unplug the APC40, start the app and load that preset. Read
+the group's box, GRAPH's head, the PRESET strip and the SYSTEM page; hover
+**1 device missing**. Plug the desk in and press nothing. Turn K1.
+
+**Right if:** the box says "waits for apc40 (lost): K1"; the head and the
+strip show **1 device missing**, whose hover lists the desk's controls by
+their names (K1, K2 …); SYSTEM says "wanted by the preset: apc40 — lost;
+n controls wait". When you plug it in the footer says "apc40 connected —
+n controls live" once, the rings light, the warning goes, and K1 turns
+the patch's knob. (With the desk unplugged every party preset shows **1
+device missing**: say whether that is useful or noise.)
+
+**Wrong if:** nothing is said when the desk comes back, it is said twice,
+or the hover reads "CC 48 ch1" instead of K1.
+
+*(check 398)*
 
 ## (b) The hand camera
 
@@ -7305,6 +8187,9 @@ what you want changed.
 - **The GRAPH page at a distance** — can you hit a pin and read a box on
   the laptop at the control window's normal size? Is the selected route's
   row better under the canvas or beside it? (L111, L113; checks 245, 247)
+- **Pictures on GRAPH** — are the thumbnails big enough to read across
+  the room? Is the tint's ±20° lean too subtle, or should it stay off?
+  (L174, L176; checks 370, 373)
 - **The modifiers' defaults** — a smooth's 0.35 s release, a threshold
   at 0.6 / 0.4, a curve's shape range: do they feel right on music?
   (L107, B43; checks 236, 241)
@@ -7410,9 +8295,10 @@ band produces a *lane*.
 **Band scene** — a saved set of all the sound bands' settings, picked
 from pad rows 2–3 with SHIFT latched.
 
-**Bank / slot** — a show's list of 24 numbered places for presets: slots
-1–8 are F1–F8 and pad row 1, slots 9–24 are pad rows 4–5 and the small
-numbered buttons on the PRESETS page.
+**Bank / slot (pads)** — a show's list of 24 numbered places for presets,
+the desk's pads: slots 1–8 are F1–F8 and pad row 1, slots 9–24 are pad
+rows 4–5. Set on the desk only (hold a pad, or SAVE + a pad); the PRESETS
+page shows none of them since 2026-10-28.
 
 **Bindings file** — `bindings.json` in the home folder: the control
 mapping that belongs to the setup rather than to any preset (keys, the
@@ -7505,8 +8391,10 @@ preset changes them.
 
 **FACES page** — the page for the faces' pattern and colours.
 
-**Factory** — shipped with the app, as opposed to saved by you (shown dim
-in the preset list; yours are white).
+**Factory** — *superseded 2026-10-28*: nothing ships with the app any
+more. Every preset in the library is yours, listed alike, and the
+twenty-five the build once shipped live on only as test data
+(`tests/corpus/`).
 
 **FL Studio** — music software (a DAW) that the app can exchange MIDI
 with.
@@ -7545,6 +8433,9 @@ lets you rewire them by dragging.
 **Ground** — the empty background of the picture. The OUTPUT page's
 Ground setting is how see-through it is in overlay mode.
 
+**Group** — several GRAPH boxes folded into one, its plugs the cables
+that cross its edge; `+` opens it in place (plan 40).
+
 **Guide and tethers** — the guide is a gauge drawn beside or on a ghost
 hand showing each axis as a ball or arc; tethers are lines from the
 routed axes to labels naming what they drive.
@@ -7559,7 +8450,8 @@ and the LFO, found in the preset list (on no F-key).
 **HANDS page** — the page for hand tracking: the box view, the feel
 settings, calibration and the ghost hands.
 
-**Home** — loading the preset the show "starts on" (fn+← or OVERDUB).
+**Home** — loading the show's startup preset (fn+← or OVERDUB), the one
+its file names; nothing on the panel sets it since 2026-10-28.
 
 **Home folder** — `~/Hyperspace`, where the app keeps your config,
 presets, shows, mapping file and logs; another folder can be used with
@@ -7568,7 +8460,8 @@ presets, shows, mapping file and logs; another folder can be used with
 **Hot reload** — the app picking up a saved code or effect file while it
 runs.
 
-**House mood** — one of the factory presets of the house show.
+**House mood** — one of the eight presets of the old `house` show
+(BIG BLUE WAVE…); test corpus only since 2026-10-28.
 
 **IAC bus** — the Mac's built-in virtual MIDI cable (Audio MIDI Setup →
 IAC Driver), used to connect the app to FL Studio with no hardware.
@@ -7642,9 +8535,14 @@ desktop; only possible when the config has `[output] overlay = true`.
 loads presets 1–8; rows 2–3 with SHIFT pick band scenes; rows 4–5 load
 presets 9–24.
 
-**Party show** — the factory show the app opens with: F1 TUMBLE, F2
+**Party show** — the show the app used to open with (F1 TUMBLE, F2
 FACES, F3 FIELD, F4 WAKE, F5 TRIP, F6 ACID, F7 MANDALA, F8 NOITA, slot 9
-TRACER. The **house show** is another factory show (F1 BIG BLUE WAVE).
+TRACER); test corpus only since 2026-10-28, with the **house show**. A
+fresh library opens an unsaved show called `untitled`; the owner's own
+shows are in the Drive library.
+
+**Patch** — a group of GRAPH boxes saved with the cables that cross its
+edge, in `patches/` in the library, to drop into any preset (plan 40).
 
 **Pattern** — the texture drawn on the faces (FLAT is plain); chosen on
 the FACES page.
@@ -7660,7 +8558,9 @@ sensor), listed in the device list and drawn inside the shape's world.
 **Preset** — a saved look: every performance setting, its routes and
 what the desk's knobs do.
 
-**PRESETS page** — the page for shows, presets, the bank and "starts on".
+**PRESETS page** — the preset strip over a list of every preset (click
+loads; rename, ×), the trash at its foot, the patches fold and one line
+for the show (open ▾ · save · as… · new).
 
 **Projector** — here, any second screen.
 
@@ -7705,13 +8605,15 @@ bindings file and config rather than in a preset.
 **SHIFT layer** — the desk's second layer, latched by pressing SHIFT once
 (its light stays on); see *Layer*.
 
-**Show (project file)** — a file in `<home>/projects/` holding a bank of
-presets and the one it starts on.
+**Show (project file)** — a file in `<library>/projects/` holding the
+session, the desk's pads (a bank of preset names), the rig's wires and a
+startup preset.
 
 **Stall log** — `<home>/stall.log`, where the app writes what it was
 doing when it froze or hit a drawing error.
 
-**Starts on** — the preset a show opens with, also what Home loads.
+**Starts on (startup)** — the preset a show's file names for Home and a
+launch; no longer picked on the panel (2026-10-28).
 
 **Stderr** — what the app prints in the terminal it was launched from.
 

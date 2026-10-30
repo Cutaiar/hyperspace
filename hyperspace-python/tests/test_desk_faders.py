@@ -2,10 +2,10 @@
 """Plan 24 C2 — the faders freed (decisions 17, 23 and 24).
 
 Driven through `MidiIO` with the fake ports tests/test_midi.py injects (its
-rig: a scratch library whose show is the factory party show):
+rig: a scratch library seeded with the corpus, its show the party show):
 
 - **S1–S8 are the preset's**: the track faders carry no factory row on the
-  preset layer, so every factory preset leaves them dark; a preset whose
+  preset layer, so every corpus preset leaves them dark; a preset whose
   desk binds them (the fixture under tests/fixtures/desk-faders/, loaded
   through the scratch library) lights all eight and drives its params, and
   the rows round-trip through save and load;
@@ -25,8 +25,10 @@ import shutil
 from pathlib import Path
 
 import pytest
+from conftest import CORPUS
 from test_midi import cc, push, rig, shift  # noqa: F401 — the fixture
 
+import hyperspace.ui  # noqa: F401 — first: ui_desk imports through the panel (ui_pad reads its EDGE)
 from hyperspace import apc40, preset, routing, ui_desk
 from hyperspace.routing import Binding, Bindings, bindings_path
 from hyperspace.view import ViewState
@@ -46,6 +48,15 @@ def load_fixture(rig, name="faders.json"):
     lib.presets.load("FADERS")
     rig.midi.poll()
     return lib
+
+
+def norm_rows(rows) -> list[str]:
+    """Desk rows as sorted JSON, the layer aside (what a file holds)."""
+    out = []
+    for d in rows or []:
+        b = Binding.from_json(d) if isinstance(d, dict) else d
+        out.append(json.dumps({**b.to_json(), "layer": None}, sort_keys=True))
+    return sorted(out)
 
 
 def faders_lit(t) -> dict[str, str]:
@@ -76,15 +87,14 @@ def test_the_faders_are_the_presets_and_the_audio_strip_is_shifts():
     assert (gain.number, gain.layer) == (apc40.CC_MASTER, None)
     assert (dim.number, dim.layer) == (apc40.CC_XFADE, None)
     assert not [b for b in preset.fresh_desk() if b.number == FADER and b.kind == "cc"]
-    assert not [b for b in preset.file_desk() if b.number == FADER and b.kind == "cc"]
 
 
-def test_every_factory_preset_leaves_the_faders_dark_and_shift_lights_the_audio(rig):
-    """Decision 23: no preset gets fader rows in this run — every factory
-    file's desk binds no track fader, and each loads with S1–S8 dark on the
+def test_every_corpus_preset_leaves_the_faders_dark_and_shift_lights_the_audio(rig):
+    """Decision 23: no shipped preset got fader rows — every corpus file's
+    desk binds no track fader, and each loads with S1–S8 dark on the
     preset layer and the audio strip under SHIFT, with no desk note."""
     lib, t = rig.presets.lib, rig.midi.table
-    for path in sorted(preset.FACTORY_DIR.glob("*.json")):
+    for path in sorted((CORPUS / "presets").glob("*.json")):
         desk = json.loads(path.read_text()).get("desk") or []
         assert not [d for d in desk if d["source"].endswith(f":{FADER}")
                     and d["source"].startswith("cc:")], path.name
@@ -98,20 +108,9 @@ def test_every_factory_preset_leaves_the_faders_dark_and_shift_lights_the_audio(
     assert faders_lit(t) == dict(zip(GLYPHS, SHIFT_TARGETS))
 
 
-def test_knob_desk_learns_fader_rows_without_changing_a_factory_desk():
-    """`knob_desk(…, faders=…)` puts track fader k + 1 on faders[k] (the
-    mechanism the owner's authoring pass uses); with no faders, the default,
-    the desk is the one every factory spec writes today."""
-    plain = preset.knob_desk(preset.TRIP_KNOBS)()
-    assert not [b for b in plain if b.kind == "cc" and b.number == FADER]
-    withf = preset.knob_desk(preset.TRIP_KNOBS, faders=("view.lines_alpha", None,
-                                                        "view.points_alpha"))()
-    rows = [(b.channel, b.target, b.layer, b.feedback) for b in withf
-            if b.kind == "cc" and b.number == FADER]
-    assert rows == [(0, "view.lines_alpha", "preset", None),
-                    (2, "view.points_alpha", "preset", None)]
-    assert [b.to_json() for b in withf if not (b.kind == "cc" and b.number == FADER)] == \
-        [b.to_json() for b in plain]
+def test_track_fader_is_a_preset_layer_row_with_soft_pickup():
+    """`preset.track_fader(k, pid)` is the row a preset's desk binds track
+    fader k with: the preset layer's, `abs`, no feedback, soft pickup."""
     b = preset.track_fader(8, "dream.mix")
     assert (b.source, b.op, b.layer, b.feedback, b.pickup) == (
         f"cc:7:{FADER}", "abs", "preset", None, True)
@@ -149,7 +148,7 @@ def test_the_fader_rows_round_trip_through_save_and_load(rig):
     path = lib.presets.save_as("FADERS 2")
     doc = json.loads(Path(path).read_text())
     want = json.loads((FIXTURES / "faders.json").read_text())["desk"]
-    assert sorted(preset._norm_rows(doc["desk"])) == sorted(preset._norm_rows(want))
+    assert norm_rows(doc["desk"]) == norm_rows(want)
     lib.presets.load("FADERS 2")
     rig.midi.poll()
     assert lib.presets.desk_notes == []
@@ -311,17 +310,6 @@ def test_lines_and_points_opacity_are_performance_params_at_one(rig):
         assert p.modulatable and p.persist
         assert not routing.is_session_id(pid)
         assert routing.base_refusal(pid, rig.reg) is None
-
-
-@pytest.fixture(scope="module")
-def ctx():
-    moderngl = pytest.importorskip("moderngl")
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-    c.release()
 
 
 def test_an_opacity_at_zero_takes_its_layer_away_and_one_changes_nothing(ctx):

@@ -4,15 +4,18 @@
 The layout (`apc40.LAYOUT`): one entry per control the protocol names,
 none overlapping, a unique short glyph each, and a glyph for every MIDI
 row shipped. The diagram (ui_desk.py): what it lights is the layer that
-is up — a factory preset's desk plus the invariant controls, then the
+is up — the loaded preset's desk plus the invariant controls, then the
 global layer after SHIFT — read from the table with no MIDI device. The
 ROUTING rows print the glyph. Headless imgui, a library on tmp_path.
 """
 
 import json
 
+from conftest import CORPUS
+from fonts import MAC_FONTS
 from imgui_bundle import imgui
 from test_ui_shell import (
+    NARROW_CONTROL,
     _click,
     _learn_over,
     frame,
@@ -21,8 +24,7 @@ from test_ui_shell import (
 
 from hyperspace import apc40, routing, ui, ui_desk, ui_routing
 from hyperspace.app import CONTROL_SIZE
-from test_ui_shell import NARROW_CONTROL
-from hyperspace.library import FACTORY
+from hyperspace.geometry import SHAPES
 from hyperspace.routing import Binding
 
 # ---------------------------------------------------------------- the layout
@@ -96,13 +98,14 @@ def _shipped_midi_rows() -> list[str]:
     srcs += [b.source for b in routing.factory_desk("apc40")]
     session = json.loads(routing.FACTORY_FILE.read_text())
     srcs += [r["source"] for r in session["bindings"]]
-    for f in sorted((FACTORY / "presets").glob("*.json")):
+    for f in sorted((CORPUS / "presets").glob("*.json")):
         srcs += [r["source"] for r in json.loads(f.read_text()).get("desk") or []]
     return [s for s in srcs if s.startswith(("cc:", "note:"))]
 
 
 def test_every_midi_row_shipped_has_a_glyph():
-    """DEFAULT_MAP, the factory session table and every factory preset's desk."""
+    """DEFAULT_MAP, the factory session table and every corpus preset's desk
+    (tests/corpus: the presets the build shipped until 2026-10-28)."""
     srcs = _shipped_midi_rows()
     assert len(srcs) > 200
     assert [s for s in srcs if apc40.glyph(s) is None] == []
@@ -414,7 +417,9 @@ def test_the_small_desk_draws_glyphs_only(rig, monkeypatch):
     st = ui_desk._state(panel)
     assert st["labels"] == [] and st["unit"][0] < ui_desk.LABEL_UNIT
     glyphs = {c.glyph for c in apc40.LAYOUT}
-    assert set(got["texts"]) == glyphs
+    # (off the Mac its wider face leaves out a glyph with no room: fonts.py)
+    assert got["texts"] and (set(got["texts"]) == glyphs if MAC_FONTS
+                             else set(got["texts"]) <= glyphs)
     x, y, w, h = got["rect"]
     assert panel._panel_x == NARROW_CONTROL[0] - ui.PANEL_W - 12
     assert x == 12.0 and x + w <= panel._panel_x - 12.0 + 1e-6 and w >= ui_desk.MIN_W
@@ -453,7 +458,10 @@ def test_a_controls_text(rig):
     assert text(reg, Binding("cc:*:18", "fx.kaleido.segments", "abs")) \
         == reg["fx.kaleido.segments"].label
     assert text(reg, Binding("cc:0:49", "no.such.param", "abs")) == "no.such.param"
-    assert text(reg, Binding("note:0:91", "view.shape", "set", 99.0)) == reg["view.shape"].label
+    # a value past the last shape names none: the label (one past the end,
+    # so a shape appended to the catalog never turns it into a name)
+    past = float(len(SHAPES))
+    assert text(reg, Binding("note:0:91", "view.shape", "set", past)) == reg["view.shape"].label
     # the hover carries the words too
     c = next(c for c in apc40.LAYOUT if c.glyph == "D3")
     b = Binding("cc:*:18", "fx.kaleido.segments", "abs", layer="preset")

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Plan 26 A0 — golden frames: every factory preset in every output state
+"""Plan 26 A0 — golden frames: every corpus preset in every output state
 it reaches, rendered offscreen, hashed byte for byte.
 
-Each factory preset (`preset.FACTORY_PRESETS`, the files in
-`hyperspace/library/presets/`) is loaded through the real `Presets` over
-a `Router` into a throwaway library home, with two synthetic hands
+Each corpus preset (`CORPUS_PRESETS`: the twenty-five files under
+`tests/corpus/presets/`, the presets the build shipped until 2026-10-28 —
+test data now, read by nothing in the app) is copied into a throwaway
+library home and loaded through the real `Presets` over a `Router`, with two synthetic hands
 (`tests/fake_hands.py`: the left open, the right a fist, test_ghost's
 pose) present or absent through the real `HandsIO`, and drawn through
 `Renderer.draw_outputs` on eight outputs at once — the eight `Switches`
@@ -31,7 +32,7 @@ copied in), opened by the real device registry, polled on the pinned
 clock and handed to the renderer, so the default scene gains its
 point-cloud node — named `cloud/<state>`. And (plan 26 A4) the proof presets,
 fixtures under `tests/fixtures/presets/` (`FIXTURE_PRESETS`, never a
-factory preset): each copied into the scratch library and loaded like a
+corpus preset): each copied into the scratch library and loaded like a
 user's preset, its `graph` section landing through the real `Presets`
 onto the rig's renderer, hands present, in the eight states — the
 manifest's `fixture_states` and `fixtures`. And (plan 31 P) the
@@ -151,16 +152,28 @@ file = "clouds/knot.npz"
 CLOUDED: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...] = (
     ("cloud", CLOUD_CONFIG, ("scene", "scene+hands"), ("legacy6", "party-faces")),
 )
-# plan 26 A4: the proof presets — fixtures, never factory presets (no
-# file under hyperspace/library/ is edited or added) — each loaded
-# through the scratch library like a user's preset, its `graph` section
-# landing through the real `Presets` (`GraphSection`) onto the rig's
-# renderer, hands present, every output state as one rig's outputs
+# the corpus (2026-10-28): the twenty-five `/7` presets the build shipped
+# until the library went one-tier, kept as test data — the goldens' main
+# subjects, in the order the manifest has always listed them (the house
+# moods, plan 12's party presets, plan 14's, then the routing-era ones)
+CORPUS = ROOT / "tests" / "corpus" / "presets"
+CORPUS_PRESETS: tuple[str, ...] = (
+    "big-blue-wave", "ember-orbit", "hex-engine", "inverse-halo", "plasma-heart",
+    "spiral-silk", "strobe-cage", "woven-lattice",
+    "party-tumble", "party-faces", "party-field", "party-wake", "party-trip",
+    "party-acid", "party-mandala", "party-noita", "party-tracer",
+    "legacy6", "lfo-breathe", "seq-demo", "hands-fx", "hands-pinch", "hands-play",
+    "hands-orbit",
+)
+# plan 26 A4: the proof presets — fixtures, never corpus presets — each
+# loaded through the scratch library like a user's preset, its `graph`
+# section landing through the real `Presets` (`GraphSection`) onto the
+# rig's renderer, hands present, every output state as one rig's outputs
 FIXTURES = ROOT / "tests" / "fixtures" / "presets"
-# plan 36 T3 (D5): the factory presets are `/7` files; what they were made
-# from — the `/2` (seq-demo `/3`) sources `python -m hyperspace.preset`
-# writes, which tools/migrate_library.py migrated — is read where the
-# proof needs the section before the wired frame (`plan33_section`)
+# plan 36 T3 (D5): the corpus presets are `/7` files; what they were made
+# from — the `/2` (seq-demo `/3`) sources the retired generator wrote,
+# which tools/migrate_library.py migrated — is read where the proof needs
+# the section before the wired frame (`plan33_section`)
 FACTORY_SOURCES = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
 # plan 30 D1: the three placements' proof presets — the palette after the
 # hands' layer, the palette into output 2's picture, a second acid after
@@ -181,11 +194,22 @@ FACTORY_SOURCES = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
 # in3 the still through acid.2: never made)
 # Plan 35 T3's `channel-out-only` (`hyperspace.preset/6`): channel a's still
 # wired straight into All outputs, nothing else — no scene pass. Plan 34
-# T4's `resize-crop` (a wired frame, below)
+# T4's `resize-crop` (a wired frame, below). Plan 39 T2's `mask-as-picture`
+# (`/7`, a wired frame): channel a's still through a matte (luma, key 0.95,
+# feather 4) wired straight into All outputs — the mask as a picture. Plan
+# 39 T3's `cut-out` (`/7`, a wired frame): that matte on a `cut`'s mask, the
+# scene through kaleido on its picture, the cut over the scene — the
+# kaleidoscope in the still's disc, the scene elsewhere. Plan 39 T4's
+# `segment-motion` (`/7`, a wired frame): the scene over the still into a
+# motion segment, its foreground into All outputs — the model learns the
+# rig's first frame, its later frames (the pinned clock: the polytope turns,
+# the still does not) are the second picture, so the turning polytope is
+# the foreground and the still is cut away
 MEDIA_FIXTURES: tuple[str, ...] = ("backdrop-still", "media-to-output-2", "faces-media",
                                    "blend-luma-key", "displace-luma", "media-chain-faces",
                                    "media-chain-backdrop", "branch-two-sizes", "switch-faces",
-                                   "channel-out-only", "resize-crop")
+                                   "channel-out-only", "resize-crop", "mask-as-picture",
+                                   "cut-out", "segment-motion")
 # plan 34 T2's two: the scene through a delay onto the faces (the infinite
 # mirror), and a loop of effects through a delay (trails: `delay →
 # zoomblur.2 → composite.under`, `composite → delay.image`) — each drawn
@@ -203,12 +227,15 @@ FEEDBACK_FIXTURES: tuple[str, ...] = ("delay-faces", "delay-trails", "echo-faces
 # scene made at 64² square, nearest, into a delay onto the faces (`scene →
 # resize → delay → shape.faces`) — and `resize-crop`, channel a's still
 # cropped at 128 through acid.2 onto output 2 alone (a media fixture, above)
+# Plan 39 T0's one (a `/7` wired frame): the scene through `edges` at its
+# defaults into All outputs — the polytope's lines as line art
 WIRED_FIXTURES: tuple[str, ...] = ("blank-frame", "channel-out-only", "through-one-output",
-                                   "resize-faces", "resize-crop")
+                                   "resize-faces", "resize-crop", "edges-scene",
+                                   "mask-as-picture", "cut-out", "segment-motion")
 FIXTURE_PRESETS: tuple[str, ...] = ("hands-lines", "palette-hands", "palette-glass",
                                     "acid-scene", "hands-glass-only", "wired-outputs",
                                     *MEDIA_FIXTURES, *FEEDBACK_FIXTURES, "blank-frame",
-                                    "through-one-output", "resize-faces")
+                                    "through-one-output", "resize-faces", "edges-scene")
 MEDIA = ROOT / "tests" / "golden" / "media"
 MEDIA_WAIT_S = 10.0      # the most a rig waits for its stills to decode (the pool)
 
@@ -262,7 +289,7 @@ from hyperspace.media.channels import MediaState
 from hyperspace.media.source import FETCHING
 from hyperspace.outputs import Switches, View
 from hyperspace.params import build_registry
-from hyperspace.preset import FACTORY_PRESETS, Presets
+from hyperspace.preset import Presets
 from hyperspace.render import Renderer
 from hyperspace.routing import Bindings, Router
 from hyperspace.view import ViewState
@@ -363,7 +390,7 @@ class Rig:
 
     def __init__(self, slug: str, hands: str, ctx: moderngl.Context, *,
                  source: Path | None = None, library: Path | None = None):
-        """A factory preset by its slug, or a fixture (`FIXTURE_PRESETS`):
+        """A corpus preset by its slug, or a fixture (`FIXTURE_PRESETS`):
         copied into the scratch library first and loaded from there. Row
         394: or any preset file `source`, copied in as `slug` — with
         `library`'s desk templates and module presets beside it
@@ -390,7 +417,9 @@ class Rig:
         self._home = tempfile.TemporaryDirectory(prefix="hyperspace-golden-lib-")
         if source is None and slug in FIXTURE_PRESETS:
             source = FIXTURES / f"{slug}.json"
-        if source is not None:               # a user's preset in the scratch library
+        elif source is None and slug in CORPUS_PRESETS:
+            source = CORPUS / f"{slug}.json"
+        if source is not None:               # a preset copied into the scratch library
             own = Path(self._home.name) / "presets"
             own.mkdir(parents=True, exist_ok=True)
             (own / f"{slug}.json").write_bytes(Path(source).read_bytes())
@@ -428,7 +457,7 @@ class Rig:
             self.seq.restart()
         self.ctx = ctx
         r = self.renderer = Renderer(ctx, dream=self.dream, fx=self.fx, ghost=self.ghost)
-        # plan 26 A4: the preset's graph (none for a factory preset: the
+        # plan 26 A4: the preset's graph (none for a corpus preset: the
         # default wiring) onto this renderer, as app.py attaches it
         presets.graph.attach(r)
         r.max_frame = RENDER_CAP
@@ -507,14 +536,18 @@ _PARK = None       # a 1×1 framebuffer bound between rigs, so none of theirs is
 def context() -> moderngl.Context:
     """The one standalone context every rig draws on, made once and kept
     (releasing a context leaves none current, which strands the caller's;
-    tests/test_golden_frames.py uses this one too). Its objects are freed
-    when they are collected (`gc_mode` auto), so each rig's renderer goes
-    with the rig (`render_all` collects after each)."""
+    tests/test_golden_frames.py uses this one too), and made current again
+    on every call: a context made and released since (each test's own,
+    tests/conftest.py) left none current, and GL calls go to the current
+    one. Its objects are freed when they are collected (`gc_mode` auto),
+    so each rig's renderer goes with the rig (`render_all` collects after
+    each)."""
     global _CTX, _PARK
     if _CTX is None:
         _CTX = moderngl.create_context(standalone=True)
         _CTX.gc_mode = "auto"
         _PARK = _target(_CTX, (1, 1))
+    _CTX.__enter__()
     return _CTX
 
 
@@ -660,11 +693,11 @@ def expected_route(state: dict, fx_on: bool, visible: bool,
 
 
 def source_doc(presets, slug: str) -> dict:
-    """Preset `slug`'s file before `/7` (plan 36 T3): a factory preset's
+    """Preset `slug`'s file before `/7` (plan 36 T3): a corpus preset's
     source (`FACTORY_SOURCES`, what its `/7` was migrated from), else the
     file as the library has it (a fixture: an old file, a migration input)."""
     src = FACTORY_SOURCES / f"{slug}.json"
-    if slug in FACTORY_PRESETS and src.is_file():
+    if slug in CORPUS_PRESETS and src.is_file():
         return json.loads(src.read_text())
     return presets.lib.read("presets", slug)
 
@@ -811,7 +844,7 @@ def _shoot_rig(slug, hands, states, size, logical, dpr, wiring, config, *,
         shots = []
         for k, ((name, sw), f) in enumerate(zip(states, targets)):
             # what the output settled on (its end, the hands laid over):
-            # for a factory preset in its own wiring, `outputs.route`'s
+            # for a corpus preset in its own wiring, `outputs.route`'s
             # table (`expected_route`) — a picture where it names one, the
             # hands over where it lays them
             key, over = rig.renderer.stats["routes"][k]
@@ -852,7 +885,7 @@ def picture(source: Path, *, slug: str = "picture", library: Path | None = None,
     """Row 394 (tools/migrate_library.py): preset file `source` drawn on the
     golden rig — copied into a scratch library as `slug`, loaded like a
     user's preset, hands `hands`, `states` as its outputs' wiring
-    (`rig_section`, as a factory preset's goldens) for `FRAMES` frames on
+    (`rig_section`, as a corpus preset's goldens) for `FRAMES` frames on
     the pinned clock — and (each output's SHA-256, the load's notes). Two
     files that draw the same have the same hashes; the frame is never
     asserted on, so a preset this build reads with a note still draws."""
@@ -885,7 +918,7 @@ def _picture(source, slug, library, states, hands) -> tuple[list[str], list[str]
 @dataclass(frozen=True)
 class Job:
     """One test's worth of rigs (tests/test_golden_frames.py draws one job
-    per test, so the workers share them out): a factory preset with the
+    per test, so the workers share them out): a corpus preset with the
     hands absent or present — its eight states, the window alone, and with
     the hands present the WIRED and CLOUDED rigs — a fixture's eight
     states, or the cap frame."""
@@ -908,7 +941,7 @@ def job_of(entry: dict) -> str:
 
 def jobs(only: set[str] | None = None, *, cap: bool = True) -> list[Job]:
     """Every job (or only the presets in `only`), in the goldens' order."""
-    out = [Job("preset", slug, hands) for slug in FACTORY_PRESETS
+    out = [Job("preset", slug, hands) for slug in CORPUS_PRESETS
            if not only or slug in only for hands in HANDS]
     out += [Job("fixture", slug, "present") for slug in FIXTURE_PRESETS
             if not only or slug in only]
@@ -1013,7 +1046,7 @@ def record(shots: list[Shot], said: dict, renderer: str, only: set[str] | None,
                          f"this is {renderer!r}: record them all")
     redone = {s.preset for s in shots}
     entries = [e for e in old["goldens"] if e["preset"] not in redone] + [s.entry() for s in shots]
-    order = {slug: k for k, slug in enumerate((*FACTORY_PRESETS, *FIXTURE_PRESETS))}
+    order = {slug: k for k, slug in enumerate((*CORPUS_PRESETS, *FIXTURE_PRESETS))}
     st = {name: k for k, (name, _) in enumerate(STATES)}
     entries.sort(key=lambda e: (order[e["preset"]], HANDS.index(e["hands"]),
                                 st.get(e["state"], len(st)), e["state"]))
@@ -1133,8 +1166,8 @@ SIGNATURES = ROOT / "tests" / "fixtures" / "frame-signatures.json"
 
 class Loader:
     """Each preset loaded as the rig loads it (the real `Presets` over a
-    scratch library, the fixtures copied in), headless: no renderer, no
-    media. `load(slug)` gives the landed spec, its section
+    scratch library, the corpus and the fixtures copied in), headless: no
+    renderer, no media. `load(slug)` gives the landed spec, its section
     (`GraphSection.free_doc`: the migrated one) and the effect instances
     then held."""
 
@@ -1143,6 +1176,8 @@ class Loader:
         home = Path(self._home.name)
         own = home / "presets"
         own.mkdir(parents=True, exist_ok=True)
+        for slug in CORPUS_PRESETS:
+            (own / f"{slug}.json").write_text((CORPUS / f"{slug}.json").read_text())
         for slug in FIXTURE_PRESETS:
             (own / f"{slug}.json").write_text((FIXTURES / f"{slug}.json").read_text())
         self.view, self.fx = ViewState(), FxState()
@@ -1183,7 +1218,7 @@ class Loader:
 
 
 def _effects_on(slug: str) -> bool:
-    """Whether a factory preset has an effect on, as its goldens recorded
+    """Whether a corpus preset has an effect on, as its goldens recorded
     it (the manifest's `effects_on`: what draws `SOLO_FX`)."""
     said = load_manifest().get("presets", {}).get(slug, {})
     return bool(said.get("absent", {}).get("effects_on"))
@@ -1196,9 +1231,9 @@ def signature_keys() -> list[str]:
     `SOLO_FX`) — and a CLOUDED rig's name, as the goldens draw them."""
     # (a `/6` fixture — plan 35 T3's — is a wired frame of its own: no
     # section before it, so no `default_graph` recorded to prove it against)
-    keys = [f"{slug}/states" for slug in (*FACTORY_PRESETS, *FIXTURE_PRESETS)
+    keys = [f"{slug}/states" for slug in (*CORPUS_PRESETS, *FIXTURE_PRESETS)
             if slug not in WIRED_FIXTURES]
-    for slug in FACTORY_PRESETS:
+    for slug in CORPUS_PRESETS:
         keys += [f"{slug}/{name}" for name, _, _, which in WIRED
                  if which is None or slug in which]
         keys += [f"{slug}/{name}" for name, _ in SOLO]
@@ -1357,7 +1392,7 @@ def main() -> None:
         print(f"rewrote {record_names()} fixtures' node names; no golden touched")
         return
     only = {x.strip() for x in a.only.split(",") if x.strip()} or None
-    if only and (unknown := only - set(FACTORY_PRESETS) - set(FIXTURE_PRESETS)):
+    if only and (unknown := only - set(CORPUS_PRESETS) - set(FIXTURE_PRESETS)):
         ap.error(f"no such preset: {', '.join(sorted(unknown))}")
     renderer, version = renderer_name(context()), gl_version(context())
     # (pixels kept only where a PNG or the contact sheet needs them)

@@ -18,9 +18,9 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-FACTORY = ROOT / "hyperspace" / "library" / "presets"
+CORPUS = ROOT / "tests" / "corpus" / "presets"          # the shipped presets, as test data
 FIXTURES = ROOT / "tests" / "fixtures" / "presets"
-SOURCES = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"   # the factory's /2s
+SOURCES = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"   # the corpus's /2s
 
 
 def _tool():
@@ -38,8 +38,7 @@ def _library(tmp_path: Path) -> Path:
     """A library shaped like the owner's: a `/2` preset (party-trip's
     source, under a file name of its own), a `/5` with an old GRAPH layout
     (glimmer-bug), one already `/7`, one this build refuses (a value that
-    will not land), a module preset, hidden.json, the trash and a backup
-    beside them."""
+    will not land), a module preset, the trash and a backup beside them."""
     from hyperspace import headless
 
     lib = tmp_path / "Drive" / "Hyperspace"
@@ -55,13 +54,11 @@ def _library(tmp_path: Path) -> Path:
     (presets / ".tmp.json").write_text("{}")
     (lib / "trash" / "presets").mkdir(parents=True)
     (lib / "trash" / "presets" / "old.json").write_text(
-        (FACTORY / "dial.json").read_text())
+        (CORPUS / "dial.json").read_text())
     (lib / "fx").mkdir()
     (lib / "fx" / "wobbly.json").write_text(json.dumps(
         {"schema": "hyperspace.preset/1", "group": "fx", "name": "wobbly",
          "values": {"fx.wobble.on": True}}))
-    (lib / "hidden.json").write_text(json.dumps(
-        {"schema": "hyperspace.hidden/1", "presets": ["dial"]}))
     return lib
 
 
@@ -115,7 +112,7 @@ def test_apply_backs_up_migrates_and_leaves_seven_and_the_rest_alone(tmp_path, c
         doc = json.loads(after[f"presets/{name}"][0])
         assert doc["schema"] == "hyperspace.preset/7", name
         assert doc["name"] == json.loads(before[f"presets/{name}"][0])["name"]
-    for name in ("presets/acid-scene.json", "presets/broken.json", "hidden.json",
+    for name in ("presets/acid-scene.json", "presets/broken.json",
                  "fx/wobbly.json", "trash/presets/old.json",
                  "presets/trip-night.json.bak-20261001"):
         assert after[name] == before[name], name      # bytes and mtime: never written
@@ -131,7 +128,7 @@ def test_apply_backs_up_migrates_and_leaves_seven_and_the_rest_alone(tmp_path, c
 def test_to_writes_each_seven_elsewhere_and_never_the_library(tmp_path, capsys):
     """Plan 36 T3: `--to FOLDER` writes every preset that passed — the `/7`
     already there too — into FOLDER under its own name; the library is
-    read, never written, and no backup is made (how the factory's `/7` are
+    read, never written, and no backup is made (how the corpus's `/7` were
     made from their sources)."""
     lib = _library(tmp_path)
     home = Path(os.environ["HYPERSPACE_HOME"])

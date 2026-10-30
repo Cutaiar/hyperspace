@@ -3,7 +3,7 @@ the naming rule; the OUTPUT and LOOKBACK pages in words.
 
 A preset may carry a `graph` section (`graph.GraphSpec`: node instances
 and their wiring, never a param). None is the default graph — every
-preset from before A4, every factory preset. One this build cannot read
+preset from before A4, every corpus preset. One this build cannot read
 is a note and the default graph, never a crash. A second instance of a
 node gets the marked ids (`fx.acid.2.*`, `ghost.2.*`) and its own params;
 the first keeps today's. The proof preset is a fixture,
@@ -22,6 +22,7 @@ import json
 from pathlib import Path
 
 import pytest
+from conftest import CORPUS, seed
 from test_presets import boot, put
 from wiredframe import Shows, graph, unwired, wire_switches, wiring
 
@@ -30,11 +31,13 @@ from hyperspace import graphmigrate as M
 from hyperspace import preset
 from hyperspace.fx import FxState, SpecError, instance_of_name, parse
 from hyperspace.graphmigrate import wired_wiring
-from hyperspace.library import FACTORY, PRESETS
+from hyperspace.library import PRESETS
 from hyperspace.outputs import Switches, View
 
 S = Switches
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "presets" / "hands-lines.json"
+# the corpus presets' sources (plan 36 T3: the corpus files are their `/7`)
+SOURCES = Path(__file__).resolve().parent / "fixtures" / "factory-sources" / "presets"
 DEFAULT = G.Wiring()
 TODAY = wired_wiring(G.Wiring())       # (plan 36 T3: today's frame, by the migration)
 
@@ -424,21 +427,22 @@ def _fixture_in(home: Path) -> None:
     dst.write_text(FIXTURE.read_text())
 
 
-def test_no_factory_preset_carries_a_graph_and_each_loads_as_before(tmp_path):
-    """Every factory preset loads with today's frame, no graph note and a
+def test_no_corpus_source_carries_a_graph_and_each_preset_loads_as_before(tmp_path):
+    """Every corpus preset loads with today's frame, no graph note and a
     clean dot. Plan 36 T3: each file is its source's `/7`, so it carries
     that frame as its graph (its source has none) and lands it as it is."""
+    seed(tmp_path)
     rig = boot(tmp_path)
     stub = Stub()
     rig.presets.graph.attach(stub)
-    for path in sorted(preset.FACTORY_SOURCES.glob("*.json")):
+    for path in sorted(SOURCES.glob("*.json")):
         assert "graph" not in json.loads(path.read_text()), path.name
-    for slug in preset.FACTORY_PRESETS:
+    for slug in sorted(p.stem for p in (CORPUS / "presets").glob("*.json")):
         rig.lib.load(PRESETS, slug)
         name = rig.lib.current(PRESETS)
         assert not [n for n in rig.presets.notes if n.startswith("graph")], slug
         # plan 33 T3: the run as wires; plan 36 T3: the file's own section
-        own = json.loads((FACTORY / "presets" / f"{slug}.json").read_text())["graph"]
+        own = json.loads((CORPUS / "presets" / f"{slug}.json").read_text())["graph"]
         assert rig.presets.graph.doc == own and _bare(stub.wiring) == DEFAULT
         assert _old(stub.wiring).run is not None and stub.wiring.wired
         # (row 394: the save is `/6`, the frame the load landed)
@@ -450,7 +454,7 @@ def test_no_factory_preset_carries_a_graph_and_each_loads_as_before(tmp_path):
 
 
 def test_the_proof_preset_loads_its_graph_from_a_scratch_library(tmp_path):
-    """`hands-lines` (a fixture, never a factory preset): its graph lands
+    """`hands-lines` (a fixture, never a corpus preset): its graph lands
     — the hands in the scene as lines, the history holding them — on the
     attached renderer, the acid on, the look-back on; nothing missing, no
     note, a clean dot; a save writes the wired frame the load made of it
@@ -694,16 +698,6 @@ def test_undoing_a_load_puts_the_graph_back_before_the_values(tmp_path):
 # ---------------------------------------------------------------- GL
 
 moderngl = pytest.importorskip("moderngl")
-
-
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-    c.release()
 
 
 def test_two_acids_run_in_one_chain_on_one_program(ctx):

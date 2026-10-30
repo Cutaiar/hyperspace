@@ -50,7 +50,7 @@ def _job(key: str, path: Path, cache: Path, flag: threading.Event) -> None:
     try:
         if not flag.is_set():
             make_proxy(path, cache, flag)
-    except Exception:  # noqa: BLE001 — no proxy just means slower seeks
+    except Exception:  # noqa: BLE001, S110 — no proxy just means slower seeks
         pass
     finally:
         with _lock:

@@ -2,8 +2,8 @@
 (ui_graph.py), headless.
 
 The model is built from the shell's rig (tests/test_ui_shell.py: the full
-registry, the factory table, a scratch library on tmp_path) with factory
-presets loaded through it, a render graph built by `graph.default_graph`
+registry, the factory table, a scratch library on tmp_path) with the
+corpus's presets (tests/corpus, seeded) loaded through it, a render graph built by `graph.default_graph`
 (or by hand, for an effect placed off the default chain) and a device
 registry of fakes. The page is drawn under the same headless imgui
 context the other pages are, with the node editor's own context on it:
@@ -15,6 +15,7 @@ import importlib
 from pathlib import Path
 
 import pytest
+from conftest import seed
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
 from test_ui_shell import frame
@@ -35,6 +36,7 @@ PKG = Path(__file__).resolve().parents[1] / "hyperspace"
 
 @pytest.fixture()
 def rig(shell_rig):  # noqa: F811
+    seed(shell_rig.lib.home)         # (the corpus: the presets the tests load by slug)
     return shell_rig
 
 
@@ -317,12 +319,12 @@ def test_old_layout_positions_follow_the_renamed_ids(rig):
 def test_layout_round_trips_through_the_preset_and_the_show(rig):
     """The look's nodes' positions are the preset's ``layout``, the rig's
     the show's: written on save, read on load. A preset without the key
-    (every factory preset) loads with no note and no dirt; one with a bad
+    (every corpus preset) loads with no note and no dirt; one with a bad
     entry keeps the good ones and says so."""
     from hyperspace.preset import LAYOUT_KEY
     lib, presets, project = rig.lib, rig.lib.presets, rig.lib.project
     lib.load("presets", "party-trip")
-    # (plan 36 T3: the factory `/7` holds the envelopes' and the sequencer's
+    # (plan 36 T3: the corpus `/7` holds the envelopes' and the sequencer's
     # values, which this rig — the panel's, built without them — lacks)
     said = [n for n in presets.notes if not n.endswith("…") or "env." not in n]
     assert presets.layout == {} and said == [] and not lib.is_dirty("presets")
@@ -448,8 +450,8 @@ def test_the_graph_page_sits_after_routing():
     assert PAGES[keys.index("graph")][2] == PAGES[keys.index("routing")][2]
 
 
-def test_the_page_draws_with_a_factory_preset_and_a_render_graph(rig):
-    """The page drawn for real on the node editor, headless: a factory
+def test_the_page_draws_with_a_corpus_preset_and_a_render_graph(rig):
+    """The page drawn for real on the node editor, headless: a corpus
     preset loaded, a render graph with effects, every node expanded and
     collapsed, a route and an effect node selected (the side column), a
     tidy — and nothing raises; the SYSTEM page then has its line."""
@@ -740,6 +742,44 @@ def test_graph_has_media_area(rig):
     wired = next(c for c in froms if c.dst_port == "rin:acid/aux")
     assert graphview.spec_name(wired.src_port, g) == ("channel.a", None)
     assert graphview.spec_name("rout:channel.e", g) == ("channel.e", None)  # not in the graph
+
+
+
+def test_the_faces_patterns_eight_inputs_are_the_pattern_nodes(rig):
+    """2026-10-27 (the owner: the face shader's inputs were missing from the
+    pattern node's side pane): `OWNERS["pattern"]` is the pattern node, so
+    every `pattern.mod.k` is a param port on it, named `patterns.label(k)`,
+    and none on the shape; a route onto `pattern.mod.3` is a cable into the
+    pattern node. With no pattern node drawn they fall to their group's
+    node, as every param whose node the section does not name."""
+    from hyperspace import patterns
+    from hyperspace.routing import Binding
+
+    assert graphview.OWNERS["pattern"] == "pattern"
+    spec = G.read_graph({"frame": "wired", "nodes": [],
+                         "wires": [{"from": "shape", "to": "scene.geometry"},
+                                   {"from": "pattern", "to": "shape.faces"},
+                                   {"from": "scene", "to": "output.all.image"}]})
+    assert not spec.notes
+    if not any(b.target == "pattern.mod.3" for b in rig.router.table.bindings):
+        rig.router.table.add(Binding("lane:3", "pattern.mod.3", "push", 0.5))
+    g = G.build_graph(views(Switches()), wired_wiring(spec.wiring()))
+    view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
+    mods = [p.id for p in rig.reg if p.group == "pattern"]
+    assert mods == [f"pattern.mod.{k}" for k in range(8)]
+    for k, pid in enumerate(mods):
+        assert owner_of(view, pid) == "render:pattern", pid
+        assert view.owner(f"mod:{pid}")[1].name == patterns.label(k)
+    shape = view.node("render:shape")
+    assert not any(p.param in mods for p in shape.ports)
+    assert owner_of(view, "view.bright") == "render:shape"
+    assert owner_of(view, "view.pattern") == "render:pattern"
+    cable = next(c for c in view.cables
+                 if c.kind == "route" and c.ref.target == "pattern.mod.3")
+    assert cable.dst_port == "mod:pattern.mod.3" and not cable.off
+    assert view.owner(cable.dst_port)[0].id == "render:pattern"
+    # no render graph: their group's node, never the shape's
+    assert owner_of(build(rig), "pattern.mod.3") == "group:pattern"
 
 
 def test_the_media_area_draws_on_the_page(rig, monkeypatch):

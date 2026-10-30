@@ -18,7 +18,7 @@ are listed in [`ENGINEERING.md`](ENGINEERING.md) §5.
 ```bash
 git clone <repo> hyperspace
 cd hyperspace/hyperspace-python
-uv sync               # everything, including torch for the dream and the dev tools
+uv sync               # everything, including torch for the dream, Apple Vision for the segment, and the dev tools
 uv run hyperspace     # opens the render window and the control window
 ```
 
@@ -26,7 +26,10 @@ uv run hyperspace     # opens the render window and the control window
 one commit in `pyproject.toml`) and compiles its `leapc_cffi` module from
 `vendor/leapc-cffi` (upstream's at the same commit, patched to build
 against whichever Ultraleap Hand Tracking is installed); they are only
-imported when the hands are switched on.
+imported when the hands are switched on. They are the `hands` dependency
+group, and torch the `dream` one: both on by default (`[tool.uv]
+default-groups`), so plain `uv sync` installs them; CI leaves them out
+(`ENGINEERING.md` §16, "CI").
 To check the install: `uv run pytest -q`.
 
 **Microphone permission.** The first time you press M (or *Listen to
@@ -37,8 +40,8 @@ Privacy & Security → Microphone.
 
 ## The dream
 
-On by default. torch and torchvision are ordinary dependencies, so plain
-`uv sync` installs them. The first time the dream runs it downloads the
+On by default. torch and torchvision are the `dream` dependency group,
+on by default, so plain `uv sync` installs them. The first time the dream runs it downloads the
 pretrained weights (VGG16, or GoogLeNet for some layers) into
 `~/Hyperspace/weights` unless they are already there or in torch's hub
 cache. If the worker cannot start, the app runs the echoes alone and
@@ -48,6 +51,28 @@ turn it off:
 ```toml
 [dream]
 enabled = false
+```
+
+## The segment (plan 39)
+
+`uv sync` on macOS also installs `pyobjc-framework-vision` (and
+`pyobjc-framework-coreml`), which the `segment` node's person mode uses:
+Apple Vision on the Neural Engine. It is imported only when a segment first
+needs it, inside the worker's first job. Run `uv sync` on both Macs after
+pulling this build. The first time a camera is opened macOS asks whether
+the terminal may use the camera: allow it (System Settings → Privacy &
+Security → Camera if you denied it); without it the node says `no frame on
+channel a`. With `[segment] backend = "torch"` (or on a machine without
+Vision) the fallback is torchvision's LR-ASPP: the first time it runs it
+downloads its weights (`lraspp_mobilenet_v3_large`, 13 MB) into
+`~/Hyperspace/weights` unless they are already there or in torch's hub
+cache, as the dream's are. Nothing to set by default:
+
+```toml
+[segment]
+backend = "auto"     # "auto" (Vision on macOS, else torch), "vision", "torch"
+weights_dir = ""     # the torch backend's weights; "" = <library home>/weights
+# device = "auto"    # the torch backend's device: "auto" is MPS when there, else CPU
 ```
 
 ## Capturing the Mac's own sound
@@ -280,8 +305,20 @@ what it shows. Details and the per-output switches are
 ## Share presets with someone
 
 Two people (or two Macs) can have the same presets: whatever either saves
-shows up on the other. The presets live in a cloud-synced folder; each
+shows up on the other. A fresh library is empty: the app starts on a blank preset and an unsaved show called `untitled`, and the shared folder holds the owner's own presets. The presets live in a cloud-synced folder; each
 Mac's own settings stay in its home (`~/Hyperspace`).
+
+What is shared, in the library folder: `presets/`, `projects/` (shows),
+`patches/` (plan 40: groups of GRAPH nodes saved with **save as patch…**,
+spawned into any preset), the module preset folders (`band/`, `dream/`,
+`view/` …; an old `fx/` is ignored, the fx module presets being retired)
+and `trash/`. What stays on each Mac, in its home:
+`config.toml`, `bindings.json`, `hands.json`, `windows.json`, `ui.json`
+(this Mac's panel settings: the GRAPH side pane's width), `last_show`,
+`stall.log`, `weights/`, `media/` (this Mac's own files; shared media go in
+the library's `media/`) and `media-cache/`. Both Macs run the
+same build: a preset with a GRAPH group is a newer file version (`/8`)
+that an older build refuses.
 
 1. Make a folder in your cloud drive, shared with each other (for
    example `Dropbox/Hyperspace`). On iCloud, mark it "Keep Downloaded";

@@ -152,16 +152,6 @@ def test_draw_render_draws_a_publish_only_output_offscreen_at_the_render_cap():
 moderngl = pytest.importorskip("moderngl")
 
 
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-    c.release()
-
-
 class Grab:
     """A publisher that keeps a copy of each picture it is handed (rows
     GL's way: row 0 the bottom)."""

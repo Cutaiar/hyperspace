@@ -65,7 +65,7 @@ Addresses: the router's source addresses are 0-based (``lfo:0`` is
 **N of them** (plan 31 B): the bank is a `modbank.Bank` — four by
 default (`N`), up to 16, each added or removed by its stable id. Ids
 never compact: with LFO 2 removed, LFO 3 is still ``lfo:2`` and
-``lfo.3.*``, so every route and factory preset keeps its meaning, and
+``lfo.3.*``, so every route and preset keeps its meaning, and
 LFO 2's lane reads NaN (dormant). The membership is the preset's
 ``"lfos"`` key and part of undo; `declare` is this kind's half of
 `Bank.bind`.
@@ -95,7 +95,7 @@ REST = 0.5
 GROUP = "lfo"
 RANDOM = SHAPES.index("random")
 # the knobs that feed an LFO's node in the modulation patch, in the order
-# `declare` makes them (patch.LFO_KNOBS, which the router reads)
+# `declare` makes them (modgraph.LFO_KNOBS, which the router reads)
 KNOBS = ("shape", "rate", "sync", "depth", "phase", "reset")
 
 

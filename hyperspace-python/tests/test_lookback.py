@@ -15,6 +15,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from conftest import CORPUS, seed
 
 moderngl = pytest.importorskip("moderngl")
 
@@ -34,16 +35,6 @@ from hyperspace.render import Renderer
 from hyperspace.view import ViewState
 
 VIEW = {"ang": [0.3, 0.7, 1.1, 0.5, 0.9, 1.3], "yaw": 0.4, "pitch": 0.25}
-
-
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-    c.release()
 
 
 class Rig:
@@ -666,7 +657,7 @@ def test_cut_through_still_cuts_in_overlay_mode(ctx):
 def _preset_rig(ctx, tmp_path):
     """The app's construction order (tests/test_presets.py `boot`), the
     renderer's own dream and fx states on the registry."""
-    from hyperspace import lfo, preset, tempo
+    from hyperspace import lfo, tempo
     from hyperspace.analysis import Analyser
     from hyperspace.analyzer import Analyzer
     from hyperspace.control import Control
@@ -679,6 +670,7 @@ def _preset_rig(ctx, tmp_path):
     control = Control(chain)
     view = ViewState()
     r = Renderer(ctx)
+    seed(tmp_path)                   # (the corpus: the presets the build once shipped)
     lib = Library(tmp_path, period=0.0)
     reg = build_registry(view, control, SimpleNamespace(chain=chain), lib.project,
                          dream=r.lookback.state, fx=r.fx.state)
@@ -689,7 +681,6 @@ def _preset_rig(ctx, tmp_path):
     lib.attach(reg)
     router = Router(reg, Bindings())
     presets = Presets(lib, reg, router)
-    preset.migrate_home(lib, router)
     return SimpleNamespace(lib=lib, reg=reg, view=view, r=r, presets=presets)
 
 
@@ -709,9 +700,9 @@ def _final_alpha(ctx, b, bg_alpha, w=240, h=160, frames=4):
     return a
 
 
-def _factory_presets():
-    from hyperspace.library import FACTORY
-    return sorted(p.stem for p in (FACTORY / "presets").glob("*.json"))
+def _corpus_presets():
+    """The presets the build once shipped (tests/corpus/presets), by slug."""
+    return sorted(p.stem for p in (CORPUS / "presets").glob("*.json"))
 
 
 # every effect on at its own blend, then every one forced to multiply
@@ -719,15 +710,15 @@ def _factory_presets():
 STRESS = ["effects", "multiply"]
 
 
-@pytest.mark.parametrize("name", _factory_presets() + STRESS)
-def test_every_factory_preset_renders_opaque_in_window_mode(ctx, tmp_path, name):
+@pytest.mark.parametrize("name", _corpus_presets() + STRESS)
+def test_every_corpus_preset_renders_opaque_in_window_mode(ctx, tmp_path, name):
     """Plan 14 WP1: the render window is a Pepper's Ghost screen — in window
     mode (and fullscreen, the same opaque ground) every pixel of the final
-    frame is alpha 255 for every factory preset, and for a preset with
+    frame is alpha 255 for every corpus preset, and for a preset with
     cut-through, faces, points, the look-back and every effect on, through
     the FX chain and the look-back composite."""
     b = _preset_rig(ctx, tmp_path)
-    first = _factory_presets()[0] if name in STRESS else name
+    first = _corpus_presets()[0] if name in STRESS else name
     path = b.lib.path_of("presets", first)
     assert path is not None, first
     b.presets.load(json.loads(path.read_text())["name"])
@@ -978,11 +969,14 @@ def test_dream_snapshot_round_trip():
     assert d.mix == pytest.approx(0.7) and d.layer == 1 and d.on is False
 
 
-def test_factory_presets_load(tmp_path):
+def test_the_dream_module_presets_load(tmp_path):
+    """The three dream module presets (the corpus's, seeded into a scratch
+    library): listed, `default` the group's default, each landing its values."""
     from hyperspace.library import Library
 
     d = DreamState()
     reg = registry(d)
+    seed(tmp_path, "dream")
     lib = Library(tmp_path, period=0.0)
     lib.attach(reg)
     assert "dream" in lib.groups()
@@ -1545,20 +1539,13 @@ def test_the_worker_status_is_never_taller_than_its_room(lbpage):
     imgui.end_frame()
 
 
-def test_the_relabel_changes_no_factory_file(tmp_path):
-    """Labels are not in preset files: the factory presets regenerate to
-    the bytes they have, and the dream module presets name ids only."""
-    import shutil
-
-    from hyperspace import preset
+def test_the_relabel_reaches_no_preset_file(tmp_path):
+    """Labels are not in preset files: the dream module presets name ids
+    only."""
     from hyperspace.library import Library
 
-    for path in preset.FACTORY_SOURCES.glob("*.json"):     # (plan 36 T3: the sources)
-        shutil.copy(path, tmp_path / path.name)
-    preset.write_factory(tmp_path)
-    for path in preset.FACTORY_SOURCES.glob("*.json"):
-        assert (tmp_path / path.name).read_bytes() == path.read_bytes(), path.name
     reg = registry()
+    seed(tmp_path / "home", "dream")
     lib = Library(tmp_path / "home", period=0.0)
     lib.attach(reg)
     for name in lib.list("dream"):
@@ -1648,7 +1635,7 @@ def test_every_layer_has_its_words():
 
 def test_saved_layers_keep_their_meaning():
     """`dream.layer` is stored as an index, so the six layers there were
-    keep their indices and the rest are appended: every factory and fixture
+    keep their indices and the rest are appended: every corpus and fixture
     file that names a layer gets the same layer by name as before."""
     import json
     from pathlib import Path
@@ -1670,14 +1657,14 @@ def test_saved_layers_keep_their_meaning():
                 yield from found(v)
 
     seen = 0
-    for f in sorted([*(root / "hyperspace" / "library").rglob("*.json"),
+    for f in sorted([*(root / "tests" / "corpus").rglob("*.json"),
                      *(root / "tests" / "fixtures").rglob("*.json")]):
         for v in found(json.loads(f.read_text())):
             assert isinstance(v, int) and 0 <= v < len(LAYERS_BEFORE), f
             reg.restore({"dream.layer": v})
             assert layer.names[layer.base] == LAYERS_BEFORE[v], f
             seen += 1
-    # the factory looks; the owner's shared/ snapshot went in plan 25, and
+    # the corpus's looks; the owner's shared/ snapshot went in plan 25, and
     # the names[:6] check above covers every index a saved file can hold
     assert seen >= 4
 

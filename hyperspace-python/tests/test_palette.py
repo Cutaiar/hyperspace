@@ -20,6 +20,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from conftest import CORPUS
 from test_presets import boot, put
 
 from hyperspace import ui_fx
@@ -31,16 +32,6 @@ from hyperspace.params import Kind
 moderngl = pytest.importorskip("moderngl")
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "presets"
 W, H = 180, 48          # every 2° of hue across; saturation and brightness down
-
-
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-    c.release()
 
 
 def rainbow() -> np.ndarray:
@@ -442,18 +433,6 @@ def test_an_old_preset_loads_as_the_same_slice(tmp_path):
                    if k.startswith("fx.palette"))
 
 
-def test_an_old_fx_module_preset_is_read_as_the_slice(tmp_path):
-    rig = boot(tmp_path)
-    (rig.home / "fx").mkdir(parents=True, exist_ok=True)
-    (rig.home / "fx" / "teal.json").write_text(json.dumps({
-        "schema": "hyperspace.preset/1", "group": "fx", "name": "teal",
-        "values": {"fx.palette.on": True, "fx.palette.mix": 1.0,
-                   "fx.palette.centre": 180.0, "fx.palette.width": 20.0}}))
-    assert rig.lib.load("fx", "teal") == []
-    v = rig.reg.fx_state.values["palette"]
-    assert (v["hue_from"], v["hue_to"]) == (170.0, 190.0)
-
-
 @pytest.mark.parametrize("slug", ["palette-hands", "palette-glass", "wired-outputs"])
 def test_the_fixtures_carry_the_slice(slug):
     doc = json.loads((FIXTURES / f"{slug}.json").read_text())
@@ -462,10 +441,10 @@ def test_the_fixtures_carry_the_slice(slug):
     assert palette_slice(doc) == (doc, [])                 # nothing left to convert
 
 
-def test_no_factory_file_names_the_palette():
-    """The base goldens cannot move: no factory preset turns the palette on."""
-    lib = FX_DIR.parent.parent / "library"
-    hits = [p for p in lib.rglob("*.json") if "fx.palette" in p.read_text()]
+def test_no_corpus_file_names_the_palette():
+    """The base goldens cannot move: no corpus preset (tests/corpus, the
+    goldens' subjects) turns the palette on."""
+    hits = [p for p in CORPUS.rglob("*.json") if "fx.palette" in p.read_text()]
     assert hits == []
 
 

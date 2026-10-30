@@ -65,7 +65,7 @@ def test_the_committed_report_is_fresh_and_regenerates_byte_identical(tool):
         "desk-coverage.md is stale: run `uv run python tools/desk_coverage.py`"
     assert not re.search(r"\d{4}-\d{2}-\d{2}|\d{2}:\d{2}", first)   # no date, no time
     assert tool.main(["--check"]) == 0
-    # --check checks the factory report only: with --library it is refused
+    # --check checks the corpus report only: with --library it is refused
     for extra in (["--library", str(FIXTURES)], ["--stdout"]):
         with pytest.raises(SystemExit) as e:
             tool.main(["--check", *extra])
@@ -83,10 +83,11 @@ def test_the_preset_layer_is_the_three_strips_and_the_maps_preset_controls(tool)
     assert not {"SM", "X", "⇧", "G6·8", "G1·1", "G4·1", "G1·9", "G4·9"} & set(glyphs)
 
 
-def test_every_factory_presets_numbers_are_in_the_report(tool, tmp_path):
-    """The numbers the PR body and the decisions file quote: every factory
-    preset is a row; the faders are dark on every one (no preset has fader
-    rows in this run); none meets the bar yet."""
+def test_every_corpus_presets_numbers_are_in_the_report(tool, tmp_path):
+    """The numbers the PR body and the decisions file quote: every corpus
+    preset (`tests/corpus/presets`, the presets the build shipped) is a
+    row; the faders are dark on every one (no preset has fader rows in this
+    run); none meets the bar yet."""
     controls, rows = tool.coverage(tmp_path)
     names = [r.name for r in rows]
     assert len(rows) == 25 and "TRIP" in names and "hands-orbit" in names   # + DIAL (#212), seq-demo (plan 31)
@@ -98,7 +99,7 @@ def test_every_factory_presets_numbers_are_in_the_report(tool, tmp_path):
         assert r.count(tool.DARK) + r.count(tool.DEAD) > tool.BAR, r.name
     trip = rows[names.index("TRIP")]
     k7 = next(c for c in trip.cells if c.glyph == "K7")
-    # the factory knob 7: an alias of view.media_alpha since plan 32
+    # TRIP's knob 7: an alias of view.media_alpha since plan 32
     assert (k7.status, k7.target, k7.why) == (tool.DEAD, "view.bmp_alpha", "no media channel")
 
 

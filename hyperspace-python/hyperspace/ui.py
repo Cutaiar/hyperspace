@@ -36,12 +36,14 @@ from imgui_bundle import imgui
 
 from . import (
     apc40,
+    devices,
     field,
     gamepad,
     graphview,
     learn,
     ui_bands,
     ui_desk,
+    ui_feel,
     ui_fx,
     ui_graph,
     ui_lfo,
@@ -75,6 +77,7 @@ from .graph import (
     wire_words,
 )
 from .hands import panel as ui_hands
+from .hold import canvas_renderer
 from .media import publish
 from .params import PLANES, Kind, Param, Registry, build_registry
 from .view import RED as RED_RGB
@@ -467,6 +470,16 @@ def device_lines(registry) -> list[str]:
     return out
 
 
+def wanted_lines(registry, table) -> list[str]:
+    """Plan 40 T4: the SYSTEM page's lines under the device lines, one per
+    device role the loaded preset's rows want and the rig lacks — "wanted
+    by the preset: leap — not in this rig; 3 rows wait" (`devices.wants`,
+    `devices.wanted_lines`); none without a registry or a table."""
+    if registry is None or table is None:
+        return []
+    return devices.wanted_lines(devices.wants(table, registry))
+
+
 # the wants the menu offers by their own items (desk, the hands, the pad)
 _OWN_WANTS = frozenset(("desk", "hand:left", "hand:right", "pad"))
 
@@ -578,11 +591,12 @@ CHEATSHEET = [
     ("G", "overlay: clicks through / back"),
     ("Q", "quit"),
     # Xbox-layout gamepad, Bluetooth or USB (gamepad.py holds the map)
-    ("pad X / B", "previous / next in the preset list"),
-    ("pad A Y", "faces · lines"),
+    ("hold d-pad ← / →", "previous / next in the preset list"),
+    ("pad A Y · B X", "faces · lines · points · screen strokes"),
+    ("pad BACK", "tap tempo"),
     ("hold START", "save the live state as a new preset"),
     ("LB / RB", "previous / next shape"),
-    ("d-pad", "brightness ↑↓ · speed ←→"),
+    ("d-pad ↑ / ↓", "brightness"),
     ("sticks", "orbit · zoom ↕ 4D spin ↔ — click resets each"),
     ("LT / RT", "4D depth out / in"),
     # any control ↔ any MIDI message, through the registry (midi.py)
@@ -943,10 +957,13 @@ class Panel:
         while a gamepad is connected, wherever Learn desk is offered — a
         button, the D-pad, a stick or a trigger completes it
         (`gamepad.learn_from`). **Route from ▸** (the owner, 2026-10-24:
-        "there is no Learn option for routing one of the LFOs there"): on
-        a modulatable param that is no trigger, every LFO and envelope of
-        the banks — the one already driving it checked — then new LFO /
-        new envelope; a pick is the cable a drag on GRAPH makes
+        "there is no Learn option for routing one of the LFOs there";
+        2026-10-28: one submenu per kind, the macros among them): on a
+        modulatable param that is no trigger, **LFO ▸** and **envelope ▸**
+        — the bank's voices, the one already driving it checked, then new
+        LFO / new envelope — and on a param a base subscriber may name,
+        **macro ▸** — the rig's knobs by label, one already setting it
+        checked; a pick is the cable a drag on GRAPH makes
         (`ui_graph.route_from_menu`). It sits after the Learn items, before
         Learn sink, and is no Learn: an LFO has no gesture to wait for."""
         lrn = self.learn
@@ -1926,7 +1943,7 @@ class Panel:
         wiring, spec = self.graph_now()
         rig = self.rig_now()
         frame = graphview.page_spec(spec)
-        said = graph_words(spec, getattr(getattr(self.renderer, "_graph", None),
+        said = graph_words(spec, getattr(getattr(canvas_renderer(self), "_graph", None),
                                          "dormant", None))
         # (the blocks' rows closer together: four windows of four rows each,
         # and All outputs', fit the page unscrolled — popped after the loop)
@@ -2027,7 +2044,7 @@ class Panel:
                 self._check(pid, t)
         imgui.pop_style_var()
         # plan 30 D1: a placed effect that runs nowhere this frame, and why
-        for line in dormant_lines(getattr(self.renderer, "_graph", None)):
+        for line in dormant_lines(getattr(canvas_renderer(self), "_graph", None)):
             imgui.text_colored(FAINT, fit_text(line, imgui.get_content_region_avail().x))
             if imgui.is_item_hovered():
                 tooltip(line)
@@ -2353,21 +2370,15 @@ class Panel:
         ui_hands.page(self, dt)
 
     def _page_presets(self, dt: float) -> None:
-        """Plan 14 WP4, top to bottom: the show (its name, show ▾ · save ·
-        save as · new), starts on ▾, the eight preset buttons, the preset
-        strip, and "more" folded over the module presets (ui_presets)."""
-        self._section("show")
+        """2026-10-28, top to bottom (ui_presets.page): the preset strip —
+        ◀ name ● ▶ · new · save · as… — then every preset as a list that
+        fills the page, its trash at the foot, the patches fold, one line
+        for the show, and the library's notes."""
         if self.library is None:
+            self._section("presets")
             imgui.text_disabled("no library attached")
-        else:
-            ui_presets.show_block(self)
-            ui_presets.starts_on(self)
-            imgui.spacing()
-        ui_presets.preset_bank(self)
-        imgui.spacing()
-        ui_presets.preset_strip(self)
-        imgui.separator()
-        ui_presets.overview(self)
+            return
+        ui_presets.page(self)
 
     def library_lines(self) -> list[tuple[str, bool]]:
         """The SYSTEM page's library lines (plan 25), each with whether it
@@ -2455,6 +2466,9 @@ class Panel:
         graph_ms = ui_graph.timing_line(self)     # plan 28 N2: the GRAPH page's own draw
         if graph_ms:
             imgui.text_disabled(graph_ms)
+        thumbs = ui_graph.thumbnail_line(self)    # plan 37 C1: the GRAPH page's thumbnails
+        if thumbs:
+            imgui.text_disabled(thumbs)
         imgui.spacing()
         self._section("devices")
         self._device_lines()
@@ -2468,12 +2482,63 @@ class Panel:
         if "desk.pad.feel" in self.reg:    # the sticks' feel (routing._register_pad_feel)
             imgui.spacing()
             self._section("gamepad")
-            self._row("desk.pad.feel")
+            # the feel (a spring's preset beside it) and its two knobs, the
+            # feel's shape over the feel working live beside them, as tall as
+            # they are (ui_feel) — beside, since the page has no height to spare
+            feel = self.router.source_feel("axis") if self.router is not None else None
+            plotted = feel is not None and feel.on
+            sp = imgui.get_style().item_spacing.x
+            avail = imgui.get_content_region_avail().x
+            plot_w = min(self.PAD_FEEL_W, avail * 0.4)
+            ctl = (avail - plot_w - sp - LABEL_W
+                   if plotted else -1)          # a control's width, after its label
             mode = self.reg["desk.pad.feel"].text()
-            for k in {"follow": ("attack", "release"), "spring": ("hz", "damp")}.get(mode, ()):
-                self._row(f"desk.pad.{k}")
+            imgui.begin_group()
+            if mode == "spring" and feel is not None and "desk.pad.spring" in self.reg:
+                feel_w = max(ctl * 0.45, 60.0)
+                self._row("desk.pad.feel", feel_w)
+                imgui.same_line()
+                spring = self.reg["desk.pad.spring"]      # its presets drawn as their curves
+                picked = ui_feel.spring_picker("##desk.pad.spring", feel, ctl - feel_w - sp)
+                self._tip(spring)
+                self._ctx(spring)
+                if picked is not None:
+                    spring.set(spring.names.index(picked))
+            else:
+                self._row("desk.pad.feel", ctl)
+            for k in {"follow": ("attack", "release"),
+                      "spring": ("duration", "bounce")}.get(mode, ()):
+                self._row(f"desk.pad.{k}", ctl)
+            imgui.end_group()
+            if plotted:
+                imgui.same_line()
+                self._pad_feel_plot(feel, plot_w, imgui.get_item_rect_size().y)
             if "desk.pad.dial.left" in self.reg:   # the sticks as dials (app._register_dial)
                 self._dials()
+
+    PAD_FEEL_W = 220.0   # the sticks' feel plots (ui_feel), px at most, beside its knobs
+
+    def _pad_feel_plot(self, feel, width: float, height: float) -> None:
+        """The sticks' feel, its shape over the feel working live: every
+        axis lane sampled each frame — as the pad reads it (`router.feeds`)
+        and after the feel (`Router.felt_lanes`, the camera job's
+        followers) — and the one that moved most lately drawn, named in its
+        corner."""
+        router = self.router
+        raws = router.feeds.get("axis")
+        felts = router.felt_lanes("axis")
+        n = max(len(raws) if raws is not None else 0, len(felts or ()))
+        traces = [ui_feel.sample(self, ("pad", i),
+                                 float(raws[i]) if raws is not None and i < len(raws) else None,
+                                 felts[i] if felts is not None and i < len(felts) else None)
+                  for i in range(n)]
+        if not traces:
+            ui_feel.draw(feel, None, width, height, stacked=True)
+            return
+        i = ui_feel.busiest(traces, imgui.get_time(), ui_feel.span(feel))
+        names = router.labels.get("axis") or []
+        ui_feel.draw(feel, traces[i], width, height,
+                     title=names[i] if i < len(names) else f"axis {i}", stacked=True)
 
     # ---- the sticks as dials (gamepad.dial, a prototype) ----
 
@@ -2655,6 +2720,8 @@ class Panel:
                 imgui.text_disabled(line)
         if not len(regs):
             imgui.text_disabled("no devices — [[devices]] in config.toml")
+        for line in devices.wanted_lines(ui_graph.panel_wants(self)):
+            imgui.text_colored(WARN, line)          # plan 40 T4: what the preset waits for
 
     def _publish_lines(self) -> None:
         """Plan 32 T9: one line per output published out (a sink of the
