@@ -199,11 +199,16 @@ def px(ctx, f, samples=0):
 
 
 def same_bytes(ctx, a, b) -> bool:
-    """Two pictures (`px`) alike: byte for byte on Apple's GL. Mesa's
-    llvmpipe (the CI runner's) does not read a texture drawn 1:1 through a
-    LINEAR sampler exactly on its texel, so a picture that took one more
-    such pass than the other may differ by a step in a channel there
-    (with NEAREST it is exact)."""
+    """Two pictures (`px`) alike: byte for byte on Apple's GL, within a
+    step in a channel elsewhere. Every 1:1 read is a texelFetch, so the
+    copies are exact on every driver; what Mesa's llvmpipe (the CI
+    runner's) still moves by a step is the effect's own pass, two ways:
+    it filters in 32-bit float, so an effect's picture held in a
+    half-float pool texture then shown into RGBA8 rounds twice where one
+    painted straight into RGBA8 rounds once; and it interpolates `v_uv` a
+    rounding apart on a multisampled target, which moves warp's displaced
+    reads. (Apple filters a half-float texture in half precision, so its
+    pictures agree.)"""
     import numpy as np
 
     if "Apple" in ctx.info["GL_RENDERER"]:

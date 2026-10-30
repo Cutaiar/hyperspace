@@ -553,13 +553,23 @@ uniform int u_opaque;      // 1 on an opaque ground (window, fullscreen): alpha 
 uniform sampler2D u_aux;   // plan 32 R: the second picture (unit 1), wired by `<effect>.aux`
 uniform int u_aux_on;      // 1 while one is wired; 0 and `aux(uv)` is transparent black
 uniform vec2 u_aux_size;   // its size, px (0, 0 with none)
+uniform int u_scaled;      // 1 when u_src is not the target's size
+uniform ivec2 u_origin;    // the target rect's origin (gl_FragCoord is window-relative)
 in vec2 v_uv;
 out vec4 f_color;
 """
 
 FS_TAIL = """
+// the pixel under this one, 1:1 by texelFetch when the source is the
+// target's size: llvmpipe does not land a 1:1 read through a LINEAR
+// sampler on its texel (a half-float source comes back a step off)
+vec4 here() {
+    return u_scaled != 0 ? texture(u_src, v_uv)
+                         : texelFetch(u_src, ivec2(gl_FragCoord.xy) - u_origin, 0);
+}
+
 void main() {
-    vec4 a = texture(u_src, v_uv);
+    vec4 a = here();
     vec4 b = effect(v_uv);
     vec4 c = u_blend == 1 ? a + b
            : u_blend == 2 ? a + b - a * b
@@ -574,12 +584,19 @@ void main() {
 }
 """
 
+# an effect with no program: its source across, 1:1 by texelFetch as
+# FS_TAIL's `here` reads it
 COPY_FS = """
 #version 330
 uniform sampler2D u_src;
+uniform int u_scaled;
+uniform ivec2 u_origin;
 in vec2 v_uv;
 out vec4 f_color;
-void main() { f_color = texture(u_src, v_uv); }
+void main() {
+    f_color = u_scaled != 0 ? texture(u_src, v_uv)
+                            : texelFetch(u_src, ivec2(gl_FragCoord.xy) - u_origin, 0);
+}
 """
 
 
@@ -735,12 +752,19 @@ class FxChain:
         try:
             dst.use()
             src.use(location=0)
+            vp = tuple(dst.viewport)
+            one = {"u_scaled": int(tuple(vp[2:]) != tuple(src.size)),
+                   "u_origin": (int(vp[0]), int(vp[1]))}
             if pv is None:
+                for k, x in one.items():
+                    self._set(self._copy, k, x)
                 self._copy_vao.render(moderngl.TRIANGLES, vertices=3)
                 return
             prog, vao = pv
             self._uniforms(prog, name, src.size, t,
                            self._opaque() if opaque is None else int(opaque))
+            for k, x in one.items():
+                self._set(prog, k, x)
             if aux is not None:
                 aux.use(location=1)
                 self._set(prog, "u_aux_on", 1)

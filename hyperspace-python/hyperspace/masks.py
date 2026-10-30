@@ -166,6 +166,8 @@ uniform vec2 u_scale;
 uniform int u_invert;
 uniform float u_amount;
 uniform int u_flip;
+uniform int u_scaled;      // 1 when u_src is not the target's size
+uniform ivec2 u_origin;    // the target rect's origin (gl_FragCoord is window-relative)
 out vec4 f_color;
 void main() {
     vec2 half_texel = 0.5 / vec2(textureSize(u_mask, 0));
@@ -173,7 +175,11 @@ void main() {
     if (u_flip != 0) uv.y = 1.0 - uv.y;
     float m = texture(u_mask, uv).r;
     if (u_invert != 0) m = 1.0 - m;
-    f_color = texture(u_src, v_uv) * mix(1.0, m, clamp(u_amount, 0.0, 1.0));
+    // the picture 1:1 by texelFetch (fx.FS_TAIL's `here`: llvmpipe does not
+    // land a 1:1 read through a LINEAR sampler on its texel)
+    vec4 c = u_scaled != 0 ? texture(u_src, v_uv)
+                           : texelFetch(u_src, ivec2(gl_FragCoord.xy) - u_origin, 0);
+    f_color = c * mix(1.0, m, clamp(u_amount, 0.0, 1.0));
 }
 """
 
@@ -410,7 +416,8 @@ class MaskPasses:
         self._run("cut", dst, rect, (src, mask), u_src=0, u_mask=1,
                   u_scale=cover_scale(mask.size, rect[2:]),
                   u_invert=int(bool(invert)), u_amount=float(amount),
-                  u_flip=int(bool(flip)))
+                  u_flip=int(bool(flip)),
+                  u_scaled=int(tuple(rect[2:]) != tuple(src.size)), u_origin=rect[:2])
 
     def fit(self, mask: moderngl.Texture, key, size: tuple[int, int], *,
             flip: bool = False) -> moderngl.Texture:

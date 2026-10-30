@@ -593,6 +593,26 @@ def test_the_cut_pass_fits_its_mask_by_cover(ctx):
     assert (alpha == 0).all(), alpha
 
 
+def test_the_cut_pass_reads_its_picture_byte_for_byte(ctx):
+    """CUT_FS reads its picture 1:1 by texelFetch: a varied half-float
+    picture under a mask that passes everything comes back exactly, into
+    a rect off the corner too. (Through a LINEAR sampler llvmpipe moves
+    ~1 % of such pixels a step.)"""
+    from hyperspace.render import Renderer
+
+    passes = Renderer(ctx).mask_passes()
+    w, h = 64, 40
+    want = np.random.default_rng(3).random((h, w, 4), dtype=np.float32).astype(np.float16)
+    src = ctx.texture((w, h), 4, data=want.tobytes(), dtype="f2")
+    mask = ctx.texture((w, h), 1, data=bytes([255] * (w * h)))
+    out = ctx.texture((w + 8, h + 4), 4, dtype="f2")
+    fbo = ctx.framebuffer(color_attachments=[out])
+    fbo.viewport = (8, 4, w, h)
+    passes.cut(src, mask, fbo)
+    got = np.frombuffer(out.read(), dtype=np.float16).reshape(h + 4, w + 8, 4)[4:, 8:]
+    assert np.array_equal(got, want)
+
+
 def test_a_reload_drops_the_mask_passes(ctx):
     """Review fix (Important 2): `Renderer.on_reload` releases the cached
     `MaskPasses`, so the next ask compiles `masks.py` as it is now."""
