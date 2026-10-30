@@ -1,5 +1,23 @@
 # Changelog
 
+## v2 — 2026-10-30
+
+### Panel
+
+- The panel's fonts now ship inside the app — Inter for words, JetBrains Mono for numbers, DejaVu behind both for symbols — so the Mac, Linux and CI all draw the same text (#297)
+- A missing media source's banner no longer clips "shows black"; long source ids shorten, the ending stays whole, and the hover keeps the full sentence (#297)
+
+### Renderer
+
+- Effects and the cut read their own pixel exactly (`texelFetch` when the read is the target's size) instead of through the smoothed sampler — a 1:1 read that landed a step off on ~0.7% of pixels is now byte for byte (#296)
+
+### For developers
+
+- CI on every PR and push to `main`: ruff + the fast tier on Linux under Xvfb, ~3.5 min, green — including a real bug fix (Mesa's GLSL error format is now parsed) and the end of the OOM that hung runs at ~99% (one shared GL-context fixture; workers peak ~1 GB, not 4) (#286)
+- Vercel deploys `main` only — the 100-deploys-a-day free quota stops running out; PR previews are gone, a manual `vercel deploy` still makes one (#294)
+- Cloud sessions set themselves up like CI — the session-start hook installs the system libraries, runs a slim `uv sync`, and starts Xvfb (#295)
+- Drive the app with no person at the rig: `tests/ui_driver.py` works the panel by control id, `tools/app_driver.py` runs the same actions in the real app and captures both windows, and the `drive-the-app` skill says when to use which (#295)
+
 ## v1 — 2026-10-29
 
 ### Graph
