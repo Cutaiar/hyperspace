@@ -633,16 +633,6 @@ def test_the_words_say_the_wires():
 moderngl = pytest.importorskip("moderngl")
 
 
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-    c.release()
-
-
 def test_a_wired_output_shows_its_picture_and_no_other_output_moves(ctx):
     """With warp on: the history wired into output 2's picture shows the
     frame with no effect (byte for byte the chain-less rig's), output 1 is

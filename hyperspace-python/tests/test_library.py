@@ -1460,15 +1460,17 @@ def test_restore_never_overwrites(owner_home):
     assert json.loads((home / "presets" / "night-three-2.json").read_text())["name"] == \
         "NIGHT THREE 2"
     assert json.loads(other.read_text())["name"] == "NIGHT THREE"
-    # a write that fails: the trash copy stays
+    # a write that fails: the trash copy stays (a read-only folder fails
+    # it, except for root, who writes through one — a container's user)
     lib.delete("presets", "NIGHT TWO")
     (item,) = [t for t in lib.trash() if t.name == "NIGHT TWO"]
-    os.chmod(home / "presets", 0o555)
-    try:
-        with pytest.raises(LibraryError, match="not restored"):
-            lib.restore_trash(item)
-    finally:
-        os.chmod(home / "presets", 0o755)
+    if os.geteuid() != 0:
+        os.chmod(home / "presets", 0o555)
+        try:
+            with pytest.raises(LibraryError, match="not restored"):
+                lib.restore_trash(item)
+        finally:
+            os.chmod(home / "presets", 0o755)
     assert item.path.exists() and not (home / "presets" / "night-two.json").exists()
     assert lib.restore_trash(item) == "NIGHT TWO" and not item.path.exists()
     # a show: the copy a rename kept, under the next free name; not opened

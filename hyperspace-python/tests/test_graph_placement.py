@@ -366,16 +366,6 @@ def test_the_words_say_the_placements():
 moderngl = pytest.importorskip("moderngl")
 
 
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-    c.release()
-
-
 def _palette(r, name="palette"):
     r.fx.state.values[name].update(on=True, mix=1.0, hue_from=170.0, hue_to=230.0)
 
@@ -437,7 +427,7 @@ def test_into_output_2_folds_one_output_only(ctx):
     output 2 folds that output's picture; output 1 is byte for byte the
     frame with no palette; the chain ran once."""
     import numpy as np
-    from test_outputs import keep_run, rig, run, views
+    from test_outputs import keep_run, rig, run, same_bytes, views
 
     def frame(placed: bool):
         r = rig(ctx, effects=("warp",), hands=False)
@@ -448,7 +438,7 @@ def test_into_output_2_folds_one_output_only(ctx):
 
     _, (a1, a2) = frame(False)
     r, (b1, b2) = frame(True)
-    assert np.array_equal(a1, b1) and np.array_equal(a1, a2)
+    assert same_bytes(ctx, a1, b1) and np.array_equal(a1, a2)
     assert not np.array_equal(a2, b2)
     assert r.stats["effects"] == ["warp", "palette"]
     # (plan 36 T3: the palette a wire into output 2's picture, no fold)
@@ -498,8 +488,7 @@ def test_a_presenter_lays_the_folded_hands_and_shows_the_folded_frame(ctx):
     hands 2, folded from that Ghost at its opacity; with the palette into
     output 2, output 2's hand-off frame is the folded one and output 1 is
     byte for byte the frame without it."""
-    import numpy as np
-    from test_outputs import H, W, keep_run, rig, run, views
+    from test_outputs import H, W, keep_run, rig, run, same_bytes, views
 
     from hyperspace.ghost import GhostState
 
@@ -551,7 +540,7 @@ def test_a_presenter_lays_the_folded_hands_and_shows_the_folded_frame(ctx):
 
     plain, a1, pa = frame(False)
     r, b1, pb = frame(True)
-    assert np.array_equal(a1, b1)
+    assert same_bytes(ctx, a1, b1)
     assert pb.handoff.frame is not None and pa.handoff.frame is not None
     assert "palette" in r.stats["effects"] and "palette" not in plain.stats["effects"]
 

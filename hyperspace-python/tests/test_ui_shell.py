@@ -12,6 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 from conftest import seed
+from fonts import MAC_FONTS, as_drawn
 from imgui_bundle import imgui, implot
 
 from hyperspace import hands, lfo, routing, tempo, ui, ui_presets, ui_routing
@@ -1614,15 +1615,20 @@ def test_the_footer_says_what_a_learn_waits_for_and_what_it_did(rig, monkeypatch
     short = min((p.id for p in rig.reg), key=len)            # room for the whole line
     lrn.arm(short, "hand:left")
     line = f"·  learning {short} — move the left hand… (click to cancel)"
+    # (off the Mac its wider face may leave no room for the hover's words: fonts.py)
+    lines = {line} if MAC_FONTS else {line, line.removesuffix(" (click to cancel)")}
     for page in ("view", "routing", "presets", "system", "hands"):
         clock[0] += 0.5
-        assert footer(page) == [(line, rgb(ui.RED))], page
+        (said,) = footer(page)
+        assert said[0] in lines and said[1] == rgb(ui.RED), page
     clock[0] += 10 * ui.MESSAGE_S                            # it never times out
-    assert footer("lfo") == [(line, rgb(ui.RED))]
+    (said,) = footer("lfo")
+    assert said[0] in lines and said[1] == rgb(ui.RED)
     # a longer id: the line keeps what it waits for; "click to cancel" is on the hover
     lrn.arm("fx.kaleido.segments", "hand:right")
-    assert footer("lfo") == [("·  learning fx.kaleido.segments — move the right hand…",
-                              rgb(ui.RED))]
+    (said,) = footer("lfo")
+    assert as_drawn([said[0]], "·  learning fx.kaleido.segments — move the right hand…")
+    assert said[1] == rgb(ui.RED)
     # a refusal that leaves it armed: the warning for MESSAGE_S, then the armed line again
     lrn.arm("view.depth4", "desk")
     table.set_layer("global")

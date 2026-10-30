@@ -25,6 +25,7 @@ from types import SimpleNamespace as NS
 
 import numpy as np
 import pytest
+from fonts import as_drawn
 from imgui_bundle import imgui
 from test_presets import boot
 from test_ui_shell import frame
@@ -521,7 +522,7 @@ def test_the_modifiers_strip_draws_its_blocks_and_routing_points_to_graph(
     texts.clear()
     ids.clear()
     frame(panel)
-    assert texts.index(ui_routing.POINTER) < texts.index("DESK  ·  PRESET LAYER")
+    assert texts.index(as_drawn(texts, ui_routing.POINTER)) < texts.index("DESK  ·  PRESET LAYER")
     assert "ROUTES" not in texts and "MODIFIERS" not in texts
     texts.clear()
     ids.clear()

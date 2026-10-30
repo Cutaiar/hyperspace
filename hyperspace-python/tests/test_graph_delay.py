@@ -1,4 +1,4 @@
-# ruff: noqa: F811 — `ctx` is test_graph_faces' fixture, taken as each GL test's argument
+
 """Plan 34 T2 — the delay (D, rows 353–358): last frame's picture, held by
 the renderer in a half-float ping-pong pair (`render.DelayPair`), so a loop
 drawn on GRAPH through a delay is legal and draws.
@@ -33,7 +33,6 @@ from test_graph_faces import (
     _rgba,
     _rig_frame,
     _tool,
-    ctx,  # noqa: F401 — the GL context fixture, taken as each GL test's argument
     section,
 )
 

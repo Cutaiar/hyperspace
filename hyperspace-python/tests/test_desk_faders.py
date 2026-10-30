@@ -312,17 +312,6 @@ def test_lines_and_points_opacity_are_performance_params_at_one(rig):
         assert routing.base_refusal(pid, rig.reg) is None
 
 
-@pytest.fixture(scope="module")
-def ctx():
-    moderngl = pytest.importorskip("moderngl")
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-    c.release()
-
-
 def test_an_opacity_at_zero_takes_its_layer_away_and_one_changes_nothing(ctx):
     from hyperspace.render import render_offscreen
 

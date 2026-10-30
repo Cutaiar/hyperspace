@@ -106,16 +106,6 @@ def test_the_ghost_settles_its_hands_once_through_the_shared_camera():
 moderngl = pytest.importorskip("moderngl")
 
 
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-    c.release()
-
-
 # the hands placed in the world by hand: 200 mm a shape unit, no tilt, the
 # palms ~2 units toward the eye from the shape's centre (FRONT) or ~2 away
 # from it (BEHIND); the shape's radius is about 1

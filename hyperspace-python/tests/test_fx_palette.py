@@ -24,16 +24,6 @@ W, H = 320, 200
 moderngl = pytest.importorskip("moderngl")
 
 
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-    c.release()
-
-
 def state(tmp_path, *, palette: bool = True) -> FxState:
     """The factory effects, with or without the palette file."""
     d = tmp_path / f"fx{len(list(tmp_path.iterdir()))}"

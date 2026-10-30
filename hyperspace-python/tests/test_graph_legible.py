@@ -21,6 +21,7 @@ from types import SimpleNamespace as NS
 import numpy as np
 import pytest
 from conftest import seed
+from fonts import as_drawn
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
 from test_graphview import _in_editor, stacked, thru
@@ -433,10 +434,11 @@ def test_routing_no_longer_draws_routes_or_modifiers_but_their_functions_stay(
     monkeypatch.setattr(ui_routing, "modifiers", lambda *a: strips.append(a) or mods(*a))
     frame(panel, "routing")
     frame(panel)
-    assert ui_routing.POINTER in texts
+    pointer = as_drawn(texts, ui_routing.POINTER)
+    assert pointer is not None
     assert "ROUTES" not in texts and "MODIFIERS" not in texts and not rows and not strips
     assert {"DESK  ·  PRESET LAYER", "MACROS", "SESSION", "SINKS"} <= set(texts)
-    assert texts.index(ui_routing.POINTER) < texts.index("DESK  ·  PRESET LAYER")
+    assert texts.index(pointer) < texts.index("DESK  ·  PRESET LAYER")
     # the functions stay
     assert ui_routing._sources(panel, router) and ui_routing._targets(panel)
     b = ui_routing.add_route(panel, "fx.acid.mix", source=m.address, depth=0.4)

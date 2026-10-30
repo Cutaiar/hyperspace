@@ -69,7 +69,7 @@ def open_source(sid: str, resolver: Resolver) -> Source:
         if Path(path).suffix.lower() in STILL_EXT:
             return StillSource(sid, path)
         if Path(path).suffix.lower() in VIDEO_EXT:
-            from .video import VideoSource   # lazily: pulls in nothing heavy itself
+            from .video import VideoSource  # lazily: pulls in nothing heavy itself
             return VideoSource(sid, path, cache=getattr(resolver, "proxy_cache", None))
         return MissingSource(sid, error("unsupported"))
     if parsed.kind == "phone":   # reserved (V2): parsed, never opened

@@ -1,4 +1,4 @@
-# ruff: noqa: F811 — `ctx` is test_graph_faces' fixture, taken as each GL test's argument
+
 """Plan 36 T4 (W4, D2, D3): look-back and dream, two nodes.
 
 `lookback` is picture in → trail out: it records what is wired into its
@@ -23,7 +23,6 @@ from test_graph_faces import (
     _media,
     _px,
     _rgba,
-    ctx,  # noqa: F401 — the GL context fixture, taken as each GL test's argument
 )
 
 from hyperspace import graph as G

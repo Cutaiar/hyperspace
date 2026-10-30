@@ -101,16 +101,6 @@ def test_held_the_page_wants_from_the_previews_thumbnails(rig):
 moderngl = pytest.importorskip("moderngl")
 
 
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-    c.release()
-
-
 def _setup(ctx):
     from test_outputs import H as HH
     from test_outputs import W, fbo, scene_view

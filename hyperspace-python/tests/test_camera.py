@@ -13,7 +13,6 @@ import math
 import shutil
 from pathlib import Path
 
-import moderngl
 import numpy as np
 import pytest
 from conftest import CORPUS
@@ -148,12 +147,6 @@ def test_the_pan_range_keeps_a_routed_pan_as_far_as_it_was():
 
 
 # --------------------------------------------------------------- the renderer
-
-@pytest.fixture(scope="module")
-def ctx():
-    c = moderngl.create_context(standalone=True)
-    yield c
-    c.release()
 
 
 def _view(**kw) -> ViewState:

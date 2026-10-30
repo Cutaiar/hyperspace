@@ -536,14 +536,18 @@ _PARK = None       # a 1×1 framebuffer bound between rigs, so none of theirs is
 def context() -> moderngl.Context:
     """The one standalone context every rig draws on, made once and kept
     (releasing a context leaves none current, which strands the caller's;
-    tests/test_golden_frames.py uses this one too). Its objects are freed
-    when they are collected (`gc_mode` auto), so each rig's renderer goes
-    with the rig (`render_all` collects after each)."""
+    tests/test_golden_frames.py uses this one too), and made current again
+    on every call: a context made and released since (each test's own,
+    tests/conftest.py) left none current, and GL calls go to the current
+    one. Its objects are freed when they are collected (`gc_mode` auto),
+    so each rig's renderer goes with the rig (`render_all` collects after
+    each)."""
     global _CTX, _PARK
     if _CTX is None:
         _CTX = moderngl.create_context(standalone=True)
         _CTX.gc_mode = "auto"
         _PARK = _target(_CTX, (1, 1))
+    _CTX.__enter__()
     return _CTX
 
 

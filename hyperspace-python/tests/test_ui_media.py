@@ -11,6 +11,7 @@ never may."""
 from types import SimpleNamespace as NS
 
 import pytest
+from fonts import MAC_FONTS
 from imgui_bundle import imgui
 from test_ui_shell import _click, _drawn, _mouse, frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
@@ -109,7 +110,8 @@ def test_banner_lists_missing(rig, monkeypatch):
     lines = [s for s in drawn if "not on this Mac" in s]
     assert len(lines) == 2
     assert "local:gone.mp4" in lines[0] and "camera:FaceTime HD Camera" in lines[1]
-    assert all("black" in s for s in lines)
+    # (off the Mac its wider face fits the longer line shorter: fonts.py)
+    assert all("black" in s or (not MAC_FONTS and s.endswith("…")) for s in lines)
     # many: the first few, then how many more — the page still fits
     for i in range(BIN):
         state.assign("h", i, f"local:x{i}.png")

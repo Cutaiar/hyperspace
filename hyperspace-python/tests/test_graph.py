@@ -340,16 +340,6 @@ def test_depth_aware_wiring_hands_each_composite_and_output_the_scenes_depth():
 moderngl = pytest.importorskip("moderngl")
 
 
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-    c.release()
-
-
 def test_the_graph_is_built_once_per_set_of_switches_and_reused(ctx):
     """Frames with the same windows evaluate one Graph object; a mute
     flipped builds nothing (plan 35 B: it is read at the window); another

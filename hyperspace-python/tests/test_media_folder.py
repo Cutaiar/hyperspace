@@ -229,7 +229,7 @@ def test_added_file_is_listed_and_goes_missing(mk, tmp_path):
     src = png(tmp_path / "away" / "p.png")
     sid = f.add_file(src)
     f.scan()
-    e = [e for e in f.entries if e.sid == sid][0]
+    e = next(e for e in f.entries if e.sid == sid)
     assert e.group == "added" and e.status == "ready"
     src.unlink()
     f.scan()
@@ -304,6 +304,9 @@ def test_a_file_still_downloading_is_not_opened_until_it_is_ready(mk, monkeypatc
     assert f.status("local:a.png") == "fetching" and f.path("local:a.png") is None
     was = f.changed
     dataless["on"] = False                     # the download landed
+    # the read the first scan started (the one that asks for the download)
+    # is done before the next looks: one still in flight reads `fetching`
+    assert wait_for(lambda: not f._inflight)
     f.scan()
     assert f.status("local:a.png") == "ready" and f.path("local:a.png") == f.local / "a.png"
     assert f.changed == was + 1

@@ -112,16 +112,6 @@ def test_an_effect_node_takes_an_image_and_makes_one():
 moderngl = pytest.importorskip("moderngl")
 
 
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-    c.release()
-
-
 def _count(r):
     """A counting stub over the frame chain's `run_one`: (name, dst) per pass."""
     calls = []

@@ -466,15 +466,6 @@ def test_the_labels_stack_at_the_hands_edge_in_frame_without_crossing():
 
 # ---------------------------------------------------------------- GL
 
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-    c.release()
-
 
 def frame(ctx, *, src=None, on=True, alpha=1.0, fx: FxState | None = None, frames=4,
           renderer: Renderer | None = None, t0: float = 2.0):

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import wave
 from pathlib import Path
 
@@ -32,13 +33,17 @@ T = np.arange(N) / SR
 
 
 def write_wav(path: Path, x: np.ndarray) -> str:
+    """Written beside `path` and renamed onto it, so a reader (another
+    xdist worker generating the same files) never sees one half written."""
     x = np.clip(x, -1.0, 1.0)
     pcm = (x * 32767.0).astype("<i2")
-    with wave.open(str(path), "wb") as w:
+    part = path.with_name(f".{path.stem}.{os.getpid()}.wav")
+    with wave.open(str(part), "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
         w.setframerate(SR)
         w.writeframes(pcm.tobytes())
+    os.replace(part, path)
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 

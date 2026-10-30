@@ -2925,9 +2925,10 @@ uv run ruff check .
   `patterns.py`'s table and checks every input moves every mode;
   `test_the_face_shaders_pass_the_reference_compiler` runs
   `glslangValidator` and skips where it is missing. Fit tests measure in
-  this machine's font metrics: in the cloud container test_fx's own two
-  fit tests miss by 18 px, so a pass or a fail there says nothing about
-  the Mac.
+  this machine's font metrics. Off the Mac `ui.py` falls back to DejaVu,
+  which is wider: a test that holds a line whole (or every desk glyph
+  drawn) holds it on the Mac and accepts the fitted form elsewhere
+  (`tests/fonts.py`: `MAC_FONTS`, `as_drawn`).
 - The golden frames: `tests/test_golden_frames.py` compares 596
   full-resolution frames — every corpus preset in every output state,
   hands absent and present, the other wirings, the fixture presets and a
@@ -2994,6 +2995,55 @@ uv run ruff check .
   `tests/test_osc.py` (`pythonosc`'s client to 127.0.0.1 on a port the
   device bound itself) and `tests/test_clouds.py`.
   `tests/test_app_boundary.py`'s `ORDER` pins the three device slots.
+
+### CI
+
+`.github/workflows/tests.yml` runs on every pull request and every push
+to `main`: one job, `tests`, on `ubuntu-24.04` — `uv sync --locked`,
+`uv run ruff check .`, then the fast tier under Xvfb with
+`--timeout 120` (pytest-timeout: a hung test fails alone and names
+itself instead of stalling its worker) and `--max-worker-restart=0` (a
+crashed worker fails the run; xdist's replacement for one stalled the
+`loadgroup` scheduler at 99 %). The fast tier takes about two minutes on
+four cores.
+
+- **What it leaves out.** `UV_NO_GROUP="hands dream"`: no Ultraleap SDK
+  to build `leapc-cffi` against, and Linux torch wheels pull gigabytes
+  of CUDA no fast-tier test imports. `[tool.uv] dependency-metadata`
+  states `leapc-cffi`'s metadata, so `uv lock` needs no SDK either. The
+  same run on a Linux machine:
+
+  ```bash
+  sudo apt-get install libasound2-dev libportaudio2 libgl-dev xvfb fonts-dejavu-core glslang-tools
+  export UV_NO_GROUP="hands dream"
+  uv sync --locked
+  xvfb-run -a uv run pytest -q --timeout 120
+  ```
+
+- **Linux, not macOS.** A `macos-15` job was tried (2026-10-29): its GL
+  is "Apple Software Renderer" (no GPU in the runner's VM), it has no
+  Ultraleap SDK, and about fifty tests hung there to the 120 s timeout,
+  30+ minutes against Linux's 2.5. Runners cost nothing on a public
+  repository; the time and the hangs decided it. GL on Linux
+  is Mesa's software rasteriser, llvmpipe. What only the Mac can judge
+  skips or loosens itself, narrowly: the golden frames (`Apple M3 Max`
+  only), `test_render.py::test_render_performance` (a frame-rate floor
+  needs a GPU; it skips on a software rasteriser), the fit tests above,
+  and `test_outputs.same_bytes`, which holds two pictures byte for byte
+  on Apple's GL and within one step elsewhere (llvmpipe does not read a
+  texture drawn 1:1 through a LINEAR sampler exactly on its texel).
+- **GL memory.** The `ctx` fixture (`tests/conftest.py`) is a context
+  per test, released after it. A `Renderer` has no release, so what a
+  test builds lives as long as its context; one context per module grew
+  an xdist worker past 4 GB on llvmpipe (which holds textures in the
+  process) and the kernel killed it. Per test, a worker peaks near 1 GB.
+  `test_golden_frames.py` and `test_graph_frame.py` keep their own
+  module-scoped context for their module-scoped rigs.
+- **Making it blocking** is a setting on `main`, not a file: Settings →
+  Rules → Rulesets → New branch ruleset, target `main`, "Require status
+  checks to pass", add `tests` (or Settings → Branches → a protection
+  rule for `main` → "Require status checks to pass before merging" →
+  `tests`).
 
 What only a person at the machine can check is
 [`TESTING-GUIDE.md`](TESTING-GUIDE.md) and the numbered list in

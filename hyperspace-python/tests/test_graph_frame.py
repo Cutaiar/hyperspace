@@ -362,6 +362,15 @@ def ctx():
     yield c
 
 
+@pytest.fixture(autouse=True)
+def _current(request):
+    """This module's context current again before each test that draws on
+    it: a test on this worker since may have made and released its own
+    (tests/conftest.py's `ctx`), which leaves none current."""
+    if "ctx" in request.fixturenames:
+        request.getfixturevalue("ctx").__enter__()
+
+
 @pytest.fixture(scope="module")
 def rig(ctx):
     """legacy6 with two synthetic hands present (the golden rig), its

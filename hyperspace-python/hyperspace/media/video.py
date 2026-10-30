@@ -115,7 +115,7 @@ class VideoSource:
             if container is not None:
                 try:
                     container.close()
-                except Exception:  # noqa: BLE001
+                except Exception:  # noqa: BLE001, S110
                     pass
 
     def _play(self, container, stream) -> None:

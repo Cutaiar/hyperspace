@@ -34,16 +34,6 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures" / "presets"
 W, H = 180, 48          # every 2° of hue across; saturation and brightness down
 
 
-@pytest.fixture(scope="module")
-def ctx():
-    try:
-        c = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    yield c
-    c.release()
-
-
 def rainbow() -> np.ndarray:
     """(H, W, 3) floats: hue across (0 → 358°), saturation 0 → 1 over the
     top half's rows, brightness 0 → 1 over the bottom half's (the other at 1)."""
