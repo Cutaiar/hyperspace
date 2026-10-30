@@ -16,6 +16,7 @@ over IAC, a second screen — is [`docs/SETUP.md`](docs/SETUP.md).
 uv sync
 uv run pytest -q       # the test suite
 uv run hyperspace      # opens the render window and the control window
+uv run hyperspace --laptop   # no projector: the render output stays a plain window
 ```
 
 The manual — every config key, page, key binding, the APC40 map, the
