@@ -51,7 +51,6 @@ another parts function, or another class with the same `draw`.
 from __future__ import annotations
 
 import math
-import os
 from dataclasses import dataclass, field
 from itertools import pairwise
 
@@ -660,13 +659,16 @@ def layout_tethers(items: list, view_proj: np.ndarray, size: tuple[int, int],
 
 
 _FONT_PATHS = (
-    (os.path.join(os.path.dirname(__file__), "fonts", "Inter-Bold.ttf"), 0),
+    ("/System/Library/Fonts/Avenir Next.ttc", 5),
+    ("/System/Library/Fonts/Helvetica.ttc", 0),
+    ("C:/Windows/Fonts/segoeuib.ttf", 0),
+    ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 0),
 )
 
 
 def _font(px: int):
-    """A PIL font at `px`: the panel's label face (hyperspace/fonts/),
-    else the Roboto imgui_bundle ships (found by path, not imported),
+    """A PIL font at `px`: the system face the panel uses where there is
+    one, else the Roboto imgui_bundle ships (found by path, not imported),
     else PIL's own."""
     from PIL import ImageFont
 

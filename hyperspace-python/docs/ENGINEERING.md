@@ -2931,7 +2931,7 @@ uv run ruff check .
   the symbols they lack; its README has sources and licences), never a
   system font, so a fit test measures the same on the Mac and in CI and
   holds every line whole everywhere. A fit test that breaks is fixed in
-  the layout, not loosened. `ghost.py`'s labels use the same Inter Bold.
+  the layout, not loosened.
 - The golden frames: `tests/test_golden_frames.py` compares 596
   full-resolution frames — every corpus preset in every output state,
   hands absent and present, the other wirings, the fixture presets and a
