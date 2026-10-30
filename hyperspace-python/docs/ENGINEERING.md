@@ -2921,6 +2921,14 @@ uv run ruff check .
   page draws and fits, every factory effect compiles. Extra windows and
   screens are fake GLFW window systems (`tests/test_app_boundary.py`).
   `HYPERSPACE_FRAMES=n uv run hyperspace` is a windowed smoke run.
+- Driving the panel: `tests/ui_driver.py` clicks, picks from combos and
+  types into sliders through imgui's own input queue, finding each
+  control by its id (`view.inst_fit`), not by where it was drawn —
+  `tests/test_ui_driver.py` on the headless rig. `tools/app_driver.py`
+  runs the same actions in the real app, from a seeded fresh home, and
+  captures both windows (`tools/drive_instances.py`, a demo script). The
+  `drive-the-app` skill (`.claude/skills/`) is the how-to for a demo or a
+  look by eye, and why not Dear ImGui's Test Engine.
 - The patterns: `tests/test_patterns.py` holds the shader to
   `patterns.py`'s table and checks every input moves every mode;
   `test_the_face_shaders_pass_the_reference_compiler` runs
@@ -3019,6 +3027,10 @@ four cores.
   uv sync --locked
   xvfb-run -a uv run pytest -q --timeout 120
   ```
+
+  A Claude Code cloud session makes the same machine at start
+  (`.claude/hooks/session-start.sh`): the libraries, the sync, a display
+  on `:99`, and `UV_NO_GROUP` kept for the session.
 
 - **Linux, not macOS.** A `macos-15` job was tried (2026-10-29): its GL
   is "Apple Software Renderer" (no GPU in the runner's VM), it has no
