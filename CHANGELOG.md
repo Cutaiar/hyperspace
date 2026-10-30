@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.1 — 2026-10-30
+
+### Panel
+
+- The panel's fonts ship inside the app — Inter for words, JetBrains Mono for numbers — so every machine draws the same text (#297)
+
+### Renderer
+
+- Effects and the cut read their own pixel exactly — a 1:1 read that landed a step off on ~0.7% of pixels now copies byte for byte (#296)
+
+### For developers
+
+- CI on every PR and push to `main`: ruff + the fast test tier on Linux, ~3.5 min, green off the Mac (#286)
+- Vercel deploys `main` only — PR previews are gone; a manual `vercel deploy` still makes one (#294)
+- Cloud sessions set themselves up like CI, and a script can drive the app's panel by control id with no person at the rig (#295)
+
 ## v1 — 2026-10-29
 
 ### Graph
