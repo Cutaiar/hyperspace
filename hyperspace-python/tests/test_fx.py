@@ -379,6 +379,36 @@ def test_blend_and_mix_match_numpy(ctx, fxdir, blend, mix):
     assert np.allclose(got, c, atol=2 / 255), (got, c)
 
 
+def test_a_pass_reads_its_own_pixel_byte_for_byte(ctx, fxdir, monkeypatch):
+    """The picture under an effect's pixel (FS_TAIL's `here`) and the copy
+    an effect with no program makes are read 1:1 by texelFetch: a
+    half-float picture comes back exactly, into a rect off the corner too.
+    (Through a LINEAR sampler llvmpipe moves ~1 % of such pixels a step.)"""
+    write(fxdir, "const", CONST.format(blend="mix"))
+    st = FxState(fxdir)
+    st.values["const"].update(on=True, mix=0.0)          # c = a: the read alone
+    chain = FxChain(ctx, st)
+    w, h = 64, 40
+    rgb = np.random.default_rng(3).random((h, w, 3), dtype=np.float32)
+    a = rgb.max(axis=2, keepdims=True)                  # premultiplied: alpha covers rgb
+    want = np.concatenate([rgb, a], axis=2).astype(np.float16)
+    (src, _), _ = chain.pool((w, h))
+    src.write(want.tobytes())
+    out = ctx.texture((w + 8, h + 4), 4, dtype="f2")
+    fbo = ctx.framebuffer(color_attachments=[out])
+
+    def through(name):
+        fbo.clear(0.0, 0.0, 0.0, 0.0)
+        fbo.viewport = (8, 4, w, h)
+        chain.run_one(name, src, fbo, 0.0, opaque=0)
+        got = np.frombuffer(out.read(), dtype=np.float16).reshape(h + 4, w + 8, 4)
+        return got[4:, 8:]
+
+    assert np.array_equal(through("const"), want)
+    monkeypatch.setattr(chain, "_program", lambda name: None)
+    assert np.array_equal(through("const"), want)
+
+
 def test_a_generator_lights_a_transparent_ground(ctx):
     st = FxState()
     st.values["plasma"]["on"] = True

@@ -3030,8 +3030,12 @@ four cores.
   only), `test_render.py::test_render_performance` (a frame-rate floor
   needs a GPU; it skips on a software rasteriser), the fit tests above,
   and `test_outputs.same_bytes`, which holds two pictures byte for byte
-  on Apple's GL and within one step elsewhere (llvmpipe does not read a
-  texture drawn 1:1 through a LINEAR sampler exactly on its texel).
+  on Apple's GL and within one step elsewhere. Every 1:1 read is a
+  `texelFetch`, exact on every driver; llvmpipe still moves an effect's
+  own pass by a step: it filters in 32-bit float, so a picture held in a
+  half-float pool texture rounds twice on its way to RGBA8 where one
+  painted straight there rounds once, and it interpolates `v_uv` a
+  rounding apart on a multisampled target.
 - **GL memory.** The `ctx` fixture (`tests/conftest.py`) is a context
   per test, released after it. A `Renderer` has no release, so what a
   test builds lives as long as its context; one context per module grew
