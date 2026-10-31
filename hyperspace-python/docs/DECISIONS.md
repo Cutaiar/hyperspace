@@ -273,6 +273,7 @@ replaces a row, rewrite that row instead of adding a new one.
 | `dream.layer` is stored as an index into `lookback.LAYERS`, which is append-only: a new layer goes at the end, so a saved look keeps its layer. The menu's order is `LAYER_INFO`'s. | `lookback.LAYERS` | row 69 |
 | A net's weights are read once a run: every layer of that net is a cut of the same loaded stack. | `dream.build_trunk`, `DreamWorker.stacks` | row 69 |
 | The dream's "speed" is `dream.k`, read as the dream frames in which a frame's share halves. | `params.dream_speed_text` | row 70 |
+| **Shipped effect defaults are calm** (the owner, 2026-10-31, after the show of 2026-10-30: "we find ourselves going into the speed multiplier … and the amount modifier … and turning those values down to 0.05× or 5 %. Very, very low values are really convincing and compelling"): each effect's `@speed` is about a quarter of what it was (floored at 0.1 where lower would read as still), its amount-type `@param` defaults about a third (never below where switching it on shows nothing), and an LFO's depth starts at 0.5, so an effect switched on reads as a drift, not a jolt. Only the defaults moved: no range changed, and a preset's own values are untouched, since a preset stores every param it names and takes a default only for one it does not. Tapers and coarse/fine control are a later change. | `shaders/fx/*.glsl` (`@speed`, `@param`), `lfo.LFO.depth` | owner (2026-10-31) |
 
 ## Render graph without a stack (plan 33)
 
