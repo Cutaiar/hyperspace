@@ -201,6 +201,14 @@ THIN, THICK = 1.5, 5.5   # a value cable at rest and at full reading
 WIRE = 3.0               # a render cable, a trigger
 NODE_W = 190.0 * graphview.SCALE    # a node's inner width
 PIN = 12.0               # a pin's square: a bigger target for a trackpad (2026-10-26)
+# 2026-10-31 (the show of 2026-10-30: cable targets "way too small" zoomed
+# out): a pin's hit target is never under MIN_PX screen px, however far out
+# the canvas is zoomed — the drawn pin stays PIN; the hit rect grows
+# (`pin_hit_size`), held to its row and to the pins beside it
+MIN_PX = 22.0            # a pin's hit target, at least, in screen px at any zoom
+STUB_REACH = (graphview.COL_W - NODE_W) / 2 + PIN   # a stub's hit, outward past the node's edge:
+#                          at most half the gap between two columns, so two columns' stubs never meet
+GROW_LEFT, CENTRED, GROW_RIGHT = -1, 0, 1   # where a pin's hit rect grows from its drawn square
 SIDE_W = 320.0           # the side column's width at first, when the page is wide enough for it
 SIDE_MIN = 240.0         # …the narrowest a drag may make it
 CANVAS_MIN = 240.0       # …and the canvas it must leave beside it
@@ -1320,7 +1328,7 @@ def _moved(panel, st: dict, view: graphview.View) -> None:
                 and (n.kind == "modifier" or isinstance(n.ref, Effect))):
             size = ed.get_node_size(ed.NodeId(_id(st, "n:" + n.id)))
             dropped(panel, view, n.id, (now[0] + size.x / 2, now[1] + size.y / 2),
-                    (size.x, size.y), lift_held())
+                    (size.x, size.y), lift_held(), zoom=st.get("zoom", 1.0))
     st["press"] = None
 
 
@@ -1337,6 +1345,7 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     # what a new preset lays out where you are looking (`in_view`)
     seen = ed.screen_to_canvas(corner)
     st["seen"] = (float(seen.x), float(seen.y))
+    st["zoom"] = ed.get_current_zoom() or 1.0   # canvas units a screen px, for the pins' hit rects
     # plan 37 C1: the canvas rect on screen this frame (what a thumbnail
     # is wanted for), and where the thumbnails come from
     far = ed.screen_to_canvas(imgui.ImVec2(corner.x + size.x, corner.y + size.y))
@@ -1560,10 +1569,32 @@ def _idle_line(st: dict, view: graphview.View, area: str, ids) -> None:
     ed.end_node()
 
 
-def _pin(st: dict, pin: str, kind, port: graphview.VPort, stub: str, drawn: set[str]) -> None:
+def pin_hit_size(zoom: float, row_h: float, pitch: float, min_px: float = MIN_PX,
+                 pin: float = PIN) -> tuple[float, float]:
+    """A pin's hit rect (width, height) in canvas units: its drawn square
+    `pin`, grown so it is never under `min_px` on screen while the canvas
+    is zoomed out (`zoom`: canvas units a screen pixel, as `title_fit`
+    takes it), and held to `pitch` across (the pins beside it, or a
+    stub's reach) and `row_h` down (its row) — never under `pin` even
+    when those are."""
+    want = max(pin, min_px * zoom)
+    return max(pin, min(want, pitch)), max(pin, min(want, row_h))
+
+
+def _pin(st: dict, pin: str, kind, port: graphview.VPort, stub: str, drawn: set[str],
+         room: tuple[float, float] = (PIN, graphview.ROW_H), grow: int = CENTRED) -> None:
+    """One pin: a `PIN` square drawn, its hit rect `pin_hit_size` within
+    `room` (across, down) — centred on the square, or (`grow`) out from
+    its left or right edge, a stub's way past the node's edge where
+    nothing competes; cables attach to the square as they did."""
     ed.begin_pin(ed.PinId(_id(st, pin)), kind)
     p0 = imgui.get_cursor_screen_pos()
     imgui.dummy(imgui.ImVec2(PIN, PIN))
+    w, h = pin_hit_size(st.get("zoom", 1.0), room[1], room[0])
+    hx = p0.x + PIN - w if grow == GROW_LEFT else p0.x if grow == GROW_RIGHT else p0.x - (w - PIN) / 2
+    hy = p0.y - (h - PIN) / 2
+    ed.pin_rect(imgui.ImVec2(hx, hy), imgui.ImVec2(hx + w, hy + h))
+    ed.pin_pivot_rect(p0, imgui.ImVec2(p0.x + PIN, p0.y + PIN))
     dl = imgui.get_window_draw_list()
     col = ui.u32(COLOURS.get(port.type, ui.DIM) if port.patched else ui.DIM)
     p1 = imgui.ImVec2(p0.x + PIN, p0.y + PIN)
@@ -1628,8 +1659,13 @@ def reveal(st: dict, view: graphview.View, b) -> str | None:
 
 def _stub(st: dict, pin: str, kind, lit: bool, drawn: set[str]) -> None:
     """A node's single in or out stub (plan 28 N7): where its bundles and
-    its collapsed render cables end, and where a drag lands to pick a port."""
-    _pin(st, pin, kind, graphview.VPort(pin, "", "", patched=lit), "", drawn)
+    its collapsed render cables end, and where a drag lands to pick a port.
+    Its hit grows outward, past the node's edge (an in stub left, an out
+    stub right: the label and the + button keep their room), and down to
+    the title line."""
+    _pin(st, pin, kind, graphview.VPort(pin, "", "", patched=lit), "", drawn,
+         room=(STUB_REACH, graphview.HEAD_H),
+         grow=GROW_LEFT if kind == ed.PinKind.input else GROW_RIGHT)
 
 
 def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
@@ -2670,11 +2706,13 @@ def _port(st: dict, port: graphview.VPort, drawn: set[str]) -> None:
         # a desk layer's port (plan 28 N5): lit while its layer is up, faint while down
         imgui.text_colored(ui.FAINT if not port.up else ui.TEXT if port.layer else ui.DIM, text)
         imgui.same_line(NODE_W - PIN)
-        _pin(st, port.pins[0], ed.PinKind.output, port, "", drawn)
+        _pin(st, port.pins[0], ed.PinKind.output, port, "", drawn,   # out past the node's edge
+             room=(STUB_REACH, graphview.ROW_H), grow=GROW_RIGHT)
         return
+    pitch = PIN + imgui.get_style().item_spacing.x    # base / mod / depth, side by side
     for pin in port.pins:
         stub = pin.partition(":")[0] if port.param is not None else ""
-        _pin(st, pin, ed.PinKind.input, port, stub, drawn)
+        _pin(st, pin, ed.PinKind.input, port, stub, drawn, room=(pitch, graphview.ROW_H))
         imgui.same_line()
     imgui.text_colored(ui.TEXT if port.patched else ui.DIM, text)
 
@@ -3838,7 +3876,7 @@ def route_from_menu(panel, p) -> None:
 
 
 def dropped(panel, view: graphview.View, nid: str, centre, size=None,
-            lift: bool = False) -> graphview.VCable | None:
+            lift: bool = False, zoom: float = 1.0) -> graphview.VCable | None:
     """A node let go at `centre` (canvas units; `size` its box): what
     `onto_plan` lit while it was dragged happens. A free effect goes onto
     the brightest picture cable under it — the one through its box nearest
@@ -3850,8 +3888,9 @@ def dropped(panel, view: graphview.View, nid: str, centre, size=None,
     either side of it closed over it, onto the cable — reordering the run;
     without ⌘ a drag only moves it on the canvas. Two cables as near as
     each other: a chooser opens (`st["onto"]`, `put_onto`) and nothing
-    changes until one is picked. Returns the cable it went into, or None."""
-    plan = onto_plan(panel, view, nid, centre, size, lift)
+    changes until one is picked. Returns the cable it went into, or None.
+    `zoom` (canvas units a screen px) grows how near is near: `graphview.drop_reach`."""
+    plan = onto_plan(panel, view, nid, centre, size, lift, zoom)
     if plan is None or plan["best"] is None:
         return None
     if plan["tie"]:
@@ -3865,7 +3904,7 @@ ONTO_TIE = 1.0          # canvas units: two cables this near each other's distan
 
 
 def onto_plan(panel, view: graphview.View, nid: str, centre, size=None,
-              lift: bool = False) -> dict | None:
+              lift: bool = False, zoom: float = 1.0) -> dict | None:
     """What letting node `nid` (its box `size`) go at `centre` would do — what the drag
     lights (`_drag_preview`) and what the drop does (`dropped`), so the two
     never disagree. None: a node no drop moves (not an effect, a wired
@@ -3884,11 +3923,12 @@ def onto_plan(panel, view: graphview.View, nid: str, centre, size=None,
         return None
     pins = _state(panel)["pin_xy"]
     mine = view.cables_of(nid)
+    near = graphview.drop_reach(zoom)           # never under NEAR screen px zoomed out
     if n.kind == "render" and isinstance(n.ref, Effect):
         e = render_edit(panel)
         ok, refused = [], {}
-        for d, c in graphview.cables_near(view, pins, centre, kinds=("render",), skip={nid},
-                                          size=size):
+        for d, c in graphview.cables_near(view, pins, centre, near, kinds=("render",),
+                                          skip={nid}, size=size):
             why = (graphview.onto_refusal(e, c) if e is not None
                    else None if c.type == graphview.IMAGE else "no picture cable")
             if why is None:
@@ -3897,8 +3937,8 @@ def onto_plan(panel, view: graphview.View, nid: str, centre, size=None,
                 refused[c.id] = why
     elif n.kind == "modifier" and not mine:     # (a wired modifier is not lifted)
         # (only a cable with a source to take: `insert_modifier`'s rule)
-        ok = [(d, c) for d, c in graphview.cables_near(view, pins, centre, skip=(nid,), size=size)
-              if c.addr]
+        ok = [(d, c) for d, c in graphview.cables_near(view, pins, centre, near, skip=(nid,),
+                                                        size=size) if c.addr]
         refused = {}
     else:
         return None
@@ -3966,7 +4006,7 @@ def _drag_preview(panel, st: dict, view: graphview.View) -> None:
     x, y = x0 + m.x - mx, y0 + m.y - my
     size = ed.get_node_size(ed.NodeId(_id(st, "n:" + nid)))
     plan = onto_plan(panel, view, nid, (x + size.x / 2, y + size.y / 2),
-                     (size.x, size.y), lift_held())
+                     (size.x, size.y), lift_held(), st.get("zoom", 1.0))
     if plan is None:
         return
     st["onto_lit"] = plan
