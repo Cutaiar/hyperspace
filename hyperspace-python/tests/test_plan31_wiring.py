@@ -175,7 +175,10 @@ def test_the_global_trigger_fires_step_0_the_same_frame():
 # ---- the envelopes in the patch ----
 
 def _square(r) -> None:
-    """LFO 1 a square in Hz at the slowest rate: its wave is +1 for ages."""
+    """LFO 1 a square in Hz at the slowest rate, at the full swing: its
+    wave is +1 for ages (depth 1 — it ships at 0.5 since the calmer
+    defaults of 2026-10-31; a test below that wants another sets its own)."""
+    r.reg["lfo.1.depth"].set(1.0)
     r.reg["lfo.1.shape"].set(lfo.SHAPES.index("square"))
     r.reg["lfo.1.sync"].set(0)
     r.reg["lfo.1.rate"].set(lfo.RATE_LO)
