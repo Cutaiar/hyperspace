@@ -459,6 +459,7 @@ def test_the_routing_page_builds_the_smoothed_energy_times_band_patch(rig):
     assert dict(ui_routing._sources(panel, router))["mod:2"] == "mod 2 combine"
     b = ui_routing.add_route(panel, "fx.acid.mix", source="mod:2", depth=1.0, op="position")
     assert b is not None and router.table.owner("fx.acid.mix") is b
+    b.motion = None            # the new row's spring off: the chain's arithmetic is under test
     # play it: the hand goes to full energy, band 0 at a half
     p = reg["fx.acid.mix"]
     seen = []

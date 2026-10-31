@@ -23,6 +23,7 @@ from hyperspace import devices, gamepad, graphview, learn, ui_graph, ui_pad, ui_
 from hyperspace import graph as G
 from hyperspace.devices import Port
 from hyperspace.learn import Learn
+from hyperspace.motion import DEFAULT_ROUTE_FEEL
 from hyperspace.routing import MOD_OPS, Binding, is_session_row
 
 PKG = Path(__file__).resolve().parents[1] / "hyperspace"
@@ -1647,9 +1648,46 @@ def test_an_lfo_route_is_unchanged(banks, monkeypatch):
     made = next(b for b in table.bindings if b.target == p.id)
     assert made.source.startswith("lfo:")
     assert (made.op, made.value) == ("position", 1.0)
-    assert learn.row_for("lfo:0", p) == Binding("lfo:0", p.id, "position", 1.0)
+    assert made.motion == DEFAULT_ROUTE_FEEL          # a new route is the smooth spring
+    assert learn.row_for("lfo:0", p) == Binding("lfo:0", p.id, "position", 1.0,
+                                                motion=DEFAULT_ROUTE_FEEL)
     assert learn.row_for("lfo:0", p, centred=True) == Binding(
-        "lfo:0", p.id, "push", learn.PUSH_DEPTH)
+        "lfo:0", p.id, "push", learn.PUSH_DEPTH, motion=DEFAULT_ROUTE_FEEL)
+
+
+def test_route_from_an_envelope_keeps_auto_feel(banks, monkeypatch):
+    """The owner, 2026-10-31: every new route is a spring — but an
+    envelope's row keeps auto (`motion=None`): it has an attack and a
+    release of its own, and a spring on top would blunt a kick-fired hit.
+    Route from ▸ env 1 lands that; Route from ▸ LFO 1 the spring."""
+    r, panel, table = banks.r, banks.panel, banks.r.router.table
+    p, _ = _glimmer_mix(r)
+    drawn_route_from(panel, p, monkeypatch, pick="env 1")
+    env_row = next(b for b in table.bindings if b.target == p.id)
+    assert env_row.source.startswith("env:") and env_row.motion is None
+    assert "motion" not in env_row.to_json()
+    table.remove(env_row)
+    drawn_route_from(panel, p, monkeypatch, pick="LFO 1")
+    lfo_row = next(b for b in table.bindings if b.target == p.id)
+    assert lfo_row.source.startswith("lfo:") and lfo_row.motion == DEFAULT_ROUTE_FEEL
+
+
+def test_a_graph_cable_into_a_mod_pin_lands_the_smooth_spring(rig):
+    """The owner, 2026-10-31: a cable dragged into a param's mod pin
+    (`Edit.connect` → `route_for` → `row_for`) lands with
+    `motion.DEFAULT_ROUTE_FEEL`, whatever row the table picks: the
+    position fader from a one-sided axis, a push from a centred one or
+    onto a centred target, a band lane's row."""
+    a, b = free_param(rig, centred=False), free_param(rig, centred=True)
+    e, _ = edit(rig, leap())
+    rows = [e.connect("out:hand:right.y", f"mod:{a.id}")]
+    c = free_param(rig, centred=False)                   # free still: `a` is taken now
+    rows.append(e.connect(f"mod:{c.id}", "out:hand:right.roll"))
+    rows.append(e.connect("out:lane:2", f"mod:{b.id}"))
+    assert [r.op for r in rows] == ["position", "push", "push"]
+    assert all(r.motion == DEFAULT_ROUTE_FEEL for r in rows)
+    assert all(r.to_json()["motion"] == {"mode": "spring", "dur": 0.5, "bounce": 0.0}
+               for r in rows)
 
 
 # ---------------------------------------------------------------- plan 35 T5: GRAPH deletes anything

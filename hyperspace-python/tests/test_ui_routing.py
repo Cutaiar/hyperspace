@@ -21,6 +21,7 @@ from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel 
 from hyperspace import routing, ui_graph, ui_presets, ui_routing
 from hyperspace.bands import CEIL
 from hyperspace.library import LibraryError
+from hyperspace.motion import DEFAULT_ROUTE_FEEL
 from hyperspace.params import Kind
 from hyperspace.routing import Binding, Bindings, Router
 from hyperspace.ui import PAGE_KEYS
@@ -93,6 +94,7 @@ def test_routing_add_and_delete(rig, tmp_path):
     frame(panel, "routing")
     b = ui_routing.add_route(panel, "view.bright")
     assert b.source == "lane:0" and b.op == "push" and b.value == 0.5
+    assert b.motion == DEFAULT_ROUTE_FEEL        # 2026-10-31: a new route is the smooth spring
     assert router.table.routes_to("view.bright") == [b]
     frame(panel)
     reg["band.select"].set(3)

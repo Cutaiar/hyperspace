@@ -87,6 +87,7 @@ from __future__ import annotations
 from . import modifiers, undo
 from .envelope import GROUP as ENV_SCHEME
 from .graph import pin_node, source_into
+from .motion import DEFAULT_ROUTE_FEEL
 from .params import PERFORMANCE_GROUPS, Kind, Param, Registry, is_lookback_knob
 from .routing import (
     MOD_OPS,
@@ -366,14 +367,23 @@ def row_for(source: str, p: Param, when: str | None = None, *,
     about a whole-number param with a short throw (`dream.steps`, 1–3)
     never reaches the next step: the learn would land and do nothing.
     Nothing reads the target's id or group and nothing is refused: a
-    rate-type param lands by the same table as any other."""
+    rate-type param lands by the same table as any other.
+
+    Every row lands with the default feel, `motion.DEFAULT_ROUTE_FEEL`
+    (the named `smooth` spring; the owner, 2026-10-31) — except an
+    envelope's, on any target, which keeps `motion=None`: an envelope has
+    an attack and a release of its own, and a half-second spring on top
+    would blunt a kick-fired hit. A saved row keeps whatever feel it has;
+    nothing here rewrites one."""
     stepped = p.kind is not Kind.CONTINUOUS or p.integer
-    if not stepped and base_scheme(source.partition(":")[0]) == ENV_SCHEME:
+    env = base_scheme(source.partition(":")[0]) == ENV_SCHEME
+    feel = None if env else DEFAULT_ROUTE_FEEL
+    if not stepped and env:
         return Binding(source, p.id, "push", max(1.0 - p.norm, PUSH_DEPTH), when=when)
     if not stepped and (centred or centred_target(p)):
         d = PUSH_DEPTH if depth is None else float(depth)
-        return Binding(source, p.id, "push", d, when=when)
-    return Binding(source, p.id, "position", 1.0, when=when)
+        return Binding(source, p.id, "push", d, when=when, motion=feel)
+    return Binding(source, p.id, "position", 1.0, when=when, motion=feel)
 
 
 class Learn:

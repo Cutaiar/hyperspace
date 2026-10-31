@@ -526,6 +526,7 @@ def test_the_smoothed_energy_times_band_patch_from_graph_alone(rig, monkeypatch)
     assert st["open"] == set()                                  # nothing was expanded
     b = router.table.owner("fx.acid.mix")
     assert isinstance(b, Binding) and b.source == combine.address
+    b.motion = None            # the new row's spring off: the chain's arithmetic is under test
     assert [m.inputs for m in router.table.modifiers] == [
         ("hand:right.energy",), (smooth.address, "lane:0")]
     # two stubs where neither stands for one output: still refused, in words
