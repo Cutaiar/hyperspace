@@ -501,9 +501,11 @@ no edge is hidden, and a window shows only its own wires.
 - **A new preset and "preset only".** `Presets.new` lays `shape → scene →
   output.all.image` where GRAPH is looking; `graphview.STARTERS` are
   pre-wired groups the picker adds. `graphview.preset_only(view)` returns
-  the ids GRAPH draws (the section's nodes, whatever is cabled to them, the
-  outputs they reach); `ui_graph.hidden_ids` hides the rest without
-  mutating or laying out anything.
+  the ids GRAPH draws (the section's nodes, whatever is cabled to them and
+  what feeds those to full depth, every output and every media channel);
+  `ui_graph.hidden_ids` hides the rest without mutating or laying out
+  anything, except a node the picker added this session
+  (`ui_graph.reveal_node`: page state, never saved, 2026-10-31).
 - **Known limitation.** The migrated dream dreams the look-back's
   occluded trail, not the raw capture (`plans/36-wysiwyg-graph.md`,
   register row 412).

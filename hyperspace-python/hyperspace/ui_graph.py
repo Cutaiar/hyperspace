@@ -318,6 +318,10 @@ def _state(panel) -> dict:
     st.setdefault("pan", (0.0, 0.0))        # canvas units every position is moved by
     st.setdefault("preset_only", PRESET_ONLY)     # plan 36 T6 (D4): on for every preset, kept across loads
     st.setdefault("hide", frozenset())      # the node ids that view leaves off this frame
+    # 2026-10-31: the nodes the picker added this session (canvas ids), drawn
+    # whatever the chip and the idle lines say until deleted (`reveal_node`):
+    # never saved, not an undo step
+    st.setdefault("revealed", set())
     st.setdefault("tint", False)            # plan 37 C2 (D3): plain red until lit
     st.setdefault("thumb_hover", None)      # the node whose thumbnail the pointer is on
     st.setdefault("tints", {})              # cable id → its tinted colour, this frame
@@ -499,15 +503,21 @@ def expand_all(st: dict, view: graphview.View, on: bool) -> None:
 def drawn_node(st: dict, n: graphview.VNode) -> bool:
     """Is node `n` drawn (plan 28 N9)? Every node but an idle one
     (`graphview.VNode.idle`: nothing in, nothing out), which is drawn only
-    while its area's idle line is open."""
+    while its area's idle line is open — unless the picker added it this
+    session (`reveal_node`, 2026-10-31): a fresh node has no cable yet, and a
+    node that is not drawn cannot be cabled. A folded group's member stays
+    folded whatever else says."""
     if n.id in st.get("hide", ()):         # plan 36 T6: left off by the preset-only view
         return False
+    if n.id in st.get("revealed", ()):
+        return True
     return not n.idle or n.area in st.setdefault("idle_open", set())
 
 
 def hidden_ids(st: dict, view: graphview.View) -> frozenset[str]:
     """Plan 36 T6: the node ids the **preset only** chip leaves off the
-    canvas (`graphview.preset_only` draws the rest); none while it is off.
+    canvas (`graphview.preset_only` draws the rest, and so does what the
+    picker added this session, `reveal_node`); none while it is off.
     Drawing only: no wire, table or position changes, and the layout
     (`areas_of`) still lays every node out, so hiding moves nothing.
     Plan 40 T2 (D4): and a folded group's members, whatever the chip —
@@ -515,8 +525,19 @@ def hidden_ids(st: dict, view: graphview.View) -> frozenset[str]:
     fold = frozenset(graphview.folded(view))
     if not st.get("preset_only", PRESET_ONLY):
         return fold
-    keep = graphview.preset_only(view)
+    keep = graphview.preset_only(view) | st.get("revealed", set())
     return frozenset(n.id for n in view.nodes if n.id not in keep) | fold
+
+
+def reveal_node(st: dict, nid: str) -> None:
+    """Node `nid` (a canvas id) drawn from now on whatever the preset-only
+    chip and its area's idle line say (`drawn_node`; 2026-10-31, the owner
+    after the show of 2026-10-30: in preset only a fresh node landed
+    hidden, "it just doesn't exist"). Page state for this session only:
+    never saved, not an undo step, forgotten when the node is deleted
+    (`remove_node`). Once the node is cabled into the section, preset only
+    draws it on its own."""
+    st.setdefault("revealed", set()).add(nid)
 
 
 def _drawn_id(st: dict, view: graphview.View, nid: str) -> bool:
@@ -2913,8 +2934,10 @@ def render_picker(panel, at=None) -> None:
     """The picker's render items (`graphview.picker`), grouped by primitive
     (plan 35 G, `graphview.PICKER_GROUP`): starters ▸ at the top (plan 36
     T5, `graphview.STARTERS`), then scene ▸, look-back ▸ (its look-back frames under `LOOKBACK_MENU`),
-    pictures ▸ (R28's switch over the channels under the switch), effects ▸
-    and copy of ▸. A frame node the section has already — the scene, the
+    pictures ▸ (R28's switch over the channels under the switch), media ▸
+    (2026-10-31: channel a–h, each selecting a channel that always exists,
+    `pick_channel`; the segment), masks ▸, effects ▸ and copy of ▸. A
+    frame node the section has already — the scene, the
     shape, the look-back, the backdrop, the pattern, an echo, the dream —
     is drawn disabled (`graphview.picked`): there is one of each. A node
     lands unwired (faint, "reaches nothing") where the menu opened (`at`,
@@ -2930,6 +2953,10 @@ def render_picker(panel, at=None) -> None:
             continue
         for kind, f, label in mine:
             if kind in ("echo", "channels"):        # (their own submenus)
+                continue
+            if kind == "channel":                   # 2026-10-31: selects, makes nothing
+                if imgui.menu_item_simple(label):
+                    pick_channel(panel, f, at)
                 continue
             if imgui.menu_item_simple(label, enabled=graphview.picked_name(kind, f) not in have):
                 add_render(panel, e, kind, f, at)
@@ -2970,6 +2997,21 @@ def switch_channels(panel, e: graphview.Edit, port: str, at=None) -> str | None:
     if why is None and e.added:
         _place_new(panel, f"render:{e.added}", at)
     return why
+
+
+def pick_channel(panel, c: str, at=None) -> None:
+    """The picker's media ▸ channel a–h (2026-10-31). Nothing is made — the
+    eight channels always exist (`graphview.build`) — and nothing is wired:
+    the channel's node is revealed (`reveal_node`), put where the menu opened
+    unless the preset's layout already places it, and selected and centred
+    next frame (`select_node`). The owner, after the show of 2026-10-30:
+    in preset only, with no channel wired to the faces, "you can't actually
+    spawn one, it just doesn't exist"."""
+    name = rgraph.channel_name(c)
+    nid = f"render:{name}"
+    pre, _ = _layouts(panel)
+    _place_new(panel, nid, None if pre is not None and pre.get(nid) is not None else at)
+    select_node(panel, name)
 
 
 def add_render(panel, e: graphview.Edit, kind: str, file: str | None = None, at=None):
@@ -3556,8 +3598,10 @@ def insert_modifier(panel, cable: graphview.VCable, kind: str):
 
 
 def _place_new(panel, nid: str, at) -> None:
-    """A node the picker made goes where the picker opened (the preset's
-    layout: modifiers and macros are the preset's)."""
+    """A node the picker made: revealed (`reveal_node`, 2026-10-31) and, when
+    the picker opened at a point, put there (the preset's layout:
+    modifiers and macros are the preset's)."""
+    reveal_node(_state(panel), nid)
     pre, _ = _layouts(panel)
     if at and pre is not None:
         px, py = panned(_state(panel))          # the menu's point is the panned canvas's
@@ -3624,7 +3668,10 @@ def remove_node(panel, nid: str):
         return None
     hit = graphview.voice_of(nid)
     why = voice_refusal(e.view.node(nid) if e.view is not None else None, nid) if hit else None
-    return _act(panel, f"delete node {nid}", why, lambda: e.remove_node(nid))
+    res = _act(panel, f"delete node {nid}", why, lambda: e.remove_node(nid))
+    if not isinstance(res, (graphview.Refusal, graphview.Ask)):   # 2026-10-31: its reveal goes
+        _state(panel).setdefault("revealed", set()).discard(nid)
+    return res
 
 
 def voice_refusal(n, nid: str | None = None) -> str | None:

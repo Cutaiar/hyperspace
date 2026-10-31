@@ -1896,7 +1896,8 @@ def test_deleting_a_window_unwires_it(tmp_path):
 
 def test_the_picker_groups_by_primitive(tmp_path):
     """The picker in the owner's groups: starters ▸ (plan 36 T5), then scene ▸,
-    look-back ▸, pictures ▸, media ▸ and masks ▸ (plan 39 T5), the effect files, a copy of each effect
+    look-back ▸, pictures ▸, media ▸ (the channels, 2026-10-31; the segment)
+    and masks ▸ (plan 39 T5), the effect files, a copy of each effect
     instance in the section — each item's group `PICKER_GROUP[kind]`."""
     section = {"frame": "wired", "nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
                "wires": [{"from": "scene", "to": "acid.image"},
@@ -1917,7 +1918,9 @@ def test_the_picker_groups_by_primitive(tmp_path):
         ("switch", None, "switch"),
         ("channels", "pattern.media", "faces media"), ("channels", "backdrop.image", "backdrop"),
         ("resize", None, "resize"), ("delay", None, "delay"),
-        # (plan 39 T5, W6: media ▸ the segment; masks ▸ the matte and the cut)
+        # (media ▸ the eight channels, 2026-10-31, and plan 39 T5 (W6)'s
+        # segment; masks ▸ the matte and the cut)
+        *(("channel", c, f"channel {c}") for c in "abcdefgh"),
         ("segment", None, "segment"), ("matte", None, "matte"), ("cut", None, "cut"),
         *(("effect", f, f) for f in files),
         ("copy", "acid", "copy of acid"), ("copy", "acid.2", "copy of acid.2")]
