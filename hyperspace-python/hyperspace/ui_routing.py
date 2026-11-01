@@ -111,8 +111,8 @@ meant to set; until it does, the table is found through the MIDI
 adapter (it shares it) and a Router is made over it — everything works
 but the bridge's `ext` feeds, which that router never sees. Right-click
 on any widget elsewhere offers "Route a lane here…" (`ctx_item`): a
-`lane:<selected band>` → that param `push` route at depth 0.5, and the
-page opens on it.
+`lane:<selected band>` → that param `push` route at `learn.LANE_DEPTH`
+(the calm depth a band lane lands at everywhere), and the page opens on it.
 """
 
 from __future__ import annotations
@@ -125,6 +125,7 @@ from imgui_bundle import imgui
 
 from . import apc40, motion, ui, ui_feel, ui_presets, undo
 from .bands import CEIL
+from .learn import LANE_DEPTH
 from .library import PRESETS
 from .modifiers import KINDS as MOD_KINDS
 from .modifiers import PARAMS as MOD_PARAMS
@@ -368,7 +369,7 @@ def router_of(panel) -> Router | None:
     return r
 
 
-def add_route(panel, target: str, source: str | None = None, depth: float = 0.5,
+def add_route(panel, target: str, source: str | None = None, depth: float = LANE_DEPTH,
               op: str = "push") -> Binding | None:
     """A new `push` row from the selected band's lane (or `source`) to
     target, into the loaded preset (no file written); it rests where its

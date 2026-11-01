@@ -84,7 +84,7 @@ table are all it needs.
 
 from __future__ import annotations
 
-from . import modifiers, undo
+from . import lfo, modifiers, undo
 from .envelope import GROUP as ENV_SCHEME
 from .graph import pin_node, source_into
 from .params import PERFORMANCE_GROUPS, Kind, Param, Registry, is_lookback_knob
@@ -120,6 +120,16 @@ PAD_SCHEMES = ("pad", "hat", "axis")    # what can complete a "pad" learn
 # written a second time: hands/core.py imports nothing from the package
 # (tests/test_learn.py::test_the_two_default_depths_agree holds them equal)
 PUSH_DEPTH = 0.25
+# a band lane's push depth (the owner, after the show of 2026-10-30: band
+# routes land far too hot). A lane reads u = band / bands.CEIL, ≈ 0.385 for
+# a nominal band, so the `position` row a lane used to land parked the
+# param at ~38 % of its throw and threw the base away, and a push at 0.5
+# added 0.19 of the throw per band — "each band pushes a third of the
+# range". A push of 0.12 about the base adds ≈ 0.05 of the throw per
+# nominal band: a shimmer the base shows through, and the depth knob
+# takes it up from there
+LANE_DEPTH = 0.12
+LANE_SCHEME = "lane"        # the analyzer's bands (routing.BUILTIN_LANES[0])
 
 
 def centred_target(p: Param) -> bool:
@@ -344,13 +354,22 @@ def row_for(source: str, p: Param, when: str | None = None, *,
             centred: bool = False, depth: float | None = None) -> Binding:
     """The row a hand learn makes (plan 18 WP3): its op and depth.
 
-        the target                       a centred axis   a one-sided axis   an envelope
-        continuous, centred on zero      push, depth D    push, depth D      push, depth H
-        any other continuous param       push, depth D    position, depth 1  push, depth H
+        the target                     a centred axis  a one-sided axis  a band lane  an LFO       an envelope
+        continuous, centred on zero    push, depth D   push, depth D     push, L      push, D      push, depth H
+        any other continuous param     push, depth D   position, depth 1 push, L      push, D      push, depth H
         an enum, a toggle, a trigger,
-        a whole-number param             position, 1      position, 1        position, 1
+        a whole-number param           position, 1     position, 1       position, 1  position, 1  position, 1
 
-    D is `depth`, or `PUSH_DEPTH` when the caller named none. An envelope
+    D is `depth`, or `PUSH_DEPTH` when the caller named none; L is
+    `depth`, or `LANE_DEPTH`. A band lane (the ``lane`` scheme) and an LFO
+    (``lfo``, `lfo.GROUP`) are pushes about the base on any continuous
+    target (the owner, after the show of 2026-10-30): a lane reads
+    `band / bands.CEIL`, ≈ 0.385 nominal, so as the fader it parked the
+    param at ~38 % of its throw and threw the base away, and as a push
+    at 0.5 ("Route a lane here…" until now) each band added 0.19 of the
+    throw — a third of a centred range's positive half; an LFO's output
+    is one-sided (0 … 1) and as the fader swept the whole throw whatever
+    the base. An envelope
     (the ``env`` scheme, `envelope.GROUP`) rests at 0 and only rises, so as
     the fader it pinned the param to its minimum between fires (the owner,
     2026-10-24: "they all reduce the base to 0 in between fires no matter
@@ -370,7 +389,10 @@ def row_for(source: str, p: Param, when: str | None = None, *,
     stepped = p.kind is not Kind.CONTINUOUS or p.integer
     if not stepped and base_scheme(source.partition(":")[0]) == ENV_SCHEME:
         return Binding(source, p.id, "push", max(1.0 - p.norm, PUSH_DEPTH), when=when)
-    if not stepped and (centred or centred_target(p)):
+    scheme = base_scheme(source.partition(":")[0])
+    if scheme == LANE_SCHEME and depth is None:
+        depth = LANE_DEPTH                  # L: a lane's own depth, where D is a hand's
+    if not stepped and (centred or centred_target(p) or scheme in (LANE_SCHEME, lfo.GROUP)):
         d = PUSH_DEPTH if depth is None else float(depth)
         return Binding(source, p.id, "push", d, when=when)
     return Binding(source, p.id, "position", 1.0, when=when)

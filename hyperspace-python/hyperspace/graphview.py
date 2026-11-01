@@ -3863,9 +3863,12 @@ class Edit:
         """The route a cable from `src` into `p`'s mod makes: the hand
         learn's row (`learn.row_for`) — a push at the hands' Learn depth
         (`hands.learn_depth`) where the source or the param is centred,
-        else the `position` fader at 1; from an envelope into a continuous
-        param, a push about the base at its headroom (the owner,
-        2026-10-24). Route from ▸ (`ui_graph.route_from`) lands the same."""
+        else the `position` fader at 1; from a band lane a push at
+        `learn.LANE_DEPTH` and from an LFO a push at `learn.PUSH_DEPTH`
+        on any continuous param (the owner, after the show of 2026-10-30);
+        from an envelope into a continuous param, a push about the base
+        at its headroom (the owner, 2026-10-24). Route from ▸
+        (`ui_graph.route_from`) lands the same."""
         addr = self.address(src)
         depth = None
         if _scheme(addr) == "hand":

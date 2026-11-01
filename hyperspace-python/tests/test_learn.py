@@ -6,6 +6,7 @@ stands for; the referee's refusal is held for the prompt."""
 import json
 from types import SimpleNamespace as NS
 
+import numpy as np
 import pytest
 
 from hyperspace.analysis import Analyser
@@ -255,6 +256,56 @@ def test_a_discrete_target_keeps_the_position_row(rig):
             assert b == Binding("hand:3", pid, "position", 1.0), (pid, centred)
             rig.table.remove(b)
     assert PUSH_DEPTH * 0.5 < MOD_ON             # why: half a throw of the push from "off"
+
+
+def test_a_band_lane_and_an_lfo_land_as_calm_pushes_about_the_base(rig):
+    """The owner, after the show of 2026-10-30: band routes far too hot.
+    A lane reads `band / CEIL` (≈ 0.385 nominal), so the `position` row it
+    used to land on a one-sided param parked it at ~38 % of its throw and
+    threw the base away; an LFO (0 … 1) as the fader swept the whole
+    throw. Now a lane is a push about the base at `LANE_DEPTH` (0.12) and
+    an LFO a push at `PUSH_DEPTH` (0.25), on any continuous target —
+    centred or not — with no rest of their own; a discrete target keeps
+    the fader, as a push never crosses its hysteresis. The two depths in
+    the owner's numbers: a nominal band adds 0.12 · 0.385 ≈ 0.046 of the
+    throw, where a push at 0.5 added 0.19."""
+    from hyperspace.bands import CEIL
+    from hyperspace.learn import LANE_DEPTH, LANE_SCHEME, row_for
+
+    reg = rig.reg
+    assert LANE_DEPTH == 0.12 and LANE_SCHEME == "lane"
+    assert LANE_DEPTH * (1.0 / CEIL) == pytest.approx(0.046, abs=0.001)
+    for pid in ("view.bright", "view.speed", "fx.mix", "camera.zoom",        # one-sided
+                "rot.rate.XY", "camera.yaw", "camera.pan.x"):               # centred on zero
+        p = reg[pid]
+        for centred in (False, True):
+            lane = row_for("lane:2", p, centred=centred)
+            assert (lane.op, lane.value, lane.rest) == ("push", LANE_DEPTH, None), (pid, centred)
+            osc = row_for("lfo:0", p, centred=centred)
+            assert (osc.op, osc.value, osc.rest) == ("push", PUSH_DEPTH, None), (pid, centred)
+        # a depth the caller names still wins, as for a hand
+        assert row_for("lane:2", p, depth=0.3).value == pytest.approx(0.3)
+        assert row_for("lfo:0", p, depth=0.3).value == pytest.approx(0.3)
+    for pid in ("view.plane.XY", "view.shape", "camera.reset", "dream.steps"):   # discrete
+        for src in ("lane:2", "lfo:0"):
+            assert (row_for(src, reg[pid]).op, row_for(src, reg[pid]).value) == \
+                ("position", 1.0), (pid, src)
+    # a lane's push in the preset's own arithmetic: the base shows through
+    p = reg["view.bright"]
+    p.set(0.5)
+    base = p.norm
+    row = row_for("lane:3", p)
+    row.motion = None            # the push's sum, whatever feel a new row is made with
+    rig.table.add(row)
+    router = Router(reg, rig.table)
+    lanes = np.zeros(8)
+    router.modulate(NS(lanes=lanes))
+    reg.apply()
+    assert p.eff_norm == pytest.approx(base)                     # silence: the base
+    lanes[3] = 1.0                                               # a nominal band
+    router.modulate(NS(lanes=lanes))
+    reg.apply()
+    assert p.eff_norm == pytest.approx(base + LANE_DEPTH / CEIL, abs=1e-6)
 
 
 def test_a_whole_number_param_keeps_the_position_row(rig):

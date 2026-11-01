@@ -73,7 +73,8 @@ def test_connecting_a_source_to_a_mod_port_adds_the_route_learn_would(rig):
     of the row the hand learn makes for that pair (`learn.row_for`): a
     one-sided hand axis on a plain param is the `position` fader at 1; a
     centred one (the device says `bipolar`) is a `push` at the hands'
-    Learn depth; a band lane the fader. It lands as one cable next build.
+    Learn depth; a band lane a push at `learn.LANE_DEPTH` (the owner,
+    after the show of 2026-10-30). It lands as one cable next build.
     The same pair learned by a hand lands the same row."""
     reg, table = rig.reg, rig.router.table
     reg["hands.learn_depth"].set(0.4)
@@ -86,7 +87,7 @@ def test_connecting_a_source_to_a_mod_port_adds_the_route_learn_would(rig):
     roll = e.connect(f"mod:{c.id}", "out:hand:right.roll")     # dragged from the input end
     assert roll.op == "push" and roll.value == pytest.approx(0.4)
     lane = e.connect("out:lane:2", f"mod:{b.id}")
-    assert lane.op == "push" and lane.value == learn.PUSH_DEPTH   # a centred target: push
+    assert lane.op == "push" and lane.value == learn.LANE_DEPTH   # a lane: a calm push
     # the hand's own learn of the first pair lands the same row
     table.remove(row)
     lrn = Learn(reg, table)
@@ -1638,16 +1639,17 @@ def test_an_envelope_on_a_toggle_stays_position(banks):
 
 def test_an_lfo_route_is_unchanged(banks, monkeypatch):
     """The envelope's row is the envelope's alone: an LFO into the same
-    param makes the row it made before (the table's: its out port is not
-    declared centred, so a plain param takes the fader; a centred pin a
-    push at PUSH_DEPTH)."""
+    param makes the table's own LFO row — a push about the base at
+    PUSH_DEPTH, not the headroom push (the owner, after the show of
+    2026-10-30: as the fader an LFO swept the whole throw whatever the
+    base); the same on a centred pin."""
     r, panel, table = banks.r, banks.panel, banks.r.router.table
     p, _ = _glimmer_mix(r)
     drawn_route_from(panel, p, monkeypatch, pick="LFO 1")
     made = next(b for b in table.bindings if b.target == p.id)
     assert made.source.startswith("lfo:")
-    assert (made.op, made.value) == ("position", 1.0)
-    assert learn.row_for("lfo:0", p) == Binding("lfo:0", p.id, "position", 1.0)
+    assert (made.op, made.value, made.rest) == ("push", learn.PUSH_DEPTH, None)
+    assert learn.row_for("lfo:0", p) == Binding("lfo:0", p.id, "push", learn.PUSH_DEPTH)
     assert learn.row_for("lfo:0", p, centred=True) == Binding(
         "lfo:0", p.id, "push", learn.PUSH_DEPTH)
 
