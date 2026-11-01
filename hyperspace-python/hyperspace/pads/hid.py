@@ -249,8 +249,9 @@ class HidPad:
             self.transport = "bluetooth"
             if r[0] == sony.BT_REPORT_ID and len(r) > 1:
                 self.tags.add(r[1] & 0x0F)
-        elif r[0] == sony.USB_REPORT_ID and not self.transport:
-            self.transport = "usb"
+        elif r[0] == sony.USB_REPORT_ID:
+            if not self.transport:
+                self.transport = "usb"
         else:
             return
         with self._lock:

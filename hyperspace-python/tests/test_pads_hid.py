@@ -65,6 +65,17 @@ def test_the_reader_calibrates_learns_its_link_and_decodes_once_a_frame():
     assert not bt.rumble_v2 and bt.tags == {1}               # a DualSense at update 0x0204
 
 
+def test_a_report_is_kept_whatever_hidapi_said_of_the_bus():
+    """hidapi's bus_type sets the link before any report: a USB report must
+    still be kept (a probe run against a fake pad found them all dropped)."""
+    for info, report in ((EDGE, bytes(usb_report(p9=0x40))),
+                         (DUALSENSE_BT, bt_report(bytes(usb_report(p9=0x40))[1:]))):
+        r = stepped(info, FakeDev())
+        r.transport = "bluetooth" if hid._bt_hint(info) else "usb"   # as `_run` sets it
+        r._take(report)
+        assert r.reports == 1 and r.latest().buttons[models.LP] == 1
+
+
 def test_outputs_go_out_on_change_after_the_take_over():
     dev = FakeDev()
     r = stepped(EDGE, dev)
@@ -332,3 +343,19 @@ def test_learn_pad_lands_the_edges_buttons_a_drag_a_pinch_and_a_tilt(monkeypatch
         pad.poll(1 / 60)
     gp.learn_from(pad, learn)
     assert learn.got == [("motion:roll", True)]
+
+
+def test_a_pad_entry_with_a_tape_plays_it(tmp_path, monkeypatch):
+    monkeypatch.setattr(gp.glfw, "joystick_present", lambda j: True)    # a tape wins over GLFW
+    path = tmp_path / "t.jsonl"
+    rec = hid.Recorder(path, "edge", "usb")
+    rec.write(bytes(usb_report(p9=0x80)), t=0.0)
+    rec.close()
+    pad = gp.Pad(tape=str(path))
+    pad.poll(1 / 60)
+    assert pad.source == "tape" and pad.jid is None and pad.model.id == "edge"
+    assert pad.down(gp.RP) and pad.touch_lanes() is not None
+    pad.close()
+    missing = gp.Pad(tape=str(tmp_path / "nope.jsonl"))
+    missing.poll()
+    assert not missing.on and "tape" in missing.tape_note
