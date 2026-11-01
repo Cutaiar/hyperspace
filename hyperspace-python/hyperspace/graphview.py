@@ -4621,7 +4621,14 @@ class Edit:
 # ---- a node dropped onto a cable: the geometry ----
 
 LINK_STRENGTH = 100.0      # imgui_node_editor's default `Style.link_strength`
-NEAR = 14.0                # canvas units: how close a drop must come to a cable
+NEAR = 14.0                # canvas units: how close a drop must come to a cable…
+
+
+def drop_reach(zoom: float = 1.0) -> float:
+    """…and never under `NEAR` screen px while the canvas is zoomed out
+    (2026-10-31; `zoom`: canvas units a screen pixel, 4 zoomed out four
+    times — the page passes the editor's, this module reads no imgui)."""
+    return NEAR * max(1.0, zoom)
 
 
 def bezier(p0, p3, strength: float = LINK_STRENGTH, steps: int = 16) -> list[tuple]:

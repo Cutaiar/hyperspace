@@ -521,6 +521,7 @@ The owner's ask (2026-10-27): "group some nodes together and then save that grou
 | A preset's desk template is one collapsible node on the GRAPH page; an edit inside is an override; the hands node folds as axes, pinches, grab, presence, dance. | `graphview.template_rows`, `graphview.hand_group` | rows 274, 276 |
 | The MODIFIERS strip's block is a modifier's editor; since plan 28 N7 it is drawn on GRAPH's side pane for a selected modifier node, not on ROUTING. | `ui_routing.modifier_block` | rows 247, 289 |
 | **A feel is shown as its shape beside its live history**: a static curve of what the setting does to a jump, and the last few seconds of the reading and of the param after the feel, sampled by the panel as it draws (the Router keeps nothing for it). The spring presets' list draws each preset's curve on one shared time axis. | `ui_feel.draw`, `ui_feel.spring_picker` | owner (2026-10-29) |
+| **A pin's hit target is at least 22 screen px at any zoom** (the show of 2026-10-30: cable targets far too small zoomed out). The drawn pin stays 12 canvas units; its hit rect grows as the canvas zooms out, held to its row and to the pins beside it, a stub's growing outward past the node's edge; a node-on-cable drop's reach grows the same way. | `ui_graph.pin_hit_size`, `graphview.drop_reach` | owner (2026-10-30) |
 
 ## Process
 
