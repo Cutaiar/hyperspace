@@ -1,15 +1,15 @@
 # Plan 42 — any controller in any role; the DualSense Edge
 
-**Built** on `plan-42-controllers` (2026-11-01), the day before the
-owner's DualSense Edge arrives, from published sources alone. Two layers,
-as the owner asked: **a foundation** in the app (pads/, the pad device,
+**Built** on `plan-42-controllers` (2026-11-01), the day before
+Dillon's DualSense Edge arrives, from published sources alone. Two layers,
+as Dillon asked: **a foundation** in the app (pads/, the pad device,
 the probe), and **an exploration** over it (the browser lab,
 `prototypes/edge-lab/`; the on-screen pad drawn for the pad in hand; two
 example patches). Decisions D1–D10 are recommendations built as written,
 pending the owner (register rows 544–553). Hand checks 407–415, group AP,
 are tomorrow's — the first with the controller.
 
-## The ask
+## The ask (Dillon, 2026-11-01)
 
 - "A strong foundation to get started and explore", then "an
   exploratory artifact to illustrate capabilities and ideas as a layer".
@@ -18,7 +18,7 @@ are tomorrow's — the first with the controller.
   the ability to support Xbox, Edge, Leap, USB controller, etc simply."
 - "You should be able to choose which controller is on which role. But
   you shouldn't get too hard-coded with this."
-- The three ideas the owner picked from the preset survey: **4** the
+- The three ideas Dillon picked from the preset survey: **4** the
   touchpad sets the zoom burst's centre (pinch zooms, twist turns in 4D);
   **5** shake to hit (an envelope on a jolt or a back button); **7**
   feedback through the pad (the light bar follows the palette, rumble on

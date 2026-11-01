@@ -6272,7 +6272,7 @@ first try).
 
 ## AP. The DualSense Edge, any controller in any role (plan 42)
 
-The owner's Edge, 2026-11-02 (decision register rows 544–553): the first
+Dillon's Edge, 2026-11-02 (decision register rows 544–553): the first
 checks with the controller in hand. Run `tools/hid_probe.py --check` (or
 the browser lab's checklist) first and commit its findings — it answers
 what these steps assume.

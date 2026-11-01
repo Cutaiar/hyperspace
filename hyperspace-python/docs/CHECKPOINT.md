@@ -164,7 +164,7 @@ as the owner's own, lower-cased (`dial`, `trip`, `plasma heart`,
 
 **Plan 42** (2026-11-01, on `plan-42-controllers`): any controller in any
 role and the DualSense Edge over USB and Bluetooth, written from published
-sources the day before the controller arrived
+sources the day before Dillon's controller arrived
 ([`plans/42-controllers.md`](plans/42-controllers.md)). Its D1–D10 are
 recommendations, pending the owner (register rows 544–553); its hand
 checks 407–415 (group AP) start with `tools/hid_probe.py --check` on the

@@ -578,7 +578,7 @@ here; overturn → the change, then the same.
 | 543 | The Wispr Flow mark is two shapes in the catalog, Flow mark and Flow capsules (indices 99 and 100, for good) | 405 | owner — 2026-10-17 |
 | 544 | Plan 42 D1: Sony pads read over hidapi, on USB and Bluetooth; GLFW only without hidapi | 407, 408 | (rec) — pending the owner |
 | 545 | Plan 42 D2: one vocabulary — a DualSense's buttons by Xbox name and position; the extras from index 32 | 407 | (rec) — pending the owner |
-| 546 | Plan 42 D3: `controller =` picks which pads an entry may take, in list order | 409 | (rec) — owner asked for it, 2026-11-01; the form pending |
+| 546 | Plan 42 D3: `controller =` picks which pads an entry may take, in list order | 409 | (rec) — Dillon asked for it, 2026-11-01; the form pending the owner |
 | 547 | Plan 42 D4: `touch:` and `motion:` are schemes of their own; not live without a finger or a sensor | 407, 412 | (rec) — pending the owner |
 | 548 | Plan 42 D5: a pad's outputs are nine sink ports on its role; an identity light and number with no row | 410, 411 | (rec) — pending the owner |
 | 549 | Plan 42 D6: trigger resistance by the official effects only | 411 | (rec) — pending the owner |
@@ -9334,8 +9334,8 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
 
 ### 544–553. Plan 42: any controller in any role; the DualSense Edge
 
-- **Asked.** The owner, 2026-11-01: a foundation and an exploration for
-  the DualSense Edge arriving the next day, **Bluetooth as well as USB**,
+- **Asked.** Dillon, 2026-11-01: a foundation and an exploration for
+  his DualSense Edge arriving the next day, **Bluetooth as well as USB**,
   "modular and extensible … Xbox, Edge, Leap, USB controller", and "you
   should be able to choose which controller is on which role … not too
   hard-coded". The ideas picked: the touchpad on the zoom burst (4), shake
