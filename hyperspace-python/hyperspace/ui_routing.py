@@ -373,11 +373,13 @@ def add_route(panel, target: str, source: str | None = None, depth: float = LANE
               op: str = "push") -> Binding | None:
     """A new `push` row from the selected band's lane (or `source`) to
     target, into the loaded preset (no file written); it rests where its
-    source does. None when the target already has a performer — the
-    prompt is up, and *Replace* puts the row in."""
+    source does and travels on the default feel (`motion.DEFAULT_ROUTE_FEEL`,
+    the `smooth` spring — the owner, 2026-10-31). None when the target
+    already has a performer — the prompt is up, and *Replace* puts the
+    row in."""
     router = router_of(panel)
     src = source or f"lane:{panel.control.selb}"
-    b = Binding(src, target, op, depth)
+    b = Binding(src, target, op, depth, motion=motion.DEFAULT_ROUTE_FEEL)
     try:
         router.table.add(b)
     except Owned as e:
@@ -1016,13 +1018,19 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
 
 
 def next_feel(m: Motion | None) -> Motion | None:
-    """The feel chip's next step along FEEL_CYCLE, keeping the knobs."""
+    """The feel chip's next step along FEEL_CYCLE, keeping follow's knobs;
+    the step onto spring lands on the default route feel's knobs (the
+    `smooth` spring, `motion.DEFAULT_ROUTE_FEEL`), the spring a new route
+    is made with, not the dataclass's bouncier default."""
     mode = None if m is None else m.mode
     i = FEEL_CYCLE.index(mode) if mode in FEEL_CYCLE else -1
     nxt = FEEL_CYCLE[(i + 1) % len(FEEL_CYCLE)]
     if nxt is None:
         return None
-    return Motion(nxt) if m is None else replace(m, mode=nxt)
+    m = Motion(nxt) if m is None else replace(m, mode=nxt)
+    if nxt == "spring":
+        m = replace(m, dur=motion.DEFAULT_ROUTE_FEEL.dur, bounce=motion.DEFAULT_ROUTE_FEEL.bounce)
+    return m
 
 
 def _feel_chip(router: Router, b: Binding, width: float) -> None:

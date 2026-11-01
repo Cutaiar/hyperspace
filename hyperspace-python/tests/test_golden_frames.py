@@ -232,7 +232,16 @@ GOLDENS_SINCE = ("resize-faces", "resize-crop", "edges-scene", "mask-as-picture"
 # scene+hands+through: the cut-through blend is the window's, so the scene
 # laid over the backdrop (zero ground, plan 32 R) no longer squares its alpha
 # and its faces no longer wash toward white; sha256 and png only)
-GOLDENS_DIGEST = "ac516263b005abff61c7cd0fc7cefe9f92bb44616aed1eb1dee3270781dbbd17"
+# (calmer shipped defaults, 2026-10-31: re-pinned for the 42 goldens
+# re-recorded — hands-lines, hands-glass-only, acid-scene, palette-glass,
+# wired-outputs, through-one-output, branch-two-sizes, resize-crop,
+# media-chain-faces and media-chain-backdrop, present, in every state that
+# draws their effect: each has an effect on whose `speed` (and for the
+# instances, bend/twist/breathe) the preset does not name, so it took the
+# new default, and the eight frames at 1/60 s land at a different phase.
+# Nothing structural moved; a corpus preset names every param and none
+# moved. sha256 and png only.)
+GOLDENS_DIGEST = "87f6d5f474f191e19b00219122f415a45838d2814a5cebe8614252da511549d2"
 # the render names the pipelines' graph used, gone in plan 35 T4 (V2: the
 # render nodes are named in the new ids)
 OLD_RENDER_NAMES = ("ghost", "history", "readout", "capture", "cover", "grounded", "fx",

@@ -1,7 +1,7 @@
 // @label Kaleidoscope
 // @order 15
 // @blend mix
-// @speed 0.2
+// @speed 0.1
 // @tip The frame folded into mirrored wedges about the centre, slowly turning — the
 // @tip trip's mandala. Zoom pulls the fold in so more of the scene lands in a wedge.
 

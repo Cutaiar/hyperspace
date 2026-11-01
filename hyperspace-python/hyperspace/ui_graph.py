@@ -113,7 +113,14 @@ onto a route or a modifier's input the same way; several nodes dragged
 together only move. A compile error colours an effect
 node's title and is its hover (`effect_errors`). The selected effect is
 the panel's one selection, shared with the FX page (`Panel.fx_selected`,
-`share`, `select_effect`).
+`share`, `select_effect`). The selected node itself is published on the
+panel (2026-10-31, `publish`: `Panel.graph_selected`, the one selected
+node's id, and `graph_selected_at`) for whoever is not this view — a
+controller's node mode, the side pane's fold of every page — as of the
+last frame this page drew; a preset landing without that node lets it go
+on any page (`settle`); `select_id` / `Panel.select_graph_node` select
+one from outside, and `node_params` / `Panel.graph_selected_params` are
+its registry ids.
 
 **The wired frame** (plan 35 G): the canvas is the preset's wired frame,
 in the owner's ids and words — every node of it titled for what it is
@@ -201,6 +208,14 @@ THIN, THICK = 1.5, 5.5   # a value cable at rest and at full reading
 WIRE = 3.0               # a render cable, a trigger
 NODE_W = 190.0 * graphview.SCALE    # a node's inner width
 PIN = 12.0               # a pin's square: a bigger target for a trackpad (2026-10-26)
+# 2026-10-31 (the show of 2026-10-30: cable targets "way too small" zoomed
+# out): a pin's hit target is never under MIN_PX screen px, however far out
+# the canvas is zoomed — the drawn pin stays PIN; the hit rect grows
+# (`pin_hit_size`), held to its row and to the pins beside it
+MIN_PX = 22.0            # a pin's hit target, at least, in screen px at any zoom
+STUB_REACH = (graphview.COL_W - NODE_W) / 2 + PIN   # a stub's hit, outward past the node's edge:
+#                          at most half the gap between two columns, so two columns' stubs never meet
+GROW_LEFT, CENTRED, GROW_RIGHT = -1, 0, 1   # where a pin's hit rect grows from its drawn square
 SIDE_W = 320.0           # the side column's width at first, when the page is wide enough for it
 SIDE_MIN = 240.0         # …the narrowest a drag may make it
 CANVAS_MIN = 240.0       # …and the canvas it must leave beside it
@@ -318,6 +333,10 @@ def _state(panel) -> dict:
     st.setdefault("pan", (0.0, 0.0))        # canvas units every position is moved by
     st.setdefault("preset_only", PRESET_ONLY)     # plan 36 T6 (D4): on for every preset, kept across loads
     st.setdefault("hide", frozenset())      # the node ids that view leaves off this frame
+    # 2026-10-31: the nodes the picker added this session (canvas ids), drawn
+    # whatever the chip and the idle lines say until deleted (`reveal_node`):
+    # never saved, not an undo step
+    st.setdefault("revealed", set())
     st.setdefault("tint", False)            # plan 37 C2 (D3): plain red until lit
     st.setdefault("thumb_hover", None)      # the node whose thumbnail the pointer is on
     st.setdefault("tints", {})              # cable id → its tinted colour, this frame
@@ -499,15 +518,21 @@ def expand_all(st: dict, view: graphview.View, on: bool) -> None:
 def drawn_node(st: dict, n: graphview.VNode) -> bool:
     """Is node `n` drawn (plan 28 N9)? Every node but an idle one
     (`graphview.VNode.idle`: nothing in, nothing out), which is drawn only
-    while its area's idle line is open."""
+    while its area's idle line is open — unless the picker added it this
+    session (`reveal_node`, 2026-10-31): a fresh node has no cable yet, and a
+    node that is not drawn cannot be cabled. A folded group's member stays
+    folded whatever else says."""
     if n.id in st.get("hide", ()):         # plan 36 T6: left off by the preset-only view
         return False
+    if n.id in st.get("revealed", ()):
+        return True
     return not n.idle or n.area in st.setdefault("idle_open", set())
 
 
 def hidden_ids(st: dict, view: graphview.View) -> frozenset[str]:
     """Plan 36 T6: the node ids the **preset only** chip leaves off the
-    canvas (`graphview.preset_only` draws the rest); none while it is off.
+    canvas (`graphview.preset_only` draws the rest, and so does what the
+    picker added this session, `reveal_node`); none while it is off.
     Drawing only: no wire, table or position changes, and the layout
     (`areas_of`) still lays every node out, so hiding moves nothing.
     Plan 40 T2 (D4): and a folded group's members, whatever the chip —
@@ -515,8 +540,19 @@ def hidden_ids(st: dict, view: graphview.View) -> frozenset[str]:
     fold = frozenset(graphview.folded(view))
     if not st.get("preset_only", PRESET_ONLY):
         return fold
-    keep = graphview.preset_only(view)
+    keep = graphview.preset_only(view) | st.get("revealed", set())
     return frozenset(n.id for n in view.nodes if n.id not in keep) | fold
+
+
+def reveal_node(st: dict, nid: str) -> None:
+    """Node `nid` (a canvas id) drawn from now on whatever the preset-only
+    chip and its area's idle line say (`drawn_node`; 2026-10-31, the owner
+    after the show of 2026-10-30: in preset only a fresh node landed
+    hidden, "it just doesn't exist"). Page state for this session only:
+    never saved, not an undo step, forgotten when the node is deleted
+    (`remove_node`). Once the node is cabled into the section, preset only
+    draws it on its own."""
+    st.setdefault("revealed", set()).add(nid)
 
 
 def _drawn_id(st: dict, view: graphview.View, nid: str) -> bool:
@@ -642,6 +678,7 @@ def page(panel, dt: float) -> None:
     sel = _selection(st, view)
     if sel is not None and escaped():           # Esc closes the details: nothing selected
         st["deselect"], sel = True, None
+    publish(panel, st, sel)
     share(panel, st, sel)
     _head(panel, st, view, sel is not None)
     imgui.separator()
@@ -855,11 +892,92 @@ def select_node(panel, name: str) -> None:
     """Select frame node `name` (plan 35 U, OUTPUT's "open on GRAPH":
     `output.2`, `output.all`) and centre it on the canvas next frame, the
     GRAPH page opened."""
+    select_id(panel, f"render:{name}")
+
+
+def select_id(panel, nid: str) -> None:
+    """Select canvas node `nid` — `Panel.graph_selected`'s form: a frame
+    node's `render:acid.2`, a modifier's own id — and centre it on the
+    canvas next frame (`_select`), the GRAPH page opened: the one request
+    path, `select_node`'s and `Panel.select_graph_node`'s."""
     st = _state(panel)
-    st["select_node"] = f"render:{name}"
+    st["select_node"] = nid
     pid = "ui.page"
     if pid in panel.reg:
         panel.reg[pid].set(ui.PAGE_KEYS.index("graph"))
+
+
+# ---------------------------------------------------------------- the selection, published
+
+def publish(panel, st: dict, sel) -> None:
+    """The canvas's selection on the panel (2026-10-31: `Panel.
+    graph_selected`, `graph_selected_at`), for whoever is not this view —
+    a controller's node mode, the side pane's fold of every page. The one
+    selected node's id when `sel` is a node and it is the only node
+    selected; None for nothing, a cable, a bundle, a group or several
+    nodes. Written each frame this page draws (a deleted node is gone from
+    the view, so the next frame publishes None), so off the page the value
+    is as of the last frame GRAPH was drawn — until `settle` sees a preset
+    land without the node. `graph_selected_at` is imgui's frame count when
+    the value last changed. An effect node's instance is `Panel.
+    fx_selected` as well (`share`); that stays as it is."""
+    nid = None
+    if sel is not None and sel[0] == "node" and len(selected_ids(st)) == 1:
+        nid = sel[1].id
+    if nid != getattr(panel, "graph_selected", None):
+        panel.graph_selected = nid
+        panel.graph_selected_at = imgui.get_frame_count()
+
+
+def settle(panel) -> None:
+    """Every frame, on any page (`Panel._draw`): the loaded preset's graph
+    spec is a new object after a load or a new (and after a graph edit) —
+    seen to have changed, a published node the preset no longer holds
+    (`still_held`) is let go of, so a load on the PRESETS page does not
+    leave a controller on a node that is gone. One identity test a frame;
+    the names are read only when the spec moved."""
+    st = panel.__dict__.get(STATE)
+    nid = getattr(panel, "graph_selected", None)
+    presets = getattr(getattr(panel, "library", None), "presets", None)
+    spec = getattr(getattr(presets, "graph", None), "spec", None)
+    if st is None or spec is st.get("spec_seen"):
+        return
+    st["spec_seen"] = spec
+    if nid is not None and not still_held(panel, nid, spec):
+        panel.graph_selected = None
+        panel.graph_selected_at = imgui.get_frame_count()
+
+
+def still_held(panel, nid: str, spec) -> bool:
+    """Does the preset as it now stands hold canvas node `nid`: a frame
+    node (`render:…`) the spec names, a modifier (`mod.N`, `modifiers.
+    next_id`) the table holds; any other node — a device's, a lane's, a
+    group's — is not the preset's and stays."""
+    if nid.startswith("render:"):
+        return nid.partition(":")[2] in graphview.frame_names(spec)
+    if nid.startswith("mod."):
+        table = getattr(ui_routing.router_of(panel), "table", None)
+        return table is None or table.modifier(nid) is not None
+    return True
+
+
+def node_params(panel, nid: str) -> list[str]:
+    """The registry ids under canvas node `nid` (`Panel.
+    graph_selected_params`): the ids with `graphview.params_of`'s prefix —
+    a copy's are its original's (`fx.<of>`), as its side-panel header says
+    — the continuous ones first and then the rest, each run in registry
+    order; an alias is left out, as the side panel leaves it. [] for a node
+    with no param (a device's, a lane's). A scan of the registry when
+    asked, never per frame."""
+    reg = panel.reg
+    view = _state(panel).get("view")
+    n = view.node(nid) if view is not None else None
+    name = nid.partition(":")[2] if nid.startswith("render:") else nid
+    of = getattr(n.ref, "effect", "") if n is not None and graphview.kind_of(name) == "copy" else ""
+    pre = graphview.params_of(name, of)
+    head = pre + "."
+    ids = [p.id for p in reg if not p.alias and (p.id == pre or p.id.startswith(head))]
+    return sorted(ids, key=lambda pid: reg[pid].kind is not Kind.CONTINUOUS)
 
 
 def effect_node(view: graphview.View, name: str) -> graphview.VNode | None:
@@ -1320,7 +1438,7 @@ def _moved(panel, st: dict, view: graphview.View) -> None:
                 and (n.kind == "modifier" or isinstance(n.ref, Effect))):
             size = ed.get_node_size(ed.NodeId(_id(st, "n:" + n.id)))
             dropped(panel, view, n.id, (now[0] + size.x / 2, now[1] + size.y / 2),
-                    (size.x, size.y), lift_held())
+                    (size.x, size.y), lift_held(), zoom=st.get("zoom", 1.0))
     st["press"] = None
 
 
@@ -1337,6 +1455,7 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     # what a new preset lays out where you are looking (`in_view`)
     seen = ed.screen_to_canvas(corner)
     st["seen"] = (float(seen.x), float(seen.y))
+    st["zoom"] = ed.get_current_zoom() or 1.0   # canvas units a screen px, for the pins' hit rects
     # plan 37 C1: the canvas rect on screen this frame (what a thumbnail
     # is wanted for), and where the thumbnails come from
     far = ed.screen_to_canvas(imgui.ImVec2(corner.x + size.x, corner.y + size.y))
@@ -1560,10 +1679,32 @@ def _idle_line(st: dict, view: graphview.View, area: str, ids) -> None:
     ed.end_node()
 
 
-def _pin(st: dict, pin: str, kind, port: graphview.VPort, stub: str, drawn: set[str]) -> None:
+def pin_hit_size(zoom: float, row_h: float, pitch: float, min_px: float = MIN_PX,
+                 pin: float = PIN) -> tuple[float, float]:
+    """A pin's hit rect (width, height) in canvas units: its drawn square
+    `pin`, grown so it is never under `min_px` on screen while the canvas
+    is zoomed out (`zoom`: canvas units a screen pixel, as `title_fit`
+    takes it), and held to `pitch` across (the pins beside it, or a
+    stub's reach) and `row_h` down (its row) — never under `pin` even
+    when those are."""
+    want = max(pin, min_px * zoom)
+    return max(pin, min(want, pitch)), max(pin, min(want, row_h))
+
+
+def _pin(st: dict, pin: str, kind, port: graphview.VPort, stub: str, drawn: set[str],
+         room: tuple[float, float] = (PIN, graphview.ROW_H), grow: int = CENTRED) -> None:
+    """One pin: a `PIN` square drawn, its hit rect `pin_hit_size` within
+    `room` (across, down) — centred on the square, or (`grow`) out from
+    its left or right edge, a stub's way past the node's edge where
+    nothing competes; cables attach to the square as they did."""
     ed.begin_pin(ed.PinId(_id(st, pin)), kind)
     p0 = imgui.get_cursor_screen_pos()
     imgui.dummy(imgui.ImVec2(PIN, PIN))
+    w, h = pin_hit_size(st.get("zoom", 1.0), room[1], room[0])
+    hx = p0.x + PIN - w if grow == GROW_LEFT else p0.x if grow == GROW_RIGHT else p0.x - (w - PIN) / 2
+    hy = p0.y - (h - PIN) / 2
+    ed.pin_rect(imgui.ImVec2(hx, hy), imgui.ImVec2(hx + w, hy + h))
+    ed.pin_pivot_rect(p0, imgui.ImVec2(p0.x + PIN, p0.y + PIN))
     dl = imgui.get_window_draw_list()
     col = ui.u32(COLOURS.get(port.type, ui.DIM) if port.patched else ui.DIM)
     p1 = imgui.ImVec2(p0.x + PIN, p0.y + PIN)
@@ -1628,8 +1769,13 @@ def reveal(st: dict, view: graphview.View, b) -> str | None:
 
 def _stub(st: dict, pin: str, kind, lit: bool, drawn: set[str]) -> None:
     """A node's single in or out stub (plan 28 N7): where its bundles and
-    its collapsed render cables end, and where a drag lands to pick a port."""
-    _pin(st, pin, kind, graphview.VPort(pin, "", "", patched=lit), "", drawn)
+    its collapsed render cables end, and where a drag lands to pick a port.
+    Its hit grows outward, past the node's edge (an in stub left, an out
+    stub right: the label and the + button keep their room), and down to
+    the title line."""
+    _pin(st, pin, kind, graphview.VPort(pin, "", "", patched=lit), "", drawn,
+         room=(STUB_REACH, graphview.HEAD_H),
+         grow=GROW_LEFT if kind == ed.PinKind.input else GROW_RIGHT)
 
 
 def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
@@ -2670,11 +2816,13 @@ def _port(st: dict, port: graphview.VPort, drawn: set[str]) -> None:
         # a desk layer's port (plan 28 N5): lit while its layer is up, faint while down
         imgui.text_colored(ui.FAINT if not port.up else ui.TEXT if port.layer else ui.DIM, text)
         imgui.same_line(NODE_W - PIN)
-        _pin(st, port.pins[0], ed.PinKind.output, port, "", drawn)
+        _pin(st, port.pins[0], ed.PinKind.output, port, "", drawn,   # out past the node's edge
+             room=(STUB_REACH, graphview.ROW_H), grow=GROW_RIGHT)
         return
+    pitch = PIN + imgui.get_style().item_spacing.x    # base / mod / depth, side by side
     for pin in port.pins:
         stub = pin.partition(":")[0] if port.param is not None else ""
-        _pin(st, pin, ed.PinKind.input, port, stub, drawn)
+        _pin(st, pin, ed.PinKind.input, port, stub, drawn, room=(pitch, graphview.ROW_H))
         imgui.same_line()
     imgui.text_colored(ui.TEXT if port.patched else ui.DIM, text)
 
@@ -2913,8 +3061,10 @@ def render_picker(panel, at=None) -> None:
     """The picker's render items (`graphview.picker`), grouped by primitive
     (plan 35 G, `graphview.PICKER_GROUP`): starters ▸ at the top (plan 36
     T5, `graphview.STARTERS`), then scene ▸, look-back ▸ (its look-back frames under `LOOKBACK_MENU`),
-    pictures ▸ (R28's switch over the channels under the switch), effects ▸
-    and copy of ▸. A frame node the section has already — the scene, the
+    pictures ▸ (R28's switch over the channels under the switch), media ▸
+    (2026-10-31: channel a–h, each selecting a channel that always exists,
+    `pick_channel`; the segment), masks ▸, effects ▸ and copy of ▸. A
+    frame node the section has already — the scene, the
     shape, the look-back, the backdrop, the pattern, an echo, the dream —
     is drawn disabled (`graphview.picked`): there is one of each. A node
     lands unwired (faint, "reaches nothing") where the menu opened (`at`,
@@ -2930,6 +3080,10 @@ def render_picker(panel, at=None) -> None:
             continue
         for kind, f, label in mine:
             if kind in ("echo", "channels"):        # (their own submenus)
+                continue
+            if kind == "channel":                   # 2026-10-31: selects, makes nothing
+                if imgui.menu_item_simple(label):
+                    pick_channel(panel, f, at)
                 continue
             if imgui.menu_item_simple(label, enabled=graphview.picked_name(kind, f) not in have):
                 add_render(panel, e, kind, f, at)
@@ -2970,6 +3124,21 @@ def switch_channels(panel, e: graphview.Edit, port: str, at=None) -> str | None:
     if why is None and e.added:
         _place_new(panel, f"render:{e.added}", at)
     return why
+
+
+def pick_channel(panel, c: str, at=None) -> None:
+    """The picker's media ▸ channel a–h (2026-10-31). Nothing is made — the
+    eight channels always exist (`graphview.build`) — and nothing is wired:
+    the channel's node is revealed (`reveal_node`), put where the menu opened
+    unless the preset's layout already places it, and selected and centred
+    next frame (`select_node`). The owner, after the show of 2026-10-30:
+    in preset only, with no channel wired to the faces, "you can't actually
+    spawn one, it just doesn't exist"."""
+    name = rgraph.channel_name(c)
+    nid = f"render:{name}"
+    pre, _ = _layouts(panel)
+    _place_new(panel, nid, None if pre is not None and pre.get(nid) is not None else at)
+    select_node(panel, name)
 
 
 def add_render(panel, e: graphview.Edit, kind: str, file: str | None = None, at=None):
@@ -3556,8 +3725,10 @@ def insert_modifier(panel, cable: graphview.VCable, kind: str):
 
 
 def _place_new(panel, nid: str, at) -> None:
-    """A node the picker made goes where the picker opened (the preset's
-    layout: modifiers and macros are the preset's)."""
+    """A node the picker made: revealed (`reveal_node`, 2026-10-31) and, when
+    the picker opened at a point, put there (the preset's layout:
+    modifiers and macros are the preset's)."""
+    reveal_node(_state(panel), nid)
     pre, _ = _layouts(panel)
     if at and pre is not None:
         px, py = panned(_state(panel))          # the menu's point is the panned canvas's
@@ -3624,7 +3795,10 @@ def remove_node(panel, nid: str):
         return None
     hit = graphview.voice_of(nid)
     why = voice_refusal(e.view.node(nid) if e.view is not None else None, nid) if hit else None
-    return _act(panel, f"delete node {nid}", why, lambda: e.remove_node(nid))
+    res = _act(panel, f"delete node {nid}", why, lambda: e.remove_node(nid))
+    if not isinstance(res, (graphview.Refusal, graphview.Ask)):   # 2026-10-31: its reveal goes
+        _state(panel).setdefault("revealed", set()).discard(nid)
+    return res
 
 
 def voice_refusal(n, nid: str | None = None) -> str | None:
@@ -3838,7 +4012,7 @@ def route_from_menu(panel, p) -> None:
 
 
 def dropped(panel, view: graphview.View, nid: str, centre, size=None,
-            lift: bool = False) -> graphview.VCable | None:
+            lift: bool = False, zoom: float = 1.0) -> graphview.VCable | None:
     """A node let go at `centre` (canvas units; `size` its box): what
     `onto_plan` lit while it was dragged happens. A free effect goes onto
     the brightest picture cable under it — the one through its box nearest
@@ -3850,8 +4024,9 @@ def dropped(panel, view: graphview.View, nid: str, centre, size=None,
     either side of it closed over it, onto the cable — reordering the run;
     without ⌘ a drag only moves it on the canvas. Two cables as near as
     each other: a chooser opens (`st["onto"]`, `put_onto`) and nothing
-    changes until one is picked. Returns the cable it went into, or None."""
-    plan = onto_plan(panel, view, nid, centre, size, lift)
+    changes until one is picked. Returns the cable it went into, or None.
+    `zoom` (canvas units a screen px) grows how near is near: `graphview.drop_reach`."""
+    plan = onto_plan(panel, view, nid, centre, size, lift, zoom)
     if plan is None or plan["best"] is None:
         return None
     if plan["tie"]:
@@ -3865,7 +4040,7 @@ ONTO_TIE = 1.0          # canvas units: two cables this near each other's distan
 
 
 def onto_plan(panel, view: graphview.View, nid: str, centre, size=None,
-              lift: bool = False) -> dict | None:
+              lift: bool = False, zoom: float = 1.0) -> dict | None:
     """What letting node `nid` (its box `size`) go at `centre` would do — what the drag
     lights (`_drag_preview`) and what the drop does (`dropped`), so the two
     never disagree. None: a node no drop moves (not an effect, a wired
@@ -3884,11 +4059,12 @@ def onto_plan(panel, view: graphview.View, nid: str, centre, size=None,
         return None
     pins = _state(panel)["pin_xy"]
     mine = view.cables_of(nid)
+    near = graphview.drop_reach(zoom)           # never under NEAR screen px zoomed out
     if n.kind == "render" and isinstance(n.ref, Effect):
         e = render_edit(panel)
         ok, refused = [], {}
-        for d, c in graphview.cables_near(view, pins, centre, kinds=("render",), skip={nid},
-                                          size=size):
+        for d, c in graphview.cables_near(view, pins, centre, near, kinds=("render",),
+                                          skip={nid}, size=size):
             why = (graphview.onto_refusal(e, c) if e is not None
                    else None if c.type == graphview.IMAGE else "no picture cable")
             if why is None:
@@ -3897,8 +4073,8 @@ def onto_plan(panel, view: graphview.View, nid: str, centre, size=None,
                 refused[c.id] = why
     elif n.kind == "modifier" and not mine:     # (a wired modifier is not lifted)
         # (only a cable with a source to take: `insert_modifier`'s rule)
-        ok = [(d, c) for d, c in graphview.cables_near(view, pins, centre, skip=(nid,), size=size)
-              if c.addr]
+        ok = [(d, c) for d, c in graphview.cables_near(view, pins, centre, near, skip=(nid,),
+                                                        size=size) if c.addr]
         refused = {}
     else:
         return None
@@ -3966,7 +4142,7 @@ def _drag_preview(panel, st: dict, view: graphview.View) -> None:
     x, y = x0 + m.x - mx, y0 + m.y - my
     size = ed.get_node_size(ed.NodeId(_id(st, "n:" + nid)))
     plan = onto_plan(panel, view, nid, (x + size.x / 2, y + size.y / 2),
-                     (size.x, size.y), lift_held())
+                     (size.x, size.y), lift_held(), st.get("zoom", 1.0))
     if plan is None:
         return
     st["onto_lit"] = plan

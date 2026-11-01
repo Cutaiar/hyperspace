@@ -1,7 +1,7 @@
 // @label Hue cycle
 // @order 85
 // @blend mix
-// @speed 0.25
+// @speed 0.1
 // @tip Colour cycling: the frame's hues turn around the wheel (Minecraft's wobble turns
 // @tip them once a second), in bands across the screen. White has no hue to turn, so
 // @tip Paint re-colours by brightness — a wireframe comes out rainbow.

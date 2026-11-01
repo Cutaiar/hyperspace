@@ -2599,10 +2599,17 @@ def preset_only(view: View) -> frozenset[str]:
     every node with a cable to one of them (whatever its kind: an LFO routed
     to an effect, a controller bound to a param are drawn, so a moving
     param shows its source; controllers, modulation and macros with no
-    cable to the section are not), and every output — All outputs and each
-    window, wired or not: they are where a picture is wired to, so one the
-    preset no longer reaches must stay on the canvas to be wired again (the
-    owner, 2026-10-27: unwiring the outputs made them vanish).
+    cable to the section are not) and whatever feeds those, to full depth
+    (2026-10-31: LFO → modifier → param draws the LFO; downstream stays one
+    hop, so a controller's other bindings pull nothing else in), every
+    output — All outputs and each window, wired or not: they are where a
+    picture is wired to, so one the preset no longer reaches must stay on
+    the canvas to be wired again (the owner, 2026-10-27: unwiring the
+    outputs made them vanish) — and, the same way, every media channel
+    (2026-10-31, the owner after the show of 2026-10-30: with no faces
+    media node wired "you can't actually spawn one, it just doesn't
+    exist"): a channel always exists, empty or not, and is where a file
+    is dropped or a source picked and what a picture is wired from.
     Only a drawing choice: nothing in `view` is changed. A view with no
     section (`view.spec` None) draws everything."""
     if view.spec is None:
@@ -2610,12 +2617,21 @@ def preset_only(view: View) -> frozenset[str]:
     have = {n.id: n for n in view.nodes}
     shown = {f"render:{name}" for name in frame_names(view.spec)} & have.keys()
     ends = [(node_of(view, c.src_port), node_of(view, c.dst_port)) for c in view.cables]
-    section = set(shown)                 # one hop: a neighbour's own cables add nothing
+    section = set(shown)                 # one hop either way from the section itself
     for a, b in ends:
         for x, y in ((a, b), (b, a)):
             if x in section and y in have:
                 shown.add(y)
-    shown |= {nid for nid, n in have.items() if n.kind == "output"}
+    feeds: dict[str, set[str]] = {}      # … then upstream of all that, to full depth
+    for a, b in ends:
+        feeds.setdefault(b, set()).add(a)
+    todo = list(shown)
+    while todo:
+        for x in feeds.get(todo.pop(), ()):
+            if x in have and x not in shown:
+                shown.add(x)
+                todo.append(x)
+    shown |= {nid for nid, n in have.items() if n.kind in ("output", "channel")}
     # plan 40 T2: a group's members are the preset's (a group holds nothing
     # of the rig's: `patches.select`), so a group is drawn, open or folded
     shown |= {n.id for g in view.groups for n in g.members}
@@ -4624,7 +4640,14 @@ class Edit:
 # ---- a node dropped onto a cable: the geometry ----
 
 LINK_STRENGTH = 100.0      # imgui_node_editor's default `Style.link_strength`
-NEAR = 14.0                # canvas units: how close a drop must come to a cable
+NEAR = 14.0                # canvas units: how close a drop must come to a cable…
+
+
+def drop_reach(zoom: float = 1.0) -> float:
+    """…and never under `NEAR` screen px while the canvas is zoomed out
+    (2026-10-31; `zoom`: canvas units a screen pixel, 4 zoomed out four
+    times — the page passes the editor's, this module reads no imgui)."""
+    return NEAR * max(1.0, zoom)
 
 
 def bezier(p0, p3, strength: float = LINK_STRENGTH, steps: int = 16) -> list[tuple]:
@@ -4786,9 +4809,11 @@ PICKER_GROUP: dict[str, str] = {
     "lookback": "look-back", "echo": "look-back", "dream": "look-back",
     "pattern": "pictures", "composite": "pictures", "switch": "pictures",
     "channels": "pictures", "resize": "pictures", "delay": "pictures",
-    # plan 39 T5 (W6): the segment under media ▸ (what a channel's picture
-    # is cut into), the mask nodes in their own group, masks ▸
-    "segment": "media",
+    # 2026-10-31: the eight channels under media ▸ (they always exist: the
+    # item selects one, `ui_graph.pick_channel`); plan 39 T5 (W6): the
+    # segment there too (what a channel's picture is cut into), the mask
+    # nodes in their own group, masks ▸
+    "channel": "media", "segment": "media",
     "matte": "masks", "cut": "masks",
     "effect": "effects",
     "copy": "copy of",
@@ -4814,7 +4839,9 @@ def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
     look-back ▸ (the look-back, plan 34's look-back frames echo.1 … echo.32
     and the dream); pictures ▸ (the faces pattern, a composite, a switch,
     R28's switch over the channels, plan 34's resize and delay); media ▸
-    (plan 39's segment); masks ▸ (plan 39's matte and cut); every
+    (2026-10-31: channel a … channel h, each the channel's letter as its
+    file — picking one makes nothing, the channels always exist; then
+    plan 39's segment); masks ▸ (plan 39's matte and cut); every
     effect file this build has; and a copy of each effect instance in the
     section."""
     gs = edit.graph
@@ -4831,7 +4858,9 @@ def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
             ("switch", None, "switch"),
             *(("channels", port, label) for port, label in CHANNEL_SWITCH_PORTS),
             ("resize", None, "resize"), ("delay", None, "delay")]
-    # plan 39 T5 (W6): media ▸ the segment; masks ▸ the matte and the cut
+    # media ▸ the eight channels (2026-10-31) and plan 39 T5 (W6)'s segment;
+    # masks ▸ the matte and the cut
+    out += [("channel", c, f"channel {c}") for c in rgraph.MEDIA_CHANNELS]
     out += [("segment", None, "segment"), ("matte", None, "matte"), ("cut", None, "cut")]
     out += [("effect", f, f) for f in sorted(files or ())]
     out += [("copy", name, f"copy of {name}") for name in _instances(spec)]
