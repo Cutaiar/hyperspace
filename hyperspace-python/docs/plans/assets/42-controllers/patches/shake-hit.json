@@ -1,0 +1,13 @@
+{"schema": "hyperspace.patch/1", "name": "shake hit",
+ "note": "plan 42 idea 5: shake the pad and the picture flashes and punches in — an envelope fired by motion:shake. Put a back button on it too: right-click Env 6's fire → Learn pad, press R4",
+ "nodes":  [],
+ "wires":  [],
+ "values": {"env.6.mode": 1, "env.6.attack": 0.01, "env.6.hold": 0.0, "env.6.decay": 0.3,
+            "env.6.sustain": 0.0, "env.6.release": 0.15, "env.6.amount": 1.0},
+ "modifiers": [],
+ "routes": [{"source": "motion:shake", "target": "env.6.fire", "op": "push"},
+            {"source": "env:5", "target": "view.bright", "op": "push", "value": 0.6},
+            {"source": "env:5", "target": "camera.zoom", "op": "push", "value": 0.12}],
+ "desk": [], "macros": {}, "lfos": [], "envs": [6],
+ "ports":  [],
+ "layout": {}}

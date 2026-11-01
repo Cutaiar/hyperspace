@@ -47,12 +47,14 @@ SYSTEM page, beside the desk's switch) hides it.
 
 from __future__ import annotations
 
+import math
+
 from imgui_bundle import imgui
 
 from . import gamepad, ui, ui_desk, ui_routing
 from .routing import Binding
 
-SCHEMES = ("pad", "hat", "axis")    # the schemes a pad control's row can have
+SCHEMES = ("pad", "hat", "axis", "touch", "motion")   # the schemes a pad control's row can have
 EDGE = ui_desk.EDGE                 # from the control window's edges, as the desk sits
 PAD = ui_desk.PAD
 GAP = ui_desk.GAP                   # between this and the desk under it
@@ -97,10 +99,11 @@ def rows(table) -> dict[str, Binding]:
     read them. Keyed by the layout's source, so a lane addressed by
     number (``axis:4``) lands on the control it names."""
     out: dict[str, Binding] = {}
+    every = gamepad.layout_for(gamepad.models.MODELS["edge"])   # every control a pad can have
     for b in table.of(*SCHEMES):
         if not b.enabled:
             continue
-        c = gamepad.control(b.source)
+        c = gamepad.control_in(every, b.source)
         if c is not None:
             out.setdefault(c.source, b)
     return out
@@ -167,7 +170,7 @@ def held(pad, c: gamepad.Control) -> bool:
         return False
     scheme, _, addr = c.source.partition(":")
     if scheme == "pad":
-        return pad.down(gamepad.BUTTONS[addr])
+        return pad.down(gamepad.ALL_BUTTONS[addr])
     if scheme == "hat":
         return bool(pad.hat & gamepad.HATS[addr])
     return False
@@ -182,7 +185,8 @@ def lane(pad, name: str) -> float:
 def _stick(pad, c: gamepad.Control) -> tuple[float, float]:
     """Where a stick is, each in [-1, 1], x right and y **down** (what a
     draw list wants); (0, 0) with no pad."""
-    xa, ya = ("LX", "LY") if c.glyph == "LS" else ("RX", "RY")
+    # by the control, not its glyph: a Sony face calls the left stick L3 (plan 42)
+    xa, ya = ("LX", "LY") if c.source == "pad:LSTICK" else ("RX", "RY")
     return 2 * lane(pad, xa) - 1, 1 - 2 * lane(pad, ya)
 
 
@@ -248,6 +252,51 @@ def _well(dl, pad, c: gamepad.Control, cx: float, cy: float, r: float,
     dl.add_circle_filled(_v(cx + dx * (r - knob), cy + dy * (r - knob)), knob, col)
 
 
+def _lanes(pad, which: str) -> dict[str, float]:
+    """A pad's touch or motion lanes by name ({} with none)."""
+    read = getattr(pad, f"{which}_lanes", None) if pad is not None else None
+    got = read() if read is not None else None
+    names = gamepad.gesture.TOUCH_LANES if which == "touch" else gamepad.gesture.MOTION_LANES
+    return dict(zip(names, got, strict=True)) if got is not None else {}
+
+
+def _touchpad(dl, pad, c: gamepad.Control, x0: float, y0: float, x1: float, y1: float,
+              edge: int, on: bool) -> None:
+    """The touchpad: its face (red while clicked) and each finger on it,
+    where it is (plan 42)."""
+    down = held(pad, c)
+    face = ui.u32(ui.RED) if down else ui.u32(_OFF if on else _DARK)
+    dl.add_rect_filled(_v(x0, y0), _v(x1, y1), face, 4.0)
+    dl.add_rect(_v(x0, y0), _v(x1, y1), edge, 4.0)
+    t = _lanes(pad, "touch")
+    r = max(2.5, 0.18 * (y1 - y0))
+    for xs, ys in (("x", "y"), ("x2", "y2")):
+        x, y = t.get(xs), t.get(ys)
+        if x is None or y is None or not (math.isfinite(x) and math.isfinite(y)):
+            continue
+        dl.add_circle_filled(_v(x0 + x * (x1 - x0), y0 + (1 - y) * (y1 - y0)), r,
+                             ui.u32(_BLACK if down else ui.RED))
+
+
+def _tilt(dl, pad, cx: float, cy: float, r: float, edge: int, on: bool) -> None:
+    """The tilt bubble: a well with a dot where the pad leans — right
+    side down to the right, the far edge up upward — its ring red on a
+    shake (plan 42)."""
+    m = _lanes(pad, "motion")
+    dl.add_circle_filled(_v(cx, cy), r, ui.u32(_WELL))
+    ring = ui.u32(ui.RED) if m.get("shake") else edge
+    dl.add_circle(_v(cx, cy), r, ring, 0, 2.0 if m.get("shake") else 1.0)
+    dl.add_line(_v(cx - r, cy), _v(cx + r, cy), edge, 1.0)
+    dl.add_line(_v(cx, cy - r), _v(cx, cy + r), edge, 1.0)
+    if not m:
+        return
+    dx = 2 * m["roll"] - 1
+    dy = 1 - 2 * m["pitch"]
+    knob = max(3.0, r * 0.22)
+    col = ui.u32(ui.RED) if on else ui.u32(ui.DIM)
+    dl.add_circle_filled(_v(cx + dx * (r - knob), cy + dy * (r - knob)), knob, col)
+
+
 def _draw(panel, dl, pad, c: gamepad.Control, b: Binding | None, said: str,
           x0: float, y0: float, x1: float, y1: float) -> None:
     """One control at the small size: its glyph on its face."""
@@ -256,6 +305,15 @@ def _draw(panel, dl, pad, c: gamepad.Control, b: Binding | None, said: str,
     edge = ui.u32(ui.DIM if on else ui.LINE)
     ink = ui.u32(ui.TEXT if on else ui.FAINT)
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    if c.kind == "touchpad":
+        _touchpad(dl, pad, c, x0, y0, x1, y1, edge, on)
+        ui_desk._text(dl, c.glyph, cx, cy, ink, x1 - x0 - 2)
+        return
+    if c.kind == "tilt":
+        r = min((x1 - x0) / 2, (y1 - y0) / 2) - 1
+        _tilt(dl, pad, cx, y0 + r + 1, r, edge, on)
+        ui_desk._text(dl, c.glyph, cx, y1 - 5, ink, x1 - x0)
+        return
     if c.kind == "button":
         face = ui.u32(ui.RED) if down else ui.u32(_OFF if on else _DARK)
         dl.add_rect_filled(_v(x0, y0), _v(x1, y1), face, 3.0)
@@ -285,6 +343,17 @@ def _draw_big(panel, dl, pad, c: gamepad.Control, b: Binding | None, said: str,
     ink = ui.u32(ui.TEXT if b is not None else ui.DIM)
     cx = (x0 + x1) / 2
     gsz = imgui.calc_text_size(c.glyph)
+    if c.kind == "touchpad":
+        _touchpad(dl, pad, c, x0, y0, x1, y1, edge, on)
+        dl.add_text(_v(x0 + 3, y0 + 1), small, c.glyph)
+        return ui_desk._Job(said, x0 + gsz.x + 7, y0, x1 - 3, y1, 1, ink, "mid") if on else None
+    if c.kind == "tilt":
+        lines = ui_desk.LABEL_LINES
+        r = max(4.0, min((y1 - y0 - lines * lh - 4) / 2, 0.42 * (x1 - x0)))
+        dl.add_text(_v(x0 + 1, y0), small, c.glyph)
+        _tilt(dl, pad, cx, y0 + r + 1, r, edge, on)
+        return ui_desk._Job(said, x0 + 1, y0 + 2 * r + 4, x1 - 1, y1, lines, ink,
+                            "top") if on else None
     if c.kind == "button":
         face = ui.u32(ui.RED) if down else ui.u32(_OFF if on else _DARK)
         dl.add_rect_filled(_v(x0, y0), _v(x1, y1), face, 3.0)
@@ -370,6 +439,15 @@ def state(panel) -> tuple[str, str]:
         return "over USB", f"{read} This one is a wired 360-protocol pad, over libusb."
     if source == "glfw":
         return "on", read
+    if source in ("hid", "tape"):
+        model = getattr(getattr(pad, "model", None), "name", "") or "pad"
+        link = getattr(pad, "link", "") or source
+        bat = getattr(getattr(pad, "report", None), "battery", -1)
+        battery = f", battery {min(100, bat * 10)} %" if isinstance(bat, int) and bat >= 0 else ""
+        word = "tape" if source == "tape" else link
+        return word, (f"{model} over {link}{battery} — read over hidapi (pads/hid.py): the "
+                      "touchpad, the motion sensors and, on an Edge, the back and Fn buttons"
+                      + (", played from a recording" if source == "tape" else "") + ".")
     note = getattr(getattr(pad, "usb_pad", None), "note", "")
     return "no pad", f"{read} None is connected" + (f" — {note}." if note else ".")
 
@@ -383,6 +461,18 @@ def _header(panel, table) -> None:
     ui._micro(word, ui.RED if _pad(panel) is not None else ui.DIM)
     if imgui.is_item_hovered():
         ui.tooltip(f"{why} The picture is the table's, with or without a pad.")
+    light = getattr(getattr(_pad(panel), "effects", None), "light", None)
+    if light is not None and _pad(panel).has("light"):
+        imgui.same_line()
+        p = imgui.get_cursor_screen_pos()
+        side = HEAD_H * 0.55
+        imgui.get_window_draw_list().add_rect_filled(
+            _v(p.x, p.y + (HEAD_H - side) / 2 - 2), _v(p.x + side, p.y + (HEAD_H + side) / 2 - 2),
+            ui.u32(imgui.ImVec4(*(c / 255 for c in light), 1.0)), 2.0)
+        imgui.dummy(_v(side, 1))
+        if imgui.is_item_hovered():
+            ui.tooltip("The light bar now: its identity colour, or what a sink row sends "
+                       "(right-click a param → Learn sink ▸ light bar hue).")
     if table is not None:
         imgui.same_line()
         n = len(rows_cached(panel, table))
@@ -417,7 +507,9 @@ def _body(panel, table) -> None:
     try:
         st = _state(panel)
         st["origin"], st["unit"] = (origin.x, origin.y), (sx, sy)
-        for c in gamepad.LAYOUT:
+        layout = gamepad.layout_for(gamepad.shown_model(getattr(panel, "pad", None)))
+        st["layout"] = layout
+        for c in layout:
             x0, y0, x1, y1 = rect(panel, c)
             b = mapped.get(c.source)
             said = says(panel, c, b)

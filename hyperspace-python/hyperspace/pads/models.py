@@ -75,8 +75,8 @@ class Model:
 _SONY_GLYPHS = {
     "A": "✕", "B": "○", "X": "□", "Y": "△", "LB": "L1", "RB": "R1",
     "VIEW": "CREATE", "MENU": "OPTIONS", "GUIDE": "PS", "SHARE": "MIC",
-    "LSTICK": "L3", "RSTICK": "R3", "LT": "L2", "RT": "R2", "TOUCH": "PAD",
-    "LP": "LB", "RP": "RB", "LFN": "Fn", "RFN": "Fn",
+    "LSTICK": "L3", "RSTICK": "R3", "LT": "L2", "RT": "R2", "TOUCH": "TOUCH",
+    "LP": "L4", "RP": "R4", "LFN": "LFn", "RFN": "RFn",
 }
 _SONY_OUT = frozenset({"touch", "motion", "light", "rumble", "triggers", "players", "mic"})
 

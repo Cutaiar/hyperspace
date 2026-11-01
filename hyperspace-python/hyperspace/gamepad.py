@@ -53,7 +53,7 @@ import sys
 import threading
 import time
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import glfw
 
@@ -232,6 +232,71 @@ LAYOUT: list[Control] = _layout()
 LAYOUT_W = max(c.x + c.w for c in LAYOUT)
 LAYOUT_H = max(c.y + c.h for c in LAYOUT)
 _BY_SOURCE = {c.source: c for c in LAYOUT}
+
+
+# ---- a pad's own face (plan 42) ----
+# The layout above is the Xbox's. A pad whose model has more draws more,
+# in the room the Xbox face leaves: the touchpad across the top (its click
+# `pad:TOUCH`, every ``touch:`` row on it), a tilt bubble under the left
+# stick (every ``motion:`` row on it), the Edge's back buttons and Fn
+# buttons between the D-pad and the right stick — and every glyph its own
+# face's (✕ for ``pad:A``). The rows keep the canonical names.
+_EXTRA_CONTROLS = {
+    "touch": Control("pad:TOUCH", "touchpad", "TOUCH", 3.0, 0.0, 6.5, 0.8),
+    "motion": Control("motion:roll", "tilt", "TILT", 0.3, 3.75, 2.3, 2.9),
+    "back": (Control("pad:LP", "button", "L4", 5.3, 4.6, 1.6, 0.8),
+             Control("pad:RP", "button", "R4", 7.2, 4.6, 1.6, 0.8)),
+    "fn": (Control("pad:LFN", "button", "LFn", 5.3, 5.55, 1.6, 0.7),
+           Control("pad:RFN", "button", "RFn", 7.2, 5.55, 1.6, 0.7)),
+}
+_LAYOUTS: dict[str, list[Control]] = {}
+
+
+def layout_for(model) -> list[Control]:
+    """The controls to draw for `model` (pads.models.Model, or None: the
+    Xbox face, `LAYOUT`): the Xbox layout with the model's glyphs, then
+    the extras its caps name (`_EXTRA_CONTROLS`). Kept per model."""
+    if not models.is_model(model) or (not model.glyphs and not model.caps):
+        return LAYOUT
+    got = _LAYOUTS.get(model.id)
+    if got is not None:
+        return got
+    out: list[Control] = []
+    for c in LAYOUT:
+        name = c.address if c.source.startswith(("pad:", "axis:")) else ""
+        out.append(replace(c, glyph=models.glyph(model, name, c.glyph)) if name else c)
+    for cap in ("touch", "motion", "back", "fn"):
+        if model.has(cap):
+            extra = _EXTRA_CONTROLS[cap]
+            for c in (extra if isinstance(extra, tuple) else (extra,)):
+                out.append(replace(c, glyph=models.glyph(model, c.address, c.glyph))
+                           if c.kind == "button" else c)
+    _LAYOUTS[model.id] = out
+    return out
+
+
+def shown_model(pad):
+    """The model the on-screen pad draws: the one read now, else the one
+    the entry's ``controller =`` names, else None (the Xbox face)."""
+    m = getattr(pad, "model", None) if getattr(pad, "on", False) else None
+    if models.is_model(m):
+        return m
+    spec = models.parse_spec(getattr(pad, "controller", "any") or "any")
+    return models.MODELS.get(spec) if spec else None
+
+
+def control_in(layout: list[Control], source: str) -> Control | None:
+    """The control of `layout` a source names: as `control`, and every
+    ``touch:`` row on the touchpad, every ``motion:`` row on the tilt —
+    unqualified sources only, as the layout's own are."""
+    scheme, _, _addr = source.partition(":")
+    if scheme in (TOUCH_SCHEME, MOTION_SCHEME):
+        kind = "touchpad" if scheme == TOUCH_SCHEME else "tilt"
+        return next((c for c in layout if c.kind == kind), None)
+    c = control(source)
+    if c is not None:
+        return next((d for d in layout if d.source == c.source), c)
+    return next((d for d in layout if d.source == source), None)
 
 
 def control(source: str) -> Control | None:
