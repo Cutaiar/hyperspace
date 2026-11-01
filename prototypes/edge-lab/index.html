@@ -1,0 +1,1845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Edge Lab · DualSense Edge over WebHID</title>
+<style>
+:root {
+  --bg: #0b0d12; --panel: #131720; --panel2: #181d28; --line: #262d3c; --line2: #323a4c;
+  --text: #d9dfea; --dim: #7d879b; --faint: #4a5366; --accent: #6cb6ff; --ok: #4ade80;
+  --warn: #fbbf24; --bad: #f87171; --hot: #ff9f43;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+button, select, input, textarea { font: inherit; color: var(--text); }
+button { background: var(--panel2); border: 1px solid var(--line2); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.primary { background: #1d4f86; border-color: #2f6db0; }
+button.danger { background: #5a1f25; border-color: #8a2f38; }
+button:disabled { opacity: .45; cursor: default; }
+select, input[type=number], input[type=text], textarea { background: #0e1118; border: 1px solid var(--line2); border-radius: 5px; padding: 2px 6px; }
+input[type=range] { accent-color: var(--accent); vertical-align: middle; }
+input[type=checkbox], input[type=radio] { accent-color: var(--accent); vertical-align: middle; }
+.mono { font-family: var(--mono); font-size: 12px; }
+.dim { color: var(--dim); }
+header { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--line); background: #0e1118; position: sticky; top: 0; z-index: 5; }
+header h1 { font-size: 15px; margin: 0 6px 0 0; letter-spacing: .02em; }
+header h1 small { color: var(--dim); font-weight: 400; }
+#status { font-family: var(--mono); font-size: 12px; color: var(--dim); flex: 1; min-width: 300px; }
+#status b { color: var(--text); font-weight: 600; }
+#notes:empty { display: none; }
+#notes { padding: 8px 14px; background: #2a210c; border-bottom: 1px solid #5b4510; color: #f5d68a; }
+#notes code { background: #00000055; padding: 0 4px; border-radius: 3px; }
+main { display: grid; grid-template-columns: minmax(620px, 1.05fr) minmax(520px, 1fr); gap: 12px; padding: 12px; align-items: start; }
+@media (max-width: 1200px) { main { grid-template-columns: 1fr; } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 12px; }
+.panel h2 { font-size: 13px; margin: 0 0 8px; color: var(--dim); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+.tabs { display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
+.tabs button { border-radius: 6px 6px 0 0; border-bottom-color: transparent; }
+.tabs button.on { background: #22304a; border-color: var(--accent); color: #fff; }
+canvas { display: block; width: 100%; }
+#readout { border-radius: 8px; background: #0d0f14; touch-action: none; }
+.viewnote { color: var(--dim); font-size: 12px; margin-top: 6px; }
+.simgrid { display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: 10px; align-items: start; }
+.simgrid canvas { background: #0e1118; border: 1px solid var(--line2); border-radius: 8px; touch-action: none; }
+.simctl { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center; margin-top: 8px; }
+.keys { margin-top: 8px; color: var(--dim); font-size: 12px; columns: 2; }
+.keys kbd { font-family: var(--mono); font-size: 11px; background: #222a38; border: 1px solid #3a4458; border-radius: 3px; padding: 0 4px; color: var(--text); }
+.tabpane { display: none; }
+.tabpane.on { display: block; }
+#visual { border-radius: 8px; background: #05060a; }
+.idea { border: 1px solid var(--line); border-radius: 8px; padding: 8px; margin-top: 8px; background: var(--panel2); }
+.idea h3 { margin: 0 0 4px; font-size: 13px; display: flex; gap: 8px; align-items: center; }
+.idea .row { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 4px 0; }
+.idea .live { font-family: var(--mono); font-size: 12px; color: var(--dim); }
+pre.routes { background: #0b0e14; border: 1px solid var(--line2); border-radius: 6px; padding: 6px 8px; font-size: 11.5px; overflow-x: auto; margin: 6px 0 0; white-space: pre; }
+table.chan { width: 100%; border-collapse: collapse; }
+table.chan td { padding: 2px 4px; border-bottom: 1px solid #1e2430; }
+table.chan td:nth-child(5) input { width: 100%; }
+.grid2 { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; align-items: center; }
+.box { border: 1px solid var(--line); border-radius: 8px; padding: 8px; margin-top: 8px; background: var(--panel2); }
+.box h3 { margin: 0 0 6px; font-size: 13px; }
+pre.hex { font-family: var(--mono); font-size: 11px; background: #0b0e14; border: 1px solid var(--line2); border-radius: 6px; padding: 6px; margin: 4px 0; white-space: pre-wrap; word-break: break-all; max-height: 120px; overflow: auto; }
+#outLog { max-height: 130px; overflow: auto; font-family: var(--mono); font-size: 11px; color: var(--dim); }
+details.step { border: 1px solid var(--line); border-radius: 8px; margin: 6px 0; background: var(--panel2); }
+details.step > summary { cursor: pointer; padding: 6px 8px; list-style: none; display: flex; gap: 8px; align-items: center; }
+details.step > summary::-webkit-details-marker { display: none; }
+details.step[open] > summary { border-bottom: 1px solid var(--line); }
+.stepbody { padding: 8px; }
+.stepbody p { margin: 4px 0 8px; }
+.pill { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: #2a3142; color: var(--dim); font-family: var(--mono); }
+.pill.saved { background: #163a26; color: var(--ok); }
+.pill.run { background: #3a2e10; color: var(--warn); }
+.specref { margin-left: auto; color: var(--faint); font-family: var(--mono); font-size: 11px; }
+.prompt { font-size: 16px; font-weight: 600; color: var(--warn); margin: 6px 0; min-height: 22px; }
+pre.evidence { font-family: var(--mono); font-size: 11px; background: #0b0e14; border: 1px solid var(--line2); border-radius: 6px; padding: 6px; max-height: 220px; overflow: auto; margin: 6px 0; white-space: pre-wrap; }
+.btnrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0; }
+.stepbody textarea { width: 100%; min-height: 34px; margin-top: 4px; }
+table.cov { border-collapse: collapse; font-size: 12px; margin-bottom: 6px; }
+table.cov td { padding: 1px 8px 1px 0; vertical-align: top; }
+#selftest { position: fixed; right: 10px; bottom: 10px; z-index: 10; font-family: var(--mono); font-size: 12px; padding: 4px 10px; border-radius: 14px; border: 1px solid var(--line2); background: #14181f; cursor: pointer; }
+#selftest.pass { color: var(--ok); border-color: #1f6b3d; }
+#selftest.fail { color: var(--bad); border-color: #8a2f38; }
+#selftestDetail { position: fixed; right: 10px; bottom: 42px; z-index: 10; max-width: 560px; max-height: 60vh; overflow: auto; background: #10141b; border: 1px solid var(--line2); border-radius: 8px; padding: 8px; font-family: var(--mono); font-size: 11.5px; display: none; white-space: pre-wrap; }
+.swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: middle; border: 1px solid #fff3; }
+.tag { display: inline-block; padding: 0 6px; border-radius: 4px; background: #222a38; font-family: var(--mono); font-size: 11px; }
+.paused { color: var(--warn); }
+a { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Edge Lab <small>DualSense Edge / DualSense · WebHID</small></h1>
+  <button id="btnConnect" class="primary">Connect controller…</button>
+  <button id="btnDisconnect" disabled>Disconnect</button>
+  <label title="Drive a virtual pad with mouse and keys"><input type="checkbox" id="simOn" checked> Simulator</label>
+  <div id="status">starting…</div>
+</header>
+<div id="notes"></div>
+
+<main>
+<section>
+  <div class="panel">
+    <div class="tabs" id="viewTabs">
+      <button data-view="faithful" class="on">a · Faithful</button>
+      <button data-view="lanes">b · Lanes</button>
+      <button data-view="cockpit">c · Cockpit</button>
+    </div>
+    <canvas id="readout"></canvas>
+    <div class="viewnote" id="viewNote"></div>
+  </div>
+
+  <div class="panel" id="simPanel">
+    <h2>Simulator <span class="dim" style="text-transform:none;letter-spacing:0;font-weight:400">— a virtual pad that sends real report bytes through the same decoder</span></h2>
+    <div class="simgrid">
+      <div>
+        <div class="dim" style="margin-bottom:3px">touchpad · drag = finger · <b>shift</b>-drag = two fingers (pinch / twist) · quick click = tap</div>
+        <canvas id="simTouch"></canvas>
+      </div>
+      <div>
+        <div class="dim" style="margin-bottom:3px">tilt · drag the dot (double-click: level)</div>
+        <canvas id="simTilt"></canvas>
+        <div style="margin-top:6px">turn <input type="range" id="simYaw" min="-1" max="1" step="0.01" value="0" style="width:70%"></div>
+      </div>
+      <div>
+        <div class="dim" style="margin-bottom:3px">sticks · drag</div>
+        <canvas id="simSticks"></canvas>
+        <div class="simctl">
+          <span>L2</span><input type="range" id="simL2" min="0" max="255" value="0">
+          <span>R2</span><input type="range" id="simR2" min="0" max="255" value="0">
+        </div>
+      </div>
+    </div>
+    <div class="btnrow" style="margin-top:8px">
+      <button id="simShake">Shake (jolt)</button>
+      <label>model <select id="simModel"><option value="edge">DualSense Edge</option><option value="dualsense">DualSense</option></select></label>
+      <label>transport <select id="simTransport"><option value="usb">USB (0x01, 64 B)</option><option value="bt">Bluetooth full (0x31, 78 B + CRC)</option><option value="bt-simple">Bluetooth simple (0x01, 10 B)</option></select></label>
+      <label>battery <input type="range" id="simBattery" min="0" max="10" value="7" style="width:80px"></label>
+      <label><input type="checkbox" id="simCharging"> charging</label>
+    </div>
+    <div class="keys">
+      <div><kbd>W A S D</kbd> left stick · <kbd>I J K L</kbd> right stick</div>
+      <div><kbd>↑ → ↓ ←</kbd> D-pad (hat)</div>
+      <div><kbd>Space</kbd> ✕ (A) · <kbd>B</kbd> ○ · <kbd>X</kbd> □ · <kbd>Y</kbd> △</div>
+      <div><kbd>Q</kbd> L1 · <kbd>E</kbd> R1 · <kbd>Z</kbd> L2 · <kbd>C</kbd> R2 (hold: ramps)</div>
+      <div><kbd>V</kbd> Create · <kbd>N</kbd> Options · <kbd>G</kbd> PS · <kbd>M</kbd> mic</div>
+      <div><kbd>F</kbd> L3 · <kbd>H</kbd> R3 · <kbd>T</kbd> touchpad click</div>
+      <div><kbd>[</kbd> <kbd>]</kbd> back LP / RP · <kbd>-</kbd> <kbd>=</kbd> Fn L / R</div>
+      <div><kbd>Enter</kbd> shake · click buttons on the drawing too</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="panel">
+    <div class="tabs" id="rightTabs">
+      <button data-tab="ideas" class="on">Ideas</button>
+      <button data-tab="feedback">Feedback</button>
+      <button data-tab="probe">Probe</button>
+      <button data-tab="tape">Tape</button>
+    </div>
+
+    <!-- ===================== IDEAS ===================== -->
+    <div class="tabpane on" id="tab-ideas">
+      <canvas id="visual"></canvas>
+      <div class="idea" id="idea4">
+        <h3><input type="checkbox" id="i4on" checked> Idea 4 · touch sets the zoom-blur centre <button class="rbtn" data-routes="r4" style="margin-left:auto">copy route</button></h3>
+        <div class="dim">finger = blur centre · pinch = zoom · twist = 4D rotation (XW) · lift = spring back</div>
+        <div class="row"><label>blur <input type="range" id="i4blur" min="0" max="1" step="0.01" value="0.45"></label><span class="live" id="i4live"></span></div>
+        <pre class="routes" id="r4" hidden></pre>
+      </div>
+      <div class="idea" id="idea5">
+        <h3><input type="checkbox" id="i5on" checked> Idea 5 · shake to hit <button class="rbtn" data-routes="r5" style="margin-left:auto">copy route</button></h3>
+        <div class="dim">motion:shake, pad:LP, pad:RP fire an envelope (attack 10 ms, decay 300 ms): brightness flash + zoom punch</div>
+        <div class="row"><button id="i5fire">fire</button><label>punch <input type="range" id="i5punch" min="0" max="1" step="0.01" value="0.5"></label><span class="live" id="i5live"></span></div>
+        <pre class="routes" id="r5" hidden></pre>
+      </div>
+      <div class="idea" id="idea7">
+        <h3><input type="checkbox" id="i7on" checked> Idea 7 · feedback <button class="rbtn" data-routes="r7" style="margin-left:auto">copy route</button></h3>
+        <div class="dim">light bar follows the visual's hue · rumble.low pulses on a beat · R2 drives a kaleido mix and the right trigger pushes back as it saturates. Channels and manual sliders: Feedback tab.</div>
+        <div class="row">
+          <label>hue speed <input type="range" id="i7hue" min="0" max="0.5" step="0.005" value="0.06"></label>
+          <label>beat <select id="i7beat"><option value="metro">metronome</option><option value="mic">laptop mic (low band)</option><option value="off">off</option></select></label>
+          <label><input type="number" id="i7bpm" min="30" max="300" value="120" style="width:60px"> BPM</label>
+          <button id="i7tap">tap tempo</button>
+        </div>
+        <div class="row"><span class="live" id="i7live"></span></div>
+        <pre class="routes" id="r7" hidden></pre>
+      </div>
+    </div>
+
+    <!-- ===================== FEEDBACK ===================== -->
+    <div class="tabpane" id="tab-feedback">
+      <div class="btnrow">
+        <label><input type="checkbox" id="outOn" checked> send outputs</label>
+        <label><input type="radio" name="outMode" value="sinks" checked> app sinks (edge:0…8)</label>
+        <label><input type="radio" name="outMode" value="raw"> raw controls</label>
+        <button id="outPanic" class="danger">all off</button>
+        <span id="outPaused" class="paused"></span> <button id="outResume" hidden>resume</button>
+      </div>
+      <div class="box">
+        <h3>Take-over (spec §5.3)</h3>
+        <div class="btnrow">
+          <label>on first write <select id="takeover"><option value="linux">Linux: flags2 0x02 + setup 0x02</option><option value="sdl">SDL: flags1 0x08 once sensor ts ≥ 10 200 000</option><option value="none">none (probe 8's plain test)</option></select></label>
+          <button id="sendLinux">send Linux take-over now</button>
+          <button id="sendSdl">send SDL reset now</button>
+        </div>
+        <div class="dim" id="takeoverState"></div>
+      </div>
+      <div class="box">
+        <h3>Sink channels <span class="dim" style="font-weight:400">— what a sink row sends (<span class="mono">{"source": …, "target": "edge:N", "op": "send"}</span>); off = the identity</span></h3>
+        <div class="btnrow">identity <select id="identity"><option value="1">P1 blue</option><option value="2">P2 red</option><option value="3">P3 green</option><option value="4">P4 pink</option><option value="5">P5 (cyan)</option></select><span class="dim">a channel no row sends keeps the player's colour, its LEDs, no rumble, free triggers</span></div>
+        <table class="chan"><tbody id="chanRows"></tbody></table>
+      </div>
+      <div class="box">
+        <h3>Raw controls <span class="dim" style="font-weight:400">(used when "raw controls" is selected)</span></h3>
+        <div class="grid2">
+          <span>light</span><span><input type="color" id="rawLight" value="#2050ff"> <select id="rawBright"><option value="0">LED bright</option><option value="1">mid</option><option value="2">dim</option></select></span>
+          <span>players</span><span id="rawPlayers"></span>
+          <span>mic LED</span><span><select id="rawMic"><option value="0">off</option><option value="1">on</option><option value="2">pulse</option></select></span>
+          <span>rumble.low</span><span><input type="range" id="rawRumL" min="0" max="1" step="0.01" value="0" style="width:60%"> <span class="mono dim">heavy / left · c3</span></span>
+          <span>rumble.high</span><span><input type="range" id="rawRumH" min="0" max="1" step="0.01" value="0" style="width:60%"> <span class="mono dim">light / right · c2</span></span>
+          <span>L2 effect</span><span id="rawTrigL"></span>
+          <span>R2 effect</span><span id="rawTrigR"></span>
+        </div>
+        <div class="dim" style="margin-top:4px">Only Off 0x05, Feedback 0x21 and Vibration 0x26 are ever encoded; 0xFC–0xFE are refused before any write.</div>
+      </div>
+      <div class="box">
+        <h3>Last output report <span class="dim mono" id="outStats"></span></h3>
+        <pre class="hex" id="outHex">—</pre>
+        <div id="outLog"></div>
+      </div>
+    </div>
+
+    <!-- ===================== PROBE ===================== -->
+    <div class="tabpane" id="tab-probe">
+      <div class="btnrow">
+        <button id="exportFindings" class="primary">Export findings JSON</button>
+        <span class="dim" id="findingsState"></span>
+      </div>
+      <details class="step" style="background:transparent"><summary class="dim">which step answers which open question (spec §9)</summary>
+        <div class="stepbody"><table class="cov">
+          <tr><td>§9.1</td><td>USB output length → step 7</td></tr>
+          <tr><td>§9.2</td><td>touch Y max, touch timestamp → step 6 · gyro axis order → step 5</td></tr>
+          <tr><td>§9.3</td><td>does something else fight our LEDs → step 9 (the Python exclusive-open part cannot be tested in a browser)</td></tr>
+          <tr><td>§9.4</td><td>BT LED take-over → step 8</td></tr>
+          <tr><td>§9.5</td><td>Edge BT descriptor opens and parses → step 1</td></tr>
+          <tr><td>§9.6</td><td>BT tag values, mic reports → step 1</td></tr>
+          <tr><td>§9.7</td><td>Edge firmware update version → step 11</td></tr>
+        </table></div>
+      </details>
+      <div id="probeList"></div>
+    </div>
+
+    <!-- ===================== TAPE ===================== -->
+    <div class="tabpane" id="tab-tape">
+      <p class="dim">Records every raw input report (as hidapi returns it: the report id first) in the app's tape format, <span class="mono">hyperspace.padtape/1</span>. The app replays it with a pad entry <span class="mono">tape = "file.jsonl"</span>.</p>
+      <div class="btnrow">
+        <button id="tapeRec" class="danger">● Record</button>
+        <button id="tapeStop" disabled>■ Stop</button>
+        <button id="tapeSave" disabled>Download .jsonl</button>
+        <button id="tapeClear" disabled>Clear</button>
+      </div>
+      <div class="btnrow"><input type="text" id="tapeNoteText" placeholder="note line, e.g. 'tilting right'" style="width:60%"><button id="tapeNote">add note</button></div>
+      <pre class="evidence" id="tapeState">no tape</pre>
+    </div>
+  </div>
+</section>
+</main>
+
+<div id="selftest">self-test…</div>
+<div id="selftestDetail"></div>
+
+<script>
+'use strict';
+/* =====================================================================
+   Edge Lab. One file, no build. Sections:
+   1 bytes & CRC · 2 Sony codec (mirrors hyperspace/pads/sony.py)
+   3 gesture lanes (mirrors hyperspace/pads/gesture.py) · 4 pad state
+   5 WebHID · 6 simulator · 7 output / sinks · 8 readouts · 9 ideas
+   10 probe · 11 tape · 12 self-test · 13 wiring
+   ===================================================================== */
+
+// ---------------------------------------------------------------- 0 utils
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+function h(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k.startsWith('on') && typeof v === 'function') e.addEventListener(k.slice(2), v);
+    else if (k === 'class') e.className = v;
+    else if (k === 'style') e.style.cssText = v;
+    else if (v === true) e.setAttribute(k, '');
+    else if (v !== false && v != null) e.setAttribute(k, v);
+  }
+  for (const c of kids.flat()) if (c != null) e.append(c instanceof Node ? c : String(c));
+  return e;
+}
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const clamp01 = v => clamp(+v || 0, 0, 1);
+const U = (v, end) => Number.isFinite(v) ? clamp(0.5 + 0.5 * v / end, 0, 1) : NaN;   // gesture._u
+const ease = (dt, tau) => tau > 0 ? 1 - Math.exp(-dt / tau) : 1;                      // gesture._ease
+const pymod = (a, m) => ((a % m) + m) % m;
+function pyRound(x) {               // Python's round(): halves to even (the app rounds this way)
+  if (!Number.isFinite(x)) return x;
+  return Math.abs(x % 1) === 0.5 ? 2 * Math.round(x / 2) : Math.round(x);
+}
+const hex2 = b => (b & 0xFF).toString(16).padStart(2, '0');
+const toHex = u8 => Array.from(u8, hex2).join('');
+const hexSpaced = (u8, per = 16) => Array.from(u8, hex2).join(' ').replace(new RegExp(`((?:[0-9a-f]{2} ){${per}})`, 'g'), '$1\n').trim();
+function fromHex(s) { const m = s.replace(/[^0-9a-f]/gi, '').match(/../g) || []; return new Uint8Array(m.map(x => parseInt(x, 16))); }
+const hexN = (v, n = 2) => '0x' + (v >>> 0).toString(16).padStart(n, '0');
+const now = () => performance.now();
+function u8of(dv) { return new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength).slice(); }
+function download(name, text, type = 'application/json') {
+  const a = h('a', { href: URL.createObjectURL(new Blob([text], { type })), download: name });
+  document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+const fmt = (v, d = 2) => Number.isFinite(v) ? v.toFixed(d) : '—';
+const sgn = v => (v > 0 ? '+' : '') ;
+
+// ---------------------------------------------------------------- 1 CRC32 (zlib's), with the DualSense's one-byte seed
+const CRC_TABLE = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+/** zlib.crc32(bytes([seed]) + data): seed 0xA1 input, 0xA2 output, 0xA3 feature; seed null = plain CRC32 */
+function crc32(data, seed = null) {
+  let c = 0xFFFFFFFF;
+  if (seed != null) c = CRC_TABLE[(c ^ seed) & 0xFF] ^ (c >>> 8);
+  for (let i = 0; i < data.length; i++) c = CRC_TABLE[(c ^ data[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+const u16le = (b, o) => b[o] | (b[o + 1] << 8);
+const s16le = (b, o) => { const v = u16le(b, o); return v & 0x8000 ? v - 0x10000 : v; };
+const u32le = (b, o) => (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
+function putU32(b, o, v) { b[o] = v & 0xFF; b[o + 1] = (v >>> 8) & 0xFF; b[o + 2] = (v >>> 16) & 0xFF; b[o + 3] = (v >>> 24) & 0xFF; }
+function putU16(b, o, v) { b[o] = v & 0xFF; b[o + 1] = (v >>> 8) & 0xFF; }
+function putS16(b, o, v) { putU16(b, o, clamp(Math.round(v), -32768, 32767) & 0xFFFF); }
+/** Does a BT report's trailing CRC32 (LE, last 4 bytes) match `seed ‖ bytes[0:n-4]`? */
+function btCrcOk(r, seed) { if (!r || r.length < 5) return false; return crc32(r.subarray(0, r.length - 4), seed) === u32le(r, r.length - 4); }
+
+// ---------------------------------------------------------------- 2 Sony codec (spec sony-hid.md; mirrors hyperspace/pads/sony.py)
+const SONY_VID = 0x054C, PID_DUALSENSE = 0x0CE6, PID_EDGE = 0x0DF2;
+const HID_FILTERS = [{ vendorId: SONY_VID, productId: PID_DUALSENSE }, { vendorId: SONY_VID, productId: PID_EDGE }];
+const SEED_IN = 0xA1, SEED_OUT = 0xA2, SEED_FEATURE = 0xA3;
+const TOUCH_W0 = 1920, TOUCH_H0 = 1080;
+const GYRO_PER_DPS = 16, ACCEL_PER_G = 8192, CAL_SLACK = 0.5, BIAS_MAX = 1024;
+const SDL_TS_READY = 10200000;
+const RUMBLE_V2_LINUX = 0x0215, RUMBLE_V2_SDL = 0x0224;
+// (payload byte, bit, canonical name) — spec §2.2 p7–p9; the Edge's four in p9's high bits
+const BUTTON_BITS = [
+  [7, 0x10, 'X'], [7, 0x20, 'A'], [7, 0x40, 'B'], [7, 0x80, 'Y'],
+  [8, 0x01, 'LB'], [8, 0x02, 'RB'], [8, 0x10, 'VIEW'], [8, 0x20, 'MENU'], [8, 0x40, 'LSTICK'], [8, 0x80, 'RSTICK'],
+  [9, 0x01, 'GUIDE'], [9, 0x02, 'TOUCH'], [9, 0x04, 'SHARE'],
+  [9, 0x10, 'LFN'], [9, 0x20, 'RFN'], [9, 0x40, 'LP'], [9, 0x80, 'RP'],
+];
+const BUTTONS = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'VIEW', 'MENU', 'GUIDE', 'SHARE', 'LSTICK', 'RSTICK', 'TOUCH', 'LP', 'RP', 'LFN', 'RFN'];
+const EDGE_ONLY = new Set(['LP', 'RP', 'LFN', 'RFN']);
+const GLYPH = { A: '✕', B: '○', X: '□', Y: '△', LB: 'L1', RB: 'R1', VIEW: 'Create', MENU: 'Options', GUIDE: 'PS', SHARE: 'mic',
+  LSTICK: 'L3', RSTICK: 'R3', TOUCH: 'pad click', LP: 'back L', RP: 'back R', LFN: 'Fn L', RFN: 'Fn R' };
+const HATS = ['UP', 'RIGHT', 'DOWN', 'LEFT'];
+// hat nibble 0–7 (N, NE, E, …) → [up, right, down, left]
+const HAT_MAP = [[1, 0, 0, 0], [1, 1, 0, 0], [0, 1, 0, 0], [0, 1, 1, 0], [0, 0, 1, 0], [0, 0, 1, 1], [0, 0, 0, 1], [1, 0, 0, 1]];
+const AXES = ['LX', 'LY', 'RX', 'RY', 'LT', 'RT'];
+const bitName = (k, bit) => { const m = BUTTON_BITS.find(([b, v]) => b === k && v === bit); return `p${k} ${hexN(bit)}${m ? ' (' + m[2] + ')' : ''}`; };
+
+function hatOf(n) { const m = n < 8 ? HAT_MAP[n] : [0, 0, 0, 0]; return { UP: m[0], RIGHT: m[1], DOWN: m[2], LEFT: m[3] }; }
+function touchAt(p, o) { return { down: !(p[o] & 0x80), id: p[o] & 0x7F, x: p[o + 1] | ((p[o + 2] & 0x0F) << 8), y: (p[o + 2] >> 4) | (p[o + 3] << 4) }; }
+
+/** USB / BT-full payload (p0 = USB byte 1 = BT byte 2). */
+function decodeFull(kind, p) {
+  const buttons = {};
+  for (const [byte, bit, name] of BUTTON_BITS) buttons[name] = (p[byte] & bit) ? 1 : 0;
+  const hatN = p[7] & 0x0F;
+  return {
+    kind, full: true, buttons, hatN, hat: hatOf(hatN),
+    sticks: [p[0], p[1], p[2], p[3]], l2: p[4], r2: p[5], l2d: !!(p[8] & 0x04), r2d: !!(p[8] & 0x08),
+    counter: p[6], seq32: u32le(p, 11),
+    gyro: [s16le(p, 15), s16le(p, 17), s16le(p, 19)], accel: [s16le(p, 21), s16le(p, 23), s16le(p, 25)],
+    sensorTime: u32le(p, 27), temp: (p[31] << 24) >> 24,
+    touches: [touchAt(p, 32), touchAt(p, 36)], p40: p[40],
+    trigStatus: [p[41], p[42]], trigActive: p[47],
+    battery: Math.min(10, p[52] & 0x0F), charging: p[52] >> 4, status53: p[53],
+    raw: p.slice(7, 11),
+  };
+}
+/** BT simple 0x01 (10 bytes, absolute): sticks 1–4, hat+face 5, shoulders 6, PS/pad 7, L2 8, R2 9. */
+function decodeSimple(r) {
+  const shaped = new Uint8Array(10); shaped[7] = r[5]; shaped[8] = r[6]; shaped[9] = r[7] & 0x03;
+  const buttons = {};
+  for (const [byte, bit, name] of BUTTON_BITS) buttons[name] = (shaped[byte] & bit) ? 1 : 0;
+  const hatN = r[5] & 0x0F;
+  return { kind: 'bt-simple', full: false, buttons, hatN, hat: hatOf(hatN), sticks: [r[1], r[2], r[3], r[4]], l2: r[8], r2: r[9],
+    l2d: !!(r[6] & 0x04), r2d: !!(r[6] & 0x08), raw: r.slice(5, 8), battery: null, charging: null };
+}
+/** One input report as hidapi returns it (report id first) → frame, or null for anything else.
+ *  bluetooth: true = a 0x01 is the simple report whatever its length; null = unknown. Never throws. */
+function decodeInput(r, bluetooth = null, checkCrc = true) {
+  try {
+    if (!r || !r.length) return null;
+    const id = r[0];
+    if (id === 0x01 && r.length >= 64 && bluetooth !== true) return decodeFull('usb', r.subarray(1));
+    if (id === 0x31 && r.length >= 78) {
+      const crcOk = btCrcOk(r.subarray(0, 78), SEED_IN);
+      if (checkCrc && !crcOk) return null;
+      const tag = r[1] & 0x0F;
+      if (tag !== 0 && tag !== 1) return null;            // 2 = microphone data (spec §2.1)
+      const f = decodeFull('bt', r.subarray(2));
+      f.tag = tag; f.btSeq = r[1] >> 4; f.crcOk = crcOk;
+      return f;
+    }
+    if (id === 0x01 && r.length >= 10 && (bluetooth === true || r.length < 64)) return decodeSimple(r);
+    return null;
+  } catch (e) { return null; }
+}
+/** WebHID hands the id separately and the DataView WITHOUT it: rebuild hidapi's bytes. */
+function fullReport(reportId, dv) { const r = new Uint8Array(dv.byteLength + 1); r[0] = reportId; r.set(new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength), 1); return r; }
+
+function nominalCal(reason) { return { nominal: true, reason, gyro: [[0, 1 / GYRO_PER_DPS], [0, 1 / GYRO_PER_DPS], [0, 1 / GYRO_PER_DPS]], accel: [[0, 1 / ACCEL_PER_G], [0, 1 / ACCEL_PER_G], [0, 1 / ACCEL_PER_G]] }; }
+/** Feature 0x05 (spec §4.1), SDL's formula and checks, as sony.calibration(); plus Linux's form for the record. */
+function parseCalibration(r) {
+  if (!r || r.length < 35 || r[0] !== 0x05) return nominalCal('report short or not 0x05');
+  const v = []; for (let i = 0; i < 17; i++) v.push(s16le(r, 1 + 2 * i));
+  const bias = v.slice(0, 3), plus = [v[3], v[5], v[7]], minus = [v[4], v[6], v[8]];
+  const speed2x = v[9] + v[10], accPlus = [v[11], v[13], v[15]], accMinus = [v[12], v[14], v[16]];
+  const linux = {
+    gyro_numerator: speed2x * 1024, gyro_denominators: plus.map((p, i) => Math.abs(p) + Math.abs(minus[i])),
+    accel_bias: accPlus.map((p, i) => p - Math.trunc((p - accMinus[i]) / 2)), accel_numerator: 2 * 8192,
+    accel_denominators: accPlus.map((p, i) => p - accMinus[i]),
+  };
+  const raw = { gyro_bias_pitch_yaw_roll: bias, gyro_plus: plus, gyro_minus: minus, speed_plus: v[9], speed_minus: v[10], accel_plus: accPlus, accel_minus: accMinus, unknown35: v.length > 17 ? null : s16le(r, 35) };
+  const believable = (scale, nominal) => Math.abs(scale / nominal - 1) <= CAL_SLACK;
+  const gyro = [], accel = [];
+  for (let i = 0; i < 3; i++) {
+    const den = plus[i] - minus[i];
+    if (den === 0 || Math.abs(bias[i]) > BIAS_MAX) return Object.assign(nominalCal(`gyro axis ${i}: zero span or bias past ${BIAS_MAX}`), { raw, linux });
+    const scale = speed2x / den;
+    if (!believable(scale, 1 / GYRO_PER_DPS)) return Object.assign(nominalCal(`gyro axis ${i}: scale ${scale.toFixed(5)} not believable`), { raw, linux });
+    gyro.push([bias[i], scale]);
+  }
+  for (let i = 0; i < 3; i++) {
+    const span = accPlus[i] - accMinus[i];
+    if (span === 0) return Object.assign(nominalCal(`accel axis ${i}: zero span`), { raw, linux });
+    const scale = 2 / span;
+    if (!believable(scale, 1 / ACCEL_PER_G)) return Object.assign(nominalCal(`accel axis ${i}: scale not believable`), { raw, linux });
+    accel.push([accPlus[i] - Math.trunc(span / 2), scale]);
+  }
+  return { nominal: false, reason: 'feature 0x05', gyro, accel, raw, linux };
+}
+/** Feature 0x20 firmware info (spec §4.3). */
+function parseFirmware(r) {
+  if (!r || r.length < 46 || r[0] !== 0x20) return null;
+  const ascii = (a, b) => String.fromCharCode(...r.slice(a, b)).replace(/\0+$/, '');
+  return { build_date: ascii(1, 12), build_time: ascii(12, 20), firmware_type: u16le(r, 20), software_series: u16le(r, 22),
+    hardware_version: hexN(u32le(r, 24), 8), firmware_version: hexN(u32le(r, 28), 8), device_info: toHex(r.slice(32, 44)),
+    update_version: u16le(r, 44), update_version_hex: hexN(u16le(r, 44), 4) };
+}
+
+// ---- output: the 47-byte effects block (spec §5.2), as sony.effects_block()
+const C = { FLAGS0: 0, FLAGS1: 1, RUMBLE_HIGH: 2, RUMBLE_LOW: 3, MIC_LED: 8, TRIG_R: 10, TRIG_L: 21, FLAGS2: 38, SETUP: 41, BRIGHT: 42, PLAYERS: 43, RGB: 44 };
+const BLOCK_LEN = 47;
+const T_OFF = 0x05, T_FEEDBACK = 0x21, T_VIBRATION = 0x26;
+const PLAYER_BITS = [0, 0x04, 0x0A, 0x15, 0x1B, 0x1F];
+const PLAYER_LIGHTS = [[0, 0, 255], [255, 0, 0], [0, 255, 0], [255, 0, 255], [0, 255, 255]];
+const TRIGGER_START = 0.15;
+const offTrigger = () => ({ mode: 'off', start: 0, strength: 0, freq: 0 });
+/** One trigger's 11 bytes (spec §6): resist → 0x21 from `start` at round(strength·8); pulse → 0x26 at `freq` Hz; else / 0 → Off. */
+function triggerBlock(t) {
+  const out = new Uint8Array(11);
+  const level = pyRound(clamp01(t && t.strength) * 8);
+  if (!t || (t.mode !== 'resist' && t.mode !== 'pulse') || level === 0) { out[0] = T_OFF; return out; }
+  const pos = clamp(pyRound(clamp01(t.start) * 9), 0, 9);
+  let mask = 0, forces = 0;
+  for (let z = pos; z < 10; z++) { mask |= 1 << z; forces += (level - 1) * Math.pow(2, 3 * z); }
+  out[0] = t.mode === 'pulse' ? T_VIBRATION : T_FEEDBACK;
+  putU16(out, 1, mask); putU32(out, 3, forces >>> 0);
+  if (t.mode === 'pulse') out[9] = clamp(pyRound(t.freq || 1), 1, 255);
+  return out;
+}
+function effectsBlock(e, { rumbleV2 = true, first = false, resetLeds = false } = {}) {
+  const b = new Uint8Array(BLOCK_LEN);
+  if (first) { b[C.FLAGS2] = 0x02; b[C.SETUP] = 0x02; return b; }   // Linux's take-over: light bar setup "out"
+  b[C.FLAGS0] = 0x02 | 0x04 | 0x08 | (rumbleV2 ? 0 : 0x01);
+  b[C.FLAGS1] = 0x01 | 0x04 | 0x10 | (resetLeds ? 0x08 : 0);
+  b[C.FLAGS2] = 0x01 | (rumbleV2 ? 0x04 : 0);
+  b[C.RUMBLE_HIGH] = pyRound(clamp01(e.rumbleHigh) * 255);
+  b[C.RUMBLE_LOW] = pyRound(clamp01(e.rumbleLow) * 255);
+  b[C.MIC_LED] = clamp(e.mic | 0, 0, 2);
+  b.set(triggerBlock(e.right), C.TRIG_R);
+  b.set(triggerBlock(e.left), C.TRIG_L);
+  b[C.BRIGHT] = clamp(e.brightness | 0, 0, 2);
+  b[C.PLAYERS] = (e.players & 0x1F) | 0x20;
+  b[C.RGB] = clamp(e.light[0] | 0, 0, 255); b[C.RGB + 1] = clamp(e.light[1] | 0, 0, 255); b[C.RGB + 2] = clamp(e.light[2] | 0, 0, 255);
+  return b;
+}
+/** Frame a block: USB 0x02 + block, zero-padded to usbLen; BT 0x31, seq<<4, 0x10, block, zeros, CRC32(0xA2 ‖ [0:74]). */
+function frameBlock(block, { bluetooth, seq = 0, usbLen = 64 }) {
+  if (!bluetooth) { const r = new Uint8Array(Math.max(usbLen, 1 + BLOCK_LEN)); r[0] = 0x02; r.set(block, 1); return r.subarray(0, Math.max(usbLen, 1 + BLOCK_LEN)); }
+  const r = new Uint8Array(78); r[0] = 0x31; r[1] = (seq & 0x0F) << 4; r[2] = 0x10; r.set(block, 3);
+  putU32(r, 74, crc32(r.subarray(0, 74), SEED_OUT));
+  return r;
+}
+function outputReport(e, opts) { return frameBlock(effectsBlock(e, opts), opts); }
+function blockOf(r) { return r[0] === 0x31 ? r.subarray(3, 3 + BLOCK_LEN) : r.subarray(1, 1 + BLOCK_LEN); }
+/** Refuse anything but the official trigger modes (and never 0xFC–0xFE) before a write. */
+function guardReport(r) {
+  const b = blockOf(r);
+  for (const o of [C.TRIG_R, C.TRIG_L]) {
+    const m = b[o];
+    if (m >= 0xFC && m <= 0xFE) throw new Error(`refused: trigger mode ${hexN(m)} (calibration/debug, spec §6)`);
+    if (m !== 0 && m !== T_OFF && m !== T_FEEDBACK && m !== T_VIBRATION) throw new Error(`refused: trigger mode ${hexN(m)} is not 0x05/0x21/0x26`);
+  }
+}
+/** Read a block back (for the readouts: what the pad was told to show). */
+function readTrigger(b, o) {
+  const m = b[o], mask = u16le(b, o + 1), forces = u32le(b, o + 3);
+  let start = -1; for (let z = 0; z < 10; z++) if (mask & (1 << z)) { start = z; break; }
+  const level = start >= 0 ? ((forces >>> (3 * start)) & 7) + 1 : 0;
+  const mode = m === T_FEEDBACK ? 'feedback' : m === T_VIBRATION ? 'vibration' : 'off';
+  return { mode, start, level: mode === 'off' ? 0 : level, freq: m === T_VIBRATION ? b[o + 9] : 0 };
+}
+function applyBlock(shown, b) {
+  if (b[C.FLAGS2] & 0x02) shown.setup = b[C.SETUP];
+  if (b[C.FLAGS1] & 0x04) shown.light = [b[C.RGB], b[C.RGB + 1], b[C.RGB + 2]];
+  if (b[C.FLAGS1] & 0x10) shown.players = b[C.PLAYERS] & 0x1F;
+  if (b[C.FLAGS1] & 0x01) shown.mic = b[C.MIC_LED];
+  if (b[C.FLAGS0] & 0x02) { shown.rumbleHigh = b[C.RUMBLE_HIGH] / 255; shown.rumbleLow = b[C.RUMBLE_LOW] / 255; }
+  if (b[C.FLAGS0] & 0x04) shown.right = readTrigger(b, C.TRIG_R);
+  if (b[C.FLAGS0] & 0x08) shown.left = readTrigger(b, C.TRIG_L);
+}
+const freshShown = () => ({ light: null, players: null, mic: 0, rumbleLow: 0, rumbleHigh: 0, left: { mode: 'off', level: 0, start: -1 }, right: { mode: 'off', level: 0, start: -1 }, setup: null });
+
+/** The simulator's input report: USB 0x01 64 B, BT 0x31 78 B (+CRC, tag 1), or BT simple 0x01 10 B. */
+function encodeInput(s, kind, btSeq = 0) {
+  if (kind === 'bt-simple') {
+    const r = new Uint8Array(10); r[0] = 0x01; r.set(s.sticks, 1);
+    let face = s.hatN & 0x0F, sh = 0, ps = (s.counter << 2) & 0xFC;
+    for (const [byte, bit, name] of BUTTON_BITS) if (s.buttons[name]) { if (byte === 7) face |= bit; else if (byte === 8) sh |= bit; else if (bit <= 0x02) ps |= bit; }
+    if (s.l2 > 0) sh |= 0x04; if (s.r2 > 0) sh |= 0x08;
+    r[5] = face; r[6] = sh; r[7] = ps; r[8] = s.l2; r[9] = s.r2; return r;
+  }
+  const p = new Uint8Array(kind === 'bt' ? 76 : 63);
+  p.set(s.sticks, 0); p[4] = s.l2; p[5] = s.r2; p[6] = s.counter & 0xFF;
+  p[7] = s.hatN & 0x0F;
+  for (const [byte, bit, name] of BUTTON_BITS) if (s.buttons[name]) p[byte] |= bit;
+  if (s.l2 > 0) p[8] |= 0x04; if (s.r2 > 0) p[8] |= 0x08;
+  putU32(p, 11, s.seq32 >>> 0);
+  for (let i = 0; i < 3; i++) { putS16(p, 15 + 2 * i, s.gyro[i]); putS16(p, 21 + 2 * i, s.accel[i]); }
+  putU32(p, 27, s.sensorTime >>> 0); p[31] = 27;
+  s.touches.forEach((t, k) => { const o = 32 + 4 * k, x = clamp(t.x | 0, 0, 4095), y = clamp(t.y | 0, 0, 4095);
+    p[o] = (t.down ? 0 : 0x80) | (t.id & 0x7F); p[o + 1] = x & 0xFF; p[o + 2] = ((x >> 8) & 0x0F) | ((y & 0x0F) << 4); p[o + 3] = (y >> 4) & 0xFF; });
+  p[40] = s.touchCount & 0xFF;
+  p[52] = (s.battery & 0x0F) | ((s.charging & 0x0F) << 4);
+  p[53] = kind === 'usb' ? 0x08 | 0x10 : 0x00;
+  if (kind === 'usb') { const r = new Uint8Array(64); r[0] = 0x01; r.set(p, 1); return r; }
+  const r = new Uint8Array(78); r[0] = 0x31; r[1] = ((btSeq & 0x0F) << 4) | 0x01; r.set(p.subarray(0, 72), 2);
+  putU32(r, 74, crc32(r.subarray(0, 74), SEED_IN));
+  return r;
+}
+
+// colorsys.rgb_to_hsv / hsv_to_rgb (devices.pad_effects uses them)
+function rgbToHsv(r, g, b) {
+  const maxc = Math.max(r, g, b), minc = Math.min(r, g, b), v = maxc;
+  if (minc === maxc) return [0, 0, v];
+  const s = (maxc - minc) / maxc, rc = (maxc - r) / (maxc - minc), gc = (maxc - g) / (maxc - minc), bc = (maxc - b) / (maxc - minc);
+  let hh = r === maxc ? bc - gc : g === maxc ? 2 + rc - bc : 4 + gc - rc;
+  return [pymod(hh / 6, 1), s, v];
+}
+function hsvToRgb(hh, s, v) {
+  if (s === 0) return [v, v, v];
+  let i = Math.floor(hh * 6); const f = hh * 6 - i, p = v * (1 - s), q = v * (1 - s * f), t = v * (1 - s * (1 - f)); i = pymod(i, 6);
+  return [[v, t, p], [q, v, p], [p, v, t], [p, q, v], [t, p, v], [v, p, q]][i];
+}
+const CHANNELS = [['light.hue', 'light bar hue'], ['light.level', 'light bar level'], ['light.white', 'light bar whiteness'],
+  ['rumble.low', 'rumble, heavy motor'], ['rumble.high', 'rumble, light motor'], ['trigger.left', 'left trigger resistance'],
+  ['trigger.right', 'right trigger resistance'], ['players', 'player lights'], ['mic', 'mic light']];
+/** devices.pad_effects(): channel → u (0..1) onto Effects; an absent channel keeps the identity. */
+function padEffects(vals, player) {
+  const ch = k => { const v = vals[CHANNELS.findIndex(c => c[0] === k)]; return v == null || !Number.isFinite(v) ? null : clamp01(v); };
+  let rgb = PLAYER_LIGHTS[(player - 1) % 5];
+  let level = ch('light.level'); level = level == null ? 1 : level;
+  const hue = ch('light.hue'), white = ch('light.white');
+  if (hue != null || white != null) {
+    const [h0, s0] = rgbToHsv(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255);
+    rgb = hsvToRgb(hue == null ? h0 : hue, white == null ? s0 : 1 - white, 1).map(c => pyRound(c * 255));
+  }
+  const light = rgb.map(c => pyRound(c * level));
+  const meter = ch('players');
+  const players = meter == null ? PLAYER_BITS[player] || 0 : (1 << pyRound(meter * 5)) - 1;
+  const mic = ch('mic');
+  const trig = k => { const u = ch(k); return u ? { mode: 'resist', start: TRIGGER_START, strength: u, freq: 0 } : offTrigger(); };
+  return { light, brightness: 0, players, mic: mic == null || mic < 0.5 ? 0 : 1, rumbleLow: ch('rumble.low') || 0, rumbleHigh: ch('rumble.high') || 0,
+    left: trig('trigger.left'), right: trig('trigger.right') };
+}
+function effectsKey(e) {
+  const t = x => [x.mode, x.start.toFixed(3), x.strength.toFixed(3), (+x.freq || 0).toFixed(1)].join(',');
+  return [e.light.join(','), e.brightness, e.players, e.mic, e.rumbleLow.toFixed(3), e.rumbleHigh.toFixed(3), t(e.left), t(e.right)].join('|');
+}
+
+// ---------------------------------------------------------------- 3 gesture lanes (mirrors hyperspace/pads/gesture.py)
+const TOUCH_LANES = ['x', 'y', 'down', 'x2', 'y2', 'down2', 'pinch', 'twist', 'tap'];
+const TOUCH_BIPOLAR = new Set(['x', 'y', 'x2', 'y2', 'pinch', 'twist']);
+const MOTION_LANES = ['roll', 'pitch', 'yaw', 'spin.roll', 'spin.pitch', 'spin.yaw', 'shake', 'energy'];
+const MOTION_BIPOLAR = new Set(['roll', 'pitch', 'yaw', 'spin.roll', 'spin.pitch', 'spin.yaw']);
+const G = { PINCH_OCTAVES: 2, TWIST_END: Math.PI, TAP_S: 0.25, TAP_TRAVEL: 0.06, TILT_DEG: 60, SPIN_DPS: 360, YAW_DEG: 90,
+  YAW_LEAK_S: 3, SHAKE_G: 1.4, SHAKE_GAP_S: 0.18, ENERGY_DPS: 400, ENERGY_G: 1.5, ENERGY_S: 0.15, GRAVITY_S: 0.25 };
+class Touchpad {
+  constructor() { this.x = [NaN, NaN]; this.y = [NaN, NaN]; this.pinch = NaN; this.twist = NaN; this.tap = 0; this._start = null; this._turn = 0; this._last = 0; this._first = null; this._ids = [null, null]; }
+  /** touches: [[down, id, x, y]] with x, y in 0..1 (x right, y down — the pad's own way up) */
+  step(touches, dt) {
+    this.tap = 0;
+    const pts = touches.slice(0, 2).map(([d, i, x, y]) => [!!d, i, +x, +y]);
+    while (pts.length < 2) pts.push([false, null, 0, 0]);
+    pts.forEach(([d, , x, y], k) => { this.x[k] = d ? x : NaN; this.y[k] = d ? 1 - y : NaN; });
+    this._tapStep(pts[0], dt);
+    if (!(pts[0][0] && pts[1][0])) { this._start = null; this.pinch = NaN; this.twist = NaN; this._ids = [pts[0][0] ? pts[0][1] : null, null]; return; }
+    const dx = pts[1][2] - pts[0][2], dy = pts[1][3] - pts[0][3];
+    const spread = Math.max(Math.hypot(dx, dy), 1e-3), angle = Math.atan2(dy, dx);
+    const ids = [pts[0][1], pts[1][1]];
+    if (this._start === null || ids[0] !== this._ids[0] || ids[1] !== this._ids[1]) { this._start = [spread, angle]; this._turn = 0; this._last = angle; this._ids = ids; }
+    let d = angle - this._last; d = pymod(d + Math.PI, 2 * Math.PI) - Math.PI;
+    this._turn += d; this._last = angle;
+    this.pinch = U(Math.log2(spread / this._start[0]), G.PINCH_OCTAVES);
+    this.twist = U(this._turn, G.TWIST_END);
+  }
+  _tapStep([down, i, x, y], dt) {
+    const f = this._first;
+    if (down) {
+      if (f === null || f[0] !== i) this._first = [i, 0, x, y, 0];
+      else this._first = [i, f[1] + dt, f[2], f[3], Math.max(f[4], Math.hypot(x - f[2], y - f[3]))];
+      return;
+    }
+    if (f !== null && f[1] < G.TAP_S && f[4] < G.TAP_TRAVEL) this.tap = 1;
+    this._first = null;
+  }
+  lanes() { const d1 = Number.isNaN(this.x[0]) ? 0 : 1, d2 = Number.isNaN(this.x[1]) ? 0 : 1; return [this.x[0], this.y[0], d1, this.x[1], this.y[1], d2, this.pinch, this.twist, this.tap]; }
+}
+class Motion {
+  constructor() { this.gravity = null; this.roll = 0; this.pitch = 0; this.yaw = 0; this.spin = [0, 0, 0]; this.shake = 0; this.energy = 0; this.jolt = 0; this._since = 1e9; }
+  /** gyro deg/s and accel g in the pad's axes (x right, y up out of the face, z toward the player) */
+  step(gyro, accel, dt) {
+    dt = Math.max(0, +dt || 0);
+    const [ax, ay, az] = accel, [gx, gy, gz] = gyro;
+    let g = this.gravity;
+    if (g === null) g = [ax, ay, az];
+    else { const k = ease(dt, G.GRAVITY_S); g = [g[0] + (ax - g[0]) * k, g[1] + (ay - g[1]) * k, g[2] + (az - g[2]) * k]; }
+    this.gravity = g;
+    this.roll = Math.atan2(-g[0], g[1]) * 180 / Math.PI;
+    this.pitch = Math.atan2(-g[2], g[1]) * 180 / Math.PI;
+    this.spin = [-gz, gx, -gy];
+    const kYaw = ease(dt, G.YAW_LEAK_S);
+    this.yaw = (this.yaw - gy * dt) * (1 - kYaw);
+    const jolt = Math.hypot(ax - g[0], ay - g[1], az - g[2]); this.jolt = jolt;
+    this._since += dt; this.shake = 0;
+    if (jolt > G.SHAKE_G && this._since >= G.SHAKE_GAP_S) { this.shake = 1; this._since = 0; }
+    const rate = Math.hypot(gx, gy, gz), e = Math.max(rate / G.ENERGY_DPS, jolt / G.ENERGY_G);
+    this.energy += (Math.min(1, e) - this.energy) * ease(dt, G.ENERGY_S);
+  }
+  lanes() { return [U(this.roll, G.TILT_DEG), U(this.pitch, G.TILT_DEG), U(this.yaw, G.YAW_DEG), U(this.spin[0], G.SPIN_DPS), U(this.spin[1], G.SPIN_DPS), U(this.spin[2], G.SPIN_DPS), this.shake, clamp01(this.energy)]; }
+}
+
+// ---------------------------------------------------------------- 4 pad state (one source at a time: 'hid' or 'sim')
+const IDENTITY_MAP = () => ({ accel: [[0, 1], [1, 1], [2, 1]], gyro: [[0, 1], [1, 1], [2, 1]] });
+const pad = {
+  source: 'sim', frame: null, frameT: 0, touchW: TOUCH_W0, touchH: TOUCH_H0, axisMap: IDENTITY_MAP(),
+  tp: new Touchpad(), mo: new Motion(), lanes: {}, prev: {}, held: {}, events: [], gyroDps: [0, 0, 0], accelG: [0, 0, 1],
+};
+const reportHooks = new Set();          // probe watchers, called for every report of the active source
+const freshStats = () => ({ byKey: {}, tags: {}, seqNibbles: [], seqSteps: { plus1: 0, other: 0 }, lastSeq: null, crcOk: 0, crcFail: 0, unknown: 0, total: 0, first: null, win: [], rate: 0 });
+const stats = freshStats();
+function resetStats() { Object.assign(stats, freshStats()); }
+// if no BT CRC ever matches (something about this OS / browser path we did not expect), decode anyway and say so
+const crcLenient = () => stats.crcFail > 50 && stats.crcOk === 0;
+function curModel() { return pad.source === 'hid' ? (hid.model || 'edge') : sim.model; }
+function curTransport() { return pad.source === 'hid' ? hid.transport : (sim.transport === 'usb' ? 'usb' : 'bluetooth'); }
+function curCal() { return pad.source === 'hid' ? hid.cal : nominalCal('simulator: nominal scales'); }
+function btHint() { const t = curTransport(); return t === 'bluetooth' ? true : t === 'usb' ? false : null; }
+
+/** Every raw report (hidapi bytes, id first) from either source goes through here. */
+function ingest(r, t, src) {
+  if (src !== pad.source) return;
+  stats.total++; const key = `${hexN(r[0])}:${r.length}`; stats.byKey[key] = (stats.byKey[key] || 0) + 1;
+  if (!stats.first) stats.first = { id: hexN(r[0]), length: r.length };
+  stats.win.push(t);
+  if (r[0] === 0x31 && r.length > 1) {
+    const tag = r[1] & 0x0F, sq = r[1] >> 4; stats.tags[tag] = (stats.tags[tag] || 0) + 1;
+    if (stats.seqNibbles.length < 24) stats.seqNibbles.push(sq);
+    if (stats.lastSeq !== null) { if (sq === ((stats.lastSeq + 1) & 15)) stats.seqSteps.plus1++; else stats.seqSteps.other++; }
+    stats.lastSeq = sq;
+    if (r.length >= 78) { if (btCrcOk(r.subarray(0, 78), SEED_IN)) stats.crcOk++; else stats.crcFail++; }
+  }
+  if (tape.on) tape.report(t, r);
+  const f = decodeInput(r, btHint(), !crcLenient());
+  if (!f) { stats.unknown++; return; }
+  pad.frame = f; pad.frameT = t;
+  for (const hook of reportHooks) { try { hook(f, r, t); } catch (e) { console.warn('probe hook', e); } }
+}
+function stickU(v) { return clamp((v - 127.5) / 127.5, -1, 1); }
+/** Once a frame, from the newest report — as gamepad.Pad does (touch / motion stepped with the frame's dt). */
+function stepPad(dt, tNow) {
+  const f = pad.frame, L = {};
+  const live = f && tNow - pad.frameT < 600;
+  for (const b of BUTTONS) L['pad:' + b] = live ? f.buttons[b] : 0;
+  for (const d of HATS) L['hat:' + d] = live ? f.hat[d] : 0;
+  const st = live ? f.sticks : [128, 128, 128, 128];
+  L['axis:LX'] = 0.5 + 0.5 * stickU(st[0]); L['axis:LY'] = 0.5 - 0.5 * stickU(st[1]);
+  L['axis:RX'] = 0.5 + 0.5 * stickU(st[2]); L['axis:RY'] = 0.5 - 0.5 * stickU(st[3]);
+  L['axis:LT'] = live ? f.l2 / 255 : 0; L['axis:RT'] = live ? f.r2 / 255 : 0;
+  if (live && f.full) {
+    const w = pad.touchW - 1, hh = pad.touchH - 1;
+    pad.tp.step(f.touches.map(t => [t.down, t.id, t.x / w, t.y / hh]), dt);
+    const cal = curCal(), m = pad.axisMap;
+    const gd = f.gyro.map((v, i) => (v - cal.gyro[i][0]) * cal.gyro[i][1]);
+    const ag = f.accel.map((v, i) => (v - cal.accel[i][0]) * cal.accel[i][1]);
+    pad.gyroDps = m.gyro.map(([i, s]) => gd[i] * s); pad.accelG = m.accel.map(([i, s]) => ag[i] * s);
+    pad.mo.step(pad.gyroDps, pad.accelG, dt);
+    pad.tp.lanes().forEach((v, i) => L['touch:' + TOUCH_LANES[i]] = v);
+    pad.mo.lanes().forEach((v, i) => L['motion:' + MOTION_LANES[i]] = v);
+  } else {
+    TOUCH_LANES.forEach(n => L['touch:' + n] = NaN); MOTION_LANES.forEach(n => L['motion:' + n] = NaN);
+  }
+  // edges and pulses, for the readouts' ticker and the ideas
+  const edges = [];
+  for (const k of [...BUTTONS.map(b => 'pad:' + b), ...HATS.map(d => 'hat:' + d)]) if (L[k] === 1 && pad.prev[k] !== 1) edges.push(k);
+  for (const k of ['touch:tap', 'motion:shake']) if (L[k] === 1) { edges.push(k); pad.held[k] = tNow; }
+  for (const k of edges) { pad.events.push({ k, t: tNow }); }
+  if (pad.events.length > 40) pad.events.splice(0, pad.events.length - 40);
+  pad.prev = L; pad.lanes = L; pad.edges = edges; pad.live = !!live;
+  while (stats.win.length && stats.win[0] < tNow - 1000) stats.win.shift();
+  stats.rate = stats.win.length;
+}
+
+// ---------------------------------------------------------------- 5 WebHID
+const hid = { device: null, model: null, transport: '', desc: null, cal: nominalCal('not read yet'), calRead: false, features: {}, fw: null,
+  usbOutLen: null, outSeq: 0, tookOver: false, writes: 0, simpleSince: null, lastPid: null };
+const hasHid = () => typeof navigator !== 'undefined' && 'hid' in navigator;
+function describeCollections(dev) {
+  const d = { inputs: {}, outputs: {}, features: {}, collections: 0 };
+  const walk = c => {
+    d.collections++;
+    for (const [kind, key] of [['inputReports', 'inputs'], ['outputReports', 'outputs'], ['featureReports', 'features']])
+      for (const rep of c[kind] || []) { let bits = 0; for (const it of rep.items || []) bits += (it.reportSize || 0) * (it.reportCount || 0); d[key][rep.reportId] = Math.ceil(bits / 8); }
+    for (const ch of c.children || []) walk(ch);
+  };
+  try { for (const c of dev.collections || []) walk(c); } catch (e) { d.error = String(e); }
+  d.transport = d.inputs[0x31] != null ? 'bluetooth' : d.inputs[0x01] === 63 ? 'usb' : d.inputs[0x01] === 9 ? 'bluetooth' : '';
+  d.maxOutputBytes = Math.max(0, ...Object.values(d.outputs));
+  return d;
+}
+async function connectClicked() {
+  if (!hasHid()) { note('WebHID is not available here.'); return; }
+  try {
+    const devs = await navigator.hid.requestDevice({ filters: HID_FILTERS });
+    if (devs && devs.length) await openDevice(devs[0], 'chosen');
+  } catch (e) { setStatusMsg('connect failed: ' + e.message); }
+}
+async function openDevice(dev, why) {
+  try {
+    if (hid.device && hid.device !== dev) await closeDevice(false);
+    if (!dev.opened) await dev.open();
+  } catch (e) { setStatusMsg(`could not open ${dev.productName || 'device'}: ${e.message} (another app — or another tab — may hold it)`); return; }
+  Object.assign(hid, { device: dev, model: dev.productId === PID_EDGE ? 'edge' : 'dualsense', desc: describeCollections(dev), cal: nominalCal('not read yet'),
+    calRead: false, features: {}, fw: null, usbOutLen: null, outSeq: 0, tookOver: false, writes: 0, simpleSince: null, lastPid: dev.productId, openedAt: now(), why });
+  hid.transport = hid.desc.transport;
+  dev.oninputreport = onInputReport;
+  resetStats(); out.shown.hid = freshShown(); out.sentKey = null;
+  setSource('hid');
+  $('#btnDisconnect').disabled = false;
+  setStatusMsg(`${why}: ${dev.productName}`);
+  await readFeatures();
+}
+async function closeDevice(user = true) {
+  const d = hid.device; hid.device = null;
+  if (d) { d.oninputreport = null; try { await d.close(); } catch (e) { /* gone already */ } }
+  $('#btnDisconnect').disabled = true;
+  if (user) hid.lastPid = null;
+  setSource('sim');
+}
+function onInputReport(e) {
+  const r = fullReport(e.reportId, e.data);
+  if (!hid.transport) hid.transport = r[0] === 0x31 ? 'bluetooth' : (r[0] === 0x01 && r.length >= 64 ? 'usb' : r[0] === 0x01 ? 'bluetooth' : '');
+  if (r[0] === 0x31) hid.transport = 'bluetooth';
+  if (hid.transport === 'bluetooth' && r[0] === 0x01) { if (hid.simpleSince === null) hid.simpleSince = now(); } else hid.simpleSince = null;
+  ingest(r, e.timeStamp > 0 ? e.timeStamp : now(), 'hid');
+}
+/** Chrome returns feature reports WITH the id in byte 0 (unlike input reports); handle both. */
+async function readFeature(id) {
+  const dv = await hid.device.receiveFeatureReport(id);
+  let u = u8of(dv); const declared = hid.desc && hid.desc.features[id];
+  let hadId = declared != null ? (u.length === declared + 1 ? true : u.length === declared ? false : u[0] === id) : u[0] === id;
+  if (!hadId) { const v = new Uint8Array(u.length + 1); v[0] = id; v.set(u, 1); u = v; }
+  const bt = hid.transport === 'bluetooth';
+  return { id: hexN(id), hex: toHex(u), length: u.length, returned_bytes: dv.byteLength, had_id_byte: hadId, declared_bytes: declared ?? null,
+    bt_crc_ok: bt && u.length >= 8 ? btCrcOk(u, SEED_FEATURE) : null, bytes: u };
+}
+async function readFeatures() {
+  if (!hid.device) return;
+  for (const id of [0x05, 0x20]) {
+    try {
+      const f = await readFeature(id); hid.features[f.id] = f;
+      if (id === 0x05) { hid.cal = parseCalibration(f.bytes); hid.calRead = !hid.cal.nominal; f.decoded = { nominal: hid.cal.nominal, reason: hid.cal.reason, sdl: { gyro: hid.cal.gyro, accel: hid.cal.accel }, raw: hid.cal.raw, linux: hid.cal.linux }; }
+      if (id === 0x20) { hid.fw = parseFirmware(f.bytes); f.decoded = hid.fw; }
+    } catch (e) {
+      hid.features[hexN(id)] = { id: hexN(id), error: `${e.name}: ${e.message}` };
+      if (id === 0x05) hid.cal = nominalCal('feature 0x05 failed: ' + e.message);
+    }
+  }
+}
+function rumbleV2() { return curModel() === 'edge' || ((hid.fw && hid.fw.update_version) || 0) >= RUMBLE_V2_LINUX; }
+function usbLens() { const d = hid.desc && hid.desc.outputs[2]; const base = hid.model === 'edge' ? [64, 63, 48] : [48, 64, 63]; return d ? [d + 1, ...base.filter(n => n !== d + 1)] : base; }
+
+// ---------------------------------------------------------------- 6 simulator
+const SIM_KEYS = { KeyW: 'ls-up', KeyS: 'ls-down', KeyA: 'ls-left', KeyD: 'ls-right', KeyI: 'rs-up', KeyK: 'rs-down', KeyJ: 'rs-left', KeyL: 'rs-right',
+  ArrowUp: 'hat-UP', ArrowDown: 'hat-DOWN', ArrowLeft: 'hat-LEFT', ArrowRight: 'hat-RIGHT', Space: 'A', KeyB: 'B', KeyX: 'X', KeyY: 'Y',
+  KeyQ: 'LB', KeyE: 'RB', KeyZ: 'l2', KeyC: 'r2', KeyV: 'VIEW', KeyN: 'MENU', KeyG: 'GUIDE', KeyM: 'SHARE', KeyF: 'LSTICK', KeyH: 'RSTICK',
+  KeyT: 'TOUCH', BracketLeft: 'LP', BracketRight: 'RP', Minus: 'LFN', Equal: 'RFN', Enter: 'shake' };
+const sim = {
+  model: 'edge', transport: 'usb', keys: new Set(), mouse: new Set(), ls: [0, 0], rs: [0, 0], lsDrag: null, rsDrag: null,
+  l2: 0, r2: 0, touches: [{ down: false, id: 0, x: 0, y: 0 }, { down: false, id: 0, x: 0, y: 0 }], nextId: 1, twoFinger: null,
+  tilt: { roll: 0, pitch: 0 }, roll: 0, pitch: 0, yawRate: 0, shakeT: -1e9, battery: 7, charging: 0,
+  sensorTime: 0, counter: 0, seq32: 0, btSeq: 0, touchCount: 0, lastT: now(),
+};
+function simTick() {
+  const t = now(), dt = Math.min(0.05, (t - sim.lastT) / 1000); sim.lastT = t;
+  if (pad.source !== 'sim' || dt <= 0) return;
+  const k = sim.keys, axis = (n, p) => (k.has(p) ? 1 : 0) - (k.has(n) ? 1 : 0);
+  const norm = v => { const m = Math.hypot(v[0], v[1]); return m > 1 ? [v[0] / m, v[1] / m] : v; };
+  const lt = sim.lsDrag || norm([axis('ls-left', 'ls-right'), axis('ls-up', 'ls-down')]);
+  const rt = sim.rsDrag || norm([axis('rs-left', 'rs-right'), axis('rs-up', 'rs-down')]);
+  for (let i = 0; i < 2; i++) { sim.ls[i] += (lt[i] - sim.ls[i]) * ease(dt, sim.lsDrag ? 0.01 : 0.05); sim.rs[i] += (rt[i] - sim.rs[i]) * ease(dt, sim.rsDrag ? 0.01 : 0.05); }
+  // triggers: hold Z / C to ramp; the right trigger slows past its resistance zone (the output we sent)
+  const shown = out.shown.sim;
+  for (const [side, key, slider] of [['l2', 'l2', '#simL2'], ['r2', 'r2', '#simR2']]) {
+    const tr = side === 'l2' ? shown.left : shown.right;
+    let rate = 3.2;
+    if (tr.mode === 'feedback' && sim[side] / 255 >= tr.start / 9) rate *= 1 - 0.85 * tr.level / 8;
+    if (k.has(key)) sim[side] = Math.min(255, sim[side] + rate * 255 * dt); else sim[side] = Math.max(0, sim[side] - 6 * 255 * dt);
+    sim[side + 'Out'] = Math.max(sim[side], +$(slider).value);
+  }
+  // tilt follows the gizmo; rates are its derivative
+  const r0 = sim.roll, p0 = sim.pitch;
+  sim.roll += (sim.tilt.roll - sim.roll) * ease(dt, 0.08); sim.pitch += (sim.tilt.pitch - sim.pitch) * ease(dt, 0.08);
+  const dRoll = (sim.roll - r0) / dt, dPitch = (sim.pitch - p0) / dt, yawRate = sim.yawRate * 180;
+  const rad = Math.PI / 180, n = () => (Math.random() - 0.5);
+  let a = [-Math.tan(sim.roll * rad), 1, -Math.tan(sim.pitch * rad)]; const am = Math.hypot(...a); a = a.map(v => v / am + n() * 0.004);
+  let gy = [dPitch + n() * 0.3, -yawRate + n() * 0.3, -dRoll + n() * 0.3];       // pad axes: x pitch rate, y −yaw rate, z −roll rate
+  if (t - sim.shakeT < 30) { a[2] += 2.4; a[0] += 0.6; gy = gy.map(v => v + 140); }
+  // buttons
+  const btn = {};
+  for (const b of BUTTONS) btn[b] = (k.has(b) || sim.mouse.has(b)) && !(sim.model !== 'edge' && EDGE_ONLY.has(b)) ? 1 : 0;
+  const hu = k.has('hat-UP') || sim.mouse.has('hat:UP'), hr = k.has('hat-RIGHT') || sim.mouse.has('hat:RIGHT'), hd = k.has('hat-DOWN') || sim.mouse.has('hat:DOWN'), hl = k.has('hat-LEFT') || sim.mouse.has('hat:LEFT');
+  const hatN = HAT_MAP.findIndex(m => m[0] === +hu && m[1] === +hr && m[2] === +hd && m[3] === +hl);
+  sim.sensorTime = (sim.sensorTime + Math.round(dt * 1e6 / 0.33)) >>> 0; sim.counter = (sim.counter + 1) & 0xFF; sim.seq32 = (sim.seq32 + 1) >>> 0; sim.btSeq = (sim.btSeq + 1) & 15;
+  if (sim.touches.some(q => q.down)) sim.touchCount = (sim.touchCount + 1) & 0xFF;
+  const state = {
+    sticks: [...sim.ls, ...sim.rs].map(v => clamp(Math.round(128 + v * 127.5), 0, 255)), l2: Math.round(sim.l2Out), r2: Math.round(sim.r2Out),
+    buttons: btn, hatN: hatN < 0 ? 8 : hatN, counter: sim.counter, seq32: sim.seq32,
+    gyro: gy.map(v => v * GYRO_PER_DPS), accel: a.map(v => v * ACCEL_PER_G), sensorTime: sim.sensorTime,
+    touches: sim.touches.map(q => ({ down: q.down, id: q.id, x: Math.round(clamp01(q.x) * (TOUCH_W0 - 1)), y: Math.round(clamp01(q.y) * (TOUCH_H0 - 1)) })),
+    touchCount: sim.touchCount, battery: sim.battery, charging: sim.charging,
+  };
+  ingest(encodeInput(state, sim.transport, sim.btSeq), t, 'sim');
+}
+// touch surface (the sim touchpad and the drawn one): u, v in 0..1 of the pad, y down
+const touchSurf = {
+  start(u, v, shift) {
+    const id = () => { const i = sim.nextId; sim.nextId = (sim.nextId + 1) & 0x7F; return i; };
+    if (shift) { sim.twoFinger = { cx: u, cy: v, u0: u, v0: v }; sim.touches[0] = { down: true, id: id(), x: u + 0.15, y: v }; sim.touches[1] = { down: true, id: id(), x: u - 0.15, y: v }; }
+    else { sim.twoFinger = null; sim.touches[0] = { down: true, id: id(), x: u, y: v }; sim.touches[1].down = false; }
+  },
+  move(u, v) {
+    const tf = sim.twoFinger;
+    if (tf) { const ox = 0.15 + (u - tf.u0), oy = v - tf.v0; sim.touches[0].x = tf.cx + ox; sim.touches[0].y = tf.cy + oy; sim.touches[1].x = tf.cx - ox; sim.touches[1].y = tf.cy - oy; }
+    else if (sim.touches[0].down) { sim.touches[0].x = u; sim.touches[0].y = v; }
+  },
+  end() { sim.touches[0].down = false; sim.touches[1].down = false; sim.twoFinger = null; },
+};
+
+// ---------------------------------------------------------------- 7 output: sinks / raw → reports, ≤ 60 Hz, only on change
+const out = {
+  enabled: true, mode: 'sinks', takeover: 'linux', paused: '', busy: false, sentKey: null, sentT: 0, last: null, log: [], errors: 0, writes: 0, winT: [],
+  ch: CHANNELS.map((c, i) => ({ on: i === 0 || i === 6, auto: true, manual: [0.6, 1, 0, 0, 0, 0, 0, 0.2, 0][i] })),
+  demo: {}, player: 1, sdlWait: false,
+  raw: { light: '#2050ff', brightness: 0, players: 0x04, mic: 0, rumbleLow: 0, rumbleHigh: 0, left: { mode: 'off', pos: 1, level: 4, freq: 30 }, right: { mode: 'off', pos: 1, level: 4, freq: 30 } },
+  shown: { hid: freshShown(), sim: freshShown() }, want: null,
+};
+const AUTO_SRC = { 0: 'idea 7 hue', 3: 'idea 7 beat', 6: 'idea 7 kaleido mix' };
+function channelValues() { const v = {}; out.ch.forEach((c, i) => { if (c.on) v[i] = c.auto && out.demo[i] != null ? out.demo[i] : c.manual; }); return v; }
+function rawTrigger(t) { return t.mode === 'feedback' ? { mode: 'resist', start: t.pos / 9, strength: t.level / 8, freq: 0 } : t.mode === 'vibration' ? { mode: 'pulse', start: t.pos / 9, strength: t.level / 8, freq: t.freq } : offTrigger(); }
+function wantedEffects() {
+  if (out.mode === 'raw') {
+    const r = out.raw, c = r.light.replace('#', '');
+    return { light: [0, 2, 4].map(i => parseInt(c.substr(i, 2), 16) || 0), brightness: r.brightness, players: r.players, mic: r.mic, rumbleLow: r.rumbleLow, rumbleHigh: r.rumbleHigh, left: rawTrigger(r.left), right: rawTrigger(r.right) };
+  }
+  return padEffects(channelValues(), out.player);
+}
+function logOut(msg, bad = false) { out.log.unshift(`${(now() / 1000).toFixed(2)}s ${bad ? '✗ ' : ''}${msg}`); out.log.length = Math.min(out.log.length, 40); if (bad) out.errors++; }
+/** Write one report (bytes as hidapi would, id first) to the active source. Throws on refusal / failure. */
+async function writeReport(r, why) {
+  guardReport(r);
+  out.last = r; out.winT.push(now());
+  if (pad.source === 'hid') {
+    if (!hid.device) throw new Error('no device');
+    await hid.device.sendReport(r[0], r.slice(1));
+    hid.writes++;
+    applyBlock(out.shown.hid, blockOf(r));
+  } else applyBlock(out.shown.sim, blockOf(r));
+  out.writes++;
+  logOut(`${why} · ${hexN(r[0])} ${r.length} B${r[0] === 0x31 ? ' seq ' + (r[1] >> 4) : ''}`);
+}
+function nextSeq() { hid.outSeq = (hid.outSeq + 1) & 15; return hid.outSeq; }
+function simSeq() { sim.outSeq = ((sim.outSeq || 0) + 1) & 15; return sim.outSeq; }
+/** Frame a block for the active source; over USB try the lengths in turn (as HidPad does) until one is taken. */
+async function sendBlock(block, why) {
+  const bt = curTransport() === 'bluetooth';
+  if (pad.source !== 'hid') return writeReport(frameBlock(block, { bluetooth: bt, seq: simSeq(), usbLen: 64 }), why);
+  if (bt) return writeReport(frameBlock(block, { bluetooth: true, seq: nextSeq() }), why);
+  if (hid.usbOutLen) return writeReport(frameBlock(block, { bluetooth: false, usbLen: hid.usbOutLen }), why);
+  let last;
+  for (const n of usbLens()) {
+    try { await writeReport(frameBlock(block, { bluetooth: false, usbLen: n }), why + ` (try ${n})`); hid.usbOutLen = n; return; }
+    catch (e) { last = e; logOut(`USB length ${n} refused: ${e.message}`, true); }
+  }
+  throw last || new Error('no USB length taken');
+}
+const sdlReady = () => pad.frame && pad.frame.full && pad.frame.sensorTime >= SDL_TS_READY;
+async function outputTick() {
+  if (out.busy || !out.enabled || out.paused || !out.want) return;
+  if (pad.source === 'hid' && (!hid.device || !hid.transport)) return;
+  const tookOver = pad.source === 'hid' ? hid.tookOver : sim.tookOver;
+  const key = effectsKey(out.want) + '|' + pad.source + '|' + curTransport();
+  const t = now();
+  if (key === out.sentKey && tookOver) return;
+  if (t - out.sentT < 1000 / 60) return;
+  out.busy = true;
+  try {
+    let reset = false;
+    if (!tookOver) {
+      if (out.takeover === 'linux') { await sendBlock(effectsBlock(null, { first: true }), 'take-over (Linux)'); }
+      else if (out.takeover === 'sdl') { if (!sdlReady() && curTransport() === 'bluetooth') { out.sdlWait = true; return; } reset = true; }
+      if (pad.source === 'hid') hid.tookOver = true; else sim.tookOver = true;
+      out.sdlWait = false;
+    }
+    await sendBlock(effectsBlock(out.want, { rumbleV2: rumbleV2(), resetLeds: reset }), reset ? 'effects + SDL reset' : 'effects');
+    out.sentKey = key; out.sentT = t;
+  } catch (e) { logOut(e.message, true); out.sentT = t + 250; out.sentKey = key; }
+  finally { out.busy = false; }
+}
+
+// ---------------------------------------------------------------- 8 readouts
+const VIEW = { faithful: { w: 1000, h: 620, k: 1.3 }, lanes: { w: 720, h: 700, k: 1 }, cockpit: { w: 1000, h: 620, k: 1.3 } };
+let view = 'faithful', hits = [];
+const COL = { body: '#1a1f2c', bodyLine: '#3a4357', idle: '#262d3c', idleLine: '#465068', text: '#d9dfea', dim: '#7d879b', faint: '#3d4556', hot: '#ffd166',
+  back: '#ff9f43', fn: '#c084fc', A: '#7aa8ff', B: '#ff5a6a', X: '#ff7ad9', Y: '#40e0a0', accent: '#6cb6ff', ok: '#4ade80' };
+function fitCanvas(cv, dw, dh) {
+  const dpr = window.devicePixelRatio || 1, w = Math.max(50, cv.clientWidth), hh = Math.round(w * dh / dw);
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(hh * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(hh * dpr); cv.style.height = hh + 'px'; }
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr * w / dw, 0, 0, dpr * w / dw, 0, 0); return ctx;
+}
+function rr(ctx, x, y, w, hh, r) { r = Math.min(r, w / 2, hh / 2); ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + hh, r); ctx.arcTo(x + w, y + hh, x, y + hh, r); ctx.arcTo(x, y + hh, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+let FONT_K = 1;     // readouts drawn at ~0.7 scale get bigger type
+function txt(ctx, s, x, y, { size = 13, color = COL.text, align = 'center', weight = 500, base = 'middle', mono = false } = {}) {
+  ctx.font = `${weight} ${(size * FONT_K).toFixed(1)}px ${mono ? 'ui-monospace, Menlo, monospace' : 'system-ui, -apple-system, sans-serif'}`; ctx.fillStyle = color; ctx.textAlign = align; ctx.textBaseline = base; ctx.fillText(s, x, y);
+}
+const rgbCss = (c, a = 1) => c ? `rgba(${c[0]},${c[1]},${c[2]},${a})` : `rgba(90,98,115,${a})`;
+const pressed = n => pad.lanes['pad:' + n] === 1;
+const shownNow = () => pad.source === 'hid' ? out.shown.hid : out.shown.sim;
+function battText() { const f = pad.frame; if (!f || !f.full) return 'battery —'; const pct = Math.min(f.battery * 10 + 5, 100); const st = { 0: 'discharging', 1: 'charging', 2: 'full' }[f.charging] || `state ${hexN(f.charging, 1)}`; return `${pct}% ${st}`; }
+function drawBattery(ctx, x, y, below = false) {
+  const f = pad.frame, lvl = f && f.full ? f.battery / 10 : 0;
+  ctx.strokeStyle = COL.idleLine; ctx.lineWidth = 2; rr(ctx, x, y, 40, 18, 4); ctx.stroke(); ctx.fillStyle = COL.idleLine; ctx.fillRect(x + 40, y + 5, 4, 8);
+  ctx.fillStyle = lvl > 0.25 ? COL.ok : '#f87171'; if (f && f.full) { rr(ctx, x + 3, y + 3, 34 * lvl, 12, 2); ctx.fill(); }
+  if (below) txt(ctx, battText(), x, y + 32, { size: 11, color: COL.dim, align: 'left' }); else txt(ctx, battText(), x - 8, y + 9, { size: 12, color: COL.dim, align: 'right' });
+}
+function pulseOn(k, ms = 260) { return now() - (pad.held[k] || -1e9) < ms; }
+function rumbleJitter() { const s = shownNow(); const a = s.rumbleLow * 3 + s.rumbleHigh * 1.4; return a > 0.01 ? [(Math.random() - 0.5) * a, (Math.random() - 0.5) * a] : [0, 0]; }
+
+// --- (a) Faithful: the Edge from above, controls lit where they are
+function edgeBody(ctx) {
+  ctx.beginPath(); ctx.moveTo(500, 100); ctx.lineTo(340, 100);
+  ctx.bezierCurveTo(250, 98, 175, 108, 148, 170); ctx.bezierCurveTo(128, 220, 112, 330, 112, 420); ctx.bezierCurveTo(112, 520, 150, 600, 218, 600);
+  ctx.bezierCurveTo(272, 600, 300, 560, 318, 520); ctx.bezierCurveTo(338, 476, 372, 446, 420, 446); ctx.lineTo(580, 446);
+  ctx.bezierCurveTo(628, 446, 662, 476, 682, 520); ctx.bezierCurveTo(700, 560, 728, 600, 782, 600); ctx.bezierCurveTo(850, 600, 888, 520, 888, 420);
+  ctx.bezierCurveTo(888, 330, 872, 220, 852, 170); ctx.bezierCurveTo(825, 108, 750, 98, 660, 100); ctx.closePath();
+}
+function drawFaithful(ctx) {
+  const L = pad.lanes, sh = shownNow(), f = pad.frame, edge = curModel() === 'edge';
+  hits = [];
+  ctx.fillStyle = '#0d0f14'; ctx.fillRect(0, 0, 1000, 620);
+  const [jx, jy] = rumbleJitter(); ctx.save(); ctx.translate(jx, jy);
+  // triggers (travel + the resistance zone we sent)
+  for (const [side, x, lane, name, tr] of [['L', 195, 'axis:LT', 'L2', sh.left], ['R', 675, 'axis:RT', 'R2', sh.right]]) {
+    const u = L[lane] || 0;
+    ctx.fillStyle = COL.idle; rr(ctx, x, 26, 130, 42, 10); ctx.fill();
+    if (tr.mode !== 'off' && tr.start >= 0) { ctx.fillStyle = tr.mode === 'feedback' ? `rgba(255,159,67,${0.15 + 0.5 * tr.level / 8})` : `rgba(192,132,252,${0.2 + 0.5 * tr.level / 8})`; ctx.fillRect(x + 130 * tr.start / 9, 26, 130 * (1 - tr.start / 9), 42); }
+    ctx.fillStyle = u > 0.98 ? COL.hot : COL.accent; rr(ctx, x, 26, Math.max(0.001, 130 * u), 42, 10); ctx.globalAlpha = 0.85; ctx.fill(); ctx.globalAlpha = 1;
+    ctx.strokeStyle = COL.idleLine; ctx.lineWidth = 1.5; rr(ctx, x, 26, 130, 42, 10); ctx.stroke();
+    txt(ctx, `${name} ${Math.round(u * 100)}%`, x + 65, 47, { size: 14, weight: 700, color: u > 0.55 ? '#10131a' : COL.text });
+    if (tr.mode !== 'off') txt(ctx, tr.mode === 'feedback' ? `resist ${tr.level}/8 from zone ${tr.start}` : `vibrate ${tr.level}/8 ${tr.freq} Hz`, x + 65, 15, { size: 11, color: COL.back });
+    hits.push({ kind: 'trigger', side, x, y: 26, w: 130, h: 42 });
+  }
+  for (const [n, x] of [['LB', 185], ['RB', 665]]) { ctx.fillStyle = pressed(n) ? COL.hot : COL.idle; rr(ctx, x, 76, 150, 18, 8); ctx.fill(); txt(ctx, GLYPH[n], x + 75, 85, { size: 11, color: pressed(n) ? '#000' : COL.dim, weight: 700 }); hits.push({ kind: 'btn', n, x, y: 76, w: 150, h: 18 }); }
+  // body
+  edgeBody(ctx); ctx.fillStyle = COL.body; ctx.fill(); ctx.strokeStyle = COL.bodyLine; ctx.lineWidth = 2.5; ctx.stroke();
+  // back buttons on the grips' underside (Edge)
+  for (const [n, x] of [['LP', 178], ['RP', 762]]) {
+    const on = pressed(n); ctx.save(); ctx.setLineDash(on ? [] : [5, 4]); ctx.strokeStyle = on ? COL.back : (edge ? '#5b6378' : '#2a303d'); ctx.lineWidth = 2;
+    ctx.fillStyle = on ? 'rgba(255,159,67,.85)' : 'rgba(255,159,67,.05)'; rr(ctx, x, 520, 60, 52, 16); ctx.fill(); ctx.stroke(); ctx.restore();
+    txt(ctx, n === 'LP' ? 'back L' : 'back R', x + 30, 540, { size: 11, color: on ? '#000' : COL.dim, weight: 700 }); txt(ctx, `pad:${n}`, x + 30, 556, { size: 10, color: on ? '#000' : COL.faint, mono: true });
+    hits.push({ kind: 'btn', n, x, y: 520, w: 60, h: 52 });
+  }
+  if (edge) txt(ctx, '(underside)', 500, 590, { size: 10, color: COL.faint });
+  // touchpad + fingers
+  ctx.fillStyle = pressed('TOUCH') ? '#2c3a55' : '#151a25'; rr(ctx, 335, 112, 330, 170, 22); ctx.fill(); ctx.strokeStyle = COL.idleLine; ctx.lineWidth = 1.5; ctx.stroke();
+  hits.push({ kind: 'touch', x: 335, y: 112, w: 330, h: 170 });
+  if (f && f.full) {
+    const pts = f.touches.map(t => ({ ...t, px: 335 + 330 * clamp01(t.x / (pad.touchW - 1)), py: 112 + 170 * clamp01(t.y / (pad.touchH - 1)) }));
+    if (pts[0].down && pts[1].down) { ctx.strokeStyle = 'rgba(108,182,255,.6)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(pts[0].px, pts[0].py); ctx.lineTo(pts[1].px, pts[1].py); ctx.stroke(); }
+    pts.forEach((p, i) => { if (!p.down) return; ctx.fillStyle = i ? 'rgba(255,122,217,.85)' : 'rgba(108,182,255,.9)'; ctx.beginPath(); ctx.arc(p.px, p.py, 13, 0, 7); ctx.fill(); txt(ctx, String(p.id), p.px, p.py, { size: 10, color: '#000', weight: 700 }); });
+    const pin = L['touch:pinch'], tw = L['touch:twist'];
+    if (Number.isFinite(pin)) txt(ctx, `pinch ${fmt(pin)}  twist ${fmt(tw)}`, 500, 270, { size: 11, color: COL.dim, mono: true });
+    if (pulseOn('touch:tap')) txt(ctx, 'TAP', 500, 130, { size: 13, color: COL.hot, weight: 800 });
+  } else txt(ctx, f ? 'no touch in the simple report' : '', 500, 197, { size: 11, color: COL.faint });
+  txt(ctx, 'touchpad', 500, 198, { size: 11, color: '#2b3344' });
+  // light bar: both sides of the touchpad
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineWidth = 6; ctx.strokeStyle = rgbCss(sh.light); ctx.shadowColor = rgbCss(sh.light); ctx.shadowBlur = sh.light ? 16 : 0;
+  ctx.beginPath(); ctx.moveTo(327, 128); ctx.quadraticCurveTo(320, 200, 330, 272); ctx.moveTo(673, 128); ctx.quadraticCurveTo(680, 200, 670, 272); ctx.stroke(); ctx.restore();
+  // player LEDs
+  for (let i = 0; i < 5; i++) { const on = sh.players != null && (sh.players >> i) & 1; ctx.fillStyle = on ? '#fff' : '#2b3242'; ctx.beginPath(); ctx.arc(468 + i * 16, 296, 4, 0, 7); ctx.fill(); }
+  // Create / Options
+  for (const [n, x] of [['VIEW', 292], ['MENU', 692]]) { ctx.fillStyle = pressed(n) ? COL.hot : COL.idle; rr(ctx, x, 116, 16, 32, 8); ctx.fill(); txt(ctx, GLYPH[n], x + 8, 160, { size: 10, color: COL.dim }); hits.push({ kind: 'btn', n, x: x - 6, y: 112, w: 28, h: 40 }); }
+  // D-pad
+  const dp = { UP: [235, 210], DOWN: [235, 290], LEFT: [195, 250], RIGHT: [275, 250] };
+  for (const [d, [x, y]] of Object.entries(dp)) { const on = L['hat:' + d] === 1; ctx.fillStyle = on ? COL.hot : COL.idle; rr(ctx, x - 19, y - 19, 38, 38, 7); ctx.fill(); ctx.strokeStyle = COL.idleLine; ctx.lineWidth = 1; ctx.stroke(); txt(ctx, { UP: '▲', DOWN: '▼', LEFT: '◀', RIGHT: '▶' }[d], x, y, { size: 13, color: on ? '#000' : COL.dim }); hits.push({ kind: 'btn', n: 'hat:' + d, x: x - 19, y: y - 19, w: 38, h: 38 }); }
+  // face
+  const fc = { Y: [765, 198], B: [817, 250], A: [765, 302], X: [713, 250] };
+  for (const [n, [x, y]] of Object.entries(fc)) { const on = pressed(n); ctx.fillStyle = on ? COL[n] : COL.idle; ctx.beginPath(); ctx.arc(x, y, 23, 0, 7); ctx.fill(); ctx.strokeStyle = COL[n]; ctx.lineWidth = 2; ctx.stroke(); txt(ctx, GLYPH[n], x, y + 1, { size: 20, color: on ? '#000' : COL[n], weight: 700 }); hits.push({ kind: 'btn', n, x: x - 23, y: y - 23, w: 46, h: 46 }); }
+  // sticks
+  for (const [n, cx, lx, ly] of [['LSTICK', 380, 'axis:LX', 'axis:LY'], ['RSTICK', 620, 'axis:RX', 'axis:RY']]) {
+    const on = pressed(n); ctx.fillStyle = '#10141c'; ctx.beginPath(); ctx.arc(cx, 372, 50, 0, 7); ctx.fill(); ctx.strokeStyle = on ? COL.hot : COL.idleLine; ctx.lineWidth = on ? 4 : 1.5; ctx.stroke();
+    ctx.strokeStyle = '#232a38'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx - 50, 372); ctx.lineTo(cx + 50, 372); ctx.moveTo(cx, 322); ctx.lineTo(cx, 422); ctx.stroke();
+    const x = cx + (L[lx] - 0.5) * 2 * 36, y = 372 - (L[ly] - 0.5) * 2 * 36;
+    ctx.fillStyle = on ? COL.hot : '#3a4560'; ctx.beginPath(); ctx.arc(x, y, 22, 0, 7); ctx.fill(); ctx.strokeStyle = COL.accent; ctx.lineWidth = 2; ctx.stroke();
+    txt(ctx, GLYPH[n], x, y, { size: 11, color: on ? '#000' : COL.dim, weight: 700 }); hits.push({ kind: 'stick', n, cx, cy: 372, x: cx - 50, y: 322, w: 100, h: 100 });
+  }
+  // PS, mic
+  ctx.fillStyle = pressed('GUIDE') ? COL.hot : COL.idle; ctx.beginPath(); ctx.arc(500, 368, 16, 0, 7); ctx.fill(); txt(ctx, 'PS', 500, 368, { size: 10, color: pressed('GUIDE') ? '#000' : COL.dim, weight: 700 }); hits.push({ kind: 'btn', n: 'GUIDE', x: 484, y: 352, w: 32, h: 32 });
+  ctx.fillStyle = pressed('SHARE') ? COL.hot : sh.mic ? '#ff8a3d' : COL.idle; rr(ctx, 482, 398, 36, 12, 6); ctx.fill(); if (sh.mic) { ctx.save(); ctx.shadowColor = '#ff8a3d'; ctx.shadowBlur = 12; ctx.fill(); ctx.restore(); }
+  txt(ctx, 'mic', 500, 420, { size: 10, color: COL.dim }); hits.push({ kind: 'btn', n: 'SHARE', x: 478, y: 394, w: 44, h: 20 });
+  // Fn (Edge)
+  for (const [n, x] of [['LFN', 366], ['RFN', 606]]) { const on = pressed(n); ctx.fillStyle = on ? COL.fn : edge ? COL.idle : '#1c212c'; rr(ctx, x, 428, 28, 13, 6); ctx.fill(); txt(ctx, 'Fn', x + 14, 435, { size: 9, color: on ? '#000' : COL.dim, weight: 700 }); hits.push({ kind: 'btn', n, x: x - 4, y: 424, w: 36, h: 21 }); }
+  // rumble marks on the grips
+  if (sh.rumbleLow > 0.01) { ctx.strokeStyle = `rgba(255,159,67,${0.3 + 0.7 * sh.rumbleLow})`; ctx.lineWidth = 3; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(150, 470, 30 + i * 12, 2.2, 4.0); ctx.stroke(); } txt(ctx, `low ${fmt(sh.rumbleLow)}`, 90, 470, { size: 11, color: COL.back }); }
+  if (sh.rumbleHigh > 0.01) { ctx.strokeStyle = `rgba(192,132,252,${0.3 + 0.7 * sh.rumbleHigh})`; ctx.lineWidth = 2; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(850, 470, 24 + i * 9, -0.9, 0.9); ctx.stroke(); } txt(ctx, `high ${fmt(sh.rumbleHigh)}`, 912, 470, { size: 11, color: COL.fn }); }
+  ctx.restore();
+  // tilt (attitude) between the triggers
+  drawAttitude(ctx, 500, 46, 28, false);
+  drawBattery(ctx, 14, 10, true);
+  txt(ctx, `${curModel() === 'edge' ? 'DualSense Edge' : 'DualSense'} · ${curTransport() || '?'} · ${pad.source}`, 12, 610, { size: 12, color: COL.dim, align: 'left' });
+  txt(ctx, `light ${sh.light ? '#' + sh.light.map(hex2).join('') : 'not set yet'}`, 988, 610, { size: 12, color: COL.dim, align: 'right', mono: true });
+  if (pulseOn('motion:shake')) txt(ctx, 'SHAKE', 500, 500, { size: 22, color: COL.hot, weight: 800 });
+}
+function drawAttitude(ctx, cx, cy, r, big) {
+  const mo = pad.mo, live = pad.live && pad.frame && pad.frame.full;
+  ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fillStyle = '#10141c'; ctx.fill(); ctx.clip();
+  ctx.strokeStyle = '#2a3242'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy); ctx.stroke();
+  if (live) {
+    const dy = -clamp(mo.pitch / 60, -1, 1) * r * 0.7;
+    ctx.translate(cx, cy + dy); ctx.rotate(mo.roll * Math.PI / 180);
+    ctx.strokeStyle = COL.accent; ctx.lineWidth = big ? 5 : 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(-r * 0.62, 0); ctx.lineTo(r * 0.62, 0); ctx.stroke();
+    ctx.lineWidth = big ? 4 : 2; ctx.beginPath(); ctx.moveTo(-r * 0.62, 0); ctx.lineTo(-r * 0.5, r * 0.3); ctx.moveTo(r * 0.62, 0); ctx.lineTo(r * 0.5, r * 0.3); ctx.stroke();
+  }
+  ctx.restore();
+  const e = live ? pad.mo.energy : 0, sh = pulseOn('motion:shake', 300);
+  ctx.strokeStyle = sh ? COL.hot : `rgba(108,182,255,${0.25 + 0.75 * e})`; ctx.lineWidth = sh ? 5 : 2 + 4 * e; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.stroke();
+  if (live) { const a = -Math.PI / 2 + clamp(pad.mo.yaw / 90, -1, 1) * Math.PI / 2; ctx.fillStyle = COL.hot; ctx.beginPath(); ctx.arc(cx + Math.cos(a) * (r + (big ? 9 : 5)), cy + Math.sin(a) * (r + (big ? 9 : 5)), big ? 5 : 3, 0, 7); ctx.fill(); }
+  if (big) { txt(ctx, live ? `roll ${sgn(mo.roll)}${mo.roll.toFixed(0)}°  pitch ${sgn(mo.pitch)}${mo.pitch.toFixed(0)}°` : 'no motion data', cx, cy + r + 20, { size: 10.5, color: COL.dim, mono: true }); if (live) txt(ctx, `yaw ${sgn(mo.yaw)}${mo.yaw.toFixed(0)}°`, cx, cy + r + 36, { size: 10.5, color: COL.dim, mono: true }); }
+}
+
+// --- (b) Lanes: every routing lane, named as the app names it
+function laneBar(ctx, x, y, w, name, v, { bipolar = false, pulse = false, gate = false, glyph = '', note = '' } = {}) {
+  const lw = 124, gw = glyph ? 86 : 0, bx = x + lw + gw, bw = w - lw - gw - 44;
+  const liveV = Number.isFinite(v);
+  txt(ctx, name, x, y + 8, { size: 11.5, align: 'left', mono: true, color: liveV ? COL.text : COL.faint });
+  if (glyph) txt(ctx, glyph, x + lw, y + 8, { size: 11, align: 'left', color: COL.dim });
+  ctx.fillStyle = '#161b26'; ctx.fillRect(bx, y + 2, bw, 13);
+  if (liveV) {
+    if (pulse || gate) { const on = pulse ? pulseOn(name) : v >= 0.5; ctx.fillStyle = on ? COL.hot : '#1f2633'; ctx.fillRect(bx, y + 2, bw, 13); }
+    else if (bipolar) { const c = bx + bw / 2, e = bx + bw * v; ctx.fillStyle = COL.accent; ctx.fillRect(Math.min(c, e), y + 2, Math.abs(e - c), 13); ctx.fillStyle = '#3a4357'; ctx.fillRect(c - 0.5, y, 1, 17); }
+    else { ctx.fillStyle = v >= 0.999 ? COL.hot : COL.accent; ctx.fillRect(bx, y + 2, bw * v, 13); }
+  }
+  if (note) txt(ctx, note, bx + bw - 3, y + 8, { size: 10, align: 'right', color: '#1a1205', weight: 700 });
+  txt(ctx, liveV ? v.toFixed(2) : '—', x + w, y + 8, { size: 11.5, align: 'right', mono: true, color: liveV ? COL.text : COL.faint });
+}
+function group(ctx, x, y, title, w = 334) { txt(ctx, title, x, y + 8, { size: 11, align: 'left', color: COL.dim, weight: 700 }); ctx.fillStyle = '#262d3c'; ctx.fillRect(x, y + 17, w, 1); return y + 23; }
+function drawLanes(ctx) {
+  const L = pad.lanes, sh = shownNow(), W = 720, cw = 334, A = 14, B = 372, rh = 19; let y;
+  ctx.fillStyle = '#0d0f14'; ctx.fillRect(0, 0, W, 700);
+  ctx.fillStyle = rgbCss(sh.light); ctx.fillRect(A, 10, 22, 18);
+  txt(ctx, `light ${sh.light ? '#' + sh.light.map(hex2).join('') : 'not set'} · players ${sh.players != null ? sh.players.toString(2).padStart(5, '0').split('').reverse().join('') : '—'} · ${curModel()} · ${curTransport() || '?'} · ${stats.rate} Hz`, A + 30, 19, { size: 11.5, align: 'left', color: COL.dim, mono: true });
+  drawBattery(ctx, 662, 10);
+  // column A: sticks, triggers, hat, buttons
+  y = group(ctx, A, 38, 'sticks');
+  for (const a of ['LX', 'LY', 'RX', 'RY']) { laneBar(ctx, A, y, cw, 'axis:' + a, L['axis:' + a], { bipolar: true }); y += rh; }
+  y = group(ctx, A, y + 4, 'triggers');
+  for (const [a, g, t] of [['LT', 'L2', sh.left], ['RT', 'R2', sh.right]]) { laneBar(ctx, A, y, cw, 'axis:' + a, L['axis:' + a], { glyph: g + (t.mode !== 'off' ? ` · ${t.mode === 'feedback' ? 'resist' : 'buzz'} ${t.level}/8` : '') }); y += rh; }
+  y = group(ctx, A, y + 4, 'hat (D-pad)');
+  for (const d of HATS) { laneBar(ctx, A, y, cw, 'hat:' + d, L['hat:' + d], { gate: true }); y += rh; }
+  y = group(ctx, A, y + 4, 'buttons');
+  for (const b of BUTTONS) { const na = curModel() !== 'edge' && EDGE_ONLY.has(b); laneBar(ctx, A, y, cw, 'pad:' + b, na ? NaN : L['pad:' + b], { gate: true, glyph: GLYPH[b] }); y += rh; }
+  txt(ctx, 'raw p7–p10  ' + (pad.frame ? toHex(pad.frame.raw).replace(/(..)/g, '$1 ') : '—'), A, y + 8, { size: 11, align: 'left', mono: true, color: COL.dim });
+  // column B: touch, motion, sinks
+  y = group(ctx, B, 38, 'touch');
+  for (const n of TOUCH_LANES) { laneBar(ctx, B, y, cw, 'touch:' + n, L['touch:' + n], { bipolar: TOUCH_BIPOLAR.has(n), pulse: n === 'tap', gate: n.startsWith('down') }); y += rh; }
+  y = group(ctx, B, y + 4, 'motion');
+  for (const n of MOTION_LANES) { laneBar(ctx, B, y, cw, 'motion:' + n, L['motion:' + n], { bipolar: MOTION_BIPOLAR.has(n), pulse: n === 'shake' }); y += rh; }
+  const f = pad.frame;
+  txt(ctx, f && f.full ? `gyro ${pad.gyroDps.map(v => v.toFixed(0).padStart(4)).join(' ')} °/s · accel ${pad.accelG.map(v => v.toFixed(2)).join(' ')} g` : 'no motion data', B, y + 8, { size: 10.5, align: 'left', mono: true, color: COL.dim }); y += 18;
+  y = group(ctx, B, y + 4, 'out · sink channels (read back from the last write)');
+  const outVals = sinkReadback(sh);
+  CHANNELS.forEach(([k], i) => { laneBar(ctx, B, y, cw, `edge:${i}`, outVals[i], { glyph: k }); y += rh; });
+  txt(ctx, 'bipolar lanes rest at 0.5 · tap and shake are one-frame pulses, held 0.26 s here · — = not live (finger up, BT simple report)', W / 2, 690, { size: 10.5, color: COL.faint });
+}
+function sinkReadback(sh) {
+  // what the last write means on each channel, read back from the bytes (not the sliders)
+  if (!sh.light) return CHANNELS.map(() => NaN);
+  const [hh, s, v] = rgbToHsv(sh.light[0] / 255, sh.light[1] / 255, sh.light[2] / 255);
+  const lit = sh.players == null ? NaN : (() => { let n = 0; for (let i = 0; i < 5; i++) if ((sh.players >> i) & 1) n++; return n / 5; })();
+  const tr = t => t.mode === 'feedback' ? t.level / 8 : 0;
+  return [hh, v, 1 - s, sh.rumbleLow, sh.rumbleHigh, tr(sh.left), tr(sh.right), lit, sh.mic ? 1 : 0];
+}
+
+// --- (c) Cockpit: big dials for the hands, the hits loud, transients in a ticker
+function drawCockpit(ctx) {
+  const L = pad.lanes, sh = shownNow(), edge = curModel() === 'edge';
+  ctx.fillStyle = '#0a0c11'; ctx.fillRect(0, 0, 1000, 620);
+  // light-bar strip = the pad's colour, full width
+  ctx.save(); ctx.fillStyle = rgbCss(sh.light, sh.light ? 1 : 0.4); ctx.shadowColor = rgbCss(sh.light); ctx.shadowBlur = sh.light ? 18 : 0; rr(ctx, 20, 12, 960, 10, 5); ctx.fill(); ctx.restore();
+  txt(ctx, `${edge ? 'EDGE' : 'DUALSENSE'} · ${(curTransport() || '?').toUpperCase()}`, 22, 40, { size: 12, align: 'left', color: COL.dim, weight: 700 });
+  for (let i = 0; i < 5; i++) { const on = sh.players != null && (sh.players >> i) & 1; ctx.fillStyle = on ? '#fff' : '#262d3c'; ctx.beginPath(); ctx.arc(468 + i * 16, 40, 4.5, 0, 7); ctx.fill(); }
+  drawBattery(ctx, 935, 31);
+  dial(ctx, 245, 270, 'L', sh.left); dial(ctx, 755, 270, 'R', sh.right);
+  drawAttitude(ctx, 500, 220, 78, true);
+  // touch mini
+  const tx = 420, ty = 350, tw = 160, th = 80, f = pad.frame;
+  ctx.fillStyle = pressed('TOUCH') ? '#24324c' : '#121722'; rr(ctx, tx, ty, tw, th, 10); ctx.fill(); ctx.strokeStyle = '#2b3446'; ctx.lineWidth = 1.5; ctx.stroke();
+  if (f && f.full) {
+    const pts = f.touches.map(t => ({ d: t.down, x: tx + tw * clamp01(t.x / (pad.touchW - 1)), y: ty + th * clamp01(t.y / (pad.touchH - 1)) }));
+    if (pts[0].d && pts[1].d) { ctx.strokeStyle = 'rgba(108,182,255,.6)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); ctx.lineTo(pts[1].x, pts[1].y); ctx.stroke(); }
+    pts.forEach((p, i) => { if (p.d) { ctx.fillStyle = i ? COL.X : COL.accent; ctx.beginPath(); ctx.arc(p.x, p.y, 8, 0, 7); ctx.fill(); } });
+    const pin = L['touch:pinch'], tw2 = L['touch:twist'];
+    txt(ctx, Number.isFinite(pin) ? `pinch ×${Math.pow(2, (pin - 0.5) * 4).toFixed(2)}  twist ${sgn(tw2 - 0.5)}${((tw2 - 0.5) * 360).toFixed(0)}°` : pulseOn('touch:tap', 400) ? 'TAP' : Number.isFinite(L['touch:x']) ? `x ${fmt(L['touch:x'])}  y ${fmt(L['touch:y'])}` : 'touchpad',
+      tx + tw / 2, ty + th + 14, { size: 12, color: pulseOn('touch:tap', 400) ? COL.hot : COL.dim, mono: true });
+  }
+  // menu row
+  [['VIEW', 'Create'], ['GUIDE', 'PS'], ['MENU', 'Options'], ['SHARE', 'mic']].forEach(([n, g], i) => { const x = 405 + i * 64, on = pressed(n); ctx.fillStyle = on ? COL.hot : n === 'SHARE' && sh.mic ? '#5a2e14' : '#161b26'; rr(ctx, x - 28, 456, 56, 22, 11); ctx.fill(); txt(ctx, g, x, 467, { size: 11, color: on ? '#000' : COL.dim, weight: 600 }); });
+  // D-pad / face clusters
+  cluster(ctx, 245, 500, [['hat:UP', '▲', 0, -1], ['hat:RIGHT', '▶', 1, 0], ['hat:DOWN', '▼', 0, 1], ['hat:LEFT', '◀', -1, 0]], COL.hot);
+  cluster(ctx, 755, 500, [['pad:Y', '△', 0, -1, COL.Y], ['pad:B', '○', 1, 0, COL.B], ['pad:A', '✕', 0, 1, COL.A], ['pad:X', '□', -1, 0, COL.X]]);
+  // back + Fn tabs, loud
+  for (const [n, x, lbl] of [['LP', 22, 'BACK L'], ['RP', 918, 'BACK R']]) { const on = pressed(n); ctx.fillStyle = on ? COL.back : edge ? '#171c27' : '#101319'; rr(ctx, x, 170, 60, 110, 14); ctx.fill(); ctx.strokeStyle = on ? '#ffd1a0' : '#2b3446'; ctx.lineWidth = 2; ctx.stroke(); txt(ctx, lbl, x + 30, 215, { size: 10, color: on ? '#000' : edge ? COL.dim : COL.faint, weight: 800 }); txt(ctx, n, x + 30, 236, { size: 11, color: on ? '#000' : COL.faint, mono: true }); }
+  for (const [n, x] of [['LFN', 22], ['RFN', 918]]) { const on = pressed(n); ctx.fillStyle = on ? COL.fn : edge ? '#171c27' : '#101319'; rr(ctx, x, 292, 60, 40, 12); ctx.fill(); txt(ctx, 'Fn', x + 30, 312, { size: 13, color: on ? '#000' : edge ? COL.dim : COL.faint, weight: 800 }); }
+  // rumble meters (what we told the motors)
+  for (const [x, v, lbl, c] of [[22, sh.rumbleLow, 'heavy', COL.back], [918, sh.rumbleHigh, 'light', COL.fn]]) { ctx.fillStyle = '#161b26'; rr(ctx, x, 346, 60, 10, 5); ctx.fill(); ctx.fillStyle = c; rr(ctx, x, 346, Math.max(0.01, 60 * v), 10, 5); ctx.fill(); txt(ctx, `rumble ${lbl}`, x + 30, 368, { size: 8, color: COL.faint }); }
+  // ticker
+  const t = now(), ev = pad.events.filter(e => t - e.t < 2200).slice(-9);
+  let x = 500 - ev.length * 52;
+  for (const e of ev) { const a = 1 - (t - e.t) / 2200, label = tickerLabel(e.k); ctx.globalAlpha = 0.25 + 0.75 * a; ctx.fillStyle = e.k === 'motion:shake' || e.k === 'pad:LP' || e.k === 'pad:RP' ? COL.back : '#2a3550'; rr(ctx, x, 572, 96, 30, 8); ctx.fill(); txt(ctx, label, x + 48, 587, { size: 13, weight: 700, color: '#fff' }); x += 104; }
+  ctx.globalAlpha = 1;
+  if (!ev.length) txt(ctx, 'presses, taps and shakes scroll here', 500, 587, { size: 12, color: '#2b3446' });
+}
+function tickerLabel(k) { const [s, n] = k.split(':'); if (s === 'pad') return GLYPH[n] || n; if (s === 'hat') return { UP: '▲', DOWN: '▼', LEFT: '◀', RIGHT: '▶' }[n]; return n.toUpperCase(); }
+function cluster(ctx, cx, cy, items, hot) { for (const [k, g, dx, dy, c] of items) { const on = pad.lanes[k] === 1, x = cx + dx * 34, y = cy + dy * 30; ctx.fillStyle = on ? (c || hot) : '#161b26'; ctx.beginPath(); ctx.arc(x, y, 16, 0, 7); ctx.fill(); ctx.strokeStyle = c || '#3a4357'; ctx.lineWidth = 1.5; ctx.stroke(); txt(ctx, g, x, y + 1, { size: 14, color: on ? '#000' : (c || COL.dim), weight: 700 }); } }
+function dial(ctx, cx, cy, side, tr) {
+  const L = pad.lanes, R = 125, u = L[side === 'L' ? 'axis:LT' : 'axis:RT'] || 0, a0 = Math.PI * 0.75, sweep = Math.PI * 1.5;
+  const col = side === 'L' ? COL.accent : '#ff9f6c';
+  ctx.lineCap = 'round'; ctx.strokeStyle = '#1b212d'; ctx.lineWidth = 16; ctx.beginPath(); ctx.arc(cx, cy, R, a0, a0 + sweep); ctx.stroke();
+  if (tr.mode !== 'off' && tr.start >= 0) { ctx.strokeStyle = tr.mode === 'feedback' ? `rgba(255,159,67,${0.25 + 0.6 * tr.level / 8})` : `rgba(192,132,252,${0.3 + 0.6 * tr.level / 8})`; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(cx, cy, R + 15, a0 + sweep * tr.start / 9, a0 + sweep); ctx.stroke(); }
+  if (u > 0.003) { ctx.strokeStyle = u > 0.98 ? COL.hot : col; ctx.lineWidth = 16; ctx.beginPath(); ctx.arc(cx, cy, R, a0, a0 + sweep * u); ctx.stroke(); }
+  const bump = side === 'L' ? 'LB' : 'RB';
+  ctx.strokeStyle = pressed(bump) ? COL.hot : '#232a38'; ctx.lineWidth = 10; ctx.beginPath(); ctx.arc(cx, cy, R + 30, -Math.PI / 2 - 0.42, -Math.PI / 2 + 0.42); ctx.stroke();
+  txt(ctx, side === 'L' ? 'L1' : 'R1', cx, cy - R - 30, { size: 10, color: pressed(bump) ? '#000' : COL.dim, weight: 800 });
+  ctx.lineCap = 'butt';
+  const stick = side === 'L' ? 'LSTICK' : 'RSTICK', on = pressed(stick), r = R - 30;
+  ctx.fillStyle = on ? '#3a3216' : '#11151d'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
+  ctx.strokeStyle = '#212836'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy); ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r); ctx.stroke(); ctx.beginPath(); ctx.arc(cx, cy, r / 2, 0, 7); ctx.stroke();
+  const x = cx + (L[`axis:${side}X`] - 0.5) * 2 * (r - 12), y = cy - (L[`axis:${side}Y`] - 0.5) * 2 * (r - 12);
+  const tr2 = (dial.trail[side] = dial.trail[side] || []); tr2.push([x, y]); if (tr2.length > 26) tr2.shift();
+  ctx.strokeStyle = col; for (let i = 1; i < tr2.length; i++) { ctx.globalAlpha = i / tr2.length * 0.6; ctx.lineWidth = 1 + 3 * i / tr2.length; ctx.beginPath(); ctx.moveTo(...tr2[i - 1]); ctx.lineTo(...tr2[i]); ctx.stroke(); }
+  ctx.globalAlpha = 1; ctx.fillStyle = on ? COL.hot : col; ctx.beginPath(); ctx.arc(x, y, 13, 0, 7); ctx.fill();
+  txt(ctx, `${side === 'L' ? 'L2' : 'R2'} ${Math.round(u * 100)}%`, cx, cy + R + 4, { size: 14, weight: 700, color: u > 0.003 ? col : COL.faint });
+  if (tr.mode !== 'off') txt(ctx, tr.mode === 'feedback' ? `pushes back ${tr.level}/8` : `buzz ${tr.level}/8`, cx, cy + R + 22, { size: 11, color: COL.back });
+}
+dial.trail = {};
+const VIEW_NOTES = {
+  faithful: 'The Edge from above, every control where it sits; back buttons drawn on the grips (they are under them). In the simulator, click controls to press them.',
+  lanes: 'Every lane under the name a routing row uses (pad:A, axis:LT, touch:pinch, motion:shake …) plus what the sink channels were last sent — the routing-centric view.',
+  cockpit: 'For a glance mid-set: big dials (stick dot + trail, trigger as the arc, the resistance we set as the outer band), the hits (back buttons, Fn) loud on the edges, tilt as a level, transients scrolling in the ticker.',
+};
+function drawReadout() { const cv = $('#readout'), d = VIEW[view], ctx = fitCanvas(cv, d.w, d.h); FONT_K = d.k; try { ({ faithful: drawFaithful, lanes: drawLanes, cockpit: drawCockpit })[view](ctx); } finally { FONT_K = 1; } }
+
+// ---------------------------------------------------------------- 9 ideas: a tesseract, zoom-blur centre, hit envelope, feedback
+const ideas = {
+  i4: { on: true, cx: 0.5, cy: 0.5, vx: 0, vy: 0, zoom: 0, zv: 0, xw: 0, xwv: 0, blur: 0.45 },
+  i5: { on: true, fireT: -1e9, env: 0, punch: 0.5, fires: 0 },
+  i7: { on: true, hue: 0.55, hueSpeed: 0.06, beat: 'metro', bpm: 120, phase: 0, beatT: -1e9, beatEnv: 0, taps: [], mix: 0, mic: null, micLevel: 0 },
+  t: 0,
+};
+function spring(x, v, target, w, z, dt) { const a = w * w * (target - x) - 2 * z * w * v; v += a * dt; x += v * dt; return [x, v]; }
+function fireEnv() { ideas.i5.fireT = now(); ideas.i5.fires++; }
+function envAt(t) { const s = (t - ideas.i5.fireT) / 1000; if (s < 0) return 0; if (s < 0.01) return s / 0.01; const d = (s - 0.01) / 0.3; return d >= 1 ? 0 : (1 - d) * (1 - d); }
+function stepIdeas(dt, tNow) {
+  const L = pad.lanes, i4 = ideas.i4, i5 = ideas.i5, i7 = ideas.i7;
+  ideas.t += dt;
+  // idea 4: centre follows the finger, springs home when it lifts; pinch → zoom (push 0.5); twist → XW (push 0.25 turn)
+  const down = i4.on && Number.isFinite(L['touch:x']);
+  const tx = down ? L['touch:x'] : 0.5, ty = down ? 1 - L['touch:y'] : 0.5;
+  const [w, z] = down ? [38, 1] : [9, 0.42];
+  const sub = 4; for (let k = 0; k < sub; k++) { [i4.cx, i4.vx] = spring(i4.cx, i4.vx, tx, w, z, dt / sub); [i4.cy, i4.vy] = spring(i4.cy, i4.vy, ty, w, z, dt / sub); }
+  const pin = i4.on ? L['touch:pinch'] : NaN, tw = i4.on ? L['touch:twist'] : NaN;
+  const zt = Number.isFinite(pin) ? (pin - 0.5) * 2 * 0.5 : 0, xt = Number.isFinite(tw) ? (tw - 0.5) * 2 * 0.25 : 0;
+  for (let k = 0; k < sub; k++) { [i4.zoom, i4.zv] = spring(i4.zoom, i4.zv, zt, Number.isFinite(pin) ? 30 : 8, Number.isFinite(pin) ? 1 : 0.45, dt / sub); [i4.xw, i4.xwv] = spring(i4.xw, i4.xwv, xt, Number.isFinite(tw) ? 30 : 7, Number.isFinite(tw) ? 1 : 0.4, dt / sub); }
+  // idea 5: shake, LP, RP fire the envelope
+  if (i5.on && pad.edges) for (const k of pad.edges) if (k === 'motion:shake' || k === 'pad:LP' || k === 'pad:RP') fireEnv();
+  i5.env = i5.on ? envAt(tNow) : 0;
+  // idea 7: hue cycle, beat, kaleido mix from R2
+  i7.hue = pymod(i7.hue + dt * i7.hueSpeed, 1);
+  const beatMs = 60000 / clamp(i7.bpm, 30, 300);
+  if (i7.beat === 'metro') { if (tNow - i7.beatT >= beatMs) { i7.beatT += Math.floor((tNow - i7.beatT) / beatMs) * beatMs; if (tNow - i7.beatT > 50) i7.beatT = tNow; } const s = (tNow - i7.beatT) / 1000; i7.beatEnv = s < 0.005 ? s / 0.005 : Math.max(0, 1 - (s - 0.005) / 0.12); }
+  else if (i7.beat === 'mic') { i7.beatEnv = micLevel(); }
+  else i7.beatEnv = 0;
+  i7.mix += (L['axis:RT'] - i7.mix) * ease(dt, 0.05);
+  out.demo = i7.on ? { 0: i7.hue, 3: i7.beatEnv, 6: i7.mix } : {};
+}
+function micLevel() {
+  const m = ideas.i7.mic; if (!m) return 0;
+  m.an.getFloatTimeDomainData(m.buf); let s = 0; for (const v of m.buf) s += v * v;
+  const rms = Math.sqrt(s / m.buf.length); m.level += (Math.min(1, rms * 9) - m.level) * (rms * 9 > m.level ? 0.6 : 0.12); return m.level;
+}
+async function startMic() {
+  if (ideas.i7.mic) return true;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const ac = new AudioContext(), src = ac.createMediaStreamSource(stream), lp = ac.createBiquadFilter(), an = ac.createAnalyser();
+    lp.type = 'lowpass'; lp.frequency.value = 150; an.fftSize = 1024; src.connect(lp); lp.connect(an);
+    ideas.i7.mic = { ac, an, buf: new Float32Array(an.fftSize), level: 0, stream }; return true;
+  } catch (e) { logOut('mic: ' + e.message, true); $('#i7beat').value = 'metro'; ideas.i7.beat = 'metro'; return false; }
+}
+// tesseract
+const TV = []; for (let i = 0; i < 16; i++) TV.push([i & 1 ? 1 : -1, i & 2 ? 1 : -1, i & 4 ? 1 : -1, i & 8 ? 1 : -1]);
+const TE = []; for (let i = 0; i < 16; i++) for (let b = 0; b < 4; b++) { const j = i ^ (1 << b); if (j > i) TE.push([i, j]); }
+function rot4(v, a, b, ang) { const c = Math.cos(ang), s = Math.sin(ang), x = v[a], y = v[b]; v[a] = x * c - y * s; v[b] = x * s + y * c; }
+function projectTesseract(t, xw) {
+  return TV.map(p => { const v = p.slice(); rot4(v, 0, 3, t * 0.35 + xw); rot4(v, 1, 2, 0.5); rot4(v, 2, 3, t * 0.22); rot4(v, 0, 1, t * 0.13); const k = 1 / (2.8 - v[3]); const x = v[0] * k, y = v[1] * k, z = v[2] * k; const k2 = 1 / (2.4 - z); return [x * k2, y * k2, v[3]]; });
+}
+function drawVisual() {
+  const cv = $('#visual'); if (!cv.offsetParent) return;
+  const W = 800, H = 520, ctx = fitCanvas(cv, W, H), i4 = ideas.i4, i5 = ideas.i5, i7 = ideas.i7;
+  const env = i5.env, punch = i5.punch;
+  ctx.fillStyle = '#05060a'; ctx.fillRect(0, 0, W, H);
+  if (env > 0) { ctx.fillStyle = `hsla(${i7.hue * 360},80%,60%,${0.22 * env * punch})`; ctx.fillRect(0, 0, W, H); }
+  const pts = projectTesseract(ideas.t, i4.xw * 2 * Math.PI);
+  const scale = 230 * Math.pow(2, i4.zoom * 2) * (1 + 0.45 * env * punch), cx0 = W / 2, cy0 = H / 2;
+  const hue = i7.hue * 360, bright = 1 + 1.6 * env * punch;
+  const fig = (alpha, lw) => {
+    for (const [a, b] of TE) { const pa = pts[a], pb = pts[b], wv = (pa[2] + pb[2]) / 2; ctx.strokeStyle = `hsla(${(hue + wv * 40 + 360) % 360},85%,${Math.min(92, (55 + wv * 12) * (0.7 + 0.3 * bright))}%,${Math.min(1, alpha * (0.55 + 0.45 * bright))})`; ctx.lineWidth = lw * (0.8 + 0.6 * env * punch); ctx.beginPath(); ctx.moveTo(cx0 + pa[0] * scale, cy0 + pa[1] * scale); ctx.lineTo(cx0 + pb[0] * scale, cy0 + pb[1] * scale); ctx.stroke(); }
+  };
+  const copies = [[0, 1, 1]];
+  if (i7.on && i7.mix > 0.01) for (let k = 1; k < 6; k++) copies.push([k * Math.PI / 3, k % 2 ? -1 : 1, i7.mix * 0.7]);
+  const bx = i4.cx * W, by = i4.cy * H, ghosts = i4.on ? 7 : 0, spread = i4.blur * 0.055;
+  for (const [ang, mir, alpha] of copies) {
+    for (let g = ghosts; g >= 0; g--) {
+      const s = 1 + g * spread; ctx.save();
+      ctx.translate(bx, by); ctx.scale(s, s); ctx.translate(-bx, -by);
+      ctx.translate(cx0, cy0); ctx.rotate(ang); ctx.scale(mir, 1); ctx.translate(-cx0, -cy0);
+      fig(alpha * (g === 0 ? 1 : 0.42 * (1 - g / (ghosts + 1))), g === 0 ? 2 : 1.5); ctx.restore();
+    }
+  }
+  if (i4.on) { ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(bx, by, 9, 0, 7); ctx.moveTo(bx - 14, by); ctx.lineTo(bx + 14, by); ctx.moveTo(bx, by - 14); ctx.lineTo(bx, by + 14); ctx.stroke(); }
+  if (i7.on && i7.beat !== 'off') { ctx.fillStyle = `rgba(255,159,67,${0.2 + 0.8 * i7.beatEnv})`; ctx.beginPath(); ctx.arc(W - 24, 24, 8 + 6 * i7.beatEnv, 0, 7); ctx.fill(); }
+  txt(ctx, `zoom ×${Math.pow(2, i4.zoom * 2).toFixed(2)} · XW ${(i4.xw * 360).toFixed(0)}° · env ${env.toFixed(2)} · kaleido ${i7.mix.toFixed(2)}`, 12, H - 14, { size: 13, align: 'left', color: 'rgba(200,210,230,.55)', mono: true });
+}
+const ROUTES = {
+  r4: ['{"source": "touch:x", "target": "fx.zoomblur.cx", "op": "position"}', '{"source": "touch:y", "target": "fx.zoomblur.cy", "op": "position"}',
+    '{"source": "touch:pinch", "target": "camera.zoom", "op": "push", "value": 0.5}', '{"source": "touch:twist", "target": "rot.phase.XW", "op": "push", "value": 0.25}'],
+  r5: ['{"source": "motion:shake", "target": "env.1.fire", "op": "push"}', '{"source": "pad:RP", "target": "env.1.fire", "op": "fire"}', '{"source": "pad:LP", "target": "env.1.fire", "op": "fire"}'],
+  r7: ['{"source": "axis:RT", "target": "fx.kaleido.mix", "op": "position"}', '{"source": "param:fx.kaleido.mix", "target": "edge:6", "op": "send"}',
+    '{"source": "lane:0", "target": "edge:3", "op": "send"}', '{"source": "param:dream.hue", "target": "edge:0", "op": "send"}'],
+};
+const ROUTE_NOTES = { r4: '', r5: '', r7: '# lane:0 is the analyzer\'s band 1 (the low band) — the app\'s version of "beat"; dream.hue stands in for whichever hue param the visual cycles\n' };
+
+// ---------------------------------------------------------------- 10 probe / checklist
+const findings = { steps: {} };
+const PROBE = [];
+const live = { tick: [] };
+function stepCtx(id) { return { model: curModel(), transport: curTransport(), source: pad.source }; }
+function noteTape(s) { if (tape.on) tape.note(s); }
+function watchBits(onDone) {
+  // rising bits of p7 (face nibble only), p8, p9, p10 against the state when the watch began; done when they all fall
+  const w = { base: null, seen: [0, 0, 0, 0], simple: false };
+  const hook = f => {
+    const r = f.raw, cur = [r[0] & 0xF0, r[1] || 0, f.full ? r[2] : (r[2] & 0x03), f.full ? r[3] : 0]; w.simple = !f.full;
+    if (!w.base) { w.base = cur; return; }
+    let any = 0; for (let k = 0; k < 4; k++) { w.seen[k] |= cur[k] & ~w.base[k]; any |= w.seen[k]; }
+    if (any && cur.every((v, k) => (v & w.seen[k]) === 0)) { reportHooks.delete(hook); onDone(names(w.seen), w); }
+  };
+  w.stop = () => reportHooks.delete(hook);
+  reportHooks.add(hook); return w;
+}
+function names(seen) { const out = []; seen.forEach((v, k) => { for (let b = 0; b < 8; b++) if (v & (1 << b)) out.push(bitName(7 + k, 1 << b)); }); return out; }
+function yesNo(onAns) { const s = h('span', { class: 'btnrow', style: 'display:inline-flex' }); s.append(h('button', { onclick: () => onAns(true) }, 'Yes'), h('button', { onclick: () => onAns(false) }, 'No')); return s; }
+async function rawLight(rgb, { resetLeds = false, players = null, n = null, why = 'probe' } = {}) {
+  const b = new Uint8Array(BLOCK_LEN); b[C.FLAGS1] = 0x04 | (resetLeds ? 0x08 : 0) | (players != null ? 0x10 : 0); b.set(rgb, C.RGB); if (players != null) b[C.PLAYERS] = players | 0x20;
+  if (n && pad.source === 'hid' && curTransport() === 'usb') return writeReport(frameBlock(b, { bluetooth: false, usbLen: n }), why);
+  if (n && pad.source === 'sim') return writeReport(frameBlock(b, { bluetooth: curTransport() === 'bluetooth', seq: simSeq(), usbLen: n }), why);
+  return sendBlock(b, why);
+}
+function pauseOut(why) { out.paused = why; }
+function resumeOut() { out.paused = ''; out.sentKey = null; }
+
+PROBE.push({
+  id: 'transport', title: '1 · Transport, report ids and lengths, BT tags', spec: '§2.1 §2.4 §9.5 §9.6',
+  question: 'What does the pad send on this link? Leave it running ~10 s (over Bluetooth: watch for tag nibbles other than 1 — 2 is microphone data).',
+  build(b) { b.append(h('div', { class: 'btnrow' }, h('button', { onclick: resetStats }, 'reset counters'), pad.source === 'hid' ? '' : h('span', { class: 'dim' }, ''))); },
+  evidence() {
+    const d = hid.desc;
+    return { transport: curTransport(), descriptor: pad.source === 'hid' && d ? { collections: d.collections, inputs: d.inputs, outputs: d.outputs, features: d.features, transport_from_descriptor: d.transport || null, error: d.error || null } : null,
+      reports_seen: stats.byKey, first_report: stats.first, bt_tags: stats.tags, bt_seq_nibbles_first: stats.seqNibbles, bt_seq_steps: stats.seqSteps, crc_ok: stats.crcOk, crc_failures: stats.crcFail, crc_check_dropped: crcLenient(), undecoded: stats.unknown, rate_hz: stats.rate,
+      opened: pad.source === 'hid' ? !!hid.device : null, product: pad.source === 'hid' && hid.device ? hid.device.productName : null };
+  },
+  answer(ev) { const tags = Object.keys(ev.bt_tags).map(Number); return { transport: ev.transport, report_ids: [...new Set(Object.keys(ev.reports_seen).map(k => k.split(':')[0]))], lengths: Object.keys(ev.reports_seen), bt_tags_seen: tags, mic_reports_seen: tags.includes(2), other_tags: tags.filter(t => t !== 1 && t !== 2), descriptor_parsed: !!(ev.descriptor && ev.descriptor.collections) }; },
+});
+PROBE.push({
+  id: 'back_default', title: '2 · Back and Fn buttons, default profile', spec: '§2.2 p9',
+  question: 'Which bits change for each Edge button? Expected (Linux): LP p9 0x40, RP p9 0x80, LFN p9 0x10, RFN p9 0x20.',
+  state: { i: -1, res: {}, w: null }, seq: ['LP', 'RP', 'LFN', 'RFN'],
+  build(b, def) {
+    const pr = h('div', { class: 'prompt' });
+    const go = () => {
+      const s = def.state; if (s.w) s.w.stop();
+      if (s.i >= def.seq.length) { pr.textContent = 'done — save the answer'; return; }
+      const n = def.seq[s.i]; pr.textContent = `press and release ${GLYPH[n]} (${n})`; noteTape(`probe back_default: press ${n}`);
+      s.w = watchBits(bits => { s.res[n] = bits; s.i++; go(); });
+    };
+    b.append(pr, h('div', { class: 'btnrow' }, h('button', { onclick: () => { def.state = { i: 0, res: {}, w: null }; go(); } }, 'start'),
+      h('button', { onclick: () => { const s = def.state; if (s.i >= 0 && s.i < def.seq.length) { s.res[def.seq[s.i]] = 'skipped'; s.i++; go(); } } }, 'skip this one')));
+  },
+  evidence(def) { return { bits_by_button: def.state.res }; },
+  answer(ev) { const exp = { LP: 'p9 0x40 (LP)', RP: 'p9 0x80 (RP)', LFN: 'p9 0x10 (LFN)', RFN: 'p9 0x20 (RFN)' }; const r = {}; for (const [k, v] of Object.entries(ev.bits_by_button)) r[k] = { bits: v, matches_spec: Array.isArray(v) && v.length === 1 && v[0] === exp[k] }; return r; },
+});
+PROBE.push({
+  id: 'back_remap', title: '3 · A back button remapped by an on-controller profile', spec: 'Edge profiles',
+  question: 'Switch the Edge to a profile that maps a back button to another control (profiles are made on a PS5; switch on the pad with Fn + a face button), then press that back button. Does the host see the target bit, the back bit, or both?',
+  state: { res: null, w: null },
+  build(b, def) {
+    const back = h('select', {}, h('option', { value: 'RP' }, 'right back (RP)'), h('option', { value: 'LP' }, 'left back (LP)'));
+    const tgt = h('select', {}, ...['A', 'B', 'X', 'Y', 'LB', 'RB', 'LSTICK', 'RSTICK', 'VIEW', 'MENU', 'TOUCH'].map(n => h('option', { value: n }, `${GLYPH[n]} (${n})`)), h('option', { value: '?' }, 'not sure'));
+    const pr = h('div', { class: 'prompt' });
+    b.append(h('div', { class: 'btnrow' }, 'back button', back, 'mapped to', tgt), pr, h('button', { onclick: () => {
+      if (def.state.w) def.state.w.stop(); pr.textContent = `press the remapped ${back.value} now`; noteTape(`probe back_remap: press ${back.value} (mapped to ${tgt.value})`);
+      def.state.w = watchBits(bits => { def.state.res = { back: back.value, mapped_to: tgt.value, bits }; pr.textContent = 'seen: ' + (bits.join(', ') || 'nothing'); });
+    } }, 'start'));
+  },
+  evidence(def) { return def.state.res || {}; },
+  answer(ev) {
+    if (!ev.bits) return { verdict: 'not run' };
+    const backBit = ev.bits.some(s => s.includes(`(${ev.back})`)), tgtBit = ev.mapped_to !== '?' && ev.bits.some(s => s.includes(`(${ev.mapped_to})`));
+    return { verdict: backBit && tgtBit ? 'both' : tgtBit ? 'target only' : backBit ? 'back only' : ev.bits.length ? 'other bits: ' + ev.bits.join(', ') : 'nothing', ...ev };
+  },
+});
+PROBE.push({
+  id: 'fn_hides', title: '4 · Does holding Fn hide face presses?', spec: 'Edge Fn',
+  question: 'Hold either Fn button and press ✕ □ ○ △ one at a time, release Fn, then press done. (Fn + a face button switches profile on the Edge — switch back afterwards.)',
+  state: { on: false, fnSeen: false, faces: new Set(), facesNoFn: new Set(), hook: null },
+  build(b, def) {
+    const pr = h('div', { class: 'prompt' });
+    b.append(pr, h('div', { class: 'btnrow' }, h('button', { onclick: () => {
+      const s = def.state = { on: true, fnSeen: false, faces: new Set(), facesNoFn: new Set(), hook: null };
+      pr.textContent = 'hold Fn, press ✕ □ ○ △, release Fn, then "done"'; noteTape('probe fn_hides: hold Fn and press face buttons');
+      s.hook = f => { const fn = f.buttons.LFN || f.buttons.RFN; if (fn) s.fnSeen = true; for (const n of ['A', 'B', 'X', 'Y']) if (f.buttons[n]) (fn ? s.faces : s.facesNoFn).add(n); };
+      reportHooks.add(s.hook);
+    } }, 'start'), h('button', { onclick: () => { const s = def.state; reportHooks.delete(s.hook); s.on = false; pr.textContent = 'stopped — save the answer'; } }, 'done')));
+  },
+  evidence(def) { const s = def.state; return { fn_bit_seen: s.fnSeen, faces_seen_while_fn: [...s.faces], faces_seen_without_fn: [...s.facesNoFn], running: s.on }; },
+  answer(ev) { return { verdict: !ev.fn_bit_seen ? 'Fn bit never seen (Fn itself may be hidden from the host)' : ev.faces_seen_while_fn.length ? 'face presses visible while Fn is held' : 'face presses hidden while Fn is held', ...ev }; },
+});
+const MOTIONS = { roll: 'tilt the RIGHT side DOWN and hold it there', pitch: 'lift the FAR edge (away from you) and hold it', yaw: 'flat on the table: turn the pad to the RIGHT (clockwise from above), then stop' };
+PROBE.push({
+  id: 'axes', title: '5 · Gyro / accel axis order and signs', spec: '§2.2 p15–26 · §9.2',
+  question: 'Hold the pad flat and still at the start of each; when told, make the move. The step proposes an axis map in x-right / y-up-out-of-the-face / z-toward-you order (as gesture.AxisMap).',
+  state: { res: {}, cur: null },
+  build(b, def) {
+    const pr = h('div', { class: 'prompt' });
+    const run = m => {
+      const s = def.state; if (s.cur && s.cur.hook) reportHooks.delete(s.cur.hook);
+      const c = s.cur = { m, t0: now(), base: [], move: [], hook: null }; noteTape(`probe axes: ${m} — ${MOTIONS[m]}`);
+      c.hook = (f, r, t) => { if (!f.full) return; const dt = t - c.t0; const row = [t, ...f.accel, ...f.gyro]; if (dt < 1000) c.base.push(row); else if (dt < 3500) c.move.push(row); else { reportHooks.delete(c.hook); s.res[m] = analyseMotion(c); pr.textContent = `${m}: recorded`; s.cur = null; } };
+      reportHooks.add(c.hook);
+      const tick = () => { if (s.cur !== c) return; const dt = now() - c.t0; pr.textContent = dt < 1000 ? `hold flat and still… ${(1 - dt / 1000).toFixed(1)} s` : `NOW: ${MOTIONS[m]} (${((3500 - dt) / 1000).toFixed(1)} s)`; requestAnimationFrame(tick); };
+      tick();
+    };
+    b.append(pr, h('div', { class: 'btnrow' }, ...Object.keys(MOTIONS).map(m => h('button', { onclick: () => run(m) }, `record ${m}`)),
+      h('button', { onclick: () => { const p = proposeAxisMap(def.state.res); if (p.map) { pad.axisMap = p.map; logOut('axis map applied: ' + JSON.stringify(p.map)); } } }, 'apply proposed map'),
+      h('button', { onclick: () => { pad.axisMap = IDENTITY_MAP(); } }, 'reset to default')));
+  },
+  evidence(def) { return { recorded: def.state.res, proposal: proposeAxisMap(def.state.res), map_in_use: pad.axisMap }; },
+  answer(ev) { return ev.proposal; },
+});
+function mean(rows, col) { return rows.length ? rows.reduce((s, r) => s + r[col], 0) / rows.length : NaN; }
+function analyseMotion(c) {
+  if (c.base.length < 5 || c.move.length < 5) return { error: `too few full reports (${c.base.length} + ${c.move.length}); over Bluetooth the full report is needed` };
+  const bA = [1, 2, 3].map(i => mean(c.base, i)), bG = [4, 5, 6].map(i => mean(c.base, i));
+  const tail = c.move.filter(r => r[0] >= c.move[c.move.length - 1][0] - 600);
+  const dA = [1, 2, 3].map((i, k) => mean(tail, i) - bA[k]);
+  const I = [0, 0, 0]; for (let j = 1; j < c.move.length; j++) { const dt = (c.move[j][0] - c.move[j - 1][0]) / 1000; for (let k = 0; k < 3; k++) I[k] += (c.move[j][4 + k] - bG[k]) * dt; }
+  return { samples: c.base.length + c.move.length, accel_baseline_raw: bA.map(v => Math.round(v)), accel_delta_raw: dA.map(v => Math.round(v)), gyro_baseline_raw: bG.map(v => Math.round(v)), gyro_integral_raw_s: I.map(v => +v.toFixed(1)) };
+}
+function proposeAxisMap(res) {
+  const argmax = (v, excl = []) => { let bi = -1, bv = -1; v.forEach((x, i) => { if (!excl.includes(i) && Math.abs(x) > bv) { bv = Math.abs(x); bi = i; } }); return bi; };
+  const out = { accel: [null, null, null], gyro: [null, null, null], notes: [] };
+  res = Object.fromEntries(Object.entries(res).filter(([, v]) => v && !v.error));
+  const base = (res.roll || res.pitch || res.yaw || {}).accel_baseline_raw;
+  if (base) { const i = argmax(base); out.accel[1] = [i, Math.sign(base[i]) || 1]; }
+  if (res.roll) { const d = res.roll.accel_delta_raw, i = argmax(d, out.accel[1] ? [out.accel[1][0]] : []); out.accel[0] = [i, -Math.sign(d[i]) || 1]; const g = res.roll.gyro_integral_raw_s, j = argmax(g); out.gyro[2] = [j, -Math.sign(g[j]) || 1]; if (Math.abs(d[i]) < 1500) out.notes.push('roll: weak accel change — tilt further'); }
+  if (res.pitch) { const d = res.pitch.accel_delta_raw, ex = [out.accel[0], out.accel[1]].filter(Boolean).map(a => a[0]), i = argmax(d, ex); out.accel[2] = [i, -Math.sign(d[i]) || 1]; const g = res.pitch.gyro_integral_raw_s, j = argmax(g, out.gyro[2] ? [out.gyro[2][0]] : []); out.gyro[0] = [j, Math.sign(g[j]) || 1]; if (Math.abs(d[i]) < 1500) out.notes.push('pitch: weak accel change — lift further'); }
+  if (res.yaw) { const g = res.yaw.gyro_integral_raw_s, ex = [out.gyro[0], out.gyro[2]].filter(Boolean).map(a => a[0]), j = argmax(g, ex); out.gyro[1] = [j, -Math.sign(g[j]) || 1]; if (Math.abs(g[argmax(g)]) < 300) out.notes.push('yaw: weak turn — turn further'); }
+  const done = out.accel.every(Boolean) && out.gyro.every(Boolean);
+  const uniq = a => new Set(a.map(x => x[0])).size === 3;
+  if (done && (!uniq(out.accel) || !uniq(out.gyro))) out.notes.push('an axis was picked twice — re-record');
+  const def = IDENTITY_MAP();
+  return { map: done ? { accel: out.accel, gyro: out.gyro } : null, partial: done ? undefined : out, matches_default: done ? JSON.stringify({ accel: out.accel, gyro: out.gyro }) === JSON.stringify(def) : null, default: def, notes: out.notes,
+    convention: 'gesture.AxisMap: [raw index, sign] for pad x (right), y (up out of the face), z (toward the player); gyro spin = (−gz, gx, −gy)' };
+}
+PROBE.push({
+  id: 'touch_range', title: '6 · Touchpad range (and where its timestamp sits)', spec: '§2.5 · §9.2',
+  question: 'Drag a finger into every corner and along every edge (both fingers if you like). Linux says 1920 × 1080, SDL 1080 vs 1070 in y.',
+  state: { min: [1e9, 1e9], max: [-1, -1], n: 0, p40: { touchChanges: 0, idleChanges: 0, last: null, sample: [] }, hook: null },
+  build(b, def) {
+    const start = () => {
+      if (def.state.hook) reportHooks.delete(def.state.hook);
+      const s = def.state = { min: [1e9, 1e9], max: [-1, -1], n: 0, p40: { touchChanges: 0, idleChanges: 0, last: null, sample: [] }, hook: null };
+      noteTape('probe touch_range: drag to every corner');
+      s.hook = f => { if (!f.full) return; let anyDown = false; for (const t of f.touches) if (t.down) { anyDown = true; s.n++; s.min[0] = Math.min(s.min[0], t.x); s.min[1] = Math.min(s.min[1], t.y); s.max[0] = Math.max(s.max[0], t.x); s.max[1] = Math.max(s.max[1], t.y); }
+        const p = s.p40; if (p.last !== null && f.p40 !== p.last) { if (anyDown) p.touchChanges++; else p.idleChanges++; } p.last = f.p40; if (p.sample.length < 16 && anyDown) p.sample.push(f.p40); };
+      reportHooks.add(s.hook);
+    };
+    b.append(h('div', { class: 'btnrow' }, h('button', { onclick: start }, 'start / reset'), h('button', { onclick: () => { const s = def.state; if (s.n) { pad.touchW = s.max[0] + 1; pad.touchH = s.max[1] + 1; logOut(`touch range applied: ${pad.touchW} × ${pad.touchH}`); } } }, 'apply measured range'),
+      h('button', { onclick: () => { pad.touchW = TOUCH_W0; pad.touchH = TOUCH_H0; } }, 'back to 1920 × 1080')));
+  },
+  evidence(def) { const s = def.state; return { contacts: s.n, min_xy: s.n ? s.min : null, max_xy: s.n ? s.max : null, p40_touch_counter: s.p40, range_in_use: [pad.touchW, pad.touchH] }; },
+  answer(ev) { return ev.contacts ? { max_x: ev.max_xy[0], max_y: ev.max_xy[1], min_x: ev.min_xy[0], min_y: ev.min_xy[1], proposed_touch_w: ev.max_xy[0] + 1, proposed_touch_h: ev.max_xy[1] + 1, p40_changes_while_touching: ev.p40_touch_counter.touchChanges, p40_changes_idle: ev.p40_touch_counter.idleChanges } : { verdict: 'not run' }; },
+});
+PROBE.push({
+  id: 'usb_out_len', title: '7 · Which USB output length works (USB only)', spec: '§5.1 · §9.1',
+  question: 'Each button sends one light-bar report of that total length (id included): 48 red, 63 green, 64 blue. Did the light change to that colour? (Chrome itself refuses a report longer than the descriptor\'s largest output report — that refusal is Chrome\'s, not macOS\'s; hidapi has no such check.)',
+  state: { res: {} },
+  build(b, def) {
+    const rows = h('div');
+    const colours = { 48: [255, 0, 0], 63: [0, 255, 0], 64: [0, 80, 255] }, names2 = { 48: 'red', 63: 'green', 64: 'blue' };
+    for (const n of [48, 63, 64]) {
+      const st = h('span', { class: 'mono dim' }), yn = h('span');
+      rows.append(h('div', { class: 'btnrow' }, h('button', { onclick: async () => {
+        if (curTransport() !== 'usb') { st.textContent = 'needs a USB connection'; return; }
+        pauseOut('probe 7'); noteTape(`probe usb_out_len: try ${n}`);
+        const r = def.state.res[n] = { sent: false, error: null, light_changed: null, colour: names2[n] };
+        try { if (pad.source === 'hid' && !hid.tookOver) { const tb = frameBlock(effectsBlock(null, { first: true }), { bluetooth: false, usbLen: n }); await writeReport(tb, `take-over at ${n}`); hid.tookOver = true; }
+          await rawLight(colours[n], { n, why: `probe 7: ${n} B` }); r.sent = true; st.textContent = 'sent — did it turn ' + names2[n] + '?'; }
+        catch (e) { r.error = `${e.name || 'Error'}: ${e.message}`; st.textContent = 'refused: ' + r.error; }
+        yn.replaceChildren(yesNo(v => { r.light_changed = v; yn.textContent = v ? 'yes' : 'no'; }));
+      } }, `send ${n} B (${names2[n]})`), st, yn));
+    }
+    b.append(rows, h('div', { class: 'btnrow' }, h('button', { onclick: () => { const w = Object.entries(def.state.res).filter(([, r]) => r.sent && r.light_changed).map(([n]) => +n); if (w.length) { hid.usbOutLen = w.includes(64) ? 64 : w[0]; logOut('USB output length set to ' + hid.usbOutLen); } } }, 'use a working length'), h('button', { onclick: resumeOut }, 'resume normal output')));
+  },
+  evidence(def) { return { results: def.state.res, descriptor_output_report_2_bytes: hid.desc ? hid.desc.outputs[2] ?? null : null, descriptor_max_output_bytes: hid.desc ? hid.desc.maxOutputBytes : null, length_in_use: hid.usbOutLen }; },
+  answer(ev) { return { works: Object.entries(ev.results).filter(([, r]) => r.sent && r.light_changed).map(([n]) => +n), refused: Object.entries(ev.results).filter(([, r]) => !r.sent).map(([n]) => +n), sent_but_no_change: Object.entries(ev.results).filter(([, r]) => r.sent && r.light_changed === false).map(([n]) => +n) }; },
+});
+PROBE.push({
+  id: 'bt_takeover', title: '8 · Which Bluetooth LED take-over makes the light bar obey (BT only)', spec: '§5.3 · §9.4',
+  question: 'For a clean test of A, connect fresh with the Feedback tab\'s "on first write" set to none (so nothing has been written yet), then try A, B, C in order and answer each.',
+  state: { res: {}, order: [] },
+  build(b, def) {
+    const rows = h('div'), wst = h('div', { class: 'dim mono' });
+    const tests = [
+      ['plain', 'A · plain write (flags1 0x04 + red)', async () => rawLight([255, 0, 0], { why: 'probe 8A: plain red' })],
+      ['linux', 'B · Linux take-over, then green', async () => { await sendBlock(effectsBlock(null, { first: true }), 'probe 8B: Linux take-over'); await rawLight([0, 255, 0], { why: 'probe 8B: green' }); }],
+      ['sdl', 'C · SDL: wait for sensor ts ≥ 10 200 000, flags1 0x08 reset, then blue + P1', async st => { while (!sdlReady()) { st.textContent = `waiting: sensor ts ${pad.frame && pad.frame.sensorTime}`; await new Promise(r => setTimeout(r, 100)); } await rawLight([0, 80, 255], { resetLeds: true, players: 0x04, why: 'probe 8C: SDL reset + blue' }); }],
+    ];
+    for (const [k, label, fn] of tests) {
+      const st = h('span', { class: 'mono dim' }), yn = h('span');
+      rows.append(h('div', { class: 'btnrow' }, h('button', { onclick: async () => {
+        if (curTransport() !== 'bluetooth') { st.textContent = 'needs a Bluetooth connection'; return; }
+        pauseOut('probe 8'); noteTape('probe bt_takeover: ' + k);
+        const r = def.state.res[k] = { writes_before: pad.source === 'hid' ? hid.writes : sim.writes || 0, sent: false, error: null, light_obeyed: null }; def.state.order.push(k);
+        try { await fn(st); r.sent = true; if (pad.source === 'hid') hid.tookOver = true; st.textContent = 'sent — did the light bar change?'; } catch (e) { r.error = e.message; st.textContent = 'error: ' + e.message; }
+        yn.replaceChildren(yesNo(v => { r.light_obeyed = v; yn.textContent = v ? 'yes' : 'no'; }));
+      } }, label), st, yn));
+    }
+    b.append(wst, rows, h('button', { onclick: resumeOut }, 'resume normal output'));
+    live.tick.push(() => { wst.textContent = `writes since connect: ${pad.source === 'hid' ? hid.writes : '—'} · on-first-write: ${out.takeover} · sensor ts ${pad.frame && pad.frame.full ? pad.frame.sensorTime : '—'}`; });
+  },
+  evidence(def) { return { results: def.state.res, order_tried: def.state.order, auto_takeover_setting: out.takeover }; },
+  answer(ev) { const r = ev.results; return { plain_obeys: r.plain ? r.plain.light_obeyed : null, linux_obeys: r.linux ? r.linux.light_obeyed : null, sdl_obeys: r.sdl ? r.sdl.light_obeyed : null, clean_plain_test: r.plain ? r.plain.writes_before === 0 : null }; },
+});
+PROBE.push({
+  id: 'led_fight', title: '9 · Does anything fight our light bar?', spec: '§9.3',
+  question: 'Sends teal, then watches for 10 s. Did the light bar stay teal the whole time (no flicker back to the system\'s colour)? Note what else was running (the app, Steam, a game).',
+  state: { res: null },
+  build(b, def) {
+    const st = h('span', { class: 'mono dim' }), yn = h('span');
+    b.append(h('div', { class: 'btnrow' }, h('button', { onclick: async () => {
+      pauseOut('probe 9'); noteTape('probe led_fight: teal for 10 s'); const r = def.state.res = { sent: false, stayed: null, error: null };
+      try { if (pad.source === 'hid' && !hid.tookOver && out.takeover === 'linux') { await sendBlock(effectsBlock(null, { first: true }), 'probe 9: take-over'); hid.tookOver = true; } await rawLight([0, 200, 180], { why: 'probe 9: teal' }); r.sent = true; } catch (e) { r.error = e.message; }
+      const t0 = now(); const tk = () => { const s = 10 - (now() - t0) / 1000; if (s > 0) { st.textContent = `watch it… ${s.toFixed(1)} s`; setTimeout(tk, 100); } else { st.textContent = 'did it stay teal?'; yn.replaceChildren(yesNo(v => { r.stayed = v; yn.textContent = v ? 'yes' : 'no'; })); } }; tk();
+    } }, 'send teal and watch'), st, yn, h('button', { onclick: resumeOut }, 'resume normal output')));
+  },
+  evidence(def) { return def.state.res || {}; },
+  answer(ev) { return { stayed: ev.stayed ?? null, untestable_here: 'whether hid_darwin_set_open_exclusive(0) via ctypes takes effect needs the Python app' }; },
+});
+PROBE.push({
+  id: 'jitter', title: '10 · Stick and trigger rest jitter', spec: 'dead zones',
+  question: 'Put the pad down, hands off, and record 3 s.',
+  state: { res: null },
+  build(b, def) {
+    const pr = h('div', { class: 'prompt' });
+    b.append(pr, h('button', { onclick: () => {
+      const acc = { n: 0, min: [255, 255, 255, 255, 255, 255], max: [0, 0, 0, 0, 0, 0], gmin: [1e9, 1e9, 1e9], gmax: [-1e9, -1e9, -1e9] }, t0 = now(); noteTape('probe jitter: hands off 3 s');
+      const hook = f => { const v = [...f.sticks, f.l2, f.r2]; acc.n++; v.forEach((x, i) => { acc.min[i] = Math.min(acc.min[i], x); acc.max[i] = Math.max(acc.max[i], x); }); if (f.full) f.gyro.forEach((x, i) => { acc.gmin[i] = Math.min(acc.gmin[i], x); acc.gmax[i] = Math.max(acc.gmax[i], x); }); if (now() - t0 > 3000) { reportHooks.delete(hook); def.state.res = acc; pr.textContent = 'recorded'; } };
+      reportHooks.add(hook); const tk = () => { if (now() - t0 < 3000) { pr.textContent = `hands off… ${(3 - (now() - t0) / 1000).toFixed(1)} s`; requestAnimationFrame(tk); } }; tk();
+    } }, 'record 3 s'));
+  },
+  evidence(def) { const a = def.state.res; if (!a) return {}; const o = { reports: a.n }; AXES.forEach((n, i) => o[n] = { min: a.min[i], max: a.max[i], spread: a.max[i] - a.min[i] }); o.gyro_raw = { min: a.gmin, max: a.gmax }; return o; },
+  answer(ev) { if (!ev.reports) return { verdict: 'not run' }; const dev = ['LX', 'LY', 'RX', 'RY'].map(n => Math.max(Math.abs(ev[n].min - 128), Math.abs(ev[n].max - 128)) / 127.5); return { worst_stick_offset: +Math.max(...dev).toFixed(3), proposed_stick_deadzone: +Math.min(0.3, Math.ceil((Math.max(...dev) + 0.02) * 100) / 100).toFixed(2), trigger_rest_max: [ev.LT.max, ev.RT.max] }; },
+});
+PROBE.push({
+  id: 'firmware_cal', title: '11 · Firmware update version and calibration', spec: '§4.1 §4.3 · §9.7',
+  question: 'Read at connect (0x05 also flips Bluetooth to the full report). Save to keep the raw bytes and what they decode to.',
+  build(b) { b.append(h('button', { onclick: async () => { if (hid.device) { await readFeatures(); } } }, 're-read 0x05 and 0x20')); },
+  evidence() {
+    if (pad.source !== 'hid') return { note: 'simulator: no feature reports (nominal calibration: 16 counts per °/s, 8192 per g)' };
+    const strip = f => f ? Object.fromEntries(Object.entries(f).filter(([k]) => k !== 'bytes')) : null;
+    return { feature_0x05: strip(hid.features['0x05']), feature_0x20: strip(hid.features['0x20']), calibration_in_use: { nominal: hid.cal.nominal, reason: hid.cal.reason, gyro_bias_scale: hid.cal.gyro, accel_bias_scale: hid.cal.accel } };
+  },
+  answer(ev) { const fw = ev.feature_0x20 && ev.feature_0x20.decoded; const uv = fw ? fw.update_version : null; return { update_version: fw ? fw.update_version_hex : null, rumble_v2_linux: uv == null ? null : curModel() === 'edge' || uv >= RUMBLE_V2_LINUX, rumble_v2_sdl: uv == null ? null : curModel() === 'edge' || uv === 0 || uv >= RUMBLE_V2_SDL, calibration_read: ev.calibration_in_use ? !ev.calibration_in_use.nominal : false, firmware: fw || null }; },
+});
+function buildProbe() {
+  const root = $('#probeList');
+  for (const def of PROBE) {
+    const pill = h('span', { class: 'pill', id: 'pill-' + def.id }, 'open');
+    const ev = h('pre', { class: 'evidence' }), notes = h('textarea', { placeholder: 'notes (saved with the answer)' });
+    const body = h('div', { class: 'stepbody' }, h('p', {}, def.question));
+    def.build(body, def);
+    body.append(h('div', { class: 'dim', style: 'margin-top:6px' }, 'evidence (live):'), ev, notes,
+      h('div', { class: 'btnrow' }, h('button', { class: 'primary', onclick: () => saveStep(def, notes.value) }, 'save answer'), h('span', { class: 'mono dim', id: 'saved-' + def.id })));
+    const card = h('details', { class: 'step', id: 'step-' + def.id }, h('summary', {}, pill, def.title, h('span', { class: 'specref' }, def.spec)), body);
+    root.append(card);
+    live.tick.push(() => { if (card.open) { const e = def.evidence(def); ev.textContent = JSON.stringify(e, null, 1); } });
+  }
+}
+function saveStep(def, notesText) {
+  const ev = def.evidence(def);
+  findings.steps[def.id] = { title: def.title, spec: def.spec, question: def.question, answer: def.answer(ev, def), evidence: ev, notes: notesText || '', ...stepCtx(), saved_at: new Date().toISOString() };
+  $('#pill-' + def.id).textContent = 'saved'; $('#pill-' + def.id).className = 'pill saved';
+  $('#saved-' + def.id).textContent = 'saved ' + new Date().toLocaleTimeString() + (pad.source === 'sim' ? ' (from the SIMULATOR)' : '');
+  noteTape(`probe ${def.id}: saved`);
+  $('#findingsState').textContent = `${Object.keys(findings.steps).length} / ${PROBE.length} steps saved`;
+}
+function exportFindings() {
+  const p = findings.steps, prop = {};
+  if (p.axes && p.axes.answer && p.axes.answer.map) prop.axis_map = p.axes.answer.map;
+  if (p.touch_range && p.touch_range.answer.proposed_touch_w) { prop.touch_w = p.touch_range.answer.proposed_touch_w; prop.touch_h = p.touch_range.answer.proposed_touch_h; }
+  if (p.usb_out_len && p.usb_out_len.answer.works.length) prop.usb_out_len = p.usb_out_len.answer.works;
+  if (p.bt_takeover) prop.bt_takeover = p.bt_takeover.answer;
+  if (p.jitter && p.jitter.answer.proposed_stick_deadzone != null) prop.stick_deadzone = p.jitter.answer.proposed_stick_deadzone;
+  if (p.firmware_cal) prop.update_version = p.firmware_cal.answer.update_version;
+  const doc = {
+    schema: 'hyperspace.edgelab.findings/1', exported: new Date().toISOString(), page: 'prototypes/edge-lab/index.html', spec: 'hyperspace-python/docs/plans/assets/42-controllers/sony-hid.md',
+    user_agent: navigator.userAgent, source: pad.source, warning: pad.source === 'sim' || Object.values(p).some(s => s.source === 'sim') ? 'some answers came from the SIMULATOR, not hardware' : undefined,
+    device: pad.source === 'hid' && hid.device ? { model: hid.model, product_name: hid.device.productName, vendor_id: hexN(hid.device.vendorId, 4), product_id: hexN(hid.device.productId, 4), transport: hid.transport, descriptor: hid.desc } : { model: curModel(), transport: curTransport(), simulated: pad.source === 'sim' },
+    selftest: selfTestResult, report_stats: { reports_seen: stats.byKey, bt_tags: stats.tags, crc_ok: stats.crcOk, crc_failures: stats.crcFail, undecoded: stats.unknown, rate_hz: stats.rate },
+    features: pad.source === 'hid' ? Object.fromEntries(Object.entries(hid.features).map(([k, f]) => [k, Object.fromEntries(Object.entries(f).filter(([kk]) => kk !== 'bytes'))])) : null,
+    in_use: { axis_map: pad.axisMap, touch_w: pad.touchW, touch_h: pad.touchH, usb_out_len: hid.usbOutLen, takeover: out.takeover },
+    proposed: prop, steps: p,
+  };
+  download(`edge-findings-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`, JSON.stringify(doc, null, 2));
+  return doc;
+}
+
+// ---------------------------------------------------------------- 11 tape (hyperspace.padtape/1)
+const TAPE_MAX = 300000;
+const tape = {
+  on: false, t0: 0, lines: [], reports: 0, bytes: 0, header: null,
+  start() { this.lines = []; this.reports = 0; this.bytes = 0; this.t0 = now(); this.on = true; this.header = { tape: 'hyperspace.padtape/1', model: curModel(), transport: curTransport() || 'usb' };
+    this.lines.push(`{"tape": "hyperspace.padtape/1", "model": "${this.header.model}", "transport": "${this.header.transport}"}`); this.src = pad.source; },
+  stop() { if (this.on) this.lastT = now(); this.on = false; },
+  t(tt) { return Math.round(Math.max(0, tt - this.t0) / 1000 * 1e4) / 1e4; },
+  report(tt, r) { if (this.src !== pad.source) { this.stop(); return; } const line = `{"t": ${this.t(tt)}, "r": "${toHex(r)}"}`; this.lines.push(line); this.reports++; this.bytes += line.length + 1; if (this.lines.length >= TAPE_MAX) { this.stop(); logOut('tape: stopped at its cap'); } },
+  note(s) { if (!this.on) return; this.lines.push(`{"t": ${this.t(now())}, "note": ${JSON.stringify(String(s))}}`); },
+  text() { return this.lines.join('\n') + '\n'; },
+};
+
+// ---------------------------------------------------------------- 12 self-test (spec §8 vectors + codec / gesture sanity)
+let selfTestResult = null;
+function selfTest() {
+  const res = [], t = (name, fn) => { try { const r = fn(); res.push({ name, ok: r === true, detail: r === true ? '' : String(r) }); } catch (e) { res.push({ name, ok: false, detail: 'threw ' + e.message }); } };
+  const z = n => Array(n).fill(0);
+  const btIn = new Uint8Array([0x31, 0x01, 0x80, 0x80, 0x80, 0x80, 0, 0, 0, 0x08, 0, 0x80, ...z(22), 0x80, 0, 0, 0, 0x80, ...z(35), 0x43, 0x70, 0x11, 0x35]);
+  const usbIn = new Uint8Array([0x01, 0x80, 0x80, 0x80, 0x80, 0, 0, 0, 0x08, 0, 0x80, ...z(22), 0x80, 0, 0, 0, 0x80, ...z(26)]);
+  const onlyRP = f => { if (!f) return 'not decoded'; const on = BUTTONS.filter(b => f.buttons[b]); if (on.join() !== 'RP') return 'buttons ' + on.join(); if (f.hatN !== 8) return 'hat ' + f.hatN; if (f.sticks.some(v => v !== 0x80)) return 'sticks'; if (f.touches.some(q => q.down)) return 'touch down'; return true; };
+  t('CRC32 check value ("123456789" = 0xCBF43926)', () => crc32(new TextEncoder().encode('123456789')) === 0xCBF43926 || hexN(crc32(new TextEncoder().encode('123456789')), 8));
+  t('§8 BT 0x31 input vector: length 78, CRC32(0xA1 ‖ [0:74]) = 0x35117043', () => btIn.length === 78 && crc32(btIn.subarray(0, 74), SEED_IN) === 0x35117043 && u32le(btIn, 74) === 0x35117043 || hexN(crc32(btIn.subarray(0, 74), SEED_IN), 8));
+  t('§8 BT input decodes (hidapi bytes): only RP held', () => { const f = decodeInput(btIn); return f && f.kind === 'bt' && f.crcOk && f.tag === 1 ? onlyRP(f) : 'kind/crc'; });
+  t('§8 BT input via WebHID shape (id separate, DataView without it)', () => { const dv = new DataView(btIn.slice(1).buffer); return onlyRP(decodeInput(fullReport(0x31, dv), true)); });
+  t('§8 USB 0x01 input vector: 64 B, only RP held', () => usbIn.length === 64 && onlyRP(decodeInput(usbIn, false)));
+  t('USB via WebHID shape (63-byte DataView + id 0x01)', () => onlyRP(decodeInput(fullReport(0x01, new DataView(usbIn.slice(1).buffer)), null)));
+  t('BT input with a bad CRC is dropped; tag 2 (mic) is dropped', () => { const b = btIn.slice(); b[5] ^= 1; const m = btIn.slice(); m[1] = 0x02; putU32(m, 74, crc32(m.subarray(0, 74), SEED_IN)); return decodeInput(b) === null && decodeInput(m) === null; });
+  t('BT simple 0x01 (10 B) decodes; Edge bits absent', () => { const f = decodeInput(new Uint8Array([1, 0x80, 0x80, 0x80, 0x80, 0x28, 0x01, 0x02, 0x10, 0xFF]), true); return f && f.kind === 'bt-simple' && f.buttons.A === 1 && f.buttons.LB === 1 && f.buttons.TOUCH === 1 && f.r2 === 255 && f.hatN === 8 && !f.full || JSON.stringify(f && f.buttons); });
+  t('short / unknown reports → null, no throw', () => [[], [0x31], [0x31, 1, 2, 3], [0x01, 2, 3], [0x05, ...z(40)], [0x02, ...z(63)], [0x31, ...z(40)]].every(a => decodeInput(new Uint8Array(a)) === null) && decodeInput(null) === null);
+  t('§8 BT output, Linux take-over, seq 0 = 31 00 10 … [41]=02 [44]=02 … CRC 0x3631E643', () => { const r = outputReport(null, { bluetooth: true, seq: 0, first: true }); const want = new Uint8Array(78); want.set([0x31, 0x00, 0x10]); want[41] = 2; want[44] = 2; want.set([0x43, 0xe6, 0x31, 0x36], 74); return toHex(r) === toHex(want) || toHex(r); });
+  t('§8 BT output, lightbar (0,0,128), seq 1: CRC 0x4CEA2342', () => { const b = new Uint8Array(BLOCK_LEN); b[1] = 0x04; b[46] = 0x80; const r = frameBlock(b, { bluetooth: true, seq: 1 }); return r[1] === 0x10 && r[2] === 0x10 && r[4] === 0x04 && r[49] === 0x80 && toHex(r.subarray(74)) === '4223ea4c' || toHex(r.subarray(74)); });
+  t('USB output framing: 0x02 + block, padded to 48 / 63 / 64', () => [48, 63, 64].every(n => { const r = outputReport(padEffects({}, 1), { bluetooth: false, usbLen: n }); return r.length === n && r[0] === 2 && r[1 + C.RGB + 2] === 255 && r[1 + C.PLAYERS] === (0x04 | 0x20); }));
+  t('§8 calibration 0x05: Linux numerators / denominators / biases (KT:306-315)', () => { const c = parseCalibration(fromHex('05 ff ff f2 ff 04 00 9d 22 5e dd 92 22 52 dd ba 22 51 dd 1c 02 1c 02 fb 1f 05 e0 83 1f 99 df 07 20 fc df 05 00 00 00 00 00')); const L = c.linux;
+    return L.gyro_numerator === 1105920 && L.gyro_denominators.join() === '17727,17728,17769' && L.accel_bias.join() === '0,-114,2' && L.accel_numerator === 16384 && L.accel_denominators.join() === '16374,16362,16395' || JSON.stringify(L); });
+  t('§8 calibration 0x05: SDL scales 0.060924 / 0.060921 / 0.060780 °/s per LSB, biases −1/−14/4, believed', () => { const c = parseCalibration(fromHex('05 ff ff f2 ff 04 00 9d 22 5e dd 92 22 52 dd ba 22 51 dd 1c 02 1c 02 fb 1f 05 e0 83 1f 99 df 07 20 fc df 05 00 00 00 00 00'));
+    return !c.nominal && c.gyro.map(g => g[0]).join() === '-1,-14,4' && [0.060924, 0.060921, 0.060780].every((v, i) => Math.abs(c.gyro[i][1] - v) < 5e-7) && c.raw.speed_plus === 540 || JSON.stringify(c.gyro); });
+  t('§8 firmware 0x20: BT feature CRC(0xA3 ‖ [0:60]) = 0xB7B3D898; Aug 18 2020, hw 0x313, fw 0x0100001E, update 0x0204', () => { const r = fromHex('20 41 75 67 20 31 38 20 32 30 32 30 30 36 3a 32 30 3a 32 39 03 00 04 00 13 03 00 00 1e 00 00 01 41 0a 00 00 00 00 00 00 00 00 00 00 04 02 00 00 2a 00 01 00 06 00 01 00 06 00 00 00 98 d8 b3 b7'); const f = parseFirmware(r);
+    return r.length === 64 && btCrcOk(r, SEED_FEATURE) && f.build_date === 'Aug 18 2020' && f.build_time === '06:20:29' && f.hardware_version === '0x00000313' && f.firmware_version === '0x0100001e' && f.update_version === 0x0204 || JSON.stringify(f); });
+  t('trigger Feedback: resist from 15 % at u=1 → 21 fe 03 f8 ff ff 3f 00…; u=0 → Off 05', () => toHex(triggerBlock({ mode: 'resist', start: 0.15, strength: 1 })) === '21fe03f8ffff3f00000000' && toHex(triggerBlock({ mode: 'resist', start: 0.15, strength: 0 })) === '0500000000000000000000' || toHex(triggerBlock({ mode: 'resist', start: 0.15, strength: 1 })));
+  t('trigger Vibration: zone 3, amp 4/8, 40 Hz → 26 f8 03 … [9]=0x28', () => { const b = triggerBlock({ mode: 'pulse', start: 3 / 9, strength: 0.5, freq: 40 }); return b[0] === 0x26 && u16le(b, 1) === 0x3F8 && ((u32le(b, 3) >>> 9) & 7) === 3 && b[9] === 40 || toHex(b); });
+  t('guard refuses 0xFC–0xFE and unofficial modes', () => { const r = outputReport(padEffects({}, 1), { bluetooth: false, usbLen: 64 }); let n = 0; for (const m of [0xFC, 0xFD, 0xFE, 0x22]) { const x = r.slice(); x[1 + C.TRIG_R] = m; try { guardReport(x); } catch (e) { n++; } } guardReport(r); return n === 4; });
+  t('pad_effects: hue 0 → red; players meter 0.6 → 0b00111; trigger.right 0.5 → Feedback 4/8 from zone 1', () => { const e = padEffects({ 0: 0, 6: 0.5, 7: 0.6 }, 1); const b = effectsBlock(e); const tr = readTrigger(b, C.TRIG_R); return e.light.join() === '255,0,0' && e.players === 7 && tr.mode === 'feedback' && tr.level === 4 && tr.start === 1 || JSON.stringify([e.light, e.players, tr]); });
+  t('gesture: pinch ×2 → 0.75; quarter turn clockwise → 0.75; quick touch → tap', () => { const p = new Touchpad(); p.step([[1, 1, 0.4, 0.5], [1, 2, 0.6, 0.5]], 0.016); p.step([[1, 1, 0.3, 0.5], [1, 2, 0.7, 0.5]], 0.016); const pin = p.pinch;
+    const q = new Touchpad(); q.step([[1, 1, 0.4, 0.5], [1, 2, 0.6, 0.5]], 0.016); q.step([[1, 1, 0.5, 0.4], [1, 2, 0.5, 0.6]], 0.016); const tw = q.twist;
+    const r = new Touchpad(); r.step([[1, 3, 0.5, 0.5]], 0.05); r.step([[1, 3, 0.51, 0.5]], 0.05); r.step([[0, 3, 0, 0]], 0.05); return Math.abs(pin - 0.75) < 1e-9 && Math.abs(tw - 0.75) < 1e-9 && r.tap === 1 || [pin, tw, r.tap].join(); });
+  t('motion: 30° right side down → roll 0.75; jolt 2 g → shake', () => { const m = new Motion(); m.step([0, 0, 0], [-0.5, Math.sqrt(3) / 2, 0], 0.016); const roll = m.lanes()[0]; m.step([0, 0, 0], [-0.5, Math.sqrt(3) / 2, 2], 0.016); return Math.abs(roll - 0.75) < 1e-9 && m.shake === 1 || [roll, m.shake].join(); });
+  t('simulator encode → decode round trip (USB and BT + CRC)', () => { const s = { sticks: [1, 2, 3, 250], l2: 9, r2: 200, buttons: { A: 1, RP: 1, LFN: 1 }, hatN: 3, counter: 5, seq32: 77, gyro: [-100, 200, -300], accel: [10, 8192, -20], sensorTime: 123456, touches: [{ down: true, id: 5, x: 1919, y: 1079 }, { down: false, id: 6, x: 3, y: 4 }], touchCount: 2, battery: 6, charging: 1 };
+    for (const k of ['usb', 'bt']) { const f = decodeInput(encodeInput(s, k, 7), k === 'bt'); if (!f) return k + ' not decoded'; if (f.sticks.join() !== '1,2,3,250' || f.gyro.join() !== '-100,200,-300' || f.accel.join() !== '10,8192,-20' || f.touches[0].x !== 1919 || f.touches[0].y !== 1079 || !f.touches[0].down || f.touches[1].down || f.buttons.A !== 1 || f.buttons.RP !== 1 || f.buttons.LFN !== 1 || f.hatN !== 3 || f.battery !== 6 || f.sensorTime !== 123456) return k + ' mismatch'; } return true; });
+  const ok = res.filter(r => r.ok).length;
+  selfTestResult = { passed: ok, total: res.length, results: res };
+  const badge = $('#selftest'); badge.textContent = `self-test ${ok}/${res.length} ${ok === res.length ? 'pass' : 'FAIL'}`; badge.className = ok === res.length ? 'pass' : 'fail';
+  $('#selftestDetail').textContent = res.map(r => `${r.ok ? 'ok  ' : 'FAIL'} ${r.name}${r.detail ? '\n     → ' + r.detail : ''}`).join('\n');
+  if (ok === res.length) console.info(`[edge-lab] self-test ${ok}/${res.length} pass`); else console.error(`[edge-lab] self-test ${ok}/${res.length}:`, res.filter(r => !r.ok));
+  return selfTestResult;
+}
+
+// ---------------------------------------------------------------- 13 wiring
+let statusMsg = '';
+function setStatusMsg(s) { statusMsg = s; }
+function note(html) { const n = $('#notes'); n.innerHTML = (n.innerHTML ? n.innerHTML + '<br>' : '') + html; }
+function setSource(src) {
+  if (pad.source === src) return;
+  pad.source = src; pad.frame = null; pad.tp = new Touchpad(); pad.mo = new Motion(); pad.prev = {}; resetStats(); out.sentKey = null;
+  if (tape.on) tape.stop();
+  $('#simOn').checked = src === 'sim';
+  $('#simPanel').style.opacity = src === 'sim' ? 1 : 0.45;
+}
+function updateStatus() {
+  const f = pad.frame, src = pad.source;
+  const parts = [];
+  if (src === 'hid' && hid.device) {
+    parts.push(`<b>${hid.model === 'edge' ? 'DualSense Edge' : 'DualSense'}</b> (${hexN(hid.device.productId, 4)})`, `<b>${hid.transport || '…'}</b>`);
+    parts.push(`${stats.rate} Hz`, battText());
+    parts.push(`fw update ${hid.fw ? hid.fw.update_version_hex : (hid.features['0x20'] && hid.features['0x20'].error ? 'read failed' : '—')}`);
+    parts.push(`calibration ${hid.calRead ? '✓ read' : '✗ nominal (' + hid.cal.reason + ')'}`);
+    if (f && !f.full) parts.push('<span style="color:#fbbf24">BT simple report (no touch / motion)</span>');
+    if (stats.crcFail) parts.push(crcLenient() ? '<span style="color:#f87171">BT CRC never matches — decoding without the check (probe step 1)</span>' : `CRC fails ${stats.crcFail}`);
+    if (stats.unknown) parts.push(`<span style="color:#fbbf24">undecoded ${stats.unknown} (probe step 1)</span>`);
+  } else if (src === 'sim') {
+    parts.push(`<b>simulator</b> · ${sim.model === 'edge' ? 'DualSense Edge' : 'DualSense'} · ${sim.transport}`, `${stats.rate} Hz`, battText());
+  } else parts.push('not connected');
+  if (!f || now() - pad.frameT > 600) parts.push(src === 'hid' ? '<span style="color:#f87171">no reports</span>' : '');
+  if (statusMsg) parts.push(`<span class="dim">${statusMsg}</span>`);
+  $('#status').innerHTML = parts.filter(Boolean).join(' · ');
+  // panels
+  const L = pad.lanes, i4 = ideas.i4, i7 = ideas.i7;
+  $('#i4live').textContent = `centre ${fmt(i4.cx)}, ${fmt(1 - i4.cy)} · touch:pinch ${fmt(L['touch:pinch'])} → zoom ×${Math.pow(2, i4.zoom * 2).toFixed(2)} · touch:twist ${fmt(L['touch:twist'])} → XW ${(i4.xw * 360).toFixed(0)}°`;
+  $('#i5live').textContent = `fires ${ideas.i5.fires} · env ${ideas.i5.env.toFixed(2)}`;
+  $('#i7live').textContent = `light.hue ${i7.hue.toFixed(2)} · rumble.low ${i7.beatEnv.toFixed(2)} (${i7.beat}) · axis:RT ${fmt(L['axis:RT'])} → fx.kaleido.mix ${i7.mix.toFixed(2)} → trigger.right`;
+  const vals = channelValues();
+  CHANNELS.forEach((c, i) => { const e = $('#chv' + i); if (e) e.textContent = vals[i] != null ? vals[i].toFixed(2) : '—'; });
+  $('#outPaused').textContent = out.paused ? `auto output paused by ${out.paused}` : ''; $('#outResume').hidden = !out.paused;
+  while (out.winT.length && out.winT[0] < now() - 1000) out.winT.shift();
+  $('#outStats').textContent = `· writes ${out.writes} · ${out.winT.length}/s · errors ${out.errors}${pad.source === 'hid' && hid.usbOutLen ? ' · USB len ' + hid.usbOutLen : ''}`;
+  $('#outHex').textContent = out.last ? hexSpaced(out.last) : '—';
+  $('#outLog').innerHTML = out.log.slice(0, 14).map(s => `<div>${s.replace(/</g, '&lt;')}</div>`).join('');
+  const tk = pad.source === 'hid' ? hid.tookOver : sim.tookOver;
+  $('#takeoverState').textContent = [tk ? 'taken over' : 'not taken over yet', out.sdlWait ? `SDL: waiting for sensor timestamp ≥ 10 200 000 (now ${f && f.sensorTime})` : '', `rumble ${rumbleV2() ? 'v2 (flags2 0x04)' : 'v1 (flags0 0x01)'}`, pad.source === 'hid' && hid.transport === 'bluetooth' ? 'BT seq nibble ' + hid.outSeq : ''].filter(Boolean).join(' · ');
+  $('#tapeState').textContent = tape.lines.length ? `${tape.on ? 'RECORDING' : 'stopped'} · ${tape.header.model} · ${tape.header.transport} · ${tape.reports} reports · ${((tape.on ? now() : tape.lastT || now()) / 1000 - tape.t0 / 1000).toFixed(1)} s · ${(tape.bytes / 1024).toFixed(0)} KB\n\n` + tape.lines.slice(0, 3).join('\n') + (tape.lines.length > 3 ? '\n…\n' + tape.lines.slice(-2).join('\n') : '') : 'no tape';
+  for (const fn of live.tick) { try { fn(); } catch (e) { console.warn(e); } }
+  // BT stuck in simple mode: offer the output that flips it
+  if (pad.source === 'hid' && hid.simpleSince && now() - hid.simpleSince > 2000 && !$('#flipBtn')) {
+    $('#status').append(' ', h('button', { id: 'flipBtn', onclick: async () => { try { await sendBlock(effectsBlock(null, { first: true }), 'switch BT to full (0x31 output)'); hid.tookOver = true; } catch (e) { logOut(e.message, true); } $('#flipBtn') && $('#flipBtn').remove(); } }, 'switch to full report'));
+  }
+}
+let lastT = now(), lastUi = 0;
+function loop(t) {
+  const dt = Math.min(0.1, Math.max(0, (t - lastT) / 1000)); lastT = t;
+  try {
+    stepPad(dt, now());
+    stepIdeas(dt, now());
+    out.want = wantedEffects();
+    drawReadout(); drawVisual(); drawSimWidgets();
+    if (t - lastUi > 200) { updateStatus(); lastUi = t; }
+  } catch (e) { console.error('[edge-lab] frame', e); }
+  requestAnimationFrame(loop);
+}
+// sim widgets (touchpad, tilt gizmo, sticks)
+function drawSimWidgets() {
+  if (pad.source !== 'sim') return;
+  { const cv = $('#simTouch'), ctx = fitCanvas(cv, 320, 180); ctx.fillStyle = '#0e1118'; ctx.fillRect(0, 0, 320, 180); ctx.strokeStyle = '#262d3c'; for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.moveTo(i * 80, 0); ctx.lineTo(i * 80, 180); ctx.moveTo(0, i * 45); ctx.lineTo(320, i * 45); ctx.stroke(); }
+    sim.touches.forEach((q, i) => { if (q.down) { ctx.fillStyle = i ? COL.X : COL.accent; ctx.beginPath(); ctx.arc(clamp01(q.x) * 320, clamp01(q.y) * 180, 10, 0, 7); ctx.fill(); } });
+    txt(ctx, 'drag here', 160, 90, { size: 12, color: '#262d3c' }); }
+  { const cv = $('#simTilt'), ctx = fitCanvas(cv, 180, 180); ctx.fillStyle = '#0e1118'; ctx.fillRect(0, 0, 180, 180); ctx.strokeStyle = '#262d3c'; ctx.beginPath(); ctx.arc(90, 90, 80, 0, 7); ctx.moveTo(10, 90); ctx.lineTo(170, 90); ctx.moveTo(90, 10); ctx.lineTo(90, 170); ctx.stroke();
+    const x = 90 + sim.tilt.roll / 60 * 80, y = 90 - sim.tilt.pitch / 60 * 80; ctx.fillStyle = COL.hot; ctx.beginPath(); ctx.arc(x, y, 9, 0, 7); ctx.fill();
+    txt(ctx, `roll ${sim.tilt.roll.toFixed(0)}°  pitch ${sim.tilt.pitch.toFixed(0)}°`, 90, 172, { size: 11, color: COL.dim }); txt(ctx, 'far edge up', 90, 18, { size: 10, color: COL.faint }); txt(ctx, 'right down ▸', 140, 82, { size: 10, color: COL.faint }); }
+  { const cv = $('#simSticks'), ctx = fitCanvas(cv, 200, 100); ctx.fillStyle = '#0e1118'; ctx.fillRect(0, 0, 200, 100);
+    [[50, sim.ls], [150, sim.rs]].forEach(([cx, v]) => { ctx.strokeStyle = '#323a4c'; ctx.beginPath(); ctx.arc(cx, 50, 40, 0, 7); ctx.stroke(); ctx.fillStyle = COL.accent; ctx.beginPath(); ctx.arc(cx + v[0] * 30, 50 + v[1] * 30, 10, 0, 7); ctx.fill(); }); }
+}
+function canvasPoint(cv, e, dw, dh) { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * dw, (e.clientY - r.top) / r.height * dh]; }
+function wireSim() {
+  const isField = e => { const t = e.target; return !!t && (t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || (t.tagName === 'INPUT' && ['text', 'number', 'color', 'search'].includes(t.type))); };
+  window.addEventListener('keydown', e => {
+    if (pad.source !== 'sim' || isField(e) || e.metaKey || e.ctrlKey || e.altKey) return;
+    const k = SIM_KEYS[e.code]; if (!k) return;
+    e.preventDefault(); if (e.repeat) return;
+    if (k === 'shake') { sim.shakeT = now(); return; }
+    sim.keys.add(k);
+  });
+  window.addEventListener('keyup', e => { const k = SIM_KEYS[e.code]; if (!k) return; sim.keys.delete(k); if (pad.source === 'sim' && !isField(e)) e.preventDefault(); });
+  window.addEventListener('blur', () => { sim.keys.clear(); sim.mouse.clear(); });
+  // touchpad surface
+  const st = $('#simTouch');
+  st.addEventListener('pointerdown', e => { st.setPointerCapture(e.pointerId); const [x, y] = canvasPoint(st, e, 1, 1); touchSurf.start(x, y, e.shiftKey); });
+  st.addEventListener('pointermove', e => { if (e.buttons) { const [x, y] = canvasPoint(st, e, 1, 1); touchSurf.move(x, y); } });
+  st.addEventListener('pointerup', () => touchSurf.end()); st.addEventListener('pointercancel', () => touchSurf.end());
+  // tilt
+  const tl = $('#simTilt'); const setTilt = e => { const [x, y] = canvasPoint(tl, e, 180, 180); sim.tilt.roll = clamp((x - 90) / 80 * 60, -75, 75); sim.tilt.pitch = clamp(-(y - 90) / 80 * 60, -75, 75); };
+  tl.addEventListener('pointerdown', e => { tl.setPointerCapture(e.pointerId); setTilt(e); }); tl.addEventListener('pointermove', e => { if (e.buttons) setTilt(e); });
+  tl.addEventListener('dblclick', () => { sim.tilt.roll = 0; sim.tilt.pitch = 0; });
+  const yaw = $('#simYaw'); yaw.addEventListener('input', () => sim.yawRate = +yaw.value); const yawBack = () => { yaw.value = 0; sim.yawRate = 0; }; yaw.addEventListener('pointerup', yawBack); yaw.addEventListener('change', yawBack);
+  // sticks pad
+  const sk = $('#simSticks'); let which = null;
+  const setStick = e => { const [x, y] = canvasPoint(sk, e, 200, 100); const cx = which === 'ls' ? 50 : 150; let v = [(x - cx) / 30, (y - 50) / 30]; const m = Math.hypot(...v); if (m > 1) v = v.map(a => a / m); sim[which + 'Drag'] = v; };
+  sk.addEventListener('pointerdown', e => { sk.setPointerCapture(e.pointerId); const [x] = canvasPoint(sk, e, 200, 100); which = x < 100 ? 'ls' : 'rs'; setStick(e); });
+  sk.addEventListener('pointermove', e => { if (which && e.buttons) setStick(e); });
+  const stickUp = () => { if (which) sim[which + 'Drag'] = null; which = null; }; sk.addEventListener('pointerup', stickUp); sk.addEventListener('pointercancel', stickUp);
+  // the drawing: click a control to press it (Faithful view)
+  const ro = $('#readout'); let drag = null;
+  ro.addEventListener('pointerdown', e => {
+    if (pad.source !== 'sim' || view !== 'faithful') return;
+    const [x, y] = canvasPoint(ro, e, 1000, 620); const hit = hits.slice().reverse().find(q => x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h); if (!hit) return;
+    ro.setPointerCapture(e.pointerId);
+    if (hit.kind === 'btn') { sim.mouse.add(hit.n.startsWith('hat:') ? hit.n : hit.n); drag = hit; }
+    else if (hit.kind === 'touch') { drag = hit; touchSurf.start((x - hit.x) / hit.w, (y - hit.y) / hit.h, e.shiftKey); }
+    else if (hit.kind === 'stick') { drag = hit; }
+    else if (hit.kind === 'trigger') { drag = hit; $(hit.side === 'L' ? '#simL2' : '#simR2').value = clamp((x - hit.x) / hit.w, 0, 1) * 255; }
+  });
+  ro.addEventListener('pointermove', e => {
+    if (!drag) return; const [x, y] = canvasPoint(ro, e, 1000, 620);
+    if (drag.kind === 'touch') touchSurf.move((x - drag.x) / drag.w, (y - drag.y) / drag.h);
+    if (drag.kind === 'stick') { let v = [(x - drag.cx) / 36, (y - drag.cy) / 36]; const m = Math.hypot(...v); if (m > 1) v = v.map(a => a / m); sim[drag.n === 'LSTICK' ? 'lsDrag' : 'rsDrag'] = v; }
+    if (drag.kind === 'trigger') $(drag.side === 'L' ? '#simL2' : '#simR2').value = clamp((x - drag.x) / drag.w, 0, 1) * 255;
+  });
+  const up = () => { if (!drag) return; if (drag.kind === 'btn') sim.mouse.delete(drag.n); if (drag.kind === 'touch') touchSurf.end(); if (drag.kind === 'stick') sim[drag.n === 'LSTICK' ? 'lsDrag' : 'rsDrag'] = null; if (drag.kind === 'trigger') $(drag.side === 'L' ? '#simL2' : '#simR2').value = 0; drag = null; };
+  ro.addEventListener('pointerup', up); ro.addEventListener('pointercancel', up);
+  $('#simShake').onclick = () => { sim.shakeT = now(); };
+  $('#simModel').onchange = e => { sim.model = e.target.value; resetStats(); };
+  $('#simTransport').onchange = e => { sim.transport = e.target.value; resetStats(); sim.tookOver = false; out.shown.sim = freshShown(); out.sentKey = null; if (tape.on) tape.stop(); };
+  $('#simBattery').oninput = e => sim.battery = +e.target.value; $('#simCharging').onchange = e => sim.charging = e.target.checked ? 1 : 0;
+  $('#simOn').onchange = e => { if (e.target.checked) setSource('sim'); else if (hid.device) setSource('hid'); else e.target.checked = true; };
+}
+function wireUi() {
+  $$('#viewTabs button').forEach(b => b.onclick = () => { view = b.dataset.view; $$('#viewTabs button').forEach(x => x.classList.toggle('on', x === b)); $('#viewNote').textContent = VIEW_NOTES[view]; });
+  $('#viewNote').textContent = VIEW_NOTES[view];
+  $$('#rightTabs button').forEach(b => b.onclick = () => { $$('#rightTabs button').forEach(x => x.classList.toggle('on', x === b)); $$('.tabpane').forEach(p => p.classList.toggle('on', p.id === 'tab-' + b.dataset.tab)); });
+  // ideas
+  $('#i4on').onchange = e => ideas.i4.on = e.target.checked; $('#i5on').onchange = e => ideas.i5.on = e.target.checked; $('#i7on').onchange = e => ideas.i7.on = e.target.checked;
+  $('#i4blur').oninput = e => ideas.i4.blur = +e.target.value; $('#i5punch').oninput = e => ideas.i5.punch = +e.target.value; $('#i5fire').onclick = fireEnv;
+  $('#i7hue').oninput = e => ideas.i7.hueSpeed = +e.target.value; $('#i7bpm').oninput = e => ideas.i7.bpm = +e.target.value || 120;
+  $('#i7beat').onchange = async e => { ideas.i7.beat = e.target.value; if (e.target.value === 'mic') await startMic(); };
+  $('#i7tap').onclick = () => { const i7 = ideas.i7, t = now(); i7.taps = i7.taps.filter(x => t - x < 3000); i7.taps.push(t); if (i7.taps.length >= 2) { const d = (i7.taps[i7.taps.length - 1] - i7.taps[0]) / (i7.taps.length - 1); i7.bpm = Math.round(60000 / d); $('#i7bpm').value = i7.bpm; } i7.beatT = t; };
+  $$('.rbtn').forEach(b => b.onclick = async () => { const id = b.dataset.routes, pre = $('#' + id), text = ROUTE_NOTES[id] + ROUTES[id].join('\n'); pre.textContent = text; pre.hidden = false; try { await navigator.clipboard.writeText(ROUTES[id].join('\n')); b.textContent = 'copied ✓'; } catch (e) { b.textContent = 'shown (select to copy)'; } setTimeout(() => b.textContent = 'copy route', 1500); });
+  // feedback
+  const rows = $('#chanRows');
+  CHANNELS.forEach(([k, label], i) => {
+    const c = out.ch[i];
+    const on = h('input', { type: 'checkbox', title: 'on: a row sends this channel; off: the identity' }); on.checked = c.on; on.onchange = () => c.on = on.checked; c.el = on;
+    const auto = h('input', { type: 'checkbox' }); auto.checked = c.auto; auto.onchange = () => c.auto = auto.checked;
+    const sl = h('input', { type: 'range', min: 0, max: 1, step: 0.01, value: c.manual }); sl.oninput = () => { c.manual = +sl.value; if (AUTO_SRC[i]) { auto.checked = false; c.auto = false; } };
+    rows.append(h('tr', {}, h('td', { class: 'mono' }, `edge:${i}`), h('td', { class: 'mono', title: label }, k), h('td', {}, h('label', {}, on, ' on')),
+      h('td', { class: 'dim' }, AUTO_SRC[i] ? h('label', { title: 'driven by the demo' }, auto, ' ' + AUTO_SRC[i]) : 'manual'), h('td', {}, sl), h('td', { class: 'mono', id: 'chv' + i, style: 'width:38px' })));
+  });
+  $('#outOn').onchange = e => out.enabled = e.target.checked;
+  $('#outResume').onclick = resumeOut;
+  $$('input[name=outMode]').forEach(r => r.onchange = () => { out.mode = $('input[name=outMode]:checked').value; });
+  $('#identity').onchange = e => out.player = +e.target.value;
+  $('#takeover').onchange = e => out.takeover = e.target.value;
+  $('#sendLinux').onclick = async () => { try { await sendBlock(effectsBlock(null, { first: true }), 'take-over (Linux, manual)'); if (pad.source === 'hid') hid.tookOver = true; else sim.tookOver = true; out.sentKey = null; } catch (e) { logOut(e.message, true); } };
+  $('#sendSdl').onclick = async () => { out.sdlWait = true; while (curTransport() === 'bluetooth' && !sdlReady()) await new Promise(r => setTimeout(r, 100)); out.sdlWait = false; try { await sendBlock(effectsBlock(out.want, { rumbleV2: rumbleV2(), resetLeds: true }), 'effects + SDL reset (manual)'); if (pad.source === 'hid') hid.tookOver = true; else sim.tookOver = true; } catch (e) { logOut(e.message, true); } };
+  $('#outPanic').onclick = async () => { out.ch.forEach((c, i) => { if (i >= 3 && i <= 6) { c.on = false; if (c.el) c.el.checked = false; } }); Object.assign(out.raw, { rumbleLow: 0, rumbleHigh: 0 }); out.raw.left.mode = 'off'; out.raw.right.mode = 'off'; $('#rawRumL').value = 0; $('#rawRumH').value = 0; $$('.trigmode').forEach(s => s.value = 'off'); resumeOut(); logOut('all off: rumble 0, triggers Off'); };
+  // raw
+  $('#rawLight').oninput = e => out.raw.light = e.target.value; $('#rawBright').onchange = e => out.raw.brightness = +e.target.value; $('#rawMic').onchange = e => out.raw.mic = +e.target.value;
+  $('#rawRumL').oninput = e => out.raw.rumbleLow = +e.target.value; $('#rawRumH').oninput = e => out.raw.rumbleHigh = +e.target.value;
+  const pl = $('#rawPlayers'), boxes = [];
+  for (let i = 0; i < 5; i++) { const cb = h('input', { type: 'checkbox' }); cb.checked = (out.raw.players >> i) & 1; cb.onchange = () => { out.raw.players = boxes.reduce((a, b, j) => a | (b.checked ? 1 << j : 0), 0); }; boxes.push(cb); pl.append(cb); }
+  pl.append(' ');
+  for (let p = 1; p <= 5; p++) pl.append(h('button', { onclick: () => { out.raw.players = PLAYER_BITS[p]; boxes.forEach((b, j) => b.checked = (PLAYER_BITS[p] >> j) & 1); out.raw.light = '#' + PLAYER_LIGHTS[p - 1].map(hex2).join(''); $('#rawLight').value = out.raw.light; } }, 'P' + p));
+  for (const [side, el] of [['left', '#rawTrigL'], ['right', '#rawTrigR']]) {
+    const t = out.raw[side];
+    const mode = h('select', { class: 'trigmode' }, h('option', { value: 'off' }, 'Off 0x05'), h('option', { value: 'feedback' }, 'Feedback 0x21'), h('option', { value: 'vibration' }, 'Vibration 0x26'));
+    const pos = h('input', { type: 'number', min: 0, max: 9, value: t.pos, style: 'width:46px' }), lvl = h('input', { type: 'number', min: 1, max: 8, value: t.level, style: 'width:46px' }), fq = h('input', { type: 'number', min: 1, max: 255, value: t.freq, style: 'width:56px' });
+    mode.onchange = () => t.mode = mode.value; pos.oninput = () => t.pos = clamp(+pos.value | 0, 0, 9); lvl.oninput = () => t.level = clamp(+lvl.value | 0, 1, 8); fq.oninput = () => t.freq = clamp(+fq.value | 0, 1, 255);
+    $(el).append(mode, ' position ', pos, ' strength / amplitude ', lvl, ' freq ', fq, ' Hz');
+  }
+  // probe + tape
+  buildProbe();
+  $('#exportFindings').onclick = exportFindings;
+  $('#tapeRec').onclick = () => { tape.start(); $('#tapeRec').disabled = true; $('#tapeStop').disabled = false; $('#tapeSave').disabled = false; $('#tapeClear').disabled = false; };
+  $('#tapeStop').onclick = () => { tape.stop(); $('#tapeRec').disabled = false; $('#tapeStop').disabled = true; };
+  $('#tapeSave').onclick = () => download(`pad-${tape.header.model}-${tape.header.transport}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.jsonl`, tape.text(), 'application/x-ndjson');
+  $('#tapeClear').onclick = () => { tape.stop(); tape.lines = []; tape.reports = 0; tape.bytes = 0; $('#tapeRec').disabled = false; $('#tapeStop').disabled = true; $('#tapeSave').disabled = true; $('#tapeClear').disabled = true; };
+  $('#tapeNote').onclick = () => { const v = $('#tapeNoteText').value.trim(); if (v && tape.on) { tape.note(v); $('#tapeNoteText').value = ''; } };
+  setInterval(() => { if (!tape.on && $('#tapeStop') && !$('#tapeStop').disabled) { $('#tapeRec').disabled = false; $('#tapeStop').disabled = true; } }, 500);
+  $('#selftest').onclick = () => { const d = $('#selftestDetail'); d.style.display = d.style.display === 'block' ? 'none' : 'block'; };
+  // connect
+  $('#btnConnect').onclick = connectClicked;
+  $('#btnDisconnect').onclick = () => closeDevice(true);
+}
+async function wireHid() {
+  if (!window.isSecureContext) { note('This page is not on a secure context, so WebHID is off. In this folder run <code>python3 -m http.server</code> and open <code>http://localhost:8000</code>. The simulator still works.'); $('#btnConnect').disabled = true; return; }
+  if (location.protocol === 'file:') note('Opened as a file: WebHID permissions can misbehave on file:// pages. Prefer <code>python3 -m http.server</code> here and <code>http://localhost:8000</code>.');
+  if (!hasHid()) { note('WebHID is not available in this browser (Safari and Firefox have none). Use Chrome, Edge or Brave on the Mac — the simulator works everywhere.'); $('#btnConnect').disabled = true; return; }
+  navigator.hid.addEventListener('disconnect', e => { if (e.device === hid.device) { setStatusMsg('disconnected — reconnects by itself when the pad comes back'); hid.device = null; $('#btnDisconnect').disabled = true; setSource('sim'); } });
+  navigator.hid.addEventListener('connect', e => { if (!hid.device && hid.lastPid && e.device.vendorId === SONY_VID && e.device.productId === hid.lastPid) openDevice(e.device, 'reconnected'); });
+  try { const devs = await navigator.hid.getDevices(); const d = devs.find(x => x.vendorId === SONY_VID && (x.productId === PID_EDGE || x.productId === PID_DUALSENSE)); if (d) openDevice(d, 'remembered'); } catch (e) { /* none */ }
+}
+window.addEventListener('error', e => console.error('[edge-lab] uncaught', e.message));
+selfTest();
+wireUi(); wireSim(); wireHid();
+setInterval(simTick, 4);
+setInterval(() => { outputTick(); }, 5);
+requestAnimationFrame(loop);
+// a handle for the console and the headless check (not used by the page itself)
+window.edgeLab = { pad, sim, hid, out, ideas, tape, findings, PROBE, stats, selfTest, decodeInput, outputReport, encodeInput, exportFindings, touchSurf, setSource };
+</script>
+</body>
+</html>
