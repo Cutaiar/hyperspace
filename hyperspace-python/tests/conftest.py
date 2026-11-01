@@ -141,6 +141,17 @@ def _no_real_midi(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_real_hid(monkeypatch):
+    """No test reaches the machine's game controllers over hidapi (plan
+    42): `hid.available()` says no, so no pad entry makes a hub, opens a
+    DualSense exclusively, writes its light bar or fights a running app.
+    A test that wants the hid road builds its hub over a fake enumerate
+    and opener, or patches `available` back (a later setattr wins)."""
+    from hyperspace.pads import hid
+    monkeypatch.setattr(hid, "available", lambda: False)
+
+
+@pytest.fixture(autouse=True)
 def _renderers_draw_todays_frame(request, monkeypatch):
     """Plan 36 T3 (W3): the app's `Renderer` starts on the empty frame
     (`graph.EMPTY`, black) until a preset's graph lands. The tests' bare

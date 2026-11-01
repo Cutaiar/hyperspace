@@ -151,6 +151,16 @@ def matches(spec: str | None, model: Model, vid: int | None = None,
     return False
 
 
+def may_be_sony(spec: str | None) -> bool:
+    """Could an entry with ``controller = spec`` take a Sony pad? (Else
+    the hid road need not open — and seize — any.)"""
+    s = parse_spec(spec) if spec else "any"
+    if s is None:
+        return True
+    return s in ("any", "sony") or s.startswith(f"{SONY_VID:04x}:") or (
+        s in MODELS and MODELS[s].family == "sony")
+
+
 def glfw_ids(guid: str | None) -> tuple[int | None, int | None]:
     """(vendor, product) from a GLFW joystick GUID — SDL's layout: bus
     (LE16) 0000, vendor (LE16) 0000, product (LE16) 0000, version … —

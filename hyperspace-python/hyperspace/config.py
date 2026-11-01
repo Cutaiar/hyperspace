@@ -572,10 +572,17 @@ def _pad_keys(cfg: dict, where: str, role: str, own: dict) -> None:
     dropped, so the pad takes its default (any pad; its place's colour
     and number)."""
     from .pads import models
+    if "hid" in own and not isinstance(own["hid"], bool):
+        _note(cfg, f"{where} ({role}) hid = {own['hid']!r} is not true or false — true")
+        own["hid"] = True
+    tape = own.get("tape")
+    if tape is not None and not isinstance(tape, str):
+        _note(cfg, f"{where} ({role}) tape = {tape!r} is not a file name — no tape")
+        del own["tape"]
     if "controller" in own and models.parse_spec(own["controller"]) is None:
         _note(cfg, f"{where} ({role}) controller = {own['controller']!r} names no pad — "
                    f"one of {', '.join(models.SPECS_WORDS)} or a USB id vvvv:pppp; any pad")
-        del own["controller"]
+        own["controller"] = "any"
     elif "controller" in own:
         own["controller"] = models.parse_spec(own["controller"])
     light = own.get("light")
@@ -602,6 +609,8 @@ def _translate(cfg: dict, data: dict) -> list[dict]:
         role = role or _midi_role(t)
         entry = {"role": role, "kind": kind, "enabled": bool(t.get("enabled", True)),
                  **{k: v for k, v in t.items() if k != "enabled"}}
+        if kind == "gamepad":          # plan 42's keys, checked as a [[devices]] entry's
+            _pad_keys(cfg, f"config: [{section}]", role, entry)
         out.append(entry)
         if isinstance(data.get(section), dict):
             _note(cfg, f"config: [{section}] is now a [[devices]] entry (role = {role!r}, "

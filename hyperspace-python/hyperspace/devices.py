@@ -684,8 +684,10 @@ class PadDevice(Base):
         spec = getattr(io, "controller", "any") or "any"
         if spec != "any":
             why.append(f"waiting for {spec}")
+        hub = getattr(getattr(io, "claims", None), "hub", None)
         why += [n for n in (getattr(getattr(io, "usb_pad", None), "note", "") or "", own,
-                            getattr(io, "tape_note", "") or "") if n]
+                            getattr(io, "tape_note", "") or "",
+                            getattr(hub, "note", "") or "") if n]
         return "  ·  ".join(why)
 
     @property

@@ -584,7 +584,7 @@ here; overturn → the change, then the same.
 | 549 | Plan 42 D6: trigger resistance by the official effects only | 411 | (rec) — pending the owner |
 | 550 | Plan 42 D7: hidapi opens the pad exclusively | 408 | (rec) — pending the owner |
 | 551 | Plan 42 D8: the pad tape is the one recording format | 415 | (rec) — pending the owner |
-| 552 | Plan 42 D9: the on-screen pad draws the model's own face | 414 | (rec) — pending the owner |
+| 552 | Plan 42 D9: the on-screen pad draws the model's own face | 407 | (rec) — pending the owner |
 | 553 | Plan 42 D10: the browser lab is a prototype beside the app | — | (rec) — pending the owner |
 
 "—": no hand check shows it; tests only.

@@ -41,7 +41,8 @@ from . import models, sony
 SCAN_S = 1.0               # how often the hub looks for pads coming and going
 READ_TIMEOUT_MS = 100      # a read waits at most this, so close() is quick
 OUT_HZ = 60.0              # the most output reports a second
-STALE_S = 0.5              # no report for this long: the reader is lost
+STALE_S = 0.5              # no report for this long: `latest` gives nothing (the pad reads lost)
+DRAIN_MAX = 64             # reports read in one go before the outputs get a turn
 TAPE_SCHEMA = "hyperspace.padtape/1"
 
 
@@ -174,7 +175,9 @@ class HidPad:
         if raw is None or time.monotonic() - t > STALE_S:
             return None
         if raw is not self._frame_of:
-            self._frame = sony.decode(raw, bluetooth=_bt_hint(self.info))
+            f = sony.decode(raw, bluetooth=_bt_hint(self.info))
+            if f is not None:          # a refused report (a mic report, a bad CRC):
+                self._frame = f        # the last good one stands, so nothing re-fires
             self._frame_of = raw
         return self._frame
 
@@ -211,9 +214,13 @@ class HidPad:
             self._calibrate(dev)
             while self._alive:
                 data = dev.read(sony.BT_IN_LEN, READ_TIMEOUT_MS)
-                if data:
+                n = 0
+                while data:            # drain what queued (hidapi keeps 30): the newest wins
                     self._take(bytes(data))
+                    n += 1
+                    data = dev.read(sony.BT_IN_LEN, 1) if n < DRAIN_MAX else None
                 self._write(dev)
+            self._neutral(dev)
         except Exception as e:  # noqa: BLE001 — unplugged, refused, a Bluetooth drop
             self.note = f"{type(e).__name__}: {e}"[:120]
         finally:
@@ -278,6 +285,22 @@ class HidPad:
         self._send(dev, report)
         self._sent_key, self._sent_t = key, now
 
+    def _neutral(self, dev) -> None:
+        """On the way out, after outputs were sent: rumble stopped and the
+        triggers freed (the light keeps its colour), so nothing goes on
+        shaking or pushing back after the app lets go."""
+        with self._lock:
+            want = self._want
+        if self._sent_key is None or want is None:
+            return
+        calm = sony.Effects(light=want.light, players=want.players, brightness=want.brightness)
+        try:
+            self._send(dev, sony.output_report(calm, bluetooth=self.bluetooth,
+                                               seq=self._next_seq(),
+                                               rumble_v2=self.rumble_v2, usb_len=self._usb_len()))
+        except Exception:  # noqa: BLE001, S110 — a pad already gone needs no calming
+            pass
+
     def _next_seq(self) -> int:
         self._seq = (self._seq + 1) & 0x0F
         return self._seq
@@ -324,12 +347,20 @@ class TapePad:
                 line = line.strip()
                 if not line:
                     continue
-                d = json.loads(line)
+                try:
+                    d = json.loads(line)
+                except ValueError:
+                    continue           # a line cut short (a recording stopped mid-write)
+                if not isinstance(d, dict):
+                    continue
                 if n == 0 and "tape" in d:
                     head = d
                     continue
                 if "r" in d:
-                    self.reports.append((float(d["t"]), bytes.fromhex(d["r"])))
+                    try:
+                        self.reports.append((float(d["t"]), bytes.fromhex(d["r"])))
+                    except (KeyError, TypeError, ValueError):
+                        continue
         if head.get("tape", TAPE_SCHEMA) != TAPE_SCHEMA:
             raise ValueError(f"{self.path.name}: not a pad tape ({head.get('tape')!r})")
         self.model = models.MODELS.get(str(head.get("model", "")), models.MODELS["dualsense"])
@@ -385,14 +416,21 @@ class HidHub:
         self._alive = True
         self._thread = None
         if start:
+            self.start()
+
+    def start(self) -> None:
+        """The scanning thread (a first `scan` can run before it, so the
+        pads plugged in now are there on the first poll)."""
+        if self._thread is None:
             self._thread = threading.Thread(target=self._run, name="hyperspace-hidhub",
                                             daemon=True)
             self._thread.start()
 
     def _run(self) -> None:
         while self._alive:
-            self.scan()
             time.sleep(SCAN_S)
+            if self._alive:
+                self.scan()
 
     def scan(self) -> None:
         try:
@@ -405,6 +443,10 @@ class HidHub:
         with self._lock:
             for path, r in list(self.readers.items()):
                 if not r.alive or path not in paths:
+                    if not r.alive and r.note:
+                        # why it died (a refused open: Input Monitoring, another
+                        # app holding the pad) — kept for the SYSTEM line
+                        self.note = f"{r.name}: {r.note}"[:120]
                     r.close()
                     del self.readers[path]
                     self.held.pop(path, None)
@@ -443,10 +485,18 @@ class HidHub:
         with self._lock:
             return any(r.alive and r.vid == vid and r.pid == pid for r in self.readers.values())
 
-    def close(self) -> None:
+    def close(self, join: float = 0.5) -> None:
+        """Stop the scan and every reader — each sends its neutral report
+        on the way out — and wait up to `join` seconds for the threads, so
+        a restart's new image finds the pads free (as `gamepad.UsbPad`)."""
         self._alive = False
         with self._lock:
-            for r in self.readers.values():
-                r.close()
+            readers = list(self.readers.values())
             self.readers.clear()
             self.held.clear()
+        for r in readers:
+            r.close()
+        for r in readers:
+            t = getattr(r, "_thread", None)
+            if t is not None and t.is_alive() and join:
+                t.join(join)

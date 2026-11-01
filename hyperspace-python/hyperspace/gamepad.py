@@ -608,7 +608,8 @@ class Claims:
         such pad in list order; None when no pad may."""
         def may(p: Pad) -> bool:
             return (p in self.order and getattr(p, "usb", False) and p.jid is None
-                    and getattr(p, "hid_pad", None) is None)
+                    and getattr(p, "hid_pad", None) is None
+                    and models.matches(getattr(p, "controller", "any"), models.MODELS["x360"]))
         if self.usb is not None and may(self.usb):
             return self.usb
         return next((p for p in self.order if may(p)), None)
@@ -628,10 +629,15 @@ class Claims:
         """The one hub every `hid` pad borrows from (pads.hid), made on
         first ask; None where hidapi cannot be imported."""
         if self.hub is None:
+            if self.__dict__.get("no_hid"):
+                return None
             from .pads import hid
             if not hid.available():
+                self.no_hid = True     # asked once: no import retried every frame
                 return None
-            self.hub = hid.HidHub()
+            self.hub = hid.HidHub(start=False)
+            self.hub.scan()            # the pads there now, before the first poll looks
+            self.hub.start()
         return self.hub
 
 
@@ -674,7 +680,7 @@ class Pad:
         self.axes: list[float] = [0.0] * 6
         self.usb = usb
         self.usb_pad: UsbPad | None = None
-        self.source: str | None = None     # "glfw", "usb" or None
+        self.source: str | None = None     # "glfw", "hid", "tape", "usb" or None
         self.claims: Claims | None = None  # shared with the other pads (`attach`)
         self.role = ""
         self.joystick: int | None = None   # pinned GLFW index, or None
@@ -710,7 +716,7 @@ class Pad:
         its index once present. None: no joystick for it now."""
         claims = getattr(self, "claims", None)
         jid = self.jid
-        if jid is not None and glfw.joystick_present(jid) and (
+        if jid is not None and glfw.joystick_present(jid) and self._may_read(jid) and (
                 claims is None or (claims.taken.get(jid, self) is self
                                    and claims.pinned.get(jid, self) is self)):
             if claims is not None:
@@ -752,6 +758,13 @@ class Pad:
             hit = cache[j] = (vid, pid, models.by_ids(vid, pid))
         return hit
 
+    def _kept(self) -> bool:
+        """Is the joystick this pad read last frame still its to read?"""
+        jid, claims = self.jid, getattr(self, "claims", None)
+        return (jid is not None and glfw.joystick_present(jid) and self._may_read(jid)
+                and (claims is None or (claims.taken.get(jid, self) is self
+                                        and claims.pinned.get(jid, self) is self)))
+
     def _may_read(self, j: int) -> bool:
         """May this pad take GLFW joystick `j`? Not when it is a Sony pad
         the hid road reads (the same pad twice), nor when its model is not
@@ -769,16 +782,21 @@ class Pad:
         """The hid hub this pad borrows from: the registry's (`Claims`), or
         one of its own for a pad no device attached; None with `hid` off or
         no hidapi."""
-        if not getattr(self, "hid", False):
-            return None
+        if not getattr(self, "hid", False) or not models.may_be_sony(
+                getattr(self, "controller", "any")):
+            return None                # an Xbox-only entry opens (and seizes) no Sony pad
         claims = getattr(self, "claims", None)
         if claims is not None:
             return claims.hid_hub() if make else claims.hub
         own = self.__dict__.get("_own_hub")
-        if own is None and make:
+        if own is None and make and not self.__dict__.get("no_hid"):
             from .pads import hid
             if hid.available():
-                own = self._own_hub = hid.HidHub()
+                own = self._own_hub = hid.HidHub(start=False)
+                own.scan()
+                own.start()
+            else:
+                self.no_hid = True
         return own
 
     def _hid_reader(self):
@@ -787,11 +805,19 @@ class Pad:
         if tape:
             r = self.__dict__.get("hid_pad")
             if r is None or getattr(r, "road", "") != "tape":
+                import os
+                try:
+                    stamp = (tape, os.stat(tape).st_mtime)
+                except OSError:
+                    stamp = (tape, None)
+                if self.__dict__.get("_tape_failed") == stamp:
+                    return None        # the same bad file: said once, not re-read each frame
                 from .pads import hid
                 try:
                     r = hid.TapePad(tape)
                 except Exception as e:  # noqa: BLE001 — a missing or bad tape is said, not raised
                     self.__dict__["tape_note"] = f"tape: {type(e).__name__}: {e}"[:120]
+                    self.__dict__["_tape_failed"] = stamp
                     return None
             return r
         hub = self._hub()
@@ -852,21 +878,32 @@ class Pad:
         if dt is None:
             dt = 0.0 if last is None else min(0.25, now - last)
         reader, frame, state = None, None, None
-        if getattr(self, "tape", None):
-            self.jid = None
+        if getattr(self, "tape", None) or (
+                not self._kept() and getattr(self, "joystick", None) is None):
+            # a tape, or a Sony pad hid lends this entry — never in place of a
+            # joystick it is reading (plugging an Edge in mid-show moves no
+            # one), nor for a pad pinned to a GLFW index
             reader = self._hid_reader()
+        if reader is not None:
+            # hid first: GLFW sees the same pad (over USB and Bluetooth) but not
+            # its extras; a lent pad not reporting yet (connecting, a BT gap)
+            # is still this entry's — no other road for it meanwhile
+            self.jid = None
+            claims = getattr(self, "claims", None)
+            if claims is not None:
+                for j in [j for j, p in claims.taken.items() if p is self]:
+                    del claims.taken[j]
+            frame = reader.latest()
+        elif getattr(self, "tape", None):
+            self.jid = None            # a tape entry reads its tape or nothing
         else:
             self.jid = self._find()
-            if self.jid is None:
-                reader = self._hid_reader()
-        if reader is not None:
-            frame = reader.latest()
         self.hid_pad = reader
         claims = getattr(self, "claims", None)
         if claims is not None and claims.usb is self and (self.jid is not None or frame is not None):
             claims.usb, self.usb_pad = None, None    # reading GLFW or hid: the reader goes back
-        if self.jid is None and frame is None:
-            state = self._usb_state()
+        if self.jid is None and reader is None and not getattr(self, "tape", None):
+            state = self._usb_state()      # no joystick, no hid pad lent: the libusb reader
         new = ("glfw" if self.jid is not None else
                ("tape" if getattr(reader, "road", "") == "tape" else "hid") if frame is not None else
                "usb" if state is not None else None)
@@ -877,10 +914,9 @@ class Pad:
         self.source = new
         self.prev_buttons, self.prev_hat = self.buttons, self.hat
         if new == "glfw":
-            # the GUID is asked only where it can matter (hid on, or a
-            # controller named): a Sony pad then reads through its own map
-            asks = getattr(self, "hid", False) or (getattr(self, "controller", "any") or "any") != "any"
-            self.model = self._glfw_ids(self.jid)[2] if asks else models.MODELS["generic"]
+            # the model from the GUID (kept while the joystick is there): a
+            # Sony pad reads through its own map, hid or no hid
+            self.model = self._glfw_ids(self.jid)[2]
             self._read_glfw()
         elif new in ("hid", "tape"):
             self.model = reader.model
@@ -892,8 +928,8 @@ class Pad:
         else:
             self.model = None
         guids = self.__dict__.setdefault("_guids", {})
-        for j in [j for j in guids if j != self.jid]:
-            del guids[j]                   # a joystick let go: asked afresh when next read
+        for j in [j for j in guids if j != self.jid and not glfw.joystick_present(j)]:
+            del guids[j]                   # a joystick gone: asked afresh when one comes
 
     def _read_glfw(self) -> None:
         raw = _unwrap(glfw.get_joystick_buttons(self.jid))
@@ -1125,7 +1161,7 @@ def learn_from(pad: Pad, learn, role: str = "", dials=frozenset) -> bool:
         if abs(u - rest) >= LEARN_TRAVEL and learn.accepts(f"axis{q}:{name}"):
             learn.learn_source(f"axis{q}:{name}", centred=name in STICKS)
             return False        # an axis has no button row to hold back
-    got = _learn_extra(pad)
+    got = _learn_extra(pad, learn)
     if got is not None:
         scheme, name, centred = got
         if learn.accepts(f"{scheme}{q}:{name}"):
@@ -1137,7 +1173,7 @@ TOUCH_LEARN_TRAVEL = 0.25      # a finger dragged this far (of the pad) lands x 
 GESTURE_LEARN = 0.2            # pinch / twist / tilt this far from rest lands it
 
 
-def _learn_extra(pad) -> tuple[str, str, bool] | None:
+def _learn_extra(pad, learn=None) -> tuple[str, str, bool] | None:
     """The touch or motion lane a Learn pad lands (plan 42), or None: a
     finger dragged `TOUCH_LEARN_TRAVEL` along x or y (whichever it went
     further), a pinch or a twist `GESTURE_LEARN` from rest, a tap; a tilt
@@ -1162,8 +1198,17 @@ def _learn_extra(pad) -> tuple[str, str, bool] | None:
         m = dict(zip(gesture.MOTION_LANES, motion, strict=True))
         if m["shake"]:
             return MOTION_SCHEME, "shake", False
-        for name in ("roll", "pitch"):
-            if abs(m[name] - 0.5) >= GESTURE_LEARN:
+        # a tilt counts from where the pad was held when the learn was armed
+        # (a pad in the hand is never level): a fresh baseline per arm, as
+        # the hands' (`armed_n`)
+        key = (getattr(learn, "learning", None), getattr(learn, "want", None),
+               getattr(learn, "armed_n", None))
+        base = pad.__dict__.get("_learn_tilt")
+        if base is None or base[0] != key:
+            pad._learn_tilt = (key, m["roll"], m["pitch"])
+            return None
+        for name, b in (("roll", base[1]), ("pitch", base[2])):
+            if abs(m[name] - b) >= GESTURE_LEARN:
                 return MOTION_SCHEME, name, True
     return None
 

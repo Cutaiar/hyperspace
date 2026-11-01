@@ -12,7 +12,7 @@ rows light the extras the way plan 42's ideas would map them.
   uv run python tools/pad_shots.py     # → docs/plans/assets/42-controllers/pad-xbox.png, pad-edge.png
 """
 
-# ruff: noqa: I001 — label_menu_shot (and through it undo_demo) is imported
+# label_menu_shot (and through it undo_demo) is imported
 # first, on purpose: it sets HYPERSPACE_HOME and points pyGLFW at imgui_bundle's libglfw
 from __future__ import annotations
 

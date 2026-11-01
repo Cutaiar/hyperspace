@@ -53,10 +53,17 @@ resistance) is a vendor report GLFW has no call for.
                    │
              gamepad.Pad  ── one vocabulary: pad:A … pad:LP, hat:, axis:, touch:, motion:, Effects out
      ┌────────┬────┴─────┬─────────┐
-   glfw      hid        usb       tape
- (Xbox map, (pads/hid:  (libusb   (a recorded
-  Sony map)  USB + BT)   360 pad)  hid session)
+   tape      hid       glfw       usb
+ (a recorded (pads/hid: (Xbox map, (libusb
+  session)    USB + BT)  Sony map)  360 pad)
 ```
+
+Each poll a pad entry reads, in that order: its tape (and nothing else);
+a joystick it already reads (plugging a pad in mid-show moves no one); a
+Sony pad the hub lends it (macOS shows the same pad to GLFW over USB and
+Bluetooth — without its extras — so hid comes first, and no other entry
+may then read it through GLFW); the next free GLFW joystick its
+``controller =`` matches; the libusb reader.
 
 - **`pads/models.py`** — a `Model` per kind of controller (USB ids,
   family, road, caps, its own glyphs); `matches(spec, model)` is the

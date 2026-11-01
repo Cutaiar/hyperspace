@@ -2,6 +2,7 @@
 pad device — fake hidapi devices, no controller and no threads."""
 
 import json
+import math
 import struct
 from types import SimpleNamespace as NS
 
@@ -359,3 +360,210 @@ def test_a_pad_entry_with_a_tape_plays_it(tmp_path, monkeypatch):
     missing = gp.Pad(tape=str(tmp_path / "nope.jsonl"))
     missing.poll()
     assert not missing.on and "tape" in missing.tape_note
+
+
+# ---- the review's findings (2026-11-01), each as the test that would have caught it ----
+
+EDGE_GUID = "030000004c050000f20d000000010000"
+XBOX_GUID = "030000005e040000130b000009050000"
+
+
+def glfw_sees(monkeypatch, guids: dict[int, str]):
+    """GLFW's raw API over joysticks with these GUIDs, all at rest."""
+    monkeypatch.setattr(gp.glfw, "joystick_present", lambda j: j in guids)
+    monkeypatch.setattr(gp.glfw, "get_joystick_guid", lambda j: guids[j])
+    monkeypatch.setattr(gp.glfw, "get_joystick_buttons", lambda j: ([0] * 19, 19))
+    monkeypatch.setattr(gp.glfw, "get_joystick_hats", lambda j: ([0], 1))
+    monkeypatch.setattr(gp.glfw, "get_joystick_axes", lambda j: ([0.0] * 4 + [-1.0, -1.0], 6))
+
+
+def claims_with_edge(found=(EDGE,)):
+    """The registry's shared claims, its hub over a fake hidapi seeing `found`."""
+    claims = gp.Claims()
+    claims.hub = hid.HidHub(start=False, enumerate_=lambda v, p: list(found),
+                            opener=lambda i: FakeDev(), start_readers=False)
+    claims.hub.scan()
+    for r in claims.hub.readers.values():
+        r._take(bytes(usb_report(p7=0x28)))          # reporting: the cross held
+    return claims
+
+
+def test_hid_reads_the_edge_even_when_glfw_sees_it_too(monkeypatch):
+    """macOS shows the Edge to GLFW over USB and Bluetooth: the hid road
+    must win, and no other entry may read the same pad through GLFW."""
+    glfw_sees(monkeypatch, {0: EDGE_GUID})
+    claims = claims_with_edge()
+    one, two = gp.Pad(hid=True), gp.Pad(hid=True)
+    one.attach(claims, "pad")
+    two.attach(claims, "p2")
+    for p in (one, two):
+        p.poll(1 / 60)
+    assert one.source == "hid" and one.jid is None and one.touch_lanes() is not None
+    assert not two.on and two.jid is None, (two.source, two.jid, two._may_read(0))   # the same Edge, not twice
+
+
+def test_a_pad_on_a_joystick_keeps_it_when_an_edge_arrives(monkeypatch):
+    glfw_sees(monkeypatch, {0: XBOX_GUID})
+    claims = claims_with_edge(found=())
+    one, two = gp.Pad(hid=True), gp.Pad(hid=True)
+    one.attach(claims, "pad")
+    two.attach(claims, "p2")
+    for p in (one, two):
+        p.poll(1 / 60)
+    assert one.source == "glfw" and not two.on
+    claims.hub.enumerate_ = lambda v, p: [EDGE]           # the Edge plugged in mid-show
+    claims.hub.scan()
+    for r in claims.hub.readers.values():
+        r._take(bytes(usb_report()))
+    for p in (one, two):
+        p.poll(1 / 60)
+    assert one.source == "glfw" and one.jid == 0          # nobody moved
+    assert two.source == "hid" and two.model.id == "edge"
+
+
+def test_an_xbox_only_entry_opens_no_sony_pad(monkeypatch):
+    monkeypatch.setattr(hid, "available", lambda: True)
+    pad = gp.Pad(hid=True, controller="xbox")
+    assert pad._hub() is None and pad.__dict__.get("_own_hub") is None
+
+
+def test_the_suite_never_reaches_a_real_controller():
+    """conftest's `_no_real_hid`: a registry's pad entry polls with no hub."""
+    reg = devices.DeviceRegistry([{"role": "pad", "kind": "gamepad", "enabled": True,
+                                   "usb": False, "hid": True, "controller": "any"}])
+    reg.open_all()
+    pad = reg.adapter("gamepad")
+    pad.poll(1 / 60)
+    assert pad.claims.hub is None and pad.claims.no_hid
+    reg.close()
+
+
+def test_a_refused_report_keeps_the_last_frame_so_nothing_fires_again():
+    r = stepped(DUALSENSE_BT, FakeDev())
+    held = bt_report(bytes(usb_report(p7=0x28))[1:])
+    r._take(held)
+    f = r.latest()
+    assert f.buttons[gp.A]
+    r._take(bt_report(bytes(usb_report())[1:], tag=0x02))       # a microphone report
+    assert r.latest() is f
+    bad = bytearray(held)
+    bad[-1] ^= 0xFF
+    r._take(bytes(bad))                                          # a bad CRC
+    assert r.latest() is f
+
+
+def test_learn_counts_a_tilt_from_where_the_pad_was_held(monkeypatch):
+    r = FakeReader()
+    rep = usb_report()
+    t = math.radians(25)
+    struct.pack_into("<3h", rep, 22, 0, int(8192 * math.cos(t)), -int(8192 * math.sin(t)))
+    r.report = bytes(rep)
+    pad = sony_pad(monkeypatch, r)
+    for _ in range(90):
+        pad.poll(1 / 60)                                  # held at 25°, far edge up
+    learn = Armed()
+    learn.armed_n = 1
+    for _ in range(5):
+        gp.learn_from(pad, learn)
+    assert learn.got == []                                # a held pad lands nothing
+    t = math.radians(55)
+    struct.pack_into("<3h", rep, 22, 0, int(8192 * math.cos(t)), -int(8192 * math.sin(t)))
+    r.report = bytes(rep)
+    for _ in range(90):
+        pad.poll(1 / 60)
+    gp.learn_from(pad, learn)
+    assert learn.got == [("motion:pitch", True)]          # 30° further does
+
+
+def test_hid_off_still_reads_a_sony_pad_through_its_own_map(monkeypatch):
+    glfw_sees(monkeypatch, {0: EDGE_GUID})
+    raw = [0] * 19
+    raw[1] = 1                                            # cross, in GLFW's Sony order
+    monkeypatch.setattr(gp.glfw, "get_joystick_buttons", lambda j: (raw, 19))
+    monkeypatch.setattr(gp.glfw, "get_joystick_axes",
+                        lambda j: ([0.0, 0.0, 0.0, -1.0, -1.0, 0.0], 6))
+    pad = gp.Pad(hid=False)
+    pad.poll()
+    assert pad.model.id == "edge" and pad.down(gp.A) and not pad.down(gp.B)
+    assert pad.lanes()[3] == pytest.approx(0.5)           # RY rests: no camera drift
+
+
+def test_a_bad_tape_is_said_once_and_a_cut_line_is_skipped(tmp_path, monkeypatch):
+    monkeypatch.setattr(gp.glfw, "joystick_present", lambda j: False)
+    path = tmp_path / "cut.jsonl"
+    rec = hid.Recorder(path, "edge", "usb")
+    rec.write(bytes(usb_report(p9=0x80)), t=0.0)
+    rec.close()
+    with path.open("a") as f:
+        f.write('{"t": 1.0, "r": "0180')                 # cut mid-line
+    pad = gp.Pad(tape=str(path))
+    pad.poll(1 / 60)
+    assert pad.on and pad.down(gp.RP)
+    made = []
+    real = hid.TapePad
+    monkeypatch.setattr(hid, "TapePad", lambda *a, **k: made.append(1) or real(*a, **k))
+    gone = gp.Pad(tape=str(tmp_path / "missing.jsonl"))
+    for _ in range(5):
+        gone.poll(1 / 60)
+    assert len(made) == 1 and not gone.on and "tape" in gone.tape_note
+
+
+def test_the_libusb_road_honours_controller():
+    claims = gp.Claims()
+    edge, x360 = gp.Pad(usb=True, controller="edge"), gp.Pad(usb=True, controller="x360")
+    edge.attach(claims, "pad")
+    x360.attach(claims, "p2")
+    assert claims.lend() is x360
+
+
+def test_outputs_go_quiet_when_the_reader_stops():
+    import time as _time
+
+    class Slow(FakeDev):
+        def read(self, n, timeout=0):
+            _time.sleep(0.002)
+            return list(usb_report()) if timeout else []
+    dev = Slow()
+    r = hid.HidPad(EDGE, opener=lambda i: dev)
+    r.send(sony.Effects(light=(9, 9, 9), rumble_low=1.0, right=sony.Trigger("resist", 0.1, 1.0)))
+    deadline = _time.monotonic() + 2
+    while len(dev.writes) < 2 and _time.monotonic() < deadline:
+        _time.sleep(0.01)
+    r.close()
+    r._thread.join(1)
+    last = dev.writes[-1][1:]
+    assert last[sony.C_RUMBLE_LOW] == 0 and last[sony.C_TRIGGER_RIGHT] == sony.T_OFF
+    assert tuple(last[sony.C_RGB:sony.C_RGB + 3]) == (9, 9, 9)
+
+
+def test_the_old_gamepad_table_checks_plan_42s_keys(tmp_path):
+    from hyperspace import config
+    p = tmp_path / "config.toml"
+    p.write_text('[gamepad]\nhid = "false"\ncontroller = "wiimote"\nplayer = 9\n')
+    cfg = config.load(p)
+    (pad,) = [e for e in config.devices(cfg) if e["kind"] == "gamepad"]
+    assert pad["hid"] is True and pad["controller"] == "any" and "player" not in pad
+    notes = " ".join(cfg.get("notes", []))
+    assert "hid = 'false'" in notes and "wiimote" in notes and "player = 9" in notes
+
+
+def test_a_refused_open_says_why_on_the_system_line(monkeypatch):
+    monkeypatch.setattr(gp.glfw, "joystick_present", lambda j: False)
+
+    class Refusing(FakeDev):
+        pass
+
+    def refuse(info):
+        raise OSError("open failed")
+    claims = gp.Claims()
+    claims.hub = hid.HidHub(start=False, enumerate_=lambda v, p: [EDGE], opener=refuse,
+                            start_readers=False)
+    claims.hub.scan()
+    r = next(iter(claims.hub.readers.values()))
+    r._run()                                              # the open fails, the reader dies
+    claims.hub.scan()
+    dev = devices.PadDevice("pad", {"controller": "edge"})
+    dev.io = gp.Pad(hid=True, controller="edge")
+    dev.io.attach(claims, "pad")
+    dev.io.poll(1 / 60)
+    assert "open failed" in dev.last
