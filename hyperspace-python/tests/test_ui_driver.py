@@ -44,6 +44,18 @@ def test_the_instance_controls_answer_the_mouse_and_the_keys(view_page):
     assert reg["view.instances"].value == 12             # nothing else moved
 
 
+@pytest.mark.parametrize("mac", [False, True], ids=["ctrl", "cmd"])
+def test_a_value_is_typed_in_under_either_modifier(view_page, mac):
+    """imgui swaps Ctrl and Cmd as they enter its queue under
+    `config_mac_osx_behaviors`, on by default on a Mac: the driver's Ctrl
+    is whichever key imgui reads as Ctrl, so a value is typed in on both
+    platforms — here under each setting, whatever the machine."""
+    r, d = view_page
+    imgui.get_io().config_mac_osx_behaviors = mac
+    d.run(d.enter("view.instances", 7))
+    assert r.view.instances == 7
+
+
 def test_a_control_not_drawn_is_named_in_the_error(view_page):
     r, d = view_page
     r.view.instances = 1                                 # one copy: no field rows
