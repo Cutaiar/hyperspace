@@ -162,6 +162,14 @@ to set; `startup` stays in the show file for Home. The Drive library's
 as the owner's own, lower-cased (`dial`, `trip`, `plasma heart`,
 `seq-demo`). Dylan's files are untouched. **Both Macs on this build.**
 
+**Plan 42** (2026-11-01, on `plan-42-controllers`): any controller in any
+role and the DualSense Edge over USB and Bluetooth, written from published
+sources the day before the controller arrived
+([`plans/42-controllers.md`](plans/42-controllers.md)). Its D1–D10 are
+recommendations, pending the owner (register rows 544–553); its hand
+checks 407–415 (group AP) start with `tools/hid_probe.py --check` on the
+real pad. `uv sync` adds hidapi.
+
 ## What is left
 
 - **Plan 37: the owner's list of face patterns** (register row 417, D1).

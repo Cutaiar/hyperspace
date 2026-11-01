@@ -35,6 +35,14 @@ applied, this is the hardware. With no pad (none connected, or
 ``[gamepad] enabled = false``) the picture is the same, drawn from the
 table alone, and the header says so.
 
+**The pad in hand** (plan 42): the picture is the model read
+(`gamepad.layout_for`, `gamepad.shown_model` — while lost, the one the
+entry's ``controller =`` names): a DualSense or an Edge draws its own
+glyphs (✕ where an Xbox pad's A is), its touchpad with each finger on it
+(every ``touch:`` row lights it), a tilt bubble that rings red on a shake
+(every ``motion:`` row), the Edge's back and Fn buttons, and the light
+bar's colour beside the header's word.
+
 Read-only: the hover names the control, its param and its source, and a
 click does nothing. Learn pad is still the way onto a control — the
 binding menu on any param (right-click → Learn pad), which the hover

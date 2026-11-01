@@ -6270,6 +6270,88 @@ back cap dimmer than its front, the tesseract's far cube dimmer than its near on
 the tesseract brighter than before (the floor set too high: row 542's
 first try).
 
+## AP. The DualSense Edge, any controller in any role (plan 42)
+
+The owner's Edge, 2026-11-02 (decision register rows 544–553): the first
+checks with the controller in hand. Run `tools/hid_probe.py --check` (or
+the browser lab's checklist) first and commit its findings — it answers
+what these steps assume.
+
+**407. The Edge over USB, as the app reads it.** (Mac, the Edge by cable)
+Headless: `tests/test_pads_sony.py`; `tests/test_pads_hid.py`.
+1. Config: one gamepad entry, `controller = "edge"`. Launch.
+2. SYSTEM: read the pad's line.
+3. Press ✕, ○, □, △, L1, R1, Create, Options, PS, both stick clicks, the
+   mic button, the touchpad click, L4, R4 and both Fn buttons; move both
+   sticks and both triggers.
+4. Show the on-screen pad (SYSTEM ▸ Pad diagram).
+
+*Pass:* (2) `hid: DualSense Edge (usb) · battery n %`. (3) each lights
+its own control on the on-screen pad (✕ where an Xbox pad's A is), the
+triggers fill L2 / R2. (4) the Edge's face: ✕○□△, the touchpad, the
+tilt bubble, L4 / R4, LFn / RFn.
+
+**408. The Edge over Bluetooth.** (Mac, the Edge paired)
+1. Unplug; pair (hold Create and PS until the light bar flashes; System
+   Settings ▸ Bluetooth). Relaunch.
+2. Repeat 407's step 3, then tilt the pad and touch the touchpad.
+
+*Pass:* the line says `(bluetooth)`; every control as over USB; the
+touch dots and the tilt bubble move. Fail: the face works but the touch
+and tilt never move (the pad stayed on its simple report).
+
+**409. Which pad is which role.** (Mac, the Edge and the Xbox pad)
+1. Two gamepad entries: `pad` with `controller = "edge"`, `p2` with
+   `controller = "xbox"`. Plug both, in either order.
+2. Swap the two `controller` values in `config.toml` while the app runs.
+
+*Pass:* (1) the Edge drives the camera and the factory rows whatever was
+plugged first; the Xbox pad's rows are `pad@p2:…`. (2) the roles swap
+within a few seconds, no relaunch.
+
+**410. The identity light.** (Mac, the Edge)
+1. No sink rows. Look at the light bar and the player lights.
+2. Add `light = "#ff0080"` and `player = 3` to the entry.
+
+*Pass:* (1) blue, one player light (the first pad's). (2) pink, three
+player lights (centre and both ends).
+
+**411. Feedback through the pad (idea 7).** (Mac, the Edge, music)
+1. Right-click `fx.kaleido.mix` → Learn sink ▸ `edge:6`. Route RT to
+   `fx.kaleido.mix` (a preset with the 26-preset habit has it).
+2. ROUTING ▸ sinks: `lane:0` → `edge:3`.
+3. Learn sink a palette hue param ▸ `edge:0`.
+
+*Pass:* (1) R2 stiffens as the kaleidoscope mix rises. (2) the heavy
+motor rumbles with the sub band. (3) the light bar follows the hue.
+
+**412. The touch burst (idea 4).** (Mac, the Edge)
+1. Copy `docs/plans/assets/42-controllers/patches/` into the library's
+   `patches/`. On GRAPH, spawn `touch burst` onto the scene → output cable.
+2. Drag a finger round the touchpad; lift it; spread two fingers.
+
+*Pass:* the burst's centre follows the finger and springs home when it
+lifts; the spread bursts harder.
+
+**413. Shake to hit (idea 5).** (Mac, the Edge)
+1. Spawn `shake hit`. Shake the pad once, sharply.
+2. Right-click Env 6's fire → Learn pad, press R4. Press R4.
+
+*Pass:* (1) one flash and punch-in per shake, none from pressing buttons.
+(2) R4 fires the same hit.
+
+**414. Learn pad on the Edge.** (Mac, the Edge)
+1. Right-click a param → Learn pad; press R4. Again on another param;
+   drag a finger left to right. Again; tip the pad right.
+
+*Pass:* rows `pad:RP`, `touch:x` and `motion:roll`, each by Learn's usual op for its target.
+
+**415. A tape plays as the pad.** (Mac, no controller)
+1. `tape = "edge-usb.jsonl"` (407's probe recording) on the entry.
+
+*Pass:* the on-screen pad replays the session, looping; SYSTEM says
+`tape: DualSense Edge`.
+
 ## What no test covers
 
 Only a person can settle these:

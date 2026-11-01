@@ -576,6 +576,16 @@ here; overturn → the change, then the same.
 | 541 | The show block is one line that says what a show is; the pads are set on the desk only | 403 | owner — 2026-10-28 |
 | 542 | The depth cue never spreads over less than 0.05, so a plane figure facing the eye draws at full weight | 406 | (rec) — PR #214 |
 | 543 | The Wispr Flow mark is two shapes in the catalog, Flow mark and Flow capsules (indices 99 and 100, for good) | 405 | owner — 2026-10-17 |
+| 544 | Plan 42 D1: Sony pads read over hidapi, on USB and Bluetooth; GLFW only without hidapi | 407, 408 | (rec) — pending the owner |
+| 545 | Plan 42 D2: one vocabulary — a DualSense's buttons by Xbox name and position; the extras from index 32 | 407 | (rec) — pending the owner |
+| 546 | Plan 42 D3: `controller =` picks which pads an entry may take, in list order | 409 | (rec) — owner asked for it, 2026-11-01; the form pending |
+| 547 | Plan 42 D4: `touch:` and `motion:` are schemes of their own; not live without a finger or a sensor | 407, 412 | (rec) — pending the owner |
+| 548 | Plan 42 D5: a pad's outputs are nine sink ports on its role; an identity light and number with no row | 410, 411 | (rec) — pending the owner |
+| 549 | Plan 42 D6: trigger resistance by the official effects only | 411 | (rec) — pending the owner |
+| 550 | Plan 42 D7: hidapi opens the pad exclusively | 408 | (rec) — pending the owner |
+| 551 | Plan 42 D8: the pad tape is the one recording format | 415 | (rec) — pending the owner |
+| 552 | Plan 42 D9: the on-screen pad draws the model's own face | 414 | (rec) — pending the owner |
+| 553 | Plan 42 D10: the browser lab is a prototype beside the app | — | (rec) — pending the owner |
 
 "—": no hand check shows it; tests only.
 
@@ -9321,3 +9331,21 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
   public show or build, check Wispr's brand terms, or swap in a mark of
   the project's own (keeping the slots).
 - **Judge it.** Check 405.
+
+### 544–553. Plan 42: any controller in any role; the DualSense Edge
+
+- **Asked.** The owner, 2026-11-01: a foundation and an exploration for
+  the DualSense Edge arriving the next day, **Bluetooth as well as USB**,
+  "modular and extensible … Xbox, Edge, Leap, USB controller", and "you
+  should be able to choose which controller is on which role … not too
+  hard-coded". The ideas picked: the touchpad on the zoom burst (4), shake
+  to hit (5), feedback through the pad (7).
+- **Built**, as recommended, before the controller was in hand:
+  [`plans/42-controllers.md`](plans/42-controllers.md) (D1–D10 = rows
+  544–553), the spec it was written against with its sources and
+  vectors ([`plans/assets/42-controllers/sony-hid.md`](plans/assets/42-controllers/sony-hid.md)).
+- **What would overturn it.** The probe's findings (hand checks 407–408):
+  an output length or LED take-over macOS refuses, back buttons that do
+  not report their own bits, sensors on other axes. Each is a constant or
+  a table in `pads/`, named there.
+
