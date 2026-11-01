@@ -120,7 +120,7 @@ class LFO:
     shape: int = 0
     rate: float = 1.0
     sync: int = 0            # index into SYNCS; 0 is Hz
-    depth: float = 1.0
+    depth: float = 0.5
     phase: float = 0.0
     # runtime, never saved
     acc: float = field(default=0.0, repr=False)     # Hz: the integrated cycles

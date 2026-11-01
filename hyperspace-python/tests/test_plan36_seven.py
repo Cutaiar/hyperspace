@@ -49,6 +49,35 @@ def _pairs(section: dict) -> list[tuple[str, str]]:
     return [(w["from"], w["to"]) for w in section.get("wires") or []]
 
 
+# the params whose shipped default moved with the calmer defaults of
+# 2026-10-31 (DECISIONS, "Shipped effect defaults are calm"): every
+# effect's speed, its amount-like faders and an LFO's depth. The corpus
+# files were migrated before that, so where a source names none of these
+# the corpus holds the old default and a migration today lands the new.
+CALMED = {"fx.acid.bend", "fx.acid.twist", "fx.acid.breathe", "fx.deconverge.amount",
+          "fx.deconverge.radial", "fx.displace.amount", "fx.doublevision.amount",
+          "fx.fractals.amount", "fx.glimmer.amount", "fx.plasma.level",
+          "fx.tripcolour.amount", "fx.warp.amount", "fx.wobble.amount", "fx.zoomblur.amount"}
+
+
+def _calmed(key: str) -> bool:
+    return (key in CALMED or (key.startswith("fx.") and key.endswith(".speed"))
+            or (key.startswith("lfo.") and key.endswith(".depth")))
+
+
+def _as_before_calming(made: bytes, source: Path, data: bytes) -> dict:
+    """The fresh migration `made` of `source`, with each calmed default the
+    source left unnamed put back to what the corpus file `data` holds —
+    and nothing else may differ."""
+    doc, want = json.loads(made), json.loads(data)
+    named = json.loads(source.read_text()).get("values") or {}
+    for key, value in doc["values"].items():
+        if value != want["values"].get(key):
+            assert _calmed(key) and key not in named, (source.name, key, value)
+            doc["values"][key] = want["values"][key]
+    return doc
+
+
 def _app_with(tmp_path, name: str, doc: dict):
     """The headless app with `doc` as the user's preset `name`, loaded."""
     app = make_app(tmp_path / "home")
@@ -282,7 +311,8 @@ def test_every_corpus_preset_is_its_sources_seven_and_round_trips(tmp_path):
     untouched it is the same bytes; and it is exactly what
     tools/migrate_library.py makes of its source (`--to`: load the old file,
     save) — so the migration can be re-run from the sources and lands the
-    same files."""
+    same files, up to the defaults a source does not name that moved since
+    (`_as_before_calming`)."""
     paths = sorted((CORPUS / "presets").glob("*.json"))
     assert len(paths) == 25
     assert sorted(p.name for p in SOURCES.glob("*.json")) == [p.name for p in paths]
@@ -292,4 +322,4 @@ def test_every_corpus_preset_is_its_sources_seven_and_round_trips(tmp_path):
         again, notes, _ = headless.resave(path, tmp_path / f"f{k}")
         assert again == data and notes == [], path.name
         made, _, _ = headless.resave(SOURCES / path.name, tmp_path / f"s{k}")
-        assert made == data, path.name
+        assert _as_before_calming(made, SOURCES / path.name, data) == json.loads(data), path.name

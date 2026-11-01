@@ -55,6 +55,7 @@ def test_output_rests_at_half_at_depth_zero_and_swings_with_depth():
 def test_hz_mode_integrates_rate_dt():
     lfos, c = LFOs(), clock_at()
     lf = lfos[0]
+    lf.depth = 1.0                              # the full swing: an LFO's depth ships at 0.5 since the calmer defaults (2026-10-31)
     lf.shape, lf.rate = SHAPES.index("saw"), 2.0
     lfos.step(0.125, 0.125, c)                  # a quarter cycle in: saw at −0.5
     assert lf.x == pytest.approx(0.25) and lf.out == pytest.approx(REST - 0.25)
@@ -99,6 +100,7 @@ def test_a_tap_does_not_move_a_running_synced_lfo_but_the_trigger_does():
     lfos, c = LFOs(), clock_at(120.0)
     bar, hz = lfos[0], lfos[1]
     bar.sync = SYNCS.index("1 bar")
+    bar.depth = hz.depth = 1.0                  # the full swing: an LFO's depth ships at 0.5 since the calmer defaults (2026-10-31)
     bar.shape = hz.shape = SHAPES.index("saw")
     hz.rate = 0.7
     run(lfos, c, 0.0, 3.3)                      # mid-bar, mid-cycle
@@ -375,6 +377,7 @@ def test_an_lfo_owning_another_lfos_depth_changes_its_output_the_same_frame():
     reg, c, lfos = rig()
     one, two = lfos[0], lfos[1]
     one.shape, one.rate = SHAPES.index("sine"), 1.0    # a quarter cycle per frame below
+    one.depth = 1.0                                     # the full swing: an LFO's depth ships at 0.5 since the calmer defaults (2026-10-31)
     two.depth = 0.0                                     # silent on its own
     two.shape, two.rate = SHAPES.index("square"), 1.0
     table = Bindings([Binding("lfo:0", "lfo.2.depth", "push", 1.0)])

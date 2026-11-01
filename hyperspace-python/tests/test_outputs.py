@@ -869,6 +869,10 @@ def test_through_bends_the_hands_with_the_shape(ctx):
 
     S = O.Switches
     r = rig(ctx)
+    # the warp at the amount this was written against: it ships at 0.2
+    # since the calmer defaults (2026-10-31), which bends the hands too
+    # little here to clear the fifth below
+    r.fx.state.values["warp"]["amount"] = 0.5
     over, through = run(ctx, r, wviews(ctx, r, S(scene=False), Thru(scene=False)))
     lit_o = over[..., :3].max(axis=2) > 40
     lit_t = through[..., :3].max(axis=2) > 40

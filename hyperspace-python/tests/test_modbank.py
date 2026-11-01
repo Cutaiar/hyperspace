@@ -173,6 +173,7 @@ def test_an_lfo_owning_another_with_gaps_lands_the_same_frame():
     reg, c, lfos = rig([1, 3, 7])
     three, seven = lfos.voice(3), lfos.voice(7)
     three.shape, three.rate = SHAPES.index("sine"), 1.0
+    three.depth = 1.0                           # the full swing: an LFO's depth ships at 0.5 since the calmer defaults (2026-10-31)
     seven.depth = 0.0
     seven.shape, seven.rate = SHAPES.index("square"), 1.0
     reg["lfo.7.depth"].set(0.0)
