@@ -28,6 +28,12 @@ dependencies = [
     # never see one — read over libusb, which libusb-package bundles
     "pyusb>=1.3.1",
     "libusb-package>=1.0.30.0",
+    # Sony pads (DualSense, DualSense Edge) over USB and Bluetooth (pads/hid.py,
+    # plan 42): the back buttons, Fn, touchpad, motion and every output (light
+    # bar, rumble, trigger resistance) live in vendor-defined report bytes GLFW
+    # never shows. The `hidapi` wheel bundles the C library. Imported only when
+    # a pad entry with `hid` on opens, so importing app pulls none of it
+    "hidapi>=0.14",
     # OSC devices (osc.py, plan 27 B4): a phone app or any OSC sender as a
     # `[[devices]] kind = "osc"` entry. Pure Python; imported only when such
     # an entry opens, so importing app pulls none of it
