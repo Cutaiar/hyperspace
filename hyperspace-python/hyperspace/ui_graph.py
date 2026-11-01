@@ -113,7 +113,14 @@ onto a route or a modifier's input the same way; several nodes dragged
 together only move. A compile error colours an effect
 node's title and is its hover (`effect_errors`). The selected effect is
 the panel's one selection, shared with the FX page (`Panel.fx_selected`,
-`share`, `select_effect`).
+`share`, `select_effect`). The selected node itself is published on the
+panel (2026-10-31, `publish`: `Panel.graph_selected`, the one selected
+node's id, and `graph_selected_at`) for whoever is not this view — a
+controller's node mode, the side pane's fold of every page — as of the
+last frame this page drew; a preset landing without that node lets it go
+on any page (`settle`); `select_id` / `Panel.select_graph_node` select
+one from outside, and `node_params` / `Panel.graph_selected_params` are
+its registry ids.
 
 **The wired frame** (plan 35 G): the canvas is the preset's wired frame,
 in the owner's ids and words — every node of it titled for what it is
@@ -650,6 +657,7 @@ def page(panel, dt: float) -> None:
     sel = _selection(st, view)
     if sel is not None and escaped():           # Esc closes the details: nothing selected
         st["deselect"], sel = True, None
+    publish(panel, st, sel)
     share(panel, st, sel)
     _head(panel, st, view, sel is not None)
     imgui.separator()
@@ -863,11 +871,92 @@ def select_node(panel, name: str) -> None:
     """Select frame node `name` (plan 35 U, OUTPUT's "open on GRAPH":
     `output.2`, `output.all`) and centre it on the canvas next frame, the
     GRAPH page opened."""
+    select_id(panel, f"render:{name}")
+
+
+def select_id(panel, nid: str) -> None:
+    """Select canvas node `nid` — `Panel.graph_selected`'s form: a frame
+    node's `render:acid.2`, a modifier's own id — and centre it on the
+    canvas next frame (`_select`), the GRAPH page opened: the one request
+    path, `select_node`'s and `Panel.select_graph_node`'s."""
     st = _state(panel)
-    st["select_node"] = f"render:{name}"
+    st["select_node"] = nid
     pid = "ui.page"
     if pid in panel.reg:
         panel.reg[pid].set(ui.PAGE_KEYS.index("graph"))
+
+
+# ---------------------------------------------------------------- the selection, published
+
+def publish(panel, st: dict, sel) -> None:
+    """The canvas's selection on the panel (2026-10-31: `Panel.
+    graph_selected`, `graph_selected_at`), for whoever is not this view —
+    a controller's node mode, the side pane's fold of every page. The one
+    selected node's id when `sel` is a node and it is the only node
+    selected; None for nothing, a cable, a bundle, a group or several
+    nodes. Written each frame this page draws (a deleted node is gone from
+    the view, so the next frame publishes None), so off the page the value
+    is as of the last frame GRAPH was drawn — until `settle` sees a preset
+    land without the node. `graph_selected_at` is imgui's frame count when
+    the value last changed. An effect node's instance is `Panel.
+    fx_selected` as well (`share`); that stays as it is."""
+    nid = None
+    if sel is not None and sel[0] == "node" and len(selected_ids(st)) == 1:
+        nid = sel[1].id
+    if nid != getattr(panel, "graph_selected", None):
+        panel.graph_selected = nid
+        panel.graph_selected_at = imgui.get_frame_count()
+
+
+def settle(panel) -> None:
+    """Every frame, on any page (`Panel._draw`): the loaded preset's graph
+    spec is a new object after a load or a new (and after a graph edit) —
+    seen to have changed, a published node the preset no longer holds
+    (`still_held`) is let go of, so a load on the PRESETS page does not
+    leave a controller on a node that is gone. One identity test a frame;
+    the names are read only when the spec moved."""
+    st = panel.__dict__.get(STATE)
+    nid = getattr(panel, "graph_selected", None)
+    presets = getattr(getattr(panel, "library", None), "presets", None)
+    spec = getattr(getattr(presets, "graph", None), "spec", None)
+    if st is None or spec is st.get("spec_seen"):
+        return
+    st["spec_seen"] = spec
+    if nid is not None and not still_held(panel, nid, spec):
+        panel.graph_selected = None
+        panel.graph_selected_at = imgui.get_frame_count()
+
+
+def still_held(panel, nid: str, spec) -> bool:
+    """Does the preset as it now stands hold canvas node `nid`: a frame
+    node (`render:…`) the spec names, a modifier (`mod.N`, `modifiers.
+    next_id`) the table holds; any other node — a device's, a lane's, a
+    group's — is not the preset's and stays."""
+    if nid.startswith("render:"):
+        return nid.partition(":")[2] in graphview.frame_names(spec)
+    if nid.startswith("mod."):
+        table = getattr(ui_routing.router_of(panel), "table", None)
+        return table is None or table.modifier(nid) is not None
+    return True
+
+
+def node_params(panel, nid: str) -> list[str]:
+    """The registry ids under canvas node `nid` (`Panel.
+    graph_selected_params`): the ids with `graphview.params_of`'s prefix —
+    a copy's are its original's (`fx.<of>`), as its side-panel header says
+    — the continuous ones first and then the rest, each run in registry
+    order; an alias is left out, as the side panel leaves it. [] for a node
+    with no param (a device's, a lane's). A scan of the registry when
+    asked, never per frame."""
+    reg = panel.reg
+    view = _state(panel).get("view")
+    n = view.node(nid) if view is not None else None
+    name = nid.partition(":")[2] if nid.startswith("render:") else nid
+    of = getattr(n.ref, "effect", "") if n is not None and graphview.kind_of(name) == "copy" else ""
+    pre = graphview.params_of(name, of)
+    head = pre + "."
+    ids = [p.id for p in reg if not p.alias and (p.id == pre or p.id.startswith(head))]
+    return sorted(ids, key=lambda pid: reg[pid].kind is not Kind.CONTINUOUS)
 
 
 def effect_node(view: graphview.View, name: str) -> graphview.VNode | None:

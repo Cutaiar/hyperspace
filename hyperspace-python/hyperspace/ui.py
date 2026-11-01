@@ -673,6 +673,19 @@ class Panel:
         # plan 33 U: the effect instance selected — on GRAPH (its node) or on
         # the FX page (its row): one selection both pages show; saved nowhere
         self.fx_selected: str | None = None
+        # 2026-10-31: the GRAPH page's selection, published for whoever is
+        # not the graph view — a controller's node mode, the side pane's
+        # fold of every page. The one selected canvas node's id
+        # (`render:acid.2`, a modifier's id); None while nothing, a cable, a
+        # bundle, a group or several nodes are selected. Written by
+        # `ui_graph.publish` each frame GRAPH draws, so off the page it is
+        # as of the last frame GRAPH was drawn (the pane-always-on work
+        # removes that), except that a preset landing without the node
+        # (`ui_graph.settle`: a load, a new) lets it go on any page. An
+        # effect's node is `fx_selected` as well (`ui_graph.share`).
+        # `graph_selected_at`: imgui's frame count when it last changed.
+        self.graph_selected: str | None = None
+        self.graph_selected_at: int = 0
         self.library = library      # library.Library, or None: no strips, no project row
         # the F1–F8 preset bank is the open project's (library.Project)
         self.bank = bank if bank is not None else (
@@ -1607,6 +1620,7 @@ class Panel:
         # held hand learn is never parked behind a hidden or collapsed panel
         ui_routing.modal(self)
         ui_desk.tick(self)      # a picked control lets go by itself (ui_desk.PICK_S)
+        ui_graph.settle(self)   # a preset landed without the published node: let it go
         if self.cheatsheet:
             self._draw_cheatsheet()
         # the pad first: the desk reads its height to keep clear of it (ui_desk.room)
@@ -1884,6 +1898,22 @@ class Panel:
         wiring = (getattr(self.renderer, "wiring", None) or getattr(gs, "wiring", None)
                   or EMPTY)
         return wiring, getattr(gs, "spec", None)
+
+    def select_graph_node(self, nid: str) -> None:
+        """Select canvas node `nid` on GRAPH — `graph_selected`'s form:
+        `render:acid.2`, a modifier's id — centred next frame, the page
+        opened: the request path OUTPUT's "open on GRAPH" takes
+        (`ui_graph.select_id`), for whoever drives the selection from
+        outside the graph view."""
+        ui_graph.select_id(self, nid)
+
+    def graph_selected_params(self) -> list[str]:
+        """The registry ids under `graph_selected` (`graphview.params_of`:
+        a copy's are its original's), the continuous ones first, each run in
+        registry order; [] with nothing selected or a node with no param
+        (`ui_graph.node_params`). Asked, not drawn: nothing per frame."""
+        nid = getattr(self, "graph_selected", None)
+        return [] if nid is None else ui_graph.node_params(self, nid)
 
     def rig_now(self):
         """The open show's rig wires (plan 36 T1, `graph.RigWires`: the bus
