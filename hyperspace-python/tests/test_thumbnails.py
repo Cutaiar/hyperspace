@@ -304,10 +304,12 @@ def test_the_page_wants_the_picture_nodes_it_draws_on_screen(rig):
     # off screen: nothing
     st["seen_rect"] = ((5000.0, 5000.0), (6000.0, 6000.0))
     assert ui_graph.thumb_wants(st, view, lambda nid: ((0.0, 0.0), (10.0, 10.0))) == {}
-    # hidden by preset only: not wanted (and so never copied)
+    # hidden by preset only: not wanted (and so never copied). Since
+    # 2026-10-31 preset only keeps every channel, so party-trip leaves no
+    # picture node off: one is left off by hand, as a folded group's member is
     st["seen_rect"] = everywhere
     st["preset_only"] = True
-    st["hide"] = ui_graph.hidden_ids(st, view)
+    st["hide"] = ui_graph.hidden_ids(st, view) | {pics[0].id}
     hidden = {ui_graph.thumb_name(n) for n in pics if n.id in st["hide"]}
     assert hidden
     got = ui_graph.thumb_wants(st, view, lambda nid: ((0.0, 0.0), (10.0, 10.0)))
