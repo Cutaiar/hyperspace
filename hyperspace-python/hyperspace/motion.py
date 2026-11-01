@@ -198,6 +198,12 @@ class Motion:
 
 
 OFF = Motion("off")
+# the feel a new route row is made with (the owner, 2026-10-31, after the
+# show of the 30th: every new route is a spring): the named `smooth`,
+# critically damped, so a reading lands without overshoot. A row keeps its
+# own feel on file; `Binding.motion`'s dataclass default stays None so a
+# row written without one still reads as auto (its source's feel)
+DEFAULT_ROUTE_FEEL = Motion("spring", dur=SPRINGS["smooth"][0], bounce=SPRINGS["smooth"][1])
 
 
 class Follower:
