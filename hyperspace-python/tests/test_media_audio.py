@@ -148,14 +148,20 @@ def small_window(monkeypatch):
     monkeypatch.setattr(video, "AUDIO_RECENTRE_S", 1.0)
 
 
+WAIT_S = 10.0   # every gate and poll waits this long at most: headroom for a loaded machine
+
+
 class _Gate:
     """`av.AudioResampler` with a gate in `resample`: the first call sets
     `inside` and waits for `release`, so a test can act while a window
-    decode is provably mid-loop."""
+    decode is provably mid-loop. `calls` counts every `resample`, so a
+    test can say how far the loop went after the gate — state, not
+    wall time."""
 
     def __init__(self, monkeypatch):
         self.inside = threading.Event()
         self.release = threading.Event()
+        self.calls = 0
         real = av.AudioResampler
         gate = self
 
@@ -164,15 +170,16 @@ class _Gate:
                 self._r = real(*a, **kw)
 
             def resample(self, fr):
+                gate.calls += 1
                 if not gate.inside.is_set():
                     gate.inside.set()
-                    gate.release.wait(3.0)
+                    gate.release.wait(WAIT_S)
                 return self._r.resample(fr)
 
         monkeypatch.setattr(av, "AudioResampler", Gated)
 
 
-def _until(fn, timeout=5.0):
+def _until(fn, timeout=WAIT_S):
     end = time.monotonic() + timeout
     while time.monotonic() < end:
         v = fn()
@@ -431,7 +438,10 @@ def test_a_window_is_decoded_into_one_buffer(pcm_clip, opened):
         tracemalloc.stop()
     assert a.nbytes == 3 * RATE * 8
     assert a._win.data.base is None                     # owns its memory: no view of a bigger one
-    assert peak < a.nbytes * 1.5                        # the old way peaked at 2× and more
+    # the old way held the chunks and their concatenation at once: 2× and more.
+    # 1.75 leaves room for the resampler's frames and whatever else the
+    # process allocates meanwhile (tracemalloc counts every thread)
+    assert peak < a.nbytes * 1.75
 
 
 def test_a_clip_of_unknown_length_holds_only_what_is_there(pcm_clip, opened, monkeypatch):
@@ -449,7 +459,9 @@ def test_a_clip_of_unknown_length_holds_only_what_is_there(pcm_clip, opened, mon
         tracemalloc.stop()
     assert not a.whole and a.held == pytest.approx((0.0, 3.0), abs=0.002)
     assert a.nbytes == 3 * RATE * 8
-    assert peak < 3 * a.nbytes                           # doublings and the trim, never the window
+    # 2 s → 4 s doubling (2 + 4) and the trim to 3 s: 2.33× the clip; 4× is
+    # headroom for the process's other allocations. The window would be 40×
+    assert peak < 4 * a.nbytes
     assert peak < 8 * 2**20
     assert _peak_hz(a.read(RATE, RATE)[:, 0]) == pytest.approx(440.0, abs=1.0)
 
@@ -480,7 +492,7 @@ def test_status_is_fetching_while_the_transport_is_outside_the_window(
     def slow_second(self, *args):
         calls.append(args[3])
         if len(calls) == 2:
-            gate.wait(3.0)
+            gate.wait(WAIT_S)
         return real(self, *args)
 
     monkeypatch.setattr(video.Soundtrack, "_decode", slow_second)
@@ -548,13 +560,13 @@ def test_an_abandoned_decode_publishes_nothing(pcm_clip, opened, monkeypatch):
     def held_up(self, *args):
         win = real(self, *args)
         inside.set()
-        release.wait(3.0)
+        release.wait(WAIT_S)
         return win
 
     monkeypatch.setattr(video.Soundtrack, "_decode", held_up)
     s = opened(pcm_clip)
     old = _audio_threads()
-    assert inside.wait(3.0) and len(old) == 1
+    assert inside.wait(WAIT_S) and len(old) == 1
     s.audio.close(0.05)                                   # gives up on the thread mid-publish
     assert s.audio.held is None
     release.set()
@@ -614,7 +626,7 @@ def test_a_far_scrub_abandons_the_window_being_decoded(long_clip, opened, small_
 
     monkeypatch.setattr(video.Soundtrack, "_decode", spy)
     s = opened(long_clip)
-    assert gate.inside.wait(3.0)                             # mid-decode of 0..4
+    assert gate.inside.wait(WAIT_S)                          # mid-decode of 0..4
     s.want(25.0)
     gate.release.set()
     assert _until(lambda: s.audio.held is not None and s.audio.held[0] > 22.0)
@@ -683,11 +695,14 @@ def test_an_empty_window_is_not_held(long_clip, opened, small_window, monkeypatc
 # -- never on the frame thread ----------------------------------------------------
 
 def test_opening_never_blocks_the_caller(pcm_clip, opened, monkeypatch):
+    """`open`, `want` and `read` return while `av.open` is still held shut:
+    the state says so (nothing probed, nothing held), and the clock only
+    has to beat the gate's own wait, which a blocked caller would sit out."""
     real = av.open
     gate = threading.Event()
 
     def slow(*a, **kw):
-        gate.wait(2.0)
+        gate.wait(WAIT_S)
         return real(*a, **kw)
 
     monkeypatch.setattr(av, "open", slow)
@@ -695,8 +710,9 @@ def test_opening_never_blocks_the_caller(pcm_clip, opened, monkeypatch):
     s = opened(pcm_clip)
     s.want(1.0)
     out = s.audio.read(RATE, 512)
-    assert time.monotonic() - t0 < 0.1
-    assert s.audio.status == FETCHING and not out.any()
+    elapsed = time.monotonic() - t0
+    assert not gate.is_set() and s.audio.status == FETCHING and not out.any()
+    assert elapsed < WAIT_S / 2          # a caller that blocked on the open would wait WAIT_S
     gate.set()
     assert _until(lambda: s.audio.status == READY)
 
@@ -713,16 +729,17 @@ def test_close_joins_the_audio_thread_too(long_clip, opened, small_window):
 
 def test_close_is_quick_mid_decode(long_clip, opened, small_window, monkeypatch):
     """Review 10: `close` while a window decode is provably inside its
-    loop; the thread is gone within the budget."""
+    loop. Quick means the loop stops at its next check instead of
+    finishing the window: the gated `resample` is the only one that ran,
+    and the join found the thread gone — state, not a stopwatch."""
     gate = _Gate(monkeypatch)
     s = opened(long_clip)
-    assert gate.inside.wait(3.0)
+    assert gate.inside.wait(WAIT_S)
     assert _audio_threads() and s.audio.status == FETCHING   # inside, nothing published yet
     threading.Timer(0.05, gate.release.set).start()          # let the loop turn once more
-    t0 = time.monotonic()
-    s.close()
-    assert time.monotonic() - t0 < 0.5
-    assert not _audio_threads()
+    s.close(timeout=WAIT_S)
+    assert not _audio_threads()                              # the join returned with it gone
+    assert gate.calls == 1                                   # no frame decoded past the stop
     assert s.audio.held is None                              # the window was never published
 
 
@@ -737,7 +754,7 @@ def test_an_abandoned_thread_never_resumes_beside_a_new_one(pcm_clip, opened, mo
     def slow(*a, **kw):
         opens.append(a[0])
         if len(opens) <= 2:                                  # the first video and audio opens hang
-            gate.wait(3.0)
+            gate.wait(WAIT_S)
         return real(*a, **kw)
 
     monkeypatch.setattr(av, "open", slow)
