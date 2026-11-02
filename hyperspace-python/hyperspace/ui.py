@@ -706,6 +706,7 @@ class Panel:
         # every launch, as the cheat sheet is — the desk keeps its room
         # until the SYSTEM page's switch asks for the pad
         self.pad_diagram = False
+        self.pad_view = 0       # ui_pad_views.VIEWS: map, faithful, lanes, cockpit
         self.page = PAGE_KEYS.index("graph")    # index into PAGES; GRAPH opens first
         self.history = PageHistory(self.page)   # ⌘[ / ⌘]: back and forward (app.frame)
         self.ghosts = 0             # ghost markers drawn this frame (tests read it)
@@ -737,12 +738,15 @@ class Panel:
         """Let go of what the panel holds outside Python: the GRAPH page's
         node editor context (ui_graph.py, plan 28 N2). app.py calls it on
         quit and on ⌘R, before imgui shuts down; a panel that never drew
-        the page holds none; the GRAPH canvas's tap (`canvas_tap`,
-        2026-11-02) is let go with it. Safe to call twice."""
+        the page holds none — the GRAPH canvas's tap (`canvas_tap`,
+        2026-11-02) and the pad drawings' NanoVG (ui_pad_nvg) go with it,
+        while the control window's GL is up. Safe to call twice."""
         ui_graph.close(self)
         tap, self.canvas_tap = getattr(self, "canvas_tap", None), None
         if tap is not None:
             tap.close()
+        from . import ui_pad_nvg
+        ui_pad_nvg.close(self)
 
     def _register_panel_params(self) -> None:
         """The panel's own state as ``ui.*`` params: the window, the sheet,
@@ -776,6 +780,10 @@ class Panel:
                  tip="The gamepad drawn over the desk, top-left: every control it sends, "
                      "lit where a row maps it and named with what it does. A grey label "
                      "is the app's own hand on a free axis (orbit, zoom, the 4D spin).")
+        from . import ui_pad_views
+        r.enum("ui.pad_view", "Pad view", lambda: self.__dict__.get("pad_view", 0),
+               lambda i: setattr(self, "pad_view", int(i)), list(ui_pad_views.VIEW_LABELS),
+               group="ui", persist=False, modulatable=False, tip=ui_pad_views.VIEW_TIP)
         r.enum("ui.page", "Page", lambda: self.page,
                lambda i: setattr(self, "page", int(i)), [lb for _, lb, _ in PAGES],
                group="ui", persist=False, modulatable=False,
@@ -2475,6 +2483,9 @@ class Panel:
         if "ui.pad_diagram" in self.reg:
             self._check("ui.pad_diagram")
             imgui.same_line()
+            if "ui.pad_view" in self.reg:
+                self._combo("ui.pad_view", width=110)
+                imgui.same_line()
         self._button("app.restart", "Restart process", small=True)
         if self.reloader is not None:
             imgui.text_disabled(f"hot reload: {self.reloader.status or 'watching'}")

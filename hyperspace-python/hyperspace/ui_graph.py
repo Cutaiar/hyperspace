@@ -3349,13 +3349,27 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
                             if n.kind in graphview.FRAME_VKINDS else n.status)
     if isinstance(n.ref, rgraph.SwitchNode):
         _switch_block(panel, view, n)
-    if n.id == PAD_NODE:                        # the pad, drawn: what each control does
+    if is_pad_node(panel, n):                   # the pad, drawn: what each control does
+        if "ui.pad_view" in panel.reg:          # its readout (map, faithful, lanes, cockpit),
+            panel._combo("ui.pad_view", width=-1)   # as on SYSTEM; the header steps them too
         ui_pad.inline(panel)
+        return                                  # — the picture says what the port lines would
     if _param_rows(panel, st, n):
         return
     for port in n.ports:
         if port.patched:
             imgui.text_disabled(f"{port.name}: {_said(port.live)}")
+
+
+def is_pad_node(panel, n: graphview.VNode) -> bool:
+    """Is `n` the node of the pad the panel's picture reads (`panel.pad`:
+    the first open gamepad entry), whatever its role is called — plan 42
+    lets it be "edge" or "xbox", not only "pad"? A second pad's node is
+    not: the picture and its mappings are the primary pad's."""
+    if n.kind != "device" or getattr(n.ref, "kind", "") != "gamepad":
+        return False
+    io = getattr(n.ref, "io", None)
+    return io is not None and io is getattr(panel, "pad", None)
 
 
 def wire_px(side: float, fb_scale: float) -> int:
@@ -3395,7 +3409,6 @@ def _wireframe(panel) -> None:
 
 # ---------------------------------------------------------------- a node's controls (2026-10-24)
 
-PAD_NODE = "device:pad"  # the primary pad's node: its details draw the pad (ui_pad.inline)
 FOLD_AT = 12             # more param rows than this: each group under its own header
 UNWIRED = imgui.ImVec4(0.58, 0.58, 0.61, 0.55)   # an input chip nothing feeds: faint
 OPEN_TIP = "Open this node's page, with it selected there"

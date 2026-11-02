@@ -6352,6 +6352,58 @@ lifts; the spread bursts harder.
 *Pass:* the on-screen pad replays the session, looping; SYSTEM says
 `tape: DualSense Edge`.
 
+**416. The pad window's four readouts.** (Mac, the Edge)
+Headless: `tests/test_ui_pad.py` (each view, each pad, no scrolling).
+1. SYSTEM: Pad diagram on. Click the view's name in the pad window's
+   header (MAP ▸) until it is back to Map; or pick from Pad view.
+2. In each: press buttons, move the sticks and triggers, touch the
+   touchpad, tilt and shake the pad; hover a control.
+
+*Pass:* Faithful lights each control where it sits on the Edge, the
+fingers on the touchpad, the light bar's colour; Lanes moves every lane
+and names its mapping; Cockpit's dials trail the sticks, the trigger arcs
+fill, R4 / L4 light on the edges and each press scrolls along the foot;
+the desk under the window never moves; a hover names the control's
+mapping.
+
+**417. Faithful and Cockpit drawn by NanoVG on the Mac.** (Mac, the Edge)
+Headless: `tests/test_ui_pad.py` (`test_the_nanovg_pen_draws_every_call_the_drawings_make`,
+`test_the_surface_fits_the_design_space_and_ends_its_frame_on_an_error`,
+`test_where_nanovg_cannot_draw_the_room_says_why`). New modules: restart
+the app.
+1. Pad diagram on; step to Faithful, then Cockpit. Compare with the
+   browser lab (`prototypes/edge-lab/`) on the same pad.
+2. Resize the control window (the pad window's room follows it).
+3. Quit (⌘Q).
+4. Start the app with `HYPERSPACE_NANOVG=0 uv run hyperspace`; step to
+   Faithful.
+
+*Pass:* in 1 the two read as the lab's drawings, crisp on the Retina
+screen (smooth curves, the light bar's glow, sharp small type), the
+terminal says no `pad drawings: off (…)`, and the visuals' frame rate
+does not drop with the pad window open; in 2 they stay crisp at every
+size; in 3 the app quits cleanly (no crash report); in 4 the room says
+Faithful is drawn with NanoVG, that it is off, and that Map and Lanes
+still work — and they do. (1 run on Dillon's Mac 2026-11-02: NanoVG drew
+both, they looked right.)
+
+**418. The pad's node on GRAPH draws the pad, whatever its role.** (Mac, the Edge first, the Xbox pad second)
+Headless: `tests/test_graph_edit.py` (`test_the_pad_nodes_details_draw_the_pad`),
+`tests/test_ui_pad.py` (`test_lanes_stay_readable_in_graphs_side_panel`).
+1. GRAPH: select the Edge's node (`edge`, the first gamepad entry).
+2. Pick Map, Faithful, Lanes and Cockpit from the drop-down above the
+   picture (or click the view's name in its header); press, touch and
+   tilt the pad.
+3. Drag the side panel's grip to its narrowest; look at Lanes.
+4. Select the Xbox pad's node (`xbox`).
+
+*Pass:* in 1 the side panel draws the pad (no list of "not live" ports
+under it); in 2 each readout draws there and follows the pad; in 3 Lanes
+is one readable column (the side panel scrolls to its foot), and the
+header's count shortens to a number rather than run off the edge; in 4
+the side panel lists the Xbox pad's patched ports, no picture (the
+picture is the first pad's).
+
 ## What no test covers
 
 Only a person can settle these:
@@ -6486,3 +6538,6 @@ Only a person can settle these:
   - that the control window sees this frame's thumbnails (`_thumbnails` flushes);
   - the face patterns themselves (375), which only the owner can name;
   - the moved effect's area frame on a preset saved before plan 37 (376).
+- NanoVG in the control window on the Mac's GL (417): the tests draw the
+  lab's drawings through a stand-in NanoVG, and the shots were rendered
+  on Mesa's software rasteriser; one look on Dillon's Mac so far.

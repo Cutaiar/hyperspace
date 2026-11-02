@@ -201,12 +201,57 @@ Settled as "later", not dropped — each picks up from here:
   `controller =`; mechanical), the stored names (`pad:A`, `axis:LT`,
   `kind = "gamepad"`, role `pad` — a file-format change with a migration
   and a backup; the proposal keeps these).
-- **Which readout the on-screen pad takes.** The lab has three
-  (Faithful, Lanes, Cockpit); the app's pad diagram is today the old
-  layout drawn with the Edge's face. Pick the one that reads best
-  mid-set and the diagram is rebuilt in its style — or keep today's.
 - **Choosing which controller is which role in the app**, not only in
   `config.toml` (which is re-read live): a SYSTEM-page control.
+
+## Built since: the pad window's readouts (Dillon, 2026-11-02)
+
+Dillon liked all three of the lab's readouts and wanted any of them, so the
+pad window has four, picked by **Pad view** (`ui.pad_view`, on SYSTEM
+beside Pad diagram) or by clicking the view's name in the window's header:
+**Map** (the labelled picture: what every control does — the default),
+**Faithful** (the controller from above), **Lanes** (every lane a row can
+name, its value and its mapping, then what the pad is being sent) and
+**Cockpit** (big dials and trigger arcs, the tilt, the back buttons on the
+edges, the last presses). `ui_pad_views.py`; each draws in the map's own
+room, so the desk never moves; a hover names a control's mapping. The
+view resets to Map at launch, as Pad diagram itself does.
+
+Faithful and Cockpit are the lab's own drawing: its canvas code
+(`drawFaithful`, `drawCockpit`) ported line for line, in the lab's
+1000 × 620 design space, fitted to the room (`ui_pad_lab.py`), written
+against a `Pen` — the canvas's calls (`DRAW_CALLS`). The first draw-list
+sketches of the two read as rough copies; two renderers were then tried
+on the same port, NanoVG and the draw list, and NanoVG kept:
+
+- **NanoVG** (`ui_pad_nvg.py`), imgui-bundle's vector renderer, draws into
+  a texture the size of the room in the window's pixels. Gradients,
+  feathered edges and image paints are there for the interface revamp
+  Dillon has planned, and its tessellation runs in C: a frame of Faithful
+  cost 0.6 ms of Python against the draw-list pen's 3.7 ms (measured on
+  the build machine). Seen on Dillon's Mac, 2026-11-02.
+- **One renderer.** The draw-list pen was dropped (Dillon: no two render
+  paths). Where NanoVG cannot run — no GL (the tests' headless panel), it
+  will not start, or ``HYPERSPACE_NANOVG=0`` — the room says why and that
+  Map and Lanes still work; the terminal says so, once
+  (``pad drawings: off (…)``). Moving off OpenGL one day is one new pen.
+- **Its GL objects go with the panel** (`Panel.close`, on quit and ⌘R,
+  while the control window's context is up), each room (the pad window,
+  GRAPH's side panel) keeps its own framebuffer, and a room gone quiet
+  lets its framebuffer go.
+
+An Xbox pad gets the same hand: the left stick high, the D-pad low, the
+guide button between View and Menu. A stick's hover names its click and
+both its axes; Lanes lists a stick-direction lane (``axis:L.N``) where a
+row maps one, and keeps its columns readable (`LANE_COL_MIN`).
+
+The pad's node on GRAPH draws the same picture, with the same header and
+readouts, whatever the pad's role is called (it looked for a node named
+``device:pad``, so an entry with ``role = "edge"`` drew nothing).
+
+![Faithful](assets/42-controllers/pad-edge-faithful.png)
+![Lanes](assets/42-controllers/pad-edge-lanes.png)
+![Cockpit](assets/42-controllers/pad-edge-cockpit.png)
 
 ## Not in this plan
 
