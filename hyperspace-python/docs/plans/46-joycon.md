@@ -258,6 +258,31 @@ An independent code review of the PR found ten things; what changed:
   owner's Bluetooth address among them); the squash merge keeps them
   out of `main`.
 
+A second pass found ten more; what changed:
+
+- **The (R)'s face reads by position** (D2, as the (L)'s and the module
+  promised): its B, the bottom button, is `pad:A`; its A `pad:B`; its Y
+  `pad:X`; its X `pad:Y` — the glyphs keep its letters; the simple
+  report likewise, and its stick's click is byte 2's 0x08 (0x04 is the
+  left stick's). The probe's (R) prompts name the position.
+- **A recentred stick still reaches ±1**: the reach each way shifts with
+  the centre (`recentre`), so the probe's 0.99 / 0.976 become 1.0.
+- **The low rumble band keeps its half-step** (an odd amplitude code's
+  0x80 flag in the band's first byte) and its frequency code stops at
+  0x7F (`LOW_BAND_MAX_HZ`).
+- **`close()` cuts a connect sequence short**: every wait in `setup`
+  checks the reader is alive, so a pad that never answers cannot hold a
+  restart for 12 s.
+- **A Nintendo pad is never seized on a guess about its bus**
+  (`hid._on_usb`): hidapi's `bus_type` where it says, else the interface
+  number (USB has one, Bluetooth reports −1), else USB.
+- **An axis map set on the pad always wins** (`gesture.axis_map_of`):
+  `Pad.axis_map` is None until set, so the identity set on purpose can
+  override a Joy-Con's built map.
+- The reader's per-codec state is declared (`_sent_leds`, `_frame`); the
+  Lanes view takes its sensor scales from the lab's `ACCEL_FS` /
+  `GYRO_FS`; `.gitignore` keeps only the probe's two output names.
+
 ## Not in this plan
 
 - The browser lab (`prototypes/edge-lab/`) is untouched (D6).

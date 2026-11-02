@@ -304,13 +304,17 @@ def _lane_rows(r: Reading, routed=frozenset()) -> list[tuple]:
             (f"centre ({r.centre_from})", f"{cx}, {cy}", None, 0.5, False)]))
     if r.sensors is not None:
         (gx, gy, gz), (ax, ay, az) = r.sensors
+        a_fs, g_fs = ui_pad_lab.ACCEL_FS, ui_pad_lab.GYRO_FS      # the lab's full scales
+
+        def u(v: float, fs: float) -> float:
+            return min(1.0, max(0.0, v / (2 * fs) + 0.5))
         out.append(("sensors (pad axes)", [
-            ("accel x", f"{ax:+.2f} g", min(1.0, max(0.0, ax / 4 + 0.5)), 0.5, True),
-            ("accel y", f"{ay:+.2f} g", min(1.0, max(0.0, ay / 4 + 0.5)), 0.5, True),
-            ("accel z", f"{az:+.2f} g", min(1.0, max(0.0, az / 4 + 0.5)), 0.5, True),
-            ("gyro x", f"{gx:+.0f}°/s", min(1.0, max(0.0, gx / 720 + 0.5)), 0.5, True),
-            ("gyro y", f"{gy:+.0f}°/s", min(1.0, max(0.0, gy / 720 + 0.5)), 0.5, True),
-            ("gyro z", f"{gz:+.0f}°/s", min(1.0, max(0.0, gz / 720 + 0.5)), 0.5, True)]))
+            ("accel x", f"{ax:+.2f} g", u(ax, a_fs), 0.5, True),
+            ("accel y", f"{ay:+.2f} g", u(ay, a_fs), 0.5, True),
+            ("accel z", f"{az:+.2f} g", u(az, a_fs), 0.5, True),
+            ("gyro x", f"{gx:+.0f}°/s", u(gx, g_fs), 0.5, True),
+            ("gyro y", f"{gy:+.0f}°/s", u(gy, g_fs), 0.5, True),
+            ("gyro z", f"{gz:+.0f}°/s", u(gz, g_fs), 0.5, True)]))
     for scheme, names_, rests, bip, have in (
             (gamepad.TOUCH_SCHEME, gesture.TOUCH_LANES, gesture.TOUCH_RESTS,
              gesture.TOUCH_BIPOLAR, r.touch),

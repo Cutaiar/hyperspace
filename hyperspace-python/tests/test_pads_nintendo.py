@@ -128,6 +128,89 @@ def test_the_r_joycons_stick_is_the_left_stick_and_the_pro_has_the_whole_face():
     assert zr.axes[gp.AX_RT] == 1.0
     home = nintendo.decode(full_report(b4=0x10), "r")
     assert [NAMES[i] for i, v in enumerate(home.buttons) if v] == ["GUIDE"]
+
+
+def test_both_sides_read_the_face_by_position():
+    """Held the same way, the (L)'s ↓ and the (R)'s B are the bottom button:
+    both ``pad:A``; the (R)'s own letters stay as its glyphs."""
+    def one(kind, **bits):
+        f = nintendo.decode(full_report(**bits), kind)
+        return [NAMES[i] for i, v in enumerate(f.buttons) if v]
+    assert one("l", b5=0x01) == ["A"] and one("r", b3=0x04) == ["A"]      # ↓ and B: the bottom
+    assert one("l", b5=0x04) == ["B"] and one("r", b3=0x08) == ["B"]      # → and A: the right
+    assert one("l", b5=0x08) == ["X"] and one("r", b3=0x01) == ["X"]      # ← and Y: the left
+    assert one("l", b5=0x02) == ["Y"] and one("r", b3=0x02) == ["Y"]      # ↑ and X: the top
+    r = models.MODELS["joycon-r"]
+    assert (models.glyph(r, "A", "A"), models.glyph(r, "B", "B"),
+            models.glyph(r, "X", "X"), models.glyph(r, "Y", "Y")) == ("B", "A", "Y", "X")
+    # the simple report before the mode is set: the same by position; the
+    # (R)'s stick click is byte 2's 0x08 (0x04 is the left stick's)
+    simple = nintendo.decode(bytes([0x3F, 0x04, 0x08, 0x08]), "r")
+    assert [NAMES[i] for i, v in enumerate(simple.buttons) if v] == ["A", "LSTICK"]
+    assert not nintendo.decode(bytes([0x3F, 0x00, 0x04, 0x08]), "r").buttons[models.CANON["LSTICK"]]
+    assert nintendo.decode(bytes([0x3F, 0x00, 0x04, 0x08]), "l").buttons[models.CANON["LSTICK"]]
+
+
+def test_the_low_band_keeps_its_half_step_and_its_ceiling():
+    """An odd amplitude code's half-step is the 0x80 flag in the low band's
+    first byte (rumble_data_table.md); the low band's frequency code stops
+    at 0x7F."""
+    odd = next(a for a in (0.30, 0.31, 0.32, 0.33, 0.34) if nintendo._amp_code(a) & 1)
+    even = next(a for a in (0.30, 0.31, 0.32, 0.33, 0.34) if not nintendo._amp_code(a) & 1)
+    b_odd, b_even = nintendo.rumble_bytes(0.0, odd), nintendo.rumble_bytes(0.0, even)
+    assert b_odd[2] & 0x80 and not b_even[2] & 0x80
+    assert b_odd[3] == (nintendo._amp_code(odd) >> 1) + 0x40
+    assert (b_odd[2] & 0x7F) == (b_even[2] & 0x7F) == nintendo.RUMBLE_NEUTRAL[2]   # 160 Hz both
+    assert b_odd[:2] == b_even[:2] == nintendo.RUMBLE_NEUTRAL[:2]              # the high band off
+    high = nintendo.rumble_bytes(0.0, 1.0, low_hz=2000.0)
+    assert (high[2] & 0x7F) <= 0x7F and high == nintendo.rumble_bytes(0.0, 1.0, low_hz=626.0)
+    assert nintendo.rumble_bytes(0.0, 1.0, low_hz=5.0) == nintendo.rumble_bytes(0.0, 1.0, low_hz=40.875)
+
+
+def test_a_recentred_stick_still_reaches_full_deflection():
+    cal = nintendo.calibration({nintendo.SPI_STICK_L_FACTORY: L_FACTORY}, "l")
+    c = nintendo.recentre(cal, "l", [(2000 + 120, 2100 - 80)] * 30)
+    assert (c.left.cx, c.left.cy) == (2120, 2020)
+    assert (c.left.x_above, c.left.x_below) == (1500 - 120, 1300 + 120)
+    assert (c.left.y_above, c.left.y_below) == (1400 + 80, 1600 - 80)
+    assert c.left.norm(2000 + 1500, 2100 + 1400) == (1.0, 1.0)      # the flash's extremes still ±1
+    assert c.left.norm(2000 - 1300, 2100 - 1600) == (-1.0, -1.0)
+    assert c.left.norm(2120, 2020) == (0.0, 0.0)
+
+
+def test_a_nintendo_pad_is_never_seized_on_a_guess_about_its_bus():
+    """Without hidapi's bus_type (before 0.14) the interface number tells
+    USB (0 or more) from Bluetooth (−1); unknown both ways reads as USB."""
+    no_bus_bt = {**JOYCON_L, "path": b"bt-old"}
+    no_bus_bt.pop("bus_type")
+    no_bus_bt["interface_number"] = -1
+    no_bus_usb = {**no_bus_bt, "path": b"usb-old", "interface_number": 0}
+    unknown = {**no_bus_bt, "path": b"unknown"}
+    unknown.pop("interface_number")
+    found = [no_bus_bt, no_bus_usb, unknown]
+    assert hid.pad_devices(lambda vid, pid: [d for d in found if d["vendor_id"] == vid]) == [no_bus_bt]
+    assert hid._on_usb(no_bus_usb) and not hid._on_usb(no_bus_bt) and hid._on_usb(unknown)
+    assert not hid._on_usb(JOYCON_L) and hid._on_usb({**JOYCON_L, "bus_type": 1})
+
+
+def test_closing_the_reader_cuts_a_connect_sequence_short():
+    """A pad that never acknowledges would hold `setup` for ~12 s; close()
+    ends it inside the hub's join, so a restart's new image finds the pad
+    free."""
+    import threading
+    import time
+
+    deaf = FakeJoyCon(deaf={nintendo.SUB_MODE: 99, nintendo.SUB_IMU: 99,
+                            nintendo.SUB_VIBRATION: 99}, answer=False)
+    r = hid.HidPad(JOYCON_L, start=False, opener=lambda i: deaf)
+    t = threading.Thread(target=r._run, daemon=True)
+    t0 = time.monotonic()
+    t.start()
+    time.sleep(0.05)
+    r.close()
+    t.join(0.5)
+    assert not t.is_alive() and time.monotonic() - t0 < 0.6
+    assert not r.alive
     pro = nintendo.decode(full_report(b5=0x02 | 0x04, rstick=(2048 + 700, 2048)), "pro")
     assert pro.hat == 1 | 2 and pro.axes[gp.AX_RX] > 0.4
 
@@ -186,7 +269,7 @@ def test_a_resting_stick_becomes_its_own_centre_but_not_a_held_one():
     cal = nintendo.calibration({nintendo.SPI_STICK_L_FACTORY: L_FACTORY}, "l")
     drifted = [(2000 + 120, 2100 - 80)] * 30                       # drift: 0.08 right, 0.05 down
     c = nintendo.recentre(cal, "l", drifted)
-    assert c.left.cx == 2120 and c.left.cy == 2020 and c.left.x_above == 1500
+    assert c.left.cx == 2120 and c.left.cy == 2020 and c.left.x_above == 1500 - 120
     assert c.left.norm(2120, 2020) == (0.0, 0.0)
     held = [(2000 + 1000, 2100)] * 30                              # a thumb on it
     assert nintendo.recentre(cal, "l", held) is cal
@@ -276,11 +359,13 @@ def test_the_sensors_axes_are_per_side_and_only_the_left_is_verified():
     assert nintendo.VERIFIED_MAPS == {"l"}
     right = stepped(JOYCON_R, FakeJoyCon(flash={}, reports=[full_report()] * 40))
     assert right.axis_map is r_map
-    assert gesture.axis_map_of(None, right) is r_map
-    assert gesture.axis_map_of(gesture.AxisMap(), right) is r_map               # the default: the reader's
+    assert gesture.axis_map_of(None, right) is r_map                             # none set: the reader's
+    ident = gesture.AxisMap()
+    assert gesture.axis_map_of(ident, right) is ident              # the identity, set on purpose, wins
     mine = gesture.AxisMap(accel=((2, 1.0), (1, 1.0), (0, 1.0)))
     assert gesture.axis_map_of(mine, right) is mine                              # a pad's override wins
     assert gesture.axis_map_of(None, NS()) == gesture.AxisMap()                  # a Sony reader: the default
+    assert gp.Pad().axis_map is None                                             # nothing set on a new pad
 
 
 def test_a_nintendo_pad_over_usb_is_left_to_glfw_until_the_handshake_is_built():
@@ -465,9 +550,12 @@ def test_the_reading_carries_a_joycons_calibration_and_sensors():
     pad.poll(dt=0.016)
     r2 = ui_pad_views.read(pad)
     groups2 = dict(ui_pad_views._lane_rows(r2))
-    assert abs(groups2["stick calibration"][0][2] - 0.75) < 1e-6
+    reach = reader.calibration.left.x_above                   # 1500 less the recentre's 100
+    assert reach == 1400
+    assert abs(groups2["stick calibration"][0][2] - (0.5 + 0.5 * 750 / reach)) < 1e-6
     # the LX row is the same reading after the app's deadzone rescale
-    assert abs(r2.axes["LX"] - (0.5 + 0.5 * (0.5 - gp.DEADZONE) / (1 - gp.DEADZONE))) < 1e-6
+    v = 750 / reach
+    assert abs(r2.axes["LX"] - (0.5 + 0.5 * (v - gp.DEADZONE) / (1 - gp.DEADZONE))) < 1e-6
     assert [s for s, *_ in groups["out (sent now)"]] == ["players", "rumble heavy", "rumble light"]
     assert groups["out (sent now)"][0][2] == 0.5                       # two of four lights
 
@@ -501,14 +589,14 @@ def test_the_lab_draws_a_joycon_as_itself():
     assert {len(t) for t in scope["scope"].values()} == {ui_pad_lab.SCOPE_N}
     assert abs(scope["scope"]["ay"][-1] - 1.0) < 0.05           # flat: +1 g out of the face
     # the (R): its face, R / ZR, + and HOME, the one stick still the left stick
-    dev = FakeJoyCon(reports=[full_report(b3=0x08 | 0x80)] * 40)      # A, ZR
+    dev = FakeJoyCon(reports=[full_report(b3=0x04 | 0x80)] * 40)      # its B (the bottom), ZR
     reader = stepped(JOYCON_R, dev)
     pad = gp.Pad(hid=True, controller="joycon-r")
     pad.claims = gp.Claims()
     pad.claims.hub = hid.HidHub(start=False, enumerate_=lambda v, p: [], start_readers=False)
     pad.claims.hub.readers[JOYCON_R["path"]] = reader
     pad.attach(pad.claims, role="joy")
-    reader._take(full_report(b3=0x08 | 0x80))
+    reader._take(full_report(b3=0x04 | 0x80))
     pad.poll(dt=0.016)
     for view in ("faithful", "cockpit"):
         got = {h[4] for h in _drawn(view, pad)}

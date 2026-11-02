@@ -670,7 +670,7 @@ class Pad:
         self.report: sony.Frame | None = None  # the last hid frame (touch, sensors, battery)
         self.touchpad = gesture.Touchpad()
         self.motion = gesture.Motion()
-        self.axis_map = gesture.AxisMap()
+        self.axis_map: gesture.AxisMap | None = None   # set: the sensors' axes, over the reader's own
         self.effects: sony.Effects | None = None   # what the device asks the pad to show
         self._t: float | None = None
         self._guids: dict[int, tuple] = {}         # jid → (vid, pid, model) while present

@@ -111,7 +111,10 @@ _JOYCON_L_GLYPHS = {
     "A": "↓", "B": "→", "X": "←", "Y": "↑", "LB": "L", "LT": "ZL", "LP": "SL", "RP": "SR",
     "VIEW": "−", "SHARE": "◉", "LSTICK": "L3",
 }
+# the (R)'s face by position too: its B sits at the bottom (``pad:A``), its
+# A at the right (``B``), its Y at the left (``X``), its X at the top (``Y``)
 _JOYCON_R_GLYPHS = {
+    "A": "B", "B": "A", "X": "Y", "Y": "X",
     "RB": "R", "RT": "ZR", "LP": "SL", "RP": "SR", "MENU": "+", "GUIDE": "HOME",
     "LSTICK": "R3",
 }

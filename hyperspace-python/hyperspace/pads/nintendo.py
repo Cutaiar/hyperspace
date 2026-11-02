@@ -73,6 +73,7 @@ RUMBLE_NEUTRAL = bytes((0x00, 0x01, 0x40, 0x40))     # 320 Hz and 160 Hz at noth
 RUMBLE_LOW_HZ, RUMBLE_HIGH_HZ = 160.0, 320.0         # the two bands the sinks drive
 RUMBLE_AMP_MAX = 1.0
 HIGH_BAND_MIN_HZ = 80.0       # the high band's lowest code (0x60)
+LOW_BAND_MAX_HZ = 626.0       # the low band's highest code (0x7F over 0x40)
 ACK = 0x80                    # a 0x21 reply's ack byte has this bit set
 
 # ---- the SPI flash (spi_flash_notes.md) ----
@@ -117,8 +118,11 @@ _L_BUTTONS = (
     (5, 0x10, "RP"), (5, 0x20, "LP"), (5, 0x40, "LB"),                   # SR SL L
     (4, 0x01, "VIEW"), (4, 0x20, "SHARE"), (4, 0x08, "LSTICK"),          # − capture L3
 )
+# the (R)'s face by position, as the (L)'s arrows: its B sits at the bottom
+# (``A``), its A at the right (``B``), its Y at the left (``X``), its X at
+# the top (``Y``) — the rows keep the position's name, the glyph its letter
 _R_BUTTONS = (
-    (3, 0x01, "Y"), (3, 0x02, "X"), (3, 0x04, "B"), (3, 0x08, "A"),
+    (3, 0x01, "X"), (3, 0x02, "Y"), (3, 0x04, "A"), (3, 0x08, "B"),      # Y X B A on the face
     (3, 0x10, "RP"), (3, 0x20, "LP"), (3, 0x40, "RB"),                   # SR SL R
     (4, 0x02, "MENU"), (4, 0x10, "GUIDE"), (4, 0x04, "LSTICK"),          # + HOME R3 (the one stick)
 )
@@ -138,8 +142,11 @@ _PRO_HAT = ((0x02, 1), (0x04, 2), (0x01, 4), (0x08, 8))
 _SIMPLE_L = ((1, 0x01, "X"), (1, 0x02, "A"), (1, 0x04, "Y"), (1, 0x08, "B"),
              (1, 0x10, "LP"), (1, 0x20, "RP"), (2, 0x01, "VIEW"), (2, 0x04, "LSTICK"),
              (2, 0x20, "SHARE"), (2, 0x40, "LB"))
-_SIMPLE_R = ((1, 0x01, "A"), (1, 0x02, "X"), (1, 0x04, "B"), (1, 0x08, "Y"),
-             (1, 0x10, "LP"), (1, 0x20, "RP"), (2, 0x01, "MENU"), (2, 0x04, "LSTICK"),
+# (the (R)'s simple report names its A, X, B, Y in that bit order; by position
+# they are the right, top, bottom and left buttons; its stick's click is bit
+# 0x08 of byte 2, the left stick's 0x04)
+_SIMPLE_R = ((1, 0x01, "B"), (1, 0x02, "Y"), (1, 0x04, "A"), (1, 0x08, "X"),
+             (1, 0x10, "LP"), (1, 0x20, "RP"), (2, 0x01, "MENU"), (2, 0x08, "LSTICK"),
              (2, 0x10, "GUIDE"), (2, 0x40, "RB"))
 
 
@@ -316,7 +323,11 @@ def recentre(cal: Calibration, kind: str, rest: list[tuple[int, int]]) -> Calibr
         return cal
     cx = round(sum(x for x, _ in rest) / len(rest))
     cy = round(sum(y for _, y in rest) / len(rest))
-    moved = StickCal(cx, cy, stick.x_above, stick.x_below, stick.y_above, stick.y_below)
+    # the stick's travel has not moved, only where it rests: the reach each
+    # way shifts with the centre, so full deflection still reads ±1
+    dx, dy = cx - stick.cx, cy - stick.cy
+    moved = StickCal(cx, cy, max(1, stick.x_above - dx), max(1, stick.x_below + dx),
+                     max(1, stick.y_above - dy), max(1, stick.y_below + dy))
     if kind == "r":
         return Calibration(cal.left, moved, cal.gyro, cal.accel, cal.nominal, cal.user_stick)
     return Calibration(moved, cal.right, cal.gyro, cal.accel, cal.nominal, cal.user_stick)
@@ -431,8 +442,11 @@ def rumble_bytes(high_amp: float, low_amp: float, high_hz: float = RUMBLE_HIGH_H
     there, so the amplitude byte is never corrupted by a negative code."""
     hf = max(0, _freq_code(max(HIGH_BAND_MIN_HZ, high_hz)) - 0x60) * 4
     hf_amp = _amp_code(high_amp) * 2
-    lf = _freq_code(low_hz) - 0x40
-    lf_amp = _amp_code(low_amp) // 2 + 0x40
+    lf = min(0x7F, _freq_code(min(LOW_BAND_MAX_HZ, low_hz)) - 0x40)     # the low band's ceiling
+    code = _amp_code(low_amp)
+    # the low band's amplitude: the code halved over 0x40 in the last byte,
+    # an odd code's half-step as the 0x80 flag in the byte before
+    lf_amp = (code >> 1) + 0x40 + (0x8000 if code & 1 else 0)
     return bytes(((hf & 0xFF), (hf_amp + (hf >> 8)) & 0xFF,
                   (lf + (lf_amp >> 8)) & 0xFF, lf_amp & 0xFF))
 
@@ -507,7 +521,7 @@ def write(dev, reader, want: Effects, now: float) -> bool:
     side = rumble_bytes(want.rumble_high, want.rumble_low)
     dev.write(rumble_report(reader._next_seq(), side, side))
     leds = player_leds(want.players) & 0x0F
-    if leds != reader.__dict__.get("_sent_leds"):
+    if leds != reader._sent_leds:
         dev.write(subcommand(reader._next_seq(), SUB_LEDS, bytes([leds]), side + side))
         reader._sent_leds = leds
     return True
@@ -567,10 +581,15 @@ def setup(dev, reader, clock=time.monotonic) -> None:
     def send(cmd: int, args: bytes = b"") -> None:
         dev.write(subcommand(reader._next_seq(), cmd, args))
 
+    def alive() -> bool:
+        return bool(getattr(reader, "alive", True))
+
     def read_until(want, timeout: float):
-        """Reports until `want(report)` answers, each handed to `_take`."""
+        """Reports until `want(report)` answers, each handed to `_take` —
+        or the reader is closed (a restart must not wait on a pad that
+        never answers)."""
         end = clock() + timeout
-        while clock() < end:
+        while clock() < end and alive():
             data = dev.read(IN_LEN, 50)
             if not data:
                 continue
@@ -584,6 +603,8 @@ def setup(dev, reader, clock=time.monotonic) -> None:
     def ask(cmd: int, args: bytes, want) -> object:
         """Send `cmd`, wait for what `want` recognises; `SETUP_TRIES` times."""
         for _ in range(SETUP_TRIES):
+            if not alive():
+                return None
             send(cmd, args)
             got = read_until(want, REPLY_TIMEOUT_S)
             if got is not None:
@@ -591,10 +612,12 @@ def setup(dev, reader, clock=time.monotonic) -> None:
         return None
     unacked = []
     for cmd, args, word in SETUP_SUBCOMMANDS:
-        if ask(cmd, args, lambda r, c=cmd: acked(r, c) or None) is None:
+        if ask(cmd, args, lambda r, c=cmd: acked(r, c) or None) is None and alive():
             unacked.append(word)
     records: dict[int, bytes] = {}
     for addr, n in SPI_READS[kind] + SPI_IMU_READS:
+        if not alive():
+            break
         got = ask(SUB_SPI_READ, spi_read_args(addr, n), lambda r, a=addr, k=n: spi_reply(r, a, k))
         if got is not None:
             records[addr] = got

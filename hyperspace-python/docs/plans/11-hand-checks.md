@@ -6492,9 +6492,12 @@ every 50 ms holds it). (3) the rumble stops at once; the light stays.
 2. Press on each.
 
 *Pass:* each role reads its own pad; the (R)'s stick is also `axis:LX`
-under its role, its A / B / X / Y their own names, R / ZR `RB` / `RT`;
-neither steals the other's; unplugging one leaves the other's rows
-alone.
+under its role, its face by position as the (L)'s (its B, the bottom
+button, is `pad:A`; its A `pad:B`; its Y `pad:X`; its X `pad:Y` — the
+on-screen pad shows its own letters), R / ZR `RB` / `RT`; neither
+steals the other's; unplugging one leaves the other's rows alone. The
+(R)'s tilt: run the probe's checks on it too — its sensor map is from
+the sources, unverified (plan 46 D5).
 
 ## What no test covers
 

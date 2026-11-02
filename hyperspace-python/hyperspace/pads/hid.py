@@ -72,7 +72,7 @@ def pad_devices(enumerate_=None) -> list[dict]:
             page, usage = d.get("usage_page"), d.get("usage")
             if page and usage and (page, usage) != (1, 5):
                 continue
-            if vid == models.NINTENDO_VID and _bt_hint(d) is False:
+            if vid == models.NINTENDO_VID and _on_usb(d):
                 # over USB a Joy-Con (in a grip) or a Pro Controller first wants the
                 # 0x80 handshake the codec does not send: left to GLFW until a hand
                 # has checked one (plan 46 "To revisit")
@@ -101,6 +101,21 @@ def _bt_hint(info: dict) -> bool | None:
     if bus is None:
         return None
     return int(bus) == 2
+
+
+def _on_usb(info: dict) -> bool:
+    """Is this device on a USB bus? hidapi's bus_type where it says (1);
+    before 0.14 the interface number tells: a USB device has one (0 or
+    more), a Bluetooth device reports −1 (a Joy-Con over Bluetooth on
+    macOS, 2026-11-02). Unknown both ways reads as USB — a Nintendo pad
+    is never seized on a guess."""
+    hint = _bt_hint(info)
+    if hint is not None:
+        return not hint
+    iface = info.get("interface_number")
+    if iface is None:
+        return True
+    return int(iface) >= 0
 
 
 class Recorder:
@@ -174,6 +189,7 @@ class HidPad:
         self._want: sony.Effects | None = None
         self._sent_key = None
         self._sent_t = 0.0
+        self._sent_leds: int | None = None   # a Joy-Con's player lights as last sent
         self._seq = 0
         self._alive = True
         self._started_full = False
@@ -386,6 +402,7 @@ class TapePad:
         self.alive = True
         self.t0 = clock()
         self.sent: list[sony.Effects] = []
+        self._frame: sony.Frame | None = None    # the last decoded frame (a reply leaves it)
         self._i = 0
 
     @property
@@ -408,7 +425,7 @@ class TapePad:
         f = self.codec.decode_frame(raw, self)
         if f is not None:              # a reply on the tape: the last frame stands, as live
             self._frame = f
-        return self.__dict__.get("_frame")
+        return self._frame
 
     def send(self, effects: sony.Effects) -> None:
         """A tape has no light to set: what was asked is kept, for a test."""

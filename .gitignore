@@ -18,4 +18,3 @@ hyperspace-python/tests/fixtures/*.wav
 # the pad probe's output, written where it is run (tools/hid_probe.py --check / --record)
 hyperspace-python/*-findings.json
 hyperspace-python/*-check.jsonl
-hyperspace-python/*.jsonl
