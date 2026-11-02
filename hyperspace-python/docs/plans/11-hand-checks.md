@@ -6366,6 +6366,22 @@ fill, R4 / L4 light on the edges and each press scrolls along the foot;
 the desk under the window never moves; a hover names the control's
 mapping.
 
+**417. Faithful and Cockpit drawn by NanoVG on the Mac.** (Mac, the Edge)
+Headless: `tests/test_ui_pad.py` (`test_the_nanovg_pen_draws_every_call_the_drawings_make`,
+`test_the_lab_views_draw_on_the_pad_windows_draw_list`). A new module:
+restart the app.
+1. Pad diagram on; step to Faithful, then Cockpit. Compare with the
+   browser lab (`prototypes/edge-lab/`) on the same pad.
+2. Resize the pad window (drag the desk's split, or hide the panel).
+3. Quit; start the app with `HYPERSPACE_NANOVG=0 uv run hyperspace`;
+   look at both again.
+
+*Pass:* in 1 the two read as the lab's drawings, crisp on the Retina
+screen (smooth curves, the light bar's glow, sharp small type), and the
+visuals' frame rate does not drop with the pad window open; in 2 they
+stay crisp at every size; in 3 the same drawings, a little softer (the
+draw list's), and nothing else changes.
+
 ## What no test covers
 
 Only a person can settle these:
@@ -6500,3 +6516,6 @@ Only a person can settle these:
   - that the control window sees this frame's thumbnails (`_thumbnails` flushes);
   - the face patterns themselves (375), which only the owner can name;
   - the moved effect's area frame on a preset saved before plan 37 (376).
+- NanoVG in the control window on the Mac's GL (417): the tests draw the
+  lab's drawings through a stand-in NanoVG and on the draw list, and the
+  shots were rendered on Mesa's software rasteriser, never a Mac's GPU.

@@ -152,9 +152,10 @@ class _Ink:
     def __init__(self, dl, texts):
         self._dl, self._texts = dl, texts
 
-    def add_text(self, pos, col, text):
-        self._texts.append(text)
-        return self._dl.add_text(pos, col, text)
+    def add_text(self, *args):
+        # (pos, col, text), or (font, size, pos, col, text) as the lab's pen draws
+        self._texts.append(args[2] if len(args) == 3 else args[4])
+        return self._dl.add_text(*args)
 
     def __getattr__(self, name):
         return getattr(self._dl, name)
@@ -431,14 +432,14 @@ def test_a_reading_of_no_pad_and_of_a_pad_without_extras():
     assert not r.has("touch") and r.effects is None
 
 
-# ---- Faithful and Cockpit drawn the lab's way (NanoVG, ui_pad_nvg) ----
+# ---- Faithful and Cockpit drawn the lab's way (ui_pad_lab) ----
 
 def _drawn(view, pad, st=None):
-    """`view` drawn by ui_pad_nvg with a pen that keeps only its hits (no
+    """`view` drawn by ui_pad_lab with a pen that keeps only its hits (no
     GPU): the hits, in the lab's 1000 × 620 design space."""
-    from hyperspace import ui_pad_nvg, ui_pad_views
-    pen = ui_pad_nvg.Pen()
-    ui_pad_nvg.VIEWS[view](pen, ui_pad_views.read(pad), {} if st is None else st)
+    from hyperspace import ui_pad_lab, ui_pad_views
+    pen = ui_pad_lab.Pen()
+    ui_pad_lab.VIEWS[view](pen, ui_pad_views.read(pad), {} if st is None else st)
     return pen.hits
 
 
@@ -446,15 +447,15 @@ def test_the_lab_drawings_place_every_control_inside_the_design_space():
     """Every pad in both lab views: each control has a hit area inside the
     design space; an Edge shows its back and Fn buttons and touchpad, an
     Xbox pad and no pad only what they have."""
-    from hyperspace import ui_pad_nvg
+    from hyperspace import ui_pad_lab
     pads = {"none": None, "xbox": _FakePad(down=("A",), lanes=[0.9, 0.1, 0.5, 0.5, 1.0, 0.0]),
             "edge": _edge_pad()}
-    for view in ui_pad_nvg.VIEWS:
+    for view in ui_pad_lab.VIEWS:
         for name, pad in pads.items():
             hits = _drawn(view, pad)
             for x, y, w, h, source in hits:
-                assert 0 <= x and x + w <= ui_pad_nvg.DESIGN_W, (view, name, source)
-                assert 0 <= y and y + h <= ui_pad_nvg.DESIGN_H, (view, name, source)
+                assert 0 <= x and x + w <= ui_pad_lab.DESIGN_W, (view, name, source)
+                assert 0 <= y and y + h <= ui_pad_lab.DESIGN_H, (view, name, source)
             got = {h[4] for h in hits}
             assert {"pad:A", "pad:B", "pad:X", "pad:Y", "pad:LSTICK", "pad:RSTICK", "hat:UP",
                     "axis:LT", "axis:RT", "pad:LB", "pad:RB", "pad:GUIDE"} <= got, (view, name)
@@ -468,42 +469,139 @@ def test_the_lab_drawings_place_every_control_inside_the_design_space():
 def test_the_cockpit_keeps_a_trail_and_a_ticker_on_the_panel():
     """The cockpit's memory is the state it is handed (kept on the panel):
     a stick trail per side, capped, and a press on the ticker once."""
-    from hyperspace import ui_pad_nvg
+    from hyperspace import ui_pad_lab
     st = {}
     pad = _FakePad(down=("A",))
-    for _ in range(ui_pad_nvg.TRAIL + 10):
+    for _ in range(ui_pad_lab.TRAIL + 10):
         _drawn("cockpit", pad, st)
-    assert {len(t) for t in st["trails"].values()} == {ui_pad_nvg.TRAIL}
+    assert {len(t) for t in st["trails"].values()} == {ui_pad_lab.TRAIL}
     assert [k for k, _t in st["events"]] == ["pad:A"]
 
 
 def test_the_horizon_is_cut_to_its_ring():
-    """NanoVG cannot clip to a circle, so the tilt's lines are cut to it."""
-    from hyperspace import ui_pad_nvg
-    a, b = ui_pad_nvg._clip((-20, 0), (20, 0), 0, 0, 10)
+    """The pen cannot clip to a circle, so the tilt's lines are cut to it."""
+    from hyperspace import ui_pad_lab
+    a, b = ui_pad_lab._clip((-20, 0), (20, 0), 0, 0, 10)
     assert a == (-10, 0) and b == (10, 0)
-    assert ui_pad_nvg._clip((-5, 0), (5, 0), 0, 0, 10) == ((-5, 0), (5, 0))
-    assert ui_pad_nvg._clip((-20, 15), (20, 15), 0, 0, 10) is None
+    assert ui_pad_lab._clip((-5, 0), (5, 0), 0, 0, 10) == ((-5, 0), (5, 0))
+    assert ui_pad_lab._clip((-20, 15), (20, 15), 0, 0, 10) is None
 
 
-def test_without_gl_the_pad_window_draws_its_own_views(rig, monkeypatch):
-    """The headless panel has no GL renderer: NanoVG is not started (and
-    not marked failed), and the draw-list views draw instead."""
+def test_the_lab_views_draw_on_the_pad_windows_draw_list(rig, monkeypatch):
+    """With no GL (the headless panel) NanoVG is not started and Faithful
+    and Cockpit draw on the window's own draw list: shapes and type land
+    there, and the hover finds the Edge's back buttons and touchpad where
+    they were drawn."""
     from hyperspace import ui_pad_nvg, ui_pad_views
     reg = rig.reg
     imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
     reg["ui.pad_diagram"].set(True)
     reg["ui.panel"].set(False)
     rig.panel.pad = _edge_pad()
-    reg["ui.pad_view"].set(ui_pad_views.VIEWS.index("faithful"))
-    _pad_frames(rig, monkeypatch)
+    sizes = {}
+    for view in ("faithful", "cockpit"):
+        reg["ui.pad_view"].set(ui_pad_views.VIEWS.index(view))
+        drawn = []
+        real = ui_pad_views.ui_pad_lab.Pen.fill
+
+        def fill(self, *a, _drawn=drawn, _real=real, **k):
+            _drawn.append(self.dl.vtx_buffer.size())
+            return _real(self, *a, **k)
+        monkeypatch.setattr(ui_pad_views.ui_pad_lab.Pen, "fill", fill)
+        _pad_frames(rig, monkeypatch)
+        monkeypatch.setattr(ui_pad_views.ui_pad_lab.Pen, "fill", real)
+        sizes[view] = drawn
+        ctx = ui_pad._state(rig.panel)["view_ctx"]
+        x0, y0, w, h = ctx.x, ctx.y, ctx.w, ctx.h
+        hits = {hh[4]: hh for hh in ctx.hits}
+        for src in ("pad:LP", "pad:TOUCH"):
+            hx0, hy0, hx1, hy1, _ = hits[src]
+            assert x0 <= hx0 < hx1 <= x0 + w and y0 <= hy0 < hy1 <= y0 + h, (view, src)
+    for view, drawn in sizes.items():
+        assert len(drawn) > 30 and drawn[-1] > drawn[0], view    # the draw list grew as it drew
     surf = ui_pad_nvg.surface_of(rig.panel)
     assert surf.vg is None and not surf.failed
-    assert {"pad:LP", "pad:TOUCH"} <= {h[4] for h in ui_pad._state(rig.panel)["view_ctx"].hits}
+
+
+def test_a_path_is_kept_until_it_is_drawn_again_and_wound_for_the_fill():
+    """The pen keeps a canvas path (a fill, then a stroke, then a glow of
+    the same outline) and winds what it fills clockwise on screen."""
+    from hyperspace import ui_pad_lab
+    pen = ui_pad_lab.Pen(dl=object(), ox=10, oy=20, s=2.0)
+    pen.rr(0, 0, 100, 50, 10)
+    assert pen._subs and pen._closed == [True] and pen._convex
+    xs = [x for x, _y in pen._subs[0]]
+    ys = [y for _x, y in pen._subs[0]]
+    assert (min(xs), max(xs), min(ys), max(ys)) == (10, 210, 20, 120)
+    ccw = [(0, 0), (0, 10), (10, 10), (10, 0)]           # anticlockwise on screen (y down)
+    assert ui_pad_lab.Pen._clean(ccw) == ccw[::-1]
+    assert ui_pad_lab.Pen._clean(ccw[::-1]) == ccw[::-1]
+    pen.path()
+    pen.move(0, 0)
+    pen.bez(0, 50, 100, 50, 100, 0)
+    sub = pen._subs[0]
+    assert sub[0] == (10, 20) and sub[-1] == (210, 20) and len(sub) > 10
 
 
 def test_the_lab_colours_read_every_way_the_port_writes_them():
+    from hyperspace import ui_pad_lab
+    assert ui_pad_lab.rgba("#000") == (0.0, 0.0, 0.0, 1.0)
+    assert ui_pad_lab.rgba("hot") == ui_pad_lab.rgba(ui_pad_lab.COL["hot"])
+    assert ui_pad_lab.rgba((255, 0, 128), 0.5) == (1.0, 0.0, 128 / 255, 0.5)
+
+
+class _Nvg:
+    """A stand-in for imgui-bundle's nanovg module: any call (recorded by
+    name), any enum (its `.value` 0)."""
+
+    def __init__(self, calls, name="nvg"):
+        self._calls, self._name = calls, name
+
+    def __getattr__(self, name):
+        if name == "value":
+            return 0
+        return _Nvg(self._calls, name)
+
+    def __call__(self, *args, **kwargs):
+        self._calls.append(self._name)
+        return _Nvg(self._calls, "result")
+
+
+def test_the_nanovg_pen_draws_every_call_the_drawings_make():
+    """Both drawings, every pad, through the NanoVG pen: every call reaches
+    NanoVG — none falls through to the draw-list pen (which has no draw
+    list here, so a missing call would raise) — and the hits are the
+    draw-list pen's own."""
+    from hyperspace import ui_pad_lab, ui_pad_nvg, ui_pad_views
+    pads = {"none": None, "xbox": _FakePad(down=("A",)), "edge": _edge_pad()}
+    for view in ui_pad_lab.VIEWS:
+        for name, pad in pads.items():
+            calls: list[str] = []
+            pen = ui_pad_nvg.NvgPen(object(), _Nvg(calls))
+            r = ui_pad_views.read(pad)
+            ui_pad_lab.VIEWS[view](pen, r, {})
+            assert {"begin_path", "fill", "stroke", "text"} <= set(calls), (view, name)
+            hits = ui_pad_lab.Pen()
+            ui_pad_lab.VIEWS[view](hits, r, {})
+            assert {h[4] for h in pen.hits} == {h[4] for h in hits.hits}, (view, name)
+    for view, want in (("faithful", {"bezier_to", "quad_to", "rounded_rect"}),   # body, light bar
+                       ("cockpit", {"arc", "circle"})):                           # the dials
+        calls = []
+        ui_pad_lab.VIEWS[view](ui_pad_nvg.NvgPen(object(), _Nvg(calls)),
+                               ui_pad_views.read(_edge_pad()), {})
+        assert want <= set(calls), view
+
+
+def test_nanovg_waits_for_gl_and_can_be_kept_off(monkeypatch):
+    """No GL context: not started and not failed (it may start later).
+    HYPERSPACE_NANOVG=0: never started, GL not even asked."""
     from hyperspace import ui_pad_nvg
-    assert ui_pad_nvg.rgba("#000") == (0.0, 0.0, 0.0, 1.0)
-    assert ui_pad_nvg.rgba("hot") == ui_pad_nvg.rgba(ui_pad_nvg.COL["hot"])
-    assert ui_pad_nvg.rgba((255, 0, 128), 0.5) == (1.0, 0.0, 128 / 255, 0.5)
+    surf = ui_pad_nvg.Surface()
+    monkeypatch.setattr(ui_pad_nvg, "_gl_current", lambda: False)
+    assert not surf.ready() and not surf.failed and surf.vg is None
+
+    def asked():
+        raise AssertionError("GL asked with NanoVG kept off")
+    monkeypatch.setattr(ui_pad_nvg, "_gl_current", asked)
+    monkeypatch.setenv("HYPERSPACE_NANOVG", "0")
+    assert not surf.ready() and not surf.failed

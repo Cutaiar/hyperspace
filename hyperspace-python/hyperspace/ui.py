@@ -137,11 +137,12 @@ _FONT_CANDIDATES = {
     "ui": [(os.path.join(_FONT_DIR, "Inter-Medium.ttf"), 0)],
     "micro": [(os.path.join(_FONT_DIR, "Inter-Bold.ttf"), 0)],
     "num": [(os.path.join(_FONT_DIR, "JetBrainsMono-SemiBold.ttf"), 0)],
+    "bold": [(os.path.join(_FONT_DIR, "Inter-Bold.ttf"), 0)],     # micro's face, no tracking
 }
 # glyphs a face lacks (planet symbols, ⊂, ◌, ▾) come from these, merged in behind it
 _FALLBACKS = [(os.path.join(_FONT_DIR, "DejaVuSans.ttf"), 0)]
 
-_FONTS: dict[str, imgui.ImFont | None] = {"ui": None, "micro": None, "num": None}
+_FONTS: dict[str, imgui.ImFont | None] = {"ui": None, "micro": None, "num": None, "bold": None}
 
 
 def _add_font(role: str, size: float, tracking: float = 0.0) -> None:
@@ -184,6 +185,7 @@ def load_fonts() -> None:
     _add_font("ui", FONT_BASE)
     _add_font("micro", FONT_MICRO, tracking=1.1)   # ≈ .09em at the label size
     _add_font("num", FONT_NUM)
+    _add_font("bold", FONT_BASE)                   # bold words at any size (the pad's drawings)
     if _FONTS["ui"] is not None:
         imgui.get_io().font_default = _FONTS["ui"]
 

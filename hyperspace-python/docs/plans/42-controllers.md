@@ -218,14 +218,26 @@ room, so the desk never moves; a hover names a control's mapping. The
 view resets to Map at launch, as Pad diagram itself does.
 
 Faithful and Cockpit are the lab's own drawing: its canvas code
-(`drawFaithful`, `drawCockpit`) ported line for line to NanoVG, which
-imgui-bundle ships, in the lab's 1000 × 620 design space, drawn into a
-texture the size of the room in the window's pixels (`ui_pad_nvg.py`).
-Dear ImGui's draw list has no curved fills, gradients or glows, and the
-first draw-list sketches of the two read as rough copies; the draw-list
-versions stay as the fallback where NanoVG cannot run (a headless panel,
-or ``HYPERSPACE_NANOVG=0``). An Xbox pad gets the same hand: the left stick
-high, the D-pad low, the guide button between View and Menu.
+(`drawFaithful`, `drawCockpit`) ported line for line, in the lab's
+1000 × 620 design space, fitted to the room (`ui_pad_lab.py`). The first
+draw-list sketches of the two read as rough copies; two renderers were
+then tried on the same port. The drawings go through a `Pen` — the
+canvas's calls — and there are two:
+
+- **NanoVG** (`ui_pad_nvg.py`), what the app draws with: imgui-bundle's
+  vector renderer, into a texture the size of the room in the window's
+  pixels. Gradients, feathered edges and image paints are there for the
+  interface revamp Dillon has planned, and its tessellation runs in C:
+  a frame of Faithful cost 0.6 ms of Python against the draw-list pen's
+  3.7 ms (measured on the build machine; its GL is software, so the GPU
+  side is hand check 417's).
+- **The draw list** (`ui_pad_lab.Pen`), where NanoVG cannot run (the
+  tests' headless panel, a GL that will not take it, or
+  ``HYPERSPACE_NANOVG=0``): the same drawings, curves cut in Python,
+  glows as faint layers.
+
+An Xbox pad gets the same hand: the left stick high, the D-pad low, the
+guide button between View and Menu.
 
 ![Faithful](assets/42-controllers/pad-edge-faithful.png)
 ![Lanes](assets/42-controllers/pad-edge-lanes.png)
