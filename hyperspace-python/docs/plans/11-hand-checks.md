@@ -6404,8 +6404,40 @@ header's count shortens to a number rather than run off the edge; in 4
 the side panel lists the Xbox pad's patched ports, no picture (the
 picture is the first pad's).
 
-## AT. Coarse and fine through the tapers (wave 0 T1)
+## AQ. Video audio 1 of 4: the track decoded, nothing audible (plan 45 V1)
 
+**421. Open a show video: nothing audible changes, memory stays flat, nothing extra is read.** (Mac, a show video of a few minutes with a soundtrack, Activity Monitor)
+Headless: `tests/test_media_audio.py` (`test_nothing_is_read_until_something_asks_for_sound`,
+`test_a_two_hour_file_holds_one_window_not_the_film`, `test_a_window_is_decoded_into_one_buffer`,
+`test_opening_never_blocks_the_caller`). In V1 nothing asks for sound
+(`Soundtrack.enable()` is V2's play-audio toggle), so this build must
+cost nothing at all: no thread, no open, no read, no memory.
+1. Launch; in Activity Monitor note the app's memory and, on the Disk
+   tab, its Bytes Read. Put a show video with a soundtrack in a channel's
+   bin and slot it; wire the channel to an output. Note Bytes Read once the
+   proxy has been made (the MEDIA page says so) and the picture plays.
+2. Let it play 30 s; scrub `pos` across the whole clip; set `rate` to −2,
+   then 0, then 4; switch `loop` to pingpong.
+3. Watch memory and Bytes Read for a minute; then slot a video with no
+   audio (a GIF or a muted export), then back.
+4. SYSTEM: the frame time. Optional: `sample Hyperspace 2` in a terminal
+   and search the thread names for `media-audio`.
+
+*Pass:* no sound from the app at any step (the analyzer's WAV file, if one
+is playing, is unchanged); the picture scrubs, reverses and freezes as it
+did before this build; memory does not rise when the clip is slotted
+beyond what the picture and the proxy took before this build, and stays
+flat through the scrubs and the loop; Bytes Read grows only as the
+picture is read (the same as before: the video thread and, once, the
+proxy job) — no second read of the file; no `media-audio-*` thread in the
+sample; the frame time does not move when the clip is slotted or scrubbed;
+no line about audio in the log for the muted file. Fail: a `media-audio-*`
+thread or a second read of the file points at something calling
+`Soundtrack.enable()` before V2; a climb in memory with time points at
+`Soundtrack._decode` holding old windows; a hitch on slot points at a
+decode reaching the frame thread (`VideoSource.open` or `want` doing more
+than storing a float).
+## AT. Coarse and fine through the tapers (wave 0 T1)
 Decision register row 561. Both Macs on this build; the owner has run
 `uv run python tools/retaper_routes.py` on the library (a dry run, then
 `--write`) **before the next show** — until then every old preset is
