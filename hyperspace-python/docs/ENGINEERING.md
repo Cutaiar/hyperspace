@@ -857,11 +857,60 @@ zoomblur (`_lib.glsl` is shared). **A new effect is a new `.glsl` file, not
 Python**: every `// @param` uniform becomes `fx.<file>.<key>`, plus
 `on mix speed blend` per effect (plan 33 removed `order` and `target`);
 `// @mix <value>` sets the effect's default wet/dry (1 when absent);
-`fx.on` bypasses every effect and `fx.mix` scales them. `// @order <n>`
+`fx.on` bypasses every effect and `fx.mix` scales them. **Coarse and
+fine through tapers** (wave 0 T1, register row 561): every effect's
+`speed` is on a signed exponential taper (`fx.T_SPEED`: 401 detents, the
+stop in the middle, ±1× 140 steps out at 20 a doubling, ±8× at the ends,
+±0.008× one step from the stop — 0.05× is a third of the way up the
+positive half, where on the linear −8 … +8 it was under one MIDI step), and
+a `@param` line flagged `amount` (`// @param 0 2 0.2 amount "Amount" …`:
+a float from `lo` 0, neither `log` nor `wrap`) puts its param on a
+zero-safe log taper (`fx.amount_taper`: 0 off, then ten doublings up to
+`hi`). The fourteen amount-type params PR #304 calmed carry the flag; the
+shape params (`reach`, `scale`, `cells`, …) stay `log`, and `mix` linear.
+A route's depth onto one of these is measured along the taper, so an
+older file's depths are converted at load (`params.retaper_depths`, the
+marker `units["fx.depth"]`) and **the owner runs
+`tools/retaper_routes.py` on the library before the next show** (below). `// @order <n>`
 is still parsed (`EffectSpec.order`) and read only by `graphmigrate`, to
 give an old preset's effect without a saved order its place in that
 preset's run; where an effect sits now is its wires. A new effect file
 needs no `@order`.
+
+**No shader multiplies time by a param** (the owner, 2026-11-02, after
+the 2026-10-30 show; register row 560). `u_phase * u_drift` reads as a
+rate, but `u_phase` is the integrated clock, so a knob step of Δdrift
+shifts the field by `phase × Δdrift` — whole screens, hours into a set.
+A rate-like param is integrated by the host instead: `// @clock
+<uniform> <rate-param> [period]` at the top of an effect file declares a
+phase `FxState.advance` moves every frame by `speed × <rate-param> × dt`
+(the rate is one of the file's own `@param` keys; the effect's speed
+fader still scales it, as it scaled `u_phase`), wrapped to `[0, period)`
+when a period is given (`tau` or a number; for a shader reading it
+through `sin` or `fract`), running on like `u_phase` when not (a scrolled
+noise field has no period). fx.py declares the uniform beside `u_phase`
+(the file must not) and binds it each pass; while the knob is still the
+clock equals what `u_phase * u_drift` was, so a port changes no picture
+at rest. The phases live on `FxState.clocks` (per instance; kept across
+an edit that keeps the clock; made on first use after a hot reload, as
+`_t_last` is). `tests/test_shader_time_lint.py` (`tests/shader_lint.py`)
+holds every shipped effect file and the face programs to the rule — a
+product of a time symbol (`u_time`, `u_phase`, `u_ptime`, a `@clock`
+uniform, or a local carrying one) and a param symbol (an `@param`
+uniform, the patterns' `m_*()` accessors, or a local carrying one), with
+every call but a constructor opaque, so `u_amount * sin(u_phase)` is an
+amplitude and passes — with an allowlist of today's offenders as exact
+(shader, param) pairs: `warp` × `u_drift`, `warp` × `u_scale`,
+`tripcolour` × `u_pulse`, the RINGS pattern × `m_colour`; K2 (warp,
+tripcolour), K3 (`view.media_rate`, `view.inst_rate`, Python-side) and
+K4 (the grids, RINGS) shrink it to empty. `tests/uv_flow.py` is the
+continuity harness: an effect run over a UV-encoded source gives its
+sampling field exactly, and the mean displacement between consecutive
+frames (an optical-flow proxy with the flow known) on the frame a param
+is stepped is compared with the still frames' — bounded (the speed, a
+`@clock`) or a jump (`u_phase * u_drift`, about 15 px at amount 2 against
+a drift of 0.05 px a frame, an hour in); `tests/test_fx_clock.py` proves
+it on a synthetic pair and keeps warp's drift as a strict xfail for K2.
 
 **The palette** (plan 24, `shaders/fx/palette.glsl`, `@order 95` (read only by the migration, which puts it last in an old preset's run),
 so, unplaced, last in the chain, after the look-back and before the dim — and
@@ -1079,6 +1128,21 @@ wires with the mutes all on; `--signatures` adds a missing case to
 `tests/fixtures/frame-signatures.json` from `build_graph` alone (never
 re-records an existing one), and `--names` rewrites only the fixtures'
 recorded node names and asserts the `goldens` list is unchanged.
+`tools/calm_lanes.py` (2026-11-02) held every preset's band routes to
+`learn.LANE_DEPTH` as springs, once. `tools/retaper_routes.py` (wave 0
+T1) measures every route depth, `set` value and macro base subscriber
+onto an effect's `speed` or `amount` param along the new tapers, once —
+in the library's presets, patches and desk templates and in the machine
+home's `bindings.json` (a show holds no rows): a dry run by default,
+every change worked out before anything is written; `--write` backs the
+library up to `~/Hyperspace/library-backup-<stamp>/` first (and
+`bindings.json` beside itself, as the app does), then rewrites each file
+as the app writes its kind, naming every row that moved and every row
+left (a value that is not a number). **The owner runs it on the library
+before the next show**, both Macs on this build; until then an old file
+is converted at every door it comes in by — a preset load, a template's
+expansion, `Library.read_patch`, `Bindings.from_json` — and nothing is
+lost.
 
 **Feedback: the delay, the echoes and the resize** (plan 34, rows
 353–371; `graph.Delay`, `graph.EchoNode`, `graph.ResizeNode`,
@@ -1352,7 +1416,10 @@ once (never over a file) and prints the two lines to add;
   than load it and strip what it does not know on its next save. This build
   reads every older schema (`/2`–`/5`) and migrates it on load. To move a
   whole library at once: `uv run python tools/migrate_library.py` (a dry
-  run), then `--apply`. Since plan 40 a preset with a group (GRAPH's
+  run), then `--apply`. The route depths onto the effects' `speed` and
+  `amount` params (wave 0 T1, register row 561) are moved the same way:
+  `uv run python tools/retaper_routes.py` (a dry run), then `--write` —
+  **before the next show**, both Macs on this build. Since plan 40 a preset with a group (GRAPH's
   **Group**) is `hyperspace.preset/8` and one without stays `/7` (register
   row 521, pending the owner); a build from before plan 40 refuses an `/8`.
 
@@ -1495,6 +1562,51 @@ as built.
   on a later output makes it publish-only (no window). Output 1 always
   has a window. One SYSTEM line per publisher: `ndi out <name> — 60 fps,
   readback 4.0 ms`, in the warning colour with the error on a failure.
+- **The GRAPH canvas as a source** (2026-11-02). The MEDIA page's Live
+  tab lists `panel:graph` without a `[[devices]]` entry: the node
+  editor's view — output 1 behind it, the faded ground, the grid, the
+  nodes and the cables — as a picture. Put it in a channel's bin and wire
+  the channel wherever a picture goes; onto the backdrop behind the very
+  canvas it shows is a one-frame echo, and meant. It is drawn by
+  draw-list replay (`replay.py`): after the control window's own imgui
+  render, the one draw list the page window owns (the backdrop, the
+  editor and its nodes all land on it; `ImDrawList._owner_name` names it,
+  `Panel.canvas_px` records it) is drawn again with the backend's program
+  into `outputs.CanvasTap`, projected so the canvas rect fills the
+  texture — so the details side pane (a child window's list), menus,
+  popups, tooltips and the held PROJECTOR inset (the foreground list)
+  are never in it. One exception is cut out by index: imgui draws a
+  child window's decorations (its ground, border and scrollbar) on the
+  parent's list inside `begin_child`, so the page notes the indices the
+  pane's took and the replay skips them (`replay.spans`). The tap is the canvas's framebuffer size, at most
+  1280 px on the long side (the projection is scaled, nothing is
+  blitted), alpha set to 1 after. Cost: nothing unless a channel polls
+  the source that frame (`CanvasTap.want` / `take`, as the preview's);
+  then one pass over the frame's draw lists and the canvas's triangles
+  drawn once more (a few thousand vertices), plus a `glFlush`. The tap
+  is a small pool of textures and each grab goes into one no frame
+  holds: a frame carries a lease on its texture (`outputs.Lease`,
+  `MediaFrame.lease`) for exactly as long as it lives, so a channel at
+  rate 0 holding the frame it showed (`channels._freeze`) holds a
+  texture no later grab writes and no canvas resize frees — however
+  many readers grab on beside it, each at full rate — and lets it go
+  with the frame. With every reader live the pool is two textures
+  written in turn; it grows by one per frame held and shrinks back. A
+  grab that fails part way publishes nothing (the last frame stands),
+  and a minimised window (an empty framebuffer, which the backend skips
+  before scaling the clip rects) draws nothing. `media_tex` wraps the
+  frame's texture as any `TEX_2D` GPU frame, one wrapper per distinct
+  texture (name, size and the tap's generation of it — a texture made
+  anew under a reused name is a new GL object with default sampler
+  state, `MediaFrame.tex_gen`) shared by every channel, so a name that
+  changes every frame costs no GL object. Off the GRAPH page the last
+  frame holds 1 s, then the channel reads black and the source says
+  `off page` (read from the panel's own `canvas_px`; its row on MEDIA
+  says why — being on MEDIA is one such time; `lost` is for a page that
+  draws and a tap that gets nothing, a minimised window); back on the
+  page it is `ready` on the first frame. `replay.py` checks the
+  backend's private names it replays with when imported (uv.lock pins
+  imgui_bundle).
 - **Dependencies** (all in the default install, imported only when a
   source opens): `av` (PyAV, bundles FFmpeg), `pillow-heif`,
   `syphon-python[opengl]` and `pyobjc-framework-avfoundation` (macOS
@@ -2784,6 +2896,29 @@ top-level `"sinks_seeded": ["bridge"]` marks it done, so rows you delete
 never come back and `send` is not read again. To translate an edited
 `send`, remove the role from `"sinks_seeded"`. A `midi-out` entry is a
 sink alone: its own port (§12) and its own sink rows on its role.
+
+**A video's soundtrack** (plan 45 V1; nothing audible yet). A video on
+a channel can decode its audio track to memory beside its picture —
+**once something asks for sound** (`Soundtrack.enable()`, which V2's
+play-audio toggle will call; until then no thread, no open, no read: a
+window decode demuxes the video's packets too, so an unheard track would
+read the whole clip for nothing). `VideoSource.audio` is a `Soundtrack`
+on a thread of its own (`media-audio-<name>`), float32 stereo at 48 kHz
+whatever the file (mono on both sides at −3 dB, surround downmixed),
+always from the original file (a scrub proxy is MJPEG with no audio). **The media transport is the one
+clock and the sound is its slave**: the soundtrack follows the same
+`want(t)` the picture does and has no clock or playhead of its own; a
+later PR reads it at the transport's position, so scrub, reverse and
+rate will sound like tape. A track of 120 s or less is held whole (its
+thread then ends); a longer one as a 120 s window around the position,
+decoded into one buffer (46 MB for a two-hour film, 92 MB while a window
+is re-made as the position moves; a decode the transport has left behind
+is abandoned, one that fails leaves the old window and is tried again
+after a 1 s move). `status` reads `fetching` whenever the transport is
+outside what is held, `ready` only inside it. A file with no track
+is silence, with no line in the log. `src.audio.read(at, n)` is the API
+the mixer (V2) will consume: (n, 2) float32 from sample `at`, zeros
+where nothing is held, never blocking. [`plans/45-video-audio.md`](plans/45-video-audio.md).
 
 ## 14. Outputs
 

@@ -54,6 +54,9 @@ canvas { display: block; width: 100%; }
 .idea h3 { margin: 0 0 4px; font-size: 13px; display: flex; gap: 8px; align-items: center; }
 .idea .row { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 4px 0; }
 .idea .live { font-family: var(--mono); font-size: 12px; color: var(--dim); }
+.idea h3 .solo { margin-left: auto; padding: 1px 8px; font-size: 12px; }
+.idea h3 .outs { font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--hot); border: 1px solid #5a3a1c; border-radius: 4px; padding: 0 6px; }
+.labsep { margin: 14px 0 0; padding: 6px 8px; border-left: 3px solid var(--hot); color: var(--dim); font-size: 12px; background: #161a23; border-radius: 0 6px 6px 0; }
 pre.routes { background: #0b0e14; border: 1px solid var(--line2); border-radius: 6px; padding: 6px 8px; font-size: 11.5px; overflow-x: auto; margin: 6px 0 0; white-space: pre; }
 table.chan { width: 100%; border-collapse: collapse; }
 table.chan td { padding: 2px 4px; border-bottom: 1px solid #1e2430; }
@@ -115,7 +118,7 @@ a { color: var(--accent); }
     <h2>Simulator <span class="dim" style="text-transform:none;letter-spacing:0;font-weight:400">— a virtual pad that sends real report bytes through the same decoder</span></h2>
     <div class="simgrid">
       <div>
-        <div class="dim" style="margin-bottom:3px">touchpad · drag = finger · <b>shift</b>-drag = two fingers (pinch / twist) · quick click = tap</div>
+        <div class="dim" style="margin-bottom:3px">touchpad · drag = finger · <b>shift</b>-drag = two fingers (pinch / twist) · <b>alt</b>-drag = two thumbs (one parked left) · quick click = tap</div>
         <canvas id="simTouch"></canvas>
       </div>
       <div>
@@ -165,19 +168,19 @@ a { color: var(--accent); }
     <div class="tabpane on" id="tab-ideas">
       <canvas id="visual"></canvas>
       <div class="idea" id="idea4">
-        <h3><input type="checkbox" id="i4on" checked> Idea 4 · touch sets the zoom-blur centre <button class="rbtn" data-routes="r4" style="margin-left:auto">copy route</button></h3>
+        <h3><input type="checkbox" id="i4on" checked> Idea 4 · touch sets the zoom-blur centre <button class="solo" data-solo="i4">solo</button><button class="rbtn" data-routes="r4">copy route</button></h3>
         <div class="dim">finger = blur centre · pinch = zoom · twist = 4D rotation (XW) · lift = spring back</div>
         <div class="row"><label>blur <input type="range" id="i4blur" min="0" max="1" step="0.01" value="0.45"></label><span class="live" id="i4live"></span></div>
         <pre class="routes" id="r4" hidden></pre>
       </div>
       <div class="idea" id="idea5">
-        <h3><input type="checkbox" id="i5on" checked> Idea 5 · shake to hit <button class="rbtn" data-routes="r5" style="margin-left:auto">copy route</button></h3>
+        <h3><input type="checkbox" id="i5on" checked> Idea 5 · shake to hit <button class="solo" data-solo="i5">solo</button><button class="rbtn" data-routes="r5">copy route</button></h3>
         <div class="dim">motion:shake, pad:LP, pad:RP fire an envelope (attack 10 ms, decay 300 ms): brightness flash + zoom punch</div>
         <div class="row"><button id="i5fire">fire</button><label>punch <input type="range" id="i5punch" min="0" max="1" step="0.01" value="0.5"></label><span class="live" id="i5live"></span></div>
         <pre class="routes" id="r5" hidden></pre>
       </div>
       <div class="idea" id="idea7">
-        <h3><input type="checkbox" id="i7on" checked> Idea 7 · feedback <button class="rbtn" data-routes="r7" style="margin-left:auto">copy route</button></h3>
+        <h3><input type="checkbox" id="i7on" checked> Idea 7 · feedback <button class="solo" data-solo="i7">solo</button><button class="rbtn" data-routes="r7">copy route</button></h3>
         <div class="dim">light bar follows the visual's hue · rumble.low pulses on a beat · R2 drives a kaleido mix and the right trigger pushes back as it saturates. Channels and manual sliders: Feedback tab.</div>
         <div class="row">
           <label>hue speed <input type="range" id="i7hue" min="0" max="0.5" step="0.005" value="0.06"></label>
@@ -187,6 +190,43 @@ a { color: var(--accent); }
         </div>
         <div class="row"><span class="live" id="i7live"></span></div>
         <pre class="routes" id="r7" hidden></pre>
+      </div>
+      <div class="labsep">Ideas 8–13 each play a shipped patch (<span class="mono">docs/plans/assets/42-controllers/patches/</span>) through the app's row maths, and drive the pad back through its session rows (<span class="mono">…/session-rows/</span>). They start off: tick one, or <b>solo</b> it. The box in the canvas's corner reads back what was last written to the pad.</div>
+      <div class="idea" id="idea8">
+        <h3><input type="checkbox" id="i8on"> Idea 8 · grab and tilt <span class="outs">hue · player lights</span><button class="solo" data-solo="i8">solo</button><button class="rbtn" data-routes="r8">copy route</button></h3>
+        <div class="dim">thumb on the touchpad = grab · then roll turns XW, pitch turns YW (a quarter turn at 60°) · lift = springs back · the light bar's hue is the XW angle, the player lights the YW angle</div>
+        <div class="row"><label title="off: tilt steers with no thumb down"><input type="checkbox" id="i8clutch" checked> clutch (needs a thumb)</label><span class="live" id="i8live"></span></div>
+        <pre class="routes" id="r8" hidden></pre>
+      </div>
+      <div class="idea" id="idea9">
+        <h3><input type="checkbox" id="i9on"> Idea 9 · spin to spin <span class="outs">light motor</span><button class="solo" data-solo="i9">solo</button><button class="rbtn" data-routes="r9">copy route</button></h3>
+        <div class="dim">turn the pad flat like a dial (motion:spin.yaw) → the XW spin follows on a spring, up to ×10 either way · the faster you turn, the more it smears into ghosts (double vision) · the light motor whirs with the smear</div>
+        <div class="row"><span class="live" id="i9live"></span></div>
+        <pre class="routes" id="r9" hidden></pre>
+      </div>
+      <div class="idea" id="idea10">
+        <h3><input type="checkbox" id="i10on"> Idea 10 · snow globe <span class="outs">whiteness</span><button class="solo" data-solo="i10">solo</button><button class="rbtn" data-routes="r10">copy route</button></h3>
+        <div class="dim">shake or swing it (motion:energy) → glitter swirls up · hold still → it settles slowly · the light bar goes snow-white with it</div>
+        <div class="row"><label>settle <input type="range" id="i10settle" min="0.5" max="6" step="0.1" value="2.5"> <span class="mono" id="i10settleV">2.5 s</span></label><span class="live" id="i10live"></span></div>
+        <pre class="routes" id="r10" hidden></pre>
+      </div>
+      <div class="idea" id="idea11">
+        <h3><input type="checkbox" id="i11on"> Idea 11 · trigger detent <span class="outs">L2 wall · heavy motor</span><button class="solo" data-solo="i11">solo</button><button class="rbtn" data-routes="r11">copy route</button></h3>
+        <div class="dim">L2 splits the colours (deconverge) · at about 72 % the trigger hits a wall · squeeze through and the radial split slams in while the grip rumbles · ease off and it drops out</div>
+        <div class="row"><span class="live" id="i11live"></span></div>
+        <pre class="routes" id="r11" hidden></pre>
+      </div>
+      <div class="idea" id="idea12">
+        <h3><input type="checkbox" id="i12on"> Idea 12 · wind up <span class="outs">R2 stiffness · player lights</span><button class="solo" data-solo="i12">solo</button><button class="rbtn" data-routes="r12">copy route</button></h3>
+        <div class="dim">hold R2 past 60 % → it winds up for as long as you hold (envelope 6): the picture warps tighter · let go → it snaps back · the right trigger stiffens as it winds, the player lights fill like a charge meter</div>
+        <div class="row"><label>wind <input type="range" id="i12wind" min="1" max="8" step="0.1" value="3"> <span class="mono" id="i12windV">3.0 s</span></label><span class="live" id="i12live"></span></div>
+        <pre class="routes" id="r12" hidden></pre>
+      </div>
+      <div class="idea" id="idea13">
+        <h3><input type="checkbox" id="i13on"> Idea 13 · thumb roll <span class="outs">light bar level</span><button class="solo" data-solo="i13">solo</button><button class="rbtn" data-routes="r13">copy route</button></h3>
+        <div class="dim">both thumbs on the touchpad → the shape stutters on the beat (idea 7's BPM) · the second thumb's height picks the roll: low 1/4, middle 1/8, high 1/16 · R4 latches it · the light bar blinks with the shape · simulator: <b>alt</b>-drag on its touchpad = two thumbs</div>
+        <div class="row"><span class="live" id="i13live"></span></div>
+        <pre class="routes" id="r13" hidden></pre>
       </div>
     </div>
 
@@ -272,6 +312,72 @@ a { color: var(--accent); }
 <div id="selftest">self-test…</div>
 <div id="selftestDetail"></div>
 
+<!-- ideas 8–13: the shipped patches and their session rows, verbatim, and the app's range for every param they touch
+     (hyperspace-python/tests/test_pads_examples.py holds this equal to the files and to the app's registry) -->
+<script type="application/json" id="labPatches">{"patches": {
+ "grab-tilt": {"schema": "hyperspace.patch/1", "name": "grab tilt", "note": "plan 42 lab idea 8: rest a thumb on the touchpad to grab the shape, then tilt the pad and it turns in 4D (roll turns XW, pitch turns YW, a quarter turn at 60°); lift the thumb and it springs back. The light bar's colour is the shape's XW angle and the player lights are its YW angle: two sink rows of your own (session-rows/grab-tilt.json): right-click rot.phase.XW → Learn sink ▸ light bar hue, rot.phase.YW → Learn sink ▸ player lights", "nodes": [], "wires": [], "values": {}, "modifiers": [{"id": "mod.1", "kind": "scale", "in": ["motion:roll"], "mul": 1.0, "offset": -0.5, "clamp": false}, {"id": "mod.2", "kind": "combine", "in": ["mod:1", "touch:down"], "how": "mul", "balance": 0.5}, {"id": "mod.3", "kind": "smooth", "in": ["mod:2"], "attack": 0.06, "release": 0.35, "spring": true}, {"id": "mod.4", "kind": "scale", "in": ["motion:pitch"], "mul": 1.0, "offset": -0.5, "clamp": false}, {"id": "mod.5", "kind": "combine", "in": ["mod:4", "touch:down"], "how": "mul", "balance": 0.5}, {"id": "mod.6", "kind": "smooth", "in": ["mod:5"], "attack": 0.06, "release": 0.35, "spring": true}], "routes": [{"source": "mod:3", "target": "rot.phase.XW", "op": "push", "value": 0.5}, {"source": "mod:6", "target": "rot.phase.YW", "op": "push", "value": 0.5}], "desk": [], "macros": {}, "lfos": [], "envs": [], "ports": [], "layout": {"mod.1": [0, 0], "mod.2": [200, 0], "mod.3": [400, 0], "mod.4": [0, 120], "mod.5": [200, 120], "mod.6": [400, 120]}},
+ "spin-spin": {"schema": "hyperspace.patch/1", "name": "spin spin", "note": "plan 42 lab idea 9: turn the pad flat like a dial and the shape's XW spin follows, up to ten times as fast either way, on a spring; the faster you turn, the more it smears into ghost copies (double vision). The light motor whirs with the smear: a sink row of your own (session-rows/spin-spin.json): right-click fx.doublevision.mix → Learn sink ▸ rumble, light motor", "nodes": [{"kind": "effect", "file": "doublevision"}], "wires": [], "values": {"fx.doublevision.on": true, "fx.doublevision.mix": 0.0, "fx.doublevision.amount": 6.0, "fx.doublevision.ghost": 0.6, "fx.doublevision.copies": 3, "fx.doublevision.speed": 0.5}, "modifiers": [{"id": "mod.1", "kind": "smooth", "in": ["motion:spin.yaw"], "attack": 0.12, "release": 0.35, "spring": true}, {"id": "mod.2", "kind": "scale", "in": ["motion:spin.yaw"], "mul": 2.0, "offset": -1.0, "clamp": true}, {"id": "mod.3", "kind": "scale", "in": ["motion:spin.yaw"], "mul": -2.0, "offset": 1.0, "clamp": true}, {"id": "mod.4", "kind": "combine", "in": ["mod:2", "mod:3"], "how": "max", "balance": 0.5}, {"id": "mod.5", "kind": "smooth", "in": ["mod:4"], "attack": 0.03, "release": 0.6, "spring": false}], "routes": [{"source": "mod:1", "target": "rot.rate.XW", "op": "push", "value": 0.15, "rest": 0.5}, {"source": "mod:5", "target": "fx.doublevision.mix", "op": "position"}], "desk": [], "macros": {}, "lfos": [], "envs": [], "ports": [{"id": "in", "type": "image", "to": "doublevision.image", "was": "scene"}, {"id": "out", "type": "image", "from": "doublevision", "was": "output.all.image"}], "layout": {"render:doublevision": [600, 60], "mod.1": [0, 0], "mod.2": [0, 120], "mod.3": [0, 240], "mod.4": [200, 180], "mod.5": [400, 180]}},
+ "snow-globe": {"schema": "hyperspace.patch/1", "name": "snow globe", "note": "plan 42 lab idea 10: shake or swing the pad and glitter swirls up over the picture; hold it still and it settles over a few seconds, like a snow globe (motion:energy, a slow release). The light bar goes snow-white with it: a sink row of your own (session-rows/snow-globe.json): right-click fx.glimmer.mix → Learn sink ▸ light bar whiteness", "nodes": [{"kind": "effect", "file": "glimmer"}], "wires": [], "values": {"fx.glimmer.on": true, "fx.glimmer.mix": 0.0, "fx.glimmer.amount": 1.6, "fx.glimmer.density": 0.55, "fx.glimmer.size": 12.0, "fx.glimmer.halo": 10.0, "fx.glimmer.ground": 0.35, "fx.glimmer.speed": 0.8}, "modifiers": [{"id": "mod.1", "kind": "smooth", "in": ["motion:energy"], "attack": 0.08, "release": 2.5, "spring": false}], "routes": [{"source": "mod:1", "target": "fx.glimmer.mix", "op": "position"}, {"source": "mod:1", "target": "fx.glimmer.density", "op": "push", "value": 0.4}], "desk": [], "macros": {}, "lfos": [], "envs": [], "ports": [{"id": "in", "type": "image", "to": "glimmer.image", "was": "scene"}, {"id": "out", "type": "image", "from": "glimmer", "was": "output.all.image"}], "layout": {"render:glimmer": [200, 0], "mod.1": [0, 0]}},
+ "trigger-detent": {"schema": "hyperspace.patch/1", "name": "trigger detent", "note": "plan 42 lab idea 11: squeeze L2 and the colours split apart (deconverge); at about 72 % of the travel the trigger hits a wall, and through it the radial split slams in while the grip rumbles; ease off and it drops out. The wall and the rumble are the radial split itself: two sink rows of your own (session-rows/trigger-detent.json): right-click fx.deconverge.radial → Learn sink ▸ left trigger resistance, and ▸ rumble, heavy motor", "nodes": [{"kind": "effect", "file": "deconverge"}], "wires": [], "values": {"fx.deconverge.on": true, "fx.deconverge.mix": 1.0, "fx.deconverge.amount": 0.0, "fx.deconverge.radial": 0.0, "fx.deconverge.speed": 0.1}, "modifiers": [{"id": "mod.1", "kind": "scale", "in": ["axis:LT"], "mul": 4.0, "offset": -2.4, "clamp": true}, {"id": "mod.2", "kind": "scale", "in": ["mod:1"], "mul": 4.0, "offset": -1.5, "clamp": true}], "routes": [{"source": "axis:LT", "target": "fx.deconverge.amount", "op": "position", "value": 0.5}, {"source": "mod:2", "target": "fx.deconverge.radial", "op": "push", "value": 0.8, "motion": {"mode": "follow", "atk": 0.005, "rel": 0.18}}], "desk": [], "macros": {}, "lfos": [], "envs": [], "ports": [{"id": "in", "type": "image", "to": "deconverge.image", "was": "scene"}, {"id": "out", "type": "image", "from": "deconverge", "was": "output.all.image"}], "layout": {"render:deconverge": [400, 0], "mod.1": [0, 60], "mod.2": [200, 60]}},
+ "wind-up": {"schema": "hyperspace.patch/1", "name": "wind up", "note": "plan 42 lab idea 12: hold R2 past 60 % and the picture winds up, warping tighter for as long as you hold (envelope 6, a three-second attack); let go and it snaps back. The right trigger stiffens as it winds and the player lights fill like a charge meter: two sink rows of your own (session-rows/wind-up.json): right-click fx.warp.amount → Learn sink ▸ right trigger resistance, and ▸ player lights", "nodes": [{"kind": "effect", "file": "warp"}], "wires": [], "values": {"fx.warp.on": true, "fx.warp.mix": 1.0, "fx.warp.amount": 0.0, "fx.warp.scale": 3.0, "fx.warp.drift": 1.5, "fx.warp.speed": 0.25, "env.6.mode": 0, "env.6.attack": 3.0, "env.6.hold": 0.0, "env.6.decay": 0.01, "env.6.sustain": 1.0, "env.6.release": 0.15, "env.6.curve": 0.6, "env.6.amount": 1.0}, "modifiers": [], "routes": [{"source": "axis:RT", "target": "env.6.gate", "op": "position"}, {"source": "env:5", "target": "fx.warp.amount", "op": "push", "value": 1.0}], "desk": [], "macros": {}, "lfos": [], "envs": [6], "ports": [{"id": "in", "type": "image", "to": "warp.image", "was": "scene"}, {"id": "out", "type": "image", "from": "warp", "was": "output.all.image"}], "layout": {"render:warp": [200, 0], "env.6": [0, 0]}},
+ "thumb-roll": {"schema": "hyperspace.patch/1", "name": "thumb roll", "note": "plan 42 lab idea 13: put both thumbs on the touchpad and the shape stutters on the beat (LFO 1, a square on the clock, blanking its lines and points); the second thumb's height picks the roll — low 1/4, middle 1/8, high 1/16; lift a thumb and it stops. R4 latches it: right-click Env 6's gate → Learn pad, press R4. The light bar blinks with the shape: a sink row of your own (session-rows/thumb-roll.json): right-click view.lines_alpha → Learn sink ▸ light bar level", "nodes": [], "wires": [], "values": {"lfo.1.shape": 3, "lfo.1.sync": 6, "lfo.1.rate": 4.0, "lfo.1.depth": 0.0, "lfo.1.phase": 0.0, "env.6.mode": 0, "env.6.attack": 0.005, "env.6.hold": 0.0, "env.6.decay": 0.01, "env.6.sustain": 1.0, "env.6.release": 0.04, "env.6.amount": 1.0}, "modifiers": [], "routes": [{"source": "touch:down2", "target": "env.6.gate", "op": "push", "value": 1.0}, {"source": "touch:y2", "target": "lfo.1.sync", "op": "push", "value": 0.4}, {"source": "env:5", "target": "lfo.1.depth", "op": "push", "value": 1.0}, {"source": "lfo:0", "target": "view.lines_alpha", "op": "push", "value": 2.0}, {"source": "lfo:0", "target": "view.points_alpha", "op": "push", "value": 2.0}], "desk": [], "macros": {}, "lfos": [1], "envs": [6], "ports": [], "layout": {"env.6": [0, 0], "lfo.1": [200, 0]}}},
+ "rows": {
+ "grab-tilt": [{"source": "param:rot.phase.XW", "target": "edge:0", "op": "send"}, {"source": "param:rot.phase.YW", "target": "edge:7", "op": "send"}],
+ "spin-spin": [{"source": "param:fx.doublevision.mix", "target": "edge:4", "op": "send"}],
+ "snow-globe": [{"source": "param:fx.glimmer.mix", "target": "edge:2", "op": "send"}],
+ "trigger-detent": [{"source": "param:fx.deconverge.radial", "target": "edge:5", "op": "send"}, {"source": "param:fx.deconverge.radial", "target": "edge:3", "op": "send"}],
+ "wind-up": [{"source": "param:fx.warp.amount", "target": "edge:6", "op": "send"}, {"source": "param:fx.warp.amount", "target": "edge:7", "op": "send"}],
+ "thumb-roll": [{"source": "pad:RP", "target": "env.6.gate", "op": "toggle"}, {"source": "param:view.lines_alpha", "target": "edge:1", "op": "send"}]},
+ "params": {
+ "env.6.amount": {"k": "continuous", "lo": 0.0, "hi": 1.0, "base": 1.0},
+ "env.6.attack": {"k": "continuous", "lo": 0.001, "hi": 8.0, "log": true, "base": 0.01},
+ "env.6.curve": {"k": "continuous", "lo": -1.0, "hi": 1.0, "base": 0.0},
+ "env.6.decay": {"k": "continuous", "lo": 0.001, "hi": 8.0, "log": true, "base": 0.2},
+ "env.6.fire": {"k": "trigger", "lo": 0.0, "hi": 1.0, "base": null},
+ "env.6.gate": {"k": "toggle", "lo": 0.0, "hi": 1.0, "base": false},
+ "env.6.hold": {"k": "continuous", "lo": 0.001, "hi": 8.0, "log": true, "base": 0.0},
+ "env.6.mode": {"k": "enum", "lo": 0.0, "hi": 1.0, "n": 2, "base": 0},
+ "env.6.release": {"k": "continuous", "lo": 0.001, "hi": 8.0, "log": true, "base": 0.3},
+ "env.6.retrig": {"k": "enum", "lo": 0.0, "hi": 1.0, "n": 2, "base": 0},
+ "env.6.sustain": {"k": "continuous", "lo": 0.0, "hi": 1.0, "base": 0.6},
+ "env.6.sync": {"k": "enum", "lo": 0.0, "hi": 1.0, "n": 2, "base": 0},
+ "env.6.velocity": {"k": "continuous", "lo": 0.0, "hi": 1.0, "base": 0.0},
+ "fx.deconverge.amount": {"k": "continuous", "lo": 0.0, "hi": 16.0, "base": 1.0},
+ "fx.deconverge.mix": {"k": "continuous", "lo": 0.0, "hi": 1.0, "base": 1.0},
+ "fx.deconverge.on": {"k": "toggle", "lo": 0.0, "hi": 1.0, "base": false},
+ "fx.deconverge.radial": {"k": "continuous", "lo": 0.0, "hi": 0.05, "base": 0.002},
+ "fx.deconverge.speed": {"k": "continuous", "lo": -8.0, "hi": 8.0, "base": 0.1},
+ "fx.doublevision.amount": {"k": "continuous", "lo": 0.0, "hi": 12.0, "base": 0.5},
+ "fx.doublevision.copies": {"k": "continuous", "lo": 1.0, "hi": 4.0, "base": 1},
+ "fx.doublevision.ghost": {"k": "continuous", "lo": 0.0, "hi": 1.0, "base": 0.5},
+ "fx.doublevision.mix": {"k": "continuous", "lo": 0.0, "hi": 1.0, "base": 1.0},
+ "fx.doublevision.on": {"k": "toggle", "lo": 0.0, "hi": 1.0, "base": false},
+ "fx.doublevision.speed": {"k": "continuous", "lo": -8.0, "hi": 8.0, "base": 0.5},
+ "fx.glimmer.amount": {"k": "continuous", "lo": 0.0, "hi": 3.0, "base": 0.5},
+ "fx.glimmer.density": {"k": "continuous", "lo": 0.0, "hi": 1.0, "base": 0.25},
+ "fx.glimmer.ground": {"k": "continuous", "lo": 0.0, "hi": 1.0, "base": 0.0},
+ "fx.glimmer.halo": {"k": "continuous", "lo": 0.0, "hi": 32.0, "base": 6.0},
+ "fx.glimmer.mix": {"k": "continuous", "lo": 0.0, "hi": 1.0, "base": 1.0},
+ "fx.glimmer.on": {"k": "toggle", "lo": 0.0, "hi": 1.0, "base": false},
+ "fx.glimmer.size": {"k": "continuous", "lo": 3.0, "hi": 64.0, "log": true, "base": 16.0},
+ "fx.glimmer.speed": {"k": "continuous", "lo": -8.0, "hi": 8.0, "base": 0.5},
+ "fx.warp.amount": {"k": "continuous", "lo": 0.0, "hi": 2.0, "base": 0.2},
+ "fx.warp.drift": {"k": "continuous", "lo": 0.0, "hi": 8.0, "base": 1.0},
+ "fx.warp.mix": {"k": "continuous", "lo": 0.0, "hi": 1.0, "base": 1.0},
+ "fx.warp.on": {"k": "toggle", "lo": 0.0, "hi": 1.0, "base": false},
+ "fx.warp.scale": {"k": "continuous", "lo": 0.5, "hi": 16.0, "log": true, "base": 3.0},
+ "fx.warp.speed": {"k": "continuous", "lo": -8.0, "hi": 8.0, "base": 0.25},
+ "lfo.1.depth": {"k": "continuous", "lo": 0.0, "hi": 1.0, "base": 0.5},
+ "lfo.1.phase": {"k": "continuous", "lo": 0.0, "hi": 1.0, "wrap": true, "base": 0.0},
+ "lfo.1.rate": {"k": "continuous", "lo": 0.01, "hi": 20.0, "log": true, "base": 1.0},
+ "lfo.1.reset": {"k": "trigger", "lo": 0.0, "hi": 1.0, "base": null},
+ "lfo.1.shape": {"k": "enum", "lo": 0.0, "hi": 1.0, "n": 5, "base": 0},
+ "lfo.1.sync": {"k": "enum", "lo": 0.0, "hi": 1.0, "n": 8, "base": 0},
+ "rot.phase.XW": {"k": "continuous", "lo": -3.141592653589793, "hi": 3.141592653589793, "wrap": true, "base": 0.0},
+ "rot.phase.YW": {"k": "continuous", "lo": -3.141592653589793, "hi": 3.141592653589793, "wrap": true, "base": 0.0},
+ "rot.rate.XW": {"k": "continuous", "lo": -66.56, "hi": 66.56, "base": 1.0},
+ "view.lines_alpha": {"k": "continuous", "lo": 0.0, "hi": 1.0, "base": 1.0},
+ "view.points_alpha": {"k": "continuous", "lo": 0.0, "hi": 1.0, "base": 1.0}}}</script>
 <script>
 'use strict';
 /* =====================================================================
@@ -862,17 +968,20 @@ function simTick() {
 }
 // touch surface (the sim touchpad and the drawn one): u, v in 0..1 of the pad, y down
 const touchSurf = {
-  start(u, v, shift) {
+  start(u, v, shift, alt = false) {
     const id = () => { const i = sim.nextId; sim.nextId = (sim.nextId + 1) & 0x7F; return i; };
-    if (shift) { sim.twoFinger = { cx: u, cy: v, u0: u, v0: v }; sim.touches[0] = { down: true, id: id(), x: u + 0.15, y: v }; sim.touches[1] = { down: true, id: id(), x: u - 0.15, y: v }; }
+    sim.thumbs = false;
+    if (alt) { sim.twoFinger = null; sim.thumbs = true; sim.touches[0] = { down: true, id: id(), x: 0.22, y: 0.6 }; sim.touches[1] = { down: true, id: id(), x: u, y: v }; }   // two thumbs: the first parked left, the second under the pointer
+    else if (shift) { sim.twoFinger = { cx: u, cy: v, u0: u, v0: v }; sim.touches[0] = { down: true, id: id(), x: u + 0.15, y: v }; sim.touches[1] = { down: true, id: id(), x: u - 0.15, y: v }; }
     else { sim.twoFinger = null; sim.touches[0] = { down: true, id: id(), x: u, y: v }; sim.touches[1].down = false; }
   },
   move(u, v) {
     const tf = sim.twoFinger;
-    if (tf) { const ox = 0.15 + (u - tf.u0), oy = v - tf.v0; sim.touches[0].x = tf.cx + ox; sim.touches[0].y = tf.cy + oy; sim.touches[1].x = tf.cx - ox; sim.touches[1].y = tf.cy - oy; }
+    if (sim.thumbs) { sim.touches[1].x = u; sim.touches[1].y = v; }
+    else if (tf) { const ox = 0.15 + (u - tf.u0), oy = v - tf.v0; sim.touches[0].x = tf.cx + ox; sim.touches[0].y = tf.cy + oy; sim.touches[1].x = tf.cx - ox; sim.touches[1].y = tf.cy - oy; }
     else if (sim.touches[0].down) { sim.touches[0].x = u; sim.touches[0].y = v; }
   },
-  end() { sim.touches[0].down = false; sim.touches[1].down = false; sim.twoFinger = null; },
+  end() { sim.touches[0].down = false; sim.touches[1].down = false; sim.twoFinger = null; sim.thumbs = false; },
 };
 
 // ---------------------------------------------------------------- 7 output: sinks / raw → reports, ≤ 60 Hz, only on change
@@ -883,7 +992,6 @@ const out = {
   raw: { light: '#2050ff', brightness: 0, players: 0x04, mic: 0, rumbleLow: 0, rumbleHigh: 0, left: { mode: 'off', pos: 1, level: 4, freq: 30 }, right: { mode: 'off', pos: 1, level: 4, freq: 30 } },
   shown: { hid: freshShown(), sim: freshShown() }, want: null,
 };
-const AUTO_SRC = { 0: 'idea 7 hue', 3: 'idea 7 beat', 6: 'idea 7 kaleido mix' };
 function channelValues() { const v = {}; out.ch.forEach((c, i) => { if (c.on) v[i] = c.auto && out.demo[i] != null ? out.demo[i] : c.manual; }); return v; }
 function rawTrigger(t) { return t.mode === 'feedback' ? { mode: 'resist', start: t.pos / 9, strength: t.level / 8, freq: 0 } : t.mode === 'vibration' ? { mode: 'pulse', start: t.pos / 9, strength: t.level / 8, freq: t.freq } : offTrigger(); }
 function wantedEffects() {
@@ -1203,6 +1311,9 @@ const ideas = {
   i4: { on: true, cx: 0.5, cy: 0.5, vx: 0, vy: 0, zoom: 0, zv: 0, xw: 0, xwv: 0, blur: 0.45 },
   i5: { on: true, fireT: -1e9, env: 0, punch: 0.5, fires: 0 },
   i7: { on: true, hue: 0.55, hueSpeed: 0.06, beat: 'metro', bpm: 120, phase: 0, beatT: -1e9, beatEnv: 0, taps: [], mix: 0, mic: null, micLevel: 0 },
+  // ideas 8–13 (section 9b): each a shipped patch, run while its box is ticked
+  i8: { on: false, run: null, clutch: true }, i9: { on: false, run: null }, i10: { on: false, run: null, settle: 2.5 },
+  i11: { on: false, run: null }, i12: { on: false, run: null, wind: 3 }, i13: { on: false, run: null },
   t: 0,
 };
 function spring(x, v, target, w, z, dt) { const a = w * w * (target - x) - 2 * z * w * v; v += a * dt; x += v * dt; return [x, v]; }
@@ -1229,7 +1340,14 @@ function stepIdeas(dt, tNow) {
   else if (i7.beat === 'mic') { i7.beatEnv = micLevel(); }
   else i7.beatEnv = 0;
   i7.mix += (L['axis:RT'] - i7.mix) * ease(dt, 0.05);
-  out.demo = i7.on ? { 0: i7.hue, 3: i7.beatEnv, 6: i7.mix } : {};
+  // what the ideas send, channel → u: idea 7's, then each running patch's sink rows (a later row wins its channel, as in sink_values)
+  const demo = {}, by = {};
+  if (i7.on) {
+    Object.assign(demo, { 0: i7.hue, 3: i7.beatEnv, 6: i7.mix });
+    Object.assign(by, { 0: 'idea 7 · hue', 3: 'idea 7 · beat', 6: 'idea 7 · kaleido mix' });
+  }
+  stepLab(dt, demo, by);
+  out.demo = demo; out.demoBy = by;
 }
 function micLevel() {
   const m = ideas.i7.mic; if (!m) return 0;
@@ -1249,35 +1367,84 @@ async function startMic() {
 const TV = []; for (let i = 0; i < 16; i++) TV.push([i & 1 ? 1 : -1, i & 2 ? 1 : -1, i & 4 ? 1 : -1, i & 8 ? 1 : -1]);
 const TE = []; for (let i = 0; i < 16; i++) for (let b = 0; b < 4; b++) { const j = i ^ (1 << b); if (j > i) TE.push([i, j]); }
 function rot4(v, a, b, ang) { const c = Math.cos(ang), s = Math.sin(ang), x = v[a], y = v[b]; v[a] = x * c - y * s; v[b] = x * s + y * c; }
-function projectTesseract(t, xw) {
-  return TV.map(p => { const v = p.slice(); rot4(v, 0, 3, t * 0.35 + xw); rot4(v, 1, 2, 0.5); rot4(v, 2, 3, t * 0.22); rot4(v, 0, 1, t * 0.13); const k = 1 / (2.8 - v[3]); const x = v[0] * k, y = v[1] * k, z = v[2] * k; const k2 = 1 / (2.4 - z); return [x * k2, y * k2, v[3]]; });
+/** The tesseract projected: `xw` is idea 4's twist; `lk` (labLook) the shape's own XW angle (the app's integrated
+ *  rot.phase.XW, which ideas 8 and 9 move) and its YW turn (idea 8). With no lab idea on, angXW = t · 0.35 as before. */
+function projectTesseract(t, xw, lk = null) {
+  const axw = lk ? lk.angXW : t * 0.35, ayw = lk ? lk.yw : 0;
+  return TV.map(p => { const v = p.slice(); rot4(v, 0, 3, axw + xw); if (ayw) rot4(v, 1, 3, ayw); rot4(v, 1, 2, 0.5); rot4(v, 2, 3, t * 0.22); rot4(v, 0, 1, t * 0.13); const k = 1 / (2.8 - v[3]); const x = v[0] * k, y = v[1] * k, z = v[2] * k; const k2 = 1 / (2.4 - z); return [x * k2, y * k2, v[3]]; });
 }
+// value noise for the trip warp (idea 12): smooth, in [−1, 1]
+function hash2(x, y) { const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return (s - Math.floor(s)) * 2 - 1; }
+function vnoise(x, y) { const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, sx = xf * xf * (3 - 2 * xf), sy = yf * yf * (3 - 2 * yf);
+  const a = hash2(xi, yi), b = hash2(xi + 1, yi), c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1); return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy; }
+/** fx/warp.glsl on a point of the 800 × 520 frame: zoom in up to ~11 %, then slide along two octaves of drifting noise, harder toward the rim. */
+function warpPoint(x, y, lk) {
+  const u = x / 800 - 0.5, v = y / 520 - 0.5, a = lk.warp, t = ideas.t * lk.warpDrift * 0.25, s = lk.warpScale;
+  const k = 1 / (1 - 0.1 * Math.min(1, a * 1.5)), r = Math.hypot(u, v) * a;
+  const nx = vnoise((u + t * 0.1) * s, (v + t * 0.1) * s) + vnoise((u + t * 0.0167) * s * 3 + 7, (v + t * 0.0167) * s * 3 + 7);
+  const ny = vnoise((u + t * 0.1) * s + 31, (v + t * 0.1) * s + 17) + vnoise((u + t * 0.0167) * s * 3 + 3, (v + t * 0.0167) * s * 3 + 11);
+  return [400 + (u * k + nx * 0.2 * r) * 800, 260 + (v * k + ny * 0.2 * r) * 520];
+}
+function hslRgb(hh, s, l) { const a = s * Math.min(l, 1 - l), f = n => { const k = (n + hh / 30) % 12; return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); }; return [f(0), f(8), f(4)]; }
 function drawVisual() {
   const cv = $('#visual'); if (!cv.offsetParent) return;
-  const W = 800, H = 520, ctx = fitCanvas(cv, W, H), i4 = ideas.i4, i5 = ideas.i5, i7 = ideas.i7;
+  const W = 800, H = 520, ctx = fitCanvas(cv, W, H), i4 = ideas.i4, i5 = ideas.i5, i7 = ideas.i7, lk = labLook();
   const env = i5.env, punch = i5.punch;
   ctx.fillStyle = '#05060a'; ctx.fillRect(0, 0, W, H);
   if (env > 0) { ctx.fillStyle = `hsla(${i7.hue * 360},80%,60%,${0.22 * env * punch})`; ctx.fillRect(0, 0, W, H); }
-  const pts = projectTesseract(ideas.t, i4.xw * 2 * Math.PI);
+  const pts = projectTesseract(ideas.t, i4.xw * 2 * Math.PI, lk);
   const scale = 230 * Math.pow(2, i4.zoom * 2) * (1 + 0.45 * env * punch), cx0 = W / 2, cy0 = H / 2;
   const hue = i7.hue * 360, bright = 1 + 1.6 * env * punch;
-  const fig = (alpha, lw) => {
-    for (const [a, b] of TE) { const pa = pts[a], pb = pts[b], wv = (pa[2] + pb[2]) / 2; ctx.strokeStyle = `hsla(${(hue + wv * 40 + 360) % 360},85%,${Math.min(92, (55 + wv * 12) * (0.7 + 0.3 * bright))}%,${Math.min(1, alpha * (0.55 + 0.45 * bright))})`; ctx.lineWidth = lw * (0.8 + 0.6 * env * punch); ctx.beginPath(); ctx.moveTo(cx0 + pa[0] * scale, cy0 + pa[1] * scale); ctx.lineTo(cx0 + pb[0] * scale, cy0 + pb[1] * scale); ctx.stroke(); }
+  const warped = lk.warp > 0.002;
+  // one pass of the figure; `chan` 0/1/2 draws only that colour channel (the split adds three of them back up)
+  const fig = (alpha, lw, chan = null) => {
+    alpha *= lk.alpha;
+    if (alpha <= 0.003) return;
+    for (const [a, b] of TE) {
+      const pa = pts[a], pb = pts[b], wv = (pa[2] + pb[2]) / 2, hh = (hue + wv * 40 + 360) % 360;
+      const ll = Math.min(92, (55 + wv * 12) * (0.7 + 0.3 * bright)), aa = Math.min(1, alpha * (0.55 + 0.45 * bright));
+      if (chan === null) ctx.strokeStyle = `hsla(${hh},85%,${ll}%,${aa})`;
+      else { const c = hslRgb(hh, 0.85, ll / 100).map(x => Math.round(x * 255)); ctx.strokeStyle = `rgba(${chan === 0 ? c[0] : 0},${chan === 1 ? c[1] : 0},${chan === 2 ? c[2] : 0},${aa})`; }
+      ctx.lineWidth = lw * (0.8 + 0.6 * env * punch); ctx.beginPath();
+      const x0 = cx0 + pa[0] * scale, y0 = cy0 + pa[1] * scale, x1 = cx0 + pb[0] * scale, y1 = cy0 + pb[1] * scale;
+      if (!warped) { ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); }
+      else for (let s = 0; s <= 8; s++) { const [x, y] = warpPoint(x0 + (x1 - x0) * s / 8, y0 + (y1 - y0) * s / 8, lk); if (s) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
+      ctx.stroke();
+    }
   };
   const copies = [[0, 1, 1]];
   if (i7.on && i7.mix > 0.01) for (let k = 1; k < 6; k++) copies.push([k * Math.PI / 3, k % 2 ? -1 : 1, i7.mix * 0.7]);
+  // idea 9: double vision — ghosts of the frame along a slow circle, 0.005 × amount of the frame out (fx/doublevision.glsl)
+  const smear = [[0, 0, 1 - 0.5 * lk.smearGhost * lk.smearMix]];
+  if (lk.smearMix > 0.01) for (let k = 0; k < lk.smearCopies; k++) { const a = ideas.t * 0.25 + k * TAU / lk.smearCopies; smear.push([Math.cos(a) * 0.005 * lk.smearAmt * W, Math.sin(a) * 0.005 * lk.smearAmt * H, lk.smearGhost * lk.smearMix * 0.8]); }
+  // idea 11: deconverge — R, G and B each from their own offset (amount px, turning with speed) and zoom about the centre, added
+  const passes = lk.split ? [[0, -1, 0, 1 / (1 + lk.radial)], [1, 0, -1, 1], [2, 0.5, 0.5, 1 / (1 - lk.radial)]] : [[null, 0, 0, 1]];
+  const sc = Math.cos(lk.splitPhase), sn = Math.sin(lk.splitPhase);
+  if (lk.split) ctx.globalCompositeOperation = 'lighter';
   const bx = i4.cx * W, by = i4.cy * H, ghosts = i4.on ? 7 : 0, spread = i4.blur * 0.055;
-  for (const [ang, mir, alpha] of copies) {
-    for (let g = ghosts; g >= 0; g--) {
-      const s = 1 + g * spread; ctx.save();
-      ctx.translate(bx, by); ctx.scale(s, s); ctx.translate(-bx, -by);
-      ctx.translate(cx0, cy0); ctx.rotate(ang); ctx.scale(mir, 1); ctx.translate(-cx0, -cy0);
-      fig(alpha * (g === 0 ? 1 : 0.42 * (1 - g / (ghosts + 1))), g === 0 ? 2 : 1.5); ctx.restore();
+  for (const [chan, ox, oy, zs] of passes) {
+    for (const [sx, sy, sa] of smear) {
+      for (const [ang, mir, alpha] of copies) {
+        for (let g = ghosts; g >= 0; g--) {
+          const s = 1 + g * spread; ctx.save();
+          if (chan !== null) { ctx.translate(cx0 - (ox * sc - oy * sn) * lk.splitPx, cy0 - (ox * sn + oy * sc) * lk.splitPx); ctx.scale(zs, zs); ctx.translate(-cx0, -cy0); }
+          ctx.translate(sx, sy);
+          ctx.translate(bx, by); ctx.scale(s, s); ctx.translate(-bx, -by);
+          ctx.translate(cx0, cy0); ctx.rotate(ang); ctx.scale(mir, 1); ctx.translate(-cx0, -cy0);
+          fig(sa * alpha * (g === 0 ? 1 : 0.42 * (1 - g / (ghosts + 1))), g === 0 ? 2 : 1.5, chan); ctx.restore();
+        }
+      }
     }
   }
+  ctx.globalCompositeOperation = 'source-over';
+  // idea 10: glitter on the shape's lines and over black, each glint on its own clock (fx/glimmer.glsl, drawn as stars)
+  if (lk.glitter > 0.005) drawFlakes(ctx, pts, scale, cx0, cy0, lk);
   if (i4.on) { ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(bx, by, 9, 0, 7); ctx.moveTo(bx - 14, by); ctx.lineTo(bx + 14, by); ctx.moveTo(bx, by - 14); ctx.lineTo(bx, by + 14); ctx.stroke(); }
   if (i7.on && i7.beat !== 'off') { ctx.fillStyle = `rgba(255,159,67,${0.2 + 0.8 * i7.beatEnv})`; ctx.beginPath(); ctx.arc(W - 24, 24, 8 + 6 * i7.beatEnv, 0, 7); ctx.fill(); }
+  drawLabOverlays(ctx, W, H, lk);
+  drawPadHud(ctx, W);
   txt(ctx, `zoom ×${Math.pow(2, i4.zoom * 2).toFixed(2)} · XW ${(i4.xw * 360).toFixed(0)}° · env ${env.toFixed(2)} · kaleido ${i7.mix.toFixed(2)}`, 12, H - 14, { size: 13, align: 'left', color: 'rgba(200,210,230,.55)', mono: true });
+  if (lk.words.length) txt(ctx, lk.words.join(' · '), 12, H - 34, { size: 13, align: 'left', color: 'rgba(255,190,130,.75)', mono: true });
 }
 const ROUTES = {
   r4: ['{"source": "touch:x", "target": "fx.zoomblur.cx", "op": "position"}', '{"source": "touch:y", "target": "fx.zoomblur.cy", "op": "position"}',
@@ -1287,6 +1454,325 @@ const ROUTES = {
     '{"source": "lane:0", "target": "edge:3", "op": "send"}', '{"source": "param:dream.hue", "target": "edge:0", "op": "send"}'],
 };
 const ROUTE_NOTES = { r4: '', r5: '', r7: '# lane:0 is the analyzer\'s band 1 (the low band) — the app\'s version of "beat"; dream.hue stands in for whichever hue param the visual cycles\n' };
+
+// ---------------------------------------------------------------- 9b ideas 8–13: the shipped patches, run through the app's row maths
+/* LAB (the JSON island above this script) holds the six patches and their session rows exactly as
+   hyperspace-python/docs/plans/assets/42-controllers/{patches,session-rows}/ have them, and the app's range
+   for every param they touch; tests/test_pads_examples.py holds all three equal. A PatchRun steps one patch as
+   the Router does — its modifiers (modifiers.py), its routes (push / position, rest, when, feel: motion.py),
+   the params' landing (params.Param.apply: wrap, clamp, a toggle's and a trigger's hysteresis, an enum's snap),
+   its envelopes (envelope.py) and LFOs (lfo.py) — and its sink rows read the params' effective norms, as
+   routing.sink_values does. So what the lab sends edge:N is what the app would. */
+const LAB = JSON.parse($('#labPatches').textContent);
+const MOD_ON = 0.6, MOD_OFF = 0.4, MOD_DEADBAND = 0.15, SETTLE = 1e-4, TAU = 2 * Math.PI;
+const on01 = v => v === true || (typeof v === 'number' && v >= 0.5);
+// motion.py's kernels: the one-pole, the asymmetric follow, the exact damped spring
+function poleK(x, tg, dt, tau) { return tau <= 0 ? tg : x + (tg - x) * (1 - Math.exp(-dt / tau)); }
+function followK(x, tg, dt, atk, rel, rest = 0) { return poleK(x, tg, dt, Math.abs(tg - rest) > Math.abs(x - rest) ? atk : rel); }
+function springK(x, v, tg, dt, hz, damp) {
+  if (hz <= 0) return [tg, 0];
+  const w = TAU * hz, z = Math.max(damp, 0), y0 = x - tg, v0 = v;
+  if (Math.abs(z - 1) < 1e-6) { const e = Math.exp(-w * dt), c = v0 + w * y0; return [tg + (y0 + c * dt) * e, (v0 - w * c * dt) * e]; }
+  if (z < 1) { const wd = w * Math.sqrt(1 - z * z), e = Math.exp(-z * w * dt), cs = Math.cos(wd * dt), sn = Math.sin(wd * dt);
+    return [tg + e * (y0 * cs + (v0 + z * w * y0) / wd * sn), e * (v0 * cs - (w * w * y0 + z * w * v0) / wd * sn)]; }
+  const s = Math.sqrt(z * z - 1), r1 = -w * (z - s), r2 = -w * (z + s), c2 = (v0 - r1 * y0) / (r2 - r1), c1 = y0 - c2, e1 = Math.exp(r1 * dt), e2 = Math.exp(r2 * dt);
+  return [tg + c1 * e1 + c2 * e2, r1 * c1 * e1 + r2 * c2 * e2];
+}
+const springHz = (dur, bounce) => [dur <= 0 ? 0 : 1 / dur, bounce >= 0 ? 1 - bounce : 1 / Math.max(1 + bounce, 1e-6)];
+class Follower {
+  constructor(x = 0) { this.x = +x; this.v = 0; }
+  step(tg, dt, m, rest = 0) {
+    if (m.mode === 'follow') { this.x = followK(this.x, tg, dt, m.atk, m.rel, rest); this.v = 0; }
+    else if (m.mode === 'spring') { const [hz, d] = springHz(m.dur, m.bounce); [this.x, this.v] = springK(this.x, this.v, tg, dt, hz, d); }
+    else { this.x = tg; this.v = 0; }
+    if (Math.abs(this.x - tg) < SETTLE && Math.abs(this.v) < SETTLE * 10) { this.x = tg; this.v = 0; }
+    return this.x;
+  }
+}
+// modifiers.py's step (a smooth with spring on is a spring of duration 2π·attack, bounce 0.4)
+const MOD_DEFAULTS = { curve: { shape: 0, invert: false }, scale: { mul: 1, offset: 0, clamp: true }, smooth: { attack: 0.05, release: 0.35, spring: false },
+  combine: { how: 'add', balance: 0.5 }, threshold: { on: 0.6, off: 0.4, hold: 0.1 }, delay: {} };
+function modStep(m, ins, st, dt, over) {
+  const p = { ...MOD_DEFAULTS[m.kind], ...m, ...(over || {}) }, x = +ins[0];
+  switch (m.kind) {
+    case 'curve': { const y = Math.pow(clamp(x, 0, 1), Math.pow(4, clamp(p.shape, -1, 1))); return on01(p.invert) ? 1 - y : y; }
+    case 'scale': { const y = x * p.mul + p.offset; return on01(p.clamp) ? clamp(y, 0, 1) : y; }
+    case 'smooth': {
+      if (!st.f) { st.f = new Follower(x); return x; }
+      const atk = Math.max(0, p.attack), rel = Math.max(0, p.release);
+      return st.f.step(x, dt, on01(p.spring) ? { mode: 'spring', dur: TAU * atk, bounce: 0.4 } : { mode: 'follow', atk, rel }, 0);
+    }
+    case 'combine': { const b = +ins[1], bal = clamp(p.balance, 0, 1); return { add: x + b, mul: x * b, min: Math.min(x, b), max: Math.max(x, b), cross: x * (1 - bal) + b * bal }[p.how]; }
+    case 'threshold': {
+      const onT = p.on, offT = Math.min(p.off, onT);
+      if (!st.gate && x >= onT) { st.gate = true; st.left = Math.max(0, p.hold); return 1; }
+      if (st.gate && x < offT) st.gate = false;
+      if (st.left > 0) { st.left -= dt; if (st.left > 1e-9) return 1; st.left = 0; }
+      return 0;
+    }
+    default: { const o = st.held == null ? 0 : st.held; st.held = x; return o; }    // delay
+  }
+}
+/** One param as the registry holds it, in norm units: a base, this frame's offsets, its landing (params.Param.apply). */
+class LabParam {
+  constructor(id, base) {
+    const s = LAB.params[id]; if (!s) throw new Error('lab: no range for ' + id);
+    this.id = id; this.s = s; this.base = this.norm(base === undefined ? s.base : base); this.eff = this.base;
+    this.mod = 0; this.held = false; this.disc = null; this.armed = true; this.onFire = null;
+  }
+  norm(v) {
+    const s = this.s;
+    if (s.k === 'toggle') return v ? 1 : 0;
+    if (s.k === 'enum') return s.n > 1 ? clamp((v | 0) / (s.n - 1), 0, 1) : 0;
+    if (s.k === 'trigger') return 0;
+    if (s.log) return clamp(Math.log2(v / s.lo) / Math.log2(s.hi / s.lo), 0, 1);
+    return clamp((v - s.lo) / (s.hi - s.lo), 0, 1);
+  }
+  value(n = this.eff) {
+    const s = this.s;
+    if (s.k === 'toggle') return n >= 0.5;
+    if (s.k === 'enum') return pyRound(n * (s.n - 1));
+    if (s.log) return s.lo * Math.pow(s.hi / s.lo, n);
+    return s.lo + n * (s.hi - s.lo);
+  }
+  setBase(v) { this.base = this.norm(v); }
+  modulate(u) { if (Number.isFinite(u)) this.mod += u; this.held = true; }
+  apply() {
+    const s = this.s, held = this.held, tg = this.base + this.mod; this.held = false; this.mod = 0;
+    if (!held) { this.eff = this.base; this.disc = null; return; }          // the last source let go: the base
+    if (s.k === 'continuous') this.eff = s.wrap ? pymod(tg, 1) : clamp(tg, 0, 1);
+    else if (s.k === 'enum') this.eff = this.snap(tg * (s.n - 1)) / Math.max(1, s.n - 1);
+    else if (s.k === 'toggle') { const on = this.disc === 1 ? tg > MOD_OFF : tg >= MOD_ON; this.disc = on ? 1 : 0; this.eff = this.disc; }
+    else if (this.armed && tg >= MOD_ON) { this.armed = false; if (this.onFire) this.onFire(); }   // a trigger: the rising edge
+    else if (!this.armed && tg < MOD_OFF) this.armed = true;
+  }
+  snap(x) { let cur = this.disc; if (cur == null || Math.abs(x - cur) > 0.5 + MOD_DEADBAND) cur = pyRound(clamp(x, 0, this.s.n - 1)); this.disc = cur; return cur; }
+}
+/** envelope.py's voice, stepped by frames: attack → hold → decay → sustain (gate) or release (one-shot); legato re-attacks from where it is. */
+const E_IDLE = 0, E_ATTACK = 1, E_HOLD = 2, E_DECAY = 3, E_SUSTAIN = 4, E_RELEASE = 5;
+class LabEnv {
+  constructor(knob) { this.knob = knob; this.stage = E_IDLE; this.p = 0; this.y0 = 0; this.out = 0; this.nmode = 0; }
+  shape(x) { return Math.pow(clamp(x, 0, 1), Math.pow(4, clamp(+this.knob('curve'), -1, 1))); }
+  level() { const s = this.stage, g = this.shape(this.p), sus = +this.knob('sustain');
+    return s === E_ATTACK ? this.y0 + (1 - this.y0) * g : s === E_HOLD ? 1 : s === E_DECAY ? this.y0 + (sus - this.y0) * g : s === E_SUSTAIN ? sus : s === E_RELEASE ? this.y0 * (1 - g) : 0; }
+  dur(st) { const d = +this.knob({ 1: 'attack', 2: 'hold', 3: 'decay', 5: 'release' }[st]); return st === E_HOLD && d <= 0.001 ? 0 : Math.max(d, 0); }
+  next() { const s = this.stage; return s === E_ATTACK ? E_HOLD : s === E_HOLD ? E_DECAY : s === E_DECAY ? (this.nmode === 1 ? E_RELEASE : E_SUSTAIN) : E_IDLE; }
+  fire() { const y0 = +this.knob('amount') > 0 ? this.level() : 0; this.nmode = this.knob('mode') | 0; this.stage = E_ATTACK; this.p = 0; this.y0 = y0; }
+  release() { if (this.nmode === 1 || this.stage === E_IDLE || this.stage === E_RELEASE) return; this.y0 = this.level(); this.stage = E_RELEASE; this.p = 0; }
+  step(dt) {
+    let left = dt;
+    while ([E_ATTACK, E_HOLD, E_DECAY, E_RELEASE].includes(this.stage)) {
+      const d = this.dur(this.stage), need = (1 - this.p) * d;
+      if (d > 0 && need > left) { this.p += left / d; break; }
+      left -= d > 0 ? need : 0; this.p = 1; const y = this.level(); this.stage = this.next(); this.p = 0; this.y0 = y;
+    }
+    this.out = this.level() * +this.knob('amount'); return this.out;
+  }
+}
+/** lfo.py's voice: u = 0.5 + 0.5 · depth · wave; a division counts the clock's beats (DIVISIONS, cycles per beat). */
+const LFO_RATIO = [0, 1 / 16, 1 / 8, 1 / 4, 1 / 2, 1, 2, 4], LFO_SYNCS = ['Hz', '4 bars', '2 bars', '1 bar', '1/2', '1/4', '1/8', '1/16'];
+const lfoWave = (shape, x) => shape === 0 ? Math.sin(TAU * x) : shape === 1 ? 1 - 4 * Math.abs(x - 0.5) : shape === 2 ? 2 * x - 1 : shape === 3 ? (x < 0.5 ? 1 : -1) : 0;
+class LabLfo {
+  constructor(knob) { this.knob = knob; this.acc = 0; this.out = 0.5; }
+  step(dt, beats) {
+    const sync = this.knob('sync') | 0, ph = +this.knob('phase');
+    let x; if (sync === 0) { this.acc = pymod(this.acc + this.knob('rate') * dt, 1); x = pymod(this.acc + ph, 1); } else x = pymod(beats * LFO_RATIO[sync] + ph, 1);
+    this.out = 0.5 + 0.5 * clamp(+this.knob('depth'), 0, 1) * lfoWave(this.knob('shape') | 0, x); return this.out;
+  }
+}
+// where each source rests (Router.rests: the pad's lanes as gesture.py / gamepad.py publish them, a modifier and an envelope 0, an LFO 0.5)
+const SRC_RESTS = { touch: { x: 0.5, y: 0.5, down: 0, x2: 0.5, y2: 0.5, down2: 0, pinch: 0.5, twist: 0.5, tap: 0 },
+  motion: { roll: 0.5, pitch: 0.5, yaw: 0.5, 'spin.roll': 0.5, 'spin.pitch': 0.5, 'spin.yaw': 0.5, shake: 0, energy: 0 },
+  axis: { LX: 0.5, LY: 0.5, RX: 0.5, RY: 0.5, LT: 0, RT: 0 } };
+function restOf(src) { const i = src.indexOf(':'), s = src.slice(0, i), n = src.slice(i + 1); if (s === 'lfo') return 0.5; if (s === 'mod' || s === 'env') return 0; const t = SRC_RESTS[s]; return t && n in t ? t[n] : 0; }
+/** One shipped patch, stepped frame by frame on the pad's lanes (`L`), in the Router's order: modifiers, the rows
+ *  from rig and modifier lanes, the envelopes, the rows they drive, the LFOs, the rows they drive. */
+class PatchRun {
+  constructor(name) {
+    this.name = name; this.doc = LAB.patches[name]; this.rows = LAB.rows[name] || [];
+    this.over = {}; this.modOver = {}; this.params = {}; this.lanes = {}; this.rowF = new Map(); this.gates = {};
+    this.mods = this.doc.modifiers.map(m => ({ m, n: +m.id.split('.')[1], st: {} }));
+    for (const r of this.doc.routes) this.param(r.target);
+    for (const r of this.rows) this.param(r.op === 'send' ? r.source.slice(6) : r.target);
+    this.envs = (this.doc.envs || []).map(n => { const e = new LabEnv(k => this.knob(`env.${n}.${k}`)); if (this.params[`env.${n}.fire`]) this.params[`env.${n}.fire`].onFire = () => e.fire(); return [n, e]; });
+    this.lfos = (this.doc.lfos || []).map(n => [n, new LabLfo(k => this.knob(`lfo.${n}.${k}`))]);
+  }
+  param(id) { return this.params[id] || (this.params[id] = new LabParam(id, this.doc.values[id])); }
+  knob(id) { if (id in this.over) return this.over[id]; const p = this.params[id]; if (p) return p.value(); return id in this.doc.values ? this.doc.values[id] : LAB.params[id].base; }
+  val(id) { return this.param(id).value(); }
+  norm(id) { return this.param(id).eff; }
+  lane(a, L) { return a in this.lanes ? this.lanes[a] : (L[a] === undefined ? NaN : L[a]); }
+  pass(L, dt, pick) {
+    const hit = new Set();
+    for (const r of this.doc.routes) {
+      if (!pick(r.source)) continue;
+      const p = this.param(r.target); hit.add(p);
+      let u = this.lane(r.source, L);
+      const g = r.when ? this.lane(r.when, L) : 1;
+      if (!Number.isFinite(u) || !(g >= 0.5)) { this.rowF.delete(r); continue; }     // not live, or its gate shut: the row lets go
+      const rest = r.rest != null ? r.rest : restOf(r.source), depth = r.value != null ? r.value : 1;
+      if (r.motion) { let f = this.rowF.get(r); if (!f) { f = new Follower(r.op === 'push' ? rest : u); this.rowF.set(r, f); } u = f.step(u, dt, r.motion, rest); }
+      p.modulate(r.op === 'push' ? depth * (u - rest) : clamp01(depth * u) - p.base);
+    }
+    for (const p of hit) p.apply();
+  }
+  step(L, dt, beats) {
+    for (const q of this.mods) {
+      const ins = (q.m.in || []).map(a => a ? this.lane(a, L) : NaN);
+      if (ins.some(v => !Number.isFinite(v))) { q.st = {}; this.lanes['mod:' + q.n] = NaN; }
+      else this.lanes['mod:' + q.n] = modStep(q.m, ins, q.st, dt, this.modOver[q.m.id]);
+    }
+    const voice = s => s.startsWith('env:') || s.startsWith('lfo:');
+    this.pass(L, dt, s => !voice(s));
+    for (const [n, e] of this.envs) {
+      const g = this.params[`env.${n}.gate`];
+      if (g) { const on = g.eff >= 0.5; if (on && !this.gates[n]) e.fire(); if (!on && this.gates[n]) e.release(); this.gates[n] = on; }
+      this.lanes['env:' + (n - 1)] = e.step(dt);
+    }
+    this.pass(L, dt, s => s.startsWith('env:'));
+    for (const [n, f] of this.lfos) this.lanes['lfo:' + (n - 1)] = f.step(dt, beats);
+    this.pass(L, dt, s => s.startsWith('lfo:'));
+  }
+  /** routing.sink_values on this patch's session rows: channel → the param's effective norm */
+  sinks() { const o = {}; for (const r of this.rows) if (r.op === 'send') o[+r.target.split(':')[1]] = this.norm(r.source.slice(6)); return o; }
+  /** a pad button's press, as its session row (Learn pad → toggle) lands it: the target's base flips */
+  press(src) { for (const r of this.rows) if (r.op === 'toggle' && r.source === src) { const p = this.param(r.target); p.base = p.base >= 0.5 ? 0 : 1; } }
+}
+const NEW_IDEAS = [['i8', 8, 'grab-tilt'], ['i9', 9, 'spin-spin'], ['i10', 10, 'snow-globe'], ['i11', 11, 'trigger-detent'], ['i12', 12, 'wind-up'], ['i13', 13, 'thumb-roll']]
+  .map(([id, n, patch]) => ({ id, n, patch, ch: (LAB.rows[patch] || []).filter(r => r.op === 'send').map(r => +r.target.split(':')[1]) }));
+const IDEA_CH = { i4: [], i5: [], i7: [0, 3, 6], ...Object.fromEntries(NEW_IDEAS.map(d => [d.id, d.ch])) };
+const lab = { beats: 0, angXW: 0, flakes: [] };
+{ let s = 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 170; i++) lab.flakes.push({ e: Math.floor(rnd() * 32), s: rnd(), h: rnd(), h2: rnd(), free: rnd() < 0.35, x: rnd() * 800, y: rnd() * 520, hue: rnd() * 360, j: [rnd() - 0.5, rnd() - 0.5] }); }
+const runOf = id => ideas[id].on ? ideas[id].run : null;
+/** Ideas 8–13, once a frame after the pad's lanes: each ticked patch stepped, its sink rows into the demo channels. */
+function stepLab(dt, demo, by) {
+  const L = pad.lanes;
+  lab.beats += dt * clamp(ideas.i7.bpm, 30, 300) / 60;
+  for (const d of NEW_IDEAS) { const s = ideas[d.id]; if (!s.on) s.run = null; else if (!s.run) s.run = new PatchRun(d.patch); }
+  const r9 = runOf('i9'), r8 = runOf('i8'), r10 = runOf('i10'), r12 = runOf('i12'), r13 = runOf('i13');
+  if (r10) r10.modOver['mod.1'] = { release: ideas.i10.settle };
+  if (r12) r12.over['env.6.attack'] = ideas.i12.wind;
+  if (r13 && pad.edges) for (const k of pad.edges) r13.press(k);           // R4 → env 6's gate (the session's toggle row)
+  if (r9) r9.step(L, dt, lab.beats);
+  // the shape's own XW turn, the app's integrator: rate × 0.35 rad/s here (idea 9 moves the rate)
+  lab.angXW = pymod(lab.angXW + dt * 0.35 * (r9 ? r9.val('rot.rate.XW') : 1) + Math.PI, TAU) - Math.PI;
+  if (r8) { r8.param('rot.phase.XW').setBase(lab.angXW); r8.param('rot.phase.YW').setBase(0); r8.step(ideas.i8.clutch ? L : { ...L, 'touch:down': 1 }, dt, lab.beats); }
+  for (const id of ['i10', 'i11', 'i12', 'i13']) { const r = runOf(id); if (r) r.step(L, dt, lab.beats); }
+  for (const d of NEW_IDEAS) { const r = runOf(d.id); if (!r) continue; for (const row of r.rows) if (row.op === 'send') { const ch = +row.target.split(':')[1]; demo[ch] = r.norm(row.source.slice(6)); by[ch] = `idea ${d.n} · ${row.source.slice(6)}`; } }
+  // the glitter's free flakes fall, and swirl about the centre while the globe is shaken
+  const sw = r10 ? r10.lane('mod:1', L) || 0 : 0;
+  for (const f of lab.flakes) if (f.free) { const dx = f.x - 400, dy = f.y - 260, a = sw * dt * 2.2 * (0.6 + f.h2); f.x = 400 + dx * Math.cos(a) - dy * Math.sin(a); f.y = 260 + dx * Math.sin(a) + dy * Math.cos(a) + dt * (8 + 14 * f.h2); if (f.y > 530) { f.y = -10; f.x = f.h * 800; } }
+}
+/** What the canvas draws from ideas 8–13 (their params' effective values; resting values when off). */
+function labLook() {
+  const g = runOf('i8'), s = runOf('i9'), w = runOf('i10'), d = runOf('i11'), u = runOf('i12'), q = runOf('i13'), words = [];
+  const lk = { angXW: g ? g.val('rot.phase.XW') : lab.angXW, yw: g ? g.val('rot.phase.YW') : 0,
+    smearMix: s ? s.val('fx.doublevision.mix') : 0, smearAmt: s ? s.knob('fx.doublevision.amount') : 0, smearGhost: s ? s.knob('fx.doublevision.ghost') : 0, smearCopies: s ? s.knob('fx.doublevision.copies') | 0 : 0,
+    glitter: w ? w.val('fx.glimmer.mix') : 0, density: w ? w.val('fx.glimmer.density') : 0, glitterAmt: w ? w.knob('fx.glimmer.amount') : 0, ground: w ? w.knob('fx.glimmer.ground') : 0,
+    splitPx: d ? d.val('fx.deconverge.amount') : 0, radial: d ? d.val('fx.deconverge.radial') : 0, splitPhase: d ? ideas.t * d.knob('fx.deconverge.speed') * TAU : 0,
+    warp: u ? u.val('fx.warp.amount') : 0, warpScale: u ? u.knob('fx.warp.scale') : 3, warpDrift: u ? u.knob('fx.warp.drift') : 1,
+    alpha: q ? q.val('view.lines_alpha') : 1, roll: q ? LFO_SYNCS[q.val('lfo.1.sync')] : '', words };
+  lk.split = !!d && (lk.splitPx > 0.05 || lk.radial > 1e-4);
+  const deg = v => `${v >= 0 ? '+' : ''}${(v * 180 / Math.PI).toFixed(0)}°`;
+  if (g) words.push(`8 XW ${deg(TAU * (pymod(g.norm('rot.phase.XW') - g.param('rot.phase.XW').base + 0.5, 1) - 0.5))} YW ${deg(lk.yw)}`);
+  if (s) words.push(`9 XW rate ×${s.val('rot.rate.XW').toFixed(1)} smear ${lk.smearMix.toFixed(2)}`);
+  if (w) words.push(`10 glitter ${lk.glitter.toFixed(2)}`);
+  if (d) words.push(`11 split ${lk.splitPx.toFixed(1)} px radial ${lk.radial.toFixed(3)}`);
+  if (u) words.push(`12 warp ${lk.warp.toFixed(2)}`);
+  if (q) words.push(`13 roll ${lk.roll} lines ${lk.alpha.toFixed(2)}`);
+  return lk;
+}
+function drawFlakes(ctx, pts, scale, cx0, cy0, lk) {
+  const t = ideas.t * 0.8;
+  for (const f of lab.flakes) {
+    if (f.h > lk.density) continue;                                        // the cells that may hold a glint
+    if (f.free && f.h2 > lk.ground + 0.25) continue;                        // over black: "ground"
+    const tw = Math.pow(0.5 + 0.5 * Math.sin(t * (1.5 + 4 * f.h2) + f.h * 97), 6);
+    const a = lk.glitter * Math.min(1, lk.glitterAmt / 1.6) * (0.25 + 0.75 * tw);
+    if (a < 0.02) continue;
+    let x = f.x, y = f.y;
+    if (!f.free) { const [ia, ib] = TE[f.e], pa = pts[ia], pb = pts[ib]; x = cx0 + (pa[0] + (pb[0] - pa[0]) * f.s) * scale + f.j[0] * 18; y = cy0 + (pa[1] + (pb[1] - pa[1]) * f.s) * scale + f.j[1] * 18; }
+    const len = 3 + 9 * tw;
+    ctx.strokeStyle = `hsla(${f.hue},90%,85%,${Math.min(1, a)})`; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(x - len, y); ctx.lineTo(x + len, y); ctx.moveTo(x, y - len); ctx.lineTo(x, y + len); ctx.stroke();
+    ctx.fillStyle = `rgba(255,255,255,${Math.min(1, a)})`; ctx.beginPath(); ctx.arc(x, y, 1.4 + tw, 0, 7); ctx.fill();
+  }
+}
+/** Each lab idea's own marks on the canvas: the grab, the L2 wall, the wind-up's charge, the roll's division. */
+function drawLabOverlays(ctx, W, H, lk) {
+  const L = pad.lanes;
+  if (runOf('i8')) {
+    const held = !ideas.i8.clutch || L['touch:down'] === 1;
+    ctx.fillStyle = held ? 'rgba(108,182,255,.85)' : 'rgba(60,70,90,.6)'; rr(ctx, 12, 12, 78, 22, 11); ctx.fill();
+    txt(ctx, held ? 'GRABBED' : 'no grab', 51, 23, { size: 11, weight: 800, color: held ? '#000' : COL.dim });
+  }
+  if (runOf('i11')) {
+    const lt = L['axis:LT'] || 0, x = 16, y0 = 100, hh = 300, wall = 0.725, through = lk.radial > 0.004;
+    ctx.fillStyle = '#141a24'; rr(ctx, x, y0, 14, hh, 6); ctx.fill();
+    ctx.fillStyle = through ? COL.back : COL.accent; rr(ctx, x, y0 + hh * (1 - lt), 14, Math.max(2, hh * lt), 6); ctx.fill();
+    ctx.fillStyle = through ? '#fff' : '#ffd166'; ctx.fillRect(x - 5, y0 + hh * (1 - wall) - 1.5, 24, 3);
+    txt(ctx, 'L2', x + 7, y0 - 10, { size: 11, weight: 700, color: COL.dim }); txt(ctx, 'wall', x + 24, y0 + hh * (1 - wall), { size: 10, align: 'left', color: '#ffd166' });
+  }
+  if (runOf('i12')) {
+    const r = runOf('i12'), u = r.norm('fx.warp.amount'), open = r.param('env.6.gate').eff >= 0.5;
+    ctx.strokeStyle = '#1b212d'; ctx.lineWidth = 8; ctx.beginPath(); ctx.arc(W / 2, H / 2, 250, -Math.PI / 2, 1.5 * Math.PI); ctx.stroke();
+    if (u > 0.002) { ctx.strokeStyle = open ? '#ff9f6c' : 'rgba(255,159,108,.4)'; ctx.beginPath(); ctx.arc(W / 2, H / 2, 250, -Math.PI / 2, -Math.PI / 2 + TAU * u); ctx.stroke(); }
+  }
+  if (runOf('i13')) { const on = lk.alpha < 0.5; ctx.fillStyle = on ? COL.hot : '#1b212d'; rr(ctx, 12, H - 74, 86, 24, 12); ctx.fill(); txt(ctx, `roll ${lk.roll}`, 55, H - 62, { size: 12, weight: 800, color: on ? '#000' : COL.dim }); }
+}
+/** The pad's outputs as last written (read back from the report bytes, not the sliders): light bar, player lights, motors, triggers. */
+function drawPadHud(ctx, W) {
+  if (!NEW_IDEAS.some(d => ideas[d.id].on)) return;
+  const sh = shownNow(), x = W - 222, y = 10, bar = (bx, by, v, c, lbl) => { ctx.fillStyle = '#1b212d'; rr(ctx, bx, by, 60, 7, 3); ctx.fill(); if (v > 0.004) { ctx.fillStyle = c; rr(ctx, bx, by, Math.max(4, 60 * v), 7, 3); ctx.fill(); } txt(ctx, lbl, bx + 64, by + 4, { size: 10, align: 'left', color: COL.dim }); };
+  ctx.fillStyle = 'rgba(10,12,17,.82)'; rr(ctx, x, y, 210, 92, 8); ctx.fill(); ctx.strokeStyle = '#2b3446'; ctx.lineWidth = 1; ctx.stroke();
+  txt(ctx, 'pad · as written', x + 8, y + 11, { size: 10, align: 'left', color: COL.faint, weight: 700 });
+  ctx.save(); ctx.fillStyle = rgbCss(sh.light, sh.light ? 1 : 0.4); ctx.shadowColor = rgbCss(sh.light); ctx.shadowBlur = sh.light ? 10 : 0; rr(ctx, x + 108, y + 6, 94, 10, 5); ctx.fill(); ctx.restore();
+  for (let i = 0; i < 5; i++) { const lit = sh.players != null && (sh.players >> i) & 1; ctx.fillStyle = lit ? '#fff' : '#262d3c'; ctx.beginPath(); ctx.arc(x + 116 + i * 14, y + 28, 4, 0, 7); ctx.fill(); }
+  txt(ctx, 'players', x + 8, y + 28, { size: 10, align: 'left', color: COL.dim });
+  bar(x + 8, y + 42, sh.rumbleLow, COL.back, 'heavy'); bar(x + 108, y + 42, sh.rumbleHigh, COL.fn, 'light');
+  const tr = t => t.mode === 'feedback' ? t.level / 8 : 0;
+  bar(x + 8, y + 60, tr(sh.left), COL.accent, 'L2 stiff'); bar(x + 108, y + 60, tr(sh.right), '#ff9f6c', 'R2 stiff');
+  txt(ctx, out.enabled ? (out.paused ? 'outputs paused' : 'Feedback tab: channels') : 'outputs off', x + 8, y + 82, { size: 9.5, align: 'left', color: COL.faint });
+}
+/** The live line under each of ideas 8–13: the lanes in, the params moved, each sink row's value, and what the pad was last told. */
+function labLive() {
+  const L = pad.lanes, sh = shownNow(), rb = sinkReadback(sh), r = id => runOf(id);
+  const sent = k => Number.isFinite(rb[k]) ? rb[k].toFixed(2) : '—', lit = () => Number.isFinite(rb[7]) ? `${pyRound(rb[7] * 5)} lit` : '—';
+  const trig = t => t.mode === 'feedback' ? `Feedback ${t.level}/8 from zone ${t.start}` : t.mode === 'vibration' ? `buzz ${t.level}/8` : 'free';
+  const deg = v => `${v >= 0 ? '+' : ''}${(v * 180 / Math.PI).toFixed(0)}°`, f2 = v => fmt(v), off = d => `off — tick it to run patches/${d.patch}.json`;
+  const lines = {
+    i8: g => { const off8 = TAU * (pymod(g.norm('rot.phase.XW') - g.param('rot.phase.XW').base + 0.5, 1) - 0.5);
+      return `touch:down ${fmt(L['touch:down'], 0)} · motion:roll ${f2(L['motion:roll'])} pitch ${f2(L['motion:pitch'])} → XW ${deg(off8)}, YW ${deg(g.val('rot.phase.YW'))} · edge:0 ${g.norm('rot.phase.XW').toFixed(2)} → sent hue ${sent(0)} · edge:7 ${g.norm('rot.phase.YW').toFixed(2)} → sent ${lit()}`; },
+    i9: s => `motion:spin.yaw ${f2(L['motion:spin.yaw'])} → rot.rate.XW ×${s.val('rot.rate.XW').toFixed(1)} · |spin| → fx.doublevision.mix ${s.val('fx.doublevision.mix').toFixed(2)} · edge:4 → sent light motor ${sent(4)}`,
+    i10: w => `motion:energy ${f2(L['motion:energy'])} → fx.glimmer.mix ${w.val('fx.glimmer.mix').toFixed(2)}, density ${w.val('fx.glimmer.density').toFixed(2)} · edge:2 → sent whiteness ${sent(2)}`,
+    i11: d => `axis:LT ${f2(L['axis:LT'])} → split ${d.val('fx.deconverge.amount').toFixed(1)} px · wall ${fmt(d.lane('mod:2', L))} → radial ${d.val('fx.deconverge.radial').toFixed(3)} · edge:5 → sent L2 ${trig(sh.left)} · edge:3 → sent heavy ${sent(3)}`,
+    i12: u => `axis:RT ${f2(L['axis:RT'])} · gate ${u.param('env.6.gate').eff >= 0.5 ? 'open' : 'shut'} · env 6 ${fmt(u.lane('env:5', L))} → fx.warp.amount ${u.val('fx.warp.amount').toFixed(2)} · edge:6 → sent R2 ${trig(sh.right)} · edge:7 → sent ${lit()}`,
+    i13: q => `touch:down2 ${fmt(L['touch:down2'], 0)} · y2 ${f2(L['touch:y2'])} → roll ${LFO_SYNCS[q.val('lfo.1.sync')]} · R4 latch ${q.param('env.6.gate').base >= 0.5 ? 'on' : 'off'} · lfo.1.depth ${q.val('lfo.1.depth').toFixed(2)} → view.lines_alpha ${q.val('view.lines_alpha').toFixed(2)} · edge:1 → sent level ${sent(1)}`,
+  };
+  for (const d of NEW_IDEAS) { const e = $('#' + d.id + 'live'); if (e) e.textContent = r(d.id) ? lines[d.id](r(d.id)) : off(d); }
+}
+/** A ticked lab idea turns its channels on (auto), as adding its sink rows would; unticked, the channels it turned on
+ *  go off again. Solo is stricter: exactly the solo idea's channels are on, so nothing else reaches the pad. */
+function syncIdeaChannels(solo = null) {
+  const want = new Set(solo ? IDEA_CH[solo] : NEW_IDEAS.filter(d => ideas[d.id].on).flatMap(d => d.ch));
+  out.ch.forEach((c, k) => {
+    if (solo) { c.on = want.has(k); c.byIdea = c.on && solo !== 'i7'; if (c.on) c.auto = true; }
+    else if (want.has(k)) { if (!c.on) { c.on = true; c.byIdea = true; } c.auto = true; }
+    else if (c.byIdea) { c.on = false; c.byIdea = false; }
+    if (c.el) c.el.checked = c.on;
+    if (c.autoEl) c.autoEl.checked = c.auto;
+  });
+}
+function setIdea(id, on) { ideas[id].on = on; const cb = $('#' + id + 'on'); if (cb) cb.checked = on; if ('run' in ideas[id] && !on) ideas[id].run = null; }
+// copy route: the patch's modifiers and routes, then its session rows — the files' own words
+const rowText = o => JSON.stringify(o, null, 1).replace(/\n\s*/g, ' ').replace(/\[ /g, '[').replace(/ \]/g, ']').replace(/\{ /g, '{').replace(/ \}/g, '}');
+for (const d of NEW_IDEAS) {
+  const doc = LAB.patches[d.patch];
+  ROUTES['r' + d.n] = [`# patches/${d.patch}.json — spawn it from GRAPH. Its modifiers, then its routes:`, ...doc.modifiers.map(rowText), ...doc.routes.map(rowText),
+    `# session-rows/${d.patch}.json — rows of your own (bindings.json): Learn sink ▸ / Learn pad`, ...(LAB.rows[d.patch] || []).map(rowText)];
+  ROUTE_NOTES['r' + d.n] = `# docs/plans/assets/42-controllers/ — ${doc.note.split(':')[0]}\n`;
+}
 
 // ---------------------------------------------------------------- 10 probe / checklist
 const findings = { steps: {} };
@@ -1633,6 +2119,53 @@ function selfTest() {
   t('motion: 30° right side down → roll 0.75; jolt 2 g → shake', () => { const m = new Motion(); m.step([0, 0, 0], [-0.5, Math.sqrt(3) / 2, 0], 0.016); const roll = m.lanes()[0]; m.step([0, 0, 0], [-0.5, Math.sqrt(3) / 2, 2], 0.016); return Math.abs(roll - 0.75) < 1e-9 && m.shake === 1 || [roll, m.shake].join(); });
   t('simulator encode → decode round trip (USB and BT + CRC)', () => { const s = { sticks: [1, 2, 3, 250], l2: 9, r2: 200, buttons: { A: 1, RP: 1, LFN: 1 }, hatN: 3, counter: 5, seq32: 77, gyro: [-100, 200, -300], accel: [10, 8192, -20], sensorTime: 123456, touches: [{ down: true, id: 5, x: 1919, y: 1079 }, { down: false, id: 6, x: 3, y: 4 }], touchCount: 2, battery: 6, charging: 1 };
     for (const k of ['usb', 'bt']) { const f = decodeInput(encodeInput(s, k, 7), k === 'bt'); if (!f) return k + ' not decoded'; if (f.sticks.join() !== '1,2,3,250' || f.gyro.join() !== '-100,200,-300' || f.accel.join() !== '10,8192,-20' || f.touches[0].x !== 1919 || f.touches[0].y !== 1079 || !f.touches[0].down || f.touches[1].down || f.buttons.A !== 1 || f.buttons.RP !== 1 || f.buttons.LFN !== 1 || f.hatN !== 3 || f.battery !== 6 || f.sensorTime !== 123456) return k + ' mismatch'; } return true; });
+  // ideas 8–13: the shipped patches through section 9b's mirror of the app's row maths, out through pad_effects
+  const drive = (run, L, s, dt = 1 / 60) => { for (let i = 0, n = Math.round(s / dt); i < n; i++) run.step(L, dt, 0); return run; };
+  const near = (a, b, e = 1e-6) => Math.abs(a - b) <= e;
+  t('ideas 8–13: six patches and their session rows embedded, every param they touch with the app\'s range', () => {
+    const gone = NEW_IDEAS.map(d => d.patch).filter(n => !LAB.patches || !LAB.patches[n] || !LAB.rows[n]); if (gone.length) return 'missing ' + gone;
+    for (const d of NEW_IDEAS) new PatchRun(d.patch);                      // throws on a param with no range
+    return NEW_IDEAS.every(d => d.ch.length > 0) || 'an idea with no sink row';
+  });
+  t('motion.spring kernel: one long step = a thousand short ones (under-, critically and over-damped)', () => {
+    for (const z of [0.6, 1, 2.5]) { let x = 0, v = 0; for (let i = 0; i < 1000; i++) [x, v] = springK(x, v, 1, 0.001, 1.5, z); const [x1] = springK(0, 0, 1, 1, 1.5, z); if (!near(x, x1, 1e-9)) return `ζ ${z}: ${x} vs ${x1}`; }
+    return true; });
+  t('idea 8 grab: no thumb → no turn; a thumb and 30° of roll → XW +45° once the spring settles; edge:0 is the XW angle', () => {
+    const r = new PatchRun('grab-tilt'), base = r.param('rot.phase.XW').base;
+    drive(r, { 'motion:roll': 0.75, 'motion:pitch': 0.5, 'touch:down': 0 }, 1);
+    if (!near(r.norm('rot.phase.XW'), base, 1e-12)) return 'turned with no thumb: ' + r.norm('rot.phase.XW');
+    drive(r, { 'motion:roll': 0.75, 'motion:pitch': 0.5, 'touch:down': 1 }, 3);
+    const off = (r.norm('rot.phase.XW') - base) * 360, s = r.sinks();
+    return near(off, 45, 0.05) && near(s[0], r.norm('rot.phase.XW'), 1e-12) && near(s[7], 0.5, 1e-9) || [off, s[0], s[7]].join(); });
+  t('idea 9 spin: either way smears (|spin|); a full turn right → XW rate ×11, left → ×−9; still → nothing', () => {
+    const span = LAB.params['rot.rate.XW'].hi - LAB.params['rot.rate.XW'].lo;
+    const r = drive(new PatchRun('spin-spin'), { 'motion:spin.yaw': 1 }, 4), q = drive(new PatchRun('spin-spin'), { 'motion:spin.yaw': 0 }, 4), z = drive(new PatchRun('spin-spin'), { 'motion:spin.yaw': 0.5 }, 4);
+    const rr = r.val('rot.rate.XW'), rq = q.val('rot.rate.XW');
+    return near(rr, 1 + 0.075 * span, 0.01) && near(rq, 1 - 0.075 * span, 0.01) && near(r.sinks()[4], 1, 1e-3) && near(q.sinks()[4], 1, 1e-3) && z.sinks()[4] === 0 && near(z.val('rot.rate.XW'), 1, 1e-9)
+      || [rr, rq, r.sinks()[4], q.sinks()[4], z.sinks()[4]].join(); });
+  t('idea 10 snow globe: shaken → glitter full; held still → settles with its 2.5 s release (e⁻¹ after 2.5 s); edge:2 whitens the bar', () => {
+    const r = drive(new PatchRun('snow-globe'), { 'motion:energy': 1 }, 1.5), peak = r.val('fx.glimmer.mix');
+    drive(r, { 'motion:energy': 0 }, 2.5); const after = r.val('fx.glimmer.mix');
+    const e = padEffects(r.sinks(), 1), sat = rgbToHsv(...e.light.map(c => c / 255))[1];
+    return near(peak, 1, 1e-3) && near(after, Math.exp(-1), 0.01) && near(sat, 1 - after, 0.02) || [peak, after, sat].join(); });
+  t('idea 11 detent: L2 0.69 → no wall; 0.725 part; 0.76 → radial 0.8 → L2 Feedback 6/8 from zone 1 and the heavy motor at 0.8', () => {
+    const at = lt => drive(new PatchRun('trigger-detent'), { 'axis:LT': lt }, 1).norm('fx.deconverge.radial');
+    const c = drive(new PatchRun('trigger-detent'), { 'axis:LT': 0.76 }, 1), e = padEffects(c.sinks(), 1), tr = readTrigger(effectsBlock(e), C.TRIG_L), [a, b] = [at(0.69), at(0.725)];
+    return a === 0 && b > 0 && b < 0.8 && near(c.norm('fx.deconverge.radial'), 0.8, 1e-3) && tr.mode === 'feedback' && tr.level === 6 && tr.start === 1 && near(e.rumbleLow, 0.8, 1e-3)
+      || JSON.stringify([a, b, c.norm('fx.deconverge.radial'), tr, e.rumbleLow]); });
+  t('idea 12 wind-up: R2 0.5 → none; 0.65 opens the gate; full at the attack\'s end (3 s) → R2 Feedback 8/8, 5 player lights; under 0.4 → back in 0.15 s', () => {
+    const r = drive(new PatchRun('wind-up'), { 'axis:RT': 0.5 }, 1); if (r.norm('fx.warp.amount') !== 0) return 'wound at R2 0.5';
+    drive(r, { 'axis:RT': 0.65 }, 1.5); const mid = r.norm('fx.warp.amount');
+    drive(r, { 'axis:RT': 0.65 }, 1.6); const full = r.norm('fx.warp.amount'), e = padEffects(r.sinks(), 1), tr = readTrigger(effectsBlock(e), C.TRIG_R);
+    drive(r, { 'axis:RT': 0.3 }, 0.17); const back = r.norm('fx.warp.amount');
+    return mid > 0 && mid < 0.5 && near(full, 1, 1e-9) && tr.mode === 'feedback' && tr.level === 8 && e.players === 0x1F && back === 0 || [mid, full, tr.level, e.players, back].join(); });
+  t('idea 13 roll: two thumbs, the second low / mid / high → 1/4, 1/8, 1/16; it blinks on the beat; one thumb → no stutter; R4 latches it', () => {
+    const div = y2 => LFO_SYNCS[drive(new PatchRun('thumb-roll'), { 'touch:down2': 1, 'touch:y2': y2 }, 0.2).val('lfo.1.sync')], d = [div(0.1), div(0.5), div(0.9)].join();
+    const one = drive(new PatchRun('thumb-roll'), { 'touch:down2': 0, 'touch:y2': NaN }, 1), two = new PatchRun('thumb-roll'), seen = new Set();
+    for (let i = 0; i < 120; i++) { two.step({ 'touch:down2': 1, 'touch:y2': 0.5 }, 1 / 60, i / 30); seen.add(two.val('view.lines_alpha')); }
+    const latch = new PatchRun('thumb-roll'); latch.press('pad:RP'); drive(latch, { 'touch:down2': 0, 'touch:y2': NaN }, 0.1);
+    return d === '1/4,1/8,1/16' && one.val('view.lines_alpha') === 1 && one.sinks()[1] === 1 && seen.has(0) && seen.has(1) && latch.val('lfo.1.depth') === 1
+      || [d, one.val('view.lines_alpha'), [...seen].join('/'), latch.val('lfo.1.depth')].join(' '); });
   const ok = res.filter(r => r.ok).length;
   selfTestResult = { passed: ok, total: res.length, results: res };
   const badge = $('#selftest'); badge.textContent = `self-test ${ok}/${res.length} ${ok === res.length ? 'pass' : 'FAIL'}`; badge.className = ok === res.length ? 'pass' : 'fail';
@@ -1674,8 +2207,9 @@ function updateStatus() {
   $('#i4live').textContent = `centre ${fmt(i4.cx)}, ${fmt(1 - i4.cy)} · touch:pinch ${fmt(L['touch:pinch'])} → zoom ×${Math.pow(2, i4.zoom * 2).toFixed(2)} · touch:twist ${fmt(L['touch:twist'])} → XW ${(i4.xw * 360).toFixed(0)}°`;
   $('#i5live').textContent = `fires ${ideas.i5.fires} · env ${ideas.i5.env.toFixed(2)}`;
   $('#i7live').textContent = `light.hue ${i7.hue.toFixed(2)} · rumble.low ${i7.beatEnv.toFixed(2)} (${i7.beat}) · axis:RT ${fmt(L['axis:RT'])} → fx.kaleido.mix ${i7.mix.toFixed(2)} → trigger.right`;
+  labLive();
   const vals = channelValues();
-  CHANNELS.forEach((c, i) => { const e = $('#chv' + i); if (e) e.textContent = vals[i] != null ? vals[i].toFixed(2) : '—'; });
+  CHANNELS.forEach((c, i) => { const e = $('#chv' + i); if (e) e.textContent = vals[i] != null ? vals[i].toFixed(2) : '—'; const s = $('#chsrc' + i); if (s) s.textContent = out.demoBy && out.demoBy[i] ? out.demoBy[i] : 'auto'; });
   $('#outPaused').textContent = out.paused ? `auto output paused by ${out.paused}` : ''; $('#outResume').hidden = !out.paused;
   while (out.winT.length && out.winT[0] < now() - 1000) out.winT.shift();
   $('#outStats').textContent = `· writes ${out.writes} · ${out.winT.length}/s · errors ${out.errors}${pad.source === 'hid' && hid.usbOutLen ? ' · USB len ' + hid.usbOutLen : ''}`;
@@ -1728,7 +2262,7 @@ function wireSim() {
   window.addEventListener('blur', () => { sim.keys.clear(); sim.mouse.clear(); });
   // touchpad surface
   const st = $('#simTouch');
-  st.addEventListener('pointerdown', e => { st.setPointerCapture(e.pointerId); const [x, y] = canvasPoint(st, e, 1, 1); touchSurf.start(x, y, e.shiftKey); });
+  st.addEventListener('pointerdown', e => { st.setPointerCapture(e.pointerId); const [x, y] = canvasPoint(st, e, 1, 1); touchSurf.start(x, y, e.shiftKey, e.altKey); });
   st.addEventListener('pointermove', e => { if (e.buttons) { const [x, y] = canvasPoint(st, e, 1, 1); touchSurf.move(x, y); } });
   st.addEventListener('pointerup', () => touchSurf.end()); st.addEventListener('pointercancel', () => touchSurf.end());
   // tilt
@@ -1749,7 +2283,7 @@ function wireSim() {
     const [x, y] = canvasPoint(ro, e, 1000, 620); const hit = hits.slice().reverse().find(q => x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h); if (!hit) return;
     ro.setPointerCapture(e.pointerId);
     if (hit.kind === 'btn') { sim.mouse.add(hit.n.startsWith('hat:') ? hit.n : hit.n); drag = hit; }
-    else if (hit.kind === 'touch') { drag = hit; touchSurf.start((x - hit.x) / hit.w, (y - hit.y) / hit.h, e.shiftKey); }
+    else if (hit.kind === 'touch') { drag = hit; touchSurf.start((x - hit.x) / hit.w, (y - hit.y) / hit.h, e.shiftKey, e.altKey); }
     else if (hit.kind === 'stick') { drag = hit; }
     else if (hit.kind === 'trigger') { drag = hit; $(hit.side === 'L' ? '#simL2' : '#simR2').value = clamp((x - hit.x) / hit.w, 0, 1) * 255; }
   });
@@ -1777,16 +2311,21 @@ function wireUi() {
   $('#i7hue').oninput = e => ideas.i7.hueSpeed = +e.target.value; $('#i7bpm').oninput = e => ideas.i7.bpm = +e.target.value || 120;
   $('#i7beat').onchange = async e => { ideas.i7.beat = e.target.value; if (e.target.value === 'mic') await startMic(); };
   $('#i7tap').onclick = () => { const i7 = ideas.i7, t = now(); i7.taps = i7.taps.filter(x => t - x < 3000); i7.taps.push(t); if (i7.taps.length >= 2) { const d = (i7.taps[i7.taps.length - 1] - i7.taps[0]) / (i7.taps.length - 1); i7.bpm = Math.round(60000 / d); $('#i7bpm').value = i7.bpm; } i7.beatT = t; };
+  for (const d of NEW_IDEAS) $('#' + d.id + 'on').onchange = e => { setIdea(d.id, e.target.checked); syncIdeaChannels(); };
+  $('#i8clutch').onchange = e => ideas.i8.clutch = e.target.checked;
+  $('#i10settle').oninput = e => { ideas.i10.settle = +e.target.value; $('#i10settleV').textContent = `${(+e.target.value).toFixed(1)} s`; };
+  $('#i12wind').oninput = e => { ideas.i12.wind = +e.target.value; $('#i12windV').textContent = `${(+e.target.value).toFixed(1)} s`; };
+  $$('.solo').forEach(b => b.onclick = () => { for (const id of Object.keys(IDEA_CH)) setIdea(id, id === b.dataset.solo); syncIdeaChannels(b.dataset.solo); });
   $$('.rbtn').forEach(b => b.onclick = async () => { const id = b.dataset.routes, pre = $('#' + id), text = ROUTE_NOTES[id] + ROUTES[id].join('\n'); pre.textContent = text; pre.hidden = false; try { await navigator.clipboard.writeText(ROUTES[id].join('\n')); b.textContent = 'copied ✓'; } catch (e) { b.textContent = 'shown (select to copy)'; } setTimeout(() => b.textContent = 'copy route', 1500); });
   // feedback
   const rows = $('#chanRows');
   CHANNELS.forEach(([k, label], i) => {
     const c = out.ch[i];
-    const on = h('input', { type: 'checkbox', title: 'on: a row sends this channel; off: the identity' }); on.checked = c.on; on.onchange = () => c.on = on.checked; c.el = on;
-    const auto = h('input', { type: 'checkbox' }); auto.checked = c.auto; auto.onchange = () => c.auto = auto.checked;
-    const sl = h('input', { type: 'range', min: 0, max: 1, step: 0.01, value: c.manual }); sl.oninput = () => { c.manual = +sl.value; if (AUTO_SRC[i]) { auto.checked = false; c.auto = false; } };
+    const on = h('input', { type: 'checkbox', title: 'on: a row sends this channel; off: the identity' }); on.checked = c.on; on.onchange = () => { c.on = on.checked; c.byIdea = false; }; c.el = on;
+    const auto = h('input', { type: 'checkbox' }); auto.checked = c.auto; auto.onchange = () => c.auto = auto.checked; c.autoEl = auto;
+    const sl = h('input', { type: 'range', min: 0, max: 1, step: 0.01, value: c.manual }); sl.oninput = () => { c.manual = +sl.value; if (out.demo[i] != null) { auto.checked = false; c.auto = false; } };
     rows.append(h('tr', {}, h('td', { class: 'mono' }, `edge:${i}`), h('td', { class: 'mono', title: label }, k), h('td', {}, h('label', {}, on, ' on')),
-      h('td', { class: 'dim' }, AUTO_SRC[i] ? h('label', { title: 'driven by the demo' }, auto, ' ' + AUTO_SRC[i]) : 'manual'), h('td', {}, sl), h('td', { class: 'mono', id: 'chv' + i, style: 'width:38px' })));
+      h('td', { class: 'dim' }, h('label', { title: 'auto: what the ticked idea sends (its sink row); off: the slider' }, auto, ' ', h('span', { id: 'chsrc' + i }, 'auto'))), h('td', {}, sl), h('td', { class: 'mono', id: 'chv' + i, style: 'width:38px' })));
   });
   $('#outOn').onchange = e => out.enabled = e.target.checked;
   $('#outResume').onclick = resumeOut;
@@ -1839,7 +2378,8 @@ setInterval(simTick, 4);
 setInterval(() => { outputTick(); }, 5);
 requestAnimationFrame(loop);
 // a handle for the console and the headless check (not used by the page itself)
-window.edgeLab = { pad, sim, hid, out, ideas, tape, findings, PROBE, stats, selfTest, decodeInput, outputReport, encodeInput, exportFindings, touchSurf, setSource };
+window.edgeLab = { pad, sim, hid, out, ideas, tape, findings, PROBE, stats, selfTest, decodeInput, outputReport, encodeInput, exportFindings, touchSurf, setSource,
+  LAB, lab, PatchRun, NEW_IDEAS, setIdea, syncIdeaChannels, sinkReadback, shownNow };
 </script>
 </body>
 </html>

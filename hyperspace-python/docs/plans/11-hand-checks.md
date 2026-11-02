@@ -6498,6 +6498,127 @@ on-screen pad shows its own letters), R / ZR `RB` / `RT`; neither
 steals the other's; unplugging one leaves the other's rows alone. The
 (R)'s tilt: run the probe's checks on it too — its sensor map is from
 the sources, unverified (plan 46 D5).
+## AU. Node groups: ids and membership (post-show G0)
+Register row 563, 2026-11-02. Headless: `tests/test_graph_groups.py` (the
+corpus property, `test_groups_keep_their_invariants_over_the_corpus`) and
+`tests/test_graph_edit.py::test_a_group_made_taken_apart_and_remade_by_the_mouse`
+(a real mouse: box-select, right-click menu, drags out of the region, the
+Delete key).
+**422. Group, delete a member, ungroup, regroup: ids and membership
+behave.** (Mac, GRAPH, any preset with three effects in its run)
+1. Box-select two effects, right-click one, **group 2 nodes**. Note the
+   folded node's name ("group 1"). Open it (`+`).
+2. Box-select the third effect and one of the members, **group 2 nodes**:
+   the second group is "group 2"; the member moved over, said on the head.
+3. Right-click group 2's title, **ungroup**. Box-select those two again and
+   group them.
+4. In the open group 1, click its remaining member and press Delete (fn+⌫).
+5. ⌘Z.
+6. Drag the member out of its region, then drag the other out.
+7. Save the preset, load another, load it back.
+*Pass:* (2) the first group's node shrinks at once, not on the next click.
+(3) the regrouped pair is **group 3**, never "group 2" again. (4) the
+member is gone from the canvas and from the group on that same frame: the
+region is one node's, with no gap where the member was, and nothing
+refers to it. (5) the member is back on the canvas **and in its group**
+(the region holds it again). (6) the first drag says "… left group 1"; the
+second "…, the last of it: the group is gone"; the nodes stay where they
+were dropped, every cable still drawn. (7) the groups come back exactly as
+saved — no "is not in the preset — left out" note on the head; a group
+made now is numbered past the highest the file names.
+## AQ. Video audio 1 of 4: the track decoded, nothing audible (plan 45 V1)
+**421. Open a show video: nothing audible changes, memory stays flat, nothing extra is read.** (Mac, a show video of a few minutes with a soundtrack, Activity Monitor)
+Headless: `tests/test_media_audio.py` (`test_nothing_is_read_until_something_asks_for_sound`,
+`test_a_two_hour_file_holds_one_window_not_the_film`, `test_a_window_is_decoded_into_one_buffer`,
+`test_opening_never_blocks_the_caller`). In V1 nothing asks for sound
+(`Soundtrack.enable()` is V2's play-audio toggle), so this build must
+cost nothing at all: no thread, no open, no read, no memory.
+1. Launch; in Activity Monitor note the app's memory and, on the Disk
+   tab, its Bytes Read. Put a show video with a soundtrack in a channel's
+   bin and slot it; wire the channel to an output. Note Bytes Read once the
+   proxy has been made (the MEDIA page says so) and the picture plays.
+2. Let it play 30 s; scrub `pos` across the whole clip; set `rate` to −2,
+   then 0, then 4; switch `loop` to pingpong.
+3. Watch memory and Bytes Read for a minute; then slot a video with no
+   audio (a GIF or a muted export), then back.
+4. SYSTEM: the frame time. Optional: `sample Hyperspace 2` in a terminal
+   and search the thread names for `media-audio`.
+*Pass:* no sound from the app at any step (the analyzer's WAV file, if one
+is playing, is unchanged); the picture scrubs, reverses and freezes as it
+did before this build; memory does not rise when the clip is slotted
+beyond what the picture and the proxy took before this build, and stays
+flat through the scrubs and the loop; Bytes Read grows only as the
+picture is read (the same as before: the video thread and, once, the
+proxy job) — no second read of the file; no `media-audio-*` thread in the
+sample; the frame time does not move when the clip is slotted or scrubbed;
+no line about audio in the log for the muted file. Fail: a `media-audio-*`
+thread or a second read of the file points at something calling
+`Soundtrack.enable()` before V2; a climb in memory with time points at
+`Soundtrack._decode` holding old windows; a hitch on slot points at a
+decode reaching the frame thread (`VideoSource.open` or `want` doing more
+than storing a float).
+## AT. Coarse and fine through the tapers (wave 0 T1)
+Decision register row 561. Both Macs on this build; the owner has run
+`uv run python tools/retaper_routes.py` on the library (a dry run, then
+`--write`) **before the next show** — until then every old preset is
+converted at load and nothing is lost, but the files still say the old
+depths.
+**420. 0.05× from an APC knob; an old preset's depth feels the same.** (Mac, the APC40, the second Mac on `main` for the last step)
+Headless: `tests/test_retaper.py`; `tests/test_fx.py`.
+1. Load `party-noita` (the library's, after the tool). FX: open Trip
+   warp. Learn a desk knob onto `fx.warp.speed` and another onto
+   `fx.warp.amount` (ROUTING, or click-to-map on the on-screen desk).
+2. Turn the speed knob from its bottom to its top, slowly, watching the
+   readout; then land 0.05× and let go of the knob.
+3. Turn the amount knob from its bottom to its top; land 0.1 (5 % of the
+   range) and let go.
+4. Right hand up in the box, at rest; then raise it to the top of the
+   box and hold it there. Watch the warp.
+5. On the second Mac (`main`, the library before the tool's rewrite — its
+   backup, or the preset as it was), the same preset and the same gesture.
+6. GRAPH ▸ the `hand:right.y → warp amount` cable's depth (or ROUTING's
+   row): read its number.
+*Pass:* (2) the readout runs −8.00× … −0.25× … −0.008× · stop (the
+knob's middle) · +0.008× … +0.050× … +0.25× … +1.00× … +8.00×, each CC
+step about an eighth of an octave, and 0.05× holds where the knob is let
+go (about a third of the way up the positive half) — it does not snap to
+stop or to 0.1×; (3) the amount reads 0 at the bottom, then 0.002 … 0.02
+… 0.2 … 2.0, and 0.1 holds (about 0.57 of the knob); (4) with the hand at
+the top of the box the warp is as strong as (5) on the old build — the
+depth was migrated about the preset's base, so a full push reaches the
+same amount; between rest and the top the curve differs a little (the
+new taper's), by eye the same gesture; (6) the depth reads about 0.074,
+where the file said 0.3 before (the tool's line: `push 0.3 → 0.0737 about
+0.9`).
+## AR. Continuity: `@clock`, and no shader multiplies time by a param
+Register row 560 (the owner, 2026-11-02; wave 0 K1, `wave0/k1-clock-directive`).
+K1 is the framework only — the directive, the lint and the harness; **no
+shipped effect is ported yet**, so this check waits for K2 (warp and
+tripcolour on `@clock`). Until then the headless proof is
+`tests/test_fx_clock.py` (a synthetic `@clock` effect beside its
+`u_phase * u_rate` twin through the UV harness; warp's drift as a strict
+xfail) and `tests/test_shader_time_lint.py` (the allowlist of today's
+offenders).
+**419. A knob step on a `@clock` param changes the rate, not the place.** (laptop; after K2; music helps)
+Headless: `tests/test_fx_clock.py` (`test_a_clocked_rate_step_is_continuous_and_the_twins_jumps`, `test_warps_speed_step_is_continuous`), `tests/test_shader_time_lint.py`.
+1. Load a preset with Trip warp on (`party-trip`, say) and let it run — the
+   longer the better; an hour is the show's shape. Note roughly where the
+   warp's ripples sit over the shape.
+2. On FX, open Trip warp. Nudge Drift one step (a tenth), then Scale one
+   step. Then nudge the effect's Speed one step (it was integrated before
+   K1: this is what right looks like).
+3. On Trip colour, nudge Pulse one step while white is on screen.
+4. Open `hyperspace/shaders/fx/warp.glsl`: the `// @clock` lines are at the
+   top; nothing in the body multiplies `u_phase` or `u_time` by a `u_` param.
+*Pass:* in 2 each nudge makes the ripples slide faster or finer from where
+they are — nothing re-draws, nothing lurches, the same as Speed; in 3 the
+green pulse keeps its beat and only quickens, no flash; 4 reads as said.
+*Fail:* a nudge on Drift or Scale lands the field somewhere else (the
+2026-10-30 show) — the port multiplies a time by a param somewhere the
+lint's allowlist still names, or a `@clock`'s period is set where the
+shader's use of it is not periodic (a scrolled noise field must run on,
+unwrapped). Before K2 lands, 2 and 3 *do* lurch on Drift, Scale and Pulse:
+that is the recorded fault, not a regression.
 
 ## What no test covers
 

@@ -9,6 +9,7 @@ exactly one of the two."""
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 from PIL import Image
@@ -55,7 +56,17 @@ class MediaFrame:
     live feed); `frame` its id, counting up, so a reader uploads only when
     it moved. A GPU frame carries `texture` (a GL texture name in the
     renderer's share group) and `tex_size` instead of `pixels`, and its
-    `tex_target` (`TEX_2D`, or `TEX_RECT` for a Syphon feed's)."""
+    `tex_target` (`TEX_2D`, or `TEX_RECT` for a Syphon feed's). `lease`
+    is a GPU frame's hold on its texture, when the source pools textures
+    (`outputs.Lease`, the GRAPH canvas's tap): an object the frame keeps
+    alive for exactly as long as it lives, so whoever holds the frame —
+    a channel at rate 0 — holds the texture, and letting the frame go
+    lets the texture go; None when the texture outlives every frame (a
+    Syphon client's). `tex_gen` is the generation of the texture object
+    under its name: a source that makes textures anew (the tap on a
+    resize) may be handed a name GL gave out before, a different object
+    with default sampler state, and bumps it; 0 for a source that never
+    does."""
 
     pixels: np.ndarray | None
     t: float
@@ -63,6 +74,8 @@ class MediaFrame:
     texture: int | None = None
     tex_size: tuple[int, int] | None = None
     tex_target: int = TEX_2D
+    lease: Any = None
+    tex_gen: int = 0
 
     def __post_init__(self):
         if (self.pixels is None) == (self.texture is None):

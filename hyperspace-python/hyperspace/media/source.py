@@ -36,7 +36,10 @@ class Source(Protocol):
     joins the source's thread. A source may also define `gl_poll() ->
     MediaFrame | None`, called only on the frame thread by the renderer
     (Syphon's `textureName()` needs the GL thread); sources without it are
-    read with `latest()`."""
+    read with `latest()`. A video source also carries `audio`, a
+    `video.Soundtrack` (plan 45): its track in memory, following the same
+    `want`, read by sample position; a source without the attribute has
+    no sound."""
 
     sid: str
     kind: str

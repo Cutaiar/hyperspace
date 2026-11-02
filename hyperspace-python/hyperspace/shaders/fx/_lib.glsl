@@ -16,6 +16,15 @@
 //   u_phase    float     — the effect's clock: seconds × its speed fader
 //   u_time     float     — seconds, wall clock (for flicker that must not
 //                          stop when the speed is 0)
+//   u_<clock>  float     — a `// @clock u_<clock> <rate-param> [period]` line
+//                          at the top of a file: a phase fx.py integrates
+//                          every frame at speed × that param (wrapped to the
+//                          period if one is given) and declares beside u_phase.
+//                          THE RULE: no shader multiplies u_phase or u_time by
+//                          a param — `u_phase * u_drift` jumps the field by
+//                          phase × Δdrift on a knob step, hours into a set;
+//                          declare a @clock and read the phase instead
+//                          (tests/test_shader_time_lint.py holds every file to it)
 //   v_uv       vec2      — this pixel, 0..1 across the frame, y up
 //   u_aux      sampler2D — the second picture, wired into the effect's aux
 //                          port (plan 32 R: a channel, the scene, the history);
