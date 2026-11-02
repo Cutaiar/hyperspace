@@ -1,13 +1,15 @@
 """Source ids: `<kind>:<ref>`, the one name a channel slot, a preset and the
 resolver share. `shared:` and `local:` are folder-relative, `file:` is an
 absolute path, the rest name a live feed. `phone:` is reserved (V2): it
-parses but is never opened."""
+parses but is never opened. `panel:` names a picture of the control
+window's own (2026-11-02): `panel:graph`, the GRAPH canvas, a built-in
+the app's resolver answers without a `[[devices]]` entry."""
 
 from __future__ import annotations
 
 from typing import NamedTuple
 
-KINDS = ("shared", "local", "file", "camera", "syphon", "ndi", "phone")
+KINDS = ("shared", "local", "file", "camera", "syphon", "ndi", "phone", "panel")
 FILE_KINDS = ("shared", "local", "file")
 
 

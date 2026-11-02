@@ -60,6 +60,8 @@ from .graph import source_into, wire_node_kind
 from .media import pool
 from .media.adapters import VIDEO_EXT
 from .media.channels import BIN, CHANNELS, EMPTY
+from .media.live import HOLD_S
+from .media.panel import OFF_PAGE
 from .media.source import FETCHING, MISSING, READY
 from .media.still import STILL_EXT
 
@@ -121,14 +123,22 @@ def folder_of(panel):
 
 
 def _feeds(panel) -> dict:
+    """The live feeds: the resolver's built-ins (`panel:graph`, 2026-11-02:
+    no `[[devices]]` entry) first, then what the devices found."""
+    out: dict = {}
+    builtin = getattr(getattr(media_of(panel), "resolver", None), "builtin", None)
+    if builtin:
+        out.update(builtin)
     devices = getattr(panel, "devices", None)
     fn = getattr(devices, "media_feeds", None)
     if fn is None:
-        return {}
+        return out
     try:
-        return dict(fn())
-    except Exception:  # noqa: BLE001 — a device's listing must not take the page down
-        return {}
+        for sid, feed in fn().items():
+            out.setdefault(sid, feed)
+    except Exception:  # noqa: BLE001, S110 — a device's listing must not take the page down
+        pass
+    return out
 
 
 def _name(sid: str) -> str:
@@ -302,7 +312,7 @@ def _row(panel, st: dict, it: Item) -> None:
     elif imgui.is_item_hovered():
         dl.add_rect_filled(a, b, ui.u32(ui.LINE), ui.ROUND)
     if imgui.is_item_hovered():
-        ui.tooltip(f"{it.sid}\n{it.status or READY}"
+        ui.tooltip(f"{it.sid}\n{it.status or READY}" + hint(it.status)
                           + ("" if picked else "\nclick to pick, then click a bin cell"))
     th = ROW_H - 8
     box = (imgui.ImVec2(a.x + 2, a.y + 1), imgui.ImVec2(a.x + 2 + THUMB_W, a.y + 1 + th))
@@ -318,10 +328,20 @@ def _row(panel, st: dict, it: Item) -> None:
     imgui.pop_font()
     if word:
         imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)
-        bad = it.status not in (FETCHING,)
+        bad = it.status not in (FETCHING, OFF_PAGE)     # expected words, not faults
         dl.add_text(imgui.ImVec2(b.x - ww - 6, a.y + (ROW_H - 4 - ui.FONT_MICRO) / 2),
                     ui.u32(ui.WARN if bad else ui.FAINT), word.upper())
         imgui.pop_font()
+
+
+def hint(status: str) -> str:
+    """The line a row's tooltip adds under a status word that needs one:
+    `off page` (`panel:graph` while GRAPH is not on screen — being here,
+    on MEDIA, is one such time) says why the preview is dark."""
+    if status == OFF_PAGE:
+        return ("\nthe GRAPH canvas is drawn only while the GRAPH page is on screen "
+                f"(not here): a channel on it holds the last picture {HOLD_S:g} s, then shows black")
+    return ""
 
 
 def _thumb(panel, st: dict, it: Item, dl, p0, p1) -> None:

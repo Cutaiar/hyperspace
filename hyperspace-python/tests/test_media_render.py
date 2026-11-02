@@ -306,6 +306,78 @@ def test_a_texture_frame_is_wrapped_never_uploaded(ctx):
     assert np.frombuffer(own.read(), np.uint8)[:4].tolist() == [0, 255, 0, 255]
 
 
+def test_one_wrapper_per_distinct_texture_however_the_frames_alternate(ctx):
+    """A source that publishes from a pool of textures (the GRAPH canvas's
+    tap) names a different texture every frame: the wrapper is made once
+    per distinct (name, size), kept across frames and channels, so N
+    frames cost no GL object after the first of each; the cache is bounded
+    (`WRAPPERS`), the least recently read let go first."""
+    from hyperspace import media_tex
+    from hyperspace.media_tex import MediaTextures
+
+    mt = MediaTextures(ctx)
+    pool = [ctx.texture((4, 2), 4) for _ in range(3)]
+    seen = {}
+    for n in range(30):                                   # 30 grabs round three textures
+        own = pool[n % 3]
+        for c in "ab":                                    # two channels on the same source
+            got = mt.texture(c, MediaFrame(None, float(n), n + 1, texture=own.glo, tex_size=(4, 2)))
+            assert got.glo == own.glo
+            assert seen.setdefault(own.glo, got) is got   # the one wrapper, both channels
+    assert mt.wraps == 3 and len(seen) == 3
+    # a texture of the same name at another size is another wrapper
+    mt.texture("a", MediaFrame(None, 31.0, 31, texture=pool[0].glo, tex_size=(2, 1)))
+    assert mt.wraps == 4
+    # bounded: past WRAPPERS the oldest goes, and is made again when named
+    more = [ctx.texture((4, 2), 4) for _ in range(media_tex.WRAPPERS)]
+    for i, own in enumerate(more):
+        mt.texture("a", MediaFrame(None, 40.0 + i, 40 + i, texture=own.glo, tex_size=(4, 2)))
+    assert len(mt._wrappers) == media_tex.WRAPPERS
+    assert (pool[0].glo, (4, 2)) not in mt._wrappers
+    mt.release()
+    assert mt._wrappers == {} and mt.wraps == 4 + media_tex.WRAPPERS
+    for own in pool + more:
+        own.read()                                        # the sources' textures still live
+        own.release()
+
+
+def test_a_texture_made_anew_under_a_reused_name_gets_its_own_wrapper(ctx):
+    """Sampler state (filter, no repeat) lives on the GL object, not the
+    name: the tap frees and remakes textures (a resize), GL hands the
+    name out again, and the new object has GL's defaults — REPEAT at the
+    edges. The frame's `tex_gen` says it is a new object: with it unchanged
+    the old wrapper serves (and the new object would wrap); bumped, a new
+    wrapper is made and the params are set on the new object."""
+    from OpenGL import GL
+
+    from hyperspace.media_tex import MediaTextures
+
+    def wrap_s(name: int) -> int:
+        GL.glBindTexture(GL.GL_TEXTURE_2D, name)
+        return int(GL.glGetTexParameteriv(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_S))
+
+    mt = MediaTextures(ctx)
+    first = ctx.texture((4, 2), 4)
+    name = first.glo
+    old = mt.texture("a", MediaFrame(None, 1.0, 1, texture=name, tex_size=(4, 2), tex_gen=1))
+    assert mt.wraps == 1 and wrap_s(name) == GL.GL_CLAMP_TO_EDGE
+    first.release()
+    again = ctx.texture((4, 2), 4)            # GL gives the freed name out again (or skip)
+    if again.glo != name:
+        pytest.skip(f"GL did not reuse texture name {name} (got {again.glo})")
+    assert wrap_s(name) == GL.GL_REPEAT       # a new object: GL's default, not the wrapper's
+    # the same generation: the stale wrapper, as before (what a frame of the
+    # old texture would still name)
+    assert mt.texture("a", MediaFrame(None, 2.0, 2, texture=name, tex_size=(4, 2), tex_gen=1)) is old
+    assert mt.wraps == 1 and wrap_s(name) == GL.GL_REPEAT
+    # the source bumped it: a wrapper of its own, the params set on this object
+    new = mt.texture("b", MediaFrame(None, 3.0, 3, texture=name, tex_size=(4, 2), tex_gen=2))
+    assert new is not old and mt.wraps == 2 and wrap_s(name) == GL.GL_CLAMP_TO_EDGE
+    assert mt.texture("a", MediaFrame(None, 4.0, 4, texture=name, tex_size=(4, 2), tex_gen=2)) is new
+    mt.release()
+    again.release()
+
+
 def test_unconsumed_channel_not_uploaded(ctx):
     """Channel b is playing but nothing reads it: never read, never
     uploaded — while the backdrop's channel a is, once a frame."""
