@@ -9376,7 +9376,11 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
   packets too, about 1.5 GB for 120 s of a 4K clip — so a soundtrack
   nobody hears costs no I/O; V2's play-audio toggle calls it, V1 nothing
   does. A file with no audio track is silence with no note. Nothing
-  audible changes in V1.
+  audible changes in V1. Second review (the same day): the track's end
+  in transport time (its own start plus its length), each frame placed
+  by its own pts, a buffer that grows for a clip of unknown length,
+  `fetching` whenever the position is outside what is held, a retry
+  after a 1 s move for every failed or empty window, whole tracks too.
 - **What would overturn it.** The window heard at a loop wrap or a
   far scrub on a long film (a moment of silence until the window
   arrives): V4 may prefetch the head or widen the window — each a

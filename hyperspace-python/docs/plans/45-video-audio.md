@@ -56,8 +56,9 @@ MediaState.poll ─▶ Transport.step ─▶ VideoSource.want ┘      ▼
   The track is resampled by PyAV on that thread to **float32, stereo,
   48 kHz** (`AUDIO_RATE`, `AUDIO_CHANNELS`): one rate and one layout so
   the mixer adds every track into one buffer and opens one output stream;
-  mono is doubled and surround downmixed by the resampler, so the memory
-  cost is 384 kB a second whatever the file; V4's varispeed resamples at
+  the resampler puts mono on both sides at −3 dB (its centre mix level)
+  and downmixes surround, so the memory cost is 384 kB a second whatever
+  the file; V4's varispeed resamples at
   read time anyway, so the file's own rate buys nothing. A file with no
   audio track is `status == "none"`: `read` is silence, the thread ends,
   nothing is logged. Nothing plays; nothing audible changes.
@@ -65,10 +66,15 @@ MediaState.poll ─▶ Transport.step ─▶ VideoSource.want ┘      ▼
   play-audio toggle); `src.audio.read(at: int, n: int) -> np.ndarray` —
   `n` samples from sample `at` (counted at 48 kHz from the clip's start)
   as an `(n, 2)` float32 array, zeros wherever nothing is held; it never
-  blocks and never raises. `status` (`off`, `fetching`, `ready`, `none`,
-  `error: …` — an error is the last window's; an older window stays
-  readable), `duration`, `rate`, `channels`, `held` (the span of seconds
-  in memory) and `nbytes`. A source without an `audio`
+  blocks and never raises. `status` (`off`; `fetching` until the probe and
+  whenever the wanted position is outside what is held, so a reader
+  hearing silence is never told `ready`; `ready` while it is inside;
+  `none`; `error: …` — an error is the last window's, an older window
+  stays readable, and a move of `AUDIO_RETRY_S` = 1 s tries again),
+  `duration` (where the track ends in transport seconds: its own start
+  less the video's, plus its length — a track whose first pts is after
+  the video's ends that much later), `rate`, `channels`, `held` (the span
+  of seconds in memory) and `nbytes`. A source without an `audio`
   attribute (a still, a live feed, a missing one) has no sound.
 - **V2 — the mixer.** One `sounddevice.OutputStream` at 48 kHz stereo,
   owned by the media package, whose callback asks each channel with a
@@ -110,8 +116,14 @@ A two-hour film must not allocate gigabytes on open. The policy, in
   decode of 120 s of AAC is a fraction of a second. A decode that the
   transport has left behind (a far scrub mid-decode) is abandoned, not
   finished first; one that fails or comes back empty leaves the old
-  window and is tried again at the next move past the recentre distance.
+  window and is tried again once the position has moved `AUDIO_RETRY_S`
+  (1 s) — for a whole track too, whose thread stays until a window is in.
   A track held whole ends its thread and closes its file once it is in.
+  Each resampled frame is laid by the pts the resampler gives it, so a
+  gap or a dropped frame in the file is silence there and shifts nothing
+  after it. A track of unknown length (no duration from the probe) is
+  windowed from the position, into a buffer that starts at 2 s and doubles
+  as rows land, so a short clip never allocates the 120 s window.
 - **Outside the window is silence.** Forward play at any rate up to the
   re-centre threshold's margin never leaves the window; a scrub far away
   reads zeros until the window arrives (one decode later). A loop wrap on
@@ -142,6 +154,21 @@ a whole track's thread ends; a stale decode is abandoned; an empty
 decode is not held; `audio` a class attribute; the `_Follower` base with
 a stop event per start; nothing read until `enable()`; `close` proven
 mid-decode.
+
+Second review (2026-11-02, eight findings on e503eff), each with its
+test: the track's end in transport time (its own start less the video's,
+plus its length — audio from 0.5 s under video from 0 keeps its last half
+second); a stop check right before a window is published, so an
+abandoned thread writes nothing back over samples let go or another
+thread's; `close` clears `_opened`, so `enable` on a closed source starts
+nothing (while `disable` → `enable` still works); a whole track that
+fails or decodes empty keeps its thread and is woken, retried after a 1 s
+move; each resampled frame placed by its own pts (a pts gap in an mkv is
+silence, the rest keeps its time); an unknown-length clip's buffer starts
+at 2 s and doubles, no trim copy when right-sized (tracemalloc holds the
+peak under 3× the clip, far under the window); `status` is `fetching`
+whenever the wanted position is outside the held window; the `getattr`
+guards on `_thread` dropped.
 
 Hand check 421 ([`11-hand-checks.md`](11-hand-checks.md)): open a show
 video, nothing audible changes, memory stays flat, **no extra read**

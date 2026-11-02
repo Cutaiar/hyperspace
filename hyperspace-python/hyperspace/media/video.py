@@ -53,10 +53,12 @@ CLOSE_JOIN_S = 1.0      # how long close waits for the thread; then it is abando
 
 # the soundtrack (plan 45 V1)
 AUDIO_RATE = 48_000     # every track is resampled to this: the mixer's one rate (V2)
-AUDIO_CHANNELS = 2      # stereo: mono is doubled, surround downmixed, by the resampler
+AUDIO_CHANNELS = 2      # stereo, by the resampler: mono on both sides at −3 dB (its centre mix), surround downmixed
 AUDIO_WINDOW_S = 120.0  # the memory bound: a longer track is held as this much around the position
 AUDIO_RECENTRE_S = AUDIO_WINDOW_S / 4   # the window follows once the position is this far off its centre
 AUDIO_WINDOW_BYTES = int(AUDIO_WINDOW_S * AUDIO_RATE) * AUDIO_CHANNELS * 4   # 46 MB, float32
+AUDIO_RETRY_S = 1.0     # a window that failed or came back empty is tried again once the position moved this far
+_GROW_S = 2.0           # a track of unknown length starts with this much buffer and doubles
 NO_AUDIO = "none"       # a Soundtrack's status for a file with no audio track: silence, no note
 OFF = "off"             # a Soundtrack's status while nothing asks for sound: no thread, no read
 
@@ -91,13 +93,19 @@ def audio_window(want: float, duration: float) -> tuple[float, float]:
     return start, start + w
 
 
-def _audio_duration(container, stream) -> float:
-    """The audio stream's length in seconds (the container's when the
-    stream does not say)."""
-    if stream.duration is not None and stream.time_base is not None:
-        return max(float(stream.duration * stream.time_base), 0.0)
+def _audio_end(container, stream, origin: float) -> float:
+    """Where the audio track ends, in transport seconds (the video's first
+    frame is 0): the stream's own start less `origin`, plus its length —
+    a track whose first pts is after the video's (AAC priming, an edit
+    list, a screen recording) ends that much later than its length. The
+    container's end stands in when the stream gives no length. 0 when
+    neither says."""
+    tb = stream.time_base
+    if stream.duration is not None and tb is not None:
+        start = float((stream.start_time or 0) * tb)
+        return max(start - origin + float(stream.duration * tb), 0.0)
     if container.duration:
-        return max(container.duration / 1_000_000.0, 0.0)
+        return max(((container.start_time or 0) + container.duration) / 1_000_000.0 - origin, 0.0)
     return 0.0
 
 
@@ -118,7 +126,7 @@ class _Follower:
         self._thread: threading.Thread | None = None
 
     def _start(self) -> None:
-        if getattr(self, "_thread", None) is not None:
+        if self._thread is not None:
             return
         stop = self._stop = threading.Event()
         self.status = FETCHING
@@ -134,7 +142,7 @@ class _Follower:
         self._wake.set()
 
     def close(self, timeout: float = CLOSE_JOIN_S) -> None:
-        t, self._thread = getattr(self, "_thread", None), None
+        t, self._thread = self._thread, None
         if t is None:
             return
         self._stop.set()
@@ -165,16 +173,19 @@ class Soundtrack(_Follower):
     it and lets the samples go; until then `status` is OFF and the file is
     not opened — a window decode demuxes the video's packets too, so a
     soundtrack nobody hears would read the whole clip for nothing. Once
-    enabled, `status` is FETCHING until the file is probed, then READY
-    (samples held), NO_AUDIO (no track: `read` is silence for good) or
-    `error(...)` (the window that failed; an older one stays readable).
-    `duration` is the track's in seconds, `rate` and `channels` what `read`
-    returns in. `want(t)` is the transport's position in seconds, as the
-    video's. `read(at, n)` is the n samples from sample `at` as an
-    (n, channels) float32 array, zeros wherever nothing is held; it never
-    blocks and never raises. `held` is the span of seconds in memory,
-    `nbytes` what that costs. A track held whole ends its thread and
-    closes its file once it is in."""
+    enabled, `status` is FETCHING until the file is probed and whenever the
+    wanted position is outside what is held (a reader there hears silence
+    until the window arrives), READY while it is inside, NO_AUDIO (no
+    track, or none decodable: `read` is silence) or `error(...)` (the
+    window that failed; an older one stays readable, and the next move of
+    `AUDIO_RETRY_S` tries again). `duration` is where the track ends in
+    transport seconds, `rate` and `channels` what `read` returns in.
+    `want(t)` is the transport's position in seconds, as the video's.
+    `read(at, n)` is the n samples from sample `at` as an (n, channels)
+    float32 array, zeros wherever nothing is held; it never blocks and
+    never raises. `held` is the span of seconds in memory, `nbytes` what
+    that costs. A track held whole ends its thread and closes its file
+    once it is in."""
 
     rate = AUDIO_RATE
     channels = AUDIO_CHANNELS
@@ -182,12 +193,24 @@ class Soundtrack(_Follower):
     def __init__(self, path: Path):
         super().__init__(f"media-audio-{Path(path).name}")
         self.path = Path(path)
-        self.status = OFF
+        self._status = OFF
         self.enabled = False        # something asks for sound
         self.duration = 0.0
         self.whole = False          # the whole track is held, never re-decoded
         self._opened = False
         self._win: _Window | None = None
+
+    @property
+    def status(self) -> str:
+        st = self._status
+        if st != READY:
+            return st
+        w, at = self._win, round(self._want * self.rate)
+        return READY if w is not None and w.start <= at <= w.end else FETCHING
+
+    @status.setter
+    def status(self, value: str) -> None:
+        self._status = value
 
     # -- called from the frame thread (through the VideoSource) -----------
 
@@ -197,6 +220,12 @@ class Soundtrack(_Follower):
         if self.enabled:
             self._start()
 
+    def close(self, timeout: float = CLOSE_JOIN_S) -> None:
+        """The source closed for good: the thread ends, and an `enable`
+        from here on starts nothing."""
+        self._opened = False
+        super().close(timeout)
+
     def enable(self) -> None:
         """Something asks for sound: decode from here on (and from `open`)."""
         self.enabled = True
@@ -204,17 +233,18 @@ class Soundtrack(_Follower):
             self._start()
 
     def disable(self) -> None:
-        """Nothing asks any more: the thread ends, the samples are let go."""
+        """Nothing asks any more: the thread ends, the samples are let go;
+        the source stays open, so `enable` brings them back."""
         self.enabled = False
-        self.close()
+        _Follower.close(self)
         self._win = None
         self.whole = False
         self.status = OFF
 
     def want(self, t: float) -> None:
         self._want = float(t)
-        if self._thread is not None and not self.whole:   # whole: nothing left to follow
-            self._wake.set()
+        if self._thread is not None and not (self.whole and self._win is not None):
+            self._wake.set()        # a whole track held has nothing left to follow
 
     # -- what V2 reads ----------------------------------------------------
 
@@ -259,13 +289,13 @@ class Soundtrack(_Follower):
                 self.status = NO_AUDIO
                 return
             stream = container.streams.audio[0]
-            self.duration = _audio_duration(container, stream)
             # the transport's zero is the video's first frame (as `_play`'s
             # `start`); audio pts are on the same container timeline
             origin = 0.0
             if container.streams.video:
                 vs = container.streams.video[0]
                 origin = float((vs.start_time or 0) * vs.time_base)
+            self.duration = _audio_end(container, stream, origin)
             self.whole = 0.0 < self.duration <= AUDIO_WINDOW_S
             self._follow(container, stream, origin, stop)
         except Exception as e:  # noqa: BLE001 — a bad track must not kill the app
@@ -282,14 +312,21 @@ class Soundtrack(_Follower):
         """Keep the window at the transport's position until stopped — or,
         for a track held whole, until it is in: then the thread ends and
         the file closes. A window that fails or comes back empty leaves the
-        old one readable; the next move past the recentre distance tries
-        again."""
-        centre = None
+        old one readable; once the position has moved `AUDIO_RETRY_S` it is
+        tried again. Nothing is published once `stop` is set: the samples
+        were let go, or are another thread's by now."""
+        centre = None        # of the window held
+        failed_at = None     # the position when the last window failed or came back empty
         while not stop.is_set():
             self._wake.clear()
-            a, b = audio_window(self._want, self.duration)
+            want = self._want
+            a, b = audio_window(want, self.duration)
             c = (a + b) / 2.0
-            if centre is not None and (self.whole or abs(c - centre) <= AUDIO_RECENTRE_S):
+            if failed_at is not None:
+                due = abs(want - failed_at) >= AUDIO_RETRY_S
+            else:
+                due = centre is None or (not self.whole and abs(c - centre) > AUDIO_RECENTRE_S)
+            if not due:
                 self._wake.wait(_IDLE_S)
                 continue
             try:
@@ -298,18 +335,20 @@ class Soundtrack(_Follower):
                 if stop.is_set():
                     return
                 self.status = error(f"{type(e).__name__}: {e}")
-                centre = c
-            else:
-                if win is None:          # stopped, or the transport moved on: start over
-                    if stop.is_set():
-                        return
-                    continue
-                centre = c
-                if len(win.data):
-                    self._win = win
-                    self.status = READY
-                elif self.whole:         # a track that says it has sound and has none
+                failed_at = want
+                continue
+            if win is None or stop.is_set():   # stopped, or the transport moved on: start over
+                if stop.is_set():
+                    return
+                continue
+            if len(win.data) == 0:
+                failed_at = want
+                if self.whole:                  # says it has sound, and has none to decode
                     self.status = NO_AUDIO
+                continue
+            self._win = win
+            self.status = READY
+            centre, failed_at = c, None
             if self.whole:
                 return
 
@@ -323,46 +362,76 @@ class Soundtrack(_Follower):
                 stop: threading.Event) -> _Window | None:
         """Seconds `a`..`b` of the track (transport time: the container's
         pts less `origin`) as one `_Window` at `rate`, stereo float32,
-        decoded straight into one buffer of the window's size — no other
-        copy is held. None when stopped, or when the transport left for
-        another window before this one was done (`_left`)."""
+        decoded straight into one buffer (`_Buffer`) — no other copy is
+        held. Each resampled frame is laid by its own time, the pts the
+        resampler gives it, so a gap or a dropped frame in the file is
+        silence there and moves nothing after it. None when stopped, or
+        when the transport left for another window before this one was
+        done (`_left`)."""
         import av
         tb = float(stream.time_base)
         container.seek(max(int((a + origin) / tb), 0), stream=stream, backward=True)
         resampler = av.AudioResampler(format="flt", layout="stereo", rate=self.rate)
         cap = round((b - a) * self.rate)
-        data = np.zeros((cap, self.channels), np.float32)
-        off = None     # the row the first resampled sample lands on (< 0: before `a`)
-        n = 0          # resampled samples so far
+        known = self.duration > 0.0
+        buf = _Buffer(cap if known else min(cap, round(_GROW_S * self.rate)), cap, self.channels)
+        base = (a + origin) * self.rate     # the window's first row, in output samples
+        nxt = 0                             # the row after the last laid, for a frame with no pts
+
+        def lay(o) -> None:
+            nonlocal nxt
+            if o.pts is not None and o.time_base is not None:
+                row = round(o.pts * float(o.time_base) * self.rate - base)
+            else:
+                row = nxt
+            nxt = buf.lay(row, _packed(o))
+
         for fr in container.decode(stream):
             if stop.is_set() or (not self.whole and self._left(a, b)):
                 return None
             if fr.pts is None:
                 continue
-            t = fr.pts * tb - origin
-            if off is None:
-                off = round((t - a) * self.rate)
-            if t > b:
+            if fr.pts * tb - origin > b:
                 break
             for o in resampler.resample(fr):
-                n += _lay(data, off + n, _packed(o))
-        if off is not None:
-            for o in resampler.resample(None):
-                n += _lay(data, off + n, _packed(o))
-        filled = 0 if off is None else min(max(off + n, 0), cap)
-        if filled < cap:
-            data = data[:filled].copy()       # hold only what is there
+                lay(o)
+        for o in resampler.resample(None):
+            lay(o)
+        data = buf.done()
         data.flags.writeable = False
         return _Window(round(a * self.rate), data)
 
 
-def _lay(data: np.ndarray, at: int, chunk: np.ndarray) -> int:
-    """Copy `chunk` into `data` from row `at`, clipped to `data`; returns
-    `chunk`'s length, so a caller can count on."""
-    lo, hi = max(at, 0), min(at + len(chunk), len(data))
-    if hi > lo:
-        data[lo:hi] = chunk[lo - at:hi - at]
-    return len(chunk)
+class _Buffer:
+    """A window's rows, laid by position into one float32 array: of the
+    window's size when the track's length is known, else `size` rows that
+    double (to `cap`) as rows land, so a short clip of unknown length never
+    allocates the whole window. `done` is the rows filled — the array
+    itself when it is already that size, else one trim."""
+
+    def __init__(self, size: int, cap: int, channels: int):
+        self.cap = cap
+        self.data = np.zeros((max(size, 0), channels), np.float32)
+        self.filled = 0
+
+    def lay(self, at: int, chunk: np.ndarray) -> int:
+        """`chunk` from row `at`, clipped to 0..cap; returns the row after it."""
+        end = min(at + len(chunk), self.cap)
+        if end > len(self.data):
+            grown = np.zeros((min(self.cap, max(end, 2 * len(self.data))), self.data.shape[1]),
+                             np.float32)
+            grown[:len(self.data)] = self.data
+            self.data = grown
+        lo, hi = max(at, 0), min(end, len(self.data))
+        if hi > lo:
+            self.data[lo:hi] = chunk[lo - at:hi - at]
+            self.filled = max(self.filled, hi)
+        return at + len(chunk)
+
+    def done(self) -> np.ndarray:
+        if self.filled == len(self.data):
+            return self.data
+        return self.data[:self.filled].copy()
 
 
 def _packed(frame) -> np.ndarray:
