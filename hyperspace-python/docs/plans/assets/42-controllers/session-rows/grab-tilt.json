@@ -1,0 +1,4 @@
+{"patch": "grab-tilt",
+ "note": "The session's rows (bindings.json) that drive the pad back for patches/grab-tilt.json: a patch drives only its own params and never a sink port (patches.check), so these are rows of your own. Right-click the param → Learn sink ▸ the channel. `edge` is the pad entry's role; on the default device list it is `pad` (pad:0 …).",
+ "rows": [{"source": "param:rot.phase.XW", "target": "edge:0", "op": "send"},
+          {"source": "param:rot.phase.YW", "target": "edge:7", "op": "send"}]}
