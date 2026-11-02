@@ -1096,13 +1096,17 @@ recorded node names and asserts the `goldens` list is unchanged.
 `tools/calm_lanes.py` (2026-11-02) held every preset's band routes to
 `learn.LANE_DEPTH` as springs, once. `tools/retaper_routes.py` (wave 0
 T1) measures every route depth, `set` value and macro base subscriber
-onto an effect's `speed` or `amount` param along the new tapers, once:
-a dry run by default, `--write` backs the library up to
-`~/Hyperspace/library-backup-<stamp>/` first and rewrites each preset
-and patch as the app writes it, naming every row that moved; session
-rows in `bindings.json` and the shows are reported, not rewritten. **The
-owner runs it on the library before the next show**, both Macs on this
-build; until then an old file is converted at every load and nothing is
+onto an effect's `speed` or `amount` param along the new tapers, once —
+in the library's presets, patches and desk templates and in the machine
+home's `bindings.json` (a show holds no rows): a dry run by default,
+every change worked out before anything is written; `--write` backs the
+library up to `~/Hyperspace/library-backup-<stamp>/` first (and
+`bindings.json` beside itself, as the app does), then rewrites each file
+as the app writes its kind, naming every row that moved and every row
+left (a value that is not a number). **The owner runs it on the library
+before the next show**, both Macs on this build; until then an old file
+is converted at every door it comes in by — a preset load, a template's
+expansion, `Library.read_patch`, `Bindings.from_json` — and nothing is
 lost.
 
 **Feedback: the delay, the echoes and the resize** (plan 34, rows

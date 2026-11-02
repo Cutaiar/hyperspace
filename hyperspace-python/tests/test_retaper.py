@@ -33,6 +33,9 @@ from hyperspace.routing import Binding
 
 ROOT = Path(__file__).resolve().parents[1]
 CORPUS = ROOT / "tests" / "corpus" / "presets"
+# a patch fixture from before wave 0 T1 (no `units` marker): a push onto
+# `fx.wobble.amount` and one onto `fx.acid.speed`, left as it was on purpose
+OLD_PATCH = ROOT / "tests" / "fixtures" / "patches" / "acid-wash.json"
 
 # PR #304's amount-type params, the ones the `amount` flag now marks
 AMOUNTS = {"fx.acid.bend", "fx.acid.twist", "fx.acid.breathe", "fx.deconverge.amount",
@@ -327,17 +330,144 @@ def test_every_corpus_preset_is_marked_and_a_run_on_the_corpus_is_a_no_op(files)
         assert out is doc and c.marked and not c.changed
 
 
-def test_the_tool_dry_runs_then_writes_as_the_app_writes_and_backs_up_first(tmp_path, monkeypatch):
-    """A dry run writes nothing and makes no backup; --write copies the
-    library to the machine home first, rewrites every unmarked preset and
-    patch as the app would save it (the marker in; a moved row in
-    `Binding.to_json`'s spelling), leaves a marked one and a dot-file
-    alone, and a second run changes nothing."""
+def test_an_overshooting_push_keeps_its_sign_and_its_overshoot(files):
+    """Review of #322 (4): a negative push from a base of 0 on an amount
+    reached nothing before and reaches nothing now, but its depth is kept
+    (sign and size), never written 0, and the row is said to overshoot; a
+    push past the top keeps its reach to the top plus its overshoot."""
+    doc = {"values": {"fx.warp.amount": 0.0, "fx.plasma.level": 0.9}, "routes": [
+        {"source": "hand:left.y", "target": "fx.warp.amount", "op": "push", "value": -0.5},
+        {"source": "hand:right.y", "target": "fx.plasma.level", "op": "push", "value": 0.5}]}
+    out, moved = retaper_depths(doc, files)
+    down, up = out["routes"]
+    assert down["value"] == -0.5                      # untouched: all of it is overshoot
+    lo, hi, _, taper = fx.retaper_of("fx.plasma.level", files)
+    top = _tapered(taper, lo, hi, 0.9)
+    assert up["value"] == pytest.approx(1.0 - top._norm_of(0.9) + 0.4)   # to the top, + 0.4 over
+    assert _reach(top, up["value"]) == pytest.approx(1.0)
+    assert len(moved) == 1 and "overshoots" in moved[0] and "+0.4" in moved[0]
+    assert all(r["value"] != 0 for r in out["routes"])
+
+
+def test_a_patch_carries_the_marker_and_an_old_one_is_read_as_it_was(tmp_path, files):
+    """Review of #322 (1, 2): `patches.lift` writes the marker and `check`
+    takes it; the library's door (`Library.read_patch`, the one a spawn
+    comes through) converts an unmarked patch's rows and leaves a marked
+    one alone, so a spawn lands what the tool would write. `patches.read`
+    itself stays pure (the module is a leaf)."""
+    import shutil
+
+    from hyperspace import patches
+    from hyperspace.routing import Bindings
+    assert (patches.UNITS_KEY, patches.UNITS) == (UNITS_KEY, {DEPTH_UNIT: DEPTH_TAPER})
+    old = json.loads(OLD_PATCH.read_text())             # from before: no marker
+    assert UNITS_KEY not in old and patches.check(old) == []
+    row = next(r for r in old["routes"] if r["target"] == "fx.wobble.amount")
+    assert row == {"source": "mod:1", "target": "fx.wobble.amount", "op": "push", "value": 0.3}
+    home = tmp_path / "home"
+    (home / "patches").mkdir(parents=True)
+    shutil.copy(OLD_PATCH, home / "patches" / "acid-wash.json")
+    marked = {**old, UNITS_KEY: dict(patches.UNITS)}
+    assert patches.check(marked) == []
+    (home / "patches" / "marked.json").write_text(json.dumps(marked))
+    app = headless.make_app(home)
+    doc = app.lib.read_patch("acid-wash")
+    got = next(r for r in doc["routes"] if r["target"] == "fx.wobble.amount")
+    lo, hi, _, taper = fx.retaper_of("fx.wobble.amount", files)
+    base = old["values"]["fx.wobble.amount"]
+    assert _reach(_tapered(taper, lo, hi, base), got["value"]) == pytest.approx(
+        _reach(_linear(lo, hi, base), 0.3))
+    assert got["value"] != 0.3 and doc[UNITS_KEY] == {DEPTH_UNIT: DEPTH_TAPER}
+    assert next(r for r in app.lib.read_patch("marked")["routes"]
+                if r["target"] == "fx.wobble.amount")["value"] == 0.3
+    # the pure reader reads what it is given; a spawn of the door's document
+    # lands the converted rows
+    assert next(r for r in patches.read(old).routes
+                if r["target"] == "fx.wobble.amount")["value"] == 0.3
+    landing = patches.spawn(doc, patches.Host.of(None, Bindings([]), {}))
+    assert next(r for r in landing.routes if r["target"].endswith("wobble.amount")
+                )["value"] == got["value"]
+    # the writer: a lift of nothing still says its units
+    lifted, _refused = patches.lift(None, Bindings([]), {}, None, [])
+    assert lifted[UNITS_KEY] == {DEPTH_UNIT: DEPTH_TAPER} and list(lifted) == list(patches.KEYS)
+    assert patches.check({**lifted, "name": "x"}) == []
+
+
+def test_a_desk_templates_rows_are_read_as_they_were_and_the_tool_rewrites_it(tmp_path, files):
+    """Review of #322 (3): a `set` row's norm in a template file from before
+    lands on the preset's desk measured along the taper; the tool rewrites
+    `desk/*.json` with the marker."""
+    from hyperspace.library import DESK_SCHEMA
+    t = _tool()
+    home = tmp_path / "home"
+    for folder in ("presets", "desk"):
+        (home / folder).mkdir(parents=True)
+    # (on the desk's preset-layer knobs: a row on an invariant control — any
+    # bare note number is one — is dropped from a preset's desk)
+    template = {"schema": DESK_SCHEMA, "name": "old desk", "desk": [
+        {"source": "cc:0:49", "target": "fx.warp.speed", "op": "set", "value": 0.75},
+        {"source": "cc:0:48", "target": "fx.warp.amount", "op": "abs"}]}
+    (home / "desk" / "old-desk.json").write_text(json.dumps(template, indent=1) + "\n")
+    doc = json.loads((CORPUS / "party-noita.json").read_text())
+    doc[preset.TEMPLATE_KEY] = "old desk"
+    doc["desk"] = []
+    (home / "presets" / "noita-t.json").write_text(preset.dumps(doc))
+    app = headless.make_app(home)
+    app.lib.load(preset.GROUP, "noita-t")
+    rows = {b.target: b for b in app.router.table.desk() if b.op == "set"}
+    lo, hi, _, taper = fx.retaper_of("fx.warp.speed", files)
+    want = lo + 0.75 * (hi - lo)
+    assert _tapered(taper, lo, hi, 0.0)._value_of_norm(rows["fx.warp.speed"].value) == pytest.approx(want)
+    # the tool
+    out, c = t.retaper(template, files, file="old-desk.json", kind="desk")
+    assert c.kind == "desk" and len(c.rows) == 1 and out[UNITS_KEY] == {DEPTH_UNIT: DEPTH_TAPER}
+    assert out["desk"][0]["value"] == pytest.approx(rows["fx.warp.speed"].value)
+    assert out["desk"][1] == template["desk"][1]
+    assert t.text(out, "desk") == json.dumps(out, indent=1) + "\n"
+
+
+def test_the_session_table_is_read_as_it_was_marked_on_write_and_rewritten_once(tmp_path, files):
+    """Review of #322 (9): `Bindings.from_json` converts an unmarked file's
+    rows about the effect's default, counts it as a change (so `load` writes
+    the file back once, backed up beside itself), `to_json` carries the
+    marker and `dumps_doc` prints it; a factory table and the shipped
+    default file carry it already."""
+    from hyperspace import routing
+    row = {"source": "note:0:53", "target": "fx.warp.amount", "op": "set", "value": 0.5}
+    data = {"schema": routing.SCHEMA, "profile": "apc40", "bindings": [dict(row)]}
+    t = routing.Bindings.from_json(data)
+    got = next(b for b in t.bindings if b.target == "fx.warp.amount")
+    lo, hi, _, taper = fx.retaper_of("fx.warp.amount", files)
+    assert _tapered(taper, lo, hi, 0.0)._value_of_norm(got.value) == pytest.approx(0.5 * hi)
+    assert t.changed and any("fx.warp.amount" in n for n in t.notes)
+    assert t.to_json()[UNITS_KEY] == {DEPTH_UNIT: DEPTH_TAPER}
+    assert '"units": {"fx.depth": "taper"}' in t.dumps()
+    again = routing.Bindings.from_json(t.to_json())
+    assert not again.changed and next(b for b in again.bindings if b.target == "fx.warp.amount").value == got.value
+    assert json.loads(routing.FACTORY_FILE.read_text())[UNITS_KEY] == {DEPTH_UNIT: DEPTH_TAPER}
+    # through `load`: written back once, the old file kept beside it
+    path = tmp_path / "bindings.json"
+    path.write_text(routing.dumps_doc(data))
+    loaded = routing.Bindings.load(path)
+    assert loaded.error == "" and json.loads(path.read_text())[UNITS_KEY] == {DEPTH_UNIT: DEPTH_TAPER}
+    assert list(tmp_path.glob("bindings.json.bak-*"))
+    assert not routing.Bindings.load(path).changed
+
+
+def test_the_tool_plans_everything_before_it_writes_backs_up_and_is_idempotent(tmp_path, monkeypatch):
+    """Review of #322 (1, 3, 6, 9): a dry run writes nothing and makes no
+    backup; --write copies the library to the machine home first, keeps
+    bindings.json beside itself, then rewrites every unmarked preset, patch,
+    desk template and the session table as the app writes each, names a row
+    whose value is not a number instead of raising, leaves a marked file
+    and a dot-file alone, and a second run changes nothing — a patch saved
+    on this build included."""
+    from hyperspace import patches, routing
     t = _tool()
     home, library = tmp_path / "home", tmp_path / "library"
-    (library / "presets").mkdir(parents=True)
-    (library / "patches").mkdir()
-    (library / "shows").mkdir()
+    for folder in ("presets", "patches", "desk"):
+        (library / folder).mkdir(parents=True)
+    home.mkdir()
     monkeypatch.setenv("HYPERSPACE_HOME", str(home))
     src = json.loads((CORPUS / "party-noita.json").read_text())
     del src["units"][DEPTH_UNIT]
@@ -346,23 +476,31 @@ def test_the_tool_dry_runs_then_writes_as_the_app_writes_and_backs_up_first(tmp_
             row["value"] = 0.3
         if row["target"] == "fx.tripcolour.amount":
             del row["value"]                      # a push of 1.0, omitted
+        if row["target"] == "fx.fractals.amount":
+            row["value"] = "lots"                 # a hand-edited row: left, said
     (library / "presets" / "party-noita.json").write_text(preset.dumps(src))
     done = json.loads((CORPUS / "party-trip.json").read_text())
     (library / "presets" / "party-trip.json").write_text(preset.dumps(done))
     (library / "presets" / ".party-noita.json.tmp").write_text("{}")
-    patch = {"schema": "hyperspace.patch/1", "name": "wash", "nodes": ["wobble"], "wires": [],
-             "values": {"fx.wobble.amount": 0.3},
-             "routes": [{"source": "mod:1", "target": "fx.wobble.amount", "op": "push",
-                         "value": 0.3}]}
-    (library / "patches" / "wash.json").write_text(json.dumps(patch, indent=1) + "\n")
-    (library / "bindings.json").write_text(json.dumps({"schema": "hyperspace.bindings/3", "bindings": [
-        {"source": "axis:LX", "target": "fx.warp.amount", "op": "push", "value": 0.4},
-        {"source": "cc:0:48", "target": "fx.warp.amount", "op": "abs"}]}))
+    old_patch = json.loads(OLD_PATCH.read_text())
+    (library / "patches" / "wash.json").write_text(json.dumps(old_patch, indent=1) + "\n")
+    new_patch, _ = patches.lift(None, routing.Bindings([]), {}, None, [])
+    new_patch["name"] = "fresh"
+    new_text = json.dumps(new_patch, indent=1) + "\n"
+    (library / "patches" / "fresh.json").write_text(new_text)
+    desk = {"schema": "hyperspace.desk/1", "name": "d", "desk": [
+        {"source": "cc:0:49", "target": "fx.warp.speed", "op": "set", "value": 0.75}]}
+    (library / "desk" / "d.json").write_text(json.dumps(desk, indent=1) + "\n")
+    table = {"schema": routing.SCHEMA, "profile": "apc40", "bindings": [
+        {"source": "note:0:54", "target": "fx.warp.amount", "op": "set", "value": 0.5},
+        {"source": "cc:0:48", "target": "fx.warp.amount", "op": "abs"}]}
+    (home / "bindings.json").write_text(routing.dumps_doc(table))
 
     assert t.main(["--library", str(library)]) == 0
     assert json.loads((library / "presets" / "party-noita.json").read_text()) == src
-    assert json.loads((library / "patches" / "wash.json").read_text()) == patch
-    assert not list(home.glob("library-backup-*"))
+    assert json.loads((library / "patches" / "wash.json").read_text()) == old_patch
+    assert json.loads((home / "bindings.json").read_text()) == table
+    assert not list(home.glob("library-backup-*")) and not list(home.glob("bindings.json.bak-*"))
 
     assert t.main(["--library", str(library), "--write", "--rows"]) == 0
     backups = list(home.glob("library-backup-*"))
@@ -375,27 +513,40 @@ def test_the_tool_dry_runs_then_writes_as_the_app_writes_and_backs_up_first(tmp_
     rows = {r["target"]: r for r in out["routes"] if r["target"].startswith("fx.")}
     assert rows["fx.warp.amount"]["value"] != 0.3
     assert 0 < rows["fx.tripcolour.amount"]["value"] < 1        # the omitted 1.0, moved
+    assert rows["fx.fractals.amount"]["value"] == "lots"         # left as it was
     assert list(rows["fx.tripcolour.amount"]) == list(Binding.from_json(
         rows["fx.tripcolour.amount"]).to_json())                # in to_json's order
     for k in src:
         if k not in ("routes", "units"):
             assert out[k] == src[k]
-    # the preset that was already marked: the same bytes
     assert (library / "presets" / "party-trip.json").read_text() == preset.dumps(done)
     assert (library / "presets" / ".party-noita.json.tmp").read_text() == "{}"
-    # the patch: its push moved, the marker in, written as GRAPH writes one
+    # the old patch: its push moved, the marker in; the fresh one: the same bytes
     ptext = (library / "patches" / "wash.json").read_text()
     pout = json.loads(ptext)
     assert ptext == json.dumps(pout, indent=1) + "\n"
-    assert pout["routes"][0]["value"] != 0.3 and pout["units"] == {DEPTH_UNIT: DEPTH_TAPER}
-    # the session row is said, not rewritten
-    said = t.session_rows(library, FxState().files)
-    assert said == ["bindings.json: axis:LX → fx.warp.amount push 0.4"]
-    assert json.loads((library / "bindings.json").read_text())["bindings"][0]["value"] == 0.4
+    wobble = next(r for r in pout["routes"] if r["target"] == "fx.wobble.amount")
+    assert wobble["value"] != 0.3 and pout["units"] == {DEPTH_UNIT: DEPTH_TAPER}
+    assert (library / "patches" / "fresh.json").read_text() == new_text
+    # the desk template: its set row moved, the marker in
+    dout = json.loads((library / "desk" / "d.json").read_text())
+    assert dout["desk"][0]["value"] != 0.75 and dout["units"] == {DEPTH_UNIT: DEPTH_TAPER}
+    # the session table: kept beside itself, its set row moved, as the app writes it
+    assert len(list(home.glob("bindings.json.bak-v3*"))) == 1
+    btext = (home / "bindings.json").read_text()
+    bout = json.loads(btext)
+    assert btext == routing.dumps_doc(bout) and bout["units"] == {DEPTH_UNIT: DEPTH_TAPER}
+    assert bout["bindings"][0]["value"] != 0.5 and bout["bindings"][1] == table["bindings"][1]
+    # (read through `load` on a copy: a load of a hand-made table may remap
+    # its factory rows and write it back, which is not this tool's doing)
+    copy = tmp_path / "copy" / "bindings.json"
+    copy.parent.mkdir()
+    copy.write_text(btext)
+    assert not routing.Bindings.load(copy).changed
 
     # a second run: nothing to do, nothing written, no second backup
-    stamp = (library / "presets" / "party-noita.json").stat().st_mtime_ns
+    stamps = {p: p.stat().st_mtime_ns for p in (*library.rglob("*.json"), home / "bindings.json")}
     assert t.main(["--library", str(library), "--write"]) == 0
-    assert (library / "presets" / "party-noita.json").stat().st_mtime_ns == stamp
-    assert (library / "presets" / "party-noita.json").read_text() == text
-    assert len(list(home.glob("library-backup-*"))) == 2       # (a backup is made per --write)
+    assert {p: p.stat().st_mtime_ns for p in stamps} == stamps
+    assert len(list(home.glob("library-backup-*"))) == 1
+    assert len(list(home.glob("bindings.json.bak-*"))) == 1

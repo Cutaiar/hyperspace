@@ -9374,20 +9374,29 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
   signature. Readouts: `fmt_speed` ("stop", "+0.050×", "+0.25×") and
   `fmt_amount` (three figures, "0.0016"). `params.retaper_depths(doc,
   files)` reads a document without `units["fx.depth"] == "taper"` as it
-  was, at every load (`Presets.load_doc`, silent as the pan's conversion
-  is): a push keeps the real value a full push reaches from the row's
-  base (the preset's own value, else the effect's default), a position or
-  `set` row the value the source lands at full throw, a macro's base
-  subscriber its two ends; depth subscribers, `scale` and `rest` do not
-  move; a missing `value` is 1.0. A save writes the marker with the pan's
-  (`params.UNITS`); no schema bump. `tools/retaper_routes.py` rewrites a
-  library's presets and patches once — dry run by default, `--write`
-  backs the folder up to `~/Hyperspace/library-backup-<stamp>` first,
-  writes each file as the app writes it, names every moved row, and
-  reports (never rewrites) session rows in `bindings.json` and the shows.
-  The corpus (25 files) and the four macro-candidate fixtures were
-  rewritten with it; 70 goldens were re-recorded (eight presets whose
-  hands push these params part-way up the box).
+  was, at every door (`Presets.load_doc`, silent as the pan's conversion
+  is; the desk templates as a load expands them; `Library.read_patch`,
+  the door a spawn comes through; `Bindings.from_json`, which writes
+  `bindings.json` back once, kept beside itself): a push keeps the real
+  value a full push reaches from the row's base (the document's own
+  value, else the effect's default — a session table's always), a
+  position or `set` row the value the source lands at full throw, a
+  macro's base subscriber its two ends; a push that over- or undershoots
+  the range from its base keeps its sign and carries the overshoot over
+  in norm, never written 0; depth subscribers, `scale` and `rest` do not
+  move; a missing `value` is 1.0. Every writer marks its document
+  (`params.UNITS` for a preset, `patches.UNITS` for a patch, the session
+  table's `to_json`); no schema bump. `tools/retaper_routes.py` rewrites a
+  library's presets, patches and desk templates and the machine home's
+  `bindings.json` once — dry run by default, every change worked out
+  before anything is written; `--write` backs the folder up to
+  `~/Hyperspace/library-backup-<stamp>` first (`bindings.json` beside
+  itself, as the app does), writes each file as the app writes its kind,
+  names every moved row and every row left (a value that is not a
+  number). A show holds no rows (its `session` is a snapshot of params).
+  The corpus (25 files), the four macro-candidate fixtures and the
+  grouped fixture were rewritten with it; 70 goldens were re-recorded
+  (eight presets whose hands push these params part-way up the box).
 - **Other options.** Depths kept as numbers and the tapers added anyway
   (every saved hand route onto an amount would have gone from "a third of
   the range" to "a few octaves"); a schema bump to `/9` for the marker
@@ -9407,9 +9416,10 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
   part. A macro's throw is linear in norm, so a macro resting mid-throw on
   such a param lands the base somewhere else at load, and two macros that
   agreed on one base (macro-breakdown-drop's 1 and 3) no longer do — the
-  tool names each such sub; the owner re-sets those by ear. A patch is
-  rewritten by the tool but not converted when applied (`patches.read`
-  has no specs to measure by; the owner has never saved one).
+  tool names each such sub; the owner re-sets those by ear. A session
+  row's push (a hand-edited `bindings.json`; the app itself never writes a
+  performer row there) is measured about the effect's default, there
+  being no base of its own.
 - **Judge it.** Check 420. **The owner runs `uv run python
   tools/retaper_routes.py` (then `--write`) on the library before the next
   show**, both Macs on this build.

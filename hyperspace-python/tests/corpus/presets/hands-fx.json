@@ -293,7 +293,7 @@
  "routes": [
   {"source": "hand:right.y", "target": "fx.mix", "op": "position"},
   {"source": "hand:right.pitch", "target": "fx.acid.twist", "op": "position"},
-  {"source": "hand:left.roll", "target": "fx.acid.speed", "op": "push", "value": 0.050000000000000044},
+  {"source": "hand:left.roll", "target": "fx.acid.speed", "op": "push", "value": 0.30000000000000004},
   {"source": "hand:left.y", "target": "view.bright", "op": "push", "value": 0.4},
   {"source": "hand:right.yaw", "target": "fx.acid.bend", "op": "position"}
  ],

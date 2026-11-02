@@ -958,17 +958,28 @@ def pan_world(doc: dict) -> tuple[dict, bool]:
 # for good by tools/retaper_routes.py, which writes the marker.
 
 _RETAPER_OPS = ("push", "position", "set")
+# the row lists a document may hold: a preset's or patch's `routes` and
+# `desk`, a desk template's `desk`, the session table's `bindings`
+_ROW_SECTIONS = ("routes", "desk", "bindings")
+_FALLBACK_FILES: dict | None = None
 
 
-def fx_files(reg) -> dict:
-    """The effect specs a registry declared from (`Registry.fx_state`,
-    build_registry), else the shader folder's as it stands — what
-    `retaper_depths` measures a document's depths against."""
-    state = getattr(reg, "fx_state", None)
-    files = getattr(state, "files", None)
+def fx_files(source=None) -> dict:
+    """The effect specs to measure a document's depths against
+    (`retaper_depths`): an `FxState`'s own `files`, or the one a registry
+    declared from (`Registry.fx_state`, build_registry). With neither — a
+    reader with no rig in hand, `Bindings.from_json`, `patches.read` — the
+    shader folder as it ships (`fx.FX_DIR`), parsed **once** per process
+    and kept; a rig whose effects live elsewhere passes its own state."""
+    global _FALLBACK_FILES
+    files = getattr(source, "files", None)
     if files is None:
-        files = FxState().files
-    return files
+        files = getattr(getattr(source, "fx_state", None), "files", None)
+    if files is not None:
+        return files
+    if _FALLBACK_FILES is None:
+        _FALLBACK_FILES = FxState().files
+    return _FALLBACK_FILES
 
 
 def _number(v) -> float | None:
@@ -977,22 +988,29 @@ def _number(v) -> float | None:
 
 
 def retaper_depths(doc: dict, files: dict) -> tuple[dict, list[str]]:
-    """A preset or patch document with every depth onto a retapered effect
-    param (`fx.retaper_of` over `files`, `FxState.files`) measured along
-    the param's taper, and marked so (`units[DEPTH_UNIT]`). Returns (the
-    document, what moved — one line per row); the document itself when it
-    is already marked. Each row's real-unit effect is kept where it can be:
+    """A document — a preset, a patch, a desk template or the session
+    table — with every depth onto a retapered effect param (`fx.retaper_of`
+    over `files`, `FxState.files`) measured along the param's taper, and
+    marked so (`units[DEPTH_UNIT]`). Returns (the document, what moved —
+    one line per row); the document itself when it is already marked. The
+    rows are its ``routes``, ``desk`` and ``bindings`` lists and its macros'
+    base subscribers. Each row's real-unit effect is kept where it can be:
 
     - a ``position`` row (and a ``set`` row's value, a norm): the real
       value the source lands at full throw is the same, so the new depth is
       that value's position on the taper. Exact at the top; below it the
       source is the param's new fader, as a position row means;
     - a ``push`` row: the real value a full push reaches **from the row's
-      base** — the preset's own value of the param, or the effect's default
-      where the preset does not name it — is the same, so the new depth is
-      the taper distance from the base to that value. Exact at rest and at
-      full push about that base; between the two, and from another base,
-      the taper's curve stands in for the line;
+      base** — the document's own value of the param, or the effect's
+      default where it names none (a session table always) — is the same,
+      so the new depth is the taper distance from the base to that value.
+      Exact at rest and at full push about that base; between the two, and
+      from another base, the taper's curve stands in for the line. A push
+      that over- or undershoots the range from that base (a negative push
+      from a base of 0) keeps its sign and its overshoot: the part inside
+      the range is converted and the part beyond it is carried over in
+      norm as it was, so a depth is never written 0 for a row that had
+      one — such a row is said "overshoots";
     - a macro's base subscriber on such a param: its ``from`` and ``to``
       are norms, and are moved as a position's depth is.
 
@@ -1023,11 +1041,9 @@ def retaper_depths(doc: dict, files: dict) -> tuple[dict, list[str]]:
 
     def rows(section):
         part = out.get(section)
-        if isinstance(part, dict):          # a desk written as overrides over a template
-            part = part.get("rows", part.get("overrides"))
         return [r for r in part if isinstance(r, dict)] if isinstance(part, list) else []
 
-    for section in ("routes", "desk"):
+    for section in _ROW_SECTIONS:
         for row in rows(section):
             got = retapered(row.get("target"))
             op = row.get("op")
@@ -1037,19 +1053,25 @@ def retaper_depths(doc: dict, files: dict) -> tuple[dict, list[str]]:
             if d is None:
                 continue
             target = row["target"]
+            said = ""
             if op == "push":
                 base = _number(values.get(target))
                 base = got[2] if base is None else base
-                reach = old_value(got, old_norm(got, base) + d)
-                new = new_norm(got, reach) - new_norm(got, base)
+                at = old_norm(got, base)
+                target_norm = at + d
+                inside = _clamp(target_norm, 0.0, 1.0) - at      # the part within the range
+                beyond = target_norm - _clamp(target_norm, 0.0, 1.0)   # the overshoot, as it was
+                new = new_norm(got, old_value(got, at + inside)) - new_norm(got, base) + beyond
                 about = f" about {base:g}"
+                if beyond:
+                    said = f" (overshoots the range by {beyond:+.3g} in norm: carried over)"
             else:
                 new = new_norm(got, old_value(got, d))
                 about = ""
             if new != d:
                 row["value"] = new
                 moved.append(f"{section} {row.get('source', '?')} → {target}: {op} {d:g} → "
-                             f"{new:.4g}{about}")
+                             f"{new:.4g}{about}{said}")
     macros = out.get("macros")
     for mid, macro in (macros.items() if isinstance(macros, dict) else ()):
         subs = macro.get("subs") if isinstance(macro, dict) else None

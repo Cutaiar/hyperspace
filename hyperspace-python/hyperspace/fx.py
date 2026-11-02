@@ -544,9 +544,7 @@ def declare(r, fx: FxState, names: set[str] | None = None) -> None:
                 r.enum(f"{pre}.{p.key}", f"{lb} {p.label.lower()}", *_key(v, p.key),
                        list(p.choices), group=g, tip=p.tip)
                 continue
-            # wave 0 T1: 0 … hi on the zero-safe log taper (getattr: a spec
-            # parsed before a hot reload brought the flag has no field)
-            if getattr(p, "amount", False):
+            if p.amount:        # wave 0 T1: 0 … hi on the zero-safe log taper
                 r.continuous(f"{pre}.{p.key}", f"{lb} {p.label.lower()}", *_key(v, p.key),
                              taper=amount_taper(p.hi), lo=p.lo, hi=p.hi, fmt=fmt_amount,
                              group=g, tip=p.tip)
@@ -634,7 +632,7 @@ def retaper_of(pid: str, files: dict[str, EffectSpec]
     if key == "speed":
         return -SPEED_MAX, SPEED_MAX, spec.speed, T_SPEED
     for p in spec.params:
-        if p.key == key and getattr(p, "amount", False):
+        if p.key == key and p.amount:
             return p.lo, p.hi, p.default, amount_taper(p.hi)
     return None
 
