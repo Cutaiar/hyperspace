@@ -574,3 +574,23 @@ def test_nanovg_waits_for_gl_and_can_be_kept_off(monkeypatch, capsys):
     assert not surf.ready() and not surf.failed
     assert not surf.ready()
     assert capsys.readouterr().err.count("pad drawings: off (HYPERSPACE_NANOVG=0)") == 1
+
+
+def test_each_room_keeps_its_own_framebuffer():
+    """The pad window and GRAPH's side panel draw at their own sizes: each
+    keeps its framebuffer (none remade while its size holds — remade twice
+    a frame, the frame rate fell), and a room no longer drawn lets its
+    framebuffer go."""
+    from hyperspace import ui_pad_nvg, ui_pad_views
+    calls: list[str] = []
+    surf = ui_pad_nvg.Surface()
+    surf.vg, surf.nvg = object(), _Nvg(calls)
+    r = ui_pad_views.read(None)
+    for k in range(5):
+        surf.render("faithful", r, {}, 800, 500, "window", k)
+        surf.render("cockpit", r, {}, 300, 200, "side", k)
+    assert calls.count("NvgFramebuffer") == 2 and set(surf.fbs) == {"window", "side"}
+    surf.render("faithful", r, {}, 820, 500, "window", 6)          # resized: remade once
+    assert calls.count("NvgFramebuffer") == 3
+    surf.render("faithful", r, {}, 820, 500, "window", 7 + ui_pad_nvg.STALE)
+    assert set(surf.fbs) == {"window"}                              # the side panel's went

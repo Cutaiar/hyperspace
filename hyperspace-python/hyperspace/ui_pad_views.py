@@ -340,8 +340,10 @@ def _lab(c: Ctx, view: str) -> None:
         _not_drawn(c, VIEW_LABELS[VIEWS.index(view)], surf.why_not())
         return
     k = imgui.get_io().display_framebuffer_scale
-    tex, pen = surf.render(view, c.r, _state(c.panel).setdefault("lab", {}),
-                           round(c.w * k.x), round(c.h * k.y))
+    room = imgui.get_id("##pad.lab")    # this window's: the pad window, or GRAPH's side panel
+    st = _state(c.panel).setdefault("lab", {}).setdefault(room, {})   # each room its own trails
+    tex, pen = surf.render(view, c.r, st, round(c.w * k.x), round(c.h * k.y), room,
+                           imgui.get_frame_count())
     c.dl.add_image(imgui.ImTextureRef(tex), _v(c.x, c.y), _v(c.x + c.w, c.y + c.h))
     s = min(c.w / ui_pad_lab.DESIGN_W, c.h / ui_pad_lab.DESIGN_H)
     ox = c.x + (c.w - ui_pad_lab.DESIGN_W * s) / 2

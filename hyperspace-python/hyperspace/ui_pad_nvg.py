@@ -8,10 +8,12 @@ texture the size of the room in the window's pixels, which the pad window
 shows as an image.
 
   `NvgPen`   every one of `ui_pad_lab.DRAW_CALLS`, made on a NanoVG context
-  `Surface`  the context and its framebuffer, made in the control
-             window's GL context the first time a drawing asks (one extra
-             call, `hello_imgui.init_gl_loader`, lets NanoVG reach GL
-             outside imgui-bundle's own runner); kept on the panel
+  `Surface`  the context, and a framebuffer per room it draws in (the pad
+             window, the GRAPH page's side panel: each its own size, so
+             neither is remade every frame), made in the control window's
+             GL context the first time a drawing asks (one extra call,
+             `hello_imgui.init_gl_loader`, lets NanoVG reach GL outside
+             imgui-bundle's own runner); kept on the panel
 
 One renderer, no second one behind it: where NanoVG cannot draw — no GL
 context (the tests' headless panel), NanoVG would not start (the reason in
@@ -28,6 +30,7 @@ import sys
 from . import ui_pad_lab
 from .ui_pad_lab import DESIGN_H, DESIGN_W, FONT_K, rgba
 
+STALE = 120                 # frames a room may go undrawn before its framebuffer goes
 _FONT_DIR = os.path.join(os.path.dirname(__file__), "fonts")
 FONTS = {"ui": "Inter-Medium.ttf", "bold": "Inter-Bold.ttf", "mono": "JetBrainsMono-SemiBold.ttf",
          "sym": "DejaVuSans.ttf"}
@@ -164,8 +167,7 @@ class Surface:
     def __init__(self):
         self.vg = None
         self.nvg = None
-        self.fb = None
-        self.fb_size = (0, 0)
+        self.fbs: dict = {}         # room → [framebuffer, (w, h), the frame it was last drawn]
         self.failed = ""
         self.said = ""
 
@@ -213,14 +215,25 @@ class Surface:
             return "NanoVG is off (HYPERSPACE_NANOVG=0)"
         return "no OpenGL here for NanoVG"
 
-    def render(self, view: str, r, st: dict, w_px: int, h_px: int) -> tuple[int, NvgPen]:
-        """Draw `view` into the framebuffer (made or remade to w_px × h_px),
-        the design space fitted and centred; (texture id, the pen — its
-        hits in design space) back."""
+    def _fb(self, room, w_px: int, h_px: int, frame: int):
+        """`room`'s framebuffer, made or remade to w_px × h_px; a room not
+        drawn for `STALE` frames lets its framebuffer go."""
+        got = self.fbs.get(room)
+        if got is None or got[1] != (w_px, h_px):
+            fb = self.nvg.nvg_imgui.NvgFramebuffer(self.vg, max(1, w_px), max(1, h_px), 0)
+            got = self.fbs[room] = [fb, (w_px, h_px), frame]
+        got[2] = frame
+        for k in [k for k, v in self.fbs.items() if frame - v[2] > STALE]:
+            del self.fbs[k]
+        return got[0]
+
+    def render(self, view: str, r, st: dict, w_px: int, h_px: int,
+               room="pad", frame: int = 0) -> tuple[int, NvgPen]:
+        """Draw `view` into `room`'s framebuffer (w_px × h_px), the design
+        space fitted and centred; (texture id, the pen — its hits in
+        design space) back. `frame` the frame's number (stale rooms go)."""
         nvg = self.nvg
-        if self.fb is None or self.fb_size != (w_px, h_px):
-            self.fb = nvg.nvg_imgui.NvgFramebuffer(self.vg, max(1, w_px), max(1, h_px), 0)
-            self.fb_size = (w_px, h_px)
+        fb = self._fb(room, w_px, h_px, frame)
         pen = NvgPen(self.vg, nvg)
         raised: list[BaseException] = []
 
@@ -238,11 +251,10 @@ class Surface:
             finally:
                 nvg.restore(vg)
         from imgui_bundle import imgui
-        nvg.nvg_imgui.render_nvg_to_frame_buffer(self.vg, self.fb, draw,
-                                                 imgui.ImVec4(0, 0, 0, 0))
+        nvg.nvg_imgui.render_nvg_to_frame_buffer(self.vg, fb, draw, imgui.ImVec4(0, 0, 0, 0))
         if raised:
             raise raised[0]
-        return self.fb.texture_id, pen
+        return fb.texture_id, pen
 
 
 def surface_of(panel) -> Surface:
