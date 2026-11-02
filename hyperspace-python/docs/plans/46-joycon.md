@@ -30,9 +30,28 @@ over Bluetooth), each with three six-axis samples once subcommand
 z read ≈ +1 g (4208 counts at 4096 per g): z is up out of the face. Its
 battery byte read `0x4e`: **low**. The Joy-Con then went to sleep (a
 Joy-Con does, idle, and only a press of one of its buttons brings it
-back), so the connect sequence below — the flash reads, the recentre —
-and the button bits, rumble and lights have run against a fake only.
-Hand check 425 is the first run of the real sequence.
+back), so the build below ran against a fake first.
+
+## What the controller said (2026-11-02, the probe)
+
+The owner ran `tools/hid_probe.py --controller joycon-l --check --record`
+on the real Joy-Con (L) over Bluetooth (hand check 425):
+[`assets/46-joycon/joycon-findings.json`](assets/46-joycon/joycon-findings.json)
+(the Bluetooth address taken out); half a second of each step kept as
+test bytes (`tests/fixtures/pads/joycon-bt-excerpt.jsonl`, cut by
+`tools/pad_tape_excerpt.py`; `tests/test_pads_joycon_real.py`).
+
+| Asked | Answer |
+|---|---|
+| The link | Bluetooth, report 0x30 (49 B) at 60/s; the flash's 0x21 replies only during the connect sequence |
+| The flash | Four records answered: the factory stick (`0x603d`) and sensor (`0x6020`) calibrations; the user records (`0x8010`, `0x8026`) blank — the Switch never wrote one. Gyro 0.061 deg/s a count, accel 4096 counts a g, as the notes say |
+| The stick | Factory centre (2003, 1968), reach 1348 / 1147 right / left and 1134 / 1179 up / down; **recentred** at connect; reach 0.99 / 1.0 / 1.0 / 0.98 each way; at rest −0.02 (far inside the 0.18 deadzone) |
+| Every button | ↓ `A`, ↑ `Y`, → `B`, ← `X`, SL `LP`, SR `RP`, L `LB`, ZL `axis:LT`, − `VIEW`, capture `SHARE`, the click `LSTICK` — **all eleven as built** (byte 5 bits 0x01 / 0x02 / 0x04 / 0x08 / 0x20 / 0x10 / 0x40 / 0x80; byte 4 0x01 / 0x20 / 0x08) |
+| The sensors' axes | Flat: z +1 g; right side down → +y; far end up → +x; a turn right → −z gyro: the proposed map `[[1, −1], [2, 1], [0, −1]]`, yaw `[2, 1]` — **the built `AXIS_MAP` holds** (D5 settled) |
+| The outputs | Three player lights, rumble low, rumble high, and the stop: each seen |
+| Battery | 50 % ("low") |
+
+Nothing in the codec needed a change.
 
 ## What was built
 

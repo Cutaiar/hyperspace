@@ -9376,13 +9376,19 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
   with the stick's well, its raw reading and the centre in use beside
   the tilt and the sensors' numbers, Cockpit one dial, Lanes only what
   it has plus its calibration; no `prototypes/joycon-lab/`.
-- **What would overturn it.** Hand check 425 (the probe's run on the
-  real Joy-Con: the first time the connect sequence, the flash reads,
-  the button bits, rumble and the lights meet hardware — the Joy-Con
-  slept before the build's reader could run): a sign in `AXIS_MAP`
-  (569), a button bit in `_L_BUTTONS` (566), a rest that never recentres
-  or recentres a held stick (568: `RECENTRE_MAX`, `RECENTRE_SPREAD`), a
-  rumble that stutters (`RUMBLE_REFRESH_S`). The owner wanting the face
-  or the hat under the Xbox names anyway (566, 567), or a second Joy-Con
-  that should pair into one pad (565).
+- **Checked on the hardware** (hand check 425, the owner, 2026-11-02):
+  the probe's run on the real Joy-Con (L) over Bluetooth — the flash
+  answered (factory stick and sensor calibrations, no user records),
+  the stick recentred and rests at −0.02, every one of the eleven
+  buttons landed as built (566), the proposed sensor map equals the
+  built `AXIS_MAP` (569 settled), three lights, both rumble bands and
+  the stop seen. Findings and a tape slice in the tree
+  (`plans/assets/46-joycon/`, `tests/test_pads_joycon_real.py`).
+  Nothing in the codec changed.
+- **What would overturn it.** The owner wanting the face or the hat
+  under the Xbox names anyway (566, 567), a second Joy-Con that should
+  pair into one pad (565), a stick whose rest the recentre bounds miss
+  (568: `RECENTRE_MAX`, `RECENTRE_SPREAD`), a rumble that stutters in a
+  set (`RUMBLE_REFRESH_S`), or a Joy-Con (R) / Pro Controller that reads
+  otherwise (unseen).
 

@@ -179,19 +179,22 @@ Remote, first of all its six-axis sensor
 the Sony codec, models `joycon-l` / `joycon-r` / `procon`, a model saying
 which controls it has (one stick, no D-pad, two outputs), the stick's
 drift calibrated from the flash and its rest, the probe's own Joy-Con
-checks. D1–D6 are recommendations pending the owner (register rows
-565–570); hand checks 424–429 (group AV) start with
-`tools/hid_probe.py --controller joycon-l --check` — the connect
-sequence, the buttons and the outputs met a fake only, because the
-Joy-Con slept before the build's reader could run. **Restart** rather
-than hot reload (the road's module list changed).
+checks, and the pad window drawing the Joy-Con as itself (Faithful with
+the stick's calibration and the sensors' numbers, Cockpit, Lanes — D6,
+the owner's: no browser lab). D1–D5 are recommendations pending the
+owner (register rows 565–569); hand check 425 ran on the real Joy-Con
+the same day: the flash, every button, the stick's rest and reach, the
+sensors' axes and the outputs all as built (findings and a tape slice in
+the tree, `tests/test_pads_joycon_real.py`); 424 and 426–429 (group AV)
+remain. **Restart** rather than hot reload (the road's module list
+changed).
 
 ## What is left
 
-- **Plan 46, hand check 425 first** (the owner's Joy-Con, 2026-11-02):
-  the probe's run on the real Joy-Con, its findings committed under
-  `plans/assets/46-joycon/` and a tape slice as a test; what it says
-  corrects `nintendo.AXIS_MAP`, the button bits and the recentre bounds.
+- **Plan 46, hand checks 424 and 426–429** (the owner's Joy-Con): the
+  app with it — the pad window's views by eye, the six axes in the hand
+  and a Learn, drift in a set, rumble and the lights from sink rows,
+  beside the Edge.
 - **Plan 42, to revisit** (Dillon, 2026-11-02): the back buttons' forward
   flip, renaming "pad" (proposal: handheld), a role picker in the app —
   each with where it starts in [`plans/42-controllers.md`](plans/42-controllers.md) "To
