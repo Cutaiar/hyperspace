@@ -285,3 +285,15 @@ K and S use two different take-over mechanisms (steps 1 and 2) and both ship. Pl
 5. Whether the stray trailing 0x00 in the Edge BT descriptor upsets IOKit.
 6. The meaning of the BT input tag values other than 1 and 2, and whether microphone (tag 2) reports ever appear without our asking.
 7. Edge firmware's update version (§4.3) and whether it matters for anything beyond rumble.
+
+## 10. Answered by the hardware (2026-11-02)
+
+An Edge, update version 0x0217, on macOS, through `tools/hid_probe.py
+--check` over USB and Bluetooth ([`edge-usb.json`](edge-usb.json),
+[`edge-bt.json`](edge-bt.json)): §9 1 — 64 bytes, at once; §9 2 — Y max
+1079 (1080 high), the axes as K/S name them; §9 3 — opened exclusively,
+nothing fought it; §9 4 — K's take-over is enough over Bluetooth; §9 5 —
+IOKit took the BT descriptor; §9 6 — only tag 1 seen (20 162 reports);
+§9 7 — 0x0217. Bluetooth paces input at about 64 reports a second, evenly,
+where §2.4 assumed far more. Fn held hides the face buttons.
+

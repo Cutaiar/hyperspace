@@ -54,8 +54,8 @@ BT_INPUT_TAGS = (0, 1)
 
 FIRMWARE_ID, FIRMWARE_LEN = 0x20, 64            # the update version: which rumble mode
 FEATURE_READ_LEN = 64                           # hidapi reads a feature into this
-# the touchpad's resolution (Linux 1920 × 1080; SDL says 1070 high —
-# the probe's corner drag settles it; spec §2.5)
+# the touchpad's resolution: Linux's 1920 × 1080 (SDL says 1070 high; an
+# Edge's corners read 0–1919 × 0–1079, 2026-11-02)
 TOUCH_W, TOUCH_H = 1920, 1080
 # the sensors' raw scales when no calibration was read (SDL's fallback,
 # spec §4.1): about 16 counts per deg/s and 8192 per g. Linux's 1024 and
@@ -343,8 +343,9 @@ F2_BRIGHTNESS, F2_LIGHT_SETUP, F2_RUMBLE_V2 = 0x01, 0x02, 0x04
 LIGHT_OUT = 0x02             # the light bar setup that hands the LEDs to the host (Linux)
 PLAYERS_INSTANT = 0x20       # player LEDs change at once, not fading
 RUMBLE_V2_VERSION = 0x0215   # a DualSense at or past this update takes rumble v2 (Linux)
-# the USB output report's length: the descriptor's (DualSense 48, Edge 64);
-# `HidPad` falls back through the others if macOS refuses one (spec §9 1)
+# the USB output report's length: the descriptor's (DualSense 48, Edge 64 —
+# macOS took an Edge's 64 at once, 2026-11-02); `HidPad` falls back through
+# the others if a pad refuses one
 USB_OUT_LENS = {"dualsense": (48, 64, 63), "edge": (64, 63, 48)}
 TRIGGER_ZONES = 10
 

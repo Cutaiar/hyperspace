@@ -276,7 +276,8 @@ class HidPad:
             return
         if self._sent_key is None:
             # Linux's take-over, once: the light bar's setup to "out", so the
-            # colours the host sets stick (spec §5.3)
+            # colours the host sets stick (spec §5.3) — enough on macOS over
+            # USB and Bluetooth (a real Edge, 2026-11-02)
             self._send(dev, sony.output_report(sony.Effects(), bluetooth=self.bluetooth,
                                                seq=self._next_seq(), first=True,
                                                usb_len=self._usb_len()), first=True)

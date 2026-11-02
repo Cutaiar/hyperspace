@@ -137,23 +137,30 @@ may then read it through GLFW); the next free GLFW joystick its
 | D9 | The on-screen pad draws **the model's own face**, its extras in the room the Xbox face leaves | 552 |
 | D10 | The browser lab is a **prototype**, beside the app, not in it | 553 |
 
-## Only the controller can say
+## What the controller said (2026-11-02)
 
-From the spec's §9 and the build; the probe's ``--check`` and the lab's
-checklist ask each one and record the answer:
+Dillon's Edge (update 0x0217), the probe's guided checks over USB and
+over Bluetooth on macOS — [`assets/42-controllers/edge-usb.json`](assets/42-controllers/edge-usb.json),
+[`edge-bt.json`](assets/42-controllers/edge-bt.json) (the Bluetooth address
+taken out), half a second of each step kept as test bytes
+(`tests/fixtures/pads/edge-bt-excerpt.jsonl`, `tests/test_pads_real.py`):
 
-1. Which USB output length macOS takes for the Edge (64 from its
-   descriptor; the reader falls back to 63 and 48).
-2. Whether the light bar obeys over Bluetooth after Linux's take-over, or
-   needs SDL's reset after the pairing animation.
-3. Whether the back buttons report their own bits in the default profile,
-   and what a profile that remaps one sends.
-4. Whether holding Fn hides the face buttons.
-5. The sensors' axis order and signs (`gesture.AxisMap`; SDL's reading is
-   assumed), the touchpad's height (1080 or 1070), the sticks' jitter at
-   rest.
-6. Whether macOS asks for Input Monitoring, and whether an exclusive open
-   keeps the PS button from opening Launchpad.
+| Asked | Answer |
+|---|---|
+| Does Bluetooth give the full report? | Yes: one simple report at connect, then only 0x31 (78 B, tag 1, every CRC good) once the calibration is read |
+| The rate | USB 1000 reports/s; **Bluetooth about 64/s, evenly every ~15 ms** — the pad or macOS paces it, not the reader (one drained burst in 20 000) |
+| The back and Fn buttons, default profile | Their own bits: L4 `p9 0x40`, R4 `0x80`, left Fn `0x10` |
+| Does holding Fn hide the face? | **Yes**: Fn + ✕ reads Fn alone (the firmware keeps Fn combos for profiles). A row may use Fn alone, never in a combination |
+| A profile that remaps a back button | Not asked: profiles are made on a PS5 |
+| The sensors' axes and signs | SDL's reading holds (`gesture.AxisMap`'s default), on both links |
+| The touchpad | 0–1919 × 0–1079: Linux's 1080, not SDL's 1070 |
+| The outputs | The light bar, player lights, rumble, R2's resistance and the mic light all obey, over USB **and** Bluetooth; Linux's take-over is enough on macOS (no SDL reset) |
+| The USB output length | 64 bytes, the descriptor's, at once |
+| Calibration | Read on both links, believable, the same on each |
+| The sticks at rest | Within 0.035 of centre, jitter under 0.01 — far inside the 0.18 deadzone |
+| Lying on a table | The Edge rests on its grips, about 11° nose-down: `motion:pitch` reads ≈ 0.40 there, not 0.5 |
+
+Still to see in the app: hand checks 407–415.
 
 ## Tomorrow
 

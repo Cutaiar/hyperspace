@@ -24,7 +24,8 @@ every routing lane, published by the pad device under the pad's role
 
 The sensors' axes: x right, y up out of the face, z toward the player
 (SDL's convention). Which raw axis is which, and its sign, is the
-`AxisMap` — the probe's tilt test checks it against the hardware.
+`AxisMap`; its default held on a real Edge over USB and Bluetooth
+(2026-11-02, the probe's tilt test).
 
 A leaf: the standard library only.
 """
