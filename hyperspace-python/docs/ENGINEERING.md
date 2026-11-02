@@ -1798,9 +1798,15 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
   `into`.
 - **Right-click**: on a `mod` stub, the param menu's Learn items (Learn
   desk, hand ▸, pad, a role, sink) — the completed row is a cable next
-  frame; on a cable, insert and delete; on a node, delete (a modifier,
-  a macro, an extra effect / hands node / composite), `draw solid` /
-  `draw lines`, `laid over` / `add` / `depth`; on the canvas, the picker:
+  frame; on a cable, insert, **starters ▸** (a picture cable: tracers,
+  tracers + dream, dream on a picture and, wave 0 E1, **echo** — a
+  delay loop with a blend spliced onto it, `graphview.ECHO_FEEDBACK`
+  the palette's decay, many allowed) and delete; on a node, delete (a
+  modifier, a macro, an extra effect / hands node / composite), `draw
+  solid` / `draw lines`, `laid over` / `add` / `depth`, and on a picture
+  node **add echo after** (the echo on the cable out of it; a submenu per
+  port when it feeds several, disabled with why when it feeds nothing:
+  `ui_graph.add_echo_after`); on the canvas, the picker:
   **modifier ▸** a kind, **effect ▸** a file, **hands**, **composite**,
   **macro ▸** an idle one. Delete takes the selection: a session row's
   cable and the rig's nodes are refused in words; a default render cable

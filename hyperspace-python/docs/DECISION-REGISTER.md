@@ -586,6 +586,7 @@ here; overturn → the change, then the same.
 | 551 | Plan 42 D8: the pad tape is the one recording format | 415 | (rec) — pending the owner |
 | 552 | Plan 42 D9: the on-screen pad draws the model's own face | 407 | (rec) — pending the owner |
 | 553 | Plan 42 D10: the browser lab is a prototype beside the app | — | (rec) — pending the owner |
+| 564 | Wave 0 E1: delay loops are the trails mechanism, the look-back keeps the dream — the echo starter (a composite laid over, a delay, a palette at val_to 0.75) on the cable menu and "add echo after" on the node menu, many allowed | 423 | (rec) — pending the owner |
 
 "—": no hand check shows it; tests only.
 

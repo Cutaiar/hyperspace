@@ -105,6 +105,7 @@ def test_the_starters_are_their_own_submenu_first():
     assert graphview.PICKER_GROUPS[0] == "starters"
     assert [w for _, w in graphview.STARTERS] == [
         "scene chain", "tracers", "tracers + dream", "dream on a picture",
+        "echo",                                         # (wave 0 E1: the delay loop)
         "channel to backdrop", "cut-out"]               # (plan 39 T5: the cut-out)
 
 
@@ -239,3 +240,233 @@ def test_a_starter_lands_at_the_point_as_one_undo_step(page):
     finally:
         undo.install(None)
     assert (lib.presets.graph.spec.to_json(), dict(lib.presets.layout)) == was
+
+
+# ---------------------------------------------------------------- the echo (wave 0 E1, 2026-11-02)
+#
+# A delay loop with a blend, spliced onto a picture cable by the insert
+# table: `picture → composite.over`, `composite → dst`, `composite →
+# delay.image`, `delay → palette.image`, `palette → composite.under`, the
+# palette's val slice shut to `ECHO_FEEDBACK` as the decay. Many allowed.
+
+ECHO_LOOP = {("composite", "delay.image"), ("delay", "palette.image"),
+             ("palette", "composite.under")}
+ECHOED = CHAIN - {("scene", ALL)} | {("scene", "composite.over"), ("composite", ALL)} | ECHO_LOOP
+
+
+def test_the_echo_is_a_starter_a_picture_cable_offers():
+    assert ("echo", "echo") in graphview.STARTERS
+    assert "echo" in graphview.CABLE_STARTERS
+    assert graphview.ECHO_FILE == "palette" and graphview.ECHO_FEEDBACK == 0.75
+
+
+def test_echo_on_a_cable_splices_a_delay_loop_with_a_blend(tmp_path):
+    """From a picture cable's menu: the composite goes onto the cable as
+    insert ▸ composite (over) would, the loop round it through a new delay
+    and a new palette, one undo step; the palette on, at mix 1, its val_to
+    the feedback, in the same step; the three laid left to right."""
+    from hyperspace import graph as G
+    rig, e, pushed = wired_rig(tmp_path, SCENE)
+    assert e.starter("echo", ("scene", ALL)) is None
+    assert wired_wires(rig) == ECHOED
+    spec = rig.presets.graph.spec
+    assert {"kind": "composite"} in _entries(rig)            # (laid over)
+    assert {"kind": "delay"} in _entries(rig)
+    assert G.EffectAt("palette", 1) in spec.effects
+    assert pushed == ["starter: echo"]
+    assert e.placed == ("delay", "palette", "composite") and e.added == "composite"
+    assert e.said == graphview.ECHO_SAID.format(
+        src="scene", dst=ALL, comp="composite", delay="delay", fx="palette",
+        fb=graphview.ECHO_FEEDBACK) == (
+        "echo: scene → composite over → output.all.image; composite → delay → palette → "
+        "composite under — palette val to 0.75 is the feedback")
+    assert rig.reg["fx.palette.on"].value is True
+    assert rig.reg["fx.palette.mix"].value == 1.0
+    assert rig.reg["fx.palette.val_to"].value == 0.75
+
+
+def test_two_echoes_in_one_graph(tmp_path):
+    """A second echo is never refused (unlike tracers): the first echo's
+    picture echoed again is its own composite, delay and palette."""
+    rig, e, pushed = wired_rig(tmp_path, SCENE)
+    assert e.starter("echo", ("scene", ALL)) is None
+    assert e.starter("echo", ("composite", ALL)) is None
+    assert e.placed == ("delay.2", "palette.2", "composite.2")
+    assert wired_wires(rig) == ECHOED - {("composite", ALL)} | {
+        ("composite", "composite.2.over"), ("composite.2", ALL),
+        ("composite.2", "delay.2.image"), ("delay.2", "palette.2.image"),
+        ("palette.2", "composite.2.under")}
+    assert pushed == ["starter: echo", "starter: echo"]
+    assert rig.reg["fx.palette.2.val_to"].value == 0.75
+    assert rig.reg["fx.palette.val_to"].value == 0.75
+    assert "already" not in e.said
+
+
+def test_echo_from_the_picker_takes_the_scene_s_picture(tmp_path):
+    """The picker's starters ▸ echo (no cable): the scene's one picture, as
+    the tracers; with no scene the loop is made and its open ends said; a
+    scene feeding two ports gets the echo's over and the words say what is
+    left."""
+    rig, e, _ = wired_rig(tmp_path, SCENE)
+    assert e.add_node("starter", "echo") is None
+    assert wired_wires(rig) == ECHOED
+    rig, e, _ = wired_rig(tmp_path / "b", {"frame": "wired"})
+    assert e.starter("echo") is None
+    assert wired_wires(rig) == ECHO_LOOP
+    assert e.said == graphview.ECHO_LOOP_SAID.format(
+        comp="composite", delay="delay", fx="palette", fb=0.75) + graphview.ECHO_UNWIRED.format(
+        comp="composite")
+    assert e.placed == ("delay", "palette", "composite")
+    two = {"frame": "wired", "wires": [*SCENE["wires"], {"from": "scene", "to": "output.2.image"}]}
+    rig, e, _ = wired_rig(tmp_path / "c", two)
+    assert e.starter("echo") is None
+    assert wired_wires(rig) == CHAIN | {("scene", "output.2.image"), ("scene", "composite.over")} \
+        | ECHO_LOOP
+    assert e.said.endswith(graphview.ECHO_UNWIRED_PICTURE.format(src="scene"))
+
+
+def test_picture_feeds_names_the_cables_an_echo_goes_after(tmp_path):
+    """`graphview.picture_feeds`: a picture node's cables out (the node
+    menu's "add echo after"); [] for one feeding nothing; None for a
+    geometry, a window and a node whose picture is a pin."""
+    section = {"frame": "wired", "nodes": [{"kind": "composite"}, {"kind": "segment"}],
+               "wires": [*SCENE["wires"], {"from": "scene", "to": "lookback.image"}]}
+    _, e, _ = wired_rig(tmp_path, section)
+    assert graphview.picture_feeds(e, "scene") == [("scene", ALL), ("scene", "lookback.image")]
+    assert graphview.picture_feeds(e, "composite") == []
+    assert graphview.picture_feeds(e, "shape") is None
+    assert graphview.picture_feeds(e, "output.all") is None
+    assert graphview.picture_feeds(e, "segment") is None
+
+
+def test_echo_undoes_in_one_step(tmp_path):
+    """One ⌘Z takes the three nodes, the loop and the palette's values back."""
+    from test_undo import settle
+    rig, e, pushed = wired_rig(tmp_path, SCENE, undo_rig=True)
+    was = rig.presets.graph.spec.to_json()
+    assert e.starter("echo", ("scene", ALL)) is None
+    assert rig.reg["fx.palette.val_to"].value == 0.75
+    settle(rig)
+    assert pushed == ["starter: echo"]
+    assert rig.undo.undo()
+    assert rig.presets.graph.spec.to_json() == was
+    assert wired_wires(rig) == CHAIN
+    assert "fx.palette.val_to" not in rig.reg or rig.reg["fx.palette.val_to"].value != 0.75
+
+
+# ---------------------------------------------------------------- the echo on the page
+
+def test_add_echo_after_from_the_node_menu_lays_the_loop_below(page):
+    """`ui_graph.add_echo_after` (the node menu's item): the echo starter on
+    the cable out of the node, its three nodes laid left to right a node's
+    height below where the menu opened, one undo step."""
+    lib = page.lib
+    lib.presets.new((0.0, 0.0))
+    u = undo.Undo(page.reg, page.router.table, marks=Marks(lib))
+    undo.install(u)
+    try:
+        u.tick(1.0)
+        u.tick(2.0)
+        was = (lib.presets.graph.spec.to_json(), dict(lib.presets.layout))
+        st = ui_graph._state(page.panel)
+        st["pan"], st["menu_at"] = (0.0, 0.0), (400.0, 300.0)
+        assert ui_graph.add_echo_after(page.panel, "scene", ALL) is None
+        assert wired_wires(lib) == ECHOED
+        lay, y = lib.presets.layout, 300 + ui_graph.ECHO_BELOW
+        assert lay["render:delay"] == [400, y]
+        assert lay["render:palette"] == [400 + graphview.COL_W, y]
+        assert lay["render:composite"] == [400 + 2 * graphview.COL_W, y]
+        assert len(lay) == len(was[1]) + 3
+        assert st["said"].startswith("echo: scene → composite over → output.all.image")
+        assert u.stack[-1].label == "starter: echo"
+        assert u.undo()
+    finally:
+        undo.install(None)
+    assert (lib.presets.graph.spec.to_json(), dict(lib.presets.layout)) == was
+
+
+def test_the_menus_offer_the_echo(page, monkeypatch):
+    """The node menu: "add echo after" on a picture node that feeds one
+    port, a submenu per port on one that feeds several, disabled with why
+    on one that feeds nothing, absent on a geometry; the cable menu's
+    starters ▸ has echo."""
+    from imgui_bundle import imgui
+    panel = page.panel
+    page.lib.presets.new((0.0, 0.0))
+    e = ui_graph.render_edit(panel)
+    assert e.add_node("composite") is None                  # feeds nothing
+    assert e.wire("scene", "lookback.image") is None        # the scene feeds two
+    assert e.wire("lookback", "composite.over") is None     # the look-back feeds one
+    frame(panel, "graph")
+    view = ui_graph._state(panel)["view"]
+    items: list[tuple[str, bool]] = []
+    menus: list[str] = []
+    monkeypatch.setattr(imgui, "menu_item_simple",
+                        lambda label, *a, **k: items.append((label, k.get("enabled", True)))
+                        and False)
+    monkeypatch.setattr(imgui, "begin_menu", lambda label, *a, **k: menus.append(label) or True)
+    monkeypatch.setattr(imgui, "end_menu", lambda: None)
+
+    def drawn(fn):
+        items.clear()
+        menus.clear()
+        imgui.new_frame()
+        imgui.begin("menu")
+        fn()
+        imgui.end()
+        imgui.end_frame()
+    drawn(lambda: ui_graph.render_node_menu(panel, view.node("render:scene")))
+    assert menus == [ui_graph.ECHO_AFTER]
+    assert ("→ output.all.image", True) in items and ("→ lookback.image", True) in items
+    drawn(lambda: ui_graph.render_node_menu(panel, view.node("render:lookback")))
+    assert (ui_graph.ECHO_AFTER, True) in items and menus == []
+    drawn(lambda: ui_graph.render_node_menu(panel, view.node("render:composite")))
+    assert (f"{ui_graph.ECHO_AFTER}: {graphview.ECHO_FEEDS_NOTHING}", False) in items
+    drawn(lambda: ui_graph.render_node_menu(panel, view.node("render:shape")))
+    assert not [label for label, _ in items if label.startswith(ui_graph.ECHO_AFTER)]
+    cable = next(c for c in view.cables if c.dst_port == "rin:output.all/image")
+    drawn(lambda: ui_graph._cable_menu(panel, view, cable, (0.0, 0.0)))
+    assert "starters" in menus and ("echo", True) in items
+
+
+# ---------------------------------------------------------------- the echo draws
+
+ECHO_PAIRS = [("scene", "composite.over"), ("composite", "output.1.image"), *ECHO_LOOP]
+ECHO_NODES = [{"kind": "composite"}, {"kind": "delay"}]
+ECHO_VALUES = {"palette": {"on": True, "mix": 1.0, "val_to": graphview.ECHO_FEEDBACK}}
+
+
+def test_the_echo_draws_and_its_trail_fades(ctx):
+    """The starter's graph on a renderer, headless: it draws with no GL
+    error; laid over (the default) the shape's frames stay calmer than the
+    same loop laid add (a see-through face brightens towards its own full
+    colour, never past it; add piles up to 1/(1 − 0.75) = 4×); after the
+    shape goes the trail shows and each frame is strictly darker than the
+    last, gone within twenty."""
+    from itertools import pairwise
+
+    from test_graph_delay import _frame
+    from test_graph_faces import _empty, _faces, _fbo, _renderer
+
+    from hyperspace.outputs import Switches, View
+    size = (160, 120)
+    r = _renderer(ctx, None, ECHO_PAIRS, ECHO_NODES, None, ECHO_VALUES)
+    add = _renderer(ctx, None, ECHO_PAIRS, [{"kind": "composite", "blend": "add"}, ECHO_NODES[1]],
+                    None, ECHO_VALUES)
+    vs = [View(Switches(), size, target=_fbo(ctx, *size))]
+    va = [View(Switches(), size, target=_fbo(ctx, *size))]
+    (first,) = _frame(ctx, r, _faces(), vs, size, 0)
+    assert int(first[..., :3].max()) > 0 and "palette" in r.stats["effects"]
+    for k in range(1, 8):
+        (over,) = _frame(ctx, r, _faces(), vs, size, k)
+        (piled,) = _frame(ctx, add, _faces(), va, size, k)
+    assert int(over[..., :3].sum()) < int(piled[..., :3].sum())
+    assert (over[..., :3] == 255).mean() < (piled[..., :3] == 255).mean()  # fewer burnt pixels
+    sums = []
+    for k in range(8, 30):
+        (px,) = _frame(ctx, r, _empty(), vs, size, k)
+        sums.append(int(px[..., :3].sum()))
+    assert sums[0] > 0, sums                                    # the trail shows
+    assert all(b < a for a, b in pairwise(sums[:10])), sums     # and fades, frame on frame
+    assert all(b <= a for a, b in pairwise(sums)), sums         # (8-bit rounding at the tail)
+    assert int(px[..., :3].max()) <= 2, int(px[..., :3].max())  # gone

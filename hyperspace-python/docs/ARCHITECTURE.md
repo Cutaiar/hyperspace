@@ -500,7 +500,13 @@ no edge is hidden, and a window shows only its own wires.
   `graph.signature` and the goldens prove each migration.
 - **A new preset and "preset only".** `Presets.new` lays `shape → scene →
   output.all.image` where GRAPH is looking; `graphview.STARTERS` are
-  pre-wired groups the picker adds. `graphview.preset_only(view)` returns
+  pre-wired groups the picker adds (a picture cable's menu offers
+  `CABLE_STARTERS` on its picture; **echo**, wave 0 E1, 2026-11-02, is a
+  delay loop with a blend spliced in by the insert table — `_echo_starter`,
+  `ECHO_FEEDBACK`, many allowed — and a picture node's menu has **add echo
+  after**, `ui_graph.add_echo_after` over `graphview.picture_feeds`; the
+  recommendation pending the owner: delay loops are the trails mechanism,
+  the look-back keeps the dream, DECISIONS "Feedback"). `graphview.preset_only(view)` returns
   the ids GRAPH draws (the section's nodes, whatever is cabled to them and
   what feeds those to full depth, every output and every media channel);
   `ui_graph.hidden_ids` hides the rest without mutating or laying out
@@ -1110,6 +1116,7 @@ is not live is dormant: its lane reads NaN and a route on it lets go
 | a preset | `Presets.load`: every performance base in one `Library.restore`, then the modifiers (`Bindings.set_modifiers`, their params declared), `Bindings.set_routes`, `set_desk`, `set_macros`, the GRAPH page's `layout`, the base subscribers landed (`Router.follow_macros(force=True)`); session params never | bases and the preset's table |
 | a module preset or show | `Library.restore` (a show: its session part) | base |
 | **a picture node dropped on a picture cable**, or a cable's **insert ▸** (GRAPH, 2026-11-01: any kind, not only an effect) | `ui_graph.onto_plan` (what the drag lights is what the drop does) → `put_onto` → `Edit.place_node` (a free node, or one lifted with ⌘: out of its place, its chain closed over it, onto the cable by `graphview.INSERT_PORTS`; a composite or a switch asks its inlet first, a channel takes the cable over) or `insert_node` → `Edit.insert_node` (a new node made and spliced): a new `graph` section read back and landed | the loaded preset's graph, one undo step |
+| a cable's **starters ▸ echo**, or a picture node's **add echo after** (GRAPH, wave 0 E1, 2026-11-02) | `ui_graph.add_starter("echo", cable)` / `ui_graph.add_echo_after` (the cable out of the node, `graphview.picture_feeds`; several, a submenu) → `Edit.starter("echo", cable)` → `graphview._echo_starter`: a new composite (over) onto the cable by the insert table's splice (`_onto`), `composite → delay.image`, `delay → palette.image`, `palette → composite.under`, landed; then the palette on, mix 1, val_to `ECHO_FEEDBACK` (0.75) in the same step; the three laid left to right from the menu (`Edit.placed`, `chain_layout`) | the loaded preset's graph and the palette's values, one undo step |
 | **spawn ▸** a patch, or a patch dropped on a cable (GRAPH, plan 40) | `ui_graph.spawn` → `patches.spawn` → the conflict sheet if any (`ui_routing.modal`) → `Edit.spawn` / `Edit.splice`: the section through `gs.land`, `bank.add`, `add_modifier`, `lib.restore`, `Bindings.add` / `replace_owner`, `bind(write=False)`, `set_macros`, the group (§3.11) | the loaded preset's graph, table, values and `groups`, one undo step; no file |
 | **group N nodes** / **ungroup** (GRAPH's right-click), `+` / `−` on a group | `Edit.group` / `ungroup` / `set_open` | the preset's `groups` only (nothing of the renderer), one undo step |
 

@@ -6404,6 +6404,39 @@ header's count shortens to a number rather than run off the edge; in 4
 the side panel lists the Xbox pad's patched ports, no picture (the
 picture is the first pad's).
 
+## AQ. The echo starter (wave 0 E1)
+
+The 2026-10-31 triage's "echo / reverb starter", built 2026-11-02 (decision
+register row 564, recommended: delay loops are the trails mechanism, the
+look-back keeps the dream). Headless: `tests/test_graph_starters.py`
+(the echo tests, and `test_the_echo_draws_and_its_trail_fades`).
+
+**423. Echo on a live preset: the feedback stays calm, and two echoes.** (Mac; the TV or a projector helps)
+1. Load a party preset with the scene into All outputs (or **new**, then
+   the scene chain). GRAPH: right-click the cable `scene → All outputs`,
+   **starters ▸ echo**.
+2. Watch the shape move for ten seconds. Then on the new composite's
+   menu pick **laid add**; watch again; pick **laid over** to come back.
+3. Turn the new palette's **val to** knob (its node's side pane) up to 0.9
+   and down to 0.4.
+4. Right-click the new composite's node: **add echo after**.
+5. ⌘Z twice.
+
+*Pass:* in 1 three new nodes land left to right on the cable — delay,
+palette, composite — and the head line reads "echo: scene → composite
+over → output.all.image; composite → delay → palette → composite under —
+palette val to 0.75 is the feedback"; the shape trails ghosts of its last
+few positions that fade within a quarter of a second, the shape itself no
+brighter than before and nothing burns to white. In 2, laid add the trail
+shows over the shape too and bright faces pile up towards white (the
+calm default is over); laid over it is as in 1. In 3, 0.9 trails for
+about a second, 0.4 barely trails; neither sticks. In 4 a second delay,
+palette and composite land (`delay.2`, `palette.2`, `composite.2`) a
+node's height below the composite, the first echo's picture echoed
+again, with no refusal — unlike a second tracers. In 5 each ⌘Z takes
+one whole echo back (its three nodes, their wires and the palette's
+values), the first leaving the preset as loaded.
+
 ## What no test covers
 
 Only a person can settle these:

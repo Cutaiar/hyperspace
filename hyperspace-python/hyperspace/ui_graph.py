@@ -147,9 +147,12 @@ prefix (`graphview.hover_of`), the side panel's header the same
 error and a loop refuse, and a window keeps itself (its wires go). The
 picker is grouped by primitive — starters ▸ (plan 36 T5: the scene chain
 `shape → scene → All outputs`, tracers, tracers + dream, dream on a
-picture, channel to backdrop, each a pre-wired group in one gesture, laid
-left to right where the menu opened; a picture cable's menu has the
-tracers and dream ones, on its picture), scene ▸, look-back ▸, pictures ▸, effects ▸,
+picture, echo (wave 0 E1, 2026-11-02: a delay loop with a blend, the
+trails mechanism from here — many allowed), channel to backdrop, each a
+pre-wired group in one gesture, laid left to right where the menu opened;
+a picture cable's menu has the tracers, dream and echo ones, on its
+picture, and a picture node's menu has **add echo after**, the echo on the
+cable out of it: `render_node_menu`, `add_echo_after`), scene ▸, look-back ▸, pictures ▸, effects ▸,
 copy of ▸ — a frame node the section has drawn disabled
 (`render_picker`).
 
@@ -3220,7 +3223,8 @@ def insert_effect(panel, cable: graphview.VCable, file: str, at=None) -> str | N
 
 def render_node_menu(panel, n) -> None:
     """A render node's menu items: a hands node drawn solid or as lines, a
-    composite's blend, delete."""
+    composite's blend, a picture node's "add echo after" (wave 0 E1:
+    `_echo_after_menu`, `add_echo_after`), delete."""
     e = render_edit(panel)
     name, _ = graphview.spec_name(n.id, e.render)
     kind = graphview.kind_of(name) if name else None
@@ -3232,8 +3236,47 @@ def render_node_menu(panel, n) -> None:
         for how in rgraph.BLENDS:
             if imgui.menu_item_simple(f"laid {how}"):
                 _render_said(panel, e, lambda e, how=how: e.set_node(name, blend=how))
+    feeds = graphview.picture_feeds(e, name) if name else None
+    if feeds is not None:
+        _echo_after_menu(panel, name, feeds)
     if imgui.menu_item_simple("delete"):
         _render_said(panel, e, lambda e: e.drop_node(n.id))
+
+
+ECHO_AFTER = "add echo after"
+# a node menu's echo is laid a collapsed node's height below where the menu
+# opened (on the node), not over the node itself
+ECHO_BELOW = graphview.TITLE_H + graphview.GAP
+
+
+def _echo_after_menu(panel, name: str, feeds: list[tuple[str, str]]) -> None:
+    """A picture node's "add echo after" (wave 0 E1, 2026-11-02): the echo
+    starter on the cable out of it — one cable, the item itself; several, a
+    submenu naming each port it feeds; none, the item disabled with why
+    (`graphview.ECHO_FEEDS_NOTHING`)."""
+    if not feeds:
+        imgui.menu_item_simple(f"{ECHO_AFTER}: {graphview.ECHO_FEEDS_NOTHING}", enabled=False)
+    elif len(feeds) == 1:
+        if imgui.menu_item_simple(ECHO_AFTER):
+            add_echo_after(panel, name, feeds[0][1])
+    elif imgui.begin_menu(ECHO_AFTER):
+        for _, d in feeds:
+            if imgui.menu_item_simple(f"→ {d}"):
+                add_echo_after(panel, name, d)
+        imgui.end_menu()
+
+
+def add_echo_after(panel, name: str, port: str, at=None) -> str | None:
+    """The echo starter (`add_starter("echo")`) on the cable from picture
+    node `name` into `port` — the node menu's "add echo after" (wave 0 E1),
+    one undo step, its three nodes laid left to right from `at`, else from
+    a node's height below where the menu opened (`ECHO_BELOW`). Returns the
+    refusal, or None."""
+    if at is None:
+        at = _state(panel).get("menu_at")
+        if at is not None:
+            at = (at[0], at[1] + ECHO_BELOW)
+    return add_starter(panel, "echo", (name, port), at)
 
 
 # ---------------------------------------------------------------- the selection
