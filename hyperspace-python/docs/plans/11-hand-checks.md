@@ -6404,14 +6404,53 @@ header's count shortens to a number rather than run off the edge; in 4
 the side panel lists the Xbox pad's patched ports, no picture (the
 picture is the first pad's).
 
-## AU. Node groups: ids and membership (post-show G0)
+## AS. The feedback starter (wave 0 E1)
 
+The 2026-10-31 triage's "echo / reverb starter", built 2026-11-02 as
+**feedback** (decision register row 564, recommended: delay loops are the
+trails mechanism, the look-back keeps the dream; "echo" already names the
+look-back's frames). Headless: `tests/test_graph_starters.py` (the
+feedback tests, `test_feedback_draws_and_its_trail_fades_to_clear`,
+`test_a_fringe_and_an_interior_fade_at_one_rate`).
+
+**423. Feedback on a live preset: the decay stays calm, fades to clear, and two loops.** (Mac; the TV or a projector helps)
+1. Load a party preset with the scene into All outputs (or **new**, then
+   the scene chain). GRAPH: right-click the cable `scene → All outputs`,
+   **starters ▸ feedback**.
+2. Watch the shape move for ten seconds. Then on the new composite's
+   menu pick **laid add**; watch again; pick **laid over** to come back.
+3. Turn the new fade's **level** knob (its node's side pane) up to 0.9
+   and down to 0.4.
+4. OUTPUT: cut through on the laptop window (a see-through ground), the
+   shape over the desktop; or wire a channel to the backdrop under the
+   scene. Watch the trail.
+5. Right-click the new composite's node (expanded, so its port rows show):
+   **add feedback after**.
+6. ⌘Z twice.
+
+*Pass:* in 1 three new nodes land left to right on the cable — delay,
+fade, composite — and the head line reads "feedback: scene → composite
+over → output.all.image; composite → delay → fade → composite under —
+fade level 0.75 is how much of last frame stays"; the shape trails ghosts
+of its last few positions that fade within a quarter of a second, the
+shape itself no brighter than before and nothing burns to white. In 2,
+laid add the trail shows over the shape too and bright faces pile up
+towards white (the calm default is over); laid over it is as in 1. In 3,
+0.9 trails for about a second, 0.4 barely trails; neither sticks. In 4
+the trail fades **to clear**: the desktop (or the backdrop) shows through
+where a ghost was, and no black footprint of where the shape has been is
+left behind; the ghost's soft edge fades at the same pace as its middle.
+In 5 a second delay, fade and composite land (`delay.2`, `fade.2`,
+`composite.2`) **under the composite's box**, clear of its port rows, the
+first loop's picture fed back again, with no refusal — unlike a second
+tracers. In 6 each ⌘Z takes one whole loop back (its three nodes, their
+wires and the fade's values), the first leaving the preset as loaded.
+## AU. Node groups: ids and membership (post-show G0)
 Register row 563, 2026-11-02. Headless: `tests/test_graph_groups.py` (the
 corpus property, `test_groups_keep_their_invariants_over_the_corpus`) and
 `tests/test_graph_edit.py::test_a_group_made_taken_apart_and_remade_by_the_mouse`
 (a real mouse: box-select, right-click menu, drags out of the region, the
 Delete key).
-
 **422. Group, delete a member, ungroup, regroup: ids and membership
 behave.** (Mac, GRAPH, any preset with three effects in its run)
 1. Box-select two effects, right-click one, **group 2 nodes**. Note the
@@ -6424,7 +6463,6 @@ behave.** (Mac, GRAPH, any preset with three effects in its run)
 5. ⌘Z.
 6. Drag the member out of its region, then drag the other out.
 7. Save the preset, load another, load it back.
-
 *Pass:* (2) the first group's node shrinks at once, not on the next click.
 (3) the regrouped pair is **group 3**, never "group 2" again. (4) the
 member is gone from the canvas and from the group on that same frame: the
