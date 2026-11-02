@@ -397,20 +397,20 @@
   {"source": "lane:3", "target": "pattern.mod.3", "op": "push", "value": 0.35},
   {"source": "lane:4", "target": "pattern.mod.4", "op": "push", "value": 0.35},
   {"source": "lane:5", "target": "pattern.mod.5", "op": "push", "value": 0.35},
-  {"source": "axis:L.N", "target": "fx.wobble.speed", "op": "push", "value": 0.35},
-  {"source": "axis:L.NE", "target": "fx.wobble.amount", "op": "push", "value": 0.5},
-  {"source": "axis:L.E", "target": "fx.deconverge.amount", "op": "push", "value": 0.6},
-  {"source": "axis:L.SE", "target": "fx.doublevision.amount", "op": "push", "value": 0.5},
-  {"source": "axis:L.S", "target": "fx.warp.amount", "op": "push", "value": 0.5},
-  {"source": "axis:L.SW", "target": "fx.tripcolour.amount", "op": "push", "value": 0.5},
+  {"source": "axis:L.N", "target": "fx.wobble.speed", "op": "push", "value": 0.13612330122326965},
+  {"source": "axis:L.NE", "target": "fx.wobble.amount", "op": "push", "value": 0.3754887502174824},
+  {"source": "axis:L.E", "target": "fx.deconverge.amount", "op": "push", "value": 0.9263034405827056},
+  {"source": "axis:L.SE", "target": "fx.doublevision.amount", "op": "push", "value": 0.9},
+  {"source": "axis:L.S", "target": "fx.warp.amount", "op": "push", "value": 0.9},
+  {"source": "axis:L.SW", "target": "fx.tripcolour.amount", "op": "push", "value": 0.9},
   {"source": "axis:L.W", "target": "fx.kaleido.mix", "op": "push"},
-  {"source": "axis:L.NW", "target": "fx.fractals.amount", "op": "push", "value": 0.4},
+  {"source": "axis:L.NW", "target": "fx.fractals.amount", "op": "push", "value": 0.8678071905102115},
   {"source": "axis:R.N", "target": "view.depth4", "op": "push", "value": 0.35},
   {"source": "axis:R.NE", "target": "view.speed", "op": "push", "value": 0.35},
-  {"source": "axis:R.E", "target": "fx.glimmer.amount", "op": "push", "value": 0.5},
+  {"source": "axis:R.E", "target": "fx.glimmer.amount", "op": "push", "value": 0.9},
   {"source": "axis:R.SE", "target": "fx.huecycle.mix", "op": "push"},
-  {"source": "axis:R.S", "target": "fx.zoomblur.amount", "op": "push", "value": 0.6},
-  {"source": "axis:R.SW", "target": "fx.plasma.level", "op": "push", "value": 0.7},
+  {"source": "axis:R.S", "target": "fx.zoomblur.amount", "op": "push", "value": 0.9263034405827056},
+  {"source": "axis:R.SW", "target": "fx.plasma.level", "op": "push", "value": 0.9485426827159245},
   {"source": "axis:R.W", "target": "view.pattern_mix", "op": "push", "value": 0.6},
   {"source": "axis:R.NW", "target": "fx.acid.mix", "op": "push"}
  ],
@@ -445,7 +445,8 @@
  "macros": {},
  "modules": {},
  "units": {
-  "camera.pan": "world"
+  "camera.pan": "world",
+  "fx.depth": "taper"
  },
  "media": {
   "channels": {}

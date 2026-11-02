@@ -5,7 +5,7 @@
 // @tip Sparkle: four-point glints that flare and fade on and around whatever is lit,
 // @tip each on its own clock and in its own iridescent colour.
 
-uniform float u_amount;  // @param 0 3 0.5 "Amount" Brightness of the glints.
+uniform float u_amount;  // @param 0 3 0.5 amount "Amount" Brightness of the glints.
 uniform float u_density; // @param 0 1 0.25 "Density" How many cells can hold a glint.
 uniform float u_size;    // @param 3 64 16 log "Size" Glint cell size, px — the star spans about one cell.
 uniform float u_halo;    // @param 0 32 6 "Reach" How far from the lit pixels glints may appear, px.

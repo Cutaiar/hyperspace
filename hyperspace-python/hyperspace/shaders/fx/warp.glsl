@@ -6,7 +6,7 @@
 // @tip zooms in up to 10 % and slides along two octaves of drifting noise, harder toward
 // @tip the edges, so the centre stays readable while the rim swims.
 
-uniform float u_amount;  // @param 0 2 0.2 "Amount" Noita's distortion amount — 0.2 on the first trip stage, 0.5 heavily tripping, ~1 with the stages stacked.
+uniform float u_amount;  // @param 0 2 0.2 amount "Amount" Noita's distortion amount — 0.2 on the first trip stage, 0.5 heavily tripping, ~1 with the stages stacked.
 uniform float u_scale;   // @param 0.5 16 3 log "Scale" Noise cells across the frame's height: low is a slow heave, high a fine ripple.
 uniform float u_drift;   // @param 0 8 1 "Drift" How fast the noise field slides under the frame (Noita's rate at 1).
 

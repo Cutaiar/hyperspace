@@ -6,7 +6,7 @@
 // @tip drawn under the scene (screen) — it runs with every shape switched off. Placed
 // @tip first, the warps after it bend it too.
 
-uniform float u_level;   // @param 0 1 0.2 "Level" Brightness of the field.
+uniform float u_level;   // @param 0 1 0.2 amount "Level" Brightness of the field.
 uniform float u_scale;   // @param 0.5 20 4 log "Scale" Waves across the frame's height.
 uniform float u_fold;    // @param 0 3 1 "Fold" Domain warp: each wave bends the next, from ribbons to marbling.
 uniform float u_bands;   // @param 0.2 4 1 log "Bands" Palette cycles across the field's range: high is contour stripes.

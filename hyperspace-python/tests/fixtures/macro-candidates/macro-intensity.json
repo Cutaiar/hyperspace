@@ -376,5 +376,8 @@
    ]
   }
  },
- "modules": {}
+ "modules": {},
+ "units": {
+  "fx.depth": "taper"
+ }
 }
