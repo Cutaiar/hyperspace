@@ -591,6 +591,10 @@ here; overturn → the change, then the same.
 | 553 | Plan 42 D10: the browser lab is a prototype beside the app | — | (rec) — pending the owner |
 | 554 | The preset contract: a preset is a complete look; the rig is what is plugged in — everything that renders in the preset, everything about hardware on the rig and requested | — | owner — 2026-11-02 |
 | 555 | One camera in the preset: `camera.*` and `eye.*` one preset group (C2, `/9`), overturning "the camera is the rig" (row 182) | — | (rec) — pending the owner |
+| 556 | Plan 44 Q1: N looks, one on air — a deck is a look with its own controls, registry's performance part, routes, graph, renderer, undo and dot; the deck is what controllers (on air), the panel and undo point at | — | (rec) — pending the owner |
+| 557 | Plan 44 Q2: hold becomes copy A into B (a deck operation; `output.hold` / `.take` / `.drop` keep their ids); no hotfix of plan 38's hold | — | (rec) — pending the owner |
+| 558 | Plan 44 Q3: shared and lent — the dream worker lent to the deck going on air; segment workers per renderer with the model shared (as today); media sources shared, the channels' state per deck; the analyzer and the clock shared | — | (rec) — pending the owner |
+| 559 | Plan 44 Q4: the APC crossfader stays the master dim; `output.xfade` is a new rig control, learnable, run by `take` over `output.xfade_s` | — | (rec) — pending the owner |
 | 560 | No shader multiplies time by a param; `@clock` integrates rate-like params in the host | 419 | agreed — owner, 2026-11-02 |
 
 "—": no hand check shows it; tests only.
@@ -9356,15 +9360,70 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
   a table in `pads/`, named there.
 
 
-## Plan 43 — the preset contract (rows 554–555)
+### 556–559. Plan 44: decks — N looks, one on air
 
+- **Asked.** The owner, after the 2026-10-30 show and reshaped on
+  2026-11-02: plan 38's hold leaks (one registry, one table: a route, a
+  bank edit or a load while held reaches the projector, as plan 38's own
+  table says) and he wants decks — not A/B but **N looks, one on air**.
+- **Answer.** Each "(rec) — pending the owner", written against the code
+  in [`plans/44-decks.md`](plans/44-decks.md) (its §7 is these four, its
+  §2 the inventory of every singleton the decks split or share, its §3 the
+  six behaviour-neutral steps D1–D6). Nothing is built; D1 waits for this
+  plan and plan 43 (rows 554–555) to merge.
+- **556 (Q1).** A deck is a look with its own controls: its registry's
+  performance part, its routes, macros, modifiers and banks, its graph,
+  its renderer, its undo and its dirty dot; one deck is on air; the
+  outputs show it through one mix pass (`output.xfade`). Controllers point
+  at the on-air deck, the panel at the deck being built, undo and the dot
+  at the panel's deck. Decks have numbers, not roles; two render, more are
+  data. *Other options*: A/B with fixed roles and a swap (a mode the
+  operator must remember); controllers following the panel (a later
+  toggle, one retarget).
+- **557 (Q2).** Hold becomes `Decks.copy(on_air, panel)`: HOLD copies the
+  on-air look into the panel's deck as one undo step, TAKE fades the
+  panel's deck on air over `output.xfade_s` and swaps, DROP copies again.
+  The three ids stay (they are learnable targets in the owner's
+  `bindings.json`); `hold.py`'s swap-around-the-draw (`Hold.program`,
+  `program_value`, `HELD_GROUPS`, `keep` / `program_only`, `mirror`,
+  `_HeldRig`, `canvas_renderer`) is deleted in D5 with 30 of its 37
+  tests. No hotfix of the hold's head line before that: a tooltip for a
+  mechanism D5 removes. *Other option*: the triage's S-tier "hold honesty"
+  line now.
+- **558 (Q3).** Shared and lent: the dream worker (one, ~19 ms a step on
+  MPS) lent to the deck going on air from the first frame of a fade —
+  `DreamWorker.submit` must carry the deck's `dream.*` params, because the
+  worker reads them off one registry today, and the running buffer `D`
+  restarts under the fade; the segment workers per renderer as today (keyed
+  by node name, the torch model already shared under `_SHARED_LOCK`,
+  Vision on the Neural Engine) — nothing to lend; the media **sources**
+  shared (`MediaState.resolver`, the opener, the closer, the pool, the
+  folder) and the eight `Channel`s' **state** per deck, because
+  `media.a.slot` / `.rate` / `.pos` are performance params and the bins are
+  the preset's — two looks want two pictures from "channel a" (the brief
+  said shared; the code says no); the analyzer and the clock shared. *Other
+  option*: a dream worker per deck (two 19 ms steps a frame on the one
+  GPU; does not fit beside two renderers at the 1080p cap).
+- **559 (Q4).** The APC40 crossfader (`cc:0:15`) stays `output.dim`
+  (DECISIONS "The crossfader is the master dim"; row 40: nothing drives
+  the dim); the deck fade is `output.xfade`, a rig control in group
+  `output`, `persist=False`, not modulatable, learnable, with no desk
+  control by default — the `take` button runs it over `output.xfade_s`.
+  The dim stays the last pass (`Renderer.dim_pass`), the mix runs before
+  it. *Other option*: the crossfader fades decks and the dim moves to the
+  CUE knob — which takes `view.shape` off the desk (`apc40.py:537`) and
+  changes a row every show preset's desk layer expects.
+- **To reverse.** Before D1: nothing to undo. After: each step is its own
+  PR with a façade (`routing.py` re-exports `Sources`; the hold's ids
+  kept), so a step reverts alone.
+- **Judge it.** Hand checks come with D4 and D5: a HOLD, an edit of every
+  kind on the panel, the projector unmoved; a TAKE on the bar.
+## Plan 43 — the preset contract (rows 554–555)
 Docs only (wave 0, C1, 2026-11-02): the line is written down and the code
 audited; nothing moved. The audit and the worklists for C2 (the camera)
 and D3 (the per-deck split) are
 [`plans/43-preset-contract.md`](plans/43-preset-contract.md).
-
 ### 554. A preset is a complete look; the rig is what is plugged in
-
 - **Answer.** owner — 2026-11-02, from the triage of the 2026-10-30
   show: the preset/session line was drawn per param group
   (`params.PERFORMANCE_GROUPS` / `SESSION_GROUPS`), not per thing on
@@ -9403,9 +9462,7 @@ and D3 (the per-deck split) are
   changes a documented behaviour (D2's step 2, "left spinning"). Both
   are plan 43 §7's questions for the owner.
 - **Judge it.** — (nothing to see yet; C2's and D3's checks).
-
 ### 555. One camera in the preset: `camera.*` and `eye.*` are one group
-
 - **Answer.** (rec) — pending the owner. The contract (row 554) puts the
   eye in the preset; this row is the recorded "camera is the rig" (row
   182, DECISIONS "A fixed camera, the eye", `params.py` 1791 "not
