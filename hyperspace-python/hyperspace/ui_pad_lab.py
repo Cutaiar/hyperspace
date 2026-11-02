@@ -4,21 +4,10 @@ The browser lab (`prototypes/edge-lab/index.html`, `drawFaithful` /
 `drawCockpit`) draws on an HTML canvas: curved paths, filled outlines,
 round-capped arcs, glows. The port here follows it line for line, in its
 own 1000 × 620 design space, through a `Pen` — the canvas's calls — so
-the drawings do not care what draws them:
-
-  `ui_pad_nvg.NvgPen`   NanoVG into a texture: what the app draws with
-  `Pen` (here)          Dear ImGui's draw list: where NanoVG cannot run
-                        (the tests' headless panel, a GL that will not
-                        take it, ``HYPERSPACE_NANOVG=0``)
-
-This `Pen` keeps a path (flattened to points in the window's pixels:
-Béziers, arcs and rounded corners cut finely by their size there) until
-it is filled, stroked or glowed, as often as asked — a canvas path, which
-the draw list's own path is not. Fills go to the draw list's anti-aliased
-convex or concave polygon fills (wound clockwise, as its anti-aliasing
-needs); strokes to its thick polyline, with round caps added; a glow is
-the line or box drawn wider and fainter on a Gaussian fall-off. With no
-draw list it only keeps the hit areas.
+the drawings do not care what draws them. The app's pen is NanoVG's
+(`ui_pad_nvg.NvgPen`); the `Pen` here draws nothing and keeps only where
+each control landed (the hover's hit areas, and what the tests read).
+Another renderer is another pen: the calls it must make are `DRAW_CALLS`.
 
   `faithful` / `cockpit`   the drawings, from a `ui_pad_views.Reading`;
                            their memory (trails, ticker, pulses) in the
@@ -31,9 +20,7 @@ import math
 import random
 import time
 
-from imgui_bundle import imgui
-
-from . import gamepad, ui
+from . import gamepad
 
 DESIGN_W, DESIGN_H = 1000.0, 620.0
 FONT_K = 1.3                # the lab's type scale for these two views
@@ -50,19 +37,6 @@ PULSE_S = 0.26              # a one-frame trigger (tap, shake) shows this long
 TRAIL = 26                  # the cockpit's stick trails, frames
 TICKER_S = 2.2
 
-GLOW_LAYERS = 10
-
-
-def _glow_alphas(blur: float, layers: int) -> list[tuple[float, float]]:
-    """(how far out, alpha) for each layer of a glow, outermost first: they
-    stack to about half strength at the shape's edge, fading as a blur
-    does (canvas's shadowBlur is a Gaussian of half the blur)."""
-    def held(d: float) -> float:
-        return 0.5 * math.exp(-(d / (0.5 * blur)) ** 2)
-    return [(blur * k / layers, held(blur * (k - 1) / layers) - held(blur * k / layers))
-            for k in range(layers, 0, -1)]
-
-
 def rgba(c: str | tuple, a: float = 1.0) -> tuple[float, float, float, float]:
     """``"#rrggbb"``, a `COL` name or an (r, g, b) of 0–255 as floats 0–1,
     alpha `a`."""
@@ -77,184 +51,61 @@ def rgba(c: str | tuple, a: float = 1.0) -> tuple[float, float, float, float]:
     return r / 255, g / 255, b / 255, a
 
 
-def _u32(c, a: float) -> int:
-    r, g, b, al = rgba(c, a)
-    return imgui.get_color_u32(imgui.ImVec4(r, g, b, al))
-
-
-def _steps(length_px: float, lo: int = 4, hi: int = 64, px: float = 3.0) -> int:
-    """How many pieces a curve this long (in the window's pixels) is cut into."""
-    return max(lo, min(hi, int(length_px / px)))
+# what a pen draws with: every call the drawings make, beside `hit`
+DRAW_CALLS = ("path", "move", "line", "bez", "quad", "close", "rr", "circle", "arc", "lines",
+              "fill", "stroke", "glow_stroke", "glow_rr", "text", "alpha", "save", "restore",
+              "translate")
 
 
 class Pen:
-    """Canvas-like drawing on an ImDrawList in the lab's design space: a
-    point (x, y) lands at (ox + x·s, oy + y·s). `dl` None: a pen that
-    draws nothing and keeps only the hit areas."""
+    """The drawings' pen, here drawing nothing: it keeps only where each
+    control landed (`hits`, in the design space). A pen that draws
+    overrides every one of `DRAW_CALLS`; `dashed_rr` is built from them."""
 
-    def __init__(self, dl=None, ox: float = 0.0, oy: float = 0.0, s: float = 1.0):
-        self.dl, self.ox, self.oy, self.s = dl, ox, oy, s
+    def __init__(self):
         self.hits: list[tuple[float, float, float, float, str]] = []
-        self._tx = self._ty = 0.0
-        self._a = 1.0
-        self._stack: list[tuple[float, float, float]] = []
-        self._subs: list[list[tuple[float, float]]] = []
-        self._closed: list[bool] = []
-        self._convex = False
 
     @property
     def live(self) -> bool:
-        return self.dl is not None
+        return False
 
     def hit(self, x, y, w, h, source: str) -> None:
         self.hits.append((x, y, w, h, source))
 
-    def _pt(self, x, y) -> tuple[float, float]:
-        return self.ox + (x + self._tx) * self.s, self.oy + (y + self._ty) * self.s
-
-    # ---- paths ----
-    def path(self) -> None:
-        self._subs, self._closed, self._convex = [], [], False
-
-    def move(self, x, y) -> None:
-        if self.live:
-            self._subs.append([self._pt(x, y)])
-            self._closed.append(False)
-
-    def line(self, x, y) -> None:
-        if self.live:
-            if not self._subs:
-                self.move(x, y)
-            else:
-                self._subs[-1].append(self._pt(x, y))
-
-    def bez(self, c1x, c1y, c2x, c2y, x, y) -> None:
-        if not self.live or not self._subs:
-            return
-        sub = self._subs[-1]
-        (x0, y0), (x1, y1), (x2, y2), (x3, y3) = (sub[-1], self._pt(c1x, c1y),
-                                                  self._pt(c2x, c2y), self._pt(x, y))
-        n = _steps(math.dist((x0, y0), (x1, y1)) + math.dist((x1, y1), (x2, y2))
-                   + math.dist((x2, y2), (x3, y3)))
-        for i in range(1, n + 1):
-            t = i / n
-            u = 1 - t
-            sub.append((u * u * u * x0 + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x3,
-                        u * u * u * y0 + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y3))
-
-    def quad(self, cx, cy, x, y) -> None:
-        if not self.live or not self._subs:
-            return
-        sub = self._subs[-1]
-        (x0, y0), (x1, y1), (x2, y2) = sub[-1], self._pt(cx, cy), self._pt(x, y)
-        n = _steps(math.dist((x0, y0), (x1, y1)) + math.dist((x1, y1), (x2, y2)))
-        for i in range(1, n + 1):
-            t = i / n
-            u = 1 - t
-            sub.append((u * u * x0 + 2 * u * t * x1 + t * t * x2,
-                        u * u * y0 + 2 * u * t * y1 + t * t * y2))
-
-    def close(self) -> None:
-        if self._closed:
-            self._closed[-1] = True
-
-    def _arc_pts(self, cx, cy, r, a0, a1, lo=6, hi=128) -> list:
-        n = _steps(abs(a1 - a0) * r * self.s, lo, hi, 2.5)
-        return [self._pt(cx + math.cos(a0 + (a1 - a0) * i / n) * r,
-                         cy + math.sin(a0 + (a1 - a0) * i / n) * r) for i in range(n + 1)]
-
-    def rr(self, x, y, w, h, r) -> None:
-        if not self.live:
-            return
-        w = max(0.01, w)
-        r = max(0.0, min(r, abs(w) / 2, h / 2))
-        pts = []
-        if r * self.s < 0.5:
-            pts = [self._pt(x, y), self._pt(x + w, y), self._pt(x + w, y + h), self._pt(x, y + h)]
-        else:
-            h2 = math.pi / 2
-            for cx, cy, a0 in ((x + w - r, y + r, -h2), (x + w - r, y + h - r, 0.0),
-                               (x + r, y + h - r, h2), (x + r, y + r, math.pi)):
-                pts += self._arc_pts(cx, cy, r, a0, a0 + h2, 2, 16)
-        self._subs, self._closed, self._convex = [pts], [True], True
-
-    def circle(self, cx, cy, r) -> None:
-        if self.live:
-            pts = self._arc_pts(cx, cy, r, 0.0, 2 * math.pi, 12, 128)[:-1]
-            self._subs, self._closed, self._convex = [pts], [True], True
+    def path(self) -> None: ...
+    def move(self, x, y) -> None: ...
+    def line(self, x, y) -> None: ...
+    def bez(self, c1x, c1y, c2x, c2y, x, y) -> None: ...
+    def quad(self, cx, cy, x, y) -> None: ...
+    def close(self) -> None: ...
+    def rr(self, x, y, w, h, r) -> None: ...
+    def circle(self, cx, cy, r) -> None: ...
 
     def arc(self, cx, cy, r, a0, a1) -> None:
         """A clockwise arc, as canvas draws one (radians, y down)."""
-        if self.live:
-            self._subs, self._closed, self._convex = [self._arc_pts(cx, cy, r, a0, a1)], [False], False
 
-    def lines(self, *pts) -> None:
-        if self.live:
-            self._subs = [[self._pt(*q) for q in pts]]
-            self._closed, self._convex = [False], False
-
-    # ---- paint ----
-    @staticmethod
-    def _clean(sub) -> list:
-        """The points with repeats dropped, wound clockwise on screen — the
-        draw list's anti-aliased fills want that winding."""
-        out = []
-        for q in sub:
-            if not out or abs(q[0] - out[-1][0]) + abs(q[1] - out[-1][1]) > 0.05:
-                out.append(q)
-        if len(out) > 2 and abs(out[0][0] - out[-1][0]) + abs(out[0][1] - out[-1][1]) <= 0.05:
-            out.pop()
-        area = sum(out[i][0] * out[(i + 1) % len(out)][1] - out[(i + 1) % len(out)][0] * out[i][1]
-                   for i in range(len(out)))
-        return out if area >= 0 else out[::-1]
-
-    def fill(self, color, a: float = 1.0) -> None:
-        if not self.live:
-            return
-        col = _u32(color, a * self._a)
-        for sub in self._subs:
-            pts = self._clean(sub)
-            if len(pts) < 3:
-                continue
-            vs = [imgui.ImVec2(x, y) for x, y in pts]
-            if self._convex:
-                self.dl.add_convex_poly_filled(vs, col)
-            else:
-                self.dl.add_concave_poly_filled(vs, col)
-
-    def _polyline(self, col: int, width_px: float, cap: str) -> None:
-        for sub, closed in zip(self._subs, self._closed, strict=True):
-            if len(sub) < 2:
-                continue
-            self.dl.add_polyline([imgui.ImVec2(x, y) for x, y in sub], col, width_px,
-                                 imgui.ImDrawFlags_.closed.value if closed else 0)
-            if cap == "round" and not closed and width_px > 1.5:
-                for x, y in (sub[0], sub[-1]):
-                    self.dl.add_circle_filled(imgui.ImVec2(x, y), width_px / 2, col)
+    def lines(self, *pts) -> None: ...
+    def fill(self, color, a: float = 1.0) -> None: ...
 
     def stroke(self, color, width: float = 1.0, a: float = 1.0, cap: str = "butt") -> None:
-        if self.live:
-            self._polyline(_u32(color, a * self._a), max(1.0, width * self.s), cap)
+        """The current path's outline; `cap` "butt" or "round"."""
 
-    def glow_stroke(self, color, width: float, blur: float, layers: int = GLOW_LAYERS) -> None:
-        """The current path stroked with a soft glow round it — canvas's
-        shadowBlur, as wider and wider faint strokes under the line (they
-        stack, so the glow is brightest by the line and fades out)."""
-        if not self.live:
-            return
-        for e, a in _glow_alphas(blur, layers):
-            self._polyline(_u32(color, a * self._a), (width + 2 * e) * self.s, "round")
-        self.stroke(color, width, cap="round")
+    def glow_stroke(self, color, width: float, blur: float) -> None:
+        """The current path stroked with a soft glow round it (canvas's
+        shadowBlur)."""
 
-    def glow_rr(self, x, y, w, h, r, color, blur: float, a: float = 0.85,
-                layers: int = GLOW_LAYERS) -> None:
-        """A soft glow round a rounded box: the box drawn larger and fainter,
-        layer on layer."""
-        if not self.live:
-            return
-        for e, k in _glow_alphas(blur, layers):
-            self.rr(x - e, y - e, w + 2 * e, h + 2 * e, r + e)
-            self.fill(color, a * k)
+    def glow_rr(self, x, y, w, h, r, color, blur: float, a: float = 0.85) -> None:
+        """A soft glow round a rounded box."""
+
+    def text(self, s: str, x, y, *, size=13, color="text", align="center", weight=500,
+             mono=False, a: float = 1.0) -> None:
+        """`s` centred on y; `align` "center", "left" or "right" about x;
+        `weight` ≥ 650 bold; `mono` the numbers' face."""
+
+    def alpha(self, a: float) -> None: ...
+    def save(self) -> None: ...
+    def restore(self) -> None: ...
+    def translate(self, x, y) -> None: ...
 
     def dashed_rr(self, x, y, w, h, color, width, dash=5.0, gap=4.0) -> None:
         """A rounded box's outline in dashes: its four straight runs dashed,
@@ -277,36 +128,6 @@ class Pen:
                            (x + w - r, y + h - r, 0.0), (x + r, y + h - r, math.pi / 2)):
             self.arc(cx, cy, r, a0, a0 + math.pi / 2)
             self.stroke(color, width)
-
-    def text(self, s: str, x, y, *, size=13, color="text", align="center", weight=500,
-             mono=False, a: float = 1.0) -> None:
-        if not self.live or not s:
-            return
-        font = ui._FONTS["num" if mono else "bold" if weight >= 650 else "ui"]
-        px = size * FONT_K * self.s
-        imgui.push_font(font, px)
-        try:
-            ts = imgui.calc_text_size(s)
-            sx, sy = self._pt(x, y)
-            sx -= {"center": ts.x / 2, "left": 0.0, "right": ts.x}[align]
-            self.dl.add_text(imgui.get_font(), px, imgui.ImVec2(round(sx), round(sy - ts.y / 2)),
-                             _u32(color, a * self._a), s)
-        finally:
-            imgui.pop_font()
-
-    def alpha(self, a: float) -> None:
-        self._a = a
-
-    def save(self) -> None:
-        self._stack.append((self._tx, self._ty, self._a))
-
-    def restore(self) -> None:
-        if self._stack:
-            self._tx, self._ty, self._a = self._stack.pop()
-
-    def translate(self, x, y) -> None:
-        self._tx += x
-        self._ty += y
 
 
 # ---------------------------------------------------------------- what the lab reads
@@ -384,8 +205,8 @@ def _battery(p: Pen, r, x, y, below=False) -> None:
 
 def _clip(a, b, cx, cy, rad):
     """The part of the segment a–b inside the circle (cx, cy, rad), or None
-    — the lab clips its horizon to the ring; the draw list cannot clip
-    to a circle, so the lines are cut to it."""
+    — the lab clips its horizon to the ring; a pen cannot clip to a
+    circle, so the lines are cut to it."""
     (x0, y0), (x1, y1) = a, b
     dx, dy, fx, fy = x1 - x0, y1 - y0, x0 - cx, y0 - cy
     qa, qb, qc = dx * dx + dy * dy, 2 * (fx * dx + fy * dy), fx * fx + fy * fy - rad * rad

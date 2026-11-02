@@ -2041,22 +2041,31 @@ def test_a_frame_node_is_added_once(tmp_path):
 
 
 def test_the_pad_nodes_details_draw_the_pad(rig, monkeypatch):
-    """The pad node selected on GRAPH: its details draw the pad's picture
-    (ui_pad.inline) — every control of its layout — and another device's
-    details do not."""
+    """The pad's node selected on GRAPH, whatever its role is called (plan
+    42: "edge", "xbox", not only "pad"): its details draw the pad's picture
+    (ui_pad.inline) — every control of its layout — and not the port lines
+    under it. A second pad's node and another device's draw no picture."""
     panel = rig.panel
     frame(panel, "graph")
     st = ui_graph._state(panel)
+    pad, other = SimpleNamespace(on=False), SimpleNamespace(on=False)
+    panel.pad = pad
     drew, real = [], ui_pad.inline
     monkeypatch.setattr(ui_pad, "inline", lambda p: (drew.append(1), real(p)))
-    for nid, want in (("device:pad", [1]), ("device:apc40", [])):
+    nodes = (("edge", SimpleNamespace(kind="gamepad", io=pad), [1]),
+             ("pad", SimpleNamespace(kind="gamepad", io=pad), [1]),
+             ("xbox", SimpleNamespace(kind="gamepad", io=other), []),
+             ("off", SimpleNamespace(kind="gamepad", io=None), []),
+             ("apc40", SimpleNamespace(kind="midi", io=pad), []))
+    for role, dev, want in nodes:
         drew.clear()
         imgui.new_frame()
         imgui.begin("side")
-        ui_graph._side(panel, st, st["view"], ("node", graphview.VNode(nid, "device", nid[7:])))
+        ui_graph._side(panel, st, st["view"],
+                       ("node", graphview.VNode(f"device:{role}", "device", role, ref=dev)))
         imgui.end()
         imgui.end_frame()
-        assert drew == want
+        assert drew == want, role
     assert ui_pad.rect(panel, gamepad.LAYOUT[0]) is not None    # it really laid the pad out
 
 

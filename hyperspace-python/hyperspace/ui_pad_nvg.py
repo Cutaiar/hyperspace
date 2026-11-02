@@ -1,26 +1,23 @@
-"""The lab's drawings with NanoVG: the pad window's Faithful and Cockpit (plan 42).
+"""The app's pen: the lab's drawings with NanoVG (plan 42's readouts).
 
 `ui_pad_lab` holds the drawings — the browser lab's canvas code ported —
-and a `Pen` that draws them on Dear ImGui's draw list. This is the other
-pen, and the one the app draws with: NanoVG, which imgui-bundle ships, a
-vector renderer with what the draw list lacks (gradients, feathered
-edges, tessellation in C rather than Python — a frame of Faithful costs
-a sixth of the draw-list pen's Python time). It draws into an offscreen
-texture the size of the room in the window's pixels, which the pad
-window shows as an image.
+written against a `Pen`. This is the pen that draws them: NanoVG, which
+imgui-bundle ships, a vector renderer with what Dear ImGui's draw list
+lacks (gradients, feathered edges, tessellation in C), into an offscreen
+texture the size of the room in the window's pixels, which the pad window
+shows as an image.
 
-  `NvgPen`   the same calls as `ui_pad_lab.Pen`, made on a NanoVG context
+  `NvgPen`   every one of `ui_pad_lab.DRAW_CALLS`, made on a NanoVG context
   `Surface`  the context and its framebuffer, made in the control
-             window's GL context the first time a view asks (one extra
+             window's GL context the first time a drawing asks (one extra
              call, `hello_imgui.init_gl_loader`, lets NanoVG reach GL
              outside imgui-bundle's own runner); kept on the panel
 
-Where no GL context is current (the tests' headless panel) or NanoVG will
-not start, `Surface.ready` is False and the draw-list pen draws the same
-drawings instead; the reason is kept (`Surface.failed`). The environment
-variable ``HYPERSPACE_NANOVG=0`` keeps NanoVG off altogether — a way out
-should a machine's GL not take it. Which one draws is said once, on the
-terminal, the first time a drawing is asked for (``pad drawings: …``).
+One renderer, no second one behind it: where NanoVG cannot draw — no GL
+context (the tests' headless panel), NanoVG would not start (the reason in
+`Surface.failed`), or ``HYPERSPACE_NANOVG=0`` — the room says so
+(`Surface.why_not`) and Map and Lanes are the views to use. The terminal
+is told once which it is (``pad drawings: …``).
 """
 
 from __future__ import annotations
@@ -38,8 +35,8 @@ FONTS = {"ui": "Inter-Medium.ttf", "bold": "Inter-Bold.ttf", "mono": "JetBrainsM
 
 class NvgPen(ui_pad_lab.Pen):
     """`ui_pad_lab.Pen`'s calls on a NanoVG context `vg` (the module `nvg`),
-    in the lab's design space (the surface sets the transform). Every call
-    the drawings make is made here; none falls through to the draw list."""
+    in the lab's design space (the surface sets the transform). Every one
+    of `DRAW_CALLS` is made here; the base keeps the hits."""
 
     def __init__(self, vg, nvg):
         super().__init__()
@@ -184,7 +181,7 @@ class Surface:
         if self.failed:
             return False
         if os.environ.get("HYPERSPACE_NANOVG", "1") == "0":
-            self._say("the draw list (HYPERSPACE_NANOVG=0)")
+            self._say("off (HYPERSPACE_NANOVG=0)")
             return False
         if not _gl_current():
             return False                # no GL context (a headless panel): not now, not failed
@@ -200,13 +197,21 @@ class Surface:
                     raise RuntimeError(f"font {file} would not load")
             for face in ("ui", "bold", "mono"):
                 nvg.add_fallback_font(vg, face, "sym")       # ✕ ○ □ △ ▲ ◀ …
-        except Exception as e:  # noqa: BLE001 — a GL that will not take NanoVG: the draw-list pen
+        except Exception as e:  # noqa: BLE001 — a GL that will not take NanoVG: the room says why
             self.failed = f"{type(e).__name__}: {e}"[:160]
-            self._say(f"the draw list (NanoVG would not start: {self.failed})")
+            self._say(f"off (NanoVG would not start: {self.failed})")
             return False
         self.vg, self.nvg = vg, nvg
         self._say("NanoVG")
         return True
+
+    def why_not(self) -> str:
+        """Why NanoVG is not drawing, in a few words (after `ready` said no)."""
+        if self.failed:
+            return f"NanoVG would not start: {self.failed}"
+        if os.environ.get("HYPERSPACE_NANOVG", "1") == "0":
+            return "NanoVG is off (HYPERSPACE_NANOVG=0)"
+        return "no OpenGL here for NanoVG"
 
     def render(self, view: str, r, st: dict, w_px: int, h_px: int) -> tuple[int, NvgPen]:
         """Draw `view` into the framebuffer (made or remade to w_px × h_px),

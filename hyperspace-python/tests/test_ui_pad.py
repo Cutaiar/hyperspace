@@ -152,10 +152,9 @@ class _Ink:
     def __init__(self, dl, texts):
         self._dl, self._texts = dl, texts
 
-    def add_text(self, *args):
-        # (pos, col, text), or (font, size, pos, col, text) as the lab's pen draws
-        self._texts.append(args[2] if len(args) == 3 else args[4])
-        return self._dl.add_text(*args)
+    def add_text(self, pos, col, text):
+        self._texts.append(text)
+        return self._dl.add_text(pos, col, text)
 
     def __getattr__(self, name):
         return getattr(self._dl, name)
@@ -396,7 +395,7 @@ def test_the_header_steps_through_the_views():
 
 
 def test_the_edge_views_show_what_it_has_and_what_maps_it(rig, monkeypatch):
-    """Faithful and cockpit draw the Edge's back and Fn buttons and its
+    """Faithful and cockpit place the Edge's back and Fn buttons and its
     touchpad where a hover finds them; the lanes name every touch and
     motion lane and say a touch row's mapping."""
     from hyperspace import ui_pad_views
@@ -406,16 +405,15 @@ def test_the_edge_views_show_what_it_has_and_what_maps_it(rig, monkeypatch):
     reg["ui.panel"].set(False)
     rig.router.table.add(Binding("touch:pinch", "camera.zoom", "push", 0.5))
     rig.panel.pad = _edge_pad()
-    sources = {}
-    for k, view in enumerate(ui_pad_views.VIEWS[1:], start=1):
-        reg["ui.pad_view"].set(k)
-        _pad_frames(rig, monkeypatch)
-        ctx = ui_pad._state(rig.panel)["view_ctx"]
-        sources[view] = {h[4] for h in ctx.hits}
-        assert ctx.r.on and ctx.r.model.id == "edge" and ctx.r.touch is not None
-    assert {"pad:LP", "pad:RP", "pad:LFN", "pad:TOUCH"} <= sources["faithful"]
-    assert {"pad:LP", "pad:RP", "pad:TOUCH", "axis:LT", "axis:RT"} <= sources["cockpit"]
-    assert {"touch:pinch", "motion:shake", "pad:LP"} <= sources["lanes"]
+    reg["ui.pad_view"].set(ui_pad_views.VIEWS.index("lanes"))
+    _pad_frames(rig, monkeypatch)
+    ctx = ui_pad._state(rig.panel)["view_ctx"]
+    assert ctx.r.on and ctx.r.model.id == "edge" and ctx.r.touch is not None
+    assert {"touch:pinch", "motion:shake", "pad:LP"} <= {h[4] for h in ctx.hits}
+    assert {"pad:LP", "pad:RP", "pad:LFN", "pad:TOUCH"} <= {
+        h[4] for h in _drawn("faithful", rig.panel.pad)}
+    assert {"pad:LP", "pad:RP", "pad:TOUCH", "axis:LT", "axis:RT"} <= {
+        h[4] for h in _drawn("cockpit", rig.panel.pad)}
     says = ui_pad._says_of(rig.panel, rig.router.table)
     words, row = says("touch:pinch")
     assert row is not None and words
@@ -487,60 +485,27 @@ def test_the_horizon_is_cut_to_its_ring():
     assert ui_pad_lab._clip((-20, 15), (20, 15), 0, 0, 10) is None
 
 
-def test_the_lab_views_draw_on_the_pad_windows_draw_list(rig, monkeypatch):
-    """With no GL (the headless panel) NanoVG is not started and Faithful
-    and Cockpit draw on the window's own draw list: shapes and type land
-    there, and the hover finds the Edge's back buttons and touchpad where
-    they were drawn."""
+def test_where_nanovg_cannot_draw_the_room_says_why(rig, monkeypatch):
+    """The headless panel has no GL: NanoVG is not started (nor marked
+    failed), nothing else draws Faithful or Cockpit, and the room says why
+    and that Map and Lanes still work; with NanoVG kept off, it says that."""
     from hyperspace import ui_pad_nvg, ui_pad_views
     reg = rig.reg
     imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
     reg["ui.pad_diagram"].set(True)
     reg["ui.panel"].set(False)
     rig.panel.pad = _edge_pad()
-    sizes = {}
     for view in ("faithful", "cockpit"):
         reg["ui.pad_view"].set(ui_pad_views.VIEWS.index(view))
-        drawn = []
-        real = ui_pad_views.ui_pad_lab.Pen.fill
-
-        def fill(self, *a, _drawn=drawn, _real=real, **k):
-            _drawn.append(self.dl.vtx_buffer.size())
-            return _real(self, *a, **k)
-        monkeypatch.setattr(ui_pad_views.ui_pad_lab.Pen, "fill", fill)
-        _pad_frames(rig, monkeypatch)
-        monkeypatch.setattr(ui_pad_views.ui_pad_lab.Pen, "fill", real)
-        sizes[view] = drawn
-        ctx = ui_pad._state(rig.panel)["view_ctx"]
-        x0, y0, w, h = ctx.x, ctx.y, ctx.w, ctx.h
-        hits = {hh[4]: hh for hh in ctx.hits}
-        for src in ("pad:LP", "pad:TOUCH"):
-            hx0, hy0, hx1, hy1, _ = hits[src]
-            assert x0 <= hx0 < hx1 <= x0 + w and y0 <= hy0 < hy1 <= y0 + h, (view, src)
-    for view, drawn in sizes.items():
-        assert len(drawn) > 30 and drawn[-1] > drawn[0], view    # the draw list grew as it drew
+        texts = _pad_frames(rig, monkeypatch)["texts"]
+        name = ui_pad_views.VIEW_LABELS[ui_pad_views.VIEWS.index(view)]
+        assert f"{name} is drawn with NanoVG." in texts, texts
+        assert "no OpenGL here for NanoVG" in texts and "Map and Lanes still work." in texts
+        assert not ui_pad._state(rig.panel)["view_ctx"].hits     # nothing to hover
     surf = ui_pad_nvg.surface_of(rig.panel)
     assert surf.vg is None and not surf.failed
-
-
-def test_a_path_is_kept_until_it_is_drawn_again_and_wound_for_the_fill():
-    """The pen keeps a canvas path (a fill, then a stroke, then a glow of
-    the same outline) and winds what it fills clockwise on screen."""
-    from hyperspace import ui_pad_lab
-    pen = ui_pad_lab.Pen(dl=object(), ox=10, oy=20, s=2.0)
-    pen.rr(0, 0, 100, 50, 10)
-    assert pen._subs and pen._closed == [True] and pen._convex
-    xs = [x for x, _y in pen._subs[0]]
-    ys = [y for _x, y in pen._subs[0]]
-    assert (min(xs), max(xs), min(ys), max(ys)) == (10, 210, 20, 120)
-    ccw = [(0, 0), (0, 10), (10, 10), (10, 0)]           # anticlockwise on screen (y down)
-    assert ui_pad_lab.Pen._clean(ccw) == ccw[::-1]
-    assert ui_pad_lab.Pen._clean(ccw[::-1]) == ccw[::-1]
-    pen.path()
-    pen.move(0, 0)
-    pen.bez(0, 50, 100, 50, 100, 0)
-    sub = pen._subs[0]
-    assert sub[0] == (10, 20) and sub[-1] == (210, 20) and len(sub) > 10
+    monkeypatch.setenv("HYPERSPACE_NANOVG", "0")
+    assert "NanoVG is off (HYPERSPACE_NANOVG=0)" in _pad_frames(rig, monkeypatch)["texts"]
 
 
 def test_the_lab_colours_read_every_way_the_port_writes_them():
@@ -568,11 +533,11 @@ class _Nvg:
 
 
 def test_the_nanovg_pen_draws_every_call_the_drawings_make():
-    """Both drawings, every pad, through the NanoVG pen: every call reaches
-    NanoVG — none falls through to the draw-list pen (which has no draw
-    list here, so a missing call would raise) — and the hits are the
-    draw-list pen's own."""
+    """Both drawings, every pad, through the NanoVG pen: it makes every one
+    of the pen's drawing calls itself (none falls to the base, which draws
+    nothing), they reach NanoVG, and the hits are the base pen's own."""
     from hyperspace import ui_pad_lab, ui_pad_nvg, ui_pad_views
+    assert set(ui_pad_lab.DRAW_CALLS) <= set(vars(ui_pad_nvg.NvgPen))
     pads = {"none": None, "xbox": _FakePad(down=("A",)), "edge": _edge_pad()}
     for view in ui_pad_lab.VIEWS:
         for name, pad in pads.items():
@@ -608,4 +573,4 @@ def test_nanovg_waits_for_gl_and_can_be_kept_off(monkeypatch, capsys):
     monkeypatch.setenv("HYPERSPACE_NANOVG", "0")
     assert not surf.ready() and not surf.failed
     assert not surf.ready()
-    assert capsys.readouterr().err.count("pad drawings: the draw list (HYPERSPACE_NANOVG=0)") == 1
+    assert capsys.readouterr().err.count("pad drawings: off (HYPERSPACE_NANOVG=0)") == 1

@@ -219,25 +219,29 @@ view resets to Map at launch, as Pad diagram itself does.
 
 Faithful and Cockpit are the lab's own drawing: its canvas code
 (`drawFaithful`, `drawCockpit`) ported line for line, in the lab's
-1000 × 620 design space, fitted to the room (`ui_pad_lab.py`). The first
-draw-list sketches of the two read as rough copies; two renderers were
-then tried on the same port. The drawings go through a `Pen` — the
-canvas's calls — and there are two:
+1000 × 620 design space, fitted to the room (`ui_pad_lab.py`), written
+against a `Pen` — the canvas's calls (`DRAW_CALLS`). The first draw-list
+sketches of the two read as rough copies; two renderers were then tried
+on the same port, NanoVG and the draw list, and NanoVG kept:
 
-- **NanoVG** (`ui_pad_nvg.py`), what the app draws with: imgui-bundle's
-  vector renderer, into a texture the size of the room in the window's
-  pixels. Gradients, feathered edges and image paints are there for the
-  interface revamp Dillon has planned, and its tessellation runs in C:
-  a frame of Faithful cost 0.6 ms of Python against the draw-list pen's
-  3.7 ms (measured on the build machine; its GL is software, so the GPU
-  side is hand check 417's).
-- **The draw list** (`ui_pad_lab.Pen`), where NanoVG cannot run (the
-  tests' headless panel, a GL that will not take it, or
-  ``HYPERSPACE_NANOVG=0``): the same drawings, curves cut in Python,
-  glows as faint layers.
+- **NanoVG** (`ui_pad_nvg.py`), imgui-bundle's vector renderer, draws into
+  a texture the size of the room in the window's pixels. Gradients,
+  feathered edges and image paints are there for the interface revamp
+  Dillon has planned, and its tessellation runs in C: a frame of Faithful
+  cost 0.6 ms of Python against the draw-list pen's 3.7 ms (measured on
+  the build machine). Seen on Dillon's Mac, 2026-11-02.
+- **One renderer.** The draw-list pen was dropped (Dillon: no two render
+  paths). Where NanoVG cannot run — no GL (the tests' headless panel), it
+  will not start, or ``HYPERSPACE_NANOVG=0`` — the room says why and that
+  Map and Lanes still work; the terminal says which, once
+  (``pad drawings: …``). Moving off OpenGL one day is one new pen.
 
 An Xbox pad gets the same hand: the left stick high, the D-pad low, the
 guide button between View and Menu.
+
+The pad's node on GRAPH draws the same picture, with the same header and
+readouts, whatever the pad's role is called (it looked for a node named
+``device:pad``, so an entry with ``role = "edge"`` drew nothing).
 
 ![Faithful](assets/42-controllers/pad-edge-faithful.png)
 ![Lanes](assets/42-controllers/pad-edge-lanes.png)

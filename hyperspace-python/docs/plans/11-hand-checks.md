@@ -6368,21 +6368,34 @@ mapping.
 
 **417. Faithful and Cockpit drawn by NanoVG on the Mac.** (Mac, the Edge)
 Headless: `tests/test_ui_pad.py` (`test_the_nanovg_pen_draws_every_call_the_drawings_make`,
-`test_the_lab_views_draw_on_the_pad_windows_draw_list`). A new module:
-restart the app.
+`test_where_nanovg_cannot_draw_the_room_says_why`). New modules: restart
+the app.
 1. Pad diagram on; step to Faithful, then Cockpit. Compare with the
    browser lab (`prototypes/edge-lab/`) on the same pad. The terminal
    says `pad drawings: NanoVG` the first time either is drawn.
 2. Resize the pad window (drag the desk's split, or hide the panel).
 3. Quit; start the app with `HYPERSPACE_NANOVG=0 uv run hyperspace`;
-   look at both again (the terminal: `pad drawings: the draw list
+   step to Faithful (the terminal: `pad drawings: off
    (HYPERSPACE_NANOVG=0)`).
 
 *Pass:* in 1 the two read as the lab's drawings, crisp on the Retina
 screen (smooth curves, the light bar's glow, sharp small type), and the
 visuals' frame rate does not drop with the pad window open; in 2 they
-stay crisp at every size; in 3 the same drawings, a little softer (the
-draw list's), and nothing else changes.
+stay crisp at every size; in 3 the room says Faithful is drawn with
+NanoVG, that it is off, and that Map and Lanes still work — and they do.
+(Run on Dillon's Mac 2026-11-02: `pad drawings: NanoVG`, looks right.)
+
+**418. The pad's node on GRAPH draws the pad, whatever its role.** (Mac, the Edge first, the Xbox pad second)
+Headless: `tests/test_graph_edit.py` (`test_the_pad_nodes_details_draw_the_pad`).
+1. GRAPH: select the Edge's node (`edge`, the first gamepad entry).
+2. Click the view's name in the picture's header through Map, Faithful,
+   Lanes and Cockpit; press, touch and tilt the pad.
+3. Select the Xbox pad's node (`xbox`).
+
+*Pass:* in 1 the side panel draws the pad (no list of "not live" ports
+under it); in 2 every readout draws there as in the pad window; in 3 the
+side panel lists the Xbox pad's patched ports, no picture (the picture
+is the first pad's).
 
 ## What no test covers
 
@@ -6519,5 +6532,5 @@ Only a person can settle these:
   - the face patterns themselves (375), which only the owner can name;
   - the moved effect's area frame on a preset saved before plan 37 (376).
 - NanoVG in the control window on the Mac's GL (417): the tests draw the
-  lab's drawings through a stand-in NanoVG and on the draw list, and the
-  shots were rendered on Mesa's software rasteriser, never a Mac's GPU.
+  lab's drawings through a stand-in NanoVG, and the shots were rendered
+  on Mesa's software rasteriser; one look on Dillon's Mac so far.

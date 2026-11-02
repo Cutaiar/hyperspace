@@ -17,8 +17,8 @@ three more ways to read it, picked by ``ui.pad_view`` beside the map.
 Designed in the browser lab (`prototypes/edge-lab/`, its three readouts)
 and drawn in the room ui_pad gives it, so the desk under it never moves:
 Faithful and Cockpit are the lab's own drawings (`ui_pad_lab`, its canvas
-code ported line for line), drawn by NanoVG (`ui_pad_nvg`) or, where that
-cannot run, on the draw list; Lanes is drawn here. Read-only, like the map: a hover
+code ported line for line), drawn by NanoVG (`ui_pad_nvg`) — where it
+cannot run the room says why; Lanes is drawn here. Read-only, like the map: a hover
 names a control, its mapping and its source; Learn pad is still the way
 onto one.
 
@@ -331,29 +331,34 @@ def _lane_line(c: Ctx, item, x, y, col_w, lh) -> None:
 # ---------------------------------------------------------------- the door
 
 def _lab(c: Ctx, view: str) -> None:
-    """`view` — one of the lab's drawings (ui_pad_lab) — in the room, its
-    design space fitted and centred; its hits mapped back for the hover.
-    Drawn by NanoVG into a texture the size of the room in the window's
-    pixels (ui_pad_nvg) where the control window's GL takes it, else by
-    the draw-list pen straight onto the window's draw list."""
+    """`view` — one of the lab's drawings (ui_pad_lab) — drawn by NanoVG
+    (ui_pad_nvg) into a texture the size of the room in the window's
+    pixels, its design space fitted and centred; its hits mapped back for
+    the hover. Where NanoVG cannot draw, the room says why instead."""
+    surf = ui_pad_nvg.surface_of(c.panel)
+    if c.w < 8 or c.h < 8 or not surf.ready():
+        _not_drawn(c, VIEW_LABELS[VIEWS.index(view)], surf.why_not())
+        return
+    k = imgui.get_io().display_framebuffer_scale
+    tex, pen = surf.render(view, c.r, _state(c.panel).setdefault("lab", {}),
+                           round(c.w * k.x), round(c.h * k.y))
+    c.dl.add_image(imgui.ImTextureRef(tex), _v(c.x, c.y), _v(c.x + c.w, c.y + c.h))
     s = min(c.w / ui_pad_lab.DESIGN_W, c.h / ui_pad_lab.DESIGN_H)
     ox = c.x + (c.w - ui_pad_lab.DESIGN_W * s) / 2
     oy = c.y + (c.h - ui_pad_lab.DESIGN_H * s) / 2
-    st = _state(c.panel).setdefault("lab", {})
-    surf = ui_pad_nvg.surface_of(c.panel)
-    if c.w >= 8 and c.h >= 8 and surf.ready():
-        k = imgui.get_io().display_framebuffer_scale
-        tex, pen = surf.render(view, c.r, st, round(c.w * k.x), round(c.h * k.y))
-        c.dl.add_image(imgui.ImTextureRef(tex), _v(c.x, c.y), _v(c.x + c.w, c.y + c.h))
-    else:
-        pen = ui_pad_lab.Pen(c.dl, ox, oy, s)
-        c.dl.push_clip_rect(_v(c.x, c.y), _v(c.x + c.w, c.y + c.h), True)
-        try:
-            ui_pad_lab.VIEWS[view](pen, c.r, st)
-        finally:
-            c.dl.pop_clip_rect()
     for hx, hy, hw, hh, source in pen.hits:
         c.hit(ox + hx * s, oy + hy * s, ox + (hx + hw) * s, oy + (hy + hh) * s, source)
+
+
+def _not_drawn(c: Ctx, name: str, why: str) -> None:
+    """The room's note where NanoVG cannot draw `name`: why, and the views
+    that still work."""
+    lh = imgui.get_text_line_height_with_spacing()
+    y = c.y + max(0.0, c.h / 2 - 1.5 * lh)
+    for words, col in ((f"{name} is drawn with NanoVG.", ui.TEXT), (why, ui.DIM),
+                       ("Map and Lanes still work.", ui.DIM)):
+        _text_left(c.dl, words, c.x + 12, y, _col(col), c.w - 24)
+        y += lh
 
 
 DRAW = {"faithful": lambda c: _lab(c, "faithful"), "lanes": lanes,
