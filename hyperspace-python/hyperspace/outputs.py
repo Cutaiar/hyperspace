@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import math
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -258,16 +259,19 @@ class Offscreen:
         return None if self.tex is None else tuple(self.tex.size)
 
     def fit(self, size: tuple[int, int]) -> moderngl.Framebuffer:
+        """The framebuffer at `size`: the one there is, or a new texture and
+        framebuffer made first and the old pair let go after, so a make
+        that fails leaves the old ones in place."""
         size = (max(int(size[0]), 1), max(int(size[1]), 1))
         if self.fbo is None or self.size != size:
-            self.release()
             tex = self.ctx.texture(size, 4)
             try:
-                self.fbo = self.ctx.framebuffer(color_attachments=[tex])
+                fbo = self.ctx.framebuffer(color_attachments=[tex])
             except Exception:
                 tex.release()
                 raise
-            self.tex = tex
+            self.release()
+            self.tex, self.fbo = tex, fbo
         return self.fbo
 
     def release(self) -> None:
@@ -329,6 +333,210 @@ class Preview:
         self.tex = None
         if self.tap is not None:
             self.tap.release()
+
+class Lease:
+    """A frame's hold on one of the tap's textures (2026-11-02): while any
+    lease on a texture lives, no grab writes it and no resize frees it. A
+    `MediaFrame` carries it (`lease`), so the hold lasts exactly as long as
+    the frame — a channel's `held` at rate 0, the source's newest — and
+    ends when the frame is dropped: CPython frees a frame the moment its
+    last reference goes (no cycle holds one), so `__del__` is prompt. A
+    lease is taken on the frame thread (`CanvasTap.lease`, from
+    `gl_poll`), but a frame may be dropped on any thread — the channels'
+    closer, a GC run — so `__del__` touches no count: it hands the slot
+    back on a deque (an atomic append) that the tap drains on the frame
+    thread (`_reap`, in `begin` and `end`). `generation` tells a texture
+    made anew under a name GL gave out before (a resize) from the old one:
+    `media_tex` keys its wrappers on it."""
+
+    __slots__ = ("_slot",)
+
+    def __init__(self, slot: _TapSlot):
+        self._slot = slot
+        slot.leases += 1
+
+    @property
+    def texture(self) -> int:
+        """The GL name."""
+        return int(self._slot.off.tex.glo)
+
+    @property
+    def size(self) -> tuple[int, int]:
+        return tuple(self._slot.off.tex.size)
+
+    @property
+    def generation(self) -> int:
+        return self._slot.gen
+
+    def __del__(self):
+        try:
+            self._slot.returns.append(self._slot)
+        except Exception:  # noqa: BLE001, S110 — interpreter shutdown
+            pass
+
+
+class _TapSlot:
+    """One of the tap's textures: how many frames hold it (`leases`, the
+    frame thread's count), the deque a dropped lease hands it back on
+    (`returns`, the tap's), and the generation of its texture (`gen`,
+    bumped by the tap each time the texture is made)."""
+
+    __slots__ = ("gen", "leases", "off", "returns")
+
+    def __init__(self, off: Offscreen, returns: deque):
+        self.off = off
+        self.returns = returns
+        self.leases = 0
+        self.gen = 0
+
+
+class CanvasTap:
+    """The GRAPH canvas as a picture (2026-11-02, `media.panel`): a small
+    pool of RGBA8 textures on the control window's context, written by
+    `replay.grab` at the end of a frame the canvas was wanted on. Each
+    grab goes into a texture no frame holds (`Lease`): a frame a channel
+    keeps (`media.<c>.rate` 0) names a texture no later grab writes and no
+    resize frees, however many readers go on grabbing beside it — the
+    pool is two textures with every reader live (written in turn) and
+    grows by one per frame held. Wanted only while a channel polls the
+    source (`PanelSource.gl_poll`), so an unlisted source costs nothing.
+    `tex` is the texture written last (None before the first), `size` its
+    size, `lease()` a hold on it, `frame_no` counts the grabs and `at` is
+    `time.monotonic()` at the last one; `allocations` counts the textures
+    made (a lease's `generation` is the count at its texture's making).
+    The size is the canvas's framebuffer size under `CAP` on its long
+    side (`fit_size`): the projection is scaled, nothing is blitted. A
+    grab that fails is `abort`ed: nothing published, the last frame
+    stands."""
+
+    CAP = 1280
+    SPARE = 1      # free textures kept past the current one, so a steady grab reallocates nothing
+
+    def __init__(self, ctx: moderngl.Context | None = None):
+        self.ctx = ctx
+        self._returns: deque = deque()       # slots whose leases were dropped, any thread
+        self._slots: list[_TapSlot] = (
+            [_TapSlot(Offscreen(ctx), self._returns), _TapSlot(Offscreen(ctx), self._returns)]
+            if ctx is not None else [])
+        self._cur: _TapSlot | None = None    # written last: what `tex` and `lease` name
+        self._next: _TapSlot | None = None   # between `begin` and `end`: being written
+        self._prev: Any = None               # what was bound before `begin`, bound again by `end`
+        self.wanted = False
+        self.allocations = 0
+        self.frame_no = 0
+        self.at = 0.0
+        self.error = ""
+
+    @property
+    def tex(self) -> Any:
+        return None if self._cur is None else self._cur.off.tex
+
+    @property
+    def size(self) -> tuple[int, int] | None:
+        return None if self._cur is None else tuple(self._cur.off.tex.size)
+
+    @property
+    def textures(self) -> int:
+        """How many textures the pool holds now."""
+        return len(self._slots)
+
+    def lease(self) -> Lease | None:
+        """A hold on the texture written last, for the frame that names it."""
+        return None if self._cur is None else Lease(self._cur)
+
+    def want(self) -> None:
+        """A channel reads the source this frame: draw the canvas at its end."""
+        self.wanted = True
+
+    def take(self) -> bool:
+        """Was it wanted this frame? (and forget the wish)"""
+        wanted, self.wanted = self.wanted, False
+        return wanted
+
+    def _reap(self) -> None:
+        """The leases dropped since last time, counted off on this (the
+        frame) thread."""
+        returns = self._returns
+        while returns:
+            returns.popleft().leases -= 1
+
+    def _free(self) -> list[_TapSlot]:
+        self._reap()
+        return [s for s in self._slots if s is not self._cur and not s.leases]
+
+    def begin(self, size: tuple[int, int]) -> moderngl.Framebuffer:
+        """The framebuffer to draw this grab into, bound and cleared opaque
+        black: a texture no frame holds and not the one written last, at
+        `size` — made when none is free, so a held texture is never
+        written or freed. What was bound before (the control window's
+        screen) is bound again by `end` or `abort`."""
+        if self.ctx is None:
+            raise RuntimeError("CanvasTap has no GL context")
+        free = self._free()
+        if free:
+            slot = free[0]
+        else:
+            slot = _TapSlot(Offscreen(self.ctx), self._returns)
+            self._slots.append(slot)
+        self._next = slot
+        self._prev = slot.off.ctx.fbo
+        was = slot.off.tex
+        fbo = slot.off.fit(size)
+        if slot.off.tex is not was:          # made anew (the first time, or a resize)
+            self.allocations += 1
+            slot.gen = self.allocations
+        fbo.use()
+        fbo.clear(0.0, 0.0, 0.0, 1.0)
+        return fbo
+
+    def _rebind(self) -> None:
+        prev, self._prev = self._prev, None
+        if prev is None:
+            prev = self.ctx.screen
+        if prev is not None:
+            prev.use()
+
+    def end(self, now: float) -> None:
+        """The grab drawn: its alpha set to 1 everywhere (the editor's ground
+        is translucent over the backdrop, a picture is not), the framebuffer
+        from before `begin` bound again, the texture published, and free
+        textures past `SPARE` let go."""
+        slot, self._next = self._next, None
+        fbo = slot.off.fbo
+        fbo.color_mask = (False, False, False, True)
+        fbo.clear(0.0, 0.0, 0.0, 1.0)
+        fbo.color_mask = (True, True, True, True)
+        self._rebind()
+        self._cur = slot
+        self.frame_no += 1
+        self.at = now
+        free = self._free()
+        for extra in free[self.SPARE:]:
+            self._slots.remove(extra)
+            extra.off.release()
+
+    def abort(self) -> None:
+        """The grab failed part way: nothing published (the last frame
+        stands, `frame_no` and `at` as they were), the framebuffer from
+        before `begin` bound again."""
+        self._next = None
+        self._rebind()
+
+    def close(self) -> None:
+        self._cur = self._next = None
+        for slot in self._slots:
+            slot.off.release()
+        self._slots = []
+
+
+def fit_size(size: tuple[float, float], scale: tuple[float, float],
+             cap: int = CanvasTap.CAP) -> tuple[int, int]:
+    """The tap's size for a canvas of `size` points at framebuffer `scale`:
+    its framebuffer size, scaled down (never up) to at most `cap` on the
+    long side, each side at least 1."""
+    w, h = max(size[0] * scale[0], 1.0), max(size[1] * scale[1], 1.0)
+    k = min(1.0, cap / max(w, h))
+    return (max(round(w * k), 1), max(round(h * k), 1))
 
 # ---------------------------------------------------------------- plan 37 C1: the thumbnails
 

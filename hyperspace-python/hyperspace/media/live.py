@@ -72,54 +72,65 @@ def _said(e: Exception) -> str:
     return str(e) if isinstance(e, Fault) else f"{type(e).__name__}: {e}"
 
 
-class LiveSource:
-    """One live feed as a `media.source.Source`, untimed. `reader` is
-    what connects to it, used only on the source's own thread:
-    `open()` connects (may raise), `read()` returns a new frame's pixels
-    (H×W×3 or ×4) or None when there is nothing new — it may wait a little
-    for one, as a camera does — and `close()` lets go. Frames are kept
-    within `cap` (`CAP_LIVE`), aspect kept, and stamped with `clock`, so
-    `latest` can tell a feed that stopped."""
+class SharedSource:
+    """What a shared, untimed source's channels call — `LiveSource` and
+    `media.panel.PanelSource` share it. Holders are counted under a lock
+    (`open` runs on the frame thread, `close` on the channels' closer
+    thread) rather than connecting and disconnecting; the newest frame
+    (`_latest`, one reference swap) is read while it is under `HOLD_S`
+    old; the status is `ready` with a fresh frame, else `_idle()` —
+    `fetching` for `HOLD_S` after the first open with no frame yet, else
+    `lost` — or the error the channels said (`status = …`), which the next
+    frame published clears. A subclass fills in `_opened()` (the first
+    holder arrived) and `_closed()` (the last left), both called under the
+    lock, and may put a word of its own in front of `_idle()`."""
 
     timed = False
     duration = 0.0
-    inline = False     # True: `release`'s work runs on the frame thread (Syphon's GL client)
 
-    def __init__(self, sid: str, reader=None, *, kind: str = "live", clock=time.monotonic,
-                 cap: tuple[int, int] = CAP_LIVE):
+    def __init__(self, sid: str, *, kind: str, clock=time.monotonic):
         self.sid = sid
         self.kind = kind
-        self.reader = reader
         self.clock = clock
-        self.cap = cap
         self._latest = Latest()
-        self._n = 0
         self._fault = ""
         self._lock = threading.Lock()
         self._holders = 0
-        self._released = 0.0
         self._opened_at: float | None = None
-        self._thread: threading.Thread | None = None
-        self._stop = threading.Event()
 
     # -- what a channel calls (the frame thread; `close` from the closer) --
 
     def open(self) -> None:
-        """A channel holds the feed: the first holder starts its thread."""
+        """A channel holds the source: the first holder starts it."""
         with self._lock:
             self._holders += 1
             if self._opened_at is None:
                 self._opened_at = self.clock()
-            if self._thread is None:
-                self._start()
+            self._opened()
 
     def close(self) -> None:
-        """A channel let go. The connection stays until nobody has held
-        the feed for `RELEASE_S` (the kind's `poll`)."""
+        """A channel let go. With no holder left the open time is
+        forgotten, so the next holder's first `HOLD_S` is `fetching`
+        again, whatever the subclass keeps connected meanwhile."""
         with self._lock:
             self._holders = max(self._holders - 1, 0)
             if not self._holders:
-                self._released = self.clock()
+                self._opened_at = None
+                self._closed()
+
+    def _opened(self) -> None:
+        pass
+
+    def _closed(self) -> None:
+        pass
+
+    def _idle(self) -> str:
+        """The status with no frame under `HOLD_S` old: `fetching` for
+        `HOLD_S` after the first open with no frame yet, else `lost`."""
+        at = self._opened_at
+        if self._latest.get() is None and at is not None and self.clock() - at <= HOLD_S:
+            return FETCHING
+        return LOST
 
     def want(self, t: float) -> None:
         pass
@@ -131,18 +142,18 @@ class LiveSource:
             return None
         return f
 
+    def _publish(self, f: MediaFrame) -> None:
+        self._latest.put(f)
+        self._fault = ""
+
     @property
     def status(self) -> str:
         if self._fault:
             return error(self._fault)
         f = self._latest.get()
-        now = self.clock()
-        if f is not None and now - f.t <= HOLD_S:
+        if f is not None and self.clock() - f.t <= HOLD_S:
             return READY
-        at = self._opened_at
-        if f is None and at is not None and now - at <= HOLD_S:
-            return FETCHING
-        return LOST
+        return self._idle()
 
     @status.setter
     def status(self, value: str) -> None:
@@ -153,6 +164,40 @@ class LiveSource:
     @property
     def held(self) -> int:
         return self._holders
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__} {self.sid} {self.status}>"
+
+
+class LiveSource(SharedSource):
+    """One live feed as a `media.source.Source`, untimed. `reader` is
+    what connects to it, used only on the source's own thread:
+    `open()` connects (may raise), `read()` returns a new frame's pixels
+    (H×W×3 or ×4) or None when there is nothing new — it may wait a little
+    for one, as a camera does — and `close()` lets go. Frames are kept
+    within `cap` (`CAP_LIVE`), aspect kept, and stamped with `clock`, so
+    `latest` can tell a feed that stopped. The first `open` starts the
+    thread; the last `close` only notes the time, and the kind's `poll`
+    lets the thread go after `RELEASE_S` (`release`)."""
+
+    inline = False     # True: `release`'s work runs on the frame thread (Syphon's GL client)
+
+    def __init__(self, sid: str, reader=None, *, kind: str = "live", clock=time.monotonic,
+                 cap: tuple[int, int] = CAP_LIVE):
+        super().__init__(sid, kind=kind, clock=clock)
+        self.reader = reader
+        self.cap = cap
+        self._n = 0
+        self._released = 0.0
+        self._thread: threading.Thread | None = None
+        self._stop = threading.Event()
+
+    def _opened(self) -> None:
+        if self._thread is None:
+            self._start()
+
+    def _closed(self) -> None:
+        self._released = self.clock()
 
     @property
     def running(self) -> bool:
@@ -218,18 +263,15 @@ class LiveSource:
                 if arr is None:
                     stop.wait(IDLE_S)
                     continue
-                self._publish(fit_within(to_rgba(arr), self.cap))
+                self._publish_pixels(fit_within(to_rgba(arr), self.cap))
         finally:
             if opened:
                 _quiet(self.reader.close)
 
-    def _publish(self, px: np.ndarray) -> None:
+    def _publish_pixels(self, px: np.ndarray) -> None:
+        """A frame of pixels from the reader, as the next frame."""
         self._n += 1
-        self._latest.put(MediaFrame(px, self.clock(), self._n))
-        self._fault = ""
-
-    def __repr__(self) -> str:
-        return f"<{type(self).__name__} {self.sid} {self.status}>"
+        self._publish(MediaFrame(px, self.clock(), self._n))
 
 
 def _quiet(fn) -> None:
