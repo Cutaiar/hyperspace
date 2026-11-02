@@ -317,7 +317,8 @@
  "macros": {},
  "modules": {},
  "units": {
-  "camera.pan": "world"
+  "camera.pan": "world",
+  "fx.depth": "taper"
  },
  "media": {
   "channels": {}

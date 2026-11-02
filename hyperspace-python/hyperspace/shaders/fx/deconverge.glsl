@@ -6,8 +6,8 @@
 // @tip from their own offset and scale about the centre, so edges split into rainbow
 // @tip fringes. Speed turns the split directions around.
 
-uniform float u_amount;  // @param 0 16 1 "Amount" The split, px (Minecraft: about 1).
-uniform float u_radial;  // @param 0 0.05 0.002 "Radial" Each channel's own zoom about the centre, so the fringes widen to the rim.
+uniform float u_amount;  // @param 0 16 1 amount "Amount" The split, px (Minecraft: about 1).
+uniform float u_radial;  // @param 0 0.05 0.002 amount "Radial" Each channel's own zoom about the centre, so the fringes widen to the rim.
 
 vec4 effect(vec2 uv) {
     mat2 r = rot(u_phase);

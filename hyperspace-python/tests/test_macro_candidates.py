@@ -17,10 +17,25 @@ from conftest import boot_home
 
 from hyperspace import routing
 from hyperspace.bands import CEIL
+from hyperspace.fx import FxState, retaper_of
 from hyperspace.params import Kind
 
 CANDIDATES = Path(__file__).resolve().parent / "fixtures" / "macro-candidates"
 FILES = sorted(CANDIDATES.glob("*.json"))
+# wave 0 T1: the effects' speed and amount params are on tapers, and the
+# candidates' base subscribers on them were migrated end for end
+# (tools/retaper_routes.py: each `from` / `to` lands the real value it did).
+# A macro's throw is linear in norm, so between its ends it now runs the
+# taper's curve: a macro resting at noon no longer lands the scene's own
+# value on such a param, and two macros sharing one (macro-breakdown-drop's
+# 1 and 3 on `fx.warp.amount`) no longer agree there — the owner re-sets
+# those by ear (docs/plans/22-macro-candidates.md). The checks below that
+# assume the old agreement skip these params; test_retaper.py holds the ends.
+_FILES_OF_FX = FxState().files
+
+
+def _retapered(pid: str) -> bool:
+    return retaper_of(pid, _FILES_OF_FX) is not None
 # the sets meant to be played all at once: no param has two macros' bases
 # (macro-intensity and macro-breakdown-drop compare versions of one idea,
 # so their macros share bases on purpose — the last one turned wins)
@@ -53,7 +68,7 @@ def test_each_candidate_loads_with_no_note_and_keeps_every_row(rig, path):
     # moves no base off the file's own value
     for pid, v in doc["values"].items():
         p = rig.reg[pid]
-        if p.kind is Kind.CONTINUOUS:
+        if p.kind is Kind.CONTINUOUS and not _retapered(pid):     # (see _retapered)
             assert p.norm == pytest.approx(p._norm_of(v), abs=1e-4), (path.stem, pid)
 
 
@@ -111,6 +126,8 @@ def test_turning_a_macro_moves_its_bases_and_scales_its_routes(rig, path):
             router.follow_macros()
             for s in m.subs:
                 if s.base is not None:
+                    if _retapered(s.base):          # (see _retapered: shared bases disagree)
+                        continue
                     assert reg[s.base].norm == pytest.approx(s.at(end), abs=1e-4), (mid, s)
                 else:
                     pushed[(s.depth, end)] = offset(s.depth[1])

@@ -322,7 +322,8 @@ def test_a_saved_preset_says_its_pan_is_in_world_units_and_loads_as_saved(tmp_pa
     path = rig.presets.save_as("WORLD PAN")
     doc = json.loads(path.read_text())
     assert doc["schema"] == "hyperspace.preset/7"     # (row 394); a key marks the units
-    assert doc[preset.UNITS_KEY] == {"camera.pan": "world"}
+    assert doc[preset.UNITS_KEY] == preset.UNITS       # (…and the depths' taper, wave 0 T1)
+    assert doc[preset.UNITS_KEY]["camera.pan"] == "world"
     assert doc["values"]["camera.pan.x"] == 2.5
     rig.reg["camera.pan.x"].set(0.0)
     rig.lib.presets.load("WORLD PAN")
@@ -514,7 +515,7 @@ def test_a_camera_module_saved_now_says_its_pan_is_in_world_units(tmp_path):
     rig.reg["camera.pan.x"].set(3.0)
     path = rig.lib.save_as("camera", "World")
     doc = json.loads(path.read_text())
-    assert doc[preset.UNITS_KEY] == {"camera.pan": "world"}
+    assert doc[preset.UNITS_KEY] == preset.UNITS and preset.UNITS["camera.pan"] == "world"
     rig.reg["camera.pan.x"].set(0.0)
     rig.lib.load("camera", "World")
     assert rig.view.pan[0] == pytest.approx(3.0) and not rig.lib.is_dirty("camera")

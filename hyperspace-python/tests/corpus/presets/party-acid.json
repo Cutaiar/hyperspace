@@ -330,12 +330,12 @@
   {"source": "hand:left.roll", "target": "rot.phase.XY", "op": "push", "value": 0.25},
   {"source": "hand:left.pitch", "target": "rot.phase.YZ", "op": "push", "value": 0.25},
   {"source": "hand:left.yaw", "target": "rot.phase.XZ", "op": "push", "value": 0.25},
-  {"source": "hand:right.y", "target": "fx.acid.bend", "op": "push", "value": 0.6},
+  {"source": "hand:right.y", "target": "fx.acid.bend", "op": "push", "value": 0.2807354922057129},
   {"source": "hand:right.z", "target": "fx.acid.reach", "op": "push", "value": -0.4},
-  {"source": "hand:right.roll", "target": "fx.acid.twist", "op": "push", "value": 0.5},
-  {"source": "hand:right.pitch", "target": "fx.deconverge.amount", "op": "push", "value": 0.6},
+  {"source": "hand:right.roll", "target": "fx.acid.twist", "op": "push", "value": 0.14569813292473555},
+  {"source": "hand:right.pitch", "target": "fx.deconverge.amount", "op": "push", "value": 0.15459683690918613},
   {"source": "hand:right.yaw", "target": "fx.huecycle.spread", "op": "push", "value": 0.4},
-  {"source": "hand:left.y", "target": "fx.wobble.amount", "op": "push", "value": 0.5}
+  {"source": "hand:left.y", "target": "fx.wobble.amount", "op": "push", "value": 0.28579809951363133}
  ],
  "desk": [
   {"source": "cc:0:48", "target": "view.bright", "op": "abs", "feedback": "ring"},
@@ -372,7 +372,8 @@
  "macros": {},
  "modules": {},
  "units": {
-  "camera.pan": "world"
+  "camera.pan": "world",
+  "fx.depth": "taper"
  },
  "media": {
   "channels": {}

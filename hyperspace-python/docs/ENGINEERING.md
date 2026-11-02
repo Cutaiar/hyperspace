@@ -857,7 +857,21 @@ zoomblur (`_lib.glsl` is shared). **A new effect is a new `.glsl` file, not
 Python**: every `// @param` uniform becomes `fx.<file>.<key>`, plus
 `on mix speed blend` per effect (plan 33 removed `order` and `target`);
 `// @mix <value>` sets the effect's default wet/dry (1 when absent);
-`fx.on` bypasses every effect and `fx.mix` scales them. `// @order <n>`
+`fx.on` bypasses every effect and `fx.mix` scales them. **Coarse and
+fine through tapers** (wave 0 T1, register row 561): every effect's
+`speed` is on a signed exponential taper (`fx.T_SPEED`: 401 detents, the
+stop in the middle, ±1× 140 steps out at 20 a doubling, ±8× at the ends,
+±0.008× one step from the stop — 0.05× is a third of the way up the
+positive half, where on the linear −8 … +8 it was under one MIDI step), and
+a `@param` line flagged `amount` (`// @param 0 2 0.2 amount "Amount" …`:
+a float from `lo` 0, neither `log` nor `wrap`) puts its param on a
+zero-safe log taper (`fx.amount_taper`: 0 off, then ten doublings up to
+`hi`). The fourteen amount-type params PR #304 calmed carry the flag; the
+shape params (`reach`, `scale`, `cells`, …) stay `log`, and `mix` linear.
+A route's depth onto one of these is measured along the taper, so an
+older file's depths are converted at load (`params.retaper_depths`, the
+marker `units["fx.depth"]`) and **the owner runs
+`tools/retaper_routes.py` on the library before the next show** (below). `// @order <n>`
 is still parsed (`EffectSpec.order`) and read only by `graphmigrate`, to
 give an old preset's effect without a saved order its place in that
 preset's run; where an effect sits now is its wires. A new effect file
@@ -1079,6 +1093,17 @@ wires with the mutes all on; `--signatures` adds a missing case to
 `tests/fixtures/frame-signatures.json` from `build_graph` alone (never
 re-records an existing one), and `--names` rewrites only the fixtures'
 recorded node names and asserts the `goldens` list is unchanged.
+`tools/calm_lanes.py` (2026-11-02) held every preset's band routes to
+`learn.LANE_DEPTH` as springs, once. `tools/retaper_routes.py` (wave 0
+T1) measures every route depth, `set` value and macro base subscriber
+onto an effect's `speed` or `amount` param along the new tapers, once:
+a dry run by default, `--write` backs the library up to
+`~/Hyperspace/library-backup-<stamp>/` first and rewrites each preset
+and patch as the app writes it, naming every row that moved; session
+rows in `bindings.json` and the shows are reported, not rewritten. **The
+owner runs it on the library before the next show**, both Macs on this
+build; until then an old file is converted at every load and nothing is
+lost.
 
 **Feedback: the delay, the echoes and the resize** (plan 34, rows
 353–371; `graph.Delay`, `graph.EchoNode`, `graph.ResizeNode`,
@@ -1352,7 +1377,10 @@ once (never over a file) and prints the two lines to add;
   than load it and strip what it does not know on its next save. This build
   reads every older schema (`/2`–`/5`) and migrates it on load. To move a
   whole library at once: `uv run python tools/migrate_library.py` (a dry
-  run), then `--apply`. Since plan 40 a preset with a group (GRAPH's
+  run), then `--apply`. The route depths onto the effects' `speed` and
+  `amount` params (wave 0 T1, register row 561) are moved the same way:
+  `uv run python tools/retaper_routes.py` (a dry run), then `--write` —
+  **before the next show**, both Macs on this build. Since plan 40 a preset with a group (GRAPH's
   **Group**) is `hyperspace.preset/8` and one without stays `/7` (register
   row 521, pending the owner); a build from before plan 40 refuses an `/8`.
 

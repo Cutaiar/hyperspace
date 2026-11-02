@@ -145,6 +145,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
     declare_resizes,
     declare_segments,
     declare_switches,
+    fx_files,
     is_cut_id,
     is_instance_id,
     is_lookback_id,
@@ -155,6 +156,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
     is_switch_id,
     pan_world,
     part_of,
+    retaper_depths,
 )
 from .routing import MOD_OPS, Binding, is_continuous
 
@@ -937,6 +939,13 @@ class Presets:
         #    slice reproduces
         doc, palette_notes = palette_slice(doc)
         notes += palette_notes
+        # 0. and its depths onto the effects' speed and amount params along
+        #    their tapers (wave 0 T1): a file from before measured them along
+        #    the linear range. Silent, as the pan is — each row's real-unit
+        #    reach is kept about its base (`params.retaper_depths`); a save
+        #    writes the marker (`UNITS`), and tools/retaper_routes.py
+        #    rewrites a library once
+        doc, _ = retaper_depths(doc, fx_files(reg))
         # 0. and its render graph (plan 26 A4): read, not yet landed. Plan
         #    36 T3 (W3): a `/7` is read as it is — no section is the empty
         #    frame, black, said; nothing is filled in. An older file is

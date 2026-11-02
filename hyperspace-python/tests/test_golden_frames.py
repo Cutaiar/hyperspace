@@ -241,7 +241,17 @@ GOLDENS_SINCE = ("resize-faces", "resize-crop", "edges-scene", "mask-as-picture"
 # new default, and the eight frames at 1/60 s land at a different phase.
 # Nothing structural moved; a corpus preset names every param and none
 # moved. sha256 and png only.)
-GOLDENS_DIGEST = "87f6d5f474f191e19b00219122f415a45838d2814a5cebe8614252da511549d2"
+# (wave 0 T1, the tapers, 2026-11-02: re-pinned for the 70 goldens
+# re-recorded — party-acid, party-mandala, party-noita, party-trip (its
+# 2× HiDPI case too), hands-fx, acid-scene, palette-glass and
+# wired-outputs, present, in every state that draws their effects: each
+# has a hand pushing an effect's `speed` or an amount param, and the
+# migrated depth keeps the push's reach at full throw about the base,
+# not at the fake hands' part-way pose, which the taper's curve now
+# lands a little differently (the contact sheet: the same pictures, small
+# shifts along the effects' edges). Nothing structural moved; sha256 and
+# png only.)
+GOLDENS_DIGEST = "270ffef5c350fa37c0927d2de923d25baca8242265464ad1174f7f9a535a263a"
 # the render names the pipelines' graph used, gone in plan 35 T4 (V2: the
 # render nodes are named in the new ids)
 OLD_RENDER_NAMES = ("ghost", "history", "readout", "capture", "cover", "grounded", "fx",
