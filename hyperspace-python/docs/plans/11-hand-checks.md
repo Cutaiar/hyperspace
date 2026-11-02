@@ -6404,7 +6404,7 @@ header's count shortens to a number rather than run off the edge; in 4
 the side panel lists the Xbox pad's patched ports, no picture (the
 picture is the first pad's).
 
-## AQ. Node groups: ids and membership (post-show G0)
+## AU. Node groups: ids and membership (post-show G0)
 
 Register row 563, 2026-11-02. Headless: `tests/test_graph_groups.py` (the
 corpus property, `test_groups_keep_their_invariants_over_the_corpus`) and
