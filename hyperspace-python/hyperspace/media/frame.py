@@ -62,7 +62,11 @@ class MediaFrame:
     alive for exactly as long as it lives, so whoever holds the frame —
     a channel at rate 0 — holds the texture, and letting the frame go
     lets the texture go; None when the texture outlives every frame (a
-    Syphon client's)."""
+    Syphon client's). `tex_gen` is the generation of the texture object
+    under its name: a source that makes textures anew (the tap on a
+    resize) may be handed a name GL gave out before, a different object
+    with default sampler state, and bumps it; 0 for a source that never
+    does."""
 
     pixels: np.ndarray | None
     t: float
@@ -71,6 +75,7 @@ class MediaFrame:
     tex_size: tuple[int, int] | None = None
     tex_target: int = TEX_2D
     lease: Any = None
+    tex_gen: int = 0
 
     def __post_init__(self):
         if (self.pixels is None) == (self.texture is None):

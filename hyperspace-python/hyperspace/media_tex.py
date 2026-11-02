@@ -12,9 +12,12 @@ made again only when its size changed, with mipmaps for the faces'
 sampling. A GPU frame (a texture name in the renderer's share group)
 never comes through the CPU: a `GL_TEXTURE_2D` one is wrapped as it is
 (`ctx.external_texture`; releasing the wrapper never deletes the source's
-texture) — one wrapper per distinct (name, size), kept across channels
-and frames (`wraps` counts them), so a source that publishes from a pool
-of textures (the GRAPH canvas's tap) costs no wrapper a frame — and a `GL_TEXTURE_RECTANGLE` one — what a Syphon client's
+texture) — one wrapper per distinct (name, size, generation), kept
+across channels and frames (`wraps` counts them), so a source that
+publishes from a pool of textures (the GRAPH canvas's tap) costs no
+wrapper a frame; the generation (`MediaFrame.tex_gen`) tells a texture
+made anew under a reused name from the old one, whose wrapper's sampler
+state (filter, no repeat) was set on the deleted object — and a `GL_TEXTURE_RECTANGLE` one — what a Syphon client's
 IOSurface-backed texture is on macOS GL, which neither moderngl nor a
 `sampler2D` can read — is blitted on the GPU into the channel's own 2D
 texture when its frame moved (`blits`), mipmapped like an upload. The
@@ -128,7 +131,7 @@ class MediaTextures:
         self.wraps = 0
         self.error = ""
         self._slots: dict[str, _Slot] = {}
-        self._wrappers: OrderedDict[tuple, moderngl.Texture] = OrderedDict()   # (name, size) → wrapper
+        self._wrappers: OrderedDict[tuple, moderngl.Texture] = OrderedDict()   # (name, size, gen) → wrapper
         self._read_fbo: int | None = None     # GL's name: the blit's read framebuffer
         self.previews = 0
         self.preview_bytes_max = 0
@@ -146,7 +149,8 @@ class MediaTextures:
             if getattr(f, "tex_target", TEX_2D) == TEX_RECT:
                 return self._blitted(slot, f)
             slot.flipped = False
-            return self._wrapped(int(f.texture), (int(f.tex_size[0]), int(f.tex_size[1])))
+            return self._wrapped(int(f.texture), (int(f.tex_size[0]), int(f.tex_size[1])),
+                                 int(getattr(f, "tex_gen", 0)))
         tex = self._owned(slot, tuple(f.size))
         key = (f.frame, f.t)
         if slot.key != key:
@@ -157,14 +161,15 @@ class MediaTextures:
         slot.flipped = True
         return tex
 
-    def _wrapped(self, name: int, size: tuple[int, int]) -> moderngl.Texture:
-        """The wrapper round GL texture `name` of `size`: the one made
-        before for that pair (any channel's), else made now. A wrapper is
-        a name and a size, nothing of the texture's own, so one serves
-        every frame that names the texture and outlives a texture the
-        source frees (it is never sampled unless a frame names it again,
-        and a name GL reuses at that size is that wrapper's)."""
-        key = (name, size)
+    def _wrapped(self, name: int, size: tuple[int, int], gen: int = 0) -> moderngl.Texture:
+        """The wrapper round GL texture `name` of `size`, generation `gen`:
+        the one made before for that triple (any channel's), else made now
+        with its sampler state set (filter, no repeat — set on the GL
+        object, so a texture made anew under a reused name needs its own,
+        which the source's bumped generation asks for). A stale wrapper
+        is never sampled unless a frame names its triple again, and goes
+        when the cache turns over."""
+        key = (name, size, gen)
         wrappers = self.__dict__.setdefault("_wrappers", OrderedDict())
         tex = wrappers.get(key)
         if tex is not None:

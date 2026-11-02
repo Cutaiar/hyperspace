@@ -109,10 +109,13 @@ class SharedSource:
             self._opened()
 
     def close(self) -> None:
-        """A channel let go."""
+        """A channel let go. With no holder left the open time is
+        forgotten, so the next holder's first `HOLD_S` is `fetching`
+        again, whatever the subclass keeps connected meanwhile."""
         with self._lock:
             self._holders = max(self._holders - 1, 0)
             if not self._holders:
+                self._opened_at = None
                 self._closed()
 
     def _opened(self) -> None:
@@ -260,14 +263,15 @@ class LiveSource(SharedSource):
                 if arr is None:
                     stop.wait(IDLE_S)
                     continue
-                self._publish(fit_within(to_rgba(arr), self.cap))
+                self._publish_pixels(fit_within(to_rgba(arr), self.cap))
         finally:
             if opened:
                 _quiet(self.reader.close)
 
-    def _publish(self, px: np.ndarray) -> None:   # type: ignore[override]
+    def _publish_pixels(self, px: np.ndarray) -> None:
+        """A frame of pixels from the reader, as the next frame."""
         self._n += 1
-        super()._publish(MediaFrame(px, self.clock(), self._n))
+        self._publish(MediaFrame(px, self.clock(), self._n))
 
 
 def _quiet(fn) -> None:

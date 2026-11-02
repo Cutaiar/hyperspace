@@ -25,9 +25,10 @@ frame (`want`) and hands back the texture the tap wrote last — one frame
 of latency, which round a loop (the channel on the backdrop behind the
 canvas it pictures) is the intended echo. Off the GRAPH page nothing is
 drawn: the last frame holds `live.HOLD_S`, then the source reads None
-(black) and says `off page` (the tap saw no canvas: not `lost`, which
-is for a page that draws and a tap that gets nothing) — the owner's
-default — and is `ready` again on the first frame the page is back."""
+(black) and says `off page` (the page says it is not drawing: not
+`lost`, which is for a page that draws and a tap that gets nothing — a
+minimised window) — the owner's default — and is `ready` again on the
+first frame the page is back."""
 
 from __future__ import annotations
 
@@ -44,20 +45,20 @@ class PanelSource(SharedSource):
     """`panel:graph` as a `media.source.Source`, untimed, shared as a live
     feed is (`SharedSource`: holders, the newest frame, the status). `tap`
     is the `outputs.CanvasTap` (duck-typed: `want()`, `lease()` with
-    `texture` and `size`, `frame_no`, `at` on `clock`'s scale, `on_page`)."""
+    `texture`, `size` and `generation`, `frame_no`, `at` on `clock`'s
+    scale); `on_page` answers whether the GRAPH page is drawing its
+    canvas now — the panel's own fact (`Panel.canvas_px is not None`),
+    read from it, so the status has one owner."""
 
-    def __init__(self, tap, *, clock=time.monotonic):
+    def __init__(self, tap, *, on_page=None, clock=time.monotonic):
         super().__init__(GRAPH, kind="panel", clock=clock)
         self.tap = tap
-
-    def _closed(self) -> None:
-        self._opened_at = None       # nobody holds it: not fetching
+        self.on_page = on_page if on_page is not None else (lambda: True)
 
     def _idle(self) -> str:
-        """`off page` while the tap saw no canvas (GRAPH is not on screen:
-        no frame can come, so not `fetching`), else a live feed's words."""
-        tap = self.tap
-        if tap is not None and not getattr(tap, "on_page", True):
+        """`off page` while GRAPH is not on screen (no frame can come, so
+        not `fetching`), else a live feed's words."""
+        if self.tap is not None and not self.on_page():
             return OFF_PAGE
         return super()._idle()
 
@@ -77,5 +78,6 @@ class PanelSource(SharedSource):
                 size = tuple(int(v) for v in lease.size)
                 self._publish(MediaFrame(None, float(tap.at), n, texture=int(lease.texture),
                                          tex_size=(size[0], size[1]), tex_target=TEX_2D,
+                                         tex_gen=int(getattr(lease, "generation", 0)),
                                          lease=lease))
         return self.latest()

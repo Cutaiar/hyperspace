@@ -49,6 +49,44 @@ from .outputs import fit_size
 
 FOREGROUND, BACKGROUND = "##Foreground", "##Background"
 
+# what `draw_lists` reaches into the backend for: the programmable
+# pipeline renderer's GL handles (its own `render` uses them by these
+# names) and a command's texture. Private to imgui_bundle, which uv.lock
+# pins; checked when this module is imported, so a rename fails loudly
+# here and not as every grab's `tap.error`
+BACKEND_ATTRS = ("_shader_handle", "_attrib_location_tex", "_attrib_proj_mtx",
+                 "_vao_handle", "_vbo_handle", "_elements_handle")
+
+
+def missing_backend_names(renderer_cls=None) -> list[str]:
+    """The names of `BACKEND_ATTRS` the backend's source never sets on
+    `self`, and `ImDrawCmd.tex_ref` / `ImTextureRef.get_tex_id` when
+    imgui lacks them: empty on the backend this was written against."""
+    import inspect
+
+    if renderer_cls is None:
+        from imgui_bundle.python_backends.opengl_backend_programmable import (
+            ProgrammablePipelineRenderer as renderer_cls,
+        )
+    src = inspect.getsource(renderer_cls)
+    out = [f"{renderer_cls.__name__}.{n}" for n in BACKEND_ATTRS if f"self.{n}" not in src]
+    if not hasattr(imgui.ImDrawCmd, "tex_ref"):
+        out.append("ImDrawCmd.tex_ref")
+    if not hasattr(getattr(imgui, "ImTextureRef", None), "get_tex_id"):
+        out.append("ImTextureRef.get_tex_id")
+    return out
+
+
+def check_backend() -> None:
+    """Raise `RuntimeError` naming what the installed backend lacks."""
+    gone = missing_backend_names()
+    if gone:
+        raise RuntimeError("replay.py: imgui_bundle's backend no longer has " + ", ".join(gone)
+                           + " — draw_lists must follow its render()")
+
+
+check_backend()
+
 
 def keep(owner: str, page: str) -> bool:
     """Whether the draw list a window `owner` owns is part of the canvas's
@@ -189,18 +227,14 @@ def grab(tap, impl, draw_data, canvas_px, *, clock=time.monotonic) -> bool:
     scale, the page window's name, the pane's decorations' index range),
     draw the canvas's lists into the tap and flush, so the render context
     sees the texture next frame. True when drawn. The tap's `take` is read
-    whether or not the page drew, so a wish never outlives its frame, and
-    its `on_page` says whether the page drew (the source's `off page`).
+    whether or not the page drew, so a wish never outlives its frame.
     An empty framebuffer (the window minimised: the backend skipped the
     frame and its clip rects are unscaled) draws nothing. A draw that
     fails is `abort`ed — nothing published, the last frame stands — and
     is the tap's `error`, never the loop's. The viewport is put back as
     it was: `end` rebinds the screen through moderngl, which reapplies
     the viewport it noted at creation, not the window's size now."""
-    if tap is None:
-        return False
-    tap.on_page = canvas_px is not None
-    if not tap.take() or canvas_px is None:
+    if tap is None or not tap.take() or canvas_px is None:
         return False
     origin, size, scale, page = canvas_px[:4]
     omit = canvas_px[4] if len(canvas_px) > 4 else None
@@ -213,12 +247,12 @@ def grab(tap, impl, draw_data, canvas_px, *, clock=time.monotonic) -> bool:
         if getattr(tap, "ctx", None) is None:
             raise RuntimeError("CanvasTap has no GL context")    # before any GL call: none is current
         viewport = [int(v) for v in gl.glGetIntegerv(gl.GL_VIEWPORT)]
-        tap.begin(target)
         try:
             try:
+                tap.begin(target)
                 draw_lists(impl, lists, origin, size, scale, target, omit)
             except Exception:
-                tap.abort()
+                tap.abort()          # whether `begin` or the draw failed: nothing half-begun stays
                 raise
             tap.end(clock())
         finally:

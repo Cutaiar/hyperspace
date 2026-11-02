@@ -1485,7 +1485,9 @@ def main() -> None:
     renderer.cloud_source = rig              # cloud:<role> → the scene's point clouds (A4b)
     renderer.rig_source = library.project    # the show's own wires: the bus cables (plan 36 T1)
     media.state.resolver.devices = rig       # ndi: / syphon: / camera: ids → live feeds (plan 32 T8)
-    media.state.resolver.builtin[PANEL_GRAPH] = PanelSource(panel.canvas_tap)   # the GRAPH canvas
+    # the GRAPH canvas (2026-11-02); `on_page` is the panel's own fact, read
+    media.state.resolver.builtin[PANEL_GRAPH] = PanelSource(
+        panel.canvas_tap, on_page=lambda: panel.canvas_px is not None)
     panel.hand_settings = hand_settings
     dream_io, panel.dream_error = _open_dream(reg, cfg)
     if dream_io is not None:            # what the dream node dreams with (plan 36 T4)

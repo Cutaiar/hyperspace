@@ -36,8 +36,10 @@ class Clock:
 
 
 class FakeLease:
-    """`outputs.Lease` in shape: the texture's name and size, and the
-    count it holds up while it lives."""
+    """`outputs.Lease` in shape: the texture's name, size and generation,
+    and the count it holds up while it lives."""
+
+    generation = 1
 
     def __init__(self, tap, glo: int, size):
         self.tap, self.texture, self.size = tap, glo, tuple(size)
@@ -49,8 +51,7 @@ class FakeLease:
 
 class FakeTap:
     """What `outputs.CanvasTap` shows a source: wanted, the texture written
-    last and a lease on it, its size, the grab count and time, and whether
-    GRAPH drew on the last frame."""
+    last and a lease on it, its size, the grab count and time."""
 
     def __init__(self):
         self.wants = 0
@@ -58,7 +59,6 @@ class FakeTap:
         self.size = None
         self.frame_no = 0
         self.at = 0.0
-        self.on_page = True
         self.leases: dict[int, int] = {}
 
     def want(self):
@@ -94,7 +94,7 @@ def test_the_source_hands_over_the_texture_the_tap_wrote_last():
     f = src.gl_poll()
     assert tap.wants == 2
     assert f is not None and f.pixels is None and f.texture == 7 and f.tex_size == (400, 240)
-    assert f.tex_target == TEX_2D and f.frame == 1 and f.t == clock()
+    assert f.tex_target == TEX_2D and f.frame == 1 and f.t == clock() and f.tex_gen == 1
     assert src.status == READY and src.latest() is f
     # the frame holds its texture: a lease that lives as long as the frame
     assert f.lease is not None and f.lease.texture == 7 and tap.leases == {7: 1}
@@ -140,24 +140,25 @@ def test_a_channel_at_rate_0_holds_the_texture_through_the_frames_lease():
 
 def test_the_status_runs_fetching_ready_the_hold_off_page_and_back():
     """Opened on GRAPH: `fetching` until the first grab, `ready` with one.
-    GRAPH left (the tap saw no canvas): the frame holds `HOLD_S` — still
-    `ready`, the picture — then the source reads None (black) and says
-    `off page`, never `lost`; the first grab back is `ready` again."""
-    clock, tap = Clock(), FakeTap()
-    src = PanelSource(tap, clock=clock)
+    GRAPH left (the page says it draws no canvas — `on_page`, the panel's
+    own fact): the frame holds `HOLD_S` — still `ready`, the picture —
+    then the source reads None (black) and says `off page`, never `lost`;
+    the first grab back is `ready` again."""
+    clock, tap, page = Clock(), FakeTap(), {"on": True}
+    src = PanelSource(tap, on_page=lambda: page["on"], clock=clock)
     src.open()
     assert src.status == FETCHING
     tap.grab(7, (400, 240), clock())
     f = src.gl_poll()
     assert src.status == READY
-    tap.on_page = False                                    # on MEDIA now
+    page["on"] = False                                     # on MEDIA now
     clock.t += live.HOLD_S
     assert src.gl_poll() is f and src.status == READY      # the hold
     clock.t += 0.01
     assert src.gl_poll() is None and src.latest() is None and src.status == OFF_PAGE
     clock.t += 10.0
     assert src.status == OFF_PAGE                          # as long as the page is away
-    tap.on_page = True
+    page["on"] = True
     tap.grab(8, (400, 240), clock())
     assert src.gl_poll().texture == 8 and src.status == READY
 
@@ -165,20 +166,49 @@ def test_the_status_runs_fetching_ready_the_hold_off_page_and_back():
 def test_off_page_from_the_start_and_lost_only_when_the_page_draws_nothing():
     """A channel opened while on MEDIA says `off page` at once (not a
     second of `fetching` for a frame that cannot come); `lost` is for a
-    page that draws and a tap that gets nothing — and for no tap at all."""
-    clock, tap = Clock(), FakeTap()
-    tap.on_page = False
-    src = PanelSource(tap, clock=clock)
+    page that draws and a tap that gets nothing — the window minimised,
+    where the backend skips the frame and `grab` draws nothing — and for
+    no tap at all. Without `on_page` the page is taken as drawing."""
+    clock, tap, page = Clock(), FakeTap(), {"on": False}
+    src = PanelSource(tap, on_page=lambda: page["on"], clock=clock)
     src.open()
     assert src.status == OFF_PAGE
-    tap.on_page = True
+    page["on"] = True                                      # GRAPH up, the window minimised
     assert src.status == FETCHING
+    for _ in range(3):
+        assert src.gl_poll() is None                       # wanted, never grabbed
     clock.t += live.HOLD_S + 0.01
-    assert src.status == LOST
+    assert src.status == LOST and src.gl_poll() is None
     headless = PanelSource(None, clock=clock)
     headless.open()
     clock.t += live.HOLD_S + 0.01
     assert headless.status == LOST
+    assert PanelSource(FakeTap(), clock=clock).on_page() is True
+
+
+def test_a_source_picked_again_after_its_last_holder_left_is_fetching():
+    """`SharedSource.close` forgets the open time with the last holder, so
+    the two subclasses agree: a feed picked again after a while says
+    `fetching` for its first `HOLD_S`, not `lost` off a stale open."""
+    clock = Clock()
+    panel = PanelSource(FakeTap(), clock=clock)
+    reader = NS(open=lambda: None, read=lambda: None, close=lambda: None)
+    feed = live.LiveSource("ndi:X", reader, clock=clock)
+    try:
+        for src in (panel, feed):
+            src.open()
+            assert src.status == FETCHING
+            clock.t += live.HOLD_S + 0.5
+            assert src.status == LOST
+            src.close()
+            assert src.held == 0 and src._opened_at is None and src.status == LOST
+            clock.t += 30.0
+            src.open()                                     # picked again
+            assert src.status == FETCHING
+            clock.t += live.HOLD_S + 0.01
+            assert src.status == LOST
+    finally:
+        feed.shut()
 
 
 def test_holders_are_counted_and_a_fault_is_said_until_the_next_frame():
@@ -206,8 +236,10 @@ def test_the_source_is_a_shared_source_as_a_live_feed_is():
     `media.live`, the panel source adding `gl_poll` and its words alone."""
     assert issubclass(PanelSource, live.SharedSource)
     assert issubclass(live.LiveSource, live.SharedSource)
-    for name in ("open", "close", "latest", "held", "want"):
+    for name in ("open", "close", "latest", "held", "want", "_publish"):
         assert getattr(PanelSource, name) is getattr(live.SharedSource, name)
+        assert getattr(live.LiveSource, name) is getattr(live.SharedSource, name)
+    assert not hasattr(live.SharedSource, "_publish_pixels")   # the reader's hook is the feed's
     assert PanelSource.status.fget is live.SharedSource.status.fget
     src = PanelSource(FakeTap())
     assert isinstance(src._lock, type(threading.Lock()))
@@ -281,7 +313,8 @@ def test_the_app_builds_the_source_on_the_canvas_tap(monkeypatch):
     r = app.MediaResolver(NS(path=lambda sid: None))
     assert r.live(GRAPH) is None and r.builtin == {}
     src = Path(app.__file__).read_text()
-    assert "resolver.builtin[PANEL_GRAPH] = PanelSource(panel.canvas_tap)" in src
+    assert "resolver.builtin[PANEL_GRAPH] = PanelSource(\n" in src
+    assert "panel.canvas_tap, on_page=lambda: panel.canvas_px is not None)" in src
     assert "replay.grab(panel.canvas_tap, impl, imgui.get_draw_data(), panel.canvas_px)" in src
 
 
@@ -301,11 +334,12 @@ def test_the_media_page_lists_panel_graph_among_the_live_feeds(tmp_path):
         ui_media._state(rig.panel)["search"] = "graph"
         assert [i.sid for i in ui_media.items(rig.panel, 2)] == [GRAPH]
         frame(rig.panel, "media")                     # the page draws it
-        # on MEDIA the tap sees no canvas: the row says `off page`, with why
-        src.tap.on_page = False
+        # on MEDIA the page draws no canvas: the row says `off page`, with why
+        src.on_page = lambda: rig.panel.canvas_px is not None
         [row] = ui_media.items(rig.panel, 2)
         assert row.status == OFF_PAGE
         assert "GRAPH page is on screen" in ui_media.hint(OFF_PAGE) and ui_media.hint(LOST) == ""
+        assert f"{live.HOLD_S:g} s" in ui_media.hint(OFF_PAGE)
         frame(rig.panel, "media")
 
 

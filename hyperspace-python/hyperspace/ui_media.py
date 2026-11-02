@@ -60,6 +60,7 @@ from .graph import source_into, wire_node_kind
 from .media import pool
 from .media.adapters import VIDEO_EXT
 from .media.channels import BIN, CHANNELS, EMPTY
+from .media.live import HOLD_S
 from .media.panel import OFF_PAGE
 from .media.source import FETCHING, MISSING, READY
 from .media.still import STILL_EXT
@@ -339,7 +340,7 @@ def hint(status: str) -> str:
     on MEDIA, is one such time) says why the preview is dark."""
     if status == OFF_PAGE:
         return ("\nthe GRAPH canvas is drawn only while the GRAPH page is on screen "
-                "(not here): a channel on it holds the last picture 1 s, then shows black")
+                f"(not here): a channel on it holds the last picture {HOLD_S:g} s, then shows black")
     return ""
 
 

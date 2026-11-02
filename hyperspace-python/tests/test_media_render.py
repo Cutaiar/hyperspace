@@ -341,6 +341,43 @@ def test_one_wrapper_per_distinct_texture_however_the_frames_alternate(ctx):
         own.release()
 
 
+def test_a_texture_made_anew_under_a_reused_name_gets_its_own_wrapper(ctx):
+    """Sampler state (filter, no repeat) lives on the GL object, not the
+    name: the tap frees and remakes textures (a resize), GL hands the
+    name out again, and the new object has GL's defaults — REPEAT at the
+    edges. The frame's `tex_gen` says it is a new object: with it unchanged
+    the old wrapper serves (and the new object would wrap); bumped, a new
+    wrapper is made and the params are set on the new object."""
+    from OpenGL import GL
+
+    from hyperspace.media_tex import MediaTextures
+
+    def wrap_s(name: int) -> int:
+        GL.glBindTexture(GL.GL_TEXTURE_2D, name)
+        return int(GL.glGetTexParameteriv(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_S))
+
+    mt = MediaTextures(ctx)
+    first = ctx.texture((4, 2), 4)
+    name = first.glo
+    old = mt.texture("a", MediaFrame(None, 1.0, 1, texture=name, tex_size=(4, 2), tex_gen=1))
+    assert mt.wraps == 1 and wrap_s(name) == GL.GL_CLAMP_TO_EDGE
+    first.release()
+    again = ctx.texture((4, 2), 4)            # GL gives the freed name out again (or skip)
+    if again.glo != name:
+        pytest.skip(f"GL did not reuse texture name {name} (got {again.glo})")
+    assert wrap_s(name) == GL.GL_REPEAT       # a new object: GL's default, not the wrapper's
+    # the same generation: the stale wrapper, as before (what a frame of the
+    # old texture would still name)
+    assert mt.texture("a", MediaFrame(None, 2.0, 2, texture=name, tex_size=(4, 2), tex_gen=1)) is old
+    assert mt.wraps == 1 and wrap_s(name) == GL.GL_REPEAT
+    # the source bumped it: a wrapper of its own, the params set on this object
+    new = mt.texture("b", MediaFrame(None, 3.0, 3, texture=name, tex_size=(4, 2), tex_gen=2))
+    assert new is not old and mt.wraps == 2 and wrap_s(name) == GL.GL_CLAMP_TO_EDGE
+    assert mt.texture("a", MediaFrame(None, 4.0, 4, texture=name, tex_size=(4, 2), tex_gen=2)) is new
+    mt.release()
+    again.release()
+
+
 def test_unconsumed_channel_not_uploaded(ctx):
     """Channel b is playing but nothing reads it: never read, never
     uploaded — while the backdrop's channel a is, once a frame."""

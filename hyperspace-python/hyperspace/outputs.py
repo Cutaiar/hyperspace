@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import math
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -258,16 +259,19 @@ class Offscreen:
         return None if self.tex is None else tuple(self.tex.size)
 
     def fit(self, size: tuple[int, int]) -> moderngl.Framebuffer:
+        """The framebuffer at `size`: the one there is, or a new texture and
+        framebuffer made first and the old pair let go after, so a make
+        that fails leaves the old ones in place."""
         size = (max(int(size[0]), 1), max(int(size[1]), 1))
         if self.fbo is None or self.size != size:
-            self.release()
             tex = self.ctx.texture(size, 4)
             try:
-                self.fbo = self.ctx.framebuffer(color_attachments=[tex])
+                fbo = self.ctx.framebuffer(color_attachments=[tex])
             except Exception:
                 tex.release()
                 raise
-            self.tex = tex
+            self.release()
+            self.tex, self.fbo = tex, fbo
         return self.fbo
 
     def release(self) -> None:
@@ -336,9 +340,14 @@ class Lease:
     `MediaFrame` carries it (`lease`), so the hold lasts exactly as long as
     the frame — a channel's `held` at rate 0, the source's newest — and
     ends when the frame is dropped: CPython frees a frame the moment its
-    last reference goes (no cycle holds one), so `__del__` is prompt. The
-    count is touched on the frame thread alone: frames are made, kept and
-    dropped there."""
+    last reference goes (no cycle holds one), so `__del__` is prompt. A
+    lease is taken on the frame thread (`CanvasTap.lease`, from
+    `gl_poll`), but a frame may be dropped on any thread — the channels'
+    closer, a GC run — so `__del__` touches no count: it hands the slot
+    back on a deque (an atomic append) that the tap drains on the frame
+    thread (`_reap`, in `begin` and `end`). `generation` tells a texture
+    made anew under a name GL gave out before (a resize) from the old one:
+    `media_tex` keys its wrappers on it."""
 
     __slots__ = ("_slot",)
 
@@ -355,21 +364,30 @@ class Lease:
     def size(self) -> tuple[int, int]:
         return tuple(self._slot.off.tex.size)
 
+    @property
+    def generation(self) -> int:
+        return self._slot.gen
+
     def __del__(self):
         try:
-            self._slot.leases -= 1
+            self._slot.returns.append(self._slot)
         except Exception:  # noqa: BLE001, S110 — interpreter shutdown
             pass
 
 
 class _TapSlot:
-    """One of the tap's textures and how many frames hold it."""
+    """One of the tap's textures: how many frames hold it (`leases`, the
+    frame thread's count), the deque a dropped lease hands it back on
+    (`returns`, the tap's), and the generation of its texture (`gen`,
+    bumped by the tap each time the texture is made)."""
 
-    __slots__ = ("leases", "off")
+    __slots__ = ("gen", "leases", "off", "returns")
 
-    def __init__(self, off: Offscreen):
+    def __init__(self, off: Offscreen, returns: deque):
         self.off = off
+        self.returns = returns
         self.leases = 0
+        self.gen = 0
 
 
 class CanvasTap:
@@ -384,24 +402,27 @@ class CanvasTap:
     source (`PanelSource.gl_poll`), so an unlisted source costs nothing.
     `tex` is the texture written last (None before the first), `size` its
     size, `lease()` a hold on it, `frame_no` counts the grabs and `at` is
-    `time.monotonic()` at the last one; `on_page` says whether GRAPH drew
-    on the last frame `replay.grab` saw. The size is the canvas's
-    framebuffer size under `CAP` on its long side (`fit_size`): the
-    projection is scaled, nothing is blitted. A grab that fails is
-    `abort`ed: nothing published, the last frame stands."""
+    `time.monotonic()` at the last one; `allocations` counts the textures
+    made (a lease's `generation` is the count at its texture's making).
+    The size is the canvas's framebuffer size under `CAP` on its long
+    side (`fit_size`): the projection is scaled, nothing is blitted. A
+    grab that fails is `abort`ed: nothing published, the last frame
+    stands."""
 
     CAP = 1280
     SPARE = 1      # free textures kept past the current one, so a steady grab reallocates nothing
 
     def __init__(self, ctx: moderngl.Context | None = None):
         self.ctx = ctx
+        self._returns: deque = deque()       # slots whose leases were dropped, any thread
         self._slots: list[_TapSlot] = (
-            [_TapSlot(Offscreen(ctx)), _TapSlot(Offscreen(ctx))] if ctx is not None else [])
+            [_TapSlot(Offscreen(ctx), self._returns), _TapSlot(Offscreen(ctx), self._returns)]
+            if ctx is not None else [])
         self._cur: _TapSlot | None = None    # written last: what `tex` and `lease` name
         self._next: _TapSlot | None = None   # between `begin` and `end`: being written
         self._prev: Any = None               # what was bound before `begin`, bound again by `end`
         self.wanted = False
-        self.on_page = True
+        self.allocations = 0
         self.frame_no = 0
         self.at = 0.0
         self.error = ""
@@ -432,7 +453,15 @@ class CanvasTap:
         wanted, self.wanted = self.wanted, False
         return wanted
 
+    def _reap(self) -> None:
+        """The leases dropped since last time, counted off on this (the
+        frame) thread."""
+        returns = self._returns
+        while returns:
+            returns.popleft().leases -= 1
+
     def _free(self) -> list[_TapSlot]:
+        self._reap()
         return [s for s in self._slots if s is not self._cur and not s.leases]
 
     def begin(self, size: tuple[int, int]) -> moderngl.Framebuffer:
@@ -447,11 +476,15 @@ class CanvasTap:
         if free:
             slot = free[0]
         else:
-            slot = _TapSlot(Offscreen(self.ctx))
+            slot = _TapSlot(Offscreen(self.ctx), self._returns)
             self._slots.append(slot)
         self._next = slot
         self._prev = slot.off.ctx.fbo
+        was = slot.off.tex
         fbo = slot.off.fit(size)
+        if slot.off.tex is not was:          # made anew (the first time, or a resize)
+            self.allocations += 1
+            slot.gen = self.allocations
         fbo.use()
         fbo.clear(0.0, 0.0, 0.0, 1.0)
         return fbo

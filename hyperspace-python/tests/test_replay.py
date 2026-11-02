@@ -113,16 +113,60 @@ def test_the_projection_maps_the_canvas_rect_onto_clip_space():
 
 def test_grab_takes_the_wish_and_draws_nothing_without_the_page():
     """A wish never outlives its frame: `take` is read whether or not GRAPH
-    drew, so a page left mid-frame leaves no stale draw next frame; and the
-    tap notes whether the page drew (`on_page`, the source's `off page`)."""
+    drew, so a page left mid-frame leaves no stale draw next frame."""
     tap = outputs.CanvasTap()
     tap.want()
     assert replay.grab(tap, None, None, None) is False
     assert tap.wanted is False and tap.tex is None and tap.frame_no == 0
-    assert tap.on_page is False
     assert replay.grab(tap, None, None, ((0, 0), (1, 1), (1, 1), PAGE)) is False   # not wanted
-    assert tap.on_page is True
     assert replay.grab(None, None, None, ((0, 0), (1, 1), (1, 1), PAGE)) is False
+
+
+def test_the_backend_still_has_what_draw_lists_reaches_for():
+    """`draw_lists` uses the programmable renderer's private GL handles and
+    a command's `tex_ref.get_tex_id()`; the module checks them on import
+    and raises naming the missing ones, so a backend rename fails loudly
+    here and not as every grab's `tap.error`."""
+    assert replay.missing_backend_names() == []
+    replay.check_backend()
+
+    class Renamed:
+        def __init__(self):
+            self._shader_handle = self._vao_handle = self._vbo_handle = 0
+            self._elements_handle = self._attrib_proj_mtx = 0     # `_attrib_location_tex` gone
+
+    assert replay.missing_backend_names(Renamed) == ["Renamed._attrib_location_tex"]
+
+
+def test_fit_makes_the_new_texture_before_letting_the_old_one_go():
+    """`Offscreen.fit` at a new size: a make that fails leaves the old
+    texture and framebuffer in place (a frame naming them stays whole)."""
+    made = []
+
+    class Ctx:
+        fbo = None
+
+        def texture(self, size, n):
+            if size == (8, 8):
+                raise RuntimeError("out of memory")
+            t = NS(size=size, released=False)
+            t.release = lambda t=t: setattr(t, "released", True)
+            made.append(t)
+            return t
+
+        def framebuffer(self, color_attachments):
+            f = NS(tex=color_attachments[0], released=False)
+            f.release = lambda f=f: setattr(f, "released", True)
+            return f
+
+    off = outputs.Offscreen(Ctx())
+    fbo = off.fit((4, 4))
+    assert off.tex.size == (4, 4) and off.fit((4, 4)) is fbo
+    with pytest.raises(RuntimeError):
+        off.fit((8, 8))
+    assert off.tex is made[0] and off.fbo is fbo and not made[0].released
+    off.fit((2, 2))
+    assert made[0].released and fbo.released and off.tex.size == (2, 2)
 
 
 def test_a_failing_grab_is_the_taps_error_never_a_raise():
@@ -199,8 +243,10 @@ class Scene:
         self.page = ""
         self.omit = (0, 0)
 
-    def shoot(self, colour=(1, 0, 0, 1), *, want: bool = True, grab=None) -> bool:
+    def shoot(self, colour=(1, 0, 0, 1), *, want: bool = True, grab=None, display=None) -> bool:
         origin, size = self.canvas
+        if display is not None:                   # the window minimised: a 0×0 display
+            imgui.get_io().display_size = imgui.ImVec2(*display)
         imgui.new_frame()
         imgui.set_next_window_pos(imgui.ImVec2(50, 40))
         imgui.set_next_window_size(imgui.ImVec2(300, 220))
@@ -234,7 +280,11 @@ class Scene:
         self.impl.render(dd)                 # the screen, every list — as the app's loop does
         if want:
             self.tap.want()
-        return (grab or replay.grab)(self.tap, self.impl, dd, (origin, size, SCALE, self.page, self.omit))
+        try:
+            return (grab or replay.grab)(self.tap, self.impl, dd, (origin, size, SCALE, self.page, self.omit))
+        finally:
+            if display is not None:
+                imgui.get_io().display_size = imgui.ImVec2(400, 300)
 
     def close(self) -> None:
         self.tap.close()
@@ -260,7 +310,7 @@ def _hold(src_tap):
 
     lease = src_tap.lease()
     return MediaFrame(None, src_tap.at, src_tap.frame_no, texture=lease.texture,
-                      tex_size=lease.size, lease=lease)
+                      tex_size=lease.size, tex_gen=lease.generation, lease=lease)
 
 
 def test_the_canvas_is_replayed_into_the_tap_without_what_lies_over_it(scene):
@@ -313,6 +363,7 @@ def test_a_frame_held_at_rate_0_keeps_its_pixels_beside_a_live_reader(scene):
     assert len(held) == 1 and held[0].leases == 1
     assert np.array_equal(_rgba(held[0].off.tex), red)       # A's bytes unchanged
     del a                                                  # A's rate back up
+    tap._reap()                                            # (the next begin's first step)
     assert held[0].leases == 0
     for _ in range(2):
         assert scene.shoot((0, 0, 1, 1)) is True, tap.error
@@ -335,6 +386,74 @@ def test_a_canvas_resize_leaves_a_held_frame_whole(scene):
     [held] = [s for s in tap._slots if s.off.tex.glo == a.texture]
     assert held.off.tex.size == (400, 240) and np.array_equal(_rgba(held.off.tex), red)
     assert tap.textures == 3
+    # the textures made anew carry a later generation than the held one,
+    # whatever name GL gave them (a reused name is a different object)
+    assert tap.lease().generation > a.tex_gen == a.lease.generation
+    assert tap.allocations == 3                            # the first, then two at the new size (the second slot was never made before)
+
+
+def test_a_frame_dropped_on_another_thread_frees_its_texture_on_the_next_grab(scene):
+    """Leases are dropped wherever the frame is (the channels' closer, a
+    GC run): `__del__` hands the slot back on a deque and the frame thread
+    counts it off in the next `begin`. A frame let go on another thread
+    while grabs run: its texture reads its colour until then, is free
+    after, and the pool is back to two with every lease accounted for."""
+    import threading
+
+    assert scene.shoot() is True, scene.tap.error
+    tap = scene.tap
+    box = [_hold(tap)]
+    name = box[0].texture
+    red = _rgba(tap.tex)
+    dropped = threading.Event()
+
+    def drop():
+        box.clear()                                        # the frame's last reference
+        dropped.set()
+
+    for _ in range(3):
+        assert scene.shoot((0, 0, 1, 1)) is True, tap.error
+    [held] = [s for s in tap._slots if s.off.tex.glo == name]
+    assert np.array_equal(_rgba(held.off.tex), red) and held.leases == 1
+    t = threading.Thread(target=drop)
+    t.start()
+    t.join()
+    assert dropped.is_set() and held.leases == 1           # not counted off yet: the deque has it
+    assert tap._returns and tap._returns[0] is held
+    for _ in range(3):
+        assert scene.shoot((0, 0, 1, 1)) is True, tap.error
+    assert held.leases == 0 and not tap._returns
+    assert tap.textures == 2
+    assert sum(s.leases for s in tap._slots) == 0          # no frame in hand: nothing leased
+
+
+def test_a_begin_that_fails_is_aborted_too(scene, monkeypatch):
+    """`fit` raising inside `begin` (a texture that cannot be made): the
+    grab is aborted — no slot half-begun, nothing published, the screen
+    bound — and the next grab is whole."""
+    assert scene.shoot() is True, scene.tap.error
+    tap = scene.tap
+    good, n = tap.tex, tap.frame_no
+    free = [s for s in tap._slots if s is not tap._cur]
+    monkeypatch.setattr(free[0].off, "fit", lambda size: (_ for _ in ()).throw(RuntimeError("no memory")))
+    assert scene.shoot((0, 0, 1, 1)) is False
+    assert tap.error == "RuntimeError: no memory"
+    assert tap._next is None and tap._prev is None and tap.ctx.fbo is scene.screen
+    assert tap.tex is good and tap.frame_no == n
+    assert tap.lease().texture == good.glo                 # a frame named now is whole
+    monkeypatch.undo()
+    assert scene.shoot((0, 0, 1, 1)) is True and tap.frame_no == n + 1
+
+
+def test_a_minimised_window_grabs_nothing_through_the_real_backend(scene):
+    """`impl.render` returns before `scale_clip_rects` on a 0×0 display;
+    `grab` bails the same way: the wish taken, no error, no frame."""
+    assert scene.shoot() is True, scene.tap.error
+    tap = scene.tap
+    n = tap.frame_no
+    assert scene.shoot((0, 0, 1, 1), display=(0, 0)) is False
+    assert tap.error == "" and tap.wanted is False and tap.frame_no == n
+    assert scene.shoot((0, 0, 1, 1)) is True and tap.frame_no == n + 1
 
 
 def test_a_draw_that_fails_publishes_nothing(scene, monkeypatch):
