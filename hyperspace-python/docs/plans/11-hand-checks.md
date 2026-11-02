@@ -6404,6 +6404,31 @@ header's count shortens to a number rather than run off the edge; in 4
 the side panel lists the Xbox pad's patched ports, no picture (the
 picture is the first pad's).
 
+## AQ. Video audio 1 of 4: the track decoded, nothing audible (plan 45 V1)
+
+**421. Open a show video: nothing audible changes and memory stays flat.** (Mac, a show video of a few minutes with a soundtrack, Activity Monitor)
+Headless: `tests/test_media_audio.py` (`test_a_two_hour_file_holds_one_window_not_the_film`,
+`test_the_window_follows_the_transport`, `test_opening_never_blocks_the_caller`).
+1. Launch; note the app's memory in Activity Monitor. Put a show video with
+   a soundtrack in a channel's bin and slot it; wire the channel to an
+   output.
+2. Let it play 30 s; scrub `pos` across the whole clip; set `rate` to −2,
+   then 0, then 4; switch `loop` to pingpong.
+3. Watch Activity Monitor for a minute; then slot a video with no
+   audio (a GIF or a muted export), then back.
+4. SYSTEM: the frame time.
+
+*Pass:* no sound from the app at any step (the analyzer's WAV file, if one
+is playing, is unchanged); the picture scrubs, reverses and freezes as it
+did before this build; memory rises once by at most ~46 MB a video on the
+first open and then stays flat through the scrubs and the loop (no climb
+with the playhead; the window of a long clip is re-decoded in place); the
+frame time does not move when the clip is slotted or scrubbed; no line
+about audio in the log for the muted file. Fail: a climb in memory with
+time points at `Soundtrack._decode` holding old windows; a hitch on slot
+points at a decode reaching the frame thread (`VideoSource.open` or
+`want` doing more than storing a float).
+
 ## What no test covers
 
 Only a person can settle these:

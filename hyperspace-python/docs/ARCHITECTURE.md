@@ -1702,6 +1702,7 @@ uploaded on it. The threads, by owner:
 |---|---|---|
 | `media-pool*` (3 workers) | still decode, thumbnails, folder scans, live discovery (`discover()` every 2 s), joins of released live sources | `pool.shutdown` at exit |
 | `media-video-<name>` | one video's PyAV decode, driven by `want(pos)` from the transport; stays within one frame of a `close()` | `close()` joins it |
+| `media-audio-<name>` (plan 45 V1) | the same video's audio track, PyAV-decoded and resampled to float32 stereo 48 kHz into memory (`video.Soundtrack`), always from the original file; follows the same `want(pos)` — the transport is the one clock — holding the track whole to 120 s, else a 120 s window around the position (46 MB); `read(at, n)` from any thread is zeros where nothing is held and never blocks; nothing plays yet | `close()` joins it within the video's budget |
 | `media-live-<id>` | a live feed's reader (`NdiReader`: `frame_sync.capture_video()`; `CameraReader`: PyAV `avfoundation`), capped to 1280×720, holding its last frame 1.0 s | released 5 s after nobody holds it, or at exit (1 s in all) |
 | `media-discover-syphon` | the Syphon server list (the main thread's `glfw.poll_events()` pumps the run loop it needs) | with the kind |
 | `media-proxy` | one cancellable transcode at a time | `proxy.cancel_all()` at exit |

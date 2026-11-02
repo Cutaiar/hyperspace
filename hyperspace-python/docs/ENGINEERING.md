@@ -2785,6 +2785,22 @@ never come back and `send` is not read again. To translate an edited
 `send`, remove the role from `"sinks_seeded"`. A `midi-out` entry is a
 sink alone: its own port (§12) and its own sink rows on its role.
 
+**A video's soundtrack** (plan 45 V1; nothing audible yet). A video on
+a channel decodes its audio track to memory beside its picture:
+`VideoSource.audio` is a `Soundtrack` on a thread of its own
+(`media-audio-<name>`), float32 stereo at 48 kHz whatever the file
+(mono doubled, surround downmixed), always from the original file (a
+scrub proxy is MJPEG with no audio). **The media transport is the one
+clock and the sound is its slave**: the soundtrack follows the same
+`want(t)` the picture does and has no clock or playhead of its own; a
+later PR reads it at the transport's position, so scrub, reverse and
+rate will sound like tape. A track of 120 s or less is held whole; a
+longer one as a 120 s window around the position (46 MB for a two-hour
+film, re-decoded in place as the position moves). A file with no track
+is silence, with no line in the log. `src.audio.read(at, n)` is the API
+the mixer (V2) will consume: (n, 2) float32 from sample `at`, zeros
+where nothing is held, never blocking. [`plans/45-video-audio.md`](plans/45-video-audio.md).
+
 ## 14. Outputs
 
 **One output** by default: the render window, from `[output] monitor` /

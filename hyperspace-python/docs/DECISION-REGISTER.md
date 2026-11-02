@@ -586,6 +586,7 @@ here; overturn → the change, then the same.
 | 551 | Plan 42 D8: the pad tape is the one recording format | 415 | (rec) — pending the owner |
 | 552 | Plan 42 D9: the on-screen pad draws the model's own face | 407 | (rec) — pending the owner |
 | 553 | Plan 42 D10: the browser lab is a prototype beside the app | — | (rec) — pending the owner |
+| 562 | Plan 45 V1: a video's audio track decoded to memory as float32 stereo 48 kHz, whole to 120 s, else a 120 s window around the transport's position; the transport is the one clock | 421 | owner's rule (2026-11-02, addendum 8); the policy (rec) |
 
 "—": no hand check shows it; tests only.
 
@@ -9349,3 +9350,31 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
   not report their own bits, sensors on other axes. Each is a constant or
   a table in `pads/`, named there.
 
+
+### 562. Plan 45 V1: a video's audio track in memory, under the transport's clock
+
+- **Asked.** The 2026-10-31 triage: PyAV decoded only the video stream,
+  the proxies carry no audio, and the only output stream was the
+  analyzer's WAV playback. Four PRs: decode (V1), a mixer with per-channel
+  gain and a play-audio toggle (V2), the analyzer on the mix (V3), sync
+  with video as master and varispeed (V4). The owner's rule (2026-11-02,
+  addendum 8): the media transport is the one clock and audio is its
+  slave; the analyzer picks the mix as a source, not a second engine;
+  "no second time base" written into the plan.
+- **Built**, V1 only ([`plans/45-video-audio.md`](plans/45-video-audio.md)):
+  `VideoSource.audio` is a `Soundtrack` on its own thread
+  (`media-audio-<name>`), fed the same `want(t)` as the picture, read by
+  sample position (`read(at, n)`, zeros where nothing is held, never
+  blocking). **The recommendation taken:** float32 stereo at 48 kHz for
+  every file (one rate and layout for the mixer's one buffer; 384 kB a
+  second whatever the file; varispeed resamples at read time anyway),
+  and one memory policy — whole to `AUDIO_WINDOW_S` = 120 s, else a
+  120 s window re-centred when the position is 30 s off its centre, so
+  a two-hour film holds 46 MB. A file with no audio track is silence
+  with no note. Nothing audible changes in V1.
+- **What would overturn it.** The window heard at a loop wrap or a
+  far scrub on a long film (a moment of silence until the window
+  arrives): V4 may prefetch the head or widen the window — each a
+  constant in `media/video.py`. A show library of clips longer than
+  120 s where the re-decode is heard: `AUDIO_WINDOW_S` up, at 384 kB a
+  second.
