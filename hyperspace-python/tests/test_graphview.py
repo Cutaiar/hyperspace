@@ -884,3 +884,12 @@ def test_a_render_nodes_said_is_its_first_line():
     assert getattr(c, "said", "") == ""
     assert graphview.summary(graphview.VNode("render:composite", "render", "composite",
                                              ref=c)) == ["0 params · 0 patched"]
+
+
+def test_a_drops_reach_is_never_under_near_screen_px():
+    """2026-10-31: how near a dropped node must come to a cable (`NEAR`
+    canvas units) grows with the canvas zoomed out, so it is never under
+    `NEAR` screen px; zoomed in it stays `NEAR`."""
+    assert graphview.drop_reach() == graphview.NEAR
+    assert graphview.drop_reach(0.5) == graphview.NEAR
+    assert graphview.drop_reach(4.0) == 4 * graphview.NEAR

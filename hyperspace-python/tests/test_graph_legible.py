@@ -526,6 +526,7 @@ def test_the_smoothed_energy_times_band_patch_from_graph_alone(rig, monkeypatch)
     assert st["open"] == set()                                  # nothing was expanded
     b = router.table.owner("fx.acid.mix")
     assert isinstance(b, Binding) and b.source == combine.address
+    b.motion = None            # the new row's spring off: the chain's arithmetic is under test
     assert [m.inputs for m in router.table.modifiers] == [
         ("hand:right.energy",), (smooth.address, "lane:0")]
     # two stubs where neither stands for one output: still refused, in words
@@ -1132,3 +1133,64 @@ def test_the_side_column_takes_its_width_from_this_mac_and_a_drag(rig):
     assert not st["side_drag"]
     assert ui_graph.read_side(machine) == 520.0           # written when the drag let go
     assert st["details_rect"][1][0] == 520.0
+
+
+# ---------------------------------------------------------------- pin hit targets (2026-10-31)
+
+def test_a_pins_hit_target_is_finger_sized_at_any_zoom():
+    """The show of 2026-10-30: a cable's drag targets were far too small
+    zoomed out. A pin's hit rect is never under `MIN_PX` on screen: its
+    drawn square zoomed well in, `MIN_PX` × the zoom otherwise, held to its
+    row down and to the pins beside it across — never under the square
+    even when those are smaller."""
+    PIN, ROW, px = ui_graph.PIN, graphview.ROW_H, ui_graph.MIN_PX
+    assert px > PIN                          # (so even zoom 1 grows the square)
+    pitch = PIN + 8.0                        # base / mod / depth, an item_spacing apart
+    assert ui_graph.pin_hit_size(PIN / px, ROW, pitch) == (PIN, PIN)   # zoomed in: the square
+    assert ui_graph.pin_hit_size(0.25, ROW, pitch) == (PIN, PIN)
+    assert ui_graph.pin_hit_size(1.0, ROW, pitch) == (pitch, px)       # 22 px: across, the pins touch
+    assert ui_graph.pin_hit_size(1.5, ROW, pitch) == (pitch, min(px * 1.5, ROW))
+    assert ui_graph.pin_hit_size(4.0, ROW, pitch) == (pitch, ROW)
+    reach, head = ui_graph.STUB_REACH, graphview.HEAD_H
+    assert ui_graph.pin_hit_size(4.0, head, reach) == (reach, head)
+    assert reach > 2 * PIN and head > ROW   # a stub's room: outward and the title line
+    for zoom in (0.25, 1.0, 2.0, 4.0, 8.0):
+        w, h = ui_graph.pin_hit_size(zoom, ROW, pitch)
+        assert PIN <= w <= pitch and PIN <= h <= ROW
+        assert w >= min(px * zoom, pitch) and h >= min(px * zoom, ROW)
+    assert ui_graph.pin_hit_size(4.0, 6.0, 6.0) == (PIN, PIN)      # never under the square
+
+
+def test_the_page_sets_each_stubs_hit_rect_outward_at_a_zoomed_out_canvas(rig, monkeypatch):
+    """Drawn for real on the editor at zoom 4 (four canvas units a screen
+    px): every pin drawn (all stubs, the nodes collapsed) sets a hit rect
+    through `ed.pin_rect` — `STUB_REACH` across, the title line down,
+    the in stub's growing left past the node's edge and the out stub's
+    right, so the label and the + button keep their room — and its pivot
+    on the drawn square, so cables attach where they did."""
+    rects, pivots, ids = [], [], []
+    real_begin, real_rect, real_pivot = ed.begin_pin, ed.pin_rect, ed.pin_pivot_rect
+    monkeypatch.setattr(ui_graph.ed, "get_current_zoom", lambda: 4.0)
+    monkeypatch.setattr(ui_graph.ed, "begin_pin", lambda pid, kind: (ids.append(pid.id()),
+                                                                      real_begin(pid, kind)))
+    monkeypatch.setattr(ui_graph.ed, "pin_rect",
+                        lambda a, b: (rects.append((a.x, a.y, b.x, b.y)), real_rect(a, b)))
+    monkeypatch.setattr(ui_graph.ed, "pin_pivot_rect",
+                        lambda a, b: (pivots.append((a.x, a.y, b.x, b.y)), real_pivot(a, b)))
+    st = party(rig)
+    assert st["zoom"] == 4.0
+    seen = len(st["pin_xy"])                 # the last frame's pins
+    assert seen and len(ids) == len(rects) == len(pivots) >= seen
+    ids, rects, pivots = ids[-seen:], rects[-seen:], pivots[-seen:]
+    PIN = ui_graph.PIN
+    for pid, (x0, y0, x1, y1), (px0, py0, px1, py1) in zip(ids, rects, pivots, strict=True):
+        name = st["names"][pid]
+        cx, cy = st["pin_xy"][name]
+        assert (px0, py0, px1, py1) == (cx - PIN / 2, cy - PIN / 2, cx + PIN / 2, cy + PIN / 2)
+        assert x1 - x0 == pytest.approx(ui_graph.STUB_REACH)
+        assert y1 - y0 == pytest.approx(graphview.HEAD_H)
+        assert (y0 + y1) / 2 == pytest.approx(cy)
+        if name == graphview.stub_in(graphview.stub_node(name)):
+            assert x1 == pytest.approx(cx + PIN / 2)      # grown left, past the node's edge
+        else:
+            assert x0 == pytest.approx(cx - PIN / 2)      # grown right

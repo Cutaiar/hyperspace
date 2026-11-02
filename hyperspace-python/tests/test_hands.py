@@ -19,6 +19,7 @@ from hyperspace.hands import signal as hs
 from hyperspace.learn import Learn
 from hyperspace.library import Library
 from hyperspace.midi import MidiIO
+from hyperspace.motion import DEFAULT_ROUTE_FEEL
 from hyperspace.params import Registry, build_registry
 from hyperspace.routing import Binding, Bindings, Router
 from hyperspace.view import ViewState
@@ -476,6 +477,8 @@ def test_learn_takes_the_axis_that_moved_as_a_push_about_the_base(app):
     assert [(b.source, b.op, b.value, b.when) for b in rows] == [
         ("hand:right.pitch", "push", 0.25, None)]
     assert rows[0].rest is None                       # the axis's own rest, each frame
+    assert rows[0].motion == DEFAULT_ROUTE_FEEL       # a new route is the smooth spring
+    rows[0].motion = None                             # off here: the arithmetic is under test
     assert app.table.owner("view.inst_amp") is rows[0]
     assert app.learn.last == ("learned view.inst_amp ← hand right.pitch pushes +0.25 "
                               "(into the preset)")
@@ -552,7 +555,8 @@ def test_learn_passes_the_axiss_centredness_and_the_sessions_depth(tmp_path):
     seen = _spied(app)
     b = _hand_learn(r, app, "view.inst_amp", _rising)
     assert seen == [("hand:right.y", {"when": None, "centred": False, "depth": 0.25})]
-    assert b == Binding("hand:right.y", "view.inst_amp", "position", 1.0)
+    assert b == Binding("hand:right.y", "view.inst_amp", "position", 1.0,
+                        motion=DEFAULT_ROUTE_FEEL)
 
     app, r = make_app(tmp_path / "uncentred"), rig()
     hands.register(app.reg, r.s)
@@ -580,6 +584,8 @@ def test_learn_passes_the_axiss_centredness_and_the_sessions_depth(tmp_path):
     rate.set(1.0)
     b = _hand_learn(r, app, "rot.rate.XY", _rolling)
     assert (b.source, b.op, b.value) == ("hand:right.roll", "push", 0.25)
+    assert b.motion == DEFAULT_ROUTE_FEEL
+    b.motion = None                                          # the figures, not the travel
 
     def reads(deg):                                          # thumb up is + on a right hand
         assert features(hand(normal=rolled(-deg)))["roll"] == pytest.approx(deg)
@@ -791,6 +797,8 @@ def test_a_hand_learn_needs_no_midi_adapter(tmp_path):
             learn=learn, router=router)
     b = table.owner("view.inst_amp")
     assert (b.source, b.op, b.value) == ("hand:right.pitch", "push", 0.25)   # plan 18 WP3
+    assert b.motion == DEFAULT_ROUTE_FEEL
+    b.motion = None                                   # the push's arithmetic, not its travel
     assert learn.learning is None and "learned view.inst_amp" in learn.last
     assert Bindings.load(table.path, legacy_midi=None).owner("view.inst_amp") is None  # the preset's
     run(r, 1, hand(direction=tilt(math.radians(13.0))), learn=learn, router=router)

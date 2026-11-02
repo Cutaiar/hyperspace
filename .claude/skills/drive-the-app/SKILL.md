@@ -67,7 +67,8 @@ worked example.
   `page<n>` (`PAGE_KEYS.index("view")`). A missing id raises with what was
   drawn: read it, it names the right one.
 - **Menus and exact values by keyboard**: `pick` opens a combo and walks
-  it with the arrow keys; `enter` Ctrl+clicks a slider and types. A tapered
+  it with the arrow keys; `enter` Ctrl+clicks a slider and types (Cmd on a
+  Mac, where imgui swaps the two: the driver sends `d.ctrl`). A tapered
   slider takes its detent, not its readout (`view.instances`: 153 is 299).
   `slide` is for showing a drag, not for landing a value.
 - **Input lands a frame late**; every action yields between move, press

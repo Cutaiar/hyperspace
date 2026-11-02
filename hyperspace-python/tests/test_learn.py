@@ -6,13 +6,15 @@ stands for; the referee's refusal is held for the prompt."""
 import json
 from types import SimpleNamespace as NS
 
+import numpy as np
 import pytest
 
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
-from hyperspace.learn import PUSH_DEPTH, Learn, centred_target
+from hyperspace.learn import PUSH_DEPTH, Learn, centred_target, row_for
 from hyperspace.library import Library
+from hyperspace.motion import DEFAULT_ROUTE_FEEL
 from hyperspace.params import Kind, build_registry
 from hyperspace.render import ViewState
 from hyperspace.routing import Binding, Bindings, Router
@@ -148,10 +150,49 @@ def played(rig, u: float, rest: float, lane: int = 3) -> None:
 
 
 def learned(rig, pid: str, source: str = "hand:3", **kw) -> Binding:
+    """A completed learn's row. It lands with the default feel (the owner,
+    2026-10-31: every new route is a spring), checked here and then taken
+    off: the tests below read the row's arithmetic frame by frame, and the
+    spring's travel is test_motion's."""
     rig.learn.arm(pid)
     rig.learn.learn_source(source, **kw)
     assert rig.learn.pending is None and not rig.learn.refused
-    return rig.table.owner(pid)
+    b = rig.table.owner(pid)
+    assert b.motion == DEFAULT_ROUTE_FEEL, pid
+    b.motion = None
+    return b
+
+
+def test_every_learned_row_is_the_smooth_spring_but_an_envelopes(rig):
+    """The owner, 2026-10-31, after the show of the 30th: every new route
+    is a spring — the named `smooth`, no bounce — whatever its op and
+    target: a push (centred or not), the position fader on a one-sided
+    param, the fader on a toggle, an enum, a whole-number param. Only an
+    envelope's row keeps auto: it has an attack and a release of its own.
+    The dataclass default stays None, so a saved row without a feel still
+    reads as auto."""
+    from hyperspace.motion import SPRINGS, Motion, spring_name
+
+    reg = rig.reg
+    assert DEFAULT_ROUTE_FEEL == Motion("spring", dur=0.5, bounce=0.0)
+    assert spring_name(DEFAULT_ROUTE_FEEL.dur, DEFAULT_ROUTE_FEEL.bounce) == "smooth"
+    assert (DEFAULT_ROUTE_FEEL.dur, DEFAULT_ROUTE_FEEL.bounce) == SPRINGS["smooth"]
+    for pid, kw in (("view.speed", {"centred": True}), ("rot.rate.XY", {}),
+                    ("view.bright", {"centred": False}), ("view.bright", {}),
+                    ("view.plane.XY", {}), ("view.shape", {}), ("dream.steps", {})):
+        row = row_for("hand:3", reg[pid], **kw)
+        assert row.motion == DEFAULT_ROUTE_FEEL, (pid, kw)
+        assert row.to_json()["motion"] == {"mode": "spring", "dur": 0.5, "bounce": 0.0}
+    for pid in ("view.bright", "view.speed", "rot.rate.XY", "view.plane.XY", "dream.steps"):
+        assert row_for("env:0", reg[pid]).motion is None, pid       # on any target
+    # through a Learn, the row the table keeps carries it
+    rig.learn.arm("view.bright")
+    rig.learn.learn_source("hand:7")
+    assert rig.table.owner("view.bright").motion == DEFAULT_ROUTE_FEEL
+    # a row from a file with no feel is still auto, and files no feel
+    old = Binding.from_json({"source": "hand:3", "target": "view.speed", "op": "push",
+                             "value": 0.25})
+    assert old.motion is None and "motion" not in old.to_json()
 
 
 def test_a_centred_axis_learns_as_a_push_about_the_base_at_the_learn_depth(rig):
@@ -257,6 +298,56 @@ def test_a_discrete_target_keeps_the_position_row(rig):
     assert PUSH_DEPTH * 0.5 < MOD_ON             # why: half a throw of the push from "off"
 
 
+def test_a_band_lane_and_an_lfo_land_as_calm_pushes_about_the_base(rig):
+    """The owner, after the show of 2026-10-30: band routes far too hot.
+    A lane reads `band / CEIL` (≈ 0.385 nominal), so the `position` row it
+    used to land on a one-sided param parked it at ~38 % of its throw and
+    threw the base away; an LFO (0 … 1) as the fader swept the whole
+    throw. Now a lane is a push about the base at `LANE_DEPTH` (0.12) and
+    an LFO a push at `PUSH_DEPTH` (0.25), on any continuous target —
+    centred or not — with no rest of their own; a discrete target keeps
+    the fader, as a push never crosses its hysteresis. The two depths in
+    the owner's numbers: a nominal band adds 0.12 · 0.385 ≈ 0.046 of the
+    throw, where a push at 0.5 added 0.19."""
+    from hyperspace.bands import CEIL
+    from hyperspace.learn import LANE_DEPTH, LANE_SCHEME, row_for
+
+    reg = rig.reg
+    assert LANE_DEPTH == 0.12 and LANE_SCHEME == "lane"
+    assert LANE_DEPTH * (1.0 / CEIL) == pytest.approx(0.046, abs=0.001)
+    for pid in ("view.bright", "view.speed", "fx.mix", "camera.zoom",        # one-sided
+                "rot.rate.XY", "camera.yaw", "camera.pan.x"):               # centred on zero
+        p = reg[pid]
+        for centred in (False, True):
+            lane = row_for("lane:2", p, centred=centred)
+            assert (lane.op, lane.value, lane.rest) == ("push", LANE_DEPTH, None), (pid, centred)
+            osc = row_for("lfo:0", p, centred=centred)
+            assert (osc.op, osc.value, osc.rest) == ("push", PUSH_DEPTH, None), (pid, centred)
+        # a depth the caller names still wins, as for a hand
+        assert row_for("lane:2", p, depth=0.3).value == pytest.approx(0.3)
+        assert row_for("lfo:0", p, depth=0.3).value == pytest.approx(0.3)
+    for pid in ("view.plane.XY", "view.shape", "camera.reset", "dream.steps"):   # discrete
+        for src in ("lane:2", "lfo:0"):
+            assert (row_for(src, reg[pid]).op, row_for(src, reg[pid]).value) == \
+                ("position", 1.0), (pid, src)
+    # a lane's push in the preset's own arithmetic: the base shows through
+    p = reg["view.bright"]
+    p.set(0.5)
+    base = p.norm
+    row = row_for("lane:3", p)
+    row.motion = None            # the push's sum, whatever feel a new row is made with
+    rig.table.add(row)
+    router = Router(reg, rig.table)
+    lanes = np.zeros(8)
+    router.modulate(NS(lanes=lanes))
+    reg.apply()
+    assert p.eff_norm == pytest.approx(base)                     # silence: the base
+    lanes[3] = 1.0                                               # a nominal band
+    router.modulate(NS(lanes=lanes))
+    reg.apply()
+    assert p.eff_norm == pytest.approx(base + LANE_DEPTH / CEIL, abs=1e-6)
+
+
 def test_a_whole_number_param_keeps_the_position_row(rig):
     """Review of PR #100: a whole-number param is stepped too. A push of
     0.25 about `dream.steps` (1–3) is a quarter of a step each way and
@@ -356,7 +447,8 @@ def test_a_learn_onto_a_performed_param_is_still_held_whatever_the_op(rig):
     lrn.arm("rot.rate.XY")
     lrn.learn_source("hand:3", centred=True, depth=0.25)
     new, cur = lrn.pending
-    assert cur is old and new == Binding("hand:3", "rot.rate.XY", "push", 0.25)
+    assert cur is old and new == Binding("hand:3", "rot.rate.XY", "push", 0.25,
+                                         motion=DEFAULT_ROUTE_FEEL)
     assert "replace?" in lrn.last and t.owner("rot.rate.XY") is old
     assert t.owner("view.bright") is mine                      # nothing moved while it asks
     assert lrn.resolve_pending(False) is None and t.owner("view.bright") is mine   # Keep
@@ -509,7 +601,8 @@ def test_a_hand_learn_writes_a_route_into_the_loaded_preset(tmp_path):
     assert table.owner("view.inst_amp") is new and b not in table.bindings and untouched(r)
     path = r.presets.save_as("HANDS")
     routes = json.loads(path.read_text())["routes"]
-    assert {"source": "hand:7", "target": "view.inst_amp", "op": "position"} in routes
+    assert {"source": "hand:7", "target": "view.inst_amp", "op": "position",
+            "motion": {"mode": "spring", "dur": 0.5, "bounce": 0.0}} in routes
     assert not lib.is_dirty("presets") and untouched(r)
     lrn.arm("view.speed")
     lrn.learn_source("hand:9")

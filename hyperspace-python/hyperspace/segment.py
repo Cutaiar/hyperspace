@@ -28,7 +28,11 @@ imported there and never on `import hyperspace.app` (tests/test_app_boundary.py)
   quality level (`alloc().initWithCompletionHandler_(None)`; `init` and
   `new` are unavailable), a `CGImage` from the frame's bytes, the result's
   `CVPixelBuffer` (`L008`, one byte a pixel) locked, read into numpy and
-  unlocked. Vision's mask has a fixed size per level (256×192, 512×384,
+  unlocked. Each run is under an `objc.autorelease_pool`: the worker's
+  thread is Python's, with no pool of its own, and without one every
+  autoreleased object of a run (the frame's NSData copy first of all)
+  leaked for the life of the process — ~1 MB a job, 140 GB over a
+  half-hour set (2026-11-01). Vision's mask has a fixed size per level (256×192, 512×384,
   2016×1512) stretched over the whole image, so it is resampled here to
   the frame's aspect at its own width: a consumer fits it by cover, as it
   fits every mask.
@@ -144,13 +148,16 @@ class VisionBackend(Backend):
     def __init__(self) -> None:
         self._requests: dict[str, Any] = {}
         self._vision = self._quartz = self._nsdata = None
+        self._pool = None               # `objc.autorelease_pool`, once open
 
     def open(self) -> None:
+        import objc
         import Quartz
         import Vision
         from Foundation import NSData
 
         self._vision, self._quartz, self._nsdata = Vision, Quartz, NSData
+        self._pool = objc.autorelease_pool
 
     def _request(self, quality: str):
         req = self._requests.get(quality)
@@ -188,6 +195,17 @@ class VisionBackend(Backend):
             q.CVPixelBufferUnlockBaseAddress(pb, 1)
 
     def run(self, frame: np.ndarray, quality: str = "fast") -> np.ndarray:
+        # Every run under its own autorelease pool (2026-11-01): the worker is
+        # a plain Python thread, which has none, and without one each
+        # autoreleased object — the NSData holding the frame's copy, the
+        # results array, the matte's pixel buffer — lives for ever: ~1 MB a
+        # job at fast, 3 at accurate, tens of GB over a set with two
+        # segment nodes near frame rate. The mask is copied out (`_pixels`)
+        # before the pool drains.
+        with self._pool():
+            return self._run_pooled(frame, quality)
+
+    def _run_pooled(self, frame: np.ndarray, quality: str) -> np.ndarray:
         quality = quality_of(quality)
         req = self._request(quality)
         handler = self._vision.VNImageRequestHandler.alloc().initWithCGImage_options_(

@@ -20,7 +20,9 @@ from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel 
 
 from hyperspace import routing, ui_graph, ui_presets, ui_routing
 from hyperspace.bands import CEIL
+from hyperspace.learn import LANE_DEPTH
 from hyperspace.library import LibraryError
+from hyperspace.motion import DEFAULT_ROUTE_FEEL
 from hyperspace.params import Kind
 from hyperspace.routing import Binding, Bindings, Router
 from hyperspace.ui import PAGE_KEYS
@@ -91,8 +93,9 @@ def test_routing_add_and_delete(rig, tmp_path):
     panel, reg = rig.panel, rig.reg
     router = _with_router(rig, tmp_path)
     frame(panel, "routing")
-    b = ui_routing.add_route(panel, "view.bright")
+    b = ui_routing.add_route(panel, "view.bright", depth=0.5)
     assert b.source == "lane:0" and b.op == "push" and b.value == 0.5
+    assert b.motion == DEFAULT_ROUTE_FEEL        # 2026-10-31: a new route is the smooth spring
     assert router.table.routes_to("view.bright") == [b]
     frame(panel)
     reg["band.select"].set(3)
@@ -102,6 +105,25 @@ def test_routing_add_and_delete(rig, tmp_path):
     router.table.remove(b)
     assert not router.table.routes_to("view.bright") and b2 in router.table.routes()
     frame(panel)
+
+
+def test_route_a_lane_here_lands_at_lane_depth(rig, tmp_path):
+    """The owner, after the show of 2026-10-30: band routes far too hot.
+    "Route a lane here…" (`add_route` with no depth) is a push at
+    `learn.LANE_DEPTH`, the depth a lane lands at from a GRAPH cable too
+    (`learn.row_for`) — it was a hand-written 0.5, 0.19 of the throw per
+    nominal band."""
+    from hyperspace.learn import row_for
+
+    panel, reg = rig.panel, rig.reg
+    router = _with_router(rig, tmp_path)
+    frame(panel, "routing")
+    reg["band.select"].set(2)
+    b = ui_routing.add_route(panel, "view.bright")
+    assert (b.source, b.op, b.value, b.rest) == ("lane:2", "push", LANE_DEPTH, None)
+    assert router.table.owner("view.bright") is b
+    cable = row_for("lane:2", reg["view.bright"])
+    assert (cable.op, cable.value) == (b.op, b.value)
 
 
 def _on_disk(tmp_path):
