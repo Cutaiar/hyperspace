@@ -73,7 +73,19 @@ import moderngl
 from imgui_bundle import imgui
 from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
 
-from . import config, devices, envelope, gamepad, geometry, lfo, placement, sequencer, tempo, undo
+from . import (
+    config,
+    devices,
+    envelope,
+    gamepad,
+    geometry,
+    lfo,
+    placement,
+    replay,
+    sequencer,
+    tempo,
+    undo,
+)
 from .audio import AudioEngine
 from .bands import CEIL
 from .control import Control
@@ -89,7 +101,9 @@ from .media import proxy as media_proxy
 from .media import publish
 from .media.channels import MediaState
 from .media.folder import MediaFolder
-from .outputs import Offscreen, Presenter, Preview, Slot, Switches, View
+from .media.panel import GRAPH as PANEL_GRAPH
+from .media.panel import PanelSource
+from .outputs import CanvasTap, Offscreen, Presenter, Preview, Slot, Switches, View
 from .overlay import RENDER_DEFAULT, GlfwBackend, Output, register_switches, render_index
 from .params import Registry, build_registry
 from .pinch import install as install_pinch
@@ -172,9 +186,12 @@ class MediaResolver:
     downloading opens afresh (final review A-I1); `status` is the scan's
     word on a file (`fetching` is never opened)."""
 
-    def __init__(self, folder: MediaFolder, devices=None):
+    def __init__(self, folder: MediaFolder, devices=None, builtin: dict | None = None):
         self.folder = folder
         self.devices = devices
+        # the app's own pictures (2026-11-02): `panel:graph` → its `PanelSource`,
+        # the one object every call, so `channels._stale` keeps it
+        self.builtin: dict = dict(builtin or {})
 
     @property
     def proxy_cache(self) -> Path:
@@ -184,6 +201,9 @@ class MediaResolver:
         return self.folder.path(sid)
 
     def live(self, sid: str):
+        own = getattr(self, "builtin", {}).get(sid)
+        if own is not None:
+            return own
         reg = getattr(self, "devices", None)
         return None if reg is None else reg.media_feeds().get(sid)
 
@@ -1321,7 +1341,13 @@ def main() -> None:
     # rate — so it paces itself off the render window.
     glfw.make_context_current(ctrl_win)
     glfw.swap_interval(0)
-    ui_gl = moderngl.create_context()  # a handle on the control context; it only clears
+    # a handle on the control context: it clears the window each frame and
+    # owns the GRAPH canvas's tap textures (`CanvasTap`, 2026-11-02), which
+    # `replay.grab` draws into after imgui's render. Rebinding its `screen`
+    # through moderngl reapplies the viewport moderngl noted at creation,
+    # not the window's size now; `grab` puts the viewport back itself, and
+    # the backend's `impl.render` sets its own at the start of every frame
+    ui_gl = moderngl.create_context()
     ui_ctx = imgui.create_context()
     apply_style()
     load_fonts()
@@ -1407,6 +1433,7 @@ def main() -> None:
     panel.outputs = slots                  # the OUTPUT page: a block per output (plan 21 WP4)
     panel.preview = Preview(ctx)           # output 1 behind the GRAPH page (2026-10-26)
     panel.monitor = Preview(ctx)           # plan 38: while held, the projector's inset there
+    panel.canvas_tap = CanvasTap(ui_gl)    # the GRAPH canvas as `panel:graph` (2026-11-02)
     panel.hold = hold
     router = Router(reg, table)
     router.use_lfos(lfos, clock)           # they step inside the pass (plan 28 N0)
@@ -1458,6 +1485,9 @@ def main() -> None:
     renderer.cloud_source = rig              # cloud:<role> → the scene's point clouds (A4b)
     renderer.rig_source = library.project    # the show's own wires: the bus cables (plan 36 T1)
     media.state.resolver.devices = rig       # ndi: / syphon: / camera: ids → live feeds (plan 32 T8)
+    # the GRAPH canvas (2026-11-02); `on_page` is the panel's own fact, read
+    media.state.resolver.builtin[PANEL_GRAPH] = PanelSource(
+        panel.canvas_tap, on_page=lambda: panel.canvas_px is not None)
     panel.hand_settings = hand_settings
     dream_io, panel.dream_error = _open_dream(reg, cfg)
     if dream_io is not None:            # what the dream node dreams with (plan 36 T4)
@@ -1658,6 +1688,9 @@ def main() -> None:
 
         imgui.render()
         impl.render(imgui.get_draw_data())
+        # the GRAPH canvas into its tap, from the lists just drawn, on a frame
+        # a channel asked for `panel:graph` (replay.py, 2026-11-02)
+        replay.grab(panel.canvas_tap, impl, imgui.get_draw_data(), panel.canvas_px)
         glfw.swap_buffers(ctrl_win)
         watchdog.pet(now)          # a frame completed: one float write
 
