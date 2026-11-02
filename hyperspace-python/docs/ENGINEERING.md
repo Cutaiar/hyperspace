@@ -877,6 +877,41 @@ give an old preset's effect without a saved order its place in that
 preset's run; where an effect sits now is its wires. A new effect file
 needs no `@order`.
 
+**No shader multiplies time by a param** (the owner, 2026-11-02, after
+the 2026-10-30 show; register row 560). `u_phase * u_drift` reads as a
+rate, but `u_phase` is the integrated clock, so a knob step of Δdrift
+shifts the field by `phase × Δdrift` — whole screens, hours into a set.
+A rate-like param is integrated by the host instead: `// @clock
+<uniform> <rate-param> [period]` at the top of an effect file declares a
+phase `FxState.advance` moves every frame by `speed × <rate-param> × dt`
+(the rate is one of the file's own `@param` keys; the effect's speed
+fader still scales it, as it scaled `u_phase`), wrapped to `[0, period)`
+when a period is given (`tau` or a number; for a shader reading it
+through `sin` or `fract`), running on like `u_phase` when not (a scrolled
+noise field has no period). fx.py declares the uniform beside `u_phase`
+(the file must not) and binds it each pass; while the knob is still the
+clock equals what `u_phase * u_drift` was, so a port changes no picture
+at rest. The phases live on `FxState.clocks` (per instance; kept across
+an edit that keeps the clock; made on first use after a hot reload, as
+`_t_last` is). `tests/test_shader_time_lint.py` (`tests/shader_lint.py`)
+holds every shipped effect file and the face programs to the rule — a
+product of a time symbol (`u_time`, `u_phase`, `u_ptime`, a `@clock`
+uniform, or a local carrying one) and a param symbol (an `@param`
+uniform, the patterns' `m_*()` accessors, or a local carrying one), with
+every call but a constructor opaque, so `u_amount * sin(u_phase)` is an
+amplitude and passes — with an allowlist of today's offenders as exact
+(shader, param) pairs: `warp` × `u_drift`, `warp` × `u_scale`,
+`tripcolour` × `u_pulse`, the RINGS pattern × `m_colour`; K2 (warp,
+tripcolour), K3 (`view.media_rate`, `view.inst_rate`, Python-side) and
+K4 (the grids, RINGS) shrink it to empty. `tests/uv_flow.py` is the
+continuity harness: an effect run over a UV-encoded source gives its
+sampling field exactly, and the mean displacement between consecutive
+frames (an optical-flow proxy with the flow known) on the frame a param
+is stepped is compared with the still frames' — bounded (the speed, a
+`@clock`) or a jump (`u_phase * u_drift`, about 15 px at amount 2 against
+a drift of 0.05 px a frame, an hour in); `tests/test_fx_clock.py` proves
+it on a synthetic pair and keeps warp's drift as a strict xfail for K2.
+
 **The palette** (plan 24, `shaders/fx/palette.glsl`, `@order 95` (read only by the migration, which puts it last in an old preset's run),
 so, unplaced, last in the chain, after the look-back and before the dim — and
 before the hands unless an output sends them through the effects; plan

@@ -43,6 +43,28 @@ effect's: ``fx.on`` (bypass everything), ``fx.mix`` (scales every
 effect's mix — one fader that fades the whole trip in) and
 ``fx.face_map`` (how the faces show a picture wired into them).
 
+**No shader multiplies time by a param** (the owner, 2026-11-02, after
+the show of 2026-10-30: ``u_phase * u_drift`` shifts the field by
+``phase × Δdrift`` — whole screens, hours into a set — on one knob step).
+A rate-like param is integrated here and the shader reads the phase::
+
+    // @clock u_drift_t drift          a second clock: u_drift_t += speed × drift × dt
+    // @clock u_pulse_t pulse tau      …wrapped to 2π (any period > 0, or `tau`)
+
+``@clock <uniform> <rate-param> [period]``: the uniform (``u_…``, one
+the file does not declare — this module does, beside ``u_phase``) is a
+phase this module integrates every frame, ``speed × <rate-param> × dt``
+(the rate is one of the file's own ``@param`` keys, and the effect's
+speed fader still scales it, as it scaled ``u_phase``), so while the knob
+is still ``u_drift_t`` equals today's ``u_phase * u_drift``, and when the
+knob moves only the rate changes, never where the field is. With a
+period the phase is kept in ``[0, period)``, for a shader that reads it
+through ``sin`` or ``fract``; without one it runs on like ``u_phase``
+(a scrolled noise field has no period to wrap to). The phases live on
+``FxState.clocks`` and survive a hot reload of this module as the speed
+phases do; ``tests/test_shader_time_lint.py`` holds every shipped shader
+to the rule.
+
 Plan 33 (rows 341–349): an effect exists where the preset's graph wires
 it — the run ``frame → … → fx.image`` each pipeline draws, a branch onto
 the faces (``shape.faces``), the pattern's layer, the backdrop, an output
@@ -102,7 +124,8 @@ AMOUNT_OCTAVES = 10
 RELOAD_EVERY = 30               # frames between mtime checks of the folder
 
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
-_DIRECTIVE = re.compile(r"^\s*//\s*@(label|order|blend|speed|mix|tip)\s+(.*?)\s*$")
+_DIRECTIVE = re.compile(r"^\s*//\s*@(label|order|blend|speed|mix|tip|clock)\s+(.*?)\s*$")
+_CLOCK_UNIFORM = re.compile(r"^u_[a-z][a-z0-9_]*$")
 _UNIFORM = re.compile(r"^\s*uniform\s+(float|int)\s+(u_\w+)\s*;\s*//\s*@param\s+(.*?)\s*$")
 _CHOICE = re.compile(
     r"^choice\s+\[(?P<names>[^\]]*)\]\s+(?P<default>\d+)\s+\"(?P<label>[^\"]+)\"\s*(?P<tip>.*)$"
@@ -143,6 +166,15 @@ class ParamSpec:
     amount: bool = False            # 0 … hi on the zero-safe log taper (wave 0 T1)
 
 
+@dataclass(frozen=True)
+class ClockSpec:
+    """One `@clock` line: a phase this module integrates and binds."""
+
+    uniform: str            # the uniform the shader reads (`u_…`), declared by this module
+    rate: str               # the @param key whose value is the rate, × the effect's speed
+    period: float | None    # wrap to [0, period); None runs on like u_phase
+
+
 @dataclass
 class EffectSpec:
     """One effect file, parsed."""
@@ -158,13 +190,15 @@ class EffectSpec:
     speed: float = 1.0
     mix: float = 1.0         # the default wet/dry (@mix); 0 for a pass that starts as a no-op
     tip: str = ""
+    clocks: list[ClockSpec] = field(default_factory=list)   # `@clock` lines, in file order
 
     def signature(self) -> tuple:
         """What the registry declares from this spec — a change means re-declare."""
         return (self.label, self.tip, self.order, self.blend, self.speed, self.mix,
                 tuple((p.key, p.label, p.lo, p.hi, p.default, p.integer, p.log, p.wrap, p.tip,
                        p.choices, p.amount)
-                      for p in self.params))
+                      for p in self.params),
+                tuple((c.uniform, c.rate, c.period) for c in getattr(self, "clocks", ())))
 
 
 def _check_key(name: str, n: int, key: str, seen: set[str]) -> None:
@@ -176,6 +210,67 @@ def _check_key(name: str, n: int, key: str, seen: set[str]) -> None:
         # is the second acid — so no key may be one
         raise SpecError(f"{name}:{n}: u_{key} — a key of digits alone would read as an "
                         "instance number (fx.<file>.2 is the second instance)")
+
+
+def _parse_clock(name: str, n: int, val: str) -> ClockSpec:
+    """`@clock <uniform> <rate-param> [period]` → its spec, the rate still
+    to be checked against the file's params (`_check_clocks`)."""
+    words = val.split()
+    if len(words) not in (2, 3):
+        raise SpecError(f"{name}:{n}: @clock wants <u_uniform> <rate-param> [period]")
+    uniform, rate = words[0], words[1]
+    if not _CLOCK_UNIFORM.match(uniform):
+        raise SpecError(f"{name}:{n}: @clock {uniform} — a clock's uniform is u_lower_snake")
+    if uniform in HEAD_UNIFORMS:
+        raise SpecError(f"{name}:{n}: @clock {uniform} — every effect already has it")
+    period: float | None = None
+    if len(words) == 3:
+        word = words[2].lower()
+        try:
+            period = math.tau if word == "tau" else float(word)
+        except ValueError as e:
+            raise SpecError(f"{name}:{n}: @clock {uniform} — bad period {words[2]!r}") from e
+        if not math.isfinite(period):       # `x %= inf` is inf for a backwards rate
+            raise SpecError(f"{name}:{n}: @clock {uniform} — a period is finite and > 0 (or `tau`)")
+        if not period > 0.0:
+            raise SpecError(f"{name}:{n}: @clock {uniform} — a period is > 0 (or `tau`)")
+    # the rate as written: a key, or a uniform — resolved against the
+    # file's params once they are all read (`_check_clocks`)
+    return ClockSpec(uniform=uniform, rate=rate, period=period)
+
+
+_DECLARED = re.compile(r"\buniform\s+\w+\s+(u_\w+)\s*(?:\[[^\]]*\])?\s*;")
+
+
+def _declared_uniforms(source: str) -> set[str]:
+    """Every uniform the file's code declares — comments removed first, so
+    a comment that mentions a declaration is not one."""
+    code = re.sub(r"/\*.*?\*/", " ", source, flags=re.DOTALL)
+    code = re.sub(r"//[^\n]*", "", code)
+    return set(_DECLARED.findall(code))
+
+
+def _check_clocks(name: str, spec: EffectSpec) -> None:
+    """Every `@clock`'s rate is one of the file's own @param — the word as
+    written is a key first, then a param's uniform (a key may itself start
+    with `u_`) — its uniform is no param's, no other clock's and not
+    declared by the file (this module declares it, beside u_phase)."""
+    keys = {p.key for p in spec.params}
+    by_uniform = {p.uniform: p.key for p in spec.params}
+    declared = _declared_uniforms(spec.source)
+    seen: set[str] = set()
+    for k, c in enumerate(spec.clocks):
+        rate = c.rate if c.rate in keys else by_uniform.get(c.rate)
+        if rate is None:
+            raise SpecError(f"{name}: @clock {c.uniform} — its rate {c.rate!r} is no @param of "
+                            "this file (a clock runs at speed × one of the file's own params)")
+        if c.uniform in by_uniform or c.uniform in seen:
+            raise SpecError(f"{name}: @clock {c.uniform} — that uniform is taken")
+        if c.uniform in declared:
+            raise SpecError(f"{name}: @clock {c.uniform} — leave the uniform undeclared: fx.py "
+                            "declares every clock beside u_phase")
+        seen.add(c.uniform)
+        spec.clocks[k] = replace(c, rate=rate)
 
 
 def parse(name: str, source: str) -> EffectSpec:
@@ -201,6 +296,10 @@ def parse(name: str, source: str) -> EffectSpec:
                     spec.mix = max(0.0, min(float(val), 1.0))
                 elif key == "blend":
                     spec.blend = BLENDS.index(val.lower())
+                elif key == "clock":
+                    spec.clocks.append(_parse_clock(name, n, val))
+            except SpecError:
+                raise                       # already says what is wrong
             except ValueError as e:
                 raise SpecError(f"{name}:{n}: bad @{key} {val!r}") from e
             continue
@@ -250,6 +349,7 @@ def parse(name: str, source: str) -> EffectSpec:
         ))
     if not re.search(r"\bvec4\s+effect\s*\(", source):
         raise SpecError(f"{name}: no 'vec4 effect(vec2 uv)'")
+    _check_clocks(name, spec)
     return spec
 
 
@@ -290,6 +390,9 @@ class FxState:
         self.held: frozenset[str] | None = None
         self.values: dict[str, dict[str, Any]] = {}
         self.phase: dict[str, float] = {}
+        # the `@clock` phases: effect name → uniform → phase (read through
+        # `_clocks`: an FxState from before a hot reload has no dict yet)
+        self.clocks: dict[str, dict[str, float]] = {}
         self.errors: dict[str, str] = {}       # file → why it is not loaded
         self.lib = ""                          # _lib.glsl's text
         self.common = ""                       # shaders/_common.glsl's text
@@ -352,6 +455,7 @@ class FxState:
             changed.add(name)
             self.values.pop(name, None)
             self.phase.pop(name, None)
+            self._clocks().pop(name, None)
         for name, spec in found.items():
             old = self.specs.get(name)
             if old is None or old.signature() != spec.signature():
@@ -422,6 +526,7 @@ class FxState:
             del self.specs[name]
             self.values.pop(name, None)
             self.phase.pop(name, None)
+            self._clocks().pop(name, None)
         for name, spec in want.items():
             if name not in self.specs:
                 changed.add(name)
@@ -447,6 +552,21 @@ class FxState:
             v[p.key] = round(x) if p.integer else float(x)
         self.values[name] = v
         self.phase.setdefault(name, 0.0)
+        # a `@clock` keeps its phase across an edit that keeps the clock;
+        # one the edit dropped is forgotten, one it added starts at 0
+        clocks = self._clocks()
+        had = clocks.get(name, {})
+        clocks[name] = {c.uniform: had.get(c.uniform, 0.0)
+                        for c in getattr(spec, "clocks", ())}
+
+    def _clocks(self) -> dict[str, dict[str, float]]:
+        """The `@clock` phases, made on first use: an FxState built before
+        a hot reload of this module has no `clocks` yet (its __init__ does
+        not re-run), and the speed phases in `phase` are kept the same way."""
+        clocks = getattr(self, "clocks", None)
+        if clocks is None:
+            clocks = self.clocks = {}
+        return clocks
 
     def poll(self) -> set[str]:
         """Pick up edited, added and removed files; re-declare what changed."""
@@ -475,9 +595,22 @@ class FxState:
 
     def advance(self, dt: float) -> None:
         """Every effect's clock by dt at its speed — on or not, so an effect
-        switched on mid-set is already moving."""
+        switched on mid-set is already moving — and each of its `@clock`
+        phases by dt × speed × its rate param, wrapped to its period when it
+        has one. The rule (DECISIONS, "Effects"): a rate-like param is
+        integrated here, never multiplied into a time in the shader, so a
+        knob step changes the rate and never where the field is."""
+        clocks = self._clocks()
         for n, v in self.values.items():
-            self.phase[n] = self.phase.get(n, 0.0) + dt * v["speed"]
+            speed = v["speed"]
+            self.phase[n] = self.phase.get(n, 0.0) + dt * speed
+            spec = self.specs.get(n)
+            for c in (getattr(spec, "clocks", None) or ()):
+                ph = clocks.setdefault(n, {})
+                x = ph.get(c.uniform, 0.0) + dt * speed * float(v.get(c.rate, 0.0))
+                if c.period:
+                    x %= c.period
+                ph[c.uniform] = x
 
     def advance_to(self, t: float) -> float:
         """Every effect's clock up to the frame time `t`: advance(dt) with
@@ -659,6 +792,16 @@ uniform ivec2 u_origin;    // the target rect's origin (gl_FragCoord is window-r
 in vec2 v_uv;
 out vec4 f_color;
 """
+# the uniforms every effect has: a `@clock` may not take one of their names
+HEAD_UNIFORMS = frozenset(re.findall(r"^uniform\s+\w+\s+(u_\w+)\s*;", FS_HEAD, re.MULTILINE))
+
+
+def clock_declarations(clocks) -> str:
+    """The `uniform float u_…;` lines for an effect's `@clock`s, part of
+    the head (string 0), so a compile error's line numbers are the file's."""
+    return "".join(f"uniform float {c.uniform};   // @clock: integrated by fx.py\n"
+                   for c in clocks)
+
 
 FS_TAIL = """
 // the pixel under this one, 1:1 by texelFetch when the source is the
@@ -701,10 +844,13 @@ void main() {
 """
 
 
-def fragment_source(lib: str, effect: str, shared: str | None = None) -> str:
+def fragment_source(lib: str, effect: str, shared: str | None = None, clocks=()) -> str:
+    """The whole fragment shader of an effect: the head (with the file's
+    `@clock` uniforms declared), the shared helpers, the lib, the file,
+    the tail."""
     shared = common() if shared is None else shared
-    return (f"{FS_HEAD}#line 1 1\n{shared}\n#line 1 2\n{lib}\n#line 1 3\n{effect}\n"
-            f"#line 1 4\n{FS_TAIL}")
+    return (f"{FS_HEAD}{clock_declarations(clocks)}#line 1 1\n{shared}\n#line 1 2\n{lib}\n"
+            f"#line 1 3\n{effect}\n#line 1 4\n{FS_TAIL}")
 
 
 class FxChain:
@@ -823,9 +969,13 @@ class FxChain:
         self._set(prog, "u_aux", 1)
         self._set(prog, "u_aux_on", 0)
         self._set(prog, "u_aux_size", (0.0, 0.0))
-        for p in st.specs[name].params:
+        spec = st.specs[name]
+        for p in spec.params:
             x = v[p.key]
             self._set(prog, p.uniform, round(x) if p.integer else float(x))
+        clocks = getattr(st, "clocks", None) or {}
+        for c in getattr(spec, "clocks", None) or ():
+            self._set(prog, c.uniform, float(clocks.get(name, {}).get(c.uniform, 0.0)))
 
     def ready(self, name: str) -> bool:
         """Whether effect `name` has a program to run (built now if it has
@@ -887,7 +1037,7 @@ class FxChain:
         spec = st.specs.get(name)
         if spec is None:
             return None
-        src = fragment_source(st.lib, spec.source, st.common)
+        src = fragment_source(st.lib, spec.source, st.common, getattr(spec, "clocks", ()))
         key = spec.name                 # the file: every instance of it runs one program (A4)
         have = self._progs.get(key)
         if (have is None or have[0] != src) and self._tried.get(key) != src:

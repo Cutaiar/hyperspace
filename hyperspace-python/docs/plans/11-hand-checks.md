@@ -6440,6 +6440,35 @@ same amount; between rest and the top the curve differs a little (the
 new taper's), by eye the same gesture; (6) the depth reads about 0.074,
 where the file said 0.3 before (the tool's line: `push 0.3 → 0.0737 about
 0.9`).
+## AR. Continuity: `@clock`, and no shader multiplies time by a param
+Register row 560 (the owner, 2026-11-02; wave 0 K1, `wave0/k1-clock-directive`).
+K1 is the framework only — the directive, the lint and the harness; **no
+shipped effect is ported yet**, so this check waits for K2 (warp and
+tripcolour on `@clock`). Until then the headless proof is
+`tests/test_fx_clock.py` (a synthetic `@clock` effect beside its
+`u_phase * u_rate` twin through the UV harness; warp's drift as a strict
+xfail) and `tests/test_shader_time_lint.py` (the allowlist of today's
+offenders).
+**419. A knob step on a `@clock` param changes the rate, not the place.** (laptop; after K2; music helps)
+Headless: `tests/test_fx_clock.py` (`test_a_clocked_rate_step_is_continuous_and_the_twins_jumps`, `test_warps_speed_step_is_continuous`), `tests/test_shader_time_lint.py`.
+1. Load a preset with Trip warp on (`party-trip`, say) and let it run — the
+   longer the better; an hour is the show's shape. Note roughly where the
+   warp's ripples sit over the shape.
+2. On FX, open Trip warp. Nudge Drift one step (a tenth), then Scale one
+   step. Then nudge the effect's Speed one step (it was integrated before
+   K1: this is what right looks like).
+3. On Trip colour, nudge Pulse one step while white is on screen.
+4. Open `hyperspace/shaders/fx/warp.glsl`: the `// @clock` lines are at the
+   top; nothing in the body multiplies `u_phase` or `u_time` by a `u_` param.
+*Pass:* in 2 each nudge makes the ripples slide faster or finer from where
+they are — nothing re-draws, nothing lurches, the same as Speed; in 3 the
+green pulse keeps its beat and only quickens, no flash; 4 reads as said.
+*Fail:* a nudge on Drift or Scale lands the field somewhere else (the
+2026-10-30 show) — the port multiplies a time by a param somewhere the
+lint's allowlist still names, or a `@clock`'s period is set where the
+shader's use of it is not periodic (a scrolled noise field must run on,
+unwrapped). Before K2 lands, 2 and 3 *do* lurch on Drift, Scale and Pulse:
+that is the recorded fault, not a regression.
 
 ## What no test covers
 
