@@ -147,12 +147,13 @@ prefix (`graphview.hover_of`), the side panel's header the same
 error and a loop refuse, and a window keeps itself (its wires go). The
 picker is grouped by primitive — starters ▸ (plan 36 T5: the scene chain
 `shape → scene → All outputs`, tracers, tracers + dream, dream on a
-picture, echo (wave 0 E1, 2026-11-02: a delay loop with a blend, the
+picture, feedback (wave 0 E1, 2026-11-02: a delay loop with a blend, the
 trails mechanism from here — many allowed), channel to backdrop, each a
 pre-wired group in one gesture, laid left to right where the menu opened;
-a picture cable's menu has the tracers, dream and echo ones, on its
-picture, and a picture node's menu has **add echo after**, the echo on the
-cable out of it: `render_node_menu`, `add_echo_after`), scene ▸, look-back ▸, pictures ▸, effects ▸,
+a picture cable's menu has the tracers, dream and feedback ones, on its
+picture, and a picture node's menu has **add feedback after**, the loop on
+the cable out of it, laid under the node's box: `render_node_menu`,
+`add_feedback_after`, `node_below`), scene ▸, look-back ▸, pictures ▸, effects ▸,
 copy of ▸ — a frame node the section has drawn disabled
 (`render_picker`).
 
@@ -3223,8 +3224,8 @@ def insert_effect(panel, cable: graphview.VCable, file: str, at=None) -> str | N
 
 def render_node_menu(panel, n) -> None:
     """A render node's menu items: a hands node drawn solid or as lines, a
-    composite's blend, a picture node's "add echo after" (wave 0 E1:
-    `_echo_after_menu`, `add_echo_after`), delete."""
+    composite's blend, a picture node's "add feedback after" (wave 0 E1:
+    `_feedback_after_menu`, `add_feedback_after`), delete."""
     e = render_edit(panel)
     name, _ = graphview.spec_name(n.id, e.render)
     kind = graphview.kind_of(name) if name else None
@@ -3236,47 +3237,62 @@ def render_node_menu(panel, n) -> None:
         for how in rgraph.BLENDS:
             if imgui.menu_item_simple(f"laid {how}"):
                 _render_said(panel, e, lambda e, how=how: e.set_node(name, blend=how))
-    feeds = graphview.picture_feeds(e, name) if name else None
+    feeds = graphview.picture_feeds(e, name) if name else None   # (the spec's wires, no copy)
     if feeds is not None:
-        _echo_after_menu(panel, name, feeds)
+        _feedback_after_menu(panel, name, feeds)
     if imgui.menu_item_simple("delete"):
         _render_said(panel, e, lambda e: e.drop_node(n.id))
 
 
-ECHO_AFTER = "add echo after"
-# a node menu's echo is laid a collapsed node's height below where the menu
-# opened (on the node), not over the node itself
-ECHO_BELOW = graphview.TITLE_H + graphview.GAP
+FEEDBACK_AFTER = "add feedback after"
 
 
-def _echo_after_menu(panel, name: str, feeds: list[tuple[str, str]]) -> None:
-    """A picture node's "add echo after" (wave 0 E1, 2026-11-02): the echo
-    starter on the cable out of it — one cable, the item itself; several, a
-    submenu naming each port it feeds; none, the item disabled with why
-    (`graphview.ECHO_FEEDS_NOTHING`)."""
+def _feedback_after_menu(panel, name: str, feeds: list[tuple[str, str]]) -> None:
+    """A picture node's "add feedback after" (wave 0 E1, 2026-11-02): the
+    feedback starter on the cable out of it — one cable, the item itself;
+    several, a submenu naming each port it feeds; none, the item disabled
+    with why (`graphview.FEEDBACK_FEEDS_NOTHING`). The loop lands under the
+    node's box (`add_feedback_after`, `node_below`)."""
     if not feeds:
-        imgui.menu_item_simple(f"{ECHO_AFTER}: {graphview.ECHO_FEEDS_NOTHING}", enabled=False)
+        imgui.menu_item_simple(f"{FEEDBACK_AFTER}: {graphview.FEEDBACK_FEEDS_NOTHING}",
+                               enabled=False)
     elif len(feeds) == 1:
-        if imgui.menu_item_simple(ECHO_AFTER):
-            add_echo_after(panel, name, feeds[0][1])
-    elif imgui.begin_menu(ECHO_AFTER):
+        if imgui.menu_item_simple(FEEDBACK_AFTER):
+            add_feedback_after(panel, name, feeds[0][1])
+    elif imgui.begin_menu(FEEDBACK_AFTER):
         for _, d in feeds:
             if imgui.menu_item_simple(f"→ {d}"):
-                add_echo_after(panel, name, d)
+                add_feedback_after(panel, name, d)
         imgui.end_menu()
 
 
-def add_echo_after(panel, name: str, port: str, at=None) -> str | None:
-    """The echo starter (`add_starter("echo")`) on the cable from picture
-    node `name` into `port` — the node menu's "add echo after" (wave 0 E1),
-    one undo step, its three nodes laid left to right from `at`, else from
-    a node's height below where the menu opened (`ECHO_BELOW`). Returns the
-    refusal, or None."""
+def node_below(st: dict, nid: str) -> tuple[float, float] | None:
+    """The canvas point just under node `nid`'s box as the editor last drew
+    it (its real position and size, expanded or collapsed: `GAP` below its
+    bottom-left), or None when the editor has no box for it — the node
+    menu's feedback lands there, never on the node's own rows."""
+    if st.get("editor") is None or st["ids"].get("n:" + nid) is None:
+        return None
+    ed.set_current_editor(st["editor"])
+    k = ed.NodeId(_id(st, "n:" + nid))
+    size = ed.get_node_size(k)
+    if size.y <= 0:
+        return None
+    p = ed.get_node_position(k)
+    return (p.x, p.y + size.y + graphview.GAP)
+
+
+def add_feedback_after(panel, name: str, port: str, at=None) -> str | None:
+    """The feedback starter (`add_starter("feedback")`) on the cable from
+    picture node `name` into `port` — the node menu's "add feedback after"
+    (wave 0 E1), one undo step, its three nodes laid left to right from
+    `at`, else from under the node's box as the editor last drew it
+    (`node_below`), else from where the menu opened. Returns the refusal,
+    or None."""
     if at is None:
-        at = _state(panel).get("menu_at")
-        if at is not None:
-            at = (at[0], at[1] + ECHO_BELOW)
-    return add_starter(panel, "echo", (name, port), at)
+        st = _state(panel)
+        at = node_below(st, f"render:{name}") or st.get("menu_at")
+    return add_starter(panel, "feedback", (name, port), at)
 
 
 # ---------------------------------------------------------------- the selection

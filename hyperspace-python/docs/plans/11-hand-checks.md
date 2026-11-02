@@ -6404,38 +6404,47 @@ header's count shortens to a number rather than run off the edge; in 4
 the side panel lists the Xbox pad's patched ports, no picture (the
 picture is the first pad's).
 
-## AS. The echo starter (wave 0 E1)
+## AS. The feedback starter (wave 0 E1)
 
-The 2026-10-31 triage's "echo / reverb starter", built 2026-11-02 (decision
-register row 564, recommended: delay loops are the trails mechanism, the
-look-back keeps the dream). Headless: `tests/test_graph_starters.py`
-(the echo tests, and `test_the_echo_draws_and_its_trail_fades`).
+The 2026-10-31 triage's "echo / reverb starter", built 2026-11-02 as
+**feedback** (decision register row 564, recommended: delay loops are the
+trails mechanism, the look-back keeps the dream; "echo" already names the
+look-back's frames). Headless: `tests/test_graph_starters.py` (the
+feedback tests, `test_feedback_draws_and_its_trail_fades_to_clear`,
+`test_a_fringe_and_an_interior_fade_at_one_rate`).
 
-**423. Echo on a live preset: the feedback stays calm, and two echoes.** (Mac; the TV or a projector helps)
+**423. Feedback on a live preset: the decay stays calm, fades to clear, and two loops.** (Mac; the TV or a projector helps)
 1. Load a party preset with the scene into All outputs (or **new**, then
    the scene chain). GRAPH: right-click the cable `scene → All outputs`,
-   **starters ▸ echo**.
+   **starters ▸ feedback**.
 2. Watch the shape move for ten seconds. Then on the new composite's
    menu pick **laid add**; watch again; pick **laid over** to come back.
-3. Turn the new palette's **val to** knob (its node's side pane) up to 0.9
+3. Turn the new fade's **level** knob (its node's side pane) up to 0.9
    and down to 0.4.
-4. Right-click the new composite's node: **add echo after**.
-5. ⌘Z twice.
+4. OUTPUT: cut through on the laptop window (a see-through ground), the
+   shape over the desktop; or wire a channel to the backdrop under the
+   scene. Watch the trail.
+5. Right-click the new composite's node (expanded, so its port rows show):
+   **add feedback after**.
+6. ⌘Z twice.
 
 *Pass:* in 1 three new nodes land left to right on the cable — delay,
-palette, composite — and the head line reads "echo: scene → composite
-over → output.all.image; composite → delay → palette → composite under —
-palette val to 0.75 is the feedback"; the shape trails ghosts of its last
-few positions that fade within a quarter of a second, the shape itself no
-brighter than before and nothing burns to white. In 2, laid add the trail
-shows over the shape too and bright faces pile up towards white (the
-calm default is over); laid over it is as in 1. In 3, 0.9 trails for
-about a second, 0.4 barely trails; neither sticks. In 4 a second delay,
-palette and composite land (`delay.2`, `palette.2`, `composite.2`) a
-node's height below the composite, the first echo's picture echoed
-again, with no refusal — unlike a second tracers. In 5 each ⌘Z takes
-one whole echo back (its three nodes, their wires and the palette's
-values), the first leaving the preset as loaded.
+fade, composite — and the head line reads "feedback: scene → composite
+over → output.all.image; composite → delay → fade → composite under —
+fade level 0.75 is how much of last frame stays"; the shape trails ghosts
+of its last few positions that fade within a quarter of a second, the
+shape itself no brighter than before and nothing burns to white. In 2,
+laid add the trail shows over the shape too and bright faces pile up
+towards white (the calm default is over); laid over it is as in 1. In 3,
+0.9 trails for about a second, 0.4 barely trails; neither sticks. In 4
+the trail fades **to clear**: the desktop (or the backdrop) shows through
+where a ghost was, and no black footprint of where the shape has been is
+left behind; the ghost's soft edge fades at the same pace as its middle.
+In 5 a second delay, fade and composite land (`delay.2`, `fade.2`,
+`composite.2`) **under the composite's box**, clear of its port rows, the
+first loop's picture fed back again, with no refusal — unlike a second
+tracers. In 6 each ⌘Z takes one whole loop back (its three nodes, their
+wires and the fade's values), the first leaving the preset as loaded.
 
 ## What no test covers
 
