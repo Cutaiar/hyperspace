@@ -255,16 +255,23 @@ def test_a_window_into_a_late_file_is_cut_in_transport_time(late_clip, opened, s
                                                             monkeypatch):
     """Review 1, the window: a 4 s window from 0.5 s of a file whose pts
     start at 2 s holds transport seconds 0.5..3 (all the sound there is),
-    not 0.5..2.5 cut by the file's offset."""
+    not 0.5..2.5 cut by the file's offset. The position is set before the
+    sound is asked for: a `want` after `enable` races the thread's first
+    window (made at position 0, and 2.5 is inside it, so it stays), which
+    is what a loaded CI runner saw."""
     monkeypatch.setattr(video, "_audio_end", lambda c, st, o: 7200.0)   # a long film
-    s = opened(late_clip)
+    s = opened(late_clip, sound=False)
     s.want(2.5)                                           # the window is 0.5..4.5
+    s.audio.enable()
     a = s.audio
-    assert _until(lambda: a.status == READY)
+    assert _until(lambda: a.held is not None)
     assert a.held == pytest.approx((0.5, 3.0), abs=0.05)
-    out = a.read(2 * RATE, RATE)
+    assert a.status == READY
+    out = a.read(2 * RATE, RATE)                          # 2..3: the tail is there, in time
     assert _peak_hz(out[:, 0]) == pytest.approx(440.0, abs=1.0)
+    assert _peak_hz(out[:, 1]) == pytest.approx(880.0, abs=1.0)
     assert not a.read(0, RATE // 4).any()                 # before the window: silence
+    assert not a.read(3 * RATE + 48, RATE // 4).any()     # past the track (a ms on): silence
 
 
 def test_a_track_that_starts_after_the_video_keeps_its_tail(aoff_clip, opened):

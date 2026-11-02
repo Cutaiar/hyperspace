@@ -93,6 +93,14 @@ def audio_window(want: float, duration: float) -> tuple[float, float]:
     return start, start + w
 
 
+def _start_of(stream) -> float:
+    """Where a stream's timeline begins, in container seconds: its
+    `start_time`, 0 when the container gives none. The video's is the
+    transport's zero (`_play`'s `start`) and the soundtrack's `origin` —
+    the one expression for both, so the two can never disagree."""
+    return float((stream.start_time or 0) * stream.time_base)
+
+
 def _audio_end(container, stream, origin: float) -> float:
     """Where the audio track ends, in transport seconds (the video's first
     frame is 0): the stream's own start less `origin`, plus its length —
@@ -102,8 +110,7 @@ def _audio_end(container, stream, origin: float) -> float:
     neither says."""
     tb = stream.time_base
     if stream.duration is not None and tb is not None:
-        start = float((stream.start_time or 0) * tb)
-        return max(start - origin + float(stream.duration * tb), 0.0)
+        return max(_start_of(stream) - origin + float(stream.duration * tb), 0.0)
     if container.duration:
         return max(((container.start_time or 0) + container.duration) / 1_000_000.0 - origin, 0.0)
     return 0.0
@@ -291,10 +298,7 @@ class Soundtrack(_Follower):
             stream = container.streams.audio[0]
             # the transport's zero is the video's first frame (as `_play`'s
             # `start`); audio pts are on the same container timeline
-            origin = 0.0
-            if container.streams.video:
-                vs = container.streams.video[0]
-                origin = float((vs.start_time or 0) * vs.time_base)
+            origin = _start_of(container.streams.video[0]) if container.streams.video else 0.0
             self.duration = _audio_end(container, stream, origin)
             self.whole = 0.0 < self.duration <= AUDIO_WINDOW_S
             self._follow(container, stream, origin, stop)
@@ -517,7 +521,7 @@ class VideoSource(_Follower):
 
     def _play(self, container, stream, stop: threading.Event) -> None:
         tb = float(stream.time_base)
-        start = (stream.start_time or 0) * tb
+        start = _start_of(stream)
         fps = self.fps
         w, h = stream.codec_context.width, stream.codec_context.height
         k = min(self.cap[0] / w, self.cap[1] / h, 1.0)
