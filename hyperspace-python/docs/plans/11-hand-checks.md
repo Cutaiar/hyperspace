@@ -6404,7 +6404,7 @@ header's count shortens to a number rather than run off the edge; in 4
 the side panel lists the Xbox pad's patched ports, no picture (the
 picture is the first pad's).
 
-## AQ. The echo starter (wave 0 E1)
+## AS. The echo starter (wave 0 E1)
 
 The 2026-10-31 triage's "echo / reverb starter", built 2026-11-02 (decision
 register row 564, recommended: delay loops are the trails mechanism, the
