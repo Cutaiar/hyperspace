@@ -588,8 +588,7 @@ class PadDevice(Base):
         from .pads import models
         e = entry or {}
         spec = models.parse_spec(e.get("controller", "any")) or "any"
-        sony_ok = spec in ("any", "sony", "dualsense", "edge") or spec.startswith("054c:")
-        if (e.get("tape") or (e.get("hid", True) and sony_ok)):
+        if (e.get("tape") or (e.get("hid", True) and models.may_be_hid(spec))):
             return cls.schemes, cls.feeds
         return cls.XBOX_SCHEMES, cls.XBOX_FEEDS
 
@@ -700,20 +699,23 @@ class PadDevice(Base):
 
         def sc(s: str) -> str:
             return f"{s}@{q}" if q else s
+        model = self.model
+
+        def has(n: str) -> bool:      # a single Joy-Con has less than a face (plan 43)
+            return model is None or model.has_control(n)
         axes = [Port(n, lb, rest=r, bipolar=n in g.STICKS,
                      group="sticks" if n in g.STICKS else "triggers", scheme=sc("axis"))
-                for n, lb, r in zip(g.AXES, g.AXIS_LABELS, g.AXIS_RESTS, strict=True)]
-        model = self.model
+                for n, lb, r in zip(g.AXES, g.AXIS_LABELS, g.AXIS_RESTS, strict=True) if has(n)]
         named = dict(g.BUTTONS)
         if model is not None:
             named = {n: i for n, i in g.ALL_BUTTONS.items()
-                     if n in g.BUTTONS or (n == "TOUCH" and model.has("touch"))
-                     or (n in ("LP", "RP") and model.has("back"))
-                     or (n in ("LFN", "RFN") and model.has("fn"))}
+                     if (n in g.BUTTONS or (n == "TOUCH" and model.has("touch"))
+                         or (n in ("LP", "RP") and model.has("back"))
+                         or (n in ("LFN", "RFN") and model.has("fn"))) and has(n)}
         buttons = [Port(n, n, kind="trigger", group="buttons", scheme=sc("pad"))
                    for n in named]
         hats = [Port(n, f"D-pad {n.lower()}", kind="trigger", group="d-pad", scheme=sc("hat"))
-                for n in g.HATS]
+                for n in g.HATS if has(n)]
         extra: list[Port] = []
         from .pads import gesture as ge
         if model is not None and model.has("touch"):
@@ -750,8 +752,10 @@ class PadDevice(Base):
         m = self.model
         if m is None or not m.outputs:
             return ()
+        # the channels keep their numbers; a pad shows only those it has (a
+        # Joy-Con: rumble and the player lights, no light bar — plan 43)
         return tuple(Port(str(k), label, group="feedback", scheme=self.role)
-                     for k, (_, label) in enumerate(SINKS))
+                     for k, (key, label) in enumerate(SINKS) if SINK_CAP[key] in m.outputs)
 
     def send(self, reg, analyzer) -> None:
         """The sink rows on this pad's ports, read after `reg.apply`, as one
@@ -888,6 +892,11 @@ SINKS = (
     ("mic", "mic light"),
 )
 SINK_CHANNEL = {key: k for k, (key, _) in enumerate(SINKS)}
+# which output cap (models.OUTPUT_CAPS) each channel needs
+SINK_CAP = {"light.hue": "light", "light.level": "light", "light.white": "light",
+            "rumble.low": "rumble", "rumble.high": "rumble",
+            "trigger.left": "triggers", "trigger.right": "triggers",
+            "players": "players", "mic": "mic"}
 # the light bar by the pad's place, as a PlayStation colours its pads
 PLAYER_LIGHTS = ((0, 0, 255), (255, 0, 0), (0, 255, 0), (255, 0, 255), (0, 255, 255))
 TRIGGER_START = 0.15     # where a sink's resistance starts in the trigger's travel

@@ -21,6 +21,7 @@ import random
 import time
 
 from . import gamepad
+from .pads import nintendo
 
 DESIGN_W, DESIGN_H = 1000.0, 620.0
 FONT_K = 1.3                # the lab's type scale for these two views
@@ -155,10 +156,10 @@ def _sent(r):
     """What the pad is being shown: (light rgb or None, players bits,
     rumble low, rumble high, left trigger, right trigger, mic)."""
     e = r.effects
-    if e is None or not r.has("light"):
+    if e is None or not (r.has("light") or r.has("rumble") or r.has("players")):
         return None, None, 0.0, 0.0, _trig(None), _trig(None), 0
-    return (tuple(e.light), int(e.players), float(e.rumble_low), float(e.rumble_high),
-            _trig(e.left), _trig(e.right), int(e.mic))
+    return (tuple(e.light) if r.has("light") else None, int(e.players),
+            float(e.rumble_low), float(e.rumble_high), _trig(e.left), _trig(e.right), int(e.mic))
 
 
 def _pulse(st: dict, key: str, on: bool, now: float, hold: float = PULSE_S) -> bool:
@@ -179,12 +180,22 @@ def _glyph(r, name: str) -> str:
     if r.sony:
         g = r.glyph(name, name)
         return _SONY_WORDS.get(g, g)
-    return _XBOX_WORDS.get(name, r.glyph(name, name))
+    return r.glyph(name, _XBOX_WORDS.get(name, name))      # a Joy-Con's own words first
+
+
+# a Joy-Con's inks: the (L)'s neon blue, the (R)'s neon red (plan 46)
+JOYCON_INK = {"l": "#3fc1ff", "r": "#ff5f6d", "pro": "#9aa7bf"}
+JOYCON_BODY = {"l": "#162738", "r": "#331a22", "pro": "#1a1f2c"}
 
 
 def _ink(r, name: str) -> str:
-    """A face button's own colour: the DualSense's, or an Xbox pad's."""
-    return COL[name] if r.sony else XBOX_INK[name]
+    """A face button's own colour: the DualSense's, a Joy-Con's side's, or
+    an Xbox pad's."""
+    if r.sony:
+        return COL[name]
+    if getattr(r, "nintendo", False):
+        return JOYCON_INK.get(r.kind, XBOX_INK[name])
+    return XBOX_INK[name]
 
 
 def _battery(p: Pen, r, x, y, below=False) -> None:
@@ -354,6 +365,9 @@ def faithful(p: Pen, r, st: dict) -> None:
     pad) in the same hand, its sticks offset and no touchpad."""
     now = time.monotonic()
     light, players, r_low, r_high, left, right, mic = _sent(r)
+    if getattr(r, "nintendo", False) and r.kind in ("l", "r"):
+        _faithful_joycon(p, r, st, now, players, r_low, r_high)   # one Joy-Con, upright (plan 46)
+        return
     sony = r.sony
     edge = r.has("back")
     p.rr(0, 0, DESIGN_W, DESIGN_H, 0)
@@ -530,12 +544,16 @@ def _faithful_xbox(p: Pen, r) -> None:
 
 # ---------------------------------------------------------------- (c) cockpit
 
-def _dial(p: Pen, r, st: dict, cx, cy, side: str, tr) -> None:
+def _dial(p: Pen, r, st: dict, cx, cy, side: str, tr, stick: str | None = None,
+          ax: str | None = None, ay: str | None = None) -> None:
     """The lab's `dial`: the trigger as a thick arc round the stick's
     well, the resistance sent as the outer band, the bumper as a cap, the
-    stick with its trail."""
+    stick with its trail. `stick`, `ax`, `ay` name the stick drawn when it
+    is not the side's own (a Joy-Con (R)'s one stick is the left stick)."""
     big = 125
     trig = "LT" if side == "L" else "RT"
+    stick = stick or f"{side}STICK"
+    ax, ay = ax or f"{side}X", ay or f"{side}Y"
     u = r.axes[trig]
     a0, sweep = math.pi * 0.75, math.pi * 1.5
     col = COL["accent"] if side == "L" else "#ff9f6c"
@@ -556,7 +574,6 @@ def _dial(p: Pen, r, st: dict, cx, cy, side: str, tr) -> None:
     p.stroke(COL["hot"] if on else "#232a38", 10, cap="round")
     p.text(_glyph(r, bump), cx, cy - big - 30, size=10, color="#000" if on else COL["dim"], weight=800)
     p.hit(cx - 60, cy - big - 40, 120, 20, f"pad:{bump}")
-    stick = f"{side}STICK"
     on = _pressed(r, stick)
     rad = big - 30
     p.circle(cx, cy, rad)
@@ -566,8 +583,8 @@ def _dial(p: Pen, r, st: dict, cx, cy, side: str, tr) -> None:
         p.stroke("#212836", 1)
     p.circle(cx, cy, rad / 2)
     p.stroke("#212836", 1)
-    x = cx + (r.axes[f"{side}X"] - 0.5) * 2 * (rad - 12)
-    y = cy - (r.axes[f"{side}Y"] - 0.5) * 2 * (rad - 12)
+    x = cx + (r.axes[ax] - 0.5) * 2 * (rad - 12)
+    y = cy - (r.axes[ay] - 0.5) * 2 * (rad - 12)
     trail = st.setdefault("trails", {}).setdefault(side, [])
     trail.append((x, y))
     del trail[:-TRAIL]
@@ -576,7 +593,7 @@ def _dial(p: Pen, r, st: dict, cx, cy, side: str, tr) -> None:
         p.stroke(col, 1 + 3 * i / len(trail), a=i / len(trail) * 0.6)
     p.circle(x, y, 13)
     p.fill(COL["hot"] if on else col)
-    for src in (f"pad:{stick}", f"axis:{side}X", f"axis:{side}Y"):   # the hover names all three
+    for src in (f"pad:{stick}", f"axis:{ax}", f"axis:{ay}"):   # the hover names all three
         p.hit(cx - rad, cy - rad, 2 * rad, 2 * rad, src)
     p.text(f"{_glyph(r, trig)} {round(u * 100)}%", cx, cy + big + 4, size=14,
            weight=700, color=col if u > 0.003 else COL["faint"])
@@ -602,6 +619,9 @@ def cockpit(p: Pen, r, st: dict) -> None:
     """The lab's `drawCockpit`: for a glance mid-set."""
     now = time.monotonic()
     light, players, r_low, r_high, left, right, mic = _sent(r)
+    if getattr(r, "nintendo", False) and r.kind in ("l", "r"):
+        _cockpit_joycon(p, r, st, now, players, r_low, r_high)    # one dial, the tilt big (plan 46)
+        return
     edge = r.has("back")
     p.rr(0, 0, DESIGN_W, DESIGN_H, 0)
     p.fill("cockpit")
@@ -729,6 +749,310 @@ def _ticker(p: Pen, r, st: dict, now: float) -> None:
     p.alpha(1.0)
     if not log:
         p.text("presses, taps and shakes scroll here", 500, 587, size=12, color="#2b3446")
+
+
+# ---------------------------------------------------------------- a Joy-Con (plan 46)
+
+def _rumble_rings(p: Pen, r_low: float, r_high: float, lx, ly, rx, ry) -> None:
+    """The rumble as rings: the heavy band at (lx, ly), the light at (rx, ry)."""
+    if r_low > 0.01:
+        for i in range(3):
+            p.arc(lx, ly, 30 + i * 12, 2.2, 4.0)
+            p.stroke("back", 3, a=0.3 + 0.7 * r_low)
+        p.text(f"low {r_low:.2f}", lx - 60, ly, size=11, color="back")
+    if r_high > 0.01:
+        for i in range(3):
+            p.arc(rx, ry, 24 + i * 9, -0.9, 0.9)
+            p.stroke("fn", 2, a=0.3 + 0.7 * r_high)
+        p.text(f"high {r_high:.2f}", rx + 62, ry, size=11, color="fn")
+
+
+def _faithful_joycon(p: Pen, r, st: dict, now: float, players, r_low, r_high) -> None:
+    """One Joy-Con from above, upright as a hand holds it like a remote:
+    the trigger and the shoulder along its top edge, − (or +) by the rail,
+    the stick and the four face buttons, capture (or HOME), SL and SR on
+    the rail with the four player lights between them. Beside it what a
+    calibration needs at a glance: the stick's well with the deadzone
+    ring, its raw reading and the centre in use on the left; the tilt,
+    big, with the sensors' numbers on the right."""
+    kind = r.kind
+    left = kind == "l"
+    ink = JOYCON_INK[kind]
+    p.rr(0, 0, DESIGN_W, DESIGN_H, 0)
+    p.fill("ground")
+    p.save()
+    shake = r_low * 3 + r_high * 1.4
+    if shake > 0.01:
+        p.translate((random.random() - 0.5) * shake, (random.random() - 0.5) * shake)
+    bx, by, bw, bh = 395, 70, 210, 530
+    trig, bump = ("LT", "LB") if left else ("RT", "RB")
+    # the trigger (ZL / ZR) and the shoulder (L / R) along the top edge
+    u = r.axes[trig]
+    p.rr(410, 14, 180, 30, 9)
+    p.fill("idle")
+    p.rr(410, 14, max(0.001, 180 * u), 30, 9)
+    p.fill("hot" if u > 0.98 else "accent", 0.85)
+    p.rr(410, 14, 180, 30, 9)
+    p.stroke("idleLine", 1.5)
+    p.text(f"{_glyph(r, trig)} {round(u * 100)}%", 500, 29, size=13, weight=700,
+           color="#10131a" if u > 0.55 else "text")
+    p.hit(410, 14, 180, 30, f"axis:{trig}")
+    on = _pressed(r, bump)
+    p.rr(410, 50, 180, 16, 8)
+    p.fill("hot" if on else "idle")
+    p.text(_glyph(r, bump), 500, 58, size=11, color="#000" if on else "dim", weight=700)
+    p.hit(410, 50, 180, 16, f"pad:{bump}")
+    # the body, the rail marked on its inner edge
+    p.rr(bx, by, bw, bh, 46)
+    p.fill(JOYCON_BODY[kind])
+    p.rr(bx, by, bw, bh, 46)
+    p.stroke("bodyLine", 2.5)
+    rail_x = bx + bw if left else bx
+    p.lines((rail_x, by + 60), (rail_x, by + bh - 60))
+    p.stroke(ink, 3, a=0.5)
+    # − / +, the stick and the face (the (L)'s stick above its arrows, the
+    # (R)'s face above its stick), capture / HOME
+    if left:
+        _pill(p, r, "VIEW", 548, 96, 26, 8, word_y=118)
+        _stick(p, r, "LSTICK", 500, 205, "LX", "LY")
+        face_cy = 345
+    else:
+        _pill(p, r, "MENU", 426, 96, 26, 8, word_y=118)
+        face_cy = 235
+        _stick(p, r, "LSTICK", 500, 420, "LX", "LY")
+    for n, (dx, dy) in (("Y", (0, -48)), ("X", (-48, 0)), ("B", (48, 0)), ("A", (0, 48))):
+        x, y = 500 + dx, face_cy + dy
+        on = _pressed(r, n)
+        p.circle(x, y, 23)
+        p.fill(ink if on else "idle")
+        p.circle(x, y, 23)
+        p.stroke(ink, 2)
+        p.text(_glyph(r, n), x, y + 1, size=20, color="#000" if on else ink, weight=700)
+        p.hit(x - 23, y - 23, 46, 46, f"pad:{n}")
+    if left:
+        on = _pressed(r, "SHARE")
+        p.rr(538, 505, 24, 24, 5)
+        p.fill("hot" if on else "idle")
+        p.text(_glyph(r, "SHARE"), 550, 517, size=12, color="#000" if on else "dim")
+        p.text("capture", 550, 545, size=10, color="dim")
+        p.hit(532, 499, 36, 36, "pad:SHARE")
+    else:
+        on = _pressed(r, "GUIDE")
+        p.circle(450, 525, 14)
+        p.fill("hot" if on else "idle")
+        p.circle(450, 525, 14)
+        p.stroke("idleLine", 1.5)
+        p.text("HOME", 450, 551, size=10, color="dim")
+        p.hit(436, 511, 28, 28, "pad:GUIDE")
+    # SL and SR on the rail, the four player lights between them
+    for n, y0 in (("LP", 150), ("RP", 330)):
+        on = _pressed(r, n)
+        p.rr(rail_x - 7, y0, 14, 90, 6)
+        p.fill("back" if on else "idle")
+        p.rr(rail_x - 7, y0, 14, 90, 6)
+        p.stroke("back" if on else "idleLine", 1.5)
+        p.text(_glyph(r, n), rail_x + (22 if left else -22), y0 + 45, size=11,
+               color="back" if on else "dim", weight=700)
+        p.hit(rail_x - 10, y0 - 4, 20, 98, f"pad:{n}")
+    lit = nintendo.player_leds(players) if players is not None else 0
+    for i in range(4):
+        p.rr(rail_x - 5, 252 + i * 16, 10, 10, 2)
+        p.fill("#ffffff" if (lit >> i) & 1 else "#2b3242")
+    _rumble_rings(p, r_low, r_high, 200, 470, 200, 555)        # under the stick's well
+    p.restore()
+    # the tilt (what the lanes make of it), then all six axes as traces
+    if r.has("motion"):
+        _attitude(p, r, st, 800, 118, 50, True, now)
+        m = r.motion
+        if m is not None and _pulse(st, "shake_word", bool(m.get("shake")), now):
+            p.text("SHAKE", 930, 60, size=20, color="hot", weight=800)
+        _scope(p, r, st, 648, 236, 336, 55)
+    # the stick's calibration: its well with the deadzone ring, the reading
+    cx, cy, rad = 200, 200, 70
+    p.circle(cx, cy, rad)
+    p.fill("well")
+    p.circle(cx, cy, rad)
+    p.stroke("idleLine", 1.5)
+    p.circle(cx, cy, rad * gamepad.DEADZONE)
+    p.stroke("#2a3242", 1)
+    for a, b in (((cx - rad, cy), (cx + rad, cy)), ((cx, cy - rad), (cx, cy + rad))):
+        p.lines(a, b)
+        p.stroke("#232a38", 1)
+    sx, sy = r.axes["LX"], r.axes["LY"]
+    x = cx + (sx - 0.5) * 2 * rad
+    y = cy - (sy - 0.5) * 2 * rad
+    inside = math.hypot(sx - 0.5, sy - 0.5) * 2 < gamepad.DEADZONE
+    p.circle(x, y, 6)
+    p.fill("dim" if inside else ink)
+    p.text("stick", cx, cy - rad - 14, size=11, color="dim")
+    p.text(f"LX {sx:.2f}  LY {sy:.2f}", cx, cy + rad + 18, size=11, color="dim", mono=True)
+    if r.stick_raw is not None and r.stick_centre is not None:
+        (rx, ry), (ccx, ccy) = r.stick_raw, r.stick_centre
+        p.text(f"raw {rx}, {ry}", cx, cy + rad + 36, size=11, color="dim", mono=True)
+        p.text(f"centre {ccx}, {ccy} ({r.centre_from})", cx, cy + rad + 52, size=11,
+               color="dim", mono=True)
+    p.hit(cx - rad, cy - rad, 2 * rad, 2 * rad, "axis:LX")
+    if r.battery >= 0 or r.on:
+        _battery(p, r, 14, 10, below=True)
+    name = getattr(r.model, "name", "") if r.on else "no pad"
+    p.text(f"{name or 'pad'} · {r.link or '—'}", 12, 610, size=12, color="dim", align="left")
+
+
+def _cockpit_joycon(p: Pen, r, st: dict, now: float, players, r_low, r_high) -> None:
+    """A Joy-Con's cockpit: its one dial (the trigger's arc, the shoulder's
+    cap, the stick's trail), the tilt big beside it, the buttons it has,
+    SL and SR loud on the edges, the rumble meters, the ticker."""
+    kind = r.kind
+    left = kind == "l"
+    ink = JOYCON_INK[kind]
+    p.rr(0, 0, DESIGN_W, DESIGN_H, 0)
+    p.fill("cockpit")
+    word = f"JOY-CON ({kind.upper()}) · {(r.link or '—').upper()}" if r.on else "NO PAD"
+    p.text(word, 22, 40, size=12, align="left", color="dim", weight=700)
+    lit = nintendo.player_leds(players) if players is not None else 0
+    for i in range(4):
+        p.circle(476 + i * 16, 40, 4.5)
+        p.fill("#ffffff" if (lit >> i) & 1 else "#262d3c")
+    if r.battery >= 0 or r.on:
+        _battery(p, r, 935, 31)
+    _dial(p, r, st, 245, 270, "L" if left else "R", _trig(None), stick="LSTICK", ax="LX", ay="LY")
+    if r.has("motion"):
+        _attitude(p, r, st, 640, 240, 115, True, now)
+        _six_bars(p, r, 104, 438, 282)             # all six axes, as bars, under the dial
+    names = ("VIEW", "SHARE") if left else ("MENU", "GUIDE")
+    for i, n in enumerate(names):
+        x, on = 608 + i * 64, _pressed(r, n)
+        p.rr(x - 28, 456, 56, 22, 11)
+        p.fill("hot" if on else "#161b26")
+        p.text(_glyph(r, n), x, 467, size=11, color="#000" if on else "dim", weight=600)
+        p.hit(x - 28, 456, 56, 22, f"pad:{n}")
+    _cluster(p, r, 755, 500, [(f"pad:{n}", _glyph(r, n), dx, dy, ink)
+                              for n, dx, dy in (("Y", 0, -1), ("B", 1, 0), ("A", 0, 1),
+                                                ("X", -1, 0))], COL["hot"])
+    for n, x in (("LP", 22), ("RP", 918)):
+        on = _pressed(r, n)
+        p.rr(x, 170, 60, 110, 14)
+        p.fill("back" if on else "#171c27")
+        p.rr(x, 170, 60, 110, 14)
+        p.stroke("#ffd1a0" if on else "#2b3446", 2)
+        p.text(_glyph(r, n), x + 30, 225, size=14, color="#000" if on else "dim", weight=800)
+        p.hit(x, 170, 60, 110, f"pad:{n}")
+    for x, v, lbl, c in ((22, r_low, "heavy", "back"), (918, r_high, "light", "fn")):
+        p.rr(x, 346, 60, 10, 5)
+        p.fill("#161b26")
+        if v > 0.005:
+            p.rr(x, 346, max(0.5, 60 * v), 10, 5)
+            p.fill(c)
+        p.text(f"rumble {lbl}", x + 30, 368, size=8, color="faint")
+    _ticker(p, r, st, now)
+
+
+# the six axes: (key, label, unit, full scale), accel in g then gyro in deg/s,
+# in the pad's axes — x right, y up out of the face, z toward the player
+SCOPE_N = 180                 # samples kept per trace (~3 s at the pad window's rate)
+ACCEL_FS, GYRO_FS = 2.0, 720.0
+SIX_AXES = (("ax", "accel x", "g", ACCEL_FS), ("ay", "accel y", "g", ACCEL_FS),
+            ("az", "accel z", "g", ACCEL_FS), ("gx", "gyro x", "°/s", GYRO_FS),
+            ("gy", "gyro y", "°/s", GYRO_FS), ("gz", "gyro z", "°/s", GYRO_FS))
+SIX_INK = {"ax": "#6cb6ff", "ay": "#40e0a0", "az": "#ff7ad9", "gx": "#6cb6ff", "gy": "#40e0a0",
+           "gz": "#ff7ad9"}
+SIX_WORDS = {"ax": "right +", "ay": "out of the face +", "az": "toward you +",
+             "gx": "about x: far end rises +", "gy": "about y: turns left +",
+             "gz": "about z: right side rises +"}
+
+
+def _six(r) -> dict[str, float] | None:
+    """The six axes this frame, by key, or None without sensor data."""
+    s = r.sensors
+    if s is None:
+        return None
+    (gx, gy, gz), (ax, ay, az) = s
+    return {"ax": ax, "ay": ay, "az": az, "gx": gx, "gy": gy, "gz": gz}
+
+
+def _scope(p: Pen, r, st: dict, x, y, w, row_h) -> None:
+    """All six degrees of freedom as traces (plan 46): the accelerometer's
+    x, y, z in g and the gyro's x, y, z in deg/s, each row the last
+    `SCOPE_N` frames scrolling left, its baseline at zero, the value now
+    and the chip's own count at the right. The traces are the state kept
+    on the panel (`st["scope"]`)."""
+    six = _six(r)
+    traces = st.setdefault("scope", {k: [] for k, *_ in SIX_AXES})
+    raw = r.raw_sensors
+    raw_by = {}
+    if raw is not None:
+        (rgx, rgy, rgz), (rax, ray, raz) = raw
+        raw_by = {"ax": rax, "ay": ray, "az": raz, "gx": rgx, "gy": rgy, "gz": rgz}
+    p.text("six axes · the pad's x right, y out of the face, z toward you", x + w / 2,
+           y - 10, size=10.5, color="dim")
+    label_w, val_w = 58, 96
+    tx0, tw = x + label_w, w - label_w - val_w
+    for k, (key, label, unit, fs) in enumerate(SIX_AXES):
+        ry = y + k * row_h
+        mid = ry + row_h / 2
+        tr = traces.setdefault(key, [])
+        if six is not None:
+            tr.append(float(six[key]))
+            del tr[:-SCOPE_N]
+        ink = SIX_INK[key]
+        p.rr(tx0, ry + 4, tw, row_h - 8, 4)
+        p.fill("well")
+        p.lines((tx0, mid), (tx0 + tw, mid))
+        p.stroke("#2a3242", 1)
+        for frac in (0.5, -0.5):                          # half scale, faint
+            p.lines((tx0, mid - frac * (row_h / 2 - 6)), (tx0 + tw, mid - frac * (row_h / 2 - 6)))
+            p.stroke("#1c2230", 1)
+        if len(tr) >= 2:
+            n = len(tr)
+            pts = [(tx0 + tw * (i / (SCOPE_N - 1)) + tw * (1 - (n - 1) / (SCOPE_N - 1)),
+                    mid - max(-1.0, min(1.0, v / fs)) * (row_h / 2 - 6)) for i, v in enumerate(tr)]
+            p.lines(*pts)
+            p.stroke(ink, 1.6, cap="round")
+        p.text(label, x + label_w - 6, mid - 6, size=11, color=ink, align="right", weight=700)
+        p.text(f"±{fs:g} {unit}", x + label_w - 6, mid + 8, size=9, color="faint", align="right")
+        if six is not None:
+            v = six[key]
+            p.text(f"{v:+.2f}" if unit == "g" else f"{v:+.0f}", x + w, mid - 6, size=12,
+                   color=ink, align="right", mono=True, weight=700)
+            if key in raw_by:
+                p.text(f"raw {raw_by[key]:+d}", x + w, mid + 8, size=9, color="faint",
+                       align="right", mono=True)
+        else:
+            p.text("—", x + w, mid, size=12, color="faint", align="right")
+    p.text("  ·  ".join(f"{k}: {SIX_WORDS[k]}" for k in ("ax", "ay", "az")), x + w / 2,
+           y + 6 * row_h + 6, size=9, color="faint")
+    p.text("  ·  ".join(f"{k}: {SIX_WORDS[k]}" for k in ("gx", "gy", "gz")), x + w / 2,
+           y + 6 * row_h + 18, size=9, color="faint")
+    p.hit(x, y, w, 6 * row_h, "motion:spin.roll")
+
+
+def _six_bars(p: Pen, r, x, y, w) -> None:
+    """The six axes as bipolar bars, for a glance: a bar from the centre
+    for each, the accelerometer's in g, the gyro's in deg/s."""
+    six = _six(r)
+    row_h = 17
+    label_w = 52
+    bx, bw = x + label_w, w - label_w - 44
+    for k, (key, label, unit, fs) in enumerate(SIX_AXES):
+        ry = y + k * row_h
+        ink = SIX_INK[key]
+        p.rr(bx, ry + 4, bw, row_h - 8, 4)
+        p.fill("#161b26")
+        cx = bx + bw / 2
+        p.lines((cx, ry + 3), (cx, ry + row_h - 3))
+        p.stroke("#2b3446", 1)
+        p.text(label, bx - 5, ry + row_h / 2, size=9.5, color=ink, align="right", weight=700)
+        if six is None:
+            continue
+        u = max(-1.0, min(1.0, six[key] / fs))
+        if abs(u) > 0.004:
+            x0, x1 = (cx, cx + u * bw / 2) if u > 0 else (cx + u * bw / 2, cx)
+            p.rr(x0, ry + 5, max(0.5, x1 - x0), row_h - 10, 3)
+            p.fill(ink, 0.9)
+        v = six[key]
+        p.text(f"{v:+.2f}" if unit == "g" else f"{v:+.0f}", x + w, ry + row_h / 2, size=9.5,
+               color=ink, align="right", mono=True)
+    p.hit(x, y, w, 6 * row_h, "motion:spin.roll")
 
 
 VIEWS = {"faithful": faithful, "cockpit": cockpit}

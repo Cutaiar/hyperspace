@@ -43,6 +43,7 @@ from .models import CANON, N_CANON
 USB_IN, BT_IN, BT_SIMPLE = "usb", "bt", "bt-simple"
 USB_REPORT_ID, BT_REPORT_ID = 0x01, 0x31
 USB_IN_LEN, BT_IN_LEN, BT_SIMPLE_LEN = 64, 78, 10
+IN_LEN = BT_IN_LEN            # a read's room (the longest report), as every codec names it
 USB_OUT_ID, BT_OUT_ID = 0x02, 0x31
 USB_OUT_LEN, BT_OUT_LEN = 64, 78
 CALIBRATION_ID, CALIBRATION_LEN = 0x05, 41     # also what switches BT to the full report
@@ -108,6 +109,7 @@ class Frame:
     battery: int = -1                      # 0–10 (×10 %); −1 unknown
     charging: int = -1                     # the status nibble: 0 discharging, 1 charging, 2 full
     raw_buttons: bytes = b""               # payload bytes 7–10 as sent, for the probe
+    raw_sticks: tuple = ()                 # a Joy-Con's 12-bit (x, y) per stick (plan 43's lab)
 
     @property
     def full(self) -> bool:
@@ -425,3 +427,64 @@ def output_report(e: Effects, *, bluetooth: bool, seq: int = 0, first: bool = Fa
     r[3:3 + BLOCK_LEN] = block
     struct.pack_into("<I", r, BT_OUT_LEN - 4, crc32(BT_OUTPUT_SEED, r[:BT_OUT_LEN - 4]))
     return bytes(r)
+
+
+# ---- the road's surface (pads/hid.py calls these on every codec; plan 46) ----
+
+def accepts(r: bytes, reader) -> str | None:
+    """Is `r` an input report the road keeps — and over which link? A BT
+    report (0x31), or a 0x01 that is short or on a Bluetooth bus, is the
+    Bluetooth link (its tag noted for the probe); a full 0x01 is USB;
+    anything else is dropped."""
+    if r[0] == BT_REPORT_ID or (r[0] == USB_REPORT_ID and (
+            len(r) < USB_IN_LEN or reader.bt_hint)):
+        if r[0] == BT_REPORT_ID and len(r) > 1:
+            reader.tags.add(r[1] & 0x0F)
+        return "bluetooth"
+    if r[0] == USB_REPORT_ID:
+        return "usb"
+    return None
+
+
+def decode_frame(raw: bytes, reader) -> Frame | None:
+    """`decode` for the reader (or tape) holding this pad."""
+    return decode(raw, bluetooth=reader.bt_hint)
+
+
+def setup(dev, reader) -> None:
+    """Feature 0x05 — the motion calibration, and over Bluetooth the
+    switch to the full report — then 0x20, the firmware's update version
+    (which rumble mode a DualSense takes). SDL and Linux read both at
+    connect (spec §2.4, §4)."""
+    got = dev.get_feature_report(CALIBRATION_ID, FEATURE_READ_LEN)
+    if got:
+        reader.calibration = calibration(bytes(got))
+    got = dev.get_feature_report(FIRMWARE_ID, FEATURE_READ_LEN)
+    if got:
+        reader.update_version = update_version(bytes(got))
+
+
+def write(dev, reader, want: Effects, now: float) -> bool:
+    """What `want` needs sent now: nothing while it equals what was last
+    sent (False); else, the first time, Linux's take-over (the light
+    bar's setup to "out", so the host's colours stick — spec §5.3, enough
+    on macOS over USB and Bluetooth, a real Edge 2026-11-02), then the
+    output report, through the reader's `_send` (which learns the USB
+    length)."""
+    if want.key() == reader._sent_key:
+        return False
+    if reader._sent_key is None:
+        reader._send(dev, output_report(Effects(), bluetooth=reader.bluetooth,
+                                        seq=reader._next_seq(), first=True,
+                                        usb_len=reader._usb_len()), first=True)
+    reader._send(dev, output_report(want, bluetooth=reader.bluetooth, seq=reader._next_seq(),
+                                    rumble_v2=reader.rumble_v2, usb_len=reader._usb_len()))
+    return True
+
+
+def calm(dev, reader, want: Effects) -> None:
+    """On the way out: rumble stopped and the triggers freed (the light
+    keeps its colour), so nothing goes on shaking or pushing back."""
+    quiet = Effects(light=want.light, players=want.players, brightness=want.brightness)
+    reader._send(dev, output_report(quiet, bluetooth=reader.bluetooth, seq=reader._next_seq(),
+                                    rumble_v2=reader.rumble_v2, usb_len=reader._usb_len()))

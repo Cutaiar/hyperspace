@@ -6404,15 +6404,107 @@ header's count shortens to a number rather than run off the edge; in 4
 the side panel lists the Xbox pad's patched ports, no picture (the
 picture is the first pad's).
 
-## AS. The feedback starter (wave 0 E1)
+## AV. The Joy-Con, one per role (plan 46)
 
+The owner's Joy-Con (L), 2026-11-02 (decision register rows 565–570):
+the first checks with it in the app. The Joy-Con sleeps when idle and
+only a press of one of its buttons wakes it; the host cannot. Charge it
+first (it read low). Run 425 before the rest: it answers what they
+assume.
+
+**424. The Joy-Con over Bluetooth, as the app reads it.** (Mac, the
+Joy-Con paired)
+Headless: `tests/test_pads_nintendo.py`.
+1. Pair: hold the sync button on the rail until the lights run; System
+   Settings ▸ Bluetooth ▸ Joy-Con (L). Config: one gamepad entry,
+   `controller = "joycon-l"` (or none: `any` takes it). Launch.
+2. SYSTEM: read the pad's line.
+3. Hold it like a remote, face up, the stick end pointing away. Press
+   each arrow, SL, SR, L, ZL, −, capture and the stick in; move the
+   stick each way.
+4. Show the on-screen pad (SYSTEM ▸ Pad diagram) and GRAPH's pad node.
+
+*Pass:* (2) `hid: Joy-Con (L) (bluetooth) · battery n %`. (3) ↓ lights
+`A`, → `B`, ← `X`, ↑ `Y`, SL / SR the back pair, L `LB`, ZL fills `LT`,
+− `VIEW`, capture `SHARE`, the click `LSTICK`; the stick drives the
+left stick only. (4) the face shows one stick, four arrows, L / ZL, SL /
+SR, −, ◉ and the tilt bubble — no right stick, no D-pad, no touchpad;
+GRAPH's node lists those ports and `motion:` lanes, no `touch:`, no
+`hat:`, and sinks for rumble heavy / light and the player lights only.
+
+**425. The probe's checks, and the findings committed.** (Mac, the
+Joy-Con paired; the app closed)
+1. `uv run python tools/hid_probe.py --controller joycon-l --check
+   --record joycon-check.jsonl`. Follow every step.
+2. Commit `joycon-findings.json` under
+   `docs/plans/assets/46-joycon/` and half a second of each step of the
+   tape as `tests/fixtures/pads/joycon-bt-excerpt.jsonl` (`git add -f`:
+   fixtures are ignored), with a test over it as
+   `tests/test_pads_real.py` does for the Edge.
+
+*Pass:* the link line says bluetooth, ~62 Hz, flash records 6 (or 5),
+calibration read; every button step ✓; the stick reaches ≥ 0.95 each
+way and rests within ±0.05; the sensors' step says the built map holds
+(else the proposed map goes into `nintendo.AXIS_MAP` and this check is
+run again); three lights, rumble low, rumble high and the stop are each
+seen. Fail: a button that lands on another name is a bit in
+`nintendo._L_BUTTONS`; a stick that reads off-centre at rest with
+`recentred False` is `RECENTRE_MAX` / `RECENTRE_SPREAD`.
+
+**426. The six axes in the hand.** (Mac, the Joy-Con paired)
+1. Launch; SYSTEM ▸ Pad diagram.
+2. Tip the right side down; lift the far end; turn it right; shake it.
+3. Right-click a rotation phase param → Learn pad; tilt the Joy-Con
+   left–right; let go. Repeat onto another param with a shake.
+
+*Pass:* (2) the tilt bubble follows (roll right high, pitch far end up
+high), yaw leans right and leaks home, SHAKE flashes once per jolt.
+(3) the first Learn lands `motion:roll` from where the Joy-Con was
+held when armed; the second `motion:shake` as a trigger; each drives
+its param.
+
+**427. Drift.** (Mac, a Joy-Con whose stick is known to drift, if there
+is one)
+1. Launch with the stick untouched; read `axis:LX` / `LY` on GRAPH's
+   pad node (or the Lanes readout).
+2. Shove the stick full right, let go; read again.
+3. Hold the stick half right while relaunching; let go after the pad's
+   line appears.
+
+*Pass:* (1) both rest at 0.50 (recentred). (2) back to 0.50 within the
+deadzone. (3) the stick was held at connect, so the flash's centre
+stands (SYSTEM's line is unchanged); after letting go the reading is
+whatever the flash says — a drift shows here and nowhere else.
+
+**428. Rumble and the lights.** (Mac, the Joy-Con paired)
+1. Launch. Read the player lights.
+2. ROUTING ▸ sinks: `lane:0` → `joy:3` (the heavy band on the sub);
+   play music. Then a param → `joy:4`.
+3. Quit the app while it rumbles.
+
+*Pass:* (1) one light for the first pad entry, two for a second. (2) it
+buzzes with the bass, the light band on top; no stutter (the refresh
+every 50 ms holds it). (3) the rumble stops at once; the light stays.
+
+**429. Beside the Edge, or a second Joy-Con.** (Mac, both paired)
+1. Two gamepad entries: `controller = "edge"` and `controller =
+   "joycon-l"` (or two Joy-Cons, `joycon-l` and `joycon-r`). Launch.
+2. Press on each.
+
+*Pass:* each role reads its own pad; the (R)'s stick is also `axis:LX`
+under its role, its face by position as the (L)'s (its B, the bottom
+button, is `pad:A`; its A `pad:B`; its Y `pad:X`; its X `pad:Y` — the
+on-screen pad shows its own letters), R / ZR `RB` / `RT`; neither
+steals the other's; unplugging one leaves the other's rows alone. The
+(R)'s tilt: run the probe's checks on it too — its sensor map is from
+the sources, unverified (plan 46 D5).
+## AS. The feedback starter (wave 0 E1)
 The 2026-10-31 triage's "echo / reverb starter", built 2026-11-02 as
 **feedback** (decision register row 564, recommended: delay loops are the
 trails mechanism, the look-back keeps the dream; "echo" already names the
 look-back's frames). Headless: `tests/test_graph_starters.py` (the
 feedback tests, `test_feedback_draws_and_its_trail_fades_to_clear`,
 `test_a_fringe_and_an_interior_fade_at_one_rate`).
-
 **423. Feedback on a live preset: the decay stays calm, fades to clear, and two loops.** (Mac; the TV or a projector helps)
 1. Load a party preset with the scene into All outputs (or **new**, then
    the scene chain). GRAPH: right-click the cable `scene → All outputs`,
@@ -6427,7 +6519,6 @@ feedback tests, `test_feedback_draws_and_its_trail_fades_to_clear`,
 5. Right-click the new composite's node (expanded, so its port rows show):
    **add feedback after**.
 6. ⌘Z twice.
-
 *Pass:* in 1 three new nodes land left to right on the cable — delay,
 fade, composite — and the head line reads "feedback: scene → composite
 over → output.all.image; composite → delay → fade → composite under —

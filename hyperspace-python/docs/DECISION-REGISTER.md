@@ -9363,8 +9363,50 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
   not report their own bits, sensors on other axes. Each is a constant or
   a table in `pads/`, named there.
 
+### 565–570. Plan 46: the Joy-Con, one per role, as a six-axis totem
+
+- **Asked.** The owner, 2026-11-02, a Joy-Con (L) just paired over
+  Bluetooth: "one Joy-Con per role because I only have one", "held more
+  like a Wii Remote than a game pad … a kinetic controller … the
+  important part is the 6-axis IMU", "show up as individual game pads …
+  only one stick or one set of pad buttons", "calibrating drift is
+  something I do want to do", "extend Dillon's work here".
+- **Built**, as recommended: [`plans/46-joycon.md`](plans/46-joycon.md)
+  (D1–D6 = rows 565–570): `pads/nintendo.py` beside `pads/sony.py` on
+  the same road, three models, a model saying which controls it has,
+  the probe's Joy-Con checks. Rows: **565** one Joy-Con per entry (a pair
+  as one pad not built); **566** the Wii-Remote hold frames the
+  vocabulary (one stick = the left stick, the (L)'s arrows the face by
+  position, SL / SR the back pair, L / ZL `LB` + `LT`, no `hat:`);
+  **567** `Model.controls` — the ports, Learn, the on-screen pad and the
+  sinks show only what the pad has; **568** drift calibrated from the
+  flash (the user's record over the factory's) then the stick's rest at
+  connect becomes its centre (within 0.3, spread under 0.1), no config
+  key; **569** the sensors' axes are the codec's `AXIS_MAP` for the hold,
+  from the notes and one flat reading; **570** the lab is the app's pad
+  window, not a browser page (the owner's own call, 2026-11-02: "if we
+  can see the Joy-Con in the app with the same level of detail as the
+  Edge, we should just do that") — Faithful draws the Joy-Con upright
+  with the stick's well, its raw reading and the centre in use beside
+  the tilt and the sensors' numbers, Cockpit one dial, Lanes only what
+  it has plus its calibration; no `prototypes/joycon-lab/`.
+- **Checked on the hardware** (hand check 425, the owner, 2026-11-02):
+  the probe's run on the real Joy-Con (L) over Bluetooth — the flash
+  answered (factory stick and sensor calibrations, no user records),
+  the stick recentred and rests at −0.02, every one of the eleven
+  buttons landed as built (566), the proposed sensor map equals the
+  built `AXIS_MAP` (569 settled), three lights, both rumble bands and
+  the stop seen. Findings and a tape slice in the tree
+  (`plans/assets/46-joycon/`, `tests/test_pads_joycon_real.py`).
+  Nothing in the codec changed.
+- **What would overturn it.** The owner wanting the face or the hat
+  under the Xbox names anyway (566, 567), a second Joy-Con that should
+  pair into one pad (565), a stick whose rest the recentre bounds miss
+  (568: `RECENTRE_MAX`, `RECENTRE_SPREAD`), a rumble that stutters in a
+  set (`RUMBLE_REFRESH_S`), or a Joy-Con (R) / Pro Controller that reads
+  otherwise (unseen).
+
 ### 561. Coarse and fine through tapers: speed on a signed exponential, amounts on a zero-safe log, the route depths migrated in the same PR
-
 - **Asked.** The owner, 2026-10-31, after the show of 2026-10-30: "turning
   those values down to 0.05× or 5 % … very, very low values are really
   convincing" — on a linear −8 … +8 a knob could not land 0.05× (0.003 of
@@ -9436,7 +9478,6 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
 - **Judge it.** Check 420. **The owner runs `uv run python
   tools/retaper_routes.py` (then `--write`) on the library before the next
   show**, both Macs on this build.
-
 - **Asked.** The owner, 2026-10-31, after the show of 2026-10-30: "turning
   those values down to 0.05× or 5 % … very, very low values are really
   convincing" — on a linear −8 … +8 a knob could not land 0.05× (0.003 of
@@ -9508,9 +9549,7 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
 - **Judge it.** Check 420. **The owner runs `uv run python
   tools/retaper_routes.py` (then `--write`) on the library before the next
   show**, both Macs on this build.
-
 ### 562. Plan 45 V1: a video's audio track in memory, under the transport's clock
-
 - **Asked.** The 2026-10-31 triage: PyAV decoded only the video stream,
   the proxies carry no audio, and the only output stream was the
   analyzer's WAV playback. Four PRs: decode (V1), a mixer with per-channel
