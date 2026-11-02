@@ -202,7 +202,6 @@ def _parse_clock(name: str, n: int, val: str) -> ClockSpec:
         raise SpecError(f"{name}:{n}: @clock {uniform} — a clock's uniform is u_lower_snake")
     if uniform in HEAD_UNIFORMS:
         raise SpecError(f"{name}:{n}: @clock {uniform} — every effect already has it")
-    rate = rate.removeprefix("u_")      # the key, or its uniform
     period: float | None = None
     if len(words) == 3:
         word = words[2].lower()
@@ -210,28 +209,47 @@ def _parse_clock(name: str, n: int, val: str) -> ClockSpec:
             period = math.tau if word == "tau" else float(word)
         except ValueError as e:
             raise SpecError(f"{name}:{n}: @clock {uniform} — bad period {words[2]!r}") from e
+        if not math.isfinite(period):       # `x %= inf` is inf for a backwards rate
+            raise SpecError(f"{name}:{n}: @clock {uniform} — a period is finite and > 0 (or `tau`)")
         if not period > 0.0:
             raise SpecError(f"{name}:{n}: @clock {uniform} — a period is > 0 (or `tau`)")
+    # the rate as written: a key, or a uniform — resolved against the
+    # file's params once they are all read (`_check_clocks`)
     return ClockSpec(uniform=uniform, rate=rate, period=period)
 
 
+_DECLARED = re.compile(r"\buniform\s+\w+\s+(u_\w+)\s*(?:\[[^\]]*\])?\s*;")
+
+
+def _declared_uniforms(source: str) -> set[str]:
+    """Every uniform the file's code declares — comments removed first, so
+    a comment that mentions a declaration is not one."""
+    code = re.sub(r"/\*.*?\*/", " ", source, flags=re.DOTALL)
+    code = re.sub(r"//[^\n]*", "", code)
+    return set(_DECLARED.findall(code))
+
+
 def _check_clocks(name: str, spec: EffectSpec) -> None:
-    """Every `@clock`'s rate is one of the file's own @param keys, its
-    uniform is no param's, no other clock's and not declared by the file
-    (this module declares it, beside u_phase)."""
+    """Every `@clock`'s rate is one of the file's own @param — the word as
+    written is a key first, then a param's uniform (a key may itself start
+    with `u_`) — its uniform is no param's, no other clock's and not
+    declared by the file (this module declares it, beside u_phase)."""
     keys = {p.key for p in spec.params}
-    uniforms = {p.uniform for p in spec.params}
+    by_uniform = {p.uniform: p.key for p in spec.params}
+    declared = _declared_uniforms(spec.source)
     seen: set[str] = set()
-    for c in spec.clocks:
-        if c.rate not in keys:
+    for k, c in enumerate(spec.clocks):
+        rate = c.rate if c.rate in keys else by_uniform.get(c.rate)
+        if rate is None:
             raise SpecError(f"{name}: @clock {c.uniform} — its rate {c.rate!r} is no @param of "
                             "this file (a clock runs at speed × one of the file's own params)")
-        if c.uniform in uniforms or c.uniform in seen:
+        if c.uniform in by_uniform or c.uniform in seen:
             raise SpecError(f"{name}: @clock {c.uniform} — that uniform is taken")
-        if re.search(rf"\buniform\s+\w+\s+{re.escape(c.uniform)}\b", spec.source):
+        if c.uniform in declared:
             raise SpecError(f"{name}: @clock {c.uniform} — leave the uniform undeclared: fx.py "
                             "declares every clock beside u_phase")
         seen.add(c.uniform)
+        spec.clocks[k] = replace(c, rate=rate)
 
 
 def parse(name: str, source: str) -> EffectSpec:

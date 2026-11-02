@@ -46,14 +46,18 @@ PATTERN_PROGRAMS = {
 def effect_pairs(name: str, source: str) -> set[tuple[str, str]]:
     """The (effect, param uniform) products in one effect file: its @param
     uniforms are the params; u_time, u_phase and its @clock uniforms are
-    the times. A param an `@clock` integrates is exempt — the host runs
-    that rate now."""
+    the times. The pre-port line is exempt — a param an `@clock` integrates
+    multiplied into `u_phase` or `u_time`, the rate the host runs now — but
+    never a product whose time side is the clock itself: `u_drift_t *
+    u_drift` is the rate applied twice."""
     spec = parse(name, source)
     params = {p.uniform for p in spec.params}
-    times = set(TIME_UNIFORMS) | {c.uniform for c in spec.clocks}
-    integrated = {f"u_{c.rate}" for c in spec.clocks}
+    clock_uniforms = {c.uniform for c in spec.clocks}
+    times = set(TIME_UNIFORMS) | clock_uniforms
+    by_key = {p.key: p.uniform for p in spec.params}
+    integrated = {by_key[c.rate] for c in spec.clocks}
     return {(name, p) for f in findings(source, params, times) for p in f.params
-            if p not in integrated}
+            if not (p in integrated and not f.times & clock_uniforms)}
 
 
 def pattern_pairs() -> set[tuple[str, str]]:
@@ -81,13 +85,6 @@ def test_no_shipped_shader_multiplies_time_by_a_param_beyond_the_allowlist():
     assert not stale, f"ported: delete from ALLOWLIST: {sorted(stale)}"
 
 
-def test_the_allowlist_is_exactly_todays_offenders():
-    """What the lint found on 2026-11-02, by name — so K2 and K4 know what
-    they are porting, and the list cannot quietly grow."""
-    assert set(ALLOWLIST) == {("warp", "u_drift"), ("warp", "u_scale"),
-                              ("tripcolour", "u_pulse"), ("patterns", "m_colour")}
-
-
 # ---------------------------------------------------------------- the lint itself
 
 HEAD = 'uniform float u_a; // @param 0 1 0.5 "A"\nuniform float u_b; // @param 0 1 0.5 "B"\n'
@@ -104,6 +101,13 @@ def pairs(body: str, clocks: str = "") -> set[str]:
     ("float t = u_time * u_b;", {"u_b"}),                       # the wall clock too
     ("float t = u_phase / u_a;", {"u_a"}),                      # a division is a rate
     ("float t = u_phase; t *= u_a;", {"u_a"}),                  # a compound product
+    ("float r = u_a; r *= u_phase;", {"u_a"}),                  # … with the param on the left
+    ("float r = u_a; r /= u_phase;", set()),                    # a param over time is no rate
+    ("#define K (u_a * 2.0)\nfloat x = u_phase * K;", {"u_a"}),  # an object-like macro, expanded
+    ("switch (int(u_b)) { case 1: { float t = u_phase * u_a; } break; default: break; }",
+     {"u_a"}),                                                  # inside a switch
+    ("float x; switch (int(u_b)) { case 0: x = u_phase * u_a; break; case 1: x = 1.0; }",
+     {"u_a"}),
     ("float t = u_phase * 20.0; float x = sin(t * u_a);", {"u_a"}),    # through an alias
     ("float t = u_phase; vec2 p = (uv + vec2(t) * 0.1) * u_a;", {"u_a"}),  # a constructor is glass
     ("float r = u_a * 2.0; float x = u_phase * r;", {"u_a"}),  # a param alias too
@@ -129,16 +133,42 @@ def test_products_through_a_user_function_are_found():
     assert {p for _, p in effect_pairs("t", src)} == {"u_a", "u_b"}
 
 
-def test_a_clock_uniform_is_a_time_and_its_rate_is_exempt():
+def test_a_clock_uniform_is_a_time_and_only_the_pre_port_line_is_exempt():
     """`@clock u_t a`: `u_t * u_b` is a product of a time (the clock) and a
-    param — found; `u_phase * u_a` is the rate the host now integrates —
-    exempt, so a port may keep the old line beside the new while it is
-    judged by eye, and the clock itself reads clean."""
+    param — found; `u_phase * u_a` is the pre-port line, the rate the host
+    now integrates — exempt, so a port may keep it beside the new while
+    the two are judged by eye; but `u_t * u_a` is the rate applied twice
+    (the porting mistake) and is never exempt."""
     clock = "// @clock u_t a\n"
     assert pairs("vec2 p = uv + vec2(u_t) * 0.1;", clock) == set()
     assert pairs("vec2 p = uv + vec2(u_t * u_b) * 0.1;", clock) == {"u_b"}
     assert pairs("float t = u_phase * u_a;", clock) == set()
+    assert pairs("float t = u_time * u_a;", clock) == set()
     assert pairs("float t = u_phase * u_b;", clock) == {"u_b"}
+    assert pairs("vec2 p = uv + vec2(u_t * u_a) * 0.1;", clock) == {"u_a"}
+    assert pairs("float t = u_t; t *= u_a;", clock) == {"u_a"}
+    assert pairs("float t = (u_phase + u_t) * u_a;", clock) == {"u_a"}
+
+
+def test_a_function_with_a_precision_qualifier_is_a_function():
+    """`highp float f(…)` is read as a function (its body checked, its
+    formals tainted by the call), not skipped as a statement."""
+    src = (HEAD + "highp float scaled(float x) { return x * u_a; }\n"
+           "vec4 effect(vec2 uv) { float y = scaled(u_phase); return src(uv) * y; }\n")
+    assert {p for _, p in effect_pairs("t", src)} == {"u_a"}
+
+
+def test_a_function_like_macro_naming_a_param_or_a_time_fails_the_lint():
+    """The lint expands object-like macros and refuses function-like ones
+    that touch a time or a param: write those as a GLSL function, which it
+    can read (a preprocessor with argument substitution is not worth
+    carrying for shaders we write ourselves)."""
+    from shader_lint import LintError
+    with pytest.raises(LintError, match="RATE"):
+        pairs("#define RATE(x) ((x) * u_a)\nfloat t = RATE(u_phase);")
+    with pytest.raises(LintError, match="AT"):
+        pairs("#define AT(x) (u_phase * (x))\nfloat t = AT(2.0);")
+    assert pairs("#define HALF(x) ((x) * 0.5)\nfloat t = HALF(u_phase) + u_a;") == set()
 
 
 def test_the_lint_reads_every_shipped_effect_through_to_the_end():

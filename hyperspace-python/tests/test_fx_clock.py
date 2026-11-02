@@ -91,6 +91,9 @@ def test_parse_reads_a_clock():
     ("// @clock u_t rate\n// @clock u_t gain", "taken"),       # twice
     ("// @clock u_t rate 0", "> 0"),
     ("// @clock u_t rate -1", "> 0"),
+    ("// @clock u_t rate inf", "finite"),                       # `x %= inf` is inf for x < 0
+    ("// @clock u_t rate 1e999", "finite"),
+    ("// @clock u_t rate nan", "finite"),
     ("// @clock u_t rate soon", "bad period"),
 ])
 def test_parse_refuses_a_bad_clock(line, why):
@@ -103,6 +106,32 @@ def test_the_file_may_not_declare_the_clocks_uniform():
     src = CLOCKED.replace("uniform float u_gain;", "uniform float u_scroll;\nuniform float u_gain;")
     with pytest.raises(SpecError, match="leave the uniform undeclared"):
         parse("scroll", src)
+    # a declaration in the code, not on a @param line, is still one
+    src = CLOCKED.replace("vec4 effect", "uniform float u_scroll;\nvec4 effect")
+    with pytest.raises(SpecError, match="leave the uniform undeclared"):
+        parse("scroll", src)
+    # a comment that mentions the declaration is not one
+    src = CLOCKED.replace("vec4 effect", "// fx.py adds `uniform float u_scroll;` for us\n"
+                          "/* as if uniform float u_scroll; */\nvec4 effect")
+    assert parse("scroll", src).clocks[0].uniform == "u_scroll"
+
+
+def test_a_rate_written_as_a_key_wins_over_a_uniform_of_that_spelling():
+    """A @param key may itself start with `u_` (`uniform float u_u_rate;`
+    is key `u_rate`): the rate word is resolved against the keys first,
+    then the uniforms, never by stripping a prefix."""
+    src = CLOCKED.replace("uniform float u_rate;", "uniform float u_u_rate;")
+    by_key = src.replace("// @clock u_scroll rate", "// @clock u_scroll u_rate")
+    assert parse("scroll", by_key).clocks[0].rate == "u_rate"           # the key, as is
+    by_uniform = src.replace("// @clock u_scroll rate", "// @clock u_scroll u_u_rate")
+    assert parse("scroll", by_uniform).clocks[0].rate == "u_rate"       # the uniform → its key
+    both = src.replace("uniform float u_gain;", 'uniform float u_gain;\n'
+                       'uniform float u_u_u_rate;  // @param 0 1 0 "Deep"')
+    # `u_u_rate` names key u_u_rate (the deeper uniform's) before uniform u_u_rate
+    assert parse("scroll", both.replace("// @clock u_scroll rate",
+                                        "// @clock u_scroll u_u_rate")).clocks[0].rate == "u_u_rate"
+    with pytest.raises(SpecError, match="no @param"):
+        parse("scroll", src.replace("// @clock u_scroll rate", "// @clock u_scroll rate_"))
 
 
 def test_a_clock_is_declared_in_the_head_and_changes_the_signature():
@@ -231,7 +260,10 @@ def test_a_clocked_rate_step_is_continuous_and_the_twins_jumps(ctx, fxdir):
     twin = uv_flow.run(ctx, FxState(fxdir), "twin", "rate", 1.0, 1.1)
     assert clocked.continuous(), clocked
     assert clocked.rest and max(clocked.rest) < 1.0                   # ~0.5 px a frame
+    # the negative, measured here and only here: the twin's still frames
+    # drift under a pixel, its step frame is a jump of many screens
     assert not twin.continuous(), twin
+    assert max(twin.rest) < 1.0 and max(twin.after) < 1.0, twin
     assert twin.step > 20 * twin.bound(), twin                        # not a near miss
 
 
@@ -243,31 +275,19 @@ def test_warps_speed_step_is_continuous(ctx):
     assert r.step < 1.0, r                                            # ~0.36 px: the drift, doubled
 
 
-@pytest.mark.xfail(strict=True, reason="K2 ports warp to @clock: until then `u_phase * u_drift` "
-                   "shifts the field by phase × Δdrift on a knob step")
-def test_warps_drift_step_is_continuous(ctx):
-    """The show's bug, measured: a tenth of a turn on Drift an hour in
-    moves the whole field. Strict: when K2 lands this passes, and the
-    xfail must go."""
-    r = uv_flow.run(ctx, FxState(), "warp", "drift", 1.0, 1.1, values=WARP_SEEN)
+@pytest.mark.xfail(strict=True, reason="K2 ports warp and tripcolour to @clock: until then the "
+                   "shader multiplies u_phase by the param and a knob step lands the field "
+                   "somewhere else")
+@pytest.mark.parametrize("effect, param, before, after, values", [
+    ("warp", "drift", 1.0, 1.1, WARP_SEEN),          # ~15 px on the step, 0.05 px a frame between
+    ("warp", "scale", 3.0, 3.3, WARP_SEEN),          # scale multiplies the scrolled offset: the same
+    ("tripcolour", "pulse", 1.5, 1.6, {}),           # a colour effect: the decoded green jumps
+])
+def test_the_allowlisted_rate_params_step_continuously(ctx, effect, param, before, after,
+                                                        values):
+    """The show's bug, measured on each pair the lint's allowlist names
+    for K2: a small step an hour in should move the field no further than
+    its drift. Strict xfail: a port flips each case to a pass with no
+    edit here but deleting the mark (and its allowlist entry)."""
+    r = uv_flow.run(ctx, FxState(), effect, param, before, after, values=values)
     assert r.continuous(), r
-
-
-@pytest.mark.parametrize("param, before, after", [("drift", 1.0, 1.1), ("scale", 3.0, 3.3)])
-def test_warps_drift_and_scale_jump_as_the_rule_predicts(ctx, param, before, after):
-    """The negative, kept as a measurement so the harness is known to see
-    it: the step frame's displacement (about 15 px at amount 2) is far
-    outside the bound the still frames set (they drift under a pixel a
-    frame — about 0.05). Scale multiplies the scrolled offset the same
-    way, so it jumps the same."""
-    r = uv_flow.run(ctx, FxState(), "warp", param, before, after, values=WARP_SEEN)
-    assert max(r.rest) < 1.0 and max(r.after) < 1.0, r
-    assert r.step > 10 * r.bound(), r
-
-
-def test_tripcolours_pulse_step_jumps_in_colour(ctx):
-    """A colour effect through the harness: the UV source's green is v, so
-    a jump in `sin(u_phase * u_pulse)` reads as a jump of the decoded
-    field — the pulse's phase lands somewhere else on the step (K2)."""
-    r = uv_flow.run(ctx, FxState(), "tripcolour", "pulse", 1.5, 1.6)
-    assert not r.continuous(), r

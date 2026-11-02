@@ -31,11 +31,14 @@ offset, not a rate. `mod(u_phase, u_param)` is a wrap. A hash of a cell
 their grid re-hashes on a size step, which is another rule's business.
 
 The analysis is a small recursive descent over the shader's tokens, one
-function body at a time, with a flat scope per function; formal
-parameters take the taint of every call site's arguments (fractals'
-`shape(uv, T)` sees `T` as a time), to a fixpoint. It is a net for the
-shaders we ship, not a GLSL compiler: a construct it does not know is
-skipped to the next `;`.
+function body at a time (a precision qualifier on the return type is
+fine), with a flat scope per function; `if` / `for` / `while` / `switch`
+bodies are read as statements; formal parameters take the taint of every
+call site's arguments (fractals' `shape(uv, T)` sees `T` as a time), to a
+fixpoint. Object-like macros are expanded first, as the compiler would; a
+function-like macro that names a time or a param is a `LintError` (write
+it as a function). It is a net for the shaders we ship, not a GLSL
+compiler: a construct it does not know is skipped to the next `;`.
 """
 
 from __future__ import annotations
@@ -98,16 +101,55 @@ class Finding:
     params: frozenset[str]
 
 
+class LintError(ValueError):
+    """The lint cannot read this shader honestly (a function-like macro that
+    touches a time or a param): change the shader, not the lint."""
+
+
+_DEFINE = re.compile(r"^\s*#\s*define\s+(?P<name>[A-Za-z_]\w*)(?P<args>\([^)]*\))?\s*(?P<body>.*)$")
+
+
 def strip(source: str) -> str:
-    """Comments and preprocessor lines gone, every line kept (numbers hold)."""
+    """Comments and preprocessor lines gone, every line kept (numbers hold);
+    the object-like macros (`#define K (u_a * 2.0)`) expanded where they
+    are used, as the compiler would, so a product through one is seen.
+    A function-like macro is left as a call the lint reads as opaque —
+    `macros` says which there were, and `findings` refuses one that names
+    a time or a param."""
+    return _strip(source)[0]
+
+
+def _strip(source: str) -> tuple[str, dict[str, str]]:
     source = re.sub(r"/\*.*?\*/", lambda m: re.sub(r"[^\n]", " ", m.group()), source, flags=re.DOTALL)
+    # a `\`-continued directive is one line: joined, the continuations blanked
+    lines = source.split("\n")
+    k = 0
+    while k < len(lines):
+        if lines[k].lstrip().startswith("#"):
+            while lines[k].rstrip().endswith("\\") and k + 1 < len(lines):
+                lines[k] = lines[k].rstrip()[:-1] + " " + lines[k + 1]
+                lines[k + 1] = ""
+                k += 1
+        k += 1
+    objects: dict[str, str] = {}
+    function_like: dict[str, str] = {}
     out = []
-    for line in source.split("\n"):
+    for line in lines:
         line = line.split("//", 1)[0]
         if line.lstrip().startswith("#"):
+            m = _DEFINE.match(line)
+            if m:
+                (function_like if m["args"] else objects)[m["name"]] = m["body"].strip()
             line = ""
         out.append(line)
-    return "\n".join(out)
+    text = "\n".join(out)
+    for _ in range(8):                       # a macro may name another
+        before = text
+        for name, body in objects.items():
+            text = re.sub(rf"\b{re.escape(name)}\b", f"({body})", text)
+        if text == before:
+            break
+    return text, function_like
 
 
 def tokenize(source: str) -> list[Token]:
@@ -211,6 +253,9 @@ class _Parser:
             if t.text in ("if", "while", "switch"):
                 self.i += 1
                 self.paren_expr()
+                return                      # the body (or block) follows as statements
+            if t.text in ("case", "default"):
+                self.skip_past(":")         # the label; its statements follow
                 return
             if t.text == "else":
                 self.i += 1
@@ -407,9 +452,11 @@ class _Parser:
         return self.names.get(t.text, NONE)
 
     def check(self, left: Taint, right: Taint, op: Token) -> None:
+        """A product (either way round) or a division with the time on the
+        left; `*=` and `/=` are the same products written short."""
         if left.times and right.params:
             self.findings.add(Finding(op.line, left.times, right.params))
-        if op.text == "*" and right.times and left.params:
+        if op.text in ("*", "*=") and right.times and left.params:
             self.findings.add(Finding(op.line, right.times, left.params))
 
 
@@ -420,10 +467,14 @@ def _functions(toks: list[Token]) -> tuple[dict[str, Func], list[tuple[int, int]
     tops: list[tuple[int, int]] = []
     i, n = 0, len(toks)
     while i < n:
-        # `type name ( … ) {`
-        if (toks[i].kind == "id" and i + 2 < n and toks[i + 1].kind == "id"
-                and toks[i + 2].text == "("):
-            j = i + 3
+        # `[qualifiers] type name ( … ) {` — `highp float f(…)` is a function too
+        k = i
+        while k < n and toks[k].text in QUALIFIERS:
+            k += 1
+        if (k + 2 < n and toks[k].kind == "id" and toks[k + 1].kind == "id"
+                and toks[k + 2].text == "("):
+            name = toks[k + 1].text
+            j = k + 3
             depth = 1
             formals: list[str] = []
             last: Token | None = None
@@ -452,7 +503,7 @@ def _functions(toks: list[Token]) -> tuple[dict[str, Func], list[tuple[int, int]
                             break
                     j += 1
                 formals = [f for f in formals if f not in TYPES and f not in QUALIFIERS]
-                funcs[toks[i + 1].text] = Func(toks[i + 1].text, formals, start, j)
+                funcs[name] = Func(name, formals, start, j)
                 i = j
                 continue
             if j < n and toks[j].text == ";":            # a prototype
@@ -470,7 +521,15 @@ def _functions(toks: list[Token]) -> tuple[dict[str, Func], list[tuple[int, int]
 def findings(source: str, params: set[str], times: set[str] = TIME_UNIFORMS,
              rounds: int = 6) -> set[Finding]:
     """Every time × param product in `source`: `params` are its param
-    symbols (uniform names), `times` its time symbols."""
+    symbols (uniform names), `times` its time symbols. Raises `LintError`
+    on a function-like macro that names either: the lint cannot see
+    through one, so the shader writes it as a function instead."""
+    _, function_like = _strip(source)
+    for name, body in function_like.items():
+        words = set(re.findall(r"[A-Za-z_]\w*", body))
+        if words & (set(params) | set(times)):
+            raise LintError(f"#define {name}(…) names {sorted(words & (set(params) | set(times)))}:"
+                            " the lint cannot read a function-like macro — write it as a function")
     toks = tokenize(source)
     funcs, tops = _functions(toks)
     globals_: dict[str, Taint] = {t: Taint(times=frozenset({t})) for t in times}

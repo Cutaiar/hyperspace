@@ -6404,7 +6404,7 @@ header's count shortens to a number rather than run off the edge; in 4
 the side panel lists the Xbox pad's patched ports, no picture (the
 picture is the first pad's).
 
-## AQ. Continuity: `@clock`, and no shader multiplies time by a param
+## AR. Continuity: `@clock`, and no shader multiplies time by a param
 
 Register row 560 (the owner, 2026-11-02; wave 0 K1, `wave0/k1-clock-directive`).
 K1 is the framework only — the directive, the lint and the harness; **no
