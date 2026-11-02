@@ -429,3 +429,81 @@ def test_a_reading_of_no_pad_and_of_a_pad_without_extras():
     r = ui_pad_views.read(fake)
     assert r.on and r.down == {"B"} and r.hat == gamepad.HAT_UP and r.motion is None
     assert not r.has("touch") and r.effects is None
+
+
+# ---- Faithful and Cockpit drawn the lab's way (NanoVG, ui_pad_nvg) ----
+
+def _drawn(view, pad, st=None):
+    """`view` drawn by ui_pad_nvg with a pen that keeps only its hits (no
+    GPU): the hits, in the lab's 1000 × 620 design space."""
+    from hyperspace import ui_pad_nvg, ui_pad_views
+    pen = ui_pad_nvg.Pen()
+    ui_pad_nvg.VIEWS[view](pen, ui_pad_views.read(pad), {} if st is None else st)
+    return pen.hits
+
+
+def test_the_lab_drawings_place_every_control_inside_the_design_space():
+    """Every pad in both lab views: each control has a hit area inside the
+    design space; an Edge shows its back and Fn buttons and touchpad, an
+    Xbox pad and no pad only what they have."""
+    from hyperspace import ui_pad_nvg
+    pads = {"none": None, "xbox": _FakePad(down=("A",), lanes=[0.9, 0.1, 0.5, 0.5, 1.0, 0.0]),
+            "edge": _edge_pad()}
+    for view in ui_pad_nvg.VIEWS:
+        for name, pad in pads.items():
+            hits = _drawn(view, pad)
+            for x, y, w, h, source in hits:
+                assert 0 <= x and x + w <= ui_pad_nvg.DESIGN_W, (view, name, source)
+                assert 0 <= y and y + h <= ui_pad_nvg.DESIGN_H, (view, name, source)
+            got = {h[4] for h in hits}
+            assert {"pad:A", "pad:B", "pad:X", "pad:Y", "pad:LSTICK", "pad:RSTICK", "hat:UP",
+                    "axis:LT", "axis:RT", "pad:LB", "pad:RB", "pad:GUIDE"} <= got, (view, name)
+            extras = {"pad:LP", "pad:RP", "pad:LFN", "pad:RFN", "pad:TOUCH"}
+            if name == "edge":
+                assert extras <= got, (view, got)
+            else:
+                assert not extras & got, (view, name, got)
+
+
+def test_the_cockpit_keeps_a_trail_and_a_ticker_on_the_panel():
+    """The cockpit's memory is the state it is handed (kept on the panel):
+    a stick trail per side, capped, and a press on the ticker once."""
+    from hyperspace import ui_pad_nvg
+    st = {}
+    pad = _FakePad(down=("A",))
+    for _ in range(ui_pad_nvg.TRAIL + 10):
+        _drawn("cockpit", pad, st)
+    assert {len(t) for t in st["trails"].values()} == {ui_pad_nvg.TRAIL}
+    assert [k for k, _t in st["events"]] == ["pad:A"]
+
+
+def test_the_horizon_is_cut_to_its_ring():
+    """NanoVG cannot clip to a circle, so the tilt's lines are cut to it."""
+    from hyperspace import ui_pad_nvg
+    a, b = ui_pad_nvg._clip((-20, 0), (20, 0), 0, 0, 10)
+    assert a == (-10, 0) and b == (10, 0)
+    assert ui_pad_nvg._clip((-5, 0), (5, 0), 0, 0, 10) == ((-5, 0), (5, 0))
+    assert ui_pad_nvg._clip((-20, 15), (20, 15), 0, 0, 10) is None
+
+
+def test_without_gl_the_pad_window_draws_its_own_views(rig, monkeypatch):
+    """The headless panel has no GL renderer: NanoVG is not started (and
+    not marked failed), and the draw-list views draw instead."""
+    from hyperspace import ui_pad_nvg, ui_pad_views
+    reg = rig.reg
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    reg["ui.pad_diagram"].set(True)
+    reg["ui.panel"].set(False)
+    rig.panel.pad = _edge_pad()
+    reg["ui.pad_view"].set(ui_pad_views.VIEWS.index("faithful"))
+    _pad_frames(rig, monkeypatch)
+    surf = ui_pad_nvg.surface_of(rig.panel)
+    assert surf.vg is None and not surf.failed
+    assert {"pad:LP", "pad:TOUCH"} <= {h[4] for h in ui_pad._state(rig.panel)["view_ctx"].hits}
+
+
+def test_the_lab_colours_read_every_way_the_port_writes_them():
+    from hyperspace import ui_pad_nvg
+    assert ui_pad_nvg.rgba("#000") == (0.0, 0.0, 0.0, 1.0)
+    assert ui_pad_nvg.rgba("hot") == ui_pad_nvg.rgba(ui_pad_nvg.COL["hot"])
+    assert ui_pad_nvg.rgba((255, 0, 128), 0.5) == (1.0, 0.0, 128 / 255, 0.5)

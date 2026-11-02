@@ -15,8 +15,10 @@ three more ways to read it, picked by ``ui.pad_view`` beside the map.
             edges, the last presses scrolling along the foot
 
 Designed in the browser lab (`prototypes/edge-lab/`, its three readouts)
-and drawn here on the pad window's draw list, in the room ui_pad gives
-it, so the desk under it never moves. Read-only, like the map: a hover
+and drawn in the room ui_pad gives it, so the desk under it never moves:
+Faithful and Cockpit by `ui_pad_nvg` (the lab's canvas drawing ported to
+NanoVG, into a texture shown here) wherever the control window's GL takes
+it, else on the draw list by the versions here; Lanes always here. Read-only, like the map: a hover
 names a control, its mapping and its source; Learn pad is still the way
 onto one.
 
@@ -35,7 +37,7 @@ from dataclasses import dataclass, field
 
 from imgui_bundle import imgui
 
-from . import gamepad, ui, ui_desk
+from . import gamepad, ui, ui_desk, ui_pad_nvg
 from .pads import gesture, models
 
 VIEWS = ("map", "faithful", "lanes", "cockpit")
@@ -709,13 +711,39 @@ def _ticker(c: Ctx, st: dict, y: float, h: float) -> None:
 
 # ---------------------------------------------------------------- the door
 
+def _nvg(c: Ctx, view: str) -> bool:
+    """`view` drawn by NanoVG into a texture the size of the room (in the
+    window's pixels), shown on the draw list; its hits mapped back. False
+    where NanoVG cannot draw (no GL): the draw-list view instead."""
+    surf = ui_pad_nvg.surface_of(c.panel)
+    if c.w < 8 or c.h < 8 or not surf.ready():
+        return False
+    k = imgui.get_io().display_framebuffer_scale
+    tex, pen = surf.render(view, c.r, _state(c.panel).setdefault("nvg", {}),
+                           round(c.w * k.x), round(c.h * k.y))
+    c.dl.add_image(imgui.ImTextureRef(tex), _v(c.x, c.y), _v(c.x + c.w, c.y + c.h))
+    s = min(c.w / ui_pad_nvg.DESIGN_W, c.h / ui_pad_nvg.DESIGN_H)
+    ox = c.x + (c.w - ui_pad_nvg.DESIGN_W * s) / 2
+    oy = c.y + (c.h - ui_pad_nvg.DESIGN_H * s) / 2
+    for hx, hy, hw, hh, source in pen.hits:
+        c.hit(ox + hx * s, oy + hy * s, ox + (hx + hw) * s, oy + (hy + hh) * s, source)
+    return True
+
+
 DRAW = {"faithful": faithful, "lanes": lanes, "cockpit": cockpit}
 
 
 def draw(view: str, panel, dl, x: float, y: float, w: float, h: float, pad, says) -> Ctx:
     """Draw `view` in the room (x, y, w, h) on `dl`; the hover after. The
-    `Ctx` back, for the tests and the tools (its hits)."""
+    `Ctx` back, for the tests and the tools (its hits).
+
+    Faithful and Cockpit are drawn with NanoVG (ui_pad_nvg — the lab's
+    canvas drawing, ported) where the control window's GL will take it;
+    elsewhere (a headless panel) with the draw-list versions here."""
     c = Ctx(panel, dl, x, y, w, h, read(pad), says)
+    if view in ui_pad_nvg.VIEWS and _nvg(c, view):
+        _hover(c)
+        return c
     imgui.push_font(ui._FONTS["ui"], 12.0)
     try:
         DRAW[view](c)

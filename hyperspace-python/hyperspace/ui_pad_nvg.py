@@ -1,0 +1,917 @@
+"""The pad window's Faithful and Cockpit, drawn with NanoVG (plan 42's readouts, option 1).
+
+The browser lab (`prototypes/edge-lab/index.html`, `drawFaithful` /
+`drawCockpit`) draws on an HTML canvas: curved paths, gradients, glows,
+round-capped arcs. Dear ImGui's draw list has none of that, so these two
+views are drawn the lab's way — NanoVG, which imgui-bundle ships — into an
+offscreen texture the pad window shows as an image. The port follows the
+lab line for line, in its own 1000 × 620 design space, scaled to the room.
+
+  `Pen`      the canvas calls the port makes (paths, fills, strokes, text,
+             glows) over a NanoVG context; with no context it only keeps
+             the hit areas — what the tests draw with, no GPU needed
+  `Surface`  the NanoVG context and its framebuffer, made in the control
+             window's GL context the first time a view asks (one extra
+             call, `hello_imgui.init_gl_loader`, lets NanoVG reach GL
+             outside imgui-bundle's own runner); kept on the panel
+  `faithful` / `cockpit`   the two views, from a `ui_pad_views.Reading`
+
+Where no GL context is current (the tests' headless panel) or NanoVG will
+not start, `Surface.ready` is False and ui_pad_views draws its draw-list
+versions instead; the reason is kept (`Surface.failed`). The environment
+variable ``HYPERSPACE_NANOVG=0`` keeps NanoVG off altogether (the draw-list
+versions always) — a way out should a machine's GL not take it.
+"""
+
+from __future__ import annotations
+
+import math
+import os
+import random
+import time
+
+from . import gamepad
+
+DESIGN_W, DESIGN_H = 1000.0, 620.0
+FONT_K = 1.3                # the lab's type scale for these two views
+
+# the lab's palette (index.html `COL`)
+COL = {"body": "#1a1f2c", "bodyLine": "#3a4357", "idle": "#262d3c", "idleLine": "#465068",
+       "text": "#d9dfea", "dim": "#7d879b", "faint": "#3d4556", "hot": "#ffd166",
+       "back": "#ff9f43", "fn": "#c084fc", "A": "#7aa8ff", "B": "#ff5a6a", "X": "#ff7ad9",
+       "Y": "#40e0a0", "accent": "#6cb6ff", "ok": "#4ade80", "ground": "#0d0f14",
+       "cockpit": "#0a0c11", "well": "#10141c"}
+XBOX_INK = {"A": "#5fd35f", "B": "#ff5a5a", "X": "#4f8dff", "Y": "#ffd23f"}
+HAT_GLYPH = {"UP": "▲", "DOWN": "▼", "LEFT": "◀", "RIGHT": "▶"}
+PULSE_S = 0.26              # a one-frame trigger (tap, shake) shows this long
+TRAIL = 26                  # the cockpit's stick trails, frames
+TICKER_S = 2.2
+
+_FONT_DIR = os.path.join(os.path.dirname(__file__), "fonts")
+FONTS = {"ui": "Inter-Medium.ttf", "bold": "Inter-Bold.ttf", "mono": "JetBrainsMono-SemiBold.ttf",
+         "sym": "DejaVuSans.ttf"}
+
+
+def rgba(c: str | tuple, a: float = 1.0) -> tuple[float, float, float, float]:
+    """``"#rrggbb"``, a `COL` name or an (r, g, b) of 0–255 as floats 0–1,
+    alpha `a`."""
+    if isinstance(c, str):
+        c = COL.get(c, c)
+        h = c.lstrip("#")
+        if len(h) == 3:
+            h = "".join(ch * 2 for ch in h)
+        r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+    else:
+        r, g, b = (int(v) for v in c[:3])
+    return r / 255, g / 255, b / 255, a
+
+
+class Pen:
+    """Canvas-like drawing on NanoVG in the lab's design space. `vg` None:
+    a pen that draws nothing and keeps only the hit areas."""
+
+    def __init__(self, vg=None, nvg=None):
+        self.vg, self.n = vg, nvg
+        self.hits: list[tuple[float, float, float, float, str]] = []
+
+    @property
+    def live(self) -> bool:
+        return self.vg is not None
+
+    def hit(self, x, y, w, h, source: str) -> None:
+        self.hits.append((x, y, w, h, source))
+
+    # ---- paths ----
+    def rr(self, x, y, w, h, r) -> None:
+        if self.live:
+            self.n.begin_path(self.vg)
+            self.n.rounded_rect(self.vg, x, y, max(0.01, w), h, min(r, abs(w) / 2, h / 2))
+
+    def circle(self, cx, cy, r) -> None:
+        if self.live:
+            self.n.begin_path(self.vg)
+            self.n.circle(self.vg, cx, cy, r)
+
+    def arc(self, cx, cy, r, a0, a1) -> None:
+        """A clockwise arc, as canvas draws one (radians, y down)."""
+        if self.live:
+            self.n.begin_path(self.vg)
+            self.n.arc(self.vg, cx, cy, r, a0, a1, self.n.Winding.cw.value)
+
+    def lines(self, *pts) -> None:
+        if self.live:
+            self.n.begin_path(self.vg)
+            self.n.move_to(self.vg, *pts[0])
+            for p in pts[1:]:
+                self.n.line_to(self.vg, *p)
+
+    def path(self) -> None:
+        if self.live:
+            self.n.begin_path(self.vg)
+
+    def move(self, x, y) -> None:
+        if self.live:
+            self.n.move_to(self.vg, x, y)
+
+    def line(self, x, y) -> None:
+        if self.live:
+            self.n.line_to(self.vg, x, y)
+
+    def bez(self, c1x, c1y, c2x, c2y, x, y) -> None:
+        if self.live:
+            self.n.bezier_to(self.vg, c1x, c1y, c2x, c2y, x, y)
+
+    def quad(self, cx, cy, x, y) -> None:
+        if self.live:
+            self.n.quad_to(self.vg, cx, cy, x, y)
+
+    def close(self) -> None:
+        if self.live:
+            self.n.close_path(self.vg)
+
+    # ---- paint ----
+    def fill(self, color, a: float = 1.0) -> None:
+        if self.live:
+            self.n.fill_color(self.vg, self.n.rgba_f(*rgba(color, a)))
+            self.n.fill(self.vg)
+
+    def stroke(self, color, width: float = 1.0, a: float = 1.0, cap: str = "butt") -> None:
+        if self.live:
+            self.n.stroke_color(self.vg, self.n.rgba_f(*rgba(color, a)))
+            self.n.stroke_width(self.vg, width)
+            self.n.line_cap(self.vg, getattr(self.n.LineCap, cap).value)
+            self.n.stroke(self.vg)
+
+    def glow_stroke(self, color, width: float, blur: float, layers: int = 8) -> None:
+        """The current path stroked with a soft glow round it — canvas's
+        shadowBlur, as wider and wider faint strokes under the line (they
+        stack, so the glow is brightest by the line and fades out)."""
+        if not self.live:
+            return
+        for k in range(layers, 0, -1):
+            self.n.stroke_color(self.vg, self.n.rgba_f(*rgba(color, 0.55 / layers)))
+            self.n.stroke_width(self.vg, width + 2 * blur * k / layers)
+            self.n.line_cap(self.vg, self.n.LineCap.round.value)
+            self.n.stroke(self.vg)
+        self.stroke(color, width, cap="round")
+
+    def glow_rr(self, x, y, w, h, r, color, blur: float, a: float = 0.85) -> None:
+        """A soft glow round a rounded box — a feathered box gradient, the
+        way NanoVG draws drop shadows."""
+        if not self.live:
+            return
+        n, vg = self.n, self.vg
+        paint = n.box_gradient(vg, x, y, w, h, r, blur, n.rgba_f(*rgba(color, a)),
+                               n.rgba_f(*rgba(color, 0.0)))
+        n.begin_path(vg)
+        n.rect(vg, x - blur, y - blur, w + 2 * blur, h + 2 * blur)
+        n.fill_paint(vg, paint)
+        n.fill(vg)
+
+    def save(self) -> None:
+        if self.live:
+            self.n.save(self.vg)
+
+    def restore(self) -> None:
+        if self.live:
+            self.n.restore(self.vg)
+
+    def translate(self, x, y) -> None:
+        if self.live:
+            self.n.translate(self.vg, x, y)
+
+    def dashed_rr(self, x, y, w, h, color, width, dash=5.0, gap=4.0) -> None:
+        """A rounded box's outline in dashes (NanoVG has no dash): its four
+        straight runs dashed, its corners drawn whole."""
+        if not self.live:
+            return
+        r = min(16.0, w / 2, h / 2)
+        runs = (((x + r, y), (x + w - r, y)), ((x + w, y + r), (x + w, y + h - r)),
+                ((x + w - r, y + h), (x + r, y + h)), ((x, y + h - r), (x, y + r)))
+        for (ax, ay), (bx, by) in runs:
+            length = math.hypot(bx - ax, by - ay)
+            t = 0.0
+            while t < length:
+                t1 = min(length, t + dash)
+                self.lines((ax + (bx - ax) * t / length, ay + (by - ay) * t / length),
+                           (ax + (bx - ax) * t1 / length, ay + (by - ay) * t1 / length))
+                self.stroke(color, width)
+                t += dash + gap
+        for cx, cy, a0 in ((x + r, y + r, math.pi), (x + w - r, y + r, -math.pi / 2),
+                           (x + w - r, y + h - r, 0.0), (x + r, y + h - r, math.pi / 2)):
+            self.arc(cx, cy, r, a0, a0 + math.pi / 2)
+            self.stroke(color, width)
+
+    def text(self, s: str, x, y, *, size=13, color="text", align="center", weight=500,
+             mono=False, a: float = 1.0) -> None:
+        if not self.live or not s:
+            return
+        n, vg = self.n, self.vg
+        n.font_face(vg, "mono" if mono else "bold" if weight >= 650 else "ui")
+        n.font_size(vg, size * FONT_K)
+        n.fill_color(vg, n.rgba_f(*rgba(COL.get(color, color), a)))
+        h = {"center": n.Align.align_center, "left": n.Align.align_left,
+             "right": n.Align.align_right}[align].value
+        n.text_align(vg, h | n.Align.align_middle.value)
+        n.text(vg, x, y, s)
+
+    def alpha(self, a: float) -> None:
+        if self.live:
+            self.n.global_alpha(self.vg, a)
+
+
+# ---------------------------------------------------------------- what the lab reads
+
+def _pressed(r, name: str) -> bool:
+    return name in r.down
+
+
+def _hat(r, name: str) -> bool:
+    return bool(r.hat & gamepad.HATS[name])
+
+
+def _trig(t) -> tuple[str, int, int, int]:
+    """A sent `sony.Trigger` as the lab reads one: (mode, start zone 0–9,
+    level 1–8, Hz) — mode "off", "feedback" or "vibration"."""
+    mode = getattr(t, "mode", "off") or "off"
+    level = round(float(getattr(t, "strength", 0.0) or 0.0) * 8)
+    if mode == "off" or level <= 0:
+        return "off", -1, 0, 0
+    start = round(min(1.0, max(0.0, float(getattr(t, "start", 0.0) or 0.0))) * 9)
+    return ("feedback" if mode == "resist" else "vibration"), start, level, int(getattr(t, "freq", 0) or 0)
+
+
+def _sent(r):
+    """What the pad is being shown: (light rgb or None, players bits,
+    rumble low, rumble high, left trigger, right trigger, mic)."""
+    e = r.effects
+    if e is None or not r.has("light"):
+        return None, None, 0.0, 0.0, _trig(None), _trig(None), 0
+    return (tuple(e.light), int(e.players), float(e.rumble_low), float(e.rumble_high),
+            _trig(e.left), _trig(e.right), int(e.mic))
+
+
+def _pulse(st: dict, key: str, on: bool, now: float, hold: float = PULSE_S) -> bool:
+    """A one-frame trigger held up for `hold` seconds, so it can be seen."""
+    if on:
+        st[key] = now
+    return now - st.get(key, -1e9) < hold
+
+
+_SONY_WORDS = {"VIEW": "Create", "MENU": "Options", "GUIDE": "PS", "SHARE": "mic",
+               "CREATE": "Create", "OPTIONS": "Options", "MIC": "mic"}
+_XBOX_WORDS = {"VIEW": "View", "MENU": "Menu", "GUIDE": "Xbox", "SHARE": "Share",
+               "LSTICK": "LS", "RSTICK": "RS"}
+
+
+def _glyph(r, name: str) -> str:
+    """What the pad's face calls `name`, in the lab's words."""
+    if r.sony:
+        g = r.glyph(name, name)
+        return _SONY_WORDS.get(g, g)
+    return _XBOX_WORDS.get(name, r.glyph(name, name))
+
+
+def _ink(r, name: str) -> str:
+    """A face button's own colour: the DualSense's, or an Xbox pad's."""
+    return COL[name] if r.sony else XBOX_INK[name]
+
+
+def _battery(p: Pen, r, x, y, below=False) -> None:
+    lvl = r.battery / 10 if r.battery >= 0 else 0.0
+    p.rr(x, y, 40, 18, 4)
+    p.stroke("idleLine", 2)
+    p.rr(x + 40, y + 5, 4, 8, 1)
+    p.fill("idleLine")
+    if r.battery >= 0:
+        p.rr(x + 3, y + 3, max(0.5, 34 * lvl), 12, 2)
+        p.fill("ok" if lvl > 0.25 else "#f87171")
+    pct = f"{min(r.battery * 10 + 5, 100)}%" if r.battery >= 0 else "battery —"
+    if below:
+        p.text(pct, x, y + 32, size=11, color="dim", align="left")
+    else:
+        p.text(pct, x - 8, y + 9, size=12, color="dim", align="right")
+
+
+def _clip(a, b, cx, cy, rad):
+    """The part of the segment a–b inside the circle (cx, cy, rad), or None
+    — the lab clips its horizon to the ring; NanoVG cannot clip to a
+    circle, so the lines are cut to it."""
+    (x0, y0), (x1, y1) = a, b
+    dx, dy, fx, fy = x1 - x0, y1 - y0, x0 - cx, y0 - cy
+    qa, qb, qc = dx * dx + dy * dy, 2 * (fx * dx + fy * dy), fx * fx + fy * fy - rad * rad
+    if qa == 0:
+        return None
+    disc = qb * qb - 4 * qa * qc
+    if disc <= 0:
+        return None
+    s = math.sqrt(disc)
+    t0, t1 = max(0.0, (-qb - s) / (2 * qa)), min(1.0, (-qb + s) / (2 * qa))
+    if t0 >= t1:
+        return None
+    return (x0 + dx * t0, y0 + dy * t0), (x0 + dx * t1, y0 + dy * t1)
+
+
+def _attitude(p: Pen, r, st: dict, cx, cy, rad, big: bool, now: float) -> None:
+    """The lab's `drawAttitude`: a horizon that rolls and lifts with the
+    pad, the ring brightening with motion energy, yaw as a dot outside it."""
+    m = r.motion
+    live = m is not None and r.degrees is not None
+    p.circle(cx, cy, rad)
+    p.fill("well")
+    p.lines((cx - rad, cy), (cx + rad, cy))
+    p.stroke("#2a3242", 1)
+    if live:
+        roll, pitch, yaw = r.degrees
+        dy = -max(-1.0, min(1.0, pitch / 60)) * rad * 0.7
+        ca, sa = math.cos(math.radians(roll)), math.sin(math.radians(roll))
+
+        def rot(x, y):
+            return cx + x * ca - y * sa, cy + dy + x * sa + y * ca
+        for (a, b), w in (((rot(-rad * 0.62, 0), rot(rad * 0.62, 0)), 5 if big else 3),
+                          ((rot(-rad * 0.62, 0), rot(-rad * 0.5, rad * 0.3)), 4 if big else 2),
+                          ((rot(rad * 0.62, 0), rot(rad * 0.5, rad * 0.3)), 4 if big else 2)):
+            seg = _clip(a, b, cx, cy, rad - w / 2)
+            if seg:
+                p.lines(*seg)
+                p.stroke("accent", w, cap="round")
+    e = float(m.get("energy", 0.0)) if live else 0.0
+    shake = _pulse(st, "shake_ring", bool(live and m.get("shake")), now, 0.3)
+    p.circle(cx, cy, rad)
+    if shake:
+        p.stroke("hot", 5)
+    else:
+        p.stroke("accent", 2 + 4 * e, a=0.25 + 0.75 * e)
+    if live:
+        a = -math.pi / 2 + max(-1.0, min(1.0, yaw / 90)) * math.pi / 2
+        o = rad + (9 if big else 5)
+        p.circle(cx + math.cos(a) * o, cy + math.sin(a) * o, 5 if big else 3)
+        p.fill("hot")
+    if big:
+        p.text(f"roll {roll:+.0f}°  pitch {pitch:+.0f}°" if live else "no motion data",
+               cx, cy + rad + 20, size=10.5, color="dim", mono=True)
+        if live:
+            p.text(f"yaw {yaw:+.0f}°", cx, cy + rad + 36, size=10.5, color="dim", mono=True)
+    p.hit(cx - rad, cy - rad, 2 * rad, 2 * rad, "motion:roll")
+
+
+def _fingers(p: Pen, t, x0, y0, w, h, rad, numbered: bool) -> list:
+    """The fingers on a touchpad drawn in (x0, y0, w, h): a line between
+    two, a dot for each; the dots' places back."""
+    pts = []
+    for k, (xs, ys) in enumerate((("x", "y"), ("x2", "y2"))):
+        x, y = t.get(xs), t.get(ys)
+        if x is not None and y is not None and math.isfinite(x) and math.isfinite(y):
+            pts.append((k, x0 + w * x, y0 + h * (1 - y)))
+    if len(pts) == 2:
+        p.lines(pts[0][1:], pts[1][1:])
+        p.stroke("accent", 2, a=0.6)
+    for k, px, py in pts:
+        p.circle(px, py, rad)
+        p.fill("X" if k else "accent", (0.85 if k else 0.9) if numbered else 1.0)
+        if numbered:
+            p.text(str(k + 1), px, py, size=10, color="#000", weight=700)
+    return pts
+
+
+# ---------------------------------------------------------------- (a) faithful
+
+def _edge_body(p: Pen) -> None:
+    """The lab's `edgeBody`: the controller's outline, one path."""
+    p.path()
+    p.move(500, 100)
+    p.line(340, 100)
+    p.bez(250, 98, 175, 108, 148, 170)
+    p.bez(128, 220, 112, 330, 112, 420)
+    p.bez(112, 520, 150, 600, 218, 600)
+    p.bez(272, 600, 300, 560, 318, 520)
+    p.bez(338, 476, 372, 446, 420, 446)
+    p.line(580, 446)
+    p.bez(628, 446, 662, 476, 682, 520)
+    p.bez(700, 560, 728, 600, 782, 600)
+    p.bez(850, 600, 888, 520, 888, 420)
+    p.bez(888, 330, 872, 220, 852, 170)
+    p.bez(825, 108, 750, 98, 660, 100)
+    p.close()
+
+
+def _stick(p: Pen, r, n: str, cx, cy, xa, ya) -> None:
+    on = _pressed(r, n)
+    p.circle(cx, cy, 50)
+    p.fill("well")
+    p.circle(cx, cy, 50)
+    p.stroke("hot" if on else "idleLine", 4 if on else 1.5)
+    p.lines((cx - 50, cy), (cx + 50, cy))
+    p.stroke("#232a38", 1)
+    p.lines((cx, cy - 50), (cx, cy + 50))
+    p.stroke("#232a38", 1)
+    x = cx + (r.axes[xa] - 0.5) * 2 * 36
+    y = cy - (r.axes[ya] - 0.5) * 2 * 36
+    p.circle(x, y, 22)
+    p.fill("hot" if on else "#3a4560")
+    p.circle(x, y, 22)
+    p.stroke("accent", 2)
+    p.text(_glyph(r, n), x, y, size=11, color="#000" if on else "dim", weight=700)
+    p.hit(cx - 50, cy - 50, 100, 100, f"pad:{n}")
+
+
+def _dpad(p: Pen, r, cx, cy) -> None:
+    for d, (dx, dy) in (("UP", (0, -40)), ("DOWN", (0, 40)), ("LEFT", (-40, 0)),
+                        ("RIGHT", (40, 0))):
+        x, y, on = cx + dx, cy + dy, _hat(r, d)
+        p.rr(x - 19, y - 19, 38, 38, 7)
+        p.fill("hot" if on else "idle")
+        p.rr(x - 19, y - 19, 38, 38, 7)
+        p.stroke("idleLine", 1)
+        p.text(HAT_GLYPH[d], x, y, size=13, color="#000" if on else "dim")
+        p.hit(x - 19, y - 19, 38, 38, f"hat:{d}")
+
+
+def _pill(p: Pen, r, n: str, x, y, w, h, word_y=None) -> None:
+    """A small button (Create, Options, View, Menu), its name under it."""
+    on = _pressed(r, n)
+    p.rr(x, y, w, h, min(w, h) / 2)
+    p.fill("hot" if on else "idle")
+    if word_y is not None:
+        p.text(_glyph(r, n), x + w / 2, word_y, size=10, color="dim")
+    p.hit(x - 6, y - 4, w + 12, h + 8, f"pad:{n}")
+
+
+def faithful(p: Pen, r, st: dict) -> None:
+    """The lab's `drawFaithful`: the pad from above, every control lit
+    where it sits. A DualSense as the lab draws it; an Xbox pad (or no
+    pad) in the same hand, its sticks offset and no touchpad."""
+    now = time.monotonic()
+    light, players, r_low, r_high, left, right, mic = _sent(r)
+    sony = r.sony
+    edge = r.has("back")
+    p.rr(0, 0, DESIGN_W, DESIGN_H, 0)
+    p.fill("ground")
+    p.save()
+    shake = r_low * 3 + r_high * 1.4           # the lab's rumble jitter
+    if shake > 0.01:
+        p.translate((random.random() - 0.5) * shake, (random.random() - 0.5) * shake)
+    # the triggers: travel, and the resistance zone the pad is sent
+    for side, x, tr in (("LT", 195, left), ("RT", 675, right)):
+        u = r.axes[side]
+        p.rr(x, 26, 130, 42, 10)
+        p.fill("idle")
+        mode, start, level, hz = tr
+        if mode != "off" and start >= 0:
+            p.rr(x + 130 * start / 9, 26, 130 * (1 - start / 9), 42, 0)
+            p.fill("back" if mode == "feedback" else "fn",
+                   (0.15 if mode == "feedback" else 0.2) + 0.5 * level / 8)
+        p.rr(x, 26, max(0.001, 130 * u), 42, 10)
+        p.fill("hot" if u > 0.98 else "accent", 0.85)
+        p.rr(x, 26, 130, 42, 10)
+        p.stroke("idleLine", 1.5)
+        p.text(f"{_glyph(r, side)} {round(u * 100)}%", x + 65, 47, size=14, weight=700,
+               color="#10131a" if u > 0.55 else "text")
+        if mode != "off":
+            p.text(f"resist {level}/8 from zone {start}" if mode == "feedback"
+                   else f"vibrate {level}/8 {hz} Hz", x + 65, 15, size=11, color="back")
+        p.hit(x, 26, 130, 42, f"axis:{side}")
+    for n, x in (("LB", 185), ("RB", 665)):
+        on = _pressed(r, n)
+        p.rr(x, 76, 150, 18, 8)
+        p.fill("hot" if on else "idle")
+        p.text(_glyph(r, n), x + 75, 85, size=11, color="#000" if on else "dim", weight=700)
+        p.hit(x, 76, 150, 18, f"pad:{n}")
+    # the body
+    _edge_body(p)
+    p.fill("body")
+    _edge_body(p)
+    p.stroke("bodyLine", 2.5)
+    # the back buttons, on the grips' underside (an Edge; dim on a DualSense)
+    if sony:
+        for n, x, word in (("LP", 178, "back L"), ("RP", 762, "back R")):
+            on = _pressed(r, n)
+            p.rr(x, 520, 60, 52, 16)
+            p.fill("back", 0.85 if on else 0.05)
+            if on:
+                p.rr(x, 520, 60, 52, 16)
+                p.stroke("back", 2)
+            else:
+                p.dashed_rr(x, 520, 60, 52, "#5b6378" if edge else "#2a303d", 2)
+            p.text(word, x + 30, 540, size=11, color="#000" if on else "dim", weight=700)
+            p.text(f"pad:{n}", x + 30, 556, size=10, color="#000" if on else "faint", mono=True)
+            if edge:
+                p.hit(x, 520, 60, 52, f"pad:{n}")
+        if edge:
+            p.text("(underside)", 500, 590, size=10, color="faint")
+    if sony:
+        _faithful_sony(p, r, st, now, light, players, mic)
+    else:
+        _faithful_xbox(p, r)
+    # the face buttons, each in its own ink
+    for n, (x, y) in (("Y", (765, 198)), ("B", (817, 250)), ("A", (765, 302)), ("X", (713, 250))):
+        on, ink = _pressed(r, n), _ink(r, n)
+        p.circle(x, y, 23)
+        p.fill(ink if on else "idle")
+        p.circle(x, y, 23)
+        p.stroke(ink, 2)
+        p.text(_glyph(r, n), x, y + 1, size=20, color="#000" if on else ink, weight=700)
+        p.hit(x - 23, y - 23, 46, 46, f"pad:{n}")
+    # rumble, as rings by the grips
+    if r_low > 0.01:
+        for i in range(3):
+            p.arc(150, 470, 30 + i * 12, 2.2, 4.0)
+            p.stroke("back", 3, a=0.3 + 0.7 * r_low)
+        p.text(f"low {r_low:.2f}", 90, 470, size=11, color="back")
+    if r_high > 0.01:
+        for i in range(3):
+            p.arc(850, 470, 24 + i * 9, -0.9, 0.9)
+            p.stroke("fn", 2, a=0.3 + 0.7 * r_high)
+        p.text(f"high {r_high:.2f}", 912, 470, size=11, color="fn")
+    p.restore()
+    # the tilt between the triggers, the battery, the corner words
+    if r.has("motion"):
+        _attitude(p, r, st, 500, 46, 28, False, now)
+    if r.battery >= 0 or sony:
+        _battery(p, r, 14, 10, below=True)
+    name = getattr(r.model, "name", "") if r.on else "no pad"
+    p.text(f"{name or 'pad'} · {r.link or '—'}", 12, 610, size=12, color="dim", align="left")
+    if r.has("light"):
+        p.text("light #{:02x}{:02x}{:02x}".format(*light) if light is not None
+               else "light not set yet",
+               988, 610, size=12, color="dim", align="right", mono=True)
+    if r.motion is not None and _pulse(st, "shake_word", bool(r.motion.get("shake")), now):
+        p.text("SHAKE", 500, 500, size=22, color="hot", weight=800)
+
+
+def _faithful_sony(p: Pen, r, st, now, light, players, mic) -> None:
+    """The DualSense's middle: touchpad, light bar, player lights, the
+    D-pad, the sticks side by side, PS, the mic, Fn on an Edge."""
+    t = r.touch
+    p.rr(335, 112, 330, 170, 22)
+    p.fill("#2c3a55" if _pressed(r, "TOUCH") else "#151a25")
+    p.rr(335, 112, 330, 170, 22)
+    p.stroke("idleLine", 1.5)
+    p.hit(335, 112, 330, 170, "pad:TOUCH")
+    p.text("touchpad", 500, 198, size=11, color="#2b3344")
+    if t is not None:
+        _fingers(p, t, 335, 112, 330, 170, 13, True)
+        pin, tw = t.get("pinch"), t.get("twist")
+        if pin is not None and math.isfinite(pin):
+            p.text(f"pinch {pin:.2f}  twist {tw:.2f}", 500, 270, size=11, color="dim", mono=True)
+        if _pulse(st, "tap", bool(t.get("tap")), now):
+            p.text("TAP", 500, 130, size=13, color="hot", weight=800)
+    elif r.on:
+        p.text("no touch in the simple report", 500, 220, size=11, color="faint")
+    # the light bar, both sides of the touchpad
+    for (x0, y0), (qx, qy), (x1, y1) in (((327, 128), (320, 200), (330, 272)),
+                                        ((673, 128), (680, 200), (670, 272))):
+        p.path()
+        p.move(x0, y0)
+        p.quad(qx, qy, x1, y1)
+        if light is not None:
+            p.glow_stroke(light, 6, 16)
+        else:
+            p.stroke((90, 98, 115), 6, cap="round")
+    for i in range(5):
+        on = players is not None and (players >> i) & 1
+        p.circle(468 + i * 16, 296, 4)
+        p.fill("#ffffff" if on else "#2b3242")
+    _pill(p, r, "VIEW", 292, 116, 16, 32, word_y=160)
+    _pill(p, r, "MENU", 692, 116, 16, 32, word_y=160)
+    _dpad(p, r, 235, 250)
+    _stick(p, r, "LSTICK", 380, 372, "LX", "LY")
+    _stick(p, r, "RSTICK", 620, 372, "RX", "RY")
+    on = _pressed(r, "GUIDE")
+    p.circle(500, 368, 16)
+    p.fill("hot" if on else "idle")
+    p.text("PS", 500, 368, size=10, color="#000" if on else "dim", weight=700)
+    p.hit(484, 352, 32, 32, "pad:GUIDE")
+    on = _pressed(r, "SHARE")
+    if mic and not on:
+        p.glow_rr(482, 398, 36, 12, 6, "#ff8a3d", 12)
+    p.rr(482, 398, 36, 12, 6)
+    p.fill("hot" if on else "#ff8a3d" if mic else "idle")
+    p.text("mic", 500, 420, size=10, color="dim")
+    p.hit(478, 394, 44, 20, "pad:SHARE")
+    edge = r.has("fn")
+    for n, x in (("LFN", 366), ("RFN", 606)):
+        on = _pressed(r, n)
+        p.rr(x, 428, 28, 13, 6)
+        p.fill("fn" if on else "idle" if edge else "#1c212c")
+        p.text("Fn", x + 14, 435, size=9, color="#000" if on else "dim", weight=700)
+        if edge:
+            p.hit(x - 4, 424, 36, 21, f"pad:{n}")
+
+
+def _faithful_xbox(p: Pen, r) -> None:
+    """An Xbox pad's middle, in the lab's hand: the left stick high and
+    the D-pad low, the guide button between View and Menu."""
+    _stick(p, r, "LSTICK", 235, 250, "LX", "LY")
+    _dpad(p, r, 380, 372)
+    _stick(p, r, "RSTICK", 620, 372, "RX", "RY")
+    on = _pressed(r, "GUIDE")
+    p.circle(500, 170, 26)
+    p.fill("hot" if on else "idle")
+    p.circle(500, 170, 26)
+    p.stroke("idleLine", 1.5)
+    p.text(_glyph(r, "GUIDE"), 500, 170, size=10, color="#000" if on else "dim", weight=700)
+    p.hit(474, 144, 52, 52, "pad:GUIDE")
+    _pill(p, r, "VIEW", 418, 238, 30, 18, word_y=270)
+    _pill(p, r, "MENU", 552, 238, 30, 18, word_y=270)
+    _pill(p, r, "SHARE", 485, 300, 30, 14, word_y=328)
+
+
+# ---------------------------------------------------------------- (c) cockpit
+
+def _dial(p: Pen, r, st: dict, cx, cy, side: str, tr) -> None:
+    """The lab's `dial`: the trigger as a thick arc round the stick's
+    well, the resistance sent as the outer band, the bumper as a cap, the
+    stick with its trail."""
+    big = 125
+    trig = "LT" if side == "L" else "RT"
+    u = r.axes[trig]
+    a0, sweep = math.pi * 0.75, math.pi * 1.5
+    col = COL["accent"] if side == "L" else "#ff9f6c"
+    p.arc(cx, cy, big, a0, a0 + sweep)
+    p.stroke("#1b212d", 16, cap="round")
+    mode, start, level, _hz = tr
+    if mode != "off" and start >= 0:
+        p.arc(cx, cy, big + 15, a0 + sweep * start / 9, a0 + sweep)
+        p.stroke(COL["back"] if mode == "feedback" else COL["fn"], 5,
+                 a=0.25 + 0.6 * level / 8, cap="round")
+    if u > 0.003:
+        p.arc(cx, cy, big, a0, a0 + sweep * u)
+        p.stroke(COL["hot"] if u > 0.98 else col, 16, cap="round")
+    p.hit(cx - big - 16, cy - big - 16, 2 * big + 32, 40, f"axis:{trig}")
+    bump = "LB" if side == "L" else "RB"
+    on = _pressed(r, bump)
+    p.arc(cx, cy, big + 30, -math.pi / 2 - 0.42, -math.pi / 2 + 0.42)
+    p.stroke(COL["hot"] if on else "#232a38", 10, cap="round")
+    p.text(_glyph(r, bump), cx, cy - big - 30, size=10, color="#000" if on else COL["dim"], weight=800)
+    p.hit(cx - 60, cy - big - 40, 120, 20, f"pad:{bump}")
+    stick = f"{side}STICK"
+    on = _pressed(r, stick)
+    rad = big - 30
+    p.circle(cx, cy, rad)
+    p.fill("#3a3216" if on else "#11151d")
+    for a, b in (((cx - rad, cy), (cx + rad, cy)), ((cx, cy - rad), (cx, cy + rad))):
+        p.lines(a, b)
+        p.stroke("#212836", 1)
+    p.circle(cx, cy, rad / 2)
+    p.stroke("#212836", 1)
+    x = cx + (r.axes[f"{side}X"] - 0.5) * 2 * (rad - 12)
+    y = cy - (r.axes[f"{side}Y"] - 0.5) * 2 * (rad - 12)
+    trail = st.setdefault("trails", {}).setdefault(side, [])
+    trail.append((x, y))
+    del trail[:-TRAIL]
+    for i in range(1, len(trail)):
+        p.lines(trail[i - 1], trail[i])
+        p.stroke(col, 1 + 3 * i / len(trail), a=i / len(trail) * 0.6)
+    p.circle(x, y, 13)
+    p.fill(COL["hot"] if on else col)
+    p.hit(cx - rad, cy - rad, 2 * rad, 2 * rad, f"pad:{stick}")
+    p.text(f"{_glyph(r, trig)} {round(u * 100)}%", cx, cy + big + 4, size=14,
+           weight=700, color=col if u > 0.003 else COL["faint"])
+    if mode != "off":
+        p.text(f"pushes back {level}/8" if mode == "feedback" else f"buzz {level}/8",
+               cx, cy + big + 22, size=11, color=COL["back"])
+
+
+def _cluster(p: Pen, r, cx, cy, items, hot) -> None:
+    for src, g, dx, dy, c in items:
+        scheme, _, name = src.partition(":")
+        on = _hat(r, name) if scheme == "hat" else _pressed(r, name)
+        x, y = cx + dx * 34, cy + dy * 30
+        p.circle(x, y, 16)
+        p.fill((c or hot) if on else "#161b26")
+        p.circle(x, y, 16)
+        p.stroke(c or "#3a4357", 1.5)
+        p.text(g, x, y + 1, size=14, color="#000" if on else (c or COL["dim"]), weight=700)
+        p.hit(x - 16, y - 16, 32, 32, src)
+
+
+def cockpit(p: Pen, r, st: dict) -> None:
+    """The lab's `drawCockpit`: for a glance mid-set."""
+    now = time.monotonic()
+    light, players, r_low, r_high, left, right, mic = _sent(r)
+    edge = r.has("back")
+    p.rr(0, 0, DESIGN_W, DESIGN_H, 0)
+    p.fill("cockpit")
+    # the light bar's colour, full width
+    if light is not None:
+        p.glow_rr(20, 12, 960, 10, 5, light, 18)
+        p.rr(20, 12, 960, 10, 5)
+        p.fill(light)
+    elif r.has("light"):
+        p.rr(20, 12, 960, 10, 5)
+        p.fill((90, 98, 115), 0.4)
+    if not r.on:
+        word = "NO PAD"
+    else:
+        word = {"edge": "EDGE", "dualsense": "DUALSENSE"}.get(getattr(r.model, "id", ""))
+        word = word or (getattr(r.model, "name", "") or "pad").upper()
+    p.text(f"{word} · {(r.link or '—').upper()}", 22, 40, size=12, align="left",
+           color="dim", weight=700)
+    if r.has("players"):
+        for i in range(5):
+            on = players is not None and (players >> i) & 1
+            p.circle(468 + i * 16, 40, 4.5)
+            p.fill("#ffffff" if on else "#262d3c")
+    if r.battery >= 0 or r.sony:
+        _battery(p, r, 935, 31)
+    _dial(p, r, st, 245, 270, "L", left)
+    _dial(p, r, st, 755, 270, "R", right)
+    if r.has("motion"):
+        _attitude(p, r, st, 500, 220, 78, True, now)
+    # the touchpad, small
+    if r.has("touch"):
+        tx, ty, tw, th = 420, 350, 160, 80
+        p.rr(tx, ty, tw, th, 10)
+        p.fill("#24324c" if _pressed(r, "TOUCH") else "#121722")
+        p.rr(tx, ty, tw, th, 10)
+        p.stroke("#2b3446", 1.5)
+        p.hit(tx, ty, tw, th, "pad:TOUCH")
+        t = r.touch
+        if t is not None:
+            _fingers(p, t, tx, ty, tw, th, 8, False)
+            pin, tw2 = t.get("pinch"), t.get("twist")
+            tap = _pulse(st, "tap", bool(t.get("tap")), now, 0.4)
+            if pin is not None and math.isfinite(pin):
+                s = f"pinch ×{2 ** ((pin - 0.5) * 4):.2f}  twist {(tw2 - 0.5) * 360:+.0f}°"
+            elif tap:
+                s = "TAP"
+            elif t.get("x") is not None and math.isfinite(t["x"]):
+                s = f"x {t['x']:.2f}  y {t['y']:.2f}"
+            else:
+                s = "touchpad"
+            p.text(s, tx + tw / 2, ty + th + 14, size=12, color="hot" if tap else "dim",
+                   mono=True)
+    # the middle row
+    for i, n in enumerate(("VIEW", "GUIDE", "MENU", "SHARE")):
+        x, on = 405 + i * 64, _pressed(r, n)
+        p.rr(x - 28, 456, 56, 22, 11)
+        p.fill("hot" if on else "#5a2e14" if n == "SHARE" and mic else "#161b26")
+        p.text(_glyph(r, n), x, 467, size=11, color="#000" if on else "dim", weight=600)
+        p.hit(x - 28, 456, 56, 22, f"pad:{n}")
+    # the D-pad and the face
+    _cluster(p, r, 245, 500, [("hat:UP", "▲", 0, -1, None), ("hat:RIGHT", "▶", 1, 0, None),
+                              ("hat:DOWN", "▼", 0, 1, None), ("hat:LEFT", "◀", -1, 0, None)],
+             COL["hot"])
+    _cluster(p, r, 755, 500, [(f"pad:{n}", _glyph(r, n), dx, dy, _ink(r, n))
+                              for n, dx, dy in (("Y", 0, -1), ("B", 1, 0), ("A", 0, 1),
+                                                ("X", -1, 0))], COL["hot"])
+    # the back and Fn tabs, loud (an Edge; dim on a DualSense); the rumble meters
+    if r.sony:
+        for n, x, lbl in (("LP", 22, "BACK L"), ("RP", 918, "BACK R")):
+            on = _pressed(r, n)
+            p.rr(x, 170, 60, 110, 14)
+            p.fill("back" if on else "#171c27" if edge else "#101319")
+            p.rr(x, 170, 60, 110, 14)
+            p.stroke("#ffd1a0" if on else "#2b3446", 2)
+            p.text(lbl, x + 30, 215, size=10, color="#000" if on else "dim" if edge else "faint",
+                   weight=800)
+            p.text(_glyph(r, n), x + 30, 236, size=11, color="#000" if on else "faint", mono=True)
+            if edge:
+                p.hit(x, 170, 60, 110, f"pad:{n}")
+        for n, x in (("LFN", 22), ("RFN", 918)):
+            on = _pressed(r, n)
+            p.rr(x, 292, 60, 40, 12)
+            p.fill("fn" if on else "#171c27" if edge else "#101319")
+            p.text("Fn", x + 30, 312, size=13, color="#000" if on else "dim" if edge else "faint",
+                   weight=800)
+            if edge:
+                p.hit(x, 292, 60, 40, f"pad:{n}")
+    if r.has("rumble"):
+        for x, v, lbl, c in ((22, r_low, "heavy", "back"), (918, r_high, "light", "fn")):
+            p.rr(x, 346, 60, 10, 5)
+            p.fill("#161b26")
+            if v > 0.005:
+                p.rr(x, 346, max(0.5, 60 * v), 10, 5)
+                p.fill(c)
+            p.text(f"rumble {lbl}", x + 30, 368, size=8, color="faint")
+    _ticker(p, r, st, now)
+
+
+def _ticker(p: Pen, r, st: dict, now: float) -> None:
+    """Presses, taps and shakes, newest last, fading over `TICKER_S`."""
+    hats = {f"hat:{n}" for n, b in gamepad.HATS.items() if r.hat & b}
+    held = frozenset({f"pad:{n}" for n in r.down} | hats)
+    if r.motion is not None and r.motion.get("shake"):
+        held |= {"motion:shake"}
+    if r.touch is not None and r.touch.get("tap"):
+        held |= {"touch:tap"}
+    seen = st.get("held", frozenset())
+    log = st.setdefault("events", [])
+    for k in sorted(held - seen):
+        log.append((k, now))
+    st["held"] = held - {"motion:shake", "touch:tap"}
+    log[:] = [(k, t) for k, t in log if now - t < TICKER_S][-9:]
+    x = 500 - len(log) * 52
+    for k, t in log:
+        a = 1 - (now - t) / TICKER_S
+        scheme, _, n = k.partition(":")
+        label = (HAT_GLYPH[n] if scheme == "hat" else _glyph(r, n) if scheme == "pad"
+                 else n.upper())
+        loud = k in ("motion:shake", "pad:LP", "pad:RP")
+        p.alpha(0.25 + 0.75 * a)
+        p.rr(x, 572, 96, 30, 8)
+        p.fill(COL["back"] if loud else "#2a3550")
+        p.text(label, x + 48, 587, size=13, weight=700, color="#ffffff")
+        x += 104
+    p.alpha(1.0)
+    if not log:
+        p.text("presses, taps and shakes scroll here", 500, 587, size=12, color="#2b3446")
+
+
+VIEWS = {"faithful": faithful, "cockpit": cockpit}
+
+
+# ---------------------------------------------------------------- the GL side
+
+def _gl_current() -> bool:
+    """Is a GL context current on this thread? (GLFW's; asked quietly, as
+    GLFW warns when a headless panel asks before it is initialised.)"""
+    import warnings
+    try:
+        import glfw
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            return bool(glfw.get_current_context())
+    except Exception:  # noqa: BLE001 — GLFW set to raise, or no GLFW: no context
+        return False
+
+
+class Surface:
+    """NanoVG's context and its framebuffer, in the control window's GL
+    context. `ready()` makes them the first time it is asked, where a GL
+    context is current; `failed` says why it could not."""
+
+    def __init__(self):
+        self.vg = None
+        self.nvg = None
+        self.fb = None
+        self.fb_size = (0, 0)
+        self.failed = ""
+
+    def ready(self) -> bool:
+        if self.vg is not None:
+            return True
+        if self.failed:
+            return False
+        if os.environ.get("HYPERSPACE_NANOVG", "1") == "0":
+            return False
+        if not _gl_current():
+            return False                # no GL context (a headless panel): not now, not failed
+        try:
+            from imgui_bundle import hello_imgui
+            from imgui_bundle import nanovg as nvg
+            hello_imgui.init_gl_loader()
+            flags = (nvg.nvg_imgui.NvgCreateFlags.antialias.value
+                     | nvg.nvg_imgui.NvgCreateFlags.stencil_strokes.value)
+            vg = nvg.nvg_imgui.create_nvg_context_hello_imgui(flags)
+            for name, file in FONTS.items():
+                if nvg.create_font(vg, name, os.path.join(_FONT_DIR, file)) < 0:
+                    raise RuntimeError(f"font {file} would not load")
+            for face in ("ui", "bold", "mono"):
+                nvg.add_fallback_font(vg, face, "sym")       # ✕ ○ □ △ ▲ ◀ …
+        except Exception as e:  # noqa: BLE001 — a GL that will not take NanoVG: the draw-list views
+            self.failed = f"{type(e).__name__}: {e}"[:160]
+            return False
+        self.vg, self.nvg = vg, nvg
+        return True
+
+    def render(self, view: str, r, st: dict, w_px: int, h_px: int) -> tuple[int | None, Pen]:
+        """Draw `view` into the framebuffer (made or remade to w_px × h_px),
+        the design space fitted and centred; (texture id, the pen — its
+        hits in design space) back."""
+        nvg = self.nvg
+        if self.fb is None or self.fb_size != (w_px, h_px):
+            self.fb = nvg.nvg_imgui.NvgFramebuffer(self.vg, max(1, w_px), max(1, h_px), 0)
+            self.fb_size = (w_px, h_px)
+        pen = Pen(self.vg, nvg)
+        raised: list[BaseException] = []
+
+        def draw(vg, width, height):
+            # an error here is held and raised after the frame is ended and
+            # the framebuffer let go, so the GL state is never left half-way
+            try:
+                s = min(width / DESIGN_W, height / DESIGN_H)
+                nvg.save(vg)
+                nvg.translate(vg, (width - DESIGN_W * s) / 2, (height - DESIGN_H * s) / 2)
+                nvg.scale(vg, s, s)
+                VIEWS[view](pen, r, st)
+            except Exception as e:  # noqa: BLE001 — re-raised below
+                raised.append(e)
+            finally:
+                nvg.restore(vg)
+        from imgui_bundle import imgui
+        nvg.nvg_imgui.render_nvg_to_frame_buffer(self.vg, self.fb, draw,
+                                                 imgui.ImVec4(0, 0, 0, 0))
+        if raised:
+            raise raised[0]
+        return self.fb.texture_id, pen
+
+
+def surface_of(panel) -> Surface:
+    """The panel's one surface (kept on the panel: a hot reload of this
+    module keeps the GL objects it made)."""
+    s = panel.__dict__.get("_pad_nvg")
+    if s is None:
+        s = panel.__dict__["_pad_nvg"] = Surface()
+    return s

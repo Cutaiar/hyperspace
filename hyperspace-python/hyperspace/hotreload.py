@@ -59,7 +59,7 @@ MODULES = (
     "lookback", "dream", "fx", "ghost", "outputs", "view", "field", "graph", "graphmigrate", "media_tex", "render", "params", "hold", "library", "control", "config",
     "overlay", "pads.models", "pads.sony", "pads.gesture", "pads.hid", "pads", "gamepad", "apc40", "generic", "modgraph", "seq_page", "routing", "patches", "preset", "learn", "midi", "bridge",
     "hands.signal", "hands.tape", "hands.core", "hands", "devices", "media.live", "media.ndi", "media.syphon", "media.camera", "media.publish", "hands.device", "osc", "graphview", "ui_presets", "ui_lookback", "ui_bands", "ui_feel", "ui_routing", "ui_fx", "ui_patterns",
-    "ui_lfo", "ui_media", "ui_desk", "ui_pad_views", "ui_pad", "hands.panel", "ui_graph", "ui_seq", "ui",
+    "ui_lfo", "ui_media", "ui_desk", "ui_pad_nvg", "ui_pad_views", "ui_pad", "hands.panel", "ui_graph", "ui_seq", "ui",
 )
 # (plan 39 T2: `masks` sits after `glsl`, whose QUAD_VS it binds, and before
 # `render`, which binds its MaskPasses. Plan 39 T4: `segment` is left out —

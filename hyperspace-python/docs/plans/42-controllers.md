@@ -217,6 +217,16 @@ edges, the last presses). `ui_pad_views.py`; each draws in the map's own
 room, so the desk never moves; a hover names a control's mapping. The
 view resets to Map at launch, as Pad diagram itself does.
 
+Faithful and Cockpit are the lab's own drawing: its canvas code
+(`drawFaithful`, `drawCockpit`) ported line for line to NanoVG, which
+imgui-bundle ships, in the lab's 1000 × 620 design space, drawn into a
+texture the size of the room in the window's pixels (`ui_pad_nvg.py`).
+Dear ImGui's draw list has no curved fills, gradients or glows, and the
+first draw-list sketches of the two read as rough copies; the draw-list
+versions stay as the fallback where NanoVG cannot run (a headless panel,
+or ``HYPERSPACE_NANOVG=0``). An Xbox pad gets the same hand: the left stick
+high, the D-pad low, the guide button between View and Menu.
+
 ![Faithful](assets/42-controllers/pad-edge-faithful.png)
 ![Lanes](assets/42-controllers/pad-edge-lanes.png)
 ![Cockpit](assets/42-controllers/pad-edge-cockpit.png)
