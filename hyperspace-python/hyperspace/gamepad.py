@@ -964,9 +964,7 @@ class Pad:
         w, h = sony.TOUCH_W - 1, sony.TOUCH_H - 1
         self.touchpad.step([(t.down, t.id, t.x / w, t.y / h) for t in frame.touches], dt)
         cal = getattr(reader, "calibration", None) or sony.Calibration()
-        amap = self.__dict__.get("axis_map") or gesture.AxisMap()
-        if amap == gesture.AxisMap():      # not overridden: the reader's own (a Joy-Con's axes)
-            amap = getattr(reader, "axis_map", None) or amap
+        amap = gesture.axis_map_of(self.__dict__.get("axis_map"), reader)   # the one rule
         gyro = amap.pick(cal.gyro_dps(frame.gyro), amap.gyro)
         accel = amap.pick(cal.accel_g(frame.accel), amap.accel)
         self.motion.step(gyro, accel, dt)

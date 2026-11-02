@@ -142,7 +142,7 @@ Nothing in the codec needed a change.
 | D2 | **The Wii-Remote hold is the vocabulary's frame**: its one stick is the left stick (`axis:LX` / `LY`, click `pad:LSTICK`), the (L)'s arrows the face by where they sit (↓ `A`, → `B`, ← `X`, ↑ `Y`), SL / SR the back pair `LP` / `RP`, L / ZL `LB` + `axis:LT` ((R): R / ZR `RB` + `RT`), − `VIEW`, + `MENU`, capture `SHARE`, HOME `GUIDE`; no `hat:` | 566 |
 | D3 | **A model says which controls it has** (`Model.controls`): the device's ports, Learn's names, the on-screen pad and the sink ports show only those — a Joy-Con is one stick and a few buttons everywhere, not a dark Xbox face | 567 |
 | D4 | **Drift is calibrated from the flash and the rest**: the Switch's user record over the factory's, then the stick's own resting reading at connect becomes its centre when it sits within 0.3 of centre and moves less than 0.1 meanwhile; no config key, no stored file | 568 |
-| D5 | **The sensors' axes are the codec's** (`nintendo.AXIS_MAP`: the chip's x along the long axis toward the shoulder end, y across, z up out of the face; the hold points the shoulder end away) — from the notes and one flat reading; the probe's tilt check settles the signs | 569 |
+| D5 | **The sensors' axes are the codec's, per side** (`nintendo.axis_map_for`: the chip's x along the long axis toward the shoulder end, y across, z up out of the face; the hold points the shoulder end away) — the (L)'s map **checked by the probe** (the proposed map equalled it, 2026-11-02); the (R)'s is the (L)'s with y and z negated, as Linux's hid-nintendo reads its chip, and the Pro Controller's the (L)'s — both **unverified** (`VERIFIED_MAPS`), the probe's tilt step says | 569 |
 | D6 | **The lab is the app's pad window, not a browser page** (the owner, 2026-11-02: "if we can see the Joy-Con in the app with the same level of detail as the Edge, we should just do that"): Faithful draws the Joy-Con upright as a hand holds it, with the stick's well, its raw reading and the centre in use on one side and the tilt with the sensors' numbers on the other; Cockpit one dial and the tilt big; Lanes only the lanes it has, plus its stick calibration and sensors; no `prototypes/joycon-lab/` | 570 |
 
 ## The lab in the app (D6)
@@ -221,8 +221,42 @@ gained `raw_sticks` for it (empty on a Sony pad).
 - **Two Joy-Cons as one pad** (D1), when a second one is here.
 - **The (R)'s HOME light** (subcommand 0x38): a tenth sink channel, or
   the mic channel's meaning on a Joy-Con.
-- **USB** (a charging grip): the same reports over USB with a 0x80
-  handshake first; `setup` does not send it.
+- **USB** (a charging grip, a Pro Controller by cable): the same reports
+  over USB after a 0x80 handshake `setup` does not send — so
+  `hid.pad_devices` leaves a Nintendo pad on a USB bus to GLFW rather
+  than seize it and read nothing; the handshake is the work.
+
+## After the review (2026-11-02)
+
+An independent code review of the PR found ten things; what changed:
+
+- **Rumble rides the reply-free 0x10 report.** The 50 ms refresh had
+  gone out as a 0x30 subcommand, and every subcommand draws a 0x21
+  reply that could stand as the newest report in the drain-newest-wins
+  read loop — stick and motion read jittery while rumbling. Now the
+  rumble is `rumble_report` (0x10) on change and on refresh, and the
+  player lights are a subcommand only when they change (`nintendo.write`).
+- **The sensors' map is per side** (D5): `axis_map_for(kind)`, the (R)'s
+  and the Pro's from the sources and marked unverified.
+- **Setup waits for each ack** (`acked`): the full report mode, the
+  sensors and rumble are each sent again up to `SETUP_TRIES` until the
+  pad's 0x21 acknowledges; what never acks is in the reader's note.
+- **A Nintendo pad over USB is left to GLFW** until the 0x80 handshake is
+  built (`hid.pad_devices`).
+- **One codec surface**: `accepts`, `decode_frame`, `setup`, `write`,
+  `calm` on both `sony` and `nintendo`; `HidPad` and `TapePad` no longer
+  branch on the family. The Sony path moved into `sony.py` unchanged
+  (its tests are the proof).
+- **One axis-map rule** (`gesture.axis_map_of`): the pad's override
+  unless it is the default, else the reader's own, else the default —
+  the app, the pad window and the probe all ask it.
+- The high rumble band is held at or above 80 Hz (its lowest code), so
+  a low frequency can no longer corrupt the amplitude byte; the Lanes
+  view's raw stick bars run over the calibration's reach, not a fixed
+  1400; `decode` reads a per-kind table.
+- The branch's history holds the raw probe files for one commit (the
+  owner's Bluetooth address among them); the squash merge keeps them
+  out of `main`.
 
 ## Not in this plan
 

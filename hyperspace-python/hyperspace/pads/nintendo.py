@@ -72,6 +72,8 @@ RUMBLE_REFRESH_S = 0.05       # resend rumble this often while it is on (hid-nin
 RUMBLE_NEUTRAL = bytes((0x00, 0x01, 0x40, 0x40))     # 320 Hz and 160 Hz at nothing
 RUMBLE_LOW_HZ, RUMBLE_HIGH_HZ = 160.0, 320.0         # the two bands the sinks drive
 RUMBLE_AMP_MAX = 1.0
+HIGH_BAND_MIN_HZ = 80.0       # the high band's lowest code (0x60)
+ACK = 0x80                    # a 0x21 reply's ack byte has this bit set
 
 # ---- the SPI flash (spi_flash_notes.md) ----
 SPI_STICK_L_FACTORY, SPI_STICK_R_FACTORY = 0x603D, 0x6046     # 9 bytes each
@@ -89,11 +91,24 @@ RECENTRE_SPREAD = 0.1         # …if it moved less than this meanwhile (else a 
 
 # the sensors' axes as the chip reports them (imu_sensor_notes.md): x along
 # the long axis toward the shoulder (L / ZL, R / ZR) end, y across it, z up
-# out of the face (a Joy-Con (L) flat on its back read z ≈ +1 g, 2026-11-02).
-# Held like a Wii Remote the shoulder end points away, so the pad's x (right)
-# is −y, its y (up out of the face) z, its z (toward the player) −x. The
-# probe's tilt check says whether the signs hold.
-AXIS_MAP = AxisMap(accel=((1, -1.0), (2, 1.0), (0, -1.0)), gyro=((1, -1.0), (2, 1.0), (0, -1.0)))
+# out of the face. Held like a Wii Remote the shoulder end points away, so
+# the pad's x (right) is −y, its y (up out of the face) z, its z (toward the
+# player) −x — **checked on a Joy-Con (L)** (the probe's tilt step,
+# 2026-11-02: the proposed map equalled this one). The (R)'s chip sits the
+# other way up on its board: Linux's hid-nintendo negates its y and z, so its
+# map is the (L)'s with those two signs flipped — **unverified**, no (R) in
+# hand. The Pro Controller's axes are the (L)'s (no flip in Linux or SDL) —
+# **unverified**. `axis_map_for(kind)`; the probe's tilt step says.
+_L_MAP = AxisMap(accel=((1, -1.0), (2, 1.0), (0, -1.0)), gyro=((1, -1.0), (2, 1.0), (0, -1.0)))
+_R_MAP = AxisMap(accel=((1, 1.0), (2, -1.0), (0, -1.0)), gyro=((1, 1.0), (2, -1.0), (0, -1.0)))
+AXIS_MAPS = {"l": _L_MAP, "r": _R_MAP, "pro": _L_MAP}
+AXIS_MAP = _L_MAP             # the one hand-checked map (the tests, the probe)
+VERIFIED_MAPS = frozenset({"l"})
+
+
+def axis_map_for(kind: str) -> AxisMap:
+    """The sensors' axes for a kind of pad ("l", "r", "pro")."""
+    return AXIS_MAPS.get(kind, _L_MAP)
 
 # (report byte, bit) → canonical button, per kind of pad. Byte 3 is the
 # right half, 4 the middle, 5 the left half (bluetooth_hid_notes.md §0x30)
@@ -137,12 +152,15 @@ def kind_of(model_id: str) -> str:
     return "l"
 
 
-def _table(kind: str):
-    if kind == "r":
-        return _R_BUTTONS, _R_TRIGGER
-    if kind == "pro":
-        return _PRO_BUTTONS, _PRO_TRIGGERS
-    return _L_BUTTONS, _L_TRIGGER
+# per kind of pad: its button table, its digital triggers, which raw stick
+# reads as the left stick (0 the left one, 1 the right), whether the right
+# stick reads too, whether byte 5's D-pad bits are the hat, the simple
+# report's table
+_KINDS = {
+    "l": (_L_BUTTONS, _L_TRIGGER, 0, False, False, _SIMPLE_L),
+    "r": (_R_BUTTONS, _R_TRIGGER, 1, False, False, _SIMPLE_R),      # its one stick is the left stick
+    "pro": (_PRO_BUTTONS, _PRO_TRIGGERS, 0, True, True, _SIMPLE_L),
+}
 
 
 def _pair(b: bytes) -> tuple[int, int]:
@@ -336,25 +354,22 @@ def decode(report, kind: str = "l", calibration: Calibration | None = None,
     if not r:
         return None
     cal = calibration or Calibration()
+    table, triggers, left_is, both, has_hat, simple = _KINDS.get(kind, _KINDS["l"])
     if r[0] == REPORT_FULL and len(r) >= REPORT_LEN:
-        table, triggers = _table(kind)
         buttons = _buttons(r, table)
         axes = [0.0, 0.0, 0.0, 0.0, -1.0, -1.0]
         for byte, bit, i in triggers:
             if r[byte] & bit:
                 axes[i] = 1.0
-        (lx, ly), (rx, ry) = raw_sticks(r)
-        if kind == "r":
-            x, y = cal.right.norm(rx, ry)
-            axes[0], axes[1] = x, -y            # the one stick is the left stick
-        else:
-            x, y = cal.left.norm(lx, ly)
-            axes[0], axes[1] = x, -y
-            if kind == "pro":
-                x, y = cal.right.norm(rx, ry)
-                axes[2], axes[3] = x, -y
+        sticks = raw_sticks(r)
+        cals = (cal.left, cal.right)
+        x, y = cals[left_is].norm(*sticks[left_is])
+        axes[0], axes[1] = x, -y                              # GLFW's up is −
+        if both:
+            x, y = cal.right.norm(*sticks[1])
+            axes[2], axes[3] = x, -y
         hat = 0
-        if kind == "pro":
+        if has_hat:
             for bit, h in _PRO_HAT:
                 if r[5] & bit:
                     hat |= h
@@ -364,13 +379,11 @@ def decode(report, kind: str = "l", calibration: Calibration | None = None,
         return Frame(kind=BT_IN, buttons=buttons, hat=hat, axes=axes,
                      gyro=(gx, gy, gz), accel=(ax, ay, az), sensor_time=0, seq=r[1],
                      battery=battery, charging=charging, raw_buttons=bytes(r[3:6]),
-                     raw_sticks=((lx, ly), (rx, ry)))
+                     raw_sticks=sticks)
     if r[0] == REPORT_SIMPLE and len(r) >= 4:
-        table = _SIMPLE_R if kind == "r" else _SIMPLE_L
-        battery, charging = -1, -1
-        return Frame(kind=BT_SIMPLE, buttons=_buttons(r, table), hat=0,
+        return Frame(kind=BT_SIMPLE, buttons=_buttons(r, simple), hat=0,
                      axes=[0.0, 0.0, 0.0, 0.0, -1.0, -1.0],
-                     battery=battery, charging=charging, raw_buttons=bytes(r[1:3]))
+                     battery=-1, charging=-1, raw_buttons=bytes(r[1:3]))
     return None
 
 
@@ -413,8 +426,10 @@ def rumble_bytes(high_amp: float, low_amp: float, high_hz: float = RUMBLE_HIGH_H
                  low_hz: float = RUMBLE_LOW_HZ) -> bytes:
     """One side's four HD-rumble bytes: the high band's frequency and
     amplitude in the first two, the low band's in the last two
-    (rumble_data_table.md). Both amplitudes 0 is `RUMBLE_NEUTRAL`."""
-    hf = (_freq_code(high_hz) - 0x60) * 4
+    (rumble_data_table.md). Both amplitudes 0 is `RUMBLE_NEUTRAL`. The
+    high band's code starts at 0x60 (80 Hz): a lower `high_hz` is held
+    there, so the amplitude byte is never corrupted by a negative code."""
+    hf = max(0, _freq_code(max(HIGH_BAND_MIN_HZ, high_hz)) - 0x60) * 4
     hf_amp = _amp_code(high_amp) * 2
     lf = _freq_code(low_hz) - 0x40
     lf_amp = _amp_code(low_amp) // 2 + 0x40
@@ -457,18 +472,60 @@ def spi_reply(report, addr: int, n: int) -> bytes | None:
     return r[20:20 + n]
 
 
-def output_reports(e: Effects, next_seq, kind: str = "l") -> list[bytes]:
-    """`Effects` as the reports that carry it: one 0x30 subcommand setting
-    the player lights, whose packet also carries this frame's rumble on
-    both sides. `next_seq()` gives each report its packet counter. The
-    light bar, the triggers and the mic have no Joy-Con meaning."""
-    side = rumble_bytes(e.rumble_high, e.rumble_low)
-    leds = bytes([player_leds(e.players) & 0x0F])
-    return [subcommand(next_seq(), SUB_LEDS, leds, side + side)]
-
-
 def rumbling(e: Effects) -> bool:
     return _amp_code(e.rumble_high) > 0 or _amp_code(e.rumble_low) > 0
+
+
+# ---- the road's surface (pads/hid.py calls these on every codec) ----
+
+def accepts(r: bytes, reader) -> str | None:
+    """Is `r` an input report the road keeps — and over which link? A
+    Joy-Con's full report, a subcommand's reply (kept, so the pad never
+    reads stale while the flash answers), the simple one; Bluetooth unless
+    hidapi said USB."""
+    if r[0] not in (REPORT_FULL, REPORT_REPLY, REPORT_SIMPLE):
+        return None
+    return "usb" if reader.bt_hint is False else "bluetooth"
+
+
+def decode_frame(raw: bytes, reader) -> Frame | None:
+    """`decode` for the reader (or tape) holding this pad."""
+    return decode(raw, reader.kind, reader.calibration)
+
+
+def write(dev, reader, want: Effects, now: float) -> bool:
+    """What `want` needs sent now, or nothing (False). Rumble rides the
+    reply-free 0x10 report — on change, and again every
+    `RUMBLE_REFRESH_S` while it is on, since a Joy-Con stops otherwise (as
+    Linux); the player lights are a 0x30 subcommand (which the pad answers
+    with a 0x21) only when they change. The light bar, the triggers and
+    the mic have no Joy-Con meaning."""
+    key = want.key()
+    refresh = rumbling(want) and now - reader._sent_t >= RUMBLE_REFRESH_S
+    if key == reader._sent_key and not refresh:
+        return False
+    side = rumble_bytes(want.rumble_high, want.rumble_low)
+    dev.write(rumble_report(reader._next_seq(), side, side))
+    leds = player_leds(want.players) & 0x0F
+    if leds != reader.__dict__.get("_sent_leds"):
+        dev.write(subcommand(reader._next_seq(), SUB_LEDS, bytes([leds]), side + side))
+        reader._sent_leds = leds
+    return True
+
+
+def calm(dev, reader, want: Effects) -> None:
+    """On the way out: the rumble stopped (the lights stay as they are —
+    no subcommand, no reply)."""
+    dev.write(rumble_report(reader._next_seq(), RUMBLE_NEUTRAL, RUMBLE_NEUTRAL))
+
+
+def output_reports(e: Effects, next_seq, kind: str = "l") -> list[bytes]:
+    """`Effects` as the reports a first send makes: the rumble (0x10) and
+    the player lights (a 0x30 subcommand, its packet carrying the rumble
+    too) — for a test or a tool; `write` is what the road sends."""
+    side = rumble_bytes(e.rumble_high, e.rumble_low)
+    return [rumble_report(next_seq(), side, side),
+            subcommand(next_seq(), SUB_LEDS, bytes([player_leds(e.players) & 0x0F]), side + side)]
 
 
 # ---- the connect sequence ----
@@ -483,13 +540,28 @@ SPI_IMU_READS = ((SPI_IMU_FACTORY, 24), (SPI_IMU_USER, 26))
 REST_REPORTS = 30            # reports the stick is watched at connect for `recentre`
 
 
+def acked(report, cmd: int) -> bool:
+    """Is `report` the pad's 0x21 reply acknowledging subcommand `cmd`?"""
+    r = bytes(report)
+    return len(r) >= 15 and r[0] == REPORT_REPLY and r[14] == cmd and bool(r[13] & ACK)
+
+
+# the subcommands `setup` sends first, each waited for and retried
+SETUP_SUBCOMMANDS = ((SUB_MODE, bytes([FULL_MODE]), "full report mode"),
+                     (SUB_IMU, bytes([0x01]), "sensors on"),
+                     (SUB_VIBRATION, bytes([0x01]), "rumble on"))
+
+
 def setup(dev, reader, clock=time.monotonic) -> None:
     """What a Joy-Con needs before it is a pad: the full report mode, the
-    sensors and rumble switched on, the calibration read from the flash,
-    and the stick's rest taken (`recentre`). `reader` is the `HidPad`:
-    its `_take` keeps every input report seen meanwhile (none is lost),
-    its `_next_seq` the packet counter, its `calibration` and `note` the
-    results. Runs on the reader's thread."""
+    sensors and rumble switched on — each waited for (its 0x21 ack) and
+    sent again up to `SETUP_TRIES` times — the calibration read from the
+    flash, and the stick's rest taken (`recentre`). `reader` is the
+    `HidPad`: its `_take` keeps every input report seen meanwhile (none
+    is lost), its `_next_seq` the packet counter, its `calibration` and
+    `note` the results; what never acked is said in the note (a pad
+    still in the simple report reads buttons only). Runs on the reader's
+    thread."""
     kind = kind_of(reader.model.id)
 
     def send(cmd: int, args: bytes = b"") -> None:
@@ -505,24 +577,35 @@ def setup(dev, reader, clock=time.monotonic) -> None:
             r = bytes(data)
             reader._take(r)
             got = want(r)
+            if got is not None and got is not False:
+                return got
+        return None
+
+    def ask(cmd: int, args: bytes, want) -> object:
+        """Send `cmd`, wait for what `want` recognises; `SETUP_TRIES` times."""
+        for _ in range(SETUP_TRIES):
+            send(cmd, args)
+            got = read_until(want, REPLY_TIMEOUT_S)
             if got is not None:
                 return got
         return None
-    send(SUB_MODE, bytes([FULL_MODE]))
-    send(SUB_IMU, bytes([0x01]))
-    send(SUB_VIBRATION, bytes([0x01]))
+    unacked = []
+    for cmd, args, word in SETUP_SUBCOMMANDS:
+        if ask(cmd, args, lambda r, c=cmd: acked(r, c) or None) is None:
+            unacked.append(word)
     records: dict[int, bytes] = {}
     for addr, n in SPI_READS[kind] + SPI_IMU_READS:
-        for _ in range(SETUP_TRIES):
-            send(SUB_SPI_READ, spi_read_args(addr, n))
-            got = read_until(lambda r, a=addr, k=n: spi_reply(r, a, k), REPLY_TIMEOUT_S)
-            if got is not None:
-                records[addr] = got
-                break
+        got = ask(SUB_SPI_READ, spi_read_args(addr, n), lambda r, a=addr, k=n: spi_reply(r, a, k))
+        if got is not None:
+            records[addr] = got
     reader.flash = records
     cal = calibration(records, kind)
+    notes = []
+    if unacked:
+        notes.append("never acknowledged: " + ", ".join(unacked))
     if not records:
-        reader.note = "no answer from the flash: nominal calibration"
+        notes.append("no answer from the flash: nominal calibration")
+    reader.note = "; ".join(notes)
     # the stick at rest: the first reports' raw readings
     rest: list[tuple[int, int]] = []
 

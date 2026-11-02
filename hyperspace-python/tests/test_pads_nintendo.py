@@ -53,14 +53,15 @@ class FakeJoyCon:
     """A Joy-Con over hidapi: silent until the mode is set, answers SPI
     reads from `flash`, then streams `reports`."""
 
-    def __init__(self, flash=None, reports=(), answer=True):
+    def __init__(self, flash=None, reports=(), answer=True, deaf=()):
         self.flash = flash if flash is not None else {
             nintendo.SPI_STICK_L_FACTORY: L_FACTORY, nintendo.SPI_IMU_FACTORY: IMU}
         self.queue: list[bytes] = []
         self.reports = list(reports)
         self.writes: list[bytes] = []
         self.mode = None
-        self.answer = answer
+        self.answer = answer            # False: the flash never answers
+        self.deaf = dict(deaf)          # subcommand → how many sends it ignores before acking
 
     def read(self, n, timeout=0):
         if self.queue:
@@ -75,12 +76,20 @@ class FakeJoyCon:
         if d[0] != nintendo.OUT_ID:
             return len(d)
         cmd, args = d[10], d[11:]
+        if self.deaf.get(cmd, 0) > 0:
+            self.deaf[cmd] -= 1
+            return len(d)
+        if cmd == nintendo.SUB_SPI_READ:
+            if self.answer:
+                addr, n = struct.unpack_from("<IB", args, 0)
+                data = self.flash.get(addr, b"\xff" * n)
+                self.queue.append(spi_reply(addr, bytes(data[:n]).ljust(n, b"\xff")))
+            return len(d)
         if cmd == nintendo.SUB_MODE:
             self.mode = args[0]
-        elif cmd == nintendo.SUB_SPI_READ and self.answer:
-            addr, n = struct.unpack_from("<IB", args, 0)
-            data = self.flash.get(addr, b"\xff" * n)
-            self.queue.append(spi_reply(addr, bytes(data[:n]).ljust(n, b"\xff")))
+        ack = bytearray(49)
+        ack[0], ack[13], ack[14] = nintendo.REPORT_REPLY, nintendo.ACK, cmd
+        self.queue.append(bytes(ack))                 # every subcommand is acknowledged
         return len(d)
 
     def get_feature_report(self, rid, n):
@@ -204,12 +213,18 @@ def test_rumble_and_the_player_lights_encode_as_the_notes_say():
     assert nintendo.player_leds(sony.player_bits(3)) == 0b0111
     assert nintendo.player_leds(0x1F) == 0b1111 and nintendo.player_leds(0) == 0
     seqs = iter(range(3, 20))
-    (out,) = nintendo.output_reports(sony.Effects(players=sony.player_bits(2), rumble_low=0.8),
-                                     lambda: next(seqs))
-    assert out[0] == 0x01 and out[1] == 3 and out[10] == nintendo.SUB_LEDS and out[11] == 0b0011
+    rum, out = nintendo.output_reports(sony.Effects(players=sony.player_bits(2), rumble_low=0.8),
+                                       lambda: next(seqs))
+    assert rum[0] == nintendo.RUMBLE_ID and rum[1] == 3 and rum[2:6] == rum[6:10]
+    assert rum[2:6] == nintendo.rumble_bytes(0.0, 0.8)
+    assert out[0] == 0x01 and out[1] == 4 and out[10] == nintendo.SUB_LEDS and out[11] == 0b0011
     assert out[2:6] == out[6:10] == nintendo.rumble_bytes(0.0, 0.8)
     assert nintendo.rumbling(sony.Effects(rumble_low=0.8)) and not nintendo.rumbling(sony.Effects())
     assert nintendo.subcommand(16, 0x40, b"\x01")[1] == 0            # the counter wraps at 16
+    # the high band's code starts at 0x60 (80 Hz): a lower frequency is held there
+    low = nintendo.rumble_bytes(0.5, 0.0, high_hz=60.0)
+    assert low == nintendo.rumble_bytes(0.5, 0.0, high_hz=80.0)
+    assert low[0] == 0 and low[1] == nintendo._amp_code(0.5) * 2    # the amplitude byte intact
 
 
 # ---- the road ----
@@ -230,6 +245,53 @@ def test_the_reader_sets_the_pad_up_reads_the_flash_and_recentres():
     assert r.note == ""
 
 
+def test_setup_waits_for_each_ack_and_says_what_never_answered():
+    """Each setup subcommand is sent again until its 0x21 ack, up to
+    SETUP_TRIES; one that never acks is named in the note (a mode that
+    never took leaves the pad in the simple report, buttons only)."""
+    dev = FakeJoyCon(reports=[full_report()] * 40, deaf={nintendo.SUB_MODE: 1})
+    r = stepped(JOYCON_L, dev)
+    modes = [w for w in dev.writes if w[0] == nintendo.OUT_ID and w[10] == nintendo.SUB_MODE]
+    assert len(modes) == 2 and dev.mode == nintendo.FULL_MODE and r.note == ""
+    deaf = FakeJoyCon(reports=[full_report()] * 40, deaf={nintendo.SUB_IMU: 99})
+    r2 = stepped(JOYCON_L, deaf)
+    imus = [w for w in deaf.writes if w[0] == nintendo.OUT_ID and w[10] == nintendo.SUB_IMU]
+    assert len(imus) == nintendo.SETUP_TRIES and "sensors on" in r2.note
+    assert not r2.calibration.nominal                      # the flash still answered
+    assert nintendo.acked(deaf.queue[-1] if deaf.queue else b"", nintendo.SUB_IMU) is False
+    ack = bytearray(49)
+    ack[0], ack[13], ack[14] = nintendo.REPORT_REPLY, nintendo.ACK, nintendo.SUB_IMU
+    assert nintendo.acked(bytes(ack), nintendo.SUB_IMU) and not nintendo.acked(bytes(ack), 0x03)
+
+
+def test_the_sensors_axes_are_per_side_and_only_the_left_is_verified():
+    assert nintendo.axis_map_for("l") is nintendo.AXIS_MAP
+    assert nintendo.axis_map_for("pro") is nintendo.AXIS_MAP
+    r_map = nintendo.axis_map_for("r")
+    assert r_map != nintendo.AXIS_MAP
+    # the (R)'s chip the other way up: its y and z signs flipped, x as the (L)'s
+    for (il, sl), (ir, sr) in zip(nintendo.AXIS_MAP.accel, r_map.accel, strict=True):
+        assert il == ir
+        assert (sl == sr) == (il == 0)
+    assert nintendo.VERIFIED_MAPS == {"l"}
+    right = stepped(JOYCON_R, FakeJoyCon(flash={}, reports=[full_report()] * 40))
+    assert right.axis_map is r_map
+    assert gesture.axis_map_of(None, right) is r_map
+    assert gesture.axis_map_of(gesture.AxisMap(), right) is r_map               # the default: the reader's
+    mine = gesture.AxisMap(accel=((2, 1.0), (1, 1.0), (0, 1.0)))
+    assert gesture.axis_map_of(mine, right) is mine                              # a pad's override wins
+    assert gesture.axis_map_of(None, NS()) == gesture.AxisMap()                  # a Sony reader: the default
+
+
+def test_a_nintendo_pad_over_usb_is_left_to_glfw_until_the_handshake_is_built():
+    usb_joycon = {**JOYCON_L, "path": b"jc-usb", "bus_type": 1}
+    usb_edge = {"path": b"edge-usb", "vendor_id": 0x054C, "product_id": 0x0DF2, "usage_page": 1,
+                "usage": 5, "bus_type": 1}
+    found = [JOYCON_L, usb_joycon, usb_edge]
+    got = hid.pad_devices(lambda vid, pid: [d for d in found if d["vendor_id"] == vid])
+    assert got == [usb_edge, JOYCON_L]
+
+
 def test_a_silent_flash_leaves_the_nominal_calibration_and_the_pad_still_reads():
     dev = FakeJoyCon(answer=False, reports=[full_report()] * 5)
     r = stepped(JOYCON_L, dev)
@@ -247,19 +309,29 @@ def test_outputs_go_out_on_change_and_rumble_is_refreshed_while_on():
     assert dev.writes == []
     r.send(sony.Effects(players=sony.player_bits(1)))
     r._write(dev)
-    assert len(dev.writes) == 1 and dev.writes[0][10] == nintendo.SUB_LEDS
+    # the first send: the rumble (0x10, reply-free) and the lights (a 0x30 subcommand)
+    assert [w[0] for w in dev.writes] == [nintendo.RUMBLE_ID, nintendo.OUT_ID]
+    assert dev.writes[1][10] == nintendo.SUB_LEDS and dev.writes[1][11] == 0b0001
     r._sent_t = 0.0
     r.send(sony.Effects(players=sony.player_bits(1)))
     r._write(dev)
-    assert len(dev.writes) == 1                                       # the same, no rumble: no write
+    assert len(dev.writes) == 2                                       # the same, no rumble: no write
     r.send(sony.Effects(players=sony.player_bits(1), rumble_high=0.5))
     r._sent_t = 0.0
     r._write(dev)
     r._sent_t -= nintendo.RUMBLE_REFRESH_S
     r._write(dev)
-    assert len(dev.writes) == 3 and dev.writes[-1][2:6] == nintendo.rumble_bytes(0.5, 0.0)
+    # rumble on, then refreshed: 0x10 both times, never a subcommand (no 0x21
+    # reply to push the newest input frame aside) while the lights stand
+    assert [w[0] for w in dev.writes[2:]] == [nintendo.RUMBLE_ID, nintendo.RUMBLE_ID]
+    assert dev.writes[-1][2:6] == nintendo.rumble_bytes(0.5, 0.0)
+    r.send(sony.Effects(players=sony.player_bits(3), rumble_high=0.5))
+    r._sent_t = 0.0
+    r._write(dev)
+    assert [w[0] for w in dev.writes[4:]] == [nintendo.RUMBLE_ID, nintendo.OUT_ID]   # lights changed
+    assert dev.writes[-1][11] == 0b0111
     r._neutral(dev)
-    assert dev.writes[-1][2:6] == nintendo.RUMBLE_NEUTRAL and dev.writes[-1][11] == 0b0001
+    assert dev.writes[-1][0] == nintendo.RUMBLE_ID and dev.writes[-1][2:6] == nintendo.RUMBLE_NEUTRAL
 
 
 def test_the_hub_lends_a_joycon_to_an_entry_that_may_take_it():
@@ -388,6 +460,14 @@ def test_the_reading_carries_a_joycons_calibration_and_sensors():
         s for s, *_ in groups["buttons"]}
     assert groups["stick calibration"][2][0] == "centre (rest)"
     assert "sensors (pad axes)" in groups
+    # the raw bars run over the calibration's reach (x_above 1500), as the LX row does
+    reader._take(full_report(lstick=(2100 + 750, 2050), timer=9))
+    pad.poll(dt=0.016)
+    r2 = ui_pad_views.read(pad)
+    groups2 = dict(ui_pad_views._lane_rows(r2))
+    assert abs(groups2["stick calibration"][0][2] - 0.75) < 1e-6
+    # the LX row is the same reading after the app's deadzone rescale
+    assert abs(r2.axes["LX"] - (0.5 + 0.5 * (0.5 - gp.DEADZONE) / (1 - gp.DEADZONE))) < 1e-6
     assert [s for s, *_ in groups["out (sent now)"]] == ["players", "rumble heavy", "rumble light"]
     assert groups["out (sent now)"][0][2] == 0.5                       # two of four lights
 

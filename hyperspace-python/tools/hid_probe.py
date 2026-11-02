@@ -102,7 +102,7 @@ class Live:
             w, h = sony.TOUCH_W - 1, sony.TOUCH_H - 1
             self.touchpad.step([(t.down, t.id, t.x / w, t.y / h) for t in f.touches], dt)
             cal = self.reader.calibration
-            amap = getattr(self.reader, "axis_map", None) or gesture.AxisMap()   # a Joy-Con's own
+            amap = gesture.axis_map_of(None, self.reader)       # the app's one rule
             self.motion.step(amap.pick(cal.gyro_dps(f.gyro), amap.gyro),
                              amap.pick(cal.accel_g(f.accel), amap.accel), dt)
         return f
@@ -409,17 +409,17 @@ def check_joycon(live: Live, rec, out: Path, found: dict) -> None:
     z = axis_of([a - b for a, b in zip(far, flat, strict=True)])
     yaw = axis_of(turn)
     proposed = ((x[0], -x[1]), (up[0], up[1]), (z[0], -z[1]))
-    want = tuple((i, int(s)) for i, s in nintendo.AXIS_MAP.accel)
+    built = nintendo.axis_map_for(kind)                     # this side's map (the (R)'s unverified)
+    want = tuple((i, int(s)) for i, s in built.accel)
     found["sensors"] = {"flat_accel": flat, "right_down_accel": right, "far_up_accel": far,
                         "turn_right_gyro": turn,
                         "proposed_axis_map": {"accel": [list(p) for p in proposed],
                                               "gyro_yaw": [yaw[0], -yaw[1]]},
                         "built_axis_map": {"accel": [list(p) for p in want],
-                                           "gyro_yaw": [nintendo.AXIS_MAP.gyro[1][0],
-                                                        int(nintendo.AXIS_MAP.gyro[1][1])]},
+                                           "gyro_yaw": [built.gyro[1][0], int(built.gyro[1][1])]},
+                        "built_verified": kind in nintendo.VERIFIED_MAPS,
                         "default_holds": proposed == want and (
-                            yaw[0], -yaw[1]) == (nintendo.AXIS_MAP.gyro[1][0],
-                                                 int(nintendo.AXIS_MAP.gyro[1][1]))}
+                            yaw[0], -yaw[1]) == (built.gyro[1][0], int(built.gyro[1][1]))}
     print(f"  → accel: x raw {x}, up raw {up}, z raw {z}; yaw raw {yaw}; "
           f"the built map holds: {found['sensors']['default_holds']}")
     lanes = dict(zip(gesture.MOTION_LANES, live.motion.lanes(), strict=True))

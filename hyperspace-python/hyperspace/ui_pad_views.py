@@ -92,6 +92,7 @@ class Reading:
     raw_sensors: tuple | None = None       # the chip's own counts, ((gx, gy, gz), (ax, ay, az))
     stick_raw: tuple | None = None         # (x, y) raw
     stick_centre: tuple | None = None      # (cx, cy) raw
+    stick_cal: object | None = None        # the nintendo.StickCal in use (its reach each way)
     centre_from: str = ""                  # "rest", "user", "flash", "nominal"
 
     @property
@@ -147,15 +148,16 @@ def read(pad) -> Reading:
         degrees = (m.roll, m.pitch, m.yaw)
     report = getattr(pad, "report", None)
     bat = getattr(report, "battery", -1)
-    sensors, raw, centre, centre_from = _calibration_of(pad, report, model) if on else (
-        None, None, None, "")
+    sensors, raw, centre, stick_cal, centre_from = _calibration_of(pad, report, model) if on else (
+        None, None, None, None, "")
     return Reading(on=on, model=model, down=down,
                    hat=int(getattr(pad, "hat", 0) or 0) if on else 0,
                    axes=dict(zip(gamepad.LANES, lanes, strict=True)), touch=touch,
                    motion=motion, degrees=degrees, effects=getattr(pad, "effects", None),
                    battery=bat if isinstance(bat, int) else -1,
                    link=str(getattr(pad, "link", "") or ""),
-                   sensors=sensors, stick_raw=raw, stick_centre=centre, centre_from=centre_from,
+                   sensors=sensors, stick_raw=raw, stick_centre=centre, stick_cal=stick_cal,
+                   centre_from=centre_from,
                    raw_sensors=((tuple(report.gyro), tuple(report.accel))
                                 if on and getattr(report, "full", False) else None))
 
@@ -167,18 +169,16 @@ def _calibration_of(pad, report, model):
     reader = getattr(pad, "hid_pad", None)
     cal = getattr(reader, "calibration", None)
     if report is None or cal is None or not hasattr(cal, "gyro_dps"):
-        return None, None, None, ""
+        return None, None, None, None, ""
     sensors = None
     if getattr(report, "full", False):
-        amap = getattr(pad, "axis_map", None) or gesture.AxisMap()
-        if amap == gesture.AxisMap():
-            amap = getattr(reader, "axis_map", None) or amap
+        amap = gesture.axis_map_of(getattr(pad, "axis_map", None), reader)   # the one rule
         try:
             sensors = (tuple(amap.pick(cal.gyro_dps(report.gyro), amap.gyro)),
                        tuple(amap.pick(cal.accel_g(report.accel), amap.accel)))
         except (TypeError, ValueError, AttributeError):
             sensors = None
-    raw = centre = None
+    raw = centre = stick = None
     where = ""
     sticks = getattr(report, "raw_sticks", ())
     if sticks and getattr(model, "family", "") == "nintendo":
@@ -191,7 +191,7 @@ def _calibration_of(pad, report, model):
             where = ("rest" if getattr(reader, "recentred", False)
                      else "nominal" if getattr(cal, "nominal", True)
                      else "user" if getattr(cal, "user_stick", False) else "flash")
-    return sensors, raw, centre, where
+    return sensors, raw, centre, stick, where
 
 
 @dataclass
@@ -293,12 +293,14 @@ def _lane_rows(r: Reading, routed=frozenset()) -> list[tuple]:
             names += list(extra)
     out.append(("buttons", [(f"pad:{n}", r.glyph(n, n), 1.0 if n in r.down else 0.0, 0.0, False)
                             for n in names if has(n)]))
-    if r.stick_raw is not None and r.stick_centre is not None:
-        # a Joy-Con's stick as the chip counts it, and the centre in use
+    if r.stick_raw is not None and r.stick_centre is not None and r.stick_cal is not None:
+        # a Joy-Con's stick as the chip counts it, over the reach the
+        # calibration in use gives it (so the bar agrees with the LX row)
         (x, y), (cx, cy) = r.stick_raw, r.stick_centre
+        nx, ny = r.stick_cal.norm(x, y)
         out.append(("stick calibration", [
-            ("raw x", str(x), (x - cx) / 1400 / 2 + 0.5, 0.5, True),
-            ("raw y", str(y), (y - cy) / 1400 / 2 + 0.5, 0.5, True),
+            ("raw x", str(x), nx / 2 + 0.5, 0.5, True),
+            ("raw y", str(y), ny / 2 + 0.5, 0.5, True),
             (f"centre ({r.centre_from})", f"{cx}, {cy}", None, 0.5, False)]))
     if r.sensors is not None:
         (gx, gy, gz), (ax, ay, az) = r.sensors
