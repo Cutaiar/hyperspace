@@ -1,0 +1,4 @@
+{"patch": "trigger-detent",
+ "note": "The session's rows (bindings.json) that drive the pad back for patches/trigger-detent.json: a patch drives only its own params and never a sink port (patches.check), so these are rows of your own. Right-click fx.deconverge.radial → Learn sink ▸ left trigger resistance, then again ▸ rumble, heavy motor. A spawn into a preset that already has deconverge makes deconverge.2: Learn them on fx.deconverge.2.radial. `edge` is the pad entry's role; on the default device list it is `pad`.",
+ "rows": [{"source": "param:fx.deconverge.radial", "target": "edge:5", "op": "send"},
+          {"source": "param:fx.deconverge.radial", "target": "edge:3", "op": "send"}]}

@@ -46,6 +46,7 @@ Rows 538–541 are the owner's own answers of 2026-10-28, on `worktree-presets-o
 Rows 542–543 come with the Flow mark (`subjects-flow-logo`, PR #214): 543 is the owner's ask, a vector logo as the subject; 542 is the build's own ruling on the depth cue the flat mark needed, for the owner to keep or overturn. Hand checks 405–406.
 
 Row 560 is the owner's own, 2026-11-02, in the reshaping of the post-show plan (wave 0, K1, on `wave0/k1-clock-directive`): no shader multiplies time by a param; a rate-like param is integrated by the host (`// @clock` in an effect file) and wrapped. It is agreed, not pending; the row is here so the ports that follow it (K2 warp and tripcolour, K3 the media and instance rates, K4 the grid effects) cite one number. Hand check 419, once K2 lands a `@clock` on a shipped effect.
+Rows 554–555 (plan 43, the preset contract, 2026-11-02) are docs only: 554 is the owner's line, "a preset is a complete look; the rig is what is plugged in"; 555 is its first consequence, one camera in the preset, which overturns row 182 and is "(rec) — pending the owner" until C2 builds it ([`plans/43-preset-contract.md`](plans/43-preset-contract.md)).
 Every other one is in the app now (rows 110–213
 on `plan-24-26-27-integration`, rows from 214 on `plan-28-30-integration`,
 until the owner merges them) and waits
@@ -588,6 +589,8 @@ here; overturn → the change, then the same.
 | 551 | Plan 42 D8: the pad tape is the one recording format | 415 | (rec) — pending the owner |
 | 552 | Plan 42 D9: the on-screen pad draws the model's own face | 407 | (rec) — pending the owner |
 | 553 | Plan 42 D10: the browser lab is a prototype beside the app | — | (rec) — pending the owner |
+| 554 | The preset contract: a preset is a complete look; the rig is what is plugged in — everything that renders in the preset, everything about hardware on the rig and requested | — | owner — 2026-11-02 |
+| 555 | One camera in the preset: `camera.*` and `eye.*` one preset group (C2, `/9`), overturning "the camera is the rig" (row 182) | — | (rec) — pending the owner |
 | 560 | No shader multiplies time by a param; `@clock` integrates rate-like params in the host | 419 | agreed — owner, 2026-11-02 |
 
 "—": no hand check shows it; tests only.
@@ -9352,3 +9355,84 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
   not report their own bits, sensors on other axes. Each is a constant or
   a table in `pads/`, named there.
 
+
+## Plan 43 — the preset contract (rows 554–555)
+
+Docs only (wave 0, C1, 2026-11-02): the line is written down and the code
+audited; nothing moved. The audit and the worklists for C2 (the camera)
+and D3 (the per-deck split) are
+[`plans/43-preset-contract.md`](plans/43-preset-contract.md).
+
+### 554. A preset is a complete look; the rig is what is plugged in
+
+- **Answer.** owner — 2026-11-02, from the triage of the 2026-10-30
+  show: the preset/session line was drawn per param group
+  (`params.PERFORMANCE_GROUPS` / `SESSION_GROUPS`), not per thing on
+  screen, so a preset came back framed differently (`camera.*` the
+  preset's, `eye.*` the session's, the spin's pose never saved).
+- **Decided.** Everything that renders goes in the preset — the eye, the
+  pose (`rot.phase.*`, `view.body`), the hands' look (`ghost.*`), the
+  cloud's look (`cloud.*`), the show's bus cuts (`graph.RigWires`), the
+  desk template inlined, no value from a library `default.json`.
+  Everything about hardware stays out and is requested — devices,
+  tempo, the analyzer and band scene, the output count and each window's
+  settings, calibration, feel (`desk.pad.*`, `desk.slew`, `hands.*`),
+  the master dim, the bank. Patch, group and preset become one format
+  later; the camera and eye merge (C2) is the first step, the per-deck
+  split (D3) the second. Nothing is built by this row: DECISIONS
+  "Presets and the desk — The preset contract (plan 43)".
+- **What the audit found** (plan 43 §3): the hands' default calibration
+  (`ghost.calibration`, `mm = null`) fits the box to the **eye**, so a
+  preset-owned eye would re-fit the hands and leave the shape (C2 must
+  pick the rig's reference eye); a second hands node's look is seeded
+  from the open **show** (`preset.GraphSection`, `Project._held_back`);
+  a preset's missing ids are filled from `<library>/<group>/default.json`
+  (`Library.resolved`), so the same file draws differently on two
+  libraries; and `hyperspace.preset/8` is already plan 40's groups, so
+  C2 is `/9` and D3 `/10`.
+- **Other options.** Keep the line per group and move only the eye (the
+  triage's S-tier "eye into preset"): fixes the camera, leaves the hands'
+  look, the cuts and the template by name on the wrong side. Draw the
+  line the other way (everything the operator touches is the show's):
+  presets would stop being portable between rigs.
+- **To reverse.** Nothing to reverse until C2 and D3 land; each is its
+  own PR with its own schema and backup.
+- **Rough edge.** `ghost.mirror` (a real mirror in front of the
+  performer) is a look by the rule and a hardware fact by its reason; the
+  pose makes a load restart the turn where the preset was saved, which
+  changes a documented behaviour (D2's step 2, "left spinning"). Both
+  are plan 43 §7's questions for the owner.
+- **Judge it.** — (nothing to see yet; C2's and D3's checks).
+
+### 555. One camera in the preset: `camera.*` and `eye.*` are one group
+
+- **Answer.** (rec) — pending the owner. The contract (row 554) puts the
+  eye in the preset; this row is the recorded "camera is the rig" (row
+  182, DECISIONS "A fixed camera, the eye", `params.py` 1791 "not
+  modulatable — the camera is the rig, the shape is what moves") being
+  overturned, and the shape of the merge.
+- **Recommended.** Move `eye` out of `SESSION_GROUPS` into the camera
+  group, keep the ids `eye.fov` / `eye.distance` (a rename is a second
+  format for no new meaning), schema `/9`, every preset in the library
+  written with the open show's eye once (`tools/migrate_library.py`, the
+  round-trip picture check "same"), old shows' `session` read for it and
+  backed up (`.bak-v2-eye`), the hands' calibration fitted to the rig's
+  reference eye (`EYE_FOV` / `EYE_DISTANCE`), the CAMERA page one
+  section, the camera node the look's on GRAPH (`graphview.RIG_KINDS`).
+  The pose (`rot.phase.*`, `view.body`) saved in the same PR as a
+  separable step. Modulatability of the eye: still none until the owner
+  asks. Worklist: plan 43 §5.
+- **Other options.** Rename to `camera.fov` / `camera.distance` (a read
+  map and an end-to-end old-file test). Leave the eye session and give
+  presets an optional override (two sources of one value: the fault the
+  contract removes). Make the eye modulatable now (row 182's objection
+  was the room's; it no longer holds, but nobody has asked).
+- **To reverse.** Before C2: delete this row. After: the group move back
+  and a migration that writes the eye into the show from the loaded
+  preset — local, two params.
+- **Rough edge.** The Drive library has one rig's show, so the migration
+  writes that rig's eye into every preset; a preset made on the TV
+  config and opened on the projector then carries the TV's eye, which is
+  the contract working as intended and a change from today.
+- **Judge it.** — (C2's hand check: frame, save, load another, load it
+  back; the framing is back).
