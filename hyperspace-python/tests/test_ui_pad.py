@@ -690,16 +690,29 @@ def test_a_routed_dial_lane_shows_in_lanes(rig, monkeypatch):
 
 
 def test_a_disabled_or_replaced_row_stops_showing_at_once(rig):
-    """Rows are edited in place: disabling one, or putting another in
-    its stead, shows on the next frame in the readouts and the map."""
+    """Rows are edited in place — disabled (the ROUTING page's checkbox,
+    `Bindings.enable`), re-pointed (`move_route`) — and the readouts and
+    the map show it on the next frame, from the table's serial: the cache
+    key never scans the rows (the pad window reads it every frame)."""
     table = rig.router.table
-    assert not [r for r in table.of("pad") if r.source == "pad:RFN"]    # a free control
+    assert not [r for r in table.of("pad") if r.source in ("pad:RFN", "pad:LFN")]   # free
     b = table.add(Binding("pad:RFN", "camera.zoom", "push", 0.5))
     assert ui_pad._says_of(rig.panel, table)("pad:RFN")[1] is b
     assert ui_pad.rows_cached(rig.panel, table)["pad:RFN"] is b
-    b.enabled = False
+    table.enable(b, False)
     assert ui_pad._says_of(rig.panel, table)("pad:RFN")[1] is None
     assert "pad:RFN" not in ui_pad.rows_cached(rig.panel, table)
+    table.enable(b, True)
+    table.move_route(b, source="pad:LFN")
+    assert ui_pad._says_of(rig.panel, table)("pad:LFN")[1] is b
+    assert "pad:RFN" not in ui_pad.rows_cached(rig.panel, table)
+    seen = []
+    real_of = table.of
+    table.of = lambda *s: (seen.append(s), real_of(*s))[1]
+    ui_pad._says_of(rig.panel, table)
+    ui_pad.rows_cached(rig.panel, table)
+    del table.of
+    assert not seen                                     # nothing changed: no scan of the rows
 
 
 def test_a_sticks_hover_names_both_its_axes_and_its_click():
@@ -812,3 +825,49 @@ def test_quiet_rooms_let_go_and_a_failed_start_frees_its_context(rig, monkeypatc
     fresh = ui_pad_nvg.Surface()
     assert not fresh.ready() and "would not load" in fresh.failed and fresh.vg is None
     assert deleted == [made]
+
+
+def test_the_drawings_show_upright_through_real_gl(monkeypatch):
+    """Real GL (CI runs the suite under Xvfb): what the drawings put at the
+    top of the design space is the texture's first row — the row ImGui's
+    image shows at its top with the default UVs `_lab` uses — so Faithful
+    and Cockpit show upright. (Not the GL rule another renderer's
+    framebuffer follows: ui_graph's wireframe flips its UVs; imgui-bundle's
+    NanoVG framebuffer is the other way up, and must not be flipped.)"""
+    import numpy as np
+
+    from hyperspace import ui_pad_lab, ui_pad_nvg, ui_pad_views
+    glfw = pytest.importorskip("glfw")
+    moderngl = pytest.importorskip("moderngl")
+    if not glfw.init():
+        pytest.skip("no display for GL")
+    glfw.window_hint(glfw.VISIBLE, False)
+    glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
+    glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
+    glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
+    glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, True)
+    win = glfw.create_window(64, 64, "upright", None, None)
+    glfw.default_window_hints()
+    if not win:
+        pytest.skip("no GL context")
+    glfw.make_context_current(win)
+    surf = ui_pad_nvg.Surface()
+    try:
+        assert surf.ready(), surf.failed
+
+        def halves(pen, r, st):                 # the top red, the bottom blue
+            pen.rr(0, 0, 1000, 310, 0)
+            pen.fill("#ff0000")
+            pen.rr(0, 310, 1000, 310, 0)
+            pen.fill("#0000ff")
+        monkeypatch.setitem(ui_pad_lab.VIEWS, "faithful", halves)
+        w, h = 100, 62
+        tex, _ = surf.render("faithful", ui_pad_views.read(None), {}, w, h, "upright", 0)
+        ctx = moderngl.create_context()
+        px = np.frombuffer(ctx.external_texture(tex, (w, h), 4, 0, "f1").read(),
+                           np.uint8).reshape(h, w, 4)
+        assert px[2, w // 2, 0] > 200 and px[2, w // 2, 2] < 60, px[2, w // 2]        # first row: red
+        assert px[-3, w // 2, 2] > 200 and px[-3, w // 2, 0] < 60, px[-3, w // 2]      # last row: blue
+    finally:
+        surf.close()
+        glfw.destroy_window(win)

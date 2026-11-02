@@ -1957,6 +1957,10 @@ class Bindings:
         # an edit of a desk row in place (the ROUTING page): a redraw only,
         # never the faders' catch cleared — no base moved
         self.redraw_serial = 0
+        # any row edited in place (`enable`, `move_route`, `replace_owner`'s
+        # retarget): what a per-frame cache keys on beside the list's identity
+        # and length (ui_pad's), so it never scans the rows to notice
+        self.rows_serial = 0
 
     # ---- construction ----
 
@@ -2459,6 +2463,7 @@ class Bindings:
             b.source = source
         if target is not None:
             b.target = target
+        self.rows_serial = getattr(self, "rows_serial", 0) + 1
         self._follow_route(old, (b.source, b.target))
 
     def _follow_route(self, old: tuple[str, str], new: tuple[str, str] | None) -> None:
@@ -2603,6 +2608,7 @@ class Bindings:
         if any(x is new for x in self.bindings):
             old = (new.source, new.target)
             new.target, new.enabled = pid, True
+            self.rows_serial = getattr(self, "rows_serial", 0) + 1
             self._check(new)
             self._follow_route(old, (new.source, new.target))
         else:
@@ -2623,6 +2629,7 @@ class Bindings:
                 b.enabled = False
                 raise
         b.enabled = on
+        self.rows_serial = getattr(self, "rows_serial", 0) + 1
         self.dropped, self.notes = [], []
 
     def remove(self, b: Binding) -> None:

@@ -145,11 +145,13 @@ def step_view(panel) -> None:
 
 
 def _key(table) -> tuple:
-    """What the pad's cached rows depend on: which rows, their sources and
-    whether each is on — rows are edited in place (a disable, a row put in
-    another's stead), so the list's length alone would not see it."""
-    return (id(table.bindings), len(table.bindings),
-            tuple((id(b), b.source, b.enabled) for b in table.of(*SCHEMES)))
+    """What the pad's cached rows depend on, without a scan of the rows
+    (the pad window reads it every frame): the list (its identity and
+    length: a row added, removed, put in another's stead) and the table's
+    serials for a row edited in place (`rows_serial`: enabled, re-pointed,
+    retargeted; `redraw_serial`: a desk or GRAPH edit)."""
+    return (id(table.bindings), len(table.bindings), getattr(table, "rows_serial", 0),
+            getattr(table, "redraw_serial", 0))
 
 
 def rows_cached(panel, table) -> dict[str, Binding]:
