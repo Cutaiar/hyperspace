@@ -858,24 +858,15 @@ def _faithful_joycon(p: Pen, r, st: dict, now: float, players, r_low, r_high) ->
     for i in range(4):
         p.rr(rail_x - 5, 252 + i * 16, 10, 10, 2)
         p.fill("#ffffff" if (lit >> i) & 1 else "#2b3242")
-    _rumble_rings(p, r_low, r_high, 330, 540, 670, 540)
+    _rumble_rings(p, r_low, r_high, 200, 470, 200, 555)        # under the stick's well
     p.restore()
-    # the tilt, big, and the sensors' numbers under it
+    # the tilt (what the lanes make of it), then all six axes as traces
     if r.has("motion"):
-        _attitude(p, r, st, 800, 180, 85, True, now)
-        s = r.sensors
-        if s is not None:
-            (gx, gy, gz), (ax, ay, az) = s
-            p.text(f"accel  x {ax:+.2f}  y {ay:+.2f}  z {az:+.2f} g", 800, 335, size=11,
-                   color="dim", mono=True)
-            p.text(f"gyro   x {gx:+5.0f}  y {gy:+5.0f}  z {gz:+5.0f} °/s", 800, 352, size=11,
-                   color="dim", mono=True)
+        _attitude(p, r, st, 800, 118, 50, True, now)
         m = r.motion
-        if m is not None:
-            p.text(f"energy {m.get('energy', 0.0):.2f}   yaw lane {m.get('yaw', 0.5):.2f}",
-                   800, 369, size=11, color="dim", mono=True)
         if m is not None and _pulse(st, "shake_word", bool(m.get("shake")), now):
-            p.text("SHAKE", 800, 440, size=22, color="hot", weight=800)
+            p.text("SHAKE", 930, 60, size=20, color="hot", weight=800)
+        _scope(p, r, st, 648, 236, 336, 55)
     # the stick's calibration: its well with the deadzone ring, the reading
     cx, cy, rad = 200, 200, 70
     p.circle(cx, cy, rad)
@@ -927,6 +918,7 @@ def _cockpit_joycon(p: Pen, r, st: dict, now: float, players, r_low, r_high) -> 
     _dial(p, r, st, 245, 270, "L" if left else "R", _trig(None), stick="LSTICK", ax="LX", ay="LY")
     if r.has("motion"):
         _attitude(p, r, st, 640, 240, 115, True, now)
+        _six_bars(p, r, 104, 438, 282)             # all six axes, as bars, under the dial
     names = ("VIEW", "SHARE") if left else ("MENU", "GUIDE")
     for i, n in enumerate(names):
         x, on = 608 + i * 64, _pressed(r, n)
@@ -953,6 +945,114 @@ def _cockpit_joycon(p: Pen, r, st: dict, now: float, players, r_low, r_high) -> 
             p.fill(c)
         p.text(f"rumble {lbl}", x + 30, 368, size=8, color="faint")
     _ticker(p, r, st, now)
+
+
+# the six axes: (key, label, unit, full scale), accel in g then gyro in deg/s,
+# in the pad's axes — x right, y up out of the face, z toward the player
+SCOPE_N = 180                 # samples kept per trace (~3 s at the pad window's rate)
+ACCEL_FS, GYRO_FS = 2.0, 720.0
+SIX_AXES = (("ax", "accel x", "g", ACCEL_FS), ("ay", "accel y", "g", ACCEL_FS),
+            ("az", "accel z", "g", ACCEL_FS), ("gx", "gyro x", "°/s", GYRO_FS),
+            ("gy", "gyro y", "°/s", GYRO_FS), ("gz", "gyro z", "°/s", GYRO_FS))
+SIX_INK = {"ax": "#6cb6ff", "ay": "#40e0a0", "az": "#ff7ad9", "gx": "#6cb6ff", "gy": "#40e0a0",
+           "gz": "#ff7ad9"}
+SIX_WORDS = {"ax": "right +", "ay": "out of the face +", "az": "toward you +",
+             "gx": "about x: far end rises +", "gy": "about y: turns left +",
+             "gz": "about z: right side rises +"}
+
+
+def _six(r) -> dict[str, float] | None:
+    """The six axes this frame, by key, or None without sensor data."""
+    s = r.sensors
+    if s is None:
+        return None
+    (gx, gy, gz), (ax, ay, az) = s
+    return {"ax": ax, "ay": ay, "az": az, "gx": gx, "gy": gy, "gz": gz}
+
+
+def _scope(p: Pen, r, st: dict, x, y, w, row_h) -> None:
+    """All six degrees of freedom as traces (plan 46): the accelerometer's
+    x, y, z in g and the gyro's x, y, z in deg/s, each row the last
+    `SCOPE_N` frames scrolling left, its baseline at zero, the value now
+    and the chip's own count at the right. The traces are the state kept
+    on the panel (`st["scope"]`)."""
+    six = _six(r)
+    traces = st.setdefault("scope", {k: [] for k, *_ in SIX_AXES})
+    raw = r.raw_sensors
+    raw_by = {}
+    if raw is not None:
+        (rgx, rgy, rgz), (rax, ray, raz) = raw
+        raw_by = {"ax": rax, "ay": ray, "az": raz, "gx": rgx, "gy": rgy, "gz": rgz}
+    p.text("six axes · the pad's x right, y out of the face, z toward you", x + w / 2,
+           y - 10, size=10.5, color="dim")
+    label_w, val_w = 58, 96
+    tx0, tw = x + label_w, w - label_w - val_w
+    for k, (key, label, unit, fs) in enumerate(SIX_AXES):
+        ry = y + k * row_h
+        mid = ry + row_h / 2
+        tr = traces.setdefault(key, [])
+        if six is not None:
+            tr.append(float(six[key]))
+            del tr[:-SCOPE_N]
+        ink = SIX_INK[key]
+        p.rr(tx0, ry + 4, tw, row_h - 8, 4)
+        p.fill("well")
+        p.lines((tx0, mid), (tx0 + tw, mid))
+        p.stroke("#2a3242", 1)
+        for frac in (0.5, -0.5):                          # half scale, faint
+            p.lines((tx0, mid - frac * (row_h / 2 - 6)), (tx0 + tw, mid - frac * (row_h / 2 - 6)))
+            p.stroke("#1c2230", 1)
+        if len(tr) >= 2:
+            n = len(tr)
+            pts = [(tx0 + tw * (i / (SCOPE_N - 1)) + tw * (1 - (n - 1) / (SCOPE_N - 1)),
+                    mid - max(-1.0, min(1.0, v / fs)) * (row_h / 2 - 6)) for i, v in enumerate(tr)]
+            p.lines(*pts)
+            p.stroke(ink, 1.6, cap="round")
+        p.text(label, x + label_w - 6, mid - 6, size=11, color=ink, align="right", weight=700)
+        p.text(f"±{fs:g} {unit}", x + label_w - 6, mid + 8, size=9, color="faint", align="right")
+        if six is not None:
+            v = six[key]
+            p.text(f"{v:+.2f}" if unit == "g" else f"{v:+.0f}", x + w, mid - 6, size=12,
+                   color=ink, align="right", mono=True, weight=700)
+            if key in raw_by:
+                p.text(f"raw {raw_by[key]:+d}", x + w, mid + 8, size=9, color="faint",
+                       align="right", mono=True)
+        else:
+            p.text("—", x + w, mid, size=12, color="faint", align="right")
+    p.text("  ·  ".join(f"{k}: {SIX_WORDS[k]}" for k in ("ax", "ay", "az")), x + w / 2,
+           y + 6 * row_h + 6, size=9, color="faint")
+    p.text("  ·  ".join(f"{k}: {SIX_WORDS[k]}" for k in ("gx", "gy", "gz")), x + w / 2,
+           y + 6 * row_h + 18, size=9, color="faint")
+    p.hit(x, y, w, 6 * row_h, "motion:spin.roll")
+
+
+def _six_bars(p: Pen, r, x, y, w) -> None:
+    """The six axes as bipolar bars, for a glance: a bar from the centre
+    for each, the accelerometer's in g, the gyro's in deg/s."""
+    six = _six(r)
+    row_h = 17
+    label_w = 52
+    bx, bw = x + label_w, w - label_w - 44
+    for k, (key, label, unit, fs) in enumerate(SIX_AXES):
+        ry = y + k * row_h
+        ink = SIX_INK[key]
+        p.rr(bx, ry + 4, bw, row_h - 8, 4)
+        p.fill("#161b26")
+        cx = bx + bw / 2
+        p.lines((cx, ry + 3), (cx, ry + row_h - 3))
+        p.stroke("#2b3446", 1)
+        p.text(label, bx - 5, ry + row_h / 2, size=9.5, color=ink, align="right", weight=700)
+        if six is None:
+            continue
+        u = max(-1.0, min(1.0, six[key] / fs))
+        if abs(u) > 0.004:
+            x0, x1 = (cx, cx + u * bw / 2) if u > 0 else (cx + u * bw / 2, cx)
+            p.rr(x0, ry + 5, max(0.5, x1 - x0), row_h - 10, 3)
+            p.fill(ink, 0.9)
+        v = six[key]
+        p.text(f"{v:+.2f}" if unit == "g" else f"{v:+.0f}", x + w, ry + row_h / 2, size=9.5,
+               color=ink, align="right", mono=True)
+    p.hit(x, y, w, 6 * row_h, "motion:spin.roll")
 
 
 VIEWS = {"faithful": faithful, "cockpit": cockpit}

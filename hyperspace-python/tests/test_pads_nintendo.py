@@ -413,6 +413,13 @@ def test_the_lab_draws_a_joycon_as_itself():
     for _ in range(ui_pad_lab.TRAIL + 5):
         _drawn("cockpit", pad, st)
     assert [k for k, _t in st["events"]] == ["pad:A", "pad:LP"]
+    # Faithful's six-axis scope: a trace per axis, kept on the panel, capped
+    scope = {}
+    for _ in range(ui_pad_lab.SCOPE_N + 7):
+        _drawn("faithful", pad, scope)
+    assert set(scope["scope"]) == {"ax", "ay", "az", "gx", "gy", "gz"}
+    assert {len(t) for t in scope["scope"].values()} == {ui_pad_lab.SCOPE_N}
+    assert abs(scope["scope"]["ay"][-1] - 1.0) < 0.05           # flat: +1 g out of the face
     # the (R): its face, R / ZR, + and HOME, the one stick still the left stick
     dev = FakeJoyCon(reports=[full_report(b3=0x08 | 0x80)] * 40)      # A, ZR
     reader = stepped(JOYCON_R, dev)

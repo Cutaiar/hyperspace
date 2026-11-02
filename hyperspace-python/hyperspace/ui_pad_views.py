@@ -89,6 +89,7 @@ class Reading:
     # see them (gyro deg/s, accel g, in the pad's axes), the stick's raw
     # 12-bit reading, the centre in use and where it came from
     sensors: tuple | None = None           # ((gx, gy, gz), (ax, ay, az))
+    raw_sensors: tuple | None = None       # the chip's own counts, ((gx, gy, gz), (ax, ay, az))
     stick_raw: tuple | None = None         # (x, y) raw
     stick_centre: tuple | None = None      # (cx, cy) raw
     centre_from: str = ""                  # "rest", "user", "flash", "nominal"
@@ -154,7 +155,9 @@ def read(pad) -> Reading:
                    motion=motion, degrees=degrees, effects=getattr(pad, "effects", None),
                    battery=bat if isinstance(bat, int) else -1,
                    link=str(getattr(pad, "link", "") or ""),
-                   sensors=sensors, stick_raw=raw, stick_centre=centre, centre_from=centre_from)
+                   sensors=sensors, stick_raw=raw, stick_centre=centre, centre_from=centre_from,
+                   raw_sensors=((tuple(report.gyro), tuple(report.accel))
+                                if on and getattr(report, "full", False) else None))
 
 
 def _calibration_of(pad, report, model):
