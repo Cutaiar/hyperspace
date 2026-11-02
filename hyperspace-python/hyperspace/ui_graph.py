@@ -93,24 +93,40 @@ pushed only once the edit is read back and accepted.
 and the shape's `faces` port are drawn like the other render nodes
 (`graphview.build`). The picker adds a node on no wire, where the menu
 opened (`add_render`): faint, "reaches nothing", until it is wired in. A
-render cable's menu offers "insert effect ▸ <file>" (`insert_effect`); a
-free effect node let go on a picture cable is inserted into it
-(`dropped`, `Edit.place_effect`): the cable's picture into its ``image``
-port, its output on into whichever port the cable fed. **The drag shows
+render cable's menu offers "insert ▸" (`insert_node`: effects ▸ and
+every other picture node kind, `graphview.INSERT_MENU`); **any picture
+node let go on a picture cable is spliced into it** (2026-11-01, the
+owner: "there's nothing special about effects"; `dropped`,
+`Edit.place_node`, `graphview.INSERT_PORTS`): the cable's picture into
+its inlet, its picture on into whichever port the cable fed. A node with
+several inlets (a composite's under and over, a switch's in1 … in8) asks
+which on release (`st["onto"]` with `inlets`, `put_onto`); a source (a
+channel) takes the cable over: it feeds the port instead, and what did
+keeps its other consumers. **The drag shows
 what the drop will do** (2026-10-29, `onto_plan`, `_drag_preview`): the
 cable it will go onto — of those through the node's box, the one nearest
 its centre — is drawn thick in the drop colour, and every other cable
-dims (a spotlight: a picture cable is already red, a trigger
-already orange). One it may not take dims with the rest, the reason
-beside the pointer, which otherwise says what letting go does;
-nothing lit, nothing happens. Two cables as near: a chooser names each
-("Look-back → Acid") and the pick takes it (`st["onto"]`, `put_onto`). An
-effect already wired only moves on the canvas — unless ⌘ is held: then
+that could take the node dims (a spotlight: a picture cable is already
+red, a trigger already orange); a cable that could never take it (a
+value cable under a picture node, a bus cable, a through wire over an
+off effect, a mask or depth cable: the plan's `cold`) keeps its colour,
+so "won't take it" reads differently from "not near enough", and near
+one the reason is beside the pointer, which otherwise says what letting
+go does; nothing lit, nothing happens. The release acts on the plan the
+last drag frame lit (`st["press_plan"]`), never on a plan re-asked at the
+editor's grid-snapped position. Two cables as near: a chooser names each
+("Look-back → Acid") and the pick takes it (`st["onto"]`, `put_onto`). A
+node already wired only moves on the canvas — unless ⌘ is held: then
 it lights a cable as a free one does, and let go on it moves there (out
-of its place, its chain closed over it: reordering the run). Without ⌘
-the pointer says to hold it from the drag's start. A free modifier goes
+of its place, its chain closed over it: reordering the run; a source's
+old consumers lose their feed, and the line says so). Without ⌘
+the pointer says to hold it from the drag's start. A node that never
+splices (a geometry, a hands layer, a matte, a window) is refused in
+words over a picture cable, as a modifier is. A free modifier goes
 onto a route or a modifier's input the same way; several nodes dragged
-together only move. A compile error colours an effect
+together only move. A member dropped out of its open group onto a cable
+leaves the group and is spliced, two steps. A group node dropped on a
+cable only moves (later). A compile error colours an effect
 node's title and is its hover (`effect_errors`). The selected effect is
 the panel's one selection, shared with the FX page (`Panel.fx_selected`,
 `share`, `select_effect`). The selected node itself is published on the
@@ -352,6 +368,8 @@ def _state(panel) -> dict:
     st.setdefault("drop_cable", None)
     st.setdefault("onto_lit", None)         # 2026-10-29: a dragged node's `onto_plan`
     st.setdefault("press", None)            # … and the node the mouse went down on
+    st.setdefault("press_plan", None)       # 2026-11-01: the last plan the drag lit (the drop's)
+    st.setdefault("onto_cold", None)        # … and the cables that could never take it, cached
     st.setdefault("drop_why", "")
     st.setdefault("patch_form", None)
     st.setdefault("patch_list", None)
@@ -1422,24 +1440,29 @@ def _moved(panel, st: dict, view: graphview.View) -> None:
         leave_groups(panel, list(left.values()))
     for n, now in moves:
         applied[n.id] = now
-        if n.id in left:
-            continue
         # (plan 36 T5: a node the preset's map already places — a new
-        # preset's All outputs — moves there, or that entry would hold it)
+        # preset's All outputs — moves there, or that entry would hold it;
+        # a leaver was placed by `leave_groups`)
         m = pre if graphview.home(n) == graphview.PRESET or (pre and n.id in pre) else show
-        if m is not None:
+        if m is not None and n.id not in left:
             px, py = panned(st)                 # saved in layout units, not panned ones
             m[n.id] = [round(now[0] - px), round(now[1] - py)]
-        # (plan 33 U: an effect too; 2026-10-29: the node the mouse went
-        # down on, let go alone, as the drag lit it — several selected
-        # nodes moved together only move)
+        # (plan 33 U: an effect too; 2026-11-01: any picture node; 2026-10-29:
+        # the node the mouse went down on, let go alone, as the drag lit it
+        # — several selected nodes moved together only move; a member that
+        # left its group by this drop is spliced too, a second step)
         press = st.get("press")
         if (press is not None and press[0] == n.id and not _with_others(st, n.id)
-                and (n.kind == "modifier" or isinstance(n.ref, Effect))):
-            size = ed.get_node_size(ed.NodeId(_id(st, "n:" + n.id)))
-            dropped(panel, view, n.id, (now[0] + size.x / 2, now[1] + size.y / 2),
-                    (size.x, size.y), lift_held(), zoom=st.get("zoom", 1.0))
+                and (n.kind == "modifier" or n.kind in graphview.FRAME_VKINDS)):
+            plan = st.get("press_plan")
+            if plan is not None and plan.get("node") == n.id:
+                drop_plan(panel, view, plan)    # what the glow showed, exactly
+            else:
+                size = ed.get_node_size(ed.NodeId(_id(st, "n:" + n.id)))
+                dropped(panel, view, n.id, (now[0] + size.x / 2, now[1] + size.y / 2),
+                        (size.x, size.y), lift_held(), zoom=st.get("zoom", 1.0))
     st["press"] = None
+    st["press_plan"] = None
 
 
 def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
@@ -1474,6 +1497,9 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
             _region(st, g)
     st["errors"] = effect_errors(panel, view)
     drawn: set[str] = set()
+    # 2026-11-01: a pin's place is this frame's or nothing — a pin not drawn
+    # (a collapsed node's port) is never a drop target 300 units off the wire
+    st["pin_xy"] = {}
     for n in view.nodes:
         if drawn_node(st, n):
             _node(st, n, drawn)
@@ -2846,7 +2872,9 @@ def _cable(st: dict, c: graphview.VCable, a: str | None = None, b: str | None = 
     if lit is not None and lit.get("hot"):
         if c.id == lit["best"] or c.id in lit["tie"]:
             col, thick = DROP_COLOUR, DROP_WIRE
-        else:                               # every other cable dims, whatever it is
+        elif c.id not in lit.get("cold", ()):
+            # every other cable that could take the node dims; one that never
+            # could (2026-11-01, `cold`) keeps its colour
             col = imgui.ImVec4(col.x, col.y, col.z, min(col.w, SPOT_ALPHA))
     ed.link(ed.LinkId(_id(st, "c:" + c.id)), ed.PinId(_id(st, a or c.src_port)),
             ed.PinId(_id(st, b or c.dst_port)), col, thick)
@@ -2868,7 +2896,7 @@ def _bundle(st: dict, b: graphview.VBundle) -> None:
     if lit is not None and lit.get("hot"):  # 2026-10-29: a dragged node's spotlight —
         if any(c.id == lit["best"] or c.id in lit["tie"] for c in b.cables):
             col, thick = DROP_COLOUR, max(thick, DROP_WIRE)     # the cable it lands in is here
-        else:
+        elif not all(c.id in lit.get("cold", ()) for c in b.cables):
             col = imgui.ImVec4(col.x, col.y, col.z, min(col.w, SPOT_ALPHA))
     ed.link(ed.LinkId(_id(st, "c:" + b.id)), ed.PinId(_id(st, b.src_port)),
             ed.PinId(_id(st, b.dst_port)), col, thick)
@@ -3163,15 +3191,31 @@ def add_starter(panel, which: str, cable=None, at=None) -> str | None:
     return why
 
 
-def insert_effect(panel, cable: graphview.VCable, file: str, at=None) -> str | None:
-    """A render cable's "insert effect ▸ <file>" (plan 33 U): the next
-    instance of `file` onto it, one undo step, put where the menu opened
-    (on the cable), never left to the layout. Returns the refusal, or None."""
+def insert_node(panel, cable: graphview.VCable, kind: str, file: str | None = None,
+                inlet: str | None = None, at=None) -> str | None:
+    """A render cable's "insert ▸" (2026-11-01; plan 33 U's "insert effect
+    ▸ <file>" the first): a new node of `kind` (`graphview.INSERT_PORTS`;
+    an effect `file`) made and spliced into the cable in one undo step
+    (`Edit.insert_node`), put where the menu opened (on the cable), never
+    left to the layout. A kind with several inlets and no `inlet` chosen
+    opens the chooser instead (`st["onto"]` with `insert`: the pick calls
+    this again with the inlet). Returns the refusal, or None."""
+    ins = graphview.INSERT_PORTS.get(kind, ((), ""))[0]
+    if len(ins) > 1 and inlet is None:
+        _state(panel)["onto"] = {"node": None, "insert": (kind, file), "cables": [cable.id],
+                                 "inlets": ins, "at": at, "open": True}
+        return None
     e = render_edit(panel)
-    why = _render_said(panel, e, lambda e: e.insert_effect(cable, file))
+    why = _render_said(panel, e, lambda e: e.insert_node(cable, kind, file, inlet))
     if why is None and e.added:
         _place_new(panel, f"render:{e.added}", at)
     return why
+
+
+def insert_effect(panel, cable: graphview.VCable, file: str, at=None) -> str | None:
+    """A render cable's "insert ▸ effects ▸ <file>" (plan 33 U): the next
+    instance of `file` onto it — `insert_node` for an effect."""
+    return insert_node(panel, cable, "effect", file, None, at)
 
 
 def render_node_menu(panel, n) -> None:
@@ -4014,20 +4058,30 @@ def route_from_menu(panel, p) -> None:
 def dropped(panel, view: graphview.View, nid: str, centre, size=None,
             lift: bool = False, zoom: float = 1.0) -> graphview.VCable | None:
     """A node let go at `centre` (canvas units; `size` its box): what
-    `onto_plan` lit while it was dragged happens. A free effect goes onto
-    the brightest picture cable under it — the one through its box nearest
-    its centre (`Edit.place_effect`, one undo step) — the
-    cable's picture into its ``image`` port, its output on into the port
-    the cable fed — a free modifier onto the brightest route or input
-    (`insert_modifier`). An effect already wired is only moved when `lift`
-    (⌘ held as it is let go: 2026-10-29): out of its place, the wires
-    either side of it closed over it, onto the cable — reordering the run;
-    without ⌘ a drag only moves it on the canvas. Two cables as near as
-    each other: a chooser opens (`st["onto"]`, `put_onto`) and nothing
-    changes until one is picked. Returns the cable it went into, or None.
-    `zoom` (canvas units a screen px) grows how near is near: `graphview.drop_reach`."""
+    `onto_plan` lights while it is dragged happens (`drop_plan`). A free
+    picture node goes onto the brightest picture cable under it — the one
+    through its box nearest its centre (`Edit.place_node`, one undo step)
+    — the cable's picture into its inlet, its picture on into the port
+    the cable fed; one with several inlets asks which first; a source
+    takes the cable over; a free modifier goes onto the brightest route or
+    input (`insert_modifier`). A node already wired is only moved when
+    `lift` (⌘ held as it is let go: 2026-10-29): out of its place, the
+    wires either side of it closed over it, onto the cable — reordering
+    the run; without ⌘ a drag only moves it on the canvas. Two cables as
+    near as each other: a chooser opens (`st["onto"]`, `put_onto`) and
+    nothing changes until one is picked. Returns the cable it went into,
+    or None. `zoom` (canvas units a screen px) grows how near is near:
+    `graphview.drop_reach`."""
     plan = onto_plan(panel, view, nid, centre, size, lift, zoom)
-    if plan is None or plan["best"] is None:
+    return None if plan is None else drop_plan(panel, view, plan)
+
+
+def drop_plan(panel, view: graphview.View, plan: dict) -> graphview.VCable | None:
+    """What `plan` (`onto_plan`'s) said letting go does, done: the chooser
+    for a tie, else the node onto its best cable (`put_onto`); nothing
+    with nothing lit. Returns the cable it went into, or None."""
+    nid = plan["node"]
+    if plan["best"] is None:
         return None
     if plan["tie"]:
         _state(panel)["onto"] = {"node": nid, "cables": plan["tie"], "open": True}
@@ -4037,54 +4091,116 @@ def dropped(panel, view: graphview.View, nid: str, centre, size=None,
 
 
 ONTO_TIE = 1.0          # canvas units: two cables this near each other's distance are a tie
+PICTURE_ON_VALUE = "{node} goes onto a picture cable, not a route"
+MOD_ON_PICTURE = "a modifier goes onto a route or a modifier's input, not a picture cable"
+THROUGH_DROP = "{through} — turn {it} on to splice here"
+
+
+def _cold(panel, st: dict, view: graphview.View, n: graphview.VNode,
+          never: str | None) -> set[str]:
+    """The cables dragged node `n` could never go onto, wherever it is let
+    go (2026-11-01: drawn undimmed while it is dragged, `_cable`): for a
+    picture node every value cable, every through wire and every render
+    cable `onto_refusal` refuses (the rig's bus, a mask, a depth, a pin's);
+    for a node that never splices (`never`) or a modifier, every render
+    cable and through wire, and for a modifier every cable with no source
+    to take. Kept across the drag's frames while the view and the node
+    hold (`st["onto_cold"]`): the refusals are asked once, not a frame."""
+    key = (id(view), n.id, len(view.cables), len(st.get("throughs", {})))
+    held = st.get("onto_cold")
+    if held is not None and held[0] == key:
+        return held[1]
+    cold: set[str] = set(st.get("throughs", {}))
+    e = render_edit(panel) if n.kind in graphview.FRAME_VKINDS and never is None else None
+    for c in view.cables:
+        if n.kind == "modifier":
+            if c.kind == "render" or not c.addr:
+                cold.add(c.id)
+        elif c.kind != "render" or never is not None or graphview.onto_refusal(e, c) is not None:
+            cold.add(c.id)
+    st["onto_cold"] = (key, cold)
+    return cold
 
 
 def onto_plan(panel, view: graphview.View, nid: str, centre, size=None,
               lift: bool = False, zoom: float = 1.0) -> dict | None:
     """What letting node `nid` (its box `size`) go at `centre` would do — what the drag
-    lights (`_drag_preview`) and what the drop does (`dropped`), so the two
-    never disagree. None: a node no drop moves (not an effect, a wired
-    modifier). Else ``{"node", "hot", "lift", "lit", "best", "tie",
-    "refused", "hint"}``: `hot`, whether a drop can do anything (a free
-    node, or a wired effect with ⌘: the cables dim around it while it is
-    dragged); the cables it may go
-    onto through its box, nearest its centre first (`lit`), the one it will (`best`),
-    the cables as near as that one when there are two or more (`tie`: the
-    chooser's), the render cables under it it may not go onto with why
-    (`refused`); `lift`, a wired effect lifted with ⌘. `hint`: a wired effect
-    dragged without ⌘ — ``"over"`` a cable it could go onto, else
-    ``"away"`` (the drag says to hold ⌘ either way)."""
+    lights (`_drag_preview`) and what the drop does (`drop_plan`), so the two
+    never disagree. None: a node no drop moves (not a picture node or a
+    modifier, a wired modifier). Else ``{"node", "hot", "lift", "lit",
+    "best", "tie", "refused", "hint", "cold", "ask", "source"}``: `hot`,
+    whether a drop can do anything (a free node, or a wired one with ⌘:
+    the cables that could take it dim around it while it is dragged); the
+    cables it may go onto through its box, nearest its centre first
+    (`lit`), the one it will (`best`), the cables as near as that one when
+    there are two or more (`tie`: the chooser's), the cables under it it
+    may not go onto with why (`refused`: a value cable, a bus cable, a
+    through wire over an off effect, a mask; or every cable, for a node
+    that never splices — a geometry, a matte, a window), the cables it
+    could never go onto wherever it is (`cold`: drawn undimmed); `lift`, a
+    wired node lifted with ⌘; `ask`, the inlets the drop will ask between
+    (a composite's, a switch's); `source`, a node that takes the cable
+    over (a channel). `hint`: a wired node dragged without ⌘ — ``"over"``
+    a cable it could go onto, else ``"away"`` (the drag says to hold ⌘
+    either way)."""
     n = view.node(nid)
     if n is None:
         return None
-    pins = _state(panel)["pin_xy"]
+    st = _state(panel)
+    pins = st["pin_xy"]
     mine = view.cables_of(nid)
     near = graphview.drop_reach(zoom)           # never under NEAR screen px zoomed out
-    if n.kind == "render" and isinstance(n.ref, Effect):
-        e = render_edit(panel)
+    plan = {"node": nid, "hot": not mine or lift, "lift": False, "lit": [], "best": None,
+            "tie": [], "refused": {}, "hint": "", "cold": set(), "ask": (), "source": False}
+    kinds = graphview.CABLE_KINDS               # every cable: the wrong ones refused in words
+    if n.kind in graphview.FRAME_VKINDS:
+        name = n.id.partition(":")[2]
+        never = graphview.drop_refusal(name, n.label)
+        cold = _cold(panel, st, view, n, never)
+        e = render_edit(panel) if never is None else None
         ok, refused = [], {}
-        for d, c in graphview.cables_near(view, pins, centre, near, kinds=("render",),
+        for d, c in graphview.cables_near(view, pins, centre, near, kinds=kinds,
                                           skip={nid}, size=size):
-            why = (graphview.onto_refusal(e, c) if e is not None
-                   else None if c.type == graphview.IMAGE else "no picture cable")
-            if why is None:
-                ok.append((d, c))
+            if c.kind != "render":
+                refused[c.id] = never or PICTURE_ON_VALUE.format(node=n.label)
+            elif c.id in cold:
+                refused[c.id] = never or graphview.onto_refusal(e, c) or ""
             else:
-                refused[c.id] = why
+                ok.append((d, c))
+        plan["ask"] = graphview.inlet_choices(name)
+        plan["source"] = graphview.is_source(name)
     elif n.kind == "modifier" and not mine:     # (a wired modifier is not lifted)
+        never = None
+        cold = _cold(panel, st, view, n, None)
+        ok, refused = [], {}
         # (only a cable with a source to take: `insert_modifier`'s rule)
-        ok = [(d, c) for d, c in graphview.cables_near(view, pins, centre, near, skip=(nid,),
-                                                        size=size) if c.addr]
-        refused = {}
+        for d, c in graphview.cables_near(view, pins, centre, near, kinds=kinds,
+                                          skip=(nid,), size=size):
+            if c.kind == "render":
+                refused[c.id] = MOD_ON_PICTURE
+            elif c.kind in ("route", "input") and c.addr:
+                ok.append((d, c))
     else:
         return None
-    plan = {"node": nid, "hot": not mine or lift, "lift": False, "lit": [], "best": None,
-            "tie": [], "refused": {}, "hint": ""}
+    # a through wire over an off effect is drawn, not a cable: under the
+    # node it says what to turn on (`st["throughs"]`, `graphview.throughs`)
+    thr = st.get("throughs", {})
+    if thr:
+        tv = graphview.View(nodes=view.nodes, cables=list(thr.values()), pins=view.pins)
+        for d, c in graphview.cables_near(tv, pins, centre, near, kinds=(graphview.THROUGH,),
+                                          skip={nid}, size=size):
+            plural = "effects:" in c.label
+            refused.setdefault(c.id, never or THROUGH_DROP.format(
+                through=c.label, it="them" if plural else "it"))
+    plan["cold"] = cold
+    plan["refused"] = refused
+    if never is not None:                       # a node that never splices: said, never hot
+        plan["hot"] = False
+        return plan
     if mine and not lift:
         plan["hint"] = "over" if ok else "away"
         return plan
     plan["lit"] = [c.id for _, c in ok]
-    plan["refused"] = refused
     if ok:
         plan["best"] = ok[0][1].id
         tie = [c.id for d, c in ok if d - ok[0][0] < ONTO_TIE]
@@ -4094,20 +4210,26 @@ def onto_plan(panel, view: graphview.View, nid: str, centre, size=None,
 
 
 def lift_held() -> bool:
-    """⌘ (or Ctrl) held: a wired effect's drag lifts it out of its chain."""
+    """⌘ (or Ctrl) held: a wired node's drag lifts it out of its chain."""
     io = imgui.get_io()
     return bool(io.key_ctrl or io.key_super)
 
 
 ONTO_TIP = "let go: {node} onto {cable}"
 LIFT_ONTO_TIP = "let go: {node} out of its chain, onto {cable}"
+ASK_TIP = ", then pick {choices}"
+TAKE_TIP = "let go: {node} feeds {dst} instead of {src}"
+LIFT_TAKE_TIP = "let go: {node} out of its place, feeds {dst} instead of {src}"
 ONTO_TIE_TIP = "let go: pick which cable {node} goes onto"
 LIFT_HINT = "hold ⌘ to move {node} out of its chain and onto this cable"
 LIFT_AWAY = "hold ⌘ to lift {node} out of its chain, then let go on a cable"
 
 
 def drag_words(view: graphview.View, plan: dict) -> str:
-    """What the drag's tooltip says for `plan` (`onto_plan`)."""
+    """What the drag's tooltip says for `plan` (`onto_plan`): what letting
+    go does — onto which cable, then which inlet it will ask (a
+    composite: "then pick under or over"), or which port a source takes
+    over — or, with nothing lit, the nearest refusal's words."""
     n = view.node(plan["node"])
     node = n.label if n is not None else plan["node"]
     if plan["hint"]:
@@ -4116,15 +4238,25 @@ def drag_words(view: graphview.View, plan: dict) -> str:
         return ONTO_TIE_TIP.format(node=node)
     if plan["best"] is not None:
         c = next((x for x in view.cables if x.id == plan["best"]), None)
-        words = graphview.onto_words(view, c) if c is not None else plan["best"]
-        return (LIFT_ONTO_TIP if plan["lift"] else ONTO_TIP).format(node=node, cable=words)
+        src, dst = graphview.onto_sides(view, c) if c is not None else (plan["best"], "")
+        if plan.get("source"):
+            return (LIFT_TAKE_TIP if plan["lift"] else TAKE_TIP).format(node=node, src=src,
+                                                                        dst=dst)
+        words = (LIFT_ONTO_TIP if plan["lift"] else ONTO_TIP).format(node=node,
+                                                                     cable=f"{src} → {dst}")
+        if plan.get("ask"):
+            words += ASK_TIP.format(choices=graphview.choices_words(plan["ask"]))
+        return words
     return next(iter(plan["refused"].values()), "")
 
 
 def _drag_preview(panel, st: dict, view: graphview.View) -> None:
-    """While one effect or modifier node is dragged: what letting it go
+    """While one picture or modifier node is dragged: what letting it go
     would do (`onto_plan`), kept in `st["onto_lit"]` for the cables drawn
-    this frame, and its words said beside the pointer.
+    this frame and in `st["press_plan"]` for the release (`_moved` acts on
+    the last plan lit, so the glow and the drop never disagree: the
+    editor's node position snaps to its grid, the pointer's does not),
+    and its words said beside the pointer.
     The node is the one the mouse went down on (`st["press"]`), where it
     is now its place then plus how far the pointer has come — never a
     guess from which positions changed. Nothing while several selected
@@ -4133,6 +4265,7 @@ def _drag_preview(panel, st: dict, view: graphview.View) -> None:
     left = imgui.MouseButton_.left
     if imgui.is_mouse_clicked(left):
         st["press"] = _pressed(st, view)
+        st["press_plan"] = None
     press = st.get("press")
     if (press is None or not imgui.is_mouse_down(left) or st.get("patch_drag")
             or not imgui.is_mouse_dragging(left) or _with_others(st, press[0])):
@@ -4146,20 +4279,23 @@ def _drag_preview(panel, st: dict, view: graphview.View) -> None:
     if plan is None:
         return
     st["onto_lit"] = plan
+    st["press_plan"] = plan
     words = drag_words(view, plan)
     if words:
         _drag_tip(words)
 
 
 def _pressed(st: dict, view: graphview.View):
-    """The mouse just went down: on an effect or modifier node (not on one
-    of its pins — that is a cable's drag), ``(node id, the pointer, the
-    node's place)``, both in canvas units; else None."""
+    """The mouse just went down: on a picture node (any render-side node:
+    `graphview.FRAME_VKINDS` — one that never splices is refused in words
+    as it is dragged) or a modifier node (not on one of its pins — that is
+    a cable's drag), ``(node id, the pointer, the node's place)``, both
+    in canvas units; else None."""
     if ed.get_hovered_pin().id():
         return None
     name = st["names"].get(ed.get_hovered_node().id(), "")[2:]
     n = view.node(name) if name else None
-    if n is None or not (n.kind == "modifier" or isinstance(n.ref, Effect)):
+    if n is None or not (n.kind == "modifier" or n.kind in graphview.FRAME_VKINDS):
         return None
     m = imgui.get_mouse_pos()
     p = ed.get_node_position(ed.NodeId(_id(st, "n:" + n.id)))
@@ -4173,20 +4309,27 @@ def _with_others(st: dict, nid: str) -> bool:
     return len(sel) > 1 and any(x.id() == k for x in sel)
 
 
-def put_onto(panel, view: graphview.View, nid: str,
-             c: graphview.VCable) -> graphview.VCable | None:
-    """Node `nid` onto cable `c` (`dropped`'s, or the chooser's pick): an
-    effect through `Edit.place_effect`, a modifier `insert_modifier`.
-    Returns the cable, or None (refused: said on the head)."""
+def put_onto(panel, view: graphview.View, nid: str, c: graphview.VCable,
+             inlet: str | None = None) -> graphview.VCable | None:
+    """Node `nid` onto cable `c` (`dropped`'s, or the chooser's pick): a
+    picture node through `Edit.place_node` — one with several inlets and
+    no `inlet` picked yet opens the chooser for them (`st["onto"]` with
+    `inlets`: "under", "over"; a switch's in1 … in8) and changes nothing
+    until one is picked — a modifier `insert_modifier`. Returns the
+    cable, or None (asked, or refused: said on the head)."""
     st = _state(panel)
     st["onto"] = None
     n = view.node(nid)
     if n is None:
         return None
-    if n.kind == "render" and isinstance(n.ref, Effect):
+    if n.kind in graphview.FRAME_VKINDS:
         # (plan 35 G: the node's own name — an instance, or a copy of one)
         name = n.id.partition(":")[2]
-        why = _render_said(panel, render_edit(panel), lambda e: e.place_effect(c, name))
+        ask = graphview.inlet_choices(name)
+        if ask and inlet is None:
+            st["onto"] = {"node": nid, "cables": [c.id], "inlets": ask, "open": True}
+            return None
+        why = _render_said(panel, render_edit(panel), lambda e: e.place_node(c, name, inlet))
         return None if why is not None else c
     res = insert_modifier(panel, c, nid)
     return None if isinstance(res, graphview.Refusal) else c
@@ -4195,9 +4338,31 @@ def put_onto(panel, view: graphview.View, nid: str,
 def _onto_menu(panel, st: dict, view: graphview.View) -> None:
     """The chooser a node let go over several cables opens: one item per
     cable (`graphview.onto_words`), nearest first; picked, the node goes
-    onto it (`put_onto`)."""
+    onto it (`put_onto`). Or (2026-11-01) the inlets of a node with
+    several (`inlets`): one item per inlet, headed by which picture it
+    takes; picked, the node goes onto the one cable with that inlet —
+    or, from the cable menu's insert ▸ (`insert`), a new node of that
+    kind is made and spliced there (`insert_node`)."""
     held = st["onto"]
-    n = view.node(held["node"])
+    n = view.node(held["node"]) if held.get("node") else None
+    inlets = held.get("inlets")
+    if inlets:
+        c = next((x for x in view.cables if x.id == held["cables"][0]), None)
+        if c is None:
+            st["onto"] = None
+            return
+        src, _ = graphview.onto_sides(view, c)
+        what = n.label if n is not None else held.get("insert", ("node",))[0]
+        ui._micro(f"{what} onto {graphview.onto_words(view, c)}: which takes {src}?")
+        for port in inlets:
+            if imgui.menu_item_simple(f"{port}##onto.{port}"):
+                if held.get("insert"):
+                    st["onto"] = None
+                    kind, file = held["insert"]
+                    insert_node(panel, c, kind, file, port, held.get("at"))
+                else:
+                    put_onto(panel, view, held["node"], c, port)
+        return
     ui._micro(f"put {n.label if n is not None else held['node']} onto")
     for cid in held["cables"]:
         c = next((x for x in view.cables if x.id == cid), None)
@@ -4595,8 +4760,11 @@ def _pin_menu(panel, view: graphview.View, pin: str) -> None:
 
 
 def _cable_menu(panel, view: graphview.View, c: graphview.VCable, at=None) -> None:
-    """A cable's menu: insert a modifier of a kind (a route's or a
-    modifier input's), delete."""
+    """A cable's menu: insert ▸ — a modifier of a kind on a route or a
+    modifier's input; on a picture cable (2026-11-01) effects ▸ and every
+    other picture node kind (`graphview.insert_items`), made and spliced
+    in one undo step, a composite or a switch asked its inlet — the
+    starters, delete."""
     imgui.text_disabled(cable_tip(view, c).splitlines()[0])
     if c.kind in ("route", "input") and imgui.begin_menu("insert"):
         for kind in modifiers.KINDS:
@@ -4604,11 +4772,18 @@ def _cable_menu(panel, view: graphview.View, c: graphview.VCable, at=None) -> No
                 insert_modifier(panel, c, kind)
         imgui.end_menu()
     if c.kind == "render" and c.type == graphview.IMAGE:
-        files = [f for kind, f, _ in graphview.picker(render_edit(panel)) if kind == "effect"]
-        if files and imgui.begin_menu("insert effect"):     # plan 33 U
-            for f in files:
-                if imgui.menu_item_simple(f):
-                    insert_effect(panel, c, f, at)
+        e = render_edit(panel)
+        files = [f for kind, f, _ in graphview.picker(e) if kind == "effect"]
+        if imgui.begin_menu("insert"):          # plan 33 U; 2026-11-01: every picture node
+            if files and imgui.begin_menu("effects"):
+                for f in files:
+                    if imgui.menu_item_simple(f):
+                        insert_effect(panel, c, f, at)
+                imgui.end_menu()
+            for kind, label, why in graphview.insert_items(e):
+                if imgui.menu_item_simple(label if why is None else f"{label}: {why}",
+                                          enabled=why is None):
+                    insert_node(panel, c, kind, None, None, at)
             imgui.end_menu()
         if imgui.begin_menu("starters"):        # plan 36 T5: laid on this cable's picture
             for which, label in graphview.STARTERS:

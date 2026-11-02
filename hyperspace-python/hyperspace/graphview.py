@@ -840,7 +840,7 @@ BUS_SAID = ("the rig's cable (the show's, not the preset's): All outputs' {port}
 BUS_IDLE = "nothing is wired into All outputs' {port}"
 BUS_SAME_PORT = "All outputs' {port} goes into a window's {port} (output.1.{port} …)"
 BUS_NO_SHOW = "no show is open: the cables from All outputs are the show's"
-BUS_NO_EFFECT = ("{wire} is the rig's cable: put the effect on All outputs' picture, or "
+BUS_NO_EFFECT = ("{wire} is the rig's cable: put the node on All outputs' picture, or "
                  "wire the window a picture of its own")
 # plan 36 T2 (W2): a listed cloud's wire into the scene, the rig's too
 CLOUD_SAID = ("the rig's cable (the show's, not the preset's): this cloud drawn in the "
@@ -3597,13 +3597,24 @@ class Edit:
         left to right, are `placed`."""
         return render_starter(self, which, cable)
 
+    def insert_node(self, cable, kind: str, file: str | None = None,
+                    inlet: str | None = None) -> str | None:
+        """A cable's insert ▸ (2026-11-01): a new node of `kind` (an effect
+        `file`; a composite, a switch, a delay, a resize, the dream, the
+        look-back, a cut, a segment, the backdrop, the pattern:
+        `INSERT_PORTS`) made and spliced into picture cable `cable` (a
+        `VCable`, or its two ends: pins or the section's names) in one
+        landing (one undo step): `src → new.<inlet>`, `new → dst`. A kind
+        with several inlets is asked which (`inlet`), never guessed. The
+        new node's name is `added`."""
+        return render_insert(self, cable, kind, file, inlet)
+
     def insert_effect(self, cable, file: str) -> Refusal | None:
-        """Plan 33 U: effect `file` onto picture cable `cable` (a `VCable`,
-        or its two ends: pins or the section's names): `src → new.image`,
-        `new → dst`, in one landing (one undo step) — R25: the file itself
-        when nothing in the section holds it, else the lowest free instance,
-        switched on in the same step."""
-        why = render_insert(self, cable, file)
+        """Plan 33 U: effect `file` onto picture cable `cable` — `insert_node`
+        for an effect: `src → new.image`, `new → dst`, one landing — R25:
+        the file itself when nothing in the section holds it, else the
+        lowest free instance, switched on in the same step."""
+        why = render_insert(self, cable, "effect", file)
         return Refusal(why) if why is not None else None
 
     def switch_channels(self, port: str) -> str | None:
@@ -3613,12 +3624,20 @@ class Edit:
         undo step (`render_channel_switch`). The switch's name is `added`."""
         return render_channel_switch(self, port)
 
+    def place_node(self, cable, name: str, inlet: str | None = None) -> str | None:
+        """Any picture node `name` (2026-11-01, `INSERT_PORTS`: a free node
+        dropped on a cable, or one lifted out of its place with ⌘ —
+        reordering the run is this) taken out of wherever its picture goes,
+        the wires either side of it closed over it, and put onto `cable`
+        — one landing. A node with several inlets takes the cable's
+        picture into `inlet`, asked first; a source (a channel) feeds the
+        port instead of what did. A kind that never splices is refused in
+        words."""
+        return render_place(self, cable, name, inlet)
+
     def place_effect(self, cable, name: str) -> Refusal | None:
-        """Plan 33 U: effect instance `name` (an existing one: a free node
-        dropped on a cable, or one dragged out of its place — reordering the
-        run is this) taken out of wherever its picture goes, the wires
-        either side of it closed over it, and put onto `cable` — one
-        landing."""
+        """Plan 33 U: effect instance `name` onto `cable` — `place_node` for
+        an effect."""
         why = render_place(self, cable, name)
         return Refusal(why) if why is not None else None
 
@@ -3879,9 +3898,12 @@ class Edit:
         """The route a cable from `src` into `p`'s mod makes: the hand
         learn's row (`learn.row_for`) — a push at the hands' Learn depth
         (`hands.learn_depth`) where the source or the param is centred,
-        else the `position` fader at 1; from an envelope into a continuous
-        param, a push about the base at its headroom (the owner,
-        2026-10-24). Route from ▸ (`ui_graph.route_from`) lands the same."""
+        else the `position` fader at 1; from a band lane a push at
+        `learn.LANE_DEPTH` and from an LFO a push at `learn.PUSH_DEPTH`
+        on any continuous param (the owner, after the show of 2026-10-30);
+        from an envelope into a continuous param, a push about the base
+        at its headroom (the owner, 2026-10-24). Route from ▸
+        (`ui_graph.route_from`) lands the same."""
         addr = self.address(src)
         depth = None
         if _scheme(addr) == "hand":
@@ -4732,9 +4754,10 @@ def cable_near(view: View, pins: Mapping[str, tuple], point, within: float = NEA
     return near[0][1] if near else None
 
 
-def onto_words(view: View, c: VCable) -> str:
-    """A cable as a chooser names it: "Look-back → Acid", the input's port
-    said when it is not the picture (``· aux``) or the cable is a value's."""
+def onto_sides(view: View, c: VCable) -> tuple[str, str]:
+    """A cable's two ends as a chooser names them: ("Look-back", "Acid"),
+    the input's port on the end when it is not the picture ("Wobble ·
+    aux") or the cable is a value's."""
     def side(pin: str) -> tuple[str, str]:
         hit = view.owner(pin)
         if hit is not None:
@@ -4743,7 +4766,13 @@ def onto_words(view: View, c: VCable) -> str:
         return (n.label if n is not None else pin), ""
     src, _ = side(c.src_port)
     dst, port = side(c.dst_port)
-    return f"{src} → {dst}" + (f" · {port}" if port and port != "image" else "")
+    return src, dst + (f" · {port}" if port and port != "image" else "")
+
+
+def onto_words(view: View, c: VCable) -> str:
+    """A cable as a chooser names it: "Look-back → Acid" (`onto_sides`)."""
+    src, dst = onto_sides(view, c)
+    return f"{src} → {dst}"
 
 
 # ---------------------------------------------------------------- render edits (plan 28 N4)
@@ -5280,7 +5309,8 @@ ADDED = {
     "scene": "wire geometry into scene.geometry, and the scene into a picture port",
     "shape": "wire it into scene.geometry",
     "backdrop": "wire a picture into backdrop.image and the scene into backdrop.scene",
-    "pattern": "the shape's faces show it while nothing is wired into shape.faces",
+    "pattern": ("wire it into shape.faces (unwired, the faces are plain) and a channel "
+                "into pattern.media"),
     "lookback": ("wire what it records into lookback.image, and its trail into a "
                  "composite's over (add) — its echo.1 … pins are its frames"),
     "layer": "wire it into an output's hands or a composite's over",
@@ -5317,13 +5347,12 @@ def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> st
     spec = _spec(edit)
     doc = _with_frame(_doc(edit))
     named = _named(doc)
-    if kind in ONCE:
-        label = label_of(kind)
-        if kind in named:
-            return IN_ALREADY.format(label=label)
-        doc["nodes"].append({"kind": kind})
+    if kind in ONCE or kind == "dream":
+        got = _new_node(edit, spec, doc, kind)
+        if isinstance(got, str):
+            return got
         edit.added = kind
-        return _land(edit, doc, f"add {kind}", f"{label} added: {ADDED[kind]}")
+        return _land(edit, doc, f"add {kind}", got[1])
     if kind in ("layer", "guide"):
         held = sorted({1} | {h.n for h in (spec.hands if spec is not None else ())})
         n = settings.get("instance") or next(
@@ -5354,54 +5383,17 @@ def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> st
         name = edit.added = rgraph.wired_hands_name(n)
         return _land(edit, doc, f"add {name}", f"{label_of(name)} added: wire it into "
                                                "scene.geometry, or add its layer")
-    if kind == "effect":
-        files = edit.graph.files() if hasattr(edit.graph, "files") else None
-        if not file or (files is not None and file not in files):
-            return f"no {file} effect in this build"
-        n = _new_instance(spec, file)
-        doc["nodes"].append(_effect_entry(file, n))
-        name = edit.added = rgraph.instance_name(file, n)
+    if kind in ("effect", "copy", "switch", "composite", "delay", "resize", *ADD_SAID):
+        got = _new_node(edit, spec, doc, kind, file, **settings)
+        if isinstance(got, str):
+            return got
+        name = edit.added = got[0]
         # plan 33 U: on no wire — it reaches nothing until it is wired in;
-        # R25: switched on, so wiring it in shows it
-        why = _land(edit, doc, f"add {name}", f"{name} added: its params are fx.{name}.*")
-        if why is None:
+        # R25: an effect switched on, so wiring it in shows it
+        why = _land(edit, doc, f"add {name}", got[1])
+        if why is None and kind == "effect":
             _switch_on(edit, name)
         return why
-    if kind == "copy":
-        if not file or file not in _instances(spec):
-            return NO_SUCH_COPY.format(of=file)
-        c = rgraph.CopyAt(_next(spec, "copy"), file)
-        doc["nodes"].append(c.to_json())
-        edit.added = c.name
-        return _land(edit, doc, f"add {c.name}",
-                     f"{label_of(c.name, of=file)} added: wire a picture into {c.name}.image "
-                     f"— it draws {file} again there, with its knobs")
-    if kind == "switch":
-        sw = rgraph.SwitchAt(_next(spec, "switch"))
-        doc["nodes"].append(sw.to_json())
-        edit.added = sw.name
-        return _land(edit, doc, f"add {sw.name}",
-                     f"{sw.name} added: wire pictures into in1 … in8, pick one with "
-                     f"{sw.name}.select")
-    if kind == "composite":
-        c = rgraph.CompositeAt(_next(spec, "composite"), settings.get("blend", "over"))
-        edit.added = c.name
-        doc["nodes"].append(c.to_json())
-        return _land(edit, doc, f"add {c.name}", f"{c.name} added: wire its under and over")
-    if kind in ("delay", "resize"):
-        at = (rgraph.DelayAt if kind == "delay" else rgraph.ResizeAt)(_next(spec, kind))
-        doc["nodes"].append(at.to_json())
-        name = edit.added = at.name
-        how = ("its picture is that one, a frame late" if kind == "delay"
-               else f"it makes it at {name}.size")
-        return _land(edit, doc, f"add {name}",
-                     f"{name} added: wire a picture into {name}.image — {how}")
-    if kind in ADD_SAID:                         # plan 39 T5 (W6)
-        at = {"matte": rgraph.MatteAt, "cut": rgraph.CutAt,
-              "segment": rgraph.SegmentAt}[kind](_next(spec, kind))
-        doc["nodes"].append(at.to_json())
-        name = edit.added = at.name
-        return _land(edit, doc, f"add {name}", ADD_SAID[kind].format(name=name))
     if kind == "echo":
         # plan 36 T4: an echo is the look-back's own output — its pin; the
         # item adds the look-back when the section has none
@@ -5419,14 +5411,6 @@ def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> st
         edit.added = "lookback"
         return _land(edit, doc, "add lookback", f"lookback added: {pin} is its {_ordinal(k)} "
                                                 "newest frame — wire it from its pin")
-    if kind == "dream":
-        if "dream" in named:
-            return IN_ALREADY.format(label=label_of("dream"))
-        doc["nodes"].append({"kind": "dream"})
-        edit.added = "dream"
-        return _land(edit, doc, "add dream", "dream added: wire a picture into dream.image, "
-                                             "and the dream into a composite's over — "
-                                             "dream.on turns it on")
     return f"no node kind {kind!r}: the picker adds what its groups list"
 
 
@@ -5629,34 +5613,179 @@ def _touches(x: dict, names: set[str]) -> bool:
             or x["to"].rpartition(".")[0] in names)
 
 
-# ---- plan 33 U: effects onto picture cables, out of their place ----
+# ---- any picture node onto a picture cable, out of its place (2026-11-01) ----
+#
+# The owner (2026-11-01): "It's not just for effects. We want more or less
+# all nodes that we've been using to be able to be dragged and dropped onto
+# wires and have them intelligently remap. A composite has an over and an
+# under: when you drop that onto a cable, you should be asked where you want
+# this input to go, over or under. There's nothing special about effects.
+# They consume and produce bitmaps. Composites consume and produce bitmaps.
+# Patterns produce bitmaps. Channels produce bitmaps."
 
-def _lift(doc: dict, name: str) -> None:
-    """Effect (or copy) `name` out of where its picture goes, in section
-    `doc`: the wire into its `image` port and every wire out of it gone,
-    and what fed it wired on into each port it fed — the chain closed over
-    it. A wire into its `aux` stays; a D1 placement of it goes; (R21) an
-    instance-1 effect left on no wire stays named, unreached. With nothing
-    wired in, its wires out simply go."""
+# every picture node kind the drop and the cable menu splice: kind → (its
+# picture inlets — one is taken without asking, several are asked, none is a
+# source that takes the cable over — and the pin its picture comes out of:
+# "" for the node itself, else `<node>.<pin>`). A kind not here never
+# splices (`drop_refusal` says why).
+INSERT_PORTS: dict[str, tuple[tuple[str, ...], str]] = {
+    "effect": (("image",), ""), "copy": (("image",), ""), "delay": (("image",), ""),
+    "resize": (("image",), ""), "dream": (("image",), ""), "lookback": (("image",), ""),
+    "cut": (("image",), ""), "segment": (("image",), "fg"),
+    "composite": (("under", "over"), ""), "switch": (rgraph.SWITCH_PORTS, ""),
+    "backdrop": (("scene",), ""), "pattern": (("media",), ""),
+    "channel": ((), ""),
+}
+# the cable menu's insert ▸ after effects ▸, in this order: (kind, its item)
+INSERT_MENU = (("composite", "composite"), ("switch", "switch"), ("delay", "delay"),
+               ("resize", "resize"), ("dream", "dream"), ("lookback", "look-back"),
+               ("cut", "cut"), ("segment", "segment"), ("backdrop", "backdrop"),
+               ("pattern", "faces pattern"))
+GEOMETRY_NODE = ("{label} makes geometry, not a picture: it goes into scene.geometry, not "
+                 "onto a cable")
+SCENE_NODE = "{label} takes geometry, not a picture: it does not go onto a cable"
+HANDS_NODE = ("{label} draws the hands over a picture: wire it into an output's hands or a "
+              "composite's over, it does not go onto a cable")
+MASK_NODE = "{label} makes a mask, not a picture: wire it into a cut's mask, not onto a cable"
+OUTPUT_NODE = "{label} is a window: a picture is wired into it, it goes onto no cable"
+NOT_ON_CABLE = "{label} does not go onto a cable"
+NO_PICTURE_CABLE = "{wire} is no picture cable: a node goes onto a picture cable"
+PICK_INLET = "{name} takes {ports}: say which takes {src}"
+NOT_AN_INLET = "{name} has no {port} inlet: its inlets are {ports}"
+NOT_INSERTABLE = "{kind} is not inserted from a cable's menu"
+CHANNEL_INSERT = "a channel is picked from media ▸ and dragged onto the cable"
+ON_CABLE_ALREADY = "{name} is on that cable already"
+# what the landing says (`Edit.said`)
+MOVED = "{name} moved: {s} → {name} → {d}"
+MOVED_INTO = "{name} moved: {s} → {name} {port} → {d}"
+INSERTED = "{name} inserted: {s} → {name} → {d}"
+INSERTED_INTO = "{name} inserted: {s} → {name} {port} → {d}"
+TOOK_OVER = "{name} feeds {d} instead of {s}"
+OPEN_INLETS = "; {name} {ports} {verb} open"
+FEEDS_NOTHING = "; {name} feeds nothing now"
+LOST_FEED = "; {ports} fed by nothing now"
+
+
+def insert_ports(name: str) -> tuple[tuple[str, ...], str] | None:
+    """Node `name`'s splice ports (`INSERT_PORTS`): (its inlet ports, each
+    as `<name>.<port>`, and its outlet pin — the node, or `<name>.<pin>`),
+    or None for a kind that never splices."""
+    got = INSERT_PORTS.get(kind_of(name) or "")
+    if got is None:
+        return None
+    ins, out = got
+    return tuple(f"{name}.{p}" for p in ins), f"{name}.{out}" if out else name
+
+
+def inlet_choices(name: str) -> tuple[str, ...]:
+    """The inlets a drop of node `name` asks between (a composite's under
+    and over, a switch's in1 … in8): empty when there is nothing to ask."""
+    got = INSERT_PORTS.get(kind_of(name) or "")
+    return got[0] if got is not None and len(got[0]) > 1 else ()
+
+
+def is_source(name: str) -> bool:
+    """Does node `name` make a picture from no picture (a channel)? Dropped
+    on a cable it takes the cable over: it feeds the port instead."""
+    got = INSERT_PORTS.get(kind_of(name) or "")
+    return got is not None and not got[0]
+
+
+def drop_refusal(name: str, label: str | None = None) -> str | None:
+    """Why node `name` never goes onto a cable (no kind of `INSERT_PORTS`:
+    a geometry, the hands' layer or guide, a matte, a window), in words;
+    None for a picture node."""
+    kind = kind_of(name)
+    if kind in INSERT_PORTS:
+        return None
+    label = label or label_of(name)
+    if kind in ("shape", "hands", "cloud"):
+        return GEOMETRY_NODE.format(label=label)
+    if kind == "scene":
+        return SCENE_NODE.format(label=label)
+    if kind in ("layer", "guide"):
+        return HANDS_NODE.format(label=label)
+    if kind == "matte":
+        return MASK_NODE.format(label=label)
+    if kind in ("output", rgraph.ALL_OUTPUTS):
+        return OUTPUT_NODE.format(label=label)
+    return NOT_ON_CABLE.format(label=label)
+
+
+def ports_words(ports: Iterable[str]) -> str:
+    """Ports in words: "under, over"; many, "in2 … in8"."""
+    ports = list(ports)
+    if len(ports) > 3:
+        return f"{ports[0]} … {ports[-1]}"
+    return ", ".join(ports)
+
+
+def choices_words(ports: Iterable[str]) -> str:
+    """The inlets a drop asks between, in the pointer's words: "under or
+    over"; many, "in1 … in8"."""
+    ports = list(ports)
+    if len(ports) > 3:
+        return f"{ports[0]} … {ports[-1]}"
+    return " or ".join(ports)
+
+
+def insert_items(edit: Edit) -> list[tuple[str, str, str | None]]:
+    """The cable menu's insert ▸ items after effects ▸ (`INSERT_MENU`):
+    (kind, label, why it is disabled — a single-instance node the section
+    has already, which is dragged onto the cable instead; None when it
+    may be inserted)."""
+    named = _named(_doc(edit))
+    out = []
+    for kind, label in INSERT_MENU:
+        why = None
+        if kind in (*ONCE, "dream") and kind in named:
+            why = f"{IN_ALREADY.format(label=label_of(kind))}: drag it onto the cable"
+        out.append((kind, label, why))
+    return out
+
+
+def _lift(doc: dict, name: str) -> list[str]:
+    """Node `name` out of where its picture goes, in section `doc`: the
+    wire into its primary inlet (an effect's `image`, a composite's
+    `under`, a switch's `in1`: `INSERT_PORTS`' first) and every wire out
+    of its outlet gone, and what fed it wired on into each port it fed —
+    the chain closed over it. A wire into any other inlet (an effect's
+    `aux`, a composite's `over`) stays; a D1 placement of it goes; (R21)
+    an instance-1 effect left on no wire stays named, unreached. With
+    nothing wired in (a source, or a node fed by nothing), its wires out
+    simply go: the ports they fed are returned, fed by nothing now."""
+    ports = insert_ports(name)
+    ins, out = ports if ports is not None else ((f"{name}.image",), name)
     wires = doc.get("wires", [])
-    into = next((x for x in wires if x["to"] == f"{name}.image"), None)
-    outs = [x for x in wires if x["from"] == name]
+    into = next((x for x in wires if x["to"] == ins[0]), None) if ins else None
+    outs = [x for x in wires if x["from"] == out]
     keep = [x for x in wires if x is not into and not any(x is o for o in outs)]
+    lost: list[str] = []
     if into is not None:
         keep += [{"from": into["from"], "to": o["to"]} for o in outs]
+    else:
+        lost = [o["to"] for o in outs]
     doc["wires"] = keep
     _unplace(doc, lambda n, key, where: n == name)
     # R21: an instance 1 left on no wire is kept, named (unreached, faint)
-    file, n = rgraph.split_instance(name)
-    if kind_of(name) == "effect" and n == 1 and not any(_touches(x, {name}) for x in keep) \
-            and not any(_entry_name(e) == name for e in doc.get("nodes", [])):
-        doc.setdefault("nodes", []).append({"kind": "effect", "file": file})
+    if kind_of(name) == "effect":
+        file, n = rgraph.split_instance(name)
+        if n == 1 and not any(_touches(x, {name}) for x in keep) \
+                and not any(_entry_name(e) == name for e in doc.get("nodes", [])):
+            doc.setdefault("nodes", []).append({"kind": "effect", "file": file})
+    return lost
 
 
-def _onto(doc: dict, s: str, d: str, name: str) -> None:
-    """Effect `name` onto the cable `s → d` in section `doc`: `s →
-    name.image`, `name → d` — whatever went into `d` before (the wire, or
-    a D1 placement into its port) replaced."""
+def _onto(doc: dict, s: str, d: str, name: str, inlet: str | None = None) -> None:
+    """Node `name` onto the cable `s → d` in section `doc`: `s → name.<inlet>`
+    (its one inlet, or the one chosen of several; none for a source, which
+    only feeds), `name → d` (its outlet pin) — whatever went into `d`
+    before (the wire, or a D1 placement into its port) replaced, and
+    whatever went into the chosen inlet."""
+    ports = insert_ports(name)
+    ins, out = ports if ports is not None else ((f"{name}.image",), name)
+    into = f"{name}.{inlet}" if inlet else (ins[0] if ins else None)
+
     def into_d(n: str, key: str, where: str) -> bool:
         if key == "after" and not where.startswith("output."):
             return f"{n}.image" == d
@@ -5671,7 +5800,50 @@ def _onto(doc: dict, s: str, d: str, name: str) -> None:
         kept = [x for x in wires if (x["from"], x["to"]) != (s, d)]
     else:
         kept = [x for x in wires if x["to"] != d]
-    doc["wires"] = kept + [{"from": s, "to": f"{name}.image"}, {"from": name, "to": d}]
+    if into is not None:
+        kept = [x for x in kept if x["to"] != into]
+        kept.append({"from": s, "to": into})
+    doc["wires"] = kept + [{"from": out, "to": d}]
+
+
+def _feeds(doc: dict, name: str) -> bool:
+    """Does anything in section `doc` take node `name`'s picture (or one of
+    its pins')?"""
+    return any(x["from"] == name or rgraph.pin_node(x["from"]) == name
+               for x in doc.get("wires", []))
+
+
+def _open_inlets(doc: dict, name: str) -> list[str]:
+    """Of node `name`'s several inlets, the ones nothing is wired into."""
+    ports = insert_ports(name)
+    if ports is None or len(ports[0]) < 2:
+        return []
+    into = {x["to"] for x in doc.get("wires", [])}
+    return [p.rpartition(".")[2] for p in ports[0] if p not in into]
+
+
+def _said_onto(doc: dict, name: str, s: str, d: str, inlet: str | None,
+               lost: Iterable[str], moved: bool) -> str:
+    """The landing's words: the splice, the inlets left open, a source
+    `s` left feeding nothing, the ports a lifted source no longer feeds."""
+    if is_source(name):
+        words = TOOK_OVER.format(name=name, s=s, d=d)
+        fed = rgraph.pin_node(s) or s
+        if kind_of(fed) not in (None, rgraph.GROUND) and not _bus_source(s) \
+                and not _feeds(doc, fed):
+            words += FEEDS_NOTHING.format(name=fed)
+    elif inlet:
+        words = (MOVED_INTO if moved else INSERTED_INTO).format(name=name, s=s, d=d, port=inlet)
+    else:
+        words = (MOVED if moved else INSERTED).format(name=name, s=s, d=d)
+    open_ = _open_inlets(doc, name)
+    if open_:
+        words += OPEN_INLETS.format(name=name, ports=ports_words(open_),
+                                    verb="is" if len(open_) == 1 else "are")
+    lost = [p for p in lost if p != d]
+    if lost:
+        words += LOST_FEED.format(ports=", ".join(lost))
+    return words
 
 
 def splice_target(edit: Edit, cable, name: str, ports) -> str | None:
@@ -5686,14 +5858,14 @@ def splice_target(edit: Edit, cable, name: str, ports) -> str | None:
 
 
 def onto_refusal(edit: Edit, cable) -> str | None:
-    """Why an effect may not go onto `cable` (the rig's bus, no picture
-    cable: `_cable_ends`' rule), or None."""
+    """Why no node may go onto `cable` (the rig's bus, no picture cable:
+    `_cable_ends`' rule), or None."""
     return _cable_ends(edit, cable)[2]
 
 
 def _splice(doc: dict, s: str, d: str, into: str, out: str) -> None:
     """Plan 40 T3 (D2): a patch onto the cable `s → d` in section `doc`, as
-    `_onto` puts one effect there — `s → into` (the patch's inlet, a member
+    `_onto` puts one node there — `s → into` (the patch's inlet, a member
     port), `out → d` (its outlet, a member) — whatever went into `d` before
     (the wire, or a D1 placement into its port) replaced."""
     def into_d(n: str, key: str, where: str) -> bool:
@@ -5731,46 +5903,126 @@ def _cable_ends(edit: Edit, cable) -> tuple[str | None, str | None, str | None]:
     if (_takes(kind_of(w.node)).get(w.port) != IMAGE or _makes(kind_of(s)) != IMAGE
             or rgraph.pin_node(s) is not None or w.port == rgraph.DEPTH_PORT):
         # (plan 36 T2: nor the scene's depth — a depth, not a picture)
-        return None, None, f"{w} is no picture cable: an effect goes onto a picture"
+        return None, None, NO_PICTURE_CABLE.format(wire=w)
     return s, d, None
 
 
-def render_insert(edit: Edit, cable, file: str) -> str | None:
+def _new_node(edit: Edit, spec, doc: dict, kind: str, file: str | None = None,
+              **settings) -> tuple[str, str] | str:
+    """A new node of `kind` appended to `doc["nodes"]`, unwired: (its name,
+    what adding it says) — or why not, in words (a single-instance kind
+    the section has, no such effect file, no such instance to copy)."""
+    if kind in (*ONCE, "dream"):
+        if kind in _named(doc):
+            return IN_ALREADY.format(label=label_of(kind))
+        doc["nodes"].append({"kind": kind})
+        if kind == "dream":
+            return kind, ("dream added: wire a picture into dream.image, and the dream into "
+                          "a composite's over — dream.on turns it on")
+        return kind, f"{label_of(kind)} added: {ADDED[kind]}"
+    if kind == "effect":
+        files = edit.graph.files() if hasattr(edit.graph, "files") else None
+        if not file or (files is not None and file not in files):
+            return f"no {file} effect in this build"
+        n = _new_instance(spec, file)
+        doc["nodes"].append(_effect_entry(file, n))
+        name = rgraph.instance_name(file, n)
+        return name, f"{name} added: its params are fx.{name}.*"
+    if kind == "copy":
+        if not file or file not in _instances(spec):
+            return NO_SUCH_COPY.format(of=file)
+        c = rgraph.CopyAt(_next(spec, "copy"), file)
+        doc["nodes"].append(c.to_json())
+        return c.name, (f"{label_of(c.name, of=file)} added: wire a picture into {c.name}.image "
+                        f"— it draws {file} again there, with its knobs")
+    if kind == "switch":
+        sw = rgraph.SwitchAt(_next(spec, "switch"))
+        doc["nodes"].append(sw.to_json())
+        return sw.name, (f"{sw.name} added: wire pictures into in1 … in8, pick one with "
+                         f"{sw.name}.select")
+    if kind == "composite":
+        c = rgraph.CompositeAt(_next(spec, "composite"), settings.get("blend", "over"))
+        doc["nodes"].append(c.to_json())
+        return c.name, f"{c.name} added: wire its under and over"
+    if kind in ("delay", "resize"):
+        at = (rgraph.DelayAt if kind == "delay" else rgraph.ResizeAt)(_next(spec, kind))
+        doc["nodes"].append(at.to_json())
+        how = ("its picture is that one, a frame late" if kind == "delay"
+               else f"it makes it at {at.name}.size")
+        return at.name, f"{at.name} added: wire a picture into {at.name}.image — {how}"
+    if kind in ADD_SAID:                         # plan 39 T5 (W6)
+        at = {"matte": rgraph.MatteAt, "cut": rgraph.CutAt,
+              "segment": rgraph.SegmentAt}[kind](_next(spec, kind))
+        doc["nodes"].append(at.to_json())
+        return at.name, ADD_SAID[kind].format(name=at.name)
+    return f"no node kind {kind!r}: the picker adds what its groups list"
+
+
+def render_insert(edit: Edit, cable, kind: str, file: str | None = None,
+                  inlet: str | None = None) -> str | None:
+    """A cable's insert ▸ (2026-11-01; plan 33 U's "insert effect" the
+    first): a new node of `kind` (an effect `file`) made and spliced into
+    picture cable `cable` in one landing — the cable's picture into its
+    inlet (`inlet`, the one chosen of several: a composite's `under` or
+    `over`, a switch's `in1` …; asked, never guessed), its picture on into
+    the port the cable fed. An effect is switched on in the same step."""
     s, d, why = _cable_ends(edit, cable)
     if why is not None:
         return why
-    files = edit.graph.files() if hasattr(edit.graph, "files") else None
-    if not file or (files is not None and file not in files):
-        return f"no {file} effect in this build"
+    if kind == "channel":
+        return CHANNEL_INSERT
+    if kind not in INSERT_PORTS:
+        return NOT_INSERTABLE.format(kind=kind)
+    ins = INSERT_PORTS[kind][0]
+    if len(ins) > 1 and inlet is None:
+        return PICK_INLET.format(name=kind, ports=choices_words(ins), src=s)
+    if inlet is not None and inlet not in ins:
+        return NOT_AN_INLET.format(name=kind, port=inlet, ports=ports_words(ins))
     spec = _spec(edit)
-    n = _new_instance(spec, file)                   # R25: the file itself when none holds it
-    name = rgraph.instance_name(file, n)
-    doc = _doc(edit)
-    if n != 1:                                      # (instance 1 is named by its wires)
-        doc["nodes"].append(_effect_entry(file, n))
-    _onto(doc, s, d, name)
-    why = _land(edit, doc, f"insert {name} into {s} → {d}", f"{name} inserted: {s} → {name} → {d}")
+    doc = _with_frame(_doc(edit))
+    got = _new_node(edit, spec, doc, kind, file)
+    if isinstance(got, str):
+        return got
+    name = got[0]
+    _onto(doc, s, d, name, inlet)
+    why = _land(edit, doc, f"insert {name} into {s} → {d}",
+                _said_onto(doc, name, s, d, inlet, (), moved=False))
     if why is None:
         edit.added = name
-        _switch_on(edit, name)                      # R25: shown on the first gesture
+        if kind == "effect":
+            _switch_on(edit, name)                  # R25: shown on the first gesture
     return why
 
 
-def render_place(edit: Edit, cable, name: str) -> str | None:
+def render_place(edit: Edit, cable, name: str, inlet: str | None = None) -> str | None:
+    """Node `name` (any picture node: `INSERT_PORTS`) onto picture cable
+    `cable`, one landing: out of where it sits (`_lift`: its chain closed
+    over it), then the cable's picture into its inlet (`inlet` of several,
+    asked: `PICK_INLET`) and its picture on into the port the cable fed
+    (`_onto`); a source (a channel) takes the cable over. A kind that
+    never splices is refused in its own words (`drop_refusal`)."""
     s, d, why = _cable_ends(edit, cable)
     if why is not None:
         return why
     nm, why = spec_name(name, edit.render)
     if nm is None:
         return why
-    if kind_of(nm) not in ("effect", "copy"):
-        return f"{nm} is no effect: an effect goes onto a picture cable"
-    if s == nm or rgraph.Wire(s, d).node == nm:
-        return f"{nm} is on that cable already"
+    why = drop_refusal(nm)
+    if why is not None:
+        return why
+    ins, _ = insert_ports(nm)
+    short = [p.rpartition(".")[2] for p in ins]
+    if len(ins) > 1 and inlet is None:
+        return PICK_INLET.format(name=nm, ports=choices_words(short), src=s)
+    if inlet is not None and inlet not in short:
+        return NOT_AN_INLET.format(name=nm, port=inlet, ports=ports_words(short))
+    if s == nm or rgraph.pin_node(s) == nm or rgraph.Wire(s, d).node == nm:
+        return ON_CABLE_ALREADY.format(name=nm)
     doc = _doc(edit)
-    _lift(doc, nm)
-    _onto(doc, s, d, nm)
-    return _land(edit, doc, f"move {nm} onto {s} → {d}", f"{nm} moved: {s} → {nm} → {d}")
+    lost = _lift(doc, nm)
+    _onto(doc, s, d, nm, inlet)
+    return _land(edit, doc, f"move {nm} onto {s} → {d}",
+                 _said_onto(doc, nm, s, d, inlet, lost, moved=True))
 
 
 def render_drop(edit: Edit, node: str) -> str | None:
