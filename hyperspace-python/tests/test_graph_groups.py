@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import random
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from conftest import CORPUS, seed
@@ -119,7 +120,8 @@ def test_one_rule_reads_a_group_number_for_the_load_and_for_group():
     e = graphview.Edit()
     e.presets = SimpleNamespace(groups=[{"id": "group.0"}, {"id": "group.x"}])
     assert e.land_group({"nodes": ["render:warp"]})["id"] == "group.1"
-    e.presets.groups.append({"id": "group.7"})
+    assert e.presets.group_high == 1            # (row 563: the floor, seeded from held)
+    e.presets = SimpleNamespace(groups=[{"id": "group.7"}])
     assert e.land_group({"nodes": ["render:acid"]})["id"] == "group.8"
 
 
@@ -616,7 +618,7 @@ def test_a_member_deleted_leaves_its_group_in_the_same_operation(rig):
     pre, table = rig.lib.presets, rig.router.table
     noita(rig, [ENTRY])
     m = table.add_modifier("scale", ["lane:1"], rig.reg)
-    pre.groups.append({"id": "group.2", "name": "mods", "nodes": [m.id], "open": False})
+    pre.groups = [*pre.groups, {"id": "group.2", "name": "mods", "nodes": [m.id], "open": False}]
     frame(rig.panel, "graph")
     assert pre.groups[1]["nodes"] == [m.id]
     u = watch(rig)
@@ -737,7 +739,7 @@ def test_groups_keep_their_invariants_over_the_corpus(tmp_path, path):
             continue
         g = rng.choice(pre.groups)
         cid = rng.choice(g["nodes"])
-        res = e.remove_node(cid)               # None, or a modifier's notes: done
+        res = e.remove_node(cid)               # None: done; a Refusal: in words
         if graphview.is_macro(cid) and not isinstance(res, (str, graphview.Ask)):
             # a macro "deleted" loses its label and subscribers; the knob is
             # the rig's and stays, so the node is still held — and a member
@@ -754,6 +756,111 @@ def test_groups_keep_their_invariants_over_the_corpus(tmp_path, path):
     assert not deleted or doc != before
     # a save never resurrects a member: the lists were right before it
     assert not {cid for g in doc.get("groups", []) for cid in g["nodes"]} & set(deleted)
+
+
+def test_a_refused_load_leaves_the_loaded_presets_groups_whole(tmp_path):
+    """Review of PR #321 (1): a load lands its graph before it reads its
+    groups, and the landing settles the groups — the *loaded* preset's,
+    still in place. A load refused after that (a value that will not take)
+    puts everything back, the groups and the floor with it."""
+    from test_presets import put
+
+    from hyperspace.library import LibraryError
+    app = headless.make_app(seed(tmp_path))
+    app.lib.load("presets", "party-noita")
+    pre = app.presets
+    pre.groups = [dict(ENTRY)]
+    pre.group_high = 5
+    put(app.lib.home, "BROKEN", schema="hyperspace.preset/7",
+        graph={"frame": "wired", "nodes": [], "wires": [{"from": "scene", "to": "acid.image"},
+                                                         {"from": "acid", "to": "output.all.image"}]},
+        values={"view.speed": "fast"})
+    with pytest.raises(LibraryError, match="nothing loaded"):
+        app.lib.load("presets", "BROKEN")
+    assert pre.groups == [ENTRY] and pre.group_high == 5
+    assert "warp" in patches.spec_names(pre.graph.spec)
+    assert app.lib.current("presets") == "NOITA"           # (still the loaded one)
+
+
+def test_every_road_that_removes_a_node_settles_its_group(tmp_path):
+    """Review of PR #321 (2): the settle is on the mechanism — the table's
+    `set_modifiers` and a bank's membership change — not on GRAPH's Edit,
+    so ROUTING's × (`ui_routing.remove_modifier`), the LFO page's ×
+    (`ui_lfo.remove_lfo`), the sequencer page's × (`ui_seq.remove_env`) and
+    a bare `Bindings.remove_modifier` each leave the group right at once."""
+    from hyperspace import ui_lfo, ui_routing, ui_seq
+    app = headless.make_app(seed(tmp_path))
+    app.lib.load("presets", "party-noita")
+    pre, table = app.presets, app.router.table
+    m1 = table.add_modifier("scale", ["lane:1"], app.reg)
+    m2 = table.add_modifier("scale", ["lane:2"], app.reg)
+    assert app.lfos.add() == 5 and app.envs.add() == 6
+    e = graphview.Edit(table, app.reg, app.router, graph=pre.graph)
+    e.presets = pre
+    entry, _ = e.group(["render:warp", m1.id, m2.id, "lfo.5", "env.6"])
+    assert sorted(entry["nodes"]) == ["env.6", "lfo.5", m1.id, m2.id, "render:warp"]
+    panel = SimpleNamespace(reg=app.reg, router=app.router, library=app.lib)
+    ui_routing.remove_modifier(panel, m1.id)
+    assert m1.id not in pre.groups[0]["nodes"] and table.modifier(m1.id) is None
+    table.remove_modifier(m2.id, app.reg)                   # the bare mechanism
+    assert m2.id not in pre.groups[0]["nodes"]
+    ui_lfo.remove_lfo(panel, app.lfos, 5)
+    assert "lfo.5" not in pre.groups[0]["nodes"] and 5 not in app.lfos
+    assert ui_seq.remove_env(panel, app.envs, 6)
+    assert pre.groups[0]["nodes"] == ["render:warp"]
+    assert pre.live_groups() == [preset.group_entry(pre.groups[0])]
+
+
+def test_undoing_a_load_keeps_the_floor_under_the_groups_numbers(rig):
+    """Review of PR #321 (3): the floor rides in the library's marks beside
+    the groups. A: three groups, the third ungrouped; B loaded; ⌘Z puts A
+    back with its two groups — and the next group is `group.4`, not the
+    ungrouped 3 handed out again."""
+    noita(rig)
+    pre = rig.lib.presets
+    u = watch(rig)
+    try:
+        for nid in NOITA_CORE:
+            ui_graph.group_nodes(rig.panel, [nid])
+        assert [g["id"] for g in pre.groups] == ["group.1", "group.2", "group.3"]
+        assert ui_graph.ungroup(rig.panel, "group.3") is None
+        u.tick(3.0)
+        u.tick(4.0)
+        rig.lib.load("presets", "party-acid")
+        assert pre.groups == [] and pre.group_high == 0
+        assert u.undo()
+        assert [g["id"] for g in pre.groups] == ["group.1", "group.2"] and pre.group_high == 3
+        frame(rig.panel, "graph")
+        four = ui_graph.group_nodes(rig.panel, NOITA_CORE[2:])
+        assert four["id"] == "group.4"
+    finally:
+        undo.install(None)
+
+
+def test_a_members_removal_from_routing_undone_puts_it_back_in_its_group(rig):
+    """Review of PR #321 (4, 5): a step that removes a node carries the marks,
+    whichever page pushed it — ROUTING's × here, GRAPH's delete of any kind
+    — so its undo puts the member back in its group; the settle on the
+    restore's reland prunes nothing it should not."""
+    from hyperspace import ui_routing
+    noita(rig, [ENTRY])
+    pre, table = rig.lib.presets, rig.router.table
+    m = table.add_modifier("scale", ["lane:1"], rig.reg)
+    pre.groups = [dict(ENTRY, nodes=[*NOITA_CORE, m.id])]
+    frame(rig.panel, "graph")
+    u = watch(rig)
+    try:
+        ui_routing.remove_modifier(rig.panel, m.id)
+        assert pre.groups[0]["nodes"] == NOITA_CORE and u.stack[-1].load
+        assert u.undo() and pre.groups[0]["nodes"] == [*NOITA_CORE, m.id]
+        assert table.modifier(m.id) is not None
+        u.tick(3.0)
+        u.tick(4.0)
+        assert ui_graph.remove_node(rig.panel, "render:warp") is None
+        assert pre.groups[0]["nodes"] == [*NOITA_CORE[1:], m.id] and u.stack[-1].load
+        assert u.undo() and pre.groups[0]["nodes"] == [*NOITA_CORE, m.id]
+    finally:
+        undo.install(None)
 
 
 # ---------------------------------------------------------------- the drawing

@@ -1230,8 +1230,9 @@ class Marks:
         its load left for the panel, the loaded preset's graph — plan 26
         A4, `preset.GraphSection.mark`, None with no presets), the
         loaded preset's GRAPH page layout (plan 28 N2, `Presets.layout`),
-        the media channels' bins (plan 32, `Presets.media`) and the GRAPH
-        page's groups (plan 40 T2, `Presets.groups`)."""
+        the media channels' bins (plan 32, `Presets.media`), the GRAPH
+        page's groups (plan 40 T2, `Presets.groups`) and the floor under
+        their numbers (row 563, `Presets.group_high`)."""
         lib, pre = self.lib, self.lib.presets
         gs = getattr(pre, "graph", None)
         return (lib.project.mark(), self.lands(),
@@ -1241,7 +1242,8 @@ class Marks:
                 gs.mark() if gs is not None else None,
                 copy.deepcopy(getattr(pre, "layout", None) or {}),
                 self._bins(pre),
-                copy.deepcopy(getattr(pre, "groups", None) or []))
+                copy.deepcopy(getattr(pre, "groups", None) or []),
+                getattr(pre, "group_high", 0))
 
     @staticmethod
     def _bins(pre):
@@ -1323,6 +1325,8 @@ class Marks:
                 media.from_json(mark[6])     # the bins (plan 32)
             if len(mark) > 7:                # the GRAPH page's groups (plan 40 T2)
                 lib.presets.groups = copy.deepcopy(mark[7])
+            if len(mark) > 8:                # and the floor under their numbers (row 563)
+                lib.presets.group_high = max(lib.presets.group_high, mark[8])
         pr.follow()
 
 

@@ -2663,16 +2663,21 @@ def _centre_node(rig, probe, nid):
 
 
 def _escape(rig):
-    """Escape closes the open menu (keyboard nav on, as test_ui_shell does)."""
+    """Escape closes the open menu (keyboard nav on for the press, as
+    test_ui_shell does; the shared io's flags put back after)."""
     io = imgui.get_io()
+    flags = io.config_flags
     io.config_flags |= imgui.ConfigFlags_.nav_enable_keyboard
-    io.add_mouse_pos_event(-1.0, -1.0)
-    frame(rig.panel)
-    io.add_key_event(imgui.Key.escape, True)
-    frame(rig.panel)
-    io.add_key_event(imgui.Key.escape, False)
-    frame(rig.panel)
-    frame(rig.panel)
+    try:
+        io.add_mouse_pos_event(-1.0, -1.0)
+        frame(rig.panel)
+        io.add_key_event(imgui.Key.escape, True)
+        frame(rig.panel)
+        io.add_key_event(imgui.Key.escape, False)
+        frame(rig.panel)
+        frame(rig.panel)
+    finally:
+        io.config_flags = flags
     assert not imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id)
 
 

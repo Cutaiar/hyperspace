@@ -1312,13 +1312,20 @@ flat graph. Folded, its internal cables are not drawn — the one sanctioned
 exception to "no hidden edges" (plan 36), the owner's — and every crossing
 cable is re-ended at one of its pins; `+` opens it in place. Group,
 Ungroup, open / fold, rename, a drag of the group, a member leaving are each
-one undo step through the marks (`library.Marks` carries `groups`). A
-group's number is never reused within a preset's life (`Presets.group_high`,
-the floor a load sets from the file; row 563), and membership is eager: a
-member deleted leaves its group's list in the same operation —
-`GraphSection.on_land` → `Presets.settle_groups` for a render node,
-`graphview.Edit` for a modifier or a voice — so a draw or a save never
-finds a dead member to filter (`live_groups` stays as the save's guard).
+one undo step through the marks (`library.Marks` carries `groups` and
+`group_high`). A group's number is never reused within a preset's life
+(row 563): `Presets.group_high` is the one authority for the next number —
+the file's highest at the load, raised by every list assigned, carried by
+the marks so an undone load keeps it. Membership is eager: a member
+deleted leaves its group's list in the same operation, by a hook on each
+mechanism that changes what the preset holds — `GraphSection.on_land`, the
+table's `Bindings.on_modifiers` (every `set_modifiers`), each bank's
+`Bank.on_change` — all pointed at `Presets.settle_groups`, so any road
+(GRAPH's delete, ROUTING's ×, the LFO and sequencer pages' ×, a spawn, a
+restore) settles alike and a draw or a save never finds a dead member to
+filter (`live_groups` stays as the save's guard). Every step that removes
+a node pushes with the marks, so its undo puts a member back in its group;
+a refused load puts the loaded preset's groups and floor back with the rest.
 
 **What the preset wants, and the arrival** (P4). `devices.wants(table,
 registry)` lists, per device role, the rows of the loaded preset (enabled

@@ -3741,9 +3741,8 @@ def _settle(panel, res):
 def _act(panel, label: str, why: str | None, fn, *, load: bool = False):
     """One edit: refused before anything moves (`why`), else one undo step
     named `label`, then `fn()` settled by `_settle`. `load`: the step also
-    carries the library's marks (the groups and the layout; row 563: a
-    group member's deletion, so undoing it puts the member back in its
-    group)."""
+    carries the library's marks (the groups and the layout; row 563: every
+    node's deletion, so undoing it puts a member back in its group)."""
     if why is not None:
         return _settle(panel, graphview.Refusal(why))
     undo.push(label, load=load)
@@ -3857,8 +3856,10 @@ def remove_node(panel, nid: str):
         return None
     hit = graphview.voice_of(nid)
     why = voice_refusal(e.view.node(nid) if e.view is not None else None, nid) if hit else None
-    member = any(nid in (g.get("nodes") or ()) for g in getattr(e.presets, "groups", None) or ())
-    res = _act(panel, f"delete node {nid}", why, lambda: e.remove_node(nid), load=member)
+    # row 563: a delete's step carries the marks, as render_edit's and the
+    # group verbs' do — the node may be a group member, and its undo puts
+    # it back in its group
+    res = _act(panel, f"delete node {nid}", why, lambda: e.remove_node(nid), load=True)
     if not isinstance(res, (graphview.Refusal, graphview.Ask)):   # 2026-10-31: its reveal goes
         _state(panel).setdefault("revealed", set()).discard(nid)
     return res

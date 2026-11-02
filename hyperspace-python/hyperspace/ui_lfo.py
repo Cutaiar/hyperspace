@@ -118,10 +118,11 @@ def add_lfo(panel, lfos) -> int | None:
 
 def remove_lfo(panel, lfos, n: int) -> None:
     """The ×: LFO `n` and its knobs go; the others keep their ids and a
-    route on its lane goes dormant. One undo step."""
+    route on its lane goes dormant. One undo step, with the library's
+    marks (row 563: the LFO may be a GRAPH group's member)."""
     if n not in lfos:
         return
-    undo.push(f"delete LFO {n}")
+    undo.push(f"delete LFO {n}", load=True)
     lfos.remove(n)
 
 
