@@ -722,6 +722,8 @@ class Panel:
         self.undo = None      # set by app.py (undo.Undo): its status shows in the footer
         self.devices = None   # set by app.py (devices.DeviceRegistry): the SYSTEM page's lines
         self.media = None     # set by app.py (app.MediaIO): the MEDIA page's folder and channels
+        self.canvas_tap = None   # set by app.py (outputs.CanvasTap): the GRAPH canvas as `panel:graph`
+        self.canvas_px = None    # the GRAPH page's canvas this frame (ui_graph.page), else None
         self.dialog_error = ""   # why the file dialog would not open (`open_file_dialog`)
         self.router = None    # set by app.py (routing.Router); else found via midi's table
         self.output = None    # set by app.py (overlay.Output); its params draw below
@@ -735,8 +737,12 @@ class Panel:
         """Let go of what the panel holds outside Python: the GRAPH page's
         node editor context (ui_graph.py, plan 28 N2). app.py calls it on
         quit and on ⌘R, before imgui shuts down; a panel that never drew
-        the page holds none. Safe to call twice."""
+        the page holds none; the GRAPH canvas's tap (`canvas_tap`,
+        2026-11-02) is let go with it. Safe to call twice."""
         ui_graph.close(self)
+        tap, self.canvas_tap = getattr(self, "canvas_tap", None), None
+        if tap is not None:
+            tap.close()
 
     def _register_panel_params(self) -> None:
         """The panel's own state as ``ui.*`` params: the window, the sheet,
@@ -1619,6 +1625,7 @@ class Panel:
         # Replace / Keep, its own window, before anything can return: a
         # held hand learn is never parked behind a hidden or collapsed panel
         ui_routing.modal(self)
+        self.canvas_px = None   # the GRAPH page sets it when it draws (replay.grab reads it)
         ui_desk.tick(self)      # a picked control lets go by itself (ui_desk.PICK_S)
         ui_graph.settle(self)   # a preset landed without the published node: let it go
         if self.cheatsheet:

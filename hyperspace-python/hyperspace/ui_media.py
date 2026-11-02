@@ -121,14 +121,22 @@ def folder_of(panel):
 
 
 def _feeds(panel) -> dict:
+    """The live feeds: the resolver's built-ins (`panel:graph`, 2026-11-02:
+    no `[[devices]]` entry) first, then what the devices found."""
+    out: dict = {}
+    builtin = getattr(getattr(media_of(panel), "resolver", None), "builtin", None)
+    if builtin:
+        out.update(builtin)
     devices = getattr(panel, "devices", None)
     fn = getattr(devices, "media_feeds", None)
     if fn is None:
-        return {}
+        return out
     try:
-        return dict(fn())
-    except Exception:  # noqa: BLE001 — a device's listing must not take the page down
-        return {}
+        for sid, feed in fn().items():
+            out.setdefault(sid, feed)
+    except Exception:  # noqa: BLE001, S110 — a device's listing must not take the page down
+        pass
+    return out
 
 
 def _name(sid: str) -> str:

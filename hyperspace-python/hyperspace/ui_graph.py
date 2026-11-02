@@ -723,14 +723,30 @@ def page(panel, dt: float) -> None:
     st["over_details"] = bool(sel) and (pos[0] <= mouse.x < pos[0] + size[0]
                                         and pos[1] <= mouse.y < pos[1] + size[1])
     canvas = imgui.ImVec2(max(avail.x, 80.0), max(avail.y, 80.0))
+    # 2026-11-02: where the canvas is and whose draw list it lands on, for
+    # `replay.grab` (`panel:graph`): the page window's own list carries the
+    # backdrop, the editor and its nodes; the side pane below is a child
+    # (its decorations' indices on this list are added at the page's end)
+    fbs = imgui.get_io().display_framebuffer_scale
+    panel.canvas_px = ((float(origin.x), float(origin.y)), (float(canvas.x), float(canvas.y)),
+                       (float(fbs.x), float(fbs.y)), imgui.internal.get_current_window().name)
     shown = _backdrop(panel, st, (origin.x, origin.y), (canvas.x, canvas.y))
     _scroll(st, (origin.x, origin.y), (canvas.x, canvas.y))
     _canvas(panel, st, view, canvas, st["backdrop_alpha"] if shown else 0.0)
     _monitor(panel, (origin.x, origin.y), (canvas.x, canvas.y))
+    omit = (0, 0)
     if sel:                             # its bottom is the canvas's: the page ends where it did
         imgui.set_cursor_screen_pos(imgui.ImVec2(*pos))
         imgui.push_style_color(imgui.Col_.child_bg, imgui.get_style_color_vec4(imgui.Col_.window_bg))
-        if imgui.begin_child("##graph.side", imgui.ImVec2(*size), imgui.ChildFlags_.borders):
+        # imgui draws a child's decorations — its ground, border and
+        # scrollbar — on the parent's list inside `begin_child` (one draw
+        # call fewer); on the page's list they would be in the canvas's
+        # picture, so the indices they take are noted for `replay` to cut out
+        page_list = imgui.get_window_draw_list()
+        i0 = page_list.idx_buffer.size()
+        opened = imgui.begin_child("##graph.side", imgui.ImVec2(*size), imgui.ChildFlags_.borders)
+        omit = (i0, page_list.idx_buffer.size())
+        if opened:
             if wide:                        # the grip on the column's left edge, then the details
                 top = imgui.get_cursor_screen_pos()
                 _grip(st, pos, size, avail.x, side)
@@ -739,6 +755,7 @@ def page(panel, dt: float) -> None:
             _side(panel, st, view, sel)
         imgui.end_child()
         imgui.pop_style_color()
+    panel.canvas_px = (*panel.canvas_px[:4], omit)
     times = st["times"]
     times.append(time.perf_counter() - t0)
     del times[:-TIMES]

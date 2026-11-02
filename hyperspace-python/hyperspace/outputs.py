@@ -330,6 +330,88 @@ class Preview:
         if self.tap is not None:
             self.tap.release()
 
+class CanvasTap:
+    """The GRAPH canvas as a picture (2026-11-02, `media.panel`): two RGBA8
+    textures on the control window's context, written in turn by
+    `replay.grab` at the end of a frame the canvas was wanted on, so the
+    frame a channel holds (`media.<c>.rate` 0) names a texture the next
+    grab leaves alone. Wanted only while a channel polls the source
+    (`PanelSource.gl_poll`), so an unlisted source costs nothing. `tex` is
+    the texture written last (None before the first), `size` its size,
+    `frame_no` counts the grabs and `at` is `time.monotonic()` at the last
+    one. The size is the canvas's framebuffer size under `CAP` on its long
+    side (`fit_size`): the projection is scaled, nothing is blitted."""
+
+    CAP = 1280
+
+    def __init__(self, ctx: moderngl.Context | None = None):
+        self._taps = (Offscreen(ctx), Offscreen(ctx)) if ctx is not None else ()
+        self._k = 0                 # which of the two was written last
+        self._prev: Any = None      # what was bound before `begin`, bound again by `end`
+        self.tex: Any = None
+        self.wanted = False
+        self.frame_no = 0
+        self.at = 0.0
+        self.error = ""
+
+    @property
+    def size(self) -> tuple[int, int] | None:
+        return None if self.tex is None else tuple(self.tex.size)
+
+    def want(self) -> None:
+        """A channel reads the source this frame: draw the canvas at its end."""
+        self.wanted = True
+
+    def take(self) -> bool:
+        """Was it wanted this frame? (and forget the wish)"""
+        wanted, self.wanted = self.wanted, False
+        return wanted
+
+    def begin(self, size: tuple[int, int]) -> moderngl.Framebuffer:
+        """The framebuffer to draw this grab into, bound and cleared opaque
+        black: the one not written last, at `size`. What was bound before
+        (the control window's screen) is bound again by `end`."""
+        tap = self._taps[self._k ^ 1]
+        self._prev = tap.ctx.fbo
+        fbo = tap.fit(size)
+        fbo.use()
+        fbo.clear(0.0, 0.0, 0.0, 1.0)
+        return fbo
+
+    def end(self, now: float) -> None:
+        """The grab drawn: its alpha set to 1 everywhere (the editor's ground
+        is translucent over the backdrop, a picture is not), the framebuffer
+        from before `begin` bound again, and the texture published."""
+        self._k ^= 1
+        tap = self._taps[self._k]
+        fbo = tap.fbo
+        fbo.color_mask = (False, False, False, True)
+        fbo.clear(0.0, 0.0, 0.0, 1.0)
+        fbo.color_mask = (True, True, True, True)
+        prev, self._prev = self._prev, None
+        if prev is None:
+            prev = tap.ctx.screen
+        if prev is not None:
+            prev.use()
+        self.tex = tap.tex
+        self.frame_no += 1
+        self.at = now
+
+    def close(self) -> None:
+        self.tex = None
+        for tap in self._taps:
+            tap.release()
+
+
+def fit_size(size: tuple[float, float], scale: tuple[float, float],
+             cap: int = CanvasTap.CAP) -> tuple[int, int]:
+    """The tap's size for a canvas of `size` points at framebuffer `scale`:
+    its framebuffer size, scaled down (never up) to at most `cap` on the
+    long side, each side at least 1."""
+    w, h = max(size[0] * scale[0], 1.0), max(size[1] * scale[1], 1.0)
+    k = min(1.0, cap / max(w, h))
+    return (max(round(w * k), 1), max(round(h * k), 1))
+
 # ---------------------------------------------------------------- plan 37 C1: the thumbnails
 
 # the long side of a node's thumbnail on GRAPH, in texels (P1)

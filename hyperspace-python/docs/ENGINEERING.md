@@ -1495,6 +1495,37 @@ as built.
   on a later output makes it publish-only (no window). Output 1 always
   has a window. One SYSTEM line per publisher: `ndi out <name> — 60 fps,
   readback 4.0 ms`, in the warning colour with the error on a failure.
+- **The GRAPH canvas as a source** (2026-11-02). The MEDIA page's Live
+  tab lists `panel:graph` without a `[[devices]]` entry: the node
+  editor's view — output 1 behind it, the faded ground, the grid, the
+  nodes and the cables — as a picture. Put it in a channel's bin and wire
+  the channel wherever a picture goes; onto the backdrop behind the very
+  canvas it shows is a one-frame echo, and meant. It is drawn by
+  draw-list replay (`replay.py`): after the control window's own imgui
+  render, the one draw list the page window owns (the backdrop, the
+  editor and its nodes all land on it; `ImDrawList._owner_name` names it,
+  `Panel.canvas_px` records it) is drawn again with the backend's program
+  into `outputs.CanvasTap`, projected so the canvas rect fills the
+  texture — so the details side pane (a child window's list), menus,
+  popups, tooltips and the held PROJECTOR inset (the foreground list)
+  are never in it. One exception is cut out by index: imgui draws a
+  child window's decorations (its ground, border and scrollbar) on the
+  parent's list inside `begin_child`, so the page notes the indices the
+  pane's took and the replay skips them (`replay.spans`). The tap is the canvas's framebuffer size, at most
+  1280 px on the long side (the projection is scaled, nothing is
+  blitted), alpha set to 1 after. Cost: nothing unless a channel polls
+  the source that frame (`CanvasTap.want` / `take`, as the preview's);
+  then one pass over the frame's draw lists and the canvas's triangles
+  drawn once more (a few thousand vertices), plus a `glFlush`. Two
+  textures are written in turn, so a channel at rate 0 holds the frame
+  it showed (`channels._freeze`) and the next grab leaves that texture
+  alone; a frozen channel stops polling, so with every reader frozen
+  nothing is drawn at all (one reader frozen beside a live one sees the
+  live picture at half rate — a known limit). `media_tex` wraps the
+  frame's texture as any `TEX_2D` GPU frame (the wrapper is remade when
+  the name alternates; no GL allocation). Off the GRAPH page the last
+  frame holds 1 s, then the channel reads black and the source says
+  `lost`; back on the page it is `ready` on the first frame.
 - **Dependencies** (all in the default install, imported only when a
   source opens): `av` (PyAV, bundles FFmpeg), `pillow-heif`,
   `syphon-python[opengl]` and `pyobjc-framework-avfoundation` (macOS
