@@ -1516,16 +1516,25 @@ as built.
   blitted), alpha set to 1 after. Cost: nothing unless a channel polls
   the source that frame (`CanvasTap.want` / `take`, as the preview's);
   then one pass over the frame's draw lists and the canvas's triangles
-  drawn once more (a few thousand vertices), plus a `glFlush`. Two
-  textures are written in turn, so a channel at rate 0 holds the frame
-  it showed (`channels._freeze`) and the next grab leaves that texture
-  alone; a frozen channel stops polling, so with every reader frozen
-  nothing is drawn at all (one reader frozen beside a live one sees the
-  live picture at half rate — a known limit). `media_tex` wraps the
-  frame's texture as any `TEX_2D` GPU frame (the wrapper is remade when
-  the name alternates; no GL allocation). Off the GRAPH page the last
-  frame holds 1 s, then the channel reads black and the source says
-  `lost`; back on the page it is `ready` on the first frame.
+  drawn once more (a few thousand vertices), plus a `glFlush`. The tap
+  is a small pool of textures and each grab goes into one no frame
+  holds: a frame carries a lease on its texture (`outputs.Lease`,
+  `MediaFrame.lease`) for exactly as long as it lives, so a channel at
+  rate 0 holding the frame it showed (`channels._freeze`) holds a
+  texture no later grab writes and no canvas resize frees — however
+  many readers grab on beside it, each at full rate — and lets it go
+  with the frame. With every reader live the pool is two textures
+  written in turn; it grows by one per frame held and shrinks back. A
+  grab that fails part way publishes nothing (the last frame stands),
+  and a minimised window (an empty framebuffer, which the backend skips
+  before scaling the clip rects) draws nothing. `media_tex` wraps the
+  frame's texture as any `TEX_2D` GPU frame, one wrapper per distinct
+  texture shared by every channel, so a name that changes every frame
+  costs no GL object. Off the GRAPH page the last frame holds 1 s, then
+  the channel reads black and the source says `off page` (its row on
+  MEDIA says why — being on MEDIA is one such time; `lost` is for a
+  page that draws and a tap that gets nothing); back on the page it is
+  `ready` on the first frame.
 - **Dependencies** (all in the default install, imported only when a
   source opens): `av` (PyAV, bundles FFmpeg), `pillow-heif`,
   `syphon-python[opengl]` and `pyobjc-framework-avfoundation` (macOS
