@@ -1529,12 +1529,17 @@ as built.
   and a minimised window (an empty framebuffer, which the backend skips
   before scaling the clip rects) draws nothing. `media_tex` wraps the
   frame's texture as any `TEX_2D` GPU frame, one wrapper per distinct
-  texture shared by every channel, so a name that changes every frame
-  costs no GL object. Off the GRAPH page the last frame holds 1 s, then
-  the channel reads black and the source says `off page` (its row on
-  MEDIA says why — being on MEDIA is one such time; `lost` is for a
-  page that draws and a tap that gets nothing); back on the page it is
-  `ready` on the first frame.
+  texture (name, size and the tap's generation of it — a texture made
+  anew under a reused name is a new GL object with default sampler
+  state, `MediaFrame.tex_gen`) shared by every channel, so a name that
+  changes every frame costs no GL object. Off the GRAPH page the last
+  frame holds 1 s, then the channel reads black and the source says
+  `off page` (read from the panel's own `canvas_px`; its row on MEDIA
+  says why — being on MEDIA is one such time; `lost` is for a page that
+  draws and a tap that gets nothing, a minimised window); back on the
+  page it is `ready` on the first frame. `replay.py` checks the
+  backend's private names it replays with when imported (uv.lock pins
+  imgui_bundle).
 - **Dependencies** (all in the default install, imported only when a
   source opens): `av` (PyAV, bundles FFmpeg), `pillow-heif`,
   `syphon-python[opengl]` and `pyobjc-framework-avfoundation` (macOS
