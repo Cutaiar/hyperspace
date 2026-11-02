@@ -6388,8 +6388,9 @@ NanoVG, that it is off, and that Map and Lanes still work — and they do.
 **418. The pad's node on GRAPH draws the pad, whatever its role.** (Mac, the Edge first, the Xbox pad second)
 Headless: `tests/test_graph_edit.py` (`test_the_pad_nodes_details_draw_the_pad`).
 1. GRAPH: select the Edge's node (`edge`, the first gamepad entry).
-2. Click the view's name in the picture's header through Map, Faithful,
-   Lanes and Cockpit; press, touch and tilt the pad.
+2. Pick Map, Faithful, Lanes and Cockpit from the drop-down above the
+   picture (or click the view's name in its header); press, touch and
+   tilt the pad.
 3. Select the Xbox pad's node (`xbox`).
 
 *Pass:* in 1 the side panel draws the pad (no list of "not live" ports
