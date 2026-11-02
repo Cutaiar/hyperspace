@@ -60,6 +60,7 @@ from .graph import source_into, wire_node_kind
 from .media import pool
 from .media.adapters import VIDEO_EXT
 from .media.channels import BIN, CHANNELS, EMPTY
+from .media.panel import OFF_PAGE
 from .media.source import FETCHING, MISSING, READY
 from .media.still import STILL_EXT
 
@@ -310,7 +311,7 @@ def _row(panel, st: dict, it: Item) -> None:
     elif imgui.is_item_hovered():
         dl.add_rect_filled(a, b, ui.u32(ui.LINE), ui.ROUND)
     if imgui.is_item_hovered():
-        ui.tooltip(f"{it.sid}\n{it.status or READY}"
+        ui.tooltip(f"{it.sid}\n{it.status or READY}" + hint(it.status)
                           + ("" if picked else "\nclick to pick, then click a bin cell"))
     th = ROW_H - 8
     box = (imgui.ImVec2(a.x + 2, a.y + 1), imgui.ImVec2(a.x + 2 + THUMB_W, a.y + 1 + th))
@@ -326,10 +327,20 @@ def _row(panel, st: dict, it: Item) -> None:
     imgui.pop_font()
     if word:
         imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)
-        bad = it.status not in (FETCHING,)
+        bad = it.status not in (FETCHING, OFF_PAGE)     # expected words, not faults
         dl.add_text(imgui.ImVec2(b.x - ww - 6, a.y + (ROW_H - 4 - ui.FONT_MICRO) / 2),
                     ui.u32(ui.WARN if bad else ui.FAINT), word.upper())
         imgui.pop_font()
+
+
+def hint(status: str) -> str:
+    """The line a row's tooltip adds under a status word that needs one:
+    `off page` (`panel:graph` while GRAPH is not on screen — being here,
+    on MEDIA, is one such time) says why the preview is dark."""
+    if status == OFF_PAGE:
+        return ("\nthe GRAPH canvas is drawn only while the GRAPH page is on screen "
+                "(not here): a channel on it holds the last picture 1 s, then shows black")
+    return ""
 
 
 def _thumb(panel, st: dict, it: Item, dl, p0, p1) -> None:
