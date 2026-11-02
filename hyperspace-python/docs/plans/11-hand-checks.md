@@ -6404,7 +6404,7 @@ header's count shortens to a number rather than run off the edge; in 4
 the side panel lists the Xbox pad's patched ports, no picture (the
 picture is the first pad's).
 
-## AQ. Coarse and fine through the tapers (wave 0 T1)
+## AT. Coarse and fine through the tapers (wave 0 T1)
 
 Decision register row 561. Both Macs on this build; the owner has run
 `uv run python tools/retaper_routes.py` on the library (a dry run, then
