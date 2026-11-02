@@ -6443,6 +6443,7 @@ Decision register row 561. Both Macs on this build; the owner has run
 `--write`) **before the next show** — until then every old preset is
 converted at load and nothing is lost, but the files still say the old
 depths.
+
 **420. 0.05× from an APC knob; an old preset's depth feels the same.** (Mac, the APC40, the second Mac on `main` for the last step)
 Headless: `tests/test_retaper.py`; `tests/test_fx.py`.
 1. Load `party-noita` (the library's, after the tool). FX: open Trip
@@ -6458,6 +6459,7 @@ Headless: `tests/test_retaper.py`; `tests/test_fx.py`.
    backup, or the preset as it was), the same preset and the same gesture.
 6. GRAPH ▸ the `hand:right.y → warp amount` cable's depth (or ROUTING's
    row): read its number.
+
 *Pass:* (2) the readout runs −8.00× … −0.25× … −0.008× · stop (the
 knob's middle) · +0.008× … +0.050× … +0.25× … +1.00× … +8.00×, each CC
 step about an eighth of an octave, and 0.05× holds where the knob is let

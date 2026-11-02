@@ -9435,6 +9435,78 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
   tools/retaper_routes.py` (then `--write`) on the library before the next
   show**, both Macs on this build.
 
+- **Asked.** The owner, 2026-10-31, after the show of 2026-10-30: "turning
+  those values down to 0.05× or 5 % … very, very low values are really
+  convincing" — on a linear −8 … +8 a knob could not land 0.05× (0.003 of
+  its throw, under one MIDI step), and the amounts were linear too. The
+  triage addendum (tension 8): a taper change silently changes what every
+  saved depth means on those params, so the migration is the same PR.
+- **Answer.** (rec) — wave 0 T1: the build's ruling, for the owner to keep
+  or overturn. The panel's shift-drag fine mode (T2) and the APC momentary
+  fine button (T3) are separate PRs.
+- **Built.** `tapers.exp_signed(140, 200)` for every effect's `speed`
+  (`fx.T_SPEED`: 401 detents, 0 in the middle, ±1× at 140 steps out, ±8×
+  at the ends, ±2^(−6.95) ≈ ±0.008× one step from the stop; a linear ramp
+  between the stop and the first step so a lane crosses it without a
+  jump; the `lo` / `hi` still say −8 … 8, so the panel's fill starts at the
+  stop) and `tapers.exp_amount(hi, 10)` for each `@param … amount` (the
+  fourteen PR #304 calmed — DECISIONS, *Shipped effect defaults are
+  calm* — `fx.amount_taper(hi)`: 0 off, then ten
+  doublings to `hi`, about hi / 1000 one step up). The `amount` flag wants
+  a float from `lo` 0, neither `log` nor `wrap`, and is part of the spec's
+  signature. Readouts: `fmt_speed` ("stop", "+0.050×", "+0.25×") and
+  `fmt_amount` (three figures, "0.0016"). `params.retaper_depths(doc,
+  files)` reads a document without `units["fx.depth"] == "taper"` as it
+  was, at every door (`Presets.load_doc`, silent as the pan's conversion
+  is; the desk templates as a load expands them; `Library.read_patch`,
+  the door a spawn comes through; `Bindings.from_json`, which writes
+  `bindings.json` back once, kept beside itself): a push keeps the real
+  value a full push reaches from the row's base (the document's own
+  value, else the effect's default — a session table's always), a
+  position or `set` row the value the source lands at full throw, a
+  macro's base subscriber its two ends; a push that over- or undershoots
+  the range from its base keeps its sign and carries the overshoot over
+  in norm, never written 0; depth subscribers, `scale` and `rest` do not
+  move; a missing `value` is 1.0. Every writer marks its document
+  (`params.UNITS` for a preset, `patches.UNITS` for a patch, the session
+  table's `to_json`); no schema bump. `tools/retaper_routes.py` rewrites a
+  library's presets, patches and desk templates and the machine home's
+  `bindings.json` once — dry run by default, every change worked out
+  before anything is written; `--write` backs the folder up to
+  `~/Hyperspace/library-backup-<stamp>` first (`bindings.json` beside
+  itself, as the app does), writes each file as the app writes its kind,
+  names every moved row and every row left (a value that is not a
+  number). A show holds no rows (its `session` is a snapshot of params).
+  The corpus (25 files), the four macro-candidate fixtures and the
+  grouped fixture were rewritten with it; 70 goldens were re-recorded
+  (eight presets whose hands push these params part-way up the box).
+- **Other options.** Depths kept as numbers and the tapers added anyway
+  (every saved hand route onto an amount would have gone from "a third of
+  the range" to "a few octaves"); a schema bump to `/9` for the marker
+  (both Macs run one build — row 394 — and a depth is still a depth);
+  preserving a push's slope at the base instead of its reach (exact for a
+  tiny push, wrong for the ones in the library, and undefined from a base
+  of 0); 8 octaves for the amounts (5 % would sit at 0.46 of the knob
+  instead of 0.57, with less room under it).
+- **To reverse.** The two `r.continuous` lines in `fx.declare` back to
+  their linear ranges, the `amount` flags off the fourteen lines, the
+  marker out of `params.UNITS` and the call out of `load_doc`; the library
+  from its backup (or the tool's maths inverted, which it is not written
+  to do).
+- **Rough edge.** Exact at rest and at full push about the row's base, not
+  between: a hand part-way up its box lands along the taper's curve, and a
+  push from a base of 0 keeps its reach but does little over its first
+  part. A macro's throw is linear in norm, so a macro resting mid-throw on
+  such a param lands the base somewhere else at load, and two macros that
+  agreed on one base (macro-breakdown-drop's 1 and 3) no longer do — the
+  tool names each such sub; the owner re-sets those by ear. A session
+  row's push (a hand-edited `bindings.json`; the app itself never writes a
+  performer row there) is measured about the effect's default, there
+  being no base of its own.
+- **Judge it.** Check 420. **The owner runs `uv run python
+  tools/retaper_routes.py` (then `--write`) on the library before the next
+  show**, both Macs on this build.
+
 ### 562. Plan 45 V1: a video's audio track in memory, under the transport's clock
 
 - **Asked.** The 2026-10-31 triage: PyAV decoded only the video stream,
