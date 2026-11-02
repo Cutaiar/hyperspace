@@ -1,7 +1,8 @@
 # Plan 45 — video audio: a video's sound, under the transport's clock
 
-**Status: V1 built (2026-11-02)** on `wave0/v1-video-audio-decode`, the
-first of four PRs; V2–V4 are designed here and not built. From the
+**Status: V1 built (2026-11-02; review fixes the same day)** on
+`wave0/v1-video-audio-decode`, the first of four PRs; V2–V4 are designed
+here and not built. From the
 post-show triage of 2026-10-31: PyAV decoded only the video stream, the
 proxies are MJPEG with no audio, and the only output stream was the
 analyzer's WAV playback (`audio.py`) — no mixer, no per-channel gain.
@@ -35,10 +36,23 @@ MediaState.poll ─▶ Transport.step ─▶ VideoSource.want ┘      ▼
 ```
 
 - **V1 (this PR), `media/video.py`.** `VideoSource.audio` is a
-  `Soundtrack`, opened with the source on a second thread of its own
+  `Soundtrack` on a second thread of the source's own
   (`media-audio-<name>`), always from the original file (a proxy has no
-  audio), closed with it inside the same `CLOSE_JOIN_S` budget.
+  audio), closed with the source inside the same `CLOSE_JOIN_S` budget.
+  Both threads are a `_Follower`: `open` / `want` / `close`, and a stop
+  event per start handed to `_run`, so a thread `close` gave up on (stuck
+  in `av.open` on a cloud file) ends when the open returns and never
+  resumes beside the one a later `open` started.
   `VideoSource.want(t)` hands the transport's position to both threads.
+  **Nothing is read until something asks for sound**: `Soundtrack.enable()`
+  starts the thread (V2's play-audio toggle will call it; `disable()` ends
+  it and lets the samples go), and until then the file is not opened and
+  `status` is `off`. The reason is I/O: a window decode demuxes every
+  packet in its range, video included, so a 120 s window of a 4K clip at
+  100 Mbit/s reads about 1.5 GB and a whole-held ≤ 120 s clip reads the
+  whole file — on a cloud-synced library, beside the video thread and the
+  proxy job. An unheard soundtrack must cost none of that; in V1 nothing
+  calls `enable()`, so this PR adds no read at all.
   The track is resampled by PyAV on that thread to **float32, stereo,
   48 kHz** (`AUDIO_RATE`, `AUDIO_CHANNELS`): one rate and one layout so
   the mixer adds every track into one buffer and opens one output stream;
@@ -47,12 +61,14 @@ MediaState.poll ─▶ Transport.step ─▶ VideoSource.want ┘      ▼
   read time anyway, so the file's own rate buys nothing. A file with no
   audio track is `status == "none"`: `read` is silence, the thread ends,
   nothing is logged. Nothing plays; nothing audible changes.
-- **The API V2 consumes.** `src.audio.read(at: int, n: int) ->
-  np.ndarray` — `n` samples from sample `at` (counted at 48 kHz from the
-  clip's start) as an `(n, 2)` float32 array, zeros wherever nothing is
-  held; it never blocks and never raises. `status` (`fetching`, `ready`,
-  `none`, `error: …`), `duration`, `rate`, `channels`, `held` (the span
-  of seconds in memory) and `nbytes`. A source without an `audio`
+- **The API V2 consumes.** `src.audio.enable()` / `disable()` (the
+  play-audio toggle); `src.audio.read(at: int, n: int) -> np.ndarray` —
+  `n` samples from sample `at` (counted at 48 kHz from the clip's start)
+  as an `(n, 2)` float32 array, zeros wherever nothing is held; it never
+  blocks and never raises. `status` (`off`, `fetching`, `ready`, `none`,
+  `error: …` — an error is the last window's; an older window stays
+  readable), `duration`, `rate`, `channels`, `held` (the span of seconds
+  in memory) and `nbytes`. A source without an `audio`
   attribute (a still, a live feed, a missing one) has no sound.
 - **V2 — the mixer.** One `sounddevice.OutputStream` at 48 kHz stereo,
   owned by the media package, whose callback asks each channel with a
@@ -86,9 +102,16 @@ A two-hour film must not allocate gigabytes on open. The policy, in
   transport's position**, kept inside the track, and re-decoded (on the
   soundtrack's thread; the old window stays readable until the new one is
   swapped in by one reference) when the position is more than
-  `AUDIO_RECENTRE_S` (30 s) from the window's centre. So a two-hour film
-  holds `AUDIO_WINDOW_BYTES` = 46 MB, and eight channels of them 370 MB at
-  the very worst; a decode of 120 s of AAC is a fraction of a second.
+  `AUDIO_RECENTRE_S` (30 s) from the window's centre. A window is decoded
+  straight into one buffer of its size — no chunk list, no concatenate —
+  so a two-hour film holds `AUDIO_WINDOW_BYTES` = 46 MB, **92 MB for the
+  moment a new window is made while the old stays readable**, and eight
+  channels of them 370 MB (740 MB in that moment) at the very worst; a
+  decode of 120 s of AAC is a fraction of a second. A decode that the
+  transport has left behind (a far scrub mid-decode) is abandoned, not
+  finished first; one that fails or comes back empty leaves the old
+  window and is tried again at the next move past the recentre distance.
+  A track held whole ends its thread and closes its file once it is in.
 - **Outside the window is silence.** Forward play at any rate up to the
   re-centre threshold's margin never leaves the window; a scrub far away
   reads zeros until the window arrives (one decode later). A loop wrap on
@@ -111,9 +134,18 @@ under 100 ms with `av.open` gated; `close` joins the audio thread, also
 mid-decode; the adapter hands out a source with a soundtrack; the
 soundtrack reads the original while the picture reads the proxy.
 
+Review fixes (2026-11-02, ten findings on PR #316), each with its test:
+pts are the container's and the window is transport time (a file whose
+streams start late — MPEG-TS, a MOV with an edit list — is held from its
+first sample); a window's error is the window's; one buffer a window;
+a whole track's thread ends; a stale decode is abandoned; an empty
+decode is not held; `audio` a class attribute; the `_Follower` base with
+a stop event per start; nothing read until `enable()`; `close` proven
+mid-decode.
+
 Hand check 421 ([`11-hand-checks.md`](11-hand-checks.md)): open a show
-video, nothing audible changes, memory stays flat. Register row 562;
-DECISIONS "Media".
+video, nothing audible changes, memory stays flat, **no extra read**
+(nothing asks for sound in V1). Register row 562; DECISIONS "Media".
 
 ## What fights the rule, for V2–V4 to mind
 

@@ -16,14 +16,20 @@ every track in one buffer at one rate. **The transport is the one clock
 and the soundtrack is its slave**: the same `want(t)` the video thread
 follows reaches the soundtrack, which keeps the samples around that
 position; nothing here has a clock, a stream or a playhead of its own,
-and V4 reads samples by the transport's position. **The memory policy**:
-a track of `AUDIO_WINDOW_S` or less is held whole (static, never
-re-decoded); a longer one is held as a window of `AUDIO_WINDOW_S` centred
-on the wanted position, re-decoded when the position is more than
+and V4 reads samples by the transport's position. **Nothing is read until
+something asks for sound** (`Soundtrack.enable`, V2's play-audio toggle):
+a window decode demuxes the video's packets too, so an unheard soundtrack
+would read the whole clip for nothing. **The memory policy**: a track of
+`AUDIO_WINDOW_S` or less is held whole (static, never re-decoded; its
+thread then ends and its file closes); a longer one is held as a window of
+`AUDIO_WINDOW_S` centred on the wanted position, decoded straight into one
+buffer of the window's size and re-decoded when the position is more than
 `AUDIO_RECENTRE_S` from the window's centre, so a two-hour film holds
-`AUDIO_WINDOW_BYTES` (46 MB), never the film. `read(at, n)` is zeros
-wherever nothing is held, so a reader outside the window hears silence,
-never blocks and never raises. Nothing in this module plays sound."""
+`AUDIO_WINDOW_BYTES` (46 MB) — twice that for the moment a new window is
+decoded while the old one stays readable — never the film. `read(at, n)`
+is zeros wherever nothing is held, so a reader outside the window hears
+silence, never blocks and never raises. Nothing in this module plays
+sound."""
 
 from __future__ import annotations
 
@@ -52,6 +58,7 @@ AUDIO_WINDOW_S = 120.0  # the memory bound: a longer track is held as this much 
 AUDIO_RECENTRE_S = AUDIO_WINDOW_S / 4   # the window follows once the position is this far off its centre
 AUDIO_WINDOW_BYTES = int(AUDIO_WINDOW_S * AUDIO_RATE) * AUDIO_CHANNELS * 4   # 46 MB, float32
 NO_AUDIO = "none"       # a Soundtrack's status for a file with no audio track: silence, no note
+OFF = "off"             # a Soundtrack's status while nothing asks for sound: no thread, no read
 
 
 def _probe(container, stream) -> tuple[float, float]:
@@ -94,6 +101,50 @@ def _audio_duration(container, stream) -> float:
     return 0.0
 
 
+class _Follower:
+    """A source's own thread, following the transport: `open` starts it,
+    `want(t)` hands it the transport's position (a float store and a wake),
+    `close` stops it and joins it `timeout` at most. Each start gets a stop
+    event of its own, handed to `_run`: a thread `close` abandoned (stuck in
+    `av.open` on a file still downloading, A-I1) sees *its* stop when the
+    open returns and ends, and can never resume beside the thread a later
+    `open` started. A subclass defines `_run(stop)` and keeps `status`."""
+
+    def __init__(self, name: str):
+        self._name = name
+        self._want = 0.0
+        self._wake = threading.Event()
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def _start(self) -> None:
+        if getattr(self, "_thread", None) is not None:
+            return
+        stop = self._stop = threading.Event()
+        self.status = FETCHING
+        t = threading.Thread(target=self._run, args=(stop,), name=self._name, daemon=True)
+        self._thread = t
+        t.start()
+
+    def open(self) -> None:
+        self._start()
+
+    def want(self, t: float) -> None:
+        self._want = float(t)
+        self._wake.set()
+
+    def close(self, timeout: float = CLOSE_JOIN_S) -> None:
+        t, self._thread = getattr(self, "_thread", None), None
+        if t is None:
+            return
+        self._stop.set()
+        self._wake.set()
+        t.join(timeout)
+
+    def _run(self, stop: threading.Event) -> None:
+        raise NotImplementedError
+
+
 @dataclass(frozen=True, eq=False)
 class _Window:
     """What a soundtrack holds: `data` (n × channels float32, read-only)
@@ -107,56 +158,63 @@ class _Window:
         return self.start + len(self.data)
 
 
-class Soundtrack:
+class Soundtrack(_Follower):
     """A video's audio track in memory, following the transport (see the
-    module docstring). `status` is FETCHING until the file is probed, then
-    READY (samples held), NO_AUDIO (no track: `read` is silence for good)
-    or `error(...)`. `duration` is the track's in seconds, `rate` and
-    `channels` what `read` returns in. `want(t)` is the transport's
-    position in seconds, as the video's. `read(at, n)` is the n samples
-    from sample `at` as an (n, channels) float32 array, zeros wherever
-    nothing is held; it never blocks and never raises. `held` is the
-    span of seconds in memory, `nbytes` what that costs."""
+    module docstring). **Nothing is read until something asks for sound**:
+    `enable()` (V2's play-audio toggle) starts the thread, `disable()` ends
+    it and lets the samples go; until then `status` is OFF and the file is
+    not opened — a window decode demuxes the video's packets too, so a
+    soundtrack nobody hears would read the whole clip for nothing. Once
+    enabled, `status` is FETCHING until the file is probed, then READY
+    (samples held), NO_AUDIO (no track: `read` is silence for good) or
+    `error(...)` (the window that failed; an older one stays readable).
+    `duration` is the track's in seconds, `rate` and `channels` what `read`
+    returns in. `want(t)` is the transport's position in seconds, as the
+    video's. `read(at, n)` is the n samples from sample `at` as an
+    (n, channels) float32 array, zeros wherever nothing is held; it never
+    blocks and never raises. `held` is the span of seconds in memory,
+    `nbytes` what that costs. A track held whole ends its thread and
+    closes its file once it is in."""
 
     rate = AUDIO_RATE
     channels = AUDIO_CHANNELS
 
     def __init__(self, path: Path):
+        super().__init__(f"media-audio-{Path(path).name}")
         self.path = Path(path)
-        self.status = FETCHING
+        self.status = OFF
+        self.enabled = False        # something asks for sound
         self.duration = 0.0
         self.whole = False          # the whole track is held, never re-decoded
+        self._opened = False
         self._win: _Window | None = None
-        self._want = 0.0
-        self._wake = threading.Event()
-        self._stop = threading.Event()
-        self._thread: threading.Thread | None = None
 
     # -- called from the frame thread (through the VideoSource) -----------
 
     def open(self) -> None:
-        if self._thread is not None:
-            return
-        self._stop.clear()
-        self.status = FETCHING
-        t = threading.Thread(target=self._run, name=f"media-audio-{self.path.name}",
-                             daemon=True)
-        self._thread = t
-        t.start()
+        """The source opened; the thread starts only once sound is asked for."""
+        self._opened = True
+        if self.enabled:
+            self._start()
+
+    def enable(self) -> None:
+        """Something asks for sound: decode from here on (and from `open`)."""
+        self.enabled = True
+        if self._opened:
+            self._start()
+
+    def disable(self) -> None:
+        """Nothing asks any more: the thread ends, the samples are let go."""
+        self.enabled = False
+        self.close()
+        self._win = None
+        self.whole = False
+        self.status = OFF
 
     def want(self, t: float) -> None:
         self._want = float(t)
-        self._wake.set()
-
-    def close(self, timeout: float = CLOSE_JOIN_S) -> None:
-        """Stop the thread and wait `timeout` at most; one stuck in
-        `av.open` is abandoned, as the video's is."""
-        t, self._thread = self._thread, None
-        if t is None:
-            return
-        self._stop.set()
-        self._wake.set()
-        t.join(timeout)
+        if self._thread is not None and not self.whole:   # whole: nothing left to follow
+            self._wake.set()
 
     # -- what V2 reads ----------------------------------------------------
 
@@ -190,11 +248,13 @@ class Soundtrack:
 
     # -- the soundtrack's own thread --------------------------------------
 
-    def _run(self) -> None:
+    def _run(self, stop: threading.Event) -> None:
         import av
         container = None
         try:
             container = av.open(str(self.path))
+            if stop.is_set():        # abandoned while the open hung: touch nothing
+                return
             if not container.streams.audio:
                 self.status = NO_AUDIO
                 return
@@ -207,9 +267,9 @@ class Soundtrack:
                 vs = container.streams.video[0]
                 origin = float((vs.start_time or 0) * vs.time_base)
             self.whole = 0.0 < self.duration <= AUDIO_WINDOW_S
-            self._follow(container, stream, origin)
+            self._follow(container, stream, origin, stop)
         except Exception as e:  # noqa: BLE001 — a bad track must not kill the app
-            if not self._stop.is_set():
+            if not stop.is_set():
                 self.status = error(f"{type(e).__name__}: {e}")
         finally:
             if container is not None:
@@ -218,57 +278,91 @@ class Soundtrack:
                 except Exception:  # noqa: BLE001, S110
                     pass
 
-    def _follow(self, container, stream, origin: float) -> None:
+    def _follow(self, container, stream, origin: float, stop: threading.Event) -> None:
+        """Keep the window at the transport's position until stopped — or,
+        for a track held whole, until it is in: then the thread ends and
+        the file closes. A window that fails or comes back empty leaves the
+        old one readable; the next move past the recentre distance tries
+        again."""
         centre = None
-        while not self._stop.is_set():
+        while not stop.is_set():
             self._wake.clear()
-            want = self._want
-            a, b = audio_window(want, self.duration)
+            a, b = audio_window(self._want, self.duration)
             c = (a + b) / 2.0
-            if centre is None or (not self.whole and abs(c - centre) > AUDIO_RECENTRE_S):
-                win = self._decode(container, stream, origin, a, b)
-                if win is None:          # stopped mid-decode
-                    return
-                self._win = win
-                self.status = READY
-                centre = c
+            if centre is not None and (self.whole or abs(c - centre) <= AUDIO_RECENTRE_S):
+                self._wake.wait(_IDLE_S)
                 continue
-            self._wake.wait(_IDLE_S)
+            try:
+                win = self._decode(container, stream, origin, a, b, stop)
+            except Exception as e:  # noqa: BLE001 — this window's failure, not the track's
+                if stop.is_set():
+                    return
+                self.status = error(f"{type(e).__name__}: {e}")
+                centre = c
+            else:
+                if win is None:          # stopped, or the transport moved on: start over
+                    if stop.is_set():
+                        return
+                    continue
+                centre = c
+                if len(win.data):
+                    self._win = win
+                    self.status = READY
+                elif self.whole:         # a track that says it has sound and has none
+                    self.status = NO_AUDIO
+            if self.whole:
+                return
 
-    def _decode(self, container, stream, origin: float,
-                a: float, b: float) -> _Window | None:
-        """Seconds `a`..`b` of the track as one `_Window` at `rate`, stereo
-        float32; None when stopped before it was done."""
+    def _left(self, a: float, b: float) -> bool:
+        """Whether the transport has moved far enough from the window
+        `a`..`b` that another window is wanted in its place."""
+        na, nb = audio_window(self._want, self.duration)
+        return abs((na + nb) - (a + b)) / 2.0 > AUDIO_RECENTRE_S
+
+    def _decode(self, container, stream, origin: float, a: float, b: float,
+                stop: threading.Event) -> _Window | None:
+        """Seconds `a`..`b` of the track (transport time: the container's
+        pts less `origin`) as one `_Window` at `rate`, stereo float32,
+        decoded straight into one buffer of the window's size — no other
+        copy is held. None when stopped, or when the transport left for
+        another window before this one was done (`_left`)."""
         import av
         tb = float(stream.time_base)
-        if a > 0.0:
-            container.seek(int(a / tb), stream=stream, backward=True)
-        else:
-            container.seek(0, stream=stream, backward=True)
+        container.seek(max(int((a + origin) / tb), 0), stream=stream, backward=True)
         resampler = av.AudioResampler(format="flt", layout="stereo", rate=self.rate)
-        chunks: list[np.ndarray] = []
-        first = None
+        cap = round((b - a) * self.rate)
+        data = np.zeros((cap, self.channels), np.float32)
+        off = None     # the row the first resampled sample lands on (< 0: before `a`)
+        n = 0          # resampled samples so far
         for fr in container.decode(stream):
-            if self._stop.is_set():
+            if stop.is_set() or (not self.whole and self._left(a, b)):
                 return None
             if fr.pts is None:
                 continue
-            t = fr.pts * tb
-            if first is None:
-                first = t
+            t = fr.pts * tb - origin
+            if off is None:
+                off = round((t - a) * self.rate)
             if t > b:
                 break
-            chunks.extend(_packed(o) for o in resampler.resample(fr))
-        chunks.extend(_packed(o) for o in resampler.resample(None))
-        data = (np.concatenate(chunks) if chunks
-                else np.zeros((0, self.channels), np.float32))
-        start = round(((first or 0.0) - origin) * self.rate)
-        # keep only the window asked for
-        lo, hi = round(a * self.rate), round(b * self.rate)
-        cut0, cut1 = max(lo - start, 0), max(min(hi - start, len(data)), 0)
-        data = np.ascontiguousarray(data[cut0:cut1])
+            for o in resampler.resample(fr):
+                n += _lay(data, off + n, _packed(o))
+        if off is not None:
+            for o in resampler.resample(None):
+                n += _lay(data, off + n, _packed(o))
+        filled = 0 if off is None else min(max(off + n, 0), cap)
+        if filled < cap:
+            data = data[:filled].copy()       # hold only what is there
         data.flags.writeable = False
-        return _Window(start + cut0, data)
+        return _Window(round(a * self.rate), data)
+
+
+def _lay(data: np.ndarray, at: int, chunk: np.ndarray) -> int:
+    """Copy `chunk` into `data` from row `at`, clipped to `data`; returns
+    `chunk`'s length, so a caller can count on."""
+    lo, hi = max(at, 0), min(at + len(chunk), len(data))
+    if hi > lo:
+        data[lo:hi] = chunk[lo - at:hi - at]
+    return len(chunk)
 
 
 def _packed(frame) -> np.ndarray:
@@ -276,12 +370,14 @@ def _packed(frame) -> np.ndarray:
     return frame.to_ndarray().reshape(-1, AUDIO_CHANNELS)
 
 
-class VideoSource:
+class VideoSource(_Follower):
     kind = "video"
     timed = True
+    audio: Soundtrack | None = None    # the track (plan 45); None on a source made before it
 
     def __init__(self, sid: str, path: Path, cap: tuple[int, int] = CAP_FILE,
                  cache: Path | None = None):
+        super().__init__(f"media-video-{Path(path).name}")
         self.sid = sid
         self.path = Path(path)
         self.cap = cap
@@ -290,58 +386,39 @@ class VideoSource:
         self.duration = 0.0
         self.fps = 0.0
         self.read_path: Path = self.path   # what is actually decoded
-        self.audio = Soundtrack(self.path)  # the track, always from the original
+        self.audio = Soundtrack(self.path)  # always from the original: a proxy has no sound
         self._latest = Latest()
-        self._want = 0.0
-        self._wake = threading.Event()
-        self._stop = threading.Event()
-        self._thread: threading.Thread | None = None
 
     # -- called from the frame thread -------------------------------------
 
     def open(self) -> None:
-        if getattr(self, "_thread", None) is not None:
-            return
-        self._stop.clear()
-        self.status = FETCHING
-        t = threading.Thread(target=self._run, name=f"media-video-{self.path.name}",
-                             daemon=True)
-        self._thread = t
-        t.start()
-        audio = getattr(self, "audio", None)   # a source from before plan 45 has none
-        if audio is not None:
-            audio.open()
+        self._start()
+        if self.audio is not None:
+            self.audio.open()
 
     def latest(self) -> MediaFrame | None:
         return self._latest.get()
 
     def want(self, t: float) -> None:
         """The transport's position: the one clock, handed to both threads."""
-        self._want = float(t)
-        self._wake.set()
-        audio = getattr(self, "audio", None)
-        if audio is not None:
-            audio.want(t)
+        super().want(t)
+        if self.audio is not None:
+            self.audio.want(t)
 
-    def close(self) -> None:
-        """Stop both threads and wait `CLOSE_JOIN_S` at most for the two
-        together (less near the app's exit deadline). A thread stuck in
-        `av.open` (a file still downloading) is abandoned: it is a daemon
-        and sees `_stop` when the open returns, so the closer goes on to the
-        next source (A-I1)."""
-        end = time.monotonic() + pool.left(CLOSE_JOIN_S)
-        t, self._thread = getattr(self, "_thread", None), None
-        if t is not None:
-            self._stop.set()
-            self._wake.set()
-            t.join(max(end - time.monotonic(), 0.0))
-        audio = getattr(self, "audio", None)
-        if audio is not None:
-            audio.close(max(end - time.monotonic(), 0.0))
+    def close(self, timeout: float = CLOSE_JOIN_S) -> None:
+        """Stop both threads and wait `timeout` at most for the two together
+        (less near the app's exit deadline). A thread stuck in `av.open` (a
+        file still downloading) is abandoned: it is a daemon and sees its
+        own stop when the open returns, so the closer goes on to the next
+        source (A-I1)."""
+        end = time.monotonic() + pool.left(timeout)
+        super().close(max(end - time.monotonic(), 0.0))
+        if self.audio is not None:
+            self.audio.close(max(end - time.monotonic(), 0.0))
 
     # -- the source's own thread ------------------------------------------
 
-    def _run(self) -> None:
+    def _run(self, stop: threading.Event) -> None:
         import av
         container = None
         try:
@@ -352,15 +429,15 @@ class VideoSource:
             stream = container.streams.video[0]
             stream.thread_type = "AUTO"
             duration, fps = _probe(container, stream)
-            if self._stop.is_set():
+            if stop.is_set():
                 return
             self.read_path, self.duration, self.fps = read, duration, fps
             if (self.cache is not None and read == self.path
                     and duration <= PROXY_MAX_S):
                 proxy.submit(self.path, self.cache)
-            self._play(container, stream)
+            self._play(container, stream, stop)
         except Exception as e:  # noqa: BLE001 — a bad file must not kill the app
-            if not self._stop.is_set():
+            if not stop.is_set():
                 self.status = error(f"{type(e).__name__}: {e}")
         finally:
             if container is not None:
@@ -369,7 +446,7 @@ class VideoSource:
                 except Exception:  # noqa: BLE001, S110
                     pass
 
-    def _play(self, container, stream) -> None:
+    def _play(self, container, stream, stop: threading.Event) -> None:
         tb = float(stream.time_base)
         start = (stream.start_time or 0) * tb
         fps = self.fps
@@ -384,7 +461,7 @@ class VideoSource:
         cur = nxt = None
         last_t = None
         shown = None   # pts of the frame last published
-        while not self._stop.is_set():
+        while not stop.is_set():
             self._wake.clear()
             want0 = self._want
             t = min(max(want0, 0.0), self.duration or want0)
@@ -399,7 +476,7 @@ class VideoSource:
                 cur = nxt = None
             moved = False
             while True:
-                if self._stop.is_set():
+                if stop.is_set():
                     return
                 if self._want != want0:   # the transport moved on: don't finish this one
                     moved = True
@@ -417,7 +494,7 @@ class VideoSource:
                 continue
             if cur is not None and cur.pts != shown:
                 shown = cur.pts
-                if self._stop.is_set():
+                if stop.is_set():
                     return
                 rgba = cur.reformat(width=size[0], height=size[1],
                                     format="rgba").to_ndarray()

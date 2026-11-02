@@ -586,7 +586,7 @@ here; overturn → the change, then the same.
 | 551 | Plan 42 D8: the pad tape is the one recording format | 415 | (rec) — pending the owner |
 | 552 | Plan 42 D9: the on-screen pad draws the model's own face | 407 | (rec) — pending the owner |
 | 553 | Plan 42 D10: the browser lab is a prototype beside the app | — | (rec) — pending the owner |
-| 562 | Plan 45 V1: a video's audio track decoded to memory as float32 stereo 48 kHz, whole to 120 s, else a 120 s window around the transport's position; the transport is the one clock | 421 | owner's rule (2026-11-02, addendum 8); the policy (rec) |
+| 562 | Plan 45 V1: a video's audio track decoded to memory as float32 stereo 48 kHz once something asks for sound, whole to 120 s, else a 120 s window around the transport's position; the transport is the one clock | 421 | owner's rule (2026-11-02, addendum 8); the policy (rec) |
 
 "—": no hand check shows it; tests only.
 
@@ -9369,9 +9369,14 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
   every file (one rate and layout for the mixer's one buffer; 384 kB a
   second whatever the file; varispeed resamples at read time anyway),
   and one memory policy — whole to `AUDIO_WINDOW_S` = 120 s, else a
-  120 s window re-centred when the position is 30 s off its centre, so
-  a two-hour film holds 46 MB. A file with no audio track is silence
-  with no note. Nothing audible changes in V1.
+  120 s window re-centred when the position is 30 s off its centre,
+  decoded into one buffer, so a two-hour film holds 46 MB (92 MB while a
+  window is re-made). **Lazy** (review, 2026-11-02): nothing is read
+  until `Soundtrack.enable()` — a window decode demuxes the video's
+  packets too, about 1.5 GB for 120 s of a 4K clip — so a soundtrack
+  nobody hears costs no I/O; V2's play-audio toggle calls it, V1 nothing
+  does. A file with no audio track is silence with no note. Nothing
+  audible changes in V1.
 - **What would overturn it.** The window heard at a loop wrap or a
   far scrub on a long film (a moment of silence until the window
   arrives): V4 may prefetch the head or widen the window — each a

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import threading
 import time
+import tracemalloc
 from pathlib import Path
 
 import av
@@ -20,10 +21,12 @@ RATE = video.AUDIO_RATE
 
 
 def _write_clip(path: Path, *, seconds=3.0, arate=44100, acodec="pcm_s16le",
-                tones=(440.0, 880.0), tone_at=None, video_too=True):
+                tones=(440.0, 880.0), tone_at=None, video_too=True, offset_s=0.0):
     """A clip with `tones` (Hz, one per channel; one tone = mono) in its
     audio and, unless `video_too` is False, a grey ramp of video. With
-    `tone_at` = (t_s, hz) every channel switches to `hz` from `t_s` on."""
+    `tone_at` = (t_s, hz) every channel switches to `hz` from `t_s` on.
+    `offset_s` puts both streams' first pts that far after zero (a file
+    whose timeline does not start at 0)."""
     fmt = "fltp" if acodec == "aac" else "s16"
     n = int(seconds * arate)
     t = np.arange(n) / arate
@@ -42,6 +45,7 @@ def _write_clip(path: Path, *, seconds=3.0, arate=44100, acodec="pcm_s16le",
             v.width, v.height, v.pix_fmt = 64, 48, "yuv420p"
             v.options = {"crf": "30", "preset": "ultrafast"}
         chunk = a.codec_context.frame_size or 1024
+        aoff = round(offset_s * arate)
         for i in range(0, n, chunk):
             part = [p[i:i + chunk] for p in planes]
             if fmt == "fltp":
@@ -50,15 +54,20 @@ def _write_clip(path: Path, *, seconds=3.0, arate=44100, acodec="pcm_s16le",
                 arr = (np.stack(part, 1).reshape(1, -1) * 32767).astype(np.int16)
             fr = av.AudioFrame.from_ndarray(arr, format=fmt, layout=a.layout.name)
             fr.sample_rate = arate
-            fr.pts = i
+            fr.pts = aoff + i
+            fr.time_base = a.codec_context.time_base
             for p in a.encode(fr):
                 out.mux(p)
         for p in a.encode():
             out.mux(p)
         if video_too:
+            voff = round(offset_s * 30)
             for i in range(int(seconds * 30)):
                 vf = av.VideoFrame.from_ndarray(np.full((48, 64, 3), (i * 2) % 256, np.uint8),
                                                 format="rgb24")
+                if offset_s:
+                    vf.pts = voff + i
+                    vf.time_base = v.codec_context.time_base
                 for p in v.encode(vf):
                     out.mux(p)
             for p in v.encode():
@@ -79,6 +88,13 @@ def aac_clip(tmp_path_factory):
 
 
 @pytest.fixture(scope="module")
+def late_clip(tmp_path_factory):
+    """The tones again, both streams' first pts at 2 s: `start_time` is 2 s
+    on the audio and the video, the audio's duration 3 s."""
+    return _write_clip(tmp_path_factory.mktemp("audio") / "late.mov", offset_s=2.0)
+
+
+@pytest.fixture(scope="module")
 def long_clip(tmp_path_factory):
     """30 s of 8 kHz mono PCM: 300 Hz for 15 s, then 600 Hz. Small enough to
     write in a blink; long enough for a (patched) window to move in."""
@@ -90,15 +106,48 @@ def long_clip(tmp_path_factory):
 def opened():
     made = []
 
-    def make(path, cache=None):
+    def make(path, cache=None, sound=True):
         s = video.VideoSource("file:" + str(path), path, cache=cache)
         made.append(s)
         s.open()
+        if sound:
+            s.audio.enable()
         return s
 
     yield make
     for s in made:
         s.close()
+
+
+@pytest.fixture
+def small_window(monkeypatch):
+    """A 4 s window that moves after 1 s, so the 30 s clip is a long film."""
+    monkeypatch.setattr(video, "AUDIO_WINDOW_S", 4.0)
+    monkeypatch.setattr(video, "AUDIO_RECENTRE_S", 1.0)
+
+
+class _Gate:
+    """`av.AudioResampler` with a gate in `resample`: the first call sets
+    `inside` and waits for `release`, so a test can act while a window
+    decode is provably mid-loop."""
+
+    def __init__(self, monkeypatch):
+        self.inside = threading.Event()
+        self.release = threading.Event()
+        real = av.AudioResampler
+        gate = self
+
+        class Gated:
+            def __init__(self, *a, **kw):
+                self._r = real(*a, **kw)
+
+            def resample(self, fr):
+                if not gate.inside.is_set():
+                    gate.inside.set()
+                    gate.release.wait(3.0)
+                return self._r.resample(fr)
+
+        monkeypatch.setattr(av, "AudioResampler", Gated)
 
 
 def _until(fn, timeout=5.0):
@@ -119,6 +168,10 @@ def _peak_hz(samples: np.ndarray) -> float:
 
 def _audio_threads():
     return [t for t in threading.enumerate() if t.name.startswith("media-audio-")]
+
+
+def _video_threads():
+    return [t for t in threading.enumerate() if t.name.startswith("media-video-")]
 
 
 # -- the buffer ---------------------------------------------------------------
@@ -153,6 +206,36 @@ def test_an_aac_track_in_an_mp4_decodes_the_same(aac_clip, opened):
     out = s.audio.read(RATE, RATE)
     assert _peak_hz(out[:, 0]) == pytest.approx(440.0, abs=2.0)
     assert _peak_hz(out[:, 1]) == pytest.approx(880.0, abs=2.0)
+
+
+def test_a_file_whose_timeline_starts_late_is_held_from_its_first_sample(late_clip, opened):
+    """Review 1: pts are the container's, the window is transport time. A
+    file whose streams start at 2 s (MPEG-TS, a MOV with an edit list) is
+    the whole 3 s from sample 0, not one second and then silence."""
+    s = opened(late_clip)
+    a = s.audio
+    assert _until(lambda: a.status == READY)
+    assert a.duration == pytest.approx(3.0, abs=0.01)
+    assert a.held == pytest.approx((0.0, 3.0), abs=0.002)
+    out = a.read(2 * RATE, RATE)                         # the last second, in transport time
+    assert _peak_hz(out[:, 0]) == pytest.approx(440.0, abs=1.0)
+    assert _peak_hz(out[:, 1]) == pytest.approx(880.0, abs=1.0)
+
+
+def test_a_window_into_a_late_file_is_cut_in_transport_time(late_clip, opened, small_window,
+                                                            monkeypatch):
+    """Review 1, the window: a 4 s window from 0.5 s of a file whose pts
+    start at 2 s holds transport seconds 0.5..3 (all the sound there is),
+    not 0.5..2.5 cut by the file's offset."""
+    monkeypatch.setattr(video, "_audio_duration", lambda c, st: 7200.0)   # a long film
+    s = opened(late_clip)
+    s.want(2.5)                                           # the window is 0.5..4.5
+    a = s.audio
+    assert _until(lambda: a.status == READY)
+    assert a.held == pytest.approx((0.5, 3.0), abs=0.05)
+    out = a.read(2 * RATE, RATE)
+    assert _peak_hz(out[:, 0]) == pytest.approx(440.0, abs=1.0)
+    assert not a.read(0, RATE // 4).any()                 # before the window: silence
 
 
 def test_read_is_zeros_outside_what_is_held_and_never_raises(pcm_clip, opened):
@@ -196,6 +279,46 @@ def test_the_transport_is_the_one_clock(pcm_clip, opened):
     assert not any(n.startswith(("play", "clock")) for n in vars(s.audio))
 
 
+# -- nothing until asked (review 9) ----------------------------------------------
+
+def test_nothing_is_read_until_something_asks_for_sound(pcm_clip, opened, monkeypatch):
+    opens = []
+    real = av.open
+
+    def spy(*a, **kw):
+        opens.append(a[0])
+        return real(*a, **kw)
+
+    monkeypatch.setattr(av, "open", spy)
+    s = opened(pcm_clip, sound=False)
+    assert _until(lambda: s.status == READY)
+    time.sleep(0.05)
+    assert s.audio.status == video.OFF and not s.audio.enabled
+    assert not _audio_threads()
+    assert opens == [str(pcm_clip)]                      # the picture's open, no other
+    assert not s.audio.read(0, 512).any() and s.audio.nbytes == 0
+    s.audio.enable()                                     # V2's play-audio toggle
+    assert _until(lambda: s.audio.status == READY)
+    assert opens == [str(pcm_clip)] * 2
+    s.audio.disable()
+    assert s.audio.status == video.OFF and s.audio.nbytes == 0 and s.audio.held is None
+    assert not _audio_threads()
+    s.audio.enable()
+    assert _until(lambda: s.audio.status == READY)
+    assert s.audio.held == pytest.approx((0.0, 3.0), abs=0.002)
+
+
+def test_enable_before_open_decodes_at_open(pcm_clip):
+    s = video.VideoSource("file:" + str(pcm_clip), pcm_clip)
+    s.audio.enable()
+    assert not _audio_threads() and s.audio.status == video.OFF
+    try:
+        s.open()
+        assert _until(lambda: s.audio.status == READY)
+    finally:
+        s.close()
+
+
 # -- the memory policy ----------------------------------------------------------
 
 def test_the_window_policy():
@@ -223,9 +346,23 @@ def test_a_two_hour_file_holds_one_window_not_the_film(pcm_clip, opened, monkeyp
     assert a.held[0] == 0.0 and a.held[1] <= video.AUDIO_WINDOW_S
 
 
-def test_the_window_follows_the_transport(long_clip, opened, monkeypatch):
-    monkeypatch.setattr(video, "AUDIO_WINDOW_S", 4.0)
-    monkeypatch.setattr(video, "AUDIO_RECENTRE_S", 1.0)
+def test_a_window_is_decoded_into_one_buffer(pcm_clip, opened):
+    """Review 3: no chunk list and no concatenate — the peak while a window
+    is made is the window, not three of it."""
+    tracemalloc.start()
+    try:
+        s = opened(pcm_clip)
+        a = s.audio
+        assert _until(lambda: a.status == READY)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert a.nbytes == 3 * RATE * 8
+    assert a._win.data.base is None                     # owns its memory: no view of a bigger one
+    assert peak < a.nbytes * 1.5                        # the old way peaked at 2× and more
+
+
+def test_the_window_follows_the_transport(long_clip, opened, small_window):
     s = opened(long_clip)
     a = s.audio
     assert _until(lambda: a.status == READY)
@@ -245,6 +382,98 @@ def test_the_window_follows_the_transport(long_clip, opened, monkeypatch):
     s.want(20.5)                                             # inside the window: no move
     time.sleep(0.15)
     assert a.held == pytest.approx((18.0, 22.0), abs=0.05)
+
+
+def test_a_whole_track_lets_its_thread_and_file_go(pcm_clip, opened):
+    """Review 4: once a whole track is in there is nothing to follow — the
+    thread ends, the container closes, and `want` wakes nobody."""
+    s = opened(pcm_clip)
+    a = s.audio
+    assert _until(lambda: a.status == READY)
+    assert _until(lambda: not _audio_threads())
+    assert _video_threads()                                  # the picture goes on
+    a._wake.clear()
+    s.want(2.0)
+    assert not a._wake.is_set()
+    assert _peak_hz(a.read(2 * RATE, RATE)[:, 0]) == pytest.approx(440.0, abs=1.0)
+
+
+def test_a_far_scrub_abandons_the_window_being_decoded(long_clip, opened, small_window,
+                                                        monkeypatch):
+    """Review 5: a decode checks where the transport is now, not only the
+    stop flag, so a scrub across a long film never finishes a stale window
+    first."""
+    gate = _Gate(monkeypatch)
+    results = []
+    real = video.Soundtrack._decode
+
+    def spy(self, *a):
+        r = real(self, *a)
+        results.append(None if r is None else (r.start / RATE, r.end / RATE))
+        return r
+
+    monkeypatch.setattr(video.Soundtrack, "_decode", spy)
+    s = opened(long_clip)
+    assert gate.inside.wait(3.0)                             # mid-decode of 0..4
+    s.want(25.0)
+    gate.release.set()
+    assert _until(lambda: s.audio.held is not None and s.audio.held[0] > 22.0)
+    assert results[0] is None                                # the stale window was dropped
+    assert s.audio.held == pytest.approx((23.0, 27.0), abs=0.05)
+    assert all(r is None or r[0] > 22.0 for r in results)    # 0..4 was never published
+
+
+def test_a_window_that_fails_keeps_the_old_one_and_the_next_move_retries(
+        long_clip, opened, small_window, monkeypatch):
+    """Review 2: one window's error is that window's, not the track's."""
+    calls = []
+    real = video.Soundtrack._decode
+
+    def flaky(self, container, stream, origin, a, b, stop):
+        calls.append(a)
+        if len(calls) == 2:
+            raise RuntimeError("a bad packet")
+        return real(self, container, stream, origin, a, b, stop)
+
+    monkeypatch.setattr(video.Soundtrack, "_decode", flaky)
+    s = opened(long_clip)
+    a = s.audio
+    assert _until(lambda: a.status == READY)
+    s.want(20.0)
+    assert _until(lambda: a.status.startswith("error:"))
+    assert "a bad packet" in a.status
+    assert a.held == pytest.approx((0.0, 4.0), abs=0.05)     # the old window stays
+    assert _audio_threads()                                  # the thread goes on
+    time.sleep(0.1)
+    assert len(calls) == 2                                   # no retry while it sits
+    s.want(10.0)                                             # the next move retries
+    assert _until(lambda: a.status == READY and a.held[0] > 7.0)
+    assert a.held == pytest.approx((8.0, 12.0), abs=0.05)
+
+
+def test_an_empty_window_is_not_held(long_clip, opened, small_window, monkeypatch):
+    """Review 6: a decode with nothing in it leaves the old window and the
+    status; the next move tries again."""
+    calls = []
+    real = video.Soundtrack._decode
+
+    def hollow(self, container, stream, origin, a, b, stop):
+        calls.append(a)
+        if len(calls) == 2:
+            return video._Window(round(a * RATE), np.zeros((0, 2), np.float32))
+        return real(self, container, stream, origin, a, b, stop)
+
+    monkeypatch.setattr(video.Soundtrack, "_decode", hollow)
+    s = opened(long_clip)
+    a = s.audio
+    assert _until(lambda: a.status == READY)
+    s.want(20.0)
+    assert _until(lambda: len(calls) == 2)
+    time.sleep(0.1)
+    assert a.status == READY and a.held == pytest.approx((0.0, 4.0), abs=0.05)
+    s.want(10.0)
+    assert _until(lambda: a.held is not None and a.held[0] > 7.0)
+    assert a.held == pytest.approx((8.0, 12.0), abs=0.05)
 
 
 # -- never on the frame thread ----------------------------------------------------
@@ -268,31 +497,62 @@ def test_opening_never_blocks_the_caller(pcm_clip, opened, monkeypatch):
     assert _until(lambda: s.audio.status == READY)
 
 
-def test_close_joins_the_audio_thread_too(pcm_clip, opened):
-    s = opened(pcm_clip)
+def test_close_joins_the_audio_thread_too(long_clip, opened, small_window):
+    s = opened(long_clip)
     assert _until(lambda: s.audio.status == READY)
-    assert _audio_threads()
+    assert _audio_threads()                                  # a long clip keeps following
     s.close()
     assert not _audio_threads()
     assert s.audio._thread is None
     s.close()                                                # twice is fine
 
 
-def test_close_is_quick_mid_decode(long_clip, opened, monkeypatch):
-    """A window decode checks the stop flag every frame."""
-    monkeypatch.setattr(video, "AUDIO_WINDOW_S", 4.0)
-    real = video.Soundtrack._decode
-
-    def crawl(self, *a):
-        time.sleep(0.02)
-        return real(self, *a)
-
-    monkeypatch.setattr(video.Soundtrack, "_decode", crawl)
+def test_close_is_quick_mid_decode(long_clip, opened, small_window, monkeypatch):
+    """Review 10: `close` while a window decode is provably inside its
+    loop; the thread is gone within the budget."""
+    gate = _Gate(monkeypatch)
     s = opened(long_clip)
+    assert gate.inside.wait(3.0)
+    assert _audio_threads() and s.audio.status == FETCHING   # inside, nothing published yet
+    threading.Timer(0.05, gate.release.set).start()          # let the loop turn once more
     t0 = time.monotonic()
     s.close()
     assert time.monotonic() - t0 < 0.5
     assert not _audio_threads()
+    assert s.audio.held is None                              # the window was never published
+
+
+def test_an_abandoned_thread_never_resumes_beside_a_new_one(pcm_clip, opened, monkeypatch):
+    """Review 8: each start has a stop event of its own. A thread stuck in
+    `av.open` when `close` gave up on it ends when the open returns, and
+    the source opened again runs one thread a kind."""
+    real = av.open
+    gate = threading.Event()
+    opens = []
+
+    def slow(*a, **kw):
+        opens.append(a[0])
+        if len(opens) <= 2:                                  # the first video and audio opens hang
+            gate.wait(3.0)
+        return real(*a, **kw)
+
+    monkeypatch.setattr(av, "open", slow)
+    s = opened(pcm_clip)
+    assert _until(lambda: len(opens) == 2)
+    old = _video_threads() + _audio_threads()
+    s.close(0.05)                                            # gives up on both
+    assert all(t.is_alive() for t in old)
+    s.open()
+    s.audio.enable()
+    assert _until(lambda: len(opens) == 4)
+    gate.set()                                               # the old opens return
+    assert _until(lambda: not any(t.is_alive() for t in old))
+    assert _until(lambda: s.status == READY and s.audio.status == READY)
+    assert len(_video_threads()) == 1
+    assert len(_audio_threads()) <= 1                        # whole: the new one may be done
+    s.want(1.0)
+    time.sleep(0.1)
+    assert s.status == READY and s.audio.status == READY     # nothing stale wrote over them
 
 
 def test_the_adapter_hands_out_a_source_with_a_soundtrack(pcm_clip):
@@ -305,7 +565,8 @@ def test_the_adapter_hands_out_a_source_with_a_soundtrack(pcm_clip):
 
     s = adapters.open_source("file:" + str(pcm_clip), R())
     assert isinstance(s.audio, video.Soundtrack)
-    assert s.audio.status == FETCHING and s.audio.read(0, 4).shape == (4, 2)
+    assert video.VideoSource.audio is None                   # a source from before plan 45
+    assert s.audio.status == video.OFF and s.audio.read(0, 4).shape == (4, 2)
     assert not hasattr(adapters.MissingSource("file:/x"), "audio")
 
 
