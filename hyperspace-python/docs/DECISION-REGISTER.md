@@ -597,6 +597,9 @@ here; overturn → the change, then the same.
 | 559 | Plan 44 Q4: the APC crossfader stays the master dim; `output.xfade` is a new rig control, learnable, run by `take` over `output.xfade_s` | — | (rec) — pending the owner |
 | 560 | No shader multiplies time by a param; `@clock` integrates rate-like params in the host | 419 | agreed — owner, 2026-11-02 |
 | 561 | Wave 0 T1: every effect's `speed` on a signed exponential taper and the fourteen amount-type params on a zero-safe log taper; a taper change migrates the route depths in the same PR (`params.retaper_depths` at load, `tools/retaper_routes.py` on the library, no schema bump) | 420 | agreed — the owner's reshaping of 2026-11-02 |
+| 562 | Plan 45 V1: a video's audio track decoded to memory as float32 stereo 48 kHz once something asks for sound, whole to 120 s, else a 120 s window around the transport's position; the transport is the one clock | 421 | owner's rule (2026-11-02, addendum 8); the policy (rec) |
+| 563 | Node groups (post-show G0, 2026-11-02): a group's id is never reused within a preset's life — `group.<n>` is one past the highest the preset has ever allotted (`Presets.group_high`: the file's highest at the load, dropped entries counted; not saved, no schema change), so an ungrouped or undone group's number is not the next group's; and membership is eager — a member node deleted by any road leaves its group's list in the same operation (hooks on the mechanisms: the section's landing, the table's `set_modifiers`, a bank's membership change), the last member taking the group; every node-removing step carries the marks (which carry the floor too) so its undo puts the member back; a refused load leaves the loaded preset's groups whole. Render node ids (`acid` → `acid.2`, the lowest free instance, R25) are untouched: a format question for the one-format PR | 422 | built as recommended — PR (G0) |
+| 564 | Wave 0 E1: delay loops are the trails mechanism, the look-back keeps the dream — the feedback starter (a composite laid over, a delay, a fade at level 0.75: colour and alpha decay alike) on the cable menu and "add feedback after" on the node menu, many allowed; "feedback" not "echo", which names the look-back's frames | 423 | (rec) — pending the owner |
 
 "—": no hand check shows it; tests only.
 
@@ -9360,8 +9363,50 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
   not report their own bits, sensors on other axes. Each is a constant or
   a table in `pads/`, named there.
 
-### 561. Coarse and fine through tapers: speed on a signed exponential, amounts on a zero-safe log, the route depths migrated in the same PR
+### 565–570. Plan 46: the Joy-Con, one per role, as a six-axis totem
 
+- **Asked.** The owner, 2026-11-02, a Joy-Con (L) just paired over
+  Bluetooth: "one Joy-Con per role because I only have one", "held more
+  like a Wii Remote than a game pad … a kinetic controller … the
+  important part is the 6-axis IMU", "show up as individual game pads …
+  only one stick or one set of pad buttons", "calibrating drift is
+  something I do want to do", "extend Dillon's work here".
+- **Built**, as recommended: [`plans/46-joycon.md`](plans/46-joycon.md)
+  (D1–D6 = rows 565–570): `pads/nintendo.py` beside `pads/sony.py` on
+  the same road, three models, a model saying which controls it has,
+  the probe's Joy-Con checks. Rows: **565** one Joy-Con per entry (a pair
+  as one pad not built); **566** the Wii-Remote hold frames the
+  vocabulary (one stick = the left stick, the (L)'s arrows the face by
+  position, SL / SR the back pair, L / ZL `LB` + `LT`, no `hat:`);
+  **567** `Model.controls` — the ports, Learn, the on-screen pad and the
+  sinks show only what the pad has; **568** drift calibrated from the
+  flash (the user's record over the factory's) then the stick's rest at
+  connect becomes its centre (within 0.3, spread under 0.1), no config
+  key; **569** the sensors' axes are the codec's `AXIS_MAP` for the hold,
+  from the notes and one flat reading; **570** the lab is the app's pad
+  window, not a browser page (the owner's own call, 2026-11-02: "if we
+  can see the Joy-Con in the app with the same level of detail as the
+  Edge, we should just do that") — Faithful draws the Joy-Con upright
+  with the stick's well, its raw reading and the centre in use beside
+  the tilt and the sensors' numbers, Cockpit one dial, Lanes only what
+  it has plus its calibration; no `prototypes/joycon-lab/`.
+- **Checked on the hardware** (hand check 425, the owner, 2026-11-02):
+  the probe's run on the real Joy-Con (L) over Bluetooth — the flash
+  answered (factory stick and sensor calibrations, no user records),
+  the stick recentred and rests at −0.02, every one of the eleven
+  buttons landed as built (566), the proposed sensor map equals the
+  built `AXIS_MAP` (569 settled), three lights, both rumble bands and
+  the stop seen. Findings and a tape slice in the tree
+  (`plans/assets/46-joycon/`, `tests/test_pads_joycon_real.py`).
+  Nothing in the codec changed.
+- **What would overturn it.** The owner wanting the face or the hat
+  under the Xbox names anyway (566, 567), a second Joy-Con that should
+  pair into one pad (565), a stick whose rest the recentre bounds miss
+  (568: `RECENTRE_MAX`, `RECENTRE_SPREAD`), a rumble that stutters in a
+  set (`RUMBLE_REFRESH_S`), or a Joy-Con (R) / Pro Controller that reads
+  otherwise (unseen).
+
+### 561. Coarse and fine through tapers: speed on a signed exponential, amounts on a zero-safe log, the route depths migrated in the same PR
 - **Asked.** The owner, 2026-10-31, after the show of 2026-10-30: "turning
   those values down to 0.05× or 5 % … very, very low values are really
   convincing" — on a linear −8 … +8 a knob could not land 0.05× (0.003 of
@@ -9433,7 +9478,112 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
 - **Judge it.** Check 420. **The owner runs `uv run python
   tools/retaper_routes.py` (then `--write`) on the library before the next
   show**, both Macs on this build.
-
+- **Asked.** The owner, 2026-10-31, after the show of 2026-10-30: "turning
+  those values down to 0.05× or 5 % … very, very low values are really
+  convincing" — on a linear −8 … +8 a knob could not land 0.05× (0.003 of
+  its throw, under one MIDI step), and the amounts were linear too. The
+  triage addendum (tension 8): a taper change silently changes what every
+  saved depth means on those params, so the migration is the same PR.
+- **Answer.** (rec) — wave 0 T1: the build's ruling, for the owner to keep
+  or overturn. The panel's shift-drag fine mode (T2) and the APC momentary
+  fine button (T3) are separate PRs.
+- **Built.** `tapers.exp_signed(140, 200)` for every effect's `speed`
+  (`fx.T_SPEED`: 401 detents, 0 in the middle, ±1× at 140 steps out, ±8×
+  at the ends, ±2^(−6.95) ≈ ±0.008× one step from the stop; a linear ramp
+  between the stop and the first step so a lane crosses it without a
+  jump; the `lo` / `hi` still say −8 … 8, so the panel's fill starts at the
+  stop) and `tapers.exp_amount(hi, 10)` for each `@param … amount` (the
+  fourteen PR #304 calmed — DECISIONS, *Shipped effect defaults are
+  calm* — `fx.amount_taper(hi)`: 0 off, then ten
+  doublings to `hi`, about hi / 1000 one step up). The `amount` flag wants
+  a float from `lo` 0, neither `log` nor `wrap`, and is part of the spec's
+  signature. Readouts: `fmt_speed` ("stop", "+0.050×", "+0.25×") and
+  `fmt_amount` (three figures, "0.0016"). `params.retaper_depths(doc,
+  files)` reads a document without `units["fx.depth"] == "taper"` as it
+  was, at every door (`Presets.load_doc`, silent as the pan's conversion
+  is; the desk templates as a load expands them; `Library.read_patch`,
+  the door a spawn comes through; `Bindings.from_json`, which writes
+  `bindings.json` back once, kept beside itself): a push keeps the real
+  value a full push reaches from the row's base (the document's own
+  value, else the effect's default — a session table's always), a
+  position or `set` row the value the source lands at full throw, a
+  macro's base subscriber its two ends; a push that over- or undershoots
+  the range from its base keeps its sign and carries the overshoot over
+  in norm, never written 0; depth subscribers, `scale` and `rest` do not
+  move; a missing `value` is 1.0. Every writer marks its document
+  (`params.UNITS` for a preset, `patches.UNITS` for a patch, the session
+  table's `to_json`); no schema bump. `tools/retaper_routes.py` rewrites a
+  library's presets, patches and desk templates and the machine home's
+  `bindings.json` once — dry run by default, every change worked out
+  before anything is written; `--write` backs the folder up to
+  `~/Hyperspace/library-backup-<stamp>` first (`bindings.json` beside
+  itself, as the app does), writes each file as the app writes its kind,
+  names every moved row and every row left (a value that is not a
+  number). A show holds no rows (its `session` is a snapshot of params).
+  The corpus (25 files), the four macro-candidate fixtures and the
+  grouped fixture were rewritten with it; 70 goldens were re-recorded
+  (eight presets whose hands push these params part-way up the box).
+- **Other options.** Depths kept as numbers and the tapers added anyway
+  (every saved hand route onto an amount would have gone from "a third of
+  the range" to "a few octaves"); a schema bump to `/9` for the marker
+  (both Macs run one build — row 394 — and a depth is still a depth);
+  preserving a push's slope at the base instead of its reach (exact for a
+  tiny push, wrong for the ones in the library, and undefined from a base
+  of 0); 8 octaves for the amounts (5 % would sit at 0.46 of the knob
+  instead of 0.57, with less room under it).
+- **To reverse.** The two `r.continuous` lines in `fx.declare` back to
+  their linear ranges, the `amount` flags off the fourteen lines, the
+  marker out of `params.UNITS` and the call out of `load_doc`; the library
+  from its backup (or the tool's maths inverted, which it is not written
+  to do).
+- **Rough edge.** Exact at rest and at full push about the row's base, not
+  between: a hand part-way up its box lands along the taper's curve, and a
+  push from a base of 0 keeps its reach but does little over its first
+  part. A macro's throw is linear in norm, so a macro resting mid-throw on
+  such a param lands the base somewhere else at load, and two macros that
+  agreed on one base (macro-breakdown-drop's 1 and 3) no longer do — the
+  tool names each such sub; the owner re-sets those by ear. A session
+  row's push (a hand-edited `bindings.json`; the app itself never writes a
+  performer row there) is measured about the effect's default, there
+  being no base of its own.
+- **Judge it.** Check 420. **The owner runs `uv run python
+  tools/retaper_routes.py` (then `--write`) on the library before the next
+  show**, both Macs on this build.
+### 562. Plan 45 V1: a video's audio track in memory, under the transport's clock
+- **Asked.** The 2026-10-31 triage: PyAV decoded only the video stream,
+  the proxies carry no audio, and the only output stream was the
+  analyzer's WAV playback. Four PRs: decode (V1), a mixer with per-channel
+  gain and a play-audio toggle (V2), the analyzer on the mix (V3), sync
+  with video as master and varispeed (V4). The owner's rule (2026-11-02,
+  addendum 8): the media transport is the one clock and audio is its
+  slave; the analyzer picks the mix as a source, not a second engine;
+  "no second time base" written into the plan.
+- **Built**, V1 only ([`plans/45-video-audio.md`](plans/45-video-audio.md)):
+  `VideoSource.audio` is a `Soundtrack` on its own thread
+  (`media-audio-<name>`), fed the same `want(t)` as the picture, read by
+  sample position (`read(at, n)`, zeros where nothing is held, never
+  blocking). **The recommendation taken:** float32 stereo at 48 kHz for
+  every file (one rate and layout for the mixer's one buffer; 384 kB a
+  second whatever the file; varispeed resamples at read time anyway),
+  and one memory policy — whole to `AUDIO_WINDOW_S` = 120 s, else a
+  120 s window re-centred when the position is 30 s off its centre,
+  decoded into one buffer, so a two-hour film holds 46 MB (92 MB while a
+  window is re-made). **Lazy** (review, 2026-11-02): nothing is read
+  until `Soundtrack.enable()` — a window decode demuxes the video's
+  packets too, about 1.5 GB for 120 s of a 4K clip — so a soundtrack
+  nobody hears costs no I/O; V2's play-audio toggle calls it, V1 nothing
+  does. A file with no audio track is silence with no note. Nothing
+  audible changes in V1. Second review (the same day): the track's end
+  in transport time (its own start plus its length), each frame placed
+  by its own pts, a buffer that grows for a clip of unknown length,
+  `fetching` whenever the position is outside what is held, a retry
+  after a 1 s move for every failed or empty window, whole tracks too.
+- **What would overturn it.** The window heard at a loop wrap or a
+  far scrub on a long film (a moment of silence until the window
+  arrives): V4 may prefetch the head or widen the window — each a
+  constant in `media/video.py`. A show library of clips longer than
+  120 s where the re-decode is heard: `AUDIO_WINDOW_S` up, at 384 kB a
+  second.
 ### 556–559. Plan 44: decks — N looks, one on air
 - **Asked.** The owner, after the 2026-10-30 show and reshaped on
   2026-11-02: plan 38's hold leaks (one registry, one table: a route, a

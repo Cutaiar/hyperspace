@@ -85,13 +85,39 @@ class Reading:
     effects: object | None = None          # what the pad is being sent (sony.Effects)
     battery: int = -1
     link: str = ""
+    # plan 46, a Joy-Con's calibration at a glance: the sensors as the lanes
+    # see them (gyro deg/s, accel g, in the pad's axes), the stick's raw
+    # 12-bit reading, the centre in use and where it came from
+    sensors: tuple | None = None           # ((gx, gy, gz), (ax, ay, az))
+    raw_sensors: tuple | None = None       # the chip's own counts, ((gx, gy, gz), (ax, ay, az))
+    stick_raw: tuple | None = None         # (x, y) raw
+    stick_centre: tuple | None = None      # (cx, cy) raw
+    stick_cal: object | None = None        # the nintendo.StickCal in use (its reach each way)
+    centre_from: str = ""                  # "rest", "user", "flash", "nominal"
 
     @property
     def sony(self) -> bool:
         return getattr(self.model, "family", "") == "sony"
 
+    @property
+    def nintendo(self) -> bool:
+        return getattr(self.model, "family", "") == "nintendo"
+
+    @property
+    def kind(self) -> str:
+        """A Joy-Con's side: "l", "r", or "pro" (anything else "")."""
+        if not self.nintendo:
+            return ""
+        from .pads import nintendo
+        return nintendo.kind_of(getattr(self.model, "id", ""))
+
     def has(self, cap: str) -> bool:
         return models.is_model(self.model) and self.model.has(cap)
+
+    def has_control(self, name: str) -> bool:
+        """Does the pad have the canonical control at all (a single Joy-Con
+        has no right stick, no D-pad)? Everything, with no model."""
+        return not models.is_model(self.model) or self.model.has_control(name)
 
     def glyph(self, name: str, default: str) -> str:
         return models.glyph(self.model if models.is_model(self.model) else None, name, default)
@@ -120,13 +146,52 @@ def read(pad) -> Reading:
     degrees = None
     if motion is not None and isinstance(getattr(m, "roll", None), float):
         degrees = (m.roll, m.pitch, m.yaw)
-    bat = getattr(getattr(pad, "report", None), "battery", -1)
+    report = getattr(pad, "report", None)
+    bat = getattr(report, "battery", -1)
+    sensors, raw, centre, stick_cal, centre_from = _calibration_of(pad, report, model) if on else (
+        None, None, None, None, "")
     return Reading(on=on, model=model, down=down,
                    hat=int(getattr(pad, "hat", 0) or 0) if on else 0,
                    axes=dict(zip(gamepad.LANES, lanes, strict=True)), touch=touch,
                    motion=motion, degrees=degrees, effects=getattr(pad, "effects", None),
                    battery=bat if isinstance(bat, int) else -1,
-                   link=str(getattr(pad, "link", "") or ""))
+                   link=str(getattr(pad, "link", "") or ""),
+                   sensors=sensors, stick_raw=raw, stick_centre=centre, stick_cal=stick_cal,
+                   centre_from=centre_from,
+                   raw_sensors=((tuple(report.gyro), tuple(report.accel))
+                                if on and getattr(report, "full", False) else None))
+
+
+def _calibration_of(pad, report, model):
+    """What the pad's reader knows past the lanes (plan 46): the sensors in
+    the pad's axes through its calibration and axis map, and a Joy-Con's
+    raw stick with the centre in use — (sensors, raw, centre, from)."""
+    reader = getattr(pad, "hid_pad", None)
+    cal = getattr(reader, "calibration", None)
+    if report is None or cal is None or not hasattr(cal, "gyro_dps"):
+        return None, None, None, None, ""
+    sensors = None
+    if getattr(report, "full", False):
+        amap = gesture.axis_map_of(getattr(pad, "axis_map", None), reader)   # the one rule
+        try:
+            sensors = (tuple(amap.pick(cal.gyro_dps(report.gyro), amap.gyro)),
+                       tuple(amap.pick(cal.accel_g(report.accel), amap.accel)))
+        except (TypeError, ValueError, AttributeError):
+            sensors = None
+    raw = centre = stick = None
+    where = ""
+    sticks = getattr(report, "raw_sticks", ())
+    if sticks and getattr(model, "family", "") == "nintendo":
+        from .pads import nintendo
+        kind = nintendo.kind_of(getattr(model, "id", ""))
+        raw = tuple(sticks[1] if kind == "r" else sticks[0])
+        stick = getattr(cal, "right" if kind == "r" else "left", None)
+        if stick is not None:
+            centre = (stick.cx, stick.cy)
+            where = ("rest" if getattr(reader, "recentred", False)
+                     else "nominal" if getattr(cal, "nominal", True)
+                     else "user" if getattr(cal, "user_stick", False) else "flash")
+    return sensors, raw, centre, stick, where
 
 
 @dataclass
@@ -209,23 +274,47 @@ def _lane_rows(r: Reading, routed=frozenset()) -> list[tuple]:
     A stick's direction lanes (``axis:L.N`` …) only where `routed` names
     them: sixteen idle lines would crowd the rest out."""
     out = []
+    has = r.has_control               # a single Joy-Con: one stick, no D-pad (plan 46)
     out.append(("sticks", [(f"axis:{n}", r.glyph(n, n), r.axes[n], 0.5, True)
-                           for n in ("LX", "LY", "RX", "RY")]))
+                           for n in ("LX", "LY", "RX", "RY") if has(n)]))
     out.append(("triggers", [(f"axis:{n}", r.glyph(n, n), r.axes[n], 0.0, False)
-                             for n in ("LT", "RT")]))
+                             for n in ("LT", "RT") if has(n)]))
     dials = [(f"axis:{n}", "", r.axes.get(n, 0.0), 0.0, False)
              for n in gamepad.DIAL_LANES if f"axis:{n}" in routed]
     if dials:
         out.append(("stick directions", dials))
-    out.append(("d-pad", [(f"hat:{n}", g, 1.0 if r.hat & gamepad.HATS[n] else 0.0, 0.0, False)
-                          for n, g in (("UP", "↑"), ("RIGHT", "→"), ("DOWN", "↓"),
-                                       ("LEFT", "←"))]))
+    hats = [(f"hat:{n}", g, 1.0 if r.hat & gamepad.HATS[n] else 0.0, 0.0, False)
+            for n, g in (("UP", "↑"), ("RIGHT", "→"), ("DOWN", "↓"), ("LEFT", "←")) if has(n)]
+    if hats:
+        out.append(("d-pad", hats))
     names = list(gamepad.BUTTONS)
     for cap, extra in (("touch", ("TOUCH",)), ("back", ("LP", "RP")), ("fn", ("LFN", "RFN"))):
         if r.has(cap):
             names += list(extra)
     out.append(("buttons", [(f"pad:{n}", r.glyph(n, n), 1.0 if n in r.down else 0.0, 0.0, False)
-                            for n in names]))
+                            for n in names if has(n)]))
+    if r.stick_raw is not None and r.stick_centre is not None and r.stick_cal is not None:
+        # a Joy-Con's stick as the chip counts it, over the reach the
+        # calibration in use gives it (so the bar agrees with the LX row)
+        (x, y), (cx, cy) = r.stick_raw, r.stick_centre
+        nx, ny = r.stick_cal.norm(x, y)
+        out.append(("stick calibration", [
+            ("raw x", str(x), nx / 2 + 0.5, 0.5, True),
+            ("raw y", str(y), ny / 2 + 0.5, 0.5, True),
+            (f"centre ({r.centre_from})", f"{cx}, {cy}", None, 0.5, False)]))
+    if r.sensors is not None:
+        (gx, gy, gz), (ax, ay, az) = r.sensors
+        a_fs, g_fs = ui_pad_lab.ACCEL_FS, ui_pad_lab.GYRO_FS      # the lab's full scales
+
+        def u(v: float, fs: float) -> float:
+            return min(1.0, max(0.0, v / (2 * fs) + 0.5))
+        out.append(("sensors (pad axes)", [
+            ("accel x", f"{ax:+.2f} g", u(ax, a_fs), 0.5, True),
+            ("accel y", f"{ay:+.2f} g", u(ay, a_fs), 0.5, True),
+            ("accel z", f"{az:+.2f} g", u(az, a_fs), 0.5, True),
+            ("gyro x", f"{gx:+.0f}°/s", u(gx, g_fs), 0.5, True),
+            ("gyro y", f"{gy:+.0f}°/s", u(gy, g_fs), 0.5, True),
+            ("gyro z", f"{gz:+.0f}°/s", u(gz, g_fs), 0.5, True)]))
     for scheme, names_, rests, bip, have in (
             (gamepad.TOUCH_SCHEME, gesture.TOUCH_LANES, gesture.TOUCH_RESTS,
              gesture.TOUCH_BIPOLAR, r.touch),
@@ -240,20 +329,27 @@ def _lane_rows(r: Reading, routed=frozenset()) -> list[tuple]:
                          rest, n in bip))
         out.append((scheme, rows))
     e = r.effects
-    if e is not None and r.has("light"):
+    if e is not None and (r.has("light") or r.has("rumble") or r.has("players")):
         light = tuple(getattr(e, "light", (0, 0, 0)))
         bits = int(getattr(e, "players", 0) or 0)
+        lights = 4 if r.nintendo else 5
 
         def trig(t) -> float:
             return float(getattr(t, "strength", 0.0) or 0.0) if getattr(t, "mode", "off") != "off" else 0.0
-        out.append(("out (sent now)", [
-            ("light", "#{:02x}{:02x}{:02x}".format(*light), max(light) / 255, 0.0, False),
-            ("players", "", (bits).bit_count() / 5, 0.0, False),
-            ("rumble heavy", "", float(getattr(e, "rumble_low", 0.0)), 0.0, False),
-            ("rumble light", "", float(getattr(e, "rumble_high", 0.0)), 0.0, False),
-            ("L2 resists", "", trig(getattr(e, "left", None)), 0.0, False),
-            ("R2 resists", "", trig(getattr(e, "right", None)), 0.0, False),
-            ("mic light", "", 1.0 if getattr(e, "mic", 0) else 0.0, 0.0, False)]))
+        rows = []
+        if r.has("light"):
+            rows.append(("light", "#{:02x}{:02x}{:02x}".format(*light), max(light) / 255, 0.0, False))
+        if r.has("players"):
+            rows.append(("players", "", min(lights, bits.bit_count()) / lights, 0.0, False))
+        if r.has("rumble"):
+            rows += [("rumble heavy", "", float(getattr(e, "rumble_low", 0.0)), 0.0, False),
+                     ("rumble light", "", float(getattr(e, "rumble_high", 0.0)), 0.0, False)]
+        if r.has("triggers"):
+            rows += [("L2 resists", "", trig(getattr(e, "left", None)), 0.0, False),
+                     ("R2 resists", "", trig(getattr(e, "right", None)), 0.0, False)]
+        if r.has("mic"):
+            rows.append(("mic light", "", 1.0 if getattr(e, "mic", 0) else 0.0, 0.0, False))
+        out.append(("out (sent now)", rows))
     return out
 
 

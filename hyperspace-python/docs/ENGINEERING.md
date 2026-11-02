@@ -851,7 +851,9 @@ LOOKBACK page and the red banner, and the look-back runs echoes only; a
 preset that asks for the dream with no worker is a warning, once.
 
 **Effects** (`fx.py`, FX page, GRAPH). One GLSL file per effect in
-`shaders/fx/` — thirteen ship: acid, deconverge, doublevision, fractals,
+`shaders/fx/` — acid, blend, deconverge, displace, doublevision, edges,
+fade (wave 0 E1, 2026-11-02: the whole premultiplied picture, colour and
+alpha, times its level — the feedback starter's decay), fractals,
 glimmer, huecycle, kaleido, palette, plasma, tripcolour, warp, wobble,
 zoomblur (`_lib.glsl` is shared). **A new effect is a new `.glsl` file, not
 Python**: every `// @param` uniform becomes `fx.<file>.<key>`, plus
@@ -1910,9 +1912,16 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
   `into`.
 - **Right-click**: on a `mod` stub, the param menu's Learn items (Learn
   desk, hand ▸, pad, a role, sink) — the completed row is a cable next
-  frame; on a cable, insert and delete; on a node, delete (a modifier,
-  a macro, an extra effect / hands node / composite), `draw solid` /
-  `draw lines`, `laid over` / `add` / `depth`; on the canvas, the picker:
+  frame; on a cable, insert, **starters ▸** (a picture cable: tracers,
+  tracers + dream, dream on a picture and, wave 0 E1, **feedback** — a
+  delay loop with a blend spliced onto it, a `fade` at
+  `graphview.FEEDBACK_LEVEL` its decay, many allowed) and delete; on a
+  node, delete (a modifier, a macro, an extra effect / hands node /
+  composite), `draw solid` / `draw lines`, `laid over` / `add` / `depth`,
+  and on a picture node **add feedback after** (the loop on the cable out
+  of it, laid under the node's box; a submenu per port when it feeds
+  several, disabled with why when it feeds nothing:
+  `ui_graph.add_feedback_after`, `node_below`); on the canvas, the picker:
   **modifier ▸** a kind, **effect ▸** a file, **hands**, **composite**,
   **macro ▸** an idle one. Delete takes the selection: a session row's
   cable and the rig's nodes are refused in words; a default render cable
@@ -2896,6 +2905,29 @@ top-level `"sinks_seeded": ["bridge"]` marks it done, so rows you delete
 never come back and `send` is not read again. To translate an edited
 `send`, remove the role from `"sinks_seeded"`. A `midi-out` entry is a
 sink alone: its own port (§12) and its own sink rows on its role.
+
+**A video's soundtrack** (plan 45 V1; nothing audible yet). A video on
+a channel can decode its audio track to memory beside its picture —
+**once something asks for sound** (`Soundtrack.enable()`, which V2's
+play-audio toggle will call; until then no thread, no open, no read: a
+window decode demuxes the video's packets too, so an unheard track would
+read the whole clip for nothing). `VideoSource.audio` is a `Soundtrack`
+on a thread of its own (`media-audio-<name>`), float32 stereo at 48 kHz
+whatever the file (mono on both sides at −3 dB, surround downmixed),
+always from the original file (a scrub proxy is MJPEG with no audio). **The media transport is the one
+clock and the sound is its slave**: the soundtrack follows the same
+`want(t)` the picture does and has no clock or playhead of its own; a
+later PR reads it at the transport's position, so scrub, reverse and
+rate will sound like tape. A track of 120 s or less is held whole (its
+thread then ends); a longer one as a 120 s window around the position,
+decoded into one buffer (46 MB for a two-hour film, 92 MB while a window
+is re-made as the position moves; a decode the transport has left behind
+is abandoned, one that fails leaves the old window and is tried again
+after a 1 s move). `status` reads `fetching` whenever the transport is
+outside what is held, `ready` only inside it. A file with no track
+is silence, with no line in the log. `src.audio.read(at, n)` is the API
+the mixer (V2) will consume: (n, 2) float32 from sample `at`, zeros
+where nothing is held, never blocking. [`plans/45-video-audio.md`](plans/45-video-audio.md).
 
 ## 14. Outputs
 

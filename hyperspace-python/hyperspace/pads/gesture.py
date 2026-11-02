@@ -158,6 +158,19 @@ class AxisMap:
         return tuple(raw[i] * s for i, s in spec)
 
 
+def axis_map_of(override, reader) -> AxisMap:
+    """The one rule for whose axes a pad's sensors are read through (plan
+    46): a map set on the pad (`override`, None when none was) — the
+    default map set on purpose counts, so an entry can force the identity
+    onto a pad whose built map is wrong; else the reader's own (a Joy-Con's,
+    per side); else the default. The app, the pad window and the probe all
+    ask here, so they never disagree."""
+    if override is not None:
+        return override
+    own = getattr(reader, "axis_map", None)
+    return own if own is not None else AxisMap()
+
+
 @dataclass
 class Motion:
     """The motion lanes from calibrated readings: `step(gyro_dps, accel_g,

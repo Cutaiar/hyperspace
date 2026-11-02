@@ -36,7 +36,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import models, sony
+from . import models, nintendo, sony
 
 SCAN_S = 1.0               # how often the hub looks for pads coming and going
 READ_TIMEOUT_MS = 100      # a read waits at most this, so close() is quick
@@ -56,26 +56,42 @@ def available() -> bool:
     return True
 
 
-def sony_devices(enumerate_=None) -> list[dict]:
-    """hidapi's records for every Sony pad plugged in or paired, one per
-    path — the gamepad interface only (usage page 1, usage 5, where the
-    platform says)."""
+def pad_devices(enumerate_=None) -> list[dict]:
+    """hidapi's records for every pad the road reads (`models.HID_IDS`: the
+    Sony pads, the Joy-Cons) plugged in or paired, one per path — the
+    gamepad interface only (usage page 1, usage 5, where the platform
+    says)."""
     if enumerate_ is None:
         import hid
         enumerate_ = hid.enumerate
     out, seen = [], set()
-    for d in enumerate_(models.SONY_VID, 0):
-        if d.get("product_id") not in models.SONY_IDS:
-            continue
-        page, usage = d.get("usage_page"), d.get("usage")
-        if page and usage and (page, usage) != (1, 5):
-            continue
-        path = d.get("path")
-        if path in seen:
-            continue
-        seen.add(path)
-        out.append(d)
+    for vid, pids in models.HID_IDS.items():
+        for d in enumerate_(vid, 0):
+            if d.get("product_id") not in pids:
+                continue
+            page, usage = d.get("usage_page"), d.get("usage")
+            if page and usage and (page, usage) != (1, 5):
+                continue
+            if vid == models.NINTENDO_VID and _on_usb(d):
+                # over USB a Joy-Con (in a grip) or a Pro Controller first wants the
+                # 0x80 handshake the codec does not send: left to GLFW until a hand
+                # has checked one (plan 46 "To revisit")
+                continue
+            path = d.get("path")
+            if path in seen:
+                continue
+            seen.add(path)
+            out.append(d)
     return out
+
+
+sony_devices = pad_devices     # plan 42's name
+
+
+def codec_for(model):
+    """The module that speaks a model's reports: `nintendo` for a Joy-Con
+    or Pro Controller, `sony` for everything else the road opens."""
+    return nintendo if getattr(model, "family", "") == "nintendo" else sony
 
 
 def _bt_hint(info: dict) -> bool | None:
@@ -85,6 +101,21 @@ def _bt_hint(info: dict) -> bool | None:
     if bus is None:
         return None
     return int(bus) == 2
+
+
+def _on_usb(info: dict) -> bool:
+    """Is this device on a USB bus? hidapi's bus_type where it says (1);
+    before 0.14 the interface number tells: a USB device has one (0 or
+    more), a Bluetooth device reports −1 (a Joy-Con over Bluetooth on
+    macOS, 2026-11-02). Unknown both ways reads as USB — a Nintendo pad
+    is never seized on a guess."""
+    hint = _bt_hint(info)
+    if hint is not None:
+        return not hint
+    iface = info.get("interface_number")
+    if iface is None:
+        return True
+    return int(iface) >= 0
 
 
 class Recorder:
@@ -118,7 +149,8 @@ class Recorder:
 
 
 class HidPad:
-    """One Sony pad read over hidapi on a thread of its own. `latest()`
+    """One pad read over hidapi on a thread of its own — a Sony pad, or a
+    Joy-Con (plan 43), each through its codec (`codec_for`). `latest()`
     is the newest `sony.Frame` (None before the first, or once stale);
     `send(effects)` asks for an output; `close()` stops the thread.
     `opener` makes the device (tests hand in a fake)."""
@@ -133,8 +165,16 @@ class HidPad:
         self.serial = str(info.get("serial_number") or "")
         self.model = models.by_ids(self.vid, self.pid)
         self.name = self.model.name
+        self.codec = codec_for(self.model)
+        self.nintendo = self.codec is nintendo
+        self.kind = nintendo.kind_of(self.model.id) if self.nintendo else ""
+        self.bt_hint = _bt_hint(self.info)    # what hidapi said of the link, if it did
         self.transport = ""          # "usb" / "bluetooth", once a report says
-        self.calibration = sony.Calibration()
+        self.calibration = self.codec.Calibration()
+        # the sensors' axes, this pad's own (a Joy-Con's per side; a Sony pad's the default)
+        self.axis_map = nintendo.axis_map_for(self.kind) if self.nintendo else None
+        self.flash: dict = {}        # a Joy-Con's SPI records read at connect (the probe asks)
+        self.recentred = False       # …and whether its stick's rest became its centre
         self.note = ""
         self.recorder = recorder
         self.opener = opener
@@ -149,6 +189,7 @@ class HidPad:
         self._want: sony.Effects | None = None
         self._sent_key = None
         self._sent_t = 0.0
+        self._sent_leds: int | None = None   # a Joy-Con's player lights as last sent
         self._seq = 0
         self._alive = True
         self._started_full = False
@@ -175,11 +216,14 @@ class HidPad:
         if raw is None or time.monotonic() - t > STALE_S:
             return None
         if raw is not self._frame_of:
-            f = sony.decode(raw, bluetooth=_bt_hint(self.info))
-            if f is not None:          # a refused report (a mic report, a bad CRC):
+            f = self._decode(raw)
+            if f is not None:          # a refused report (a mic report, a bad CRC, a reply):
                 self._frame = f        # the last good one stands, so nothing re-fires
             self._frame_of = raw
         return self._frame
+
+    def _decode(self, raw: bytes):
+        return self.codec.decode_frame(raw, self)
 
     @property
     def rumble_v2(self) -> bool:
@@ -212,13 +256,14 @@ class HidPad:
             if hint is not None:
                 self.transport = "bluetooth" if hint else "usb"
             self._calibrate(dev)
+            in_len = self.codec.IN_LEN
             while self._alive:
-                data = dev.read(sony.BT_IN_LEN, READ_TIMEOUT_MS)
+                data = dev.read(in_len, READ_TIMEOUT_MS)
                 n = 0
                 while data:            # drain what queued (hidapi keeps 30): the newest wins
                     self._take(bytes(data))
                     n += 1
-                    data = dev.read(sony.BT_IN_LEN, 1) if n < DRAIN_MAX else None
+                    data = dev.read(in_len, 1) if n < DRAIN_MAX else None
                 self._write(dev)
             self._neutral(dev)
         except Exception as e:  # noqa: BLE001 — unplugged, refused, a Bluetooth drop
@@ -232,35 +277,26 @@ class HidPad:
                     pass
 
     def _calibrate(self, dev) -> None:
-        """Feature 0x05 — the motion calibration, and over Bluetooth the
-        switch to the full report — then 0x20, the firmware's update
-        version (which rumble mode a DualSense takes). SDL and Linux read
-        both at connect (spec §2.4, §4)."""
+        """The codec's connect sequence (`setup`): a Sony pad's feature
+        reads (the motion calibration, and over Bluetooth the switch to
+        the full report; the firmware's update version), a Joy-Con's
+        subcommands (the full report mode, sensors and rumble on, each
+        acknowledged), its flash reads and its stick's rest."""
         try:
-            got = dev.get_feature_report(sony.CALIBRATION_ID, sony.FEATURE_READ_LEN)
-            if got:
-                self.calibration = sony.calibration(bytes(got))
-            got = dev.get_feature_report(sony.FIRMWARE_ID, sony.FEATURE_READ_LEN)
-            if got:
-                self.update_version = sony.update_version(bytes(got))
+            self.codec.setup(dev, self)
         except Exception as e:  # noqa: BLE001 — a pad that will not answer still reads
-            self.note = f"feature report: {type(e).__name__}"[:120]
+            self.note = f"setup: {type(e).__name__}: {e}"[:120]
 
     def _take(self, r: bytes) -> None:
         if self.recorder is not None:
             self.recorder.write(r)
         if not r:
             return
-        if r[0] == sony.BT_REPORT_ID or (r[0] == sony.USB_REPORT_ID and (
-                len(r) < sony.USB_IN_LEN or _bt_hint(self.info))):
-            self.transport = "bluetooth"
-            if r[0] == sony.BT_REPORT_ID and len(r) > 1:
-                self.tags.add(r[1] & 0x0F)
-        elif r[0] == sony.USB_REPORT_ID:
-            if not self.transport:
-                self.transport = "usb"
-        else:
+        link = self.codec.accepts(r, self)
+        if link is None:
             return
+        if link == "bluetooth" or not self.transport:   # a BT report settles it; USB only if unsaid
+            self.transport = link
         with self._lock:
             self._raw, self._raw_t = r, time.monotonic()
             self.reports += 1
@@ -270,21 +306,13 @@ class HidPad:
             want = self._want
         if want is None or not self.transport:
             return
-        key = want.key()
         now = time.monotonic()
-        if key == self._sent_key or now - self._sent_t < 1.0 / OUT_HZ:
+        if now - self._sent_t < 1.0 / OUT_HZ:
             return
-        if self._sent_key is None:
-            # Linux's take-over, once: the light bar's setup to "out", so the
-            # colours the host sets stick (spec §5.3) — enough on macOS over
-            # USB and Bluetooth (a real Edge, 2026-11-02)
-            self._send(dev, sony.output_report(sony.Effects(), bluetooth=self.bluetooth,
-                                               seq=self._next_seq(), first=True,
-                                               usb_len=self._usb_len()), first=True)
-        report = sony.output_report(want, bluetooth=self.bluetooth, seq=self._next_seq(),
-                                    rumble_v2=self.rumble_v2, usb_len=self._usb_len())
-        self._send(dev, report)
-        self._sent_key, self._sent_t = key, now
+        # the codec sends what changed (a Sony pad's take-over first; a
+        # Joy-Con's rumble again while it is on), or nothing
+        if self.codec.write(dev, self, want, now):
+            self._sent_key, self._sent_t = want.key(), now
 
     def _neutral(self, dev) -> None:
         """On the way out, after outputs were sent: rumble stopped and the
@@ -294,11 +322,8 @@ class HidPad:
             want = self._want
         if self._sent_key is None or want is None:
             return
-        calm = sony.Effects(light=want.light, players=want.players, brightness=want.brightness)
         try:
-            self._send(dev, sony.output_report(calm, bluetooth=self.bluetooth,
-                                               seq=self._next_seq(),
-                                               rumble_v2=self.rumble_v2, usb_len=self._usb_len()))
+            self.codec.calm(dev, self, want)
         except Exception:  # noqa: BLE001, S110 — a pad already gone needs no calming
             pass
 
@@ -367,11 +392,17 @@ class TapePad:
         self.model = models.MODELS.get(str(head.get("model", "")), models.MODELS["dualsense"])
         self.name = f"tape: {self.path.name}"
         self.transport = str(head.get("transport") or "usb")
-        self.calibration = sony.Calibration()
+        self.codec = codec_for(self.model)
+        self.nintendo = self.codec is nintendo
+        self.kind = nintendo.kind_of(self.model.id) if self.nintendo else ""
+        self.bt_hint = self.transport == "bluetooth"
+        self.calibration = self.codec.Calibration()
+        self.axis_map = nintendo.axis_map_for(self.kind) if self.nintendo else None
         self.note = "" if self.reports else "the tape holds no reports"
         self.alive = True
         self.t0 = clock()
         self.sent: list[sony.Effects] = []
+        self._frame: sony.Frame | None = None    # the last decoded frame (a reply leaves it)
         self._i = 0
 
     @property
@@ -390,7 +421,11 @@ class TapePad:
             self._i = 0
         while self._i + 1 < len(self.reports) and self.reports[self._i + 1][0] <= t:
             self._i += 1
-        return sony.decode(self.reports[self._i][1], bluetooth=self.transport == "bluetooth")
+        raw = self.reports[self._i][1]
+        f = self.codec.decode_frame(raw, self)
+        if f is not None:              # a reply on the tape: the last frame stands, as live
+            self._frame = f
+        return self._frame
 
     def send(self, effects: sony.Effects) -> None:
         """A tape has no light to set: what was asked is kept, for a test."""

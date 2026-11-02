@@ -2599,3 +2599,182 @@ def test_the_insert_table_names_picture_ports_only():
             continue
         name = {"output": "output.1", "layer": "hands.layer", "guide": "hands.guide"}.get(kind, kind)
         assert graphview.kind_of(name) == kind and graphview.drop_refusal(name), kind
+
+
+# ---------------------------------------------------------------- 2026-11-02 (G0, row 563): a group by the mouse
+
+def _box_select(rig, probe, a, b, steps=10):
+    """A real box-select: press on empty canvas at `a`, drag to `b`, let go
+    (canvas units)."""
+    io = imgui.get_io()
+    s0, s1 = _to_screen(probe, a), _to_screen(probe, b)
+    io.add_mouse_pos_event(*s0)
+    frame(rig.panel)
+    frame(rig.panel)
+    io.add_mouse_button_event(0, True)
+    frame(rig.panel)
+    for i in range(1, steps + 1):
+        u = i / steps
+        io.add_mouse_pos_event(s0[0] + (s1[0] - s0[0]) * u, s0[1] + (s1[1] - s0[1]) * u)
+        frame(rig.panel)
+    frame(rig.panel)
+    io.add_mouse_button_event(0, False)
+    frame(rig.panel)
+    frame(rig.panel)
+    io.add_mouse_pos_event(-1.0, -1.0)
+    frame(rig.panel)
+
+
+def _right_click(rig, probe, nid):
+    """A real right-click on node `nid`'s title: the node's menu opens and
+    is drawn on the frames that follow."""
+    io = imgui.get_io()
+    (px, py), (sx, _sy) = _node_box(rig, nid)
+    io.add_mouse_pos_event(*_to_screen(probe, (px + sx * 0.35, py + 6.0)))
+    frame(rig.panel)
+    frame(rig.panel)
+    io.add_mouse_button_event(1, True)
+    frame(rig.panel)
+    io.add_mouse_button_event(1, False)
+    frame(rig.panel)
+    frame(rig.panel)
+    frame(rig.panel)
+
+
+def _left_click(rig, probe, nid):
+    """A real click on node `nid`'s title: selected, alone."""
+    io = imgui.get_io()
+    (px, py), (sx, _sy) = _node_box(rig, nid)
+    io.add_mouse_pos_event(*_to_screen(probe, (px + sx * 0.35, py + 6.0)))
+    frame(rig.panel)
+    frame(rig.panel)
+    io.add_mouse_button_event(0, True)
+    frame(rig.panel)
+    io.add_mouse_button_event(0, False)
+    frame(rig.panel)
+    frame(rig.panel)
+
+
+def _centre_node(rig, probe, nid):
+    """Pan so node `nid` sits in the middle of the canvas; its box after."""
+    (px, py), (sx, sy) = _node_box(rig, nid)
+    _centre_on(rig, probe, (px + sx / 2, py + sy / 2))
+    return _node_box(rig, nid)
+
+
+def _escape(rig):
+    """Escape closes the open menu (keyboard nav on for the press, as
+    test_ui_shell does; the shared io's flags put back after)."""
+    io = imgui.get_io()
+    flags = io.config_flags
+    io.config_flags |= imgui.ConfigFlags_.nav_enable_keyboard
+    try:
+        io.add_mouse_pos_event(-1.0, -1.0)
+        frame(rig.panel)
+        io.add_key_event(imgui.Key.escape, True)
+        frame(rig.panel)
+        io.add_key_event(imgui.Key.escape, False)
+        frame(rig.panel)
+        frame(rig.panel)
+    finally:
+        io.config_flags = flags
+    assert not imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id)
+
+
+def test_a_group_made_taken_apart_and_remade_by_the_mouse(rig, monkeypatch):
+    """Row 563, by the mouse (the real editor, the harness above): two
+    effects in the run box-selected and grouped from the right-click menu;
+    the folded node opened from its menu; one member then the other
+    dragged out of the region — the first leaves its group at once, the
+    second takes the group with it (ungroup, by the mouse); the two
+    regrouped take `group.2`, never `group.1` again; and a member deleted
+    with the Delete key is out of the group's list on that same frame.
+    The one menu item picked on each menu is the patched `menu_item_simple`;
+    everything else is mouse and key events through imgui."""
+    from test_graphview import _in_editor
+    pairs = (*FRAME0, ("lookback", "acid.image"), ("acid", "wobble.image"),
+             ("wobble", "output.all.image"))
+    places = {"render:shape": [-800, 0], "render:scene": [-400, 0], "render:lookback": [0, 0],
+              "render:acid": [320, 0], "render:wobble": [640, 0], "render:output.all": [960, 0]}
+    _gs, probe = _drag_rig(rig, monkeypatch, *pairs, layout=places, effects=("acid", "wobble"), on=("acid", "wobble"))
+    st, pre = ui_graph._state(rig.panel), rig.lib.presets
+    assert pre.groups == []
+    _centre_on(rig, probe, (600.0, 90.0))      # (the page pans by moving the nodes:
+    (ax, ay), (aw, ah) = _node_box(rig, "render:acid")        # read them after)
+    (wx, wy), (ww, wh) = _node_box(rig, "render:wobble")
+    # 1. box-select the two, group them from the menu
+    _box_select(rig, probe, (ax - 30, ay - 80), (wx + ww + 30, max(ay + ah, wy + wh) + 80))
+    _in_editor(rig, lambda: st.__setitem__("menu_sel", ui_graph.selected_ids(st)))
+    assert sorted(st["menu_sel"]) == ["render:acid", "render:wobble"]
+    picked: list[str] = []
+    want = {"pick": "group "}
+
+    def item(label, *a, **k):               # one click on the item wanted, once
+        picked.append(label)
+        if want["pick"] and label.startswith(want["pick"]):
+            want["pick"] = None
+            return True
+        return False
+    monkeypatch.setattr(imgui, "menu_item_simple", item)
+    _right_click(rig, probe, "render:acid")
+    assert "group 2 nodes" in picked, picked
+    assert [(g["id"], sorted(g["nodes"]), g["open"]) for g in pre.groups] == [
+        ("group.1", ["render:acid", "render:wobble"], False)]
+    _escape(rig)
+    frame(rig.panel)
+    assert st["view"].group("group.1") is not None and "render:acid" in st["hide"]
+    # 2. open it from its menu, drag one member out, then the other
+    picked.clear()
+    want["pick"] = "open"
+    _right_click(rig, probe, "group.1")
+    assert "open" in picked and pre.groups[0]["open"] is True
+    _escape(rig)
+    frame(rig.panel)
+    frame(rig.panel)
+    (wx, wy), (ww, wh) = _node_box(rig, "render:wobble")
+    _drag_to(rig, probe, "render:wobble", (wx + ww / 2, wy + wh / 2 + 420))
+    frame(rig.panel)
+    assert pre.groups[0]["nodes"] == ["render:acid"], pre.groups
+    assert st["said"] == "wobble left group 1"
+    (ax, ay), (aw, ah) = _node_box(rig, "render:acid")
+    _drag_to(rig, probe, "render:acid", (ax + aw / 2, ay + ah / 2 - 420))
+    frame(rig.panel)
+    assert pre.groups == []                                 # ungrouped, by the mouse
+    assert st["said"] == "acid left group 1, the last of it: the group is gone"
+    assert wires_of(rig.lib) == set(pairs)                 # the graph is untouched
+    # 3. regrouped, by another box (the two are 840 units apart now: zoomed
+    # out so one box on screen holds both): the next number, never the old
+    _zoom_out(rig, probe, 6)
+    (ax, ay), (aw, ah) = _node_box(rig, "render:acid")
+    (wx, wy), (ww, wh) = _node_box(rig, "render:wobble")
+    _centre_on(rig, probe, ((ax + wx + ww) / 2, (ay + wy + wh) / 2))
+    (ax, ay), (aw, ah) = _node_box(rig, "render:acid")
+    (wx, wy), (ww, wh) = _node_box(rig, "render:wobble")
+    _box_select(rig, probe, (min(ax, wx) - 30, min(ay, wy) - 60),
+                (max(ax + aw, wx + ww) + 30, max(ay + ah, wy + wh) + 60))
+    _in_editor(rig, lambda: st.__setitem__("menu_sel", ui_graph.selected_ids(st)))
+    assert sorted(st["menu_sel"]) == ["render:acid", "render:wobble"]
+    picked.clear()
+    want["pick"] = "group "
+    _right_click(rig, probe, "render:wobble")
+    assert "group 2 nodes" in picked, picked
+    assert [g["id"] for g in pre.groups] == ["group.2"]
+    _escape(rig)
+    frame(rig.panel)
+    # 4. open it, click a member, Delete: out of the list on that frame
+    assert ui_graph.set_open(rig.panel, "group.2", True) is None
+    frame(rig.panel)
+    frame(rig.panel)
+    _centre_node(rig, probe, "render:wobble")
+    _left_click(rig, probe, "render:wobble")
+    io = imgui.get_io()
+    io.add_key_event(imgui.Key.delete, True)
+    frame(rig.panel)                    # the key queues the selection for the editor…
+    frame(rig.panel)                    # …whose query on this frame drops the node
+    io.add_key_event(imgui.Key.delete, False)
+    assert pre.groups == [{"id": "group.2", "name": "group 2", "nodes": ["render:acid"],
+                           "open": True}], (pre.groups, st["note"], st["said"])
+    assert "wobble" not in {w.src for w in pre.graph.spec.wires}
+    frame(rig.panel)
+    assert pre.groups[0]["nodes"] == ["render:acid"]
+

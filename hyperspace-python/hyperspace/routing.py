@@ -255,7 +255,7 @@ import json
 import math
 import sys
 import time
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
@@ -1910,6 +1910,11 @@ class Bindings:
     # `to_json` writes rows only, and `is_session_row` is about rows
     modifiers: tuple[Modifier, ...] = ()
     modifiers_serial: int = 0    # bumped by every change: the Router's lanes follow
+    # row 563 (2026-11-02): told after every `set_modifiers` — the preset
+    # points it at `Presets.settle_groups`, so a modifier removed by any
+    # road leaves its GRAPH group in the same call (class-level: an
+    # instance from before a hot reload has it)
+    on_modifiers: Callable[[], None] | None = None
     # the surface page up on the first MIDI role's desk (plan 31 §A): an
     # object with `rows()` (seq_page.SeqPage), or None. Its rows shadow
     # every row on their controls, invariant ones included, while it is up;
@@ -2706,6 +2711,8 @@ class Bindings:
         self.modifiers_serial = self.modifiers_serial + 1
         if reg is not None:
             declare_modifiers(reg, self.modifiers)
+        if self.on_modifiers is not None:
+            self.on_modifiers()
         return notes
 
     def add_modifier(self, kind: str, inputs: Iterable[str] = (),

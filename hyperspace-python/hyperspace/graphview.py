@@ -851,11 +851,44 @@ CLOUD_INTO_SCENE = "{cloud} is a cloud device: its one wire is into scene.geomet
 # undo step, every node and cable ordinary after it. (key, the item's words)
 STARTERS = (("scene", "scene chain"), ("tracers", "tracers"),
             ("tracers+dream", "tracers + dream"), ("dream", "dream on a picture"),
+            # wave 0 E1 (2026-11-02): a delay loop with a blend on a picture
+            # ("feedback", not "echo": `echo.k` is the look-back's frame)
+            ("feedback", "feedback"),
             ("backdrop", "channel to backdrop"),
             # plan 39 T5 (W6): channel a segmented, its foreground over the scene
             ("cut-out", "cut-out"))
 # the starters a picture cable's menu offers, that cable their picture
-CABLE_STARTERS = ("tracers", "tracers+dream", "dream")
+CABLE_STARTERS = ("tracers", "tracers+dream", "dream", "feedback")
+# wave 0 E1 (2026-11-02, the 2026-10-31 triage's "echo / reverb starter"):
+# feedback is a delay loop with a blend — on picture cable `src → dst` a
+# new composite spliced in by the insert table (`_onto`, the cable's
+# picture into its `over`), its picture round through a new delay and a
+# new fade into its `under`. The fade is the decay: a delay has no params
+# of its own (DECISIONS, plan 34: "decay, mix and tint are an effect's
+# after it"), and `fade.glsl` multiplies the whole premultiplied picture,
+# colour and alpha alike, by `FEEDBACK_LEVEL` a frame — so the trail fades
+# towards clear (not to an opaque black ghost, as a palette's val slice,
+# which keeps alpha, would leave over a backdrop or the desktop), a
+# half-covered fringe at the same rate as the face it edges, gone in about
+# ten frames, never piling up. Laid *over*, not add: the picture is never
+# brighter than it was, and the trail shows where the picture is
+# see-through (the scene's ground), as the look-back's tracers did —
+# "laid add" on the composite's menu brightens it instead. There may be
+# many: each is its own composite, delay and fade instance.
+FEEDBACK_FILE = "fade"
+FEEDBACK_LEVEL = 0.75                  # the fade's level: how much of last frame stays
+FEEDBACK_SAID = ("feedback: {src} → {comp} over → {dst}; {comp} → {delay} → {fx} → {comp} "
+                 "under — {fx} level {level:g} is how much of last frame stays")
+FEEDBACK_LOOP_SAID = ("feedback: {comp} → {delay} → {fx} → {comp} under — {fx} level {level:g} "
+                      "is how much of last frame stays")
+FEEDBACK_UNWIRED = (" — left unwired: {comp}.over (wire a picture into it) and the composite's "
+                    "picture")
+# the picker's feedback on a scene whose picture is not one thing: refused
+# (never a dead `scene → composite.over` nothing pulls; review 2026-11-02)
+FEEDBACK_MANY_FEEDS = ("{src} feeds {n} picture ports: say which — starters ▸ feedback on that "
+                       "cable, or add feedback after on {src}")
+FEEDBACK_NO_FEED = "{src} feeds no picture port: wire its picture somewhere first"
+FEEDBACK_FEEDS_NOTHING = "feeds nothing: wire its picture somewhere first"
 # the scene chain: a new preset's whole section and the first starter —
 # shape → scene → All outputs, plain faces (no pattern wire)
 SCENE_CHAIN = (("shape", "scene.geometry"), ("scene", f"{rgraph.ALL_OUTPUTS}.image"))
@@ -4205,14 +4238,23 @@ class Edit:
     def land_group(self, entry: Mapping) -> dict:
         """Add group `entry` (``{"name"?, "patch"?, "nodes", "open"?}`` — a
         `patches.Landing.group`, or Group's own) to the preset as
-        ``group.<n>``, n one past the highest held (the modifier rule), named
-        "group <n>" when it has no name; folded unless it says open. Pushes
-        no undo step: the caller's verb has (Group's below; plan 40 T3's
-        spawn, whose landing is one step). Returns the entry as landed."""
+        ``group.<n>``, n one past the preset's `group_high` — the highest
+        number it has ever held (row 563: the file's highest at the load,
+        raised by every list assigned, carried by the marks), bumped here,
+        so an ungrouped or undone group's number is never handed out again
+        while the preset is loaded. A bare `presets` with no floor yet (a
+        test's) is seeded from the highest held. Named "group <n>" when it
+        has no name; folded unless it says open. Pushes no undo step: the
+        caller's verb has (Group's below; plan 40 T3's spawn, whose landing
+        is one step). Returns the entry as landed."""
         groups = self._groups()
         if groups is None:
             raise ValueError(NO_PRESET_GROUPS)
-        n = max((graphmigrate.group_number(g.get("id")) for g in groups), default=0) + 1
+        high = getattr(self.presets, "group_high", None)
+        if high is None:
+            high = max((graphmigrate.group_number(g.get("id")) for g in groups), default=0)
+        n = int(high) + 1
+        self.presets.group_high = n
         g = {"id": f"group.{n}", "name": str(entry.get("name") or f"group {n}")}
         if entry.get("patch"):
             g["patch"] = str(entry["patch"])
@@ -5286,16 +5328,26 @@ def _new_instance(spec, file: str) -> int:
     return next(n for n in range(1, len(held) + 2) if n not in held)
 
 
+def _set_after_landing(edit: Edit, name: str, **values) -> None:
+    """Effect `name`'s params `values` (`fx.<name>.<key>`) set after the
+    landing that declared them, in the same undo step (the step `_land`
+    pushed is still open this frame, so an undo puts each value back with
+    the graph): R25's switch-on (`_switch_on`), the feedback starter's fade
+    level. Nothing to do with no registry to hand (a stand-in section); a
+    key the registry has no param for is skipped."""
+    reg = getattr(edit.graph, "reg", None) or edit.reg
+    if reg is None:
+        return
+    for key, value in values.items():
+        pid = f"fx.{name}.{key}"
+        if pid in reg:
+            reg[pid].set(value)
+
+
 def _switch_on(edit: Edit, name: str) -> None:
     """R25: effect `name`, just added or inserted, switched on
-    (`fx.<name>.on`) — after the landing that declared its params and in
-    the same undo step (the step `_land` pushed is still open this frame,
-    so an undo puts the value back with the graph). Nothing to do with no
-    registry to hand (a stand-in section) or no such param."""
-    reg = getattr(edit.graph, "reg", None) or edit.reg
-    pid = f"fx.{name}.on"
-    if reg is not None and pid in reg:
-        reg[pid].set(True)
+    (`fx.<name>.on`) — `_set_after_landing`."""
+    _set_after_landing(edit, name, on=True)
 
 
 def _effect_entry(file: str, n: int) -> dict:
@@ -5436,6 +5488,13 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
     - **cut-out** (plan 39 T5, W6): a new segment and a new composite,
       `channel.a → segment.image`, `segment.fg → composite.over`, `scene →
       composite.under`, `composite → output.all.image` — never refused.
+    - **feedback** (wave 0 E1, 2026-11-02): a delay loop with a blend — a
+      new composite spliced onto the cable by the insert table (`picture →
+      composite.over`, `composite → dst`), `composite → delay.image`,
+      `delay → fade.image`, `fade → composite.under`, the fade's level
+      `FEEDBACK_LEVEL` (`_feedback_starter`) — never refused for a second:
+      there may be many, each its own three nodes. From the picker, a scene
+      whose picture is not one thing is refused in words (no dead wire).
 
     The scene chain and the cut-out take All outputs' picture: the words
     name what fed it before (`STARTER_REPLACED`).
@@ -5461,6 +5520,13 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
     doc = _with_frame(_doc(edit))
     before = _named(doc)
     all_in = f"{rgraph.ALL_OUTPUTS}.image"
+    if which == "feedback":
+        if cable is None:                   # the picker: the scene's one picture, as tracers
+            src, dst, n = _scene_feed(doc)
+            if src is not None and dst is None:         # not one thing: refused, no dead wire
+                return (FEEDBACK_MANY_FEEDS.format(src=src, n=n) if n
+                        else FEEDBACK_NO_FEED.format(src=src))
+        return _feedback_starter(edit, doc, before, label, src, dst)
     if which == "scene":
         was = _was_into(doc, all_in, "scene")
         wires = [x for x in doc.get("wires", []) if x["to"] != all_in]
@@ -5508,13 +5574,10 @@ def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
             return IN_ALREADY.format(label=label_of(kind))
     unwired: list[str] = []
     if cable is None:
-        src = "scene" if "scene" in before else None
-        feeds = [x["to"] for x in doc.get("wires", []) if src and x["from"] == src
-                 and _picture_port(x["to"])]
-        dst = feeds[0] if len(feeds) == 1 else None
+        src, dst, n = _scene_feed(doc)
         if src is not None and dst is None:
             unwired.append("the composite's picture (the scene feeds "
-                           + ("no picture port" if not feeds else f"{len(feeds)} ports") + ")")
+                           + ("no picture port" if not n else f"{n} ports") + ")")
     comp = rgraph.CompositeAt(_next(_spec(edit), "composite"), "add" if looks else "over")
     wires = list(doc.get("wires", []))
     if dst is not None:     # (what fed picture port `dst` — one wire: the composite does now)
@@ -5570,6 +5633,77 @@ def _started(edit: Edit, doc: dict, before: set[str], *order: str, label: str,
         after = _named(_doc(edit))
         edit.placed = tuple(n for n in order if n in after and n not in before)
     return why
+
+
+def _scene_feed(doc: dict) -> tuple[str | None, str | None, int]:
+    """The picture a starter from the picker (no cable) is laid on: the
+    scene, the one picture port it feeds, and how many it feeds — (None,
+    None, 0) with no scene; (scene, None, n) where it feeds no picture port
+    or several (the tracers and the dream then wire what they can and say
+    the rest; feedback refuses: neither guesses)."""
+    if "scene" not in _named(doc):
+        return None, None, 0
+    feeds = [x["to"] for x in doc.get("wires", []) if x["from"] == "scene"
+             and _picture_port(x["to"])]
+    return "scene", feeds[0] if len(feeds) == 1 else None, len(feeds)
+
+
+def _feedback_starter(edit: Edit, doc: dict, before: set[str], label: str,
+                      src: str | None, dst: str | None) -> str | None:
+    """The feedback starter (wave 0 E1, 2026-11-02; `FEEDBACK_FILE`,
+    `FEEDBACK_LEVEL`): a new composite (laid over), a new delay and a new
+    fade instance, in one landing. On picture cable `src → dst` the
+    composite goes onto the cable through the insert table's splice
+    (`_onto`, as insert ▸ composite would: `src → composite.over`,
+    `composite → dst`); the loop is `composite → delay.image`, `delay →
+    fade.image`, `fade → composite.under`, legal because it passes through
+    the delay. With no cable and no scene (the picker on a blank canvas)
+    the loop is made and its two open ends said. After the landing, in the
+    same undo step (`_set_after_landing`): the fade on, its level
+    `FEEDBACK_LEVEL`. `placed` is delay, fade, composite — the loop left to
+    right; `added` the composite. Never refused for a second instance: each
+    is its own three nodes."""
+    spec = _spec(edit)
+    got = _new_node(edit, spec, doc, "effect", FEEDBACK_FILE)
+    if isinstance(got, str):
+        return got
+    fx = got[0]
+    comp = rgraph.CompositeAt(_next(spec, "composite"), "over")
+    delay = rgraph.DelayAt(_next(spec, "delay"))
+    doc["nodes"] += [comp.to_json(), delay.to_json()]
+    words = {"comp": comp.name, "delay": delay.name, "fx": fx, "level": FEEDBACK_LEVEL}
+    if src is not None and dst is not None:
+        _onto(doc, src, dst, comp.name, "over")
+        said = FEEDBACK_SAID.format(src=src, dst=dst, **words)
+    else:
+        said = FEEDBACK_LOOP_SAID.format(**words) + FEEDBACK_UNWIRED.format(comp=comp.name)
+    doc["wires"] = [*doc.get("wires", []),
+                    {"from": comp.name, "to": f"{delay.name}.image"},
+                    {"from": delay.name, "to": f"{fx}.image"},
+                    {"from": fx, "to": f"{comp.name}.under"}]
+    why = _started(edit, doc, before, delay.name, fx, comp.name, label=label, said=said)
+    if why is None:
+        edit.added = comp.name
+        _set_after_landing(edit, fx, on=True, level=FEEDBACK_LEVEL)
+    return why
+
+
+def picture_feeds(edit: Edit, name: str) -> list[tuple[str, str]] | None:
+    """The picture cables out of node `name` — (its name, the port each
+    feeds), the cables feedback can be added after (wave 0 E1: a node
+    menu's "add feedback after"); [] for a picture node that feeds nothing,
+    None for a node that makes no picture (a geometry, a window, a matte)
+    or makes it on a pin (a segment's `fg`: a pin is no cable's source,
+    `_cable_ends`' rule). Read off the section's wires as they stand — no
+    copy of the section, since a menu asks every frame it is open."""
+    kind = kind_of(name)
+    ports = insert_ports(name)
+    if (kind is None or _makes(kind) != IMAGE or _bus_source(name)
+            or (ports is not None and ports[1] != name)):
+        return None
+    spec = _spec(edit)
+    return [(w.src, w.dst) for w in (spec.wires if spec is not None else ())
+            if w.src == name and _picture_port(w.dst)]
 
 
 def render_channel_switch(edit: Edit, port: str) -> str | None:

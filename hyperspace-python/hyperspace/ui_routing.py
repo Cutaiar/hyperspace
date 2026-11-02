@@ -1648,9 +1648,11 @@ def set_modifier_input(panel, mid: str, k: int, source: str) -> None:
 
 def remove_modifier(panel, mid: str) -> None:
     """The ×: the modifier and its params go, what fed it wired on to
-    what it fed (`Bindings.remove_modifier`). One undo step."""
+    what it fed (`Bindings.remove_modifier`). One undo step, with the
+    library's marks (row 563: the modifier may be a GRAPH group's member;
+    the table settles the group, the undo puts the member back)."""
     router = router_of(panel)
-    undo.push(f"delete modifier {mid}")
+    undo.push(f"delete modifier {mid}", load=True)
     router.table.remove_modifier(mid, panel.reg)
 
 

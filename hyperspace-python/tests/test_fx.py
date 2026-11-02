@@ -316,6 +316,8 @@ def test_each_effect_changes_the_frame(ctx, name):
         st.values[name]["density"] = 1.0
     if name == "palette":                  # it starts at mix 0 (today's picture): turn it up
         st.values[name].update(mix=1.0, hue_from=155.0, hue_to=245.0)
+    if name == "fade":                     # its level starts at 1 (today's picture): turn it down
+        st.values[name]["level"] = 0.5
     img = render(ctx, st)
     assert ctx.error == "GL_NO_ERROR"
     diff = np.abs(img[..., :3].astype(int) - base[..., :3]).sum()
