@@ -1724,8 +1724,13 @@ frame thread hands it a frame (the channel's own array, or a readback) and
 uploads a result only when its index moved, smoothed per result in float
 (`segment.smooth`) and feathered only when the result or the radius
 changed. Vision's matte, a fixed 4:3 size per level stretched over the
-image, is resampled to the frame's aspect on the worker. Motion mode runs
-no thread. The node says its state: `256×144 · Vision fast · a frame or
+image, is resampled to the frame's aspect on the worker, and every Vision
+run is under its own `objc.autorelease_pool` — the worker is a plain
+Python thread with no pool, and without one each job leaked its frame's
+NSData copy for the life of the process (~1 MB a job; 140 GB over a
+half-hour set with two segment nodes, 2026-11-01;
+`tests/test_segment.py::test_vision_frees_each_jobs_memory`). Motion mode
+runs no thread. The node says its state: `256×144 · Vision fast · a frame or
 two late · 29 fps`.
 
 **Undo.** `Undo.tick` (frame step 4) compares a fingerprint of the watched
