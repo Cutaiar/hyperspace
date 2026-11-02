@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.2 — 2026-11-01
+
+### Graph
+
+- Any picture node can be dropped on a cable to splice it in — composite, switch, delay, resize, dream, look-back, cut, segment, backdrop, the faces pattern, a media channel — not just effects (#307)
+- Dropping a composite or switch on a cable asks which inlet takes it (under / over, in1 … in8); the others stay open (#307)
+- A channel dropped on a cable feeds that port instead; the old source keeps its other cables and the line says if it now feeds nothing (#307)
+- ⌘-drag lifts a wired node of any kind out of its chain and onto a cable, closing the gap behind it (#307)
+- Right-click a cable → "insert ▸" offers every picture kind, not just effects (#307)
+- A node that can't go on a cable says why, and only the cables that could take it dim while you drag (#307)
+- Cable drag targets stay finger-sized at any zoom — at least 22 px on screen — and the drop onto a cable reaches as far zoomed out as zoomed in (#300)
+- Media channels a–h are in the add menu (media ▸ channel), and the preset-only view always shows all eight, wired or not (#303)
+- A node you just added is never hidden by the preset-only view, and an LFO feeding a modifier feeding a param is drawn too (#303)
+
+### Routes
+
+- Every new route lands with the `smooth` spring feel (0.5 s, no bounce) instead of raw; envelope routes keep auto, and saved routes are unchanged (#301)
+- A band routed to a param now lands as a gentle push about its base (`LANE_DEPTH` 0.12) instead of taking the param over; an LFO lands as a push (0.25) too; toggles and menus still follow the source (#305)
+
+### Effects
+
+- Calmer shipped defaults — effect speeds about a quarter, amounts about a third, LFO depth 1.0 → 0.5 — so turning an effect on is no longer jarring; presets that set their own values look the same (#304)
+
+### For developers
+
+- The panel publishes the GRAPH page's selected node (`Panel.graph_selected`, `select_graph_node`, `graph_selected_params`) — groundwork for a controller node mode; restart, don't hot reload (#302)
+
 ## v1.1 — 2026-10-30
 
 ### Panel
