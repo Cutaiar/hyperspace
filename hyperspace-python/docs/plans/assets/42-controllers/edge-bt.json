@@ -1,0 +1,213 @@
+{
+ "model": "edge",
+ "path": "(this Mac's IOKit path)",
+ "info": {
+  "path": "(this Mac's IOKit path)",
+  "vendor_id": 1356,
+  "product_id": 3570,
+  "serial_number": "(removed: the controller's Bluetooth address)",
+  "release_number": 256,
+  "manufacturer_string": "",
+  "product_string": "DualSense Edge Wireless Controller",
+  "usage_page": 1,
+  "usage": 5,
+  "interface_number": -1,
+  "bus_type": 2
+ },
+ "link": {
+  "transport": "bluetooth",
+  "kinds": [
+   "bt"
+  ],
+  "report_id": "31",
+  "report_len": 78,
+  "bt_tags": [
+   1
+  ],
+  "rate_hz": 58,
+  "update_version": "0x0217",
+  "calibration": {
+   "nominal": false,
+   "gyro": [
+    [
+     -41.0,
+     0.06102039663257811
+    ],
+    [
+     -5.0,
+     0.06113784319275403
+    ],
+    [
+     -5.0,
+     0.061134382429525645
+    ]
+   ],
+   "accel": [
+    [
+     -6.0,
+     0.00012196609342602757
+    ],
+    [
+     11.0,
+     0.00012221203788573176
+    ],
+    [
+     -28.0,
+     0.00012195121951219512
+    ]
+   ]
+  }
+ },
+ "nothing_held": {
+  "down": [],
+  "raw_buttons": [
+   "08000000"
+  ]
+ },
+ "left_back": {
+  "down": [
+   "LP"
+  ],
+  "raw_buttons": [
+   "08004000"
+  ]
+ },
+ "right_back": {
+  "down": [
+   "RP"
+  ],
+  "raw_buttons": [
+   "08008000"
+  ]
+ },
+ "fn_left": {
+  "down": [
+   "LFN"
+  ],
+  "raw_buttons": [
+   "08001000"
+  ]
+ },
+ "fn_and_cross": {
+  "down": [
+   "LFN"
+  ],
+  "raw_buttons": [
+   "08001000"
+  ]
+ },
+ "profile_back": {
+  "down": [],
+  "raw_buttons": [
+   "08000000"
+  ]
+ },
+ "default_profile": {
+  "down": [
+   "A"
+  ],
+  "raw_buttons": [
+   "28000000"
+  ]
+ },
+ "sensors": {
+  "flat_accel": [
+   102.27722772277228,
+   8070.683168316832,
+   1637.3168316831684
+  ],
+  "right_down_accel": [
+   -2924.2574257425745,
+   7337.0990099009905,
+   2288.7227722772277
+  ],
+  "far_up_accel": [
+   -199.7766990291262,
+   7152.0,
+   -4056.8058252427186
+  ],
+  "turn_right_gyro": [
+   -45.073170731707314,
+   -522.9317073170731,
+   -150.7658536585366
+  ],
+  "proposed_axis_map": {
+   "accel": [
+    [
+     0,
+     1
+    ],
+    [
+     1,
+     1
+    ],
+    [
+     2,
+     1
+    ]
+   ],
+   "gyro_yaw": [
+    1,
+    1
+   ]
+  },
+  "default_holds": true
+ },
+ "touch_reach": {
+  "x": 1919,
+  "y": 1079,
+  "x_min": 0,
+  "y_min": 0
+ },
+ "light_red": {
+  "seen": true,
+  "usb_len": null,
+  "note": ""
+ },
+ "players_3": {
+  "seen": true,
+  "usb_len": null,
+  "note": ""
+ },
+ "rumble": {
+  "seen": true,
+  "usb_len": null,
+  "note": ""
+ },
+ "trigger_right": {
+  "seen": true,
+  "usb_len": null,
+  "note": ""
+ },
+ "mic_led": {
+  "seen": true,
+  "usb_len": null,
+  "note": ""
+ },
+ "stick_rest": {
+  "LX": [
+   0.00392156862745098,
+   0.00392156862745098
+  ],
+  "LY": [
+   0.0196078431372549,
+   0.0196078431372549
+  ],
+  "RX": [
+   0.0196078431372549,
+   0.027450980392156862
+  ],
+  "RY": [
+   -0.00392156862745098,
+   0.00392156862745098
+  ],
+  "LT": [
+   -1.0,
+   -1.0
+  ],
+  "RT": [
+   -1.0,
+   -1.0
+  ]
+ }
+}

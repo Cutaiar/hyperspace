@@ -30,6 +30,12 @@ and a prototype:
   widget (a [Scriptable](https://scriptable.app) script) showing the same QR
   code.
 
+- **[`prototypes/edge-lab/`](prototypes/edge-lab/)** — a browser lab for the
+  DualSense Edge (plan 42): Chrome reads it over USB or Bluetooth through
+  WebHID — every control live, three readouts, the touchpad / shake /
+  feedback ideas, and the hardware checks — with a simulator when no pad
+  is connected. Not part of the app.
+
 - **[`prototypes/subjects/`](prototypes/subjects/)** — a browser sketch of a
   vector logo as the subject (the Wispr Flow mark), flat or as 3D capsules,
   under a set of materials. Not part of the app; its shapes are, as the

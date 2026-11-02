@@ -298,6 +298,7 @@ def test_no_devices_list_translates_the_old_tables_with_one_note_each(tmp_path, 
     assert "notes" not in cfg and capsys.readouterr().err == ""
     pad, midi, leap, bridge = config.devices(cfg)
     assert pad == {"role": "pad", "kind": "gamepad", "enabled": True, "usb": True,
+                   "hid": True, "controller": "any",          # plan 42
                    "dial_left": "petal", "dial_right": "blend"}
     assert midi == {"role": "apc40", "kind": "midi", "enabled": True, "port": None,
                     "profile": "apc40", "map": str(tmp_path / "midi_map.json")}

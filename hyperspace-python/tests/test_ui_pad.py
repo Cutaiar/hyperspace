@@ -299,3 +299,46 @@ def test_it_draws_with_a_pad_on_it(rig, monkeypatch):
     rig.panel.pad = _FakePad(down=("A", "LB", "LSTICK"), hat=gamepad.HAT_LEFT,
                              lanes=[0.9, 0.1, 0.5, 0.5, 1.0, 0.0])
     assert _pad_frames(rig, monkeypatch)["texts"] == before
+
+
+# ---- a pad's own face (plan 42) ----
+
+def test_the_edge_draws_its_own_face_and_its_extras_without_overlap():
+    from hyperspace.pads import models
+    edge = gamepad.layout_for(models.MODELS["edge"])
+    assert gamepad.layout_for(None) is gamepad.LAYOUT
+    assert gamepad.layout_for(models.MODELS["xbox"]) == gamepad.LAYOUT
+    glyphs = {c.source: c.glyph for c in edge}
+    assert glyphs["pad:A"] == "✕" and glyphs["pad:Y"] == "△" and glyphs["axis:LT"] == "L2"
+    assert {"pad:TOUCH", "motion:roll", "pad:LP", "pad:RP", "pad:LFN", "pad:RFN"} <= set(glyphs)
+    assert len(set(glyphs.values())) == len(glyphs)
+    for i, a in enumerate(edge):
+        assert a.x + a.w <= gamepad.LAYOUT_W + 1e-9 and a.y + a.h <= gamepad.LAYOUT_H + 1e-9
+        for b in edge[i + 1:]:
+            apart = (a.x + a.w <= b.x or b.x + b.w <= a.x or a.y + a.h <= b.y or b.y + b.h <= a.y)
+            assert apart, (a.source, b.source)
+    ds = {c.source for c in gamepad.layout_for(models.MODELS["dualsense"])}
+    assert "pad:TOUCH" in ds and "pad:LP" not in ds          # no back buttons on a DualSense
+
+
+def test_touch_and_motion_rows_light_the_touchpad_and_the_tilt():
+    edge = gamepad.layout_for(gamepad.models.MODELS["edge"])
+    assert gamepad.control_in(edge, "touch:pinch").kind == "touchpad"
+    assert gamepad.control_in(edge, "motion:shake").kind == "tilt"
+    assert gamepad.control_in(edge, "pad:A").glyph == "✕"
+    from types import SimpleNamespace as NS
+    table = NS(of=lambda *s: [Binding("touch:x", "fx.zoomblur.cx", "position"),
+                              Binding("motion:roll", "rot.phase.XY", "push", 0.25)])
+    got = ui_pad.rows(table)
+    assert set(got) == {"pad:TOUCH", "motion:roll"}
+
+
+def test_each_stick_well_shows_its_own_stick_on_a_sony_face():
+    """The well picks its axes by the control, not the glyph (an Edge's
+    left stick is "L3", not "LS": both wells once read the right stick)."""
+    from types import SimpleNamespace as NS
+    edge = gamepad.layout_for(gamepad.models.MODELS["edge"])
+    ls = next(c for c in edge if c.source == "pad:LSTICK")
+    rs = next(c for c in edge if c.source == "pad:RSTICK")
+    pad = NS(lanes=lambda: [1.0, 0.5, 0.5, 1.0, 0.0, 0.0])    # left stick right, right stick up
+    assert ui_pad._stick(pad, ls) == (1.0, 0.0) and ui_pad._stick(pad, rs) == (0.0, -1.0)
