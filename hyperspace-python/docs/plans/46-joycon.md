@@ -4,7 +4,7 @@
 Joy-Con (L) over Bluetooth, as an extension of plan 42's road: a second
 codec beside the Sony one, three models, the probe's checks for them.
 Decisions D1–D6 are recommendations built as written, pending the owner
-(register rows 565–570). Hand checks 424–429, group AQ, are the first
+(register rows 565–570). Hand checks 424–429, group AV, are the first
 with the controller in the app.
 
 ## The ask (the owner, 2026-11-02)
@@ -124,7 +124,45 @@ Hand check 425 is the first run of the real sequence.
 | D3 | **A model says which controls it has** (`Model.controls`): the device's ports, Learn's names, the on-screen pad and the sink ports show only those — a Joy-Con is one stick and a few buttons everywhere, not a dark Xbox face | 567 |
 | D4 | **Drift is calibrated from the flash and the rest**: the Switch's user record over the factory's, then the stick's own resting reading at connect becomes its centre when it sits within 0.3 of centre and moves less than 0.1 meanwhile; no config key, no stored file | 568 |
 | D5 | **The sensors' axes are the codec's** (`nintendo.AXIS_MAP`: the chip's x along the long axis toward the shoulder end, y across, z up out of the face; the hold points the shoulder end away) — from the notes and one flat reading; the probe's tilt check settles the signs | 569 |
-| D6 | **No browser lab fork**: the probe's `--check` is the Joy-Con's lab for now; a `prototypes/joycon-lab/` fork of the Edge lab waits until the Joy-Con has been seen in the app | 570 |
+| D6 | **The lab is the app's pad window, not a browser page** (the owner, 2026-11-02: "if we can see the Joy-Con in the app with the same level of detail as the Edge, we should just do that"): Faithful draws the Joy-Con upright as a hand holds it, with the stick's well, its raw reading and the centre in use on one side and the tilt with the sensors' numbers on the other; Cockpit one dial and the tilt big; Lanes only the lanes it has, plus its stick calibration and sensors; no `prototypes/joycon-lab/` | 570 |
+
+## The lab in the app (D6)
+
+The pad window's four readouts (SYSTEM ▸ Pad diagram; click the view's
+name to step through them), drawn from a tape by `tools/pad_shots.py`:
+
+| Faithful | Cockpit |
+|---|---|
+| ![Faithful](assets/46-joycon/pad-joycon-faithful.png) | ![Cockpit](assets/46-joycon/pad-joycon-cockpit.png) |
+
+| Lanes | Map |
+|---|---|
+| ![Lanes](assets/46-joycon/pad-joycon-lanes.png) | ![Map](assets/46-joycon/pad-joycon.png) |
+
+- **Faithful** (`ui_pad_lab._faithful_joycon`): the Joy-Con upright, the
+  trigger and the shoulder along its top edge, − (+) by the rail, the
+  stick and the four face buttons, capture (HOME), SL and SR on the rail
+  with the four player lights between them; on the left the stick's well
+  with the deadzone ring, the dot grey inside it, `LX` / `LY`, the raw
+  12-bit reading and the centre in use with where it came from (`rest`,
+  `user`, `flash`, `nominal`); on the right the tilt, big, and the
+  accelerometer in g and the gyro in deg/s in the pad's axes — what a
+  calibration needs at a glance. The (R) mirrors it: its face above its
+  stick, + and HOME.
+- **Cockpit** (`_cockpit_joycon`): one dial (the trigger's arc, the
+  shoulder's cap, the stick's trail), the tilt big beside it, the two
+  middle buttons it has, the face cluster, SL and SR loud on the edges,
+  the rumble meters, the ticker.
+- **Lanes**: the sticks, triggers, buttons and D-pad rows only where the
+  model has the control; two new groups, `stick calibration` (raw x, raw
+  y, the centre) and `sensors (pad axes)`, for any pad whose reader has
+  a calibration; `out (sent now)` lists the channels the pad has (four
+  player lights on a Joy-Con).
+- **Map**: `gamepad.layout_for` already drops what the model lacks.
+
+The `Reading` (`ui_pad_views`) carries `sensors`, `stick_raw`,
+`stick_centre` and `centre_from` from the pad's reader; `sony.Frame`
+gained `raw_sticks` for it (empty on a Sony pad).
 
 ## On another Mac
 
@@ -159,10 +197,8 @@ Hand check 425 is the first run of the real sequence.
 - **The simple report's button bits** (`_SIMPLE_L` / `_SIMPLE_R`): from
   the notes, never seen — the mode switch makes them moot within the
   first report.
-- **The Pro Controller** (`procon`): decoded by the same codec, unseen.
-- **The Joy-Con's own face** in the pad window's Faithful readout
-  (`ui_pad_lab.py` draws an Xbox body for every non-Sony pad); the
-  on-screen pad (`ui_pad.py`) already draws only what it has.
+- **The Pro Controller** (`procon`): decoded by the same codec, unseen;
+  the pad window draws it on the Xbox body with its own glyphs.
 - **Two Joy-Cons as one pad** (D1), when a second one is here.
 - **The (R)'s HOME light** (subcommand 0x38): a tenth sink channel, or
   the mic channel's meaning on a Joy-Con.

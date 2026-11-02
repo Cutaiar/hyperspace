@@ -109,6 +109,7 @@ class Frame:
     battery: int = -1                      # 0–10 (×10 %); −1 unknown
     charging: int = -1                     # the status nibble: 0 discharging, 1 charging, 2 full
     raw_buttons: bytes = b""               # payload bytes 7–10 as sent, for the probe
+    raw_sticks: tuple = ()                 # a Joy-Con's 12-bit (x, y) per stick (plan 43's lab)
 
     @property
     def full(self) -> bool:

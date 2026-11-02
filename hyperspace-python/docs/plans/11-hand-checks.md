@@ -6404,7 +6404,7 @@ header's count shortens to a number rather than run off the edge; in 4
 the side panel lists the Xbox pad's patched ports, no picture (the
 picture is the first pad's).
 
-## AQ. The Joy-Con, one per role (plan 46)
+## AV. The Joy-Con, one per role (plan 46)
 
 The owner's Joy-Con (L), 2026-11-02 (decision register rows 565–570):
 the first checks with it in the app. The Joy-Con sleeps when idle and

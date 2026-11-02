@@ -363,7 +363,8 @@ def decode(report, kind: str = "l", calibration: Calibration | None = None,
         battery, charging = _battery(r[2])
         return Frame(kind=BT_IN, buttons=buttons, hat=hat, axes=axes,
                      gyro=(gx, gy, gz), accel=(ax, ay, az), sensor_time=0, seq=r[1],
-                     battery=battery, charging=charging, raw_buttons=bytes(r[3:6]))
+                     battery=battery, charging=charging, raw_buttons=bytes(r[3:6]),
+                     raw_sticks=((lx, ly), (rx, ry)))
     if r[0] == REPORT_SIMPLE and len(r) >= 4:
         table = _SIMPLE_R if kind == "r" else _SIMPLE_L
         battery, charging = -1, -1

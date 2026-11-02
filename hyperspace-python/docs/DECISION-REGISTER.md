@@ -9369,8 +9369,13 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
   flash (the user's record over the factory's) then the stick's rest at
   connect becomes its centre (within 0.3, spread under 0.1), no config
   key; **569** the sensors' axes are the codec's `AXIS_MAP` for the hold,
-  from the notes and one flat reading; **570** no browser lab fork — the
-  probe is the Joy-Con's lab until it has been seen in the app.
+  from the notes and one flat reading; **570** the lab is the app's pad
+  window, not a browser page (the owner's own call, 2026-11-02: "if we
+  can see the Joy-Con in the app with the same level of detail as the
+  Edge, we should just do that") — Faithful draws the Joy-Con upright
+  with the stick's well, its raw reading and the centre in use beside
+  the tilt and the sensors' numbers, Cockpit one dial, Lanes only what
+  it has plus its calibration; no `prototypes/joycon-lab/`.
 - **What would overturn it.** Hand check 425 (the probe's run on the
   real Joy-Con: the first time the connect sequence, the flash reads,
   the button bits, rumble and the lights meet hardware — the Joy-Con

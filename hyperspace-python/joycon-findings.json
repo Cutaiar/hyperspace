@@ -1,0 +1,299 @@
+{
+ "model": "joycon-l",
+ "path": "b'DevSrvsID:4295264292'",
+ "info": {
+  "path": "b'DevSrvsID:4295264292'",
+  "vendor_id": 1406,
+  "product_id": 8198,
+  "serial_number": "C8:91:43:A3:F5:EF",
+  "release_number": 1,
+  "manufacturer_string": "",
+  "product_string": "Joy-Con (L)",
+  "usage_page": 1,
+  "usage": 5,
+  "interface_number": -1,
+  "bus_type": 2
+ },
+ "link": {
+  "transport": "bluetooth",
+  "kinds": [
+   "bt"
+  ],
+  "report_id": "30",
+  "report_len": 49,
+  "rate_hz": 60,
+  "note": "",
+  "battery": 5
+ },
+ "flash": {
+  "0x603d": "44e546a8b77c7bb449",
+  "0x8010": "ffffffffffffffffffffff",
+  "0x6020": "b1ff5f00daff004000400040f6ff0100faffe73be73be73b",
+  "0x8026": "ffffffffffffffffffffffffffffffffffffffffffffffffffff"
+ },
+ "calibration": {
+  "nominal": false,
+  "user_stick": false,
+  "recentred": true,
+  "stick": {
+   "cx": 2003,
+   "cy": 1968,
+   "x_above": 1348,
+   "x_below": 1147,
+   "y_above": 1134,
+   "y_below": 1179
+  },
+  "gyro": [
+   [
+    -10.0,
+    0.06099706744868035
+   ],
+   [
+    1.0,
+    0.06104082431198644
+   ],
+   [
+    -6.0,
+    0.06101297177498207
+   ]
+  ],
+  "accel": [
+   [
+    -79.0,
+    0.00024296908218429206
+   ],
+   [
+    95.0,
+    0.00024556449137454726
+   ],
+   [
+    -38.0,
+    0.00024357569114602363
+   ]
+  ]
+ },
+ "nothing_held": {
+  "down": [],
+  "want": null,
+  "ok": true,
+  "raw_buttons": [
+   "000000"
+  ],
+  "hat": 0
+ },
+ "press_0": {
+  "down": [
+   "A"
+  ],
+  "want": "A",
+  "ok": true,
+  "raw_buttons": [
+   "000001"
+  ],
+  "hat": 0
+ },
+ "press_1": {
+  "down": [
+   "Y"
+  ],
+  "want": "Y",
+  "ok": true,
+  "raw_buttons": [
+   "000002"
+  ],
+  "hat": 0
+ },
+ "press_2": {
+  "down": [
+   "B"
+  ],
+  "want": "B",
+  "ok": true,
+  "raw_buttons": [
+   "000004"
+  ],
+  "hat": 0
+ },
+ "press_3": {
+  "down": [
+   "X"
+  ],
+  "want": "X",
+  "ok": true,
+  "raw_buttons": [
+   "000008"
+  ],
+  "hat": 0
+ },
+ "press_4": {
+  "down": [
+   "LP"
+  ],
+  "want": "LP",
+  "ok": true,
+  "raw_buttons": [
+   "000020"
+  ],
+  "hat": 0
+ },
+ "press_5": {
+  "down": [
+   "RP"
+  ],
+  "want": "RP",
+  "ok": true,
+  "raw_buttons": [
+   "000010"
+  ],
+  "hat": 0
+ },
+ "press_6": {
+  "down": [
+   "LB"
+  ],
+  "want": "LB",
+  "ok": true,
+  "raw_buttons": [
+   "000040"
+  ],
+  "hat": 0
+ },
+ "press_7": {
+  "down": [
+   "axis:LT"
+  ],
+  "want": "axis:LT",
+  "ok": true,
+  "raw_buttons": [
+   "000080"
+  ],
+  "hat": 0
+ },
+ "press_8": {
+  "down": [
+   "VIEW"
+  ],
+  "want": "VIEW",
+  "ok": true,
+  "raw_buttons": [
+   "000100"
+  ],
+  "hat": 0
+ },
+ "press_9": {
+  "down": [
+   "SHARE"
+  ],
+  "want": "SHARE",
+  "ok": true,
+  "raw_buttons": [
+   "002000"
+  ],
+  "hat": 0
+ },
+ "press_10": {
+  "down": [
+   "LSTICK"
+  ],
+  "want": "LSTICK",
+  "ok": true,
+  "raw_buttons": [
+   "000800"
+  ],
+  "hat": 0
+ },
+ "stick_reach": {
+  "stick right": 0.99,
+  "stick left": 1.0,
+  "stick up": 1.0,
+  "stick down": 0.976
+ },
+ "stick_rest": {
+  "LX": [
+   -0.021,
+   -0.018
+  ],
+  "LY": [
+   -0.02,
+   -0.017
+  ]
+ },
+ "sensors": {
+  "flat_accel": [
+   85.03,
+   40.87,
+   4153.24
+  ],
+  "right_down_accel": [
+   -165.9126213592233,
+   2884.26213592233,
+   2970.990291262136
+  ],
+  "far_up_accel": [
+   3294.4368932038833,
+   216.67961165048544,
+   2477.766990291262
+  ],
+  "turn_right_gyro": [
+   -73.73399014778325,
+   44.995073891625616,
+   -486.27093596059115
+  ],
+  "proposed_axis_map": {
+   "accel": [
+    [
+     1,
+     -1
+    ],
+    [
+     2,
+     1
+    ],
+    [
+     0,
+     -1
+    ]
+   ],
+   "gyro_yaw": [
+    2,
+    1
+   ]
+  },
+  "built_axis_map": {
+   "accel": [
+    [
+     1,
+     -1
+    ],
+    [
+     2,
+     1
+    ],
+    [
+     0,
+     -1
+    ]
+   ],
+   "gyro_yaw": [
+    2,
+    1
+   ]
+  },
+  "default_holds": true
+ },
+ "players_3": {
+  "seen": true,
+  "note": ""
+ },
+ "rumble_low": {
+  "seen": true,
+  "note": ""
+ },
+ "rumble_high": {
+  "seen": true,
+  "note": ""
+ },
+ "rumble_stops": {
+  "seen": true
+ }
+}

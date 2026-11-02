@@ -180,7 +180,7 @@ the Sony codec, models `joycon-l` / `joycon-r` / `procon`, a model saying
 which controls it has (one stick, no D-pad, two outputs), the stick's
 drift calibrated from the flash and its rest, the probe's own Joy-Con
 checks. D1–D6 are recommendations pending the owner (register rows
-565–570); hand checks 424–429 (group AQ) start with
+565–570); hand checks 424–429 (group AV) start with
 `tools/hid_probe.py --controller joycon-l --check` — the connect
 sequence, the buttons and the outputs met a fake only, because the
 Joy-Con slept before the build's reader could run. **Restart** rather

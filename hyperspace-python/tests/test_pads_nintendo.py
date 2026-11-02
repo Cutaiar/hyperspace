@@ -358,3 +358,73 @@ def test_the_on_screen_layout_draws_only_what_a_joycon_has():
     assert glyphs["pad:A"] == "↓" and glyphs["pad:LP"] == "SL" and glyphs["axis:LT"] == "ZL"
     assert len(gp.layout_for(models.MODELS["procon"])) > len(layout)
     assert models.MODELS["edge"].has_control("RX") and not models.MODELS["joycon-r"].has_control("LB")
+
+
+# ---- the pad window's readouts (plan 46: the Joy-Con drawn as itself) ----
+
+def _drawn(view: str, pad, st=None):
+    from hyperspace import ui_pad_lab, ui_pad_views
+    pen = ui_pad_lab.Pen()
+    ui_pad_lab.VIEWS[view](pen, ui_pad_views.read(pad), {} if st is None else st)
+    return pen.hits
+
+
+def test_the_reading_carries_a_joycons_calibration_and_sensors():
+    from hyperspace import ui_pad_views
+    pad, reader = joycon_pad([full_report(lstick=(2000 + 100, 2100 - 50))] * 40)
+    reader._take(full_report(lstick=(2100, 2050), accel=(0, 0, 4096)))
+    pad.poll(dt=0.016)
+    pad.send_effects(sony.Effects(players=sony.player_bits(2), rumble_low=0.5))
+    r = ui_pad_views.read(pad)
+    assert r.nintendo and r.kind == "l" and not r.sony
+    assert r.stick_raw == (2100, 2050) and r.stick_centre == (2100, 2050) and r.centre_from == "rest"
+    (_gx, _gy, _gz), (ax, ay, az) = r.sensors
+    assert abs(ay - 1.0) < 0.02 and abs(ax) < 0.02 and abs(az) < 0.02    # up out of the face
+    assert not r.has_control("RX") and r.has_control("LX") and not r.has_control("UP")
+    groups = dict(ui_pad_views._lane_rows(r))
+    assert [s for s, *_ in groups["sticks"]] == ["axis:LX", "axis:LY"]
+    assert [s for s, *_ in groups["triggers"]] == ["axis:LT"] and "d-pad" not in groups
+    assert "pad:LP" in {s for s, *_ in groups["buttons"]} and "pad:MENU" not in {
+        s for s, *_ in groups["buttons"]}
+    assert groups["stick calibration"][2][0] == "centre (rest)"
+    assert "sensors (pad axes)" in groups
+    assert [s for s, *_ in groups["out (sent now)"]] == ["players", "rumble heavy", "rumble light"]
+    assert groups["out (sent now)"][0][2] == 0.5                       # two of four lights
+
+
+def test_the_lab_draws_a_joycon_as_itself():
+    from hyperspace import ui_pad_lab
+    pad, reader = joycon_pad()
+    reader._take(full_report(b5=0x01 | 0x20 | 0x80, accel=(0, 0, 4096)))   # ↓, SL, ZL
+    pad.poll(dt=0.016)
+    pad.send_effects(sony.Effects(players=sony.player_bits(1), rumble_high=0.4))
+    for view in ("faithful", "cockpit"):
+        hits = _drawn(view, pad)
+        for x, y, w, h, source in hits:
+            assert 0 <= x and x + w <= ui_pad_lab.DESIGN_W, (view, source)
+            assert 0 <= y and y + h <= ui_pad_lab.DESIGN_H, (view, source)
+        got = {h[4] for h in hits}
+        assert {"pad:A", "pad:B", "pad:X", "pad:Y", "pad:LSTICK", "axis:LX", "axis:LY",
+                "axis:LT", "pad:LB", "pad:LP", "pad:RP", "pad:VIEW", "pad:SHARE",
+                "motion:roll"} <= got, (view, got)
+        assert not got & {"pad:RSTICK", "axis:RX", "axis:RT", "pad:RB", "hat:UP", "pad:TOUCH",
+                          "pad:MENU", "pad:GUIDE"}, (view, got)
+    st = {}
+    for _ in range(ui_pad_lab.TRAIL + 5):
+        _drawn("cockpit", pad, st)
+    assert [k for k, _t in st["events"]] == ["pad:A", "pad:LP"]
+    # the (R): its face, R / ZR, + and HOME, the one stick still the left stick
+    dev = FakeJoyCon(reports=[full_report(b3=0x08 | 0x80)] * 40)      # A, ZR
+    reader = stepped(JOYCON_R, dev)
+    pad = gp.Pad(hid=True, controller="joycon-r")
+    pad.claims = gp.Claims()
+    pad.claims.hub = hid.HidHub(start=False, enumerate_=lambda v, p: [], start_readers=False)
+    pad.claims.hub.readers[JOYCON_R["path"]] = reader
+    pad.attach(pad.claims, role="joy")
+    reader._take(full_report(b3=0x08 | 0x80))
+    pad.poll(dt=0.016)
+    for view in ("faithful", "cockpit"):
+        got = {h[4] for h in _drawn(view, pad)}
+        assert {"pad:A", "axis:RT", "pad:RB", "pad:MENU", "pad:GUIDE", "pad:LSTICK",
+                "axis:LX"} <= got, (view, got)
+        assert not got & {"axis:LT", "pad:LB", "pad:VIEW", "pad:SHARE", "pad:RSTICK"}, (view, got)
