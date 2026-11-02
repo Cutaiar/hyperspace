@@ -12,7 +12,12 @@ made again only when its size changed, with mipmaps for the faces'
 sampling. A GPU frame (a texture name in the renderer's share group)
 never comes through the CPU: a `GL_TEXTURE_2D` one is wrapped as it is
 (`ctx.external_texture`; releasing the wrapper never deletes the source's
-texture), and a `GL_TEXTURE_RECTANGLE` one — what a Syphon client's
+texture) — one wrapper per distinct (name, size, generation), kept
+across channels and frames (`wraps` counts them), so a source that
+publishes from a pool of textures (the GRAPH canvas's tap) costs no
+wrapper a frame; the generation (`MediaFrame.tex_gen`) tells a texture
+made anew under a reused name from the old one, whose wrapper's sampler
+state (filter, no repeat) was set on the deleted object — and a `GL_TEXTURE_RECTANGLE` one — what a Syphon client's
 IOSurface-backed texture is on macOS GL, which neither moderngl nor a
 `sampler2D` can read — is blitted on the GPU into the channel's own 2D
 texture when its frame moved (`blits`), mipmapped like an upload. The
@@ -44,6 +49,7 @@ duck-typed (`pixels`, `texture`, `tex_size`, `frame`, `t`, `size`)."""
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any
 
@@ -52,6 +58,7 @@ import numpy as np
 
 TEX_2D, TEX_RECT = 0x0DE1, 0x84F5      # = media.frame's (a GPU frame's `tex_target`)
 PREVIEW_W = 320                        # the widest a MEDIA page preview is uploaded
+WRAPPERS = 32                          # GPU frames' wrappers kept, every channel's together
 
 # how a channel's picture fills a frame of another shape: `channels.FITS`,
 # by index (`media.<c>.fit`); a test holds the two equal
@@ -103,8 +110,6 @@ class _Slot:
 
     tex: moderngl.Texture | None = None      # owned: made here, written here
     key: tuple | None = None                 # the (frame, t) written into it
-    ext: moderngl.Texture | None = None      # a GPU frame's texture, wrapped
-    ext_key: tuple | None = None             # (its name, its size)
     flipped: bool = True                     # what `texture` last returned is an upload
     fbo: moderngl.Framebuffer | None = None  # on `tex`: a rectangle frame's blit lands here
 
@@ -115,14 +120,18 @@ class MediaTextures:
     frames copied on the GPU, for the tests and the SYSTEM page; `error`
     says why the last rectangle frame could not be copied ("" when it
     could). `previews` counts the MEDIA page's small uploads and
-    `preview_bytes_max` the largest of them."""
+    `preview_bytes_max` the largest of them; `wraps` the GPU frames'
+    wrappers made (`_wrappers`, at most `WRAPPERS`, the least recently
+    read let go first)."""
 
     def __init__(self, ctx: moderngl.Context):
         self.ctx = ctx
         self.uploads = 0
         self.blits = 0
+        self.wraps = 0
         self.error = ""
         self._slots: dict[str, _Slot] = {}
+        self._wrappers: OrderedDict[tuple, moderngl.Texture] = OrderedDict()   # (name, size, gen) → wrapper
         self._read_fbo: int | None = None     # GL's name: the blit's read framebuffer
         self.previews = 0
         self.preview_bytes_max = 0
@@ -139,18 +148,9 @@ class MediaTextures:
         if getattr(f, "texture", None) is not None:
             if getattr(f, "tex_target", TEX_2D) == TEX_RECT:
                 return self._blitted(slot, f)
-            want = (int(f.texture), tuple(f.tex_size))
-            if slot.ext is None or slot.ext_key != want:
-                if slot.ext is not None:
-                    slot.ext.release()            # the wrapper only: not the source's texture
-                slot.ext = self.ctx.external_texture(want[0], want[1], 4, 0, "f1")
-                # GL's default minifier wants mipmaps a wrapped texture lacks:
-                # without this it is incomplete and samples black
-                slot.ext.filter = (moderngl.LINEAR, moderngl.LINEAR)
-                slot.ext.repeat_x = slot.ext.repeat_y = False
-                slot.ext_key = want
             slot.flipped = False
-            return slot.ext
+            return self._wrapped(int(f.texture), (int(f.tex_size[0]), int(f.tex_size[1])),
+                                 int(getattr(f, "tex_gen", 0)))
         tex = self._owned(slot, tuple(f.size))
         key = (f.frame, f.t)
         if slot.key != key:
@@ -159,6 +159,31 @@ class MediaTextures:
             slot.key = key
             self.uploads += 1
         slot.flipped = True
+        return tex
+
+    def _wrapped(self, name: int, size: tuple[int, int], gen: int = 0) -> moderngl.Texture:
+        """The wrapper round GL texture `name` of `size`, generation `gen`:
+        the one made before for that triple (any channel's), else made now
+        with its sampler state set (filter, no repeat — set on the GL
+        object, so a texture made anew under a reused name needs its own,
+        which the source's bumped generation asks for). A stale wrapper
+        is never sampled unless a frame names its triple again, and goes
+        when the cache turns over."""
+        key = (name, size, gen)
+        wrappers = self.__dict__.setdefault("_wrappers", OrderedDict())
+        tex = wrappers.get(key)
+        if tex is not None:
+            wrappers.move_to_end(key)
+            return tex
+        tex = self.ctx.external_texture(name, size, 4, 0, "f1")
+        # GL's default minifier wants mipmaps a wrapped texture lacks:
+        # without this it is incomplete and samples black
+        tex.filter = (moderngl.LINEAR, moderngl.LINEAR)
+        tex.repeat_x = tex.repeat_y = False
+        wrappers[key] = tex
+        self.wraps = getattr(self, "wraps", 0) + 1
+        while len(wrappers) > WRAPPERS:
+            wrappers.popitem(last=False)[1].release()     # the wrapper only: not the source's texture
         return tex
 
     def _owned(self, slot: _Slot, size: tuple[int, int]) -> moderngl.Texture:
@@ -269,10 +294,13 @@ class MediaTextures:
         """Every texture made here, and every wrapper, released; the next
         `texture` uploads afresh."""
         for slot in [*self._slots.values(), *getattr(self, "_previews", {}).values()]:
-            for res in (slot.fbo, slot.tex, slot.ext):
+            for res in (slot.fbo, slot.tex):
                 if res is not None:
                     res.release()
+        for tex in getattr(self, "_wrappers", {}).values():
+            tex.release()
         self._slots, self._previews, self._shown = {}, {}, {}
+        self._wrappers = OrderedDict()
         if self._read_fbo is not None:
             try:
                 from OpenGL import GL
