@@ -6404,6 +6404,38 @@ header's count shortens to a number rather than run off the edge; in 4
 the side panel lists the Xbox pad's patched ports, no picture (the
 picture is the first pad's).
 
+## AQ. Node groups: ids and membership (post-show G0)
+
+Register row 563, 2026-11-02. Headless: `tests/test_graph_groups.py` (the
+corpus property, `test_groups_keep_their_invariants_over_the_corpus`) and
+`tests/test_graph_edit.py::test_a_group_made_taken_apart_and_remade_by_the_mouse`
+(a real mouse: box-select, right-click menu, drags out of the region, the
+Delete key).
+
+**422. Group, delete a member, ungroup, regroup: ids and membership
+behave.** (Mac, GRAPH, any preset with three effects in its run)
+1. Box-select two effects, right-click one, **group 2 nodes**. Note the
+   folded node's name ("group 1"). Open it (`+`).
+2. Box-select the third effect and one of the members, **group 2 nodes**:
+   the second group is "group 2"; the member moved over, said on the head.
+3. Right-click group 2's title, **ungroup**. Box-select those two again and
+   group them.
+4. In the open group 1, click its remaining member and press Delete (fn+⌫).
+5. ⌘Z.
+6. Drag the member out of its region, then drag the other out.
+7. Save the preset, load another, load it back.
+
+*Pass:* (2) the first group's node shrinks at once, not on the next click.
+(3) the regrouped pair is **group 3**, never "group 2" again. (4) the
+member is gone from the canvas and from the group on that same frame: the
+region is one node's, with no gap where the member was, and nothing
+refers to it. (5) the member is back on the canvas **and in its group**
+(the region holds it again). (6) the first drag says "… left group 1"; the
+second "…, the last of it: the group is gone"; the nodes stay where they
+were dropped, every cable still drawn. (7) the groups come back exactly as
+saved — no "is not in the preset — left out" note on the head; a group
+made now is numbered past the highest the file names.
+
 ## What no test covers
 
 Only a person can settle these:

@@ -21,6 +21,7 @@ tests/fixtures/groups/party-noita-grouped.json."""
 from __future__ import annotations
 
 import json
+import random
 from pathlib import Path
 
 import pytest
@@ -564,6 +565,195 @@ def test_the_last_member_leaving_takes_the_group():
     assert e.leave_group("group.1", "render:warp", (10, 20)) is None
     assert pre.groups == [] and pre.layout == {"render:warp": [10, 20]}
     assert e.said == "warp left one, the last of it: the group is gone"
+
+
+# ---------------------------------------------------------------- 2026-11-02 (G0, row 563): hygiene
+
+def test_a_groups_number_is_never_handed_out_twice(rig):
+    """Row 563: an ungrouped group's number is not the next group's. Before,
+    `land_group` took one past the highest *held*, so ungrouping the newest
+    group handed its id to the next one made — and the page's state keyed
+    by that id (its node, its selection) met a stranger. Now the preset
+    keeps the highest it has ever allotted (`Presets.group_high`), the
+    file's highest at the load counting the entries the load dropped, and
+    an undo that takes a group back does not give its number away."""
+    noita(rig)
+    one = ui_graph.group_nodes(rig.panel, NOITA_CORE[:2])
+    two = ui_graph.group_nodes(rig.panel, NOITA_CORE[2:])
+    assert (one["id"], two["id"]) == ("group.1", "group.2")
+    assert ui_graph.ungroup(rig.panel, "group.2") is None
+    three = ui_graph.group_nodes(rig.panel, NOITA_CORE[2:])
+    assert three["id"] == "group.3"                     # (was group.2 again)
+    assert [g["id"] for g in rig.lib.presets.groups] == ["group.1", "group.3"]
+    u = watch(rig)
+    try:
+        ui_graph.ungroup(rig.panel, "group.3")
+        assert u.undo() and [g["id"] for g in rig.lib.presets.groups] == ["group.1", "group.3"]
+        ui_graph.ungroup(rig.panel, "group.3")
+        four = ui_graph.group_nodes(rig.panel, NOITA_CORE[2:])
+        assert four["id"] == "group.4"                  # not 3: an undo gives nothing away
+    finally:
+        undo.install(None)
+    # a reload starts from the file's own numbers — every id it names, kept
+    # or dropped at the load (no counter is saved: the schema is as it was)
+    doc = rig.lib.presets.document("x")
+    assert "group_high" not in doc and doc["schema"] == preset.GROUPS_SCHEMA
+    doc["groups"].append({"id": "group.9", "name": "gone", "nodes": ["render:kaleido"]})
+    rig.lib.presets.load_doc(doc)
+    assert [g["id"] for g in rig.lib.presets.groups] == ["group.1", "group.4"]
+    assert rig.lib.presets.group_high == 9
+    e = ui_graph.group_edit(rig.panel)
+    assert e.land_group({"nodes": ["render:tripcolour"]})["id"] == "group.10"
+
+
+def test_a_member_deleted_leaves_its_group_in_the_same_operation(rig):
+    """Row 563: membership is eager. A render node deleted from the canvas,
+    a voice deleted, a modifier deleted — each is out of its group's list
+    when the call returns, before any draw or save (before, the list kept
+    the dead id until `attach_groups` or `live_groups` filtered it); the
+    last member going takes the group; and the undo of that delete puts
+    the member back in its group (the step carries the marks)."""
+    pre, table = rig.lib.presets, rig.router.table
+    noita(rig, [ENTRY])
+    m = table.add_modifier("scale", ["lane:1"], rig.reg)
+    pre.groups.append({"id": "group.2", "name": "mods", "nodes": [m.id], "open": False})
+    frame(rig.panel, "graph")
+    assert pre.groups[1]["nodes"] == [m.id]
+    u = watch(rig)
+    try:
+        # a render node, through the canvas's delete
+        assert ui_graph.render_edit(rig.panel).drop_node("render:fractals") is None
+        assert pre.groups[0]["nodes"] == NOITA_CORE[:2]         # at once: no frame drawn
+        assert u.undo() and pre.groups[0]["nodes"] == NOITA_CORE
+        assert "fractals" in patches.spec_names(pre.graph.spec)
+        u.tick(3.0)
+        u.tick(4.0)
+        # a modifier, through the page's delete: the last of its group, so
+        # the group goes with it — and its step carries the marks now, so
+        # the undo puts the modifier back in its group
+        assert ui_graph.remove_node(rig.panel, m.id) is None
+        assert [g["id"] for g in pre.groups] == ["group.1"] and table.modifier(m.id) is None
+        assert u.stack[-1].load
+        assert u.undo() and [g["nodes"] for g in pre.groups] == [NOITA_CORE, [m.id]]
+        assert table.modifier(m.id) is not None
+        u.tick(5.0)
+        u.tick(6.0)
+        # a modifier beside render nodes: the list shrinks, the group stays
+        ui_graph.group_nodes(rig.panel, ["render:warp", m.id])
+        assert pre.groups[-1]["nodes"] == ["render:warp", m.id]
+        assert ui_graph.remove_node(rig.panel, m.id) is None
+        assert pre.groups[-1]["nodes"] == ["render:warp"]
+        # every member deleted: the group is gone, and nothing else is
+        assert ui_graph.render_edit(rig.panel).drop_node("render:warp") is None
+        assert [g["id"] for g in pre.groups] == ["group.1"]
+        assert pre.groups[0]["nodes"] == ["render:doublevision", "render:fractals"]
+    finally:
+        undo.install(None)
+
+
+def _group_invariants(pre, seen: set[str]) -> None:
+    """What must hold of a preset's groups at every step: no dangling member,
+    no id twice (a group's, a member's), every wire on a node the graph
+    holds, and every group id one of this life's (`seen`)."""
+    held = pre._held_canvas()
+    ids = [g["id"] for g in pre.groups]
+    assert len(set(ids)) == len(ids), ids
+    assert set(ids) <= seen, (ids, seen)
+    members = [cid for g in pre.groups for cid in g["nodes"]]
+    assert len(set(members)) == len(members), members
+    assert set(members) <= held, set(members) - held
+    assert all(g["nodes"] for g in pre.groups)
+    spec = pre.graph.spec
+    names = patches.spec_names(spec)
+    for w in spec.all_wires():
+        assert w.node in names and graphview.kind_of(w.node) is not None, w
+        assert (G.pin_node(w.src) or w.src) in names, w
+    # a save writes exactly the live lists: nothing left for it to drop
+    assert pre.live_groups() == [preset.group_entry(g) for g in pre.groups]
+
+
+def _stripped(doc: dict) -> dict:
+    return {k: v for k, v in doc.items() if k not in ("groups", "schema")}
+
+
+def _round_trip(pre, tmp_path, k: int) -> dict:
+    """The preset saved and loaded by a fresh app: its groups land whole
+    (every member there) and its document is the same again."""
+    doc = pre.document("x")
+    fresh = headless.make_app(tmp_path / f"rt{k}")
+    fresh.presets.load_doc(json.loads(preset.dumps(doc)))
+    assert [n for n in fresh.presets.notes if n.startswith("group")] == []
+    assert fresh.presets.groups == doc.get("groups", [])
+    assert fresh.presets.document("x") == doc
+    return doc
+
+
+@pytest.mark.parametrize("path", CORPUS_PRESETS, ids=lambda p: p.stem)
+def test_groups_keep_their_invariants_over_the_corpus(tmp_path, path):
+    """Row 563, the property: on every corpus preset, random eligible
+    subsets grouped, ungrouped, regrouped and members deleted (a render
+    node, a voice, a modifier — whatever the pick lands on), headless;
+    after every edit no member dangles, no id is twice, every wire is on a
+    live node, no group takes a number a group of this preset's life had,
+    and the preset round-trips through save and load with its groups
+    whole — and, while nothing was deleted, with everything else unchanged."""
+    app = headless.make_app(seed(tmp_path))
+    app.lib.load("presets", path.stem)
+    pre, table = app.presets, app.router.table
+    assert pre.groups == []
+    before = _stripped(pre.document("x"))
+    e = graphview.Edit(table, app.reg, app.router, graph=pre.graph)
+    e.presets = pre
+    rng = random.Random(path.stem)
+    seen: set[str] = set()
+
+    def group_some() -> dict | None:
+        held = sorted(pre._held_canvas())
+        entry, _said = e.group(rng.sample(held, k=min(len(held), rng.randint(1, 6))))
+        if entry is not None:
+            assert entry["id"] not in seen, (entry["id"], seen)
+            seen.add(entry["id"])
+        _group_invariants(pre, seen)
+        return entry
+
+    # 1. group, ungroup, regroup: the preset is as it was, but for the groups
+    for _ in range(12):
+        group_some()
+        if pre.groups and rng.random() < 0.5:
+            assert e.ungroup(rng.choice(pre.groups)["id"]) is None
+            _group_invariants(pre, seen)
+    for g in list(pre.groups):
+        assert e.ungroup(g["id"]) is None
+    assert pre.groups == [] and _stripped(pre.document("x")) == before
+    group_some()
+    group_some()
+    _round_trip(pre, tmp_path, 1)
+    assert _stripped(pre.document("x")) == before
+    # 2. members deleted: out of their lists in the same call, every time
+    deleted: list[str] = []
+    for _ in range(12):
+        if not pre.groups or rng.random() < 0.3:
+            group_some()
+            continue
+        g = rng.choice(pre.groups)
+        cid = rng.choice(g["nodes"])
+        res = e.remove_node(cid)               # None, or a modifier's notes: done
+        if graphview.is_macro(cid) and not isinstance(res, (str, graphview.Ask)):
+            # a macro "deleted" loses its label and subscribers; the knob is
+            # the rig's and stays, so the node is still held — and a member
+            assert cid in pre._held_canvas() and cid in g["nodes"]
+        elif not isinstance(res, (str, graphview.Ask)):   # (the camera: refused in words)
+            deleted.append(cid)
+            assert all(cid not in x["nodes"] for x in pre.groups), cid
+            if cid.startswith("render:"):
+                assert cid[7:] not in patches.spec_names(pre.graph.spec)
+        else:
+            assert cid in {c for x in pre.groups for c in x["nodes"]}
+        _group_invariants(pre, seen)
+    doc = _round_trip(pre, tmp_path, 2)
+    assert not deleted or doc != before
+    # a save never resurrects a member: the lists were right before it
+    assert not {cid for g in doc.get("groups", []) for cid in g["nodes"]} & set(deleted)
 
 
 # ---------------------------------------------------------------- the drawing

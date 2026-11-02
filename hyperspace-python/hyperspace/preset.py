@@ -279,6 +279,10 @@ class GraphSection:
         # keeps the held program's nodes too; None: a landing is exactly
         # its graph
         self.hold = None
+        # 2026-11-02 (G0, row 563): told after every landing — `Presets`
+        # points it at `settle_groups`, so a group's member list loses a
+        # deleted node in the same operation, never on the next draw or save
+        self.on_land: Callable[[], None] | None = None
         if renderer is not None:
             self.attach(renderer)
 
@@ -360,6 +364,9 @@ class GraphSection:
         self.spec, self.doc = spec, copy.deepcopy(doc)
         self.free = copy.deepcopy(free)
         self._push()
+        hook = getattr(self, "on_land", None)   # (a section from before the hook: none)
+        if hook is not None:
+            hook()
 
     def names(self, spec: GraphSpec | None = None) -> dict[str, Any]:
         """The node instances `spec` (the landed one by default) declares,
@@ -839,6 +846,12 @@ class Presets:
         self.layout: dict[str, list[float]] = {}
         # plan 40 T2: the GRAPH page's groups (`GROUPS_KEY` entries)
         self.groups: list[dict] = []
+        # 2026-11-02 (G0, row 563): the highest group number this preset has
+        # allotted since its load — the file's highest at the load, counting
+        # entries the load dropped — so a group's id is never one a group
+        # of this preset's life had (`graphview.Edit.land_group` reads and
+        # bumps it; not saved: a reload starts again from the file's own)
+        self.group_high = 0
         # R17 (final review): the live preset came from `new` and has never
         # been saved — save names it (whatever a file of its name holds);
         # a load or a save clears it (`_landed`)
@@ -846,6 +859,7 @@ class Presets:
         # plan 26 A4: the loaded preset's graph section (its instances'
         # params, the renderer's wiring once one is attached)
         self.graph = GraphSection(reg, lib=lib)
+        self.graph.on_land = self.settle_groups
         lib.kind(GROUP, SCHEMA.rpartition("/")[0],
                  load=lambda doc, path: self.load_doc(doc, path),
                  document=lambda name: self.document(name),
@@ -1222,9 +1236,13 @@ class Presets:
         #     plan 40 T2 (D4): and its groups — a member the graph does not
         #     hold left out, said, a group left empty dropped; no key is no
         #     group (`graphmigrate.groups_of`)
-        self.groups, group_notes = read_groups(graphmigrate.groups_of(doc), self._held_canvas(),
-                                               self._groupable)
+        raw_groups = graphmigrate.groups_of(doc)
+        self.groups, group_notes = read_groups(raw_groups, self._held_canvas(), self._groupable)
         notes += group_notes
+        #     and the floor under the next group's number: every id the file
+        #     named, kept or dropped (row 563: an id is never handed out twice)
+        self.group_high = max((group_number(g.get("id")) for g in raw_groups
+                               if isinstance(g, dict)), default=0)
         # 7. the notes, for the panel
         self.notes = notes
         self.migrated = migrated            # plan 36 T3: the one-way migration's word
@@ -1358,6 +1376,7 @@ class Presets:
         gs = self.__dict__.get("graph")
         if gs is None:
             gs = self.graph = GraphSection(self.reg, lib=self.lib)
+            gs.on_land = self.settle_groups
         return gs
 
     def parts(self) -> tuple:
@@ -1399,10 +1418,38 @@ class Presets:
                                           self.router.table, ids)
         return set(members.canvas()), refused
 
+    def settle_groups(self) -> list[str]:
+        """2026-11-02 (G0, row 563): membership updated at once. Every
+        member the preset no longer holds (`_held_canvas`: a render node
+        the section just landed without, a modifier or a voice just removed)
+        is taken out of its group's list, in place, and a group left with
+        none is taken out of the list — in the same operation that removed
+        the node, so the next draw and the next save find the lists already
+        right. Returns the canvas ids taken out (none: nothing changed).
+        Called by the graph section after every landing (`on_land`) and by
+        `graphview.Edit` after a modifier's or a voice's removal."""
+        groups = self.__dict__.get("groups")
+        if not groups:
+            return []
+        held = self._held_canvas()
+        gone: list[str] = []
+        for g in list(groups):
+            nodes = g.get("nodes") or []
+            left = [cid for cid in nodes if cid in held]
+            if len(left) == len(nodes):
+                continue
+            gone += [cid for cid in nodes if cid not in held]
+            if left:
+                g["nodes"] = left
+            else:
+                groups.remove(g)
+        return gone
+
     def live_groups(self) -> list[dict]:
         """Plan 40 T2: the groups as a save writes them — each member the
-        preset no longer holds (a node deleted since) left out, a group left
-        with none left out — in the file's key order."""
+        preset no longer holds left out, a group left with none left out —
+        in the file's key order. Since row 563 the lists are kept so as the
+        nodes go (`settle_groups`); this stays the save's own guard."""
         groups = getattr(self, "groups", None) or []
         if not groups:
             return []
