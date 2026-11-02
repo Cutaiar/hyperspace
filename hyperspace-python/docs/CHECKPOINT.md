@@ -172,12 +172,30 @@ real pad — run on Dillon's Edge over USB and Bluetooth on 2026-11-02, every
 question answered (the plan's "What the controller said"). `uv sync` adds hidapi; **restart** rather than hot reload (new
 fields on `Pad`, `PadDevice` and `gamepad.Claims`).
 
+**Plan 46** (2026-11-02, on `worktree-joycon`): the Joy-Con over
+Bluetooth on plan 42's road — one Joy-Con per entry, held like a Wii
+Remote, first of all its six-axis sensor
+([`plans/46-joycon.md`](plans/46-joycon.md)): `pads/nintendo.py` beside
+the Sony codec, models `joycon-l` / `joycon-r` / `procon`, a model saying
+which controls it has (one stick, no D-pad, two outputs), the stick's
+drift calibrated from the flash and its rest, the probe's own Joy-Con
+checks. D1–D6 are recommendations pending the owner (register rows
+565–570); hand checks 424–429 (group AQ) start with
+`tools/hid_probe.py --controller joycon-l --check` — the connect
+sequence, the buttons and the outputs met a fake only, because the
+Joy-Con slept before the build's reader could run. **Restart** rather
+than hot reload (the road's module list changed).
+
 ## What is left
 
+- **Plan 46, hand check 425 first** (the owner's Joy-Con, 2026-11-02):
+  the probe's run on the real Joy-Con, its findings committed under
+  `plans/assets/46-joycon/` and a tape slice as a test; what it says
+  corrects `nintendo.AXIS_MAP`, the button bits and the recentre bounds.
 - **Plan 42, to revisit** (Dillon, 2026-11-02): the back buttons' forward
   flip, renaming "pad" (proposal: handheld), a role picker in the app —
   each with where it starts in [`plans/42-controllers.md`](plans/42-controllers.md) "To
-  revisit". Joy-Cons are a separate effort.
+  revisit". Joy-Cons: plan 46.
 - **Plan 37: the owner's list of face patterns** (register row 417, D1).
   The sheets are in `plans/assets/37-faces/`. With the list, the owner
   also says whether to renumber `view.pattern` or keep tombstones, and the

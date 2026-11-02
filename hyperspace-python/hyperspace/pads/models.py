@@ -11,11 +11,14 @@ pad lacks at indices well past anything a GLFW pad reports
 (`TOUCH`…`RFN`, from 32), so no raw index ever lands on one.
 
 **A `Model` per kind of pad**: its USB ids, its family, the road that
-reads it (``glfw``, ``hid``, ``usb``), what it has (`caps`), and what its
+reads it (``glfw``, ``hid``, ``usb``), what it has (`caps`), what its
 controls are called on its own face (`glyphs`: ✕ for ``pad:A`` on a
 DualSense) — the on-screen pad draws that, the rows keep the canonical
-name. A new controller is one entry in `MODELS` (and a driver if no road
-reads it yet).
+name — and, for a pad that is less than an Xbox face, which canonical
+controls it has at all (`controls`: one Joy-Con has one stick, four
+face buttons and no D-pad; None is the whole face). A new controller is
+one entry in `MODELS` (and a codec module in `pads/` if no road reads it
+yet: `sony` for the DualSense, `nintendo` for the Joy-Con).
 
 **Which pad is which role** (`matches`): an entry's ``controller =``
 names a model (``"edge"``), a family (``"sony"``, ``"xbox"``), a USB id
@@ -47,6 +50,9 @@ OUTPUT_CAPS = frozenset({"light", "rumble", "triggers", "players", "mic"})
 
 SONY_VID = 0x054C
 MICROSOFT_VID = 0x045E
+NINTENDO_VID = 0x057E
+# the families the hid road (pads/hid.py) reads, each through its own codec
+HID_FAMILIES = ("sony", "nintendo")
 
 
 @dataclass(frozen=True)
@@ -54,7 +60,8 @@ class Model:
     """One kind of controller. `ids` are the (vendor, product) pairs it
     answers to; `road` the driver that reads it by default; `caps` what
     it has past the Xbox face; `glyphs` canonical control → what its own
-    face calls it (anything absent keeps its canonical glyph)."""
+    face calls it (anything absent keeps its canonical glyph); `controls`
+    the canonical controls it has at all, None for the whole Xbox face."""
 
     id: str
     name: str
@@ -63,9 +70,16 @@ class Model:
     ids: tuple[tuple[int, int], ...] = ()
     caps: frozenset[str] = frozenset()
     glyphs: dict[str, str] = field(default_factory=dict)
+    controls: frozenset[str] | None = None
 
     def has(self, cap: str) -> bool:
         return cap in self.caps
+
+    def has_control(self, name: str) -> bool:
+        """Does this pad have the canonical control `name` (``A``, ``LX``,
+        ``UP`` …)? Every pad has the whole Xbox face unless its `controls`
+        say less (a single Joy-Con: one stick, no D-pad)."""
+        return self.controls is None or name in self.controls
 
     @property
     def outputs(self) -> frozenset[str]:
@@ -80,6 +94,30 @@ _SONY_GLYPHS = {
 }
 _SONY_OUT = frozenset({"touch", "motion", "light", "rumble", "triggers", "players", "mic"})
 
+# A single Joy-Con (plan 43) is held like a Wii Remote — face up, the stick
+# under the thumb, pointing where the hand points — and is first of all
+# its six-axis sensor. What it has reads by position: its one stick is the
+# left stick (``axis:LX`` / ``LY``, its click ``pad:LSTICK``); the (L)'s
+# four arrow buttons are the face by where they sit (↓ ``pad:A``, →
+# ``B``, ← ``X``, ↑ ``Y``); its L and ZL ``pad:LB`` and ``axis:LT``, the
+# (R)'s R and ZR ``pad:RB`` and ``axis:RT``; SL and SR on the rail are the
+# back pair ``pad:LP`` / ``pad:RP`` (as the Edge's paddles); − ``VIEW``,
+# + ``MENU``, capture ``SHARE``, HOME ``GUIDE``. No D-pad, no right stick,
+# no touchpad. Its outputs: rumble (two bands) and the four player lights
+# — no light bar, no trigger resistance, no mic light.
+_JOYCON_CAPS = frozenset({"motion", "back", "rumble", "players"})
+_JOYCON_COMMON = frozenset({"LX", "LY", "LSTICK", "A", "B", "X", "Y", "LP", "RP"})
+_JOYCON_L_GLYPHS = {
+    "A": "↓", "B": "→", "X": "←", "Y": "↑", "LB": "L", "LT": "ZL", "LP": "SL", "RP": "SR",
+    "VIEW": "−", "SHARE": "◉", "LSTICK": "L3",
+}
+_JOYCON_R_GLYPHS = {
+    "RB": "R", "RT": "ZR", "LP": "SL", "RP": "SR", "MENU": "+", "GUIDE": "HOME",
+    "LSTICK": "R3",
+}
+_PRO_GLYPHS = {"LB": "L", "RB": "R", "LT": "ZL", "RT": "ZR", "VIEW": "−", "MENU": "+",
+               "GUIDE": "HOME", "SHARE": "◉", "LSTICK": "L3", "RSTICK": "R3"}
+
 MODELS: dict[str, Model] = {m.id: m for m in (
     Model("xbox", "Xbox pad", "xbox", "glfw", ((MICROSOFT_VID, 0),)),
     Model("x360", "wired Xbox 360 pad", "xbox", "usb"),
@@ -87,10 +125,26 @@ MODELS: dict[str, Model] = {m.id: m for m in (
           _SONY_OUT, {**_SONY_GLYPHS}),
     Model("edge", "DualSense Edge", "sony", "hid", ((SONY_VID, 0x0DF2),),
           _SONY_OUT | {"back", "fn"}, {**_SONY_GLYPHS}),
+    Model("joycon-l", "Joy-Con (L)", "nintendo", "hid", ((NINTENDO_VID, 0x2006),),
+          _JOYCON_CAPS, {**_JOYCON_L_GLYPHS},
+          _JOYCON_COMMON | {"LB", "LT", "VIEW", "SHARE"}),
+    Model("joycon-r", "Joy-Con (R)", "nintendo", "hid", ((NINTENDO_VID, 0x2007),),
+          _JOYCON_CAPS, {**_JOYCON_R_GLYPHS},
+          _JOYCON_COMMON | {"RB", "RT", "MENU", "GUIDE"}),
+    # the Pro Controller speaks the Joy-Con's protocol with the whole face
+    # (both sticks, a D-pad): the codec reads it; no hand has checked one
+    Model("procon", "Pro Controller", "nintendo", "hid", ((NINTENDO_VID, 0x2009),),
+          frozenset({"motion", "rumble", "players"}), {**_PRO_GLYPHS}),
     # any other GLFW pad: read with the Xbox map, as every pad was before plan 42
     Model("generic", "gamepad", "generic", "glfw"),
 )}
 SONY_IDS = {pid for m in MODELS.values() if m.family == "sony" for _, pid in m.ids}
+# vendor → the product ids the hid road opens: every model whose road is hid
+HID_IDS: dict[int, set[int]] = {}
+for _m in MODELS.values():
+    if _m.road == "hid":
+        for _vid, _pid in _m.ids:
+            HID_IDS.setdefault(_vid, set()).add(_pid)
 
 SPECS_WORDS = ("any",) + tuple(MODELS) + tuple(sorted({m.family for m in MODELS.values()}))
 
@@ -151,14 +205,21 @@ def matches(spec: str | None, model: Model, vid: int | None = None,
     return False
 
 
-def may_be_sony(spec: str | None) -> bool:
-    """Could an entry with ``controller = spec`` take a Sony pad? (Else
-    the hid road need not open — and seize — any.)"""
+def may_be_hid(spec: str | None) -> bool:
+    """Could an entry with ``controller = spec`` take a pad the hid road
+    reads (a Sony pad, a Joy-Con)? Else the road need not open — and
+    seize — any."""
     s = parse_spec(spec) if spec else "any"
     if s is None:
         return True
-    return s in ("any", "sony") or s.startswith(f"{SONY_VID:04x}:") or (
-        s in MODELS and MODELS[s].family == "sony")
+    if s == "any" or s in HID_FAMILIES:
+        return True
+    if s in MODELS:
+        return MODELS[s].road == "hid"
+    return any(s.startswith(f"{vid:04x}:") for vid in HID_IDS)
+
+
+may_be_sony = may_be_hid       # plan 42's name, for a module loaded before plan 43
 
 
 def glfw_ids(guid: str | None) -> tuple[int | None, int | None]:

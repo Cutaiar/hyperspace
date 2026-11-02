@@ -1,26 +1,36 @@
-"""Watch, record and check a DualSense or DualSense Edge over hidapi (plan 42).
+"""Watch, record and check a DualSense, a DualSense Edge or a Joy-Con over
+hidapi (plans 42 and 43).
 
-    uv run python tools/hid_probe.py --list            # every Sony pad hidapi sees
+    uv run python tools/hid_probe.py --list            # every pad hidapi sees
     uv run python tools/hid_probe.py                   # live: buttons, sticks, touch, motion
     uv run python tools/hid_probe.py --record edge.jsonl   # …and keep a tape of it
     uv run python tools/hid_probe.py --check           # the guided hardware checks
     uv run python tools/hid_probe.py --check --record edge-check.jsonl --out findings.json
+    uv run python tools/hid_probe.py --controller joycon-l --check   # a Joy-Con's checks
 
 The pad is read exactly as the app reads it (`pads.hid.HidPad`, decoded by
-`pads.sony`, the lanes by `pads.gesture`), over USB or Bluetooth — pair it
-first: hold Create and PS until the light bar flashes, then System
-Settings ▸ Bluetooth. Close anything else holding the pad (the app, the
-browser lab's tab): hidapi opens it exclusively.
+`pads.sony` or `pads.nintendo`, the lanes by `pads.gesture`), over USB or
+Bluetooth — pair it first: a DualSense by holding Create and PS until the
+light bar flashes, a Joy-Con by holding the small sync button on its rail
+until its lights run, then System Settings ▸ Bluetooth (a Joy-Con that
+went to sleep comes back when any of its buttons is pressed). Close
+anything else holding the pad (the app, the browser lab's tab): hidapi
+opens it exclusively.
 
-``--check`` walks through what only a controller can answer
-(docs/plans/assets/42-controllers/sony-hid.md §9 and plan 42's list):
+``--check`` walks through what only a controller can answer. For a Sony
+pad (docs/plans/assets/42-controllers/sony-hid.md §9 and plan 42's list):
 the link, the back buttons with and without a profile, whether Fn hides
 the face, the sensors' axes and signs, the touchpad's reach, whether the
 light bar, rumble, a trigger and the player lights obey, and how still
-the sticks rest. Each step says what to do, waits for Enter, and records
+the sticks rest. For a Joy-Con (plan 43): the link and what the flash
+said, each button landing where the vocabulary says, the stick's reach
+and its rest (the drift, before and after `recentre`), the sensors' axes
+and signs in the Wii-Remote hold, and whether rumble and the player
+lights obey. Each step says what to do, waits for Enter, and records
 what the pad sent; the answers go to ``--out`` (default
-``edge-findings.json``) and, with ``--record``, into the tape as notes.
-Hand both back: they are what the next build is corrected against.
+``edge-findings.json`` / ``joycon-findings.json``) and, with
+``--record``, into the tape as notes. Hand both back: they are what the
+next build is corrected against.
 
 ``--shared`` asks hidapi not to open the pad exclusively (a ctypes call
 into the wheel; untested on a Mac — spec §3), so GLFW can see it too.
@@ -34,10 +44,11 @@ import sys
 import time
 from pathlib import Path
 
-from hyperspace.pads import gesture, hid, models, sony
+from hyperspace.pads import gesture, hid, models, nintendo, sony
 
 NAMES = {i: n for n, i in models.CANON.items()}
 HATS = {1: "↑", 2: "→", 4: "↓", 8: "←"}
+AXES = ("LX", "LY", "RX", "RY", "LT", "RT")
 
 
 def shared() -> str:
@@ -54,11 +65,12 @@ def shared() -> str:
 
 
 def pick(controller: str) -> dict:
-    found = [d for d in hid.sony_devices()
+    found = [d for d in hid.pad_devices()
              if models.matches(controller, models.by_ids(d["vendor_id"], d["product_id"]),
                                d["vendor_id"], d["product_id"])]
     if not found:
-        raise SystemExit(f"no Sony pad for controller = {controller!r} — plugged in or paired?")
+        raise SystemExit(f"no pad for controller = {controller!r} — plugged in or paired? "
+                         "(a sleeping Joy-Con wakes when a button is pressed)")
     return found[0]
 
 
@@ -90,7 +102,9 @@ class Live:
             w, h = sony.TOUCH_W - 1, sony.TOUCH_H - 1
             self.touchpad.step([(t.down, t.id, t.x / w, t.y / h) for t in f.touches], dt)
             cal = self.reader.calibration
-            self.motion.step(cal.gyro_dps(f.gyro), cal.accel_g(f.accel), dt)
+            amap = getattr(self.reader, "axis_map", None) or gesture.AxisMap()   # a Joy-Con's own
+            self.motion.step(amap.pick(cal.gyro_dps(f.gyro), amap.gyro),
+                             amap.pick(cal.accel_g(f.accel), amap.accel), dt)
         return f
 
     def wait(self, seconds: float, each=None) -> list[sony.Frame]:
@@ -170,6 +184,9 @@ def check(live: Live, rec, out: Path) -> None:
     r = live.reader
     found: dict = {"model": r.model.id, "path": repr(r.path), "info": {
         k: (v if isinstance(v, (int, str)) else repr(v)) for k, v in r.info.items()}}
+    if getattr(r, "nintendo", False):
+        check_joycon(live, rec, out, found)
+        return
 
     def note(step: str) -> None:
         if rec is not None:
@@ -273,14 +290,169 @@ def check(live: Live, rec, out: Path) -> None:
     print(f"\nfindings written to {out}")
 
 
+# which button of a Joy-Con lands where (plan 43): what to press, the
+# canonical button (or axis) it should read as
+JOYCON_PRESSES = {
+    "l": (("the ↓ arrow", "A"), ("the ↑ arrow", "Y"), ("the → arrow", "B"), ("the ← arrow", "X"),
+          ("SL (on the rail)", "LP"), ("SR (on the rail)", "RP"), ("L (the shoulder)", "LB"),
+          ("ZL (the trigger)", "axis:LT"), ("− (minus)", "VIEW"), ("the capture button", "SHARE"),
+          ("the stick in (click)", "LSTICK")),
+    "r": (("A", "A"), ("B", "B"), ("X", "X"), ("Y", "Y"),
+          ("SL (on the rail)", "LP"), ("SR (on the rail)", "RP"), ("R (the shoulder)", "RB"),
+          ("ZR (the trigger)", "axis:RT"), ("+ (plus)", "MENU"), ("HOME", "GUIDE"),
+          ("the stick in (click)", "LSTICK")),
+    "pro": (("A", "A"), ("B", "B"), ("X", "X"), ("Y", "Y"), ("L", "LB"), ("R", "RB"),
+            ("ZL", "axis:LT"), ("ZR", "axis:RT"), ("−", "VIEW"), ("+", "MENU"),
+            ("HOME", "GUIDE"), ("capture", "SHARE"), ("the left stick in", "LSTICK"),
+            ("the right stick in", "RSTICK"), ("D-pad up", "hat:UP")),
+}
+
+
+def check_joycon(live: Live, rec, out: Path, found: dict) -> None:
+    """The Joy-Con's guided checks (plan 43): the link and the flash, the
+    buttons by position, the stick's reach and rest, the sensors' axes in
+    the Wii-Remote hold, rumble and the player lights."""
+    r = live.reader
+    kind = r.kind
+
+    def note(step: str) -> None:
+        if rec is not None:
+            rec.note(step)
+
+    note("settle")
+    frames = live.wait(1.5)
+    raw = r._raw or b""
+    cal = r.calibration
+    stick = cal.right if kind == "r" else cal.left
+    found["link"] = {"transport": r.transport, "kinds": sorted({f.kind for f in frames}),
+                     "report_id": raw[:1].hex(), "report_len": len(raw),
+                     "rate_hz": round(live.rate), "note": r.note,
+                     "battery": frames[-1].battery if frames else -1}
+    found["flash"] = {f"0x{a:04x}": v.hex() for a, v in r.flash.items()}
+    found["calibration"] = {"nominal": cal.nominal, "user_stick": cal.user_stick,
+                            "recentred": r.recentred, "stick": vars(stick),
+                            "gyro": cal.gyro, "accel": cal.accel}
+    print(f"\nlink: {found['link']['transport']} {found['link']['kinds']} "
+          f"{found['link']['rate_hz']} Hz, battery {found['link']['battery'] * 10}%; flash records "
+          f"{len(r.flash)}, calibration {'nominal' if cal.nominal else 'read'}"
+          f"{' (user stick)' if cal.user_stick else ''}, recentred {r.recentred}")
+
+    def read_held(fr) -> list[str]:
+        """What the vocabulary says is held: the buttons, and a trigger axis at full."""
+        names = held(fr)
+        for k, ax in ((4, "axis:LT"), (5, "axis:RT")):
+            if fr and sum(1 for f in fr if f.axes[k] > 0.5) > len(fr) / 2:
+                names.append(ax)
+        return names
+
+    def hold(step: str, key: str, text: str, want: str | None) -> None:
+        ask(text)
+        note(step)
+        fr = live.wait(1.0)
+        got = read_held(fr)
+        found[key] = {"down": got, "want": want, "ok": want is None or got == [want],
+                      "raw_buttons": [f.raw_buttons.hex() for f in fr[-1:]],
+                      "hat": fr[-1].hat if fr else 0}
+        mark = "" if want is None else ("  ✓" if found[key]["ok"] else f"  ✗ wanted [{want}]")
+        print(f"  → {got}  raw bytes 3–5 {found[key]['raw_buttons']}{mark}")
+
+    hold("still", "nothing_held", "Put the Joy-Con down, touch nothing.", None)
+    for k, (what, want) in enumerate(JOYCON_PRESSES[kind]):
+        if want.startswith("hat:"):
+            ask(f"Hold {what}.")
+            note(want)
+            fr = live.wait(1.0)
+            found[f"press_{k}"] = {"want": want, "hat": fr[-1].hat if fr else 0,
+                                   "ok": bool(fr) and fr[-1].hat == 1}
+            print(f"  → hat {found[f'press_{k}']['hat']}")
+            continue
+        hold(want, f"press_{k}", f"Hold {what}.", want)
+
+    # the stick: its reach each way, then its rest
+    reach: dict = {}
+    for step, text, k, sign in (("stick right", "Push the stick full RIGHT and hold it.", 0, 1),
+                                ("stick left", "Push the stick full LEFT and hold it.", 0, -1),
+                                ("stick up", "Push the stick full UP (away from you) and hold it.",
+                                 1, -1),
+                                ("stick down", "Push the stick full DOWN (toward you) and hold it.",
+                                 1, 1)):
+        ask(text)
+        note(step)
+        fr = live.wait(1.0)
+        vals = [f.axes[k] * sign for f in fr]
+        reach[step] = round(max(vals), 3) if vals else None
+        print(f"  → {reach[step]} of 1.0")
+    found["stick_reach"] = reach
+    ask("Hands off the stick; after Enter hold the Joy-Con still for 3 s.")
+    note("rest")
+    rest = live.wait(3.0)
+    found["stick_rest"] = {name: [round(min(f.axes[k] for f in rest), 3),
+                                  round(max(f.axes[k] for f in rest), 3)]
+                           for k, name in enumerate(AXES[:2])} if rest else {}
+    print(f"  → at rest {found['stick_rest']} (deadzone ±0.18; recentred: {r.recentred})")
+
+    # the sensors, held like a Wii Remote: flat, right side down, far end up, a turn
+    ask("Hold the Joy-Con flat, face up, the stick end pointing AWAY from you, as a remote.")
+    note("flat")
+    flat = mean(f.accel for f in live.wait(1.0))
+    ask("Tip its RIGHT side down about 45° and hold it.")
+    note("right down")
+    right = mean(f.accel for f in live.wait(1.0))
+    ask("Level again, then lift the FAR end (the shoulder buttons) about 45° and hold it.")
+    note("far up")
+    far = mean(f.accel for f in live.wait(1.0))
+    ask("Level again and, after Enter, turn it to the RIGHT (clockwise from above) for 2 s.")
+    note("turn right")
+    turn = mean(f.gyro for f in live.wait(2.0))
+    up = axis_of(flat)
+    x = axis_of([a - b for a, b in zip(right, flat, strict=True)])
+    z = axis_of([a - b for a, b in zip(far, flat, strict=True)])
+    yaw = axis_of(turn)
+    proposed = ((x[0], -x[1]), (up[0], up[1]), (z[0], -z[1]))
+    want = tuple((i, int(s)) for i, s in nintendo.AXIS_MAP.accel)
+    found["sensors"] = {"flat_accel": flat, "right_down_accel": right, "far_up_accel": far,
+                        "turn_right_gyro": turn,
+                        "proposed_axis_map": {"accel": [list(p) for p in proposed],
+                                              "gyro_yaw": [yaw[0], -yaw[1]]},
+                        "built_axis_map": {"accel": [list(p) for p in want],
+                                           "gyro_yaw": [nintendo.AXIS_MAP.gyro[1][0],
+                                                        int(nintendo.AXIS_MAP.gyro[1][1])]},
+                        "default_holds": proposed == want and (
+                            yaw[0], -yaw[1]) == (nintendo.AXIS_MAP.gyro[1][0],
+                                                 int(nintendo.AXIS_MAP.gyro[1][1]))}
+    print(f"  → accel: x raw {x}, up raw {up}, z raw {z}; yaw raw {yaw}; "
+          f"the built map holds: {found['sensors']['default_holds']}")
+    lanes = dict(zip(gesture.MOTION_LANES, live.motion.lanes(), strict=True))
+    print(f"  → lanes now: roll {lanes['roll']:.2f} pitch {lanes['pitch']:.2f} yaw {lanes['yaw']:.2f}")
+
+    # outputs: each asks a person
+    def show(key: str, effects: sony.Effects, question: str) -> None:
+        r.send(effects)
+        live.wait(0.8)
+        found[key] = {"seen": yes(question), "note": r.note}
+    show("players_3", sony.Effects(players=sony.player_bits(3)),
+         "Are three of the four player lights on?")
+    show("rumble_low", sony.Effects(players=sony.player_bits(3), rumble_low=0.8),
+         "Is it rumbling (the low, heavy band)?")
+    show("rumble_high", sony.Effects(players=sony.player_bits(3), rumble_high=0.6),
+         "A lighter, higher buzz now?")
+    r.send(sony.Effects(players=sony.player_bits(1)))
+    live.wait(0.5)
+    found["rumble_stops"] = {"seen": yes("Has the rumble stopped, with one light on?")}
+    out.write_text(json.dumps(found, indent=1, default=lambda v: list(v) if isinstance(v, tuple)
+                              else repr(v)) + "\n")
+    print(f"\nfindings written to {out}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
-    ap.add_argument("--list", action="store_true", help="list the Sony pads hidapi sees")
+    ap.add_argument("--list", action="store_true", help="list the pads hidapi sees")
     ap.add_argument("--controller", default="any", help='which pad: "edge", "dualsense", any…')
     ap.add_argument("--record", type=Path, help="keep a tape of every report (.jsonl)")
     ap.add_argument("--check", action="store_true", help="the guided hardware checks")
-    ap.add_argument("--out", type=Path, default=Path("edge-findings.json"),
-                    help="where --check writes its answers")
+    ap.add_argument("--out", type=Path, default=None,
+                    help="where --check writes its answers (edge-findings.json, or "
+                         "joycon-findings.json for a Joy-Con)")
     ap.add_argument("--shared", action="store_true", help="open the pad non-exclusively")
     args = ap.parse_args()
     if not hid.available():
@@ -288,7 +460,7 @@ def main() -> None:
     if args.shared:
         print(shared())
     if args.list:
-        for d in hid.sony_devices():
+        for d in hid.pad_devices():
             print(describe(d))
         return
     info = pick(args.controller)
@@ -299,9 +471,11 @@ def main() -> None:
         bus = {1: "usb", 2: "bluetooth"}.get(info.get("bus_type"), "")
         rec = hid.Recorder(args.record, model.id, bus)
     live = Live(info, recorder=rec)
+    out = args.out or Path("joycon-findings.json" if model.family == "nintendo"
+                           else "edge-findings.json")
     try:
         if args.check:
-            check(live, rec, args.out)
+            check(live, rec, out)
         else:
             watch(live)
     finally:

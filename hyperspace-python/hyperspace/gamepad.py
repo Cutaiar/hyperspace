@@ -264,6 +264,8 @@ def layout_for(model) -> list[Control]:
     out: list[Control] = []
     for c in LAYOUT:
         name = c.address if c.source.startswith(("pad:", "axis:")) else ""
+        if c.source.startswith(("pad:", "axis:", "hat:")) and not model.has_control(c.address):
+            continue                   # a single Joy-Con: no right stick, no D-pad (plan 43)
         out.append(replace(c, glyph=models.glyph(model, name, c.glyph)) if name else c)
     for cap in ("touch", "motion", "back", "fn"):
         if model.has(cap):
@@ -782,9 +784,9 @@ class Pad:
         """The hid hub this pad borrows from: the registry's (`Claims`), or
         one of its own for a pad no device attached; None with `hid` off or
         no hidapi."""
-        if not getattr(self, "hid", False) or not models.may_be_sony(
+        if not getattr(self, "hid", False) or not models.may_be_hid(
                 getattr(self, "controller", "any")):
-            return None                # an Xbox-only entry opens (and seizes) no Sony pad
+            return None                # an Xbox-only entry opens (and seizes) no hid pad
         claims = getattr(self, "claims", None)
         if claims is not None:
             return claims.hid_hub() if make else claims.hub
@@ -845,6 +847,9 @@ class Pad:
             out.update(LP=LP, RP=RP)
         if self.has("fn"):
             out.update(LFN=LFN, RFN=RFN)
+        m = getattr(self, "model", None)
+        if models.is_model(m) and m.controls is not None:    # a single Joy-Con: less than a face
+            out = {n: i for n, i in out.items() if m.has_control(n)}
         return out
 
     @property
@@ -960,6 +965,8 @@ class Pad:
         self.touchpad.step([(t.down, t.id, t.x / w, t.y / h) for t in frame.touches], dt)
         cal = getattr(reader, "calibration", None) or sony.Calibration()
         amap = self.__dict__.get("axis_map") or gesture.AxisMap()
+        if amap == gesture.AxisMap():      # not overridden: the reader's own (a Joy-Con's axes)
+            amap = getattr(reader, "axis_map", None) or amap
         gyro = amap.pick(cal.gyro_dps(frame.gyro), amap.gyro)
         accel = amap.pick(cal.accel_g(frame.accel), amap.accel)
         self.motion.step(gyro, accel, dt)

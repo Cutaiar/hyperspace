@@ -189,15 +189,19 @@ like the rename above. The SYSTEM page shows both.
                             #   Security ▸ Camera)
 
     [gamepad]               # a game controller (gamepad.py, pads/): an Xbox pad through
-                            # GLFW, a DualSense / DualSense Edge over USB or Bluetooth
+                            # GLFW, a DualSense / DualSense Edge over USB or Bluetooth,
+                            # a Joy-Con over Bluetooth (one per entry, held like a Wii
+                            # Remote: its six-axis motion, one stick, a few buttons)
     enabled = true          # false never polls for one
     controller = "any"      # which pads this entry may take (plan 42): "any" (the next
-                            # free one), a model "edge" / "dualsense" / "xbox" / "x360",
-                            # a family "sony" / "xbox", or a USB id "054c:0df2" — so each
+                            # free one), a model "edge" / "dualsense" / "joycon-l" /
+                            # "joycon-r" / "procon" / "xbox" / "x360", a family "sony" /
+                            # "nintendo" / "xbox", or a USB id "054c:0df2" — so each
                             # role gets the pad you choose, whatever else is plugged in
-    hid = true              # read Sony pads over hidapi (USB and Bluetooth: touchpad,
-                            # motion, the Edge's back and Fn buttons, light bar, rumble,
-                            # trigger resistance); false: GLFW only (USB, no extras)
+    hid = true              # read Sony pads and Joy-Cons over hidapi (USB and Bluetooth:
+                            # touchpad, motion, the Edge's back and Fn buttons, light
+                            # bar, rumble, trigger resistance, a Joy-Con's player lights);
+                            # false: GLFW only (USB, no extras)
                             # light = "#ff0080"  the light bar with no sink row on it, and
                             # player = 2          the player LEDs; absent: by its place
                             # tape = "edge.jsonl" read a recorded session instead of a pad

@@ -43,6 +43,7 @@ from .models import CANON, N_CANON
 USB_IN, BT_IN, BT_SIMPLE = "usb", "bt", "bt-simple"
 USB_REPORT_ID, BT_REPORT_ID = 0x01, 0x31
 USB_IN_LEN, BT_IN_LEN, BT_SIMPLE_LEN = 64, 78, 10
+IN_LEN = BT_IN_LEN            # a read's room (the longest report), as every codec names it
 USB_OUT_ID, BT_OUT_ID = 0x02, 0x31
 USB_OUT_LEN, BT_OUT_LEN = 64, 78
 CALIBRATION_ID, CALIBRATION_LEN = 0x05, 41     # also what switches BT to the full report

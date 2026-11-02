@@ -9349,3 +9349,35 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
   not report their own bits, sensors on other axes. Each is a constant or
   a table in `pads/`, named there.
 
+### 565–570. Plan 46: the Joy-Con, one per role, as a six-axis totem
+
+- **Asked.** The owner, 2026-11-02, a Joy-Con (L) just paired over
+  Bluetooth: "one Joy-Con per role because I only have one", "held more
+  like a Wii Remote than a game pad … a kinetic controller … the
+  important part is the 6-axis IMU", "show up as individual game pads …
+  only one stick or one set of pad buttons", "calibrating drift is
+  something I do want to do", "extend Dillon's work here".
+- **Built**, as recommended: [`plans/46-joycon.md`](plans/46-joycon.md)
+  (D1–D6 = rows 565–570): `pads/nintendo.py` beside `pads/sony.py` on
+  the same road, three models, a model saying which controls it has,
+  the probe's Joy-Con checks. Rows: **565** one Joy-Con per entry (a pair
+  as one pad not built); **566** the Wii-Remote hold frames the
+  vocabulary (one stick = the left stick, the (L)'s arrows the face by
+  position, SL / SR the back pair, L / ZL `LB` + `LT`, no `hat:`);
+  **567** `Model.controls` — the ports, Learn, the on-screen pad and the
+  sinks show only what the pad has; **568** drift calibrated from the
+  flash (the user's record over the factory's) then the stick's rest at
+  connect becomes its centre (within 0.3, spread under 0.1), no config
+  key; **569** the sensors' axes are the codec's `AXIS_MAP` for the hold,
+  from the notes and one flat reading; **570** no browser lab fork — the
+  probe is the Joy-Con's lab until it has been seen in the app.
+- **What would overturn it.** Hand check 425 (the probe's run on the
+  real Joy-Con: the first time the connect sequence, the flash reads,
+  the button bits, rumble and the lights meet hardware — the Joy-Con
+  slept before the build's reader could run): a sign in `AXIS_MAP`
+  (569), a button bit in `_L_BUTTONS` (566), a rest that never recentres
+  or recentres a held stick (568: `RECENTRE_MAX`, `RECENTRE_SPREAD`), a
+  rumble that stutters (`RUMBLE_REFRESH_S`). The owner wanting the face
+  or the hat under the Xbox names anyway (566, 567), or a second Joy-Con
+  that should pair into one pad (565).
+
