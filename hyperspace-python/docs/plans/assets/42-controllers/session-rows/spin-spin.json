@@ -1,0 +1,3 @@
+{"patch": "spin-spin",
+ "note": "The session's rows (bindings.json) that drive the pad back for patches/spin-spin.json: a patch drives only its own params and never a sink port (patches.check), so this is a row of your own. Right-click fx.doublevision.mix → Learn sink ▸ rumble, light motor. A spawn into a preset that already has double vision makes doublevision.2: Learn it on fx.doublevision.2.mix. `edge` is the pad entry's role; on the default device list it is `pad`.",
+ "rows": [{"source": "param:fx.doublevision.mix", "target": "edge:4", "op": "send"}]}
