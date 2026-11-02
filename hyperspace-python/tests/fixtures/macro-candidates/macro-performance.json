@@ -263,13 +263,13 @@
     },
     {
      "base": "fx.warp.speed",
-     "from": 0.51875,
-     "to": 0.60625
+     "from": 0.7631517202913528,
+     "to": 0.8882767373177921
     },
     {
      "base": "fx.huecycle.speed",
-     "from": 0.50313,
-     "to": 0.52812
+     "from": 0.634018918624497,
+     "to": 0.7923870202322724
     },
     {
      "depth": {
@@ -311,12 +311,12 @@
     },
     {
      "base": "fx.zoomblur.amount",
-     "from": 0.4,
+     "from": 0.8678071905102115,
      "to": 0.0
     },
     {
      "base": "fx.deconverge.amount",
-     "from": 0.25,
+     "from": 0.8,
      "to": 0.0
     },
     {
@@ -650,11 +650,14 @@
     },
     {
      "base": "fx.warp.amount",
-     "from": 0.25,
-     "to": 0.8
+     "from": 0.8,
+     "to": 0.9678071905102115
     }
    ]
   }
  },
- "modules": {}
+ "modules": {},
+ "units": {
+  "fx.depth": "taper"
+ }
 }

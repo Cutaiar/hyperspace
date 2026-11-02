@@ -163,5 +163,6 @@
   {"source": "note:0:80", "target": "overlay.on", "op": "toggle", "feedback": "led"},
   {"source": "note:0:87", "target": "overlay.passthrough", "op": "toggle", "feedback": "led"},
   {"source": "note:0:88", "target": "seq.page", "op": "toggle", "feedback": "led"}
- ]
+ ],
+ "units": {"fx.depth": "taper"}
 }

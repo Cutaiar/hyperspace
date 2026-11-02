@@ -330,11 +330,11 @@
   {"source": "hand:left.roll", "target": "rot.phase.XY", "op": "push", "value": 0.25},
   {"source": "hand:left.pitch", "target": "rot.phase.YZ", "op": "push", "value": 0.25},
   {"source": "hand:left.yaw", "target": "rot.phase.XZ", "op": "push", "value": 0.25},
-  {"source": "hand:right.y", "target": "fx.warp.amount", "op": "push", "value": 0.3},
-  {"source": "hand:right.y", "target": "fx.tripcolour.amount", "op": "push", "value": 0.25},
-  {"source": "hand:right.y", "target": "fx.fractals.amount", "op": "push", "value": 0.2},
+  {"source": "hand:right.y", "target": "fx.warp.amount", "op": "push", "value": 0.07369655941613018},
+  {"source": "hand:right.y", "target": "fx.tripcolour.amount", "op": "push", "value": 0.09328858041437349},
+  {"source": "hand:right.y", "target": "fx.fractals.amount", "op": "push", "value": 0.05145731728291136},
   {"source": "hand:right.z", "target": "fx.warp.scale", "op": "push", "value": -0.4},
-  {"source": "hand:right.roll", "target": "fx.doublevision.amount", "op": "push", "value": 0.6},
+  {"source": "hand:right.roll", "target": "fx.doublevision.amount", "op": "push", "value": 0.1485426827170886},
   {"source": "hand:right.pitch", "target": "fx.tripcolour.pulse", "op": "push", "value": 0.4},
   {"source": "hand:left.y", "target": "fx.warp.drift", "op": "push", "value": 0.4}
  ],
@@ -373,7 +373,8 @@
  "macros": {},
  "modules": {},
  "units": {
-  "camera.pan": "world"
+  "camera.pan": "world",
+  "fx.depth": "taper"
  },
  "groups": [
   {"id": "group.1", "name": "noita core", "nodes": ["render:warp", "render:doublevision", "render:fractals"], "open": false}

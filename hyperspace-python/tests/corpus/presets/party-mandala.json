@@ -334,12 +334,12 @@
   {"source": "hand:left.roll", "target": "rot.phase.XY", "op": "push", "value": 0.25},
   {"source": "hand:left.pitch", "target": "rot.phase.YZ", "op": "push", "value": 0.25},
   {"source": "hand:left.yaw", "target": "rot.phase.XZ", "op": "push", "value": 0.25},
-  {"source": "hand:right.y", "target": "fx.fractals.amount", "op": "push", "value": 0.4},
+  {"source": "hand:right.y", "target": "fx.fractals.amount", "op": "push", "value": 0.09999999999999998},
   {"source": "hand:right.z", "target": "fx.kaleido.zoom", "op": "push", "value": -0.5},
   {"source": "hand:right.roll", "target": "fx.kaleido.swirl", "op": "position"},
-  {"source": "hand:right.pitch", "target": "fx.plasma.level", "op": "push", "value": 0.4},
+  {"source": "hand:right.pitch", "target": "fx.plasma.level", "op": "push", "value": 0.8678071905102115},
   {"source": "hand:right.yaw", "target": "fx.fractals.cells", "op": "push", "value": -0.4},
-  {"source": "hand:left.y", "target": "fx.glimmer.amount", "op": "push", "value": 0.5}
+  {"source": "hand:left.y", "target": "fx.glimmer.amount", "op": "push", "value": 0.13219280948862433}
  ],
  "desk": [
   {"source": "cc:0:48", "target": "view.bright", "op": "abs", "feedback": "ring"},
@@ -376,7 +376,8 @@
  "macros": {},
  "modules": {},
  "units": {
-  "camera.pan": "world"
+  "camera.pan": "world",
+  "fx.depth": "taper"
  },
  "media": {
   "channels": {}

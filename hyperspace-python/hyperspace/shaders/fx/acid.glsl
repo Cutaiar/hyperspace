@@ -6,10 +6,10 @@
 // @tip screen instead of the world: the frame heaves up and down and rolls about the
 // @tip centre by an amount that grows with distance from it, and breathes in and out.
 
-uniform float u_bend;    // @param 0 0.4 0.03 "Bend" Vertical heave, in frame heights (Minecraft: 5 blocks).
-uniform float u_twist;   // @param 0 3.1416 0.17 "Twist" Roll about the centre, radians at full swing.
+uniform float u_bend;    // @param 0 0.4 0.03 amount "Bend" Vertical heave, in frame heights (Minecraft: 5 blocks).
+uniform float u_twist;   // @param 0 3.1416 0.17 amount "Twist" Roll about the centre, radians at full swing.
 uniform float u_reach;   // @param 1 40 10 log "Reach" How fast the wave builds with distance from the centre — high rings tighter.
-uniform float u_breathe; // @param 0 1 0.12 "Breathe" The depth pulse: the frame zooms in and out with the wave.
+uniform float u_breathe; // @param 0 1 0.12 amount "Breathe" The depth pulse: the frame zooms in and out with the wave.
 
 vec4 effect(vec2 uv) {
     vec2 p = centred(uv);

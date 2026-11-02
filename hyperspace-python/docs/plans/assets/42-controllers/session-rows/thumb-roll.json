@@ -1,0 +1,4 @@
+{"patch": "thumb-roll",
+ "note": "The session's rows (bindings.json) for patches/thumb-roll.json: a patch holds no pad-button row and no sink row (patches.check), so these are rows of your own. R4 latches the roll: right-click Env 6's gate → Learn pad, press R4 (a toggle: press on, press off). The light bar blinks with the shape: right-click view.lines_alpha → Learn sink ▸ light bar level. A spawn into a preset that already has an envelope 6 numbers the patch's next free one: Learn R4 on that one's gate. `edge` is the pad entry's role; on the default device list it is `pad`.",
+ "rows": [{"source": "pad:RP", "target": "env.6.gate", "op": "toggle"},
+          {"source": "param:view.lines_alpha", "target": "edge:1", "op": "send"}]}

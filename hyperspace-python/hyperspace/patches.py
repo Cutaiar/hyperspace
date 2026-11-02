@@ -66,9 +66,17 @@ from .routing import Binding, base_scheme, is_continuous, is_macro
 KIND = "hyperspace.patch"
 VERSION = 1
 SCHEMA = f"{KIND}/{VERSION}"
+# the marker that a patch's depths are measured along the effect tapers
+# (wave 0 T1), as a preset's `units` is — `params.UNITS_KEY`, `DEPTH_UNIT`
+# and `DEPTH_TAPER`, spelled here a second time because this module is a
+# leaf (tests/test_retaper.py holds the two spellings equal). A file
+# without it is read as it was by the library's door (`Library.read_patch`,
+# `params.retaper_depths`), never here: `read` and `spawn` are pure
+UNITS_KEY = "units"
+UNITS = {"fx.depth": "taper"}
 # the file's keys, in the order a lift writes them
 KEYS = ("schema", "name", "note", "nodes", "wires", "values", "modifiers", "routes", "desk",
-        "macros", "lfos", "envs", "ports", "layout")
+        "macros", "lfos", "envs", "ports", "layout", UNITS_KEY)
 
 # what a patch may hold of the render graph (P1): what can be made twice —
 # the kinds `graph.wire_node_kind(…, wired=True)` names; `hands`, `layer`
@@ -531,7 +539,10 @@ def read(doc: Mapping) -> Patch:
     """A patch document → its `Patch`: the fragment as the file says it
     (nodes by name, wires and ports in a fixed order, so two equal patches
     read equal), and its boundary classified. Tolerant: a shape `check`
-    would refuse reads as what it can; the library refuses before this."""
+    would refuse reads as what it can; the library refuses before this —
+    and reads a file from before wave 0 T1 (no `units` marker) as it was
+    (`Library.read_patch`, `params.retaper_depths`), so what arrives here
+    has its depths along the effect tapers."""
     nodes = tuple(sorted((dict(e) for e in doc.get("nodes") or () if isinstance(e, Mapping)),
                          key=lambda e: (entry_name(e) or "", str(e))))
     m = _members_of({**doc, "nodes": nodes})
@@ -614,7 +625,7 @@ def check(doc: Any) -> list[str]:
         out.append("name and note are text")
     for key, typ in (("nodes", list), ("wires", list), ("values", dict), ("modifiers", list),
                      ("routes", list), ("desk", list), ("macros", dict), ("lfos", list),
-                     ("envs", list), ("ports", list), ("layout", dict)):
+                     ("envs", list), ("ports", list), ("layout", dict), (UNITS_KEY, dict)):
         if key in doc and not isinstance(doc[key], typ):
             out.append(f"{key} is not a {'list' if typ is list else 'map'}")
     if out:
@@ -983,7 +994,7 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
            "desk": desk, "macros": macros,
            "lfos": sorted(rn.voice(LFO, n) for n in members.lfos),
            "envs": sorted(rn.voice(ENV, n) for n in members.envs),
-           "ports": ports, "layout": lay}
+           "ports": ports, "layout": lay, UNITS_KEY: dict(UNITS)}
     return doc, refused
 
 

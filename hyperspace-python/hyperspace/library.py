@@ -132,8 +132,10 @@ from .params import (
     UNITS,
     UNITS_KEY,
     Registry,
+    fx_files,
     is_instance_id,
     pan_world,
+    retaper_depths,
 )
 
 SLOTS = 24                # the bank: F1–F8, then the desk's clip rows 4 and 5
@@ -1674,6 +1676,11 @@ class Library:
         if refused:
             path = self.path_of(PATCHES, name)
             raise LibraryError(f"{path.name if path else name}: " + "; ".join(refused))
+        # wave 0 T1: a file from before (no `units` marker) has its depths
+        # onto the effects' retapered params read as they were, measured
+        # against this rig's effect files — the one door a patch comes in
+        # by, so a spawn lands what tools/retaper_routes.py would write
+        doc, _ = retaper_depths(doc, fx_files(self.reg))
         return doc
 
     def save_patch(self, doc: dict) -> Path:

@@ -1,0 +1,4 @@
+{"patch": "wind-up",
+ "note": "The session's rows (bindings.json) that drive the pad back for patches/wind-up.json: a patch drives only its own params and never a sink port (patches.check), so these are rows of your own. Right-click fx.warp.amount → Learn sink ▸ right trigger resistance, then again ▸ player lights. A spawn into a preset that already has trip warp makes warp.2: Learn them on fx.warp.2.amount. `edge` is the pad entry's role; on the default device list it is `pad`.",
+ "rows": [{"source": "param:fx.warp.amount", "target": "edge:6", "op": "send"},
+          {"source": "param:fx.warp.amount", "target": "edge:7", "op": "send"}]}
