@@ -24,15 +24,21 @@ helpers every effect can call)::
     uniform int   u_count;   // @param 2 16 6 "Count" …    (int uniform → integer param)
     vec4 effect(vec2 uv) { return src(uv + …); }
 
-``@param lo hi default [log] [wrap] "Label" tip`` — the uniform name
-without its ``u_`` is the id suffix. A discrete choice (plan 30 N8) is
+``@param lo hi default [log] [wrap] [amount] "Label" tip`` — the uniform
+name without its ``u_`` is the id suffix. ``amount`` (wave 0 T1) marks a
+param whose range is 0 … hi with a meaningful zero — how much of the
+effect there is — and puts it on the zero-safe log taper
+(`amount_taper`: position 0 is off, then ten doublings up to hi), so a
+knob reaches 0.05 of the range as easily as 0.5; it needs ``lo`` 0, a
+float uniform, and neither ``log`` nor ``wrap``. A discrete choice (plan 30 N8) is
 ``uniform int u_mode; // @param choice [compress|gradient] 0 "Mode" tip``:
 the names in brackets, ``|`` between them, then the default's index — an
 enum param the strips draw as a picker (a combo), never a slider; the
 uniform gets the index. Every effect also gets four params
 of its own: ``on``, ``mix`` (wet/dry against its input), ``speed`` (the
 rate its clock ``u_phase`` runs at — integrated here, so a lane riding
-the speed never jumps the phase) and ``blend``. Three more are every
+the speed never jumps the phase; on the signed exponential taper
+`T_SPEED`, stop in the middle, ±8× at the ends) and ``blend``. Three more are every
 effect's: ``fx.on`` (bypass everything), ``fx.mix`` (scales every
 effect's mix — one fader that fades the whole trip in) and
 ``fx.face_map`` (how the faces show a picture wired into them).
@@ -80,6 +86,7 @@ effect returning a low alpha never lets the desktop through (plan 14 WP1).
 
 from __future__ import annotations
 
+import functools
 import math
 import re
 from collections.abc import Callable
@@ -89,6 +96,7 @@ from typing import Any
 
 import moderngl
 
+from . import tapers
 from .glsl import QUAD_VS, common, common_mtime, gl_error
 
 FX_DIR = Path(__file__).parent / "shaders" / "fx"
@@ -101,6 +109,18 @@ PER_FACE, SCREEN = 0, 1
 # would read as the retired id, so neither is ever a key
 RESERVED = {"on", "mix", "speed", "blend", "order", "target"}
 SPEED_MAX = 8.0
+# wave 0 T1 (the owner, 2026-10-31: "turning those values down to 0.05× or
+# 5 % … very, very low values are really convincing"): a knob on a linear
+# −8 … +8 could not reach 0.05× (0.003 of its throw, under one MIDI step),
+# so `speed` is on a signed exponential taper: 401 detents, the stop in the
+# middle, 1× at 140 steps out (20 a doubling), ±8× at the ends and
+# ±2^(−6.95) ≈ ±0.008× one step from the stop — ten octaves a side, so
+# 0.05× sits at detent 254, a third of the way up the positive side
+SPEED_SIDE, SPEED_UNITY = 200, 140
+T_SPEED = tapers.exp_signed(SPEED_UNITY, SPEED_SIDE)
+# an `amount` param's taper (`ParamSpec.amount`): off at 0, then ten
+# doublings (200 detents) up to its hi — about hi / 1000 one step up
+AMOUNT_OCTAVES = 10
 RELOAD_EVERY = 30               # frames between mtime checks of the folder
 
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -112,7 +132,7 @@ _CHOICE = re.compile(
 )
 _PARAM = re.compile(
     r"^(?P<nums>(?:[-+]?[\d.]+(?:[eE][-+]?\d+)?\s+){3})"
-    r"(?P<flags>(?:(?:log|wrap)\s+)*)\"(?P<label>[^\"]+)\"\s*(?P<tip>.*)$"
+    r"(?P<flags>(?:(?:log|wrap|amount)\s+)*)\"(?P<label>[^\"]+)\"\s*(?P<tip>.*)$"
 )
 
 
@@ -143,6 +163,7 @@ class ParamSpec:
     wrap: bool = False
     tip: str = ""
     choices: tuple[str, ...] = ()   # a discrete choice's names (`@param choice`): an enum
+    amount: bool = False            # 0 … hi on the zero-safe log taper (wave 0 T1)
 
 
 @dataclass(frozen=True)
@@ -175,7 +196,7 @@ class EffectSpec:
         """What the registry declares from this spec — a change means re-declare."""
         return (self.label, self.tip, self.order, self.blend, self.speed, self.mix,
                 tuple((p.key, p.label, p.lo, p.hi, p.default, p.integer, p.log, p.wrap, p.tip,
-                       p.choices)
+                       p.choices, p.amount)
                       for p in self.params),
                 tuple((c.uniform, c.rate, c.period) for c in getattr(self, "clocks", ())))
 
@@ -316,11 +337,15 @@ def parse(name: str, source: str) -> EffectSpec:
             raise SpecError(f"{name}:{n}: u_{key} needs lo < hi")
         if "log" in flags and lo <= 0:
             raise SpecError(f"{name}:{n}: u_{key} is log, so lo must be > 0")
+        if "amount" in flags and (lo != 0 or typ != "float" or "log" in flags
+                                  or "wrap" in flags):
+            raise SpecError(f"{name}:{n}: u_{key} is an amount, so it is a float from lo 0, "
+                            "neither log nor wrap")
         seen.add(key)
         spec.params.append(ParamSpec(
             key=key, uniform=uniform, label=pm["label"], lo=lo, hi=hi,
             default=min(max(default, lo), hi), integer=typ == "int", log="log" in flags,
-            wrap="wrap" in flags, tip=pm["tip"].strip(),
+            wrap="wrap" in flags, tip=pm["tip"].strip(), amount="amount" in flags,
         ))
     if not re.search(r"\bvec4\s+effect\s*\(", source):
         raise SpecError(f"{name}: no 'vec4 effect(vec2 uv)'")
@@ -637,10 +662,13 @@ def declare(r, fx: FxState, names: set[str] | None = None) -> None:
         r.continuous(f"{pre}.mix", f"{lb} mix", *_key(v, "mix"), lo=0.0, hi=1.0,
                      fmt=lambda x: f"mix {x:.2f}", group=g,
                      tip="Wet/dry: 0 its input untouched, 1 the effect in full.")
-        r.continuous(f"{pre}.speed", f"{lb} speed", *_key(v, "speed"),
-                     lo=-SPEED_MAX, hi=SPEED_MAX, fmt=lambda x: f"{x:+.2f}×", group=g,
+        # wave 0 T1: on the signed exponential taper (lo / hi say the range
+        # spans zero, so the panel's fill starts at the stop)
+        r.continuous(f"{pre}.speed", f"{lb} speed", *_key(v, "speed"), taper=T_SPEED,
+                     lo=-SPEED_MAX, hi=SPEED_MAX, fmt=fmt_speed, group=g,
                      tip="The rate of the effect's clock; negative runs it backwards, 0 "
-                         "freezes it.")
+                         "(the middle) freezes it. Exponential either side of the stop, "
+                         "so 0.05× is as easy to land as 0.5×.")
         r.enum(f"{pre}.blend", f"{lb} blend", *_key(v, "blend"), BLENDS, group=g,
                tip="How the effect's output lands on its input: mix replaces, add and "
                    "screen light up, multiply darkens.")
@@ -648,6 +676,11 @@ def declare(r, fx: FxState, names: set[str] | None = None) -> None:
             if p.choices:       # a discrete choice (plan 30 N8): a picker, never a slider
                 r.enum(f"{pre}.{p.key}", f"{lb} {p.label.lower()}", *_key(v, p.key),
                        list(p.choices), group=g, tip=p.tip)
+                continue
+            if p.amount:        # wave 0 T1: 0 … hi on the zero-safe log taper
+                r.continuous(f"{pre}.{p.key}", f"{lb} {p.label.lower()}", *_key(v, p.key),
+                             taper=amount_taper(p.hi), lo=p.lo, hi=p.hi, fmt=fmt_amount,
+                             group=g, tip=p.tip)
                 continue
             r.continuous(f"{pre}.{p.key}", f"{lb} {p.label.lower()}", *_key(v, p.key),
                          lo=p.lo, hi=p.hi, log=p.log, wrap=p.wrap, integer=p.integer,
@@ -668,6 +701,73 @@ def _fmt(p: ParamSpec) -> Callable[[float], str]:
     span = p.hi - p.lo
     digits = 3 if span <= 0.2 else 2 if span <= 20 else 1 if span <= 200 else 0
     return lambda x: f"{x:.{digits}f}"
+
+
+def fmt_speed(x: float) -> str:
+    """A speed's readout: "stop" at 0, else signed with three decimals
+    under 0.1× ("+0.050×"), two above ("+0.25×", "−8.00×")."""
+    x = float(x)
+    if x == 0:
+        return "stop"
+    return f"{x:+.3f}×" if abs(x) < 0.1 else f"{x:+.2f}×"
+
+
+def fmt_amount(x: float) -> str:
+    """An amount's readout over its ten octaves: "0" when off, else three
+    significant figures as a plain decimal ("0.0016", "0.35", "16")."""
+    x = float(x)
+    if not x > 0:
+        return "0"
+    s = f"{x:.3g}"
+    if "e" in s:
+        s = f"{x:.{min(8, max(0, 2 - math.floor(math.log10(x))))}f}"
+    return s
+
+
+@functools.cache
+def amount_taper(hi: float) -> tapers.Taper:
+    """The zero-safe log taper an `amount` param of range 0 … `hi` is on
+    (one per distinct hi, shared by every effect instance)."""
+    return tapers.exp_amount(float(hi), AMOUNT_OCTAVES)
+
+
+def param_of(pid: str, files: dict[str, EffectSpec]) -> tuple[EffectSpec, str] | None:
+    """The effect file and key behind param id `pid` — ``fx.<file>.<key>``
+    or an instance's ``fx.<file>.<n>.<key>`` (plan 26 A4) — over the specs
+    `files` (`FxState.files`, file name → spec), or None for any other id."""
+    parts = pid.split(".")
+    if len(parts) < 3 or parts[0] != "fx":
+        return None
+    spec = files.get(parts[1])
+    if spec is None:
+        return None
+    if len(parts) == 3:
+        return spec, parts[2]
+    mark = parts[2]
+    if len(parts) == 4 and mark.isdecimal() and str(int(mark)) == mark and int(mark) >= 2:
+        return spec, parts[3]
+    return None
+
+
+def retaper_of(pid: str, files: dict[str, EffectSpec]
+               ) -> tuple[float, float, float, tapers.Taper] | None:
+    """What wave 0 T1 changed under a route onto `pid`, or None when it
+    changed nothing there: ``(lo, hi, default, taper)`` — the linear range
+    the param had before (and still declares as `lo` / `hi`), its default
+    (the base a preset that does not name it takes), and the taper it is
+    on now — for an effect's `speed` and for each `amount` param. What
+    `params.retaper_depths` and tools/retaper_routes.py measure a saved
+    depth against."""
+    got = param_of(pid, files)
+    if got is None:
+        return None
+    spec, key = got
+    if key == "speed":
+        return -SPEED_MAX, SPEED_MAX, spec.speed, T_SPEED
+    for p in spec.params:
+        if p.key == key and p.amount:
+            return p.lo, p.hi, p.default, amount_taper(p.hi)
+    return None
 
 
 # ---- GL ----

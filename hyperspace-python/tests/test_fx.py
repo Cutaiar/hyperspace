@@ -18,6 +18,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from hyperspace import fx
 from hyperspace.fx import (
     BLENDS,
     FX_DIR,
@@ -118,9 +119,12 @@ def test_declare_makes_ordinary_params():
     assert all(p.group == "fx" for p in r)
     assert r["fx.kaleido.segments"].integer
     assert r["fx.warp.scale"].log
-    # a fader writes the state the chain reads, and back
+    # a fader writes the state the chain reads, and back (wave 0 T1: an
+    # amount is on the zero-safe log taper, so `set_value` lands the
+    # nearest detent, 3.5 % apart)
     r["fx.warp.amount"].set_value(1.25)
-    assert st.values["warp"]["amount"] == pytest.approx(1.25)
+    assert st.values["warp"]["amount"] == pytest.approx(1.25, rel=0.04)
+    assert r["fx.warp.amount"].taper is fx.amount_taper(2.0)
     st.values["warp"]["on"] = True
     assert r["fx.warp.on"].value is True
 
@@ -130,8 +134,8 @@ def test_a_lane_rides_an_effect_param():
     r = Registry()
     declare(r, st)
     p = r["fx.warp.amount"]
-    p.set_value(0.5)
-    p.modulate(0.25)                # a quarter of the 0–2 throw
+    p.set_value(0.5)                # a detent of the log taper (2 · 2^−2)
+    p.modulate(0.1)                 # a tenth of the throw: one of its ten octaves (wave 0 T1)
     r.apply()
     assert st.values["warp"]["amount"] == pytest.approx(1.0)
     assert p.base == pytest.approx(0.5)
@@ -862,8 +866,10 @@ def test_the_idle_strips_controls_stay_live(fxpage):
     amount, speed = reg["fx.warp.amount"], reg["fx.warp.speed"]
     was = amount.base
     fxpage.click("fx.warp.amount", 0.9)
-    assert amount.base > was and amount.base == pytest.approx(amount.lo + 0.9 * (
-        amount.hi - amount.lo), abs=0.1 * (amount.hi - amount.lo))
+    # (wave 0 T1: the amount's slider runs over its log taper's detents, so
+    # 9/10 of the throw is the taper's value there — one octave under hi)
+    assert amount.base > was and amount.base == pytest.approx(
+        amount._value_of_norm(0.9), abs=0.1 * (amount.hi - amount.lo))
     fxpage.click("fx.warp.speed", 0.25)
     assert speed.base < 0
     fxpage.click("fx.warp.mix", 0.5)

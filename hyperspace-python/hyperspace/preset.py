@@ -145,6 +145,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
     declare_resizes,
     declare_segments,
     declare_switches,
+    fx_files,
     is_cut_id,
     is_instance_id,
     is_lookback_id,
@@ -155,6 +156,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
     is_switch_id,
     pan_world,
     part_of,
+    retaper_depths,
 )
 from .routing import MOD_OPS, Binding, is_continuous
 
@@ -937,6 +939,14 @@ class Presets:
         #    slice reproduces
         doc, palette_notes = palette_slice(doc)
         notes += palette_notes
+        # 0. and its depths onto the effects' speed and amount params along
+        #    their tapers (wave 0 T1): a file from before measured them along
+        #    the linear range. Silent, as the pan is — each row's real-unit
+        #    reach is kept about its base (`params.retaper_depths`); a save
+        #    writes the marker (`UNITS`), and tools/retaper_routes.py
+        #    rewrites a library once. Measured against this rig's own effect
+        #    files (`self.fx`), the registry's when there is no state
+        doc, _ = retaper_depths(doc, self._effect_files())
         # 0. and its render graph (plan 26 A4): read, not yet landed. Plan
         #    36 T3 (W3): a `/7` is read as it is — no section is the empty
         #    frame, black, said; nothing is filled in. An older file is
@@ -1042,7 +1052,7 @@ class Presets:
         if doc.get(TEMPLATE_KEY):
             name = str(doc[TEMPLATE_KEY])
             try:
-                tdoc = lib.desk_template(name)
+                tdoc = self._template(name)
                 # (plan 33 M: as the migration read it, a row on a channel
                 # choice on its switch)
                 template = template_rows if template_rows is not None else tdoc["desk"]
@@ -1325,7 +1335,7 @@ class Presets:
                 tmods = held[1]
             else:
                 try:
-                    tmods = list(self.lib.desk_template(ref).get(MODIFIERS_KEY) or [])
+                    tmods = list(self._template(ref).get(MODIFIERS_KEY) or [])
                 except LibraryError:
                     tmods = []
             if name is not None:
@@ -1340,6 +1350,23 @@ class Presets:
         own = [d for d in live if not undo.alike(theirs.get(d["id"]), d)]
         return {MODIFIERS_KEY: own} if own else {}
 
+    def _effect_files(self) -> dict:
+        """The effect files a document's depths are measured against (wave
+        0 T1, `params.retaper_depths`): this rig's own `FxState`'s (the
+        graph section's, `GraphSection.fx`), else the registry's, else the
+        shader folder's once."""
+        state = self._graph_section().fx
+        return fx_files(state if state is not None else self.reg)
+
+    def _template(self, name: str) -> dict:
+        """Desk template `name`'s document (`Library.desk_template`), its
+        rows' depths measured along the tapers (wave 0 T1: a template file
+        from before has a `set` row's norm as it was; the tool rewrites
+        `desk/*.json` too). Raises LibraryError as the library does."""
+        tdoc = self.lib.desk_template(name)
+        tdoc, _ = retaper_depths(tdoc, self._effect_files())
+        return tdoc
+
     def _template_rows(self, doc: dict) -> list | None:
         """A copy of the rows of the desk template `doc` names (plan 24 C3),
         or None: none named, or one the library lacks (the load says so when
@@ -1348,7 +1375,7 @@ class Presets:
         if not name:
             return None
         try:
-            return copy.deepcopy(list(self.lib.desk_template(str(name))["desk"]))
+            return copy.deepcopy(list(self._template(str(name))["desk"]))
         except (LibraryError, KeyError, TypeError):
             return None
 
@@ -1458,7 +1485,7 @@ class Presets:
             template = held[1]                  # as the load expanded it
         else:
             try:
-                template = self.lib.desk_template(ref)["desk"]
+                template = self._template(ref)["desk"]
             except LibraryError:
                 template = []
         if name is not None:                     # the file now written holds these too

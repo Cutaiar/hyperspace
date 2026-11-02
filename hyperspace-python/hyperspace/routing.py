@@ -266,16 +266,21 @@ from .bands import BANDS, CEIL
 from .modifiers import Modifier, ModState
 from .motion import CUSTOM, OFF, Follower, Motion
 from .params import (
+    DEPTH_TAPER,
+    DEPTH_UNIT,
     DRIVE,
     F_KEYS,
     PERFORMANCE_GROUPS,
     PLANES,
     ROT_RATE_MAX,
     SESSION_GROUPS,
+    UNITS_KEY,
     Kind,
     Param,
     Registry,
+    fx_files,
     part_of,
+    retaper_depths,
 )
 
 SCHEMA = "hyperspace.bindings/3"
@@ -1823,6 +1828,8 @@ def dumps_doc(d: dict) -> str:
     if d.get("sinks_seeded"):            # plan 27 B3: the sinks' `send` lists translated
         text += f' "sinks_seeded": {json.dumps(d["sinks_seeded"])},\n'
     text += f' "bindings": [\n{rows}\n ]'
+    if d.get(UNITS_KEY):                 # wave 0 T1: the depths' units
+        text += f',\n {json.dumps(UNITS_KEY)}: {json.dumps(d[UNITS_KEY])}'
     return text + "\n}\n"
 
 
@@ -2095,13 +2102,21 @@ class Bindings:
         schema = data.get("schema")
         if schema not in (SCHEMA, SCHEMA_V2, SCHEMA_V1, None):
             raise ValueError(f"unknown schema {schema!r}")
+        # wave 0 T1: a file without the `units` marker has its rows' depths
+        # onto the effects' retapered params — a button's `set` norm, a
+        # hand-edited push — measured along the linear ranges: read as they
+        # were (`params.retaper_depths`, against the shader folder's effect
+        # files: a session row has no base of its own, so a push is measured
+        # about the effect's default), noted, and the file written back once
+        data, retapered = retaper_depths(data, fx_files())
         rows = [Binding.from_json(b) for b in data.get("bindings", [])]
-        notes: list[str] = []
+        notes: list[str] = list(retapered)
         migrated = schema in (SCHEMA_V1, None)
         if migrated:
-            rows, notes = migrate_v1(rows)
+            rows, v1_notes = migrate_v1(rows)
+            notes += v1_notes
         profile = data.get("profile", "apc40")
-        changed = False
+        changed = bool(retapered)
         if desk and schema != SCHEMA and any(b.is_midi for b in rows):
             rows, sorted_notes = sort_layers(rows, profile)
             notes += sorted_notes
@@ -2135,6 +2150,8 @@ class Bindings:
         seeded = getattr(self, "sinks_seeded", None)      # a table from before a hot reload
         if seeded:
             d["sinks_seeded"] = list(seeded)
+        # wave 0 T1: the rows' depths are measured along the effect tapers
+        d[UNITS_KEY] = {DEPTH_UNIT: DEPTH_TAPER}
         return d
 
     def dumps(self) -> str:

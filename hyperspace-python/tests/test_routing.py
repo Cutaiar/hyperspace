@@ -408,7 +408,7 @@ def test_table_file_round_trip_and_path(tmp_path):
     # the preset layer are the loaded preset's (plan 13 §2.2, WP5)
     assert text.count("\n  {") == len(session) < n
     doc = json.loads(text)
-    assert set(doc) == {"schema", "profile", "bindings"}
+    assert set(doc) == {"schema", "profile", "bindings", "units"}   # (units: wave 0 T1)
     t2 = Bindings.load(path)
     assert t2.to_json() == t.to_json() and t2.profile == "apc40" and not t2.error
     assert t2.routes() == [] and t2.desk() == [] and t2.carried is None
@@ -1969,7 +1969,7 @@ def test_the_live_table_writes_only_the_sessions_controls(tmp_path):
     r.reg["macro.3"].set_value(0.25)
     t.bind(Binding("cc:0:99", "view.zoom", "abs"))               # a session row: the file
     doc = json.loads(path.read_text())
-    assert set(doc) == {"schema", "profile", "bindings"}
+    assert set(doc) == {"schema", "profile", "bindings", "units"}   # (units: wave 0 T1)
     assert all(routing.is_session_row(Binding.from_json(d)) for d in doc["bindings"])
     assert {"source": "cc:0:99", "target": "view.zoom", "op": "abs"} in doc["bindings"]
     assert not any(d.get("layer") == "preset" for d in doc["bindings"])
