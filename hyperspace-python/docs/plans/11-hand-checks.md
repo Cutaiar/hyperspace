@@ -6352,6 +6352,20 @@ lifts; the spread bursts harder.
 *Pass:* the on-screen pad replays the session, looping; SYSTEM says
 `tape: DualSense Edge`.
 
+**416. The pad window's four readouts.** (Mac, the Edge)
+Headless: `tests/test_ui_pad.py` (each view, each pad, no scrolling).
+1. SYSTEM: Pad diagram on. Click the view's name in the pad window's
+   header (MAP ▸) until it is back to Map; or pick from Pad view.
+2. In each: press buttons, move the sticks and triggers, touch the
+   touchpad, tilt and shake the pad; hover a control.
+
+*Pass:* Faithful lights each control where it sits on the Edge, the
+fingers on the touchpad, the light bar's colour; Lanes moves every lane
+and names its mapping; Cockpit's dials trail the sticks, the trigger arcs
+fill, R4 / L4 light on the edges and each press scrolls along the foot;
+the desk under the window never moves; a hover names the control's
+mapping.
+
 ## What no test covers
 
 Only a person can settle these:

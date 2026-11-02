@@ -342,3 +342,90 @@ def test_each_stick_well_shows_its_own_stick_on_a_sony_face():
     rs = next(c for c in edge if c.source == "pad:RSTICK")
     pad = NS(lanes=lambda: [1.0, 0.5, 0.5, 1.0, 0.0, 0.0])    # left stick right, right stick up
     assert ui_pad._stick(pad, ls) == (1.0, 0.0) and ui_pad._stick(pad, rs) == (0.0, -1.0)
+
+
+# ---- the readouts (plan 42's follow-up): map, faithful, lanes, cockpit ----
+
+def _edge_pad():
+    """An Edge read from the real Bluetooth bytes (tests/fixtures/pads),
+    polled long enough for its tilt to settle."""
+    from pathlib import Path
+    tape = Path(__file__).resolve().parent / "fixtures" / "pads" / "edge-bt-excerpt.jsonl"
+    pad = gamepad.Pad(tape=str(tape))
+    for _ in range(30):
+        pad.poll(1 / 60)
+    return pad
+
+
+def test_every_view_draws_every_pad_and_never_scrolls(rig, monkeypatch):
+    """Each view at the control size, the panel hidden and shown: no pad,
+    an Xbox pad, a real Edge — drawn in the map's own room (the desk under
+    it never moves) and never scrolling."""
+    from hyperspace import ui_pad_views
+    reg = rig.reg
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    reg["ui.pad_diagram"].set(True)
+    pads = {"none": None, "xbox": _FakePad(down=("A",), lanes=[0.9, 0.1, 0.5, 0.5, 1.0, 0.0]),
+            "edge": _edge_pad()}
+    for panel_on in (False, True):
+        reg["ui.panel"].set(panel_on)
+        rig.panel.pad = None
+        reg["ui.pad_view"].set(0)
+        room = _pad_frames(rig, monkeypatch)["rect"]
+        for k, view in enumerate(ui_pad_views.VIEWS):
+            reg["ui.pad_view"].set(k)
+            for name, pad in pads.items():
+                rig.panel.pad = pad
+                got = _pad_frames(rig, monkeypatch)
+                assert got["rect"] == room, (view, name)
+                assert got["scroll"] == (0.0, 0.0), (view, name)
+                assert ui_pad.view_of(rig.panel) == view
+
+
+def test_the_header_steps_through_the_views():
+    from types import SimpleNamespace as NS
+    panel = NS(pad_view=0)
+    seen = []
+    for _ in range(5):
+        seen.append(ui_pad.view_of(panel))
+        ui_pad.step_view(panel)
+    assert seen == ["map", "faithful", "lanes", "cockpit", "map"]
+    panel.pad_view = 9                                     # out of range: the map
+    assert ui_pad.view_of(panel) == "map"
+
+
+def test_the_edge_views_show_what_it_has_and_what_maps_it(rig, monkeypatch):
+    """Faithful and cockpit draw the Edge's back and Fn buttons and its
+    touchpad where a hover finds them; the lanes name every touch and
+    motion lane and say a touch row's mapping."""
+    from hyperspace import ui_pad_views
+    reg = rig.reg
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    reg["ui.pad_diagram"].set(True)
+    reg["ui.panel"].set(False)
+    rig.router.table.add(Binding("touch:pinch", "camera.zoom", "push", 0.5))
+    rig.panel.pad = _edge_pad()
+    sources = {}
+    for k, view in enumerate(ui_pad_views.VIEWS[1:], start=1):
+        reg["ui.pad_view"].set(k)
+        _pad_frames(rig, monkeypatch)
+        ctx = ui_pad._state(rig.panel)["view_ctx"]
+        sources[view] = {h[4] for h in ctx.hits}
+        assert ctx.r.on and ctx.r.model.id == "edge" and ctx.r.touch is not None
+    assert {"pad:LP", "pad:RP", "pad:LFN", "pad:TOUCH"} <= sources["faithful"]
+    assert {"pad:LP", "pad:RP", "pad:TOUCH", "axis:LT", "axis:RT"} <= sources["cockpit"]
+    assert {"touch:pinch", "motion:shake", "pad:LP"} <= sources["lanes"]
+    says = ui_pad._says_of(rig.panel, rig.router.table)
+    words, row = says("touch:pinch")
+    assert row is not None and words
+    assert says("axis:LX") == (ui_pad.BUILT_IN["axis:LX"], None)
+
+
+def test_a_reading_of_no_pad_and_of_a_pad_without_extras():
+    from hyperspace import ui_pad_views
+    r = ui_pad_views.read(None)
+    assert not r.on and r.touch is None and r.axes["LX"] == 0.5
+    fake = _FakePad(down=("B",), hat=gamepad.HAT_UP)
+    r = ui_pad_views.read(fake)
+    assert r.on and r.down == {"B"} and r.hat == gamepad.HAT_UP and r.motion is None
+    assert not r.has("touch") and r.effects is None

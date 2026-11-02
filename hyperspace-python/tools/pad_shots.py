@@ -9,7 +9,9 @@ right side down and its far edge up, the right back button held — read
 by `gamepad.Pad` exactly as a pad entry with ``tape =`` reads one. A few
 rows light the extras the way plan 42's ideas would map them.
 
-  uv run python tools/pad_shots.py     # → docs/plans/assets/42-controllers/pad-xbox.png, pad-edge.png
+  uv run python tools/pad_shots.py     # → docs/plans/assets/42-controllers/pad-{xbox,edge}[-view].png
+
+Each face in each of the pad window's views (ui_pad_views.VIEWS).
 """
 
 # label_menu_shot (and through it undo_demo) is imported
@@ -23,7 +25,7 @@ from pathlib import Path
 import label_menu_shot as shot
 from label_menu_shot import Hidden
 
-from hyperspace import gamepad
+from hyperspace import gamepad, ui_pad_views
 from hyperspace.pads import hid, sony
 from hyperspace.routing import Binding
 
@@ -81,18 +83,28 @@ def main() -> None:
         if table.owner(b.target) is None:      # the loaded preset may perform it already
             table.add(b)
 
+    views = ui_pad_views.VIEWS
     panel.pad = gamepad.Pad()                 # no pad connected: the Xbox face
-    h.draw(6)
-    print(f"wrote {crop(h.save('pad-xbox.png'))}")
+    for k, view in enumerate(views):
+        panel.reg["ui.pad_view"].set(k)
+        h.draw(6)
+        name = "pad-xbox.png" if view == "map" else f"pad-xbox-{view}.png"
+        print(f"wrote {crop(h.save(name))}")
 
     with tempfile.TemporaryDirectory() as tmp:
         pad = gamepad.Pad(tape=str(edge_tape(Path(tmp) / "edge.jsonl")))
         panel.pad = pad
-        for _ in range(45):                   # long enough for the tilt to settle
-            pad.poll(1 / 60)
-            pad.effects = sony.Effects(light=(255, 0, 128))   # as the device would send it
-            h.draw(1)
-        print(f"wrote {crop(h.save('pad-edge.png'))}  ({pad.model.name}, {pad.link})")
+        # as the device would send it: a sink row on R2's resistance and the heavy motor
+        sent = sony.Effects(light=(255, 0, 128), players=sony.player_bits(1), rumble_low=0.6,
+                            right=sony.Trigger("resist", 0.15, 0.75))
+        for k, view in enumerate(views):
+            panel.reg["ui.pad_view"].set(k)
+            for _ in range(45):               # long enough for the tilt to settle
+                pad.poll(1 / 60)
+                pad.effects = sent
+                h.draw(1)
+            name = "pad-edge.png" if view == "map" else f"pad-edge-{view}.png"
+            print(f"wrote {crop(h.save(name))}  ({pad.model.name}, {pad.link})")
     h.close()
 
 
