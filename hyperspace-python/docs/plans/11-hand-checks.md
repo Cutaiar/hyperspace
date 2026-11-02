@@ -6371,10 +6371,12 @@ Headless: `tests/test_ui_pad.py` (`test_the_nanovg_pen_draws_every_call_the_draw
 `test_the_lab_views_draw_on_the_pad_windows_draw_list`). A new module:
 restart the app.
 1. Pad diagram on; step to Faithful, then Cockpit. Compare with the
-   browser lab (`prototypes/edge-lab/`) on the same pad.
+   browser lab (`prototypes/edge-lab/`) on the same pad. The terminal
+   says `pad drawings: NanoVG` the first time either is drawn.
 2. Resize the pad window (drag the desk's split, or hide the panel).
 3. Quit; start the app with `HYPERSPACE_NANOVG=0 uv run hyperspace`;
-   look at both again.
+   look at both again (the terminal: `pad drawings: the draw list
+   (HYPERSPACE_NANOVG=0)`).
 
 *Pass:* in 1 the two read as the lab's drawings, crisp on the Retina
 screen (smooth curves, the light bar's glow, sharp small type), and the

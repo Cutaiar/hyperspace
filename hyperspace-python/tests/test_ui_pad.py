@@ -592,16 +592,20 @@ def test_the_nanovg_pen_draws_every_call_the_drawings_make():
         assert want <= set(calls), view
 
 
-def test_nanovg_waits_for_gl_and_can_be_kept_off(monkeypatch):
-    """No GL context: not started and not failed (it may start later).
-    HYPERSPACE_NANOVG=0: never started, GL not even asked."""
+def test_nanovg_waits_for_gl_and_can_be_kept_off(monkeypatch, capsys):
+    """No GL context: not started and not failed (it may start later), and
+    nothing said yet. HYPERSPACE_NANOVG=0: never started, GL not even
+    asked, and the terminal told once which pen draws."""
     from hyperspace import ui_pad_nvg
     surf = ui_pad_nvg.Surface()
     monkeypatch.setattr(ui_pad_nvg, "_gl_current", lambda: False)
     assert not surf.ready() and not surf.failed and surf.vg is None
+    assert "pad drawings" not in capsys.readouterr().err
 
     def asked():
         raise AssertionError("GL asked with NanoVG kept off")
     monkeypatch.setattr(ui_pad_nvg, "_gl_current", asked)
     monkeypatch.setenv("HYPERSPACE_NANOVG", "0")
     assert not surf.ready() and not surf.failed
+    assert not surf.ready()
+    assert capsys.readouterr().err.count("pad drawings: the draw list (HYPERSPACE_NANOVG=0)") == 1

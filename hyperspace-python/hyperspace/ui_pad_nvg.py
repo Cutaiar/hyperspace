@@ -19,12 +19,14 @@ Where no GL context is current (the tests' headless panel) or NanoVG will
 not start, `Surface.ready` is False and the draw-list pen draws the same
 drawings instead; the reason is kept (`Surface.failed`). The environment
 variable ``HYPERSPACE_NANOVG=0`` keeps NanoVG off altogether — a way out
-should a machine's GL not take it.
+should a machine's GL not take it. Which one draws is said once, on the
+terminal, the first time a drawing is asked for (``pad drawings: …``).
 """
 
 from __future__ import annotations
 
 import os
+import sys
 
 from . import ui_pad_lab
 from .ui_pad_lab import DESIGN_H, DESIGN_W, FONT_K, rgba
@@ -168,11 +170,21 @@ class Surface:
         self.fb = None
         self.fb_size = (0, 0)
         self.failed = ""
+        self.said = ""
+
+    def _say(self, words: str) -> None:
+        """Which pen draws, on the terminal — once."""
+        if words != self.said:
+            self.said = words
+            print(f"pad drawings: {words}", file=sys.stderr)
 
     def ready(self) -> bool:
         if self.vg is not None:
             return True
-        if self.failed or os.environ.get("HYPERSPACE_NANOVG", "1") == "0":
+        if self.failed:
+            return False
+        if os.environ.get("HYPERSPACE_NANOVG", "1") == "0":
+            self._say("the draw list (HYPERSPACE_NANOVG=0)")
             return False
         if not _gl_current():
             return False                # no GL context (a headless panel): not now, not failed
@@ -190,8 +202,10 @@ class Surface:
                 nvg.add_fallback_font(vg, face, "sym")       # ✕ ○ □ △ ▲ ◀ …
         except Exception as e:  # noqa: BLE001 — a GL that will not take NanoVG: the draw-list pen
             self.failed = f"{type(e).__name__}: {e}"[:160]
+            self._say(f"the draw list (NanoVG would not start: {self.failed})")
             return False
         self.vg, self.nvg = vg, nvg
+        self._say("NanoVG")
         return True
 
     def render(self, view: str, r, st: dict, w_px: int, h_px: int) -> tuple[int, NvgPen]:
