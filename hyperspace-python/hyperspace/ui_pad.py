@@ -59,7 +59,7 @@ import math
 
 from imgui_bundle import imgui
 
-from . import gamepad, ui, ui_desk, ui_pad_views, ui_routing
+from . import gamepad, ui, ui_desk, ui_pad_nvg, ui_pad_views, ui_routing
 from .routing import Binding
 
 SCHEMES = ("pad", "hat", "axis", "touch", "motion")   # the schemes a pad control's row can have
@@ -145,8 +145,11 @@ def step_view(panel) -> None:
 
 
 def _key(table) -> tuple:
+    """What the pad's cached rows depend on: which rows, their sources and
+    whether each is on — rows are edited in place (a disable, a row put in
+    another's stead), so the list's length alone would not see it."""
     return (id(table.bindings), len(table.bindings),
-            tuple(b.source for b in table.of(*SCHEMES)))
+            tuple((id(b), b.source, b.enabled) for b in table.of(*SCHEMES)))
 
 
 def rows_cached(panel, table) -> dict[str, Binding]:
@@ -426,6 +429,7 @@ def diagram(panel) -> None:
     mapped), then every control at its place — in the room `room` gives
     it. `panel._pad_h` is left behind for `ui_desk.room`, which keeps the
     desk clear of it; it is 0 while this is off."""
+    ui_pad_nvg.sweep(panel, imgui.get_frame_count())   # each frame: quiet rooms let go
     if not getattr(panel, "pad_diagram", False):
         panel._pad_h = 0.0
         return
@@ -453,11 +457,15 @@ def inline(panel) -> None:
     the pad node (ui_graph._node_side), whether or not the floating one is up."""
     w = imgui.get_content_region_avail().x
     h = (w - 2 * PAD) / gamepad.LAYOUT_W * gamepad.LAYOUT_H + 2 * PAD + HEAD_H
+    table = _table(panel)
+    if view_of(panel) == "lanes" and table is not None:   # every lane, readable: as tall as that takes
+        h = max(h, ui_pad_views.lanes_height(w - 2 * PAD, _pad(panel) or getattr(panel, "pad", None),
+                                             _says_of(panel, table)) + 2 * PAD + HEAD_H)
     imgui.push_style_var(imgui.StyleVar_.window_padding, _v(PAD, PAD))
     if imgui.begin_child("##pad.inline", _v(w, h), imgui.ChildFlags_.borders
                          | imgui.ChildFlags_.always_use_window_padding,
                          imgui.WindowFlags_.no_scrollbar | imgui.WindowFlags_.no_scroll_with_mouse):
-        _body(panel, _table(panel))
+        _body(panel, table)
     imgui.end_child()
     imgui.pop_style_var()
 
@@ -518,10 +526,13 @@ def _header(panel, table) -> None:
     if table is not None:
         imgui.same_line()
         n = len(rows_cached(panel, table))
-        imgui.text_colored(ui.DIM, f"{n} mapped")
-        if imgui.is_item_hovered():
-            ui.tooltip("Controls with a row in bindings.json. A grey label is the "
-                              "app's own hand on a free axis, not a row.")
+        room = imgui.get_content_region_avail().x       # narrow in GRAPH's side panel
+        said = next((w for w in (f"{n} mapped", str(n)) if imgui.calc_text_size(w).x <= room), "")
+        if said:
+            imgui.text_colored(ui.DIM, said)
+            if imgui.is_item_hovered():
+                ui.tooltip(f"{n} controls with a row in bindings.json. A grey label is the "
+                           "app's own hand on a free axis, not a row.")
     imgui.set_cursor_pos(start)          # the line is HEAD_H tall whatever is on it
     imgui.dummy(_v(1, HEAD_H - imgui.get_style().item_spacing.y))
 
@@ -552,7 +563,7 @@ def _body(panel, table) -> None:
     if view != "map":          # plan 42's readouts: the room is the map's, so the desk keeps
         origin = imgui.get_cursor_screen_pos()
         avail = imgui.get_content_region_avail()
-        _state(panel)["view_ctx"] = ui_pad_views.draw(
+        ui_pad_views.draw(
             view, panel, imgui.get_window_draw_list(), origin.x, origin.y, avail.x, avail.y,
             _pad(panel) or getattr(panel, "pad", None), _says_of(panel, table))
         imgui.dummy(avail)

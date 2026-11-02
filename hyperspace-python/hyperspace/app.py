@@ -1508,6 +1508,7 @@ def main() -> None:
         *[(ch, "media.channels", "Channel") for ch in media.state.channels.values()],
         (media.folder, "media.folder", "MediaFolder"),
         (panel, "ui", "Panel"),
+        *([(panel._pad_nvg, "ui_pad_nvg", "Surface")] if "_pad_nvg" in panel.__dict__ else []),
         (control, "control", "Control"),
         (audio, "audio", "AudioEngine"),
         (audio.chain, "analyzer", "Analyzer"),

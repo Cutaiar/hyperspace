@@ -8,6 +8,7 @@ them; the live pad shows through it; the desk keeps clear of it. Headless
 imgui, a library on tmp_path — no pad is plugged in anywhere here.
 """
 
+import pytest
 from imgui_bundle import imgui
 from test_ui_shell import (
     NARROW_CONTROL,
@@ -162,9 +163,17 @@ class _Ink:
 
 def _pad_frames(rig, monkeypatch, n=3) -> dict:
     """Draw `n` frames and return what the pad window was and drew on the
-    last: its rect, its scroll range, the text on its draw list."""
-    out: dict = {"texts": [], "rect": None}
+    last: its rect, its scroll range, the text on its draw list, and a
+    readout's `Ctx` (its reading and hit areas) where one drew."""
+    from hyperspace import ui_pad_views
+    out: dict = {"texts": [], "rect": None, "ctx": None}
     real_body, real_dl = ui_pad._body, imgui.get_window_draw_list
+    real_draw = ui_pad_views.draw
+
+    def draw(*a, **k):
+        out["ctx"] = real_draw(*a, **k)
+        return out["ctx"]
+    monkeypatch.setattr(ui_pad_views, "draw", draw)
 
     def body(p, table):
         out["texts"].clear()
@@ -178,6 +187,7 @@ def _pad_frames(rig, monkeypatch, n=3) -> dict:
     for _ in range(n):
         frame(rig.panel)
     monkeypatch.setattr(ui_pad, "_body", real_body)
+    monkeypatch.setattr(ui_pad_views, "draw", real_draw)
     return out
 
 
@@ -360,7 +370,9 @@ def _edge_pad():
 def test_every_view_draws_every_pad_and_never_scrolls(rig, monkeypatch):
     """Each view at the control size, the panel hidden and shown: no pad,
     an Xbox pad, a real Edge — drawn in the map's own room (the desk under
-    it never moves) and never scrolling."""
+    it never moves) and never scrolling. (Headless, Faithful and Cockpit
+    are the room's note that NanoVG cannot draw here; their drawings are
+    the tests below, through the hit pen and a stand-in NanoVG.)"""
     from hyperspace import ui_pad_views
     reg = rig.reg
     imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
@@ -406,8 +418,7 @@ def test_the_edge_views_show_what_it_has_and_what_maps_it(rig, monkeypatch):
     rig.router.table.add(Binding("touch:pinch", "camera.zoom", "push", 0.5))
     rig.panel.pad = _edge_pad()
     reg["ui.pad_view"].set(ui_pad_views.VIEWS.index("lanes"))
-    _pad_frames(rig, monkeypatch)
-    ctx = ui_pad._state(rig.panel)["view_ctx"]
+    ctx = _pad_frames(rig, monkeypatch)["ctx"]
     assert ctx.r.on and ctx.r.model.id == "edge" and ctx.r.touch is not None
     assert {"touch:pinch", "motion:shake", "pad:LP"} <= {h[4] for h in ctx.hits}
     assert {"pad:LP", "pad:RP", "pad:LFN", "pad:TOUCH"} <= {
@@ -497,11 +508,12 @@ def test_where_nanovg_cannot_draw_the_room_says_why(rig, monkeypatch):
     rig.panel.pad = _edge_pad()
     for view in ("faithful", "cockpit"):
         reg["ui.pad_view"].set(ui_pad_views.VIEWS.index(view))
-        texts = _pad_frames(rig, monkeypatch)["texts"]
+        got = _pad_frames(rig, monkeypatch)
+        texts = got["texts"]
         name = ui_pad_views.VIEW_LABELS[ui_pad_views.VIEWS.index(view)]
         assert f"{name} is drawn with NanoVG." in texts, texts
         assert "no OpenGL here for NanoVG" in texts and "Map and Lanes still work." in texts
-        assert not ui_pad._state(rig.panel)["view_ctx"].hits     # nothing to hover
+        assert not got["ctx"].hits                               # nothing to hover
     surf = ui_pad_nvg.surface_of(rig.panel)
     assert surf.vg is None and not surf.failed
     monkeypatch.setenv("HYPERSPACE_NANOVG", "0")
@@ -517,19 +529,27 @@ def test_the_lab_colours_read_every_way_the_port_writes_them():
 
 class _Nvg:
     """A stand-in for imgui-bundle's nanovg module: any call (recorded by
-    name), any enum (its `.value` 0)."""
+    name), any enum (its `.value` 0). Every name reached from the module
+    is kept in `paths`, to check against the real module (a misspelt call
+    would pass here and fail in the app); a call's result is no module's."""
 
-    def __init__(self, calls, name="nvg"):
-        self._calls, self._name = calls, name
+    def __init__(self, calls, name="nvg", path="", paths=None):
+        self._calls, self._name, self._path = calls, name, path
+        self.paths = paths if paths is not None else set()
 
     def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
         if name == "value":
             return 0
-        return _Nvg(self._calls, name)
+        path = None if self._path is None else f"{self._path}.{name}".lstrip(".")
+        if path is not None:
+            self.paths.add(path)
+        return _Nvg(self._calls, name, path, self.paths)
 
     def __call__(self, *args, **kwargs):
         self._calls.append(self._name)
-        return _Nvg(self._calls, "result")
+        return _Nvg(self._calls, "result", None, self.paths)
 
 
 def test_the_nanovg_pen_draws_every_call_the_drawings_make():
@@ -538,17 +558,26 @@ def test_the_nanovg_pen_draws_every_call_the_drawings_make():
     nothing), they reach NanoVG, and the hits are the base pen's own."""
     from hyperspace import ui_pad_lab, ui_pad_nvg, ui_pad_views
     assert set(ui_pad_lab.DRAW_CALLS) <= set(vars(ui_pad_nvg.NvgPen))
+    from imgui_bundle import nanovg as real
     pads = {"none": None, "xbox": _FakePad(down=("A",)), "edge": _edge_pad()}
+    used: set[str] = set()
     for view in ui_pad_lab.VIEWS:
         for name, pad in pads.items():
             calls: list[str] = []
-            pen = ui_pad_nvg.NvgPen(object(), _Nvg(calls))
+            stand_in = _Nvg(calls)
+            pen = ui_pad_nvg.NvgPen(object(), stand_in)
             r = ui_pad_views.read(pad)
             ui_pad_lab.VIEWS[view](pen, r, {})
             assert {"begin_path", "fill", "stroke", "text"} <= set(calls), (view, name)
             hits = ui_pad_lab.Pen()
             ui_pad_lab.VIEWS[view](hits, r, {})
             assert {h[4] for h in pen.hits} == {h[4] for h in hits.hits}, (view, name)
+            used |= stand_in.paths
+    for path in sorted(used):                   # every name the pen reached is NanoVG's own
+        obj = real
+        for part in path.split("."):
+            assert hasattr(obj, part), path
+            obj = getattr(obj, part)
     for view, want in (("faithful", {"bezier_to", "quad_to", "rounded_rect"}),   # body, light bar
                        ("cockpit", {"arc", "circle"})):                           # the dials
         calls = []
@@ -560,7 +589,7 @@ def test_the_nanovg_pen_draws_every_call_the_drawings_make():
 def test_nanovg_waits_for_gl_and_can_be_kept_off(monkeypatch, capsys):
     """No GL context: not started and not failed (it may start later), and
     nothing said yet. HYPERSPACE_NANOVG=0: never started, GL not even
-    asked, and the terminal told once which pen draws."""
+    asked, and the terminal told once why."""
     from hyperspace import ui_pad_nvg
     surf = ui_pad_nvg.Surface()
     monkeypatch.setattr(ui_pad_nvg, "_gl_current", lambda: False)
@@ -594,3 +623,192 @@ def test_each_room_keeps_its_own_framebuffer():
     assert calls.count("NvgFramebuffer") == 3
     surf.render("faithful", r, {}, 820, 500, "window", 7 + ui_pad_nvg.STALE)
     assert set(surf.fbs) == {"window"}                              # the side panel's went
+
+
+# ---- the review of 2026-11-02 (deep review and Devin's): each finding's test ----
+
+def _side_frame(panel, monkeypatch, width: float) -> list[str]:
+    """GRAPH's side panel as wide as `width`: the pad picture drawn there
+    (ui_pad.inline), the text it put on the draw list back."""
+    texts: list[str] = []
+    real_dl = imgui.get_window_draw_list
+    imgui.new_frame()
+    imgui.set_next_window_size(imgui.ImVec2(width, 900))
+    imgui.begin("side")
+    with monkeypatch.context() as m:
+        m.setattr(imgui, "get_window_draw_list", lambda: _Ink(real_dl(), texts))
+        ui_pad.inline(panel)
+    imgui.end()
+    imgui.end_frame()
+    return texts
+
+
+def test_lanes_stay_readable_in_graphs_side_panel(rig, monkeypatch):
+    """GRAPH's side panel at its narrowest: Lanes keeps its columns wide
+    enough to read — each lane's address whole, not "ax…" — taking the
+    height that needs (the side panel scrolls)."""
+    from hyperspace import ui_graph, ui_pad_views
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    rig.panel.pad = _edge_pad()
+    rig.reg["ui.pad_view"].set(ui_pad_views.VIEWS.index("lanes"))
+    texts = _side_frame(rig.panel, monkeypatch, ui_graph.SIDE_MIN)
+    for name in ("axis:LX", "axis:RT", "hat:UP", "pad:A", "touch:pinch", "motion:roll"):
+        assert name in texts, (name, [t for t in texts if t.endswith("…")][:8])
+
+
+def test_closing_the_panel_lets_nanovg_go(rig):
+    """Panel.close (on quit and ⌘R, while the control window's GL is
+    still up) frees NanoVG's framebuffers and its context — not the
+    interpreter's exit, after GLFW has gone."""
+    from hyperspace import ui_pad_nvg
+    calls: list[str] = []
+    surf = ui_pad_nvg.surface_of(rig.panel)
+    surf.vg, surf.nvg = object(), _Nvg(calls)
+    surf.fbs["room"] = [object(), (1, 1), 0]
+    rig.panel.close()
+    assert not surf.fbs and surf.vg is None
+    assert "delete_nvg_context_hello_imgui" in calls
+    rig.panel.close()                                          # twice: nothing more
+
+
+def test_a_routed_dial_lane_shows_in_lanes(rig, monkeypatch):
+    """A row on one of a stick's direction lanes (``axis:L.N``) shows in
+    Lanes with its value and mapping; the unrouted ones stay out."""
+    from hyperspace import ui_pad_views
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    reg = rig.reg
+    reg["ui.pad_diagram"].set(True)
+    reg["ui.panel"].set(False)
+    rig.router.table.add(Binding("axis:L.N", "camera.zoom", "position"))
+    lanes = list(gamepad.LANE_RESTS)
+    lanes[gamepad.LANES.index("L.N")] = 0.8
+    rig.panel.pad = _FakePad(lanes=lanes)
+    reg["ui.pad_view"].set(ui_pad_views.VIEWS.index("lanes"))
+    texts = _pad_frames(rig, monkeypatch)["texts"]
+    assert "axis:L.N" in texts and "0.80" in texts
+    assert "axis:R.S" not in texts
+
+
+def test_a_disabled_or_replaced_row_stops_showing_at_once(rig):
+    """Rows are edited in place: disabling one, or putting another in
+    its stead, shows on the next frame in the readouts and the map."""
+    table = rig.router.table
+    assert not [r for r in table.of("pad") if r.source == "pad:RFN"]    # a free control
+    b = table.add(Binding("pad:RFN", "camera.zoom", "push", 0.5))
+    assert ui_pad._says_of(rig.panel, table)("pad:RFN")[1] is b
+    assert ui_pad.rows_cached(rig.panel, table)["pad:RFN"] is b
+    b.enabled = False
+    assert ui_pad._says_of(rig.panel, table)("pad:RFN")[1] is None
+    assert "pad:RFN" not in ui_pad.rows_cached(rig.panel, table)
+
+
+def test_a_sticks_hover_names_both_its_axes_and_its_click():
+    """Hovering a stick names what its X and Y axes and its click do —
+    in Faithful and in Cockpit — not only the click."""
+    from hyperspace import ui_pad_views
+    for view in ("faithful", "cockpit"):
+        hits = _drawn(view, _edge_pad())
+        at = {h[4]: h[:4] for h in hits}
+        for side in ("L", "R"):
+            assert at[f"axis:{side}X"] == at[f"axis:{side}Y"] == at[f"pad:{side}STICK"], view
+    ctx = ui_pad_views.Ctx(None, None, 0, 0, 100, 100, ui_pad_views.read(None),
+                           lambda s: ("", None))
+    for src in ("pad:LSTICK", "axis:LX", "axis:LY"):
+        ctx.hit(10, 10, 50, 50, src)
+    ctx.hit(60, 60, 90, 90, "pad:A")
+    tip = ui_pad_views.tip_at(ctx, 20, 20)
+    assert all(gamepad.control_name(s) in tip for s in ("pad:LSTICK", "axis:LX", "axis:LY"))
+    assert gamepad.control_name("pad:A") not in tip
+
+
+def _fake_nvg(log: list):
+    """A NanoVG that records its transform calls and runs the drawing, as
+    `render_nvg_to_frame_buffer` does: (begin, the drawing, end)."""
+    from types import SimpleNamespace as NS
+
+    def rec(name):
+        return lambda vg, *a: log.append((name, a))
+
+    def render(vg, fb, draw, clear):
+        log.append(("begin", ()))
+        draw(vg, fb.w, fb.h)
+        log.append(("end", ()))
+    return NS(save=rec("save"), restore=rec("restore"), translate=rec("translate"),
+              scale=rec("scale"),
+              nvg_imgui=NS(NvgFramebuffer=lambda vg, w, h, f: NS(w=w, h=h, texture_id=7),
+                           render_nvg_to_frame_buffer=render))
+
+
+def test_the_surface_fits_the_design_space_and_ends_its_frame_on_an_error(monkeypatch):
+    """`Surface.render`: the lab's 1000 × 620 fitted to the framebuffer and
+    centred (letterboxed); a drawing that raises still restores the
+    transform and ends the frame, then the error is raised."""
+    from hyperspace import ui_pad_lab, ui_pad_nvg, ui_pad_views
+    log: list = []
+    surf = ui_pad_nvg.Surface()
+    surf.vg, surf.nvg = object(), _fake_nvg(log)
+    drew = []
+    monkeypatch.setitem(ui_pad_lab.VIEWS, "faithful", lambda pen, r, st: drew.append(pen))
+    tex, pen = surf.render("faithful", ui_pad_views.read(None), {}, 2000, 620, "room", 0)
+    assert tex == 7 and drew == [pen]
+    assert ("scale", (1.0, 1.0)) in log and ("translate", (500.0, 0.0)) in log
+
+    def boom(pen, r, st):
+        raise ValueError("a drawing's error")
+    monkeypatch.setitem(ui_pad_lab.VIEWS, "faithful", boom)
+    log.clear()
+    with pytest.raises(ValueError):
+        surf.render("faithful", ui_pad_views.read(None), {}, 2000, 620, "room", 1)
+    assert [e[0] for e in log] == ["begin", "save", "translate", "scale", "restore", "end"]
+
+
+def test_the_room_maps_the_drawings_hits_onto_the_screen(rig, monkeypatch):
+    """Where NanoVG draws, a hit in the design space lands on the screen
+    where the texture shows it: the room's letterboxed rect."""
+    from hyperspace import ui_pad_lab, ui_pad_nvg, ui_pad_views
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    reg = rig.reg
+    reg["ui.pad_diagram"].set(True)
+    reg["ui.panel"].set(False)
+    surf = ui_pad_nvg.surface_of(rig.panel)
+    surf.vg, surf.nvg = object(), _fake_nvg([])
+    monkeypatch.setitem(ui_pad_lab.VIEWS, "faithful",
+                        lambda pen, r, st: (pen.hit(0, 0, 1000, 620, "pad:A"),
+                                            pen.hit(500, 310, 10, 10, "pad:B")))
+    reg["ui.pad_view"].set(ui_pad_views.VIEWS.index("faithful"))
+    c = _pad_frames(rig, monkeypatch)["ctx"]
+    s = min(c.w / 1000, c.h / 620)
+    ox, oy = c.x + (c.w - 1000 * s) / 2, c.y + (c.h - 620 * s) / 2
+    at = {h[4]: h[:4] for h in c.hits}
+    assert at["pad:A"] == pytest.approx((ox, oy, ox + 1000 * s, oy + 620 * s))
+    assert at["pad:B"] == pytest.approx((ox + 500 * s, oy + 310 * s, ox + 510 * s, oy + 320 * s))
+    surf.vg = None                                  # the rig's panel closes without a NanoVG
+
+
+def test_quiet_rooms_let_go_and_a_failed_start_frees_its_context(rig, monkeypatch):
+    """A room not drawn for STALE frames lets its framebuffer go — swept
+    each frame even with the pad window off — and a NanoVG made before a
+    font failed to load is deleted, not leaked."""
+    from imgui_bundle import hello_imgui
+    from imgui_bundle import nanovg as nvg
+
+    from hyperspace import ui_pad_nvg
+    surf = ui_pad_nvg.Surface()
+    surf.fbs = {"old": [object(), (1, 1), 0], "new": [object(), (1, 1), 200]}
+    surf.sweep(200)
+    assert set(surf.fbs) == {"new"}
+    swept = []
+    monkeypatch.setattr(ui_pad_nvg, "sweep", lambda panel, frame: swept.append(frame))
+    rig.reg["ui.pad_diagram"].set(False)
+    frame(rig.panel)
+    assert swept
+
+    made, deleted = object(), []
+    monkeypatch.setattr(ui_pad_nvg, "_current", lambda: object())
+    monkeypatch.setattr(hello_imgui, "init_gl_loader", lambda: None)
+    monkeypatch.setattr(nvg.nvg_imgui, "create_nvg_context_hello_imgui", lambda flags: made)
+    monkeypatch.setattr(nvg.nvg_imgui, "delete_nvg_context_hello_imgui", deleted.append)
+    monkeypatch.setattr(nvg, "create_font", lambda vg, name, path: -1)
+    fresh = ui_pad_nvg.Surface()
+    assert not fresh.ready() and "would not load" in fresh.failed and fresh.vg is None
+    assert deleted == [made]

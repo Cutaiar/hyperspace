@@ -736,8 +736,11 @@ class Panel:
         """Let go of what the panel holds outside Python: the GRAPH page's
         node editor context (ui_graph.py, plan 28 N2). app.py calls it on
         quit and on ⌘R, before imgui shuts down; a panel that never drew
-        the page holds none. Safe to call twice."""
+        the page holds none — and the pad drawings' NanoVG (ui_pad_nvg),
+        while the control window's GL is up. Safe to call twice."""
         ui_graph.close(self)
+        from . import ui_pad_nvg
+        ui_pad_nvg.close(self)
 
     def _register_panel_params(self) -> None:
         """The panel's own state as ``ui.*`` params: the window, the sheet,

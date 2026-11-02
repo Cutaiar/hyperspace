@@ -233,11 +233,17 @@ on the same port, NanoVG and the draw list, and NanoVG kept:
 - **One renderer.** The draw-list pen was dropped (Dillon: no two render
   paths). Where NanoVG cannot run — no GL (the tests' headless panel), it
   will not start, or ``HYPERSPACE_NANOVG=0`` — the room says why and that
-  Map and Lanes still work; the terminal says which, once
-  (``pad drawings: …``). Moving off OpenGL one day is one new pen.
+  Map and Lanes still work; the terminal says so, once
+  (``pad drawings: off (…)``). Moving off OpenGL one day is one new pen.
+- **Its GL objects go with the panel** (`Panel.close`, on quit and ⌘R,
+  while the control window's context is up), each room (the pad window,
+  GRAPH's side panel) keeps its own framebuffer, and a room gone quiet
+  lets its framebuffer go.
 
 An Xbox pad gets the same hand: the left stick high, the D-pad low, the
-guide button between View and Menu.
+guide button between View and Menu. A stick's hover names its click and
+both its axes; Lanes lists a stick-direction lane (``axis:L.N``) where a
+row maps one, and keeps its columns readable (`LANE_COL_MIN`).
 
 The pad's node on GRAPH draws the same picture, with the same header and
 readouts, whatever the pad's role is called (it looked for a node named

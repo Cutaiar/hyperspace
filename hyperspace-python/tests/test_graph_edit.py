@@ -2055,6 +2055,9 @@ def test_the_pad_nodes_details_draw_the_pad(rig, monkeypatch):
     monkeypatch.setattr(ui_pad, "inline", lambda p: (drew.append(1), real(p)))
     picked, combo = [], panel._combo
     monkeypatch.setattr(panel, "_combo", lambda pid, **k: (picked.append(pid), combo(pid, **k))[1])
+    said, disabled = [], imgui.text_disabled
+    monkeypatch.setattr(imgui, "text_disabled", lambda s: (said.append(s), disabled(s))[1])
+    port = graphview.VPort("pad:A", "A", "out", patched=True)
     nodes = (("edge", SimpleNamespace(kind="gamepad", io=pad), [1]),
              ("pad", SimpleNamespace(kind="gamepad", io=pad), [1]),
              ("xbox", SimpleNamespace(kind="gamepad", io=other), []),
@@ -2063,14 +2066,16 @@ def test_the_pad_nodes_details_draw_the_pad(rig, monkeypatch):
     for role, dev, want in nodes:
         drew.clear()
         picked.clear()
+        said.clear()
         imgui.new_frame()
         imgui.begin("side")
         ui_graph._side(panel, st, st["view"],
-                       ("node", graphview.VNode(f"device:{role}", "device", role, ref=dev)))
+                       ("node", graphview.VNode(f"device:{role}", "device", role, [port], ref=dev)))
         imgui.end()
         imgui.end_frame()
         assert drew == want, role
         assert picked == (["ui.pad_view"] if want else []), role   # the readout's drop-down
+        assert ("A: not live" in said) is (not want), role         # the port lines: not under it
     assert ui_pad.rect(panel, gamepad.LAYOUT[0]) is not None    # it really laid the pad out
 
 

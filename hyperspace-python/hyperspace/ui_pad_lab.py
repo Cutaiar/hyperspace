@@ -322,7 +322,8 @@ def _stick(p: Pen, r, n: str, cx, cy, xa, ya) -> None:
     p.circle(x, y, 22)
     p.stroke("accent", 2)
     p.text(_glyph(r, n), x, y, size=11, color="#000" if on else "dim", weight=700)
-    p.hit(cx - 50, cy - 50, 100, 100, f"pad:{n}")
+    for src in (f"pad:{n}", f"axis:{xa}", f"axis:{ya}"):      # the hover names all three
+        p.hit(cx - 50, cy - 50, 100, 100, src)
 
 
 def _dpad(p: Pen, r, cx, cy) -> None:
@@ -575,7 +576,8 @@ def _dial(p: Pen, r, st: dict, cx, cy, side: str, tr) -> None:
         p.stroke(col, 1 + 3 * i / len(trail), a=i / len(trail) * 0.6)
     p.circle(x, y, 13)
     p.fill(COL["hot"] if on else col)
-    p.hit(cx - rad, cy - rad, 2 * rad, 2 * rad, f"pad:{stick}")
+    for src in (f"pad:{stick}", f"axis:{side}X", f"axis:{side}Y"):   # the hover names all three
+        p.hit(cx - rad, cy - rad, 2 * rad, 2 * rad, src)
     p.text(f"{_glyph(r, trig)} {round(u * 100)}%", cx, cy + big + 4, size=14,
            weight=700, color=col if u > 0.003 else COL["faint"])
     if mode != "off":

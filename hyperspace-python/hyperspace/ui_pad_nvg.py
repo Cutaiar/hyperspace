@@ -18,8 +18,15 @@ shows as an image.
 One renderer, no second one behind it: where NanoVG cannot draw — no GL
 context (the tests' headless panel), NanoVG would not start (the reason in
 `Surface.failed`), or ``HYPERSPACE_NANOVG=0`` — the room says so
-(`Surface.why_not`) and Map and Lanes are the views to use. The terminal
-is told once which it is (``pad drawings: …``).
+(`Surface.why_not`) and Map and Lanes are the views to use; the terminal
+is told once (``pad drawings: off (…)``).
+
+Its GL objects live in the control window's context, so they go with the
+panel (`close`, from `Panel.close`, on quit and ⌘R, before the windows
+do), never at the interpreter's exit after GLFW has gone. A room not
+drawn for `STALE` frames lets its framebuffer go (`sweep`, every frame).
+The surface is a hot-reload target (app.py): a save re-classes it in
+place, its GL objects kept.
 """
 
 from __future__ import annotations
@@ -146,17 +153,28 @@ class NvgPen(ui_pad_lab.Pen):
         self.n.translate(self.vg, x, y)
 
 
-def _gl_current() -> bool:
-    """Is a GL context current on this thread? (GLFW's; asked quietly, as
-    GLFW warns when a headless panel asks before it is initialised.)"""
+def _current():
+    """GLFW's current context (a window), or None — asked quietly, as GLFW
+    warns when a headless panel asks before it is initialised."""
     import warnings
     try:
         import glfw
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            return bool(glfw.get_current_context())
+            win = glfw.get_current_context()
+        return win if win else None
     except Exception:  # noqa: BLE001 — GLFW set to raise, or no GLFW: no context
-        return False
+        return None
+
+
+def _gl_current() -> bool:
+    """Is a GL context current on this thread?"""
+    return _current() is not None
+
+
+def _same(a, b) -> bool:
+    import ctypes
+    return ctypes.cast(a, ctypes.c_void_p).value == ctypes.cast(b, ctypes.c_void_p).value
 
 
 class Surface:
@@ -168,11 +186,12 @@ class Surface:
         self.vg = None
         self.nvg = None
         self.fbs: dict = {}         # room → [framebuffer, (w, h), the frame it was last drawn]
+        self.win = None             # the GLFW window whose context holds them
         self.failed = ""
         self.said = ""
 
     def _say(self, words: str) -> None:
-        """Which pen draws, on the terminal — once."""
+        """Why NanoVG is not drawing, on the terminal — once."""
         if words != self.said:
             self.said = words
             print(f"pad drawings: {words}", file=sys.stderr)
@@ -187,6 +206,7 @@ class Surface:
             return False
         if not _gl_current():
             return False                # no GL context (a headless panel): not now, not failed
+        vg = None
         try:
             from imgui_bundle import hello_imgui
             from imgui_bundle import nanovg as nvg
@@ -200,12 +220,39 @@ class Surface:
             for face in ("ui", "bold", "mono"):
                 nvg.add_fallback_font(vg, face, "sym")       # ✕ ○ □ △ ▲ ◀ …
         except Exception as e:  # noqa: BLE001 — a GL that will not take NanoVG: the room says why
+            if vg is not None:                               # made, then a font failed
+                nvg.nvg_imgui.delete_nvg_context_hello_imgui(vg)
             self.failed = f"{type(e).__name__}: {e}"[:160]
             self._say(f"off (NanoVG would not start: {self.failed})")
             return False
-        self.vg, self.nvg = vg, nvg
-        self._say("NanoVG")
+        self.vg, self.nvg, self.win = vg, nvg, _current()
         return True
+
+    def sweep(self, frame: int) -> None:
+        """Let go of the framebuffers of rooms not drawn for `STALE` frames
+        (a room on Map, a side panel closed)."""
+        for k in [k for k, v in self.fbs.items() if frame - v[2] > STALE]:
+            del self.fbs[k]
+
+    def close(self) -> None:
+        """Free the framebuffers and the context, in the context that made
+        them (made current for it, and back after). Safe to call twice;
+        the next `ready` starts afresh."""
+        if self.vg is None:
+            self.fbs.clear()
+            return
+        was = _current()
+        switch = self.win is not None and (was is None or not _same(was, self.win))
+        if switch:
+            import glfw
+            glfw.make_context_current(self.win)
+        try:
+            self.fbs.clear()                    # each framebuffer's GL objects, freed now
+            self.nvg.nvg_imgui.delete_nvg_context_hello_imgui(self.vg)
+        finally:
+            self.vg = None
+            if switch:
+                glfw.make_context_current(was)
 
     def why_not(self) -> str:
         """Why NanoVG is not drawing, in a few words (after `ready` said no)."""
@@ -223,8 +270,7 @@ class Surface:
             fb = self.nvg.nvg_imgui.NvgFramebuffer(self.vg, max(1, w_px), max(1, h_px), 0)
             got = self.fbs[room] = [fb, (w_px, h_px), frame]
         got[2] = frame
-        for k in [k for k, v in self.fbs.items() if frame - v[2] > STALE]:
-            del self.fbs[k]
+        self.sweep(frame)
         return got[0]
 
     def render(self, view: str, r, st: dict, w_px: int, h_px: int,
@@ -264,3 +310,17 @@ def surface_of(panel) -> Surface:
     if s is None:
         s = panel.__dict__["_pad_nvg"] = Surface()
     return s
+
+
+def sweep(panel, frame: int) -> None:
+    """Each frame, whatever is drawn: rooms gone quiet let go (`Surface.sweep`)."""
+    s = panel.__dict__.get("_pad_nvg")
+    if s is not None:
+        s.sweep(frame)
+
+
+def close(panel) -> None:
+    """The panel's NanoVG, freed while its GL is up (`Panel.close`)."""
+    s = panel.__dict__.get("_pad_nvg")
+    if s is not None:
+        s.close()

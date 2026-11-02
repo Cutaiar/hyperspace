@@ -53,6 +53,7 @@ _STICK = imgui.ImVec4(0.42, 0.70, 1.0, 1.0)
 _TRIG = imgui.ImVec4(1.0, 0.76, 0.35, 1.0)
 
 LANE_PX = (12.0, 11.0, 10.0)   # the lanes' type sizes, the largest that fits
+LANE_COL_MIN = 170.0           # a lanes column never narrower: an address, a bar, a value
 
 
 def _v(x: float, y: float) -> imgui.ImVec2:
@@ -77,7 +78,7 @@ class Reading:
     model: object | None = None
     down: frozenset = frozenset()          # canonical button names held
     hat: int = 0
-    axes: dict = field(default_factory=dict)   # LX … RT as routing lanes, 0–1
+    axes: dict = field(default_factory=dict)   # every axis lane (LX … RT, L.N …), 0–1
     touch: dict | None = None              # touch:… lanes, NaN where no finger
     motion: dict | None = None             # motion:… lanes
     degrees: tuple | None = None           # roll, pitch, yaw in degrees
@@ -105,13 +106,14 @@ def _lanes_of(pad, attr: str, names) -> dict | None:
 def read(pad) -> Reading:
     """The pad as the views read it — whatever it lacks left empty."""
     if pad is None:
-        return Reading(axes=dict(zip(gamepad.AXES, gamepad.AXIS_RESTS, strict=True)))
+        return Reading(axes=dict(zip(gamepad.LANES, gamepad.LANE_RESTS, strict=True)))
     on = bool(getattr(pad, "on", False))
     model = gamepad.shown_model(pad)
     named = getattr(pad, "buttons_named", None)
     named = named if isinstance(named, dict) else gamepad.BUTTONS
     down = frozenset(n for n, i in named.items() if on and pad.down(i))
-    lanes = list(pad.lanes())[:6] if on else list(gamepad.AXIS_RESTS)
+    got = list(pad.lanes())[:len(gamepad.LANES)] if on else []
+    lanes = got + list(gamepad.LANE_RESTS[len(got):])      # every lane, its rest where unread
     touch = _lanes_of(pad, "touch_lanes", gesture.TOUCH_LANES) if on else None
     motion = _lanes_of(pad, "motion_lanes", gesture.MOTION_LANES) if on else None
     m = getattr(pad, "motion", None)
@@ -121,7 +123,7 @@ def read(pad) -> Reading:
     bat = getattr(getattr(pad, "report", None), "battery", -1)
     return Reading(on=on, model=model, down=down,
                    hat=int(getattr(pad, "hat", 0) or 0) if on else 0,
-                   axes=dict(zip(gamepad.AXES, lanes, strict=True)), touch=touch,
+                   axes=dict(zip(gamepad.LANES, lanes, strict=True)), touch=touch,
                    motion=motion, degrees=degrees, effects=getattr(pad, "effects", None),
                    battery=bat if isinstance(bat, int) else -1,
                    link=str(getattr(pad, "link", "") or ""))
@@ -170,34 +172,51 @@ def _light(r: Reading):
     return imgui.ImVec4(*(min(255, max(0, int(v))) / 255 for v in rgb), 1.0)
 
 
+def _tip(c: Ctx, source: str) -> str:
+    words, row = c.says(source)
+    name = gamepad.control_name(source) or source
+    if row is not None:
+        return f"{name} · {words} · {row.describe()}"
+    if words:
+        return f"{name} · {words} — the app's own, no row in the table"
+    return f"{name} · free — right-click a param → Learn pad, then use it here"
+
+
+def tip_at(c: Ctx, x: float, y: float) -> str | None:
+    """What the controls under (x, y) do, a line each — a stick is its
+    click and its two axes — or None where there is none."""
+    seen: list[str] = []
+    for x0, y0, x1, y1, source in reversed(c.hits):
+        if x0 <= x < x1 and y0 <= y < y1 and source not in seen:
+            seen.append(source)
+    return "\n".join(_tip(c, s) for s in seen) if seen else None
+
+
 def _hover(c: Ctx) -> None:
-    """The hover over the control under the pointer: its mapping."""
+    """The hover over the controls under the pointer: their mappings."""
     if not imgui.is_window_hovered():
         return
     m = imgui.get_mouse_pos()
-    for x0, y0, x1, y1, source in reversed(c.hits):
-        if x0 <= m.x < x1 and y0 <= m.y < y1:
-            words, row = c.says(source)
-            name = gamepad.control_name(source) or source
-            if row is not None:
-                tip = f"{name} · {words} · {row.describe()}"
-            elif words:
-                tip = f"{name} · {words} — the app's own, no row in the table"
-            else:
-                tip = f"{name} · free — right-click a param → Learn pad, then use it here"
-            ui.tooltip(tip)
-            return
+    tip = tip_at(c, m.x, m.y)
+    if tip:
+        ui.tooltip(tip)
 
 
 # ---------------------------------------------------------------- lanes
 
-def _lane_rows(r: Reading) -> list[tuple]:
-    """(group, rows): each row (source, glyph, value or None, rest, bipolar)."""
+def _lane_rows(r: Reading, routed=frozenset()) -> list[tuple]:
+    """(group, rows): each row (source, glyph, value or None, rest, bipolar).
+    A stick's direction lanes (``axis:L.N`` …) only where `routed` names
+    them: sixteen idle lines would crowd the rest out."""
     out = []
     out.append(("sticks", [(f"axis:{n}", r.glyph(n, n), r.axes[n], 0.5, True)
                            for n in ("LX", "LY", "RX", "RY")]))
     out.append(("triggers", [(f"axis:{n}", r.glyph(n, n), r.axes[n], 0.0, False)
                              for n in ("LT", "RT")]))
+    dials = [(f"axis:{n}", "", r.axes.get(n, 0.0), 0.0, False)
+             for n in gamepad.DIAL_LANES if f"axis:{n}" in routed]
+    if dials:
+        out.append(("stick directions", dials))
     out.append(("d-pad", [(f"hat:{n}", g, 1.0 if r.hat & gamepad.HATS[n] else 0.0, 0.0, False)
                           for n, g in (("UP", "↑"), ("RIGHT", "→"), ("DOWN", "↓"),
                                        ("LEFT", "←"))]))
@@ -238,20 +257,42 @@ def _lane_rows(r: Reading) -> list[tuple]:
     return out
 
 
+def _routed(says) -> frozenset:
+    """The stick-direction lanes a row maps."""
+    return frozenset(s for s in (f"axis:{n}" for n in gamepad.DIAL_LANES) if says(s)[1] is not None)
+
+
+def _line_h(px: float) -> float:
+    imgui.push_font(ui._FONTS["ui"], px)
+    lh = imgui.get_text_line_height() + 2
+    imgui.pop_font()
+    return lh
+
+
+def lanes_height(w: float, pad, says) -> float:
+    """How tall Lanes must be, `w` wide, for every line at the largest type
+    in columns no narrower than `LANE_COL_MIN` — GRAPH's side panel gives
+    it that (it scrolls), where the pad window's room is fixed."""
+    groups = _lane_rows(read(pad), _routed(says))
+    n_lines = sum(1 + len(rows) for _, rows in groups)
+    cols = max(1, int(w // LANE_COL_MIN))
+    return math.ceil(n_lines / cols) * _line_h(LANE_PX[0])
+
+
 def lanes(c: Ctx) -> None:
     """Every lane in columns, the groups in order: the address a row
     names, its glyph, a bar from its rest, the value, what maps it. The
-    largest type that fits (`LANE_PX`); what never fits is cut at the foot."""
-    groups = _lane_rows(c.r)
+    largest type that fits (`LANE_PX`) in columns no narrower than
+    `LANE_COL_MIN`; what never fits is cut at the foot."""
+    groups = _lane_rows(c.r, _routed(c.says))
     n_lines = sum(1 + len(rows) for _, rows in groups)
+    most = max(1, int(c.w // LANE_COL_MIN))
     chosen = None
     for px in LANE_PX:
-        imgui.push_font(ui._FONTS["ui"], px)
-        lh = imgui.get_text_line_height() + 2
-        imgui.pop_font()
+        lh = _line_h(px)
         per_col = max(1, int(c.h // lh))
-        cols = math.ceil(n_lines / per_col)
-        if c.w / cols >= 18 * px or px == LANE_PX[-1]:
+        cols = min(most, math.ceil(n_lines / per_col))
+        if (per_col * cols >= n_lines and c.w / cols >= 18 * px) or px == LANE_PX[-1]:
             chosen = (px, lh, per_col, cols)
             break
     px, lh, per_col, cols = chosen
