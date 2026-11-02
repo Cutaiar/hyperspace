@@ -6,7 +6,7 @@
 // @tip frame's brightness on a slow sine, so white swings between magenta and hot green
 // @tip and everything else shifts with it. A grain of noise keeps it alive.
 
-uniform float u_amount;  // @param 0 2 0.15 "Amount" Noita's colour amount — 0.05 on the first stage, 0.4 heavily tripping, 1.5 on the last; above 1 it overshoots.
+uniform float u_amount;  // @param 0 2 0.15 amount "Amount" Noita's colour amount — 0.05 on the first stage, 0.4 heavily tripping, 1.5 on the last; above 1 it overshoots.
 uniform float u_pulse;   // @param 0.1 6 1.5 log "Pulse" The sine's rate, rad/s (Noita: 1.5).
 
 vec4 effect(vec2 uv) {

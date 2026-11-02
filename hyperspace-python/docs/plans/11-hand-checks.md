@@ -6404,6 +6404,72 @@ header's count shortens to a number rather than run off the edge; in 4
 the side panel lists the Xbox pad's patched ports, no picture (the
 picture is the first pad's).
 
+## AT. Coarse and fine through the tapers (wave 0 T1)
+
+Decision register row 561. Both Macs on this build; the owner has run
+`uv run python tools/retaper_routes.py` on the library (a dry run, then
+`--write`) **before the next show** — until then every old preset is
+converted at load and nothing is lost, but the files still say the old
+depths.
+
+**420. 0.05× from an APC knob; an old preset's depth feels the same.** (Mac, the APC40, the second Mac on `main` for the last step)
+Headless: `tests/test_retaper.py`; `tests/test_fx.py`.
+1. Load `party-noita` (the library's, after the tool). FX: open Trip
+   warp. Learn a desk knob onto `fx.warp.speed` and another onto
+   `fx.warp.amount` (ROUTING, or click-to-map on the on-screen desk).
+2. Turn the speed knob from its bottom to its top, slowly, watching the
+   readout; then land 0.05× and let go of the knob.
+3. Turn the amount knob from its bottom to its top; land 0.1 (5 % of the
+   range) and let go.
+4. Right hand up in the box, at rest; then raise it to the top of the
+   box and hold it there. Watch the warp.
+5. On the second Mac (`main`, the library before the tool's rewrite — its
+   backup, or the preset as it was), the same preset and the same gesture.
+6. GRAPH ▸ the `hand:right.y → warp amount` cable's depth (or ROUTING's
+   row): read its number.
+
+*Pass:* (2) the readout runs −8.00× … −0.25× … −0.008× · stop (the
+knob's middle) · +0.008× … +0.050× … +0.25× … +1.00× … +8.00×, each CC
+step about an eighth of an octave, and 0.05× holds where the knob is let
+go (about a third of the way up the positive half) — it does not snap to
+stop or to 0.1×; (3) the amount reads 0 at the bottom, then 0.002 … 0.02
+… 0.2 … 2.0, and 0.1 holds (about 0.57 of the knob); (4) with the hand at
+the top of the box the warp is as strong as (5) on the old build — the
+depth was migrated about the preset's base, so a full push reaches the
+same amount; between rest and the top the curve differs a little (the
+new taper's), by eye the same gesture; (6) the depth reads about 0.074,
+where the file said 0.3 before (the tool's line: `push 0.3 → 0.0737 about
+0.9`).
+## AR. Continuity: `@clock`, and no shader multiplies time by a param
+Register row 560 (the owner, 2026-11-02; wave 0 K1, `wave0/k1-clock-directive`).
+K1 is the framework only — the directive, the lint and the harness; **no
+shipped effect is ported yet**, so this check waits for K2 (warp and
+tripcolour on `@clock`). Until then the headless proof is
+`tests/test_fx_clock.py` (a synthetic `@clock` effect beside its
+`u_phase * u_rate` twin through the UV harness; warp's drift as a strict
+xfail) and `tests/test_shader_time_lint.py` (the allowlist of today's
+offenders).
+**419. A knob step on a `@clock` param changes the rate, not the place.** (laptop; after K2; music helps)
+Headless: `tests/test_fx_clock.py` (`test_a_clocked_rate_step_is_continuous_and_the_twins_jumps`, `test_warps_speed_step_is_continuous`), `tests/test_shader_time_lint.py`.
+1. Load a preset with Trip warp on (`party-trip`, say) and let it run — the
+   longer the better; an hour is the show's shape. Note roughly where the
+   warp's ripples sit over the shape.
+2. On FX, open Trip warp. Nudge Drift one step (a tenth), then Scale one
+   step. Then nudge the effect's Speed one step (it was integrated before
+   K1: this is what right looks like).
+3. On Trip colour, nudge Pulse one step while white is on screen.
+4. Open `hyperspace/shaders/fx/warp.glsl`: the `// @clock` lines are at the
+   top; nothing in the body multiplies `u_phase` or `u_time` by a `u_` param.
+*Pass:* in 2 each nudge makes the ripples slide faster or finer from where
+they are — nothing re-draws, nothing lurches, the same as Speed; in 3 the
+green pulse keeps its beat and only quickens, no flash; 4 reads as said.
+*Fail:* a nudge on Drift or Scale lands the field somewhere else (the
+2026-10-30 show) — the port multiplies a time by a param somewhere the
+lint's allowlist still names, or a `@clock`'s period is set where the
+shader's use of it is not periodic (a scrolled noise field must run on,
+unwrapped). Before K2 lands, 2 and 3 *do* lurch on Drift, Scale and Pulse:
+that is the recorded fault, not a regression.
+
 ## What no test covers
 
 Only a person can settle these:

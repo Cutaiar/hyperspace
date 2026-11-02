@@ -63,7 +63,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from . import patterns, tapers, undo
+from . import fx, patterns, tapers, undo
 from .analyzer import CURVES, F_HI, F_LO, Q_HI, Q_LO
 from .bands import CEIL, NORMS, SHAPERS
 from .fx import FxState
@@ -907,7 +907,12 @@ class Registry:
 # older build still loads the file — reading its pan as px); one without
 # it is a preset/2 file from before, its pan read in px and converted
 UNITS_KEY = "units"
-UNITS = {"camera.pan": "world"}
+# wave 0 T1: a route's depth onto an effect's `speed` or an `amount` param
+# is measured along the param's taper (`fx.retaper_of`), where a document
+# from before measured it along the linear range; `retaper_depths` reads
+# the old file as it was, and this key says a document is already so
+DEPTH_UNIT, DEPTH_TAPER = "fx.depth", "taper"
+UNITS = {"camera.pan": "world", DEPTH_UNIT: DEPTH_TAPER}
 PAN_IDS = ("camera.pan.x", "camera.pan.y")
 
 
@@ -940,6 +945,155 @@ def pan_world(doc: dict) -> tuple[dict, bool]:
             changed |= new != v
             out["values"][pid] = new
     return out, changed
+
+
+# ---- wave 0 T1: a depth onto a retapered effect param, read as it was ----
+#
+# A route's depth is in the target's normalised units; the effects' `speed`
+# and `amount` params were linear and are now on tapers (fx.T_SPEED,
+# fx.amount_taper), so the same number means another real-unit change.
+# Bases are stored in real units and are safe; the depths are not. A
+# document without `units[DEPTH_UNIT]` had its depths measured along the
+# linear range, and is converted here — at load (`Presets.load_doc`) and
+# for good by tools/retaper_routes.py, which writes the marker.
+
+_RETAPER_OPS = ("push", "position", "set")
+# the row lists a document may hold: a preset's or patch's `routes` and
+# `desk`, a desk template's `desk`, the session table's `bindings`
+_ROW_SECTIONS = ("routes", "desk", "bindings")
+_FALLBACK_FILES: dict | None = None
+
+
+def fx_files(source=None) -> dict:
+    """The effect specs to measure a document's depths against
+    (`retaper_depths`): an `FxState`'s own `files`, or the one a registry
+    declared from (`Registry.fx_state`, build_registry). With neither — a
+    reader with no rig in hand, `Bindings.from_json`, `patches.read` — the
+    shader folder as it ships (`fx.FX_DIR`), parsed **once** per process
+    and kept; a rig whose effects live elsewhere passes its own state."""
+    global _FALLBACK_FILES
+    files = getattr(source, "files", None)
+    if files is None:
+        files = getattr(getattr(source, "fx_state", None), "files", None)
+    if files is not None:
+        return files
+    if _FALLBACK_FILES is None:
+        _FALLBACK_FILES = FxState().files
+    return _FALLBACK_FILES
+
+
+def _number(v) -> float | None:
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) \
+        and math.isfinite(v) else None
+
+
+def retaper_depths(doc: dict, files: dict) -> tuple[dict, list[str]]:
+    """A document — a preset, a patch, a desk template or the session
+    table — with every depth onto a retapered effect param (`fx.retaper_of`
+    over `files`, `FxState.files`) measured along the param's taper, and
+    marked so (`units[DEPTH_UNIT]`). Returns (the document, what moved —
+    one line per row); the document itself when it is already marked. The
+    rows are its ``routes``, ``desk`` and ``bindings`` lists and its macros'
+    base subscribers. Each row's real-unit effect is kept where it can be:
+
+    - a ``position`` row (and a ``set`` row's value, a norm): the real
+      value the source lands at full throw is the same, so the new depth is
+      that value's position on the taper. Exact at the top; below it the
+      source is the param's new fader, as a position row means;
+    - a ``push`` row: the real value a full push reaches **from the row's
+      base** — the document's own value of the param, or the effect's
+      default where it names none (a session table always) — is the same,
+      so the new depth is the taper distance from the base to that value.
+      Exact at rest and at full push about that base; between the two, and
+      from another base, the taper's curve stands in for the line. A push
+      that over- or undershoots the range from that base (a negative push
+      from a base of 0) keeps its sign and its overshoot: the part inside
+      the range is converted and the part beyond it is carried over in
+      norm as it was, so a depth is never written 0 for a row that had
+      one — such a row is said "overshoots";
+    - a macro's base subscriber on such a param: its ``from`` and ``to``
+      are norms, and are moved as a position's depth is.
+
+    Depth subscribers, ``scale`` and ``rest`` are multipliers or the
+    source's and do not move. A row whose value is not a number is left."""
+    units = doc.get(UNITS_KEY)
+    if isinstance(units, dict) and units.get(DEPTH_UNIT) == DEPTH_TAPER:
+        return doc, []
+    out = copy.deepcopy(doc)
+    values = out.get("values") if isinstance(out.get("values"), dict) else {}
+    moved: list[str] = []
+    probe = Param("", "", Kind.CONTINUOUS)
+
+    def retapered(target):
+        return fx.retaper_of(target, files) if isinstance(target, str) else None
+
+    def new_norm(got, v: float) -> float:
+        probe.taper = got[3]
+        return probe._norm_of(v)
+
+    def old_value(got, n: float) -> float:
+        lo, hi = got[0], got[1]
+        return lo + _clamp(n, 0.0, 1.0) * (hi - lo)
+
+    def old_norm(got, v: float) -> float:
+        lo, hi = got[0], got[1]
+        return _clamp((v - lo) / (hi - lo), 0.0, 1.0)
+
+    def rows(section):
+        part = out.get(section)
+        return [r for r in part if isinstance(r, dict)] if isinstance(part, list) else []
+
+    for section in _ROW_SECTIONS:
+        for row in rows(section):
+            got = retapered(row.get("target"))
+            op = row.get("op")
+            if got is None or op not in _RETAPER_OPS:
+                continue
+            d = _number(row.get("value", 1.0))
+            if d is None:
+                continue
+            target = row["target"]
+            said = ""
+            if op == "push":
+                base = _number(values.get(target))
+                base = got[2] if base is None else base
+                at = old_norm(got, base)
+                target_norm = at + d
+                inside = _clamp(target_norm, 0.0, 1.0) - at      # the part within the range
+                beyond = target_norm - _clamp(target_norm, 0.0, 1.0)   # the overshoot, as it was
+                new = new_norm(got, old_value(got, at + inside)) - new_norm(got, base) + beyond
+                about = f" about {base:g}"
+                if beyond:
+                    said = f" (overshoots the range by {beyond:+.3g} in norm: carried over)"
+            else:
+                new = new_norm(got, old_value(got, d))
+                about = ""
+            if new != d:
+                row["value"] = new
+                moved.append(f"{section} {row.get('source', '?')} → {target}: {op} {d:g} → "
+                             f"{new:.4g}{about}{said}")
+    macros = out.get("macros")
+    for mid, macro in (macros.items() if isinstance(macros, dict) else ()):
+        subs = macro.get("subs") if isinstance(macro, dict) else None
+        for s in (subs if isinstance(subs, list) else ()):
+            if not isinstance(s, dict) or "depth" in s:
+                continue
+            got = retapered(s.get("base"))
+            if got is None:
+                continue
+            for key in ("from", "to"):
+                n = _number(s.get(key, 0.0 if key == "from" else 1.0))
+                if n is None:
+                    continue
+                new = new_norm(got, old_value(got, n))
+                if new != n:
+                    s[key] = new
+                    moved.append(f"{mid} base {s['base']}: {key} {n:g} → {new:.4g}")
+    units = out.get(UNITS_KEY)
+    if not isinstance(units, dict):
+        units = out[UNITS_KEY] = {}
+    units[DEPTH_UNIT] = DEPTH_TAPER
+    return out, moved
 
 
 def _attr(obj, name):

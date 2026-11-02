@@ -330,11 +330,11 @@
   {"source": "lane:3", "target": "pattern.mod.3", "op": "push", "value": 0.35},
   {"source": "lane:4", "target": "pattern.mod.4", "op": "push", "value": 0.35},
   {"source": "lane:5", "target": "pattern.mod.5", "op": "push", "value": 0.35},
-  {"source": "hand:right.y", "target": "fx.zoomblur.amount", "op": "push", "value": 0.8},
+  {"source": "hand:right.y", "target": "fx.zoomblur.amount", "op": "push", "value": 0.31699250014498825},
   {"source": "hand:right.z", "target": "fx.kaleido.zoom", "op": "push", "value": -0.5},
   {"source": "hand:right.roll", "target": "fx.kaleido.swirl", "op": "position"},
   {"source": "hand:right.yaw", "target": "fx.huecycle.spread", "op": "push", "value": 0.4},
-  {"source": "hand:right.pitch", "target": "fx.plasma.level", "op": "push", "value": 0.4},
+  {"source": "hand:right.pitch", "target": "fx.plasma.level", "op": "push", "value": 0.15849625007249413},
   {"source": "hand:left.y", "target": "lfo.1.depth", "op": "position"},
   {"source": "lfo:0", "target": "camera.zoom", "op": "push", "value": 0.0505},
   {"source": "hand:left.x", "target": "fx.zoomblur.cx", "op": "push", "value": 0.8},
@@ -375,7 +375,8 @@
  "macros": {},
  "modules": {},
  "units": {
-  "camera.pan": "world"
+  "camera.pan": "world",
+  "fx.depth": "taper"
  },
  "media": {
   "channels": {}

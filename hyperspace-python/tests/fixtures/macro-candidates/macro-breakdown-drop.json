@@ -225,7 +225,7 @@
     {
      "base": "fx.warp.amount",
      "from": 0.0,
-     "to": 0.5
+     "to": 0.9
     }
    ]
   },
@@ -446,11 +446,14 @@
     },
     {
      "base": "fx.warp.amount",
-     "from": 0.25,
-     "to": 0.8
+     "from": 0.8,
+     "to": 0.9678071905102115
     }
    ]
   }
  },
- "modules": {}
+ "modules": {},
+ "units": {
+  "fx.depth": "taper"
+ }
 }
