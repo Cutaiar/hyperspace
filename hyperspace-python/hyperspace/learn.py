@@ -114,7 +114,7 @@ SAVE_REFUSAL = ("Save is the desk's SAVE (track 8's clip stop, held) — it take
 # today's rig offers
 DESK = "desk"
 BARE_WANTS = (DESK, "hand:left", "hand:right", "pad")
-PAD_SCHEMES = ("pad", "hat", "axis")    # what can complete a "pad" learn
+PAD_SCHEMES = ("pad", "hat", "axis", "touch", "motion")    # what can complete a "pad" learn
 
 # a push learn's depth when the adapter names none (plan 18 WP3). The hands
 # adapter passes its own `hands.learn_depth`, whose default is this number
