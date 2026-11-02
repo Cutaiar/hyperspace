@@ -162,17 +162,27 @@ taken out), half a second of each step kept as test bytes
 
 Still to see in the app: hand checks 407–415.
 
-## Tomorrow
+## On another Mac
 
-1. `git pull`, `uv sync` (hidapi), plug the Edge in by USB.
-2. `uv run python tools/hid_probe.py --check --record edge-usb.jsonl
-   --out edge-usb.json`, then pair over Bluetooth (Create + PS until the
-   light flashes; System Settings ▸ Bluetooth) and again with
-   `edge-bt.*`. Or the lab: `cd prototypes/edge-lab && python3 -m
-   http.server`, Chrome at http://localhost:8000.
-3. Commit the four files under `docs/plans/assets/42-controllers/`; the
-   next build corrects what they contradict.
-4. The hand checks, group AP (407–415).
+1. This build: `git fetch && git checkout plan-42-controllers` (or `main`
+   once merged), `uv sync` (it adds hidapi), then quit and relaunch — not
+   a hot reload.
+2. `config.toml` is the machine's own. With no `[[devices]]` list, the
+   default pad entry is `controller = "any"` with `hid` on: it takes the
+   Edge as the main pad with no change. With a list, name it — the main
+   pad is the first gamepad entry:
+   ```toml
+   [[devices]]
+   role = "edge"
+   kind = "gamepad"
+   controller = "edge"
+   ```
+3. Close what could hold the pad (Steam, the browser lab's tab): the app
+   opens it exclusively. If macOS asks for Input Monitoring, allow it.
+4. Over Bluetooth the pad pairs again on a new Mac (Create + PS until the
+   light flashes), and again on the old one to go back.
+5. Patches and presets with `touch:` / `motion:` rows in the shared library
+   are dormant, not broken, on a build without plan 42.
 
 ## Not in this plan
 

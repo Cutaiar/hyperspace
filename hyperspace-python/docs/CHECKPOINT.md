@@ -168,7 +168,8 @@ sources the day before Dillon's controller arrived
 ([`plans/42-controllers.md`](plans/42-controllers.md)). Its D1–D10 are
 recommendations, pending the owner (register rows 544–553); its hand
 checks 407–415 (group AP) start with `tools/hid_probe.py --check` on the
-real pad. `uv sync` adds hidapi; **restart** rather than hot reload (new
+real pad — run on Dillon's Edge over USB and Bluetooth on 2026-11-02, every
+question answered (the plan's "What the controller said"). `uv sync` adds hidapi; **restart** rather than hot reload (new
 fields on `Pad`, `PadDevice` and `gamepad.Claims`).
 
 ## What is left
