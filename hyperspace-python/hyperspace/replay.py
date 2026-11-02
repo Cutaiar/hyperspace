@@ -173,26 +173,56 @@ def draw_lists(impl, lists, origin: tuple[float, float], size: tuple[float, floa
     return drawn
 
 
+def framebuffer_size(draw_data) -> tuple[int, int]:
+    """The control window's framebuffer size as the backend computes it
+    (`display_size` × `framebuffer_scale`, truncated): (0, 0) for a
+    minimised or zero-sized window, on which `impl.render` returns before
+    `scale_clip_rects`, so the lists' clip rects are still in points."""
+    ds, fs = draw_data.display_size, draw_data.framebuffer_scale
+    return (int(ds[0] * fs[0]), int(ds[1] * fs[1]))
+
+
 def grab(tap, impl, draw_data, canvas_px, *, clock=time.monotonic) -> bool:
     """After `impl.render(draw_data)`, before the swap: when the tap was
     wanted this frame and the GRAPH page drew (`canvas_px` is its
     `(origin, size, scale, page[, omit])` — points, points, framebuffer
     scale, the page window's name, the pane's decorations' index range),
-    draw the canvas's lists into the tap and flush,
-    so the render context sees the texture next frame. True when drawn.
-    The tap's `take` is read whether or not the page drew, so a wish never
-    outlives its frame. A failure is the tap's `error`, never the loop's."""
-    if tap is None or not tap.take() or canvas_px is None:
+    draw the canvas's lists into the tap and flush, so the render context
+    sees the texture next frame. True when drawn. The tap's `take` is read
+    whether or not the page drew, so a wish never outlives its frame, and
+    its `on_page` says whether the page drew (the source's `off page`).
+    An empty framebuffer (the window minimised: the backend skipped the
+    frame and its clip rects are unscaled) draws nothing. A draw that
+    fails is `abort`ed — nothing published, the last frame stands — and
+    is the tap's `error`, never the loop's. The viewport is put back as
+    it was: `end` rebinds the screen through moderngl, which reapplies
+    the viewport it noted at creation, not the window's size now."""
+    if tap is None:
+        return False
+    tap.on_page = canvas_px is not None
+    if not tap.take() or canvas_px is None:
         return False
     origin, size, scale, page = canvas_px[:4]
     omit = canvas_px[4] if len(canvas_px) > 4 else None
     try:
+        fb = framebuffer_size(draw_data)
+        if fb[0] <= 0 or fb[1] <= 0:
+            return False
         lists = canvas_lists(draw_data.cmd_lists, page)
-        tap.begin(fit_size(size, scale))
+        target = fit_size(size, scale)
+        if getattr(tap, "ctx", None) is None:
+            raise RuntimeError("CanvasTap has no GL context")    # before any GL call: none is current
+        viewport = [int(v) for v in gl.glGetIntegerv(gl.GL_VIEWPORT)]
+        tap.begin(target)
         try:
-            draw_lists(impl, lists, origin, size, scale, fit_size(size, scale), omit)
-        finally:
+            try:
+                draw_lists(impl, lists, origin, size, scale, target, omit)
+            except Exception:
+                tap.abort()
+                raise
             tap.end(clock())
+        finally:
+            gl.glViewport(*viewport)
         gl.glFlush()
         tap.error = ""
     except Exception as e:  # noqa: BLE001 — a picture must not cost the panel its frame

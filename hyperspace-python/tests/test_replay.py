@@ -1,8 +1,11 @@
 """Draw-list replay (2026-11-02): the GRAPH canvas as `panel:graph`. The
 filter rule over fake draw lists, the scissor and projection maths, the
-tap's double buffer, and — on a GL context — a real imgui frame replayed
-into the tap: the canvas's own window kept, its child (the side pane), a
-tooltip and the foreground list left out."""
+tap's leased texture pool, and — on a GL context — a real imgui frame
+replayed into the tap: the canvas's own window kept, its child (the side
+pane), a tooltip and the foreground list left out; a frame held at rate 0
+beside a live reader, across a canvas resize; a draw that fails
+publishing nothing; an empty framebuffer drawing nothing; the viewport
+put back."""
 
 from __future__ import annotations
 
@@ -110,21 +113,40 @@ def test_the_projection_maps_the_canvas_rect_onto_clip_space():
 
 def test_grab_takes_the_wish_and_draws_nothing_without_the_page():
     """A wish never outlives its frame: `take` is read whether or not GRAPH
-    drew, so a page left mid-frame leaves no stale draw next frame."""
+    drew, so a page left mid-frame leaves no stale draw next frame; and the
+    tap notes whether the page drew (`on_page`, the source's `off page`)."""
     tap = outputs.CanvasTap()
     tap.want()
     assert replay.grab(tap, None, None, None) is False
     assert tap.wanted is False and tap.tex is None and tap.frame_no == 0
+    assert tap.on_page is False
     assert replay.grab(tap, None, None, ((0, 0), (1, 1), (1, 1), PAGE)) is False   # not wanted
+    assert tap.on_page is True
     assert replay.grab(None, None, None, ((0, 0), (1, 1), (1, 1), PAGE)) is False
 
 
 def test_a_failing_grab_is_the_taps_error_never_a_raise():
     tap = outputs.CanvasTap()
     tap.want()
-    bad = NS(cmd_lists=[dl(PAGE)])
+    bad = NS(cmd_lists=[dl(PAGE)], display_size=(400, 300), framebuffer_scale=(2, 2))
     assert replay.grab(tap, None, bad, ((0, 0), (10, 10), (1, 1), PAGE)) is False
-    assert tap.error and tap.wanted is False
+    assert tap.error and tap.wanted is False and tap.frame_no == 0
+
+
+def test_an_empty_framebuffer_draws_nothing_and_publishes_nothing():
+    """The window minimised: the backend's `render` returns before
+    `scale_clip_rects` when the framebuffer is 0 wide or high, so the
+    clip rects are still in points; `grab` bails out the same way — the
+    wish taken, no error, no frame."""
+    assert replay.framebuffer_size(NS(display_size=(400, 300), framebuffer_scale=(2, 2))) == (800, 600)
+    assert replay.framebuffer_size(NS(display_size=(0, 300), framebuffer_scale=(2, 2))) == (0, 600)
+    assert replay.framebuffer_size(NS(display_size=(400, 0.4), framebuffer_scale=(1, 1))) == (400, 0)
+    tap = outputs.CanvasTap()
+    for ds in ((0, 300), (400, 0)):
+        tap.want()
+        dd = NS(cmd_lists=[dl(PAGE)], display_size=ds, framebuffer_scale=(2, 2))
+        assert replay.grab(tap, None, dd, ((0, 0), (10, 10), (2, 2), PAGE)) is False
+        assert tap.error == "" and tap.wanted is False and tap.frame_no == 0 and tap.tex is None
 
 
 # ---------------------------------------------------------------- on GL
@@ -144,93 +166,216 @@ def _rgba(tex) -> np.ndarray:
 
 RED, GREEN, BLUE, WHITE = (255, 0, 0, 255), (0, 255, 0, 255), (0, 0, 255, 255), (255, 255, 255, 255)
 CYAN = (0, 255, 255, 255)
+ORIGIN, SIZE = (60.0, 100.0), (200.0, 120.0)        # the canvas, points
+SCALE = (2.0, 2.0)
 
 
-def test_the_canvas_is_replayed_into_the_tap_without_what_lies_over_it():
+class Scene:
+    """A control window of 400×300 points at 2× on a standalone context:
+    the backend, a screen texture and a tap. `shoot(colour)` runs one imgui
+    frame — a page window with the canvas in `colour` and a green head
+    above it, the side pane (a bordered child, cyan ground, blue content)
+    over the canvas, a tooltip and a white foreground rect — renders it to
+    the screen as the app's loop does and grabs it into the tap; `canvas`
+    is the rect it draws the canvas in (points), changed to test a
+    resize."""
+
+    def __init__(self):
+        from imgui_bundle.python_backends.opengl_backend_programmable import (
+            ProgrammablePipelineRenderer,
+        )
+
+        self.gl = _gl()
+        self.ictx = imgui.create_context()
+        io = imgui.get_io()
+        io.display_size = imgui.ImVec2(400, 300)
+        io.display_framebuffer_scale = imgui.ImVec2(*SCALE)
+        io.fonts.add_font_default()
+        self.screen = self.gl.framebuffer(color_attachments=[self.gl.texture((800, 600), 4)])
+        self.screen.use()
+        self.impl = ProgrammablePipelineRenderer()
+        self.tap = outputs.CanvasTap(self.gl)
+        self.canvas = (ORIGIN, SIZE)
+        self.page = ""
+        self.omit = (0, 0)
+
+    def shoot(self, colour=(1, 0, 0, 1), *, want: bool = True, grab=None) -> bool:
+        origin, size = self.canvas
+        imgui.new_frame()
+        imgui.set_next_window_pos(imgui.ImVec2(50, 40))
+        imgui.set_next_window_size(imgui.ImVec2(300, 220))
+        imgui.begin("PAGE", None, imgui.WindowFlags_.no_decoration)
+        self.page = imgui.internal.get_current_window().name
+        d = imgui.get_window_draw_list()
+        d.add_rect_filled(imgui.ImVec2(60, 50), imgui.ImVec2(260, 90), imgui.get_color_u32(imgui.ImVec4(0, 1, 0, 1)))
+        d.add_rect_filled(imgui.ImVec2(*origin), imgui.ImVec2(origin[0] + size[0], origin[1] + size[1]),
+                          imgui.get_color_u32(imgui.ImVec4(*colour)))
+        imgui.set_cursor_screen_pos(imgui.ImVec2(160, 120))
+        # the side pane as the GRAPH page draws it: a bordered child with a
+        # ground — decorations imgui puts on the page's list — noted
+        imgui.push_style_color(imgui.Col_.child_bg, imgui.ImVec4(0, 1, 1, 1))
+        i0 = d.idx_buffer.size()
+        imgui.begin_child("##side", imgui.ImVec2(80, 80), imgui.ChildFlags_.borders)
+        self.omit = (i0, d.idx_buffer.size())
+        imgui.get_window_draw_list().add_rect_filled(imgui.ImVec2(170, 130), imgui.ImVec2(230, 190),
+                                                     imgui.get_color_u32(imgui.ImVec4(0, 0, 1, 1)))
+        imgui.end_child()
+        imgui.pop_style_color()
+        imgui.begin_tooltip()
+        imgui.text("a tooltip over the canvas")
+        imgui.end_tooltip()
+        imgui.end()
+        imgui.get_foreground_draw_list().add_rect_filled(
+            imgui.ImVec2(70, 110), imgui.ImVec2(100, 130), imgui.get_color_u32(imgui.ImVec4(1, 1, 1, 1)))
+        imgui.render()
+        dd = imgui.get_draw_data()
+        self.screen.use()
+        self.screen.clear(0, 0, 0, 1)
+        self.impl.render(dd)                 # the screen, every list — as the app's loop does
+        if want:
+            self.tap.want()
+        return (grab or replay.grab)(self.tap, self.impl, dd, (origin, size, SCALE, self.page, self.omit))
+
+    def close(self) -> None:
+        self.tap.close()
+        self.impl.shutdown()
+        imgui.destroy_context(self.ictx)
+        self.screen.release()
+        self.gl.release()
+
+
+@pytest.fixture
+def scene():
+    sc = Scene()
+    try:
+        yield sc
+    finally:
+        sc.close()
+
+
+def _hold(src_tap):
+    """A channel at rate 0 in shape: a frame naming the tap's texture with
+    the lease a `PanelSource` would put on it (`MediaFrame.lease`)."""
+    from hyperspace.media.frame import MediaFrame
+
+    lease = src_tap.lease()
+    return MediaFrame(None, src_tap.at, src_tap.frame_no, texture=lease.texture,
+                      tex_size=lease.size, lease=lease)
+
+
+def test_the_canvas_is_replayed_into_the_tap_without_what_lies_over_it(scene):
     """A real imgui frame on a GL context: a page window with a red canvas
     and a green head above it, a child window (the side pane) blue over
     the canvas, a tooltip and a white foreground rect over it too. The
     screen shows all of them; the tap shows the red canvas alone, opaque,
     at the canvas's framebuffer size, and its red matches the screen's."""
-    from imgui_bundle.python_backends.opengl_backend_programmable import (
-        ProgrammablePipelineRenderer,
-    )
+    for _ in range(2):                                # a frame to settle, one to shoot
+        assert scene.shoot() is True, scene.tap.error
+    tap, omit = scene.tap, scene.omit
+    assert scene.page == "PAGE" and tap.error == "" and tap.frame_no == 2 and omit[1] > omit[0]
+    assert tap.size == (400, 240)
+    pic, shown = _rgba(tap.tex), _rgba(scene.screen.color_attachments[0])
+    # the screen has everything: red canvas, the side pane (cyan ground, blue
+    # content), white inset, green head
+    assert tuple(shown[2 * 120, 2 * 85]) == WHITE and tuple(shown[2 * 160, 2 * 200]) == BLUE
+    assert tuple(shown[2 * 125, 2 * 165]) == CYAN and tuple(shown[2 * 70, 2 * 100]) == GREEN
+    # the tap: the canvas's red where the side pane and the inset lay, nothing else
+    canvas_px = (2 * (200 - 60), 2 * (160 - 100))                # the side pane's spot, tap px
+    assert tuple(pic[canvas_px[1], canvas_px[0]]) == RED
+    assert tuple(pic[2 * (125 - 100), 2 * (165 - 60)]) == RED  # under the pane's ground
+    assert tuple(pic[2 * 20, 2 * 25]) == RED                       # under the white inset
+    assert tuple(pic[120, 200]) == RED and tuple(pic[0, 0]) == RED and tuple(pic[239, 399]) == RED
+    colours = {tuple(c) for c in np.unique(pic.reshape(-1, 4), axis=0)}
+    assert colours == {RED}, colours                                # no green, blue or white
+    assert pic[..., 3].min() == 255
+    # with every reader live the pool is two textures written in turn
+    held = tap.tex
+    assert scene.shoot() is True and tap.tex is not held and tap.frame_no == 3
+    assert tap.textures == 2 and tap.ctx.fbo is scene.screen       # the screen bound again
 
-    gl = _gl()
-    ictx = imgui.create_context()
-    io = imgui.get_io()
-    io.display_size = imgui.ImVec2(400, 300)
-    io.display_framebuffer_scale = imgui.ImVec2(2, 2)
-    io.fonts.add_font_default()
-    screen = gl.framebuffer(color_attachments=[gl.texture((800, 600), 4)])
-    screen.use()
-    impl = ProgrammablePipelineRenderer()
-    tap = outputs.CanvasTap(gl)
-    origin, size = (60.0, 100.0), (200.0, 120.0)        # the canvas, points
-    try:
-        page = ""
-        for _ in range(2):                                # a frame to settle, one to shoot
-            imgui.new_frame()
-            imgui.set_next_window_pos(imgui.ImVec2(50, 40))
-            imgui.set_next_window_size(imgui.ImVec2(300, 220))
-            imgui.begin("PAGE", None, imgui.WindowFlags_.no_decoration)
-            page = imgui.internal.get_current_window().name
-            d = imgui.get_window_draw_list()
-            d.add_rect_filled(imgui.ImVec2(60, 50), imgui.ImVec2(260, 90), imgui.get_color_u32(imgui.ImVec4(0, 1, 0, 1)))
-            d.add_rect_filled(imgui.ImVec2(*origin), imgui.ImVec2(origin[0] + size[0], origin[1] + size[1]),
-                              imgui.get_color_u32(imgui.ImVec4(1, 0, 0, 1)))
-            imgui.set_cursor_screen_pos(imgui.ImVec2(160, 120))
-            # the side pane as the GRAPH page draws it: a bordered child with
-            # a ground — decorations imgui puts on the page's list — noted
-            imgui.push_style_color(imgui.Col_.child_bg, imgui.ImVec4(0, 1, 1, 1))
-            i0 = d.idx_buffer.size()
-            imgui.begin_child("##side", imgui.ImVec2(80, 80), imgui.ChildFlags_.borders)
-            omit = (i0, d.idx_buffer.size())
-            imgui.get_window_draw_list().add_rect_filled(imgui.ImVec2(170, 130), imgui.ImVec2(230, 190),
-                                                         imgui.get_color_u32(imgui.ImVec4(0, 0, 1, 1)))
-            imgui.end_child()
-            imgui.pop_style_color()
-            imgui.begin_tooltip()
-            imgui.text("a tooltip over the canvas")
-            imgui.end_tooltip()
-            imgui.end()
-            imgui.get_foreground_draw_list().add_rect_filled(
-                imgui.ImVec2(70, 110), imgui.ImVec2(100, 130), imgui.get_color_u32(imgui.ImVec4(1, 1, 1, 1)))
-            imgui.render()
-            dd = imgui.get_draw_data()
-            screen.use()
-            screen.clear(0, 0, 0, 1)
-            impl.render(dd)                 # the screen, every list — as the app's loop does
-            tap.want()
-            assert replay.grab(tap, impl, dd, (origin, size, (2.0, 2.0), page, omit)) is True, tap.error
-        assert page == "PAGE" and tap.error == "" and tap.frame_no == 2 and omit[1] > omit[0]
-        assert tap.size == (400, 240)
-        pic, shown = _rgba(tap.tex), _rgba(screen.color_attachments[0])
-        # the screen has everything: red canvas, the side pane (cyan ground, blue
-        # content), white inset, green head
-        assert tuple(shown[2 * 120, 2 * 85]) == WHITE and tuple(shown[2 * 160, 2 * 200]) == BLUE
-        assert tuple(shown[2 * 125, 2 * 165]) == CYAN and tuple(shown[2 * 70, 2 * 100]) == GREEN
-        # the tap: the canvas's red where the side pane and the inset lay, nothing else
-        canvas_px = (2 * (200 - 60), 2 * (160 - 100))                # the side pane's spot, tap px
-        assert tuple(pic[canvas_px[1], canvas_px[0]]) == RED
-        assert tuple(pic[2 * (125 - 100), 2 * (165 - 60)]) == RED  # under the pane's ground
-        assert tuple(pic[2 * 20, 2 * 25]) == RED                       # under the white inset
-        assert tuple(pic[120, 200]) == RED and tuple(pic[0, 0]) == RED and tuple(pic[239, 399]) == RED
-        colours = {tuple(c) for c in np.unique(pic.reshape(-1, 4), axis=0)}
-        assert colours == {RED}, colours                                # no green, blue or white
-        assert pic[..., 3].min() == 255
-        # a channel at rate 0 holds the texture written before: the next grab
-        # writes the other one
-        held = tap.tex
-        imgui.new_frame()
-        imgui.render()
-        tap.want()
-        assert replay.grab(tap, impl, imgui.get_draw_data(), (origin, size, (2.0, 2.0), page, (0, 0))) is True
-        assert tap.tex is not held and tap.frame_no == 3
-        assert tuple(_rgba(held)[120, 200]) == RED
-    finally:
-        tap.close()
-        impl.shutdown()
-        imgui.destroy_context(ictx)
-        screen.release()
-        gl.release()
+
+def test_a_frame_held_at_rate_0_keeps_its_pixels_beside_a_live_reader(scene):
+    """Channel A at rate 0 holds the red frame; channel B reads on. Three
+    more grabs (blue) later A's texture still reads red everywhere — no
+    grab writes a leased texture — and the pool grew by one, no more; A
+    letting go frees it, and the pool shrinks back to two."""
+    assert scene.shoot() is True, scene.tap.error
+    tap = scene.tap
+    a = _hold(tap)                                        # channel A freezes on frame 1
+    red = _rgba(tap.tex)
+    assert tuple(red[120, 200]) == RED and a.texture == tap.tex.glo
+    for _ in range(3):
+        assert scene.shoot((0, 0, 1, 1)) is True, tap.error   # channel B's grabs
+        assert tap.tex.glo != a.texture
+        assert tuple(_rgba(tap.tex)[120, 200]) == BLUE
+    assert tap.frame_no == 4 and tap.textures == 3
+    held = [s for s in tap._slots if s.off.tex.glo == a.texture]
+    assert len(held) == 1 and held[0].leases == 1
+    assert np.array_equal(_rgba(held[0].off.tex), red)       # A's bytes unchanged
+    del a                                                  # A's rate back up
+    assert held[0].leases == 0
+    for _ in range(2):
+        assert scene.shoot((0, 0, 1, 1)) is True, tap.error
+    assert tap.textures == 2                               # the spare let go
+
+
+def test_a_canvas_resize_leaves_a_held_frame_whole(scene):
+    """A frame held at rate 0, then the canvas changes size: the two grabs
+    after it go into textures of the new size, the held frame's texture is
+    neither freed nor resized and still reads back its red at its size."""
+    assert scene.shoot() is True, scene.tap.error
+    tap = scene.tap
+    a = _hold(tap)
+    red = _rgba(tap.tex)
+    assert a.tex_size == (400, 240)
+    scene.canvas = ((60.0, 100.0), (100.0, 60.0))        # the pane dragged: a smaller canvas
+    for _ in range(2):
+        assert scene.shoot((0, 0, 1, 1)) is True, tap.error
+        assert tap.size == (200, 120) and tap.tex.glo != a.texture
+    [held] = [s for s in tap._slots if s.off.tex.glo == a.texture]
+    assert held.off.tex.size == (400, 240) and np.array_equal(_rgba(held.off.tex), red)
+    assert tap.textures == 3
+
+
+def test_a_draw_that_fails_publishes_nothing(scene, monkeypatch):
+    """A draw that raises after its first command: the half-drawn texture
+    is not published — `tex`, `frame_no` and `at` stand as the last good
+    grab left them, the error is the tap's — and the screen is bound
+    again; the grab after it is whole."""
+    assert scene.shoot() is True, scene.tap.error
+    tap = scene.tap
+    good, n, at = tap.tex, tap.frame_no, tap.at
+    real = replay.scissor
+    calls = []
+
+    def torn(*args):
+        calls.append(args)
+        if len(calls) == 2:
+            raise RuntimeError("torn")
+        return real(*args)
+
+    monkeypatch.setattr(replay, "scissor", torn)
+    assert scene.shoot((0, 0, 1, 1)) is False
+    assert len(calls) == 2 and tap.error == "RuntimeError: torn"
+    assert tap.tex is good and tap.frame_no == n and tap.at == at
+    assert tuple(_rgba(tap.tex)[120, 200]) == RED
+    assert tap.ctx.fbo is scene.screen and tap._next is None
+    monkeypatch.setattr(replay, "scissor", real)
+    assert scene.shoot((0, 0, 1, 1)) is True and tap.frame_no == n + 1 and tap.error == ""
+    assert tuple(_rgba(tap.tex)[120, 200]) == BLUE
+
+
+def test_the_viewport_is_put_back_after_a_grab(scene):
+    """`end` rebinds the screen through moderngl, which reapplies the
+    viewport it noted when the framebuffer was made — not the window's
+    size now — so `grab` restores the viewport it found."""
+    import OpenGL.GL as gl
+
+    def resized_then_grab(*args):
+        gl.glViewport(3, 5, 777, 555)             # the window since resized: what the loop has set
+        return replay.grab(*args)
+
+    assert scene.shoot() is True, scene.tap.error
+    assert scene.shoot(grab=resized_then_grab) is True, scene.tap.error
+    assert [int(v) for v in gl.glGetIntegerv(gl.GL_VIEWPORT)] == [3, 5, 777, 555]
+    assert scene.tap.ctx.fbo is scene.screen

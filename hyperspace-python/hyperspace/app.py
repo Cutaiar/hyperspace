@@ -1341,7 +1341,13 @@ def main() -> None:
     # rate — so it paces itself off the render window.
     glfw.make_context_current(ctrl_win)
     glfw.swap_interval(0)
-    ui_gl = moderngl.create_context()  # a handle on the control context; it only clears
+    # a handle on the control context: it clears the window each frame and
+    # owns the GRAPH canvas's tap textures (`CanvasTap`, 2026-11-02), which
+    # `replay.grab` draws into after imgui's render. Rebinding its `screen`
+    # through moderngl reapplies the viewport moderngl noted at creation,
+    # not the window's size now; `grab` puts the viewport back itself, and
+    # the backend's `impl.render` sets its own at the start of every frame
+    ui_gl = moderngl.create_context()
     ui_ctx = imgui.create_context()
     apply_style()
     load_fonts()
