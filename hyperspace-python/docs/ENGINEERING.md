@@ -851,7 +851,9 @@ LOOKBACK page and the red banner, and the look-back runs echoes only; a
 preset that asks for the dream with no worker is a warning, once.
 
 **Effects** (`fx.py`, FX page, GRAPH). One GLSL file per effect in
-`shaders/fx/` — thirteen ship: acid, deconverge, doublevision, fractals,
+`shaders/fx/` — acid, blend, deconverge, displace, doublevision, edges,
+fade (wave 0 E1, 2026-11-02: the whole premultiplied picture, colour and
+alpha, times its level — the feedback starter's decay), fractals,
 glimmer, huecycle, kaleido, palette, plasma, tripcolour, warp, wobble,
 zoomblur (`_lib.glsl` is shared). **A new effect is a new `.glsl` file, not
 Python**: every `// @param` uniform becomes `fx.<file>.<key>`, plus
@@ -1910,9 +1912,16 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
   `into`.
 - **Right-click**: on a `mod` stub, the param menu's Learn items (Learn
   desk, hand ▸, pad, a role, sink) — the completed row is a cable next
-  frame; on a cable, insert and delete; on a node, delete (a modifier,
-  a macro, an extra effect / hands node / composite), `draw solid` /
-  `draw lines`, `laid over` / `add` / `depth`; on the canvas, the picker:
+  frame; on a cable, insert, **starters ▸** (a picture cable: tracers,
+  tracers + dream, dream on a picture and, wave 0 E1, **feedback** — a
+  delay loop with a blend spliced onto it, a `fade` at
+  `graphview.FEEDBACK_LEVEL` its decay, many allowed) and delete; on a
+  node, delete (a modifier, a macro, an extra effect / hands node /
+  composite), `draw solid` / `draw lines`, `laid over` / `add` / `depth`,
+  and on a picture node **add feedback after** (the loop on the cable out
+  of it, laid under the node's box; a submenu per port when it feeds
+  several, disabled with why when it feeds nothing:
+  `ui_graph.add_feedback_after`, `node_below`); on the canvas, the picker:
   **modifier ▸** a kind, **effect ▸** a file, **hands**, **composite**,
   **macro ▸** an idle one. Delete takes the selection: a session row's
   cable and the rig's nodes are refused in words; a default render cable
