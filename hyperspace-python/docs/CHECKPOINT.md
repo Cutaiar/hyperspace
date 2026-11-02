@@ -174,6 +174,11 @@ fields on `Pad`, `PadDevice` and `gamepad.Claims`).
 
 ## What is left
 
+- **Plan 42, to revisit** (Dillon, 2026-11-02): the back buttons' forward
+  flip, renaming "pad" (proposal: handheld), which lab readout the
+  on-screen pad takes, a role picker in the app — each with where it
+  starts in [`plans/42-controllers.md`](plans/42-controllers.md) "To
+  revisit". Joy-Cons are a separate effort.
 - **Plan 37: the owner's list of face patterns** (register row 417, D1).
   The sheets are in `plans/assets/37-faces/`. With the list, the owner
   also says whether to renumber `view.pattern` or keep tombstones, and the

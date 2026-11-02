@@ -184,12 +184,33 @@ Still to see in the app: hand checks 407–415.
 5. Patches and presets with `touch:` / `motion:` rows in the shared library
    are dormant, not broken, on a build without plan 42.
 
+## To revisit (Dillon, 2026-11-02)
+
+Settled as "later", not dropped — each picks up from here:
+
+- **The back buttons' forward flip.** The Edge's lever back buttons can be
+  flipped forward as well as pressed in. Maybe not a novel input: the
+  sources give each back button one bit, and the lever may close the same
+  switch either way. To settle: `tools/hid_probe.py --record flip.jsonl`
+  over Bluetooth — still, press L4, flip it forward, the same for R4 — and
+  diff every byte between the moments. A separate bit becomes its own
+  control (`pad:LP2`-style) and a mark in the lab.
+- **Renaming "pad".** "Pad" is a poor name for this class of controller;
+  the proposal is **handheld** (desk, hands, handheld). Three depths: the
+  words people read (cheap), the code names (`gamepad.py`, `Pad`, `pads/`,
+  `controller =`; mechanical), the stored names (`pad:A`, `axis:LT`,
+  `kind = "gamepad"`, role `pad` — a file-format change with a migration
+  and a backup; the proposal keeps these).
+- **Which readout the on-screen pad takes.** The lab has three
+  (Faithful, Lanes, Cockpit); the app's pad diagram is today the old
+  layout drawn with the Edge's face. Pick the one that reads best
+  mid-set and the diagram is rebuilt in its style — or keep today's.
+- **Choosing which controller is which role in the app**, not only in
+  `config.toml` (which is re-read live): a SYSTEM-page control.
+
 ## Not in this plan
 
-- An in-app editor for which pad is which role (config is edited live,
-  `config.toml` is re-read): a SYSTEM-page control if the config proves
-  clumsy.
+- **Joy-Cons** — a separate effort: the brief lists them, no code reads
+  them yet; a `Model` and a driver on this same road.
 - The microphone and the speaker; the haptic voice-coil audio; the
   unofficial trigger effects.
-- Joy-Cons (the brief lists them; no code reads them yet): a `Model` and
-  a driver on this same road.
