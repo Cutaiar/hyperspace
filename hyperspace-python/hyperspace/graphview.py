@@ -4205,14 +4205,23 @@ class Edit:
     def land_group(self, entry: Mapping) -> dict:
         """Add group `entry` (``{"name"?, "patch"?, "nodes", "open"?}`` — a
         `patches.Landing.group`, or Group's own) to the preset as
-        ``group.<n>``, n one past the highest held (the modifier rule), named
-        "group <n>" when it has no name; folded unless it says open. Pushes
-        no undo step: the caller's verb has (Group's below; plan 40 T3's
-        spawn, whose landing is one step). Returns the entry as landed."""
+        ``group.<n>``, n one past the preset's `group_high` — the highest
+        number it has ever held (row 563: the file's highest at the load,
+        raised by every list assigned, carried by the marks), bumped here,
+        so an ungrouped or undone group's number is never handed out again
+        while the preset is loaded. A bare `presets` with no floor yet (a
+        test's) is seeded from the highest held. Named "group <n>" when it
+        has no name; folded unless it says open. Pushes no undo step: the
+        caller's verb has (Group's below; plan 40 T3's spawn, whose landing
+        is one step). Returns the entry as landed."""
         groups = self._groups()
         if groups is None:
             raise ValueError(NO_PRESET_GROUPS)
-        n = max((graphmigrate.group_number(g.get("id")) for g in groups), default=0) + 1
+        high = getattr(self.presets, "group_high", None)
+        if high is None:
+            high = max((graphmigrate.group_number(g.get("id")) for g in groups), default=0)
+        n = int(high) + 1
+        self.presets.group_high = n
         g = {"id": f"group.{n}", "name": str(entry.get("name") or f"group {n}")}
         if entry.get("patch"):
             g["patch"] = str(entry["patch"])

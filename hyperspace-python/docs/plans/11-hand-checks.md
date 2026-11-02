@@ -6404,8 +6404,38 @@ header's count shortens to a number rather than run off the edge; in 4
 the side panel lists the Xbox pad's patched ports, no picture (the
 picture is the first pad's).
 
-## AQ. Video audio 1 of 4: the track decoded, nothing audible (plan 45 V1)
+## AU. Node groups: ids and membership (post-show G0)
 
+Register row 563, 2026-11-02. Headless: `tests/test_graph_groups.py` (the
+corpus property, `test_groups_keep_their_invariants_over_the_corpus`) and
+`tests/test_graph_edit.py::test_a_group_made_taken_apart_and_remade_by_the_mouse`
+(a real mouse: box-select, right-click menu, drags out of the region, the
+Delete key).
+
+**422. Group, delete a member, ungroup, regroup: ids and membership
+behave.** (Mac, GRAPH, any preset with three effects in its run)
+1. Box-select two effects, right-click one, **group 2 nodes**. Note the
+   folded node's name ("group 1"). Open it (`+`).
+2. Box-select the third effect and one of the members, **group 2 nodes**:
+   the second group is "group 2"; the member moved over, said on the head.
+3. Right-click group 2's title, **ungroup**. Box-select those two again and
+   group them.
+4. In the open group 1, click its remaining member and press Delete (fn+⌫).
+5. ⌘Z.
+6. Drag the member out of its region, then drag the other out.
+7. Save the preset, load another, load it back.
+
+*Pass:* (2) the first group's node shrinks at once, not on the next click.
+(3) the regrouped pair is **group 3**, never "group 2" again. (4) the
+member is gone from the canvas and from the group on that same frame: the
+region is one node's, with no gap where the member was, and nothing
+refers to it. (5) the member is back on the canvas **and in its group**
+(the region holds it again). (6) the first drag says "… left group 1"; the
+second "…, the last of it: the group is gone"; the nodes stay where they
+were dropped, every cable still drawn. (7) the groups come back exactly as
+saved — no "is not in the preset — left out" note on the head; a group
+made now is numbered past the highest the file names.
+## AQ. Video audio 1 of 4: the track decoded, nothing audible (plan 45 V1)
 **421. Open a show video: nothing audible changes, memory stays flat, nothing extra is read.** (Mac, a show video of a few minutes with a soundtrack, Activity Monitor)
 Headless: `tests/test_media_audio.py` (`test_nothing_is_read_until_something_asks_for_sound`,
 `test_a_two_hour_file_holds_one_window_not_the_film`, `test_a_window_is_decoded_into_one_buffer`,
@@ -6422,7 +6452,6 @@ cost nothing at all: no thread, no open, no read, no memory.
    audio (a GIF or a muted export), then back.
 4. SYSTEM: the frame time. Optional: `sample Hyperspace 2` in a terminal
    and search the thread names for `media-audio`.
-
 *Pass:* no sound from the app at any step (the analyzer's WAV file, if one
 is playing, is unchanged); the picture scrubs, reverses and freezes as it
 did before this build; memory does not rise when the clip is slotted
@@ -6443,7 +6472,6 @@ Decision register row 561. Both Macs on this build; the owner has run
 `--write`) **before the next show** — until then every old preset is
 converted at load and nothing is lost, but the files still say the old
 depths.
-
 **420. 0.05× from an APC knob; an old preset's depth feels the same.** (Mac, the APC40, the second Mac on `main` for the last step)
 Headless: `tests/test_retaper.py`; `tests/test_fx.py`.
 1. Load `party-noita` (the library's, after the tool). FX: open Trip
@@ -6459,7 +6487,6 @@ Headless: `tests/test_retaper.py`; `tests/test_fx.py`.
    backup, or the preset as it was), the same preset and the same gesture.
 6. GRAPH ▸ the `hand:right.y → warp amount` cable's depth (or ROUTING's
    row): read its number.
-
 *Pass:* (2) the readout runs −8.00× … −0.25× … −0.008× · stop (the
 knob's middle) · +0.008× … +0.050× … +0.25× … +1.00× … +8.00×, each CC
 step about an eighth of an octave, and 0.05× holds where the knob is let

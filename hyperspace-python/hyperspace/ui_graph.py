@@ -3736,6 +3736,8 @@ def edit_of(panel, view: graphview.View | None = None) -> graphview.Edit | None:
                        graph=getattr(getattr(lib, "presets", None), "graph", None),
                        render=getattr(holdmod.canvas_renderer(panel), "_graph", None))
     e.show = getattr(lib, "project", None)              # (plan 36 T1: the rig's wires)
+    # row 563: a modifier or a voice deleted leaves its group at once
+    e.presets = getattr(lib, "presets", None)
     return e
 
 
@@ -3753,12 +3755,14 @@ def _settle(panel, res):
     return res
 
 
-def _act(panel, label: str, why: str | None, fn):
+def _act(panel, label: str, why: str | None, fn, *, load: bool = False):
     """One edit: refused before anything moves (`why`), else one undo step
-    named `label`, then `fn()` settled by `_settle`."""
+    named `label`, then `fn()` settled by `_settle`. `load`: the step also
+    carries the library's marks (the groups and the layout; row 563: every
+    node's deletion, so undoing it puts a member back in its group)."""
     if why is not None:
         return _settle(panel, graphview.Refusal(why))
-    undo.push(label)
+    undo.push(label, load=load)
     return _settle(panel, fn())
 
 
@@ -3869,7 +3873,10 @@ def remove_node(panel, nid: str):
         return None
     hit = graphview.voice_of(nid)
     why = voice_refusal(e.view.node(nid) if e.view is not None else None, nid) if hit else None
-    res = _act(panel, f"delete node {nid}", why, lambda: e.remove_node(nid))
+    # row 563: a delete's step carries the marks, as render_edit's and the
+    # group verbs' do — the node may be a group member, and its undo puts
+    # it back in its group
+    res = _act(panel, f"delete node {nid}", why, lambda: e.remove_node(nid), load=True)
     if not isinstance(res, (graphview.Refusal, graphview.Ask)):   # 2026-10-31: its reveal goes
         _state(panel).setdefault("revealed", set()).discard(nid)
     return res

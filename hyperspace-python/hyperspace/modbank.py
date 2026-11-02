@@ -72,6 +72,10 @@ class Bank:
     stepped_at: float | None = None   # the t of the bank's last step
     high = 0                          # the session's highest id ever held (`next_id`)
     serial = 0                        # moves on every membership change
+    # row 563 (2026-11-02): told on every membership change — the preset
+    # points it at `Presets.settle_groups`, so a voice removed by any road
+    # leaves its GRAPH group in the same call
+    on_change: Callable[[], None] | None = None
     reg = None                        # the registry `bind` gave, or None
     declare: Callable[[Any, int, Any], None] | None = None
 
@@ -240,6 +244,8 @@ class Bank:
     def _changed(self) -> None:
         self.serial += 1
         self._resize()
+        if self.on_change is not None:
+            self.on_change()
 
     # ---- the frame ----
 

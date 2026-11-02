@@ -281,6 +281,10 @@ class GraphSection:
         # keeps the held program's nodes too; None: a landing is exactly
         # its graph
         self.hold = None
+        # 2026-11-02 (G0, row 563): told after every landing — `Presets`
+        # points it at `settle_groups`, so a group's member list loses a
+        # deleted node in the same operation, never on the next draw or save
+        self.on_land: Callable[[], None] | None = None
         if renderer is not None:
             self.attach(renderer)
 
@@ -362,6 +366,8 @@ class GraphSection:
         self.spec, self.doc = spec, copy.deepcopy(doc)
         self.free = copy.deepcopy(free)
         self._push()
+        if self.on_land is not None:
+            self.on_land()
 
     def names(self, spec: GraphSpec | None = None) -> dict[str, Any]:
         """The node instances `spec` (the landed one by default) declares,
@@ -839,8 +845,18 @@ class Presets:
         self.desk_notes: list[str] = []  # the desk rows the last load dropped (set_desk)
         # plan 28 N2: the GRAPH page's positions of the look's nodes
         self.layout: dict[str, list[float]] = {}
-        # plan 40 T2: the GRAPH page's groups (`GROUPS_KEY` entries)
-        self.groups: list[dict] = []
+        # 2026-11-02 (G0, row 563): the highest group number this preset has
+        # allotted since its load — the file's highest at the load, counting
+        # entries the load dropped — so a group's id is never one a group
+        # of this preset's life had: the one authority for the next number
+        # (`graphview.Edit.land_group` takes `group_high + 1` and bumps it;
+        # the `groups` setter raises it to the highest assigned; the marks
+        # carry it beside the groups; not saved: a reload starts again from
+        # the file's own)
+        self.group_high = 0
+        # plan 40 T2: the GRAPH page's groups (`GROUPS_KEY` entries; the
+        # `groups` property, so an assignment seeds the floor)
+        self.groups = []
         # R17 (final review): the live preset came from `new` and has never
         # been saved — save names it (whatever a file of its name holds);
         # a load or a save clears it (`_landed`)
@@ -848,6 +864,12 @@ class Presets:
         # plan 26 A4: the loaded preset's graph section (its instances'
         # params, the renderer's wiring once one is attached)
         self.graph = GraphSection(reg, lib=lib)
+        # row 563: membership is settled where what the preset holds changes
+        # — a landing, the table's modifiers, a bank's voices
+        self.graph.on_land = self.settle_groups
+        router.table.on_modifiers = self.settle_groups
+        for bank in self.banks().values():
+            bank.on_change = self.settle_groups
         lib.kind(GROUP, SCHEMA.rpartition("/")[0],
                  load=lambda doc, path: self.load_doc(doc, path),
                  document=lambda name: self.document(name),
@@ -1123,6 +1145,9 @@ class Presets:
         # (membership and every bank voice's values, before anything moves)
         held_mods = table.modifiers_doc(reg)
         held_banks = {s: b.doc() for s, b in self.banks().items()}
+        # (row 563: the landing settles the groups still loaded — a refusal
+        # puts them back, and the floor under their numbers)
+        held_groups, held_high = copy.deepcopy(self.groups), self.group_high
         # from here to the values landing, anything that raises puts the
         # graph that was there back, with its instances' values: a load is
         # refused whole, never half a graph
@@ -1185,6 +1210,7 @@ class Presets:
             # fresh (`held_values` was taken before `bank.set`): a refused
             # load leaves LFO 5's depth where it stood, not at its default
             lib.restore({k: v for k, v in held_values.items() if k in reg})
+            self.groups, self.group_high = held_groups, held_high
             raise
         # 2½. the bins (plan 32): each channel opens what its slot names at
         #     the next frame's poll
@@ -1232,9 +1258,13 @@ class Presets:
         #     plan 40 T2 (D4): and its groups — a member the graph does not
         #     hold left out, said, a group left empty dropped; no key is no
         #     group (`graphmigrate.groups_of`)
-        self.groups, group_notes = read_groups(graphmigrate.groups_of(doc), self._held_canvas(),
-                                               self._groupable)
+        raw_groups = graphmigrate.groups_of(doc)
+        self.groups, group_notes = read_groups(raw_groups, self._held_canvas(), self._groupable)
         notes += group_notes
+        #     and the floor under the next group's number: every id the file
+        #     named, kept or dropped (row 563: an id is never handed out twice)
+        self.group_high = max((group_number(g.get("id")) for g in raw_groups
+                               if isinstance(g, dict)), default=0)
         # 7. the notes, for the panel
         self.notes = notes
         self.migrated = migrated            # plan 36 T3: the one-way migration's word
@@ -1385,6 +1415,7 @@ class Presets:
         gs = self.__dict__.get("graph")
         if gs is None:
             gs = self.graph = GraphSection(self.reg, lib=self.lib)
+            gs.on_land = self.settle_groups
         return gs
 
     def parts(self) -> tuple:
@@ -1426,10 +1457,52 @@ class Presets:
                                           self.router.table, ids)
         return set(members.canvas()), refused
 
+    @property
+    def groups(self) -> list[dict]:
+        """The GRAPH page's groups (plan 40 T2), the live list. Assigning
+        raises `group_high` to the highest number assigned (row 563), so a
+        number is never handed out twice however the list arrived — a
+        load, a mark put back, a test's own entries."""
+        d = self.__dict__
+        if "_groups" not in d:                  # (an instance from before the property)
+            d["_groups"] = d.pop("groups", [])
+        return d["_groups"]
+
+    @groups.setter
+    def groups(self, value) -> None:
+        groups = list(value or ())
+        self.__dict__["_groups"] = groups
+        top = max((group_number(g.get("id")) for g in groups if isinstance(g, dict)), default=0)
+        self.group_high = max(self.__dict__.get("group_high", 0), top)
+
+    def settle_groups(self) -> None:
+        """2026-11-02 (G0, row 563): membership updated at once. Every
+        member the preset no longer holds (`_held_canvas`: a render node
+        the section just landed without, a modifier or a voice just removed)
+        is taken out of its group's list, in place, and a group left with
+        none is taken out of the list — in the same operation that removed
+        the node, so the next draw and the next save find the lists already
+        right. Hung on the mechanisms, not the callers: the graph section's
+        `on_land`, the table's `on_modifiers`, each bank's `on_change`."""
+        groups = self.groups
+        if not groups:
+            return
+        held = self._held_canvas()
+        for g in list(groups):
+            nodes = g.get("nodes") or []
+            left = [cid for cid in nodes if cid in held]
+            if len(left) == len(nodes):
+                continue
+            if left:
+                g["nodes"] = left
+            else:
+                groups.remove(g)
+
     def live_groups(self) -> list[dict]:
         """Plan 40 T2: the groups as a save writes them — each member the
-        preset no longer holds (a node deleted since) left out, a group left
-        with none left out — in the file's key order."""
+        preset no longer holds left out, a group left with none left out —
+        in the file's key order. Since row 563 the lists are kept so as the
+        nodes go (`settle_groups`); this stays the save's own guard."""
         groups = getattr(self, "groups", None) or []
         if not groups:
             return []
