@@ -59,7 +59,7 @@ import math
 
 from imgui_bundle import imgui
 
-from . import gamepad, ui, ui_desk, ui_routing
+from . import gamepad, ui, ui_desk, ui_pad_nvg, ui_pad_views, ui_routing
 from .routing import Binding
 
 SCHEMES = ("pad", "hat", "axis", "touch", "motion")   # the schemes a pad control's row can have
@@ -117,9 +117,41 @@ def rows(table) -> dict[str, Binding]:
     return out
 
 
+def source_rows(table) -> dict[str, Binding]:
+    """{source: the row that acts} by the exact address a row names — the
+    lanes view's (``touch:pinch`` apart from ``touch:x``), where `rows`
+    folds every touch row onto the touchpad."""
+    out: dict[str, Binding] = {}
+    for b in table.of(*SCHEMES):
+        if b.enabled:
+            out.setdefault(b.source, b)
+    return out
+
+
+def view_of(panel) -> str:
+    """The pad window's readout (`ui.pad_view`): one of ui_pad_views.VIEWS."""
+    k = int(panel.__dict__.get("pad_view", 0) or 0)
+    return ui_pad_views.VIEWS[k] if 0 <= k < len(ui_pad_views.VIEWS) else "map"
+
+
+def step_view(panel) -> None:
+    """The next readout, round: what a click on the header's name does."""
+    k = (ui_pad_views.VIEWS.index(view_of(panel)) + 1) % len(ui_pad_views.VIEWS)
+    reg = getattr(panel, "reg", None)
+    if reg is not None and "ui.pad_view" in reg:
+        reg["ui.pad_view"].set(k)
+    else:
+        panel.pad_view = k
+
+
 def _key(table) -> tuple:
-    return (id(table.bindings), len(table.bindings),
-            tuple(b.source for b in table.of(*SCHEMES)))
+    """What the pad's cached rows depend on, without a scan of the rows
+    (the pad window reads it every frame): the list (its identity and
+    length: a row added, removed, put in another's stead) and the table's
+    serials for a row edited in place (`rows_serial`: enabled, re-pointed,
+    retargeted; `redraw_serial`: a desk or GRAPH edit)."""
+    return (id(table.bindings), len(table.bindings), getattr(table, "rows_serial", 0),
+            getattr(table, "redraw_serial", 0))
 
 
 def rows_cached(panel, table) -> dict[str, Binding]:
@@ -399,6 +431,7 @@ def diagram(panel) -> None:
     mapped), then every control at its place — in the room `room` gives
     it. `panel._pad_h` is left behind for `ui_desk.room`, which keeps the
     desk clear of it; it is 0 while this is off."""
+    ui_pad_nvg.sweep(panel, imgui.get_frame_count())   # each frame: quiet rooms let go
     if not getattr(panel, "pad_diagram", False):
         panel._pad_h = 0.0
         return
@@ -426,11 +459,15 @@ def inline(panel) -> None:
     the pad node (ui_graph._node_side), whether or not the floating one is up."""
     w = imgui.get_content_region_avail().x
     h = (w - 2 * PAD) / gamepad.LAYOUT_W * gamepad.LAYOUT_H + 2 * PAD + HEAD_H
+    table = _table(panel)
+    if view_of(panel) == "lanes" and table is not None:   # every lane, readable: as tall as that takes
+        h = max(h, ui_pad_views.lanes_height(w - 2 * PAD, _pad(panel) or getattr(panel, "pad", None),
+                                             _says_of(panel, table)) + 2 * PAD + HEAD_H)
     imgui.push_style_var(imgui.StyleVar_.window_padding, _v(PAD, PAD))
     if imgui.begin_child("##pad.inline", _v(w, h), imgui.ChildFlags_.borders
                          | imgui.ChildFlags_.always_use_window_padding,
                          imgui.WindowFlags_.no_scrollbar | imgui.WindowFlags_.no_scroll_with_mouse):
-        _body(panel, _table(panel))
+        _body(panel, table)
     imgui.end_child()
     imgui.pop_style_var()
 
@@ -481,21 +518,57 @@ def _header(panel, table) -> None:
         if imgui.is_item_hovered():
             ui.tooltip("The light bar now: its identity colour, or what a sink row sends "
                        "(right-click a param → Learn sink ▸ light bar hue).")
+    imgui.same_line()
+    view = view_of(panel)
+    ui._micro(f"{view} ▸", ui.TEXT)
+    if imgui.is_item_hovered():
+        ui.tooltip(ui_pad_views.VIEW_TIP)
+        if imgui.is_mouse_clicked(imgui.MouseButton_.left):
+            step_view(panel)
     if table is not None:
         imgui.same_line()
         n = len(rows_cached(panel, table))
-        imgui.text_colored(ui.DIM, f"{n} mapped")
-        if imgui.is_item_hovered():
-            ui.tooltip("Controls with a row in bindings.json. A grey label is the "
-                              "app's own hand on a free axis, not a row.")
+        room = imgui.get_content_region_avail().x       # narrow in GRAPH's side panel
+        said = next((w for w in (f"{n} mapped", str(n)) if imgui.calc_text_size(w).x <= room), "")
+        if said:
+            imgui.text_colored(ui.DIM, said)
+            if imgui.is_item_hovered():
+                ui.tooltip(f"{n} controls with a row in bindings.json. A grey label is the "
+                           "app's own hand on a free axis, not a row.")
     imgui.set_cursor_pos(start)          # the line is HEAD_H tall whatever is on it
     imgui.dummy(_v(1, HEAD_H - imgui.get_style().item_spacing.y))
+
+
+def _says_of(panel, table):
+    """`says(source)` for a view: (the words, the row) — a row's param in
+    the panel's words, else an axis's built-in meaning, else nothing."""
+    st = _state(panel)
+    key = _key(table)
+    if st.get("src_key") != key or st.get("src_table") is not table:
+        st.update(src_key=key, src_table=table, src_rows=source_rows(table))
+    rows_ = st["src_rows"]
+
+    def says_(source: str) -> tuple[str, Binding | None]:
+        b = rows_.get(source)
+        if b is not None:
+            return ui_desk.text(panel.reg, b), b
+        return BUILT_IN.get(source, ""), None
+    return says_
 
 
 def _body(panel, table) -> None:
     _header(panel, table)
     if table is None:
         imgui.text_disabled("no table")
+        return
+    view = view_of(panel)
+    if view != "map":          # plan 42's readouts: the room is the map's, so the desk keeps
+        origin = imgui.get_cursor_screen_pos()
+        avail = imgui.get_content_region_avail()
+        ui_pad_views.draw(
+            view, panel, imgui.get_window_draw_list(), origin.x, origin.y, avail.x, avail.y,
+            _pad(panel) or getattr(panel, "pad", None), _says_of(panel, table))
+        imgui.dummy(avail)
         return
     mapped = rows_cached(panel, table)
     pad = _pad(panel)
