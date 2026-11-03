@@ -34,6 +34,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 from conftest import CORPUS, opened_last, seed
 from test_app_boundary import ORDER, _host
 from test_undo import DT, FakeIn, FakeOut, boot
@@ -342,6 +343,19 @@ def test_two_routers_with_different_modifiers_each_keep_their_own_mod_lanes(tmp_
     assert not np.isnan(own_a[3])                       # the delay ran on a's own lane
 
 
+def test_a_clock_other_than_the_shared_sources_is_refused_before_anything_registers():
+    """`Deck.build(sources=…, clock=…)` with two clocks: refused up front,
+    before the registry, the banks or any hook exists — not halfway, from
+    inside the router."""
+    called = []
+    with pytest.raises(ValueError, match="own clock"):
+        Deck.build(library=None, control=None, audio=None,
+                   table=lambda reg: called.append("table"),
+                   hands=lambda reg: called.append("hands"),
+                   sources=Sources(clock=tempo.Clock()), clock=tempo.Clock())
+    assert called == []
+
+
 def test_the_deck_holds_the_rig_boot_hands_out(tmp_path):
     """`boot`'s handles are the deck's objects; a headless deck has no GL:
     no renderer, no hold, and the installed undo is the deck's."""
@@ -426,7 +440,7 @@ def test_the_build_keeps_mains_order():
            "envelope.register(reg, envs, clock)", "sequencer.register(reg, seq, clock)",
            "made.outputs = outputs(reg)", "Hold(reg, renderer", "register_hold(reg, hold",
            "bindings = table(reg)", "library.attach(reg)", "panel(reg, s, clock=clock",
-           "Router(reg, bindings, sources)", "router.use_lfos(lfos, clock)",
+           "Router(reg, bindings, sources=sources)", "router.use_lfos(lfos, clock)",
            "router.use_bank(envs, clock)", "router.use_sequencer(seq, envs)",
            "Presets(library, reg, router)", "presets.graph.attach(renderer)",
            "hold.section = presets.graph", "Learn(reg, router.table", "devices(reg, router, learn, panel=",

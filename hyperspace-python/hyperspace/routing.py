@@ -2750,7 +2750,7 @@ class Router:
     table's pad feel (`source_feel`, `felt`). `devices` (keyword) is handed
     to the sources' `use`."""
 
-    def __init__(self, reg: Registry, table: Bindings, sources: Sources | None = None,
+    def __init__(self, reg: Registry, table: Bindings, *, sources: Sources | None = None,
                  devices=None):
         self.reg = reg
         self.table = table
@@ -3105,20 +3105,34 @@ class Router:
     # ---- motion (motion.py): the feel a reading travels with ----
 
     def source_feel(self, scheme: str) -> Motion:
-        """A scheme's own feel under this table's pad feel (`table.pad_feel`)
-        — the pad's for `axis`, none for every other source; the rule is
-        `Sources.source_feel`'s, asked here without the hop (per row per
-        frame, through `feel_of`)."""
-        return getattr(self.table, "pad_feel", OFF) if base_scheme(scheme) == "axis" else OFF
+        """A scheme's own feel (`Sources.source_feel`'s rule) under this
+        table's pad feel (`table.pad_feel`)."""
+        return self.sources.source_feel(scheme, getattr(self.table, "pad_feel", OFF))
 
     def feel_of(self, b: Binding) -> Motion:
         """The motion row `b` runs on its reading: its own, or its source's."""
         return b.motion if b.motion is not None else self.source_feel(b.scheme)
 
     def felt(self, scheme: str, values, dt: float) -> list[float] | None:
-        """`Sources.felt`: `values` through the scheme's own feel, this
-        table's pad feel for `axis`."""
-        return self.sources.felt(scheme, values, dt, getattr(self.table, "pad_feel", OFF))
+        """`values` — an adapter's lanes for `scheme` — through the scheme's
+        own feel (`source_feel`: this table's pad feel for `axis`), one
+        follower per lane: what the pad's default camera job reads
+        (gamepad.steer). None while that feel is off or `values` is None,
+        and the followers are dropped, so the next one starts where the
+        source is. The followers are this router's (plan 44 D2), like its
+        rows' movers: another router over the same sources never steps or
+        drops them."""
+        m = self.source_feel(scheme)
+        felt = self.__dict__.setdefault("_felt", {})
+        if values is None or not m.on:
+            felt.pop(scheme, None)
+            return None
+        rests = self.sources.rests.get(scheme) or []
+        fs = felt.get(scheme)
+        if fs is None or len(fs) != len(values):
+            fs = felt[scheme] = [Follower(v) for v in values]
+        return [f.step(v, dt, m, rests[i] if i < len(rests) else 0.0)
+                for i, (f, v) in enumerate(zip(fs, values))]
 
     def felt_now(self, b: Binding) -> float | None:
         """Row `b`'s reading after its feel, as the last `modulate` left
@@ -3128,8 +3142,11 @@ class Router:
         return None if f is None else f.x
 
     def felt_lanes(self, scheme: str) -> list[float] | None:
-        """`Sources.felt_lanes`: `scheme`'s lanes after its own feel."""
-        return self.sources.felt_lanes(scheme)
+        """`scheme`'s lanes after its own feel, as this router's last `felt`
+        left them (the pad's camera job; the SYSTEM page's plot); None while
+        that feel is off or nothing has run it."""
+        fs = self.__dict__.get("_felt", {}).get(scheme)
+        return None if fs is None else [f.x for f in fs]
 
     def _move(self, b: Binding, m: Motion, u: float, p: Param, depth: float,
               dt: float, movers: dict, rests: dict | None = None) -> float:
@@ -3465,35 +3482,47 @@ class Router:
 
     def _publish_modifiers(self) -> None:
         """The ``mod`` scheme's labels, rests, gates and signal kinds, as
-        an adapter publishes its lanes' — once the table's modifiers
-        change, or another router over the same sources published its own
-        (plan 44 D2, row 591: the ``mod`` lanes share the sources until D4).
-        The vector is this router's (`_mod_out`): a new one starts from
-        this router's last outputs, never another router's. No modifiers:
-        the scheme is not offered at all."""
+        an adapter publishes its lanes' — built once the table's modifiers
+        change and kept on this router (`_mod_pub`), with its own output
+        vector (`_mod_out`): a new vector starts from this router's last
+        outputs, never another router's. No modifiers: the scheme is not
+        offered — taken out of the sources only while the entry there is
+        this router's, so another router's lanes stand (plan 44 D2)."""
         mods = self.table.modifiers
+        sc = modifiers.SCHEME
+        d = self.__dict__
         if not mods:
-            for d in (self.feeds, self.labels, self.rests, self.gates, self.lane_kinds):
-                d.pop(modifiers.SCHEME, None)
-            self.__dict__.pop("_mod_out", None)
+            own = d.pop("_mod_out", None)
+            d.pop("_mod_pub", None)
+            if own is not None and self.sources.feeds.get(sc) is own:
+                for m in (self.feeds, self.labels, self.rests, self.gates, self.lane_kinds):
+                    m.pop(sc, None)
             return
         n = max(m.n for m in mods) + 1
         labels, kinds = [""] * n, [modifiers.VALUE] * n
         for m in mods:
             labels[m.n] = f"{m.n} {m.kind}"
             kinds[m.n] = m.out
-        sc = modifiers.SCHEME
-        self.labels[sc], self.rests[sc] = labels, [modifiers.REST] * n
-        self.lane_kinds[sc] = kinds
         # a threshold's fire is a switch a row's `when` can wait on
-        self.gates[sc] = [(m.n, f"mod {m.n} {m.kind}") for m in mods
-                          if m.out == modifiers.TRIGGER]
-        old = self.__dict__.get("_mod_out")
+        gates = [(m.n, f"mod {m.n} {m.kind}") for m in mods if m.out == modifiers.TRIGGER]
+        old = d.get("_mod_out")
         vec = np.full(n, math.nan)
         if old is not None:                  # last frame's outputs stand until stepped
             vec[:min(n, len(old))] = old[:n]
-        self.feed(sc, vec)                   # written in place per node after this
-        self.__dict__["_mod_out"] = self.feeds[sc]
+        d["_mod_out"] = vec                  # written in place per node after this
+        d["_mod_pub"] = (labels, [modifiers.REST] * n, kinds, gates)
+        self._put_modifiers()
+
+    def _put_modifiers(self) -> None:
+        """This router's ``mod`` entries into the sources: five dict
+        writes of what `_publish_modifiers` built, nothing rebuilt — what
+        a pass does when another router over the same sources published
+        its own since (row 591)."""
+        d, sc, src = self.__dict__, modifiers.SCHEME, self.sources
+        labels, rests, kinds, gates = d["_mod_pub"]
+        src.labels[sc], src.rests[sc], src.gates[sc] = labels, rests, gates
+        src.lane_kinds[sc] = kinds
+        src.feeds[sc] = d["_mod_out"]
 
     def _sync_modifiers(self) -> None:
         """Once the table's modifiers change (`modifiers_serial`, and on the
@@ -3502,10 +3531,13 @@ class Router:
         its node, in dependency order (plan 28 N0) — `_step_modifier`."""
         serial = getattr(self.table, "modifiers_serial", 0)
         d = self.__dict__
-        if d.get("_mods_seen") == serial and (
-                not self.table.modifiers
-                or self.sources.feeds.get(modifiers.SCHEME) is d.get("_mod_out", False)):
-            return                           # still ours: no other router republished
+        if d.get("_mods_seen") == serial:
+            if not self.table.modifiers or self.sources.feeds.get(modifiers.SCHEME) is d.get(
+                    "_mod_out", False):
+                return                       # still ours: no other router published since
+            if "_mod_pub" in d:
+                self._put_modifiers()        # another's: put ours back, O(1)
+                return
         self.__dict__["_mods_seen"] = serial
         self._publish_modifiers()
         live = {m.id for m in self.table.modifiers}
@@ -3632,7 +3664,7 @@ class Router:
 # what a router from before plan 44 D2 kept in its own __dict__ and the
 # sources hold now: a hot reload moves it across (`_adopt_sources`)
 _ADOPTED = ("feeds", "labels", "gates", "rests", "_names", "_lane_kinds", "_codes",
-            "_felt", "_inverse", "devices", "clock")
+            "_inverse", "devices", "clock")
 
 
 def _adopt_sources(router) -> Sources:

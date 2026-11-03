@@ -8,11 +8,12 @@ lanes (`labels`, `rests`, `gates`, `lane_kinds`), the address map a scheme
 with named lanes publishes (`names`) and what an address means over it
 (`resolve`, `address`), the device registry it asks which schemes there
 are (`use`, `follow_devices`, `schemes`), the scheme's own feel and its
-followers (`source_feel`, `felt`, `felt_lanes`), the key and button
-constants a row names (`code`), and the one clock every router's banks
+rule (`source_feel`: the pad's feel for `axis`, none else), the key and
+button constants a row names (`code`), and the one clock every router's banks
 step on (plan 44 §2: one beat for every deck). The
 evaluator — the patch, the banks, the macros, the modifiers' memory, the
-rows' followers, the key and pad rows — stays `routing.Router`, one per
+rows' followers and the camera job's (`Router.felt`), the key and pad
+rows — stays `routing.Router`, one per
 deck, built over a `Sources` (`Router(reg, table, sources)`); one `Sources`
 fed once a frame can feed two routers over two registries, which is what
 decks need first (plan 44 §1).
@@ -29,8 +30,8 @@ states — which schemes are rows, which MIDI role an unqualified row
 means, which device is a scheme's primary — are written into every live
 binding table that follows these sources (`follow`, held weakly). The
 sources read no table: what an address means under a table's primaries
-(`resolve`) and a scheme's feel under a table's pad feel (`source_feel`,
-`felt`) are asked with that table's facts, so each router resolves
+(`resolve`) and a scheme's feel under a table's pad feel (`source_feel`)
+are asked with that table's facts, so each router resolves
 against its own table and caches the answer itself.
 """
 
@@ -40,7 +41,7 @@ import weakref
 
 import numpy as np
 
-from .motion import OFF, Follower, Motion
+from .motion import OFF, Motion
 
 # the schemes no device feeds — the analyzer, the LFOs, the envelopes and
 # the sequencer's trigger lanes (plan 31) — in offer order; devices.py's
@@ -290,32 +291,6 @@ class Sources:
         own smoothing. One feel for every pad (plan 27 B6): ``axis@p2``
         travels with it too."""
         return pad_feel if base_scheme(scheme) == "axis" else OFF
-
-    def felt(self, scheme: str, values, dt: float,
-             pad_feel: Motion = OFF) -> list[float] | None:
-        """`values` — an adapter's lanes for `scheme` — through the scheme's
-        own feel, one follower per lane: what the pad's default camera job
-        reads (app.py). None while that feel is off or `values` is None,
-        and the followers are dropped, so the next one starts where the
-        source is. `pad_feel` is the asking table's (`source_feel`)."""
-        m = self.source_feel(scheme, pad_feel)
-        felt = self.__dict__.setdefault("_felt", {})
-        if values is None or not m.on:
-            felt.pop(scheme, None)
-            return None
-        rests = self.rests.get(scheme) or []
-        fs = felt.get(scheme)
-        if fs is None or len(fs) != len(values):
-            fs = felt[scheme] = [Follower(v) for v in values]
-        return [f.step(v, dt, m, rests[i] if i < len(rests) else 0.0)
-                for i, (f, v) in enumerate(zip(fs, values))]
-
-    def felt_lanes(self, scheme: str) -> list[float] | None:
-        """`scheme`'s lanes after its own feel, as the last `felt` left
-        them (the pad's camera job; the SYSTEM page's plot); None while
-        that feel is off or nothing has run it."""
-        fs = self.__dict__.get("_felt", {}).get(scheme)
-        return None if fs is None else [f.x for f in fs]
 
 
 def _resolve(scheme: str, name: str) -> int | None:

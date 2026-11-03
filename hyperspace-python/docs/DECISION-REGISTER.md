@@ -626,9 +626,9 @@ here; overturn → the change, then the same.
 | 587 | Plan 48: a save writes back to the preset's own file; as… with a folder in the name writes into it; a new preset grown from the loaded one (two-handed save, `preset.save_new`, an empty pad's hold) lands beside it; ⇧F's `PRESET <n>` at the top | 441 | (rec) — pending the owner; built as recommended |
 | 588 | Plan 48: the PRESETS page draws a folder's preset as `party / TRIP` with the folder dim; the flat list stays; a rename's field holds the leaf and keeps the folder | 440, 441 | (rec) — pending the owner; built as recommended |
 | 589 | Wave 1 T0: the test suite cannot hang the Mac — pytest-timeout's thread method at 120 s for xdist workers (the signal method for a serial run) with no worker restart in pyproject's addopts, so a test blocked in C fails by name and ends the run; `live` tests hold a per-account `flock` (wait 60 s, then skip); one tier at a time on a shared Mac; a real-GLFW test asks a child process first (`gl_window_ok`, #332) and skips if `glfwInit` does not answer | — | (rec) — pending the owner; built as recommended (T0) |
-| 590 | Plan 44 D2: the router split — `routing_sources.Sources` (the feeds, labels, rests, gates, kinds, names and the lane cache, the device registry and `schemes`, the source feel and its followers, the key-code cache, the one clock) is the shared half every source feeds; `Router(reg, table, sources)` keeps the evaluator (the patch, the banks, the macros, the modifiers' memory and their own `mod` vector, the rows' followers, key and pad rows) and what depends on its table (an address resolved and cached against its own primaries, its pad feel); every other old source-side name on `Router` reads through to its sources (a router from before the build, after a hot reload, gets sources of its own), a router handed a second clock is refused, and `routing.py` re-exports `Sources` and the scheme grammar it moved, so no importer changes; no behaviour change (`tests/test_deck.py::test_one_sources_fed_once_drives_two_routers_as_one_router_did`) | 444, 445 | built as recommended — PR (D2) |
+| 590 | Plan 44 D2: the router split — `routing_sources.Sources` (the feeds, labels, rests, gates, kinds, names and the lane cache, the device registry and `schemes`, the source-feel rule, the key-code cache, the one clock) is the shared half every source feeds; `Router(reg, table, sources)` keeps the evaluator (the patch, the banks, the macros, the modifiers' memory and their own `mod` vector, the rows' and the camera job's followers, key and pad rows; `sources=` keyword-only) and what depends on its table (an address resolved and cached against its own primaries, its pad feel); every other old source-side name on `Router` reads through to its sources (a router from before the build, after a hot reload, gets sources of its own), a router handed a second clock is refused, and `routing.py` re-exports `Sources` and the scheme grammar it moved, so no importer changes; no behaviour change (`tests/test_deck.py::test_one_sources_fed_once_drives_two_routers_as_one_router_did`) | 444, 445 | built as recommended — PR (D2) |
 | 591 | Plan 44 D2: the banks' and the modifiers' own lanes (`lfo`, `env`, `seq`, `mod`) still publish into the shared `Sources`, as they did into the one router — each router republishes before it reads, and its `mod` vector is its own (seeded from its own last outputs, put back when another router published), so each of two routers lands what it would alone, even on different modifiers; D4 gives each deck its own layer for them (names, rests, what the panel reads between passes) | — | (rec) — pending the owner; built as recommended |
-| 592 | Plan 44 D2: `devices.poll` keeps `router=` — `act` lands the deck's rows, and the pad's axis lanes reach the sources through `Router.pad`; the pad's touch and motion lanes move to `PadDevice.feed(sources)`, the feed slot; `devices.feed`, the adapters' `feed` and `audio.publish` are handed the sources; `app.frame` hands them `h.sources`, a host without one its router | 444 | (rec) — pending the owner; built as recommended |
+| 592 | Plan 44 D2: `devices.poll` keeps `router=` — `act` lands the deck's rows, and the pad's axis lanes reach the sources through `Router.pad`; the pad's touch and motion lanes move to `PadDevice.feed(sources)`, the feed slot; `devices.feed`, the adapters' `feed` and `audio.publish` are handed the sources; `app.frame` hands them `router.sources` — no second handle on the host | 444 | (rec) — pending the owner; built as recommended |
 | 593 | Plan 44 D2: a `Sources` follows every live table a router over it runs (`Sources.follow`, held weakly) and writes the device registry's rig facts (row schemes, MIDI roles, primaries) into each; it reads no table — an address is resolved against the asking router's own table (`Sources.resolve(source, primaries)`, cached on the router), a scheme's feel under that table's pad feel | — | (rec) — pending the owner; built as recommended |
 
 "—": no hand check shows it; tests only.
@@ -10524,11 +10524,13 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   `Sources` holds `feeds`, `labels`, `gates`, `rests`, `lane_kinds`,
   `names` and the resolved-address cache (`lane`, `address`), the device
   registry (`use`, `follow_devices`, `schemes`), the key and button code
-  cache (`code`, behind `Router._code`), the source feel and its
-  followers (`source_feel`, `felt`, `felt_lanes`, each handed the asking
-  table's pad feel) and the one `clock`: the first `use_bank` that brings
-  one sets it, a router handed another clock is a `ValueError`, and
-  `Deck.build` over shared sources takes theirs (review fix).
+  cache (`code`, behind `Router._code`), the rule for a scheme's own
+  feel (`source_feel`, handed the asking table's pad feel) and the one
+  `clock`: the first `use_bank` that brings one sets it, a router handed
+  another clock is a `ValueError`, and `Deck.build` over shared sources
+  takes theirs and refuses a different `clock` before anything registers
+  (review fixes). The camera job's followers (`felt`, `felt_lanes`) are
+  each router's own, beside its rows' movers (second review).
   `Router(reg, table, sources)` keeps `modulate`, the patch
   (`build_modgraph` / `modgraph` / `_plan`), the modifiers' memory, the
   banks and the sequencer, the macros' bases, `keys`, `pad`, `claimed`,
@@ -10546,14 +10548,19 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   reads and writes its sources. `Router.sources` is made lazily: a router
   from before this build that a hot reload re-classes gets sources of its
   own holding what it had (feeds, labels, rests, gates, names, kinds,
-  codes, followers, devices, clock), so the frame goes on. The
+  codes, devices, clock; its followers stay its own), so the frame
+  goes on. The
   scheme grammar the sources resolve (`BUILTIN_LANES`, `MIDI_SCHEMES`,
   `ROW_SCHEMES`, `QUALIFIER`, `base_scheme`, `qualified`, `is_continuous`,
   and `_resolve` with its lazy `glfw` / `gamepad` imports) moved with
   them, unchanged; `routing.py` imports it back and re-exports it and
   `Sources`. `Deck.build(sources=…)` builds the router over the sources
-  handed in, else new ones (`Deck.sources`); `app.Host.sources` is the
-  deck's; `hotreload.MODULES` has `routing_sources` just before `routing`.
+  handed in, else new ones (`Deck.sources`); `app.frame` feeds the
+  router's sources (`router.sources`; no `Host` field, so the pad's lanes
+  and the other feeds cannot land in two places); `sources` is a keyword
+  (`Router(reg, table, sources=…)`), so a caller from before D2 passing a
+  device registry third is a `TypeError`; `hotreload.MODULES` has
+  `routing_sources` just before `routing`.
 - **Recommended.** As built. The proof is
   `tests/test_deck.py::test_one_sources_fed_once_drives_two_routers_as_one_router_did`:
   three headless rigs, one over its own sources and two over one shared
@@ -10596,9 +10603,13 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   banks' outputs at the top of its pass. The `mod` vector is the
   router's own (`_mod_out`): seeded from its own last outputs, never the
   shared vector, and put back into the sources (with its labels, rests,
-  gates and kinds) at the start of its pass whenever another router
-  published since — so a delay's one-frame read is its own deck's
-  (review fix;
+  gates and kinds, built once when its modifiers change and kept on the
+  router: five assignments, nothing rebuilt per frame) at the start of
+  its pass whenever another router published since — so a delay's
+  one-frame read is its own deck's. A router with no modifiers takes the
+  `mod` entries out of the sources only while they are its own, so
+  another router's lanes stand (review fixes;
+  `tests/test_routing_sources.py::test_a_router_without_modifiers_leaves_the_others_mod_lanes`,
   `tests/test_deck.py::test_two_routers_with_different_modifiers_each_keep_their_own_mod_lanes`).
   What is not right yet: between two passes the shared `lfo` / `env` /
   `seq` / `mod` lanes, labels and rests hold the last router's, so the
@@ -10629,9 +10640,9 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   slot, so a device never reaches into a router for its sources (review
   fix; both slots come before the pass, the only reader). `DeviceRegistry.feed`, every device's
   `feed` and `audio.AudioEngine.publish` are handed the sources;
-  `app.frame` hands them `h.sources` (a host without one — built before
-  D2, or a test's — hands its router, which feeds its own sources, as
-  before). The adapters' `feed` bodies are unchanged: they write
+  `app.frame` hands them `router.sources` — the same sources the pad's
+  lanes reach through the router, by construction (second review: the
+  `Host.sources` field the first build had is gone). The adapters' `feed` bodies are unchanged: they write
   `feeds`, `labels`, `rests`, `gates`, `names` and `lane_kinds`, which a
   `Sources` has.
 - **Recommended.** As built. D5 (controllers to A) gives `act` the deck
@@ -10671,8 +10682,9 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   primaries a test or the registry's `_tell_table` set directly would be
   ignored.
 - **To reverse.** A move, no data.
-- **Rough edge.** The pad's followers (`felt`) are shared: two routers
-  calling `felt` on `axis` in one frame would step them twice; only the
-  deck the devices act on calls it.
+- **Rough edge.** None left from the review: the pad's followers
+  (`felt`), shared in the first build, are each router's own (second
+  review), so one router's `felt` — or its pad going away — never steps
+  or drops another's.
 - **Judge it.** — (tests: `tests/test_routing_sources.py`,
   `tests/test_routing.py`'s primary-pad tests, `tests/test_devices.py`).

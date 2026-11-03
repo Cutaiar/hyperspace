@@ -151,6 +151,12 @@ class Deck:
                 raise ValueError(f"Deck.build: {', '.join(given)} given with a renderer, "
                                  "whose own states the deck's params must drive")
             dream, fx, ghost = renderer.lookback.state, renderer.fx.state, renderer.ghost.state
+        # one clock for every deck (plan 44 §2): a clock other than the shared
+        # sources' is refused before anything registers on it
+        if (sources is not None and clock is not None and sources.clock is not None
+                and clock is not sources.clock):
+            raise ValueError("Deck.build: the sources step every bank on their own clock; "
+                             "a different `clock` was given")
         s = ViewState()
         reg = build_registry(s, control, audio, library.project,
                              dream=dream if dream is not None else DreamState(),
@@ -201,7 +207,7 @@ class Deck:
         # the router: this deck's evaluator over the sources every source
         # feeds (plan 44 D2) — the rig's when handed in, else its own
         sources = sources if sources is not None else Sources()
-        router = Router(reg, bindings, sources)
+        router = Router(reg, bindings, sources=sources)
         router.use_lfos(lfos, clock)           # they step inside the pass (plan 28 N0)
         router.use_bank(envs, clock)           # …and so do the envelopes (plan 31)
         router.use_sequencer(seq, envs)        # after the banks begin, before the plan

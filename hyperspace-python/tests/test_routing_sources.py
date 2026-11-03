@@ -19,8 +19,8 @@ from hyperspace.routing import Binding, Bindings, Router, Sources
 def _pair():
     """Two routers over one `Sources`, each over its own registry and table."""
     src = Sources()
-    a = Router(Registry(), Bindings([]), src)
-    b = Router(Registry(), Bindings([]), src)
+    a = Router(Registry(), Bindings([]), sources=src)
+    b = Router(Registry(), Bindings([]), sources=src)
     return src, a, b
 
 
@@ -46,6 +46,67 @@ def test_each_router_reads_the_pad_feel_of_its_own_table():
     assert a.source_feel("hand") == OFF
     assert a.felt("axis", [1.0], 1 / 60) == [1.0]        # a's feel is on
     assert b.felt("axis", [1.0], 1 / 60) is None         # b's is off: its followers dropped
+    # …b's, not a's: the camera job's followers are each router's own
+    assert a.felt_lanes("axis") == [1.0]
+    b.felt("axis", None, 0.0)                            # b's pad went away (`Router.pad`)
+    assert a.felt_lanes("axis") == [1.0]
+    assert a.felt("axis", [0.0], 1 / 60)[0] > 0.0        # a's follower kept its place
+    assert "_felt" not in vars(a.sources)
+
+
+def test_a_router_without_modifiers_leaves_the_others_mod_lanes():
+    """B has no modifiers: its pass takes nothing of A's ``mod`` lanes out
+    of the shared sources — A's vector, labels and rests stand."""
+    from types import SimpleNamespace
+
+    from hyperspace.bands import CEIL
+
+    src, a, b = _pair()
+    a.table.add_modifier("scale", ["lane:0"], a.reg, mul=2.0)
+    chain = SimpleNamespace(lanes=np.array([0.2 * CEIL, 0.0]))
+    a.modulate(chain)
+    vec, labels = src.feeds["mod"], src.labels["mod"]
+    assert vec[1] == pytest.approx(0.4) and labels == ["", "1 scale"]
+    b.modulate(chain)
+    assert src.feeds["mod"] is vec and src.labels["mod"] is labels
+    assert src.rests["mod"] == [0.0, 0.0]
+    # a's own last modifier removed: its entry goes, as before D2
+    a.table.remove_modifier("mod.1", a.reg)
+    a.modulate(chain)
+    assert "mod" not in src.feeds and "mod" not in src.labels
+
+
+def test_two_routers_with_modifiers_swap_their_lanes_in_without_rebuilding():
+    """Both routers have modifiers: each pass puts its own ``mod`` entries
+    back (row 591) by assignment — the vector and the lists it built when
+    its modifiers changed, never rebuilt per frame."""
+    from types import SimpleNamespace
+
+    from hyperspace.bands import CEIL
+
+    src, a, b = _pair()
+    a.table.add_modifier("scale", ["lane:0"], a.reg, mul=2.0)
+    b.table.add_modifier("scale", ["lane:1"], b.reg)
+    b.table.add_modifier("scale", ["mod:1"], b.reg, mul=0.5)
+    chain = SimpleNamespace(lanes=np.array([0.2 * CEIL, 0.6 * CEIL]))
+    a.modulate(chain)
+    b.modulate(chain)
+    built = {r: (r.__dict__["_mod_out"], r.__dict__["_mod_pub"]) for r in (a, b)}
+    for _ in range(5):
+        for r in (a, b):
+            r.modulate(chain)
+            out, pub = built[r]
+            assert r.__dict__["_mod_out"] is out and r.__dict__["_mod_pub"] is pub
+            assert src.feeds["mod"] is out and src.labels["mod"] is pub[0]
+    assert built[a][0][1] == pytest.approx(0.4)
+    assert built[b][0][1] == pytest.approx(0.6) and built[b][0][2] == pytest.approx(0.3)
+
+
+def test_sources_are_keyword_only():
+    """A caller from before D2 that handed a device registry as the third
+    argument is told so, rather than failing deep in `follow`."""
+    with pytest.raises(TypeError):
+        Router(Registry(), Bindings([]), Sources())
 
 
 def test_the_sources_hold_the_tables_weakly():
