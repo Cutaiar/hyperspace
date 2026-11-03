@@ -174,20 +174,30 @@ __all__ = ["FINE_DIV", "FINE_PARAM", "PICKUP_TOL", "Binding", "DeskEvent", "Desk
            "find_port", "retry_after"]
 
 
-def register_fine(reg: Registry) -> None:
-    """`desk.fine`: the desk's fine button held (wave 2 T3) — on, every
-    knob moves its param FINE_DIV times less. The rig's, like `desk.save`:
-    never saved, never performed; a reconnect lets go of it. The first
-    adapter a registry meets makes it."""
-    if FINE_PARAM in reg:
+# the desk's held buttons: a toggle the hand holds on, never saved, never
+# performed, that a reconnect lets go of (`MidiIO._enter`) so a lost
+# note-off cannot leave it down — SAVE (routing.register_desk) and FINE
+HELD_PARAMS = (SAVE_PARAM, FINE_PARAM)
+
+
+def register_held(reg: Registry, pid: str, label: str, tip: str) -> None:
+    """A held button's param (`HELD_PARAMS`): a toggle in group desk,
+    `persist=False`, not modulatable. The first registration stands."""
+    if pid in reg:
         return
     held = [False]
-    reg.toggle(FINE_PARAM, "Fine", lambda: held[0],
-               lambda v: held.__setitem__(0, bool(v)), group="desk",
-               persist=False, modulatable=False,
-               tip=f"The APC40's FINE (SEND B): hold it and a knob moves its value "
-                   f"{FINE_DIV} times less for the same turn. Let go and the knob carries "
-                   "on from where the value is.")
+    reg.toggle(pid, label, lambda: held[0], lambda v: held.__setitem__(0, bool(v)),
+               group="desk", persist=False, modulatable=False, tip=tip)
+
+
+def register_fine(reg: Registry) -> None:
+    """`desk.fine`: the desk's fine button held (wave 2 T3) — on, every
+    knob moves its param FINE_DIV times less. The rig's, like `desk.save`
+    (to move beside it in `routing.register_desk` once D2 has landed)."""
+    register_held(reg, FINE_PARAM, "Fine",
+                  f"The desk's FINE button held: a knob moves its value {FINE_DIV} times "
+                  "less for the same turn. Let go and the knob carries on from where the "
+                  "value is.")
 
 
 @dataclass(frozen=True)
@@ -426,6 +436,9 @@ class MidiIO:
         self._fine_moved: set[tuple] = set()
         self._fine_was = False
         self._fine_out: int | None = None
+        self._fine_held: tuple[int, int] | None = None   # FINE's press, held
+        self._fine_seen: tuple | None = None             # `_fine_control`'s cache key
+        self._fine_at: tuple[int, int] | None = None
         if self.ports.injected:
             self._enter()
         elif self.ports.connect():
@@ -466,12 +479,13 @@ class MidiIO:
         self._light_bars()
         # a SAVE whose note-off was lost (plan 24 C1) must not turn the next
         # pad press into a save: power-up lets go of it
-        save = self.reg.get(SAVE_PARAM)
-        if save is not None and save.value:
-            save.set(False)
-        fine = self.reg.get(FINE_PARAM)         # …and of FINE, the same way
-        if fine is not None and fine.value:
-            fine.set(False)
+        # (and of FINE, wave 2 T3: the knobs it moved are forgotten with it)
+        for pid in HELD_PARAMS:
+            held = self.reg.get(pid)
+            if held is not None and held.value:
+                held.set(False)
+        self._fine_held, self._fine_was = None, False
+        self.__dict__["_fine_moved"] = set()
         # where the faders were is forgotten too: one moved while the cable
         # was out would otherwise seed a false pickup crossing (`redraw`)
         self.__dict__["_hw"] = {}
@@ -666,7 +680,9 @@ class MidiIO:
             self.__dict__.setdefault("_hw", {})[(kind, ch, number)] = value / full
         if kind == "note" and value == 0 and self._hold_state()[0].pop((ch, number), None):
             self._light_bars()      # let go before HOLD_S: a tap, nothing fires
-        if kind == "note" and self._fine_control() == (ch, number):
+        held_fine = self.__dict__.get("_fine_held")
+        if kind == "note" and ((value > 0 and self._fine_control() == (ch, number))
+                               or (value == 0 and held_fine == (ch, number))):
             self._fine_press(ch, number, value > 0)
             if fell and value > 0 and number in getattr(self.profile, "MODE0_TOGGLES", ()):
                 self._fine_press(ch, number, False)     # no release will come (see below)
@@ -967,11 +983,20 @@ class MidiIO:
         fine = getattr(self.profile, "FINE", None)
         if fine is None:
             return None
+        t = self.table
+        key = (self._serials(), getattr(t, "rows_serial", 0), id(t.bindings),
+               len(t.bindings))
+        if key == self.__dict__.get("_fine_seen"):
+            return self.__dict__.get("_fine_at")
         number, ch = fine
+        at: tuple[int, int] | None = ch, number
         for b in self.bindings:
-            if b.kind == "note" and b.number == number and b.channel in (None, ch):
-                return None
-        return ch, number
+            if (b.enabled and b.kind == "note" and b.number == number
+                    and b.channel in (None, ch)):
+                at = None           # the owner's row (an off one gives way)
+                break
+        self._fine_seen, self._fine_at = key, at
+        return at
 
     def _fine_on(self) -> bool:
         p = self.reg.get(FINE_PARAM)
@@ -986,12 +1011,15 @@ class MidiIO:
             p = self.reg[FINE_PARAM]
         if pressed:
             self._held[(ch, number)] = []
+            self._fine_held = (ch, number)
             p.set(True)
             self._log_press(self._source("note", ch, number),
                             f"fine: knobs move {FINE_DIV}× less while held", "both")
         else:
             self._held.pop((ch, number), None)
+            self._fine_held = None
             p.set(False)
+            self._fine_release()     # now: a coarse CC later in this batch must not jump
 
     def _fine_move(self, b: Binding, p: Param, u: float) -> None:
         """A knob's message while fine is on: the base moves by the knob's
@@ -999,31 +1027,44 @@ class MidiIO:
         knob with no last position (never moved, never drawn) only takes
         this one as its position. Any glide on the param is dropped."""
         was, b.last_hw = b.last_hw, u
-        if was is None or u == was:
+        if was is None:
             return
-        self._slew_state().pop(p.id, None)
-        y = min(max(p.norm + (u - was) / FINE_DIV, 0.0), 1.0)
+        d = u - was
+        if d == 0.0:
+            if u not in (0.0, 1.0):
+                return
+            # an end stop: the encoder sends its end again for each detent
+            # turned against it — one MIDI step that way
+            d = 1.0 / 127.0 if u == 1.0 else -1.0 / 127.0
+        s = self._slew_state().pop(p.id, None)
+        if s is not None and abs(p.norm - s.wrote) <= SLEW_TOL:
+            p.set_norm(s.target)    # a glide in flight lands where the ring showed
+        y = p.norm + d / FINE_DIV
+        y = y % 1.0 if p.wrap else min(max(y, 0.0), 1.0)
         p.set(p._value_of_norm(y))
         self._note_written(p)
         self.__dict__.setdefault("_fine_moved", set()).add(b.control)
 
     def _follow_fine(self) -> None:
-        """Fine let go since the last poll: each knob it moved is re-based
-        onto its param — its ring re-sent (`_rebase` catches it there) —
-        or, where rings do not re-base, its catch let go (soft pickup)."""
+        """`desk.fine` turned off since the last poll by anything but the
+        button (the panel, a learned row): the release `_fine_press` makes."""
         on = self._fine_on()
         was = self.__dict__.get("_fine_was", False)
         self._fine_was = on
-        if on or not was:
-            return
+        if was and not on:
+            self._fine_release()
+
+    def _fine_release(self) -> None:
+        """Fine let go: each knob it moved loses its catch and has its ring
+        re-sent. Until the ring goes out, a message the knob sent from
+        where it had wandered is read as pickup and moves nothing; the
+        ring re-bases the encoder onto the param (`_rebase` catches it
+        there). Where rings do not re-base the catch stays let go: soft
+        pickup, as the faders."""
         moved = self.__dict__.setdefault("_fine_moved", set())
-        rebases = getattr(self.profile, "RING_REBASES_KNOB", False)
         for b in self.bindings:
             if b.control in moved:
-                if rebases:
-                    b.last_out = None
-                else:
-                    b.caught = False
+                b.last_out, b.caught = None, False
         moved.clear()
 
     def _fine_light(self) -> None:
@@ -1247,6 +1288,7 @@ class MidiIO:
         there, so a fader moved on the other layer picks up its own param
         instead of jumping it. A load's rule above wins over this one."""
         if load:
+            self.__dict__["_fine_moved"] = set()     # a new desk: every ring re-sent below
             slews = self._slew_state()
             for pid in [pid for pid in slews if not is_session_id(pid)]:
                 del slews[pid]

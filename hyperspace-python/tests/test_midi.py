@@ -1634,3 +1634,83 @@ def test_a_row_on_send_b_takes_it_and_a_reconnect_lets_go_of_fine(rig):
         Binding(f"note:0:{FINE}", "view.lines", "toggle", feedback="led"))
     push(rig, note(FINE), note(FINE, 0))
     assert lines.value != was and not rig.reg[midi.FINE_PARAM].value
+
+
+def test_a_fine_detent_during_a_glide_starts_from_where_the_glide_was_going(rig):
+    """Review of #344, 1: a coarse detent starts a glide and the ring (so
+    the encoder) shows its target; a fine detent then lands the glide
+    there and moves on from it — never back from the value in flight."""
+    mix = rig.reg["view.pattern_mix"]
+    mix.set_norm(0.4)
+    slew_rig(rig)                                   # the clock stays at 0: the glide waits
+    knob = Encoder(rig)
+    knob.turn(1)                                    # ring 51 → 52: aimed at 0.41
+    assert "view.pattern_mix" in rig.midi._slews and mix.norm == pytest.approx(0.4)
+    push(rig, note(FINE))
+    knob.turn(1)
+    assert mix.norm == pytest.approx(0.41 + 1 / 127 / midi.FINE_DIV, abs=1e-9)
+    assert rig.midi._slews == {}
+
+
+def test_a_coarse_message_in_the_releases_batch_does_not_jump(rig):
+    """Review of #344, 2: the encoder has wandered a few steps past the
+    param's ring during fine; a coarse message that arrives in the same
+    batch as the release is read as pickup, and the ring re-bases after."""
+    mix = rig.reg["view.pattern_mix"]
+    mix.set_norm(0.4)
+    rig.midi.poll()
+    knob = Encoder(rig)
+    push(rig, note(FINE))
+    knob.turn(10)
+    held = mix.norm
+    assert knob.pos != round(held * 127)            # it has wandered
+    push(rig, note(FINE, 0), cc(K_MIX, knob.pos + 1))
+    assert mix.norm == held
+    knob._follow()
+    assert knob.pos == round(held * 127)            # re-based on the param
+
+
+def test_fine_reaches_both_ends_and_wraps_a_circular_param(rig):
+    """Review of #344, 3: at an end stop the encoder sends its end again
+    for each detent; each one is a step that way."""
+    mix = rig.reg["view.pattern_mix"]
+    mix.set_norm(0.99)
+    rig.midi.poll()
+    knob = Encoder(rig)
+    push(rig, note(FINE))
+    knob.turn(30)
+    assert mix.norm == pytest.approx(1.0)
+    mix.set_norm(0.01)
+    rig.midi.poll()
+    knob.turn(-30)
+    assert mix.norm == pytest.approx(0.0)
+    yaw = rig.reg["camera.yaw"]                     # D2 on the preset layer
+    assert yaw.wrap
+    yaw.set_norm(0.99)
+    rig.midi.poll()
+    Encoder(rig, 0x11).turn(30)
+    assert yaw.norm < 0.5                           # past the end, round to the start
+
+
+def test_an_off_row_on_send_b_gives_way_to_fine(rig):
+    """Review of #344, 7: a row on SEND B switched off on the ROUTING page
+    does not take it; switched on, it does."""
+    lines = rig.reg["view.lines"]
+    b = Binding(f"note:0:{FINE}", "view.lines", "toggle", feedback="led", enabled=False)
+    rig.midi.table.bindings.append(b)
+    was = lines.value
+    push(rig, note(FINE))
+    assert rig.reg[midi.FINE_PARAM].value and lines.value == was
+    push(rig, note(FINE, 0))
+    rig.midi.table.enable(b)
+    push(rig, note(FINE), note(FINE, 0))
+    assert not rig.reg[midi.FINE_PARAM].value and lines.value != was
+
+
+def test_a_row_landing_on_send_b_while_held_still_lets_go_of_fine(rig):
+    """Review of #344, 5: the release goes to the press that held FINE."""
+    push(rig, note(FINE))
+    rig.midi.table.bindings.append(
+        Binding(f"note:0:{FINE}", "view.lines", "toggle", feedback="led"))
+    push(rig, note(FINE, 0))
+    assert not rig.reg[midi.FINE_PARAM].value

@@ -10530,15 +10530,22 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   base with `Param.set` between detents (no glide, any glide dropped): a
   detent is 1/1270 of the throw, under one detent of every param — 0.08
   of `view.pattern_mix`'s hundred, 0.32 of a speed's 401. The ring
-  follows and re-bases the encoder as ever. The button is read by the
+  follows and re-bases the encoder as ever. A glide in flight lands on
+  its target (what the ring showed) before the fine step. At an end stop
+  the encoder sends its end again for each detent, and each repeat is
+  one MIDI step that way, so fine reaches 0 and 1; a `wrap` param wraps. The button is read by the
   adapter, not dispatched through the table: `routing.py` is D2's while
   it is open, and a table row would need `APC_NEW_ROWS` to reach the
   owner's existing `bindings.json`. So it works on every file at once; it
-  stands down where any row of the device's table names SEND B (that row
-  is the owner's); it is never a learn's candidate. Its LED: 1 held, 0
+  stands down where any enabled row of the device's table names SEND B
+  (that row is the owner's; an off one gives way), worked out once per
+  table change; it is never a learn's candidate. A release goes to the
+  press that held FINE even if a row has landed on SEND B since. Its LED: 1 held, 0
   not, change-gated, relit after a load darkens the desk. The press goes
   in the desk log. `desk.fine` is learnable as `desk.slew` is (a learned
-  toggle row would latch it).
+  toggle row would latch it). It is registered by `midi.register_held`,
+  the held-button shape SAVE has; **move it beside `desk.save` in
+  `routing.register_desk` after D2** (routing.py was frozen for D2).
 - **Other options.** A clip stop (1–7 are free, but the sequencer page
   shadows them); a track select 7–8 (far from the knobs); SEND C or
   device ◀ ▶ (as free; SEND B is nearer the track knobs). ÷4 or ÷20.
@@ -10562,19 +10569,25 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   mismatch.
 - **Answer.** (rec) — the build's: the ring re-base (plan 13 D7, hand
   check 31), not a pickup and not a relative read from then on.
-- **Built.** `MidiIO._follow_fine`, once a poll: on fine's on → off,
-  every knob row `_fine_move` touched has its ring re-sent
-  (`last_out = None`), so `_rebase` catches it at the param's ring and
-  the device's encoder sits there; the next coarse detent is one MIDI
-  step from the param. With `RING_REBASES_KNOB` False those knobs lose
-  their catch and pick up as the faders do. `desk.fine` (group desk,
+- **Built.** `MidiIO._fine_release`, at the note-off itself (and once a
+  poll when `desk.fine` is turned off any other way): every knob row
+  `_fine_move` touched loses its catch and has its ring re-sent
+  (`last_out = None`). A message the knob sent from where it had wandered,
+  later in the same batch, is read as pickup and moves nothing; then the
+  ring goes out, `_rebase` catches the row at the param's ring and the
+  device's encoder sits there; the next coarse detent is one MIDI step
+  from the param. With `RING_REBASES_KNOB` False the catch stays let go
+  and those knobs pick up as the faders do. `desk.fine` (group desk,
   `persist=False`, `modulatable=False`) is the rig's; `_enter` lets go of
-  it as of SAVE, so a lost note-off cannot leave the desk fine.
+  it as of SAVE (one loop over `midi.HELD_PARAMS`) and forgets the knobs
+  it moved, so a lost note-off cannot leave the desk fine; a load forgets
+  them too (its redraw re-sends every ring).
 - **Other options.** Soft pickup (the knob dead until turned back
   through the value — up to a tenth of its throw away after a long fine
   turn); keeping fine's relative read for good (every knob relative, no
   longer an absolute-with-re-base desk).
-- **To reverse.** `_follow_fine`'s loop body to `b.caught = False`.
+- **To reverse.** `_fine_release`'s loop body to `b.caught = False` alone
+  (soft pickup, the ring left as it was).
 - **Rough edge.** The re-base lands on the param's ring, a 1/127 grid:
   a fine value between ring steps is kept, and the first coarse detent
   after it lands on the param's own detent grid again (up to one detent
