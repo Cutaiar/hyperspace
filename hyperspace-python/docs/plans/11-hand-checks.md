@@ -6970,6 +6970,60 @@ preset 'party/TRIP'" and loads nothing, the pad still drawn as filled;
 the show opens (no schema refusal); back on this build the pad still
 loads `party / TRIP`.
 
+## BE. Video audio 3 of 4: the analyzer listens to the mix (plan 45 V3)
+Decision register rows 594–596. The source is `audio.mix` (AUDIO,
+*Listen to video sound*, beside the mic's button): the mixer's sum —
+after the gains and the clip — into the analyzer as mono, the mean of L
+and R. It opens no input device, and it is silent until a channel's
+`audio` is on (MEDIA). The button is a new param: **restart once** after
+updating. The sound itself is V2's (check 437): the occasional click at
+rate 1 is still expected until V4, and the bands hear the same blocks.
+**446. The bands follow a video's soundtrack, and the mic is not grabbed.** (Mac, the speakers or headphones, a show video with a clear beat)
+Headless: `tests/test_audio_mix.py` (`test_the_mix_lands_in_the_analyzers_ring_as_mono_with_the_gains_applied`,
+`test_the_bands_see_the_videos_tone_as_they_would_the_mics`, `test_the_mix_is_taken_after_the_clip`).
+1. Slot the video on channel A, wire it to an output, tick `audio` on A.
+2. AUDIO: *Listen to video sound*. Watch ANALYZER's meters and the shape.
+3. Move A's `gain` from the notch to −6 dB and to off.
+*Pass:* AUDIO says `video sound (media mix) · 48.0 kHz`; the meters and
+the shape move with the video's sound as they do with the mic — a kick
+in the soundtrack lifts the low band on the picture's hit; −6 dB is a
+weaker drive, off is the bands decaying to rest; macOS's orange
+microphone dot in the menu bar is **not** lit (no input opened). Fail:
+the bands moving with the room rather than the file point at the mic
+still open (`AudioEngine.stop` not reached); bands late against the
+picture by more than a frame or two point at the ring being drained
+late (`AudioEngine.step`).
+**447. Switching sources mid-run keeps the bands' tuning.** (Mac, a show video with sound playing on A, a WAV file, the mic)
+Headless: `tests/test_audio_mix.py` (`test_switching_sources_mid_run_detaches_the_mix_and_keeps_the_bands`,
+`test_the_audio_mix_toggle_picks_the_source_and_lets_it_go`).
+1. With video sound the source, set `master.gain` somewhere off its default
+   and change one band's attack.
+2. *Listen to mic*; then *Load track* a WAV; then *Listen to video sound*;
+   then *Stop*.
+*Pass:* each switch is clean — the mic follows the room, the WAV plays
+and the bands follow it, video sound follows the video again; the master
+gain and the band's attack are what you set throughout; the video's
+sound in the speakers never stops or clicks because of a switch; Stop
+leaves the bands at rest and the video still audible. Fail: the bands
+following the video while the mic or WAV is picked point at the mixer
+still pushing (`listen(None)` not called).
+**448. Video sound with nothing heard is silence; a channel brings it.** (Mac, a show video with sound, after one restart on this build)
+Headless: `tests/test_audio_mix.py` (`test_mix_with_nothing_heard_is_silence_not_an_error`,
+`test_a_stream_that_stops_or_stalls_is_silence_not_the_last_block_held`,
+`test_a_mixer_from_before_v3_learns_to_listen_after_a_hot_reload`).
+1. Launch with no channel's `audio` on. AUDIO: *Listen to video sound*.
+2. MEDIA: tick `audio` on A (the video playing at rate 1).
+3. Untick it; then pull the headphones or switch the output device.
+*Pass:* step 1 shows no error, the line "silent until a channel's sound
+is on (MEDIA)", the bands at rest and SYSTEM shows no `media sound` line
+(nothing opened); step 2 the bands come alive with the sound; unticked,
+the bands decay to rest (not frozen on the last block); a device change
+that stops the stream leaves the bands at rest until it reopens (5 s),
+and AUDIO says `video sound silent — error: …` in warning colour while
+it is down.
+Fail: a frozen meter after the untick points at the no-voice block not
+being pushed (`Mixer._push`).
+
 ## BI. FINE: SEND B held, a knob a tenth as far (wave 2 T3)
 Register rows 609–610. Headless: `tests/test_midi.py` (the fine
 section: a synthetic encoder that the host's rings re-base). Restart

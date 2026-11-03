@@ -9,11 +9,11 @@ and merges; builders build.
 
 You are orchestrating **wave 2** of the Hyperspace post-show plan. The plan
 is the Claude Doc "Tier 2 and 3 build order"
-(https://claude.ai/artifact/VGSHyfG5sJFqxov8fgdPes). **The wave 1 session
-could not open that doc** (not shared with its account), so the wave 2 list
-below is reconstructed from the wave 1 prompt, the plan docs in the repo and
-the owner's words; read the doc's "The PR list by wave" first and correct
-the table before briefing anyone. Wave 1 is merged to `main`; the owner
+(https://claude.ai/artifact/VGSHyfG5sJFqxov8fgdPes), exported into the repo
+on 2026-11-03 as `hyperspace-python/docs/plans/tier-2-3-build-order.md`
+(the session's connectors cannot open the doc; the repo copy is the
+reference). The wave 2 list below is the doc's "PR list by wave", wave 2,
+checked against it on 2026-11-03. Wave 1 is merged to `main`; the owner
 (Dan) wants wave 2 run the same way: one builder agent per item in its own
 worktree, one PR per item to `main`, an independent code review and a fix
 round on every PR (a second pass when the fixes were large), and a union
@@ -90,17 +90,21 @@ Also on `main` from the owner: #330, the Joy-Con as a 4D totem (plan 47,
 
 | Id | Item | Lane | Size | Waits on |
 | --- | --- | --- | --- | --- |
-| D2 | Split the router's shared sources (`routing_sources.py`: feeds, labels, gates, rests, names, devices, clock, feed, felt) from its per-deck evaluator; `routing.py` re-exports; the same-state proof extended to two routers over one `Sources` (plan 44 §3 D2) | Core | L | nothing; **while open, `routing.py`, `devices.py`, `app.frame` and the adapters' `router.feed` sites are frozen for every other PR** |
-| D3 | The session/performance line made mechanical: `build_session` / `build_performance`, `SessionTable` + a deck's `Bindings`, `Presets` owns `current`/dirty, `MediaSources` + `Channels`; `ghost` and `cloud` to performance, the bus cuts into the preset, desk templates inlined, no `default.json` fallback; schema **`/10`** and `hyperspace.project/3` with a one-way migration in `tools/` and a backup (plan 44 §3 D3 + plan 43 §6) | Core | L | D2 merged; land between shows, both Macs together |
-| V3 | The analyzer listens to the mix: the mixer's summed block pushed into the analyzer's ring as a `mix` source beside `mic` and `file` (plan 45) | Media | S–M | nothing |
-| V4 | Sync with video as master; varispeed: the callback reads sequentially from its own sample position slewed toward the transport's, resamples by the transport's speed, reverse and rate ≠ 1 sound like tape; decides the loop-wrap case (plan 45) | Media | M | V3 (same files) |
-| L2 | Preset folders stage 2: move a preset between folders from the PRESETS page, make/rename a folder, `tools/move_library.py` and `tools/migrate_library.py` walk folders (plan 48 "stage 2") | Library | S–M | nothing |
-| T1 | Test infra follow-ups: the flakes above (worker crashes under GPU contention: serialise torch/Vision live tests behind the live lock or an `xdist_group`), `--dist load` if the owner says so, the register tidy (rows 565–570 into the table; `###` sections in numeric order), module-scoped live fixtures under the lock (row 589's caveat) | Time/infra | S | nothing |
-| U2 | Panel fold stage 2 | UI | M | Dillon's lane; do not assign unless the owner says so |
+| D2 | Split the router's shared sources (`routing_sources.py`: feeds, labels, gates, rests, names, devices, clock, feed, felt) from its per-deck evaluator; `routing.py` re-exports; the same-state proof extended to two routers over one `Sources` (plan 44 §3 D2; doc 2.1) | Core | M–L | nothing; **while open, `routing.py`, `devices.py`, `app.frame` and the adapters' `router.feed` sites are frozen for every other PR** |
+| D3 | The session/performance line made mechanical: `build_session` / `build_performance`, `SessionTable` + a deck's `Bindings`, `Presets` owns `current`/dirty, `MediaSources` + `Channels`; `ghost` and `cloud` to performance, the bus cuts into the preset, **desk templates retired** (none exist), the `modules` labels **dropped** with the `default.json` fallback, `ghost.mirror` and the rig kept for now; schema **`/10`** and `hyperspace.project/3` with a one-way migration in `tools/` and a backup (plan 44 §3 D3 + plan 43 §6; doc 2.2) | Core | L | D2 merged (C2 is); land between shows, both Macs together |
+| F1 | One format: patch = group not yet saved = preset with no open pins, one loader, one conflict sheet; module presets and desk templates retired as separate ideas; `/11` only if the one format needs it (doc 2.3; DECISIONS "Patch, group and preset become one format") | Format | L | D3 merged |
+| V3 | The analyzer listens to the mix: the mixer's summed block pushed into the analyzer's ring as a `mix` source beside `mic` and `file` (plan 45; doc 2.8) | Media | M | nothing (V2 is merged) |
+| T2 | Shift-drag fine mode in the panel (doc 2.6) | Time | S | nothing (the tapers are merged) |
+| T3 | A momentary fine button on the APC40's knobs (doc 2.7) | Time | S | nothing; ours (the desk was Dillon's by decision 10 — say so in the PR body and tag him) |
+| U1 | Panel fold stage 1 (doc 0.9, never started): the side pane always on, with selection, presets, dream, faces and analyzer sections; plan 49 written in the same PR | UI | M | nothing; **ours this wave** (the owner, 2026-11-03: the fold is ours, on its schedule) |
+| U2 | Panel fold stage 2 (doc 2.4): media, fx, LFO, sequencer, audio, camera, output fold in; the FX page retired | UI | L | U1 merged; ours |
+| L2 | The folder tree in the PRESETS section of the folded pane (doc 2.5) | UI | S–M | U1 merged |
+| I1 | Test infra follow-ups (the wave 1 prompt called this "T1"; renamed so the doc's T1, the tapers, keeps its name): the flakes above (worker crashes under GPU contention: serialise torch/Vision live tests behind the live lock or an `xdist_group`), `--dist load` (the owner said go, 2026-11-03; measure the live tests under the lock), the register tidy (`###` sections in numeric order; the 565–570 table rows exist already), module-scoped live fixtures under the lock (row 589's caveat), the stale wave 0/1 worktrees, the untracked `tests/fixtures/real.mp3` the audio golden manifest names | infra | S | nothing |
 
-Not wave 2 unless the plan doc says so: F1 (patch, group and preset as one
-format), P1–P3 (patches v2), N1–N3 (node mode), D4–D6 (deck B in render,
-controllers to A / the panel to B, the playlist) — these follow D3.
+Not wave 2 (the doc's waves 3 and 4): **V4** (3.7, waits on V3 — the wave 1
+prompt had it in wave 2; the doc does not), D4–D6, P1–P3, B1/B2, O1/O2, U3,
+N1–N3. The doc lets a PR start when its gate is merged, but the owner said:
+do not start wave 3.
 
 Decisions the owner answers before or during this wave (ask at the start,
 with the recommendations, and proceed with everything not gated): row 564
@@ -112,6 +116,44 @@ holds (`ls "<library>/desk/"`), and whether `ghost.mirror` stays the rig's
 (the owner said yes on 2026-11-02 — confirm it is still so); the `--dist
 load` follow-up (row 589).
 
+## Checkpoint 2026-11-03 (the owner's answers; do not re-ask)
+
+- The `/9` migration (C2) was run by the owner on 2026-11-03 (backup
+  `~/Hyperspace/library-backup-20261102-214757`): every Drive preset is
+  `hyperspace.preset/9`, the shows' eye dropped (`.bak-v2-eye`), the shows
+  still `hyperspace.project/2`. D3's tool stacks on it.
+- #299 (`--laptop`, 1a0d13f), #338 and #339 (the poi follow-ups:
+  `devices.py`, `app.py`, `render.py`, `ui_graph.py`, `ui_pad.py`) are
+  merged, so D2's freeze starts from a `main` that holds them (98ee981).
+  #340 (the Edge Lab trigger bench, `prototypes/` only) is the owner's and
+  outside every freeze.
+- **U2** is not wave 2; it is scheduled where the six-wave doc puts it.
+- **D3**: desk templates **retired** (none exist in the Drive library or
+  `~/Hyperspace`, so the inlining is a no-op and the code goes); the
+  `modules` labels **dropped** with the default-module fallback (row 540
+  resolved: one preset of 109 carried any); `ghost.mirror` and the rig
+  concept **survive for now** — the rig goes away in a later wave.
+- `--dist load`: T1 switches to it as recommended and measures the live
+  tests under the lock (row 589).
+- Rows 564, 580, 585–589: **yes**. Plan 42's 544–553: see their rows —
+  **545 overturned** (north / south / east / west for every four-button
+  cluster and D-pad: a work item for the controllers lane, unscheduled);
+  546, 550, 551, 552 still open.
+- Two items the owner raised with no wave yet: the **grand cleanup pass**
+  (every preset normalised to the newest format, old cruft dropped) and
+  the **north / south / east / west vocabulary** (545).
+- The plan doc could not be opened by the session's connectors (the
+  owner's account has view-only access to it, so Export was greyed out too);
+  the owner exported it by hand and it is in the repo as
+  `tier-2-3-build-order.md`. The table above is corrected against it:
+  **F1 is wave 2** (after D3), **V4 is wave 3**, **T2 and T3** were missing,
+  **L2 is the pane's folder tree** gated on Dillon's U1 (not started), and
+  the infra item is **I1**.
+- Builders run on **Opus** (the owner, 2026-11-03).
+- **The fold is ours this wave** (the owner, 2026-11-03, after talking to
+  Dillon): U1 first, then U2 and L2 on it. T3 is ours too. Merging on green
+  is authorised for the wave.
+
 ## How to run it
 
 1. Confirm `main` is the springboard (`git fetch`, `git log -1 origin/main`),
@@ -122,8 +164,11 @@ load` follow-up (row 589).
    letter / plan number, the commit trailer lines the session requires,
    the PR title and body conventions (a `## Review fixes` section is added
    later), and "do not merge; do not run any migration against
-   `~/Hyperspace` or the Drive folder". Launch D2, V3, L2 and T1 together;
-   V4 after V3; D3 after D2 merges.
+   `~/Hyperspace` or the Drive folder". Launch D2, V3, U1, I1 together, then T2 and T3 (never more than two
+   fast-tier runs on the machine at once, so stagger); D3 after D2 merges;
+   U2 and L2 after U1 merges; F1 after D3 merges. **Builders run on Opus** (the owner, 2026-11-03; DECISIONS
+   "Process": never Fable) — pass `model: "opus"` to every implementation
+   agent.
 3. **Testing on the shared Mac** (the wave 1 lesson): builders run the
    FAST tier only, `uv run pytest -q -n 4 -p no:cacheprovider`, one run at
    a time each; the orchestrator runs every `--all` (goldens included)
@@ -145,9 +190,9 @@ load` follow-up (row 589).
 6. Merge in this order, re-merging `main` into each PR at the head of the
    queue on an alias branch (`m/<id>`, pushed to the PR's branch), waiting
    for green CI, then `gh pr ready` + `gh pr merge --squash --delete-branch
-   --auto` with a commit body that carries the trailer lines: T1, D2, V3,
-   L2, V4, D3 (last: the schema move, between shows). The owner authorised
-   merging-when-green for wave 1; ask again at the start of wave 2.
+   --auto` with a commit body that carries the trailer lines: I1, D2, V3,
+   T2, T3, U1, L2, U2, D3 (the schema move, between shows), F1 (only after
+   D3). The owner authorised merging-when-green for wave 2 on 2026-11-03.
 7. After the last merge: both Macs pull, `uv sync`, restart; the owner runs
    D3's migration; hand checks for the wave; then write the wave 3 opening
    prompt the way this one was written and stop.
