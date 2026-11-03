@@ -10184,7 +10184,11 @@ and D3 (the per-deck split) are
   step is a hundredth of a detent for an effect's float param (a whole
   detent for an integer), a tenth for a pattern input (the tile is 8-bit),
   so a shape change stays a fraction of a pixel while a phase carried by
-  time is still moved by `phase × Δ`.
+  time is still moved by `phase × Δ`. Each knob is measured under every
+  setting of the effect's choices (blend's key acts in the luma key
+  only), with the UV map turned half a turn on the aux input (displace and
+  blend read nothing without one), and with `u_time` at the wall time the
+  phase stands at for the effect's speed.
 - **Measured.** Every knob that grows fails by 4.3–4.9 × the threshold
   (warp drift 0.23 → 6.2 px, warp scale 0.26 → 6.7, tripcolour pulse 1.3
   → 27.7, RINGS colour before row 579 3.2 → 61.6 levels); every other knob

@@ -29,24 +29,32 @@ clock stopped at the same phase, early in a set and late in one.
   segments — changes it by the same amount whenever it moves, and passes
   however large that is; one whose change grows with the clock is twenty
   times its early size and more (warp's drift and scale, tripcolour's
-  pulse and RINGS' colour before K4: see the PR). What it cannot see: a
-  rate under a sine that has wrapped by phase 98 at a hundredth of a
-  detent (a rate of more than ~6 rad a unit) — the lint's product rule
-  catches those.
+  pulse and RINGS' colour before K4: see the PR).
+- **Aux.** An effect with an aux input (displace, blend) reads a second
+  picture there, the UV map turned half a turn (`uv_flow.uv_mirror`), so
+  its knobs move the field; every other effect ignores it.
+- **What it cannot see.** A rate under a sine that has wrapped by phase 98
+  at a hundredth of a detent (a rate of more than ~6 rad a unit) — the
+  lint's product rule catches those. A knob whose effect needs an aux
+  that changes with time (the aux here is still), or another param far
+  from its default and half the amounts (each knob is stepped alone, from
+  the others' defaults). A choice param (a picker, not a knob) is never
+  stepped itself; every knob is measured under each of its settings. The face patterns' SPEED (integrated by the renderer, tested in
+  `test_patterns.py`).
 
-The pairs the time lint still allowlists are left to the lint: a growth
-there is expected until the port, and no xfail mark is needed once they
-go. GL is the conftest's per-test `ctx`; every chain is released.
+The time lint's allowlist is not consulted: while a pair sits on it the
+pair fails here too (its `stale` assertion, not this module, owns the
+list). GL is the conftest's per-test `ctx`; every chain is released.
 """
 
 from __future__ import annotations
 
+import itertools
 import shutil
 
 import numpy as np
 import pytest
 import uv_flow
-from test_shader_time_lint import ALLOWLIST as TIME_ALLOWLIST
 
 from hyperspace import fx
 from hyperspace import patterns as P
@@ -62,7 +70,7 @@ FX_FRACTION = 0.01                               # of a detent, for a float para
 PATTERN_FLOOR = 0.5                              # levels of 255
 PATTERN_FRACTION = 0.1
 PATTERN_SIZE = 64
-PATTERN_DETENT = 2.6 / 100                       # pattern.mod.*: 0 … 2.6, RAW_STEPS
+WALL_T0 = 100.0                                  # u_time where a speed of 0 leaves it
 
 
 def grows(early: float, late: float, floor: float) -> bool:
@@ -77,12 +85,17 @@ def declared(state: fx.FxState) -> Registry:
     return r
 
 
+# the shipped effects, read once for the module (collection and every test)
+_SHIPPED = fx.FxState()
+EFFECTS = sorted(_SHIPPED.files)
+
+
 @pytest.fixture(scope="module")
 def shipped() -> tuple[fx.FxState, Registry]:
-    """The shipped effects, read and declared once for the module (no GL:
-    each test makes its chain on its own `ctx` and releases it)."""
-    state = fx.FxState()
-    return state, declared(state)
+    """The shipped effects declared once for the module (no GL: each test
+    makes its chain on its own `ctx` and releases it). Every test leaves
+    the values as it found them."""
+    return _SHIPPED, declared(_SHIPPED)
 
 
 # ---------------------------------------------------------------- effects
@@ -107,7 +120,7 @@ def small_step(r: Registry, state: fx.FxState, name: str, key: str,
     """`key`'s value and a `fraction` of one detent on (`detent`); a whole
     detent for an integer."""
     before, after = detent(r, state, name, key)
-    p = next((p for p in state.files[name].params if p.key == key), None)
+    p = next((p for p in state.specs[name].params if p.key == key), None)
     if p is not None and p.integer:
         return before, after
     d = after - before
@@ -116,44 +129,55 @@ def small_step(r: Registry, state: fx.FxState, name: str, key: str,
     return before, before + d * fraction
 
 
+def wall(phase: float, speed: float) -> float:
+    """The wall time (`u_time`) at which `phase` stands at `speed`: the
+    same set, so a `u_time × param` product is as late as the phase; at
+    speed 0 the phase never moved, and the wall clock is `WALL_T0`."""
+    return phase / abs(speed) if speed else WALL_T0
+
+
 def effect_report(ctx, state: fx.FxState, r: Registry, name: str,
-                  keys=None) -> dict[str, tuple[float, float]]:
-    """key → (early, late) step sizes, px, for effect `name` on `state`
+                  keys=None) -> dict[str, list[tuple[float, float]]]:
+    """key → [(early, late)] step sizes, px, one pair per setting of the
+    effect's choices, for effect `name` on `state`
     (declared on `r`): every amount-type param but the one stepped at half
-    its range, so the effect shows (their defaults are calm: PR #304)."""
-    spec = state.files[name]
+    its range, so the effect shows (their defaults are calm: PR #304); a
+    second picture on the aux input (`uv_flow.uv_mirror`)."""
+    spec = state.specs[name]
     v = state.values[name]
     rest = dict(v)
     keys = keys or ["speed", *[p.key for p in spec.params if not p.choices]]
     chain = fx.FxChain(ctx, state)
+    aux = ctx.texture((uv_flow.W, uv_flow.H), 4, dtype="f2")
     out = {}
     try:
         (src, _), (_, dst) = chain.pool((uv_flow.W, uv_flow.H))
         src.write(uv_flow.uv_source().tobytes())
+        aux.write(uv_flow.uv_mirror().tobytes())
+        choices = [p for p in spec.params if p.choices]
         for key in keys:
-            v.clear()
-            v.update(rest)
-            v.update({p.key: p.hi / 2 for p in spec.params if p.amount and p.key != key})
-            v.update(on=True, mix=1.0)
-            a, b = small_step(r, state, name, key)
-            out[key] = (max(uv_flow.jump(chain, src, dst, name, key, a, b, ph) for ph in EARLY),
-                        min(uv_flow.jump(chain, src, dst, name, key, a, b, ph) for ph in LATE))
+            # under every setting of the effect's choices (a knob may act
+            # in one mode only: blend's key is the luma key's)
+            for pick in itertools.product(*(range(len(c.choices)) for c in choices)):
+                v.clear()
+                v.update(rest)
+                v.update({p.key: p.hi / 2 for p in spec.params if p.amount and p.key != key})
+                v.update({c.key: i for c, i in zip(choices, pick, strict=True)})
+                v.update(on=True, mix=1.0)
+                a, b = small_step(r, state, name, key)
+                speed = v["speed"]
+                e = max(uv_flow.jump(chain, src, dst, name, key, a, b, ph, wall(ph, speed), aux)
+                        for ph in EARLY)
+                l = min(uv_flow.jump(chain, src, dst, name, key, a, b, ph, wall(ph, speed), aux)
+                        for ph in LATE)
+                out.setdefault(key, []).append((e, l))
         assert not chain.errors, chain.errors
     finally:
         v.clear()
         v.update(rest)
+        aux.release()
         chain.release()
     return out
-
-
-def time_allowlisted(spec: fx.EffectSpec) -> set[str]:
-    """The keys of `spec` whose uniform the time lint still allowlists."""
-    by_uniform = {p.uniform: p.key for p in spec.params}
-    return {by_uniform[u] for (shader, u) in TIME_ALLOWLIST
-            if shader == spec.name and u in by_uniform}
-
-
-EFFECTS = sorted(fx.FxState().files)
 
 
 def test_a_knob_at_its_top_is_measured_one_detent_down(shipped):
@@ -161,10 +185,10 @@ def test_a_knob_at_its_top_is_measured_one_detent_down(shipped):
     (fade's level, palette's ends and its anchors sit there by default) —
     never two."""
     state, r = shipped
-    fade = state.files["fade"].params[0]
+    fade = state.specs["fade"].params[0]
     assert fade.key == "level" and state.values["fade"]["level"] == fade.hi
     assert detent(r, state, "palette", "anchors") == (4, 3)
-    for name, spec in state.files.items():
+    for name, spec in state.specs.items():
         for p in spec.params:
             if p.choices:
                 continue
@@ -185,11 +209,22 @@ def test_every_knob_of_every_effect_steps_the_same_an_hour_in(ctx, shipped, name
     coordinate, never before."""
     state, r = shipped
     report = effect_report(ctx, state, r, name)
-    left = time_allowlisted(state.files[name])
-    bad = {k: (round(e, 3), round(l, 3)) for k, (e, l) in report.items()
-           if grows(e, l, FX_FLOOR_PX) and k not in left}
+    bad = {k: [(round(e, 3), round(l, 3)) for e, l in pairs if grows(e, l, FX_FLOOR_PX)]
+           for k, pairs in report.items()}
+    bad = {k: x for k, x in bad.items() if x}
     assert not bad, f"{name}: a step lands further the longer the set runs " \
                     f"(key: (early px, late px)): {bad}"
+
+
+@pytest.mark.parametrize("name, keys", [("displace", ["amount", "angle"]),
+                                        ("blend", ["key", "soft"])])
+def test_an_aux_effects_knobs_are_measured_through_its_aux(ctx, shipped, name, keys):
+    """With nothing on the aux input displace and blend draw their input
+    through, and every step reads zero: the harness wires the turned UV
+    map in, so each knob's step is seen (and then held to the rule)."""
+    state, r = shipped
+    report = effect_report(ctx, state, r, name, keys)
+    assert all(any(e > 0.0 and l > 0.0 for e, l in pairs) for pairs in report.values()), report
 
 
 # the harness's own proof, on effects written for it: what the lint
@@ -240,7 +275,7 @@ def test_a_clock_stands_where_the_hour_left_it_and_its_rate_step_moves_nothing(c
     assert state.phase["clocked"] == 100.0
     assert state.clocks["clocked"]["u_scroll"] == pytest.approx(300.0)
     r = declared(state)
-    early, late = effect_report(ctx, state, r, "clocked", ["rate"])["rate"]
+    [(early, late)] = effect_report(ctx, state, r, "clocked", ["rate"])["rate"]
     assert early == late == 0.0
 
 
@@ -256,31 +291,45 @@ def test_the_harness_sees_a_param_scaling_a_scrolled_coordinate_the_lint_cannot(
     assert not findings(LIB_SCALED, {"u_scale"}, set(TIME_UNIFORMS))   # invisible to the lint
     state = fx.FxState(made)
     r = declared(state)
-    early, late = effect_report(ctx, state, r, "scaled", ["scale"])["scale"]
+    [(early, late)] = effect_report(ctx, state, r, "scaled", ["scale"])["scale"]
     assert grows(early, late, FX_FLOOR_PX), (early, late)
     bound = FACTOR * early + FX_FLOOR_PX
     assert late > 2 * bound, (early, late, bound)                    # not a near miss
     for name in ("fixed", "bounded"):
-        e, l = effect_report(ctx, state, r, name, ["scale"])["scale"]
+        [(e, l)] = effect_report(ctx, state, r, name, ["scale"])["scale"]
         assert not grows(e, l, FX_FLOOR_PX), (name, e, l)
 
 
 # ---------------------------------------------------------------- the face patterns
 
-def pattern_report(tile, mode: int) -> dict[str, tuple[float, float]]:
-    """input name → (early, late): the mean change, levels, of a tenth of a
-    detent up from the design (1.0) at `u_ptime` = each phase (SPEED is 1,
-    so the tile's clock is the phase)."""
-    up = 1.0 + PATTERN_DETENT * PATTERN_FRACTION
+def pattern_ups(tmp_path) -> list[float]:
+    """Each pattern input's value a `PATTERN_FRACTION` of one detent up from
+    the design (1.0): the detent the registry's own `pattern.mod.<k>`
+    steps (`Param.step`), on a registry built as the app builds it."""
+    from test_params import make
 
+    reg, view = make(tmp_path)[:2]
+    ups = []
+    for k in range(P.N_INPUTS):
+        view.pattern_mod[k] = 1.0
+        reg[f"pattern.mod.{k}"].step(1)
+        ups.append(1.0 + (view.pattern_mod[k] - 1.0) * PATTERN_FRACTION)
+        view.pattern_mod[k] = 1.0
+    return ups
+
+
+def pattern_report(tile, mode: int, ups: list[float]) -> dict[str, tuple[float, float]]:
+    """input name → (early, late): the mean change, levels, of `ups[k]`
+    against the design (1.0) at `u_ptime` = each phase (SPEED is 1, so the
+    tile's clock is the phase)."""
     def at(k: int, t: float) -> float:
-        return float(np.abs(tile(mode, k, up, t) - tile(mode, k, 1.0, t)).mean())
+        return float(np.abs(tile(mode, k, ups[k], t) - tile(mode, k, 1.0, t)).mean())
     return {inp.name: (max(at(k, t) for t in EARLY), min(at(k, t) for t in LATE))
             for k, inp in enumerate(P.INPUTS)
             if k != P.SPEED}        # integrated by the renderer (_pattern_clock), tested there
 
 
-def test_every_input_of_every_pattern_steps_the_same_an_hour_in(ctx):
+def test_every_input_of_every_pattern_steps_the_same_an_hour_in(ctx, tmp_path):
     """The face patterns' clock is integrated (`u_ptime`), but a mode can
     still multiply it into a term an input scales — RINGS' colour did,
     `pal(ph · 0.15 · m_colour())` with `ph` carrying the clock, until K4.
@@ -289,6 +338,8 @@ def test_every_input_of_every_pattern_steps_the_same_an_hour_in(ctx):
     from hyperspace.render import Renderer
     from hyperspace.view import ViewState
 
+    ups = pattern_ups(tmp_path)
+    assert all(1.0 < u < 1.01 for u in ups), ups     # a tenth of a detent of 0 … 2.6
     r = Renderer(ctx)
     assert r.pattern_error == ""
 
@@ -299,6 +350,7 @@ def test_every_input_of_every_pattern_steps_the_same_an_hour_in(ctx):
                               5.0).astype(float)
     bad = {f"{P.MODES[mode].name} {k}": (round(e, 2), round(l, 2))
            for mode in range(1, len(P.MODES))
-           for k, (e, l) in pattern_report(tile, mode).items() if grows(e, l, PATTERN_FLOOR)}
+           for k, (e, l) in pattern_report(tile, mode, ups).items()
+           if grows(e, l, PATTERN_FLOOR)}
     assert not bad, "an input's step grows with the clock " \
                     f"(mode input: (early levels, late levels)): {bad}"
