@@ -109,7 +109,7 @@ from .overlay import RENDER_DEFAULT, GlfwBackend, Output, register_switches, ren
 from .params import Registry
 from .pinch import install as install_pinch
 from .render import Renderer
-from .routing import SLEW_DEFAULT_S, Bindings, Router, bindings_path, register_desk
+from .routing import SLEW_DEFAULT_S, Bindings, Router, Sources, bindings_path, register_desk
 from .ui import Panel, apply_style, load_fonts
 from .view import ViewState
 from .watchdog import LOG_NAME, RenderWatch, Watchdog
@@ -1121,6 +1121,10 @@ class Host:
     # `lfos`, `renderer`, `learn` and `undo` above are assigned from — they
     # stay for D1, so `frame` reads what it read
     deck: Deck | None = None
+    # the router's shared half (routing_sources.Sources, plan 44 D2): where
+    # the audio lanes' names and the devices' feeds go. None (a host built
+    # without one): the router stands in, feeding its own
+    sources: Sources | None = None
 
     @property
     def adapters(self) -> tuple:
@@ -1150,6 +1154,7 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     and the loop goes on, so the next save can fix it. `imgui.new_frame()`
     has already run (main): `keys.typing` is this frame's value."""
     reg, keys, router, reloader = h.reg, h.keys, h.router, h.reloader
+    sources = h.sources if getattr(h, "sources", None) is not None else router
     h.clock.tick(now)   # the clock's "now" for the frame: a trigger and the LFO step agree
 
     # the chain object is recreated on source attach; keep bindings fresh
@@ -1251,13 +1256,13 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     try:
         audio = h.audio
         audio.step(dt)
-        audio.publish(router)       # the lanes' names, like every source (R8)
+        audio.publish(sources)      # the lanes' names, like every source (R8)
         chain = audio.chain if audio.on else None
         if devs is not None:
             # the devices' feeds: the hands feed `hand` (and complete a
             # hand Learn), the bridge feeds `ext` (its out half is a sink,
             # below) — each guarded by the registry, the first error the toast's
-            devs.feed(router)
+            devs.feed(sources)
             if devs.error and ok:
                 ok, reloader.runtime_error = False, devs.error
         # the lanes are a modulation source like any other (routing.py);
@@ -1662,7 +1667,8 @@ def main(argv: list[str] | None = None) -> None:
                 quit=lambda: glfw.set_window_should_close(render_win, True),
                 devices=rig, dream_io=dream_io, learn=deck.learn, render_watch=render_watch,
                 undo=deck.undo, media=media,
-                outputs=[sl.output for sl in slots if sl.output is not None], deck=deck)
+                outputs=[sl.output for sl in slots if sl.output is not None], deck=deck,
+                sources=deck.sources)
 
     # smoke-test escape hatch: HYPERSPACE_FRAMES=n closes after n frames
     frames_left = int(os.environ.get("HYPERSPACE_FRAMES", "0")) or None

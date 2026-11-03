@@ -361,6 +361,7 @@ def _host(log: list[str], *, pad_on=True, pressed=(), held=(), super_=False, sti
         draw_panel=lambda dt, fps: log.append("panel.draw"),
         restart=lambda: log.append("restart"), quit=lambda: log.append("quit"),
         devices=rig, dream_io=None, undo=Stub("undo", log), media=Stub("media", log),
+        sources=Stub("sources", log),          # plan 44 D2: what the feeds go to
     )
     assert g.KEY_ESCAPE  # the fake never touches glfw; the keys are plain ints
     return h
@@ -405,10 +406,35 @@ def test_the_frame_runs_in_the_documented_order():
     h = _host(log)
     assert app.frame(h, now=1.0, dt=1 / 60, fps=60.0) is True
     assert log == ORDER
+    assert not any(s.startswith("sources.") for s in log)   # fed, never asked
     assert h.renderer.bg_alpha == 0.5                # the output's ground, this frame
     assert h.renderer.dim == 0.4                     # and its master dim (plan 15 WP3)
     assert h.control.chain is h.audio.chain          # the chain stays one object
     assert h.reloader.runtime_error == ""            # a clean frame clears the toast
+
+
+def test_the_frame_feeds_the_shared_sources_not_the_router():
+    """Plan 44 D2: the feed slot hands `h.sources` (routing_sources.Sources)
+    where it handed the router — the analyzer's lane names and every
+    device's feed — while the scene-setters and the pass stay the router's.
+    A host without sources (one from before D2) feeds its router, which
+    reads and writes its own sources, as before."""
+    log: list[str] = []
+    h = _host(log)
+    got: list[tuple[str, object]] = []
+    h.audio.publish = lambda to: got.append(("audio", to))
+    hands, bridge = h.devices.devices[2].io, h.devices.devices[3].io
+    hands.poll = lambda dt, learn, to: got.append(("hands", to))
+    bridge.receive = lambda to: got.append(("bridge.receive", to))
+    bridge.publish = lambda to: got.append(("bridge.publish", to))
+    assert app.frame(h, now=1.0, dt=1 / 60, fps=60.0) is True
+    assert got == [("audio", h.sources), ("hands", h.sources),
+                   ("bridge.receive", h.sources), ("bridge.publish", h.sources)]
+    assert "router.modulate" in log and "router.pad" in log      # the deck's evaluator
+    got.clear()
+    h.sources = None
+    assert app.frame(h, now=1.1, dt=1 / 60, fps=60.0) is True
+    assert {to for _, to in got} == {h.router}
 
 
 def _deck_build_src() -> str:
@@ -1036,7 +1062,7 @@ def test_the_app_starts_with_knob_smoothing_at_80_ms_and_a_show_keeps_its_own(tm
     src, build = inspect.getsource(app.main), _deck_build_src()
     assert 0 < src.index("_desk_table(reg, Bindings.load(") < src.index("table=load_table")
     assert build.index("bindings = table(reg)") < build.index("library.attach(reg)")
-    assert build.index("library.attach(reg)") < build.index("Router(reg, bindings)")
+    assert build.index("library.attach(reg)") < build.index("Router(reg, bindings, sources)")
 
     home = seed(tmp_path / "home")                      # the corpus: the party show opens
     r = _launch(home)

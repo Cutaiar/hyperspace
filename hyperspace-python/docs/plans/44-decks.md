@@ -184,7 +184,37 @@ same arguments, so the two orders cannot drift again.
   `preset.py`, `undo.py`, `hold.py` and `main` are frozen for other PRs
   (it is a conflict magnet, and short).
 
-### D2 — split the router's shared sources from its per-deck evaluator (L)
+### D2 — split the router's shared sources from its per-deck evaluator (L) — **built**
+
+*Built 2026-11-03 (wave 2, rows 590–593).* As written, with these
+differences. **The grammar moved with the sources:** `Sources` resolves
+addresses, so `BUILTIN_LANES`, `MIDI_SCHEMES`, `ROW_SCHEMES`,
+`QUALIFIER`, `base_scheme`, `qualified`, `is_continuous` and `_resolve`
+(with its lazy `glfw` / `gamepad` imports) live in `routing_sources.py`,
+unchanged, and `routing.py` imports them back and re-exports them;
+`routing.py` imports nothing lazily now. `lane_kinds` and `_codes`
+(`Sources.code`) are the sources' too; `claimed` stays the router's (it
+reads the table). **The router reads through:** every source-side name
+`Router` had (`feeds`, `labels`, `rests`, `gates`, `names`, `lane_kinds`,
+`devices`, `clock`, `use`, `follow_devices`, `schemes`, `lane`,
+`address`, `feed`, `source_feel`, `felt`, `felt_lanes`) is a property or
+a one-line method on its `sources`, and a router built without sources
+makes its own — so the panel, Learn, the ghost (which reads the table
+and `lane` through the router, unchanged) and the tests keep working.
+**`devices.poll` keeps `router=`** (row 592): `act` lands the deck's rows;
+the pad's lanes reach `router.sources`. `feed`, `audio.publish` and the
+adapters' feeds take the sources; `Host.sources` is the deck's, and a
+host without one feeds its router. **The tables are followed** (row 593):
+`Sources.follow(table)` keeps every table a router over it runs and
+writes the rig facts into each; the first one's primaries and pad feel
+are the ones read. **Not yet split** (row 591): the banks' and the
+modifiers' own lanes still publish into the shared sources; each router
+republishes before it reads, which is enough for one preset on two
+routers (the proof) and is D4's to layer. The proof is
+`tests/test_deck.py::test_one_sources_fed_once_drives_two_routers_as_one_router_did`
+(three headless rigs: one over its own sources, two over one shared;
+every corpus preset; each frame every param of the shared two equals the
+solo one), beside D1's test unchanged.
 
 **New** `routing_sources.py` (the audit's split list names
 `routing_schemes` / `binding` / `sinks` for `routing.py`; this is the

@@ -2,7 +2,8 @@
 
 A `Deck` bundles what plan 44 §2 marks "per deck", as the objects exist
 today: the registry (`reg`), the view state (`view`), the binding table
-(`table`), the router, the three modulator banks (`lfos`, `envs`,
+(`table`), the router and the sources it reads (`sources`, plan 44
+D2), the three modulator banks (`lfos`, `envs`,
 `seq`), the presets and their graph section (`presets`, `presets.graph`),
 the learn, the undo and the marks it restores through, and — in the app,
 never headless — the renderer and the hold, and the clock the banks step on. D1 changes no behaviour:
@@ -46,7 +47,7 @@ from .library import Marks
 from .lookback import DreamState
 from .params import Registry, build_registry
 from .preset import Presets
-from .routing import Bindings, Router
+from .routing import Bindings, Router, Sources
 from .view import ViewState
 
 
@@ -86,6 +87,11 @@ class Deck:
     marks: Marks
     renderer: Any = None
     hold: Hold | None = None
+    # what the sources said this frame (routing_sources.Sources, plan 44
+    # D2): the router's shared half, the one the devices and the analyzer
+    # feed. Built here while there is one deck (`build(sources=…)` hands a
+    # rig's one in, so two routers read one feed); plan 44 §2 calls it shared
+    sources: Sources | None = None
 
     @property
     def graph(self):
@@ -97,6 +103,7 @@ class Deck:
               renderer=None, media=None, restart: Callable[[], Any] | None = None,
               dream=None, fx=None, ghost=None,
               clock: tempo.Clock | None = None, lfos: lfo.LFOs | None = None,
+              sources: Sources | None = None,
               hands: Callable[[Registry], Any] | None = None,
               outputs: Callable[[Registry], Any] | None = None,
               panel: Callable[..., Any] | None = None,
@@ -114,7 +121,8 @@ class Deck:
         each when None) — given with a renderer they are a ValueError,
         since the renderer's states are the ones it draws. `media` is the channels' `MediaState`, `restart`
         the `app.restart` param's callback, `clock` / `lfos` a clock and
-        an LFO bank to use in place of new ones. The hooks, each called
+        an LFO bank to use in place of new ones, `sources` the shared
+        sources the router reads (plan 44 D2; new ones when None). The hooks, each called
         where `main` builds that rig object, each returning what it made:
         `hands(reg)` the hands' setup, `outputs(reg)` the outputs' params
         and switches, `panel(reg, view, clock=, lfos=, envs=, seq=, hold=,
@@ -184,7 +192,10 @@ class Deck:
             # the panel's own ui.* params, and its handles on what exists now
             made.panel = panel(reg, s, clock=clock, lfos=lfos, envs=envs, seq=seq, hold=hold,
                                output=made.outputs)
-        router = Router(reg, bindings)
+        # the router: this deck's evaluator over the sources every source
+        # feeds (plan 44 D2) — the rig's when handed in, else its own
+        sources = sources if sources is not None else Sources()
+        router = Router(reg, bindings, sources)
         router.use_lfos(lfos, clock)           # they step inside the pass (plan 28 N0)
         router.use_bank(envs, clock)           # …and so do the envelopes (plan 31)
         router.use_sequencer(seq, envs)        # after the banks begin, before the plan
@@ -231,7 +242,7 @@ class Deck:
             hold.undo = undo_obj           # Drop goes back to the hold's point through it
         return cls(reg=reg, view=s, table=router.table, router=router, lfos=lfos, envs=envs,
                    seq=seq, clock=clock, presets=presets, learn=learn, undo=undo_obj, marks=marks,
-                   renderer=renderer, hold=hold)
+                   renderer=renderer, hold=hold, sources=sources)
 
     def targets(self) -> list[tuple[Any, str, str]]:
         """The live objects a hot reload re-classes, as (object, module,
@@ -261,6 +272,10 @@ class Deck:
             # …and its preview renderer once made
             *([(hold.preview, "render", "Renderer")]
               if hold is not None and hold.preview is not None else []),
+            # the router's shared half (plan 44 D2), while the deck builds it
+            # (getattr: a stand-in deck, or one from before D2, has none)
+            *([(src, "routing_sources", "Sources")]
+              if (src := getattr(self, "sources", None)) is not None else []),
             (self.router, "routing", "Router"),
             (self.presets, "preset", "Presets"),
             (self.presets.graph, "preset", "GraphSection"),      # plan 26 A4

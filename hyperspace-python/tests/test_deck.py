@@ -5,7 +5,9 @@ at 749be48 (a copy of that body, below) and one built through
 `Deck.build` (today's `boot`) reach the same state over every corpus
 preset; two registries share no frame state; `main` builds its deck once
 with the frame order unchanged; and every swap target the deck lists
-lives in a watched module, the deck itself included.
+lives in a watched module, the deck itself included. Plan 44 D2 adds the
+second comparison: one `Sources` fed once drives two routers over two
+registries to the values one router over its own sources lands.
 
 What differs, on purpose: the old `boot` had drifted from `main`. It
 never handed the router its banks (`use_lfos` / `use_bank` /
@@ -52,7 +54,7 @@ from hyperspace.midi import MidiIO
 from hyperspace.overlay import Output
 from hyperspace.params import Registry, build_registry
 from hyperspace.preset import Presets
-from hyperspace.routing import Bindings, Router, bindings_path
+from hyperspace.routing import Bindings, Router, Sources, bindings_path
 from hyperspace.view import ViewState
 
 PKG = Path(__file__).resolve().parents[1] / "hyperspace"
@@ -221,6 +223,80 @@ def test_a_deck_built_the_old_way_and_the_new_way_reach_the_same_state(tmp_path)
     _compare(_walk(old_boot(home)), new, exact=False)     # the old boot, verbatim
 
 
+def _feed(src: Sources, t: float) -> None:
+    """One frame of what the rig's sources say, into `src`: the hands'
+    lanes (named, as the adapter publishes them) and the pad's axes, each
+    a slow wave of its own; the analyzer's lanes are the chain's."""
+    from hyperspace import gamepad
+    from hyperspace.hands.core import Layout
+
+    if "hand" not in src.names:
+        lay = Layout(hands.HandSettings.from_config({}).axes)
+        src.labels["hand"], src.gates["hand"] = lay.names, lay.gates
+        src.names["hand"] = lay.index
+        gamepad.publish(src)
+    n = len(src.names["hand"])
+    src.feed("hand", 0.5 + 0.45 * np.sin(t * (1.0 + 0.13 * np.arange(n))))
+    k = len(gamepad.LANES)
+    src.feed("axis", 0.5 + 0.4 * np.cos(t * (0.7 + 0.11 * np.arange(k))))
+
+
+def _values(reg) -> dict:
+    """Every param's effective value, as the frame left it — but the
+    panel's own `ui.*`, whose getters read an imgui panel the headless rig
+    stands in for with a namespace (none is a route's target)."""
+    return {p.id: repr(p.value) for p in reg if p.group != "ui"}
+
+
+def test_one_sources_fed_once_drives_two_routers_as_one_router_did(tmp_path):
+    """Plan 44 D2's proof, the first thing decks promise: one `Sources`
+    fed once a frame, two `Router`s over two registries both loaded with
+    the same preset, and every param of the two lands the value one router
+    over its own sources lands — every frame, over every corpus preset.
+    The pass of each reads the shared feeds (the hands, the pad, the
+    analyzer's chain) and steps its own banks, modifiers and followers."""
+    solo = boot(tmp_path / "solo")
+    a = boot(tmp_path / "a")
+    shared = a.router.sources
+    b = boot(tmp_path / "b", sources=shared)
+    assert b.router.sources is shared and b.deck.sources is shared
+    assert solo.router.sources is not shared
+    assert a.reg is not b.reg and a.router is not b.router
+    assert any(t is b.table for t in shared.tables)
+    rigs = (solo, a, b)
+    names = sorted(a.lib.list(PRESETS))
+    assert names == sorted(solo.lib.list(PRESETS)) == sorted(b.lib.list(PRESETS))
+    chain = a.chain                                  # one analyzer, as the rig has
+    frames = 0
+    driven: dict[str, set[str]] = {"hand": set(), "axis": set(), "lane": set()}
+    for name in names:
+        for r in rigs:
+            r.lib.load(PRESETS, name)
+        chain.out = CEIL * np.linspace(0.15, 0.85, len(chain.out))
+        for k in range(FRAMES // 2):
+            for r in rigs:
+                r.t += DT
+                r.clock.tick(r.t)
+            _feed(solo.router.sources, a.t)
+            _feed(shared, a.t)                       # fed once for both routers
+            for r in rigs:
+                r.router.follow_macros()
+                r.router.modulate(chain, DT, r.t)
+                r.reg.apply()
+            want = _values(solo.reg)
+            assert _values(a.reg) == want, (name, k)
+            assert _values(b.reg) == want, (name, k)
+            frames += 1
+        for row in a.table.mods():                   # what the shared feeds moved
+            scheme = routing.base_scheme(row.scheme)
+            p = a.reg.get(row.target)
+            if scheme in driven and p is not None and p.modulated:
+                driven[scheme].add(row.target)
+    assert frames == len(names) * (FRAMES // 2)
+    # the proof has teeth: the shared feeds drove params on both decks
+    assert all(driven.values()), driven
+
+
 def test_the_deck_holds_the_rig_boot_hands_out(tmp_path):
     """`boot`'s handles are the deck's objects; a headless deck has no GL:
     no renderer, no hold, and the installed undo is the deck's."""
@@ -231,6 +307,10 @@ def test_the_deck_holds_the_rig_boot_hands_out(tmp_path):
     assert d.table is d.router.table and d.graph is d.presets.graph
     assert d.renderer is None and d.hold is None
     assert d.clock is r.clock is d.router.clock
+    # plan 44 D2: the router reads the deck's sources (its own while there
+    # is one deck), and the clock the banks step on is theirs
+    assert d.sources is d.router.sources and d.sources.clock is d.clock
+    assert d.sources.table is d.table and d.router.feeds is d.sources.feeds
     assert undo.installed() is d.undo
     assert d.router.lfos is d.lfos and d.router.bank("env") is d.envs
     assert d.router.sequencer is d.seq and d.undo.marks is d.marks
@@ -301,7 +381,7 @@ def test_the_build_keeps_mains_order():
            "envelope.register(reg, envs, clock)", "sequencer.register(reg, seq, clock)",
            "made.outputs = outputs(reg)", "Hold(reg, renderer", "register_hold(reg, hold",
            "bindings = table(reg)", "library.attach(reg)", "panel(reg, s, clock=clock",
-           "Router(reg, bindings)", "router.use_lfos(lfos, clock)",
+           "Router(reg, bindings, sources)", "router.use_lfos(lfos, clock)",
            "router.use_bank(envs, clock)", "router.use_sequencer(seq, envs)",
            "Presets(library, reg, router)", "presets.graph.attach(renderer)",
            "hold.section = presets.graph", "Learn(reg, router.table", "devices(reg, router, learn, panel=",

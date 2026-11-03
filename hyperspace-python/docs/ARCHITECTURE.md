@@ -43,7 +43,7 @@ runs the one frame loop.
 | Component | Modules | Owns | Writes | Boundary (held by) |
 |---|---|---|---|---|
 | **Registry** | `params.py`, `tapers.py` | every `Param`: id, kind, taper, flags, base, this frame's offsets | the live objects, once a frame, in `Registry.apply()` | never imports `midi`, `bridge` or `dream` (`tests/test_params.py::test_core_does_not_import_the_midi_adapter`, `tests/test_bridge.py::test_core_does_not_import_the_bridge`, `tests/test_dream.py::test_core_does_not_import_the_worker`). It does import `fx`, `ghost`, `lookback`, `geometry`, `analyzer` and `bands` for their state classes and constants |
-| **Routing table** | `routing.py`, `modgraph.py`, `modifiers.py` | `Binding` rows, `<home>/bindings.json` (the session's controls), the referee, the desk's layers, the macros, the preset's modifiers (`Bindings.modifiers`), the per-frame modulation pass — the table as a graph in dependency order (`Router.modgraph`; `modgraph.py` the leaf that sorts it, `modifiers.py` the leaf that steps a modifier) | offsets, through `Router.modulate` → `Param.modulate` (the only call site in the package); bases for key / pad rows (`routing.act`) and macro base subscribers | imports nothing above it — no `ui`, `app`, `hands`, `midi`, `bridge`, `learn`, `dream`, `hotreload`, `library`; `glfw` and `gamepad` only lazily, to resolve key and pad names (`tests/test_routing_boundary.py::test_routing_imports_nothing_above_it`, `::test_importing_routing_pulls_in_no_adapter_or_panel`, `::test_only_router_modulate_calls_param_modulate`) |
+| **Routing table** | `routing.py`, `routing_sources.py`, `modgraph.py`, `modifiers.py` | `Binding` rows, `<home>/bindings.json` (the session's controls), the referee, the desk's layers, the macros, the preset's modifiers (`Bindings.modifiers`), the per-frame modulation pass — the table as a graph in dependency order (`Router.modgraph`; `modgraph.py` the leaf that sorts it, `modifiers.py` the leaf that steps a modifier); what the sources said this frame — feeds, labels, rests, gates, names, the device registry, the source feel, the clock — in `routing_sources.Sources` (plan 44 D2: shared, fed by the devices and the analyzer), each deck's `Router(reg, table, sources)` the evaluator over it | offsets, through `Router.modulate` → `Param.modulate` (the only call site in the package); bases for key / pad rows (`routing.act`) and macro base subscribers | imports nothing above it — no `ui`, `app`, `hands`, `midi`, `bridge`, `learn`, `dream`, `hotreload`, `library`; `routing_sources.py` below `routing` (no `routing`, `params`, `devices`; it writes no param), and it alone imports `glfw` and `gamepad`, lazily, to resolve key and pad names (`tests/test_routing_boundary.py::test_routing_imports_nothing_above_it`, `::test_the_shared_sources_write_no_param`, `::test_importing_routing_pulls_in_no_adapter_or_panel`, `::test_only_router_modulate_calls_param_modulate`) |
 | **Learn** | `learn.py` | the armed param and what it waits for, the held Replace / Keep question, the picked desk control, Unbind | table rows, through the table's edit doors | imports only `undo`, `params`, `routing`; the device profile and the device registry (what can be armed, the sink ports) arrive as arguments (`tests/test_learn.py::test_learn_control_needs_no_adapter`) |
 | **Devices** | `devices.py` (the `Device` protocol, `Port`, `DeviceRegistry`, the kind table, `PointCloud`; the pad's `schemes_for`, `SINKS`, `pad_effects`, plan 42), each kind's adapter: `midi.py` + `apc40.py` / `generic.py`, `gamepad.py`, `hands/` (`hands/device.py` the wrapper), `bridge.py`, `osc.py`; and the host's own `app.Keys` / `app.Mouse` | every input and output the rig lists in `config.toml`'s `[[devices]]`, each opened behind its entry with its pickup state and a status line; the device list's watch and retry; the point clouds (`DeviceRegistry.clouds`) | MIDI rows / pad buttons / OSC hits / keys / mouse: the **base** (scene-setter slot); hands, bridge `ext`, the pad's axes, OSC axes: only `Router.feed` (feed slot); sinks read effective values after `reg.apply` and send them out, writing nothing | `devices.py` is the one importer of every adapter module, each inside its device's `open`; the core never imports `midi`, `bridge`, `osc` (above, and `tests/test_app_boundary.py`); routing and learn are handed the registry as an argument (`Router.use`, `Learn.devices`); `hands/core.py`, `signal.py`, `tape.py` import nothing from the package and `hands/device.py` and `hands/panel.py` are the only pieces that know the host (`tests/test_hands_boundary.py`); only `osc.py` and `devices.kinds()` name the OSC device (`tests/test_osc.py::test_only_osc_py_and_the_kind_table_name_the_osc_device`) |
 | **Audio source** | `audio.py`, `analysis.py`, `analyzer.py`, `bands.py` (and the tests' `offline.py`) | capture or file playback, the FFT, the N band lanes | `Analyzer.lanes` (read by `Router.modulate`), the lanes' names (`AudioEngine.publish`) | imports only itself, `tapers` and `motion` (`tests/test_audio_boundary.py`) |
@@ -69,7 +69,8 @@ may import them: `analysis`, `tapers`, `motion`, `undo`, `placement`,
 `routing`, only inside a function. Near-leaves: `outputs`, `fx`,
 `lookback` and `masks` (plan 39) import only `glsl`; `view` and `field` only `geometry`; `lfo` and
 `envelope` only `modbank` (plan 31); `modifiers` only
-`motion` and `tapers` (`modgraph` is held by
+`motion` and `tapers`; `routing_sources` only `motion` (plan 44 D2,
+`tests/test_routing_boundary.py`) (`modgraph` is held by
 `tests/test_modgraph.py::test_modgraph_is_a_leaf`; `modifiers` by convention
 and the hot reloader's order test).
 
@@ -950,10 +951,11 @@ The class subclasses `devices.Base` and implements only what it has:
 raise and the registry retries on its schedule), `poll(dt, now)` (read
 the hardware; a device whose hardware went away reports `lost` and looks
 for it again itself), `act(router)` for discrete controls as rows
-through the table, `feed(router)` for continuous ones —
-`router.feed("<role>", vector)` (floats in `[0, 1]`, `NaN` for a lane
-out of view, `None` when the device is gone) and `router.labels`,
-`router.rests`, optionally `router.gates` and `router.names` (a new dict
+through the table, `feed(sources)` for continuous ones — the shared
+`routing_sources.Sources` (plan 44 D2) —
+`sources.feed("<role>", vector)` (floats in `[0, 1]`, `NaN` for a lane
+out of view, `None` when the device is gone) and `sources.labels`,
+`sources.rests`, optionally `sources.gates` and `sources.names` (a new dict
 whenever its layout changes) — `learn(learn)` to complete a "Learn
 <role>", `sinks` and `send(reg, analyzer)` for an output, `close()`, a
 `status` and `last` for its SYSTEM line, and `sources` as `Port`s. Its

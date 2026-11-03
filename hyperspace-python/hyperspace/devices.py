@@ -4,7 +4,8 @@ polled in order each frame, and closed in one list.
 
 A *device* is anything that satisfies the `Device` protocol below:
 `open()`, `poll(dt, now)`, `close()`, a `status` for the SYSTEM page, a
-`role`, its `sources` (the ports it publishes), `feed(router)`,
+`role`, its `sources` (the ports it publishes), `feed(sources)` (the
+shared `routing_sources.Sources`, plan 44 D2),
 `learn(learn)` and `wants` (what a Learn can arm it for). Today's inputs
 are devices since B2: `MidiDevice` — one per MIDI entry, each with its own
 `profile` (`apc40`, `generic`) and its own rows (`cc@<role>:…` for every
@@ -27,7 +28,7 @@ today's devices the role is not the scheme:** a preset names a *scheme*
 `schemes` tuple says which schemes its role publishes, so every existing
 row is unchanged whatever the entry is called. A new device (B4's OSC)
 publishes under its role. Two enabled devices may not **feed** one
-scheme: the Router holds one vector per fed scheme (`feeds`), so a second
+scheme: the sources hold one vector per fed scheme (`feeds`), so a second
 pad (`axis`) or a second hands device (`hand`) is refused with a note
 naming both roles (`RefusedDevice`); two MIDI desks of different roles
 feed nothing (their messages are rows) and are both accepted — an
@@ -216,7 +217,7 @@ class Device(Protocol):
 
     def act(self, router) -> None: ...
 
-    def feed(self, router) -> None: ...
+    def feed(self, sources) -> None: ...
 
     def send(self, reg, analyzer) -> None: ...
 
@@ -307,7 +308,7 @@ class Base:
     def act(self, router) -> None:
         pass
 
-    def feed(self, router) -> None:
+    def feed(self, sources) -> None:
         pass
 
     def send(self, reg, analyzer) -> None:
@@ -833,7 +834,9 @@ class PadDevice(Base):
         # the sticks a route reads as a dial, for the next frame's Learn
         # (gamepad.dialed); asked only while the pad is there, once a frame
         claimed = getattr(router, "claimed", None)     # duck-typed: a shim may have none
-        self._feed_extras(router, io, q)
+        # the touch and motion lanes are a source: the router's shared half
+        # (plan 44 D2), or a shim itself
+        self._feed_extras(getattr(router, "sources", router), io, q)
         reg = self.ctx.reg if self.ctx.reg is not None else getattr(router, "reg", None)
         skip = self._totem(io, reg)
         if q:
@@ -1065,11 +1068,11 @@ class BridgeDevice(Base):
         if self.io is not None:
             self.io.reconnect()
 
-    def feed(self, router) -> None:
+    def feed(self, sources) -> None:
         if self.io is None:
             return
-        self.io.receive(router)
-        self.io.publish(router)
+        self.io.receive(sources)
+        self.io.publish(sources)
 
     def send(self, reg, analyzer) -> None:
         io = self.io
@@ -2040,11 +2043,13 @@ class DeviceRegistry:
         except Exception as e:  # noqa: BLE001
             self._note(_err("devices", e))
 
-    def feed(self, router) -> None:
-        """The feed slot: every open device publishes its vectors."""
+    def feed(self, sources) -> None:
+        """The feed slot: every open device publishes its vectors into
+        the shared sources (routing_sources.Sources, plan 44 D2: what every
+        deck's pass reads; a router stands in for its own sources)."""
         for d in list(self.devices):
             if d.role in self._opened:
-                self._guard(d, lambda d=d: d.feed(router))
+                self._guard(d, lambda d=d: d.feed(sources))
 
     def send(self, reg, analyzer=None) -> None:
         """After `reg.apply`: the sinks read effective values out, each

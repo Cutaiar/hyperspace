@@ -391,7 +391,7 @@ def test_felt_is_none_while_the_feel_is_off_and_follows_when_on(rig):
     assert out[0] == 1.0
     out = r.felt("axis", [0.5, 0.5, 0.5, 0.5, 0.0, 0.0], DT)
     assert out[0] == pytest.approx(pole(1.0, 0.5, DT, 0.4))
-    assert r.felt("axis", None, DT) is None and "axis" not in r._felt
+    assert r.felt("axis", None, DT) is None and "axis" not in r.sources._felt
 
 
 # ---- the panel's chip ----
