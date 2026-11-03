@@ -190,6 +190,13 @@ def load_fonts() -> None:
 
 TIP_CH = 65   # a tooltip wraps at this many characters: a readable line (the owner, 2026-10-26)
 
+# Shift-drag fine mode (wave 2 T2, register rows 607–608): while ⇧ is held a
+# drag on a continuous slider or fader moves the value FINE as far as the
+# mouse moves the grab; once ⇧ has been held in a drag, the rest of that
+# drag is relative, so letting ⇧ go goes back to coarse without a jump.
+FINE = 0.1
+FINE_TIP = "FINE  ·  ⇧ held: a drag moves a tenth as far"
+
 
 def tooltip(text: str) -> None:
     """A hover's words as a tooltip, wrapped at `TIP_CH` characters of the
@@ -723,6 +730,8 @@ class Panel:
         self.pad = None       # set by app.py unless [gamepad] enabled = false (gamepad.Pad)
         self.learn = None     # set by app.py: the armed param and the held question (learn.Learn)
         self.undo = None      # set by app.py (undo.Undo): its status shows in the footer
+        self._fine_drag = None   # the slider a Shift drag holds (`_fine`): its id, mouse x, throw
+        self._shift = self._mouse_down = False   # this frame's ⇧ and left button (`_fine_frame`)
         self.devices = None   # set by app.py (devices.DeviceRegistry): the SYSTEM page's lines
         self.media = None     # set by app.py (app.MediaIO): the MEDIA page's folder and channels
         self.canvas_tap = None   # set by app.py (outputs.CanvasTap): the GRAPH canvas as `panel:graph`
@@ -1138,7 +1147,8 @@ class Panel:
         if not p.modulated:
             return
         r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
-        x = r0.x + inset + (r1.x - r0.x - 2 * inset) * p.eff_norm
+        x0, span = self._throw(r0, r1, inset)
+        x = x0 + span * p.eff_norm
         dl = imgui.get_window_draw_list()
         dl.add_rect_filled(imgui.ImVec2(x - 1.5, r0.y + 3), imgui.ImVec2(x + 1.5, r1.y - 3),
                            u32(GHOST), 1.5)
@@ -1210,9 +1220,9 @@ class Panel:
               imgui.Col_.frame_bg_hovered if hovered else imgui.Col_.frame_bg)
         dl.add_rect_filled(r0, r1, imgui.get_color_u32(bg), ROUND)
         half = self._grab_half(r1.x - r0.x, steps)
-        span = r1.x - r0.x - 2 * half
-        xa = r0.x + half + span * origin
-        xb = r0.x + half + span * min(max(norm, 0.0), 1.0)
+        x0, span = self._throw(r0, r1, half)
+        xa = x0 + span * origin
+        xb = x0 + span * min(max(norm, 0.0), 1.0)
         lo, hi = min(xa, xb), max(xa, xb)
         if lo == r0.x + half:
             lo = r0.x               # a fill from the left end runs into the corner
@@ -1226,6 +1236,79 @@ class Panel:
                                u32(edge), 2.0)
         dl.channels_merge()
         return out
+
+    # ---- Shift-drag fine mode (wave 2 T2): a tenth of the drag ----
+
+    def _fine_frame(self) -> None:
+        """Once a frame, before any widget: read ⇧ and the button once,
+        and forget a fine drag whose button is up — whether or not its
+        slider is still drawn (a page change mid-drag leaves nothing)."""
+        io = imgui.get_io()
+        self._shift = io.key_shift
+        self._mouse_down = imgui.is_mouse_down(0)
+        if not self._mouse_down:
+            self._fine_drag = None
+
+    def _fine(self, p: Param, t0: float, x0: float, span: float) -> tuple[bool, float | None]:
+        """After a continuous slider's draw: `(own, t)` — `own` when a
+        Shift drag holds this slider (imgui's write this frame is to be
+        dropped), `t` the throw fraction (0..1) to write, or None to write
+        nothing. `(False, None)` lets imgui's own drag stand; an integer
+        never has the mode.
+
+        imgui's sliders are absolute — the grab goes where the mouse is —
+        and have no slow modifier (Alt slows only a *drag* widget, and
+        Shift speeds one up), so the panel moves the value itself: the
+        drag that ⇧ joins is taken over from the value it had, and each
+        frame the mouse moves adds its movement along the throw × `FINE`
+        while ⇧ is held, × 1 once it is let go — relative until the
+        button comes up, so neither edge jumps. On the press's own frame
+        nothing is written (the slider's jump to the mouse is dropped, and
+        a base between detents, or on a log range, stays exactly as it
+        was); joined mid-drag, the mouse's last-frame place is the anchor,
+        so this frame's movement counts at the fine rate. `t0` is the
+        value before this frame's imgui write; `x0`, `span` the throw
+        (`_throw`). One drag is one undo step: the writes come every frame
+        the mouse moves, as a plain drag's do (`undo.SETTLE_S`)."""
+        if p.integer or not imgui.is_item_active():
+            return False, None
+        shift = getattr(self, "_shift", False)
+        if not getattr(self, "_mouse_down", False):
+            return False, None          # a typed value (Ctrl+click): imgui's
+        io = imgui.get_io()
+        key = imgui.get_item_id()
+        st = getattr(self, "_fine_drag", None)
+        if st is None or st["id"] != key:
+            if not shift:
+                return False, None
+            x = io.mouse_pos.x if imgui.is_item_activated() else io.mouse_pos_prev.x
+            st = self._fine_drag = {"id": key, "x": x, "t": min(max(t0, 0.0), 1.0)}
+        x = io.mouse_pos.x
+        moved, st["x"] = x - st["x"], x
+        if moved == 0 or span <= 0:
+            return True, None
+        st["t"] = min(max(st["t"] + moved / span * (FINE if shift else 1.0), 0.0), 1.0)
+        return True, st["t"]
+
+    @staticmethod
+    def _throw(r0, r1, half: float) -> tuple[float, float]:
+        """Where a slider's grab centre travels: its left end and length
+        in screen px, `half` in from either end of the frame."""
+        return r0.x + half, r1.x - r0.x - 2 * half
+
+    def _fine_tip(self, a: Param, p: Param) -> None:
+        """The slider's tooltip, led by "FINE" while ⇧ is held over a
+        control that has a fine mode (continuous, not an integer), and
+        shown alone while a fine drag goes on off the track, where no
+        hover would show it."""
+        if p.integer or not getattr(self, "_shift", False):
+            self._tip(a, lambda: self._hint(a, p))
+            return
+        st = getattr(self, "_fine_drag", None)
+        if st is not None and st["id"] == imgui.get_item_id() and not imgui.is_item_hovered():
+            tooltip(FINE_TIP)
+            return
+        self._tip(a, lambda: "\n".join(t for t in (FINE_TIP, self._hint(a, p)) if t))
 
     # ---- widgets: each one reads, draws and writes a Param ----
 
@@ -1270,22 +1353,27 @@ class Panel:
         imgui.set_next_item_width(-1)
         imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(10, 8))
         imgui.push_font(_FONTS["num"], FONT_NUM)
+        t0 = p.norm
         changed, pos2 = self._track(
-            lambda: imgui.slider_int("##s", pos, 0, p.steps,
+            lambda: imgui.slider_int(f"##{pid}", pos, 0, p.steps,
                                      text.replace("%", "%%") if inside else ""),
             p.norm, self._origin(p), p.steps, knob=not inside,
         )
         imgui.pop_font()
         imgui.pop_style_var()
-        self._tip(a, lambda: self._hint(a, p))
-        self._ctx(a)
-        self._learn_frame(a)
         r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
         half = self._grab_half(r1.x - r0.x, p.steps)
+        x0, span = self._throw(r0, r1, half)
+        own, t = self._fine(p, t0, x0, span)
+        if own:
+            changed, pos2 = t is not None, pos if t is None else round(t * p.steps)
+        self._fine_tip(a, p)
+        self._ctx(a)
+        self._learn_frame(a)
         if p.taper is not None and p.taper.unity is not None:
             # detent notch: ticks at the fader position the grab centre
             # occupies at unity (frame inset by grab padding + half grab)
-            nx = r0.x + half + (r1.x - r0.x - 2 * half) * p.taper.unity / p.steps
+            nx = x0 + span * p.taper.unity / p.steps
             dl = imgui.get_window_draw_list()
             notch = u32(imgui.ImVec4(1, 1, 1, 0.55))
             dl.add_line(imgui.ImVec2(nx, r0.y + 2), imgui.ImVec2(nx, r0.y + 6), notch, 2.0)
@@ -1307,6 +1395,7 @@ class Panel:
         # the readout is imgui's printf format: a "%" in it ("60%") is doubled
         text = (self._mod_text(p) if p.modulated else p.text()).replace("%", "%%")
         imgui.push_font(_FONTS["num"], FONT_NUM)
+        t0 = p.norm
         if p.taper is not None:
             steps = p.steps
             changed, pos = self._track(lambda: imgui.slider_int(
@@ -1325,11 +1414,20 @@ class Panel:
                 f"##{pid}", float(v), p.lo, p.hi, text, flags),
                 p.norm, self._origin(p), knob=False)
         imgui.pop_font()
-        self._tip(a, lambda: self._hint(a, p))
+        r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        half = self._grab_half(r1.x - r0.x, steps)
+        own, t = self._fine(p, t0, *self._throw(r0, r1, half))
+        if own:
+            changed = t is not None     # a frame the mouse did not move writes nothing
+            if changed:
+                # the throw fraction back to a value: a taper's detent, or
+                # the untapered range's own (log) mapping, as the param reads it
+                nv = (p.taper.map(round(t * steps)) if p.taper is not None
+                      else p._value_of_norm(t))
+        self._fine_tip(a, p)
         self._ctx(a)
         self._learn_frame(a)
-        r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
-        self._ghost(p, self._grab_half(r1.x - r0.x, steps))
+        self._ghost(p, half)
         if changed:
             p.set_value(nv)
         return changed
@@ -1631,6 +1729,7 @@ class Panel:
 
     def draw(self, dt: float, fps: float) -> None:
         try:
+            self._fine_frame()      # ⇧ and the button, read once; a finished fine drag forgotten
             self._draw(dt, fps)
         finally:
             # the red banner, its own window, last and in front: a render
