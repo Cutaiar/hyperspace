@@ -57,9 +57,9 @@ MODULES = (
     "media.frame", "media.ids", "media.source", "media.pool", "media.still", "media.proxy", "media.video", "media.adapters", "media.thumbs", "media.folder", "media",
     "analysis", "tapers", "motion", "media.transport", "media.mixer", "media.channels", "modifiers", "palettecompat", "undo", "placement", "geometry", "bands", "analyzer", "audio", "tempo", "modbank", "lfo", "envelope", "sequencer", "glsl", "masks", "patterns",
     "lookback", "dream", "fx", "ghost", "outputs", "replay", "view", "field", "graph", "graphmigrate", "media_tex", "poi_guide", "render", "params", "hold", "library", "control", "config",
-    "overlay", "pads.models", "pads.gesture", "poi", "totem", "pads.sony", "pads.nintendo", "pads.hid", "pads", "gamepad", "apc40", "generic", "modgraph", "seq_page", "routing", "patches", "preset", "learn", "deck", "midi", "bridge",
+    "overlay", "pads.models", "pads.gesture", "poi", "totem", "pads.sony", "pads.nintendo", "pads.hid", "pads", "gamepad", "apc40", "generic", "modgraph", "seq_page", "routing_sources", "routing", "patches", "preset", "learn", "deck", "midi", "bridge",
     "hands.signal", "hands.tape", "hands.core", "hands", "devices", "media.live", "media.panel", "media.ndi", "media.syphon", "media.camera", "media.publish", "hands.device", "osc", "graphview", "ui_presets", "ui_lookback", "ui_bands", "ui_feel", "ui_routing", "ui_fx", "ui_patterns",
-    "ui_lfo", "ui_media", "ui_desk", "ui_pad_lab", "ui_pad_nvg", "ui_pad_views", "ui_pad", "hands.panel", "ui_graph", "ui_seq", "ui",
+    "ui_lfo", "ui_media", "ui_desk", "ui_pad_lab", "ui_pad_nvg", "ui_pad_views", "ui_pad", "hands.panel", "ui_pane", "ui_graph", "ui_seq", "ui",
 )
 # (plan 39 T2: `masks` sits after `glsl`, whose QUAD_VS it binds, and before
 # `render`, which binds its MaskPasses. Plan 39 T4: `segment` is left out —

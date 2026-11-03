@@ -174,10 +174,12 @@ the idle lines, forgets every position on the canvas and lays them all
 out again in their areas — one undo step for the positions (`forget`) —
 frames the canvas on them and says so on the head ("laid out 36 nodes in
 6 areas, every one collapsed · 12 idle off the canvas", or "already
-tidy"). The selection shows under the canvas on
-the panel's narrow page; the **details beside / below** chip, drawn only
-while something is selected, moves it (a page 720 px wide puts it in a
-side column by itself, no chip). **The side column is resizable** (the
+tidy"). **The side pane is always on** (plan 49, stage 1: `ui_pane.py`):
+folding sections — the selection's details (`_side`; with nothing
+selected, a line saying so), then the bodies of the PRESETS, LOOKBACK,
+FACES and ANALYZER pages. It lies under the canvas on the panel's narrow
+page; the **details beside / below** chip moves it (a page 720 px wide
+puts it in a side column by itself, no chip). **The side column is resizable** (the
 owner, 2026-10-27: "for some UI, the little sidebar … is just not wide
 enough"): a grip on its left edge drags it between `SIDE_MIN` and what
 leaves `CANVAS_MIN` of canvas (`side_width`), and the width is this Mac's,
@@ -196,17 +198,26 @@ the preset's and the show's, never a NodeEditor.json beside the app.
 from __future__ import annotations
 
 import colorsys
-import json
 import math
-import sys
 import time
-from pathlib import Path
 
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
 
 from . import graph as rgraph
-from . import graphview, modifiers, params, patches, pinch, ui, ui_fx, ui_pad, ui_routing, undo
+from . import (
+    graphview,
+    modifiers,
+    params,
+    patches,
+    pinch,
+    ui,
+    ui_fx,
+    ui_pad,
+    ui_pane,
+    ui_routing,
+    undo,
+)
 from . import hold as holdmod
 from .bands import CEIL
 from .graph import Effect
@@ -240,7 +251,7 @@ SIDE_W = 320.0           # the side column's width at first, when the page is wi
 SIDE_MIN = 240.0         # …the narrowest a drag may make it
 CANVAS_MIN = 240.0       # …and the canvas it must leave beside it
 GRIP_W = 8.0             # the drag grip on the column's left edge
-UI_FILE = "ui.json"      # <machine>/ui.json: this Mac's panel settings (the side width)
+UI_FILE = ui_pane.UI_FILE   # <machine>/ui.json: this Mac's panel settings (the side width)
 WIDE = 720.0             # …which is this wide; narrower, the selection goes below
 BELOW_H = 240.0          # the selection's height below the canvas
 TIMES = 120              # draws the SYSTEM line's median is over
@@ -403,6 +414,8 @@ def close(panel) -> None:
     """Destroy the editor context, if the page ever made one — before
     imgui's own context goes (quit, ⌘R). Safe to call twice."""
     st = panel.__dict__.get(STATE)
+    if st:
+        ui_pane.flush(st, force=True)       # plan 49: a fold not yet written
     if not st or st.get("editor") is None:
         return
     ctx, st["editor"] = st["editor"], None
@@ -702,7 +715,8 @@ def page(panel, dt: float) -> None:
         st["deselect"], sel = True, None
     publish(panel, st, sel)
     share(panel, st, sel)
-    _head(panel, st, view, sel is not None)
+    # plan 49: the pane is always on, so its chip is too (on a narrow page)
+    _head(panel, st, view, True)
     imgui.separator()
     avail = imgui.get_content_region_avail()
     wide = st["beside"] or avail.x >= WIDE
@@ -711,9 +725,12 @@ def page(panel, dt: float) -> None:
     # top-left), so a selection that narrowed it panned every node (the
     # owner, 2026-10-24). The details are laid over its edge instead.
     origin = imgui.get_cursor_screen_pos()
-    if st["side_w"] is None:                    # this Mac's width, asked once
-        lib = getattr(panel, "library", None)
-        st["machine"] = getattr(lib, "machine", None)
+    if st["machine"] is None:                   # asked until a library is attached
+        st["machine"] = getattr(getattr(panel, "library", None), "machine", None)
+    if st["side_w"] is None or (st["machine"] is not None and not st.get("side_read")
+                                and not st.get("side_drag")):
+        # this Mac's width, asked once the machine is known (the default until then)
+        st["side_read"] = st["machine"] is not None
         st["side_w"] = (read_side(st["machine"]) if st["machine"] is not None else None) or SIDE_W
     # (the frame's width is clamped to this page; the remembered one is not,
     # so a narrow window never shrinks what a wide one was set to)
@@ -723,9 +740,9 @@ def page(panel, dt: float) -> None:
     # its canvas): noted here, before it draws, so `_menus` opens no graph
     # menu there and the control's own Learn menu opens (the owner, 2026-10-24)
     mouse = imgui.get_mouse_pos()
-    st["details_rect"] = (pos, size) if sel else None
-    st["over_details"] = bool(sel) and (pos[0] <= mouse.x < pos[0] + size[0]
-                                        and pos[1] <= mouse.y < pos[1] + size[1])
+    st["details_rect"] = (pos, size)          # plan 49: the pane is always on
+    st["over_details"] = (pos[0] <= mouse.x < pos[0] + size[0]
+                          and pos[1] <= mouse.y < pos[1] + size[1])
     canvas = imgui.ImVec2(max(avail.x, 80.0), max(avail.y, 80.0))
     # 2026-11-02: where the canvas is and whose draw list it lands on, for
     # `replay.grab` (`panel:graph`): the page window's own list carries the
@@ -737,28 +754,32 @@ def page(panel, dt: float) -> None:
     shown = _backdrop(panel, st, (origin.x, origin.y), (canvas.x, canvas.y))
     _scroll(st, (origin.x, origin.y), (canvas.x, canvas.y))
     _canvas(panel, st, view, canvas, st["backdrop_alpha"] if shown else 0.0)
-    _monitor(panel, (origin.x, origin.y), (canvas.x, canvas.y))
-    omit = (0, 0)
-    if sel:                             # its bottom is the canvas's: the page ends where it did
-        imgui.set_cursor_screen_pos(imgui.ImVec2(*pos))
-        imgui.push_style_color(imgui.Col_.child_bg, imgui.get_style_color_vec4(imgui.Col_.window_bg))
-        # imgui draws a child's decorations — its ground, border and
-        # scrollbar — on the parent's list inside `begin_child` (one draw
-        # call fewer); on the page's list they would be in the canvas's
-        # picture, so the indices they take are noted for `replay` to cut out
-        page_list = imgui.get_window_draw_list()
-        i0 = page_list.idx_buffer.size()
-        opened = imgui.begin_child("##graph.side", imgui.ImVec2(*size), imgui.ChildFlags_.borders)
-        omit = (i0, page_list.idx_buffer.size())
-        if opened:
-            if wide:                        # the grip on the column's left edge, then the details
-                top = imgui.get_cursor_screen_pos()
-                _grip(st, pos, size, avail.x, side)
-                imgui.set_cursor_screen_pos(imgui.ImVec2(top.x + GRIP_W, top.y))
-                imgui.indent(GRIP_W)
-            _side(panel, st, view, sel)
-        imgui.end_child()
-        imgui.pop_style_color()
+    # the held projector's inset: in the canvas's corner, left of the pane
+    # beside it, above the band under it (a narrow page)
+    _monitor(panel, (origin.x, origin.y), (canvas.x - size[0], canvas.y) if wide
+             else (canvas.x, canvas.y - size[1]))
+    # the pane, always on (plan 49): its bottom is the canvas's, so the page ends where it did
+    imgui.set_cursor_screen_pos(imgui.ImVec2(*pos))
+    imgui.push_style_color(imgui.Col_.child_bg, imgui.get_style_color_vec4(imgui.Col_.window_bg))
+    # imgui draws a child's decorations — its ground, border and
+    # scrollbar — on the parent's list inside `begin_child` (one draw
+    # call fewer); on the page's list they would be in the canvas's
+    # picture, so the indices they take are noted for `replay` to cut out
+    page_list = imgui.get_window_draw_list()
+    i0 = page_list.idx_buffer.size()
+    opened = imgui.begin_child("##graph.side", imgui.ImVec2(*size), imgui.ChildFlags_.borders)
+    omit = (i0, page_list.idx_buffer.size())
+    st["pane_window"] = imgui.internal.get_current_window().name   # (the tests find it by it)
+    if opened:
+        if wide:                        # the grip on the column's left edge, then the details
+            _grip(st, pos, size, avail.x, side)
+            imgui.indent(GRIP_W)
+        # plan 49: folding sections — the selection's details first
+        ui_pane.draw(panel, st, dt,
+                     (lambda: _side(panel, st, view, sel)) if sel else None,
+                     sel_words(sel), below=not wide)
+    imgui.end_child()
+    imgui.pop_style_color()
     panel.canvas_px = (*panel.canvas_px[:4], omit)
     times = st["times"]
     times.append(time.perf_counter() - t0)
@@ -843,9 +864,8 @@ def read_side(machine) -> float | None:
     ``graph.side_w``), or None: no file, an unreadable one, or a value that
     is not a number. Never raises; a bad file costs only the memory."""
     try:
-        doc = json.loads((Path(machine) / UI_FILE).read_text())
-        w = doc["graph"]["side_w"]
-    except (OSError, ValueError, KeyError, TypeError):
+        w = ui_pane.read_doc(machine)["graph"]["side_w"]
+    except (KeyError, TypeError):
         return None
     return float(w) if isinstance(w, (int, float)) and not isinstance(w, bool) else None
 
@@ -854,49 +874,54 @@ def write_side(machine, side_w: float) -> None:
     """Remember `side_w` in ``<machine>/ui.json``, keeping whatever else
     the file holds; a write that fails says so on stderr and costs only
     the memory."""
-    path = Path(machine) / UI_FILE
-    try:
-        doc = json.loads(path.read_text())
-        if not isinstance(doc, dict):
-            doc = {}
-    except (OSError, ValueError):
-        doc = {}
+    doc = ui_pane.read_doc(machine)
     graph = doc.get("graph")
     if not isinstance(graph, dict):
         graph = doc["graph"] = {}
     graph["side_w"] = round(float(side_w), 1)
-    try:
-        path.write_text(json.dumps(doc, indent=1) + "\n")
-    except OSError as e:
-        print(f"graph: {UI_FILE} not written ({e})", file=sys.stderr)
+    ui_pane.write_doc(machine, doc, "graph")
 
 
 def _grip(st: dict, pos: tuple[float, float], size: tuple[float, float], avail_w: float,
           side: float) -> None:
-    """The side column's drag grip (its left edge, `GRIP_W` wide, the
-    column's height), drawn first inside the column's child so it sits
-    over the canvas like the rest of the details. Held, the column follows
-    the mouse (`side_width` keeps it in range); let go, the width is
+    """The side column's drag grip: its left edge, `GRIP_W` wide, the
+    column's height. Called inside the column's child but submits no item
+    — a hit test of its own on the mouse (plan 49 review: an item pinned
+    to the column's top grew the child's content by its scroll every
+    frame, once the sections made the column scroll, and its hit box left
+    the drawn edge). Pressed on, the column follows the mouse
+    (`side_width` keeps it in range) until let go, when the width is
     written for this Mac. A faint line while hovered or held, and the
     east-west cursor."""
-    imgui.set_cursor_screen_pos(imgui.ImVec2(pos[0], pos[1]))
-    imgui.invisible_button("##graph.side.grip", imgui.ImVec2(GRIP_W, max(size[1], 1.0)))
-    hovered, active = imgui.is_item_hovered(), imgui.is_item_active()
-    if active:
-        st["side_w"] = side_width(side - imgui.get_io().mouse_delta.x, avail_w)
+    m = imgui.get_mouse_pos()
+    over = (pos[0] <= m.x < pos[0] + GRIP_W and pos[1] <= m.y < pos[1] + size[1]
+            and imgui.is_window_hovered(imgui.HoveredFlags_.child_windows)
+            and not imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id))
+    if over and imgui.is_mouse_clicked(0):
         st["side_drag"] = True
-    elif st.get("side_drag"):
-        st["side_drag"] = False
+    held = bool(st.get("side_drag"))
+    if held and imgui.is_mouse_down(0):
+        st["side_w"] = side_width(side - imgui.get_io().mouse_delta.x, avail_w)
+    elif held:
+        st["side_drag"] = held = False
         machine = st.get("machine")
         if machine is not None:
             write_side(machine, st["side_w"])
-    if hovered or active:
+    if over or held:
         imgui.set_mouse_cursor(imgui.MouseCursor_.resize_ew)
         x = pos[0] + GRIP_W / 2
         imgui.get_window_draw_list().add_line(
             imgui.ImVec2(x, pos[1]), imgui.ImVec2(x, pos[1] + size[1]),
-            imgui.get_color_u32(imgui.Col_.separator_active if active else imgui.Col_.separator_hovered),
-            2.0)
+            imgui.get_color_u32(imgui.Col_.separator_active if held
+                                else imgui.Col_.separator_hovered), 2.0)
+
+
+def wants_chip_w(panel) -> float:
+    """The width `_wants_chip` takes on its line, the spacing before it
+    included; 0 when it draws nothing (the PRESET strip budgets it)."""
+    from . import devices  # (late, as `_wants_chip`)
+    text = devices.missing_chip(panel_wants(panel))
+    return 0.0 if text is None else ui.chip_w(text) + imgui.get_style().item_spacing.x
 
 
 def share(panel, st: dict, sel) -> None:
@@ -1179,7 +1204,7 @@ def panel_wants(panel) -> list:
     return got[1]
 
 
-def _wants_chip(panel) -> None:
+def _wants_chip(panel, beside: bool = True) -> None:
     """Plan 40 T4: **N devices missing** on the line after the chips before
     it, its hover one line per device the loaded preset wants and the rig
     lacks ("apc40 (lost): K1, K2", `devices.want_lines`); nothing when
@@ -1190,7 +1215,8 @@ def _wants_chip(panel) -> None:
     text = devices.missing_chip(ws)
     if text is None:
         return
-    imgui.same_line()
+    if beside:                              # (else on a row of its own: a narrow strip)
+        imgui.same_line()
     ui.chip(f"{text}##wants")
     if imgui.is_item_hovered():
         ui.tooltip("\n".join(["the preset's rows that wait for a device:",
@@ -1341,10 +1367,14 @@ def monitor_rect(origin: tuple[float, float], avail: tuple[float, float],
                  pic: tuple[int, int]) -> tuple[tuple[float, float], tuple[float, float]]:
     """Where the projector's inset lies (plan 38): `MONITOR_W` of the
     canvas's width at its top-right corner, a margin in, the picture's
-    aspect kept — (top-left, bottom-right), screen pixels."""
+    aspect kept — and no taller than `avail`'s height leaves, a margin in
+    (plan 49: on a narrow page `avail` stops above the side pane's band),
+    narrowed to keep the aspect — (top-left, bottom-right), screen pixels."""
     pad = 8.0
+    aspect = max(pic[1], 1) / max(pic[0], 1)
     w = max(avail[0] * MONITOR_W, 32.0)
-    h = w * max(pic[1], 1) / max(pic[0], 1)
+    w = max(min(w, (avail[1] - 2 * pad) / aspect), 1.0)
+    h = w * aspect
     x, y = origin[0] + avail[0] - w - pad, origin[1] + pad
     return (x, y), (x + w, y + h)
 
@@ -3337,6 +3367,19 @@ def _selection(st: dict, view: graphview.View):
         if g is not None:
             return ("group", g)
     return None
+
+
+def sel_words(sel) -> str:
+    """The selection section's header words (plan 49): a node's label, a
+    group's name, else the kind ("cable", "bundle"); "" with nothing."""
+    if sel is None:
+        return ""
+    what, obj = sel
+    if what == "node":
+        return str(getattr(obj, "label", "") or what)
+    if what == "group":
+        return str(getattr(obj, "name", "") or what)
+    return what
 
 
 def _side(panel, st: dict, view: graphview.View, sel) -> None:

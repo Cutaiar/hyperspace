@@ -6970,6 +6970,172 @@ preset 'party/TRIP'" and loads nothing, the pad still drawn as filled;
 the show opens (no schema refusal); back on this build the pad still
 loads `party / TRIP`.
 
+## BD. Decks D2: the router's sources split from its evaluator, nothing changes (plan 44)
+Register rows 590–593, 2026-11-03. Headless:
+`tests/test_deck.py::test_one_sources_fed_once_drives_two_routers_as_one_router_did`
+(one `Sources` fed once, two routers over two registries land every
+corpus preset's params as one router does, every frame),
+`tests/test_deck.py::test_a_deck_built_the_old_way_and_the_new_way_reach_the_same_state`,
+`tests/test_app_boundary.py::test_the_frame_feeds_the_shared_sources_not_the_router`,
+`tests/test_routing_boundary.py` (the import wall and the pin over
+`routing_sources.py`) and the goldens.
+**444. Every source moves the picture as on the previous build.** (Mac,
+the rig's config: the APC40, the pad, the hands if they are set up)
+1. Quit and launch (a restart: this build adds a module and a field on
+   live objects). The startup preset lands as before.
+2. Load a preset with hand, pad-stick and band routes (TRIP or TUMBLE).
+   Move a hand in the box, push each stick, play music into the mic.
+3. Turn an APC40 knob; press a pad button with a row (A, say) and a key
+   row (R).
+4. ROUTING: read the source names on the routes (`R height`, a band's
+   name, `LFO 1`); SYSTEM: the pad's feel plot while a stick moves.
+*Pass:* (2) each route moves what it moved on the previous build, as
+much; (3) the knob, the button and the key act once each; (4) the names
+read as before, the pad plot follows the stick. Fail: a route that no
+longer moves (a feed that went nowhere), a name shown as `hand:9` where
+it read `R roll`, or a red banner naming `routing_sources`.
+**445. A hot reload of the new module and of routing keeps the routes
+moving.** (Mac, after 444, a preset with a hand or stick route loaded)
+1. Open `hyperspace/routing_sources.py`, add a blank line, save; move the
+   hand or stick.
+2. The same in `hyperspace/routing.py`; move it again, and turn a knob.
+3. SYSTEM: the hot reload line.
+*Pass:* (1–2) no red banner, no error toast, the route and the knob move
+the picture after each save; (3) "hot: routing_sources …" and then
+"hot: routing …" with the time. Fail: a route that stops after a save, or
+a hot reload error naming `Sources` or `Router`.
+
+## BE. Video audio 3 of 4: the analyzer listens to the mix (plan 45 V3)
+Decision register rows 594–596. The source is `audio.mix` (AUDIO,
+*Listen to video sound*, beside the mic's button): the mixer's sum —
+after the gains and the clip — into the analyzer as mono, the mean of L
+and R. It opens no input device, and it is silent until a channel's
+`audio` is on (MEDIA). The button is a new param: **restart once** after
+updating. The sound itself is V2's (check 437): the occasional click at
+rate 1 is still expected until V4, and the bands hear the same blocks.
+**446. The bands follow a video's soundtrack, and the mic is not grabbed.** (Mac, the speakers or headphones, a show video with a clear beat)
+Headless: `tests/test_audio_mix.py` (`test_the_mix_lands_in_the_analyzers_ring_as_mono_with_the_gains_applied`,
+`test_the_bands_see_the_videos_tone_as_they_would_the_mics`, `test_the_mix_is_taken_after_the_clip`).
+1. Slot the video on channel A, wire it to an output, tick `audio` on A.
+2. AUDIO: *Listen to video sound*. Watch ANALYZER's meters and the shape.
+3. Move A's `gain` from the notch to −6 dB and to off.
+*Pass:* AUDIO says `video sound (media mix) · 48.0 kHz`; the meters and
+the shape move with the video's sound as they do with the mic — a kick
+in the soundtrack lifts the low band on the picture's hit; −6 dB is a
+weaker drive, off is the bands decaying to rest; macOS's orange
+microphone dot in the menu bar is **not** lit (no input opened). Fail:
+the bands moving with the room rather than the file point at the mic
+still open (`AudioEngine.stop` not reached); bands late against the
+picture by more than a frame or two point at the ring being drained
+late (`AudioEngine.step`).
+**447. Switching sources mid-run keeps the bands' tuning.** (Mac, a show video with sound playing on A, a WAV file, the mic)
+Headless: `tests/test_audio_mix.py` (`test_switching_sources_mid_run_detaches_the_mix_and_keeps_the_bands`,
+`test_the_audio_mix_toggle_picks_the_source_and_lets_it_go`).
+1. With video sound the source, set `master.gain` somewhere off its default
+   and change one band's attack.
+2. *Listen to mic*; then *Load track* a WAV; then *Listen to video sound*;
+   then *Stop*.
+*Pass:* each switch is clean — the mic follows the room, the WAV plays
+and the bands follow it, video sound follows the video again; the master
+gain and the band's attack are what you set throughout; the video's
+sound in the speakers never stops or clicks because of a switch; Stop
+leaves the bands at rest and the video still audible. Fail: the bands
+following the video while the mic or WAV is picked point at the mixer
+still pushing (`listen(None)` not called).
+**448. Video sound with nothing heard is silence; a channel brings it.** (Mac, a show video with sound, after one restart on this build)
+Headless: `tests/test_audio_mix.py` (`test_mix_with_nothing_heard_is_silence_not_an_error`,
+`test_a_stream_that_stops_or_stalls_is_silence_not_the_last_block_held`,
+`test_a_mixer_from_before_v3_learns_to_listen_after_a_hot_reload`).
+1. Launch with no channel's `audio` on. AUDIO: *Listen to video sound*.
+2. MEDIA: tick `audio` on A (the video playing at rate 1).
+3. Untick it; then pull the headphones or switch the output device.
+*Pass:* step 1 shows no error, the line "silent until a channel's sound
+is on (MEDIA)", the bands at rest and SYSTEM shows no `media sound` line
+(nothing opened); step 2 the bands come alive with the sound; unticked,
+the bands decay to rest (not frozen on the last block); a device change
+that stops the stream leaves the bands at rest until it reopens (5 s),
+and AUDIO says `video sound silent — error: …` in warning colour while
+it is down.
+Fail: a frozen meter after the untick points at the no-voice block not
+being pushed (`Mixer._push`).
+
+## BF. The panel fold, stage 1: the side pane always on (plan 49)
+Register rows 597–601, 2026-11-03. Headless: `tests/test_ui_pane.py`
+(the panel driver on GRAPH: each section opened by a click and a control
+found in it by its page's id, a click in a section moving the param, a
+selection in the selection section, a selection leaving the fold alone,
+the fold state through `ui.json` written after the last click, a late
+library read then, the grip holding its edge while the pane scrolls, the
+narrow band's own fold, no conflicting ids with all five open).
+A restart after pulling (a new module).
+**449. The pane is there with nothing selected, and each section is its
+page.** (Mac, the control window at its launch size, a preset loaded)
+1. Open the app on GRAPH; click the canvas's empty ground (nothing
+   selected).
+2. Unfold each section in turn — presets, lookback, faces, analyzer —
+   and open its page on the rail beside it.
+*Pass:* (1) the pane is beside the canvas, `SELECTION` at the top
+saying nothing is selected, `PRESETS` open under it. (2) each section
+shows what its page shows, in the same order and words; the spectrogram
+moves, the lookback thumbnails move. Fail: an empty pane, or a section
+missing a row its page has.
+**450. The fold is kept across a relaunch, per Mac.** (Mac)
+1. Fold presets, unfold analyzer. Drag the pane wider.
+2. Quit and relaunch; open GRAPH.
+3. On the other Mac, open GRAPH.
+*Pass:* (2) presets folded, analyzer open, the width as dragged. (3)
+the other Mac's pane as it was there (selection and presets open the
+first time). `~/Hyperspace/ui.json` holds `pane.open` and `graph.side_w`
+(and `pane.below` once the narrow band has been folded, 454).
+**451. A section's control learns and answers keys as on its page.**
+(Mac, the APC40)
+1. In the faces section, right-click **Faces** → Learn; turn a free knob.
+2. In the lookback section, right-click a slider → Learn; press a key
+   row's key that moves it (or move it from the desk).
+*Pass:* (1) the knob turns the faces on and off; the ROUTING page shows
+the row. (2) the slider in the section follows. Fail: the graph's menu
+opens instead of the param's, or nothing is armed.
+**452. Open sections share the pane; a selection leaves the fold alone.**
+(Mac)
+1. Open presets and analyzer, fold selection. Click a node.
+2. Unfold selection. Press Esc.
+3. Unfold lookback and faces too (all five open); scroll the pane to its
+   foot; drag the grip on its left edge.
+*Pass:* (1) selection stays folded, its header naming the node; presets
+and analyzer share the pane's height, each scrolling by itself, the
+presets list still a list. (2) the node's details, then words saying
+nothing is selected; the fold stays open. (3) the pane scrolls to a
+fixed foot (it does not keep growing), and the grip resizes it from its
+drawn edge, scrolled or not.
+**453. The presets section at 320 px.** (Mac, the pane at its narrowest)
+1. Drag the pane to its narrowest. In the presets section, step ◀ ▶,
+   click a row, **save**, **as…** (type a name, Enter).
+2. In the show line: **open ▾**, **save**.
+*Pass:* (1) the strip fits — its name cut short, the chips flush right,
+nothing past the pane's edge; each action does what it does on the
+PRESETS page; with a preset that wants a device the rig lacks, **N
+devices missing** sits beside ▶ or on its own row under the strip,
+never over **new**. (2) the show line's chips on a second row, each
+working.
+**454. A narrow window puts the pane under the canvas.** (Mac)
+1. Make the control window narrow (under 720 px of page).
+2. In the band, fold selection and unfold presets; widen the window
+   past 720 px of page, then narrow it again.
+3. Click **details beside**, then **details below**.
+*Pass:* (1) the pane is a band along the canvas's bottom, its five
+headers one row of chips, selection alone open and taking the band's
+height, the chip on the head with nothing selected. (2) the band shows
+presets alone, the whole band; wide, the column keeps its own folds;
+narrow again, the band's come back. (3) the chip moves it beside and
+back. Fail: the canvas re-centres its nodes as the pane moves.
+**455. The held projector's inset sits clear of the pane.** (Mac, plan
+38's HOLD on)
+1. Hold the projector. Look at the canvas's top-right corner.
+2. Narrow the control window (the pane a band under the canvas).
+*Pass:* (1) the red-framed PROJECTOR inset is left of the pane, whole;
+the pane's headers are not covered. (2) the inset stays above the band,
+smaller if it must, never over its chips.
+
 ## BG. Two test runs at once take turns (wave 2 I1)
 Register rows 605–606, 2026-11-03. Headless: `tests/test_live_lock.py`
 (two processes; an inner `-n 2 --dist load` run whose two live tests run
@@ -6993,6 +7159,34 @@ waited its turns; the wait is not in `--durations`, it is outside the
 test's timing) and no NDI or Syphon loopback fails. Fail: a run sits at 99 % for minutes
 (kill it, ENGINEERING §16's recovery), a loopback fails in one run while
 the other runs, or "worker 'gwN' crashed".
+
+## BI. FINE: SEND B held, a knob a tenth as far (wave 2 T3)
+Register rows 609–610. Headless: `tests/test_midi.py` (the fine
+section: a synthetic encoder that the host's rings re-base). Restart
+the app after pulling (a new field on the adapter).
+**459. Held, a knob creeps; let go, it is coarse again.** (Mac, the APC40)
+1. Load any preset. Turn K4 (pattern mix) a few detents and watch its
+   readout on the panel.
+2. Hold SEND B. Turn K4 ten detents up, slowly; then a few down.
+3. Still holding, turn D4 (pattern) a detent; then move the crossfader.
+4. Let go of SEND B.
+*Pass:* (2) SEND B lights while held; ten detents move the readout about
+as far as one detent did in (1), smoothly, and the ring creeps a step
+every ten or so; (3) the pattern steps as it always does and the
+crossfader dims as always (neither is fine); (4) SEND B goes dark. The
+desk log (SYSTEM) has the press. Fail: the value jumps on the first fine
+detent, or nothing moves.
+**460. After letting go, the knob carries on from where the value is.**
+(Mac, the APC40)
+1. Hold SEND B and turn K4 twenty detents up (two coarse steps' worth).
+2. Let go of SEND B; turn K4 one detent up, then one down.
+3. Unplug the APC40's USB while holding SEND B; plug it back in; let go.
+*Pass:* (2) the first detent moves the value by one ordinary step from
+where fine left it — no jump of twenty steps back to where the knob had
+wandered — and the second brings it back about as far; (3) after the
+reconnect SEND B is dark and K4 is coarse. Fail: a jump on the first
+detent, or K4 dead until turned a long way (that is soft pickup: say so —
+hand check 31's re-base did not happen).
 
 ## What no test covers
 

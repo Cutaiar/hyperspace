@@ -1805,7 +1805,7 @@ the panel at 540 and the desk takes what is left.
 | CAMERA | Zoom (0.005–200×, log, so 1× sits at the knob's noon — far enough out to frame a field of thousands), yaw, pitch, pan, reset. |
 | LOOKBACK | The look-back switch and three sections: ECHOES, DREAM, BOTH (§2). |
 | FX | The effect stack (§2). |
-| AUDIO | Listen to mic / Load track / Stop, the device and **rescan**, the transport, the master faders (gain, dynamics, trim). |
+| AUDIO | Listen to mic / Listen to video sound (the media mix, plan 45 V3) / Load track / Stop, the device and **rescan**, the transport, the master faders (gain, dynamics, trim). |
 | ANALYZER | The band scene and Reset all, the meters, the band editor (spectrogram with the bands over it, the selected band's strip). |
 | ROUTING | One page over the loaded preset: a pointer to GRAPH (where the routes and the modifiers are edited since plan 28 N7), desk rows, macros, the session's MIDI rows read-only, the sinks, and a filter (§9). |
 | GRAPH | Both graphs on one canvas — devices, the analyzer, LFOs, modifiers, macros, params under their render nodes, the render graph, the outputs — laid out in titled areas by concern, every node collapsed by default, one wire a node pair, the idle macros off the canvas; the routes and the modifiers are edited here (below). |
@@ -2270,6 +2270,7 @@ doing its job while a learn is armed.
 | STOP ALL | invariant | Reset all bands |
 | DEVICE ON/OFF · DETAIL | invariant | panel · cheat sheet |
 | MASTER select · PAN | invariant | overlay · overlay click-through |
+| SEND B | both (the adapter's, not a row) | **FINE**: held, every knob moves its param a tenth as far (lit while held); let go, each knob carries on from its param. A row put on SEND B takes it over |
 | D1–D8 | global | the selected band's strip: trim, contrast, transient, pre, post, attack, decay, threshold |
 | K1–K5 | global | hand steadiness, response, catch, the selected axis's return, BPM (K6–K8 dark) |
 | S1–S6 · S7 · S8 | global | band 1–6 post-drive · master dynamics · master trim (`apc40.SHIFT_FADERS`) |

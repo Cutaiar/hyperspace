@@ -353,7 +353,7 @@ def test_canvas_px_is_recorded_only_while_graph_draws(tmp_path):
         _origin, size, scale, page, omit = px
         assert size[0] >= 80 and size[1] >= 80 and scale == (1.0, 1.0)
         assert page.startswith("CONTROLS/##page_") and "/" not in page[len("CONTROLS/"):]
-        assert omit == (0, 0)                         # nothing selected: no pane
+        assert omit[1] > omit[0]                      # plan 49: the pane, selected or not
         frame(panel, "view")
         assert panel.canvas_px is None
         panel.reg["ui.page"].set(PAGE_KEYS.index("graph"))
