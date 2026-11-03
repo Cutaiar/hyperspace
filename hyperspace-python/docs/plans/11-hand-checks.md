@@ -6702,7 +6702,7 @@ in its folder.** (Mac with `[library] path` set to the Drive folder)
 and nothing new appeared in Drive's `trash/` (nor on the other Mac).
 (3) `party / TRIP B` is back in the list and in `presets/party/`. (4) the
 old files are listed after this Mac's under "N from the library's old
-trash — empty leaves them", and after emptying they are still in Drive's
+trash — restore copies, empty leaves them"; a restore of one puts it back in `presets/` and it stays in Drive's `trash/` too; after emptying they are all still in Drive's
 `trash/` while this Mac's trash is empty.
 **443. An old show's bare slot still loads; a folder slot on an older
 build is filled but missing.** (Mac on this build; a second Mac or a

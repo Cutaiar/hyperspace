@@ -278,9 +278,85 @@ def test_empty_removes_only_this_macs_trash_and_lists_the_old_one(lib_dirs):
     assert lib.empty_trash() == 1
     assert old.is_file()                                     # the library's own: left
     assert not (lib_dirs.machine / "trash" / "presets" / "party").exists()
-    # the old one restores like any other
+    # the old one restores as a copy: the shared folder's trash is never written
+    before = old.read_bytes()
     assert lib.restore_trash(lib.trash()[0]) == "GONE"
-    assert (lib_dirs.presets / "gone.json").is_file() and not old.exists()
+    assert (lib_dirs.presets / "gone.json").is_file()
+    assert old.read_bytes() == before and lib.trash()[0].old
+
+
+# ---------------------------------------------------------------- review fixes
+
+def test_a_slash_in_a_files_own_name_is_never_a_folder(lib_dirs):
+    """Review 1, 5, 6 (the ruling): a top-level file whose own name holds a
+    `/` is listed with it made " - "; the row, the rename seed and the
+    two-handed save all read it as top-level; an old show naming it
+    `Ac/Dc` still finds it."""
+    _put(lib_dirs.presets / "ac-dc.json", "AC/DC")
+    r = make(lib_dirs)
+    lib, pr = r.lib, r.lib.project
+    assert "AC - DC" in lib.list(PRESETS) and "AC/DC" not in lib.list(PRESETS)
+    assert lib.folder_of(PRESETS, "AC - DC") == ("", "AC - DC")
+    assert lib.path_of(PRESETS, "Ac/Dc") == lib_dirs.presets / "ac-dc.json"   # an old show
+    pr.bank[3] = "Ac/Dc"
+    pr.load_slot(3)
+    assert lib.current(PRESETS) == "AC - DC"
+    assert pr.save_into(4)
+    assert pr.bank[4] == "AC - DC 2" and (lib_dirs.presets / "ac-dc-2.json").is_file()
+    assert not (lib_dirs.presets / "AC").exists() and not (lib_dirs.presets / "ac").exists()
+    lib.overwrite(PRESETS)                                  # writes the shown name back
+    assert json.loads((lib_dirs.presets / "ac-dc-2.json").read_text())["name"] == "AC - DC 2"
+    lib.rename(PRESETS, "AC - DC", "AC - DC LIVE")
+    assert (lib_dirs.presets / "ac-dc-live.json").is_file()
+
+
+def test_one_fold_a_folder_with_a_trailing_space_counts_on(lib_dirs):
+    """Review 2: the two-handed save in a folder whose name ends in a space
+    makes TRIP 3 when TRIP 2 is there, never writes over TRIP 2."""
+    folder = lib_dirs.presets / "late "
+    _put(folder / "trip.json", "TRIP")
+    _put(folder / "trip-2.json", "TRIP 2")
+    r = make(lib_dirs)
+    r.presets.load("late /TRIP")
+    two = (folder / "trip-2.json").read_text()
+    assert r.lib.project.save_into(6)
+    assert (folder / "trip-3.json").is_file() and (folder / "trip-2.json").read_text() == two
+
+
+def test_a_conflict_loser_is_listed_in_its_own_folder(lib_dirs):
+    """Review 3: the loser of a name clash is re-listed under its own
+    folder's prefix, and resolves to its own file."""
+    r = make(lib_dirs)
+    loser = lib_dirs.presets / "party" / "b (Dan's conflicted copy).json"
+    assert r.lib.path_of(PRESETS, "party/b (Dan's conflicted copy)") == loser
+
+
+def test_a_folder_named_in_another_case_is_the_folder_on_disk(lib_dirs):
+    """Review 4: `Party/B` finds `party/b.json`; a save as `Party/NEW` lands
+    in `party/` and is listed with the folder as it is on disk."""
+    r = make(lib_dirs)
+    assert r.lib.path_of(PRESETS, "Party/B") == lib_dirs.presets / "party" / "b.json"
+    assert r.lib.path_of(PRESETS, "PARTY/DEEP/c") == lib_dirs.presets / "party" / "deep" / "c.json"
+    r.presets.save_as("Party/NEW")
+    assert r.lib.current(PRESETS) == "party/NEW" and "party/NEW" in r.lib.list(PRESETS)
+    assert sorted(p.name for p in lib_dirs.presets.iterdir() if p.is_dir()) == [".cache", "party"]
+
+
+def test_the_presets_walk_is_kept_until_a_folder_moves(lib_dirs, monkeypatch):
+    """Review 8: two listings in a row walk the tree once; a file added
+    in a subfolder is seen on the next."""
+    r = make(lib_dirs)
+    walks = []
+    real = library.os.walk
+    monkeypatch.setattr(library.os, "walk", lambda *a, **k: (walks.append(a[0]), real(*a, **k))[1])
+    r.lib._walks.clear()
+    r.lib.list(PRESETS)
+    r.lib.list(PRESETS)
+    r.lib.path_of(PRESETS, "party/B")
+    r.lib.is_dirty(PRESETS)
+    assert len(walks) == 1
+    _put(lib_dirs.presets / "party" / "deep" / "d.json", "D")
+    assert "party/deep/D" in r.lib.list(PRESETS)
 
 
 def test_one_folder_is_one_library_and_trash(tmp_path):

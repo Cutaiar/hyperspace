@@ -57,7 +57,6 @@ from .library import (
     PRESETS,
     RETIRED_MODULES,
     LibraryError,
-    split_name,
 )
 
 LIST_POLL = 1.0      # seconds between re-listings of a group's presets
@@ -76,13 +75,6 @@ SHOW_TIP = ("A show is the room the presets play in: which preset each of the de
             "session (tempo, hands, the analyzer, the outputs), the band scene, and the "
             "bus cables cut on GRAPH. A preset is the look; the show is everything "
             "around it. Open another, save this one, or start a new one here.")
-
-
-def preset_parts(name: str) -> tuple[str, str]:
-    """A listed preset's folder and leaf, for the list's row (plan 48 row
-    588): ``party/TRIP`` → (``party``, ``TRIP``), drawn ``party / TRIP``
-    with the folder dim; a bare name has no folder."""
-    return split_name(name)
 
 
 # ---- state on the panel, created on first use ----
@@ -394,7 +386,7 @@ def _list_row(panel, group: str, name: str, cur: str | None, drawn: dict, rect) 
     # plan 48 row 588: a preset from a folder reads "party / TRIP", the
     # folder dim — the row's text drawn over a label-less selectable; a
     # top-level name is the selectable's own label, as before
-    folder, leaf = preset_parts(name) if group == PRESETS else ("", name)
+    folder, leaf = lib.folder_of(group, name)      # the library's one rule
     x = imgui.get_cursor_pos_x()
     imgui.push_style_color(imgui.Col_.text, imgui.ImVec4(0.92, 0.92, 0.92, 1))
     picked, _ = imgui.selectable(f"##{name}##pick" if folder else f"{name}##pick",
@@ -595,12 +587,14 @@ def _trash_popup(panel, bin_: list) -> None:
     old = sum(1 for t in bin_ if getattr(t, "old", False))
     drawn["old"] = old
     if old:
-        ui._micro(f"{old} from the library's old trash — empty leaves them")
+        ui._micro(f"{old} from the library's old trash — restore copies, empty leaves them")
         if imgui.is_item_hovered():
             ui.tooltip("Deletes and overwritten files now go to this Mac's trash "
                        f"({lib._trash_dir()}), never the shared library. The "
                        f"library's old trash ({lib.home / 'trash'}) is shown so its files "
-                       "can be restored; clear it in Finder.")
+                       "can be restored: a restore copies the file back and leaves it "
+                       "there (the app never writes to the shared folder's trash); "
+                       "clear it in Finder.")
     n -= old
     imgui.separator()
     now = imgui.get_time()

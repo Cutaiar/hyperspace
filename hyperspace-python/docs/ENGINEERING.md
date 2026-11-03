@@ -1338,7 +1338,7 @@ root and `Library.machine` the home.
 | `projects/<slug>.hyp.json` | Your shows (the code calls them projects). | `hyperspace.project/2` |
 | `patches/<slug>.json` | Your patches (plan 40): a group of GRAPH nodes and its boundary, spawned into a preset, never loaded. Written only by **save as patch…** / **update patch**. | `hyperspace.patch/1` |
 | `<group>/<slug>.json` | Module presets, one registry group each (`band/`, `dream/`, `hands/`, `view/` …). An `fx/` folder from before plan 40 is ignored: the fx module presets are retired (`library.RETIRED_MODULES`). | `hyperspace.preset/1` |
-| `trash/…` | Only in a library from before plan 48: the trash every Mac shared. Listed at the foot of the trash popup (marked old) and restorable; never written, never emptied by the app — clear it in Finder. | as the original |
+| `trash/…` | Only in a library from before plan 48: the trash every Mac shared. Listed at the foot of the trash popup (marked old); a restore copies a file back and leaves it there; never written, never emptied by the app — clear it in Finder. | as the original |
 
 **The home** (`Library.machine`; never in a shared folder):
 
@@ -1390,7 +1390,7 @@ Restore from the PRESETS page's **trash (n) ▸** popup — back into that
 folder, the next free name if the name is taken there — or copy a file
 back into `<library>/<group>/[<folder>/]` under its plain name. A
 `trash/` left in the shared library by an older build is listed after
-this Mac's, marked old, and restorable; the app never writes to it or
+this Mac's, marked old; a restore copies the file back and leaves it there — the app never writes to it or
 empties it.
 
 ### The shared library

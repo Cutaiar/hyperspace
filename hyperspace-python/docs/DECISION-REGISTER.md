@@ -602,7 +602,7 @@ here; overturn → the change, then the same.
 | 564 | Wave 0 E1: delay loops are the trails mechanism, the look-back keeps the dream — the feedback starter (a composite laid over, a delay, a fade at level 0.75: colour and alpha decay alike) on the cable menu and "add feedback after" on the node menu, many allowed; "feedback" not "echo", which names the look-back's frames | 423 | (rec) — pending the owner |
 | 584 | Plan 48: the library lists `presets/` every folder down (hidden folders skipped); a preset's name is folder-qualified (`party/TRIP`), the file keeps the leaf; `path_slug` for a preset's file key, `slug` stays flat | 440 | (rec) — the owner's ask (L1, 2026-11-02); built as recommended |
 | 585 | Plan 48: the bank names a preset by its folder-qualified name, a bare name a top-level file; no `hyperspace.project` schema bump — an older build reads a folder slot as filled-but-missing | 443 | (rec) — pending the owner; built as recommended |
-| 586 | Plan 48: the trash is this Mac's (`<machine>/trash/<origin folder>/`), never in a synced library; the old library trash listed (marked old), restorable, never written or emptied — not migrated | 442 | (rec) — pending the owner; built as recommended |
+| 586 | Plan 48: the trash is this Mac's (`<machine>/trash/<origin folder>/`), never in a synced library; the old library trash listed (marked old), restorable as a copy (the file stays), never written or emptied — not migrated | 442 | (rec) — pending the owner; built as recommended |
 | 587 | Plan 48: a save writes back to the preset's own file; as… with a folder in the name writes into it; a new preset grown from the loaded one (two-handed save, `preset.save_new`, an empty pad's hold) lands beside it; ⇧F's `PRESET <n>` at the top | 441 | (rec) — pending the owner; built as recommended |
 | 588 | Plan 48: the PRESETS page draws a folder's preset as `party / TRIP` with the folder dim; the flat list stays; a rename's field holds the leaf and keeps the folder | 440, 441 | (rec) — pending the owner; built as recommended |
 | 589 | Wave 1 T0: the test suite cannot hang the Mac — pytest-timeout's thread method at 120 s for xdist workers (the signal method for a serial run) with no worker restart in pyproject's addopts, so a test blocked in C fails by name and ends the run; `live` tests hold a per-account `flock` (wait 60 s, then skip); one tier at a time on a shared Mac; a real-GLFW test asks a child process first (`gl_window_ok`, #332) and skips if `glfwInit` does not answer | — | (rec) — pending the owner; built as recommended (T0) |
@@ -9745,7 +9745,20 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   raises). `slug` itself stays flat: shows, module presets and patches
   have no folders and `Project.path_for` must never make one. Two files
   of one folder with one inner name keep plan 25's conflict rule per
-  folder. Only `presets/` recurses.
+  folder. Only `presets/` recurses. **A `/` in a listed name always
+  means a folder** (the orchestrator's ruling on review): a top-level
+  file whose own `name` holds one (`AC/DC`, from before folders) is
+  listed as `AC - DC` (`library.harmless`), so `folder_of` has one rule
+  (split at the last `/`) and the PRESETS row, the rename seed and the
+  two-handed save agree; a save writes the shown name back into the
+  file. An old show's `AC/DC` or `Ac/Dc` still resolves: `path_of`
+  compares folder and leaf by one fold (`library.fold`: `path_slug`
+  lowered, as APFS finds a file), and when the name's folder is not on
+  disk tries its `slug` among the top-level files. A folder spelled in
+  another case is the folder on disk (`Party/NEW` lands in `party/` and
+  is listed `party/NEW`). The walk is kept until a folder's mtime moves
+  or the library writes (`Library._tree`), since the panel lists every
+  frame.
 - **Other options.** Change `slug` to keep `/` (the brief's wording): a
   show or patch called `AC/DC` would then write `projects/ac/dc.hyp.json`.
   Keep the file's own `name` as the whole qualified name: a Finder move
@@ -9754,11 +9767,9 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **To reverse.** `_files` back to one glob; the folder names stop
   resolving (filled-but-missing slots, row 585) until the files are moved
   back to the top.
-- **Rough edge.** A top-level preset whose own name holds a `/`
-  (`AC/DC`) lists as `AC/DC` and looks like a folder on the page (its
-  prefix is drawn dim, and its rename field is seeded with `DC`);
-  `folder_of` reads the file, so a save and a two-handed save still
-  treat it as top-level. Typing `AC/DC` into as… makes a folder `AC`.
+- **Rough edge.** `AC/DC` reads `AC - DC` on the page and, after a save,
+  in its file. Typing `AC/DC` into as… makes a folder `AC` — by the
+  ruling, a typed `/` is a folder.
 - **Judge it.** 440.
 ### 585. The bank names a preset by its folder-qualified name; no schema bump
 - **Answer.** (rec) — pending the owner; built as recommended.
@@ -9795,7 +9806,7 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   folders bottom-up. With no `[library] path` the machine home is the
   library: nothing moves. The old `<library>/trash/` is **listed, not
   migrated**: marked `old`, at the end of the popup under one dim line,
-  restorable, never written and never emptied by the app.
+  restorable as a copy — the file stays where it is — never written and never emptied by the app (review: a restore that removed it would write into the shared folder and race the other Mac).
 - **Other options.** Migrate it once on first use: both Macs would race
   to move one shared folder, each ending with half, and a migration is a
   write into the cloud folder the row exists to stop. Ignore it: files

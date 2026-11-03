@@ -33,6 +33,14 @@ The trash is a machine thing.
   empty, `.`, `..` or hidden, and so an absolute path: a name never
   reaches outside `presets/`. Two files of one folder with the same
   inner name (a conflict copy) keep plan 25's rule, per folder.
+- **A `/` in a listed name always means a folder.** A top-level file
+  whose own `name` holds one (`AC/DC`, from before folders) is listed as
+  `AC - DC` (`library.harmless`); a save writes that back. Names compare
+  by one fold (`library.fold`: folder segments stripped and lowered, the
+  leaf slugged), so `Party/Trip` finds `presets/party/trip.json` as APFS
+  would, and a name whose folder is not on disk falls back to its `slug`
+  among the top-level files (an old show's `Ac/Dc`). The walk is kept
+  until a folder's mtime moves or the library writes (`Library._tree`).
 - **The bank names a preset by that name.** A slot holds `party/TRIP`; a
   bare name is a top-level file, so every show written before reads as
   it did. `cycle`, `walk`, `home`, `load_startup`, `still_named`, the
@@ -54,7 +62,7 @@ The trash is a machine thing.
   `[library] path` the machine home is the library and nothing moves.
 - **The old library trash** (`<library>/trash/`, what every Mac wrote
   into before) is left where it is: listed at the end of the trash
-  popup, marked old, restorable, never written to, never emptied by the
+  popup, marked old; a restore copies a file back and leaves it there; never written to, never emptied by the
   app, with one dim line saying so. Clear it in Finder.
 - **The PRESETS page** draws a folder's preset as `party / TRIP`, the
   folder dim, the name bright; a top-level preset is drawn as before.
