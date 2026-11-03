@@ -44,12 +44,12 @@ from . import (
     ui_bands,
     ui_desk,
     ui_feel,
-    ui_fx,
     ui_graph,
     ui_lfo,
     ui_lookback,
     ui_media,
     ui_pad,
+    ui_pane,
     ui_patterns,
     ui_presets,
     ui_routing,
@@ -190,6 +190,13 @@ def load_fonts() -> None:
 
 TIP_CH = 65   # a tooltip wraps at this many characters: a readable line (the owner, 2026-10-26)
 
+# Shift-drag fine mode (wave 2 T2, register rows 607–608): while ⇧ is held a
+# drag on a continuous slider or fader moves the value FINE as far as the
+# mouse moves the grab; once ⇧ has been held in a drag, the rest of that
+# drag is relative, so letting ⇧ go goes back to coarse without a jump.
+FINE = 0.1
+FINE_TIP = "FINE  ·  ⇧ held: a drag moves a tenth as far"
+
 
 def tooltip(text: str) -> None:
     """A hover's words as a tooltip, wrapped at `TIP_CH` characters of the
@@ -207,6 +214,19 @@ def _micro(text: str, color: imgui.ImVec4 | None = None) -> None:
     imgui.push_font(_FONTS["micro"], FONT_MICRO)
     imgui.text_colored(DIM if color is None else color, text.upper())
     imgui.pop_font()
+
+
+def fit_micro(text: str, width: float, least: float = 12.0) -> str:
+    """`text` as `_micro` draws it (upper case, the micro face), cut to
+    `width` with an ellipsis; "" where the room is under `least` (plan 49
+    stage 2: a note, a strip's head, a node's ports in the side pane)."""
+    if width < least:
+        return ""
+    imgui.push_font(_FONTS["micro"], FONT_MICRO)
+    try:
+        return fit_text(text.upper(), width)
+    finally:
+        imgui.pop_font()
 
 
 def _micro_width(text: str) -> float:
@@ -301,6 +321,7 @@ def fit_text(text: str, width: float) -> str:
 GROUND_WORDS = "nothing — its ground"
 THROUGH_WORDS = "hands through the effects"     # OUTPUT's checkbox (plan 35 O)
 OPEN_ON_GRAPH = "open on GRAPH"                 # a window's block: its node selected there
+NAME_ROOM = 64.0     # px: an OUTPUT block name needs this beside its ticks, or they go under it
 
 
 def shows_line(spec, n: int | None, slots=(), rig=None) -> str:
@@ -447,6 +468,26 @@ def button_w(*labels: str) -> float:
     s = imgui.get_style()
     w = sum(imgui.calc_text_size(lb.split("##")[0]).x + 2 * s.frame_padding.x for lb in labels)
     return w + s.item_spacing.x * max(len(labels) - 1, 0)
+
+
+def check_w(label: str) -> float:
+    """A checkbox's width with its label: the box, the inner gap, the words."""
+    s = imgui.get_style()
+    words = label.split("##")[0]
+    return imgui.get_frame_height() + (s.item_inner_spacing.x + imgui.calc_text_size(words).x
+                                       if words else 0.0)
+
+
+def beside(w: float) -> bool:
+    """The next item, `w` wide, on the line of the item before when it ends
+    by the region's right edge; else on a row of its own (plan 49 stage 2:
+    a page's row of chips or ticks in the side pane's 240–320 px). Call it
+    where `imgui.same_line()` stood. True when it stayed on the line."""
+    right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
+    if imgui.get_item_rect_max().x + imgui.get_style().item_spacing.x + w <= right + 0.5:
+        imgui.same_line()
+        return True
+    return False
 
 
 def device_lines(registry) -> list[str]:
@@ -610,11 +651,15 @@ CHEATSHEET = [
 # and the backdrop's and the faces' channel pickers. The audio page
 # holds the source and the master faders (the level into the analyser);
 # the analyzer page the scene and meters, then the band editor
-# (ui_bands.py); the routing page is the matrix (ui_routing.py); the fx
-# page a browser of the graph's effects (ui_fx.py); the faces page the pattern browser
+# (ui_bands.py); the routing page is the matrix (ui_routing.py); the faces
+# page the pattern browser
 # and its eight inputs (ui_patterns.py); the hands page is the Ultraleap live
 # view and setup (hands/panel.py); the lfo page the clock and the four
-# LFOs (ui_lfo.py).
+# LFOs (ui_lfo.py). Plan 49 stage 2: the FX page is retired — its browser
+# of the graph's effects (ui_fx.py) is GRAPH's side pane's fx section — but
+# its row stays, so every index `ui.page` holds (a key row's `set`, an old
+# show's) names the page it always did; the rail draws no pill for it, and
+# landing on it opens GRAPH with the fx section unfolded (`RETIRED`).
 PAGES = [
     ("output", "output", "output"),
     ("view", "view", "view"),
@@ -622,7 +667,7 @@ PAGES = [
     ("media", "media", ("media", "backdrop")),   # plan 32 U: the channels (ui_media.py)
     ("camera", "camera", "camera"),
     ("lookback", "lookback", "dream"),
-    ("fx", "fx", "fx"),
+    ("fx", "fx", "fx"),           # retired (plan 49 stage 2): GRAPH's fx section
     ("audio", "audio", "master"),
     ("analyzer", "analyzer", "band"),
     ("routing", "routing", None),
@@ -634,6 +679,9 @@ PAGES = [
     ("system", "system", None),
 ]
 PAGE_KEYS = [k for k, _, _ in PAGES]
+# plan 49 stage 2: a page retired into GRAPH's side pane → (the page it
+# opens, the section it unfolds there, `ui_pane.focus`)
+RETIRED = {"fx": ("graph", "fx")}
 
 
 class PageHistory:
@@ -679,9 +727,10 @@ class Panel:
         # (`render:acid.2`, a modifier's id); None while nothing, a cable, a
         # bundle, a group or several nodes are selected. Written by
         # `ui_graph.publish` each frame GRAPH draws, so off the page it is
-        # as of the last frame GRAPH was drawn (the pane-always-on work
-        # removes that), except that a preset landing without the node
-        # (`ui_graph.settle`: a load, a new) lets it go on any page. An
+        # as of the last frame GRAPH was drawn (plan 49 stage 1 keeps the
+        # pane on GRAPH: stage 3 removes that), except that a preset
+        # landing without the node (`ui_graph.settle`: a load, a new) lets
+        # it go on any page. An
         # effect's node is `fx_selected` as well (`ui_graph.share`).
         # `graph_selected_at`: imgui's frame count when it last changed.
         self.graph_selected: str | None = None
@@ -707,6 +756,7 @@ class Panel:
         # until the SYSTEM page's switch asks for the pad
         self.pad_diagram = False
         self.pad_view = 0       # ui_pad_views.VIEWS: map, faithful, lanes, cockpit
+        self.poi_dials = True   # the Poi window (ui_pad.poi_window): shown each time the poi comes on
         self.page = PAGE_KEYS.index("graph")    # index into PAGES; GRAPH opens first
         self.history = PageHistory(self.page)   # ⌘[ / ⌘]: back and forward (app.frame)
         self.ghosts = 0             # ghost markers drawn this frame (tests read it)
@@ -721,6 +771,8 @@ class Panel:
         self.pad = None       # set by app.py unless [gamepad] enabled = false (gamepad.Pad)
         self.learn = None     # set by app.py: the armed param and the held question (learn.Learn)
         self.undo = None      # set by app.py (undo.Undo): its status shows in the footer
+        self._fine_drag = None   # the slider a Shift drag holds (`_fine`): its id, mouse x, throw
+        self._shift = self._mouse_down = False   # this frame's ⇧ and left button (`_fine_frame`)
         self.devices = None   # set by app.py (devices.DeviceRegistry): the SYSTEM page's lines
         self.media = None     # set by app.py (app.MediaIO): the MEDIA page's folder and channels
         self.canvas_tap = None   # set by app.py (outputs.CanvasTap): the GRAPH canvas as `panel:graph`
@@ -744,7 +796,10 @@ class Panel:
         quit and on ⌘R, before imgui shuts down; a panel that never drew
         the page holds none — the GRAPH canvas's tap (`canvas_tap`,
         2026-11-02) and the pad drawings' NanoVG (ui_pad_nvg) go with it,
-        while the control window's GL is up. Safe to call twice."""
+        while the control window's GL is up. Safe to call twice. A presets
+        fold clicked under `WRITE_AFTER_S` ago is written first (plan 48
+        stage 2, as `ui_graph.close` flushes the pane's)."""
+        ui_presets.flush_folds(self, force=True)
         ui_graph.close(self)
         tap, self.canvas_tap = getattr(self, "canvas_tap", None), None
         if tap is not None:
@@ -788,10 +843,23 @@ class Panel:
         r.enum("ui.pad_view", "Pad view", lambda: self.__dict__.get("pad_view", 0),
                lambda i: setattr(self, "pad_view", int(i)), list(ui_pad_views.VIEW_LABELS),
                group="ui", persist=False, modulatable=False, tip=ui_pad_views.VIEW_TIP)
-        r.enum("ui.page", "Page", lambda: self.page,
-               lambda i: setattr(self, "page", int(i)), [lb for _, lb, _ in PAGES],
-               group="ui", persist=False, modulatable=False,
-               tip="Which page of the panel is open.")
+        r.enum("ui.page", "Page", lambda: self.page, lambda i: Panel.go_page(self, i),
+               [lb for _, lb, _ in PAGES], group="ui", persist=False, modulatable=False,
+               tip="Which page of the panel is open. FX is retired (plan 49): it opens "
+                   "GRAPH with the side pane's fx section unfolded.")
+
+    def go_page(self, i) -> None:
+        """`ui.page`'s setter: open page `i`; a retired one (`RETIRED`: FX)
+        opens the page it went to with its section unfolded and scrolled to
+        (`ui_pane.focus`), so a key row or an old show that names FX still
+        lands on the effects (plan 49 stage 2)."""
+        i = int(i)
+        key = PAGE_KEYS[i] if 0 <= i < len(PAGE_KEYS) else None
+        if key in RETIRED:
+            home, section = RETIRED[key]
+            ui_pane.focus(ui_graph._state(self), section)
+            i = PAGE_KEYS.index(home)
+        self.page = i
 
     # ---- binding menu: every widget gets one on right-click ----
 
@@ -1133,7 +1201,8 @@ class Panel:
         if not p.modulated:
             return
         r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
-        x = r0.x + inset + (r1.x - r0.x - 2 * inset) * p.eff_norm
+        x0, span = self._throw(r0, r1, inset)
+        x = x0 + span * p.eff_norm
         dl = imgui.get_window_draw_list()
         dl.add_rect_filled(imgui.ImVec2(x - 1.5, r0.y + 3), imgui.ImVec2(x + 1.5, r1.y - 3),
                            u32(GHOST), 1.5)
@@ -1205,9 +1274,9 @@ class Panel:
               imgui.Col_.frame_bg_hovered if hovered else imgui.Col_.frame_bg)
         dl.add_rect_filled(r0, r1, imgui.get_color_u32(bg), ROUND)
         half = self._grab_half(r1.x - r0.x, steps)
-        span = r1.x - r0.x - 2 * half
-        xa = r0.x + half + span * origin
-        xb = r0.x + half + span * min(max(norm, 0.0), 1.0)
+        x0, span = self._throw(r0, r1, half)
+        xa = x0 + span * origin
+        xb = x0 + span * min(max(norm, 0.0), 1.0)
         lo, hi = min(xa, xb), max(xa, xb)
         if lo == r0.x + half:
             lo = r0.x               # a fill from the left end runs into the corner
@@ -1221,6 +1290,79 @@ class Panel:
                                u32(edge), 2.0)
         dl.channels_merge()
         return out
+
+    # ---- Shift-drag fine mode (wave 2 T2): a tenth of the drag ----
+
+    def _fine_frame(self) -> None:
+        """Once a frame, before any widget: read ⇧ and the button once,
+        and forget a fine drag whose button is up — whether or not its
+        slider is still drawn (a page change mid-drag leaves nothing)."""
+        io = imgui.get_io()
+        self._shift = io.key_shift
+        self._mouse_down = imgui.is_mouse_down(0)
+        if not self._mouse_down:
+            self._fine_drag = None
+
+    def _fine(self, p: Param, t0: float, x0: float, span: float) -> tuple[bool, float | None]:
+        """After a continuous slider's draw: `(own, t)` — `own` when a
+        Shift drag holds this slider (imgui's write this frame is to be
+        dropped), `t` the throw fraction (0..1) to write, or None to write
+        nothing. `(False, None)` lets imgui's own drag stand; an integer
+        never has the mode.
+
+        imgui's sliders are absolute — the grab goes where the mouse is —
+        and have no slow modifier (Alt slows only a *drag* widget, and
+        Shift speeds one up), so the panel moves the value itself: the
+        drag that ⇧ joins is taken over from the value it had, and each
+        frame the mouse moves adds its movement along the throw × `FINE`
+        while ⇧ is held, × 1 once it is let go — relative until the
+        button comes up, so neither edge jumps. On the press's own frame
+        nothing is written (the slider's jump to the mouse is dropped, and
+        a base between detents, or on a log range, stays exactly as it
+        was); joined mid-drag, the mouse's last-frame place is the anchor,
+        so this frame's movement counts at the fine rate. `t0` is the
+        value before this frame's imgui write; `x0`, `span` the throw
+        (`_throw`). One drag is one undo step: the writes come every frame
+        the mouse moves, as a plain drag's do (`undo.SETTLE_S`)."""
+        if p.integer or not imgui.is_item_active():
+            return False, None
+        shift = getattr(self, "_shift", False)
+        if not getattr(self, "_mouse_down", False):
+            return False, None          # a typed value (Ctrl+click): imgui's
+        io = imgui.get_io()
+        key = imgui.get_item_id()
+        st = getattr(self, "_fine_drag", None)
+        if st is None or st["id"] != key:
+            if not shift:
+                return False, None
+            x = io.mouse_pos.x if imgui.is_item_activated() else io.mouse_pos_prev.x
+            st = self._fine_drag = {"id": key, "x": x, "t": min(max(t0, 0.0), 1.0)}
+        x = io.mouse_pos.x
+        moved, st["x"] = x - st["x"], x
+        if moved == 0 or span <= 0:
+            return True, None
+        st["t"] = min(max(st["t"] + moved / span * (FINE if shift else 1.0), 0.0), 1.0)
+        return True, st["t"]
+
+    @staticmethod
+    def _throw(r0, r1, half: float) -> tuple[float, float]:
+        """Where a slider's grab centre travels: its left end and length
+        in screen px, `half` in from either end of the frame."""
+        return r0.x + half, r1.x - r0.x - 2 * half
+
+    def _fine_tip(self, a: Param, p: Param) -> None:
+        """The slider's tooltip, led by "FINE" while ⇧ is held over a
+        control that has a fine mode (continuous, not an integer), and
+        shown alone while a fine drag goes on off the track, where no
+        hover would show it."""
+        if p.integer or not getattr(self, "_shift", False):
+            self._tip(a, lambda: self._hint(a, p))
+            return
+        st = getattr(self, "_fine_drag", None)
+        if st is not None and st["id"] == imgui.get_item_id() and not imgui.is_item_hovered():
+            tooltip(FINE_TIP)
+            return
+        self._tip(a, lambda: "\n".join(t for t in (FINE_TIP, self._hint(a, p)) if t))
 
     # ---- widgets: each one reads, draws and writes a Param ----
 
@@ -1265,22 +1407,27 @@ class Panel:
         imgui.set_next_item_width(-1)
         imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(10, 8))
         imgui.push_font(_FONTS["num"], FONT_NUM)
+        t0 = p.norm
         changed, pos2 = self._track(
-            lambda: imgui.slider_int("##s", pos, 0, p.steps,
+            lambda: imgui.slider_int(f"##{pid}", pos, 0, p.steps,
                                      text.replace("%", "%%") if inside else ""),
             p.norm, self._origin(p), p.steps, knob=not inside,
         )
         imgui.pop_font()
         imgui.pop_style_var()
-        self._tip(a, lambda: self._hint(a, p))
-        self._ctx(a)
-        self._learn_frame(a)
         r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
         half = self._grab_half(r1.x - r0.x, p.steps)
+        x0, span = self._throw(r0, r1, half)
+        own, t = self._fine(p, t0, x0, span)
+        if own:
+            changed, pos2 = t is not None, pos if t is None else round(t * p.steps)
+        self._fine_tip(a, p)
+        self._ctx(a)
+        self._learn_frame(a)
         if p.taper is not None and p.taper.unity is not None:
             # detent notch: ticks at the fader position the grab centre
             # occupies at unity (frame inset by grab padding + half grab)
-            nx = r0.x + half + (r1.x - r0.x - 2 * half) * p.taper.unity / p.steps
+            nx = x0 + span * p.taper.unity / p.steps
             dl = imgui.get_window_draw_list()
             notch = u32(imgui.ImVec4(1, 1, 1, 0.55))
             dl.add_line(imgui.ImVec2(nx, r0.y + 2), imgui.ImVec2(nx, r0.y + 6), notch, 2.0)
@@ -1302,6 +1449,7 @@ class Panel:
         # the readout is imgui's printf format: a "%" in it ("60%") is doubled
         text = (self._mod_text(p) if p.modulated else p.text()).replace("%", "%%")
         imgui.push_font(_FONTS["num"], FONT_NUM)
+        t0 = p.norm
         if p.taper is not None:
             steps = p.steps
             changed, pos = self._track(lambda: imgui.slider_int(
@@ -1320,11 +1468,20 @@ class Panel:
                 f"##{pid}", float(v), p.lo, p.hi, text, flags),
                 p.norm, self._origin(p), knob=False)
         imgui.pop_font()
-        self._tip(a, lambda: self._hint(a, p))
+        r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        half = self._grab_half(r1.x - r0.x, steps)
+        own, t = self._fine(p, t0, *self._throw(r0, r1, half))
+        if own:
+            changed = t is not None     # a frame the mouse did not move writes nothing
+            if changed:
+                # the throw fraction back to a value: a taper's detent, or
+                # the untapered range's own (log) mapping, as the param reads it
+                nv = (p.taper.map(round(t * steps)) if p.taper is not None
+                      else p._value_of_norm(t))
+        self._fine_tip(a, p)
         self._ctx(a)
         self._learn_frame(a)
-        r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
-        self._ghost(p, self._grab_half(r1.x - r0.x, steps))
+        self._ghost(p, half)
         if changed:
             p.set_value(nv)
         return changed
@@ -1494,6 +1651,11 @@ class Panel:
         section whose params are saved by another group says so in `note`."""
         _micro(title, TEXT)
         if note:
+            # plan 49 stage 2: cut to what the title leaves it (the side pane)
+            room = imgui.get_content_region_avail().x - _micro_width(title) - 16
+            if _micro_width(note) > room:
+                note = fit_micro(note, room, 24.0)
+        if note:
             imgui.same_line(imgui.get_content_region_avail().x - _micro_width(note) - 4)
             _micro(note, FAINT)
         lib = self.library
@@ -1626,6 +1788,7 @@ class Panel:
 
     def draw(self, dt: float, fps: float) -> None:
         try:
+            self._fine_frame()      # ⇧ and the button, read once; a finished fine drag forgotten
             self._draw(dt, fps)
         finally:
             # the red banner, its own window, last and in front: a render
@@ -1644,6 +1807,9 @@ class Panel:
             self._draw_cheatsheet()
         # the pad first: the desk reads its height to keep clear of it (ui_desk.room)
         ui_pad.diagram(self)
+        # the poi's dials, their own window while the poi is on (plan 47): out
+        # of the pad window, whose room stays the pad's; GRAPH's side pane too
+        ui_pad.poi_window(self)
         if getattr(self, "desk", True):     # (a Panel from before a hot reload)
             ui_desk.diagram(self)
         if not self.open:
@@ -1666,6 +1832,8 @@ class Panel:
             return
         self.ghosts = 0
         self.page = max(0, min(self.page, len(PAGES) - 1))
+        if PAGE_KEYS[self.page] in RETIRED:     # set straight, not through ui.page
+            self.go_page(self.page)
         foot = imgui.get_frame_height_with_spacing()
         self._rail(foot)
         imgui.same_line()
@@ -1701,7 +1869,9 @@ class Panel:
         dl = imgui.get_window_draw_list()
         w, h = RAIL_W - 12, FONT_MICRO + 16
         imgui.push_font(_FONTS["micro"], FONT_MICRO)
-        for k, (_key, label, group) in enumerate(PAGES):
+        for k, (key, label, group) in enumerate(PAGES):
+            if key in RETIRED:          # plan 49 stage 2: a section of GRAPH's pane now
+                continue
             lit = k == self.page
             p0 = imgui.get_cursor_screen_pos()
             if imgui.invisible_button(f"##page{k}", imgui.ImVec2(w, h)):
@@ -1871,9 +2041,9 @@ class Panel:
             tip = self.reg["output.render"].tip
             self._combo("output.render", width=96,
                         tip=f"{tip}\nDrawing {size[0]}×{size[1]} now." if size else None)
-            imgui.same_line()
+            beside(check_w(self.reg["output.fullscreen"].label))
         self._check("output.fullscreen")
-        imgui.same_line()
+        beside(check_w(self.reg["output.overlay"].label))
         # decision 21 (a): overlay only when the config asks — shut, the
         # toggle is drawn disabled with the reason, and its three overlay-only
         # settings (click-through, ground, opacity) would do nothing
@@ -2000,7 +2170,11 @@ class Panel:
         ticks = sum(imgui.calc_text_size(s).x for s in ("picture", "hands", THROUGH_WORDS))
         ticks += 3 * (imgui.get_frame_height() + 2 * imgui.get_style().item_inner_spacing.x)
         ticks += 3 * imgui.get_style().item_spacing.x
-        room = max(imgui.get_content_region_avail().x - ticks - 8, 40)
+        # plan 49 stage 2: in the side pane the ticks go under the name,
+        # wrapped where they would pass the edge (`beside`)
+        narrow = imgui.get_content_region_avail().x - ticks - 8 < NAME_ROOM
+        room = (imgui.get_content_region_avail().x if narrow
+                else max(imgui.get_content_region_avail().x - ticks - 8, 40))
         labels = {sl.n: fit_text(f"{sl.n}  {sl.name}" if sl.name else f"{sl.n}", room)
                   for sl in slots}
         col = imgui.get_cursor_pos_x() + 8 + max(imgui.calc_text_size(t).x
@@ -2014,14 +2188,15 @@ class Panel:
                 continue
             imgui.align_text_to_frame_padding()
             imgui.text(labels[sl.n])
-            imgui.same_line(col)
+            if not narrow:
+                imgui.same_line(col)
             # plan 35 O (row 374): the window's two mutes (the rig's, never
             # the preset); "hands through the effects" is the preset's
             # wiring, written from here (T6, `graphview.set_through`)
             self._check(f"{pre}.scene", "picture")
-            imgui.same_line()
+            beside(check_w("hands"))
             self._check(f"{pre}.hands", "hands")
-            imgui.same_line()
+            beside(check_w(THROUGH_WORDS))
             self._through_check(frame, sl.n, slots, rig)
             # the mirror (plan 23 WP1): two ticks at the right of the dim row,
             # or of the "shows:" line when the output has no dim of its own
@@ -2030,10 +2205,13 @@ class Panel:
             st = imgui.get_style()
             fw = sum(imgui.calc_text_size(t).x + imgui.get_frame_height()
                      + st.item_inner_spacing.x + st.item_spacing.x for _, t in flips)
+            if narrow and flips:            # the pane: the flips on a row of their own
+                fw = 0.0
             if f"{pre}.dim" in self.reg:
-                self._row(f"{pre}.dim", width=-(fw + 8) if flips else -1, label="dim")
-                for pid, t in flips:
-                    imgui.same_line()
+                self._row(f"{pre}.dim", width=-(fw + 8) if fw else -1, label="dim")
+                for i, (pid, t) in enumerate(flips):
+                    if not narrow or i:
+                        beside(check_w(t))
                     self._check(pid, t)
                 flips = []
             sw = sl.switches
@@ -2081,7 +2259,7 @@ class Panel:
                 tooltip(f"select {graphview.label_of(pre, slots)} on the GRAPH "
                                   "page and bring it on screen")
             for pid, t in flips:            # no dim row: the ticks at the right of this one
-                imgui.same_line()
+                beside(check_w(t))
                 self._check(pid, t)
         imgui.pop_style_var()
         # plan 30 D1: a placed effect that runs nowhere this frame, and why
@@ -2314,28 +2492,30 @@ class Panel:
         self._row("eye.distance")
         imgui.spacing()
         self._button("camera.reset", "Reset view")
-        imgui.same_line()
+        beside(imgui.calc_text_size("R  ·  stick click").x)
         imgui.text_disabled("R  ·  stick click")
 
     def _page_lookback(self, dt: float) -> None:
         ui_lookback.page(self, dt)     # the frame history and its composite
-
-    def _page_fx(self, dt: float) -> None:
-        ui_fx.page(self, dt)           # the graph's effects, by where each ends
 
     def _page_audio(self, dt: float) -> None:
         a = self.audio
         self._section("audio source")
         mic_on = a.on and a.mode == "mic"
         self._button("audio.mic", "Stop mic" if mic_on else "Listen to mic")
-        imgui.same_line()
+        if "audio.mix" in self.reg:       # plan 45 V3: the videos' sound, summed
+            mix_on = a.on and a.mode == "mix"
+            words = "Stop video sound" if mix_on else "Listen to video sound"
+            beside(button_w(words))
+            self._button("audio.mix", words)
+        beside(button_w("Load track"))
         if imgui.button("Load track"):
             self._file_dialog = self.open_file_dialog(
                 "Choose a track", ["Audio", "*.wav *.mp3 *.flac *.ogg"])
             if self._file_dialog is None:
                 a.error = self.dialog_error
         if a.on:
-            imgui.same_line()
+            beside(button_w("Stop"))
             self._button("audio.stop", "Stop")
         if self._file_dialog is not None and self._file_dialog.ready():
             picked = self._file_dialog.result()
@@ -2354,19 +2534,26 @@ class Panel:
             # the analyser's rate — the track's for a file, not the capture rate
             rate = getattr(a, "rate", getattr(a, "sr", 0.0))
             imgui.text_disabled(f"{a.label}  ·  {rate / 1000:.1f} kHz")
+            mx = getattr(a, "_mixer", None)
+            if a.mode == "mix" and mx is not None:
+                if getattr(mx, "failed", False):        # the mixer's error is the source's
+                    imgui.text_colored(WARN, f"video sound silent — {mx.state}")
+                elif not getattr(mx, "playing", 0):
+                    imgui.text_disabled("silent until a channel's sound is on (MEDIA)")
         else:
             imgui.text_disabled("no source — the shape spins on its own")
 
         # transport
         if a.mode == "file":
             self._button("audio.play", "Pause" if a.playing else "Play")
-            imgui.same_line()
+            beside(button_w("Restart"))
             self._button("audio.restart", "Restart")
-            imgui.same_line()
             pos, dur = a.position(), a.duration()
+            clock = (f"{int(pos // 60)}:{int(pos % 60):02d} / "
+                     f"{int(dur // 60)}:{int(dur % 60):02d}")
+            beside(_readout_width(clock))           # measured as printed (a 100-minute set)
             imgui.align_text_to_frame_padding()
-            _readout(f"{int(pos // 60)}:{int(pos % 60):02d} / "
-                     f"{int(dur // 60)}:{int(dur % 60):02d}", DIM)
+            _readout(clock, DIM)
         imgui.spacing()
 
         # the level into the analyser: what every band sees
@@ -2376,8 +2563,11 @@ class Panel:
         self._fader("master.trim")
 
     def _page_analyzer(self, dt: float) -> None:
-        """Scene, meters, then the band editor (ui_bands.py): the
-        spectrogram with the bands over it and the selected band's strip."""
+        """The ANALYZER page — scene, meters, then the band editor
+        (ui_bands.py): the spectrogram with the bands over it and the
+        selected band's strip. GRAPH's side pane draws it as its
+        analyzer section (ui_pane.py, plan 49): the page is the section at
+        full height."""
         c = self.control
         self._section("bands", "band")
         # scene + reset-all (relabels to Undo while the window is open)
@@ -2411,10 +2601,12 @@ class Panel:
         ui_hands.page(self, dt)
 
     def _page_presets(self, dt: float) -> None:
-        """2026-10-28, top to bottom (ui_presets.page): the preset strip —
-        ◀ name ● ▶ · new · save · as… — then every preset as a list that
-        fills the page, its trash at the foot, the patches fold, one line
-        for the show, and the library's notes."""
+        """The PRESETS page, 2026-10-28, top to bottom
+        (ui_presets.page): the preset strip — ◀ name ● ▶ · new · save ·
+        as… — then every preset as a list that fills the room it has, its
+        trash at the foot, the patches fold, one line for the show, and the
+        library's notes. GRAPH's side pane draws it as its presets section
+        (ui_pane.py, plan 49)."""
         if self.library is None:
             self._section("presets")
             imgui.text_disabled("no library attached")
@@ -2510,6 +2702,10 @@ class Panel:
         graph_ms = ui_graph.timing_line(self)     # plan 28 N2: the GRAPH page's own draw
         if graph_ms:
             imgui.text_disabled(graph_ms)
+            # plan 49 stage 2: what of it the side pane's open sections took
+            pane_ms = ui_pane.timing_line(self)
+            if pane_ms:
+                imgui.text_disabled(fit_text(pane_ms, imgui.get_content_region_avail().x))
         thumbs = ui_graph.thumbnail_line(self)    # plan 37 C1: the GRAPH page's thumbnails
         if thumbs:
             imgui.text_disabled(thumbs)

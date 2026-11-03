@@ -779,6 +779,7 @@ gone/floating → `ui_desk.room`; drawing jumps on first `/` →
 `Panel._draw_cheatsheet`'s `_sheet_h`; `/` dead → `key:SLASH` row.
 
 **59. An FX chip opens without switching.**
+*Retired in place (plan 49 stage 2, 2026-11-03): the FX page is gone — where this says the FX page, use the fx section of GRAPH's side pane (check 472); a key row or a show that names FX lands there.*
 Headless: `tests/test_fx.py::{test_a_chip_click_selects_and_never_toggles,test_the_chips_led_toggles_and_never_selects,test_selection_is_by_name_and_survives_a_reorder,test_selection_survives_a_preset_load}`.
 F5 (TRIP), FX page: chips three per row, dot (on) or ring (off) at left
 (diamond if aimed at faces, check 91). Click an off effect's name.
@@ -792,6 +793,7 @@ click switches → `ui_fx._chip`; strip jumps → `FxState.selected` /
 that matter → `ui_fx.CHIPS_PER_ROW`.
 
 **60. An effect that is not running says why.**
+*Retired in place (plan 49 stage 2, 2026-11-03): the FX page is gone — where this says the FX page, use the fx section of GRAPH's side pane (check 472); a key row or a show that names FX lands there.*
 Headless: `tests/test_fx.py::{test_an_off_effects_strip_says_so_and_turn_on_switches_it_on,test_a_bypassed_stack_says_so_on_the_strip,test_the_idle_strips_controls_stay_live,test_why_idle_names_faces_off,test_the_page_fits_with_the_tightest_strip_idle}`.
 FX page, open an off effect. *Pass:* "off — nothing below shows
 until it is on" + **turn on** chip; "on" box full strength; faders
@@ -2300,6 +2302,7 @@ or the output is not the one you think (screen indices move after an
 HDMI re-sync).
 
 **166. The palette fold on a fader.** (APC40 for the fader; the rest on the laptop)
+*Retired in place (plan 49 stage 2, 2026-11-03): the FX page is gone — where this says the FX page, use the fx section of GRAPH's side pane (check 472); a key row or a show that names FX lands there.*
 Headless: `tests/test_fx_palette.py::{test_the_defaults_leave_every_frame_byte_identical,test_a_turned_up_mix_changes_the_picture,test_the_grey_ramp_is_a_greyscale_and_a_coloured_one_is_not,test_every_palette_param_takes_a_route,test_a_raised_floor_does_not_light_a_see_through_ground}`.
 Any preset. FX page: the Palette chip is last; switch it on (nothing
 changes); right-click its **Mix** → **Learn desk**, move S2; sweep S2.
@@ -2316,6 +2319,7 @@ picture changes at mix 0 → the chain's skip of a zero-mix pass; S2
 refused → the fader is still the session's (153).
 
 **167. A saved palette, and the palette's strip.** (copy)
+*Retired in place (plan 49 stage 2, 2026-11-03): the FX page is gone — where this says the FX page, use the fx section of GRAPH's side pane (check 472); a key row or a show that names FX lands there.*
 Headless: `tests/test_fx_palette.py::test_a_saved_palette_is_an_fx_module_preset`, `tests/test_fx.py::test_the_palette_strip_fits_in_both_modes`.
 Copy `tests/fixtures/palettes/fx/sunset.json` into the library's `fx/`.
 FX page, open Palette: in compress mode the strip shows mode (a
@@ -2770,6 +2774,7 @@ preset of yours uses one (register row 169: after that it is a
 migration).
 
 **194. The per-node times on SYSTEM while an effect is toggled.**
+*Retired in place (plan 49 stage 2, 2026-11-03): the FX page is gone — where this says the FX page, use the fx section of GRAPH's side pane (check 472); a key row or a show that names FX lands there.*
 Headless: `tests/test_golden_frames.py::{test_each_node_has_a_rolling_median_in_ms,test_no_timer_queries_means_a_note_and_the_same_pixels,test_the_gpu_lines_on_the_system_page}`, `tests/test_graph.py::{test_the_default_graph_for_one_default_view_is_todays_frame_in_order,test_the_timer_lists_the_graphs_nodes_and_drops_a_node_that_left}`.
 Launch, load TRIP (F5), open SYSTEM. On the FX page untick **Effects**,
 wait two seconds, tick it again. On LOOKBACK switch **Look-back** on and
@@ -2992,6 +2997,7 @@ land); a crash or a refused load on the teapot; the teapot gone after
 the save.
 
 **212. Two acids in one chain.** (copy)
+*Retired in place (plan 49 stage 2, 2026-11-03): the FX page is gone — where this says the FX page, use the fx section of GRAPH's side pane (check 472); a key row or a show that names FX lands there.*
 Headless: `tests/test_graph_json.py::{test_a_second_acid_is_its_own_params_clock_and_place_in_the_chain,test_a_preset_says_two_acids_in_data_and_carries_the_seconds_values,test_two_acids_run_in_one_chain_on_one_program}`.
 TWO-ACIDS (above); open the FX page and ROUTING; then load TRIP. *Pass:*
 two chips, "Acid" and "Acid 2", each with its own strip and twist
@@ -3109,6 +3115,7 @@ hands checks need the hand camera or the synthetic tape (as in group V),
 with **Ghost hands** ticked.
 
 **220. SYSTEM times each effect that ran.**
+*Retired in place (plan 49 stage 2, 2026-11-03): the FX page is gone — where this says the FX page, use the fx section of GRAPH's side pane (check 472); a key row or a show that names FX lands there.*
 Headless: `tests/test_graph_effects.py::test_the_system_page_times_each_effect_that_ran`, `tests/test_graph.py::test_the_timer_lists_the_graphs_nodes_and_drops_a_node_that_left`, `tests/test_golden_frames.py::test_each_node_has_a_rolling_median_in_ms`.
 SYSTEM open; load ACID (F6); then on the FX page switch Kaleido on and
 Acid off. *Pass:* under "gpu per node, ms", lines `acid`, `wobble`,
@@ -3123,6 +3130,7 @@ run not built: `Renderer._graph_for` not passing the effects); a line
 for every effect file (an off effect timed: `Effect.TIMED`).
 
 **221. Switching effects on and off changes nothing but the picture.**
+*Retired in place (plan 49 stage 2, 2026-11-03): the FX page is gone — where this says the FX page, use the fx section of GRAPH's side pane (check 472); a key row or a show that names FX lands there.*
 Headless: `tests/test_graph_effects.py::{test_an_off_effect_is_read_through_and_runs_no_pass,test_the_renderer_builds_the_run_from_the_stack_and_a_toggle_does_not_rebuild,test_the_run_draws_what_the_one_block_chain_drew}`, every golden.
 ACID; on the FX page toggle chips quickly, drag one chip to another
 place, then untick **Effects** (`fx.on`). *Pass:* each toggle is the
@@ -3221,6 +3229,7 @@ before the history`; no page scrolls. *Fail:* words that disagree with
 the picture.
 
 **229. The FX page's placed chip.** (copy)
+*Retired in place (plan 49 stage 2, 2026-11-03): the FX page is gone — where this says the FX page, use the fx section of GRAPH's side pane (check 472); a key row or a show that names FX lands there.*
 Headless: `tests/test_fx.py::{test_a_placed_effects_chip_says_where_it_sits_and_is_not_reorderable,test_the_page_fits_with_three_placed_effects,test_a_placed_effects_strip_says_its_place_wherever_it_is_drawn}`.
 PALETTE-HANDS; FX page. Drag the palette's chip; drop another chip on
 it. Open its strip and hover its title. Untick every output's
@@ -3237,6 +3246,7 @@ palette in the chain's grid (the page did not get the preset's graph:
 not reaching `_chip` / `_drop`); the page scrolling.
 
 **230. The faces target still bends the faces.**
+*Retired in place (plan 49 stage 2, 2026-11-03): the FX page is gone — where this says the FX page, use the fx section of GRAPH's side pane (check 472); a key row or a show that names FX lands there.*
 Headless: `tests/test_render.py::{test_a_face_effect_changes_the_faces_and_nothing_else,test_a_frame_effect_runs_over_a_face_effect}`, `tests/test_fx.py::test_the_face_chain_borrows_the_frame_chains_programs`.
 Any factory preset with Faces on (FACES, F2). FX page: open Warp, click
 ONTO **faces**, switch it on; hover the ONTO faces chip. *Pass:* the picture
@@ -3248,6 +3258,7 @@ time is inside `scene`). *Fail:* the frame warps (the target lost in the
 run of effect nodes).
 
 **231. Two palettes with different slices on two outputs.** (copy, glass and projector)
+*Retired in place (plan 49 stage 2, 2026-11-03): the FX page is gone — where this says the FX page, use the fx section of GRAPH's side pane (check 472); a key row or a show that names FX lands there.*
 Headless: `tests/test_graph_placement.py::test_into_output_2_folds_one_output_only`, `tests/test_graph_json.py::test_a_second_acid_is_its_own_params_clock_and_place_in_the_chain` (neighbours only: no test loads this configuration, two placed instances of one file into two outputs).
 101's rig; make `two-palettes.json` (above) and load TWO-PALETTES; FX
 page, then ROUTING; drag Palette 2's hue turn. *Pass:* the glass folds to
@@ -3260,6 +3271,7 @@ palette 2 on this output only`. *Fail:* both outputs one colour (one
 palette's values on both); a fold on the wrong output; one chip.
 
 **267. The whole picture as shades of one red.** (projector)
+*Retired in place (plan 49 stage 2, 2026-11-03): the FX page is gone — where this says the FX page, use the fx section of GRAPH's side pane (check 472); a key row or a show that names FX lands there.*
 Headless: `tests/test_palette.py::{test_a_red_slice_gives_only_reds,test_the_defaults_are_the_whole_cylinder_and_the_identity}`.
 Any factory preset with plenty of colour (TRIP, F3); FX page, open
 Palette, switch it on, raise its mix to 1 (nothing changes at the
@@ -3298,6 +3310,7 @@ with val 1 → 0.2 the dark ground turns bright and the bright shape dim
 (the arc taken the other way); the inversion ignored (the ends sorted).
 
 **270. The mode is a picker; the strip reads as the slice.** (laptop)
+*Retired in place (plan 49 stage 2, 2026-11-03): the FX page is gone — where this says the FX page, use the fx section of GRAPH's side pane (check 472); a key row or a show that names FX lands there.*
 Headless: `tests/test_palette.py::{test_mode_is_a_discrete_choice,test_the_strip_rows_are_the_slice,test_the_choice_form_is_parsed_and_refused_when_bad,test_the_gradient_mode_is_still_there}`, `tests/test_fx.py::test_the_palette_strip_fits_in_both_modes`.
 FX page, open Palette. Click Mode; pick gradient, then compress. Hover
 Mode, and right-click its label. Drag the hue row's small turn slider
@@ -3851,6 +3864,7 @@ you dropped it. *Fail:* the idle macros left drawn; a box outside its
 area; tidy says nothing.
 
 **275. The off effects are one line; the chain reads through them.** (laptop)
+*Retired in place (plan 49 stage 2, 2026-11-03): the FX page is gone — where this says the FX page, use the fx section of GRAPH's side pane (check 472); a key row or a show that names FX lands there.*
 Headless: `tests/test_graph_areas.py::test_an_off_effect_with_no_cable_is_idle_and_a_through_wire_spans_it`.
 On party-trip open GRAPH and click **SHADERS**. Hover the faint red wire
 from *history*; press Delete on it. Then on the FX page switch *warp* on
@@ -4131,6 +4145,7 @@ has been run by a person; the loopback tests (our sender into our
 receiver) are the only evidence for 304–309.
 
 **296. A still as a backdrop.** (laptop)
+*Retired in place (plan 49 stage 2, 2026-11-03): the FX page is gone — where this says the FX page, use the fx section of GRAPH's side pane (check 472); a key row or a show that names FX lands there.*
 Headless: `tests/test_media_render.py::{test_backdrop_under_scene,test_backdrop_history_toggle,test_an_effect_after_the_scene_sits_after_the_backdrop_too,test_the_echoes_show_over_a_bright_backdrop,test_a_static_backdrop_in_the_history_keeps_its_brightness}`, `tests/test_golden_frames.py` (`backdrop-still`).
 MEDIA page: pick the still in the library (This Mac), click bin cell 1 of
 channel A, then set **Backdrop** channel to A and its alpha to 1. Turn the
@@ -4375,6 +4390,7 @@ the wording; a device that takes no mode says `error: no supported mode
 
 **317. A preset with a pattern and a bin, saved and reloaded on the merged
 build.** (laptop, the copy, a picture; a second Mac for the last step)
+*Retired in place (plan 49 stage 2, 2026-11-03): the FX page is gone — where this says the FX page, use the fx section of GRAPH's side pane (check 472); a key row or a show that names FX lands there.*
 Headless: `tests/test_plan31_32_merge.py::{test_a_pattern_and_a_bin_save_as_4_and_round_trip,test_an_older_build_refuses_the_combined_4,test_a_3_only_and_a_media_free_preset_are_what_each_branch_wrote,test_media_at_the_librarys_default_is_untouched}`.
 On `plan-31-32-integration`, load TRIP, turn two steps on in the SEQ grid,
 put a picture in channel a's bin on the MEDIA page and make it the
@@ -4464,6 +4480,7 @@ needed, or a cable that cannot be hit (`ui_graph.dropped`,
 
 **321. The FX page finds and plays an effect on a branch.** (laptop, the
 copy)
+*Retired in place (plan 49 stage 2, 2026-11-03): the FX page is gone — where this says the FX page, use the fx section of GRAPH's side pane (check 472); a key row or a show that names FX lands there.*
 Headless: `tests/test_fx.py::{test_groups_follow_the_wires,test_the_fx_page_lists_the_graphs_effects,test_show_on_graph_selects_the_node}`.
 With 318's graph loaded, open the FX page. Find `acid.2` and `kaleido.2`,
 click each, move a slider of the open one, toggle its `on`, click **Show on
@@ -4548,6 +4565,7 @@ in SHADERS that are made of the media alone, or tidy putting a faint node
 in an area it does not belong to (`graphview.media_made`, `area_of`).
 
 **327. The FX page with a big graph, at arm's length.** (laptop)
+*Retired in place (plan 49 stage 2, 2026-11-03): the FX page is gone — where this says the FX page, use the fx section of GRAPH's side pane (check 472); a key row or a show that names FX lands there.*
 Headless: `tests/test_fx.py::{test_the_page_draws_and_fits,test_the_fx_page_lists_the_graphs_effects}`. The first draws TRIP's graph with each of its effects open and asserts the page never scrolls; a dozen-effect graph is not covered.
 Build a graph with about twelve effects across the run, two branches, the
 faces, the backdrop and three unreached nodes. Open the FX page and read
@@ -4592,6 +4610,7 @@ canvas moving when a node is clicked (`ui_graph._param_rows`, `home_page`,
 `_switch_block`).
 
 **330. Route from ▸ an LFO, a new LFO, and a taken param.** (laptop, the copy)
+*Retired in place (plan 49 stage 2, 2026-11-03): the FX page is gone — where this says the FX page, use the fx section of GRAPH's side pane (check 472); a key row or a show that names FX lands there.*
 Headless: `tests/test_graph_edit.py::{test_route_from_lists_the_lfos_and_envelopes_on_a_modulatable_param,test_route_from_an_lfo_makes_the_route_a_graph_cable_makes,test_route_from_on_a_taken_param_asks_replace_or_keep,test_route_from_new_lfo_adds_one_and_routes_it,test_an_lfo_already_driving_is_checked}`.
 The owner, 2026-10-24: "There is no Learn option for routing one of the
 LFOs there or any of the envelopes there." On the FX page open Glimmer
@@ -4613,6 +4632,7 @@ replaces with no prompt, or a page whose menu lacks it
 (`ui_graph.route_from_menu`, `Panel._ctx_learn`).
 
 **331. An envelope pushes up from the base and comes back to it.** (laptop, the copy)
+*Retired in place (plan 49 stage 2, 2026-11-03): the FX page is gone — where this says the FX page, use the fx section of GRAPH's side pane (check 472); a key row or a show that names FX lands there.*
 Headless: `tests/test_graph_edit.py::{test_an_envelope_route_is_a_push_about_the_base,test_an_envelope_on_a_toggle_stays_position,test_an_lfo_route_is_unchanged}`.
 The owner, 2026-10-24: "the envelopes have no way for me to set a
 baseline … they all reduce the base to 0 in between fires no matter what
@@ -5698,6 +5718,7 @@ wire refused (the type rule); a red cable (the cable typed by its port: row
 
 **390. Edges on the scene, on the camera, and into a cut.** (the projector
 rig or the laptop, GRAPH page)
+*Retired in place (plan 49 stage 2, 2026-11-03): the FX page is gone — where this says the FX page, use the fx section of GRAPH's side pane (check 472); a key row or a show that names FX lands there.*
 Headless: `tests/test_fx_edges.py` (params, flat → black, a vertical edge,
 threshold, glow, direction hues);
 `tests/test_fx.py::test_each_effect_changes_the_frame[edges]` and
@@ -5769,6 +5790,7 @@ stuck).
 
 **393. A half-transparent face over a bright backdrop, cut-through on and
 off.** (the projector, an opaque window)
+*Retired in place (plan 49 stage 2, 2026-11-03): the FX page is gone — where this says the FX page, use the fx section of GRAPH's side pane (check 472); a key row or a show that names FX lands there.*
 Headless: `tests/test_media_render.py::test_a_half_transparent_scene_over_white_is_honest_on_an_opaque_window`;
 `tests/test_lookback.py` (`test_cut_through_never_cuts_an_opaque_ground`,
 `test_cut_through_still_cuts_in_overlay_mode`). Also open the eight
@@ -6068,6 +6090,7 @@ under another role (row 531's role order).
 
 **400. The fx modules are gone; the FX page is not.** (laptop; PRESETS,
 FX)
+*Retired in place (plan 49 stage 2, 2026-11-03): the FX page is gone — where this says the FX page, use the fx section of GRAPH's side pane (check 472); a key row or a show that names FX lands there.*
 Headless: `tests/test_presets.py::test_the_fx_presets_are_retired`,
 `::test_an_old_fx_label_loads_quietly_and_saves_without_it`;
 `tests/test_ui_presets.py::test_more_opened_holds_a_strip_per_module_and_still_fits`;
@@ -6969,6 +6992,388 @@ checkout on a build before plan 48)
 preset 'party/TRIP'" and loads nothing, the pad still drawn as filled;
 the show opens (no schema refusal); back on this build the pad still
 loads `party / TRIP`.
+
+## BD. Decks D2: the router's sources split from its evaluator, nothing changes (plan 44)
+Register rows 590–593, 2026-11-03. Headless:
+`tests/test_deck.py::test_one_sources_fed_once_drives_two_routers_as_one_router_did`
+(one `Sources` fed once, two routers over two registries land every
+corpus preset's params as one router does, every frame),
+`tests/test_deck.py::test_a_deck_built_the_old_way_and_the_new_way_reach_the_same_state`,
+`tests/test_app_boundary.py::test_the_frame_feeds_the_shared_sources_not_the_router`,
+`tests/test_routing_boundary.py` (the import wall and the pin over
+`routing_sources.py`) and the goldens.
+**444. Every source moves the picture as on the previous build.** (Mac,
+the rig's config: the APC40, the pad, the hands if they are set up)
+1. Quit and launch (a restart: this build adds a module and a field on
+   live objects). The startup preset lands as before.
+2. Load a preset with hand, pad-stick and band routes (TRIP or TUMBLE).
+   Move a hand in the box, push each stick, play music into the mic.
+3. Turn an APC40 knob; press a pad button with a row (A, say) and a key
+   row (R).
+4. ROUTING: read the source names on the routes (`R height`, a band's
+   name, `LFO 1`); SYSTEM: the pad's feel plot while a stick moves.
+*Pass:* (2) each route moves what it moved on the previous build, as
+much; (3) the knob, the button and the key act once each; (4) the names
+read as before, the pad plot follows the stick. Fail: a route that no
+longer moves (a feed that went nowhere), a name shown as `hand:9` where
+it read `R roll`, or a red banner naming `routing_sources`.
+**445. A hot reload of the new module and of routing keeps the routes
+moving.** (Mac, after 444, a preset with a hand or stick route loaded)
+1. Open `hyperspace/routing_sources.py`, add a blank line, save; move the
+   hand or stick.
+2. The same in `hyperspace/routing.py`; move it again, and turn a knob.
+3. SYSTEM: the hot reload line.
+*Pass:* (1–2) no red banner, no error toast, the route and the knob move
+the picture after each save; (3) "hot: routing_sources …" and then
+"hot: routing …" with the time. Fail: a route that stops after a save, or
+a hot reload error naming `Sources` or `Router`.
+
+## BE. Video audio 3 of 4: the analyzer listens to the mix (plan 45 V3)
+Decision register rows 594–596. The source is `audio.mix` (AUDIO,
+*Listen to video sound*, beside the mic's button): the mixer's sum —
+after the gains and the clip — into the analyzer as mono, the mean of L
+and R. It opens no input device, and it is silent until a channel's
+`audio` is on (MEDIA). The button is a new param: **restart once** after
+updating. The sound itself is V2's (check 437): the occasional click at
+rate 1 is still expected until V4, and the bands hear the same blocks.
+**446. The bands follow a video's soundtrack, and the mic is not grabbed.** (Mac, the speakers or headphones, a show video with a clear beat)
+Headless: `tests/test_audio_mix.py` (`test_the_mix_lands_in_the_analyzers_ring_as_mono_with_the_gains_applied`,
+`test_the_bands_see_the_videos_tone_as_they_would_the_mics`, `test_the_mix_is_taken_after_the_clip`).
+1. Slot the video on channel A, wire it to an output, tick `audio` on A.
+2. AUDIO: *Listen to video sound*. Watch ANALYZER's meters and the shape.
+3. Move A's `gain` from the notch to −6 dB and to off.
+*Pass:* AUDIO says `video sound (media mix) · 48.0 kHz`; the meters and
+the shape move with the video's sound as they do with the mic — a kick
+in the soundtrack lifts the low band on the picture's hit; −6 dB is a
+weaker drive, off is the bands decaying to rest; macOS's orange
+microphone dot in the menu bar is **not** lit (no input opened). Fail:
+the bands moving with the room rather than the file point at the mic
+still open (`AudioEngine.stop` not reached); bands late against the
+picture by more than a frame or two point at the ring being drained
+late (`AudioEngine.step`).
+**447. Switching sources mid-run keeps the bands' tuning.** (Mac, a show video with sound playing on A, a WAV file, the mic)
+Headless: `tests/test_audio_mix.py` (`test_switching_sources_mid_run_detaches_the_mix_and_keeps_the_bands`,
+`test_the_audio_mix_toggle_picks_the_source_and_lets_it_go`).
+1. With video sound the source, set `master.gain` somewhere off its default
+   and change one band's attack.
+2. *Listen to mic*; then *Load track* a WAV; then *Listen to video sound*;
+   then *Stop*.
+*Pass:* each switch is clean — the mic follows the room, the WAV plays
+and the bands follow it, video sound follows the video again; the master
+gain and the band's attack are what you set throughout; the video's
+sound in the speakers never stops or clicks because of a switch; Stop
+leaves the bands at rest and the video still audible. Fail: the bands
+following the video while the mic or WAV is picked point at the mixer
+still pushing (`listen(None)` not called).
+**448. Video sound with nothing heard is silence; a channel brings it.** (Mac, a show video with sound, after one restart on this build)
+Headless: `tests/test_audio_mix.py` (`test_mix_with_nothing_heard_is_silence_not_an_error`,
+`test_a_stream_that_stops_or_stalls_is_silence_not_the_last_block_held`,
+`test_a_mixer_from_before_v3_learns_to_listen_after_a_hot_reload`).
+1. Launch with no channel's `audio` on. AUDIO: *Listen to video sound*.
+2. MEDIA: tick `audio` on A (the video playing at rate 1).
+3. Untick it; then pull the headphones or switch the output device.
+*Pass:* step 1 shows no error, the line "silent until a channel's sound
+is on (MEDIA)", the bands at rest and SYSTEM shows no `media sound` line
+(nothing opened); step 2 the bands come alive with the sound; unticked,
+the bands decay to rest (not frozen on the last block); a device change
+that stops the stream leaves the bands at rest until it reopens (5 s),
+and AUDIO says `video sound silent — error: …` in warning colour while
+it is down.
+Fail: a frozen meter after the untick points at the no-voice block not
+being pushed (`Mixer._push`).
+
+## BF. The panel fold, stage 1: the side pane always on (plan 49)
+Register rows 597–601, 2026-11-03. Headless: `tests/test_ui_pane.py`
+(the panel driver on GRAPH: each section opened by a click and a control
+found in it by its page's id, a click in a section moving the param, a
+selection in the selection section, a selection leaving the fold alone,
+the fold state through `ui.json` written after the last click, a late
+library read then, the grip holding its edge while the pane scrolls, the
+narrow band's own fold, no conflicting ids with all five open).
+A restart after pulling (a new module).
+**449. The pane is there with nothing selected, and each section is its
+page.** (Mac, the control window at its launch size, a preset loaded)
+1. Open the app on GRAPH; click the canvas's empty ground (nothing
+   selected).
+2. Unfold each section in turn — presets, lookback, faces, analyzer —
+   and open its page on the rail beside it.
+*Pass:* (1) the pane is beside the canvas, `SELECTION` at the top
+saying nothing is selected, `PRESETS` open under it. (2) each section
+shows what its page shows, in the same order and words; the spectrogram
+moves, the lookback thumbnails move. Fail: an empty pane, or a section
+missing a row its page has.
+**450. The fold is kept across a relaunch, per Mac.** (Mac)
+1. Fold presets, unfold analyzer. Drag the pane wider.
+2. Quit and relaunch; open GRAPH.
+3. On the other Mac, open GRAPH.
+*Pass:* (2) presets folded, analyzer open, the width as dragged. (3)
+the other Mac's pane as it was there (selection and presets open the
+first time). `~/Hyperspace/ui.json` holds `pane.open` and `graph.side_w`
+(and `pane.below` once the narrow band has been folded, 454).
+**451. A section's control learns and answers keys as on its page.**
+(Mac, the APC40)
+1. In the faces section, right-click **Faces** → Learn; turn a free knob.
+2. In the lookback section, right-click a slider → Learn; press a key
+   row's key that moves it (or move it from the desk).
+*Pass:* (1) the knob turns the faces on and off; the ROUTING page shows
+the row. (2) the slider in the section follows. Fail: the graph's menu
+opens instead of the param's, or nothing is armed.
+**452. Open sections share the pane; a selection leaves the fold alone.**
+(Mac)
+1. Open presets and analyzer, fold selection. Click a node.
+2. Unfold selection. Press Esc.
+3. Unfold lookback and faces too (all five open); scroll the pane to its
+   foot; drag the grip on its left edge.
+*Pass:* (1) selection stays folded, its header naming the node; presets
+and analyzer share the pane's height, each scrolling by itself, the
+presets list still a list. (2) the node's details, then words saying
+nothing is selected; the fold stays open. (3) the pane scrolls to a
+fixed foot (it does not keep growing), and the grip resizes it from its
+drawn edge, scrolled or not.
+**453. The presets section at 320 px.** (Mac, the pane at its narrowest)
+1. Drag the pane to its narrowest. In the presets section, step ◀ ▶,
+   click a row, **save**, **as…** (type a name, Enter).
+2. In the show line: **open ▾**, **save**.
+*Pass:* (1) the strip fits — its name cut short, the chips flush right,
+nothing past the pane's edge; each action does what it does on the
+PRESETS page; with a preset that wants a device the rig lacks, **N
+devices missing** sits beside ▶ or on its own row under the strip,
+never over **new**. (2) the show line's chips on a second row, each
+working.
+**454. A narrow window puts the pane under the canvas.** (Mac)
+1. Make the control window narrow (under 720 px of page).
+2. In the band, fold selection and unfold presets; widen the window
+   past 720 px of page, then narrow it again.
+3. Click **details beside**, then **details below**.
+*Pass:* (1) the pane is a band along the canvas's bottom, its five
+headers one row of chips, selection alone open and taking the band's
+height, the chip on the head with nothing selected. (2) the band shows
+presets alone, the whole band; wide, the column keeps its own folds;
+narrow again, the band's come back. (3) the chip moves it beside and
+back. Fail: the canvas re-centres its nodes as the pane moves.
+**455. The held projector's inset sits clear of the pane.** (Mac, plan
+38's HOLD on)
+1. Hold the projector. Look at the canvas's top-right corner.
+2. Narrow the control window (the pane a band under the canvas).
+*Pass:* (1) the red-framed PROJECTOR inset is left of the pane, whole;
+the pane's headers are not covered. (2) the inset stays above the band,
+smaller if it must, never over its chips.
+
+## BG. Two test runs at once take turns (wave 2 I1)
+Register rows 605–606, 2026-11-03. Headless: `tests/test_live_lock.py`
+(two processes; an inner `-n 2 --dist load` run whose two live tests run
+one after the other). Nothing of the app changes.
+**456. Two runs at once on the shared Mac: the live tests take turns,
+neither hangs.** (the Mac, two terminals in two checkouts on this build,
+no other test run going)
+1. In both terminals at once:
+   `cd hyperspace-python && uv run pytest -q -n 4 -p no:cacheprovider`
+   (the fast tier). Wait for both.
+2. In both at once:
+   `uv run pytest -q -n 4 -p no:cacheprovider -m live -rs`
+   (the live tier: Syphon, NDI, the camera list, Vision, torch, the
+   dream). Note each run's time; then run it once alone for comparison.
+*Pass:* (1) both end with "passed" and the same count, in about a
+minute and a half each; neither sits at 99 %. (2) both end; every live
+test passes in each, or a few skip with "another test run holds the live
+devices (xdist-…) past 60 s" (the other run's id, never this run's);
+at least one of the two takes clearly longer than the run alone (it
+waited its turns; the wait is not in `--durations`, it is outside the
+test's timing) and no NDI or Syphon loopback fails. Fail: a run sits at 99 % for minutes
+(kill it, ENGINEERING §16's recovery), a loopback fails in one run while
+the other runs, or "worker 'gwN' crashed".
+
+## BH. Shift-drag fine mode in the panel (wave 2 T2)
+Decision register rows 607–608 (after row 561). A panel gesture: hold ⇧
+while dragging a continuous slider or fader and it moves a tenth as far.
+Nothing is saved; a save of `ui.py` carries it (no restart).
+**457. A fine drag lands a tenth, lets go without a jump, undoes in one.** (laptop, no hardware)
+Headless: `tests/test_ui_fine.py`.
+1. VIEW: drag *Brightness* left to right a hand's width; note how far the
+   readout moved. Put it back.
+2. Hold ⇧, press on the fader (anywhere), drag the same hand's width.
+3. Mid-drag, still holding the button, let ⇧ go; keep dragging.
+4. Release the button; ⌘Z once.
+5. Hold ⇧ and press on *Field depth* (a lattice, 12 copies) away from its
+   grab; drag a little.
+*Pass:* (2) the press does not jump the grab to the mouse, and the
+readout moves about a tenth of (1)'s distance, a detent at a time; (3)
+nothing jumps when ⇧ is let go, and the drag goes back to full speed
+from where it was; (4) one ⌘Z puts Brightness back where (2) started;
+(5) the same on an untapered slider: no jump at the press, a slow walk.
+Fail: a jump to the mouse at (2) or (3) points at the take-over
+(`Panel._fine`'s first frame); two ⌘Z needed points at a drag that
+paused past `undo.SETTLE_S` (row 43), not this.
+**458. The word FINE, and what fine mode leaves alone.** (laptop, no hardware)
+Headless: `tests/test_ui_fine.py`.
+1. Hover *Field depth*, then hold ⇧ still hovering.
+2. Still holding ⇧, hover *Instances*; ⇧-click *Fit*; ⇧-click on the
+   *Shape* menu.
+3. ⇧-drag *Field depth* and pull the mouse up off the slider while
+   dragging.
+*Pass:* (1) the tooltip is the param's tip, then leads with `FINE · ⇧
+held: a drag moves a tenth as far` while ⇧ is down; (2) Instances shows
+no FINE and slides as it always did (an integer), Fit toggles, the menu
+opens — ⇧ changes nothing on them; (3) the FINE tooltip stays while the
+drag goes on off the track. Fail: a route's depth on ROUTING not going
+fine is expected (row 608: not reached yet).
+
+## BI. FINE: SEND B held, a knob a tenth as far (wave 2 T3)
+Register rows 609–610. Headless: `tests/test_midi.py` (the fine
+section: a synthetic encoder that the host's rings re-base). Restart
+the app after pulling (a new field on the adapter).
+**459. Held, a knob creeps; let go, it is coarse again.** (Mac, the APC40)
+1. Load any preset. Turn K4 (pattern mix) a few detents and watch its
+   readout on the panel.
+2. Hold SEND B. Turn K4 ten detents up, slowly; then a few down.
+3. Still holding, turn D4 (pattern) a detent; then move the crossfader.
+4. Let go of SEND B.
+*Pass:* (2) SEND B lights while held; ten detents move the readout about
+as far as one detent did in (1), smoothly, and the ring creeps a step
+every ten or so; (3) the pattern steps as it always does and the
+crossfader dims as always (neither is fine); (4) SEND B goes dark. The
+desk log (SYSTEM) has the press. Fail: the value jumps on the first fine
+detent, or nothing moves.
+**460. After letting go, the knob carries on from where the value is.**
+(Mac, the APC40)
+1. Hold SEND B and turn K4 twenty detents up (two coarse steps' worth).
+2. Let go of SEND B; turn K4 one detent up, then one down.
+3. Unplug the APC40's USB while holding SEND B; plug it back in; let go.
+*Pass:* (2) the first detent moves the value by one ordinary step from
+where fine left it — no jump of twenty steps back to where the knob had
+wandered — and the second brings it back about as far; (3) after the
+reconnect SEND B is dark and K4 is coarse. Fail: a jump on the first
+detent, or K4 dead until turned a long way (that is soft pickup: say so —
+hand check 31's re-base did not happen).
+
+## BK. The panel fold, stage 2: every page a section, the FX page retired (plan 49)
+Register rows 626–632, 2026-11-03. Headless: `tests/test_ui_pane.py`
+(each stage-2 section opened alone at 240 px and 320 px, its page's
+control found inside the pane and nothing past its edge; MEDIA four to
+a row and SEQ eight across at 240 px; the redrawn lookback section; the
+FX page retired into the fx section; focus; the SYSTEM cost line; all
+twelve open with no conflicting ids), `tests/test_lookback.py` (the two
+nodes, every `dream.*` param once), `tests/test_fx.py` (the browser at
+the panel's size). A restart after pulling (new Panel methods and
+fields; `ui_pane` imports four more pages).
+**471. Each new section is its page.** (Mac, the control window at its
+launch size, a preset with effects, media and a sequence loaded)
+1. On GRAPH unfold, one at a time: fx, media, lfo, seq, audio, camera,
+   output; open its page on the rail beside it (fx has none).
+2. In each, move one control (a slider, a tick, a step).
+*Pass:* (1) each shows what its page shows, in the same order and
+words, folded at first; (2) the picture, the clock or the sound answers
+as from the page, and the page shows the move. Fail: a section missing
+a row its page has, or a control that does nothing there.
+**472. The FX page is gone; FX still lands on the effects.** (Mac)
+1. Look down the rail.
+2. Select an effect node on the canvas; in the selection section click
+   **open on FX**.
+3. Fold fx; then press a key or pad row that sets the page to FX (or
+   learn one: right-click a rail pill → its menu, if a row is set up).
+*Pass:* (1) no FX pill; AUDIO … SYSTEM where they were. (2)/(3) GRAPH,
+the fx section unfolded and at the pane's top, the effect's row lit; it
+stays unfolded after a relaunch. Fail: a blank page, or another page
+opens.
+**473. MEDIA in the narrowest pane.** (Mac, the pane dragged to its
+narrowest)
+1. Unfold media alone. Pick a library item; click a cell of channel F;
+   right-click it; click a cell with nothing picked.
+*Pass:* channels A–D over E–H, each picture, playhead and bin legible
+at arm's length; the item lands in F's cell, empties, then cues; the
+library's **Add file…** on its own row; nothing past the pane's edge.
+**474. SEQ in the narrowest pane.** (Mac, the APC40 on its seq page)
+1. Unfold seq alone at the pane's narrowest. Toggle steps 1 and 8 of
+   lane 2; set length 6 on the numbers; mute lane 3; pick env 2 on lane 1.
+2. Open an envelope strip.
+*Pass:* (1) the eight steps across, thin but aimable, the APC's grid
+lighting the same; the beat light and step under the transport; (2) the
+shape over its knobs, every knob reachable. Fail: a cell past the edge.
+**475. LFO strips in the narrowest pane.** (Mac)
+1. Unfold lfo alone at the narrowest; change an LFO's shape and sync;
+   **reset**; add a fifth LFO (+ lfo) so they fold.
+*Pass:* the scope over its knobs, the pickers and **reset** on one
+line; the folded lines' bars shortened, the chevron and **+ lfo** inside.
+**476. LOOKBACK reads as the two nodes.** (Mac, the owner's eye; the
+dream worker on)
+1. Open the LOOKBACK page; then on GRAPH unfold the lookback section,
+   beside and at the pane's narrowest.
+2. Untick the dream on its head. Load a preset with no dream node.
+*Pass:* (1) a **LOOK-BACK** head (picture in → trail out) over what it
+records, its knobs and its echoes; a **DREAM** head (picture in →
+dreamed picture out) over the worker's line beside the dream buffer, the
+layer and its knobs; a line saying the dream is graded by the
+look-back's darken and contrast. The page and the section the same.
+(2) the head says off and the picture passes through; with no dream
+node its head says not on the canvas. *Fail:* it still reads as three
+sections, or a knob under the wrong node.
+**477. OUTPUT and AUDIO in the narrowest pane.** (Mac, two outputs)
+1. Unfold output alone: tick picture / hands / through on each block,
+   flip X; untick fullscreen.
+2. Unfold audio: **Listen to video sound**, **Load track**, play,
+   restart.
+*Pass:* the ticks under each block's name, wrapped, the flips on their
+own row; the audio buttons wrapped, each working; nothing past the edge.
+**478. Twelve open, and what they cost.** (Mac)
+1. Unfold every section; scroll the pane to its foot and back.
+2. Open SYSTEM.
+*Pass:* (1) the pane scrolls, each body by itself, the canvas smooth;
+(2) under GRAPH's draw time a "side pane: …" line, the dearest first,
+listing the sections that were on screen. Fail: GRAPH's draw time grown
+past what SYSTEM showed with two open by more than the line says.
+**479. The narrow band's twelve chips.** (Mac, the control window narrow)
+1. Narrow the window (the pane a band under the canvas); unfold seq in
+   the band.
+*Pass:* the headers wrap to two or three rows, all inside the band; the
+seq section takes the band's height below them.
+
+## BL. Preset folders, stage 2: the tree (plan 48)
+Register rows 636–638, 2026-11-03. Headless:
+`tests/test_ui_presets_tree.py` (the panel driver on the PRESETS page:
+the tree's order and nesting, a header folded by a click and kept in
+`ui.json` beside the pane's, **move to ▸** and a drag onto a header
+moving a file with its bytes kept and F6 following, a folder renamed and
+made from its menu, an empty folder removed and a full one refused),
+`tests/test_library_folders.py` (`Library.move`, `make_folder`,
+`rename_folder`, `remove_folder` over a temp library and machine home)
+and the tools over a nested library (`tests/test_move_library.py`,
+`tests/test_migrate_library.py`). Both Macs on this build first (row 585).
+**481. The list is a tree, and a fold is this Mac's.** (Mac A and Mac B,
+the shared library with a folder or two in `presets/`)
+1. On Mac A, open the PRESETS page; then GRAPH, its pane's presets section.
+2. Click a folder's header to fold it. Load a preset from another folder,
+   then one from inside the folded folder by a pad.
+3. Quit and relaunch Mac A; look at Mac B's list.
+*Pass:* (1) the top-level presets first, then one header per folder
+(`party  ·  2`), alphabetically, each folder's presets by their names
+alone under it, a nested folder indented under its parent; the same
+tree on the page and in the pane. (2) the folder's rows go; with its
+preset loaded the header ends `· TRIP`. (3) Mac A still has it folded;
+Mac B's is open. Fail: a folder's preset listed at the top as well.
+**482. Move a preset into a folder; the pad and the other Mac follow.**
+(Mac A and Mac B, the APC40 on Mac A, a preset on a pad)
+1. On Mac A, right-click the preset on F6's pad → **move to ▸** → a folder.
+2. Drag another top-level preset onto a folder's header.
+3. Tap F6. Save the show. On Mac B, reopen the show and tap F6.
+4. Move the first one back: right-click → **move to ▸** → *top level*.
+*Pass:* (1) the row moves under the header; the footer says "moved ACID
+→ party/ACID (n shows updated)"; the show's dot does not light; in
+Finder the file is in `presets/party/`, the same size as before
+and nothing left at the top. (2) as (1), into that folder. (3) both Macs load it
+from F6. (4) back at the top, F6 still loads it. Fail: F6 says "no
+preset", or a copy left behind at the top.
+**483. Make, rename and remove a folder.** (Mac A and Mac B)
+1. **new folder** at the list's foot: type `ambient`, Enter. Right-click
+   its header → *new folder inside…*: `slow`, Enter.
+2. Move a preset on a pad into `ambient/slow`. Right-click `ambient` →
+   *rename folder…*: `chill`, Enter. Tap the pad.
+3. Right-click `chill` → *remove folder* (off while it holds anything);
+   move the preset out, remove `chill/slow`, then `chill`.
+*Pass:* (1) both headers, `slow` indented under `ambient`; both in
+Finder under `presets/`. (2) the header reads `chill`, the preset under
+`chill / slow`, the pad loads it; Mac B sees `chill` after Drive syncs.
+(3) remove is greyed with a hover saying why; once empty each goes, from
+Finder too. Fail: any preset file gone with a folder.
 
 ## What no test covers
 

@@ -10,7 +10,8 @@ imgui context and GlfwRenderer. Keys are polled, not callback-driven, so
 they work from whichever window is focused (the control window defers to
 imgui while it is typing); the mouse orbits, pans and zooms in the render
 window only. overlay.py owns where the render window goes (screen,
-fullscreen, overlay) through the output.* params.
+fullscreen, overlay) through the output.* params. ``hyperspace --laptop``
+(or ``--single``) launches for one screen with no projector (config.laptop).
 
   ← / →  shape      space  pause      P  points     R  reset view
   [ / ]  brightness , / .  speed      1–6  planes   H  panel
@@ -49,6 +50,7 @@ it calls.
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import os
 import shutil
@@ -80,6 +82,7 @@ from . import (
     gamepad,
     lfo,
     placement,
+    poi,
     replay,
     tempo,
     totem,
@@ -1147,6 +1150,11 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     and the loop goes on, so the next save can fix it. `imgui.new_frame()`
     has already run (main): `keys.typing` is this frame's value."""
     reg, keys, router, reloader = h.reg, h.keys, h.router, h.reloader
+    # the router's shared half (routing_sources.Sources, plan 44 D2): where
+    # the audio lanes' names and the devices' feeds go — the router's own,
+    # so the pad's lanes (fed through the router in `devs.poll`) and every
+    # other feed land in one place
+    sources = router.sources
     h.clock.tick(now)   # the clock's "now" for the frame: a trigger and the LFO step agree
 
     # the chain object is recreated on source attach; keep bindings fresh
@@ -1248,13 +1256,13 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     try:
         audio = h.audio
         audio.step(dt)
-        audio.publish(router)       # the lanes' names, like every source (R8)
+        audio.publish(sources)      # the lanes' names, like every source (R8)
         chain = audio.chain if audio.on else None
         if devs is not None:
             # the devices' feeds: the hands feed `hand` (and complete a
             # hand Learn), the bridge feeds `ext` (its out half is a sink,
             # below) — each guarded by the registry, the first error the toast's
-            devs.feed(router)
+            devs.feed(sources)
             if devs.error and ok:
                 ok, reloader.runtime_error = False, devs.error
         # the lanes are a modulation source like any other (routing.py);
@@ -1330,15 +1338,33 @@ def _hot_error_toast(msg: str) -> None:
     imgui.end()
 
 
-def main() -> None:
+def _args(argv: list[str] | None = None) -> argparse.Namespace:
+    """The command line. ``--laptop`` (or ``--single``): no projector on
+    this machine — config.laptop reads the rig's config for one screen."""
+    p = argparse.ArgumentParser(prog="hyperspace", description="Real-time 4D polytope visualizer.")
+    p.add_argument("--laptop", "--single", action="store_true",
+                   help="one screen, no projector: the render output is a plain window "
+                        "(no fullscreen, no overlay, no later outputs) and the controls "
+                        "come to the front; the rig's remembered window spots are "
+                        "neither used nor overwritten")
+    return p.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = _args(argv)                    # before GLFW: --help prints and exits here
     if not glfw.init():
         raise SystemExit("GLFW failed to initialise")
     cfg = config.load()                   # before the windows: [output] overlay is a creation hint
+    if args.laptop:
+        config.laptop(cfg)
     home = library_home()                 # the folder config.load has just ensured
     # the render outputs (plan 21 WP3: one per [[output.screens]] entry, one
-    # with no list) and the controls; output 1's window is the render window
-    slots, ctrl_win = _windows(_overlay_allowed(cfg), cfg, home)
+    # with no list) and the controls; output 1's window is the render window.
+    # On a laptop the rig's windows.json is not read: its spots are the rig's
+    slots, ctrl_win = _windows(_overlay_allowed(cfg), cfg, None if args.laptop else home)
     render_win = slots[0].win
+    if args.laptop:
+        glfw.focus_window(ctrl_win)       # the controls in front of the render window
 
     # the render side: moderngl on output 1's context, vsynced — it renders
     # every output's frame (fork F12) and paces the loop (fork F6)
@@ -1441,6 +1467,15 @@ def main() -> None:
         totem.register(reg, totem.TotemState())
         if totem.configured_on(cfg):
             reg["totem.on"].set(True)
+        # the Joy-Con as a poi's handle (plan 47, the poi): likewise; its
+        # dials start from `[poi]` (weight, length, spring, gravity, drag,
+        # hand, depth), the only way they outlast a launch
+        poi_cfg = poi.configured(cfg)
+        swing = poi.PoiState()
+        poi.register(reg, swing, poi_cfg)
+        renderer.poi_source = swing          # its guide over the outputs (poi_guide.py)
+        if poi_cfg.get("on") is True:
+            reg["poi.on"].set(True)
         # after attach, before the router: its ui.* params are the last a
         # launch declares before the table's rows resolve; `output` is what
         # the outputs hook returned
@@ -1478,7 +1513,9 @@ def main() -> None:
 
         def point_at_devices() -> None:
             panel.midi = rig.adapter("midi")         # the first desk listed: the APC40's page
-            panel.pad = rig.adapter("gamepad")       # the menu's "Learn pad"
+            # the pad window's and the menu's "Learn pad": the first pad
+            # with a controller behind it now, re-picked on every connect
+            panel.pad = rig.live_adapter("gamepad")
             panel.hands = rig.adapter("hands")
             renderer.ghost.source = panel.hands      # no tracker, nothing draws
             router.follow_devices()                  # the MIDI roles and row schemes, again
@@ -1614,6 +1651,8 @@ def main() -> None:
         return [*(sl.win for sl in slots[1:]), ctrl_win, render_win]
 
     def save_windows() -> None:           # both exits: quit below, ⌘R in _restart
+        if args.laptop:                   # the rig's spots are kept for the rig
+            return
         _save_windows(home, render_win, ctrl_win, output, [sl.output for sl in slots[1:]])
 
     # the flat handles are the deck's (plan 44 D1), so `frame` is unchanged

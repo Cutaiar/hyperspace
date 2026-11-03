@@ -767,3 +767,44 @@ def test_todays_rig_as_a_devices_list_equals_the_old_tables(tmp_path, capsys):
         assert a[key] == b[key], key
     assert b["midi"]["port"] == "APC40" and b["hands"]["enabled"] is False
     assert capsys.readouterr().err.count("[midi] is now") == 1
+
+
+class _Pad(Fake):
+    """A pad entry whose controller comes and goes (`io.on`), its status
+    the pad device's: connected while one is behind it, lost while not."""
+
+    kind = "gamepad"
+
+    def __init__(self, role, log, on=False):
+        super().__init__(role, log)
+        self.io = SimpleNamespace(on=on)
+
+    def open(self) -> None:
+        self._hit("open")
+
+    @property
+    def status(self) -> str:
+        return "connected" if self.io.on else "lost"
+
+
+def test_the_pad_picture_follows_a_controller_connected_after_launch():
+    """A generic `pad` entry listed before a Joy-Con's, no controller at
+    launch: the pad window draws the first entry. The Joy-Con connects:
+    its status change re-runs the listeners and the live pick is it, not
+    the empty entry before it; it leaves, the first again."""
+    log: list[str] = []
+    generic, joy = _Pad("pad", log), _Pad("joy", log)
+    reg = devices.DeviceRegistry(devices=[generic, joy])
+    reg.entries = [{"role": r, "kind": "gamepad", "enabled": True} for r in ("pad", "joy")]
+    panel = SimpleNamespace(pad=None)
+    reg.listeners.append(lambda: setattr(panel, "pad", reg.live_adapter("gamepad")))
+    reg.open_all()
+    assert panel.pad is generic.io and reg.adapter("gamepad") is generic.io
+    reg.poll(1 / 60, 0.0)
+    joy.io.on = True                                      # the Joy-Con pairs
+    reg.poll(1 / 60, 0.0)
+    assert panel.pad is joy.io
+    assert reg.adapter("gamepad") is generic.io           # the plain pick is unchanged
+    joy.io.on = False
+    reg.poll(1 / 60, 0.0)
+    assert panel.pad is generic.io

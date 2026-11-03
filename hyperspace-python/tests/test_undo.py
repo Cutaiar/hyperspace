@@ -54,14 +54,16 @@ class FakeOut:
         self.sent.append(msg)
 
 
-def boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None):
+def boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None, sources=None):
     """app.main's construction order, headless, over `home` — seeded with
     the corpus first (conftest.seed: the shipped presets and the party
     show, which the home then opens with its startup preset, TUMBLE).
     The deck is `Deck.build`'s, the one order `app.main` runs too (plan 44
     D1); the rig around it is stand-ins: no GL (no renderer, no hold), a
     namespace for the audio engine, a bare `Output`, the panel's params
-    without imgui, and one `MidiIO` over fake ports."""
+    without imgui, and one `MidiIO` over fake ports. `sources`: shared
+    sources (routing_sources.Sources) for the deck's router to read, as a
+    second deck's would (plan 44 D2); None, its own."""
     seed(home)
     if show:
         opened_last(home, show)
@@ -106,9 +108,12 @@ def boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None):
 
     deck = Deck.build(library=lib, control=control, audio=audio, table=load_table,
                       dream=dream, fx=fx, ghost=ghost,
-                      clock=tempo.Clock(now=lambda: r.t), lfos=lfo.LFOs(seed=1),
+                      # shared sources bring their one clock (plan 44 §2)
+                      clock=(sources.clock if sources is not None and sources.clock
+                             is not None else tempo.Clock(now=lambda: r.t)),
+                      lfos=lfo.LFOs(seed=1),
                       hands=hands_setup, outputs=outputs_setup, panel=panel_setup,
-                      devices=devices_setup)
+                      devices=devices_setup, sources=sources)
     r.__dict__.update(lib=lib, reg=deck.reg, view=deck.view, control=control, chain=chain,
                       audio=audio, router=deck.router, table=deck.table, presets=deck.presets,
                       clock=deck.clock, lfos=deck.lfos, learn=deck.learn, inp=inp,

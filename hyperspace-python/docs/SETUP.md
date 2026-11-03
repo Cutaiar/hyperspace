@@ -22,6 +22,15 @@ uv sync               # everything, including torch for the dream, Apple Vision 
 uv run hyperspace     # opens the render window and the control window
 ```
 
+On a machine with no projector or second screen — working on the panel,
+the graph and the output preview from a laptop — launch with
+`uv run hyperspace --laptop` (or `--single`). The rig's config is read
+as for one screen: the render output opens as a plain window, never
+fullscreen or floated as the overlay at launch (the panel and T still
+can), later `[[output.screens]]` outputs are not opened, the controls
+come to the front, and the rig's remembered window spots
+(`windows.json`) are neither used nor overwritten.
+
 `uv sync` also fetches Ultraleap's `leap` wrapper from GitHub (pinned to
 one commit in `pyproject.toml`) and compiles its `leapc_cffi` module from
 `vendor/leapc-cffi` (upstream's at the same commit, patched to build

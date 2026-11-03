@@ -1141,6 +1141,12 @@ class Renderer:
         # registry (app hands it over; duck-typed: `clouds` and its
         # devices' kinds). None: no cloud is drawn
         self.cloud_source = None
+        # plan 47, the poi: its state (`poi.PoiState`, handed over by app),
+        # whose handle, string and weight the guide draws over each output
+        # that shows the hands (`poi_guide.PoiGuide`, made on first use).
+        # None: nothing is drawn
+        self.poi_source = None
+        self.poi_guide = None
         # plan 36 T1: whoever holds the rig's own wires (the open show,
         # `library.Project.rig`, by `app`); None: every bus cable standing
         self.rig_source = None
@@ -1669,6 +1675,7 @@ class Renderer:
         # while something still asks for them
         self._frame_size = size
         self._prune_sized()
+        self._poi_layer(s, size, target, vp)
         graph = self._graph_for(views)
         # plan 34 D: each delay's pair turns — last frame's write is now
         # what its delay reads
@@ -1706,6 +1713,32 @@ class Renderer:
             timer.end_frame(graph.timed_in(frame))
             stats["gpu_ms"] = timer.medians()
             stats["gpu_note"] = timer.note
+
+    def _poi_layer(self, s: ViewState, size: tuple[int, int], target, vp) -> None:
+        """The poi's guide for this frame (plan 47), drawn once into its
+        own layer before the graph runs, laid over each output by
+        `_compose`. Nothing — no GL touched — with no poi, or the poi or
+        its guide off. A failure is the guide's alone: it is dropped for
+        the frame and the frame goes on."""
+        state = getattr(self, "poi_source", None)
+        guide = getattr(self, "poi_guide", None)
+        if state is None or not getattr(state, "on", False):
+            if guide is not None:
+                guide.shown = False
+            return
+        try:
+            if guide is None:
+                from .poi_guide import PoiGuide
+                guide = self.poi_guide = PoiGuide(self.ctx)
+            if guide.layer(size, s, state):
+                target.use()
+                self.ctx.viewport = vp
+        except Exception as e:  # noqa: BLE001 — the guide must not take the frame down
+            if guide is not None:
+                guide.shown = False
+                guide.error = f"poi guide: {type(e).__name__}: {e}"[:160]
+            target.use()
+            self.ctx.viewport = vp
 
     def _graph_for(self, views: list[View], s: ViewState | None = None) -> Graph:
         """The render graph for these views: the last one while their count
@@ -2201,6 +2234,17 @@ class Renderer:
                     rg.composite_readout(tgt, inner, opaque=opaque, flip=flip)
             except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
                 self._hands_failed(e, tgt, rect)
+        # plan 47: the poi's guide over the hands, on an output that shows
+        # them (its hands switch mutes it too), never through the effects
+        guide = getattr(self, "poi_guide", None)
+        if guide is not None and guide.shown and bool(getattr(v.switches, "hands", True)):
+            try:
+                guide.lay(tgt, inner, opaque=opaque, flip=flip)
+            except Exception as e:  # noqa: BLE001
+                guide.shown = False
+                guide.error = f"poi guide: {type(e).__name__}: {e}"[:160]
+                tgt.use()
+                ctx.viewport = rect
         # the dim, after everything: the scene, the look-back, every effect
         # and the hands dim alike, and the history and the dream worker
         # never hold it. At 1 the pass does not run and the frame is

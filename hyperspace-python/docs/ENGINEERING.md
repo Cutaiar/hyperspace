@@ -1805,7 +1805,7 @@ the panel at 540 and the desk takes what is left.
 | CAMERA | Zoom (0.005–200×, log, so 1× sits at the knob's noon — far enough out to frame a field of thousands), yaw, pitch, pan, reset. |
 | LOOKBACK | The look-back switch and three sections: ECHOES, DREAM, BOTH (§2). |
 | FX | The effect stack (§2). |
-| AUDIO | Listen to mic / Load track / Stop, the device and **rescan**, the transport, the master faders (gain, dynamics, trim). |
+| AUDIO | Listen to mic / Listen to video sound (the media mix, plan 45 V3) / Load track / Stop, the device and **rescan**, the transport, the master faders (gain, dynamics, trim). |
 | ANALYZER | The band scene and Reset all, the meters, the band editor (spectrogram with the bands over it, the selected band's strip). |
 | ROUTING | One page over the loaded preset: a pointer to GRAPH (where the routes and the modifiers are edited since plan 28 N7), desk rows, macros, the session's MIDI rows read-only, the sinks, and a filter (§9). |
 | GRAPH | Both graphs on one canvas — devices, the analyzer, LFOs, modifiers, macros, params under their render nodes, the render graph, the outputs — laid out in titled areas by concern, every node collapsed by default, one wire a node pair, the idle macros off the canvas; the routes and the modifiers are edited here (below). |
@@ -2270,6 +2270,7 @@ doing its job while a learn is armed.
 | STOP ALL | invariant | Reset all bands |
 | DEVICE ON/OFF · DETAIL | invariant | panel · cheat sheet |
 | MASTER select · PAN | invariant | overlay · overlay click-through |
+| SEND B | both (the adapter's, not a row) | **FINE**: held, every knob moves its param a tenth as far (lit while held); let go, each knob carries on from its param. A row put on SEND B takes it over |
 | D1–D8 | global | the selected band's strip: trim, contrast, transient, pre, post, attack, decay, threshold |
 | K1–K5 | global | hand steadiness, response, catch, the selected axis's return, BPM (K6–K8 dark) |
 | S1–S6 · S7 · S8 | global | band 1–6 post-drive · master dynamics · master trim (`apc40.SHIFT_FADERS`) |
@@ -3148,7 +3149,7 @@ uv run ruff check .
   time, and leaves `--all`, the goldens and `tests/test_media_live.py`
   to whoever merges.
 - **A hung test fails by name.** pyproject's addopts carry
-  `--timeout=120 --max-worker-restart=0` and its ini key
+  `--dist load --timeout=120 --max-worker-restart=4` and its ini key
   `timeout_method = "thread"`. **Workers use the thread method, a
   serial run the signal method** (conftest's `pytest_configure`, unless
   the run names one: `--timeout-method` or `-o timeout_method=`). A test blocked inside a C call (`glfw.init()`, a
@@ -3176,22 +3177,55 @@ uv run ruff check .
   without it `load` hands the queue to the replacement and `loadgroup`
   stalls (`sample` showed the replacement waiting on its channel for
   work, not in a modal, after the reopen-windows alert below was
-  cleared). So today's `loadgroup` keeps the cap: any crash, even a
-  transient one, ends the run and leaves the dead worker's queue unrun
-  — the summary looks finished, so compare the count with a clean
-  run's (an `--all` with a crash of
-  `test_segment.py::test_vision_frees_each_jobs_memory` said "4297
-  passed" against 4902) — which is cheaper than a run that never ends.
-  `load` without the cap is the follow-up (row 589, "Other options").
-- **Live tests take turns across processes.** Within a run
-  `xdist_group("live")` gives every `live` test to one worker; across
-  runs (two sessions, two worktrees) the autouse fixture
-  `_live_devices_take_turns` holds an `fcntl.flock` on
+  cleared). Under `loadgroup` (wave 1) the cap was 0: any crash ended
+  the run and left the dead worker's queue unrun (an `--all` with a
+  crash of `test_segment.py::test_vision_frees_each_jobs_memory` said
+  "4297 passed" against 4902). **Since row 605 (2026-11-03) the
+  scheduler is `load` with a cap of 4**: a crash or a hang costs its
+  one test and the replacement takes the queue; a fifth ends the run
+  (re-measured, `--dist load`: cap 0 "1 failed, 30 passed" at `-n 2`
+  and "1 failed, 31 passed" at `-n 4`; cap 4 "1 failed, 40 passed" at
+  both; six crashing tests under cap 4 at `-n 2` "6 failed, 39
+  passed", the run ended, one test lost after the fifth crash). So a
+  run that crashed still shows a count to compare with a clean run's,
+  and a recurring hang ends it rather than stalling it.
+- **Live tests take turns, across workers and across processes.**
+  `--dist load` hands a test to any worker, so nothing in xdist keeps
+  two `live` tests of one run apart (the old `xdist_group("live")` only
+  worked under `loadgroup`, and is gone): conftest's
+  `pytest_runtest_protocol` wrapper holds an `fcntl.flock` on
   `$TMPDIR/hyperspace-tests-live-<uid>.lock` (`tests/live_lock.py`) for each
-  live test's setup, call and teardown. It waits at most
-  `live_lock.WAIT_S` (60 s) and then skips with "another test run holds
-  the live devices"; the kernel drops the lock when a worker dies.
-  `tests/test_live_lock.py` proves it with two processes. The file is
+  live test's whole protocol (setup, call, teardown), for two workers of
+  one run and for two runs (two sessions, two worktrees) alike. It is
+  the outer wrapper (tryfirst), outside pytest-timeout's, so **the wait
+  is not timed**: a test gets its 120 s after its turn comes. The holder
+  writes `<run id>:<pid>` (xdist's `testrunuid`, or `pid-<n>` serially)
+  into the file once it holds the lock, and clears it before letting
+  go, so an empty file under a held lock is a holder that names no run
+  (an older build's). A waiter waits **without bound behind a live
+  worker of its own run** (that holder's own timeout bounds each turn,
+  so a run never skips its own live tests), at most `live_lock.WAIT_S`
+  (60 s) behind another run's holder ("another test run holds the live
+  devices (<id>) past 60 s") and `live_lock.RUN_WAIT_S` (90 s) behind
+  one that names no run, or names this run with a pid that is gone ("a
+  test run that names no run id …"); each holder's time is counted on
+  its own, and the skip happens in `pytest_runtest_setup`. A live test
+  its skip / skipif marks skip, or one with a fixture wider than the
+  test, takes no turn at all (an `importorskip` or a fixture's skip
+  cannot be known before setup: those still queue once). The kernel
+  drops the lock when a worker dies. `-m live -n 4` under `load`: "35
+  passed in 39.34s" (measured with the earlier, timed wait: the longest
+  22.8 s). `tests/test_live_lock.py` proves it with two processes, with
+  an inner `-n 2 --dist load` run whose two live tests run one after
+  the other (without the run's id the second skipped), and with a test
+  that waits 2 s for its turn under `--timeout=1` and passes. A live
+  test may not use a fixture wider than the test (module, class,
+  package or session scoped, bar pytest's own deviceless ones): it
+  would be set up before the lock, outside it, so `pytest_runtest_setup`
+  fails that test by name before any fixture is set up (after its skip
+  marks: a skipped one is a skip, not an error), without taking the
+  lock (`_wide_fixtures`; under xdist too, the rest of the run goes on,
+  and a deselected test is never looked at); none does today. The file is
   per account (`hyperspace-tests-live-<uid>.lock`); a lock file that
   cannot be opened or locked is a skip with the reason, never an error.
   The folder is `tempfile.gettempdir()`, so a session whose `TMPDIR`
@@ -3235,6 +3269,18 @@ uv run ruff check .
 - No test reaches the machine's MIDI: the autouse fixture
   `_no_real_midi` makes the port lists empty and every open raise,
   unless a test patches `mido` itself.
+- No test reads the machine's GLFW joysticks: the autouse fixture
+  `_no_real_joysticks` makes `glfw.joystick_present` say no and the
+  GUID, buttons, hats and axes empty, unless a test patches the getter
+  itself. Before `glfw.init()` the real getters say nothing anyway;
+  after a real-GL test in the same worker has called it, they read the
+  Mac's pad on index 0 (a Joy-Con (L) on 2026-11-03), and
+  `test_pads_hid.py::test_an_xbox_pad_has_no_extras_and_a_simple_report_none`,
+  which faked the buttons but not the GUID, read the Joy-Con's model and
+  failed after `test_ui_pad.py::test_the_drawings_show_upright_through_real_gl`
+  (row 606). The source is fixed too: a test that calls `glfw.init()`
+  calls `glfw.terminate()` when it is done (that test does now); the
+  guard stays as the belt.
 - One test is skipped:
   `tests/test_hands_tape.py::test_every_recorded_tape_replays_through_the_ghost`,
   because no real hand tape has been recorded into
@@ -3340,12 +3386,13 @@ uv run ruff check .
 `.github/workflows/tests.yml` runs on every pull request and every push
 to `main`: one job, `tests`, on `ubuntu-24.04` — `uv sync --locked`,
 `uv run ruff check .`, then the fast tier under Xvfb with
-`--timeout 120` (pytest-timeout: a hung test fails alone and names
-itself instead of stalling its worker) and `--max-worker-restart=0` (a
-crashed worker fails the run; xdist's replacement for one stalled the
-`loadgroup` scheduler at 99 %) — the same values pyproject's addopts now
-carry, with the thread method, so the explicit flags are redundant but
-consistent. The fast tier takes about two minutes on
+`--dist load --timeout 120 --max-worker-restart=4` (pytest-timeout: a
+hung test fails alone and names itself instead of stalling its worker;
+a crashed worker's queue goes to its replacement, up to four, then the
+run ends — row 605) — the same values pyproject's addopts carry, with
+the thread method, so the explicit flags are redundant but consistent.
+(Until the owner lands that workflow edit, CI still says
+`--max-worker-restart=0`, which wins over addopts.) The fast tier takes about two minutes on
 four cores.
 
 - **What it leaves out.** `UV_NO_GROUP="hands dream"`: no Ultraleap SDK

@@ -4,7 +4,8 @@ polled in order each frame, and closed in one list.
 
 A *device* is anything that satisfies the `Device` protocol below:
 `open()`, `poll(dt, now)`, `close()`, a `status` for the SYSTEM page, a
-`role`, its `sources` (the ports it publishes), `feed(router)`,
+`role`, its `sources` (the ports it publishes), `feed(sources)` (the
+shared `routing_sources.Sources`, plan 44 D2),
 `learn(learn)` and `wants` (what a Learn can arm it for). Today's inputs
 are devices since B2: `MidiDevice` — one per MIDI entry, each with its own
 `profile` (`apc40`, `generic`) and its own rows (`cc@<role>:…` for every
@@ -27,7 +28,7 @@ today's devices the role is not the scheme:** a preset names a *scheme*
 `schemes` tuple says which schemes its role publishes, so every existing
 row is unchanged whatever the entry is called. A new device (B4's OSC)
 publishes under its role. Two enabled devices may not **feed** one
-scheme: the Router holds one vector per fed scheme (`feeds`), so a second
+scheme: the sources hold one vector per fed scheme (`feeds`), so a second
 pad (`axis`) or a second hands device (`hand`) is refused with a note
 naming both roles (`RefusedDevice`); two MIDI desks of different roles
 feed nothing (their messages are rows) and are both accepted — an
@@ -216,7 +217,7 @@ class Device(Protocol):
 
     def act(self, router) -> None: ...
 
-    def feed(self, router) -> None: ...
+    def feed(self, sources) -> None: ...
 
     def send(self, reg, analyzer) -> None: ...
 
@@ -307,7 +308,7 @@ class Base:
     def act(self, router) -> None:
         pass
 
-    def feed(self, router) -> None:
+    def feed(self, sources) -> None:
         pass
 
     def send(self, reg, analyzer) -> None:
@@ -833,7 +834,6 @@ class PadDevice(Base):
         # the sticks a route reads as a dial, for the next frame's Learn
         # (gamepad.dialed); asked only while the pad is there, once a frame
         claimed = getattr(router, "claimed", None)     # duck-typed: a shim may have none
-        self._feed_extras(router, io, q)
         reg = self.ctx.reg if self.ctx.reg is not None else getattr(router, "reg", None)
         skip = self._totem(io, reg)
         if q:
@@ -848,38 +848,58 @@ class PadDevice(Base):
             if reg is not None:
                 gamepad.steer(io, router, reg, self.__dict__.get("_dt", 0.0), routed=routed)
 
+    def feed(self, sources) -> None:
+        """The pad's touch and motion lanes into the shared sources (plan
+        44 D2), in the feed slot like every device's lanes; its axis lanes
+        are fed by `Router.pad`, in `act`, into the router's sources."""
+        io = self.io
+        if io is not None:
+            self._feed_extras(sources, io, self.qualifier)
+
     def _totem(self, io, reg) -> dict:
-        """The totem experiment (plan 47, totem.py): while `totem.on`, the
-        first pad with motion sensors turns the shape; its buttons the totem
-        uses are held off its rows (`Router.pad`'s `skip`). Nothing while
-        the totem is off or the registry has none. The totem names the pad
-        by this device's role (unique, "pad" for the first), not the
-        router's qualifier ("" for the primary)."""
-        from . import totem
-        # duck-typed, not isinstance: a hot reload of totem.py makes a new
-        # TotemState class the live state is not (yet) an instance of
-        state = totem.state_of(reg)
-        if state is None or not state.on:
-            return {}
-        totem.step(state, io, reg, self.__dict__.get("_dt", 0.0), self.role)
-        return {"skip": totem.SKIP} if totem.drives(state, self.role) else {}
+        """The totem and the poi experiments (plan 47, totem.py, poi.py):
+        while `totem.on` the first pad with motion sensors turns the shape,
+        while `poi.on` it swings the shape as a poi's weight; the buttons
+        each uses are held off the pad's rows (`Router.pad`'s `skip`).
+        Nothing while both are off or the registry has neither. Each names
+        the pad by this device's role (unique, "pad" for the first), not
+        the router's qualifier ("" for the primary). The poi steps first,
+        so a reset that fires both finds the pan the poi has let go of."""
+        from . import poi, totem
+        # duck-typed, not isinstance: a hot reload makes a new state class
+        # the live state is not (yet) an instance of
+        swing, state = poi.state_of(reg), totem.state_of(reg)
+        dt = self.__dict__.get("_dt", 0.0)
+        skip: frozenset = frozenset()
+        if swing is not None and swing.on:
+            poi.step(swing, io, reg, dt, self.role)
+            if poi.drives(swing, self.role):
+                skip |= poi.SKIP
+        if state is not None and state.on:
+            totem.step(state, io, reg, dt, self.role)
+            if totem.drives(state, self.role):
+                skip |= totem.SKIP
+        return {"skip": skip} if skip else {}
 
     def _totem_skip(self, reg, io) -> frozenset:
-        """The buttons the totem holds off this pad this frame — as it will
-        be once `act` has run its take-over (Learn runs first): none while
-        it reads another pad, or is off."""
-        from . import totem
+        """The buttons the totem and the poi hold off this pad this frame —
+        as they will be once `act` has run their take-over (Learn runs
+        first): none while each reads another pad, or is off."""
+        from . import poi, totem
         state = totem.state_of(reg)
-        return totem.SKIP if totem.will_drive(state, io, self.role) else frozenset()
+        skip = totem.SKIP if totem.will_drive(state, io, self.role) else frozenset()
+        if poi.will_drive(poi.state_of(reg), io, self.role):
+            skip |= poi.SKIP
+        return skip
 
-    def _feed_extras(self, router, io, q: str) -> None:
+    def _feed_extras(self, sources, io, q: str) -> None:
         """The ``touch`` and ``motion`` lanes (plan 42): their names,
         labels, rests, kinds and gates published once per scheme, then this
         frame's vector — None while the pad read has neither, so their
-        routes let go. A router without `feed` (a shim) is left alone."""
+        routes let go. Sources without `feed` (a shim) are left alone."""
         from .pads import models
         model = getattr(io, "model", None)
-        if not hasattr(router, "feed") or not (
+        if not hasattr(sources, "feed") or not (
                 models.is_model(model) or self.__dict__.get("_fed_extras")):
             return                     # an Xbox pad (or a shim) feeds no extra scheme
         from . import gamepad as g
@@ -893,18 +913,18 @@ class PadDevice(Base):
                 (g.MOTION_SCHEME, ge.MOTION_LANES, ge.MOTION_LABELS, ge.MOTION_RESTS,
                  ge.MOTION_TRIGGERS, (), getattr(io, "motion_lanes", None))):
             sc = qualified(scheme, q)
-            names = getattr(router, "names", None)
+            names = getattr(sources, "names", None)
             if isinstance(names, dict) and sc not in names:
-                router.names[sc] = {n: i for i, n in enumerate(lanes)}
-                router.labels[sc] = list(labels)
-                router.rests[sc] = list(rests)
-                kinds = getattr(router, "lane_kinds", None)
+                sources.names[sc] = {n: i for i, n in enumerate(lanes)}
+                sources.labels[sc] = list(labels)
+                sources.rests[sc] = list(rests)
+                kinds = getattr(sources, "lane_kinds", None)
                 if isinstance(kinds, dict):
                     kinds[sc] = ["trigger" if n in triggers else "value" for n in lanes]
-                gate_d = getattr(router, "gates", None)
+                gate_d = getattr(sources, "gates", None)
                 if isinstance(gate_d, dict) and gates:
                     gate_d[sc] = [(lanes.index(n), labels[lanes.index(n)]) for n in gates]
-            router.feed(sc, read() if read is not None else None)
+            sources.feed(sc, read() if read is not None else None)
 
     def targets(self) -> list[tuple]:
         return [(self.io, "gamepad", "Pad")] if self.io is not None else []
@@ -1053,11 +1073,11 @@ class BridgeDevice(Base):
         if self.io is not None:
             self.io.reconnect()
 
-    def feed(self, router) -> None:
+    def feed(self, sources) -> None:
         if self.io is None:
             return
-        self.io.receive(router)
-        self.io.publish(router)
+        self.io.receive(sources)
+        self.io.publish(sources)
 
     def send(self, reg, analyzer) -> None:
         io = self.io
@@ -1649,6 +1669,19 @@ class DeviceRegistry:
         return next((d.io for d in self.devices
                      if d.kind == kind and getattr(d, "io", None) is not None), None)
 
+    def live_adapter(self, kind: str):
+        """The first open adapter of `kind` that has its hardware now (its
+        `on`: a pad with a controller behind it), else `adapter(kind)`.
+        What the pad window reads: with a generic `pad` entry listed before
+        a Joy-Con's, the Joy-Con connecting after launch is the pad drawn,
+        not the empty entry before it. The listeners run again on every
+        status change (`poll`), so the pick follows a pad coming or going."""
+        for d in self.devices:
+            io = getattr(d, "io", None)
+            if d.kind == kind and io is not None and getattr(io, "on", False):
+                return io
+        return self.adapter(kind)
+
     def schemes(self) -> tuple[str, ...]:
         """Every scheme the listed devices publish under, in list order."""
         out: list[str] = []
@@ -2015,11 +2048,13 @@ class DeviceRegistry:
         except Exception as e:  # noqa: BLE001
             self._note(_err("devices", e))
 
-    def feed(self, router) -> None:
-        """The feed slot: every open device publishes its vectors."""
+    def feed(self, sources) -> None:
+        """The feed slot: every open device publishes its vectors into
+        the shared sources (routing_sources.Sources, plan 44 D2: what every
+        deck's pass reads; a router stands in for its own sources)."""
         for d in list(self.devices):
             if d.role in self._opened:
-                self._guard(d, lambda d=d: d.feed(router))
+                self._guard(d, lambda d=d: d.feed(sources))
 
     def send(self, reg, analyzer=None) -> None:
         """After `reg.apply`: the sinks read effective values out, each
