@@ -8,6 +8,7 @@ Over test_preset_folders' temp library and temp machine home: nothing
 here touches ~/Hyperspace or a Drive folder."""
 
 import json
+import os
 
 import pytest
 from test_preset_folders import _put, lib_dirs, make  # noqa: F401 — the fixture
@@ -158,9 +159,17 @@ def test_a_case_change_renames_and_another_folder_by_that_name_is_refused(
     assert lib.rename_folder("party", "Party") == "Party"     # this very folder: allowed
     assert "Party/B" in lib.list(PRESETS) and lib.project.bank[1] == "Party/B"
     # a case-sensitive volume: `party` beside `Party` is another folder — the
-    # disk says so (samefile), not the fold, and nothing is replaced
-    lib.make_folder("", "empty")
-    monkeypatch.setattr(type(lib_dirs.presets), "samefile", lambda self, other: False)
+    # disk says so (samefile), not the fold, and nothing is replaced. Where
+    # the disk allows it (Linux CI) the sibling is real; where it folds case
+    # (APFS) there can be no sibling, so samefile is faked to say "another"
+    p = lib_dirs.presets
+    folds = (p / "party").exists() and os.path.samefile(p / "party", p / "Party")
+    if folds:
+        monkeypatch.setattr(type(p), "samefile", lambda self, other: False)
+    else:
+        (p / "party").mkdir()                                     # the sibling, empty
+        lib._sync()
     with pytest.raises(LibraryError, match="taken"):
-        lib.rename_folder("Party", "PARTY")
-    assert (lib_dirs.presets / "Party" / "b.json").is_file()
+        lib.rename_folder("Party", "party")
+    assert (p / "Party" / "b.json").is_file()
+    assert folds or not any((p / "party").iterdir())            # the sibling untouched
