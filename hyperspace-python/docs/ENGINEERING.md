@@ -2811,7 +2811,7 @@ route onto one is dropped at load. The ghost hands are drawn in the
 shape's camera (plan 26, §2): the eye, and the calibration in
 `hands.json` — `"units": {"mm": null, "origin": null, "tilt": 32.0}`,
 "from the box" by default, which fits the padded box (or, with no box,
-the calibrated ranges) into a 16:9 picture of the eye, seen from 32°
+the calibrated ranges) into a 16:9 picture of the rig's reference eye (the default eye, whatever the preset's: plan 43 C2), seen from 32°
 above; an `mm` or `origin` written there wins. `hands.json` is
 `hyperspace.hands/3`; an older file is kept as `hands.json.bak-v2` before
 the first rewrite. A hand leaving fades out over 0.3 s and one coming
