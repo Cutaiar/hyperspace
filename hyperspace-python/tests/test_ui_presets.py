@@ -170,13 +170,15 @@ def test_cross_sends_the_file_to_the_trash_and_the_row_goes(rig, tmp_path):  # n
     assert st["page"]["foot"] == ["trash (2) ▸"]
 
 
-def test_a_folder_preset_reads_folder_then_name_and_renames_in_its_folder(rig):  # noqa: F811
-    """Plan 48 row 588: a preset in ``presets/party/`` is listed as
-    ``party/DIAL`` — drawn "party / " dim, then its name, its chips clear
-    of both; `rename` seeds the field with the leaf alone, and the file
-    stays in its folder."""
+def test_a_folder_preset_sits_under_its_header_and_renames_in_its_folder(rig):  # noqa: F811
+    """Plan 48 row 588, under stage 2's tree (row 636): a preset in
+    ``presets/party/`` is listed as ``party/DIAL`` and drawn under the
+    ``party`` header by its leaf, its chips clear of it; `rename` seeds
+    the field with the leaf alone, and the file stays in its folder.
+    (The window tall enough that the folder, after every top-level
+    preset, is in view.)"""
     panel, lib = rig.panel, rig.lib
-    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    imgui.get_io().display_size = imgui.ImVec2(CONTROL_SIZE[0], 2400)
     src = lib.path_of("presets", "DIAL")
     folder = lib.home / "presets" / "party"
     folder.mkdir()
@@ -184,9 +186,13 @@ def test_a_folder_preset_reads_folder_then_name_and_renames_in_its_folder(rig): 
     st = _page(panel)
     page = st["page"]
     assert ("party/DIAL", ("rename", "×")) in page["rows"]
+    assert page["rows"][-1][0] == "party/DIAL"                  # after the top level
+    assert ("party", True) in page["folders"]
     assert ("party", "DIAL") in page["text"] and ("", "TUMBLE") in page["text"]
     row, ren = page["rects"]["row.party/DIAL"], page["rects"]["rename.party/DIAL"]
-    assert row[0] + imgui.calc_text_size("party / DIAL").x < ren[0]
+    head = page["rects"]["folder.party"]
+    assert head[3] <= row[1] and head[0] < row[0]               # under it, indented
+    assert row[0] + imgui.calc_text_size("DIAL").x < ren[0]
     _click(panel, ren)
     frame(panel)
     assert st["naming"] == "rename:party/DIAL" and st["buf"] == "DIAL"
