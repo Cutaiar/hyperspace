@@ -3011,7 +3011,12 @@ modules are on the list in dependency order: `modifiers` after
 `motion`, `modgraph` before `routing`, `graphview` after `osc`, `ui_graph`
 before `ui`; `ui_feel`, the live feel plots, before `ui_routing`. A reload of `ui_graph` keeps the GRAPH page's editor
 context (it is held on the panel, not in the module), so the page goes
-on drawing with its zoom and selection.
+on drawing with its zoom and selection. The deck (`deck.py`, plan 44
+D1) is on the list after `learn`, before `midi`: a save re-classes the
+live `Deck` and its objects come from `Deck.targets()`, which `main`'s
+target list takes first, then the rig's. `Deck.build` runs once at
+launch, so a change to it — or a field added to a live object — needs
+Cmd+R, not a save.
 
 **The watchdog** (`watchdog.py`) appends to `<home>/stall.log` a `===
 <kind>` header — the time, the loaded preset, what happened — and every

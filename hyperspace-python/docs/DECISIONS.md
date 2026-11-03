@@ -523,6 +523,15 @@ rows 554 and 555.
 | **Then the per-deck split** (D3): what the contract puts in the preset is a deck's; what it leaves on the rig is the rig's single copy. The hands' look, the cloud's look, the bus cuts, the inlined desk and the default-module fallback move in this step, schema `/10`. | `params.py`, `library.Project`, `graph.RigWires`, `hold.py` | owner, 2026-11-02 (the order); D3's own rows when it is planned |
 | **Patch, group and preset become one format, later.** A preset is then a patch that fills the whole frame; a module preset is a patch of one group (row 540). The merge above is the first step toward it, not a design of it. | — | owner, 2026-11-02 (the direction); not planned |
 
+### Decks (plan 44)
+
+[`plans/44-decks.md`](plans/44-decks.md): N looks, one on air (rows
+556–559, pending the owner). Built so far: D1.
+
+| Decision | Where | Who |
+|---|---|---|
+| **One `Deck`, one construction order** (D1). Today's per-deck singletons — the registry, the view, the table, the router, the LFOs, envelopes and sequencer, the presets and their graph section, learn, undo and its marks, the renderer, the hold — are one `Deck`, built by `Deck.build` in `app.main`'s old order (the registry's and the attach order); `main` and the headless `tests/test_undo.boot` both call it, the rig's objects passed in as hooks at their old places. It promises no behaviour change: one deck, the same frame, the same files; the flat handles on `Host` and `Panel` stay until D5. | `deck.Deck`, `Deck.build`, `Deck.targets`, `app.Host.deck`, `ui.Panel.deck` | plan 44 D1; row 571 |
+
 ## Undo
 
 | Decision | Where | Who |

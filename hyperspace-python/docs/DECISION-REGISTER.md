@@ -600,6 +600,7 @@ here; overturn → the change, then the same.
 | 562 | Plan 45 V1: a video's audio track decoded to memory as float32 stereo 48 kHz once something asks for sound, whole to 120 s, else a 120 s window around the transport's position; the transport is the one clock | 421 | owner's rule (2026-11-02, addendum 8); the policy (rec) |
 | 563 | Node groups (post-show G0, 2026-11-02): a group's id is never reused within a preset's life — `group.<n>` is one past the highest the preset has ever allotted (`Presets.group_high`: the file's highest at the load, dropped entries counted; not saved, no schema change), so an ungrouped or undone group's number is not the next group's; and membership is eager — a member node deleted by any road leaves its group's list in the same operation (hooks on the mechanisms: the section's landing, the table's `set_modifiers`, a bank's membership change), the last member taking the group; every node-removing step carries the marks (which carry the floor too) so its undo puts the member back; a refused load leaves the loaded preset's groups whole. Render node ids (`acid` → `acid.2`, the lowest free instance, R25) are untouched: a format question for the one-format PR | 422 | built as recommended — PR (G0) |
 | 564 | Wave 0 E1: delay loops are the trails mechanism, the look-back keeps the dream — the feedback starter (a composite laid over, a delay, a fade at level 0.75: colour and alpha decay alike) on the cable menu and "add feedback after" on the node menu, many allowed; "feedback" not "echo", which names the look-back's frames | 423 | (rec) — pending the owner |
+| 571 | Plan 44 D1: today's per-deck singletons (registry, view, table, router, the three banks, presets and their graph section, learn, undo and its marks, renderer, hold) bundled in one `deck.Deck`; `Deck.build` is the one construction order — `app.main` and `tests/test_undo.boot` both call it, the rig's objects built between its lines passed in as hooks at their old places; no behaviour change (`tests/test_deck.py`) | 430 | built as recommended — PR (D1) |
 
 "—": no hand check shows it; tests only.
 
@@ -9716,3 +9717,53 @@ and D3 (the per-deck split) are
   the contract working as intended and a change from today.
 - **Judge it.** — (C2's hand check: frame, save, load another, load it
   back; the framing is back).
+### 571. Plan 44 D1: one `Deck`, one construction order
+- **Asked.** Plan 44 §3 D1 (rows 556–559): bundle what §2 marks per deck,
+  as the objects exist today, into one `Deck`, and move `app.main`'s lines
+  from the view state to `undo.install` into `Deck.build` in their order —
+  the registry's order and the attach order — with no behaviour change,
+  so D2–D6 have one object to split and to point controllers and the
+  panel at.
+- **Answer.** Built as recommended. `hyperspace/deck.py`: a `Deck`
+  dataclass (`reg`, `view`, `table`, `router`, `lfos`, `envs`, `seq`,
+  `presets` and `graph`, `learn`, `undo`, `marks`, `renderer`, `hold`),
+  `Deck.build` holding `main`'s lines in their order, and
+  `Deck.targets()` the hot-reload tuples `main` listed for those objects,
+  in its order (`main` splices them first, then the rig's). Where `main`
+  built a rig object between two deck lines, `build` calls the caller's
+  hook at that place: `hands(reg)` (the hands' setup), `outputs(reg)`
+  (output 1's params and every output's switches), `panel(reg, view)`
+  (the panel and its `ui.*` params), `devices(reg, router, learn)` (the
+  devices, the dream worker, the dial, the keep-awake), and the table
+  through `table(reg)`. A headless deck has no renderer and no hold.
+  `app.Host.deck` and `ui.Panel.deck` are new; every flat handle stays,
+  assigned from the deck, so `frame` and its order are unchanged.
+  `tests/test_undo.boot` now calls `Deck.build` with its stand-ins.
+- **Recommended.** As built. The proof is
+  `tests/test_deck.py::test_a_deck_built_the_old_way_and_the_new_way_reach_the_same_state`:
+  over every corpus preset (load, 120 frames of the pass over a fixed
+  lane vector, `view.bright` turned, `undo.undo()`), the old `boot` and
+  `Deck.build` reach the same registry, table, routes, desk, macros,
+  modifiers, banks and undo stack. The goldens did not move.
+- **Other options.** `main` building the deck in stages (three or four
+  calls) with no hooks: fewer closures, but the order lives in `main`
+  again and the headless copy can drift. Moving the rig's objects (the
+  outputs, the panel, the devices) after the deck: the registry's order
+  and "default" would change, which D1 must not do.
+- **To reverse.** Put `Deck.build`'s body back into `main` and
+  `boot`, delete `deck.py`, its `MODULES` entry and the two `deck`
+  fields — a move, no data.
+- **Rough edge.** The old `boot` had drifted from `main`: it never
+  handed the router its banks (`use_lfos` / `use_bank` /
+  `use_sequencer`), so its LFOs, envelopes and sequencer never stepped
+  inside the pass. `boot` runs `main`'s lines now; with those three lines
+  added the old body and the deck agree to the bit, and without them
+  three corpus presets (TRIP, TUMBLE, seq-demo) leave a base a round-off
+  apart after an undo, which `undo.alike` calls the same value — the
+  test checks both. The fifteen test files on `boot` pass unchanged. A
+  hot reload re-classes a live `Deck` and back-fills a new field, but
+  `Panel.deck` is set in `Panel.__init__`, so this PR is a restart, not
+  a hot reload.
+- **Judge it.** Hand check 430 (group AW): launch, load, a knob, ⌘Z,
+  HOLD / TAKE / DROP, a hot reload of `deck.py` and of `routing.py` —
+  all as before.

@@ -1,7 +1,9 @@
 # Plan 44 — decks: N looks, one on air
 
-**Status: a plan, not built** (2026-11-02, wave 0 item D0 of the post-show
-sequencing). Written against `main` at 72da1ed: every symbol below is in
+**Status: D1 built** (2026-11-02, wave 1: `hyperspace/deck.py`, the
+`Deck` bundle and `Deck.build`, no behaviour change — register row 571,
+hand check 430, group AW); D2–D6 a plan, not built. Written 2026-11-02 as
+wave 0 item D0 of the post-show sequencing. Written against `main` at 72da1ed: every symbol below is in
 the code today unless the text says it is new. Its four decisions are
 register rows 556–559, "(rec) — pending the owner". The build is six PRs,
 D1–D6, each its own and behaviour-neutral until D4; D1 does not start
@@ -114,7 +116,21 @@ control that does nothing at its default; D5 is the first behaviour the
 owner sees. Sizes as the audit uses them: S under a day, M a few days, L
 a week or more.
 
-### D1 — bundle today's singletons into one `Deck` (M)
+### D1 — bundle today's singletons into one `Deck` (M) — **built**
+
+*Built 2026-11-02 (wave 1, row 571).* As written, with one shape the
+text left open: where `main` builds a rig object between two deck lines
+(the hands' setup, the outputs' params and switches, the panel, the
+devices with the dream worker, the dial and the keep-awake), `Deck.build`
+takes it as a hook it calls at that very place (`hands`, `outputs`,
+`panel`, `devices`; the table through `table(reg)`), so the registry's
+order is unmoved and the headless `boot` runs the same lines with its
+stand-ins. The panel's handles that need no deck object are set in the
+panel hook (the canvas tap must exist before the devices); the rest just
+after `build`. The proof found one drift: the old `boot` never handed
+the router its banks, as `main` has since plans 28 N0 and 31 — with
+those three lines the old body and the deck agree to the bit.
+
 
 **New** `hyperspace/deck.py`: a `Deck` dataclass holding what §2 marks
 per deck as the objects exist today — `reg`, `view`, `table`, `router`,

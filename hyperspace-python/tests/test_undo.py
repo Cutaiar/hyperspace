@@ -21,21 +21,16 @@ import numpy as np
 import pytest
 from conftest import opened_last, seed
 
-from hyperspace import devices, envelope, hands, lfo, routing, sequencer, tempo, undo
+from hyperspace import devices, hands, lfo, routing, tempo, undo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
-from hyperspace.fx import FxState
-from hyperspace.ghost import GhostState
-from hyperspace.learn import Learn
-from hyperspace.library import PRESETS, Library, Marks
-from hyperspace.lookback import DreamState
+from hyperspace.deck import Deck
+from hyperspace.library import PRESETS, Library
 from hyperspace.midi import MidiIO
 from hyperspace.overlay import Output
-from hyperspace.params import Param, build_registry
-from hyperspace.preset import Presets
-from hyperspace.routing import Binding, Bindings, Router, bindings_path
-from hyperspace.view import ViewState
+from hyperspace.params import Param
+from hyperspace.routing import Binding, Bindings, bindings_path
 
 PKG = Path(__file__).resolve().parents[1] / "hyperspace"
 DT = 1 / 60
@@ -62,59 +57,55 @@ class FakeOut:
 def boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None):
     """app.main's construction order, headless, over `home` — seeded with
     the corpus first (conftest.seed: the shipped presets and the party
-    show, which the home then opens with its startup preset, TUMBLE)."""
+    show, which the home then opens with its startup preset, TUMBLE).
+    The deck is `Deck.build`'s, the one order `app.main` runs too (plan 44
+    D1); the rig around it is stand-ins: no GL (no renderer, no hold), a
+    namespace for the audio engine, a bare `Output`, the panel's params
+    without imgui, and one `MidiIO` over fake ports."""
     seed(home)
     if show:
         opened_last(home, show)
     chain = Analyzer(Analyser())
     control = Control(chain)
     audio = SimpleNamespace(chain=chain, on=True)
-    view = ViewState()
     lib = Library(home, period=0.0)
-    reg = build_registry(view, control, audio, lib.project,
-                         dream=dream if dream is not None else DreamState(),
-                         fx=fx if fx is not None else FxState(),
-                         ghost=ghost if ghost is not None else GhostState())
-    lib.on_layout("band", control.apply_layout)
-    lib.extra("band", lambda: {"layout": chain.layout()})
-    lib.on_load("band", control.scene_loaded)
-    control.library = lib
-    settings = hands.HandSettings.from_config({})
-    hands.register(reg, settings)
     r = SimpleNamespace(t=100.0)
-    clock = tempo.Clock(now=lambda: r.t)
-    lfos = lfo.LFOs(seed=1)
-    tempo.register(reg, clock)
-    lfo.register(reg, lfos, clock)
-    # plan 31, as app.main: the envelopes and the sequencer beside the LFOs
-    # (plan 36 T3: the factory `/7` files hold their values)
-    envelope.register(reg, envelope.Envelopes(), clock)
-    sequencer.register(reg, sequencer.Sequencer(), clock)
-    output = Output(None, None)
-    output.register(reg)
-    # the desk's session params before attach, as app.main has them (plan 18
-    # WP2): declared late, desk.slew would read as an unsaved show
-    table = Bindings.load(bindings_path(home), legacy_midi=None)
-    routing.register_desk(reg, table)
-    lib.attach(reg)
-    # the panel's own params, declared as ui.Panel declares them (no imgui)
-    from hyperspace.ui import Panel
-    Panel._register_panel_params(SimpleNamespace(reg=reg, open=True, cheatsheet=True,
-                                                 desk=True, page=1))
-    router = Router(reg, table)
-    presets = Presets(lib, reg, router)
-    learn = Learn(reg, router.table, lane=router.lane)
     inp, out = FakeIn(), FakeOut()
-    midi = MidiIO(reg, router.table, inp=inp, out=out, learner=learn)
-    lib.project.load_startup()
-    u = undo.Undo(reg, router.table, marks=Marks(lib),
-                  tag=lambda: tuple(s.name for s in audio.chain.spec),
-                  on_restore=router.sync_macros)
-    undo.install(u)
-    r.__dict__.update(lib=lib, reg=reg, view=view, control=control, chain=chain, audio=audio,
-                      router=router, table=router.table, presets=presets, clock=clock,
-                      lfos=lfos, learn=learn, midi=midi, inp=inp, out=out, undo=u,
-                      home=Path(home), settings=settings, output=output)
+
+    def hands_setup(reg):
+        r.settings = hands.HandSettings.from_config({})
+        hands.register(reg, r.settings)
+
+    def outputs_setup(reg):
+        r.output = Output(None, None)
+        r.output.register(reg)
+
+    def load_table(reg):
+        # the desk's session params before attach, as app.main has them (plan
+        # 18 WP2): declared late, desk.slew would read as an unsaved show
+        table = Bindings.load(bindings_path(home), legacy_midi=None)
+        routing.register_desk(reg, table)
+        return table
+
+    def panel_setup(reg, view):
+        # the panel's own params, declared as ui.Panel declares them (no imgui)
+        from hyperspace.ui import Panel
+        Panel._register_panel_params(SimpleNamespace(reg=reg, open=True, cheatsheet=True,
+                                                     desk=True, page=1))
+
+    def devices_setup(reg, router, learn):
+        r.midi = MidiIO(reg, router.table, inp=inp, out=out, learner=learn)
+
+    deck = Deck.build(library=lib, control=control, audio=audio, table=load_table,
+                      dream=dream, fx=fx, ghost=ghost,
+                      clock=tempo.Clock(now=lambda: r.t), lfos=lfo.LFOs(seed=1),
+                      hands=hands_setup, outputs=outputs_setup, panel=panel_setup,
+                      devices=devices_setup)
+    r.__dict__.update(lib=lib, reg=deck.reg, view=deck.view, control=control, chain=chain,
+                      audio=audio, router=deck.router, table=deck.table, presets=deck.presets,
+                      clock=deck.router.clock, lfos=deck.lfos, learn=deck.learn, inp=inp,
+                      out=out, undo=deck.undo, envs=deck.envs, seq=deck.seq, home=Path(home),
+                      deck=deck)
     return r
 
 
