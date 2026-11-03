@@ -21,6 +21,7 @@ frame's displacement is far off the rest's.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from itertools import pairwise
 
@@ -85,13 +86,20 @@ def run(ctx, state: FxState, name: str, param: str, before: float, after: float,
     see). `phase` is where the effect's clock stands first (an hour at
     speed 1 — the show's fourth hour at a quarter; not a round number, so a
     jump of whole mirrored screens cannot land back on itself), since the
-    jump grows with it. Every frame is DT apart; the clocks move through
+    jump grows with it; each `@clock` of the effect stands where that hour
+    at these knobs left it (phase × its rate). Every frame is DT apart; the clocks move through
     `run_one`."""
     v = state.values[name]
     v.update(on=True, mix=1.0)
     v.update(values or {})
     v[param] = before
     state.phase[name] = phase
+    # its `@clock`s where an hour at these knobs left them: phase × rate
+    # (u_phase is already speed × seconds), wrapped to a period if any
+    clocks = state.clocks.setdefault(name, {})
+    for c in state.specs[name].clocks:
+        x = phase * math.prod(float(v[k]) for k in c.factors)
+        clocks[c.uniform] = x % c.period if c.period else x
     chain = FxChain(ctx, state)
     try:
         (src, _), (_, dst) = chain.pool((w, h))

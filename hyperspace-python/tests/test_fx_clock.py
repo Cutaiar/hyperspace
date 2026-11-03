@@ -2,10 +2,10 @@
 and the UV-field continuity harness (`tests/uv_flow.py`) that shows why.
 
 The parse and the state run anywhere; the GL half needs a standalone
-context and skips without one. Nothing shipped is ported here (K2–K4 do
-that): the harness is proven on a synthetic effect and its twin, on
-warp's speed (integrated today — passes) and on warp's drift (multiplied
-in the shader — the expected failure K2 turns into a pass).
+context and skips without one. The harness is proven on a synthetic
+effect and its twin, on warp's speed (always integrated) and on the
+rates K2 ported to `@clock` (warp's drift and scale — one clock at
+drift × scale, the scroll counted in cells — and tripcolour's pulse).
 """
 
 from __future__ import annotations
@@ -95,11 +95,29 @@ def test_parse_reads_a_clock():
     ("// @clock u_t rate 1e999", "finite"),
     ("// @clock u_t rate nan", "finite"),
     ("// @clock u_t rate soon", "bad period"),
+    ("// @clock u_t rate*nope", "no @param of this file"),     # every factor is a param
+    ("// @clock u_t rate*", "no @param of this file"),
+    ("// @clock u_t rate*u_rate", "twice"),                     # the same param twice
 ])
 def test_parse_refuses_a_bad_clock(line, why):
     src = CLOCKED.replace("// @clock u_scroll rate", line).replace("u_scroll", "u_t")
     with pytest.raises(SpecError, match=why):
         parse("scroll", src)
+
+
+def test_a_rate_may_be_a_product_of_params(fxdir):
+    """`@clock u_t rate*gain`: the phase runs at speed × rate × gain (warp's
+    scroll, counted in cells: drift × scale), each word resolved as a
+    single rate's is."""
+    s = parse("scroll", CLOCKED.replace("// @clock u_scroll rate", "// @clock u_scroll rate*u_gain"))
+    assert s.clocks == [ClockSpec("u_scroll", "rate*gain", None)]
+    assert s.clocks[0].factors == ("rate", "gain")
+    assert parse("scroll", CLOCKED).clocks[0].factors == ("rate",)
+    write(fxdir, "scroll", CLOCKED.replace("// @clock u_scroll rate", "// @clock u_scroll rate*gain"))
+    st = FxState(fxdir)
+    st.values["scroll"].update(speed=2.0, rate=3.0, gain=0.5)
+    st.advance(0.5)
+    assert st.clocks["scroll"]["u_scroll"] == pytest.approx(1.5)        # 0.5 × 2 × 3 × 0.5
 
 
 def test_the_file_may_not_declare_the_clocks_uniform():
@@ -275,19 +293,28 @@ def test_warps_speed_step_is_continuous(ctx):
     assert r.step < 1.0, r                                            # ~0.36 px: the drift, doubled
 
 
-@pytest.mark.xfail(strict=True, reason="K2 ports warp and tripcolour to @clock: until then the "
-                   "shader multiplies u_phase by the param and a knob step lands the field "
-                   "somewhere else")
 @pytest.mark.parametrize("effect, param, before, after, values", [
-    ("warp", "drift", 1.0, 1.1, WARP_SEEN),          # ~15 px on the step, 0.05 px a frame between
-    ("warp", "scale", 3.0, 3.3, WARP_SEEN),          # scale multiplies the scrolled offset: the same
-    ("tripcolour", "pulse", 1.5, 1.6, {}),           # a colour effect: the decoded green jumps
+    ("warp", "drift", 1.0, 1.1, WARP_SEEN),          # was ~15 px on the step; now ~0.05, as between
+    ("tripcolour", "pulse", 1.5, 1.6, {}),           # a colour effect: was ~20 px of decoded green
 ])
-def test_the_allowlisted_rate_params_step_continuously(ctx, effect, param, before, after,
-                                                        values):
-    """The show's bug, measured on each pair the lint's allowlist names
-    for K2: a small step an hour in should move the field no further than
-    its drift. Strict xfail: a port flips each case to a pass with no
-    edit here but deleting the mark (and its allowlist entry)."""
+def test_the_ported_rate_params_step_continuously(ctx, effect, param, before, after, values):
+    """The show's bug, measured on each rate K2 ported to `@clock`: a
+    small step an hour in moves the field no further than its drift."""
     r = uv_flow.run(ctx, FxState(), effect, param, before, after, values=values)
     assert r.continuous(), r
+
+
+def test_warps_scale_step_re_zooms_and_no_longer_jumps(ctx):
+    """Scale is no rate: a step re-zooms the noise cells about the centre,
+    a change of picture the size of the step (a tenth is ~10 px at the
+    rim of this frame, as a tenth of amount is ~1 px), the same at any
+    hour. Before K2 the scrolled offset was multiplied by scale, so a step
+    also slid the field by phase × drift × Δscale (~16 px even for a
+    hundredth, an hour in); now the scroll runs on `@clock u_drift_t
+    drift*scale` and a hundredth moves ~1.3 px."""
+    hour = uv_flow.run(ctx, FxState(), "warp", "scale", 3.0, 3.03, values=WARP_SEEN)
+    assert hour.step < 2.0, hour
+    early = uv_flow.run(ctx, FxState(), "warp", "scale", 3.0, 3.3, values=WARP_SEEN, phase=10.3)
+    late = uv_flow.run(ctx, FxState(), "warp", "scale", 3.0, 3.3, values=WARP_SEEN)
+    assert late.step == pytest.approx(early.step, rel=0.2), (early, late)
+    assert max(late.after) < 1.0, late                                # and it slides on

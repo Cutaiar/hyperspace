@@ -9,9 +9,9 @@ effect's `// @clock` (fx.py), the patterns' `u_ptime`
 
 The allowlist below is today's offenders, found by this lint on
 2026-11-02, as exact (shader, param) pairs: a new product anywhere fails,
-and so does a stale entry once its shader is ported — K2 (warp,
-tripcolour) and K4 (the grid effects; the RINGS pattern's hue is the
-same shape) shrink it to empty, one pair at a time.
+and so does a stale entry once its shader is ported. K2 (row 577) took
+out warp's drift and scale and tripcolour's pulse; K4 (the RINGS
+pattern's hue) shrinks it to empty.
 """
 
 from __future__ import annotations
@@ -24,11 +24,9 @@ from hyperspace.fx import FxState, parse
 
 # ---------------------------------------------------------------- the allowlist
 
-# (shader, param symbol) → why it is still there. Shrinks to {} with K2–K4.
+# (shader, param symbol) → why it is still there. Shrinks to {} with K4
+# (K2 ported warp and tripcolour, register row 577).
 ALLOWLIST: dict[tuple[str, str], str] = {
-    ("warp", "u_drift"): "K2: `t = u_phase * u_drift` scrolls the noise field",
-    ("warp", "u_scale"): "K2: `(p + vec2(t) * 0.1) * u_scale` scales the scrolled offset",
-    ("tripcolour", "u_pulse"): "K2: `sin(u_phase * u_pulse)` is the pulse's rate",
     ("patterns", "m_colour"): "K4: RINGS' `pal(ph * 0.15 * m_colour() …)` — `ph` carries u_ptime",
 }
 
@@ -47,7 +45,7 @@ def effect_pairs(name: str, source: str) -> set[tuple[str, str]]:
     """The (effect, param uniform) products in one effect file: its @param
     uniforms are the params; u_time, u_phase and its @clock uniforms are
     the times. The pre-port line is exempt — a param an `@clock` integrates
-    multiplied into `u_phase` or `u_time`, the rate the host runs now — but
+    (any factor of its rate) multiplied into `u_phase` or `u_time`, the rate the host runs now — but
     never a product whose time side is the clock itself: `u_drift_t *
     u_drift` is the rate applied twice."""
     spec = parse(name, source)
@@ -55,7 +53,7 @@ def effect_pairs(name: str, source: str) -> set[tuple[str, str]]:
     clock_uniforms = {c.uniform for c in spec.clocks}
     times = set(TIME_UNIFORMS) | clock_uniforms
     by_key = {p.key: p.uniform for p in spec.params}
-    integrated = {by_key[c.rate] for c in spec.clocks}
+    integrated = {by_key[k] for c in spec.clocks for k in c.factors}
     return {(name, p) for f in findings(source, params, times) for p in f.params
             if not (p in integrated and not f.times & clock_uniforms)}
 
