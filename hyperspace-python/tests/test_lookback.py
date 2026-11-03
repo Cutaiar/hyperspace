@@ -1395,10 +1395,9 @@ def test_every_dream_label_says_whose_knob_it_is():
         assert reg[pid].label.startswith("Echo "), pid
     for pid in ui_lookback.SECTIONS["dream"]:
         assert reg[pid].label.startswith("Dream "), pid
-    # (plan 49 stage 2: the look-back's own, which the dream reads too — `GRADE`)
+    # (plan 49 stage 2: the look-back's own, which the dream reads too — `GRADE_LINE`)
     assert [reg[pid].label for pid in look[4:]] == [
         "Shape hides wake", "Darken", "Contrast", "Look-back detail"]
-    assert set(ui_lookback.GRADE) <= set(look)
     assert reg["dream.on"].label == "Dream on"           # (plan 36 T4: the dream's own)
     labels = [p.label for p in reg.group("dream")]
     assert len(set(labels)) == len(labels)          # ROUTING's list tells every one apart

@@ -229,7 +229,7 @@ content — no node, edge or position is added, hidden or laid out
   `check_w`, `NAME_ROOM`; `_section`'s note cut to fit; the AUDIO,
   CAMERA and OUTPUT bodies' rows wrapping; SYSTEM's side pane line.
 - `hyperspace/ui_lookback.py`: the page redrawn (`SECTIONS` by node,
-  `PORTS`, `GRADE`, `GRADE_LINE`, `_node_head`, `_dream_word`, `_held`,
+  `PORTS`, `GRADE_LINE`, `_node_head`, `_dream_word`, `_held`,
   `_dream_thumb`, `TWO_UP`); `_status` dropped.
 - `hyperspace/ui_media.py`: `COL_MIN`, the channels four to a row,
   **Add file…** wrapping. `hyperspace/ui_seq.py`: `ROOMY`,

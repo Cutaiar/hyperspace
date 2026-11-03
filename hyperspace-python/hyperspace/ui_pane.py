@@ -296,7 +296,7 @@ def draw(panel, st: dict, dt: float, selection: Callable[[], None] | None,
     layout = "below" if below else "open"
     got = opened(st, layout)
     want = st.pop("pane_focus", None)    # `focus`: unfolded here, in this draw's layout
-    if want in got:
+    if want in KEYS:                     # (a state or file from before a section existed)
         set_open(st, want, True, layout)
     n_open = sum(1 for k in KEYS if got.get(k))
     drawn = st["pane_drawn"] = []        # the sections whose bodies drew (the tests read it)

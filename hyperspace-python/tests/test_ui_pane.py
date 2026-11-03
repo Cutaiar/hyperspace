@@ -597,3 +597,23 @@ def test_the_track_readout_is_measured_as_printed(tmp_path, monkeypatch):
         frame(r.panel, "audio")
         assert "102:05 / 140:00" in widths
 
+
+
+def test_focus_lands_on_a_fold_from_before_stage_2(tmp_path, monkeypatch):
+    """Review round 2: a ui.json written by stage 1 names five sections,
+    and a page state from before a hot reload may hold only those; landing
+    on FX still unfolds and draws the fx section."""
+    with build_rig(tmp_path) as r:
+        old = {k: k in ("selection", "presets") for k in
+               ("selection", "presets", "lookback", "faces", "analyzer")}
+        (r.lib.machine / ui_pane.UI_FILE).write_text(json.dumps({"pane": {"open": old}}))
+        r.panel.desk = False
+        imgui.get_io().display_size = imgui.ImVec2(*WIDE)
+        for _ in range(2):
+            frame(r.panel, "graph")
+        st = _st(r)
+        st["pane_open"]["open"] = dict(old)          # the stage-1 state, no fx key at all
+        r.reg["ui.page"].set(PAGE_KEYS.index("fx"))
+        for _ in range(2):
+            frame(r.panel, "graph")
+        assert ui_pane.opened(st)["fx"] is True and "fx" in st["pane_drawn"]

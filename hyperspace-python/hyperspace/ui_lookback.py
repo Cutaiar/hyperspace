@@ -59,7 +59,6 @@ SECTIONS = {
 # each node's head: what goes in and what comes out (plan 36's two picture nodes)
 PORTS = {"look-back": "picture in → trail out",
          "dream": "picture in → dreamed picture out"}
-GRADE = ("dream.darken", "dream.contrast", "dream.res")     # the look-back's, read by the dream
 GRADE_LINE = "graded by the look-back's darken and contrast, sent at its detail"
 OFF_CANVAS = "not on the canvas"
 # a head's hover after its ports (review fix 7: where the worker is set up)
