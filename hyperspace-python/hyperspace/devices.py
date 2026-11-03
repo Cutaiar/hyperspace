@@ -1661,6 +1661,19 @@ class DeviceRegistry:
         return next((d.io for d in self.devices
                      if d.kind == kind and getattr(d, "io", None) is not None), None)
 
+    def live_adapter(self, kind: str):
+        """The first open adapter of `kind` that has its hardware now (its
+        `on`: a pad with a controller behind it), else `adapter(kind)`.
+        What the pad window reads: with a generic `pad` entry listed before
+        a Joy-Con's, the Joy-Con connecting after launch is the pad drawn,
+        not the empty entry before it. The listeners run again on every
+        status change (`poll`), so the pick follows a pad coming or going."""
+        for d in self.devices:
+            io = getattr(d, "io", None)
+            if d.kind == kind and io is not None and getattr(io, "on", False):
+                return io
+        return self.adapter(kind)
+
     def schemes(self) -> tuple[str, ...]:
         """Every scheme the listed devices publish under, in list order."""
         out: list[str] = []

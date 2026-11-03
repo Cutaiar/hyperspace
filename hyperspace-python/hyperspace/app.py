@@ -1486,7 +1486,9 @@ def main() -> None:
 
         def point_at_devices() -> None:
             panel.midi = rig.adapter("midi")         # the first desk listed: the APC40's page
-            panel.pad = rig.adapter("gamepad")       # the menu's "Learn pad"
+            # the pad window's and the menu's "Learn pad": the first pad
+            # with a controller behind it now, re-picked on every connect
+            panel.pad = rig.live_adapter("gamepad")
             panel.hands = rig.adapter("hands")
             renderer.ghost.source = panel.hands      # no tracker, nothing draws
             router.follow_devices()                  # the MIDI roles and row schemes, again
