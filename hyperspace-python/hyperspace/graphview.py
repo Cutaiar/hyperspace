@@ -2691,7 +2691,7 @@ def preset_only(view: View) -> frozenset[str]:
                 todo.append(x)
     shown |= {nid for nid, n in have.items() if n.kind in ("output", "channel")}
     # plan 40 T2: a group's members are the preset's (a group holds nothing
-    # of the rig's: `patches.select`), so a group is drawn, open or folded
+    # of the rig's: `patches.groupable`), so a group is drawn, open or folded
     shown |= {n.id for g in view.groups for n in g.members}
     return frozenset(shown)
 
@@ -3084,6 +3084,9 @@ SAVED_PATCH = "saved {name} as a patch"
 UPDATED_PATCH = "updated patch {name}"
 PATCH_NEEDS_NAME = "a patch needs a name"
 PATCH_EXISTS = "a patch named {name} exists — Update patch, or another name"
+# plan 50: a group holds any node the preset saves; the save is where what a
+# patch cannot carry (the frame's, the camera, a lane envelope) is refused
+SAVE_REFUSED = "{name} not saved as a patch: {why}"
 RIG_KINDS = ("output", "channel", "cloud")   # always there: the rig's own nodes
 # …and the look's one camera (plan 43 C2: the camera is the preset's, not
 # the rig's), always there too: what a patch's wire may name though no
@@ -3190,7 +3193,7 @@ def folded(view: View) -> dict[str, VGroup]:
 
 def attach_groups(view: View, entries, table) -> None:
     """`view.groups` from the preset's `groups` entries (plan 40 T2): each
-    entry's members the view has and a group may hold (`patches.select`; a
+    entry's members the view has and a group may hold (`patches.groupable`, plan 50; a
     node already in an earlier group stays there), its boundary classified
     over the view's cables by `patches`' rule. A group with no member left
     (its nodes deleted since: the save leaves them out) is not drawn."""
@@ -3201,7 +3204,7 @@ def attach_groups(view: View, entries, table) -> None:
         if not isinstance(e, Mapping) or not isinstance(e.get("id"), str):
             continue
         ids = [x for x in e.get("nodes") or () if isinstance(x, str)]
-        mem, _ = patches.select(view.spec, table, ids)
+        mem, _ = patches.groupable(view.spec, table, ids)
         ok = set(mem.canvas())
         keep = [cid for cid in dict.fromkeys(ids) if cid in ok and cid in have
                 and cid not in taken]
@@ -3211,7 +3214,7 @@ def attach_groups(view: View, entries, table) -> None:
         g = VGroup(e["id"], str(e.get("name") or e["id"]), list(ids), [have[c] for c in keep],
                    open=bool(e.get("open")), patch=e.get("patch") or None,
                    kept_by_host=list(e.get("kept_by_host") or ()))
-        mem, _ = patches.select(view.spec, table, keep)
+        mem, _ = patches.groupable(view.spec, table, keep)
         _boundary(view, g, mem)
         _open_pins(view, g, e)              # plan 40 T3: a spawn's host ports, still open
         view.groups.append(g)
@@ -4299,8 +4302,9 @@ class Edit:
     def group(self, ids: Iterable[str], name: str | None = None
               ) -> tuple[dict | None, list[str]]:
         """Group (right-click with nodes selected): of canvas ids `ids`, the
-        ones a group may hold (`patches.select`: the lift's rule) made one
-        group, folded, named "group <n>" — one undo step. Returns (the
+        ones a group may hold (`patches.groupable`, plan 50: any node the
+        preset saves — whether it saves as a patch is asked at the save) made
+        one group, folded, named "group <n>" — one undo step. Returns (the
         entry, or None when nothing was grouped; the words for what was
         left out: "scene is the frame's; left out", a node another group
         held moved here, said; "nothing to group"). A node is in one group
@@ -4310,7 +4314,7 @@ class Edit:
         if groups is None:
             return None, [NO_PRESET_GROUPS]
         ids = list(dict.fromkeys(ids))
-        mem, refused = patches.select(getattr(self.graph, "spec", None), self.table, ids)
+        mem, refused = patches.groupable(getattr(self.graph, "spec", None), self.table, ids)
         ok = set(mem.canvas())
         keep = [cid for cid in ids if cid in ok]
         if not keep:
@@ -4710,9 +4714,11 @@ class Edit:
             # (review fix) another patch has this file: Save as never replaces it
             return PATCH_EXISTS.format(name=name)
         spec, table, values, layout = self.presets.parts()
+        # plan 50: a group holds any node the preset saves; what a patch
+        # cannot carry is asked here, at the save, and refused in words
         _, refused = patches.select(spec, table, g["nodes"])
         if refused:
-            return "; ".join(refused)
+            return SAVE_REFUSED.format(name=g["name"], why="; ".join(refused))
         doc, said = patches.lift(spec, table, values, layout, g["nodes"])
         doc["name"], doc["note"] = name, str(note or "").strip()
         try:

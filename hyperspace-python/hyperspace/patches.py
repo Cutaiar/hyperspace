@@ -216,6 +216,10 @@ def forward(doc: Mapping) -> dict:
     if kind == MODULE_KIND and version == MODULE_VERSION and isinstance(
             doc.get(GROUP_KEY), str):
         return STEPS[(kind, version)](doc)
+    if kind == MODULE_KIND and version is not None and version > MODULE_VERSION and isinstance(
+            doc.get(GROUP_KEY), str):
+        # (one group's values under a later module schema: a newer build's)
+        raise ValueError(NEWER_WORDS.format(schema=doc.get("schema"), newest=SCHEMA))
     if kind != KIND or version is None:
         raise ValueError(NOT_FRAGMENT_WORDS.format(schema=doc.get("schema")
                                                    if isinstance(doc, Mapping) else None,
@@ -766,7 +770,8 @@ def check(doc: Any) -> list[str]:
     if not isinstance(doc, Mapping):
         return [f"a patch is a JSON object, not {type(doc).__name__}"]
     out: list[str] = []
-    if doc.get("schema") != SCHEMA:
+    kind, version = _schema(doc)
+    if kind != KIND or version not in READS:     # (plan 50: a /1 is read as its /2)
         out.append(f"schema {doc.get('schema')!r} is not {SCHEMA}")
     if GROUP_KEY in doc:                  # plan 50: a patch of one param group
         return out + _check_group(doc)

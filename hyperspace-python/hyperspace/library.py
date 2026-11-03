@@ -1961,7 +1961,7 @@ class Library:
         kind's — the presets, the patches — in ``<root>/<group>/``; every
         other group's, its patches of one group (what module presets
         were), in ``<root>/patches/<group>/``."""
-        if group in (PRESETS, PATCHES) or group in self._kinds:
+        if group in (PRESETS, PATCHES, PROJECTS) or group in self._kinds:
             return root / group
         return root / PATCHES / group
 

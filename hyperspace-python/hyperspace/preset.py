@@ -219,9 +219,9 @@ VERSIONS = (2, 3, 4, 5, 6, 7, 8, 9, 10)
 # rig's cables from All outputs into a window that this preset cuts
 # (`graph.RigWires`); no key: every cable stands
 BUS_KEY = graphmigrate.BUS_KEY
-# what a load says of a file naming a desk template (retired, plan 44 D3)
-TEMPLATE_RETIRED = ("desk template {name!r}: desk templates are retired (plan 44 D3) — "
-                    "this preset's own desk rows only")
+# what a load says of a file naming a desk template (retired, plan 44 D3;
+# said by the one ladder since plan 50)
+TEMPLATE_RETIRED = graphmigrate.TEMPLATE_RETIRED
 # plan 43 C2 (row 573): the spin's pose, `{"rot.phase.XY": angle, …}` — the
 # six `POSE_IDS` in radians — beside `values` (a phase moves every frame: it
 # is no base, so `values` stays the bases' snapshot)
@@ -652,7 +652,7 @@ def read_groups(raw, held, refusal: Callable[[list[str]], tuple[set, list[str]]]
     its graph, modifiers and voices make) is left out with a note ("group
     acid wash: acid.3 is not in the preset — left out"); one a group may
     not hold (`refusal(ids)` → (the ids kept, the words for the rest):
-    `patches.select`'s rule) is left out in its words; a node already in an
+    `patches.groupable`'s rule, plan 50) is left out in its words; a node already in an
     earlier group is left out of the later; a group left with no member is
     dropped, said; an entry that is not a group is ignored, said. Pure."""
     groups: list[dict] = []
@@ -1000,46 +1000,29 @@ class Presets:
         #    placement as its wire, the values of an effect the section does
         #    not name dropped — a desk template's rows counted as the desk
         #    they expand to — and a save writes that `/7` as `/9` (row 394, plan 43 C2)
+        #    0. and the one orbit camera (plan 43 C2): a file before `/9`
+        #    never named the eye — it drew through the open show's — so it
+        #    takes the eye an old show's session held (`Project.old_eye`)
+        #    and the camera node's GRAPH position that show kept
+        #    (`camera_at`), silent; and the look made whole (plan 44 D3): a
+        #    file before `/10` takes what an old show's session and `rig`
+        #    held (`Project.old_look`, `old_cuts`), its module labels and
+        #    its desk template's name dropped — the template said.
+        #    Plan 50: these steps are the one ladder, `graphmigrate.forward`
+        #    (a fragment's is `patches.forward`). What the show handed on
+        #    for a node this preset's graph does not declare — another
+        #    preset's `ghost.2.*` — is the show's leftover, dropped quietly
+        #    below, never an "unknown id" (review of #351); the migrated
+        #    line is said on the strip (`_warn`), not one of `notes`
         gs = self._graph_section()
-        from_show: set[str] = set()          # (the look ids `ten` handed on, below)
-        migrate_notes: list[str] = []
-        migrated = ""
-        version = graphmigrate.schema_version(doc)
-        if version is None or version < graphmigrate.SEVEN:
-            old = str(doc.get("schema"))
-            doc, migrate_notes = graphmigrate.seven(doc, gs.specs())
-            # (said on the strip — `_warn` — but no problem with the file:
-            # not one of `notes`, which say what did not land)
-            migrated = graphmigrate.MIGRATED_NOTE.format(old=old, new=SAVE_SCHEMA)
-        # 0. and the one orbit camera (plan 43 C2): a file before `/9` never
-        #    named the eye — it drew through the open show's — so it takes
-        #    the eye an old show's session held (`Project.old_eye`), and the
-        #    camera node's GRAPH position that show kept (`camera_at`); an id
-        #    still missing takes the build's default below (step 2). Silent,
-        #    as the pan is: the picture is the one it drew
-        if version is None or version < graphmigrate.NINE:
-            show = getattr(lib, "project", None)
-            doc = graphmigrate.nine(doc, getattr(show, "old_eye", None),
-                                    getattr(show, "camera_at", None))
-        # 0. and the look made whole (plan 44 D3): a file before `/10` drew
-        #    the hands, the clouds and the bus cables as the open show held
-        #    them, so it takes what an old show's session and `rig` held
-        #    (`Project.old_look`, `old_cuts`); its module labels and its desk
-        #    template's name are dropped — a template is said: none was ever
-        #    in a library (the owner, 2026-11-03), and its own rows are the desk
-        if version is None or version < graphmigrate.TEN:
-            if doc.get("desk_template"):
-                notes.append(TEMPLATE_RETIRED.format(name=str(doc["desk_template"])))
-            show = getattr(lib, "project", None)
-            had = set(dict(doc.get("values") or {})) if isinstance(doc.get("values"), dict) \
-                else set()
-            doc = graphmigrate.ten(doc, getattr(show, "old_look", None),
-                                   getattr(show, "old_cuts", None))
-            # (review of #351: what the show handed on for a node this preset's
-            # graph does not declare — another preset's `ghost.2.*` — is the
-            # show's leftover, dropped quietly, never an "unknown id")
-            from_show = set(dict(doc.get("values") or {})) - had \
-                if isinstance(doc.get("values"), dict) else set()
+        show = getattr(lib, "project", None)
+        fwd = graphmigrate.forward(doc, gs.specs(), eye=getattr(show, "old_eye", None),
+                                   camera_at=getattr(show, "camera_at", None),
+                                   look=getattr(show, "old_look", None),
+                                   cuts=getattr(show, "old_cuts", None))
+        doc, migrated, from_show = fwd.doc, fwd.migrated, set(fwd.from_show)
+        migrate_notes = list(fwd.migrate_notes)
+        notes += fwd.notes
         spec, section, graph_notes = gs.read(doc.get(GRAPH_KEY))
         notes += graph_notes
         # 1. what the file names that a preset may not carry — all parsed
@@ -1469,8 +1452,8 @@ class Presets:
 
     def _groupable(self, ids: list[str]) -> tuple[set[str], list[str]]:
         """Plan 40 T2: of canvas ids `ids`, those a group may hold and the
-        words for the rest (`patches.select`: the lift's rule)."""
-        members, refused = patches.select(getattr(self._graph_section(), "spec", None),
+        words for the rest (`patches.groupable`, plan 50: any node the preset saves)."""
+        members, refused = patches.groupable(getattr(self._graph_section(), "spec", None),
                                           self.router.table, ids)
         return set(members.canvas()), refused
 

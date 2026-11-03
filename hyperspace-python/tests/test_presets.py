@@ -541,7 +541,7 @@ def test_module_labels_are_dropped_and_a_missing_id_is_the_build_value(rig):
     library's `dream/default.json`, here `wake`'s values as the default)."""
     lib, reg = rig.lib, rig.reg
     wake = lib.read("dream", "wake")
-    (rig.home / "dream" / "default.json").write_text(json.dumps({**wake, "name": "default"}))
+    (rig.home / "patches" / "dream" / "default.json").write_text(json.dumps({**wake, "name": "default"}))
     lib._sync()
     lib.label("camera", "stale")                          # a label from before
     put(rig.home, "LABELS", schema="hyperspace.preset/9", values={"dream.mix": 0.25},

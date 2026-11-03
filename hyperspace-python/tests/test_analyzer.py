@@ -52,8 +52,8 @@ def scene(name: str) -> dict:
 
 def put_band(home: Path, name: str, doc: dict) -> Path:
     """A band preset of the user's in `home`, as the strip would save it."""
-    (home / "band").mkdir(exist_ok=True)
-    path = home / "band" / f"{slug(name)}.json"
+    (home / "patches" / "band").mkdir(parents=True, exist_ok=True)
+    path = home / "patches" / "band" / f"{slug(name)}.json"
     path.write_text(json.dumps(doc))
     return path
 

@@ -10,7 +10,7 @@ Plan 24 C3 (decision 19). Each preset is loaded the way the app loads it —
 a headless registry, router and `Presets` over a **scratch** library home
 made for the run, never the owner's, holding the test corpus
 (`tests/corpus/presets`, the presets the build shipped until 2026-10-28,
-and `tests/corpus/dream`, the dream module presets they may name) — and
+and `tests/corpus/patches/dream`, the dream module presets they may name) — and
 each control of the APC40's
 preset layer (`layer_controls`) gets one of three words:
 
@@ -64,7 +64,7 @@ from hyperspace.view import ViewState
 
 REPORT = ROOT / "docs" / "plans" / "assets" / "24-party-fixes" / "desk-coverage.md"
 CORPUS = ROOT / "tests" / "corpus"                   # the presets, as test data
-CORPUS_GROUPS = (PRESETS, "dream")                   # what the scratch home is seeded with
+CORPUS_GROUPS = (PRESETS, "patches/dream")                # what the scratch home is seeded with
 BAR = 4                     # the owner's bar: at most this many dark or dead
 MAPPED, DARK, DEAD = "mapped", "dark", "dead"
 MARK = {MAPPED: "●", DARK: "·", DEAD: "✕"}

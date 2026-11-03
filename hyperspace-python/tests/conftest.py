@@ -371,8 +371,11 @@ def opened_last(home, show: str = "house"):
 
 CORPUS = Path(__file__).resolve().parent / "corpus"
 # the groups the corpus holds: the twenty-five presets, the three dream
-# module presets, and the two shows (party, house) whose banks name them
+# patches of one group (plan 50: what the module presets were, under
+# patches/dream/), and the two shows (party, house) whose banks name them
 CORPUS_GROUPS = ("presets", "dream", "projects")
+# (a module group named bare — "dream" — is its patches folder, plan 50)
+GROUP_DIRS = {"dream": "patches/dream"}
 
 
 def seed(home, *groups: str, last_show: str | None = "party"):
@@ -389,10 +392,10 @@ def seed(home, *groups: str, last_show: str | None = "party"):
 
     home = Path(home)
     for group in groups or CORPUS_GROUPS:
-        src = CORPUS / group
+        src = CORPUS / GROUP_DIRS.get(group, group)
         if not src.is_dir():
             raise FileNotFoundError(f"no corpus group {group!r} under {CORPUS}")
-        dst = home / group
+        dst = home / GROUP_DIRS.get(group, group)
         dst.mkdir(parents=True, exist_ok=True)
         for f in sorted(src.glob("*.json")):
             if not (dst / f.name).exists():
