@@ -2270,6 +2270,7 @@ doing its job while a learn is armed.
 | STOP ALL | invariant | Reset all bands |
 | DEVICE ON/OFF · DETAIL | invariant | panel · cheat sheet |
 | MASTER select · PAN | invariant | overlay · overlay click-through |
+| SEND B | both (the adapter's, not a row) | **FINE**: held, every knob moves its param a tenth as far (lit while held); let go, each knob carries on from its param. A row put on SEND B takes it over |
 | D1–D8 | global | the selected band's strip: trim, contrast, transient, pre, post, attack, decay, threshold |
 | K1–K5 | global | hand steadiness, response, catch, the selected axis's return, BPM (K6–K8 dark) |
 | S1–S6 · S7 · S8 | global | band 1–6 post-drive · master dynamics · master trim (`apc40.SHIFT_FADERS`) |

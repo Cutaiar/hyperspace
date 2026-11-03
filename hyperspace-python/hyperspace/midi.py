@@ -96,6 +96,25 @@ sending the base, not the base in flight (`_ring_norm`): the same message
 as before, so the encoder is never re-based behind the hand. `rel` and
 `rel64` knobs, buttons and discrete targets are not smoothed. At 0 no
 glide is ever made and every base and every message sent is as before.
+
+The fine button (wave 2 T3, register rows 609–610). While `desk.fine` is
+on — the profile's `FINE` control held (SEND B on the APC40), or the
+param set any other way — an `abs` knob row (one with a ring) on a
+continuous, non-integer param reads the knob relatively: each message
+moves the base by what the knob moved since its last message, divided by
+FINE_DIV, written between detents with `Param.set` (no glide). A tenth of
+a MIDI step is under one detent of every param, so a slow turn creeps.
+The ring follows the base, and a ring sent re-bases the encoder as ever;
+when fine lets go, every knob it moved has its ring re-sent, so the
+encoder is re-based onto the param and the next coarse turn continues
+from there (no jump, no pickup) — on a profile whose rings do not re-base
+(`RING_REBASES_KNOB` False) those knobs lose their catch instead and pick
+up. Faders, discrete targets and relative rows are never fine. The button
+is the adapter's, not a table row: it works on every bindings.json, gives
+way to any row this device's table puts on its control (that row is the
+owner's), is never a learn's candidate, and its LED is lit while it is
+held. `desk.fine` is the rig's (group desk, never saved, not modulatable):
+a reconnect lets go of it, as of SAVE.
 """
 
 from __future__ import annotations
@@ -148,8 +167,27 @@ SLEW_TOL = 1e-6     # norm: further than this from our last write, someone else 
 SLEW_BACK_S = 0.05  # a new glide starts at the previous poll, no further back than this
 DESK_LOG_SIZE = 20  # the desk event log keeps this many events (plan 24 C1)
 
-__all__ = ["PICKUP_TOL", "Binding", "DeskEvent", "DeskLog", "MidiIO", "Ports", "Slew",
+FINE_PARAM = "desk.fine"   # the fine button held (wave 2 T3); `register_fine`
+FINE_DIV = 10              # held, a knob moves its param this many times less
+
+__all__ = ["FINE_DIV", "FINE_PARAM", "PICKUP_TOL", "Binding", "DeskEvent", "DeskLog", "MidiIO", "Ports", "Slew",
            "find_port", "retry_after"]
+
+
+def register_fine(reg: Registry) -> None:
+    """`desk.fine`: the desk's fine button held (wave 2 T3) — on, every
+    knob moves its param FINE_DIV times less. The rig's, like `desk.save`:
+    never saved, never performed; a reconnect lets go of it. The first
+    adapter a registry meets makes it."""
+    if FINE_PARAM in reg:
+        return
+    held = [False]
+    reg.toggle(FINE_PARAM, "Fine", lambda: held[0],
+               lambda v: held.__setitem__(0, bool(v)), group="desk",
+               persist=False, modulatable=False,
+               tip=f"The APC40's FINE (SEND B): hold it and a knob moves its value "
+                   f"{FINE_DIV} times less for the same turn. Let go and the knob carries "
+                   "on from where the value is.")
 
 
 @dataclass(frozen=True)
@@ -382,6 +420,12 @@ class MidiIO:
         self.desk_log = DeskLog()
         # SHIFT's param and the smoothing's, for a bare adapter too
         register_desk(registry, self.table)
+        register_fine(registry)
+        # the fine button (wave 2 T3): the knobs it moved, by control, and
+        # its LED as last sent
+        self._fine_moved: set[tuple] = set()
+        self._fine_was = False
+        self._fine_out: int | None = None
         if self.ports.injected:
             self._enter()
         elif self.ports.connect():
@@ -425,6 +469,9 @@ class MidiIO:
         save = self.reg.get(SAVE_PARAM)
         if save is not None and save.value:
             save.set(False)
+        fine = self.reg.get(FINE_PARAM)         # …and of FINE, the same way
+        if fine is not None and fine.value:
+            fine.set(False)
         # where the faders were is forgotten too: one moved while the cable
         # was out would otherwise seed a false pickup crossing (`redraw`)
         self.__dict__["_hw"] = {}
@@ -534,6 +581,7 @@ class MidiIO:
         # table is followed, so a preset a pad loaded in this very poll has
         # ended its glides (`redraw`) before any of them steps over it
         self._glide(self._now())
+        self._follow_fine()
         self.feedback()
 
     def _follow_table(self) -> None:
@@ -618,6 +666,11 @@ class MidiIO:
             self.__dict__.setdefault("_hw", {})[(kind, ch, number)] = value / full
         if kind == "note" and value == 0 and self._hold_state()[0].pop((ch, number), None):
             self._light_bars()      # let go before HOLD_S: a tap, nothing fires
+        if kind == "note" and self._fine_control() == (ch, number):
+            self._fine_press(ch, number, value > 0)
+            if fell and value > 0 and number in getattr(self.profile, "MODE0_TOGGLES", ()):
+                self._fine_press(ch, number, False)     # no release will come (see below)
+            return
         # an armed learn (plan 17 WP2): a CC or a press is a candidate only
         # when the learn waits for the desk (`Learn.accepts`: not during a
         # hand learn) and the control is not invariant (fork 6: SHIFT, a
@@ -876,6 +929,10 @@ class MidiIO:
                     p.fire()
                 b.last_hw = u
                 return
+            if self._fine_on() and b.feedback == "ring" and p.kind is Kind.CONTINUOUS \
+                    and not p.integer:
+                self._fine_move(b, p, u)
+                return
             if b.pickup and not b.caught:
                 cur = p.norm
                 crossed = b.last_hw is not None and (b.last_hw - cur) * (u - cur) <= 0
@@ -900,6 +957,84 @@ class MidiIO:
     def _note_written(self, p: Param) -> None:
         if p.kind is not Kind.TRIGGER:
             self._writes[p.id] = p.norm
+
+    # ---- the fine button (wave 2 T3) ----
+
+    def _fine_control(self) -> tuple[int, int] | None:
+        """(channel, note) of the profile's FINE button, or None: a profile
+        with none, or a table that puts a row of this device on it (any
+        layer — that row is the owner's, and the button gives way)."""
+        fine = getattr(self.profile, "FINE", None)
+        if fine is None:
+            return None
+        number, ch = fine
+        for b in self.bindings:
+            if b.kind == "note" and b.number == number and b.channel in (None, ch):
+                return None
+        return ch, number
+
+    def _fine_on(self) -> bool:
+        p = self.reg.get(FINE_PARAM)
+        return p is not None and bool(p.value)
+
+    def _fine_press(self, ch: int, number: int, pressed: bool) -> None:
+        """FINE pressed or let go: `desk.fine` follows the hand. `_held`
+        keeps the press, so `fell_back` reads its release as Mode 2's."""
+        p = self.reg.get(FINE_PARAM)
+        if p is None:                   # an adapter from before a hot reload
+            register_fine(self.reg)
+            p = self.reg[FINE_PARAM]
+        if pressed:
+            self._held[(ch, number)] = []
+            p.set(True)
+            self._log_press(self._source("note", ch, number),
+                            f"fine: knobs move {FINE_DIV}× less while held", "both")
+        else:
+            self._held.pop((ch, number), None)
+            p.set(False)
+
+    def _fine_move(self, b: Binding, p: Param, u: float) -> None:
+        """A knob's message while fine is on: the base moves by the knob's
+        own move since its last message over FINE_DIV, between detents. A
+        knob with no last position (never moved, never drawn) only takes
+        this one as its position. Any glide on the param is dropped."""
+        was, b.last_hw = b.last_hw, u
+        if was is None or u == was:
+            return
+        self._slew_state().pop(p.id, None)
+        y = min(max(p.norm + (u - was) / FINE_DIV, 0.0), 1.0)
+        p.set(p._value_of_norm(y))
+        self._note_written(p)
+        self.__dict__.setdefault("_fine_moved", set()).add(b.control)
+
+    def _follow_fine(self) -> None:
+        """Fine let go since the last poll: each knob it moved is re-based
+        onto its param — its ring re-sent (`_rebase` catches it there) —
+        or, where rings do not re-base, its catch let go (soft pickup)."""
+        on = self._fine_on()
+        was = self.__dict__.get("_fine_was", False)
+        self._fine_was = on
+        if on or not was:
+            return
+        moved = self.__dict__.setdefault("_fine_moved", set())
+        rebases = getattr(self.profile, "RING_REBASES_KNOB", False)
+        for b in self.bindings:
+            if b.control in moved:
+                if rebases:
+                    b.last_out = None
+                else:
+                    b.caught = False
+        moved.clear()
+
+    def _fine_light(self) -> None:
+        """FINE's LED: lit while fine is on, change-gated."""
+        c = self._fine_control()
+        if c is None:
+            return
+        v = 1 if self._fine_on() else 0
+        if v != self.__dict__.get("_fine_out"):
+            self._fine_out = v
+            self._send(mido.Message("note_on", channel=c[0], note=c[1], velocity=v))
 
     # ---- knob smoothing ----
 
@@ -1057,6 +1192,7 @@ class MidiIO:
                     self._send(mido.Message(
                         "note_on", channel=b.channel or 0, note=b.number, velocity=v
                     ))
+        self._fine_light()
 
     def _rebase(self, b: Binding, p: Param, v: int) -> None:
         """Plan 13 D7, hand check 31 (`profile.RING_REBASES_KNOB`): the ring
@@ -1149,6 +1285,8 @@ class MidiIO:
                 self._dark(b, velocity=0)
         if load or whole:
             self._dark_desk(drawn, dark)
+            if self._fine_control() is not None:
+                self._fine_out = 0          # FINE has no row: `_dark_desk` just sent it dark
         self.feedback()
 
     def _dark_desk(self, drawn: set, dark: set) -> None:
@@ -1184,5 +1322,7 @@ class MidiIO:
 
     def on_reload(self) -> None:
         """Hot reload: re-send everything so the surface matches the code."""
+        register_fine(self.reg)
+        self._fine_out = None
         for b in (*self.bindings, *self._page_rows()):
             b.last_out = None

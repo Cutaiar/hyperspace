@@ -6,7 +6,7 @@ import mido
 import pytest
 from conftest import seed
 
-from hyperspace import apc40, hands, lfo, tempo
+from hyperspace import apc40, hands, lfo, midi, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
@@ -1496,3 +1496,141 @@ def test_two_empty_pads_held_together_each_save_into_their_own_slot(rig):
     t[0] = midi.HOLD_S
     push(rig)
     assert pr.bank[6] is not None and pr.bank[7] is not None and pr.bank[6] != pr.bank[7]
+
+
+# ------------------------------------------- wave 2 T3: the fine button
+
+FINE = apc40.FINE[0]        # SEND B
+
+
+class Encoder:
+    """The device's side of an endless knob (apc40.RING_REBASES_KNOB): it
+    sits wherever the host's last ring CC put it, and each detent turned
+    sends its position one step on."""
+
+    def __init__(self, rig, ccn=K_MIX):
+        self.rig, self.cc, self.seen, self.pos = rig, ccn, 0, None
+
+    def _follow(self):
+        for m in self.rig.out.sent[self.seen:]:
+            if m.type == "control_change" and m.control == self.cc and m.channel == 0:
+                self.pos = m.value
+        self.seen = len(self.rig.out.sent)
+
+    def turn(self, detents):
+        for _ in range(abs(detents)):
+            self._follow()
+            self.pos = min(max(self.pos + (1 if detents > 0 else -1), 0), 127)
+            push(self.rig, cc(self.cc, self.pos))
+        self._follow()
+
+
+def fine_leds(rig, since=0):
+    return [m.velocity for m in rig.out.sent[since:]
+            if m.type == "note_on" and m.note == FINE and m.channel == 0]
+
+
+def test_the_fine_param_is_the_rigs_and_send_b_is_free_on_both_layers(rig):
+    p = rig.reg[midi.FINE_PARAM]
+    assert p.kind is Kind.TOGGLE and not p.value
+    assert (p.group, p.persist, p.modulatable) == ("desk", False, False)
+    assert apc40.FINE == (apc40.N_SEND_B, 0) and apc40.FINE[0] != apc40.N_SHIFT
+    assert not [b for b in rig.midi.bindings if b.kind == "note" and b.number == FINE]
+
+
+def test_a_knob_held_fine_moves_a_tenth_as_far_and_between_detents(rig):
+    """Ten detents coarse move view.pattern_mix ten MIDI steps; the same
+    ten with FINE held move it one, the ring re-basing the encoder on the
+    way as it always does."""
+    mix = rig.reg["view.pattern_mix"]
+    mix.set_norm(0.4)
+    rig.midi.poll()
+    knob = Encoder(rig)
+    knob.turn(10)                                   # coarse: ten MIDI steps, on detents
+    assert mix.norm == pytest.approx(0.4 + 10 / 127, abs=0.02)
+    mix.set_norm(0.4)
+    rig.midi.poll()
+    push(rig, note(FINE))
+    assert rig.reg[midi.FINE_PARAM].value
+    knob.turn(10)
+    assert mix.norm == pytest.approx(0.4 + 10 / 127 / midi.FINE_DIV, abs=1e-9)
+    assert abs(mix.norm * 100 - round(mix.norm * 100)) > 0.01       # between detents
+    knob.turn(-4)
+    assert mix.norm == pytest.approx(0.4 + 6 / 127 / midi.FINE_DIV, abs=1e-9)
+    assert rig.midi._slews == {}
+
+
+def test_letting_go_of_fine_re_bases_the_knob_onto_the_param(rig):
+    """On release the knob's ring is re-sent, so the encoder sits on the
+    param again and the next coarse detent is one step from there — no
+    jump back to where the knob's absolute position had wandered."""
+    mix = rig.reg["view.pattern_mix"]
+    mix.set_norm(0.4)
+    rig.midi.poll()
+    knob = Encoder(rig)
+    push(rig, note(FINE))
+    knob.turn(10)
+    held = mix.norm
+    mark = len(rig.out.sent)
+    push(rig, note(FINE, 0))
+    assert not rig.reg[midi.FINE_PARAM].value
+    assert [m.value for m in rig.out.sent[mark:]
+            if m.type == "control_change" and m.control == K_MIX] == [round(held * 127)]
+    knob.turn(1)
+    assert mix.norm == pytest.approx(round((round(held * 127) + 1) / 127 * 100) / 100)
+    assert abs(mix.norm - held) < 2 / 100                   # one coarse step, no jump
+
+
+def test_without_re_basing_rings_a_fine_knob_picks_up_after_release(rig, monkeypatch):
+    monkeypatch.setattr(apc40, "RING_REBASES_KNOB", False)
+    mix = rig.reg["view.pattern_mix"]
+    b = next(x for x in rig.midi.bindings if x.target == "view.pattern_mix")
+    push(rig, cc(K_MIX, 50))
+    push(rig, note(FINE))
+    before = mix.norm
+    push(rig, cc(K_MIX, 60))
+    assert mix.norm == pytest.approx(before + 10 / 127 / midi.FINE_DIV)
+    push(rig, note(FINE, 0))
+    assert not b.caught
+    push(rig, cc(K_MIX, 61))                       # far from the value: soft pickup
+    assert mix.norm == pytest.approx(before + 10 / 127 / midi.FINE_DIV)
+
+
+def test_fines_led_is_lit_while_held(rig):
+    mark = len(rig.out.sent)
+    push(rig, note(FINE))
+    push(rig, note(FINE, 0))
+    assert fine_leds(rig, mark) == [1, 0]
+    mark = len(rig.out.sent)
+    rig.midi.poll()
+    shift(rig)
+    assert fine_leds(rig, mark) == []              # change-gated; a layer switch keeps it
+    push(rig, note(FINE))
+    mark = len(rig.out.sent)
+    rig.midi.redraw(load=True)                     # a load darkens the desk, then relights it
+    assert fine_leds(rig, mark) == [0, 1]
+    assert "fine" in rig.midi.desk_log.lines()[0]
+
+
+def test_fine_leaves_discrete_targets_and_faders_coarse(rig):
+    pattern = rig.reg["view.pattern"]               # D4, an enum on the preset layer
+    push(rig, cc(0x13, 0))
+    push(rig, note(FINE))
+    push(rig, cc(0x13, 127))
+    assert pattern.value == len(pattern.names) - 1
+    dim = rig.reg["output.dim"]                     # the crossfader: a pot, soft pickup
+    dim.set_norm(0.0)
+    push(rig, cc(apc40.CC_XFADE, 0), cc(apc40.CC_XFADE, 127))
+    assert dim.norm == pytest.approx(1.0)
+
+
+def test_a_row_on_send_b_takes_it_and_a_reconnect_lets_go_of_fine(rig):
+    push(rig, note(FINE))
+    rig.midi._enter()                               # a reconnect: the press is forgotten
+    assert not rig.reg[midi.FINE_PARAM].value
+    lines = rig.reg["view.lines"]
+    was = lines.value
+    rig.midi.table.bindings.append(
+        Binding(f"note:0:{FINE}", "view.lines", "toggle", feedback="led"))
+    push(rig, note(FINE), note(FINE, 0))
+    assert lines.value != was and not rig.reg[midi.FINE_PARAM].value

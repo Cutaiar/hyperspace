@@ -48,6 +48,7 @@ Rows 542–543 come with the Flow mark (`subjects-flow-logo`, PR #214): 543 is t
 Row 560 is the owner's own, 2026-11-02, in the reshaping of the post-show plan (wave 0, K1, on `wave0/k1-clock-directive`): no shader multiplies time by a param; a rate-like param is integrated by the host (`// @clock` in an effect file) and wrapped. It is agreed, not pending; the row is here so the ports that follow it (K2 warp and tripcolour, K3 the media and instance rates, K4 the grid effects) cite one number. Hand check 419, once K2 lands a `@clock` on a shipped effect.
 Rows 554–555 (plan 43, the preset contract, 2026-11-02) are docs only: 554 is the owner's line, "a preset is a complete look; the rig is what is plugged in"; 555 is its first consequence, one camera in the preset, which overturns row 182 and is "(rec) — pending the owner" until C2 builds it ([`plans/43-preset-contract.md`](plans/43-preset-contract.md)).
 Rows 579–580 are K4 of wave 1 (on `wave1/k4`), row 560's port for the RINGS pattern and its measured rule: 579 ports RINGS × colour and records glimmer, wobble and fractals as measured and left alone (no knob of theirs grows with the clock); 580 is the build's ruling, a harness over every shipped knob for what the time lint cannot read. Hand check 436.
+Rows 609–610 are T3 of wave 2 (on `wave2/t3`), row 561's third part: the APC40's momentary fine button. 609 is the button and what it scales, 610 what happens when it is let go; both the build's, for the owner (and Dillon, whose desk it is) to keep or overturn. Hand checks 459–460, group BI.
 Every other one is in the app now (rows 110–213
 on `plan-24-26-27-integration`, rows from 214 on `plan-28-30-integration`,
 until the owner merges them) and waits
@@ -626,6 +627,8 @@ here; overturn → the change, then the same.
 | 587 | Plan 48: a save writes back to the preset's own file; as… with a folder in the name writes into it; a new preset grown from the loaded one (two-handed save, `preset.save_new`, an empty pad's hold) lands beside it; ⇧F's `PRESET <n>` at the top | 441 | (rec) — pending the owner; built as recommended |
 | 588 | Plan 48: the PRESETS page draws a folder's preset as `party / TRIP` with the folder dim; the flat list stays; a rename's field holds the leaf and keeps the folder | 440, 441 | (rec) — pending the owner; built as recommended |
 | 589 | Wave 1 T0: the test suite cannot hang the Mac — pytest-timeout's thread method at 120 s for xdist workers (the signal method for a serial run) with no worker restart in pyproject's addopts, so a test blocked in C fails by name and ends the run; `live` tests hold a per-account `flock` (wait 60 s, then skip); one tier at a time on a shared Mac; a real-GLFW test asks a child process first (`gl_window_ok`, #332) and skips if `glfwInit` does not answer | — | (rec) — pending the owner; built as recommended (T0) |
+| 609 | Wave 2 T3: SEND B held is FINE — while it is down every APC knob (a ring row, `abs`, on a continuous non-integer param) moves its param a tenth as far, read relatively and written between detents; its LED lit while held; faders, discrete targets and relative rows stay coarse; the button is the adapter's (`apc40.FINE`, `midi.MidiIO`), not a map row, and gives way to any row on SEND B | 459 | (rec) — the build's, for the owner and Dillon to keep |
+| 610 | Wave 2 T3: letting go of FINE re-sends the ring of every knob it moved, so the encoder is re-based onto the param and the next coarse turn continues from there (plan 13 D7's re-base; soft pickup where rings do not re-base); `desk.fine` is the rig's (group desk, never saved, not modulatable) and a reconnect lets go of it | 460 | (rec) — the build's, for the owner and Dillon to keep |
 
 "—": no hand check shows it; tests only.
 
@@ -10509,3 +10512,71 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   `tests/test_gl_probe.py`; a deliberate `time.sleep(130)` under
   `-n 2 --timeout=5` failed by name in 5.5 s, and under `-n0 --timeout=5`
   failed and the run went on: "1 failed, 2 passed").
+
+### 609. FINE: SEND B held, every knob a tenth as far
+- **Asked.** The owner, after the show of 2026-10-30, in the triage's
+  "coarse and fine control" (row 561): a button on the APC40 held down so
+  that a knob turned meanwhile moves its param in fine steps. T1 (the
+  tapers) and T2 (the panel's shift-drag) are separate PRs.
+- **Answer.** (rec) — the build's: SEND B, ÷10 (`midi.FINE_DIV`). The
+  desk's layout is Dillon's (DECISIONS, "Presets and the desk"); this is
+  one button and comes out whole.
+- **Built.** `apc40.FINE = (N_SEND_B, 0)`. SEND B has no row on either
+  layer, the sequencer page does not shadow it (the clip stops it does),
+  and it sits between the track knobs and the device knobs, a thumb's
+  reach from both. While `desk.fine` is on, an `abs` row with a ring on a
+  continuous, non-integer param reads each message as the knob's move
+  since its last one (`b.last_hw`), divides it by 10 and adds it to the
+  base with `Param.set` between detents (no glide, any glide dropped): a
+  detent is 1/1270 of the throw, under one detent of every param — 0.08
+  of `view.pattern_mix`'s hundred, 0.32 of a speed's 401. The ring
+  follows and re-bases the encoder as ever. The button is read by the
+  adapter, not dispatched through the table: `routing.py` is D2's while
+  it is open, and a table row would need `APC_NEW_ROWS` to reach the
+  owner's existing `bindings.json`. So it works on every file at once; it
+  stands down where any row of the device's table names SEND B (that row
+  is the owner's); it is never a learn's candidate. Its LED: 1 held, 0
+  not, change-gated, relit after a load darkens the desk. The press goes
+  in the desk log. `desk.fine` is learnable as `desk.slew` is (a learned
+  toggle row would latch it).
+- **Other options.** A clip stop (1–7 are free, but the sequencer page
+  shadows them); a track select 7–8 (far from the knobs); SEND C or
+  device ◀ ▶ (as free; SEND B is nearer the track knobs). ÷4 or ÷20.
+  A map row through `Bindings.dispatch` with `desk.fine` as a momentary
+  target (the clean shape, after D2: one `APC_NEW_ROWS` line, and the
+  on-screen desk would draw it). Fine on the faders too (a pot's position
+  is its value: every release would leave it out of place).
+- **To reverse.** `apc40.FINE = None` (or the line out): the adapter's
+  `_fine_control` is then None everywhere and nothing else changes.
+- **Rough edge.** The on-screen desk (ui_desk.py) draws SEND B as free:
+  it reads the table, and FINE is not a row. A learn armed while SEND B
+  is pressed ignores the press. An enum or integer knob held fine steps
+  as before. Between a ring sent mid-turn and the encoder taking it, a
+  message already in flight reads a few steps large (the same race the
+  coarse re-base has, ten times smaller here).
+- **Judge it.** Check 459.
+
+### 610. Letting go of FINE: the knob continues from the param
+- **Asked.** T3's brief: on release the knob's absolute position no
+  longer matches the param; handle it as the adapter already handles a
+  mismatch.
+- **Answer.** (rec) — the build's: the ring re-base (plan 13 D7, hand
+  check 31), not a pickup and not a relative read from then on.
+- **Built.** `MidiIO._follow_fine`, once a poll: on fine's on → off,
+  every knob row `_fine_move` touched has its ring re-sent
+  (`last_out = None`), so `_rebase` catches it at the param's ring and
+  the device's encoder sits there; the next coarse detent is one MIDI
+  step from the param. With `RING_REBASES_KNOB` False those knobs lose
+  their catch and pick up as the faders do. `desk.fine` (group desk,
+  `persist=False`, `modulatable=False`) is the rig's; `_enter` lets go of
+  it as of SAVE, so a lost note-off cannot leave the desk fine.
+- **Other options.** Soft pickup (the knob dead until turned back
+  through the value — up to a tenth of its throw away after a long fine
+  turn); keeping fine's relative read for good (every knob relative, no
+  longer an absolute-with-re-base desk).
+- **To reverse.** `_follow_fine`'s loop body to `b.caught = False`.
+- **Rough edge.** The re-base lands on the param's ring, a 1/127 grid:
+  a fine value between ring steps is kept, and the first coarse detent
+  after it lands on the param's own detent grid again (up to one detent
+  from the fine value).
+- **Judge it.** Check 460.
