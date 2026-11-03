@@ -2381,10 +2381,7 @@ class Panel:
         self._fader("master.trim")
 
     def _page_analyzer(self, dt: float) -> None:
-        self.analyzer_body(dt)
-
-    def analyzer_body(self, dt: float) -> None:
-        """The ANALYZER page's body — scene, meters, then the band editor
+        """The ANALYZER page — scene, meters, then the band editor
         (ui_bands.py): the spectrogram with the bands over it and the
         selected band's strip. GRAPH's side pane draws it as its
         analyzer section (ui_pane.py, plan 49): the page is the section at
@@ -2422,10 +2419,7 @@ class Panel:
         ui_hands.page(self, dt)
 
     def _page_presets(self, dt: float) -> None:
-        self.presets_body(dt)
-
-    def presets_body(self, dt: float) -> None:
-        """The PRESETS page's body, 2026-10-28, top to bottom
+        """The PRESETS page, 2026-10-28, top to bottom
         (ui_presets.page): the preset strip — ◀ name ● ▶ · new · save ·
         as… — then every preset as a list that fills the room it has, its
         trash at the foot, the patches fold, one line for the show, and the

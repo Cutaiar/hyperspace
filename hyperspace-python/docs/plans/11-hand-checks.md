@@ -6974,8 +6974,10 @@ loads `party / TRIP`.
 Register rows 597–601, 2026-11-03. Headless: `tests/test_ui_pane.py`
 (the panel driver on GRAPH: each section opened by a click and a control
 found in it by its page's id, a click in a section moving the param, a
-selection in the selection section, a new selection unfolding it, the
-fold state through `ui.json`, no conflicting ids with all five open).
+selection in the selection section, a selection leaving the fold alone,
+the fold state through `ui.json` written after the last click, a late
+library read then, the grip holding its edge while the pane scrolls, the
+narrow band's own fold, no conflicting ids with all five open).
 A restart after pulling (a new module).
 **449. The pane is there with nothing selected, and each section is its
 page.** (Mac, the control window at its launch size, a preset loaded)
@@ -6994,7 +6996,8 @@ missing a row its page has.
 3. On the other Mac, open GRAPH.
 *Pass:* (2) presets folded, analyzer open, the width as dragged. (3)
 the other Mac's pane as it was there (selection and presets open the
-first time). `~/Hyperspace/ui.json` holds `pane.open` and `graph.side_w`.
+first time). `~/Hyperspace/ui.json` holds `pane.open` and `graph.side_w`
+(and `pane.below` once the narrow band has been folded, 454).
 **451. A section's control learns and answers keys as on its page.**
 (Mac, the APC40)
 1. In the faces section, right-click **Faces** → Learn; turn a free knob.
@@ -7003,27 +7006,39 @@ first time). `~/Hyperspace/ui.json` holds `pane.open` and `graph.side_w`.
 *Pass:* (1) the knob turns the faces on and off; the ROUTING page shows
 the row. (2) the slider in the section follows. Fail: the graph's menu
 opens instead of the param's, or nothing is armed.
-**452. Two sections open share the pane; a selection takes its share.**
+**452. Open sections share the pane; a selection leaves the fold alone.**
 (Mac)
 1. Open presets and analyzer, fold selection. Click a node.
-2. Press Esc.
-*Pass:* (1) selection unfolds by itself with the node's details; the
-three share the pane's height, each scrolling by itself, the presets
-list still a list. (2) the selection says nothing is selected; the fold
-stays open.
+2. Unfold selection. Press Esc.
+3. Unfold lookback and faces too (all five open); scroll the pane to its
+   foot; drag the grip on its left edge.
+*Pass:* (1) selection stays folded, its header naming the node; presets
+and analyzer share the pane's height, each scrolling by itself, the
+presets list still a list. (2) the node's details, then words saying
+nothing is selected; the fold stays open. (3) the pane scrolls to a
+fixed foot (it does not keep growing), and the grip resizes it from its
+drawn edge, scrolled or not.
 **453. The presets section at 320 px.** (Mac, the pane at its narrowest)
 1. Drag the pane to its narrowest. In the presets section, step ◀ ▶,
    click a row, **save**, **as…** (type a name, Enter).
 2. In the show line: **open ▾**, **save**.
 *Pass:* (1) the strip fits — its name cut short, the chips flush right,
 nothing past the pane's edge; each action does what it does on the
-PRESETS page. (2) the show line's chips on a second row, each working.
+PRESETS page; with a preset that wants a device the rig lacks, **N
+devices missing** sits beside ▶ or on its own row under the strip,
+never over **new**. (2) the show line's chips on a second row, each
+working.
 **454. A narrow window puts the pane under the canvas.** (Mac)
 1. Make the control window narrow (under 720 px of page).
-2. Click **details beside**, then **details below**.
-*Pass:* (1) the pane is a band along the canvas's bottom, its headers
-there, the chip on the head with nothing selected. (2) the chip moves it
-beside and back. Fail: the canvas re-centres its nodes as the pane moves.
+2. In the band, fold selection and unfold presets; widen the window
+   past 720 px of page, then narrow it again.
+3. Click **details beside**, then **details below**.
+*Pass:* (1) the pane is a band along the canvas's bottom, its five
+headers one row of chips, selection alone open and taking the band's
+height, the chip on the head with nothing selected. (2) the band shows
+presets alone, the whole band; wide, the column keeps its own folds;
+narrow again, the band's come back. (3) the chip moves it beside and
+back. Fail: the canvas re-centres its nodes as the pane moves.
 **455. The held projector's inset sits clear of the pane.** (Mac, plan
 38's HOLD on)
 1. Hold the projector. Look at the canvas's top-right corner.

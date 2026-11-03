@@ -168,14 +168,16 @@ def name_w() -> float:
 NAME_MIN = 48.0     # px: the narrowest the strip's name button is squeezed to
 
 
-def strip_name_w(avail: float, chips: tuple[str, ...], dirty_: bool) -> float:
+def strip_name_w(avail: float, chips: tuple[str, ...], dirty_: bool,
+                 extra: float = 0.0) -> float:
     """The name button's width on a strip `avail` px wide (plan 49): `name_w`
     where it fits — every page — else what is left beside the arrows, the
-    dot and the right-hand chips (GRAPH's side pane, a few hundred px),
-    never under `NAME_MIN`."""
+    dot, `extra` (the presets strip's "N devices missing" chip after ▶,
+    `ui_graph.wants_chip_w`) and the right-hand chips (GRAPH's side pane, a
+    few hundred px), never under `NAME_MIN`."""
     style = imgui.get_style()
     beside = (2 * imgui.get_frame_height() + 4 + ui.chip_w(*chips) + style.item_spacing.x
-              + (2 * ui.DOT_R + 2 if dirty_ else 0.0))
+              + (2 * ui.DOT_R + 2 if dirty_ else 0.0) + extra)
     return max(NAME_MIN, min(name_w(), avail - beside))
 
 
@@ -292,7 +294,14 @@ def strip(panel, group: str) -> None:
     chips = (word, "as…") if kind else (word, "as…", "reset")
     if presets is not None:
         chips = ("new", *chips)
-    width = strip_name_w(imgui.get_content_region_avail().x, chips, is_dirty)
+    wants, avail = 0.0, imgui.get_content_region_avail().x
+    if group == PRESETS:
+        from . import ui_graph  # (late, as below)
+        wants = ui_graph.wants_chip_w(panel)
+    # "N devices missing" beside ▶ where it fits by a squeezed name, else
+    # on a row of its own under the strip (a narrow pane, plan 49)
+    wants_beside = wants == 0.0 or strip_name_w(avail, chips, is_dirty) - wants >= NAME_MIN
+    width = strip_name_w(avail, chips, is_dirty, wants if wants_beside else 0.0)
 
     # ◀ name ▶ — the arrows step by name order; a module strip's name opens its list
     imgui.begin_disabled(not listing)
@@ -328,7 +337,8 @@ def strip(panel, group: str) -> None:
     imgui.end_disabled()
     if group == PRESETS:
         from . import ui_graph  # (late, as `new` below)
-        ui_graph._wants_chip(panel)     # plan 40 T4: the devices the preset waits for
+        if wants_beside:                # plan 40 T4: the devices the preset waits for
+            ui_graph._wants_chip(panel)
     else:
         _list_popup(panel, group, listing, cur)
 
@@ -372,6 +382,9 @@ def strip(panel, group: str) -> None:
             d = lib.default_name(group)
             ui.tooltip(f"Back to the default preset — {d}" if d
                        else "Back to the values the module started with")
+    if not wants_beside:
+        from . import ui_graph
+        ui_graph._wants_chip(panel, beside=False)
     imgui.pop_id()
 
 

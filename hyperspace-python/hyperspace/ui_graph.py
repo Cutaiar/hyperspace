@@ -414,6 +414,8 @@ def close(panel) -> None:
     """Destroy the editor context, if the page ever made one — before
     imgui's own context goes (quit, ⌘R). Safe to call twice."""
     st = panel.__dict__.get(STATE)
+    if st:
+        ui_pane.flush(st, force=True)       # plan 49: a fold not yet written
     if not st or st.get("editor") is None:
         return
     ctx, st["editor"] = st["editor"], None
@@ -723,9 +725,12 @@ def page(panel, dt: float) -> None:
     # top-left), so a selection that narrowed it panned every node (the
     # owner, 2026-10-24). The details are laid over its edge instead.
     origin = imgui.get_cursor_screen_pos()
-    if st["side_w"] is None:                    # this Mac's width, asked once
-        lib = getattr(panel, "library", None)
-        st["machine"] = getattr(lib, "machine", None)
+    if st["machine"] is None:                   # asked until a library is attached
+        st["machine"] = getattr(getattr(panel, "library", None), "machine", None)
+    if st["side_w"] is None or (st["machine"] is not None and not st.get("side_read")
+                                and not st.get("side_drag")):
+        # this Mac's width, asked once the machine is known (the default until then)
+        st["side_read"] = st["machine"] is not None
         st["side_w"] = (read_side(st["machine"]) if st["machine"] is not None else None) or SIDE_W
     # (the frame's width is clamped to this page; the remembered one is not,
     # so a narrow window never shrinks what a wide one was set to)
@@ -751,7 +756,6 @@ def page(panel, dt: float) -> None:
     _canvas(panel, st, view, canvas, st["backdrop_alpha"] if shown else 0.0)
     # the held projector's inset: in the canvas's corner left of the pane
     _monitor(panel, (origin.x, origin.y), (canvas.x - size[0] if wide else canvas.x, canvas.y))
-    ui_pane.note_selection(st, sel_key(sel))
     # the pane, always on (plan 49): its bottom is the canvas's, so the page ends where it did
     imgui.set_cursor_screen_pos(imgui.ImVec2(*pos))
     imgui.push_style_color(imgui.Col_.child_bg, imgui.get_style_color_vec4(imgui.Col_.window_bg))
@@ -763,16 +767,15 @@ def page(panel, dt: float) -> None:
     i0 = page_list.idx_buffer.size()
     opened = imgui.begin_child("##graph.side", imgui.ImVec2(*size), imgui.ChildFlags_.borders)
     omit = (i0, page_list.idx_buffer.size())
+    st["pane_window"] = imgui.internal.get_current_window().name   # (the tests find it by it)
     if opened:
         if wide:                        # the grip on the column's left edge, then the details
-            top = imgui.get_cursor_screen_pos()
             _grip(st, pos, size, avail.x, side)
-            imgui.set_cursor_screen_pos(imgui.ImVec2(top.x + GRIP_W, top.y))
             imgui.indent(GRIP_W)
         # plan 49: folding sections — the selection's details first
         ui_pane.draw(panel, st, dt,
                      (lambda: _side(panel, st, view, sel)) if sel else None,
-                     sel_words(sel))
+                     sel_words(sel), below=not wide)
     imgui.end_child()
     imgui.pop_style_color()
     panel.canvas_px = (*panel.canvas_px[:4], omit)
@@ -879,30 +882,44 @@ def write_side(machine, side_w: float) -> None:
 
 def _grip(st: dict, pos: tuple[float, float], size: tuple[float, float], avail_w: float,
           side: float) -> None:
-    """The side column's drag grip (its left edge, `GRIP_W` wide, the
-    column's height), drawn first inside the column's child so it sits
-    over the canvas like the rest of the details. Held, the column follows
-    the mouse (`side_width` keeps it in range); let go, the width is
+    """The side column's drag grip: its left edge, `GRIP_W` wide, the
+    column's height. Called inside the column's child but submits no item
+    — a hit test of its own on the mouse (plan 49 review: an item pinned
+    to the column's top grew the child's content by its scroll every
+    frame, once the sections made the column scroll, and its hit box left
+    the drawn edge). Pressed on, the column follows the mouse
+    (`side_width` keeps it in range) until let go, when the width is
     written for this Mac. A faint line while hovered or held, and the
     east-west cursor."""
-    imgui.set_cursor_screen_pos(imgui.ImVec2(pos[0], pos[1]))
-    imgui.invisible_button("##graph.side.grip", imgui.ImVec2(GRIP_W, max(size[1], 1.0)))
-    hovered, active = imgui.is_item_hovered(), imgui.is_item_active()
-    if active:
-        st["side_w"] = side_width(side - imgui.get_io().mouse_delta.x, avail_w)
+    m = imgui.get_mouse_pos()
+    over = (pos[0] <= m.x < pos[0] + GRIP_W and pos[1] <= m.y < pos[1] + size[1]
+            and imgui.is_window_hovered(imgui.HoveredFlags_.child_windows)
+            and not imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id))
+    if over and imgui.is_mouse_clicked(0):
         st["side_drag"] = True
-    elif st.get("side_drag"):
-        st["side_drag"] = False
+    held = bool(st.get("side_drag"))
+    if held and imgui.is_mouse_down(0):
+        st["side_w"] = side_width(side - imgui.get_io().mouse_delta.x, avail_w)
+    elif held:
+        st["side_drag"] = held = False
         machine = st.get("machine")
         if machine is not None:
             write_side(machine, st["side_w"])
-    if hovered or active:
+    if over or held:
         imgui.set_mouse_cursor(imgui.MouseCursor_.resize_ew)
         x = pos[0] + GRIP_W / 2
         imgui.get_window_draw_list().add_line(
             imgui.ImVec2(x, pos[1]), imgui.ImVec2(x, pos[1] + size[1]),
-            imgui.get_color_u32(imgui.Col_.separator_active if active else imgui.Col_.separator_hovered),
-            2.0)
+            imgui.get_color_u32(imgui.Col_.separator_active if held
+                                else imgui.Col_.separator_hovered), 2.0)
+
+
+def wants_chip_w(panel) -> float:
+    """The width `_wants_chip` takes on its line, the spacing before it
+    included; 0 when it draws nothing (the PRESET strip budgets it)."""
+    from . import devices  # (late, as `_wants_chip`)
+    text = devices.missing_chip(panel_wants(panel))
+    return 0.0 if text is None else ui.chip_w(text) + imgui.get_style().item_spacing.x
 
 
 def share(panel, st: dict, sel) -> None:
@@ -1185,7 +1202,7 @@ def panel_wants(panel) -> list:
     return got[1]
 
 
-def _wants_chip(panel) -> None:
+def _wants_chip(panel, beside: bool = True) -> None:
     """Plan 40 T4: **N devices missing** on the line after the chips before
     it, its hover one line per device the loaded preset wants and the rig
     lacks ("apc40 (lost): K1, K2", `devices.want_lines`); nothing when
@@ -1196,7 +1213,8 @@ def _wants_chip(panel) -> None:
     text = devices.missing_chip(ws)
     if text is None:
         return
-    imgui.same_line()
+    if beside:                              # (else on a row of its own: a narrow strip)
+        imgui.same_line()
     ui.chip(f"{text}##wants")
     if imgui.is_item_hovered():
         ui.tooltip("\n".join(["the preset's rows that wait for a device:",
@@ -3343,15 +3361,6 @@ def _selection(st: dict, view: graphview.View):
         if g is not None:
             return ("group", g)
     return None
-
-
-def sel_key(sel):
-    """What a selection is, for the pane to tell a new one (plan 49): its
-    kind and id; None with nothing selected."""
-    if sel is None:
-        return None
-    what, obj = sel
-    return what, getattr(obj, "id", None)
 
 
 def sel_words(sel) -> str:
