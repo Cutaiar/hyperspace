@@ -95,9 +95,10 @@ Also on `main` from the owner: #330, the Joy-Con as a 4D totem (plan 47,
 | F1 | One format: patch = group not yet saved = preset with no open pins, one loader, one conflict sheet; module presets and desk templates retired as separate ideas; `/11` only if the one format needs it (doc 2.3; DECISIONS "Patch, group and preset become one format") | Format | L | D3 merged |
 | V3 | The analyzer listens to the mix: the mixer's summed block pushed into the analyzer's ring as a `mix` source beside `mic` and `file` (plan 45; doc 2.8) | Media | M | nothing (V2 is merged) |
 | T2 | Shift-drag fine mode in the panel (doc 2.6) | Time | S | nothing (the tapers are merged) |
-| T3 | A momentary fine button on the APC40's knobs (doc 2.7) | Time | S | nothing; the desk is Dillon's (decision 10) — assign only at the owner's say |
-| L2 | The folder tree in the PRESETS section of the folded pane (doc 2.5) | UI | S–M | **U1, fold stage 1 (Dillon) — not started as of 2026-11-03**, so blocked unless the owner rules otherwise; plan 48 "stage 2"'s non-pane parts (move a preset between folders, make/rename a folder, the tools walking folders) could go now as L2a |
-| U2 | Panel fold stage 2, the FX page retired (doc 2.4) | UI | L | U1; Dillon's; not assigned (the owner, 2026-11-03) |
+| T3 | A momentary fine button on the APC40's knobs (doc 2.7) | Time | S | nothing; ours (the desk was Dillon's by decision 10 — say so in the PR body and tag him) |
+| U1 | Panel fold stage 1 (doc 0.9, never started): the side pane always on, with selection, presets, dream, faces and analyzer sections; plan 49 written in the same PR | UI | M | nothing; **ours this wave** (the owner, 2026-11-03: the fold is ours, on its schedule) |
+| U2 | Panel fold stage 2 (doc 2.4): media, fx, LFO, sequencer, audio, camera, output fold in; the FX page retired | UI | L | U1 merged; ours |
+| L2 | The folder tree in the PRESETS section of the folded pane (doc 2.5) | UI | S–M | U1 merged |
 | I1 | Test infra follow-ups (the wave 1 prompt called this "T1"; renamed so the doc's T1, the tapers, keeps its name): the flakes above (worker crashes under GPU contention: serialise torch/Vision live tests behind the live lock or an `xdist_group`), `--dist load` (the owner said go, 2026-11-03; measure the live tests under the lock), the register tidy (`###` sections in numeric order; the 565–570 table rows exist already), module-scoped live fixtures under the lock (row 589's caveat), the stale wave 0/1 worktrees, the untracked `tests/fixtures/real.mp3` the audio golden manifest names | infra | S | nothing |
 
 Not wave 2 (the doc's waves 3 and 4): **V4** (3.7, waits on V3 — the wave 1
@@ -149,6 +150,9 @@ load` follow-up (row 589).
   **L2 is the pane's folder tree** gated on Dillon's U1 (not started), and
   the infra item is **I1**.
 - Builders run on **Opus** (the owner, 2026-11-03).
+- **The fold is ours this wave** (the owner, 2026-11-03, after talking to
+  Dillon): U1 first, then U2 and L2 on it. T3 is ours too. Merging on green
+  is authorised for the wave.
 
 ## How to run it
 
@@ -160,9 +164,9 @@ load` follow-up (row 589).
    letter / plan number, the commit trailer lines the session requires,
    the PR title and body conventions (a `## Review fixes` section is added
    later), and "do not merge; do not run any migration against
-   `~/Hyperspace` or the Drive folder". Launch D2, V3, T2 and I1 together
-   (T3 and L2 only as the owner rules); D3 after D2 merges; F1 after D3
-   merges. **Builders run on Opus** (the owner, 2026-11-03; DECISIONS
+   `~/Hyperspace` or the Drive folder". Launch D2, V3, U1, I1 together, then T2 and T3 (never more than two
+   fast-tier runs on the machine at once, so stagger); D3 after D2 merges;
+   U2 and L2 after U1 merges; F1 after D3 merges. **Builders run on Opus** (the owner, 2026-11-03; DECISIONS
    "Process": never Fable) — pass `model: "opus"` to every implementation
    agent.
 3. **Testing on the shared Mac** (the wave 1 lesson): builders run the
@@ -187,9 +191,8 @@ load` follow-up (row 589).
    queue on an alias branch (`m/<id>`, pushed to the PR's branch), waiting
    for green CI, then `gh pr ready` + `gh pr merge --squash --delete-branch
    --auto` with a commit body that carries the trailer lines: I1, D2, V3,
-   T2, T3, L2, D3 (the schema move, between shows), F1 (only after D3).
-   The owner authorised merging-when-green for wave 1; ask again at the
-   start of wave 2.
+   T2, T3, U1, L2, U2, D3 (the schema move, between shows), F1 (only after
+   D3). The owner authorised merging-when-green for wave 2 on 2026-11-03.
 7. After the last merge: both Macs pull, `uv sync`, restart; the owner runs
    D3's migration; hand checks for the wave; then write the wave 3 opening
    prompt the way this one was written and stop.
