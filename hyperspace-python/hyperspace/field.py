@@ -361,7 +361,7 @@ def perspective(z: np.ndarray, radius: float, persp: float) -> np.ndarray:
     return eye / np.maximum(eye - z, 0.25 * eye)     # never past 4×, whatever moves
 
 
-def field(s, w: float, h: float, radius_px: float | None = None,
+def field(s, w: float, h: float, *, radius_px: float | None = None,
           pad_px: float = PAD_PX) -> np.ndarray:
     """Where the copies of view `s` go in a (w, h) viewport at its motion's
     phase `s.inst_phase` (K3, row 578: `inst_rate` integrated by the host):

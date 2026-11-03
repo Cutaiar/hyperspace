@@ -234,6 +234,16 @@ class ViewState:
     rate: list[float] = field(default_factory=lambda: [1.0] * 6)
     pattern_mod: list[float] = field(default_factory=lambda: [1.0] * N_MOD)
 
+    def seed_phases(self, t: float) -> None:
+        """Set the field's and the media path's phases as if their rates had
+        always been what they are now, `t` seconds in (K3, row 578): what
+        t × rate read before the host integrated them —
+        `Renderer._pattern_clock`'s first call. For a pinned clock (the
+        golden harness, the shot tools): seeded at t, then `integrate(dt)`
+        each frame, the phase is (t + k·dt) · rate at a constant rate."""
+        self.inst_phase = (t * self.inst_rate) % INST_PERIOD
+        self.media_phase = (t * self.media_rate) % MEDIA_PERIOD
+
     def integrate(self, dt: float) -> None:
         """The frame() angle update: ang[p] += dt·speed·RATE[p]·rate[p].
 

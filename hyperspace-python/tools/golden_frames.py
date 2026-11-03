@@ -518,9 +518,8 @@ class Rig:
             # set as if its rate had always been this one
             # (Renderer._pattern_clock's first call), so frame k reads
             # (T0 + k·DT) · rate at a constant rate, as before K3
-            v, self.seeded = self.view, True
-            v.inst_phase = (self.t - DT) * v.inst_rate
-            v.media_phase = (self.t - DT) * v.media_rate
+            self.seeded = True
+            self.view.seed_phases(self.t - DT)
         self.view.integrate(DT)
         self.renderer.draw_outputs(self.view, *logical, dpr, views, t_now=self.t)
 

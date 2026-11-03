@@ -6676,6 +6676,11 @@ Headless: `tests/test_view_phase.py` (`test_a_knob_step_on_the_field_rate_moves_
    (`view.media_rate`) one step each way in each.
 4. Turn **Media rate** to 0: the picture stops where it is; back up: it
    moves on from there.
+5. Under hold (plan 38): engage HOLD and nudge Field rate on the preview.
+   Until plan 44's per-deck `ViewState`, a Field rate or Media rate move
+   on the preview also moves the projector — its copies quicken too —
+   and the hold's red line stays silent about it. That is the ruled
+   behaviour (row 578), the same as the turn's speed, not a fault.
 *Pass:* in 2 and 3 every nudge makes the motion quicken or slow from
 where it is — no copy and no picture leaps across the screen, the same as
 nudging the turn's speed; in 4 the picture parks and resumes in place.

@@ -163,18 +163,24 @@ def test_instances_grid(ctx):
 def test_instance_motion(ctx):
     import numpy as np
 
-    still = render_offscreen(
-        ViewState(shape=3, ang=list(VIEW["ang"]), instances=9), 800, 600,
-        ctx=ctx, t_now=2.0,
-    )
-    for motion in (1, 2, 3):
-        moving = render_offscreen(
+    still = render_offscreen(ViewState(shape=3, ang=list(VIEW["ang"]), instances=9), 800, 600,
+                             ctx=ctx)
+
+    def at(motion, phase):
+        # K3: the motion's phase is the host's (ViewState.integrate), not
+        # the frame's clock
+        return render_offscreen(
             ViewState(shape=3, ang=list(VIEW["ang"]), instances=9,
-                      inst_motion=motion, inst_amp=0.4),
-            800, 600, ctx=ctx, t_now=2.0,
-        )
-        assert np.abs(moving.astype(int) - still.astype(int)).mean() > 0.01, (
+                      inst_motion=motion, inst_amp=0.4, inst_phase=phase),
+            800, 600, ctx=ctx)
+
+    for motion in (1, 2, 3):
+        a, b = at(motion, 2.0), at(motion, 3.1)
+        assert np.abs(a.astype(int) - still.astype(int)).mean() > 0.01, (
             f"instance motion mode {motion} leaves the grid static"
+        )
+        assert np.abs(a.astype(int) - b.astype(int)).mean() > 0.01, (
+            f"instance motion mode {motion} does not move with its phase"
         )
 
 

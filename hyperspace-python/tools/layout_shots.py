@@ -48,7 +48,7 @@ T = 3.1                       # the pinned clock: mid-motion on the last row
 def view(n: int, layout: int, motion: int = 0) -> ViewState:
     s = ViewState(shape=3, faces=True, pattern=2, bright=1.4, points=True, lines=True,
                   instances=n, inst_layout=layout, inst_motion=motion, inst_amp=0.35,
-                  inst_rate=1.0, inst_phase=T * 1.0)   # K3: the phase the host integrates
+                  inst_rate=1.0)
     s.ang = [0.3, 0.7, 1.1, 0.5, 0.9, 1.3]
     s.yaw, s.pitch = 0.4, 0.25
     gx, gy = inst_positions(n, layout)
@@ -69,6 +69,7 @@ def render(ctx, s: ViewState) -> np.ndarray:
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H), 4)])
     fbo.use()
     ctx.viewport = (0, 0, W, H)
+    s.seed_phases(T)          # K3: the field's phase at the pinned clock
     r.draw(s, W, H, t_now=T)
     img = np.frombuffer(fbo.read(components=3), dtype=np.uint8).reshape(H, W, 3)[::-1].copy()
     fbo.release()

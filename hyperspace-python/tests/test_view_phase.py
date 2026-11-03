@@ -54,6 +54,19 @@ def test_from_rest_at_a_constant_rate_the_phase_is_rate_times_t():
     assert s.inst_phase == pytest.approx(1.4 * 1.5) and s.media_phase == pytest.approx(0.7 * 1.5)
 
 
+@pytest.mark.parametrize("t", (0.0, 2.0, 37.5))
+def test_seeding_then_integrating_is_rate_times_t(t):
+    """`seed_phases(t)` (a pinned clock's start: the golden harness, the
+    shot tools) then k frames of `integrate` read (t + k·dt) · rate, the
+    phase t × rate gave before K3, wrapped."""
+    s = ViewState(inst_rate=1.4, media_rate=0.7)
+    s.seed_phases(t)
+    _run(s, 30)
+    end = t + 30 * DT
+    assert s.inst_phase == pytest.approx((end * 1.4) % INST_PERIOD, abs=1e-9)
+    assert s.media_phase == pytest.approx((end * 0.7) % MEDIA_PERIOD, abs=1e-9)
+
+
 def test_the_phases_run_while_the_turn_is_paused():
     """`playing` pauses the turn; the field and the path ran on the wall
     clock before K3 and still run."""
@@ -127,6 +140,10 @@ def test_a_knob_step_on_the_field_rate_moves_no_copy_further_than_one_frame(moti
 # ---------------------------------------------------------------- the pin
 
 RATES = ("inst_rate", "media_rate")
+# a string that reaches a rate: the attribute's name (getattr, vars) or
+# its param id (reg[...]) — exactly; a uniform or a message that merely
+# contains one is not a read
+RATE_NAMES = {*RATES, *(f"view.{r}" for r in RATES)}
 
 
 def _rate_reads(name: str) -> list[int]:
@@ -141,8 +158,7 @@ def _reads(tree: ast.AST) -> list[int]:
     prose = {id(n.value) for n in ast.walk(tree) if isinstance(n, ast.Expr)}
     return [n.lineno for n in ast.walk(tree)
             if (isinstance(n, ast.Attribute) and n.attr in RATES)
-            or (isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in prose
-                and any(r in n.value for r in RATES))]
+            or (isinstance(n, ast.Constant) and id(n) not in prose and n.value in RATE_NAMES)]
 
 
 def test_the_pin_sees_every_road_to_a_rate():
@@ -150,6 +166,8 @@ def test_the_pin_sees_every_road_to_a_rate():
                 'ph = vars(s)["media_rate"]', 'r = reg["view.inst_rate"].value'):
         assert _reads(ast.parse(src)), src
     assert not _reads(ast.parse('def f(s):\n    """reads inst_rate"""\n    return s.inst_phase'))
+    for src in ('u = p["u_media_rate"]', 'log("inst_rate moved")'):
+        assert not _reads(ast.parse(src)), src
 
 
 @pytest.mark.parametrize("name", ("render.py", "field.py"))

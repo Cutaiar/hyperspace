@@ -9741,10 +9741,15 @@ and D3 (the per-deck split) are
   `Renderer._field` / `_legacy_field` / `_copies_of` lost their now-unused
   `t`. From rest at a constant rate the phase is rate · t, the picture
   before K3. The golden harness (`tools/golden_frames.py`) sets each
-  rig's phases on its first frame, after the first `reg.apply`, at
-  `T0 · rate` from the rate that frame's modulation leaves — as if the
-  rate had always been that, `Renderer._pattern_clock`'s first call (row
-  99) — so frame k reads (T0 + k·DT) · rate as it did: no golden moved.
+  rig's phases on its first frame, after the first `reg.apply`, with
+  `ViewState.seed_phases(T0)` from the rate that frame's modulation
+  leaves — as if the rate had always been that, `Renderer._pattern_clock`'s
+  first call (row 99) — so frame k reads (T0 + k·DT) · rate as it did: no
+  golden moved. The shot tools (`layout_shots`, `dream_shots`, `fx_shots`,
+  `lookback_shots`, `hands_tape`, `dream_layer_sheet`) seed at their
+  pinned clock the same way; their committed sheets were not regenerated.
+  `field.field`'s `radius_px` and `pad_px` are keyword-only, so a caller
+  still passing a time cannot land it on the cull radius.
   `app.frame` runs `view.integrate` in a guarded block of its own after
   the step's (the order unchanged), so a step that raises every frame no
   longer stops the motion with it.
@@ -9773,8 +9778,16 @@ and D3 (the per-deck split) are
   held rate. This is how the turn already behaves, and the two rate
   params join `view.speed` in `hold.ONE_FOR_BOTH` (the orchestrator's
   ruling) so the hold neither holds them nor counts them as changed on
-  its red line (`tests/test_hold.py`).
+  its red line (`tests/test_hold.py`). Plainly: until plan 44's
+  per-deck `ViewState`, a Field rate or Media rate move on the preview
+  also moves the projector, and the hold's red line stays silent about
+  it.
   A paused turn (`view.playing` off) leaves the field and the path
-  moving, as before.
+  moving, as before. And `app.frame` integrates even on a frame whose step
+  raised before `reg.apply()`, so the phases then advance on the last
+  applied rates — the motion carries on at stale values where before K3
+  the field and path still ran on the wall clock and the turn stopped
+  (intended: the picture keeps moving through a broken step; the red
+  banner names the step).
 - **Judge it.** Hand check 435 (group AZ).
 
