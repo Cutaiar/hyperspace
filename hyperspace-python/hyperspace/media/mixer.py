@@ -100,6 +100,7 @@ class Mixer:
         self._mix = np.zeros((BLOCK, AUDIO_CHANNELS), np.float32)   # the callback's own
         self._one = np.zeros((BLOCK, AUDIO_CHANNELS), np.float32)
         self.tap = None       # plan 45 V3: the analyzer's ring, or None (`listen`)
+        self.tap_errors = 0   # pushes into that ring that raised (not voice reads)
         self._mono = np.zeros(BLOCK, np.float32)
 
     # -- the frame thread ---------------------------------------------------
@@ -201,13 +202,14 @@ class Mixer:
         """The analyzer's input ring (anything with `push(mono)`), or None
         to stop. From the frame thread; the callback reads it once a block.
         Opens nothing: the stream still opens when a channel first asks."""
-        self.__dict__.setdefault("_mono", np.zeros(BLOCK, np.float32))  # a Mixer from before V3
         self.tap = ring
 
     def _push(self, mix, frames: int) -> None:
-        """The block just written, as mono (mean of L and R), into the
-        analyzer's ring. Called from the callback only; a failure here costs
-        the analyzer one block, never the sound already written."""
+        """The block just written, as mono (the mean over its channels: L
+        and R), into the analyzer's ring. Called from the callback only; a
+        failure here costs the analyzer one block, never the sound already
+        written. `_mono` is (re)made here, the one place: another block
+        size, or a Mixer from before V3 that has none."""
         ring = getattr(self, "tap", None)
         if ring is None:
             return
@@ -218,11 +220,10 @@ class Mixer:
             if mix is None:
                 mono.fill(0.0)
             else:
-                np.add(mix[:, 0], mix[:, 1], out=mono)
-                np.multiply(mono, 0.5, out=mono)
+                np.mean(mix, axis=1, out=mono)
             ring.push(mono)
         except Exception:  # noqa: BLE001 — the analyzer's loss, not the room's
-            self.errors += 1
+            self.tap_errors = getattr(self, "tap_errors", 0) + 1
 
     def line(self) -> str:
         """SYSTEM's one line: '' until a channel has asked for the stream
@@ -231,7 +232,9 @@ class Mixer:
             return ""
         return (f"media sound: {self.state} · {self.playing} playing"
                 f" · {self.underruns} underruns"
-                + (f" · {self.errors} read errors" if self.errors else ""))
+                + (f" · {self.errors} read errors" if self.errors else "")
+                + (f" · {tap} analyzer push errors"
+                   if (tap := getattr(self, "tap_errors", 0)) else ""))
 
     # -- the stream's thread ------------------------------------------------
 

@@ -2363,8 +2363,11 @@ class Panel:
             rate = getattr(a, "rate", getattr(a, "sr", 0.0))
             imgui.text_disabled(f"{a.label}  ·  {rate / 1000:.1f} kHz")
             mx = getattr(a, "_mixer", None)
-            if a.mode == "mix" and mx is not None and not getattr(mx, "playing", 0):
-                imgui.text_disabled("silent until a channel's sound is on (MEDIA)")
+            if a.mode == "mix" and mx is not None:
+                if getattr(mx, "failed", False):        # the mixer's error is the source's
+                    imgui.text_colored(WARN, f"video sound silent — {mx.state}")
+                elif not getattr(mx, "playing", 0):
+                    imgui.text_disabled("silent until a channel's sound is on (MEDIA)")
         else:
             imgui.text_disabled("no source — the shape spins on its own")
 

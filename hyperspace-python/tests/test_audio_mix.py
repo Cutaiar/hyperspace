@@ -14,7 +14,7 @@ from test_audio import FakeStream, fake_sd  # noqa: F401 — the fixture
 from test_media_mixer import DT, opened, rig
 
 from hyperspace.analysis import FFT_SIZE
-from hyperspace.audio import AudioEngine
+from hyperspace.audio import MIX_IDLE_FRAMES, AudioEngine
 from hyperspace.control import Control
 from hyperspace.media import mixer as M
 from hyperspace.media.video import AUDIO_RATE
@@ -126,7 +126,7 @@ def test_mix_with_nothing_heard_is_silence_not_an_error():
     assert len(got) == M.BLOCK and not got.any(), "no voice pushes zeros: the bands decay"
 
 
-def test_a_stream_that_stops_is_silence_not_the_last_block_held():
+def test_a_stream_that_stops_or_stalls_is_silence_not_the_last_block_held():
     m, f = heard(1, amp=0.5)
     a = AudioEngine()
     a.start_mix(m.mixer)
@@ -136,9 +136,15 @@ def test_a_stream_that_stops_is_silence_not_the_last_block_held():
         s.pull()
     a.step(DT)
     assert a.analyser._buf.any()
-    m.mixer.state = "error: the output stream stopped"   # no callback will come
+    assert m.mixer.state == "open"           # still "open": PortAudio stalled, no callback
+    for _ in range(MIX_IDLE_FRAMES - 1):
+        a.step(DT)
+    assert a.analyser._buf.any(), "a frame or two with no block is jitter, not silence"
     a.step(DT)
     assert not a.analyser._buf.any()
+    s.pull()                                 # the callback comes back: the sound does too
+    a.step(DT)
+    assert a.analyser._buf.any() and a._mix_idle == 0
 
 
 def test_switching_sources_mid_run_detaches_the_mix_and_keeps_the_bands():
@@ -177,7 +183,17 @@ def test_a_ring_that_raises_costs_the_analyzer_not_the_sound():
     m.mixer.listen(Bad())
     m.poll(DT, 0.0)
     out = opened(m, f).pull()
-    assert out.any() and m.mixer.errors == 1
+    assert out.any() and m.mixer.tap_errors == 1 and m.mixer.errors == 0
+    assert "1 analyzer push errors" in m.mixer.line() and "read errors" not in m.mixer.line()
+
+
+def test_the_mono_is_the_mean_over_however_many_channels():
+    mx = M.Mixer(make=lambda **kw: None)
+    a = AudioEngine()
+    a.start_mix(mx)
+    mx._push(np.array([[0.3, 0.6, 0.9]] * 4, np.float32), 4)
+    np.testing.assert_allclose(a._ring.drain(), 0.6, atol=1e-6)
+    assert mx.tap_errors == 0
 
 
 def test_a_mixer_from_before_v3_learns_to_listen_after_a_hot_reload():
@@ -206,3 +222,9 @@ def test_the_audio_mix_toggle_picks_the_source_and_lets_it_go():
     mix.set(True)
     mix.set(False)
     assert not a.on and m.mixer.tap is None
+
+
+def test_the_toggle_is_declared_only_with_the_hosts_media():
+    a = AudioEngine()
+    reg = build_registry(ViewState(), Control(a.chain), a)    # no media: no fed mixer
+    assert "audio.mix" not in reg and "audio.mic" in reg

@@ -7009,7 +7009,7 @@ following the video while the mic or WAV is picked point at the mixer
 still pushing (`listen(None)` not called).
 **448. Video sound with nothing heard is silence; a channel brings it.** (Mac, a show video with sound, after one restart on this build)
 Headless: `tests/test_audio_mix.py` (`test_mix_with_nothing_heard_is_silence_not_an_error`,
-`test_a_stream_that_stops_is_silence_not_the_last_block_held`,
+`test_a_stream_that_stops_or_stalls_is_silence_not_the_last_block_held`,
 `test_a_mixer_from_before_v3_learns_to_listen_after_a_hot_reload`).
 1. Launch with no channel's `audio` on. AUDIO: *Listen to video sound*.
 2. MEDIA: tick `audio` on A (the video playing at rate 1).
@@ -7018,7 +7018,9 @@ Headless: `tests/test_audio_mix.py` (`test_mix_with_nothing_heard_is_silence_not
 is on (MEDIA)", the bands at rest and SYSTEM shows no `media sound` line
 (nothing opened); step 2 the bands come alive with the sound; unticked,
 the bands decay to rest (not frozen on the last block); a device change
-that stops the stream leaves the bands at rest until it reopens (5 s).
+that stops the stream leaves the bands at rest until it reopens (5 s),
+and AUDIO says `video sound silent — error: …` in warning colour while
+it is down.
 Fail: a frozen meter after the untick points at the no-voice block not
 being pushed (`Mixer._push`).
 

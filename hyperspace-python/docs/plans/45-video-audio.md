@@ -231,24 +231,31 @@ video, nothing audible changes, memory stays flat, **no extra read**
   first) takes it back (`listen(None)`).
 - **What the analyzer hears** (rec): the block the callback just wrote —
   after the gains and after the ±1 clip, what the room hears — as mono,
-  the mean of L and R, at 48 kHz (`AudioEngine.MIX_RATE`, held equal to
+  the mean over its channels (L and R), at 48 kHz (`AudioEngine.MIX_RATE`, held equal to
   `AUDIO_RATE` by a test rather than imported: `audio.py` may not import
   the media package). A callback with no voice pushes zeros, so the bands
   decay. The push is one copy into the mixer's kept `_mono`; it counts
   nothing and moves nothing — the analyzer drains the ring once a frame
   as it drains the mic's. `start_file`'s `_played` is not reused.
 - **Silence, not a stale block** (rec): until a channel is heard the
-  mixer's stream is not open (V2, unchanged), so no callback comes; while
-  the source is `mix` and the stream is not `open`, `AudioEngine.step`
-  zeroes the analyser's window each frame. A `mix` with nothing heard is
-  silence, not an error.
+  mixer's stream is not open (V2, unchanged), so no callback comes; once
+  the mixer has not pushed for `MIX_IDLE_FRAMES` = 6 frames (never
+  opened, failed, stopped, or stalled with `active` still true),
+  `AudioEngine.step` zeroes the analyser's window each frame — a count of
+  frame-loop steps, not the mixer's `state`. A `mix` with nothing heard
+  is silence, not an error; a mixer that failed shows its `state` in
+  warning colour on AUDIO.
 - **The picker is a toggle, `audio.mix`**, beside `audio.mic` (AUDIO:
-  *Listen to video sound*; not persisted, no key or desk binding). There
+  *Listen to video sound*; not persisted, no key or desk binding),
+  declared only when the host's `MediaState` is passed (a stand-in's
+  mixer is fed by nobody) and reaching the mixer through
+  `MediaState.live_mixer()`. There
   is **no config key** for the source — none names the mic or the file
   either — so `config.py` is untouched.
 - **Hot reload**: the new fields are read with defaults, so the live
   stream and capture survive; the toggle is a registry param built at
   launch, so the button needs one restart. A ring push that raises is
-  counted in `Mixer.errors` after the output is written: the analyzer
+  counted in `Mixer.tap_errors` (SYSTEM: `analyzer push errors`, apart
+  from voice read errors) after the output is written: the analyzer
   loses a block, the room loses nothing.
 - **`publish` is untouched** (D2 is changing its signature in parallel).

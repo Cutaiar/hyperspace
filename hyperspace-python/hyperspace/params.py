@@ -1662,6 +1662,7 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     """
     r = Registry()
     dream = dream if dream is not None else DreamState()
+    fed_media = media is not None    # the host's channels, polled: their mixer is fed (audio.mix)
     media = media if media is not None else media_channels.MediaState()
     r.media = media
     # plan 43 C2 (row 573): the view the rotation params write — what a
@@ -2357,15 +2358,17 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
 
     def set_mix(on: bool) -> None:
         if on and not mix_on() and hasattr(audio, "start_mix"):
-            get = getattr(media, "_mixer", None)
-            audio.start_mix(get() if get is not None else getattr(media, "mixer", None))
+            audio.start_mix(media.live_mixer())
         elif not on and mix_on():
             audio.stop()
 
-    r.toggle("audio.mix", "Video sound", mix_on, set_mix, group=g, persist=False,
-             tip="Listen to the media mixer: the channels whose sound is on, summed "
-                 "after their gains. Silent until a channel's sound is on; no input "
-                 "device is opened.")
+    # only with the host's media: a stand-in MediaState's mixer is fed by
+    # nobody, and the toggle would "succeed" into silence for ever
+    if fed_media:
+        r.toggle("audio.mix", "Video sound", mix_on, set_mix, group=g, persist=False,
+                 tip="Listen to the media mixer: the channels whose sound is on, summed "
+                     "after their gains. Silent until a channel's sound is on; no input "
+                     "device is opened.")
     r.enum("audio.device", "Input device",
            lambda: int(getattr(audio, "device_sel", 0)),
            lambda i: setattr(audio, "device_sel", int(i)),

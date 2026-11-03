@@ -20,7 +20,9 @@ engine opens no stream for it (no input device is grabbed) and keeps no
 position: the transport is the video sound's one clock, and the analyzer
 reads the ring once a frame as it reads the mic's. Until the mixer's
 stream is open (V2: the first channel whose sound is on) the mix is
-silence. The file transport below (`_played`) is the second time base
+silence, and so it is once the mixer has not pushed for `MIX_IDLE_FRAMES`
+frames (a stream failed, stopped, or stalled with `active` still true) —
+a count of frame-loop steps, read nowhere else. The file transport below (`_played`) is the second time base
 plan 45 forbids for video sound; `mix` shares nothing with it.
 """
 
@@ -36,7 +38,8 @@ import soundfile as sf
 from .analysis import FFT_SIZE, Analyser
 from .analyzer import Analyzer
 
-_SILENCE = np.zeros(FFT_SIZE)    # the analyser's window of nothing (mix mode, no stream)
+MIX_IDLE_FRAMES = 6    # frames with no push from the mixer before the mix reads silence
+_SILENCE = np.zeros(FFT_SIZE)    # the analyser's window of nothing (mix mode, no push)
 
 LOOPBACK_NAMES = ("blackhole", "loopback", "soundflower")
 
@@ -61,10 +64,6 @@ def preselect(devices: list[dict]) -> int:
     one implementation: `AudioEngine.device_sel` reads it, and the panel's
     combo reads `device_sel`."""
     return next((k for k, d in enumerate(devices) if d["loopback"]), 0)
-
-
-def _mix_open(mixer) -> bool:
-    return mixer is not None and getattr(mixer, "state", "") == "open"
 
 
 class _Ring:
@@ -125,6 +124,7 @@ class AudioEngine:
         self._offset = 0            # frames into the track at last start
         self._played = 0            # frames emitted since last start (callback-owned)
         self._mixer = None          # mix mode: the media mixer pushing into the ring
+        self._mix_idle = 0          # mix mode: frames since the mixer last pushed
 
     # ---- the input devices `audio.device` chooses from ----
 
@@ -240,13 +240,14 @@ class AudioEngine:
         """Listen to the media mixer (`media.mixer.Mixer`): its callback
         pushes the summed video sound, mono, into this engine's ring. No
         stream is opened here and no device grabbed; with no channel heard
-        (or the mixer's stream not yet open) the bands read silence."""
+        (or no push from the mixer for `MIX_IDLE_FRAMES`) the bands read silence."""
         self.stop()
         if mixer is None or not hasattr(mixer, "listen"):
             self.error = "no media mixer to listen to"
             return False
         self._attach("mix", "video sound (media mix)", self.MIX_RATE)
         self._mixer = mixer
+        self._mix_idle = 0
         mixer.listen(self._ring)
         return True
 
@@ -326,10 +327,15 @@ class AudioEngine:
         pending = self._ring.drain()
         if len(pending):
             self.analyser.feed(pending)
-        elif self.mode == "mix" and not _mix_open(getattr(self, "_mixer", None)):
-            # the mixer's stream is not (or no longer) open: silence, not
-            # the last block held — no callback will come to say so
-            self.analyser.feed(_SILENCE)
+        if self.mode == "mix":
+            # frames since the mixer last pushed: a stream never opened, failed,
+            # stopped or stalled (PortAudio quiet with `active` still true) is
+            # silence after MIX_IDLE_FRAMES, not the last block held for ever.
+            # Counted on the frame loop, read nowhere else: no time base.
+            idle = 0 if len(pending) else getattr(self, "_mix_idle", 0) + 1
+            self._mix_idle = idle
+            if idle >= MIX_IDLE_FRAMES:
+                self.analyser.feed(_SILENCE)
         self.chain.step(dt)
 
     def publish(self, router) -> None:
