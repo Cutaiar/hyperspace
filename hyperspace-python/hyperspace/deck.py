@@ -51,6 +51,20 @@ from .view import ViewState
 
 
 @dataclass
+class RigMade:
+    """What the caller's hooks returned, as `Deck.build` called them: the
+    rig's objects built between the deck's lines (the hands' setup, the
+    outputs, the panel, the devices). `build` threads each to the hooks
+    after it that take it, and fills this record when the caller hands
+    one in (`made=`), so the caller keeps them without shared state."""
+
+    hands: Any = None
+    outputs: Any = None
+    panel: Any = None
+    devices: Any = None
+
+
+@dataclass
 class Deck:
     """One look and its controls (plan 44 §1), today's singletons bundled.
     `renderer` and `hold` are None on a headless deck (no GL)."""
@@ -86,7 +100,9 @@ class Deck:
               hands: Callable[[Registry], Any] | None = None,
               outputs: Callable[[Registry], Any] | None = None,
               panel: Callable[..., Any] | None = None,
-              devices: Callable[[Registry, Router, Learn], Any] | None = None,
+              devices: Callable[..., Any] | None = None,
+              made: RigMade | None = None,
+              attach: bool = True, startup: bool = True, install: bool = True,
               warm: bool = False) -> Deck:
         """`app.main`'s deck lines, in their order. `library`, `control`
         and `audio` (anything with a `.chain`) are the rig's, built and
@@ -99,15 +115,25 @@ class Deck:
         since the renderer's states are the ones it draws. `media` is the channels' `MediaState`, `restart`
         the `app.restart` param's callback, `clock` / `lfos` a clock and
         an LFO bank to use in place of new ones. The hooks, each called
-        where `main` builds that rig object: `hands(reg)` the hands'
-        setup, `outputs(reg)` the outputs' params and switches (what it
-        returns is handed to the panel hook as `output`),
-        `panel(reg, view, clock=, lfos=, envs=, seq=, hold=, output=)` the
-        panel (its `ui.*` params, and its handles on what exists by then),
-        and
-        `devices(reg, router, learn)` the devices — before the startup
-        preset lands. `warm`: build every shape's geometry on a background
-        thread once the startup preset has landed."""
+        where `main` builds that rig object, each returning what it made:
+        `hands(reg)` the hands' setup, `outputs(reg)` the outputs' params
+        and switches, `panel(reg, view, clock=, lfos=, envs=, seq=, hold=,
+        output=)` the panel (its `ui.*` params, and its handles on what
+        exists by then; `output` is what `outputs` returned), and
+        `devices(reg, router, learn, panel=, hand_settings=)` the devices —
+        before the startup preset lands (`panel` and `hand_settings` are
+        what those hooks returned). A hook left out passes None on; `made`
+        (a `RigMade`) collects every hook's return for the caller.
+
+        Three steps act on what there is one of in the process, and are
+        switches so a second deck can leave them alone: `attach` (the
+        library binds this registry, "default" is its state now),
+        `startup` (the show's startup preset lands on this deck) and
+        `install` (this deck's undo is the one `undo.push` and the
+        `edit.*` triggers reach). All three default on, as `main` has them;
+        a second deck built beside the first passes all three False, and
+        D2+ decides their real shape. `warm`: build every shape's geometry
+        on a background thread once the startup preset has landed."""
         if renderer is not None:
             given = [k for k, v in (("dream", dream), ("fx", fx), ("ghost", ghost))
                      if v is not None]
@@ -121,8 +147,9 @@ class Deck:
                              fx=fx if fx is not None else FxState(),
                              ghost=ghost if ghost is not None else GhostState(),
                              media=media, restart=restart)
+        made = made if made is not None else RigMade()
         if hands is not None:
-            hands(reg)                         # before attach: "default" includes them
+            made.hands = hands(reg)            # before attach: "default" includes them
         # the tap-tempo clock and the LFO bank (tempo.py, lfo.py; four by
         # default, up to 16, plan 31 B): their knobs are params too, so a
         # preset carries a tempo and an LFO arrangement
@@ -139,7 +166,8 @@ class Deck:
         sequencer.register(reg, seq, clock)
         # the render window's placement registers before attach, so "default"
         # includes output.* and reset / the dirty dot see them (audit L6)
-        output = outputs(reg) if outputs is not None else None
+        if outputs is not None:
+            made.outputs = outputs(reg)
         # plan 38: the projector held while the next look is built — rig
         # controls beside the switches; its undo is handed over once it exists
         hold = None
@@ -150,10 +178,12 @@ class Deck:
         # attach for the same reason: the desk's session param, `desk.slew`,
         # is the table's
         bindings = table(reg)
-        library.attach(reg)
+        if attach:
+            library.attach(reg)
         if panel is not None:
             # the panel's own ui.* params, and its handles on what exists now
-            panel(reg, s, clock=clock, lfos=lfos, envs=envs, seq=seq, hold=hold, output=output)
+            made.panel = panel(reg, s, clock=clock, lfos=lfos, envs=envs, seq=seq, hold=hold,
+                               output=made.outputs)
         router = Router(reg, bindings)
         router.use_lfos(lfos, clock)           # they step inside the pass (plan 28 N0)
         router.use_bank(envs, clock)           # …and so do the envelopes (plan 31)
@@ -172,10 +202,12 @@ class Deck:
         # refused (learn.py; the band.sel.* rule is the registry's `real`)
         learn = Learn(reg, router.table, lane=router.lane)   # hand:7 and hand:right.y: one axis
         if devices is not None:
-            devices(reg, router, learn)
+            made.devices = devices(reg, router, learn, panel=made.panel,
+                                   hand_settings=made.hands)
         # the project's startup preset (D11), once, now that everything it lands
         # on exists; a missing one is said on the panel and the app runs on
-        library.project.load_startup()
+        if startup:
+            library.project.load_startup()
         if warm:
             # every shape's faces, triangles and UVs built now, off the frame, the
             # startup preset's shape first, so the first switch to a big one
@@ -193,7 +225,8 @@ class Deck:
                               # the LFOs' membership (plan 31 B), read off the
                               # router at each step, so a re-classed router counts
                               banks=lambda: router._banks())
-        undos.install(undo_obj)            # what undo.push and the edit.* triggers reach
+        if install:
+            undos.install(undo_obj)        # what undo.push and the edit.* triggers reach
         if hold is not None:
             hold.undo = undo_obj           # Drop goes back to the hold's point through it
         return cls(reg=reg, view=s, table=router.table, router=router, lfos=lfos, envs=envs,
@@ -204,8 +237,9 @@ class Deck:
         """The live objects a hot reload re-classes, as (object, module,
         class) — the deck itself, then the ones `app.main` listed for these
         objects, in its order; re-evaluated each swap, so a voice or a
-        preview renderer made since counts. The clock is the rig's to list
-        (shared, plan 44 §2)."""
+        preview renderer made since counts. The clock is listed here while
+        the deck builds it (plan 44 §2 calls it shared: D3+ hands the rig's
+        in, and the rig lists it)."""
         r, hold = self.renderer, self.hold
         return [
             (self, "deck", "Deck"),
@@ -231,6 +265,7 @@ class Deck:
             (self.presets, "preset", "Presets"),
             (self.presets.graph, "preset", "GraphSection"),      # plan 26 A4
             (self.learn, "learn", "Learn"),
+            (self.clock, "tempo", "Clock"),
             (self.lfos, "lfo", "LFOs"),
             # the LFOs as they are at this swap: N of them, with gaps (plan 31 B)
             *[(lf, "lfo", "LFO") for lf in self.lfos.lfos],

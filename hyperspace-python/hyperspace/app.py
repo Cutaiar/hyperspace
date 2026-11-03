@@ -58,6 +58,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import NamedTuple
 
 # pyGLFW and imgui_bundle each ship a libglfw; loading both trips ObjC class
 # collisions on macOS. Point pyGLFW at imgui_bundle's copy before it loads.
@@ -85,7 +86,7 @@ from . import (
 from .audio import AudioEngine
 from .bands import CEIL
 from .control import Control
-from .deck import Deck
+from .deck import Deck, RigMade
 from .geometry import EYE_DISTANCE, EYE_FOV, px_per_unit
 from .hold import preview_size
 from .hotreload import HotReloader
@@ -1065,6 +1066,17 @@ def _ride_depth(p, octaves: float) -> None:
     gamepad.ride_depth(p, octaves)
 
 
+class _DevicesMade(NamedTuple):
+    """What `main`'s devices hook made beside the deck (plan 44 D1): the
+    device registry, the dream worker (or None), the keep-awake and the
+    segment workers' closer."""
+
+    rig: devices.DeviceRegistry
+    dream_io: object | None
+    awake: object
+    segmenters: object
+
+
 @dataclass
 class Host:
     """Everything one frame touches, built once by `main()`; `frame()` runs a
@@ -1387,16 +1399,14 @@ def main() -> None:
     # built by `Deck.build` in the order these lines had here. The rig
     # objects built between its lines — the hands' setup, the outputs, the
     # panel, the devices — are the hooks below, each run at its old place
-    hand_settings = output = panel = rig = dream_io = awake = segmenters = None
+    made = RigMade()          # what each hook below returned, filled by Deck.build
 
-    def hands_setup(reg: Registry) -> None:
-        nonlocal hand_settings
-        hand_settings = _hand_settings(reg, cfg)   # before attach: "default" includes them
+    def hands_setup(reg: Registry):
+        return _hand_settings(reg, cfg)       # before attach: "default" includes them
 
     def outputs_setup(reg: Registry) -> Output:
         # the render window's placement registers before attach, so "default"
         # includes output.* and reset / the dirty dot see them (audit L6)
-        nonlocal output
         output = _make_output(render_win, reg, cfg)
         slots[0].output = output
         for sl in later:                       # no params: the config says (fork F10)
@@ -1418,11 +1428,12 @@ def main() -> None:
         ))
 
     def panel_setup(reg: Registry, s: ViewState, *, clock, lfos, envs, seq, hold,
-                    output) -> None:
+                    output) -> Panel:
         # after attach, before the router: its ui.* params are the last a
         # launch declares before the table's rows resolve; `output` is what
         # the outputs hook returned
-        nonlocal panel
+        if output is None:
+            raise RuntimeError("Deck.build: the panel hook needs the outputs hook's Output")
         panel = Panel(control, audio, s, renderer, library.project, registry=reg, library=library)
         panels.append(panel)
         panel.clock, panel.lfos = clock, lfos     # the LFO page's scopes and beat light
@@ -1433,9 +1444,13 @@ def main() -> None:
         panel.monitor = Preview(ctx)           # plan 38: while held, the projector's inset there
         panel.canvas_tap = CanvasTap(ui_gl)    # the GRAPH canvas as `panel:graph` (2026-11-02)
         panel.hold = hold
+        return panel
 
-    def devices_setup(reg: Registry, router: Router, learn: Learn) -> None:
-        nonlocal rig, dream_io, awake, segmenters
+    def devices_setup(reg: Registry, router: Router, learn: Learn, *, panel,
+                      hand_settings) -> _DevicesMade:
+        # `panel` and `hand_settings` are what those hooks returned
+        if panel is None:
+            raise RuntimeError("Deck.build: the devices hook needs the panel hook's Panel")
         panel.learn = learn
         panel.router = router                  # the ROUTING page edits the live table
         # the devices (devices.py, plan 27 B1): the pad, MIDI, the hands and
@@ -1484,12 +1499,15 @@ def main() -> None:
         # whichever pad is the primary now
         _register_dial(reg, lambda: rig.adapter("gamepad"))
         awake = _open_awake(cfg)               # no screensaver over the show
+        return _DevicesMade(rig, dream_io, awake, segmenters)
 
     deck = Deck.build(library=library, control=control, audio=audio, table=load_table,
                       renderer=renderer, media=media.state,
                       restart=lambda: [setattr(p, "restart_requested", True) for p in panels],
                       hands=hands_setup, outputs=outputs_setup, panel=panel_setup,
-                      devices=devices_setup, warm=True)
+                      devices=devices_setup, made=made, warm=True)
+    hand_settings, output, panel = made.hands, made.outputs, made.panel
+    rig, dream_io, awake, segmenters = made.devices
     s, reg, router, hold = deck.view, deck.reg, deck.router, deck.hold
     clock, presets, undo_obj = deck.clock, deck.presets, deck.undo
     panel.undo = undo_obj              # the footer's message slot
@@ -1521,7 +1539,6 @@ def main() -> None:
         *[(sl.presenter, "outputs", "Presenter") for sl in later if sl.presenter],
         (library, "library", "Library"),
         (library.project, "library", "Project"),
-        (clock, "tempo", "Clock"),
         *([(hand_settings, "hands.core", "HandSettings")] if hand_settings else []),
         *([(dream_io, "dream", "DreamWorker")] if dream_io else []),
         # the devices' adapters, the shims and the registry (devices.py):

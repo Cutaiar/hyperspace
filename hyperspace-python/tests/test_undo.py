@@ -80,10 +80,12 @@ def boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None):
     def hands_setup(reg):
         r.settings = hands.HandSettings.from_config({})
         hands.register(reg, r.settings)
+        return r.settings
 
     def outputs_setup(reg):
         r.output = Output(None, None)
         r.output.register(reg)
+        return r.output
 
     def load_table(reg):
         # the desk's session params before attach, as app.main has them (plan
@@ -98,8 +100,9 @@ def boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None):
         Panel._register_panel_params(SimpleNamespace(reg=reg, open=True, cheatsheet=True,
                                                      desk=True, page=1))
 
-    def devices_setup(reg, router, learn):
+    def devices_setup(reg, router, learn, **made):
         r.midi = MidiIO(reg, router.table, inp=inp, out=out, learner=learn)
+        return r.midi
 
     deck = Deck.build(library=lib, control=control, audio=audio, table=load_table,
                       dream=dream, fx=fx, ghost=ghost,
@@ -130,8 +133,6 @@ def frames(r, n: int = 1, *, hand=None, lanes: bool = False) -> None:
         r.undo.tick(r.t)
         if hand is not None:
             r.router.feed("hand", hand(r.t))
-        r.lfos.step(DT, r.t, r.clock)
-        r.lfos.publish(r.router)
         r.router.modulate(r.chain if lanes else None)
         r.reg.apply()
         r.view.integrate(DT)

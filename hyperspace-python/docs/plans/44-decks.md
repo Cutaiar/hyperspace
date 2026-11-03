@@ -5,7 +5,7 @@
 hand check 430, group AW); D2–D6 a plan, not built. Written 2026-11-02 as
 wave 0 item D0 of the post-show sequencing. Written against `main` at 72da1ed: every symbol below is in
 the code today unless the text says it is new. Its four decisions are
-register rows 556–559, "(rec) — pending the owner". The build is six PRs,
+register rows 556–559, answered by the owner on 2026-11-02 (as recommended; 558 with a nuance, §7). The build is six PRs,
 D1–D6, each its own and behaviour-neutral until D4; D1 does not start
 before this plan and plan 43 (the preset contract, written in parallel)
 are merged, because D3 and plan 43 draw the same line.
@@ -133,7 +133,11 @@ param (the library's band hooks, `control.library`) stays with the
 caller, before `build`, so a second deck does not wire it again. The
 clock is a `Deck` field, built in `build` for now; D3+ passes the rig's
 one in. `Deck.targets()` lists the deck itself first, so a save of
-`deck.py` re-classes it. The proof found one drift: the old `boot` never handed
+`deck.py` re-classes it. The hooks return what they make and `build`
+threads it to the hooks after them (`RigMade` records it for `main`).
+`attach`, `startup` and `install` — the steps there is one of in the
+process — are switches, on by default; a second deck turns them off
+until D2+ decides. The proof found one drift: the old `boot` never handed
 the router its banks, as `main` has since plans 28 N0 and 31 — with
 those three lines the old body and the deck agree to the bit.
 
@@ -464,8 +468,8 @@ touched while dirty; a missing preset is skipped with a note. Size M.
 
 ## 7. Decisions for the owner
 
-Each is a recommendation built as written unless overturned; register rows
-556–559.
+**Answered by the owner, 2026-11-02: all four as recommended, 558 with
+a nuance** (register rows 556–559).
 
 1. **N looks, one on air; the deck is the thing controllers, the panel and
    undo point at** (row 556). *Recommend yes*, with two decks built in D4
@@ -492,7 +496,14 @@ Each is a recommendation built as written unless overturned; register rows
    per deck (the code's correction to the brief); the analyzer and the
    clock shared. The alternative for the dream — a worker per deck — is
    two 19 ms steps a frame on the one GPU and does not fit beside two
-   renderers at the 1080p cap.
+   renderers at the 1080p cap. *The owner's nuance (2026-11-02):* the
+   look-back (its rings, its knobs) and the dream's knobs are per deck;
+   only the dream worker itself — the torch step — is reserved for the
+   on-air deck, and as little as possible beyond it (§2's table already
+   says so). His question — a second, lower-resolution dream worker for
+   the off-air (panel's) deck's preview — is possible in principle (the
+   panel's deck already draws at preview size), to be measured on the
+   bench in D4/D5 against the one-GPU budget of §8; not decided now.
 4. **The APC crossfader stays the master dim** (row 559). *Recommend yes*
    until the dim has another home; `output.xfade` learnable, the `take`
    button its default road. The alternative — the crossfader fades decks

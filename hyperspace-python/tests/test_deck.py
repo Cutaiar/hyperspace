@@ -267,6 +267,10 @@ def test_main_builds_its_deck_once_and_the_frame_order_is_unchanged():
     assert kw["hands"] == "hands_setup" and kw["outputs"] == "outputs_setup"
     assert kw["panel"] == "panel_setup" and kw["devices"] == "devices_setup"
     assert kw["renderer"] == "renderer" and kw["table"] == "load_table"
+    assert kw["made"] == "made"
+    # the hooks hand their objects on through `build` (RigMade), no shared
+    # sentinels in `main`
+    assert "nonlocal" not in inspect.getsource(app.main)
     # nothing of the deck's is still built in main
     src = inspect.getsource(app.main)
     for line in ("build_registry(", "Router(reg, table)", "Presets(library", "Learn(reg",
@@ -295,12 +299,12 @@ def test_the_build_keeps_mains_order():
            "hands(reg)",
            "tempo.register(reg, clock)", "lfo.register(reg, lfos, clock)",
            "envelope.register(reg, envs, clock)", "sequencer.register(reg, seq, clock)",
-           "output = outputs(reg)", "Hold(reg, renderer", "register_hold(reg, hold",
+           "made.outputs = outputs(reg)", "Hold(reg, renderer", "register_hold(reg, hold",
            "bindings = table(reg)", "library.attach(reg)", "panel(reg, s, clock=clock",
            "Router(reg, bindings)", "router.use_lfos(lfos, clock)",
            "router.use_bank(envs, clock)", "router.use_sequencer(seq, envs)",
            "Presets(library, reg, router)", "presets.graph.attach(renderer)",
-           "hold.section = presets.graph", "Learn(reg, router.table", "devices(reg, router, learn)",
+           "hold.section = presets.graph", "Learn(reg, router.table", "devices(reg, router, learn, panel=",
            "library.project.load_startup()", "geometry.warm_all(first=s.shape)",
            "Marks(library)", "undos.Undo(reg, router.table", "undos.install(undo_obj)",
            "hold.undo = undo_obj"]
@@ -336,31 +340,36 @@ def test_a_save_of_deck_py_re_classes_the_live_deck_and_back_fills_a_new_field(
     """The reloader over `Deck.targets()`: a save of deck.py that adds a
     field with a default re-classes the live deck to the new class and
     back-fills the field (`hotreload._backfill_dataclass`). The save is a
-    copy of deck.py the module is pointed at; the module's namespace is
-    put back afterwards, so no other test sees the reloaded class."""
+    copy of deck.py; the reloader's `importlib.reload` executes it into a
+    fresh module object put in `sys.modules` (never re-executing the
+    shared `hyperspace.deck` in place, which other tests and threads in
+    the worker hold). Afterwards the deck's class and the back-filled
+    attribute are put back, and monkeypatch restores the module entry, its
+    `__file__` and the reloader's `importlib`, so the test leaves things
+    as it found them."""
     import importlib.util
     import os
     import sys
 
+    from hyperspace import hotreload
     from hyperspace.hotreload import HotReloader
 
     r = boot(tmp_path / "home")
     deck = r.deck
     mod = sys.modules["hyperspace.deck"]
-    kept = dict(vars(mod))
     copy = tmp_path / "deck.py"
     src = (PKG / "deck.py").read_text()
     copy.write_text(src)
-    monkeypatch.setattr(mod, "__file__", str(copy))
+    monkeypatch.setattr(mod, "__file__", str(copy))     # the file the reloader watches
 
-    class Finder:                    # `importlib.reload` finds the module again by name
-        @staticmethod
-        def find_spec(name, path=None, target=None):
-            if name == "hyperspace.deck":
-                return importlib.util.spec_from_file_location(name, copy)
-            return None
+    def reload(m):
+        spec = importlib.util.spec_from_file_location("hyperspace.deck", copy)
+        fresh = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fresh)
+        monkeypatch.setitem(sys.modules, "hyperspace.deck", fresh)
+        return fresh
 
-    monkeypatch.setattr(sys, "meta_path", [Finder, *sys.meta_path])
+    monkeypatch.setattr(hotreload, "importlib", SimpleNamespace(reload=reload))
     try:
         hot = HotReloader(deck.targets, modules=("deck",), period=0.0)
         assert "added" not in vars(deck)
@@ -370,13 +379,14 @@ def test_a_save_of_deck_py_re_classes_the_live_deck_and_back_fills_a_new_field(
         st = copy.stat()
         os.utime(copy, (st.st_atime, st.st_mtime + 5))
         assert hot.poll(now=1.0) and hot.error == "", hot.error
-        assert type(deck) is mod.Deck and type(deck) is not kept["Deck"]
+        fresh = sys.modules["hyperspace.deck"]
+        assert fresh is not mod and type(deck) is fresh.Deck and type(deck) is not Deck
         assert deck.added == 7
         assert hot.status.startswith("hot: deck")
     finally:
-        vars(mod).clear()
-        vars(mod).update(kept)
-    assert mod.Deck is kept["Deck"]
+        deck.__class__ = Deck
+        vars(deck).pop("added", None)
+    assert type(deck) is Deck and "added" not in vars(deck) and mod.Deck is Deck
 
 
 def test_the_band_hooks_are_the_rigs_and_two_decks_leave_them_once(tmp_path, monkeypatch):
@@ -400,8 +410,18 @@ def test_the_band_hooks_are_the_rigs_and_two_decks_leave_them_once(tmp_path, mon
     assert band() == ONCE
     assert r.control.library is r.lib
     hooks = (r.lib._layout_hooks["band"], r.lib._extra_hooks["band"], r.lib._load_hooks["band"])
+    startups: list = []
+    real_startup = type(r.lib.project).load_startup
+    monkeypatch.setattr(type(r.lib.project), "load_startup",
+                        lambda self: (startups.append(1), real_startup(self))[1])
+    loaded = r.lib.current(PRESETS)
+    # a second deck leaves the process's one-of-a-kind steps alone (plan 44
+    # D1: `attach`, `startup`, `install` off; D2+ decides their real shape)
     second = Deck.build(library=r.lib, control=r.control, audio=r.audio,
-                        table=lambda reg: Bindings())
+                        table=lambda reg: Bindings(),
+                        attach=False, startup=False, install=False)
+    assert r.lib.reg is r.reg and undo.installed() is r.undo      # the first deck's still
+    assert startups == [] and r.lib.current(PRESETS) == loaded    # nothing re-landed
     assert band() == ONCE                                                 # still once
     assert (r.lib._layout_hooks["band"], r.lib._extra_hooks["band"],
             r.lib._load_hooks["band"]) == hooks
@@ -449,3 +469,34 @@ def test_the_panel_hook_gets_what_the_outputs_hook_returned(tmp_path):
     Deck.build(library=lib, control=Control(chain), audio=SimpleNamespace(chain=chain),
                table=lambda reg: Bindings(), panel=lambda reg, view, **kw: seen.update(kw))
     assert seen["output"] is None                                       # no outputs hook
+
+
+def test_the_hooks_hand_their_objects_on_and_into_the_record(tmp_path):
+    """Each hook returns what it made; `build` hands the hands' setup and
+    the panel to the devices hook and records every return on `made`, so
+    `main` reads its rig objects from one record, not from sentinels."""
+    from hyperspace.deck import RigMade
+
+    lib = Library(seed(tmp_path / "home"), period=0.0)
+    chain = Analyzer(Analyser())
+    got: dict = {}
+    made = RigMade()
+    deck = Deck.build(library=lib, control=Control(chain), audio=SimpleNamespace(chain=chain),
+                      table=lambda reg: Bindings(), hands=lambda reg: "settings",
+                      outputs=lambda reg: "output", panel=lambda reg, view, **kw: "panel",
+                      devices=lambda reg, router, learn, **kw: got.update(
+                          kw, router=router, learn=learn) or "devices",
+                      made=made)
+    assert (made.hands, made.outputs, made.panel, made.devices) == (
+        "settings", "output", "panel", "devices")
+    assert got["panel"] == "panel" and got["hand_settings"] == "settings"
+    assert got["router"] is deck.router and got["learn"] is deck.learn
+
+
+def test_mains_hooks_name_a_missing_dependency():
+    """`main`'s panel hook needs the outputs hook's Output and its devices
+    hook the panel hook's Panel; each says so, naming the hook, rather
+    than failing later on a None."""
+    src = inspect.getsource(app.main)
+    assert "the panel hook needs the outputs hook's Output" in src
+    assert "the devices hook needs the panel hook's Panel" in src

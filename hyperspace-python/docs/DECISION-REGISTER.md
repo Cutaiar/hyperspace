@@ -591,10 +591,10 @@ here; overturn → the change, then the same.
 | 553 | Plan 42 D10: the browser lab is a prototype beside the app | — | (rec) — pending the owner |
 | 554 | The preset contract: a preset is a complete look; the rig is what is plugged in — everything that renders in the preset, everything about hardware on the rig and requested | — | owner — 2026-11-02 |
 | 555 | One camera in the preset: `camera.*` and `eye.*` one preset group (C2, `/9`), overturning "the camera is the rig" (row 182) | — | (rec) — pending the owner |
-| 556 | Plan 44 Q1: N looks, one on air — a deck is a look with its own controls, registry's performance part, routes, graph, renderer, undo and dot; the deck is what controllers (on air), the panel and undo point at | — | (rec) — pending the owner |
-| 557 | Plan 44 Q2: hold becomes copy A into B (a deck operation; `output.hold` / `.take` / `.drop` keep their ids); no hotfix of plan 38's hold | — | (rec) — pending the owner |
-| 558 | Plan 44 Q3: shared and lent — the dream worker lent to the deck going on air; segment workers per renderer with the model shared (as today); media sources shared, the channels' state per deck; the analyzer and the clock shared | — | (rec) — pending the owner |
-| 559 | Plan 44 Q4: the APC crossfader stays the master dim; `output.xfade` is a new rig control, learnable, run by `take` over `output.xfade_s` | — | (rec) — pending the owner |
+| 556 | Plan 44 Q1: N looks, one on air — a deck is a look with its own controls, registry's performance part, routes, graph, renderer, undo and dot; the deck is what controllers (on air), the panel and undo point at | — | owner — 2026-11-02 (as recommended; 558 with the nuance) |
+| 557 | Plan 44 Q2: hold becomes copy A into B (a deck operation; `output.hold` / `.take` / `.drop` keep their ids); no hotfix of plan 38's hold | — | owner — 2026-11-02 (as recommended; 558 with the nuance) |
+| 558 | Plan 44 Q3: shared and lent — the dream worker lent to the deck going on air; segment workers per renderer with the model shared (as today); media sources shared, the channels' state per deck; the analyzer and the clock shared | — | owner — 2026-11-02 (as recommended; 558 with the nuance) |
+| 559 | Plan 44 Q4: the APC crossfader stays the master dim; `output.xfade` is a new rig control, learnable, run by `take` over `output.xfade_s` | — | owner — 2026-11-02 (as recommended; 558 with the nuance) |
 | 560 | No shader multiplies time by a param; `@clock` integrates rate-like params in the host | 419 | agreed — owner, 2026-11-02 |
 | 561 | Wave 0 T1: every effect's `speed` on a signed exponential taper and the fourteen amount-type params on a zero-safe log taper; a taper change migrates the route depths in the same PR (`params.retaper_depths` at load, `tools/retaper_routes.py` on the library, no schema bump) | 420 | agreed — the owner's reshaping of 2026-11-02 |
 | 562 | Plan 45 V1: a video's audio track decoded to memory as float32 stereo 48 kHz once something asks for sound, whole to 120 s, else a 120 s window around the transport's position; the transport is the one clock | 421 | owner's rule (2026-11-02, addendum 8); the policy (rec) |
@@ -9590,11 +9590,11 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
   2026-11-02: plan 38's hold leaks (one registry, one table: a route, a
   bank edit or a load while held reaches the projector, as plan 38's own
   table says) and he wants decks — not A/B but **N looks, one on air**.
-- **Answer.** Each "(rec) — pending the owner", written against the code
-  in [`plans/44-decks.md`](plans/44-decks.md) (its §7 is these four, its
-  §2 the inventory of every singleton the decks split or share, its §3 the
-  six behaviour-neutral steps D1–D6). Nothing is built; D1 waits for this
-  plan and plan 43 (rows 554–555) to merge.
+- **Answer.** Owner — 2026-11-02 (as recommended; 558 with the nuance
+  below). Written against the code in [`plans/44-decks.md`](plans/44-decks.md)
+  (its §7 is these four, its §2 the inventory of every singleton the decks
+  split or share, its §3 the six behaviour-neutral steps D1–D6). D1 is
+  built (row 571).
 - **556 (Q1).** A deck is a look with its own controls: its registry's
   performance part, its routes, macros, modifiers and banks, its graph,
   its renderer, its undo and its dirty dot; one deck is on air; the
@@ -9628,6 +9628,16 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
   said shared; the code says no); the analyzer and the clock shared. *Other
   option*: a dream worker per deck (two 19 ms steps a frame on the one
   GPU; does not fit beside two renderers at the 1080p cap).
+  **The owner's nuance (2026-11-02):** the look-back — its rings, its
+  knobs — and the dream's knobs are per deck; the only thing reserved for
+  the on-air deck is the dream worker itself (the expensive torch step),
+  and as little as possible beyond it (as §2's table already has it:
+  `lookback.Lookback` and `DreamState` per deck, the worker lent). He
+  asked whether a second, lower-resolution dream worker could serve the
+  off-air (panel's) deck for its preview: possible in principle — the
+  panel's deck already draws at preview size — to be measured on the
+  bench in D4/D5 against the one-GPU budget plan 44 §8 states; not
+  decided now.
 - **559 (Q4).** The APC40 crossfader (`cc:0:15`) stays `output.dim`
   (DECISIONS "The crossfader is the master dim"; row 40: nothing drives
   the dim); the deck fade is `output.xfade`, a rig control in group
@@ -9740,7 +9750,13 @@ and D3 (the per-deck split) are
   on), `panel(reg, view, clock=, lfos=, envs=, seq=, hold=, output=)`
   (the panel, its `ui.*` params and its handles, where `main` set them), `devices(reg, router, learn)` (the
   devices, the dream worker, the dial, the keep-awake), and the table
-  through `table(reg)`. A headless deck has no renderer and no hold; `dream` / `fx` /
+  through `table(reg)`. Each hook returns what it made; `build` hands
+  the outputs' result to the panel hook and the panel and hands' setup to
+  the devices hook, and records every return on a `deck.RigMade` the
+  caller reads. The three steps there is one of in the process —
+  `library.attach`, the startup preset, `undo.install` — are switches
+  (`attach`, `startup`, `install`), all on as `main` has them; a second
+  deck passes them off, and D2+ decides their real shape. A headless deck has no renderer and no hold; `dream` / `fx` /
   `ghost` stand-ins given beside a renderer are refused.
   `app.Host.deck` and `ui.Panel.deck` are new; every flat handle stays,
   assigned from the deck, so `frame` and its order are unchanged.
