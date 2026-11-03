@@ -6880,6 +6880,37 @@ appears only once a toggle has been on and stays `open` after. Fail:
 memory climbing while the film plays at rate 1 points at the window
 (`Soundtrack._decode`); memory not falling when unticked points at the
 disable not reaching the soundtrack (it runs on the media closer).
+
+## BA. Continuity K4: RINGS' colour, and the knobs that scale space
+Register rows 579–580 (wave 1 K4, `wave1/k4`). RINGS' colour no longer
+scales the hue drift; glimmer, wobble and fractals were measured and left
+as they are — their size, frequency and cells knobs change a shape by the
+same amount at any hour.
+**436. RINGS' colour and the three effects' knobs, nudged an hour in, re-land nothing.** (laptop; an hour of running, or the longer the better; music helps)
+Headless: `tests/test_step_continuity.py` (every effect's every knob and
+every pattern's every input but SPEED, late against early),
+`tests/test_shader_time_lint.py` (no `("patterns", "m_colour")` entry).
+1. Load a preset on the RINGS pattern (`dial`, `inverse-halo` or
+   `party-acid`) and let it run an hour. Note the colours on the rings.
+2. On FACES, nudge COLOUR one step up, then one down. With music on,
+   let the UPR lane move it (the factory route puts it on COLOUR).
+3. Switch Glimmer, Wobble and Fractals on (FX), each at an amount that
+   shows, still an hour in. Nudge glimmer's Size, wobble's Frequency
+   and fractals' Cells and Size one step each, up and down.
+*Pass:* in 2 the hues along the rings spread or close a little about
+where they were and keep drifting at the same pace — no flash, no jump
+round the wheel, the same nudge as a minute into the set; in 3 each nudge
+is a small zoom or a change of pitch from where the picture is — the
+stars stay the same stars, the lattice the same lattice, the same size
+of change as in the first minute (all three zoom about the frame's
+bottom-left corner, so the far side moves most: that is the look, not
+the fault).
+*Fail:* in 2 a nudge turns the colours somewhere else, more the longer
+the set has run (the pre-K4 RINGS: an hour in, a detent was most of a
+palette cycle), or with music the rings' colours flicker on every flare;
+in 3 a nudge throws the stars, waves or lattice to a new place that it
+would not have at minute one.
+
 ## What no test covers
 
 Only a person can settle these:
