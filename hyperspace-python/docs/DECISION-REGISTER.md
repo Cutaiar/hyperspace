@@ -629,6 +629,8 @@ here; overturn → the change, then the same.
 | 594 | Plan 45 V3, the analyzer listens to the mix: a third source, `mix`, beside `mic` and `file` — the mixer's callback pushes the block it just wrote (after the gains and after the ±1 clip: what the room hears) into the analyzer's ring as mono, the mean of L and R, at 48 kHz; a callback with no voice pushes zeros; the push is one copy into a kept buffer, counts nothing and moves nothing, and the analyzer drains the ring once a frame as it drains the mic's | 446, 447 | (rec) — built as recommended (V3) |
 | 595 | Plan 45 V3, picking it: `audio.mix` ("Video sound"), a toggle beside `audio.mic` on AUDIO ("Listen to video sound"), not persisted, like the mic's; it opens no stream and grabs no input device, and opens nothing on the mixer either (the stream opens as V2 says, the first channel heard); until a channel is heard, or once the mixer has not pushed for `MIX_IDLE_FRAMES` = 6 frames (a stream never opened, failed, stopped or stalled), the bands read silence (the analyser's window zeroed each frame), and a mixer `error: …` is shown in warning colour beside the source's label; declared only when the host's `MediaState` is passed (a stand-in's mixer is fed by nobody); no config key — none names the mic or the file either | 446, 448 | (rec) — built as recommended (V3) |
 | 596 | Plan 45 V3, a hot reload and a failure: the engine's and the mixer's new fields are read with defaults (`getattr`, `MediaState._mixer()`'s fill-in), so a hot reload keeps the live stream and the live capture; the `audio.mix` toggle is a registry param, built at launch, so the button needs one restart; a ring push that raises is counted in the mixer's own `tap_errors` (SYSTEM: `analyzer push errors`, apart from voice read errors) and costs the analyzer one block, never the sound already written | 448 | (rec) — built as recommended (V3) |
+| 607 | Wave 2 T2 (after row 561): ⇧ held while dragging a continuous panel slider or fader moves the value a tenth as far (`ui.FINE` = 0.1, ÷10 as the APC40's fine button on #344); the panel's own relative drag, not imgui's modifier (a slider has none — Alt slows only a drag widget, and Shift speeds one up); once ⇧ joins a drag the rest of it is relative, so a ⇧ press does not jump to the mouse and letting ⇧ go returns to coarse without a jump; one drag, one undo step; an enum, an integer and a toggle are untouched | 457 | (rec) — built as recommended (T2) |
+| 608 | Wave 2 T2, its reach and its word: every slider and fader `ui.py` draws for a param (`Panel._slider`, `Panel._fader`, so every page's `_row` and `half`); the tooltip leads with `FINE` while ⇧ is held over one; not the raw sliders on ROUTING (a route's depth and rest, a modifier's knobs, a span's from / to) or GRAPH's backdrop, which are other files; no arrow keys (keyboard navigation is off in the panel); a fader's imgui label is now its param id, so the driver finds it; hot reload carries it | 457, 458 | (rec) — built as recommended (T2) |
 
 "—": no hand check shows it; tests only.
 
@@ -10604,3 +10606,54 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   `analyzer push errors`, kept apart from a voice's `read errors`), one
   block lost to the analyzer, never the room's sound.
 - **Judge it.** Hand check 448.
+
+### 607. Wave 2 T2: Shift-drag fine mode in the panel
+- **Asked.** The owner's coarse-and-fine ask after the show of 2026-10-30
+  (row 561's): T1 reshaped the tapers, T3 is the APC40's fine button; T2
+  is the panel's gesture — hold ⇧ and a drag moves the value finely.
+- **Answer.** (rec) — built as recommended. **÷10** (`ui.FINE`), the
+  APC40's fine button's factor (#344), so one word means one rate on both
+  surfaces. It is a panel gesture, not a param: nothing is saved, routed
+  or learnable (`desk.fine` is the desk's).
+- **Built.** `Panel._fine`, called after each continuous slider's draw:
+  while the item is active and the button down, the drag ⇧ joins (at the
+  press or mid-drag) is taken over from the value it had, and each frame
+  adds the mouse's movement along the throw × 0.1 while ⇧ is held, × 1
+  once it is let go — relative until the button comes up, so neither edge
+  jumps (a ⇧ press does not jump to the mouse either). A tapered control
+  keeps the fraction between detents, so a slow fine drag still walks
+  them. The writes come every frame the mouse moves, as a plain drag's
+  do: one drag is one undo step (`undo.SETTLE_S`).
+- **Why not imgui's own.** imgui's sliders are absolute — the grab goes
+  where the mouse is — and have no slow modifier: the Alt ÷100 / Shift
+  ×10 pair belongs to `drag_float` / `drag_int`, which the panel does not
+  draw. Mapping ⇧ onto it would mean turning every slider into a drag
+  widget (no track to click, a different look), and Shift would still be
+  imgui's *fast* key there. So the drag math is ours, in one place.
+- **Other options.** ÷100 (imgui's Alt rate: too slow on a 100-detent
+  fader, a detent per 30 px); ⌥ instead of ⇧ (the ask names ⇧); absolute
+  again on release (the jump the ask rules out).
+- **To reverse.** Delete the two `self._fine(…)` blocks in `_slider` and
+  `_fader`, and `_fine_tip` back to `_tip`: minutes.
+- **Judge it.** Hand check 457.
+
+### 608. Wave 2 T2: what fine mode reaches, and how it says so
+- **Answer.** (rec) — built as recommended. Every slider and fader
+  `ui.py` draws for a param — `Panel._slider` and `Panel._fader`, so every
+  page's `_row` and `half` and every knob drawn through them. An enum (a
+  combo), an integer (`view.instances`, a lattice's echoes) and a toggle
+  are untouched: a ⇧ click is a click. While ⇧ is held over one that has
+  the mode, its tooltip leads with `FINE · ⇧ held: a drag moves a tenth as
+  far`, and a fine drag that leaves the track still shows the word. **Not
+  reached**: ROUTING's own sliders (a route's depth and rest, a
+  modifier's knobs, a span's from / to, `ui_routing.py`) and GRAPH's
+  backdrop (`ui_graph.py`, U1's on #345) — they call imgui directly; a
+  later PR can pass them through `Panel._fine`. **No arrow keys**: the
+  panel does not turn on imgui's keyboard navigation, so a slider takes no
+  arrows to make finer. A fader's imgui label is its param id now
+  (`##view.bright`, was `##s` under the id's push), so the driver finds
+  each by id. A hot reload of `ui.py` carries it: the panel reads its one
+  new field with a default.
+- **What would overturn it.** The owner wanting ROUTING's depths fine too
+  (the next step), or `FINE` on the readout rather than in the tooltip.
+- **Judge it.** Hand checks 457–458.
