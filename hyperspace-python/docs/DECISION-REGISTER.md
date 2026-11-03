@@ -601,6 +601,7 @@ here; overturn → the change, then the same.
 | 563 | Node groups (post-show G0, 2026-11-02): a group's id is never reused within a preset's life — `group.<n>` is one past the highest the preset has ever allotted (`Presets.group_high`: the file's highest at the load, dropped entries counted; not saved, no schema change), so an ungrouped or undone group's number is not the next group's; and membership is eager — a member node deleted by any road leaves its group's list in the same operation (hooks on the mechanisms: the section's landing, the table's `set_modifiers`, a bank's membership change), the last member taking the group; every node-removing step carries the marks (which carry the floor too) so its undo puts the member back; a refused load leaves the loaded preset's groups whole. Render node ids (`acid` → `acid.2`, the lowest free instance, R25) are untouched: a format question for the one-format PR | 422 | built as recommended — PR (G0) |
 | 564 | Wave 0 E1: delay loops are the trails mechanism, the look-back keeps the dream — the feedback starter (a composite laid over, a delay, a fade at level 0.75: colour and alpha decay alike) on the cable menu and "add feedback after" on the node menu, many allowed; "feedback" not "echo", which names the look-back's frames | 423 | (rec) — pending the owner |
 | 571 | Plan 44 D1: today's per-deck singletons (registry, view, table, router, the three banks, presets and their graph section, learn, undo and its marks, renderer, hold) bundled in one `deck.Deck`; `Deck.build` is the one construction order — `app.main` and `tests/test_undo.boot` both call it, the rig's objects built between its lines passed in as hooks at their old places; no behaviour change (`tests/test_deck.py`) | 430 | built as recommended — PR (D1) |
+| 577 | Wave 1 K2: warp's drift and scale on one `@clock` at drift × scale (the scroll counted in cells), tripcolour's pulse on a `@clock` wrapped to 2π; the lint's allowlist loses three pairs; party-noita's 17 goldens re-recorded | 419, 434 | owner's rule (row 560), built |
 | 589 | Wave 1 T0: the test suite cannot hang the Mac — pytest-timeout's thread method at 120 s for xdist workers (the signal method for a serial run) with no worker restart in pyproject's addopts, so a test blocked in C fails by name and ends the run; `live` tests hold a per-account `flock` (wait 60 s, then skip); one tier at a time on a shared Mac; a real-GLFW test asks a child process first (`gl_window_ok`, #332) and skips if `glfwInit` does not answer | — | (rec) — pending the owner; built as recommended (T0) |
 
 "—": no hand check shows it; tests only.
@@ -9728,6 +9729,66 @@ and D3 (the per-deck split) are
   the contract working as intended and a change from today.
 - **Judge it.** — (C2's hand check: frame, save, load another, load it
   back; the framing is back).
+
+### 577. Continuity K2: warp's drift and scale and tripcolour's pulse on `@clock`
+- **Asked.** Row 560 (the owner, 2026-11-02, after the show of
+  2026-10-30): no shader multiplies time by a param. K1 built the
+  directive, the lint and the UV-field harness; K2 ports the two shipped
+  effects the lint found — warp (`t = u_phase * u_drift`, and
+  `(p + vec2(t) * 0.1) * u_scale`, which multiplied the scrolled offset by
+  scale too) and tripcolour (`sin(u_phase * u_pulse)`).
+- **Answer.** The owner's rule (row 560); the build's choices below,
+  for the owner to keep or overturn.
+- **Built.** Warp: `// @clock u_drift_t drift*scale` — one phase at speed ×
+  drift × scale, unwrapped (a scrolled noise field runs on), read as
+  `perlin2(p * u_scale + vec2(u_drift_t) * 0.1)` and the second octave
+  `p * u_scale * 3.0 + vec2(u_drift_t) * (0.0167 * 3.0) + 7.0`. The scroll
+  is counted in noise cells, so at still knobs it is the old
+  `u_phase × drift × scale` exactly (the same picture) and the field
+  still slides the same screens a second at any scale; a drift step
+  changes the speed only, a scale step re-zooms the cells about the
+  centre and slides nothing. A one-param rate could not say "cells a
+  second = drift × scale", so the directive grew a product rate
+  (`<rate-param>*<rate-param>`, each of the file's own params once;
+  `ClockSpec.factors`), documented in `_lib.glsl`'s contract comment, the
+  `fx` docstring and DECISIONS. Tripcolour: `// @clock u_pulse_t pulse
+  tau`, read as `sin(u_pulse_t)`. The lint's allowlist loses
+  (warp, u_drift), (warp, u_scale) and (tripcolour, u_pulse); only
+  (patterns, m_colour), K4, is left, and the lint's pre-port exemption
+  (a clock's rate param times `u_phase` passed while a file was
+  mid-port) is gone, so the old line put back beside the clock is found
+  again. The harness now also stands each
+  `@clock` where the hour at the run's knobs left it. Harness, an hour
+  in (`tests/uv_flow.py`, 320×200, px moved on the step frame / largest
+  still frame): drift 1 → 1.1 15.3 / 0.05 before, 0.05 / 0.06 after;
+  pulse 1.5 → 1.6 20.5 / 0.16 before, 0.16 / 0.16 after; scale 3 → 3.03
+  16.3 before, 1.3 after; scale 3 → 3.3 15.1 before, 10.4 after (10.6 at
+  ten seconds in: the re-zoom, the same at any hour).
+- **Goldens.** party-noita's 17 frames (8 pictures) re-recorded: the
+  hands-absent ones by float rounding only (the scroll is summed in the
+  host in double and added after the scale, where the shader multiplied
+  in float32 — no 8-bit difference on the contact sheet); the
+  hands-present ones because the preset routes the hands to warp's scale
+  and drift, so the knobs move during the eight frames and the clock
+  integrates what the old shader multiplied (at most 15/255 on 716 of
+  2.6 M pixels). No other preset moved.
+- **Other options.** Integrate the scroll in cells at a fixed reference
+  scale (a one-param clock at drift, offset × 3): no directive change,
+  but the field would slide slower in screens at a finer scale, unlike
+  today. Two clocks (drift; drift × scale through a second): the same
+  extension by another name. Slew scale so its re-zoom is spread over
+  frames: a smoothing the directive does not have, and a 1 % step already
+  moves 1.3 px at the rim.
+- **To reverse.** Put `t = u_phase * u_drift` back in warp.glsl and
+  `sin(u_phase * u_pulse)` in tripcolour.glsl, drop the two `@clock`
+  lines and restore the three allowlist pairs: minutes (the product rate
+  can stay unused).
+- **Rough edge.** A scale step still changes the picture by the size of
+  the step — a tenth moves the rim ~10 px on a 320-px frame — because
+  scale is a spatial knob, not a rate; that is the knob working, not a
+  jump, and it is the same at any hour. Needs a restart (a change to
+  `fx.py` and a directive the old parser refuses), not a hot reload.
+- **Judge it.** Checks 419 and 434.
 ### 571. Plan 44 D1: one `Deck`, one construction order
 - **Asked.** Plan 44 §3 D1 (rows 556–559): bundle what §2 marks per deck,
   as the objects exist today, into one `Deck`, and move `app.main`'s lines

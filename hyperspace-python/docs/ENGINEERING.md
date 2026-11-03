@@ -884,9 +884,11 @@ the 2026-10-30 show; register row 560). `u_phase * u_drift` reads as a
 rate, but `u_phase` is the integrated clock, so a knob step of Δdrift
 shifts the field by `phase × Δdrift` — whole screens, hours into a set.
 A rate-like param is integrated by the host instead: `// @clock
-<uniform> <rate-param> [period]` at the top of an effect file declares a
-phase `FxState.advance` moves every frame by `speed × <rate-param> × dt`
-(the rate is one of the file's own `@param` keys; the effect's speed
+<uniform> <rate-param>[*<rate-param>…] [period]` at the top of an effect
+file declares a phase `FxState.advance` moves every frame by `speed ×
+<rate-param> × dt` (the rate is one of the file's own `@param` keys, or
+a product of them, each once — warp's `drift*scale`, its scroll counted
+in noise cells so a scale step re-zooms and slides nothing; the effect's speed
 fader still scales it, as it scaled `u_phase`), wrapped to `[0, period)`
 when a period is given (`tau` or a number; for a shader reading it
 through `sin` or `fract`), running on like `u_phase` when not (a scrolled
@@ -902,17 +904,19 @@ uniform, or a local carrying one) and a param symbol (an `@param`
 uniform, the patterns' `m_*()` accessors, or a local carrying one), with
 every call but a constructor opaque, so `u_amount * sin(u_phase)` is an
 amplitude and passes — with an allowlist of today's offenders as exact
-(shader, param) pairs: `warp` × `u_drift`, `warp` × `u_scale`,
-`tripcolour` × `u_pulse`, the RINGS pattern × `m_colour`; K2 (warp,
-tripcolour), K3 (`view.media_rate`, `view.inst_rate`, Python-side) and
-K4 (the grids, RINGS) shrink it to empty. `tests/uv_flow.py` is the
+(shader, param) pairs — after K2 (row 577: warp and tripcolour ported)
+only the RINGS pattern × `m_colour`, which K4 takes out (K3,
+`view.media_rate` and `view.inst_rate`, is Python-side). `tests/uv_flow.py` is the
 continuity harness: an effect run over a UV-encoded source gives its
 sampling field exactly, and the mean displacement between consecutive
 frames (an optical-flow proxy with the flow known) on the frame a param
 is stepped is compared with the still frames' — bounded (the speed, a
 `@clock`) or a jump (`u_phase * u_drift`, about 15 px at amount 2 against
 a drift of 0.05 px a frame, an hour in); `tests/test_fx_clock.py` proves
-it on a synthetic pair and keeps warp's drift as a strict xfail for K2.
+it on a synthetic pair and on K2's ports (warp's drift and tripcolour's
+pulse step continuously an hour in; warp's scale re-zooms by the size of
+the step, the same at any hour). The harness stands each `@clock` where
+the hour at the run's knobs left it.
 
 **The palette** (plan 24, `shaders/fx/palette.glsl`, `@order 95` (read only by the migration, which puts it last in an old preset's run),
 so, unplaced, last in the chain, after the look-back and before the dim — and
