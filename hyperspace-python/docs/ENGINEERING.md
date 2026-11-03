@@ -2906,7 +2906,7 @@ never come back and `send` is not read again. To translate an edited
 `send`, remove the role from `"sinks_seeded"`. A `midi-out` entry is a
 sink alone: its own port (§12) and its own sink rows on its role.
 
-**A video's soundtrack** (plan 45 V1; nothing audible yet). A video on
+**A video's soundtrack** (plan 45 V1; heard through the mixer since V2). A video on
 a channel can decode its audio track to memory beside its picture —
 **once something asks for sound** (`Soundtrack.enable()`, which V2's
 play-audio toggle will call; until then no thread, no open, no read: a
@@ -2926,8 +2926,24 @@ is abandoned, one that fails leaves the old window and is tried again
 after a 1 s move). `status` reads `fetching` whenever the transport is
 outside what is held, `ready` only inside it. A file with no track
 is silence, with no line in the log. `src.audio.read(at, n)` is the API
-the mixer (V2) will consume: (n, 2) float32 from sample `at`, zeros
-where nothing is held, never blocking. [`plans/45-video-audio.md`](plans/45-video-audio.md).
+the mixer consumes: (n, 2) float32 from sample `at`, zeros where nothing
+is held, never blocking. [`plans/45-video-audio.md`](plans/45-video-audio.md).
+
+**The media mixer** (plan 45 V2, `media/mixer.py`). Tick a channel's
+`audio` (`media.<c>.audio`; MEDIA, on the selected channel's source line,
+or the channel node's side pane on GRAPH) and its video's sound plays at
+the channel's `gain` (`media.<c>.gain`: off, then −30…+6 dB, unity at
+the notch). One output stream, 48 kHz stereo, on the default output
+device, opened the first time any channel's sound is on and left open
+until quit; SYSTEM's `media sound` line says whether it is open, how many
+channels play and how many underruns PortAudio reported. Each frame the
+channels hand it the playhead their transports were just stepped to, and
+it reads there — it keeps no position of its own, so in this build the
+sound is clean at rate 1 only: at any other rate it stutters, and a hold
+(rate 0) is silent (varispeed is V4's). Two loud channels summed clip at
+full scale; the gains are there for it. The analyzer's own WAV playback
+(`audio.py`) is a separate stream and untouched; the analyzer listening
+to the mix is V3's.
 
 ## 14. Outputs
 
@@ -3011,7 +3027,10 @@ modules are on the list in dependency order: `modifiers` after
 `motion`, `modgraph` before `routing`, `graphview` after `osc`, `ui_graph`
 before `ui`; `ui_feel`, the live feel plots, before `ui_routing`. A reload of `ui_graph` keeps the GRAPH page's editor
 context (it is held on the panel, not in the module), so the page goes
-on drawing with its zoom and selection.
+on drawing with its zoom and selection. A reload of `media/mixer.py` keeps the
+media sound playing: the live mixer is re-classed by `MediaState` and
+the stream's callback reaches the new code through the class; adding
+the module itself needed a restart.
 
 **The watchdog** (`watchdog.py`) appends to `<home>/stall.log` a `===
 <kind>` header — the time, the loaded preset, what happened — and every

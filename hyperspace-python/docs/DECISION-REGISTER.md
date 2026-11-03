@@ -600,6 +600,9 @@ here; overturn → the change, then the same.
 | 562 | Plan 45 V1: a video's audio track decoded to memory as float32 stereo 48 kHz once something asks for sound, whole to 120 s, else a 120 s window around the transport's position; the transport is the one clock | 421 | owner's rule (2026-11-02, addendum 8); the policy (rec) |
 | 563 | Node groups (post-show G0, 2026-11-02): a group's id is never reused within a preset's life — `group.<n>` is one past the highest the preset has ever allotted (`Presets.group_high`: the file's highest at the load, dropped entries counted; not saved, no schema change), so an ungrouped or undone group's number is not the next group's; and membership is eager — a member node deleted by any road leaves its group's list in the same operation (hooks on the mechanisms: the section's landing, the table's `set_modifiers`, a bank's membership change), the last member taking the group; every node-removing step carries the marks (which carry the floor too) so its undo puts the member back; a refused load leaves the loaded preset's groups whole. Render node ids (`acid` → `acid.2`, the lowest free instance, R25) are untouched: a format question for the one-format PR | 422 | built as recommended — PR (G0) |
 | 564 | Wave 0 E1: delay loops are the trails mechanism, the look-back keeps the dream — the feedback starter (a composite laid over, a delay, a fade at level 0.75: colour and alpha decay alike) on the cable menu and "add feedback after" on the node menu, many allowed; "feedback" not "echo", which names the look-back's frames | 423 | (rec) — pending the owner |
+| 581 | Plan 45 V2, the mixer: one `sounddevice.OutputStream` (48 kHz stereo float32) owned by the media package; its callback sums each heard channel's `read(round(playhead × 48000), frames)` × gain, where the playhead is the one the frame thread last stepped the transport to (handed in as one tuple a frame), clipped at ±1; the callback integrates nothing — rate 1 only, varispeed is V4's | 437, 438 | built — V2 PR (the rule is the owner's, row 562) |
+| 582 | Plan 45 V2, the two params a channel: `media.<c>.audio` (toggle, default off — today's silence) and `media.<c>.gain` (linear, default 1.0, `tapers.T_MEDIA_GAIN` = `exp_zero(100, 120)`: off, then −30…+6 dB, unity notch), both performance (`media` group), persisted, learnable, modulatable; no schema move — a file without them loads them at their defaults | 437, 438 | (rec) — built as recommended |
+| 583 | Plan 45 V2, the stream's lifecycle: nothing opened until a channel's sound is first on (on a thread of its own, `media-mixer-open`); then left open playing silence until exit (`MediaState.close`, within its budget); a failed open is said on SYSTEM and retried 5 s later while asked; a toggle's `disable()` runs on the media closer, never the frame thread | 439 | (rec) — built as recommended |
 
 "—": no hand check shows it; tests only.
 
@@ -9716,3 +9719,80 @@ and D3 (the per-deck split) are
   the contract working as intended and a change from today.
 - **Judge it.** — (C2's hand check: frame, save, load another, load it
   back; the framing is back).
+### 581. Plan 45 V2: the mixer — one stream, read at the transport's position
+- **Asked.** Plan 45's second PR: a mixer with a per-channel gain and a
+  play-audio toggle, one output stream, under the owner's rule (row 562):
+  the media transport is the one clock, audio its slave, no second time
+  base.
+- **Built** ([`plans/45-video-audio.md`](plans/45-video-audio.md),
+  `media/mixer.py`). One `sounddevice.OutputStream` at 48 kHz stereo
+  float32, `BLOCK` = 800 samples (one 60 Hz frame). Once a frame, after
+  the transports are stepped, `MediaState.poll` hands the mixer a tuple of
+  voices — for each channel whose `media.<c>.audio` is on and whose source
+  has a soundtrack: the `Soundtrack`, the playhead in seconds the
+  transport was just stepped to, the gain — swapped in as one reference.
+  The callback reads that tuple once and, for each voice, asks
+  `read(round(playhead × 48000), frames)`, multiplies by the gain, sums,
+  and clips at ±1. It keeps no sample counter, no stream time and no
+  position: two callbacks between two frames read the same samples. A
+  transport standing still (rate 0, a hold) is left out: silence rather
+  than one block repeated as a buzz. A voice whose read raises or returns
+  the wrong shape is skipped and counted; nothing reaches PortAudio as an
+  exception.
+- **Rate 1 only.** At the rig's 60 Hz a callback and a step roughly
+  alternate, so play at rate 1 is close to continuous; a slower frame, a
+  jitter at the phase where a callback meets a step, or any rate ≠ 1
+  repeats or skips a block. Smoothing within a block by the transport's
+  `speed` (and so scrub, reverse and rate sounding like tape) is V4's,
+  and the hand checks say so.
+- **Why not a counter in the callback.** It would be continuous at rate 1
+  today, and it is exactly the second time base the rule forbids
+  (`audio.py`'s `_played`): it drifts from the picture and must be
+  re-anchored by a scrub, a loop wrap and a rate change.
+- **What would overturn it.** V4 (varispeed from the transport's speed);
+  or the owner hearing V2 at rate 1 and asking for a different block.
+### 582. Plan 45 V2: `media.<c>.audio` and `media.<c>.gain`
+- **Answer.** (rec) — built as recommended. Two params a channel,
+  declared in `params.build_registry`'s media loop beside the transport's:
+  `media.<c>.audio` ("A audio", a toggle on `Channel.play_audio`, default
+  off — today's silence) and `media.<c>.gain` ("A gain", on
+  `Channel.gain`, linear, default 1.0). The gain's taper is
+  `tapers.T_MEDIA_GAIN` = `exp_zero(100, 120)`: position 0 is off, then
+  20 steps a doubling from 0.03× (−30 dB) to 2.00× (+6 dB), the unity
+  notch at 100; it reads in dB (`tapers.fmt_level`). Both are in the
+  `media` group, so performance: persisted in the preset, learnable,
+  modulatable, reached by the pad, a macro and undo.
+- **No schema move.** A load lands every persisted performance param from
+  the file or its group default (`preset.py`, the load's step 2), so a
+  file from before this build loads both at their defaults with no note;
+  a build from before this one reading a file this one wrote notes the
+  sixteen ids as unknown and ignores them (the precedent: both Macs
+  sharing a library run one build). The corpus and the grouped fixture
+  were re-saved with the sixteen values at their defaults, nothing else
+  moved.
+- **Other options.** A gain in dB on `lin_db` (a fader of −60…+12 dB
+  stored in dB: a route or an LFO on it would then move in dB, and 0 is
+  a finite −60); a single "sound" enum per channel (off / on / solo) —
+  nobody asked for solo.
+- **To reverse.** Drop the two declarations and the fields; files that
+  hold the ids then load with an "unknown id(s)" note.
+### 583. Plan 45 V2: the stream's lifecycle
+- **Answer.** (rec) — built as recommended. Nothing is opened until a
+  channel's sound is first on (plan 45 V1's "nothing until something
+  asks", extended to the stream). The open runs on a thread of its own
+  (`media-mixer-open`) so a slow CoreAudio open never holds the frame
+  thread; a failure is the mixer's `state` (`error: …`, in warning colour
+  on SYSTEM) and is tried again `RETRY_S` = 5 s later while a channel
+  still asks. Once open the stream stays open, playing silence while no
+  channel plays, until `MediaState.close` at exit, which aborts and closes
+  it inside its budget (an open still under way at exit closes its own
+  stream when it returns). A hot reload of `media/mixer.py` keeps the
+  live stream: `MediaState._mixer()` re-classes the mixer and the
+  stream's callback goes through the class. The toggle's `disable()`
+  joins the soundtrack's thread, so it runs on the media closer; a
+  disable landing after a quick re-enable is healed the next frame.
+- **Other options.** Close the stream when the last channel goes quiet
+  (a PortAudio stop waits for its buffers, on whichever thread does it,
+  and the next toggle pays the open again); open on the frame thread
+  (simpler, a hitch of tens of ms the first time).
+- **Judge it.** Hand checks 437–439, group BB.

@@ -2509,6 +2509,11 @@ class Panel:
         thumbs = ui_graph.thumbnail_line(self)    # plan 37 C1: the GRAPH page's thumbnails
         if thumbs:
             imgui.text_disabled(thumbs)
+        sound = ui_media.mixer_line(self)         # plan 45 V2: the media mixer's stream
+        if "error" in sound:
+            imgui.text_colored(WARN, sound)
+        elif sound:
+            imgui.text_disabled(sound)
         imgui.spacing()
         self._section("devices")
         self._device_lines()
