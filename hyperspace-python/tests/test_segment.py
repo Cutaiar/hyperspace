@@ -303,8 +303,8 @@ def test_torch_runs_once_on_a_synthetic_frame():
     w = segment.SegmentWorker(b)
     try:
         w.submit(_synthetic(), 1)
-        # (under the 120 s per-test timeout, which counts the live lock's
-        # wait: a slow MPS fails here by name, not as a killed worker)
+        # (well under the 120 s per-test timeout, which starts after the live
+        # lock's wait: a slow MPS fails here by name, not as a killed worker)
         assert w.drain(60.0), "torch gave no matte within 60 s"
         assert w.error == "", w.error
         mask, index, size = w.latest()

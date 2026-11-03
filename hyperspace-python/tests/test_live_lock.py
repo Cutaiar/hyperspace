@@ -1,9 +1,11 @@
 """The live-device lock (tests/live_lock.py, conftest's
-`_live_devices_take_turns`): live tests of two pytest processes take
-turns, and so do two workers of one `--dist load` run (row 605); a waiter
-skips after a bounded wait — longer while its own run holds it — and the
-lock comes free when a test raises. A live test's fixture wider than the
-test is refused at collection."""
+`pytest_runtest_protocol` and `pytest_runtest_setup`): live tests of two
+pytest processes take turns, and so do two workers of one `--dist load`
+run (row 605); a waiter skips, saying why, after a bounded wait behind
+another run or a holder that names none, and waits on behind its own
+run; the wait is outside the per-test timeout; the lock comes free when
+a test raises. A live test's fixture wider than the test is an error by
+name before it is set up."""
 
 import multiprocessing as mp
 import os
@@ -81,29 +83,57 @@ def test_a_dead_holder_leaves_it_free(tmp_path):
     live_lock.release(fd)
 
 
-def test_a_waiter_of_the_holders_own_run_waits_longer(tmp_path):
-    """The holder wrote its run's id into the file: a waiter of the same run
-    waits up to `run_wait_s`, one of another run gives up at `wait_s`."""
+def test_a_waiter_of_the_holders_own_run_waits_until_it_lets_go(tmp_path):
+    """The holder wrote its run's id into the file: a waiter of another run
+    gives up at `wait_s`, saying whose run; one of the same run waits on
+    past both bounds until the holder lets go (2 s here)."""
     path = tmp_path / "live.lock"
     p, release = _holder(path, run="xdist-R")
-    let_go = threading.Timer(0.8, release.set)
+    let_go = threading.Timer(2.0, release.set)
     try:
+        fd, why = live_lock.wait_for(path, wait_s=0.2, poll_s=0.05, run="xdist-S",
+                                     run_wait_s=0.2)
+        assert fd is None and live_lock.SKIP_REASON in why and "xdist-R" in why, why
         t = time.monotonic()
-        assert live_lock.acquire(path, wait_s=0.2, poll_s=0.05, run="xdist-S",
-                                 run_wait_s=10) is None
-        assert time.monotonic() - t < 0.7
         let_go.start()
-        fd = live_lock.acquire(path, wait_s=0.2, poll_s=0.05, run="xdist-R", run_wait_s=10)
-        assert fd is not None and time.monotonic() - t >= 0.75
+        fd, why = live_lock.wait_for(path, wait_s=0.2, poll_s=0.05, run="xdist-R",
+                                     run_wait_s=0.2)
+        assert fd is not None and why == ""
+        assert time.monotonic() - t >= 1.9
         assert live_lock.holder(fd) == "xdist-R"
         live_lock.release(fd)
     finally:
         let_go.cancel()
         release.set()
         p.join(10)
+
+
+def test_a_holder_that_names_no_run_is_waited_for_run_wait_s_and_said(tmp_path):
+    """An older build's holder writes no id: a waiter with a run waits the
+    longer `run_wait_s` for it, not `wait_s`, and says so when it gives up."""
+    path = tmp_path / "live.lock"
+    p, release = _holder(path)                  # (no id: the file stays empty)
+    try:
+        t = time.monotonic()
+        fd, why = live_lock.wait_for(path, wait_s=0.1, poll_s=0.05, run="xdist-R",
+                                     run_wait_s=1.0)
+        assert fd is None and why.startswith(live_lock.UNKNOWN_REASON), why
+        assert time.monotonic() - t >= 0.95
+    finally:
+        release.set()
+        p.join(10)
+
+
+def test_a_release_leaves_the_id_and_the_next_holder_overwrites_it(tmp_path):
+    path = tmp_path / "live.lock"
+    fd = live_lock.acquire(path, wait_s=0, run="xdist-a-long-run-id")
+    live_lock.release(fd)
+    fd = live_lock.acquire(path, wait_s=0, run="pid-7")
+    assert live_lock.holder(fd) == "pid-7"
+    live_lock.release(fd)
     fd = os.open(path, os.O_RDONLY)
     try:
-        assert live_lock.holder(fd) == ""       # released: no id left behind
+        assert live_lock.holder(fd) == "pid-7"
     finally:
         os.close(fd)
 
@@ -125,17 +155,19 @@ def test_held_releases_when_the_block_raises(tmp_path):
 
 _CONFTEST = """
 import importlib.util
+import os
 import sys
 
 sys.path.insert(0, {tests!r})
 import live_lock
 
-live_lock.WAIT_S = 0.3
+live_lock.WAIT_S = float(os.environ.get("INNER_WAIT_S", "0.3"))
+live_lock.RUN_WAIT_S = 0.6
 _spec = importlib.util.spec_from_file_location("hs_conftest", {conftest!r})
 _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
-_live_devices_take_turns = _mod._live_devices_take_turns
-pytest_collection_modifyitems = _mod.pytest_collection_modifyitems
+pytest_runtest_protocol = _mod.pytest_runtest_protocol
+pytest_runtest_setup = _mod.pytest_runtest_setup
 
 
 def pytest_configure(config):
@@ -177,7 +209,7 @@ def test_c_a_plain_test_never_takes_it():
 """
 
 
-def _inner_pytest(tmp_path, temp, tests=_TESTS, args=("-p", "no:xdist")):
+def _inner_pytest(tmp_path, temp, tests=_TESTS, args=("-p", "no:xdist"), env=None):
     """Run `tests` in a pytest of their own, with this conftest's fixture
     and collection hook and TMPDIR (where the lock file lives) at `temp`."""
     run = tmp_path / "run"
@@ -186,7 +218,7 @@ def _inner_pytest(tmp_path, temp, tests=_TESTS, args=("-p", "no:xdist")):
         tests=str(TESTS), conftest=str(TESTS / "conftest.py")))
     (run / "test_inner.py").write_text(textwrap.dedent(tests))
     (run / "pytest.ini").write_text("[pytest]\n")
-    env = dict(os.environ, TMPDIR=str(temp), INNER_LOG=str(tmp_path / "log"))
+    env = dict(os.environ, TMPDIR=str(temp), INNER_LOG=str(tmp_path / "log"), **(env or {}))
     return subprocess.run(
         [sys.executable, "-m", "pytest", "-q", "-rs", "-p", "no:cacheprovider",
          *args, "-c", str(run / "pytest.ini"), "--rootdir", str(run),
@@ -243,29 +275,81 @@ def test_two_workers_of_one_load_run_take_turns_and_neither_skips(tmp_path):
 
 
 _WIDE = """
+import os
+
 import pytest
 
 
 @pytest.fixture(scope="module")
 def device():
+    open(os.environ["INNER_LOG"], "a").write("opened\\n")
     yield "opened"
 
 
 @pytest.mark.live
 def test_a_live_test_on_a_module_fixture(device):
     pass
+
+
+def test_a_plain_test_beside_it():
+    pass
 """
 
 
-def test_a_live_test_on_a_module_scoped_fixture_is_refused_at_collection(tmp_path):
+@pytest.mark.parametrize("args", [("-p", "no:xdist"), ("-n", "2", "--dist", "load")],
+                         ids=["serial", "xdist"])
+def test_a_live_test_on_a_module_scoped_fixture_is_an_error_by_name(tmp_path, args):
     """Row 589's caveat: the lock is per test, so a module- or
-    session-scoped fixture would open its device outside it."""
+    session-scoped fixture would open its device outside it. The test is
+    an error by name before the fixture is set up — under xdist too — and
+    the rest of the run goes on."""
     temp = tmp_path / "temp"
     temp.mkdir()
-    out = _inner_pytest(tmp_path, temp, _WIDE)
-    assert out.returncode != 0
+    out = _inner_pytest(tmp_path, temp, _WIDE, args)
     text = out.stdout + out.stderr
-    assert "outside the live lock" in text and "uses device (module-scoped)" in text, text
+    assert "1 passed, 1 error" in out.stdout, text
+    assert "test_a_live_test_on_a_module_fixture" in text and "INTERNALERROR" not in text
+    assert "outside the live lock" in text and "device (module-scoped)" in text, text
+    assert not (tmp_path / "log").exists()          # the fixture never ran
+
+
+def test_a_deselected_live_test_on_a_module_fixture_costs_nothing(tmp_path):
+    """The fast tier deselects live tests: one with a wide fixture is not looked at."""
+    temp = tmp_path / "temp"
+    temp.mkdir()
+    out = _inner_pytest(tmp_path, temp, _WIDE, ("-p", "no:xdist", "-m", "not live"))
+    assert out.returncode == 0 and "1 passed, 1 deselected" in out.stdout, out.stdout + out.stderr
+
+
+_ONE_LIVE = """
+import pytest
+
+
+@pytest.mark.live
+def test_a_live_test():
+    pass
+"""
+
+
+def test_the_wait_for_the_lock_is_not_timed(tmp_path):
+    """The lock is taken outside pytest-timeout's window (conftest's
+    `pytest_runtest_protocol`, the outer wrapper): a test that waits 2 s
+    for its turn under `--timeout=1` still runs and passes."""
+    temp = tmp_path / "temp"
+    temp.mkdir()
+    p, release = _holder(temp / live_lock.lock_path().name, run="xdist-other")
+    let_go = threading.Timer(2.0, release.set)
+    let_go.start()
+    try:
+        t = time.monotonic()
+        out = _inner_pytest(tmp_path, temp, _ONE_LIVE, ("-p", "no:xdist", "--timeout=1"),
+                            env={"INNER_WAIT_S": "30"})
+        assert time.monotonic() - t >= 1.9
+    finally:
+        let_go.cancel()
+        release.set()
+        p.join(10)
+    assert "1 passed" in out.stdout, out.stdout + out.stderr
 
 
 def test_the_fixture_holds_it_for_a_live_test_and_lets_go_when_it_raises(tmp_path):
@@ -279,14 +363,14 @@ def test_the_fixture_holds_it_for_a_live_test_and_lets_go_when_it_raises(tmp_pat
 def test_the_fixture_skips_a_live_test_another_run_holds_it_for(tmp_path):
     temp = tmp_path / "temp"
     temp.mkdir()
-    p, release = _holder(temp / live_lock.lock_path().name)
+    p, release = _holder(temp / live_lock.lock_path().name, run="xdist-other")
     try:
         out = _inner_pytest(tmp_path, temp)
     finally:
         release.set()
         p.join(10)
     assert "1 skipped" in out.stdout, out.stdout + out.stderr
-    assert live_lock.SKIP_REASON in out.stdout
+    assert live_lock.SKIP_REASON in out.stdout and "xdist-other" in out.stdout
 
 
 def test_a_lock_file_that_cannot_be_opened_is_a_skip_reason(tmp_path, monkeypatch):

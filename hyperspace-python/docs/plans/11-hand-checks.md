@@ -6981,15 +6981,16 @@ no other test run going)
    `cd hyperspace-python && uv run pytest -q -n 4 -p no:cacheprovider`
    (the fast tier). Wait for both.
 2. In both at once:
-   `uv run pytest -q -n 4 -p no:cacheprovider -m live -rs --durations=8`
+   `uv run pytest -q -n 4 -p no:cacheprovider -m live -rs`
    (the live tier: Syphon, NDI, the camera list, Vision, torch, the
-   dream).
+   dream). Note each run's time; then run it once alone for comparison.
 *Pass:* (1) both end with "passed" and the same count, in about a
 minute and a half each; neither sits at 99 %. (2) both end; every live
 test passes in each, or a few skip with "another test run holds the live
-devices"; the `setup` times in `--durations` (the waits for the lock)
-reach tens of seconds in at least one run — the other run's turn — and
-no NDI or Syphon loopback fails. Fail: a run sits at 99 % for minutes
+devices (xdist-…) past 60 s" (the other run's id, never this run's);
+at least one of the two takes clearly longer than the run alone (it
+waited its turns; the wait is not in `--durations`, it is outside the
+test's timing) and no NDI or Syphon loopback fails. Fail: a run sits at 99 % for minutes
 (kill it, ENGINEERING §16's recovery), a loopback fails in one run while
 the other runs, or "worker 'gwN' crashed".
 

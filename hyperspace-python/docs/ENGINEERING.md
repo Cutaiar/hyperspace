@@ -3191,26 +3191,34 @@ uv run ruff check .
 - **Live tests take turns, across workers and across processes.**
   `--dist load` hands a test to any worker, so nothing in xdist keeps
   two `live` tests of one run apart (the old `xdist_group("live")` only
-  worked under `loadgroup`, and is gone): the autouse fixture
-  `_live_devices_take_turns` holds an `fcntl.flock` on
+  worked under `loadgroup`, and is gone): conftest's
+  `pytest_runtest_protocol` wrapper holds an `fcntl.flock` on
   `$TMPDIR/hyperspace-tests-live-<uid>.lock` (`tests/live_lock.py`) for each
-  live test's setup, call and teardown, for two workers of one run and
-  for two runs (two sessions, two worktrees) alike. The holder writes
-  its run's id (xdist's `testrunuid`, or `pid-<n>` serially) into the
-  file; a waiter waits at most `live_lock.RUN_WAIT_S` (90 s) while its
-  own run holds it — its run's live tier, 35 tests, ~25 s serially —
-  and `live_lock.WAIT_S` (60 s) while another run does, then skips with
-  "another test run holds the live devices"; the kernel drops the lock
-  when a worker dies. Both waits count toward the 120 s timeout. `-m live -n 4`
-  under `load`: "35 passed in 39.34s", the longest wait 22.8 s (a
-  setup time in `--durations`). `tests/test_live_lock.py` proves it
-  with two processes and with an inner `-n 2 --dist load` run whose two
-  live tests run one after the other (without the run's id the second
-  skipped: "1 passed, 1 skipped"). A live test may not use a fixture
-  wider than the test (module, class, package or session scoped, bar
-  pytest's own deviceless ones): it would be set up before the lock,
-  outside it, so collection refuses one with a usage error naming it
-  (`_wide_fixtures`); none does today. The file is
+  live test's whole protocol (setup, call, teardown), for two workers of
+  one run and for two runs (two sessions, two worktrees) alike. It is
+  the outer wrapper (tryfirst), outside pytest-timeout's, so **the wait
+  is not timed**: a test gets its 120 s after its turn comes. The holder
+  writes its run's id (xdist's `testrunuid`, or `pid-<n>` serially) into
+  the file, overwritten at each acquire and never cleared. A waiter
+  waits **without bound behind its own run** (that holder's own timeout
+  bounds each turn, so a run never skips its own live tests), at most
+  `live_lock.WAIT_S` (60 s) behind another run's holder ("another test
+  run holds the live devices (<id>) past 60 s") and `live_lock.RUN_WAIT_S`
+  (90 s) behind one that names no run, an older build's ("a test run
+  that names no run id …"); only time behind a holder not of its run
+  counts, and the skip happens in `pytest_runtest_setup`. The kernel
+  drops the lock when a worker dies. `-m live -n 4` under `load`: "35
+  passed in 39.34s" (measured with the earlier, timed wait: the longest
+  22.8 s). `tests/test_live_lock.py` proves it with two processes, with
+  an inner `-n 2 --dist load` run whose two live tests run one after
+  the other (without the run's id the second skipped), and with a test
+  that waits 2 s for its turn under `--timeout=1` and passes. A live
+  test may not use a fixture wider than the test (module, class,
+  package or session scoped, bar pytest's own deviceless ones): it
+  would be set up before the lock, outside it, so `pytest_runtest_setup`
+  fails that test by name before any fixture is set up
+  (`_wide_fixtures`; under xdist too, the rest of the run goes on, and
+  a deselected test is never looked at); none does today. The file is
   per account (`hyperspace-tests-live-<uid>.lock`); a lock file that
   cannot be opened or locked is a skip with the reason, never an error.
   The folder is `tempfile.gettempdir()`, so a session whose `TMPDIR`
@@ -3373,7 +3381,9 @@ to `main`: one job, `tests`, on `ubuntu-24.04` — `uv sync --locked`,
 hung test fails alone and names itself instead of stalling its worker;
 a crashed worker's queue goes to its replacement, up to four, then the
 run ends — row 605) — the same values pyproject's addopts carry, with
-the thread method, so the explicit flags are redundant but consistent. The fast tier takes about two minutes on
+the thread method, so the explicit flags are redundant but consistent.
+(Until the owner lands that workflow edit, CI still says
+`--max-worker-restart=0`, which wins over addopts.) The fast tier takes about two minutes on
 four cores.
 
 - **What it leaves out.** `UV_NO_GROUP="hands dream"`: no Ultraleap SDK

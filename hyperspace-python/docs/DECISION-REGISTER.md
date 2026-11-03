@@ -626,7 +626,7 @@ here; overturn → the change, then the same.
 | 587 | Plan 48: a save writes back to the preset's own file; as… with a folder in the name writes into it; a new preset grown from the loaded one (two-handed save, `preset.save_new`, an empty pad's hold) lands beside it; ⇧F's `PRESET <n>` at the top | 441 | (rec) — pending the owner; built as recommended |
 | 588 | Plan 48: the PRESETS page draws a folder's preset as `party / TRIP` with the folder dim; the flat list stays; a rename's field holds the leaf and keeps the folder | 440, 441 | (rec) — pending the owner; built as recommended |
 | 589 | Wave 1 T0: the test suite cannot hang the Mac — pytest-timeout's thread method at 120 s for xdist workers (the signal method for a serial run) with no worker restart in pyproject's addopts, so a test blocked in C fails by name and ends the run; `live` tests hold a per-account `flock` (wait 60 s, then skip); one tier at a time on a shared Mac; a real-GLFW test asks a child process first (`gl_window_ok`, #332) and skips if `glfwInit` does not answer | — | (rec) — pending the owner; built as recommended (T0) |
-| 605 | Wave 2 I1: `--dist load` with up to four worker restarts (pyproject and CI), so a crash or hang costs its one test, not the run's queue; the live lock alone keeps two live tests apart, a run's own live tests queueing on it for up to 90 s (the holder's run id in the file) and another run's for 60 s; a live test's fixture wider than the test is refused at collection; the dream's real VGG test joins the live tier | 456 | owner (2026-11-03) for `--dist load`; the rest (rec) — pending the owner; built as recommended (I1) |
+| 605 | Wave 2 I1: `--dist load` with up to four worker restarts (pyproject now; CI once the owner lands the workflow edit), so a crash or hang costs its one test, not the run's queue; the live lock alone keeps two live tests apart, taken outside the per-test timeout, a run's own live tests waiting for each other without bound (the holder's run id in the file), another run's 60 s and a holder naming no run 90 s, then a skip that says which; a live test's fixture wider than the test fails that test by name before it is set up; the dream's real VGG test joins the live tier | 456 | owner (2026-11-03) for `--dist load`; the rest (rec) — pending the owner; built as recommended (I1) |
 | 606 | Wave 2 I1: the four flakes of wave 1 — the Xbox pad test's order dependence was the Mac's real Joy-Con read once a real-GL test had initialised GLFW (fixed: no test reads a real joystick); the segment crashes and the `test_shape_renders` failures did not reproduce (what was tried is recorded); `tests/fixtures/real.mp3` is used by no test; `tools/sort_register.py` sorts this file | — | (rec) — pending the owner; built as recommended (I1) |
 
 "—": no hand check shows it; tests only.
@@ -10522,10 +10522,11 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   skipping past its 60 s wait; and a module- or session-scoped fixture
   of a live test is set up outside the per-test lock.
 - **Answer.** Owner (2026-11-03) for `--dist load`; the restart cap,
-  the lock's own-run wait, the collection check and the dream test
+  the lock's own-run wait, the wide-fixture check and the dream test
   (rec) — pending the owner; built as recommended (wave 2, I1).
-- **Recommended.** (1) pyproject's addopts and CI's flags (kept equal)
-  carry `--dist load --timeout=120 --max-worker-restart=4`: a crash or
+- **Recommended.** (1) pyproject's addopts carry, and CI's flags will
+  carry once the owner lands the workflow edit (kept equal),
+  `--dist load --timeout=120 --max-worker-restart=4`: a crash or
   a hang (the thread timeout `os._exit`s its worker) costs its one
   test and the replacement takes the queue; a fifth crash ends the run,
   so a hang that recurs ends it instead of costing 120 s per test. The
@@ -10538,24 +10539,43 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   group existed — none was there for ordering). The holder writes its
   run's id into the lock file (xdist's `testrunuid`, read from the
   config so a pytest a test starts in a subprocess is another run;
-  `pid-<n>` serially); a waiter whose own run holds it waits up to
-  `RUN_WAIT_S` (90 s, under the 120 s timeout the wait counts toward),
-  one of another run `WAIT_S` (60 s), then skips. The lock has no
-  queue, so the bound is the rest of the run's live tier, ~25 s
-  serially for 35 tests. Measured: `-m live -n 4` under `load`, "34
+  `pid-<n>` serially), overwritten at each acquire (written whole, then
+  trimmed) and never cleared. The lock is taken in conftest's
+  `pytest_runtest_protocol`, the outer wrapper (tryfirst), so the wait
+  is outside pytest-timeout's window and a test gets its whole 120 s
+  after its turn (`timeout_func_only = true` would do the same but drop
+  every fixture's setup and teardown from the hang guard, which is
+  where `glfw.init()`-style hangs can sit; not taken). A waiter waits
+  **without bound behind its own run**: that holder's own timeout
+  bounds each turn, so a run never skips its own live tests, which
+  `loadgroup` always ran. Only time behind a holder not of its run
+  counts: `WAIT_S` (60 s) behind another run's id, then a skip "another
+  test run holds the live devices (<id>) past 60 s"; `RUN_WAIT_S`
+  (90 s) behind a file that names no run (an older build's holder),
+  then "a test run that names no run id (an older build's) holds the
+  live devices past 90 s". The skip is raised in
+  `pytest_runtest_setup`. Measured with the first version's timed wait
+  (90 s own-run bound): `-m live -n 4` under `load`, "34
   passed in 23.43s" (the longest wait 16.8 s), then with (4) "35 passed
   in 39.34s" (22.8 s), at load averages of 22–64 from the other
-  builders; a serial `-m live`, "34 passed … in 25.18s". The fast tier
+  builders; a serial `-m live`, "34 passed … in 25.18s". With the untimed,
+  unbounded own-run wait: "35 passed in 27.57s" (load average 55). The fast tier
   holds no live test, so two fast-tier runs never meet on the lock;
   `tests/test_live_lock.py::test_two_workers_of_one_load_run_take_turns_and_neither_skips`
   runs an inner `-n 2 --dist load` pytest whose two live tests each
   sleep 0.8 s on gw0 and gw1: they run one after the other, both pass,
   and both saw the run's own id; without the id the second skipped
-  ("1 passed, 1 skipped"). (3) Collection refuses a live test that uses
-  a fixture wider than the test (module, class, package or session
-  scoped), bar pytest's own deviceless ones (`tmp_path_factory`,
-  `worker_id` …), with a usage error naming the test and the fixture
-  (`conftest._wide_fixtures`); `--setup-plan` of the live tier showed
+  ("1 passed, 1 skipped"); `test_the_wait_for_the_lock_is_not_timed`
+  waits 2 s for its turn under `--timeout=1` and passes. (3) A live
+  test that uses a fixture wider than the test (module, class, package
+  or session scoped), bar pytest's own deviceless ones
+  (`tmp_path_factory`, `worker_id` …), fails by name in
+  `pytest_runtest_setup` before any fixture is set up
+  (`conftest._wide_fixtures`): per item, so xdist names it (a
+  collection-time `UsageError` came out of a worker as an opaque
+  `INTERNALERROR`) and the rest of the run goes on, and only for tests
+  that run, so a deselected live test never stops the fast tier; tested
+  serially and under `-n 2`. `--setup-plan` of the live tier showed
   none today (only `tmp_path_factory`, session-scoped). The torch
   model `segment._shared_model` keeps is a per-process cache of
   weights, not a device; it stays. (4)
@@ -10570,18 +10590,24 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   scheduler that keeps `loadgroup`'s group and redistributes on a crash:
   more code than the lock already covers. A FIFO lock (a ticket file):
   fairness the wait bound does not need while the live tier is short.
+  An own-run waiter that fails at a bound instead of waiting on: a long
+  live queue would fail tests that would have passed.
+  `timeout_func_only = true` to take the wait out of the timer: it
+  takes every fixture out too (above).
   Leave the dream test `slow` only: torch on MPS twice at once in an
   `--all` run.
 - **To reverse.** `--dist loadgroup --max-worker-restart=0` in addopts
   and CI, the `xdist_group("live")` marker back in conftest; the run id
   and `RUN_WAIT_S` can stay (unused).
-- **Rough edge.** The own-run wait has no queue: a live tier much
-  longer than 90 s would skip again, and grows with every live test
-  added. The lock is per test, so another run's live tests interleave
-  with this run's one test at a time; a waiter of either may lose the
-  race repeatedly and skip at its bound. The wait counts toward the
-  120 s timeout: a 90 s wait before a 30 s test is killed by the
-  watchdog (now one test lost, not the run). CI's two-line edit
+- **Rough edge.** The wait is untimed, so nothing but the holders'
+  own timeouts bounds a run's wait for its own live tier: a worker can
+  sit idle behind it, and the tier's length adds to the run's. The lock
+  is per test, so another run's live tests interleave with this run's
+  one test at a time; a waiter may lose the race behind another run
+  repeatedly and skip at its bound. An older build's holder writes no
+  id, so the file still shows the last id written — perhaps this run's
+  — and a waiter then waits on it unbounded (its own timeout still
+  ends it). CI's two-line edit
   (`.github/workflows/tests.yml`: `--dist load` and
   `--max-worker-restart=4`) is the owner's to push — the builder's
   token has no `workflow` scope; until then CI's own

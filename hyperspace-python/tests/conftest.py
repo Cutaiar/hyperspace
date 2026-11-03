@@ -119,14 +119,6 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.live)
         if path in _SLOW_FILES or key in _SLOW_TESTS:
             item.add_marker(pytest.mark.slow)
-    wide = [f"{item.nodeid} uses {name} ({scope}-scoped)"
-            for item in items if item.get_closest_marker("live") is not None
-            for name, scope in _wide_fixtures(item)]
-    if wide:
-        raise pytest.UsageError(
-            "a live test's fixture wider than the test is set up outside the live "
-            "lock (tests/live_lock.py): open the device in the test or a "
-            "function-scoped fixture — " + "; ".join(wide))
 
 
 # pytest's own fixtures wider than a test, which hold no device
@@ -145,31 +137,54 @@ def _wide_fixtures(item):
             yield name, scope
 
 
-@pytest.fixture(autouse=True)
-def _live_devices_take_turns(request):
+@pytest.hookimpl(hookwrapper=True, tryfirst=True)
+def pytest_runtest_protocol(item, nextitem):
     """A test marked `live` holds the machine-wide live lock
-    (tests/live_lock.py) for its setup, call and teardown, so no two live
-    tests run at once: not two workers of one run (`--dist load` hands a
-    test to any worker, row 605) and not two pytest processes (two
-    sessions, two worktrees). `glfw.init()` and a camera, audio or HID
-    open can block in C, not fail, while another process holds the window
-    system or the device: the lock is the mitigation, the thread timeout
-    (pyproject addopts) the backstop. It waits at most `live_lock.WAIT_S`
-    for another run and `live_lock.RUN_WAIT_S` for its own, then skips —
-    never forever. It is function-scoped: a module- or session-scoped
-    fixture a live test requested would be set up before the lock is
-    taken, outside it, so collection refuses one (`_wide_fixtures`): a
-    live test opens its devices in its own body or a function-scoped
-    fixture."""
-    if request.node.get_closest_marker("live") is None:
+    (tests/live_lock.py) for its whole protocol — setup, call, teardown —
+    so no two live tests run at once: not two workers of one run (`--dist
+    load` hands a test to any worker, row 605) and not two pytest
+    processes (two sessions, two worktrees). `glfw.init()` and a camera,
+    audio or HID open can block in C, not fail, while another process
+    holds the window system or the device: the lock is the mitigation,
+    the thread timeout the backstop.
+
+    Taken here, outside pytest-timeout's own protocol wrapper (tryfirst:
+    this one is outer), so the wait is not timed: a test gets its whole
+    120 s after its turn comes. While a worker of this run holds it the
+    wait has no bound (that holder's own timeout bounds it, so a run
+    never skips its own live tests); another run's holder is waited for
+    `live_lock.WAIT_S`, a holder that names no run `RUN_WAIT_S`, then the
+    test skips with the reason (`pytest_runtest_setup`)."""
+    if item.get_closest_marker("live") is None:
         yield
         return
     import live_lock
 
-    with live_lock.held(run=_run_id(request.config)) as why_not:
-        if why_not:
-            pytest.skip(why_not)
+    with live_lock.held(run=_run_id(item.config)) as why_not:
+        item.stash[_LIVE_WHY_NOT] = why_not
         yield
+
+
+_LIVE_WHY_NOT = pytest.StashKey[str | None]()
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_setup(item):
+    """Before any fixture of a live test: refuse a fixture wider than the
+    test (`_wide_fixtures`: it would be set up outside the lock, and is
+    never set up here), then skip if the lock was not had. Per item, so
+    xdist names the test and the rest of the run goes on; only tests that
+    run are checked, so a deselected tier is never looked at (row 605)."""
+    if item.get_closest_marker("live") is None:
+        return
+    wide = [f"{name} ({scope}-scoped)" for name, scope in _wide_fixtures(item)]
+    if wide:
+        pytest.fail("a live test's fixture wider than the test is set up outside the "
+                    "live lock (tests/live_lock.py): open the device in the test or a "
+                    "function-scoped fixture — it uses " + ", ".join(wide), pytrace=False)
+    why_not = item.stash.get(_LIVE_WHY_NOT, None)
+    if why_not:
+        pytest.skip(why_not)
 
 
 def _run_id(config) -> str:
