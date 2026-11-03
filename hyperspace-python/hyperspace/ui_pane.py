@@ -1,4 +1,4 @@
-"""GRAPH's side pane, always on, as folding sections (plan 49, stage 1).
+"""GRAPH's side pane, always on, as folding sections (plan 49, stages 1 and 2).
 
 The pane PR #266 made resizable used to open only while a node, a cable,
 a bundle or a group was selected. Now it is always beside the canvas
@@ -8,18 +8,23 @@ header that folds and unfolds by a click:
 - **selection** — what the pane showed before: the selected thing's
   details (`ui_graph._side`), or, with nothing selected, a line in words
   saying so;
-- **presets**, **lookback**, **faces**, **analyzer** — the body of the
-  page of that name, drawn by the very function the page draws
-  (`Panel._page_presets`, `ui_lookback.page`, `ui_patterns.page`,
-  `Panel._page_analyzer`): the page is the section at full height.
-  `SECTIONS` holds each body's function, so a section U2 adds is one row
-  there.
+- **presets**, **fx**, **lookback**, **faces**, **media**, **lfo**,
+  **seq**, **analyzer**, **audio**, **camera**, **output** — the body of
+  the page of that name, drawn by the very function the page draws
+  (`Panel._page_presets`, `ui_fx.page`, `ui_lookback.page`, … and the
+  `Panel._page_<key>` methods of the pages that are Panel methods): the
+  page is the section at full height. `SECTIONS` holds each body's
+  function, so a section is one row there. Stage 2 (U2) added fx, media,
+  lfo, seq, audio, camera and output, and retired the FX page: its
+  browser is the fx section alone, and `ui.page` landing on FX opens
+  GRAPH with that section unfolded (`focus`, `ui.RETIRED`).
 
 The open sections share the pane's height evenly; each body is a child
 of its own, so a long one scrolls by itself. Beside the canvas a body is
 never under `MIN_BODY_H` (past that the pane scrolls). On a narrow page
-the pane is #266's band under the canvas: there the headers are one row
-of chips and the bodies share the rest with no floor, so one open
+the pane is #266's band under the canvas: there the headers are rows of
+chips (a chip that would pass the edge starts the next row: twelve do not
+fit one) and the bodies share the rest with no floor, so one open
 section has the whole band.
 
 Which sections are open is this Mac's, kept in ``<machine>/ui.json``
@@ -43,8 +48,18 @@ preset strips). A page and its section are never drawn in one frame:
 the pane is on GRAPH, and the page is one of the others. Each header is
 ``##pane.<key>`` for the driver.
 
-The rail and every page are untouched: stage 2 folds the rest of the
-pages in, stage 3 takes the rail away (plan 49).
+**Narrow.** The pages were laid out for the panel's width; at the pane's
+(`ui_graph.SIDE_MIN`, 240 px, at the narrowest) a chip or a tick that
+would pass the right edge starts a new row (`ui.beside`), and the MEDIA
+grid, the SEQ grid, the LFO and envelope strips and the OUTPUT blocks
+lay themselves out for the room they are given (plan 49, stage 2).
+
+**Cost.** Each drawn body's time is kept (``st["pane_ms"]``, a running
+mean) and the SYSTEM page says it under GRAPH's own line
+(`timing_line`); a body scrolled out of the pane's view is not drawn
+(imgui skips the child), so it costs nothing.
+
+The rail and every other page stay: stage 3 takes the rail away (plan 49).
 """
 
 from __future__ import annotations
@@ -56,7 +71,17 @@ from pathlib import Path
 
 from imgui_bundle import imgui
 
-from . import library, ui, ui_lookback, ui_patterns, ui_presets
+from . import (
+    library,
+    ui,
+    ui_fx,
+    ui_lfo,
+    ui_lookback,
+    ui_media,
+    ui_patterns,
+    ui_presets,
+    ui_seq,
+)
 
 UI_FILE = "ui.json"      # <machine>/ui.json: this Mac's panel settings
 
@@ -78,23 +103,63 @@ def _analyzer(panel, dt: float) -> None:
     panel._page_analyzer(dt)
 
 
+# plan 49 stage 2 (U2): the rest of the pages
+def _fx(panel, dt: float) -> None:
+    ui_fx.page(panel, dt)          # the FX page's browser; the page itself is retired
+
+
+def _media(panel, dt: float) -> None:
+    ui_media.draw(panel, dt)
+
+
+def _lfo(panel, dt: float) -> None:
+    ui_lfo.page(panel, dt)
+
+
+def _seq(panel, dt: float) -> None:
+    ui_seq.page(panel, dt)
+
+
+def _audio(panel, dt: float) -> None:
+    panel._page_audio(dt)
+
+
+def _camera(panel, dt: float) -> None:
+    panel._page_camera(dt)
+
+
+def _output(panel, dt: float) -> None:
+    panel._page_output(dt)
+
+
 # (key, title, the rail's groups for its dirty dot, the body — the page's
-# own draw; None for selection, whose body `draw` is handed): down the pane
+# own draw; None for selection, whose body `draw` is handed): down the pane,
+# the graph's own things first (what is selected, the preset, its effects
+# and pictures), then the voices that move them, then the room and the rig
 SECTIONS: tuple[tuple[str, str, tuple[str, ...], Callable | None], ...] = (
     ("selection", "selection", (), None),
     ("presets", "presets", ("presets",), _presets),
+    ("fx", "fx", ("fx",), _fx),
     ("lookback", "lookback", ("dream",), _lookback),
     ("faces", "faces", ("pattern",), _faces),
+    ("media", "media", ("media", "backdrop"), _media),
+    ("lfo", "lfo", ("lfo", "tempo"), _lfo),
+    ("seq", "seq", ("seq", "env"), _seq),
     ("analyzer", "analyzer", ("band",), _analyzer),
+    ("audio", "audio", ("master",), _audio),
+    ("camera", "camera", ("camera",), _camera),
+    ("output", "output", ("output",), _output),
 )
 KEYS = tuple(k for k, *_ in SECTIONS)
-DEFAULT_OPEN = {"selection": True, "presets": True, "lookback": False, "faces": False,
-                "analyzer": False}
+# beside the canvas: selection and presets open at first (stage 1); every
+# section stage 2 added folded (rec: a fresh Mac's pane reads as it did)
+DEFAULT_OPEN = {k: k in ("selection", "presets") for k in KEYS}
 DEFAULT_BELOW = {k: k == "selection" for k in KEYS}     # the narrow page's band
 LAYOUTS = {"open": DEFAULT_OPEN, "below": DEFAULT_BELOW}   # ui.json's pane.<layout>
 MIN_BODY_H = 160.0       # beside the canvas, an open body is never shorter (the pane scrolls)
 CHIP_MAX = 220.0         # px: the most a band header's words take
 WRITE_AFTER_S = 0.5      # a fold is written this long after the last click
+COST_KEEP = 0.9          # a body's running mean: this much the last mean, the rest the newest
 NOTHING = "nothing selected — click a node, a cable or a group on the canvas"
 OPEN_TIP = "Fold or unfold this section (kept on this Mac)"
 
@@ -184,6 +249,17 @@ def set_open(st: dict, key: str, on: bool, layout: str = "open",
     st["pane_dirty_at"] = time.monotonic() if now is None else now
 
 
+def focus(st: dict, key: str) -> None:
+    """Unfold section `key` in the layout the pane last drew (beside the
+    canvas until it has drawn) and scroll its header to the pane's top on
+    the next draw: what `ui.page` landing on a retired page does
+    (`ui.RETIRED`: FX → the fx section), and what stage 3's "focus
+    section" will do for every page. An unfold as a click's, so it is
+    kept on this Mac."""
+    set_open(st, key, True, st.get("pane_layout", "open"))
+    st["pane_focus"] = key
+
+
 def flush(st: dict, now: float | None = None, force: bool = False) -> bool:
     """Write the layouts folded or unfolded since the last write, once
     `WRITE_AFTER_S` has passed since the last change (`force`: now, as
@@ -219,21 +295,21 @@ def draw(panel, st: dict, dt: float, selection: Callable[[], None] | None,
     band — its own fold state, the headers one row of chips, the bodies
     sharing the rest with no floor."""
     layout = "below" if below else "open"
+    st["pane_layout"] = layout           # where `focus` unfolds a section
     got = opened(st, layout)
     n_open = sum(1 for k in KEYS if got.get(k))
     drawn = st["pane_drawn"] = []        # the sections whose bodies drew (the tests read it)
+    want = st.pop("pane_focus", None)
     if below:
         for i, (key, title, groups, _) in enumerate(SECTIONS):
-            if i:
-                imgui.same_line()
             on = bool(got.get(key))
             if _header(panel, key, title, on, said if key == "selection" else "", groups,
-                       chip=True):
+                       chip=True, first=i == 0):
                 set_open(st, key, not on, layout)
         h = body_height(imgui.get_content_region_avail().y, n_open, 0.0)
         for key, _, _, body in SECTIONS:
             if got.get(key):
-                _body(panel, key, body, dt, selection, h, drawn)
+                _body(panel, st, key, body, dt, selection, h, drawn)
     else:
         head_h = imgui.get_frame_height_with_spacing()
         h = body_height(imgui.get_content_region_avail().y - head_h * len(SECTIONS), n_open)
@@ -242,17 +318,22 @@ def draw(panel, st: dict, dt: float, selection: Callable[[], None] | None,
             if _header(panel, key, title, on, said if key == "selection" else "", groups):
                 set_open(st, key, not on, layout)
                 on = not on
+            if key == want:
+                imgui.set_scroll_here_y(0.0)        # the focused section's header at the top
             if on:
-                _body(panel, key, body, dt, selection, h, drawn)
+                _body(panel, st, key, body, dt, selection, h, drawn)
     flush(st)
 
 
-def _body(panel, key: str, body, dt: float, selection, h: float, drawn: list) -> None:
+def _body(panel, st: dict, key: str, body, dt: float, selection, h: float,
+          drawn: list) -> None:
     """Section `key`'s body, `h` tall, under its own id: the page's draw,
-    or the selection's details (or words saying there is none)."""
+    or the selection's details (or words saying there is none). Its time
+    is kept for the SYSTEM page (`timing_line`)."""
     imgui.push_id(f"pane.{key}")
     try:
         if imgui.begin_child("##body", imgui.ImVec2(0, h)):
+            t0 = time.perf_counter()
             if body is not None:
                 body(panel, dt)
             elif selection is None:
@@ -260,17 +341,34 @@ def _body(panel, key: str, body, dt: float, selection, h: float, drawn: list) ->
             else:
                 selection()
             drawn.append(key)
+            ms = (time.perf_counter() - t0) * 1000.0
+            cost = st.setdefault("pane_ms", {})
+            cost[key] = ms if key not in cost else COST_KEEP * cost[key] + (1 - COST_KEEP) * ms
         imgui.end_child()
     finally:
         imgui.pop_id()
 
 
+def timing_line(panel, st: dict | None) -> str:
+    """The SYSTEM page's line for the pane (plan 49 stage 2): each section
+    whose body drew last time GRAPH drew, its running mean in ms, the
+    dearest first — "" until one has. `st` is GRAPH's page state; its
+    own line above this one times the whole page, these included."""
+    st = st or {}
+    cost, shown = st.get("pane_ms") or {}, st.get("pane_drawn") or []
+    got = sorted(((cost[k], k) for k in shown if k in cost), reverse=True)
+    if not got:
+        return ""
+    return "side pane: " + "  ·  ".join(f"{k} {ms:.2f}" for ms, k in got) + " ms"
+
+
 def _header(panel, key: str, title: str, on: bool, said: str, groups,
-            chip: bool = False) -> bool:
+            chip: bool = False, first: bool = True) -> bool:
     """One section's header: ▾ / ▸ and its title in the micro face (the
     selection's named after it), a dot where the section's group has moved
     off its preset, as on the rail. `chip`: as wide as its words (the
-    band's one row), lit while open. True when clicked."""
+    band's rows), lit while open, on the row of the chip before it (`first`:
+    there is none) unless it would pass the edge. True when clicked."""
     dot = any(ui_presets.dirty(panel, g, polled=True) for g in groups)
     room = 2 * ui.RAIL_DOT_R + 12 if dot else 0.0
     imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)   # measured in the face it is drawn in
@@ -281,6 +379,8 @@ def _header(panel, key: str, title: str, on: bool, said: str, groups,
         if chip:
             words = ui.fit_text(words, CHIP_MAX)
             size = imgui.ImVec2(imgui.calc_text_size(words).x + room, 0)
+            if not first:               # a selectable pads its words by the frame's padding
+                ui.beside(size.x + 2 * imgui.get_style().frame_padding.x)
         else:
             words = ui.fit_text(words, imgui.get_content_region_avail().x - room - 8)
             size = imgui.ImVec2(0, 0)

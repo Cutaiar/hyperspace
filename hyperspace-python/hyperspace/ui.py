@@ -44,12 +44,12 @@ from . import (
     ui_bands,
     ui_desk,
     ui_feel,
-    ui_fx,
     ui_graph,
     ui_lfo,
     ui_lookback,
     ui_media,
     ui_pad,
+    ui_pane,
     ui_patterns,
     ui_presets,
     ui_routing,
@@ -301,6 +301,7 @@ def fit_text(text: str, width: float) -> str:
 GROUND_WORDS = "nothing — its ground"
 THROUGH_WORDS = "hands through the effects"     # OUTPUT's checkbox (plan 35 O)
 OPEN_ON_GRAPH = "open on GRAPH"                 # a window's block: its node selected there
+NAME_ROOM = 64.0     # px: an OUTPUT block name needs this beside its ticks, or they go under it
 
 
 def shows_line(spec, n: int | None, slots=(), rig=None) -> str:
@@ -447,6 +448,26 @@ def button_w(*labels: str) -> float:
     s = imgui.get_style()
     w = sum(imgui.calc_text_size(lb.split("##")[0]).x + 2 * s.frame_padding.x for lb in labels)
     return w + s.item_spacing.x * max(len(labels) - 1, 0)
+
+
+def check_w(label: str) -> float:
+    """A checkbox's width with its label: the box, the inner gap, the words."""
+    s = imgui.get_style()
+    words = label.split("##")[0]
+    return imgui.get_frame_height() + (s.item_inner_spacing.x + imgui.calc_text_size(words).x
+                                       if words else 0.0)
+
+
+def beside(w: float) -> bool:
+    """The next item, `w` wide, on the line of the item before when it ends
+    by the region's right edge; else on a row of its own (plan 49 stage 2:
+    a page's row of chips or ticks in the side pane's 240–320 px). Call it
+    where `imgui.same_line()` stood. True when it stayed on the line."""
+    right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
+    if imgui.get_item_rect_max().x + imgui.get_style().item_spacing.x + w <= right + 0.5:
+        imgui.same_line()
+        return True
+    return False
 
 
 def device_lines(registry) -> list[str]:
@@ -610,11 +631,15 @@ CHEATSHEET = [
 # and the backdrop's and the faces' channel pickers. The audio page
 # holds the source and the master faders (the level into the analyser);
 # the analyzer page the scene and meters, then the band editor
-# (ui_bands.py); the routing page is the matrix (ui_routing.py); the fx
-# page a browser of the graph's effects (ui_fx.py); the faces page the pattern browser
+# (ui_bands.py); the routing page is the matrix (ui_routing.py); the faces
+# page the pattern browser
 # and its eight inputs (ui_patterns.py); the hands page is the Ultraleap live
 # view and setup (hands/panel.py); the lfo page the clock and the four
-# LFOs (ui_lfo.py).
+# LFOs (ui_lfo.py). Plan 49 stage 2: the FX page is retired — its browser
+# of the graph's effects (ui_fx.py) is GRAPH's side pane's fx section — but
+# its row stays, so every index `ui.page` holds (a key row's `set`, an old
+# show's) names the page it always did; the rail draws no pill for it, and
+# landing on it opens GRAPH with the fx section unfolded (`RETIRED`).
 PAGES = [
     ("output", "output", "output"),
     ("view", "view", "view"),
@@ -622,7 +647,7 @@ PAGES = [
     ("media", "media", ("media", "backdrop")),   # plan 32 U: the channels (ui_media.py)
     ("camera", "camera", "camera"),
     ("lookback", "lookback", "dream"),
-    ("fx", "fx", "fx"),
+    ("fx", "fx", "fx"),           # retired (plan 49 stage 2): GRAPH's fx section
     ("audio", "audio", "master"),
     ("analyzer", "analyzer", "band"),
     ("routing", "routing", None),
@@ -634,6 +659,9 @@ PAGES = [
     ("system", "system", None),
 ]
 PAGE_KEYS = [k for k, _, _ in PAGES]
+# plan 49 stage 2: a page retired into GRAPH's side pane → (the page it
+# opens, the section it unfolds there, `ui_pane.focus`)
+RETIRED = {"fx": ("graph", "fx")}
 
 
 class PageHistory:
@@ -790,10 +818,23 @@ class Panel:
         r.enum("ui.pad_view", "Pad view", lambda: self.__dict__.get("pad_view", 0),
                lambda i: setattr(self, "pad_view", int(i)), list(ui_pad_views.VIEW_LABELS),
                group="ui", persist=False, modulatable=False, tip=ui_pad_views.VIEW_TIP)
-        r.enum("ui.page", "Page", lambda: self.page,
-               lambda i: setattr(self, "page", int(i)), [lb for _, lb, _ in PAGES],
-               group="ui", persist=False, modulatable=False,
-               tip="Which page of the panel is open.")
+        r.enum("ui.page", "Page", lambda: self.page, self.go_page,
+               [lb for _, lb, _ in PAGES], group="ui", persist=False, modulatable=False,
+               tip="Which page of the panel is open. FX is retired (plan 49): it opens "
+                   "GRAPH with the side pane's fx section unfolded.")
+
+    def go_page(self, i) -> None:
+        """`ui.page`'s setter: open page `i`; a retired one (`RETIRED`: FX)
+        opens the page it went to with its section unfolded and scrolled to
+        (`ui_pane.focus`), so a key row or an old show that names FX still
+        lands on the effects (plan 49 stage 2)."""
+        i = int(i)
+        key = PAGE_KEYS[i] if 0 <= i < len(PAGE_KEYS) else None
+        if key in RETIRED:
+            home, section = RETIRED[key]
+            ui_pane.focus(ui_graph._state(self), section)
+            i = PAGE_KEYS.index(home)
+        self.page = i
 
     # ---- binding menu: every widget gets one on right-click ----
 
@@ -1671,6 +1712,8 @@ class Panel:
             return
         self.ghosts = 0
         self.page = max(0, min(self.page, len(PAGES) - 1))
+        if PAGE_KEYS[self.page] in RETIRED:     # set straight, not through ui.page
+            self.go_page(self.page)
         foot = imgui.get_frame_height_with_spacing()
         self._rail(foot)
         imgui.same_line()
@@ -1706,7 +1749,9 @@ class Panel:
         dl = imgui.get_window_draw_list()
         w, h = RAIL_W - 12, FONT_MICRO + 16
         imgui.push_font(_FONTS["micro"], FONT_MICRO)
-        for k, (_key, label, group) in enumerate(PAGES):
+        for k, (key, label, group) in enumerate(PAGES):
+            if key in RETIRED:          # plan 49 stage 2: a section of GRAPH's pane now
+                continue
             lit = k == self.page
             p0 = imgui.get_cursor_screen_pos()
             if imgui.invisible_button(f"##page{k}", imgui.ImVec2(w, h)):
@@ -1876,9 +1921,9 @@ class Panel:
             tip = self.reg["output.render"].tip
             self._combo("output.render", width=96,
                         tip=f"{tip}\nDrawing {size[0]}×{size[1]} now." if size else None)
-            imgui.same_line()
+            beside(check_w(self.reg["output.fullscreen"].label))
         self._check("output.fullscreen")
-        imgui.same_line()
+        beside(check_w(self.reg["output.overlay"].label))
         # decision 21 (a): overlay only when the config asks — shut, the
         # toggle is drawn disabled with the reason, and its three overlay-only
         # settings (click-through, ground, opacity) would do nothing
@@ -2005,7 +2050,11 @@ class Panel:
         ticks = sum(imgui.calc_text_size(s).x for s in ("picture", "hands", THROUGH_WORDS))
         ticks += 3 * (imgui.get_frame_height() + 2 * imgui.get_style().item_inner_spacing.x)
         ticks += 3 * imgui.get_style().item_spacing.x
-        room = max(imgui.get_content_region_avail().x - ticks - 8, 40)
+        # plan 49 stage 2: in the side pane the ticks go under the name,
+        # wrapped where they would pass the edge (`beside`)
+        narrow = imgui.get_content_region_avail().x - ticks - 8 < NAME_ROOM
+        room = (imgui.get_content_region_avail().x if narrow
+                else max(imgui.get_content_region_avail().x - ticks - 8, 40))
         labels = {sl.n: fit_text(f"{sl.n}  {sl.name}" if sl.name else f"{sl.n}", room)
                   for sl in slots}
         col = imgui.get_cursor_pos_x() + 8 + max(imgui.calc_text_size(t).x
@@ -2019,14 +2068,15 @@ class Panel:
                 continue
             imgui.align_text_to_frame_padding()
             imgui.text(labels[sl.n])
-            imgui.same_line(col)
+            if not narrow:
+                imgui.same_line(col)
             # plan 35 O (row 374): the window's two mutes (the rig's, never
             # the preset); "hands through the effects" is the preset's
             # wiring, written from here (T6, `graphview.set_through`)
             self._check(f"{pre}.scene", "picture")
-            imgui.same_line()
+            beside(check_w("hands"))
             self._check(f"{pre}.hands", "hands")
-            imgui.same_line()
+            beside(check_w(THROUGH_WORDS))
             self._through_check(frame, sl.n, slots, rig)
             # the mirror (plan 23 WP1): two ticks at the right of the dim row,
             # or of the "shows:" line when the output has no dim of its own
@@ -2319,28 +2369,25 @@ class Panel:
         self._row("eye.distance")
         imgui.spacing()
         self._button("camera.reset", "Reset view")
-        imgui.same_line()
+        beside(imgui.calc_text_size("R  ·  stick click").x)
         imgui.text_disabled("R  ·  stick click")
 
     def _page_lookback(self, dt: float) -> None:
         ui_lookback.page(self, dt)     # the frame history and its composite
-
-    def _page_fx(self, dt: float) -> None:
-        ui_fx.page(self, dt)           # the graph's effects, by where each ends
 
     def _page_audio(self, dt: float) -> None:
         a = self.audio
         self._section("audio source")
         mic_on = a.on and a.mode == "mic"
         self._button("audio.mic", "Stop mic" if mic_on else "Listen to mic")
-        imgui.same_line()
+        beside(button_w("Load track"))
         if imgui.button("Load track"):
             self._file_dialog = self.open_file_dialog(
                 "Choose a track", ["Audio", "*.wav *.mp3 *.flac *.ogg"])
             if self._file_dialog is None:
                 a.error = self.dialog_error
         if a.on:
-            imgui.same_line()
+            beside(button_w("Stop"))
             self._button("audio.stop", "Stop")
         if self._file_dialog is not None and self._file_dialog.ready():
             picked = self._file_dialog.result()
@@ -2365,10 +2412,10 @@ class Panel:
         # transport
         if a.mode == "file":
             self._button("audio.play", "Pause" if a.playing else "Play")
-            imgui.same_line()
+            beside(button_w("Restart"))
             self._button("audio.restart", "Restart")
-            imgui.same_line()
             pos, dur = a.position(), a.duration()
+            beside(_readout_width("00:00 / 00:00"))
             imgui.align_text_to_frame_padding()
             _readout(f"{int(pos // 60)}:{int(pos % 60):02d} / "
                      f"{int(dur // 60)}:{int(dur % 60):02d}", DIM)
@@ -2520,6 +2567,10 @@ class Panel:
         graph_ms = ui_graph.timing_line(self)     # plan 28 N2: the GRAPH page's own draw
         if graph_ms:
             imgui.text_disabled(graph_ms)
+            # plan 49 stage 2: what of it the side pane's open sections took
+            pane_ms = ui_pane.timing_line(self, self.__dict__.get(ui_graph.STATE))
+            if pane_ms:
+                imgui.text_disabled(fit_text(pane_ms, imgui.get_content_region_avail().x))
         thumbs = ui_graph.thumbnail_line(self)    # plan 37 C1: the GRAPH page's thumbnails
         if thumbs:
             imgui.text_disabled(thumbs)

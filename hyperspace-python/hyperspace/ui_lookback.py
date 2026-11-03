@@ -1,47 +1,68 @@
-"""The LOOKBACK page — the frame history and its composite (lookback.py).
+"""The LOOKBACK page — the look-back and the dream, as the two picture
+nodes they are (plan 36 T4; redrawn by plan 49 stage 2).
 
-Three sections on the dream group, named for what a knob acts on (plan 20
-WP4): ECHOES (how bright, how long, how many, how far apart, and a row of
-live thumbnails — the echoes newest first, straight from the atlas
-texture, with the dream buffer at the end when a worker has filled it),
-DREAM (the worker's status line — device and copy path, ms per submit,
-frames behind, drops, NaN resets, the stability clamp — or why there is
-none; the net layer as one menu of every layer of both nets; the
-worker's settings; the dream buffer's hue, saturation and tint —
-lookback.py's chroma()), and BOTH (the grade, the occlusion and the size, which every layer of the wake
-shares). `SECTIONS` is the layout: which param is drawn under which
-title, in order, two to a row. One preset strip for the group, under the
-page's title.
+The owner, 2026-11-02, on the page's old split into look-back / dream /
+"both": "a horrid representation of what's going on there". Since plan 36
+they are two nodes on GRAPH, each picture in → picture out, and the page
+draws them so, top to bottom under one preset strip for the dream group:
 
-A function over the Panel, like ui_presets: it draws with the panel's
-widget helpers and keeps no state, so a hot reload of this module lands
-on the next frame. Without a renderer (headless tests) or before the
-first capture, the thumbnail row says so instead of drawing textures;
-the control window shares the render window's GL context, so the atlas
-is a plain texture id to imgui there.
+  LOOK-BACK   picture in → trail out. Its head says how far back the
+              trail reaches; then what it records (a combo of the graph's
+              pictures, `lookback.image`) and what its trail is laid over,
+              in words; its knobs (`params.is_lookback_knob`: brightness,
+              fade time, count, time apart, shape hides, darken, contrast,
+              detail); the echoes it holds as thumbnails, newest first.
+  DREAM       picture in → dreamed picture out. Its head is `dream.on`
+              (off: the picture passes through untouched, the worker
+              idle) and its state; the worker's status line, the net
+              layer as one menu of every layer of both nets, its knobs,
+              the tint swatch, and the dream buffer's thumbnail.
+
+What the old page called "both" is named for what it is: darken,
+contrast and detail are the look-back's knobs (`LOOKBACK_KEYS`), and the
+dream reads them too — one state, `Renderer.dreamer` is made on the
+look-back's — so the dream says so in a line (`GRADE_LINE`), not a third
+section. A node not on the canvas says so on its head. `SECTIONS` is the
+layout: which param is drawn under which node, in order, two to a row
+(one where the room is narrower than `TWO_UP`, the side pane).
+
+One function, `page`, for the LOOKBACK page and GRAPH's side pane's
+lookback section (ui_pane.py). A function over the Panel, like
+ui_presets: it draws with the panel's widget helpers and keeps no state,
+so a hot reload of this module lands on the next frame. Without a
+renderer (headless tests) or before the first capture, the thumbnail row
+says so instead of drawing textures; the control window shares the
+render window's GL context, so the atlas is a plain texture id to imgui
+there.
 """
 
 from __future__ import annotations
 
 from imgui_bundle import imgui
 
-from . import graphview, ui
+from . import graphview, learn, ui
 from .graph import lookback_words
 from .lookback import LAYER_INFO, LAYERS, RES, tint_colour
 from .params import Kind
 
-# what is drawn under each title, in order. `dream.on` is the page's own
-# switch, above them; `dream.layer` is the DREAM section's layer menu and the
-# rest are half-width cells, two to a row.
+# what is drawn under each node, in order (plan 49 stage 2): the look-back's
+# own knobs (`params.LOOKBACK_KEYS`), then the dream's — `dream.on` on its
+# head, `dream.layer` its layer menu, the rest half-width cells
 SECTIONS = {
-    "echoes": ("dream.echo_mix", "dream.fade", "dream.echoes", "dream.gap"),
-    "dream": ("dream.layer", "dream.mix", "dream.k", "dream.step", "dream.steps",
+    "look-back": ("dream.echo_mix", "dream.fade", "dream.echoes", "dream.gap",
+                  "dream.occlude", "dream.darken", "dream.contrast", "dream.res"),
+    "dream": ("dream.on", "dream.layer", "dream.mix", "dream.k", "dream.step", "dream.steps",
               "dream.mask_decay", "dream.jitter", "dream.octaves", "dream.hue",
               "dream.sat", "dream.tint", "dream.tint_from", "dream.tint_hue",
               "dream.tint_sat"),
-    "both": ("dream.darken", "dream.contrast", "dream.occlude", "dream.res"),
 }
-NOTES = {"dream": "[dream] in config.toml", "both": "echoes and dream alike"}
+# each node's head: what goes in and what comes out (plan 36's two picture nodes)
+PORTS = {"look-back": "picture in → trail out",
+         "dream": "picture in → dreamed picture out"}
+GRADE = ("dream.darken", "dream.contrast", "dream.res")     # the look-back's, read by the dream
+GRADE_LINE = "graded by the look-back's darken and contrast, sent at its detail"
+OFF_CANVAS = "not on the canvas"
+TWO_UP = 360.0      # px: narrower than this (the side pane), the cells go one to a row
 # a cell's label: the section says whose knob it is, so the registry's
 # "Echo …" / "Dream …" is dropped here (the ROUTING page, a Learn message
 # and the desk diagram say the registry's)
@@ -63,41 +84,113 @@ def page_label(pid: str) -> str:
     for the layer, a menu with no label — the layer's own name."""
     if pid == "dream.layer":
         return "(the layer's name)"
-    return SHORT.get(pid, "Look-back")
+    return SHORT.get(pid, "dream")
 
 
 def page(panel, dt: float) -> None:
+    """The look-back and the dream, as two picture nodes (the module's
+    doc): the LOOKBACK page and the pane's lookback section."""
     r = panel.reg
-    st = r["dream.on"]
     lb = getattr(panel.renderer, "lookback", None)
     dr = getattr(panel.renderer, "dreamer", None)       # plan 36 T4: the dream node's
+    spec = _spec(panel)
+    drawn = learn.drawn_of(spec) if spec is not None else None
 
-    panel._section("look-back", "dream", note=_worker_note(dr))
-    panel._check("dream.on")
-    status = _status(lb, dr, bool(st.base))
-    imgui.same_line(imgui.get_content_region_avail().x - imgui.calc_text_size(status).x)
-    imgui.align_text_to_frame_padding()
-    imgui.text_disabled(status)
+    panel._section("look-back · dream", "dream", note=_worker_note(dr))
     if getattr(lb, "error", ""):
         imgui.text_colored(ui.WARN, f"GLSL: {lb.error} — on the shipped helpers")
+
+    # LOOK-BACK: picture in → trail out
+    _node_head(panel, "look-back", _held(lb) + _trail_note(r),
+               drawn is None or "lookback" in drawn)
     # plan 35 U: what the look-back records — a combo of the graph's
     # pictures setting the wire into `lookback.image` (plan 36 T4), one GRAPH edit
     # (`graphview.set_picture`) — and what it draws over, in words, beside it
-    _records_row(panel)
-
-    panel._section("echoes", note=_trail_note(r))
-    _cells(panel, lb, "##echoes", SECTIONS["echoes"])
-    _thumbnails(panel, lb, dr)
+    _records_row(panel, spec)
+    _cells(panel, lb, "##look-back", SECTIONS["look-back"])
+    _thumbnails(panel, lb)
     imgui.spacing()
 
-    panel._section("dream", note=NOTES["dream"])
+    # DREAM: picture in → dreamed picture out; off passes it through
+    _node_head(panel, "dream", _dream_word(dr, bool(r["dream.on"].base)),
+               drawn is None or "dream" in drawn, switch="dream.on")
     _worker_line(panel, dr)
     _layer_menu(panel)
-    _cells(panel, dr, "##dream", [pid for pid in SECTIONS["dream"] if pid != "dream.layer"])
-    imgui.spacing()
+    _cells(panel, dr, "##dream", [pid for pid in SECTIONS["dream"]
+                                  if pid not in ("dream.on", "dream.layer")])
+    ui._micro(ui.fit_text(GRADE_LINE.upper(), imgui.get_content_region_avail().x), ui.FAINT)
 
-    panel._section("both", note=NOTES["both"])
-    _cells(panel, lb, "##both", SECTIONS["both"])
+
+def _spec(panel):
+    """The loaded preset's graph (`Panel.graph_now`), or None: a stand-in
+    renderer or library, no graph."""
+    now = getattr(panel, "graph_now", None)
+    try:
+        return now()[1] if now is not None else None
+    except (AttributeError, TypeError):
+        return None
+
+
+NODE_BG = imgui.ImVec4(0.16, 0.16, 0.18, 1.0)    # a node head's band (GRAPH's node face)
+
+
+def _node_head(panel, title: str, word: str, on_canvas: bool,
+               switch: str | None = None) -> None:
+    """A node's head, one control tall, drawn as GRAPH draws a node: a band
+    with its title, what it takes and gives (`PORTS`), and `word` at its
+    right — or, for a node the graph does not hold, that it is not on the
+    canvas. `switch`: the node's on/off (`dream.on`), a tick at its start."""
+    dl = imgui.get_window_draw_list()
+    p0 = imgui.get_cursor_screen_pos()
+    w, h = imgui.get_content_region_avail().x, imgui.get_frame_height()
+    dl.add_rect_filled(p0, imgui.ImVec2(p0.x + w, p0.y + h), ui.u32(NODE_BG), 5.0)
+    dl.add_rect(p0, imgui.ImVec2(p0.x + w, p0.y + h), ui.u32(ui.LINE), 5.0)
+    if switch is not None:
+        panel._check(switch, "")
+        imgui.same_line(0, 6)
+    else:
+        imgui.dummy(imgui.ImVec2(2, h))
+        imgui.same_line(0, 6)
+    imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + (h - ui.FONT_MICRO) / 2 - 1)
+    ui._micro(title, ui.TEXT)
+    imgui.same_line(0, 10)
+    imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)
+    try:
+        right = word if on_canvas else OFF_CANVAS
+        rw = min(imgui.calc_text_size(right.upper()).x, w * 0.5)
+        right = ui.fit_text(right.upper(), rw)
+        room = p0.x + w - 8 - rw - 10 - imgui.get_cursor_screen_pos().x
+        ports = ui.fit_text(PORTS[title].upper(), room) if room > 24 else ""
+        if ports:
+            imgui.text_colored(ui.FAINT, ports)
+            imgui.same_line(0, 10)
+        imgui.set_cursor_screen_pos(imgui.ImVec2(p0.x + w - 8 - imgui.calc_text_size(right).x,
+                                                 imgui.get_cursor_screen_pos().y))
+        imgui.text_colored(ui.FAINT if on_canvas else ui.WARN, right)
+    finally:
+        imgui.pop_font()
+    if imgui.is_item_hovered():
+        ui.tooltip(f"{title}: {PORTS[title]}" + ("" if on_canvas else
+                   f" — {OFF_CANVAS}: its knobs act once GRAPH has one (right-click the "
+                   "canvas, look-back ▸)"))
+    imgui.set_cursor_screen_pos(imgui.ImVec2(p0.x, p0.y + h + imgui.get_style().item_spacing.y))
+
+
+def _held(lb) -> str:
+    """How many echoes the ring holds, for the look-back's head."""
+    if lb is None:
+        return ""
+    if lb.atlas is None:
+        return f"{getattr(lb, 'ring_error', '') or 'no echoes'} · "
+    return f"{len(lb.thumbnails())} held · "
+
+
+def _dream_word(dr, on: bool) -> str:
+    """The dream's state on its head (plan 36 T4: `dream.on` is the
+    dream's — off, it passes its picture through)."""
+    if not on:
+        return "off: passes the picture through"
+    return "dreaming" if getattr(dr, "dream_frame", -1) >= 0 else "no dream yet"
 
 
 CAPTURE = "lookback.image"            # plan 36 T4: what it records is its image
@@ -132,14 +225,10 @@ def draws_over_line(spec) -> str:
                              else graphview.picture_label(spec, now))
 
 
-def _records_row(panel) -> None:
+def _records_row(panel, spec) -> None:
     """The records combo, half the row, and "draws over:" beside it; the
-    last edit's words under them while there are any."""
-    now = getattr(panel, "graph_now", None)
-    try:
-        spec = now()[1] if now is not None else None
-    except (AttributeError, TypeError):     # a stand-in renderer or library: no graph
-        spec = None
+    last edit's words under them while there are any. `spec` is the
+    loaded preset's graph (`_spec`)."""
     frame = graphview.page_spec(spec)
     width = imgui.get_content_region_avail().x * 0.55
     # (the hover: the longer words — "with the hands", a placed effect)
@@ -156,8 +245,10 @@ def _records_row(panel) -> None:
 
 
 def _cells(panel, lb, table: str, ids) -> None:
-    """`ids` two to a row: a slider, or a combo for an enum, behind its label."""
-    if not imgui.begin_table(table, 2, imgui.TableFlags_.sizing_stretch_same):
+    """`ids` two to a row (one in a room narrower than `TWO_UP`: the side
+    pane): a slider, or a combo for an enum, behind its label."""
+    cols = 2 if imgui.get_content_region_avail().x >= TWO_UP else 1
+    if not imgui.begin_table(table, cols, imgui.TableFlags_.sizing_stretch_same):
         return
     for pid in ids:
         imgui.table_next_column()
@@ -254,19 +345,6 @@ def _trail_note(r) -> str:
     return f"{n} × {gap * 1000:.0f} ms · the trail reaches {n * gap:.2f} s"
 
 
-def _status(lb, dr, on: bool) -> str:
-    """The page's status: the echoes held, and the dream (plan 36 T4:
-    `dream.on` is the dream's — off, it passes its picture through)."""
-    if lb is None:
-        return "no renderer"
-    dream = ("dream off" if not on else
-             "dream" if getattr(dr, "dream_frame", -1) >= 0 else "no dream")
-    if lb.atlas is None:
-        return f"{getattr(lb, 'ring_error', '') or 'no echoes'} · {dream}"
-    n = len(lb.thumbnails())
-    return f"{n} echo(es) · {dream}"
-
-
 def _tint_swatch(panel, lb) -> None:
     """The tint colour the composite uses this frame, as a swatch: the
     chosen one, or — from the scene — whatever hue the newest echo had."""
@@ -346,6 +424,11 @@ def _worker_line(panel, lb) -> None:
     on its hover."""
     err = getattr(panel, "dream_error", "")
     full = _worker_status(lb, err)
+    # the dream buffer, while a worker has filled it, left of the words:
+    # the dream's picture beside what its worker says (as tall as the words' room)
+    thumb = _dream_thumb(lb)
+    if thumb:
+        imgui.same_line()
     shown = fit_lines(full, imgui.get_content_region_avail().x, STATUS_LINES)
     # torch missing: said plainly, in the warning colour
     imgui.push_style_color(imgui.Col_.text, ui.WARN if err else ui.FAINT)
@@ -362,23 +445,22 @@ def _echo_text(lb) -> str:
     return f"{w}×{h} px"
 
 
-def _thumbnails(panel, lb, dr=None) -> None:
-    """The echoes newest first, then the dream buffer: what the composite
-    sees this frame, with each one's age and weight on hover."""
+def _thumbnails(panel, lb) -> None:
+    """The look-back's echoes newest first: what its trail is made of this
+    frame, with each one's age and weight on hover."""
     if lb is None or lb.atlas is None:
         imgui.text_disabled("no history yet — wire a look-back on GRAPH")
         return
     thumbs = lb.thumbnails()
-    dreamt = dr is not None and dr.dream is not None and dr.dream_frame >= 0
-    if not thumbs and not dreamt:
+    if not thumbs:
         imgui.text_disabled("nothing captured yet")
         return
     ew, eh = lb.echo
     size = imgui.ImVec2(THUMB_H * ew / max(eh, 1), THUMB_H)
     tex = imgui.ImTextureRef(lb.atlas.glo)
     origin = imgui.get_cursor_screen_pos()
-    # as many as fit on one line, room kept for the dream and a "+n"
-    avail = imgui.get_content_region_avail().x - 30 - (size.x + 8 if dreamt else 0)
+    # as many as fit on one line, room kept for a "+n"
+    avail = imgui.get_content_region_avail().x - 30
     fit = max(1, int(avail // (size.x + 3)))
     shown = thumbs[:fit]
     for k, t in enumerate(shown):
@@ -391,15 +473,21 @@ def _thumbnails(panel, lb, dr=None) -> None:
     if len(thumbs) > fit:
         imgui.same_line(0, 3)
         imgui.text_disabled(f"+{len(thumbs) - fit}")
-    if dreamt:
-        if shown:
-            imgui.same_line(0, 8)
-        imgui.image(imgui.ImTextureRef(dr.dream.glo), size, imgui.ImVec2(0, 1),
-                    imgui.ImVec2(1, 0))
-        if imgui.is_item_hovered():
-            ui.tooltip(f"dream buffer · answers frame {dr.dream_frame}")
-    # a hairline under the row: newest at the left, the dream at the end
+    # a hairline under the row: newest at the left
     r1 = imgui.get_item_rect_max()
     dl = imgui.get_window_draw_list()
     dl.add_line(imgui.ImVec2(origin.x, r1.y + 2), imgui.ImVec2(r1.x, r1.y + 2),
                 ui.u32(ui.LINE))
+
+
+def _dream_thumb(dr) -> bool:
+    """The dream buffer — what the dream lays over its picture — as one
+    thumbnail, while a worker has filled it (True); nothing before."""
+    if dr is None or getattr(dr, "dream", None) is None or getattr(dr, "dream_frame", -1) < 0:
+        return False
+    w, h = getattr(dr.dream, "size", (16, 9))
+    imgui.image(imgui.ImTextureRef(dr.dream.glo), imgui.ImVec2(THUMB_H * w / max(h, 1), THUMB_H),
+                imgui.ImVec2(0, 1), imgui.ImVec2(1, 0))
+    if imgui.is_item_hovered():
+        ui.tooltip(f"dream buffer · answers frame {dr.dream_frame}")
+    return True
