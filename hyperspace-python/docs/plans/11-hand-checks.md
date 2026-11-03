@@ -6689,6 +6689,32 @@ Each the same as in the first minute.
 the green — the show's fault (2026-10-30) — or the pulse or drift stops
 dead after a nudge (a clock that did not move).
 
+## AW. Decks D1: one `Deck`, nothing changes (plan 44)
+Register row 571, 2026-11-02. Headless: `tests/test_deck.py` (the old
+construction order and `Deck.build` land every corpus preset to the same
+state; `main` builds one deck; `frame`'s order unchanged) and the goldens.
+**430. A launch on the build does everything it did.** (Mac, the rig's
+config, the APC40 plugged in)
+1. Quit and launch (a restart: this build adds a module and a field on
+   live objects, so a hot reload of the old process is not enough). The
+   startup preset lands as before.
+2. PRESETS: load another preset. Turn a knob on the APC40 and drag a
+   slider on the panel; ⌘Z twice, ⇧⌘Z once.
+3. HOLD, change a param on the panel, TAKE; HOLD again, change it, DROP.
+4. Open `hyperspace/deck.py`, add a blank line, save; then the same in
+   `hyperspace/routing.py`. Turn a knob after each.
+5. SYSTEM: the hot reload line.
+*Pass:* (1) the picture, the PRESETS strip and the dirty dot are as on
+the previous build; (2) the preset lands, the knob and the slider move
+the picture, ⌘Z takes back the slider then the knob, ⇧⌘Z puts the slider
+back, the footer names each step; (3) the projector stays on the program
+while held, TAKE shows the change, DROP puts it back, as before; (4) no
+red banner, no error toast, the knob still moves the picture after each
+save; (5) SYSTEM shows "hot: deck …" and then "hot: routing …" with the
+time. Fail: anything that differs from the previous build — a step
+missing from the undo footer, a knob that stops after a save, or a hot
+reload error naming `deck`.
+
 ## What no test covers
 
 Only a person can settle these:

@@ -523,6 +523,17 @@ rows 554 and 555.
 | **Then the per-deck split** (D3): what the contract puts in the preset is a deck's; what it leaves on the rig is the rig's single copy. The hands' look, the cloud's look, the bus cuts, the inlined desk and the default-module fallback move in this step, schema `/10`. | `params.py`, `library.Project`, `graph.RigWires`, `hold.py` | owner, 2026-11-02 (the order); D3's own rows when it is planned |
 | **Patch, group and preset become one format, later.** A preset is then a patch that fills the whole frame; a module preset is a patch of one group (row 540). The merge above is the first step toward it, not a design of it. | — | owner, 2026-11-02 (the direction); not planned |
 
+### Decks (plan 44)
+
+[`plans/44-decks.md`](plans/44-decks.md): N looks, one on air (rows
+556–559, the owner's, 2026-11-02: all four as recommended, 558 with a
+nuance). Built so far: D1.
+
+| Decision | Where | Who |
+|---|---|---|
+| **N looks, one on air; hold becomes copy A into B; the crossfader stays the dim** (Q1, Q2, Q4): as plan 44 §7 recommends. **Shared and lent** (Q3): the look-back (its rings, its knobs) and the dream's knobs are per deck; only the dream worker itself (the torch step) is reserved for the on-air deck and lent to the deck going on air, and as little as possible beyond it. A second, lower-resolution dream worker for the panel's deck's preview is possible in principle, to be measured in D4/D5 against the one-GPU budget (§8); not decided. | `deck.Deck` (D1 on), D4/D5 | owner, 2026-11-02; rows 556–559 |
+| **One `Deck`, one construction order** (D1). Today's per-deck singletons — the registry, the view, the table, the router, the LFOs, envelopes and sequencer and their clock, the presets and their graph section, learn, undo and its marks, the renderer, the hold — are one `Deck`, built by `Deck.build` in `app.main`'s old order (the registry's and the attach order); `main` and the headless `tests/test_undo.boot` both call it, the rig's objects passed in as hooks at their old places. It promises no behaviour change: one deck, the same frame, the same files; the flat handles on `Host` and `Panel` stay until D5. | `deck.Deck`, `Deck.build`, `Deck.targets`, `app.Host.deck`, `ui.Panel.deck` | plan 44 D1; row 571 |
+
 ## Undo
 
 | Decision | Where | Who |
@@ -573,6 +584,7 @@ rows 554 and 555.
 | **A run that builds mechanisms edits and adds no preset** (plans 24, 26 and 27, 2026-10-14; plans 28 and 30, 2026-10-16): every file under `hyperspace/library/` stays byte-identical, and every proof is a fixture under `tests/fixtures/` (force-added: the folder is gitignored) loaded through a scratch library. Fader sets, hand mappings, dance presets, palettes, templates and the factory presets' graph wiring are the owners' creative pass. | owner |
 | **Every new param defaults to today's picture**: a new mix or opacity at what the frame does now, a new switch off, a new source at its rest. | owner |
 | **Plans 24, 26 and 27 ran in parallel** (2026-10-12): the render graph is the top priority, the device registry the highest-leverage piece. | owner |
+| **The test suite cannot hang the Mac** (wave 1 T0, 2026-11-02): a hung test fails by name (pytest-timeout at 120 s: the thread method in xdist workers, the signal method in a serial run; no worker restart); `live` tests take turns across processes on a per-account lock and skip after 60 s; one tier at a time on a shared Mac; a test that opens a real GLFW window asks `gl_window_ok` first. | row 589 |
 
 ## Decided not to build
 
