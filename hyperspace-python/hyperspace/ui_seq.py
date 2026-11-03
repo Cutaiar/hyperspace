@@ -78,6 +78,13 @@ THUMB_W = 48.0        # a folded strip's thumbnail (its height is the frame's)
 THUMB_SAMPLES = 4     # per curved stage of a thumbnail
 NAME_W = 52.0         # a folded strip's name cell; its level bar takes the rest
 FOLD_COLS = 2         # folded strips to a line
+# plan 49 stage 2: GRAPH's side pane (240–320 px). Narrower than `ROOMY`
+# the lane column narrows, the cells may thin to `CELL_MIN`, the folded
+# strips go one to a line and an open strip's scope sits over its knobs
+ROOMY = 320.0         # px: the room the page's own layout wants
+LANE_W_NARROW = 56.0  # the lane column in the pane: the number and M over the picker
+CELL_MIN = 12.0       # the thinnest a step cell gets in the pane (16 on the page)
+BESIDE_SCOPE = 200.0  # px: the knobs want this beside the scope, or go under it
 SUS_SHARE = 0.25      # the sustain plateau's width in the drawing, of the other stages
 
 # the APC40's LED colours (ui_desk._LED), so the screen and the pads agree
@@ -213,7 +220,13 @@ def _transport(panel, seq) -> None:
     clock = getattr(panel, "clock", None)
     step = "stopped" if seq.playhead is None else f"step {seq.playhead + 1}/{seq.length}"
     w = ui._micro_width(step) + (2 * ui_lfo.BEAT_R + 10 + 4 * 12 + 8 if clock else 0)
-    imgui.same_line(imgui.get_content_region_avail().x + imgui.get_cursor_pos_x() - w - 4)
+    # flush right on the transport's line, or (the side pane) on a line of its own
+    right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
+    if imgui.get_item_rect_max().x + imgui.get_style().item_spacing.x + w + 4 <= right:
+        imgui.same_line(imgui.get_content_region_avail().x + imgui.get_cursor_pos_x() - w - 4)
+    else:
+        imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x
+                               - w - 4)
     h = imgui.get_frame_height()
     if clock is not None:
         ui_lfo._beats(clock, h)
@@ -238,10 +251,13 @@ def _transport(panel, seq) -> None:
 def _grid(panel, seq, envs) -> None:
     lanes, steps = len(seq.lanes), len(seq.lanes[0].steps)
     avail = imgui.get_content_region_avail().x
-    cw = max(16.0, min(CELL, (avail - LANE_W - GAP * steps) / steps))
+    # the page's layout, or the side pane's: a narrower lane column and
+    # thinner cells, the eight steps always across (the APC's clip grid)
+    lane_w, floor = (LANE_W, 16.0) if avail >= ROOMY else (LANE_W_NARROW, CELL_MIN)
+    cw = max(floor, min(CELL, (avail - lane_w - GAP * steps) / steps))
     ch = CELL
     o = imgui.get_cursor_screen_pos()
-    x0 = o.x + LANE_W + GAP
+    x0 = o.x + lane_w + GAP
     gy = o.y + HEAD_H + GAP
     dl = imgui.get_window_draw_list()
     head = seq.playhead if seq.playhead is not None and seq.playhead < seq.length else None
@@ -256,12 +272,12 @@ def _grid(panel, seq, envs) -> None:
     sel = selected_lane(panel, seq)
     for li in range(lanes):
         y = gy + li * (ch + GAP)
-        _lane_label(panel, seq, envs, li, o.x, y, ch, li == sel)
+        _lane_label(panel, seq, envs, li, o.x, y, ch, li == sel, lane_w)
         for si in range(steps):
             _cell(panel, seq, li, si, x0 + si * (cw + GAP), y, cw, ch)
     # the grid's extent as one item, so the page lays out below it
     imgui.set_cursor_screen_pos(o)
-    imgui.dummy(imgui.ImVec2(LANE_W + GAP + steps * (cw + GAP) - GAP,
+    imgui.dummy(imgui.ImVec2(lane_w + GAP + steps * (cw + GAP) - GAP,
                              HEAD_H + GAP + lanes * (ch + GAP) - GAP))
 
 
@@ -291,7 +307,7 @@ def _heads(panel, seq, x0: float, y: float, cw: float) -> None:
 
 
 def _lane_label(panel, seq, envs, li: int, x: float, y: float, h: float,
-                sel: bool) -> None:
+                sel: bool, lane_w: float = LANE_W) -> None:
     """Lane li's label: its number (select) and mute over its envelope picker."""
     lane = seq.lanes[li]
     p = f"{SEQ_GROUP}.{li + 1}"
@@ -306,17 +322,17 @@ def _lane_label(panel, seq, envs, li: int, x: float, y: float, h: float,
     imgui.same_line(0, 4)
     panel._lit_button(f"{p}.mute", "M", lane.mute)
     imgui.set_cursor_screen_pos(imgui.ImVec2(x, top + ch + 4))
-    _env_picker(panel, envs, f"{p}.env", lane.env)
+    _env_picker(panel, envs, f"{p}.env", lane.env, lane_w)
 
 
-def _env_picker(panel, envs, pid: str, cur: int) -> None:
+def _env_picker(panel, envs, pid: str, cur: int, lane_w: float = LANE_W) -> None:
     """`seq.<l>.env` as a picker over the bank's ids; a lane pointed at a
     removed extra says so."""
     a = panel.reg[pid]
     p = panel._real(a)
     gone = cur not in envs
     imgui.push_style_var(imgui.StyleVar_.frame_padding, ui.CHIP_PAD)
-    imgui.set_next_item_width(LANE_W - 4)
+    imgui.set_next_item_width(lane_w - 4)
     if gone:
         imgui.push_style_color(imgui.Col_.text, ui.WARN)
     opened = imgui.begin_combo(f"##{pid}", f"env {cur}",
@@ -378,12 +394,16 @@ def _strip(panel, seq, envs, n: int) -> None:
     p = f"{ENV_GROUP}.{n}"
     extra = n not in LANE_ENVS
     imgui.push_id(p)
+    chips = ["+ env", "gate"] + (["×"] if extra else [])
     ui._micro(f"env {n}")
-    imgui.same_line(SCOPE_W + imgui.get_style().item_spacing.x)
-    ui._micro(f"{_lanes_of(seq, n)} · {STAGES[env.stage]} · out {env.out:.2f}", ui.FAINT)
+    sp = imgui.get_style().item_spacing.x
+    imgui.same_line(SCOPE_W + sp)
+    # (fitted to what the chips leave it: the side pane is narrow)
+    room = imgui.get_content_region_avail().x - ui.chip_w(*chips) - 12
+    ui._micro(ui_lfo.fit_micro(f"{_lanes_of(seq, n)} · {STAGES[env.stage]} · "
+                               f"out {env.out:.2f}", room), ui.FAINT)
     # the head's chips, flush right on the label line: `+ env` lives here,
     # since there is always an open strip (the lane envelopes never go)
-    chips = ["+ env", "gate"] + (["×"] if extra else [])
     imgui.same_line(imgui.get_content_region_avail().x + imgui.get_cursor_pos_x()
                     - ui.chip_w(*chips) - 4)
     _add_chip(panel, envs)
@@ -399,9 +419,10 @@ def _strip(panel, seq, envs, n: int) -> None:
     rows = 5
     fh = imgui.get_frame_height_with_spacing()
     _scope(env, rows * fh - imgui.get_style().item_spacing.y)
-    imgui.same_line()
+    # the knobs beside the shape, or under it where the room is narrow (the pane)
+    if imgui.get_content_region_avail().x - SCOPE_W - sp >= BESIDE_SCOPE:
+        imgui.same_line()
     imgui.begin_group()
-    sp = imgui.get_style().item_spacing.x
     cw = (imgui.get_content_region_avail().x - 2 * sp) / 3
     panel._combo(f"{p}.mode", cw)
     imgui.same_line()
@@ -447,7 +468,8 @@ def _folds(panel, seq, envs, ids, key: str) -> None:
     """The folded strips, two to a line: half the rows a strip each would take."""
     if not ids:
         return
-    if imgui.begin_table(f"##envfold.{key}", FOLD_COLS, imgui.TableFlags_.sizing_stretch_same):
+    cols = FOLD_COLS if imgui.get_content_region_avail().x >= ROOMY else 1    # the pane: one
+    if imgui.begin_table(f"##envfold.{key}", cols, imgui.TableFlags_.sizing_stretch_same):
         for n in ids:
             imgui.table_next_column()
             _folded(panel, seq, envs, n)

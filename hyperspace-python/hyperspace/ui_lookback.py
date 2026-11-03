@@ -139,21 +139,21 @@ def _node_head(panel, title: str, word: str, on_canvas: bool,
     """A node's head, one control tall, drawn as GRAPH draws a node: a band
     with its title, what it takes and gives (`PORTS`), and `word` at its
     right — or, for a node the graph does not hold, that it is not on the
-    canvas. `switch`: the node's on/off (`dream.on`), a tick at its start."""
+    canvas. `switch`: the node's on/off (`dream.on`), a tick after its name."""
     dl = imgui.get_window_draw_list()
     p0 = imgui.get_cursor_screen_pos()
     w, h = imgui.get_content_region_avail().x, imgui.get_frame_height()
     dl.add_rect_filled(p0, imgui.ImVec2(p0.x + w, p0.y + h), ui.u32(NODE_BG), 5.0)
     dl.add_rect(p0, imgui.ImVec2(p0.x + w, p0.y + h), ui.u32(ui.LINE), 5.0)
-    if switch is not None:
-        panel._check(switch, "")
-        imgui.same_line(0, 6)
-    else:
-        imgui.dummy(imgui.ImVec2(2, h))
-        imgui.same_line(0, 6)
-    imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + (h - ui.FONT_MICRO) / 2 - 1)
+    imgui.set_cursor_screen_pos(imgui.ImVec2(p0.x + 8, p0.y + (h - ui.FONT_MICRO) / 2 - 1))
     ui._micro(title, ui.TEXT)
-    imgui.same_line(0, 10)
+    imgui.same_line(0, 8)
+    if switch is not None:              # its on/off after its name, as a node's switch
+        imgui.set_cursor_screen_pos(imgui.ImVec2(imgui.get_cursor_screen_pos().x, p0.y))
+        panel._check(switch, "")
+        imgui.same_line(0, 8)
+    imgui.set_cursor_screen_pos(imgui.ImVec2(imgui.get_cursor_screen_pos().x,
+                                             p0.y + (h - ui.FONT_MICRO) / 2 - 1))
     imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)
     try:
         right = word if on_canvas else OFF_CANVAS

@@ -818,7 +818,7 @@ class Panel:
         r.enum("ui.pad_view", "Pad view", lambda: self.__dict__.get("pad_view", 0),
                lambda i: setattr(self, "pad_view", int(i)), list(ui_pad_views.VIEW_LABELS),
                group="ui", persist=False, modulatable=False, tip=ui_pad_views.VIEW_TIP)
-        r.enum("ui.page", "Page", lambda: self.page, self.go_page,
+        r.enum("ui.page", "Page", lambda: self.page, lambda i: Panel.go_page(self, i),
                [lb for _, lb, _ in PAGES], group="ui", persist=False, modulatable=False,
                tip="Which page of the panel is open. FX is retired (plan 49): it opens "
                    "GRAPH with the side pane's fx section unfolded.")
@@ -1537,6 +1537,13 @@ class Panel:
         section whose params are saved by another group says so in `note`."""
         _micro(title, TEXT)
         if note:
+            # plan 49 stage 2: cut to what the title leaves it (the side pane)
+            room = imgui.get_content_region_avail().x - _micro_width(title) - 16
+            if _micro_width(note) > room:
+                imgui.push_font(_FONTS["micro"], FONT_MICRO)
+                note = fit_text(note.upper(), room) if room > 24 else ""
+                imgui.pop_font()
+        if note:
             imgui.same_line(imgui.get_content_region_avail().x - _micro_width(note) - 4)
             _micro(note, FAINT)
         lib = self.library
@@ -2085,10 +2092,13 @@ class Panel:
             st = imgui.get_style()
             fw = sum(imgui.calc_text_size(t).x + imgui.get_frame_height()
                      + st.item_inner_spacing.x + st.item_spacing.x for _, t in flips)
+            if narrow and flips:            # the pane: the flips on a row of their own
+                fw = 0.0
             if f"{pre}.dim" in self.reg:
-                self._row(f"{pre}.dim", width=-(fw + 8) if flips else -1, label="dim")
-                for pid, t in flips:
-                    imgui.same_line()
+                self._row(f"{pre}.dim", width=-(fw + 8) if fw else -1, label="dim")
+                for i, (pid, t) in enumerate(flips):
+                    if not narrow or i:
+                        beside(check_w(t))
                     self._check(pid, t)
                 flips = []
             sw = sl.switches
@@ -2136,7 +2146,7 @@ class Panel:
                 tooltip(f"select {graphview.label_of(pre, slots)} on the GRAPH "
                                   "page and bring it on screen")
             for pid, t in flips:            # no dim row: the ticks at the right of this one
-                imgui.same_line()
+                beside(check_w(t))
                 self._check(pid, t)
         imgui.pop_style_var()
         # plan 30 D1: a placed effect that runs nowhere this frame, and why

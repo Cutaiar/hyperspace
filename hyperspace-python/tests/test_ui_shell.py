@@ -29,7 +29,16 @@ from hyperspace.overlay import Output, register_switches
 from hyperspace.params import PLANES, Kind, build_registry
 from hyperspace.preset import Presets
 from hyperspace.routing import Binding, Bindings, Owned, Router, keymap, padmap
-from hyperspace.ui import CHEATSHEET, PAGE_KEYS, PAGES, PageHistory, Panel, apply_style, load_fonts
+from hyperspace.ui import (
+    CHEATSHEET,
+    PAGE_KEYS,
+    PAGES,
+    RETIRED,
+    PageHistory,
+    Panel,
+    apply_style,
+    load_fonts,
+)
 from hyperspace.view import ViewState
 
 
@@ -159,7 +168,8 @@ def test_the_panel_opens_on_graph_filling_the_window(tmp_path):
 def test_every_page_draws_with_a_library(rig):
     for k, (key, _, _) in enumerate(PAGES):
         rig.reg["ui.page"].set(k)
-        assert rig.panel.page == k
+        # a retired page (plan 49 stage 2: FX) opens the page it went to
+        assert rig.panel.page == (PAGE_KEYS.index(RETIRED[key][0]) if key in RETIRED else k)
         for _ in range(2):
             frame(rig.panel)
         assert PAGE_KEYS[k] == key
@@ -325,19 +335,24 @@ def test_page_param_is_ui_state_not_a_preset(rig):
     assert rig.panel.page == len(PAGES) - 1
 
 
+# the pages the rail opens (plan 49 stage 2: FX is GRAPH's fx section)
+DRAWN = [k for k in PAGE_KEYS if k not in RETIRED]
+
+
 def _page_scroll(rig, monkeypatch) -> dict[str, float]:
     """Draw every page at the control size three times and read each page
     child's scroll range after its own draw."""
     imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
     over = {}
-    for key in PAGE_KEYS:
+    drawn = DRAWN
+    for key in drawn:
         draw = getattr(Panel, f"_page_{key}")
 
         def measured(self, dt, _draw=draw, _key=key):
             _draw(self, dt)
             over[_key] = imgui.get_scroll_max_y()
         monkeypatch.setattr(Panel, f"_page_{key}", measured)
-    for key in PAGE_KEYS:
+    for key in drawn:
         for _ in range(3):              # the window settles its size, then its content
             frame(rig.panel, key)
     return over
@@ -352,7 +367,7 @@ def test_every_page_fits_the_control_window(rig, monkeypatch):
     assert rig.panel.desk                   # the desk diagram on (plan 14 WP7)
     assert rig.router.table.routes()
     over = _page_scroll(rig, monkeypatch)
-    assert set(over) == set(PAGE_KEYS)
+    assert set(over) == set(DRAWN)
     assert {k: v for k, v in over.items() if v > 0} == {}
 
 
@@ -1813,7 +1828,7 @@ def _depths(monkeypatch) -> dict[str, tuple[int, bool]]:
         return end()
     monkeypatch.setattr(imgui, "begin_disabled", begin_disabled)
     monkeypatch.setattr(imgui, "end_disabled", end_disabled)
-    for key in PAGE_KEYS:
+    for key in DRAWN:
         draw = getattr(Panel, f"_page_{key}")
 
         def page(self, dt, _draw=draw, _key=key):
@@ -1837,16 +1852,16 @@ def test_a_picked_control_dims_every_page_but_routing(rig, monkeypatch):
 
     def pages() -> dict[str, tuple[int, bool]]:
         seen.clear()
-        for key in PAGE_KEYS:
+        for key in DRAWN:
             frame(panel, key)
-        assert set(seen) == set(PAGE_KEYS)
+        assert set(seen) == set(DRAWN)
         return dict(seen)
-    idle = {k: (0, False) for k in PAGE_KEYS}
+    idle = {k: (0, False) for k in DRAWN}
     assert pages() == idle
     lrn.pick(_control("D3").source)
     dimmed = pages()
     assert dimmed.pop("routing") == (0, False)
-    assert dimmed == {k: (1, True) for k in PAGE_KEYS if k != "routing"}
+    assert dimmed == {k: (1, True) for k in DRAWN if k != "routing"}
     assert panel._picking is False                           # only while the page draws
     lrn.pick(_control("SM").source)                          # invariant: picked for the look only
     assert ui_desk.picked(panel) is not None and pages() == idle

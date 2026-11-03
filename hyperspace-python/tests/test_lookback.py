@@ -1243,25 +1243,25 @@ def lbpage(tmp_path, monkeypatch):
     page.close()
 
 
-def test_the_page_has_three_sections_and_every_dream_param_once(lbpage):
-    """ECHOES, DREAM, BOTH, in that order under the page's own title, and
-    every persisted `dream.*` param drawn exactly once, under the section
-    that says what it acts on (plan 20 §1, "The look-back page's knobs
-    today")."""
+def test_the_page_draws_the_two_picture_nodes_and_every_dream_param_once(lbpage):
+    """Plan 49 stage 2 (the owner, 2026-11-02: the look-back / dream / both
+    split was "a horrid representation"): under the page's title, the
+    LOOK-BACK node and the DREAM node, as plan 36 made them — each param
+    under the node it is a knob of (`params.is_lookback_knob`), `dream.on`
+    on the dream's head, the shared "both" gone — and every persisted
+    `dream.*` param drawn exactly once."""
     from hyperspace import ui_lookback
+    from hyperspace.params import is_lookback_knob
 
     lbpage.frame()
     got = lbpage.by_section()
-    assert list(got) == ["look-back", "echoes", "dream", "both"]
-    assert got["look-back"] == ["dream.on"]
-    assert got["echoes"] == ["dream.echo_mix", "dream.fade", "dream.echoes", "dream.gap"]
-    assert set(got["dream"]) == {
-        "dream.layer", "dream.mix", "dream.k", "dream.step", "dream.steps", "dream.mask_decay",
-        "dream.jitter", "dream.octaves", "dream.hue", "dream.sat", "dream.tint",
-        "dream.tint_from", "dream.tint_hue", "dream.tint_sat"}
-    assert got["both"] == ["dream.darken", "dream.contrast", "dream.occlude", "dream.res"]
-    # the layout table is what was drawn, and it is the whole group, once
-    assert {k: tuple(v) for k, v in got.items() if k != "look-back"} == ui_lookback.SECTIONS
+    assert list(got) == ["look-back · dream", "look-back", "dream"]
+    assert got["look-back · dream"] == []
+    assert got["look-back"] == list(ui_lookback.SECTIONS["look-back"])
+    assert all(is_lookback_knob(pid) for pid in got["look-back"])
+    assert got["dream"][0] == "dream.on"                 # the dream's own switch, on its head
+    assert not any(is_lookback_knob(pid) for pid in got["dream"])
+    assert set(got["dream"]) == set(ui_lookback.SECTIONS["dream"])
     drawn = [pid for ids in got.values() for pid in ids]
     assert sorted(drawn) == sorted(DREAM_IDS)
     # one widget per param (the layer: its menu), on or off
@@ -1272,8 +1272,8 @@ def test_the_page_has_three_sections_and_every_dream_param_once(lbpage):
         assert sorted(ids) == sorted(DREAM_IDS)
     # every cell has a label, and every label is in the page's table
     labels = [text for kind, text in lbpage.events if kind == "label"]
-    cells = [pid for title in ("echoes", "dream", "both") for pid in ui_lookback.SECTIONS[title]
-             if pid != "dream.layer"]
+    cells = [pid for title in ("look-back", "dream") for pid in ui_lookback.SECTIONS[title]
+             if pid not in ("dream.layer", "dream.on")]
     assert [lb for lb in labels if lb != "the tint"] == [ui_lookback.SHORT[pid] for pid in cells]
 
 
@@ -1390,12 +1390,15 @@ def test_every_dream_label_says_whose_knob_it_is():
     from hyperspace import ui_lookback
 
     reg = registry()
-    for pid in ui_lookback.SECTIONS["echoes"]:
+    look = ui_lookback.SECTIONS["look-back"]
+    for pid in look[:4]:
         assert reg[pid].label.startswith("Echo "), pid
     for pid in ui_lookback.SECTIONS["dream"]:
         assert reg[pid].label.startswith("Dream "), pid
-    assert [reg[pid].label for pid in ui_lookback.SECTIONS["both"]] == [
-        "Darken", "Contrast", "Shape hides wake", "Look-back detail"]
+    # (plan 49 stage 2: the look-back's own, which the dream reads too — `GRADE`)
+    assert [reg[pid].label for pid in look[4:]] == [
+        "Shape hides wake", "Darken", "Contrast", "Look-back detail"]
+    assert set(ui_lookback.GRADE) <= set(look)
     assert reg["dream.on"].label == "Dream on"           # (plan 36 T4: the dream's own)
     labels = [p.label for p in reg.group("dream")]
     assert len(set(labels)) == len(labels)          # ROUTING's list tells every one apart
@@ -1459,7 +1462,7 @@ def test_dream_speed_is_dream_k(lbpage):
     assert events[at + 1] == ("widget", "dream.k")
     assert lbpage.widgets().count("dream.k") == 1
     # the DREAM section's first row: brightness, then speed, on one line
-    cells = [w for w in lbpage.by_section()["dream"] if w != "dream.layer"]
+    cells = [w for w in lbpage.by_section()["dream"] if w not in ("dream.layer", "dream.on")]
     assert cells[:2] == ["dream.mix", "dream.k"]
     mix, speed = lbpage.rects["dream.mix"], lbpage.rects["dream.k"]
     assert round(mix[1]) == round(speed[1]) and mix[2] < speed[0]
