@@ -542,7 +542,7 @@ def test_two_decks_hold_the_session_params_by_reference():
         b.continuous("tempo.bpm", "BPM", lambda: 1.0, lambda v: None, group="tempo")
     # the mirror's one setting reaches both decks' hands states
     a["ghost.mirror"].set(True)
-    states = a["ghost.mirror"].states
+    states = a["ghost.mirror"].room.states
     assert len(states) == 2 and all(st.mirror for st in states)
     # the mirror is the session's even though its group is a deck's
     assert a["ghost.mirror"] is b["ghost.mirror"] is session["ghost.mirror"]

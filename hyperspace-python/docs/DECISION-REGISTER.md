@@ -645,21 +645,31 @@ here; overturn → the change, then the same.
 | 608 | Wave 2 T2, its reach and its word: every slider and fader `ui.py` draws for a param (`Panel._slider`, `Panel._fader`, so every page's `_row` and `half`); the tooltip leads with `FINE` while ⇧ is held over one; not the raw sliders on ROUTING (a route's depth and rest, a modifier's knobs, a span's from / to) or GRAPH's backdrop, which are other files; no arrow keys (keyboard navigation is off in the panel); a fader's imgui label is now its param id, so the driver finds it; hot reload carries it | 457, 458 | (rec) — built as recommended (T2) |
 | 609 | Wave 2 T3: SEND B held is FINE — while it is down every APC knob (a ring row, `abs`, on a continuous non-integer param) moves its param a tenth as far, read relatively and written between detents; its LED lit while held; faders, discrete targets and relative rows stay coarse; the button is the adapter's (`apc40.FINE`, `midi.MidiIO`), not a map row, and gives way to any row on SEND B | 459 | (rec) — the build's, for the owner and Dillon to keep |
 | 610 | Wave 2 T3: letting go of FINE re-sends the ring of every knob it moved, so the encoder is re-based onto the param and the next coarse turn continues from there (plan 13 D7's re-base; soft pickup where rings do not re-base); `desk.fine` is the rig's (group desk, never saved, not modulatable) and a reconnect lets go of it | 460 | (rec) — the build's, for the owner and Dillon to keep |
-| 611 | Plan 44 D3: the registry split — `params.build_session` declares the rig's params once into a `SessionRegistry` (the analyzer's, the audio transport, `app.restart`, the undo keys) and `build_performance` a deck's (the look, the media channels, the clouds, the hands, the macros, the bank's triggers) on a `Registry` that follows it (`Registry.follow`): every session `Param` is one object in every deck's registry, added there the moment it is declared, in its order, and dropped from every deck when the session drops it. A session param declared on a deck's registry later (the clock's, the hands', the outputs', the desk's, the panel's) is handed to the session by `Registry.add` (`part_of` is the one rule), so it is declared once; `build_registry` is the two in a row; session aliases (`band.sel.*`) are answered from any deck (`Registry.real` asks the session's rules) | 461 | (rec) — built as plan 44 §3 D3 asks |
-| 612 | Plan 44 D3: `ghost.mirror` stays the rig's (the owner, 2026-11-02, kept 2026-11-03) as a session **key** of a performance group — `params.SESSION_KEYS = {"ghost": ("mirror",)}`, asked first by `part_of` / `part_of_id`, so `ghost.mirror` and an extra node's `ghost.2.mirror` keep their group (the HANDS page lists it; the id is a saved format) but are the session's, kept by the show, never named by a preset; declared once and written to every deck's hands state (`Param.states`) | 462 | (rec) — of the two the brief offered (its own session param, a session sub-group), the session key |
+| 611 | Plan 44 D3: the registry split — `params.build_session` declares the rig's params once into a `SessionRegistry` (the analyzer's, the audio transport, `app.restart`, the undo keys) and `build_performance` a deck's (the look, the media channels, the clouds, the hands, the macros, the bank's triggers) on a `Registry` that follows it (`Registry.follow`): every session `Param` is one object in every deck's registry, added there the moment it is declared, in its order, and dropped from every deck when the session drops it. A session param declared on a deck's registry later (the clock's, the hands', the outputs', the desk's, the panel's) is handed to the session by `Registry.add` (`part_of` is the one rule), so it is declared once; `build_registry` is the two in a row; session aliases (`band.sel.*`) are answered from any deck (`Registry.real` asks the session's rules). Review of #351: a session param is applied **once a frame**, by the session's lead deck (`SessionRegistry.lead`, the first that follows); every other deck's `apply` leaves it alone (its router's offsets ride into the lead's next apply), and every deck's pass in a frame lands the shared params under one mark (the first deck to begin a frame moves the session's counter, the rest adopt it); a param's part is cached at its declaration (`Param._part`) | 461 | (rec) — built as plan 44 §3 D3 asks |
+| 612 | Plan 44 D3: `ghost.mirror` stays the rig's (the owner, 2026-11-02, kept 2026-11-03) as a session **key** of a performance group — `params.SESSION_KEYS = {"ghost": ("mirror",)}`, asked first by `part_of` / `part_of_id`, so `ghost.mirror` and an extra node's `ghost.2.mirror` keep their group (the HANDS page lists it; the id is a saved format) but are the session's, kept by the show, never named by a preset; declared once; its value lives on the session's param (`ghost.RoomSetting`, read there) and is written to every live deck's hands state, each held weakly (review of #351) | 462 | (rec) — of the two the brief offered (its own session param, a session sub-group), the session key |
 | 613 | Plan 44 D3 (plan 43 §6 item 1): `ghost` and `cloud` move to `PERFORMANCE_GROUPS` (after `segment`, so `mod` stays last); every hands and cloud look value is in a preset's `values` and a load lands it; the extra hands nodes' looks (`ghost.2.*` but the mirror) are the preset's under the naming rule; `preset.GraphSection._seed` survives for the session keys alone (an extra node's mirror from the open show), where plan 43 §6 item 2 said drop it | 462, 463 | (rec) — the seed kept for the mirror, else a reopened show would lose `ghost.2.mirror` |
-| 614 | Plan 44 D3: the table split — `routing.SessionTable` holds the session's rows (by reference, read off the deck tables that follow it), `bindings.json` (`load`, `to_json`, `dumps`, `write`, the backup, `migrate_v1`, `remap_factory`), the latch per role (`layer`, `layers`, `layer_serial`: `desk.shift`'s), the slew, the pad's feel, the rig facts (`midi_roles`, `primaries`, `row_schemes`) and what the launch did to the file; a deck's `Bindings(…, session=)` holds its own rows (routes, the preset layer, macros, modifiers) beside the session's, one list as before, and `SESSION_ATTRS` are properties onto the session; a session row a deck binds, adds or removes is handed to every other deck at once (`Bindings._share`: the session rows first in the other's list, its own after); `Sources.follow` follows the session table (row 593's note) | 464 | (rec) — built as plan 44 §3 D3 asks; the share's order is the build's |
+| 614 | Plan 44 D3: the table split — `routing.SessionTable` holds the session's rows (by reference, read off the deck tables that follow it), `bindings.json` (`load`, `to_json`, `dumps`, `write`, the backup, `migrate_v1`, `remap_factory`), the latch per role (`layer`, `layers`, `layer_serial`: `desk.shift`'s), the slew, the pad's feel, the rig facts (`midi_roles`, `primaries`, `row_schemes`) and what the launch did to the file; a deck's `Bindings(…, session=)` holds its own rows (routes, the preset layer, macros, modifiers) beside the session's, one list as before, and `SESSION_ATTRS` are properties onto the session; a session row a deck binds, adds or removes is handed to every other deck at once (`Bindings._share`: the session rows first in the other's list, its own after); the first table over a new session seeds its rows with the ones it was given (review of #351); `Sources.follow` follows the session table (row 593's note) | 464 | (rec) — built as plan 44 §3 D3 asks; the share's order is the build's |
 | 615 | Plan 44 D3: the presets own what is loaded — `Presets.landing` (the name, what the load or save produced, how to re-apply), `current`, `loaded`, `is_dirty`; `Library._landed` / `current` / `landed` / `is_dirty` / the marks / the file watch hand the presets group to it (`Library._owner`); every other group's landing stays the library's | 461 | (rec) — built as plan 44 §3 D3 asks, so D5 moves nothing |
 | 616 | Plan 44 D3: `MediaState` splits — `media.channels.MediaSources` (resolver, opener, closer, the soundtracks' bookkeeping, the mixer and `live_mixer`) is the rig's, `Channels` (the eight channels, the bins, the transports; `media.*` declared over them) a deck's, reading `resolver` / `opener` / `closer` / `mixer` / `sound` through to its sources; `MediaState` is `Channels`' old name and `Channels(resolver, opener)` makes both; V3's `audio.mix` toggle is the session's, declared in `build_session` over the media given | 464 | (rec) — built as plan 44 §3 D3 asks |
 | 617 | Plan 44 D3 (plan 43 §6 item 3): the bus cuts are the preset's — `Presets.bus` (`graph.RigWires`), read from a preset's `bus` key (none: every cable stands), written when anything is cut, in the dirty dot, in a load's undo step (`library.Marks`), what the renderer reads (`Deck.build` sets `renderer.rig_source = presets`; `Presets.rig` is what `graph.rig_of` and the hold read) and what GRAPH and OUTPUT edit (`graphview._rig` reads `edit.presets`; `ui.Panel.rig_now`; `ui_graph.render_edit` hands the presets); `Project` loses `rig`, `_saved_rig`, `MARK_RIG`; the hold holds the preset's cuts as it held the show's | 465, 466 | (rec) — the key is `bus` (a `cut` key would read as the cut node of plan 39) |
-| 618 | Plan 44 D3: the show is `hyperspace.project/3` — the rig's session, the pads, `startup` (and the session groups' module names and the rig nodes' GRAPH layout, as before). A `/2` show is read through `library.MIGRATIONS`' step (`show_without_look`) after `Project._take` reads out what it held of the look (`show_look`: the hands' and clouds' values, the `rig` cuts → `Project.old_look`, `old_cuts`), which every preset before `/10` takes while the show is open; its first write keeps `<file>.bak-v2-look` (no backup, no write) and `kept_look` reads that backup on later launches; `kept_eye` reads it too | 467, 468 | (rec) — as plan 43 C2 did for the eye |
-| 619 | Plan 44 D3: presets are `hyperspace.preset/10` — every save (`preset.SAVE_SCHEMA = graphmigrate.LOOK_SCHEMA`, `VERSIONS` `/2`–`/10`); a load of an older file runs `graphmigrate.ten` after `nine`: the open show's look into `values`, its cuts into `bus` (a file's own stand), `modules` and `desk_template` dropped (a templated desk's `dark` rows with it); an older build refuses a `/10` and a `/3` show as this one refuses `/11` and `/4` | 467 | (rec) — the one bump plan 44 §8 allows |
+| 618 | Plan 44 D3: the show is `hyperspace.project/3` — the rig's session, the pads, `startup` (and the session groups' module names and the rig nodes' GRAPH layout, as before). A `/2` show is read through `library.MIGRATIONS`' step (`show_without_look`) after `Project._take` reads out what it held of the look (`show_look`: the hands' and clouds' values, the `rig` cuts → `Project.old_look`, `old_cuts`), which every preset before `/10` takes while the show is open — one id set (`graphmigrate.is_look_id`: the hands' and clouds' groups less the mirror) for both readers, any other id staying the show's (review of #351); its first write keeps `<file>.bak-v2-look` (no backup, no write) and `kept_look` reads that backup on later launches; `kept_eye` reads it too | 467, 468 | (rec) — as plan 43 C2 did for the eye |
+| 619 | Plan 44 D3: presets are `hyperspace.preset/10` — every save (`preset.SAVE_SCHEMA = graphmigrate.LOOK_SCHEMA`, `VERSIONS` `/2`–`/10`); a load of an older file runs `graphmigrate.ten` after `nine`: the open show's look into `values` (an id this preset's graph does not declare — another preset's `ghost.2.*` — dropped quietly at the load, never an unknown id: review of #351), its cuts into `bus` (a file's own stand), `modules` and `desk_template` dropped (a templated desk's `dark` rows with it); an older build refuses a `/10` and a `/3` show as this one refuses `/11` and `/4` | 467 | (rec) — the one bump plan 44 §8 allows |
 | 620 | Plan 44 D3: desk templates retired (the owner, 2026-11-03: neither the Drive library nor `~/Hyperspace` holds one, so plan 43 §6 item 4's inlining is a no-op) — `TEMPLATE_KEY`, `expand_desk`, `compact_desk`, `merge_modifiers`, `template_doc`, `_desk_part`'s compaction, `_at_load`, `_mods_at_load`, `template_of_loaded`, `template_at_load`, `library.DESK` / `DESK_SCHEMA` / `desk_template` and `default_name`'s `DESK` branch are gone; a file naming one is said ("desk templates are retired") and lands its own rows; `tests/test_desk_templates.py` is the migration's test; the tool no longer retapers `desk/`; hand check 156 is retired in place | 469 | owner — 2026-11-03 |
 | 621 | Plan 44 D3 (row 540 resolved, the owner, 2026-11-03): the presets' `modules` labels are dropped with the default-module fallback — a preset load fills a missing id from `Library._fresh_of` (the value its object was built with), never a group's `default.json`; every performance strip lands clean and unnamed; the strips keep `resolved`; a save writes no `modules` | 469 | owner — 2026-11-03 |
-| 622 | Plan 44 D3: `tools/migrate_library.py` moves a library to `/10` and its shows to `/3` in one pass — dry run by default, `--apply` backs the library up to `~/Hyperspace/library-backup-<stamp>` first, retapers, then resaves every preset every folder down (plan 48; `--force` by `folder/stem` or stem) with the rig's show open, so a library not yet at `/9` takes the `/9` step in the same load; the show's look **and its bus cuts are written into every preset the library holds** (as the `/9` step wrote the eye), and every `/2` show is rewritten `/3` beside its `.bak-v2-look` | 467, 468 | (rec) — the brief's reading: every preset, not only the bank's |
+| 622 | Plan 44 D3: `tools/migrate_library.py` moves a library to `/10` and its shows to `/3` in one pass — dry run by default, `--apply` backs the library up to `~/Hyperspace/library-backup-<stamp>` first, retapers, then resaves every preset every folder down (plan 48; `--force` by the path under `presets/`, or by a bare stem only when no other folder holds it — said otherwise; review of #351) with the rig's show open, so a library not yet at `/9` takes the `/9` step in the same load; the show's look **and its bus cuts are written into every preset the library holds** (as the `/9` step wrote the eye), and every `/2` show is rewritten `/3` beside its `.bak-v2-look` | 467, 468 | (rec) — the brief's reading: every preset, not only the bank's |
 | 623 | Plan 44 D3 (plan 43 §6 item 3): a window the rig lacks is asked for in words — `graphview.wanted_windows(spec, cuts, count)` (every `output.<n>` past the rig's that the preset wires or cuts) and `WINDOW_WANTED`; not yet drawn on OUTPUT or GRAPH (`ui*.py` is U2's and L2's this wave), nothing opened | 470 | (rec) — the words and the rule now, the two lines with the UI's next PR |
 | 624 | Plan 44 D3: behaviour-neutral by construction — a deck's registry lists the session's params first (they exist before `build_performance` runs), then its own, then what is declared later in declaration order; nothing reads the order across the line (snapshots are maps, `apply` lands each param alone); D1's and D2's same-state tests, `test_undo.py::test_session_params_are_covered` and `tests/test_hold.py` pass with the session shared by reference; the goldens are expected unmoved over the migrated corpus (every corpus preset's new values are the build's defaults, which the goldens drew) | — | (rec) — the goldens are the orchestrator's to run |
-| 625 | Plan 44 D3 rough edges left for D4/D5: `hold._preset_part` still sorts Drop's bases by group, so Drop puts `ghost.mirror` back with the look (hold.py was out of this PR's reach beyond `program`; D5 deletes the hold); `Registry.apply` on two decks would land a session param twice a frame; the library's presets kind is the deck built last (`lib.presets`) | — | (rec) — recorded, not built |
+| 625 | Plan 44 D3 rough edges left for D4/D5: `hold._preset_part` still sorts Drop's bases by group, so Drop puts `ghost.mirror` back with the look (hold.py was out of this PR's reach beyond `program`; D5 deletes the hold); a deck that runs after the lead lands its session offsets a frame late (the double-apply itself is closed, row 611); the library's presets kind is the deck built last (`lib.presets`) | — | (rec) — recorded, not built |
+| 626 | Plan 49 U2: the rest of the pages are sections of GRAPH's side pane — fx, media, lfo, seq, audio, camera, output, after U1's five, in the order selection · presets · fx · lookback · faces · media · lfo · seq · analyzer · audio · camera · output — each body the function its page draws (`ui_fx.page`, `ui_media.draw`, `ui_lfo.page`, `ui_seq.page`, `Panel._page_audio` / `_page_camera` / `_page_output`), one row of `ui_pane.SECTIONS`; every new section folded at first, beside and in the band | 471, 478 | (rec) — pending the owner; built as recommended |
+| 627 | Plan 49 U2: the FX page is retired — the rail draws no FX pill, `Panel._page_fx` is gone, its browser is the pane's fx section; its row stays in `ui.PAGES` so every index `ui.page` holds keeps its page (a key row's `set`, an old show), and landing on FX — through the param or set straight — opens GRAPH with the fx section unfolded and scrolled to (`ui.RETIRED`, `ui_pane.focus`: a request the next draw acts on in its own layout, beside the canvas or the narrow page's band — review fix 1), kept on this Mac as a click's unfold | 472 | (rec) — pending the owner; built as recommended |
+| 628 | Plan 49 U2: narrow layouts, nothing past the pane's edge at `SIDE_MIN` (240 px): a row of chips or ticks wraps where the next would pass the edge (`ui.beside`: AUDIO's buttons and transport, OUTPUT's toggles and each block's three ticks and flips, the band's twelve headers); a section note is cut to what its title leaves; LOOKBACK's cells and SEQ's folded envelopes one to a row under 360 / 320 px; an LFO's or an envelope's scope over its knobs where fewer than 220 / 200 px are beside it | 473, 474, 475, 477, 479 | (rec) — pending the owner; built as recommended |
+| 629 | Plan 49 U2, MEDIA in the pane: the eight channels four to a row (A–D over E–H) where a column would be under 40 px (`ui_media.COL_MIN`), each a picture, playhead and its bin of sixteen cells at the column's width; eight across on the page as before; the library's **Add file…** on a row of its own when the tabs leave no room | 473 | (rec) — pending the owner; built as recommended |
+| 630 | Plan 49 U2, SEQ in the pane: the eight steps always across (the APC40's clip grid, never folded or transposed); under 320 px the lane column narrows to 56 px (number and M over the picker) and a cell may thin to 12 px (16 on the page), still 48 px tall; the transport's beat light and step on a line of their own where they would overlap | 474 | (rec) — pending the owner; built as recommended |
+| 631 | Plan 49 U2, the LOOKBACK redraw (the owner, 2026-11-02: the look-back / dream / shared split was "a horrid representation"): the page and the section draw one function as plan 36's two picture nodes — LOOK-BACK (picture in → trail out: records, its eight knobs by `params.is_lookback_knob`, its echoes) and DREAM (picture in → dreamed picture out, `dream.on` on its head, off passes through: its worker beside the dream buffer, the layer, its knobs) — each head saying when the graph holds no such node, its hover the whole band (what it takes and gives; the dream's, where its worker is set up: `[dream]` in config.toml — review fixes 2, 7); "both" is gone: darken, contrast and detail are the look-back's knobs and a line under the dream says it reads them (one state: `Renderer.dreamer` shares the look-back's) | 476 | (rec) — pending the owner; built as recommended |
+| 632 | Plan 49 U2: SYSTEM says each drawn section's cost under GRAPH's own line ("side pane: media 0.42 · fx 0.31 … ms", a running mean per body, the dearest first, `ui_pane.timing_line`); a body scrolled out of the pane's view is not drawn and costs nothing | 478 | (rec) — pending the owner; built as recommended |
+| 636 | Plan 48 stage 2 (L2): the PRESETS list is a tree — the top-level presets first, then a folding header per folder alphabetically (its name, its count, and while folded the loaded preset's leaf when it is inside), a folder's presets then its folders, nested; a row under a header is its leaf; every folder open unless folded on this Mac (`presets.folded` in `<machine>/ui.json`, beside the pane's, written `WRITE_AFTER_S` after the last click as the pane's are); one drawing on the PRESETS page and in GRAPH's pane | 481 | (rec) — pending the owner; built as recommended |
+| 637 | Plan 48 stage 2: a preset moves between folders by its row's right-click **move to ▸** (the top level and every folder) or a drag onto a folder's header; `Library.move` keeps the file's bytes and stem, and as a rename does, the loaded preset's name follows and every show naming it is rewritten (the open one written too, each copied to the trash first); no undo step, as a rename has none | 482 | (rec) — pending the owner; built as recommended |
+| 638 | Plan 48 stage 2: **new folder** at the list's foot makes one at the top, a header's right-click one inside it; a folder renames in place (every preset keeps its leaf, the shows follow; never over another folder, asked of the disk) and is removed only when empty (a Finder `.DS_Store` aside; the item off, naming what is in the way); `tools/move_library.py` and `tools/migrate_library.py` walk `presets/` every folder down as the library does | 483 | (rec) — pending the owner; built as recommended |
 
 "—": no hand check shows it; tests only.
 
@@ -11275,8 +11285,16 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   param (plan 43 §6 item 6's other road — the triage's XL).
 - **To reverse.** `build_registry`'s old body; `Registry.add` without the
   routing.
-- **Rough edge.** With two decks `Registry.apply` would land a session
-  param twice a frame (D4's mix pass decides who applies the session).
+- **Review of #351.** A session param is applied once a frame: only the
+  session's lead deck's `apply` lands the session's params, and every
+  deck's `begin_frame` in one frame shares the session's mark (the first
+  moves it on, the rest adopt it), so a param one pass landed is never
+  landed again that frame and two counters never meet by chance on a
+  shared `Param`. `part_of` is cached on the param; `Registry.add` leaves
+  the duplicate check to `SessionRegistry.add`.
+- **Rough edge.** A deck that runs after the lead in a frame lands its
+  session offsets in the lead's next apply — a frame late (D4 orders the
+  passes).
 - **Judge it.** Check 461.
 
 ### 612. `ghost.mirror` is a session key of a performance group
@@ -11289,8 +11307,9 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   HANDS page and its id are unchanged) but are the room's: the show keeps
   them, a preset never names them (a load notes and ignores one), the hold
   and undo see them as the session's. `ghost.register` declares the mirror
-  once and keeps every deck's `GhostState` on the param (`Param.states`):
-  one setting written to all.
+  once; its value is a `ghost.RoomSetting` on the session's param (what the
+  param reads), written to every live deck's `GhostState`, each held
+  weakly — a rebuilt deck's old state is let go (review of #351).
 - **Other options.** A group of its own (`room.mirror`: a renamed id, a
   read map); a session sub-group (`ghost.rig`, a group that is not the
   id's first segment, which `tests/test_params.py` forbids).
@@ -11496,3 +11515,219 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **To reverse.** —
 - **Rough edge.** See the row.
 - **Judge it.** —
+## Wave 2 — the panel fold, stage 2 (plan 49, rows 626–632)
+
+### 626. The rest of the pages fold into the pane
+- **Asked.** The build-order doc's row "Graph always on, pages fold into
+  the side pane", stage 2 (U2): media, fx, LFO, sequencer, audio, camera
+  and output become sections; the FX page is retired.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** Seven rows added to `ui_pane.SECTIONS`, each body the
+  function its page draws, so no page code is copied and a page is still
+  its section at full height. Order: the graph's own things first
+  (selection, presets, fx, lookback, faces, media), then what moves them
+  (lfo, seq, analyzer), then the room and the rig (audio, camera,
+  output). Every new section folded at first in both layouts: a fresh
+  Mac's pane reads as stage 1 left it, and a section is one click away.
+- **Other options.** The rail's order (output first); some open by
+  default (fx beside the effects it lists).
+- **To reverse.** Drop the rows; the pages are untouched.
+- **Judge it.** 471, 478.
+
+### 627. The FX page retired; its slot kept
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** The rail loses FX and `Panel._page_fx` is gone; the
+  browser of the graph's effects (plan 33 U, grouped by where each ends)
+  is the fx section alone. `ui.page` is an enum whose value is an index,
+  and a binding's `set` holds the index: dropping the row would shift
+  every page after it (AUDIO … SYSTEM) by one, so the row stays in
+  `ui.PAGES` (`RETIRED = {"fx": ("graph", "fx")}`) and `Panel.go_page`
+  — the param's setter, and `Panel.draw` for a page set straight (⌘[ /
+  ⌘]) — opens GRAPH and `ui_pane.focus`es the fx section: a request the
+  next draw acts on in its own layout (beside the canvas or the narrow
+  page's band; review fix 1 — it had unfolded the layout last drawn, and
+  the band ignored it), unfolded, scrolled to the top, written to
+  `ui.json` as a click's unfold. GRAPH's **open on FX** chip (an effect node's
+  selection) goes the same way.
+- **Other options.** Drop the row and remap stored indices (no store of
+  them is ours to rewrite: the bindings are the rig's); land on GRAPH
+  without unfolding.
+- **Rough edge.** A `step` row on `ui.page` (none is shipped) from
+  LOOKBACK lands on GRAPH, then LFO: the retired slot is a door, not a
+  page. The hand checks that name the FX page are retired in place (a
+  line under each).
+- **Judge it.** 472.
+
+### 628. Narrow layouts: wrap, cut, stack
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** Checked with the panel driver at `SIDE_MIN` (240 px)
+  and `SIDE_W` (320 px), every control's rect inside the pane
+  (`test_each_stage2_section_draws_in_the_pane_and_nothing_passes_its_edge`).
+  `ui.beside(w)` stands where `same_line()` stood in a row that can
+  spill: it keeps the line when the next item ends by the region's edge,
+  else starts a row. A section note is cut to what its title leaves
+  (`Panel._section`). Below their widths LOOKBACK's cells go one to a
+  row, SEQ's folded envelopes one to a line, and an LFO's or an
+  envelope's scope sits over its knobs. On the page every layout is what
+  it was (the page-fit tests unchanged).
+- **Judge it.** 473, 474, 475, 477, 479.
+
+### 629. MEDIA's channels four to a row in the pane
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** Eight columns at 240 px are 22 px each, a bin cell
+  10 px: too thin to aim at from arm's length. Under `COL_MIN` (40 px a
+  column) the channels go A–D over E–H, each column as on the page
+  (letter, picture, playhead, bin as two columns of eight cells).
+- **Other options.** One channel at a time with a picker; the bins
+  folded to the slot on air.
+- **Judge it.** 473.
+
+### 630. SEQ's grid stays eight across
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** The grid is the APC40's clip grid on screen, so it
+  is never transposed or split: under 320 px the lane column narrows
+  to 56 px and a cell may thin to 12 px (16 on the page), 48 px tall
+  as ever. At 240 px the cells are 12 px; at the default 320 px, 22 px.
+- **Other options.** Steps as rows (the desk's picture lost); 1–4 over
+  5–8.
+- **Judge it.** 474.
+
+### 631. LOOKBACK as the two picture nodes
+- **Asked.** The owner, 2026-11-02, on the page's look-back / dream /
+  "both" split: "a horrid representation of what's going on there";
+  plan 49 suggested drawing it as plan 36's two picture nodes.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** One function (`ui_lookback.page`) for the page and
+  the section, under one preset strip: a **LOOK-BACK** head (picture in
+  → trail out, how far back the trail reaches) over what it records and
+  draws over, its eight knobs (`params.LOOKBACK_KEYS`) and its echoes;
+  a **DREAM** head (picture in → dreamed picture out, `dream.on` after
+  its name; off, the picture passes through) over its worker's line
+  beside the dream buffer, the layer menu and its knobs. A head names
+  "not on the canvas" when the loaded graph holds no such node; its hover
+  is the whole band, and the dream's says where its worker is set up
+  (`[dream]` in config.toml, the old DREAM section's note: review fixes
+  2, 7). The graph's node names are asked once per loaded graph (review
+  fix 6). "Both"
+  is gone: darken, contrast and detail were always the look-back's knobs,
+  and the dream reads them (`Renderer.dreamer` is made on the look-back's
+  state), which a line under the dream now says (`GRADE_LINE`). The
+  page still fits the control window with thumbnails, the worker at its
+  longest and an error line.
+- **Other options.** Draw the two nodes as GRAPH draws them, ports and
+  all (a canvas inside the pane); split the grade into a node of its own
+  (the graph has none).
+- **Judge it.** 476.
+
+### 632. What each section costs, on SYSTEM
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** `ui_pane._body` times each body it draws into a
+  running mean (`st["pane_ms"]`); SYSTEM shows "side pane: …" under
+  GRAPH's own line, the dearest first, for the sections drawn last time.
+  A body imgui skips (scrolled out of view) costs nothing and is not
+  listed.
+- **Judge it.** 478.
+
+
+## Wave 2 — preset folders, stage 2 (plan 48, rows 636–638)
+
+### 636. The presets list as a tree
+- **Asked.** The build-order doc's row "Preset folders", L2: the tree in
+  the PRESETS section of the folded pane; plan 48's "what stage 2 might
+  do" (the list grouped under a folding header per folder).
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** `ui_presets.preset_list` draws the list as a tree:
+  the top-level presets first (the list's order), then a header per
+  folder, alphabetically case folded — `party  ·  12` — and inside it the
+  folder's presets (the list's order) and then its own folders, indented.
+  A row under a header is its leaf (`TRIP`); the header says the folder.
+  Every folder on disk is a header, an empty one too. A click on a header
+  folds it; the fold is this Mac's, `presets.folded` (a list of folders)
+  in `<machine>/ui.json` (no second file). It is read once the machine is
+  known (again if it changes), with any fold clicked before that laid
+  over it, and written `ui_pane.WRITE_AFTER_S` after the last click by
+  `ui_presets.flush_folds` through `ui_pane.write_key` (one small helper
+  added to `ui_pane`), the rest of the file kept — deferred as the
+  pane's own folds are (review of #349); `Panel.close` writes one not
+  yet written, as `ui_graph.close` does the pane's. A folder not named
+  there is open. Folded with the
+  loaded preset inside, the header ends with its leaf (`party · 12 ·
+  TRIP`). The strip, rename, ×, the trash and the show line are as they
+  were; the strip's arrows still step by the flat list. One function
+  draws the page and GRAPH's pane section (the pane draws the page's
+  body), so a fold made in one is the fold in the other.
+- **Other options.** Folded by default: sixty presets in folders would
+  open to a list of headers and a click per look. A flat list with the
+  folder dim (stage 1, row 588): kept under the header's reading only.
+- **To reverse.** `preset_list` back to the one loop over `names`.
+- **Rough edge.** A folded folder's presets are still on the strip's
+  arrows and the pads; the fold hides rows, never presets.
+- **Judge it.** 481.
+
+### 637. Moving a preset between folders
+- **Asked.** Plan 48 stage 2: "move to ▸" on the row, or a drag onto a
+  folder header.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** Both: a row's right-click opens **move to ▸**, a
+  submenu of *top level* and every folder (less the one it is in); a row
+  dragged onto a header moves into that folder (the top level by the
+  menu only: it has no header). `Library.move(name, folder)` moves the
+  file whole — a hard link then an unlink, or where the disk makes no
+  links an exclusive copy of the bytes — never over a file, its stem and
+  its inner `name` kept, so it is listed `<folder>/<leaf>`; refused when
+  the folder already has a preset of that name. Then exactly as a rename
+  (plan 19 WP4's): the loaded preset's name follows if it is the one
+  moved (its clean reference kept, so an unsaved edit stays one), and
+  every show in the home that names it — by its name, its file key or
+  any spelling that found it — is copied to the trash and rewritten, the
+  open show through its `Project` (written, as a rename writes it, so
+  the move leaves no dot). No undo step: a rename has none; moving it
+  back is the net. The file needs no trash copy: its bytes do not change.
+- **Other options.** Rewrite the open show's bank in memory only and
+  leave the show dirty: every other show (and the open one, unsaved)
+  would name a file that is gone. An undo step: the library's file
+  operations have none.
+- **To reverse.** Drop `Library.move`, `_row_menu` and the drag source.
+- **Rough edge.** Writing the open show writes its other unsaved edits
+  with it, as a rename always has.
+- **Judge it.** 482.
+
+### 638. Making, renaming and removing a folder; the tools walk folders
+- **Asked.** Plan 48 stage 2: making, renaming and removing a folder from
+  the page; plan 48's "Not done here": the tools reading `presets/*.json`
+  only.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** **new folder** at the list's foot (flush right, beside
+  the trash line) makes a folder at the top; a header's right-click
+  offers *new folder inside…*, *rename folder…* and *remove folder* —
+  the name typed in the rename field's style (Enter, Esc). A name with a
+  `/`, a leading `.`, a `.json` ending (it would read as a preset; and
+  the walk lists files only, so a folder made so in Finder is never a
+  preset), a control character, or one already there (case folded) is
+  refused on the footer. A rename is the folder's own rename on disk, in
+  the same parent: every preset inside, every folder down, keeps its
+  file and its leaf (`party/deep/C` → `crowd/deep/C`), the loaded preset
+  and every show follow as a move does (`rename` itself now ends in the
+  same `_follow_many`), and the folds follow the name. The new name is
+  taken unless the disk says it is this very folder (`samefile`: a change
+  of case on a disk that folds case), so on a case-sensitive volume
+  `Party` beside `party` is refused, never replaced (review of #349).
+  Remove takes an empty folder only (a Finder `.DS_Store` goes with it);
+  the menu asks `Library.held` — the same test the remove makes, hidden
+  files and folders too — so the item is off while anything is in the
+  way, its hover and the refusal naming what. The tools:
+  `move_library.files` and `migrate_library.preset_files` walk `presets/`
+  as the library does (`library._walk`: hidden folders skipped, never
+  through a link); the migration's report, `--force` and `--to` name a
+  preset by its path under `presets/` (`party/trip.json`), and `--to`
+  keeps the folders.
+- **Other options.** Remove a folder with its presets to the trash: a
+  one-click loss of a whole set, and the trash restores files, not
+  folders.
+- **To reverse.** Drop `make_folder`, `rename_folder`, `remove_folder` and
+  `_folder_menu`; the tools back to `glob("*.json")`.
+- **Rough edge.** A folder renamed on one Mac while the other has a show
+  open: that show names the old folder until it is reopened (Drive syncs
+  the rewritten file; the open `Project` holds its bank), as with a
+  rename.
+- **Judge it.** 483.

@@ -2097,8 +2097,12 @@ class Bindings:
         if session is None:
             session = SessionTable(path=path, profile=profile)
             self.bindings: list[Binding] = own
-        else:
+        elif session.tables:
             self.bindings = [*session.rows, *(b for b in own if not is_session_row(b))]
+        else:
+            # (review of #351: a session no table follows yet holds no rows —
+            # the first table to follow it seeds them, its own given ones)
+            self.bindings = own
         self.__dict__["_session"] = session
         session.follow(self)
         # the preset content an older file carried (`Carried`), until the

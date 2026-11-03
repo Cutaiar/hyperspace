@@ -269,6 +269,10 @@ class Param:
             self.persist = False
         if self.kind is Kind.TEXT:
             self.modulatable = False
+        # plan 44 D3 (review of #351): its part of the split, once — an id and
+        # a group never change, and `snapshot(part=)` asks every frame the
+        # dirty dot is drawn
+        self._part = part_of_id(self.id, self.group)
 
     # ---- generic value access ----
 
@@ -667,8 +671,13 @@ def part_of(p: Param) -> str | None:
     in neither (no group, or `preset`, whose params never persist). A
     session key of a performance group (`SESSION_KEYS`: `ghost.mirror`)
     is the session's. The one rule (plan 44 D3): a deck's registry hands
-    the session every param this calls "session"."""
-    return part_of_id(p.id, p.group)
+    the session every param this calls "session". Cached on the param at
+    its declaration (`Param._part`); one from before a hot reload is asked."""
+    got = p.__dict__.get("_part", _UNSET)
+    return part_of_id(p.id, p.group) if got is _UNSET else got
+
+
+_UNSET = object()
 
 
 def part_of_id(pid: str, group: str | None = None) -> str | None:
@@ -810,9 +819,7 @@ class Registry:
         every deck that follows it — declared once (plan 44 D3)."""
         session = self.session
         if session is not None and session is not self and part_of(p) == "session":
-            if p.id in self._p:
-                raise ValueError(f"duplicate param id {p.id}")
-            return session.add(p)
+            return session.add(p)            # (its one duplicate check, every deck)
         return self._put(p)
 
     def __getitem__(self, pid: str) -> Param:
@@ -861,10 +868,30 @@ class Registry:
     def begin_frame(self) -> int:
         """A new frame mark (plan 28 N0): `Router.modulate` lands the params
         its pass reads under it, and the next `apply` skips those. Returns
-        the mark."""
-        self.frame += 1
+        the mark.
+
+        A deck's registry (plan 44 D3, review of #351) takes its mark from
+        its session: the first deck to begin a frame moves the session's
+        frame on, every other deck adopts it, so every deck's pass in one
+        frame lands the shared session params under **one** mark — a
+        session param a pass landed is never landed again that frame by
+        another deck, and two registries' counters can never meet by
+        chance on a shared `Param`."""
+        session = self.session
+        if session is not None and session is not self:
+            if self.frame == session.frame:      # this deck is the first this frame
+                session.frame += 1
+            self.frame = session.frame
+        else:
+            self.frame += 1
         self.landed = self.frame
         return self.frame
+
+    def _owned_by_session(self, p: Param) -> bool:
+        """Whether `p` is a session param this deck holds by reference."""
+        session = self.session
+        return (session is not None and session is not self
+                and session._p.get(p.id) is p)
 
     def apply(self) -> None:
         """Once per frame, after every source has called modulate(): base +
@@ -872,14 +899,27 @@ class Registry:
         those `Router.modulate` already landed under this frame's mark
         (plan 28 N0: a param the pass reads lands before its reader), which
         `Param.apply` skips. Closes the mark: an `apply` with no pass
-        before it lands everything, as before."""
+        before it lands everything, as before.
+
+        Plan 44 D3 (review of #351): a session param is one `Param` in
+        every deck, and an apply consumes its frame's offsets — so only the
+        session's **lead** deck (`SessionRegistry.lead`, the first that
+        follows it) lands the session's params; every other deck's apply
+        leaves them alone, its router's offsets riding into the lead's
+        next apply (a frame late for a deck that runs after the lead —
+        D4's order to settle), never releasing what another deck holds."""
         # over a copy: a modulated trigger may add or remove params
         # (a band layout change) while we are still walking the table.
         # `nonfinite`: the params that dropped a NaN / inf this frame (the
         # stall log names each once, app.py) — those the pass landed too
         mark, self.landed = self.landed, None
+        session = self.session
+        follower = (session is not None and session is not self
+                    and session.lead is not self)
         bad: list[str] = []
         for p in list(self._p.values()):
+            if follower and self._owned_by_session(p):
+                continue
             if p._base is not None:
                 p.apply(mark)
             if p._bad:
@@ -1009,6 +1049,17 @@ class SessionRegistry(Registry):
             import weakref
             self._decks = [weakref.ref(d) for d in live]
         return live
+
+    @property
+    def lead(self) -> Registry | None:
+        """The deck whose `apply` lands the session's params, once a frame
+        (review of #351): the first live deck that follows. None: no deck —
+        then `apply` on the session itself is the one road."""
+        for r in self._decks:
+            d = r()
+            if d is not None:
+                return d
+        return None
 
     def add(self, p: Param) -> Param:
         if part_of(p) == "performance":
