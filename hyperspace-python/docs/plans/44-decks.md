@@ -323,7 +323,8 @@ where they read the show's); the goldens over the migrated corpus are
 the orchestrator's to run, expected unmoved. **Not done** (row 625):
 `hold._preset_part` sorts Drop by group (the mirror goes back with the
 look); a deck that runs after the lead lands its session offsets a frame
-late; the window-wanted line is not drawn yet (row 623).
+late. The window a rig lacks is said on OUTPUT and the GRAPH head (row
+623).
 
 The same line as plan 43's preset contract: what belongs to a look is
 what belongs to a deck. Plan 43 says *which groups and rows* cross the

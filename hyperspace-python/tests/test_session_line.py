@@ -554,3 +554,29 @@ def test_a_second_table_shares_the_session_rows_it_brings_and_refuses_another_fi
         Bindings([], session=s, path=tmp_path / "other.json")
     with pytest.raises(ValueError, match="the session's"):
         Bindings([], session=s, profile="launchpad")
+
+
+# ---------------------------------------------------------------- review of #351, round 3
+
+
+def test_a_mirror_from_before_the_room_is_given_one_never_declared_twice():
+    """Round 3, finding 1: a hot reload keeps a session whose `ghost.mirror`
+    was declared by the build before (no `room`); a deck's `register` gives
+    it a `RoomSetting` with its setting kept, and never re-declares it."""
+    from hyperspace.ghost import GhostState, RoomSetting
+    from hyperspace.ghost import register as declare_ghost
+    from hyperspace.params import Registry, SessionRegistry
+    s = SessionRegistry()
+    old = GhostState(mirror=True)
+    a = Registry(session=s)
+    a.toggle("ghost.mirror", "Ghost mirror", lambda: old.mirror,
+             lambda v: setattr(old, "mirror", bool(v)), group="ghost", modulatable=False)
+    assert "room" not in s["ghost.mirror"].__dict__
+    b = Registry(session=s)
+    st = GhostState()
+    declare_ghost(b, st)                         # (no duplicate param id)
+    p = s["ghost.mirror"]
+    assert isinstance(p.room, RoomSetting) and b["ghost.mirror"] is p
+    assert st.mirror is True and p.value is True
+    p.set(False)
+    assert st.mirror is False and p.value is False

@@ -7338,11 +7338,14 @@ value is the build's, not `default.json`'s; a file that named a desk
 template (none should exist) loads its own rows with "desk templates are
 retired" on the strip.
 **470. A window the rig lacks.** (laptop, one window)
-Headless: `tests/test_session_line.py::test_the_window_a_rig_lacks_is_asked_for`.
-1. Load a preset saved on the rig with Output 2 wired.
-*Pass:* nothing breaks: Output 2's wires are dormant on GRAPH. (The words
-"this preset wires Output 2, which this rig has not open" come with the UI
-PRs, row 623: note whether you missed them.)
+Headless: `tests/test_session_line.py::test_the_window_a_rig_lacks_is_asked_for`, `tests/test_device_wants.py::test_a_window_the_rig_lacks_is_said_on_output_and_the_graph_head`.
+1. Load a preset saved on the rig with Output 2 wired; look at OUTPUT and
+   at the GRAPH head.
+2. Load a preset that uses only Output 1.
+*Pass:* (1) nothing breaks: Output 2's wires are dormant on GRAPH; OUTPUT
+(under the output blocks) and the GRAPH head each say, in the warning
+colour, "this preset wires Output 2, which this rig has not open — add a
+window on OUTPUT to show it"; (2) both lines are gone.
 
 ## BK. The panel fold, stage 2: every page a section, the FX page retired (plan 49)
 Register rows 626–632, 2026-11-03. Headless: `tests/test_ui_pane.py`

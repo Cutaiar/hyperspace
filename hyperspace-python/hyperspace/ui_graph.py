@@ -1151,6 +1151,8 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
     if imgui.is_item_hovered():
         ui.tooltip(line)
     _area_chips(st)
+    for want in window_wants(panel):       # plan 44 D3: a window the rig lacks
+        imgui.text_colored(ui.WARN, want)
     hold = getattr(panel, "hold", None)
     if hold is not None and hold.on:        # plan 38: first, in red, while it lasts
         imgui.text_colored(ui.WARN, hold_line(hold, time.perf_counter()))
@@ -1176,6 +1178,19 @@ def panel_wants(panel) -> list:
     if got is None or got[0] != key:
         got = panel.__dict__["_wants_cache"] = (key, devices.wants(router.table, rig))
     return got[1]
+
+
+def window_wants(panel) -> list[str]:
+    """Plan 44 D3 (row 623): the windows the loaded preset wires or cuts
+    that this rig has not open (`graphview.window_wanted_lines` over the
+    presets' graph and bus cuts and the panel's outputs), one line each —
+    what OUTPUT and the GRAPH head say; [] with no presets (a test's panel)."""
+    presets = getattr(getattr(panel, "library", None), "presets", None)
+    if presets is None:
+        return []
+    spec = getattr(getattr(presets, "graph", None), "spec", None)
+    count = len(getattr(panel, "outputs", None) or ())
+    return graphview.window_wanted_lines(spec, getattr(presets, "bus", None), count)
 
 
 def _wants_chip(panel, beside: bool = True) -> None:

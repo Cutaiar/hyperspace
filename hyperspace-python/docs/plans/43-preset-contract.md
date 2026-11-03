@@ -372,8 +372,8 @@ resolved), `ghost.mirror` **stays the rig's**. Item by item:
    `rig_source` is the presets; `graphview`'s words and edits, and the two
    one-line UI reads (`ui.Panel.rig_now`, `ui_graph.render_edit`), follow.
    A window the rig lacks: the rule and the words
-   (`graphview.wanted_windows`, `WINDOW_WANTED`), not yet drawn — the UI
-   PRs' (row 623); `devices.wants` was not the place (it names Learn's
+   (`graphview.wanted_windows`, `WINDOW_WANTED`), said on OUTPUT and the
+   GRAPH head (`ui_graph.window_wants`, row 623); `devices.wants` was not the place (it names Learn's
    targets).
 4. Desk templates: **retired**, not inlined (none existed): the code is
    gone, `graphmigrate.ten` drops `desk_template` (and a templated desk's

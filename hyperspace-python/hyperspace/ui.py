@@ -2034,6 +2034,8 @@ class Panel:
             if err:
                 imgui.text_colored(WARN, f"{err} — the picture is not dimmed")
         self._output_blocks()
+        for want in ui_graph.window_wants(self):   # plan 44 D3: a window the rig lacks
+            imgui.text_colored(WARN, want)
         if len(self.reg["output.monitor"].names) > 1:
             self._combo("output.monitor")
         if "output.render" in self.reg:     # the render cap, on the toggles' row
