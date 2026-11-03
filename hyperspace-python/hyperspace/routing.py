@@ -283,6 +283,19 @@ from .params import (
     retaper_depths,
 )
 
+# re-exported: the grammar and the shared sources (plan 44 D2) live there
+from .routing_sources import (  # noqa: F401
+    _NO_LANES,
+    BUILTIN_LANES,
+    MIDI_SCHEMES,
+    QUALIFIER,
+    ROW_SCHEMES,
+    Sources,
+    base_scheme,
+    is_continuous,
+    qualified,
+)
+
 SCHEMA = "hyperspace.bindings/3"
 SCHEMA_V1 = "hyperspace.bindings/1"
 SCHEMA_V2 = "hyperspace.bindings/2"
@@ -303,56 +316,10 @@ FACTORY_FILE = Path(__file__).with_name("bindings.default.json")
 BANKS: dict[str, type] = {lfo.LFOs.SCHEME: lfo.LFOs,
                           envelope.Envelopes.SCHEME: envelope.Envelopes}
 
-# the schemes no device feeds — the analyzer, the LFOs, the envelopes and
-# the sequencer's trigger lanes (plan 31) — in offer order; devices.py's
-# BUILTIN_SCHEMES, restated (routing never imports devices), the two held
-# equal by tests/test_plan31_wiring.py
-BUILTIN_LANES = ("lane", "lfo", "env", "seq")
-
-MIDI_SCHEMES = ("cc", "note", "pitch")
-# the row kinds the table dispatches itself (plan 27 B2): the keys
-# (`Router.keys`), the pad's buttons and D-pad (`Router.pad`) and MIDI
-# (midi.MidiIO). Every other scheme is a **continuous** source — a lane
-# some device feeds (`lane`, `lfo`, `hand`, `axis`, a new device's role) —
-# so a preset row naming a device this rig lacks is still a performer,
-# dormant until its device feeds (decision 11). Which continuous schemes
-# exist, and in what order a page offers them, is the device registry's
-# (`Router.schemes`, devices.DeviceRegistry.continuous_schemes): there is
-# no fixed list of them here
-ROW_SCHEMES = ("key", "pad", "hat", *MIDI_SCHEMES)
-# a source's device qualifier (plan 27 B2 for MIDI, B6 for every scheme):
-# ``cc@<role>:<ch>:<n>``, ``pitch@<role>:<ch>``, ``pad@<role>:A``,
-# ``axis@<role>:LX`` — the row of a device other than the first one listed
-# that publishes the scheme. An unqualified source is that first device's
-# (MIDI: `Bindings.midi_roles`, the profile-matching rule B2 built; any
-# other scheme: `Bindings.primaries`, the first enabled device of its kind
-# in list order), so every row written before plan 27 means what it meant.
-# The qualifier adds no ``:`` (a role has none). For a continuous scheme
-# the qualified head (``axis@p2``) is its own Router key — its own feed,
-# labels, rests and names — so two pads never overwrite each other
-QUALIFIER = "@"
-
-
-def base_scheme(scheme: str) -> str:
-    """A scheme without its device qualifier: ``cc@launch`` → ``cc``,
-    ``axis@p2`` → ``axis`` (plan 27 B6: any scheme takes one); a scheme
-    with none is returned as it is."""
-    head, at, _ = scheme.partition(QUALIFIER)
-    return head if at else scheme
-
-
-def qualified(scheme: str, role: str) -> str:
-    """`scheme` under the device qualifier `role` (``axis`` + ``p2`` →
-    ``axis@p2``); "" leaves it bare — the primary device's (plan 27 B6)."""
-    return f"{scheme}{QUALIFIER}{role}" if role else scheme
-
-
-def is_continuous(scheme: str) -> bool:
-    """Is `scheme` a continuous source — read by the Router as a lane,
-    driven through a performer row — rather than a row kind the table
-    dispatches (`ROW_SCHEMES`)? Open-ended: a scheme no device of this rig
-    publishes is continuous too, its rows dormant (decision 11)."""
-    return base_scheme(scheme) not in ROW_SCHEMES
+# the scheme grammar — `BUILTIN_LANES`, `MIDI_SCHEMES`, `ROW_SCHEMES`,
+# `QUALIFIER`, `base_scheme`, `qualified`, `is_continuous` — is the shared
+# sources' (routing_sources.py, plan 44 D2), imported above and re-exported
+# from here so no importer changes
 MOD_OPS = ("push", "position")                 # the performer ops: the Router's rows
 # `hold` is a button row's op (plan 15 WP4, fork 13): the target fires
 # once the button has been down HOLD_S, and a shorter press does nothing —
@@ -2765,39 +2732,31 @@ class Bindings:
 
 # ---------------------------------------------------------------- router
 
-_NO_LANES: dict = {}      # `Router.lane`'s cache before its first miss; never written
-
-
 class Router:
-    """The adapters' lookup and the per-frame modulation pass over one table.
+    """One deck's evaluator over one table: the adapters' row lookup (keys,
+    the pad's buttons) and the per-frame modulation pass.
 
-    `devices` is the rig's device registry (devices.DeviceRegistry, plan 27
-    B2), handed in as an argument — this module imports nothing above it —
-    and asked which continuous schemes there are and in what order a page
-    offers them (`schemes`); None (a bare router, the tests') offers what
-    has been fed or labelled."""
+    What the sources said this frame — the feeds, their labels, rests,
+    gates, kinds and names, the device registry, the clock — is `sources`
+    (routing_sources.Sources, plan 44 D2), shared: one `Sources` fed once
+    a frame can feed two routers over two registries. A router made
+    without one makes its own, so a bare router (the tests') reads and
+    feeds as it always did. Every source-side name the router had —
+    `feeds`, `labels`, `rests`, `gates`, `names`, `lane_kinds`, `devices`,
+    `clock`, `use`, `follow_devices`, `schemes`, `address`, `feed` — reads
+    and writes the sources, so every caller keeps working. What depends on
+    the table is the router's own: an address resolves against this
+    table's primaries and is cached here (`lane`), a scheme's feel is this
+    table's pad feel (`source_feel`, `felt`). `devices` (keyword) is handed
+    to the sources' `use`."""
 
-    def __init__(self, reg: Registry, table: Bindings, devices=None):
+    def __init__(self, reg: Registry, table: Bindings, *, sources: Sources | None = None,
+                 devices=None):
         self.reg = reg
         self.table = table
-        self.devices = None
+        self.sources = sources if sources is not None else Sources()
         if devices is not None:
             self.use(devices)
-        self.feeds: dict[str, np.ndarray | None] = {}   # ext/lfo/hand vectors, per frame
-        self.labels: dict[str, list[str]] = {}          # scheme → lane names, from the adapter
-        # scheme → the lanes an adapter offers as gates, [(index, label)]:
-        # switch-like lanes a row's `when` can wait on. The adapter says
-        # which of its lanes those are; nothing here knows about hands.
-        self.gates: dict[str, list[tuple[int, str]]] = {}
-        # scheme → where each lane sits idle, published like `labels`: what
-        # a push row with no rest of its own uses, every frame (a hand axis
-        # its configured rest value, a presence lane 0, an LFO 0.5); the
-        # analyzer's lanes, and any scheme that publishes nothing, rest at 0
-        self.rests: dict[str, list[float]] = {}
-        # `names` (scheme → {address name: lane}) and the resolved-address
-        # cache are made on first use, so a Router from before a hot reload
-        # has them too
-        self._codes: dict[str, int | None] = {}
         register_desk(reg, table)
         # follow_macros: each macro's base as last acted on, and the table's
         # macros_serial as last seen — a start acts on nothing (the bases
@@ -2806,107 +2765,116 @@ class Router:
         self._macros_seen = table.macros_serial
         self._note_macro_bases()
 
-    # ---- the device registry (plan 27 B2) ----
+    # ---- the shared sources (routing_sources.py), read through ----
 
-    def use(self, devices) -> None:
-        """Ask `devices` (anything with `continuous_schemes()`, and
-        optionally `row_schemes()` and `midi_roles()`) from now on: which
-        schemes are lanes and in what order (`schemes`), which a device
-        delivers as rows (the referee's `row_schemes`), which MIDI role an
-        unqualified row means (`Bindings.midi_roles`). Called again
-        whenever the device list changes."""
-        self.devices = devices
-        self.follow_devices()
+    @property
+    def sources(self) -> Sources:
+        """The shared half this router reads. A router from before plan 44
+        D2 (a hot reload rather than the restart that build asks for) has
+        none: it gets its own, holding what that router had been fed, so
+        the frame goes on over its own sources."""
+        src = self.__dict__.get("_sources")
+        if src is None:
+            src = self.__dict__["_sources"] = _adopt_sources(self)
+            src.follow(self.table)
+        return src
 
-    def follow_devices(self) -> None:
-        """Re-read the registry's row schemes and MIDI roles into the table
-        (the registry's listener calls it when the list changes)."""
-        devs = self.__dict__.get("devices")
-        if devs is None:
-            return
-        rows = getattr(devs, "row_schemes", None)
-        if rows is not None:
-            self.table.row_schemes = tuple(dict.fromkeys((*ROW_SCHEMES, *rows())))
-        roles = getattr(devs, "midi_roles", None)
-        if roles is not None:
-            self.table.midi_roles = tuple(roles())
-        prim = getattr(devs, "primaries", None)
-        if prim is not None:
-            self.table.primaries = dict(prim())
-            self.__dict__.pop("_lanes", None)     # an ``axis@pad`` address may mean another key
+    @sources.setter
+    def sources(self, src: Sources) -> None:
+        self.__dict__["_sources"] = src
+        src.follow(self.table)
 
-    def schemes(self) -> tuple[str, ...]:
-        """The continuous schemes a route can read, in the order a page
-        offers them: the registry's (`continuous_schemes`: the analyzer's
-        `lane` and the LFOs' `lfo` first, then each listed device's feeds
-        in list order), then any other scheme that has been fed or
-        labelled this run. With no registry, `BUILTIN_LANES` (the
-        analyzer, the LFOs, the envelopes, the sequencer) and then whatever
-        has been fed or labelled."""
-        devs = self.__dict__.get("devices")
-        out = list(devs.continuous_schemes()) if devs is not None else [*BUILTIN_LANES]
-        for s in (*self.labels, *self.feeds):
-            if s not in out and is_continuous(s):
-                out.append(s)
-        return tuple(out)
+    @property
+    def feeds(self) -> dict[str, np.ndarray | None]:
+        return self.sources.feeds
+
+    @property
+    def labels(self) -> dict[str, list[str]]:
+        return self.sources.labels
+
+    @property
+    def gates(self) -> dict[str, list[tuple[int, str]]]:
+        return self.sources.gates
+
+    @property
+    def rests(self) -> dict[str, list[float]]:
+        return self.sources.rests
 
     @property
     def names(self) -> dict[str, dict[str, int]]:
-        """scheme → {address name: lane index}, published like `labels`
-        by an adapter whose lanes have names (the hands: ``"right.roll"``
-        → its lane, decision register row 20), by plain assignment of a
-        **new** dict whenever its layout changes — the resolved addresses
-        are cached against that dict's identity. A row naming
-        ``hand:right.roll`` reads the lane this map gives; a name the map
-        lacks, or any name while no map is published, is dormant — never
-        another lane. A numeric address (``hand:7``) is the lane at that
-        index whatever the map says."""
-        d = self.__dict__.get("_names")
-        if d is None:
-            d = self.__dict__["_names"] = {}
-        return d
+        return self.sources.names
+
+    @property
+    def lane_kinds(self) -> dict[str, list[str]]:
+        return self.sources.lane_kinds
+
+    @property
+    def devices(self):
+        return self.sources.devices
+
+    @property
+    def clock(self):
+        """The one clock every router's banks step on: the sources' (plan
+        44 §2). Set by the first `use_bank` / `use_sequencer` that hands
+        one in when the sources have none; never replaced (`_clock_from`)."""
+        return self.sources.clock
+
+    def _clock_from(self, clock) -> None:
+        """The sources' clock is the rig's one: taken from `clock` when the
+        sources have none, and a different clock is refused — a router
+        must not move the beat every other router's banks step on."""
+        src = self.sources
+        if clock is None:
+            return
+        if src.clock is None:
+            src.clock = clock
+        elif clock is not src.clock:
+            raise ValueError("Router: the sources step every bank on one clock; "
+                             "this router was handed another")
+
+    def use(self, devices) -> None:
+        """`Sources.use`: ask the device registry from now on."""
+        self.sources.use(devices)
+
+    def follow_devices(self) -> None:
+        """`Sources.follow_devices`: the registry's rig facts, again."""
+        self.sources.follow_devices()
+
+    def schemes(self) -> tuple[str, ...]:
+        """`Sources.schemes`: the continuous schemes, in offer order."""
+        return self.sources.schemes()
 
     def lane(self, source: str) -> tuple[str, int]:
-        """(scheme, lane index) that a source address names — its number,
-        or its name through `names` — with −1 for an address that names no
-        lane (a name the adapter's map lacks, no map yet, garbage), which
-        every reader treats as dormant. Cached per address until the
-        scheme's map is republished, so the per-frame pass parses nothing."""
-        d = self.__dict__
-        hit = d.get("_lanes", _NO_LANES).get(source)
-        if hit is None or self.names.get(hit[0]) is not hit[1]:
+        """(scheme, lane index) that a source address names under this
+        table's primaries (`Sources.resolve`), with −1 for an address that
+        names no lane — dormant. Cached per address here, against this
+        table's primaries and the scheme's published map, so the
+        per-frame pass parses nothing."""
+        hit = self._lane_cache().get(source)
+        if hit is None or self.sources.names.get(hit[0]) is not hit[1]:
             hit = self._resolve_lane(source)
         return hit[0], hit[2]
 
+    def _lane_cache(self) -> dict:
+        """The resolved addresses, dropped when this table's primaries are
+        a new dict (the device registry republished them)."""
+        d = self.__dict__
+        prim = getattr(self.table, "primaries", None)
+        if d.get("_lanes_prim", _NO_LANES) is not prim:
+            d["_lanes_prim"], d["_lanes"] = prim, {}
+        return d["_lanes"]
+
     def _resolve_lane(self, source: str) -> tuple[str, dict | None, int]:
         """`lane`'s cache miss: (scheme, the map it was resolved against, index)."""
-        cache = self.__dict__.get("_lanes")
-        if cache is None or len(cache) > 4096:       # addresses typed at the page, say
+        cache = self._lane_cache()
+        if len(cache) > 4096:                            # addresses typed at the page, say
             cache = self.__dict__["_lanes"] = {}
-        scheme, _, addr = source.partition(":")
-        base, at, role = scheme.partition(QUALIFIER)
-        if at and role and getattr(self.table, "primaries", {}).get(base) == role:
-            scheme = base        # qualified with the primary's own role: its lanes (B6)
-        m = self.names.get(scheme)
-        try:
-            i = int(addr)
-        except ValueError:
-            i = -1 if m is None else m.get(addr, -1)
-        hit = cache[source] = (scheme, m, i)
+        hit = cache[source] = self.sources.resolve(source, getattr(self.table, "primaries", None))
         return hit
 
     def address(self, scheme: str, i: int) -> str:
-        """Lane `i` of `scheme` as a row should name it: by its published
-        name when the scheme has one (``hand:right.roll``), else by index."""
-        m = self.names.get(scheme)
-        if not m:
-            return f"{scheme}:{i}"
-        inv = self.__dict__.setdefault("_inverse", {})    # scheme → (map, {lane: name})
-        hit = inv.get(scheme)
-        if hit is None or hit[0] is not m:                 # the page asks per row per frame
-            hit = inv[scheme] = (m, {k: n for n, k in m.items()})
-        name = hit[1].get(i)
-        return f"{scheme}:{name}" if name is not None else f"{scheme}:{i}"
+        """`Sources.address`: lane `i` of `scheme` as a row names it."""
+        return self.sources.address(scheme, i)
 
     def _note_macro_bases(self) -> None:
         for p in self.reg.group("macro"):
@@ -3032,8 +3000,9 @@ class Router:
         axis = qualified("axis", role)
         publish = getattr(pad, "publish", None)
         if publish is not None:
-            publish(self, axis) if role else publish(self)
-        self.feed(axis, pad.lanes() if pad.on else None)
+            src = self.sources                   # the axes are a source: the shared half's
+            publish(src, axis) if role else publish(src)
+        self.sources.feed(axis, pad.lanes() if pad.on else None)
         # source → press time (None once fired), one dict per pad
         holds = (self.__dict__.setdefault("_pad_holds", {}) if not role else
                  self.__dict__.setdefault("_pad_holds_of", {}).setdefault(role, {}))
@@ -3092,20 +3061,17 @@ class Router:
 
     def _code(self, b: Binding) -> int | None:
         """The key / button / hat constant a source names; None if there is none."""
-        src = b.source
-        if src not in self._codes:
-            self._codes[src] = _resolve(b.scheme, ":".join(b.parts))
-        return self._codes[src]
+        return self.sources.code(b)
 
     # ---- continuous sources ----
 
     def feed(self, scheme: str, values) -> None:
-        """An adapter hands in this frame's vector for `ext` / `lfo` sources
-        (None: not live, its rows let go)."""
-        self.feeds[scheme] = None if values is None else np.asarray(values, dtype=float)
+        """`Sources.feed`: this frame's vector for `scheme` (None: not live)."""
+        self.sources.feed(scheme, values)
 
-    def gated(self, b: Binding) -> bool:
-        """Is this row allowed to act this frame?
+    def gated(self, b: Binding, feeds: dict | None = None) -> bool:
+        """Is this row allowed to act this frame? (`feeds`: the sources'
+        feeds, handed in by the pass so its per-row reads take no hop.)
 
         A row with no `when` always is. One with `when` waits on that
         source address reading on (≥ 0.5) — a pinch switch, say, so the
@@ -3121,28 +3087,27 @@ class Router:
         if b.when is None:
             return True
         scheme, i = self.lane(b.when)
-        vec = self.feeds.get(scheme)
+        vec = (self.sources.feeds if feeds is None else feeds).get(scheme)
         if vec is None or not 0 <= i < len(vec):
             return False
         u = float(vec[i])
         return not math.isnan(u) and u >= 0.5
 
-    def rest_of(self, source: str) -> float:
+    def rest_of(self, source: str, rests: dict | None = None) -> float:
         """Where `source` rests right now, from its adapter's `rests` — 0
         when the adapter published none (the analyzer's lanes, an unknown
-        address). What a push row without a rest of its own is centred on."""
+        address). What a push row without a rest of its own is centred on.
+        (`rests`: the sources' rests, handed in by the pass.)"""
         scheme, i = self.lane(source)
-        rests = self.rests.get(scheme) or []
+        rests = (self.sources.rests if rests is None else rests).get(scheme) or []
         return float(rests[i]) if 0 <= i < len(rests) else 0.0
 
     # ---- motion (motion.py): the feel a reading travels with ----
 
     def source_feel(self, scheme: str) -> Motion:
-        """A scheme's own feel: the pad's (`table.pad_feel`) for `axis`,
-        none for every other source — the analyzer's lanes have theirs in
-        the chain already, a hand has its own smoothing. One feel for every
-        pad (plan 27 B6): ``axis@p2`` travels with it too."""
-        return getattr(self.table, "pad_feel", OFF) if base_scheme(scheme) == "axis" else OFF
+        """A scheme's own feel (`Sources.source_feel`'s rule) under this
+        table's pad feel (`table.pad_feel`)."""
+        return self.sources.source_feel(scheme, getattr(self.table, "pad_feel", OFF))
 
     def feel_of(self, b: Binding) -> Motion:
         """The motion row `b` runs on its reading: its own, or its source's."""
@@ -3150,16 +3115,19 @@ class Router:
 
     def felt(self, scheme: str, values, dt: float) -> list[float] | None:
         """`values` — an adapter's lanes for `scheme` — through the scheme's
-        own feel, one follower per lane: what the pad's default camera job
-        reads (app.py). None while that feel is off or `values` is None,
+        own feel (`source_feel`: this table's pad feel for `axis`), one
+        follower per lane: what the pad's default camera job reads
+        (gamepad.steer). None while that feel is off or `values` is None,
         and the followers are dropped, so the next one starts where the
-        source is."""
+        source is. The followers are this router's (plan 44 D2), like its
+        rows' movers: another router over the same sources never steps or
+        drops them."""
         m = self.source_feel(scheme)
         felt = self.__dict__.setdefault("_felt", {})
         if values is None or not m.on:
             felt.pop(scheme, None)
             return None
-        rests = self.rests.get(scheme) or []
+        rests = self.sources.rests.get(scheme) or []
         fs = felt.get(scheme)
         if fs is None or len(fs) != len(values):
             fs = felt[scheme] = [Follower(v) for v in values]
@@ -3174,18 +3142,18 @@ class Router:
         return None if f is None else f.x
 
     def felt_lanes(self, scheme: str) -> list[float] | None:
-        """`scheme`'s lanes after its own feel, as the last `felt` left
-        them (the pad's camera job; the SYSTEM page's plot); None while
+        """`scheme`'s lanes after its own feel, as this router's last `felt`
+        left them (the pad's camera job; the SYSTEM page's plot); None while
         that feel is off or nothing has run it."""
         fs = self.__dict__.get("_felt", {}).get(scheme)
         return None if fs is None else [f.x for f in fs]
 
     def _move(self, b: Binding, m: Motion, u: float, p: Param, depth: float,
-              dt: float, movers: dict) -> float:
+              dt: float, movers: dict, rests: dict | None = None) -> float:
         """Row `b`'s reading `u` after its motion. A row's follower starts
         where it moves nothing — a push row at its rest, a position row at
         the base — so a source going live glides in from the base."""
-        rest = b.rest if b.rest is not None else self.rest_of(b.source)
+        rest = b.rest if b.rest is not None else self.rest_of(b.source, rests)
         key = (b.source, b.target)
         f = movers.get(key)
         if f is None:
@@ -3204,10 +3172,12 @@ class Router:
         each at its node of the patch, after the knob params it reads have
         landed (decision 7), and it feeds its scheme. Its scheme must be in
         `BANKS`. A bare router (the tests') steps no bank, and whatever
-        feeds the scheme feeds it."""
+        feeds the scheme feeds it. The clock is the sources' one (plan 44
+        §2: one beat for every deck): `clock` becomes it when the sources
+        have none, and a different clock is a ValueError (`_clock_from`)."""
+        self._clock_from(clock)
         banks = self.__dict__.setdefault("banks", {})
         banks[bank.SCHEME] = bank
-        self.clock = clock
 
     def use_lfos(self, lfos, clock) -> None:
         """The LFO bank (lfo.LFOs) and its clock: `use_bank`, and `lfos`
@@ -3224,10 +3194,9 @@ class Router:
         envelope nodes later in it see this frame's fires, stamped at each
         step's exact time. It feeds ``seq:<i>``, trigger lanes resting at 0
         (decision 10), which a route can take to any trigger param. `clock`
-        None: the one `use_bank` gave."""
+        None: the sources' one; given, it must be that one (`_clock_from`)."""
+        self._clock_from(clock)
         self.sequencer, self.seq_envs = seq, envs
-        if clock is not None:
-            self.clock = clock
 
     def _step_sequencer(self, t: float, clock) -> None:
         """The sequencer's frame (`use_sequencer`): its fires and stop
@@ -3451,7 +3420,7 @@ class Router:
 
     # ---- the modifiers (plan 28 N1): their output lanes, ``mod:<n>`` ----
 
-    def _reading(self, address: str, lanes) -> float | None:
+    def _reading(self, address: str, lanes, feeds: dict | None = None) -> float | None:
         """A source address's reading this frame, as a modifier reads its
         input: the analyzer's lane (`lanes`, already normalised) for
         ``lane:``, else the scheme's fed vector; None while it is not
@@ -3459,7 +3428,8 @@ class Router:
         if not address:
             return None
         scheme, i = self.lane(address)
-        vec = lanes if scheme == "lane" else self.feeds.get(scheme)
+        vec = lanes if scheme == "lane" else (
+            self.sources.feeds if feeds is None else feeds).get(scheme)
         if vec is None or not 0 <= i < len(vec):
             return None
         u = float(vec[i])
@@ -3480,11 +3450,12 @@ class Router:
         value, so the loop is exactly one frame late. `cut`: a modifier
         whose input `modgraph` keeps off to break a loop with no delay: dormant."""
         m = self.table.modifier(mid)
-        vec = self.feeds.get(modifiers.SCHEME)
+        feeds = self.sources.feeds
+        vec = feeds.get(modifiers.SCHEME)
         if m is None or vec is None or not 0 <= m.n < len(vec):
             return None
         states = self.__dict__.setdefault("_mod_states", {})
-        reads = [self._reading(a, lanes) for a in m.inputs]
+        reads = [self._reading(a, lanes, feeds) for a in m.inputs]
         if early and m.kind == "delay" and not cut:
             # a delay closing a loop runs before its input (plan 28 N0): its
             # input's lane as it stands is last frame's value — the loop's
@@ -3511,40 +3482,47 @@ class Router:
 
     def _publish_modifiers(self) -> None:
         """The ``mod`` scheme's labels, rests, gates and signal kinds, as
-        an adapter publishes its lanes' — once the table's modifiers
-        change. No modifiers: the scheme is not offered at all."""
+        an adapter publishes its lanes' — built once the table's modifiers
+        change and kept on this router (`_mod_pub`), with its own output
+        vector (`_mod_out`): a new vector starts from this router's last
+        outputs, never another router's. No modifiers: the scheme is not
+        offered — taken out of the sources only while the entry there is
+        this router's, so another router's lanes stand (plan 44 D2)."""
         mods = self.table.modifiers
+        sc = modifiers.SCHEME
+        d = self.__dict__
         if not mods:
-            for d in (self.feeds, self.labels, self.rests, self.gates, self.lane_kinds):
-                d.pop(modifiers.SCHEME, None)
+            own = d.pop("_mod_out", None)
+            d.pop("_mod_pub", None)
+            if own is not None and self.sources.feeds.get(sc) is own:
+                for m in (self.feeds, self.labels, self.rests, self.gates, self.lane_kinds):
+                    m.pop(sc, None)
             return
         n = max(m.n for m in mods) + 1
         labels, kinds = [""] * n, [modifiers.VALUE] * n
         for m in mods:
             labels[m.n] = f"{m.n} {m.kind}"
             kinds[m.n] = m.out
-        sc = modifiers.SCHEME
-        self.labels[sc], self.rests[sc] = labels, [modifiers.REST] * n
-        self.lane_kinds[sc] = kinds
         # a threshold's fire is a switch a row's `when` can wait on
-        self.gates[sc] = [(m.n, f"mod {m.n} {m.kind}") for m in mods
-                          if m.out == modifiers.TRIGGER]
-        old = self.feeds.get(sc)
+        gates = [(m.n, f"mod {m.n} {m.kind}") for m in mods if m.out == modifiers.TRIGGER]
+        old = d.get("_mod_out")
         vec = np.full(n, math.nan)
         if old is not None:                  # last frame's outputs stand until stepped
             vec[:min(n, len(old))] = old[:n]
-        self.feed(sc, vec)                   # written in place per node after this
+        d["_mod_out"] = vec                  # written in place per node after this
+        d["_mod_pub"] = (labels, [modifiers.REST] * n, kinds, gates)
+        self._put_modifiers()
 
-    @property
-    def lane_kinds(self) -> dict[str, list[str]]:
-        """scheme → each lane's signal kind, "value" or "trigger" (decision
-        10), published like `labels` by a source that has triggers: today
-        the ``mod`` lanes, where a threshold's output is a trigger. A
-        trigger lane is still read as a value (1 while it fires, else 0)."""
-        d = self.__dict__.get("_lane_kinds")
-        if d is None:
-            d = self.__dict__["_lane_kinds"] = {}
-        return d
+    def _put_modifiers(self) -> None:
+        """This router's ``mod`` entries into the sources: five dict
+        writes of what `_publish_modifiers` built, nothing rebuilt — what
+        a pass does when another router over the same sources published
+        its own since (row 591)."""
+        d, sc, src = self.__dict__, modifiers.SCHEME, self.sources
+        labels, rests, kinds, gates = d["_mod_pub"]
+        src.labels[sc], src.rests[sc], src.gates[sc] = labels, rests, gates
+        src.lane_kinds[sc] = kinds
+        src.feeds[sc] = d["_mod_out"]
 
     def _sync_modifiers(self) -> None:
         """Once the table's modifiers change (`modifiers_serial`, and on the
@@ -3552,9 +3530,14 @@ class Router:
         removed modifier's memory dropped. The pass then steps each one at
         its node, in dependency order (plan 28 N0) — `_step_modifier`."""
         serial = getattr(self.table, "modifiers_serial", 0)
-        if self.__dict__.get("_mods_seen") == serial and (
-                not self.table.modifiers or modifiers.SCHEME in self.feeds):
-            return
+        d = self.__dict__
+        if d.get("_mods_seen") == serial:
+            if not self.table.modifiers or self.sources.feeds.get(modifiers.SCHEME) is d.get(
+                    "_mod_out", False):
+                return                       # still ours: no other router published since
+            if "_mod_pub" in d:
+                self._put_modifiers()        # another's: put ours back, O(1)
+                return
         self.__dict__["_mods_seen"] = serial
         self._publish_modifiers()
         live = {m.id for m in self.table.modifiers}
@@ -3591,12 +3574,14 @@ class Router:
         mark = begin() if begin is not None else None
         banks = self._banks()
         fed: dict[str, np.ndarray] = {}
-        clock = self.__dict__.get("clock")
+        src = self.sources
+        feeds = src.feeds
+        clock = src.clock
         t = now if now is not None else getattr(clock, "t", 0.0)
         for scheme, bank in banks.items():
             bank.begin(t, clock)
             bank.publish(self)                   # names, rests; each lane as its voice steps
-            fed[scheme] = self.feeds[scheme]
+            fed[scheme] = feeds[scheme]
         # plan 31 W1: after every `begin` (a held global trigger has moved
         # the epoch), before the plan (the envelopes step at their nodes)
         self._step_sequencer(t, clock)
@@ -3605,8 +3590,8 @@ class Router:
         lanes = None if analyzer is None else analyzer.lanes / CEIL
         # each row's lane — a number, or a name through `names` — from the
         # cache `lane` keeps; a miss or a republished map resolves again
-        names = self.names
-        cache = self.__dict__.get("_lanes", _NO_LANES)
+        names, rests = src.names, src.rests
+        cache = self._lane_cache()
         for step in plan:
             kind = step[0]
             if kind == "bank":
@@ -3624,13 +3609,13 @@ class Router:
                     hit = self._resolve_lane(b.source)
                     cache = self.__dict__["_lanes"]
                 scheme, _, i = hit
-                vec = lanes if scheme == "lane" else self.feeds.get(scheme)
+                vec = lanes if scheme == "lane" else feeds.get(scheme)
                 if vec is None or not 0 <= i < len(vec):
                     continue
                 u = float(vec[i])
                 if math.isnan(u):    # this lane's source is out of view
                     continue
-                if not self.gated(b):
+                if b.when is not None and not self.gated(b, feeds):
                     continue         # gate open: apply() writes the base back
                 p = self.reg.get(b.target)
                 if p is None:
@@ -3654,12 +3639,12 @@ class Router:
                     continue
                 m = self.feel_of(b)
                 if m.on:
-                    u = self._move(b, m, u, p, depth, dt, movers)
+                    u = self._move(b, m, u, p, depth, dt, movers, rests)
                     moved.add((b.source, b.target))
                 if b.op == "push":
                     # centred where the source rests — the row's own number, or
                     # the source's as published this frame: idle adds nothing
-                    rest = b.rest if b.rest is not None else self.rest_of(b.source)
+                    rest = b.rest if b.rest is not None else self.rest_of(b.source, rests)
                     x = depth * (u - rest)
                 else:
                     # position: the source is the fader — the offset that lands
@@ -3676,6 +3661,25 @@ class Router:
             del movers[key]
 
 
+# what a router from before plan 44 D2 kept in its own __dict__ and the
+# sources hold now: a hot reload moves it across (`_adopt_sources`)
+_ADOPTED = ("feeds", "labels", "gates", "rests", "_names", "_lane_kinds", "_codes",
+            "_inverse", "devices", "clock")
+
+
+def _adopt_sources(router) -> Sources:
+    """Sources for a router that has none — one built before plan 44 D2
+    and re-classed by a hot reload: what it had been fed, its names, its
+    device registry and its clock, moved into new sources it reads from
+    now on (the old attributes left where they were, unread)."""
+    src = Sources()
+    old = router.__dict__
+    for k in _ADOPTED:
+        if k in old:
+            src.__dict__[k] = old[k]
+    return src
+
+
 def _modifiers_of(table) -> list:
     """The table's modifiers (plan 28 N1's `Bindings.modifiers`: a list, or
     a dict by id) — none on a table from before N1."""
@@ -3689,19 +3693,6 @@ def _modifier_node(m) -> str:
     mid = str(getattr(m, "id", ""))
     head, dot, n = mid.partition(".")
     return f"{head}:{n}" if dot else f"mod:{mid}"
-
-
-def _resolve(scheme: str, name: str) -> int | None:
-    """key:NAME → glfw.KEY_NAME; pad:NAME → gamepad.NAME; hat:DIR → gamepad.HAT_DIR.
-    Imported here so the table itself never needs a window system."""
-    try:
-        if scheme == "key":
-            import glfw
-            return getattr(glfw, f"KEY_{name.rsplit('+', 1)[-1]}")   # SHIFT+B → KEY_B
-        from . import gamepad
-        return getattr(gamepad, f"HAT_{name}" if scheme == "hat" else name)
-    except (ImportError, AttributeError):
-        return None
 
 
 # --------------------------------------------------------------- factory file

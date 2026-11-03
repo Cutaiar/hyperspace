@@ -6970,6 +6970,41 @@ preset 'party/TRIP'" and loads nothing, the pad still drawn as filled;
 the show opens (no schema refusal); back on this build the pad still
 loads `party / TRIP`.
 
+## BD. Decks D2: the router's sources split from its evaluator, nothing changes (plan 44)
+Register rows 590–593, 2026-11-03. Headless:
+`tests/test_deck.py::test_one_sources_fed_once_drives_two_routers_as_one_router_did`
+(one `Sources` fed once, two routers over two registries land every
+corpus preset's params as one router does, every frame),
+`tests/test_deck.py::test_a_deck_built_the_old_way_and_the_new_way_reach_the_same_state`,
+`tests/test_app_boundary.py::test_the_frame_feeds_the_shared_sources_not_the_router`,
+`tests/test_routing_boundary.py` (the import wall and the pin over
+`routing_sources.py`) and the goldens.
+**444. Every source moves the picture as on the previous build.** (Mac,
+the rig's config: the APC40, the pad, the hands if they are set up)
+1. Quit and launch (a restart: this build adds a module and a field on
+   live objects). The startup preset lands as before.
+2. Load a preset with hand, pad-stick and band routes (TRIP or TUMBLE).
+   Move a hand in the box, push each stick, play music into the mic.
+3. Turn an APC40 knob; press a pad button with a row (A, say) and a key
+   row (R).
+4. ROUTING: read the source names on the routes (`R height`, a band's
+   name, `LFO 1`); SYSTEM: the pad's feel plot while a stick moves.
+*Pass:* (2) each route moves what it moved on the previous build, as
+much; (3) the knob, the button and the key act once each; (4) the names
+read as before, the pad plot follows the stick. Fail: a route that no
+longer moves (a feed that went nowhere), a name shown as `hand:9` where
+it read `R roll`, or a red banner naming `routing_sources`.
+**445. A hot reload of the new module and of routing keeps the routes
+moving.** (Mac, after 444, a preset with a hand or stick route loaded)
+1. Open `hyperspace/routing_sources.py`, add a blank line, save; move the
+   hand or stick.
+2. The same in `hyperspace/routing.py`; move it again, and turn a knob.
+3. SYSTEM: the hot reload line.
+*Pass:* (1–2) no red banner, no error toast, the route and the knob move
+the picture after each save; (3) "hot: routing_sources …" and then
+"hot: routing …" with the time. Fail: a route that stops after a save, or
+a hot reload error naming `Sources` or `Router`.
+
 ## BE. Video audio 3 of 4: the analyzer listens to the mix (plan 45 V3)
 Decision register rows 594–596. The source is `audio.mix` (AUDIO,
 *Listen to video sound*, beside the mic's button): the mixer's sum —
