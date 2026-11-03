@@ -62,6 +62,8 @@ PORTS = {"look-back": "picture in → trail out",
 GRADE = ("dream.darken", "dream.contrast", "dream.res")     # the look-back's, read by the dream
 GRADE_LINE = "graded by the look-back's darken and contrast, sent at its detail"
 OFF_CANVAS = "not on the canvas"
+# a head's hover after its ports (review fix 7: where the worker is set up)
+HEAD_NOTES = {"dream": "\n\nIts worker: [dream] in config.toml (on by default)."}
 TWO_UP = 360.0      # px: narrower than this (the side pane), the cells go one to a row
 # a cell's label: the section says whose knob it is, so the registry's
 # "Echo …" / "Dream …" is dropped here (the ROUTING page, a Learn message
@@ -94,7 +96,7 @@ def page(panel, dt: float) -> None:
     lb = getattr(panel.renderer, "lookback", None)
     dr = getattr(panel.renderer, "dreamer", None)       # plan 36 T4: the dream node's
     spec = _spec(panel)
-    drawn = learn.drawn_of(spec) if spec is not None else None
+    drawn = _drawn(panel, spec)
 
     panel._section("look-back · dream", "dream", note=_worker_note(dr))
     if getattr(lb, "error", ""):
@@ -118,7 +120,22 @@ def page(panel, dt: float) -> None:
     _layer_menu(panel)
     _cells(panel, dr, "##dream", [pid for pid in SECTIONS["dream"]
                                   if pid not in ("dream.on", "dream.layer")])
-    ui._micro(ui.fit_text(GRADE_LINE.upper(), imgui.get_content_region_avail().x), ui.FAINT)
+    ui._micro(ui.fit_micro(GRADE_LINE, imgui.get_content_region_avail().x), ui.FAINT)
+
+
+STATE = "_lookback_page"     # the panel's attribute: the graph last asked, and its names
+
+
+def _drawn(panel, spec):
+    """The node names graph `spec` wires (`learn.drawn_of`), asked once per
+    graph: a `GraphSpec` is frozen and an edit makes a new one, so the
+    last answer stands while the same one is loaded (review fix 6)."""
+    if spec is None:
+        return None
+    st = panel.__dict__.setdefault(STATE, {})
+    if st.get("spec") is not spec:
+        st["spec"], st["drawn"] = spec, learn.drawn_of(spec)
+    return st["drawn"]
 
 
 def _spec(panel):
@@ -148,9 +165,11 @@ def _node_head(panel, title: str, word: str, on_canvas: bool,
     imgui.set_cursor_screen_pos(imgui.ImVec2(p0.x + 8, p0.y + (h - ui.FONT_MICRO) / 2 - 1))
     ui._micro(title, ui.TEXT)
     imgui.same_line(0, 8)
+    tick = False
     if switch is not None:              # its on/off after its name, as a node's switch
         imgui.set_cursor_screen_pos(imgui.ImVec2(imgui.get_cursor_screen_pos().x, p0.y))
         panel._check(switch, "")
+        tick = imgui.is_item_hovered()  # (the tick's own hover is its param's)
         imgui.same_line(0, 8)
     imgui.set_cursor_screen_pos(imgui.ImVec2(imgui.get_cursor_screen_pos().x,
                                              p0.y + (h - ui.FONT_MICRO) / 2 - 1))
@@ -158,9 +177,9 @@ def _node_head(panel, title: str, word: str, on_canvas: bool,
     try:
         right = word if on_canvas else OFF_CANVAS
         rw = min(imgui.calc_text_size(right.upper()).x, w * 0.5)
-        right = ui.fit_text(right.upper(), rw)
+        right = ui.fit_micro(right, rw)
         room = p0.x + w - 8 - rw - 10 - imgui.get_cursor_screen_pos().x
-        ports = ui.fit_text(PORTS[title].upper(), room) if room > 24 else ""
+        ports = ui.fit_micro(PORTS[title], room, 24.0)
         if ports:
             imgui.text_colored(ui.FAINT, ports)
             imgui.same_line(0, 10)
@@ -169,10 +188,12 @@ def _node_head(panel, title: str, word: str, on_canvas: bool,
         imgui.text_colored(ui.FAINT if on_canvas else ui.WARN, right)
     finally:
         imgui.pop_font()
-    if imgui.is_item_hovered():
+    # the whole band's hover (review fix 2), not only its last word's
+    band = imgui.ImVec2(p0.x + w, p0.y + h)
+    if not tick and imgui.is_window_hovered() and imgui.is_mouse_hovering_rect(p0, band):
         ui.tooltip(f"{title}: {PORTS[title]}" + ("" if on_canvas else
                    f" — {OFF_CANVAS}: its knobs act once GRAPH has one (right-click the "
-                   "canvas, look-back ▸)"))
+                   "canvas, look-back ▸)") + HEAD_NOTES.get(title, ""))
     imgui.set_cursor_screen_pos(imgui.ImVec2(p0.x, p0.y + h + imgui.get_style().item_spacing.y))
 
 

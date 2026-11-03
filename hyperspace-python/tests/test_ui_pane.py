@@ -501,23 +501,99 @@ def test_the_fx_page_is_retired_into_the_fx_section(pane):
     assert PAGE_KEYS[r.panel.page] == "graph"
 
 
-def test_focus_unfolds_in_the_layout_last_drawn():
-    st = {"machine": None, "pane_layout": "below"}
+def test_focus_is_a_request_the_next_draw_acts_on_in_its_own_layout(tmp_path, monkeypatch):
+    """Review fix 1: `focus` asks, whatever layout drew last; the next
+    draw unfolds the section in its own layout. On the narrow page (the
+    band under the canvas) landing on the retired FX page unfolds the
+    band's fx section and draws it; the column beside keeps its folds."""
+    st = {"machine": None}
     ui_pane.focus(st, "seq")
-    assert ui_pane.opened(st, "below")["seq"] and not ui_pane.opened(st, "open")["seq"]
-    assert st["pane_focus"] == "seq"
+    assert st["pane_focus"] == "seq" and not ui_pane.opened(st, "below")["seq"]
+    with build_rig(tmp_path) as r:              # the rig's 820 px window: the band
+        d = Driver(step=lambda: frame(r.panel, "graph"))
+        d.record(monkeypatch.setattr)
+        d.run(d.wait(2))
+        gst = _st(r)
+        assert gst["details_rect"][1][1] == ui_graph.BELOW_H
+        r.reg["ui.page"].set(PAGE_KEYS.index("fx"))
+        d.run(d.wait(2))
+        assert PAGE_KEYS[r.panel.page] == "graph"
+        assert ui_pane.opened(gst, "below")["fx"] and "fx" in gst["pane_drawn"]
+        assert not ui_pane.opened(gst, "open")["fx"]
+        assert "pane_focus" not in gst
+        assert _inside(d.rect("fx.on"), gst["details_rect"])
 
 
 def test_the_system_page_says_what_each_open_section_costs(pane, monkeypatch):
     r, _d = pane
     st = _st(r)
     assert set(st["pane_ms"]) >= {"selection", "presets"}
-    line = ui_pane.timing_line(r.panel, st)
+    line = ui_pane.timing_line(r.panel)
     assert line.startswith("side pane: ") and "presets" in line and line.endswith(" ms")
-    assert ui_pane.timing_line(r.panel, None) == ""
+    from types import SimpleNamespace
+    assert ui_pane.timing_line(SimpleNamespace()) == ""         # GRAPH never drew
     said: list[str] = []
     real = imgui.text_disabled
     monkeypatch.setattr(imgui, "text_disabled", lambda s, *a: (said.append(s), real(s, *a)))
     frame(r.panel, "system")
     assert any(s.startswith("side pane: ") for s in said)
     frame(r.panel, "graph")
+
+
+def test_a_node_heads_hover_is_the_whole_band(tmp_path, monkeypatch):
+    """Review fix 2: the look-back's and the dream's heads say what they
+    are, and the dream where its worker is set up, wherever on the band
+    the mouse is — not only over the word at its right."""
+    from hyperspace import ui, ui_lookback
+    with build_rig(tmp_path) as r:
+        r.panel.desk = False
+        r.panel.page = PAGE_KEYS.index("graph")
+        d = _tall_driver(r, monkeypatch)
+        d.run(d.wait(2))
+        st = _st(r)
+        _only(st, "lookback")
+        d.run(d.wait(3))
+        said: list[str] = []
+        real = ui.tooltip
+        monkeypatch.setattr(ui, "tooltip", lambda text: (said.append(text), real(text)))
+        x0, y0, x1, y1 = d.rect("dream.on")        # the dream's head: just right of its tick
+        d.run(d.move((x1 + 30, (y0 + y1) / 2)), d.wait(1))
+        assert any(t.startswith("dream: " + ui_lookback.PORTS["dream"]) and "[dream]" in t
+                   for t in said)
+        said.clear()
+        x0, y0, _x1, y1 = d.rect("dream.on")
+        d.run(d.move(((x0 + _x1) / 2, (y0 + y1) / 2)), d.wait(1))   # over the tick itself
+        assert not any(t.startswith("dream: ") for t in said)
+
+
+def test_the_lookback_asks_the_graph_its_names_once_per_graph(tmp_path, monkeypatch):
+    """Review fix 6: `learn.drawn_of` walks the wires; the page asks it
+    once for each graph loaded, not every frame."""
+    from hyperspace import learn, ui_lookback
+    asked = []
+    real = learn.drawn_of
+    monkeypatch.setattr(learn, "drawn_of", lambda spec: (asked.append(spec), real(spec))[1])
+    with build_rig(tmp_path) as r:
+        for _ in range(4):
+            frame(r.panel, "lookback")
+        assert len(asked) == 1
+        spec = ui_lookback._spec(r.panel)
+        assert ui_lookback._drawn(r.panel, spec) is ui_lookback._drawn(r.panel, spec)
+
+
+def test_the_track_readout_is_measured_as_printed(tmp_path, monkeypatch):
+    """Review fix 3: a track past 100 minutes ("102:05 / 140:00") is
+    measured as it is printed, so its readout wraps rather than passing
+    the pane's edge."""
+    from hyperspace import ui as ui_mod
+    widths = []
+    real = ui_mod._readout_width
+    monkeypatch.setattr(ui_mod, "_readout_width", lambda t: (widths.append(t), real(t))[1])
+    # (the rig's stand-in audio has no transport params: its buttons stubbed)
+    monkeypatch.setattr(ui_mod.Panel, "_button", lambda self, *a, **k: False)
+    with build_rig(tmp_path) as r:
+        r.panel.audio.__dict__.update(mode="file", on=False, playing=True,
+                                      position=lambda: 6125.0, duration=lambda: 8400.0)
+        frame(r.panel, "audio")
+        assert "102:05 / 140:00" in widths
+

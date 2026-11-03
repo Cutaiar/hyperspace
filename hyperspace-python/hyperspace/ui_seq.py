@@ -221,8 +221,7 @@ def _transport(panel, seq) -> None:
     step = "stopped" if seq.playhead is None else f"step {seq.playhead + 1}/{seq.length}"
     w = ui._micro_width(step) + (2 * ui_lfo.BEAT_R + 10 + 4 * 12 + 8 if clock else 0)
     # flush right on the transport's line, or (the side pane) on a line of its own
-    right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
-    if imgui.get_item_rect_max().x + imgui.get_style().item_spacing.x + w + 4 <= right:
+    if ui.beside(w + 4):
         imgui.same_line(imgui.get_content_region_avail().x + imgui.get_cursor_pos_x() - w - 4)
     else:
         imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x
@@ -400,8 +399,8 @@ def _strip(panel, seq, envs, n: int) -> None:
     imgui.same_line(SCOPE_W + sp)
     # (fitted to what the chips leave it: the side pane is narrow)
     room = imgui.get_content_region_avail().x - ui.chip_w(*chips) - 12
-    ui._micro(ui_lfo.fit_micro(f"{_lanes_of(seq, n)} · {STAGES[env.stage]} · "
-                               f"out {env.out:.2f}", room), ui.FAINT)
+    ui._micro(ui.fit_micro(f"{_lanes_of(seq, n)} · {STAGES[env.stage]} · "
+                           f"out {env.out:.2f}", room), ui.FAINT)
     # the head's chips, flush right on the label line: `+ env` lives here,
     # since there is always an open strip (the lane envelopes never go)
     imgui.same_line(imgui.get_content_region_avail().x + imgui.get_cursor_pos_x()

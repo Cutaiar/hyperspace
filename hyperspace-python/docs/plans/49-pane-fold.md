@@ -108,8 +108,9 @@ started; on 2026-11-03 the owner gave it to us, on its own schedule.
   and a binding's `set` stores it, so the FX row stays in `ui.PAGES`
   (`ui.RETIRED`): landing on it — the param, a page set straight by ⌘[ /
   ⌘], GRAPH's **open on FX** chip — opens GRAPH with the fx section
-  unfolded and scrolled to the pane's top (`ui_pane.focus`, kept as a
-  click's unfold). The hand checks that name the FX page carry a line
+  unfolded and scrolled to the pane's top (`ui_pane.focus`: a request the
+  next draw acts on in its own layout, beside or in the narrow band; kept
+  as a click's unfold). The hand checks that name the FX page carry a line
   saying so (retired in place, not deleted).
 - **Narrow.** Checked with the panel driver at `SIDE_MIN` (240 px) and
   `SIDE_W` (320 px): no control's rect passes the pane's right edge.
@@ -136,7 +137,8 @@ started; on 2026-11-03 the owner gave it to us, on its own schedule.
   dreamed picture out; `dream.on` after its name, off passes the picture
   through) over its worker's line beside the dream buffer, the layer and
   its knobs. A head says "not on the canvas" when the loaded graph has no
-  such node. "Both" is gone: darken, contrast and detail are the
+  such node; its hover is the whole band, and the dream's names
+  `[dream]` in config.toml as where its worker is set up. "Both" is gone: darken, contrast and detail are the
   look-back's knobs, which the dream reads (one state), and a line under
   the dream says so. The page still fits the control window.
 - **Height and cost.** With many sections open the pane scrolls; a body
@@ -219,7 +221,7 @@ content — no node, edge or position is added, hidden or laid out
 - `hyperspace/ui_pane.py`: seven rows in `SECTIONS` (bodies `_fx`,
   `_media`, `_lfo`, `_seq`, `_audio`, `_camera`, `_output`),
   `DEFAULT_OPEN` from the keys, `focus`, `timing_line`, `_body` timing
-  each body (`pane_ms`), `pane_layout` recorded, the band's header chips
+  each body (`pane_ms`), `pane_focus` acted on in either layout, the band's header chips
   wrapping (`_header(first=)`).
 - `hyperspace/ui.py`: `RETIRED`, `Panel.go_page` (`ui.page`'s setter,
   and `draw` for a page set straight), the rail skipping retired rows,
@@ -247,4 +249,11 @@ content — no node, edge or position is added, hidden or laid out
   retired FX).
 - Restart, not hot reload: `Panel.go_page` is new and `ui.page`'s setter
   is bound at launch; `ui_pane` imports four more page modules.
-
+- **Review fixes** (PR #350, one round): 1 `focus` a pending request the
+  next draw unfolds and scrolls to in its own layout (the band had
+  ignored it); 2 a node head's hover the whole band; 3 the track readout
+  measured as printed; 4 MEDIA's and SEQ's flush-right rows through
+  `ui.beside`; 5 `ui.fit_micro`, one helper for four callers; 6 the
+  look-back's node names asked once per graph; 7 `[dream] in config.toml`
+  back on the dream's hover; 8 `ui_pane.timing_line(panel)` fetches the
+  state itself.

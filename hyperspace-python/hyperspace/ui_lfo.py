@@ -191,18 +191,6 @@ def _clock_strip(panel, clock) -> None:
         imgui.end_table()
 
 
-def fit_micro(text: str, width: float) -> str:
-    """`text` as `ui._micro` draws it (upper case, the micro face), cut to
-    `width` with an ellipsis; "" with no room at all."""
-    if width <= 12:
-        return ""
-    imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)
-    try:
-        return ui.fit_text(text.upper(), width)
-    finally:
-        imgui.pop_font()
-
-
 def _beats(clock, h: float) -> None:
     """The beat light, then one dot per beat of the bar with the current one lit."""
     dl = imgui.get_window_draw_list()
@@ -232,7 +220,7 @@ def _strip(panel, lfos, clock, n: int, first: bool = False) -> None:
     ui._micro(f"lfo {n}")
     imgui.same_line(SCOPE_W + imgui.get_style().item_spacing.x)
     # (fitted to what the chips leave it: the side pane is narrow)
-    ui._micro(fit_micro(_where(lf, clock),
+    ui._micro(ui.fit_micro(_where(lf, clock),
                         imgui.get_content_region_avail().x - ui.chip_w(*chips) - 12), ui.FAINT)
     # the head's chips, flush right on the label line: no row of their own
     imgui.same_line(imgui.get_content_region_avail().x + imgui.get_cursor_pos_x()

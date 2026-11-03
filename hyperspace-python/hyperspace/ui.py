@@ -209,6 +209,19 @@ def _micro(text: str, color: imgui.ImVec4 | None = None) -> None:
     imgui.pop_font()
 
 
+def fit_micro(text: str, width: float, least: float = 12.0) -> str:
+    """`text` as `_micro` draws it (upper case, the micro face), cut to
+    `width` with an ellipsis; "" where the room is under `least` (plan 49
+    stage 2: a note, a strip's head, a node's ports in the side pane)."""
+    if width < least:
+        return ""
+    imgui.push_font(_FONTS["micro"], FONT_MICRO)
+    try:
+        return fit_text(text.upper(), width)
+    finally:
+        imgui.pop_font()
+
+
 def _micro_width(text: str) -> float:
     """What _micro(text) will take, for right-aligning things beside it."""
     imgui.push_font(_FONTS["micro"], FONT_MICRO)
@@ -1540,9 +1553,7 @@ class Panel:
             # plan 49 stage 2: cut to what the title leaves it (the side pane)
             room = imgui.get_content_region_avail().x - _micro_width(title) - 16
             if _micro_width(note) > room:
-                imgui.push_font(_FONTS["micro"], FONT_MICRO)
-                note = fit_text(note.upper(), room) if room > 24 else ""
-                imgui.pop_font()
+                note = fit_micro(note, room, 24.0)
         if note:
             imgui.same_line(imgui.get_content_region_avail().x - _micro_width(note) - 4)
             _micro(note, FAINT)
@@ -2436,10 +2447,11 @@ class Panel:
             beside(button_w("Restart"))
             self._button("audio.restart", "Restart")
             pos, dur = a.position(), a.duration()
-            beside(_readout_width("00:00 / 00:00"))
+            clock = (f"{int(pos // 60)}:{int(pos % 60):02d} / "
+                     f"{int(dur // 60)}:{int(dur % 60):02d}")
+            beside(_readout_width(clock))           # measured as printed (a 100-minute set)
             imgui.align_text_to_frame_padding()
-            _readout(f"{int(pos // 60)}:{int(pos % 60):02d} / "
-                     f"{int(dur // 60)}:{int(dur % 60):02d}", DIM)
+            _readout(clock, DIM)
         imgui.spacing()
 
         # the level into the analyser: what every band sees
@@ -2589,7 +2601,7 @@ class Panel:
         if graph_ms:
             imgui.text_disabled(graph_ms)
             # plan 49 stage 2: what of it the side pane's open sections took
-            pane_ms = ui_pane.timing_line(self, self.__dict__.get(ui_graph.STATE))
+            pane_ms = ui_pane.timing_line(self)
             if pane_ms:
                 imgui.text_disabled(fit_text(pane_ms, imgui.get_content_region_avail().x))
         thumbs = ui_graph.thumbnail_line(self)    # plan 37 C1: the GRAPH page's thumbnails

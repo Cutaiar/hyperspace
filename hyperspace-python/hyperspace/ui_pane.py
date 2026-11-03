@@ -250,13 +250,12 @@ def set_open(st: dict, key: str, on: bool, layout: str = "open",
 
 
 def focus(st: dict, key: str) -> None:
-    """Unfold section `key` in the layout the pane last drew (beside the
-    canvas until it has drawn) and scroll its header to the pane's top on
-    the next draw: what `ui.page` landing on a retired page does
-    (`ui.RETIRED`: FX → the fx section), and what stage 3's "focus
-    section" will do for every page. An unfold as a click's, so it is
-    kept on this Mac."""
-    set_open(st, key, True, st.get("pane_layout", "open"))
+    """Ask the pane's next draw to unfold section `key` and scroll it into
+    view, in whichever layout that draw is (beside the canvas, or the
+    narrow page's band: review fix 1): what `ui.page` landing on a retired
+    page does (`ui.RETIRED`: FX → the fx section), and what stage 3's
+    "focus section" will do for every page. The unfold is a click's, so
+    it is kept on this Mac."""
     st["pane_focus"] = key
 
 
@@ -295,11 +294,12 @@ def draw(panel, st: dict, dt: float, selection: Callable[[], None] | None,
     band — its own fold state, the headers one row of chips, the bodies
     sharing the rest with no floor."""
     layout = "below" if below else "open"
-    st["pane_layout"] = layout           # where `focus` unfolds a section
     got = opened(st, layout)
+    want = st.pop("pane_focus", None)    # `focus`: unfolded here, in this draw's layout
+    if want in got:
+        set_open(st, want, True, layout)
     n_open = sum(1 for k in KEYS if got.get(k))
     drawn = st["pane_drawn"] = []        # the sections whose bodies drew (the tests read it)
-    want = st.pop("pane_focus", None)
     if below:
         for i, (key, title, groups, _) in enumerate(SECTIONS):
             on = bool(got.get(key))
@@ -309,6 +309,8 @@ def draw(panel, st: dict, dt: float, selection: Callable[[], None] | None,
         h = body_height(imgui.get_content_region_avail().y, n_open, 0.0)
         for key, _, _, body in SECTIONS:
             if got.get(key):
+                if key == want:
+                    imgui.set_scroll_here_y(0.0)    # the focused body at the band's top
                 _body(panel, st, key, body, dt, selection, h, drawn)
     else:
         head_h = imgui.get_frame_height_with_spacing()
@@ -349,12 +351,13 @@ def _body(panel, st: dict, key: str, body, dt: float, selection, h: float,
         imgui.pop_id()
 
 
-def timing_line(panel, st: dict | None) -> str:
+def timing_line(panel) -> str:
     """The SYSTEM page's line for the pane (plan 49 stage 2): each section
     whose body drew last time GRAPH drew, its running mean in ms, the
-    dearest first — "" until one has. `st` is GRAPH's page state; its
-    own line above this one times the whole page, these included."""
-    st = st or {}
+    dearest first — "" until one has (or GRAPH never drew). GRAPH's own
+    line above this one times the whole page, these included."""
+    from . import ui_graph  # (late: ui_graph imports this module)
+    st = panel.__dict__.get(ui_graph.STATE) or {}
     cost, shown = st.get("pane_ms") or {}, st.get("pane_drawn") or []
     got = sorted(((cost[k], k) for k in shown if k in cost), reverse=True)
     if not got:

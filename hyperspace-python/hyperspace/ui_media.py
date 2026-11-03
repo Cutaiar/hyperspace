@@ -239,8 +239,7 @@ def _library(panel, st: dict, rows_shown: int = LIST_ROWS) -> None:
             st["tab"] = k
     add = "Add file…"
     # flush right on the tabs' line, or (the side pane) on a row of its own
-    right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
-    if imgui.get_item_rect_max().x + 2 * imgui.get_style().item_spacing.x + ui.chip_w(add) <= right:
+    if ui.beside(ui.chip_w(add)):
         imgui.same_line(imgui.get_content_region_avail().x + imgui.get_cursor_pos_x()
                         - ui.chip_w(add))
     else:
