@@ -165,6 +165,20 @@ def name_w() -> float:
     return imgui.calc_text_size("n" * NAME_MAX).x + 2 * imgui.get_style().frame_padding.x
 
 
+NAME_MIN = 48.0     # px: the narrowest the strip's name button is squeezed to
+
+
+def strip_name_w(avail: float, chips: tuple[str, ...], dirty_: bool) -> float:
+    """The name button's width on a strip `avail` px wide (plan 49): `name_w`
+    where it fits — every page — else what is left beside the arrows, the
+    dot and the right-hand chips (GRAPH's side pane, a few hundred px),
+    never under `NAME_MIN`."""
+    style = imgui.get_style()
+    beside = (2 * imgui.get_frame_height() + 4 + ui.chip_w(*chips) + style.item_spacing.x
+              + (2 * ui.DOT_R + 2 if dirty_ else 0.0))
+    return max(NAME_MIN, min(name_w(), avail - beside))
+
+
 def _guard(panel, fn, *args):
     """Run a library call; a bad file or a full disk shows, never raises."""
     try:
@@ -274,6 +288,11 @@ def strip(panel, group: str) -> None:
     is_dirty = dirty(panel, group)
     kind = group in lib.kinds
     presets = getattr(lib, "presets", None) if group == PRESETS else None
+    word = "save"
+    chips = (word, "as…") if kind else (word, "as…", "reset")
+    if presets is not None:
+        chips = ("new", *chips)
+    width = strip_name_w(imgui.get_content_region_avail().x, chips, is_dirty)
 
     # ◀ name ▶ — the arrows step by name order; a module strip's name opens its list
     imgui.begin_disabled(not listing)
@@ -281,10 +300,12 @@ def strip(panel, group: str) -> None:
         _guard(panel, lib.prev, group)
     imgui.same_line(0, 2)
     label = _elide(cur) if cur else "—"
+    if width < name_w():                # a narrow strip: the name cut to its button
+        label = ui.fit_text(label, width - 2 * imgui.get_style().frame_padding.x)
     imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(0, 0, 0, 0))
     imgui.push_style_color(imgui.Col_.text, ui.DIM if cur is None else
                            imgui.ImVec4(0.92, 0.92, 0.92, 1))
-    if imgui.button(f"{label}##name", imgui.ImVec2(name_w(), 0)) and group != PRESETS:
+    if imgui.button(f"{label}##name", imgui.ImVec2(width, 0)) and group != PRESETS:
         imgui.open_popup("list")
     imgui.pop_style_color(2)
     _rect(panel, f"strip.{group}.name")
@@ -312,10 +333,6 @@ def strip(panel, group: str) -> None:
         _list_popup(panel, group, listing, cur)
 
     # (new ·) save · as… (· reset on a module strip), flush right
-    word = "save"
-    chips = (word, "as…") if kind else (word, "as…", "reset")
-    if presets is not None:
-        chips = ("new", *chips)
     imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w(*chips))
     if presets is not None:
         if ui.chip("new##new"):
@@ -686,6 +703,9 @@ def show_line(panel) -> None:
         return
     proj = lib.project
     imgui.push_id("show")
+    # the line's right edge: a chip that would pass it starts a new row
+    # (GRAPH's side pane, plan 49; every page has the room for one row)
+    right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
     ui._micro(SHOW_LINE)
     _rect(panel, "show.line")
     if imgui.is_item_hovered():
@@ -705,7 +725,7 @@ def show_line(panel) -> None:
         if imgui.is_item_hovered():
             ui.tooltip("the show differs from its file: the session (tempo, hands, "
                        "the analyzer, output), its pads or its wires")
-    imgui.same_line()
+    _beside(right, SHOW_W)
     imgui.set_next_item_width(SHOW_W)
     if imgui.begin_combo("##shows", "open"):
         listing = names(panel, PROJECT)
@@ -720,7 +740,7 @@ def show_line(panel) -> None:
     _rect(panel, "show.menu")
     if imgui.is_item_hovered():
         ui.tooltip("Open another show from the library")
-    imgui.same_line()
+    _beside(right, ui.chip_w("save"))
     if ui.chip("save"):
         _guard(panel, proj.save)
         invalidate(panel, PROJECT)
@@ -728,13 +748,13 @@ def show_line(panel) -> None:
     if imgui.is_item_hovered():
         ui.tooltip("Save the show — the session (tempo, hands, the analyzer, output), "
                    "its pads and its wires")
-    imgui.same_line()
+    _beside(right, ui.chip_w("as…"))
     if ui.chip("as…"):
         _begin_naming(panel, PROJECT, proj.name)
     _rect(panel, "show.save_as")
     if imgui.is_item_hovered():
         ui.tooltip("Save the show under another name")
-    imgui.same_line()
+    _beside(right, ui.chip_w("new"))
     if ui.chip("new"):
         _guard(panel, proj.new)
         invalidate(panel, PRESETS)
@@ -742,6 +762,13 @@ def show_line(panel) -> None:
     if imgui.is_item_hovered():
         ui.tooltip("A new show: fresh state, every pad empty")
     imgui.pop_id()
+
+
+def _beside(right: float, w: float) -> None:
+    """The next item, `w` wide, on the line of the one before when it ends
+    by `right`; else (a narrow pane) on a row of its own."""
+    if imgui.get_item_rect_max().x + imgui.get_style().item_spacing.x + w <= right:
+        imgui.same_line()
 
 
 def _project_save_as(panel, name: str) -> None:

@@ -174,10 +174,12 @@ the idle lines, forgets every position on the canvas and lays them all
 out again in their areas — one undo step for the positions (`forget`) —
 frames the canvas on them and says so on the head ("laid out 36 nodes in
 6 areas, every one collapsed · 12 idle off the canvas", or "already
-tidy"). The selection shows under the canvas on
-the panel's narrow page; the **details beside / below** chip, drawn only
-while something is selected, moves it (a page 720 px wide puts it in a
-side column by itself, no chip). **The side column is resizable** (the
+tidy"). **The side pane is always on** (plan 49, stage 1: `ui_pane.py`):
+folding sections — the selection's details (`_side`; with nothing
+selected, a line saying so), then the bodies of the PRESETS, LOOKBACK,
+FACES and ANALYZER pages. It lies under the canvas on the panel's narrow
+page; the **details beside / below** chip moves it (a page 720 px wide
+puts it in a side column by itself, no chip). **The side column is resizable** (the
 owner, 2026-10-27: "for some UI, the little sidebar … is just not wide
 enough"): a grip on its left edge drags it between `SIDE_MIN` and what
 leaves `CANVAS_MIN` of canvas (`side_width`), and the width is this Mac's,
@@ -196,17 +198,26 @@ the preset's and the show's, never a NodeEditor.json beside the app.
 from __future__ import annotations
 
 import colorsys
-import json
 import math
-import sys
 import time
-from pathlib import Path
 
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
 
 from . import graph as rgraph
-from . import graphview, modifiers, params, patches, pinch, ui, ui_fx, ui_pad, ui_routing, undo
+from . import (
+    graphview,
+    modifiers,
+    params,
+    patches,
+    pinch,
+    ui,
+    ui_fx,
+    ui_pad,
+    ui_pane,
+    ui_routing,
+    undo,
+)
 from . import hold as holdmod
 from .bands import CEIL
 from .graph import Effect
@@ -240,7 +251,7 @@ SIDE_W = 320.0           # the side column's width at first, when the page is wi
 SIDE_MIN = 240.0         # …the narrowest a drag may make it
 CANVAS_MIN = 240.0       # …and the canvas it must leave beside it
 GRIP_W = 8.0             # the drag grip on the column's left edge
-UI_FILE = "ui.json"      # <machine>/ui.json: this Mac's panel settings (the side width)
+UI_FILE = ui_pane.UI_FILE   # <machine>/ui.json: this Mac's panel settings (the side width)
 WIDE = 720.0             # …which is this wide; narrower, the selection goes below
 BELOW_H = 240.0          # the selection's height below the canvas
 TIMES = 120              # draws the SYSTEM line's median is over
@@ -702,7 +713,8 @@ def page(panel, dt: float) -> None:
         st["deselect"], sel = True, None
     publish(panel, st, sel)
     share(panel, st, sel)
-    _head(panel, st, view, sel is not None)
+    # plan 49: the pane is always on, so its chip is too (on a narrow page)
+    _head(panel, st, view, True)
     imgui.separator()
     avail = imgui.get_content_region_avail()
     wide = st["beside"] or avail.x >= WIDE
@@ -723,9 +735,9 @@ def page(panel, dt: float) -> None:
     # its canvas): noted here, before it draws, so `_menus` opens no graph
     # menu there and the control's own Learn menu opens (the owner, 2026-10-24)
     mouse = imgui.get_mouse_pos()
-    st["details_rect"] = (pos, size) if sel else None
-    st["over_details"] = bool(sel) and (pos[0] <= mouse.x < pos[0] + size[0]
-                                        and pos[1] <= mouse.y < pos[1] + size[1])
+    st["details_rect"] = (pos, size)          # plan 49: the pane is always on
+    st["over_details"] = (pos[0] <= mouse.x < pos[0] + size[0]
+                          and pos[1] <= mouse.y < pos[1] + size[1])
     canvas = imgui.ImVec2(max(avail.x, 80.0), max(avail.y, 80.0))
     # 2026-11-02: where the canvas is and whose draw list it lands on, for
     # `replay.grab` (`panel:graph`): the page window's own list carries the
@@ -737,28 +749,32 @@ def page(panel, dt: float) -> None:
     shown = _backdrop(panel, st, (origin.x, origin.y), (canvas.x, canvas.y))
     _scroll(st, (origin.x, origin.y), (canvas.x, canvas.y))
     _canvas(panel, st, view, canvas, st["backdrop_alpha"] if shown else 0.0)
-    _monitor(panel, (origin.x, origin.y), (canvas.x, canvas.y))
-    omit = (0, 0)
-    if sel:                             # its bottom is the canvas's: the page ends where it did
-        imgui.set_cursor_screen_pos(imgui.ImVec2(*pos))
-        imgui.push_style_color(imgui.Col_.child_bg, imgui.get_style_color_vec4(imgui.Col_.window_bg))
-        # imgui draws a child's decorations — its ground, border and
-        # scrollbar — on the parent's list inside `begin_child` (one draw
-        # call fewer); on the page's list they would be in the canvas's
-        # picture, so the indices they take are noted for `replay` to cut out
-        page_list = imgui.get_window_draw_list()
-        i0 = page_list.idx_buffer.size()
-        opened = imgui.begin_child("##graph.side", imgui.ImVec2(*size), imgui.ChildFlags_.borders)
-        omit = (i0, page_list.idx_buffer.size())
-        if opened:
-            if wide:                        # the grip on the column's left edge, then the details
-                top = imgui.get_cursor_screen_pos()
-                _grip(st, pos, size, avail.x, side)
-                imgui.set_cursor_screen_pos(imgui.ImVec2(top.x + GRIP_W, top.y))
-                imgui.indent(GRIP_W)
-            _side(panel, st, view, sel)
-        imgui.end_child()
-        imgui.pop_style_color()
+    # the held projector's inset: in the canvas's corner left of the pane
+    _monitor(panel, (origin.x, origin.y), (canvas.x - size[0] if wide else canvas.x, canvas.y))
+    ui_pane.note_selection(st, sel_key(sel))
+    # the pane, always on (plan 49): its bottom is the canvas's, so the page ends where it did
+    imgui.set_cursor_screen_pos(imgui.ImVec2(*pos))
+    imgui.push_style_color(imgui.Col_.child_bg, imgui.get_style_color_vec4(imgui.Col_.window_bg))
+    # imgui draws a child's decorations — its ground, border and
+    # scrollbar — on the parent's list inside `begin_child` (one draw
+    # call fewer); on the page's list they would be in the canvas's
+    # picture, so the indices they take are noted for `replay` to cut out
+    page_list = imgui.get_window_draw_list()
+    i0 = page_list.idx_buffer.size()
+    opened = imgui.begin_child("##graph.side", imgui.ImVec2(*size), imgui.ChildFlags_.borders)
+    omit = (i0, page_list.idx_buffer.size())
+    if opened:
+        if wide:                        # the grip on the column's left edge, then the details
+            top = imgui.get_cursor_screen_pos()
+            _grip(st, pos, size, avail.x, side)
+            imgui.set_cursor_screen_pos(imgui.ImVec2(top.x + GRIP_W, top.y))
+            imgui.indent(GRIP_W)
+        # plan 49: folding sections — the selection's details first
+        ui_pane.draw(panel, st, dt,
+                     (lambda: _side(panel, st, view, sel)) if sel else None,
+                     sel_words(sel))
+    imgui.end_child()
+    imgui.pop_style_color()
     panel.canvas_px = (*panel.canvas_px[:4], omit)
     times = st["times"]
     times.append(time.perf_counter() - t0)
@@ -843,9 +859,8 @@ def read_side(machine) -> float | None:
     ``graph.side_w``), or None: no file, an unreadable one, or a value that
     is not a number. Never raises; a bad file costs only the memory."""
     try:
-        doc = json.loads((Path(machine) / UI_FILE).read_text())
-        w = doc["graph"]["side_w"]
-    except (OSError, ValueError, KeyError, TypeError):
+        w = ui_pane.read_doc(machine)["graph"]["side_w"]
+    except (KeyError, TypeError):
         return None
     return float(w) if isinstance(w, (int, float)) and not isinstance(w, bool) else None
 
@@ -854,21 +869,12 @@ def write_side(machine, side_w: float) -> None:
     """Remember `side_w` in ``<machine>/ui.json``, keeping whatever else
     the file holds; a write that fails says so on stderr and costs only
     the memory."""
-    path = Path(machine) / UI_FILE
-    try:
-        doc = json.loads(path.read_text())
-        if not isinstance(doc, dict):
-            doc = {}
-    except (OSError, ValueError):
-        doc = {}
+    doc = ui_pane.read_doc(machine)
     graph = doc.get("graph")
     if not isinstance(graph, dict):
         graph = doc["graph"] = {}
     graph["side_w"] = round(float(side_w), 1)
-    try:
-        path.write_text(json.dumps(doc, indent=1) + "\n")
-    except OSError as e:
-        print(f"graph: {UI_FILE} not written ({e})", file=sys.stderr)
+    ui_pane.write_doc(machine, doc, "graph")
 
 
 def _grip(st: dict, pos: tuple[float, float], size: tuple[float, float], avail_w: float,
@@ -3337,6 +3343,28 @@ def _selection(st: dict, view: graphview.View):
         if g is not None:
             return ("group", g)
     return None
+
+
+def sel_key(sel):
+    """What a selection is, for the pane to tell a new one (plan 49): its
+    kind and id; None with nothing selected."""
+    if sel is None:
+        return None
+    what, obj = sel
+    return what, getattr(obj, "id", None)
+
+
+def sel_words(sel) -> str:
+    """The selection section's header words (plan 49): a node's label, a
+    group's name, else the kind ("cable", "bundle"); "" with nothing."""
+    if sel is None:
+        return ""
+    what, obj = sel
+    if what == "node":
+        return str(getattr(obj, "label", "") or what)
+    if what == "group":
+        return str(getattr(obj, "name", "") or what)
+    return what
 
 
 def _side(panel, st: dict, view: graphview.View, sel) -> None:

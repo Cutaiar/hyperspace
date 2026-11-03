@@ -6970,6 +6970,66 @@ preset 'party/TRIP'" and loads nothing, the pad still drawn as filled;
 the show opens (no schema refusal); back on this build the pad still
 loads `party / TRIP`.
 
+## BF. The panel fold, stage 1: the side pane always on (plan 49)
+Register rows 597–601, 2026-11-03. Headless: `tests/test_ui_pane.py`
+(the panel driver on GRAPH: each section opened by a click and a control
+found in it by its page's id, a click in a section moving the param, a
+selection in the selection section, a new selection unfolding it, the
+fold state through `ui.json`, no conflicting ids with all five open).
+A restart after pulling (a new module).
+**449. The pane is there with nothing selected, and each section is its
+page.** (Mac, the control window at its launch size, a preset loaded)
+1. Open the app on GRAPH; click the canvas's empty ground (nothing
+   selected).
+2. Unfold each section in turn — presets, lookback, faces, analyzer —
+   and open its page on the rail beside it.
+*Pass:* (1) the pane is beside the canvas, `SELECTION` at the top
+saying nothing is selected, `PRESETS` open under it. (2) each section
+shows what its page shows, in the same order and words; the spectrogram
+moves, the lookback thumbnails move. Fail: an empty pane, or a section
+missing a row its page has.
+**450. The fold is kept across a relaunch, per Mac.** (Mac)
+1. Fold presets, unfold analyzer. Drag the pane wider.
+2. Quit and relaunch; open GRAPH.
+3. On the other Mac, open GRAPH.
+*Pass:* (2) presets folded, analyzer open, the width as dragged. (3)
+the other Mac's pane as it was there (selection and presets open the
+first time). `~/Hyperspace/ui.json` holds `pane.open` and `graph.side_w`.
+**451. A section's control learns and answers keys as on its page.**
+(Mac, the APC40)
+1. In the faces section, right-click **Faces** → Learn; turn a free knob.
+2. In the lookback section, right-click a slider → Learn; press a key
+   row's key that moves it (or move it from the desk).
+*Pass:* (1) the knob turns the faces on and off; the ROUTING page shows
+the row. (2) the slider in the section follows. Fail: the graph's menu
+opens instead of the param's, or nothing is armed.
+**452. Two sections open share the pane; a selection takes its share.**
+(Mac)
+1. Open presets and analyzer, fold selection. Click a node.
+2. Press Esc.
+*Pass:* (1) selection unfolds by itself with the node's details; the
+three share the pane's height, each scrolling by itself, the presets
+list still a list. (2) the selection says nothing is selected; the fold
+stays open.
+**453. The presets section at 320 px.** (Mac, the pane at its narrowest)
+1. Drag the pane to its narrowest. In the presets section, step ◀ ▶,
+   click a row, **save**, **as…** (type a name, Enter).
+2. In the show line: **open ▾**, **save**.
+*Pass:* (1) the strip fits — its name cut short, the chips flush right,
+nothing past the pane's edge; each action does what it does on the
+PRESETS page. (2) the show line's chips on a second row, each working.
+**454. A narrow window puts the pane under the canvas.** (Mac)
+1. Make the control window narrow (under 720 px of page).
+2. Click **details beside**, then **details below**.
+*Pass:* (1) the pane is a band along the canvas's bottom, its headers
+there, the chip on the head with nothing selected. (2) the chip moves it
+beside and back. Fail: the canvas re-centres its nodes as the pane moves.
+**455. The held projector's inset sits clear of the pane.** (Mac, plan
+38's HOLD on)
+1. Hold the projector. Look at the canvas's top-right corner.
+*Pass:* the red-framed PROJECTOR inset is left of the pane, whole; the
+pane's headers are not covered.
+
 ## What no test covers
 
 Only a person can settle these:

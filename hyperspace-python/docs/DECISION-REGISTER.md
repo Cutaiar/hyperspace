@@ -626,6 +626,11 @@ here; overturn → the change, then the same.
 | 587 | Plan 48: a save writes back to the preset's own file; as… with a folder in the name writes into it; a new preset grown from the loaded one (two-handed save, `preset.save_new`, an empty pad's hold) lands beside it; ⇧F's `PRESET <n>` at the top | 441 | (rec) — pending the owner; built as recommended |
 | 588 | Plan 48: the PRESETS page draws a folder's preset as `party / TRIP` with the folder dim; the flat list stays; a rename's field holds the leaf and keeps the folder | 440, 441 | (rec) — pending the owner; built as recommended |
 | 589 | Wave 1 T0: the test suite cannot hang the Mac — pytest-timeout's thread method at 120 s for xdist workers (the signal method for a serial run) with no worker restart in pyproject's addopts, so a test blocked in C fails by name and ends the run; `live` tests hold a per-account `flock` (wait 60 s, then skip); one tier at a time on a shared Mac; a real-GLFW test asks a child process first (`gl_window_ok`, #332) and skips if `glfwInit` does not answer | — | (rec) — pending the owner; built as recommended (T0) |
+| 597 | Plan 49 U1: GRAPH's side pane always on, as folding sections — selection (`ui_graph._side`, words when nothing is selected), presets, lookback, faces, analyzer — each body the function its page draws (`Panel.presets_body`, `ui_lookback.page`, `ui_patterns.page`, `Panel.analyzer_body`); a widget keeps its page's label (`##<param id>`) and each body is drawn under `push_id("pane.<key>")`; headers `##pane.<key>`; every page and the rail unchanged | 449, 451 | (rec) — pending the owner; built as recommended |
+| 598 | Plan 49 U1: which sections are open is this Mac's (`pane.open` in `<machine>/ui.json`, beside `graph.side_w`), written on a click; selection and presets open by default, the rest folded; a new selection unfolds selection | 450 | (rec) — pending the owner; built as recommended |
+| 599 | Plan 49 U1: open sections share the pane's height evenly, never under 160 px (past that the pane scrolls), each body scrolling by itself; a narrow page keeps #266's band under the canvas; the details beside / below chip shows on every narrow page | 452, 454 | (rec) — pending the owner; built as recommended |
+| 600 | Plan 49 U1: in a narrow pane the preset strip's name button is squeezed to the room beside its chips (never under 48 px; unchanged on every page) and the show line's chips wrap; the held projector's inset sits left of the pane | 453, 455 | (rec) — pending the owner; built as recommended |
+| 601 | Plan 49 U1: section titles follow the rail's words (`lookback`, not `dream`); the lookback section draws the page as it is — its look-back / dream / shared split is stage 2's to redraw (the owner, 2026-11-02: "a horrid representation") | 449 | (rec) — pending the owner; built as recommended |
 
 "—": no hand check shows it; tests only.
 
@@ -10509,3 +10514,90 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   `tests/test_gl_probe.py`; a deliberate `time.sleep(130)` under
   `-n 2 --timeout=5` failed by name in 5.5 s, and under `-n0 --timeout=5`
   failed and the run went on: "1 failed, 2 passed").
+
+## Wave 2 — the panel fold, stage 1 (plan 49, rows 597–601)
+
+### 597. The side pane always on, as folding sections
+- **Asked.** The build-order doc's row "Graph always on, pages fold into
+  the side pane", stage 1 (U1); the owner gave the fold to us on
+  2026-11-03.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** On GRAPH the pane (#266's, its width and grip as
+  built) is drawn every frame and holds five sections (`ui_pane.SECTIONS`):
+  selection, presets, lookback, faces, analyzer. Each body is the
+  function its page draws — `Panel.presets_body` and `Panel.analyzer_body`
+  factored out of `_page_presets` / `_page_analyzer`, `ui_lookback.page`
+  and `ui_patterns.page` as they were — so no page code is duplicated and
+  the page is the section at full height. A widget keeps its page's
+  label, so the panel driver, Learn's framing and the right-click menu
+  find it by the same id; each body sits under `push_id("pane.<key>")`
+  inside the pane's child, so imgui's ids stay unique when two sections
+  draw preset strips (`tests/test_ui_pane.py` checks every id with all
+  five open). The page and its section are never drawn in one frame.
+- **Other options.** A section that opens its page instead of drawing
+  it (no fold at all); copying each page's body into the pane (two
+  layouts to keep in step); the sections in a tab bar (one at a time, and
+  no shared height).
+- **To reverse.** `ui_graph.page` draws the pane only `if sel`, and calls
+  `_side` instead of `ui_pane.draw`.
+- **Rough edge.** The pages were laid out for the panel's width; in a
+  320 px pane some rows are tight (the FACES browser's chips, the
+  ANALYZER band strip). Stage 2 and the eye decide what needs a narrow
+  layout.
+- **Judge it.** 449, 451.
+
+### 598. The fold state is this Mac's
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** `pane.open` in `<machine>/ui.json`, beside
+  `graph.side_w` (`ui_pane.read_open` / `write_open`; `read_side` /
+  `write_side` now share `read_doc` / `write_doc`), read once when the
+  page first knows the machine, written on a header's click. Defaults:
+  selection and presets open, lookback, faces and analyzer folded (the
+  spectrogram and the thumbnails cost a draw each frame they are open).
+  A new selection (a different node, cable, bundle or group) unfolds
+  selection if it was folded, and writes that, so a click on a node
+  shows its details as it always did.
+- **Other options.** Saved in the show (then both Macs fight over it);
+  a new selection leaving the fold alone (a folded selection would hide
+  every click's details).
+- **To reverse.** Drop `note_selection`; change `DEFAULT_OPEN`.
+- **Judge it.** 450.
+
+### 599. Open sections share the pane's height
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** The room under the five headers is shared evenly by
+  the open sections, each at least `MIN_BODY_H` (160 px; past that the
+  pane scrolls), each body a child scrolling by itself — so one open
+  section has the whole pane, as a page has the whole panel. A narrow
+  page keeps #266's `BELOW_H` band under the canvas, and the details
+  beside / below chip (shown before only with a selection) shows on
+  every narrow page.
+- **Other options.** Each body as tall as its content, the pane
+  scrolling (the presets list and the band editor fill whatever they
+  are given, so they would need a height anyway); a draggable split.
+- **To reverse.** `ui_pane.body_height`.
+- **Judge it.** 452, 454.
+
+### 600. Narrow strips; the projector inset beside the pane
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** The preset strip's name button is `name_w` where it
+  fits (every page, unchanged) and otherwise the room beside the arrows,
+  the dot and the chips, never under 48 px, its words cut to it
+  (`ui_presets.strip_name_w`); the show line's open / save / as… / new
+  start a new row where they would pass the edge (`ui_presets._beside`).
+  The held projector's inset (plan 38) sits in the canvas's top-right
+  corner left of the pane, where it lay under the pane before whenever
+  something was selected.
+- **To reverse.** `name_w()` back in `strip`; `same_line()` back in
+  `show_line`; `_monitor` given the whole canvas.
+- **Judge it.** 453, 455.
+
+### 601. Section titles follow the rail
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** The sections are named as the rail's pills are
+  (`lookback`, not the brief's `dream`), so a section reads as the page
+  it folds. The lookback section draws the LOOKBACK page as it is; the
+  owner's "a horrid representation of what's going on there" (2026-11-02,
+  the look-back / dream / shared split) is stage 2's to redraw, as the two
+  picture nodes plan 36 made of them.
+- **Judge it.** 449.
