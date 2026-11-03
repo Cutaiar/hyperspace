@@ -110,6 +110,8 @@ content — no node, edge or position is added, hidden or laid out
   `ui_pane.read_doc` / `write_doc`; the monitor inset beside the pane.
 - `hyperspace/ui.py`: `Panel.presets_body`, `Panel.analyzer_body`.
 - `hyperspace/ui_presets.py`: `strip_name_w`, `NAME_MIN`, `_beside`.
+- `hyperspace/hotreload.py`: `ui_pane` on the watched list, before `ui_graph`
+  (the one line outside U1's files; `tests/test_hotreload.py` requires it).
 - Tests: `tests/test_ui_pane.py` (new); two tests whose premise was "no
   pane without a selection" now say the pane is on
   (`test_graph_legible.py::test_beside_shows_on_a_narrow_page_selected_or_not`,

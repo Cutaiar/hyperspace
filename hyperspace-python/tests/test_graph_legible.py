@@ -344,8 +344,7 @@ def test_beside_shows_on_a_narrow_page_selected_or_not(rig, monkeypatch):
     monkeypatch.setattr(ui, "chip", lambda label, *a, **k: chips.append(label)
                         or chip(label, *a, **k))
     frame(rig.panel, "graph")
-    assert "tidy##graph" in chips and not any(c.startswith("details") for c in chips)
-    assert "expand all##graph" in chips
+    assert "tidy##graph" in chips and "expand all##graph" in chips
     # the control window's narrow page, nothing selected: the chip (plan 49)
     imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
     frame(rig.panel, "graph")
