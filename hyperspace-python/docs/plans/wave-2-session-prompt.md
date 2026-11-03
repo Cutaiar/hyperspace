@@ -112,6 +112,34 @@ holds (`ls "<library>/desk/"`), and whether `ghost.mirror` stays the rig's
 (the owner said yes on 2026-11-02 — confirm it is still so); the `--dist
 load` follow-up (row 589).
 
+## Checkpoint 2026-11-03 (the owner's answers; do not re-ask)
+
+- The `/9` migration (C2) had **not** been run on the Drive library at the
+  checkpoint (106 presets `/7`, one each `/8`, `/5`, `/2`; the shows
+  `hyperspace.project/2`; the 2026-11-02 00:31 backup was the retaper's).
+  The owner runs it before D3; D3's tool stacks on it. Check the library's
+  schemas before D3's migration is briefed.
+- #299 (`--laptop`) is merged (1a0d13f). **#338** (the poi follow-ups:
+  `devices.py`, `app.py`, `render.py`, `ui_graph.py`) merges before D2 is
+  briefed — D2's freeze would otherwise block it.
+- **U2** is not wave 2; it is scheduled where the six-wave doc puts it.
+- **D3**: desk templates **retired** (none exist in the Drive library or
+  `~/Hyperspace`, so the inlining is a no-op and the code goes); the
+  `modules` labels **dropped** with the default-module fallback (row 540
+  resolved: one preset of 109 carried any); `ghost.mirror` and the rig
+  concept **survive for now** — the rig goes away in a later wave.
+- `--dist load`: T1 switches to it as recommended and measures the live
+  tests under the lock (row 589).
+- Rows 564, 580, 585–589: **yes**. Plan 42's 544–553: see their rows —
+  **545 overturned** (north / south / east / west for every four-button
+  cluster and D-pad: a work item for the controllers lane, unscheduled);
+  546, 550, 551, 552 still open.
+- Two items the owner raised with no wave yet: the **grand cleanup pass**
+  (every preset normalised to the newest format, old cruft dropped) and
+  the **north / south / east / west vocabulary** (545).
+- The plan doc was still unreadable from the orchestrator's account at the
+  checkpoint; the wave 2 table above is unverified against it.
+
 ## How to run it
 
 1. Confirm `main` is the springboard (`git fetch`, `git log -1 origin/main`),

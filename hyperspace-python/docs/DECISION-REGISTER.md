@@ -580,16 +580,16 @@ here; overturn → the change, then the same.
 | 541 | The show block is one line that says what a show is; the pads are set on the desk only | 403 | owner — 2026-10-28 |
 | 542 | The depth cue never spreads over less than 0.05, so a plane figure facing the eye draws at full weight | 406 | (rec) — PR #214 |
 | 543 | The Wispr Flow mark is two shapes in the catalog, Flow mark and Flow capsules (indices 99 and 100, for good) | 405 | owner — 2026-10-17 |
-| 544 | Plan 42 D1: Sony pads read over hidapi, on USB and Bluetooth; GLFW only without hidapi | 407, 408 | (rec) — pending the owner |
-| 545 | Plan 42 D2: one vocabulary — a DualSense's buttons by Xbox name and position; the extras from index 32 | 407 | (rec) — pending the owner |
+| 544 | Plan 42 D1: Sony pads read over hidapi, on USB and Bluetooth; GLFW only without hidapi | 407, 408 | owner — 2026-11-03: yes; the cost of Bluetooth polling on the pad's battery to be understood |
+| 545 | Plan 42 D2: one vocabulary — a DualSense's buttons by Xbox name and position; the extras from index 32 | 407 | owner — 2026-11-03: **not Xbox names** — a four-button cluster and the D-pad are north / south / east / west on every pad, since every pad is orientable (the extras from 32 stand); a work item, not built |
 | 546 | Plan 42 D3: `controller =` picks which pads an entry may take, in list order | 409 | (rec) — Dillon asked for it, 2026-11-01; the form pending the owner |
-| 547 | Plan 42 D4: `touch:` and `motion:` are schemes of their own; not live without a finger or a sensor | 407, 412 | (rec) — pending the owner |
-| 548 | Plan 42 D5: a pad's outputs are nine sink ports on its role; an identity light and number with no row | 410, 411 | (rec) — pending the owner |
-| 549 | Plan 42 D6: trigger resistance by the official effects only | 411 | (rec) — pending the owner |
-| 550 | Plan 42 D7: hidapi opens the pad exclusively | 408 | (rec) — pending the owner |
-| 551 | Plan 42 D8: the pad tape is the one recording format | 415 | (rec) — pending the owner |
-| 552 | Plan 42 D9: the on-screen pad draws the model's own face | 407 | (rec) — pending the owner |
-| 553 | Plan 42 D10: the browser lab is a prototype beside the app | — | (rec) — pending the owner |
+| 547 | Plan 42 D4: `touch:` and `motion:` are schemes of their own; not live without a finger or a sensor | 407, 412 | owner — 2026-11-03: yes |
+| 548 | Plan 42 D5: a pad's outputs are nine sink ports on its role; an identity light and number with no row | 410, 411 | owner — 2026-11-03: yes for now; Dylan's sink and feedback-into-the-controller work makes this dynamic — a standalone item the app must be able to receive |
+| 549 | Plan 42 D6: trigger resistance by the official effects only | 411 | owner — 2026-11-03: yes for now; our own effects are coming as a standalone item; the Edge is not the priority |
+| 550 | Plan 42 D7: hidapi opens the pad exclusively | 408 | (rec) — pending the owner, 2026-11-03: open as long as exclusive means this one pad (it does: `open_path` on one device, never the HID system); the Joy-Con is on hidapi already; whether Xbox and rhythm pads should be is not asked here |
+| 551 | Plan 42 D8: the pad tape is the one recording format | 415 | (rec) — pending the owner (explained 2026-11-03: a tape is the raw reports with their times, `hyperspace.padtape/1`, played back as the pad — the tests' and the probe's record) |
+| 552 | Plan 42 D9: the on-screen pad draws the model's own face | 407 | (rec) — pending the owner (explained 2026-11-03: the pad window draws ✕ ○ □ △ on a DualSense while the rows keep `pad:A`) |
+| 553 | Plan 42 D10: the browser lab is a prototype beside the app | — | owner — 2026-11-03: moot in the app (row 570: the lab is the pad window), but the browser lab stays as the place to explore what to build before building it — most of it external to Hyperspace for now |
 | 554 | The preset contract: a preset is a complete look; the rig is what is plugged in — everything that renders in the preset, everything about hardware on the rig and requested | — | owner — 2026-11-02 |
 | 555 | One camera in the preset: `camera.*` and `eye.*` one preset group (C2, `/9`), overturning "the camera is the rig" (row 182) | 431 | owner — 2026-11-02 (as recommended, plus: eye modulatable, pose always saved) |
 | 556 | Plan 44 Q1: N looks, one on air — a deck is a look with its own controls, registry's performance part, routes, graph, renderer, undo and dot; the deck is what controllers (on air), the panel and undo point at | — | owner — 2026-11-02 (as recommended; 558 with the nuance) |
@@ -600,7 +600,7 @@ here; overturn → the change, then the same.
 | 561 | Wave 0 T1: every effect's `speed` on a signed exponential taper and the fourteen amount-type params on a zero-safe log taper; a taper change migrates the route depths in the same PR (`params.retaper_depths` at load, `tools/retaper_routes.py` on the library, no schema bump) | 420 | agreed — the owner's reshaping of 2026-11-02 |
 | 562 | Plan 45 V1: a video's audio track decoded to memory as float32 stereo 48 kHz once something asks for sound, whole to 120 s, else a 120 s window around the transport's position; the transport is the one clock | 421 | owner's rule (2026-11-02, addendum 8); the policy (rec) |
 | 563 | Node groups (post-show G0, 2026-11-02): a group's id is never reused within a preset's life — `group.<n>` is one past the highest the preset has ever allotted (`Presets.group_high`: the file's highest at the load, dropped entries counted; not saved, no schema change), so an ungrouped or undone group's number is not the next group's; and membership is eager — a member node deleted by any road leaves its group's list in the same operation (hooks on the mechanisms: the section's landing, the table's `set_modifiers`, a bank's membership change), the last member taking the group; every node-removing step carries the marks (which carry the floor too) so its undo puts the member back; a refused load leaves the loaded preset's groups whole. Render node ids (`acid` → `acid.2`, the lowest free instance, R25) are untouched: a format question for the one-format PR | 422 | built as recommended — PR (G0) |
-| 564 | Wave 0 E1: delay loops are the trails mechanism, the look-back keeps the dream — the feedback starter (a composite laid over, a delay, a fade at level 0.75: colour and alpha decay alike) on the cable menu and "add feedback after" on the node menu, many allowed; "feedback" not "echo", which names the look-back's frames | 423 | (rec) — pending the owner |
+| 564 | Wave 0 E1: delay loops are the trails mechanism, the look-back keeps the dream — the feedback starter (a composite laid over, a delay, a fade at level 0.75: colour and alpha decay alike) on the cable menu and "add feedback after" on the node menu, many allowed; "feedback" not "echo", which names the look-back's frames | 423 | owner — 2026-11-03: yes (the vocabulary: feedback, not echo) |
 | 565 | Plan 46 D1: one Joy-Con per `[[devices]]` entry, held like a Wii Remote (a pair as one pad not built) | 424–429 | built as recommended — PR #315 |
 | 566 | Plan 46 D2: the Wii-Remote hold frames the vocabulary — one stick is the left stick, the (L)'s arrows the face by position, SL / SR the back pair, L / ZL `LB` + `LT`, no `hat:` | 424–429 | built; checked on the hardware (425, the owner, 2026-11-02) |
 | 567 | Plan 46 D3: `Model.controls` — the ports, Learn, the on-screen pad and the sinks show only what the pad has | 424–429 | built as recommended |
@@ -616,16 +616,16 @@ here; overturn → the change, then the same.
 | 577 | Wave 1 K2: warp's drift and scale on one `@clock` at drift × scale (the scroll counted in cells), tripcolour's pulse on a `@clock` wrapped to 2π; the lint's allowlist loses three pairs; party-noita's 17 goldens re-recorded | 419, 434 | owner's rule (row 560), built |
 | 578 | Wave 1 K3: `view.media_rate` and `view.inst_rate` integrated by the host into `view.media_phase` and `view.inst_phase` (`ViewState.integrate`, wrapped at 2π and 20π), read by the media path and the field's motion in place of t × rate; not params, never saved | 435 | built under row 560 (the owner's rule) — PR (K3) |
 | 579 | Continuity K4: RINGS' colour widens the hue range along the rings and never the drift — `pal((r · f · colour − t · 3/2π) · 0.15 …)` for `pal(ph · 0.15 · colour …)`, the same picture at colour 1; glimmer, wobble and fractals measured and left as they are — their size, frequency and cells knobs change a shape, by the same amount at any hour | 436 | agreed — row 560's port |
-| 580 | A knob step is the same size an hour in as a second in: every shipped effect's every param and every pattern's every input but SPEED, measured (a small step with the clocks stopped, late against early, `tests/test_step_continuity.py`), the space-scaling case the time lint cannot read | 436 | (rec) — the build's, for the owner to keep |
+| 580 | A knob step is the same size an hour in as a second in: every shipped effect's every param and every pattern's every input but SPEED, measured (a small step with the clocks stopped, late against early, `tests/test_step_continuity.py`), the space-scaling case the time lint cannot read | 436 | owner — 2026-11-03: yes |
 | 581 | Plan 45 V2, the mixer: one `sounddevice.OutputStream` (48 kHz stereo float32) owned by the media package; its callback sums each heard channel's `read(round(playhead × 48000), frames)` × gain, where the playhead is the one the frame thread last stepped the transport to (handed in as one tuple a frame), clipped at ±1; the callback integrates nothing, so the glitch is structural: the audio and display clocks are never locked and a block now and then repeats or skips even at rate 1 — an occasional click at rate 1 is expected until V4 reads sequentially and slews toward the transport; any other rate stutters; forward play only (a hold, a parked `once` clip, reverse and pingpong's way back are silent) | 437, 438 | built — V2 PR (the rule is the owner's, row 562) |
 | 582 | Plan 45 V2, the two params a channel: `media.<c>.audio` (toggle, default off — today's silence) and `media.<c>.gain` (linear, default 1.0, `tapers.T_MEDIA_GAIN` = `exp_zero(100, 120)`: off, then −30…+6 dB, unity notch), both performance (`media` group), persisted, learnable, modulatable; no schema move — a file without them loads them at their defaults | 437, 438 | (rec) — built as recommended |
 | 583 | Plan 45 V2, the stream's lifecycle: nothing opened until a channel's sound is first on (on a thread of its own, `media-mixer-open`); then left open playing silence until exit (`MediaState.close`, within its budget); a failed open, or a stream that stops under us (a device unplugged), is said on SYSTEM and retried 5 s after the failure while asked; the toggle's off is acted on 30 frames later (`OFF_FRAMES`: a lane flicking it costs nothing) and its `disable()` runs on the media closer, never at once with an enable (`_Sound`); a slot change leaves the old track to its source's `close` | 439 | (rec) — built as recommended |
 | 584 | Plan 48: the library lists `presets/` every folder down (hidden folders skipped); a preset's name is folder-qualified (`party/TRIP`), the file keeps the leaf; `path_slug` for a preset's file key, `slug` stays flat | 440 | (rec) — the owner's ask (L1, 2026-11-02); built as recommended |
-| 585 | Plan 48: the bank names a preset by its folder-qualified name, a bare name a top-level file; no `hyperspace.project` schema bump — an older build reads a folder slot as filled-but-missing | 443 | (rec) — pending the owner; built as recommended |
-| 586 | Plan 48: the trash is this Mac's (`<machine>/trash/<origin folder>/`), never in a synced library; the old library trash listed (marked old), restorable as a copy (the file stays), never written or emptied — not migrated | 442 | (rec) — pending the owner; built as recommended |
-| 587 | Plan 48: a save writes back to the preset's own file; as… with a folder in the name writes into it; a new preset grown from the loaded one (two-handed save, `preset.save_new`, an empty pad's hold) lands beside it; ⇧F's `PRESET <n>` at the top | 441 | (rec) — pending the owner; built as recommended |
-| 588 | Plan 48: the PRESETS page draws a folder's preset as `party / TRIP` with the folder dim; the flat list stays; a rename's field holds the leaf and keeps the folder | 440, 441 | (rec) — pending the owner; built as recommended |
-| 589 | Wave 1 T0: the test suite cannot hang the Mac — pytest-timeout's thread method at 120 s for xdist workers (the signal method for a serial run) with no worker restart in pyproject's addopts, so a test blocked in C fails by name and ends the run; `live` tests hold a per-account `flock` (wait 60 s, then skip); one tier at a time on a shared Mac; a real-GLFW test asks a child process first (`gl_window_ok`, #332) and skips if `glfwInit` does not answer | — | (rec) — pending the owner; built as recommended (T0) |
+| 585 | Plan 48: the bank names a preset by its folder-qualified name, a bare name a top-level file; no `hyperspace.project` schema bump — an older build reads a folder slot as filled-but-missing | 443 | owner — 2026-11-03: yes; and a grand cleanup pass later normalises every preset to the newest format and drops the old cruft |
+| 586 | Plan 48: the trash is this Mac's (`<machine>/trash/<origin folder>/`), never in a synced library; the old library trash listed (marked old), restorable as a copy (the file stays), never written or emptied — not migrated | 442 | owner — 2026-11-03: yes |
+| 587 | Plan 48: a save writes back to the preset's own file; as… with a folder in the name writes into it; a new preset grown from the loaded one (two-handed save, `preset.save_new`, an empty pad's hold) lands beside it; ⇧F's `PRESET <n>` at the top | 441 | owner — 2026-11-03: yes |
+| 588 | Plan 48: the PRESETS page draws a folder's preset as `party / TRIP` with the folder dim; the flat list stays; a rename's field holds the leaf and keeps the folder | 440, 441 | owner — 2026-11-03: yes |
+| 589 | Wave 1 T0: the test suite cannot hang the Mac — pytest-timeout's thread method at 120 s for xdist workers (the signal method for a serial run) with no worker restart in pyproject's addopts, so a test blocked in C fails by name and ends the run; `live` tests hold a per-account `flock` (wait 60 s, then skip); one tier at a time on a shared Mac; a real-GLFW test asks a child process first (`gl_window_ok`, #332) and skips if `glfwInit` does not answer | — | owner — 2026-11-03: yes; `--dist load` goes to wave 2 T1 as recommended (measured under the live lock) |
 
 "—": no hand check shows it; tests only.
 
@@ -9392,6 +9392,18 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
   [`plans/42-controllers.md`](plans/42-controllers.md) (D1–D10 = rows
   544–553), the spec it was written against with its sources and
   vectors ([`plans/assets/42-controllers/sony-hid.md`](plans/assets/42-controllers/sony-hid.md)).
+- **Answer.** owner — 2026-11-03, row by row: 544 yes (the Bluetooth
+  cost on the pad's battery to be understood); 545 **overturned** — one
+  vocabulary, but not Xbox names: a four-button cluster and the D-pad are
+  north / south / east / west on every pad, since every pad is
+  orientable (a work item); 547 yes; 548 and 549 yes for now — Dylan's
+  sinks and feedback-into-the-controller work and our own trigger
+  effects land as standalone items the app must be able to receive, the
+  Edge is not the priority; 550 open on one question (does hidapi's
+  exclusive open lock out other controllers? — it opens one device by
+  path, so no; which pads ride hidapi is the real question); 551 and
+  552 explained, pending; 553 moot in the app, the browser lab kept as
+  the exploring ground; 546 not answered.
 - **What would overturn it.** The probe's findings (hand checks 407–408):
   an output length or LED take-over macOS refuses, back buttons that do
   not report their own bits, sensors on other axes. Each is a constant or
@@ -10240,7 +10252,7 @@ and D3 (the per-deck split) are
   time and a param in the source and cannot see a param that scales
   space where the time arrives some other way (inside a builtin it reads
   as opaque, `mod(u_phase, …)`; through a hash; from the host).
-- **Answer.** (rec) — the build's, for the owner to keep or overturn: a
+- **Answer.** owner — 2026-11-03: yes. The build's ruling: a
   measurement over everything shipped, not a second lint.
   `tests/test_step_continuity.py` takes every effect's `speed` and every
   `@param` (amount-type params at half their range so the effect shows)
@@ -10336,7 +10348,7 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   ruling, a typed `/` is a folder.
 - **Judge it.** 440.
 ### 585. The bank names a preset by its folder-qualified name; no schema bump
-- **Answer.** (rec) — pending the owner; built as recommended.
+- **Answer.** owner — 2026-11-03: yes; built as recommended.
 - **Recommended.** `Project.bank` entries are what the list says:
   `party/TRIP`, or a bare `TRIP` for a top-level file. Every show written
   before holds bare names, so it reads and plays unchanged. No
@@ -10358,7 +10370,7 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   presets into folders, or the older one shows those pads dark.
 - **Judge it.** 443.
 ### 586. The trash is this Mac's
-- **Answer.** (rec) — pending the owner; built as recommended.
+- **Answer.** owner — 2026-11-03: yes; built as recommended.
 - **Recommended.** `to_trash(path, root, origin)` writes
   `<root>/trash/<origin>/<stem>.<stamp>[-n].json`; the library passes its
   machine home and the folder the file came from relative to the
@@ -10382,7 +10394,7 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   trash only, so B cannot restore it.
 - **Judge it.** 442.
 ### 587. Where a save lands
-- **Answer.** (rec) — pending the owner; built as recommended.
+- **Answer.** owner — 2026-11-03: yes; built as recommended.
 - **Recommended.** **save** writes over the file the loaded name
   resolves to, wherever it is. **as…** writes the typed name: with a
   folder in it (`party/NEW`) into that folder, made if need be; the
@@ -10401,7 +10413,7 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   any file's.
 - **Judge it.** 441.
 ### 588. The PRESETS page's reading of folders
-- **Answer.** (rec) — pending the owner; built as recommended.
+- **Answer.** owner — 2026-11-03: yes; built as recommended.
 - **Recommended.** The flat list stays (plan 41), sorted by the
   qualified name, so a folder's presets sit together. A folder's row is
   a label-less selectable with `party / ` drawn dim and the name bright
@@ -10428,8 +10440,9 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   inside a C call while another process holds the window system or the
   device, and pytest-timeout's default signal method cannot interrupt a
   blocked C call, so each run sat at 99 % for good.
-- **Answer.** (rec) — pending the owner; built as recommended (wave 1,
-  T0).
+- **Answer.** owner — 2026-11-03: yes; built as recommended (wave 1,
+  T0). `--dist load` goes to wave 2 T1 as recommended, measured under the
+  live lock.
 - **Recommended.** (1) pyproject's addopts carry
   `--timeout=120 --max-worker-restart=0` and its ini key
   `timeout_method = "thread"`, and conftest's `pytest_configure`
