@@ -36,7 +36,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import models, nintendo, sony
+from . import gesture, models, nintendo, sony
 
 SCAN_S = 1.0               # how often the hub looks for pads coming and going
 READ_TIMEOUT_MS = 100      # a read waits at most this, so close() is quick
@@ -181,6 +181,8 @@ class HidPad:
         self._lock = threading.Lock()
         self._raw: bytes | None = None       # the newest report, decoded on `latest`
         self._raw_t = 0.0
+        # the gyro integrated here, every report (`take_turn`)
+        self._turn = Turn()
         self._frame: sony.Frame | None = None
         self._frame_of: bytes | None = None
         self.update_version = 0
@@ -221,6 +223,15 @@ class HidPad:
                 self._frame = f        # the last good one stands, so nothing re-fires
             self._frame_of = raw
         return self._frame
+
+    def take_turn(self) -> tuple[tuple[float, float, float], int]:
+        """The degrees turned about the sensor's x, y, z (calibrated, not yet
+        through the pad's axis map) since the last call, and how many
+        reports said so — summed on the reader's thread every report, so a
+        1000 Hz pad loses no report to a slow frame and the frame decodes
+        only `latest`. None turned and 0 while no report came."""
+        with self._lock:
+            return self._turn.take()
 
     def _decode(self, raw: bytes):
         return self.codec.decode_frame(raw, self)
@@ -287,7 +298,9 @@ class HidPad:
         except Exception as e:  # noqa: BLE001 — a pad that will not answer still reads
             self.note = f"setup: {type(e).__name__}: {e}"[:120]
 
-    def _take(self, r: bytes) -> None:
+    def _take(self, r: bytes, t: float | None = None) -> None:
+        """One report off the wire, at `t` (monotonic; now when not said —
+        a test says when its reports came)."""
         if self.recorder is not None:
             self.recorder.write(r)
         if not r:
@@ -297,9 +310,17 @@ class HidPad:
             return
         if link == "bluetooth" or not self.transport:   # a BT report settles it; USB only if unsaid
             self.transport = link
+        t = time.monotonic() if t is None else t
+        samples = self._gyro_of(r)
         with self._lock:
-            self._raw, self._raw_t = r, time.monotonic()
+            self._raw, self._raw_t = r, t
+            if samples is not None:
+                self._turn.add(samples, t, self.calibration, _clock(self.codec, r))
             self.reports += 1
+
+    def _gyro_of(self, r: bytes):
+        f = getattr(self.codec, "gyro_of", None)
+        return f(r, self) if f is not None else None
 
     def _write(self, dev) -> None:
         with self._lock:
@@ -404,6 +425,9 @@ class TapePad:
         self.sent: list[sony.Effects] = []
         self._frame: sony.Frame | None = None    # the last decoded frame (a reply leaves it)
         self._i = 0
+        self._loop_n = 0               # how many times round the loop `latest` is
+        self._taken: int | None = None # the position (loop × reports + i) `take_turn` reached
+        self._turn = Turn()
 
     @property
     def length(self) -> float:
@@ -415,8 +439,8 @@ class TapePad:
         t = self.clock() - self.t0
         if self.loop and self.length > 0:
             # the last report holds as long as the one before it did, then round again
-            gap = self.length - self.reports[-2][0] if len(self.reports) > 1 else 0.0
-            t %= self.length + max(1e-3, gap)
+            self._loop_n = int(t // self.period)
+            t %= self.period
         if t < self.reports[min(self._i, len(self.reports) - 1)][0]:
             self._i = 0
         while self._i + 1 < len(self.reports) and self.reports[self._i + 1][0] <= t:
@@ -427,12 +451,86 @@ class TapePad:
             self._frame = f
         return self._frame
 
+    @property
+    def period(self) -> float:
+        """One time round a looping tape: the last report holds as long as
+        the one before it did."""
+        gap = self.length - self.reports[-2][0] if len(self.reports) > 1 else 0.0
+        return self.length + max(1e-3, gap)
+
+    def take_turn(self) -> tuple[tuple[float, float, float], int]:
+        """As `HidPad.take_turn`: every report `latest` passed since the
+        last call — across the loop's seam, and a whole loop of a one-report
+        tape too — integrated at its tape time (at most one loop's worth)."""
+        n = len(self.reports)
+        if not n:
+            return (0.0, 0.0, 0.0), 0
+        pos = self._loop_n * n + self._i
+        start = max(0 if self._taken is None else self._taken + 1, pos - n + 1)
+        self._taken = pos
+        period = self.period if self.loop and self.length > 0 else 0.0
+        for q in range(start, pos + 1):
+            loop_k, k = divmod(q, n)
+            t, raw = self.reports[k]
+            samples = self.codec.gyro_of(raw, self) if hasattr(self.codec, "gyro_of") else None
+            if samples is not None:
+                # the reports' clock runs on within a loop; round the seam it
+                # jumps back, so the first report of a loop goes by tape time
+                self._turn.add(samples, t + loop_k * period, self.calibration,
+                               _clock(self.codec, raw) if k else None)
+        return self._turn.take()
+
     def send(self, effects: sony.Effects) -> None:
         """A tape has no light to set: what was asked is kept, for a test."""
         self.sent = [*self.sent[-15:], effects]
 
     def close(self) -> None:
         self.alive = False
+
+
+def _clock(codec, raw: bytes):
+    f = getattr(codec, "report_clock", None)
+    return f(raw) if f is not None else None
+
+
+class Turn:
+    """The gyro integrated report by report: each report's samples, through
+    the calibration and the soft dead band (`gesture.turn_of`), times the
+    time since the report before, split evenly between its samples. That
+    time is the reports' own clock (`report_clock`: a Bluetooth burst that
+    arrives all at once after a pause still covers the time it was sent
+    over), arrival time for a codec with none or across a gap the clock may
+    have wrapped through; at most `gesture.REPORT_DT_MAX` a report (the
+    first after a real gap). `take` hands the sum over and starts again."""
+
+    def __init__(self):
+        self.sum = [0.0, 0.0, 0.0]
+        self.n = 0
+        self.last_t: float | None = None
+        self.last_clock: tuple[int, int, float] | None = None
+
+    def add(self, samples, t: float, cal, clock=None) -> None:
+        last, self.last_t = self.last_t, t
+        last_clock, self.last_clock = self.last_clock, clock
+        dt = 0.0
+        if last is not None:
+            dt = max(0.0, t - last)
+            if clock is not None and last_clock is not None and clock[1:] == last_clock[1:] \
+                    and dt < clock[1] * clock[2] / 2:       # no wrap the clock cannot see
+                dt = ((clock[0] - last_clock[0]) % clock[1]) * clock[2]
+            dt = min(gesture.REPORT_DT_MAX, dt)
+        self.n += 1
+        if not dt or not samples:
+            return
+        each = dt / len(samples)
+        for s in samples:
+            for a, v in enumerate(gesture.turn_of(cal.gyro_dps(s), each)):
+                self.sum[a] += v
+
+    def take(self) -> tuple[tuple[float, float, float], int]:
+        got, n = (self.sum[0], self.sum[1], self.sum[2]), self.n
+        self.sum, self.n = [0.0, 0.0, 0.0], 0
+        return got, n
 
 
 class HidHub:
