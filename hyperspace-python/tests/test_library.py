@@ -532,25 +532,32 @@ def test_bad_files_are_reported_not_fatal(rig, tmp_path):
         lib.load("view", "broken")
     with pytest.raises(LibraryError, match="newer"):
         lib.load("view", "F")
-    with pytest.raises(LibraryError, match="camera preset"):
+    with pytest.raises(LibraryError, match="a patch of the camera group, not a patch of the view"):
         lib.load("view", "O")
     with pytest.raises(LibraryError, match="no preset"):
         lib.load("view", "nope")
 
 
 def test_schema_migration_table():
+    """The shows' ladder (plan 50: the only one `migrate_doc` serves — a
+    preset's is `graphmigrate.forward`, a fragment's `patches.forward`)."""
     with pytest.raises(LibraryError, match="no schema"):
-        migrate_doc({}, "hyperspace.preset")
+        migrate_doc({}, "hyperspace.project")
     with pytest.raises(LibraryError, match="not a hyperspace.project"):
         migrate_doc({"schema": "hyperspace.preset/1"}, "hyperspace.project")
-    library.MIGRATIONS[("hyperspace.preset", 0)] = lambda d: {"schema": d["schema"], "values": d["v"]}
+    with pytest.raises(LibraryError, match="no ladder for hyperspace.preset"):
+        migrate_doc({"schema": "hyperspace.preset/1"}, "hyperspace.preset")
+    assert set(library.CURRENT) == {"hyperspace.project"}
+    library.MIGRATIONS[("hyperspace.project", 0)] = lambda d: {"schema": d["schema"], "v": 1}
+    library.MIGRATIONS[("hyperspace.project", 1)] = lambda d: {**d, "w": 2}
     try:
-        out = migrate_doc({"schema": "hyperspace.preset/0", "v": {"a": 1}}, "hyperspace.preset")
-        assert out == {"schema": "hyperspace.preset/1", "values": {"a": 1}}
+        out = migrate_doc({"schema": "hyperspace.project/0"}, "hyperspace.project")
+        assert out["schema"] == "hyperspace.project/3" and out["v"] == 1 and out["w"] == 2
     finally:
-        del library.MIGRATIONS[("hyperspace.preset", 0)]
+        del library.MIGRATIONS[("hyperspace.project", 0)]
+        del library.MIGRATIONS[("hyperspace.project", 1)]
     with pytest.raises(LibraryError, match="no migration"):
-        migrate_doc({"schema": "hyperspace.preset/0"}, "hyperspace.preset")
+        migrate_doc({"schema": "hyperspace.project/0"}, "hyperspace.project")
 
 
 # ---------------------------------------------------------------- projects

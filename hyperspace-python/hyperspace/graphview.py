@@ -3030,7 +3030,7 @@ PATCH_EXISTS = "a patch named {name} exists — Update patch, or another name"
 # plan 50: a group holds any node the preset saves; the save is where what a
 # patch cannot carry (the frame's, the camera, a lane envelope) is refused
 SAVE_REFUSED = "{name} not saved as a patch: {why}"
-RIG_KINDS = ("output", "channel", "cloud")   # always there: the rig's own nodes
+RIG_KINDS = patches.RIG_KINDS   # always there: the rig's own nodes (one list, plan 50)
 # …and the look's one camera (plan 43 C2: the camera is the preset's, not
 # the rig's), always there too: what a patch's wire may name though no
 # section does

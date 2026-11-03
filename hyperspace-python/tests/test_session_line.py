@@ -529,8 +529,8 @@ def test_the_ghost_groups_roads_leave_the_mirror_alone(tmp_path):
     assert lib.is_dirty("ghost")
     lib.reset("ghost")
     assert m.value is True and reg["ghost.alpha"].value == pytest.approx(0.6)
-    (rig.home / "ghost").mkdir(exist_ok=True)
-    (rig.home / "ghost" / "dim.json").write_text(json.dumps(
+    (rig.home / "patches" / "ghost").mkdir(parents=True, exist_ok=True)   # (plan 50)
+    (rig.home / "patches" / "ghost" / "dim.json").write_text(json.dumps(
         {"schema": "hyperspace.preset/1", "group": "ghost", "name": "dim",
          "values": {"ghost.alpha": 0.3, "ghost.mirror": False}}))
     lib._sync()

@@ -64,9 +64,10 @@ newest; an older build refuses a `/2`.
 
 Row 642. `patches.groupable` (the canvas's rule: Group, a load's
 `read_groups`, the drawing) holds any node the preset file saves — the
-frame's singletons, the camera, a channel, a lane envelope too — and
-refuses only the rig's windows and clouds, a device, the analyzer, the
-sequencer, a node the preset lacks and a group. `patches.select` (the
+frame's singletons, the camera, a lane envelope too — and refuses only
+the rig's render kinds (`patches.RIG_KINDS`, `graphview.RIG_KINDS` the
+same list: a window, All outputs, a media channel, a cloud), a device,
+the analyzer, the sequencer, a node the preset lacks and a group. `patches.select` (the
 lift's rule) runs at **Save as patch** and refuses in words, the group
 kept, nothing written: "group 1 not saved as a patch: scene is the
 frame's; left out". Hands 1 is always held by a wired frame, so a delete
@@ -77,7 +78,10 @@ leaves it a member (row 647).
 Desk templates went with D3. A module preset is now a patch of one group
 (rows 643–644): `<library>/patches/<group>/<slug>.json` with `"group"` —
 the folder keeps a group's names its own and out of GRAPH's spawnable
-list (`patches/*.json`, one level); the field is what a read checks.
+list (`patches/*.json`, one level); the field is what a read checks —
+anything else in a group's folder (a whole preset, a canvas patch,
+another group's, an empty `group`) is refused, the mismatch named; only
+an old module preset that never said its group takes the folder's.
 Every strip (view, rot, camera, output, master, band, dream, tempo, lfo,
 seq, env) lists, steps, loads, saves, resets, deletes and restores them
 from the trash as before; no strip code changed (`Library.group_dir`
@@ -116,3 +120,25 @@ unchanged on the `patch/1` fixture (read as its `/2`). The library,
 analyzer, undo, camera, preset-folder and shared-library tests that wrote
 module presets into `<home>/<group>/` write them into
 `<home>/patches/<group>/`.
+
+## Review fixes (PR #352)
+
+1. A group refuses the rig's media channel too: `patches.RIG_KINDS`
+   (window, All outputs, channel, cloud) is the one list, and
+   `graphview.RIG_KINDS` is it.
+2. `headless.SHARED_FOLDERS` is `("patches",)`, every folder down, so a
+   headless resave sees the module groups' patches where the migration
+   put them.
+3. A strip load lands a group patch's values directly; "a module load is
+   a spawn" stays the docs' story, not the hot path.
+4. The migration's file list is `retaper_routes.json_files`.
+5. An unreadable `patches/*.json` is said by the migration.
+6. An empty or non-text `group` is a group patch's key that names
+   nothing: `shape_of` reads it as a group patch, `check` refuses it in
+   one line.
+7. `Library.read` refuses anything in a group's folder that is no patch
+   of that group, the mismatch named.
+8. `library.migrate_doc` serves the shows alone; the preset entry and
+   `PRESET_SCHEMA` are gone.
+9. The corpus layout is one table, `library.group_folder`, used by
+   conftest's `seed` and `tools/desk_coverage.py`.

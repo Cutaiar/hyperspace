@@ -86,7 +86,7 @@ VERSION = 2
 SCHEMA = f"{KIND}/{VERSION}"
 READS = (1, 2)
 # a module preset as it was before plan 50 — `hyperspace.preset/1` with a
-# `group` (library.PRESET_SCHEMA) — read through `forward` as a `/2`
+# `group` — read through `forward` as a `/2`, never written
 MODULE_KIND, MODULE_VERSION = "hyperspace.preset", 1
 # plan 50: the key that makes a patch one param group's, its value the
 # registry group (``"dream"``). Such a patch holds `values` — and, for a
@@ -99,6 +99,7 @@ GROUP_KEYS = ("schema", "name", "note", GROUP_KEY, "values", "layout", "units")
 PRESET_SHAPE, PATCH_SHAPE, GROUP_SHAPE = "preset", "patch", "group"
 NEWER_WORDS = "{schema} is newer than this build ({newest})"
 NOT_FRAGMENT_WORDS = "schema {schema!r} is not a {kind}"
+GROUP_EMPTY_WORDS = "group is {value!r}: the key names no param group"
 GROUP_ONLY_WORDS = ("{key}: a patch of one group ({group}) holds values only — no canvas, "
                     "rows or voices")
 # the marker that a patch's depths are measured along the effect tapers
@@ -244,13 +245,21 @@ def shape_of(doc: Mapping) -> str:
     — a patch of one param group (its `group` key: what a module preset
     was; it replaces that group's values); `PATCH_SHAPE` — a fragment of
     the canvas with its boundary, spawned into the open preset under fresh
-    ids. By the schema's kind, then the `group` key."""
+    ids. By the schema's kind, then the `group` key — its presence, as
+    `check` reads it (review fix 6: a `group` that is empty or not text is
+    still a group patch's key, and `check` refuses it in one line,
+    `GROUP_EMPTY_WORDS`)."""
     kind, version = _schema(doc)
     if kind == MODULE_KIND and version is not None and version > MODULE_VERSION:
         return PRESET_SHAPE
-    if isinstance(doc.get(GROUP_KEY), str) and doc.get(GROUP_KEY):
+    if GROUP_KEY in doc:
         return GROUP_SHAPE
     return PATCH_SHAPE
+
+
+def names_group(doc: Mapping) -> bool:
+    """Does `doc` name a param group: a `group` key that is non-empty text?"""
+    return isinstance(doc.get(GROUP_KEY), str) and bool(doc.get(GROUP_KEY))
 
 
 def group_doc(group: str, name: str, values: Mapping[str, Any], *, note: str = "",
@@ -272,10 +281,10 @@ def _check_group(doc: Mapping) -> list[str]:
     """`check` for a patch of one group: its keys (`GROUP_KEYS`), a group
     named, values a map. Which ids are the group's is the registry's
     (`Library.resolved` lands only those): not asked here."""
+    if not names_group(doc):            # one line, whatever else the file holds
+        return [GROUP_EMPTY_WORDS.format(value=doc.get(GROUP_KEY))]
     out: list[str] = []
-    group = doc.get(GROUP_KEY)
-    if not isinstance(group, str) or not group:
-        out.append("group names a param group")
+    group = doc[GROUP_KEY]
     for key in sorted(set(doc) - set(GROUP_KEYS)):
         out.append(GROUP_ONLY_WORDS.format(key=key, group=group))
     if not isinstance(doc.get("values", {}), dict):
@@ -910,9 +919,13 @@ def check(doc: Any) -> list[str]:
 # to the host
 INSIDE, RIG, INTO, OUT = "inside", "rig", "into", "out"
 NESTED_WORDS = "{name} is a group: a group holds nodes, not groups; left out"
-# plan 50: the render kinds no group holds — the rig's windows (an output,
-# All outputs) and clouds, which no preset file holds as a node
-NEVER_GROUPED = ("output", "cloud")
+# the rig's own render kinds, always there — its windows (an output, All
+# outputs), its media channels (this Mac's files) and its clouds — which no
+# preset file holds as a node; `graphview.RIG_KINDS` is this list. Plan 50
+# (review fix 1): no group holds one either, so a group can never carry what
+# no patch can
+RIG_KINDS = ("output", "channel", "cloud")
+NEVER_GROUPED = RIG_KINDS
 
 
 def select(spec: G.GraphSpec | None, table, node_ids: Iterable[str]
@@ -937,12 +950,12 @@ def groupable(spec: G.GraphSpec | None, table, node_ids: Iterable[str]
     checked at save"). A group is a patch not yet saved, so it holds any
     node the preset file saves: every render node of its section — the
     frame's singletons (the scene, the shape, the backdrop, the pattern, the
-    look-back, hands 1), the camera, a channel, a copy without its
-    original — its modifiers, its LFOs and envelopes (the lane envelopes
-    too) and the macros. Refused here only what no preset holds and what a
-    group cannot: the rig's windows (an output, All outputs) and clouds, a
-    device, the analyzer, the sequencer, a node or modifier the preset
-    lacks, a group (no nesting). Whether it can be saved as a patch is
+    look-back, hands 1), the camera, a copy without its original — its
+    modifiers, its LFOs and envelopes (the lane envelopes too) and the
+    macros. Refused here only what no preset holds and what a group cannot:
+    the rig's render kinds (`RIG_KINDS`: a window, All outputs, a media
+    channel, a cloud), a device, the analyzer, the sequencer, a node or
+    modifier the preset lacks, a group (no nesting). Whether it can be saved as a patch is
     asked at the save (`select`). Pure."""
     return _select(spec, table, node_ids, save=False)
 

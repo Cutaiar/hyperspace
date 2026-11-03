@@ -55,7 +55,7 @@ from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.fx import FxState
-from hyperspace.library import PRESETS, Library
+from hyperspace.library import PRESETS, Library, group_folder
 from hyperspace.lookback import DreamState
 from hyperspace.params import build_registry
 from hyperspace.preset import Presets
@@ -64,7 +64,7 @@ from hyperspace.view import ViewState
 
 REPORT = ROOT / "docs" / "plans" / "assets" / "24-party-fixes" / "desk-coverage.md"
 CORPUS = ROOT / "tests" / "corpus"                   # the presets, as test data
-CORPUS_GROUPS = (PRESETS, "patches/dream")                # what the scratch home is seeded with
+CORPUS_GROUPS = (PRESETS, "dream")      # what the scratch home is seeded with (`group_folder`)
 BAR = 4                     # the owner's bar: at most this many dark or dead
 MAPPED, DARK, DEAD = "mapped", "dark", "dead"
 MARK = {MAPPED: "●", DARK: "·", DEAD: "✕"}
@@ -193,7 +193,7 @@ def coverage(home: Path, library: Path | None = None) -> tuple[list[apc40.Contro
     """Every preset the scratch `home` lists (the corpus's, copied in, and
     with `library` that library's too), each a `Row`."""
     for group in CORPUS_GROUPS:
-        _copy_in(CORPUS / group, home / group)
+        _copy_in(CORPUS / group_folder(group), home / group_folder(group))
     if library is not None:
         for group in (PRESETS,):        # (plan 44 D3: desk templates are retired)
             _copy_in(library / group, home / group)

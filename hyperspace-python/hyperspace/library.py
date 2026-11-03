@@ -2,9 +2,11 @@
 
 Two kinds of file, both plain JSON you can open in a text editor:
 
-  module preset   one registry *group* (view, camera, band…) —
-                  ``{"schema": "hyperspace.preset/1", "group", "name",
-                  "values": {id: base}}``, produced by ``Registry.snapshot
+  module preset   one registry *group* (view, camera, band…) — since
+                  plan 50 a patch of one group, ``<root>/patches/<group>/``,
+                  ``{"schema": "hyperspace.patch/2", "name", "group",
+                  "values": {id: base}}`` (a ``hyperspace.preset/1`` from
+                  before is read through `patches.forward`), produced by ``Registry.snapshot
                   (group)`` and applied with ``Registry.restore``. The
                   analyzer's presets also carry ``layout`` (see the
                   contract in docs/plans/07-overhaul.md): restore hands the
@@ -198,6 +200,8 @@ PATCH_SCHEMA = patchdoc.SCHEMA          # "hyperspace.patch/2" (plan 50)
 PATCH_SPAWNED = "a patch is spawned, not loaded"
 # what `read_patch` says of a patch of one group asked for by name
 GROUP_PATCH_WORDS = "{name} is a patch of the {group} group: open it from that group's strip"
+# what `read` says of a file in a group's folder that is no patch of that group
+NOT_GROUP_WORDS = "{file} is {what}, not a patch of the {group} group"
 # the groups `rename` serves: the presets and the patches (a module preset
 # is saved under another name instead)
 RENAMABLE = (PRESETS, PATCHES)
@@ -215,9 +219,6 @@ _TRASHED = re.compile(r"(?P<stem>.+)\.(?P<stamp>\d{8}-\d{6})(?:-(?P<n>\d+))?(?P<
 HOME_ENV = "HYPERSPACE_HOME"
 DEFAULT_HOME = Path("~/Hyperspace")
 
-# a module preset as it was written before plan 50 (one group's values):
-# read through `patches.forward` as its `patch/2`, never written
-PRESET_SCHEMA = "hyperspace.preset/1"
 PERFORMANCE_SCHEMA = "hyperspace.preset/2" # a preset: the performance (preset.py)
 PROJECT_SCHEMA = "hyperspace.project/3"   # plan 44 D3: the rig's session, the pads, startup
 PROJECT_V2 = "hyperspace.project/2"        # read as its /3 (`show_without_look`), once
@@ -692,20 +693,24 @@ def _order(path: Path) -> tuple[str, int]:
 
 # ---- versioning: schema "<kind>/<n>"; each step lifts a doc one version ----
 
+# (the shows' ladder only, since plan 50: a preset's is `graphmigrate.forward`,
+# a module preset's and a patch's `patches.forward` — review fix 8)
 MIGRATIONS: dict[tuple[str, int], Any] = {
-    # ("hyperspace.preset", 1): lambda doc: {...},   # 1 → 2, when there is one
     # plan 44 D3: a /2 show less what each preset holds now (read out first:
     # `Project._take`, `show_look`)
     ("hyperspace.project", 2): lambda doc: show_without_look(doc) or dict(doc),
 }
 # no project 1 → 2 step: a schema-1 show (an inline theme bank) is refused
 # (`Project._take`) — no old-schema support since 2026-10-25
-CURRENT = {"hyperspace.preset": 1, "hyperspace.project": 3}
+CURRENT = {"hyperspace.project": 3}
 
 
 def migrate_doc(doc: dict, kind: str) -> dict:
-    """Lift a file to the current version of its kind, or refuse it."""
+    """Lift a file to the current version of its kind, or refuse it — a
+    show (``hyperspace.project``), the one kind it serves since plan 50."""
     schema = doc.get("schema")
+    if kind not in CURRENT:
+        raise LibraryError(f"no ladder for {kind} here")
     if not isinstance(schema, str) or "/" not in schema:
         raise LibraryError(f"no schema (expected {kind}/{CURRENT[kind]})")
     k, _, v = schema.rpartition("/")
@@ -753,6 +758,18 @@ def _patch_kind() -> DocKind:
     # (plan 50: every version the one ladder reads, `patches.forward`)
     return DocKind(patchdoc.KIND, patchdoc.READS, _patch_spawned, _patch_spawned,
                    _patch_spawned)
+
+
+def group_folder(group: str, kinds=()) -> str:
+    """The folder a group's files sit in, relative to a library root (plan
+    50) — the one table, `Library.group_dir`'s and the test corpus's
+    (tests/conftest.py `seed`, tools/desk_coverage.py): the presets, the
+    patches, the shows and any document kind (`kinds`) in their own
+    ``<group>``; every other group's — a module group's patches of one
+    group — in ``patches/<group>``."""
+    if group in (PRESETS, PATCHES, PROJECTS) or group in kinds:
+        return group
+    return f"{PATCHES}/{group}"
 
 
 def forward_group(doc: dict, where: str = "") -> dict:
@@ -1961,10 +1978,8 @@ class Library:
         """Where `group`'s files live under `root` (plan 50): a document
         kind's — the presets, the patches — in ``<root>/<group>/``; every
         other group's, its patches of one group (what module presets
-        were), in ``<root>/patches/<group>/``."""
-        if group in (PRESETS, PATCHES, PROJECTS) or group in self._kinds:
-            return root / group
-        return root / PATCHES / group
+        were), in ``<root>/patches/<group>/`` (`group_folder`, the one table)."""
+        return root / group_folder(group, self._kinds)
 
     def _files(self, group: str) -> dict[str, Path]:
         """file key → path, every file of the group's folder (`group_dir`):
@@ -2262,13 +2277,27 @@ class Library:
             return doc
         # plan 50: a patch of one param group, through the one ladder (a
         # module preset from before reads as its `patch/2`; one that never
-        # said its group is the folder's)
-        if isinstance(doc, dict) and patchdoc.GROUP_KEY not in doc:
+        # said its group is the folder's). Review fix 7: anything else in a
+        # group's folder — a whole preset, a canvas patch, another group's —
+        # is refused, the mismatch named
+        if not isinstance(doc, dict):
+            raise LibraryError(f"{path.name}: not a JSON object")
+        if (doc.get("schema") == f"{patchdoc.MODULE_KIND}/{patchdoc.MODULE_VERSION}"
+                and patchdoc.GROUP_KEY not in doc):
             doc[patchdoc.GROUP_KEY] = group
+        if patchdoc.GROUP_KEY not in doc:
+            what = ("a whole preset" if patchdoc.shape_of(doc) == patchdoc.PRESET_SHAPE
+                    else "a canvas patch" if str(doc.get("schema", "")).startswith(
+                        f"{patchdoc.KIND}/") else f"schema {doc.get('schema')!r}")
+            raise LibraryError(NOT_GROUP_WORDS.format(file=path.name, what=what, group=group))
         doc = forward_group(doc, path.name)
-        if doc.get(patchdoc.GROUP_KEY) != group:
-            raise LibraryError(f"{path.name} is a {doc.get(patchdoc.GROUP_KEY)} preset, "
-                               f"not {group}")
+        refused = patchdoc.check(doc)
+        if refused:
+            raise LibraryError(f"{path.name}: " + "; ".join(refused))
+        if doc[patchdoc.GROUP_KEY] != group:
+            raise LibraryError(NOT_GROUP_WORDS.format(
+                file=path.name, what=f"a patch of the {doc[patchdoc.GROUP_KEY]} group",
+                group=group))
         return doc
 
     # ---- patches (plan 40 T1) ----
@@ -2281,10 +2310,10 @@ class Library:
         group's (spawned from that group's strip), raises LibraryError with
         the reasons in words."""
         doc = forward_group(self.read(PATCHES, name), name)
-        if patchdoc.shape_of(doc) == patchdoc.GROUP_SHAPE:
+        if patchdoc.names_group(doc):
             raise LibraryError(GROUP_PATCH_WORDS.format(name=name,
                                                         group=doc[patchdoc.GROUP_KEY]))
-        refused = patchdoc.check(doc)
+        refused = patchdoc.check(doc)      # (an empty `group`: one line, review fix 6)
         if refused:
             path = self.path_of(PATCHES, name)
             raise LibraryError(f"{path.name if path else name}: " + "; ".join(refused))
@@ -2482,11 +2511,11 @@ class Library:
             if hook is not None and doc.get("layout") is not None:
                 hook(doc["layout"])                    # rebuild params first
                 self._fresh_of(group)                  # …and their build values are "fresh"
-            # plan 50: a patch of one group lands as a spawn that replaces
-            # that group's values (`patches.spawn` → `Landing.replaces`):
-            # nothing of it can collide, so there is no sheet
-            landing = patchdoc.spawn({**doc, patchdoc.GROUP_KEY: group}, patchdoc.Host())
-            values = _module_values(group, {**doc, "values": landing.values})
+            # plan 50: a patch of one group replaces that group's values —
+            # what `patches.spawn` of it says (`Landing.replaces`; nothing can
+            # collide, so no sheet). Landed here directly (review fix 3): the
+            # spawn would only hand its values back, at a full read's cost
+            values = _module_values(group, doc)
             # (an old module file's retired ids — plan 33 T7's orders and
             # targets — are no unknown ids: the wires say them now)
             missing = [k for k in values if k not in self.reg and not retired(k)]

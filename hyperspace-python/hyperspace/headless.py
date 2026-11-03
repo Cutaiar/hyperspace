@@ -76,8 +76,11 @@ def make_app(home: Path, plan31: bool = True, *, machine: Path | None = None):
 # the library folders copied beside a preset for its load: the module
 # presets (a strip's defaults; plan 44 D3 retired the desk templates and
 # the labels, so a whole preset's load reads none of them, but the golden
-# rig and the tools keep the library's module groups as the app has them)
-SHARED_FOLDERS = ("fx", "dream", "band", "tempo")
+# rig and the tools keep the library's module groups as the app has them).
+# Plan 50 (review fix 2): every module preset is a patch of one group under
+# `patches/<group>/`, so the one folder, every folder down (`copytree`) —
+# the old `<group>/` folders are the migration's to move, never read
+SHARED_FOLDERS = ("patches",)
 def _link_or_copy(src, dst):
     """A hard link where the disk allows one, else a copy."""
     try:

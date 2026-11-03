@@ -408,7 +408,9 @@ def shared_retapers(library: Path, todo) -> bool:
             rel = path.relative_to(library)
         except ValueError:
             continue
-        if rel.parts and rel.parts[0] in SHARED_FOLDERS:
+        # (plan 50: `patches/` is shared for its groups' folders — a module
+        # group's patches; a top-level patch is spawned, never read by a load)
+        if len(rel.parts) > 2 and rel.parts[0] in SHARED_FOLDERS:
             return True
     return False
 
@@ -491,10 +493,7 @@ def group_plan(library: Path) -> tuple[list[tuple[Path, Path, bytes]], list[str]
     if not library.is_dir():
         return todo, said
 
-    def files(folder: Path) -> list[Path]:
-        return sorted(p for p in folder.glob("*.json")
-                      if p.is_file() and not p.name.startswith(".") and ".bak-" not in p.name)
-
+    files = _retaper_tool().json_files          # (review fix 4: the one file list)
     for folder in sorted(d for d in library.iterdir() if d.is_dir()):
         if folder.name in NOT_MODULES or folder.name.startswith((".", BACKUP_PREFIX)):
             continue
@@ -519,12 +518,14 @@ def group_plan(library: Path) -> tuple[list[tuple[Path, Path, bytes]], list[str]
                             "holds another file — left as it is")
                 continue
             todo.append((path, dest, data))
-    if (library / "patches").is_dir():
-        for path in files(library / "patches"):
-            doc = _read(path)
-            if doc is None or doc.get("schema") != f"{patches.KIND}/1":
-                continue
-            todo.append((path, path, _json_text(patches.forward(doc)).encode()))
+    for path in files(library / "patches"):
+        doc = _read(path)
+        if doc is None:                          # (review fix 5: said, as above)
+            said.append(f"patches/{path.name}: does not read — left as it is")
+            continue
+        if doc.get("schema") != f"{patches.KIND}/1":
+            continue                             # (already /2, or the next build's)
+        todo.append((path, path, _json_text(patches.forward(doc)).encode()))
     return todo, said
 
 

@@ -247,3 +247,76 @@ def test_the_tool_dry_run_writes_nothing_and_apply_backs_up_first(tmp_path, monk
     assert (backup / "dream" / "old.json").read_text() == json.dumps(OLD_MODULE)
     assert "wrote 3 patch(es) as hyperspace.patch/2" in out
     assert (root / PATCHES / "dream" / "old.json").is_file()
+
+
+# ---------------------------------------------------------------- review fixes (PR #352)
+
+def test_a_group_never_holds_the_rigs_kinds_one_list_with_graphview():
+    """Review fix 1: a media channel, a window, All outputs and a cloud are
+    the rig's (`patches.RIG_KINDS`, `graphview.RIG_KINDS` the same list):
+    Group refuses them, so a group never carries what no patch can."""
+    from hyperspace import graph as G
+    from hyperspace import graphview
+    assert graphview.RIG_KINDS is patches.RIG_KINDS
+    spec = G.read_graph({"frame": "wired", "wires": [
+        {"from": "channel.a", "to": "warp.image"}, {"from": "warp", "to": "output.all.image"}]})
+    held, said = patches.groupable(spec, None, ["render:channel.a", "render:warp",
+                                                "render:output.all"])
+    assert held.render == ("warp",)
+    assert said == [patches.CHANNEL_WORDS.format(name="channel.a"),
+                    patches.WINDOW_WORDS.format(name="output.all")]
+
+
+def test_an_empty_group_key_is_one_refusal_and_one_reading():
+    """Review fix 6: `check` and `shape_of` read the key the same way — a
+    `group` present but empty or not text is a group patch's key that names
+    nothing, refused in one line whatever else the file holds."""
+    canvas = patches.forward(json.loads(ACID_WASH.read_text()))
+    for bad in ("", None, 3):
+        doc = {**canvas, "group": bad}
+        assert patches.shape_of(doc) == patches.GROUP_SHAPE
+        assert patches.check(doc) == [patches.GROUP_EMPTY_WORDS.format(value=bad)]
+        assert not patches.names_group(doc)
+
+
+def test_a_groups_folder_refuses_what_is_no_patch_of_that_group(tmp_path):
+    """Review fix 7: in `patches/dream/`, a whole preset, a canvas patch and
+    another group's patch are each refused, the mismatch named — never
+    landed as dream values."""
+    folder = tmp_path / PATCHES / "dream"
+    folder.mkdir(parents=True)
+    shutil.copy(CORPUS / "presets" / "dial.json", folder / "dial.json")
+    shutil.copy(ACID_WASH, folder / "acid.json")
+    (folder / "cam.json").write_text(json.dumps(patches.group_doc("camera", "cam", {})))
+    (folder / "blank.json").write_text(json.dumps({**patches.group_doc("dream", "b", {}),
+                                                    "group": ""}))
+    app = headless.make_app(tmp_path)
+    for name, words in (("dial", "dial.json is a whole preset, not a patch of the dream group"),
+                        ("acid wash", "acid.json is a canvas patch, not a patch of the dream"),
+                        ("cam", "cam.json is a patch of the camera group, not a patch of"),
+                        ("b", "the key names no param group")):
+        with pytest.raises(LibraryError, match=words):
+            app.lib.read("dream", name)
+
+
+def test_the_tool_says_an_unreadable_patch(tmp_path):
+    """Review fix 5: a `patches/*.json` that does not read is left, said."""
+    tool = _tool()
+    root = _old_library(tmp_path / "lib")
+    (root / PATCHES / "torn.json").write_text("{not json")
+    _moves, left = tool.group_plan(root)
+    assert "patches/torn.json: does not read — left as it is" in left
+
+
+def test_a_headless_resave_sees_the_librarys_patches(tmp_path):
+    """Review fix 2: the scratch home a resave loads in holds the library's
+    `patches/`, every folder down — the module groups' patches with it."""
+    lib = tmp_path / "lib"
+    (lib / PATCHES / "dream").mkdir(parents=True)
+    shutil.copy(WAKE, lib / PATCHES / "dream" / "wake.json")
+    shutil.copy(ACID_WASH, lib / PATCHES / "acid-wash.json")
+    assert headless.SHARED_FOLDERS == (PATCHES,)
+    headless.resave(CORPUS / "presets" / "dial.json", tmp_path / "scratch", library=lib)
+    home = tmp_path / "scratch" / "library"
+    assert (home / PATCHES / "dream" / "wake.json").is_file()
+    assert (home / PATCHES / "acid-wash.json").is_file()
