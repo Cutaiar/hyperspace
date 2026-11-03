@@ -6,10 +6,8 @@ process died with a window open, AppKit shows the "reopen windows?" alert
 (NSPersistentUIRestorer -> NSAlert runModal), and a hidden process blocks in
 it forever (also when there is no window server for the session). Nothing
 in the parent can interrupt that call, so the first GL-window test asks a
-child with a hard timeout. Recovery:
-`defaults write org.python.python ApplePersistenceIgnoreState -bool YES`
-and move `~/Library/Saved Application State/org.python.python.savedState`
-aside. Cached per process (so per xdist worker).
+child with a hard timeout. The recovery: ENGINEERING.md §16, "Why
+`glfwInit()` hangs on the Mac". Cached per process (so per xdist worker).
 """
 
 from __future__ import annotations
@@ -20,7 +18,7 @@ import sys
 TIMEOUT_S = 8.0
 NO_DISPLAY = "no display for GL"
 STUCK = ("glfw.init() did not complete in 8 s: a modal alert or no window "
-         "server; see TESTING-GUIDE")
+         "server; see ENGINEERING §16")
 PROBE_CODE = "import glfw,sys; sys.exit(0 if glfw.init() else 2)"
 
 _cache: list = []                       # [None] or [reason]

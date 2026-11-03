@@ -3040,11 +3040,6 @@ uv run pytest --all -q    # every tier: golden, slow, live (~55 s)
 uv run ruff check .
 ```
 
-- GL-window tests probe `glfw.init()` in a subprocess first
-  (`tests/gl_probe.py`, 8 s, cached per worker) and skip with a reason if it
-  does not complete (a modal AppKit "reopen windows?" alert or no window
-  server; recovery in `TESTING-GUIDE.md`); they also take the live lock. Never
-  run two test tiers at once on the Mac.
 - Tiers: `golden`, `slow` and `live` are markers `tests/conftest.py`
   applies by name (see "Running the automated tests" in
   `TESTING-GUIDE.md`); the default run is `-n auto` without them. Run
@@ -3092,7 +3087,14 @@ uv run ruff check .
   window open (a memory kill, or the thread timeout's `os._exit`), and
   the new process waits in that modal forever. Any worker that dies with
   a GLFW window open arms the alert again, which is one more reason live
-  tests take turns. To recover, move
+  tests take turns. So a test that opens a real GLFW window asks for
+  the `gl_window_ok` fixture (or calls `gl_probe.require()`, as
+  `test_media_live.py`'s `_gl_context` does) before its own
+  `glfw.init()`: `tests/gl_probe.py` runs `glfw.init()` in a child
+  process with an 8 s cap, once per worker, and the test skips with the
+  reason when the child does not answer. To find a stuck process: `ps`,
+  then `sample <pid>` (main thread in CFRunLoop / `mach_msg`). To
+  recover, move
   `~/Library/Saved Application State/org.python.python.savedState`
   aside, then run
   `defaults write org.python.python ApplePersistenceIgnoreState -bool YES`.

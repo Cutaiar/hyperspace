@@ -9776,10 +9776,10 @@ and D3 (the per-deck split) are
   "Python quit unexpectedly while reopening windows" alert
   (`NSAlert runModal`) waits forever. Any earlier `org.python.python`
   process that died with a window open (a memory kill, or the thread
-  timeout's `os._exit`) arms it. To recover, move
-  `~/Library/Saved Application State/org.python.python.savedState`
-  aside and run `defaults write org.python.python
-  ApplePersistenceIgnoreState -bool YES` (ENGINEERING §16).
+  timeout's `os._exit`) arms it. The recovery is in ENGINEERING §16. A
+  test that opens a real GLFW window first asks a child process
+  (`tests/gl_probe.py`, 8 s, PR #332 folded in) and skips when the
+  child does not answer.
 - **Judge it.** — (tests only: `tests/test_live_lock.py`; a deliberate
   `time.sleep(130)` under `-n 2 --timeout=5 --timeout-method=thread`
   failed by name in 5.5 s with `--max-worker-restart=0`).

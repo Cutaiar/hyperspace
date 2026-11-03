@@ -43,7 +43,7 @@ def test_a_probe_that_times_out_names_the_alert_and_the_guide(monkeypatch):
     monkeypatch.setattr(gl_probe.subprocess, "run", run)
     why = gl_probe.reason()
     assert why == ("glfw.init() did not complete in 8 s: a modal alert or no "
-                   "window server; see TESTING-GUIDE")
+                   "window server; see ENGINEERING §16")
 
 
 def test_the_answer_is_cached(monkeypatch):
