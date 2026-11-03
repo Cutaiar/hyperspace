@@ -177,13 +177,13 @@ class ClockSpec:
 
     uniform: str            # the uniform the shader reads (`u_…`), declared by this module
     rate: str               # the @param key whose value is the rate, × the effect's speed;
-                            # `a*b`: the product of two (or more) of the file's params
+                            # `a*b`: the product of two (or more) of the file's params,
+                            # sorted once checked, so one clock has one spelling
     period: float | None    # wrap to [0, period); None runs on like u_phase
-
-    @property
-    def factors(self) -> tuple[str, ...]:
-        """The @param keys whose product is the rate (one, mostly)."""
-        return tuple(self.rate.split("*"))
+    # the rate's @param keys, sorted — set by `_check_clocks` (the grammar
+    # lives there), read every frame by `clock_rate`; () on a spec built by
+    # hand or before a hot reload, which `clock_rate` splits for itself
+    factors: tuple[str, ...] = field(default=(), compare=False)
 
 
 @dataclass
@@ -216,9 +216,13 @@ def clock_rate(clock: ClockSpec, values: dict[str, Any]) -> float:
     """A `@clock`'s rate from an effect's values: the product of its
     factors, a factor the values lack read as 0 (a stilled clock, never an
     exception on the frame). `FxState.advance` and the continuity harness
-    both read it here. `rate.split`, not `.factors`: a ClockSpec from
-    before a hot reload of this module has no such property."""
-    return math.prod(float(values.get(k, 0.0)) for k in clock.rate.split("*"))
+    both read it here. The checked spec's `factors`; a ClockSpec from
+    before a hot reload of this module (or built by hand) has none, and
+    its rate is split here."""
+    rate = 1.0
+    for k in getattr(clock, "factors", None) or clock.rate.split("*"):
+        rate *= float(values.get(k, 0.0))
+    return rate
 
 
 def _check_key(name: str, n: int, key: str, seen: set[str]) -> None:
@@ -232,12 +236,37 @@ def _check_key(name: str, n: int, key: str, seen: set[str]) -> None:
                         "instance number (fx.<file>.2 is the second instance)")
 
 
+def _is_period(word: str) -> bool:
+    """`tau` or a number: a period's word, never a rate's factor."""
+    if word.lower() == "tau":
+        return True
+    try:
+        float(word)
+    except ValueError:
+        return False
+    return True
+
+
+def _rate_word(words: list[str]) -> list[str]:
+    """A `@clock` line's words with its rate made one word: a product may
+    be written with spaces round its `*`s (`drift * scale`), so the words
+    after the uniform are joined while one ends or the next starts with
+    `*` — but never onto a period's word, so `drift * tau` (a dropped
+    factor) stays `drift*` and is refused as an empty factor."""
+    if len(words) < 2:
+        return words
+    rate, i = words[1], 2
+    while (i < len(words) and (rate.endswith("*") or words[i].startswith("*"))
+           and not _is_period(words[i])):
+        rate += words[i]
+        i += 1
+    return [words[0], rate, *words[i:]]
+
+
 def _parse_clock(name: str, n: int, val: str) -> ClockSpec:
     """`@clock <uniform> <rate-param>[*<rate-param>…] [period]` → its spec,
     the rate still to be checked against the file's params (`_check_clocks`)."""
-    # a product may be written with spaces round its `*`s: `drift * scale`
-    head = val.split(None, 1)
-    words = head[:1] + re.sub(r"\s*\*\s*", "*", head[1]).split() if len(head) > 1 else head
+    words = _rate_word(val.split())
     if len(words) not in (2, 3):
         raise SpecError(f"{name}:{n}: @clock wants <u_uniform> "
                         "<rate-param>[*<rate-param>…] [period]")
@@ -284,8 +313,8 @@ def _check_clocks(name: str, spec: EffectSpec) -> None:
     declared = _declared_uniforms(spec.source)
     seen: set[str] = set()
     for k, c in enumerate(spec.clocks):
-        factors = []
-        for word in c.factors:
+        factors: list[str] = []
+        for word in c.rate.split("*"):
             if not word:
                 raise SpecError(f"{name}: @clock {c.uniform} — an empty factor in its rate "
                                 f"{c.rate!r} (a product is <param>*<param>, a param each side "
@@ -297,14 +326,14 @@ def _check_clocks(name: str, spec: EffectSpec) -> None:
             if key in factors:
                 raise SpecError(f"{name}: @clock {c.uniform} — {key!r} twice in its rate")
             factors.append(key)
-        rate = "*".join(factors)
+        factors.sort()                  # one clock, one spelling: `scale*drift` is `drift*scale`
         if c.uniform in by_uniform or c.uniform in seen:
             raise SpecError(f"{name}: @clock {c.uniform} — that uniform is taken")
         if c.uniform in declared:
             raise SpecError(f"{name}: @clock {c.uniform} — leave the uniform undeclared: fx.py "
                             "declares every clock beside u_phase")
         seen.add(c.uniform)
-        spec.clocks[k] = replace(c, rate=rate)
+        spec.clocks[k] = replace(c, rate="*".join(factors), factors=tuple(factors))
 
 
 def parse(name: str, source: str) -> EffectSpec:

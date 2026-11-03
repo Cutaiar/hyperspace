@@ -100,6 +100,8 @@ def test_parse_reads_a_clock():
     ("// @clock u_t rate*", "empty factor"),                    # nothing after a `*`
     ("// @clock u_t *rate", "empty factor"),
     ("// @clock u_t rate**gain", "empty factor"),
+    ("// @clock u_t rate * tau", "empty factor"),               # a dropped factor, not a
+    ("// @clock u_t rate * 6.28", "empty factor"),              # … rate of `tau` or `6.28`
     ("// @clock u_t rate*u_rate", "twice"),                     # the same param twice
 ])
 def test_parse_refuses_a_bad_clock(line, why):
@@ -110,7 +112,9 @@ def test_parse_refuses_a_bad_clock(line, why):
 
 def test_a_product_may_be_written_with_spaces_round_its_star():
     src = CLOCKED.replace("// @clock u_scroll rate", "// @clock u_scroll rate * gain tau")
-    assert parse("scroll", src).clocks == [ClockSpec("u_scroll", "rate*gain", math.tau)]
+    assert parse("scroll", src).clocks == [ClockSpec("u_scroll", "gain*rate", math.tau)]
+    src = CLOCKED.replace("// @clock u_scroll rate", "// @clock u_scroll rate *gain 2.5")
+    assert parse("scroll", src).clocks == [ClockSpec("u_scroll", "gain*rate", 2.5)]
     bad = CLOCKED.replace("// @clock u_scroll rate", "// @clock u_scroll rate gain 1 2")
     with pytest.raises(SpecError, match=r"<rate-param>\[\*<rate-param>…\]"):
         parse("scroll", bad)
@@ -122,6 +126,10 @@ def test_a_clocks_rate_is_read_as_the_app_reads_it():
     c = ClockSpec("u_t", "rate*gain", None)
     assert clock_rate(c, {"rate": 3.0, "gain": 0.5}) == pytest.approx(1.5)
     assert clock_rate(c, {"rate": 3.0}) == 0.0
+    checked = parse("scroll", CLOCKED.replace("// @clock u_scroll rate",
+                                              "// @clock u_scroll rate*gain")).clocks[0]
+    assert checked.factors == ("gain", "rate")                      # what the frame reads
+    assert clock_rate(checked, {"rate": 3.0, "gain": 0.5}) == pytest.approx(1.5)
 
 
 def test_a_rate_may_be_a_product_of_params(fxdir):
@@ -129,9 +137,12 @@ def test_a_rate_may_be_a_product_of_params(fxdir):
     scroll, counted in cells: drift × scale), each word resolved as a
     single rate's is."""
     s = parse("scroll", CLOCKED.replace("// @clock u_scroll rate", "// @clock u_scroll rate*u_gain"))
-    assert s.clocks == [ClockSpec("u_scroll", "rate*gain", None)]
-    assert s.clocks[0].factors == ("rate", "gain")
+    assert s.clocks == [ClockSpec("u_scroll", "gain*rate", None)]   # sorted: one spelling
+    assert s.clocks[0].factors == ("gain", "rate")
     assert parse("scroll", CLOCKED).clocks[0].factors == ("rate",)
+    swapped = parse("scroll", CLOCKED.replace("// @clock u_scroll rate",
+                                              "// @clock u_scroll gain*rate"))
+    assert swapped.signature() == s.signature()
     write(fxdir, "scroll", CLOCKED.replace("// @clock u_scroll rate", "// @clock u_scroll rate*gain"))
     st = FxState(fxdir)
     st.values["scroll"].update(speed=2.0, rate=3.0, gain=0.5)
@@ -324,19 +335,25 @@ def test_the_ported_rate_params_step_continuously(ctx, effect, param, before, af
 
 
 def test_warps_scale_step_re_zooms_and_no_longer_jumps(ctx):
-    """Scale is no rate: a step re-zooms the noise cells about the centre,
-    a change of picture the size of the step (a tenth is ~10 px at the
-    rim of this frame, as a tenth of amount is ~1 px), the same at any
-    hour. Before K2 the scrolled offset was multiplied by scale, so a step
-    also slid the field by phase × drift × Δscale (~16 px even for a
-    hundredth, an hour in); now the scroll runs on `@clock u_drift_t
-    drift*scale` and a hundredth moves ~1.3 px."""
-    hour = uv_flow.run(ctx, FxState(), "warp", "scale", 3.0, 3.03, values=WARP_SEEN)
-    early = uv_flow.run(ctx, FxState(), "warp", "scale", 3.0, 3.3, values=WARP_SEEN, phase=10.3)
-    late = uv_flow.run(ctx, FxState(), "warp", "scale", 3.0, 3.3, values=WARP_SEEN)
-    # a re-zoom is the size of the step: a hundredth ~1/8 of a tenth's
-    # move (a port that still slid the field: 16 px against 15, ~1)
-    assert hour.step <= late.step / 4, (hour, late)
-    assert late.step == pytest.approx(early.step, rel=0.2), (early, late)
-    # and it slides on: neither frozen nor jumping after the step
-    assert 0.01 < min(late.after) and max(late.after) < late.bound(), late
+    """Scale is no rate: a step re-zooms the noise cells about the centre.
+    A re-zoom by a fraction f moves the noise pattern by f·r at radius r,
+    so the field moves by at most about f × the frame's half-diagonal (the
+    warp's displacement field does not fold, so it changes no faster than
+    its pattern moves), with a margin of 2 — 3.8 px for a hundredth on
+    this frame. Before K2 the scrolled offset was multiplied by scale, so
+    a step also slid the field by phase × drift × Δscale: 16 px for a
+    hundredth an hour in, past the bound. And the hour plays no part: with
+    the clock standing at the same place, the step is the same at ten
+    seconds as an hour in, to within the harness's still-frame jitter."""
+    radius = math.hypot(uv_flow.W, uv_flow.H) / 2
+    for after in (3.03, 3.3):
+        r = uv_flow.run(ctx, FxState(), "warp", "scale", 3.0, after, values=WARP_SEEN)
+        assert r.step <= 2.0 * (after / 3.0 - 1.0) * radius, r
+        # and it slides on: neither frozen nor jumping after the step
+        assert 0.01 < min(r.after) and max(r.after) < r.bound(), r
+    at = {"u_drift_t": 3613.7 * 3.0 * 1.0}                          # an hour's scroll at 3, 1
+    early = uv_flow.run(ctx, FxState(), "warp", "scale", 3.0, 3.3, values=WARP_SEEN, phase=10.3,
+                        clocks=at)
+    late = uv_flow.run(ctx, FxState(), "warp", "scale", 3.0, 3.3, values=WARP_SEEN, clocks=at)
+    jitter = max(*early.rest, *late.rest)
+    assert abs(late.step - early.step) <= 2.0 * jitter, (early, late)
