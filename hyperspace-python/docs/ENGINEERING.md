@@ -2939,9 +2939,11 @@ device, opened the first time any channel's sound is on (opened again
 unticking lets the video's samples go half a second later; SYSTEM's `media sound` line says whether it is open, how many
 channels play and how many underruns PortAudio reported. Each frame the
 channels hand it the playhead their transports were just stepped to, and
-it reads there — it keeps no position of its own, so in this build the
-sound is clean at rate 1 only: at any other rate it stutters, and a hold
-(rate 0) is silent (varispeed is V4's). Two loud channels summed clip at
+it reads there — it keeps no position of its own, and the audio and
+display clocks are never locked, so even at rate 1 expect an occasional
+click (a block repeated or skipped) until V4 reads sequentially and slews
+toward the transport; at any other rate it stutters, and a hold, a `once`
+clip parked at its end and reverse are silent (varispeed is V4's). Two loud channels summed clip at
 full scale; the gains are there for it. The analyzer's own WAV playback
 (`audio.py`) is a separate stream and untouched; the analyzer listening
 to the mix is V3's.

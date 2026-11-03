@@ -84,11 +84,15 @@ MediaState.poll ─▶ Transport.step ─▶ VideoSource.want ┘      ▼
   whose source has an `audio`: the soundtrack, the playhead the transport
   was just stepped to, the gain. The callback reads the tuple once, sums
   `read(round(playhead × 48000), frames)` × gain and clips at ±1. **The
-  callback integrates nothing**: two callbacks between two frames read
-  the same samples, so V2 is clean at rate 1 at the rig's 60 Hz and
-  stutters or skips at any other rate (V4's). A transport standing still
-  (rate 0, or a jog's coast under `HOLD_SPEED`) is left out: silence,
-  not a block repeated as a buzz. A read
+  callback integrates nothing**, so the glitch is structural: the audio
+  and display clocks are never locked, and even at rate 1 a block now and
+  then repeats or skips — an occasional click at rate 1 is expected until
+  V4 reads sequentially and slews toward the transport; any other rate
+  stutters (V4's). Only forward play is read: a hold, a jog's coast under
+  `HOLD_SPEED`, a `once` clip parked at its end, reverse and pingpong's
+  way back are left out, silent — not a block repeated as a buzz. The
+  callback allocates nothing once warm (`Soundtrack.read` grew an
+  optional `out=`). A read
   that raises or returns the wrong shape is skipped and counted.
   The params (`params.build_registry`'s media loop): `media.<c>.audio`
   (a toggle, off — today's silence) and `media.<c>.gain` (linear, unity,

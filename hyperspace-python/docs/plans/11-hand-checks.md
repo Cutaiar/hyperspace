@@ -6658,13 +6658,16 @@ shader's use of it is not periodic (a scrolled noise field must run on,
 unwrapped). Before K2 lands, 2 and 3 *do* lurch on Drift, Scale and Pulse:
 that is the recorded fault, not a regression.
 
-## BB. Video audio 2 of 4: the mixer, rate 1 only (plan 45 V2)
+## BB. Video audio 2 of 4: the mixer, forward play (plan 45 V2)
 Decision register rows 581–583. The play-audio toggle and the gain are
 `media.<c>.audio` and `media.<c>.gain` (MEDIA, on the selected channel's
-source line; GRAPH, the channel node's side pane). **Rate 1 only in this
-build**: the sound is read at the transport's position each frame, so at
-any other rate it stutters or skips, and a hold (rate 0) is silent —
-varispeed is V4's. Judge V2 at rate 1.
+source line; GRAPH, the channel node's side pane). The sound is read at
+the transport's position each frame with no position of its own, and the
+audio and display clocks are never locked: **an occasional click at rate
+1 is expected until V4 reads sequentially and slews toward the
+transport**; at any other rate it stutters, and a hold, a `once` clip
+parked at its end, reverse and pingpong's way back are silent —
+varispeed is V4's. Judge V2 at rate 1, forward.
 **437. Play audio on a show video: the sound follows the picture.** (Mac, the speakers or headphones, a show video with a soundtrack)
 Headless: `tests/test_media_mixer.py` (`test_the_callback_reads_the_transports_stepped_position_and_moves_nothing`,
 `test_a_real_clip_through_the_channel_and_the_mixer`).
@@ -6680,9 +6683,10 @@ lands where the picture is within a fraction of a second (a far scrub on
 a film longer than two minutes may be silent for a moment while its
 window is read); the gain is silent at the bottom, half as loud at −6 dB,
 louder at +6 dB; at rate 0 silence, at rate 2 a stutter (expected: V4),
-at rate 1 again clean. SYSTEM shows `media sound: open · 1 playing`.
-Fail: a steady buzz or clicks at rate 1 point at the frame rate (the
-SYSTEM frame time well above 16.7 ms) or the block; sound late against
+at rate 1 again as before — an occasional click is expected (V4). SYSTEM
+shows `media sound: open · 1 playing`. Fail: a steady buzz, or clicks
+more than now and then at rate 1, point at the frame rate (the SYSTEM
+frame time well above 16.7 ms) or the block; sound late against
 the picture by more than a frame or two points at the output latency.
 **438. Two channels summed; one off goes silent; the analyzer untouched.** (Mac, two show videos with distinct soundtracks, a WAV file)
 Headless: `tests/test_media_mixer.py` (`test_the_callback_sums_each_heard_channel_read_at_its_playhead_times_its_gain`,

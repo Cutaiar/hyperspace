@@ -12,12 +12,22 @@ this frame's, never a mix — and for each voice asks
 `read(round(playhead × AUDIO_RATE), frames)`, multiplies by the gain and
 sums into one float32 stereo block, clipped at ±1. **The callback
 integrates nothing**: no sample counter, no stream time, no position of
-its own (`audio.py`'s `_played` is the model it must not copy). Two
-callbacks between two frames read the same samples; that is V2 at rate 1
-(the block is one 60 Hz frame long, `BLOCK`, so at the rig's frame rate a
-callback and a step roughly alternate). A voice whose transport stands
-still (rate 0, a hold) is left out — silence, not one block buzzing — and
-a voice at any other rate ≠ 1 stutters or skips: varispeed is V4's.
+its own (`audio.py`'s `_played` is the model it must not copy). The
+glitch that buys is structural, not a matter of rate: the audio clock and
+the display clock are never locked, so even at rate 1 a callback now and
+then lands twice between two steps (a block repeated) or a step passes
+with no callback (a block skipped) — an occasional click, expected until
+V4 reads sequentially and slews toward the transport. The block is one
+60 Hz frame long (`BLOCK`), so at the rig's frame rate a callback and a
+step roughly alternate; any rate ≠ 1 stutters or skips outright. A voice
+not moving forward (`MediaState._voices`: a hold, a jog's coast dying
+out, a `once` clip parked at its end, reverse, pingpong's way back) is
+left out — silence, not one block buzzing; reverse is V4's.
+
+The callback allocates nothing once warm: one mix buffer and one voice
+buffer of the block's size are kept (`_mix`, `_one`, remade only if
+PortAudio asks for another size), each voice is read into `_one` through
+`Soundtrack.read(..., out=)` and scaled and summed in place.
 
 The stream is opened lazily — never until a channel's sound is first
 turned on (nothing until something asks, as V1's soundtrack; a hold or a
@@ -77,6 +87,8 @@ class Mixer:
         self.state = "off"
         self.underruns = 0
         self.errors = 0
+        self._mix = np.zeros((BLOCK, AUDIO_CHANNELS), np.float32)   # the callback's own
+        self._one = np.zeros((BLOCK, AUDIO_CHANNELS), np.float32)
 
     # -- the frame thread ---------------------------------------------------
 
@@ -101,7 +113,11 @@ class Mixer:
             return
         s = self._stream
         if s is not None:
-            if getattr(s, "active", True):
+            try:
+                alive = bool(getattr(s, "active", True))   # a PortAudio call: may raise
+            except Exception:  # noqa: BLE001 — a stream that cannot say is a stopped one
+                alive = False
+            if alive:
                 return
             with self._lock:                   # stopped under us: back to the retry
                 if self._stream is not s:
@@ -144,22 +160,30 @@ class Mixer:
         _shut(s)            # closed while it opened: never left playing
 
     def close(self, budget: float = CLOSE_BUDGET_S) -> bool:
-        """App exit: no voice from here on, an open under way waited for at
-        most `budget` s (within the exit's deadline, `pool.left`), the
-        stream aborted and closed. True when nothing is left running (an
-        open still stuck closes its stream itself when it returns)."""
+        """App exit: no voice from here on; an open under way waited for and
+        the stream aborted and closed (on ``media-mixer-shut``), the two
+        together within `budget` s (and the exit's deadline, `pool.left`).
+        True when nothing is left running (an open still stuck closes its
+        stream itself when it returns; a stuck abort dies with the
+        process)."""
+        end = time.monotonic() + pool.left(budget)
         with self._lock:
             self._closed = True
             self.voices = ()
             t = self._opener
         if t is not None:
-            t.join(pool.left(budget))
+            t.join(max(end - time.monotonic(), 0.0))
         with self._lock:
             s, self._stream = self._stream, None
             self.state = "closed"
-        if s is not None:
-            _shut(s)
-        return t is None or not t.is_alive()
+        shut = None
+        if s is not None:          # abort + close off this thread, waited for in the budget
+            shut = threading.Thread(target=_shut, args=(s,), name="media-mixer-shut",
+                                    daemon=True)
+            shut.start()
+            shut.join(max(end - time.monotonic(), 0.0))
+        return ((t is None or not t.is_alive())
+                and (shut is None or not shut.is_alive()))
 
     def line(self) -> str:
         """SYSTEM's one line: '' until a channel has asked for the stream
@@ -182,13 +206,18 @@ class Mixer:
             if not voices:
                 outdata.fill(0.0)
                 return
-            mix = np.zeros((frames, AUDIO_CHANNELS), np.float32)
+            mix, one = self._mix, self._one
+            if len(mix) != frames:          # PortAudio asked for another size: once
+                mix = self._mix = np.zeros((frames, AUDIO_CHANNELS), np.float32)
+                one = self._one = np.zeros((frames, AUDIO_CHANNELS), np.float32)
+            mix.fill(0.0)
             for st, at, gain in voices:
                 try:
-                    block = st.read(round(at * AUDIO_RATE), frames)
+                    block = st.read(round(at * AUDIO_RATE), frames, out=one)
                     if block.shape != mix.shape:
                         raise ValueError(f"read gave {block.shape}")
-                    mix += block * np.float32(gain)
+                    np.multiply(block, gain, out=one, casting="unsafe")
+                    np.add(mix, one, out=mix)
                 except Exception:  # noqa: BLE001 — one bad voice is silence, not a dead stream
                     self.errors += 1
             np.clip(mix, -CEILING, CEILING, out=mix)

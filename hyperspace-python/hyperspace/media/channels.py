@@ -58,7 +58,7 @@ STILL_KINDS = ("still", "missing")   # untimed and not live: rate means nothing
 CLOSE_BUDGET_S = 1.5     # app exit: how long `MediaState.close` waits for the closes
 CLOSER_IDLE_S = 2.0      # the closer thread ends after this long with nothing to close
 OFF_FRAMES = 30          # a channel's sound turned off lets its soundtrack go this many frames later
-HOLD_SPEED = 1e-3        # a transport slower than this (a hold, a jog's coast dying out) is silent
+HOLD_SPEED = 1e-3        # slower than this forward (a hold, a jog's coast dying out) is silent
 
 
 class Closer:
@@ -325,24 +325,20 @@ class MediaState:
         `OFF_FRAMES` frames after it stops asking (a lane flicking the
         toggle never queues a disable and a fresh decode a flick), through
         `_Sound`. Returns, for every channel heard, (soundtrack, the
-        playhead just stepped, gain) — a transport slower than `HOLD_SPEED`
-        (a hold, a jog's coast dying out) is left out, a hold is silence —
-        and whether any channel asks for sound at all (the mixer opens its
-        stream on that, before a hold ends)."""
+        playhead just stepped, gain) — a channel not moving forward
+        (`_forward`) is left out — and whether any channel asks for sound
+        at all (the mixer opens its stream on that, before a hold ends)."""
         sound, out, asked = self._sound(), [], False
         for ch in self.channels.values():
             src = ch.source
             track = getattr(src, "audio", None)
             want = track if ch.play_audio else None
             try:
-                if ch.heard is not None and ch.heard is not track:
-                    sound.off(ch.heard, self._closer())     # (not this source's: let go)
-                    ch.heard = None
                 if want is not None:
                     ch.quiet = 0
                     if ch.heard is None:
+                        sound.on(want)          # (raises: not heard, tried again next frame)
                         ch.heard = want
-                        sound.on(want)
                 elif ch.heard is not None:
                     ch.quiet += 1
                     if ch.quiet >= OFF_FRAMES:
@@ -355,12 +351,11 @@ class MediaState:
             if want is None:
                 continue
             asked = True
-            tr = ch.transport
-            if tr is None or not abs(tr.speed) >= HOLD_SPEED:
+            if not _forward(ch.transport):
                 continue
             g = float(ch.gain)
             if g > 0.0:             # (NaN too: not > 0)
-                out.append((want, float(tr.playhead), g))
+                out.append((want, float(ch.transport.playhead), g))
         return tuple(out), asked
 
     def _switch(self, ch: Channel, sid: str | None, now: float) -> None:
@@ -551,6 +546,22 @@ class MediaState:
         quiet = self._mixer().close(min(mixer.CLOSE_BUDGET_S, budget))
         left = max(budget - (time.monotonic() - t0), 0.0)
         return self.drain(pool.left(left)) and quiet
+
+
+def _forward(tr: Transport | None) -> bool:
+    """Whether a channel's transport is playing forward — the only way
+    V2 reads its sound (plan 45 V2, second review). Not: a hold (rate 0)
+    or a jog's coast dying out toward it (speed under `HOLD_SPEED`); a
+    `once` clip parked at its end (the playhead clamped at the duration
+    with the speed still 1, which would re-read one block a frame — the
+    track often outlasts the picture); reverse and pingpong's way back
+    (direction × speed < 0: a forward block under a backward picture).
+    Reverse is V4's, with varispeed."""
+    if tr is None:
+        return False
+    if tr.duration > 0.0 and tr.playhead >= tr.duration:
+        return False
+    return tr.direction * tr.speed >= HOLD_SPEED
 
 
 def _read(src) -> MediaFrame | None:

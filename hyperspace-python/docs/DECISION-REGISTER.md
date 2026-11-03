@@ -600,7 +600,7 @@ here; overturn → the change, then the same.
 | 562 | Plan 45 V1: a video's audio track decoded to memory as float32 stereo 48 kHz once something asks for sound, whole to 120 s, else a 120 s window around the transport's position; the transport is the one clock | 421 | owner's rule (2026-11-02, addendum 8); the policy (rec) |
 | 563 | Node groups (post-show G0, 2026-11-02): a group's id is never reused within a preset's life — `group.<n>` is one past the highest the preset has ever allotted (`Presets.group_high`: the file's highest at the load, dropped entries counted; not saved, no schema change), so an ungrouped or undone group's number is not the next group's; and membership is eager — a member node deleted by any road leaves its group's list in the same operation (hooks on the mechanisms: the section's landing, the table's `set_modifiers`, a bank's membership change), the last member taking the group; every node-removing step carries the marks (which carry the floor too) so its undo puts the member back; a refused load leaves the loaded preset's groups whole. Render node ids (`acid` → `acid.2`, the lowest free instance, R25) are untouched: a format question for the one-format PR | 422 | built as recommended — PR (G0) |
 | 564 | Wave 0 E1: delay loops are the trails mechanism, the look-back keeps the dream — the feedback starter (a composite laid over, a delay, a fade at level 0.75: colour and alpha decay alike) on the cable menu and "add feedback after" on the node menu, many allowed; "feedback" not "echo", which names the look-back's frames | 423 | (rec) — pending the owner |
-| 581 | Plan 45 V2, the mixer: one `sounddevice.OutputStream` (48 kHz stereo float32) owned by the media package; its callback sums each heard channel's `read(round(playhead × 48000), frames)` × gain, where the playhead is the one the frame thread last stepped the transport to (handed in as one tuple a frame), clipped at ±1; the callback integrates nothing — rate 1 only, varispeed is V4's | 437, 438 | built — V2 PR (the rule is the owner's, row 562) |
+| 581 | Plan 45 V2, the mixer: one `sounddevice.OutputStream` (48 kHz stereo float32) owned by the media package; its callback sums each heard channel's `read(round(playhead × 48000), frames)` × gain, where the playhead is the one the frame thread last stepped the transport to (handed in as one tuple a frame), clipped at ±1; the callback integrates nothing, so the glitch is structural: the audio and display clocks are never locked and a block now and then repeats or skips even at rate 1 — an occasional click at rate 1 is expected until V4 reads sequentially and slews toward the transport; any other rate stutters; forward play only (a hold, a parked `once` clip, reverse and pingpong's way back are silent) | 437, 438 | built — V2 PR (the rule is the owner's, row 562) |
 | 582 | Plan 45 V2, the two params a channel: `media.<c>.audio` (toggle, default off — today's silence) and `media.<c>.gain` (linear, default 1.0, `tapers.T_MEDIA_GAIN` = `exp_zero(100, 120)`: off, then −30…+6 dB, unity notch), both performance (`media` group), persisted, learnable, modulatable; no schema move — a file without them loads them at their defaults | 437, 438 | (rec) — built as recommended |
 | 583 | Plan 45 V2, the stream's lifecycle: nothing opened until a channel's sound is first on (on a thread of its own, `media-mixer-open`); then left open playing silence until exit (`MediaState.close`, within its budget); a failed open, or a stream that stops under us (a device unplugged), is said on SYSTEM and retried 5 s after the failure while asked; the toggle's off is acted on 30 frames later (`OFF_FRAMES`: a lane flicking it costs nothing) and its `disable()` runs on the media closer, never at once with an enable (`_Sound`); a slot change leaves the old track to its source's `close` | 439 | (rec) — built as recommended |
 
@@ -9740,12 +9740,20 @@ and D3 (the per-deck split) are
   than one block repeated as a buzz. A voice whose read raises or returns
   the wrong shape is skipped and counted; nothing reaches PortAudio as an
   exception.
-- **Rate 1 only.** At the rig's 60 Hz a callback and a step roughly
-  alternate, so play at rate 1 is close to continuous; a slower frame, a
-  jitter at the phase where a callback meets a step, or any rate ≠ 1
-  repeats or skips a block. Smoothing within a block by the transport's
-  `speed` (and so scrub, reverse and rate sounding like tape) is V4's,
-  and the hand checks say so.
+- **The glitch is structural, not a rate limit** (second review). The
+  audio clock and the display clock are never locked, so even at rate 1
+  a callback now and then lands twice between two steps (a block
+  repeated) or a step passes with none (a block skipped): **an occasional
+  click at rate 1 is expected until V4 reads sequentially and slews
+  toward the transport.** At the rig's 60 Hz with an 800-sample block a
+  callback and a step roughly alternate, so the clicks are occasional; a
+  slower frame makes them frequent, and any rate ≠ 1 stutters or skips
+  outright. Only forward play is read: a hold, a jog's coast dying out, a
+  `once` clip parked at its end (the playhead clamped with the speed
+  still 1), reverse and pingpong's way back are left out, silent
+  (`channels._forward`). Smoothing by the transport's `speed` — scrub,
+  reverse and rate sounding like tape — is V4's, and the hand checks say
+  so.
 - **Why not a counter in the callback.** It would be continuous at rate 1
   today, and it is exactly the second time base the rule forbids
   (`audio.py`'s `_played`): it drifts from the picture and must be

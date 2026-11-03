@@ -30,6 +30,7 @@ class FakeTrack:
         self.enabled = False
         self.enables = self.disables = 0
         self.reads: list[tuple[int, int]] = []
+        self.outs: list = []
 
     def enable(self):
         self.enabled = True
@@ -39,11 +40,16 @@ class FakeTrack:
         self.enabled = False
         self.disables += 1
 
-    def read(self, at, n):
+    def read(self, at, n, out=None):
         self.reads.append((at, n))
+        self.outs.append(out)
         if self.raises:
             raise RuntimeError("bad read")
-        return np.full((n, 2), self.value, np.float32)
+        if out is None:
+            return np.full((n, 2), self.value, np.float32)
+        out = out[:n]
+        out.fill(self.value)
+        return out
 
 
 class Video(FakeSource):
@@ -75,11 +81,14 @@ class FakeStream:
         self.callback = kw["callback"]
         self.started = self.aborted = self.closed = False
         self.active = True
+        self.abort_s = 0.0          # how long abort takes (a device that will not stop)
 
     def start(self):
         self.started = True
 
     def abort(self):
+        if self.abort_s:
+            time.sleep(self.abort_s)
         self.aborted = True
 
     def close(self):
@@ -390,6 +399,87 @@ def test_a_still_and_a_live_feed_add_nothing_and_open_no_stream():
     assert m.mixer.voices == () and m.mixer.state == "off" and f.calls == 0
 
 
+def test_a_once_clip_parked_at_its_end_is_silence():
+    """Second review 1: at loop `once` the playhead clamps at the duration
+    with the speed still 1; a track that outlasts the picture would be
+    re-read one block a frame there — a buzz. Parked at the end: silent."""
+    m, _, f = rig("shared:a.mp4")
+    ch = m.channels["a"]
+    ch.play_audio, ch.loop = True, 2                # once
+    ch.pos = 0.99
+    m.poll(DT, 0.0)
+    ch.pos = 0.995                                  # (a scrub near the end, then let go)
+    m.poll(DT, 0.1)
+    assert m.mixer.playing == 1                     # still short of the end: heard
+    for k in range(60):                             # 0.05 s of clip left: it parks
+        m.poll(DT, 0.2 + k * DT)
+    tr = ch.transport
+    assert tr.playhead == tr.duration and tr.speed == 1.0
+    assert m.mixer.playing == 0 and not opened(m, f).pull().any()
+
+
+def test_reverse_and_pingpongs_way_back_are_silence():
+    """Second review 1: a forward block under a backward picture is wrong;
+    reverse is V4's, so a channel moving backwards is left out — a
+    negative rate, and pingpong's return leg at a positive one."""
+    m, _, _ = rig("shared:a.mp4", "shared:b.mp4")
+    a, b = m.channels["a"], m.channels["b"]
+    a.play_audio, a.rate = True, -1.0
+    b.play_audio, b.loop = True, 1                  # pingpong
+    b.pos = 0.999
+    m.poll(DT, 0.0)
+    b.pos = 0.9995
+    m.poll(DT, 0.1)
+    for k in range(10):                             # past the end: on the way back
+        m.poll(DT, 0.2 + k * DT)
+    assert b.transport.direction == -1.0 and b.transport.speed == 1.0
+    assert m.mixer.voices == ()
+    assert m.mixer.state != "off", "both still ask: the stream is up for when they turn"
+
+
+def test_an_enable_that_raises_is_tried_again_next_frame():
+    """Second review 3: `heard` is set only once `on` returned, so an
+    enable that raised is retried rather than forgotten."""
+    m, _, _ = rig("shared:a.mp4")
+    ch = m.channels["a"]
+    m.poll(DT, 0.0)
+    t = track(m, "a")
+    real, calls = t.enable, []
+
+    def flaky():
+        calls.append(1)
+        if len(calls) == 1:
+            raise OSError("not yet")
+        real()
+
+    t.enable = flaky
+    ch.play_audio = True
+    m.poll(DT, 0.1)
+    assert ch.heard is None and not t.enabled
+    m.poll(DT, 0.2)
+    assert ch.heard is t and t.enabled and len(calls) == 2
+
+
+def test_the_callback_reads_into_its_own_buffers():
+    """Second review 6: once warm the callback allocates nothing: every
+    voice is read into the mixer's one voice buffer (`read(..., out=)`)
+    and summed into its one mix buffer, the same arrays callback after
+    callback."""
+    m, _, f = rig("shared:a.mp4", "shared:b.mp4",
+                  values={"shared:a.mp4": 0.25, "shared:b.mp4": 0.5})
+    for c in "ab":
+        m.channels[c].play_audio = True
+    m.channels["b"].gain = 0.5
+    m.poll(DT, 0.0)
+    s = opened(m, f)
+    mix, one = m.mixer._mix, m.mixer._one
+    for _ in range(3):
+        assert np.allclose(s.pull(), 0.25 + 0.25)
+    assert m.mixer._mix is mix and m.mixer._one is one
+    for c in "ab":
+        assert all(o is one for o in track(m, c).outs)
+
+
 def test_a_read_that_raises_is_contained():
     m, _, f = rig("shared:a.mp4", "shared:b.mp4", raises=("shared:a.mp4",),
                   values={"shared:b.mp4": 0.5})
@@ -404,7 +494,7 @@ def test_a_wrong_shape_and_a_broken_voice_list_are_silence_not_a_raise():
     mx = M.Mixer(make=Factory())
 
     class Short(FakeTrack):
-        def read(self, at, n):
+        def read(self, at, n, out=None):
             return np.zeros((n - 1, 2), np.float32)
 
     mx.voices = ((Short(), 0.0, 1.0),)
@@ -537,6 +627,60 @@ def test_a_stream_that_stops_under_us_is_opened_again():
     m.poll(DT, 0.3)
     settle(m)
     assert len(f.made) == 2 and m.mixer._stream is f.made[1] and m.mixer.state == "open"
+
+
+def test_a_stream_whose_active_raises_is_a_stopped_one():
+    """Second review 2: sounddevice raises for a dead stream when asked if
+    it is active; that is "stopped", never an exception out of `poll`."""
+    m, _, f = rig("shared:a.mp4")
+    m.channels["a"].play_audio = True
+    m.poll(DT, 0.0)
+    s = opened(m, f)
+
+    class Dead(FakeStream):
+        @property
+        def active(self):
+            raise OSError("PortAudioError: stream is not running")
+
+        @active.setter
+        def active(self, v):
+            pass
+
+    s.__class__ = Dead
+    m.poll(DT, 0.1)                             # no raise
+    assert m.mixer.failed and m.mixer._stream is None
+    m.mixer._failed_at -= M.RETRY_S
+    m.poll(DT, 0.2)
+    settle(m)
+    assert len(f.made) == 2 and m.mixer.state == "open"
+
+
+def test_close_holds_its_budget_with_an_abort_that_hangs():
+    """Second review 7: the abort and close run off the calling thread and
+    are waited for inside the budget; `MediaState.close` hands the closer
+    only what is left, so the whole stays within the budget."""
+    m, _, f = rig("shared:a.mp4")
+    m.channels["a"].play_audio = True
+    m.poll(DT, 0.0)
+    s = opened(m, f)
+    s.abort_s = 3.0
+    t0 = time.monotonic()
+    assert m.close(budget=1.0) is False
+    took = time.monotonic() - t0
+    assert took < 1.0 + 0.2, took
+    assert m.mixer._stream is None and m.mixer.state == "closed"
+
+
+def test_the_closer_gets_what_the_mixer_left_of_the_budget(monkeypatch):
+    m, _, f = rig("shared:a.mp4")
+    m.channels["a"].play_audio = True
+    m.poll(DT, 0.0)
+    s = opened(m, f)
+    s.abort_s = 0.3
+    seen = []
+    monkeypatch.setattr(m, "drain", lambda timeout: seen.append(timeout) or True)
+    assert m.close(budget=1.0)
+    assert len(seen) == 1 and 0.5 <= seen[0] <= 0.72, seen
 
 
 def test_close_aborts_and_closes_the_stream():
