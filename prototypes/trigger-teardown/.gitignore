@@ -1,0 +1,6 @@
+# capture scratch: the review sheets and their frames are rebuilt on demand
+teardown-out/beats-frames/
+teardown-out/*.mp4
+teardown-out/*.wav
+teardown-out/dist/trigger-film.html
+teardown-out/beats.png
