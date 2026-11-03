@@ -100,12 +100,50 @@ def test_a_waiter_of_the_holders_own_run_waits_until_it_lets_go(tmp_path):
                                      run_wait_s=0.2)
         assert fd is not None and why == ""
         assert time.monotonic() - t >= 1.9
-        assert live_lock.holder(fd) == "xdist-R"
+        assert live_lock.holder(fd) == f"xdist-R:{os.getpid()}"
         live_lock.release(fd)
     finally:
         let_go.cancel()
         release.set()
         p.join(10)
+
+
+def test_an_own_run_id_whose_pid_is_gone_is_a_holder_that_names_none(tmp_path):
+    """A killed worker's id left under an older build's lock (which writes
+    none): this run's id with a dead pid is waited for `run_wait_s`, not
+    for ever."""
+    path = tmp_path / "live.lock"
+    p, release = _holder(path)                  # an older build: writes no id
+    dead = subprocess.Popen([sys.executable, "-c", "pass"])
+    dead.wait()
+    fd = os.open(path, os.O_RDWR)
+    os.pwrite(fd, f"xdist-R:{dead.pid}".encode(), 0)
+    os.close(fd)
+    try:
+        fd, why = live_lock.wait_for(path, wait_s=0.1, poll_s=0.05, run="xdist-R",
+                                     run_wait_s=0.5)
+        assert fd is None and why.startswith(live_lock.UNKNOWN_REASON), why
+    finally:
+        release.set()
+        p.join(10)
+
+
+def test_each_holder_is_counted_on_its_own(tmp_path, monkeypatch):
+    """Time behind a holder that names no run does not count toward
+    another run's bound, and the reason names the holder whose bound ran
+    out (the file is read through `holder`, scripted here)."""
+    path = tmp_path / "live.lock"
+    p, release = _holder(path)
+    seen = iter([""] * 6 + ["xdist-S:1"] * 1000)
+    monkeypatch.setattr(live_lock, "holder", lambda fd: next(seen))
+    try:
+        fd, why = live_lock.wait_for(path, wait_s=0.5, poll_s=0.1, run="xdist-R",
+                                     run_wait_s=5.0)
+    finally:
+        release.set()
+        p.join(10)
+    # ~0.6 s behind "no id" (under its 5 s), then 0.5 s behind xdist-S: its bound
+    assert fd is None and live_lock.SKIP_REASON in why and "(xdist-S)" in why, why
 
 
 def test_a_holder_that_names_no_run_is_waited_for_run_wait_s_and_said(tmp_path):
@@ -124,16 +162,17 @@ def test_a_holder_that_names_no_run_is_waited_for_run_wait_s_and_said(tmp_path):
         p.join(10)
 
 
-def test_a_release_leaves_the_id_and_the_next_holder_overwrites_it(tmp_path):
+def test_a_holder_writes_run_and_pid_and_a_release_clears_them(tmp_path):
     path = tmp_path / "live.lock"
     fd = live_lock.acquire(path, wait_s=0, run="xdist-a-long-run-id")
     live_lock.release(fd)
     fd = live_lock.acquire(path, wait_s=0, run="pid-7")
-    assert live_lock.holder(fd) == "pid-7"
+    assert live_lock.holder(fd) == f"pid-7:{os.getpid()}"       # (no long id's tail)
+    assert live_lock.run_of(live_lock.holder(fd)) == ("pid-7", os.getpid())
     live_lock.release(fd)
     fd = os.open(path, os.O_RDONLY)
     try:
-        assert live_lock.holder(fd) == "pid-7"
+        assert live_lock.holder(fd) == ""
     finally:
         os.close(fd)
 
@@ -168,6 +207,27 @@ _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
 pytest_runtest_protocol = _mod.pytest_runtest_protocol
 pytest_runtest_setup = _mod.pytest_runtest_setup
+
+if os.environ.get("INNER_SIGNAL"):          # say when the wait starts, whom it saw, how long
+    import time
+
+    _real_wait_for = live_lock.wait_for
+
+    def _signalled_wait_for(path=None, *a, **k):
+        sig = os.environ["INNER_SIGNAL"]
+        fd = os.open(path or live_lock.lock_path(), os.O_RDWR | os.O_CREAT, 0o600)
+        who = live_lock.holder(fd)
+        os.close(fd)
+        with open(sig + ".tmp", "w") as f:
+            f.write(who)
+        os.replace(sig + ".tmp", sig)
+        t = time.monotonic()
+        out = _real_wait_for(path, *a, **k)
+        with open(sig + ".waited", "w") as f:
+            f.write(str(time.monotonic() - t))
+        return out
+
+    live_lock.wait_for = _signalled_wait_for
 
 
 def pytest_configure(config):
@@ -269,7 +329,8 @@ def test_two_workers_of_one_load_run_take_turns_and_neither_skips(tmp_path):
     rows = [line.split() for line in (tmp_path / "log").read_text().splitlines()]
     assert sorted(r[0] for r in rows) == ["one", "two"]
     assert {r[1] for r in rows} == {"gw0", "gw1"}               # two workers
-    assert len({r[2] for r in rows}) == 1 and rows[0][2].startswith("xdist-")  # one run's id
+    runs = {live_lock.run_of(r[2])[0] for r in rows}
+    assert len(runs) == 1 and runs.pop().startswith("xdist-")    # one run's id
     (_, first_ends), (second_starts, _) = sorted((float(r[3]), float(r[4])) for r in rows)
     assert first_ends <= second_starts, f"the two live tests overlapped: {rows}"
 
@@ -321,6 +382,54 @@ def test_a_deselected_live_test_on_a_module_fixture_costs_nothing(tmp_path):
     assert out.returncode == 0 and "1 passed, 1 deselected" in out.stdout, out.stdout + out.stderr
 
 
+_NO_TURN = """
+import pytest
+
+
+@pytest.fixture(scope="module")
+def device():
+    yield "opened"
+
+
+@pytest.mark.live
+@pytest.mark.skipif(True, reason="not on this machine")
+def test_a_live_test_its_marks_skip():
+    pass
+
+
+@pytest.mark.live
+@pytest.mark.skipif(True, reason="not on this machine")
+def test_a_skipped_live_test_on_a_module_fixture(device):
+    pass
+
+
+@pytest.mark.live
+def test_a_live_test_on_a_module_fixture(device):
+    pass
+"""
+
+
+def test_a_live_test_that_will_not_run_takes_no_turn(tmp_path):
+    """While another run holds the lock (and the inner run would wait 30 s
+    for it): a live test its skipif skips skips at once — a wide fixture
+    beside the skip is a skip, not an error — and a wide-fixture test is
+    its error at once; none of them waited for a turn."""
+    temp = tmp_path / "temp"
+    temp.mkdir()
+    p, release = _holder(temp / live_lock.lock_path().name, run="xdist-other")
+    try:
+        t = time.monotonic()
+        out = _inner_pytest(tmp_path, temp, _NO_TURN, env={"INNER_WAIT_S": "30"})
+        took = time.monotonic() - t
+    finally:
+        release.set()
+        p.join(10)
+    text = out.stdout + out.stderr
+    assert "2 skipped, 1 error" in out.stdout, text
+    assert text.count("not on this machine") == 2 and "outside the live lock" in text, text
+    assert took < 20, f"a test waited for a turn it would not use ({took:.1f} s)"
+
+
 _ONE_LIVE = """
 import pytest
 
@@ -334,21 +443,31 @@ def test_a_live_test():
 def test_the_wait_for_the_lock_is_not_timed(tmp_path):
     """The lock is taken outside pytest-timeout's window (conftest's
     `pytest_runtest_protocol`, the outer wrapper): a test that waits 2 s
-    for its turn under `--timeout=1` still runs and passes."""
+    for its turn under `--timeout=1` still runs and passes. The holder
+    lets go 2 s after the inner run says it has started waiting (a file
+    it writes, with the holder it saw), not on a clock of the outer's."""
     temp = tmp_path / "temp"
     temp.mkdir()
+    sig = tmp_path / "waiting"
     p, release = _holder(temp / live_lock.lock_path().name, run="xdist-other")
-    let_go = threading.Timer(2.0, release.set)
-    let_go.start()
+    got = []
+    inner = threading.Thread(target=lambda: got.append(_inner_pytest(
+        tmp_path, temp, _ONE_LIVE, ("-p", "no:xdist", "--timeout=1"),
+        env={"INNER_WAIT_S": "30", "INNER_SIGNAL": str(sig)})))
+    inner.start()
     try:
-        t = time.monotonic()
-        out = _inner_pytest(tmp_path, temp, _ONE_LIVE, ("-p", "no:xdist", "--timeout=1"),
-                            env={"INNER_WAIT_S": "30"})
-        assert time.monotonic() - t >= 1.9
+        deadline = time.monotonic() + 50
+        while not sig.exists() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert sig.exists(), "the inner run never started waiting"
+        time.sleep(2.0)
     finally:
-        let_go.cancel()
         release.set()
+        inner.join(60)
         p.join(10)
+    assert live_lock.run_of(sig.read_text())[0] == "xdist-other"     # it saw the holder
+    assert float((tmp_path / "waiting.waited").read_text()) >= 1.9
+    out = got[0]
     assert "1 passed" in out.stdout, out.stdout + out.stderr
 
 

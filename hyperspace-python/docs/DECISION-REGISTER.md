@@ -10539,22 +10539,27 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   group existed — none was there for ordering). The holder writes its
   run's id into the lock file (xdist's `testrunuid`, read from the
   config so a pytest a test starts in a subprocess is another run;
-  `pid-<n>` serially), overwritten at each acquire (written whole, then
-  trimmed) and never cleared. The lock is taken in conftest's
+  `pid-<n>` serially) and its pid, `<run id>:<pid>`, written whole then
+  trimmed once it holds the lock and cleared before it lets go: an
+  empty file under a held lock is a holder that names no run. The lock is taken in conftest's
   `pytest_runtest_protocol`, the outer wrapper (tryfirst), so the wait
   is outside pytest-timeout's window and a test gets its whole 120 s
   after its turn (`timeout_func_only = true` would do the same but drop
   every fixture's setup and teardown from the hang guard, which is
   where `glfw.init()`-style hangs can sit; not taken). A waiter waits
-  **without bound behind its own run**: that holder's own timeout
-  bounds each turn, so a run never skips its own live tests, which
-  `loadgroup` always ran. Only time behind a holder not of its run
-  counts: `WAIT_S` (60 s) behind another run's id, then a skip "another
-  test run holds the live devices (<id>) past 60 s"; `RUN_WAIT_S`
-  (90 s) behind a file that names no run (an older build's holder),
-  then "a test run that names no run id (an older build's) holds the
-  live devices past 90 s". The skip is raised in
-  `pytest_runtest_setup`. Measured with the first version's timed wait
+  **without bound behind a live worker of its own run**: that holder's
+  own timeout bounds each turn, so a run never skips its own live
+  tests, which `loadgroup` always ran. Behind anyone else each holder's
+  time is counted on its own (by run id): `WAIT_S` (60 s) behind
+  another run's, then a skip "another test run holds the live devices
+  (<id>) past 60 s"; `RUN_WAIT_S` (90 s) behind a file that names no
+  run (an older build's holder) or names this run with a pid that is
+  gone, then "a test run that names no run id (an older build's) holds
+  the live devices past 90 s". The skip is raised in
+  `pytest_runtest_setup`. A live test its skip / skipif marks skip
+  (pytest's own `evaluate_skip_marks`), or one with a fixture wider
+  than the test, takes no turn; an `importorskip` or a fixture's skip
+  cannot be known before setup, so those still queue once. Measured with the first version's timed wait
   (90 s own-run bound): `-m live -n 4` under `load`, "34
   passed in 23.43s" (the longest wait 16.8 s), then with (4) "35 passed
   in 39.34s" (22.8 s), at load averages of 22–64 from the other
@@ -10575,7 +10580,8 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   collection-time `UsageError` came out of a worker as an opaque
   `INTERNALERROR`) and the rest of the run goes on, and only for tests
   that run, so a deselected live test never stops the fast tier; tested
-  serially and under `-n 2`. `--setup-plan` of the live tier showed
+  serially and under `-n 2`. It takes no lock, and it comes after the
+  test's skip marks: a skipped one is a skip, not an error. `--setup-plan` of the live tier showed
   none today (only `tmp_path_factory`, session-scoped). The torch
   model `segment._shared_model` keeps is a per-process cache of
   weights, not a device; it stays. (4)
@@ -10605,11 +10611,13 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   is per test, so another run's live tests interleave with this run's
   one test at a time; a waiter may lose the race behind another run
   repeatedly and skip at its bound. An older build's holder writes no
-  id, so the file still shows the last id written — perhaps this run's
-  — and a waiter then waits on it unbounded (its own timeout still
-  ends it). CI's two-line edit
-  (`.github/workflows/tests.yml`: `--dist load` and
-  `--max-worker-restart=4`) is the owner's to push — the builder's
+  id and does not clear one: after a killed worker of this build (whose
+  id is left) it shows that id, whose pid is gone, so it is waited for
+  as a holder that names none. A pid reused by a new process in that
+  window would read as alive. CI's edit
+  (`.github/workflows/tests.yml`: `--dist load`,
+  `--max-worker-restart=4` and the comment above them, which still
+  cites the `loadgroup` stall) is the owner's to push — the builder's
   token has no `workflow` scope; until then CI's own
   `--max-worker-restart=0` wins over addopts and a crash in CI loses
   the dead worker's queue, as in wave 1.
@@ -10638,7 +10646,10 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   fix is conftest's autouse `_no_real_joysticks` (beside
   `_no_real_midi` and `_no_real_hid`): no joystick present, the GUID,
   buttons, hats and axes empty, unless a test patches the getter
-  itself; the same pair then "2 passed". (2)
+  itself; the same pair then "2 passed". And at the source: that test,
+  and `test_media_live.py::test_syphon_loopback`, the other test that
+  calls `glfw.init()`, now call `glfw.terminate()` when done; the guard
+  stays as the belt. (2)
   `test_segment.py::test_vision_frees_each_jobs_memory` and
   `::test_torch_runs_once_on_a_synthetic_frame` — **not reproduced.**
   Both were already live (behind the lock since T0). Tried: each alone
@@ -10671,7 +10682,11 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   only `tools/record_golden.py`'s input for re-recording, and it skips
   a missing clip itself. Nothing to skip. (5) `tools/sort_register.py`
   sorts the answer sheet's rows and the `### <n>.` sections from 544 on
-  (a `## ` heading moves with the section under it), changing no text:
+  (a `## ` heading, and any unnumbered `### ` under it, moves with the
+  section under it; an unnumbered `### ` elsewhere stays in the section
+  before it; a tail after the last section — a `## ` with no numbered
+  section under it — stays last; `tests/test_sort_register.py`),
+  changing no text:
   run on this file it moved 561, 562, 556–559, 554–555, 565–570 and
   571–583 into order (the same lines, the first 9382 unchanged; a
   second run changes nothing). The older sections (169–209 after

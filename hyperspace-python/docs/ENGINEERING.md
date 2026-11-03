@@ -3198,15 +3198,20 @@ uv run ruff check .
   one run and for two runs (two sessions, two worktrees) alike. It is
   the outer wrapper (tryfirst), outside pytest-timeout's, so **the wait
   is not timed**: a test gets its 120 s after its turn comes. The holder
-  writes its run's id (xdist's `testrunuid`, or `pid-<n>` serially) into
-  the file, overwritten at each acquire and never cleared. A waiter
-  waits **without bound behind its own run** (that holder's own timeout
-  bounds each turn, so a run never skips its own live tests), at most
-  `live_lock.WAIT_S` (60 s) behind another run's holder ("another test
-  run holds the live devices (<id>) past 60 s") and `live_lock.RUN_WAIT_S`
-  (90 s) behind one that names no run, an older build's ("a test run
-  that names no run id …"); only time behind a holder not of its run
-  counts, and the skip happens in `pytest_runtest_setup`. The kernel
+  writes `<run id>:<pid>` (xdist's `testrunuid`, or `pid-<n>` serially)
+  into the file once it holds the lock, and clears it before letting
+  go, so an empty file under a held lock is a holder that names no run
+  (an older build's). A waiter waits **without bound behind a live
+  worker of its own run** (that holder's own timeout bounds each turn,
+  so a run never skips its own live tests), at most `live_lock.WAIT_S`
+  (60 s) behind another run's holder ("another test run holds the live
+  devices (<id>) past 60 s") and `live_lock.RUN_WAIT_S` (90 s) behind
+  one that names no run, or names this run with a pid that is gone ("a
+  test run that names no run id …"); each holder's time is counted on
+  its own, and the skip happens in `pytest_runtest_setup`. A live test
+  its skip / skipif marks skip, or one with a fixture wider than the
+  test, takes no turn at all (an `importorskip` or a fixture's skip
+  cannot be known before setup: those still queue once). The kernel
   drops the lock when a worker dies. `-m live -n 4` under `load`: "35
   passed in 39.34s" (measured with the earlier, timed wait: the longest
   22.8 s). `tests/test_live_lock.py` proves it with two processes, with
@@ -3216,9 +3221,10 @@ uv run ruff check .
   test may not use a fixture wider than the test (module, class,
   package or session scoped, bar pytest's own deviceless ones): it
   would be set up before the lock, outside it, so `pytest_runtest_setup`
-  fails that test by name before any fixture is set up
-  (`_wide_fixtures`; under xdist too, the rest of the run goes on, and
-  a deselected test is never looked at); none does today. The file is
+  fails that test by name before any fixture is set up (after its skip
+  marks: a skipped one is a skip, not an error), without taking the
+  lock (`_wide_fixtures`; under xdist too, the rest of the run goes on,
+  and a deselected test is never looked at); none does today. The file is
   per account (`hyperspace-tests-live-<uid>.lock`); a lock file that
   cannot be opened or locked is a skip with the reason, never an error.
   The folder is `tempfile.gettempdir()`, so a session whose `TMPDIR`
@@ -3271,7 +3277,9 @@ uv run ruff check .
   `test_pads_hid.py::test_an_xbox_pad_has_no_extras_and_a_simple_report_none`,
   which faked the buttons but not the GUID, read the Joy-Con's model and
   failed after `test_ui_pad.py::test_the_drawings_show_upright_through_real_gl`
-  (row 606).
+  (row 606). The source is fixed too: a test that calls `glfw.init()`
+  calls `glfw.terminate()` when it is done (that test does now); the
+  guard stays as the belt.
 - One test is skipped:
   `tests/test_hands_tape.py::test_every_recorded_tape_replays_through_the_ghost`,
   because no real hand tape has been recorded into

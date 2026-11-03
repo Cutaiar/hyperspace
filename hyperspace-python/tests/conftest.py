@@ -154,8 +154,10 @@ def pytest_runtest_protocol(item, nextitem):
     wait has no bound (that holder's own timeout bounds it, so a run
     never skips its own live tests); another run's holder is waited for
     `live_lock.WAIT_S`, a holder that names no run `RUN_WAIT_S`, then the
-    test skips with the reason (`pytest_runtest_setup`)."""
-    if item.get_closest_marker("live") is None:
+    test skips with the reason (`pytest_runtest_setup`). A live test its
+    skip marks skip, or one with a fixture wider than the test, takes no
+    lock (`_takes_the_lock`)."""
+    if not _takes_the_lock(item):
         yield
         return
     import live_lock
@@ -168,14 +170,32 @@ def pytest_runtest_protocol(item, nextitem):
 _LIVE_WHY_NOT = pytest.StashKey[str | None]()
 
 
+def _skipped_by_marks(item) -> bool:
+    """Would pytest's skipping plugin skip `item` on its skip / skipif
+    marks? (An `importorskip` or a fixture's skip cannot be known before
+    setup: those tests still queue once for a turn they will not use.)"""
+    from _pytest.skipping import evaluate_skip_marks
+
+    return evaluate_skip_marks(item) is not None
+
+
+def _takes_the_lock(item) -> bool:
+    """A live test that will run: not one its marks skip, nor one with a
+    fixture wider than the test (its setup fails it, row 605)."""
+    return (item.get_closest_marker("live") is not None and not _skipped_by_marks(item)
+            and not any(_wide_fixtures(item)))
+
+
 @pytest.hookimpl(tryfirst=True)
 def pytest_runtest_setup(item):
     """Before any fixture of a live test: refuse a fixture wider than the
     test (`_wide_fixtures`: it would be set up outside the lock, and is
     never set up here), then skip if the lock was not had. Per item, so
     xdist names the test and the rest of the run goes on; only tests that
-    run are checked, so a deselected tier is never looked at (row 605)."""
-    if item.get_closest_marker("live") is None:
+    run are checked, so a deselected tier is never looked at (row 605). A
+    test its skip / skipif marks skip is left to the skipping plugin,
+    which runs next: a skip, not an error."""
+    if item.get_closest_marker("live") is None or _skipped_by_marks(item):
         return
     wide = [f"{name} ({scope}-scoped)" for name, scope in _wide_fixtures(item)]
     if wide:

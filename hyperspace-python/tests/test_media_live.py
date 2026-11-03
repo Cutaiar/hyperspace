@@ -609,3 +609,4 @@ def test_syphon_loopback(gl_window_ok):
         srv.stop()
         ctx.release()
         glfw.destroy_window(win)
+        glfw.terminate()        # (not left up for the worker's later tests: row 606)
