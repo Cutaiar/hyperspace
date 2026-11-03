@@ -438,10 +438,10 @@ def test_a_read_error_is_counted_but_never_warns():
     m.channels["a"].play_audio = True
     m.poll(DT, 0.0)
     opened(m, f).pull()
-    text, warn = ui_media.mixer_line(NS(media=m))
+    text, warn = ui_media.mixer_line(NS(media=NS(state=m)))
     assert "1 read errors" in text and not warn and not m.mixer.failed
     m.mixer.state = "error: OSError: gone"
-    assert ui_media.mixer_line(NS(media=m))[1] is True
+    assert ui_media.mixer_line(NS(media=NS(state=m)))[1] is True
 
 
 # ---------------------------------------------------------------- the stream
