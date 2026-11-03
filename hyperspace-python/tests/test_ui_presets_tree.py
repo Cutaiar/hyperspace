@@ -112,6 +112,12 @@ def test_a_header_folds_by_a_click_and_the_fold_is_this_macs(rig):  # noqa: F811
     assert ("party", True) in st["page"]["folders"]
     ui_presets.flush_folds(panel, force=True)
     assert json.loads(ui_json.read_text())["presets"] == {"folded": []}
+    # a fold clicked just before quitting is written by the panel's close
+    _click(panel, st["page"]["rects"]["folder.party"])
+    assert json.loads(ui_json.read_text())["presets"] == {"folded": []}   # not yet
+    panel.close()
+    assert json.loads(ui_json.read_text())["presets"] == {"folded": ["party"]}
+    assert not ui_presets.flush_folds(panel, force=True)              # nothing left
 
 
 def test_a_fold_read_before_the_machine_is_known_is_read_again(rig):  # noqa: F811
