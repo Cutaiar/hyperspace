@@ -114,7 +114,8 @@ def test_a_preset_without_the_sound_params_loads_them_at_their_defaults(rig):
         del old["values"][f"media.{c}.audio"], old["values"][f"media.{c}.gain"]
     assert rig.presets.load_doc(old) == [] and rig.presets.notes == []
     assert rig.reg["media.a.audio"].value is False and rig.reg["media.a.gain"].value == 1.0
-    assert old["schema"] == preset.WIRED_SCHEMA
+    # the same schema the build writes, whatever it is: the ids did not move it
+    assert json.loads(save_text(rig, "y"))["schema"] == old["schema"]
 
 
 # the effect files added after the base was written (plan 32 T7)
