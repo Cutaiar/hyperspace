@@ -5,7 +5,7 @@ today: the registry (`reg`), the view state (`view`), the binding table
 (`table`), the router, the three modulator banks (`lfos`, `envs`,
 `seq`), the presets and their graph section (`presets`, `presets.graph`),
 the learn, the undo and the marks it restores through, and — in the app,
-never headless — the renderer and the hold. D1 changes no behaviour:
+never headless — the renderer and the hold, and the clock the banks step on. D1 changes no behaviour:
 there is one deck, `app.main` builds it, and `app.Host` and `ui.Panel`
 keep their flat handles, assigned from it.
 
@@ -14,15 +14,18 @@ keep their flat handles, assigned from it.
 `library.attach` calls "default") and the attach order. Where `main`
 builds a rig object between two deck lines — the hands' setup, the
 outputs' params, the panel, the devices — `build` calls the caller's hook
-at that very place, so the headless rig (`tests/test_undo.boot`) and the
+at that very place (the rig's own wiring that declares no param, such as
+the library's band hooks, stays with the caller, before `build`), so the headless rig (`tests/test_undo.boot`) and the
 app run the same lines and cannot drift apart. A hook the caller leaves
 out is a step that rig does not have.
 
-`Deck.targets()` is the hot-reload tuples `main` listed for these objects,
-in the order it listed them; `main` hands the reloader the deck's and
-then the rig's. A field added to `Deck` later is back-filled on a live
-deck by the reloader (`_backfill_dataclass`), but `build` does not re-run:
-a PR that adds one says "restart" (plan 44 §8).
+`Deck.targets()` is the deck itself and then the hot-reload tuples `main`
+listed for these objects, in the order it listed them; `main` hands the
+reloader the deck's and then the rig's. A save of this file re-classes
+the live deck, and a field added to `Deck` with a default is back-filled
+on it (`hotreload._backfill_dataclass`); but `build` does not re-run, so
+what a new field should hold on a running deck arrives only with a
+restart, and a PR that adds one says "restart" (plan 44 §8).
 """
 
 from __future__ import annotations
@@ -59,6 +62,10 @@ class Deck:
     lfos: lfo.LFOs
     envs: envelope.Envelopes
     seq: sequencer.Sequencer
+    # the tap-tempo clock the banks step on. Built here today, in main's
+    # order; plan 44 §2 calls it shared — D3+ passes the rig's one in
+    # (`build(clock=…)`) rather than building one per deck
+    clock: tempo.Clock
     presets: Presets
     learn: Learn
     undo: undos.Undo
@@ -78,40 +85,42 @@ class Deck:
               clock: tempo.Clock | None = None, lfos: lfo.LFOs | None = None,
               hands: Callable[[Registry], Any] | None = None,
               outputs: Callable[[Registry], Any] | None = None,
-              panel: Callable[[Registry, ViewState], Any] | None = None,
+              panel: Callable[..., Any] | None = None,
               devices: Callable[[Registry, Router, Learn], Any] | None = None,
               warm: bool = False) -> Deck:
         """`app.main`'s deck lines, in their order. `library`, `control`
-        and `audio` (anything with a `.chain`) are the rig's, built first;
+        and `audio` (anything with a `.chain`) are the rig's, built and
+        wired to each other first (the band hooks, `control.library`);
         `table(reg)` loads the binding table and declares the desk's
         params on `reg`. `renderer` (the app's; None headless) supplies the
         look-back's, the effects' and the hands' states and gets a hold;
         headless, `dream` / `fx` / `ghost` stand in for them (a fresh one
-        each when None). `media` is the channels' `MediaState`, `restart`
+        each when None) — given with a renderer they are a ValueError,
+        since the renderer's states are the ones it draws. `media` is the channels' `MediaState`, `restart`
         the `app.restart` param's callback, `clock` / `lfos` a clock and
         an LFO bank to use in place of new ones. The hooks, each called
         where `main` builds that rig object: `hands(reg)` the hands'
-        setup, `outputs(reg)` the outputs' params and switches,
-        `panel(reg, view)` the panel (its `ui.*` params), and
+        setup, `outputs(reg)` the outputs' params and switches (what it
+        returns is handed to the panel hook as `output`),
+        `panel(reg, view, clock=, lfos=, envs=, seq=, hold=, output=)` the
+        panel (its `ui.*` params, and its handles on what exists by then),
+        and
         `devices(reg, router, learn)` the devices — before the startup
         preset lands. `warm`: build every shape's geometry on a background
         thread once the startup preset has landed."""
-        s = ViewState()
         if renderer is not None:
+            given = [k for k, v in (("dream", dream), ("fx", fx), ("ghost", ghost))
+                     if v is not None]
+            if given:
+                raise ValueError(f"Deck.build: {', '.join(given)} given with a renderer, "
+                                 "whose own states the deck's params must drive")
             dream, fx, ghost = renderer.lookback.state, renderer.fx.state, renderer.ghost.state
+        s = ViewState()
         reg = build_registry(s, control, audio, library.project,
                              dream=dream if dream is not None else DreamState(),
                              fx=fx if fx is not None else FxState(),
                              ghost=ghost if ghost is not None else GhostState(),
                              media=media, restart=restart)
-        # an analyzer preset carries its band layout; the library hands it to
-        # control before restoring values (07-overhaul contracts)
-        library.on_layout("band", control.apply_layout)
-        # …and a saved band preset carries the layout back out (audit A2); the
-        # scene combo and the strip keep each other posted (audit A1)
-        library.extra("band", lambda: {"layout": audio.chain.layout()})
-        library.on_load("band", control.scene_loaded)
-        control.library = library
         if hands is not None:
             hands(reg)                         # before attach: "default" includes them
         # the tap-tempo clock and the LFO bank (tempo.py, lfo.py; four by
@@ -130,8 +139,7 @@ class Deck:
         sequencer.register(reg, seq, clock)
         # the render window's placement registers before attach, so "default"
         # includes output.* and reset / the dirty dot see them (audit L6)
-        if outputs is not None:
-            outputs(reg)
+        output = outputs(reg) if outputs is not None else None
         # plan 38: the projector held while the next look is built — rig
         # controls beside the switches; its undo is handed over once it exists
         hold = None
@@ -144,7 +152,8 @@ class Deck:
         bindings = table(reg)
         library.attach(reg)
         if panel is not None:
-            panel(reg, s)                      # the panel's own ui.* params
+            # the panel's own ui.* params, and its handles on what exists now
+            panel(reg, s, clock=clock, lfos=lfos, envs=envs, seq=seq, hold=hold, output=output)
         router = Router(reg, bindings)
         router.use_lfos(lfos, clock)           # they step inside the pass (plan 28 N0)
         router.use_bank(envs, clock)           # …and so do the envelopes (plan 31)
@@ -188,16 +197,18 @@ class Deck:
         if hold is not None:
             hold.undo = undo_obj           # Drop goes back to the hold's point through it
         return cls(reg=reg, view=s, table=router.table, router=router, lfos=lfos, envs=envs,
-                   seq=seq, presets=presets, learn=learn, undo=undo_obj, marks=marks,
+                   seq=seq, clock=clock, presets=presets, learn=learn, undo=undo_obj, marks=marks,
                    renderer=renderer, hold=hold)
 
     def targets(self) -> list[tuple[Any, str, str]]:
         """The live objects a hot reload re-classes, as (object, module,
-        class) — the ones `app.main` listed for these objects, in its order;
-        re-evaluated each swap, so a voice or a preview renderer made since
-        counts."""
+        class) — the deck itself, then the ones `app.main` listed for these
+        objects, in its order; re-evaluated each swap, so a voice or a
+        preview renderer made since counts. The clock is the rig's to list
+        (shared, plan 44 §2)."""
         r, hold = self.renderer, self.hold
         return [
+            (self, "deck", "Deck"),
             *([(r, "render", "Renderer"),
                (r.scene, "render", "SceneTarget"),
                (r.cover, "render", "CoverTarget"),

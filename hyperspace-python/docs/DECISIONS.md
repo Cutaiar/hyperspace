@@ -530,7 +530,7 @@ rows 554 and 555.
 
 | Decision | Where | Who |
 |---|---|---|
-| **One `Deck`, one construction order** (D1). Today's per-deck singletons — the registry, the view, the table, the router, the LFOs, envelopes and sequencer, the presets and their graph section, learn, undo and its marks, the renderer, the hold — are one `Deck`, built by `Deck.build` in `app.main`'s old order (the registry's and the attach order); `main` and the headless `tests/test_undo.boot` both call it, the rig's objects passed in as hooks at their old places. It promises no behaviour change: one deck, the same frame, the same files; the flat handles on `Host` and `Panel` stay until D5. | `deck.Deck`, `Deck.build`, `Deck.targets`, `app.Host.deck`, `ui.Panel.deck` | plan 44 D1; row 571 |
+| **One `Deck`, one construction order** (D1). Today's per-deck singletons — the registry, the view, the table, the router, the LFOs, envelopes and sequencer and their clock, the presets and their graph section, learn, undo and its marks, the renderer, the hold — are one `Deck`, built by `Deck.build` in `app.main`'s old order (the registry's and the attach order); `main` and the headless `tests/test_undo.boot` both call it, the rig's objects passed in as hooks at their old places. It promises no behaviour change: one deck, the same frame, the same files; the flat handles on `Host` and `Panel` stay until D5. | `deck.Deck`, `Deck.build`, `Deck.targets`, `app.Host.deck`, `ui.Panel.deck` | plan 44 D1; row 571 |
 
 ## Undo
 

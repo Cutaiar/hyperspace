@@ -125,9 +125,15 @@ devices with the dream worker, the dial and the keep-awake), `Deck.build`
 takes it as a hook it calls at that very place (`hands`, `outputs`,
 `panel`, `devices`; the table through `table(reg)`), so the registry's
 order is unmoved and the headless `boot` runs the same lines with its
-stand-ins. The panel's handles that need no deck object are set in the
-panel hook (the canvas tap must exist before the devices); the rest just
-after `build`. The proof found one drift: the old `boot` never handed
+stand-ins. The panel hook is handed what exists by then (the clock, the
+banks, the hold, and what the outputs hook returned), so the panel's
+handles are set where `main` set them; only `panel.undo` and the new
+`panel.deck` come after `build`. The rig's own wiring that declares no
+param (the library's band hooks, `control.library`) stays with the
+caller, before `build`, so a second deck does not wire it again. The
+clock is a `Deck` field, built in `build` for now; D3+ passes the rig's
+one in. `Deck.targets()` lists the deck itself first, so a save of
+`deck.py` re-classes it. The proof found one drift: the old `boot` never handed
 the router its banks, as `main` has since plans 28 N0 and 31 — with
 those three lines the old body and the deck agree to the bit.
 

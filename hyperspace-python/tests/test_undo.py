@@ -69,6 +69,11 @@ def boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None):
     control = Control(chain)
     audio = SimpleNamespace(chain=chain, on=True)
     lib = Library(home, period=0.0)
+    # the rig's own wiring, before the deck (as app.main): the band hooks
+    lib.on_layout("band", control.apply_layout)
+    lib.extra("band", lambda: {"layout": chain.layout()})
+    lib.on_load("band", control.scene_loaded)
+    control.library = lib
     r = SimpleNamespace(t=100.0)
     inp, out = FakeIn(), FakeOut()
 
@@ -87,7 +92,7 @@ def boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None):
         routing.register_desk(reg, table)
         return table
 
-    def panel_setup(reg, view):
+    def panel_setup(reg, view, **handles):
         # the panel's own params, declared as ui.Panel declares them (no imgui)
         from hyperspace.ui import Panel
         Panel._register_panel_params(SimpleNamespace(reg=reg, open=True, cheatsheet=True,
@@ -103,7 +108,7 @@ def boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None):
                       devices=devices_setup)
     r.__dict__.update(lib=lib, reg=deck.reg, view=deck.view, control=control, chain=chain,
                       audio=audio, router=deck.router, table=deck.table, presets=deck.presets,
-                      clock=deck.router.clock, lfos=deck.lfos, learn=deck.learn, inp=inp,
+                      clock=deck.clock, lfos=deck.lfos, learn=deck.learn, inp=inp,
                       out=out, undo=deck.undo, envs=deck.envs, seq=deck.seq, home=Path(home),
                       deck=deck)
     return r

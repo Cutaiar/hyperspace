@@ -9726,16 +9726,22 @@ and D3 (the per-deck split) are
   panel at.
 - **Answer.** Built as recommended. `hyperspace/deck.py`: a `Deck`
   dataclass (`reg`, `view`, `table`, `router`, `lfos`, `envs`, `seq`,
-  `presets` and `graph`, `learn`, `undo`, `marks`, `renderer`, `hold`),
-  `Deck.build` holding `main`'s lines in their order, and
-  `Deck.targets()` the hot-reload tuples `main` listed for those objects,
-  in its order (`main` splices them first, then the rig's). Where `main`
+  `clock`, `presets` and `graph`, `learn`, `undo`, `marks`, `renderer`,
+  `hold`), `Deck.build` holding `main`'s lines in their order, and
+  `Deck.targets()` the deck itself and then the hot-reload tuples `main`
+  listed for those objects, in its order (`main` splices them first, then
+  the rig's). The clock is built in `build` as before; plan 44 calls it
+  shared, and D3+ passes the rig's one in. The library's band hooks and
+  `control.library` are the rig's wiring and stay with the caller, before
+  `build`. Where `main`
   built a rig object between two deck lines, `build` calls the caller's
   hook at that place: `hands(reg)` (the hands' setup), `outputs(reg)`
-  (output 1's params and every output's switches), `panel(reg, view)`
-  (the panel and its `ui.*` params), `devices(reg, router, learn)` (the
+  (output 1's params and every output's switches; its result is handed
+  on), `panel(reg, view, clock=, lfos=, envs=, seq=, hold=, output=)`
+  (the panel, its `ui.*` params and its handles, where `main` set them), `devices(reg, router, learn)` (the
   devices, the dream worker, the dial, the keep-awake), and the table
-  through `table(reg)`. A headless deck has no renderer and no hold.
+  through `table(reg)`. A headless deck has no renderer and no hold; `dream` / `fx` /
+  `ghost` stand-ins given beside a renderer are refused.
   `app.Host.deck` and `ui.Panel.deck` are new; every flat handle stays,
   assigned from the deck, so `frame` and its order are unchanged.
   `tests/test_undo.boot` now calls `Deck.build` with its stand-ins.

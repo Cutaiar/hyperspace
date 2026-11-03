@@ -1373,6 +1373,14 @@ def main() -> None:
     # dream.* drives the renderer's look-back (lookback.py); the post pass
     # runs inside renderer.draw
     panels: list = []                  # app.restart raises the panel's flag; frame() polls it
+    # an analyzer preset carries its band layout; the library hands it to
+    # control before restoring values (07-overhaul contracts)
+    library.on_layout("band", control.apply_layout)
+    # …and a saved band preset carries the layout back out (audit A2); the
+    # scene combo and the strip keep each other posted (audit A1)
+    library.extra("band", lambda: {"layout": audio.chain.layout()})
+    library.on_load("band", control.scene_loaded)
+    control.library = library
 
     # the deck (deck.py, plan 44 D1): the registry, the view state, the
     # table, the router, the banks, the presets, learn, undo and the hold,
@@ -1385,7 +1393,7 @@ def main() -> None:
         nonlocal hand_settings
         hand_settings = _hand_settings(reg, cfg)   # before attach: "default" includes them
 
-    def outputs_setup(reg: Registry) -> None:
+    def outputs_setup(reg: Registry) -> Output:
         # the render window's placement registers before attach, so "default"
         # includes output.* and reset / the dirty dot see them (audit L6)
         nonlocal output
@@ -1396,6 +1404,7 @@ def main() -> None:
         # each opened output's switches (plan 21 WP4): rig settings, seeded
         # from the config's launch values already on the slots, never saved
         register_switches(reg, slots)
+        return output
 
     def load_table(reg: Registry) -> Bindings:
         # one binding table for keys, pad, MIDI and lanes (an old midi_map.json
@@ -1408,17 +1417,22 @@ def main() -> None:
             Path(mc.get("map", "midi_map.json")),
         ))
 
-    def panel_setup(reg: Registry, s: ViewState) -> None:
+    def panel_setup(reg: Registry, s: ViewState, *, clock, lfos, envs, seq, hold,
+                    output) -> None:
         # after attach, before the router: its ui.* params are the last a
-        # launch declares before the table's rows resolve
+        # launch declares before the table's rows resolve; `output` is what
+        # the outputs hook returned
         nonlocal panel
         panel = Panel(control, audio, s, renderer, library.project, registry=reg, library=library)
         panels.append(panel)
+        panel.clock, panel.lfos = clock, lfos     # the LFO page's scopes and beat light
+        panel.envs, panel.seq = envs, seq         # plan 31: what a SEQ page draws
         panel.output = output
         panel.outputs = slots                  # the OUTPUT page: a block per output (plan 21 WP4)
         panel.preview = Preview(ctx)           # output 1 behind the GRAPH page (2026-10-26)
         panel.monitor = Preview(ctx)           # plan 38: while held, the projector's inset there
         panel.canvas_tap = CanvasTap(ui_gl)    # the GRAPH canvas as `panel:graph` (2026-11-02)
+        panel.hold = hold
 
     def devices_setup(reg: Registry, router: Router, learn: Learn) -> None:
         nonlocal rig, dream_io, awake, segmenters
@@ -1477,15 +1491,9 @@ def main() -> None:
                       hands=hands_setup, outputs=outputs_setup, panel=panel_setup,
                       devices=devices_setup, warm=True)
     s, reg, router, hold = deck.view, deck.reg, deck.router, deck.hold
-    clock, lfos, envs, seq = router.clock, deck.lfos, deck.envs, deck.seq
-    presets, undo_obj = deck.presets, deck.undo
-    # the panel's handles on the deck's objects (plan 44 D1: `panel.deck`
-    # beside them; D5 reads them through it)
-    panel.deck = deck
-    panel.clock, panel.lfos = clock, lfos     # the LFO page's scopes and beat light
-    panel.envs, panel.seq = envs, seq         # plan 31: what a SEQ page draws
-    panel.hold = hold
+    clock, presets, undo_obj = deck.clock, deck.presets, deck.undo
     panel.undo = undo_obj              # the footer's message slot
+    panel.deck = deck                  # plan 44 D1: beside its handles; D5 reads through it
     # panel state and chain must stay one object even after source changes
     # the live objects that get re-classed on a hot reload; re-evaluated
     # each swap so recreated ones (the chain after a source attach) count

@@ -5,7 +5,20 @@ at 749be48 (a copy of that body, below) and one built through
 `Deck.build` (today's `boot`) reach the same state over every corpus
 preset; two registries share no frame state; `main` builds its deck once
 with the frame order unchanged; and every swap target the deck lists
-lives in a watched module.
+lives in a watched module, the deck itself included.
+
+What differs, on purpose: the old `boot` had drifted from `main`. It
+never handed the router its banks (`use_lfos` / `use_bank` /
+`use_sequencer`, which `main` has called since plans 28 N0 and 31) and
+built its `Undo` without `banks=`. Today's `boot` runs `main`'s lines, so
+its LFOs, envelopes and sequencer step inside the pass and undo takes the
+banks' membership. On three corpus presets (TRIP, TUMBLE, seq-demo) a
+bank-driven row then leaves a base (`camera.zoom`, `view.bright`) a
+round-off apart from the old rig's after the undo, because undo puts
+back only a base that is not `undo.alike` its state (plan 15 §1 row 2).
+`alike` is the right comparison for that case: it is the tolerance undo
+itself uses to call two bases the same value. With main's three lines
+added to the old body, the two rigs agree to the bit.
 """
 
 from __future__ import annotations
@@ -217,6 +230,7 @@ def test_the_deck_holds_the_rig_boot_hands_out(tmp_path):
         r.reg, r.view, r.table, r.router, r.lfos, r.presets, r.learn, r.undo)
     assert d.table is d.router.table and d.graph is d.presets.graph
     assert d.renderer is None and d.hold is None
+    assert d.clock is r.clock is d.router.clock
     assert undo.installed() is d.undo
     assert d.router.lfos is d.lfos and d.router.bank("env") is d.envs
     assert d.router.sequencer is d.seq and d.undo.marks is d.marks
@@ -278,11 +292,11 @@ def test_the_build_keeps_mains_order():
     src = textwrap.dedent(inspect.getsource(Deck.build))
     src = src[src.index('"""', src.index('"""') + 3) + 3:]       # the body, not the docstring
     seq = ["s = ViewState()", "build_registry(s, control, audio, library.project",
-           'library.on_layout("band"', "control.library = library", "hands(reg)",
+           "hands(reg)",
            "tempo.register(reg, clock)", "lfo.register(reg, lfos, clock)",
            "envelope.register(reg, envs, clock)", "sequencer.register(reg, seq, clock)",
-           "outputs(reg)", "Hold(reg, renderer", "register_hold(reg, hold",
-           "bindings = table(reg)", "library.attach(reg)", "panel(reg, s)",
+           "output = outputs(reg)", "Hold(reg, renderer", "register_hold(reg, hold",
+           "bindings = table(reg)", "library.attach(reg)", "panel(reg, s, clock=clock",
            "Router(reg, bindings)", "router.use_lfos(lfos, clock)",
            "router.use_bank(envs, clock)", "router.use_sequencer(seq, envs)",
            "Presets(library, reg, router)", "presets.graph.attach(renderer)",
@@ -302,7 +316,8 @@ def test_every_swap_target_lives_in_a_watched_module(tmp_path):
 
     r = boot(tmp_path / "home")
     targets = r.deck.targets()
-    assert targets and targets[0] == (r.view, "view", "ViewState")    # headless: no renderer
+    assert targets[0] == (r.deck, "deck", "Deck")                     # the deck itself first
+    assert targets[1] == (r.view, "view", "ViewState")                # headless: no renderer
     defined: dict[str, set[str]] = {}
     for obj, mod, cls in targets:
         assert mod in MODULES, f"{mod}.{cls} is a swap target but {mod} is not watched"
@@ -314,3 +329,123 @@ def test_every_swap_target_lives_in_a_watched_module(tmp_path):
     assert MODULES.index("learn") < MODULES.index("deck") < MODULES.index("midi")
     ids = [id(o) for o, _, _ in targets]
     assert len(ids) == len(set(ids))                                   # each object once
+
+
+def test_a_save_of_deck_py_re_classes_the_live_deck_and_back_fills_a_new_field(
+        tmp_path, monkeypatch):
+    """The reloader over `Deck.targets()`: a save of deck.py that adds a
+    field with a default re-classes the live deck to the new class and
+    back-fills the field (`hotreload._backfill_dataclass`). The save is a
+    copy of deck.py the module is pointed at; the module's namespace is
+    put back afterwards, so no other test sees the reloaded class."""
+    import importlib.util
+    import os
+    import sys
+
+    from hyperspace.hotreload import HotReloader
+
+    r = boot(tmp_path / "home")
+    deck = r.deck
+    mod = sys.modules["hyperspace.deck"]
+    kept = dict(vars(mod))
+    copy = tmp_path / "deck.py"
+    src = (PKG / "deck.py").read_text()
+    copy.write_text(src)
+    monkeypatch.setattr(mod, "__file__", str(copy))
+
+    class Finder:                    # `importlib.reload` finds the module again by name
+        @staticmethod
+        def find_spec(name, path=None, target=None):
+            if name == "hyperspace.deck":
+                return importlib.util.spec_from_file_location(name, copy)
+            return None
+
+    monkeypatch.setattr(sys, "meta_path", [Finder, *sys.meta_path])
+    try:
+        hot = HotReloader(deck.targets, modules=("deck",), period=0.0)
+        assert "added" not in vars(deck)
+        anchor = "    hold: Hold | None = None\n"
+        assert src.count(anchor) == 1
+        copy.write_text(src.replace(anchor, anchor + "    added: int = 7\n"))
+        st = copy.stat()
+        os.utime(copy, (st.st_atime, st.st_mtime + 5))
+        assert hot.poll(now=1.0) and hot.error == "", hot.error
+        assert type(deck) is mod.Deck and type(deck) is not kept["Deck"]
+        assert deck.added == 7
+        assert hot.status.startswith("hot: deck")
+    finally:
+        vars(mod).clear()
+        vars(mod).update(kept)
+    assert mod.Deck is kept["Deck"]
+
+
+def test_the_band_hooks_are_the_rigs_and_two_decks_leave_them_once(tmp_path, monkeypatch):
+    """The library's band hooks and `control.library` are rig-to-rig wiring
+    (plan 44 §2: the analyzer and the library are shared): the caller sets
+    them once, before `Deck.build`, which never touches them — so a second
+    deck over the same library (D2+) does not set them again."""
+    from hyperspace.library import Library as Lib
+
+    calls: list[str] = []
+    ONCE = ["on_layout:band", "extra:band", "on_load:band"]
+
+    def band() -> list[str]:          # the presets kind's own on_load is the deck's
+        return [c for c in calls if c.endswith(":band")]
+
+    for name in ("on_layout", "extra", "on_load"):
+        real = getattr(Lib, name)
+        monkeypatch.setattr(Lib, name, lambda self, group, hook, _n=name, _r=real: (
+            calls.append(f"{_n}:{group}"), _r(self, group, hook))[1])
+    r = boot(tmp_path / "home")
+    assert band() == ONCE
+    assert r.control.library is r.lib
+    hooks = (r.lib._layout_hooks["band"], r.lib._extra_hooks["band"], r.lib._load_hooks["band"])
+    second = Deck.build(library=r.lib, control=r.control, audio=r.audio,
+                        table=lambda reg: Bindings())
+    assert band() == ONCE                                                 # still once
+    assert (r.lib._layout_hooks["band"], r.lib._extra_hooks["band"],
+            r.lib._load_hooks["band"]) == hooks
+    assert second.reg is not r.reg and r.control.library is r.lib
+    src = textwrap.dedent(inspect.getsource(Deck.build))
+    assert "on_layout" not in src and "control.library =" not in src
+    main = inspect.getsource(app.main)
+    assert main.index('library.on_layout("band"') < main.index("Deck.build(")
+    assert main.index("control.library = library") < main.index("Deck.build(")
+
+
+def test_a_renderer_and_a_stand_in_state_together_are_refused(tmp_path):
+    """With a renderer the deck's params drive the renderer's own states;
+    a `dream` / `fx` / `ghost` handed in beside it would be dropped, so
+    `build` refuses it before building anything."""
+    import pytest
+
+    lib = Library(seed(tmp_path / "home"), period=0.0)
+    chain = Analyzer(Analyser())
+    renderer = SimpleNamespace(lookback=SimpleNamespace(state=DreamState()),
+                               fx=SimpleNamespace(state=FxState()),
+                               ghost=SimpleNamespace(state=GhostState()))
+    for kw in ({"dream": DreamState()}, {"fx": FxState()}, {"ghost": GhostState()},
+               {"fx": FxState(), "ghost": GhostState()}):
+        with pytest.raises(ValueError, match=", ".join(kw)):
+            Deck.build(library=lib, control=Control(chain), audio=SimpleNamespace(chain=chain),
+                       table=lambda reg: Bindings(), renderer=renderer, **kw)
+
+
+def test_the_panel_hook_gets_what_the_outputs_hook_returned(tmp_path):
+    """The panel hook runs after the outputs hook and is handed its result
+    (`output=`) with the clock, the banks and the hold, so the panel has
+    its handles at the place `main` gave them before D1."""
+    seen: dict = {}
+    marker = object()
+    lib = Library(seed(tmp_path / "home"), period=0.0)
+    chain = Analyzer(Analyser())
+    deck = Deck.build(library=lib, control=Control(chain), audio=SimpleNamespace(chain=chain),
+                      table=lambda reg: Bindings(), outputs=lambda reg: marker,
+                      panel=lambda reg, view, **kw: seen.update(kw, view=view))
+    assert seen["output"] is marker and seen["view"] is deck.view
+    assert (seen["clock"], seen["lfos"], seen["envs"], seen["seq"], seen["hold"]) == (
+        deck.clock, deck.lfos, deck.envs, deck.seq, None)
+    seen.clear()
+    Deck.build(library=lib, control=Control(chain), audio=SimpleNamespace(chain=chain),
+               table=lambda reg: Bindings(), panel=lambda reg, view, **kw: seen.update(kw))
+    assert seen["output"] is None                                       # no outputs hook
