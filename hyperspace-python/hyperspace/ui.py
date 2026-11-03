@@ -732,6 +732,10 @@ class Panel:
         self.hand_settings = None  # set by app.py (hands.HandSettings): the HANDS page
         self.clock = None          # set by app.py (tempo.Clock): the LFO page's beat light
         self.lfos = None           # set by app.py (lfo.LFOs): the LFO page's scopes
+        # set by app.py (deck.Deck, plan 44 D1): the deck the handles above
+        # (`reg`, `router`, `learn`, `undo`, `lfos`, `hold` …) are assigned
+        # from; nothing reads through it until D5
+        self.deck = None
         self._register_panel_params()
 
     def close(self) -> None:

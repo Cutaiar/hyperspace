@@ -3011,7 +3011,12 @@ modules are on the list in dependency order: `modifiers` after
 `motion`, `modgraph` before `routing`, `graphview` after `osc`, `ui_graph`
 before `ui`; `ui_feel`, the live feel plots, before `ui_routing`. A reload of `ui_graph` keeps the GRAPH page's editor
 context (it is held on the panel, not in the module), so the page goes
-on drawing with its zoom and selection.
+on drawing with its zoom and selection. The deck (`deck.py`, plan 44
+D1) is on the list after `learn`, before `midi`: a save re-classes the
+live `Deck` and its objects come from `Deck.targets()`, which `main`'s
+target list takes first, then the rig's. `Deck.build` runs once at
+launch, so a change to it — or a field added to a live object — needs
+Cmd+R, not a save.
 
 **The watchdog** (`watchdog.py`) appends to `<home>/stall.log` a `===
 <kind>` header — the time, the loaded preset, what happened — and every
@@ -3044,6 +3049,94 @@ uv run ruff check .
   applies by name (see "Running the automated tests" in
   `TESTING-GUIDE.md`); the default run is `-n auto` without them. Run
   `--all` before a merge and after touching rendering or presets.
+- **One tier at a time on a shared Mac** (row 589). Every xdist worker
+  that imports torch holds about 1 GB, and `-n auto` is sixteen of them
+  on the M3 Max: two or three `--all` runs from parallel sessions took
+  the machine to 140 GB on 2026-11-01. A session that is not the one
+  merging runs the fast tier with a few workers (`-n 4`), one run at a
+  time, and leaves `--all`, the goldens and `tests/test_media_live.py`
+  to whoever merges.
+- **A hung test fails by name.** pyproject's addopts carry
+  `--timeout=120 --max-worker-restart=0` and its ini key
+  `timeout_method = "thread"`. **Workers use the thread method, a
+  serial run the signal method** (conftest's `pytest_configure`, unless
+  the run names one: `--timeout-method` or `-o timeout_method=`). A test blocked inside a C call (`glfw.init()`, a
+  camera, audio or HID open) never returns to Python, so a signal
+  handler never runs; the thread method's watchdog dumps every
+  thread's stack and `os._exit`s its whole process, which xdist
+  reports as "worker 'gwN' crashed while running '<test>'". In a
+  serial run (`-n0`, the debugger's mode) that would end the run with
+  no summary, so there the signal method fails the test and goes on
+  (a `sleep(130)` under `-n0 --timeout=5`: "1 failed, 2 passed"; with
+  `--timeout-method=thread` named, the process ended with no summary).
+  The slowest fast-tier test takes about 6 s, far under the limit.
+- **The restart cap, measured** (2026-11-02, `-n 2`, one test that
+  `os._exit`s and forty quick ones; "default" is xdist's own cap,
+  `-n` × 4):
+
+  | `--dist` | the crashing test | `--max-worker-restart=0` | default restarts |
+  |---|---|---|---|
+  | `loadgroup` | ungrouped | 1 failed, 11 passed: 29 never ran | stalled, killed after 60 s |
+  | `loadgroup` | in an `xdist_group` | 1 failed, 11 passed: 29 never ran | stalled, killed after 60 s |
+  | `load` | ungrouped | 1 failed, 14 passed: 26 never ran | 1 failed, 40 passed |
+  | `load` | in an `xdist_group` | 1 failed, 14 passed: 26 never ran | 1 failed, 40 passed |
+
+  With the cap a dead worker's queue is lost under either scheduler;
+  without it `load` hands the queue to the replacement and `loadgroup`
+  stalls (`sample` showed the replacement waiting on its channel for
+  work, not in a modal, after the reopen-windows alert below was
+  cleared). So today's `loadgroup` keeps the cap: any crash, even a
+  transient one, ends the run and leaves the dead worker's queue unrun
+  — the summary looks finished, so compare the count with a clean
+  run's (an `--all` with a crash of
+  `test_segment.py::test_vision_frees_each_jobs_memory` said "4297
+  passed" against 4902) — which is cheaper than a run that never ends.
+  `load` without the cap is the follow-up (row 589, "Other options").
+- **Live tests take turns across processes.** Within a run
+  `xdist_group("live")` gives every `live` test to one worker; across
+  runs (two sessions, two worktrees) the autouse fixture
+  `_live_devices_take_turns` holds an `fcntl.flock` on
+  `$TMPDIR/hyperspace-tests-live-<uid>.lock` (`tests/live_lock.py`) for each
+  live test's setup, call and teardown. It waits at most
+  `live_lock.WAIT_S` (60 s) and then skips with "another test run holds
+  the live devices"; the kernel drops the lock when a worker dies.
+  `tests/test_live_lock.py` proves it with two processes. The file is
+  per account (`hyperspace-tests-live-<uid>.lock`); a lock file that
+  cannot be opened or locked is a skip with the reason, never an error.
+  The folder is `tempfile.gettempdir()`, so a session whose `TMPDIR`
+  differs (a sandbox that sets its own) gets a different lock file and
+  does not take turns with the others.
+- **Why `glfwInit()` hangs on the Mac, and the recovery.** A sample of
+  a bare `glfw.init()` ends in `_glfwInitCocoa` → `[NSApplication run]`
+  → the reopen AppleEvent →
+  `-[NSPersistentUIRestorer promptToIgnorePersistentStateWithCrashHistory:]`
+  → `-[NSAlert runModal]`. macOS shows every new Python GUI process
+  (bundle `org.python.python`) a hidden "Python quit unexpectedly while
+  reopening windows" alert, because an earlier process died with a
+  window open (a memory kill, or the thread timeout's `os._exit`), and
+  the new process waits in that modal forever. Any worker that dies with
+  a GLFW window open arms the alert again, which is one more reason live
+  tests take turns. So a test that opens a real GLFW window asks for
+  the `gl_window_ok` fixture (both do:
+  `test_ui_pad.py::test_the_drawings_show_upright_through_real_gl`,
+  which stays in the fast tier so CI checks the orientation under
+  Xvfb, and `test_media_live.py::test_syphon_loopback`):
+  `tests/gl_probe.py` runs `glfw.init()` in a child process with an
+  8 s cap, once per worker, and the test skips with the reason when
+  the child does not answer (SIGTERM, then SIGKILL a second later), when
+  `glfw.init()` says no, or when the child fails (its stderr in the
+  reason). The child is started with `-ApplePersistenceIgnoreState YES`
+  on its argv (NSUserDefaults' argument domain, this process only;
+  nothing is written), meant to keep it from restoring or offering to
+  restore saved windows, and from leaving saved state behind when it is
+  killed at the cap. Neither was tested: that needs the alert armed on
+  purpose in the owner's saved state. What was checked: the probe still
+  answers (0.2 s) and `defaults read org.python.python` is unchanged. To find a stuck process: `ps`,
+  then `sample <pid>` (main thread in CFRunLoop / `mach_msg`). To
+  recover, move
+  `~/Library/Saved Application State/org.python.python.savedState`
+  aside, then run
+  `defaults write org.python.python ApplePersistenceIgnoreState -bool YES`.
 
 - Every test runs against its own temporary home: `tests/conftest.py`
   sets `HYPERSPACE_HOME` to the test's `tmp_path` in `os.environ`
@@ -3159,7 +3252,9 @@ to `main`: one job, `tests`, on `ubuntu-24.04` — `uv sync --locked`,
 `--timeout 120` (pytest-timeout: a hung test fails alone and names
 itself instead of stalling its worker) and `--max-worker-restart=0` (a
 crashed worker fails the run; xdist's replacement for one stalled the
-`loadgroup` scheduler at 99 %). The fast tier takes about two minutes on
+`loadgroup` scheduler at 99 %) — the same values pyproject's addopts now
+carry, with the thread method, so the explicit flags are redundant but
+consistent. The fast tier takes about two minutes on
 four cores.
 
 - **What it leaves out.** `UV_NO_GROUP="hands dream"`: no Ultraleap SDK

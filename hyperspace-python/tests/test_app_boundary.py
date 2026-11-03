@@ -411,15 +411,28 @@ def test_the_frame_runs_in_the_documented_order():
     assert h.reloader.runtime_error == ""            # a clean frame clears the toast
 
 
+def _deck_build_src() -> str:
+    """The source of `Deck.build`: `main`'s deck lines since plan 44 D1
+    (main calls it once, tests/test_deck.py)."""
+    import inspect
+    import textwrap
+
+    from hyperspace.deck import Deck
+
+    return textwrap.dedent(inspect.getsource(Deck.build))
+
+
 def test_main_hands_the_router_its_lfos():
     """Plan 28 N0: the LFOs step inside `router.modulate`, so `ORDER` no
     longer shows them — a main that forgot `router.use_lfos(lfos, clock)`
     would freeze every LFO with the frame order unchanged. The call is in
-    `main`, on the router it builds, with the bank and clock it registered."""
+    `main`'s deck (`Deck.build`, plan 44 D1), on the router it builds,
+    with the bank and clock it registered."""
     import ast
     import inspect
 
-    tree = ast.parse(inspect.getsource(app.main))
+    assert "Deck.build(" in inspect.getsource(app.main)
+    tree = ast.parse(_deck_build_src())
     calls = [ast.unparse(n) for n in ast.walk(tree) if isinstance(n, ast.Call)
              and isinstance(n.func, ast.Attribute) and n.func.attr == "use_lfos"]
     assert calls == ["router.use_lfos(lfos, clock)"]
@@ -434,7 +447,9 @@ def test_main_hands_the_router_its_envelopes_and_sequencer():
     import ast
     import inspect
 
-    src = inspect.getsource(app.main)
+    from hyperspace.deck import Deck
+
+    src = _deck_build_src()                  # main's deck lines (plan 44 D1)
     tree = ast.parse(src)
     calls = [ast.unparse(n) for n in ast.walk(tree) if isinstance(n, ast.Call)
              and isinstance(n.func, ast.Attribute)
@@ -443,8 +458,9 @@ def test_main_hands_the_router_its_envelopes_and_sequencer():
     assert src.index("envelope.register(reg, envs, clock)") < src.index("library.attach(reg)")
     assert src.index("sequencer.register(reg, seq, clock)") < src.index("library.attach(reg)")
     assert src.index("router.use_lfos(lfos, clock)") < src.index("router.use_bank(envs, clock)")
-    assert '(envs, "envelope", "Envelopes")' in src
-    assert '(seq, "sequencer", "Sequencer")' in src
+    targets = inspect.getsource(Deck.targets)
+    assert '(self.envs, "envelope", "Envelopes")' in targets
+    assert '(self.seq, "sequencer", "Sequencer")' in targets
 
 
 def test_an_absent_pad_or_adapter_is_simply_skipped():
@@ -1012,9 +1028,12 @@ def test_the_app_starts_with_knob_smoothing_at_80_ms_and_a_show_keeps_its_own(tm
     from hyperspace import routing
 
     assert routing.Bindings().slew == 0.0 and routing.SLEW_DEFAULT_S == 0.08
-    src = inspect.getsource(app.main)
-    assert 0 < src.index("_desk_table(reg, Bindings.load(") < src.index("library.attach(reg)")
-    assert src.index("library.attach(reg)") < src.index("Router(reg, table)")
+    # main's table hook (plan 44 D1) is what `Deck.build` reads it with,
+    # before the library attaches; the router after
+    src, build = inspect.getsource(app.main), _deck_build_src()
+    assert 0 < src.index("_desk_table(reg, Bindings.load(") < src.index("table=load_table")
+    assert build.index("bindings = table(reg)") < build.index("library.attach(reg)")
+    assert build.index("library.attach(reg)") < build.index("Router(reg, bindings)")
 
     home = seed(tmp_path / "home")                      # the corpus: the party show opens
     r = _launch(home)
@@ -1447,9 +1466,11 @@ def test_the_switches_are_registered_from_the_configs_launch_values(monkeypatch,
     from hyperspace.overlay import register_switches
     from hyperspace.params import Registry
 
-    src = inspect.getsource(app.main)
+    # main's outputs hook (plan 44 D1), run by `Deck.build` before attach
+    src, build = inspect.getsource(app.main), _deck_build_src()
     assert src.index("_make_output(render_win, reg, cfg)") < src.index(
-        "register_switches(reg, slots)") < src.index("library.attach(reg)")
+        "register_switches(reg, slots)") < src.index("outputs=outputs_setup")
+    assert build.index("outputs(reg)") < build.index("library.attach(reg)")
     assert "panel.outputs = slots" in src
     g = _OutGlfw()
     monkeypatch.setattr(app, "glfw", g)
