@@ -11,7 +11,7 @@ The bytes follow `hyperspace-python/docs/plans/assets/42-controllers/sony-hid.md
 The lane names, sink channels and tape format are the Python app's
 (`pads/sony.py`, `pads/gesture.py`, `devices.pad_effects`), so whatever you
 find here carries over. The spec's §8 test vectors run on load: the badge in
-the bottom-right corner should read `self-test 30/30 pass`; click it for the
+the bottom-right corner should read `self-test 48/48 pass`; click it for the
 details.
 
 ![Faithful view and the ideas canvas](shots/faithful-and-ideas.png)
@@ -88,6 +88,82 @@ device list is empty or no reports arrive, check System Settings ▸ Privacy
   **copy route** shows the app's rows for each idea and copies them.
   **solo** turns every other idea off, and leaves only the soloed idea's
   output channels on.
+- **Triggers.** The bench: every effect the adaptive triggers can make, one
+  recipe per side, so two can be felt against each other. Twenty-seven
+  recipes in six families.
+  - **Still shapes** — set once, felt as you pass through: *free*
+    (Off 0x05) · *wall* (one uniform push-back, which is all the app sends
+    today) · *response curve* (linear, curved either way, S, inverse,
+    stepped, sawtooth) · *detents* (notches you feel) · *snap-to* (detents
+    inverted: hard between the stops, free at them, so the trigger shoves
+    the finger onto a value) · *grit* (random forces redrawn a few times a
+    second — sandpaper).
+  - **Weapons** — a break, and what happens after it: *sniper break*
+    (Weapon 0x25: slack, wall, and past the break it gives way) · *recoil*
+    (the wall drops, the motor rattles, the wall returns; semi or full
+    auto) · *fatigue* (every shot heats it, the wall softens, the rattle
+    drops in pitch, and at the top of the heat it seizes) · *the jam* (now
+    and then the shot locks it solid until you let go) · *bowstring* ·
+    *gallop* (wind the period up and it is a machine gun).
+  - **The loop** — effects that watch the finger and rewrite the shape
+    every frame. **No stored preset can hold these**, which is the point of
+    the family: *mass* (resistance follows how fast you are moving, so the
+    trigger gains weight) · *stiction* (hard to start, easy once going) ·
+    *the retreating wall* (the stop keeps a zone ahead, so the travel never
+    ends) · *sticky memory* (pause and a notch appears where you stopped) ·
+    *ratchet* (the force climbs and lets go while you hold still) · *idle*
+    (a breath at rest).
+  - **Music** — the trigger as an instrument: *buzz* · *engine* (the pitch
+    follows the travel) · *play notes* (the frequency byte is 1–255 Hz,
+    which is pitch: the travel walks a scale, two triggers make a chord) ·
+    *the beat* (a pitched tick on the lab's own tempo) · *the spectrum*
+    (ten zones, ten frequency bands — slide the finger down the trigger and
+    feel the EQ) · *the scope* (the last second of the music as a shape,
+    scrolling).
+  - **Readouts** — the trigger as a display you squeeze: *gauge* (the stop
+    sits where the number is — squeeze until you meet it; reads the beat,
+    the mic, the battery, the report rate or the other trigger) ·
+    *countdown* (the wall marches up as the bar line approaches and lets go
+    on the one).
+  - **Both hands** — *coupled*: this trigger answers to the other one
+    (follow, oppose, or share one budget of force). A crossfader you can
+    feel from either end.
+  - **Dither**, a switch on every recipe: a force of 4.5 goes out as 4 on
+    some frames and 5 on others, so the eight levels the firmware has
+    become finer. It makes every frame a new report, so the write rate goes
+    to the cap (measured: 57 a second). Whether a hand reads it as a
+    half-step or as a flutter is exactly what it is there to find out.
+  - **Pairs worth feeling** load both sides at once, grouped by family:
+    the sniper, linear vs inverse, brake and gas, semi-auto, full auto,
+    sandpaper, quantise, wear it out, weight, never ends, alive, a chord,
+    the EQ, the groove, the dial, crossfader, and more.
+  - **The plot** under each side is the ten zones exactly as the firmware
+    got them, with the live travel and the break on the same axis; the line
+    under it is the mode, the 11 bytes, and whatever the recipe has to say
+    (`the wall is at zone 3`, `note 3/6 · 73 Hz`, `heat 40 %`, `JAMMED`).
+  - **The travel trace** is your own finger over the last 2.6 s, every shot
+    marked, and for each one: how long the slack took, how long you held on
+    the wall, and how far down it broke. That is the sniper's three stages,
+    drawn.
+  - **use the laptop mic** hangs a second analyser off idea 7's microphone,
+    without its 150 Hz low-pass, and gives the music recipes ten log bands
+    from 40 Hz to 12 kHz. Everything else needs nothing.
+  - Only Off 0x05, Feedback 0x21, Weapon 0x25 and Vibration 0x26 are ever
+    encoded — one mode per trigger per report, so a shape and a buzz can
+    never be felt at once. Recoil, fatigue, the jam, bowstring, gallop and
+    every loop recipe take turns in time instead, re-sent frame by frame,
+    which is also how the unofficial 0x22 / 0x23 / 0x27 (bow, gallop,
+    machine) are built rather than sent. 0xFC–0xFE are refused before any
+    write.
+  - **send this bench to the pad** takes the output over from the sink
+    channels (the same switch as the Feedback tab's radio); **free both**
+    puts Off 0x05 on each side.
+
+  ![The bench: a dithered brake-pedal curve on L2, mass on R2](shots/triggers.png)
+
+  What the app itself can send is a strict subset of this — one wall per
+  trigger, from a fixed zone. The brain-blast for the rest is
+  `hyperspace-python/docs/plans/brain-blast-trigger-extensions.md`.
 - **Feedback.**
   - The nine sink channels in the app's order. Each has an on/off switch
     (off keeps the player identity), an auto setting (what the ticked idea
@@ -283,6 +359,19 @@ These were checked headless with Playwright:
 - The simulator: all three readouts, the ideas, the feedback writes, the
   probe steps (the axis probe proposes the identity map for the simulated
   pad), the findings export and the tape export.
+- The trigger bench in Chrome (2026-11-02), on the simulator: every pair
+  loaded and both triggers run through the whole travel, with the bytes
+  read back from the report each time — the Weapon block's wall and break,
+  each multiple-position shape zone by zone, the vibration Hz, and the
+  recoil's wall → kick → wall. Then all 27 recipes on both sides with every
+  slider dragged end to end, every switch toggled and every menu changed:
+  no NaN, no console errors, no write errors. Then a behaviour pass per
+  recipe with the trigger animated — stiction grips and slips, the wall
+  retreats zone by zone, the notch lands where the finger paused, the
+  pentatonic walks 55 → 65 → 73 → 82 → 98 → 110 Hz, the gauge's stop
+  follows its reading, coupled follows the other side. Dither was measured:
+  four distinct blocks a cycle, 57 writes a second. The self-test reads
+  48/48.
 - Ideas 8–13 in Chromium (2026-11-02), on the simulator, each one soloed and
   played: the grab, the spin either way, the shake and the settle, L2 under
   and through the wall, the wind and the release, the two-thumb roll at two
@@ -290,7 +379,7 @@ These were checked headless with Playwright:
   back: the light bar's hue, whiteness and level, the player lights, both
   motors, and each trigger's Feedback level and zone. Also checked: ideas 4,
   5 and 7 still run, there were no console errors, and the self-test reads
-  30/30.
+  48/48.
 - The WebHID code path, against a mock `navigator.hid`: the id-less input
   DataView, feature reads that come back with the id byte, Bluetooth
   simple → full, the outgoing BT sequence nibble and CRC, and the USB
