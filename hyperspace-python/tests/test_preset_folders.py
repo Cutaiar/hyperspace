@@ -10,6 +10,7 @@ touches ~/Hyperspace or a Drive folder.
 """
 
 import json
+import os
 from types import SimpleNamespace
 
 import pytest
@@ -297,7 +298,9 @@ def test_a_slash_in_a_files_own_name_is_never_a_folder(lib_dirs):
     lib, pr = r.lib, r.lib.project
     assert "AC - DC" in lib.list(PRESETS) and "AC/DC" not in lib.list(PRESETS)
     assert lib.folder_of(PRESETS, "AC - DC") == ("", "AC - DC")
-    assert lib.path_of(PRESETS, "Ac/Dc") == lib_dirs.presets / "ac-dc.json"   # an old show
+    # an old show's spelling: a read finds it, a writer never does (review 2, item 1)
+    assert lib.path_of(PRESETS, "Ac/Dc", loose=True) == lib_dirs.presets / "ac-dc.json"
+    assert lib.path_of(PRESETS, "Ac/Dc") is None
     pr.bank[3] = "Ac/Dc"
     pr.load_slot(3)
     assert lib.current(PRESETS) == "AC - DC"
@@ -367,3 +370,113 @@ def test_one_folder_is_one_library_and_trash(tmp_path):
     assert lib._old_trash() is None and lib._trash_dir() == tmp_path / "trash"
     assert library.to_trash(tmp_path / PRESETS / "party" / "b.json", tmp_path,
                             "presets/party").parent == tmp_path / "trash" / "presets" / "party"
+
+
+# ---------------------------------------------------------------- review, second pass
+
+def test_a_save_into_a_folder_not_there_never_writes_over_a_flat_file(lib_dirs):
+    """Second pass 1: as… "nope/TRIP" with no `nope/` but a top-level
+    `nope-trip.json` makes `presets/nope/trip.json`; NOPE TRIP is left
+    alone, and a delete or rename of the folder name finds nothing."""
+    _put(lib_dirs.presets / "nope-trip.json", "NOPE TRIP")
+    r = make(lib_dirs)
+    flat = (lib_dirs.presets / "nope-trip.json").read_text()
+    assert not r.lib.delete(PRESETS, "nope/TRIP")
+    with pytest.raises(LibraryError, match="no preset"):
+        r.lib.rename(PRESETS, "nope/TRIP", "X")
+    path = r.presets.save_as("nope/TRIP")
+    assert path == lib_dirs.presets / "nope" / "trip.json"
+    assert (lib_dirs.presets / "nope-trip.json").read_text() == flat
+
+
+def test_a_kept_walk_is_trusted_one_tick_at_most(lib_dirs, monkeypatch):
+    """Second pass 2: a file whose folder's mtime did not move (a coarse
+    filesystem) is seen once WALK_TTL has passed."""
+    r = make(lib_dirs)
+    clock = [1000.0]
+    monkeypatch.setattr(library, "_now", lambda: clock[0])
+    r.lib._walks.clear()
+    r.lib.list(PRESETS)
+    folder = lib_dirs.presets / "party"
+    stamp = folder.stat().st_mtime_ns
+    _put(folder / "e.json", "E")
+    os.utime(folder, ns=(stamp, stamp))                   # as HFS+ might leave it
+    assert "party/E" not in r.lib.list(PRESETS)           # within the tick: kept
+    clock[0] += library.WALK_TTL
+    assert "party/E" in r.lib.list(PRESETS)
+
+
+def test_a_rename_repoints_a_slot_that_named_it_by_an_old_spelling(lib_dirs):
+    """Second pass 3: a slot `Ac/Dc` (resolved by the loose read) follows
+    a rename, and the show file says the new name."""
+    _put(lib_dirs.presets / "ac-dc.json", "AC/DC")
+    r = make(lib_dirs)
+    pr = r.lib.project
+    pr.bank[2] = "Ac/Dc"
+    pr.write()
+    assert r.lib.still_named("AC - DC") == ["F3"]
+    r.lib.rename(PRESETS, "AC - DC", "THUNDER")
+    assert pr.bank[2] == "THUNDER"
+    shown = json.loads((lib_dirs.root / "projects" / "night.hyp.json").read_text())
+    assert shown["bank"][2] == "THUNDER"
+
+
+def test_a_restore_into_a_folder_spelled_otherwise_takes_the_next_name(lib_dirs):
+    """Second pass 4: the trash kept the file under `Party/` (the folder
+    as it was spelled then) and `party/b.json` is there again: it is
+    restored as B 2, not refused."""
+    r = make(lib_dirs)
+    lib = r.lib
+    lib.delete(PRESETS, "party/B")
+    trash = lib_dirs.machine / "trash" / "presets"
+    (kept,) = (trash / "party").glob("b.*.json")
+    (trash / "Party-tmp").mkdir()
+    kept.rename(trash / "Party-tmp" / kept.name)
+    (trash / "party").rmdir()
+    (trash / "Party-tmp").rename(trash / "Party")       # (two steps: APFS folds case)
+    _put(lib_dirs.presets / "party" / "b.json", "B")
+    (item,) = lib.trash()
+    assert item.folder == "Party"
+    assert lib.restore_trash(item) == "party/B 2"
+    assert (lib_dirs.presets / "party" / "b-2.json").is_file()
+
+
+def test_a_restore_clears_the_delete_warning_of_a_slashed_name(lib_dirs):
+    """Second pass 5: × said "AC - DC is in the trash …"; the restore
+    clears it, matching by the listed name."""
+    _put(lib_dirs.presets / "ac-dc.json", "AC/DC")
+    r = make(lib_dirs)
+    lib = r.lib
+    lib.project.bank[5] = "AC - DC"
+    lib.delete(PRESETS, "AC - DC")
+    assert lib.warning.startswith("AC - DC is in the trash")
+    (item,) = lib.trash()
+    assert item.name == "AC - DC"
+    lib.restore_trash(item)
+    assert lib.warning == ""
+
+
+def test_a_miss_reuses_the_kept_fold_map(lib_dirs, monkeypatch):
+    """Second pass 6: a name with no file, asked every frame, folds the
+    files once per walk, not once per ask."""
+    r = make(lib_dirs)
+    calls = []
+    real = library.fold
+    monkeypatch.setattr(library, "fold", lambda n: (calls.append(n), real(n))[1])
+    r.lib._walks.clear()
+    r.lib.path_of(PRESETS, "untitled")
+    first = len(calls)
+    assert first >= 4                                     # every file folded once
+    r.lib.path_of(PRESETS, "untitled")
+    assert len(calls) - first <= 2                        # then the name alone
+
+
+def test_a_save_says_a_files_own_slash_went(lib_dirs):
+    """Second pass 9: the first save over `AC/DC` says it, the next does not."""
+    _put(lib_dirs.presets / "ac-dc.json", "AC/DC")
+    r = make(lib_dirs)
+    r.presets.load("AC - DC")
+    r.lib.overwrite(PRESETS)
+    assert r.lib.status == "presets: saved AC - DC (was AC/DC)"
+    r.lib.overwrite(PRESETS)
+    assert r.lib.status == "presets: saved AC - DC"

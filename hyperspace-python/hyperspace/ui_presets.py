@@ -77,6 +77,13 @@ SHOW_TIP = ("A show is the room the presets play in: which preset each of the de
             "around it. Open another, save this one, or start a new one here.")
 
 
+def trash_tag(item) -> str:
+    """A trash row's dim first column: its group, and for a file in the
+    library's old trash (plan 48 row 586) ``· library`` — so a row says in
+    itself that "empty" leaves it and a restore is a copy."""
+    return f"{item.group} · library" if getattr(item, "old", False) else item.group
+
+
 # ---- state on the panel, created on first use ----
 
 def _state(panel) -> dict:
@@ -552,7 +559,7 @@ def _trash_popup(panel, bin_: list) -> None:
     n = len(bin_)
     ui._micro(f"trash  ·  {n} file{'' if n == 1 else 's'}")
     style = imgui.get_style()
-    gw = max([imgui.calc_text_size(t.group).x for t in bin_] or [0.0])
+    gw = max([imgui.calc_text_size(trash_tag(t)).x for t in bin_] or [0.0])
     nw = max([imgui.calc_text_size(t.name).x for t in bin_] or [0.0])
     ww = imgui.calc_text_size("Oct 30 00:00").x
     sp = 2 * style.item_spacing.x
@@ -563,7 +570,7 @@ def _trash_popup(panel, bin_: list) -> None:
         for i, item in enumerate(bin_):
             x = imgui.get_cursor_pos_x()
             imgui.align_text_to_frame_padding()
-            imgui.text_disabled(item.group)
+            imgui.text_disabled(trash_tag(item))       # an old row says so in itself
             imgui.same_line(x + gw + sp)
             imgui.text(item.name)
             imgui.same_line(x + gw + nw + 2 * sp)
@@ -572,9 +579,13 @@ def _trash_popup(panel, bin_: list) -> None:
             hit = ui.chip(f"restore##restore.{i}")
             rect(f"restore.{i}")
             drawn["rows"].append((item.group, item.name, item.when))
+            drawn.setdefault("tags", []).append(trash_tag(item))
             if imgui.is_item_hovered():
                 ui.tooltip(f"{item.path.name} — back into {item.group}/, never over a "
-                           "file: a name that is taken gets the next free one")
+                           "file: a name that is taken gets the next free one"
+                           + ("\nFrom the library's old trash: a copy comes back and the "
+                              "file stays there (empty trash leaves it)"
+                              if getattr(item, "old", False) else ""))
             if hit:
                 _said(panel, lib.restore_trash, item)
                 invalidate(panel, item.group)

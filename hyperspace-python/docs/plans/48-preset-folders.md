@@ -39,8 +39,10 @@ The trash is a machine thing.
   by one fold (`library.fold`: folder segments stripped and lowered, the
   leaf slugged), so `Party/Trip` finds `presets/party/trip.json` as APFS
   would, and a name whose folder is not on disk falls back to its `slug`
-  among the top-level files (an old show's `Ac/Dc`). The walk is kept
-  until a folder's mtime moves or the library writes (`Library._tree`).
+  among the top-level files (an old show's `Ac/Dc`) — on a read only:
+  a save, a delete or a rename never takes that road. The walk is kept
+  until a folder's mtime moves, the library writes or one second passes
+  (`Library._walked`, `WALK_TTL`).
 - **The bank names a preset by that name.** A slot holds `party/TRIP`; a
   bare name is a top-level file, so every show written before reads as
   it did. `cycle`, `walk`, `home`, `load_startup`, `still_named`, the

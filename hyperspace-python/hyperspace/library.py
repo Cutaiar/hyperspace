@@ -429,11 +429,25 @@ def _walk(folder: Path, pattern: str = "*.json") -> list[Path]:
     """Every file matching `pattern` under `folder`, every folder down,
     sorted — less hidden folders (``.cache``, a cloud client's own) and
     never through a link to a folder (plan 48)."""
-    out: list[Path] = []
+    return [p for _here, found in _walk_dirs(folder, pattern) for p in found]
+
+
+def _walk_dirs(folder: Path, pattern: str = "*.json"):
+    """The one walker (`_walk`, `Library._tree`): each folder under
+    `folder` (itself first), every folder down, with its files matching
+    `pattern`, sorted — less hidden folders and never through a link to a
+    folder."""
     for here, dirs, _files in os.walk(folder, followlinks=False):
         dirs[:] = sorted(d for d in dirs if not d.startswith("."))
-        out.extend(sorted(Path(here).glob(pattern)))
-    return out
+        h = Path(here)
+        yield h, sorted(h.glob(pattern))
+
+
+# how long a kept walk of the presets is trusted without a look at the
+# disk (review of #334): a folder's mtime alone misses a file added in
+# the same tick on a coarse filesystem (HFS+ 1 s, SMB 2 s) or a cloud mount
+WALK_TTL = 1.0
+_now = time.monotonic       # (a test moves the clock)
 
 
 def _mtime(path: Path) -> int | None:
@@ -876,7 +890,7 @@ class Project:
             lib.say(warning=f"{key}: an empty slot — hold its pad" + (
                 f" (or ⇧{key})" if k < F_KEYS else "") + " to save the live state into it")
             return
-        if presets is None or lib.path_of(PRESETS, name) is None:
+        if presets is None or lib.path_of(PRESETS, name, loose=True) is None:
             lib.say(warning=f"{key}: no preset {name!r}")
             return
         try:
@@ -985,7 +999,7 @@ class Project:
             self.bank_error = "presets: no preset loader"
             return False
         # stems as slugs: on a filesystem that folds case, `Trip-2.json`
-        # is the file a save of "TRIP 2" would write over. Plan 47 row 587:
+        # is the file a save of "TRIP 2" would write over. Plan 48 row 587:
         # the new preset lands beside the loaded one — in its folder, the
         # library's root for a top-level one or none loaded
         taken = lib._taken(PRESETS) | {lib._fold(PRESETS, n) for n in self.bank if n}
@@ -1030,7 +1044,7 @@ class Project:
         written or deleted; no undo step."""
         if not 0 <= k < len(self.bank):
             return
-        if self.lib.path_of(PRESETS, name) is None:
+        if self.lib.path_of(PRESETS, name, loose=True) is None:
             self.lib.say(warning=f"{slot_key(k)}: no preset {name!r}")
             return
         self._set_slot(k, name, f"{slot_key(k)}: {name}")
@@ -1110,7 +1124,7 @@ class Project:
         lib, presets, name = self.lib, self._loader(), self.startup
         if presets is None or not name:
             return
-        if lib.path_of(PRESETS, name) is None:
+        if lib.path_of(PRESETS, name, loose=True) is None:
             lib.say(warning=f"startup: no preset {name!r}")
             return
         try:
@@ -1132,7 +1146,7 @@ class Project:
             return
         if lib.warning == HOME_UNSET:                 # it names one now
             lib.warning = ""
-        if self._loader() is not None and lib.path_of(PRESETS, name) is not None:
+        if self._loader() is not None and lib.path_of(PRESETS, name, loose=True) is not None:
             undo.push(f"home → {name}", load=True)
         self.load_startup()
 
@@ -1679,27 +1693,49 @@ class Library:
         return out
 
     def _tree(self, d: Path) -> tuple[list[Path], list[str]]:
-        """The presets' folder walked (`_walk`'s rule): its ``*.json`` files
-        and its folders (``party``, ``party/deep``) — kept until a folder's
-        mtime moves (a file or folder made, removed or renamed in it) or the
-        library writes (`_sync`), as `_doc` keeps a parse: the panel asks
-        for the list every frame (plan 48 review)."""
+        """The presets' folder walked (`_walk_dirs`): its ``*.json`` files
+        and its folders (``party``, ``party/deep``)."""
+        hit = self._walked(d)
+        return hit["files"], hit["folders"]
+
+    def _walked(self, d: Path) -> dict:
+        """`_tree`'s walk, kept (plan 48 review) until a folder's mtime
+        moves (a file or folder made, removed or renamed in it), the
+        library writes (`_sync`) or WALK_TTL passes (a coarse or cloud
+        filesystem's mtime may not move) — as `_doc` keeps a parse: the
+        panel asks for the list every frame. Beside it, built on first ask,
+        the files by `fold` (`byfold`, `path_of`'s miss)."""
         walks = self.__dict__.setdefault("_walks", {})   # (a Library from before a reload)
         hit = walks.get(d)
-        if hit is not None and all(_mtime(p) == m for p, m in hit[0].items()):
-            return hit[1], hit[2]
+        now = _now()
+        if (hit is not None and now - hit["at"] < WALK_TTL
+                and all(_mtime(p) == m for p, m in hit["stamps"].items())):
+            return hit
         stamps: dict[Path, int | None] = {}
         files: list[Path] = []
         folders: list[str] = []
-        for here, dirs, _names in os.walk(d, followlinks=False):
-            dirs[:] = sorted(x for x in dirs if not x.startswith("."))
-            h = Path(here)
+        for h, found in _walk_dirs(d):
             stamps[h] = _mtime(h)
-            files.extend(sorted(h.glob("*.json")))
+            files.extend(found)
             if h != d:
                 folders.append(h.relative_to(d).as_posix())
-        walks[d] = (stamps, files, folders)
-        return files, folders
+        walks[d] = hit = {"at": now, "stamps": stamps, "files": files, "folders": folders}
+        return hit
+
+    def _byfold(self) -> dict[str | None, Path]:
+        """Every preset file by `fold` of its key (``party/trip``), kept
+        with the walk."""
+        out: dict[str | None, Path] = {}
+        for root in self._roots():
+            d = root / PRESETS
+            if not d.is_dir():
+                continue
+            hit = self._walked(d)
+            if "byfold" not in hit:
+                hit["byfold"] = {fold(p.relative_to(d).as_posix()[:-5]): p
+                                 for p in sorted(hit["files"])}
+            out.update(hit["byfold"])
+        return out
 
     def _folder_on_disk(self, folder: str) -> str | None:
         """The folder under ``presets/`` that `folder` names, spelled as it
@@ -1806,31 +1842,52 @@ class Library:
             out[name] = p
         return out
 
-    def path_of(self, group: str, name: str) -> Path | None:
+    def path_of(self, group: str, name: str, *, loose: bool = False) -> Path | None:
         """The file a name resolves to: a listed name; else a file key —
         the slug, and for a preset its folder and slug compared by `fold`
-        (``Party/Trip`` finds ``presets/party/trip.json``, as APFS does);
-        else, for a preset name whose folder is not on disk, its `slug`
-        among the top-level files — an old show's ``Ac/Dc`` for the
-        top-level ``ac-dc.json`` (plan 48 review). None for none, and for
-        a preset name that could not name a file inside ``presets/``
+        (``Party/Trip`` finds ``presets/party/trip.json``, as APFS does).
+        With `loose` — a **read** only: a load, a pad, the startup preset,
+        what a show still names — a preset name whose folder is not on
+        disk also tries its `slug` among the top-level files, an old show's
+        ``Ac/Dc`` for the top-level ``ac-dc.json`` (plan 48 review). A
+        writer (`save_as`, `delete`, `rename`) never takes that road:
+        ``party/TRIP`` typed with no ``party/`` is a new file in a new
+        folder, never the top-level ``party-trip.json``. None for none, and
+        for a preset name that could not name a file inside ``presets/``
         (``../x``, ``/etc/x``)."""
-        idx = self._index(group)
+        return self._resolve(group, name, self._lookup(group), loose=loose)
+
+    def _lookup(self, group: str) -> tuple:
+        """What `_resolve` reads, taken once: the index, the file keys, and
+        for the presets the files by `fold` and the folders on disk folded."""
+        idx, files = self._index(group), self._files(group)
+        if group != PRESETS:
+            return idx, files, {}, set()
+        folders: set[str | None] = set()
+        for root in self._roots():
+            if (root / PRESETS).is_dir():
+                hit = self._walked(root / PRESETS)
+                if "folded" not in hit:                 # kept with the walk, as byfold
+                    hit["folded"] = {fold_folder(f) for f in hit["folders"]}
+                folders |= hit["folded"]
+        return idx, files, self._byfold(), folders
+
+    @staticmethod
+    def _resolve(group: str, name: str, snap: tuple, *, loose: bool) -> Path | None:
+        idx, files, byfold, folders = snap
         hit = idx.get(name)
         if hit is not None:
             return hit
-        files = self._files(group)
         if group != PRESETS:
             return files.get(slug(name))
         key = fold(name)
         if key is None:
             return None
-        byfold = {fold(k): p for k, p in sorted(files.items())}
         hit = byfold.get(key)
-        if hit is not None:
+        if hit is not None or not loose:
             return hit
         folder = split_name(name)[0]
-        if folder and self._folder_on_disk(folder) is None:
+        if folder and fold_folder(folder) not in folders:
             return byfold.get(slug(name))           # a top-level key has no "/"
         return None
 
@@ -1859,17 +1916,20 @@ class Library:
         the file at `path`): its slots (``F6``, ``slot 12``) and its
         ``startup``."""
         pr, key = self.project, self._fold(PRESETS, name)
+        snap = self._lookup(PRESETS)                   # one look for every slot
+        target = path or self._resolve(PRESETS, name, snap, loose=True)
 
         def names(n: str | None) -> bool:
             return bool(n) and (n == name or (key is not None and self._fold(PRESETS, n) == key)
-                                or (path is not None and self.path_of(PRESETS, n) == path))
+                                or (target is not None
+                                    and self._resolve(PRESETS, n, snap, loose=True) == target))
         out = [slot_key(k) for k, n in enumerate(pr.bank) if names(n)]
         if names(pr.startup):
             out.append("the startup preset")
         return out
 
     def read(self, group: str, name: str) -> dict:
-        path = self.path_of(group, name)
+        path = self.path_of(group, name, loose=True)
         if path is None:
             raise LibraryError(f"{group}: no preset {name!r}")
         doc = copy.deepcopy(self._doc(path))
@@ -2050,7 +2110,7 @@ class Library:
         if group not in self._kinds:
             self._need_reg()
         doc = self.read(group, name)
-        return self._apply_doc(group, name, doc, path=self.path_of(group, name))
+        return self._apply_doc(group, name, doc, path=self.path_of(group, name, loose=True))
 
     def _apply_doc(self, group: str, name: str, doc: dict, *, path: Path | None = None,
                    quiet: bool = False) -> list[str]:
@@ -2164,6 +2224,7 @@ class Library:
         self.writable()
         doc = self.document(group, name, extra=extra)
         path = self.path_of(group, name)
+        renamed = None
         if group == PRESETS:
             # plan 48 row 587: a folder-qualified name is written in its
             # folder (made if need be); the file holds the leaf, and the
@@ -2171,6 +2232,9 @@ class Library:
             # on disk (review: `Party/NEW` into an existing `party/`)
             folder, leaf = self.folder_of(group, name)
             if path is not None:
+                raw = self._name_of(path)
+                if raw != harmless(raw):
+                    renamed = raw                       # its own "/" goes (the ruling)
                 pre = self._prefix(group, path)
                 if fold_folder(folder) != fold_folder(pre[:-1]):
                     leaf = self._leaf(group, path)      # found by a looser spelling
@@ -2200,7 +2264,9 @@ class Library:
         self._sync(path)
         self._landed(group, name, kind.signature() if kind is not None
                      else self.resolved(group, doc["values"]))
-        self.say(f"{group}: saved {name}")
+        # review of #334: a file's own "/" written as " - " is said, once —
+        # the next save finds the name it now holds
+        self.say(f"{group}: saved {name}" + (f" (was {renamed})" if renamed else ""))
         hook = self._load_hooks.get(group)
         if kind is not None and hook is not None:   # a kind's current moved: say so
             hook(name)                               # (the bank's light, preset.py)
@@ -2240,6 +2306,13 @@ class Library:
         path = self.path_of(group, name)
         if path is None:
             return False
+        # its listed name (review of #334: what a restore matches the
+        # warning by) and, while the file is there to resolve to, what in
+        # the open show still names it — not cleared for the owner, so a
+        # restore to the old name makes them work again (plan 19 WP4)
+        shown = (name if self._index(group).get(name) == path
+                 else self._prefix(group, path) + self._leaf(group, path))
+        still = self.still_named(shown, path) if group == PRESETS else []
         if self._to_trash(path) is None:
             raise LibraryError(f"{path.name}: not deleted — it could not be kept in the "
                                f"trash ({self._trash_dir()})")
@@ -2248,19 +2321,15 @@ class Library:
         except OSError as e:
             raise LibraryError(f"{path.name}: {e}") from e
         self._sync(path)
-        if self._current.get(group) == name and self.path_of(group, name) is None:
+        if self._current.get(group) in (name, shown) and self.path_of(group, shown) is None:
             self._landed(group, None, None)
         if group == PRESETS:
-            # what still points at it (plan 19 WP4): the open show's slots and
-            # startup — not cleared for the owner, so a restore to the old
-            # name makes them work again
-            still = self.still_named(name)
             if still:
-                self.say(warning=f"{name} is in the trash — {_and(still)} still "
+                self.say(warning=f"{shown} is in the trash — {_and(still)} still "
                                  f"name{'s' if len(still) == 1 else ''} it; restore it from "
                                  "the trash, or clear the slot")
             else:
-                self.say(f"{name} is in the trash — the PRESETS page's trash can restore it")
+                self.say(f"{shown} is in the trash — the PRESETS page's trash can restore it")
         return True
 
     def rename(self, group: str, old: str, new: str) -> Path:
@@ -2330,6 +2399,11 @@ class Library:
         if not pre:
             mine.add(stem)
         mine -= {None, ""}
+        # review of #334: what each slot resolved to before the rename (a
+        # loose read, as a pad loads it), so a slot naming it by an old
+        # spelling (`Ac/Dc`) follows it too
+        snap = self._lookup(group)
+        named = lambda n: self._resolve(group, n, snap, loose=True) == path
         in_place = slug(leaf) == stem
         # `_taken` less this preset's own stem and name — in its own folder
         taken = ({self._fold(group, s) for s, p in self._files(group).items() if p != path}
@@ -2375,21 +2449,23 @@ class Library:
         if group == PATCHES:
             self.say(f"renamed {old} → {new}")
             return dst
-        done, left = self._repoint(old, new, mine)         # 5.
+        done, left = self._repoint(old, new, mine, named)  # 5.
         self.project.follow()                              # 6.
         self.say(f"renamed {old} → {new} ({done} show{'' if done == 1 else 's'} updated)")
         if left:
             self.say(warning=f"renamed {old} → {new}; not updated: {', '.join(left)}")
         return dst
 
-    def _repoint(self, old: str, new: str, mine: set[str]) -> tuple[int, list[str]]:
+    def _repoint(self, old: str, new: str, mine: set[str],
+                 named=lambda n: False) -> tuple[int, list[str]]:
         """Step 5 of `rename`: every user show naming the old preset (by its
         name, or a slug of it or of its file stem) names the new one, each
         copied to the trash first. Returns (shows written, shows left as
         they were with why)."""
 
         def hit(n) -> bool:
-            return isinstance(n, str) and bool(n) and (n == old or self._fold(PRESETS, n) in mine)
+            return isinstance(n, str) and bool(n) and (
+                n == old or self._fold(PRESETS, n) in mine or named(n))
 
         pr, done, left = self.project, 0, []
         for show in sorted((self.home / PROJECTS).glob(f"*{PROJECT_SUFFIX}")):
@@ -2567,6 +2643,10 @@ class Library:
         # the group and the folder it came from are where it lies in the
         # trash (plan 48: ``trash/presets/party/`` → ``presets/party/``)
         _root, group, sub, _old = where
+        if sub and group == PRESETS:
+            # review of #334: the folder as it is on disk now (APFS folds
+            # case), so what is taken there is read from the right place
+            sub = self._folder_on_disk(sub) or sub
         filename = f"{m['stem']}{m['suffix']}"
         show = group == PROJECTS
         suffix = PROJECT_SUFFIX if show and filename.endswith(PROJECT_SUFFIX) else ".json"
@@ -2614,7 +2694,7 @@ class Library:
             dst.unlink(missing_ok=True)
             raise LibraryError(f"{dst.name}: not restored ({e})") from e
         self._sync(dst)
-        if group == PRESETS and self.warning.startswith(f"{pre}{name} is in the trash"):
+        if group == PRESETS and self.warning.startswith(f"{pre}{self._shown(group, name)} is in the trash"):
             self.warning = ""                              # what × said is no longer so
         now = pre + self._shown(group, str(doc["name"]) if renamed else name)
         what = f"show {now}" if show else now
@@ -2755,7 +2835,7 @@ class Library:
         hit = []
         try:
             for group, name in list(self._current.items()):
-                if name is not None and self.path_of(group, name) in changed:
+                if name is not None and self.path_of(group, name, loose=True) in changed:
                     reapply = self._adopted.get(group)
                     if reapply is not None:            # by the road it came in
                         reapply()

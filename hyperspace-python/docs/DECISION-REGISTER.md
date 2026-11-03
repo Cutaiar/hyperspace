@@ -9754,11 +9754,18 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   file. An old show's `AC/DC` or `Ac/Dc` still resolves: `path_of`
   compares folder and leaf by one fold (`library.fold`: `path_slug`
   lowered, as APFS finds a file), and when the name's folder is not on
-  disk tries its `slug` among the top-level files. A folder spelled in
+  disk — on a **read** only (`path_of(..., loose=True)`: a load, a pad,
+  the startup preset, a rename's repoint, what a show still names) —
+  tries its `slug` among the top-level files; a save, a delete or a
+  rename never does, so `party/TRIP` typed with no `party/` is a new
+  file in a new folder, never the flat `party-trip.json`. A save that
+  turns a file's own `/` into ` - ` says so once ("saved AC - DC (was
+  AC/DC)"). A folder spelled in
   another case is the folder on disk (`Party/NEW` lands in `party/` and
-  is listed `party/NEW`). The walk is kept until a folder's mtime moves
-  or the library writes (`Library._tree`), since the panel lists every
-  frame.
+  is listed `party/NEW`). The walk is kept until a folder's mtime moves,
+  the library writes or one second passes (`WALK_TTL`: a coarse or cloud
+  filesystem's mtime may not move), with the files by fold kept beside
+  it (`Library._walked`), since the panel lists every frame.
 - **Other options.** Change `slug` to keep `/` (the brief's wording): a
   show or patch called `AC/DC` would then write `projects/ac/dc.hyp.json`.
   Keep the file's own `name` as the whole qualified name: a Finder move
@@ -9844,7 +9851,9 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   over it; a top-level row is drawn exactly as before. `rename` seeds
   the field with the leaf and keeps the folder (a `/` refused). × trashes
   to this Mac; a folder left empty stays on disk. The trash popup lists
-  a folder's preset by its qualified name.
+  a folder's preset by its qualified name, and marks a row from the
+  library's old trash in the row itself (`presets · library`, dim; its
+  restore tooltip says the copy stays) — review of #334.
 - **Other options.** `party / TRIP` all in one ink: the folder fights
   the name at distance. A folding header per folder: more page, more
   clicks, stage 2.
