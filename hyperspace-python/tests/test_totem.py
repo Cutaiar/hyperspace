@@ -397,10 +397,10 @@ def test_a_joycon_whose_reports_stall_holds_its_motion_where_it_was():
     import test_pads_nintendo as tn
     pad, reader = tn.joycon_pad()
     t0 = __import__("time").monotonic()
-    reader._take(tn.full_report(gyro=(0, 0, 0)), t=t0)
+    reader._take(tn.full_report(gyro=(0, 0, 0), timer=0), t=t0)
     pad.poll(dt=DT)
     pad.motion.take_turn()
-    reader._take(tn.full_report(gyro=(0, 0, 4000)), t=t0 + 0.015)
+    reader._take(tn.full_report(gyro=(0, 0, 4000), timer=3), t=t0 + 0.015)
     pad.poll(dt=DT)
     one = pad.motion.take_turn()
     assert abs(one[1]) + abs(one[2]) + abs(one[0]) > 0.0
@@ -408,7 +408,7 @@ def test_a_joycon_whose_reports_stall_holds_its_motion_where_it_was():
         pad.poll(dt=DT)
     assert pad.motion.take_turn() == (0.0, 0.0, 0.0)
     for k in (2, 3):                         # two reports land before the next frame
-        reader._take(tn.full_report(gyro=(0, 0, 4000)), t=t0 + 0.015 * k)
+        reader._take(tn.full_report(gyro=(0, 0, 4000), timer=3 * k), t=t0 + 0.015 * k)
     pad.poll(dt=DT)
     two = pad.motion.take_turn()
     assert [b for b in two] == pytest.approx([2 * a for a in one])
@@ -580,14 +580,17 @@ def test_the_totem_names_the_pad_by_its_device_role():
 def tape(tmp_path, times, gyro_z=2000):
     """A DualSense USB tape: one report at each of `times`, the gyro's z
     at `gyro_z` raw."""
+    import struct
+
     from test_pads_sony import usb_report
 
     from hyperspace.pads import hid
-    rep = usb_report()
-    import struct
-    struct.pack_into("<3h", rep, 1 + 15, 0, 0, gyro_z)
     lines = [json.dumps({"tape": hid.TAPE_SCHEMA, "model": "dualsense", "transport": "usb"})]
-    lines += [json.dumps({"t": t, "r": bytes(rep).hex()}) for t in times]
+    for t in times:
+        rep = usb_report()
+        struct.pack_into("<3h", rep, 1 + 15, 0, 0, gyro_z)
+        struct.pack_into("<I", rep, 1 + 27, round(t * 3e6))   # its sensor clock
+        lines.append(json.dumps({"t": t, "r": bytes(rep).hex()}))
     path = tmp_path / "pad.jsonl"
     path.write_text("\n".join(lines) + "\n")
     return path, bytes(rep)
@@ -643,12 +646,14 @@ def edge_reader():
     return stepped(EDGE, FakeDev())
 
 
-def gyro_report(z=2000):
+def gyro_report(z=2000, t=0.0):
+    """A DualSense USB report turning about z, its sensor clock at `t` s."""
     import struct
 
     from test_pads_sony import usb_report
     rep = usb_report()
     struct.pack_into("<3h", rep, 1 + 15, 0, 0, z)
+    struct.pack_into("<I", rep, 1 + 27, round(t * 3e6) & 0xFFFFFFFF)
     return bytes(rep)
 
 
@@ -668,7 +673,7 @@ def test_a_1000_hz_burst_through_a_slow_frame_loses_no_turn_and_decodes_once(mon
     real = sony.decode
     monkeypatch.setattr(sony, "decode", lambda *a, **k: calls.append(1) or real(*a, **k))
     for k in range(1, 121):                                 # 120 ms of a 1000 Hz pad, one frame
-        r._take(raw, t=t0 + 0.001 * k)
+        r._take(gyro_report(t=0.001 * k), t=t0 + 0.001 * k)
     assert calls == []                                      # the reader's thread decodes nothing
     pad.poll(0.12)
     assert len(calls) <= 1                                  # the frame decodes `latest` only
@@ -682,15 +687,15 @@ def test_a_reply_as_the_newest_report_adds_no_second_turn():
     import test_pads_nintendo as tn
     pad, reader = tn.joycon_pad()
     t0 = __import__("time").monotonic()
-    reader._take(tn.full_report(gyro=(0, 0, 0)), t=t0)
+    reader._take(tn.full_report(gyro=(0, 0, 0), timer=0), t=t0)
     pad.poll(dt=DT)
     pad.motion.take_turn()
-    reader._take(tn.full_report(gyro=(0, 0, 4000)), t=t0 + 0.015)
+    reader._take(tn.full_report(gyro=(0, 0, 4000), timer=3), t=t0 + 0.015)
     reader._take(tn.spi_reply(0x6020, b"\x00"), t=t0 + 0.02)
     pad.poll(dt=DT)
     one = pad.motion.take_turn()
     assert any(one)
-    reader._take(tn.full_report(gyro=(0, 0, 4000)), t=t0 + 0.03)
+    reader._take(tn.full_report(gyro=(0, 0, 4000), timer=6), t=t0 + 0.03)
     reader._take(tn.spi_reply(0x6020, b"\x00"), t=t0 + 0.035)
     pad.poll(dt=DT)
     assert pad.motion.take_turn() == pytest.approx(one)    # once each, not twice
@@ -706,7 +711,7 @@ def test_the_dead_band_is_per_report_and_a_gap_is_capped():
     raw = gyro_report()
     rate = cal.gyro_dps(r.codec.gyro_of(raw, r)[0])[2]
     turn = hid.Turn()
-    turn.add(r.codec.gyro_of(raw, r), 0.0, cal)
+    turn.add(r.codec.gyro_of(raw, r), 0.0, cal)             # no clock: arrival time
     turn.add(r.codec.gyro_of(raw, r), 0.004, cal)          # two reports in one frame
     turn.add(r.codec.gyro_of(raw, r), 0.008, cal)
     got, n = turn.take()
@@ -728,7 +733,7 @@ def test_a_stall_lets_the_energy_and_yaw_ease_home(monkeypatch):
     pad._hid_reader = lambda: r
     t0 = __import__("time").monotonic()
     for k in range(30):                                     # a fast turn: energy up
-        r._take(gyro_report(z=20000), t=t0 + 0.004 * k)
+        r._take(gyro_report(z=20000, t=0.004 * k), t=t0 + 0.004 * k)
         pad.poll(DT)
     e0, yaw0 = pad.motion.energy, pad.motion.yaw
     assert e0 > 0.3
@@ -775,3 +780,127 @@ def test_learn_on_the_frame_the_totem_takes_the_pad_lands_none_of_its_buttons():
     dead.io.frame(hold=("A",))
     learn = ArmedLearn()
     assert totem.will_drive(state, dead.io, "p2") is False
+
+
+# ---- the third review (PR #335) ----
+
+def test_the_same_pad_back_after_lost_s_takes_over_afresh():
+    reg, state, _ = rig()
+    reg["totem.on"].set(True)
+    pad = FakePad()
+    s, c = math.sin(math.radians(30)), math.cos(math.radians(30))
+    for k in range(60):
+        pad.frame(gyro=(0.0, 0.0, 90.0))
+        totem.step(state, pad, reg, DT, "joy", now=k * DT)
+    gone = 60 * DT
+    reg["rot.phase.XY"].set(-1.0)                           # the integrator moved on meanwhile
+    for _ in range(120):
+        pad.frame(accel=(-s, c, 0.0))                        # …and the pad came back tilted
+    back = gone + totem.LOST_S + 0.1
+    assert totem.will_drive(state, pad, "joy", now=back)
+    totem.step(state, pad, reg, DT, "joy", now=back)
+    assert phase(reg, "XY") == pytest.approx(-1.0, abs=1e-9)     # adopted, no jump
+    assert state.note.startswith("reading joy")
+    for k in range(1, 60):
+        pad.frame(accel=(-s, c, 0.0))
+        totem.step(state, pad, reg, DT, "joy", now=back + k * DT)
+    assert reg["camera.pan.x"].value == pytest.approx(0.0, abs=1e-3)   # re-referenced
+
+
+def test_the_pan_given_back_is_what_was_applied_at_the_ranges_edge():
+    from hyperspace.params import PAN_RANGE
+    reg, state, _ = rig()
+    reg["camera.pan.x"].set(PAN_RANGE - 0.1)
+    reg["totem.on"].set(True)
+    pad = FakePad()
+    s, c = math.sin(math.radians(30)), math.cos(math.radians(30))
+    run(reg, state, pad, 30)
+    run(reg, state, pad, 120, accel=(-s, c, 0.0))           # wants +0.78: stops at the edge
+    assert reg["camera.pan.x"].value == pytest.approx(PAN_RANGE)
+    assert state.pan_out[0] == pytest.approx(0.1)
+    reg["totem.on"].set(False)
+    assert reg["camera.pan.x"].value == pytest.approx(PAN_RANGE - 0.1)
+
+
+def test_a_joycon_burst_after_a_pause_integrates_the_whole_turn():
+    """Bluetooth holds 20 reports through a 300 ms pause and hands them over
+    within 2 ms: their own clock (the timer byte, 5 ms a tick, three a
+    report) says they span 300 ms, and all of it turns."""
+    import test_pads_nintendo as tn
+    pad, reader = tn.joycon_pad()
+    t0 = __import__("time").monotonic()
+    reader._take(tn.full_report(gyro=(0, 0, 4000), timer=0), t=t0)
+    pad.poll(dt=DT)
+    pad.motion.take_turn()
+    for k in range(1, 21):
+        reader._take(tn.full_report(gyro=(0, 0, 4000), timer=(3 * k) & 0xFF),
+                     t=t0 + 0.3 + 0.0001 * k)
+    pad.poll(dt=DT)
+    got = pad.motion.take_turn()
+    samples = reader.codec.gyro_of(tn.full_report(gyro=(0, 0, 4000)), reader)
+    amap = gesture.axis_map_of(pad.__dict__.get("axis_map"), reader)
+    one = amap.pick(_one(reader, samples), amap.gyro)      # one report's 15 ms
+    assert got == pytest.approx([20 * v for v in one])
+
+
+def _one(reader, samples):
+    from hyperspace.pads import hid
+    ref = hid.Turn()
+    ref.add(samples, 0.0, reader.calibration)
+    ref.add(samples, 0.015, reader.calibration)
+    return ref.take()[0]
+
+
+def test_a_reset_zeroes_a_modulated_phases_base():
+    reg, state, _ = rig()
+    reg["totem.on"].set(True)
+    pad = FakePad()
+    run(reg, state, pad, 30, gyro=(0.0, 0.0, 90.0))
+    xy = reg["rot.phase.XY"]
+    for _ in range(3):                                      # a route holds XY
+        xy.modulate(0.05)
+        run(reg, state, pad, 1, gyro=(0.0, 0.0, 90.0))
+        xy.apply()
+    assert abs(xy.base) > 0.3
+    reg["totem.reset"].fire()
+    xy.modulate(0.05)
+    xy.apply()
+    assert xy.base == pytest.approx(0.0, abs=1e-9)
+    assert state.ang[totem.PLANES.index("XY")] == pytest.approx(0.0, abs=1e-9)
+    xy.modulate(0.05)
+    run(reg, state, pad, 1)                                 # the next step keeps it at 0
+    xy.apply()
+    assert xy.base == pytest.approx(0.0, abs=1e-9)
+
+
+def test_will_drive_and_step_agree_on_a_driven_pad_that_lost_its_sensors():
+    reg, state, _ = rig()
+    reg["totem.on"].set(True)
+    pad = FakePad()
+    run(reg, state, pad, 2)
+    assert totem.will_drive(state, pad, "")
+    pad.on = False
+    assert totem.will_drive(state, pad, "") is False
+    totem.step(state, pad, reg, DT)
+    assert not totem.drives(state, "")
+
+
+def test_one_rule_finds_the_totem_state():
+    reg, state, _ = rig()
+    assert totem.state_of(reg) is state
+    assert totem.state_of(None) is None
+    assert totem.state_of(SimpleNamespace(totem=lambda: None)) is None
+    assert totem.state_of(SimpleNamespace()) is None
+
+
+def test_learn_unarmed_never_asks_the_totem(monkeypatch):
+    reg, _, _ = rig()
+    reg["totem.on"].set(True)
+    dev = device(reg)
+    asked = []
+    monkeypatch.setattr(totem, "will_drive", lambda *a, **k: asked.append(a) or False)
+    dev.io.frame()
+    dev.learn(SimpleNamespace(learning=None))
+    assert asked == []
+    dev.learn(ArmedLearn())
+    assert len(asked) == 1

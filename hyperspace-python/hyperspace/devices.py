@@ -809,9 +809,11 @@ class PadDevice(Base):
         # routes as the last frame's `act` saw them: Learn runs before it)
         dialed = self.__dict__.get("_dialed", set())
         # the buttons the totem holds while it reads this pad learn nothing
-        # either (as their rows do not fire: `act`'s skip)
-        skip = self._totem_skip(self.ctx.reg if self.ctx.reg is not None
-                                else getattr(learn, "reg", None), self.io)
+        # either (as their rows do not fire: `act`'s skip) — asked only
+        # while a learn is armed
+        skip = (self._totem_skip(self.ctx.reg if self.ctx.reg is not None
+                                 else getattr(learn, "reg", None), self.io)
+                if getattr(learn, "learning", None) is not None else frozenset())
         self._taken = bool(gamepad.learn_from(self.io, learn, role=q, dials=lambda: dialed,
                                               skip=skip)
                            if q else gamepad.learn_from(self.io, learn, dials=lambda: dialed,
@@ -854,10 +856,10 @@ class PadDevice(Base):
         by this device's role (unique, "pad" for the first), not the
         router's qualifier ("" for the primary)."""
         from . import totem
-        state = getattr(reg, "totem", None) if reg is not None else None
         # duck-typed, not isinstance: a hot reload of totem.py makes a new
         # TotemState class the live state is not (yet) an instance of
-        if not totem.is_state(state) or not state.on:
+        state = totem.state_of(reg)
+        if state is None or not state.on:
             return {}
         totem.step(state, io, reg, self.__dict__.get("_dt", 0.0), self.role)
         return {"skip": totem.SKIP} if totem.drives(state, self.role) else {}
@@ -867,9 +869,8 @@ class PadDevice(Base):
         be once `act` has run its take-over (Learn runs first): none while
         it reads another pad, or is off."""
         from . import totem
-        state = getattr(reg, "totem", None) if reg is not None else None
-        return totem.SKIP if totem.is_state(state) and totem.will_drive(state, io, self.role) \
-            else frozenset()
+        state = totem.state_of(reg)
+        return totem.SKIP if totem.will_drive(state, io, self.role) else frozenset()
 
     def _feed_extras(self, router, io, q: str) -> None:
         """The ``touch`` and ``motion`` lanes (plan 42): their names,

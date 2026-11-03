@@ -35,7 +35,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from . import envelope, geometry, lfo, sequencer, tempo
+from . import envelope, geometry, lfo, sequencer, tempo, totem
 from . import undo as undos
 from .fx import FxState
 from .ghost import GhostState
@@ -276,6 +276,6 @@ class Deck:
             (self.seq, "sequencer", "Sequencer"),
             *[(ln, "sequencer", "Lane") for ln in self.seq.lanes],
             # the totem's state (plan 47), once the panel hook registered it
-            *([(self.reg.totem, "totem", "TotemState")]
-              if hasattr(getattr(self.reg, "totem", None), "driving") else []),
+            *([(st, "totem", "TotemState")]
+              if (st := totem.state_of(self.reg)) is not None else []),
         ]

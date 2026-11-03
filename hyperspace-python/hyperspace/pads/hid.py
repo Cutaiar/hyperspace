@@ -315,7 +315,7 @@ class HidPad:
         with self._lock:
             self._raw, self._raw_t = r, t
             if samples is not None:
-                self._turn.add(samples, t, self.calibration)
+                self._turn.add(samples, t, self.calibration, _clock(self.codec, r))
             self.reports += 1
 
     def _gyro_of(self, r: bytes):
@@ -474,7 +474,10 @@ class TapePad:
             t, raw = self.reports[k]
             samples = self.codec.gyro_of(raw, self) if hasattr(self.codec, "gyro_of") else None
             if samples is not None:
-                self._turn.add(samples, t + loop_k * period, self.calibration)
+                # the reports' clock runs on within a loop; round the seam it
+                # jumps back, so the first report of a loop goes by tape time
+                self._turn.add(samples, t + loop_k * period, self.calibration,
+                               _clock(self.codec, raw) if k else None)
         return self._turn.take()
 
     def send(self, effects: sony.Effects) -> None:
@@ -485,20 +488,37 @@ class TapePad:
         self.alive = False
 
 
+def _clock(codec, raw: bytes):
+    f = getattr(codec, "report_clock", None)
+    return f(raw) if f is not None else None
+
+
 class Turn:
     """The gyro integrated report by report: each report's samples, through
     the calibration and the soft dead band (`gesture.turn_of`), times the
-    time since the report before (at most `gesture.REPORT_DT_MAX`), split
-    evenly between its samples. `take` hands the sum over and starts again."""
+    time since the report before, split evenly between its samples. That
+    time is the reports' own clock (`report_clock`: a Bluetooth burst that
+    arrives all at once after a pause still covers the time it was sent
+    over), arrival time for a codec with none or across a gap the clock may
+    have wrapped through; at most `gesture.REPORT_DT_MAX` a report (the
+    first after a real gap). `take` hands the sum over and starts again."""
 
     def __init__(self):
         self.sum = [0.0, 0.0, 0.0]
         self.n = 0
         self.last_t: float | None = None
+        self.last_clock: tuple[int, int, float] | None = None
 
-    def add(self, samples, t: float, cal) -> None:
+    def add(self, samples, t: float, cal, clock=None) -> None:
         last, self.last_t = self.last_t, t
-        dt = 0.0 if last is None else min(gesture.REPORT_DT_MAX, max(0.0, t - last))
+        last_clock, self.last_clock = self.last_clock, clock
+        dt = 0.0
+        if last is not None:
+            dt = max(0.0, t - last)
+            if clock is not None and last_clock is not None and clock[1:] == last_clock[1:] \
+                    and dt < clock[1] * clock[2] / 2:       # no wrap the clock cannot see
+                dt = ((clock[0] - last_clock[0]) % clock[1]) * clock[2]
+            dt = min(gesture.REPORT_DT_MAX, dt)
         self.n += 1
         if not dt or not samples:
             return

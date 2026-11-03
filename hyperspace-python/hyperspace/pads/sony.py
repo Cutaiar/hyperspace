@@ -468,6 +468,16 @@ def gyro_of(raw: bytes, reader) -> tuple[tuple[int, int, int], ...] | None:
     return None
 
 
+SENSOR_TICK_S = 1 / 3e6        # the sensor timestamp's unit, 0.33 µs (Linux hid-playstation)
+
+
+def report_clock(raw: bytes) -> tuple[int, int, float]:
+    """The report's own clock — (count, wrap, seconds a count): the full
+    report's sensor timestamp — for a report `gyro_of` took."""
+    off = (1 if raw[0] == USB_REPORT_ID else 2) + 27
+    return struct.unpack_from("<I", raw, off)[0], 1 << 32, SENSOR_TICK_S
+
+
 def setup(dev, reader) -> None:
     """Feature 0x05 — the motion calibration, and over Bluetooth the
     switch to the full report — then 0x20, the firmware's update version

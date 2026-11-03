@@ -195,9 +195,19 @@ def reset(state: TotemState, reg) -> None:
     """The registry's `camera.reset` — one reset, not a copy of its list —
     then the totem's angles read back from the phases it left and the tilt
     re-referenced on the next step."""
-    p = reg.get("camera.reset") if hasattr(reg, "get") else None
+    get = reg.get if hasattr(reg, "get") else (lambda pid: None)
+    phases = [q for n in PLANES if (q := get(f"rot.phase.{n}")) is not None]
+    # a phase a route modulates keeps its base apart from the view: the
+    # view's write would land in that base as a turn at the frame's apply
+    # (Param.apply), so its object is put back and the base goes to 0
+    held = {id(q): q.get() for q in phases if q.modulated}
+    p = get("camera.reset")
     if p is not None:
         p.fire()
+    for q in phases:
+        if id(q) in held:
+            q.put(held[id(q)])
+        q.set(0.0)
     state.ang = [_base(reg, f"rot.phase.{n}") for n in PLANES]
     state.ref = None
     state.pan_out = [0.0, 0.0]          # the reset zeroed the pan, the totem's share with it
@@ -209,7 +219,7 @@ def _give_back_pan(state: TotemState, reg) -> None:
     for j, axis in enumerate("xy"):
         p = reg.get(f"camera.pan.{axis}") if hasattr(reg, "get") else None
         if state.pan_out[j] and p is not None:
-            p.nudge(-state.pan_out[j])
+            p.nudge(-state.pan_out[j])          # what was applied, so never past a stop
     state.pan_out = [0.0, 0.0]
 
 
@@ -233,13 +243,10 @@ def will_drive(state: TotemState | None, pad, role: str, now: float | None = Non
     """Will the totem read the pad of `role` this frame — it reads it now,
     or it reads none (or a pad gone quiet) and this pad has sensors? What
     Learn asks before `act` runs the take-over (`step`)."""
-    if state is None or not state.on:
-        return False
-    if state.driving == role:
-        return True
+    if state is None or not state.on or not _live(pad):
+        return False                  # a pad with no live sensors is let go (`step`)
     now = time.monotonic() if now is None else now
-    free = state.driving is None or now - state.seen > LOST_S
-    return free and _live(pad)
+    return state.driving is None or state.driving == role or now - state.seen > LOST_S
 
 
 def reading(state: TotemState | None, now: float | None = None) -> str | None:
@@ -249,6 +256,14 @@ def reading(state: TotemState | None, now: float | None = None) -> str | None:
         return None
     now = time.monotonic() if now is None else now
     return state.driving if now - state.seen <= LOST_S else None
+
+
+def state_of(reg) -> TotemState | None:
+    """The registry's totem state (`reg.totem`), or None — none registered,
+    or a stub's something else. The one rule the pad device and the deck
+    ask."""
+    s = getattr(reg, "totem", None) if reg is not None else None
+    return s if is_state(s) else None
 
 
 def is_state(obj) -> bool:
@@ -275,12 +290,14 @@ def step(state: TotemState | None, pad, reg, dt: float, role: str = "",
     if state is None or not state.on:
         return
     now = time.monotonic() if now is None else now
-    if state.driving is not None and state.driving != role:
-        if now - state.seen <= LOST_S:
-            return                                # another pad holds it
+    if state.driving is not None and now - state.seen > LOST_S:
+        # the pad it read went quiet (its device gone): let go — the same
+        # pad coming back takes over afresh, as any other would
         state.say(f"{state.driving or 'the pad'} went quiet")
-        state.driving = None                      # its device is gone: this one may
+        state.driving = None
         _give_back_pan(state, reg)                # …and the shape comes back meanwhile
+    if state.driving is not None and state.driving != role:
+        return                                    # another pad holds it
     if not _live(pad):
         if state.driving == role:
             state.driving = None
@@ -338,12 +355,15 @@ def _pan(state: TotemState, motion, reg, dt: float) -> None:
                 max(-PAN_MAX, min(PAN_MAX, -PAN_PER_RAD * dp))]
         k = _ease(dt, PAN_SMOOTH_S)
         want = [o + (t - o) * k for o, t in zip(state.pan_out, want, strict=True)]
+    # pan_out is what the nudges applied — at the pan's stop less than
+    # asked — so giving it back returns the pan exactly where it was
+    out = list(state.pan_out)
     for j, axis in enumerate("xy"):
-        d = want[j] - state.pan_out[j]
+        d = want[j] - out[j]
         p = reg.get(f"camera.pan.{axis}")
         if d and p is not None:
-            p.nudge(d)
-    state.pan_out = want
+            out[j] += p.nudge(d)
+    state.pan_out = out
 
 
 def configured_on(cfg) -> bool:

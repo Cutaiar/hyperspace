@@ -30,8 +30,12 @@ Joy-Con's three, 5 ms apart; a DualSense's one), puts each through the
 calibration and a soft dead band per report (`gesture.TURN_DEADBAND_DPS`
 = 3: a still Joy-Con reads up to ~2 deg/s on the real tape, and a rate
 under the band turns nothing for that report), and multiplies it by the
-time since the report before, at most 50 ms (`gesture.REPORT_DT_MAX`, so a
-Bluetooth pause is no turn). Each frame the pad takes the sum
+time since the report before, by the reports' own clock (`report_clock`:
+a DualSense's sensor timestamp, 0.33 µs a count; a Joy-Con's timer byte, 5
+ms a tick) so a Bluetooth burst that arrives all at once after a pause
+still covers the time it was sent over, at most 50 ms a report
+(`gesture.REPORT_DT_MAX`, so a real gap is no turn); arrival time stands
+in where a codec has no clock or a tape loops round. Each frame the pad takes the sum
 (`HidPad.take_turn`), puts it through its axis map, and adds it to the
 angle the totem takes (`Motion.take_turn`). A report that stalls adds
 nothing. Two reports between frames both count. A 1000 Hz DualSense
@@ -63,7 +67,9 @@ levelling the pad brings it back.
 **Reset — A (or the D-pad's down).** The registry's own `camera.reset`
 ("Reset view": every `rot.phase.*`, the orbit, the zoom and the pan to
 their rests, the 3D switch's held pose dropped — the shape square to the
-world's axes), one reset rather than a copy of its list. The pad's pose
+world's axes), one reset rather than a copy of its list; a phase a route
+modulates goes to 0 through its param as well, so the route's base does
+not bring the old angle back. The pad's pose
 right now becomes the reference for the tilt. (On a Joy-Con (L) held sideways, A
 *is* the down arrow; on a Pro Controller the D-pad's down does it too.)
 
@@ -213,4 +219,9 @@ a 1000 Hz burst through a 120 ms frame loses no turn and decodes once; a
 tape's turn across the loop's seam and a one-report tape's; the dead band
 per report and a capped gap; a stall eases the energy and yaw home; a pad
 gone quiet gives the pan back with no pad taking over; Learn on the frame
-the totem takes the pad.
+the totem takes the pad. The third's: the same pad back after
+`LOST_S` takes over afresh; the pan given back is what was applied at the
+range's edge; a Joy-Con burst after a pause turns the whole time it spans;
+a reset zeroes a modulated phase's base; `will_drive` and `step` agree on
+a pad that lost its sensors; one rule finds the state; an unarmed Learn
+never asks the totem.

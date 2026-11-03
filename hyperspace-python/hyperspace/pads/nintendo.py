@@ -58,6 +58,7 @@ REPORT_FULL = 0x30            # the standard full report, ~60 a second
 REPORT_REPLY = 0x21           # a subcommand's reply (buttons and sticks, no sensors)
 REPORT_SIMPLE = 0x3F          # before the mode is set: buttons only
 REPORT_LEN = 49
+JOYCON_TICK_S = 0.005          # the timer byte's tick (r[1]): one an IMU sample
 OUT_ID = 0x01                 # rumble + a subcommand
 RUMBLE_ID = 0x10              # rumble alone
 # subcommands (bluetooth_hid_notes.md)
@@ -511,10 +512,14 @@ def gyro_of(raw: bytes, reader) -> tuple[tuple[int, int, int], ...] | None:
     """The raw gyro samples of one full report — all three, 5 ms apart,
     oldest first — or None for anything else (a subcommand's reply, the
     simple report): what the reader's thread integrates every report."""
-    r = raw
-    if not r or r[0] != REPORT_FULL or len(r) < REPORT_LEN:
-        return None
-    return tuple(struct.unpack_from("<3h", r, 13 + 12 * k + 6) for k in range(3))
+    return tuple(g for _, g in imu_samples(raw)) or None
+
+
+def report_clock(raw: bytes) -> tuple[int, int, float]:
+    """The report's own clock — (count, wrap, seconds a count): the timer
+    byte, 5 ms a tick (three ticks a report, the real tape) — for the
+    time between two reports however late they arrive."""
+    return raw[1], 256, JOYCON_TICK_S
 
 
 def write(dev, reader, want: Effects, now: float) -> bool:
