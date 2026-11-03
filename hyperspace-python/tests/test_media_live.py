@@ -519,6 +519,9 @@ def _gl_context():
         import moderngl
     except ImportError:
         return None
+    import gl_probe
+
+    gl_probe.require()                  # skips where glfw.init() would hang
     if not glfw.init():
         return None
     glfw.window_hint(glfw.VISIBLE, False)
