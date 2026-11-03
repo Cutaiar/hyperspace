@@ -3077,6 +3077,20 @@ uv run ruff check .
   the live tier (`_LIVE_TESTS`): the fast tier's one real-GLFW test,
   `test_ui_pad.py::test_the_drawings_show_upright_through_real_gl`,
   hung in `glfwInit()` on the Mac and moved there (row 589).
+- **Why `glfwInit()` hangs on the Mac, and the recovery.** A sample of
+  a bare `glfw.init()` ends in `_glfwInitCocoa` → `[NSApplication run]`
+  → the reopen AppleEvent →
+  `-[NSPersistentUIRestorer promptToIgnorePersistentStateWithCrashHistory:]`
+  → `-[NSAlert runModal]`. macOS shows every new Python GUI process
+  (bundle `org.python.python`) a hidden "Python quit unexpectedly while
+  reopening windows" alert, because an earlier process died with a
+  window open (a memory kill, or the thread timeout's `os._exit`), and
+  the new process waits in that modal forever. Any worker that dies with
+  a GLFW window open arms the alert again, which is one more reason live
+  tests take turns. To recover, move
+  `~/Library/Saved Application State/org.python.python.savedState`
+  aside, then run
+  `defaults write org.python.python ApplePersistenceIgnoreState -bool YES`.
 
 - Every test runs against its own temporary home: `tests/conftest.py`
   sets `HYPERSPACE_HOME` to the test's `tmp_path` in `os.environ`

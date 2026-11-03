@@ -9770,7 +9770,16 @@ and D3 (the per-deck split) are
   method's stack dump goes to the worker's stderr, which xdist does not
   show; `-n0 -k <test>` shows it. The lock is per test, so between two
   live tests of one run another run can take its turn. The lock wait
-  counts toward the test's 120 s.
+  counts toward the test's 120 s. Why `glfwInit()` blocks on the Mac:
+  it runs `[NSApplication run]`, the reopen event has
+  `NSPersistentUIRestorer` prompt about a crash history, and the hidden
+  "Python quit unexpectedly while reopening windows" alert
+  (`NSAlert runModal`) waits forever. Any earlier `org.python.python`
+  process that died with a window open (a memory kill, or the thread
+  timeout's `os._exit`) arms it. To recover, move
+  `~/Library/Saved Application State/org.python.python.savedState`
+  aside and run `defaults write org.python.python
+  ApplePersistenceIgnoreState -bool YES` (ENGINEERING §16).
 - **Judge it.** — (tests only: `tests/test_live_lock.py`; a deliberate
   `time.sleep(130)` under `-n 2 --timeout=5 --timeout-method=thread`
   failed by name in 5.5 s with `--max-worker-restart=0`).
