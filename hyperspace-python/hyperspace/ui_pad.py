@@ -525,6 +525,7 @@ def _header(panel, table) -> None:
         ui.tooltip(ui_pad_views.VIEW_TIP)
         if imgui.is_mouse_clicked(imgui.MouseButton_.left):
             step_view(panel)
+    _totem(panel)
     if table is not None:
         imgui.same_line()
         n = len(rows_cached(panel, table))
@@ -537,6 +538,43 @@ def _header(panel, table) -> None:
                            "app's own hand on a free axis, not a row.")
     imgui.set_cursor_pos(start)          # the line is HEAD_H tall whatever is on it
     imgui.dummy(_v(1, HEAD_H - imgui.get_style().item_spacing.y))
+
+
+def totem_word(reg) -> tuple[str, str] | None:
+    """The totem's word for the header (plan 47, an experiment): "totem
+    off", or the three live planes (``totem YZ · XZ · ZW``); None with no
+    totem in the registry. The hover is the button map."""
+    state = getattr(reg, "totem", None)
+    if state is None or "totem.on" not in reg:
+        return None
+    from . import totem
+    tip = ("The Joy-Con as a 4D totem (plan 47, an experiment) — click to switch it "
+           f"{'off' if state.on else 'on'}. Its gyro turns three planes, one per axis "
+           "(x → YZ, y → XZ, z → XY); X / Y / B throw x / y / z into W (XW, YW, ZW); "
+           "A (or ↓) resets the shape to the world's axes from where the pad is; the "
+           "tilt moves the shape.")
+    if not state.on:
+        return "totem off", tip
+    word = f"totem {totem.readout(state)}"
+    if state.driving is None:
+        word += " (no pad)"
+    return word, tip + (f" Last: {state.note}." if state.note else "")
+
+
+def _totem(panel) -> None:
+    """The totem's word in the header, after the view's; a click switches it."""
+    reg = getattr(panel, "reg", None)
+    said = totem_word(reg) if reg is not None else None
+    if said is None:
+        return
+    word, tip = said
+    imgui.same_line()
+    on = bool(reg["totem.on"].value)
+    ui._micro(word, ui.RED if on else ui.DIM)
+    if imgui.is_item_hovered():
+        ui.tooltip(tip)
+        if imgui.is_mouse_clicked(imgui.MouseButton_.left):
+            reg["totem.on"].set(not on)
 
 
 def _says_of(panel, table):

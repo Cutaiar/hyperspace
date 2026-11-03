@@ -84,6 +84,7 @@ from . import (
     replay,
     sequencer,
     tempo,
+    totem,
     undo,
 )
 from .audio import AudioEngine
@@ -1402,6 +1403,11 @@ def main() -> None:
     seq = sequencer.Sequencer()
     envelope.register(reg, envs, clock)
     sequencer.register(reg, seq, clock)
+    # the Joy-Con totem (plan 47, an experiment): off unless `[totem] on`
+    # says so or the pad window's word is clicked; never saved
+    totem.register(reg, totem.TotemState(), s)
+    if (cfg.get("totem") or {}).get("on") is True:
+        reg["totem.on"].set(True)
     # the render window's placement registers before attach, so "default"
     # includes output.* and reset / the dirty dot see them (audit L6)
     output = _make_output(render_win, reg, cfg)
