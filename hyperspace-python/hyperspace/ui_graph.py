@@ -754,8 +754,10 @@ def page(panel, dt: float) -> None:
     shown = _backdrop(panel, st, (origin.x, origin.y), (canvas.x, canvas.y))
     _scroll(st, (origin.x, origin.y), (canvas.x, canvas.y))
     _canvas(panel, st, view, canvas, st["backdrop_alpha"] if shown else 0.0)
-    # the held projector's inset: in the canvas's corner left of the pane
-    _monitor(panel, (origin.x, origin.y), (canvas.x - size[0] if wide else canvas.x, canvas.y))
+    # the held projector's inset: in the canvas's corner, left of the pane
+    # beside it, above the band under it (a narrow page)
+    _monitor(panel, (origin.x, origin.y), (canvas.x - size[0], canvas.y) if wide
+             else (canvas.x, canvas.y - size[1]))
     # the pane, always on (plan 49): its bottom is the canvas's, so the page ends where it did
     imgui.set_cursor_screen_pos(imgui.ImVec2(*pos))
     imgui.push_style_color(imgui.Col_.child_bg, imgui.get_style_color_vec4(imgui.Col_.window_bg))
@@ -1365,10 +1367,14 @@ def monitor_rect(origin: tuple[float, float], avail: tuple[float, float],
                  pic: tuple[int, int]) -> tuple[tuple[float, float], tuple[float, float]]:
     """Where the projector's inset lies (plan 38): `MONITOR_W` of the
     canvas's width at its top-right corner, a margin in, the picture's
-    aspect kept — (top-left, bottom-right), screen pixels."""
+    aspect kept — and no taller than `avail`'s height leaves, a margin in
+    (plan 49: on a narrow page `avail` stops above the side pane's band),
+    narrowed to keep the aspect — (top-left, bottom-right), screen pixels."""
     pad = 8.0
+    aspect = max(pic[1], 1) / max(pic[0], 1)
     w = max(avail[0] * MONITOR_W, 32.0)
-    h = w * max(pic[1], 1) / max(pic[0], 1)
+    w = max(min(w, (avail[1] - 2 * pad) / aspect), 1.0)
+    h = w * aspect
     x, y = origin[0] + avail[0] - w - pad, origin[1] + pad
     return (x, y), (x + w, y + h)
 

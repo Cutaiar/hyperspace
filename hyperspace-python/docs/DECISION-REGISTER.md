@@ -10557,7 +10557,8 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   is 240 px). `read_doc` / `write_doc` are `library._read_json` and the
   atomic `library._write_text` (review fix 6), shared by `read_side` /
   `write_side`. Read the first frame the machine is known — a library
-  attached after GRAPH first drew is read then (review fix 4). A click is
+  attached after GRAPH first drew is read then (review fix 4), with any
+  fold clicked before it laid over the file's (`pane_clicks`, round 2). A click is
   written `WRITE_AFTER_S` (0.5 s) after the last one (`ui_pane.flush`),
   `ui_graph.close` writing what is left, as the width waits for the
   drag's release. **Only a click unfolds** (review fix 7): a selection
@@ -10604,7 +10605,8 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   start a new row where they would pass the edge (`ui_presets._beside`).
   The held projector's inset (plan 38) sits in the canvas's top-right
   corner left of the pane, where it lay under the pane before whenever
-  something was selected.
+  something was selected; on a narrow page above the band under the
+  canvas, narrowed to fit the room left (`monitor_rect`, review round 2).
 - **To reverse.** `name_w()` back in `strip`; `same_line()` back in
   `show_line`; `_monitor` given the whole canvas.
 - **Judge it.** 453, 455.

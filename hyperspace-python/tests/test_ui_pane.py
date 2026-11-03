@@ -237,10 +237,16 @@ def test_a_library_attached_late_has_its_fold_read_then(tmp_path, monkeypatch):
             frame(r.panel, "graph")
         st = _st(r)
         assert st["machine"] is None and "faces" not in st["pane_drawn"]
+        ui_pane.set_open(st, "analyzer", True)       # a click before the library is there
         r.panel.library = lib
         for _ in range(2):
             frame(r.panel, "graph")
-        assert st["machine"] == machine and "faces" in st["pane_drawn"]
+        assert st["machine"] == machine
+        # the file's fold and the click both kept (review round 2)
+        assert "faces" in st["pane_drawn"] and "analyzer" in st["pane_drawn"]
+        assert ui_pane.flush(st, force=True)
+        got = ui_pane.read_open(machine)
+        assert got["faces"] is True and got["analyzer"] is True
 
 
 def test_the_grip_holds_its_edge_while_the_pane_scrolls(pane):
@@ -305,3 +311,32 @@ def test_the_strip_budgets_the_devices_missing_chip(tmp_path):
         assert ui_presets.strip_name_w(300.0, chips, False, 60.0) == max(
             ui_presets.NAME_MIN, narrow - 60.0)
         imgui.end_frame()
+
+
+def test_the_projector_inset_keeps_clear_of_the_pane(tmp_path, monkeypatch):
+    """Review round 2: the held projector's inset is laid in the canvas
+    left of the pane beside it, and above the band under it on a narrow
+    page — never over the pane."""
+    pic = (1920, 1080)
+    (x, y), (x1, y1) = ui_graph.monitor_rect((0.0, 0.0), (800.0, 100.0), pic)
+    assert y1 <= 100.0 - 8.0 + 1e-6 and abs((y1 - y) / (x1 - x) - 1080 / 1920) < 1e-6
+    with build_rig(tmp_path) as r:                  # the rig's 820 px window: narrow
+        got = []
+        monkeypatch.setattr(ui_graph, "_monitor", lambda panel, o, a: got.append((o, a)))
+        for _ in range(2):
+            frame(r.panel, "graph")
+        st = _st(r)
+        (px, py), (_pw, _ph) = st["details_rect"]
+        (ox, oy), (aw, ah) = got[-1]
+        assert oy + ah <= py + 1e-6                  # the inset's room stops at the band
+        _a, b = ui_graph.monitor_rect((ox, oy), (aw, ah), pic)
+        assert b[1] <= py
+        r.panel.desk = False
+        imgui.get_io().display_size = imgui.ImVec2(*WIDE)
+        imgui.new_frame()
+        imgui.set_window_size("CONTROLS", imgui.ImVec2(WIDE[0] - 24, WIDE[1] - 24))
+        r.panel.draw(1 / 60, 60.0)
+        imgui.end_frame()
+        (px, py), (_pw, _ph) = st["details_rect"]
+        (ox, oy), (aw, ah) = got[-1]
+        assert ox + aw <= px + 1e-6                  # wide: left of the column

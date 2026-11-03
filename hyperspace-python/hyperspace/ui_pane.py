@@ -153,15 +153,18 @@ def opened(st: dict, layout: str = "open") -> dict[str, bool]:
     """`layout`'s open state on GRAPH's page state (`ui_graph._state`):
     the defaults while the machine is not known, then read from this Mac's
     file — once, the first frame `st["machine"]` is (a library attached
-    after GRAPH first drew is read then, and its state kept)."""
+    after GRAPH first drew is read then), with any fold clicked before
+    that laid over what the file says (`pane_clicks`), so it is kept and
+    written by the next `flush`."""
     states = st.get("pane_open")
     if not isinstance(states, dict) or set(states) - set(LAYOUTS):
         states = st["pane_open"] = {}           # (a state from before the layouts)
     machine = st.get("machine")
     if machine is not None and st.get("pane_from") != machine:
         st["pane_from"] = machine               # the file, now it can be asked
+        clicks = st.get("pane_clicks") or {}
         for other in LAYOUTS:
-            states[other] = read_open(machine, other)
+            states[other] = {**read_open(machine, other), **clicks.get(other, {})}
     elif layout not in states:
         states[layout] = read_open(machine, layout)
     return states[layout]
@@ -176,6 +179,8 @@ def set_open(st: dict, key: str, on: bool, layout: str = "open",
         return
     got[key] = on
     st.setdefault("pane_dirty", set()).add(layout)
+    # the clicks not yet written, laid over the file if it is read after them
+    st.setdefault("pane_clicks", {}).setdefault(layout, {})[key] = on
     st["pane_dirty_at"] = time.monotonic() if now is None else now
 
 
@@ -194,6 +199,7 @@ def flush(st: dict, now: float | None = None, force: bool = False) -> bool:
         if layout in states:
             write_open(machine, states[layout], layout)
     dirty.clear()
+    st.pop("pane_clicks", None)
     return True
 
 

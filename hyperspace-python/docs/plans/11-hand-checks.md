@@ -7042,8 +7042,10 @@ back. Fail: the canvas re-centres its nodes as the pane moves.
 **455. The held projector's inset sits clear of the pane.** (Mac, plan
 38's HOLD on)
 1. Hold the projector. Look at the canvas's top-right corner.
-*Pass:* the red-framed PROJECTOR inset is left of the pane, whole; the
-pane's headers are not covered.
+2. Narrow the control window (the pane a band under the canvas).
+*Pass:* (1) the red-framed PROJECTOR inset is left of the pane, whole;
+the pane's headers are not covered. (2) the inset stays above the band,
+smaller if it must, never over its chips.
 
 ## What no test covers
 

@@ -86,7 +86,9 @@ started; on 2026-11-03 the owner gave it to us, on its own schedule.
   missing** chip budgeted beside ▶, or on a row of its own under the
   strip when even a squeezed name leaves no room — and the show line's
   chips start a new row where they would pass the edge
-  (`ui_presets._beside`).
+  (`ui_presets._beside`). The held projector's inset (plan 38) sits in
+  the canvas's corner left of the column, or above the band on a narrow
+  page (`monitor_rect` keeps it under the room's height).
 
 ## What stays
 
@@ -143,3 +145,5 @@ content — no node, edge or position is added, hidden or laid out
   read then; 5 the devices chip budgeted or wrapped; 6 the library's
   atomic write and tolerant read; 7 no unfold on a selection, the write
   deferred; 8 the bodies in `SECTIONS`, the page wrappers dropped.
+  Round 2: a fold clicked before the library attached kept over the
+  file's (`pane_clicks`); the projector's inset above the narrow band.
