@@ -3094,6 +3094,9 @@ uv run ruff check .
   `tests/test_live_lock.py` proves it with two processes. The file is
   per account (`hyperspace-tests-live-<uid>.lock`); a lock file that
   cannot be opened or locked is a skip with the reason, never an error.
+  The folder is `tempfile.gettempdir()`, so a session whose `TMPDIR`
+  differs (a sandbox that sets its own) gets a different lock file and
+  does not take turns with the others.
 - **Why `glfwInit()` hangs on the Mac, and the recovery.** A sample of
   a bare `glfw.init()` ends in `_glfwInitCocoa` → `[NSApplication run]`
   → the reopen AppleEvent →

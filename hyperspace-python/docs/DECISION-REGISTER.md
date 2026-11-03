@@ -9772,7 +9772,11 @@ and D3 (the per-deck split) are
   slows CI and the merger's run, and two sessions still add up; the
   rule says it instead. Block on the lock with no bound: two sessions'
   live tests would queue, and a stuck holder would hang the other run
-  exactly as before.
+  exactly as before. `--dist load` instead of `loadgroup`, with the per-account
+  live lock doing the serialising that `xdist_group("live")` does now:
+  `load` hands a crashed worker's queue to its replacement (the probe:
+  "1 failed, 40 passed" after the crash), so the restart cap could go —
+  a follow-up to decide with the owner, not this PR.
 - **To reverse.** Drop the three flags from addopts and delete
   the fixture and `tests/live_lock.py`; nothing on disk outside the
   tests reads either.
