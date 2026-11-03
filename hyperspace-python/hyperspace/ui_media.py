@@ -75,6 +75,7 @@ GAP = 6.0                  # between two channel columns
 CELL_H = 16.0              # a bin cell
 CELL_GAP = 2.0
 BAR_H = 4.0                # the playhead bar under a channel's picture
+GAIN_W = 110.0             # the channel's sound level (plan 45 V2), on the source's line
 PIC_MAX_H = 25.0           # a channel's picture is 16:9 of its column, never taller than
                            # this (the panel at ui.PANEL_W): the page fits on a wider one
 THUMBS_KEPT = 512          # decoded thumbnails held for the renderer: the least recently
@@ -698,6 +699,12 @@ def _selected(panel, st: dict, state) -> None:
     sid = ch.bin[ch.index()]
     head = state.playhead(c)
     clock = f"{_mmss(head[0])} / {_mmss(head[1])}" if head is not None else ""
+    if f"media.{c}.audio" in panel.reg:     # (a registry from before plan 45 V2 lacks it)
+        # the channel's sound on the source's own line: the page has no row to spare
+        panel._check(f"media.{c}.audio", "audio")
+        imgui.same_line()
+        panel._slider(f"media.{c}.gain", GAIN_W)
+        imgui.same_line()
     w = imgui.get_content_region_avail().x - (ui._readout_width(clock) + 8 if clock else 0)
     imgui.align_text_to_frame_padding()
     imgui.text_colored(ui.TEXT if sid else ui.FAINT,
@@ -708,6 +715,18 @@ def _selected(panel, st: dict, state) -> None:
         imgui.same_line(imgui.get_content_region_avail().x + imgui.get_cursor_pos_x()
                         - ui._readout_width(clock))
         ui._readout(clock, ui.DIM)
+
+
+def mixer_line(panel) -> tuple[str, bool]:
+    """SYSTEM's line for the media sound (plan 45 V2, `Mixer.line`) and
+    whether it warns (`Mixer.failed`: the stream would not open or stopped
+    — a contained read error does not); '' until a channel's audio has
+    first been turned on."""
+    state = media_of(panel)
+    m = getattr(state, "mixer", None) if state is not None else None
+    if m is None:
+        return "", False
+    return m.line(), bool(getattr(m, "failed", False))
 
 
 def _mmss(s: float) -> str:

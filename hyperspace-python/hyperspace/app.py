@@ -82,6 +82,7 @@ from . import (
     placement,
     replay,
     tempo,
+    totem,
 )
 from .audio import AudioEngine
 from .bands import CEIL
@@ -1268,9 +1269,14 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
             devs.send(reg, chain)
             if devs.error and ok:
                 ok, reloader.runtime_error = False, devs.error
-        h.view.integrate(dt)
     except Exception as e:  # noqa: BLE001
         ok, reloader.runtime_error = False, _err("step", e)
+    # the integrator on its own (K3, row 578): the turn, the field's motion
+    # and the media path keep moving through a step that raised every frame
+    try:
+        h.view.integrate(dt)
+    except Exception as e:  # noqa: BLE001
+        ok, reloader.runtime_error = False, _err("view.integrate", e)
     # the analyzer's lanes as a route reads them (out / CEIL), for the
     # patterns that draw the bands themselves (u_levels, plan 22 B3): render
     # input, read-only, like the dim — never a param
@@ -1429,6 +1435,12 @@ def main() -> None:
 
     def panel_setup(reg: Registry, s: ViewState, *, clock, lfos, envs, seq, hold,
                     output) -> Panel:
+        # the Joy-Con totem (plan 47, an experiment): off unless `[totem] on`
+        # says so or the pad window's word is clicked; never saved, so it may
+        # register after attach (a fresh extra, library.py); `s` for the reset
+        totem.register(reg, totem.TotemState(), s)
+        if (cfg.get("totem") or {}).get("on") is True:
+            reg["totem.on"].set(True)
         # after attach, before the router: its ui.* params are the last a
         # launch declares before the table's rows resolve; `output` is what
         # the outputs hook returned

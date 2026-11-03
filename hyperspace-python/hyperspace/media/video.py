@@ -255,12 +255,18 @@ class Soundtrack(_Follower):
 
     # -- what V2 reads ----------------------------------------------------
 
-    def read(self, at: int, n: int) -> np.ndarray:
+    def read(self, at: int, n: int, out: np.ndarray | None = None) -> np.ndarray:
         """`n` samples from sample `at` (counted at `rate` from the start of
         the clip) as (n, channels) float32: the track where it is held,
-        zeros everywhere else. The reader's own array, safe to write."""
+        zeros everywhere else. The reader's own array, safe to write —
+        `out[:n]` when the reader hands one in (plan 45 V2: the mixer's
+        callback allocates nothing), a new one otherwise."""
         n = max(int(n), 0)
-        out = np.zeros((n, self.channels), np.float32)
+        if out is None:
+            out = np.zeros((n, self.channels), np.float32)
+        else:
+            out = out[:n]
+            out.fill(0.0)
         w = self._win
         if w is None or n == 0:
             return out

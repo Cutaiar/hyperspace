@@ -1859,6 +1859,12 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
         r.enum(f"media.{c}.loop", f"{c.upper()} loop", *_attr(ch, "loop"), list(MEDIA_LOOPS),
                group=g, tip="At the clip's end: loop, play back (pingpong), or hold the "
                             "last frame (once).")
+        r.toggle(f"media.{c}.audio", f"{c.upper()} audio", *_attr(ch, "play_audio"), group=g,
+                 tip="Play the video's own sound, read at the playhead (plan 45). Forward "
+                     "play only for now, with an occasional click; other rates stutter.")
+        r.continuous(f"media.{c}.gain", f"{c.upper()} gain", *_attr(ch, "gain"),
+                     taper=tapers.T_MEDIA_GAIN, fmt=tapers.fmt_level, group=g,
+                     tip="The channel's sound level, off to +6 dB; unity at the notch.")
 
     # ---- the backdrop (plan 32 R, row 330): a picture under the scene ----
     # (which is the graph's wire into `backdrop.image`: plan 33 T7 retired

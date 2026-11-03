@@ -473,7 +473,15 @@ KALEIDO six wedges, whatever the inputs. FLAT reads none.
 to 64 one detent apart, then 40 detents a doubling): copies laid out by
 `view.inst_layout` and moved by `view.inst_motion` (STILL, ORBIT, WAVE,
 RIPPLE) with `inst_amp` and `inst_rate`. At 0 nothing is drawn but the
-ground, the echoes, the effects and the hands carry on.
+ground, the echoes, the effects and the hands carry on. The motion's
+phase is `view.inst_phase`, `inst_rate` integrated by the host in
+`ViewState.integrate` (wrapped at 20π, a whole period of every use: ph,
+0.7·ph, 0.9·ph), not t × rate in the draw — so a step on the rate changes
+how fast the field moves and never where it is (register row 578, K3);
+the media path (`view.media_mode`, orbit / figure-8 / sway) reads
+`view.media_phase`, `media_rate` integrated the same way (wrapped at 2π).
+Neither is a param or saved; like the turn's angles, the draw only reads
+them (`field.field`, `Renderer._legacy_field`, `_face_uniforms`).
 
 - *Flat layouts*, in the screen's plane: **GRID** (rows of ⌈√n⌉),
   **HEX** (a honeycomb spiral from the centre; a copy never moves as the
@@ -905,8 +913,11 @@ uniform, the patterns' `m_*()` accessors, or a local carrying one), with
 every call but a constructor opaque, so `u_amount * sin(u_phase)` is an
 amplitude and passes — with an allowlist of today's offenders as exact
 (shader, param) pairs — after K2 (row 577: warp and tripcolour ported)
-only the RINGS pattern × `m_colour`, which K4 takes out (K3,
-`view.media_rate` and `view.inst_rate`, is Python-side). `tests/uv_flow.py` is the
+only the RINGS pattern × `m_colour`, which K4 takes out. K3
+(`view.media_rate`, `view.inst_rate`) was Python-side, outside the lint —
+`ViewState.integrate` moves `media_phase` and `inst_phase`, and
+`tests/test_view_phase.py` pins that render.py and field.py read no rate
+and measures a field-rate step against one frame's motion (row 578). `tests/uv_flow.py` is the
 continuity harness: an effect run over a UV-encoded source gives its
 sampling field exactly, and the mean displacement between consecutive
 frames (an optical-flow proxy with the flow known) on the frame a param
@@ -2910,7 +2921,7 @@ never come back and `send` is not read again. To translate an edited
 `send`, remove the role from `"sinks_seeded"`. A `midi-out` entry is a
 sink alone: its own port (§12) and its own sink rows on its role.
 
-**A video's soundtrack** (plan 45 V1; nothing audible yet). A video on
+**A video's soundtrack** (plan 45 V1; heard through the mixer since V2). A video on
 a channel can decode its audio track to memory beside its picture —
 **once something asks for sound** (`Soundtrack.enable()`, which V2's
 play-audio toggle will call; until then no thread, no open, no read: a
@@ -2930,8 +2941,27 @@ is abandoned, one that fails leaves the old window and is tried again
 after a 1 s move). `status` reads `fetching` whenever the transport is
 outside what is held, `ready` only inside it. A file with no track
 is silence, with no line in the log. `src.audio.read(at, n)` is the API
-the mixer (V2) will consume: (n, 2) float32 from sample `at`, zeros
-where nothing is held, never blocking. [`plans/45-video-audio.md`](plans/45-video-audio.md).
+the mixer consumes: (n, 2) float32 from sample `at`, zeros where nothing
+is held, never blocking. [`plans/45-video-audio.md`](plans/45-video-audio.md).
+
+**The media mixer** (plan 45 V2, `media/mixer.py`). Tick a channel's
+`audio` (`media.<c>.audio`; MEDIA, on the selected channel's source line,
+or the channel node's side pane on GRAPH) and its video's sound plays at
+the channel's `gain` (`media.<c>.gain`: off, then −30…+6 dB, unity at
+the notch). One output stream, 48 kHz stereo, on the default output
+device, opened the first time any channel's sound is on (opened again
+5 s after it fails or the device goes away) and left open until quit;
+unticking lets the video's samples go half a second later; SYSTEM's `media sound` line says whether it is open, how many
+channels play and how many underruns PortAudio reported. Each frame the
+channels hand it the playhead their transports were just stepped to, and
+it reads there — it keeps no position of its own, and the audio and
+display clocks are never locked, so even at rate 1 expect an occasional
+click (a block repeated or skipped) until V4 reads sequentially and slews
+toward the transport; at any other rate it stutters, and a hold, a `once`
+clip parked at its end and reverse are silent (varispeed is V4's). Two loud channels summed clip at
+full scale; the gains are there for it. The analyzer's own WAV playback
+(`audio.py`) is a separate stream and untouched; the analyzer listening
+to the mix is V3's.
 
 ## 14. Outputs
 
@@ -3020,7 +3050,10 @@ D1) is on the list after `learn`, before `midi`: a save re-classes the
 live `Deck` and its objects come from `Deck.targets()`, which `main`'s
 target list takes first, then the rig's. `Deck.build` runs once at
 launch, so a change to it — or a field added to a live object — needs
-Cmd+R, not a save.
+Cmd+R, not a save. A reload of `media/mixer.py` keeps the
+media sound playing: the live mixer is re-classed by `MediaState` and
+the stream's callback reaches the new code through the class; adding
+the module itself needed a restart.
 
 **The watchdog** (`watchdog.py`) appends to `<home>/stall.log` a `===
 <kind>` header — the time, the loaded preset, what happened — and every
