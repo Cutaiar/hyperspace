@@ -686,9 +686,10 @@ class Panel:
         # (`render:acid.2`, a modifier's id); None while nothing, a cable, a
         # bundle, a group or several nodes are selected. Written by
         # `ui_graph.publish` each frame GRAPH draws, so off the page it is
-        # as of the last frame GRAPH was drawn (the pane-always-on work
-        # removes that), except that a preset landing without the node
-        # (`ui_graph.settle`: a load, a new) lets it go on any page. An
+        # as of the last frame GRAPH was drawn (plan 49 stage 1 keeps the
+        # pane on GRAPH: stage 3 removes that), except that a preset
+        # landing without the node (`ui_graph.settle`: a load, a new) lets
+        # it go on any page. An
         # effect's node is `fx_selected` as well (`ui_graph.share`).
         # `graph_selected_at`: imgui's frame count when it last changed.
         self.graph_selected: str | None = None
@@ -2465,8 +2466,11 @@ class Panel:
         self._fader("master.trim")
 
     def _page_analyzer(self, dt: float) -> None:
-        """Scene, meters, then the band editor (ui_bands.py): the
-        spectrogram with the bands over it and the selected band's strip."""
+        """The ANALYZER page — scene, meters, then the band editor
+        (ui_bands.py): the spectrogram with the bands over it and the
+        selected band's strip. GRAPH's side pane draws it as its
+        analyzer section (ui_pane.py, plan 49): the page is the section at
+        full height."""
         c = self.control
         self._section("bands", "band")
         # scene + reset-all (relabels to Undo while the window is open)
@@ -2500,10 +2504,12 @@ class Panel:
         ui_hands.page(self, dt)
 
     def _page_presets(self, dt: float) -> None:
-        """2026-10-28, top to bottom (ui_presets.page): the preset strip —
-        ◀ name ● ▶ · new · save · as… — then every preset as a list that
-        fills the page, its trash at the foot, the patches fold, one line
-        for the show, and the library's notes."""
+        """The PRESETS page, 2026-10-28, top to bottom
+        (ui_presets.page): the preset strip — ◀ name ● ▶ · new · save ·
+        as… — then every preset as a list that fills the room it has, its
+        trash at the foot, the patches fold, one line for the show, and the
+        library's notes. GRAPH's side pane draws it as its presets section
+        (ui_pane.py, plan 49)."""
         if self.library is None:
             self._section("presets")
             imgui.text_disabled("no library attached")
