@@ -387,24 +387,23 @@ def harmless(name: str) -> str:
     return name.replace("/", " - ")
 
 
-def next_name(base: str | None, taken: set[str], folder: str = "") -> str:
+def next_name(base: str | None, taken: set[str], *, key=None) -> str:
     """A name for a new preset grown from `base`, the loaded preset's name
     (plan 15 WP4, fork 16): the first ``"<stem> <n>"`` whose slug is not in
     `taken`, a set of slugs. A base that ends in whitespace and a number
     after a non-empty stem counts on from that number (``TRIP 2`` →
     ``TRIP 3``); any other is its own stem and counting starts at 2
     (``TRIP`` → ``TRIP 2``, ``2001`` → ``2001 2``). With no base the stem
-    is ``PRESET`` and counting starts at 1. Given a `folder` (plan 48),
-    the name is a leaf of that folder: `taken` then holds folded keys
-    (``party/trip-2``, `Library._fold`); the folder is not returned."""
+    is ``PRESET`` and counting starts at 1. `key` is what a candidate is
+    compared by (`slug`; for a preset in a folder the caller's
+    `Library._fold` of the qualified name, plan 48 — the one fold)."""
+    key = key or slug
     base = (base or "").strip()
     if not base:
         stem, n = "PRESET", 1
     else:
         m = re.fullmatch(r"(.*\S)\s+(\d+)", base, re.DOTALL)
         stem, n = (m.group(1), int(m.group(2)) + 1) if m else (base, 2)
-    def key(leaf: str) -> str | None:
-        return fold(f"{folder}/{leaf}") if folder else slug(leaf)
     while key(f"{stem} {n}") in taken:
         n += 1
     return f"{stem} {n}"
@@ -868,11 +867,22 @@ class Project:
         """`active` follows the loaded preset — the one place (plan 19
         WP1): kept where it is when that slot still names it, else the
         first slot that names it, else −1; −1 when nothing is loaded."""
-        cur = self.lib.current(PRESETS)
+        lib, cur = self.lib, self.lib.current(PRESETS)
         if cur is None:                               # nothing loaded: no slot is lit
             self.active = -1
-        elif not 0 <= self.active < len(self.bank) or self.bank[self.active] != cur:
-            self.active = self.bank.index(cur) if cur in self.bank else -1
+            return
+        # a slot names it when it is the same string or reads (as a pad
+        # loads it, loosely) the same file: `Ac/Dc`, `Party/TRIP` (plan 48
+        # review); one look at the library for every slot
+        snap = lib._lookup(PRESETS) if hasattr(lib, "_lookup") else None
+        target = None if snap is None else lib._resolve(PRESETS, cur, snap, loose=True)
+
+        def names(n: str | None) -> bool:
+            return n is not None and (n == cur or (
+                target is not None and lib._resolve(PRESETS, n, snap, loose=True) == target))
+
+        if not (0 <= self.active < len(self.bank) and names(self.bank[self.active])):
+            self.active = next((k for k, n in enumerate(self.bank) if names(n)), -1)
 
     def _loader(self):
         return getattr(self.lib, "presets", None)
@@ -1004,7 +1014,8 @@ class Project:
         # library's root for a top-level one or none loaded
         taken = lib._taken(PRESETS) | {lib._fold(PRESETS, n) for n in self.bank if n}
         folder, base = lib.folder_of(PRESETS, lib.current(PRESETS))
-        leaf = next_name(base, taken, folder)
+        leaf = next_name(base, taken, key=lambda n: lib._fold(
+            PRESETS, f"{folder}/{n}" if folder else n))
         name = f"{folder}/{leaf}" if folder else leaf
         try:
             presets.save_as(name)
@@ -1722,19 +1733,23 @@ class Library:
         walks[d] = hit = {"at": now, "stamps": stamps, "files": files, "folders": folders}
         return hit
 
-    def _byfold(self) -> dict[str | None, Path]:
+    def _byfold(self) -> dict[str | None, list[Path]]:
         """Every preset file by `fold` of its key (``party/trip``), kept
-        with the walk."""
-        out: dict[str | None, Path] = {}
+        with the walk — a list per key: two files may fold to one
+        (`_resolve` refuses to pick)."""
+        out: dict[str | None, list[Path]] = {}
         for root in self._roots():
             d = root / PRESETS
             if not d.is_dir():
                 continue
             hit = self._walked(d)
             if "byfold" not in hit:
-                hit["byfold"] = {fold(p.relative_to(d).as_posix()[:-5]): p
-                                 for p in sorted(hit["files"])}
-            out.update(hit["byfold"])
+                byfold: dict[str | None, list[Path]] = {}
+                for p in sorted(hit["files"]):
+                    byfold.setdefault(fold(p.relative_to(d).as_posix()[:-5]), []).append(p)
+                hit["byfold"] = byfold
+            for k, ps in hit["byfold"].items():
+                out.setdefault(k, []).extend(ps)
         return out
 
     def _folder_on_disk(self, folder: str) -> str | None:
@@ -1808,7 +1823,7 @@ class Library:
         except LibraryError:
             return path.name[:-5]
 
-    def _index(self, group: str) -> dict[str, Path]:
+    def _index(self, group: str, files: dict[str, Path] | None = None) -> dict[str, Path]:
         """display name → path; a name is also reachable by its slug.
 
         Two files of one folder with the same name inside — a cloud
@@ -1826,7 +1841,7 @@ class Library:
         file's own ``/`` is listed as ``" - "`` (`harmless`): a ``/`` in a
         listed name is always a folder."""
         out: dict[str, Path] = {}
-        for p in self._files(group).values():
+        for p in (self._files(group) if files is None else files).values():
             pre = self._prefix(group, p)
             leaf = self._leaf(group, p)
             name = pre + leaf
@@ -1854,13 +1869,20 @@ class Library:
         ``party/TRIP`` typed with no ``party/`` is a new file in a new
         folder, never the top-level ``party-trip.json``. None for none, and
         for a preset name that could not name a file inside ``presets/``
-        (``../x``, ``/etc/x``)."""
-        return self._resolve(group, name, self._lookup(group), loose=loose)
+        (``../x``, ``/etc/x``). Two files that answer to one spelling
+        (``trip_2.json`` and ``trip-2.json``) resolve to neither by a fold:
+        the file key spelled as on disk finds its own, any other spelling
+        neither (a loose read says which two)."""
+        say = (lambda text: self.say(warning=text)) if loose else None
+        return self._resolve(group, name, self._lookup(group), loose=loose, say=say)
 
     def _lookup(self, group: str) -> tuple:
-        """What `_resolve` reads, taken once: the index, the file keys, and
-        for the presets the files by `fold` and the folders on disk folded."""
-        idx, files = self._index(group), self._files(group)
+        """What `_resolve` reads, taken once per operation (review of #334:
+        a rename or a frame's ask lists the folder once): the index, the
+        file keys, and for the presets the files by `fold` and the folders
+        on disk folded."""
+        files = self._files(group)
+        idx = self._index(group, files)
         if group != PRESETS:
             return idx, files, {}, set()
         folders: set[str | None] = set()
@@ -1873,7 +1895,13 @@ class Library:
         return idx, files, self._byfold(), folders
 
     @staticmethod
-    def _resolve(group: str, name: str, snap: tuple, *, loose: bool) -> Path | None:
+    def _resolve(group: str, name: str, snap: tuple, *, loose: bool,
+                 say=None) -> Path | None:
+        """`path_of` over a `_lookup` snapshot. A fold that two files answer
+        to (``trip_2`` / ``trip-2``; ``Trip`` / ``trip`` on a case-sensitive
+        disk) is never settled by sort order: a name that is a file key as
+        on disk (``trip_2``) finds that file, any other spelling neither,
+        and `say` (a loose read's) is told which two."""
         idx, files, byfold, folders = snap
         hit = idx.get(name)
         if hit is not None:
@@ -1883,12 +1911,24 @@ class Library:
         key = fold(name)
         if key is None:
             return None
-        hit = byfold.get(key)
-        if hit is not None or not loose:
+        hit = files.get(name)                       # a file key, as it is on disk
+        if hit is not None:
             return hit
+
+        def one(k: str | None) -> Path | None:
+            found = byfold.get(k) or []
+            if len(found) == 1:
+                return found[0]
+            if found and say is not None:
+                say(f"{name}: two presets answer to that name — "
+                    f"{found[0].name} and {found[1].name}; rename one")
+            return None
+
+        if byfold.get(key) or not loose:
+            return one(key)
         folder = split_name(name)[0]
         if folder and fold_folder(folder) not in folders:
-            return byfold.get(slug(name))           # a top-level key has no "/"
+            return one(slug(name))                  # a top-level key has no "/"
         return None
 
     def list(self, group: str) -> list[str]:
@@ -2231,14 +2271,13 @@ class Library:
             # name is spelled as the list will spell it — the folder as it is
             # on disk (review: `Party/NEW` into an existing `party/`)
             folder, leaf = self.folder_of(group, name)
+            if not leaf.strip():                        # "party/", "party/   "
+                raise LibraryError("a preset needs a name")
             if path is not None:
                 raw = self._name_of(path)
                 if raw != harmless(raw):
                     renamed = raw                       # its own "/" goes (the ruling)
-                pre = self._prefix(group, path)
-                if fold_folder(folder) != fold_folder(pre[:-1]):
-                    leaf = self._leaf(group, path)      # found by a looser spelling
-                folder = pre[:-1]
+                folder = self._prefix(group, path)[:-1]  # as on disk
             else:
                 key = path_slug(name)              # LibraryError on ../ or /abs
                 folder = key.rpartition("/")[0]
@@ -2373,7 +2412,9 @@ class Library:
         # names a patch; a group's provenance slug is the preset's to keep)
         if group not in RENAMABLE:
             raise LibraryError(f"{group}: only a preset can be renamed (or a patch)")
-        path = self.path_of(group, old)
+        snap = self._lookup(group)                 # one look for the whole rename
+        idx, files = snap[0], snap[1]
+        path = self._resolve(group, old, snap, loose=False)
         if path is None:
             raise LibraryError(f"no preset {old!r}")
         new = (new or "").strip()
@@ -2394,20 +2435,20 @@ class Library:
         doc = _read_json(path)
         # what names this file, folded: its listed names and its file key
         # (and, at the top, its raw stem, as before plan 48)
-        mine = {self._fold(group, n) for n, p in self._index(group).items() if p == path}
-        mine |= {self._fold(group, s) for s, p in self._files(group).items() if p == path}
+        mine = {self._fold(group, n) for n, p in idx.items() if p == path}
+        mine |= {self._fold(group, s) for s, p in files.items() if p == path}
         if not pre:
             mine.add(stem)
         mine -= {None, ""}
         # review of #334: what each slot resolved to before the rename (a
         # loose read, as a pad loads it), so a slot naming it by an old
         # spelling (`Ac/Dc`) follows it too
-        snap = self._lookup(group)
+        # (`snap`, taken above, is the library as it was before)
         named = lambda n: self._resolve(group, n, snap, loose=True) == path
         in_place = slug(leaf) == stem
         # `_taken` less this preset's own stem and name — in its own folder
-        taken = ({self._fold(group, s) for s, p in self._files(group).items() if p != path}
-                 | {self._fold(group, n) for n, p in self._index(group).items() if p != path})
+        taken = ({self._fold(group, s) for s, p in files.items() if p != path}
+                 | {self._fold(group, n) for n, p in idx.items() if p != path})
         if self._fold(group, new) in taken:
             raise LibraryError(f"{leaf}: that name is taken — pick another")
         kind = self._kinds.get(group)
@@ -2530,7 +2571,12 @@ class Library:
         (plan 25): the trash every Mac wrote into before plan 48 — listed
         and restorable, never written, never emptied (row 586). None when
         the library is the machine home (the same folder) or missing."""
-        if self.__dict__.get("missing") is not None or self.home == self._machine():
+        if self.__dict__.get("missing") is not None:
+            return None
+        try:                                           # a symlinked home is the same folder
+            if self.home.resolve() == self._machine().resolve():
+                return None
+        except OSError:
             return None
         old = self.home / TRASH
         return old if old.is_dir() else None
@@ -2548,14 +2594,16 @@ class Library:
     def _trash_roots(self) -> list[tuple[Path, Path, bool]]:
         """(root, root resolved, whether it is the old library trash) for
         this Mac's trash and the library's old one, each resolved once."""
-        out = []
+        out: list[tuple[Path, Path, bool]] = []
         for root, old in ((self._trash_dir(), False), (self._old_trash(), True)):
             if root is None:
                 continue
             try:
-                out.append((root, root.resolve(), old))
+                resolved = root.resolve()
             except OSError:
                 continue
+            if all(resolved != r for _root, r, _old in out):   # one folder, listed once
+                out.append((root, resolved, old))
         return out
 
     @staticmethod
@@ -2651,6 +2699,9 @@ class Library:
         show = group == PROJECTS
         suffix = PROJECT_SUFFIX if show and filename.endswith(PROJECT_SUFFIX) else ".json"
         stem = filename.removesuffix(suffix)
+        # only the presets have folders (plan 48): a file a non-preset group
+        # kept deeper goes back where that group lists it
+        sub = sub if group == PRESETS else ""
         folder = self.home / group / sub if sub else self.home / group
         pre = f"{sub}/" if sub and group == PRESETS else ""
         data = path.read_bytes()

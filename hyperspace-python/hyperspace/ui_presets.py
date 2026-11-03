@@ -81,7 +81,7 @@ def trash_tag(item) -> str:
     """A trash row's dim first column: its group, and for a file in the
     library's old trash (plan 48 row 586) ``· library`` — so a row says in
     itself that "empty" leaves it and a restore is a copy."""
-    return f"{item.group} · library" if getattr(item, "old", False) else item.group
+    return f"{item.group} · library" if item.old else item.group
 
 
 # ---- state on the panel, created on first use ----
@@ -585,7 +585,7 @@ def _trash_popup(panel, bin_: list) -> None:
                            "file: a name that is taken gets the next free one"
                            + ("\nFrom the library's old trash: a copy comes back and the "
                               "file stays there (empty trash leaves it)"
-                              if getattr(item, "old", False) else ""))
+                              if item.old else ""))
             if hit:
                 _said(panel, lib.restore_trash, item)
                 invalidate(panel, item.group)
@@ -595,7 +595,7 @@ def _trash_popup(panel, bin_: list) -> None:
         rect("rows")
     # plan 48 row 586: the trash is this Mac's; what the library's own
     # trash kept from before is listed and restorable, never emptied here
-    old = sum(1 for t in bin_ if getattr(t, "old", False))
+    old = sum(1 for t in bin_ if t.old)
     drawn["old"] = old
     if old:
         ui._micro(f"{old} from the library's old trash — restore copies, empty leaves them")
@@ -608,6 +608,13 @@ def _trash_popup(panel, bin_: list) -> None:
                        "clear it in Finder.")
     n -= old
     imgui.separator()
+    if n == 0:
+        # only the library's old trash is listed: nothing here to empty, so
+        # no chip to arm ("delete 0 files for good?", review of #334)
+        st["empty_armed"] = None
+        drawn["empty"] = None
+        imgui.end_popup()
+        return
     now = imgui.get_time()
     armed = st.get("empty_armed")
     if armed is not None and now - armed > EMPTY_S:

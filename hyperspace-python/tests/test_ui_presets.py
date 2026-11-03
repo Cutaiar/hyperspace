@@ -503,6 +503,23 @@ def _trash_view(panel):
     return st, st["trash_view"]
 
 
+def test_old_trash_rows_say_so_and_nothing_to_empty_draws_no_chip(rig, monkeypatch):  # noqa: F811
+    """Plan 48 review: a row from the library's old trash carries
+    "presets · library" in itself; when only such rows are listed there is
+    nothing "empty" would remove, so no chip to arm."""
+    from hyperspace.library import Trashed
+    panel, lib = rig.panel, rig.lib
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    old = Trashed(lib.home / "trash" / "presets" / "gone.20261001-120000.json", "presets",
+                  "GONE", "Oct 1 12:00", "", True)
+    monkeypatch.setattr(lib, "trash", lambda: [old])
+    ui_presets.invalidate(panel, "presets")
+    _st, view = _trash_view(panel)
+    assert view["rows"] == [("presets", "GONE", "Oct 1 12:00")]
+    assert view["tags"] == ["presets · library"] and view["old"] == 1
+    assert view["empty"] is None and "empty" not in view["rects"]
+
+
 def test_empty_asks_once_and_disarms(rig, tmp_path):  # noqa: F811
     """"empty trash…" asks once, in place, no modal: one click arms it —
     "delete N files for good? — click again" — and empties nothing; a

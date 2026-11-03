@@ -480,3 +480,74 @@ def test_a_save_says_a_files_own_slash_went(lib_dirs):
     assert r.lib.status == "presets: saved AC - DC (was AC/DC)"
     r.lib.overwrite(PRESETS)
     assert r.lib.status == "presets: saved AC - DC"
+
+
+# ---------------------------------------------------------------- review, third pass
+
+def test_a_folder_with_no_name_is_refused(lib_dirs):
+    """Third pass 1: as… "party/" or "party/   " saves nothing."""
+    r = make(lib_dirs)
+    before = tree(lib_dirs.presets)
+    for name in ("party/", "party/   "):
+        with pytest.raises(LibraryError, match="needs a name"):
+            r.presets.save_as(name)
+    assert tree(lib_dirs.presets) == before and r.lib.current(PRESETS) is None
+
+
+def test_a_pad_naming_its_preset_by_another_spelling_lights(lib_dirs):
+    """Third pass 2: slots `Ac/Dc` and `Party/B` load through the loose
+    read and their pads light, as an exact spelling's does."""
+    _put(lib_dirs.presets / "ac-dc.json", "AC/DC")
+    r = make(lib_dirs)
+    pr = r.lib.project
+    pr.bank[4], pr.bank[5] = "Ac/Dc", "Party/B"
+    pr.load_slot(4)
+    assert r.lib.current(PRESETS) == "AC - DC" and pr.active == 4
+    pr.load_slot(5)
+    assert r.lib.current(PRESETS) == "party/B" and pr.active == 5
+    r.presets.load("A")
+    assert pr.active == 0
+    r.presets.load("Ac/Dc")                    # the strip: the first slot that names it
+    assert pr.active == 4
+
+
+def test_a_symlinked_home_lists_its_trash_once(tmp_path):
+    """Third pass 3: `[library] path` written through a link to the
+    machine home is the same folder — its trash is this Mac's, not old."""
+    machine = tmp_path / "M"
+    _put(machine / PRESETS / "a.json", "A")
+    (tmp_path / "link").symlink_to(machine, target_is_directory=True)
+    lib = Library(tmp_path / "link", machine=machine, period=0.0)
+    assert lib._old_trash() is None
+    lib.delete(PRESETS, "A")
+    listed = lib.trash()
+    assert len(listed) == 1 and not listed[0].old
+
+
+def test_a_non_preset_file_kept_deeper_goes_back_to_its_group(lib_dirs):
+    """Third pass 4: only the presets have folders — a module preset the
+    trash holds a folder down restores to its group's own folder."""
+    r = make(lib_dirs)
+    deep = lib_dirs.machine / "trash" / "camera" / "odd"
+    deep.mkdir(parents=True)
+    (deep / "wide.20261001-120000.json").write_text(
+        json.dumps({"schema": "hyperspace.preset/1", "group": "camera", "name": "Wide",
+                    "values": {}}))
+    (item,) = r.lib.trash()
+    r.lib.restore_trash(item)
+    assert (lib_dirs.root / "camera" / "wide.json").is_file()
+    assert not (lib_dirs.root / "camera" / "odd").exists()
+
+
+def test_two_files_of_one_spelling_are_never_picked_by_sort_order(lib_dirs):
+    """Third pass 5: `trip_2.json` and `trip-2.json` both fold to
+    `trip-2`; a loose read of `Trip 2` resolves to neither and says
+    which two, while the exact key still finds its own."""
+    _put(lib_dirs.presets / "trip_2.json", "TRIP TWO")
+    _put(lib_dirs.presets / "trip-2.json", "TRIP 2B")
+    r = make(lib_dirs)
+    assert r.lib.path_of(PRESETS, "trip-2") == lib_dirs.presets / "trip-2.json"
+    assert r.lib.path_of(PRESETS, "trip_2", loose=True) == lib_dirs.presets / "trip_2.json"
+    assert r.lib.path_of(PRESETS, "Trip! 2", loose=True) is None
+    assert "two presets answer to that name" in r.lib.warning
+    assert "trip-2.json" in r.lib.warning and "trip_2.json" in r.lib.warning
