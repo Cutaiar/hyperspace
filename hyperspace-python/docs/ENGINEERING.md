@@ -3062,8 +3062,16 @@ uv run ruff check .
   ends the run (the dead worker's queued tests are not run); with
   xdist's default restarts the replacement worker sat idle and the run
   stalled at 75 % for good (measured on a deliberate `sleep(130)` with
-  `--timeout=5`). The slowest fast-tier test takes about 6 s, far
-  under the limit.
+  `--timeout=5`, twice, the second time after the reopen-windows alert
+  below was cleared). It is the `loadgroup` scheduler, not the Mac:
+  `sample` shows the replacement waiting on its channel for work, the
+  dead worker's queued tests are never handed to it, and the same
+  probe under `--dist load` replaces the worker and runs them. So the
+  cap stays: a crash, even a transient one with no hang, ends the run
+  and leaves the dead worker's queue unrun ("1 failed, N passed" looks
+  finished — count the tests), which is cheaper than a run that never
+  ends. The slowest fast-tier test takes about 6 s, far under the
+  limit.
 - **Live tests take turns across processes.** Within a run
   `xdist_group("live")` gives every `live` test to one worker; across
   runs (two sessions, two worktrees) the autouse fixture

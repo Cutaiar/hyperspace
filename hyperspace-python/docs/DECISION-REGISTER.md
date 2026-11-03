@@ -9736,7 +9736,8 @@ and D3 (the per-deck split) are
   the worker, which xdist reports as "worker 'gwN' crashed while running
   '<test>'"; with no restart that ends the run (measured: with xdist's
   default restarts the replacement worker sat idle and the run stalled
-  at 75 % for good). CI keeps its own `--timeout 120
+  at 75 % for good — xdist's `loadgroup` scheduler never hands the dead
+  worker's queue to the replacement; `--dist load` does). CI keeps its own `--timeout 120
   --max-worker-restart=0`, the same values. (2) Every
   test marked `live` holds an `fcntl.flock` on
   `$TMPDIR/hyperspace-tests-live.lock` for its setup, call and teardown
@@ -9764,9 +9765,13 @@ and D3 (the per-deck split) are
 - **To reverse.** Drop the three flags from addopts and delete
   the fixture and `tests/live_lock.py`; nothing on disk outside the
   tests reads either.
-- **Rough edge.** With no worker restart, one hang ends the run and
-  the dead worker's queued tests are not run: the run says which test
-  hung but not how the rest fared, so fix it and run again. The thread
+- **Rough edge.** With no worker restart, one hang or crash ends the
+  run and the dead worker's queued tests are not run (a crash of
+  `test_segment.py::test_vision_frees_each_jobs_memory` in an `--all`
+  run left about 600 unrun behind "1 failed, 4297 passed"): the run
+  names the test but not how the rest fared, so fix it and run again.
+  Lifting the cap needs `--dist load`, which gives up `loadgroup`'s
+  one-worker live group. The thread
   method's stack dump goes to the worker's stderr, which xdist does not
   show; `-n0 -k <test>` shows it. The lock is per test, so between two
   live tests of one run another run can take its turn. The lock wait
