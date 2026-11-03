@@ -9742,7 +9742,10 @@ and D3 (the per-deck split) are
   `fx` docstring and DECISIONS. Tripcolour: `// @clock u_pulse_t pulse
   tau`, read as `sin(u_pulse_t)`. The lint's allowlist loses
   (warp, u_drift), (warp, u_scale) and (tripcolour, u_pulse); only
-  (patterns, m_colour), K4, is left. The harness now also stands each
+  (patterns, m_colour), K4, is left, and the lint's pre-port exemption
+  (a clock's rate param times `u_phase` passed while a file was
+  mid-port) is gone, so the old line put back beside the clock is found
+  again. The harness now also stands each
   `@clock` where the hour at the run's knobs left it. Harness, an hour
   in (`tests/uv_flow.py`, 320×200, px moved on the step frame / largest
   still frame): drift 1 → 1.1 15.3 / 0.05 before, 0.05 / 0.06 after;

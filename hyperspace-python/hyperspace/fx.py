@@ -50,7 +50,7 @@ A rate-like param is integrated here and the shader reads the phase::
 
     // @clock u_drift_t drift          a second clock: u_drift_t += speed × drift × dt
     // @clock u_pulse_t pulse tau      …wrapped to 2π (any period > 0, or `tau`)
-    // @clock u_drift_t drift*scale    a product of params: speed × drift × scale × dt
+    // @clock u_cells_t drift*scale    a product of params: speed × drift × scale × dt
 
 ``@clock <uniform> <rate-param>[*<rate-param>…] [period]``: the uniform (``u_…``, one
 the file does not declare — this module does, beside ``u_phase``) is a
@@ -212,6 +212,15 @@ class EffectSpec:
                 tuple((c.uniform, c.rate, c.period) for c in getattr(self, "clocks", ())))
 
 
+def clock_rate(clock: ClockSpec, values: dict[str, Any]) -> float:
+    """A `@clock`'s rate from an effect's values: the product of its
+    factors, a factor the values lack read as 0 (a stilled clock, never an
+    exception on the frame). `FxState.advance` and the continuity harness
+    both read it here. `rate.split`, not `.factors`: a ClockSpec from
+    before a hot reload of this module has no such property."""
+    return math.prod(float(values.get(k, 0.0)) for k in clock.rate.split("*"))
+
+
 def _check_key(name: str, n: int, key: str, seen: set[str]) -> None:
     if key in RESERVED or key in seen:
         raise SpecError(f"{name}:{n}: u_{key} — {key!r} is taken")
@@ -226,9 +235,12 @@ def _check_key(name: str, n: int, key: str, seen: set[str]) -> None:
 def _parse_clock(name: str, n: int, val: str) -> ClockSpec:
     """`@clock <uniform> <rate-param>[*<rate-param>…] [period]` → its spec,
     the rate still to be checked against the file's params (`_check_clocks`)."""
-    words = val.split()
+    # a product may be written with spaces round its `*`s: `drift * scale`
+    head = val.split(None, 1)
+    words = head[:1] + re.sub(r"\s*\*\s*", "*", head[1]).split() if len(head) > 1 else head
     if len(words) not in (2, 3):
-        raise SpecError(f"{name}:{n}: @clock wants <u_uniform> <rate-param> [period]")
+        raise SpecError(f"{name}:{n}: @clock wants <u_uniform> "
+                        "<rate-param>[*<rate-param>…] [period]")
     uniform, rate = words[0], words[1]
     if not _CLOCK_UNIFORM.match(uniform):
         raise SpecError(f"{name}:{n}: @clock {uniform} — a clock's uniform is u_lower_snake")
@@ -273,7 +285,11 @@ def _check_clocks(name: str, spec: EffectSpec) -> None:
     seen: set[str] = set()
     for k, c in enumerate(spec.clocks):
         factors = []
-        for word in c.rate.split("*"):
+        for word in c.factors:
+            if not word:
+                raise SpecError(f"{name}: @clock {c.uniform} — an empty factor in its rate "
+                                f"{c.rate!r} (a product is <param>*<param>, a param each side "
+                                "of every `*`)")
             key = word if word in keys else by_uniform.get(word)
             if key is None:
                 raise SpecError(f"{name}: @clock {c.uniform} — its rate {word!r} is no @param of "
@@ -625,10 +641,7 @@ class FxState:
             spec = self.specs.get(n)
             for c in (getattr(spec, "clocks", None) or ()):
                 ph = clocks.setdefault(n, {})
-                # rate.split, not .factors: a ClockSpec from before a hot
-                # reload of this module has no such property
-                rate = math.prod(float(v.get(k, 0.0)) for k in c.rate.split("*"))
-                x = ph.get(c.uniform, 0.0) + dt * speed * rate
+                x = ph.get(c.uniform, 0.0) + dt * speed * clock_rate(c, v)
                 if c.period:
                     x %= c.period
                 ph[c.uniform] = x
