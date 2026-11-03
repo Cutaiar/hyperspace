@@ -308,9 +308,16 @@ modules' (`poi.SKIP` is A and the D-pad's down, a subset of `totem.SKIP`).
 
 - The pad window (SYSTEM → *Pad diagram*): its header reads **poi off**
   after the totem's word. **Click it.** On, it reads **poi 1.00 · 0.30 ·
-  0.20** (length · weight · springiness), and the six dials (length,
-  weight, spring, gravity, drag, hand) and *depth zooms* are drawn under the
-  header. The GRAPH page's pad node shows the same. Or:
+  0.20** (length · weight · springiness), followed by the word **dials**.
+  The dials have their own small window, **Poi**, which opens when the poi
+  comes on: the six dials (length, weight, spring, gravity, drag, hand),
+  *depth zooms*, *show string* and a **reset** button. It is movable and
+  starts at the top centre of the control window. Clicking **dials** (or
+  the window's close box) hides it, and clicking **dials** again brings it
+  back. The pad window keeps all its room for the pad: the dials used to
+  sit under its header and shrank the map, Faithful and Cockpit until they
+  could not be read (2026-11-03). The GRAPH page's pad node has the same
+  header and opens the same window. Or:
 - `config.toml`, which is also the only way the dials outlast a launch:
 
   ```toml
