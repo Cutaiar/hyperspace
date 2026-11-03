@@ -11,7 +11,7 @@ The bytes follow `hyperspace-python/docs/plans/assets/42-controllers/sony-hid.md
 The lane names, sink channels and tape format are the Python app's
 (`pads/sony.py`, `pads/gesture.py`, `devices.pad_effects`), so whatever you
 find here carries over. The spec's §8 test vectors run on load: the badge in
-the bottom-right corner should read `self-test 30/30 pass`; click it for the
+the bottom-right corner should read `self-test 38/38 pass`; click it for the
 details.
 
 ![Faithful view and the ideas canvas](shots/faithful-and-ideas.png)
@@ -88,6 +88,44 @@ device list is empty or no reports arrive, check System Settings ▸ Privacy
   **copy route** shows the app's rows for each idea and copies them.
   **solo** turns every other idea off, and leaves only the soloed idea's
   output channels on.
+- **Triggers.** The bench: every effect the adaptive triggers can make,
+  one recipe per side, so two can be felt against each other.
+  - **Recipes.** *free* (Off 0x05) · *wall* — one uniform push-back, which
+    is all the app sends today · *sniper break* (Weapon 0x25) — slack, a
+    wall that holds, and past the break it gives way · *response curve* —
+    the travel shaped zone by zone: linear, curved either way, S, inverse,
+    stepped or sawtooth · *detents* — hard zones with free ones between
+    them, clicks the finger can count · *buzz* (Vibration 0x26) — it just
+    vibrates, amplitude and Hz · *engine* — the pitch rises with the travel
+    · *recoil* — a wall that fires: cross it and the wall drops for a
+    moment while the coil kicks and the heavy motor thumps, one shot per
+    squeeze or full auto · *bowstring* — harder as you draw, then it lets
+    go · *gallop* — a heavy foot and a light one on a period.
+  - **Pairs worth feeling** load both sides at once: the sniper, linear vs
+    inverse, brake and gas, semi-auto, full auto, the engine, notches, just
+    buzzing, the bowstring, the gallop.
+  - **The plot** under each side is the ten zones exactly as the firmware
+    got them, with the live travel on top and the break as a dashed line;
+    the line under it is the mode and the 11 bytes.
+  - **The travel trace** is your own finger over the last 2.6 s, every shot
+    marked, and for each one: how long the slack took, how long you held on
+    the wall, and how far down it broke. That is the sniper's three stages,
+    drawn.
+  - Only Off 0x05, Feedback 0x21, Weapon 0x25 and Vibration 0x26 are ever
+    encoded — one mode per trigger per report, so a shape and a buzz can
+    never be felt at once. Recoil, bowstring and gallop take turns in time
+    instead, re-sent frame by frame, which is also how the unofficial
+    0x22 / 0x23 / 0x27 (bow, gallop, machine) are built rather than sent.
+    0xFC–0xFE are refused before any write.
+  - **send this bench to the pad** takes the output over from the sink
+    channels (the same switch as the Feedback tab's radio); **free both**
+    puts Off 0x05 on each side.
+
+  ![The bench: a brake-pedal curve on L2, the sniper break on R2](shots/triggers.png)
+
+  What the app itself can send is a strict subset of this — one wall per
+  trigger, from a fixed zone. The brain-blast for the rest is
+  `hyperspace-python/docs/plans/brain-blast-trigger-extensions.md`.
 - **Feedback.**
   - The nine sink channels in the app's order. Each has an on/off switch
     (off keeps the player identity), an auto setting (what the ticked idea
@@ -283,6 +321,12 @@ These were checked headless with Playwright:
 - The simulator: all three readouts, the ideas, the feedback writes, the
   probe steps (the axis probe proposes the identity map for the simulated
   pad), the findings export and the tape export.
+- The trigger bench in Chrome (2026-11-02), on the simulator: each of the
+  ten pairs loaded and both triggers run through the whole travel, with the
+  bytes read back from the report each time — the Weapon block's wall and
+  break, each multiple-position shape zone by zone, the vibration Hz, and
+  the recoil's wall → kick → wall. No console errors, no write errors, and
+  the self-test reads 38/38.
 - Ideas 8–13 in Chromium (2026-11-02), on the simulator, each one soloed and
   played: the grab, the spin either way, the shake and the settle, L2 under
   and through the wall, the wind and the release, the two-thumb roll at two
@@ -290,7 +334,7 @@ These were checked headless with Playwright:
   back: the light bar's hue, whiteness and level, the player lights, both
   motors, and each trigger's Feedback level and zone. Also checked: ideas 4,
   5 and 7 still run, there were no console errors, and the self-test reads
-  30/30.
+  38/38.
 - The WebHID code path, against a mock `navigator.hid`: the id-less input
   DataView, feature reads that come back with the id byte, Bluetooth
   simple → full, the outgoing BT sequence nibble and CRC, and the USB
