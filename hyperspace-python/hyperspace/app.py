@@ -80,6 +80,7 @@ from . import (
     gamepad,
     lfo,
     placement,
+    poi,
     replay,
     tempo,
     totem,
@@ -1441,6 +1442,13 @@ def main() -> None:
         totem.register(reg, totem.TotemState(), s)
         if (cfg.get("totem") or {}).get("on") is True:
             reg["totem.on"].set(True)
+        # the Joy-Con as a poi's handle (plan 47, the poi): likewise; its
+        # dials start from `[poi]` (weight, length, spring, gravity, drag,
+        # hand, depth), the only way they outlast a launch
+        poi_cfg = cfg.get("poi") or {}
+        poi.register(reg, poi.PoiState(), poi_cfg)
+        if poi_cfg.get("on") is True:
+            reg["poi.on"].set(True)
         # after attach, before the router: its ui.* params are the last a
         # launch declares before the table's rows resolve; `output` is what
         # the outputs hook returned

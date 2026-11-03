@@ -56,14 +56,16 @@ While the totem drives a pad, that pad's rows on the buttons it uses
 (`SKIP`) do not fire (the factory's A / B / X / Y toggles would otherwise
 flip the faces and the points with every plane switch).
 
-A leaf: the standard library only; the registry and the pad are
-duck-typed.
+A leaf but for its sibling poi.py (a leaf: whether a poi owns the pan);
+the registry and the pad are duck-typed.
 """
 
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+
+from . import poi
 
 GROUP = "totem"
 # the six planes in the app's order (geometry.PLANES; a test holds them equal)
@@ -269,9 +271,10 @@ def _buttons(state: TotemState, pad, reg) -> None:
 def _pan(state: TotemState, motion, reg, dt: float) -> None:
     """The tilt against the reference onto camera.pan, as a relative move
     of what the totem added last frame: x right for the right side down,
-    up (pan.y −) for the far end up. Off, what it added is taken back."""
+    up (pan.y −) for the far end up. Off, or while a poi owns the pan
+    (poi.py), what it added is taken back."""
     want = [0.0, 0.0]
-    if state.pan:
+    if state.pan and not poi.owns_pan(reg):       # a poi swinging the shape owns the pan
         roll, pitch = math.radians(motion.roll), math.radians(motion.pitch)
         if state.ref is None:
             state.ref = (roll, pitch)

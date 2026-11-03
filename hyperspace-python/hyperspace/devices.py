@@ -841,16 +841,29 @@ class PadDevice(Base):
                 gamepad.steer(io, router, reg, self.__dict__.get("_dt", 0.0), routed=routed)
 
     def _totem(self, io, reg, q: str) -> dict:
-        """The totem experiment (plan 47, totem.py): while `totem.on`, the
-        first pad with motion sensors turns the shape; its buttons the totem
-        uses are held off its rows (`Router.pad`'s `skip`). Nothing while
-        the totem is off or the registry has none."""
-        from . import totem
-        state = getattr(reg, "totem", None) if reg is not None else None
-        if not isinstance(state, totem.TotemState) or not state.on:
+        """The totem and the poi experiments (plan 47, totem.py, poi.py):
+        while `totem.on` the first pad with motion sensors turns the shape,
+        while `poi.on` it swings the shape as a poi's weight; the buttons
+        each uses are held off the pad's rows (`Router.pad`'s `skip`).
+        The poi steps first, so a reset that fires both finds the pan the
+        poi has already let go of. Nothing while both are off or the
+        registry has neither."""
+        from . import poi, totem
+        if reg is None:
             return {}
-        totem.step(state, io, reg, self.__dict__.get("_dt", 0.0), self.role)
-        return {"skip": totem.SKIP} if totem.drives(state, self.role) else {}
+        dt = self.__dict__.get("_dt", 0.0)
+        skip: set[str] = set()
+        swing = getattr(reg, "poi", None)
+        if isinstance(swing, poi.PoiState) and swing.on:
+            poi.step(swing, io, reg, dt, self.role)
+            if poi.drives(swing, self.role):
+                skip |= poi.SKIP
+        state = getattr(reg, "totem", None)
+        if isinstance(state, totem.TotemState) and state.on:
+            totem.step(state, io, reg, dt, self.role)
+            if totem.drives(state, self.role):
+                skip |= totem.SKIP
+        return {"skip": frozenset(skip)} if skip else {}
 
     def _feed_extras(self, router, io, q: str) -> None:
         """The ``touch`` and ``motion`` lanes (plan 42): their names,

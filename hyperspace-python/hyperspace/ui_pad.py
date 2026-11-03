@@ -526,6 +526,7 @@ def _header(panel, table) -> None:
         if imgui.is_mouse_clicked(imgui.MouseButton_.left):
             step_view(panel)
     _totem(panel)
+    _poi(panel)
     if table is not None:
         imgui.same_line()
         n = len(rows_cached(panel, table))
@@ -577,6 +578,66 @@ def _totem(panel) -> None:
             reg["totem.on"].set(not on)
 
 
+def poi_word(reg) -> tuple[str, str] | None:
+    """The poi's word for the header (plan 47, the poi): "poi off", or its
+    dials (``poi 1.00 · 0.30 · 0.20``: length, weight, springiness); None
+    with no poi in the registry."""
+    state = getattr(reg, "poi", None)
+    if state is None or "poi.on" not in reg:
+        return None
+    from . import poi
+    tip = ("The Joy-Con as the handle of a poi (plan 47, an experiment) — click to "
+           f"switch it {'off' if state.on else 'on'}. The shape is the weight on the "
+           "string: swing the pad and it flies round. Length · weight · springiness; "
+           "the dials are under this line while it is on. A (or ↓) resets.")
+    if not state.on:
+        return "poi off", tip
+    word = f"poi {poi.readout(state)}"
+    if state.driving is None:
+        word += " (no pad)"
+    return word, tip + (f" Last: {state.note}." if state.note else "")
+
+
+def _poi(panel) -> None:
+    """The poi's word in the header, after the totem's; a click switches it."""
+    reg = getattr(panel, "reg", None)
+    said = poi_word(reg) if reg is not None else None
+    if said is None:
+        return
+    word, tip = said
+    imgui.same_line()
+    on = bool(reg["poi.on"].value)
+    ui._micro(word, ui.RED if on else ui.DIM)
+    if imgui.is_item_hovered():
+        ui.tooltip(tip)
+        if imgui.is_mouse_clicked(imgui.MouseButton_.left):
+            reg["poi.on"].set(not on)
+
+
+POI_DIALS = ("length", "weight", "spring", "gravity", "drag", "hand")
+
+
+def _poi_dials(panel) -> None:
+    """While the poi is on, its dials in two columns under the header: the
+    string's length, the weight, the springiness, then gravity, the air's
+    drag and the hand's push; the depth switch after."""
+    reg = getattr(panel, "reg", None)
+    state = getattr(reg, "poi", None) if reg is not None else None
+    half = getattr(panel, "half", None)
+    if state is None or not state.on or half is None or "poi.length" not in reg:
+        return
+    if imgui.begin_table("##poi", 2, imgui.TableFlags_.sizing_stretch_same):
+        try:
+            for key in POI_DIALS:
+                imgui.table_next_column()
+                half(f"poi.{key}", label=key)
+        finally:
+            imgui.end_table()
+    check = getattr(panel, "_check", None)
+    if check is not None:
+        check("poi.depth", "depth zooms")
+
+
 def _says_of(panel, table):
     """`says(source)` for a view: (the words, the row) — a row's param in
     the panel's words, else an axis's built-in meaning, else nothing."""
@@ -596,6 +657,7 @@ def _says_of(panel, table):
 
 def _body(panel, table) -> None:
     _header(panel, table)
+    _poi_dials(panel)
     if table is None:
         imgui.text_disabled("no table")
         return

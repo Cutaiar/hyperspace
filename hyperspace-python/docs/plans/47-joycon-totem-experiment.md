@@ -167,3 +167,174 @@ pad device stepping it only while on and holding its buttons off the rows,
 the router's skip — and the plan 46 tape driven through it: the still
 window holds, the turn-right window turns XZ positive, the right-down and
 far-up windows pan right and up.
+
+## The poi (2026-11-03, the same terms)
+
+**An experiment beside the totem, on the same pad.** No decision rows, no
+register rows, no preset or schema change.
+
+### The ask (the owner, 2026-11-03)
+
+> I want the Joy-Con to be the handle of a poi. I want to be able to adjust
+> the weight of the object that's attached to it, the length of the
+> string, and the springiness of the string. […] use the Joy-Con like it's
+> the handle of a poi, in order to have the geometry fly around the space
+> like it is attached via a string to the Joy-Con.
+
+### What it does
+
+`hyperspace/poi.py`, run by the pad device (`PadDevice._totem`, before the
+totem) once a frame while `poi.on` is set, on the first pad with motion
+sensors. **The shape is the weight**; the scene shows it where the weight
+is.
+
+**The handle.** A pad cannot say where it is, only how it turns and what
+it feels, so the handle is modelled as:
+
+- **a wrist** at the world's origin (the screen's centre), moved by the
+  hand's push: the accelerometer, turned into the world with its 1 g of
+  gravity taken out (a dead band of 0.04 g off the top), drives a point
+  held home by a critically damped spring at `HAND_HZ` = 0.7 Hz. A quick
+  push or a hand circling registers; a slow drift, and the gravity the
+  attitude's error leaks, do not. `poi.hand` scales it; 0 is the wrist
+  alone.
+- **the tip**, `HANDLE` = 0.3 world units out of the wrist along the pad's
+  far end (−z in its axes: toward the screen, held face up), turned by the
+  pad's **attitude**. The attitude is the gyro integrated in full (a
+  rotation matrix, not three angles), with its tilt pulled toward gravity
+  while the pad reads within 0.15 g of 1 g, that is, while it is not being
+  flung (a complementary filter, 2 rad/s per radian). The start, and each
+  reset, takes the tilt from gravity with the heading straight ahead. The
+  string hangs from the tip, so **a turn of the wrist swings the weight**,
+  as on a real poi, where small circles of the hand drive the weight
+  round.
+
+**The string** has a rest length (`poi.length`, world units: the shape's
+own radius is 1) and pulls only when stretched. It never pushes, so a slack
+string lets the weight fly. Its stiffness is `poi.spring`, from 0 (3000, a
+cord that barely stretches) to 1 (6, a bungee), geometric between. Its
+pull is damped along its line at a quarter of critical. It never stretches
+past 4× its length (`MAX_STRETCH`), a stop that keeps a soft string on a
+heavy weight in the picture.
+
+**The weight** (`poi.weight`) is the inertia. A heavy one stretches the
+string further, keeps its swing longer against the air (`poi.drag`, a
+linear drag) and answers the hand later. Gravity is `poi.gravity` × the
+world's. The world's is 9.81 m/s² at 2.5 world units a metre (`UNITS_PER_M`),
+so a 1-unit string swings at a real 40 cm poi's period, about 1.3 s. At 0
+the poi is in orbit.
+
+The physics runs at a fixed 960 Hz (`STEP_S`, semi-implicit Euler) whatever
+the frame rate, at most 96 steps a frame, so the stiffest string on the
+lightest weight stays stable. It costs about 0.1 ms a frame.
+
+**What it moves.** The weight's x and y set where the shape sits
+(`camera.pan`, y down). Its depth toward the eye, measured from the tip at
+rest, scales it (`camera.zoom`, half an octave a unit; `poi.depth` turns
+this off). The poi keeps the base it found (`pan_home`, `zoom_home`) and
+writes home + its offset each frame through `Param.set`. Anyone else's
+write on an axis (a knob, `camera.reset`, the totem's reset, a load)
+becomes that axis's new home. Switched off, each base goes back to home.
+A still pad hangs the shape `poi.length` below where it was.
+
+### With the totem
+
+Each has its own switch, and both can run from the same pad. While the poi
+is on it owns the pan, so the totem's tilt-pan steps aside (`poi.owns_pan`).
+The totem's turn still turns the shape as it flies. Both reset on A (or the
+D-pad's down). The poi steps first, so it has let go of the pan before the
+totem's reset zeroes it. The rows held off the pad are the union of both
+modules' (`poi.SKIP` is A and the D-pad's down, a subset of `totem.SKIP`).
+
+### How to switch it on
+
+- The pad window (SYSTEM → *Pad diagram*): its header reads **poi off**
+  after the totem's word. **Click it.** On, it reads **poi 1.00 · 0.30 ·
+  0.20** (length · weight · springiness), and the six dials (length,
+  weight, spring, gravity, drag, hand) and *depth zooms* are drawn under the
+  header. The GRAPH page's pad node shows the same. Or:
+- `config.toml`, which is also the only way the dials outlast a launch:
+
+  ```toml
+  [poi]
+  on = true
+  length = 1.0     # world units (the shape's radius is 1), 0.2–4
+  weight = 0.3     # 0.05–2
+  spring = 0.2     # 0 a cord, 1 a bungee
+  gravity = 1.0    # × the world's, 0–2
+  drag = 0.15      # 0–1
+  hand = 1.0       # the hand's push, 0–2
+  depth = true     # depth toward the eye zooms
+  ```
+
+The params are `poi.on`, `poi.weight`, `.length`, `.spring`, `.gravity`,
+`.drag`, `.hand`, `.depth` and the trigger `poi.reset`. Like the totem's,
+they are rig switches: never saved (`persist` off) and never a performer's
+(`modulatable` off). A key or desk row can still set any of them, since a
+desk row is a scene-setter. Each change is written to the terminal
+(`poi: on — 1.00 · 0.30 · 0.20`).
+
+### Caveats
+
+- **The writes are a scene-setter's.** The pan and the zoom move every
+  frame while the weight swings, so they land in undo (one long step that
+  closes when the weight settles) and light the preset's dirty dot, as an
+  orbit with the stick does. A save while the weight is out saves it out.
+  The clean form is a source: `poi:` lanes a route performs onto the pan
+  (an offset, no undo, no save). That is the next step if this feels
+  right, but it puts routes in the preset.
+- **No real hand position.** The wrist's spring home means a hand held
+  off to one side drifts back to centre in a second or two. Only motion
+  registers.
+- **The heading drifts** a little, as the totem's turn does (no
+  magnetometer). The swing does not care, because the weight follows the
+  tip whatever way is "ahead". A reset puts it straight again.
+- **The shape hangs off centre at rest**, `poi.length` below home, since
+  the hand is at the centre. With `poi.gravity` at 0 it floats where it
+  was left.
+- **A heavy weight on a soft string can stretch to the stop**, 4× the
+  length, where the stop holds it.
+
+### What to feel for at the machine
+
+1. Switch it on and hold the Joy-Con still, face up, pointing at the screen.
+   The shape should hang below centre and keep still. Press A: it should
+   still hang there.
+2. Circle the wrist slowly, the far end tracing a cone. Does the shape wind
+   up into a circle round the centre? Does it lag the hand the way a poi
+   does?
+3. Length: a longer string should give a wider, slower circle.
+   Springiness: with spring at 0.8 and a heavy weight, does the shape
+   bounce on the string? Weight: does a heavy one keep its swing longer
+   when you stop?
+4. A quick push of the hand, with no turn: does the shape get thrown? With
+   `hand` at 0, does only the wrist's turn move it?
+5. With the totem on as well, does the shape tumble with the pad's turn
+   while it flies?
+
+### Tests
+
+`tests/test_poi.py`:
+- off by default and never saved; the config's start, clamped
+- a still pad hangs the shape at length plus sag, with no creep over ten
+  seconds
+- a longer string hangs lower, and a softer or heavier one stretches
+  further
+- circling the wrist swings the weight round, held by the stop
+- a slack string never pushes, and with no gravity the weight floats
+- the air takes the swing out, slower on a heavier weight
+- the hand's push moves the handle, does nothing with `hand` at 0, and the
+  wrist comes home afterwards
+- the stiffest string on the lightest weight stays finite under a violent
+  pad
+- the swing is the same at 30 and 120 frames a second
+- the tilt settles on gravity
+- home is kept per axis, and off puts it back
+- depth zooms, and its switch turns that off
+- the reset, on A and on the D-pad's down
+- the pad device steps it only while on, holding the union of skips
+- with the totem: its tilt-pan steps aside while its turn still turns, and
+  a reset that fires both leaves the poi hanging from zero
+- the plan 46 tape: a still Joy-Con hangs the shape still
+
+`tests/test_ui_pad.py`: the header's word and the dials.

@@ -871,3 +871,29 @@ def test_the_drawings_show_upright_through_real_gl(monkeypatch, gl_window_ok):
     finally:
         surf.close()
         glfw.destroy_window(win)
+
+
+def test_the_poi_says_its_word_and_shows_its_dials_while_on(rig, monkeypatch):
+    """Plan 47, the poi: "poi off" in the header with no dials; on, the
+    header reads its length · weight · springiness and the six dials and
+    the depth switch are drawn under it, and the big pad still never
+    scrolls."""
+    from hyperspace import poi
+    panel, reg = rig.panel, rig.reg
+    poi.register(reg, poi.PoiState())
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    reg["ui.pad_diagram"].set(True)
+    reg["ui.panel"].set(False)
+    drawn: list[str] = []
+    real_half = panel.half
+    monkeypatch.setattr(panel, "half", lambda pid, **k: drawn.append(pid) or real_half(pid, **k))
+    assert ui_pad.poi_word(reg)[0] == "poi off"
+    _pad_frames(rig, monkeypatch)
+    assert drawn == []
+    reg["poi.on"].set(True)
+    reg["poi.length"].set(1.5)
+    word, tip = ui_pad.poi_word(reg)
+    assert word == "poi 1.50 · 0.30 · 0.20 (no pad)" and "click" in tip
+    got = _pad_frames(rig, monkeypatch, n=1)
+    assert drawn == [f"poi.{k}" for k in ui_pad.POI_DIALS]
+    assert got["scroll"] == (0.0, 0.0)
