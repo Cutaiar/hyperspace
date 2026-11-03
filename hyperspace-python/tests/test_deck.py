@@ -558,7 +558,7 @@ def test_the_band_hooks_are_the_rigs_and_two_decks_leave_them_once(tmp_path, mon
     # D1: `attach`, `startup`, `install` off; D2+ decides their real shape)
     second = Deck.build(library=r.lib, control=r.control, audio=r.audio,
                         table=lambda reg: Bindings(),
-                        attach=False, startup=False, install=False)
+                        attach=False, startup=False, install=False, on_air=False)
     assert r.lib.reg is r.reg and undo.installed() is r.undo      # the first deck's still
     # (plan 44 D3: what is loaded is each deck's presets' own — the first's
     # is as it was; the library's kind is the deck built last, D5's seam)

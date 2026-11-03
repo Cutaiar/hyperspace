@@ -272,7 +272,7 @@ class Param:
         # plan 44 D3 (review of #351): its part of the split, once — an id and
         # a group never change, and `snapshot(part=)` asks every frame the
         # dirty dot is drawn
-        self._part = part_of_id(self.id, self.group)
+        self._part = None if self.group is None else part_of_id(self.id, self.group)
 
     # ---- generic value access ----
 
@@ -674,10 +674,30 @@ def part_of(p: Param) -> str | None:
     the session every param this calls "session". Cached on the param at
     its declaration (`Param._part`); one from before a hot reload is asked."""
     got = p.__dict__.get("_part", _UNSET)
-    return part_of_id(p.id, p.group) if got is _UNSET else got
+    if got is not _UNSET:
+        return got
+    return None if p.group is None else part_of_id(p.id, p.group)
 
 
 _UNSET = object()
+
+
+def group_part(group: str | None) -> str | None:
+    """The part a whole group is in ("performance", "session" or None)."""
+    for name, groups in PARTS.items():
+        if group in groups:
+            return name
+    return None
+
+
+def in_group(p: Param, group: str) -> bool:
+    """Whether `p` is one of `group`'s params on every per-group road — a
+    module preset's values, its reset, its dirty dot, `snapshot(group)`,
+    the library's fresh values (review of #351, round 2): its group, and
+    its group's part — so a session key (`ghost.mirror`) is never moved,
+    saved or counted by the `ghost` group's roads, though the HANDS page
+    (`Registry.group`) still lists it."""
+    return p.group == group and part_of(p) == group_part(group)
 
 
 def part_of_id(pid: str, group: str | None = None) -> str | None:
@@ -882,6 +902,7 @@ class Registry:
             if self.frame == session.frame:      # this deck is the first this frame
                 session.frame += 1
             self.frame = session.frame
+            session.landed = session.frame       # (the session's own apply dedups by it)
         else:
             self.frame += 1
         self.landed = self.frame
@@ -942,7 +963,7 @@ class Registry:
         for p in self._p.values():
             if not p.persist:
                 continue
-            if group is not None and p.group != group:
+            if group is not None and not in_group(p, group):
                 continue
             if ids is not None and p.id not in ids:
                 continue
@@ -1039,6 +1060,8 @@ class SessionRegistry(Registry):
     def _follow(self, deck: Registry) -> None:
         import weakref
         self._decks.append(weakref.ref(deck))
+        if self.lead is None:             # nobody named yet: the first deck, until one is
+            self.lead = deck
 
     @property
     def decks(self) -> list[Registry]:
@@ -1053,13 +1076,31 @@ class SessionRegistry(Registry):
     @property
     def lead(self) -> Registry | None:
         """The deck whose `apply` lands the session's params, once a frame
-        (review of #351): the first live deck that follows. None: no deck —
-        then `apply` on the session itself is the one road."""
-        for r in self._decks:
-            d = r()
-            if d is not None:
-                return d
-        return None
+        (review of #351, round 2): **named** — the deck on air, which
+        `Deck.build(on_air=True)` (the host's one deck today) sets — held
+        weakly; until one is named, the first deck that follows. A registry
+        that follows and is not the lead (a stale deck a closure still
+        holds, a scratch registry in a tool) never lands them. None: no
+        deck — `apply` on the session itself is then the one road."""
+        ref = self.__dict__.get("_lead")
+        return ref() if ref is not None else None
+
+    @lead.setter
+    def lead(self, deck: Registry | None) -> None:
+        import weakref
+        if deck is not None and deck.session is not self:
+            raise ValueError("the lead is a deck that follows this session")
+        self.__dict__["_lead"] = weakref.ref(deck) if deck is not None else None
+
+    def apply(self) -> None:
+        """The session's params landed from the session itself (review of
+        #351, round 2): under the frame's shared mark when a deck began one
+        (`Registry.begin_frame` sets `landed`), so in the same frame as the
+        lead's apply — before or after it — each param lands once; with no
+        frame begun (no deck, a test) every one lands, as `Registry.apply`
+        does. The lead's apply is the normal road; this one is for a host
+        with no lead."""
+        super().apply()
 
     def add(self, p: Param) -> Param:
         if part_of(p) == "performance":

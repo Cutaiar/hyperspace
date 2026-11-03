@@ -56,9 +56,8 @@ def rig_devices(rig, *more, desk=True):
     return devices.DeviceRegistry(ctx=ctx, devices=listed)
 
 
-def build(rig, devs, template=None):
-    return graphview.build(rig.router.table, rig.reg, rig.router, devs, None, None,
-                           template=template)
+def build(rig, devs):
+    return graphview.build(rig.router.table, rig.reg, rig.router, devs, None, None)
 
 
 def node_of(view, pin):
@@ -208,9 +207,9 @@ def test_a_shadowed_layered_row_leaves_the_invariant_port_on_the_first_node(rig)
 def test_a_corpus_preset_draws_no_template_node(rig):
     """Every corpus preset has a plain desk section: no template node."""
     rig.lib.load("presets", "party-trip")
-    assert ui_graph.template_of(rig.panel) is None
-    view = build(rig, rig_devices(rig), ui_graph.template_of(rig.panel))
-    assert not [n for n in view.nodes if n.kind == graphview.TEMPLATE]
+    assert not hasattr(ui_graph, "template_of") and not hasattr(graphview, "TEMPLATE")
+    view = build(rig, rig_devices(rig))
+    assert not [n for n in view.nodes if n.kind == "template"]
     assert not [c for c in view.cables if c.inside]
 
 

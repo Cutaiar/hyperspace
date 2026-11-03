@@ -73,9 +73,11 @@ def make_app(home: Path, plan31: bool = True, *, machine: Path | None = None):
                            envs=envs, seq=seq, clock=clock)
 
 
-# the library folders a preset's load reads beside its own file: the desk
-# templates it may name (plan 24 C3) and the module presets it labels
-SHARED_FOLDERS = ("desk", "fx", "dream", "band", "tempo")
+# the library folders copied beside a preset for its load: the module
+# presets (a strip's defaults; plan 44 D3 retired the desk templates and
+# the labels, so a whole preset's load reads none of them, but the golden
+# rig and the tools keep the library's module groups as the app has them)
+SHARED_FOLDERS = ("fx", "dream", "band", "tempo")
 def _link_or_copy(src, dst):
     """A hard link where the disk allows one, else a copy."""
     try:
@@ -138,7 +140,7 @@ def resave(path: Path, scratch: Path, *, library: Path | None = None,
            show: dict | None = None) -> tuple[bytes, list[str], str]:
     """Preset file `path` loaded and saved untouched by the app (`make_app`)
     in a scratch library at `scratch` — `path` copied in as a preset of its
-    own, with `library`'s desk templates and module presets beside it when
+    own, with `library`'s module presets beside it when
     given, and `show` (a `show_seed`: the rig's old eye) open: (the bytes
     the save wrote, the load's notes, the name it loaded as). The pose is
     written only where the file had one. Raises

@@ -78,11 +78,15 @@ def test_two_decks_tables_hold_the_session_rows_by_reference():
 
 
 def test_the_session_table_reads_and_writes_the_file(tmp_path):
-    """`SessionTable.load` is the file's one door (the old migrations and the
-    backup through it); `write` writes the session rows only."""
+    """`Bindings.load(path).session` is the file's session table (the old
+    migrations and the backup through the load); `write` writes the session
+    rows only. Its descriptors are made from `SESSION_ATTRS`, one list."""
+    from hyperspace.routing import SESSION_ATTRS
     path = tmp_path / "bindings.json"
-    t = SessionTable.load(path, legacy_midi=None)
-    assert isinstance(t, Bindings) and t.session.path == path
+    t = Bindings.load(path, legacy_midi=None)
+    assert isinstance(t.session, SessionTable) and t.session.path == path
+    assert not hasattr(SessionTable, "load")
+    assert all(isinstance(getattr(Bindings, n), property) for n in SESSION_ATTRS)
     t.add(Binding("hand:7", "view.speed", "push", 0.3))
     t.write()
     doc = json.loads(path.read_text())
@@ -434,6 +438,119 @@ def test_force_by_a_bare_stem_is_refused_when_two_folders_hold_it(tmp_path, monk
     assert tool._forced(r1, {"trip"}, stems) and not tool._forced(r2, {"trip"}, stems)
     assert tool._forced(r2, {"party/trip"}, stems) and not tool._forced(r1, {"party/trip"}, stems)
     n1, n2 = tool.Result("party/night.json"), tool.Result("club/night.json")
-    assert tool.ambiguous_forces([n1, n2], {"night"}) == ["night"]
+    assert tool.stem_counts([n1, n2]) == {"night": 2}
+    assert tool.ambiguous_forces([n1, n2], {"night"}, {"night": 2}) == ["night"]
     assert not tool._forced(n1, {"night"}, {"night": 2})
     assert tool._forced(n1, {"night"}, {"night": 1})                 # the only one: by stem
+
+
+# ---------------------------------------------------------------- review of #351, round 2
+
+
+def test_the_lead_is_named_and_a_stale_follower_never_lands_the_session():
+    """Round 2, finding 1: the lead is the deck on air, named
+    (`session.lead = reg`, as `Deck.build(on_air=True)` does) — a registry
+    that followed first and is still referenced (an old deck a closure
+    holds) lands nothing once another is named."""
+    from hyperspace.params import build_performance
+    from hyperspace.view import ViewState
+    session, stale, _b = _two_decks()
+    assert session.lead is stale                 # nobody named: the first
+    live = build_performance(ViewState(), session=session)
+    session.lead = live
+    p = session["master.gain"]
+    base = p.value
+    live.begin_frame()
+    p.modulate(0.1)
+    stale.apply()                                # still referenced: lands nothing
+    assert p.value == pytest.approx(base)
+    live.apply()
+    assert p.value != pytest.approx(base)
+    with pytest.raises(ValueError):
+        session.lead = build_performance(ViewState())        # not a follower
+
+
+def test_deck_build_names_its_registry_the_lead(tmp_path):
+    from test_undo import boot as undo_boot
+    rig = undo_boot(tmp_path / "home")
+    assert rig.reg.session.lead is rig.reg
+
+
+def test_the_sessions_own_apply_lands_each_param_once_a_frame():
+    """Round 2, finding 2: `session.apply()` in the same frame as the lead's
+    apply — after it or before it — lands each session param once (the
+    frame's shared mark), never releasing the modulation."""
+    session, a, _b = _two_decks()
+    p = session["master.gain"]
+    base = p.value
+    for order in ("lead first", "session first"):
+        a.begin_frame()
+        p.modulate(0.1)
+        if order == "lead first":
+            a.apply()
+            moved = p.value
+            session.apply()
+        else:
+            session.apply()
+            moved = p.value
+            a.apply()
+        assert p.modulated and p.value == pytest.approx(moved) != pytest.approx(base), order
+    a.begin_frame()
+    session.apply()                              # no source: the base back, once
+    assert not p.modulated and p.value == pytest.approx(base)
+
+
+def test_a_param_with_no_group_is_unclassified():
+    """Round 2, finding 3: `group=None` is in no part — never handed to the
+    session for an id that starts like a session group's."""
+    from hyperspace.params import Kind, Param, part_of
+    p = Param("master.thing", "x", Kind.TOGGLE, group=None)
+    assert part_of(p) is None and p._part is None
+    session, a, _b = _two_decks()
+    a.add(p)
+    assert "master.thing" in a and "master.thing" not in session
+
+
+def test_the_ghost_groups_roads_leave_the_mirror_alone(tmp_path):
+    """Round 2, finding 4: the `ghost` group's per-group roads — its
+    snapshot, its fresh values, a reset, a module preset's load and its
+    dirty dot — leave `ghost.mirror` (the room's) alone, while the HANDS
+    page still lists it (`Registry.group`)."""
+    from hyperspace.params import in_group
+    rig = boot(tmp_path / "home")
+    lib, reg = rig.lib, rig.reg
+    m = reg["ghost.mirror"]
+    assert m in reg.group("ghost") and not in_group(m, "ghost")
+    assert "ghost.mirror" not in reg.snapshot("ghost") and "ghost.mirror" not in lib._fresh_of("ghost")
+    lib.label("ghost", None)
+    m.set(True)
+    assert not lib.is_dirty("ghost")             # the mirror moved: no ghost dot
+    reg["ghost.alpha"].set(0.2)
+    assert lib.is_dirty("ghost")
+    lib.reset("ghost")
+    assert m.value is True and reg["ghost.alpha"].value == pytest.approx(0.6)
+    (rig.home / "ghost").mkdir(exist_ok=True)
+    (rig.home / "ghost" / "dim.json").write_text(json.dumps(
+        {"schema": "hyperspace.preset/1", "group": "ghost", "name": "dim",
+         "values": {"ghost.alpha": 0.3, "ghost.mirror": False}}))
+    lib._sync()
+    lib.load("ghost", "dim")
+    assert m.value is True and reg["ghost.alpha"].value == pytest.approx(0.3)
+
+
+def test_a_second_table_shares_the_session_rows_it_brings_and_refuses_another_file(tmp_path):
+    """Round 2, finding 5: a second deck's `Bindings(rows, session=)` adds
+    the session rows it brings that the session lacks — every deck gets
+    them — and one naming another file or profile is refused, named."""
+    a = Bindings.factory(path=tmp_path / "bindings.json")
+    s = a.session
+    key = Binding("key:F10", "view.lines", "toggle")
+    b = Bindings([key, Binding("hand:7", "view.speed", "push", 0.3)], session=s)
+    assert any(x is key for x in a.bindings) and any(x is key for x in b.bindings)
+    assert key in s.rows
+    again = Bindings([Binding("key:F10", "view.lines", "toggle")], session=s)
+    assert sum(1 for x in again.bindings if x.source == "key:F10") == 1   # not twice
+    with pytest.raises(ValueError, match="the session's"):
+        Bindings([], session=s, path=tmp_path / "other.json")
+    with pytest.raises(ValueError, match="the session's"):
+        Bindings([], session=s, profile="launchpad")

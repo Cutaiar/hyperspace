@@ -124,6 +124,7 @@ class Deck:
               devices: Callable[..., Any] | None = None,
               made: RigMade | None = None,
               attach: bool = True, startup: bool = True, install: bool = True,
+              on_air: bool = True,
               warm: bool = False) -> Deck:
         """`app.main`'s deck lines, in their order. `library`, `control`
         and `audio` (anything with a `.chain`) are the rig's, built and
@@ -159,7 +160,9 @@ class Deck:
         `install` (this deck's undo is the one `undo.push` and the
         `edit.*` triggers reach). All three default on, as `main` has them;
         a second deck built beside the first passes all three False, and
-        D2+ decides their real shape. `warm`: build every shape's geometry
+        D2+ decides their real shape. `on_air` (plan 44 D3, review of #351):
+        this deck is the session's lead — its `apply` lands the session's
+        params once a frame; a deck built beside it passes False. `warm`: build every shape's geometry
         on a background thread once the startup preset has landed."""
         if renderer is not None:
             given = [k for k, v in (("dream", dream), ("fx", fx), ("ghost", ghost))
@@ -180,6 +183,10 @@ class Deck:
                              fx=fx if fx is not None else FxState(),
                              ghost=ghost if ghost is not None else GhostState(),
                              media=media, restart=restart, session=session)
+        if on_air and reg.session is not None:
+            # (review of #351: the deck on air lands the session's params —
+            # named, never "whichever registry followed first")
+            reg.session.lead = reg
         made = made if made is not None else RigMade()
         if hands is not None:
             made.hands = hands(reg)            # before attach: "default" includes them

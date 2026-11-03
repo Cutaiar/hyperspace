@@ -23,7 +23,7 @@ every folder down as the library lists them (plan 48; not ``trash/``,
 not a hidden folder, not a backup, not a dot-file) is loaded and saved untouched
 by the app itself (`hyperspace.headless.resave`: the registry, library,
 router and presets the tests save through) in a scratch library — the
-library's desk templates and module presets beside it, and **the rig's
+library's module presets beside it, and **the rig's
 show open** (below) — and three checks are made:
 
 - it loads (a file this build refuses is left as it is);
@@ -64,8 +64,7 @@ held the eye (the app's own backups, `library.LOOK_BACKUP`, `EYE_BACKUP`).
 **The retaper first** (wave 0 T1, tools/retaper_routes.py): one bump moves
 everything, so ``--apply`` measures every document of the library still
 without the taper marker (``units["fx.depth"] == "taper"``) along the
-effect tapers before anything else — the patches, the desk templates and
-this Mac's ``bindings.json`` (kept as ``bindings.json.bak-v3``) as
+effect tapers before anything else — the patches and this Mac's ``bindings.json`` (kept as ``bindings.json.bak-v3``) as
 retaper_routes.py writes them. A preset is retapered by its own resave
 (its load measures an unmarked file's depths, its save writes the marker),
 so every ``/10`` is along the tapers. The dry run says what it would
@@ -399,8 +398,10 @@ def retaper_write(todo) -> list[str]:
 
 def shared_retapers(library: Path, todo) -> bool:
     """Whether `retaper_plan` would rewrite a document a preset's load reads
-    beside it (`headless.SHARED_FOLDERS`: a desk template) — else the
-    library itself is what every preset is computed against."""
+    beside it (`headless.SHARED_FOLDERS`, the module presets — none today:
+    the retaper rewrites patches and `bindings.json`, plan 44 D3 retired the
+    desk templates) — else the library itself is what every preset is
+    computed against."""
     from hyperspace.headless import SHARED_FOLDERS
     for path, _c in todo:
         try:
@@ -413,8 +414,8 @@ def shared_retapers(library: Path, todo) -> bool:
 
 
 def retapered_copy(library: Path, todo, dest: Path) -> Path:
-    """The folders a preset's load reads beside it (`headless.SHARED_FOLDERS`:
-    the desk templates, the module presets) copied to `dest`, each document
+    """The folders copied beside a preset for its load (`headless.SHARED_FOLDERS`:
+    the module presets) copied to `dest`, each document
     of `retaper_plan`'s that lives there written as the retaper writes it —
     what a dry run or --to computes every preset's /10 against, so it is what
     --apply (which retapers the library itself first) writes."""
@@ -580,7 +581,7 @@ def write(path: Path, data: bytes) -> None:
         tmp.unlink(missing_ok=True)
 
 
-def _forced(r: Result, forced: set[str], stems: dict[str, int] | None = None) -> bool:
+def _forced(r: Result, forced: set[str], stems: dict[str, int]) -> bool:
     """Whether ``--force`` names `r`: by its file under ``presets/`` less
     ``.json`` (``party/trip``), or by its stem alone (``trip``) only when no
     other preset of the library has that stem (`stems`: each stem's count;
@@ -588,16 +589,22 @@ def _forced(r: Result, forced: set[str], stems: dict[str, int] | None = None) ->
     if r.file.removesuffix(".json") in forced:
         return True
     stem = Path(r.file).stem
-    return stem in forced and (stems or {}).get(stem, 1) == 1
+    return stem in forced and stems.get(stem, 1) == 1
 
 
-def ambiguous_forces(results, forced: set[str]) -> list[str]:
-    """The ``--force`` names that are no preset's path but a stem more than
-    one preset has: each forces none, said, so the owner gives the folder
-    path."""
+def stem_counts(results) -> dict[str, int]:
+    """Each file stem's count over `results` — counted once (`main`) and
+    handed to `ambiguous_forces` and `_forced`."""
     stems: dict[str, int] = {}
     for r in results:
         stems[Path(r.file).stem] = stems.get(Path(r.file).stem, 0) + 1
+    return stems
+
+
+def ambiguous_forces(results, forced: set[str], stems: dict[str, int]) -> list[str]:
+    """The ``--force`` names that are no preset's path but a stem more than
+    one preset has (`stems`, `stem_counts`): each forces none, said, so the
+    owner gives the folder path."""
     paths = {r.file.removesuffix(".json") for r in results}
     return sorted(n for n in forced if n not in paths and stems.get(n, 0) > 1)
 
@@ -705,10 +712,8 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
     for r in results:
         counts[r.old] = counts.get(r.old, 0) + 1
     print("\nby schema found: " + ", ".join(f"{s}: {n}" for s, n in sorted(counts.items())))
-    stems: dict[str, int] = {}
-    for r in results:
-        stems[Path(r.file).stem] = stems.get(Path(r.file).stem, 0) + 1
-    for name in ambiguous_forces(results, forced):
+    stems = stem_counts(results)
+    for name in ambiguous_forces(results, forced, stems):
         print(f"--force {name}: {stems[name]} presets have that name in different folders — "
               "give the folder path (party/{name}); none forced by it".replace("{name}", name))
     writes = [r for r in results if not r.error and (not r.unchanged or a.to is not None)

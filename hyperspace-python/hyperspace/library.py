@@ -147,6 +147,7 @@ from .params import (
     UNITS_KEY,
     Registry,
     fx_files,
+    in_group,
     is_instance_id,
     pan_world,
     retaper_depths,
@@ -1843,7 +1844,7 @@ class Library:
                 self._fresh.update((k, snap[k]) for k in new)
                 self._defaults.pop(group, None)
         return {k: v for k, v in self._fresh.items() if reg is not None and k in reg
-                and reg[k].group == group}
+                and in_group(reg[k], group)}       # (a session key of the group left out)
 
     def _fresh_all(self) -> dict[str, Any]:
         for g in {p.group for p in (self.reg or []) if p.persist and p.group}:
@@ -2355,7 +2356,9 @@ class Library:
         (a strip load, or the scene combo re-tuning from a scene)."""
         out = self.defaults(group)
         out.update(values)
-        return {k: v for k, v in out.items() if k in self.reg}
+        # (review of #351: a group's session key — `ghost.mirror` — is no
+        # module preset's to set, whatever a file says: `params.in_group`)
+        return {k: v for k, v in out.items() if k in self.reg and in_group(self.reg[k], group)}
 
     def _landed(self, group: str, name: str | None, loaded: dict[str, Any] | None,
                 reapply=None) -> None:
