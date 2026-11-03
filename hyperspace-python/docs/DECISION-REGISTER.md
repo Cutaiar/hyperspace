@@ -11002,8 +11002,9 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   over it, and written `ui_pane.WRITE_AFTER_S` after the last click by
   `ui_presets.flush_folds` through `ui_pane.write_key` (one small helper
   added to `ui_pane`), the rest of the file kept — deferred as the
-  pane's own folds are (review of #349). A folder not named there is
-  open. Folded with the
+  pane's own folds are (review of #349); `Panel.close` writes one not
+  yet written, as `ui_graph.close` does the pane's. A folder not named
+  there is open. Folded with the
   loaded preset inside, the header ends with its leaf (`party · 12 ·
   TRIP`). The strip, rename, ×, the trash and the show line are as they
   were; the strip's arrows still step by the flat list. One function
