@@ -16,7 +16,16 @@ from typing import Any
 
 import numpy as np
 
-from .geometry import EYE_DISTANCE, EYE_FOV, RATE, is_3d, pose_angles, rot_matrix, view_angles
+from .geometry import (
+    EYE_DISTANCE,
+    EYE_FOV,
+    RATE,
+    SHAPES,
+    is_3d,
+    pose_angles,
+    rot_matrix,
+    view_angles,
+)
 
 N_MOD = 8   # pattern.mod.* inputs the face shader reads as u_mod[N_MOD]
 RED = (1.0, 43 / 255, 43 / 255)   # the points' colour, and the panel's one accent (ui.RED)
@@ -247,20 +256,30 @@ class ViewState:
 
     def pose(self) -> list[float]:
         """The spin's pose as six plane angles, each in (−π, π] — what a
-        preset saves (plan 43 C2, row 573: `params.POSE_IDS`). With no body
-        turned in (`body` None, the 3D switch not holding) the angles as
-        they stand, so every layer of a scene keeps its own. Else the turn
-        the shape is drawn at — R(its angles)·body, its angles the 3D ones
-        alone while the switch holds (`geometry.view_angles`) — read back
-        as six angles (`geometry.pose_angles`), the body folded in: a load
-        that sets them (`set_pose`) draws the same 4D shape whichever way
-        the switch stands. A 3D shape never had a body (its W planes do
-        nothing to it): its own three angles. A scene that mixes 3D and 4D
-        layers with a body turned in keeps its 4D layers' pose; its 3D
-        layers take the folded XY, XZ and YZ (the one case not exact)."""
+        preset saves (plan 43 C2, row 573: `params.POSE_IDS`) — one pose
+        per picture, by one road (review 2.4):
+
+        - a 3D shape: its own XY, XZ and YZ folded, the W planes 0 — body
+          or none (its W planes and any body do nothing to it);
+        - a 4D shape: the turn it is drawn at — R(its angles)·body, its
+          angles the 3D ones alone while the switch holds
+          (`geometry.view_angles`) — read back as six angles
+          (`geometry.pose_angles`, one branch of the six for any turn), so
+          a 4D shape saved with or without the switch ever toggled saves
+          the same six, and a load that sets them (`set_pose`) draws it the
+          same whichever way the switch stands;
+        - a scene (`Shape.layers`): its layers turn at fractions of the
+          angles (`spin` 0.4, −0.7 …), so a turn is not a fold of one — the
+          angles as they stand, unfolded (a 3D scene's W planes 0); a 4D
+          scene with a body turned in folds it as a 4D shape does, its 3D
+          layers taking the folded XY, XZ and YZ (the one case not exact).
+
+        The folded roads return angles in (−π, π]; a scene's are as they
+        stand (`preset.pose_angle` rounds both the same way)."""
         ang = [float(a) for a in self.ang]
-        if self.body is None and not self.held:
-            return [math.remainder(a, 2.0 * math.pi) + 0.0 for a in ang]
+        scene = bool(SHAPES[self.shape].layers)
+        if scene and (is_3d(self.shape) or (self.body is None and not self.held)):
+            return ang[:3] + [0.0] * 3 if is_3d(self.shape) else ang
         if is_3d(self.shape):
             return [math.remainder(a, 2.0 * math.pi) + 0.0 for a in ang[:3]] + [0.0] * 3
         B = np.eye(4) if self.body is None else np.asarray(self.body, dtype=np.float64)

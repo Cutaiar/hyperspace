@@ -5450,6 +5450,17 @@ class HandsLayer(Node):
         # "always", or "downstream": split while an effect of `downstream`
         # — what reads the layer, followed on (`_Build._split`) — is live
         self.readout = readout
+        # plan 43 C2: laid depth-aware by a composite (`_Build.build` marks it)
+        self.depth_laid = False
+
+    @property
+    def in_world(self) -> bool:
+        """Plan 43 C2 (review 2.1): whether this layer is laid depth-aware —
+        at an output (`laid` "depth") or by a depth composite — and so drawn
+        through the scene's (the preset's) eye, its depth comparable with the
+        scene's. Otherwise it is a screen-space picture through the rig's
+        reference eye, keeping its size whatever the preset's eye."""
+        return getattr(self, "laid", "over") == "depth" or getattr(self, "depth_laid", False)
         self.downstream: tuple[str, ...] = ()
 
     def split(self, frame: Frame) -> bool:
@@ -5491,7 +5502,7 @@ class HandsLayer(Node):
             with frame.timed(self.name):
                 kw = {"lines": True} if getattr(geo, "draw_as", "solid") == "lines" else {}
                 drew = gh.layer(frame.size, frame.t, readout=split, now=geo.now(frame),
-                                settled=True, **kw)
+                                settled=True, world=self.in_world, **kw)
         except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
             r._hands_failed(e, frame.target, frame.vp, ghost=gh)
             drew = False
@@ -7086,6 +7097,17 @@ class _Build:
                                   blend=_laid_of(p["hands"]), image=end,
                                   hands=p["hands"], readout=p["guide"],
                                   depth=p[DEPTH_PORT] if p["hands"] is not None else None))
+        # plan 43 C2 (review 2.1, the ruling): a hands layer laid depth-aware
+        # anywhere — at an output (its `laid`) or by a depth composite — is
+        # "in the world": drawn through the scene's eye, so its depth and the
+        # scene's describe one projection; any other keeps the reference eye
+        for node in [*self.built, *outputs]:
+            if isinstance(node, Composite) and node.blend == "depth":
+                over = node.inputs["over"]
+                while isinstance(over, Effect):
+                    over = over.inputs["image"]
+                if isinstance(over, HandsLayer):
+                    over.depth_laid = True
         self._mute_hands(ports, [*self.built, *self.ends, *writes, *captures])
         # into the graph in the default graph's order: the frame's own
         # nodes, the run, each through's composite and copies, the

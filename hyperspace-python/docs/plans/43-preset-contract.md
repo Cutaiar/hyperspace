@@ -210,8 +210,8 @@ default-module fallback (D3). After D3 a show's `session` holds only
   `geometry.pose_angles` / `ViewState.pose`, set by `ViewState.set_pose`.
   The phases stay `persist=False` (the turn moves every frame: no base, no
   undo step, no dirty dot), and `values` stays the bases' snapshot. Old
-  files keep spinning; the migration's resave writes no pose
-  (`Presets.pose_of_file`).
+  files keep spinning; the migration's resave takes the pose back out of
+  a file that had none (`headless.resave`).
 - **"The first load"** (step 2): an old preset takes the old show's eye
   on *every* load while that show is open (`Project.old_eye`, read out of
   the session by `_take`), not just the first — the same eye the tool
@@ -239,8 +239,9 @@ default-module fallback (D3). After D3 a show's `session` holds only
   with it open too), then rewrites the shows. The corpus was rewritten
   with the tool (`--to`), the build's default eye: no golden moved.
 - **Hold** (step 7): `HELD_GROUPS` gains `eye` (the eye is its own group,
-  so not held through `camera`); the pose is one for both
-  (`ONE_FOR_BOTH`'s turn), so a pose loaded under hold lands on both.
+  so not held through `camera`); a pose loaded under hold waits on the
+  hold and lands at Take (review 2.3: the turn is one for both, so landing
+  it at the load would move the held projector).
 
 Schema **`/9`** (not `/8`; §2). Files, in order:
 

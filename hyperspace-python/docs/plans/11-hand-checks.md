@@ -6680,8 +6680,9 @@ fov, zoom and pan — and on the very turn the shape was saved on, 3D still
 holding (the shape is where it was, not where `TUMBLE` left the spin);
 `TUMBLE` itself kept spinning from wherever it was (it has no pose); no
 dirty dot while the shape turns. (5) Under the hold the projector keeps
-`TUMBLE`'s framing until TAKE while the shape jumps to the saved turn on
-both the projector and the preview at once; TAKE brings the framing.
+`TUMBLE`'s framing *and its turn* (no jump, 3D unchanged) until TAKE;
+TAKE brings the framing and puts the shape on the saved turn at once. A
+DROP instead leaves the projector turning where it was.
 **432. The migration, on a copy then on the library, between shows.** (laptop, then the second Mac; no show that night)
 Headless: `tests/test_one_camera.py` (`test_the_tool_retapers_backs_up_and_moves_the_eye_into_every_preset`, `test_the_tool_draws_the_old_file_with_the_show_open_as_its_nine`, `test_an_old_show_hands_its_eye_to_old_presets_and_keeps_none_itself`), `tests/test_migrate_library.py`.
 1. Copy the Drive library folder somewhere local (Finder ▸ Duplicate).
@@ -6709,19 +6710,24 @@ loads them as the first does. *Fail:* a preset skipped ("not written") —
 note its line; a Mac on an older build refuses the `/9` files (expected:
 update it).
 **433. Zoom the eye on a preset with hands in the scene and one with a hands layer; a hand axis on the fov.** (laptop, the Leap; hands present)
-Headless: `tests/test_one_camera.py` (`test_hands_in_the_scene_scale_with_the_shape_and_a_layer_keeps_its_size`, `test_the_hands_calibration_is_the_rigs_reference_eye`, `test_a_hand_axis_learns_onto_the_eye_and_breathes_the_framing`).
+Headless: `tests/test_one_camera.py` (`test_hands_in_the_scene_scale_with_the_shape_and_a_layer_keeps_its_size`, `test_a_layer_laid_depth_aware_is_in_the_world_through_the_presets_eye`, `test_the_hands_calibration_is_the_rigs_reference_eye`, `test_a_hand_axis_learns_onto_the_eye_and_breathes_the_framing`).
 1. A preset whose graph wires the hands into the scene (`hands → scene`).
    Hands in the box, still. Move Eye field of view from 47.6° to 30°, then
    to 70°; back to 47.6°.
 2. A preset whose graph lays a hands layer (`hands → hands.layer →`
-   an output's hands). The same three fov moves.
+   an output's hands). The same three fov moves. Then lay that layer
+   depth-aware (its hands entry's `laid: depth`, or a composite with
+   blend depth over the scene) and do the three moves again with a hand
+   behind the shape.
 3. Learn hand: arm `eye.fov` (CAMERA ▸ the row's Learn hand), then raise
    the right hand. Move the hand up and down the box.
 *Pass:* (1) the shape and the hands grow and shrink together, the hands
 staying where they are against the shape (a finger on an edge stays on
 that edge); at 47.6° nothing differs from before this build. (2) the
 shape grows and shrinks, the layer's hands keep their size and place on
-screen. (3) the row learns (no "can't follow a hand"), and the framing
+screen; laid depth-aware they grow and shrink with the shape (they are in
+the world) and a hand behind the shape stays hidden exactly where the
+shape covers it at every fov. (3) the row learns (no "can't follow a hand"), and the framing
 breathes with the hand — wider as it goes one way, tighter the other —
 and settles back to the knob's value when the hand leaves.
 

@@ -1431,10 +1431,9 @@ class Ghost:
         box = box_of(self.source)
         cal = self.calibrated(box, m, getattr(self.source, "units", None))
         vp, eye = through_eye(cal, m, aspect, fov, distance)
-        # (plan 43 C2: the reference eye's, for a layer — the same matrix
-        # when the preset's eye is the reference)
-        ref = (vp, eye) if fov in (None, EYE_FOV) and distance in (None, EYE_DISTANCE) \
-            else through_eye(cal, m, aspect)
+        # (plan 43 C2: the reference eye's, for a layer laid without depth —
+        # one 4×4 product off the cached fit, so no shortcut to keep exact)
+        ref = through_eye(cal, m, aspect)
         poses = [pose(side, sk, m, fade) for side, sk, fade in seen]
         if st.guide:
             lo, hi = stage_box(box, m)
@@ -1545,7 +1544,7 @@ class Ghost:
 
     def layer(self, size: tuple[int, int], t: float, readout: bool = False,
               now=None, hands: bool = True, settled: bool = False,
-              lines: bool = False) -> bool:
+              lines: bool = False, world: bool = False) -> bool:
         """Render the hands' layer at `size` (the frame's) for time `t`:
         the fades stepped, the hands drawn opaque with depth into their own
         framebuffer, the tethers flat over them, resolved into `tex`.
@@ -1558,9 +1557,12 @@ class Ghost:
 
         Plan 43 C2 (row 575): a layer is screen-space — the hands are
         drawn through the rig's reference eye (`Settled.layer`), so they
-        keep their size and place on screen whatever the preset's eye;
-        the readout alone (`hands` False: the hands are in the scene) is
-        drawn through the scene's eye, so a gauge on the hand stays on it.
+        keep their size and place on screen whatever the preset's eye —
+        unless `world` (the layer is laid depth-aware, `HandsLayer.in_world`:
+        its depth is compared with the scene's, so it is drawn through the
+        scene's eye, one projection for both). The readout alone (`hands`
+        False: the hands are in the scene) is drawn through the scene's eye,
+        so a gauge on the hand stays on it.
 
         `readout` (a pipeline will put the hands through the effects): the
         guide and the tethers go into a second layer, `readout`, instead —
@@ -1583,7 +1585,7 @@ class Ghost:
         if got is None:
             return False
         poses, view_proj, eye = got
-        if hands and getattr(got, "layer", None) is not None:
+        if hands and not world and getattr(got, "layer", None) is not None:
             view_proj, eye = got.layer           # (plan 43 C2: the reference eye's)
         ctx = self.ctx
         if self.geometry is None and not self._build():

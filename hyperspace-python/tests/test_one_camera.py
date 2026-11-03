@@ -294,11 +294,51 @@ def test_an_old_show_hands_its_eye_to_old_presets_and_keeps_none_itself(tmp_path
     assert bak.read_bytes() == before
     pr.save()
     assert sorted(p.name for p in show.parent.glob("rig.hyp.json.bak-*")) == [bak.name]
-    # a fresh launch: no old eye left, the /9 carries its own
+    # a fresh launch: the show holds no eye now, but its `.bak-v2-eye` does
+    # — still handed to old presets (review 2.2) — and the /9 carries its own
     again = boot(home, show="rig")
-    assert again.lib.project.old_eye == {} and again.lib.project.camera_at is None
+    assert again.lib.project.old_eye == EYE and again.lib.project.camera_at == CAMERA_AT
+    assert not any(k.startswith("eye.") for k in again.lib.project.session)
     again.presets.load("OLD")
     assert again.reg["eye.fov"].value == 30.0 and again.reg["eye.distance"].value == 5.0
+
+
+def test_a_bank_autosave_before_the_tool_still_hands_old_presets_the_eye(tmp_path):
+    """Review 2.2: the first write of an old show on this build (here the
+    bank's autosave, `Project.write`) drops its eye into `.bak-v2-eye`; an
+    old preset opened on the next launch — before the tool ran — still
+    takes that eye and the camera's position from the backup."""
+    home = tmp_path / "lib"
+    _write(home / "projects" / "rig.hyp.json", old_show())
+    (home / "presets").mkdir(parents=True)
+    (home / "presets" / "old.json").write_text(preset.dumps({**old_preset(), "name": "OLD"}))
+    rig = boot(home, show="rig")
+    rig.lib.project.put_slot(0, "OLD")                # a pad: the bank's autosave
+    show = json.loads((home / "projects" / "rig.hyp.json").read_text())
+    assert "eye.fov" not in show["session"]
+    assert (home / "projects" / "rig.hyp.json.bak-v2-eye").is_file()
+    again = boot(home, show="rig")
+    assert again.lib.project.old_eye == EYE and again.lib.project.camera_at == CAMERA_AT
+    again.reg["eye.fov"].set(90.0)
+    again.presets.load("OLD")
+    assert again.reg["eye.fov"].value == 30.0 and again.reg["eye.distance"].value == 5.0
+    assert again.presets.layout["render:camera"] == CAMERA_AT
+
+
+def test_the_tool_copies_nothing_when_nothing_it_reads_is_retapered(tmp_path, monkeypatch):
+    """Review 2.7: a dry run with no unmarked template reads the library
+    itself (no retapered copy); with one, it makes the copy once."""
+    tool = _tool()
+    made = []
+    real = tool.retapered_copy
+    monkeypatch.setattr(tool, "retapered_copy", lambda *a: made.append(a) or real(*a))
+    lib = _library(tmp_path)
+    shutil.rmtree(lib / "desk")
+    tool.main(["--library", str(lib)], picture=same_picture)
+    assert made == []
+    lib2 = _library(tmp_path / "two")
+    tool.main(["--library", str(lib2)], picture=same_picture)
+    assert len(made) == 1
 
 
 def test_an_old_preset_with_no_old_eye_takes_the_builds(tmp_path):
@@ -358,6 +398,23 @@ def test_a_hand_axis_learns_onto_the_eye_and_breathes_the_framing(tmp_path):
     assert p.base == pytest.approx(base)
     p.apply()                                                    # let go: the base back
     assert view.eye_fov == pytest.approx(base)
+
+
+def test_a_layer_is_in_the_world_only_when_laid_depth_aware():
+    """Review 2.1: `HandsLayer.in_world` — laid depth-aware at an output
+    (`laid` "depth") or by a depth composite (`depth_laid`, set by the
+    build) — and nothing else."""
+    from hyperspace.graph import HandsLayer
+    layer = HandsLayer("hands.layer")
+    assert not layer.in_world
+    for laid in ("over", "add"):
+        layer.laid = laid
+        assert not layer.in_world
+    layer.laid = "depth"
+    assert layer.in_world
+    other = HandsLayer("hands.2.layer")
+    other.depth_laid = True
+    assert other.in_world
 
 
 def test_the_camera_node_is_the_looks():
@@ -604,6 +661,30 @@ def test_hands_in_the_scene_scale_with_the_shape_and_a_layer_keeps_its_size(ctx)
     assert np.array_equal(layer[0], layer[1]) and _span(layer[0])[0] > 20
 
 
+def test_a_layer_laid_depth_aware_is_in_the_world_through_the_presets_eye(ctx):
+    """Review 2.1 (the ruling): a hands layer laid depth-aware compares its
+    depth with the scene's, so it is drawn through the scene's eye — it
+    scales with the shape as the eye widens, and behind the shape at a
+    non-default eye the texels it hides show the picture under them
+    exactly (one projection for both depths). Laid plain over it keeps the
+    reference eye (the test above)."""
+    from test_hands_node import BEHIND, _rig
+
+    from hyperspace.graph import Wiring
+    wide = 60.0
+    ratio = math.tan(math.radians(G.EYE_FOV) / 2) / math.tan(math.radians(wide) / 2)
+    alone = [_span(_shot(ctx, _rig(ctx, Wiring(blend="depth"), shape=False), f))
+             for f in (G.EYE_FOV, wide)]
+    (w0, h0), (w1, h1) = alone
+    assert w1 / w0 == pytest.approx(ratio, rel=0.06) and h1 / h0 == pytest.approx(ratio, rel=0.06)
+    depth = _shot(ctx, _rig(ctx, Wiring(blend="depth"), BEHIND), wide)
+    over = _shot(ctx, _rig(ctx, Wiring(hands="scene"), BEHIND), wide)   # (in the scene)
+    bare = _shot(ctx, _rig(ctx, None, BEHIND, hands=False), wide)
+    hidden = np.abs(depth - bare).sum(axis=2) == 0
+    drawn = np.abs(over - bare).sum(axis=2) > 0                          # where hands fall
+    assert (hidden & drawn).sum() > 50   # behind the shape, hidden where the shape is nearer
+
+
 # ---------------------------------------------------------------- review fixes
 
 
@@ -615,8 +696,9 @@ def test_a_pose_at_the_edge_of_the_turn_saves_loads_and_saves_as_itself(tmp_path
              7 * math.pi, -5 * math.pi, 2.5, -2.5, 0.0, 1e-9]
     for a in edges:
         b = preset.pose_angle(a)
-        assert -math.pi < b < math.pi and preset.pose_angle(b) == b, a
-        assert b == round(b, 6) and math.remainder(b, 2 * math.pi) == b, a
+        assert preset.pose_angle(b) == b and b == round(b, 6), a
+        if -math.pi <= a <= math.pi:                 # a folded road's angle
+            assert -math.pi < b < math.pi and math.remainder(b, 2 * math.pi) == b, a
     rig = boot(tmp_path)
     for k in range(0, len(edges), 6):
         rig.view.set_pose((edges[k:k + 6] + [0.0] * 6)[:6])
@@ -625,6 +707,49 @@ def test_a_pose_at_the_edge_of_the_turn_saves_loads_and_saves_as_itself(tmp_path
         two = rig.presets.document("EDGE")
         assert two[preset.POSE_KEY] == one[preset.POSE_KEY]
         assert preset.dumps(two) == preset.dumps(one)
+
+
+def test_one_picture_saves_one_pose_and_save_load_save_is_byte_stable(tmp_path):
+    """Review 2.4: a 3D shape saves its folded XY/XZ/YZ and W 0 whether a
+    body was ever turned in or not; a 4D shape saves the same six whether
+    the 3D switch was ever toggled or not (one branch for one turn); a
+    scene saves its angles unfolded (its layers spin at fractions of them).
+    Each, saved, loaded (a frame integrated, the switch folding a fresh
+    body) and saved again, writes the same bytes."""
+    rig = boot(tmp_path)
+    reg, view = rig.reg, rig.view
+    four = next(i for i in range(len(G.SHAPES)) if not G.is_3d(i) and not G.SHAPES[i].layers)
+    three = next(i for i in range(len(G.SHAPES)) if G.is_3d(i) and not G.SHAPES[i].layers)
+    scene = next(i for i in range(len(G.SHAPES)) if G.SHAPES[i].layers)
+    ang = [2.9, -2.2, 3.0, 2.4, -1.9, 2.6]
+
+    def save_load_save(three_d: bool) -> dict:
+        reg["view.rotate"].set(False)
+        reg["view.three_d"].set(three_d)
+        one = rig.presets.document("P")
+        rig.presets.load_doc(one)
+        view.integrate(0.0)                       # a frame: the switch folds a body
+        two = rig.presets.document("P")
+        assert preset.dumps(two) == preset.dumps(one)
+        return one[preset.POSE_KEY]
+
+    for shape in (three, four):
+        reg["view.shape"].set(shape)
+        poses = []
+        for toggled in (False, True):
+            view.set_pose(ang)
+            if toggled:                           # the switch on and off: a body turned in
+                view.three_d = True
+                view.integrate(0.0)
+                view.ang[:3] = [a + 0.0 for a in ang[:3]]
+            poses.append(save_load_save(toggled))
+        assert poses[0] == poses[1], shape
+        if shape == three:
+            assert [poses[0][k] for k in POSE_IDS[3:]] == [0.0, 0.0, 0.0]
+    reg["view.shape"].set(scene)
+    view.set_pose([a + 40.0 for a in ang])        # a long run: far past one turn
+    pose = save_load_save(False)
+    assert pose[POSE_IDS[0]] == pytest.approx(ang[0] + 40.0)
 
 
 def test_an_old_show_with_the_camera_under_its_old_id_and_no_eye(tmp_path):

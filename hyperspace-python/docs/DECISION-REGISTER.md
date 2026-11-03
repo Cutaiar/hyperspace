@@ -9778,16 +9778,22 @@ and D3 (the per-deck split) are
   1e-6 and held to ±3.141592 so save → load → save is a fixed point at
   ±π, `preset.pose_angle`) right after `values`: `ViewState.pose` folds `view.body` in —
   the drawn turn R(angles)·body read back as six angles
-  (`geometry.pose_angles`, exact on SO(4)) — and `Presets.load_doc`
+  (`geometry.pose_angles`, exact on SO(4); one road per picture —
+  review 2.4: a 3D shape its folded XY/XZ/YZ and W 0, body or none; a 4D
+  shape through `pose_angles` whether the switch was ever toggled; a scene
+  its angles unfolded, its layers spinning at fractions of them) — and `Presets.load_doc`
   sets it (`ViewState.set_pose`: no body, the 3D switch not yet holding,
   so the shape is drawn the same before and after the next `integrate`).
   The phases stay `persist=False`: the turn moves every frame, so it is
   no base — not in `values`, no undo step, no dirty dot. A pose that is
   not six finite numbers is said and ignored. The migration's resave
-  (`Presets.pose_of_file`, `headless.resave`) writes a pose only where
-  the file had one, so a migrated old file keeps spinning and its `/9` is
-  a fixed point. A load under hold sets the one turn both renderers draw
-  (`hold.ONE_FOR_BOTH`): the pose lands on the program and the preview.
+  (`headless.resave`) takes the pose back out of a file that had none,
+  so a migrated old file keeps spinning and its `/9` is a fixed point
+  (`save` stays one road). **Under hold** (review 2.3, the ruling): the
+  one turn both renderers draw is the projector's, so a load keeps its
+  pose back on the hold (`Hold.hold_pose`) — the held picture and its 3D
+  body do not jump — and Take lands it; Drop forgets it; a save while
+  held writes the loaded preset's pose.
 - **Other options.** The six phases in `values` (they are no bases, and
   every check that `values` is the bases' snapshot would carry an
   exception); a save chip ("save the turn") — the owner chose always.
@@ -9830,16 +9836,22 @@ and D3 (the per-deck split) are
   (`ghost.Settled.layer`, the settle's second camera), so they keep
   their size and place on screen whatever the preset's eye; the readout
   alone (hands in the scene) follows the scene's eye, so a gauge stays
-  on its hand. At the default eye the two cameras are one matrix: no
-  picture of before moved.
+  on its hand. **A layer laid depth-aware** (review 2.1, the ruling: at
+  an output, its `laid` "depth", or by a depth composite) compares its
+  depth with the scene's, so it is "in the world": drawn through the
+  scene's eye (`HandsLayer.in_world`, `Ghost.layer(world=True)`), one
+  projection for both depth buffers; only a layer laid without depth
+  keeps the reference eye and its screen size. At the default eye the
+  cameras are one: no picture of before moved. The fit is cached by box,
+  basis and units (`Ghost.calibrated`); each eye is one 4×4 product
+  (`ghost.through_eye`).
 - **Other options.** Calibrate against the preset's eye (today's maths:
   every hand keeps its screen size, the shape does not — the hands leave
   the world); write `mm` at calibration time (a hands.json change).
 - **To reverse.** Pass the eye to `calibration` again and drop
   `Settled.layer`.
-- **Rough edge.** A depth-aware lay of a hands layer over a scene drawn
-  through a zoomed eye compares depths from two cameras; for occlusion
-  draw the hands in the scene.
+- **Rough edge.** A depth-aware layer does not keep its screen size
+  when the eye zooms (it is in the world, by the ruling).
 - **Judge it.** Check 433.
 
 ### 576. Row 521 closed: every save `/9`; `modules` labels inert pending row 540

@@ -10,8 +10,9 @@ it loaded as (`Library.save_as`, the strip's save), the bytes written read
 back. Nothing here touches the library a file came from.
 
 Plan 43 C2: a resave is the migration's, so it writes the spin's pose only
-where the file had one (`Presets.pose_of_file`: an old file keeps spinning,
-and its `/9` is a fixed point); and with `show` — what an old show kept of
+where the file had one (the app saves one every time; the resave takes it
+back out of a file that had none — an old file keeps spinning, and its
+`/9` is a fixed point); and with `show` — what an old show kept of
 the camera (`show_seed`) — the scratch library opens a show holding just
 that, so an old preset takes the rig's eye as the app takes it.
 """
@@ -75,6 +76,15 @@ def make_app(home: Path, plan31: bool = True, *, machine: Path | None = None):
 # the library folders a preset's load reads beside its own file: the desk
 # templates it may name (plan 24 C3) and the module presets it labels
 SHARED_FOLDERS = ("desk", "fx", "dream", "band", "tempo")
+def _link_or_copy(src, dst):
+    """A hard link where the disk allows one, else a copy."""
+    try:
+        os.link(src, dst)
+    except OSError:
+        shutil.copy2(src, dst)
+    return dst
+
+
 SEED_SHOW = "migration"        # the scratch show `seed` writes (plan 43 C2)
 
 
@@ -86,8 +96,8 @@ def show_seed(doc: dict | None) -> dict | None:
     so an old preset takes the build's default eye."""
     if not isinstance(doc, dict):
         return None
-    from .graphmigrate import CAMERA_NODES
-    from .library import CAMERA_NODE, EYE_IDS, PROJECT_SCHEMA, read_layout
+    from .graphmigrate import CAMERA_NODE, CAMERA_NODES, EYE_IDS
+    from .library import PROJECT_SCHEMA, read_layout
     session = doc.get("session") if isinstance(doc.get("session"), dict) else {}
     layout, _ = read_layout(doc.get("layout"))
     out: dict = {"schema": PROJECT_SCHEMA, "name": SEED_SHOW,
@@ -119,7 +129,7 @@ def resave(path: Path, scratch: Path, *, library: Path | None = None,
     own, with `library`'s desk templates and module presets beside it when
     given, and `show` (a `show_seed`: the rig's old eye) open: (the bytes
     the save wrote, the load's notes, the name it loaded as). The pose is
-    written only where the file had one (`Presets.pose_of_file`). Raises
+    written only where the file had one. Raises
     what the load raises (`LibraryError`) for a file that does not load.
     `scratch` is created; nothing outside it is written."""
     scratch = Path(scratch)
@@ -130,8 +140,12 @@ def resave(path: Path, scratch: Path, *, library: Path | None = None,
         for folder in SHARED_FOLDERS:
             src = Path(library) / folder
             if src.is_dir():
+                # (hard links where the disk allows: a library's folders are
+                # read, never written, by a resave — one copy per run, not
+                # one per preset; review 2.7)
                 shutil.copytree(src, home / folder, dirs_exist_ok=True,
-                                ignore=shutil.ignore_patterns(".*", "Icon*"))
+                                ignore=shutil.ignore_patterns(".*", "Icon*"),
+                                copy_function=_link_or_copy)
     before = os.environ.get("HYPERSPACE_HOME")
     os.environ["HYPERSPACE_HOME"] = str(machine)    # (nothing reaches ~/Hyperspace)
     try:
@@ -141,11 +155,21 @@ def resave(path: Path, scratch: Path, *, library: Path | None = None,
         shutil.copyfile(path, home / preset.GROUP / f"{stem}.json")
         seed(home, machine, show)
         app = make_app(home, machine=machine)
-        app.presets.pose_of_file = True
         app.lib.load(preset.GROUP, stem)
         name = app.lib.current(preset.GROUP) or stem
         notes = list(app.presets.notes)
         out = app.presets.save_as(name)
+        # (plan 43 C2: the app saves the pose every time; the migration
+        # writes one only where the file had one — an old file keeps
+        # spinning — so a file without one has it taken back out)
+        try:
+            had = preset.POSE_KEY in json.loads(Path(path).read_text())
+        except (OSError, ValueError, TypeError):
+            had = True
+        if not had:
+            doc = json.loads(out.read_text())
+            if doc.pop(preset.POSE_KEY, None) is not None:
+                out.write_text(preset.dumps(doc))
         return out.read_bytes(), notes, name
     finally:
         if before is None:

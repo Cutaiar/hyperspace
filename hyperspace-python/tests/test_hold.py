@@ -1062,12 +1062,16 @@ def test_the_held_groups_are_the_renderers_and_take_the_eye():
     assert {"view.three_d", "view.speed"} <= set(H.ONE_FOR_BOTH)
 
 
-def test_a_preset_loaded_under_hold_keeps_the_projectors_eye_and_lands_its_pose_on_both(rig):
-    """Plan 43 C2: a preset loaded while held — its eye is the preview's
-    until Take (the program draws the held framing); its saved pose sets
-    the one turn both draw, so it lands on both at once."""
+def test_a_preset_loaded_under_hold_keeps_the_projectors_eye_and_turn_until_take(rig):
+    """Plan 43 C2 (review 2.3, the ruling): a preset loaded while held —
+    its eye is the preview's until Take (the program draws the held
+    framing), and its saved pose waits on the hold: the one turn both
+    renderers draw (and its 3D body) is the projector's and does not jump;
+    Take lands the pose, Drop forgets it; a save while held writes the
+    loaded preset's pose."""
     import json
 
+    import numpy as np
     from conftest import CORPUS
 
     from hyperspace import preset
@@ -1075,19 +1079,31 @@ def test_a_preset_loaded_under_hold_keeps_the_projectors_eye_and_lands_its_pose_
 
     reg, hold, view = rig.reg, rig.hold, rig.view
     fov = reg["eye.fov"].base
-    hold.engage()
     doc = json.loads((CORPUS / "presets" / "dial.json").read_text())
     doc["values"]["eye.fov"] = 70.0
     pose = [0.1, -0.2, 0.3, 0.4, -0.5, 0.6]
     doc[preset.POSE_KEY] = dict(zip(POSE_IDS, pose, strict=True))
-    rig.presets.load_doc(doc)
-    assert view.ang == pose                      # set at once, on the one view
-    settle(rig)
-    assert reg["eye.fov"].base == 70.0 and "eye.fov" in hold.changed()
-    turn = list(view.ang)
-    with hold.program():
-        assert view.eye_fov == pytest.approx(fov)
-        assert view.ang == turn                  # the one turn: the program's too
-    assert view.eye_fov == 70.0 and view.ang == turn
-    hold.take()
-    assert view.eye_fov == 70.0
+    for end in ("take", "drop"):
+        reg["eye.fov"].set(fov)                  # (the projector's framing at each HOLD)
+        settle(rig)
+        view.three_d = True
+        view.integrate(0.0)                      # the projector's 3D body
+        hold.engage()
+        turn, body = list(view.ang), np.array(view.body)
+        rig.presets.load_doc(doc)
+        assert view.ang == turn and np.array_equal(view.body, body)   # no jump
+        assert hold.pose == pose
+        assert [rig.presets.document("x")[preset.POSE_KEY][k] for k in POSE_IDS] == pose
+        settle(rig)
+        assert reg["eye.fov"].base == 70.0 and "eye.fov" in hold.changed()
+        with hold.program():
+            assert view.eye_fov == pytest.approx(fov)
+        if end == "take":
+            hold.take()
+            assert view.ang == pose and view.body is None and hold.pose is None
+            assert view.eye_fov == 70.0
+        else:
+            moving = list(view.ang)
+            hold.drop()
+            assert view.ang == moving and hold.pose is None    # forgotten, never landed
+        settle(rig)

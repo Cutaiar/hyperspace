@@ -1238,9 +1238,8 @@ Behaviour the code has today that the model does not guard:
 - A preset's pose is exact for a shape, a 4D shape under the 3D switch
   and a 3D shape; a scene that mixes 3D and 4D layers with a body turned
   in keeps its 4D layers' pose and folds its 3D layers' (plan 43 C2,
-  `ViewState.pose`). A depth-aware lay of a hands layer (drawn through the
-  reference eye) over a scene drawn through a zoomed preset eye compares
-  depths from two cameras (row 575).
+  `ViewState.pose`). A preset loaded under hold lands its pose at Take
+  (`Hold.hold_pose`), not at the load (row 573).
 - An old preset (before `/9`) takes the eye the open show's old session
   held only while that show is open (`Project.old_eye`); the migration
   tool is what makes it the preset's for good.

@@ -35,8 +35,9 @@ for both:
 
 - the turn — `rot.*`, speed, the planes, the 3D switch: the angles are
   integrated once a frame, before either draw (`ViewState.integrate`) —
-  and so is a preset's saved pose (plan 43 C2): a load under hold sets the
-  turn (`ViewState.set_pose`) on the one view, so it lands on both;
+  so the projector keeps its turn: a preset loaded under hold keeps its
+  saved pose back on the hold (`hold_pose`) and it lands at Take (plan 43
+  C2) — Drop forgets it;
 - the media channels (`media.*`): a channel decodes once for every reader,
   so a source switched shows on both;
 - the modulators (`lfo`, `env`, `seq`, `macro`, `mod`) and the routes:
@@ -134,6 +135,7 @@ class Hold:
         self.preview = None             # the preview renderer, made on first use
         self.error = ""                 # why the preview could not be drawn
         self.status = ""                # what the last engage / take / drop did
+        self.pose = None                # a pose a load under the hold kept back (plan 43 C2)
 
     # ---- the switch
 
@@ -160,10 +162,15 @@ class Hold:
         """The preview onto the projector: let go. False: nothing was held."""
         if not self.on:
             return False
-        loaded = self.loaded
+        loaded, pose = self.loaded, getattr(self, "pose", None)
         self._release()
         self._settle()                  # the live graph's instances alone, now
         self._let_go()
+        # plan 43 C2 (review 2.3): the pose a load under the hold kept back
+        # lands now, with the rest of the preview
+        view = getattr(self.reg, "view", None)
+        if pose is not None and callable(getattr(view, "set_pose", None)):
+            view.set_pose(pose)
         if loaded:                      # R19: a load's delays start empty — on the projector now
             reset = getattr(self.renderer, "reset_delays", None)
             if callable(reset):
@@ -203,6 +210,15 @@ class Hold:
         self.on = False
         self.wiring, self.rig, self.ghosts, self.values, self.point = None, None, {}, {}, None
         self.moved, self.error, self.kept, self.loaded = 0, "", {}, False
+        self.pose = None                # (Drop forgets a kept-back pose; Take has landed it)
+
+    def hold_pose(self, angles) -> None:
+        """A preset loaded while held carries a saved pose (plan 43 C2,
+        review 2.3): kept here — the one turn both renderers draw is the
+        projector's too, so setting it now would make the held picture jump
+        — and landed at Take (`take`); Drop forgets it. None (a load with no
+        pose) forgets one kept before."""
+        self.pose = None if angles is None else [float(a) for a in angles]
 
     def _release(self) -> None:
         """The landings no longer keep the program's nodes."""

@@ -43,7 +43,7 @@ six `rot.phase.*` (`params.POSE_IDS`) under ``"pose"`` (`POSE_KEY`, beside
 ``values``, which stays the bases: a phase is no base), `view.body`
 folded in (`ViewState.pose`), and a load **sets** the turn there
 (`set_pose`), so the same preset opens on the same turn. A file with no pose (every file
-before ``/9``, and every file the migration rewrote: `pose_of_file`)
+before ``/9``, and every file the migration rewrote: `headless.resave`)
 leaves the turn spinning, as it always did.
 
 One file per preset, ``<library>/presets/<slug>.json`` — one tier, every
@@ -226,13 +226,19 @@ POSE_EDGE = math.floor(math.pi * 1e6) / 1e6
 
 
 def pose_angle(a: float) -> float:
-    """One angle as a pose saves it (plan 43 C2, review 1): folded into
-    (−π, π], rounded to six places, then held to ±`POSE_EDGE` — π itself
-    would round to 3.141593 > π, fold to −π on the next load and save as
-    −3.141593, so save → load → save would not be a fixed point. Every
-    value this returns is its own fold and its own rounding."""
-    r = round(math.remainder(float(a), 2.0 * math.pi), 6)
-    return min(max(r, -POSE_EDGE), POSE_EDGE) + 0.0
+    """One angle of `ViewState.pose` as a pose saves it (plan 43 C2, review
+    1): rounded to six places, and — an angle on the folded roads, inside
+    [−π, π] — held to ±`POSE_EDGE`: π itself would round to 3.141593 > π,
+    fold to −π on the next save and write −3.141593, so save → load → save
+    would not be a fixed point. A scene's unfolded angle (its layers spin
+    at fractions of it, `ViewState.pose`) is only rounded: it is never
+    folded, so its rounding is its fixed point. Every value this returns
+    is its own rounding."""
+    a = float(a)
+    r = round(a, 6)
+    if -math.pi <= a <= math.pi:
+        r = min(max(r, -POSE_EDGE), POSE_EDGE)
+    return r + 0.0
 
 
 def read_pose(pose: Any) -> list[float] | None:
@@ -899,13 +905,6 @@ class Presets:
         self.note = ""
         self.notes: list[str] = []       # step 1's notes from the last load
         self.migrated = ""               # plan 36 T3: "/N migrated to /9" when that load was old
-        # plan 43 C2: whether the file the last load read named a pose; with
-        # `pose_of_file` set (the migration's resave, `headless.resave`) a
-        # save writes the pose only then, so a migrated old file keeps
-        # spinning and its /9 is a fixed point. Off (the app): every save
-        # writes the pose (row 573)
-        self.posed = False
-        self.pose_of_file = False
         self.desk_notes: list[str] = []  # the desk rows the last load dropped (set_desk)
         # plan 28 N2: the GRAPH page's positions of the look's nodes
         self.layout: dict[str, list[float]] = {}
@@ -1276,13 +1275,17 @@ class Presets:
             except (ValueError, TypeError) as e:
                 lib.restore(before)
                 raise ValueError(f"a value would not land ({e}); nothing loaded") from e
-            # 2. and the turn (plan 43 C2): set to the file's pose — on the
-            #    one view both renderers draw (hold.ONE_FOR_BOTH: a held
-            #    program and the preview share the turn), so it lands on both
+            # 2. and the turn (plan 43 C2): set to the file's pose. The one
+            #    view is what both renderers draw (hold.ONE_FOR_BOTH), so
+            #    while the projector is held the pose waits on the hold and
+            #    lands at Take (Drop forgets it: review 2.3) — the held
+            #    projector never jumps to another turn mid-set
             view = getattr(reg, "view", None)
-            if turn is not None and callable(getattr(view, "set_pose", None)):
+            hold = getattr(gs, "hold", None)
+            if callable(getattr(hold, "hold_pose", None)):
+                hold.hold_pose(turn)          # (None: a load with no pose clears it)
+            elif turn is not None and callable(getattr(view, "set_pose", None)):
                 view.set_pose(turn)
-            self.posed = turn is not None
         except BaseException:
             if table.modifiers_doc(reg) != held_mods:     # the modifiers as they were
                 table.set_modifiers(held_mods, reg)
@@ -1393,9 +1396,9 @@ class Presets:
         held = graphmigrate.section_effects(doc[GRAPH_KEY])
         values = {k: v for k, v in values.items()
                   if graphmigrate.effect_of(k) in (None, *held)}
-        # plan 43 C2 (row 573): the spin's pose, after the bases — always,
-        # but in the migration's resave (`pose_of_file`), which writes one
-        # only where the file it read had one
+        # plan 43 C2 (row 573): the spin's pose, after the bases — every save
+        # (the migration's resave takes it back out of a file that had none:
+        # `headless.resave`)
         pose = self._pose()
         doc.update(values=values, **({POSE_KEY: pose} if pose else {}),
                    routes=[b.to_json() for b in table.routes()],
@@ -1427,13 +1430,15 @@ class Presets:
     def _pose(self) -> dict[str, float]:
         """The spin's pose, the `pose` section (plan 43 C2): the view's six
         angles, its body folded in (`ViewState.pose`), by `POSE_IDS` — none
-        on a registry with no view (a test's, one from before C2), and none
-        in the migration's resave when the file it read had none."""
+        on a registry with no view (a test's, one from before C2). While the
+        projector is held with a loaded pose waiting (review 2.3), that pose:
+        it is the loaded preset's turn, not the program's."""
         view = getattr(self.reg, "view", None)
         if not callable(getattr(view, "pose", None)):
             return {}
-        if getattr(self, "pose_of_file", False) and not getattr(self, "posed", False):
-            return {}
+        waiting = getattr(getattr(self._graph_section(), "hold", None), "pose", None)
+        if waiting is not None:
+            return {pid: pose_angle(a) for pid, a in zip(POSE_IDS, waiting, strict=True)}
         return {pid: pose_angle(a) for pid, a in zip(POSE_IDS, view.pose(), strict=True)}
 
     def _values(self) -> dict[str, Any]:

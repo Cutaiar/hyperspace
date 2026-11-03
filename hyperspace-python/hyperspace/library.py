@@ -123,7 +123,7 @@ from typing import Any
 from . import patches as patchdoc
 from . import undo
 from .graph import RigWires
-from .graphmigrate import CAMERA_NODES, renamed_layout, retired
+from .graphmigrate import CAMERA_NODES, EYE_IDS, renamed_layout, retired
 from .palettecompat import palette_slice
 from .params import (
     F_KEYS,
@@ -157,9 +157,6 @@ SPRING_BACKUP = "2-spring"
 # `session`, which the presets hold since `/9` (`Project.old_eye`) —
 # <file>.bak-v2-eye
 EYE_BACKUP = "2-eye"
-# the eye's ids (the preset's since plan 43 C2; an old show's session held them)
-EYE_IDS = ("eye.fov", "eye.distance")
-CAMERA_NODE = "render:camera"      # the camera's GRAPH node, the look's since C2
 PRESETS = "presets"       # the presets' group, a document kind (preset.py)
 # <root>/desk/<slug>.json (plan 24 C3): the desk templates — named sets of
 # preset-layer rows a preset's desk can start from (`desk_template`,
@@ -680,6 +677,14 @@ class Project:
         # renames the old one, but neither may stay the show's)
         found = [self.layout.pop(k) for k in CAMERA_NODES if k in self.layout]
         self.camera_at = list(found[0]) if found else None
+        # (review 2.2: a show whose first write on this build — the bank's
+        # autosave, say — already moved its eye into `<file>.bak-v2-eye`
+        # still hands that eye to the presets before `/9`, until the tool
+        # writes it into them)
+        if path is not None and not self.old_eye:
+            self.old_eye, kept_at = _kept_eye(path)
+            if self.camera_at is None and kept_at is not None:
+                self.camera_at = kept_at
         self._saved_layout = copy.deepcopy(self.layout)
         self.rig = self._saved_rig = RigWires.read(doc.get(RIG))
 
@@ -1257,6 +1262,27 @@ class Project:
         reg = self.lib.reg
         return {pid: v for pid, v in (self.session or {}).items()
                 if is_instance_id(pid) and (reg is None or pid not in reg)}
+
+
+def _kept_eye(path: Path) -> tuple[dict[str, Any], list[float] | None]:
+    """The eye (and the camera's GRAPH position) a show's ``.bak-v2-eye``
+    copy kept — the oldest copy that holds one — or ({}, None): what an
+    old show's `session` held before its first write on this build dropped
+    it (plan 43 C2, `Project.write`)."""
+    for bak in sorted(path.parent.glob(f"{path.name}.bak-v{EYE_BACKUP}*")):
+        try:
+            doc = json.loads(bak.read_text())
+        except (OSError, ValueError):
+            continue
+        session = doc.get("session") if isinstance(doc, dict) else None
+        if not isinstance(session, dict):
+            continue
+        eye = {pid: session[pid] for pid in EYE_IDS if pid in session}
+        if eye:
+            layout, _ = read_layout(doc.get(LAYOUT))
+            at = next((layout[k] for k in CAMERA_NODES if k in layout), None)
+            return eye, (list(at) if at is not None else None)
+    return {}, None
 
 
 def _kept(path: Path, tag: str = BANK8_BACKUP) -> bool:

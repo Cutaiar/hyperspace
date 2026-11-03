@@ -63,7 +63,7 @@ An old file (before ``/7``) whose load says its section was "not read"
 says: its ``/9`` would carry the old words with the migration lost for
 good. A file whose load or save raises (a frame that does not settle
 included) is skipped alone; the run goes on. No pose is written: an old
-file had none and keeps spinning (`Presets.pose_of_file`).
+file had none and keeps spinning (`headless.resave` takes it back out).
 
 The default is a **dry run**: for each preset its file, its name, old schema
 → new, the notes its load made and the checks' results; the show and the
@@ -356,6 +356,21 @@ def retaper_write(todo) -> list[str]:
     return said
 
 
+def shared_retapers(library: Path, todo) -> bool:
+    """Whether `retaper_plan` would rewrite a document a preset's load reads
+    beside it (`headless.SHARED_FOLDERS`: a desk template) — else the
+    library itself is what every preset is computed against."""
+    from hyperspace.headless import SHARED_FOLDERS
+    for path, _c in todo:
+        try:
+            rel = path.relative_to(library)
+        except ValueError:
+            continue
+        if rel.parts and rel.parts[0] in SHARED_FOLDERS:
+            return True
+    return False
+
+
 def retapered_copy(library: Path, todo, dest: Path) -> Path:
     """The folders a preset's load reads beside it (`headless.SHARED_FOLDERS`:
     the desk templates, the module presets) copied to `dest`, each document
@@ -510,8 +525,9 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
     forced = set(a.force)
     results: list[Result] = []
     with tempfile.TemporaryDirectory(prefix="hyperspace-migrate-") as scratch:
-        read_from = library if a.apply else retapered_copy(library, retapers,
-                                                           Path(scratch) / "retapered")
+        # (review 2.7: a copy only when a document the loads read is retapered)
+        read_from = (retapered_copy(library, retapers, Path(scratch) / "retapered")
+                     if not a.apply and shared_retapers(library, retapers) else library)
         for k, path in enumerate(files):
             r = check(path, read_from, Path(scratch) / str(k), picture=picture, show=seed)
             results.append(r)
