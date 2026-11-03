@@ -9,10 +9,12 @@ effect's `// @clock` (fx.py), the patterns' `u_ptime`
 
 The allowlist below is today's offenders, found by this lint on
 2026-11-02, as exact (shader, param) pairs: a new product anywhere fails,
-and so does a stale entry once its shader is ported. K4 (register row
-579) ported RINGS × colour, the pattern's hue; the grid effects it was
-also given (glimmer, wobble, fractals) were measured and left alone — no
-knob of theirs grows with the clock (`tests/test_step_continuity.py`).
+and so does a stale entry once its shader is ported. K2 (row 577) took
+out warp's drift and scale and tripcolour's pulse; K4 (row 579) ported
+RINGS × colour, the pattern's hue, and the list is empty. The grid effects
+K4 was also given (glimmer, wobble, fractals) were measured and left
+alone — no knob of theirs grows with the clock
+(`tests/test_step_continuity.py`).
 """
 
 from __future__ import annotations
@@ -25,11 +27,9 @@ from hyperspace.fx import FxState, parse
 
 # ---------------------------------------------------------------- the allowlist
 
-# (shader, param symbol) → why it is still there. K4 took out RINGS × colour (row 579).
+# (shader, param symbol) → why it is still there. Empty: K2 ported warp and
+# tripcolour (row 577), K4 RINGS × colour (row 579). A new product fails.
 ALLOWLIST: dict[tuple[str, str], str] = {
-    ("warp", "u_drift"): "K2: `t = u_phase * u_drift` scrolls the noise field",
-    ("warp", "u_scale"): "K2: `(p + vec2(t) * 0.1) * u_scale` scales the scrolled offset",
-    ("tripcolour", "u_pulse"): "K2: `sin(u_phase * u_pulse)` is the pulse's rate",
 }
 
 # the patterns' param symbols: a mode reads its inputs only through these
@@ -46,18 +46,13 @@ PATTERN_PROGRAMS = {
 def effect_pairs(name: str, source: str) -> set[tuple[str, str]]:
     """The (effect, param uniform) products in one effect file: its @param
     uniforms are the params; u_time, u_phase and its @clock uniforms are
-    the times. The pre-port line is exempt — a param an `@clock` integrates
-    multiplied into `u_phase` or `u_time`, the rate the host runs now — but
-    never a product whose time side is the clock itself: `u_drift_t *
-    u_drift` is the rate applied twice."""
+    the times. No exemption: a param a `@clock` integrates multiplied into
+    `u_phase` again is the show's bug come back (K2 left nothing
+    mid-port), and `u_drift_t * u_drift` is the rate applied twice."""
     spec = parse(name, source)
     params = {p.uniform for p in spec.params}
-    clock_uniforms = {c.uniform for c in spec.clocks}
-    times = set(TIME_UNIFORMS) | clock_uniforms
-    by_key = {p.key: p.uniform for p in spec.params}
-    integrated = {by_key[c.rate] for c in spec.clocks}
-    return {(name, p) for f in findings(source, params, times) for p in f.params
-            if not (p in integrated and not f.times & clock_uniforms)}
+    times = set(TIME_UNIFORMS) | {c.uniform for c in spec.clocks}
+    return {(name, p) for f in findings(source, params, times) for p in f.params}
 
 
 def pattern_pairs() -> set[tuple[str, str]]:
@@ -133,21 +128,38 @@ def test_products_through_a_user_function_are_found():
     assert {p for _, p in effect_pairs("t", src)} == {"u_a", "u_b"}
 
 
-def test_a_clock_uniform_is_a_time_and_only_the_pre_port_line_is_exempt():
+def test_a_clock_uniform_is_a_time_and_nothing_is_exempt():
     """`@clock u_t a`: `u_t * u_b` is a product of a time (the clock) and a
-    param — found; `u_phase * u_a` is the pre-port line, the rate the host
-    now integrates — exempt, so a port may keep it beside the new while
-    the two are judged by eye; but `u_t * u_a` is the rate applied twice
-    (the porting mistake) and is never exempt."""
+    param — found; `u_phase * u_a` is the show's bug even though the host
+    integrates `a` too — found; `u_t * u_a` is the rate applied twice (the
+    porting mistake) — found."""
     clock = "// @clock u_t a\n"
     assert pairs("vec2 p = uv + vec2(u_t) * 0.1;", clock) == set()
     assert pairs("vec2 p = uv + vec2(u_t * u_b) * 0.1;", clock) == {"u_b"}
-    assert pairs("float t = u_phase * u_a;", clock) == set()
-    assert pairs("float t = u_time * u_a;", clock) == set()
+    assert pairs("float t = u_phase * u_a;", clock) == {"u_a"}
+    assert pairs("float t = u_time * u_a;", clock) == {"u_a"}
     assert pairs("float t = u_phase * u_b;", clock) == {"u_b"}
     assert pairs("vec2 p = uv + vec2(u_t * u_a) * 0.1;", clock) == {"u_a"}
     assert pairs("float t = u_t; t *= u_a;", clock) == {"u_a"}
     assert pairs("float t = (u_phase + u_t) * u_a;", clock) == {"u_a"}
+
+
+def test_a_ported_shader_that_brings_the_product_back_is_flagged():
+    """Warp and tripcolour as K2 left them, with the old line put back
+    beside the clock: every factor of the clock's rate is found again."""
+    files = FxState().files
+    warp = files["warp"].source
+    assert effect_pairs("warp", warp) == set()
+    back = warp.replace("vec2 p = centred(uv);",
+                        "vec2 p = centred(uv);\n    float t = u_phase * u_drift;\n"
+                        "    p += vec2(t) * 0.1 * u_scale;")
+    assert back != warp
+    assert effect_pairs("warp", back) == {("warp", "u_drift"), ("warp", "u_scale")}
+    trip = files["tripcolour"].source
+    assert effect_pairs("tripcolour", trip) == set()
+    pulse = trip.replace("sin(u_pulse_t)", "sin(u_phase * u_pulse)")
+    assert pulse != trip
+    assert effect_pairs("tripcolour", pulse) == {("tripcolour", "u_pulse")}
 
 
 def test_a_function_with_a_precision_qualifier_is_a_function():
