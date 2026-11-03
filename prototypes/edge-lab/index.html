@@ -277,7 +277,7 @@ a { color: var(--accent); }
 
     <!-- ===================== TRIGGERS ===================== -->
     <div class="tabpane" id="tab-triggers">
-      <p class="dim">The bench: a recipe per trigger, out of the official effects only (Off 0x05, Feedback 0x21, Weapon 0x25, Vibration 0x26). Pick one per side and feel them against each other — the plot is the zones exactly as the firmware got them, and the trace below is your own finger.</p>
+      <p class="dim">The bench: a recipe per trigger, out of the official effects only (Off 0x05, Feedback 0x21, Weapon 0x25, Vibration 0x26). Pick one per side and feel them against each other — the plot is the zones exactly as the firmware got them, and the trace below is your own finger. The menu is in six families: <b>still shapes</b> set once; <b>weapons</b> break and then do something; <b>the loop</b> watches the finger and rewrites the shape every frame, which no stored preset can do; <b>music</b> makes the trigger an instrument; <b>readouts</b> make it a display you squeeze; <b>both hands</b> plays one trigger through the other.</p>
       <div class="btnrow">
         <label title="takes the output over from the sink channels"><input type="checkbox" id="benchSend"> send this bench to the pad</label>
         <span class="dim" id="benchState"></span>
@@ -285,7 +285,8 @@ a { color: var(--accent); }
       </div>
       <div class="box">
         <h3>Pairs worth feeling <span class="dim" style="font-weight:400">— each loads both sides</span></h3>
-        <div class="btnrow" id="benchPairs"></div>
+        <div class="btnrow"><button id="benchMic">use the laptop mic</button><span class="dim">the music recipes (spectrum, scope, the beat) read ten bands off it; the rest need nothing</span></div>
+        <div id="benchPairs"></div>
         <div class="dim" id="benchPairNote"></div>
       </div>
       <div id="benchSides"></div>
@@ -1150,12 +1151,32 @@ function shapeAt(shape, x, notches = 3) {
   if (shape === 'saw') return (x * n) % 1;
   return x;
 }
-/** `shape` rasterised onto the zones `from`…9, lo → hi. */
+/** `shape` rasterised onto the zones `from`…9, lo → hi. Left unrounded:
+ *  `descBlock` rounds on the way out, and the dither switch needs the
+ *  fractions the firmware's eight levels cannot hold. */
 function curveZones(p) {
   const from = clamp(p.from | 0, 0, 9), span = Math.max(1, 9 - from);
   return Array.from({ length: ZONES }, (_, z) => (z < from ? 0
-    : clamp(pyRound(p.lo + (p.hi - p.lo) * shapeAt(p.shape, (z - from) / span, p.notches)), 0, 8)));
+    : clamp(p.lo + (p.hi - p.lo) * shapeAt(p.shape, (z - from) / span, p.notches), 0, 8)));
 }
+// a repeatable grain: the same tick gives the same texture, so a test can read it back
+const noise = (a, b) => { const x = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return x - Math.floor(x); };
+/* Temporal dither. The firmware takes eight force levels; a force of 4.5 is
+   4 on some frames and 5 on others, at the write rate. Each zone's own offset
+   keeps neighbours from flickering in step (an ordered dither's thresholds).
+   Whether a hand reads this as a half-step or as a flutter is the question. */
+const DITHER = [0.125, 0.625, 0.375, 0.875];
+const ditherZone = (v, k) => { const f = Math.floor(v); return clamp(f + (v - f > DITHER[k & 3] ? 1 : 0), 0, 8); };
+// the scales the pitch recipe walks up the travel, in semitones from the root
+const SCALES = [['octaves', 'octaves', [0, 12, 24, 36, 48]], ['major', 'major', [0, 2, 4, 5, 7, 9, 11, 12]],
+  ['penta', 'minor pentatonic', [0, 3, 5, 7, 10, 12]], ['fifths', 'fifths', [0, 7, 12, 19, 24]],
+  ['chromatic', 'chromatic', [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]]];
+const GAUGES = [['beat', 'the beat, as a phase'], ['level', 'the mic level'], ['battery', 'the pad battery'],
+  ['rate', 'reports a second'], ['other', 'the other trigger']];
+const LINKS = [['follow', 'follow — the other trigger hardens this one'],
+  ['oppose', 'oppose — the other trigger frees this one'],
+  ['share', 'share — one budget of force, split by which is further down']];
+
 const BENCH_PARAMS = {
   from: { label: 'from zone', min: 0, max: 9, step: 1, def: 1 },
   force: { label: 'force 1–8', min: 1, max: 8, step: 1, def: 6 },
@@ -1174,55 +1195,108 @@ const BENCH_PARAMS = {
   period: { label: 'gallops / s', min: 0.5, max: 8, step: 0.5, def: 2.5 },
   snapMs: { label: 'let-go ms', min: 40, max: 500, step: 10, def: 160 },
   thump: { label: 'thump the heavy motor on the break', kind: 'bool', def: true },
+  // the loop's own
+  vref: { label: 'full force at (travel / s)', min: 0.5, max: 8, step: 0.5, def: 3 },
+  grip: { label: 'force while still', min: 1, max: 8, step: 1, def: 7 },
+  slip: { label: 'force once moving', min: 0, max: 8, step: 1, def: 2 },
+  lead: { label: 'zones ahead of the finger', min: 1, max: 4, step: 1, def: 1 },
+  dwell: { label: 'pause before it sticks (ms)', min: 60, max: 600, step: 20, def: 180 },
+  stops: { label: 'stops', min: 2, max: 6, step: 1, def: 4 },
+  rateHz: { label: 'cycles / s', min: 0.5, max: 12, step: 0.5, def: 3 },
+  // music
+  root: { label: 'root note (Hz)', min: 20, max: 120, step: 1, def: 55 },
+  scale: { label: 'scale', kind: 'select', options: SCALES.map(s => [s[0], s[1]]), def: 'penta' },
+  steps: { label: 'notes across the travel', min: 2, max: 12, step: 1, def: 6 },
+  gain: { label: 'gain', min: 1, max: 8, step: 1, def: 5 },
+  // readouts, wear, both hands
+  src: { label: 'reading', kind: 'select', options: GAUGES, def: 'beat' },
+  bars: { label: 'bars', min: 1, max: 8, step: 1, def: 4 },
+  cool: { label: 'cools in (s)', min: 1, max: 20, step: 1, def: 6 },
+  jamPct: { label: 'jams (%)', min: 0, max: 100, step: 5, def: 20 },
+  link: { label: 'how', kind: 'select', options: LINKS, def: 'follow' },
 };
-/* Each recipe: what it sends (`make`), where the hand should feel a break
-   (`breakAt`, for the trace and the shot stats) and whether it keeps firing
-   while held (`auto`). `st` is the side's runtime: armed, fireT, shots. */
+// the families the recipe menu is grouped by, in order
+const FAMILIES = [['shape', 'still shapes — set once, felt as you pass through'],
+  ['weapon', 'weapons — a break, and what happens after it'],
+  ['loop', 'the loop — effects that watch the finger (no preset can hold these)'],
+  ['music', 'music — the trigger as an instrument and a speaker'],
+  ['read', 'readouts — the trigger as a display you squeeze'],
+  ['pair', 'both hands — one trigger felt through the other']];
+/* Each recipe: its family, what it sends (`make`), where the hand should feel a
+   break (`breakAt`, for the trace and the shot stats) and whether it keeps firing
+   while held (`auto`). `st` is the side's runtime: armed, fireT, shots, and the
+   speed the loop measures. A `make` may return fractional zone forces — the
+   dither switch is what makes the fractions audible to the firmware. */
 const RECIPES = [
-  { id: 'free', name: 'free', mode: 'Off 0x05',
+  // ---- still shapes
+  { id: 'free', name: 'free', family: 'shape', mode: 'Off 0x05',
     blurb: 'nothing in the way — the baseline to feel the others against',
     params: [], make: () => ({ mode: 'off' }) },
-  { id: 'wall', name: 'wall', mode: 'Feedback 0x21',
+  { id: 'wall', name: 'wall', family: 'shape', mode: 'Feedback 0x21',
     blurb: 'one uniform push-back from a point to the bottom. All the app sends today: the trigger.left / trigger.right sink channels are this, from zone 1.',
     params: ['from', 'force'],
     make: p => ({ mode: 'feedback', zones: flat(p.from, p.force) }) },
-  { id: 'sniper', name: 'sniper break', mode: 'Weapon 0x25',
-    blurb: 'the two-stage trigger: slack to the wall, the wall holds against the finger, and past the break it gives way at once. Squeeze slowly — the slack, the stop and the break are three separate things the hand can feel.',
-    params: ['wall', 'brk', 'force', 'thump'],
-    breakAt: p => zoneU(Math.max(p.brk, p.wall + 1)),
-    make: (p, u, t, st) => ({ mode: 'weapon', start: p.wall, end: Math.max(p.brk, p.wall + 1), strength: p.force,
-      rumble: p.thump && t - st.fireT < 70 ? 0.9 : 0 }) },
-  { id: 'curve', name: 'response curve', mode: 'Feedback 0x21 (multiple position)',
-    blurb: 'the whole travel shaped, zone by zone: linear, curved either way, S, inverse, stepped or sawtooth. Ten zones is all the resolution the firmware has — the staircase in the plot is what the finger gets.',
+  { id: 'curve', name: 'response curve', family: 'shape', mode: 'Feedback 0x21 (multiple position)',
+    blurb: 'the whole travel shaped, zone by zone: linear, curved either way, S, inverse, stepped or sawtooth. Ten zones is all the resolution the firmware has — the staircase in the plot is what the finger gets, unless dither is on.',
     params: ['shape', 'from', 'lo', 'hi', 'notches'],
     hide: (p, key) => key === 'notches' && p.shape !== 'steps' && p.shape !== 'saw',
     make: p => ({ mode: 'feedback', zones: curveZones(p) }) },
-  { id: 'detents', name: 'detents', mode: 'Feedback 0x21 (multiple position)',
+  { id: 'detents', name: 'detents', family: 'shape', mode: 'Feedback 0x21 (multiple position)',
     blurb: 'notches: hard zones with free ones between them, so the finger counts clicks on the way down. A mask with gaps in it — this is what Multiple Position Feedback is for.',
     params: ['notches', 'force', 'from'],
     make: p => { const n = clamp(p.notches | 0, 2, 5), from = clamp(p.from | 0, 0, 9), span = Math.max(1, 10 - from);
       const at = new Set(Array.from({ length: n }, (_, i) => from + Math.round(i * (span - 1) / (n - 1))));
       return { mode: 'feedback', zones: Array.from({ length: ZONES }, (_, z) => (at.has(z) ? p.force : 0)) }; } },
-  { id: 'buzz', name: 'buzz', mode: 'Vibration 0x26',
-    blurb: 'what if it just pushed back over and over? The same geared motor that makes the wall drives the stop in and out instead — amplitude and Hz, over the zones you pick. Low Hz is a knock, high Hz is a hum.',
-    params: ['from', 'amp', 'hz'],
-    make: p => ({ mode: 'vibration', zones: flat(p.from, p.amp), freq: p.hz }) },
-  { id: 'rev', name: 'engine', mode: 'Vibration 0x26, re-sent',
-    blurb: 'the pitch follows the travel: the deeper you squeeze the higher it sings. The firmware holds one frequency, so the lab re-sends the block as the trigger moves — the write log shows it working.',
-    params: ['from', 'amp', 'hz', 'hz2'],
-    make: (p, u) => ({ mode: 'vibration', zones: flat(p.from, p.amp),
-      freq: pyRound(p.hz + (p.hz2 - p.hz) * clamp01((u - zoneU(p.from)) / Math.max(0.05, 1 - zoneU(p.from)))) }) },
-  { id: 'recoil', name: 'recoil', mode: 'Feedback 0x21 ⇄ Vibration 0x26',
-    blurb: 'a wall that fires. Cross it and the wall drops for a moment and the trigger motor rattles instead, with the body\'s heavy motor behind it; then the wall comes back. One shot per squeeze, or hold for full auto.',
+  { id: 'snap', name: 'snap-to', family: 'shape', mode: 'Feedback 0x21 (multiple position)',
+    blurb: "detents inverted, and the useful one: hard *between* the stops and free *at* them, so the trigger shoves the finger onto a value instead of letting it sit between two. A trigger that can only land on quarters.",
+    params: ['stops', 'force'],
+    make: p => { const n = clamp(p.stops | 0, 2, 6);
+      const at = new Set(Array.from({ length: n }, (_, i) => Math.round(i * 9 / (n - 1))));
+      return { mode: 'feedback', zones: Array.from({ length: ZONES }, (_, z) => (at.has(z) ? 0 : p.force)),
+        note: `stops at ${[...at].join(', ')}` }; } },
+  { id: 'grit', name: 'grit', family: 'shape', mode: 'Feedback 0x21, re-sent',
+    blurb: 'sandpaper: every zone takes a random force, redrawn a few times a second. Slow and coarse is gravel, fast and fine is a rough surface sliding under the finger.',
+    params: ['from', 'force', 'rateHz'],
+    make: (p, u, t) => { const g = Math.floor(t / 1000 * p.rateHz);
+      return { mode: 'feedback', zones: Array.from({ length: ZONES }, (_, z) => (z < p.from ? 0 : 1 + noise(g, z) * (p.force - 1))) }; } },
+
+  // ---- weapons
+  { id: 'sniper', name: 'sniper break', family: 'weapon', mode: 'Weapon 0x25',
+    blurb: 'the two-stage trigger: slack to the wall, the wall holds against the finger, and past the break it gives way at once. Squeeze slowly — the slack, the stop and the break are three separate things the hand can feel.',
+    params: ['wall', 'brk', 'force', 'thump'],
+    breakAt: p => zoneU(Math.max(p.brk, p.wall + 1)),
+    make: (p, u, t, st) => ({ mode: 'weapon', start: p.wall, end: Math.max(p.brk, p.wall + 1), strength: p.force,
+      rumble: p.thump && t - st.fireT < 70 ? 0.9 : 0 }) },
+  { id: 'recoil', name: 'recoil', family: 'weapon', mode: 'Feedback 0x21 ⇄ Vibration 0x26',
+    blurb: "a wall that fires. Cross it and the wall drops for a moment and the trigger motor rattles instead, with the body's heavy motor behind it; then the wall comes back. One shot per squeeze, or hold for full auto.",
     params: ['brk', 'force', 'kickHz', 'kickMs', 'rate', 'thump'],
     breakAt: p => zoneU(p.brk), auto: p => p.rate,
     make: (p, u, t, st) => {
       const firing = t - st.fireT < p.kickMs;
-      if (firing) return { mode: 'vibration', zones: flat(Math.max(0, p.brk - 1), 8), freq: p.kickHz,
-        rumble: p.thump ? 1 : 0 };
+      if (firing) return { mode: 'vibration', zones: flat(Math.max(0, p.brk - 1), 8), freq: p.kickHz, rumble: p.thump ? 1 : 0 };
       return { mode: 'feedback', zones: flat(p.brk, p.force) };
     } },
-  { id: 'bow', name: 'bowstring', mode: 'Feedback 0x21 → Off 0x05',
+  { id: 'fatigue', name: 'fatigue', family: 'weapon', mode: 'Feedback 0x21 ⇄ Vibration 0x26',
+    blurb: 'full auto that wears out: every shot heats it, the wall softens and the rattle drops in pitch as it goes, and at the top of the heat it seizes until you let go. Let it cool and it comes back.',
+    params: ['brk', 'force', 'kickHz', 'kickMs', 'rate', 'cool'],
+    breakAt: p => zoneU(p.brk), auto: p => Math.max(1, p.rate),
+    make: (p, u, t, st) => {
+      const heat = clamp01(st.heat || 0);
+      if (heat > 0.98) return { mode: 'feedback', zones: flat(0, 8), note: 'seized — let go' };
+      if (t - st.fireT < p.kickMs * (1 + heat))
+        return { mode: 'vibration', zones: flat(Math.max(0, p.brk - 1), 8), freq: Math.max(5, p.kickHz * (1 - 0.6 * heat)), rumble: 1 };
+      return { mode: 'feedback', zones: flat(p.brk, Math.max(1, p.force * (1 - 0.7 * heat))), note: `heat ${(heat * 100).toFixed(0)} %` };
+    } },
+  { id: 'jam', name: 'the jam', family: 'weapon', mode: 'Feedback 0x21 ⇄ Vibration 0x26',
+    blurb: 'a wall that fires, and now and then does not: the shot that jams locks the trigger solid until the finger comes all the way back up. The cheapest story a trigger can tell.',
+    params: ['brk', 'force', 'jamPct', 'kickHz', 'kickMs'],
+    breakAt: p => zoneU(p.brk),
+    make: (p, u, t, st) => {
+      if (st.jammed) return { mode: 'feedback', zones: flat(0, 8), note: 'JAMMED — release fully' };
+      if (t - st.fireT < p.kickMs) return { mode: 'vibration', zones: flat(Math.max(0, p.brk - 1), 8), freq: p.kickHz, rumble: 1 };
+      return { mode: 'feedback', zones: flat(p.brk, p.force) };
+    } },
+  { id: 'bow', name: 'bowstring', family: 'weapon', mode: 'Feedback 0x21 → Off 0x05',
     blurb: 'it gets harder the further you draw, and at the bottom it lets go: the resistance vanishes for a moment and the grip thumps. Ease back off to re-draw.',
     params: ['from', 'hi', 'snapMs', 'thump'],
     breakAt: () => 0.97,
@@ -1231,19 +1305,173 @@ const RECIPES = [
       if (st.fireT > st.lowT) return { mode: 'off' };                 // loose until the finger comes back up
       return { mode: 'feedback', zones: curveZones({ from: p.from, lo: 1, hi: p.hi, shape: 'in', notches: 3 }) };
     } },
-  { id: 'gallop', name: 'gallop', mode: 'Vibration 0x26, re-sent',
-    blurb: 'two feet, over and over: a heavy beat and a light one on a period you set, under the finger the whole time you hold. The unofficial 0x23 does this in firmware; this is the same thing re-sent.',
+  { id: 'gallop', name: 'gallop', family: 'weapon', mode: 'Vibration 0x26, re-sent',
+    blurb: 'two feet, over and over: a heavy beat and a light one on a period you set, under the finger the whole time you hold. The unofficial 0x23 does this in firmware; this is the same thing re-sent. Wind the period up and it is the unofficial 0x27, a machine gun.',
     params: ['from', 'amp', 'hz', 'period'],
-    make: (p, u, t) => ({ mode: 'vibration', zones: flat(p.from, (t / 1000 * p.period) % 1 < 0.42 ? p.amp : Math.max(1, p.amp - 3)),
-      freq: p.hz }) },
+    make: (p, u, t) => ({ mode: 'vibration', zones: flat(p.from, (t / 1000 * p.period) % 1 < 0.42 ? p.amp : Math.max(1, p.amp - 3)), freq: p.hz }) },
+
+  // ---- the loop
+  { id: 'mass', name: 'mass', family: 'loop', mode: 'Feedback 0x21, re-sent',
+    blurb: 'the trigger gains weight: the resistance follows how fast you are moving, not where you are. Ease it down and it is light; stab at it and it is treacle. No still shape can do this — it only exists because the loop can read the finger 100 times a second.',
+    params: ['force', 'vref'],
+    make: (p, u, t, st) => ({ mode: 'feedback', zones: flat(0, clamp(Math.abs(st.vel) / p.vref * p.force, 0, 8)),
+      note: `${Math.abs(st.vel).toFixed(2)} travel / s` }) },
+  { id: 'stiction', name: 'stiction', family: 'loop', mode: 'Feedback 0x21, re-sent',
+    blurb: 'hard to start, easy once it is going — the thing every real mechanism does and no preset can. Let it settle for a moment and it grips again.',
+    params: ['grip', 'slip'],
+    make: (p, u, t, st) => { const moving = Math.abs(st.vel) > 0.25;
+      return { mode: 'feedback', zones: flat(0, moving ? p.slip : p.grip), note: moving ? 'sliding' : 'stuck' }; } },
+  { id: 'retreat', name: 'the retreating wall', family: 'loop', mode: 'Feedback 0x21, re-sent',
+    blurb: 'the stop keeps itself a zone ahead of the finger, so the travel never ends. You can push for as long as you like and never reach the bottom. Deeply strange; worth feeling once.',
+    params: ['force', 'lead'],
+    make: (p, u, t, st) => { const z = clamp(zoneOf(u) + (p.lead | 0), 0, 9);
+      return { mode: 'feedback', zones: flat(z, p.force), note: `the wall is at zone ${z}` }; } },
+  { id: 'sticky', name: 'sticky memory', family: 'loop', mode: 'Feedback 0x21, re-sent',
+    blurb: 'pause anywhere and a notch appears where you stopped, so the trigger remembers the spot and you can find it again blind. Move away and it lets go of it.',
+    params: ['force', 'dwell'],
+    make: (p, u, t, st) => {
+      const z = st.sticky;
+      if (z == null) return { mode: 'feedback', zones: flat(0, 0), note: 'hold still to set a notch' };
+      const zones = new Array(ZONES).fill(0); zones[z] = p.force;
+      if (z > 0) zones[z - 1] = Math.max(1, p.force - 4);
+      return { mode: 'feedback', zones, note: `remembering zone ${z}` };
+    } },
+  { id: 'ratchet', name: 'ratchet', family: 'loop', mode: 'Feedback 0x21, re-sent',
+    blurb: 'hold still and it still moves: the force climbs, lets go, climbs again. A slipping clutch, a winch, a stripped thread — the one texture that happens entirely in time and not at all in space.',
+    params: ['from', 'force', 'rateHz'],
+    make: (p, u, t) => ({ mode: 'feedback', zones: flat(p.from, 1 + ((t / 1000 * p.rateHz) % 1) * (p.force - 1)) }) },
+  { id: 'idle', name: 'idle', family: 'loop', mode: 'Feedback 0x21, re-sent',
+    blurb: 'a breath at rest: the faintest wobble, only while the trigger is up, so the pad feels alive in the hands when nothing is happening. The firmware floor is force 1, so this may be below what a hand can feel — which is the thing to find out.',
+    params: ['amp'],
+    make: (p, u, t) => (u > 0.06 ? { mode: 'off' }
+      : { mode: 'feedback', zones: flat(0, 1 + (0.5 + 0.5 * Math.sin(t / 1000 * 2 * Math.PI * 0.3)) * Math.max(0, p.amp - 1) * 0.35) }) },
+
+  // ---- music
+  { id: 'buzz', name: 'buzz', family: 'music', mode: 'Vibration 0x26',
+    blurb: 'what if it just pushed back over and over? The same geared motor that makes the wall drives the stop in and out instead — amplitude and Hz, over the zones you pick. Low Hz is a knock, high Hz is a hum.',
+    params: ['from', 'amp', 'hz'],
+    make: p => ({ mode: 'vibration', zones: flat(p.from, p.amp), freq: p.hz }) },
+  { id: 'rev', name: 'engine', family: 'music', mode: 'Vibration 0x26, re-sent',
+    blurb: 'the pitch follows the travel: the deeper you squeeze the higher it sings. The firmware holds one frequency, so the lab re-sends the block as the trigger moves — the write log shows it working.',
+    params: ['from', 'amp', 'hz', 'hz2'],
+    make: (p, u) => ({ mode: 'vibration', zones: flat(p.from, p.amp),
+      freq: pyRound(p.hz + (p.hz2 - p.hz) * clamp01((u - zoneU(p.from)) / Math.max(0.05, 1 - zoneU(p.from)))) }) },
+  { id: 'pitch', name: 'play notes', family: 'music', mode: 'Vibration 0x26, re-sent',
+    blurb: 'the frequency byte is 1–255 Hz, which is pitch: 55 Hz is A1, 110 is A2. The travel walks up a scale, so the trigger hums a note and the finger chooses it. Two triggers, two notes, a chord in the hands.',
+    params: ['scale', 'root', 'steps', 'amp'],
+    make: (p, u) => {
+      const sc = (SCALES.find(s => s[0] === p.scale) || SCALES[0])[2];
+      const n = clamp(Math.floor(clamp01(u * 0.999) * p.steps), 0, p.steps - 1);
+      const semi = sc[n % sc.length] + 12 * Math.floor(n / sc.length);
+      const hz = clamp(pyRound(p.root * Math.pow(2, semi / 12)), 1, 255);
+      return { mode: 'vibration', zones: flat(0, p.amp), freq: hz, note: `note ${n + 1}/${p.steps} · ${hz} Hz` };
+    } },
+  { id: 'beat', name: 'the beat', family: 'music', mode: 'Vibration 0x26, re-sent',
+    blurb: "the tick in the finger: the amplitude follows the lab's own beat (the Ideas tab picks metronome, tap tempo or the laptop mic) and the pitch is yours. Not rumble on the beat — a pitched tick you can feel the groove in.",
+    params: ['from', 'hz', 'amp'],
+    make: (p, u, t) => { const e = benchBeat();
+      return e < 0.04 ? { mode: 'off', note: 'between beats' }
+        : { mode: 'vibration', zones: flat(p.from, 1 + e * (p.amp - 1)), freq: p.hz, note: `beat ${e.toFixed(2)}` }; } },
+  { id: 'spectrum', name: 'the spectrum', family: 'music', mode: 'Feedback 0x21, re-sent',
+    blurb: 'ten zones, ten frequency bands: the bass at the top of the travel, the air at the bottom, each zone pushing as hard as its band is loud. Slide the finger down the trigger and feel the EQ. The staircase stops being a limit and becomes exactly the right resolution.',
+    params: ['gain'],
+    make: p => { const b = benchBands();
+      if (!b) return { mode: 'off', note: 'turn the mic on, above' };
+      return { mode: 'feedback', zones: b.map(v => clamp(v * p.gain * 1.6, 0, 8)), note: 'live, from the mic' }; } },
+  { id: 'scope', name: 'the scope', family: 'music', mode: 'Feedback 0x21, re-sent',
+    blurb: 'the last second of the music as a shape under the finger, scrolling: zone 9 is now, zone 0 is a second ago. A tactile oscilloscope — the groove, slightly in the past.',
+    params: ['gain'],
+    make: p => ({ mode: 'feedback', zones: benchScope().map(v => clamp(v * p.gain * 1.6, 0, 8)),
+      note: benchBands() ? 'live, from the mic' : "the lab's beat (no mic)" }) },
+
+  // ---- readouts
+  { id: 'gauge', name: 'gauge', family: 'read', mode: 'Feedback 0x21, re-sent',
+    blurb: 'the trigger as a dial you read with your finger: squeeze until you meet the stop, and where the stop is *is* the number. Eyes-free metering mid-set, which is worth more than any effect.',
+    params: ['src', 'force'],
+    make: (p, u, t, st, side) => { const v = clamp01(gaugeValue(p.src, side));
+      const z = clamp(pyRound(v * 9), 0, 9);
+      return { mode: 'feedback', zones: flat(z, p.force), note: `${(v * 100).toFixed(0)} % — the stop is at zone ${z}` }; } },
+  { id: 'countdown', name: 'countdown', family: 'read', mode: 'Feedback 0x21, re-sent',
+    blurb: "the wall marches up the travel as the bar line approaches and lets go on the one, so the build arrives in the hand before it arrives in the room. Runs on the lab's BPM (Ideas tab).",
+    params: ['bars', 'force', 'thump'],
+    make: (p, u, t, st) => { const ph = barPhase(p.bars);
+      if (ph > 0.97) return { mode: 'off', rumble: p.thump ? 1 : 0, note: 'now' };
+      const z = clamp(pyRound((1 - ph) * 9), 0, 9);
+      return { mode: 'feedback', zones: flat(z, p.force), note: `${((1 - ph) * p.bars).toFixed(2)} bars to go` }; } },
+
+  // ---- both hands
+  { id: 'coupled', name: 'coupled', family: 'pair', mode: 'Feedback 0x21, re-sent',
+    blurb: 'this trigger answers to the other one: follow and squeezing one hardens the other, oppose and it frees it, share and the two of them split one budget of force. A crossfader you can feel from either end — put it on both sides.',
+    params: ['link', 'force'],
+    make: (p, u, t, st, side) => {
+      const o = travelOf(side === 'left' ? 'right' : 'left');
+      const f = p.link === 'oppose' ? p.force * (1 - o)
+        : p.link === 'share' ? p.force * clamp01(0.5 + (o - u)) : p.force * o;
+      return { mode: 'feedback', zones: flat(0, clamp(f, 0, 8)), note: `the other trigger is at ${(o * 100).toFixed(0)} %` };
+    } },
 ];
 const recipeOf = id => RECIPES.find(r => r.id === id) || RECIPES[0];
+// ---- what the music and the readout recipes read (the lab's own beat, and a wide mic feed)
+function benchBeat() { return clamp01(ideas.i7.beatEnv || 0); }
+/** Where we are in a run of `bars` four-beat bars, 0 at the line. */
+function barPhase(bars) {
+  const span = 60000 / clamp(ideas.i7.bpm, 30, 300) * 4 * clamp(bars | 0, 1, 8);
+  return (now() % span) / span;
+}
+const benchBands = () => (bench.audio.an ? bench.audio.bands : null);
+const benchScope = () => bench.scope;
+function gaugeValue(src, side) {
+  const b = benchBands();
+  if (src === 'level') return b ? b.reduce((x, y) => x + y, 0) / ZONES : benchBeat();
+  if (src === 'battery') { const f = pad.frame; return f && f.full ? f.battery / 10 : 0; }
+  if (src === 'rate') return clamp01((stats.rate || 0) / 250);
+  if (src === 'other') return travelOf(side === 'left' ? 'right' : 'left');
+  return barPhase(1);
+}
+/** A second analyser on idea 7's microphone, without its 150 Hz low-pass: ten
+ *  log bands, 40 Hz to 12 kHz, one per trigger zone. */
+async function benchMicOn() {
+  if (bench.audio.an) return true;
+  if (!await startMic()) return false;
+  const m = ideas.i7.mic;
+  try {
+    const an = m.ac.createAnalyser();
+    an.fftSize = 2048; an.smoothingTimeConstant = 0.6;
+    m.src.connect(an);
+    bench.audio = { ac: m.ac, an, data: new Uint8Array(an.frequencyBinCount), bands: new Array(ZONES).fill(0) };
+    logOut('bench: the mic is on — ten bands');
+    return true;
+  } catch (e) { logOut('bench mic: ' + e.message, true); return false; }
+}
+const BAND_LO = 40, BAND_HI = 12000;
+function stepAudio(dt) {
+  const a = bench.audio;
+  if (a.an) {
+    a.an.getByteFrequencyData(a.data);
+    const hzPer = a.ac.sampleRate / 2 / a.data.length;
+    for (let z = 0; z < ZONES; z++) {
+      const lo = BAND_LO * Math.pow(BAND_HI / BAND_LO, z / ZONES), hi = BAND_LO * Math.pow(BAND_HI / BAND_LO, (z + 1) / ZONES);
+      let s = 0, c = 0;
+      for (let i = Math.max(1, Math.floor(lo / hzPer)); i < Math.min(a.data.length, Math.max(2, Math.ceil(hi / hzPer))); i++) { s += a.data[i]; c++; }
+      a.bands[z] += ((c ? s / c / 255 : 0) - a.bands[z]) * clamp01(dt * 12);
+    }
+  }
+  bench.scopeT += dt * 1000;                       // the scope: ten samples, one every 100 ms, zone 9 is now
+  if (bench.scopeT >= 100) {
+    bench.scopeT = 0; bench.scope.shift();
+    bench.scope.push(a.an ? a.bands.reduce((x, y) => x + y, 0) / ZONES : benchBeat());
+  }
+}
+
 function freshParams() { const p = {}; for (const [k, s] of Object.entries(BENCH_PARAMS)) p[k] = s.def; return p; }
-const freshSt = () => ({ armed: true, fireT: -1e9, lowT: 0, shots: 0, leaveT: 0, holdMs: 0, last: null });
+const freshSt = () => ({ armed: true, fireT: -1e9, lowT: 0, shots: 0, leaveT: 0, holdMs: 0, last: null,
+  u0: null, vel: 0, stillMs: 0, sticky: null, heat: 0, jammed: false });
 const bench = {
-  left: { recipe: 'free', p: freshParams(), st: freshSt(), desc: null, block: descBlock(null) },
-  right: { recipe: 'sniper', p: freshParams(), st: freshSt(), desc: null, block: descBlock(null) },
-  trace: [], marks: [],
+  left: { recipe: 'free', p: freshParams(), st: freshSt(), dither: false, desc: null, block: descBlock(null) },
+  right: { recipe: 'sniper', p: freshParams(), st: freshSt(), dither: false, desc: null, block: descBlock(null) },
+  trace: [], marks: [], tick: 0,
+  audio: { ac: null, an: null, data: null, bands: new Array(ZONES).fill(0) },
+  scope: new Array(ZONES).fill(0), scopeT: 0,
 };
 const travelOf = side => clamp01(pad.lanes[side === 'left' ? 'axis:LT' : 'axis:RT'] || 0);
 /** Where the trigger's own break sits for the drawings, or null. */
@@ -1252,20 +1480,32 @@ function stepBenchSide(side, dt, t) {
   const s = bench[side], st = s.st, r = recipeOf(s.recipe), u = travelOf(side), bp = breakOf(s);
   if (u <= 0.02) { st.leaveT = t; st.holdMs = 0; }
   if (u <= 0.2) st.lowT = t;
+  // what the closed-loop recipes read: the finger's speed, where it paused, how hot it is
+  const v = dt > 0 ? (u - (st.u0 == null ? u : st.u0)) / dt : 0;
+  st.u0 = u; st.vel += (v - st.vel) * clamp01(dt * 18);
+  if (Math.abs(st.vel) < 0.08 && u > 0.05) { st.stillMs += dt * 1000; if (st.stillMs > s.p.dwell) st.sticky = zoneOf(u); }
+  else if (Math.abs(st.vel) > 0.5) { st.stillMs = 0; if (st.sticky != null && Math.abs(zoneOf(u) - st.sticky) > 1) st.sticky = null; }
+  st.heat = clamp01((st.heat || 0) - dt / Math.max(1, s.p.cool));
+  if (u <= 0.04) st.jammed = false;
   if (bp != null) {
     if (u >= bp - 0.09 && u < bp) st.holdMs += dt * 1000;
     const due = r.auto && r.auto(s.p) > 0 && t - st.fireT >= 1000 / r.auto(s.p);
     if (u >= bp && (st.armed || due)) {
       st.armed = false; st.fireT = t; st.shots++;
       st.last = { slack: t - st.leaveT, hold: st.holdMs, u };
+      st.heat = clamp01(st.heat + 0.13);                                   // fatigue's
+      if (s.recipe === 'jam' && noise(st.shots, 7) * 100 < s.p.jamPct) st.jammed = true;
       bench.marks.push({ t, side, u });
     }
     if (u < bp - 0.06) st.armed = true;
   }
-  s.desc = r.make(s.p, u, t, st) || { mode: 'off' };
-  s.block = descBlock(s.desc);
+  const d = r.make(s.p, u, t, st, side) || { mode: 'off' };
+  if (s.dither && d.zones) d.zones = d.zones.map((x, z) => ditherZone(clamp(x, 0, 8), bench.tick + z));
+  s.desc = d;
+  s.block = descBlock(d);
 }
 function stepBench(dt, t) {
+  bench.tick++; stepAudio(dt);
   stepBenchSide('left', dt, t); stepBenchSide('right', dt, t);
   bench.trace.push({ t, l: travelOf('left'), r: travelOf('right') });
   while (bench.trace.length && bench.trace[0].t < t - BENCH_WIN) bench.trace.shift();
@@ -1283,7 +1523,7 @@ function benchFree() {
   for (const side of ['left', 'right']) { bench[side].recipe = 'free'; bench[side].st = freshSt(); }
   buildBench(); logOut('bench: both triggers free (Off 0x05)');
 }
-// pairs worth feeling side by side: [label, note, {left: [recipe, params…], right: …}]
+// pairs worth feeling side by side: [label, note, {left: [recipe, params…], right: …}, family]
 const BENCH_PAIRS = [
   ['the sniper', 'L2 free, R2 the two-stage break', { left: ['free', {}], right: ['sniper', { wall: 4, brk: 6, force: 7 }] }],
   ['linear vs inverse', 'the same ramp both ways: L2 rises, R2 frees up', { left: ['curve', { shape: 'linear', from: 0, lo: 1, hi: 8 }], right: ['curve', { shape: 'inverse', from: 0, lo: 1, hi: 8 }] }],
@@ -1295,7 +1535,20 @@ const BENCH_PAIRS = [
   ['just buzzing', 'L2 a slow knock, R2 a tone', { left: ['buzz', { from: 0, amp: 6, hz: 8 }], right: ['buzz', { from: 0, amp: 6, hz: 120 }] }],
   ['the bowstring', 'L2 draws and lets go', { left: ['bow', { from: 0, hi: 8, snapMs: 160 }], right: ['free', {}] }],
   ['the gallop', 'R2 two feet under the finger', { left: ['free', {}], right: ['gallop', { from: 0, amp: 7, hz: 20, period: 2.5 }] }],
+  ['sandpaper', 'L2 coarse gravel, R2 a fine rough surface', { left: ['grit', { from: 0, force: 8, rateHz: 2 }], right: ['grit', { from: 0, force: 5, rateHz: 10 }] }, 'shape'],
+  ['quantise', 'L2 notches you feel, R2 stops that correct you', { left: ['detents', { notches: 5, force: 8, from: 0 }], right: ['snap', { stops: 5, force: 7 }] }, 'shape'],
+  ['wear it out', 'L2 jams now and then, R2 overheats and seizes', { left: ['jam', { brk: 5, force: 7, jamPct: 35, kickHz: 90, kickMs: 90 }], right: ['fatigue', { brk: 4, force: 7, kickHz: 120, kickMs: 70, rate: 9, cool: 5 }] }, 'weapon'],
+  ['weight', 'L2 has mass, R2 has stiction — the two the loop alone can do', { left: ['mass', { force: 8, vref: 2.5 }], right: ['stiction', { grip: 8, slip: 1 }] }, 'loop'],
+  ['never ends', 'R2 keeps the wall a zone ahead, forever', { left: ['free', {}], right: ['retreat', { force: 7, lead: 1 }] }, 'loop'],
+  ['alive', 'L2 breathes at rest, R2 slips under the finger', { left: ['idle', { amp: 8 }], right: ['ratchet', { from: 0, force: 8, rateHz: 4 }] }, 'loop'],
+  ['a chord', 'two notes, one per hand — hold both and move them', { left: ['pitch', { scale: 'penta', root: 55, steps: 6, amp: 6 }], right: ['pitch', { scale: 'fifths', root: 82, steps: 5, amp: 6 }] }, 'music'],
+  ['the EQ', 'both triggers are the spectrum — needs the mic', { left: ['spectrum', { gain: 5 }], right: ['spectrum', { gain: 5 }] }, 'music'],
+  ['the groove', 'L2 the beat, R2 the last second of it', { left: ['beat', { from: 0, hz: 60, amp: 8 }], right: ['scope', { gain: 5 }] }, 'music'],
+  ['the dial', 'L2 reads the battery, R2 counts down the bar', { left: ['gauge', { src: 'battery', force: 7 }], right: ['countdown', { bars: 2, force: 7 }] }, 'read'],
+  ['crossfader', 'each hand felt in the other — squeeze one, the other hardens', { left: ['coupled', { link: 'follow', force: 8 }], right: ['coupled', { link: 'oppose', force: 8 }] }, 'pair'],
 ];
+/** A pair with no family of its own belongs to whichever its right side is. */
+const famOf = pair => recipeOf(pair[2].right[0] === 'free' ? pair[2].left[0] : pair[2].right[0]).family;
 function loadPair(pair) {
   for (const side of ['left', 'right']) {
     const [id, over] = pair[2][side], s = bench[side];
@@ -1306,7 +1559,9 @@ function loadPair(pair) {
 /** One side's card: the recipe, its parameters, the zone plot and the bytes. */
 function buildBenchSide(side) {
   const s = bench[side], r = recipeOf(s.recipe), name = side === 'left' ? 'L2' : 'R2';
-  const sel = h('select', {}, ...RECIPES.map(x => h('option', { value: x.id }, x.name)));
+  const sel = h('select', {}, ...FAMILIES.map(([fam, label]) =>
+    h('optgroup', { label: label.split(' — ')[0] },
+      ...RECIPES.filter(x => x.family === fam).map(x => h('option', { value: x.id }, x.name)))));
   sel.value = s.recipe;
   sel.onchange = () => { s.recipe = sel.value; s.st = freshSt(); buildBench(); };
   const grid = h('div', { class: 'grid2', style: 'margin-top:6px' });
@@ -1328,9 +1583,13 @@ function buildBenchSide(side) {
     }
     grid.append(h('span', { class: 'dim' }, spec.kind === 'bool' ? '' : spec.label), spec.kind === 'bool' ? h('label', {}, input, ' ', spec.label) : input);
   }
+  const dith = h('input', { type: 'checkbox', title: 'every frame becomes a new report: the write rate goes to the cap' });
+  dith.checked = !!s.dither; dith.onchange = () => s.dither = dith.checked;
   return h('div', { class: 'box' },
     h('h3', {}, `${name} · `, sel, ' ', h('span', { class: 'tag' }, r.mode)),
     h('div', { class: 'dim' }, r.blurb), grid,
+    h('div', { class: 'dim', style: 'margin-top:4px' },
+      h('label', { title: 'a force of 4.5 as 4 on some frames and 5 on others' }, dith, ' dither the half-steps')),
     h('canvas', { id: 'benchPlot' + side, style: 'margin-top:6px;border-radius:6px;background:#0b0e14' }),
     h('div', { class: 'mono dim', id: 'benchHex' + side, style: 'margin-top:4px' }, '—'));
 }
@@ -1372,7 +1631,8 @@ function drawBenchPlot(side) {
   if (hex) {
     const st = bench[side].st, b = s.block;
     const words = { 0x05: 'Off 0x05', 0x21: 'Feedback 0x21', 0x25: 'Weapon 0x25', 0x26: 'Vibration 0x26' }[b[0]] || hexN(b[0]);
-    hex.textContent = `${words}  ${hexSpaced(b)}${st.shots ? `  ·  ${st.shots} shot${st.shots === 1 ? '' : 's'}` : ''}`;
+    hex.textContent = `${words}  ${hexSpaced(b)}${st.shots ? `  ·  ${st.shots} shot${st.shots === 1 ? '' : 's'}` : ''}`
+      + (d.note ? `\n${d.note}` : '');
   }
 }
 /** The last couple of seconds of travel, with every break crossed marked: the slack, the stop and the break, drawn. */
@@ -1734,7 +1994,7 @@ async function startMic() {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const ac = new AudioContext(), src = ac.createMediaStreamSource(stream), lp = ac.createBiquadFilter(), an = ac.createAnalyser();
     lp.type = 'lowpass'; lp.frequency.value = 150; an.fftSize = 1024; src.connect(lp); lp.connect(an);
-    ideas.i7.mic = { ac, an, buf: new Float32Array(an.fftSize), level: 0, stream }; return true;
+    ideas.i7.mic = { ac, an, src, buf: new Float32Array(an.fftSize), level: 0, stream }; return true;
   } catch (e) { logOut('mic: ' + e.message, true); $('#i7beat').value = 'metro'; ideas.i7.beat = 'metro'; return false; }
 }
 // tesseract
@@ -2509,7 +2769,7 @@ function selfTest() {
     const lin = curveZones({ shape: 'linear', from: 0, lo: 1, hi: 8, notches: 3 });
     const inv = curveZones({ shape: 'inverse', from: 0, lo: 1, hi: 8, notches: 3 });
     const st = curveZones({ shape: 'steps', from: 0, lo: 1, hi: 8, notches: 3 });
-    const ok = a => a.length === 10 && a.every(v => v >= 0 && v <= 8 && v === Math.round(v));
+    const ok = a => a.length === 10 && a.every(v => v >= 0 && v <= 8) && readTrigger(descBlock({ mode: 'feedback', zones: a }), 0).zones.every(v => v === Math.round(v));
     return ok(lin) && ok(inv) && ok(st) && lin.every((v, i) => i === 0 || v >= lin[i - 1]) && lin[9] === 8
       && inv.every((v, i) => i === 0 || v <= inv[i - 1]) && inv[0] === 8 && new Set(st).size === 3
       && curveZones({ shape: 'linear', from: 5, lo: 1, hi: 8, notches: 3 }).slice(0, 5).join() === '0,0,0,0,0'
@@ -2535,6 +2795,69 @@ function selfTest() {
     return semi.shots === 1 && semi.modes.includes('vibration') && semi.modes[semi.modes.length - 1] === 'feedback'
       && twice.shots === 2 && auto.shots >= 9 && auto.shots <= 11
       || [semi.shots, twice.shots, auto.shots].join(); });
+  t('dither: 4.5 sends only 4 or 5 and averages 4.5; a whole force never flickers; 0 and 8 hold', () => {
+    const cyc = v => [0, 1, 2, 3].map(k => ditherZone(v, k));
+    const half = cyc(4.5), mean = half.reduce((a, b) => a + b, 0) / 4;
+    const quarter = cyc(0.25).reduce((a, b) => a + b, 0) / 4;          // a quarter of a step: on one frame in four
+    return half.every(v => v === 4 || v === 5) && Math.abs(mean - 4.5) < 1e-9
+      && cyc(4).join() === '4,4,4,4' && cyc(0).join() === '0,0,0,0' && cyc(8).join() === '8,8,8,8'
+      && Math.abs(quarter - 0.25) < 1e-9
+      || [half.join(), mean, cyc(4).join(), quarter].join(' | '); });
+  t('a recipe keeps its fractions, so dither has something to send: four phases, four different blocks', () => {
+    const zones = curveZones({ shape: 'linear', from: 0, lo: 0, hi: 8, notches: 3 });
+    const frac = zones.filter(v => Math.abs(v - Math.round(v)) > 1e-6).length;
+    const blocks = new Set([0, 1, 2, 3].map(k => toHex(descBlock({ mode: 'feedback', zones: zones.map((v, z) => ditherZone(v, k + z)) }))));
+    const plain = new Set([0, 1, 2, 3].map(() => toHex(descBlock({ mode: 'feedback', zones }))));
+    return frac >= 4 && blocks.size === 4 && plain.size === 1 || [frac, blocks.size, plain.size].join(); });
+  t('the loop reads the finger: mass follows the speed, stiction grips when still and slips when moving', () => {
+    const p = freshParams();
+    const mass = v => descBlock(recipeOf('mass').make(Object.assign({}, p, { force: 8, vref: 2 }), 0.5, 1e5, Object.assign(freshSt(), { vel: v })));
+    const stick = v => recipeOf('stiction').make(Object.assign({}, p, { grip: 8, slip: 1 }), 0.5, 1e5, Object.assign(freshSt(), { vel: v })).zones[0];
+    const still = mass(0), slow = mass(0.5), fast = mass(4);
+    return still[0] === T_OFF && readTrigger(slow, 0).zones[0] < readTrigger(fast, 0).zones[0] && readTrigger(fast, 0).zones[0] === 8
+      && stick(0) === 8 && stick(2) === 1 || [toHex(still), readTrigger(slow, 0).zones[0], readTrigger(fast, 0).zones[0], stick(0), stick(2)].join(); });
+  t('the retreating wall keeps itself ahead of the finger, and runs out at the bottom', () => {
+    const at = u => readTrigger(descBlock(recipeOf('retreat').make(Object.assign(freshParams(), { force: 6, lead: 1 }), u, 1e5, freshSt())), 0).start;
+    return at(0) === 1 && at(0.33) === 4 && at(0.55) === 6 && at(1) === 9 || [at(0), at(0.33), at(0.55), at(1)].join(); });
+  t('play notes: the travel walks the scale and every note lands inside the firmware\'s 1–255 Hz', () => {
+    const hz = (u, over) => recipeOf('pitch').make(Object.assign(freshParams(), { scale: 'penta', root: 55, steps: 6, amp: 6 }, over), u, 1e5, freshSt()).freq;
+    const up = [0, 0.2, 0.4, 0.6, 0.8, 0.999].map(u => hz(u));
+    const every = SCALES.every(([id]) => [0, 0.5, 0.999].every(u => { const f = hz(u, { scale: id, root: 120, steps: 12 }); return f >= 1 && f <= 255; }));
+    return up.every((v, i) => i === 0 || v > up[i - 1]) && up[0] === 55 && every || up.join() + ' ' + every; });
+  t('the readouts read: a gauge puts its stop where the number is, the countdown walks to the line', () => {
+    const g = v => { const st = freshSt(); pad.lanes['axis:LT'] = v;
+      const r = readTrigger(descBlock(recipeOf('gauge').make(Object.assign(freshParams(), { src: 'other', force: 7 }), 0, 1e5, st, 'right')), 0); return r.start; };
+    const keep = pad.lanes['axis:LT'];
+    const lo = g(0.1), mid = g(0.6), hi = g(1);
+    if (keep === undefined) delete pad.lanes['axis:LT']; else pad.lanes['axis:LT'] = keep;
+    const ph = barPhase(4);
+    return lo === 1 && mid === 5 && hi === 9 && ph >= 0 && ph < 1 || [lo, mid, hi, ph].join(); });
+  t('coupled: the other trigger is what this one answers to, three ways', () => {
+    const keep = pad.lanes['axis:LT'];
+    const f = (link, other) => { pad.lanes['axis:LT'] = other;
+      return readTrigger(descBlock(recipeOf('coupled').make(Object.assign(freshParams(), { link, force: 8 }), 0.0, 1e5, freshSt(), 'right')), 0).zones[0]; };
+    const follow = [f('follow', 0), f('follow', 1)], oppose = [f('oppose', 0), f('oppose', 1)];
+    if (keep === undefined) delete pad.lanes['axis:LT']; else pad.lanes['axis:LT'] = keep;
+    return follow.join() === '0,8' && oppose.join() === '8,0' || follow.join() + ' / ' + oppose.join(); });
+  t('grit is a repeatable texture: the same tick draws the same zones, the next one does not', () => {
+    const p = Object.assign(freshParams(), { from: 0, force: 8, rateHz: 4 });
+    const at = t => toHex(descBlock(recipeOf('grit').make(p, 0.5, t, freshSt())));
+    return at(1e5) === at(1e5 + 40) && at(1e5) !== at(1e5 + 300) || [at(1e5), at(1e5 + 40), at(1e5 + 300)].join(' '); });
+  t('wear: a jam locks every zone until the finger is all the way up; heat softens the wall and drops the pitch', () => {
+    const jam = readTrigger(descBlock(recipeOf('jam').make(freshParams(), 0.7, 1e5, Object.assign(freshSt(), { jammed: true }))), 0);
+    const cold = recipeOf('fatigue').make(freshParams(), 0.7, 1e5, Object.assign(freshSt(), { heat: 0 }));
+    const warm = recipeOf('fatigue').make(freshParams(), 0.7, 1e5, Object.assign(freshSt(), { heat: 0.7 }));
+    const seized = recipeOf('fatigue').make(freshParams(), 0.7, 1e5, Object.assign(freshSt(), { heat: 1 }));
+    return jam.zones.every(v => v === 8) && warm.zones[9] < cold.zones[9] && seized.zones.every(v => v === 8)
+      || [jam.zones.join(), cold.zones[9], warm.zones[9]].join(' '); });
+  t('every recipe in the menu belongs to a family, and every family has recipes', () => {
+    const fams = new Set(FAMILIES.map(f => f[0]));
+    const orphan = RECIPES.filter(r => !fams.has(r.family)).map(r => r.id);
+    const empty = FAMILIES.filter(([f]) => !RECIPES.some(r => r.family === f)).map(f => f[0]);
+    const unknown = RECIPES.flatMap(r => r.params.filter(k => !BENCH_PARAMS[k]).map(k => `${r.id}.${k}`));
+    const pairs = BENCH_PAIRS.filter(x => !recipeOf(x[2].left[0]) || !recipeOf(x[2].right[0])
+      || !RECIPES.some(r => r.id === x[2].left[0]) || !RECIPES.some(r => r.id === x[2].right[0])).map(x => x[0]);
+    return !orphan.length && !empty.length && !unknown.length && !pairs.length || JSON.stringify({ orphan, empty, unknown, pairs }); });
   t('the bench only ever sends official modes, whatever the recipe and wherever the travel', () => {
     const bad = [];
     for (const r of RECIPES) for (const u of [0, 0.3, 0.55, 0.8, 1]) for (const dt of [0, 80, 200]) {
@@ -2786,10 +3109,17 @@ function wireUi() {
   $('#benchSend').onchange = e => setOutMode(e.target.checked ? 'bench' : 'sinks');
   $('#benchFree').onclick = benchFree;
   const pairs = $('#benchPairs');
-  BENCH_PAIRS.forEach(pair => pairs.append(h('button', {
+  const btn = pair => h('button', {
     onmouseenter: () => $('#benchPairNote').textContent = pair[1],
     onclick: () => { loadPair(pair); $('#benchPairNote').textContent = pair[1]; if (!$('#benchSend').checked) setOutMode('bench'); },
-  }, pair[0])));
+  }, pair[0]);
+  for (const [fam, label] of FAMILIES) {
+    const mine = BENCH_PAIRS.filter(x => (x[3] || famOf(x)) === fam);
+    if (!mine.length) continue;
+    pairs.append(h('div', { class: 'btnrow', style: 'margin:2px 0' },
+      h('span', { class: 'dim', style: 'min-width:92px;font-size:12px' }, label.split(' — ')[0]), ...mine.map(btn)));
+  }
+  $('#benchMic').onclick = async e => { e.target.disabled = true; const ok = await benchMicOn(); e.target.textContent = ok ? 'mic on · ten bands' : 'mic refused'; e.target.disabled = ok; };
   // probe + tape
   buildProbe();
   $('#exportFindings').onclick = exportFindings;

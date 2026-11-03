@@ -216,6 +216,36 @@ letting a patch own a sink. Build B in a way that does not block that.
    seven writes. Worth checking over Bluetooth, where plan 42 measured the
    link pacing input at about 64 reports a second.
 
+## What the bench found out (2026-11-02)
+
+Building all of it turned up three things the design has to answer for.
+
+- **"Still shape" and "loop" are different kinds of thing, and the loop is
+  the unexplored one.** Six of the bench's recipes — mass, stiction, the
+  retreating wall, sticky memory, ratchet, idle — *cannot be written down
+  as a shape at all*. They are a function of the finger's speed, or of
+  where it paused, or of time alone. Every published preset bank is still
+  frames, because every published tool exposes a still frame. A trigger
+  with mass is three lines in a loop and feels like nothing else on the
+  pad. **Whatever the extension node is, its tick is the feature; the
+  record is just what the tick emits.**
+- **The protocol's resolution is not the hand's.** Eight force levels is
+  the firmware's limit, but a host that rewrites the block every frame can
+  dither between two levels and buy fractions of a step — the bench has a
+  switch for it on every recipe. It costs one write per frame (measured:
+  57 a second, at the 60 Hz coalescing cap), so it is a real trade, and
+  whether a finger reads it as a half-step or as a flutter is a hand's
+  question. If it works, the useful vocabulary is roughly twice the size
+  the spec implies.
+- **The interesting inputs are not the pad's own.** The music recipes read
+  ten frequency bands and the lab's tempo; the gauge reads the battery and
+  the report rate; coupled reads the *other* trigger. In the app all of
+  those are already lanes or analyser outputs — which means an extension
+  node wants **ordinary graph inputs**, not a private channel to the pad.
+  That is a point in favour of option C's end state: if the inputs are
+  ordinary wires and the output is one record, the gap between "a node" and
+  "a patch" is small.
+
 ## What the lab already settles
 
 `prototypes/edge-lab/` ▸ **Triggers** is the bench: a recipe per side, the
@@ -223,17 +253,30 @@ ten zones drawn exactly as the firmware got them, the 11 bytes under them,
 and a trace of your own finger with every shot marked — how long the slack
 took, how long you held on the wall, how far down it broke.
 
-Each recipe is a candidate extension node, one for one, with the parameters
-it would need already named: *wall*, *sniper break* (Weapon), *response
-curve* (linear / curved / inverse / S / steps / saw), *detents*, *buzz*,
-*engine*, *recoil* (semi and full auto), *bowstring*, *gallop*. The "pairs
-worth feeling" buttons are the demos: the sniper, linear vs inverse, brake
-and gas, semi-auto, full auto, notches.
+Twenty-seven recipes in six families, each a candidate extension node with
+the parameters it would need already named:
+
+| family | recipes | what an extension of this kind needs |
+|---|---|---|
+| still shapes | wall, response curve, detents, snap-to, grit | a shape record, nothing else |
+| weapons | sniper break, recoil, fatigue, the jam, bowstring, gallop | a record, a tick, and its own state |
+| the loop | mass, stiction, the retreating wall, sticky memory, ratchet, idle | a tick **and the trigger's travel back as an input** |
+| music | buzz, engine, play notes, the beat, the spectrum, the scope | a tick and an ordinary wire from the analyser |
+| readouts | gauge, countdown | a tick and a wire from anything at all |
+| both hands | coupled | the other side's travel — one pad, two extensions, talking |
+
+The "pairs worth feeling" buttons are the demos, grouped the same way.
 
 **What a hand still has to answer, at the pad:**
 
 - Can a finger tell ten zones apart, or is the useful resolution three or
   four? That decides whether a *curve* is one node or a gimmick.
+- Does dither read as a half-step or as a flutter? If it works, the force
+  vocabulary roughly doubles for the cost of a write per frame.
+- Does *mass* feel like weight, or just like a wall that comes and goes?
+  The whole argument for a per-frame tick rests on that one.
+- Is *idle* below the threshold of feeling? Force 1 is the firmware's
+  floor; there may be nothing under it.
 - Does the trigger motor's rattle read as recoil, or just as a buzz? Does
   the body's heavy motor behind it matter?
 - How much of the sniper's three stages survives at the real break? Dan's
