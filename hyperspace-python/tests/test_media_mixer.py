@@ -16,7 +16,7 @@ import pytest
 from test_media_channels import FakeOpener, FakeSource, Here
 
 from hyperspace.media import mixer as M
-from hyperspace.media.channels import MediaState
+from hyperspace.media.channels import HOLD_SPEED, OFF_FRAMES, MediaState
 from hyperspace.media.video import AUDIO_RATE
 
 DT = 1 / 60
@@ -74,6 +74,7 @@ class FakeStream:
         self.kw = kw
         self.callback = kw["callback"]
         self.started = self.aborted = self.closed = False
+        self.active = True
 
     def start(self):
         self.started = True
@@ -237,8 +238,10 @@ def test_the_toggle_enables_and_disables_exactly_on_a_flip():
         m.poll(DT, 0.1 + k * DT)
     assert (t.enables, t.disables) == (1, 0)
     ch.play_audio = False
-    for k in range(3):
+    for k in range(OFF_FRAMES - 1):
         m.poll(DT, 0.2 + k * DT)
+    assert m.drain(2.0) and (t.enables, t.disables) == (1, 0), "let go only after a while"
+    m.poll(DT, 0.9)
     assert m.drain(2.0)                         # the disable runs on the closer
     assert (t.enables, t.disables) == (1, 1)
     ch.play_audio = True
@@ -258,22 +261,124 @@ def test_a_slot_change_while_on_enables_the_new_and_disables_the_old():
     new = track(m, "a")
     assert new is not old
     assert m.drain(2.0)
-    assert (old.enables, old.disables) == (1, 1)
+    # the old track ends with its source's `close`: one closer job, no `_Silence`
+    assert (old.enables, old.disables) == (1, 0) and m.closer.done == 1
     assert (new.enables, new.disables) == (1, 0)
     assert m.mixer.voices[0][0] is new
 
 
-def test_a_disable_landing_after_a_re_enable_is_healed():
-    """Off then on before the closer ran the disable: the next poll sees
-    the soundtrack disabled under a toggle that is on, and enables it."""
+class SlowOff(FakeTrack):
+    """A soundtrack whose `disable` is held mid-way (the join of a thread
+    stuck in `av.open`); it counts an enable landing inside a disable."""
+
+    def __init__(self):
+        super().__init__()
+        self.gate, self.inside = threading.Event(), threading.Event()
+        self.overlaps = 0
+        self._in = False
+
+    def enable(self):
+        if self._in:
+            self.overlaps += 1
+        super().enable()
+
+    def disable(self):
+        self._in = True
+        self.enabled = False
+        self.inside.set()
+        self.gate.wait(5.0)
+        self.disables += 1
+        self._in = False
+
+
+def slow(m) -> SlowOff:
+    """Channel a's source opened, its soundtrack swapped for a `SlowOff`."""
+    m.poll(DT, 0.0)
+    t = m.channels["a"].source.audio = SlowOff()
+    return t
+
+
+def test_an_enable_never_lands_inside_a_disable():
+    """Review 1: off long enough for the disable to start on the closer,
+    then on again while it is still inside it: the frame thread does not
+    enable then; the closer enables once its disable is done, so the track
+    ends enabled, with no overlap, and the next frames add nothing."""
     m, _, _ = rig("shared:a.mp4")
     ch = m.channels["a"]
+    t = slow(m)
     ch.play_audio = True
     m.poll(DT, 0.0)
+    assert t.enables == 1
+    ch.play_audio = False
+    for k in range(OFF_FRAMES):
+        m.poll(DT, k * DT)
+    assert t.inside.wait(2.0)                   # the closer is inside the disable
+    ch.play_audio = True
+    for k in range(3):
+        m.poll(DT, 1.0 + k * DT)
+    assert t.enables == 1 and not t.enabled, "no enable while the disable runs"
+    t.gate.set()
+    assert m.drain(2.0)
+    assert (t.enables, t.disables, t.overlaps) == (2, 1, 0) and t.enabled
+    for k in range(3):
+        m.poll(DT, 2.0 + k * DT)
+    assert t.enables == 2
+
+
+def test_on_and_off_again_while_a_disable_runs_is_one_disable_and_no_enable():
+    m, _, _ = rig("shared:a.mp4")
+    ch = m.channels["a"]
+    t = slow(m)
+    ch.play_audio = True
+    m.poll(DT, 0.0)
+    ch.play_audio = False
+    for k in range(OFF_FRAMES):
+        m.poll(DT, k * DT)
+    assert t.inside.wait(2.0)
+    for flip in range(6):                       # on, off, on … while it is held
+        ch.play_audio = flip % 2 == 0
+        m.poll(DT, 1.0 + flip * DT)
+    ch.play_audio = False
+    for k in range(OFF_FRAMES + 2):
+        m.poll(DT, 2.0 + k * DT)
+    t.gate.set()
+    assert m.drain(2.0)
+    assert (t.disables, t.enables, t.overlaps) == (1, 1, 0) and not t.enabled
+
+
+def test_a_lane_flicking_the_toggle_queues_nothing():
+    """Review 2: a toggle flipped every frame (a lane, an LFO) never stays
+    off `OFF_FRAMES`, so nothing is disabled or re-decoded; the sound is in
+    the mix only on the frames it is on."""
+    m, _, _ = rig("shared:a.mp4")
+    ch = m.channels["a"]
+    for k in range(120):
+        ch.play_audio = k % 2 == 0
+        m.poll(DT, k * DT)
+        assert m.mixer.playing == (1 if ch.play_audio else 0)
+    assert m.drain(2.0)
     t = track(m, "a")
-    t.disable()                                 # the closer's late disable
-    m.poll(DT, 0.1)
-    assert t.enabled and t.enables == 2
+    assert (t.enables, t.disables) == (1, 0) and m.closer.done == 0
+
+
+def test_a_jogs_dying_coast_is_silence():
+    """Review 3: a jog let go at rate 0 leaves the spring's coast decaying
+    toward 0 for many frames; under `HOLD_SPEED` it is a hold, so the
+    callback is never asked to repeat one block."""
+    m, _, f = rig("shared:a.mp4")
+    ch = m.channels["a"]
+    ch.play_audio, ch.rate, ch.jog = True, 0.0, 0.5
+    for k in range(20):
+        m.poll(DT, k * DT)
+    assert m.mixer.playing == 1                 # the jog moves the clip: heard
+    ch.jog = 0.0
+    tr = ch.transport
+    for k in range(600):
+        m.poll(DT, 1.0 + k * DT)
+        if abs(tr.speed) < HOLD_SPEED:
+            assert m.mixer.playing == 0, tr.speed
+    assert 0.0 < abs(tr.speed) < HOLD_SPEED or tr.speed == 0.0
+    assert m.mixer.playing == 0 and not opened(m, f).pull().any()
 
 
 def test_a_still_and_a_live_feed_add_nothing_and_open_no_stream():
@@ -323,6 +428,22 @@ def test_an_underflow_is_counted():
     assert "1 playing" in m.mixer.line() and "1 underruns" in m.mixer.line()
 
 
+def test_a_read_error_is_counted_but_never_warns():
+    """Review 5: the line says "read errors"; only a stream that failed warns."""
+    from types import SimpleNamespace as NS
+
+    from hyperspace import ui_media
+
+    m, _, f = rig("shared:a.mp4", raises=("shared:a.mp4",))
+    m.channels["a"].play_audio = True
+    m.poll(DT, 0.0)
+    opened(m, f).pull()
+    text, warn = ui_media.mixer_line(NS(media=m))
+    assert "1 read errors" in text and not warn and not m.mixer.failed
+    m.mixer.state = "error: OSError: gone"
+    assert ui_media.mixer_line(NS(media=m))[1] is True
+
+
 # ---------------------------------------------------------------- the stream
 
 def test_the_stream_opens_on_the_first_toggle_and_not_before():
@@ -358,12 +479,64 @@ def test_a_failed_open_is_said_and_tried_again_later():
     m.channels["a"].play_audio = True
     m.poll(DT, 0.0)
     settle(m)
-    assert m.mixer.state.startswith("error: OSError") and "error" in m.mixer.line()
+    assert m.mixer.state.startswith("error: OSError") and m.mixer.failed
     m.poll(DT, 1.0)
     assert f.calls == 1                         # not every frame
     f.fail = False
-    m.poll(DT, M.RETRY_S + 0.1)
+    m.mixer._failed_at -= M.RETRY_S             # RETRY_S since the failure
+    m.poll(DT, 2.0)
     opened(m, f)
+
+
+def test_the_retry_counts_from_when_the_open_failed():
+    """Review 7: an open that took long to fail waits RETRY_S from its
+    failure, not from its start."""
+    gate = threading.Event()
+    m, _, f = rig("shared:a.mp4", gate=gate, fail=True)
+    m.channels["a"].play_audio = True
+    m.poll(DT, 0.0)
+    began = time.monotonic()
+    time.sleep(0.05)
+    gate.set()
+    settle(m)
+    assert m.mixer._failed_at >= began + 0.05
+    m.poll(DT, 1.0)
+    assert f.calls == 1
+
+
+def test_sound_on_during_a_hold_opens_the_stream():
+    """Review 6: the toggle asks, heard or not yet: at rate 0 or gain off
+    the stream comes up, so the sound is there the moment play resumes."""
+    m, _, f = rig("shared:a.mp4", "shared:b.mp4")
+    m.channels["a"].rate = 0.0
+    m.channels["b"].gain = 0.0
+    for c in "ab":
+        m.channels[c].play_audio = True
+    m.poll(DT, 0.0)
+    assert m.mixer.playing == 0
+    opened(m, f)
+
+
+def test_a_stream_that_stops_under_us_is_opened_again():
+    """Review 4: a device unplugged ends the stream (`active` false); the
+    next feed drops it, SYSTEM warns, and RETRY_S later a new one opens."""
+    m, _, f = rig("shared:a.mp4")
+    m.channels["a"].play_audio = True
+    m.poll(DT, 0.0)
+    s = opened(m, f)
+    s.active = False
+    m.poll(DT, 0.1)
+    assert m.mixer.failed and "stopped" in m.mixer.state and m.mixer._stream is None
+    deadline = time.monotonic() + 2.0
+    while not s.closed and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert s.aborted and s.closed
+    m.poll(DT, 0.2)
+    assert f.calls == 1                         # not before RETRY_S
+    m.mixer._failed_at -= M.RETRY_S
+    m.poll(DT, 0.3)
+    settle(m)
+    assert len(f.made) == 2 and m.mixer._stream is f.made[1] and m.mixer.state == "open"
 
 
 def test_close_aborts_and_closes_the_stream():
@@ -373,11 +546,7 @@ def test_close_aborts_and_closes_the_stream():
     s = opened(m, f)
     assert m.close()
     assert s.aborted and s.closed and m.mixer.state == "closed" and m.mixer.voices == ()
-    assert track_disabled(m, f)
-
-
-def track_disabled(m, f) -> bool:
-    return all(v.audio.disables == 1 for v in m.opener.made)
+    assert m.opener.closes == 1                 # the source's close ends its soundtrack
 
 
 def test_close_returns_within_its_budget_with_an_open_stuck_and_never_leaves_it_playing():
@@ -407,17 +576,29 @@ def test_a_reload_of_the_module_keeps_the_stream_and_reaches_the_new_callback(mo
     m.poll(DT, 0.0)
     s = opened(m, f)
 
-    class Before(M.Mixer):                      # the class the live mixer had before a save
-        pass
-
-    m.mixer.__class__ = Before
+    # the class the live mixer had before a save: the module's own `Mixer`, an older one
+    before = type("Mixer", (M.Mixer,), {"__module__": M.__name__})
+    m.mixer.__class__ = before
+    del m.mixer.__dict__["errors"]              # a field the saved module added
     m.poll(DT, 0.1)
     assert type(m.mixer) is M.Mixer and f.made == [s] and not s.closed
+    assert m.mixer.errors == 0                  # backfilled from a fresh one's default
     seen = []
     old = M.Mixer._callback
     monkeypatch.setattr(M.Mixer, "_callback",
                         lambda self, *a: seen.append(1) or old(self, *a))
     assert np.allclose(s.pull(), 0.5) and seen == [1]
+
+
+def test_a_mixer_of_another_class_is_left_as_it_is():
+    m, _, _ = rig("shared:a.mp4")
+
+    class Mine(M.Mixer):
+        pass
+
+    m.mixer.__class__ = Mine
+    m.poll(DT, 0.0)
+    assert type(m.mixer) is Mine
 
 
 def test_a_media_state_from_before_the_mixer_gets_one():
@@ -465,7 +646,8 @@ def test_a_real_clip_through_the_channel_and_the_mixer(tmp_path):
         assert _peak_hz(out[:, 1]) == pytest.approx(880.0, abs=4.0)
         assert np.abs(out).max() == pytest.approx(0.25, abs=0.02)
         ch.play_audio = False
-        m.poll(DT, 0.2)
+        for k in range(OFF_FRAMES):
+            m.poll(DT, 0.2 + k * DT)
         assert m.drain(2.0)
         assert a.status == video.OFF and a.nbytes == 0
     finally:

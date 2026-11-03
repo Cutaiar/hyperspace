@@ -19,12 +19,14 @@ callback and a step roughly alternate). A voice whose transport stands
 still (rate 0, a hold) is left out — silence, not one block buzzing — and
 a voice at any other rate ≠ 1 stutters or skips: varispeed is V4's.
 
-The stream is opened lazily — never until a voice is first handed in
-(nothing until something asks, as V1's soundtrack) — on a thread of its
-own (``media-mixer-open``), so a slow CoreAudio open never holds the frame
-thread. Once open it stays open, playing silence while no channel plays,
-until `close` (app exit, `MediaState.close`); a failed open is tried again
-`RETRY_S` later while a voice still asks. The callback never blocks and
+The stream is opened lazily — never until a channel's sound is first
+turned on (nothing until something asks, as V1's soundtrack; a hold or a
+gain at off still asks) — on a thread of its own (``media-mixer-open``),
+so a slow CoreAudio open never holds the frame thread. Once open it stays
+open, playing silence while no channel plays, until `close` (app exit,
+`MediaState.close`); a failed open, or a stream that stops under us (its
+`active` false: a device unplugged), is tried again `RETRY_S` after the
+failure while a channel still asks. The callback never blocks and
 never raises: a voice whose `read` raises or hands back the wrong shape is
 skipped (`errors` counts them) and anything else wrong is silence.
 
@@ -58,7 +60,7 @@ def _default_stream(**kw):
 class Mixer:
     """One output stream for every channel's video sound (module docstring).
 
-    The frame thread calls `feed(voices, now)` once a frame and `close` at
+    The frame thread calls `feed(voices, asked)` once a frame and `close` at
     exit; the stream's thread calls `_callback`. `state` is "off" (never
     asked), "opening", "open", "closed" or "error: …"; `playing` the voices
     in the last feed, `underruns` the callbacks PortAudio flagged as an
@@ -82,23 +84,44 @@ class Mixer:
     def playing(self) -> int:
         return len(self.voices)
 
-    def feed(self, voices: tuple[Voice, ...], now: float | None = None) -> None:
-        """This frame's voices (one swap); opens the stream the first time
-        any is handed in. Returns at once: the open runs on its own thread."""
+    @property
+    def failed(self) -> bool:
+        """The stream could not be opened, or stopped under us: SYSTEM warns."""
+        return self.state.startswith("error")
+
+    def feed(self, voices: tuple[Voice, ...], asked: bool | None = None) -> None:
+        """This frame's voices (one swap). `asked` — some channel's sound is
+        on, heard or not yet (a hold, gain off): the stream is opened then,
+        so it is up before the sound is; it defaults to any voice. A stream
+        that has stopped under us (a device unplugged, CoreAudio gone) is
+        dropped and opened again `RETRY_S` later. Returns at once: the open
+        and the drop run on threads of their own."""
         self.voices = tuple(voices)
-        if not self.voices or self._closed:
+        if self._closed:
             return
-        if self._stream is not None or self._opener is not None:
+        s = self._stream
+        if s is not None:
+            if getattr(s, "active", True):
+                return
+            with self._lock:                   # stopped under us: back to the retry
+                if self._stream is not s:
+                    return
+                self._stream = None
+                self._failed_at = time.monotonic()
+                self.state = "error: the output stream stopped"
+            threading.Thread(target=_shut, args=(s,), name="media-mixer-shut",
+                             daemon=True).start()
             return
-        now = time.monotonic() if now is None else now
-        if now - self._failed_at < RETRY_S:
+        if not (bool(self.voices) if asked is None else asked) or self._opener is not None:
+            return
+        if time.monotonic() - self._failed_at < RETRY_S:
             return
         self.state = "opening"
-        t = self._opener = threading.Thread(target=self._open, args=(now,),
-                                            name="media-mixer-open", daemon=True)
+        t = self._opener = threading.Thread(target=self._open, name="media-mixer-open",
+                                            daemon=True)
         t.start()
 
-    def _open(self, now: float) -> None:
+    def _open(self) -> None:
         try:
             s = self._make(samplerate=AUDIO_RATE, channels=AUDIO_CHANNELS, dtype="float32",
                            blocksize=BLOCK,
@@ -107,7 +130,7 @@ class Mixer:
             s.start()
         except Exception as e:  # noqa: BLE001 — no device is silence, said on SYSTEM
             with self._lock:
-                self._failed_at = now
+                self._failed_at = time.monotonic()     # when it failed, not when it began
                 self._opener = None
                 if not self._closed:
                     self.state = f"error: {type(e).__name__}: {e}"[:160]
@@ -139,7 +162,8 @@ class Mixer:
         return t is None or not t.is_alive()
 
     def line(self) -> str:
-        """SYSTEM's one line: '' until a voice has asked for the stream."""
+        """SYSTEM's one line: '' until a channel has asked for the stream
+        (`failed` says whether to warn)."""
         if self.state == "off":
             return ""
         return (f"media sound: {self.state} · {self.playing} playing"

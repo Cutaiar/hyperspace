@@ -602,7 +602,7 @@ here; overturn → the change, then the same.
 | 564 | Wave 0 E1: delay loops are the trails mechanism, the look-back keeps the dream — the feedback starter (a composite laid over, a delay, a fade at level 0.75: colour and alpha decay alike) on the cable menu and "add feedback after" on the node menu, many allowed; "feedback" not "echo", which names the look-back's frames | 423 | (rec) — pending the owner |
 | 581 | Plan 45 V2, the mixer: one `sounddevice.OutputStream` (48 kHz stereo float32) owned by the media package; its callback sums each heard channel's `read(round(playhead × 48000), frames)` × gain, where the playhead is the one the frame thread last stepped the transport to (handed in as one tuple a frame), clipped at ±1; the callback integrates nothing — rate 1 only, varispeed is V4's | 437, 438 | built — V2 PR (the rule is the owner's, row 562) |
 | 582 | Plan 45 V2, the two params a channel: `media.<c>.audio` (toggle, default off — today's silence) and `media.<c>.gain` (linear, default 1.0, `tapers.T_MEDIA_GAIN` = `exp_zero(100, 120)`: off, then −30…+6 dB, unity notch), both performance (`media` group), persisted, learnable, modulatable; no schema move — a file without them loads them at their defaults | 437, 438 | (rec) — built as recommended |
-| 583 | Plan 45 V2, the stream's lifecycle: nothing opened until a channel's sound is first on (on a thread of its own, `media-mixer-open`); then left open playing silence until exit (`MediaState.close`, within its budget); a failed open is said on SYSTEM and retried 5 s later while asked; a toggle's `disable()` runs on the media closer, never the frame thread | 439 | (rec) — built as recommended |
+| 583 | Plan 45 V2, the stream's lifecycle: nothing opened until a channel's sound is first on (on a thread of its own, `media-mixer-open`); then left open playing silence until exit (`MediaState.close`, within its budget); a failed open, or a stream that stops under us (a device unplugged), is said on SYSTEM and retried 5 s after the failure while asked; the toggle's off is acted on 30 frames later (`OFF_FRAMES`: a lane flicking it costs nothing) and its `disable()` runs on the media closer, never at once with an enable (`_Sound`); a slot change leaves the old track to its source's `close` | 439 | (rec) — built as recommended |
 
 "—": no hand check shows it; tests only.
 
@@ -9735,7 +9735,8 @@ and D3 (the per-deck split) are
   `read(round(playhead × 48000), frames)`, multiplies by the gain, sums,
   and clips at ±1. It keeps no sample counter, no stream time and no
   position: two callbacks between two frames read the same samples. A
-  transport standing still (rate 0, a hold) is left out: silence rather
+  transport slower than `HOLD_SPEED` = 1e-3 (rate 0, a hold, and a jog's
+  coast dying out toward it) is left out: silence rather
   than one block repeated as a buzz. A voice whose read raises or returns
   the wrong shape is skipped and counted; nothing reaches PortAudio as an
   exception.
@@ -9781,16 +9782,27 @@ and D3 (the per-deck split) are
   channel's sound is first on (plan 45 V1's "nothing until something
   asks", extended to the stream). The open runs on a thread of its own
   (`media-mixer-open`) so a slow CoreAudio open never holds the frame
-  thread; a failure is the mixer's `state` (`error: …`, in warning colour
-  on SYSTEM) and is tried again `RETRY_S` = 5 s later while a channel
-  still asks. Once open the stream stays open, playing silence while no
+  thread. "Asks" is the toggle being on — at rate 0 or with the gain off
+  too — so the stream is up before the sound is (review 6). A failure is
+  the mixer's `state` (`error: …`, in warning colour on SYSTEM; a
+  contained read error is counted, never a warning) and is tried again
+  `RETRY_S` = 5 s after it failed while a channel still asks; a stream
+  that stops under us (`active` false: a device unplugged, CoreAudio
+  gone) is dropped by the next frame and takes the same road. Once open the stream stays open, playing silence while no
   channel plays, until `MediaState.close` at exit, which aborts and closes
   it inside its budget (an open still under way at exit closes its own
   stream when it returns). A hot reload of `media/mixer.py` keeps the
-  live stream: `MediaState._mixer()` re-classes the mixer and the
-  stream's callback goes through the class. The toggle's `disable()`
-  joins the soundtrack's thread, so it runs on the media closer; a
-  disable landing after a quick re-enable is healed the next frame.
+  live stream: `MediaState._mixer()` re-classes the module's own `Mixer`
+  (a fresh one's defaults filled in for fields added since; no hook in
+  `app.main`'s reload targets reaches it, and `app.main` was frozen for
+  this PR) and the stream's callback goes through the class. The toggle's
+  `disable()` joins the soundtrack's thread, so it runs on the media
+  closer, and only once the toggle has been off `OFF_FRAMES` = 30 frames
+  (the toggle is modulatable: a lane flicking it must not queue a join
+  and a fresh decode each flick). `_Sound` serialises the two: while a
+  disable is queued or running the frame thread only notes it wants the
+  track again, and the closer enables it once the disable is done. A slot
+  change leaves the old track to its source's `close`, one closer job.
 - **Other options.** Close the stream when the last channel goes quiet
   (a PortAudio stop waits for its buffers, on whichever thread does it,
   and the next toggle pays the open again); open on the frame thread

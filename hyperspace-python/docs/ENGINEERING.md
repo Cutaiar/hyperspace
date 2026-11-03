@@ -2934,8 +2934,9 @@ is held, never blocking. [`plans/45-video-audio.md`](plans/45-video-audio.md).
 or the channel node's side pane on GRAPH) and its video's sound plays at
 the channel's `gain` (`media.<c>.gain`: off, then −30…+6 dB, unity at
 the notch). One output stream, 48 kHz stereo, on the default output
-device, opened the first time any channel's sound is on and left open
-until quit; SYSTEM's `media sound` line says whether it is open, how many
+device, opened the first time any channel's sound is on (opened again
+5 s after it fails or the device goes away) and left open until quit;
+unticking lets the video's samples go half a second later; SYSTEM's `media sound` line says whether it is open, how many
 channels play and how many underruns PortAudio reported. Each frame the
 channels hand it the playhead their transports were just stepped to, and
 it reads there — it keeps no position of its own, so in this build the

@@ -717,12 +717,16 @@ def _selected(panel, st: dict, state) -> None:
         ui._readout(clock, ui.DIM)
 
 
-def mixer_line(panel) -> str:
-    """SYSTEM's line for the media sound (plan 45 V2, `Mixer.line`): ''
-    until a channel's audio has first been turned on."""
+def mixer_line(panel) -> tuple[str, bool]:
+    """SYSTEM's line for the media sound (plan 45 V2, `Mixer.line`) and
+    whether it warns (`Mixer.failed`: the stream would not open or stopped
+    — a contained read error does not); '' until a channel's audio has
+    first been turned on."""
     state = media_of(panel)
     m = getattr(state, "mixer", None) if state is not None else None
-    return m.line() if m is not None else ""
+    if m is None:
+        return "", False
+    return m.line(), bool(getattr(m, "failed", False))
 
 
 def _mmss(s: float) -> str:

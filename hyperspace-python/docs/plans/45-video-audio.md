@@ -87,7 +87,8 @@ MediaState.poll ─▶ Transport.step ─▶ VideoSource.want ┘      ▼
   callback integrates nothing**: two callbacks between two frames read
   the same samples, so V2 is clean at rate 1 at the rig's 60 Hz and
   stutters or skips at any other rate (V4's). A transport standing still
-  (rate 0) is left out: silence, not a block repeated as a buzz. A read
+  (rate 0, or a jog's coast under `HOLD_SPEED`) is left out: silence,
+  not a block repeated as a buzz. A read
   that raises or returns the wrong shape is skipped and counted.
   The params (`params.build_registry`'s media loop): `media.<c>.audio`
   (a toggle, off — today's silence) and `media.<c>.gain` (linear, unity,
@@ -95,11 +96,14 @@ MediaState.poll ─▶ Transport.step ─▶ VideoSource.want ┘      ▼
   performance — persisted, learnable, modulatable, so Learn, the pad, a
   macro and undo reach them; no schema move (a file without them loads
   them at their defaults). The toggle `enable()`s the channel's
-  soundtrack the frame it turns on, and a slot change under it enables the
-  new and disables the old; `disable()` joins the soundtrack's thread, so
-  it runs on the media closer. The stream is opened, on a thread of its
-  own, the first time any channel's sound is on — nothing until something
-  asks — and left open, playing silence, until `MediaState.close` at
+  soundtrack the frame it turns on and lets it go 30 frames after it turns
+  off (`OFF_FRAMES`: a lane flicking the toggle costs nothing); a slot
+  change under it enables the new, and the old ends with its source's
+  `close`. `disable()` joins the soundtrack's thread, so it runs on the
+  media closer, never at once with an enable (`channels._Sound`). The stream is opened, on a thread of its
+  own, the first time any channel's sound is on (at rate 0 or gain off
+  too) — nothing until something asks — reopened 5 s after it fails or
+  stops under us (a device unplugged), and otherwise left open, playing silence, until `MediaState.close` at
   exit. MEDIA shows the toggle and the gain on the selected channel's
   source line; GRAPH's channel node side pane lists them with its other
   params; SYSTEM a `media sound` line (open, channels playing, underruns).
