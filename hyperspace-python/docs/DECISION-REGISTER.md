@@ -47,6 +47,7 @@ Rows 542–543 come with the Flow mark (`subjects-flow-logo`, PR #214): 543 is t
 
 Row 560 is the owner's own, 2026-11-02, in the reshaping of the post-show plan (wave 0, K1, on `wave0/k1-clock-directive`): no shader multiplies time by a param; a rate-like param is integrated by the host (`// @clock` in an effect file) and wrapped. It is agreed, not pending; the row is here so the ports that follow it (K2 warp and tripcolour, K3 the media and instance rates, K4 the grid effects) cite one number. Hand check 419, once K2 lands a `@clock` on a shipped effect.
 Rows 554–555 (plan 43, the preset contract, 2026-11-02) are docs only: 554 is the owner's line, "a preset is a complete look; the rig is what is plugged in"; 555 is its first consequence, one camera in the preset, which overturns row 182 and is "(rec) — pending the owner" until C2 builds it ([`plans/43-preset-contract.md`](plans/43-preset-contract.md)).
+Rows 579–580 are K4 of wave 1 (on `wave1/k4`), row 560's port for the RINGS pattern and its measured rule: 579 ports RINGS × colour and records glimmer, wobble and fractals as measured and left alone (no knob of theirs grows with the clock); 580 is the build's ruling, a harness over every shipped knob for what the time lint cannot read. Hand check 436.
 Every other one is in the app now (rows 110–213
 on `plan-24-26-27-integration`, rows from 214 on `plan-28-30-integration`,
 until the owner merges them) and waits
@@ -603,6 +604,8 @@ here; overturn → the change, then the same.
 | 571 | Plan 44 D1: today's per-deck singletons (registry, view, table, router, the three banks, presets and their graph section, learn, undo and its marks, renderer, hold) bundled in one `deck.Deck`; `Deck.build` is the one construction order — `app.main` and `tests/test_undo.boot` both call it, the rig's objects built between its lines passed in as hooks at their old places; no behaviour change (`tests/test_deck.py`) | 430 | built as recommended — PR (D1) |
 | 577 | Wave 1 K2: warp's drift and scale on one `@clock` at drift × scale (the scroll counted in cells), tripcolour's pulse on a `@clock` wrapped to 2π; the lint's allowlist loses three pairs; party-noita's 17 goldens re-recorded | 419, 434 | owner's rule (row 560), built |
 | 578 | Wave 1 K3: `view.media_rate` and `view.inst_rate` integrated by the host into `view.media_phase` and `view.inst_phase` (`ViewState.integrate`, wrapped at 2π and 20π), read by the media path and the field's motion in place of t × rate; not params, never saved | 435 | built under row 560 (the owner's rule) — PR (K3) |
+| 579 | Continuity K4: RINGS' colour widens the hue range along the rings and never the drift — `pal((r · f · colour − t · 3/2π) · 0.15 …)` for `pal(ph · 0.15 · colour …)`, the same picture at colour 1; glimmer, wobble and fractals measured and left as they are — their size, frequency and cells knobs change a shape, by the same amount at any hour | 436 | agreed — row 560's port |
+| 580 | A knob step is the same size an hour in as a second in: every shipped effect's every param and every pattern's every input but SPEED, measured (a small step with the clocks stopped, late against early, `tests/test_step_continuity.py`), the space-scaling case the time lint cannot read | 436 | (rec) — the build's, for the owner to keep |
 | 581 | Plan 45 V2, the mixer: one `sounddevice.OutputStream` (48 kHz stereo float32) owned by the media package; its callback sums each heard channel's `read(round(playhead × 48000), frames)` × gain, where the playhead is the one the frame thread last stepped the transport to (handed in as one tuple a frame), clipped at ±1; the callback integrates nothing, so the glitch is structural: the audio and display clocks are never locked and a block now and then repeats or skips even at rate 1 — an occasional click at rate 1 is expected until V4 reads sequentially and slews toward the transport; any other rate stutters; forward play only (a hold, a parked `once` clip, reverse and pingpong's way back are silent) | 437, 438 | built — V2 PR (the rule is the owner's, row 562) |
 | 582 | Plan 45 V2, the two params a channel: `media.<c>.audio` (toggle, default off — today's silence) and `media.<c>.gain` (linear, default 1.0, `tapers.T_MEDIA_GAIN` = `exp_zero(100, 120)`: off, then −30…+6 dB, unity notch), both performance (`media` group), persisted, learnable, modulatable; no schema move — a file without them loads them at their defaults | 437, 438 | (rec) — built as recommended |
 | 583 | Plan 45 V2, the stream's lifecycle: nothing opened until a channel's sound is first on (on a thread of its own, `media-mixer-open`); then left open playing silence until exit (`MediaState.close`, within its budget); a failed open, or a stream that stops under us (a device unplugged), is said on SYSTEM and retried 5 s after the failure while asked; the toggle's off is acted on 30 frames later (`OFF_FRAMES`: a lane flicking it costs nothing) and its `disable()` runs on the media closer, never at once with an enable (`_Sound`); a slot change leaves the old track to its source's `close` | 439 | (rec) — built as recommended |
@@ -10117,3 +10120,92 @@ and D3 (the per-deck split) are
   `tests/test_gl_probe.py`; a deliberate `time.sleep(130)` under
   `-n 2 --timeout=5` failed by name in 5.5 s, and under `-n0 --timeout=5`
   failed and the run went on: "1 failed, 2 passed").
+### 579. RINGS' colour step, and the spatial knobs of glimmer, wobble and fractals
+- **Asked.** Row 560 (the owner, 2026-11-02): no shader multiplies time by
+  a param. The time lint's allowlist named RINGS × colour for K4: `pal(ph
+  * 0.15 * m_colour() + …)` with `ph = r * f - t * 3 / TAU`, `t` the
+  patterns' clock, so a colour step turned the palette by `t · 0.072 ·
+  Δcolour` cycles — a tenth of a cycle per detent a minute in, 6.7 an hour
+  in — and COLOUR is the input the factory routes put the UPR lane on, so
+  the music did it on every flare. The wave 1 prompt also named glimmer,
+  wobble and fractals as "param scales space" suspects.
+- **Built.** RINGS reads `pal((r * f * m_colour() - t * 3.0 / TAU) * 0.15 +
+  face_turn(…))`: colour scales the radius term only — the hue range
+  along the rings, which is what `patterns.py` says it does — and the
+  drift runs at the design's rate whatever the colour. At colour 1 the
+  expression is the old one term for term, so no golden moved. A detent
+  of colour on a 128² tile, an hour in: 59.5 levels of 255 before, 9.4
+  after (four seconds in, 8.0 before and 9.8 after; a frame's own motion is
+  1.2). The other `m_colour()` uses multiply no time-carrying term:
+  `spread_hue` (every caller's `x` is a sine, a cosine or a static
+  coordinate), `finish`, METER (`s` is a band index), TRUCHET (`along`
+  has no `t`), HEX and CELLS (a hash × colour, `t` added), SPIRAL (`r ×
+  colour`, `t` added) and PLASMA (`s` is a sum of sines, bounded) —
+  left alone. Glimmer, wobble and fractals, measured with the harness of
+  row 580 (a hundredth of a detent, px early / late): glimmer size 0.32 /
+  0.29, wobble frequency 0.076 / 0.074, fractals cells 2.5 / 1.2 and size
+  0.19 / 0.09, every other knob of theirs under 0.01 — none grows. Each
+  knob multiplies a coordinate (glimmer's cell grid, wobble's `p.y *
+  u_freq`, fractals' `ps * cells`), but what is added to that coordinate
+  is bounded (a sine, a Perlin sample) or comes after the product (`+
+  t`), so a step changes the shape by the same amount whenever it comes:
+  glimmer's stars keep their hash and their twinkle and move with the
+  zoom (the cell index survives a size step), wobble's waves change pitch,
+  fractals' lattice re-scales. All three zoom about the frame's
+  bottom-left corner rather than its centre, so a step slides the far
+  side most; that is a look, the same at minute one, and fractals'
+  mirror fold sits on that corner, so re-centring would change the
+  picture at every constant knob — not done.
+- **Other options.** A second integrated pattern clock for the hue drift
+  scaled by colour (keeps "more colour runs the hues faster" at the cost
+  of a uniform and a clock in `Renderer`; nobody asked for that coupling
+  and the mode's own table does not describe it). Re-centring glimmer's
+  and wobble's zoom (a change at every non-default size for no growth).
+- **To reverse.** One line of `patterns.glsl` (it hot-reloads) and the
+  allowlist entry back.
+- **Judge it.** Check 436.
+### 580. A knob step is the same size an hour in as a second in
+- **Asked.** The wave 1 prompt for K4: the time lint reads products of a
+  time and a param in the source and cannot see a param that scales
+  space where the time arrives some other way (inside a builtin it reads
+  as opaque, `mod(u_phase, …)`; through a hash; from the host).
+- **Answer.** (rec) — the build's, for the owner to keep or overturn: a
+  measurement over everything shipped, not a second lint.
+  `tests/test_step_continuity.py` takes every effect's `speed` and every
+  `@param` (amount-type params at half their range so the effect shows)
+  and every face pattern's inputs but SPEED (the renderer integrates it,
+  tested in `test_patterns.py`), and measures the picture's change for a
+  small step with every clock stopped at the same phase
+  (`uv_flow.jump`: the UV-encoded source, so the change is in pixels of
+  the sampling field; a pattern's 64² tile in levels): the largest over
+  six phases from 0.1 to 98 against the smaller of an hour and two. A
+  step may be any size — a shape knob is meant to change the picture —
+  but no more than 4 × its early size + 0.5 (px or levels) late. The
+  step is a hundredth of a detent for an effect's float param (a whole
+  detent for an integer), a tenth for a pattern input (the tile is 8-bit),
+  so a shape change stays a fraction of a pixel while a phase carried by
+  time is still moved by `phase × Δ`. Each knob is measured under every
+  setting of the effect's choices (blend's key acts in the luma key
+  only), with the UV map turned half a turn on the aux input (displace and
+  blend read nothing without one), and with `u_time` at the wall time the
+  phase stands at for the effect's speed.
+- **Measured.** Every knob that grows fails by 4.3–4.9 × the threshold
+  (warp drift 0.23 → 6.2 px, warp scale 0.26 → 6.7, tripcolour pulse 1.3
+  → 27.7, RINGS colour before row 579 3.2 → 61.6 levels); every other knob
+  is under 0.25 × it (the nearest: METER's scale, HEX's scale and warp,
+  doublevision's copies, kaleido's segments — big shape changes, the same
+  late). No false positive over the 17 effects and 12 patterns; K2's
+  ports (row 577) are checked like the rest now the time lint's
+  allowlist is empty: warp's drift and scale and tripcolour's pulse pass. A synthetic effect, `src(fract((uv +
+  mod(u_phase, 1e4) · 0.001) · u_scale))`, passes the lint and fails the
+  harness (past twice the rule's bound); the same with the offset added after the
+  scale, or a scale over a bounded wobble, passes. About 3 s of test time
+  serially, in the fast tier.
+- **What it cannot see.** A rate under a sine that has already wrapped by
+  phase 98 at a hundredth of a detent (more than ~6 rad a unit) — the
+  lint's product rule is for those, and the two together are the rule. A
+  param an effect never shows at its other params' defaults and half
+  their amounts.
+- **To reverse.** Delete the file and the two helpers at the end of
+  `tests/uv_flow.py`.
+- **Judge it.** Check 436.
