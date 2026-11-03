@@ -284,7 +284,11 @@ it, so a session param is declared once whichever deck declares it; a
 deck's registry lists the session's params first (nothing reads the
 order across the line, row 624). `ghost.mirror` is a session **key** of
 the `ghost` group (`params.SESSION_KEYS`, row 612), written to every
-deck's hands state. **The table** (row 614): `SessionTable` reads its rows
+deck's hands state (a `ghost.RoomSetting` on the session's param, each
+state held weakly). A session param is applied **once a frame**, by the
+session's lead deck alone, and every deck's pass in a frame shares the
+session's mark (review of #351: two decks would otherwise release each
+other's modulation). **The table** (row 614): `SessionTable` reads its rows
 off the deck tables that follow it and owns the file and the session's
 state; a deck's `Bindings` holds the session rows by reference and
 proxies `SESSION_ATTRS`; a session row bound, added or removed on one
@@ -294,7 +298,9 @@ session table. **The library** (row 615): `Presets.landing` /
 **Media** (row 616): `MediaSources` and `Channels`, `MediaState` the old
 name; V3's `audio.mix` is the session's, declared by `build_session`.
 **The schema** (rows 617–622): preset `/10` (`graphmigrate.ten`: the
-open show's hands' and clouds' looks and its bus cuts into an old file,
+open show's hands' and clouds' looks and its bus cuts into an old file —
+one id set, `graphmigrate.is_look_id`, for the show's reader and this one,
+an id the preset's graph does not declare dropped quietly —
 `modules` and `desk_template` dropped), the show `/3`
 (`library.show_without_look`, `.bak-v2-look`), the bus cuts the
 preset's (`Presets.bus`, key `bus`, the renderer's `rig_source`), desk
@@ -309,8 +315,8 @@ and `tests/test_hold.py` (its two bus-cut tests read the presets' cuts
 where they read the show's); the goldens over the migrated corpus are
 the orchestrator's to run, expected unmoved. **Not done** (row 625):
 `hold._preset_part` sorts Drop by group (the mirror goes back with the
-look); `Registry.apply` would land a session param once per deck; the
-window-wanted line is not drawn yet (row 623).
+look); a deck that runs after the lead lands its session offsets a frame
+late; the window-wanted line is not drawn yet (row 623).
 
 The same line as plan 43's preset contract: what belongs to a look is
 what belongs to a deck. Plan 43 says *which groups and rows* cross the

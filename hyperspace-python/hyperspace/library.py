@@ -137,7 +137,7 @@ from typing import Any
 from . import patches as patchdoc
 from . import undo
 from .graph import RigWires
-from .graphmigrate import CAMERA_NODES, EYE_IDS, renamed_layout, retired
+from .graphmigrate import CAMERA_NODES, EYE_IDS, is_look_id, renamed_layout, retired
 from .palettecompat import palette_slice
 from .params import (
     F_KEYS,
@@ -149,7 +149,6 @@ from .params import (
     fx_files,
     is_instance_id,
     pan_world,
-    part_of_id,
     retaper_depths,
 )
 
@@ -519,11 +518,10 @@ def show_without_eye(doc: dict) -> dict | None:
 
 def _look_ids(session: dict) -> list[str]:
     """The ids of a `/2` show's session that are a preset's since plan 44
-    D3: every performance id (`params.part_of_id`: the hands' look, the
-    clouds' — `ghost.mirror` stays the room's) but the eye, plan 43 C2's
-    own road (`EYE_IDS`)."""
-    return [k for k in session if isinstance(k, str) and k not in EYE_IDS
-            and part_of_id(k) == "performance"]
+    D3: the hands' and the clouds' looks (`graphmigrate.is_look_id`, the
+    one set `ten` hands on — `ghost.mirror` stays the room's). Any other id
+    a show held stays the show's (the eye is plan 43 C2's own road)."""
+    return [k for k in session if is_look_id(k)]
 
 
 def show_look(doc: Any) -> tuple[dict[str, Any], RigWires]:

@@ -356,7 +356,11 @@ resolved), `ghost.mirror` **stays the rig's**. Item by item:
 
 1. `ghost` and `cloud` are in `PERFORMANCE_GROUPS`; `ghost.mirror` (and
    an extra node's `ghost.2.mirror`) is a **session key**
-   (`params.SESSION_KEYS`), kept in its group (row 612).
+   (`params.SESSION_KEYS`), kept in its group, its value a
+   `ghost.RoomSetting` on the session's param (row 612). The look an old
+   show gives up is one id set (`graphmigrate.is_look_id`: the hands' and
+   clouds' groups less the mirror), read out of the show and handed to old
+   presets by the same rule; any other id stays the show's.
 2. `ghost.register`'s docstring says the look's, the mirror the room's;
    `GraphSection._seed` is **kept for the session keys alone** (an extra
    node's mirror from the open show) — dropping it outright, as the item

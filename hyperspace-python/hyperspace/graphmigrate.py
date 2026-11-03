@@ -91,6 +91,18 @@ BUS_KEY = "bus"
 # the keys `/10` retired: the module labels (row 540, the owner, 2026-11-03)
 # and the desk templates (plan 24 C3: neither library held one)
 TEN_RETIRED = ("modules", "desk_template")
+# the look a /2 show held that /10 makes the preset's (review of #351: one
+# id set, one place — `library.show_look` reads it out of an old show, `ten`
+# hands it to an old preset): the hands' and the clouds' groups, less the
+# room's mirror (`params.SESSION_KEYS`)
+LOOK_GROUPS = ("ghost", "cloud")
+
+
+def is_look_id(pid: Any) -> bool:
+    """Whether `pid` is one of the look ids `/10` moved from the show into
+    the preset (`LOOK_GROUPS`, but `ghost[.n].mirror`)."""
+    return (isinstance(pid, str) and pid.partition(".")[0] in LOOK_GROUPS
+            and pid.rpartition(".")[2] != "mirror")
 EYE_IDS = ("eye.fov", "eye.distance")
 CAMERA_NODE = "render:camera"      # the camera's canvas id (`graphview.CAMERA`'s node)
 # …and every id a file may hold it under: today's and the old canvas's (R14)
@@ -1306,9 +1318,7 @@ def ten(doc: dict, look: dict | None = None, cuts: Any = None) -> dict:
         out["desk"] = [r for r in out["desk"]
                        if not (isinstance(r, dict) and r.get("dark") is True)]
     look = {pid: v for pid, v in dict(look or {}).items()
-            if isinstance(pid, str) and pid.partition(".")[0] in ("ghost", "cloud")
-            and pid.rpartition(".")[2] != "mirror"
-            and isinstance(v, (int, float, bool))}
+            if is_look_id(pid) and isinstance(v, (int, float, bool))}
     raw = out.get("values")
     # (a `values` that is no map is the load's to judge, as in `nine`)
     if look and (raw is None or isinstance(raw, dict)):

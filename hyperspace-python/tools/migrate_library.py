@@ -486,10 +486,26 @@ def write(path: Path, data: bytes) -> None:
         tmp.unlink(missing_ok=True)
 
 
-def _forced(r: Result, forced: set[str]) -> bool:
+def _forced(r: Result, forced: set[str], stems: dict[str, int] | None = None) -> bool:
     """Whether ``--force`` names `r`: by its file under ``presets/`` less
-    ``.json`` (``party/trip``), or by its stem alone (``trip``)."""
-    return r.file.removesuffix(".json") in forced or Path(r.file).stem in forced
+    ``.json`` (``party/trip``), or by its stem alone (``trip``) only when no
+    other preset of the library has that stem (`stems`: each stem's count;
+    review of #351 — one name never forces a preset in every folder)."""
+    if r.file.removesuffix(".json") in forced:
+        return True
+    stem = Path(r.file).stem
+    return stem in forced and (stems or {}).get(stem, 1) == 1
+
+
+def ambiguous_forces(results, forced: set[str]) -> list[str]:
+    """The ``--force`` names that are no preset's path but a stem more than
+    one preset has: each forces none, said, so the owner gives the folder
+    path."""
+    stems: dict[str, int] = {}
+    for r in results:
+        stems[Path(r.file).stem] = stems.get(Path(r.file).stem, 0) + 1
+    paths = {r.file.removesuffix(".json") for r in results}
+    return sorted(n for n in forced if n not in paths and stems.get(n, 0) > 1)
 
 
 def line(r: Result) -> str:
@@ -522,8 +538,10 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
                     help="back the library up, retaper, then rewrite every preset that "
                          "passed as /10 and every show as /3")
     ap.add_argument("--force", action="append", default=[], metavar="NAME",
-                    help="write this preset (its file stem) despite a picture or "
-                         "fixed-point difference; repeatable")
+                    help="write this preset despite a picture or fixed-point difference: "
+                         "its path under presets/ less .json (party/trip), or its file "
+                         "stem alone when no other folder has a preset of that stem; "
+                         "repeatable")
     ap.add_argument("--to", type=Path, default=None, metavar="FOLDER",
                     help="write each preset that passed into FOLDER (the library is "
                          "only read; no backup)")
@@ -583,10 +601,16 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
     for r in results:
         counts[r.old] = counts.get(r.old, 0) + 1
     print("\nby schema found: " + ", ".join(f"{s}: {n}" for s, n in sorted(counts.items())))
+    stems: dict[str, int] = {}
+    for r in results:
+        stems[Path(r.file).stem] = stems.get(Path(r.file).stem, 0) + 1
+    for name in ambiguous_forces(results, forced):
+        print(f"--force {name}: {stems[name]} presets have that name in different folders — "
+              "give the folder path (party/{name}); none forced by it".replace("{name}", name))
     writes = [r for r in results if not r.error and (not r.unchanged or a.to is not None)
-              and (r.ok or _forced(r, forced))]
+              and (r.ok or _forced(r, forced, stems))]
     skipped = [r for r in results if not r.ok
-               and (r.error or not _forced(r, forced))]
+               and (r.error or not _forced(r, forced, stems))]
     untouched = [r for r in results if r.ok and r.unchanged]
     if a.to is not None:
         a.to.mkdir(parents=True, exist_ok=True)

@@ -1001,6 +1001,7 @@ class Presets:
         #    not name dropped — a desk template's rows counted as the desk
         #    they expand to — and a save writes that `/7` as `/9` (row 394, plan 43 C2)
         gs = self._graph_section()
+        from_show: set[str] = set()          # (the look ids `ten` handed on, below)
         migrate_notes: list[str] = []
         migrated = ""
         version = graphmigrate.schema_version(doc)
@@ -1030,8 +1031,15 @@ class Presets:
             if doc.get("desk_template"):
                 notes.append(TEMPLATE_RETIRED.format(name=str(doc["desk_template"])))
             show = getattr(lib, "project", None)
+            had = set(dict(doc.get("values") or {})) if isinstance(doc.get("values"), dict) \
+                else set()
             doc = graphmigrate.ten(doc, getattr(show, "old_look", None),
                                    getattr(show, "old_cuts", None))
+            # (review of #351: what the show handed on for a node this preset's
+            # graph does not declare — another preset's `ghost.2.*` — is the
+            # show's leftover, dropped quietly, never an "unknown id")
+            from_show = set(dict(doc.get("values") or {})) - had \
+                if isinstance(doc.get("values"), dict) else set()
         spec, section, graph_notes = gs.read(doc.get(GRAPH_KEY))
         notes += graph_notes
         # 1. what the file names that a preset may not carry — all parsed
@@ -1077,7 +1085,8 @@ class Presets:
                 # effect's — instance 1 exists only where its graph names it)
                 later[pid] = v
             elif p is None:
-                unknown.append(pid)
+                if pid not in from_show:
+                    unknown.append(pid)
             elif part_of(p) == "session":
                 notes.append(f"{pid} is the session's, ignored")
             elif part_of(p) is None or not p.persist:
@@ -1191,7 +1200,8 @@ class Presets:
             for pid, v in later.items():
                 p = reg.get(pid)
                 if p is None:
-                    late.append(pid)
+                    if pid not in from_show:
+                        late.append(pid)
                 elif part_of(p) == "session":
                     notes.append(f"{pid} is the session's, ignored")
                 elif part_of(p) is None or not p.persist:
