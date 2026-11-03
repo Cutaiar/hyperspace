@@ -3052,10 +3052,10 @@ uv run ruff check .
   time, and leaves `--all`, the goldens and `tests/test_media_live.py`
   to whoever merges.
 - **A hung test fails by name.** pyproject's addopts carry
-  `--timeout=120 --timeout-method=thread --max-worker-restart=0`.
-  **Workers use the thread method, a serial run the signal method**
-  (conftest's `pytest_configure`, unless `--timeout-method` is named on
-  the command line). A test blocked inside a C call (`glfw.init()`, a
+  `--timeout=120 --max-worker-restart=0` and its ini key
+  `timeout_method = "thread"`. **Workers use the thread method, a
+  serial run the signal method** (conftest's `pytest_configure`, unless
+  the run names one: `--timeout-method` or `-o timeout_method=`). A test blocked inside a C call (`glfw.init()`, a
   camera, audio or HID open) never returns to Python, so a signal
   handler never runs; the thread method's watchdog dumps every
   thread's stack and `os._exit`s its whole process, which xdist
@@ -3066,23 +3066,27 @@ uv run ruff check .
   `--timeout-method=thread` named, the process ended with no summary).
   The slowest fast-tier test takes about 6 s, far under the limit.
 - **The restart cap, measured** (2026-11-02, `-n 2`, one test that
-  `os._exit`s and forty quick ones, `--dist loadgroup`):
+  `os._exit`s and forty quick ones; "default" is xdist's own cap,
+  `-n` × 4):
 
-  | the crashing test | `--max-worker-restart=0` | default restarts |
-  |---|---|---|
-  | ungrouped | "1 failed, 11 passed" in 16 s: 29 never ran | stalled, killed after 60 s |
-  | in an `xdist_group` | "1 failed, 11 passed" in 1.5 s: 29 never ran | stalled, killed after 60 s |
+  | `--dist` | the crashing test | `--max-worker-restart=0` | default restarts |
+  |---|---|---|---|
+  | `loadgroup` | ungrouped | 1 failed, 11 passed: 29 never ran | stalled, killed after 60 s |
+  | `loadgroup` | in an `xdist_group` | 1 failed, 11 passed: 29 never ran | stalled, killed after 60 s |
+  | `load` | ungrouped | 1 failed, 14 passed: 26 never ran | 1 failed, 40 passed |
+  | `load` | in an `xdist_group` | 1 failed, 14 passed: 26 never ran | 1 failed, 40 passed |
 
-  Under `--dist load` with default restarts the same probe ended at
-  "1 failed, 40 passed": `loadgroup` does not hand a dead worker's
-  queue to its replacement (`sample` showed the replacement waiting on
-  its channel for work, not in a modal; it stalled the same way after
-  the reopen-windows alert below was cleared). So the cap stays: any
-  crash, even a transient one with no hang, ends the run and leaves the
-  dead worker's queue unrun — the summary looks finished, so compare
-  the count with a clean run's (an `--all` with a crash of
+  With the cap a dead worker's queue is lost under either scheduler;
+  without it `load` hands the queue to the replacement and `loadgroup`
+  stalls (`sample` showed the replacement waiting on its channel for
+  work, not in a modal, after the reopen-windows alert below was
+  cleared). So today's `loadgroup` keeps the cap: any crash, even a
+  transient one, ends the run and leaves the dead worker's queue unrun
+  — the summary looks finished, so compare the count with a clean
+  run's (an `--all` with a crash of
   `test_segment.py::test_vision_frees_each_jobs_memory` said "4297
   passed" against 4902) — which is cheaper than a run that never ends.
+  `load` without the cap is the follow-up (row 589, "Other options").
 - **Live tests take turns across processes.** Within a run
   `xdist_group("live")` gives every `live` test to one worker; across
   runs (two sessions, two worktrees) the autouse fixture
@@ -3114,7 +3118,15 @@ uv run ruff check .
   Xvfb, and `test_media_live.py::test_syphon_loopback`):
   `tests/gl_probe.py` runs `glfw.init()` in a child process with an
   8 s cap, once per worker, and the test skips with the reason when
-  the child does not answer. To find a stuck process: `ps`,
+  the child does not answer (SIGTERM, then SIGKILL a second later), when
+  `glfw.init()` says no, or when the child fails (its stderr in the
+  reason). The child is started with `-ApplePersistenceIgnoreState YES`
+  on its argv (NSUserDefaults' argument domain, this process only;
+  nothing is written), meant to keep it from restoring or offering to
+  restore saved windows, and from leaving saved state behind when it is
+  killed at the cap. Neither was tested: that needs the alert armed on
+  purpose in the owner's saved state. What was checked: the probe still
+  answers (0.2 s) and `defaults read org.python.python` is unchanged. To find a stuck process: `ps`,
   then `sample <pid>` (main thread in CFRunLoop / `mach_msg`). To
   recover, move
   `~/Library/Saved Application State/org.python.python.savedState`

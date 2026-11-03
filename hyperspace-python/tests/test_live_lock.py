@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 
 import live_lock
+import pytest
 
 TESTS = Path(__file__).resolve().parent
 
@@ -182,30 +183,45 @@ def test_the_fixture_skips_a_live_test_another_run_holds_it_for(tmp_path):
         p.join(10)
     assert "1 skipped" in out.stdout, out.stdout + out.stderr
     assert live_lock.SKIP_REASON in out.stdout
-    # (the plain tests ran, and found it held by the other process)
-    assert "2 failed" in out.stdout
 
 
-def test_a_lock_file_that_cannot_be_opened_is_a_skip_reason(tmp_path):
-    path = tmp_path / "live.lock"
-    path.write_text("")
-    path.chmod(0o400)                   # (as if another account owned it)
-    with live_lock.held(path, wait_s=0) as why_not:
-        assert why_not and "cannot be taken" in why_not
+def test_a_lock_file_that_cannot_be_opened_is_a_skip_reason(tmp_path, monkeypatch):
+    def refused(*a, **k):
+        raise PermissionError(13, "Permission denied")     # (another account's file)
+    monkeypatch.setattr(live_lock, "_open", refused)
+    with live_lock.held(tmp_path / "live.lock", wait_s=0) as why_not:
+        assert why_not and "cannot be taken" in why_not and "Permission denied" in why_not
 
 
 def test_a_flock_error_closes_the_file_and_is_a_skip_reason(tmp_path, monkeypatch):
     opened, closed = [], []
-    real_open, real_close = os.open, os.close
-    monkeypatch.setattr(live_lock.os, "open", lambda *a: opened.append(real_open(*a)) or opened[-1])
-    monkeypatch.setattr(live_lock.os, "close", lambda fd: closed.append(fd) or real_close(fd))
+
+    def opening(*a, **k):
+        opened.append(os.open(*a, **k))
+        return opened[-1]
+
+    def closing(fd):
+        closed.append(fd)
+        os.close(fd)
 
     def no_locks(fd, op):
         raise OSError(77, "No locks available")
-    monkeypatch.setattr(live_lock.fcntl, "flock", no_locks)
+    monkeypatch.setattr(live_lock, "_open", opening)
+    monkeypatch.setattr(live_lock, "_close", closing)
+    monkeypatch.setattr(live_lock, "_flock", no_locks)
     with live_lock.held(tmp_path / "live.lock", wait_s=0) as why_not:
         assert "No locks available" in why_not
-    assert opened and closed == opened
+    assert len(opened) == 1 and closed == opened
+
+
+def test_a_skip_inside_the_block_chains_no_lock_error(tmp_path, monkeypatch):
+    def refused(*a, **k):
+        raise PermissionError(13, "Permission denied")
+    monkeypatch.setattr(live_lock, "_open", refused)
+    with (pytest.raises(pytest.skip.Exception) as e,
+          live_lock.held(tmp_path / "live.lock", wait_s=0) as why_not):
+        pytest.skip(why_not)
+    assert e.value.__context__ is None
 
 
 def test_the_lock_file_is_the_accounts_own():

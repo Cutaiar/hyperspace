@@ -81,10 +81,13 @@ def _serial(config) -> bool:
 
 
 def _method_named(config) -> bool:
-    """The person named a timeout method on the command line or in
-    PYTEST_ADDOPTS (pyproject's addopts do not count)."""
-    words = [*config.invocation_params.args, *os.environ.get("PYTEST_ADDOPTS", "").split()]
-    return any(str(w).startswith(("--timeout-method", "--timeout_method")) for w in words)
+    """A timeout method was named for this run: `--timeout-method` (the
+    option is None otherwise: pyproject sets the ini key, not an addopt)
+    or `-o timeout_method=...`."""
+    if config.getoption("timeout_method", None) is not None:
+        return True
+    overrides = getattr(config.option, "override_ini", None) or []
+    return any(o.split("=", 1)[0].strip() == "timeout_method" for o in overrides)
 
 
 @pytest.hookimpl(tryfirst=True)
@@ -124,7 +127,10 @@ def _live_devices_take_turns(request):
     and a camera, audio or HID open can block in C, not fail, while
     another process holds the window system or the device: the lock is
     the mitigation, the thread timeout (pyproject addopts) the backstop.
-    It waits at most `live_lock.WAIT_S` and then skips — never forever."""
+    It waits at most `live_lock.WAIT_S` and then skips — never forever.
+    It is function-scoped: a module- or session-scoped fixture a live test
+    requests is set up before the lock is taken, outside it, so a live
+    test opens its devices in its own body or a function-scoped fixture."""
     if request.node.get_closest_marker("live") is None:
         yield
         return

@@ -9731,19 +9731,20 @@ and D3 (the per-deck split) are
 - **Answer.** (rec) — pending the owner; built as recommended (wave 1,
   T0).
 - **Recommended.** (1) pyproject's addopts carry
-  `--timeout=120 --timeout-method=thread --max-worker-restart=0`, and
-  conftest's `pytest_configure` switches a serial run (`-n0`, no
-  workers) to the signal method unless `--timeout-method` is named on
-  the command line: the thread watchdog `os._exit`s its whole process,
+  `--timeout=120 --max-worker-restart=0` and its ini key
+  `timeout_method = "thread"`, and conftest's `pytest_configure`
+  switches a serial run (`-n0`, no workers) to the signal method unless
+  the run names one (`--timeout-method`, `-o timeout_method=`): the thread watchdog `os._exit`s its whole process,
   which in a worker xdist names ("worker 'gwN' crashed while running
   '<test>'") but in a serial run would end it with no summary. The
   restart cap, measured (`-n 2`, a test that `os._exit`s and forty
   quick ones, `--dist loadgroup`): with the cap "1 failed, 11 passed"
   and 29 never ran, whether the crash was in an `xdist_group` or not;
   with default restarts both stalled until killed. Under `--dist load`
-  the same crash with restarts ended "1 failed, 40 passed": the
-  `loadgroup` scheduler never hands a dead worker's queue to the
-  replacement. So the cap stays. CI keeps its own `--timeout 120
+  the cap loses the queue too ("1 failed, 14 passed", 26 never ran,
+  grouped or not), and with default restarts it ended "1 failed, 40
+  passed": only `load` hands a dead worker's queue to the replacement.
+  With `loadgroup` the cap stays. CI keeps its own `--timeout 120
   --max-worker-restart=0`, the same values. (2) Every test marked
   `live` holds an `fcntl.flock` on
   `$TMPDIR/hyperspace-tests-live-<uid>.lock` for its setup, call and
@@ -9763,7 +9764,9 @@ and D3 (the per-deck split) are
   the guard is #332's probe, folded in: it and
   `test_media_live.py::test_syphon_loopback` ask for `gl_window_ok`,
   which runs `glfw.init()` in a child process with an 8 s cap and skips
-  with the reason when the child does not answer. Every other `glfw`,
+  with the reason when the child does not answer (SIGTERM, then SIGKILL
+  a second later), says no, or fails (its stderr in the reason); the
+  child carries `-ApplePersistenceIgnoreState YES` on its argv. Every other `glfw`,
   `sounddevice` and `hid` use in the fast tier is over a fake.
 - **Other options.** Keep the signal method and add the lock only: a
   test blocked in C would still hang its worker for good. A per-test
@@ -9775,8 +9778,13 @@ and D3 (the per-deck split) are
   exactly as before. `--dist load` instead of `loadgroup`, with the per-account
   live lock doing the serialising that `xdist_group("live")` does now:
   `load` hands a crashed worker's queue to its replacement (the probe:
-  "1 failed, 40 passed" after the crash), so the restart cap could go —
-  a follow-up to decide with the owner, not this PR.
+  "1 failed, 40 passed" after the crash, with default restarts; with
+  the cap it loses the queue like `loadgroup`), so the restart cap
+  would go with it. Not this PR: without `xdist_group("live")` the
+  live tests of one run would wait on each other through the lock, and
+  a live tier longer than `WAIT_S` (60 s) would start skipping tests in
+  its own run — the wait needs rethinking first. A follow-up to decide
+  with the owner.
 - **To reverse.** Drop the three flags from addopts and delete
   the fixture and `tests/live_lock.py`; nothing on disk outside the
   tests reads either.

@@ -32,6 +32,9 @@ WAIT_S = 60.0
 POLL_S = 0.1
 SKIP_REASON = "another test run holds the live devices"
 
+# the system calls, through names a test can replace for this module alone
+_open, _close, _flock = os.open, os.close, fcntl.flock
+
 
 def lock_path() -> Path:
     """One file per account (a file another account made may refuse us)."""
@@ -45,28 +48,28 @@ def acquire(path: Path | None = None, wait_s: float | None = None,
     had within `wait_s` seconds (`WAIT_S`, read at the call)."""
     path = lock_path() if path is None else Path(path)
     wait_s = WAIT_S if wait_s is None else wait_s
-    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    fd = _open(path, os.O_RDWR | os.O_CREAT, 0o600)
     deadline = time.monotonic() + wait_s
     try:
         while True:
             try:
-                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                _flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 return fd
             except BlockingIOError:
                 if time.monotonic() >= deadline:
-                    os.close(fd)
+                    _close(fd)
                     return None
                 time.sleep(poll_s)
     except BaseException:
-        os.close(fd)
+        _close(fd)
         raise
 
 
 def release(fd: int) -> None:
     try:
-        fcntl.flock(fd, fcntl.LOCK_UN)
+        _flock(fd, fcntl.LOCK_UN)
     finally:
-        os.close(fd)
+        _close(fd)
 
 
 @contextlib.contextmanager
@@ -74,10 +77,13 @@ def held(path: Path | None = None, wait_s: float | None = None, poll_s: float = 
     """Hold the lock for the block. Yields None when held, else the reason
     the caller skips with: another run holds it past the wait, or the lock
     file cannot be opened or locked (an OSError: permissions, ENOLCK)."""
+    fd, why_not = None, None
     try:
         fd = acquire(path, wait_s, poll_s)
     except OSError as e:
-        yield f"the live-device lock cannot be taken: {e}"
+        why_not = f"the live-device lock cannot be taken: {e}"
+    if why_not:                         # (yielded outside the handler: a skip
+        yield why_not                   # thrown in here chains no OSError)
         return
     try:
         yield None if fd is not None else SKIP_REASON
