@@ -9800,7 +9800,9 @@ and D3 (the per-deck split) are
   the drawn turn R(angles)·body read back as six angles
   (`geometry.pose_angles`, exact on SO(4); one road per picture —
   review 2.4: a 3D shape its folded XY/XZ/YZ and W 0, body or none; a 4D
-  shape through `pose_angles` whether the switch was ever toggled; a scene
+  shape with no body its drawn angles each folded on its own plane (review
+  3.1: the same motion after a load), with a body `pose_angles` of the
+  turn; a scene
   its angles unfolded, its layers spinning at fractions of them) — and `Presets.load_doc`
   sets it (`ViewState.set_pose`: no body, the 3D switch not yet holding,
   so the shape is drawn the same before and after the next `integrate`).

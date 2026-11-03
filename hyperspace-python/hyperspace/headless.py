@@ -88,24 +88,26 @@ def _link_or_copy(src, dst):
 SEED_SHOW = "migration"        # the scratch show `seed` writes (plan 43 C2)
 
 
-def show_seed(doc: dict | None) -> dict | None:
+def show_seed(doc: dict | None, eye: dict | None = None,
+              camera_at: list | None = None) -> dict | None:
     """What an old show (before plan 43 C2) kept of the camera, as a show of
-    its own: its session's `eye.*` and its layout's camera node — nothing
-    else of the rig (plan 43 C2: the eye an old preset drew through). None
-    when it kept neither (a show from C2 on, or no show): nothing to seed,
-    so an old preset takes the build's default eye."""
-    if not isinstance(doc, dict):
+    its own: its session's `eye.*` and its layout's camera node
+    (`library.show_eye`, the one reader) — nothing else of the rig (plan 43
+    C2: the eye an old preset drew through). `eye` / `camera_at` stand in
+    where `doc` kept none (a `.bak-v2-eye` copy's, `library.kept_eye`).
+    None when there is neither: nothing to seed, so an old preset takes the
+    build's default eye."""
+    from .graphmigrate import CAMERA_NODE
+    from .library import PROJECT_SCHEMA, show_eye
+    own_eye, own_at = show_eye(doc)
+    eye = own_eye or dict(eye or {})
+    at = own_at if own_at is not None else camera_at
+    if not eye and at is None:
         return None
-    from .graphmigrate import CAMERA_NODE, CAMERA_NODES, EYE_IDS
-    from .library import PROJECT_SCHEMA, read_layout
-    session = doc.get("session") if isinstance(doc.get("session"), dict) else {}
-    layout, _ = read_layout(doc.get("layout"))
-    out: dict = {"schema": PROJECT_SCHEMA, "name": SEED_SHOW,
-                 "session": {pid: session[pid] for pid in EYE_IDS if pid in session}}
-    at = next((layout[k] for k in CAMERA_NODES if k in layout), None)
+    out: dict = {"schema": PROJECT_SCHEMA, "name": SEED_SHOW, "session": eye}
     if at is not None:
-        out["layout"] = {CAMERA_NODE: at}
-    return out if out["session"] or at is not None else None
+        out["layout"] = {CAMERA_NODE: list(at)}
+    return out
 
 
 def seed(home: Path, machine: Path, show: dict | None) -> None:

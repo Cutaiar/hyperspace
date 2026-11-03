@@ -37,8 +37,12 @@ for both:
   integrated once a frame, before either draw (`ViewState.integrate`) —
   so the projector keeps its turn: a preset loaded under hold keeps its
   saved pose back on the hold (`hold_pose`) and it lands at Take (plan 43
-  C2) — Drop forgets it; and the field's and the media path's rates,
-  integrated there into their phases (K3, row 578);
+  C2) — Drop forgets it. The one special case beside the held values: the
+  phases (`rot.phase.*`) are no bases — the integrator moves them every
+  frame — so holding them as values would freeze the projector's spin;
+  the pose is one value to land later, not a look to draw twice; and the
+  field's and the media path's rates, integrated there into their phases
+  (K3, row 578);
 - the media channels (`media.*`): a channel decodes once for every reader,
   so a source switched shows on both;
 - the modulators (`lfo`, `env`, `seq`, `macro`, `mod`) and the routes:

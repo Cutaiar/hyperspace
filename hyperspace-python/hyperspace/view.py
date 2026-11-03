@@ -294,13 +294,16 @@ class ViewState:
 
         - a 3D shape: its own XY, XZ and YZ folded, the W planes 0 — body
           or none (its W planes and any body do nothing to it);
-        - a 4D shape: the turn it is drawn at — R(its angles)·body, its
-          angles the 3D ones alone while the switch holds
-          (`geometry.view_angles`) — read back as six angles
-          (`geometry.pose_angles`, one branch of the six for any turn), so
-          a 4D shape saved with or without the switch ever toggled saves
-          the same six, and a load that sets them (`set_pose`) draws it the
-          same whichever way the switch stands;
+        - a 4D shape with no body turned in: its angles as drawn
+          (`geometry.view_angles`: the 3D ones alone while the switch
+          holds), each folded on its own plane — the same rotation *and*
+          the same motion after a load (review 3.1: re-deriving the six
+          from the matrix can pick another branch, cos < 0 on a plane,
+          which turns that plane backwards once the integrator adds to it);
+        - a 4D shape with a body: the turn it is drawn at — R(its
+          angles)·body — read back as six angles (`geometry.pose_angles`),
+          the body folded in, so a load that sets them (`set_pose`) draws
+          it the same whichever way the switch stands;
         - a scene (`Shape.layers`): its layers turn at fractions of the
           angles (`spin` 0.4, −0.7 …), so a turn is not a fold of one — the
           angles as they stand, unfolded (a 3D scene's W planes 0); a 4D
@@ -313,9 +316,10 @@ class ViewState:
         scene = bool(SHAPES[self.shape].layers)
         if scene and (is_3d(self.shape) or (self.body is None and not self.held)):
             return ang[:3] + [0.0] * 3 if is_3d(self.shape) else ang
-        if is_3d(self.shape):
-            return [math.remainder(a, 2.0 * math.pi) + 0.0 for a in ang[:3]] + [0.0] * 3
-        B = np.eye(4) if self.body is None else np.asarray(self.body, dtype=np.float64)
+        if is_3d(self.shape) or self.body is None:
+            drawn = view_angles(self.shape, ang, self.held)
+            return [math.remainder(float(a), 2.0 * math.pi) + 0.0 for a in drawn]
+        B = np.asarray(self.body, dtype=np.float64)
         return pose_angles(rot_matrix(view_angles(self.shape, ang, self.held)) @ B)
 
     def set_pose(self, angles) -> None:

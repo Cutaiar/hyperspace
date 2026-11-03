@@ -204,7 +204,7 @@ def rig_show(library: Path, home: Path, name: str | None = None
     migration ran) gives the eye its ``.bak-v2-eye`` kept. Raises
     LookupError for a `name` the library has no show of."""
     from hyperspace import headless
-    from hyperspace.library import EYE_BACKUP, LAST_SHOW
+    from hyperspace.library import EYE_BACKUP, LAST_SHOW, kept_eye, show_eye
 
     shows = {p.name[: -len(SHOW_SUFFIX)]: p for p in show_files(library)}
     if name is not None:
@@ -224,14 +224,12 @@ def rig_show(library: Path, home: Path, name: str | None = None
             why = "no show in the library" if not shows else (
                 f"{len(shows)} shows and none is this Mac's last: name one with --show")
             return None, None, f"show: none ({why}) — every preset takes the build's default eye"
-    seed = headless.show_seed(_read(path))
-    if seed is None or not seed["session"]:
-        for bak in sorted(path.parent.glob(f"{path.name}.bak-v{EYE_BACKUP}*")):
-            kept = headless.show_seed(_read(bak))
-            if kept is not None and kept["session"]:
-                seed = {**kept, **(seed or {}), "session": kept["session"]}
-                how += f", its eye from {bak.name}"
-                break
+    doc = _read(path)
+    eye, _at = show_eye(doc)
+    kept, kept_at = ({}, None) if eye else kept_eye(path)
+    seed = headless.show_seed(doc, kept, kept_at)
+    if kept:
+        how += f", its eye from {path.name}.bak-v{EYE_BACKUP}"
     eye = seed["session"] if seed is not None else {}
     said = (", ".join(f"{k} {v:.4g}" for k, v in sorted(eye.items())) if eye
             else "no eye (the build's default)")

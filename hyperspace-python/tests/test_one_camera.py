@@ -417,6 +417,73 @@ def test_a_layer_is_in_the_world_only_when_laid_depth_aware():
     assert other.in_world
 
 
+def test_a_fresh_hands_layer_has_its_downstream():
+    """Review 3.2: `HandsLayer.__init__` sets `downstream` (the effects
+    reading it, `_Build._split`) — the `in_world` property sits after it."""
+    from hyperspace.graph import HandsLayer
+    layer = HandsLayer("hands.layer")
+    assert layer.downstream == () and layer.readout == "downstream"
+    assert layer.depth_laid is False and not layer.in_world
+
+
+def test_the_layer_behind_a_picture_is_found_through_every_pass():
+    """Review 3.3: one walk (`graph.layers_behind`) for how a layer is laid
+    on at an output and for which layer a depth composite lays — through
+    an effect, a resize, a switch's inputs and a delay's write — so a
+    layer behind a resize laid depth-aware is marked in the world too."""
+    from hyperspace import graph as gr
+    layer = gr.HandsLayer("hands.layer")
+    layer.laid = "depth"
+    resized = gr.ResizeNode("resize", image=layer)
+    assert gr.layers_behind(resized) == [layer]
+    assert gr._laid_of(resized) == "depth"
+    warped = gr.Effect("warp", image=resized)
+    assert gr.layers_behind(warped) == [layer]
+    other = gr.HandsLayer("hands.2.layer")
+    switch = gr.SwitchNode("switch", in1=warped, in3=other)
+    assert gr.layers_behind(switch) == [layer, other]
+    write = gr.DelayWrite("delay#write", "delay", image=switch)
+    read = gr.Delay("delay")
+    assert gr.layers_behind(read) == []                        # (no write map: unknown)
+    assert gr.layers_behind(read, {"delay": write}) == [layer, other]
+    assert gr.layers_behind(gr.ResizeNode("r2", image=None)) == []
+    loop = gr.ResizeNode("loop")                                 # a cycle ends
+    loop.inputs["image"] = loop
+    assert gr.layers_behind(loop) == []
+
+
+def test_one_reader_of_a_shows_camera_and_its_backup_is_remembered(tmp_path):
+    """Reviews 3.4 and 3.5: `library.show_eye` is the one reader of what a
+    show kept of the camera (`kept_eye` reads the backups with it,
+    `headless.show_seed` builds its seed with it); `kept_eye` remembers what
+    it found per show file and folder state — a copy rewritten in place is
+    not read again — and looks again once the folder changes."""
+    assert L.show_eye(old_show()) == (EYE, CAMERA_AT)
+    assert L.show_eye({"layout": {"render:eye": [3, 4]}}) == ({}, [3, 4])
+    assert L.show_eye(None) == ({}, None)
+    assert headless.show_seed({"session": {}}, EYE, CAMERA_AT)["session"] == EYE
+    show = _write(tmp_path / "projects" / "rig.hyp.json", {"session": {}})
+    assert L.kept_eye(show) == ({}, None)
+    bak = _write(tmp_path / "projects" / "rig.hyp.json.bak-v2-eye", old_show())
+    assert L.kept_eye(show) == (EYE, CAMERA_AT)               # (a new file: looked again)
+    mtime = bak.parent.stat().st_mtime_ns
+    bak.write_text("not json")                                 # in place: the folder stands
+    os.utime(bak.parent, ns=(mtime, mtime))
+    assert L.kept_eye(show) == (EYE, CAMERA_AT)               # remembered, not re-read
+    bak.unlink()
+    assert L.kept_eye(show) == ({}, None)
+
+
+def test_nine_leaves_values_that_are_no_map_to_the_load():
+    """Review 3.7: a `values` that is no map is left as it is (the load's
+    own reading refuses or reads it); a non-number eye is never written."""
+    odd = {"schema": "hyperspace.preset/7", "values": ["not", "a", "map"]}
+    assert graphmigrate.nine(odd, EYE)["values"] == ["not", "a", "map"]
+    out = graphmigrate.nine({"schema": "hyperspace.preset/7", "values": {}},
+                            {"eye.fov": "wide", "eye.distance": 5.0, "tempo.bpm": 1.0})
+    assert out["values"] == {"eye.distance": 5.0}
+
+
 def test_the_camera_node_is_the_looks():
     """GRAPH: the camera is no rig node any more — its position is the
     preset's and its refusal says it is the look's one camera."""
@@ -743,13 +810,40 @@ def test_one_picture_saves_one_pose_and_save_load_save_is_byte_stable(tmp_path):
                 view.integrate(0.0)
                 view.ang[:3] = [a + 0.0 for a in ang[:3]]
             poses.append(save_load_save(toggled))
-        assert poses[0] == poses[1], shape
         if shape == three:
+            assert poses[0] == poses[1]
             assert [poses[0][k] for k in POSE_IDS[3:]] == [0.0, 0.0, 0.0]
+        else:                         # (review 3.1: a body folds through the matrix,
+            pics = []                 # its branch its own — one picture either way)
+            for p in poses:
+                w = ViewState(shape=shape)
+                w.set_pose([p[k] for k in POSE_IDS])
+                pics.append(G.shape_view(shape, w.ang, 0.0, 0.0, flat=w.held, body=w.body)[:2])
+            assert all(np.allclose(a, b, atol=1e-3) for a, b in zip(*pics))
     reg["view.shape"].set(scene)
     view.set_pose([a + 40.0 for a in ang])        # a long run: far past one turn
     pose = save_load_save(False)
     assert pose[POSE_IDS[0]] == pytest.approx(ang[0] + 40.0)
+
+
+@pytest.mark.parametrize("plane", range(6))
+def test_a_loaded_pose_turns_on_as_the_saved_shape_did(plane):
+    """Review 3.1: an angle past π/2 on any plane (cos < 0) saves as that
+    plane's own fold, not another Euler branch of the same matrix — so
+    after a load the integrator turns every plane the way it turned:
+    save → load → one frame draws what the unloaded shape draws a frame on."""
+    shape = next(i for i in range(len(G.SHAPES)) if not G.is_3d(i) and not G.SHAPES[i].layers)
+    ang = [0.1] * 6
+    ang[plane] = 2.0
+    v = ViewState(shape=shape, ang=list(ang), planes=[True] * 6)
+    w = ViewState(shape=shape, planes=[True] * 6)
+    w.set_pose([preset.pose_angle(a) for a in v.pose()])
+    assert w.ang == pytest.approx(ang, abs=1e-6)
+    for s in (v, w):
+        s.integrate(0.25)
+    a = G.shape_view(shape, v.ang, 0.0, 0.0, flat=v.held, body=v.body)[:2]
+    b = G.shape_view(shape, w.ang, 0.0, 0.0, flat=w.held, body=w.body)[:2]
+    assert all(np.allclose(x, y, atol=1e-2) for x, y in zip(a, b))
 
 
 def test_an_old_show_with_the_camera_under_its_old_id_and_no_eye(tmp_path):

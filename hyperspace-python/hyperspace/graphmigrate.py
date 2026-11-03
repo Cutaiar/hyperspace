@@ -1254,13 +1254,15 @@ def nine(doc: dict, eye: dict | None = None, camera_at: Any = None) -> dict:
     if not isinstance(doc, dict) or (version is not None and version >= NINE):
         return doc
     out = dict(doc)
+    eye = {pid: v for pid, v in dict(eye or {}).items()
+           if pid in EYE_IDS and isinstance(v, (int, float)) and not isinstance(v, bool)}
     raw = out.get("values")
-    values = dict(raw) if isinstance(raw, dict) else ({} if raw is None else None)
-    if values is not None and any(pid in (eye or {}) for pid in EYE_IDS):
-        for pid in EYE_IDS:
-            v = (eye or {}).get(pid)
-            if pid not in values and isinstance(v, (int, float)) and not isinstance(v, bool):
-                values[pid] = v
+    # (a `values` that is no map is not this step's to judge: it is left as
+    # it is, and the load's own reading of `values` refuses or reads it)
+    if eye and (raw is None or isinstance(raw, dict)):
+        values = dict(raw or {})
+        for pid, v in eye.items():
+            values.setdefault(pid, v)
         out["values"] = values
     layout = out.get("layout")
     if camera_at is not None and (layout is None or isinstance(layout, dict)):

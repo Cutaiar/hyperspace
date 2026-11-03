@@ -682,7 +682,7 @@ class Project:
         # still hands that eye to the presets before `/9`, until the tool
         # writes it into them)
         if path is not None and not self.old_eye:
-            self.old_eye, kept_at = _kept_eye(path)
+            self.old_eye, kept_at = kept_eye(path)
             if self.camera_at is None and kept_at is not None:
                 self.camera_at = kept_at
         self._saved_layout = copy.deepcopy(self.layout)
@@ -1264,25 +1264,52 @@ class Project:
                 if is_instance_id(pid) and (reg is None or pid not in reg)}
 
 
-def _kept_eye(path: Path) -> tuple[dict[str, Any], list[float] | None]:
+def show_eye(doc: Any) -> tuple[dict[str, Any], list[float] | None]:
+    """What a show document kept of the camera (plan 43 C2): the eye in its
+    `session` (`EYE_IDS`) and the camera node's GRAPH position in its
+    `layout` (either id, `CAMERA_NODES`) — ({}, None) for neither. The one
+    reader of a show's camera: `Project._take`, `kept_eye`,
+    `headless.show_seed` and the migration tool all ask it."""
+    if not isinstance(doc, dict):
+        return {}, None
+    session = doc.get("session")
+    session = session if isinstance(session, dict) else {}
+    layout, _ = read_layout(doc.get(LAYOUT))
+    at = next((layout[k] for k in CAMERA_NODES if k in layout), None)
+    return ({pid: session[pid] for pid in EYE_IDS if pid in session},
+            list(at) if at is not None else None)
+
+
+# (path, the folder's state) → what `kept_eye` found there: a show opened
+# again finds it with one stat, not a glob and a parse (review 3.5)
+_KEPT_EYES: dict[tuple[str, int], tuple[dict[str, Any], list[float] | None]] = {}
+
+
+def kept_eye(path: Path) -> tuple[dict[str, Any], list[float] | None]:
     """The eye (and the camera's GRAPH position) a show's ``.bak-v2-eye``
-    copy kept — the oldest copy that holds one — or ({}, None): what an
-    old show's `session` held before its first write on this build dropped
-    it (plan 43 C2, `Project.write`)."""
+    copy kept — the oldest copy that holds an eye (`show_eye`) — or ({},
+    None): what an old show's `session` held before its first write on
+    this build dropped it (plan 43 C2, `Project.write`). Remembered per
+    show file and its folder's state (a new backup changes the folder), so
+    a show from this build — which has no such copy — costs a stat."""
+    try:
+        key = (str(path), path.parent.stat().st_mtime_ns)
+    except OSError:
+        return {}, None
+    hit = _KEPT_EYES.get(key)
+    if hit is not None:
+        return dict(hit[0]), hit[1]
+    found: tuple[dict[str, Any], list[float] | None] = ({}, None)
     for bak in sorted(path.parent.glob(f"{path.name}.bak-v{EYE_BACKUP}*")):
         try:
-            doc = json.loads(bak.read_text())
+            eye, at = show_eye(json.loads(bak.read_text()))
         except (OSError, ValueError):
             continue
-        session = doc.get("session") if isinstance(doc, dict) else None
-        if not isinstance(session, dict):
-            continue
-        eye = {pid: session[pid] for pid in EYE_IDS if pid in session}
         if eye:
-            layout, _ = read_layout(doc.get(LAYOUT))
-            at = next((layout[k] for k in CAMERA_NODES if k in layout), None)
-            return eye, (list(at) if at is not None else None)
-    return {}, None
+            found = (eye, at)
+            break
+    _KEPT_EYES[key] = found
+    return dict(found[0]), found[1]
 
 
 def _kept(path: Path, tag: str = BANK8_BACKUP) -> bool:
