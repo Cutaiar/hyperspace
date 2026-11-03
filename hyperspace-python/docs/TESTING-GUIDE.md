@@ -194,6 +194,17 @@ tiers that `tests/conftest.py` marks by name:
   39's two real-model tests are here too (Apple Vision and torchvision,
   once each on a made-up frame: `uv run pytest -q --all tests/test_segment.py`).
 
+GL-window tests (a real hidden GLFW window: `test_the_drawings_show_upright_through_real_gl`
+and the Syphon loopbacks) probe `glfw.init()` in a child process first
+(`tests/gl_probe.py`, 8 s) and skip if it does not answer, on top of the live
+lock. On macOS `glfw.init()` runs `[NSApplication run]`, and if a previous
+Python GUI process died with a window open, AppKit shows the "reopen windows?"
+alert (NSPersistentUIRestorer, NSAlert runModal) and a hidden process blocks in
+it forever. Recovery: `defaults write org.python.python ApplePersistenceIgnoreState -bool YES`
+and move `~/Library/Saved Application State/org.python.python.savedState`
+aside. To find a stuck one: `ps`, then `sample <pid>` (main thread in
+CFRunLoop / mach_msg). Never run two test tiers at once on the Mac.
+
 `uv run pytest --all` runs every tier (about 50 s). Pick a tier with
 `-m golden`, `-m slow` or `-m live` (add `--all` or name the file), and
 use `-n0` to run serially (for a debugger). A test named by node id is

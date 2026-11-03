@@ -115,6 +115,16 @@ def _live_devices_take_turns(request):
 
 
 @pytest.fixture
+def gl_window_ok():
+    """Skip (with the reason) unless `glfw.init()` completes in a child
+    process (tests/gl_probe.py). A test that opens a real GLFW window asks
+    for this before its own `glfw.init()`; it runs after the live lock."""
+    import gl_probe
+
+    gl_probe.require()
+
+
+@pytest.fixture
 def ctx():
     """A standalone GL context of the test's own, released after it (skips
     where there is none). Per test, not per module: a Renderer has no
