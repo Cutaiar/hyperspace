@@ -186,6 +186,7 @@ class PoiState:
 
     on: bool = False
     depth: bool = True
+    guide: bool = True            # the handle, the string and the weight drawn (poi_guide.py)
     weight: float = DEFAULTS["weight"]
     length: float = DEFAULTS["length"]
     spring: float = DEFAULTS["spring"]
@@ -256,8 +257,9 @@ def register(reg, state: PoiState, cfg: dict | None = None) -> None:
         v = cfg.get(key)
         if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v):
             setattr(state, key, min(hi, max(lo, float(v))))
-    if isinstance(cfg.get("depth"), bool):
-        state.depth = cfg["depth"]
+    for key in ("depth", "guide"):
+        if isinstance(cfg.get(key), bool):
+            setattr(state, key, cfg[key])
 
     def set_on(v) -> None:
         v = bool(v)
@@ -303,6 +305,12 @@ def register(reg, state: PoiState, cfg: dict | None = None) -> None:
                lambda v: setattr(state, "depth", bool(v)), group=GROUP,
                persist=False, modulatable=False,
                tip="The weight swinging toward the eye grows the shape, away shrinks it.")
+
+    reg.toggle(f"{GROUP}.guide", "Poi guide", lambda: state.guide,
+               lambda v: setattr(state, "guide", bool(v)), group=GROUP,
+               persist=False, modulatable=False,
+               tip="The handle, the string and a marker on the weight, drawn over each "
+                   "output that shows the hands (its hands switch mutes them too).")
 
     def fire_reset() -> None:
         reset(state)

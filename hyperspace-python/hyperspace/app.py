@@ -1446,7 +1446,9 @@ def main() -> None:
         # dials start from `[poi]` (weight, length, spring, gravity, drag,
         # hand, depth), the only way they outlast a launch
         poi_cfg = poi.configured(cfg)
-        poi.register(reg, poi.PoiState(), poi_cfg)
+        swing = poi.PoiState()
+        poi.register(reg, swing, poi_cfg)
+        renderer.poi_source = swing          # its guide over the outputs (poi_guide.py)
         if poi_cfg.get("on") is True:
             reg["poi.on"].set(True)
         # after attach, before the router: its ui.* params are the last a
@@ -1486,7 +1488,9 @@ def main() -> None:
 
         def point_at_devices() -> None:
             panel.midi = rig.adapter("midi")         # the first desk listed: the APC40's page
-            panel.pad = rig.adapter("gamepad")       # the menu's "Learn pad"
+            # the pad window's and the menu's "Learn pad": the first pad
+            # with a controller behind it now, re-picked on every connect
+            panel.pad = rig.live_adapter("gamepad")
             panel.hands = rig.adapter("hands")
             renderer.ghost.source = panel.hands      # no tracker, nothing draws
             router.follow_devices()                  # the MIDI roles and row schemes, again

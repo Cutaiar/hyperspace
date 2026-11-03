@@ -396,3 +396,45 @@ desk row is a scene-setter. Each change is written to the terminal
 - the plan 46 tape: a still Joy-Con hangs the shape still
 
 `tests/test_ui_pad.py`: the header's word and the dials.
+
+### The guide: the string, the handle and the weight (2026-11-03)
+
+The owner, after a first go at the machine: the string cannot be seen,
+and the handle must be seen where it is in space. Asked where it should
+draw, they chose an operator's guide (not the audience's picture), with a
+marker for the weight.
+
+`hyperspace/poi_guide.py` draws, in the world the shape is drawn in and
+through the shape's eye:
+- the **handle**: a grey tube from the wrist to the tip, a grey ball at the
+  wrist and a blue one at the tip;
+- the **string**: from the tip to the weight, white while taut and grey
+  while slack;
+- the **weight**: a red marker on the shape's centre as drawn (the live
+  pan), so it never parts from the shape, scaled by the depth zoom as the
+  shape is.
+
+The poi's space sits on the pan's home. The guide is drawn once a frame
+into its own multisampled layer with depth, before the graph runs, and is
+laid over each output after the hands and their readout
+(`Renderer._poi_layer`, `_compose`). It never goes through the effects or
+into the look-back, so it is not in the history. An output's hands switch
+(`output.N.hands`) mutes it with the hands. `poi.guide` (*show string* in
+the pad window, `guide` in `[poi]`) turns it off. It is on by default
+while the poi is on, and draws nothing until the poi has written the pan.
+With no poi handed to the renderer (`Renderer.poi_source` None), nothing
+changes: no golden moved.
+
+Held face up and pointing at the screen, the handle points into the
+screen, so the guide shows it end-on, the wrist ball covering the tip.
+Tipping the pad shows its length.
+
+Tests are in `tests/test_poi_guide.py`:
+- nothing draws while the poi is off, its guide is off, or it has no home
+- the weight marker sits on the shape, and the string runs from tip to
+  weight
+- the handle follows the home, and the marker grows with depth
+- the string is bright while taut and dim while slack
+- the renderer lays the guide where the weight and the tip project, and
+  leaves the rest of the picture alone
+- an output's hands switch mutes the guide

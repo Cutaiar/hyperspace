@@ -3422,7 +3422,7 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
 
 def is_pad_node(panel, n: graphview.VNode) -> bool:
     """Is `n` the node of the pad the panel's picture reads (`panel.pad`:
-    the first open gamepad entry), whatever its role is called — plan 42
+    the first gamepad entry with a controller now), whatever its role is called — plan 42
     lets it be "edge" or "xbox", not only "pad"? A second pad's node is
     not: the picture and its mappings are the primary pad's."""
     if n.kind != "device" or getattr(n.ref, "kind", "") != "gamepad":

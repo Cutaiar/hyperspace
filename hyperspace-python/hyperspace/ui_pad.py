@@ -636,6 +636,9 @@ def _poi_dials(panel) -> None:
     check = getattr(panel, "_check", None)
     if check is not None:
         check("poi.depth", "depth zooms")
+        if "poi.guide" in reg:
+            imgui.same_line()
+            check("poi.guide", "show string")
 
 
 def _says_of(panel, table):
