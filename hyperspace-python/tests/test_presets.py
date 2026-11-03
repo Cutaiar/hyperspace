@@ -1149,7 +1149,10 @@ def test_active_follows_the_loaded_preset_from_one_place(tmp_path):
                preset.Presets._landed):
         src = inspect.getsource(fn)
         assert "follow()" in src and "bank.index" not in src, fn.__qualname__
-    assert inspect.getsource(library).count("bank.index(") == 1
+    # (plan 48: `follow` resolves each slot to its file, so a slot naming
+    # the preset by another spelling lights too — the one look-up is there)
+    assert inspect.getsource(library).count("bank.index(") == 0
+    assert "enumerate(self.bank)" in inspect.getsource(library.Project.follow)
     assert "pr.bank.index(" not in inspect.getsource(preset)
 
 

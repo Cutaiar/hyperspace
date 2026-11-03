@@ -601,6 +601,12 @@ here; overturn → the change, then the same.
 | 562 | Plan 45 V1: a video's audio track decoded to memory as float32 stereo 48 kHz once something asks for sound, whole to 120 s, else a 120 s window around the transport's position; the transport is the one clock | 421 | owner's rule (2026-11-02, addendum 8); the policy (rec) |
 | 563 | Node groups (post-show G0, 2026-11-02): a group's id is never reused within a preset's life — `group.<n>` is one past the highest the preset has ever allotted (`Presets.group_high`: the file's highest at the load, dropped entries counted; not saved, no schema change), so an ungrouped or undone group's number is not the next group's; and membership is eager — a member node deleted by any road leaves its group's list in the same operation (hooks on the mechanisms: the section's landing, the table's `set_modifiers`, a bank's membership change), the last member taking the group; every node-removing step carries the marks (which carry the floor too) so its undo puts the member back; a refused load leaves the loaded preset's groups whole. Render node ids (`acid` → `acid.2`, the lowest free instance, R25) are untouched: a format question for the one-format PR | 422 | built as recommended — PR (G0) |
 | 564 | Wave 0 E1: delay loops are the trails mechanism, the look-back keeps the dream — the feedback starter (a composite laid over, a delay, a fade at level 0.75: colour and alpha decay alike) on the cable menu and "add feedback after" on the node menu, many allowed; "feedback" not "echo", which names the look-back's frames | 423 | (rec) — pending the owner |
+| 565 | Plan 46 D1: one Joy-Con per `[[devices]]` entry, held like a Wii Remote (a pair as one pad not built) | 424–429 | built as recommended — PR #315 |
+| 566 | Plan 46 D2: the Wii-Remote hold frames the vocabulary — one stick is the left stick, the (L)'s arrows the face by position, SL / SR the back pair, L / ZL `LB` + `LT`, no `hat:` | 424–429 | built; checked on the hardware (425, the owner, 2026-11-02) |
+| 567 | Plan 46 D3: `Model.controls` — the ports, Learn, the on-screen pad and the sinks show only what the pad has | 424–429 | built as recommended |
+| 568 | Plan 46 D4: stick drift calibrated from the flash (the user's record over the factory's), then the rest at connect becomes the centre (within 0.3, spread under 0.1), no config key | 424–429 | built; checked 425 |
+| 569 | Plan 46 D5: the sensors' axes are the codec's `AXIS_MAP` for the hold, from the notes and one flat reading | 424–429 | built; settled by check 425 |
+| 570 | Plan 46 D6: the lab is the app's pad window, not a browser page — the Joy-Con drawn upright with its stick well, raw reading, centre, tilt and sensors | 429 | owner — 2026-11-02 |
 | 571 | Plan 44 D1: today's per-deck singletons (registry, view, table, router, the three banks, presets and their graph section, learn, undo and its marks, renderer, hold) bundled in one `deck.Deck`; `Deck.build` is the one construction order — `app.main` and `tests/test_undo.boot` both call it, the rig's objects built between its lines passed in as hooks at their old places; no behaviour change (`tests/test_deck.py`) | 430 | built as recommended — PR (D1) |
 | 572 | C2 built: the eye keeps its ids (`eye` a performance group beside `camera`, not a rename), every save `hyperspace.preset/9`, an old preset takes the eye its old show held (`Project.old_eye`), and `tools/migrate_library.py` runs the retaper first (one bump moves everything), backs up, writes the rig's show's eye into every preset and drops it from the shows (`.bak-v2-eye`) | 432 | built as decided — owner, 2026-11-02 (plan 43 C2) |
 | 573 | The spin's pose is saved by every preset (a `pose` section of the six `rot.phase.*`, `view.body` folded in) and a load sets the turn there; a file without a pose (every old file, every file the migration rewrote) keeps spinning | 431 | owner — 2026-11-02; the `pose` key beside `values` (rec) |
@@ -614,6 +620,11 @@ here; overturn → the change, then the same.
 | 581 | Plan 45 V2, the mixer: one `sounddevice.OutputStream` (48 kHz stereo float32) owned by the media package; its callback sums each heard channel's `read(round(playhead × 48000), frames)` × gain, where the playhead is the one the frame thread last stepped the transport to (handed in as one tuple a frame), clipped at ±1; the callback integrates nothing, so the glitch is structural: the audio and display clocks are never locked and a block now and then repeats or skips even at rate 1 — an occasional click at rate 1 is expected until V4 reads sequentially and slews toward the transport; any other rate stutters; forward play only (a hold, a parked `once` clip, reverse and pingpong's way back are silent) | 437, 438 | built — V2 PR (the rule is the owner's, row 562) |
 | 582 | Plan 45 V2, the two params a channel: `media.<c>.audio` (toggle, default off — today's silence) and `media.<c>.gain` (linear, default 1.0, `tapers.T_MEDIA_GAIN` = `exp_zero(100, 120)`: off, then −30…+6 dB, unity notch), both performance (`media` group), persisted, learnable, modulatable; no schema move — a file without them loads them at their defaults | 437, 438 | (rec) — built as recommended |
 | 583 | Plan 45 V2, the stream's lifecycle: nothing opened until a channel's sound is first on (on a thread of its own, `media-mixer-open`); then left open playing silence until exit (`MediaState.close`, within its budget); a failed open, or a stream that stops under us (a device unplugged), is said on SYSTEM and retried 5 s after the failure while asked; the toggle's off is acted on 30 frames later (`OFF_FRAMES`: a lane flicking it costs nothing) and its `disable()` runs on the media closer, never at once with an enable (`_Sound`); a slot change leaves the old track to its source's `close` | 439 | (rec) — built as recommended |
+| 584 | Plan 48: the library lists `presets/` every folder down (hidden folders skipped); a preset's name is folder-qualified (`party/TRIP`), the file keeps the leaf; `path_slug` for a preset's file key, `slug` stays flat | 440 | (rec) — the owner's ask (L1, 2026-11-02); built as recommended |
+| 585 | Plan 48: the bank names a preset by its folder-qualified name, a bare name a top-level file; no `hyperspace.project` schema bump — an older build reads a folder slot as filled-but-missing | 443 | (rec) — pending the owner; built as recommended |
+| 586 | Plan 48: the trash is this Mac's (`<machine>/trash/<origin folder>/`), never in a synced library; the old library trash listed (marked old), restorable as a copy (the file stays), never written or emptied — not migrated | 442 | (rec) — pending the owner; built as recommended |
+| 587 | Plan 48: a save writes back to the preset's own file; as… with a folder in the name writes into it; a new preset grown from the loaded one (two-handed save, `preset.save_new`, an empty pad's hold) lands beside it; ⇧F's `PRESET <n>` at the top | 441 | (rec) — pending the owner; built as recommended |
+| 588 | Plan 48: the PRESETS page draws a folder's preset as `party / TRIP` with the folder dim; the flat list stays; a rename's field holds the leaf and keeps the folder | 440, 441 | (rec) — pending the owner; built as recommended |
 | 589 | Wave 1 T0: the test suite cannot hang the Mac — pytest-timeout's thread method at 120 s for xdist workers (the signal method for a serial run) with no worker restart in pyproject's addopts, so a test blocked in C fails by name and ends the run; `live` tests hold a per-account `flock` (wait 60 s, then skip); one tier at a time on a shared Mac; a real-GLFW test asks a child process first (`gl_window_ok`, #332) and skips if `glfwInit` does not answer | — | (rec) — pending the owner; built as recommended (T0) |
 
 "—": no hand check shows it; tests only.
@@ -10180,6 +10191,233 @@ and D3 (the per-deck split) are
   HOLD / TAKE / DROP, a hot reload of `deck.py` and of `routing.py` —
   all as before.
 
+### 579. RINGS' colour step, and the spatial knobs of glimmer, wobble and fractals
+- **Asked.** Row 560 (the owner, 2026-11-02): no shader multiplies time by
+  a param. The time lint's allowlist named RINGS × colour for K4: `pal(ph
+  * 0.15 * m_colour() + …)` with `ph = r * f - t * 3 / TAU`, `t` the
+  patterns' clock, so a colour step turned the palette by `t · 0.072 ·
+  Δcolour` cycles — a tenth of a cycle per detent a minute in, 6.7 an hour
+  in — and COLOUR is the input the factory routes put the UPR lane on, so
+  the music did it on every flare. The wave 1 prompt also named glimmer,
+  wobble and fractals as "param scales space" suspects.
+- **Built.** RINGS reads `pal((r * f * m_colour() - t * 3.0 / TAU) * 0.15 +
+  face_turn(…))`: colour scales the radius term only — the hue range
+  along the rings, which is what `patterns.py` says it does — and the
+  drift runs at the design's rate whatever the colour. At colour 1 the
+  expression is the old one term for term, so no golden moved. A detent
+  of colour on a 128² tile, an hour in: 59.5 levels of 255 before, 9.4
+  after (four seconds in, 8.0 before and 9.8 after; a frame's own motion is
+  1.2). The other `m_colour()` uses multiply no time-carrying term:
+  `spread_hue` (every caller's `x` is a sine, a cosine or a static
+  coordinate), `finish`, METER (`s` is a band index), TRUCHET (`along`
+  has no `t`), HEX and CELLS (a hash × colour, `t` added), SPIRAL (`r ×
+  colour`, `t` added) and PLASMA (`s` is a sum of sines, bounded) —
+  left alone. Glimmer, wobble and fractals, measured with the harness of
+  row 580 (a hundredth of a detent, px early / late): glimmer size 0.32 /
+  0.29, wobble frequency 0.076 / 0.074, fractals cells 2.5 / 1.2 and size
+  0.19 / 0.09, every other knob of theirs under 0.01 — none grows. Each
+  knob multiplies a coordinate (glimmer's cell grid, wobble's `p.y *
+  u_freq`, fractals' `ps * cells`), but what is added to that coordinate
+  is bounded (a sine, a Perlin sample) or comes after the product (`+
+  t`), so a step changes the shape by the same amount whenever it comes:
+  glimmer's stars keep their hash and their twinkle and move with the
+  zoom (the cell index survives a size step), wobble's waves change pitch,
+  fractals' lattice re-scales. All three zoom about the frame's
+  bottom-left corner rather than its centre, so a step slides the far
+  side most; that is a look, the same at minute one, and fractals'
+  mirror fold sits on that corner, so re-centring would change the
+  picture at every constant knob — not done.
+- **Other options.** A second integrated pattern clock for the hue drift
+  scaled by colour (keeps "more colour runs the hues faster" at the cost
+  of a uniform and a clock in `Renderer`; nobody asked for that coupling
+  and the mode's own table does not describe it). Re-centring glimmer's
+  and wobble's zoom (a change at every non-default size for no growth).
+- **To reverse.** One line of `patterns.glsl` (it hot-reloads) and the
+  allowlist entry back.
+- **Judge it.** Check 436.
+### 580. A knob step is the same size an hour in as a second in
+- **Asked.** The wave 1 prompt for K4: the time lint reads products of a
+  time and a param in the source and cannot see a param that scales
+  space where the time arrives some other way (inside a builtin it reads
+  as opaque, `mod(u_phase, …)`; through a hash; from the host).
+- **Answer.** (rec) — the build's, for the owner to keep or overturn: a
+  measurement over everything shipped, not a second lint.
+  `tests/test_step_continuity.py` takes every effect's `speed` and every
+  `@param` (amount-type params at half their range so the effect shows)
+  and every face pattern's inputs but SPEED (the renderer integrates it,
+  tested in `test_patterns.py`), and measures the picture's change for a
+  small step with every clock stopped at the same phase
+  (`uv_flow.jump`: the UV-encoded source, so the change is in pixels of
+  the sampling field; a pattern's 64² tile in levels): the largest over
+  six phases from 0.1 to 98 against the smaller of an hour and two. A
+  step may be any size — a shape knob is meant to change the picture —
+  but no more than 4 × its early size + 0.5 (px or levels) late. The
+  step is a hundredth of a detent for an effect's float param (a whole
+  detent for an integer), a tenth for a pattern input (the tile is 8-bit),
+  so a shape change stays a fraction of a pixel while a phase carried by
+  time is still moved by `phase × Δ`. Each knob is measured under every
+  setting of the effect's choices (blend's key acts in the luma key
+  only), with the UV map turned half a turn on the aux input (displace and
+  blend read nothing without one), and with `u_time` at the wall time the
+  phase stands at for the effect's speed.
+- **Measured.** Every knob that grows fails by 4.3–4.9 × the threshold
+  (warp drift 0.23 → 6.2 px, warp scale 0.26 → 6.7, tripcolour pulse 1.3
+  → 27.7, RINGS colour before row 579 3.2 → 61.6 levels); every other knob
+  is under 0.25 × it (the nearest: METER's scale, HEX's scale and warp,
+  doublevision's copies, kaleido's segments — big shape changes, the same
+  late). No false positive over the 17 effects and 12 patterns; K2's
+  ports (row 577) are checked like the rest now the time lint's
+  allowlist is empty: warp's drift and scale and tripcolour's pulse pass. A synthetic effect, `src(fract((uv +
+  mod(u_phase, 1e4) · 0.001) · u_scale))`, passes the lint and fails the
+  harness (past twice the rule's bound); the same with the offset added after the
+  scale, or a scale over a bounded wobble, passes. About 3 s of test time
+  serially, in the fast tier.
+- **What it cannot see.** A rate under a sine that has already wrapped by
+  phase 98 at a hundredth of a detent (more than ~6 rad a unit) — the
+  lint's product rule is for those, and the two together are the rule. A
+  param an effect never shows at its other params' defaults and half
+  their amounts.
+- **To reverse.** Delete the file and the two helpers at the end of
+  `tests/uv_flow.py`.
+- **Judge it.** Check 436.
+## Plan 48 — preset folders, stage 1 (rows 584–588)
+Wave 1 L1, 2026-11-02: [`plans/48-preset-folders.md`](plans/48-preset-folders.md).
+Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
+`tests/test_ui_presets.py`.
+### 584. The library lists every folder down; names are folder-qualified
+- **Asked.** The owner, after the 2026-10-30 show: sort the presets into
+  folders in Finder and have both Macs follow. Overturns DECISIONS
+  "Decided not to build — Preset folders" (one tier took hiding away).
+- **Answer.** (rec) — the owner's ask; built as recommended.
+- **Recommended.** `Library._files("presets")` walks `presets/**/*.json`
+  (`library._walk`: `os.walk` with no link following, hidden folders
+  pruned). A preset in a folder is listed as `<folder>/<its own name>`
+  (`party/TRIP` for `presets/party/trip.json` whose `name` is `TRIP`); a
+  top-level one is bare. The file holds the leaf only; the folder is the
+  path, so a move in Finder is a rename of the listed name and nothing
+  in the file changes. A name also resolves by its file key,
+  `path_slug(name)` (`party/trip`: the folder as on disk, the leaf
+  slugged); `path_slug` refuses an empty, `.`, `..` or hidden segment,
+  so `../x` and `/etc/x` name nothing (`path_of` → None, a save
+  raises). `slug` itself stays flat: shows, module presets and patches
+  have no folders and `Project.path_for` must never make one. Two files
+  of one folder with one inner name keep plan 25's conflict rule per
+  folder. Only `presets/` recurses. **A `/` in a listed name always
+  means a folder** (the orchestrator's ruling on review): a top-level
+  file whose own `name` holds one (`AC/DC`, from before folders) is
+  listed as `AC - DC` (`library.harmless`), so `folder_of` has one rule
+  (split at the last `/`) and the PRESETS row, the rename seed and the
+  two-handed save agree; a save writes the shown name back into the
+  file. An old show's `AC/DC` or `Ac/Dc` still resolves: `path_of`
+  compares folder and leaf by one fold (`library.fold`: `path_slug`
+  lowered, as APFS finds a file), and when the name's folder is not on
+  disk — on a **read** only (`path_of(..., loose=True)`: a load, a pad,
+  the startup preset, a rename's repoint, what a show still names) —
+  tries its `slug` among the top-level files; a save, a delete or a
+  rename never does, so `party/TRIP` typed with no `party/` is a new
+  file in a new folder, never the flat `party-trip.json`. A save that
+  turns a file's own `/` into ` - ` says so once ("saved AC - DC (was
+  AC/DC)"). A folder spelled in
+  another case is the folder on disk (`Party/NEW` lands in `party/` and
+  is listed `party/NEW`). The walk is kept until a folder's mtime moves,
+  the library writes or one second passes (`WALK_TTL`: a coarse or cloud
+  filesystem's mtime may not move), with the files by fold kept beside
+  it (`Library._walked`), since the panel lists every frame.
+- **Other options.** Change `slug` to keep `/` (the brief's wording): a
+  show or patch called `AC/DC` would then write `projects/ac/dc.hyp.json`.
+  Keep the file's own `name` as the whole qualified name: a Finder move
+  would leave the file saying the old folder. List folders as headers:
+  stage 2's.
+- **To reverse.** `_files` back to one glob; the folder names stop
+  resolving (filled-but-missing slots, row 585) until the files are moved
+  back to the top.
+- **Rough edge.** `AC/DC` reads `AC - DC` on the page and, after a save,
+  in its file. Typing `AC/DC` into as… makes a folder `AC` — by the
+  ruling, a typed `/` is a folder.
+- **Judge it.** 440.
+### 585. The bank names a preset by its folder-qualified name; no schema bump
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** `Project.bank` entries are what the list says:
+  `party/TRIP`, or a bare `TRIP` for a top-level file. Every show written
+  before holds bare names, so it reads and plays unchanged. No
+  `hyperspace.project` bump: an older build looks a slot up as a listed
+  name, then as `slug(name)` (`party-trip`), finds neither and says
+  "no preset 'party/TRIP'" — a filled slot that loads nothing; the string
+  is kept and written back as held, so a show round-trips through an
+  older build intact. `still_named` and a rename's repoint compare by
+  `Library._fold` (folder and leaf), so a bare `TRIP` and `party/TRIP`
+  are two presets.
+- **Other options.** Bump to `hyperspace.project/3` so an older build
+  refuses the show: one folder slot would take the whole show away from
+  the older Mac, worse than one dark pad. Store the file key
+  (`party/trip`) instead of the name: the bank would stop reading the
+  same as the list.
+- **To reverse.** Move the files back to the top and rename the slots;
+  nothing else stores a folder.
+- **Rough edge.** Both Macs should run this build before anyone sorts
+  presets into folders, or the older one shows those pads dark.
+- **Judge it.** 443.
+### 586. The trash is this Mac's
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** `to_trash(path, root, origin)` writes
+  `<root>/trash/<origin>/<stem>.<stamp>[-n].json`; the library passes its
+  machine home and the folder the file came from relative to the
+  library (`Library._to_trash`: `presets/party`), so the trash mirrors
+  the tree. `trash()` lists the machine's; `restore_trash` reads the
+  group and folder from where the file lies (never from the caller's
+  `Trashed`) and puts it back there, next free name if taken in that
+  folder; `empty_trash` empties the machine's and removes its empty
+  folders bottom-up. With no `[library] path` the machine home is the
+  library: nothing moves. The old `<library>/trash/` is **listed, not
+  migrated**: marked `old`, at the end of the popup under one dim line,
+  restorable as a copy — the file stays where it is — never written and never emptied by the app (review: a restore that removed it would write into the shared folder and race the other Mac).
+- **Other options.** Migrate it once on first use: both Macs would race
+  to move one shared folder, each ending with half, and a migration is a
+  write into the cloud folder the row exists to stop. Ignore it: files
+  a Mac kept before would be unreachable from the app.
+- **To reverse.** `_to_trash` passes `self.home` again; the listing's
+  old/new split goes.
+- **Rough edge.** A file restored on Mac A from the old trash disappears
+  from Mac B's list too (it is one folder); a file × on Mac A is in A's
+  trash only, so B cannot restore it.
+- **Judge it.** 442.
+### 587. Where a save lands
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** **save** writes over the file the loaded name
+  resolves to, wherever it is. **as…** writes the typed name: with a
+  folder in it (`party/NEW`) into that folder, made if need be; the
+  field is seeded with the loaded preset's full name, so a plain edit of
+  the leaf lands beside it. The two-handed save, `preset.save_new` and
+  an empty pad's hold grow the name from the loaded preset (`next_name`
+  per folder: `party/TRIP` → `party/TRIP 2`) and write it **in the
+  loaded preset's folder** (`Library.folder_of` reads the file, not the
+  string); with none loaded, or `untitled`, at the top. ⇧F on an empty
+  slot (`PRESET <n>`) is at the top: it is not grown from the loaded one.
+- **Other options.** Every new preset at the top: the owner sorts by
+  hand after every show. A "new presets" folder: a folder the owner did
+  not make.
+- **To reverse.** `_save_new` back to `next_name(current, taken)` alone.
+- **Rough edge.** A loaded conflict copy's folder is its own folder, as
+  any file's.
+- **Judge it.** 441.
+### 588. The PRESETS page's reading of folders
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** The flat list stays (plan 41), sorted by the
+  qualified name, so a folder's presets sit together. A folder's row is
+  a label-less selectable with `party / ` drawn dim and the name bright
+  over it; a top-level row is drawn exactly as before. `rename` seeds
+  the field with the leaf and keeps the folder (a `/` refused). × trashes
+  to this Mac; a folder left empty stays on disk. The trash popup lists
+  a folder's preset by its qualified name, and marks a row from the
+  library's old trash in the row itself (`presets · library`, dim; its
+  restore tooltip says the copy stays) — review of #334.
+- **Other options.** `party / TRIP` all in one ink: the folder fights
+  the name at distance. A folding header per folder: more page, more
+  clicks, stage 2.
+- **To reverse.** `_list_row` back to the one selectable.
+- **Rough edge.** A long folder path eats the row; nothing elides it yet.
+- **Judge it.** 440, 441.
+
 ## Wave 1 — the test suite (row 589)
 ### 589. The test suite cannot hang the Mac
 - **Asked.** On 2026-11-01 the owner's Mac reached 140 GB: several
@@ -10271,92 +10509,3 @@ and D3 (the per-deck split) are
   `tests/test_gl_probe.py`; a deliberate `time.sleep(130)` under
   `-n 2 --timeout=5` failed by name in 5.5 s, and under `-n0 --timeout=5`
   failed and the run went on: "1 failed, 2 passed").
-### 579. RINGS' colour step, and the spatial knobs of glimmer, wobble and fractals
-- **Asked.** Row 560 (the owner, 2026-11-02): no shader multiplies time by
-  a param. The time lint's allowlist named RINGS × colour for K4: `pal(ph
-  * 0.15 * m_colour() + …)` with `ph = r * f - t * 3 / TAU`, `t` the
-  patterns' clock, so a colour step turned the palette by `t · 0.072 ·
-  Δcolour` cycles — a tenth of a cycle per detent a minute in, 6.7 an hour
-  in — and COLOUR is the input the factory routes put the UPR lane on, so
-  the music did it on every flare. The wave 1 prompt also named glimmer,
-  wobble and fractals as "param scales space" suspects.
-- **Built.** RINGS reads `pal((r * f * m_colour() - t * 3.0 / TAU) * 0.15 +
-  face_turn(…))`: colour scales the radius term only — the hue range
-  along the rings, which is what `patterns.py` says it does — and the
-  drift runs at the design's rate whatever the colour. At colour 1 the
-  expression is the old one term for term, so no golden moved. A detent
-  of colour on a 128² tile, an hour in: 59.5 levels of 255 before, 9.4
-  after (four seconds in, 8.0 before and 9.8 after; a frame's own motion is
-  1.2). The other `m_colour()` uses multiply no time-carrying term:
-  `spread_hue` (every caller's `x` is a sine, a cosine or a static
-  coordinate), `finish`, METER (`s` is a band index), TRUCHET (`along`
-  has no `t`), HEX and CELLS (a hash × colour, `t` added), SPIRAL (`r ×
-  colour`, `t` added) and PLASMA (`s` is a sum of sines, bounded) —
-  left alone. Glimmer, wobble and fractals, measured with the harness of
-  row 580 (a hundredth of a detent, px early / late): glimmer size 0.32 /
-  0.29, wobble frequency 0.076 / 0.074, fractals cells 2.5 / 1.2 and size
-  0.19 / 0.09, every other knob of theirs under 0.01 — none grows. Each
-  knob multiplies a coordinate (glimmer's cell grid, wobble's `p.y *
-  u_freq`, fractals' `ps * cells`), but what is added to that coordinate
-  is bounded (a sine, a Perlin sample) or comes after the product (`+
-  t`), so a step changes the shape by the same amount whenever it comes:
-  glimmer's stars keep their hash and their twinkle and move with the
-  zoom (the cell index survives a size step), wobble's waves change pitch,
-  fractals' lattice re-scales. All three zoom about the frame's
-  bottom-left corner rather than its centre, so a step slides the far
-  side most; that is a look, the same at minute one, and fractals'
-  mirror fold sits on that corner, so re-centring would change the
-  picture at every constant knob — not done.
-- **Other options.** A second integrated pattern clock for the hue drift
-  scaled by colour (keeps "more colour runs the hues faster" at the cost
-  of a uniform and a clock in `Renderer`; nobody asked for that coupling
-  and the mode's own table does not describe it). Re-centring glimmer's
-  and wobble's zoom (a change at every non-default size for no growth).
-- **To reverse.** One line of `patterns.glsl` (it hot-reloads) and the
-  allowlist entry back.
-- **Judge it.** Check 436.
-### 580. A knob step is the same size an hour in as a second in
-- **Asked.** The wave 1 prompt for K4: the time lint reads products of a
-  time and a param in the source and cannot see a param that scales
-  space where the time arrives some other way (inside a builtin it reads
-  as opaque, `mod(u_phase, …)`; through a hash; from the host).
-- **Answer.** (rec) — the build's, for the owner to keep or overturn: a
-  measurement over everything shipped, not a second lint.
-  `tests/test_step_continuity.py` takes every effect's `speed` and every
-  `@param` (amount-type params at half their range so the effect shows)
-  and every face pattern's inputs but SPEED (the renderer integrates it,
-  tested in `test_patterns.py`), and measures the picture's change for a
-  small step with every clock stopped at the same phase
-  (`uv_flow.jump`: the UV-encoded source, so the change is in pixels of
-  the sampling field; a pattern's 64² tile in levels): the largest over
-  six phases from 0.1 to 98 against the smaller of an hour and two. A
-  step may be any size — a shape knob is meant to change the picture —
-  but no more than 4 × its early size + 0.5 (px or levels) late. The
-  step is a hundredth of a detent for an effect's float param (a whole
-  detent for an integer), a tenth for a pattern input (the tile is 8-bit),
-  so a shape change stays a fraction of a pixel while a phase carried by
-  time is still moved by `phase × Δ`. Each knob is measured under every
-  setting of the effect's choices (blend's key acts in the luma key
-  only), with the UV map turned half a turn on the aux input (displace and
-  blend read nothing without one), and with `u_time` at the wall time the
-  phase stands at for the effect's speed.
-- **Measured.** Every knob that grows fails by 4.3–4.9 × the threshold
-  (warp drift 0.23 → 6.2 px, warp scale 0.26 → 6.7, tripcolour pulse 1.3
-  → 27.7, RINGS colour before row 579 3.2 → 61.6 levels); every other knob
-  is under 0.25 × it (the nearest: METER's scale, HEX's scale and warp,
-  doublevision's copies, kaleido's segments — big shape changes, the same
-  late). No false positive over the 17 effects and 12 patterns; K2's
-  ports (row 577) are checked like the rest now the time lint's
-  allowlist is empty: warp's drift and scale and tripcolour's pulse pass. A synthetic effect, `src(fract((uv +
-  mod(u_phase, 1e4) · 0.001) · u_scale))`, passes the lint and fails the
-  harness (past twice the rule's bound); the same with the offset added after the
-  scale, or a scale over a bounded wobble, passes. About 3 s of test time
-  serially, in the fast tier.
-- **What it cannot see.** A rate under a sine that has already wrapped by
-  phase 98 at a hundredth of a detent (more than ~6 rad a unit) — the
-  lint's product rule is for those, and the two together are the rule. A
-  param an effect never shows at its other params' defaults and half
-  their amounts.
-- **To reverse.** Delete the file and the two helpers at the end of
-  `tests/uv_flow.py`.
-- **Judge it.** Check 436.

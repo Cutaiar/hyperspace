@@ -1356,11 +1356,11 @@ root and `Library.machine` the home.
 
 | Path | What it is | Format |
 |---|---|---|
-| `presets/<slug>.json` | Your presets (§10). | `hyperspace.preset/2`, or `/3` when it uses plan 31's sequencer, envelopes or LFO count (below) |
+| `presets/<slug>.json`, `presets/<folder>/…/<slug>.json` | Your presets (§10), in folders you make in Finder if you like (plan 48): one in `presets/party/` is named `party/<its name>`. A hidden folder (`.cache`) is not read. | `hyperspace.preset/2`, or `/3` when it uses plan 31's sequencer, envelopes or LFO count (below) |
 | `projects/<slug>.hyp.json` | Your shows (the code calls them projects). | `hyperspace.project/2` |
 | `patches/<slug>.json` | Your patches (plan 40): a group of GRAPH nodes and its boundary, spawned into a preset, never loaded. Written only by **save as patch…** / **update patch**. | `hyperspace.patch/1` |
 | `<group>/<slug>.json` | Module presets, one registry group each (`band/`, `dream/`, `hands/`, `view/` …). An `fx/` folder from before plan 40 is ignored: the fx module presets are retired (`library.RETIRED_MODULES`). | `hyperspace.preset/1` |
-| `trash/<group>/<slug>.<YYYYMMDD-HHMMSS>.json` | Copies of your files taken before an overwrite, delete or rename. Never watched. | as the original |
+| `trash/…` | Only in a library from before plan 48: the trash every Mac shared. Listed at the foot of the trash popup (marked old); a restore copies a file back and leaves it there; never written, never emptied by the app — clear it in Finder. | as the original |
 
 **The home** (`Library.machine`; never in a shared folder):
 
@@ -1372,6 +1372,7 @@ root and `Library.machine` the home.
 | `windows.json` | Where the control window and each render output were at the last quit (§14). Machine-specific; safe to delete. | `hyperspace.windows/1` |
 | `ui.json` | This Mac's panel settings: the GRAPH page's side-pane width (`graph.side_w`, PR #266), written when its grip is let go. Safe to delete. | plain JSON |
 | `last_show` | One line: the file name of the show opened last on this machine. | text |
+| `trash/<group>/[<folder>/]<slug>.<YYYYMMDD-HHMMSS>.json` | This Mac's trash (plan 48): copies of library files taken before an overwrite, delete or rename, under the folder each came from (`trash/presets/party/…`). Never in the shared folder, never watched. | as the original |
 | `stall.log` | The watchdog's log (§15). | text |
 | `weights/` | The dream's pretrained network weights, downloaded on first use. | binary |
 | `media/` | This Mac's media files, ids `local:<relative path>` (plan 32; the shared ones are `<library>/media/`). Subfolders are groups. | any picture or video |
@@ -1387,12 +1388,12 @@ folder of old routing presets is no longer read.
 
 | File | When | Kept first |
 |---|---|---|
-| `presets/<name>.json`, `patches/<name>.json`, `<group>/<name>.json` | A save over it, ⇧F1–F8, × on the PRESETS page (its list or its patches fold), a rename, **update patch**. Never a load or a spawn. | A copy in `trash/<group>/`. A save goes on if the copy fails (and says so); a × or a rename is refused. A save that writes the same text adds nothing. |
+| `presets/<name>.json`, `patches/<name>.json`, `<group>/<name>.json` | A save over it, ⇧F1–F8, × on the PRESETS page (its list or its patches fold), a rename, **update patch**. Never a load or a spawn. | A copy in this Mac's `trash/<group>/[<folder>/]`. A save goes on if the copy fails (and says so); a × or a rename is refused. A save that writes the same text adds nothing. |
 | `projects/<show>.hyp.json` | A pad change, save; a rename of a preset it names. Never a load. | The first write that puts a preset past slot 8: `<show>.hyp.json.bak-v2-bank8`; the first write over a show holding the stick spring's old ids: `.bak-v2-spring`; the first write over a show holding the eye (plan 43 C2: the presets' now): `.bak-v2-eye` — no copy, no write. A rename: a copy in `trash/projects/`. |
 | `bindings.json` | At launch, when a newer build adds factory rows (the bank pads, OVERDUB, the clip-stop row, Home, the undo keys) where the control or key is free. A row you changed is left as you had it. | `bindings.json.bak-v<schema>` (`.bak-v3` for today's files; a dated name if that exists, never over any `.bak-*`). No copy, no rewrite: the table runs from memory for the session and the next launch tries again. |
 | `hands.json` | A calibration sweep or "reset ranges". A schema-1 file is read as it is and never rewritten at launch. | The first rewrite of a schema-1 file: `hands.json.bak-v1`. |
 | `<group>/…` | Restore from the trash. | Nothing to keep: a restore never writes over a file — a taken name restores as the next free name. |
-| `trash/**` | **Empty trash.** | **Nothing. Emptying the trash is the one action in the app that keeps no copy.** It deletes exactly the files its popup lists, after a second click. |
+| this Mac's `trash/**` | **Empty trash.** | **Nothing. Emptying the trash is the one action in the app that keeps no copy.** It deletes exactly the files its popup lists as this Mac's, after a second click; the library's old trash is left. |
 | `windows.json`, `last_show` | Every quit and Cmd+R / every show load and save as. | Nothing (machine state). |
 
 Every library write is atomic: the text goes to a dot-named temp file
@@ -1403,8 +1404,16 @@ client never syncs a half-written preset.
 
 `library.to_trash` copies a file exclusively (a second copy in the same
 second gets `-2`, `-3`), so nothing in the trash is ever overwritten.
-Restore from the PRESETS page's **trash (n) ▸** popup, or copy a file back
-into `<home>/<group>/` under its plain name.
+The trash is **this Mac's** (plan 48): `<home>/trash/`, the machine
+home, even when `[library] path` puts the library in a shared folder, so
+a × on one Mac never syncs a copy to the other. A copy sits under the
+folder it came from (`trash/presets/party/trip.20261102-221500.json`).
+Restore from the PRESETS page's **trash (n) ▸** popup — back into that
+folder, the next free name if the name is taken there — or copy a file
+back into `<library>/<group>/[<folder>/]` under its plain name. A
+`trash/` left in the shared library by an older build is listed after
+this Mac's, marked old; a restore copies the file back and leaves it there — the app never writes to it or
+empties it.
 
 ### The shared library
 
@@ -2606,6 +2615,21 @@ files live on only as the golden frames' corpus (`tests/corpus/`, §16)
 and nothing in the app reads them. The eleven band **scenes** are code
 data (`hyperspace/scenes/band/`, §13), not presets.
 
+**Folders** (plan 48, stage 1). Make folders under `presets/` in Finder
+and move presets into them; the app lists every folder down (hidden ones
+skipped) and names a preset in one by its folder: `presets/party/trip.json`,
+whose own `name` is `TRIP`, is `party/TRIP` in the list, on the strip,
+on a pad and in a show's bank (a top-level preset's name is bare, as
+before, so every older show reads unchanged). The file keeps only its
+own name; the folder is where it is. **save** writes back to the file
+the preset came from; **as…** writes the name you type, into its folder
+if it has one (`party/NEW`, made if need be); a new preset grown from
+the loaded one — the two-handed save, `preset.save_new`, an empty pad's
+hold — lands beside it, in its folder; **rename** keeps the folder (its
+field holds the name alone). Moving a preset between folders, and making
+or renaming a folder, is Finder's until stage 2; a folder left empty
+stays.
+
 A **show** (`projects/<slug>.hyp.json`; the code says *project*) is the
 room the presets play in: the session's values, the module presets of
 the session groups (the band layout and scene), the **pads** (the bank,
@@ -2640,11 +2664,15 @@ shape → scene → All outputs, named `untitled` and dirty until saved),
 **save** (over the loaded preset's file; on `untitled` it asks for a
 name) and **as…**; **the list** — every preset by name, case folded,
 filling the page (never shorter than three rows, scrolling past the room
-it has), the loaded one selected: a click loads, **rename** turns the
-row into a name field, **×** sends the file to the trash; **trash (n) ▸**
+it has), the loaded one selected, a folder's preset drawn `party / TRIP`
+with the folder dim: a click loads, **rename** turns the
+row into a name field, **×** sends the file to this Mac's trash; **trash (n) ▸**
 at the list's foot, only while the trash holds something — every file in
-it, newest first, each with **restore**, then **empty trash…**, which
-asks "delete N files for good? — click again" for 4 s; **patches ▸**,
+it, newest first, each with **restore**, then (when the shared library
+still has an old trash) one dim line saying how many of the rows are
+from it, then **empty trash…**, which
+asks "delete N files for good? — click again" for 4 s and empties this
+Mac's only; **patches ▸**,
 folded — every patch, rename and × (a patch is spawned on GRAPH, never
 loaded here); **show** — one line saying what a show is ("the desk's
 pads, the session, the rig's wires"), then its name ● (red while it

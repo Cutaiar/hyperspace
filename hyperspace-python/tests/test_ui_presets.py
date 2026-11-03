@@ -170,6 +170,31 @@ def test_cross_sends_the_file_to_the_trash_and_the_row_goes(rig, tmp_path):  # n
     assert st["page"]["foot"] == ["trash (2) ▸"]
 
 
+def test_a_folder_preset_reads_folder_then_name_and_renames_in_its_folder(rig):  # noqa: F811
+    """Plan 48 row 588: a preset in ``presets/party/`` is listed as
+    ``party/DIAL`` — drawn "party / " dim, then its name, its chips clear
+    of both; `rename` seeds the field with the leaf alone, and the file
+    stays in its folder."""
+    panel, lib = rig.panel, rig.lib
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    src = lib.path_of("presets", "DIAL")
+    folder = lib.home / "presets" / "party"
+    folder.mkdir()
+    src.rename(folder / "dial.json")
+    st = _page(panel)
+    page = st["page"]
+    assert ("party/DIAL", ("rename", "×")) in page["rows"]
+    assert ("party", "DIAL") in page["text"] and ("", "TUMBLE") in page["text"]
+    row, ren = page["rects"]["row.party/DIAL"], page["rects"]["rename.party/DIAL"]
+    assert row[0] + imgui.calc_text_size("party / DIAL").x < ren[0]
+    _click(panel, ren)
+    frame(panel)
+    assert st["naming"] == "rename:party/DIAL" and st["buf"] == "DIAL"
+    lib.rename("presets", "party/DIAL", st["buf"] + " TWO")
+    st["naming"] = None
+    assert (folder / "dial-two.json").is_file() and "party/DIAL TWO" in lib.list("presets")
+
+
 def test_rename_turns_the_row_into_the_field_and_enter_renames(rig, tmp_path):  # noqa: F811
     """`rename` on a row: the row becomes the name field, seeded with the
     name; Enter renames the file (the name inside it too) and the list
@@ -476,6 +501,23 @@ def _trash_view(panel):
     _click(panel, st["page"]["rects"]["trash"])
     frame(panel)
     return st, st["trash_view"]
+
+
+def test_old_trash_rows_say_so_and_nothing_to_empty_draws_no_chip(rig, monkeypatch):  # noqa: F811
+    """Plan 48 review: a row from the library's old trash carries
+    "presets · library" in itself; when only such rows are listed there is
+    nothing "empty" would remove, so no chip to arm."""
+    from hyperspace.library import Trashed
+    panel, lib = rig.panel, rig.lib
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    old = Trashed(lib.home / "trash" / "presets" / "gone.20261001-120000.json", "presets",
+                  "GONE", "Oct 1 12:00", "", True)
+    monkeypatch.setattr(lib, "trash", lambda: [old])
+    ui_presets.invalidate(panel, "presets")
+    _st, view = _trash_view(panel)
+    assert view["rows"] == [("presets", "GONE", "Oct 1 12:00")]
+    assert view["tags"] == ["presets · library"] and view["old"] == 1
+    assert view["empty"] is None and "empty" not in view["rects"]
 
 
 def test_empty_asks_once_and_disarms(rig, tmp_path):  # noqa: F811
