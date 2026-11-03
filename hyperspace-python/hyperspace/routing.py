@@ -3026,7 +3026,9 @@ class Router:
 
         `skip`: the rows' sources, unqualified (``pad:A``, ``hat:DOWN``),
         that do not fire this frame — the buttons the totem holds while it
-        reads this pad (totem.SKIP, the plan 47 experiment)."""
+        reads this pad (totem.SKIP, the plan 47 experiment). A skipped
+        `hold` row forgets a press it was timing, so a press that began
+        before the skip does not fire when the skip ends mid-press."""
         axis = qualified("axis", role)
         publish = getattr(pad, "publish", None)
         if publish is not None:
@@ -3050,6 +3052,8 @@ class Router:
                     b.device == role or (not role and own and b.device == own)):
                 continue
             if skip and b.bare in skip:
+                if b.op == "hold":
+                    holds.pop((b.source, b.target), None)
                 continue
             hat = b.scheme == "hat"
             down = bool(pad.hat & code) if hat else pad.down(code)

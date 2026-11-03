@@ -22,16 +22,27 @@ of it would block until it lands). Every `RECHECK_S` the channel asks
 the resolver again: a file that has arrived or finished downloading opens, one that has gone goes black, and one replaced on
 disk (the resolver's optional `stamp(sid)` moved) opens afresh. The
 resolver answers from the folder's last scan, so none of this touches the
-disk on the frame thread."""
+disk on the frame thread.
+
+Sound (plan 45 V2): a channel's `play_audio` toggle enables its source's
+soundtrack (`VideoSource.audio`) the frame it turns on or a new slot comes
+under it, and disables it `OFF_FRAMES` after it turns off — on the
+closer, since a disable joins the soundtrack's thread, and never at once
+with an enable (`_Sound`); a slot change leaves the old track to its
+source's `close`. Each poll ends by handing the mixer
+(`media/mixer.py`) the channels heard, with the playhead each transport
+was just stepped to and the channel's `gain`: the transport is the one
+clock, and the mixer reads at its position."""
 
 from __future__ import annotations
 
 import queue
 import threading
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from . import adapters, ids, pool
+from . import adapters, ids, mixer, pool
 from .adapters import MissingSource
 from .frame import MediaFrame
 from .source import FETCHING, MISSING, Source, error
@@ -46,6 +57,8 @@ RECHECK_S = 1.0          # how often a channel asks the resolver about its id ag
 STILL_KINDS = ("still", "missing")   # untimed and not live: rate means nothing
 CLOSE_BUDGET_S = 1.5     # app exit: how long `MediaState.close` waits for the closes
 CLOSER_IDLE_S = 2.0      # the closer thread ends after this long with nothing to close
+OFF_FRAMES = 30          # a channel's sound turned off lets its soundtrack go this many frames later
+HOLD_SPEED = 1e-3        # slower than this forward (a hold, a jog's coast dying out) is silent
 
 
 class Closer:
@@ -109,6 +122,8 @@ class Channel:
     pos: float = 0.0
     jog: float = 0.0
     loop: int = 0
+    play_audio: bool = False   # plan 45 V2: the source's soundtrack into the mixer
+    gain: float = 1.0          # …at this gain (linear; 1 is unity)
     # runtime, never saved
     source: Source | None = field(default=None, repr=False, compare=False)
     transport: Transport | None = field(default=None, repr=False, compare=False)
@@ -117,9 +132,75 @@ class Channel:
     checked: float = field(default=0.0, repr=False, compare=False)
     frozen: bool = field(default=False, repr=False, compare=False)
     held: MediaFrame | None = field(default=None, repr=False, compare=False)
+    heard: Any = field(default=None, repr=False, compare=False)   # the Soundtrack enabled for it
+    quiet: int = field(default=0, repr=False, compare=False)      # frames its sound has been off
 
     def index(self) -> int:
         return min(max(round(self.slot), 0), BIN - 1)
+
+
+class _Sound:
+    """Who calls a soundtrack's `enable` and `disable`, so the two never
+    run at once on one track (plan 45 V2, review): the frame thread enables
+    (`on`, non-blocking), the closer disables (`off` queues a `_Silence`:
+    `disable` joins the soundtrack's thread). While a disable is queued or
+    running the frame thread only notes that it wants the track again, and
+    the closer enables it once its disable is done (`done`), under the
+    lock `on` takes — so an enable never lands inside a disable."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._pending: dict[int, list] = {}     # id(track) → [track, wanted again]
+
+    def on(self, track) -> None:
+        with self._lock:
+            p = self._pending.get(id(track))
+            if p is not None:
+                p[1] = True
+                return
+            track.enable()
+
+    def off(self, track, closer: Closer) -> None:
+        with self._lock:
+            p = self._pending.get(id(track))
+            if p is not None:
+                p[1] = False
+                return
+            self._pending[id(track)] = [track, False]
+        closer.put(_Silence(self, track))
+
+    def forget(self, track) -> None:
+        """The track's source is being dropped: a queued disable is not
+        followed by an enable."""
+        with self._lock:
+            p = self._pending.get(id(track))
+            if p is not None:
+                p[1] = False
+
+    def done(self, track) -> None:
+        with self._lock:
+            p = self._pending.pop(id(track), None)
+            if p is not None and p[1]:
+                track.enable()
+
+    def busy(self, track) -> bool:
+        with self._lock:
+            return id(track) in self._pending
+
+
+class _Silence:
+    """A soundtrack's `disable` as a job for the closer: it joins the
+    soundtrack's thread, which can sit in `av.open` on a cloud file, so it
+    never runs on the frame thread (plan 45 V2)."""
+
+    def __init__(self, sound: _Sound, track):
+        self.sound, self.track = sound, track
+
+    def close(self) -> None:
+        try:
+            self.track.disable()
+        finally:
+            self.sound.done(self.track)
 
 
 class NoResolver:
@@ -175,6 +256,8 @@ class MediaState:
         self.channels: dict[str, Channel] = {c: Channel(c) for c in CHANNELS}
         self._closed = False
         self.closer = Closer()
+        self.mixer = mixer.Mixer()
+        self.sound = _Sound()
 
     def _closer(self) -> Closer:
         """The closer; made here for a MediaState from before it (a hot
@@ -183,6 +266,27 @@ class MediaState:
         if c is None:
             c = self.closer = Closer()
         return c
+
+    def _mixer(self) -> mixer.Mixer:
+        """The mixer (plan 45 V2); made here for a MediaState from before
+        it, and re-classed to the module's `Mixer` after a hot reload of
+        `media.mixer` (its stream, and the callback reached through the
+        class, live on)."""
+        m = self.__dict__.get("mixer")
+        if m is None:
+            m = self.mixer = mixer.Mixer()
+        elif (type(m) is not mixer.Mixer and type(m).__qualname__ == "Mixer"
+              and type(m).__module__ == mixer.__name__):     # the module's own, reloaded
+            m.__class__ = mixer.Mixer
+            for k, v in vars(mixer.Mixer()).items():  # fields added since: their defaults
+                m.__dict__.setdefault(k, v)
+        return m
+
+    def _sound(self) -> _Sound:
+        s = self.__dict__.get("sound")
+        if s is None:
+            s = self.sound = _Sound()
+        return s
 
     # -- the frame thread ---------------------------------------------------
 
@@ -210,10 +314,56 @@ class MediaState:
                     self._freeze(ch, src)
             except Exception as e:  # noqa: BLE001 — a source must not kill the frame
                 src.status = error(f"{type(e).__name__}: {e}")
+        voices, asked = self._voices()
+        self._mixer().feed(voices, asked)
+
+    # -- the sound (plan 45 V2) ---------------------------------------------
+
+    def _voices(self) -> tuple[tuple, bool]:
+        """Each channel's soundtrack follows its play-audio toggle: enabled
+        the frame the toggle (or a new slot under it) asks, let go
+        `OFF_FRAMES` frames after it stops asking (a lane flicking the
+        toggle never queues a disable and a fresh decode a flick), through
+        `_Sound`. Returns, for every channel heard, (soundtrack, the
+        playhead just stepped, gain) — a channel not moving forward
+        (`_forward`) is left out — and whether any channel asks for sound
+        at all (the mixer opens its stream on that, before a hold ends)."""
+        sound, out, asked = self._sound(), [], False
+        for ch in self.channels.values():
+            src = ch.source
+            track = getattr(src, "audio", None)
+            want = track if ch.play_audio else None
+            try:
+                if want is not None:
+                    ch.quiet = 0
+                    if ch.heard is None:
+                        sound.on(want)          # (raises: not heard, tried again next frame)
+                        ch.heard = want
+                elif ch.heard is not None:
+                    ch.quiet += 1
+                    if ch.quiet >= OFF_FRAMES:
+                        sound.off(ch.heard, self._closer())
+                        ch.heard, ch.quiet = None, 0
+            except Exception as e:  # noqa: BLE001 — a soundtrack must not kill the frame
+                if src is not None:
+                    src.status = error(f"{type(e).__name__}: {e}")
+                continue
+            if want is None:
+                continue
+            asked = True
+            if not _forward(ch.transport):
+                continue
+            g = float(ch.gain)
+            if g > 0.0:             # (NaN too: not > 0)
+                out.append((want, float(ch.transport.playhead), g))
+        return tuple(out), asked
 
     def _switch(self, ch: Channel, sid: str | None, now: float) -> None:
         old, ch.source, ch.transport = ch.source, None, None
         ch.frozen, ch.held = False, None
+        if ch.heard is not None:        # the leaving source's `close` ends its sound
+            self._sound().forget(ch.heard)
+            ch.heard, ch.quiet = None, 0
         if old is not None:
             self._closer().put(old)     # never joined here: see the module docstring
         ch.sid, ch.checked, ch.stamp = sid, now, None
@@ -392,7 +542,26 @@ class MediaState:
         self._closed = True
         for ch in self.channels.values():
             self._switch(ch, None, 0.0)
-        return self.drain(pool.left(budget))
+        t0 = time.monotonic()
+        quiet = self._mixer().close(min(mixer.CLOSE_BUDGET_S, budget))
+        left = max(budget - (time.monotonic() - t0), 0.0)
+        return self.drain(pool.left(left)) and quiet
+
+
+def _forward(tr: Transport | None) -> bool:
+    """Whether a channel's transport is playing forward — the only way
+    V2 reads its sound (plan 45 V2, second review). Not: a hold (rate 0)
+    or a jog's coast dying out toward it (speed under `HOLD_SPEED`); a
+    `once` clip parked at its end (the playhead clamped at the duration
+    with the speed still 1, which would re-read one block a frame — the
+    track often outlasts the picture); reverse and pingpong's way back
+    (direction × speed < 0: a forward block under a backward picture).
+    Reverse is V4's, with varispeed."""
+    if tr is None:
+        return False
+    if tr.duration > 0.0 and tr.playhead >= tr.duration:
+        return False
+    return tr.direction * tr.speed >= HOLD_SPEED
 
 
 def _read(src) -> MediaFrame | None:

@@ -216,13 +216,13 @@ def test_a_picture_put_back_saves_the_untouched_frame(tmp_path):
     app.lib.load("presets", "TRIP")
     gs = app.presets.graph
     untouched = app.presets.document("TRIP")
-    assert untouched["schema"] == M.WIRED_SCHEMA
+    assert untouched["schema"] == M.SAVE_SCHEMA
     e = graphview.Edit(graph=gs, push=lambda label: None)
     assert graphview.set_picture(e, "output.2.image", "scene") is None
     assert G.Wire("scene", "output.2.image") in gs.spec.wires    # (plan 28's words: /2)
     assert graphview.set_picture(e, "output.2.image", "nothing") is None
     edited = app.presets.document("TRIP")
-    assert edited["schema"] == M.WIRED_SCHEMA and edited["graph"] != untouched["graph"]
+    assert edited["schema"] == M.SAVE_SCHEMA and edited["graph"] != untouched["graph"]
     assert graphview.set_picture(e, "output.2.image", "as All outputs") is None
     assert app.presets.document("TRIP") == untouched
     assert graphview.set_through(e, 2, True) is None      # (TRIP lays All outputs' hands)

@@ -313,7 +313,10 @@ def test_old_layout_positions_follow_the_renamed_ids(rig):
     raw["layout"] = {"render:eye": [40, 50], "render:output.1": [60, 70]}
     project.path.write_text(json.dumps(raw))
     project.load("old-show")
-    assert project.layout == {"render:camera": [40, 50], "render:output.1": [60, 70]}
+    # (plan 43 C2: the camera's position is the look's — held for the old
+    # presets this show opens, never the show's own)
+    assert project.layout == {"render:output.1": [60, 70]}
+    assert project.camera_at == [40, 50]
 
 
 def test_layout_round_trips_through_the_preset_and_the_show(rig):

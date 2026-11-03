@@ -388,9 +388,9 @@ def test_render_pins_reach_n4s_methods_and_refuse_as_a_refusal(rig):
     got = e.disconnect(wire)
     assert isinstance(got, graphview.Refusal) and got == graphview.NO_SUCH_WIRE.format(
         wire="hands.layer → output.2.hands")
-    # (plan 35 G: the shape deletes too; the camera is the rig's)
+    # (plan 35 G: the shape deletes too; the camera is the look's one, kept)
     got = e.remove_node("render:camera")
-    assert isinstance(got, graphview.Refusal) and got == graphview.NOT_REMOVABLE.format(
+    assert isinstance(got, graphview.Refusal) and got == graphview.CAMERA_KEPT.format(
         label="Camera")
     for t in graphview.RENDER_TYPES:
         assert ui_graph.CREATE[t] is ui_graph._create_render
@@ -772,7 +772,8 @@ def test_a_move_picks_up_the_performer_not_a_sleeping_route(rig):
 
 def test_deleting_a_node_dispatches_by_kind(rig, monkeypatch):
     """Delete on a node goes by its kind (`DELETE_NODE`): a render or an
-    output node is N4's (the rig's camera refused in words: plan 35 G), a
+    output node is N4's (the camera refused in words: plan 35 G — the look's
+    one since plan 43 C2), a
     kind not listed is the rig's; a macro node's delete goes through the
     table's `set_macros`, its label and subscribers with it."""
     from imgui_bundle import imgui_node_editor as ed
@@ -780,7 +781,7 @@ def test_deleting_a_node_dispatches_by_kind(rig, monkeypatch):
     st = {"note": ""}
     shape = graphview.VNode("render:camera", "render", "Camera")
     ui_graph.DELETE_NODE[shape.kind](rig.panel, st, None, shape)
-    assert st["note"] == graphview.NOT_REMOVABLE.format(label="Camera")
+    assert st["note"] == graphview.CAMERA_KEPT.format(label="Camera")
     assert ui_graph.DELETE_NODE["output"] is ui_graph._delete_render_node
     group = graphview.VNode("group:tempo", "group", "tempo")
     ui_graph.DELETE_NODE.get(group.kind, ui_graph._rig_node_cut)(rig.panel, st, None, group)
@@ -830,7 +831,7 @@ def test_a_render_edit_s_line_goes_at_the_next_edit_or_refusal(rig, monkeypatch)
 
 
 def test_a_selection_delete_keeps_its_first_refusal_s_words(rig, monkeypatch):
-    """Delete on a selection of three: the rig's camera (refused), a
+    """Delete on a selection of three: the camera (refused: the look's one), a
     modifier (it goes) and an LFO (refused) — the head keeps the first
     refusal's words for the frame, not wiped by the modifier's landing nor
     replaced by the LFO's. The next delete starts afresh: a landing alone
@@ -868,7 +869,7 @@ def test_a_selection_delete_keeps_its_first_refusal_s_words(rig, monkeypatch):
     queue[:] = [ui_graph._id(st, f"n:{n.id}") for n in (shape, mod, lfo)]
     ui_graph._delete(panel, st, view)
     assert table.modifier(m.id) is None                     # the modifier went …
-    assert st["note"] == graphview.NOT_REMOVABLE.format(label="Camera")   # … the first words stay
+    assert st["note"] == graphview.CAMERA_KEPT.format(label="Camera")   # … the first words stay
     assert "held" not in st
     m2 = ui_graph.add_modifier(panel, "threshold")
     st["note"] = "an old refusal"
@@ -1173,7 +1174,7 @@ def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
     assert n is not None and n.faint and not n.idle
     assert graphview.summary(n)[0] == graphview.REACHES_NOTHING
     doc = json.loads(rig.presets.save_as("Out").read_text())
-    assert doc["schema"] == "hyperspace.preset/7"
+    assert doc["schema"] == "hyperspace.preset/9"
     assert {"kind": "effect", "file": "acid"} in doc["graph"]["nodes"]
     settle(rig)
     assert rig.undo.undo()           # (both unwires inside one settle: one step)
@@ -1205,7 +1206,7 @@ def test_an_unwired_instance_one_saves_with_its_entry_on_or_off(tmp_path):
     for name, on in (("On", True), ("Off", False)):
         rig.reg["fx.huecycle.on"].set(on)
         doc = json.loads(rig.presets.save_as(name).read_text())
-        assert doc["schema"] == "hyperspace.preset/7", name
+        assert doc["schema"] == "hyperspace.preset/9", name
         assert {"kind": "effect", "file": "huecycle"} in doc["graph"]["nodes"], name
         assert G.run_back(G.read_graph(doc["graph"]), "output.all.image") == (
             "plasma", "kaleido", "zoomblur"), name

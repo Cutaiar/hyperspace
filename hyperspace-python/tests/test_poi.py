@@ -351,3 +351,42 @@ def test_real_bytes_a_still_joycon_hangs_the_shape_still():
     tail = ys[len(ys) // 2:]
     assert max(abs(x) for x, _ in tail) < 0.05
     assert all(abs(y - state.length) < 0.1 for _, y in tail)
+
+
+def test_one_duck_typed_rule_finds_the_state_so_a_hot_reload_still_drives():
+    import dataclasses
+    reg, state, _ = rig()
+    assert poi.state_of(reg) is state
+    Reloaded = dataclasses.make_dataclass(          # a reload's new class: not PoiState
+        "PoiState", [(f.name, f.type, f) for f in dataclasses.fields(poi.PoiState)],
+        bases=(), namespace={k: v for k, v in vars(poi.PoiState).items()
+                             if callable(v) and not k.startswith("__")})
+    reg.poi = Reloaded()
+    assert not isinstance(reg.poi, poi.PoiState) and poi.state_of(reg) is reg.poi
+    reg.poi.on = True
+    dev = PadDevice("pad", {}, Context(reg=reg), io=FakePad())
+    dev._dt = DT
+    router = ShimRouter(reg)
+    for _ in range(30):
+        dev.io.frame()
+        dev.act(router)
+    assert router.calls[-1]["skip"] == poi.SKIP and pan(reg)[1] > 0.5
+    reg.poi = lambda: None                            # a stub's something else
+    assert poi.state_of(reg) is None and not poi.owns_pan(reg)
+
+
+def test_learn_ignores_the_reset_while_the_poi_will_take_the_pad():
+    reg, state, _ = rig()
+    dev = PadDevice("pad", {}, Context(reg=reg), io=FakePad())
+    assert dev._totem_skip(reg, dev.io) == frozenset()
+    reg["poi.on"].set(True)
+    dev.io.frame()
+    assert dev._totem_skip(reg, dev.io) == poi.SKIP       # before act takes it over
+    state.driving = "other"
+    assert dev._totem_skip(reg, dev.io) == frozenset()    # another pad holds it
+
+
+def test_a_scalar_poi_in_the_config_is_no_table():
+    assert poi.configured({"poi": True}) == {}
+    assert poi.configured({"poi": {"length": 2.0}}) == {"length": 2.0}
+    assert poi.configured({}) == {}

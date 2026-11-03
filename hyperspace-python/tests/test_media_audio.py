@@ -321,6 +321,22 @@ def test_read_is_zeros_outside_what_is_held_and_never_raises(pcm_clip, opened):
     assert a.read(5, -3).shape == (0, 2)
 
 
+def test_read_into_the_readers_own_buffer(pcm_clip, opened):
+    """Plan 45 V2 (second review): `read(at, n, out=)` writes into the
+    reader's buffer — zeros where nothing is held, every stale sample
+    overwritten — and returns its first n rows; the same samples as
+    without `out`."""
+    s = opened(pcm_clip)
+    a = s.audio
+    assert _until(lambda: a.status == READY)
+    buf = np.full((400, 2), 7.0, np.float32)
+    got = a.read(3 * RATE - 100, 200, out=buf)
+    assert got.base is buf and got.shape == (200, 2)
+    assert np.array_equal(got, a.read(3 * RATE - 100, 200))
+    assert not got[100:].any() and (buf[200:] == 7.0).all()
+    assert not a.read(10 * RATE, 300, out=buf).any() and (buf[300:] == 7.0).all()
+
+
 def test_a_file_without_audio_is_silence_with_no_note(tmp_path, opened, capsys):
     p = tmp_path / "mute.mp4"
     with av.open(str(p), "w") as out:

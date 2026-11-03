@@ -5,6 +5,7 @@ real ones are in test_pads_joycon_real.py."""
 
 import math
 import struct
+import time
 from types import SimpleNamespace as NS
 
 import hyperspace.gamepad as gp
@@ -477,8 +478,11 @@ def test_the_pad_reads_a_joycon_as_one_stick_and_its_motion_through_its_own_axes
     assert abs(lanes["roll"] - 0.5) < 0.02 and abs(lanes["pitch"] - 0.5) < 0.02
     # the shoulder end lifted: up now has a part along the chip's +x, which
     # the map reads as away from the player (−z) — the far edge up: pitch high
+    # each report 50 ms after the last (the motion steps per report, on
+    # the time between them — not the frame's dt)
+    t0 = time.monotonic()
     for _ in range(80):
-        reader._take(full_report(accel=(2900, 0, 2900), timer=_ & 0xFF))
+        reader._take(full_report(accel=(2900, 0, 2900), timer=_ & 0xFF), t=t0 + 0.05 * _)
         pad.poll(dt=0.05)
     lanes = dict(zip(gesture.MOTION_LANES, pad.motion_lanes(), strict=True))
     assert lanes["pitch"] > 0.65 and abs(lanes["roll"] - 0.5) < 0.05

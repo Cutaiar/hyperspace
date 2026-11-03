@@ -251,7 +251,7 @@ def register(reg, state: PoiState, cfg: dict | None = None) -> None:
     if f"{GROUP}.on" in reg:
         return
     reg.poi = state
-    cfg = cfg or {}
+    cfg = cfg if isinstance(cfg, dict) else {}
     for key, (lo, hi) in RANGES.items():
         v = cfg.get(key)
         if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v):
@@ -322,15 +322,42 @@ def reset(state: PoiState) -> None:
     state.say(f"reset — {readout(state)}")
 
 
+def configured(cfg) -> dict:
+    """The config's `[poi]` table, or {} (a scalar `poi = true` is no table)."""
+    section = cfg.get("poi") if isinstance(cfg, dict) else None
+    return section if isinstance(section, dict) else {}
+
+
 def drives(state: PoiState | None, role: str) -> bool:
     """Is the poi reading the pad of `role` now?"""
     return state is not None and state.on and state.driving == role
 
 
+def will_drive(state: PoiState | None, pad, role: str) -> bool:
+    """Will the poi read the pad of `role` this frame — it reads it now, or
+    reads none and this pad has sensors? What Learn asks before `act`."""
+    if state is None or not state.on or not _live(pad):
+        return False
+    return state.driving is None or state.driving == role
+
+
+def state_of(reg) -> PoiState | None:
+    """The registry's poi state (`reg.poi`), or None."""
+    s = getattr(reg, "poi", None) if reg is not None else None
+    return s if is_state(s) else None
+
+
+def is_state(obj) -> bool:
+    """Duck-typed, as `totem.is_state`: a hot reload of this module makes a
+    new class the live state is not an instance of (until re-classed)."""
+    return (not callable(obj) and isinstance(getattr(obj, "on", None), bool)
+            and hasattr(obj, "driving") and hasattr(obj, "ball"))
+
+
 def owns_pan(reg) -> bool:
     """Is a poi swinging the shape (the totem's tilt-pan steps aside)?"""
-    state = getattr(reg, "poi", None)
-    return isinstance(state, PoiState) and state.on
+    state = state_of(reg)
+    return state is not None and state.on
 
 
 def _live(pad) -> bool:

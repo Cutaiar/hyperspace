@@ -1,8 +1,8 @@
 # Plan 45 — video audio: a video's sound, under the transport's clock
 
-**Status: V1 built (2026-11-02; review fixes the same day)** on
-`wave0/v1-video-audio-decode`, the first of four PRs; V2–V4 are designed
-here and not built. From the
+**Status: V1, V2 built.** V1 (2026-11-02; review fixes the same day) on
+`wave0/v1-video-audio-decode`, merged; V2, the mixer (2026-11-02), on
+`wave1/v2`; V3–V4 are designed here and not built. From the
 post-show triage of 2026-10-31: PyAV decoded only the video stream, the
 proxies are MJPEG with no audio, and the only output stream was the
 analyzer's WAV playback (`audio.py`) — no mixer, no per-channel gain.
@@ -76,14 +76,43 @@ MediaState.poll ─▶ Transport.step ─▶ VideoSource.want ┘      ▼
   the video's ends that much later), `rate`, `channels`, `held` (the span
   of seconds in memory) and `nbytes`. A source without an `audio`
   attribute (a still, a live feed, a missing one) has no sound.
-- **V2 — the mixer.** One `sounddevice.OutputStream` at 48 kHz stereo,
-  owned by the media package, whose callback asks each channel with a
-  timed source for `read(round(playhead × 48000), frames)` × that
-  channel's gain and sums. A per-video "play audio" toggle and a
-  per-channel gain, both `media.<c>.*` params (so Learn, the pad, a macro
-  and undo reach them; defaults: off and unity, today's silence). The
-  playhead the callback reads is the transport's last stepped value; the
-  callback integrates nothing.
+- **V2 — the mixer (built), `media/mixer.py`.** One
+  `sounddevice.OutputStream` at 48 kHz stereo float32, a block of 800
+  samples (one 60 Hz frame), owned by the media package. Once a frame,
+  after the transports are stepped, `MediaState.poll` hands the mixer one
+  tuple of voices — for each channel whose play-audio toggle is on and
+  whose source has an `audio`: the soundtrack, the playhead the transport
+  was just stepped to, the gain. The callback reads the tuple once, sums
+  `read(round(playhead × 48000), frames)` × gain and clips at ±1. **The
+  callback integrates nothing**, so the glitch is structural: the audio
+  and display clocks are never locked, and even at rate 1 a block now and
+  then repeats or skips — an occasional click at rate 1 is expected until
+  V4 reads sequentially and slews toward the transport; any other rate
+  stutters (V4's). Only forward play is read: a hold, a jog's coast under
+  `HOLD_SPEED`, a `once` clip parked at its end, reverse and pingpong's
+  way back are left out, silent — not a block repeated as a buzz. The
+  callback allocates nothing once warm (`Soundtrack.read` grew an
+  optional `out=`). A read
+  that raises or returns the wrong shape is skipped and counted.
+  The params (`params.build_registry`'s media loop): `media.<c>.audio`
+  (a toggle, off — today's silence) and `media.<c>.gain` (linear, unity,
+  `tapers.T_MEDIA_GAIN`: off, then −30…+6 dB, the notch at unity), both
+  performance — persisted, learnable, modulatable, so Learn, the pad, a
+  macro and undo reach them; no schema move (a file without them loads
+  them at their defaults). The toggle `enable()`s the channel's
+  soundtrack the frame it turns on and lets it go 30 frames after it turns
+  off (`OFF_FRAMES`: a lane flicking the toggle costs nothing); a slot
+  change under it enables the new, and the old ends with its source's
+  `close`. `disable()` joins the soundtrack's thread, so it runs on the
+  media closer, never at once with an enable (`channels._Sound`). The stream is opened, on a thread of its
+  own, the first time any channel's sound is on (at rate 0 or gain off
+  too) — nothing until something asks — reopened 5 s after it fails or
+  stops under us (a device unplugged), and otherwise left open, playing silence, until `MediaState.close` at
+  exit. MEDIA shows the toggle and the gain on the selected channel's
+  source line; GRAPH's channel node side pane lists them with its other
+  params; SYSTEM a `media sound` line (open, channels playing, underruns).
+  `tests/test_media_mixer.py`; register rows 581–583; hand checks 437–439
+  (group BB).
 - **V3 — the analyzer listens to the mix.** The mixer's summed block is
   pushed into the analyzer's ring as a source beside `mic` and `file`
   (`AudioSource` grows a `mix` mode): the bands follow the show's video

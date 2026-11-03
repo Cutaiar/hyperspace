@@ -967,7 +967,18 @@ class Pad:
         amap = gesture.axis_map_of(self.__dict__.get("axis_map"), reader)   # the one rule
         gyro = amap.pick(cal.gyro_dps(frame.gyro), amap.gyro)
         accel = amap.pick(cal.accel_g(frame.accel), amap.accel)
-        self.motion.step(gyro, accel, dt)
+        take = getattr(reader, "take_turn", None)
+        if take is None:               # a reader that sums nothing (a test's): per frame
+            self.motion.step(gyro, accel, dt)
+            return
+        # the turn the reader summed on its thread, every report (plan 47
+        # review): a slow frame loses none, a stalled pad adds none
+        turn, n = take()
+        self.motion.add_turn(amap.pick(turn, amap.gyro))
+        if n:
+            self.motion.step(gyro, accel, dt, integrate=False)
+        else:
+            self.motion.decay(dt)      # no report: the lanes leak home, nothing turns
 
     def touch_lanes(self) -> list[float] | None:
         """The ``touch:`` lanes (gesture.TOUCH_LANES), or None while the
@@ -1117,7 +1128,8 @@ def dialed(lanes) -> set[str]:
     return {LANES[i].partition(".")[0] for i in lanes if len(AXES) <= i < len(LANES)}
 
 
-def learn_from(pad: Pad, learn, role: str = "", dials=frozenset) -> bool:
+def learn_from(pad: Pad, learn, role: str = "", dials=frozenset,
+               skip=frozenset()) -> bool:
     """The pad completes an armed learn (learn.Learn, duck-typed — this
     module imports nothing from the package): the first button or D-pad
     press this frame lands a button row (`Learn.learn_pad_button`), else
@@ -1131,17 +1143,23 @@ def learn_from(pad: Pad, learn, role: str = "", dials=frozenset) -> bool:
     nudged stick never ends the learn. True when the press was the
     learn's, so the router lets that frame's button rows be. `role` is a
     second pad's qualifier (plan 27 B6): its rows read ``pad@p2:A``,
-    ``hat@p2:UP``, ``axis@p2:LX``; "" (the primary pad) leaves them bare."""
+    ``hat@p2:UP``, ``axis@p2:LX``; "" (the primary pad) leaves them bare.
+    `skip`: the buttons, unqualified (``pad:A``, ``hat:DOWN``), that land
+    nothing — the totem's while it reads this pad (as `Router.pad`'s)."""
     if learn is None or getattr(learn, "learning", None) is None or not pad.on:
         return False
     target = learn.target_for(learn.learning)
     q = f"@{role}" if role else ""          # routing.QUALIFIER (nothing imported here)
     named = getattr(pad, "buttons_named", None)      # plan 42: the extras the pad has
     for name, i in (named if isinstance(named, dict) else BUTTONS).items():
+        if f"pad:{name}" in skip:
+            continue
         if pad.pressed(i) and learn.accepts(f"pad{q}:{name}"):
             learn.learn_pad_button(f"pad{q}:{name}")
             return True
     for name, bit in HATS.items():
+        if f"hat:{name}" in skip:
+            continue
         if pad.hat_pressed(bit) and learn.accepts(f"hat{q}:{name}"):
             learn.learn_pad_button(f"hat{q}:{name}")
             return True

@@ -141,14 +141,16 @@ def test_patches_is_a_leaf():
 
 def test_the_rig_nodes_are_graphviews_not_removable():
     """`RIG_NODES` restates the render nodes the GRAPH page refuses to delete
-    as the rig's (`graphview.spec_name`'s `NOT_REMOVABLE`): the two lists
+    (`graphview.spec_name`): the clouds as the rig's (`NOT_REMOVABLE`), the
+    camera as the look's one (`CAMERA_KEPT`, plan 43 C2); the two lists
     agree, and the patch reads a name's kind as the canvas does."""
     assert set(patches.RIG_NODES) == {graphview.CAMERA, "cloud"}
     for name in ("camera", "cloud", "cloud.2"):
         got, why = graphview.spec_name(f"render:{name}")
-        assert got is None and why == graphview.NOT_REMOVABLE.format(
-            label=graphview.label_of(name)), (name, why)
-        assert patches.held_words(name) == patches.RIG_WORDS.format(name=name)
+        said = graphview.CAMERA_KEPT if name == "camera" else graphview.NOT_REMOVABLE
+        assert got is None and why == said.format(label=graphview.label_of(name)), (name, why)
+        words = patches.CAMERA_WORDS if name == "camera" else patches.RIG_WORDS
+        assert patches.held_words(name) == words.format(name=name)
     for name in ("acid", "acid.2", "composite.3", "hands.2", "hands.2.layer", "segment.fg",
                  "output.all", "output.2", "channel.a", "scene", "lookback.2", "camera",
                  "cloud.1"):
@@ -173,7 +175,8 @@ def test_the_example_is_a_patch():
     (lambda d: d["nodes"].append({"kind": "hands"}), "hands is the frame's; left out"),
     (lambda d: d["nodes"].append({"kind": "lookback", "instance": 2}),
      "lookback.2 is the frame's; left out"),
-    (lambda d: d["nodes"].append({"kind": "camera"}), "camera is the rig's; left out"),
+    (lambda d: d["nodes"].append({"kind": "camera"}),
+     "camera is the look's one camera, never a patch's; left out"),
     (lambda d: d["nodes"].append({"kind": "cloud"}), "cloud is the rig's; left out"),
     (lambda d: d["nodes"].append({"kind": "output"}),
      "output is the rig's window; left out — a patch's picture leaves by a port"),
@@ -316,7 +319,7 @@ def test_a_lift_that_names_scene_refuses_it_and_keeps_the_rest():
     assert refused == ["scene is the frame's; left out",
                        ("output.all is the rig's window; left out — a patch's picture "
                         "leaves by a port"),
-                       "camera is the rig's; left out",
+                       "camera is the look's one camera, never a patch's; left out",
                        "the sequencer is the rig's; left out",
                        ("env.2 is a sequencer lane's envelope; left out (a patch's envelope "
                         "spawns as 6 or more)"),

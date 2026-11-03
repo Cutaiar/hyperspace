@@ -1439,13 +1439,13 @@ def main() -> None:
         # the Joy-Con totem (plan 47, an experiment): off unless `[totem] on`
         # says so or the pad window's word is clicked; never saved, so it may
         # register after attach (a fresh extra, library.py); `s` for the reset
-        totem.register(reg, totem.TotemState(), s)
-        if (cfg.get("totem") or {}).get("on") is True:
+        totem.register(reg, totem.TotemState())
+        if totem.configured_on(cfg):
             reg["totem.on"].set(True)
         # the Joy-Con as a poi's handle (plan 47, the poi): likewise; its
         # dials start from `[poi]` (weight, length, spring, gravity, drag,
         # hand, depth), the only way they outlast a launch
-        poi_cfg = cfg.get("poi") or {}
+        poi_cfg = poi.configured(cfg)
         poi.register(reg, poi.PoiState(), poi_cfg)
         if poi_cfg.get("on") is True:
             reg["poi.on"].set(True)

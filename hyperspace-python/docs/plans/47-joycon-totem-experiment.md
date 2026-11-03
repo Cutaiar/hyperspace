@@ -23,10 +23,28 @@ frame while `totem.on` is set, on the first pad with motion sensors.
 
 **Turn.** The pad's calibrated gyro (deg/s, in the pad's axes after the
 Joy-Con's axis map: x right, y up out of the face, z toward the player)
-goes through a soft dead band (`DEADBAND_DPS` = 3, a still Joy-Con reads
-up to ~2 deg/s on the real tape) and a one-pole smoothing (`SMOOTH_S` =
-20 ms), and is integrated, dt-correct, into three plane angles — one per
-axis:
+is integrated into three plane angles — one per axis — **per report, on
+the hid reader's thread**. As each report arrives, the reader (`hid.Turn`)
+pulls its gyro samples out without decoding the rest (`gyro_of`: a
+Joy-Con's three, 5 ms apart; a DualSense's one), puts each through the
+calibration and a soft dead band per report (`gesture.TURN_DEADBAND_DPS`
+= 3: a still Joy-Con reads up to ~2 deg/s on the real tape, and a rate
+under the band turns nothing for that report), and multiplies it by the
+time since the report before, by the reports' own clock (`report_clock`:
+a DualSense's sensor timestamp, 0.33 µs a count; a Joy-Con's timer byte, 5
+ms a tick) so a Bluetooth burst that arrives all at once after a pause
+still covers the time it was sent over, at most 50 ms a report
+(`gesture.REPORT_DT_MAX`, so a real gap is no turn); arrival time stands
+in where a codec has no clock or a tape loops round. Each frame the pad takes the sum
+(`HidPad.take_turn`), puts it through its axis map, and adds it to the
+angle the totem takes (`Motion.take_turn`). A report that stalls adds
+nothing. Two reports between frames both count. A 1000 Hz DualSense
+loses no report to a slow frame. The frame still decodes only the newest
+report (`latest`). A frame with no report lets the motion lanes leak home
+(`Motion.decay`), with no turn. A recorded tape sums the reports it
+passed the same way, across its loop's seam. (The first cut multiplied
+the last report's rate by the frame's dt and smoothed it; the code
+reviews' fixes dropped both.)
 
 | Turn about the pad's | 3-space plane | W plane (latched by) |
 |---|---|---|
@@ -46,16 +64,29 @@ of six are live at all times.
 Right side down moves the shape right, the far end up moves it up, and
 levelling the pad brings it back.
 
-**Reset — A (or the D-pad's down).** Every `rot.phase.*` to 0, the pan to
-0, the camera's orbit (yaw, pitch) to 0, the 3D switch's held pose
-dropped: the shape square to the world's axes. The pad's pose right now
-becomes the reference for the tilt. (On a Joy-Con (L) held sideways, A
+**Reset — A (or the D-pad's down).** The registry's own `camera.reset`
+("Reset view": every `rot.phase.*`, the orbit, the zoom and the pan to
+their rests, the 3D switch's held pose dropped — the shape square to the
+world's axes), one reset rather than a copy of its list; a phase a route
+modulates goes to 0 through its param as well, so the route's base does
+not bring the old angle back. The pad's pose
+right now becomes the reference for the tilt. (On a Joy-Con (L) held sideways, A
 *is* the down arrow; on a Pro Controller the D-pad's down does it too.)
 
 **Its buttons.** While the totem reads a pad, that pad's rows on A, B, X,
 Y and the D-pad's down do not fire (`totem.SKIP` → `Router.pad(skip=)`),
 or the factory rows would toggle the faces, points and lines with every
-plane switch. Every other button keeps its row.
+plane switch. Every other button keeps its row. Learn ignores those
+buttons on that pad too, from the very frame the totem takes it, and a `hold` row whose press began before the
+totem took the pad forgets it, so it does not fire when the totem lets go
+mid-press.
+
+**Letting go.** Switched off, the totem takes back the pan its tilt
+added. A pad it reads that stops stepping it for half a second
+(`LOST_S` — its device gone) lets it go and gives the pan back: the
+header reads **(no pad)** and the next pad with sensors takes over. A pad is named by its device
+role (`[[devices]]`' `role`, "joy" above), never the router's qualifier
+(which is "" for the first pad): the terminal says `reading joy`.
 
 ## How to switch it on
 
@@ -74,6 +105,12 @@ Either:
   ```
 
 Each change is also written to the terminal (`totem: x → XW  (XW · XZ · XY)`).
+A `[totem]` that is not a table (`totem = true`) is config.load's error
+on the SYSTEM page ("must be a table"), and the totem stays off.
+
+The state survives a hot reload of `totem.py`: the pad device checks it by
+duck type, not `isinstance`, and the deck lists it among the objects a
+reload re-classes (`Deck.targets`).
 
 The params are `totem.on`, `totem.w.x` / `.y` / `.z`, `totem.pan` (the
 tilt-pan, on by default) and the trigger `totem.reset` — rig switches,
@@ -133,6 +170,8 @@ the totem left it.
   pad creeping, but while the pad moves its bias rides along; over
   minutes the shape's pose and the pad's part a few degrees. A press of A
   puts them together again.
+- **The reset is the view's reset**, so it puts the zoom back to 1× as
+  well (the first cut left the zoom alone).
 - **The pan is a scene-setter's write**, so it lands in undo and lights
   the preset's dirty dot as an orbit with the stick does. The phases do
   not (`persist=False`).
@@ -153,8 +192,8 @@ the totem left it.
 4. Tilt and hold: the shape stays off centre; level: it comes back. Is the
    coupling with the turn tolerable, or should tilt-pan go?
 5. Fast turns: is the dead band (3 deg/s) eating slow motion, or is the
-   still pad still creeping? (`DEADBAND_DPS`, `SMOOTH_S`, `PAN_PER_RAD` in
-   `totem.py` — a save lands live.)
+   still pad still creeping? (`TURN_DEADBAND_DPS` in `pads/gesture.py`,
+   `PAN_PER_RAD` in `totem.py` — a save lands live.)
 
 ## Tests
 
@@ -166,7 +205,26 @@ jump, the tilt-pan and its return, the reset (A and the D-pad's down), the
 pad device stepping it only while on and holding its buttons off the rows,
 the router's skip — and the plan 46 tape driven through it: the still
 window holds, the turn-right window turns XZ positive, the right-down and
-far-up windows pan right and up.
+far-up windows pan right and up. The review's fixes each have a test:
+a hot reload's new class still drives (and the deck lists the state for
+re-classing); a stalled report adds no turn and two reports in a frame
+both count (through the real Joy-Con reader and `Pad` as well); a pad gone
+quiet lets the totem go and the header says "(no pad)"; on / off / on
+while tilted leaves the pan at 0; the totem's reset equals the camera
+reset plus a re-reference; Learn ignores the totem's buttons; a hold
+begun before the skip does not fire after it; a scalar `[totem]` (through
+config.load) leaves it off; the pad is named by its device role. The
+second review's: a 0x21 reply as the newest report adds no second turn;
+a 1000 Hz burst through a 120 ms frame loses no turn and decodes once; a
+tape's turn across the loop's seam and a one-report tape's; the dead band
+per report and a capped gap; a stall eases the energy and yaw home; a pad
+gone quiet gives the pan back with no pad taking over; Learn on the frame
+the totem takes the pad. The third's: the same pad back after
+`LOST_S` takes over afresh; the pan given back is what was applied at the
+range's edge; a Joy-Con burst after a pause turns the whole time it spans;
+a reset zeroes a modulated phase's base; `will_drive` and `step` agree on
+a pad that lost its sensors; one rule finds the state; an unarmed Learn
+never asks the totem.
 
 ## The poi (2026-11-03, the same terms)
 

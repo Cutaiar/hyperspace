@@ -54,15 +54,17 @@ def _land(rig, doc):
 
 def test_only_the_looks_render_params_are_held(rig):
     """The groups the renderer reads, persisted, real, set — not the turn's
-    3D switch, the rig, the modulators or a trigger."""
+    3D switch, the rig, the modulators or a trigger. Plan 43 C2: the eye is
+    the look's, held with the camera; the turn (`rot.*`, the pose) is one
+    for both."""
     rig.hold.engage()
     held = set(rig.hold.values)
     # (plan 36: an effect's own params exist only while a preset wires it —
     # the startup preset wires none — so the effects' group is `fx.mix`'s)
-    assert {"view.bright", "view.lines", "camera.zoom", "fx.mix",
+    assert {"view.bright", "view.lines", "camera.zoom", "eye.fov", "eye.distance", "fx.mix",
             "dream.mix", "pattern.mod.1"} <= held
     assert not {p for p in held if p.split(".")[0] in ("lfo", "media", "tempo", "output",
-                                                       "hands", "eye", "rot", "macro")}
+                                                       "hands", "rot", "macro")}
     assert "view.three_d" not in held
     assert all(rig.reg[p].persist and not rig.reg[p].alias for p in held)
 
@@ -514,17 +516,20 @@ def test_drop_goes_back_to_the_hold_point_as_one_undo_step(rig):
     from hyperspace.graph import read_graph
 
     zoom0, fov0 = reg["camera.zoom"].base, reg["eye.fov"].base
+    bpm0 = reg["tempo.bpm"].base
     wiring0 = r.wiring
     hold.engage()
     reg["camera.zoom"].set(zoom0 * 2)
-    reg["eye.fov"].set(fov0 + 10)          # the room's, not the look's
+    reg["eye.fov"].set(fov0 + 10)          # the look's since plan 43 C2
+    reg["tempo.bpm"].set(bpm0 + 10)        # the room's, not the look's
     rig.presets.graph.land(read_graph({"frame": "wired"}))
     settle(rig)
     assert r.wiring != wiring0 and hold.rewired()
     assert hold.drop() and not hold.on
     settle(rig)
     assert reg["camera.zoom"].base == pytest.approx(zoom0)
-    assert reg["eye.fov"].base == pytest.approx(fov0 + 10)
+    assert reg["eye.fov"].base == pytest.approx(fov0)
+    assert reg["tempo.bpm"].base == pytest.approx(bpm0 + 10)
     assert r.wiring == wiring0
     assert rig.undo.undo()
     assert reg["camera.zoom"].base == pytest.approx(zoom0 * 2)
@@ -615,7 +620,7 @@ def test_drop_after_a_whole_new_look_is_one_undo_step_back_and_one_forward(rig):
     """Hand check AI.4, headless (plan 38 B2). Held on a clean TUMBLE: three
     of the look's params moved, the graph rewired on GRAPH, another preset
     loaded (TRIP: other values, routes, desk, graph), its macros and a
-    route edited, a rig param (the eye's) moved. DROP: the values, the
+    route edited, a rig param (the tempo) moved. DROP: the values, the
     graph, the routes, the desk's preset layer, the macros and the name are
     the hold point's — the dirty dot out as it was — and the rig's param is
     left. One step: the stack grows by one, and one ⌘Z brings the whole
@@ -628,7 +633,8 @@ def test_drop_after_a_whole_new_look_is_one_undo_step_back_and_one_forward(rig):
     reg, lib, hold, r, table = rig.reg, rig.lib, rig.hold, rig.renderer, rig.table
     rig.undo.clear()
     assert lib.current(PRESETS) == "TUMBLE" and not lib.is_dirty(PRESETS)
-    at_hold, wiring0, fov0 = look(rig), r.wiring, reg["eye.fov"].base
+    # (the rig's param is the tempo: the eye is the look's since plan 43 C2)
+    at_hold, wiring0, fov0 = look(rig), r.wiring, reg["tempo.bpm"].base
     hold.engage()
     for pid, k in (("view.bright", 3), ("camera.zoom", 4), ("fx.mix", -5)):
         reg[pid].step(k)
@@ -641,7 +647,7 @@ def test_drop_after_a_whole_new_look_is_one_undo_step_back_and_one_forward(rig):
     table.set_macros({"macro.1": {"label": "mine", "subs": [
         {"base": "view.speed", "from": 0.2, "to": 0.9}]}}, reg)
     table.remove(table.routes()[0])
-    reg["eye.fov"].set(fov0 + 10)                              # the room's, not the look's
+    reg["tempo.bpm"].set(fov0 + 10)                            # the room's, not the look's
     settle(rig)
     assert lib.is_dirty(PRESETS) and hold.rewired()
     dropped, wiring1, depth = look(rig), r.wiring, len(rig.undo.stack)
@@ -651,7 +657,7 @@ def test_drop_after_a_whole_new_look_is_one_undo_step_back_and_one_forward(rig):
     assert hold.drop() and not hold.on
     assert same_look(look(rig), at_hold) and r.wiring == wiring0
     assert lib.current(PRESETS) == "TUMBLE" and not lib.is_dirty(PRESETS)
-    assert reg["eye.fov"].base == pytest.approx(fov0 + 10)
+    assert reg["tempo.bpm"].base == pytest.approx(fov0 + 10)
     assert len(rig.undo.stack) == depth + 1 and rig.undo.stack[-1].label == "drop the preview"
     settle(rig)
     assert same_look(look(rig), at_hold) and r.wiring == wiring0   # nothing re-lands
@@ -659,7 +665,7 @@ def test_drop_after_a_whole_new_look_is_one_undo_step_back_and_one_forward(rig):
     assert rig.undo.undo()                                     # one step, not several
     assert same_look(look(rig), dropped) and r.wiring == wiring1
     assert lib.current(PRESETS) == "TRIP" and lib.is_dirty(PRESETS)
-    assert reg["eye.fov"].base == pytest.approx(fov0 + 10)
+    assert reg["tempo.bpm"].base == pytest.approx(fov0 + 10)
     assert len(rig.undo.stack) == depth
 
 
@@ -1052,3 +1058,63 @@ def test_the_projector_inset_draws_framed_while_held(shell_rig):  # noqa: F811
     finally:
         imgui.end()
         imgui.end_frame()
+
+
+# ---------------------------------------------------------------- plan 43 C2: the one camera
+
+def test_the_held_groups_are_the_renderers_and_take_the_eye():
+    """`HELD_GROUPS` pinned: the look's groups the renderer reads, the eye
+    among them since plan 43 C2 (the one orbit camera is the preset's);
+    the turn stays one for both."""
+    assert H.HELD_GROUPS == ("view", "camera", "pattern", "dream", "fx", "backdrop", "switch",
+                             "resize", "matte", "cut", "segment", "eye")
+    assert "rot" not in H.HELD_GROUPS
+    # (what C2 needs of the turn's one-for-both list; K3 pins the whole set)
+    assert {"view.three_d", "view.speed"} <= set(H.ONE_FOR_BOTH)
+
+
+def test_a_preset_loaded_under_hold_keeps_the_projectors_eye_and_turn_until_take(rig):
+    """Plan 43 C2 (review 2.3, the ruling): a preset loaded while held —
+    its eye is the preview's until Take (the program draws the held
+    framing), and its saved pose waits on the hold: the one turn both
+    renderers draw (and its 3D body) is the projector's and does not jump;
+    Take lands the pose, Drop forgets it; a save while held writes the
+    loaded preset's pose."""
+    import json
+
+    import numpy as np
+    from conftest import CORPUS
+
+    from hyperspace import preset
+    from hyperspace.params import POSE_IDS
+
+    reg, hold, view = rig.reg, rig.hold, rig.view
+    fov = reg["eye.fov"].base
+    doc = json.loads((CORPUS / "presets" / "dial.json").read_text())
+    doc["values"]["eye.fov"] = 70.0
+    pose = [0.1, -0.2, 0.3, 0.4, -0.5, 0.6]
+    doc[preset.POSE_KEY] = dict(zip(POSE_IDS, pose, strict=True))
+    for end in ("take", "drop"):
+        reg["eye.fov"].set(fov)                  # (the projector's framing at each HOLD)
+        settle(rig)
+        view.three_d = True
+        view.integrate(0.0)                      # the projector's 3D body
+        hold.engage()
+        turn, body = list(view.ang), np.array(view.body)
+        rig.presets.load_doc(doc)
+        assert view.ang == turn and np.array_equal(view.body, body)   # no jump
+        assert hold.pose == pose
+        assert [rig.presets.document("x")[preset.POSE_KEY][k] for k in POSE_IDS] == pose
+        settle(rig)
+        assert reg["eye.fov"].base == 70.0 and "eye.fov" in hold.changed()
+        with hold.program():
+            assert view.eye_fov == pytest.approx(fov)
+        if end == "take":
+            hold.take()
+            assert view.ang == pose and view.body is None and hold.pose is None
+            assert view.eye_fov == 70.0
+        else:
+            moving = list(view.ang)
+            hold.drop()
+            assert view.ang == moving and hold.pose is None    # forgotten, never landed
+        settle(rig)

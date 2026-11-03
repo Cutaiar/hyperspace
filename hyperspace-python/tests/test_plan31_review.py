@@ -245,7 +245,7 @@ def test_desk_rows_and_layout_keys_on_plan_31_ids_survive_a_build_without_it(tmp
     old.presets.load_doc(doc)
     out = old.presets.document("x")
     assert out["desk"][0] == row and out["layout"] == layout
-    assert out["schema"] == preset.WIRED_SCHEMA
+    assert out["schema"] == preset.SAVE_SCHEMA
 
 
 # ---- 8: a refused add says why: the count, or the ids used up ----
