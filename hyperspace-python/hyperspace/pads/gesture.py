@@ -181,11 +181,21 @@ TURN_DEADBAND_DPS = 3.0
 REPORT_DT_MAX = 0.05
 
 
+def _banded(v: float) -> float:
+    """A rate through the dead band: nothing under `TURN_DEADBAND_DPS`, a
+    ramp up to twice it, then exact. Not the band subtracted from every
+    rate: that made a fast turn short by the band on every axis, and a poi
+    swung hard for a few seconds lost ten degrees of attitude to it."""
+    a, d = abs(float(v)), TURN_DEADBAND_DPS
+    if a < d:
+        return 0.0
+    return math.copysign(2.0 * (a - d) if a < 2.0 * d else a, float(v))
+
+
 def turn_of(dps, dt: float) -> tuple[float, float, float]:
-    """Degrees turned about x, y, z by one report: its rate, less the soft
-    dead band (`TURN_DEADBAND_DPS`), times its own time."""
-    return tuple(math.copysign(max(0.0, abs(float(v)) - TURN_DEADBAND_DPS), float(v)) * dt
-                 for v in dps)
+    """Degrees turned about x, y, z by one report: its rate through the
+    dead band (`_banded`), times its own time."""
+    return tuple(_banded(v) * dt for v in dps)
 
 
 @dataclass
@@ -210,6 +220,10 @@ class Motion:
     accel: tuple[float, float, float] = (0.0, 1.0, 0.0)    # the last reading, g along x, y, z (poi.py)
     shake: float = 0.0
     energy: float = 0.0
+    reports: int = 0          # readings stepped so far: a consumer tells a new one from a held one
+    # each named consumer's own share of the turn (`take_turn(tap)`): the
+    # totem and the poi read one pad without taking each other's degrees
+    taps: dict = field(default_factory=dict)
     _since_shake: float = 1e9
 
     def step(self, gyro, accel, dt: float, integrate: bool = True) -> None:
@@ -221,6 +235,7 @@ class Motion:
         gx, gy, gz = (float(v) for v in gyro)
         self.gyro = (gx, gy, gz)
         self.accel = (ax, ay, az)
+        self.reports += 1
         if integrate:
             self.add_turn(turn_of((gx, gy, gz), dt))
         g = self.gravity
@@ -260,10 +275,20 @@ class Motion:
     def add_turn(self, turn) -> None:
         tx, ty, tz = self.turned
         self.turned = (tx + turn[0], ty + turn[1], tz + turn[2])
+        taps = self.__dict__.setdefault("taps", {})     # (a Motion from before the taps)
+        for name, (x, y, z) in taps.items():
+            taps[name] = (x + turn[0], y + turn[1], z + turn[2])
 
-    def take_turn(self) -> tuple[float, float, float]:
-        """The degrees turned about x, y, z since the last call, then 0."""
-        t, self.turned = self.turned, (0.0, 0.0, 0.0)
+    def take_turn(self, tap: str = "") -> tuple[float, float, float]:
+        """The degrees turned about x, y, z since the last call, then 0.
+        `tap` names a consumer with a share of its own (the poi beside the
+        totem): its first call starts it at 0."""
+        if not tap:
+            t, self.turned = self.turned, (0.0, 0.0, 0.0)
+            return t
+        taps = self.__dict__.setdefault("taps", {})
+        t = taps.get(tap, (0.0, 0.0, 0.0))
+        taps[tap] = (0.0, 0.0, 0.0)
         return t
 
     def lanes(self) -> list[float]:
