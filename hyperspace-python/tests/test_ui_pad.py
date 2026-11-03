@@ -850,6 +850,7 @@ def test_the_drawings_show_upright_through_real_gl(monkeypatch, gl_window_ok):
     win = glfw.create_window(64, 64, "upright", None, None)
     glfw.default_window_hints()
     if not win:
+        glfw.terminate()
         pytest.skip("no GL context")
     glfw.make_context_current(win)
     surf = ui_pad_nvg.Surface()
@@ -872,6 +873,7 @@ def test_the_drawings_show_upright_through_real_gl(monkeypatch, gl_window_ok):
     finally:
         surf.close()
         glfw.destroy_window(win)
+        glfw.terminate()        # (not left up for the worker's later tests: row 606)
 
 
 def test_the_poi_says_its_word_and_shows_its_dials_while_on(rig, monkeypatch):

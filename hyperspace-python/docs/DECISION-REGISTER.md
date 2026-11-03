@@ -639,6 +639,8 @@ here; overturn → the change, then the same.
 | 599 | Plan 49 U1: beside the canvas open sections share the pane's height evenly, never under 160 px (past that the pane scrolls); in the narrow page's band (#266's) the headers are one row and the open sections share the rest with no floor; each body scrolls by itself; the side grip is a hit test with no item; the details beside / below chip shows on every narrow page | 452, 454 | (rec) — pending the owner; built as recommended |
 | 600 | Plan 49 U1: in a narrow pane the preset strip's name button is squeezed to the room beside its chips and the devices-missing chip (never under 48 px; unchanged on every page; that chip on its own row when even then there is no room) and the show line's chips wrap; the held projector's inset sits left of the pane | 453, 455 | (rec) — pending the owner; built as recommended |
 | 601 | Plan 49 U1: section titles follow the rail's words (`lookback`, not `dream`); the lookback section draws the page as it is — its look-back / dream / shared split is stage 2's to redraw (the owner, 2026-11-02: "a horrid representation") | 449 | (rec) — pending the owner; built as recommended |
+| 605 | Wave 2 I1: `--dist load` with up to four worker restarts (pyproject now; CI once the owner lands the workflow edit), so a crash or hang costs its one test, not the run's queue; the live lock alone keeps two live tests apart, taken outside the per-test timeout, a run's own live tests waiting for each other without bound (the holder's run id in the file), another run's 60 s and a holder naming no run 90 s, then a skip that says which; a live test's fixture wider than the test fails that test by name before it is set up; the dream's real VGG test joins the live tier | 456 | owner (2026-11-03) for `--dist load`; the rest (rec) — pending the owner; built as recommended (I1) |
+| 606 | Wave 2 I1: the four flakes of wave 1 — the Xbox pad test's order dependence was the Mac's real Joy-Con read once a real-GL test had initialised GLFW (fixed: no test reads a real joystick); the segment crashes and the `test_shape_renders` failures did not reproduce (what was tried is recorded); `tests/fixtures/real.mp3` is used by no test; `tools/sort_register.py` sorts this file | — | (rec) — pending the owner; built as recommended (I1) |
 | 609 | Wave 2 T3: SEND B held is FINE — while it is down every APC knob (a ring row, `abs`, on a continuous non-integer param) moves its param a tenth as far, read relatively and written between detents; its LED lit while held; faders, discrete targets and relative rows stay coarse; the button is the adapter's (`apc40.FINE`, `midi.MidiIO`), not a map row, and gives way to any row on SEND B | 459 | (rec) — the build's, for the owner and Dillon to keep |
 | 610 | Wave 2 T3: letting go of FINE re-sends the ring of every knob it moved, so the encoder is re-based onto the param and the next coarse turn continues from there (plan 13 D7's re-base; soft pickup where rings do not re-base); `desk.fine` is the rig's (group desk, never saved, not modulatable) and a reconnect lets go of it | 460 | (rec) — the build's, for the owner and Dillon to keep |
 
@@ -9424,49 +9426,151 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
   not report their own bits, sensors on other axes. Each is a constant or
   a table in `pads/`, named there.
 
-### 565–570. Plan 46: the Joy-Con, one per role, as a six-axis totem
+## Plan 43 — the preset contract (rows 554–555, 572–576)
+Docs only (wave 0, C1, 2026-11-02): the line is written down and the code
+audited. C2 (wave 1, 2026-11-02, rows 572–576) moved the camera: the eye,
+the pose, schema `/9`, the migration. The audit and the worklists for C2 (the camera)
+and D3 (the per-deck split) are
+[`plans/43-preset-contract.md`](plans/43-preset-contract.md).
+### 554. A preset is a complete look; the rig is what is plugged in
+- **Answer.** owner — 2026-11-02, from the triage of the 2026-10-30
+  show: the preset/session line was drawn per param group
+  (`params.PERFORMANCE_GROUPS` / `SESSION_GROUPS`), not per thing on
+  screen, so a preset came back framed differently (`camera.*` the
+  preset's, `eye.*` the session's, the spin's pose never saved).
+- **Decided.** Everything that renders goes in the preset — the eye, the
+  pose (`rot.phase.*`, `view.body`), the hands' look (`ghost.*`), the
+  cloud's look (`cloud.*`), the show's bus cuts (`graph.RigWires`), the
+  desk template inlined, no value from a library `default.json`.
+  Everything about hardware stays out and is requested — devices,
+  tempo, the analyzer and band scene, the output count and each window's
+  settings, calibration, feel (`desk.pad.*`, `desk.slew`, `hands.*`),
+  the master dim, the bank. Patch, group and preset become one format
+  later; the camera and eye merge (C2) is the first step, the per-deck
+  split (D3) the second. Nothing is built by this row: DECISIONS
+  "Presets and the desk — The preset contract (plan 43)".
+- **What the audit found** (plan 43 §3): the hands' default calibration
+  (`ghost.calibration`, `mm = null`) fits the box to the **eye**, so a
+  preset-owned eye would re-fit the hands and leave the shape (C2 must
+  pick the rig's reference eye); a second hands node's look is seeded
+  from the open **show** (`preset.GraphSection`, `Project._held_back`);
+  a preset's missing ids are filled from `<library>/<group>/default.json`
+  (`Library.resolved`), so the same file draws differently on two
+  libraries; and `hyperspace.preset/8` is already plan 40's groups, so
+  C2 is `/9` and D3 `/10`.
+- **Other options.** Keep the line per group and move only the eye (the
+  triage's S-tier "eye into preset"): fixes the camera, leaves the hands'
+  look, the cuts and the template by name on the wrong side. Draw the
+  line the other way (everything the operator touches is the show's):
+  presets would stop being portable between rigs.
+- **To reverse.** Nothing to reverse until C2 and D3 land; each is its
+  own PR with its own schema and backup.
+- **Rough edge.** `ghost.mirror` (a real mirror in front of the
+  performer) is a look by the rule and a hardware fact by its reason; the
+  pose makes a load restart the turn where the preset was saved, which
+  changes a documented behaviour (D2's step 2, "left spinning"). Both
+  are plan 43 §7's questions for the owner.
+- **Judge it.** — (nothing to see yet; C2's and D3's checks).
+### 555. One camera in the preset: `camera.*` and `eye.*` are one group
+- **Answer.** owner — 2026-11-02 (as recommended, plus: eye modulatable,
+  pose always saved). Built as rows 572–576. Was: (rec). The contract (row 554) puts the
+  eye in the preset; this row is the recorded "camera is the rig" (row
+  182, DECISIONS "A fixed camera, the eye", `params.py` 1791 "not
+  modulatable — the camera is the rig, the shape is what moves") being
+  overturned, and the shape of the merge.
+- **Recommended.** Move `eye` out of `SESSION_GROUPS` into the camera
+  group, keep the ids `eye.fov` / `eye.distance` (a rename is a second
+  format for no new meaning), schema `/9`, every preset in the library
+  written with the open show's eye once (`tools/migrate_library.py`, the
+  round-trip picture check "same"), old shows' `session` read for it and
+  backed up (`.bak-v2-eye`), the hands' calibration fitted to the rig's
+  reference eye (`EYE_FOV` / `EYE_DISTANCE`), the CAMERA page one
+  section, the camera node the look's on GRAPH (`graphview.RIG_KINDS`).
+  The pose (`rot.phase.*`, `view.body`) saved in the same PR as a
+  separable step. Modulatability of the eye: still none until the owner
+  asks. Worklist: plan 43 §5.
+- **Other options.** Rename to `camera.fov` / `camera.distance` (a read
+  map and an end-to-end old-file test). Leave the eye session and give
+  presets an optional override (two sources of one value: the fault the
+  contract removes). Make the eye modulatable now (row 182's objection
+  was the room's; it no longer holds, but nobody has asked).
+- **To reverse.** Before C2: delete this row. After: the group move back
+  and a migration that writes the eye into the show from the loaded
+  preset — local, two params.
+- **Rough edge.** The Drive library has one rig's show, so the migration
+  writes that rig's eye into every preset; a preset made on the TV
+  config and opened on the projector then carries the TV's eye, which is
+  the contract working as intended and a change from today.
+- **Judge it.** — (C2's hand check: frame, save, load another, load it
+  back; the framing is back).
 
-- **Asked.** The owner, 2026-11-02, a Joy-Con (L) just paired over
-  Bluetooth: "one Joy-Con per role because I only have one", "held more
-  like a Wii Remote than a game pad … a kinetic controller … the
-  important part is the 6-axis IMU", "show up as individual game pads …
-  only one stick or one set of pad buttons", "calibrating drift is
-  something I do want to do", "extend Dillon's work here".
-- **Built**, as recommended: [`plans/46-joycon.md`](plans/46-joycon.md)
-  (D1–D6 = rows 565–570): `pads/nintendo.py` beside `pads/sony.py` on
-  the same road, three models, a model saying which controls it has,
-  the probe's Joy-Con checks. Rows: **565** one Joy-Con per entry (a pair
-  as one pad not built); **566** the Wii-Remote hold frames the
-  vocabulary (one stick = the left stick, the (L)'s arrows the face by
-  position, SL / SR the back pair, L / ZL `LB` + `LT`, no `hat:`);
-  **567** `Model.controls` — the ports, Learn, the on-screen pad and the
-  sinks show only what the pad has; **568** drift calibrated from the
-  flash (the user's record over the factory's) then the stick's rest at
-  connect becomes its centre (within 0.3, spread under 0.1), no config
-  key; **569** the sensors' axes are the codec's `AXIS_MAP` for the hold,
-  from the notes and one flat reading; **570** the lab is the app's pad
-  window, not a browser page (the owner's own call, 2026-11-02: "if we
-  can see the Joy-Con in the app with the same level of detail as the
-  Edge, we should just do that") — Faithful draws the Joy-Con upright
-  with the stick's well, its raw reading and the centre in use beside
-  the tilt and the sensors' numbers, Cockpit one dial, Lanes only what
-  it has plus its calibration; no `prototypes/joycon-lab/`.
-- **Checked on the hardware** (hand check 425, the owner, 2026-11-02):
-  the probe's run on the real Joy-Con (L) over Bluetooth — the flash
-  answered (factory stick and sensor calibrations, no user records),
-  the stick recentred and rests at −0.02, every one of the eleven
-  buttons landed as built (566), the proposed sensor map equals the
-  built `AXIS_MAP` (569 settled), three lights, both rumble bands and
-  the stop seen. Findings and a tape slice in the tree
-  (`plans/assets/46-joycon/`, `tests/test_pads_joycon_real.py`).
-  Nothing in the codec changed.
-- **What would overturn it.** The owner wanting the face or the hat
-  under the Xbox names anyway (566, 567), a second Joy-Con that should
-  pair into one pad (565), a stick whose rest the recentre bounds miss
-  (568: `RECENTRE_MAX`, `RECENTRE_SPREAD`), a rumble that stutters in a
-  set (`RUMBLE_REFRESH_S`), or a Joy-Con (R) / Pro Controller that reads
-  otherwise (unseen).
-
+### 556–559. Plan 44: decks — N looks, one on air
+- **Asked.** The owner, after the 2026-10-30 show and reshaped on
+  2026-11-02: plan 38's hold leaks (one registry, one table: a route, a
+  bank edit or a load while held reaches the projector, as plan 38's own
+  table says) and he wants decks — not A/B but **N looks, one on air**.
+- **Answer.** Owner — 2026-11-02 (as recommended; 558 with the nuance
+  below). Written against the code in [`plans/44-decks.md`](plans/44-decks.md)
+  (its §7 is these four, its §2 the inventory of every singleton the decks
+  split or share, its §3 the six behaviour-neutral steps D1–D6). D1 is
+  built (row 571).
+- **556 (Q1).** A deck is a look with its own controls: its registry's
+  performance part, its routes, macros, modifiers and banks, its graph,
+  its renderer, its undo and its dirty dot; one deck is on air; the
+  outputs show it through one mix pass (`output.xfade`). Controllers point
+  at the on-air deck, the panel at the deck being built, undo and the dot
+  at the panel's deck. Decks have numbers, not roles; two render, more are
+  data. *Other options*: A/B with fixed roles and a swap (a mode the
+  operator must remember); controllers following the panel (a later
+  toggle, one retarget).
+- **557 (Q2).** Hold becomes `Decks.copy(on_air, panel)`: HOLD copies the
+  on-air look into the panel's deck as one undo step, TAKE fades the
+  panel's deck on air over `output.xfade_s` and swaps, DROP copies again.
+  The three ids stay (they are learnable targets in the owner's
+  `bindings.json`); `hold.py`'s swap-around-the-draw (`Hold.program`,
+  `program_value`, `HELD_GROUPS`, `keep` / `program_only`, `mirror`,
+  `_HeldRig`, `canvas_renderer`) is deleted in D5 with 30 of its 37
+  tests. No hotfix of the hold's head line before that: a tooltip for a
+  mechanism D5 removes. *Other option*: the triage's S-tier "hold honesty"
+  line now.
+- **558 (Q3).** Shared and lent: the dream worker (one, ~19 ms a step on
+  MPS) lent to the deck going on air from the first frame of a fade —
+  `DreamWorker.submit` must carry the deck's `dream.*` params, because the
+  worker reads them off one registry today, and the running buffer `D`
+  restarts under the fade; the segment workers per renderer as today (keyed
+  by node name, the torch model already shared under `_SHARED_LOCK`,
+  Vision on the Neural Engine) — nothing to lend; the media **sources**
+  shared (`MediaState.resolver`, the opener, the closer, the pool, the
+  folder) and the eight `Channel`s' **state** per deck, because
+  `media.a.slot` / `.rate` / `.pos` are performance params and the bins are
+  the preset's — two looks want two pictures from "channel a" (the brief
+  said shared; the code says no); the analyzer and the clock shared. *Other
+  option*: a dream worker per deck (two 19 ms steps a frame on the one
+  GPU; does not fit beside two renderers at the 1080p cap).
+  **The owner's nuance (2026-11-02):** the look-back — its rings, its
+  knobs — and the dream's knobs are per deck; the only thing reserved for
+  the on-air deck is the dream worker itself (the expensive torch step),
+  and as little as possible beyond it (as §2's table already has it:
+  `lookback.Lookback` and `DreamState` per deck, the worker lent). He
+  asked whether a second, lower-resolution dream worker could serve the
+  off-air (panel's) deck for its preview: possible in principle — the
+  panel's deck already draws at preview size — to be measured on the
+  bench in D4/D5 against the one-GPU budget plan 44 §8 states; not
+  decided now.
+- **559 (Q4).** The APC40 crossfader (`cc:0:15`) stays `output.dim`
+  (DECISIONS "The crossfader is the master dim"; row 40: nothing drives
+  the dim); the deck fade is `output.xfade`, a rig control in group
+  `output`, `persist=False`, not modulatable, learnable, with no desk
+  control by default — the `take` button runs it over `output.xfade_s`.
+  The dim stays the last pass (`Renderer.dim_pass`), the mix runs before
+  it. *Other option*: the crossfader fades decks and the dim moves to the
+  CUE knob — which takes `view.shape` off the desk (`apc40.py:537`) and
+  changes a row every show preset's desk layer expects.
+- **To reverse.** Before D1: nothing to undo. After: each step is its own
+  PR with a façade (`routing.py` re-exports `Sources`; the hold's ids
+  kept), so a step reverts alone.
+- **Judge it.** Hand checks come with D4 and D5: a HOLD, an edit of every
+  kind on the panel, the projector unmoved; a TAKE on the bar.
 ### 561. Coarse and fine through tapers: speed on a signed exponential, amounts on a zero-safe log, the route depths migrated in the same PR
 - **Asked.** The owner, 2026-10-31, after the show of 2026-10-30: "turning
   those values down to 0.05× or 5 % … very, very low values are really
@@ -9645,150 +9749,111 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
   constant in `media/video.py`. A show library of clips longer than
   120 s where the re-decode is heard: `AUDIO_WINDOW_S` up, at 384 kB a
   second.
-### 556–559. Plan 44: decks — N looks, one on air
-- **Asked.** The owner, after the 2026-10-30 show and reshaped on
-  2026-11-02: plan 38's hold leaks (one registry, one table: a route, a
-  bank edit or a load while held reaches the projector, as plan 38's own
-  table says) and he wants decks — not A/B but **N looks, one on air**.
-- **Answer.** Owner — 2026-11-02 (as recommended; 558 with the nuance
-  below). Written against the code in [`plans/44-decks.md`](plans/44-decks.md)
-  (its §7 is these four, its §2 the inventory of every singleton the decks
-  split or share, its §3 the six behaviour-neutral steps D1–D6). D1 is
-  built (row 571).
-- **556 (Q1).** A deck is a look with its own controls: its registry's
-  performance part, its routes, macros, modifiers and banks, its graph,
-  its renderer, its undo and its dirty dot; one deck is on air; the
-  outputs show it through one mix pass (`output.xfade`). Controllers point
-  at the on-air deck, the panel at the deck being built, undo and the dot
-  at the panel's deck. Decks have numbers, not roles; two render, more are
-  data. *Other options*: A/B with fixed roles and a swap (a mode the
-  operator must remember); controllers following the panel (a later
-  toggle, one retarget).
-- **557 (Q2).** Hold becomes `Decks.copy(on_air, panel)`: HOLD copies the
-  on-air look into the panel's deck as one undo step, TAKE fades the
-  panel's deck on air over `output.xfade_s` and swaps, DROP copies again.
-  The three ids stay (they are learnable targets in the owner's
-  `bindings.json`); `hold.py`'s swap-around-the-draw (`Hold.program`,
-  `program_value`, `HELD_GROUPS`, `keep` / `program_only`, `mirror`,
-  `_HeldRig`, `canvas_renderer`) is deleted in D5 with 30 of its 37
-  tests. No hotfix of the hold's head line before that: a tooltip for a
-  mechanism D5 removes. *Other option*: the triage's S-tier "hold honesty"
-  line now.
-- **558 (Q3).** Shared and lent: the dream worker (one, ~19 ms a step on
-  MPS) lent to the deck going on air from the first frame of a fade —
-  `DreamWorker.submit` must carry the deck's `dream.*` params, because the
-  worker reads them off one registry today, and the running buffer `D`
-  restarts under the fade; the segment workers per renderer as today (keyed
-  by node name, the torch model already shared under `_SHARED_LOCK`,
-  Vision on the Neural Engine) — nothing to lend; the media **sources**
-  shared (`MediaState.resolver`, the opener, the closer, the pool, the
-  folder) and the eight `Channel`s' **state** per deck, because
-  `media.a.slot` / `.rate` / `.pos` are performance params and the bins are
-  the preset's — two looks want two pictures from "channel a" (the brief
-  said shared; the code says no); the analyzer and the clock shared. *Other
-  option*: a dream worker per deck (two 19 ms steps a frame on the one
-  GPU; does not fit beside two renderers at the 1080p cap).
-  **The owner's nuance (2026-11-02):** the look-back — its rings, its
-  knobs — and the dream's knobs are per deck; the only thing reserved for
-  the on-air deck is the dream worker itself (the expensive torch step),
-  and as little as possible beyond it (as §2's table already has it:
-  `lookback.Lookback` and `DreamState` per deck, the worker lent). He
-  asked whether a second, lower-resolution dream worker could serve the
-  off-air (panel's) deck for its preview: possible in principle — the
-  panel's deck already draws at preview size — to be measured on the
-  bench in D4/D5 against the one-GPU budget plan 44 §8 states; not
-  decided now.
-- **559 (Q4).** The APC40 crossfader (`cc:0:15`) stays `output.dim`
-  (DECISIONS "The crossfader is the master dim"; row 40: nothing drives
-  the dim); the deck fade is `output.xfade`, a rig control in group
-  `output`, `persist=False`, not modulatable, learnable, with no desk
-  control by default — the `take` button runs it over `output.xfade_s`.
-  The dim stays the last pass (`Renderer.dim_pass`), the mix runs before
-  it. *Other option*: the crossfader fades decks and the dim moves to the
-  CUE knob — which takes `view.shape` off the desk (`apc40.py:537`) and
-  changes a row every show preset's desk layer expects.
-- **To reverse.** Before D1: nothing to undo. After: each step is its own
-  PR with a façade (`routing.py` re-exports `Sources`; the hold's ids
-  kept), so a step reverts alone.
-- **Judge it.** Hand checks come with D4 and D5: a HOLD, an edit of every
-  kind on the panel, the projector unmoved; a TAKE on the bar.
-## Plan 43 — the preset contract (rows 554–555, 572–576)
-Docs only (wave 0, C1, 2026-11-02): the line is written down and the code
-audited. C2 (wave 1, 2026-11-02, rows 572–576) moved the camera: the eye,
-the pose, schema `/9`, the migration. The audit and the worklists for C2 (the camera)
-and D3 (the per-deck split) are
-[`plans/43-preset-contract.md`](plans/43-preset-contract.md).
-### 554. A preset is a complete look; the rig is what is plugged in
-- **Answer.** owner — 2026-11-02, from the triage of the 2026-10-30
-  show: the preset/session line was drawn per param group
-  (`params.PERFORMANCE_GROUPS` / `SESSION_GROUPS`), not per thing on
-  screen, so a preset came back framed differently (`camera.*` the
-  preset's, `eye.*` the session's, the spin's pose never saved).
-- **Decided.** Everything that renders goes in the preset — the eye, the
-  pose (`rot.phase.*`, `view.body`), the hands' look (`ghost.*`), the
-  cloud's look (`cloud.*`), the show's bus cuts (`graph.RigWires`), the
-  desk template inlined, no value from a library `default.json`.
-  Everything about hardware stays out and is requested — devices,
-  tempo, the analyzer and band scene, the output count and each window's
-  settings, calibration, feel (`desk.pad.*`, `desk.slew`, `hands.*`),
-  the master dim, the bank. Patch, group and preset become one format
-  later; the camera and eye merge (C2) is the first step, the per-deck
-  split (D3) the second. Nothing is built by this row: DECISIONS
-  "Presets and the desk — The preset contract (plan 43)".
-- **What the audit found** (plan 43 §3): the hands' default calibration
-  (`ghost.calibration`, `mm = null`) fits the box to the **eye**, so a
-  preset-owned eye would re-fit the hands and leave the shape (C2 must
-  pick the rig's reference eye); a second hands node's look is seeded
-  from the open **show** (`preset.GraphSection`, `Project._held_back`);
-  a preset's missing ids are filled from `<library>/<group>/default.json`
-  (`Library.resolved`), so the same file draws differently on two
-  libraries; and `hyperspace.preset/8` is already plan 40's groups, so
-  C2 is `/9` and D3 `/10`.
-- **Other options.** Keep the line per group and move only the eye (the
-  triage's S-tier "eye into preset"): fixes the camera, leaves the hands'
-  look, the cuts and the template by name on the wrong side. Draw the
-  line the other way (everything the operator touches is the show's):
-  presets would stop being portable between rigs.
-- **To reverse.** Nothing to reverse until C2 and D3 land; each is its
-  own PR with its own schema and backup.
-- **Rough edge.** `ghost.mirror` (a real mirror in front of the
-  performer) is a look by the rule and a hardware fact by its reason; the
-  pose makes a load restart the turn where the preset was saved, which
-  changes a documented behaviour (D2's step 2, "left spinning"). Both
-  are plan 43 §7's questions for the owner.
-- **Judge it.** — (nothing to see yet; C2's and D3's checks).
-### 555. One camera in the preset: `camera.*` and `eye.*` are one group
-- **Answer.** owner — 2026-11-02 (as recommended, plus: eye modulatable,
-  pose always saved). Built as rows 572–576. Was: (rec). The contract (row 554) puts the
-  eye in the preset; this row is the recorded "camera is the rig" (row
-  182, DECISIONS "A fixed camera, the eye", `params.py` 1791 "not
-  modulatable — the camera is the rig, the shape is what moves") being
-  overturned, and the shape of the merge.
-- **Recommended.** Move `eye` out of `SESSION_GROUPS` into the camera
-  group, keep the ids `eye.fov` / `eye.distance` (a rename is a second
-  format for no new meaning), schema `/9`, every preset in the library
-  written with the open show's eye once (`tools/migrate_library.py`, the
-  round-trip picture check "same"), old shows' `session` read for it and
-  backed up (`.bak-v2-eye`), the hands' calibration fitted to the rig's
-  reference eye (`EYE_FOV` / `EYE_DISTANCE`), the CAMERA page one
-  section, the camera node the look's on GRAPH (`graphview.RIG_KINDS`).
-  The pose (`rot.phase.*`, `view.body`) saved in the same PR as a
-  separable step. Modulatability of the eye: still none until the owner
-  asks. Worklist: plan 43 §5.
-- **Other options.** Rename to `camera.fov` / `camera.distance` (a read
-  map and an end-to-end old-file test). Leave the eye session and give
-  presets an optional override (two sources of one value: the fault the
-  contract removes). Make the eye modulatable now (row 182's objection
-  was the room's; it no longer holds, but nobody has asked).
-- **To reverse.** Before C2: delete this row. After: the group move back
-  and a migration that writes the eye into the show from the loaded
-  preset — local, two params.
-- **Rough edge.** The Drive library has one rig's show, so the migration
-  writes that rig's eye into every preset; a preset made on the TV
-  config and opened on the projector then carries the TV's eye, which is
-  the contract working as intended and a change from today.
-- **Judge it.** — (C2's hand check: frame, save, load another, load it
-  back; the framing is back).
+### 565–570. Plan 46: the Joy-Con, one per role, as a six-axis totem
+
+- **Asked.** The owner, 2026-11-02, a Joy-Con (L) just paired over
+  Bluetooth: "one Joy-Con per role because I only have one", "held more
+  like a Wii Remote than a game pad … a kinetic controller … the
+  important part is the 6-axis IMU", "show up as individual game pads …
+  only one stick or one set of pad buttons", "calibrating drift is
+  something I do want to do", "extend Dillon's work here".
+- **Built**, as recommended: [`plans/46-joycon.md`](plans/46-joycon.md)
+  (D1–D6 = rows 565–570): `pads/nintendo.py` beside `pads/sony.py` on
+  the same road, three models, a model saying which controls it has,
+  the probe's Joy-Con checks. Rows: **565** one Joy-Con per entry (a pair
+  as one pad not built); **566** the Wii-Remote hold frames the
+  vocabulary (one stick = the left stick, the (L)'s arrows the face by
+  position, SL / SR the back pair, L / ZL `LB` + `LT`, no `hat:`);
+  **567** `Model.controls` — the ports, Learn, the on-screen pad and the
+  sinks show only what the pad has; **568** drift calibrated from the
+  flash (the user's record over the factory's) then the stick's rest at
+  connect becomes its centre (within 0.3, spread under 0.1), no config
+  key; **569** the sensors' axes are the codec's `AXIS_MAP` for the hold,
+  from the notes and one flat reading; **570** the lab is the app's pad
+  window, not a browser page (the owner's own call, 2026-11-02: "if we
+  can see the Joy-Con in the app with the same level of detail as the
+  Edge, we should just do that") — Faithful draws the Joy-Con upright
+  with the stick's well, its raw reading and the centre in use beside
+  the tilt and the sensors' numbers, Cockpit one dial, Lanes only what
+  it has plus its calibration; no `prototypes/joycon-lab/`.
+- **Checked on the hardware** (hand check 425, the owner, 2026-11-02):
+  the probe's run on the real Joy-Con (L) over Bluetooth — the flash
+  answered (factory stick and sensor calibrations, no user records),
+  the stick recentred and rests at −0.02, every one of the eleven
+  buttons landed as built (566), the proposed sensor map equals the
+  built `AXIS_MAP` (569 settled), three lights, both rumble bands and
+  the stop seen. Findings and a tape slice in the tree
+  (`plans/assets/46-joycon/`, `tests/test_pads_joycon_real.py`).
+  Nothing in the codec changed.
+- **What would overturn it.** The owner wanting the face or the hat
+  under the Xbox names anyway (566, 567), a second Joy-Con that should
+  pair into one pad (565), a stick whose rest the recentre bounds miss
+  (568: `RECENTRE_MAX`, `RECENTRE_SPREAD`), a rumble that stutters in a
+  set (`RUMBLE_REFRESH_S`), or a Joy-Con (R) / Pro Controller that reads
+  otherwise (unseen).
+
+### 571. Plan 44 D1: one `Deck`, one construction order
+- **Asked.** Plan 44 §3 D1 (rows 556–559): bundle what §2 marks per deck,
+  as the objects exist today, into one `Deck`, and move `app.main`'s lines
+  from the view state to `undo.install` into `Deck.build` in their order —
+  the registry's order and the attach order — with no behaviour change,
+  so D2–D6 have one object to split and to point controllers and the
+  panel at.
+- **Answer.** Built as recommended. `hyperspace/deck.py`: a `Deck`
+  dataclass (`reg`, `view`, `table`, `router`, `lfos`, `envs`, `seq`,
+  `clock`, `presets` and `graph`, `learn`, `undo`, `marks`, `renderer`,
+  `hold`), `Deck.build` holding `main`'s lines in their order, and
+  `Deck.targets()` the deck itself and then the hot-reload tuples `main`
+  listed for those objects, in its order (`main` splices them first, then
+  the rig's). The clock is built in `build` as before; plan 44 calls it
+  shared, and D3+ passes the rig's one in. The library's band hooks and
+  `control.library` are the rig's wiring and stay with the caller, before
+  `build`. Where `main`
+  built a rig object between two deck lines, `build` calls the caller's
+  hook at that place: `hands(reg)` (the hands' setup), `outputs(reg)`
+  (output 1's params and every output's switches; its result is handed
+  on), `panel(reg, view, clock=, lfos=, envs=, seq=, hold=, output=)`
+  (the panel, its `ui.*` params and its handles, where `main` set them), `devices(reg, router, learn)` (the
+  devices, the dream worker, the dial, the keep-awake), and the table
+  through `table(reg)`. Each hook returns what it made; `build` hands
+  the outputs' result to the panel hook and the panel and hands' setup to
+  the devices hook, and records every return on a `deck.RigMade` the
+  caller reads. The three steps there is one of in the process —
+  `library.attach`, the startup preset, `undo.install` — are switches
+  (`attach`, `startup`, `install`), all on as `main` has them; a second
+  deck passes them off, and D2+ decides their real shape. A headless deck has no renderer and no hold; `dream` / `fx` /
+  `ghost` stand-ins given beside a renderer are refused.
+  `app.Host.deck` and `ui.Panel.deck` are new; every flat handle stays,
+  assigned from the deck, so `frame` and its order are unchanged.
+  `tests/test_undo.boot` now calls `Deck.build` with its stand-ins.
+- **Recommended.** As built. The proof is
+  `tests/test_deck.py::test_a_deck_built_the_old_way_and_the_new_way_reach_the_same_state`:
+  over every corpus preset (load, 120 frames of the pass over a fixed
+  lane vector, `view.bright` turned, `undo.undo()`), the old `boot` and
+  `Deck.build` reach the same registry, table, routes, desk, macros,
+  modifiers, banks and undo stack. The goldens did not move.
+- **Other options.** `main` building the deck in stages (three or four
+  calls) with no hooks: fewer closures, but the order lives in `main`
+  again and the headless copy can drift. Moving the rig's objects (the
+  outputs, the panel, the devices) after the deck: the registry's order
+  and "default" would change, which D1 must not do.
+- **To reverse.** Put `Deck.build`'s body back into `main` and
+  `boot`, delete `deck.py`, its `MODULES` entry and the two `deck`
+  fields — a move, no data.
+- **Rough edge.** The old `boot` had drifted from `main`: it never
+  handed the router its banks (`use_lfos` / `use_bank` /
+  `use_sequencer`), so its LFOs, envelopes and sequencer never stepped
+  inside the pass. `boot` runs `main`'s lines now; with those three lines
+  added the old body and the deck agree to the bit, and without them
+  three corpus presets (TRIP, TUMBLE, seq-demo) leave a base a round-off
+  apart after an undo, which `undo.alike` calls the same value — the
+  test checks both. The fifteen test files on `boot` pass unchanged. A
+  hot reload re-classes a live `Deck` and back-fills a new field, but
+  `Panel.deck` is set in `Panel.__init__`, so this PR is a restart, not
+  a hot reload.
+- **Judge it.** Hand check 430 (group AW): launch, load, a knob, ⌘Z,
+  HOLD / TAKE / DROP, a hot reload of `deck.py` and of `routing.py` —
+  all as before.
 
 ### 572. C2 built: ids kept, `/9`, the migration tool runs the retaper first
 
@@ -9925,6 +9990,227 @@ and D3 (the per-deck split) are
 - **Rough edge.** Every preset's first line changes on its next save.
 - **Judge it.** Check 432.
 
+### 577. Continuity K2: warp's drift and scale and tripcolour's pulse on `@clock`
+- **Asked.** Row 560 (the owner, 2026-11-02, after the show of
+  2026-10-30): no shader multiplies time by a param. K1 built the
+  directive, the lint and the UV-field harness; K2 ports the two shipped
+  effects the lint found — warp (`t = u_phase * u_drift`, and
+  `(p + vec2(t) * 0.1) * u_scale`, which multiplied the scrolled offset by
+  scale too) and tripcolour (`sin(u_phase * u_pulse)`).
+- **Answer.** The owner's rule (row 560); the build's choices below,
+  for the owner to keep or overturn.
+- **Built.** Warp: `// @clock u_drift_t drift*scale` — one phase at speed ×
+  drift × scale, unwrapped (a scrolled noise field runs on), read as
+  `perlin2(p * u_scale + vec2(u_drift_t) * 0.1)` and the second octave
+  `p * u_scale * 3.0 + vec2(u_drift_t) * (0.0167 * 3.0) + 7.0`. The scroll
+  is counted in noise cells, so at still knobs it is the old
+  `u_phase × drift × scale` exactly (the same picture) and the field
+  still slides the same screens a second at any scale; a drift step
+  changes the speed only, a scale step re-zooms the cells about the
+  centre and slides nothing. A one-param rate could not say "cells a
+  second = drift × scale", so the directive grew a product rate
+  (`<rate-param>*<rate-param>`, each of the file's own params once;
+  `ClockSpec.factors`), documented in `_lib.glsl`'s contract comment, the
+  `fx` docstring and DECISIONS. Tripcolour: `// @clock u_pulse_t pulse
+  tau`, read as `sin(u_pulse_t)`. The lint's allowlist loses
+  (warp, u_drift), (warp, u_scale) and (tripcolour, u_pulse); only
+  (patterns, m_colour), K4, is left, and the lint's pre-port exemption
+  (a clock's rate param times `u_phase` passed while a file was
+  mid-port) is gone, so the old line put back beside the clock is found
+  again. The harness now also stands each
+  `@clock` where the hour at the run's knobs left it. Harness, an hour
+  in (`tests/uv_flow.py`, 320×200, px moved on the step frame / largest
+  still frame): drift 1 → 1.1 15.3 / 0.05 before, 0.05 / 0.06 after;
+  pulse 1.5 → 1.6 20.5 / 0.16 before, 0.16 / 0.16 after; scale 3 → 3.03
+  16.3 before, 1.3 after; scale 3 → 3.3 15.1 before, 10.4 after (10.6 at
+  ten seconds in: the re-zoom, the same at any hour).
+- **Goldens.** party-noita's 17 frames (8 pictures) re-recorded: the
+  hands-absent ones by float rounding only (the scroll is summed in the
+  host in double and added after the scale, where the shader multiplied
+  in float32 — no 8-bit difference on the contact sheet); the
+  hands-present ones because the preset routes the hands to warp's scale
+  and drift, so the knobs move during the eight frames and the clock
+  integrates what the old shader multiplied (at most 15/255 on 716 of
+  2.6 M pixels). No other preset moved.
+- **Other options.** Integrate the scroll in cells at a fixed reference
+  scale (a one-param clock at drift, offset × 3): no directive change,
+  but the field would slide slower in screens at a finer scale, unlike
+  today. Two clocks (drift; drift × scale through a second): the same
+  extension by another name. Slew scale so its re-zoom is spread over
+  frames: a smoothing the directive does not have, and a 1 % step already
+  moves 1.3 px at the rim.
+- **To reverse.** Put `t = u_phase * u_drift` back in warp.glsl and
+  `sin(u_phase * u_pulse)` in tripcolour.glsl, drop the two `@clock`
+  lines and restore the three allowlist pairs: minutes (the product rate
+  can stay unused).
+- **Rough edge.** A scale step still changes the picture by the size of
+  the step — a tenth moves the rim ~10 px on a 320-px frame — because
+  scale is a spatial knob, not a rate; that is the knob working, not a
+  jump, and it is the same at any hour. Needs a restart (a change to
+  `fx.py` and a directive the old parser refuses), not a hot reload.
+- **Judge it.** Checks 419 and 434.
+### 578. The media path's and the field's rates are integrated by the host
+- **Asked.** Row 560 (the owner, 2026-11-02, after the show of
+  2026-10-30): no shader multiplies time by a param. It named
+  `view.media_rate` and `view.inst_rate` as the same fault on the Python
+  side: the media path's phase was `t * s.media_rate` (render.py,
+  `_face_uniforms`) and the field's motion `t * s.inst_rate` (render.py
+  `_legacy_field`, field.py `field`), so a knob step an hour into a set
+  moved the phase by t · Δrate — the picture over the faces and every copy
+  of the shape jumped to somewhere else.
+- **Answer.** Built under row 560 (wave 1 K3); the rule is the owner's,
+  the shape below the build's.
+- **Built.** `ViewState` gains `inst_phase` and `media_phase` (floats, 0,
+  rad), plain fields like the turn's `ang`: not params, never saved, no
+  schema change. `ViewState.integrate(dt)` adds `dt · inst_rate` and
+  `dt · media_rate` every frame, before the turn's own update and whether
+  or not the turn is playing (they ran on the wall clock before), wrapped
+  at a whole period of every use: the path reads sin/cos of ph and 2·ph
+  (`MEDIA_PERIOD` 2π); the field reads ph, 0.7·ph and 0.9·ph
+  (`field._motion`), whose common period is 20π (`INST_PERIOD`). The
+  draw reads the phases and no rate: `field.field` and
+  `Renderer._field` / `_legacy_field` / `_copies_of` lost their now-unused
+  `t`. From rest at a constant rate the phase is rate · t, the picture
+  before K3. The golden harness (`tools/golden_frames.py`) sets each
+  rig's phases on its first frame, after the first `reg.apply`, with
+  `ViewState.seed_phases(T0)` from the rate that frame's modulation
+  leaves — as if the rate had always been that, `Renderer._pattern_clock`'s
+  first call (row 99) — so frame k reads (T0 + k·DT) · rate as it did: no
+  golden moved. The shot tools (`layout_shots`, `dream_shots`, `fx_shots`,
+  `lookback_shots`, `hands_tape`, `dream_layer_sheet`) seed at their
+  pinned clock the same way; their committed sheets were not regenerated.
+  `field.field`'s `radius_px` and `pad_px` are keyword-only, so a caller
+  still passing a time cannot land it on the cull radius.
+  `app.frame` runs `view.integrate` in a guarded block of its own after
+  the step's (the order unchanged), so a step that raises every frame no
+  longer stops the motion with it.
+  `tests/test_view_phase.py`: a step changes the slope, not the value; the
+  wrap is invisible in the field; render.py and field.py read no rate (an
+  AST pin); a field-rate nudge ten seconds in moves no copy further than
+  one frame's motion at the new rate, where t × rate moved them several
+  times that.
+- **Other options.** Integrate per renderer, keyed on the frame's `t`
+  (`Renderer._pattern_clock`'s shape): the held program and the preview
+  are two renderers over one `ViewState`, so each would keep its own
+  phase and the hold would need no edit. Not taken (the orchestrator's
+  ruling on review): plan 44 makes `ViewState` per deck — one look, one
+  turn, one phase — and the turn's `rot.phase.*` is the precedent on the
+  view; the hold's one-for-both is a plan 38 consequence that plan 44's
+  D5 removes. `field.field` is also called with a view, not a renderer. A `@clock` in a shader:
+  these paths are computed in Python, not in a shader.
+- **To reverse.** The two fields and the two lines in `integrate` out;
+  `ph = t * s.media_rate` / `t * s.inst_rate` back in render.py and
+  field.py with `t` threaded back through `field` and the scene pass; the
+  harness's seed out.
+- **Rough edge.** The hold (plan 38): there is one `ViewState` and
+  `integrate` runs once a frame before either draw, so the phase is one
+  for both — under hold an operator's change to either rate moves the
+  projector's motion's speed too, where before K3 the program kept its
+  held rate. This is how the turn already behaves, and the two rate
+  params join `view.speed` in `hold.ONE_FOR_BOTH` (the orchestrator's
+  ruling) so the hold neither holds them nor counts them as changed on
+  its red line (`tests/test_hold.py`). Plainly: until plan 44's
+  per-deck `ViewState`, a Field rate or Media rate move on the preview
+  also moves the projector, and the hold's red line stays silent about
+  it.
+  A paused turn (`view.playing` off) leaves the field and the path
+  moving, as before. And `app.frame` integrates even on a frame whose step
+  raised before `reg.apply()`, so the phases then advance on the last
+  applied rates — the motion carries on at stale values where before K3
+  the field and path still ran on the wall clock and the turn stopped
+  (intended: the picture keeps moving through a broken step; the red
+  banner names the step).
+- **Judge it.** Hand check 435 (group AZ).
+
+### 579. RINGS' colour step, and the spatial knobs of glimmer, wobble and fractals
+- **Asked.** Row 560 (the owner, 2026-11-02): no shader multiplies time by
+  a param. The time lint's allowlist named RINGS × colour for K4: `pal(ph
+  * 0.15 * m_colour() + …)` with `ph = r * f - t * 3 / TAU`, `t` the
+  patterns' clock, so a colour step turned the palette by `t · 0.072 ·
+  Δcolour` cycles — a tenth of a cycle per detent a minute in, 6.7 an hour
+  in — and COLOUR is the input the factory routes put the UPR lane on, so
+  the music did it on every flare. The wave 1 prompt also named glimmer,
+  wobble and fractals as "param scales space" suspects.
+- **Built.** RINGS reads `pal((r * f * m_colour() - t * 3.0 / TAU) * 0.15 +
+  face_turn(…))`: colour scales the radius term only — the hue range
+  along the rings, which is what `patterns.py` says it does — and the
+  drift runs at the design's rate whatever the colour. At colour 1 the
+  expression is the old one term for term, so no golden moved. A detent
+  of colour on a 128² tile, an hour in: 59.5 levels of 255 before, 9.4
+  after (four seconds in, 8.0 before and 9.8 after; a frame's own motion is
+  1.2). The other `m_colour()` uses multiply no time-carrying term:
+  `spread_hue` (every caller's `x` is a sine, a cosine or a static
+  coordinate), `finish`, METER (`s` is a band index), TRUCHET (`along`
+  has no `t`), HEX and CELLS (a hash × colour, `t` added), SPIRAL (`r ×
+  colour`, `t` added) and PLASMA (`s` is a sum of sines, bounded) —
+  left alone. Glimmer, wobble and fractals, measured with the harness of
+  row 580 (a hundredth of a detent, px early / late): glimmer size 0.32 /
+  0.29, wobble frequency 0.076 / 0.074, fractals cells 2.5 / 1.2 and size
+  0.19 / 0.09, every other knob of theirs under 0.01 — none grows. Each
+  knob multiplies a coordinate (glimmer's cell grid, wobble's `p.y *
+  u_freq`, fractals' `ps * cells`), but what is added to that coordinate
+  is bounded (a sine, a Perlin sample) or comes after the product (`+
+  t`), so a step changes the shape by the same amount whenever it comes:
+  glimmer's stars keep their hash and their twinkle and move with the
+  zoom (the cell index survives a size step), wobble's waves change pitch,
+  fractals' lattice re-scales. All three zoom about the frame's
+  bottom-left corner rather than its centre, so a step slides the far
+  side most; that is a look, the same at minute one, and fractals'
+  mirror fold sits on that corner, so re-centring would change the
+  picture at every constant knob — not done.
+- **Other options.** A second integrated pattern clock for the hue drift
+  scaled by colour (keeps "more colour runs the hues faster" at the cost
+  of a uniform and a clock in `Renderer`; nobody asked for that coupling
+  and the mode's own table does not describe it). Re-centring glimmer's
+  and wobble's zoom (a change at every non-default size for no growth).
+- **To reverse.** One line of `patterns.glsl` (it hot-reloads) and the
+  allowlist entry back.
+- **Judge it.** Check 436.
+### 580. A knob step is the same size an hour in as a second in
+- **Asked.** The wave 1 prompt for K4: the time lint reads products of a
+  time and a param in the source and cannot see a param that scales
+  space where the time arrives some other way (inside a builtin it reads
+  as opaque, `mod(u_phase, …)`; through a hash; from the host).
+- **Answer.** owner — 2026-11-03: yes. The build's ruling: a
+  measurement over everything shipped, not a second lint.
+  `tests/test_step_continuity.py` takes every effect's `speed` and every
+  `@param` (amount-type params at half their range so the effect shows)
+  and every face pattern's inputs but SPEED (the renderer integrates it,
+  tested in `test_patterns.py`), and measures the picture's change for a
+  small step with every clock stopped at the same phase
+  (`uv_flow.jump`: the UV-encoded source, so the change is in pixels of
+  the sampling field; a pattern's 64² tile in levels): the largest over
+  six phases from 0.1 to 98 against the smaller of an hour and two. A
+  step may be any size — a shape knob is meant to change the picture —
+  but no more than 4 × its early size + 0.5 (px or levels) late. The
+  step is a hundredth of a detent for an effect's float param (a whole
+  detent for an integer), a tenth for a pattern input (the tile is 8-bit),
+  so a shape change stays a fraction of a pixel while a phase carried by
+  time is still moved by `phase × Δ`. Each knob is measured under every
+  setting of the effect's choices (blend's key acts in the luma key
+  only), with the UV map turned half a turn on the aux input (displace and
+  blend read nothing without one), and with `u_time` at the wall time the
+  phase stands at for the effect's speed.
+- **Measured.** Every knob that grows fails by 4.3–4.9 × the threshold
+  (warp drift 0.23 → 6.2 px, warp scale 0.26 → 6.7, tripcolour pulse 1.3
+  → 27.7, RINGS colour before row 579 3.2 → 61.6 levels); every other knob
+  is under 0.25 × it (the nearest: METER's scale, HEX's scale and warp,
+  doublevision's copies, kaleido's segments — big shape changes, the same
+  late). No false positive over the 17 effects and 12 patterns; K2's
+  ports (row 577) are checked like the rest now the time lint's
+  allowlist is empty: warp's drift and scale and tripcolour's pulse pass. A synthetic effect, `src(fract((uv +
+  mod(u_phase, 1e4) · 0.001) · u_scale))`, passes the lint and fails the
+  harness (past twice the rule's bound); the same with the offset added after the
+  scale, or a scale over a bounded wobble, passes. About 3 s of test time
+  serially, in the fast tier.
+- **What it cannot see.** A rate under a sine that has already wrapped by
+  phase 98 at a hundredth of a detent (more than ~6 rad a unit) — the
+  lint's product rule is for those, and the two together are the rule. A
+  param an effect never shows at its other params' defaults and half
+  their amounts.
+- **To reverse.** Delete the file and the two helpers at the end of
+  `tests/uv_flow.py`.
+- **Judge it.** Check 436.
 ### 581. Plan 45 V2: the mixer — one stream, read at the transport's position
 - **Asked.** Plan 45's second PR: a mixer with a per-channel gain and a
   play-audio toggle, one output stream, under the owner's rule (row 562):
@@ -10023,290 +10309,6 @@ and D3 (the per-deck split) are
   (simpler, a hitch of tens of ms the first time).
 - **Judge it.** Hand checks 437–439, group BB.
 
-### 578. The media path's and the field's rates are integrated by the host
-- **Asked.** Row 560 (the owner, 2026-11-02, after the show of
-  2026-10-30): no shader multiplies time by a param. It named
-  `view.media_rate` and `view.inst_rate` as the same fault on the Python
-  side: the media path's phase was `t * s.media_rate` (render.py,
-  `_face_uniforms`) and the field's motion `t * s.inst_rate` (render.py
-  `_legacy_field`, field.py `field`), so a knob step an hour into a set
-  moved the phase by t · Δrate — the picture over the faces and every copy
-  of the shape jumped to somewhere else.
-- **Answer.** Built under row 560 (wave 1 K3); the rule is the owner's,
-  the shape below the build's.
-- **Built.** `ViewState` gains `inst_phase` and `media_phase` (floats, 0,
-  rad), plain fields like the turn's `ang`: not params, never saved, no
-  schema change. `ViewState.integrate(dt)` adds `dt · inst_rate` and
-  `dt · media_rate` every frame, before the turn's own update and whether
-  or not the turn is playing (they ran on the wall clock before), wrapped
-  at a whole period of every use: the path reads sin/cos of ph and 2·ph
-  (`MEDIA_PERIOD` 2π); the field reads ph, 0.7·ph and 0.9·ph
-  (`field._motion`), whose common period is 20π (`INST_PERIOD`). The
-  draw reads the phases and no rate: `field.field` and
-  `Renderer._field` / `_legacy_field` / `_copies_of` lost their now-unused
-  `t`. From rest at a constant rate the phase is rate · t, the picture
-  before K3. The golden harness (`tools/golden_frames.py`) sets each
-  rig's phases on its first frame, after the first `reg.apply`, with
-  `ViewState.seed_phases(T0)` from the rate that frame's modulation
-  leaves — as if the rate had always been that, `Renderer._pattern_clock`'s
-  first call (row 99) — so frame k reads (T0 + k·DT) · rate as it did: no
-  golden moved. The shot tools (`layout_shots`, `dream_shots`, `fx_shots`,
-  `lookback_shots`, `hands_tape`, `dream_layer_sheet`) seed at their
-  pinned clock the same way; their committed sheets were not regenerated.
-  `field.field`'s `radius_px` and `pad_px` are keyword-only, so a caller
-  still passing a time cannot land it on the cull radius.
-  `app.frame` runs `view.integrate` in a guarded block of its own after
-  the step's (the order unchanged), so a step that raises every frame no
-  longer stops the motion with it.
-  `tests/test_view_phase.py`: a step changes the slope, not the value; the
-  wrap is invisible in the field; render.py and field.py read no rate (an
-  AST pin); a field-rate nudge ten seconds in moves no copy further than
-  one frame's motion at the new rate, where t × rate moved them several
-  times that.
-- **Other options.** Integrate per renderer, keyed on the frame's `t`
-  (`Renderer._pattern_clock`'s shape): the held program and the preview
-  are two renderers over one `ViewState`, so each would keep its own
-  phase and the hold would need no edit. Not taken (the orchestrator's
-  ruling on review): plan 44 makes `ViewState` per deck — one look, one
-  turn, one phase — and the turn's `rot.phase.*` is the precedent on the
-  view; the hold's one-for-both is a plan 38 consequence that plan 44's
-  D5 removes. `field.field` is also called with a view, not a renderer. A `@clock` in a shader:
-  these paths are computed in Python, not in a shader.
-- **To reverse.** The two fields and the two lines in `integrate` out;
-  `ph = t * s.media_rate` / `t * s.inst_rate` back in render.py and
-  field.py with `t` threaded back through `field` and the scene pass; the
-  harness's seed out.
-- **Rough edge.** The hold (plan 38): there is one `ViewState` and
-  `integrate` runs once a frame before either draw, so the phase is one
-  for both — under hold an operator's change to either rate moves the
-  projector's motion's speed too, where before K3 the program kept its
-  held rate. This is how the turn already behaves, and the two rate
-  params join `view.speed` in `hold.ONE_FOR_BOTH` (the orchestrator's
-  ruling) so the hold neither holds them nor counts them as changed on
-  its red line (`tests/test_hold.py`). Plainly: until plan 44's
-  per-deck `ViewState`, a Field rate or Media rate move on the preview
-  also moves the projector, and the hold's red line stays silent about
-  it.
-  A paused turn (`view.playing` off) leaves the field and the path
-  moving, as before. And `app.frame` integrates even on a frame whose step
-  raised before `reg.apply()`, so the phases then advance on the last
-  applied rates — the motion carries on at stale values where before K3
-  the field and path still ran on the wall clock and the turn stopped
-  (intended: the picture keeps moving through a broken step; the red
-  banner names the step).
-- **Judge it.** Hand check 435 (group AZ).
-
-### 577. Continuity K2: warp's drift and scale and tripcolour's pulse on `@clock`
-- **Asked.** Row 560 (the owner, 2026-11-02, after the show of
-  2026-10-30): no shader multiplies time by a param. K1 built the
-  directive, the lint and the UV-field harness; K2 ports the two shipped
-  effects the lint found — warp (`t = u_phase * u_drift`, and
-  `(p + vec2(t) * 0.1) * u_scale`, which multiplied the scrolled offset by
-  scale too) and tripcolour (`sin(u_phase * u_pulse)`).
-- **Answer.** The owner's rule (row 560); the build's choices below,
-  for the owner to keep or overturn.
-- **Built.** Warp: `// @clock u_drift_t drift*scale` — one phase at speed ×
-  drift × scale, unwrapped (a scrolled noise field runs on), read as
-  `perlin2(p * u_scale + vec2(u_drift_t) * 0.1)` and the second octave
-  `p * u_scale * 3.0 + vec2(u_drift_t) * (0.0167 * 3.0) + 7.0`. The scroll
-  is counted in noise cells, so at still knobs it is the old
-  `u_phase × drift × scale` exactly (the same picture) and the field
-  still slides the same screens a second at any scale; a drift step
-  changes the speed only, a scale step re-zooms the cells about the
-  centre and slides nothing. A one-param rate could not say "cells a
-  second = drift × scale", so the directive grew a product rate
-  (`<rate-param>*<rate-param>`, each of the file's own params once;
-  `ClockSpec.factors`), documented in `_lib.glsl`'s contract comment, the
-  `fx` docstring and DECISIONS. Tripcolour: `// @clock u_pulse_t pulse
-  tau`, read as `sin(u_pulse_t)`. The lint's allowlist loses
-  (warp, u_drift), (warp, u_scale) and (tripcolour, u_pulse); only
-  (patterns, m_colour), K4, is left, and the lint's pre-port exemption
-  (a clock's rate param times `u_phase` passed while a file was
-  mid-port) is gone, so the old line put back beside the clock is found
-  again. The harness now also stands each
-  `@clock` where the hour at the run's knobs left it. Harness, an hour
-  in (`tests/uv_flow.py`, 320×200, px moved on the step frame / largest
-  still frame): drift 1 → 1.1 15.3 / 0.05 before, 0.05 / 0.06 after;
-  pulse 1.5 → 1.6 20.5 / 0.16 before, 0.16 / 0.16 after; scale 3 → 3.03
-  16.3 before, 1.3 after; scale 3 → 3.3 15.1 before, 10.4 after (10.6 at
-  ten seconds in: the re-zoom, the same at any hour).
-- **Goldens.** party-noita's 17 frames (8 pictures) re-recorded: the
-  hands-absent ones by float rounding only (the scroll is summed in the
-  host in double and added after the scale, where the shader multiplied
-  in float32 — no 8-bit difference on the contact sheet); the
-  hands-present ones because the preset routes the hands to warp's scale
-  and drift, so the knobs move during the eight frames and the clock
-  integrates what the old shader multiplied (at most 15/255 on 716 of
-  2.6 M pixels). No other preset moved.
-- **Other options.** Integrate the scroll in cells at a fixed reference
-  scale (a one-param clock at drift, offset × 3): no directive change,
-  but the field would slide slower in screens at a finer scale, unlike
-  today. Two clocks (drift; drift × scale through a second): the same
-  extension by another name. Slew scale so its re-zoom is spread over
-  frames: a smoothing the directive does not have, and a 1 % step already
-  moves 1.3 px at the rim.
-- **To reverse.** Put `t = u_phase * u_drift` back in warp.glsl and
-  `sin(u_phase * u_pulse)` in tripcolour.glsl, drop the two `@clock`
-  lines and restore the three allowlist pairs: minutes (the product rate
-  can stay unused).
-- **Rough edge.** A scale step still changes the picture by the size of
-  the step — a tenth moves the rim ~10 px on a 320-px frame — because
-  scale is a spatial knob, not a rate; that is the knob working, not a
-  jump, and it is the same at any hour. Needs a restart (a change to
-  `fx.py` and a directive the old parser refuses), not a hot reload.
-- **Judge it.** Checks 419 and 434.
-### 571. Plan 44 D1: one `Deck`, one construction order
-- **Asked.** Plan 44 §3 D1 (rows 556–559): bundle what §2 marks per deck,
-  as the objects exist today, into one `Deck`, and move `app.main`'s lines
-  from the view state to `undo.install` into `Deck.build` in their order —
-  the registry's order and the attach order — with no behaviour change,
-  so D2–D6 have one object to split and to point controllers and the
-  panel at.
-- **Answer.** Built as recommended. `hyperspace/deck.py`: a `Deck`
-  dataclass (`reg`, `view`, `table`, `router`, `lfos`, `envs`, `seq`,
-  `clock`, `presets` and `graph`, `learn`, `undo`, `marks`, `renderer`,
-  `hold`), `Deck.build` holding `main`'s lines in their order, and
-  `Deck.targets()` the deck itself and then the hot-reload tuples `main`
-  listed for those objects, in its order (`main` splices them first, then
-  the rig's). The clock is built in `build` as before; plan 44 calls it
-  shared, and D3+ passes the rig's one in. The library's band hooks and
-  `control.library` are the rig's wiring and stay with the caller, before
-  `build`. Where `main`
-  built a rig object between two deck lines, `build` calls the caller's
-  hook at that place: `hands(reg)` (the hands' setup), `outputs(reg)`
-  (output 1's params and every output's switches; its result is handed
-  on), `panel(reg, view, clock=, lfos=, envs=, seq=, hold=, output=)`
-  (the panel, its `ui.*` params and its handles, where `main` set them), `devices(reg, router, learn)` (the
-  devices, the dream worker, the dial, the keep-awake), and the table
-  through `table(reg)`. Each hook returns what it made; `build` hands
-  the outputs' result to the panel hook and the panel and hands' setup to
-  the devices hook, and records every return on a `deck.RigMade` the
-  caller reads. The three steps there is one of in the process —
-  `library.attach`, the startup preset, `undo.install` — are switches
-  (`attach`, `startup`, `install`), all on as `main` has them; a second
-  deck passes them off, and D2+ decides their real shape. A headless deck has no renderer and no hold; `dream` / `fx` /
-  `ghost` stand-ins given beside a renderer are refused.
-  `app.Host.deck` and `ui.Panel.deck` are new; every flat handle stays,
-  assigned from the deck, so `frame` and its order are unchanged.
-  `tests/test_undo.boot` now calls `Deck.build` with its stand-ins.
-- **Recommended.** As built. The proof is
-  `tests/test_deck.py::test_a_deck_built_the_old_way_and_the_new_way_reach_the_same_state`:
-  over every corpus preset (load, 120 frames of the pass over a fixed
-  lane vector, `view.bright` turned, `undo.undo()`), the old `boot` and
-  `Deck.build` reach the same registry, table, routes, desk, macros,
-  modifiers, banks and undo stack. The goldens did not move.
-- **Other options.** `main` building the deck in stages (three or four
-  calls) with no hooks: fewer closures, but the order lives in `main`
-  again and the headless copy can drift. Moving the rig's objects (the
-  outputs, the panel, the devices) after the deck: the registry's order
-  and "default" would change, which D1 must not do.
-- **To reverse.** Put `Deck.build`'s body back into `main` and
-  `boot`, delete `deck.py`, its `MODULES` entry and the two `deck`
-  fields — a move, no data.
-- **Rough edge.** The old `boot` had drifted from `main`: it never
-  handed the router its banks (`use_lfos` / `use_bank` /
-  `use_sequencer`), so its LFOs, envelopes and sequencer never stepped
-  inside the pass. `boot` runs `main`'s lines now; with those three lines
-  added the old body and the deck agree to the bit, and without them
-  three corpus presets (TRIP, TUMBLE, seq-demo) leave a base a round-off
-  apart after an undo, which `undo.alike` calls the same value — the
-  test checks both. The fifteen test files on `boot` pass unchanged. A
-  hot reload re-classes a live `Deck` and back-fills a new field, but
-  `Panel.deck` is set in `Panel.__init__`, so this PR is a restart, not
-  a hot reload.
-- **Judge it.** Hand check 430 (group AW): launch, load, a knob, ⌘Z,
-  HOLD / TAKE / DROP, a hot reload of `deck.py` and of `routing.py` —
-  all as before.
-
-### 579. RINGS' colour step, and the spatial knobs of glimmer, wobble and fractals
-- **Asked.** Row 560 (the owner, 2026-11-02): no shader multiplies time by
-  a param. The time lint's allowlist named RINGS × colour for K4: `pal(ph
-  * 0.15 * m_colour() + …)` with `ph = r * f - t * 3 / TAU`, `t` the
-  patterns' clock, so a colour step turned the palette by `t · 0.072 ·
-  Δcolour` cycles — a tenth of a cycle per detent a minute in, 6.7 an hour
-  in — and COLOUR is the input the factory routes put the UPR lane on, so
-  the music did it on every flare. The wave 1 prompt also named glimmer,
-  wobble and fractals as "param scales space" suspects.
-- **Built.** RINGS reads `pal((r * f * m_colour() - t * 3.0 / TAU) * 0.15 +
-  face_turn(…))`: colour scales the radius term only — the hue range
-  along the rings, which is what `patterns.py` says it does — and the
-  drift runs at the design's rate whatever the colour. At colour 1 the
-  expression is the old one term for term, so no golden moved. A detent
-  of colour on a 128² tile, an hour in: 59.5 levels of 255 before, 9.4
-  after (four seconds in, 8.0 before and 9.8 after; a frame's own motion is
-  1.2). The other `m_colour()` uses multiply no time-carrying term:
-  `spread_hue` (every caller's `x` is a sine, a cosine or a static
-  coordinate), `finish`, METER (`s` is a band index), TRUCHET (`along`
-  has no `t`), HEX and CELLS (a hash × colour, `t` added), SPIRAL (`r ×
-  colour`, `t` added) and PLASMA (`s` is a sum of sines, bounded) —
-  left alone. Glimmer, wobble and fractals, measured with the harness of
-  row 580 (a hundredth of a detent, px early / late): glimmer size 0.32 /
-  0.29, wobble frequency 0.076 / 0.074, fractals cells 2.5 / 1.2 and size
-  0.19 / 0.09, every other knob of theirs under 0.01 — none grows. Each
-  knob multiplies a coordinate (glimmer's cell grid, wobble's `p.y *
-  u_freq`, fractals' `ps * cells`), but what is added to that coordinate
-  is bounded (a sine, a Perlin sample) or comes after the product (`+
-  t`), so a step changes the shape by the same amount whenever it comes:
-  glimmer's stars keep their hash and their twinkle and move with the
-  zoom (the cell index survives a size step), wobble's waves change pitch,
-  fractals' lattice re-scales. All three zoom about the frame's
-  bottom-left corner rather than its centre, so a step slides the far
-  side most; that is a look, the same at minute one, and fractals'
-  mirror fold sits on that corner, so re-centring would change the
-  picture at every constant knob — not done.
-- **Other options.** A second integrated pattern clock for the hue drift
-  scaled by colour (keeps "more colour runs the hues faster" at the cost
-  of a uniform and a clock in `Renderer`; nobody asked for that coupling
-  and the mode's own table does not describe it). Re-centring glimmer's
-  and wobble's zoom (a change at every non-default size for no growth).
-- **To reverse.** One line of `patterns.glsl` (it hot-reloads) and the
-  allowlist entry back.
-- **Judge it.** Check 436.
-### 580. A knob step is the same size an hour in as a second in
-- **Asked.** The wave 1 prompt for K4: the time lint reads products of a
-  time and a param in the source and cannot see a param that scales
-  space where the time arrives some other way (inside a builtin it reads
-  as opaque, `mod(u_phase, …)`; through a hash; from the host).
-- **Answer.** owner — 2026-11-03: yes. The build's ruling: a
-  measurement over everything shipped, not a second lint.
-  `tests/test_step_continuity.py` takes every effect's `speed` and every
-  `@param` (amount-type params at half their range so the effect shows)
-  and every face pattern's inputs but SPEED (the renderer integrates it,
-  tested in `test_patterns.py`), and measures the picture's change for a
-  small step with every clock stopped at the same phase
-  (`uv_flow.jump`: the UV-encoded source, so the change is in pixels of
-  the sampling field; a pattern's 64² tile in levels): the largest over
-  six phases from 0.1 to 98 against the smaller of an hour and two. A
-  step may be any size — a shape knob is meant to change the picture —
-  but no more than 4 × its early size + 0.5 (px or levels) late. The
-  step is a hundredth of a detent for an effect's float param (a whole
-  detent for an integer), a tenth for a pattern input (the tile is 8-bit),
-  so a shape change stays a fraction of a pixel while a phase carried by
-  time is still moved by `phase × Δ`. Each knob is measured under every
-  setting of the effect's choices (blend's key acts in the luma key
-  only), with the UV map turned half a turn on the aux input (displace and
-  blend read nothing without one), and with `u_time` at the wall time the
-  phase stands at for the effect's speed.
-- **Measured.** Every knob that grows fails by 4.3–4.9 × the threshold
-  (warp drift 0.23 → 6.2 px, warp scale 0.26 → 6.7, tripcolour pulse 1.3
-  → 27.7, RINGS colour before row 579 3.2 → 61.6 levels); every other knob
-  is under 0.25 × it (the nearest: METER's scale, HEX's scale and warp,
-  doublevision's copies, kaleido's segments — big shape changes, the same
-  late). No false positive over the 17 effects and 12 patterns; K2's
-  ports (row 577) are checked like the rest now the time lint's
-  allowlist is empty: warp's drift and scale and tripcolour's pulse pass. A synthetic effect, `src(fract((uv +
-  mod(u_phase, 1e4) · 0.001) · u_scale))`, passes the lint and fails the
-  harness (past twice the rule's bound); the same with the offset added after the
-  scale, or a scale over a bounded wobble, passes. About 3 s of test time
-  serially, in the fast tier.
-- **What it cannot see.** A rate under a sine that has already wrapped by
-  phase 98 at a hundredth of a detent (more than ~6 rad a unit) — the
-  lint's product rule is for those, and the two together are the rule. A
-  param an effect never shows at its other params' defaults and half
-  their amounts.
-- **To reverse.** Delete the file and the two helpers at the end of
-  `tests/uv_flow.py`.
-- **Judge it.** Check 436.
 ## Plan 48 — preset folders, stage 1 (rows 584–588)
 Wave 1 L1, 2026-11-02: [`plans/48-preset-folders.md`](plans/48-preset-folders.md).
 Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
@@ -10791,89 +10793,6 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   block lost to the analyzer, never the room's sound.
 - **Judge it.** Hand check 448.
 
-### 609. FINE: SEND B held, every knob a tenth as far
-- **Asked.** The owner, after the show of 2026-10-30, in the triage's
-  "coarse and fine control" (row 561): a button on the APC40 held down so
-  that a knob turned meanwhile moves its param in fine steps. T1 (the
-  tapers) and T2 (the panel's shift-drag) are separate PRs.
-- **Answer.** (rec) — the build's: SEND B, ÷10 (`midi.FINE_DIV`). The
-  desk's layout is Dillon's (DECISIONS, "Presets and the desk"); this is
-  one button and comes out whole.
-- **Built.** `apc40.FINE = (N_SEND_B, 0)`. SEND B has no row on either
-  layer, the sequencer page does not shadow it (the clip stops it does),
-  and it sits between the track knobs and the device knobs, a thumb's
-  reach from both. While `desk.fine` is on, an `abs` row with a ring on a
-  continuous, non-integer param reads each message as the knob's move
-  since its last one (`b.last_hw`), divides it by 10 and adds it to the
-  base with `Param.set` between detents (no glide, any glide dropped): a
-  detent is 1/1270 of the throw, under one detent of every param — 0.08
-  of `view.pattern_mix`'s hundred, 0.32 of a speed's 401. The ring
-  follows and re-bases the encoder as ever. A glide in flight lands on
-  its target (what the ring showed) before the fine step. At an end stop
-  the encoder sends its end again for each detent, and each repeat is
-  one MIDI step that way, so fine reaches 0 and 1; a `wrap` param wraps. The button is read by the
-  adapter, not dispatched through the table: `routing.py` is D2's while
-  it is open, and a table row would need `APC_NEW_ROWS` to reach the
-  owner's existing `bindings.json`. So it works on every file at once; it
-  stands down where any enabled row of the device's table names SEND B
-  (that row is the owner's; an off one gives way), worked out once per
-  table change; it is never a learn's candidate. A release goes to the
-  press that held FINE even if a row has landed on SEND B since. Its LED: 1 held, 0
-  not, change-gated, relit after a load darkens the desk. The press goes
-  in the desk log. `desk.fine` is learnable as `desk.slew` is (a learned
-  toggle row would latch it). It is registered by `midi.register_held`,
-  the held-button shape SAVE has; **move it beside `desk.save` in
-  `routing.register_desk` after D2** (routing.py was frozen for D2).
-- **Other options.** A clip stop (1–7 are free, but the sequencer page
-  shadows them); a track select 7–8 (far from the knobs); SEND C or
-  device ◀ ▶ (as free; SEND B is nearer the track knobs). ÷4 or ÷20.
-  A map row through `Bindings.dispatch` with `desk.fine` as a momentary
-  target (the clean shape, after D2: one `APC_NEW_ROWS` line, and the
-  on-screen desk would draw it). Fine on the faders too (a pot's position
-  is its value: every release would leave it out of place).
-- **To reverse.** `apc40.FINE = None` (or the line out): the adapter's
-  `_fine_control` is then None everywhere and nothing else changes.
-- **Rough edge.** The on-screen desk (ui_desk.py) draws SEND B as free:
-  it reads the table, and FINE is not a row. A learn armed while SEND B
-  is pressed ignores the press. An enum or integer knob held fine steps
-  as before. Between a ring sent mid-turn and the encoder taking it, a
-  message already in flight reads a few steps large (the same race the
-  coarse re-base has, ten times smaller here).
-- **Judge it.** Check 459.
-
-### 610. Letting go of FINE: the knob continues from the param
-- **Asked.** T3's brief: on release the knob's absolute position no
-  longer matches the param; handle it as the adapter already handles a
-  mismatch.
-- **Answer.** (rec) — the build's: the ring re-base (plan 13 D7, hand
-  check 31), not a pickup and not a relative read from then on.
-- **Built.** `MidiIO._fine_release`, at the note-off itself (and once a
-  poll when `desk.fine` is turned off any other way): every knob row
-  `_fine_move` touched loses its catch and has its ring re-sent
-  (`last_out = None`). A message the knob sent from where it had wandered,
-  later in the same batch, is read as pickup and moves nothing; then the
-  ring goes out, `_rebase` catches the row at the param's ring and the
-  device's encoder sits there; the next coarse detent is one MIDI step
-  from the param. With `RING_REBASES_KNOB` False the catch stays let go
-  and those knobs pick up as the faders do. `desk.fine` (group desk,
-  `persist=False`, `modulatable=False`) is the rig's; `_enter` lets go of
-  it as of SAVE (one loop over `midi.HELD_PARAMS`) and forgets the knobs
-  it moved, so a lost note-off cannot leave the desk fine; a load forgets
-  them too where rings re-base (its redraw re-sends every ring), and
-  keeps them where they do not, so the release still lets go of their
-  catch.
-- **Other options.** Soft pickup (the knob dead until turned back
-  through the value — up to a tenth of its throw away after a long fine
-  turn); keeping fine's relative read for good (every knob relative, no
-  longer an absolute-with-re-base desk).
-- **To reverse.** `_fine_release`'s loop body to `b.caught = False` alone
-  (soft pickup, the ring left as it was).
-- **Rough edge.** The re-base lands on the param's ring, a 1/127 grid:
-  a fine value between ring steps is kept, and the first coarse detent
-  after it lands on the param's own detent grid again (up to one detent
-  from the fine value).
-- **Judge it.** Check 460.
-
 ## Wave 2 — the panel fold, stage 1 (plan 49, rows 597–601)
 
 ### 597. The side pane always on, as folding sections
@@ -10979,3 +10898,280 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   the look-back / dream / shared split) is stage 2's to redraw, as the two
   picture nodes plan 36 made of them.
 - **Judge it.** 449.
+
+## Wave 2 — the test suite's follow-ups (rows 605–606)
+### 605. `--dist load`: a crash costs one test; the live lock keeps live tests apart
+- **Asked.** Row 589's "Other options": under `loadgroup` with no
+  worker restart, one crash ended the run and lost the dead worker's
+  queue; `load` hands that queue to a replacement. The owner said go on
+  2026-11-03. Row 589's caveats: without `xdist_group("live")` a run's
+  live tests wait on each other through the lock and could start
+  skipping past its 60 s wait; and a module- or session-scoped fixture
+  of a live test is set up outside the per-test lock.
+- **Answer.** Owner (2026-11-03) for `--dist load`; the restart cap,
+  the lock's own-run wait, the wide-fixture check and the dream test
+  (rec) — pending the owner; built as recommended (wave 2, I1).
+- **Recommended.** (1) pyproject's addopts carry, and CI's flags will
+  carry once the owner lands the workflow edit (kept equal),
+  `--dist load --timeout=120 --max-worker-restart=4`: a crash or
+  a hang (the thread timeout `os._exit`s its worker) costs its one
+  test and the replacement takes the queue; a fifth crash ends the run,
+  so a hang that recurs ends it instead of costing 120 s per test. The
+  probe (`-n 2` / `-n 4`, one `os._exit` test among forty quick ones,
+  `--dist load`): cap 0 "1 failed, 30 passed" / "1 failed, 31 passed";
+  cap 4 "1 failed, 40 passed" at both; six crashing tests, cap 4,
+  `-n 2`: "6 failed, 39 passed" and the run ended. (2) The live lock is
+  the one thing keeping two live tests apart, inside a run as across
+  runs; `xdist_group("live")` is gone (`load` ignores it, and no other
+  group existed — none was there for ordering). The holder writes its
+  run's id into the lock file (xdist's `testrunuid`, read from the
+  config so a pytest a test starts in a subprocess is another run;
+  `pid-<n>` serially) and its pid, `<run id>:<pid>`, written whole then
+  trimmed once it holds the lock and cleared before it lets go: an
+  empty file under a held lock is a holder that names no run. The lock is taken in conftest's
+  `pytest_runtest_protocol`, the outer wrapper (tryfirst), so the wait
+  is outside pytest-timeout's window and a test gets its whole 120 s
+  after its turn (`timeout_func_only = true` would do the same but drop
+  every fixture's setup and teardown from the hang guard, which is
+  where `glfw.init()`-style hangs can sit; not taken). A waiter waits
+  **without bound behind a live worker of its own run**: that holder's
+  own timeout bounds each turn, so a run never skips its own live
+  tests, which `loadgroup` always ran. Behind anyone else each holder's
+  time is counted on its own (by run id): `WAIT_S` (60 s) behind
+  another run's, then a skip "another test run holds the live devices
+  (<id>) past 60 s"; `RUN_WAIT_S` (90 s) behind a file that names no
+  run (an older build's holder) or names this run with a pid that is
+  gone, then "a test run that names no run id (an older build's) holds
+  the live devices past 90 s". The skip is raised in
+  `pytest_runtest_setup`. A live test its skip / skipif marks skip
+  (pytest's own `evaluate_skip_marks`), or one with a fixture wider
+  than the test, takes no turn; an `importorskip` or a fixture's skip
+  cannot be known before setup, so those still queue once. Measured with the first version's timed wait
+  (90 s own-run bound): `-m live -n 4` under `load`, "34
+  passed in 23.43s" (the longest wait 16.8 s), then with (4) "35 passed
+  in 39.34s" (22.8 s), at load averages of 22–64 from the other
+  builders; a serial `-m live`, "34 passed … in 25.18s". With the untimed,
+  unbounded own-run wait: "35 passed in 27.57s" (load average 55). The fast tier
+  holds no live test, so two fast-tier runs never meet on the lock;
+  `tests/test_live_lock.py::test_two_workers_of_one_load_run_take_turns_and_neither_skips`
+  runs an inner `-n 2 --dist load` pytest whose two live tests each
+  sleep 0.8 s on gw0 and gw1: they run one after the other, both pass,
+  and both saw the run's own id; without the id the second skipped
+  ("1 passed, 1 skipped"); `test_the_wait_for_the_lock_is_not_timed`
+  waits 2 s for its turn under `--timeout=1` and passes. (3) A live
+  test that uses a fixture wider than the test (module, class, package
+  or session scoped), bar pytest's own deviceless ones
+  (`tmp_path_factory`, `worker_id` …), fails by name in
+  `pytest_runtest_setup` before any fixture is set up
+  (`conftest._wide_fixtures`): per item, so xdist names it (a
+  collection-time `UsageError` came out of a worker as an opaque
+  `INTERNALERROR`) and the rest of the run goes on, and only for tests
+  that run, so a deselected live test never stops the fast tier; tested
+  serially and under `-n 2`. It takes no lock, and it comes after the
+  test's skip marks: a skipped one is a skip, not an error. `--setup-plan` of the live tier showed
+  none today (only `tmp_path_factory`, session-scoped). The torch
+  model `segment._shared_model` keeps is a per-process cache of
+  weights, not a device; it stays. (4)
+  `test_dream.py::test_end_to_end_offscreen`, the dream's real VGG on
+  MPS and its file's only MPS test, joins the live tier (it was only
+  `slow`), so it never shares MPS with the segment's torch test —
+  conftest's own rule for those, which it broke in an `--all` run.
+- **Other options.** `load` with no cap (xdist's default, `-n` × 4,
+  sixty-four at `-n auto`): a hang that recurs on every GL test would
+  cost 120 s a time for an hour. Keep `loadgroup` and the cap of 0:
+  the run ends at the first crash, as in wave 1. A custom xdist
+  scheduler that keeps `loadgroup`'s group and redistributes on a crash:
+  more code than the lock already covers. A FIFO lock (a ticket file):
+  fairness the wait bound does not need while the live tier is short.
+  An own-run waiter that fails at a bound instead of waiting on: a long
+  live queue would fail tests that would have passed.
+  `timeout_func_only = true` to take the wait out of the timer: it
+  takes every fixture out too (above).
+  Leave the dream test `slow` only: torch on MPS twice at once in an
+  `--all` run.
+- **To reverse.** `--dist loadgroup --max-worker-restart=0` in addopts
+  and CI, the `xdist_group("live")` marker back in conftest; the run id
+  and `RUN_WAIT_S` can stay (unused).
+- **Rough edge.** The wait is untimed, so nothing but the holders'
+  own timeouts bounds a run's wait for its own live tier: a worker can
+  sit idle behind it, and the tier's length adds to the run's. The lock
+  is per test, so another run's live tests interleave with this run's
+  one test at a time; a waiter may lose the race behind another run
+  repeatedly and skip at its bound. An older build's holder writes no
+  id and does not clear one: after a killed worker of this build (whose
+  id is left) it shows that id, whose pid is gone, so it is waited for
+  as a holder that names none. A pid reused by a new process in that
+  window would read as alive. CI's edit
+  (`.github/workflows/tests.yml`: `--dist load`,
+  `--max-worker-restart=4` and the comment above them, which still
+  cites the `loadgroup` stall) is the owner's to push — the builder's
+  token has no `workflow` scope; until then CI's own
+  `--max-worker-restart=0` wins over addopts and a crash in CI loses
+  the dead worker's queue, as in wave 1.
+- **Judge it.** 456 (the owner, two runs at once on the shared Mac).
+  Headless: `tests/test_live_lock.py`.
+
+### 606. The four flakes of wave 1, and the register's order
+- **Asked.** Wave 1 left four flakes (wave-2 session prompt): two
+  segment tests each crashed a worker once under GPU contention, the
+  Xbox pad test failed once under one order, `test_shape_renders`
+  failed twice under load; and the register's sections after 543 were
+  out of order.
+- **Answer.** (rec) — pending the owner; built as recommended (wave 2,
+  I1).
+- **Recommended.** (1)
+  `test_pads_hid.py::test_an_xbox_pad_has_no_extras_and_a_simple_report_none`
+  — **found and fixed.** It fakes GLFW joystick 0's presence and
+  buttons but not its GUID; `Pad` asks the real
+  `glfw.get_joystick_guid(0)` for the model. Before `glfw.init()` that
+  says nothing (the Xbox map); after
+  `test_ui_pad.py::test_the_drawings_show_upright_through_real_gl` has
+  run `glfw.init()` in the same worker (it never terminates GLFW) it
+  reads the Mac's real pad — a Joy-Con (L) on index 0 on 2026-11-03 —
+  and the button set has LP/RP and lacks GUIDE/MENU. Reproduced
+  serially with exactly those two tests ("1 failed, 1 passed"). The
+  fix is conftest's autouse `_no_real_joysticks` (beside
+  `_no_real_midi` and `_no_real_hid`): no joystick present, the GUID,
+  buttons, hats and axes empty, unless a test patches the getter
+  itself; the same pair then "2 passed". And at the source: that test,
+  and `test_media_live.py::test_syphon_loopback`, the other test that
+  calls `glfw.init()`, now call `glfw.terminate()` when done; the guard
+  stays as the belt. (2)
+  `test_segment.py::test_vision_frees_each_jobs_memory` and
+  `::test_torch_runs_once_on_a_synthetic_frame` — **not reproduced.**
+  Both were already live (behind the lock since T0). Tried: each alone
+  (`-n0 --all tests/test_segment.py`: 13 passed; torch 13.9 s and
+  Vision's 300 jobs 6.0 s at a load average of 25); `-n 4 --all` over
+  `test_segment.py`, `test_render.py`, `test_graph_frame.py`,
+  `test_media_render.py` and `test_dream.py` twice ("407 passed" both);
+  the live tier at `-n 4` twice (above). The wave-1 crashes were under
+  `-n auto` `--all` runs with the goldens, which this builder may not
+  run on the shared Mac. A "crash" there is either a native crash or
+  the 120 s watchdog, which xdist reports alike. Two changes, neither
+  a retry: the dream's MPS test joins the live tier (row 605 (4)), the
+  one other torch-on-MPS test an `--all` run had alongside; and the
+  torch test's `drain` is 60 s, not 120 s, so a slow MPS fails by its
+  own assertion rather than as the watchdog killing the worker. (3)
+  `test_render.py::test_shape_renders[...]` (Clifford torus, then Five
+  cubes, on PR #333's `-n 4` runs; no failure text was kept) — **not
+  reproduced.** Tried: `-k shape_renders -n 4` three times (101
+  passed each), after the real-GL test serially (184 passed), and two
+  whole fast tiers at `-n 4` (no failure). Read: the frame is
+  deterministic (`t_now` 0, a context per test); the geometry caches
+  are filled under per-shape locks by the render thread and by any
+  `Deck.build`'s background `warm_all` (many tests start one, and
+  under load it outlives its test), and nothing was found that writes
+  a cache entry partly or mutates one. Left as is, to be caught with
+  its message the next time. (4) `tests/fixtures/real.mp3` — **no test
+  reads it.** The audio manifest's `real.mp3:default` entry is checked
+  by `test_golden.py::test_audio_manifest` against its trace
+  `tests/golden/audio/real-default.jsonl`, which is tracked; the mp3 is
+  only `tools/record_golden.py`'s input for re-recording, and it skips
+  a missing clip itself. Nothing to skip. (5) `tools/sort_register.py`
+  sorts the answer sheet's rows and the `### <n>.` sections from 544 on
+  (a `## ` heading, and any unnumbered `### ` under it, moves with the
+  section under it; an unnumbered `### ` elsewhere stays in the section
+  before it; a tail after the last section — a `## ` with no numbered
+  section under it — stays last; `tests/test_sort_register.py`),
+  changing no text:
+  run on this file it moved 561, 562, 556–559, 554–555, 565–570 and
+  571–583 into order (the same lines, the first 9382 unchanged; a
+  second run changes nothing). The older sections (169–209 after
+  210–213) keep their plan grouping; `sort_register.py 1` sorts those
+  too.
+- **Other options.** A retry (`pytest-rerunfailures`) on the three
+  unreproduced tests: it hides the next real failure. Terminate GLFW at
+  the end of the real-GL test instead of the guard: the next test that
+  initialises GLFW would bring it back. Add `real.mp3` to the tree: it
+  is a commercial master (`tools/record_golden.py` says so) and the
+  repository is public; nothing in CI needs it.
+- **To reverse.** Delete `_no_real_joysticks`; take the dream test out
+  of `_LIVE_TESTS`; `drain(120.0)`.
+- **Rough edge.** The render flake and the segment crashes stay
+  unexplained; xdist does not show the thread watchdog's stack dump
+  (a worker's stderr), so the next one should be rerun as
+  `-n0 -k <test>` at once.
+- **Judge it.** — (tests only: the pair above; `tests/test_live_lock.py`).
+
+### 609. FINE: SEND B held, every knob a tenth as far
+- **Asked.** The owner, after the show of 2026-10-30, in the triage's
+  "coarse and fine control" (row 561): a button on the APC40 held down so
+  that a knob turned meanwhile moves its param in fine steps. T1 (the
+  tapers) and T2 (the panel's shift-drag) are separate PRs.
+- **Answer.** (rec) — the build's: SEND B, ÷10 (`midi.FINE_DIV`). The
+  desk's layout is Dillon's (DECISIONS, "Presets and the desk"); this is
+  one button and comes out whole.
+- **Built.** `apc40.FINE = (N_SEND_B, 0)`. SEND B has no row on either
+  layer, the sequencer page does not shadow it (the clip stops it does),
+  and it sits between the track knobs and the device knobs, a thumb's
+  reach from both. While `desk.fine` is on, an `abs` row with a ring on a
+  continuous, non-integer param reads each message as the knob's move
+  since its last one (`b.last_hw`), divides it by 10 and adds it to the
+  base with `Param.set` between detents (no glide, any glide dropped): a
+  detent is 1/1270 of the throw, under one detent of every param — 0.08
+  of `view.pattern_mix`'s hundred, 0.32 of a speed's 401. The ring
+  follows and re-bases the encoder as ever. A glide in flight lands on
+  its target (what the ring showed) before the fine step. At an end stop
+  the encoder sends its end again for each detent, and each repeat is
+  one MIDI step that way, so fine reaches 0 and 1; a `wrap` param wraps. The button is read by the
+  adapter, not dispatched through the table: `routing.py` is D2's while
+  it is open, and a table row would need `APC_NEW_ROWS` to reach the
+  owner's existing `bindings.json`. So it works on every file at once; it
+  stands down where any enabled row of the device's table names SEND B
+  (that row is the owner's; an off one gives way), worked out once per
+  table change; it is never a learn's candidate. A release goes to the
+  press that held FINE even if a row has landed on SEND B since. Its LED: 1 held, 0
+  not, change-gated, relit after a load darkens the desk. The press goes
+  in the desk log. `desk.fine` is learnable as `desk.slew` is (a learned
+  toggle row would latch it). It is registered by `midi.register_held`,
+  the held-button shape SAVE has; **move it beside `desk.save` in
+  `routing.register_desk` after D2** (routing.py was frozen for D2).
+- **Other options.** A clip stop (1–7 are free, but the sequencer page
+  shadows them); a track select 7–8 (far from the knobs); SEND C or
+  device ◀ ▶ (as free; SEND B is nearer the track knobs). ÷4 or ÷20.
+  A map row through `Bindings.dispatch` with `desk.fine` as a momentary
+  target (the clean shape, after D2: one `APC_NEW_ROWS` line, and the
+  on-screen desk would draw it). Fine on the faders too (a pot's position
+  is its value: every release would leave it out of place).
+- **To reverse.** `apc40.FINE = None` (or the line out): the adapter's
+  `_fine_control` is then None everywhere and nothing else changes.
+- **Rough edge.** The on-screen desk (ui_desk.py) draws SEND B as free:
+  it reads the table, and FINE is not a row. A learn armed while SEND B
+  is pressed ignores the press. An enum or integer knob held fine steps
+  as before. Between a ring sent mid-turn and the encoder taking it, a
+  message already in flight reads a few steps large (the same race the
+  coarse re-base has, ten times smaller here).
+- **Judge it.** Check 459.
+
+### 610. Letting go of FINE: the knob continues from the param
+- **Asked.** T3's brief: on release the knob's absolute position no
+  longer matches the param; handle it as the adapter already handles a
+  mismatch.
+- **Answer.** (rec) — the build's: the ring re-base (plan 13 D7, hand
+  check 31), not a pickup and not a relative read from then on.
+- **Built.** `MidiIO._fine_release`, at the note-off itself (and once a
+  poll when `desk.fine` is turned off any other way): every knob row
+  `_fine_move` touched loses its catch and has its ring re-sent
+  (`last_out = None`). A message the knob sent from where it had wandered,
+  later in the same batch, is read as pickup and moves nothing; then the
+  ring goes out, `_rebase` catches the row at the param's ring and the
+  device's encoder sits there; the next coarse detent is one MIDI step
+  from the param. With `RING_REBASES_KNOB` False the catch stays let go
+  and those knobs pick up as the faders do. `desk.fine` (group desk,
+  `persist=False`, `modulatable=False`) is the rig's; `_enter` lets go of
+  it as of SAVE (one loop over `midi.HELD_PARAMS`) and forgets the knobs
+  it moved, so a lost note-off cannot leave the desk fine; a load forgets
+  them too where rings re-base (its redraw re-sends every ring), and
+  keeps them where they do not, so the release still lets go of their
+  catch.
+- **Other options.** Soft pickup (the knob dead until turned back
+  through the value — up to a tenth of its throw away after a long fine
+  turn); keeping fine's relative read for good (every knob relative, no
+  longer an absolute-with-re-base desk).
+- **To reverse.** `_fine_release`'s loop body to `b.caught = False` alone
+  (soft pickup, the ring left as it was).
+- **Rough edge.** The re-base lands on the param's ring, a 1/127 grid:
+  a fine value between ring steps is kept, and the first coarse detent
+  after it lands on the param's own detent grid again (up to one detent
+  from the fine value).
+- **Judge it.** Check 460.

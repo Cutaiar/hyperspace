@@ -108,14 +108,16 @@ testpaths = ["tests"]
 # the fast tier in parallel; `pytest --all` runs everything; -n0 = serial.
 # A hung test fails by name (ENGINEERING §16, row 589): the thread method,
 # because the signal method cannot interrupt a call blocked in C
-# (`glfw.init()`, a device open) — it dumps the stacks and exits the worker;
-# --max-worker-restart=0 so that crashed worker ends the run, where xdist's
-# replacement would stall the loadgroup scheduler at 99 % for ever. The
-# method is the ini key, not an addopt, so `--timeout-method` or
-# `-o timeout_method=` overrides it; a serial run without either uses the
-# signal method (tests/conftest.py, pytest_configure).
-addopts = """-n auto --dist loadgroup -m 'not golden and not slow and not live' \
---timeout=120 --max-worker-restart=0"""
+# (`glfw.init()`, a device open) — it dumps the stacks and exits the worker.
+# --dist load (row 605): a crashed worker's queue goes to its replacement,
+# so a crash costs its one test; up to four replacements, then the run ends
+# (a hang that recurs ends it, never stalls it). `loadgroup` stalled at 99 %
+# with any replacement; live tests take turns through tests/live_lock.py,
+# not an xdist_group. The method is the ini key, not an addopt, so
+# `--timeout-method` or `-o timeout_method=` overrides it; a serial run
+# without either uses the signal method (tests/conftest.py, pytest_configure).
+addopts = """-n auto --dist load -m 'not golden and not slow and not live' \
+--timeout=120 --max-worker-restart=4"""
 timeout_method = "thread"
 markers = [
     "golden: golden-frame draws (tests/test_golden_frames.py), one test per rig job, ~12 s with -n auto",
