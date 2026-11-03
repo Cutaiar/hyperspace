@@ -76,6 +76,8 @@ CELL_H = 16.0              # a bin cell
 CELL_GAP = 2.0
 BAR_H = 4.0                # the playhead bar under a channel's picture
 GAIN_W = 110.0             # the channel's sound level (plan 45 V2), on the source's line
+COL_MIN = 40.0             # px: a channel column thinner than this (the side pane) and
+                           # the eight go four to a row, A–D over E–H (plan 49 stage 2)
 PIC_MAX_H = 25.0           # a channel's picture is 16:9 of its column, never taller than
                            # this (the panel at ui.PANEL_W): the page fits on a wider one
 THUMBS_KEPT = 512          # decoded thumbnails held for the renderer: the least recently
@@ -236,8 +238,13 @@ def _library(panel, st: dict, rows_shown: int = LIST_ROWS) -> None:
         if ui.lit_chip(f"{label}##media.tab", st["tab"] == k):
             st["tab"] = k
     add = "Add file…"
-    imgui.same_line(imgui.get_content_region_avail().x + imgui.get_cursor_pos_x()
-                    - ui.chip_w(add))
+    # flush right on the tabs' line, or (the side pane) on a row of its own
+    if ui.beside(ui.chip_w(add)):
+        imgui.same_line(imgui.get_content_region_avail().x + imgui.get_cursor_pos_x()
+                        - ui.chip_w(add))
+    else:
+        imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x
+                               - ui.chip_w(add))
     imgui.begin_disabled(folder is None)
     if ui.chip(f"{add}##media.add"):
         st["dialog"] = panel.open_file_dialog("Add media", MEDIA_FILTER)
@@ -517,8 +524,14 @@ def _channels(panel, st: dict, state) -> None:
     if r is not None and hasattr(r, "media_watch"):
         r.media_watch = set(CHANNELS)        # the next frame reads them (`media_shown`)
     avail = imgui.get_content_region_avail().x
-    cw = (avail - GAP * (len(CHANNELS) - 1)) / len(CHANNELS)
+    # eight across on the page; four to a row where a column would be
+    # thinner than COL_MIN (GRAPH's side pane): A–D over E–H
+    per = len(CHANNELS)
+    if (avail - GAP * (per - 1)) / per < COL_MIN:
+        per = len(CHANNELS) // 2
+    cw = (avail - GAP * (per - 1)) / per
     top = imgui.get_cursor_screen_pos()
+    row_top = top.y
     gone = set(state.missing())
     backdrop = _channel_of(panel, "backdrop.image")
     faces = _channel_of(panel, "pattern.media")
@@ -526,10 +539,12 @@ def _channels(panel, st: dict, state) -> None:
     bottom = top.y
     dl = imgui.get_window_draw_list()
     for k, c in enumerate(CHANNELS):
-        x = top.x + k * (cw + GAP)
+        if k and k % per == 0:              # the next row of four (the pane)
+            row_top = bottom + GAP
+        x = top.x + (k % per) * (cw + GAP)
         ch = state.channels[c]
         status = state.status(c)
-        imgui.set_cursor_screen_pos(imgui.ImVec2(x, top.y))
+        imgui.set_cursor_screen_pos(imgui.ImVec2(x, row_top))
         if ui.lit_chip(f"{c.upper()}##media.sel.{c}", st["sel"] == c,
                        size=imgui.ImVec2(cw, 0)):
             st["sel"] = c

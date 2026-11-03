@@ -660,6 +660,13 @@ here; overturn → the change, then the same.
 | 623 | Plan 44 D3 (plan 43 §6 item 3): a window the rig lacks is asked for in words — `graphview.wanted_windows(spec, cuts, count)` (every `output.<n>` past the rig's that the preset wires or cuts) and `WINDOW_WANTED`; not yet drawn on OUTPUT or GRAPH (`ui*.py` is U2's and L2's this wave), nothing opened | 470 | (rec) — the words and the rule now, the two lines with the UI's next PR |
 | 624 | Plan 44 D3: behaviour-neutral by construction — a deck's registry lists the session's params first (they exist before `build_performance` runs), then its own, then what is declared later in declaration order; nothing reads the order across the line (snapshots are maps, `apply` lands each param alone); D1's and D2's same-state tests, `test_undo.py::test_session_params_are_covered` and `tests/test_hold.py` pass with the session shared by reference; the goldens are expected unmoved over the migrated corpus (every corpus preset's new values are the build's defaults, which the goldens drew) | — | (rec) — the goldens are the orchestrator's to run |
 | 625 | Plan 44 D3 rough edges left for D4/D5: `hold._preset_part` still sorts Drop's bases by group, so Drop puts `ghost.mirror` back with the look (hold.py was out of this PR's reach beyond `program`; D5 deletes the hold); a deck that runs after the lead lands its session offsets a frame late (the double-apply itself is closed, row 611); the library's presets kind is the deck built last (`lib.presets`) | — | (rec) — recorded, not built |
+| 626 | Plan 49 U2: the rest of the pages are sections of GRAPH's side pane — fx, media, lfo, seq, audio, camera, output, after U1's five, in the order selection · presets · fx · lookback · faces · media · lfo · seq · analyzer · audio · camera · output — each body the function its page draws (`ui_fx.page`, `ui_media.draw`, `ui_lfo.page`, `ui_seq.page`, `Panel._page_audio` / `_page_camera` / `_page_output`), one row of `ui_pane.SECTIONS`; every new section folded at first, beside and in the band | 471, 478 | (rec) — pending the owner; built as recommended |
+| 627 | Plan 49 U2: the FX page is retired — the rail draws no FX pill, `Panel._page_fx` is gone, its browser is the pane's fx section; its row stays in `ui.PAGES` so every index `ui.page` holds keeps its page (a key row's `set`, an old show), and landing on FX — through the param or set straight — opens GRAPH with the fx section unfolded and scrolled to (`ui.RETIRED`, `ui_pane.focus`: a request the next draw acts on in its own layout, beside the canvas or the narrow page's band — review fix 1), kept on this Mac as a click's unfold | 472 | (rec) — pending the owner; built as recommended |
+| 628 | Plan 49 U2: narrow layouts, nothing past the pane's edge at `SIDE_MIN` (240 px): a row of chips or ticks wraps where the next would pass the edge (`ui.beside`: AUDIO's buttons and transport, OUTPUT's toggles and each block's three ticks and flips, the band's twelve headers); a section note is cut to what its title leaves; LOOKBACK's cells and SEQ's folded envelopes one to a row under 360 / 320 px; an LFO's or an envelope's scope over its knobs where fewer than 220 / 200 px are beside it | 473, 474, 475, 477, 479 | (rec) — pending the owner; built as recommended |
+| 629 | Plan 49 U2, MEDIA in the pane: the eight channels four to a row (A–D over E–H) where a column would be under 40 px (`ui_media.COL_MIN`), each a picture, playhead and its bin of sixteen cells at the column's width; eight across on the page as before; the library's **Add file…** on a row of its own when the tabs leave no room | 473 | (rec) — pending the owner; built as recommended |
+| 630 | Plan 49 U2, SEQ in the pane: the eight steps always across (the APC40's clip grid, never folded or transposed); under 320 px the lane column narrows to 56 px (number and M over the picker) and a cell may thin to 12 px (16 on the page), still 48 px tall; the transport's beat light and step on a line of their own where they would overlap | 474 | (rec) — pending the owner; built as recommended |
+| 631 | Plan 49 U2, the LOOKBACK redraw (the owner, 2026-11-02: the look-back / dream / shared split was "a horrid representation"): the page and the section draw one function as plan 36's two picture nodes — LOOK-BACK (picture in → trail out: records, its eight knobs by `params.is_lookback_knob`, its echoes) and DREAM (picture in → dreamed picture out, `dream.on` on its head, off passes through: its worker beside the dream buffer, the layer, its knobs) — each head saying when the graph holds no such node, its hover the whole band (what it takes and gives; the dream's, where its worker is set up: `[dream]` in config.toml — review fixes 2, 7); "both" is gone: darken, contrast and detail are the look-back's knobs and a line under the dream says it reads them (one state: `Renderer.dreamer` shares the look-back's) | 476 | (rec) — pending the owner; built as recommended |
+| 632 | Plan 49 U2: SYSTEM says each drawn section's cost under GRAPH's own line ("side pane: media 0.42 · fx 0.31 … ms", a running mean per body, the dearest first, `ui_pane.timing_line`); a body scrolled out of the pane's view is not drawn and costs nothing | 478 | (rec) — pending the owner; built as recommended |
 | 636 | Plan 48 stage 2 (L2): the PRESETS list is a tree — the top-level presets first, then a folding header per folder alphabetically (its name, its count, and while folded the loaded preset's leaf when it is inside), a folder's presets then its folders, nested; a row under a header is its leaf; every folder open unless folded on this Mac (`presets.folded` in `<machine>/ui.json`, beside the pane's, written `WRITE_AFTER_S` after the last click as the pane's are); one drawing on the PRESETS page and in GRAPH's pane | 481 | (rec) — pending the owner; built as recommended |
 | 637 | Plan 48 stage 2: a preset moves between folders by its row's right-click **move to ▸** (the top level and every folder) or a drag onto a folder's header; `Library.move` keeps the file's bytes and stem, and as a rename does, the loaded preset's name follows and every show naming it is rewritten (the open one written too, each copied to the trash first); no undo step, as a rename has none | 482 | (rec) — pending the owner; built as recommended |
 | 638 | Plan 48 stage 2: **new folder** at the list's foot makes one at the top, a header's right-click one inside it; a folder renames in place (every preset keeps its leaf, the shows follow; never over another folder, asked of the disk) and is removed only when empty (a Finder `.DS_Store` aside; the item off, naming what is in the way); `tools/move_library.py` and `tools/migrate_library.py` walk `presets/` every folder down as the library does | 483 | (rec) — pending the owner; built as recommended |
@@ -11508,6 +11515,120 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **To reverse.** —
 - **Rough edge.** See the row.
 - **Judge it.** —
+## Wave 2 — the panel fold, stage 2 (plan 49, rows 626–632)
+
+### 626. The rest of the pages fold into the pane
+- **Asked.** The build-order doc's row "Graph always on, pages fold into
+  the side pane", stage 2 (U2): media, fx, LFO, sequencer, audio, camera
+  and output become sections; the FX page is retired.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** Seven rows added to `ui_pane.SECTIONS`, each body the
+  function its page draws, so no page code is copied and a page is still
+  its section at full height. Order: the graph's own things first
+  (selection, presets, fx, lookback, faces, media), then what moves them
+  (lfo, seq, analyzer), then the room and the rig (audio, camera,
+  output). Every new section folded at first in both layouts: a fresh
+  Mac's pane reads as stage 1 left it, and a section is one click away.
+- **Other options.** The rail's order (output first); some open by
+  default (fx beside the effects it lists).
+- **To reverse.** Drop the rows; the pages are untouched.
+- **Judge it.** 471, 478.
+
+### 627. The FX page retired; its slot kept
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** The rail loses FX and `Panel._page_fx` is gone; the
+  browser of the graph's effects (plan 33 U, grouped by where each ends)
+  is the fx section alone. `ui.page` is an enum whose value is an index,
+  and a binding's `set` holds the index: dropping the row would shift
+  every page after it (AUDIO … SYSTEM) by one, so the row stays in
+  `ui.PAGES` (`RETIRED = {"fx": ("graph", "fx")}`) and `Panel.go_page`
+  — the param's setter, and `Panel.draw` for a page set straight (⌘[ /
+  ⌘]) — opens GRAPH and `ui_pane.focus`es the fx section: a request the
+  next draw acts on in its own layout (beside the canvas or the narrow
+  page's band; review fix 1 — it had unfolded the layout last drawn, and
+  the band ignored it), unfolded, scrolled to the top, written to
+  `ui.json` as a click's unfold. GRAPH's **open on FX** chip (an effect node's
+  selection) goes the same way.
+- **Other options.** Drop the row and remap stored indices (no store of
+  them is ours to rewrite: the bindings are the rig's); land on GRAPH
+  without unfolding.
+- **Rough edge.** A `step` row on `ui.page` (none is shipped) from
+  LOOKBACK lands on GRAPH, then LFO: the retired slot is a door, not a
+  page. The hand checks that name the FX page are retired in place (a
+  line under each).
+- **Judge it.** 472.
+
+### 628. Narrow layouts: wrap, cut, stack
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** Checked with the panel driver at `SIDE_MIN` (240 px)
+  and `SIDE_W` (320 px), every control's rect inside the pane
+  (`test_each_stage2_section_draws_in_the_pane_and_nothing_passes_its_edge`).
+  `ui.beside(w)` stands where `same_line()` stood in a row that can
+  spill: it keeps the line when the next item ends by the region's edge,
+  else starts a row. A section note is cut to what its title leaves
+  (`Panel._section`). Below their widths LOOKBACK's cells go one to a
+  row, SEQ's folded envelopes one to a line, and an LFO's or an
+  envelope's scope sits over its knobs. On the page every layout is what
+  it was (the page-fit tests unchanged).
+- **Judge it.** 473, 474, 475, 477, 479.
+
+### 629. MEDIA's channels four to a row in the pane
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** Eight columns at 240 px are 22 px each, a bin cell
+  10 px: too thin to aim at from arm's length. Under `COL_MIN` (40 px a
+  column) the channels go A–D over E–H, each column as on the page
+  (letter, picture, playhead, bin as two columns of eight cells).
+- **Other options.** One channel at a time with a picker; the bins
+  folded to the slot on air.
+- **Judge it.** 473.
+
+### 630. SEQ's grid stays eight across
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** The grid is the APC40's clip grid on screen, so it
+  is never transposed or split: under 320 px the lane column narrows
+  to 56 px and a cell may thin to 12 px (16 on the page), 48 px tall
+  as ever. At 240 px the cells are 12 px; at the default 320 px, 22 px.
+- **Other options.** Steps as rows (the desk's picture lost); 1–4 over
+  5–8.
+- **Judge it.** 474.
+
+### 631. LOOKBACK as the two picture nodes
+- **Asked.** The owner, 2026-11-02, on the page's look-back / dream /
+  "both" split: "a horrid representation of what's going on there";
+  plan 49 suggested drawing it as plan 36's two picture nodes.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** One function (`ui_lookback.page`) for the page and
+  the section, under one preset strip: a **LOOK-BACK** head (picture in
+  → trail out, how far back the trail reaches) over what it records and
+  draws over, its eight knobs (`params.LOOKBACK_KEYS`) and its echoes;
+  a **DREAM** head (picture in → dreamed picture out, `dream.on` after
+  its name; off, the picture passes through) over its worker's line
+  beside the dream buffer, the layer menu and its knobs. A head names
+  "not on the canvas" when the loaded graph holds no such node; its hover
+  is the whole band, and the dream's says where its worker is set up
+  (`[dream]` in config.toml, the old DREAM section's note: review fixes
+  2, 7). The graph's node names are asked once per loaded graph (review
+  fix 6). "Both"
+  is gone: darken, contrast and detail were always the look-back's knobs,
+  and the dream reads them (`Renderer.dreamer` is made on the look-back's
+  state), which a line under the dream now says (`GRADE_LINE`). The
+  page still fits the control window with thumbnails, the worker at its
+  longest and an error line.
+- **Other options.** Draw the two nodes as GRAPH draws them, ports and
+  all (a canvas inside the pane); split the grade into a node of its own
+  (the graph has none).
+- **Judge it.** 476.
+
+### 632. What each section costs, on SYSTEM
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** `ui_pane._body` times each body it draws into a
+  running mean (`st["pane_ms"]`); SYSTEM shows "side pane: …" under
+  GRAPH's own line, the dearest first, for the sections drawn last time.
+  A body imgui skips (scrolled out of view) costs nothing and is not
+  listed.
+- **Judge it.** 478.
+
+
 ## Wave 2 — preset folders, stage 2 (plan 48, rows 636–638)
 
 ### 636. The presets list as a tree
