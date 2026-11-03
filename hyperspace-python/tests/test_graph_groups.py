@@ -1483,7 +1483,7 @@ def test_the_spawn_menu_open_two_frames_lists_the_patches_once(rig, monkeypatch)
     lib = rig.panel.library
     real_list, real_path = lib.list, lib.path_of
     monkeypatch.setattr(lib, "list", lambda g, **k: (lists.append(g), real_list(g, **k))[1])
-    monkeypatch.setattr(lib, "path_of", lambda g, n: (paths.append(n), real_path(g, n))[1])
+    monkeypatch.setattr(lib, "path_of", lambda g, n, **k: (paths.append(n), real_path(g, n, **k))[1])
     monkeypatch.setattr(imgui, "begin_menu", lambda *a: False)
     ui_graph._spawn_menu(rig.panel, (0.0, 0.0))
     first = list(paths)

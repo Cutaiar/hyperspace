@@ -77,6 +77,13 @@ SHOW_TIP = ("A show is the room the presets play in: which preset each of the de
             "around it. Open another, save this one, or start a new one here.")
 
 
+def trash_tag(item) -> str:
+    """A trash row's dim first column: its group, and for a file in the
+    library's old trash (plan 48 row 586) ``· library`` — so a row says in
+    itself that "empty" leaves it and a restore is a copy."""
+    return f"{item.group} · library" if item.old else item.group
+
+
 # ---- state on the panel, created on first use ----
 
 def _state(panel) -> dict:
@@ -383,11 +390,22 @@ def _list_row(panel, group: str, name: str, cur: str | None, drawn: dict, rect) 
         drawn["rows"].append((name, ("field",)))
         _name_field(panel, key, lambda n, old=name: _rename(panel, old, n, group))
         return
+    # plan 48 row 588: a preset from a folder reads "party / TRIP", the
+    # folder dim — the row's text drawn over a label-less selectable; a
+    # top-level name is the selectable's own label, as before
+    folder, leaf = lib.folder_of(group, name)      # the library's one rule
+    x = imgui.get_cursor_pos_x()
     imgui.push_style_color(imgui.Col_.text, imgui.ImVec4(0.92, 0.92, 0.92, 1))
-    picked, _ = imgui.selectable(f"{name}##pick", name == cur,
-                                 imgui.SelectableFlags_.allow_overlap)
-    imgui.pop_style_color()
+    picked, _ = imgui.selectable(f"##{name}##pick" if folder else f"{name}##pick",
+                                 name == cur, imgui.SelectableFlags_.allow_overlap)
     rect(f"row.{name}")
+    if folder:
+        imgui.same_line(x, 0)
+        imgui.text_colored(ui.DIM, f"{folder.replace('/', ' / ')} / ")
+        imgui.same_line(0, 0)
+        imgui.text(leaf)
+    imgui.pop_style_color()
+    drawn.setdefault("text", []).append((folder, leaf))
     if picked and not patch:
         _guard(panel, lib.load, group, name)
     chips = ("rename", "×") if renamable else ("×",)
@@ -406,7 +424,7 @@ def _list_row(panel, group: str, name: str, cur: str | None, drawn: dict, rect) 
         if not hit:
             continue
         if chip == "rename":
-            _begin_naming(panel, key, name)
+            _begin_naming(panel, key, leaf)      # a rename keeps the folder
         else:
             _guard(panel, lib.delete, group, name)
         invalidate(panel, group)
@@ -541,7 +559,7 @@ def _trash_popup(panel, bin_: list) -> None:
     n = len(bin_)
     ui._micro(f"trash  ·  {n} file{'' if n == 1 else 's'}")
     style = imgui.get_style()
-    gw = max([imgui.calc_text_size(t.group).x for t in bin_] or [0.0])
+    gw = max([imgui.calc_text_size(trash_tag(t)).x for t in bin_] or [0.0])
     nw = max([imgui.calc_text_size(t.name).x for t in bin_] or [0.0])
     ww = imgui.calc_text_size("Oct 30 00:00").x
     sp = 2 * style.item_spacing.x
@@ -552,7 +570,7 @@ def _trash_popup(panel, bin_: list) -> None:
         for i, item in enumerate(bin_):
             x = imgui.get_cursor_pos_x()
             imgui.align_text_to_frame_padding()
-            imgui.text_disabled(item.group)
+            imgui.text_disabled(trash_tag(item))       # an old row says so in itself
             imgui.same_line(x + gw + sp)
             imgui.text(item.name)
             imgui.same_line(x + gw + nw + 2 * sp)
@@ -561,9 +579,13 @@ def _trash_popup(panel, bin_: list) -> None:
             hit = ui.chip(f"restore##restore.{i}")
             rect(f"restore.{i}")
             drawn["rows"].append((item.group, item.name, item.when))
+            drawn.setdefault("tags", []).append(trash_tag(item))
             if imgui.is_item_hovered():
                 ui.tooltip(f"{item.path.name} — back into {item.group}/, never over a "
-                           "file: a name that is taken gets the next free one")
+                           "file: a name that is taken gets the next free one"
+                           + ("\nFrom the library's old trash: a copy comes back and the "
+                              "file stays there (empty trash leaves it)"
+                              if item.old else ""))
             if hit:
                 _said(panel, lib.restore_trash, item)
                 invalidate(panel, item.group)
@@ -571,7 +593,28 @@ def _trash_popup(panel, bin_: list) -> None:
                 invalidate(panel, PRESETS)
         imgui.end_child()
         rect("rows")
+    # plan 48 row 586: the trash is this Mac's; what the library's own
+    # trash kept from before is listed and restorable, never emptied here
+    old = sum(1 for t in bin_ if t.old)
+    drawn["old"] = old
+    if old:
+        ui._micro(f"{old} from the library's old trash — restore copies, empty leaves them")
+        if imgui.is_item_hovered():
+            ui.tooltip("Deletes and overwritten files now go to this Mac's trash "
+                       f"({lib._trash_dir()}), never the shared library. The "
+                       f"library's old trash ({lib.home / 'trash'}) is shown so its files "
+                       "can be restored: a restore copies the file back and leaves it "
+                       "there (the app never writes to the shared folder's trash); "
+                       "clear it in Finder.")
+    n -= old
     imgui.separator()
+    if n == 0:
+        # only the library's old trash is listed: nothing here to empty, so
+        # no chip to arm ("delete 0 files for good?", review of #334)
+        st["empty_armed"] = None
+        drawn["empty"] = None
+        imgui.end_popup()
+        return
     now = imgui.get_time()
     armed = st.get("empty_armed")
     if armed is not None and now - armed > EMPTY_S:

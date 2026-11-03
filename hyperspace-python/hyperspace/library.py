@@ -64,7 +64,11 @@ the app starts on a blank preset in an unsaved show.
 
   $HYPERSPACE_HOME/<group>/<slug>.json       module presets (default ~/Hyperspace,
                                  or the [library] path, plan 25)
-  $HYPERSPACE_HOME/presets/<slug>.json       presets
+  $HYPERSPACE_HOME/presets/[<folder>/…/]<slug>.json
+                                 presets, in folders if the owner made
+                                 any (plan 48): listed every folder down,
+                                 less hidden ones, by folder-qualified name
+                                 (``party/TRIP``; ``_index``, `path_slug`)
   $HYPERSPACE_HOME/patches/<slug>.json       patches (plan 40)
   $HYPERSPACE_HOME/projects/<slug>.hyp.json  shows
   $HYPERSPACE_HOME/config.toml, bindings.json (a midi_map.json is only
@@ -72,7 +76,10 @@ the app starts on a blank preset in an unsaved show.
   $HYPERSPACE_HOME/bindings/      the old routing presets: made presets
                                  once (plan 13 WP5) and never read again,
                                  so no group (LEGACY_DIRS)
-  $HYPERSPACE_HOME/trash/<group>/<slug>.<date>-<time>.json
+  <machine>/trash/<group>/[<folder>/]<slug>.<date>-<time>.json
+                                 (this Mac's home, never the shared library:
+                                 plan 48; a ``<library>/trash`` from before
+                                 is listed, restorable, never emptied)
                                  a preset file as it was before a save
                                  overwrote it or a delete removed it
                                  (``to_trash``, plan 15) or a rename replaced
@@ -331,21 +338,78 @@ def slug(name: str) -> str:
     return s or "untitled"
 
 
-def next_name(base: str | None, taken: set[str]) -> str:
+def path_slug(name: str) -> str:
+    """A preset's file key from its folder-qualified name (plan 48 row
+    584): ``party/TRIP 2`` → ``party/trip-2`` — the folder as it is on
+    disk (each segment stripped of spaces at its ends), the leaf through
+    `slug`. ``/`` is only ever the folder separator: a segment that is
+    empty, ``.``, ``..`` or hidden (``.cache``) — and so an absolute path
+    — raises LibraryError, so a name can never point a read or a write
+    outside ``presets/``. `slug` itself stays flat: shows, module presets
+    and patches have no folders, and a ``/`` in their names is a ``-``."""
+    name = str(name)
+    folder, _, leaf = name.rpartition("/")
+    parts = [s.strip() for s in folder.split("/")] if "/" in name else []
+    if any(not s or s.startswith(".") for s in parts):
+        raise LibraryError(f"{name}: not a preset name — a folder may not be empty, "
+                           "hidden or '..'")
+    return "/".join([*parts, slug(leaf)])
+
+
+def split_name(name: str) -> tuple[str, str]:
+    """``party/deep/TRIP`` → (``party/deep``, ``TRIP``); a bare name's
+    folder is ``""`` (plan 48)."""
+    folder, _, leaf = str(name).rpartition("/")
+    return folder, leaf
+
+
+def fold(name: str) -> str | None:
+    """The one comparison key of a preset name (plan 48): `path_slug`,
+    lowered — folder segments stripped and case-folded, the leaf slugged
+    (``Party /TRIP 2`` → ``party/trip-2``), as APFS would find the file.
+    None for a name that could name no file (``../x``)."""
+    try:
+        return path_slug(name).lower()
+    except LibraryError:
+        return None
+
+
+def fold_folder(folder: str) -> str | None:
+    """`fold` of a folder alone: ``""`` for the top, None for one that
+    could hold no preset."""
+    if not folder:
+        return ""
+    key = fold(f"{folder}/x")
+    return None if key is None else key[:-2]
+
+
+def harmless(name: str) -> str:
+    """A preset's own ``name`` as the list shows it (plan 48 review): a
+    ``/`` in a listed name always means a folder, so a file whose own name
+    holds one (``AC/DC``, from before folders) is listed with it made a
+    ``" - "`` (``AC - DC``) — no reader splits it, no writer makes a
+    folder of it; a save writes the shown name back into the file."""
+    return name.replace("/", " - ")
+
+
+def next_name(base: str | None, taken: set[str], *, key=None) -> str:
     """A name for a new preset grown from `base`, the loaded preset's name
     (plan 15 WP4, fork 16): the first ``"<stem> <n>"`` whose slug is not in
     `taken`, a set of slugs. A base that ends in whitespace and a number
     after a non-empty stem counts on from that number (``TRIP 2`` →
     ``TRIP 3``); any other is its own stem and counting starts at 2
     (``TRIP`` → ``TRIP 2``, ``2001`` → ``2001 2``). With no base the stem
-    is ``PRESET`` and counting starts at 1."""
+    is ``PRESET`` and counting starts at 1. `key` is what a candidate is
+    compared by (`slug`; for a preset in a folder the caller's
+    `Library._fold` of the qualified name, plan 48 — the one fold)."""
+    key = key or slug
     base = (base or "").strip()
     if not base:
         stem, n = "PRESET", 1
     else:
         m = re.fullmatch(r"(.*\S)\s+(\d+)", base, re.DOTALL)
         stem, n = (m.group(1), int(m.group(2)) + 1) if m else (base, 2)
-    while slug(f"{stem} {n}") in taken:
+    while key(f"{stem} {n}") in taken:
         n += 1
     return f"{stem} {n}"
 
@@ -363,6 +427,38 @@ def bank_doc(bank: list[str | None]) -> list[str | None]:
     while len(out) > F_KEYS and out[-1] is None:
         out.pop()
     return out + [None] * (F_KEYS - len(out))
+
+
+def _walk(folder: Path, pattern: str = "*.json") -> list[Path]:
+    """Every file matching `pattern` under `folder`, every folder down,
+    sorted — less hidden folders (``.cache``, a cloud client's own) and
+    never through a link to a folder (plan 48)."""
+    return [p for _here, found in _walk_dirs(folder, pattern) for p in found]
+
+
+def _walk_dirs(folder: Path, pattern: str = "*.json"):
+    """The one walker (`_walk`, `Library._tree`): each folder under
+    `folder` (itself first), every folder down, with its files matching
+    `pattern`, sorted — less hidden folders and never through a link to a
+    folder."""
+    for here, dirs, _files in os.walk(folder, followlinks=False):
+        dirs[:] = sorted(d for d in dirs if not d.startswith("."))
+        h = Path(here)
+        yield h, sorted(h.glob(pattern))
+
+
+# how long a kept walk of the presets is trusted without a look at the
+# disk (review of #334): a folder's mtime alone misses a file added in
+# the same tick on a coarse filesystem (HFS+ 1 s, SMB 2 s) or a cloud mount
+WALK_TTL = 1.0
+_now = time.monotonic       # (a test moves the clock)
+
+
+def _mtime(path: Path) -> int | None:
+    try:
+        return path.stat().st_mtime_ns
+    except OSError:
+        return None
 
 
 def _read_json(path: Path) -> dict:
@@ -437,16 +533,20 @@ def _write_text(path: Path, text: str) -> None:
         raise LibraryError(f"{path.name}: {e}") from e
 
 
-def to_trash(path: Path, root: Path) -> Path | None:
+def to_trash(path: Path, root: Path, origin: str | None = None) -> Path | None:
     """Copy `path` — a preset file about to be overwritten or deleted — to
-    ``<root>/trash/<folder>/<stem>.<YYYYMMDD-HHMMSS><suffix>``, `<folder>`
-    being the file's own folder name (``presets``, ``band``, ``fx``…). A
+    ``<root>/trash/<origin>/<stem>.<YYYYMMDD-HHMMSS><suffix>``, `<origin>`
+    the folder it came from relative to the library (``presets``,
+    ``presets/party``, ``band``…; the file's own folder name when not
+    given). The library passes its **machine** home as `root` (plan 48
+    row 586, `Library._to_trash`): the trash is this Mac's, never in a
+    synced library. A
     name taken in the same second gets ``-2``, ``-3``, …; the copy is
     created exclusively, so nothing in the trash is ever overwritten.
     Returns the path written, or None when the copy failed (said on
     stderr): the caller decides what that means — a save goes on and
     warns, a delete is refused."""
-    folder = root / TRASH / path.parent.name
+    folder = root / TRASH / (origin or path.parent.name)
     stamp = time.strftime("%Y%m%d-%H%M%S")
     try:
         _refuse_missing(folder)
@@ -477,10 +577,14 @@ def to_trash(path: Path, root: Path) -> Path | None:
 class Trashed:
     """A file in the trash, as its view lists it (plan 19 WP4)."""
 
-    path: Path          # <home>/trash/presets/trip-3.20261004-011203.json
-    group: str          # its folder: "presets", "fx", "projects", …
-    name: str           # the name inside the file, else its stem
+    path: Path          # <machine>/trash/presets/party/trip-3.20261004-011203.json
+    group: str          # its group's folder: "presets", "fx", "projects", …
+    name: str           # the name inside the file, else its stem; folder-qualified
+                        # for a preset from a folder ("party/TRIP", plan 48)
     when: str           # "Oct 4 01:12", from the stamp in the file name ("" if none)
+    folder: str = ""    # the folder under the group it came from ("party"), plan 48
+    old: bool = False   # in the library's own trash, from before plan 48 (row 586):
+                        # listed and restorable, never emptied by the app
 
 
 def _when(stamp: str) -> str:
@@ -829,11 +933,22 @@ class Project:
         """`active` follows the loaded preset — the one place (plan 19
         WP1): kept where it is when that slot still names it, else the
         first slot that names it, else −1; −1 when nothing is loaded."""
-        cur = self.lib.current(PRESETS)
+        lib, cur = self.lib, self.lib.current(PRESETS)
         if cur is None:                               # nothing loaded: no slot is lit
             self.active = -1
-        elif not 0 <= self.active < len(self.bank) or self.bank[self.active] != cur:
-            self.active = self.bank.index(cur) if cur in self.bank else -1
+            return
+        # a slot names it when it is the same string or reads (as a pad
+        # loads it, loosely) the same file: `Ac/Dc`, `Party/TRIP` (plan 48
+        # review); one look at the library for every slot
+        snap = lib._lookup(PRESETS) if hasattr(lib, "_lookup") else None
+        target = None if snap is None else lib._resolve(PRESETS, cur, snap, loose=True)
+
+        def names(n: str | None) -> bool:
+            return n is not None and (n == cur or (
+                target is not None and lib._resolve(PRESETS, n, snap, loose=True) == target))
+
+        if not (0 <= self.active < len(self.bank) and names(self.bank[self.active])):
+            self.active = next((k for k, n in enumerate(self.bank) if names(n)), -1)
 
     def _loader(self):
         return getattr(self.lib, "presets", None)
@@ -851,7 +966,7 @@ class Project:
             lib.say(warning=f"{key}: an empty slot — hold its pad" + (
                 f" (or ⇧{key})" if k < F_KEYS else "") + " to save the live state into it")
             return
-        if presets is None or lib.path_of(PRESETS, name) is None:
+        if presets is None or lib.path_of(PRESETS, name, loose=True) is None:
             lib.say(warning=f"{key}: no preset {name!r}")
             return
         try:
@@ -960,9 +1075,14 @@ class Project:
             self.bank_error = "presets: no preset loader"
             return False
         # stems as slugs: on a filesystem that folds case, `Trip-2.json`
-        # is the file a save of "TRIP 2" would write over
-        taken = lib._taken(PRESETS) | {slug(n) for n in self.bank if n}
-        name = next_name(lib.current(PRESETS), taken)
+        # is the file a save of "TRIP 2" would write over. Plan 48 row 587:
+        # the new preset lands beside the loaded one — in its folder, the
+        # library's root for a top-level one or none loaded
+        taken = lib._taken(PRESETS) | {lib._fold(PRESETS, n) for n in self.bank if n}
+        folder, base = lib.folder_of(PRESETS, lib.current(PRESETS))
+        leaf = next_name(base, taken, key=lambda n: lib._fold(
+            PRESETS, f"{folder}/{n}" if folder else n))
+        name = f"{folder}/{leaf}" if folder else leaf
         try:
             presets.save_as(name)
         except (LibraryError, OSError) as e:          # a full disk must not stop the show
@@ -1001,7 +1121,7 @@ class Project:
         written or deleted; no undo step."""
         if not 0 <= k < len(self.bank):
             return
-        if self.lib.path_of(PRESETS, name) is None:
+        if self.lib.path_of(PRESETS, name, loose=True) is None:
             self.lib.say(warning=f"{slot_key(k)}: no preset {name!r}")
             return
         self._set_slot(k, name, f"{slot_key(k)}: {name}")
@@ -1081,7 +1201,7 @@ class Project:
         lib, presets, name = self.lib, self._loader(), self.startup
         if presets is None or not name:
             return
-        if lib.path_of(PRESETS, name) is None:
+        if lib.path_of(PRESETS, name, loose=True) is None:
             lib.say(warning=f"startup: no preset {name!r}")
             return
         try:
@@ -1103,7 +1223,7 @@ class Project:
             return
         if lib.warning == HOME_UNSET:                 # it names one now
             lib.warning = ""
-        if self._loader() is not None and lib.path_of(PRESETS, name) is not None:
+        if self._loader() is not None and lib.path_of(PRESETS, name, loose=True) is not None:
             undo.push(f"home → {name}", load=True)
         self.load_startup()
 
@@ -1691,13 +1811,124 @@ class Library:
         return sorted(out - set(RETIRED_MODULES))
 
     def _files(self, group: str) -> dict[str, Path]:
-        """slug → path, every file of the group's folder."""
+        """file key → path, every file of the group's folder: the stem, and
+        for the presets (plan 48 row 584) the path under ``presets/`` less
+        ``.json`` — ``party/deep/c`` — every folder down, less hidden ones
+        (``.cache``)."""
         out: dict[str, Path] = {}
         for root in self._roots():
             d = root / group
-            if d.is_dir():
+            if not d.is_dir():
+                continue
+            if group != PRESETS:
                 out.update((p.name[:-5], p) for p in d.glob("*.json"))
+                continue
+            for p in self._tree(d)[0]:
+                out[p.relative_to(d).as_posix()[:-5]] = p
         return out
+
+    def _tree(self, d: Path) -> tuple[list[Path], list[str]]:
+        """The presets' folder walked (`_walk_dirs`): its ``*.json`` files
+        and its folders (``party``, ``party/deep``)."""
+        hit = self._walked(d)
+        return hit["files"], hit["folders"]
+
+    def _walked(self, d: Path) -> dict:
+        """`_tree`'s walk, kept (plan 48 review) until a folder's mtime
+        moves (a file or folder made, removed or renamed in it), the
+        library writes (`_sync`) or WALK_TTL passes (a coarse or cloud
+        filesystem's mtime may not move) — as `_doc` keeps a parse: the
+        panel asks for the list every frame. Beside it, built on first ask,
+        the files by `fold` (`byfold`, `path_of`'s miss)."""
+        walks = self.__dict__.setdefault("_walks", {})   # (a Library from before a reload)
+        hit = walks.get(d)
+        now = _now()
+        if (hit is not None and now - hit["at"] < WALK_TTL
+                and all(_mtime(p) == m for p, m in hit["stamps"].items())):
+            return hit
+        stamps: dict[Path, int | None] = {}
+        files: list[Path] = []
+        folders: list[str] = []
+        for h, found in _walk_dirs(d):
+            stamps[h] = _mtime(h)
+            files.extend(found)
+            if h != d:
+                folders.append(h.relative_to(d).as_posix())
+        walks[d] = hit = {"at": now, "stamps": stamps, "files": files, "folders": folders}
+        return hit
+
+    def _byfold(self) -> dict[str | None, list[Path]]:
+        """Every preset file by `fold` of its key (``party/trip``), kept
+        with the walk — a list per key: two files may fold to one
+        (`_resolve` refuses to pick)."""
+        out: dict[str | None, list[Path]] = {}
+        for root in self._roots():
+            d = root / PRESETS
+            if not d.is_dir():
+                continue
+            hit = self._walked(d)
+            if "byfold" not in hit:
+                byfold: dict[str | None, list[Path]] = {}
+                for p in sorted(hit["files"]):
+                    byfold.setdefault(fold(p.relative_to(d).as_posix()[:-5]), []).append(p)
+                hit["byfold"] = byfold
+            for k, ps in hit["byfold"].items():
+                out.setdefault(k, []).extend(ps)
+        return out
+
+    def _folder_on_disk(self, folder: str) -> str | None:
+        """The folder under ``presets/`` that `folder` names, spelled as it
+        is on disk (``Party`` for ``party``: APFS folds case, so both are
+        one folder and the list says it one way) — None when there is none."""
+        want = fold_folder(folder)
+        if want is None:
+            return None
+        if want == "":
+            return ""
+        for root in self._roots():
+            d = root / PRESETS
+            if d.is_dir():
+                for f in self._tree(d)[1]:
+                    if fold_folder(f) == want:
+                        return f
+        return None
+
+    def _prefix(self, group: str, path: Path | None) -> str:
+        """The folder a preset file sits in under ``presets/``, ending in
+        ``/`` (``party/``) — ``""`` at the top, for any other group, or a
+        path outside the library (plan 48)."""
+        if group != PRESETS or path is None:
+            return ""
+        try:
+            rel = path.parent.relative_to(self.home / group).as_posix()
+        except ValueError:
+            return ""
+        return "" if rel == "." else f"{rel}/"
+
+    def _fold(self, group: str, name: str) -> str | None:
+        """What a name is compared by — case and spacing folded: its slug,
+        and for a preset its folder too (``party/trip-2``, `path_slug`
+        lowered); None for a preset name that could not name a file
+        (``../x``)."""
+        return slug(name) if group != PRESETS else fold(name)
+
+    def folder_of(self, group: str, name: str | None) -> tuple[str, str]:
+        """(folder, leaf) of a preset name — one rule (plan 48 review): a
+        ``/`` in a listed name always means a folder (a file's own ``/`` is
+        listed as ``" - "``, `harmless`), so the name is split at its last
+        ``/``; ``""`` is the top. Any other group has no folders."""
+        if not name:
+            return "", name or ""
+        return split_name(name) if group == PRESETS else ("", name)
+
+    def _leaf(self, group: str, path: Path) -> str:
+        """The name a file is listed by, less its folder: its own ``name``
+        (else its stem), for a preset with any ``/`` made harmless."""
+        return self._shown(group, self._name_of(path))
+
+    @staticmethod
+    def _shown(group: str, name: str) -> str:
+        return harmless(name) if group == PRESETS else name
 
     def _doc(self, path: Path) -> dict:
         """The parsed file, re-read only when its mtime moved (UI polls per frame)."""
@@ -1716,7 +1947,7 @@ class Library:
         except LibraryError:
             return path.name[:-5]
 
-    def _index(self, group: str) -> dict[str, Path]:
+    def _index(self, group: str, files: dict[str, Path] | None = None) -> dict[str, Path]:
         """display name → path; a name is also reachable by its slug.
 
         Two files of one folder with the same name inside — a cloud
@@ -1724,25 +1955,105 @@ class Library:
         beside ``hi-frek.json`` (plan 25) — are both listed: the file whose
         stem is the name's slug keeps the name (else the lower stem), and
         the other is listed under its file stem, to be loaded, renamed or
-        deleted."""
+        deleted.
+
+        A preset in a folder under ``presets/`` is listed by its
+        **folder-qualified** name (plan 48 row 584): ``party/TRIP`` for
+        ``presets/party/trip.json`` whose own ``name`` is ``TRIP`` — the
+        file keeps the leaf, the folder is the path. A top-level preset's
+        name is bare, as before, so the rule above holds per folder. A
+        file's own ``/`` is listed as ``" - "`` (`harmless`): a ``/`` in a
+        listed name is always a folder."""
         out: dict[str, Path] = {}
-        for p in self._files(group).values():
-            name = self._name_of(p)
+        for p in (self._files(group) if files is None else files).values():
+            pre = self._prefix(group, p)
+            leaf = self._leaf(group, p)
+            name = pre + leaf
             prev = out.get(name)
             if prev is not None:
-                want = slug(name)
+                want = slug(leaf)
                 keep, other = ((prev, p) if prev.name[:-5] == want
                                else (p, prev) if p.name[:-5] == want
                                else tuple(sorted((prev, p), key=lambda q: q.name)))
                 out[name] = keep
-                out.setdefault(other.name[:-5], other)
+                out.setdefault(self._prefix(group, other) + other.name[:-5], other)
                 continue
             out[name] = p
         return out
 
-    def path_of(self, group: str, name: str) -> Path | None:
-        idx = self._index(group)
-        return idx.get(name) or self._files(group).get(slug(name))
+    def path_of(self, group: str, name: str, *, loose: bool = False) -> Path | None:
+        """The file a name resolves to: a listed name; else a file key —
+        the slug, and for a preset its folder and slug compared by `fold`
+        (``Party/Trip`` finds ``presets/party/trip.json``, as APFS does).
+        With `loose` — a **read** only: a load, a pad, the startup preset,
+        what a show still names — a preset name whose folder is not on
+        disk also tries its `slug` among the top-level files, an old show's
+        ``Ac/Dc`` for the top-level ``ac-dc.json`` (plan 48 review). A
+        writer (`save_as`, `delete`, `rename`) never takes that road:
+        ``party/TRIP`` typed with no ``party/`` is a new file in a new
+        folder, never the top-level ``party-trip.json``. None for none, and
+        for a preset name that could not name a file inside ``presets/``
+        (``../x``, ``/etc/x``). Two files that answer to one spelling
+        (``trip_2.json`` and ``trip-2.json``) resolve to neither by a fold:
+        the file key spelled as on disk finds its own, any other spelling
+        neither (a loose read says which two)."""
+        say = (lambda text: self.say(warning=text)) if loose else None
+        return self._resolve(group, name, self._lookup(group), loose=loose, say=say)
+
+    def _lookup(self, group: str) -> tuple:
+        """What `_resolve` reads, taken once per operation (review of #334:
+        a rename or a frame's ask lists the folder once): the index, the
+        file keys, and for the presets the files by `fold` and the folders
+        on disk folded."""
+        files = self._files(group)
+        idx = self._index(group, files)
+        if group != PRESETS:
+            return idx, files, {}, set()
+        folders: set[str | None] = set()
+        for root in self._roots():
+            if (root / PRESETS).is_dir():
+                hit = self._walked(root / PRESETS)
+                if "folded" not in hit:                 # kept with the walk, as byfold
+                    hit["folded"] = {fold_folder(f) for f in hit["folders"]}
+                folders |= hit["folded"]
+        return idx, files, self._byfold(), folders
+
+    @staticmethod
+    def _resolve(group: str, name: str, snap: tuple, *, loose: bool,
+                 say=None) -> Path | None:
+        """`path_of` over a `_lookup` snapshot. A fold that two files answer
+        to (``trip_2`` / ``trip-2``; ``Trip`` / ``trip`` on a case-sensitive
+        disk) is never settled by sort order: a name that is a file key as
+        on disk (``trip_2``) finds that file, any other spelling neither,
+        and `say` (a loose read's) is told which two."""
+        idx, files, byfold, folders = snap
+        hit = idx.get(name)
+        if hit is not None:
+            return hit
+        if group != PRESETS:
+            return files.get(slug(name))
+        key = fold(name)
+        if key is None:
+            return None
+        hit = files.get(name)                       # a file key, as it is on disk
+        if hit is not None:
+            return hit
+
+        def one(k: str | None) -> Path | None:
+            found = byfold.get(k) or []
+            if len(found) == 1:
+                return found[0]
+            if found and say is not None:
+                say(f"{name}: two presets answer to that name — "
+                    f"{found[0].name} and {found[1].name}; rename one")
+            return None
+
+        if byfold.get(key) or not loose:
+            return one(key)
+        folder = split_name(name)[0]
+        if folder and fold_folder(folder) not in folders:
+            return one(slug(name))                  # a top-level key has no "/"
+        return None
 
     def list(self, group: str) -> list[str]:
         """Every preset of the group by name, case folded — the PRESETS
@@ -1753,26 +2064,36 @@ class Library:
         """The slugs a new file of the group may not take: every file stem
         in the folder and every listed name — on a filesystem that folds
         case `Trip-2.json` is the file a save of "TRIP 2" would write over
-        (`save_new`, `rename`)."""
-        return ({slug(s) for s in self._files(group)}
-                | {slug(n) for n in self.list(group)})
+        (`save_new`, `rename`). For the presets each is folded with its
+        folder (`_fold`: ``party/trip-2``), so a name is taken only in its
+        own folder (plan 48)."""
+        if group != PRESETS:
+            return ({slug(s) for s in self._files(group)}
+                    | {slug(n) for n in self.list(group)})
+        out = {self._fold(group, s) for s in self._files(group)}
+        out |= {self._fold(group, n) for n in self.list(group)}
+        out.discard(None)
+        return out  # type: ignore[return-value]
 
     def still_named(self, name: str, path: Path | None = None) -> list[str]:
         """What in the open show still names the preset `name` (or, given,
         the file at `path`): its slots (``F6``, ``slot 12``) and its
         ``startup``."""
-        pr, key = self.project, slug(name)
+        pr, key = self.project, self._fold(PRESETS, name)
+        snap = self._lookup(PRESETS)                   # one look for every slot
+        target = path or self._resolve(PRESETS, name, snap, loose=True)
 
         def names(n: str | None) -> bool:
-            return bool(n) and (n == name or slug(n) == key
-                                or (path is not None and self.path_of(PRESETS, n) == path))
+            return bool(n) and (n == name or (key is not None and self._fold(PRESETS, n) == key)
+                                or (target is not None
+                                    and self._resolve(PRESETS, n, snap, loose=True) == target))
         out = [slot_key(k) for k, n in enumerate(pr.bank) if names(n)]
         if names(pr.startup):
             out.append("the startup preset")
         return out
 
     def read(self, group: str, name: str) -> dict:
-        path = self.path_of(group, name)
+        path = self.path_of(group, name, loose=True)
         if path is None:
             raise LibraryError(f"{group}: no preset {name!r}")
         doc = copy.deepcopy(self._doc(path))
@@ -1827,7 +2148,7 @@ class Library:
                 old = path.read_text()
             except (OSError, ValueError):
                 old = None                               # unreadable as text: keep it anyway
-            if old != text and to_trash(path, self.home) is None:
+            if old != text and self._to_trash(path) is None:
                 self.say(warning=f"{PATCHES}/{path.name}: overwritten — the old file could "
                                  "not be kept in the trash")
         _write_text(path, text)
@@ -1953,7 +2274,7 @@ class Library:
         if group not in self._kinds:
             self._need_reg()
         doc = self.read(group, name)
-        return self._apply_doc(group, name, doc, path=self.path_of(group, name))
+        return self._apply_doc(group, name, doc, path=self.path_of(group, name, loose=True))
 
     def _apply_doc(self, group: str, name: str, doc: dict, *, path: Path | None = None,
                    quiet: bool = False) -> list[str]:
@@ -1969,7 +2290,14 @@ class Library:
                 raise LibraryError(f"{group}/{name}: {e}") from e
             if path is not None:
                 self._sync(path)                       # a migrated user file, rewritten once
-            self._landed(group, doc.get("name") or name, kind.signature())
+            # its listed name: the file's own, under its folder (plan 48) —
+            # or, for a conflict copy listed under its stem, the name it was
+            # loaded by, so the list's ◀ ▶ step on from it
+            shown = (self._prefix(group, path) + self._shown(group, str(doc["name"]))
+                     if path is not None and doc.get("name") else None)
+            if shown is None or (shown != name and self.path_of(group, shown) != path):
+                shown = name if path is not None else (doc.get("name") or name)
+            self._landed(group, shown, kind.signature())
         else:
             # a module preset load, step or file-watch re-apply: one undo
             # step, the layout it may rebuild included (undo.py, plan 15)
@@ -2059,7 +2387,31 @@ class Library:
         says the old file was not kept (plan 15 fork 6)."""
         self.writable()
         doc = self.document(group, name, extra=extra)
-        path = self.path_of(group, name) or self.home / group / f"{slug(name)}.json"
+        path = self.path_of(group, name)
+        renamed = None
+        if group == PRESETS:
+            # plan 48 row 587: a folder-qualified name is written in its
+            # folder (made if need be); the file holds the leaf, and the
+            # name is spelled as the list will spell it — the folder as it is
+            # on disk (review: `Party/NEW` into an existing `party/`)
+            folder, leaf = self.folder_of(group, name)
+            if not leaf.strip():                        # "party/", "party/   "
+                raise LibraryError("a preset needs a name")
+            if path is not None:
+                raw = self._name_of(path)
+                if raw != harmless(raw):
+                    renamed = raw                       # its own "/" goes (the ruling)
+                folder = self._prefix(group, path)[:-1]  # as on disk
+            else:
+                key = path_slug(name)              # LibraryError on ../ or /abs
+                folder = key.rpartition("/")[0]
+                folder = self._folder_on_disk(folder) or folder
+                leaf = leaf.strip()
+                path = self.home / group / (f"{folder}/" if folder else "") / f"{slug(leaf)}.json"
+            doc["name"] = leaf
+            name = f"{folder}/{leaf}" if folder else leaf
+        elif path is None:
+            path = self.home / group / f"{slug(name)}.json"
         kind = self._kinds.get(group)
         text = (kind.text(doc) if kind is not None and kind.text is not None
                 else _json_text(doc))
@@ -2068,14 +2420,16 @@ class Library:
                 old = path.read_text()
             except (OSError, ValueError):
                 old = None                               # unreadable as text: keep it anyway
-            if old != text and to_trash(path, self.home) is None:
+            if old != text and self._to_trash(path) is None:
                 self.say(warning=f"{group}/{path.name}: overwritten — the old file could "
                                  "not be kept in the trash")
         _write_text(path, text)
         self._sync(path)
         self._landed(group, name, kind.signature() if kind is not None
                      else self.resolved(group, doc["values"]))
-        self.say(f"{group}: saved {name}")
+        # review of #334: a file's own "/" written as " - " is said, once —
+        # the next save finds the name it now holds
+        self.say(f"{group}: saved {name}" + (f" (was {renamed})" if renamed else ""))
         hook = self._load_hooks.get(group)
         if kind is not None and hook is not None:   # a kind's current moved: say so
             hook(name)                               # (the bank's light, preset.py)
@@ -2115,27 +2469,30 @@ class Library:
         path = self.path_of(group, name)
         if path is None:
             return False
-        if to_trash(path, self.home) is None:
+        # its listed name (review of #334: what a restore matches the
+        # warning by) and, while the file is there to resolve to, what in
+        # the open show still names it — not cleared for the owner, so a
+        # restore to the old name makes them work again (plan 19 WP4)
+        shown = (name if self._index(group).get(name) == path
+                 else self._prefix(group, path) + self._leaf(group, path))
+        still = self.still_named(shown, path) if group == PRESETS else []
+        if self._to_trash(path) is None:
             raise LibraryError(f"{path.name}: not deleted — it could not be kept in the "
-                               f"trash ({self.home / TRASH})")
+                               f"trash ({self._trash_dir()})")
         try:
             path.unlink()
         except OSError as e:
             raise LibraryError(f"{path.name}: {e}") from e
         self._sync(path)
-        if self._current.get(group) == name and self.path_of(group, name) is None:
+        if self._current.get(group) in (name, shown) and self.path_of(group, shown) is None:
             self._landed(group, None, None)
         if group == PRESETS:
-            # what still points at it (plan 19 WP4): the open show's slots and
-            # startup — not cleared for the owner, so a restore to the old
-            # name makes them work again
-            still = self.still_named(name)
             if still:
-                self.say(warning=f"{name} is in the trash — {_and(still)} still "
+                self.say(warning=f"{shown} is in the trash — {_and(still)} still "
                                  f"name{'s' if len(still) == 1 else ''} it; restore it from "
                                  "the trash, or clear the slot")
             else:
-                self.say(f"{name} is in the trash — the PRESETS page's trash can restore it")
+                self.say(f"{shown} is in the trash — the PRESETS page's trash can restore it")
         return True
 
     def rename(self, group: str, old: str, new: str) -> Path:
@@ -2179,33 +2536,55 @@ class Library:
         # names a patch; a group's provenance slug is the preset's to keep)
         if group not in RENAMABLE:
             raise LibraryError(f"{group}: only a preset can be renamed (or a patch)")
-        path = self.path_of(group, old)
+        snap = self._lookup(group)                 # one look for the whole rename
+        idx, files = snap[0], snap[1]
+        path = self._resolve(group, old, snap, loose=False)
         if path is None:
             raise LibraryError(f"no preset {old!r}")
         new = (new or "").strip()
-        if not new:
+        # plan 48 row 584: a rename keeps the folder — `new` is the leaf
+        # (the folder may be spelled in front of it, as the list spells it);
+        # moving a preset between folders is stage 2's
+        pre = self._prefix(group, path)
+        leaf = new[len(pre):].strip() if pre and new.startswith(pre) else new
+        if group == PRESETS and "/" in leaf:
+            raise LibraryError(f"{new}: a rename keeps the folder — a name has no '/' "
+                               "(move the file in Finder to change its folder)")
+        if not leaf:
             raise LibraryError("a preset needs a name")
+        new = pre + leaf
         stem = path.name[:-5]
         if new == old:
             return path
         doc = _read_json(path)
-        mine = {stem} | {slug(n) for n, p in self._index(group).items() if p == path}
-        in_place = slug(new) == stem
-        # `_taken` less this preset's own stem and name
-        taken = ({slug(s) for s, p in self._files(group).items() if p != path}
-                 | {slug(n) for n, p in self._index(group).items() if p != path})
-        if slug(new) in taken:
-            raise LibraryError(f"{new}: that name is taken — pick another")
+        # what names this file, folded: its listed names and its file key
+        # (and, at the top, its raw stem, as before plan 48)
+        mine = {self._fold(group, n) for n, p in idx.items() if p == path}
+        mine |= {self._fold(group, s) for s, p in files.items() if p == path}
+        if not pre:
+            mine.add(stem)
+        mine -= {None, ""}
+        # review of #334: what each slot resolved to before the rename (a
+        # loose read, as a pad loads it), so a slot naming it by an old
+        # spelling (`Ac/Dc`) follows it too
+        # (`snap`, taken above, is the library as it was before)
+        named = lambda n: self._resolve(group, n, snap, loose=True) == path
+        in_place = slug(leaf) == stem
+        # `_taken` less this preset's own stem and name — in its own folder
+        taken = ({self._fold(group, s) for s, p in files.items() if p != path}
+                 | {self._fold(group, n) for n, p in idx.items() if p != path})
+        if self._fold(group, new) in taken:
+            raise LibraryError(f"{leaf}: that name is taken — pick another")
         kind = self._kinds.get(group)
-        doc["name"] = new
+        doc["name"] = leaf
         text = (kind.text(doc) if kind is not None and kind.text is not None
                 else _json_text(doc))
-        dst = path if in_place else self.home / group / f"{slug(new)}.json"
+        dst = path if in_place else path.parent / f"{slug(leaf)}.json"
         if in_place:
             # 2–3 in one: keep the old text, then write over it
-            if to_trash(path, self.home) is None:
+            if self._to_trash(path) is None:
                 raise LibraryError(f"{path.name}: not renamed — it could not be kept in the "
-                                   f"trash ({self.home / TRASH})")
+                                   f"trash ({self._trash_dir()})")
             _write_text(path, text)
         else:
             try:
@@ -2216,10 +2595,10 @@ class Library:
             except OSError as e:
                 dst.unlink(missing_ok=True)
                 raise LibraryError(f"{dst.name}: {e}") from e
-            if to_trash(path, self.home) is None:          # 3.
+            if self._to_trash(path) is None:          # 3.
                 dst.unlink(missing_ok=True)
                 raise LibraryError(f"{path.name}: not renamed — it could not be kept in the "
-                                   f"trash ({self.home / TRASH})")
+                                   f"trash ({self._trash_dir()})")
             try:
                 path.unlink()
             except OSError as e:
@@ -2227,7 +2606,7 @@ class Library:
                 raise LibraryError(f"{path.name}: not renamed ({e})") from e
         self._sync(path, dst)                              # 4.
         cur = self._current.get(group)
-        if cur is not None and (cur == old or slug(cur) in mine):
+        if cur is not None and (cur == old or self._fold(group, cur) in mine):
             self._landed(group, new, self._loaded.get(group))
             hook = self._load_hooks.get(group)
             if hook is not None:
@@ -2235,21 +2614,23 @@ class Library:
         if group == PATCHES:
             self.say(f"renamed {old} → {new}")
             return dst
-        done, left = self._repoint(old, new, mine)         # 5.
+        done, left = self._repoint(old, new, mine, named)  # 5.
         self.project.follow()                              # 6.
         self.say(f"renamed {old} → {new} ({done} show{'' if done == 1 else 's'} updated)")
         if left:
             self.say(warning=f"renamed {old} → {new}; not updated: {', '.join(left)}")
         return dst
 
-    def _repoint(self, old: str, new: str, mine: set[str]) -> tuple[int, list[str]]:
+    def _repoint(self, old: str, new: str, mine: set[str],
+                 named=lambda n: False) -> tuple[int, list[str]]:
         """Step 5 of `rename`: every user show naming the old preset (by its
         name, or a slug of it or of its file stem) names the new one, each
         copied to the trash first. Returns (shows written, shows left as
         they were with why)."""
 
         def hit(n) -> bool:
-            return isinstance(n, str) and bool(n) and (n == old or slug(n) in mine)
+            return isinstance(n, str) and bool(n) and (
+                n == old or self._fold(PRESETS, n) in mine or named(n))
 
         pr, done, left = self.project, 0, []
         for show in sorted((self.home / PROJECTS).glob(f"*{PROJECT_SUFFIX}")):
@@ -2257,7 +2638,7 @@ class Library:
             if pr.path is not None and show == pr.path:
                 if not (any(hit(n) for n in pr.bank) or hit(pr.startup)):
                     continue
-                if to_trash(show, self.home) is None:
+                if self._to_trash(show) is None:
                     left.append(f"{label} (it could not be kept in the trash)")
                     continue
                 was = (list(pr.bank), pr.startup)
@@ -2282,7 +2663,7 @@ class Library:
             if doc.get("schema") != PROJECT_SCHEMA:
                 left.append(f"{label} (a {doc.get('schema')} show: plan 13's migration owns it)")
                 continue
-            if to_trash(show, self.home) is None:
+            if self._to_trash(show) is None:
                 left.append(f"{label} (it could not be kept in the trash)")
                 continue
             doc["bank"] = [new if hit(n) else n for n in bank]
@@ -2303,46 +2684,116 @@ class Library:
 
     # ---- the trash: a view of it, restore, empty (plan 19 WP4) ----
 
-    def _in_trash(self, path: Path) -> bool:
-        """Does `path` — its symlinks and any ``..`` resolved — lie under
-        ``<home>/trash/``, one folder down? The guard on every file the
-        trash's view restores or deletes."""
+    def _trash_dir(self) -> Path:
+        """``<machine>/trash`` — this Mac's trash (plan 48 row 586): what
+        a save overwrote, a delete removed or a rename replaced, never in
+        a synced library, so one Mac's deletes do not fill the other's."""
+        return self._machine() / TRASH
+
+    def _old_trash(self) -> Path | None:
+        """``<library>/trash`` when the library is a folder of its own
+        (plan 25): the trash every Mac wrote into before plan 48 — listed
+        and restorable, never written, never emptied (row 586). None when
+        the library is the machine home (the same folder) or missing."""
+        if self.__dict__.get("missing") is not None:
+            return None
+        try:                                           # a symlinked home is the same folder
+            if self.home.resolve() == self._machine().resolve():
+                return None
+        except OSError:
+            return None
+        old = self.home / TRASH
+        return old if old.is_dir() else None
+
+    def _to_trash(self, path: Path) -> Path | None:
+        """`to_trash` into this Mac's trash, under the folder `path` came
+        from relative to the library (``presets/party``), so a restore puts
+        it back there."""
         try:
-            root = (self.home / TRASH).resolve()
+            origin = path.parent.relative_to(self.home).as_posix()
+        except ValueError:
+            origin = path.parent.name
+        return to_trash(path, self._machine(), origin)
+
+    def _trash_roots(self) -> list[tuple[Path, Path, bool]]:
+        """(root, root resolved, whether it is the old library trash) for
+        this Mac's trash and the library's old one, each resolved once."""
+        out: list[tuple[Path, Path, bool]] = []
+        for root, old in ((self._trash_dir(), False), (self._old_trash(), True)):
+            if root is None:
+                continue
+            try:
+                resolved = root.resolve()
+            except OSError:
+                continue
+            if all(resolved != r for _root, r, _old in out):   # one folder, listed once
+                out.append((root, resolved, old))
+        return out
+
+    @staticmethod
+    def _under(path: Path, roots) -> tuple[Path, str, str, bool] | None:
+        """Where a trashed file lies among `roots` (`_trash_roots`) — its
+        symlinks and any ``..`` resolved: (the trash root, its group, the
+        folder under the group, whether it is the old library trash), or
+        None when it lies in none at least one folder down."""
+        try:
             real = path.resolve()
         except OSError:
-            return False
-        return real.parent.parent == root
+            return None
+        for root, resolved, old in roots:
+            try:
+                parts = real.parent.relative_to(resolved).parts
+            except ValueError:
+                continue
+            if parts and not any(p.startswith(".") for p in parts):
+                return root, parts[0], "/".join(parts[1:]), old
+        return None
+
+    def _trash_of(self, path: Path) -> tuple[Path, str, str, bool] | None:
+        """`_under` both trashes: the guard on every file the trash's view
+        restores or deletes."""
+        return self._under(path, self._trash_roots())
 
     def trash(self) -> list[Trashed]:
-        """Every file under ``<home>/trash/<folder>/``, newest first — what
-        "empty" removes, and nothing else: what you see is what goes."""
-        root = self.home / TRASH
-        if not root.is_dir():
-            return []
+        """Every file under this Mac's ``<machine>/trash/<group>/…`` (a
+        preset from a folder one folder down per folder, plan 48), newest
+        first — what "empty" removes, and nothing else: what you see is
+        what goes; then the library's old trash (`_old_trash`), each marked
+        ``old``: restorable (a copy: the file stays), never emptied."""
         out = []
-        for folder in sorted(root.iterdir()):
-            if not folder.is_dir():
+        roots = self._trash_roots()
+        for root, _resolved, old in roots:
+            if not root.is_dir():
                 continue
-            for path in folder.iterdir():
-                # only what `to_trash` writes: <stem>.<stamp>[-n]<suffix>, never a
-                # dotfile — a Finder `.DS_Store` is not the owner's, and a restore
-                # would make it a preset (review of PR #117)
-                m = _TRASHED.fullmatch(path.name)
-                if (m is None or path.name.startswith(".")
-                        or not (path.is_file() or path.is_symlink())):
+            for group in sorted(root.iterdir()):
+                if not group.is_dir() or group.name.startswith("."):
                     continue
-                stem = m["stem"]
-                if stem.endswith(PROJECT_SUFFIX[:-5]) and folder.name == PROJECTS:
-                    stem = stem[: -len(PROJECT_SUFFIX[:-5])]
-                name = stem
-                if path.is_file() and self._in_trash(path):
-                    try:
-                        name = str(_read_json(path).get("name") or stem)
-                    except LibraryError:
-                        pass
-                out.append(Trashed(path, folder.name, name, _when(m["stamp"]) if m else ""))
-        return sorted(out, key=lambda t: (_order(t.path), t.path.name), reverse=True)
+                for path in _walk(group, "*"):
+                    # only what `to_trash` writes: <stem>.<stamp>[-n]<suffix>, never a
+                    # dotfile — a Finder `.DS_Store` is not the owner's, and a restore
+                    # would make it a preset (review of PR #117)
+                    m = _TRASHED.fullmatch(path.name)
+                    if (m is None or path.name.startswith(".")
+                            or not (path.is_file() or path.is_symlink())):
+                        continue
+                    stem = m["stem"]
+                    if stem.endswith(PROJECT_SUFFIX[:-5]) and group.name == PROJECTS:
+                        stem = stem[: -len(PROJECT_SUFFIX[:-5])]
+                    name = stem
+                    if path.is_file() and self._under(path, roots) is not None:
+                        try:
+                            name = self._shown(group.name,
+                                               str(_read_json(path).get("name") or stem))
+                        except LibraryError:
+                            pass
+                    folder = path.parent.relative_to(group).as_posix()
+                    folder = "" if folder == "." else folder
+                    if folder and group.name == PRESETS:
+                        name = f"{folder}/{name}"
+                    out.append(Trashed(path, group.name, name,
+                                       _when(m["stamp"]) if m else "", folder, old))
+        return sorted(out, key=lambda t: (not t.old, _order(t.path), t.path.name),
+                      reverse=True)
 
     def restore_trash(self, item: Trashed) -> str:
         """Put a trashed file back as ``<home>/<group>/<stem><suffix>`` —
@@ -2355,16 +2806,28 @@ class Library:
         opened; a restore loads nothing. Returns the name it now has."""
         self.writable()
         path = item.path
-        if not path.is_file() or not self._in_trash(path):
-            raise LibraryError(f"{path.name}: not in the trash ({self.home / TRASH})")
+        where = self._trash_of(path) if path.is_file() else None
+        if where is None:
+            raise LibraryError(f"{path.name}: not in the trash ({self._trash_dir()})")
         m = _TRASHED.fullmatch(path.name)
         if m is None or path.name.startswith("."):
             raise LibraryError(f"{path.name}: not restored — not a file the trash kept")
+        # the group and the folder it came from are where it lies in the
+        # trash (plan 48: ``trash/presets/party/`` → ``presets/party/``)
+        _root, group, sub, _old = where
+        if sub and group == PRESETS:
+            # review of #334: the folder as it is on disk now (APFS folds
+            # case), so what is taken there is read from the right place
+            sub = self._folder_on_disk(sub) or sub
         filename = f"{m['stem']}{m['suffix']}"
-        show = item.group == PROJECTS
+        show = group == PROJECTS
         suffix = PROJECT_SUFFIX if show and filename.endswith(PROJECT_SUFFIX) else ".json"
         stem = filename.removesuffix(suffix)
-        folder = self.home / item.group
+        # only the presets have folders (plan 48): a file a non-preset group
+        # kept deeper goes back where that group lists it
+        sub = sub if group == PRESETS else ""
+        folder = self.home / group / sub if sub else self.home / group
+        pre = f"{sub}/" if sub and group == PRESETS else ""
         data = path.read_bytes()
         try:
             doc = json.loads(data)
@@ -2377,12 +2840,13 @@ class Library:
                      for p in (root / PROJECTS).glob(f"*{PROJECT_SUFFIX}")}
             names = {slug(s) for s in stems}
         else:
-            stems = set(self._files(item.group))
-            names = ({slug(n) for n in self.list(item.group)}
-                     if item.group == PRESETS else set())
+            # what is taken in the folder it goes back to
+            stems = {p.name[:-5] for p in self._files(group).values() if p.parent == folder}
+            names = ({slug(n[len(pre):]) for n, p in self._index(group).items()
+                      if p.parent == folder} if group == PRESETS else set())
         taken = {slug(s) for s in stems} | names
         renamed = slug(stem) in {slug(s) for s in stems} or (
-            item.group == PRESETS and slug(name) in names)
+            group == PRESETS and slug(name) in names)
         if renamed:
             if doc is None:
                 raise LibraryError(f"{path.name}: not restored — {stem} is taken and the file "
@@ -2390,7 +2854,7 @@ class Library:
             new = next_name(name, taken)
             doc["name"] = new
             stem = slug(new)
-            kind = self._kinds.get(item.group)
+            kind = self._kinds.get(group)
             text = (kind.text(doc) if kind is not None and kind.text is not None
                     else _json_text(doc))
             data = text.encode()
@@ -2405,14 +2869,19 @@ class Library:
             dst.unlink(missing_ok=True)
             raise LibraryError(f"{dst.name}: not restored ({e})") from e
         self._sync(dst)
-        if item.group == PRESETS and self.warning.startswith(f"{name} is in the trash"):
+        if group == PRESETS and self.warning.startswith(f"{pre}{self._shown(group, name)} is in the trash"):
             self.warning = ""                              # what × said is no longer so
-        now = str(doc["name"]) if renamed else name
+        now = pre + self._shown(group, str(doc["name"]) if renamed else name)
         what = f"show {now}" if show else now
         if renamed:
-            self.say(f"restored as {what} — {name} is taken")
+            self.say(f"restored as {what} — {pre}{name} is taken")
         else:
             self.say(f"restored {what}" + (" — it is in the show list" if show else ""))
+        if where[3]:
+            # the library's old trash is never written (plan 48 review): a
+            # restore from it is a copy, and the file stays where it is —
+            # the other Mac may be restoring it too
+            return now
         try:
             path.unlink()                                  # only after the write
         except OSError as e:
@@ -2422,14 +2891,19 @@ class Library:
     def empty_trash(self) -> int:
         """Delete every file `trash()` lists, and then the trash's folders
         left empty — the one delete in the app that keeps no copy (the
-        panel asks twice). A path that does not resolve under
-        ``<home>/trash/`` (a symlink out, a ``..``) is refused and left,
-        and said. Returns how many files went."""
+        panel asks twice). This Mac's trash only (plan 48 row 586): the
+        library's old trash (`_old_trash`) is listed but never emptied
+        here. A path that does not resolve under ``<machine>/trash/`` (a
+        symlink out, a ``..``) is refused and left, and said. Returns how
+        many files went."""
         self.writable()
-        gone, refused = 0, []
+        gone, refused, roots = 0, [], self._trash_roots()
         for item in self.trash():
+            if item.old:
+                continue
             path = item.path
-            if path.is_symlink() or not self._in_trash(path):
+            where = None if path.is_symlink() else self._under(path, roots)
+            if where is None or where[3]:
                 refused.append(path.name)
                 continue
             try:
@@ -2437,14 +2911,18 @@ class Library:
                 gone += 1
             except OSError as e:
                 refused.append(f"{path.name} ({e})")
-        root = self.home / TRASH
+        root = self._trash_dir()
         if root.is_dir():
-            for folder in root.iterdir():
-                if folder.is_dir() and not folder.is_symlink():
-                    try:
-                        folder.rmdir()                     # only when it is empty
-                    except OSError:
-                        pass
+            # the folders left empty, deepest first (`os.walk` bottom-up
+            # never goes through a link)
+            for here, dirs, _files in os.walk(root, topdown=False, followlinks=False):
+                for d in dirs:
+                    folder = Path(here) / d
+                    if not folder.is_symlink():
+                        try:
+                            folder.rmdir()                 # only when it is empty
+                        except OSError:
+                            pass
         if refused:
             self.say(warning=f"trash: emptied {gone}; left {', '.join(refused[:4])}"
                              + (f" (+{len(refused) - 4} more)" if len(refused) > 4 else "")
@@ -2493,7 +2971,8 @@ class Library:
                 continue
             for d in root.iterdir():
                 if d.is_dir() and not d.name.startswith("."):
-                    for f in d.glob("*.json"):
+                    # the presets every folder down (plan 48), as `_files` lists them
+                    for f in self._tree(d)[0] if d.name == PRESETS else d.glob("*.json"):
                         try:
                             out[f] = f.stat().st_mtime
                         except OSError:
@@ -2508,6 +2987,7 @@ class Library:
             except OSError:
                 self._mtimes.pop(p, None)
             self._docs.pop(p, None)
+        self.__dict__.get("_walks", {}).clear()     # our own write: walk again
         self._defaults.clear()
 
     def poll(self, now: float | None = None) -> bool:
@@ -2530,7 +3010,7 @@ class Library:
         hit = []
         try:
             for group, name in list(self._current.items()):
-                if name is not None and self.path_of(group, name) in changed:
+                if name is not None and self.path_of(group, name, loose=True) in changed:
                     reapply = self._adopted.get(group)
                     if reapply is not None:            # by the road it came in
                         reapply()
