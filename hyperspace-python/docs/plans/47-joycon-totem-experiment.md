@@ -445,3 +445,55 @@ Tests are in `tests/test_poi_guide.py`:
 - the renderer lays the guide where the weight and the tip project, and
   leaves the rest of the picture alone
 - an output's hands switch mutes the guide
+
+### The hand, second cut: a frame that does not centre itself (2026-11-03)
+
+The owner, at the machine: the Joy-Con carried a full metre to one side
+moved the shape a little, then it came back to the centre; fast moves
+drifted a lot; and the tip was drawn toward them. Their intent is a Wii
+remote's: the object held in the hand, in a reference frame that does not
+re-centre itself. Above, "No real hand position" and the wrist's spring
+home are replaced by the following:
+
+- **The hand stays where it is carried** (`poi._hand`). Its push (the
+  accel through the attitude, with gravity taken out) is integrated into
+  a velocity and that into a place, with no spring home. A metre carried
+  is 2.5 world units at `poi.hand` 1, and the place stays there. A puts
+  the hand home. It is held within `HAND_LIMIT` (8 units), and a pad
+  whose readings stop (`STALL_S`) pushes nothing.
+- **Still means still** (`_stillness`): turning slower than 15 deg/s, with
+  a push under 0.06 g left after taking out gravity, for 80 ms. While
+  still, the velocity is zeroed, so the drift a double integral gathers
+  cannot run on between moves. The tilt is pulled to gravity only while
+  still: the old test, |accel| near 1 g, took a gentle sideways push for
+  gravity, tilted the attitude into it and swallowed the move. As a
+  fallback, a pad that turns slowly and reads 1 g for 1.5 s while the
+  attitude still sees a push counts as still, because the attitude is
+  wrong, and no hand pushes one way that long.
+- **Every report's turn**, through the poi's own tap
+  (`Motion.take_turn("poi")`), so the totem and the poi each get every
+  degree.
+- **The dead band passes a real turn exact** (`gesture._banded`): zero
+  under 3 deg/s, a ramp to 6, exact above. It used to subtract 3 deg/s from
+  every rate, which on a hard swing lost about ten degrees of attitude in
+  seconds, and that error leaked gravity into the push. The totem gains
+  the same accuracy.
+- **A hard spin bleeds the velocity**: faster than 120 deg/s, at up to 2/s.
+  A spin gives no still moment to zero what the attitude's errors leak.
+  A carry turns little, so it is untouched, and the place is never pulled
+  home.
+- **The handle points along the pad's +z**, away from the player as the
+  owner holds it.
+
+**What it cannot do.** An IMU alone gives no absolute position. A move's
+travel is a double integral, so a metre lands about a metre away, with
+an error that stays put rather than being pulled back. The Wii's sensor
+bar is what gave its remote an absolute point; nothing here does.
+
+The tests now drive a physically consistent pad (`Truth` in
+`tests/test_poi.py`: its accel turns with its gyro), and cover:
+- a metre carried that stays, and A bringing the hand home
+- a still pad with a 3° tilt error that does not drift
+- the limit, and a stalled pad
+- both consumers getting every degree
+- fast swings with no travel that leave the hand where it was
