@@ -2921,7 +2921,7 @@ never come back and `send` is not read again. To translate an edited
 `send`, remove the role from `"sinks_seeded"`. A `midi-out` entry is a
 sink alone: its own port (§12) and its own sink rows on its role.
 
-**A video's soundtrack** (plan 45 V1; nothing audible yet). A video on
+**A video's soundtrack** (plan 45 V1; heard through the mixer since V2). A video on
 a channel can decode its audio track to memory beside its picture —
 **once something asks for sound** (`Soundtrack.enable()`, which V2's
 play-audio toggle will call; until then no thread, no open, no read: a
@@ -2941,8 +2941,27 @@ is abandoned, one that fails leaves the old window and is tried again
 after a 1 s move). `status` reads `fetching` whenever the transport is
 outside what is held, `ready` only inside it. A file with no track
 is silence, with no line in the log. `src.audio.read(at, n)` is the API
-the mixer (V2) will consume: (n, 2) float32 from sample `at`, zeros
-where nothing is held, never blocking. [`plans/45-video-audio.md`](plans/45-video-audio.md).
+the mixer consumes: (n, 2) float32 from sample `at`, zeros where nothing
+is held, never blocking. [`plans/45-video-audio.md`](plans/45-video-audio.md).
+
+**The media mixer** (plan 45 V2, `media/mixer.py`). Tick a channel's
+`audio` (`media.<c>.audio`; MEDIA, on the selected channel's source line,
+or the channel node's side pane on GRAPH) and its video's sound plays at
+the channel's `gain` (`media.<c>.gain`: off, then −30…+6 dB, unity at
+the notch). One output stream, 48 kHz stereo, on the default output
+device, opened the first time any channel's sound is on (opened again
+5 s after it fails or the device goes away) and left open until quit;
+unticking lets the video's samples go half a second later; SYSTEM's `media sound` line says whether it is open, how many
+channels play and how many underruns PortAudio reported. Each frame the
+channels hand it the playhead their transports were just stepped to, and
+it reads there — it keeps no position of its own, and the audio and
+display clocks are never locked, so even at rate 1 expect an occasional
+click (a block repeated or skipped) until V4 reads sequentially and slews
+toward the transport; at any other rate it stutters, and a hold, a `once`
+clip parked at its end and reverse are silent (varispeed is V4's). Two loud channels summed clip at
+full scale; the gains are there for it. The analyzer's own WAV playback
+(`audio.py`) is a separate stream and untouched; the analyzer listening
+to the mix is V3's.
 
 ## 14. Outputs
 
@@ -3031,7 +3050,10 @@ D1) is on the list after `learn`, before `midi`: a save re-classes the
 live `Deck` and its objects come from `Deck.targets()`, which `main`'s
 target list takes first, then the rig's. `Deck.build` runs once at
 launch, so a change to it — or a field added to a live object — needs
-Cmd+R, not a save.
+Cmd+R, not a save. A reload of `media/mixer.py` keeps the
+media sound playing: the live mixer is re-classed by `MediaState` and
+the stream's callback reaches the new code through the class; adding
+the module itself needed a restart.
 
 **The watchdog** (`watchdog.py`) appends to `<home>/stall.log` a `===
 <kind>` header — the time, the loaded preset, what happened — and every

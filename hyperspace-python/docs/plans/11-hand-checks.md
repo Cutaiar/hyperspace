@@ -6747,6 +6747,65 @@ nudging the turn's speed; in 4 the picture parks and resumes in place.
 wraps at a period one of its uses does not share (`view.INST_PERIOD`,
 `MEDIA_PERIOD`).
 
+## BB. Video audio 2 of 4: the mixer, forward play (plan 45 V2)
+Decision register rows 581–583. The play-audio toggle and the gain are
+`media.<c>.audio` and `media.<c>.gain` (MEDIA, on the selected channel's
+source line; GRAPH, the channel node's side pane). The sound is read at
+the transport's position each frame with no position of its own, and the
+audio and display clocks are never locked: **an occasional click at rate
+1 is expected until V4 reads sequentially and slews toward the
+transport**; at any other rate it stutters, and a hold, a `once` clip
+parked at its end, reverse and pingpong's way back are silent —
+varispeed is V4's. Judge V2 at rate 1, forward.
+**437. Play audio on a show video: the sound follows the picture.** (Mac, the speakers or headphones, a show video with a soundtrack)
+Headless: `tests/test_media_mixer.py` (`test_the_callback_reads_the_transports_stepped_position_and_moves_nothing`,
+`test_a_real_clip_through_the_channel_and_the_mixer`).
+1. Slot a show video on channel A and wire it to an output; MEDIA, select
+   A: tick `audio`. The video's sound plays from the speakers.
+2. Let it play 30 s at rate 1, watching a cut or a hit in the picture.
+3. Scrub `pos` to the middle and let go; then to near the start.
+4. Move `gain` to the bottom (off), to −6 dB, to the notch (0 dB), to +6 dB.
+5. Set `rate` to 0, then 2, then back to 1.
+*Pass:* the sound plays with the picture at rate 1 — a hit in the picture
+is heard with it, no audible drift over 30 s; after each scrub the sound
+lands where the picture is within a fraction of a second (a far scrub on
+a film longer than two minutes may be silent for a moment while its
+window is read); the gain is silent at the bottom, half as loud at −6 dB,
+louder at +6 dB; at rate 0 silence, at rate 2 a stutter (expected: V4),
+at rate 1 again as before — an occasional click is expected (V4). SYSTEM
+shows `media sound: open · 1 playing`. Fail: a steady buzz, or clicks
+more than now and then at rate 1, point at the frame rate (the SYSTEM
+frame time well above 16.7 ms) or the block; sound late against
+the picture by more than a frame or two points at the output latency.
+**438. Two channels summed; one off goes silent; the analyzer untouched.** (Mac, two show videos with distinct soundtracks, a WAV file)
+Headless: `tests/test_media_mixer.py` (`test_the_callback_sums_each_heard_channel_read_at_its_playhead_times_its_gain`,
+`test_the_toggle_enables_and_disables_exactly_on_a_flip`, `test_the_sum_is_clipped_at_one`).
+1. AUDIO: play a WAV file through the analyzer's file transport.
+2. Slot a video on A and another on B; tick `audio` on both.
+3. Untick A's `audio`; tick it again; change B's slot to another video.
+*Pass:* both soundtracks heard together, each at its own position; A off
+is A silent at once and B plays on; A on again is A back where its
+picture is; B's slot change brings the new video's sound and drops the
+old; the WAV plays and the bands follow it exactly as before this build
+(the mixer is not the analyzer's source until V3). Two loud tracks
+summed may clip — the gains are there for it.
+**439. Memory and Bytes Read with audio on: the window policy holds; off releases.** (Mac, a show video of a few minutes and a film longer than two minutes, Activity Monitor)
+Headless: `tests/test_media_audio.py` (the window policy), `tests/test_media_mixer.py`
+(`test_the_stream_opens_on_the_first_toggle_and_not_before`).
+1. Launch; note memory and Bytes Read. Slot the short video, play it with
+   `audio` off for 30 s: neither moves beyond check 421's.
+2. Tick `audio`: note memory and Bytes Read.
+3. Slot the film, tick `audio`, scrub to its middle and back.
+4. Untick `audio` on both; wait 5 s.
+*Pass:* with `audio` off nothing is read for sound (as check 421); on, the
+short clip's track is read once (memory up by about 384 kB a second of
+it, Bytes Read up once), the film holds one window (memory up by about
+46 MB, twice that for a moment while a window is re-made after a far
+scrub); unticked, that memory is let go; SYSTEM's `media sound` line
+appears only once a toggle has been on and stays `open` after. Fail:
+memory climbing while the film plays at rate 1 points at the window
+(`Soundtrack._decode`); memory not falling when unticked points at the
+disable not reaching the soundtrack (it runs on the media closer).
 ## What no test covers
 
 Only a person can settle these:
