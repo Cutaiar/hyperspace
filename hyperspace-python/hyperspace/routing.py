@@ -2862,12 +2862,12 @@ class Router:
         prim = getattr(self.table, "primaries", None)
         if d.get("_lanes_prim", _NO_LANES) is not prim:
             d["_lanes_prim"], d["_lanes"] = prim, {}
-        return d.get("_lanes", _NO_LANES)
+        return d["_lanes"]
 
     def _resolve_lane(self, source: str) -> tuple[str, dict | None, int]:
         """`lane`'s cache miss: (scheme, the map it was resolved against, index)."""
         cache = self._lane_cache()
-        if cache is _NO_LANES or len(cache) > 4096:      # addresses typed at the page, say
+        if len(cache) > 4096:                            # addresses typed at the page, say
             cache = self.__dict__["_lanes"] = {}
         hit = cache[source] = self.sources.resolve(source, getattr(self.table, "primaries", None))
         return hit

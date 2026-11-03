@@ -2470,8 +2470,7 @@ def _lagged_modulate(self: Router, analyzer=None, dt: float | None = None) -> No
     one test only (`test_every_factory_preset_lands_the_same_values_one_frame_earlier`),
     the reference the new pass is held to; a test file, so the boundary
     walk (`test_only_router_modulate_calls_param_modulate`, the package
-    only) never sees its `p.modulate`. Plan 44 D2: the lane cache is the
-    shared sources' (`self.sources`), not the router's — the one change."""
+    only) never sees its `p.modulate`."""
     from hyperspace.routing import _NO_LANES
 
     dt = 1 / 60 if dt is None else dt
@@ -2479,12 +2478,12 @@ def _lagged_modulate(self: Router, analyzer=None, dt: float | None = None) -> No
     moved: set = set()
     lanes = None if analyzer is None else analyzer.lanes / CEIL
     names = self.names
-    cache = self.sources.__dict__.get("_lanes", _NO_LANES)
+    cache = self.__dict__.get("_lanes", _NO_LANES)
     for b in self.table.mods():
         hit = cache.get(b.source)
         if hit is None or names.get(hit[0]) is not hit[1]:
             hit = self._resolve_lane(b.source)
-            cache = self.sources.__dict__["_lanes"]
+            cache = self.__dict__["_lanes"]
         scheme, _, i = hit
         vec = lanes if scheme == "lane" else self.feeds.get(scheme)
         if vec is None or not 0 <= i < len(vec):
