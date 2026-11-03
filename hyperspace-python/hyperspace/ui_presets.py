@@ -23,8 +23,13 @@ bottom (``page``):
               name is a readout, the list is the page
   the list    every preset by name, the loaded one selected, filling the
               page: a click loads, `rename` turns the row into a name
-              field, × sends the file to the trash. Nothing folds, nothing
-              drops down, nothing is dim
+              field, × sends the file to the trash. Plan 48 stage 2: a
+              tree — the top-level presets, then a folding header per
+              folder (the fold this Mac's, in ui.json), nested folders
+              nested; a row's right-click is "move to ▸", a row drags
+              onto a header; a header's right-click makes a folder
+              inside, renames it, removes it (empty only); "new folder"
+              at the foot makes one at the top
   trash (n) ▸ at the list's foot, only while the trash holds something:
               its own popup — restore per file, "empty trash…" asked twice
               in place
@@ -49,6 +54,8 @@ compare and is cheap enough to ask each frame for the page on screen.
 
 from __future__ import annotations
 
+import time
+
 from imgui_bundle import imgui
 
 from . import preset, ui
@@ -68,6 +75,13 @@ LIST_ROWS = 12       # rows of a module strip's list, and of the trash, before e
 EMPTY_S = 4.0        # how long "empty trash…" stays armed for its second click
 MIN_ROWS = 3         # the page's list is never shorter than this many rows
 TRASH_KEY = "\0trash"     # the listings cache: the trash
+# plan 48 stage 2: the tree
+FOLDERS_KEY = "\0folders" # the listings cache: the presets' folders
+PRESET_DRAG = "PRESET"    # a row's drag payload (the name kept in `_state`'s preset_drag)
+UI_KEY = "presets"        # <machine>/ui.json: {"presets": {"folded": [folder, …]}}
+FOLDER_TIP = ("A folder of presets: click to fold or unfold (kept on this Mac). "
+              "Drag a preset onto it to move it in. Right-click: a new folder inside, "
+              "rename, remove (an empty folder only)")
 # what a show is, in one line under the SHOW label and in its hover
 SHOW_LINE = "show  ·  the desk's pads, the session, the rig's wires"
 SHOW_TIP = ("A show is the room the presets play in: which preset each of the desk's "
@@ -123,7 +137,7 @@ def invalidate(panel, key: str) -> None:
     """Our own write: the next frame re-lists rather than waiting out the
     poll — the listing and the trash."""
     lists = _state(panel)["lists"]
-    for slot in (key, TRASH_KEY):
+    for slot in (key, TRASH_KEY, FOLDERS_KEY):
         lists.pop(slot, None)
 
 
@@ -203,7 +217,7 @@ def _said(panel, fn, *args):
 
 # ---- the name field: the strip while a save-as is being typed ----
 
-def _name_field(panel, key: str, commit) -> bool:
+def _name_field(panel, key: str, commit, hint: str = "preset name") -> bool:
     """Draw the inline name field for `key`; returns True while it is open."""
     st = _state(panel)
     if st["naming"] != key:
@@ -212,7 +226,7 @@ def _name_field(panel, key: str, commit) -> bool:
     if st.pop("focus", False):          # the field takes the keyboard once, on open
         imgui.set_keyboard_focus_here()
     entered, st["buf"] = imgui.input_text_with_hint(
-        f"##name.{key}", "preset name", st["buf"],
+        f"##name.{key}", hint, st["buf"],
         imgui.InputTextFlags_.enter_returns_true | imgui.InputTextFlags_.auto_select_all,
     )
     imgui.same_line()
@@ -406,7 +420,8 @@ def list_row_h() -> float:
             + imgui.get_style().item_spacing.y)
 
 
-def _list_row(panel, group: str, name: str, cur: str | None, drawn: dict, rect) -> None:
+def _list_row(panel, group: str, name: str, cur: str | None, drawn: dict, rect,
+              tree: bool = False) -> None:
     """One row of a preset list: the name (a pick loads it), then its
     chips — `rename` and × on a preset or a patch (plan 40 T3: a patch's
     row has no pick — a patch is spawned on GRAPH, never loaded), × alone
@@ -423,20 +438,35 @@ def _list_row(panel, group: str, name: str, cur: str | None, drawn: dict, rect) 
     # plan 48 row 588: a preset from a folder reads "party / TRIP", the
     # folder dim — the row's text drawn over a label-less selectable; a
     # top-level name is the selectable's own label, as before
+    # (plan 48 stage 2: under its folder's header — `tree` — a row is the
+    # leaf alone, the header says the folder)
     folder, leaf = lib.folder_of(group, name)      # the library's one rule
     x = imgui.get_cursor_pos_x()
     imgui.push_style_color(imgui.Col_.text, imgui.ImVec4(0.92, 0.92, 0.92, 1))
-    picked, _ = imgui.selectable(f"##{name}##pick" if folder else f"{name}##pick",
-                                 name == cur, imgui.SelectableFlags_.allow_overlap)
+    label = (f"{leaf}##{name}##pick" if folder and tree else
+             f"##{name}##pick" if folder else f"{name}##pick")
+    picked, _ = imgui.selectable(label, name == cur, imgui.SelectableFlags_.allow_overlap)
     rect(f"row.{name}")
-    if folder:
+    dragged = False
+    if group == PRESETS:
+        # plan 48 stage 2: a row drags onto a folder's header, and its
+        # right-click offers "move to ▸"
+        if imgui.begin_drag_drop_source():
+            st["preset_drag"], dragged = name, True
+            imgui.set_drag_drop_payload_py_id(PRESET_DRAG, 0)
+            imgui.text(name)
+            imgui.end_drag_drop_source()
+        if imgui.begin_popup_context_item(f"menu.{name}"):
+            _row_menu(panel, name, folder)
+            imgui.end_popup()
+    if folder and not tree:
         imgui.same_line(x, 0)
         imgui.text_colored(ui.DIM, f"{folder.replace('/', ' / ')} / ")
         imgui.same_line(0, 0)
         imgui.text(leaf)
     imgui.pop_style_color()
     drawn.setdefault("text", []).append((folder, leaf))
-    if picked and not patch:
+    if picked and not patch and not dragged:
         _guard(panel, lib.load, group, name)
     chips = ("rename", "×") if renamable else ("×",)
     drawn["rows"].append((name, chips))
@@ -528,33 +558,43 @@ def _reserve() -> float:
 def preset_list(panel) -> None:
     """Every preset, as a list that fills the page (never shorter than
     MIN_ROWS rows, scrolling past the room it has): the loaded one
-    selected, a click loads, `rename` and × on each row (`_list_row`);
-    then the trash's foot line while the trash holds something. What was
-    drawn is kept in `_state`'s ``page`` for the tests: each row's name
-    and chips, the foot's lines, screen rects."""
+    selected, a click loads, `rename` and × on each row (`_list_row`).
+    Plan 48 stage 2: a tree — the top-level presets first, then a folding
+    header per folder, alphabetically, a folder's presets (in the list's
+    order) then its own folders under it (`_folder`); a fold is this
+    Mac's (`folded`). Then the foot line: the trash's while it holds
+    something, and **new folder** (at the top) flush right. What was drawn
+    is kept in `_state`'s ``page`` for the tests: each row's name and
+    chips, each header (``folders``: (folder, open)), the foot's lines,
+    screen rects."""
     lib, st = panel.library, _state(panel)
     cur = lib.current(PRESETS)
     rows = names(panel, PRESETS)
     bin_ = trashed(panel)
-    drawn: dict = {"group": PRESETS, "rows": [], "foot": [], "rects": {}}
+    drawn: dict = {"group": PRESETS, "rows": [], "foot": [], "rects": {}, "folders": []}
     st["page"] = drawn
 
     def rect(key: str) -> None:
         a, b = imgui.get_item_rect_min(), imgui.get_item_rect_max()
         drawn["rects"][key] = (a.x, a.y, b.x, b.y)
 
+    flush_folds(panel)                  # a fold clicked WRITE_AFTER_S ago, kept
+    tree = _tree(lib, rows, folder_list(panel))
     room = imgui.get_content_region_avail().y - _reserve()
     height = max(room, list_row_h() * MIN_ROWS)
     if imgui.begin_child("##presets.rows", imgui.ImVec2(0, height)):
-        if not rows:
+        if not tree["count"].get(""):  # no preset anywhere, folders or none
             imgui.text_disabled("no presets — new, then save as… makes one")
-        for name in rows:
-            _list_row(panel, PRESETS, name, cur, drawn, rect)
+        _folder_body(panel, "", tree, cur, drawn, rect)
     imgui.end_child()
     rect("rows")
+    if _name_field(panel, "newfolder:", lambda n: _make_folder(panel, "", n), "folder name"):
+        return
+    chip = "new folder"
     if bin_:
         line = f"trash ({len(bin_)}) ▸"
-        hit, _ = imgui.selectable(f"{line}##trash", False)
+        width = imgui.get_content_region_avail().x - ui.chip_w(chip) - imgui.get_style().item_spacing.x
+        hit, _ = imgui.selectable(f"{line}##trash", False, 0, imgui.ImVec2(max(width, 1.0), 0))
         drawn["foot"].append(line)
         rect("trash")
         if hit:
@@ -564,6 +604,273 @@ def preset_list(panel) -> None:
             ui.tooltip("What × and rename sent to the trash, and every older version a "
                        "save replaced: restore puts one back")
         _trash_popup(panel, bin_)
+        imgui.same_line()
+    imgui.set_cursor_pos_x(imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x
+                           - ui.chip_w(chip))
+    imgui.push_style_color(imgui.Col_.text, ui.DIM)
+    if ui.chip(f"{chip}##newfolder"):
+        _begin_naming(panel, "newfolder:", "")
+    imgui.pop_style_color()
+    rect("new_folder")
+    if imgui.is_item_hovered():
+        ui.tooltip("A new folder at the top of the presets (a folder's right-click makes "
+                   "one inside it). Drag a preset onto a folder, or right-click it: "
+                   "move to ▸")
+
+
+# ---- the tree (plan 48 stage 2) ----
+
+def folder_list(panel) -> list[str]:
+    """``library.folders()``, refreshed on the poll cadence."""
+    st, lib = _state(panel), panel.library
+    now = imgui.get_time()
+    hit = st["lists"].get(FOLDERS_KEY)
+    if hit is None or now - hit[0] >= LIST_POLL:
+        try:
+            listing = lib.folders()
+        except (LibraryError, OSError) as e:
+            lib.error = f"library: {e}"
+            listing = hit[1] if hit else []
+        st["lists"][FOLDERS_KEY] = hit = (now, listing)
+    return hit[1]
+
+
+def _tree(lib, rows: list[str], folders: list[str]) -> dict:
+    """The list as a tree: ``rows`` — folder → its presets, in the list's
+    order (``""`` the top); ``kids`` — folder → its folders, sorted case
+    folded; ``count`` — folder → presets in it, every folder down. Every
+    folder on disk is in it, empty ones too, and every folder a name
+    sits in (with its parents)."""
+    by: dict[str, list[str]] = {}
+    every: set[str] = set(folders)
+    for name in rows:
+        folder = lib.folder_of(PRESETS, name)[0]
+        by.setdefault(folder, []).append(name)
+        every.add(folder)
+    for f in list(every):
+        while f:
+            every.add(f)
+            f = f.rpartition("/")[0]
+    every.discard("")
+    kids: dict[str, list[str]] = {}
+    for f in every:
+        kids.setdefault(f.rpartition("/")[0], []).append(f)
+    for v in kids.values():
+        v.sort(key=str.lower)
+    count: dict[str, int] = {}
+
+    def total(f: str) -> int:
+        count[f] = len(by.get(f, [])) + sum(total(k) for k in kids.get(f, []))
+        return count[f]
+    total("")
+    return {"rows": by, "kids": kids, "count": count}
+
+
+def _folder_body(panel, folder: str, tree: dict, cur, drawn: dict, rect) -> None:
+    """A folder's inside (the top's too): a new folder's name field while
+    one is being made here, its presets, then its folders."""
+    if folder:
+        _name_field(panel, f"newfolder:{folder}",
+                    lambda n: _make_folder(panel, folder, n), "folder name")
+    for name in tree["rows"].get(folder, []):
+        _list_row(panel, PRESETS, name, cur, drawn, rect, tree=True)
+    for kid in tree["kids"].get(folder, []):
+        _folder(panel, kid, tree, cur, drawn, rect)
+
+
+def _folder(panel, folder: str, tree: dict, cur, drawn: dict, rect) -> None:
+    """One folder's header, folding (this Mac's, `folded`): its name, how
+    many presets it holds, and — folded — the loaded preset's name when it
+    is inside; a drop target for a dragged row; its right-click menu
+    (`_folder_menu`). Open, its body under it, indented."""
+    st = _state(panel)
+    leaf = folder.rpartition("/")[2]
+    if _name_field(panel, f"folder:{folder}",
+                   lambda n: _rename_folder(panel, folder, n), "folder name"):
+        drawn["folders"].append((folder, None))
+        return
+    shut = folder in folded(panel)
+    n = tree["count"].get(folder, 0)
+    label = f"{leaf}  ·  {n}"
+    where = panel.library.folder_of(PRESETS, cur)[0] if cur else None
+    if shut and where is not None and (where == folder or where.startswith(folder + "/")):
+        label += f"  ·  {cur.rpartition('/')[2]}"
+    imgui.set_next_item_open(not shut, imgui.Cond_.always)
+    opened = imgui.tree_node_ex(f"{label}###folder.{folder}",
+                                imgui.TreeNodeFlags_.framed
+                                | imgui.TreeNodeFlags_.span_avail_width)
+    rect(f"folder.{folder}")
+    if imgui.is_item_toggled_open():
+        set_folded(panel, folder, not opened)
+    drawn["folders"].append((folder, opened))
+    if imgui.is_item_hovered():
+        ui.tooltip(FOLDER_TIP)
+    if imgui.begin_drag_drop_target():
+        if imgui.accept_drag_drop_payload_py_id(PRESET_DRAG) is not None:
+            name = st.pop("preset_drag", None)
+            if name:
+                _move(panel, name, folder)
+        imgui.end_drag_drop_target()
+    if imgui.begin_popup_context_item(f"folder.menu.{folder}"):
+        _folder_menu(panel, folder)
+        imgui.end_popup()
+    if opened:
+        _folder_body(panel, folder, tree, cur, drawn, rect)
+        imgui.tree_pop()
+
+
+def _menu_rect(panel, key: str) -> None:
+    a, b = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+    _state(panel).setdefault("menu", {})[key] = (a.x, a.y, b.x, b.y)
+
+
+def _row_menu(panel, name: str, folder: str) -> None:
+    """A row's right-click: **move to ▸** — the top level and every
+    folder, less the one it is in. What was drawn is kept in `_state`'s
+    ``menu`` (item → rect) for the tests."""
+    st = _state(panel)
+    st["menu"] = {}
+    st["menu_for"] = name
+    ui._micro(name)
+    opened = imgui.begin_menu("move to")
+    _menu_rect(panel, "move to")
+    if not opened:
+        return
+    for f in ["", *folder_list(panel)]:
+        if f == folder:
+            continue
+        label = "top level" if not f else f.replace("/", " / ")
+        if imgui.menu_item_simple(f"{label}##to.{f}"):
+            _move(panel, name, f)
+        _menu_rect(panel, f"to.{f}")
+    imgui.end_menu()
+
+
+def _folder_menu(panel, folder: str) -> None:
+    """A folder's right-click: a new folder inside, rename, remove (an
+    empty folder only — the item is off otherwise, its hover naming what
+    is in the way: `Library.held`, the same test the remove makes, hidden
+    files and all; review of #349). Drawn only while the menu is open,
+    so the folder is listed only then."""
+    st = _state(panel)
+    st["menu"] = {}
+    st["menu_for"] = folder
+    held = _guard(panel, panel.library.held, folder) or []
+    empty = not held
+    st["menu_held"] = held
+    if imgui.menu_item_simple("new folder inside…"):
+        set_folded(panel, folder, False)
+        _begin_naming(panel, f"newfolder:{folder}", "")
+    _menu_rect(panel, "new")
+    if imgui.menu_item_simple("rename folder…"):
+        _begin_naming(panel, f"folder:{folder}", folder.rpartition("/")[2])
+    _menu_rect(panel, "rename")
+    if imgui.menu_item_simple("remove folder", "", False, empty):
+        _said(panel, panel.library.remove_folder, folder)
+        set_folded(panel, folder, False)
+        _changed(panel)
+    _menu_rect(panel, "remove")
+    if not empty and imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+        ui.tooltip("Only an empty folder is removed — it holds "
+                   + ", ".join(held) + ": move or trash them first")
+
+
+def _changed(panel) -> None:
+    invalidate(panel, PRESETS)
+    invalidate(panel, PROJECT)
+
+
+def _move(panel, name: str, folder: str) -> None:
+    _said(panel, panel.library.move, name, folder)
+    _changed(panel)
+
+
+def _make_folder(panel, parent: str, name: str) -> None:
+    _said(panel, panel.library.make_folder, parent, name)
+    _changed(panel)
+
+
+def _rename_folder(panel, folder: str, name: str) -> None:
+    new = _said(panel, panel.library.rename_folder, folder, name)
+    if new and new != folder:
+        shut = folded(panel)
+        moved = {f for f in shut if f == folder or f.startswith(folder + "/")}
+        for f in moved:
+            shut.discard(f)
+            shut.add(new + f[len(folder):])
+        if moved:
+            _folds_dirty(panel, clicks={**{f: False for f in moved},
+                                        **{new + f[len(folder):]: True for f in moved}})
+    _changed(panel)
+
+
+# ---- the folds: this Mac's, in ui.json beside the pane's (ui_pane) ----
+
+def _machine(panel):
+    lib = panel.library
+    try:
+        return lib._machine()
+    except (AttributeError, OSError):
+        return None
+
+
+def folded(panel) -> set[str]:
+    """The folders folded on this Mac — ``presets.folded`` in
+    ``<machine>/ui.json`` (`ui_pane.read_doc`). Read once the machine is
+    known, and again if it changes (review of #349, as `ui_pane.opened`:
+    a draw before the library attached must not stand for the file), any
+    fold clicked before that laid over what the file says
+    (``fold_clicks``), so the next write keeps both. A folder not named
+    there is open."""
+    st = _state(panel)
+    machine = _machine(panel)
+    if "folded" not in st or (machine is not None and st.get("folded_from") != machine):
+        held = None
+        if machine is not None:
+            from . import ui_pane  # (late: ui_pane imports this module)
+            sec = ui_pane.read_doc(machine).get(UI_KEY)
+            held = sec.get("folded") if isinstance(sec, dict) else None
+        got = {f for f in held if isinstance(f, str)} if isinstance(held, list) else set()
+        for f, shut in (st.get("fold_clicks") or {}).items():
+            (got.add if shut else got.discard)(f)
+        st["folded"], st["folded_from"] = got, machine
+    return st["folded"]
+
+
+def set_folded(panel, folder: str, shut: bool, now: float | None = None) -> None:
+    """Fold or unfold `folder`; kept in this Mac's ui.json `WRITE_AFTER_S`
+    after the last change (`flush_folds`), as the pane's folds are."""
+    s = folded(panel)
+    if (folder in s) == shut:
+        return
+    (s.add if shut else s.discard)(folder)
+    _folds_dirty(panel, now, {folder: shut})
+
+
+def _folds_dirty(panel, now: float | None = None, clicks: dict | None = None) -> None:
+    st = _state(panel)
+    st.setdefault("fold_clicks", {}).update(clicks or {})
+    st["folds_dirty_at"] = time.monotonic() if now is None else now
+
+
+def flush_folds(panel, now: float | None = None, force: bool = False) -> bool:
+    """Write ``presets.folded`` (`ui_pane.write_key`, the rest of ui.json
+    as it was) once `ui_pane.WRITE_AFTER_S` has passed since the last fold
+    (`force`: now). Called each frame the list draws; True when it wrote."""
+    from . import ui_pane
+    st = _state(panel)
+    at = st.get("folds_dirty_at")
+    machine = _machine(panel)
+    if at is None or machine is None:
+        return False
+    now = time.monotonic() if now is None else now
+    if not force and now - at < ui_pane.WRITE_AFTER_S:
+        return False
+    ui_pane.write_key(machine, UI_KEY, {"folded": sorted(folded(panel), key=str.lower)},
+                      "presets")
+    st.pop("folds_dirty_at", None)
+    st.pop("fold_clicks", None)
+    return True
 
 
 def _trash_popup(panel, bin_: list) -> None:

@@ -3,8 +3,9 @@
 
     uv run python tools/move_library.py DEST [--from HOME] [--dry-run]
 
-Copies the library — ``presets/``, ``projects/`` and every module-preset
-group folder (``fx/``, ``dream/``, ``band/`` …) — from HOME (default:
+Copies the library — ``presets/`` every folder down (plan 48: hidden
+folders skipped), ``projects/`` and every module-preset group folder
+(``fx/``, ``dream/``, ``band/`` …) — from HOME (default:
 ``$HYPERSPACE_HOME``, else ``~/Hyperspace``) into DEST, which it creates if
 missing. Then add the two lines it prints to HOME's config.toml
 and start Hyperspace: the library is read and written in DEST from then on.
@@ -29,22 +30,38 @@ HERE = Path(__file__).resolve().parent.parent
 SKIP_DIRS = {"weights", "trash", "bindings"}
 
 
-def _home() -> Path:
-    sys.path.insert(0, str(HERE))
+def _library():
+    """The app's `hyperspace.library`, imported late (the tool runs from
+    anywhere): the repo put on ``sys.path`` once."""
+    if str(HERE) not in sys.path:
+        sys.path.insert(0, str(HERE))
     from hyperspace import library
-    return Path(library.home())
+    return library
+
+
+def _home() -> Path:
+    return Path(_library().home())
+
+
+def _walk(folder: Path) -> list[Path]:
+    """`library._walk`: every ``*.json`` under `folder`, every folder down,
+    less hidden folders and never through a link to a folder (plan 48)."""
+    return _library()._walk(folder)
 
 
 def files(root: Path) -> list[Path]:
     """The library documents under `root`, relative: every ``<folder>/*.json``
-    one level down — backups, dot-files and the machine's folders left out."""
+    one level down, and ``presets/`` every folder down as the library lists
+    it (plan 48 stage 2: hidden folders skipped) — backups, dot-files and
+    the machine's folders left out."""
     out: list[Path] = []
     if not root.is_dir():
         return out
     for folder in sorted(p for p in root.iterdir() if p.is_dir()):
         if folder.name in SKIP_DIRS or folder.name.startswith("."):
             continue
-        for f in sorted(folder.glob("*.json")):
+        found = _walk(folder) if folder.name == "presets" else sorted(folder.glob("*.json"))
+        for f in found:
             if f.name.startswith(".") or ".bak-" in f.name or not f.is_file():
                 continue
             out.append(f.relative_to(root))
