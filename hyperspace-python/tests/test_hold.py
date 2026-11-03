@@ -121,6 +121,17 @@ def test_the_turns_speed_and_planes_are_not_held(rig):
     assert "view.speed" not in rig.hold.changed()
 
 
+@pytest.mark.parametrize("pid", ("view.inst_rate", "view.media_rate"))
+def test_the_field_and_media_rates_are_one_for_both(rig, pid):
+    """K3 (row 578): integrated once a frame into the view's phases, before
+    either draw, as the turn's speed is — held, they would draw nothing
+    different and only count on the red line."""
+    rig.hold.engage()
+    assert pid not in rig.hold.values
+    rig.reg[pid].set(rig.reg[pid].base * 0.5 + 0.7)
+    assert pid not in rig.hold.changed()
+
+
 def test_a_landing_while_held_keeps_the_programs_effects_switches_and_resizes(rig):
     """Plan 38 B3 (C1): a look with an effect, a switch and a resize held;
     a blank graph lands (as `new` does). The effect instance, its params,

@@ -69,6 +69,7 @@ def render(ctx, s: ViewState) -> np.ndarray:
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H), 4)])
     fbo.use()
     ctx.viewport = (0, 0, W, H)
+    s.seed_phases(T)          # K3: the field's phase at the pinned clock
     r.draw(s, W, H, t_now=T)
     img = np.frombuffer(fbo.read(components=3), dtype=np.uint8).reshape(H, W, 3)[::-1].copy()
     fbo.release()

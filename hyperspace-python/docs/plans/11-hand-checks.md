@@ -6630,15 +6630,17 @@ where the file said 0.3 before (the tool's line: `push 0.3 → 0.0737 about
 0.9`).
 ## AR. Continuity: `@clock`, and no shader multiplies time by a param
 Register row 560 (the owner, 2026-11-02; wave 0 K1, `wave0/k1-clock-directive`).
-K1 is the framework only — the directive, the lint and the harness; **no
-shipped effect is ported yet**, so this check waits for K2 (warp and
-tripcolour on `@clock`). Until then the headless proof is
-`tests/test_fx_clock.py` (a synthetic `@clock` effect beside its
-`u_phase * u_rate` twin through the UV harness; warp's drift as a strict
-xfail) and `tests/test_shader_time_lint.py` (the allowlist of today's
-offenders).
+K1 is the framework — the directive, the lint and the harness; K2
+(register row 577) ported warp (drift and scale, one clock at drift ×
+scale) and tripcolour (pulse) onto `@clock`, so this check can be run
+now (group AY, check 434, is the same nudges an hour in). The headless
+proof is `tests/test_fx_clock.py` (a synthetic `@clock` effect beside its
+`u_phase * u_rate` twin through the UV harness; warp's drift and
+tripcolour's pulse stepping continuously; warp's scale re-zooming and no
+longer jumping) and `tests/test_shader_time_lint.py` (the allowlist now
+names only RINGS × colour, K4).
 **419. A knob step on a `@clock` param changes the rate, not the place.** (laptop; after K2; music helps)
-Headless: `tests/test_fx_clock.py` (`test_a_clocked_rate_step_is_continuous_and_the_twins_jumps`, `test_warps_speed_step_is_continuous`), `tests/test_shader_time_lint.py`.
+Headless: `tests/test_fx_clock.py` (`test_a_clocked_rate_step_is_continuous_and_the_twins_jumps`, `test_warps_speed_step_is_continuous`, `test_the_ported_rate_params_step_continuously`, `test_warps_scale_step_re_zooms_and_no_longer_jumps`), `tests/test_shader_time_lint.py`.
 1. Load a preset with Trip warp on (`party-trip`, say) and let it run — the
    longer the better; an hour is the show's shape. Note roughly where the
    warp's ripples sit over the shape.
@@ -6648,15 +6650,192 @@ Headless: `tests/test_fx_clock.py` (`test_a_clocked_rate_step_is_continuous_and_
 3. On Trip colour, nudge Pulse one step while white is on screen.
 4. Open `hyperspace/shaders/fx/warp.glsl`: the `// @clock` lines are at the
    top; nothing in the body multiplies `u_phase` or `u_time` by a `u_` param.
-*Pass:* in 2 each nudge makes the ripples slide faster or finer from where
-they are — nothing re-draws, nothing lurches, the same as Speed; in 3 the
+*Pass:* in 2 a Drift nudge makes the ripples slide faster from where they
+are, the same as Speed; a Scale nudge makes them a touch finer about the
+centre (the rim moves a little more than the middle, the size of the
+nudge) and they slide on — nothing re-draws, nothing lurches; in 3 the
 green pulse keeps its beat and only quickens, no flash; 4 reads as said.
 *Fail:* a nudge on Drift or Scale lands the field somewhere else (the
 2026-10-30 show) — the port multiplies a time by a param somewhere the
 lint's allowlist still names, or a `@clock`'s period is set where the
 shader's use of it is not periodic (a scrolled noise field must run on,
-unwrapped). Before K2 lands, 2 and 3 *do* lurch on Drift, Scale and Pulse:
-that is the recorded fault, not a regression.
+unwrapped). On a build before K2, 2 and 3 *do* lurch on Drift, Scale and
+Pulse: that is the recorded fault K2 fixed.
+
+## AY. Continuity K2: warp and tripcolour on `@clock`
+Register row 577 (wave 1 K2, `wave1/k2`). Warp's scroll is one `@clock`,
+`u_drift_t`, at speed × drift × scale (the scroll counted in noise cells,
+so neither knob moves where the field is); tripcolour's sine is
+`u_pulse_t` at speed × pulse, wrapped to 2π. Check 419 is the first
+look; this one is the show's shape — an hour in, where the old build
+lurched by whole screens.
+**434. An hour in, warp's Drift and Scale and tripcolour's Pulse nudge without a lurch.** (laptop or the rig; an hour of running; music helps)
+Headless: `tests/test_fx_clock.py` (`test_the_ported_rate_params_step_continuously`, `test_warps_scale_step_re_zooms_and_no_longer_jumps`, the harness an hour in), `tests/test_shader_time_lint.py`.
+1. Load `party-noita` (Trip warp and Trip colour both on) and leave it
+   running for an hour — a long set, or the laptop left on with the
+   display awake.
+2. On FX, open Trip warp. Nudge Drift one step up, then one down; then
+   Scale one step up, then one down. Watch the rim, where the warp is
+   strongest.
+3. Open Trip colour and nudge Pulse one step while white is on screen.
+4. With hands, push the right hand forward and back (the preset routes
+   the hand's depth to Scale) and raise the left (Drift).
+*Pass:* in 2 Drift changes how fast the ripples slide and nothing else;
+Scale makes them a touch finer or coarser about the centre and they slide
+on from where they are; in 3 the green pulse keeps its beat and only
+quickens or slows; in 4 the ripples breathe with the hands, no snaps.
+Each the same as in the first minute.
+*Fail:* any nudge an hour in throws the ripples somewhere else or flashes
+the green — the show's fault (2026-10-30) — or the pulse or drift stops
+dead after a nudge (a clock that did not move).
+
+## AW. Decks D1: one `Deck`, nothing changes (plan 44)
+Register row 571, 2026-11-02. Headless: `tests/test_deck.py` (the old
+construction order and `Deck.build` land every corpus preset to the same
+state; `main` builds one deck; `frame`'s order unchanged) and the goldens.
+**430. A launch on the build does everything it did.** (Mac, the rig's
+config, the APC40 plugged in)
+1. Quit and launch (a restart: this build adds a module and a field on
+   live objects, so a hot reload of the old process is not enough). The
+   startup preset lands as before.
+2. PRESETS: load another preset. Turn a knob on the APC40 and drag a
+   slider on the panel; ⌘Z twice, ⇧⌘Z once.
+3. HOLD, change a param on the panel, TAKE; HOLD again, change it, DROP.
+4. Open `hyperspace/deck.py`, add a blank line, save; then the same in
+   `hyperspace/routing.py`. Turn a knob after each.
+5. SYSTEM: the hot reload line.
+*Pass:* (1) the picture, the PRESETS strip and the dirty dot are as on
+the previous build; (2) the preset lands, the knob and the slider move
+the picture, ⌘Z takes back the slider then the knob, ⇧⌘Z puts the slider
+back, the footer names each step; (3) the projector stays on the program
+while held, TAKE shows the change, DROP puts it back, as before; (4) no
+red banner, no error toast, the knob still moves the picture after each
+save; (5) SYSTEM shows "hot: deck …" and then "hot: routing …" with the
+time. Fail: anything that differs from the previous build — a step
+missing from the undo footer, a knob that stops after a save, or a hot
+reload error naming `deck`.
+
+## AZ. Continuity: the media path's and the field's rates (wave 1 K3)
+Register row 578 (under row 560; wave 1 K3, `wave1/k3`). The rates are
+integrated by the host (`ViewState.integrate`): the draw reads a phase,
+never t × rate. Restart the app after pulling (a new field on the live
+`ViewState`).
+**435. A nudge on the media rate or the field rate changes the speed, not the place.** (laptop; any time, but the longer the app has run the better)
+Headless: `tests/test_view_phase.py` (`test_a_knob_step_on_the_field_rate_moves_no_copy_further_than_one_frame`, `test_a_rate_step_changes_the_slope_not_the_value`, `test_the_draw_reads_the_phase_never_the_rate`).
+1. Load a preset with a field in motion (`party-field` or `ember-orbit`:
+   several copies, motion ORBIT or WAVE) and let it run — ten minutes at
+   least; the show's shape is an hour.
+2. Nudge **Field rate** (`view.inst_rate`, the FIELD row; APC40 knob
+   0x35 on the preset layer) one step up, then one down, then sweep it
+   slowly to the top and back to 1.
+3. Put a media channel on the faces (a still on `pattern.media`), set its
+   path to orbit, then figure-8, then sway, and nudge **Media rate**
+   (`view.media_rate`) one step each way in each.
+4. Turn **Media rate** to 0: the picture stops where it is; back up: it
+   moves on from there.
+5. Under hold (plan 38): engage HOLD and nudge Field rate on the preview.
+   Until plan 44's per-deck `ViewState`, a Field rate or Media rate move
+   on the preview also moves the projector — its copies quicken too —
+   and the hold's red line stays silent about it. That is the ruled
+   behaviour (row 578), the same as the turn's speed, not a fault.
+*Pass:* in 2 and 3 every nudge makes the motion quicken or slow from
+where it is — no copy and no picture leaps across the screen, the same as
+nudging the turn's speed; in 4 the picture parks and resumes in place.
+*Fail:* a nudge lands the copies or the picture somewhere else (the
+2026-10-30 show's fault): the draw reads a rate again
+(`tests/test_view_phase.py`'s pin should have caught it), or a phase
+wraps at a period one of its uses does not share (`view.INST_PERIOD`,
+`MEDIA_PERIOD`).
+
+## BB. Video audio 2 of 4: the mixer, forward play (plan 45 V2)
+Decision register rows 581–583. The play-audio toggle and the gain are
+`media.<c>.audio` and `media.<c>.gain` (MEDIA, on the selected channel's
+source line; GRAPH, the channel node's side pane). The sound is read at
+the transport's position each frame with no position of its own, and the
+audio and display clocks are never locked: **an occasional click at rate
+1 is expected until V4 reads sequentially and slews toward the
+transport**; at any other rate it stutters, and a hold, a `once` clip
+parked at its end, reverse and pingpong's way back are silent —
+varispeed is V4's. Judge V2 at rate 1, forward.
+**437. Play audio on a show video: the sound follows the picture.** (Mac, the speakers or headphones, a show video with a soundtrack)
+Headless: `tests/test_media_mixer.py` (`test_the_callback_reads_the_transports_stepped_position_and_moves_nothing`,
+`test_a_real_clip_through_the_channel_and_the_mixer`).
+1. Slot a show video on channel A and wire it to an output; MEDIA, select
+   A: tick `audio`. The video's sound plays from the speakers.
+2. Let it play 30 s at rate 1, watching a cut or a hit in the picture.
+3. Scrub `pos` to the middle and let go; then to near the start.
+4. Move `gain` to the bottom (off), to −6 dB, to the notch (0 dB), to +6 dB.
+5. Set `rate` to 0, then 2, then back to 1.
+*Pass:* the sound plays with the picture at rate 1 — a hit in the picture
+is heard with it, no audible drift over 30 s; after each scrub the sound
+lands where the picture is within a fraction of a second (a far scrub on
+a film longer than two minutes may be silent for a moment while its
+window is read); the gain is silent at the bottom, half as loud at −6 dB,
+louder at +6 dB; at rate 0 silence, at rate 2 a stutter (expected: V4),
+at rate 1 again as before — an occasional click is expected (V4). SYSTEM
+shows `media sound: open · 1 playing`. Fail: a steady buzz, or clicks
+more than now and then at rate 1, point at the frame rate (the SYSTEM
+frame time well above 16.7 ms) or the block; sound late against
+the picture by more than a frame or two points at the output latency.
+**438. Two channels summed; one off goes silent; the analyzer untouched.** (Mac, two show videos with distinct soundtracks, a WAV file)
+Headless: `tests/test_media_mixer.py` (`test_the_callback_sums_each_heard_channel_read_at_its_playhead_times_its_gain`,
+`test_the_toggle_enables_and_disables_exactly_on_a_flip`, `test_the_sum_is_clipped_at_one`).
+1. AUDIO: play a WAV file through the analyzer's file transport.
+2. Slot a video on A and another on B; tick `audio` on both.
+3. Untick A's `audio`; tick it again; change B's slot to another video.
+*Pass:* both soundtracks heard together, each at its own position; A off
+is A silent at once and B plays on; A on again is A back where its
+picture is; B's slot change brings the new video's sound and drops the
+old; the WAV plays and the bands follow it exactly as before this build
+(the mixer is not the analyzer's source until V3). Two loud tracks
+summed may clip — the gains are there for it.
+**439. Memory and Bytes Read with audio on: the window policy holds; off releases.** (Mac, a show video of a few minutes and a film longer than two minutes, Activity Monitor)
+Headless: `tests/test_media_audio.py` (the window policy), `tests/test_media_mixer.py`
+(`test_the_stream_opens_on_the_first_toggle_and_not_before`).
+1. Launch; note memory and Bytes Read. Slot the short video, play it with
+   `audio` off for 30 s: neither moves beyond check 421's.
+2. Tick `audio`: note memory and Bytes Read.
+3. Slot the film, tick `audio`, scrub to its middle and back.
+4. Untick `audio` on both; wait 5 s.
+*Pass:* with `audio` off nothing is read for sound (as check 421); on, the
+short clip's track is read once (memory up by about 384 kB a second of
+it, Bytes Read up once), the film holds one window (memory up by about
+46 MB, twice that for a moment while a window is re-made after a far
+scrub); unticked, that memory is let go; SYSTEM's `media sound` line
+appears only once a toggle has been on and stays `open` after. Fail:
+memory climbing while the film plays at rate 1 points at the window
+(`Soundtrack._decode`); memory not falling when unticked points at the
+disable not reaching the soundtrack (it runs on the media closer).
+
+## BA. Continuity K4: RINGS' colour, and the knobs that scale space
+Register rows 579–580 (wave 1 K4, `wave1/k4`). RINGS' colour no longer
+scales the hue drift; glimmer, wobble and fractals were measured and left
+as they are — their size, frequency and cells knobs change a shape by the
+same amount at any hour.
+**436. RINGS' colour and the three effects' knobs, nudged an hour in, re-land nothing.** (laptop; an hour of running, or the longer the better; music helps)
+Headless: `tests/test_step_continuity.py` (every effect's every knob and
+every pattern's every input but SPEED, late against early),
+`tests/test_shader_time_lint.py` (no `("patterns", "m_colour")` entry).
+1. Load a preset on the RINGS pattern (`dial`, `inverse-halo` or
+   `party-acid`) and let it run an hour. Note the colours on the rings.
+2. On FACES, nudge COLOUR one step up, then one down. With music on,
+   let the UPR lane move it (the factory route puts it on COLOUR).
+3. Switch Glimmer, Wobble and Fractals on (FX), each at an amount that
+   shows, still an hour in. Nudge glimmer's Size, wobble's Frequency
+   and fractals' Cells and Size one step each, up and down.
+*Pass:* in 2 the hues along the rings spread or close a little about
+where they were and keep drifting at the same pace — no flash, no jump
+round the wheel, the same nudge as a minute into the set; in 3 each nudge
+is a small zoom or a change of pitch from where the picture is — the
+stars stay the same stars, the lattice the same lattice, the same size
+of change as in the first minute (all three zoom about the frame's
+bottom-left corner, so the far side moves most: that is the look, not
+the fault).
+*Fail:* in 2 a nudge turns the colours somewhere else, more the longer
+the set has run (the pre-K4 RINGS: an hour in, a detent was most of a
+palette cycle), or with music the rings' colours flicker on every flare;
+in 3 a nudge throws the stars, waves or lattice to a new place that it
+would not have at minute one.
 
 ## BC. Preset folders, stage 1 (plan 48)
 Register rows 584–588, 2026-11-02. Headless:

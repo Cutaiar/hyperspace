@@ -150,6 +150,7 @@ def _shots(args) -> None:
         clock.t = k / 60
         io.poll(1 / 60)
         s.integrate(1 / 60)
+        s.seed_phases(clock.t)  # K3: the field's and media path's phases at the pinned clock
         fbo.use()
         ctx.viewport = (0, 0, w, h)
         r.draw(s, w, h, t_now=clock.t)

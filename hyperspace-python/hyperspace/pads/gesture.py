@@ -184,6 +184,7 @@ class Motion:
     pitch: float = 0.0
     yaw: float = 0.0
     spin: tuple[float, float, float] = (0.0, 0.0, 0.0)     # deg/s about z (roll), x (pitch), y (yaw)
+    gyro: tuple[float, float, float] = (0.0, 0.0, 0.0)     # the last reading, deg/s about x, y, z (totem.py)
     shake: float = 0.0
     energy: float = 0.0
     _since_shake: float = 1e9
@@ -192,6 +193,7 @@ class Motion:
         dt = max(0.0, float(dt))
         ax, ay, az = (float(v) for v in accel)
         gx, gy, gz = (float(v) for v in gyro)
+        self.gyro = (gx, gy, gz)
         g = self.gravity
         if g is None:
             g = (ax, ay, az)

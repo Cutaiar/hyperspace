@@ -65,6 +65,7 @@ def scene(ctx, dream):
 
 def frame(ctx, fbo, r, s, t):
     s.integrate(1 / 60)
+    s.seed_phases(t)  # K3: the field's and media path's phases at the pinned clock
     fbo.use()
     ctx.viewport = (0, 0, W, H)
     r.draw(s, W, H, t_now=t)

@@ -732,6 +732,10 @@ class Panel:
         self.hand_settings = None  # set by app.py (hands.HandSettings): the HANDS page
         self.clock = None          # set by app.py (tempo.Clock): the LFO page's beat light
         self.lfos = None           # set by app.py (lfo.LFOs): the LFO page's scopes
+        # set by app.py (deck.Deck, plan 44 D1): the deck the handles above
+        # (`reg`, `router`, `learn`, `undo`, `lfos`, `hold` …) are assigned
+        # from; nothing reads through it until D5
+        self.deck = None
         self._register_panel_params()
 
     def close(self) -> None:
@@ -2509,6 +2513,11 @@ class Panel:
         thumbs = ui_graph.thumbnail_line(self)    # plan 37 C1: the GRAPH page's thumbnails
         if thumbs:
             imgui.text_disabled(thumbs)
+        sound, warn = ui_media.mixer_line(self)   # plan 45 V2: the media mixer's stream
+        if sound and warn:
+            imgui.text_colored(WARN, sound)
+        elif sound:
+            imgui.text_disabled(sound)
         imgui.spacing()
         self._section("devices")
         self._device_lines()

@@ -2819,7 +2819,7 @@ class Renderer:
             put("u_bmp_alpha", float(s.media_alpha))
             # the layer's own path about the face centre — independent
             # of the instance-grid motion
-            ph = t * s.media_rate
+            ph = float(s.media_phase)    # K3: media_rate integrated by the host
             if s.media_mode == 1:      # orbit
                 ox, oy = math.cos(ph), math.sin(ph)
             elif s.media_mode == 2:    # figure-8
@@ -3183,7 +3183,7 @@ class Renderer:
             return
         # the copies: where each goes, how big, how bright — far to near,
         # those wholly off screen dropped (`_copies_of`)
-        inst = self._copies_of(s, w, h, t_m, P, vp, dpr, legacy)
+        inst = self._copies_of(s, w, h, P, vp, dpr, legacy)
         if not len(inst):
             return                     # every copy is off screen: the ground alone
         self._ibuf.orphan(inst.nbytes)
@@ -3357,14 +3357,14 @@ class Renderer:
         prog["u_model"].write(mats[1])
         prog["u_depth_alpha"].value = depth_alpha
 
-    def _field(self, s: ViewState, w: int, h: int, t: float) -> np.ndarray:
+    def _field(self, s: ViewState, w: int, h: int) -> np.ndarray:
         """The copies this scene pass lays out: `field.field`'s rows
         (centre px, scale, alpha), far to near, none culled — the camera's
         pan handed over in px through the default eye (`CELL`). Its own
         method so a test can see what the pass was handed."""
-        return field(_PanPx(s, SCALE * min(w, h)), w, h, t)
+        return field(_PanPx(s, SCALE * min(w, h)), w, h)
 
-    def _legacy_field(self, s: ViewState, t: float) -> np.ndarray:
+    def _legacy_field(self, s: ViewState) -> np.ndarray:
         """The copies of a flat layout with Fit off, as the field was laid out
         before the instanced draws — the same float arithmetic: (m, 4) rows
         of (x, y) in the world at scale 1 (a cell CELL shape radii, y up),
@@ -3386,7 +3386,7 @@ class Renderer:
                 # trigonometric motion over the field: each instance's
                 # phase comes from its position, so the field moves as
                 # one figure (field._motion's flat formulas)
-                ph = t * s.inst_rate
+                ph = float(s.inst_phase)    # K3: inst_rate integrated by the host
                 if s.inst_motion == 1:    # ORBIT — circles in a traveling wave
                     th = ph + (gx + gy) * 0.9
                     dx, dy = np.cos(th), np.sin(th)
@@ -3404,7 +3404,7 @@ class Renderer:
             inst[:, 1] = (-oy).astype(np.float32)
         return inst
 
-    def _copies_of(self, s: ViewState, w: int, h: int, t: float, P: np.ndarray,
+    def _copies_of(self, s: ViewState, w: int, h: int, P: np.ndarray,
                    vp: np.ndarray, dpr: float, legacy: bool = False) -> np.ndarray:
         """The instance rows for the scene pass, (m, 4) float32: each copy's
         centre in the world (x, y on the plane through the origin, y up),
@@ -3419,7 +3419,7 @@ class Renderer:
         px a unit), so the field keeps its world spacing whatever the eye;
         the camera is in the rows and the world transform is the identity."""
         if legacy:
-            inst = self._legacy_field(s, t)
+            inst = self._legacy_field(s)
             if not len(inst):
                 return np.zeros((0, 4), dtype=np.float32)
             # where the copies land in the world, for the cull alone
@@ -3429,7 +3429,7 @@ class Renderer:
             seen[:, 1] = inst[:, 1] * zoom - float(s.pan[1])
             seen[:, 2] = zoom
         else:
-            rows = self._field(s, w, h, t)
+            rows = self._field(s, w, h)
             if not len(rows):
                 return np.zeros((0, 4), dtype=np.float32)
             ppu0 = SCALE * min(w, h)

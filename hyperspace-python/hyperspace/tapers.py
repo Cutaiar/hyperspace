@@ -180,12 +180,24 @@ T_DRIVE = exp_zero(100, 160)   # master audio drive: off, 0.03×–8.00×
 T_DYN = exp_zero(80, 120)      # dynamics: bypass, then 0.06×–4.00×
 T_BRIGHT = exp_pure(60, 100)   # brightness: 0.13×–4.00×, never off
 T_SPEED = exp_zero(120, 160)   # rotation speed: stop, then 0.016–4.00 rad/s
+# a media channel's sound (plan 45 V2): off, then 0.03×–2.00× (−30…+6 dB), unity notch at 100
+T_MEDIA_GAIN = exp_zero(100, 120)
 
 
 # ---- readout formatters ----
 
 def fmt_gain(v: float) -> str:
     return "off" if v <= 0 else f"{v:.2f}×"
+
+
+def fmt_level(v: float) -> str:
+    """A linear gain read in dB: "off", "−6.0 dB", "0.0 dB", "+3.0 dB"."""
+    if not v > 0:
+        return "off"
+    db = 20 * math.log10(v)
+    if abs(db) < 0.05:
+        return "0.0 dB"
+    return f"{'+' if db > 0 else '−'}{abs(db):.1f} dB"
 
 
 def fmt_db(v: float) -> str:
