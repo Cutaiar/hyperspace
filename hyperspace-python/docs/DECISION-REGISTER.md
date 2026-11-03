@@ -630,6 +630,11 @@ here; overturn → the change, then the same.
 | 594 | Plan 45 V3, the analyzer listens to the mix: a third source, `mix`, beside `mic` and `file` — the mixer's callback pushes the block it just wrote (after the gains and after the ±1 clip: what the room hears) into the analyzer's ring as mono, the mean of L and R, at 48 kHz; a callback with no voice pushes zeros; the push is one copy into a kept buffer, counts nothing and moves nothing, and the analyzer drains the ring once a frame as it drains the mic's | 446, 447 | (rec) — built as recommended (V3) |
 | 595 | Plan 45 V3, picking it: `audio.mix` ("Video sound"), a toggle beside `audio.mic` on AUDIO ("Listen to video sound"), not persisted, like the mic's; it opens no stream and grabs no input device, and opens nothing on the mixer either (the stream opens as V2 says, the first channel heard); until a channel is heard, or once the mixer has not pushed for `MIX_IDLE_FRAMES` = 6 frames (a stream never opened, failed, stopped or stalled), the bands read silence (the analyser's window zeroed each frame), and a mixer `error: …` is shown in warning colour beside the source's label; declared only when the host's `MediaState` is passed (a stand-in's mixer is fed by nobody); no config key — none names the mic or the file either | 446, 448 | (rec) — built as recommended (V3) |
 | 596 | Plan 45 V3, a hot reload and a failure: the engine's and the mixer's new fields are read with defaults (`getattr`, `MediaState._mixer()`'s fill-in), so a hot reload keeps the live stream and the live capture; the `audio.mix` toggle is a registry param, built at launch, so the button needs one restart; a ring push that raises is counted in the mixer's own `tap_errors` (SYSTEM: `analyzer push errors`, apart from voice read errors) and costs the analyzer one block, never the sound already written | 448 | (rec) — built as recommended (V3) |
+| 597 | Plan 49 U1: GRAPH's side pane always on, as folding sections — selection (`ui_graph._side`, words when nothing is selected), presets, lookback, faces, analyzer — each body the function its page draws (`Panel._page_presets`, `ui_lookback.page`, `ui_patterns.page`, `Panel._page_analyzer`), named in its row of `ui_pane.SECTIONS`; a widget keeps its page's label (`##<param id>`) and each body is drawn under `push_id("pane.<key>")`; headers `##pane.<key>`; every page and the rail unchanged | 449, 451 | (rec) — pending the owner; built as recommended |
+| 598 | Plan 49 U1: which sections are open is this Mac's, one state per layout in `<machine>/ui.json` beside `graph.side_w` — `pane.open` beside the canvas (selection and presets open at first), `pane.below` in the narrow band (selection alone) — written atomically half a second after the last click; only a click unfolds, a selection never does | 450, 452 | (rec) — pending the owner; built as recommended |
+| 599 | Plan 49 U1: beside the canvas open sections share the pane's height evenly, never under 160 px (past that the pane scrolls); in the narrow page's band (#266's) the headers are one row and the open sections share the rest with no floor; each body scrolls by itself; the side grip is a hit test with no item; the details beside / below chip shows on every narrow page | 452, 454 | (rec) — pending the owner; built as recommended |
+| 600 | Plan 49 U1: in a narrow pane the preset strip's name button is squeezed to the room beside its chips and the devices-missing chip (never under 48 px; unchanged on every page; that chip on its own row when even then there is no room) and the show line's chips wrap; the held projector's inset sits left of the pane | 453, 455 | (rec) — pending the owner; built as recommended |
+| 601 | Plan 49 U1: section titles follow the rail's words (`lookback`, not `dream`); the lookback section draws the page as it is — its look-back / dream / shared split is stage 2's to redraw (the owner, 2026-11-02: "a horrid representation") | 449 | (rec) — pending the owner; built as recommended |
 | 609 | Wave 2 T3: SEND B held is FINE — while it is down every APC knob (a ring row, `abs`, on a continuous non-integer param) moves its param a tenth as far, read relatively and written between detents; its LED lit while held; faders, discrete targets and relative rows stay coarse; the button is the adapter's (`apc40.FINE`, `midi.MidiIO`), not a map row, and gives way to any row on SEND B | 459 | (rec) — the build's, for the owner and Dillon to keep |
 | 610 | Wave 2 T3: letting go of FINE re-sends the ring of every knob it moved, so the encoder is re-based onto the param and the next coarse turn continues from there (plan 13 D7's re-base; soft pickup where rings do not re-base); `desk.fine` is the rig's (group desk, never saved, not modulatable) and a reconnect lets go of it | 460 | (rec) — the build's, for the owner and Dillon to keep |
 
@@ -10690,3 +10695,109 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   after it lands on the param's own detent grid again (up to one detent
   from the fine value).
 - **Judge it.** Check 460.
+
+## Wave 2 — the panel fold, stage 1 (plan 49, rows 597–601)
+
+### 597. The side pane always on, as folding sections
+- **Asked.** The build-order doc's row "Graph always on, pages fold into
+  the side pane", stage 1 (U1); the owner gave the fold to us on
+  2026-11-03.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** On GRAPH the pane (#266's, its width as built) is
+  drawn every frame and holds five sections (`ui_pane.SECTIONS`):
+  selection, presets, lookback, faces, analyzer. Each body is the
+  function its page draws — `Panel._page_presets`, `ui_lookback.page`,
+  `ui_patterns.page`, `Panel._page_analyzer` — named in the section's row
+  of `SECTIONS` (review fix 8: one row per section, no wrapper, no
+  dispatch to keep in step), so no page code is duplicated and the page
+  is the section at full height. A widget keeps its page's
+  label, so the panel driver, Learn's framing and the right-click menu
+  find it by the same id; each body sits under `push_id("pane.<key>")`
+  inside the pane's child, so imgui's ids stay unique when two sections
+  draw preset strips (`tests/test_ui_pane.py` checks every id with all
+  five open). The page and its section are never drawn in one frame.
+- **Other options.** A section that opens its page instead of drawing
+  it (no fold at all); copying each page's body into the pane (two
+  layouts to keep in step); the sections in a tab bar (one at a time, and
+  no shared height).
+- **To reverse.** `ui_graph.page` draws the pane only `if sel`, and calls
+  `_side` instead of `ui_pane.draw`.
+- **Rough edge.** The pages were laid out for the panel's width; in a
+  320 px pane some rows are tight (the FACES browser's chips, the
+  ANALYZER band strip). Stage 2 and the eye decide what needs a narrow
+  layout.
+- **Judge it.** 449, 451.
+
+### 598. The fold state is this Mac's
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** One state per layout in `<machine>/ui.json`, beside
+  `graph.side_w`: `pane.open` for the column beside the canvas
+  (selection and presets open, lookback, faces and analyzer folded — the
+  spectrogram and the thumbnails cost a draw each frame they are open)
+  and `pane.below` for the narrow page's band (selection alone: the band
+  is 240 px). `read_doc` / `write_doc` are `library._read_json` and the
+  atomic `library._write_text` (review fix 6), shared by `read_side` /
+  `write_side`. Read the first frame the machine is known — a library
+  attached after GRAPH first drew is read then (review fix 4), with any
+  fold clicked before it laid over the file's (`pane_clicks`, round 2). A click is
+  written `WRITE_AFTER_S` (0.5 s) after the last one (`ui_pane.flush`),
+  `ui_graph.close` writing what is left, as the width waits for the
+  drag's release. **Only a click unfolds** (review fix 7): a selection
+  leaves the fold alone — a folded selection's header names what is
+  selected — so a section folded on purpose stays folded and no
+  selection writes the file.
+- **Other options.** Saved in the show (then both Macs fight over it);
+  a new selection unfolding selection (built first: it undid a fold the
+  user had just made and wrote ui.json on the UI thread per selection);
+  one state for both layouts (the band cannot hold the column's
+  defaults).
+- **To reverse.** `DEFAULT_OPEN` / `DEFAULT_BELOW`; `WRITE_AFTER_S` to 0.
+- **Judge it.** 450, 452.
+
+### 599. Open sections share the pane's height
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** Beside the canvas the room under the five headers is
+  shared evenly by the open sections, each at least `MIN_BODY_H` (160
+  px; past that the pane scrolls), each body a child scrolling by itself
+  — so one open section has the whole pane, as a page has the whole
+  panel. A narrow page keeps #266's `BELOW_H` band under the canvas
+  (review fix 2): there the headers are one row of chips and the open
+  sections share the rest with no floor, so one open section has the
+  whole band less one row. The side grip is a hit test on the column's
+  left edge with no item (review fix 1: an `invisible_button` pinned to
+  the column's top grew its content by the scroll each frame once the
+  sections made it scroll). The details beside / below chip (shown
+  before only with a selection) shows on every narrow page.
+- **Other options.** Each body as tall as its content, the pane
+  scrolling (the presets list and the band editor fill whatever they
+  are given, so they would need a height anyway); a draggable split.
+- **To reverse.** `ui_pane.body_height`.
+- **Judge it.** 452, 454.
+
+### 600. Narrow strips; the projector inset beside the pane
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** The preset strip's name button is `name_w` where it
+  fits (every page, unchanged) and otherwise the room beside the arrows,
+  the dot, the presets strip's **N devices missing** chip
+  (`ui_graph.wants_chip_w`, review fix 5) and the chips, never under 48
+  px, its words cut to it (`ui_presets.strip_name_w`); where even a
+  48 px name leaves no room for that chip it goes on a row of its own
+  under the strip; the show line's open / save / as… / new
+  start a new row where they would pass the edge (`ui_presets._beside`).
+  The held projector's inset (plan 38) sits in the canvas's top-right
+  corner left of the pane, where it lay under the pane before whenever
+  something was selected; on a narrow page above the band under the
+  canvas, narrowed to fit the room left (`monitor_rect`, review round 2).
+- **To reverse.** `name_w()` back in `strip`; `same_line()` back in
+  `show_line`; `_monitor` given the whole canvas.
+- **Judge it.** 453, 455.
+
+### 601. Section titles follow the rail
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** The sections are named as the rail's pills are
+  (`lookback`, not the brief's `dream`), so a section reads as the page
+  it folds. The lookback section draws the LOOKBACK page as it is; the
+  owner's "a horrid representation of what's going on there" (2026-11-02,
+  the look-back / dream / shared split) is stage 2's to redraw, as the two
+  picture nodes plan 36 made of them.
+- **Judge it.** 449.
