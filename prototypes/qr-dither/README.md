@@ -1,0 +1,118 @@
+# QR Dither
+
+A tesseract drawn *in the data of a QR code*, not on top of one. Grab it, fold
+it through the fourth dimension, and the code re-derives itself every update —
+always scanning, always landing on `hyperspace.cutaiar.io`.
+
+![Seven dot styles over the same solved matrix](shots/styles.png)
+
+The trick is [Russ Cox's QArt](https://research.swtch.com/qart): Reed-Solomon
+encoding is linear over GF(2), so "make module (x, y) black" is a linear
+constraint and the message bits that satisfy it come out of Gaussian
+elimination. The picture is not overlaid and rescued by error correction the
+way every other QR-art tool works — the picture **is** the payload, with zero
+corrected errors. The filler lands in a `#fragment`, which the browser
+discards, so no DNS or redirect is involved.
+
+## Open it
+
+```sh
+cd web && python3 -m http.server 8777
+```
+
+then <http://127.0.0.1:8777>. Three tabs:
+
+- **live solver** — re-derives the whole code per update, **0.2 ms** a solve.
+- **sprite** — 216 precomputed frames, 106 KB, every one decode-verified.
+- **tiles** — the original stills, next to the plain `qr.svg` for comparison.
+
+A `file://` open will not work: the pages `fetch` their data.
+
+## What makes it live
+
+[`gen/basis.py`](gen/basis.py) is the whole idea. pyqart redoes the elimination
+for every image, because it sorts pivots by image contrast. But the generator
+basis of the code depends only on the block geometry — the image only supplies
+target *values*. Pin the pivot order and the whole thing collapses to
+
+```
+result = base XOR  SUM over pivots p of  (base_p != want_p) * u_p
+```
+
+with `{u_p}` computed once. `gen/export_js.py` ships that as a 358 KB blob and
+[`web/solver.js`](web/solver.js) does nothing per frame but XOR 30-word
+vectors. One 2-second factorisation buys unlimited sub-millisecond solves.
+
+Two things had to be pinned for the payload to survive: the data bits below the
+numeric filler (they carry the mode indicators and **the URL itself**) and the
+pad bits above `upper`. Leave them writable and you get beautiful hypercubes
+that decode to nothing. The numeric filler also needs each 10-bit group under
+1000, which pyqart handles by *retrying* — fatal for a live loop, so each
+group's top bit is pinned to zero instead, capping it at 511. Validity is
+structural: no control in the UI can break it, only make it harder to read.
+
+## The texture question
+
+![centre-first, even, and the clump family](shots/textures.png)
+
+A fixed pivot order is what buys the speed, and it is also what costs the look.
+pyqart's contrast ordering is *adaptive* — it spends freedom exactly where the
+drawing has edges, which is what grows the organic halo in the stills. A fixed
+order is guessing at a drawing it has not seen, so the leftover noise has to be
+placed blind. The `noise` control picks how:
+
+| order | leftovers land | reads as |
+| --- | --- | --- |
+| `gothic` | vertical low-frequency blobs | heavy strokes, line artefacts |
+| `streak` | strongly vertical cells | streaks down the grid |
+| `clump` | isotropic blobs | calmer gothic |
+| `even` | a low-discrepancy sequence, one module at a time | sparkle |
+| `centre` | all of it in a ring at the rim | crisp middle, noisy border |
+
+Measured as mean vertical run length of uncontrolled modules: `even` 1.29,
+`clump`/`gothic` 1.59, `streak` 1.63, against pyqart's 1.66.
+
+**Only `gothic` is committed.** The other four are 358 KB each and regenerate in
+about five seconds; the UI tells you the command when you click one that is
+missing:
+
+```sh
+uv run --with pyqart --with pillow --with numpy \
+  python3 gen/export_js.py --url https://hyperspace.cutaiar.io \
+  --order streak --out solver-streak
+```
+
+## The URL is baked in
+
+The data bits *are* the drawing, so the URL is part of the factorisation. Point
+it somewhere else and everything — blobs, sprite, stills — has to be rebuilt:
+
+```sh
+uv run --with pyqart --with pillow --with numpy --with zxing-cpp \
+  python3 gen/export_js.py --url https://example.com --order gothic --out solver-gothic
+uv run --with pyqart --with pillow --with numpy --with zxing-cpp \
+  python3 gen/sweep.py --url https://example.com --frames 36 --frames2 6 --tag sweep-2ax
+```
+
+## Verification
+
+Nothing here is trusted on looks. `gen/verify_affine.py` checks the affine
+reconstruction against zxing in Python; the browser's own output was pulled out
+of the running page and decoded the same way (24/24 orientations, 15/15 across
+all five textures, 16/16 across every dot and eye style, including a near-solid
+blob and a zero-margin bleed). `gen/stress.py` measures blur and glare
+tolerance against plain high-ECC codes — worth reading before printing anything,
+because QArt runs at **ECC L** by design and has roughly a third the absolute
+blur tolerance of a plain ECC-H code at the same physical size.
+
+## Shape and projection
+
+[`gen/tesseract.py`](gen/tesseract.py). Only axis-aligned projections survive
+module quantisation — a square grid renders horizontal, vertical and 45° edges
+cleanly and everything else as staircases, so rotated projections of the
+original sweep dissolved into blobs. The XW fold works because it is a
+perspective change, not an in-plane rotation. A hypercube turned 90° in XW maps
+its own vertex set onto itself, so 36 frames is a seamless loop. The drag
+planes follow the app's own mapping (x → XW, y → YW; x → XZ, y → YZ in 3D
+mode); `max_span()` fixes the scale across all orientations so the shape does
+not snap to refill the frame as it folds.

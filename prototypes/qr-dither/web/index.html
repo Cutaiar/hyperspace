@@ -1,0 +1,65 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>QR dither — bench</title>
+<style>
+  :root { --red:#ff2b2b; --dim:rgba(255,255,255,.42); --line:rgba(255,255,255,.14);
+          --mono: ui-monospace,"SF Mono","JetBrains Mono",Menlo,monospace; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:#000; color:#fff; font-family:var(--mono); }
+  body { display:flex; flex-direction:column; }
+  header { display:flex; align-items:center; gap:22px; padding:14px 22px;
+           border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  h1 { margin:0; font-size:12px; font-weight:500; letter-spacing:.3em;
+       text-transform:uppercase; color:var(--red); white-space:nowrap; }
+  nav { display:flex; gap:2px; border:1px solid var(--line); border-radius:7px; overflow:hidden; }
+  nav button { background:transparent; border:0; color:var(--dim); font:inherit; font-size:11px;
+               padding:8px 16px; cursor:pointer; letter-spacing:.05em; white-space:nowrap; }
+  nav button.on { background:var(--red); color:#000; font-weight:600; }
+  nav button:not(.on):hover { color:#fff; }
+  .blurb { font-size:10.5px; color:var(--dim); line-height:1.6; flex:1; min-width:240px; }
+  .blurb b { color:#fff; font-weight:500; }
+  main { flex:1; position:relative; }
+  iframe { position:absolute; inset:0; width:100%; height:100%; border:0; background:#000; }
+  iframe[hidden] { display:none !important; }
+</style>
+
+<header>
+  <h1>QR dither · bench</h1>
+  <nav>
+    <button data-k="live" class="on">live solver</button>
+    <button data-k="sprite">sprite</button>
+    <button data-k="tiles">tiles</button>
+  </nav>
+  <div class="blurb" id="blurb"></div>
+</header>
+<main id="main"></main>
+
+<script>
+const TABS = {
+  live:   { src:'live.html',
+            note:'Re-derives the code from scratch every frame, <b>0.2 ms</b> a solve. Fixed pivot order, so the leftover noise lands in a fixed pattern rather than following the drawing.' },
+  sprite: { src:'sprite.html',
+            note:'<b>216</b> precomputed frames, <b>106 KB</b>, every one decode-verified before you touch it. Two axes, no solver on the client.' },
+  tiles:  { src:'preview.html',
+            note:'The original stills, built by pyqart with <b>contrast-ordered</b> pivots — adaptive, so the halo follows the drawing. Prettier than either live order, and the reason is the 2 s factorisation.' },
+};
+const main = document.getElementById('main'), blurb = document.getElementById('blurb');
+const frames = {};
+function show(k) {
+  if (!frames[k]) {                       // lazy: do not fetch a tab until it is asked for
+    const f = document.createElement('iframe');
+    f.src = TABS[k].src; f.loading = 'lazy'; frames[k] = f; main.append(f);
+  }
+  for (const [key, f] of Object.entries(frames)) f.hidden = key !== k;
+  for (const b of document.querySelectorAll('nav button')) b.classList.toggle('on', b.dataset.k === k);
+  blurb.innerHTML = TABS[k].note;
+  location.hash = k;
+}
+for (const b of document.querySelectorAll('nav button')) b.onclick = () => show(b.dataset.k);
+// a hash change is same-document, so nothing re-runs without this
+addEventListener('hashchange', () => {
+  const k = location.hash.slice(1);
+  if (TABS[k]) show(k);
+});
+show(TABS[location.hash.slice(1)] ? location.hash.slice(1) : 'live');
+</script>

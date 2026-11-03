@@ -1,0 +1,100 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>QR dither — sprite</title>
+<style>
+  :root { --red:#ff2b2b; --dim:rgba(255,255,255,.42); --line:rgba(255,255,255,.14);
+          --mono: ui-monospace,"SF Mono","JetBrains Mono",Menlo,monospace; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; background:#000; color:#fff; font-family:var(--mono); }
+  body { min-height:100svh; display:flex; flex-direction:column; align-items:center;
+         justify-content:center; gap:22px; padding:32px 16px; }
+  h1 { margin:0; font-size:13px; font-weight:500; letter-spacing:.3em;
+       text-transform:uppercase; color:var(--red); }
+  #stage { touch-action:none; cursor:grab; line-height:0; border-radius:8px;
+           background:#fff; position:relative; }
+  #stage.grabbing { cursor:grabbing; }
+  canvas { display:block; border-radius:8px; image-rendering:pixelated;
+           width:430px; height:430px; }
+  @media (max-width:520px){ canvas{ width:88vw; height:88vw; } }
+  .row { display:flex; gap:20px; font-size:11px; color:var(--dim); letter-spacing:.05em;
+         flex-wrap:wrap; justify-content:center; align-items:center; }
+  .row b { color:#fff; font-weight:500; font-variant-numeric:tabular-nums; }
+  .ok { color:#6ee7a8; }
+  .hint { font-size:11px; color:var(--dim); text-align:center; line-height:1.9; }
+  kbd { border:1px solid var(--line); border-radius:4px; padding:1px 5px; font-size:10px; color:#fff; }
+</style>
+
+<h1>QR dither · sprite</h1>
+<div id="stage"><canvas id="c"></canvas></div>
+<div class="row">
+  <span>XW <b id="axw">0°</b></span>
+  <span>YW <b id="ayw">0°</b></span>
+  <span><b id="sz">—</b> for the whole set</span>
+  <span class="ok" id="ver">—</span>
+</div>
+<p class="hint">
+  the precomputed fallback — every frame verified before you ever touch it<br>
+  grab and drag &nbsp; <kbd>g</kbd> ghost &nbsp; <kbd>r</kbd> reset
+</p>
+
+<script type="module">
+const c = document.getElementById('c'), ctx = c.getContext('2d');
+const meta = await (await fetch('sweep-2ax.json')).json();
+const load = s => new Promise((r, j) => { const i = new Image(); i.onload = () => r(i); i.onerror = j; i.src = s; });
+const sheet = await load('sweep-2ax.png');
+const gh = await load('sweep-2ax-ghost.png').catch(() => null);
+
+const n = meta.modules, quiet = meta.quiet, side = n + 2 * quiet;
+c.width = c.height = side;
+ctx.imageSmoothingEnabled = false;
+
+// continuous angle, snapped to the nearest generated frame
+let xw = 0, yw = 0, vx = 0, vy = 0, ghost = false;
+const SENS = 0.006, FRICTION = 0.94, Q = Math.PI / 2;
+
+function draw() {
+  const i = ((Math.round(xw / Q * meta.cols) % meta.cols) + meta.cols) % meta.cols;
+  const j = Math.max(0, Math.min(meta.rows - 1,
+      Math.round(((yw / Q % 1) + 1) % 1 * meta.rows) % meta.rows));
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, side, side);
+  const src = ghost && gh ? gh : sheet;
+  ctx.drawImage(src, i * n, j * n, n, n, quiet, quiet, n, n);
+  const deg = r => ((r * 180 / Math.PI) % 360 + 360) % 360;
+  document.getElementById('axw').textContent = deg(xw).toFixed(1) + '°';
+  document.getElementById('ayw').textContent = deg(yw).toFixed(1) + '°';
+}
+
+function frame() {
+  if (!down && (Math.abs(vx) > 1e-5 || Math.abs(vy) > 1e-5)) {
+    xw += vx; yw += vy; vx *= FRICTION; vy *= FRICTION; draw();
+  }
+  requestAnimationFrame(frame);
+}
+
+let down = false, px = 0, py = 0;
+const stage = document.getElementById('stage');
+stage.addEventListener('pointerdown', e => {
+  down = true; px = e.clientX; py = e.clientY; vx = vy = 0;
+  stage.classList.add('grabbing'); stage.setPointerCapture(e.pointerId);
+});
+stage.addEventListener('pointermove', e => {
+  if (!down) return;
+  const dx = (e.clientX - px) * SENS, dy = (e.clientY - py) * SENS;
+  px = e.clientX; py = e.clientY;
+  xw += dx; yw += dy; vx = dx; vy = dy; draw();
+});
+for (const ev of ['pointerup','pointercancel'])
+  stage.addEventListener(ev, () => { down = false; stage.classList.remove('grabbing'); });
+addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (k === 'g') { ghost = !ghost; draw(); }
+  if (k === 'r') { xw = yw = vx = vy = 0; draw(); }
+});
+
+const kb = await fetch('sweep-2ax.png', { method:'HEAD' })
+  .then(r => +r.headers.get('content-length') || 0).catch(() => 0);
+document.getElementById('sz').textContent = kb ? (kb/1024).toFixed(0) + ' KB' : '—';
+document.getElementById('ver').textContent =
+  `✓ ${meta.verified}/${meta.total} verified`;
+draw(); requestAnimationFrame(frame);
+</script>
