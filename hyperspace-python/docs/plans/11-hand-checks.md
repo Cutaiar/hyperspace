@@ -2176,7 +2176,7 @@ and come alive when Faces (scene launch 3) is pressed. Say whether
 control that visibly works marked ✕ → `learn.cannot_show`; then
 `uv run python tools/desk_coverage.py --check` (a stale report fails).
 
-**156. A desk template and a preset that names it.** (copy)
+**156. A desk template and a preset that names it.** (copy) — **retired** (plan 44 D3, row 620: desk templates are gone; check 469 covers a file that still names one)
 Headless: `tests/test_desk_templates.py::{test_a_preset_naming_a_template_loads_its_rows_with_the_overrides_on_top,test_a_save_round_trips_the_reference_not_the_expanded_rows,test_a_missing_template_is_a_note_and_the_overrides_alone,test_a_template_fixed_after_the_load_changes_no_override_on_save}`.
 Copy `tests/fixtures/desk-templates/desk/fixture-shape.json` into the
 library's `desk/` and `tests/fixtures/desk-templates/presets/templated.json`
@@ -7222,6 +7222,104 @@ wandered — and the second brings it back about as far; (3) after the
 reconnect SEND B is dark and K4 is coarse. Fail: a jump on the first
 detent, or K4 dead until turned a long way (that is soft pickup: say so —
 hand check 31's re-base did not happen).
+
+## BJ. The session / performance line: `/10` presets, `/3` shows (plan 44 D3)
+Register rows 611–625. Both Macs on this build, **between shows** — restart
+(new modules and fields on long-lived objects), never a hot reload. Until
+the owner has run `tools/migrate_library.py --apply` on the library, an old
+preset takes the open show's hands' look, clouds' look and bus cuts only
+while that (old) show is open. Desk templates are retired: check 156 is
+retired in place.
+**461. Nothing moved: the rig and one deck as before.** (laptop)
+Headless: `tests/test_deck.py`, `tests/test_undo.py::test_session_params_are_covered`, `tests/test_hold.py`, `tests/test_params.py::test_two_decks_hold_the_session_params_by_reference`.
+1. Open the show; load three presets from the bank; tap a tempo; move the
+   master dim and a band fader; Cmd+Z each.
+2. HOLD; load another preset; TAKE.
+*Pass:* every page and the desk behave as on the last build; the tempo,
+the dim and the band survive every load; undo takes each gesture back;
+the PRESETS dot and the show's dot light as they did; the hold behaves as
+hand checks 370–380 say.
+**462. The hands' look is the preset's, the mirror the room's.** (laptop, the Leap; hands present)
+Headless: `tests/test_ghost.py`, `tests/test_graph_json.py::test_a_second_hands_node_gets_its_own_look_and_the_rooms_mirror`.
+1. HANDS: hands on, opacity 30 %, style CAGE, guide BESIDE, mirror on.
+   Save as `D3 HANDS`.
+2. Load `TUMBLE`; then `D3 HANDS`.
+3. Save the show; restart; open it.
+*Pass:* (2) `TUMBLE` brings its own hands' look (it switches the hands as
+it was saved); `D3 HANDS` brings opacity, style and guide back; the
+mirror stays on through every load; (3) the mirror is still on.
+**463. A cloud's look travels with its preset.** (Mac with a `cloud` device listed; else skip)
+1. Set Cloud point size and scale; save as `D3 CLOUD`; load another; load
+   `D3 CLOUD`.
+*Pass:* the cloud draws as set in `D3 CLOUD` and as the other preset had it
+there.
+**464. Two tables, one desk; two channels, one decode.** (Mac, the APC40)
+Headless: `tests/test_session_line.py` (the table and the media tests).
+1. Learn a key row (`F9` → lines) and a global-layer knob; restart.
+2. SHIFT on the desk; load a preset; SHIFT off.
+3. A video on channel a; load a preset that uses channel a.
+*Pass:* (1) both rows are in `bindings.json` and work after the restart;
+(2) SHIFT's latch and the knob smoothing behave as before; (3) the video
+plays on, decoded once (SYSTEM: one source).
+**465. Cut a bus cable, save, load another, load it back: the cut is the preset's.** (laptop, two windows)
+Headless: `tests/test_plan36_bus.py`, `tests/test_session_line.py::test_a_cut_is_the_presets_undone_with_it_and_held_in_its_dot`.
+1. GRAPH: delete All outputs' image cable into Output 2. The PRESETS dot
+   lights; the show's does not. Save the preset as `D3 CUT`.
+2. Load `TUMBLE`, then `D3 CUT`; Cmd+Z; Cmd+Shift+Z.
+3. Open `D3 CUT`'s file in a text editor.
+*Pass:* (1) Output 2 goes to its ground; (2) `TUMBLE` shows the picture on
+Output 2 again, `D3 CUT` cuts it again; the undo puts `TUMBLE` back with
+its cables, the redo `D3 CUT` with its cut; (3) a `"bus": {"cut": […]}`
+entry and `"schema": "hyperspace.preset/10"`; the show file has no `rig`.
+**466. A cut under the hold stays off the projector until TAKE.** (laptop, two windows)
+1. Load `D3 CUT`'s neighbour on the bank; HOLD; load `D3 CUT`; TAKE.
+*Pass:* the projector's Output 2 keeps its picture while held and goes to
+its ground at TAKE.
+**467. The migration, on a copy then on the library, between shows.** (laptop, then the second Mac; no show that night)
+Headless: `tests/test_session_line.py::test_the_tool_writes_the_shows_look_and_cuts_into_every_preset_every_folder_down`, `tests/test_desk_templates.py`, `tests/test_migrate_library.py`, `tests/test_one_camera.py`.
+1. Copy the Drive library folder somewhere local. Run `uv run python
+   tools/migrate_library.py --library <the copy>` (a dry run): read the
+   `show:` line (its eye, hands' and clouds' looks, and the bus cuts it
+   will write into every preset), `shows to rewrite as /3:`, and every
+   preset's `round-trip picture: same`.
+2. `--apply` on the copy; open the app on the copy; open the show; step
+   through a dozen presets, folders too.
+3. Between shows, both Macs on this build: `--apply` on the real library
+   (no `--library`: the config's path). Note the `backup:` line. Open the
+   app; open the show; step through every preset on the bank.
+4. Open the show's file and two presets' files in a text editor.
+*Pass:* (1) nothing written (the folder's dates unchanged); (2)/(3) every
+preset draws as it did with the show open before — the hands, the clouds
+and the windows' cables as they were; `~/Hyperspace/library-backup-<stamp>/`
+holds the library as it was; (4) the show is `hyperspace.project/3` with
+no `rig` and no `ghost.alpha`/`cloud.*` (but `ghost.mirror`), and
+`<show>.hyp.json.bak-v2-look` beside it is the old file; each preset is
+`/10` with `ghost.*`/`cloud.*` in `values` and the show's `bus`, no
+`modules`, no `desk_template`. *Fail:* a preset skipped ("not written") —
+note its line; a Mac on an older build refuses the files (expected:
+update it).
+**468. An old show opens on the new build before the migration.** (a copy of the library from before step 3 of 467)
+Headless: `tests/test_session_line.py::test_an_old_preset_opened_with_an_old_show_takes_its_look_and_cuts_end_to_end`.
+1. Open the old (`/2`) show; load three old presets; save the show; restart
+   and open it again; load the same three.
+*Pass:* the hands, the clouds and the cut cables are as the show had them,
+before and after the save; the save leaves `.bak-v2-look` beside the show.
+**469. No module labels, no default module, no desk template.** (laptop)
+Headless: `tests/test_presets.py::test_module_labels_are_dropped_and_a_missing_id_is_the_build_value`, `tests/test_desk_templates.py`.
+1. Load a migrated preset that used to name a dream module (`WAKE`, if the
+   library had one); look at the LOOKBACK strip.
+2. Put a `dream/default.json` in a copy of the library; load a preset that
+   leaves a dream value out.
+*Pass:* (1) the strip names no module and has no dot; (2) the left-out
+value is the build's, not `default.json`'s; a file that named a desk
+template (none should exist) loads its own rows with "desk templates are
+retired" on the strip.
+**470. A window the rig lacks.** (laptop, one window)
+Headless: `tests/test_session_line.py::test_the_window_a_rig_lacks_is_asked_for`.
+1. Load a preset saved on the rig with Output 2 wired.
+*Pass:* nothing breaks: Output 2's wires are dormant on GRAPH. (The words
+"this preset wires Output 2, which this rig has not open" come with the UI
+PRs, row 623: note whether you missed them.)
 
 ## What no test covers
 

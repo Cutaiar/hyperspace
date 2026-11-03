@@ -137,7 +137,12 @@ class Sources:
     def follow(self, table) -> None:
         """`table` (a routing.Bindings a router runs over) is told the
         registry's rig facts from now on (`follow_devices`). Held weakly:
-        a table no router keeps is forgotten, never written again."""
+        a table no router keeps is forgotten, never written again. Plan 44
+        D3 (row 593's note): the rig facts are the session's, so a deck's
+        table is followed through its session table (`table.session`, a
+        `routing.SessionTable`) — every deck over one session is told at
+        once, and the session is written once."""
+        table = getattr(table, "session", None) or table
         if any(r() is table for r in self._tables):
             return
         self._tables.append(weakref.ref(table))

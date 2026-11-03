@@ -3051,7 +3051,8 @@ def render_edit(panel) -> graphview.Edit:
     rg = getattr(holdmod.canvas_renderer(panel), "_graph", None)      # (plan 38 B3)
     e = graphview.Edit(graph=gs, render=rg, push=lambda label: undo.push(label, load=True))
     e.slots = getattr(panel, "outputs", None) or ()     # (plan 35 G: a window's name)
-    e.show = getattr(lib, "project", None)              # (plan 36 T1: the rig's wires)
+    e.show = getattr(lib, "project", None)
+    e.presets = getattr(lib, "presets", None)           # (plan 44 D3: the bus cuts are the preset's)
     return e
 
 

@@ -1174,7 +1174,7 @@ def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
     assert n is not None and n.faint and not n.idle
     assert graphview.summary(n)[0] == graphview.REACHES_NOTHING
     doc = json.loads(rig.presets.save_as("Out").read_text())
-    assert doc["schema"] == "hyperspace.preset/9"
+    assert doc["schema"] == "hyperspace.preset/10"
     assert {"kind": "effect", "file": "acid"} in doc["graph"]["nodes"]
     settle(rig)
     assert rig.undo.undo()           # (both unwires inside one settle: one step)
@@ -1206,7 +1206,7 @@ def test_an_unwired_instance_one_saves_with_its_entry_on_or_off(tmp_path):
     for name, on in (("On", True), ("Off", False)):
         rig.reg["fx.huecycle.on"].set(on)
         doc = json.loads(rig.presets.save_as(name).read_text())
-        assert doc["schema"] == "hyperspace.preset/9", name
+        assert doc["schema"] == "hyperspace.preset/10", name
         assert {"kind": "effect", "file": "huecycle"} in doc["graph"]["nodes"], name
         assert G.run_back(G.read_graph(doc["graph"]), "output.all.image") == (
             "plasma", "kaleido", "zoomblur"), name

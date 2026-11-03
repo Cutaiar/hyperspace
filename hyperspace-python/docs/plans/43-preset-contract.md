@@ -9,8 +9,10 @@ migration) — their exact worklists.
 
 **Status (2026-11-02): C2 built** (wave 1, branch `wave1/c2`; register
 rows 572–576; hand checks 431–433, group AX) — §5 says what it did and
-where it differed, §7 records the owner's answers. D3 is next. The audit
-below is as read at 72da1ed, before C2.
+where it differed, §7 records the owner's answers. **D3 built**
+(2026-11-03, wave 2, plan 44 D3; register rows 611–625; hand checks
+461–470, group BJ) — §6's "What changed in the build" says what it did
+and where it differed. The audit below is as read at 72da1ed, before C2.
 
 Agreed by the owner on 2026-11-02, from the triage of the 2026-10-30
 show (2026-10-31): "camera not restored" — a preset saved after the
@@ -344,6 +346,43 @@ it, whatever shape the decks take. Schema **`/10`** (after C2's `/9`).
    §12 (the ghost table's "session group" line), §14; ARCHITECTURE §2's
    `RigWires` and §3.8; hand checks for the hands' look and the cuts
    surviving a load; the register rows D3 is assigned.
+
+### What changed in the build (D3, 2026-11-03)
+
+Built on plan 44 D3's branch, with the owner's three answers of
+2026-11-03 (the wave 2 checkpoint): desk templates **retired**, the
+`modules` labels **dropped** with the `default.json` fallback (row 540
+resolved), `ghost.mirror` **stays the rig's**. Item by item:
+
+1. `ghost` and `cloud` are in `PERFORMANCE_GROUPS`; `ghost.mirror` (and
+   an extra node's `ghost.2.mirror`) is a **session key**
+   (`params.SESSION_KEYS`), kept in its group (row 612).
+2. `ghost.register`'s docstring says the look's, the mirror the room's;
+   `GraphSection._seed` is **kept for the session keys alone** (an extra
+   node's mirror from the open show) — dropping it outright, as the item
+   said, would lose `ghost.2.mirror` on a reopen (row 613).
+   `Project._held_back` stays for the same reason.
+3. The bus cuts are `Presets.bus`, saved under **`bus`** (row 617);
+   `Project` lost `rig`, `_saved_rig` and the mark's rig entries
+   (`RIG` stays, the key an old show is read by); the renderer's
+   `rig_source` is the presets; `graphview`'s words and edits, and the two
+   one-line UI reads (`ui.Panel.rig_now`, `ui_graph.render_edit`), follow.
+   A window the rig lacks: the rule and the words
+   (`graphview.wanted_windows`, `WINDOW_WANTED`), not yet drawn — the UI
+   PRs' (row 623); `devices.wants` was not the place (it names Learn's
+   targets).
+4. Desk templates: **retired**, not inlined (none existed): the code is
+   gone, `graphmigrate.ten` drops `desk_template` (and a templated desk's
+   `dark` rows), `tests/test_desk_templates.py` is the migration's test,
+   check 156 retired (row 620).
+5. A preset load fills from `_fresh_of`; the labels are dropped (row 621).
+6. The per-deck split is plan 44 D3's (rows 611, 614–616).
+7. The show is `hyperspace.project/3`: the rig's session, the pads,
+   `startup` (and, as before, the session groups' module names and the
+   rig nodes' layout); a `/2` is read as its `/3`, what it held of the
+   look handed to old presets (row 618).
+8. The docs: the DECISIONS rows rewritten in place, ENGINEERING §4, §10,
+   §12, §14, ARCHITECTURE §2 and §3.8, the register rows and the checks.
 
 ## 7. What the code could not tell me
 

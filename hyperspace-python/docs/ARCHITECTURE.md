@@ -473,10 +473,13 @@ no edge is hidden, and a window shows only its own wires.
 
 - **The bus.** All outputs reaches a window only through a drawn cable
   `output.all.<port> → output.N.<port>` (image, hands, guide, depth: four
-  bus ports). The cables are the rig's (`graph.RigWires`, saved in the show
-  as `library.Project.rig`, `{"cut": [...]}`, written only when something is
-  cut; the renderer reads it through `Renderer.rig_source`, so a cut
-  rebuilds the graph). `graph.window_ports(wires, n, rig)` is the one place
+  bus ports). The cables are the rig's, and which of them stand is the
+  preset's (plan 44 D3: `graph.RigWires` as `preset.Presets.bus`, saved in
+  the preset under `bus` as `{"cut": [...]}`, written only when something is
+  cut, in its dirty dot and its load's undo step; an old show's `rig` is
+  handed to old presets once, `library.Project.old_cuts`); the renderer
+  reads it through `Renderer.rig_source` (the presets, `Presets.rig`), so a
+  cut rebuilds the graph. `graph.window_ports(wires, n, rig)` is the one place
   a window's port is resolved: its own wire, else the standing bus cable,
   else nothing. `Output.settle`, `Shown.fallback` and the bent stand-down
   are deleted; a window's hands mute removes the hands layer from that
@@ -1135,6 +1138,16 @@ is not live is dormant: its lane reads NaN and a route on it lets go
 
 ### 3.8 The binding file
 
+The file is the session table's (plan 44 D3): `routing.SessionTable` holds
+the session's rows, the file's doors (`load`, `to_json`, `write`, the
+backup, the old migrations) and the session's own state — the layer latch
+per role (`desk.shift`), the slew, the pad's feel, the device registry's
+facts (`Sources.follow` writes them there) — and each deck's
+`routing.Bindings` holds those rows by reference beside its own (routes,
+the preset layer, macros, modifiers), one list for the adapters, the
+referee and `dispatch`; a session row learned on one deck is every
+deck's. One deck today.
+
 `<home>/bindings.json`, schema `routing.SCHEMA`
 (`hyperspace.bindings/3`), holds the **session's controls** only: the
 keys, the pad, OSC hit rows, the invariant and global-layer MIDI rows,
@@ -1680,7 +1693,8 @@ dream is no longer pulled by the look-back's run.
 **Render graph.** `graph.build_graph` builds the frame as nodes from
 the renderer's `Wiring` alone (plan 35/36: only what a wire reaches; no
 switch builds a node, a window's mutes are read each frame), the rig's
-standing wires (`RigWires`: the bus and cloud cables) and the effect
+standing wires (`RigWires`: the bus and cloud cables, the loaded preset's
+cuts since plan 44 D3) and the effect
 files present (one `Effect` node per wired instance);
 `Renderer._graph_for` keeps it
 until one of those changes, and `Graph.evaluate` runs it (§2). The shape

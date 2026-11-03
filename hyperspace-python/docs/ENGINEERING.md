@@ -814,7 +814,7 @@ one instanced quad per point through the eye — a hard round dot, alpha
 the see-through shape, so a dot in front of an edge hides it and an edge
 in front of a dot is drawn over it. Its world transform is one uniform
 scale about the world origin, `cloud.scale`; the shape's `camera.*` and
-`rot.*` do not move it. The look is the session group `cloud`:
+`rot.*` do not move it. The look is the group `cloud`, the preset's since plan 44 D3:
 `cloud.size` (radius, logical px, 0.5–12, 2), `cloud.scale` (0.01–10,
 0.3: the fixture knot at about the shape's size), `cloud.bright` (0–2,
 1), `cloud.colors` (the source's colours, on; off or none, white) — no
@@ -1356,8 +1356,8 @@ root and `Library.machine` the home.
 
 | Path | What it is | Format |
 |---|---|---|
-| `presets/<slug>.json`, `presets/<folder>/…/<slug>.json` | Your presets (§10), in folders you make in Finder if you like (plan 48): one in `presets/party/` is named `party/<its name>`. A hidden folder (`.cache`) is not read. | `hyperspace.preset/2`, or `/3` when it uses plan 31's sequencer, envelopes or LFO count (below) |
-| `projects/<slug>.hyp.json` | Your shows (the code calls them projects). | `hyperspace.project/2` |
+| `presets/<slug>.json`, `presets/<folder>/…/<slug>.json` | Your presets (§10), in folders you make in Finder if you like (plan 48): one in `presets/party/` is named `party/<its name>`. A hidden folder (`.cache`) is not read. | `hyperspace.preset/10` (every save, plan 44 D3; older ones are read and migrated on load) |
+| `projects/<slug>.hyp.json` | Your shows (the code calls them projects): the rig's session, the pads, `startup`. | `hyperspace.project/3` (plan 44 D3; a `/2` is read once, kept as `.bak-v2-look` beside it at its first write) |
 | `patches/<slug>.json` | Your patches (plan 40): a group of GRAPH nodes and its boundary, spawned into a preset, never loaded. Written only by **save as patch…** / **update patch**. | `hyperspace.patch/1` |
 | `<group>/<slug>.json` | Module presets, one registry group each (`band/`, `dream/`, `hands/`, `view/` …). An `fx/` folder from before plan 40 is ignored: the fx module presets are retired (`library.RETIRED_MODULES`). | `hyperspace.preset/1` |
 | `trash/…` | Only in a library from before plan 48: the trash every Mac shared. Listed at the foot of the trash popup (marked old); a restore copies a file back and leaves it there; never written, never emptied by the app — clear it in Finder. | as the original |
@@ -1444,21 +1444,25 @@ once (never over a file) and prints the two lines to add;
 - **iCloud / Dropbox.** Mark the folder "Keep Downloaded" / "Available
   offline": an evicted file is invisible to the app.
 - **Both Macs on one library run the newest build** (row 394, the
-  owner's 2026-10-25 decision). Every save is **`hyperspace.preset/9`**
-  (plan 43 C2: the eye in `values`, the spin's pose in `pose`; groups or
-  none — row 521 closed by row 576); an older build refuses it with
-  "schema … is not a hyperspace.preset" rather than load it and strip what
-  it does not know on its next save. This build reads every older schema
-  (`/2`–`/8`) and migrates it on load (an old preset takes the eye its old
-  show held). To move a whole library at once — **between shows, both
-  Macs updated together, a backup first** — `uv run python
-  tools/migrate_library.py` (a dry run: the rig's show and its eye, the
-  retaper, every preset's round-trip picture), then `--apply`: it backs
-  the library up to `~/Hyperspace/library-backup-<stamp>/`, measures the
-  unmarked route depths along the effect tapers first (wave 0 T1, register
-  row 561: what `tools/retaper_routes.py --write` does), writes every
-  preset as `/9` with the show's eye, and drops the eye from the shows
-  (`.bak-v2-eye` beside each).
+  owner's 2026-10-25 decision). Every save is **`hyperspace.preset/10`**
+  (plan 44 D3: `/9`'s eye and pose, and the hands' and clouds' looks in
+  `values`, the bus cuts in `bus`, no `modules`, no `desk_template`) and
+  every show **`hyperspace.project/3`**; an older build refuses them with
+  "schema … is not a hyperspace.preset" (or "newer than this build")
+  rather than load them and strip what it does not know on its next save.
+  This build reads every older schema (`/2`–`/9`, a `/2` show) and
+  migrates it on load (an old preset takes the eye, the hands' and clouds'
+  looks and the bus cuts its old show held). To move a whole library at
+  once — **between shows, both Macs updated together, a backup first** —
+  `uv run python tools/migrate_library.py` (a dry run: the rig's show and
+  its eye, looks and cuts, the retaper, every preset's round-trip picture),
+  then `--apply`: it backs the library up to
+  `~/Hyperspace/library-backup-<stamp>/`, measures the unmarked route
+  depths along the effect tapers first (wave 0 T1, register row 561),
+  writes every preset — every folder down — as `/10` with the show's eye,
+  looks and cuts (one pass: a library not yet at `/9` takes that step in
+  the same load), and rewrites every show as `/3` (`.bak-v2-look` beside a
+  `/2`, `.bak-v2-eye` beside a `/3` that still held the eye).
 
 | Schema | What it added | Read | Written |
 |---|---|---|---|
@@ -2546,9 +2550,8 @@ routable and modulatable. A modifier whose input is not live (a hand out
 of the box, a device the rig lacks, no input picked) is **dormant**: its
 lane reads absent, so a route on it lets go and the base returns.
 Removing one leaves the routes on its lane, dormant; ids are one past
-the highest (`mod.1`, `mod.2` …). A desk template may carry a
-`modifiers` list; a preset that names it gets them, its own overriding
-by id.
+the highest (`mod.1`, `mod.2` …). (A desk template carried them once:
+plan 44 D3 retired the templates.)
 
 **The MODIFIERS strip** (`ui_routing.modifiers`; since plan 28 N7 not
 drawn on ROUTING — a modifier is added from GRAPH's right-click picker
@@ -2589,17 +2592,24 @@ Since plan 40 a preset may end with `groups` (after `layout`, one group a
 line: `{"id": "group.1", "name": "acid wash", "patch": "acid-wash",
 "nodes": ["render:acid.2", "mod.3"], "open": false}`, and a
 `kept_by_host` list when a spawn's sheet kept rows for the preset); it is
-written only when a group exists (§6, "Groups and patches"). Every save
-is `hyperspace.preset/9` (§4).
+written only when a group exists (§6, "Groups and patches"). Since plan
+44 D3 a preset may hold `bus` (`{"cut": [{"from", "to"}, …]}`: the rig's
+cables from All outputs into a window, or a cloud's into the scene, that
+this preset cuts — none is every cable standing), written only when
+something is cut, in the dirty dot and the load's undo step. Every save
+is `hyperspace.preset/10` (§4).
 A build from before plans 28 and 30 ignores `modifiers` and `layout` with no
 note and **drops them when it saves**, and opens a `graph` with wires or
 placements as the default graph with a note: keep both Macs of a shared
 library on the same build (register row 277). **A load replaces all of
-it** — every performance param lands from the file or its group default,
-every route and preset-layer row is replaced — and never touches a
-session param (`tempo hands ghost band master scene audio output overlay
-ui desk cloud`; the eye left this list in plan 43 C2): a tapped BPM, the
-hands' feel and the ghost hands survive any preset. Anything a file names that it may not (a session id, an unknown
+it** — every performance param lands from the file or the value its
+object was built with (plan 44 D3: never a group's `default.json`), every
+route and preset-layer row is replaced, the bus cuts are the file's — and
+never touches a session param (`tempo hands band master scene audio
+output overlay ui desk`, and `ghost.mirror`; the eye left this list in
+plan 43 C2, the hands' and clouds' looks in plan 44 D3): a tapped BPM, the
+hands' feel and the mirror survive any preset; the ghost hands' look is
+the preset's. Anything a file names that it may not (a session id, an unknown
 id, a route onto a param that is not modulatable, a desk row on an
 invariant control, a route onto a modifier the file does not hold, a
 `mod.*` id in `values`, an unreadable `layout` entry) is dropped with a
@@ -2634,8 +2644,8 @@ stays.
 A **show** (`projects/<slug>.hyp.json`; the code says *project*) is the
 room the presets play in: the session's values, the module presets of
 the session groups (the band layout and scene), the **pads** (the bank,
-below), the rig's own wires (the bus cables cut on GRAPH, §2) and a
-`startup` preset. A launch opens the show opened last (`last_show`) if
+below) and a `startup` preset (`hyperspace.project/3`, plan 44 D3: the bus
+cuts are each preset's now, §2; an old show's are handed to old presets). A launch opens the show opened last (`last_show`) if
 its file is there; otherwise, and on **new**, an unsaved show called
 `untitled` with every pad empty, which **save** writes into the library.
 
@@ -2848,8 +2858,10 @@ following the skeleton raw (no smoothing), a display only.
 | `ghost.tethers` | off | with a guide: a line from each routed mark to a label naming the params it drives |
 | `ghost.style` | HANDS | HANDS (capsules), JOINTS (beads), PALMS (an orb that swells as the hand opens, a ring, a spoke), CAGE (a wire octahedron), MARIONETTE (fingertips on strings from a bar) |
 
-All six are in the `ghost` group, a session group: saved with the show,
-never moved by a preset. `mirror`, `guide`, `tethers` and `style` are
+All six are in the `ghost` group, a performance group since plan 44 D3:
+the hands' look is the preset's, saved and landed with it — but for
+`ghost.mirror`, a session key (`params.SESSION_KEYS`): the room's, saved
+with the show, never moved by a preset. `mirror`, `guide`, `tethers` and `style` are
 settings — a hand learn onto one is refused in words, and a preset's
 route onto one is dropped at load. The ghost hands are drawn in the
 shape's camera (plan 26, §2): the eye, and the calibration in
@@ -3044,7 +3056,10 @@ hands on, through off, dim 1), never saved, never in a preset, show or
 undo step; a switch flipped mid-set lasts until the restart. They can be
 learned onto a desk button. What every output draws through is the
 loaded preset's one camera (plan 43 C2): the window is the rig's, the
-framing is the look's.
+framing is the look's — and so (plan 44 D3) are the bus cuts: which of the
+rig's cables from All outputs reach a window is the loaded preset's
+(`Presets.bus`); a window the preset wires that this rig has not open is
+asked for in words (`graphview.wanted_windows`, `WINDOW_WANTED`).
 
 | Scene | Hands | Through | The output shows |
 |---|---|---|---|

@@ -15,7 +15,7 @@ Two kinds of file, both plain JSON you can open in a text editor:
                   code (hyperspace/scenes/band/, control.py) — a band
                   preset in the library is the user's own, and a strip
                   load tells the scene combo through ``on_load``.
-  project         the show — ``{"schema": "hyperspace.project/2",
+  project         the show — ``{"schema": "hyperspace.project/3",
                   "name", "note", "startup": <preset name>, "bank": [8–24
                   × <preset name> | null], "session": <session snapshot>,
                   "modules": {group: name | {"name", "values", …}}}``, in
@@ -39,11 +39,16 @@ Two kinds of file, both plain JSON you can open in a text editor:
                   the project names by a preset that carries a ``layout``
                   gets that layout back on load, the same road a strip
                   load takes. A schema-1 project is refused (no old-schema
-                  support, 2026-10-25). Plan 36 T1: ``rig``, the
-                  show's own wires — ``{"cut": [{"from", "to"}, …]}``, the
-                  bus cables from All outputs into a window this show has
-                  cut on GRAPH (``graph.RigWires``); absent, every one
-                  stands.
+                  support, 2026-10-25). Plan 44 D3 (``/3``): the show
+                  is the rig's session, the pads and ``startup`` — the
+                  bus cuts (plan 36 T1's ``rig``) and the hands' and
+                  clouds' looks (``ghost.*`` but ``ghost.mirror``,
+                  ``cloud.*``) are each preset's now. A ``/2`` show is
+                  read as its ``/3`` (`show_without_look`): what it held
+                  of the look is handed to every preset before ``/10``
+                  a load reads while it is open (``Project.old_look``,
+                  ``old_cuts``), and its first write keeps the ``/2``
+                  beside it (``<file>.bak-v2-look``).
 
 A third kind of document is *not* the library's own format but goes
 through the same doors: a **document kind** registered with ``kind()``
@@ -98,10 +103,12 @@ as). None, or one that is gone or will not read (the reason in `error`),
 and the app starts on an unsaved show called ``untitled`` with an empty
 bank (``_open_default``).
 
-Loading a preset fills ids it doesn't name from the group's *default*
-preset (DEFAULT_NAMES, else one called "default", else the values the
-objects were constructed with), so a preset is the same state whatever it
-lands on; ids the registry doesn't know are reported in ``warning`` and
+Loading a module preset fills ids it doesn't name from the group's
+*default* preset (DEFAULT_NAMES, else one called "default", else the
+values the objects were constructed with); a whole preset (preset.py)
+fills them from the values the objects were constructed with alone
+(`_fresh_of`, plan 44 D3 — never a ``default.json``), so a preset is the
+same state whatever it lands on; ids the registry doesn't know are reported in ``warning`` and
 returned, never fatal. ``is_dirty(group)`` says whether the group's bases
 have moved off what the loaded (or default) preset would produce.
 
@@ -142,6 +149,7 @@ from .params import (
     fx_files,
     is_instance_id,
     pan_world,
+    part_of_id,
     retaper_depths,
 )
 
@@ -164,16 +172,14 @@ SPRING_BACKUP = "2-spring"
 # `session`, which the presets hold since `/9` (`Project.old_eye`) —
 # <file>.bak-v2-eye
 EYE_BACKUP = "2-eye"
+# LOOK_BACKUP (plan 44 D3): the copy `Project.write` makes before the first
+# write of a `/2` show as `/3` — which drops its bus cuts (`rig`) and the
+# hands' and clouds' looks from its `session`, each preset's since `/10` —
+# <file>.bak-v2-look
+LOOK_BACKUP = "2-look"
 PRESETS = "presets"       # the presets' group, a document kind (preset.py)
-# <root>/desk/<slug>.json (plan 24 C3): the desk templates — named sets of
-# preset-layer rows a preset's desk can start from (`desk_template`,
-# preset.py `expand_desk`). A module-preset group in the library's tree,
-# which [library] path shares (plan 25). Its files are their own format,
-# DESK_SCHEMA, read only through `desk_template`: the `desk` *param* group
-# (desk.slew, desk.pad.*) has no module-preset strip, and a template is
-# never applied as its module preset
-DESK = "desk"
-DESK_SCHEMA = "hyperspace.desk/1"
+# (plan 24 C3's desk templates, `<root>/desk/`, are retired — plan 44 D3,
+# the owner, 2026-11-03: neither library held one)
 # <root>/patches/<slug>.json (plan 40 P1): the patches — a group of nodes
 # and its boundary, saved once, spawned anywhere (patches.py). A document
 # kind of the library's own (`Library.__init__`), so the folder lists,
@@ -204,7 +210,8 @@ DEFAULT_HOME = Path("~/Hyperspace")
 
 PRESET_SCHEMA = "hyperspace.preset/1"      # a module preset (one group)
 PERFORMANCE_SCHEMA = "hyperspace.preset/2" # a preset: the performance (preset.py)
-PROJECT_SCHEMA = "hyperspace.project/2"
+PROJECT_SCHEMA = "hyperspace.project/3"   # plan 44 D3: the rig's session, the pads, startup
+PROJECT_V2 = "hyperspace.project/2"        # read as its /3 (`show_without_look`), once
 PROJECT_V1 = "hyperspace.project/1"        # refused: no old-schema support (2026-10-25)
 PROJECT_SUFFIX = ".hyp.json"
 PROJECTS = "projects"
@@ -219,7 +226,10 @@ HOME_UNSET = "home: this show names no startup preset"
 # the outputs), a preset's (preset.LAYOUT_KEY) for the look's. No key: every
 # node is laid out automatically, and nothing is dirty
 LAYOUT = "layout"
-RIG = "rig"            # plan 36 T1: a show's own wires (`graph.RigWires`)
+# plan 36 T1: a `/2` show's own wires (`graph.RigWires`) — the bus cuts,
+# each preset's since plan 44 D3 (preset.BUS_KEY): read out of an old show
+# once (`show_look`), never written
+RIG = "rig"
 
 
 def read_layout(value: Any) -> tuple[dict[str, list[float]], int]:
@@ -506,6 +516,46 @@ def show_without_eye(doc: dict) -> dict | None:
     return out
 
 
+def _look_ids(session: dict) -> list[str]:
+    """The ids of a `/2` show's session that are a preset's since plan 44
+    D3: every performance id (`params.part_of_id`: the hands' look, the
+    clouds' — `ghost.mirror` stays the room's) but the eye, plan 43 C2's
+    own road (`EYE_IDS`)."""
+    return [k for k in session if isinstance(k, str) and k not in EYE_IDS
+            and part_of_id(k) == "performance"]
+
+
+def show_look(doc: Any) -> tuple[dict[str, Any], RigWires]:
+    """What a `/2` show held of the look (plan 44 D3): the hands' and the
+    clouds' values in its `session` (`_look_ids`) and its bus cuts (`rig`,
+    `graph.RigWires`) — ({}, no cut) for neither, and for any `/3`. The one
+    reader: `Project._take`, `kept_look`, `headless.show_seed` and the
+    migration tool all ask it."""
+    if not isinstance(doc, dict) or doc.get("schema") not in (PROJECT_V2, None):
+        return {}, RigWires()
+    session = doc.get("session")
+    session = session if isinstance(session, dict) else {}
+    return ({k: session[k] for k in _look_ids(session)}, RigWires.read(doc.get(RIG)))
+
+
+def show_without_look(doc: dict) -> dict | None:
+    """A `/2` show's document as its `/3` (plan 44 D3): the schema, without
+    its bus cuts (`rig`) and without the look's ids in its `session`
+    (`_look_ids`); None for a document that is not `/2` (nothing to
+    rewrite). The eye is `show_without_eye`'s. Pure: the version step a
+    load reads an old show through, and tools/migrate_library.py's."""
+    if not isinstance(doc, dict) or doc.get("schema") != PROJECT_V2:
+        return None
+    out = dict(doc)
+    out["schema"] = PROJECT_SCHEMA
+    out.pop(RIG, None)
+    session = doc.get("session")
+    if isinstance(session, dict):
+        drop = set(_look_ids(session))
+        out["session"] = {k: v for k, v in session.items() if k not in drop}
+    return out
+
+
 def _write_json(path: Path, doc: dict) -> None:
     _write_text(path, _json_text(doc))
 
@@ -606,10 +656,13 @@ def _order(path: Path) -> tuple[str, int]:
 
 MIGRATIONS: dict[tuple[str, int], Any] = {
     # ("hyperspace.preset", 1): lambda doc: {...},   # 1 → 2, when there is one
+    # plan 44 D3: a /2 show less what each preset holds now (read out first:
+    # `Project._take`, `show_look`)
+    ("hyperspace.project", 2): lambda doc: show_without_look(doc) or dict(doc),
 }
 # no project 1 → 2 step: a schema-1 show (an inline theme bank) is refused
 # (`Project._take`) — no old-schema support since 2026-10-25
-CURRENT = {"hyperspace.preset": 1, "hyperspace.project": 2}
+CURRENT = {"hyperspace.preset": 1, "hyperspace.project": 3}
 
 
 def migrate_doc(doc: dict, kind: str) -> dict:
@@ -729,11 +782,12 @@ class Project:
         # those as on disk (`is_dirty`)
         self.layout: dict[str, list[float]] = {}
         self._saved_layout: dict[str, list[float]] = {}
-        # plan 36 T1: the rig's own wires — the bus cables from All outputs
-        # into each window, which this show has cut (`graph.RigWires`) — and
-        # those as on disk; the renderer reads `rig` (its `rig_source`)
-        self.rig = RigWires()
-        self._saved_rig = RigWires()
+        # plan 44 D3: what an old show (`/2`) held of the look — the hands'
+        # and clouds' values in its session, its bus cuts — read out by
+        # `_take` and handed to every preset before `/10` a load reads while
+        # this show is open (`graphmigrate.ten`); never written back
+        self.old_look: dict[str, Any] = {}
+        self.old_cuts = RigWires()
         # plan 43 C2: what an old show (before the eye was the preset's) kept
         # of the camera — the eye in its `session`, the camera node's GRAPH
         # position in its `layout` — read out of the file by `_take` and
@@ -749,6 +803,12 @@ class Project:
         if doc.get("schema") == PROJECT_V1:
             raise LibraryError(f"{where} is a schema-1 show, which this build does not read "
                                "(no old-schema support, 2026-10-25)")
+        # plan 44 D3: what a /2 show held of the look, before the version
+        # step drops it (`show_without_look`) — else what its first write on
+        # this build kept beside it (`kept_look`)
+        self.old_look, self.old_cuts = show_look(doc)
+        if path is not None and not self.old_look and not self.old_cuts.cut:
+            self.old_look, self.old_cuts = kept_look(path)
         doc = migrate_doc(doc, "hyperspace.project")
         self.name = str(doc.get("name") or (path.name[: -len(PROJECT_SUFFIX)] if path
                                             else UNTITLED))
@@ -790,7 +850,6 @@ class Project:
             if self.camera_at is None and kept_at is not None:
                 self.camera_at = kept_at
         self._saved_layout = copy.deepcopy(self.layout)
-        self.rig = self._saved_rig = RigWires.read(doc.get(RIG))
 
     @property
     def stem(self) -> str:
@@ -810,9 +869,6 @@ class Project:
         layout = getattr(self, "layout", None)
         if layout:                       # plan 28 N2; a show with none writes none
             doc[LAYOUT] = {k: list(layout[k]) for k in sorted(layout)}
-        rig = getattr(self, "rig", RigWires()).to_json()
-        if rig:                          # plan 36 T1; every cable standing writes none
-            doc[RIG] = rig
         return doc
 
     def mark(self) -> tuple:
@@ -820,22 +876,24 @@ class Project:
         name, note, path, stem, session, modules, bank, startup and the
         bank and startup as on disk — copies, so a later edit of the live
         show never reaches a mark; then the GRAPH page's positions of the
-        rig's nodes, and (plan 36 T1) the rig's wires, live and as on disk
-        (immutable: held as they are)."""
+        rig's nodes, live and as on disk; then what an old show kept of the
+        camera (plan 43 C2) and of the look (plan 44 D3; the bus cuts are
+        the preset's: `Marks`)."""
         return (self.name, self.note, self.path, getattr(self, "_stem", None),
                 copy.deepcopy(self.session), copy.deepcopy(self.modules), list(self.bank),
                 self.startup, (list(self._saved[0]), self._saved[1]),
                 # plan 28 N2: the GRAPH page's positions of the rig's nodes
                 copy.deepcopy(getattr(self, "layout", {})),
                 copy.deepcopy(getattr(self, "_saved_layout", {})),
-                getattr(self, "rig", RigWires()), getattr(self, "_saved_rig", RigWires()),
                 # plan 43 C2: what an old show kept of the camera, for its presets
-                dict(getattr(self, "old_eye", {})), getattr(self, "camera_at", None))
+                dict(getattr(self, "old_eye", {})), getattr(self, "camera_at", None),
+                # plan 44 D3: and of the look
+                dict(getattr(self, "old_look", {})), getattr(self, "old_cuts", RigWires()))
 
     # the mark's fixed head, and where its later parts start
     MARK_LAYOUT = 9          # the GRAPH page's layout, and as on disk (plan 28 N2)
-    MARK_RIG = 11            # the rig's wires, and as on disk (plan 36 T1)
-    MARK_EYE = 13            # an old show's eye and camera position (plan 43 C2)
+    MARK_EYE = 11            # an old show's eye and camera position (plan 43 C2)
+    MARK_LOOK = 13           # an old show's look and bus cuts (plan 44 D3)
 
     def remark(self, mark: tuple) -> None:
         """Put back what `mark()` returned: the show's own fields, nothing
@@ -846,10 +904,10 @@ class Project:
         if len(mark) > self.MARK_LAYOUT:   # plan 28 N2: the show's layout, and as on disk
             self.layout = copy.deepcopy(mark[self.MARK_LAYOUT])
             self._saved_layout = copy.deepcopy(mark[self.MARK_LAYOUT + 1])
-        if len(mark) > self.MARK_RIG:      # plan 36 T1: the rig's wires, and as on disk
-            self.rig, self._saved_rig = mark[self.MARK_RIG], mark[self.MARK_RIG + 1]
         if len(mark) > self.MARK_EYE:      # plan 43 C2: an old show's eye, for its presets
             self.old_eye, self.camera_at = dict(mark[self.MARK_EYE]), mark[self.MARK_EYE + 1]
+        if len(mark) > self.MARK_LOOK:     # plan 44 D3: and its look, for its presets
+            self.old_look, self.old_cuts = dict(mark[self.MARK_LOOK]), mark[self.MARK_LOOK + 1]
         self.session, self.modules = copy.deepcopy(session), copy.deepcopy(modules)
         self.bank = list(bank)
         self._saved = (list(saved[0]), saved[1])
@@ -1328,7 +1386,9 @@ class Project:
         file that holds the eye in its `session` (`eye.*`) or the camera's
         GRAPH position in its `layout` (both the presets' since `/9`: this
         write drops them) keeps it first as ``<file>.bak-v2-eye``.
-        No backup, no write."""
+        And (plan 44 D3) the first write of a `/2` show — written `/3`,
+        without its bus cuts and the hands' and clouds' looks, each preset's
+        now — keeps it first as ``<file>.bak-v2-look``. No backup, no write."""
         self.lib.writable()
         path = self.path_for(self.name) if self.path is None else self.path
         try:
@@ -1354,12 +1414,15 @@ class Project:
                     and backup(path, EYE_BACKUP) is None):
                 raise LibraryError(f"{path.name}: not written — no backup of the show "
                                    "with its eye could be made")
+            if (old.get("schema") == PROJECT_V2 and not _kept(path, LOOK_BACKUP)
+                    and backup(path, LOOK_BACKUP) is None):
+                raise LibraryError(f"{path.name}: not written — no backup of the /2 show "
+                                   "could be made")
         self.path = path
         _write_json(self.path, doc)
         self.lib._sync(self.path)
         self._saved = (list(self.bank), self.startup)
         self._saved_layout = copy.deepcopy(getattr(self, "layout", {}))
-        self._saved_rig = getattr(self, "rig", RigWires())
         return self.path
 
     def is_dirty(self) -> bool:
@@ -1372,8 +1435,7 @@ class Project:
                 or not undo.alike(self.session, {**self._held_back(),
                                                  **reg.snapshot(part="session")})
                 or (self.bank, self.startup) != self._saved
-                or getattr(self, "layout", {}) != getattr(self, "_saved_layout", {})
-                or getattr(self, "rig", RigWires()) != getattr(self, "_saved_rig", RigWires()))
+                or getattr(self, "layout", {}) != getattr(self, "_saved_layout", {}))
 
     def _held_back(self) -> dict:
         """The session's settings of node instances the registry lacks now
@@ -1420,7 +1482,10 @@ def kept_eye(path: Path) -> tuple[dict[str, Any], list[float] | None]:
     if hit is not None:
         return dict(hit[0]), hit[1]
     found: tuple[dict[str, Any], list[float] | None] = ({}, None)
-    for bak in sorted(path.parent.glob(f"{path.name}.bak-v{EYE_BACKUP}*")):
+    # (plan 44 D3: a /2 show the tool rewrote as /3 kept itself as `.bak-v2-look`)
+    baks = [*sorted(path.parent.glob(f"{path.name}.bak-v{EYE_BACKUP}*")),
+            *sorted(path.parent.glob(f"{path.name}.bak-v{LOOK_BACKUP}*"))]
+    for bak in baks:
         try:
             eye, at = show_eye(json.loads(bak.read_text()))
         except (OSError, ValueError):
@@ -1429,6 +1494,33 @@ def kept_eye(path: Path) -> tuple[dict[str, Any], list[float] | None]:
             found = (eye, at)
             break
     _KEPT_EYES[key] = found
+    return dict(found[0]), found[1]
+
+
+_KEPT_LOOKS: dict[tuple[str, int], tuple[dict[str, Any], RigWires]] = {}
+
+
+def kept_look(path: Path) -> tuple[dict[str, Any], RigWires]:
+    """What a show's ``.bak-v2-look`` copy kept of the look (`show_look`)
+    — the oldest copy — or ({}, no cut): a `/2` show whose first write on
+    this build made it `/3` still hands its old look to the presets before
+    `/10` (plan 44 D3), until the tool writes it into them. Remembered per
+    show file and its folder's state, as `kept_eye`."""
+    try:
+        key = (str(path), path.parent.stat().st_mtime_ns)
+    except OSError:
+        return {}, RigWires()
+    hit = _KEPT_LOOKS.get(key)
+    if hit is not None:
+        return dict(hit[0]), hit[1]
+    found: tuple[dict[str, Any], RigWires] = ({}, RigWires())
+    for bak in sorted(path.parent.glob(f"{path.name}.bak-v{LOOK_BACKUP}*")):
+        try:
+            found = show_look(json.loads(bak.read_text()))
+        except (OSError, ValueError):
+            continue
+        break
+    _KEPT_LOOKS[key] = found
     return dict(found[0]), found[1]
 
 
@@ -1478,7 +1570,8 @@ class Marks:
         loaded preset's GRAPH page layout (plan 28 N2, `Presets.layout`),
         the media channels' bins (plan 32, `Presets.media`), the GRAPH
         page's groups (plan 40 T2, `Presets.groups`) and the floor under
-        their numbers (row 563, `Presets.group_high`)."""
+        their numbers (row 563, `Presets.group_high`), and the preset's bus
+        cuts (plan 44 D3, `Presets.bus`)."""
         lib, pre = self.lib, self.lib.presets
         gs = getattr(pre, "graph", None)
         return (lib.project.mark(), self.lands(),
@@ -1489,7 +1582,8 @@ class Marks:
                 copy.deepcopy(getattr(pre, "layout", None) or {}),
                 self._bins(pre),
                 copy.deepcopy(getattr(pre, "groups", None) or []),
-                getattr(pre, "group_high", 0))
+                getattr(pre, "group_high", 0),
+                getattr(pre, "bus", None))
 
     @staticmethod
     def _bins(pre):
@@ -1501,7 +1595,7 @@ class Marks:
         """{group: landed} — every group's name, reference and re-apply
         road, by reference: cheap enough to read every frame."""
         lib = self.lib
-        return {g: lib.landed(g) for g in {*lib._current, *lib._loaded, *lib._adopted}}
+        return {g: lib.landed(g) for g in lib.landed_groups()}
 
     def mend(self, pre: dict, lands: dict) -> None:
         """After the restore of a step that is not a load: a group whose
@@ -1552,12 +1646,9 @@ class Marks:
         elif len(show) > Project.MARK_LAYOUT:
             # the same show: its GRAPH page positions still go back (plan 28
             # N2; the undo of a tidy) — unlike the bank, they are not in its
-            # file until it is saved; so do the rig's wires (plan 36 T1: the
-            # undo of a bus cable cut on GRAPH)
+            # file until it is saved
             pr.layout = copy.deepcopy(show[Project.MARK_LAYOUT])
-            if len(show) > Project.MARK_RIG:
-                pr.rig = show[Project.MARK_RIG]
-        for group in {*lib._current, *lib._loaded, *lib._adopted} - set(landed):
+        for group in lib.landed_groups() - set(landed):
             lib.reland(group, (None, None, None))
         for group, was in landed.items():
             lib.reland(group, was)
@@ -1573,6 +1664,8 @@ class Marks:
                 lib.presets.groups = copy.deepcopy(mark[7])
             if len(mark) > 8:                # and the floor under their numbers (row 563)
                 lib.presets.group_high = max(lib.presets.group_high, mark[8])
+            if len(mark) > 9 and mark[9] is not None:   # the bus cuts (plan 44 D3)
+                lib.presets.bus = mark[9]
         pr.follow()
 
 
@@ -2156,29 +2249,9 @@ class Library:
         self.say(f"{PATCHES}: saved {name}")
         return path
 
-    def desk_template(self, name: str) -> dict:
-        """The desk template `name` (plan 24 C3): its file under
-        ``<root>/desk/``, as ``{"schema": DESK_SCHEMA, "name", "note"?, "desk":
-        [row, …]}`` — the rows in a preset's ``desk`` form (no ``layer``).
-        A template that is not there, or not that format, raises
-        LibraryError; the caller says so and goes on without it."""
-        path = self.path_of(DESK, name)
-        if path is None:
-            raise LibraryError(f"no desk template {name!r}")
-        doc = copy.deepcopy(self._doc(path))
-        if doc.get("schema") != DESK_SCHEMA:
-            raise LibraryError(f"{path.name}: schema {doc.get('schema')!r} is not "
-                               f"{DESK_SCHEMA}")
-        rows = doc.get("desk")
-        if not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows):
-            raise LibraryError(f"{path.name}: its desk is not a list of rows")
-        return doc
-
     # ---- defaults & values ----
 
     def default_name(self, group: str) -> str | None:
-        if group == DESK:          # its folder holds desk templates, never module presets:
-            return None            # a template named "default" is no group default
         if group in RETIRED_MODULES:   # plan 40 T5: an old fx/default.json is no default
             return None
         name = DEFAULT_NAMES.get(group, "default")
@@ -2216,7 +2289,11 @@ class Library:
         """One place for what "the group's current preset" means: its name,
         the values it produced (what is_dirty compares against) and, for a
         preset someone else applied, how to apply it again when its file
-        changes on disk."""
+        changes on disk. The presets' is their own (`_owner`, plan 44 D3)."""
+        owner = self._owner(group)
+        if owner is not None:
+            owner.landing = (name, loaded, reapply)
+            return
         self._current[group] = name
         if loaded is None:
             self._loaded.pop(group, None)
@@ -2240,7 +2317,27 @@ class Library:
 
     def landed(self, group: str) -> tuple:
         """The group's landed state, opaque, for an undo to hand back."""
+        owner = self._owner(group)
+        if owner is not None:
+            return tuple(owner.landing)
         return (self._current.get(group), self._loaded.get(group), self._adopted.get(group))
+
+    def _owner(self, group: str):
+        """Who keeps `group`'s landing when it is not the library (plan 44
+        D3): the presets kind's `Presets` — its `landing`, (current, what
+        its load produced, how to re-apply) — so a deck's dirty dot is its
+        own; None for every other group."""
+        pre = self.__dict__.get("presets")
+        if group == PRESETS and pre is not None and hasattr(type(pre), "landing"):
+            return pre
+        return None
+
+    def landed_groups(self) -> set[str]:
+        """Every group with a landing: the library's and the presets'."""
+        out = {*self._current, *self._loaded, *self._adopted}
+        if self._owner(PRESETS) is not None:
+            out.add(PRESETS)
+        return out
 
     def reland(self, group: str, mark: tuple) -> None:
         """Put back what landed() returned — the analyzer's reset undo."""
@@ -2267,6 +2364,9 @@ class Library:
     # ---- presets: the surface the strip draws ----
 
     def current(self, group: str) -> str | None:
+        owner = self._owner(group)
+        if owner is not None:
+            return owner.landing[0]
         return self._current.get(group)
 
     def load(self, group: str, name: str) -> list[str]:
@@ -2327,10 +2427,10 @@ class Library:
             self._landed(group, doc.get("name") or name, resolved)
         self.report(missing, f"{group}/{name}")
         if not quiet:
-            self.say(f"{group}: {self._current[group]}")
+            self.say(f"{group}: {self.current(group)}")
         hook = self._load_hooks.get(group)
         if hook is not None:
-            hook(self._current[group])
+            hook(self.current(group))
         return missing
 
     def land_unsaved(self, group: str, name: str, doc: dict) -> list[str]:
@@ -2484,7 +2584,7 @@ class Library:
         except OSError as e:
             raise LibraryError(f"{path.name}: {e}") from e
         self._sync(path)
-        if self._current.get(group) in (name, shown) and self.path_of(group, shown) is None:
+        if self.current(group) in (name, shown) and self.path_of(group, shown) is None:
             self._landed(group, None, None)
         if group == PRESETS:
             if still:
@@ -2605,9 +2705,9 @@ class Library:
                 dst.unlink(missing_ok=True)
                 raise LibraryError(f"{path.name}: not renamed ({e})") from e
         self._sync(path, dst)                              # 4.
-        cur = self._current.get(group)
+        cur = self.current(group)
         if cur is not None and (cur == old or self._fold(group, cur) in mine):
-            self._landed(group, new, self._loaded.get(group))
+            self._landed(group, new, self.landed(group)[1])
             hook = self._load_hooks.get(group)
             if hook is not None:
                 hook(new)
@@ -2937,6 +3037,9 @@ class Library:
         save (nothing loaded yet is never dirty). Floats compare within
         undo's tolerance (`undo.alike`, plan 16 WP7): the last bits a
         performer leaves in a base it took light no dot."""
+        owner = self._owner(group)
+        if owner is not None:                # plan 44 D3: the presets' own dot
+            return owner.is_dirty()
         kind = self._kinds.get(group)
         if kind is not None:
             ref = self._loaded.get(group)
@@ -3009,9 +3112,9 @@ class Library:
             return True
         hit = []
         try:
-            for group, name in list(self._current.items()):
+            for group in sorted(self.landed_groups()):
+                name, _loaded, reapply = self.landed(group)
                 if name is not None and self.path_of(group, name, loose=True) in changed:
-                    reapply = self._adopted.get(group)
                     if reapply is not None:            # by the road it came in
                         reapply()
                     else:

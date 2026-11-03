@@ -89,24 +89,34 @@ SEED_SHOW = "migration"        # the scratch show `seed` writes (plan 43 C2)
 
 
 def show_seed(doc: dict | None, eye: dict | None = None,
-              camera_at: list | None = None) -> dict | None:
-    """What an old show (before plan 43 C2) kept of the camera, as a show of
-    its own: its session's `eye.*` and its layout's camera node
-    (`library.show_eye`, the one reader) — nothing else of the rig (plan 43
-    C2: the eye an old preset drew through). `eye` / `camera_at` stand in
-    where `doc` kept none (a `.bak-v2-eye` copy's, `library.kept_eye`).
-    None when there is neither: nothing to seed, so an old preset takes the
-    build's default eye."""
+              camera_at: list | None = None, look: dict | None = None,
+              cuts=None) -> dict | None:
+    """What an old show kept of the look, as a show of its own: its
+    session's `eye.*` and its layout's camera node (plan 43 C2,
+    `library.show_eye`), and (plan 44 D3) the hands' and clouds' looks in
+    its session and its bus cuts (`library.show_look`) — nothing else of
+    the rig: what an old preset drew through. `eye` / `camera_at` / `look`
+    / `cuts` stand in where `doc` kept none (a `.bak-v2-eye` or
+    `.bak-v2-look` copy's, `library.kept_eye` / `kept_look`). Written as a
+    `/2` show, so the app reads it as the old show it stands for
+    (`Project.old_eye`, `old_look`, `old_cuts`). None when there is
+    nothing: an old preset takes the build's defaults."""
     from .graphmigrate import CAMERA_NODE
-    from .library import PROJECT_SCHEMA, show_eye
+    from .library import PROJECT_V2, RIG, show_eye, show_look
     own_eye, own_at = show_eye(doc)
+    own_look, own_cuts = show_look(doc)
     eye = own_eye or dict(eye or {})
     at = own_at if own_at is not None else camera_at
-    if not eye and at is None:
+    look = own_look or dict(look or {})
+    cuts = own_cuts if own_cuts.cut else cuts
+    cut = cuts.to_json() if cuts is not None and getattr(cuts, "cut", None) else {}
+    if not eye and at is None and not look and not cut:
         return None
-    out: dict = {"schema": PROJECT_SCHEMA, "name": SEED_SHOW, "session": eye}
+    out: dict = {"schema": PROJECT_V2, "name": SEED_SHOW, "session": {**look, **eye}}
     if at is not None:
         out["layout"] = {CAMERA_NODE: list(at)}
+    if cut:
+        out[RIG] = cut
     return out
 
 

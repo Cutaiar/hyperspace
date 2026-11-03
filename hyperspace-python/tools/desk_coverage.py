@@ -55,7 +55,7 @@ from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.fx import FxState
-from hyperspace.library import DESK, PRESETS, Library
+from hyperspace.library import PRESETS, Library
 from hyperspace.lookback import DreamState
 from hyperspace.params import build_registry
 from hyperspace.preset import Presets
@@ -195,7 +195,7 @@ def coverage(home: Path, library: Path | None = None) -> tuple[list[apc40.Contro
     for group in CORPUS_GROUPS:
         _copy_in(CORPUS / group, home / group)
     if library is not None:
-        for group in (PRESETS, DESK):
+        for group in (PRESETS,):        # (plan 44 D3: desk templates are retired)
             _copy_in(library / group, home / group)
     rig = boot(home)
     controls = layer_controls(rig.table)

@@ -98,7 +98,7 @@ STYLES = ["HANDS", "JOINTS", "PALMS", "CAGE", "MARIONETTE"]   # PARTS, in this o
 
 @dataclass
 class GhostState:
-    """What the ghost.* params write. Session, not performance: see
+    """What the ghost.* params write. The look's, but for `mirror`: see
     `register`."""
 
     on: bool = False
@@ -119,9 +119,13 @@ def prefix(n: int = 1) -> str:
 
 
 def register(reg, state: GhostState, n: int = 1) -> None:
-    """ghost.* — session params (params.SESSION_GROUPS): the hands are the
-    room's display, like the output's placement, so a preset load never
-    switches them off mid-set. They show on the HANDS page and can be
+    """ghost.* — the hands' look, performance params (plan 43 §6, plan 44
+    D3, schema `/10`): a preset is a complete look, so it carries how the
+    hands are drawn and a load lands it, as it lands the eye — the one
+    exception is `mirror` (`params.SESSION_KEYS`), a fact of the room (a
+    real mirror in front of the performer's hands): the session's single
+    copy, kept by the show, declared once and written to every deck's
+    hands state. They show on the HANDS page and can be
     learned onto a desk button or knob. Only `on` and `alpha` are
     modulatable (a hand or an LFO may drive them); `mirror`, `guide`,
     `tethers` and `style` are settings of the rig and the show — a
@@ -142,13 +146,28 @@ def register(reg, state: GhostState, n: int = 1) -> None:
                    lambda v: setattr(state, "alpha", float(v)), lo=0.0, hi=1.0,
                    fmt=lambda v: f"{v * 100:.0f}%", group=GROUP,
                    tip="How solid the ghost hands are over the picture.")
-    reg.toggle(f"{pre}.mirror", f"{lb} mirror", lambda: state.mirror,
-               lambda v: setattr(state, "mirror", bool(v)), group=GROUP, modulatable=False,
-               tip="Flip the ghost hands left for right, the hands only — for a real "
-                   "mirror in front of the performer's hands. For a Pepper's Ghost "
-                   "glass use Flip X / Flip Y on the OUTPUT page, which mirror the whole "
-                   "picture; with an output flip on, leave this off or the hands flip "
-                   "twice.")
+    mirror = reg.get(f"{pre}.mirror")
+    if mirror is not None:
+        # the session's (plan 44 D3): another deck declared it — one setting
+        # for the room, written to every deck's hands state
+        states = mirror.__dict__.setdefault("states", [])
+        states.append(state)
+        state.mirror = bool(mirror.base)
+    else:
+        states = [state]
+
+        def set_mirror(v, states=states):
+            for st in states:
+                st.mirror = bool(v)
+        mirror = reg.toggle(
+            f"{pre}.mirror", f"{lb} mirror", lambda: state.mirror, set_mirror, group=GROUP,
+            modulatable=False,
+            tip="Flip the ghost hands left for right, the hands only — for a real "
+                "mirror in front of the performer's hands. For a Pepper's Ghost "
+                "glass use Flip X / Flip Y on the OUTPUT page, which mirror the whole "
+                "picture; with an output flip on, leave this off or the hands flip "
+                "twice. The room's, not the preset's: a show keeps it.")
+        mirror.__dict__["states"] = states
     reg.enum(f"{pre}.guide", f"{lb} guide", lambda: state.guide,
              lambda i: setattr(state, "guide", int(i)), GUIDES, group=GROUP,
              modulatable=False,

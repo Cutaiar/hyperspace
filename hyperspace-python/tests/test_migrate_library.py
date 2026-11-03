@@ -1,5 +1,5 @@
 """Row 394: tools/migrate_library.py — a library's presets rewritten as
-the newest schema (plan 43 C2: `hyperspace.preset/9`) once, through the
+the newest schema (plan 44 D3: `hyperspace.preset/10`) once, through the
 app's own load and save, a picture check on the golden rig deciding what
 is written.
 
@@ -37,7 +37,7 @@ def _tool():
 def _library(tmp_path: Path) -> Path:
     """A library shaped like the owner's: a `/2` preset (party-trip's
     source, under a file name of its own), a `/5` with an old GRAPH layout
-    (glimmer-bug), one already `/9`, one this build refuses (a value that
+    (glimmer-bug), one already at the newest, one this build refuses (a value that
     will not land), a module preset, the trash and a backup beside them."""
     from hyperspace import headless
 
@@ -88,11 +88,11 @@ def test_a_dry_run_writes_nothing(tmp_path, capsys):
     assert _tree(lib) == before
     assert not home.exists() or not list(home.glob("library-backup-*"))
     assert "dry run, nothing is written" in out
-    assert "trip-night.json" in out and "2 → 9" in out
-    assert "glimmer-bug.json" in out and "5 → 9" in out
-    assert "already /9, untouched" in out
+    assert "trip-night.json" in out and "2 → 10" in out
+    assert "glimmer-bug.json" in out and "5 → 10" in out
+    assert "already /10, untouched" in out
     assert "broken: does not load" in out
-    assert "would rewrite 2 as /9, leave 1 untouched (already /9), skip 1" in out
+    assert "would rewrite 2 as /10, leave 1 untouched (already /10), skip 1" in out
 
 
 def test_apply_backs_up_migrates_and_leaves_seven_and_the_rest_alone(tmp_path, capsys):
@@ -110,19 +110,19 @@ def test_apply_backs_up_migrates_and_leaves_seven_and_the_rest_alone(tmp_path, c
     assert after.keys() == before.keys()              # no file added, none renamed
     for name in ("trip-night.json", "glimmer-bug.json"):
         doc = json.loads(after[f"presets/{name}"][0])
-        assert doc["schema"] == "hyperspace.preset/9", name
+        assert doc["schema"] == "hyperspace.preset/10", name
         assert doc["name"] == json.loads(before[f"presets/{name}"][0])["name"]
     for name in ("presets/acid-scene.json", "presets/broken.json",
                  "fx/wobbly.json", "trash/presets/old.json",
                  "presets/trip-night.json.bak-20261001"):
         assert after[name] == before[name], name      # bytes and mtime: never written
-    assert "rewrote 2 as /9, left 1 untouched (already /9), skipped 1" in out
+    assert "rewrote 2 as /10, left 1 untouched (already /10), skipped 1" in out
     assert not [p for p in (lib / "presets").iterdir() if p.name.endswith(".tmp")]
-    # and once more: everything is /9 now, so nothing to do but the refusal
+    # and once more: everything is /10 now, so nothing to do but the refusal
     again = _tree(lib)
     assert _tool().main(["--library", str(lib)], picture=same_picture) == 1
     assert _tree(lib) == again
-    assert "would rewrite 0 as /9, leave 3 untouched" in capsys.readouterr().out
+    assert "would rewrite 0 as /10, leave 3 untouched" in capsys.readouterr().out
 
 
 def test_to_writes_each_seven_elsewhere_and_never_the_library(tmp_path, capsys):
@@ -141,9 +141,9 @@ def test_to_writes_each_seven_elsewhere_and_never_the_library(tmp_path, capsys):
     assert sorted(p.name for p in out_dir.iterdir()) == [
         "acid-scene.json", "glimmer-bug.json", "trip-night.json"]
     for p in out_dir.iterdir():
-        assert json.loads(p.read_text())["schema"] == "hyperspace.preset/9", p.name
+        assert json.loads(p.read_text())["schema"] == "hyperspace.preset/10", p.name
     assert (out_dir / "acid-scene.json").read_bytes() == before["presets/acid-scene.json"][0]
-    assert "wrote 3 as /9 into" in capsys.readouterr().out
+    assert "wrote 3 as /10 into" in capsys.readouterr().out
     with pytest.raises(SystemExit):
         _tool().main(["--library", str(lib), "--to", str(out_dir), "--apply"])
 
@@ -162,11 +162,11 @@ def test_a_preset_whose_picture_moves_is_not_written_unless_forced(tmp_path, cap
     assert _tree(lib)["presets/glimmer-bug.json"] == before["presets/glimmer-bug.json"]
     assert "glimmer-bug: round-trip picture differs (8 of 8 outputs)" in out
     assert json.loads((lib / "presets" / "trip-night.json").read_text())["schema"] == \
-        "hyperspace.preset/9"
+        "hyperspace.preset/10"
     assert _tool().main(["--library", str(lib), "--apply", "--force", "glimmer-bug"],
                         picture=moved) == 0
     assert json.loads((lib / "presets" / "glimmer-bug.json").read_text())["schema"] == \
-        "hyperspace.preset/9"
+        "hyperspace.preset/10"
 
 
 def test_an_old_file_whose_section_is_not_read_is_never_written(tmp_path, capsys):
@@ -186,7 +186,7 @@ def test_an_old_file_whose_section_is_not_read_is_never_written(tmp_path, capsys
     assert _tree(lib)["presets/odd.json"] == before["presets/odd.json"]
     assert "odd: its graph section was not read by this build" in out
     assert json.loads((lib / "presets" / "trip-night.json").read_text())["schema"] == \
-        "hyperspace.preset/9"
+        "hyperspace.preset/10"
 
 
 def test_a_file_that_raises_runtime_error_is_skipped_alone(tmp_path, capsys, monkeypatch):
@@ -209,7 +209,7 @@ def test_a_file_that_raises_runtime_error_is_skipped_alone(tmp_path, capsys, mon
     assert _tree(lib)["presets/glimmer-bug.json"] == before["presets/glimmer-bug.json"]
     assert "glimmer-bug: does not load: wired_section: the frame did not settle" in out
     assert json.loads((lib / "presets" / "trip-night.json").read_text())["schema"] == \
-        "hyperspace.preset/9"
+        "hyperspace.preset/10"
 
 
 def test_the_library_defaults_to_the_configs(tmp_path, capsys):
@@ -240,4 +240,4 @@ def test_the_real_picture_check_passes_an_old_preset(tmp_path, capsys):
     assert out.count("round-trip picture: same") == 3
     for name in ("trip-night", "glimmer-bug", "acid-scene"):
         assert json.loads((lib / "presets" / f"{name}.json").read_text())["schema"] == \
-            "hyperspace.preset/9"
+            "hyperspace.preset/10"

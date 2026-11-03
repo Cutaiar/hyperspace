@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.preset/9",
+ "schema": "hyperspace.preset/10",
  "name": "TRACER",
  "note": "party-tracer: the 16-cell's points and lines trailing 24 echoes over 1.6 s, each halving in 0.76 s \u2014 the look-back alone, legible at a glance, the same on any screen",
  "graph": {"frame": "wired",
@@ -141,6 +141,10 @@
   "camera.pan.y": 0.0,
   "eye.fov": 47.611887036915434,
   "eye.distance": 3.7777777777777777,
+  "cloud.size": 2.0,
+  "cloud.scale": 0.3,
+  "cloud.bright": 1.0,
+  "cloud.colors": true,
   "dream.on": false,
   "dream.mix": 0.0,
   "dream.echo_mix": 0.7,
@@ -167,6 +171,11 @@
   "fx.on": false,
   "fx.mix": 1.0,
   "fx.face_map": 0,
+  "ghost.on": false,
+  "ghost.alpha": 0.6,
+  "ghost.guide": 0,
+  "ghost.tethers": false,
+  "ghost.style": 0,
   "macro.1": 1.0,
   "macro.2": 1.0,
   "macro.3": 1.0,
@@ -360,7 +369,6 @@
   {"source": "cc:*:23", "target": "view.depth4", "op": "abs", "feedback": "ring"}
  ],
  "macros": {},
- "modules": {},
  "units": {
   "camera.pan": "world",
   "fx.depth": "taper"

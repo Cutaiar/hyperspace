@@ -34,7 +34,6 @@ from hyperspace import modifiers as M
 from hyperspace import routing, ui_routing, undo
 from hyperspace.bands import CEIL
 from hyperspace.learn import Learn
-from hyperspace.library import DESK
 from hyperspace.modifiers import Modifier, ModState, step
 from hyperspace.params import PERFORMANCE_GROUPS, part_of
 from hyperspace.preset import MODIFIERS_KEY
@@ -266,13 +265,10 @@ def test_a_modifiers_param_is_modulatable_by_a_route(rig):
 
 # ---------------------------------------------------------------- the preset
 
-def put(lib, *names: str, desk: str | None = None) -> None:
+def put(lib, *names: str) -> None:
     (lib.home / "presets").mkdir(parents=True, exist_ok=True)
     for n in names:
         shutil.copy(FIXTURES / "presets" / f"{n}.json", lib.home / "presets" / f"{n}.json")
-    if desk:
-        (lib.home / DESK).mkdir(parents=True, exist_ok=True)
-        shutil.copy(FIXTURES / "desk" / f"{desk}.json", lib.home / DESK / f"{desk}.json")
 
 
 def test_modifiers_live_in_the_preset_and_never_in_bindings_json(rig):
@@ -333,31 +329,6 @@ def test_a_modifier_whose_input_the_rig_lacks_is_dormant(rig):
     assert math.isnan(router.feeds["mod"][1]) and math.isnan(router.feeds["mod"][2])
     assert not reg["fx.acid.mix"].modulated and reg["fx.acid.mix"].norm == base
     assert [m.id for m in router.table.modifiers] == ["mod.1", "mod.2"]
-
-
-def test_a_template_may_carry_modifiers_and_a_preset_overrides_by_id(rig):
-    lib, reg, presets, table = rig.lib, rig.reg, rig.presets, rig.router.table
-    put(lib, "mod-templated", desk="mod-rig")
-    assert presets.load("mod-templated") == [] and presets.notes == []
-    # the template's mod.1 overridden by the preset's (release 1.5), its
-    # mod.3 kept, the preset's own mod.2 added; in id order
-    assert [(m.id, m.kind) for m in table.modifiers] == [
-        ("mod.1", "smooth"), ("mod.2", "scale"), ("mod.3", "threshold")]
-    assert reg["mod.1.release"].value == 1.5 and reg["mod.3.hold"].value == 0.25
-    # a save writes only what differs from the template's
-    doc = presets.document("MOD TEMPLATED")
-    assert [d["id"] for d in doc[MODIFIERS_KEY]] == ["mod.1", "mod.2"]
-    # the preset's override taken back to the template's: not written at all
-    reg["mod.1.release"].set(0.6)
-    assert [d["id"] for d in presets.document("X")[MODIFIERS_KEY]] == ["mod.2"]
-    # a fix to the template reaches the preset at its next load
-    path = lib.home / DESK / "mod-rig.json"
-    tdoc = json.loads(path.read_text())
-    tdoc[MODIFIERS_KEY][1]["hold"] = 0.5
-    path.write_text(json.dumps(tdoc))
-    lib.poll(now=1e9)
-    presets.load("mod-templated")
-    assert reg["mod.3.hold"].value == 0.5
 
 
 def test_an_older_preset_without_the_key_loads_as_before(rig):

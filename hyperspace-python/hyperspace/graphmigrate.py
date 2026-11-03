@@ -78,7 +78,19 @@ GROUPS_KEY = "groups"
 # `/7` and `/8` are read through `nine`, the eye filled in on the way
 EYE_SCHEMA = "hyperspace.preset/9"
 NINE = 9
-SAVE_SCHEMA = EYE_SCHEMA
+# plan 44 D3 (rows 611–625): `/10` is `/9` with the look made whole — the
+# hands' look (`ghost.*`, but `ghost.mirror`) and the clouds' (`cloud.*`)
+# in `values`, the bus cuts in `bus` (`BUS_KEY`: `graph.RigWires`'s JSON,
+# the cables from All outputs into each window this preset cuts), no
+# `modules` labels and no `desk_template`. What every save writes; `/9`
+# and older are read through `ten`, the open show's look filled in
+LOOK_SCHEMA = "hyperspace.preset/10"
+TEN = 10
+SAVE_SCHEMA = LOOK_SCHEMA
+BUS_KEY = "bus"
+# the keys `/10` retired: the module labels (row 540, the owner, 2026-11-03)
+# and the desk templates (plan 24 C3: neither library held one)
+TEN_RETIRED = ("modules", "desk_template")
 EYE_IDS = ("eye.fov", "eye.distance")
 CAMERA_NODE = "render:camera"      # the camera's canvas id (`graphview.CAMERA`'s node)
 # …and every id a file may hold it under: today's and the old canvas's (R14)
@@ -1270,6 +1282,43 @@ def nine(doc: dict, eye: dict | None = None, camera_at: Any = None) -> dict:
         if not any(k in layout for k in CAMERA_NODES):
             layout[CAMERA_NODE] = list(camera_at)
             out["layout"] = layout
+    return out
+
+
+def ten(doc: dict, look: dict | None = None, cuts: Any = None) -> dict:
+    """An older preset (before `/10`) as its `/10` reads it (plan 44 D3) —
+    pure, one way, on load (`Presets.load_doc`, after `nine`) and so in
+    tools/migrate_library.py's resave: the hands' and the clouds' looks
+    written into `values` from `look` (what the open show's `session` held,
+    `library.Project.old_look`: an id the file already names stays, an id
+    neither names takes the build's default at the load), the bus cuts into
+    `bus` from `cuts` (the open show's `rig`, a `graph.RigWires`; a file
+    that names its own keeps them), and the retired keys (`TEN_RETIRED`:
+    the module labels, a desk template's name) dropped. A `/10` and
+    anything that is not a document come back as they are."""
+    version = schema_version(doc)
+    if not isinstance(doc, dict) or (version is not None and version >= TEN):
+        return doc
+    out = {k: v for k, v in doc.items() if k not in TEN_RETIRED}
+    if doc.get("desk_template") and isinstance(out.get("desk"), list):
+        # a templated desk's `dark` rows only said "not the template's row
+        # here": with no template they say nothing (the overrides are the desk)
+        out["desk"] = [r for r in out["desk"]
+                       if not (isinstance(r, dict) and r.get("dark") is True)]
+    look = {pid: v for pid, v in dict(look or {}).items()
+            if isinstance(pid, str) and pid.partition(".")[0] in ("ghost", "cloud")
+            and pid.rpartition(".")[2] != "mirror"
+            and isinstance(v, (int, float, bool))}
+    raw = out.get("values")
+    # (a `values` that is no map is the load's to judge, as in `nine`)
+    if look and (raw is None or isinstance(raw, dict)):
+        values = dict(raw or {})
+        for pid, v in look.items():
+            values.setdefault(pid, v)
+        out["values"] = values
+    got = cuts.to_json() if isinstance(cuts, G.RigWires) else {}
+    if got and BUS_KEY not in out:
+        out[BUS_KEY] = got
     return out
 
 

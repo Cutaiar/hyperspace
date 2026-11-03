@@ -2039,10 +2039,10 @@ class Panel:
         return [] if nid is None else ui_graph.node_params(self, nid)
 
     def rig_now(self):
-        """The open show's rig wires (plan 36 T1, `graph.RigWires`: the bus
-        cables it has cut), what the OUTPUT page's words and edits read;
-        with no show, every cable standing."""
-        return rig_of(getattr(getattr(self, "library", None), "project", None))
+        """The loaded preset's bus cuts (plan 44 D3; plan 36 T1's were the show's:
+        `graph.RigWires`), what the OUTPUT page's words and edits read;
+        with no presets, every cable standing."""
+        return rig_of(getattr(getattr(self, "library", None), "presets", None))
 
     def black_outputs(self) -> list[int]:
         """The opened outputs showing nothing for a reason other than the

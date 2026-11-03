@@ -2,7 +2,9 @@
 
 **Status: D1 built** (2026-11-02, wave 1: `hyperspace/deck.py`, the
 `Deck` bundle and `Deck.build`, no behaviour change — register row 571,
-hand check 430, group AW); D2–D6 a plan, not built. Written 2026-11-02 as
+hand check 430, group AW); D2 built (2026-11-03, rows 590–593); **D3
+built** (2026-11-03, wave 2: rows 611–625, hand checks 461–470, group BJ);
+D4–D6 a plan, not built. Written 2026-11-02 as
 wave 0 item D0 of the post-show sequencing. Written against `main` at 72da1ed: every symbol below is in
 the code today unless the text says it is new. Its four decisions are
 register rows 556–559, answered by the owner on 2026-11-02 (as recommended; 558 with a nuance, §7). The build is six PRs,
@@ -268,7 +270,47 @@ router; `app.frame` hands `h.sources` where it hands `router` for feeding.
   (`test_only_router_modulate_calls_param_modulate` pins it); change any
   op or scheme string; change what `Binding` holds.
 
-### D3 — split session params from per-deck performance params (L)
+### D3 — split session params from per-deck performance params (L) — **built**
+
+*Built 2026-11-03 (wave 2, rows 611–625).* As written, with these
+shapes the text left open. **The registry** (row 611): `build_session`
+declares only what has no deck-side object — the analyzer's groups, the
+audio transport, `app.restart`, the undo keys — and every later session
+declaration (the clock's, the hands', the outputs', the desk's, the
+panel's) reaches the session through the deck's registry:
+`Registry.add` hands a param `part_of` calls session to the
+`SessionRegistry`, which adds the same object to every deck that follows
+it, so a session param is declared once whichever deck declares it; a
+deck's registry lists the session's params first (nothing reads the
+order across the line, row 624). `ghost.mirror` is a session **key** of
+the `ghost` group (`params.SESSION_KEYS`, row 612), written to every
+deck's hands state. **The table** (row 614): `SessionTable` reads its rows
+off the deck tables that follow it and owns the file and the session's
+state; a deck's `Bindings` holds the session rows by reference and
+proxies `SESSION_ATTRS`; a session row bound, added or removed on one
+deck is handed to every other (`_share`); `Sources.follow` follows the
+session table. **The library** (row 615): `Presets.landing` /
+`current` / `loaded` / `is_dirty`, the library asking `Library._owner`.
+**Media** (row 616): `MediaSources` and `Channels`, `MediaState` the old
+name; V3's `audio.mix` is the session's, declared by `build_session`.
+**The schema** (rows 617–622): preset `/10` (`graphmigrate.ten`: the
+open show's hands' and clouds' looks and its bus cuts into an old file,
+`modules` and `desk_template` dropped), the show `/3`
+(`library.show_without_look`, `.bak-v2-look`), the bus cuts the
+preset's (`Presets.bus`, key `bus`, the renderer's `rig_source`), desk
+templates retired and the labels dropped (the owner, 2026-11-03),
+`tools/migrate_library.py` extended (one pass, every folder down, the
+show's look and cuts into every preset, every show `/3`). **The proof**:
+`tests/test_session_line.py` (two decks' tables and channels over one
+session; an old `/9` preset and an old `/2` show end to end; the tool on
+a scratch copy), `tests/test_params.py::test_two_decks_hold_the_session_params_by_reference`,
+D1's and D2's same-state tests, `test_undo.py::test_session_params_are_covered`
+and `tests/test_hold.py` (its two bus-cut tests read the presets' cuts
+where they read the show's); the goldens over the migrated corpus are
+the orchestrator's to run, expected unmoved. **Not done** (row 625):
+`hold._preset_part` sorts Drop by group (the mirror goes back with the
+look); `Registry.apply` would land a session param once per deck; the
+window-wanted line is not drawn yet (row 623).
 
 The same line as plan 43's preset contract: what belongs to a look is
 what belongs to a deck. Plan 43 says *which groups and rows* cross the

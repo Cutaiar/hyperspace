@@ -645,6 +645,21 @@ here; overturn → the change, then the same.
 | 608 | Wave 2 T2, its reach and its word: every slider and fader `ui.py` draws for a param (`Panel._slider`, `Panel._fader`, so every page's `_row` and `half`); the tooltip leads with `FINE` while ⇧ is held over one; not the raw sliders on ROUTING (a route's depth and rest, a modifier's knobs, a span's from / to) or GRAPH's backdrop, which are other files; no arrow keys (keyboard navigation is off in the panel); a fader's imgui label is now its param id, so the driver finds it; hot reload carries it | 457, 458 | (rec) — built as recommended (T2) |
 | 609 | Wave 2 T3: SEND B held is FINE — while it is down every APC knob (a ring row, `abs`, on a continuous non-integer param) moves its param a tenth as far, read relatively and written between detents; its LED lit while held; faders, discrete targets and relative rows stay coarse; the button is the adapter's (`apc40.FINE`, `midi.MidiIO`), not a map row, and gives way to any row on SEND B | 459 | (rec) — the build's, for the owner and Dillon to keep |
 | 610 | Wave 2 T3: letting go of FINE re-sends the ring of every knob it moved, so the encoder is re-based onto the param and the next coarse turn continues from there (plan 13 D7's re-base; soft pickup where rings do not re-base); `desk.fine` is the rig's (group desk, never saved, not modulatable) and a reconnect lets go of it | 460 | (rec) — the build's, for the owner and Dillon to keep |
+| 611 | Plan 44 D3: the registry split — `params.build_session` declares the rig's params once into a `SessionRegistry` (the analyzer's, the audio transport, `app.restart`, the undo keys) and `build_performance` a deck's (the look, the media channels, the clouds, the hands, the macros, the bank's triggers) on a `Registry` that follows it (`Registry.follow`): every session `Param` is one object in every deck's registry, added there the moment it is declared, in its order, and dropped from every deck when the session drops it. A session param declared on a deck's registry later (the clock's, the hands', the outputs', the desk's, the panel's) is handed to the session by `Registry.add` (`part_of` is the one rule), so it is declared once; `build_registry` is the two in a row; session aliases (`band.sel.*`) are answered from any deck (`Registry.real` asks the session's rules) | 461 | (rec) — built as plan 44 §3 D3 asks |
+| 612 | Plan 44 D3: `ghost.mirror` stays the rig's (the owner, 2026-11-02, kept 2026-11-03) as a session **key** of a performance group — `params.SESSION_KEYS = {"ghost": ("mirror",)}`, asked first by `part_of` / `part_of_id`, so `ghost.mirror` and an extra node's `ghost.2.mirror` keep their group (the HANDS page lists it; the id is a saved format) but are the session's, kept by the show, never named by a preset; declared once and written to every deck's hands state (`Param.states`) | 462 | (rec) — of the two the brief offered (its own session param, a session sub-group), the session key |
+| 613 | Plan 44 D3 (plan 43 §6 item 1): `ghost` and `cloud` move to `PERFORMANCE_GROUPS` (after `segment`, so `mod` stays last); every hands and cloud look value is in a preset's `values` and a load lands it; the extra hands nodes' looks (`ghost.2.*` but the mirror) are the preset's under the naming rule; `preset.GraphSection._seed` survives for the session keys alone (an extra node's mirror from the open show), where plan 43 §6 item 2 said drop it | 462, 463 | (rec) — the seed kept for the mirror, else a reopened show would lose `ghost.2.mirror` |
+| 614 | Plan 44 D3: the table split — `routing.SessionTable` holds the session's rows (by reference, read off the deck tables that follow it), `bindings.json` (`load`, `to_json`, `dumps`, `write`, the backup, `migrate_v1`, `remap_factory`), the latch per role (`layer`, `layers`, `layer_serial`: `desk.shift`'s), the slew, the pad's feel, the rig facts (`midi_roles`, `primaries`, `row_schemes`) and what the launch did to the file; a deck's `Bindings(…, session=)` holds its own rows (routes, the preset layer, macros, modifiers) beside the session's, one list as before, and `SESSION_ATTRS` are properties onto the session; a session row a deck binds, adds or removes is handed to every other deck at once (`Bindings._share`: the session rows first in the other's list, its own after); `Sources.follow` follows the session table (row 593's note) | 464 | (rec) — built as plan 44 §3 D3 asks; the share's order is the build's |
+| 615 | Plan 44 D3: the presets own what is loaded — `Presets.landing` (the name, what the load or save produced, how to re-apply), `current`, `loaded`, `is_dirty`; `Library._landed` / `current` / `landed` / `is_dirty` / the marks / the file watch hand the presets group to it (`Library._owner`); every other group's landing stays the library's | 461 | (rec) — built as plan 44 §3 D3 asks, so D5 moves nothing |
+| 616 | Plan 44 D3: `MediaState` splits — `media.channels.MediaSources` (resolver, opener, closer, the soundtracks' bookkeeping, the mixer and `live_mixer`) is the rig's, `Channels` (the eight channels, the bins, the transports; `media.*` declared over them) a deck's, reading `resolver` / `opener` / `closer` / `mixer` / `sound` through to its sources; `MediaState` is `Channels`' old name and `Channels(resolver, opener)` makes both; V3's `audio.mix` toggle is the session's, declared in `build_session` over the media given | 464 | (rec) — built as plan 44 §3 D3 asks |
+| 617 | Plan 44 D3 (plan 43 §6 item 3): the bus cuts are the preset's — `Presets.bus` (`graph.RigWires`), read from a preset's `bus` key (none: every cable stands), written when anything is cut, in the dirty dot, in a load's undo step (`library.Marks`), what the renderer reads (`Deck.build` sets `renderer.rig_source = presets`; `Presets.rig` is what `graph.rig_of` and the hold read) and what GRAPH and OUTPUT edit (`graphview._rig` reads `edit.presets`; `ui.Panel.rig_now`; `ui_graph.render_edit` hands the presets); `Project` loses `rig`, `_saved_rig`, `MARK_RIG`; the hold holds the preset's cuts as it held the show's | 465, 466 | (rec) — the key is `bus` (a `cut` key would read as the cut node of plan 39) |
+| 618 | Plan 44 D3: the show is `hyperspace.project/3` — the rig's session, the pads, `startup` (and the session groups' module names and the rig nodes' GRAPH layout, as before). A `/2` show is read through `library.MIGRATIONS`' step (`show_without_look`) after `Project._take` reads out what it held of the look (`show_look`: the hands' and clouds' values, the `rig` cuts → `Project.old_look`, `old_cuts`), which every preset before `/10` takes while the show is open; its first write keeps `<file>.bak-v2-look` (no backup, no write) and `kept_look` reads that backup on later launches; `kept_eye` reads it too | 467, 468 | (rec) — as plan 43 C2 did for the eye |
+| 619 | Plan 44 D3: presets are `hyperspace.preset/10` — every save (`preset.SAVE_SCHEMA = graphmigrate.LOOK_SCHEMA`, `VERSIONS` `/2`–`/10`); a load of an older file runs `graphmigrate.ten` after `nine`: the open show's look into `values`, its cuts into `bus` (a file's own stand), `modules` and `desk_template` dropped (a templated desk's `dark` rows with it); an older build refuses a `/10` and a `/3` show as this one refuses `/11` and `/4` | 467 | (rec) — the one bump plan 44 §8 allows |
+| 620 | Plan 44 D3: desk templates retired (the owner, 2026-11-03: neither the Drive library nor `~/Hyperspace` holds one, so plan 43 §6 item 4's inlining is a no-op) — `TEMPLATE_KEY`, `expand_desk`, `compact_desk`, `merge_modifiers`, `template_doc`, `_desk_part`'s compaction, `_at_load`, `_mods_at_load`, `template_of_loaded`, `template_at_load`, `library.DESK` / `DESK_SCHEMA` / `desk_template` and `default_name`'s `DESK` branch are gone; a file naming one is said ("desk templates are retired") and lands its own rows; `tests/test_desk_templates.py` is the migration's test; the tool no longer retapers `desk/`; hand check 156 is retired in place | 469 | owner — 2026-11-03 |
+| 621 | Plan 44 D3 (row 540 resolved, the owner, 2026-11-03): the presets' `modules` labels are dropped with the default-module fallback — a preset load fills a missing id from `Library._fresh_of` (the value its object was built with), never a group's `default.json`; every performance strip lands clean and unnamed; the strips keep `resolved`; a save writes no `modules` | 469 | owner — 2026-11-03 |
+| 622 | Plan 44 D3: `tools/migrate_library.py` moves a library to `/10` and its shows to `/3` in one pass — dry run by default, `--apply` backs the library up to `~/Hyperspace/library-backup-<stamp>` first, retapers, then resaves every preset every folder down (plan 48; `--force` by `folder/stem` or stem) with the rig's show open, so a library not yet at `/9` takes the `/9` step in the same load; the show's look **and its bus cuts are written into every preset the library holds** (as the `/9` step wrote the eye), and every `/2` show is rewritten `/3` beside its `.bak-v2-look` | 467, 468 | (rec) — the brief's reading: every preset, not only the bank's |
+| 623 | Plan 44 D3 (plan 43 §6 item 3): a window the rig lacks is asked for in words — `graphview.wanted_windows(spec, cuts, count)` (every `output.<n>` past the rig's that the preset wires or cuts) and `WINDOW_WANTED`; not yet drawn on OUTPUT or GRAPH (`ui*.py` is U2's and L2's this wave), nothing opened | 470 | (rec) — the words and the rule now, the two lines with the UI's next PR |
+| 624 | Plan 44 D3: behaviour-neutral by construction — a deck's registry lists the session's params first (they exist before `build_performance` runs), then its own, then what is declared later in declaration order; nothing reads the order across the line (snapshots are maps, `apply` lands each param alone); D1's and D2's same-state tests, `test_undo.py::test_session_params_are_covered` and `tests/test_hold.py` pass with the session shared by reference; the goldens are expected unmoved over the migrated corpus (every corpus preset's new values are the build's defaults, which the goldens drew) | — | (rec) — the goldens are the orchestrator's to run |
+| 625 | Plan 44 D3 rough edges left for D4/D5: `hold._preset_part` still sorts Drop's bases by group, so Drop puts `ghost.mirror` back with the look (hold.py was out of this PR's reach beyond `program`; D5 deletes the hold); `Registry.apply` on two decks would land a session param twice a frame; the library's presets kind is the deck built last (`lib.presets`) | — | (rec) — recorded, not built |
 
 "—": no hand check shows it; tests only.
 
@@ -11237,3 +11252,247 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   after it lands on the param's own detent grid again (up to one detent
   from the fine value).
 - **Judge it.** Check 460.
+
+### 611. D3 built: one session registry, held by reference in every deck's
+
+- **Answer.** (rec) — plan 44 §3 D3, built as written.
+- **Built.** `params.build_session(control, audio, restart, media=)` →
+  `SessionRegistry` (the `master`, `scene`, `band` and `audio` params,
+  `app.restart`, `edit.undo` / `edit.redo`, `audio.mix`);
+  `params.build_performance(view, bank, dream=, fx=, ghost=, media=,
+  session=)` → a deck's `Registry(session=)`, which `follow`s the session:
+  its params are added to the deck's map as the same `Param` objects, and
+  every later add or remove on the session reaches every deck (weakly
+  held). `Registry.add` on a deck hands a session param (`part_of`) to the
+  session, so `tempo.register`, `hands.register`, `Output.register`,
+  `register_desk` and the panel's `ui.*` declare once whichever deck calls
+  them; `Registry.remove` of a session param removes it everywhere;
+  `Registry.real` falls back to the session's alias rules;
+  `snapshot(part=)` is `part_of`'s. `build_registry` is the two in a row
+  (the façade every caller uses); `Deck.build(session=)` takes the rig's.
+- **Other options.** Interleave the two builders to keep today's registry
+  order (no reader needs it, row 624); a deck index on every performance
+  param (plan 43 §6 item 6's other road — the triage's XL).
+- **To reverse.** `build_registry`'s old body; `Registry.add` without the
+  routing.
+- **Rough edge.** With two decks `Registry.apply` would land a session
+  param twice a frame (D4's mix pass decides who applies the session).
+- **Judge it.** Check 461.
+
+### 612. `ghost.mirror` is a session key of a performance group
+
+- **Answer.** (rec) — the owner kept the mirror the rig's (2026-11-02,
+  confirmed 2026-11-03); the form is the build's.
+- **Built.** `params.SESSION_KEYS = {"ghost": ("mirror",)}`: `part_of` /
+  `part_of_id` call a param of that group whose id ends `.mirror`
+  session, so `ghost.mirror` and `ghost.2.mirror` keep group `ghost` (the
+  HANDS page and its id are unchanged) but are the room's: the show keeps
+  them, a preset never names them (a load notes and ignores one), the hold
+  and undo see them as the session's. `ghost.register` declares the mirror
+  once and keeps every deck's `GhostState` on the param (`Param.states`):
+  one setting written to all.
+- **Other options.** A group of its own (`room.mirror`: a renamed id, a
+  read map); a session sub-group (`ghost.rig`, a group that is not the
+  id's first segment, which `tests/test_params.py` forbids).
+- **To reverse.** Drop the key; the mirror becomes the look's.
+- **Rough edge.** Drop under hold (`hold._preset_part`, by group) puts the
+  mirror back with the look (row 625).
+- **Judge it.** Check 462.
+
+### 613. The hands' and the clouds' looks are the preset's
+
+- **Answer.** plan 43 §6 item 1 (the contract, the owner's of 2026-11-02).
+- **Built.** `ghost` and `cloud` are in `PERFORMANCE_GROUPS` (after
+  `segment`; `mod` stays last). A preset's `values` carry `ghost.on`,
+  `.alpha`, `.guide`, `.tethers`, `.style` and `cloud.*`; a load lands
+  them; an extra hands node's `ghost.2.*` likewise. `GraphSection._seed`
+  is kept for the session keys alone: a newly declared node takes its
+  mirror from the open show.
+- **Other options.** Plan 43 §6 item 2's "drop the show seeding" in full
+  — then a reopened show would lose an extra node's mirror.
+- **To reverse.** The groups back to `SESSION_GROUPS` and a migration
+  writing the loaded preset's values into the show.
+- **Rough edge.** A preset now switches the ghost hands on or off — the
+  look is the preset's. The golden rig sets `ghost.on` after its load, as
+  before.
+- **Judge it.** Checks 462, 463.
+
+### 614. `SessionTable` and a deck's `Bindings`
+
+- **Answer.** (rec) — plan 44 §3 D3.
+- **Built.** `routing.SessionTable`: the session rows (`rows`, read off
+  the first deck table that follows it), `sinks`, the file (`load` →
+  `Bindings.load`, `to_json`, `dumps`, `write`, `backup`, `migrate_v1`,
+  `remap_factory`), and the state `SESSION_ATTRS` names. `Bindings(…,
+  session=)`: a new table makes its own session; one given its session
+  starts with the session rows (by reference) and keeps its own after;
+  every `SESSION_ATTRS` name is a property onto the session, so `layer`,
+  `slew`, `pad_feel`, `primaries` … are one value; `bind`, `add` and
+  `remove` of a session row `_share` it with every other deck; a table
+  from before a hot reload makes its session from what it held
+  (`_sess`). `register_desk` / `_register_pad_feel` declare session
+  params, once (row 611). `Sources.follow(table)` follows
+  `table.session`.
+- **Other options.** One list owned by the session and a view per deck
+  (every direct `table.bindings` edit in the code and the tests would
+  change).
+- **To reverse.** The attributes back on `Bindings`.
+- **Rough edge.** A row edited in place (`enable`, a retarget) is the
+  same object in both decks, so it needs no share; a direct
+  `table.bindings.append` of a session row (tests do it) is not shared.
+- **Judge it.** Check 464.
+
+### 615. What is loaded, and the dot, are the presets'
+
+- **Answer.** (rec) — plan 44 §3 D3.
+- **Built.** `Presets.landing` / `current` / `loaded` / `is_dirty`;
+  `Library._owner(PRESETS)` routes `_landed`, `current`, `landed`,
+  `is_dirty`, `landed_groups` (the marks, the file watch) there. Module
+  groups keep `_current` / `_loaded` / `_adopted`.
+- **Other options.** Leave it in the library until D5.
+- **To reverse.** `_owner` returning None.
+- **Rough edge.** A second deck built with the same library becomes the
+  library's presets kind (`lib.presets`), as since D1.
+- **Judge it.** Check 461.
+
+### 616. `MediaSources` and `Channels`
+
+- **Answer.** (rec) — plan 44 §3 D3.
+- **Built.** `media.channels.MediaSources` (resolver, opener, closer,
+  sound, mixer, `live_mixer`, `drain`); `Channels(resolver, opener, *,
+  sources=)` (the eight `Channel`s, `poll`, `frame`, the bins, `close`),
+  reading the five through; `MediaState = Channels`. The app's hot-reload
+  list names both. `audio.mix` is declared by `build_session`.
+- **Other options.** A second object passed beside the channels to every
+  reader (the renderer, the MEDIA page).
+- **To reverse.** Fold the sources back.
+- **Rough edge.** `Channels.close` still closes the sources' mixer (one
+  deck today).
+- **Judge it.** Check 464.
+
+### 617. The bus cuts are the preset's, under `bus`
+
+- **Answer.** (rec) — plan 43 §6 item 3; the key's name is the build's.
+- **Built.** `Presets.bus` (`graph.RigWires`) and `Presets.rig` (what
+  `rig_of` reads); a load reads `bus`, a save writes it when anything is
+  cut, `signature` covers it, `library.Marks` carries it (index 9);
+  `Deck.build` points `renderer.rig_source` at the presets (the app's old
+  line in the devices hook is gone); `graphview`'s rig edits read and write
+  `edit.presets.bus`, its words (`BUS_SAID`, `CLOUD_SAID`, `BUS_NO_SHOW`,
+  All outputs' hover) say the preset; `ui.Panel.rig_now` reads the
+  presets and `ui_graph.render_edit` hands them to the edit (two one-line
+  UI touches, without which a cut on GRAPH would be refused). `Project`
+  has no `rig`; the hold's `program` holds `rig_source`'s, now the
+  preset's.
+- **Other options.** `cuts` (reads as plan 39's cut node); keeping the
+  key `rig` (the show's word).
+- **To reverse.** `Project.rig` back and `rig_source = project`.
+- **Rough edge.** A preset loaded under hold cuts nothing on the
+  projector until Take (its cuts are the preview's).
+- **Judge it.** Checks 465, 466.
+
+### 618. The show is `/3`; an old show's look goes to old presets
+
+- **Answer.** (rec) — plan 43 §6 item 7.
+- **Built.** `library.PROJECT_SCHEMA = "hyperspace.project/3"`,
+  `PROJECT_V2`, `MIGRATIONS[("hyperspace.project", 2)] =
+  show_without_look`; `show_look` / `show_without_look` / `kept_look`;
+  `Project.old_look` / `old_cuts` (marks 13–14); `Project.write` keeps a
+  `/2` file as `.bak-v2-look` before its first `/3` write; `kept_eye`
+  reads that backup too. The show keeps its session (`ghost.mirror`
+  among it), modules, bank, startup and the rig nodes' layout.
+- **Other options.** Refuse a `/2` show until the tool ran.
+- **To reverse.** `PROJECT_SCHEMA` back to `/2` and the step gone.
+- **Rough edge.** As with the eye: several shows, one look per preset;
+  `--show` picks.
+- **Judge it.** Checks 467, 468.
+
+### 619. Presets are `/10`
+
+- **Answer.** (rec) — plan 44 §3 D3, the one bump.
+- **Built.** `graphmigrate.LOOK_SCHEMA`, `TEN`, `BUS_KEY`, `TEN_RETIRED`,
+  `ten(doc, look, cuts)`; `preset.SAVE_SCHEMA`, `VERSIONS`, `BUS_KEY`,
+  `TEMPLATE_RETIRED`; `Presets.load_doc` runs `ten` after `nine`. The
+  corpus (`tests/corpus/presets`) and the grouped fixture are `/10`, the
+  corpus shows `/3`.
+- **Other options.** None the two-Macs rule allows.
+- **To reverse.** A `/10` → `/9` writer (the look would go back to the
+  show).
+- **Rough edge.** An older build refuses every file this one saves.
+- **Judge it.** Check 467.
+
+### 620. Desk templates retired
+
+- **Answer.** owner — 2026-11-03 (none in either library).
+- **Built.** The template code is gone (preset.py, library.py); a load of
+  a file naming one says `TEMPLATE_RETIRED` and lands its own rows (its
+  `dark` rows dropped by `ten`); `ui_graph.template_of` finds no
+  `template_of_loaded` and draws no template node; `tools/desk_coverage.py`
+  copies no `desk/`; the migration tool no longer retapers `desk/`;
+  `tests/test_desk_templates.py` is the migration's test. Hand check 156
+  is retired in place.
+- **Other options.** Inline every template (a no-op here).
+- **To reverse.** Plan 24 C3's code from git.
+- **Rough edge.** A `desk/` folder left in a library is never read.
+- **Judge it.** Check 469.
+
+### 621. No module labels, no `default.json` fallback
+
+- **Answer.** owner — 2026-11-03 (row 540 resolved).
+- **Built.** `Presets.load_doc` step 2 fills from `_fresh_of`; step 6
+  labels every performance strip None (clean against what landed);
+  `document` writes no `modules`; `ten` drops the key; `Presets.new`
+  writes none.
+- **Other options.** Keep the labels inert (plan 43 §7 answer 6, superseded).
+- **To reverse.** Step 6 and the `resolved` fill back.
+- **Rough edge.** A module strip's own load still fills from its
+  `default.json` (`resolved`), as the strips always did.
+- **Judge it.** Check 469.
+
+### 622. The migration: `/10` and `/3` in one pass, the cuts into every preset
+
+- **Answer.** (rec) — the brief's reading of plan 43 §6.
+- **Built.** `tools/migrate_library.py`: `NEWEST = /10`, `SHOW_NEWEST =
+  /3`; `preset_files` every folder down (not hidden folders, not
+  `trash/`); results named `folder/file`; `rig_show` / `headless.show_seed`
+  carry the eye, the looks and the cuts (the seed is a `/2` show, so the
+  app reads it as the old show); `show_plan` rewrites every `/2` show (and
+  any `/3` still holding the eye) as `/3`, `show_write` backs each up
+  first. Dry run by default; `--apply` backs the whole library up first.
+- **Other options.** The cuts only into the presets the show's bank
+  names (a preset off the bank would lose the show's cuts).
+- **To reverse.** The library backup.
+- **Rough edge.** A preset meant to show every cable gets the show's
+  cuts; join them on GRAPH and save.
+- **Judge it.** Checks 467, 468.
+
+### 623. A window the rig lacks is asked for
+
+- **Answer.** (rec) — plan 43 §6 item 3, half built.
+- **Built.** `graphview.wanted_windows`, `WINDOW_WANTED`.
+- **Other options.** Extend `devices.wants` (it names Learn's targets,
+  not windows).
+- **To reverse.** Delete the two.
+- **Rough edge.** Not drawn yet: the OUTPUT and GRAPH lines belong to the
+  UI PRs.
+- **Judge it.** Check 470.
+
+### 624. Behaviour-neutral by construction
+
+- **Answer.** (rec).
+- **Built.** See the row; the proof is the existing same-state, undo and
+  hold tests plus `tests/test_session_line.py`.
+- **Other options.** Keep the registry's interleaved order.
+- **To reverse.** —
+- **Rough edge.** The goldens are run by the orchestrator, not this PR.
+- **Judge it.** Check 461.
+
+### 625. Rough edges left for D4 and D5
+
+- **Answer.** (rec) — recorded.
+- **Built.** Nothing.
+- **Other options.** Fix `hold._preset_part` here (outside this PR's
+  files).
+- **To reverse.** —
+- **Rough edge.** See the row.
+- **Judge it.** —

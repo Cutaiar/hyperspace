@@ -84,7 +84,7 @@ def rig(tmp_path):
 def put(home, name, **doc):
     """A user preset file, the rest of the shape filled in."""
     body = {"schema": preset.SCHEMA, "name": name, "values": {}, "routes": [],
-            "desk": [], "macros": {}, "modules": {}, **doc}
+            "desk": [], "macros": {}, **doc}
     path = home / "presets" / f"{name.lower()}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(body))
@@ -92,12 +92,14 @@ def put(home, name, **doc):
 
 
 def expected(lib, values):
-    """Every performance param: the file's value, else its group default."""
+    """Every performance param: the file's value, else the value its object
+    was built with (plan 44 D3: `_fresh_of`, never a `default.json`)."""
     out = {}
     for g in PERFORMANCE_GROUPS:
-        out.update(lib.resolved(g, {k: v for k, v in values.items()
-                                    if lib.reg[k].group == g}))
-    return out
+        out.update({k: v for k, v in lib._fresh_of(g).items()
+                    if part_of(lib.reg[k]) == "performance"})
+    out.update(values)
+    return {k: out[k] for k in lib.reg.snapshot(part="performance") if k in out}
 
 
 def boot_registry():
@@ -394,7 +396,7 @@ def test_shift_f_saves_the_live_state_as_the_slots_preset(rig):
     assert "tempo.bpm" not in user["values"] and "master.gain" not in user["values"]
     assert pr.bank[2] == "STROBE CAGE" and pr.active == 2
     doc = json.loads((home / "projects" / "house.hyp.json").read_text())
-    assert doc["schema"] == "hyperspace.project/2"
+    assert doc["schema"] == "hyperspace.project/3"   # (plan 44 D3)
     assert doc["bank"] == pr.bank[:F_KEYS] == bank_doc(pr.bank)     # eight in the file
     # an empty slot: a new name, made unique against what is there
     put(home, "PRESET 8")
@@ -530,42 +532,30 @@ def test_home_is_one_undo_step(tmp_path):
 
 # ---------------------------------------------------------------- module labels
 
-def test_module_labels_are_recorded_and_never_chain_load(rig):
-    """D3: `modules` sets the strip's label with a clean dot; the group's
-    values are the preset's (over the group default), never the module
-    preset's file; a group the file does not name shows no label. (Plan 40
-    T5: on the dream group — the fx module presets are retired.)"""
+
+def test_module_labels_are_dropped_and_a_missing_id_is_the_build_value(rig):
+    """Plan 44 D3 (row 540 resolved, the owner, 2026-11-03): an old file's
+    `modules` labels name nothing any more — every performance strip lands
+    clean and unnamed — and a value the file leaves out is the value its
+    object was built with, never the group's default module preset (the
+    library's `dream/default.json`, here `wake`'s values as the default)."""
     lib, reg = rig.lib, rig.reg
+    wake = lib.read("dream", "wake")
+    (rig.home / "dream" / "default.json").write_text(json.dumps({**wake, "name": "default"}))
+    lib._sync()
     lib.label("camera", "stale")                          # a label from before
-    wake = lib.read("dream", "wake")["values"]
-    assert wake["dream.echoes"] == 24
-    put(rig.home, "LABELS", values={"dream.mix": 0.25}, modules={"dream": "wake"})
+    put(rig.home, "LABELS", schema="hyperspace.preset/9", values={"dream.mix": 0.25},
+        modules={"dream": "wake", "fx": "trip"})
     rig.presets.load("LABELS")
-    assert lib.current("dream") == "wake" and not lib.is_dirty("dream")
-    assert reg.snapshot("dream") == lib.resolved("dream", {"dream.mix": 0.25})
-    assert reg["dream.echoes"].base != wake["dream.echoes"]  # the file was never loaded
-    assert lib.current("camera") is None
+    assert lib.current("dream") is None and lib.current("camera") is None
+    assert lib.current("fx") is None and not lib.is_dirty("dream")
+    assert reg["dream.mix"].base == pytest.approx(0.25)
+    assert reg["dream.echoes"].base == lib._fresh_of("dream")["dream.echoes"]
+    assert reg["dream.echoes"].base != wake["values"]["dream.echoes"]   # no default.json
+    doc = rig.presets.document("LABELS")
+    assert "modules" not in doc and doc["schema"] == "hyperspace.preset/10"
     reg["dream.mix"].set(0.3)
     assert lib.is_dirty("dream")                            # the dot is live against the load
-
-
-def test_an_old_fx_label_loads_quietly_and_saves_without_it(rig):
-    """Plan 40 T5 (D6): a preset that still names an fx module keeps the
-    label on load — it never loaded anything (D3) — with no note, and the
-    next save drops it; the other groups' labels are kept and saved."""
-    lib = rig.lib
-    # (a `/7` with a picture wired, so the load has nothing else to say)
-    acid = json.loads((rig.home / "presets" / "party-acid.json").read_text())
-    put(rig.home, "OLD", schema=acid["schema"], graph=acid["graph"], values={"fx.on": True},
-        modules={"fx": "trip", "dream": "wake"})
-    rig.presets.load("OLD")
-    assert rig.presets.notes == [] and not lib.warning
-    assert lib.current("fx") == "trip" and lib.current("dream") == "wake"
-    assert not lib.is_dirty("fx")
-    doc = rig.presets.document("OLD")
-    assert doc["modules"] == {"dream": "wake"}
-    path = rig.presets.save_as("Resaved")
-    assert json.loads(path.read_text())["modules"] == {"dream": "wake"}
 
 
 def test_the_fx_presets_are_retired(rig):
@@ -612,9 +602,9 @@ def test_a_preset_round_trips(rig):
     assert path == rig.home / "presets" / "round-trip.json"
     doc = json.loads(path.read_text())
     # (row 394: every save is the newest schema)
-    assert doc["schema"] == "hyperspace.preset/9" and doc["name"] == "Round Trip"
+    assert doc["schema"] == "hyperspace.preset/10" and doc["name"] == "Round Trip"
     assert doc["desk"] == desk and doc["macros"] == macros and doc["note"] == "a note"
-    assert doc["modules"] == {"dream": "wake"}
+    assert "modules" not in doc                     # (plan 44 D3: the labels are retired)
     # every performance base, the media family's too — and no retired id
     # (plan 33 T7: the wires say them; row 394: nothing writes them back)
     snap = rig.reg.snapshot(part="performance")
@@ -626,7 +616,7 @@ def test_a_preset_round_trips(rig):
     rig.presets.load("Round Trip")
     assert rig.presets.signature() == sig and not lib.is_dirty("presets")
     assert preset.desk_json(table.desk()) == desk and table.macros_doc() == macros
-    assert lib.current("dream") == "wake"
+    assert lib.current("dream") is None             # (plan 44 D3: no module label)
 
 
 # ---------------------------------------------------------------- the desk and the macros
@@ -1353,21 +1343,21 @@ def test_a_wired_preset_saves_as_v6(rig):
     `hyperspace.preset/9` — the frame edited or not; the ladder reads `/2`
     … `/9` (plan 40 T2's `/8` a `/7` with groups) — and a `/10` file is
     refused in its words."""
-    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9)
+    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10)
     assert graphmigrate.WIRED_SCHEMA == preset.WIRED_SCHEMA == "hyperspace.preset/7"
     rig.presets.load_doc({"schema": preset.SCHEMA, "name": "edited", "values": {}})
     section = rig.presets.graph.free_doc()
     assert section["frame"] == "wired"
     edited = {**section, "wires": [w for w in section["wires"]
                                    if w["to"] != "lookback.capture"]}
-    assert rig.presets.document("edited")["schema"] == "hyperspace.preset/9"
+    assert rig.presets.document("edited")["schema"] == "hyperspace.preset/10"
     rig.presets.graph.land(G.read_graph(edited), edited)
     doc = rig.presets.document("edited")
-    assert doc["schema"] == "hyperspace.preset/9" and doc["graph"] == edited
-    put(rig.home, "TEN", schema="hyperspace.preset/10")
+    assert doc["schema"] == "hyperspace.preset/10" and doc["graph"] == edited
+    put(rig.home, "ELEVEN", schema="hyperspace.preset/11")
     rig.lib.poll()
     with pytest.raises(LibraryError, match="is not a hyperspace.preset"):
-        rig.lib.read("presets", "TEN")
+        rig.lib.read("presets", "ELEVEN")
 
 
 @pytest.mark.parametrize("name", WIRED_FIXTURES)
@@ -1390,7 +1380,7 @@ def test_a_wired_frame_preset_saves_and_loads(tmp_path, name):
             assert got == spec
         spec = got
         saved = r.presets.save_as(name).read_text()
-        assert json.loads(saved)["schema"] == "hyperspace.preset/9"
+        assert json.loads(saved)["schema"] == "hyperspace.preset/10"
 
 
 # ---------------------------------------------------------------- a new preset (plan 35 T7)
@@ -1565,7 +1555,7 @@ def test_resize_values_save_and_load_with_the_preset(tmp_path):
     assert r.presets.load("CROP") == []
     assert r.reg["resize.2.crop_x"].value == 0.3
     saved = r.presets.save_as("CROP").read_text()
-    assert json.loads(saved)["schema"] == "hyperspace.preset/9"
+    assert json.loads(saved)["schema"] == "hyperspace.preset/10"
     assert json.loads(saved)["values"]["resize.2.crop_x"] == 0.3
     (b / "presets").mkdir(parents=True)
     (b / "presets" / "crop.json").write_text(saved)

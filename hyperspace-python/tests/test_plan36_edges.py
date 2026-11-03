@@ -286,13 +286,14 @@ def test_the_clouds_wire_is_cut_and_joined_on_graph(tmp_path):
     spec = app.presets.graph.spec
     before = spec.to_json()
     g = G.build_graph([View(Switches(), SIZE)], spec.wiring(), ("scan",), (),
-                      G.rig_of(app.lib.project))
+                      G.rig_of(app.presets))
     c = cable(graphview.build(Bindings(), Registry(), None, None, g, spec),
               "cloud", "scene.geometry")
-    assert e.unwire(c) is None and app.lib.project.rig.cut == {G.cloud_wire(0)}
-    assert app.presets.graph.spec.to_json() == before and app.lib.project.is_dirty()
+    # (plan 44 D3: the cut is the preset's, its dot the preset's)
+    assert e.unwire(c) is None and app.presets.bus.cut == {G.cloud_wire(0)}
+    assert app.presets.graph.spec.to_json() == before and app.lib.is_dirty("presets")
     assert e.wire("rout:cloud", "rin:scene/geometry") is None
-    assert app.lib.project.rig.cut == frozenset() and len(pushed) == 2
+    assert app.presets.bus.cut == frozenset() and len(pushed) == 2
     assert e.wire("rout:cloud", "rin:lookback/image") == graphview.CLOUD_INTO_SCENE.format(
         cloud="cloud")
 

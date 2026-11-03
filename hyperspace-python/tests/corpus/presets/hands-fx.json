@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.preset/9",
+ "schema": "hyperspace.preset/10",
  "name": "hands-fx",
  "note": "Plan 08: both hands play the Acid shader and the fx mix.",
  "graph": {"frame": "wired",
@@ -136,6 +136,10 @@
   "camera.pan.y": 0.0,
   "eye.fov": 47.611887036915434,
   "eye.distance": 3.7777777777777777,
+  "cloud.size": 2.0,
+  "cloud.scale": 0.3,
+  "cloud.bright": 1.0,
+  "cloud.colors": true,
   "dream.on": false,
   "dream.mix": 0.7,
   "dream.echo_mix": 0.4,
@@ -170,6 +174,11 @@
   "fx.acid.twist": 0.5,
   "fx.acid.reach": 10.0,
   "fx.acid.breathe": 0.35,
+  "ghost.on": false,
+  "ghost.alpha": 0.6,
+  "ghost.guide": 0,
+  "ghost.tethers": false,
+  "ghost.style": 0,
   "macro.1": 1.0,
   "macro.2": 1.0,
   "macro.3": 1.0,
@@ -348,7 +357,6 @@
   {"source": "cc:*:23", "target": "camera.yaw", "op": "abs", "feedback": "ring"}
  ],
  "macros": {},
- "modules": {},
  "units": {
   "camera.pan": "world",
   "fx.depth": "taper"

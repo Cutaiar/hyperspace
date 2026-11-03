@@ -825,8 +825,8 @@ HOVERS: dict[str, str] = {
     "echo": "The k-th newest look-back frame.",
     "dream": "The dream buffer.",
     "output": "A window: shows its picture, the hands over it, the guide over all.",
-    rgraph.ALL_OUTPUTS: ("The rig's bus: a window shows it by a cable from here (the show's), "
-                         "unless the preset wires that port itself."),
+    rgraph.ALL_OUTPUTS: ("The rig's bus: a window shows it by a cable from here, unless the "
+                         "preset cuts that cable or wires that port itself."),
     # R13: `ground`, a source with no render node, drawn so its wires can be seen and deleted
     rgraph.GROUND: ("A window's background where nothing is drawn — the clear colour, or "
                     "see-through in overlay: wired into an output's port, that port shows it."),
@@ -836,17 +836,40 @@ OUTPUT_UNWIRED = "{label} is a window of this rig: its wires are gone, it shows 
 ALL_UNWIRED = ("All outputs stays (every window reads it): its wires are gone, so the "
                "windows show their own wires, else their ground")
 # plan 36 T1 (W1, D1): the rig's bus cables from All outputs into each
-# window (`graph.RigWires`, held by the open show), in words
-BUS_SAID = ("the rig's cable (the show's, not the preset's): All outputs' {port} on "
-            "{label} — cut it and {label} shows nothing there")
+# window (`graph.RigWires`) — which of them stand is the preset's since
+# plan 44 D3 (`preset.Presets.bus`, saved under `bus`), in words
+BUS_SAID = ("the rig's cable: All outputs' {port} on {label} — cut it and {label} shows "
+            "nothing there with this preset (a preset saves its cuts)")
 BUS_IDLE = "nothing is wired into All outputs' {port}"
 BUS_SAME_PORT = "All outputs' {port} goes into a window's {port} (output.1.{port} …)"
-BUS_NO_SHOW = "no show is open: the cables from All outputs are the show's"
+BUS_NO_SHOW = "no preset is loaded: a preset holds which cables from All outputs stand"
 BUS_NO_EFFECT = ("{wire} is the rig's cable: put the node on All outputs' picture, or "
                  "wire the window a picture of its own")
+# plan 44 D3 (plan 43 §6 item 3): a window the preset wires or cuts that this
+# rig has not open — requested, said, never an error: the preset is a
+# complete look, the rig is what is plugged in
+WINDOW_WANTED = ("this preset wires Output {n}, which this rig has not open — add a "
+                 "window on OUTPUT to show it")
+
+
+def wanted_windows(spec, rig=None, count: int = 0) -> list[int]:
+    """The windows past this rig's `count` that the preset asks for (plan 44
+    D3): every `output.<n>` its section wires into, and every one its bus
+    cuts (`rig`, the preset's `graph.RigWires`) name, n > `count`, in order —
+    what OUTPUT and GRAPH say (`WINDOW_WANTED`) so the owner can open them.
+    Pure; nothing is opened here."""
+    want: set[int] = set()
+    wires = list(getattr(spec, "wires", None) or ())
+    cut = list(getattr(rig, "cut", None) or ())
+    for w in (*wires, *cut):
+        node = getattr(w, "node", "") or ""
+        head, _, n = node.partition(".")
+        if head == "output" and n.isdecimal() and int(n) > count:
+            want.add(int(n))
+    return sorted(want)
 # plan 36 T2 (W2): a listed cloud's wire into the scene, the rig's too
-CLOUD_SAID = ("the rig's cable (the show's, not the preset's): this cloud drawn in the "
-              "scene — cut it and the scene draws no cloud")
+CLOUD_SAID = ("the rig's cable: this cloud drawn in the scene — cut it and the scene "
+              "draws no cloud with this preset (a preset saves its cuts)")
 CLOUD_IDLE = "nothing reaches the scene: the cloud is not drawn"
 CLOUD_INTO_SCENE = "{cloud} is a cloud device: its one wire is into scene.geometry"
 # plan 36 T5 (W5): the picker's starters ▸ — each a pre-wired group, one
@@ -1769,7 +1792,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     # every window on the canvas, but where the preset wires that port
     # itself (its own wire takes it: one wire into a port, always drawn);
     # dormant into a window not open, or while nothing feeds that port of
-    # All outputs. A render cable like any: delete cuts it (the show's)
+    # All outputs. A render cable like any: delete cuts it (the preset's, plan 44 D3)
     owned = {w.dst for w in frame.all_wires()}
     feeds = {w.port for w in frame.all_wires() if w.node == rgraph.ALL_OUTPUTS}
     standing = rgraph.RigWires() if rig is None else rig
@@ -5073,9 +5096,10 @@ def _drawn_edge(x: dict) -> bool:
 
 
 def _rig(edit: Edit) -> rgraph.RigWires:
-    """The rig's own wires the open show holds (`edit.show`, plan 36 T1);
-    with no show, the rig as it ships."""
-    return rgraph.rig_of(getattr(edit, "show", None))
+    """The bus cuts the loaded preset holds (`edit.presets.bus`, plan 44
+    D3; plan 36 T1's were the show's); with no presets, the rig as it
+    ships: every cable standing."""
+    return rgraph.rig_of(getattr(edit, "presets", None))
 
 
 def _bus_source(name: str | None) -> bool:
@@ -5088,9 +5112,9 @@ def _land(edit: Edit, doc: dict, label: str, said: str, dry: bool = False,
           rig: rgraph.RigWires | None = None) -> str | None:
     """Read `doc` back as a preset would (a note is the refusal, nothing
     changed); else, unless `dry`, the undo step and the landing. `rig`
-    (plan 36 T1): the show's rig wires after the edit, set in the same
-    undo step — refused with no show to hold them."""
-    if rig is not None and rig != _rig(edit) and getattr(edit, "show", None) is None:
+    (plan 36 T1): the preset's bus cuts after the edit (plan 44 D3), set
+    in the same undo step — refused with no presets to hold them."""
+    if rig is not None and rig != _rig(edit) and getattr(edit, "presets", None) is None:
         return BUS_NO_SHOW
     gs = edit.graph
     if gs is None:
@@ -5124,7 +5148,7 @@ def _land(edit: Edit, doc: dict, label: str, said: str, dry: bool = False,
     if not same:
         gs.land(spec, new)
     if rig is not None and rig != _rig(edit):
-        edit.show.rig = rig
+        edit.presets.bus = rig
     edit.said = said
     return None
 
@@ -5213,7 +5237,7 @@ def render_wire(edit: Edit, src: str, dst: str, dry: bool = False,
     nothing else (plan 36 T1: no placement, switch or other wire moves
     with it; a placement it would contradict is refused in words by the
     read). From one of All outputs' bus pins it is the rig's cable into
-    the window's same port (`bus_wire`): the show's, joined, and the
+    the window's same port (`bus_wire`): the preset's cut, joined, and the
     preset's own wire into that port, if any, gives the port up to it.
     `doc` (plan 35 T6): the section to wire on, else the landed one."""
     s, why = spec_name(src, edit.render)
@@ -5230,13 +5254,13 @@ def render_wire(edit: Edit, src: str, dst: str, dry: bool = False,
         # plan 36 T2: a cloud's one wire is the rig's, into the scene
         if not rgraph.is_cloud_wire(w):
             return CLOUD_INTO_SCENE.format(cloud=s)
-        if getattr(edit, "show", None) is None:
+        if getattr(edit, "presets", None) is None:
             return BUS_NO_SHOW
         return _land(edit, doc, f"wire {w}", f"wired {w}", dry, rig=_rig(edit).joining(w))
     if _bus_source(s):
         if not rgraph.is_bus(w):
             return BUS_SAME_PORT.format(port=s.rpartition(".")[2])
-        if getattr(edit, "show", None) is None:
+        if getattr(edit, "presets", None) is None:
             return BUS_NO_SHOW
         gone = [x for x in doc.get("wires", []) if x["to"] == d]
         doc["wires"] = [x for x in doc.get("wires", []) if x["to"] != d]
@@ -6197,7 +6221,7 @@ def render_drop(edit: Edit, node: str) -> str | None:
         # itself is not drawn, and stays as it is — M2)
         rig = _rig(edit)
         owned = {x["to"] for x in wires}
-        bus = [] if kind == rgraph.ALL_OUTPUTS or getattr(edit, "show", None) is None else [
+        bus = [] if kind == rgraph.ALL_OUTPUTS or getattr(edit, "presets", None) is None else [
             w for w in rig.present(rgraph.bus_wire(int(name.partition(".")[2]), p)
                                    for p in rgraph.BUS_PORTS) if w.dst not in owned]
         if len(left) == len(wires) and not bus:     # (T5 review: say nothing was done)

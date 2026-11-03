@@ -17,8 +17,12 @@ from hyperspace.params import (
     SESSION_GROUPS,
     Kind,
     Registry,
+    SessionRegistry,
+    build_performance,
     build_registry,
+    build_session,
     part_of,
+    part_of_id,
 )
 from hyperspace.view import ViewState
 
@@ -401,14 +405,14 @@ def test_the_list_walk_from_nothing_loaded_and_a_bad_file(rig):
     Presets(bank.lib, reg, Router(reg, Bindings()))
     lib = bank.lib
     listing = lib.list(PRESETS)
-    lib._current.pop(PRESETS, None)
+    lib._landed(PRESETS, None, None)        # (plan 44 D3: the presets' own landing)
     assert bank.walk(-1) == listing[-1]
-    lib._current.pop(PRESETS, None)
+    lib._landed(PRESETS, None, None)        # (plan 44 D3: the presets' own landing)
     assert bank.walk(1) == listing[0]
     bad = lib.home / PRESETS / "aaa-broken.json"
     bad.parent.mkdir(parents=True, exist_ok=True)
     bad.write_text("{ not json")
-    lib._current.pop(PRESETS, None)
+    lib._landed(PRESETS, None, None)        # (plan 44 D3: the presets' own landing)
     lib.error = ""
     assert bank.walk(1) is None and lib.error.startswith("library:")
 
@@ -498,9 +502,60 @@ def test_snapshot_by_part(tmp_path):
     macros = {f"macro.{k}" for k in range(1, 9)}
     assert macros <= set(whole) and macros <= set(perf)
     assert "tempo.bpm" in sess and "scene.select" in sess and "lfo.1.depth" in perf
+    # plan 43 §6 item 1 / plan 44 D3: the hands' look and the clouds' are the
+    # preset's, but for the mirror — the room's (`SESSION_KEYS`)
+    assert "ghost.alpha" in perf and "ghost.style" in perf and "cloud.size" in perf
+    assert "ghost.mirror" in sess and "ghost.mirror" not in perf
+    assert part_of_id("ghost.2.mirror") == "session" and part_of_id("ghost.2.on") == "performance"
     # the filters combine
     assert reg.snapshot("macro", part="session") == {}
     assert reg.snapshot("view", part="performance") == reg.snapshot("view")
+
+
+def test_two_decks_hold_the_session_params_by_reference():
+    """Plan 44 D3: `build_session` once, `build_performance` per deck — every
+    session param is one `Param` object in both decks' registries (a base
+    written through one is the room's), declared once whichever deck
+    declares it, and dropped from both when the session drops it; each
+    deck's performance params are its own."""
+    from hyperspace import tempo
+    chain = Analyzer(Analyser())
+    control, audio = Control(chain), SimpleNamespace(chain=chain)
+    session = build_session(control, audio)
+    a = build_performance(ViewState(), session=session)
+    b = build_performance(ViewState(), session=session)
+    assert isinstance(session, SessionRegistry) and a.session is session is b.session
+    assert a["master.gain"] is b["master.gain"] is session["master.gain"]
+    assert a["view.bright"] is not b["view.bright"]
+    assert "view.bright" not in session
+    a["master.gain"].set(1.7)
+    assert b["master.gain"].base == pytest.approx(1.7)
+    a["view.bright"].set(0.3)
+    assert b["view.bright"].base != pytest.approx(0.3)
+    # a session param declared on one deck is the session's, and the other's
+    clock = tempo.Clock()
+    tempo.register(a, clock)
+    assert a["tempo.bpm"] is b["tempo.bpm"] is session["tempo.bpm"]
+    tempo.register(b, clock)                # declared once: the session has it already
+    assert b["tempo.bpm"] is session["tempo.bpm"]
+    with pytest.raises(ValueError):         # …and a second declaration is refused
+        b.continuous("tempo.bpm", "BPM", lambda: 1.0, lambda v: None, group="tempo")
+    # the mirror's one setting reaches both decks' hands states
+    a["ghost.mirror"].set(True)
+    states = a["ghost.mirror"].states
+    assert len(states) == 2 and all(st.mirror for st in states)
+    # the mirror is the session's even though its group is a deck's
+    assert a["ghost.mirror"] is b["ghost.mirror"] is session["ghost.mirror"]
+    assert a["ghost.alpha"] is not b["ghost.alpha"]
+    # the aliases the session declares are answered from any deck
+    assert a.real(a["band.sel.f"]) is session.real(session["band.sel.f"])
+    # a band removed leaves every deck
+    gone = next(p.id for p in session if p.id.startswith("band.0."))
+    a.remove(gone)
+    assert gone not in session and gone not in a and gone not in b
+    # the session never takes a deck's param
+    with pytest.raises(ValueError):
+        session.continuous("view.x", "x", lambda: 0.0, lambda v: None, group="view")
 
 
 def test_core_does_not_import_the_midi_adapter():

@@ -307,7 +307,9 @@ class Hold:
 
     @contextmanager
     def program(self, renderer=None) -> Iterator[None]:
-        """Around the draw of the outputs: the held wiring, rig cables and
+        """Around the draw of the outputs: the held wiring, bus cuts (plan 44
+        D3: the held preset's, `rig_source` being the presets — so a preset
+        loaded under the hold cuts nothing on the projector until Take) and
         look on `renderer` (the hold's own by default), the live ones back
         after — whatever the draw raised. Off, nothing changes. Plan 36's
         rule: the held copy is exactly what was landed at the press — no

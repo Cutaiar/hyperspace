@@ -29,8 +29,9 @@ DT = 1 / 60
 def rig(tmp_path):
     r = boot(tmp_path / "home")
     # plan 38 B1: the renderer as plan 36 leaves it — the empty frame until
-    # a preset's graph lands one, the open show's rig cables (`rig_source`)
-    r.renderer = SimpleNamespace(wiring=G.EMPTY, ghost_states={}, rig_source=r.lib.project)
+    # a preset's graph lands one, the loaded preset's bus cuts (`rig_source`:
+    # the presets, plan 44 D3 — as `Deck.build` points the app's renderer)
+    r.renderer = SimpleNamespace(wiring=G.EMPTY, ghost_states={}, rig_source=r.presets)
     r.presets.graph.attach(r.renderer)
     r.hold = H.Hold(r.reg, r.renderer, undo=r.undo, section=r.presets.graph)
     settle(r)
@@ -439,15 +440,15 @@ def test_the_program_takes_the_held_wiring_and_hands(rig):
 
 def test_a_bus_cable_cut_after_the_hold_stays_off_the_projector(rig):
     """Plan 38 B1 (plan 36's explicit graph): the rig's bus cables are part
-    of what is held. A cable cut on GRAPH after the press — the open show's
-    `RigWires` — is the preview's: the program reads the cables as they
+    of what is held. A cable cut on GRAPH after the press — the loaded
+    preset's `RigWires` (plan 44 D3) — is the preview's: the program reads the cables as they
     stood (by `graph.rig_of`, as `Renderer._graph_for` does), the live ones
     come back after the draw, `rewired` says the graph moved, and the
     preview renderer reads the cut, never a default."""
-    r, hold, show = rig.renderer, rig.hold, rig.lib.project
+    r, hold, show = rig.renderer, rig.hold, rig.presets
     assert show.rig == G.RigWires()
     hold.engage()
-    show.rig = show.rig.cutting(G.bus_wire(1, "image"))
+    show.bus = show.bus.cutting(G.bus_wire(1, "image"))
     assert hold.rewired()
     with hold.program():
         assert G.rig_of(r.rig_source) == G.RigWires()
@@ -463,11 +464,11 @@ def test_a_bus_cable_cut_after_the_hold_stays_off_the_projector(rig):
 
 def test_drop_puts_a_bus_cable_cut_during_the_hold_back(rig):
     """A bus cable cut is a graph edit, so Drop's one undo step stands it
-    again (the show's mark carries the rig's wires, plan 36 T1): the
+    again (the library's marks carry the preset's cuts, plan 44 D3): the
     projector, which never saw the cut, still never moves."""
-    show = rig.lib.project
+    show = rig.presets
     rig.hold.engage()
-    show.rig = show.rig.cutting(G.bus_wire(1, "image"))
+    show.bus = show.bus.cutting(G.bus_wire(1, "image"))
     settle(rig)
     assert rig.hold.drop()
     settle(rig)
