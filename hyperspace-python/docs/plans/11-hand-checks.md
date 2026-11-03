@@ -7129,6 +7129,54 @@ reconnect SEND B is dark and K4 is coarse. Fail: a jump on the first
 detent, or K4 dead until turned a long way (that is soft pickup: say so —
 hand check 31's re-base did not happen).
 
+## BL. Preset folders, stage 2: the tree (plan 48)
+Register rows 636–638, 2026-11-03. Headless:
+`tests/test_ui_presets_tree.py` (the panel driver on the PRESETS page:
+the tree's order and nesting, a header folded by a click and kept in
+`ui.json` beside the pane's, **move to ▸** and a drag onto a header
+moving a file with its bytes kept and F6 following, a folder renamed and
+made from its menu, an empty folder removed and a full one refused),
+`tests/test_library_folders.py` (`Library.move`, `make_folder`,
+`rename_folder`, `remove_folder` over a temp library and machine home)
+and the tools over a nested library (`tests/test_move_library.py`,
+`tests/test_migrate_library.py`). Both Macs on this build first (row 585).
+**481. The list is a tree, and a fold is this Mac's.** (Mac A and Mac B,
+the shared library with a folder or two in `presets/`)
+1. On Mac A, open the PRESETS page; then GRAPH, its pane's presets section.
+2. Click a folder's header to fold it. Load a preset from another folder,
+   then one from inside the folded folder by a pad.
+3. Quit and relaunch Mac A; look at Mac B's list.
+*Pass:* (1) the top-level presets first, then one header per folder
+(`party  ·  2`), alphabetically, each folder's presets by their names
+alone under it, a nested folder indented under its parent; the same
+tree on the page and in the pane. (2) the folder's rows go; with its
+preset loaded the header ends `· TRIP`. (3) Mac A still has it folded;
+Mac B's is open. Fail: a folder's preset listed at the top as well.
+**482. Move a preset into a folder; the pad and the other Mac follow.**
+(Mac A and Mac B, the APC40 on Mac A, a preset on a pad)
+1. On Mac A, right-click the preset on F6's pad → **move to ▸** → a folder.
+2. Drag another top-level preset onto a folder's header.
+3. Tap F6. Save the show. On Mac B, reopen the show and tap F6.
+4. Move the first one back: right-click → **move to ▸** → *top level*.
+*Pass:* (1) the row moves under the header; the footer says "moved ACID
+→ party/ACID (n shows updated)"; the show's dot does not light; in
+Finder the file is in `presets/party/`, the same size as before
+and nothing left at the top. (2) as (1), into that folder. (3) both Macs load it
+from F6. (4) back at the top, F6 still loads it. Fail: F6 says "no
+preset", or a copy left behind at the top.
+**483. Make, rename and remove a folder.** (Mac A and Mac B)
+1. **new folder** at the list's foot: type `ambient`, Enter. Right-click
+   its header → *new folder inside…*: `slow`, Enter.
+2. Move a preset on a pad into `ambient/slow`. Right-click `ambient` →
+   *rename folder…*: `chill`, Enter. Tap the pad.
+3. Right-click `chill` → *remove folder* (off while it holds anything);
+   move the preset out, remove `chill/slow`, then `chill`.
+*Pass:* (1) both headers, `slow` indented under `ambient`; both in
+Finder under `presets/`. (2) the header reads `chill`, the preset under
+`chill / slow`, the pad loads it; Mac B sees `chill` after Drive syncs.
+(3) remove is greyed with a hover saying why; once empty each goes, from
+Finder too. Fail: any preset file gone with a folder.
+
 ## What no test covers
 
 Only a person can settle these:

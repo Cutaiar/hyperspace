@@ -1,7 +1,8 @@
-# Plan 48 — preset folders, stage 1
+# Plan 48 — preset folders, stages 1 and 2
 
 Wave 1 item L1 of the post-show plan (2026-11-02). Register rows 584–588,
-hand checks 440–443 (group BC).
+hand checks 440–443 (group BC). Stage 2 is wave 2 item L2 (2026-11-03),
+**built**: register rows 636–638, hand checks 481–483 (group BL).
 
 ## The ask
 
@@ -74,14 +75,44 @@ The trash is a machine thing.
   the same folders, so an edit to `presets/party/trip.json` re-applies
   it like any other.
 
-## What stage 2 might do
+## Stage 2 — built (wave 2 L2, 2026-11-03)
 
-Not built, not promised: moving a preset between folders from the page
-(drag a row onto a folder header, or a "move to ▸" on the row); making,
-renaming and removing a folder from the page; the list grouped under a
-folding header per folder; the bank's slot menu offering folders. The
-stage 1 names (`folder/leaf`) are what stage 2 would move, so nothing in
-the format changes.
+The stage 1 names (`folder/leaf`) are what stage 2 moves; nothing in the
+file format changes, and no schema moves.
+
+- **The tree** (row 636). `ui_presets.preset_list` draws the list as a
+  tree: the top-level presets first, then a folding header per folder
+  (`party  ·  12`), alphabetically, each holding its presets (in the
+  list's order, drawn by their leaf) and then its own folders, indented.
+  Every folder on disk is a header, empty ones too (`Library.folders`).
+  A click folds a header; the fold is this Mac's — `presets.folded` in
+  `<machine>/ui.json`, through `ui_pane`'s `read_doc` / `write_doc`, the
+  pane's keys kept. Folded with the loaded preset inside, the header ends
+  with its leaf. The PRESETS page and GRAPH's pane section are one
+  drawing. The strip, rename, ×, the trash and the show line are as in
+  stage 1.
+- **Move** (row 637). A row's right-click: **move to ▸** — *top level*
+  and every folder. A row dragged onto a header moves into that folder.
+  `Library.move(name, folder)`: the file whole, its bytes and stem kept
+  (`_move_file`: a hard link then an unlink, else an exclusive copy),
+  never over a file; then, as `rename` does (`_follow_many` over
+  `_repoint_by`), the loaded preset's name follows and every show in the
+  home that names it is copied to the trash and rewritten, the open one
+  through its `Project`. No undo step, as a rename has none.
+- **Folders** (row 638). **new folder** at the list's foot makes one at
+  the top; a header's right-click makes one inside, renames the folder
+  (`Library.rename_folder`: one rename on disk, every preset keeps its
+  leaf, the shows follow, the folds follow) or removes it
+  (`Library.remove_folder`: empty only, a `.DS_Store` aside).
+- **The tools** walk `presets/` every folder down as the library does
+  (`library._walk`): `tools/move_library.py` copies `presets/party/…`,
+  `tools/migrate_library.py` migrates it in place and names a preset by
+  its path under `presets/` (`party/trip.json`, also for `--force`;
+  `--to` keeps the folders).
+
+Not done: the bank's slot menu offering folders (the pads are the desk's,
+with no page UI, row 458's rule); the "grand cleanup pass" of the owner's
+library (the owner's, some day).
 
 ## The file layout
 
@@ -108,11 +139,14 @@ the format changes.
 - **586** — the trash on the machine; the old library trash listed, not
   migrated.
 - **587** — where a save, an as… and a two-handed save land.
-- **588** — the PRESETS page's reading of folders.
+- **588** — the PRESETS page's reading of folders (under stage 2's
+  header a row is its leaf; row 636).
+- **636** — the tree, the fold this Mac's (stage 2).
+- **637** — move to ▸ and the drag; the shows follow as on a rename.
+- **638** — making, renaming, removing a folder; the tools walk folders.
 
-## Not done here
+## Not done in stage 1
 
-`tools/move_library.py` and `tools/migrate_library.py` still read
-`presets/*.json` only. Both have already run on the owner's library;
-a folder made after that is not moved or migrated by them. Their walk can
-follow when a stage 2 or a new schema needs it.
+`tools/move_library.py` and `tools/migrate_library.py` read
+`presets/*.json` only in stage 1; stage 2 made them walk every folder
+down (row 638).
