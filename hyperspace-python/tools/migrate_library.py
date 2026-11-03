@@ -145,7 +145,7 @@ NOT_READ = "not read — black"
 class Result:
     """What one preset's checks found."""
 
-    file: str                       # the file's name, kept
+    file: str                       # the file's path under presets/ (party/trip.json), kept
     name: str = ""                  # the preset's own name
     old: str = "?"                  # its schema as found
     new: str = ""                   # the schema it saves as
@@ -180,28 +180,17 @@ def configured_library(home: Path) -> Path:
 
 
 def preset_files(library: Path) -> list[Path]:
-    """The library's presets: ``presets/**/*.json``, every folder down as the
-    library lists them (plan 48) — a dot-file (a write's temp file), a
-    backup (``.bak-``), a hidden folder and anything in a ``trash/`` left
-    out."""
+    """The library's presets: ``presets/`` every folder down, as the library
+    lists them (`library._walk`, plan 48 stage 2: hidden folders skipped,
+    never through a link) — a dot-file (a write's temp file), a backup
+    (``.bak-``) and anything in ``trash/`` left out."""
+    from hyperspace.library import _walk
+
     folder = library / PRESETS
     if not folder.is_dir():
         return []
-    out = []
-    for p in folder.rglob("*.json"):
-        rel = p.relative_to(folder).parts
-        if (p.is_file() and not p.name.startswith(".") and ".bak-" not in p.name
-                and not any(d.startswith(".") or d == "trash" for d in rel[:-1])):
-            out.append(p)
-    return sorted(out)
-
-
-def _rel(path: Path, library: Path) -> str:
-    """A preset's file under ``presets/``, folder and all (``party/trip.json``)."""
-    try:
-        return path.relative_to(library / PRESETS).as_posix()
-    except ValueError:
-        return path.name
+    return [p for p in _walk(folder)
+            if p.is_file() and not p.name.startswith(".") and ".bak-" not in p.name]
 
 
 def show_files(library: Path) -> list[Path]:
@@ -279,15 +268,17 @@ def rig_show(library: Path, home: Path, name: str | None = None
 
 
 def check(path: Path, library: Path, scratch: Path, *, picture=None,
-          show: dict | None = None) -> Result:
+          show: dict | None = None, file: str | None = None) -> Result:
     """Load, save, re-save and draw preset file `path` (`picture`: the
     golden rig's, `golden_frames.picture`; a test may hand its own), the
     rig's show `show` (a `headless.show_seed`) open. An old file whose
-    section the load did not read is an error: never written (`NOT_READ`)."""
+    section the load did not read is an error: never written (`NOT_READ`).
+    `file` is what the result calls it — its path under ``presets/``
+    (``party/trip.json``, plan 48 stage 2), else its file name."""
     from hyperspace import graphmigrate, headless
     from hyperspace.library import LibraryError
 
-    res = Result(_rel(path, library))
+    res = Result(file or path.name)
     original = path.read_bytes()
     try:
         res.old = str(json.loads(original).get("schema") or "?")
@@ -584,7 +575,8 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
         read_from = (retapered_copy(library, retapers, Path(scratch) / "retapered")
                      if not a.apply and shared_retapers(library, retapers) else library)
         for k, path in enumerate(files):
-            r = check(path, read_from, Path(scratch) / str(k), picture=picture, show=seed)
+            r = check(path, read_from, Path(scratch) / str(k), picture=picture, show=seed,
+                      file=path.relative_to(library / PRESETS).as_posix())
             results.append(r)
             print(line(r), flush=True)
     counts: dict[str, int] = {}
