@@ -237,6 +237,7 @@ replaces a row, rewrite that row instead of adding a new one.
 | The guide and the tethers' labels are never bent: when hands go through effects, they are drawn in a layer of their own laid on afterwards. | `Ghost.readout` | row 80 |
 | **Instances are laid out by `view.inst_layout`: GRID, HEX or RING.** | `render.inst_positions` | row 71 |
 | **The cut-through blend is a window's, not a ground's** (plan 39 T1): the squared-alpha cut-through (`SRC_ALPHA, ONE_MINUS_SRC_ALPHA`) is taken only when the window is see-through (`Renderer.bg_alpha < 1`, overlay mode); a scene cleared to a zero ground — laid into a composite's `over` or over the backdrop — always takes the separate blend, so its picture is honest premultiplied data and `view.cut_through` changes nothing on an opaque window. Eight backdrop fixture goldens were re-recorded for it, no factory preset's. | `render.draw_scene` | row 448 |
+| **`hyperspace --laptop` (or `--single`) reads the rig's config for one screen, for that launch only** (#299, 2026-11-03): output 1 a plain window (never fullscreen or the overlay at launch; T and the panel still can), later `[[output.screens]]` outputs not opened, both windows on the primary screen, the controls focused in front, `windows.json` neither read nor written so the rig's spots survive, one note on stderr and SYSTEM; publishing and output 1's switches stand. ⌘R keeps the flag. | `config.laptop`, `app._args` | owner — PR #299 |
 
 ## Media
 
