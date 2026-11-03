@@ -6270,6 +6270,706 @@ back cap dimmer than its front, the tesseract's far cube dimmer than its near on
 the tesseract brighter than before (the floor set too high: row 542's
 first try).
 
+## AP. The DualSense Edge, any controller in any role (plan 42)
+
+Dillon's Edge, 2026-11-02 (decision register rows 544–553): the first
+checks with the controller in hand. Run `tools/hid_probe.py --check` (or
+the browser lab's checklist) first and commit its findings — it answers
+what these steps assume.
+
+**407. The Edge over USB, as the app reads it.** (Mac, the Edge by cable)
+Headless: `tests/test_pads_sony.py`; `tests/test_pads_hid.py`.
+1. Config: one gamepad entry, `controller = "edge"`. Launch.
+2. SYSTEM: read the pad's line.
+3. Press ✕, ○, □, △, L1, R1, Create, Options, PS, both stick clicks, the
+   mic button, the touchpad click, L4, R4 and both Fn buttons; move both
+   sticks and both triggers.
+4. Show the on-screen pad (SYSTEM ▸ Pad diagram).
+
+*Pass:* (2) `hid: DualSense Edge (usb) · battery n %`. (3) each lights
+its own control on the on-screen pad (✕ where an Xbox pad's A is), the
+triggers fill L2 / R2. (4) the Edge's face: ✕○□△, the touchpad, the
+tilt bubble, L4 / R4, LFn / RFn.
+
+**408. The Edge over Bluetooth.** (Mac, the Edge paired)
+1. Unplug; pair (hold Create and PS until the light bar flashes; System
+   Settings ▸ Bluetooth). Relaunch.
+2. Repeat 407's step 3, then tilt the pad and touch the touchpad.
+
+*Pass:* the line says `(bluetooth)`; every control as over USB; the
+touch dots and the tilt bubble move. Fail: the face works but the touch
+and tilt never move (the pad stayed on its simple report).
+
+**409. Which pad is which role.** (Mac, the Edge and the Xbox pad)
+1. Two gamepad entries: `pad` with `controller = "edge"`, `p2` with
+   `controller = "xbox"`. Plug both, in either order.
+2. Swap the two `controller` values in `config.toml` while the app runs.
+
+*Pass:* (1) the Edge drives the camera and the factory rows whatever was
+plugged first; the Xbox pad's rows are `pad@p2:…`. (2) the roles swap
+within a few seconds, no relaunch.
+
+**410. The identity light.** (Mac, the Edge)
+1. No sink rows. Look at the light bar and the player lights.
+2. Add `light = "#ff0080"` and `player = 3` to the entry.
+
+*Pass:* (1) blue, one player light (the first pad's). (2) pink, three
+player lights (centre and both ends).
+
+**411. Feedback through the pad (idea 7).** (Mac, the Edge, music)
+1. Right-click `fx.kaleido.mix` → Learn sink ▸ `edge:6`. Route RT to
+   `fx.kaleido.mix` (a preset with the 26-preset habit has it).
+2. ROUTING ▸ sinks: `lane:0` → `edge:3`.
+3. Learn sink a palette hue param ▸ `edge:0`.
+
+*Pass:* (1) R2 stiffens as the kaleidoscope mix rises. (2) the heavy
+motor rumbles with the sub band. (3) the light bar follows the hue.
+
+**412. The touch burst (idea 4).** (Mac, the Edge)
+1. Copy `docs/plans/assets/42-controllers/patches/` into the library's
+   `patches/`. On GRAPH, spawn `touch burst` onto the scene → output cable.
+2. Drag a finger round the touchpad; lift it; spread two fingers.
+
+*Pass:* the burst's centre follows the finger and springs home when it
+lifts; the spread bursts harder.
+
+**413. Shake to hit (idea 5).** (Mac, the Edge)
+1. Spawn `shake hit`. Shake the pad once, sharply.
+2. Right-click Env 6's fire → Learn pad, press R4. Press R4.
+
+*Pass:* (1) one flash and punch-in per shake, none from pressing buttons.
+(2) R4 fires the same hit.
+
+**414. Learn pad on the Edge.** (Mac, the Edge)
+1. Right-click a param → Learn pad; press R4. Again on another param;
+   drag a finger left to right. Again; tip the pad right.
+
+*Pass:* rows `pad:RP`, `touch:x` and `motion:roll`, each by Learn's usual op for its target.
+
+**415. A tape plays as the pad.** (Mac, no controller)
+1. `tape = "edge-usb.jsonl"` (407's probe recording) on the entry.
+
+*Pass:* the on-screen pad replays the session, looping; SYSTEM says
+`tape: DualSense Edge`.
+
+**416. The pad window's four readouts.** (Mac, the Edge)
+Headless: `tests/test_ui_pad.py` (each view, each pad, no scrolling).
+1. SYSTEM: Pad diagram on. Click the view's name in the pad window's
+   header (MAP ▸) until it is back to Map; or pick from Pad view.
+2. In each: press buttons, move the sticks and triggers, touch the
+   touchpad, tilt and shake the pad; hover a control.
+
+*Pass:* Faithful lights each control where it sits on the Edge, the
+fingers on the touchpad, the light bar's colour; Lanes moves every lane
+and names its mapping; Cockpit's dials trail the sticks, the trigger arcs
+fill, R4 / L4 light on the edges and each press scrolls along the foot;
+the desk under the window never moves; a hover names the control's
+mapping.
+
+**417. Faithful and Cockpit drawn by NanoVG on the Mac.** (Mac, the Edge)
+Headless: `tests/test_ui_pad.py` (`test_the_nanovg_pen_draws_every_call_the_drawings_make`,
+`test_the_surface_fits_the_design_space_and_ends_its_frame_on_an_error`,
+`test_where_nanovg_cannot_draw_the_room_says_why`). New modules: restart
+the app.
+1. Pad diagram on; step to Faithful, then Cockpit. Compare with the
+   browser lab (`prototypes/edge-lab/`) on the same pad.
+2. Resize the control window (the pad window's room follows it).
+3. Quit (⌘Q).
+4. Start the app with `HYPERSPACE_NANOVG=0 uv run hyperspace`; step to
+   Faithful.
+
+*Pass:* in 1 the two read as the lab's drawings, crisp on the Retina
+screen (smooth curves, the light bar's glow, sharp small type), the
+terminal says no `pad drawings: off (…)`, and the visuals' frame rate
+does not drop with the pad window open; in 2 they stay crisp at every
+size; in 3 the app quits cleanly (no crash report); in 4 the room says
+Faithful is drawn with NanoVG, that it is off, and that Map and Lanes
+still work — and they do. (1 run on Dillon's Mac 2026-11-02: NanoVG drew
+both, they looked right.)
+
+**418. The pad's node on GRAPH draws the pad, whatever its role.** (Mac, the Edge first, the Xbox pad second)
+Headless: `tests/test_graph_edit.py` (`test_the_pad_nodes_details_draw_the_pad`),
+`tests/test_ui_pad.py` (`test_lanes_stay_readable_in_graphs_side_panel`).
+1. GRAPH: select the Edge's node (`edge`, the first gamepad entry).
+2. Pick Map, Faithful, Lanes and Cockpit from the drop-down above the
+   picture (or click the view's name in its header); press, touch and
+   tilt the pad.
+3. Drag the side panel's grip to its narrowest; look at Lanes.
+4. Select the Xbox pad's node (`xbox`).
+
+*Pass:* in 1 the side panel draws the pad (no list of "not live" ports
+under it); in 2 each readout draws there and follows the pad; in 3 Lanes
+is one readable column (the side panel scrolls to its foot), and the
+header's count shortens to a number rather than run off the edge; in 4
+the side panel lists the Xbox pad's patched ports, no picture (the
+picture is the first pad's).
+
+## AV. The Joy-Con, one per role (plan 46)
+
+The owner's Joy-Con (L), 2026-11-02 (decision register rows 565–570):
+the first checks with it in the app. The Joy-Con sleeps when idle and
+only a press of one of its buttons wakes it; the host cannot. Charge it
+first (it read low). Run 425 before the rest: it answers what they
+assume.
+
+**424. The Joy-Con over Bluetooth, as the app reads it.** (Mac, the
+Joy-Con paired)
+Headless: `tests/test_pads_nintendo.py`.
+1. Pair: hold the sync button on the rail until the lights run; System
+   Settings ▸ Bluetooth ▸ Joy-Con (L). Config: one gamepad entry,
+   `controller = "joycon-l"` (or none: `any` takes it). Launch.
+2. SYSTEM: read the pad's line.
+3. Hold it like a remote, face up, the stick end pointing away. Press
+   each arrow, SL, SR, L, ZL, −, capture and the stick in; move the
+   stick each way.
+4. Show the on-screen pad (SYSTEM ▸ Pad diagram) and GRAPH's pad node.
+
+*Pass:* (2) `hid: Joy-Con (L) (bluetooth) · battery n %`. (3) ↓ lights
+`A`, → `B`, ← `X`, ↑ `Y`, SL / SR the back pair, L `LB`, ZL fills `LT`,
+− `VIEW`, capture `SHARE`, the click `LSTICK`; the stick drives the
+left stick only. (4) the face shows one stick, four arrows, L / ZL, SL /
+SR, −, ◉ and the tilt bubble — no right stick, no D-pad, no touchpad;
+GRAPH's node lists those ports and `motion:` lanes, no `touch:`, no
+`hat:`, and sinks for rumble heavy / light and the player lights only.
+
+**425. The probe's checks, and the findings committed.** (Mac, the
+Joy-Con paired; the app closed)
+1. `uv run python tools/hid_probe.py --controller joycon-l --check
+   --record joycon-check.jsonl`. Follow every step.
+2. Commit `joycon-findings.json` under
+   `docs/plans/assets/46-joycon/` and half a second of each step of the
+   tape as `tests/fixtures/pads/joycon-bt-excerpt.jsonl` (`git add -f`:
+   fixtures are ignored), with a test over it as
+   `tests/test_pads_real.py` does for the Edge.
+
+*Pass:* the link line says bluetooth, ~62 Hz, flash records 6 (or 5),
+calibration read; every button step ✓; the stick reaches ≥ 0.95 each
+way and rests within ±0.05; the sensors' step says the built map holds
+(else the proposed map goes into `nintendo.AXIS_MAP` and this check is
+run again); three lights, rumble low, rumble high and the stop are each
+seen. Fail: a button that lands on another name is a bit in
+`nintendo._L_BUTTONS`; a stick that reads off-centre at rest with
+`recentred False` is `RECENTRE_MAX` / `RECENTRE_SPREAD`.
+
+**426. The six axes in the hand.** (Mac, the Joy-Con paired)
+1. Launch; SYSTEM ▸ Pad diagram.
+2. Tip the right side down; lift the far end; turn it right; shake it.
+3. Right-click a rotation phase param → Learn pad; tilt the Joy-Con
+   left–right; let go. Repeat onto another param with a shake.
+
+*Pass:* (2) the tilt bubble follows (roll right high, pitch far end up
+high), yaw leans right and leaks home, SHAKE flashes once per jolt.
+(3) the first Learn lands `motion:roll` from where the Joy-Con was
+held when armed; the second `motion:shake` as a trigger; each drives
+its param.
+
+**427. Drift.** (Mac, a Joy-Con whose stick is known to drift, if there
+is one)
+1. Launch with the stick untouched; read `axis:LX` / `LY` on GRAPH's
+   pad node (or the Lanes readout).
+2. Shove the stick full right, let go; read again.
+3. Hold the stick half right while relaunching; let go after the pad's
+   line appears.
+
+*Pass:* (1) both rest at 0.50 (recentred). (2) back to 0.50 within the
+deadzone. (3) the stick was held at connect, so the flash's centre
+stands (SYSTEM's line is unchanged); after letting go the reading is
+whatever the flash says — a drift shows here and nowhere else.
+
+**428. Rumble and the lights.** (Mac, the Joy-Con paired)
+1. Launch. Read the player lights.
+2. ROUTING ▸ sinks: `lane:0` → `joy:3` (the heavy band on the sub);
+   play music. Then a param → `joy:4`.
+3. Quit the app while it rumbles.
+
+*Pass:* (1) one light for the first pad entry, two for a second. (2) it
+buzzes with the bass, the light band on top; no stutter (the refresh
+every 50 ms holds it). (3) the rumble stops at once; the light stays.
+
+**429. Beside the Edge, or a second Joy-Con.** (Mac, both paired)
+1. Two gamepad entries: `controller = "edge"` and `controller =
+   "joycon-l"` (or two Joy-Cons, `joycon-l` and `joycon-r`). Launch.
+2. Press on each.
+
+*Pass:* each role reads its own pad; the (R)'s stick is also `axis:LX`
+under its role, its face by position as the (L)'s (its B, the bottom
+button, is `pad:A`; its A `pad:B`; its Y `pad:X`; its X `pad:Y` — the
+on-screen pad shows its own letters), R / ZR `RB` / `RT`; neither
+steals the other's; unplugging one leaves the other's rows alone. The
+(R)'s tilt: run the probe's checks on it too — its sensor map is from
+the sources, unverified (plan 46 D5).
+## AS. The feedback starter (wave 0 E1)
+The 2026-10-31 triage's "echo / reverb starter", built 2026-11-02 as
+**feedback** (decision register row 564, recommended: delay loops are the
+trails mechanism, the look-back keeps the dream; "echo" already names the
+look-back's frames). Headless: `tests/test_graph_starters.py` (the
+feedback tests, `test_feedback_draws_and_its_trail_fades_to_clear`,
+`test_a_fringe_and_an_interior_fade_at_one_rate`).
+**423. Feedback on a live preset: the decay stays calm, fades to clear, and two loops.** (Mac; the TV or a projector helps)
+1. Load a party preset with the scene into All outputs (or **new**, then
+   the scene chain). GRAPH: right-click the cable `scene → All outputs`,
+   **starters ▸ feedback**.
+2. Watch the shape move for ten seconds. Then on the new composite's
+   menu pick **laid add**; watch again; pick **laid over** to come back.
+3. Turn the new fade's **level** knob (its node's side pane) up to 0.9
+   and down to 0.4.
+4. OUTPUT: cut through on the laptop window (a see-through ground), the
+   shape over the desktop; or wire a channel to the backdrop under the
+   scene. Watch the trail.
+5. Right-click the new composite's node (expanded, so its port rows show):
+   **add feedback after**.
+6. ⌘Z twice.
+*Pass:* in 1 three new nodes land left to right on the cable — delay,
+fade, composite — and the head line reads "feedback: scene → composite
+over → output.all.image; composite → delay → fade → composite under —
+fade level 0.75 is how much of last frame stays"; the shape trails ghosts
+of its last few positions that fade within a quarter of a second, the
+shape itself no brighter than before and nothing burns to white. In 2,
+laid add the trail shows over the shape too and bright faces pile up
+towards white (the calm default is over); laid over it is as in 1. In 3,
+0.9 trails for about a second, 0.4 barely trails; neither sticks. In 4
+the trail fades **to clear**: the desktop (or the backdrop) shows through
+where a ghost was, and no black footprint of where the shape has been is
+left behind; the ghost's soft edge fades at the same pace as its middle.
+In 5 a second delay, fade and composite land (`delay.2`, `fade.2`,
+`composite.2`) **under the composite's box**, clear of its port rows, the
+first loop's picture fed back again, with no refusal — unlike a second
+tracers. In 6 each ⌘Z takes one whole loop back (its three nodes, their
+wires and the fade's values), the first leaving the preset as loaded.
+## AU. Node groups: ids and membership (post-show G0)
+Register row 563, 2026-11-02. Headless: `tests/test_graph_groups.py` (the
+corpus property, `test_groups_keep_their_invariants_over_the_corpus`) and
+`tests/test_graph_edit.py::test_a_group_made_taken_apart_and_remade_by_the_mouse`
+(a real mouse: box-select, right-click menu, drags out of the region, the
+Delete key).
+**422. Group, delete a member, ungroup, regroup: ids and membership
+behave.** (Mac, GRAPH, any preset with three effects in its run)
+1. Box-select two effects, right-click one, **group 2 nodes**. Note the
+   folded node's name ("group 1"). Open it (`+`).
+2. Box-select the third effect and one of the members, **group 2 nodes**:
+   the second group is "group 2"; the member moved over, said on the head.
+3. Right-click group 2's title, **ungroup**. Box-select those two again and
+   group them.
+4. In the open group 1, click its remaining member and press Delete (fn+⌫).
+5. ⌘Z.
+6. Drag the member out of its region, then drag the other out.
+7. Save the preset, load another, load it back.
+*Pass:* (2) the first group's node shrinks at once, not on the next click.
+(3) the regrouped pair is **group 3**, never "group 2" again. (4) the
+member is gone from the canvas and from the group on that same frame: the
+region is one node's, with no gap where the member was, and nothing
+refers to it. (5) the member is back on the canvas **and in its group**
+(the region holds it again). (6) the first drag says "… left group 1"; the
+second "…, the last of it: the group is gone"; the nodes stay where they
+were dropped, every cable still drawn. (7) the groups come back exactly as
+saved — no "is not in the preset — left out" note on the head; a group
+made now is numbered past the highest the file names.
+## AQ. Video audio 1 of 4: the track decoded, nothing audible (plan 45 V1)
+**421. Open a show video: nothing audible changes, memory stays flat, nothing extra is read.** (Mac, a show video of a few minutes with a soundtrack, Activity Monitor)
+Headless: `tests/test_media_audio.py` (`test_nothing_is_read_until_something_asks_for_sound`,
+`test_a_two_hour_file_holds_one_window_not_the_film`, `test_a_window_is_decoded_into_one_buffer`,
+`test_opening_never_blocks_the_caller`). In V1 nothing asks for sound
+(`Soundtrack.enable()` is V2's play-audio toggle), so this build must
+cost nothing at all: no thread, no open, no read, no memory.
+1. Launch; in Activity Monitor note the app's memory and, on the Disk
+   tab, its Bytes Read. Put a show video with a soundtrack in a channel's
+   bin and slot it; wire the channel to an output. Note Bytes Read once the
+   proxy has been made (the MEDIA page says so) and the picture plays.
+2. Let it play 30 s; scrub `pos` across the whole clip; set `rate` to −2,
+   then 0, then 4; switch `loop` to pingpong.
+3. Watch memory and Bytes Read for a minute; then slot a video with no
+   audio (a GIF or a muted export), then back.
+4. SYSTEM: the frame time. Optional: `sample Hyperspace 2` in a terminal
+   and search the thread names for `media-audio`.
+*Pass:* no sound from the app at any step (the analyzer's WAV file, if one
+is playing, is unchanged); the picture scrubs, reverses and freezes as it
+did before this build; memory does not rise when the clip is slotted
+beyond what the picture and the proxy took before this build, and stays
+flat through the scrubs and the loop; Bytes Read grows only as the
+picture is read (the same as before: the video thread and, once, the
+proxy job) — no second read of the file; no `media-audio-*` thread in the
+sample; the frame time does not move when the clip is slotted or scrubbed;
+no line about audio in the log for the muted file. Fail: a `media-audio-*`
+thread or a second read of the file points at something calling
+`Soundtrack.enable()` before V2; a climb in memory with time points at
+`Soundtrack._decode` holding old windows; a hitch on slot points at a
+decode reaching the frame thread (`VideoSource.open` or `want` doing more
+than storing a float).
+## AT. Coarse and fine through the tapers (wave 0 T1)
+Decision register row 561. Both Macs on this build; the owner has run
+`uv run python tools/retaper_routes.py` on the library (a dry run, then
+`--write`) **before the next show** — until then every old preset is
+converted at load and nothing is lost, but the files still say the old
+depths.
+**420. 0.05× from an APC knob; an old preset's depth feels the same.** (Mac, the APC40, the second Mac on `main` for the last step)
+Headless: `tests/test_retaper.py`; `tests/test_fx.py`.
+1. Load `party-noita` (the library's, after the tool). FX: open Trip
+   warp. Learn a desk knob onto `fx.warp.speed` and another onto
+   `fx.warp.amount` (ROUTING, or click-to-map on the on-screen desk).
+2. Turn the speed knob from its bottom to its top, slowly, watching the
+   readout; then land 0.05× and let go of the knob.
+3. Turn the amount knob from its bottom to its top; land 0.1 (5 % of the
+   range) and let go.
+4. Right hand up in the box, at rest; then raise it to the top of the
+   box and hold it there. Watch the warp.
+5. On the second Mac (`main`, the library before the tool's rewrite — its
+   backup, or the preset as it was), the same preset and the same gesture.
+6. GRAPH ▸ the `hand:right.y → warp amount` cable's depth (or ROUTING's
+   row): read its number.
+*Pass:* (2) the readout runs −8.00× … −0.25× … −0.008× · stop (the
+knob's middle) · +0.008× … +0.050× … +0.25× … +1.00× … +8.00×, each CC
+step about an eighth of an octave, and 0.05× holds where the knob is let
+go (about a third of the way up the positive half) — it does not snap to
+stop or to 0.1×; (3) the amount reads 0 at the bottom, then 0.002 … 0.02
+… 0.2 … 2.0, and 0.1 holds (about 0.57 of the knob); (4) with the hand at
+the top of the box the warp is as strong as (5) on the old build — the
+depth was migrated about the preset's base, so a full push reaches the
+same amount; between rest and the top the curve differs a little (the
+new taper's), by eye the same gesture; (6) the depth reads about 0.074,
+where the file said 0.3 before (the tool's line: `push 0.3 → 0.0737 about
+0.9`).
+## AR. Continuity: `@clock`, and no shader multiplies time by a param
+Register row 560 (the owner, 2026-11-02; wave 0 K1, `wave0/k1-clock-directive`).
+K1 is the framework — the directive, the lint and the harness; K2
+(register row 577) ported warp (drift and scale, one clock at drift ×
+scale) and tripcolour (pulse) onto `@clock`, so this check can be run
+now (group AY, check 434, is the same nudges an hour in). The headless
+proof is `tests/test_fx_clock.py` (a synthetic `@clock` effect beside its
+`u_phase * u_rate` twin through the UV harness; warp's drift and
+tripcolour's pulse stepping continuously; warp's scale re-zooming and no
+longer jumping) and `tests/test_shader_time_lint.py` (the allowlist now
+names only RINGS × colour, K4).
+**419. A knob step on a `@clock` param changes the rate, not the place.** (laptop; after K2; music helps)
+Headless: `tests/test_fx_clock.py` (`test_a_clocked_rate_step_is_continuous_and_the_twins_jumps`, `test_warps_speed_step_is_continuous`, `test_the_ported_rate_params_step_continuously`, `test_warps_scale_step_re_zooms_and_no_longer_jumps`), `tests/test_shader_time_lint.py`.
+1. Load a preset with Trip warp on (`party-trip`, say) and let it run — the
+   longer the better; an hour is the show's shape. Note roughly where the
+   warp's ripples sit over the shape.
+2. On FX, open Trip warp. Nudge Drift one step (a tenth), then Scale one
+   step. Then nudge the effect's Speed one step (it was integrated before
+   K1: this is what right looks like).
+3. On Trip colour, nudge Pulse one step while white is on screen.
+4. Open `hyperspace/shaders/fx/warp.glsl`: the `// @clock` lines are at the
+   top; nothing in the body multiplies `u_phase` or `u_time` by a `u_` param.
+*Pass:* in 2 a Drift nudge makes the ripples slide faster from where they
+are, the same as Speed; a Scale nudge makes them a touch finer about the
+centre (the rim moves a little more than the middle, the size of the
+nudge) and they slide on — nothing re-draws, nothing lurches; in 3 the
+green pulse keeps its beat and only quickens, no flash; 4 reads as said.
+*Fail:* a nudge on Drift or Scale lands the field somewhere else (the
+2026-10-30 show) — the port multiplies a time by a param somewhere the
+lint's allowlist still names, or a `@clock`'s period is set where the
+shader's use of it is not periodic (a scrolled noise field must run on,
+unwrapped). On a build before K2, 2 and 3 *do* lurch on Drift, Scale and
+Pulse: that is the recorded fault K2 fixed.
+## AX. One orbit camera: the eye and the pose are the preset's (plan 43 C2)
+Register rows 555, 572–576 (the owner, 2026-11-02). Both Macs on this
+build. Until the owner has run `tools/migrate_library.py` on the library
+(431 and 433 may run before it on a fresh preset), an old preset takes the
+open show's eye only while that show is open.
+**431. Frame a picture, save, load another, load it back: the framing and the turn are back.** (laptop; the 3D switch for step 3)
+Headless: `tests/test_one_camera.py` (`test_frame_save_load_another_and_load_back_puts_the_framing_and_the_turn_back`, `test_a_saved_pose_draws_the_same_shape_whichever_way_the_switch_stands`), `tests/test_hold.py` (`test_a_preset_loaded_under_hold_keeps_the_projectors_eye_and_lands_its_pose_on_both`).
+1. Load any preset with a 4D shape turning. CAMERA: one section — zoom,
+   yaw, pitch, pan, then Eye field of view and Eye distance (no "the
+   room's camera" note). Set the fov to about 35°, the zoom to 1.5×, pan
+   the shape a little right.
+2. Stop the rotation (`view.rotate` off) on a turn you would recognise.
+   Save it as `C2 FRAME`.
+3. Turn the rotation on, switch 3D on, let it turn a few seconds, switch
+   rotation off again on a new turn. Save over `C2 FRAME`.
+4. Load another preset (a corpus one: `TUMBLE`). Then load `C2 FRAME`.
+5. Load `TUMBLE` again and leave it spinning; HOLD; load `C2 FRAME`
+   under the hold; TAKE.
+*Pass:* (4) `C2 FRAME` comes back with the framing of step 3 — the same
+fov, zoom and pan — and on the very turn the shape was saved on, 3D still
+holding (the shape is where it was, not where `TUMBLE` left the spin);
+`TUMBLE` itself kept spinning from wherever it was (it has no pose); no
+dirty dot while the shape turns. (5) Under the hold the projector keeps
+`TUMBLE`'s framing *and its turn* (no jump, 3D unchanged) until TAKE;
+TAKE brings the framing and puts the shape on the saved turn at once. A
+DROP instead leaves the projector turning where it was.
+**432. The migration, on a copy then on the library, between shows.** (laptop, then the second Mac; no show that night)
+Headless: `tests/test_one_camera.py` (`test_the_tool_retapers_backs_up_and_moves_the_eye_into_every_preset`, `test_the_tool_draws_the_old_file_with_the_show_open_as_its_nine`, `test_an_old_show_hands_its_eye_to_old_presets_and_keeps_none_itself`), `tests/test_migrate_library.py`.
+1. Copy the Drive library folder somewhere local (Finder ▸ Duplicate).
+   Run `uv run python tools/migrate_library.py --library <the copy>` (a
+   dry run): read the `show:` line (the rig's show and its eye), the
+   `retaper first:` and `shows holding the eye:` lines, and every
+   preset's `round-trip picture: same`.
+2. Run it again with `--apply` on the copy. Open the app on the copy
+   (`[library] path` pointed at it, or `HYPERSPACE_HOME`), open the show
+   and step through a dozen presets.
+3. Between shows, both Macs on this build: run the tool with `--apply` on
+   the real library (no `--library`: the config's path). Note the
+   `backup:` line. Open the app; open the show; step through every preset
+   on the bank.
+4. Open `<library>/projects/<show>.hyp.json` in a text editor.
+5. On the second Mac (pulled, the same build): open the show; load three
+   presets.
+*Pass:* (1) the dry run writes nothing (the folder's dates unchanged) and
+every preset reads `round-trip picture: same`; (2)/(3) every preset draws
+as it did before the run (the same framing as on the old build with the
+show open); `~/Hyperspace/library-backup-<stamp>/` holds the library as it
+was; (4) the show's `session` has no `eye.fov` / `eye.distance` and
+`<show>.hyp.json.bak-v2-eye` sits beside it with them; (5) the second Mac
+loads them as the first does. *Fail:* a preset skipped ("not written") —
+note its line; a Mac on an older build refuses the `/9` files (expected:
+update it).
+**433. Zoom the eye on a preset with hands in the scene and one with a hands layer; a hand axis on the fov.** (laptop, the Leap; hands present)
+Headless: `tests/test_one_camera.py` (`test_hands_in_the_scene_scale_with_the_shape_and_a_layer_keeps_its_size`, `test_a_layer_laid_depth_aware_is_in_the_world_through_the_presets_eye`, `test_the_hands_calibration_is_the_rigs_reference_eye`, `test_a_hand_axis_learns_onto_the_eye_and_breathes_the_framing`).
+1. A preset whose graph wires the hands into the scene (`hands → scene`).
+   Hands in the box, still. Move Eye field of view from 47.6° to 30°, then
+   to 70°; back to 47.6°.
+2. A preset whose graph lays a hands layer (`hands → hands.layer →`
+   an output's hands). The same three fov moves. Then lay that layer
+   depth-aware (its hands entry's `laid: depth`, or a composite with
+   blend depth over the scene) and do the three moves again with a hand
+   behind the shape.
+3. Learn hand: arm `eye.fov` (CAMERA ▸ the row's Learn hand), then raise
+   the right hand. Move the hand up and down the box.
+*Pass:* (1) the shape and the hands grow and shrink together, the hands
+staying where they are against the shape (a finger on an edge stays on
+that edge); at 47.6° nothing differs from before this build. (2) the
+shape grows and shrinks, the layer's hands keep their size and place on
+screen; laid depth-aware they grow and shrink with the shape (they are in
+the world) and a hand behind the shape stays hidden exactly where the
+shape covers it at every fov. (3) the row learns (no "can't follow a hand"), and the framing
+breathes with the hand — wider as it goes one way, tighter the other —
+and settles back to the knob's value when the hand leaves.
+
+
+## AY. Continuity K2: warp and tripcolour on `@clock`
+Register row 577 (wave 1 K2, `wave1/k2`). Warp's scroll is one `@clock`,
+`u_drift_t`, at speed × drift × scale (the scroll counted in noise cells,
+so neither knob moves where the field is); tripcolour's sine is
+`u_pulse_t` at speed × pulse, wrapped to 2π. Check 419 is the first
+look; this one is the show's shape — an hour in, where the old build
+lurched by whole screens.
+**434. An hour in, warp's Drift and Scale and tripcolour's Pulse nudge without a lurch.** (laptop or the rig; an hour of running; music helps)
+Headless: `tests/test_fx_clock.py` (`test_the_ported_rate_params_step_continuously`, `test_warps_scale_step_re_zooms_and_no_longer_jumps`, the harness an hour in), `tests/test_shader_time_lint.py`.
+1. Load `party-noita` (Trip warp and Trip colour both on) and leave it
+   running for an hour — a long set, or the laptop left on with the
+   display awake.
+2. On FX, open Trip warp. Nudge Drift one step up, then one down; then
+   Scale one step up, then one down. Watch the rim, where the warp is
+   strongest.
+3. Open Trip colour and nudge Pulse one step while white is on screen.
+4. With hands, push the right hand forward and back (the preset routes
+   the hand's depth to Scale) and raise the left (Drift).
+*Pass:* in 2 Drift changes how fast the ripples slide and nothing else;
+Scale makes them a touch finer or coarser about the centre and they slide
+on from where they are; in 3 the green pulse keeps its beat and only
+quickens or slows; in 4 the ripples breathe with the hands, no snaps.
+Each the same as in the first minute.
+*Fail:* any nudge an hour in throws the ripples somewhere else or flashes
+the green — the show's fault (2026-10-30) — or the pulse or drift stops
+dead after a nudge (a clock that did not move).
+
+## AW. Decks D1: one `Deck`, nothing changes (plan 44)
+Register row 571, 2026-11-02. Headless: `tests/test_deck.py` (the old
+construction order and `Deck.build` land every corpus preset to the same
+state; `main` builds one deck; `frame`'s order unchanged) and the goldens.
+**430. A launch on the build does everything it did.** (Mac, the rig's
+config, the APC40 plugged in)
+1. Quit and launch (a restart: this build adds a module and a field on
+   live objects, so a hot reload of the old process is not enough). The
+   startup preset lands as before.
+2. PRESETS: load another preset. Turn a knob on the APC40 and drag a
+   slider on the panel; ⌘Z twice, ⇧⌘Z once.
+3. HOLD, change a param on the panel, TAKE; HOLD again, change it, DROP.
+4. Open `hyperspace/deck.py`, add a blank line, save; then the same in
+   `hyperspace/routing.py`. Turn a knob after each.
+5. SYSTEM: the hot reload line.
+*Pass:* (1) the picture, the PRESETS strip and the dirty dot are as on
+the previous build; (2) the preset lands, the knob and the slider move
+the picture, ⌘Z takes back the slider then the knob, ⇧⌘Z puts the slider
+back, the footer names each step; (3) the projector stays on the program
+while held, TAKE shows the change, DROP puts it back, as before; (4) no
+red banner, no error toast, the knob still moves the picture after each
+save; (5) SYSTEM shows "hot: deck …" and then "hot: routing …" with the
+time. Fail: anything that differs from the previous build — a step
+missing from the undo footer, a knob that stops after a save, or a hot
+reload error naming `deck`.
+
+## AZ. Continuity: the media path's and the field's rates (wave 1 K3)
+Register row 578 (under row 560; wave 1 K3, `wave1/k3`). The rates are
+integrated by the host (`ViewState.integrate`): the draw reads a phase,
+never t × rate. Restart the app after pulling (a new field on the live
+`ViewState`).
+**435. A nudge on the media rate or the field rate changes the speed, not the place.** (laptop; any time, but the longer the app has run the better)
+Headless: `tests/test_view_phase.py` (`test_a_knob_step_on_the_field_rate_moves_no_copy_further_than_one_frame`, `test_a_rate_step_changes_the_slope_not_the_value`, `test_the_draw_reads_the_phase_never_the_rate`).
+1. Load a preset with a field in motion (`party-field` or `ember-orbit`:
+   several copies, motion ORBIT or WAVE) and let it run — ten minutes at
+   least; the show's shape is an hour.
+2. Nudge **Field rate** (`view.inst_rate`, the FIELD row; APC40 knob
+   0x35 on the preset layer) one step up, then one down, then sweep it
+   slowly to the top and back to 1.
+3. Put a media channel on the faces (a still on `pattern.media`), set its
+   path to orbit, then figure-8, then sway, and nudge **Media rate**
+   (`view.media_rate`) one step each way in each.
+4. Turn **Media rate** to 0: the picture stops where it is; back up: it
+   moves on from there.
+5. Under hold (plan 38): engage HOLD and nudge Field rate on the preview.
+   Until plan 44's per-deck `ViewState`, a Field rate or Media rate move
+   on the preview also moves the projector — its copies quicken too —
+   and the hold's red line stays silent about it. That is the ruled
+   behaviour (row 578), the same as the turn's speed, not a fault.
+*Pass:* in 2 and 3 every nudge makes the motion quicken or slow from
+where it is — no copy and no picture leaps across the screen, the same as
+nudging the turn's speed; in 4 the picture parks and resumes in place.
+*Fail:* a nudge lands the copies or the picture somewhere else (the
+2026-10-30 show's fault): the draw reads a rate again
+(`tests/test_view_phase.py`'s pin should have caught it), or a phase
+wraps at a period one of its uses does not share (`view.INST_PERIOD`,
+`MEDIA_PERIOD`).
+
+## BB. Video audio 2 of 4: the mixer, forward play (plan 45 V2)
+Decision register rows 581–583. The play-audio toggle and the gain are
+`media.<c>.audio` and `media.<c>.gain` (MEDIA, on the selected channel's
+source line; GRAPH, the channel node's side pane). The sound is read at
+the transport's position each frame with no position of its own, and the
+audio and display clocks are never locked: **an occasional click at rate
+1 is expected until V4 reads sequentially and slews toward the
+transport**; at any other rate it stutters, and a hold, a `once` clip
+parked at its end, reverse and pingpong's way back are silent —
+varispeed is V4's. Judge V2 at rate 1, forward.
+**437. Play audio on a show video: the sound follows the picture.** (Mac, the speakers or headphones, a show video with a soundtrack)
+Headless: `tests/test_media_mixer.py` (`test_the_callback_reads_the_transports_stepped_position_and_moves_nothing`,
+`test_a_real_clip_through_the_channel_and_the_mixer`).
+1. Slot a show video on channel A and wire it to an output; MEDIA, select
+   A: tick `audio`. The video's sound plays from the speakers.
+2. Let it play 30 s at rate 1, watching a cut or a hit in the picture.
+3. Scrub `pos` to the middle and let go; then to near the start.
+4. Move `gain` to the bottom (off), to −6 dB, to the notch (0 dB), to +6 dB.
+5. Set `rate` to 0, then 2, then back to 1.
+*Pass:* the sound plays with the picture at rate 1 — a hit in the picture
+is heard with it, no audible drift over 30 s; after each scrub the sound
+lands where the picture is within a fraction of a second (a far scrub on
+a film longer than two minutes may be silent for a moment while its
+window is read); the gain is silent at the bottom, half as loud at −6 dB,
+louder at +6 dB; at rate 0 silence, at rate 2 a stutter (expected: V4),
+at rate 1 again as before — an occasional click is expected (V4). SYSTEM
+shows `media sound: open · 1 playing`. Fail: a steady buzz, or clicks
+more than now and then at rate 1, point at the frame rate (the SYSTEM
+frame time well above 16.7 ms) or the block; sound late against
+the picture by more than a frame or two points at the output latency.
+**438. Two channels summed; one off goes silent; the analyzer untouched.** (Mac, two show videos with distinct soundtracks, a WAV file)
+Headless: `tests/test_media_mixer.py` (`test_the_callback_sums_each_heard_channel_read_at_its_playhead_times_its_gain`,
+`test_the_toggle_enables_and_disables_exactly_on_a_flip`, `test_the_sum_is_clipped_at_one`).
+1. AUDIO: play a WAV file through the analyzer's file transport.
+2. Slot a video on A and another on B; tick `audio` on both.
+3. Untick A's `audio`; tick it again; change B's slot to another video.
+*Pass:* both soundtracks heard together, each at its own position; A off
+is A silent at once and B plays on; A on again is A back where its
+picture is; B's slot change brings the new video's sound and drops the
+old; the WAV plays and the bands follow it exactly as before this build
+(the mixer is not the analyzer's source until V3). Two loud tracks
+summed may clip — the gains are there for it.
+**439. Memory and Bytes Read with audio on: the window policy holds; off releases.** (Mac, a show video of a few minutes and a film longer than two minutes, Activity Monitor)
+Headless: `tests/test_media_audio.py` (the window policy), `tests/test_media_mixer.py`
+(`test_the_stream_opens_on_the_first_toggle_and_not_before`).
+1. Launch; note memory and Bytes Read. Slot the short video, play it with
+   `audio` off for 30 s: neither moves beyond check 421's.
+2. Tick `audio`: note memory and Bytes Read.
+3. Slot the film, tick `audio`, scrub to its middle and back.
+4. Untick `audio` on both; wait 5 s.
+*Pass:* with `audio` off nothing is read for sound (as check 421); on, the
+short clip's track is read once (memory up by about 384 kB a second of
+it, Bytes Read up once), the film holds one window (memory up by about
+46 MB, twice that for a moment while a window is re-made after a far
+scrub); unticked, that memory is let go; SYSTEM's `media sound` line
+appears only once a toggle has been on and stays `open` after. Fail:
+memory climbing while the film plays at rate 1 points at the window
+(`Soundtrack._decode`); memory not falling when unticked points at the
+disable not reaching the soundtrack (it runs on the media closer).
+
+## BA. Continuity K4: RINGS' colour, and the knobs that scale space
+Register rows 579–580 (wave 1 K4, `wave1/k4`). RINGS' colour no longer
+scales the hue drift; glimmer, wobble and fractals were measured and left
+as they are — their size, frequency and cells knobs change a shape by the
+same amount at any hour.
+**436. RINGS' colour and the three effects' knobs, nudged an hour in, re-land nothing.** (laptop; an hour of running, or the longer the better; music helps)
+Headless: `tests/test_step_continuity.py` (every effect's every knob and
+every pattern's every input but SPEED, late against early),
+`tests/test_shader_time_lint.py` (no `("patterns", "m_colour")` entry).
+1. Load a preset on the RINGS pattern (`dial`, `inverse-halo` or
+   `party-acid`) and let it run an hour. Note the colours on the rings.
+2. On FACES, nudge COLOUR one step up, then one down. With music on,
+   let the UPR lane move it (the factory route puts it on COLOUR).
+3. Switch Glimmer, Wobble and Fractals on (FX), each at an amount that
+   shows, still an hour in. Nudge glimmer's Size, wobble's Frequency
+   and fractals' Cells and Size one step each, up and down.
+*Pass:* in 2 the hues along the rings spread or close a little about
+where they were and keep drifting at the same pace — no flash, no jump
+round the wheel, the same nudge as a minute into the set; in 3 each nudge
+is a small zoom or a change of pitch from where the picture is — the
+stars stay the same stars, the lattice the same lattice, the same size
+of change as in the first minute (all three zoom about the frame's
+bottom-left corner, so the far side moves most: that is the look, not
+the fault).
+*Fail:* in 2 a nudge turns the colours somewhere else, more the longer
+the set has run (the pre-K4 RINGS: an hour in, a detent was most of a
+palette cycle), or with music the rings' colours flicker on every flare;
+in 3 a nudge throws the stars, waves or lattice to a new place that it
+would not have at minute one.
+
+## BC. Preset folders, stage 1 (plan 48)
+Register rows 584–588, 2026-11-02. Headless:
+`tests/test_preset_folders.py` (a temp library and a temp machine home:
+the listing, `path_slug`'s refusals, load/save in place, the watcher,
+rename, the bank, the two-handed save, the trash and its restore) and
+`tests/test_ui_presets.py::test_a_folder_preset_reads_folder_then_name_and_renames_in_its_folder`.
+Both Macs on this build first (row 585).
+**440. A folder in the Drive library shows on both Macs and loads from
+the pad.** (Mac A and Mac B, the shared library, the APC40 on one)
+1. On Mac A, in Finder, make `presets/party/` in the Drive library and
+   drag two presets into it (say `trip.json` and `wake.json`).
+2. Wait for Drive to sync; look at the PRESETS page on both Macs.
+3. On one Mac, click `party / TRIP` in the list. Then put it on a pad
+   (hold an empty pad after loading it, or SAVE + a pad) and tap another
+   pad, then that pad.
+*Pass:* (2) both lists show `party / TRIP` and `party / WAKE` (the
+folder dim, the name bright), next to each other, and neither under its
+old bare name; the page does not scroll across. (3) the click loads it
+(the strip reads `party/TRIP`); the pad loads it and lights; the show
+file's bank says `"party/TRIP …"`. Fail: a bare `TRIP` still listed
+(the old file not moved, or the list not walking folders).
+**441. A two-handed save lands beside a folder preset; a rename keeps
+the folder.** (Mac, the APC40, a preset in `presets/party/` loaded)
+1. Load `party / TRIP`. Hold SAVE and tap an empty pad.
+2. On the PRESETS page, **rename** the new row: the field holds the name
+   alone (`TRIP 2`). Type `TRIP LATE`, Enter.
+3. Load `party / TRIP`, **as…**, edit the field to `party/TRIP B`, Enter.
+*Pass:* (1) a new `party / TRIP 2` in the list, `presets/party/trip-2.json`
+in Finder, the pad points at it, nothing new at the top of `presets/`.
+(2) `party / TRIP LATE` in the list, `presets/party/trip-late.json`; the
+pad still loads it; the field never offered the folder. (3)
+`presets/party/trip-b.json`. Fail: any new file at the top of `presets/`.
+**442. × keeps the file on this Mac, not in Drive; restore puts it back
+in its folder.** (Mac with `[library] path` set to the Drive folder)
+1. × `party / TRIP B` on the PRESETS page.
+2. In Finder: `~/Hyperspace/trash/presets/party/` and the Drive
+   library's `trash/`.
+3. On the page, **trash (n) ▸**: restore it.
+4. If the Drive library has an old `trash/` with files in it: open the
+   trash popup again and look at its foot; then **empty trash…** twice.
+*Pass:* (2) `trip-b.<date>-<time>.json` is in `~/Hyperspace/trash/presets/party/`
+and nothing new appeared in Drive's `trash/` (nor on the other Mac).
+(3) `party / TRIP B` is back in the list and in `presets/party/`. (4) the
+old files are listed after this Mac's under "N from the library's old
+trash — restore copies, empty leaves them"; a restore of one puts it back in `presets/` and it stays in Drive's `trash/` too; after emptying they are all still in Drive's
+`trash/` while this Mac's trash is empty.
+**443. An old show's bare slot still loads; a folder slot on an older
+build is filled but missing.** (Mac on this build; a second Mac or a
+checkout on a build before plan 48)
+1. On this build, open a show saved before plan 48 whose pads name
+   top-level presets; tap each pad.
+2. Put `party / TRIP` on a pad and save the show. Open the same show on
+   the older build and tap that pad; save the show there; reopen it on
+   this build.
+*Pass:* (1) every pad loads as it did. (2) the older build says "no
+preset 'party/TRIP'" and loads nothing, the pad still drawn as filled;
+the show opens (no schema refusal); back on this build the pad still
+loads `party / TRIP`.
+
 ## What no test covers
 
 Only a person can settle these:
@@ -6404,3 +7104,6 @@ Only a person can settle these:
   - that the control window sees this frame's thumbnails (`_thumbnails` flushes);
   - the face patterns themselves (375), which only the owner can name;
   - the moved effect's area frame on a preset saved before plan 37 (376).
+- NanoVG in the control window on the Mac's GL (417): the tests draw the
+  lab's drawings through a stand-in NanoVG, and the shots were rendered
+  on Mesa's software rasteriser; one look on Dillon's Mac so far.

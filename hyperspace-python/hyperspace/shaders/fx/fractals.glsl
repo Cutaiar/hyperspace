@@ -1,11 +1,12 @@
 // @label Fractals
 // @order 60
 // @blend screen
+// @speed 0.25
 // @tip Noita's trip fractals (drugged_fractals_amount): a folded, twisting trig lattice
 // @tip that glows out of the bright parts of the frame and breathes on its own clock.
 // @tip Ground lets it bloom over the black too, so it also runs on an empty scene.
 
-uniform float u_amount;  // @param 0 3 1 "Amount" Noita's fractals amount — 0.1 first stage, 1 heavily tripping, 1.5 on the last (they stack).
+uniform float u_amount;  // @param 0 3 0.35 amount "Amount" Noita's fractals amount — 0.1 first stage, 1 heavily tripping, 1.5 on the last (they stack).
 uniform float u_size;    // @param 0 1 0 "Size" Noita's fractals_size: 0 a steady lattice, 1 its cells swell and shrink with a slow noise.
 uniform float u_cells;   // @param 4 60 20 log "Cells" Lattice cells across the frame's width (Noita: 20).
 uniform float u_halo;    // @param 0 32 6 "Halo" How far past the shape the pattern shows, px — Noita keys it on bright pixels, and a wireframe is thin.

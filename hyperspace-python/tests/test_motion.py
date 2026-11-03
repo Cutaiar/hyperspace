@@ -13,7 +13,7 @@ from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.library import Library
-from hyperspace.motion import OFF, Follower, Motion, follow, pole, spring
+from hyperspace.motion import DEFAULT_ROUTE_FEEL, OFF, Follower, Motion, follow, pole, spring
 from hyperspace.params import build_registry
 from hyperspace.render import ViewState
 from hyperspace.routing import Binding, Bindings, Router
@@ -400,6 +400,9 @@ def test_the_feel_chip_cycles_auto_follow_spring_still_and_keeps_knobs():
     m = next_feel(None)
     assert m.mode == "follow"
     m = next_feel(Motion("follow", atk=0.1, rel=0.9))
-    assert m == Motion("spring", atk=0.1, rel=0.9)
+    # the step onto spring is the smooth spring a new route is made with
+    # (the owner, 2026-10-31), not the dataclass's bouncier default knobs
+    assert m == Motion("spring", atk=0.1, rel=0.9, dur=0.5, bounce=0.0)
+    assert (m.dur, m.bounce) == (DEFAULT_ROUTE_FEEL.dur, DEFAULT_ROUTE_FEEL.bounce)
     assert next_feel(m).mode == "off"
     assert next_feel(next_feel(m)) is None

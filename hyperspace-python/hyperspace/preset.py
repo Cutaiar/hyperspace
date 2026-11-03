@@ -17,19 +17,34 @@
 
 **The schema a save writes** (row 394, the owner's decision of
 2026-10-25, superseding D1's ladder, R10 and R15): always the newest,
-``hyperspace.preset/7`` (`WIRED_SCHEMA`), in today's words — the wired
-frame (plan 35) that says everything (plan 36 W3: every edge a wire, the
-hands entries and `laid` written, effects only where the section names
-them), today's node ids and canvas ids, every value the registry holds
-(the media family, the envelopes and the sequencer), no retired id
-written back. Both Macs run the same build, so nothing is written for an
-older one. A ``/7`` is read as it is: nothing is added to it, and one
-with no graph section is black. Every older schema (`VERSIONS`) is read
-only through the one-way migration to ``/7`` (`graphmigrate.seven`), with
-a note: ``/2`` is the format above, ``/3`` adds the envelopes and the
-sequencer (plan 31), ``/4`` media (plan 32), ``/5`` the free graph (plan
-33), ``/6`` the wired frame (plan 35); a re-save is ``/7``.
-tools/migrate_library.py rewrites a library's presets that way, once.
+``hyperspace.preset/9`` (`SAVE_SCHEMA`, plan 43 C2; row 521 closed: no
+``/7``-or-``/8`` fork), in today's words — the wired frame (plan 35) that
+says everything (plan 36 W3: every edge a wire, the hands entries and
+`laid` written, effects only where the section names them), today's node
+ids and canvas ids, every value the registry holds (the media family, the
+envelopes and the sequencer, the eye), the groups where there are any,
+the spin's pose, no retired id written back. Both Macs run the same
+build, so nothing is written for an older one. A ``/7`` or ``/8`` is read
+as it is — one with no graph section is black — but for the eye, which
+it never named (`graphmigrate.nine`: the open show's, else the build's).
+Every older schema (`VERSIONS`) is read only through the one-way
+migration to ``/7`` (`graphmigrate.seven`), with a note: ``/2`` is the
+format above, ``/3`` adds the envelopes and the sequencer (plan 31),
+``/4`` media (plan 32), ``/5`` the free graph (plan 33), ``/6`` the wired
+frame (plan 35), ``/8`` the groups (plan 40), ``/9`` the one orbit camera
+(plan 43 C2); a re-save is ``/9``. tools/migrate_library.py rewrites a
+library's presets that way, once.
+
+**The one orbit camera** (plan 43 C2, the owner, 2026-11-02): a preset
+is a complete look, so the camera is all of it — `camera.*` (the shape's
+pose and scale in the world) and `eye.*` (the eye it is seen through),
+landed like any value — and the **spin's pose**: every save writes the
+six `rot.phase.*` (`params.POSE_IDS`) under ``"pose"`` (`POSE_KEY`, beside
+``values``, which stays the bases: a phase is no base), `view.body`
+folded in (`ViewState.pose`), and a load **sets** the turn there
+(`set_pose`), so the same preset opens on the same turn. A file with no pose (every file
+before ``/9``, and every file the migration rewrote: `headless.resave`)
+leaves the turn spinning, as it always did.
 
 One file per preset, ``<library>/presets/<slug>.json`` — one tier, every
 preset the user's (2026-10-28: nothing ships, nothing is "factory", nothing
@@ -52,8 +67,9 @@ replaces rows, never an offset. In order (plan 13 §5):
 2. land the values: **every** persisted param of every performance group
    gets the file's value or its group default (`Library.resolved`: the
    group's default module preset over the build values), in registry
-   order, in one go (D2). A session param is never touched, and the
-   rotation phases (not persisted) are left spinning;
+   order, in one go (D2). A session param is never touched. The rotation
+   phases (not persisted) are set to the file's pose when it has one
+   (plan 43 C2), else left spinning;
 3. replace every performer row with ``routes`` (`Bindings.set_routes`;
    the referee is first-wins, the rest in ``table.dropped`` for the
    ROUTING page);
@@ -100,6 +116,7 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -133,6 +150,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
     PAN_IDS,
     PERFORMANCE_GROUPS,
     PLANES,
+    POSE_IDS,
     RESIZE_GROUP,
     SEGMENT_GROUP,
     SESSION_GROUPS,
@@ -145,6 +163,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
     declare_resizes,
     declare_segments,
     declare_switches,
+    fx_files,
     is_cut_id,
     is_instance_id,
     is_lookback_id,
@@ -155,23 +174,32 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
     is_switch_id,
     pan_world,
     part_of,
+    retaper_depths,
 )
 from .routing import MOD_OPS, Binding, is_continuous
 
 SCHEMA = PERFORMANCE_SCHEMA
 # the schemas a load reads (each migrated on load; row 394: a save writes
-# `WIRED_SCHEMA` only). /3 is /2 plus the envelopes and the sequencer (plan
+# `SAVE_SCHEMA` only). /3 is /2 plus the envelopes and the sequencer (plan
 # 31 P), /4 /3 plus media (plan 32 S, D1), /5 /4 plus the free graph (plan
 # 33 M), /6 /5 with the wired frame in the new ids (plan 35, row 385)
 SCHEMA_V3 = f"{SCHEMA.rpartition('/')[0]}/3"
 MEDIA_SCHEMA = f"{SCHEMA.rpartition('/')[0]}/4"
 FREE_SCHEMA = graphmigrate.FREE_SCHEMA
 WIRED_SCHEMA = graphmigrate.WIRED_SCHEMA
-# plan 40 T2 (D4, D7): `/8` is `/7` plus `groups` — what a save writes only
-# when the preset holds a group (the lowest schema that loses nothing: a
-# preset with none writes `/7`, byte for byte as before)
+# plan 40 T2 (D4, D7): `/8` is `/7` plus `groups` — what a save wrote while
+# the preset held a group, until plan 43 C2 made every save `/9` (row 576)
 GROUPS_SCHEMA = graphmigrate.GROUPS_SCHEMA
-VERSIONS = (2, 3, 4, 5, 6, 7, 8)
+# plan 43 C2 (rows 572, 576): `/9` is `/8` with the eye and the pose — what
+# every save writes, groups or none
+EYE_SCHEMA = SAVE_SCHEMA = graphmigrate.EYE_SCHEMA
+VERSIONS = (2, 3, 4, 5, 6, 7, 8, 9)
+# plan 43 C2 (row 573): the spin's pose, `{"rot.phase.XY": angle, …}` — the
+# six `POSE_IDS` in radians — beside `values` (a phase moves every frame: it
+# is no base, so `values` stays the bases' snapshot)
+POSE_KEY = "pose"
+# what a load says of a pose it could not read (six numbers, by `POSE_IDS`)
+POSE_UNREAD = "pose: not six numbers, ignored — the turn is left spinning"
 # the registry groups (and lane schemes) a /2 file never names
 V3_GROUPS = ("env", "seq")
 # the preset keys a bank writes only off its default (modbank, plan 31 B)
@@ -190,6 +218,42 @@ UNWIRED_SAID = ("graph: a /7 section is a wired frame (\"frame\": \"wired\"); th
 # plan 32 S (row 337): the media section
 MEDIA_KEY = "media"
 BMP_PREFIX = "view.bmp_"          # the one bitmap file's params, gone in plan 32
+
+
+# the largest saved angle: π rounded *down* to the file's six places, so a
+# written angle is always strictly inside (−π, π) and reads back as itself
+POSE_EDGE = math.floor(math.pi * 1e6) / 1e6
+
+
+def pose_angle(a: float) -> float:
+    """One angle of `ViewState.pose` as a pose saves it (plan 43 C2, review
+    1): rounded to six places, and — an angle on the folded roads, inside
+    [−π, π] — held to ±`POSE_EDGE`: π itself would round to 3.141593 > π,
+    fold to −π on the next save and write −3.141593, so save → load → save
+    would not be a fixed point. A scene's unfolded angle (its layers spin
+    at fractions of it, `ViewState.pose`) is only rounded: it is never
+    folded, so its rounding is its fixed point. Every value this returns
+    is its own rounding."""
+    a = float(a)
+    r = round(a, 6)
+    if -math.pi <= a <= math.pi:
+        r = min(max(r, -POSE_EDGE), POSE_EDGE)
+    return r + 0.0
+
+
+def read_pose(pose: Any) -> list[float] | None:
+    """A file's pose section (plan 43 C2, row 573): its six `rot.phase.*`
+    angles in `POSE_IDS` order, each a finite number — else None (no pose,
+    or not all of one: the load says so and leaves the turn spinning)."""
+    if not isinstance(pose, dict):
+        return None
+    out: list[float] = []
+    for pid in POSE_IDS:
+        v = pose.get(pid)
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
+            return None
+        out.append(float(v))
+    return out
 
 
 def desk_json(rows) -> list[dict]:
@@ -279,6 +343,10 @@ class GraphSection:
         # keeps the held program's nodes too; None: a landing is exactly
         # its graph
         self.hold = None
+        # 2026-11-02 (G0, row 563): told after every landing — `Presets`
+        # points it at `settle_groups`, so a group's member list loses a
+        # deleted node in the same operation, never on the next draw or save
+        self.on_land: Callable[[], None] | None = None
         if renderer is not None:
             self.attach(renderer)
 
@@ -338,7 +406,8 @@ class GraphSection:
         free graph's words when `doc` is the file's from before them (a
         load: `free_doc`). With no `free` (an edit on the GRAPH page) `doc`
         is both. Plan 35 T3: every load's and every GRAPH edit's graph is a
-        wired frame, and that is what a save writes (row 394: `/7`, plan 36 T3).
+        wired frame, and that is what a save writes (row 394: `/7`, plan 36
+        T3; `/9` since plan 43 C2).
 
         An extra hands node declared for the first time this run starts
         from what the open show holds for it (`ghost.2.*` in its session —
@@ -360,6 +429,8 @@ class GraphSection:
         self.spec, self.doc = spec, copy.deepcopy(doc)
         self.free = copy.deepcopy(free)
         self._push()
+        if self.on_land is not None:
+            self.on_land()
 
     def names(self, spec: GraphSpec | None = None) -> dict[str, Any]:
         """The node instances `spec` (the landed one by default) declares,
@@ -833,12 +904,22 @@ class Presets:
         self.lib, self.reg, self.router = lib, reg, router
         self.note = ""
         self.notes: list[str] = []       # step 1's notes from the last load
-        self.migrated = ""               # plan 36 T3: "/N migrated to /7" when that load was old
+        self.migrated = ""               # plan 36 T3: "/N migrated to /9" when that load was old
         self.desk_notes: list[str] = []  # the desk rows the last load dropped (set_desk)
         # plan 28 N2: the GRAPH page's positions of the look's nodes
         self.layout: dict[str, list[float]] = {}
-        # plan 40 T2: the GRAPH page's groups (`GROUPS_KEY` entries)
-        self.groups: list[dict] = []
+        # 2026-11-02 (G0, row 563): the highest group number this preset has
+        # allotted since its load — the file's highest at the load, counting
+        # entries the load dropped — so a group's id is never one a group
+        # of this preset's life had: the one authority for the next number
+        # (`graphview.Edit.land_group` takes `group_high + 1` and bumps it;
+        # the `groups` setter raises it to the highest assigned; the marks
+        # carry it beside the groups; not saved: a reload starts again from
+        # the file's own)
+        self.group_high = 0
+        # plan 40 T2: the GRAPH page's groups (`GROUPS_KEY` entries; the
+        # `groups` property, so an assignment seeds the floor)
+        self.groups = []
         # R17 (final review): the live preset came from `new` and has never
         # been saved — save names it (whatever a file of its name holds);
         # a load or a save clears it (`_landed`)
@@ -846,6 +927,12 @@ class Presets:
         # plan 26 A4: the loaded preset's graph section (its instances'
         # params, the renderer's wiring once one is attached)
         self.graph = GraphSection(reg, lib=lib)
+        # row 563: membership is settled where what the preset holds changes
+        # — a landing, the table's modifiers, a bank's voices
+        self.graph.on_land = self.settle_groups
+        router.table.on_modifiers = self.settle_groups
+        for bank in self.banks().values():
+            bank.on_change = self.settle_groups
         lib.kind(GROUP, SCHEMA.rpartition("/")[0],
                  load=lambda doc, path: self.load_doc(doc, path),
                  document=lambda name: self.document(name),
@@ -905,7 +992,7 @@ class Presets:
                   and not is_resize_id(k) and not is_lookback_id(k)
                   and not is_matte_id(k) and not is_cut_id(k)
                   and not is_segment_id(k)}
-        doc = {"schema": WIRED_SCHEMA, "name": UNTITLED_PRESET, "values": values,
+        doc = {"schema": SAVE_SCHEMA, "name": UNTITLED_PRESET, "values": values,
                "routes": [], "macros": {}, "modules": {},
                "desk": desk_json(fresh_desk(self.router.table.profile)),
                GRAPH_KEY: read_graph({FRAME_KEY: WIRED_FRAME, "wires": [
@@ -937,6 +1024,14 @@ class Presets:
         #    slice reproduces
         doc, palette_notes = palette_slice(doc)
         notes += palette_notes
+        # 0. and its depths onto the effects' speed and amount params along
+        #    their tapers (wave 0 T1): a file from before measured them along
+        #    the linear range. Silent, as the pan is — each row's real-unit
+        #    reach is kept about its base (`params.retaper_depths`); a save
+        #    writes the marker (`UNITS`), and tools/retaper_routes.py
+        #    rewrites a library once. Measured against this rig's own effect
+        #    files (`self.fx`), the registry's when there is no state
+        doc, _ = retaper_depths(doc, self._effect_files())
         # 0. and its render graph (plan 26 A4): read, not yet landed. Plan
         #    36 T3 (W3): a `/7` is read as it is — no section is the empty
         #    frame, black, said; nothing is filled in. An older file is
@@ -945,7 +1040,7 @@ class Presets:
         #    wired frame in the new ids (plan 35), every hidden edge and D1
         #    placement as its wire, the values of an effect the section does
         #    not name dropped — a desk template's rows counted as the desk
-        #    they expand to — and a save writes that `/7` (row 394)
+        #    they expand to — and a save writes that `/7` as `/9` (row 394, plan 43 C2)
         gs = self._graph_section()
         template_rows = self._template_rows(doc)
         migrate_notes: list[str] = []
@@ -956,7 +1051,17 @@ class Presets:
             doc, migrate_notes = graphmigrate.seven(doc, gs.specs(), desk=template_rows)
             # (said on the strip — `_warn` — but no problem with the file:
             # not one of `notes`, which say what did not land)
-            migrated = graphmigrate.MIGRATED_NOTE.format(old=old, new=WIRED_SCHEMA)
+            migrated = graphmigrate.MIGRATED_NOTE.format(old=old, new=SAVE_SCHEMA)
+        # 0. and the one orbit camera (plan 43 C2): a file before `/9` never
+        #    named the eye — it drew through the open show's — so it takes
+        #    the eye an old show's session held (`Project.old_eye`), and the
+        #    camera node's GRAPH position that show kept (`camera_at`); an id
+        #    still missing takes the build's default below (step 2). Silent,
+        #    as the pan is: the picture is the one it drew
+        if version is None or version < graphmigrate.NINE:
+            show = getattr(lib, "project", None)
+            doc = graphmigrate.nine(doc, getattr(show, "old_eye", None),
+                                    getattr(show, "camera_at", None))
         spec, section, graph_notes = gs.read(doc.get(GRAPH_KEY))
         notes += graph_notes
         # 1. what the file names that a preset may not carry — all parsed
@@ -1014,6 +1119,12 @@ class Presets:
         if unknown:
             shown = ", ".join(unknown[:4]) + ("…" if len(unknown) > 4 else "")
             notes.append(f"{len(unknown)} unknown id(s): {shown}")
+        # plan 43 C2 (row 573): the pose is all six angles or none — a part
+        # of one, or a value that is no finite number, is said and the turn
+        # left spinning, as a file with no pose leaves it
+        turn = read_pose(doc.get(POSE_KEY))
+        if doc.get(POSE_KEY) is not None and turn is None:
+            notes.append(POSE_UNREAD)
         # plan 32 S: the media section's bins, read now, landed with the
         # values; no section is every bin empty
         bins, media_notes = media_channels.read_bins(doc.get(MEDIA_KEY))
@@ -1042,7 +1153,7 @@ class Presets:
         if doc.get(TEMPLATE_KEY):
             name = str(doc[TEMPLATE_KEY])
             try:
-                tdoc = lib.desk_template(name)
+                tdoc = self._template(name)
                 # (plan 33 M: as the migration read it, a row on a channel
                 # choice on its switch)
                 template = template_rows if template_rows is not None else tdoc["desk"]
@@ -1113,6 +1224,9 @@ class Presets:
         # (membership and every bank voice's values, before anything moves)
         held_mods = table.modifiers_doc(reg)
         held_banks = {s: b.doc() for s, b in self.banks().items()}
+        # (row 563: the landing settles the groups still loaded — a refusal
+        # puts them back, and the floor under their numbers)
+        held_groups, held_high = copy.deepcopy(self.groups), self.group_high
         # from here to the values landing, anything that raises puts the
         # graph that was there back, with its instances' values: a load is
         # refused whole, never half a graph
@@ -1161,6 +1275,17 @@ class Presets:
             except (ValueError, TypeError) as e:
                 lib.restore(before)
                 raise ValueError(f"a value would not land ({e}); nothing loaded") from e
+            # 2. and the turn (plan 43 C2): set to the file's pose. The one
+            #    view is what both renderers draw (hold.ONE_FOR_BOTH), so
+            #    while the projector is held the pose waits on the hold and
+            #    lands at Take (Drop forgets it: review 2.3) — the held
+            #    projector never jumps to another turn mid-set
+            view = getattr(reg, "view", None)
+            hold = getattr(gs, "hold", None)
+            if callable(getattr(hold, "hold_pose", None)):
+                hold.hold_pose(turn)          # (None: a load with no pose clears it)
+            elif turn is not None and callable(getattr(view, "set_pose", None)):
+                view.set_pose(turn)
         except BaseException:
             if table.modifiers_doc(reg) != held_mods:     # the modifiers as they were
                 table.set_modifiers(held_mods, reg)
@@ -1175,6 +1300,7 @@ class Presets:
             # fresh (`held_values` was taken before `bank.set`): a refused
             # load leaves LFO 5's depth where it stood, not at its default
             lib.restore({k: v for k, v in held_values.items() if k in reg})
+            self.groups, self.group_high = held_groups, held_high
             raise
         # 2½. the bins (plan 32): each channel opens what its slot names at
         #     the next frame's poll
@@ -1222,9 +1348,13 @@ class Presets:
         #     plan 40 T2 (D4): and its groups — a member the graph does not
         #     hold left out, said, a group left empty dropped; no key is no
         #     group (`graphmigrate.groups_of`)
-        self.groups, group_notes = read_groups(graphmigrate.groups_of(doc), self._held_canvas(),
-                                               self._groupable)
+        raw_groups = graphmigrate.groups_of(doc)
+        self.groups, group_notes = read_groups(raw_groups, self._held_canvas(), self._groupable)
         notes += group_notes
+        #     and the floor under the next group's number: every id the file
+        #     named, kept or dropped (row 563: an id is never handed out twice)
+        self.group_high = max((group_number(g.get("id")) for g in raw_groups
+                               if isinstance(g, dict)), default=0)
         # 7. the notes, for the panel
         self.notes = notes
         self.migrated = migrated            # plan 36 T3: the one-way migration's word
@@ -1239,8 +1369,8 @@ class Presets:
         # row 394 (the owner, 2026-10-25): every save is the newest schema,
         # in today's words — both Macs run the same build, so nothing is
         # written down for an older one (D1's lowest-schema rule, R10 and
-        # R15 are superseded)
-        doc: dict[str, Any] = {"schema": WIRED_SCHEMA, "name": name}
+        # R15 are superseded); plan 43 C2 (row 576): `/9`, groups or none
+        doc: dict[str, Any] = {"schema": SAVE_SCHEMA, "name": name}
         if self.note:
             doc["note"] = self.note
         table = self.router.table
@@ -1266,7 +1396,11 @@ class Presets:
         held = graphmigrate.section_effects(doc[GRAPH_KEY])
         values = {k: v for k, v in values.items()
                   if graphmigrate.effect_of(k) in (None, *held)}
-        doc.update(values=values,
+        # plan 43 C2 (row 573): the spin's pose, after the bases — every save
+        # (the migration's resave takes it back out of a file that had none:
+        # `headless.resave`)
+        pose = self._pose()
+        doc.update(values=values, **({POSE_KEY: pose} if pose else {}),
                    routes=[b.to_json() for b in table.routes()],
                    **self._modifiers_part(name),
                    **self._desk_part(name), macros=table.macros_doc(),
@@ -1275,11 +1409,11 @@ class Presets:
         if layout:                      # plan 28 N2: a preset with none writes none
             doc[LAYOUT_KEY] = {k: list(layout[k]) for k in sorted(layout)}
         # plan 40 T2 (D4, D7): the groups, after the layout, each of what the
-        # preset still holds; a preset with none writes none and stays `/7`
+        # preset still holds; a preset with none writes none (the schema is
+        # `/9` either way: plan 43 C2, row 576)
         groups = self.live_groups()
         if groups:
             doc[GROUPS_KEY] = groups
-            doc["schema"] = GROUPS_SCHEMA
         # plan 32 S: the channels' bins
         media = self.media
         if media is not None:
@@ -1292,6 +1426,20 @@ class Presets:
         review fix): GRAPH's spawn reads them for its `patches.Host`."""
         banks = getattr(self.router, "_banks", None)
         return banks() if callable(banks) else {}
+
+    def _pose(self) -> dict[str, float]:
+        """The spin's pose, the `pose` section (plan 43 C2): the view's six
+        angles, its body folded in (`ViewState.pose`), by `POSE_IDS` — none
+        on a registry with no view (a test's, one from before C2). While the
+        projector is held with a loaded pose waiting (review 2.3), that pose:
+        it is the loaded preset's turn, not the program's."""
+        view = getattr(self.reg, "view", None)
+        if not callable(getattr(view, "pose", None)):
+            return {}
+        waiting = getattr(getattr(self._graph_section(), "hold", None), "pose", None)
+        if waiting is not None:
+            return {pid: pose_angle(a) for pid, a in zip(POSE_IDS, waiting, strict=True)}
+        return {pid: pose_angle(a) for pid, a in zip(POSE_IDS, view.pose(), strict=True)}
 
     def _values(self) -> dict[str, Any]:
         """The preset's `values`: every performance base but the modifiers'
@@ -1325,7 +1473,7 @@ class Presets:
                 tmods = held[1]
             else:
                 try:
-                    tmods = list(self.lib.desk_template(ref).get(MODIFIERS_KEY) or [])
+                    tmods = list(self._template(ref).get(MODIFIERS_KEY) or [])
                 except LibraryError:
                     tmods = []
             if name is not None:
@@ -1340,6 +1488,23 @@ class Presets:
         own = [d for d in live if not undo.alike(theirs.get(d["id"]), d)]
         return {MODIFIERS_KEY: own} if own else {}
 
+    def _effect_files(self) -> dict:
+        """The effect files a document's depths are measured against (wave
+        0 T1, `params.retaper_depths`): this rig's own `FxState`'s (the
+        graph section's, `GraphSection.fx`), else the registry's, else the
+        shader folder's once."""
+        state = self._graph_section().fx
+        return fx_files(state if state is not None else self.reg)
+
+    def _template(self, name: str) -> dict:
+        """Desk template `name`'s document (`Library.desk_template`), its
+        rows' depths measured along the tapers (wave 0 T1: a template file
+        from before has a `set` row's norm as it was; the tool rewrites
+        `desk/*.json` too). Raises LibraryError as the library does."""
+        tdoc = self.lib.desk_template(name)
+        tdoc, _ = retaper_depths(tdoc, self._effect_files())
+        return tdoc
+
     def _template_rows(self, doc: dict) -> list | None:
         """A copy of the rows of the desk template `doc` names (plan 24 C3),
         or None: none named, or one the library lacks (the load says so when
@@ -1348,7 +1513,7 @@ class Presets:
         if not name:
             return None
         try:
-            return copy.deepcopy(list(self.lib.desk_template(str(name))["desk"]))
+            return copy.deepcopy(list(self._template(str(name))["desk"]))
         except (LibraryError, KeyError, TypeError):
             return None
 
@@ -1358,6 +1523,7 @@ class Presets:
         gs = self.__dict__.get("graph")
         if gs is None:
             gs = self.graph = GraphSection(self.reg, lib=self.lib)
+            gs.on_land = self.settle_groups
         return gs
 
     def parts(self) -> tuple:
@@ -1399,10 +1565,52 @@ class Presets:
                                           self.router.table, ids)
         return set(members.canvas()), refused
 
+    @property
+    def groups(self) -> list[dict]:
+        """The GRAPH page's groups (plan 40 T2), the live list. Assigning
+        raises `group_high` to the highest number assigned (row 563), so a
+        number is never handed out twice however the list arrived — a
+        load, a mark put back, a test's own entries."""
+        d = self.__dict__
+        if "_groups" not in d:                  # (an instance from before the property)
+            d["_groups"] = d.pop("groups", [])
+        return d["_groups"]
+
+    @groups.setter
+    def groups(self, value) -> None:
+        groups = list(value or ())
+        self.__dict__["_groups"] = groups
+        top = max((group_number(g.get("id")) for g in groups if isinstance(g, dict)), default=0)
+        self.group_high = max(self.__dict__.get("group_high", 0), top)
+
+    def settle_groups(self) -> None:
+        """2026-11-02 (G0, row 563): membership updated at once. Every
+        member the preset no longer holds (`_held_canvas`: a render node
+        the section just landed without, a modifier or a voice just removed)
+        is taken out of its group's list, in place, and a group left with
+        none is taken out of the list — in the same operation that removed
+        the node, so the next draw and the next save find the lists already
+        right. Hung on the mechanisms, not the callers: the graph section's
+        `on_land`, the table's `on_modifiers`, each bank's `on_change`."""
+        groups = self.groups
+        if not groups:
+            return
+        held = self._held_canvas()
+        for g in list(groups):
+            nodes = g.get("nodes") or []
+            left = [cid for cid in nodes if cid in held]
+            if len(left) == len(nodes):
+                continue
+            if left:
+                g["nodes"] = left
+            else:
+                groups.remove(g)
+
     def live_groups(self) -> list[dict]:
         """Plan 40 T2: the groups as a save writes them — each member the
-        preset no longer holds (a node deleted since) left out, a group left
-        with none left out — in the file's key order."""
+        preset no longer holds left out, a group left with none left out —
+        in the file's key order. Since row 563 the lists are kept so as the
+        nodes go (`settle_groups`); this stays the save's own guard."""
         groups = getattr(self, "groups", None) or []
         if not groups:
             return []
@@ -1458,7 +1666,7 @@ class Presets:
             template = held[1]                  # as the load expanded it
         else:
             try:
-                template = self.lib.desk_template(ref)["desk"]
+                template = self._template(ref)["desk"]
             except LibraryError:
                 template = []
         if name is not None:                     # the file now written holds these too
@@ -1498,7 +1706,7 @@ class Presets:
 
     def _warn(self, name: str) -> None:
         """The strip's warning line: the load's first note — else (plan 36
-        T3) that an old file was migrated to `/7` on load, until it is saved."""
+        T3) that an old file was migrated to `/9` on load, until it is saved."""
         if self.notes:
             more = f" (+{len(self.notes) - 1} more)" if len(self.notes) > 1 else ""
             self.lib.say(warning=f"preset {name}: {self.notes[0]}{more}")

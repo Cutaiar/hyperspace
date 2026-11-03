@@ -35,7 +35,7 @@ def save_text(r, name):
 def test_channel_params_registered(rig):
     reg = rig.reg
     media = [p.id for p in reg if p.id.startswith("media.")]
-    assert len(media) == 48
+    assert len(media) == 64      # eight params a channel (plan 45 V2: audio, gain)
     for c in CHANNELS:
         slot = reg[f"media.{c}.slot"]
         assert slot.kind is Kind.CONTINUOUS and slot.integer and (slot.lo, slot.hi) == (0, 15)
@@ -45,7 +45,7 @@ def test_channel_params_registered(rig):
         assert (reg[f"media.{c}.jog"].lo, reg[f"media.{c}.jog"].hi) == (-1.0, 1.0)
         assert reg[f"media.{c}.loop"].choices == ["loop", "pingpong", "once"]
         assert all(reg[f"media.{c}.{k}"].modulatable
-                   for k in ("slot", "fit", "rate", "pos", "jog", "loop"))
+                   for k in ("slot", "fit", "rate", "pos", "jog", "loop", "audio", "gain"))
     # (plan 33 T7: `backdrop.channel` and `view.media` retired — which
     # channel each draws is the graph's wire into `backdrop.image` /
     # `pattern.media`; plan 35 T3: and `backdrop.history`, the wire into
@@ -77,6 +77,47 @@ def test_build_registry_takes_a_media_state(rig):
     assert m.channels["a"].rate == -2.0
 
 
+def test_the_sound_params_per_channel(rig):
+    """Plan 45 V2: `media.<c>.audio` (a toggle, off) and `media.<c>.gain`
+    (unity, `tapers.T_MEDIA_GAIN`) on every channel — performance,
+    persisted, modulatable — writing the channel's `play_audio` / `gain`."""
+    from hyperspace import tapers
+    m = rig.reg.media
+    for c in CHANNELS:
+        a, g = rig.reg[f"media.{c}.audio"], rig.reg[f"media.{c}.gain"]
+        assert a.kind is Kind.TOGGLE and a.value is False
+        assert g.kind is Kind.CONTINUOUS and g.value == 1.0 and g.taper is tapers.T_MEDIA_GAIN
+        assert all(p.persist and p.modulatable and p.group == "media" for p in (a, g))
+        a.set(True)
+        g.set(0.5)
+        assert m.channels[c].play_audio is True and m.channels[c].gain == 0.5
+    t = tapers.T_MEDIA_GAIN
+    assert t.map(t.unity) == 1.0 and t.map(0) == 0.0 and t.map(t.steps) == pytest.approx(2.0)
+    assert t.unmap(t.map(t.unity)) == t.unity
+    assert tapers.fmt_level(1.0) == "0.0 dB" and tapers.fmt_level(0.0) == "off"
+    assert tapers.fmt_level(0.5) == "−6.0 dB" and tapers.fmt_level(2.0) == "+6.0 dB"
+
+
+def test_a_preset_without_the_sound_params_loads_them_at_their_defaults(rig):
+    """No schema move (row 582): a file from before V2 names neither id and
+    loads with no note, each channel's sound off at unity — even after a
+    preset that had them on; one that names them lands them, and the save
+    holds them."""
+    doc = json.loads(save_text(rig, "x"))
+    assert doc["values"]["media.a.audio"] is False and doc["values"]["media.a.gain"] == 1.0
+    on = json.loads(json.dumps(doc))
+    on["values"]["media.a.audio"], on["values"]["media.a.gain"] = True, 0.5
+    assert rig.presets.load_doc(on) == [] and rig.presets.notes == []
+    assert rig.reg["media.a.audio"].value is True and rig.reg["media.a.gain"].value == 0.5
+    old = json.loads(json.dumps(doc))
+    for c in CHANNELS:
+        del old["values"][f"media.{c}.audio"], old["values"][f"media.{c}.gain"]
+    assert rig.presets.load_doc(old) == [] and rig.presets.notes == []
+    assert rig.reg["media.a.audio"].value is False and rig.reg["media.a.gain"].value == 1.0
+    # the same schema the build writes, whatever it is: the ids did not move it
+    assert json.loads(save_text(rig, "y"))["schema"] == old["schema"]
+
+
 # the effect files added after the base was written (plan 32 T7)
 LATER_EFFECTS = ('  "fx.displace.', '  "fx.blend.')
 
@@ -95,7 +136,7 @@ def test_preset_without_media_keeps_every_value_in_six(tmp_path, name):
     assert r.presets.load(name) == []
     base = json.loads((BASE / f"{name}.json").read_text())
     doc = json.loads(save_text(r, name))
-    assert doc["schema"] == preset.WIRED_SCHEMA
+    assert doc["schema"] == preset.SAVE_SCHEMA
     # (plan 36 T3: an effect the migrated section does not name — off, in
     # no run — has its values dropped with it)
     held = M.section_effects(doc["graph"])
@@ -114,11 +155,11 @@ def test_a_media_preset_and_one_without_are_both_six(rig):
     """Row 394: with media or without, the save is `/6`, with the bins (an
     empty section when none is assigned) and every media-family value."""
     doc = rig.presets.document("x")
-    assert doc["schema"] == preset.WIRED_SCHEMA == "hyperspace.preset/7"
+    assert doc["schema"] == preset.SAVE_SCHEMA == "hyperspace.preset/9"
     assert doc[preset.MEDIA_KEY] == {"channels": {}}
     rig.reg.media.assign("a", 0, "shared:loops/tunnel.mp4")
     doc = rig.presets.document("x")
-    assert doc["schema"] == preset.WIRED_SCHEMA
+    assert doc["schema"] == preset.SAVE_SCHEMA
     assert doc[preset.MEDIA_KEY] == {"channels": {"a": ["shared:loops/tunnel.mp4"]}}
     assert doc["values"]["media.a.slot"] == 0
     for pid, v in (("media.b.rate", 2.0), ("view.media_alpha", 0.5),
@@ -135,24 +176,24 @@ def test_a_row_on_a_media_param_survives_the_save(rig):
                                      "op": "push", "value": 0.2}])
     assert rig.presets.load("LFOPOS") == []
     doc = rig.presets.document("LFOPOS")
-    assert doc["schema"] == preset.WIRED_SCHEMA
+    assert doc["schema"] == preset.SAVE_SCHEMA
     assert any(r["target"] == "media.a.pos" for r in doc["routes"])
     put(rig.home, "MACROALPHA", macros={"macro.1": {"subs": [
         {"base": "backdrop.alpha", "from": 0, "to": 1}]}})
     assert rig.presets.load("MACROALPHA") == []
     doc = rig.presets.document("MACROALPHA")
-    assert doc["schema"] == preset.WIRED_SCHEMA
+    assert doc["schema"] == preset.SAVE_SCHEMA
     assert doc["macros"]["macro.1"]["subs"][0]["base"] == "backdrop.alpha"
     put(rig.home, "DESKALPHA", desk=[{"source": "cc:0:48", "target": "backdrop.alpha",
                                       "op": "set"}])
     assert rig.presets.load("DESKALPHA") == []
     doc = rig.presets.document("DESKALPHA")
-    assert doc["schema"] == preset.WIRED_SCHEMA
+    assert doc["schema"] == preset.SAVE_SCHEMA
     assert any(r.get("target") == "backdrop.alpha" for r in doc["desk"])
     put(rig.home, "PLAIN", routes=[{"source": "lfo:0", "target": "camera.zoom",
                                     "op": "push", "value": 0.1}])
     assert rig.presets.load("PLAIN") == []
-    assert rig.presets.document("PLAIN")["schema"] == preset.WIRED_SCHEMA
+    assert rig.presets.document("PLAIN")["schema"] == preset.SAVE_SCHEMA
 
 
 def test_bins_round_trip(rig, tmp_path):
@@ -163,7 +204,7 @@ def test_bins_round_trip(rig, tmp_path):
     rig.reg["media.a.slot"].set(1)
     path = rig.presets.save_as("MEDIA")
     text = path.read_text()
-    assert '"schema": "hyperspace.preset/7"' in text
+    assert '"schema": "hyperspace.preset/9"' in text
     assert '  "a": ["shared:loops/tunnel.mp4", "camera:FaceTime HD Camera"]' in text
     want = m.to_json()
     m.from_json({})
@@ -217,7 +258,7 @@ def test_bmp_alpha_is_an_alias_of_media_alpha(rig):
     assert reg.snapshot()["view.media_alpha"] == 0.3
     doc = rig.presets.document("x")
     assert "view.bmp_alpha" not in doc["values"]
-    assert doc["values"]["view.media_alpha"] == 0.3 and doc["schema"] == preset.WIRED_SCHEMA
+    assert doc["values"]["view.media_alpha"] == 0.3 and doc["schema"] == preset.SAVE_SCHEMA
     put(rig.home, "OLDALPHA", values={"view.bmp_alpha": 0.25})
     assert rig.presets.load("OLDALPHA") == [] and rig.presets.notes == []
     assert real.value == 0.25

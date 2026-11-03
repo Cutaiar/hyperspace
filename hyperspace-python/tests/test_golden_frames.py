@@ -232,7 +232,32 @@ GOLDENS_SINCE = ("resize-faces", "resize-crop", "edges-scene", "mask-as-picture"
 # scene+hands+through: the cut-through blend is the window's, so the scene
 # laid over the backdrop (zero ground, plan 32 R) no longer squares its alpha
 # and its faces no longer wash toward white; sha256 and png only)
-GOLDENS_DIGEST = "ac516263b005abff61c7cd0fc7cefe9f92bb44616aed1eb1dee3270781dbbd17"
+# (calmer shipped defaults, 2026-10-31: re-pinned for the 42 goldens
+# re-recorded — hands-lines, hands-glass-only, acid-scene, palette-glass,
+# wired-outputs, through-one-output, branch-two-sizes, resize-crop,
+# media-chain-faces and media-chain-backdrop, present, in every state that
+# draws their effect: each has an effect on whose `speed` (and for the
+# instances, bend/twist/breathe) the preset does not name, so it took the
+# new default, and the eight frames at 1/60 s land at a different phase.
+# Nothing structural moved; a corpus preset names every param and none
+# moved. sha256 and png only.)
+# (wave 0 T1, the tapers, 2026-11-02: re-pinned for the 70 goldens
+# re-recorded — party-acid, party-mandala, party-noita, party-trip (its
+# 2× HiDPI case too), hands-fx, acid-scene, palette-glass and
+# wired-outputs, present, in every state that draws their effects: each
+# has a hand pushing an effect's `speed` or an amount param, and the
+# migrated depth keeps the push's reach at full throw about the base,
+# not at the fake hands' part-way pose, which the taper's curve now
+# lands a little differently (the contact sheet: the same pictures, small
+# shifts along the effects' edges). Nothing structural moved; sha256 and
+# png only.)
+# (wave 1 K2, register row 577: re-pinned for the 17 goldens re-recorded —
+# party-noita, absent and present, every state that draws trip warp: its
+# scroll is now a `@clock` at drift × scale, summed in the host, so the
+# absent frames differ by float rounding only (no 8-bit step on the
+# contact sheet) and the present ones, whose hands push warp's scale and
+# drift, by at most 15/255 on 716 pixels. sha256 and png only.)
+GOLDENS_DIGEST = "805c41e8520bff5458645e22c98bdb530d1c866bea13431f9ace0b0520f88458"
 # the render names the pipelines' graph used, gone in plan 35 T4 (V2: the
 # render nodes are named in the new ids)
 OLD_RENDER_NAMES = ("ghost", "history", "readout", "capture", "cover", "grounded", "fx",
@@ -413,7 +438,7 @@ def test_every_preset_resaved_as_seven_draws_its_goldens(ctx, tmp_path, slug, fa
     seven = tmp_path / "seven" / f"{slug}.json"
     seven.parent.mkdir()
     seven.write_bytes(raw)
-    assert json.loads(raw)["schema"] == "hyperspace.preset/7", slug
+    assert json.loads(raw)["schema"] == "hyperspace.preset/9", slug
     if slug in _SHIPPED_FIXTURES:
         got, _ = tool.picture(seven, slug=slug, states=tool.SHIPPED)
         assert got == tool.picture(path, slug=slug, states=tool.SHIPPED)[0], slug
@@ -456,7 +481,7 @@ def test_every_preset_with_its_main_run_grouped_draws_its_goldens(ctx, tmp_path,
     path = tool.CORPUS / f"{slug}.json"
     src = json.loads(path.read_text())
     run = G.run_back(G.read_graph(src["graph"]), "output.all.image")
-    twin = {**src, "schema": preset.GROUPS_SCHEMA,
+    twin = {**src, "schema": preset.SAVE_SCHEMA,
             "groups": [{"id": "group.1", "name": "main run",
                         "nodes": [f"render:{n}" for n in run], "open": False}]}
     grouped = tmp_path / "grouped" / f"{slug}.json"

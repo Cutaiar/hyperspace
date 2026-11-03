@@ -63,7 +63,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from . import patterns, tapers, undo
+from . import fx, patterns, tapers, undo
 from .analyzer import CURVES, F_HI, F_LO, Q_HI, Q_LO
 from .bands import CEIL, NORMS, SHAPERS
 from .fx import FxState
@@ -143,10 +143,22 @@ F_KEYS = 8
 # `segment` (plan 39 T4): each segment node's mode, level, feather, smooth,
 # switch and motion's sense and learn, the preset's, declared while its
 # graph holds the entry (declare_segments)
-PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "media", "backdrop",
-                      "switch", "resize", "matte", "cut", "segment", "lfo", "env", "seq", "macro", "mod")
+# `eye` (plan 43 C2, the owner, 2026-11-02, row 555): the one orbit camera is
+# the look's — `camera.*` (the shape's pose and scale in the world) and
+# `eye.*` (the fixed eye the world is seen through) are one camera in the
+# preset. The ids keep their group (`eye.fov`, a saved id, is a format):
+# the merge is the group's move from the session, not a rename
+PERFORMANCE_GROUPS = ("view", "rot", "camera", "eye", "pattern", "dream", "fx", "media",
+                      "backdrop", "switch", "resize", "matte", "cut", "segment", "lfo", "env",
+                      "seq", "macro", "mod")
 SESSION_GROUPS = ("tempo", "hands", "ghost", "band", "master", "scene", "audio", "output",
-                  "overlay", "ui", "desk", "eye", "cloud")
+                  "overlay", "ui", "desk", "cloud")
+# plan 43 C2 (row 573): the spin's pose — where each plane is in its turn,
+# `view.body` folded in (`ViewState.pose`) — saved by every preset under
+# these ids (its `pose` section, preset.POSE_KEY, beside `values`) and set
+# by its load. The params stay `persist=False`: the turn moves every frame,
+# so it is no base, no undo step and no dirty dot
+POSE_IDS = tuple(f"rot.phase.{name}" for name in PLANE_NAMES)
 PARTS = {"performance": PERFORMANCE_GROUPS, "session": SESSION_GROUPS}
 
 # the reference's fader → rotation-rate factor (its PLANEDRIVE was
@@ -167,7 +179,10 @@ ROT_RATE_MAX = CEIL * DRIVE * tapers.T_DRIVE.map(tapers.T_DRIVE.steps)
 # where it moved ±400 px
 PAN_RANGE = 12.0
 # the eye's ranges: a field of view from a long lens to a wide one, and a
-# distance from just outside a unit shape to far off
+# distance from just outside a unit shape to far off. Plan 43 C2 (row 574)
+# made both modulatable and left their tapers as they were — `eye.fov`
+# linear, `eye.distance` log — so a desk row or macro learned onto either
+# before lands the same value for the same knob position
 EYE_FOV_RANGE = (10.0, 120.0)
 EYE_DISTANCE_RANGE = (1.5, 40.0)
 
@@ -907,7 +922,12 @@ class Registry:
 # older build still loads the file — reading its pan as px); one without
 # it is a preset/2 file from before, its pan read in px and converted
 UNITS_KEY = "units"
-UNITS = {"camera.pan": "world"}
+# wave 0 T1: a route's depth onto an effect's `speed` or an `amount` param
+# is measured along the param's taper (`fx.retaper_of`), where a document
+# from before measured it along the linear range; `retaper_depths` reads
+# the old file as it was, and this key says a document is already so
+DEPTH_UNIT, DEPTH_TAPER = "fx.depth", "taper"
+UNITS = {"camera.pan": "world", DEPTH_UNIT: DEPTH_TAPER}
 PAN_IDS = ("camera.pan.x", "camera.pan.y")
 
 
@@ -940,6 +960,155 @@ def pan_world(doc: dict) -> tuple[dict, bool]:
             changed |= new != v
             out["values"][pid] = new
     return out, changed
+
+
+# ---- wave 0 T1: a depth onto a retapered effect param, read as it was ----
+#
+# A route's depth is in the target's normalised units; the effects' `speed`
+# and `amount` params were linear and are now on tapers (fx.T_SPEED,
+# fx.amount_taper), so the same number means another real-unit change.
+# Bases are stored in real units and are safe; the depths are not. A
+# document without `units[DEPTH_UNIT]` had its depths measured along the
+# linear range, and is converted here — at load (`Presets.load_doc`) and
+# for good by tools/retaper_routes.py, which writes the marker.
+
+_RETAPER_OPS = ("push", "position", "set")
+# the row lists a document may hold: a preset's or patch's `routes` and
+# `desk`, a desk template's `desk`, the session table's `bindings`
+_ROW_SECTIONS = ("routes", "desk", "bindings")
+_FALLBACK_FILES: dict | None = None
+
+
+def fx_files(source=None) -> dict:
+    """The effect specs to measure a document's depths against
+    (`retaper_depths`): an `FxState`'s own `files`, or the one a registry
+    declared from (`Registry.fx_state`, build_registry). With neither — a
+    reader with no rig in hand, `Bindings.from_json`, `patches.read` — the
+    shader folder as it ships (`fx.FX_DIR`), parsed **once** per process
+    and kept; a rig whose effects live elsewhere passes its own state."""
+    global _FALLBACK_FILES
+    files = getattr(source, "files", None)
+    if files is None:
+        files = getattr(getattr(source, "fx_state", None), "files", None)
+    if files is not None:
+        return files
+    if _FALLBACK_FILES is None:
+        _FALLBACK_FILES = FxState().files
+    return _FALLBACK_FILES
+
+
+def _number(v) -> float | None:
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) \
+        and math.isfinite(v) else None
+
+
+def retaper_depths(doc: dict, files: dict) -> tuple[dict, list[str]]:
+    """A document — a preset, a patch, a desk template or the session
+    table — with every depth onto a retapered effect param (`fx.retaper_of`
+    over `files`, `FxState.files`) measured along the param's taper, and
+    marked so (`units[DEPTH_UNIT]`). Returns (the document, what moved —
+    one line per row); the document itself when it is already marked. The
+    rows are its ``routes``, ``desk`` and ``bindings`` lists and its macros'
+    base subscribers. Each row's real-unit effect is kept where it can be:
+
+    - a ``position`` row (and a ``set`` row's value, a norm): the real
+      value the source lands at full throw is the same, so the new depth is
+      that value's position on the taper. Exact at the top; below it the
+      source is the param's new fader, as a position row means;
+    - a ``push`` row: the real value a full push reaches **from the row's
+      base** — the document's own value of the param, or the effect's
+      default where it names none (a session table always) — is the same,
+      so the new depth is the taper distance from the base to that value.
+      Exact at rest and at full push about that base; between the two, and
+      from another base, the taper's curve stands in for the line. A push
+      that over- or undershoots the range from that base (a negative push
+      from a base of 0) keeps its sign and its overshoot: the part inside
+      the range is converted and the part beyond it is carried over in
+      norm as it was, so a depth is never written 0 for a row that had
+      one — such a row is said "overshoots";
+    - a macro's base subscriber on such a param: its ``from`` and ``to``
+      are norms, and are moved as a position's depth is.
+
+    Depth subscribers, ``scale`` and ``rest`` are multipliers or the
+    source's and do not move. A row whose value is not a number is left."""
+    units = doc.get(UNITS_KEY)
+    if isinstance(units, dict) and units.get(DEPTH_UNIT) == DEPTH_TAPER:
+        return doc, []
+    out = copy.deepcopy(doc)
+    values = out.get("values") if isinstance(out.get("values"), dict) else {}
+    moved: list[str] = []
+    probe = Param("", "", Kind.CONTINUOUS)
+
+    def retapered(target):
+        return fx.retaper_of(target, files) if isinstance(target, str) else None
+
+    def new_norm(got, v: float) -> float:
+        probe.taper = got[3]
+        return probe._norm_of(v)
+
+    def old_value(got, n: float) -> float:
+        lo, hi = got[0], got[1]
+        return lo + _clamp(n, 0.0, 1.0) * (hi - lo)
+
+    def old_norm(got, v: float) -> float:
+        lo, hi = got[0], got[1]
+        return _clamp((v - lo) / (hi - lo), 0.0, 1.0)
+
+    def rows(section):
+        part = out.get(section)
+        return [r for r in part if isinstance(r, dict)] if isinstance(part, list) else []
+
+    for section in _ROW_SECTIONS:
+        for row in rows(section):
+            got = retapered(row.get("target"))
+            op = row.get("op")
+            if got is None or op not in _RETAPER_OPS:
+                continue
+            d = _number(row.get("value", 1.0))
+            if d is None:
+                continue
+            target = row["target"]
+            said = ""
+            if op == "push":
+                base = _number(values.get(target))
+                base = got[2] if base is None else base
+                at = old_norm(got, base)
+                target_norm = at + d
+                inside = _clamp(target_norm, 0.0, 1.0) - at      # the part within the range
+                beyond = target_norm - _clamp(target_norm, 0.0, 1.0)   # the overshoot, as it was
+                new = new_norm(got, old_value(got, at + inside)) - new_norm(got, base) + beyond
+                about = f" about {base:g}"
+                if beyond:
+                    said = f" (overshoots the range by {beyond:+.3g} in norm: carried over)"
+            else:
+                new = new_norm(got, old_value(got, d))
+                about = ""
+            if new != d:
+                row["value"] = new
+                moved.append(f"{section} {row.get('source', '?')} → {target}: {op} {d:g} → "
+                             f"{new:.4g}{about}{said}")
+    macros = out.get("macros")
+    for mid, macro in (macros.items() if isinstance(macros, dict) else ()):
+        subs = macro.get("subs") if isinstance(macro, dict) else None
+        for s in (subs if isinstance(subs, list) else ()):
+            if not isinstance(s, dict) or "depth" in s:
+                continue
+            got = retapered(s.get("base"))
+            if got is None:
+                continue
+            for key in ("from", "to"):
+                n = _number(s.get(key, 0.0 if key == "from" else 1.0))
+                if n is None:
+                    continue
+                new = new_norm(got, old_value(got, n))
+                if new != n:
+                    s[key] = new
+                    moved.append(f"{mid} base {s['base']}: {key} {n:g} → {new:.4g}")
+    units = out.get(UNITS_KEY)
+    if not isinstance(units, dict):
+        units = out[UNITS_KEY] = {}
+    units[DEPTH_UNIT] = DEPTH_TAPER
+    return out, moved
 
 
 def _attr(obj, name):
@@ -1495,6 +1664,10 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     dream = dream if dream is not None else DreamState()
     media = media if media is not None else media_channels.MediaState()
     r.media = media
+    # plan 43 C2 (row 573): the view the rotation params write — what a
+    # preset's save reads the spin's pose from and its load sets it on
+    # (`ViewState.pose` / `set_pose`; a registry from before is posed by none)
+    r.view = view
     # plan 33 S: the switches' picks live on the view state the renderer
     # reads (`ViewState.switch`); their params come with the preset's graph
     picks = getattr(view, "switch", None)
@@ -1705,6 +1878,12 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
         r.enum(f"media.{c}.loop", f"{c.upper()} loop", *_attr(ch, "loop"), list(MEDIA_LOOPS),
                group=g, tip="At the clip's end: loop, play back (pingpong), or hold the "
                             "last frame (once).")
+        r.toggle(f"media.{c}.audio", f"{c.upper()} audio", *_attr(ch, "play_audio"), group=g,
+                 tip="Play the video's own sound, read at the playhead (plan 45). Forward "
+                     "play only for now, with an occasional click; other rates stutter.")
+        r.continuous(f"media.{c}.gain", f"{c.upper()} gain", *_attr(ch, "gain"),
+                     taper=tapers.T_MEDIA_GAIN, fmt=tapers.fmt_level, group=g,
+                     tip="The channel's sound level, off to +6 dB; unity at the notch.")
 
     # ---- the backdrop (plan 32 R, row 330): a picture under the scene ----
     # (which is the graph's wire into `backdrop.image`: plan 33 T7 retired
@@ -1718,9 +1897,11 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     # ---- rotation: per-plane rate and phase ----
     # rate multiplies dt·speed·RATE[p]; signed so a lane can spin a plane
     # backwards, and as wide as the reference's plane drive (ROT_RATE_MAX).
-    # phase is the integrated angle, folded to one turn: not a preset value
-    # (a preset changes the look, not where the spin is) but a modulation
-    # target — a lane adds a phase offset on top of the integrator.
+    # phase is the integrated angle, folded to one turn: not a base (it moves
+    # every frame: no undo step, no dirty dot) but a modulation target — a
+    # lane adds a phase offset on top of the integrator. Plan 43 C2 (row
+    # 573): a preset saves the pose under these ids all the same
+    # (`POSE_IDS`, `ViewState.pose`) and its load sets the turn there.
     g = "rot"
     fold = lambda a: math.remainder(a, 2 * math.pi)   # ±π stay put, the rest folds
     for p, name in enumerate(PLANES):
@@ -1787,21 +1968,26 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     r.trigger("camera.reset", "Reset view", reset_view, group=g,
               tip="Reset rotation phases, orbit, zoom and pan.")
 
-    # ---- the eye (plan 26 A2): the one fixed camera the shape (and, from
-    # A3, the hands) are seen through. Session, like the room it is framed
-    # on: a preset never moves it. The defaults are the old 3D divide, so
-    # the shape lands where it always did; not modulatable — the camera
-    # is the rig, the shape is what moves
+    # ---- the eye (plan 26 A2): the one fixed camera the shape and the
+    # hands drawn in the scene are seen through. Plan 43 C2 (the owner,
+    # 2026-11-02, rows 555, 574): the preset's, part of the one orbit
+    # camera with `camera.*` — a load lands it like any look value — and
+    # modulatable: a lane breathes the framing (row 182's objection, that
+    # a lane would swing the whole room, went with the eye leaving the
+    # room). The defaults are the old 3D divide, so the shape lands where
+    # it always did; the hands' calibration is fitted to those defaults,
+    # the rig's reference eye, never to this one (`ghost.calibration`)
     g = "eye"
     r.continuous("eye.fov", "Eye field of view", *_attr(view, "eye_fov"),
                  lo=EYE_FOV_RANGE[0], hi=EYE_FOV_RANGE[1],
-                 fmt=lambda v: f"{v:.1f}°", group=g, modulatable=False,
+                 fmt=lambda v: f"{v:.1f}°", group=g,
                  tip="How wide the eye sees, across the shorter side of the picture. "
                      f"Wider shows more of the world, smaller; {EYE_FOV:.1f}° is the "
-                     "view the shape was always drawn in.")
+                     "view the shape was always drawn in. The preset's: a lane on it "
+                     "breathes the framing.")
     r.continuous("eye.distance", "Eye distance", *_attr(view, "eye_distance"),
                  lo=EYE_DISTANCE_RANGE[0], hi=EYE_DISTANCE_RANGE[1], log=True,
-                 fmt=lambda v: f"{v:.2f}", group=g, modulatable=False,
+                 fmt=lambda v: f"{v:.2f}", group=g,
                  tip="How far the eye stands from the centre of the world, in shape "
                      "radii. Nearer: a stronger perspective and a bigger shape. "
                      f"{EYE_DISTANCE:.2f} is the view the shape was always drawn in.")

@@ -60,6 +60,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import NamedTuple
 
 # pyGLFW and imgui_bundle each ship a libglfw; loading both trips ObjC class
 # collisions on macOS. Point pyGLFW at imgui_bundle's copy before it loads.
@@ -75,27 +76,38 @@ import moderngl
 from imgui_bundle import imgui
 from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
 
-from . import config, devices, envelope, gamepad, geometry, lfo, placement, sequencer, tempo, undo
+from . import (
+    config,
+    devices,
+    gamepad,
+    lfo,
+    placement,
+    poi,
+    replay,
+    tempo,
+    totem,
+)
 from .audio import AudioEngine
 from .bands import CEIL
 from .control import Control
+from .deck import Deck, RigMade
 from .geometry import EYE_DISTANCE, EYE_FOV, px_per_unit
-from .hold import Hold, preview_renderer, preview_size
-from .hold import register as register_hold
+from .hold import preview_size
 from .hotreload import HotReloader
 from .learn import Learn
-from .library import Library, Marks
+from .library import Library
 from .library import home as library_home
 from .media import pool as media_pool
 from .media import proxy as media_proxy
 from .media import publish
 from .media.channels import MediaState
 from .media.folder import MediaFolder
-from .outputs import Offscreen, Presenter, Preview, Slot, Switches, View
+from .media.panel import GRAPH as PANEL_GRAPH
+from .media.panel import PanelSource
+from .outputs import CanvasTap, Offscreen, Presenter, Preview, Slot, Switches, View
 from .overlay import RENDER_DEFAULT, GlfwBackend, Output, register_switches, render_index
-from .params import Registry, build_registry
+from .params import Registry
 from .pinch import install as install_pinch
-from .preset import Presets
 from .render import Renderer
 from .routing import SLEW_DEFAULT_S, Bindings, Router, bindings_path, register_desk
 from .ui import Panel, apply_style, load_fonts
@@ -174,9 +186,12 @@ class MediaResolver:
     downloading opens afresh (final review A-I1); `status` is the scan's
     word on a file (`fetching` is never opened)."""
 
-    def __init__(self, folder: MediaFolder, devices=None):
+    def __init__(self, folder: MediaFolder, devices=None, builtin: dict | None = None):
         self.folder = folder
         self.devices = devices
+        # the app's own pictures (2026-11-02): `panel:graph` → its `PanelSource`,
+        # the one object every call, so `channels._stale` keeps it
+        self.builtin: dict = dict(builtin or {})
 
     @property
     def proxy_cache(self) -> Path:
@@ -186,6 +201,9 @@ class MediaResolver:
         return self.folder.path(sid)
 
     def live(self, sid: str):
+        own = getattr(self, "builtin", {}).get(sid)
+        if own is not None:
+            return own
         reg = getattr(self, "devices", None)
         return None if reg is None else reg.media_feeds().get(sid)
 
@@ -1052,6 +1070,17 @@ def _ride_depth(p, octaves: float) -> None:
     gamepad.ride_depth(p, octaves)
 
 
+class _DevicesMade(NamedTuple):
+    """What `main`'s devices hook made beside the deck (plan 44 D1): the
+    device registry, the dream worker (or None), the keep-awake and the
+    segment workers' closer."""
+
+    rig: devices.DeviceRegistry
+    dream_io: object | None
+    awake: object
+    segmenters: object
+
+
 @dataclass
 class Host:
     """Everything one frame touches, built once by `main()`; `frame()` runs a
@@ -1088,6 +1117,10 @@ class Host:
     # every opened render output's window settings, output 1's (`output`)
     # first; each applied once a frame (plan 21 WP3)
     outputs: list = field(default_factory=list)
+    # the deck (deck.py, plan 44 D1): the bundle `reg`, `view`, `router`,
+    # `lfos`, `renderer`, `learn` and `undo` above are assigned from — they
+    # stay for D1, so `frame` reads what it read
+    deck: Deck | None = None
 
     @property
     def adapters(self) -> tuple:
@@ -1239,9 +1272,14 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
             devs.send(reg, chain)
             if devs.error and ok:
                 ok, reloader.runtime_error = False, devs.error
-        h.view.integrate(dt)
     except Exception as e:  # noqa: BLE001
         ok, reloader.runtime_error = False, _err("step", e)
+    # the integrator on its own (K3, row 578): the turn, the field's motion
+    # and the media path keep moving through a step that raised every frame
+    try:
+        h.view.integrate(dt)
+    except Exception as e:  # noqa: BLE001
+        ok, reloader.runtime_error = False, _err("view.integrate", e)
     # the analyzer's lanes as a route reads them (out / CEIL), for the
     # patterns that draw the bands themselves (u_levels, plan 22 B3): render
     # input, read-only, like the dim — never a param
@@ -1329,7 +1367,6 @@ def main(argv: list[str] | None = None) -> None:
     glfw.swap_interval(1)
     ctx = moderngl.create_context()
     renderer = Renderer(ctx)
-    s = ViewState()
     # each later output: a presenter on its own context, never waiting
     _open_presenters(slots, notes=cfg.setdefault("notes", []))
     later = [sl for sl in slots[1:] if sl.opened]
@@ -1341,7 +1378,13 @@ def main(argv: list[str] | None = None) -> None:
     # rate — so it paces itself off the render window.
     glfw.make_context_current(ctrl_win)
     glfw.swap_interval(0)
-    ui_gl = moderngl.create_context()  # a handle on the control context; it only clears
+    # a handle on the control context: it clears the window each frame and
+    # owns the GRAPH canvas's tap textures (`CanvasTap`, 2026-11-02), which
+    # `replay.grab` draws into after imgui's render. Rebinding its `screen`
+    # through moderngl reapplies the viewport moderngl noted at creation,
+    # not the window's size now; `grab` puts the viewport back itself, and
+    # the backend's `impl.render` sets its own at the start of every frame
+    ui_gl = moderngl.create_context()
     ui_ctx = imgui.create_context()
     apply_style()
     load_fonts()
@@ -1369,10 +1412,6 @@ def main(argv: list[str] | None = None) -> None:
     # dream.* drives the renderer's look-back (lookback.py); the post pass
     # runs inside renderer.draw
     panels: list = []                  # app.restart raises the panel's flag; frame() polls it
-    reg = build_registry(s, control, audio, library.project, dream=renderer.lookback.state,
-                         fx=renderer.fx.state, ghost=renderer.ghost.state,
-                         media=media.state,
-                         restart=lambda: [setattr(p, "restart_requested", True) for p in panels])
     # an analyzer preset carries its band layout; the library hands it to
     # control before restoring values (07-overhaul contracts)
     library.on_layout("band", control.apply_layout)
@@ -1381,160 +1420,160 @@ def main(argv: list[str] | None = None) -> None:
     library.extra("band", lambda: {"layout": audio.chain.layout()})
     library.on_load("band", control.scene_loaded)
     control.library = library
-    hand_settings = _hand_settings(reg, cfg)   # before attach: "default" includes them
-    # the tap-tempo clock and the LFO bank (tempo.py, lfo.py; four by
-    # default, up to 16, plan 31 B): their knobs are params too, so a
-    # preset carries a tempo and an LFO arrangement
-    clock = tempo.Clock()
-    lfos = lfo.LFOs()
-    tempo.register(reg, clock)
-    lfo.register(reg, lfos, clock)
-    # plan 31: the envelope bank (the five lane envelopes, plus extras) and
-    # the step sequencer that fires them — registered beside the LFOs and
-    # before attach, so "default" holds their knobs and an empty pattern
-    envs = envelope.Envelopes()
-    seq = sequencer.Sequencer()
-    envelope.register(reg, envs, clock)
-    sequencer.register(reg, seq, clock)
-    # the render window's placement registers before attach, so "default"
-    # includes output.* and reset / the dirty dot see them (audit L6)
-    output = _make_output(render_win, reg, cfg)
-    slots[0].output = output
-    for sl in later:                       # no params: the config says (fork F10)
-        sl.output = _later_output(sl)
-    # each opened output's switches (plan 21 WP4): rig settings, seeded
-    # from the config's launch values already on the slots, never saved
-    register_switches(reg, slots)
-    # plan 38: the projector held while the next look is built — rig
-    # controls beside the switches; its undo is handed over once it exists
-    hold = Hold(reg, renderer, make=lambda: preview_renderer(renderer))
-    register_hold(reg, hold, now=time.perf_counter)
-    # one binding table for keys, pad, MIDI and lanes (an old midi_map.json
-    # migrates) — read before attach for the same reason: the desk's
-    # session param, `desk.slew`, is the table's, at the app's default
-    # until the show says otherwise
-    mc = cfg.get("midi", {})
-    table = _desk_table(reg, Bindings.load(
-        bindings_path(home), mc.get("profile", "apc40"),
-        Path(mc.get("map", "midi_map.json")),
-    ))
-    library.attach(reg)
-    panel = Panel(control, audio, s, renderer, library.project, registry=reg, library=library)
-    panels.append(panel)
-    panel.clock, panel.lfos = clock, lfos     # the LFO page's scopes and beat light
-    panel.envs, panel.seq = envs, seq         # plan 31: what a SEQ page draws
-    panel.output = output
-    panel.outputs = slots                  # the OUTPUT page: a block per output (plan 21 WP4)
-    panel.preview = Preview(ctx)           # output 1 behind the GRAPH page (2026-10-26)
-    panel.monitor = Preview(ctx)           # plan 38: while held, the projector's inset there
-    panel.hold = hold
-    router = Router(reg, table)
-    router.use_lfos(lfos, clock)           # they step inside the pass (plan 28 N0)
-    router.use_bank(envs, clock)           # …and so do the envelopes (plan 31)
-    router.use_sequencer(seq, envs)        # after the banks begin, before the plan
-    # the presets (preset.py): the library's `presets/` files, landed on the
-    # registry and the table; the project's bank loads through it
-    presets = Presets(library, reg, router)
-    # plan 26 A4: a preset's graph section sets the renderer's wiring and
-    # hands an extra hands node its own state (`Renderer.ghost_states`)
-    presets.graph.attach(renderer)
-    hold.section = presets.graph           # plan 38 B3: landings keep the held program's nodes
-    # one Learn over the live table, whatever the MIDI gate says: a knob
-    # or a hand completes it, the panel's prompt settles what the referee
-    # refused (learn.py; the band.sel.* rule is the registry's `real`)
-    learn = Learn(reg, router.table, lane=router.lane)   # hand:7 and hand:right.y: one axis
-    panel.learn = learn
-    panel.router = router                  # the ROUTING page edits the live table
-    # the devices (devices.py, plan 27 B1): the pad, MIDI, the hands and
-    # the bridge, each opened behind its `[[devices]]` entry (the old
-    # tables translated), polled by `frame` through the registry. What
-    # holds an adapter — the panel (Learn's hints, the desk page, the HANDS
-    # page, the Learn pad menu) and the ghost renderer (the tracker's
-    # skeletons) — is pointed at it now and again whenever the list changes
-    rig = _open_devices(cfg, devices.Context(reg=reg, table=router.table, learn=learn,
-                                             audio=audio, hand_settings=hand_settings,
-                                             notes=cfg.setdefault("notes", []), home=home),
-                        home)
 
-    def point_at_devices() -> None:
-        panel.midi = rig.adapter("midi")         # the first desk listed: the APC40's page
-        panel.pad = rig.adapter("gamepad")       # the menu's "Learn pad"
-        panel.hands = rig.adapter("hands")
-        renderer.ghost.source = panel.hands      # no tracker, nothing draws
-        router.follow_devices()                  # the MIDI roles and row schemes, again
-    # schemes from the registry (plan 27 B2): the router asks it which
-    # sources are lanes and in what order the pages offer them, the learn
-    # what can be armed — each handed the registry, importing nothing
-    router.use(rig)
-    learn.devices = rig
-    rig.listeners.append(point_at_devices)
-    # plan 40 T4: a device coming or going, said in the footer with what it brings
-    rig.said = lambda role, was, now: library.say(
-        devices.arrival(router.table, rig, role, was, now) or None)
-    point_at_devices()
-    panel.devices = rig                        # the SYSTEM page's device lines
-    panel.media = media                        # the MEDIA page: the folder and the channels
-    renderer.ghost.router = router           # the guide lights what the table routes
-    renderer.cloud_source = rig              # cloud:<role> → the scene's point clouds (A4b)
-    renderer.rig_source = library.project    # the show's own wires: the bus cables (plan 36 T1)
-    media.state.resolver.devices = rig       # ndi: / syphon: / camera: ids → live feeds (plan 32 T8)
-    panel.hand_settings = hand_settings
-    dream_io, panel.dream_error = _open_dream(reg, cfg)
-    if dream_io is not None:            # what the dream node dreams with (plan 36 T4)
-        renderer.dreamer.source = dream_io
-    renderer.segment_cfg = cfg.get("segment", {})   # the segment workers' backend (plan 39 T4)
-    segmenters = _Closer(renderer.close)   # …closed with the adapters, at quit and restart
-    # the sticks as dials (gamepad.dial, a prototype): session params on
-    # whichever pad is the primary now
-    _register_dial(reg, lambda: rig.adapter("gamepad"))
-    awake = _open_awake(cfg)               # no screensaver over the show
-    # the project's startup preset (D11), once, now that everything it lands
-    # on exists; a missing one is said on the panel and the app runs on
-    library.project.load_startup()
-    # every shape's faces, triangles and UVs built now, off the frame, the
-    # startup preset's shape first, so the first switch to a big one
-    # (rectified 600-cell, 600-cell, 120-cell, Clifford torus) does not stutter
-    geometry.warm_all(first=s.shape)
-    # undo (undo.py, plan 15 WP1), built after the startup preset so a
-    # launch starts with an empty stack: bases through the registry, table
-    # parts through the table, what is loaded through the library's marks;
-    # the bands' names in strip order say which layout a strip's values
-    # belong to, and a restore tells the router its macros are acted on
-    marks = Marks(library)
-    undo_obj = undo.Undo(reg, router.table, marks=marks,
-                         tag=lambda: tuple(s.name for s in audio.chain.spec),
-                         on_restore=router.sync_macros,
-                         # the LFOs' membership (plan 31 B), read off the
-                         # router at each step, so a re-classed router counts
-                         banks=lambda: router._banks())
-    undo.install(undo_obj)             # what undo.push and the edit.* triggers reach
+    # the deck (deck.py, plan 44 D1): the registry, the view state, the
+    # table, the router, the banks, the presets, learn, undo and the hold,
+    # built by `Deck.build` in the order these lines had here. The rig
+    # objects built between its lines — the hands' setup, the outputs, the
+    # panel, the devices — are the hooks below, each run at its old place
+    made = RigMade()          # what each hook below returned, filled by Deck.build
+
+    def hands_setup(reg: Registry):
+        return _hand_settings(reg, cfg)       # before attach: "default" includes them
+
+    def outputs_setup(reg: Registry) -> Output:
+        # the render window's placement registers before attach, so "default"
+        # includes output.* and reset / the dirty dot see them (audit L6)
+        output = _make_output(render_win, reg, cfg)
+        slots[0].output = output
+        for sl in later:                       # no params: the config says (fork F10)
+            sl.output = _later_output(sl)
+        # each opened output's switches (plan 21 WP4): rig settings, seeded
+        # from the config's launch values already on the slots, never saved
+        register_switches(reg, slots)
+        return output
+
+    def load_table(reg: Registry) -> Bindings:
+        # one binding table for keys, pad, MIDI and lanes (an old midi_map.json
+        # migrates) — read before attach for the same reason: the desk's
+        # session param, `desk.slew`, is the table's, at the app's default
+        # until the show says otherwise
+        mc = cfg.get("midi", {})
+        return _desk_table(reg, Bindings.load(
+            bindings_path(home), mc.get("profile", "apc40"),
+            Path(mc.get("map", "midi_map.json")),
+        ))
+
+    def panel_setup(reg: Registry, s: ViewState, *, clock, lfos, envs, seq, hold,
+                    output) -> Panel:
+        # the Joy-Con totem (plan 47, an experiment): off unless `[totem] on`
+        # says so or the pad window's word is clicked; never saved, so it may
+        # register after attach (a fresh extra, library.py); `s` for the reset
+        totem.register(reg, totem.TotemState())
+        if totem.configured_on(cfg):
+            reg["totem.on"].set(True)
+        # the Joy-Con as a poi's handle (plan 47, the poi): likewise; its
+        # dials start from `[poi]` (weight, length, spring, gravity, drag,
+        # hand, depth), the only way they outlast a launch
+        poi_cfg = poi.configured(cfg)
+        swing = poi.PoiState()
+        poi.register(reg, swing, poi_cfg)
+        renderer.poi_source = swing          # its guide over the outputs (poi_guide.py)
+        if poi_cfg.get("on") is True:
+            reg["poi.on"].set(True)
+        # after attach, before the router: its ui.* params are the last a
+        # launch declares before the table's rows resolve; `output` is what
+        # the outputs hook returned
+        if output is None:
+            raise RuntimeError("Deck.build: the panel hook needs the outputs hook's Output")
+        panel = Panel(control, audio, s, renderer, library.project, registry=reg, library=library)
+        panels.append(panel)
+        panel.clock, panel.lfos = clock, lfos     # the LFO page's scopes and beat light
+        panel.envs, panel.seq = envs, seq         # plan 31: what a SEQ page draws
+        panel.output = output
+        panel.outputs = slots                  # the OUTPUT page: a block per output (plan 21 WP4)
+        panel.preview = Preview(ctx)           # output 1 behind the GRAPH page (2026-10-26)
+        panel.monitor = Preview(ctx)           # plan 38: while held, the projector's inset there
+        panel.canvas_tap = CanvasTap(ui_gl)    # the GRAPH canvas as `panel:graph` (2026-11-02)
+        panel.hold = hold
+        return panel
+
+    def devices_setup(reg: Registry, router: Router, learn: Learn, *, panel,
+                      hand_settings) -> _DevicesMade:
+        # `panel` and `hand_settings` are what those hooks returned
+        if panel is None:
+            raise RuntimeError("Deck.build: the devices hook needs the panel hook's Panel")
+        panel.learn = learn
+        panel.router = router                  # the ROUTING page edits the live table
+        # the devices (devices.py, plan 27 B1): the pad, MIDI, the hands and
+        # the bridge, each opened behind its `[[devices]]` entry (the old
+        # tables translated), polled by `frame` through the registry. What
+        # holds an adapter — the panel (Learn's hints, the desk page, the HANDS
+        # page, the Learn pad menu) and the ghost renderer (the tracker's
+        # skeletons) — is pointed at it now and again whenever the list changes
+        rig = _open_devices(cfg, devices.Context(reg=reg, table=router.table, learn=learn,
+                                                 audio=audio, hand_settings=hand_settings,
+                                                 notes=cfg.setdefault("notes", []), home=home),
+                            home)
+
+        def point_at_devices() -> None:
+            panel.midi = rig.adapter("midi")         # the first desk listed: the APC40's page
+            # the pad window's and the menu's "Learn pad": the first pad
+            # with a controller behind it now, re-picked on every connect
+            panel.pad = rig.live_adapter("gamepad")
+            panel.hands = rig.adapter("hands")
+            renderer.ghost.source = panel.hands      # no tracker, nothing draws
+            router.follow_devices()                  # the MIDI roles and row schemes, again
+        # schemes from the registry (plan 27 B2): the router asks it which
+        # sources are lanes and in what order the pages offer them, the learn
+        # what can be armed — each handed the registry, importing nothing
+        router.use(rig)
+        learn.devices = rig
+        rig.listeners.append(point_at_devices)
+        # plan 40 T4: a device coming or going, said in the footer with what it brings
+        rig.said = lambda role, was, now: library.say(
+            devices.arrival(router.table, rig, role, was, now) or None)
+        point_at_devices()
+        panel.devices = rig                        # the SYSTEM page's device lines
+        panel.media = media                        # the MEDIA page: the folder and the channels
+        renderer.ghost.router = router           # the guide lights what the table routes
+        renderer.cloud_source = rig              # cloud:<role> → the scene's point clouds (A4b)
+        renderer.rig_source = library.project    # the show's own wires: the bus cables (plan 36 T1)
+        media.state.resolver.devices = rig       # ndi: / syphon: / camera: ids → live feeds (plan 32 T8)
+        # the GRAPH canvas (2026-11-02); `on_page` is the panel's own fact, read
+        media.state.resolver.builtin[PANEL_GRAPH] = PanelSource(
+            panel.canvas_tap, on_page=lambda: panel.canvas_px is not None)
+        panel.hand_settings = hand_settings
+        dream_io, panel.dream_error = _open_dream(reg, cfg)
+        if dream_io is not None:            # what the dream node dreams with (plan 36 T4)
+            renderer.dreamer.source = dream_io
+        renderer.segment_cfg = cfg.get("segment", {})   # the segment workers' backend (plan 39 T4)
+        segmenters = _Closer(renderer.close)   # …closed with the adapters, at quit and restart
+        # the sticks as dials (gamepad.dial, a prototype): session params on
+        # whichever pad is the primary now
+        _register_dial(reg, lambda: rig.adapter("gamepad"))
+        awake = _open_awake(cfg)               # no screensaver over the show
+        return _DevicesMade(rig, dream_io, awake, segmenters)
+
+    deck = Deck.build(library=library, control=control, audio=audio, table=load_table,
+                      renderer=renderer, media=media.state,
+                      restart=lambda: [setattr(p, "restart_requested", True) for p in panels],
+                      hands=hands_setup, outputs=outputs_setup, panel=panel_setup,
+                      devices=devices_setup, made=made, warm=True)
+    hand_settings, output, panel = made.hands, made.outputs, made.panel
+    rig, dream_io, awake, segmenters = made.devices
+    s, reg, router, hold = deck.view, deck.reg, deck.router, deck.hold
+    clock, presets, undo_obj = deck.clock, deck.presets, deck.undo
     panel.undo = undo_obj              # the footer's message slot
-    hold.undo = undo_obj               # Drop goes back to the hold's point through it
+    panel.deck = deck                  # plan 44 D1: beside its handles; D5 reads through it
     # panel state and chain must stay one object even after source changes
     # the live objects that get re-classed on a hot reload; re-evaluated
     # each swap so recreated ones (the chain after a source attach) count
     reloader = HotReloader(targets=lambda: [
-        (renderer, "render", "Renderer"),
-        (renderer.scene, "render", "SceneTarget"),
-        (renderer.cover, "render", "CoverTarget"),
-        (renderer.lookback, "lookback", "Lookback"),
-        (renderer.lookback.state, "lookback", "DreamState"),
-        (renderer.fx, "fx", "FxChain"),
-        (renderer.fx.state, "fx", "FxState"),
-        (renderer.ghost, "ghost", "Ghost"),
-        (renderer.ghost.state, "ghost", "GhostState"),
-        (s, "view", "ViewState"),
+        # the deck's objects (deck.py, plan 44 D1): the renderer and its
+        # parts, the view state, the registry and every param, the marks,
+        # undo, the hold, the router, the presets, learn and the banks
+        *deck.targets(),
         (media.state, "media.channels", "MediaState"),        # plan 32
         *[(ch, "media.channels", "Channel") for ch in media.state.channels.values()],
         (media.folder, "media.folder", "MediaFolder"),
         (panel, "ui", "Panel"),
+        *([(panel._pad_nvg, "ui_pad_nvg", "Surface")] if "_pad_nvg" in panel.__dict__ else []),
         (control, "control", "Control"),
         (audio, "audio", "AudioEngine"),
         (audio.chain, "analyzer", "Analyzer"),
         *[(p, "bands", "Params") for p in audio.chain.params],
         *([(audio.analyser, "analysis", "Analyser")] if audio.analyser is not None else []),
-        (reg, "params", "Registry"),
-        *[(p, "params", "Param") for p in reg],
         (output, "overlay", "Output"),
         (output.backend, "overlay", "GlfwBackend"),
         # the later render outputs (plan 21 WP3); a presenter rebuilds its
@@ -1544,24 +1583,6 @@ def main(argv: list[str] | None = None) -> None:
         *[(sl.presenter, "outputs", "Presenter") for sl in later if sl.presenter],
         (library, "library", "Library"),
         (library.project, "library", "Project"),
-        (marks, "library", "Marks"),
-        (undo_obj, "undo", "Undo"),
-        (hold, "hold", "Hold"),             # plan 38, and its preview renderer once made
-        *([(hold.preview, "render", "Renderer")] if hold.preview is not None else []),
-        (router, "routing", "Router"),
-        (presets, "preset", "Presets"),
-        (presets.graph, "preset", "GraphSection"),      # plan 26 A4
-        (learn, "learn", "Learn"),
-        (clock, "tempo", "Clock"),
-        (lfos, "lfo", "LFOs"),
-        # the LFOs as they are at this swap: N of them, with gaps (plan 31 B)
-        *[(lf, "lfo", "LFO") for lf in lfos.lfos],
-        # the envelopes the same way (plan 31: five lane ones and the
-        # extras), and the sequencer with its lanes
-        (envs, "envelope", "Envelopes"),
-        *[(e, "envelope", "Envelope") for e in envs.voices],
-        (seq, "sequencer", "Sequencer"),
-        *[(ln, "sequencer", "Lane") for ln in seq.lanes],
         *([(hand_settings, "hands.core", "HandSettings")] if hand_settings else []),
         *([(dream_io, "dream", "DreamWorker")] if dream_io else []),
         # the devices' adapters, the shims and the registry (devices.py):
@@ -1629,18 +1650,19 @@ def main(argv: list[str] | None = None) -> None:
             return
         _save_windows(home, render_win, ctrl_win, output, [sl.output for sl in slots[1:]])
 
-    host = Host(reg=reg, view=s, control=control, audio=audio, router=router,
-                clock=clock, lfos=lfos, keys=keys, mouse=mouse, output=output,
-                renderer=renderer, panel=panel, reloader=reloader,
+    # the flat handles are the deck's (plan 44 D1), so `frame` is unchanged
+    host = Host(reg=deck.reg, view=deck.view, control=control, audio=audio, router=deck.router,
+                clock=clock, lfos=deck.lfos, keys=keys, mouse=mouse, output=output,
+                renderer=deck.renderer, panel=panel, reloader=reloader,
                 draw_render=draw_render, draw_panel=draw_panel,
                 restart=lambda: _restart(audio, (watchdog, awake, panel, *host.adapters,
                                                  publishers, segmenters), impl,
                                          ctrl_win,
                                          save=save_windows, windows=all_windows()),
                 quit=lambda: glfw.set_window_should_close(render_win, True),
-                devices=rig, dream_io=dream_io, learn=learn, render_watch=render_watch,
-                undo=undo_obj, media=media,
-                outputs=[sl.output for sl in slots if sl.output is not None])
+                devices=rig, dream_io=dream_io, learn=deck.learn, render_watch=render_watch,
+                undo=deck.undo, media=media,
+                outputs=[sl.output for sl in slots if sl.output is not None], deck=deck)
 
     # smoke-test escape hatch: HYPERSPACE_FRAMES=n closes after n frames
     frames_left = int(os.environ.get("HYPERSPACE_FRAMES", "0")) or None
@@ -1679,6 +1701,9 @@ def main(argv: list[str] | None = None) -> None:
 
         imgui.render()
         impl.render(imgui.get_draw_data())
+        # the GRAPH canvas into its tap, from the lists just drawn, on a frame
+        # a channel asked for `panel:graph` (replay.py, 2026-11-02)
+        replay.grab(panel.canvas_tap, impl, imgui.get_draw_data(), panel.canvas_px)
         glfw.swap_buffers(ctrl_win)
         watchdog.pet(now)          # a frame completed: one float write
 

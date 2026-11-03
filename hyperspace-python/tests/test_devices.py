@@ -81,7 +81,9 @@ def test_the_kinds_table_maps_each_kind_and_make_sorts_an_entry():
     assert set(devices.KINDS) == {"midi", "gamepad", "hands", "bridge", "midi-out", "osc", "cloud",
                                   "ndi", "syphon", "camera"}
     assert devices.MidiDevice.schemes == ("cc", "note", "pitch")
-    assert devices.PadDevice.schemes == ("axis", "pad", "hat")
+    # plan 42: the touchpad and the motion sensors, for a pad that may be a Sony one
+    assert devices.PadDevice.schemes == ("axis", "pad", "hat", "touch", "motion")
+    assert devices.PadDevice.schemes_for({"controller": "xbox"})[0] == ("axis", "pad", "hat")
     assert devices.HandsDevice.schemes == ("hand", "hands")      # B2: C4's pair scheme too
     assert devices.BridgeDevice.schemes == ("ext",)
     for kind, cls in devices.KINDS.items():
@@ -142,7 +144,8 @@ def test_a_second_enabled_device_claiming_a_scheme_is_refused_with_a_note(monkey
     assert not any("launchpad" in n or "pad2" in n for n in notes)
     assert [r for r, _, st, _, _ in reg.lines() if r in ("apc40", "launchpad")] == [
         "apc40", "launchpad"]                               # both desks on the SYSTEM page
-    assert reg.schemes() == ("axis", "pad", "hat", "axis@pad2", "pad@pad2", "hat@pad2",
+    assert reg.schemes() == ("axis", "pad", "hat", "touch", "motion",
+                             "axis@pad2", "pad@pad2", "hat@pad2", "touch@pad2", "motion@pad2",
                              "hand", "hands", "cc", "note", "pitch")
     # the first hands device leaves the list: leap2 is no longer refused and opens
     monkeypatch.undo()
@@ -172,19 +175,23 @@ def test_two_pads_open_each_under_its_role(monkeypatch):
     one, two = reg.get("pad"), reg.get("p2")
     assert isinstance(one, devices.PadDevice) and isinstance(two, devices.PadDevice)
     assert (one.qualifier, two.qualifier) == ("", "p2")
-    assert one.schemes == ("axis", "pad", "hat") and two.schemes == ("axis@p2", "pad@p2", "hat@p2")
-    assert two.feeds == ("axis@p2",) and two.rows == ("pad@p2", "hat@p2")
+    assert one.schemes == ("axis", "pad", "hat", "touch", "motion")
+    assert two.schemes == ("axis@p2", "pad@p2", "hat@p2", "touch@p2", "motion@p2")
+    assert two.feeds == ("axis@p2", "touch@p2", "motion@p2") and two.rows == ("pad@p2", "hat@p2")
     assert [p.address for p in one.sources][:2] == ["axis:LX", "axis:LY"]
     assert [p.address for p in two.sources][:2] == ["axis@p2:LX", "axis@p2:LY"]
     assert "pad@p2:A" in [p.address for p in two.sources]
     assert "hat@p2:UP" in [p.address for p in two.sources]
-    assert reg.schemes() == ("axis", "pad", "hat", "axis@p2", "pad@p2", "hat@p2")
-    assert reg.continuous_schemes() == ("lane", "lfo", "env", "seq", "axis", "axis@p2")
+    assert reg.schemes() == ("axis", "pad", "hat", "touch", "motion",
+                             "axis@p2", "pad@p2", "hat@p2", "touch@p2", "motion@p2")
+    assert reg.continuous_schemes() == ("lane", "lfo", "env", "seq", "axis", "touch", "motion",
+                                        "axis@p2", "touch@p2", "motion@p2")
     assert reg.row_schemes() == ("pad", "hat", "pad@p2", "hat@p2")
     # Learn pad (whichever pad moves) and "Learn p2" (that pad only)
     assert reg.wants() == ("pad", "p2")
     assert one.wants == ("pad",) and two.wants == ("pad", "p2")
-    assert reg.primaries() == {"axis": "pad", "pad": "pad", "hat": "pad"}
+    assert reg.primaries() == {"axis": "pad", "pad": "pad", "hat": "pad",
+                               "touch": "pad", "motion": "pad"}
     assert table.primaries == reg.primaries()               # the table is told
     # two joysticks: each pad reads its own, and its line says which
     present = {0, 1}
@@ -205,7 +212,7 @@ def test_two_pads_open_each_under_its_role(monkeypatch):
     # the first pad leaves: p2 is the primary now, its rows bare
     reg.apply(entries[1:])
     two = reg.get("p2")
-    assert two.qualifier == "" and two.schemes == ("axis", "pad", "hat")
+    assert two.qualifier == "" and two.schemes == ("axis", "pad", "hat", "touch", "motion")
     assert "devices: p2 changed — reopened" in notes
     assert two.wants == ("pad",) and reg.wants() == ("pad",)
     reg.close()
@@ -427,8 +434,10 @@ def test_continuous_schemes_are_the_builtins_then_each_devices_feeds_in_list_ord
         devices.MidiDevice("apc40", io=io), devices.PadDevice("pad", io=io),
         devices.OffDevice("leap", "hands"), devices.BridgeDevice("bridge", io=io)])
     assert devices.BUILTIN_SCHEMES == ("lane", "lfo", "env", "seq")
-    assert reg.continuous_schemes() == ("lane", "lfo", "env", "seq", "axis", "hand", "hands", "ext")
-    assert reg.schemes() == ("cc", "note", "pitch", "axis", "pad", "hat", "hand", "hands", "ext")
+    assert reg.continuous_schemes() == ("lane", "lfo", "env", "seq", "axis", "touch", "motion",
+                                        "hand", "hands", "ext")
+    assert reg.schemes() == ("cc", "note", "pitch", "axis", "pad", "hat", "touch", "motion",
+                             "hand", "hands", "ext")
     assert devices.DeviceRegistry([]).continuous_schemes() == ("lane", "lfo", "env", "seq")
 
 
@@ -758,3 +767,44 @@ def test_todays_rig_as_a_devices_list_equals_the_old_tables(tmp_path, capsys):
         assert a[key] == b[key], key
     assert b["midi"]["port"] == "APC40" and b["hands"]["enabled"] is False
     assert capsys.readouterr().err.count("[midi] is now") == 1
+
+
+class _Pad(Fake):
+    """A pad entry whose controller comes and goes (`io.on`), its status
+    the pad device's: connected while one is behind it, lost while not."""
+
+    kind = "gamepad"
+
+    def __init__(self, role, log, on=False):
+        super().__init__(role, log)
+        self.io = SimpleNamespace(on=on)
+
+    def open(self) -> None:
+        self._hit("open")
+
+    @property
+    def status(self) -> str:
+        return "connected" if self.io.on else "lost"
+
+
+def test_the_pad_picture_follows_a_controller_connected_after_launch():
+    """A generic `pad` entry listed before a Joy-Con's, no controller at
+    launch: the pad window draws the first entry. The Joy-Con connects:
+    its status change re-runs the listeners and the live pick is it, not
+    the empty entry before it; it leaves, the first again."""
+    log: list[str] = []
+    generic, joy = _Pad("pad", log), _Pad("joy", log)
+    reg = devices.DeviceRegistry(devices=[generic, joy])
+    reg.entries = [{"role": r, "kind": "gamepad", "enabled": True} for r in ("pad", "joy")]
+    panel = SimpleNamespace(pad=None)
+    reg.listeners.append(lambda: setattr(panel, "pad", reg.live_adapter("gamepad")))
+    reg.open_all()
+    assert panel.pad is generic.io and reg.adapter("gamepad") is generic.io
+    reg.poll(1 / 60, 0.0)
+    joy.io.on = True                                      # the Joy-Con pairs
+    reg.poll(1 / 60, 0.0)
+    assert panel.pad is joy.io
+    assert reg.adapter("gamepad") is generic.io           # the plain pick is unchanged
+    joy.io.on = False
+    reg.poll(1 / 60, 0.0)
+    assert panel.pad is generic.io

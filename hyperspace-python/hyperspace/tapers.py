@@ -53,6 +53,62 @@ def exp_pure(u: int, n: int) -> Taper:
     )
 
 
+def exp_signed(u: int, side: int) -> Taper:
+    """Signed exponential about a hard zero in the middle (wave 0 T1, the
+    effects' speed): 2·side + 1 detents, position `side` is 0, and either
+    side runs exponentially from ±2^((1 − u)/OCT) one step out to
+    ±2^((side − u)/OCT) at its end, through ±1 at `side ± u` (the unity
+    notch is the positive one). Between the zero and the first detent the
+    map ramps linearly, so a float position — a lane riding the param —
+    crosses the stop without a jump. A value of 0 is the stop; any other
+    value lands at least one step out, so a tiny speed never rounds to
+    "stopped" by accident."""
+    first = 2.0 ** ((1 - u) / OCT)
+
+    def _map(p: float) -> float:
+        d = p - side
+        a = abs(d)
+        if a == 0:
+            return 0.0
+        v = first * a if a < 1 else 2.0 ** ((a - u) / OCT)
+        return v if d > 0 else -v
+
+    def _unmap(v: float) -> int:
+        if not v or math.isnan(v):           # 0, or a NaN: the stop
+            return side
+        a = abs(v)
+        d = 1 if a < first else clamp(round(u + OCT * math.log2(a)), 1, side)
+        return side + d if v > 0 else side - d
+
+    return Taper(steps=2 * side, unity=side + u, log=True, map=_map, unmap=_unmap)
+
+
+def exp_amount(hi: float, octaves: int) -> Taper:
+    """A zero-safe log taper for an amount 0…`hi` (wave 0 T1): position 0
+    is a hard 0; positions 1…n run `octaves` doublings up to `hi` at
+    n = octaves · OCT, so the bottom step is hi · 2^((1 − n)/OCT) (about
+    hi / 1000 at ten octaves). Between 0 and the first detent the map
+    ramps linearly, as `exp_signed` does, so a lane crosses zero without
+    a jump. A value of 0 is off; any value above 0 lands at least one step
+    up, so switching an effect on always shows something."""
+    n = octaves * OCT
+    first = hi * 2.0 ** ((1 - n) / OCT)
+
+    def _map(p: float) -> float:
+        if p <= 0:
+            return 0.0
+        return first * p if p < 1 else hi * 2.0 ** ((p - n) / OCT)
+
+    def _unmap(v: float) -> int:
+        if not v > 0:                        # 0, negative, NaN
+            return 0
+        if v < first:
+            return 1
+        return clamp(round(n + OCT * math.log2(v / hi)), 1, n)
+
+    return Taper(steps=n, log=True, map=_map, unmap=_unmap)
+
+
 def exp_time(v0: float, n: int) -> Taper:
     """Exponential time constant; v0 is ms at position 0, value stored in s."""
     return Taper(
@@ -124,12 +180,24 @@ T_DRIVE = exp_zero(100, 160)   # master audio drive: off, 0.03×–8.00×
 T_DYN = exp_zero(80, 120)      # dynamics: bypass, then 0.06×–4.00×
 T_BRIGHT = exp_pure(60, 100)   # brightness: 0.13×–4.00×, never off
 T_SPEED = exp_zero(120, 160)   # rotation speed: stop, then 0.016–4.00 rad/s
+# a media channel's sound (plan 45 V2): off, then 0.03×–2.00× (−30…+6 dB), unity notch at 100
+T_MEDIA_GAIN = exp_zero(100, 120)
 
 
 # ---- readout formatters ----
 
 def fmt_gain(v: float) -> str:
     return "off" if v <= 0 else f"{v:.2f}×"
+
+
+def fmt_level(v: float) -> str:
+    """A linear gain read in dB: "off", "−6.0 dB", "0.0 dB", "+3.0 dB"."""
+    if not v > 0:
+        return "off"
+    db = 20 * math.log10(v)
+    if abs(db) < 0.05:
+        return "0.0 dB"
+    return f"{'+' if db > 0 else '−'}{abs(db):.1f} dB"
 
 
 def fmt_db(v: float) -> str:

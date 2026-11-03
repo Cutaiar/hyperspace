@@ -188,8 +188,24 @@ like the rename above. The SYSTEM page shows both.
                             #   (a refused camera: System Settings ▸ Privacy &
                             #   Security ▸ Camera)
 
-    [gamepad]               # the Xbox pad polled through GLFW (gamepad.py)
+    [gamepad]               # a game controller (gamepad.py, pads/): an Xbox pad through
+                            # GLFW, a DualSense / DualSense Edge over USB or Bluetooth,
+                            # a Joy-Con over Bluetooth (one per entry, held like a Wii
+                            # Remote: its six-axis motion, one stick, a few buttons)
     enabled = true          # false never polls for one
+    controller = "any"      # which pads this entry may take (plan 42): "any" (the next
+                            # free one), a model "edge" / "dualsense" / "joycon-l" /
+                            # "joycon-r" / "procon" / "xbox" / "x360", a family "sony" /
+                            # "nintendo" / "xbox", or a USB id "054c:0df2" — so each
+                            # role gets the pad you choose, whatever else is plugged in
+    hid = true              # read Sony pads and Joy-Cons over hidapi (USB and Bluetooth:
+                            # touchpad, motion, the Edge's back and Fn buttons, light
+                            # bar, rumble, trigger resistance, a Joy-Con's player lights);
+                            # false: GLFW only (USB, no extras)
+                            # light = "#ff0080"  the light bar with no sink row on it, and
+                            # player = 2          the player LEDs; absent: by its place
+                            # tape = "edge.jsonl" read a recorded session instead of a pad
+                            # (tools/hid_probe.py --record, or the browser lab's)
     usb = true              # no pad in GLFW: look for a wired Xbox 360 pad over libusb
                             # (one reader, lent to the first usb = true pad entry
                             # that has no GLFW joystick, kept while it has none)
@@ -281,7 +297,8 @@ DEFAULTS: dict = {
                "flip_x": False, "flip_y": False,
                "syphon": "", "ndi": "", "window": True},
     # gamepad.py: the Xbox pad — on by default, inert when absent
-    "gamepad": {"enabled": True, "usb": True, "dial_left": "petal", "dial_right": "blend"},
+    "gamepad": {"enabled": True, "usb": True, "hid": True, "controller": "any",
+                "dial_left": "petal", "dial_right": "blend"},
     # bridge.py: the analyzer's lanes out to a DAW, external lanes in — off by default
     "bridge": {"enabled": False, "out": "IAC", "in": "", "encoding": "pitch", "channel": 0,
                "cc": 16, "rate": 100, "send": ["lane:*"], "in_lanes": 16},
@@ -560,6 +577,8 @@ def _device(n: int, e: dict, cfg: dict, roles: set[str], problems: list[str],
         enabled = True
     roles.add(role)
     own = {k: v for k, v in e.items() if k not in DEVICE_KEYS}
+    if kind == "gamepad":
+        _pad_keys(cfg, where, role, own)
     if kind == "gamepad" and "joystick" in own:
         # plan 27 B6: a pinned GLFW index, 0-based (GLFW has 16). Anything
         # else is a note, and the pad takes the next free joystick
@@ -573,6 +592,40 @@ def _device(n: int, e: dict, cfg: dict, roles: set[str], problems: list[str],
     return {"role": role, "kind": kind, "enabled": enabled, **_kind_defaults(kind), **own}
 
 
+def _pad_keys(cfg: dict, where: str, role: str, own: dict) -> None:
+    """A gamepad entry's plan 42 keys, checked in place: ``controller``
+    (pads.models.parse_spec: ``any``, a model, a family, ``vvvv:pppp``),
+    ``light`` (``#rrggbb``), ``player`` (0–5). A bad one is a note and is
+    dropped, so the pad takes its default (any pad; its place's colour
+    and number)."""
+    from .pads import models
+    if "hid" in own and not isinstance(own["hid"], bool):
+        _note(cfg, f"{where} ({role}) hid = {own['hid']!r} is not true or false — true")
+        own["hid"] = True
+    tape = own.get("tape")
+    if tape is not None and not isinstance(tape, str):
+        _note(cfg, f"{where} ({role}) tape = {tape!r} is not a file name — no tape")
+        del own["tape"]
+    if "controller" in own and models.parse_spec(own["controller"]) is None:
+        _note(cfg, f"{where} ({role}) controller = {own['controller']!r} names no pad — "
+                   f"one of {', '.join(models.SPECS_WORDS)} or a USB id vvvv:pppp; any pad")
+        own["controller"] = "any"
+    elif "controller" in own:
+        own["controller"] = models.parse_spec(own["controller"])
+    light = own.get("light")
+    if light is not None and not (isinstance(light, str) and len(light.strip().lstrip("#")) == 6
+                                  and all(c in "0123456789abcdefABCDEF"
+                                          for c in light.strip().lstrip("#"))):
+        _note(cfg, f"{where} ({role}) light = {light!r} is not a colour \"#rrggbb\" — "
+                   "the pad's own")
+        del own["light"]
+    player = own.get("player")
+    if player is not None and (isinstance(player, bool) or not isinstance(player, int)
+                               or not 0 <= player <= 5):
+        _note(cfg, f"{where} ({role}) player = {player!r} is not 0–5 — by its place")
+        del own["player"]
+
+
 def _translate(cfg: dict, data: dict) -> list[dict]:
     """No `[[devices]]`: the old tables — the defaults, and what the file
     says — become the equivalent entries in today's poll order, with one
@@ -583,6 +636,8 @@ def _translate(cfg: dict, data: dict) -> list[dict]:
         role = role or _midi_role(t)
         entry = {"role": role, "kind": kind, "enabled": bool(t.get("enabled", True)),
                  **{k: v for k, v in t.items() if k != "enabled"}}
+        if kind == "gamepad":          # plan 42's keys, checked as a [[devices]] entry's
+            _pad_keys(cfg, f"config: [{section}]", role, entry)
         out.append(entry)
         if isinstance(data.get(section), dict):
             _note(cfg, f"config: [{section}] is now a [[devices]] entry (role = {role!r}, "

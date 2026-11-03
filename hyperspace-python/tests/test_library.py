@@ -428,7 +428,7 @@ def test_presets_are_the_librarys_one_document_kind(rig, tmp_path):
     path = lib.save_as("presets", "My Routes")
     assert path == tmp_path / "presets" / "my-routes.json"
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.preset/7" and len(doc["routes"]) == 13
+    assert doc["schema"] == "hyperspace.preset/9" and len(doc["routes"]) == 13
     assert lib.current("presets") == "My Routes" and not lib.is_dirty("presets")
     lib.load("presets", "hands-play")
     assert not router.table.routes_to("view.bright")[0].source.startswith("lane")
@@ -732,7 +732,7 @@ def test_a_save_over_a_preset_keeps_the_old_file_in_the_trash(rig, tmp_path, mon
     lib.overwrite("band")
     assert len(trash(tmp_path, "band")) == 1
     # a copy that fails: the save goes on, and says the old file was not kept
-    monkeypatch.setattr(library, "to_trash", lambda path, root: None)
+    monkeypatch.setattr(library, "to_trash", lambda path, root, origin=None: None)
     lib.warning = ""
     reg["view.bright"].set(3.0)
     assert lib.overwrite("view") == path
@@ -760,7 +760,7 @@ def test_a_delete_keeps_the_file_in_the_trash_or_does_not_delete(rig, tmp_path, 
     (blocked / library.TRASH).write_text("not a folder")
     assert library.to_trash(path, blocked) is None
     assert "not copied to the trash" in capsys.readouterr().err
-    monkeypatch.setattr(library, "to_trash", lambda path, root: None)
+    monkeypatch.setattr(library, "to_trash", lambda path, root, origin=None: None)
     with pytest.raises(LibraryError, match="not deleted"):
         lib.delete("camera", "Tall")
     assert path.exists() and lib.list("camera") == ["Tall"] and lib.current("camera") == "Tall"
@@ -943,7 +943,7 @@ def test_the_owner_home_is_shaped_like_the_owners(owner_home):
     assert len(pads) == 16 and {p["target"] for p in pads} == {"view.shape"}
     for name in OWNER_PRESETS:
         doc = json.loads((home / "presets" / f"{slug(name)}.json").read_text())
-        assert doc["schema"] == "hyperspace.preset/7" and doc["name"] == name   # (row 394)
+        assert doc["schema"] == "hyperspace.preset/9" and doc["name"] == name   # (row 394)
         by_source = {row["source"]: row for row in doc["desk"]}
         for pad in pads:
             if name == "NIGHT TWO" and pad["source"] == OWNER_PAD["source"]:
@@ -1265,7 +1265,8 @@ def test_rename_updates_every_show_and_keeps_each_old_file(owner_home):
     real = library.to_trash
     with pytest.MonkeyPatch.context() as m:
         m.setattr(library, "to_trash",
-                  lambda p, root: None if p.name == "spare.hyp.json" else real(p, root))
+                  lambda p, root, origin=None: None if p.name == "spare.hyp.json"
+                  else real(p, root, origin))
         new = lib.rename("presets", "NIGHT TWO", "SUNRISE")
     assert new == home / "presets" / "sunrise.json"
     assert not (home / "presets" / "night-two.json").exists()
@@ -1340,7 +1341,7 @@ def test_a_rename_that_cannot_keep_the_old_file_changes_nothing(owner_home):
     lib = r.lib
     before = tree(home)
     with pytest.MonkeyPatch.context() as m:
-        m.setattr(library, "to_trash", lambda path, root: None)
+        m.setattr(library, "to_trash", lambda path, root, origin=None: None)
         for new in ("SUNRISE", "night two"):
             with pytest.raises(LibraryError, match="could not be kept in the trash"):
                 lib.rename("presets", "NIGHT TWO", new)

@@ -69,9 +69,10 @@ def test_the_default_calibration_puts_the_hands_where_the_ghost_camera_did(size)
     for k in (0, 1):
         assert abs(old[:, k].min() - new[:, k].min()) < PX[size]
         assert abs(old[:, k].max() - new[:, k].max()) < PX[size]
-    # the calibration is the room's, not the output's: the same world
-    # whatever the output's shape
-    assert np.allclose(G.calibration(box, m), G.calibration(box, m, aspect=G.CAL_ASPECT))
+    # the calibration is the room's, not the output's: it takes no aspect
+    # (nor, since plan 43 C2, any eye) — the same world whatever the output
+    import inspect
+    assert list(inspect.signature(G.calibration).parameters) == ["box", "m", "units"]
 
 
 def test_the_ghost_settles_its_hands_once_through_the_shared_camera():

@@ -121,33 +121,25 @@ RAIL_DOT_R = 5.0
 # moving number does not jitter), BIG for the signature cell-count
 # readout. With the 1.92 dynamic atlas each face renders at every size.
 #
-# Weight is what makes type read at a distance. The SF faces are variable
-# fonts and FreeType picks a named instance from the high 16 bits of the
-# face index: SF Rounded's list runs Ultrathin … Black, so 6 is Medium and
-# 8 Bold; SF Mono's runs Light … Heavy, so 4 is Semibold.
+# The faces ship in hyperspace/fonts/ (its README: sources, licences), so
+# the panel draws, and the tests measure, the same on every machine.
+# Weight is what makes type read at a distance: Inter Medium for words,
+# Bold for the small labels, JetBrains Mono SemiBold for numbers.
 
 FONT_BASE = 16.0
 FONT_MICRO = 12.5
 FONT_NUM = 16.0
 FONT_BIG = 52.0
 
-_SF_ROUNDED = "/System/Library/Fonts/SFNSRounded.ttf"
-_SF_MONO = "/System/Library/Fonts/SFNSMono.ttf"
+_FONT_DIR = os.path.join(os.path.dirname(__file__), "fonts")
 # (path, face index) per role; the first that exists wins
 _FONT_CANDIDATES = {
-    "ui": [(_SF_ROUNDED, 6 << 16), ("/System/Library/Fonts/Avenir Next.ttc", 5),
-           ("C:/Windows/Fonts/seguisb.ttf", 0),
-           ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 0)],
-    "micro": [(_SF_ROUNDED, 8 << 16), ("/System/Library/Fonts/Avenir Next.ttc", 0),
-              ("C:/Windows/Fonts/segoeuib.ttf", 0),
-              ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 0)],
-    "num": [(_SF_MONO, 4 << 16), ("/System/Library/Fonts/Menlo.ttc", 1),
-            ("C:/Windows/Fonts/consolab.ttf", 0),
-            ("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", 0)],
+    "ui": [(os.path.join(_FONT_DIR, "Inter-Medium.ttf"), 0)],
+    "micro": [(os.path.join(_FONT_DIR, "Inter-Bold.ttf"), 0)],
+    "num": [(os.path.join(_FONT_DIR, "JetBrainsMono-SemiBold.ttf"), 0)],
 }
-# glyphs a face lacks (arrows, ⇧, ●, ×) come from these, merged in behind it
-_FALLBACKS = [(_SF_MONO, 3 << 16), ("/System/Library/Fonts/Menlo.ttc", 0),
-              ("/System/Library/Fonts/Apple Symbols.ttf", 0)]
+# glyphs a face lacks (planet symbols, ⊂, ◌, ▾) come from these, merged in behind it
+_FALLBACKS = [(os.path.join(_FONT_DIR, "DejaVuSans.ttf"), 0)]
 
 _FONTS: dict[str, imgui.ImFont | None] = {"ui": None, "micro": None, "num": None}
 
@@ -681,6 +673,19 @@ class Panel:
         # plan 33 U: the effect instance selected — on GRAPH (its node) or on
         # the FX page (its row): one selection both pages show; saved nowhere
         self.fx_selected: str | None = None
+        # 2026-10-31: the GRAPH page's selection, published for whoever is
+        # not the graph view — a controller's node mode, the side pane's
+        # fold of every page. The one selected canvas node's id
+        # (`render:acid.2`, a modifier's id); None while nothing, a cable, a
+        # bundle, a group or several nodes are selected. Written by
+        # `ui_graph.publish` each frame GRAPH draws, so off the page it is
+        # as of the last frame GRAPH was drawn (the pane-always-on work
+        # removes that), except that a preset landing without the node
+        # (`ui_graph.settle`: a load, a new) lets it go on any page. An
+        # effect's node is `fx_selected` as well (`ui_graph.share`).
+        # `graph_selected_at`: imgui's frame count when it last changed.
+        self.graph_selected: str | None = None
+        self.graph_selected_at: int = 0
         self.library = library      # library.Library, or None: no strips, no project row
         # the F1–F8 preset bank is the open project's (library.Project)
         self.bank = bank if bank is not None else (
@@ -701,6 +706,7 @@ class Panel:
         # every launch, as the cheat sheet is — the desk keeps its room
         # until the SYSTEM page's switch asks for the pad
         self.pad_diagram = False
+        self.pad_view = 0       # ui_pad_views.VIEWS: map, faithful, lanes, cockpit
         self.page = PAGE_KEYS.index("graph")    # index into PAGES; GRAPH opens first
         self.history = PageHistory(self.page)   # ⌘[ / ⌘]: back and forward (app.frame)
         self.ghosts = 0             # ghost markers drawn this frame (tests read it)
@@ -717,6 +723,8 @@ class Panel:
         self.undo = None      # set by app.py (undo.Undo): its status shows in the footer
         self.devices = None   # set by app.py (devices.DeviceRegistry): the SYSTEM page's lines
         self.media = None     # set by app.py (app.MediaIO): the MEDIA page's folder and channels
+        self.canvas_tap = None   # set by app.py (outputs.CanvasTap): the GRAPH canvas as `panel:graph`
+        self.canvas_px = None    # the GRAPH page's canvas this frame (ui_graph.page), else None
         self.dialog_error = ""   # why the file dialog would not open (`open_file_dialog`)
         self.router = None    # set by app.py (routing.Router); else found via midi's table
         self.output = None    # set by app.py (overlay.Output); its params draw below
@@ -724,14 +732,25 @@ class Panel:
         self.hand_settings = None  # set by app.py (hands.HandSettings): the HANDS page
         self.clock = None          # set by app.py (tempo.Clock): the LFO page's beat light
         self.lfos = None           # set by app.py (lfo.LFOs): the LFO page's scopes
+        # set by app.py (deck.Deck, plan 44 D1): the deck the handles above
+        # (`reg`, `router`, `learn`, `undo`, `lfos`, `hold` …) are assigned
+        # from; nothing reads through it until D5
+        self.deck = None
         self._register_panel_params()
 
     def close(self) -> None:
         """Let go of what the panel holds outside Python: the GRAPH page's
         node editor context (ui_graph.py, plan 28 N2). app.py calls it on
         quit and on ⌘R, before imgui shuts down; a panel that never drew
-        the page holds none. Safe to call twice."""
+        the page holds none — the GRAPH canvas's tap (`canvas_tap`,
+        2026-11-02) and the pad drawings' NanoVG (ui_pad_nvg) go with it,
+        while the control window's GL is up. Safe to call twice."""
         ui_graph.close(self)
+        tap, self.canvas_tap = getattr(self, "canvas_tap", None), None
+        if tap is not None:
+            tap.close()
+        from . import ui_pad_nvg
+        ui_pad_nvg.close(self)
 
     def _register_panel_params(self) -> None:
         """The panel's own state as ``ui.*`` params: the window, the sheet,
@@ -765,6 +784,10 @@ class Panel:
                  tip="The gamepad drawn over the desk, top-left: every control it sends, "
                      "lit where a row maps it and named with what it does. A grey label "
                      "is the app's own hand on a free axis (orbit, zoom, the 4D spin).")
+        from . import ui_pad_views
+        r.enum("ui.pad_view", "Pad view", lambda: self.__dict__.get("pad_view", 0),
+               lambda i: setattr(self, "pad_view", int(i)), list(ui_pad_views.VIEW_LABELS),
+               group="ui", persist=False, modulatable=False, tip=ui_pad_views.VIEW_TIP)
         r.enum("ui.page", "Page", lambda: self.page,
                lambda i: setattr(self, "page", int(i)), [lb for _, lb, _ in PAGES],
                group="ui", persist=False, modulatable=False,
@@ -1614,7 +1637,9 @@ class Panel:
         # Replace / Keep, its own window, before anything can return: a
         # held hand learn is never parked behind a hidden or collapsed panel
         ui_routing.modal(self)
+        self.canvas_px = None   # the GRAPH page sets it when it draws (replay.grab reads it)
         ui_desk.tick(self)      # a picked control lets go by itself (ui_desk.PICK_S)
+        ui_graph.settle(self)   # a preset landed without the published node: let it go
         if self.cheatsheet:
             self._draw_cheatsheet()
         # the pad first: the desk reads its height to keep clear of it (ui_desk.room)
@@ -1892,6 +1917,22 @@ class Panel:
         wiring = (getattr(self.renderer, "wiring", None) or getattr(gs, "wiring", None)
                   or EMPTY)
         return wiring, getattr(gs, "spec", None)
+
+    def select_graph_node(self, nid: str) -> None:
+        """Select canvas node `nid` on GRAPH — `graph_selected`'s form:
+        `render:acid.2`, a modifier's id — centred next frame, the page
+        opened: the request path OUTPUT's "open on GRAPH" takes
+        (`ui_graph.select_id`), for whoever drives the selection from
+        outside the graph view."""
+        ui_graph.select_id(self, nid)
+
+    def graph_selected_params(self) -> list[str]:
+        """The registry ids under `graph_selected` (`graphview.params_of`:
+        a copy's are its original's), the continuous ones first, each run in
+        registry order; [] with nothing selected or a node with no param
+        (`ui_graph.node_params`). Asked, not drawn: nothing per frame."""
+        nid = getattr(self, "graph_selected", None)
+        return [] if nid is None else ui_graph.node_params(self, nid)
 
     def rig_now(self):
         """The open show's rig wires (plan 36 T1, `graph.RigWires`: the bus
@@ -2266,15 +2307,15 @@ class Panel:
         self._row("camera.pan.x")
         self._row("camera.pan.y")
         imgui.spacing()
+        # plan 43 C2: one orbit camera, the preset's — zoom and pan move the
+        # shape in the world, the eye (plan 26 A2) is what the world is seen
+        # through; one section, saved with the preset
+        self._row("eye.fov")
+        self._row("eye.distance")
+        imgui.spacing()
         self._button("camera.reset", "Reset view")
         imgui.same_line()
         imgui.text_disabled("R  ·  stick click")
-        # plan 26 A2: the one fixed camera the shape is seen through — the
-        # room's, not the preset's (eye.* is session); zoom and pan above
-        # move the shape in front of it
-        self._section("eye", note="the room's camera, not the preset's")
-        self._row("eye.fov")
-        self._row("eye.distance")
 
     def _page_lookback(self, dt: float) -> None:
         ui_lookback.page(self, dt)     # the frame history and its composite
@@ -2446,6 +2487,9 @@ class Panel:
         if "ui.pad_diagram" in self.reg:
             self._check("ui.pad_diagram")
             imgui.same_line()
+            if "ui.pad_view" in self.reg:
+                self._combo("ui.pad_view", width=110)
+                imgui.same_line()
         self._button("app.restart", "Restart process", small=True)
         if self.reloader is not None:
             imgui.text_disabled(f"hot reload: {self.reloader.status or 'watching'}")
@@ -2469,6 +2513,11 @@ class Panel:
         thumbs = ui_graph.thumbnail_line(self)    # plan 37 C1: the GRAPH page's thumbnails
         if thumbs:
             imgui.text_disabled(thumbs)
+        sound, warn = ui_media.mixer_line(self)   # plan 45 V2: the media mixer's stream
+        if sound and warn:
+            imgui.text_colored(WARN, sound)
+        elif sound:
+            imgui.text_disabled(sound)
         imgui.spacing()
         self._section("devices")
         self._device_lines()

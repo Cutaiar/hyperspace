@@ -336,9 +336,12 @@ stay the parity oracle.
 **The eye** is a fixed perspective camera on the world's +z axis looking
 at the origin: `eye.fov` (47.6°, `geometry.EYE_FOV`, across the
 picture's shorter side; 10–120°) and `eye.distance` (3.78 shape radii,
-`EYE_DISTANCE`; 1.5–40), on the CAMERA page under **eye**. They are
-session params (group `eye`: no preset moves them) and not modulatable
-(the camera is the rig; the shape is what moves). The defaults are
+`EYE_DISTANCE`; 1.5–40, log), on the CAMERA page in its one
+section. Since plan 43 C2 they are the **preset's** — with `camera.*` the
+one orbit camera (group `eye`, a performance group: a load lands the
+framing) — and modulatable: a lane breathes the framing (register rows
+555, 574). The defaults are the rig's **reference eye** too: the hands'
+calibration is fitted to them, never to the preset's eye. The defaults are
 `project_h`'s old 3D divide: at zoom 1 and pan 0 every vertex lands
 within 2.3e-13 px of `project_h` in float64 and 1.1e-4 px in float32,
 against a bar of half a pixel
@@ -473,7 +476,15 @@ KALEIDO six wedges, whatever the inputs. FLAT reads none.
 to 64 one detent apart, then 40 detents a doubling): copies laid out by
 `view.inst_layout` and moved by `view.inst_motion` (STILL, ORBIT, WAVE,
 RIPPLE) with `inst_amp` and `inst_rate`. At 0 nothing is drawn but the
-ground, the echoes, the effects and the hands carry on.
+ground, the echoes, the effects and the hands carry on. The motion's
+phase is `view.inst_phase`, `inst_rate` integrated by the host in
+`ViewState.integrate` (wrapped at 20π, a whole period of every use: ph,
+0.7·ph, 0.9·ph), not t × rate in the draw — so a step on the rate changes
+how fast the field moves and never where it is (register row 578, K3);
+the media path (`view.media_mode`, orbit / figure-8 / sway) reads
+`view.media_phase`, `media_rate` integrated the same way (wrapped at 2π).
+Neither is a param or saved; like the turn's angles, the draw only reads
+them (`field.field`, `Renderer._legacy_field`, `_face_uniforms`).
 
 - *Flat layouts*, in the screen's plane: **GRID** (rows of ⌈√n⌉),
   **HEX** (a honeycomb spiral from the centre; a copy never moves as the
@@ -601,8 +612,12 @@ line, and the LOOKBACK page "history: the scene · with the hands"
 **The hands** (`graph.Hands`, the `ghost.*` params' node) are `ghost.py`'s
 five styles as geometry in the shared camera: `ghost.shared_camera`
 takes the Leap's millimetres into the world through the calibration in
-`hands.json` (§12) and the eye. A frame's poses are settled once
-(`Ghost.settle`) for every draw of them. A hands node is timed by its
+`hands.json` (§12) — fitted to the rig's reference eye, whatever the
+preset's (plan 43 C2, row 575) — and the eye. A frame's poses are settled
+once (`Ghost.settle`) for every draw of them: hands drawn **in the scene**
+go through the preset's eye and scale with the shape as it zooms; a
+**hands layer** is drawn through the reference eye (`Settled.layer`) and
+keeps its size on screen. A hands node is timed by its
 consumer: inside a scene its draw is its own SYSTEM line (`ghost`); its
 layer's draw is the layer's line (`hands`).
 
@@ -851,17 +866,75 @@ LOOKBACK page and the red banner, and the look-back runs echoes only; a
 preset that asks for the dream with no worker is a warning, once.
 
 **Effects** (`fx.py`, FX page, GRAPH). One GLSL file per effect in
-`shaders/fx/` — thirteen ship: acid, deconverge, doublevision, fractals,
+`shaders/fx/` — acid, blend, deconverge, displace, doublevision, edges,
+fade (wave 0 E1, 2026-11-02: the whole premultiplied picture, colour and
+alpha, times its level — the feedback starter's decay), fractals,
 glimmer, huecycle, kaleido, palette, plasma, tripcolour, warp, wobble,
 zoomblur (`_lib.glsl` is shared). **A new effect is a new `.glsl` file, not
 Python**: every `// @param` uniform becomes `fx.<file>.<key>`, plus
 `on mix speed blend` per effect (plan 33 removed `order` and `target`);
 `// @mix <value>` sets the effect's default wet/dry (1 when absent);
-`fx.on` bypasses every effect and `fx.mix` scales them. `// @order <n>`
+`fx.on` bypasses every effect and `fx.mix` scales them. **Coarse and
+fine through tapers** (wave 0 T1, register row 561): every effect's
+`speed` is on a signed exponential taper (`fx.T_SPEED`: 401 detents, the
+stop in the middle, ±1× 140 steps out at 20 a doubling, ±8× at the ends,
+±0.008× one step from the stop — 0.05× is a third of the way up the
+positive half, where on the linear −8 … +8 it was under one MIDI step), and
+a `@param` line flagged `amount` (`// @param 0 2 0.2 amount "Amount" …`:
+a float from `lo` 0, neither `log` nor `wrap`) puts its param on a
+zero-safe log taper (`fx.amount_taper`: 0 off, then ten doublings up to
+`hi`). The fourteen amount-type params PR #304 calmed carry the flag; the
+shape params (`reach`, `scale`, `cells`, …) stay `log`, and `mix` linear.
+A route's depth onto one of these is measured along the taper, so an
+older file's depths are converted at load (`params.retaper_depths`, the
+marker `units["fx.depth"]`) and **the owner runs
+`tools/retaper_routes.py` on the library before the next show** (below). `// @order <n>`
 is still parsed (`EffectSpec.order`) and read only by `graphmigrate`, to
 give an old preset's effect without a saved order its place in that
 preset's run; where an effect sits now is its wires. A new effect file
 needs no `@order`.
+
+**No shader multiplies time by a param** (the owner, 2026-11-02, after
+the 2026-10-30 show; register row 560). `u_phase * u_drift` reads as a
+rate, but `u_phase` is the integrated clock, so a knob step of Δdrift
+shifts the field by `phase × Δdrift` — whole screens, hours into a set.
+A rate-like param is integrated by the host instead: `// @clock
+<uniform> <rate-param>[*<rate-param>…] [period]` at the top of an effect
+file declares a phase `FxState.advance` moves every frame by `speed ×
+<rate-param> × dt` (the rate is one of the file's own `@param` keys, or
+a product of them, each once — warp's `drift*scale`, its scroll counted
+in noise cells so a scale step re-zooms and slides nothing; the effect's speed
+fader still scales it, as it scaled `u_phase`), wrapped to `[0, period)`
+when a period is given (`tau` or a number; for a shader reading it
+through `sin` or `fract`), running on like `u_phase` when not (a scrolled
+noise field has no period). fx.py declares the uniform beside `u_phase`
+(the file must not) and binds it each pass; while the knob is still the
+clock equals what `u_phase * u_drift` was, so a port changes no picture
+at rest. The phases live on `FxState.clocks` (per instance; kept across
+an edit that keeps the clock; made on first use after a hot reload, as
+`_t_last` is). `tests/test_shader_time_lint.py` (`tests/shader_lint.py`)
+holds every shipped effect file and the face programs to the rule — a
+product of a time symbol (`u_time`, `u_phase`, `u_ptime`, a `@clock`
+uniform, or a local carrying one) and a param symbol (an `@param`
+uniform, the patterns' `m_*()` accessors, or a local carrying one), with
+every call but a constructor opaque, so `u_amount * sin(u_phase)` is an
+amplitude and passes — with an allowlist of today's offenders as exact
+(shader, param) pairs — after K2 (row 577: warp and tripcolour ported)
+only the RINGS pattern × `m_colour`, which K4 takes out. K3
+(`view.media_rate`, `view.inst_rate`) was Python-side, outside the lint —
+`ViewState.integrate` moves `media_phase` and `inst_phase`, and
+`tests/test_view_phase.py` pins that render.py and field.py read no rate
+and measures a field-rate step against one frame's motion (row 578). `tests/uv_flow.py` is the
+continuity harness: an effect run over a UV-encoded source gives its
+sampling field exactly, and the mean displacement between consecutive
+frames (an optical-flow proxy with the flow known) on the frame a param
+is stepped is compared with the still frames' — bounded (the speed, a
+`@clock`) or a jump (`u_phase * u_drift`, about 15 px at amount 2 against
+a drift of 0.05 px a frame, an hour in); `tests/test_fx_clock.py` proves
+it on a synthetic pair and on K2's ports (warp's drift and tripcolour's
+pulse step continuously an hour in; warp's scale re-zooms by the size of
+the step, the same at any hour). The harness stands each `@clock` where
+the hour at the run's knobs left it.
 
 **The palette** (plan 24, `shaders/fx/palette.glsl`, `@order 95` (read only by the migration, which puts it last in an old preset's run),
 so, unplaced, last in the chain, after the look-back and before the dim — and
@@ -1079,6 +1152,21 @@ wires with the mutes all on; `--signatures` adds a missing case to
 `tests/fixtures/frame-signatures.json` from `build_graph` alone (never
 re-records an existing one), and `--names` rewrites only the fixtures'
 recorded node names and asserts the `goldens` list is unchanged.
+`tools/calm_lanes.py` (2026-11-02) held every preset's band routes to
+`learn.LANE_DEPTH` as springs, once. `tools/retaper_routes.py` (wave 0
+T1) measures every route depth, `set` value and macro base subscriber
+onto an effect's `speed` or `amount` param along the new tapers, once —
+in the library's presets, patches and desk templates and in the machine
+home's `bindings.json` (a show holds no rows): a dry run by default,
+every change worked out before anything is written; `--write` backs the
+library up to `~/Hyperspace/library-backup-<stamp>/` first (and
+`bindings.json` beside itself, as the app does), then rewrites each file
+as the app writes its kind, naming every row that moved and every row
+left (a value that is not a number). **The owner runs it on the library
+before the next show**, both Macs on this build; until then an old file
+is converted at every door it comes in by — a preset load, a template's
+expansion, `Library.read_patch`, `Bindings.from_json` — and nothing is
+lost.
 
 **Feedback: the delay, the echoes and the resize** (plan 34, rows
 353–371; `graph.Delay`, `graph.EchoNode`, `graph.ResizeNode`,
@@ -1268,11 +1356,11 @@ root and `Library.machine` the home.
 
 | Path | What it is | Format |
 |---|---|---|
-| `presets/<slug>.json` | Your presets (§10). | `hyperspace.preset/2`, or `/3` when it uses plan 31's sequencer, envelopes or LFO count (below) |
+| `presets/<slug>.json`, `presets/<folder>/…/<slug>.json` | Your presets (§10), in folders you make in Finder if you like (plan 48): one in `presets/party/` is named `party/<its name>`. A hidden folder (`.cache`) is not read. | `hyperspace.preset/2`, or `/3` when it uses plan 31's sequencer, envelopes or LFO count (below) |
 | `projects/<slug>.hyp.json` | Your shows (the code calls them projects). | `hyperspace.project/2` |
 | `patches/<slug>.json` | Your patches (plan 40): a group of GRAPH nodes and its boundary, spawned into a preset, never loaded. Written only by **save as patch…** / **update patch**. | `hyperspace.patch/1` |
 | `<group>/<slug>.json` | Module presets, one registry group each (`band/`, `dream/`, `hands/`, `view/` …). An `fx/` folder from before plan 40 is ignored: the fx module presets are retired (`library.RETIRED_MODULES`). | `hyperspace.preset/1` |
-| `trash/<group>/<slug>.<YYYYMMDD-HHMMSS>.json` | Copies of your files taken before an overwrite, delete or rename. Never watched. | as the original |
+| `trash/…` | Only in a library from before plan 48: the trash every Mac shared. Listed at the foot of the trash popup (marked old); a restore copies a file back and leaves it there; never written, never emptied by the app — clear it in Finder. | as the original |
 
 **The home** (`Library.machine`; never in a shared folder):
 
@@ -1284,6 +1372,7 @@ root and `Library.machine` the home.
 | `windows.json` | Where the control window and each render output were at the last quit (§14). Machine-specific; safe to delete. | `hyperspace.windows/1` |
 | `ui.json` | This Mac's panel settings: the GRAPH page's side-pane width (`graph.side_w`, PR #266), written when its grip is let go. Safe to delete. | plain JSON |
 | `last_show` | One line: the file name of the show opened last on this machine. | text |
+| `trash/<group>/[<folder>/]<slug>.<YYYYMMDD-HHMMSS>.json` | This Mac's trash (plan 48): copies of library files taken before an overwrite, delete or rename, under the folder each came from (`trash/presets/party/…`). Never in the shared folder, never watched. | as the original |
 | `stall.log` | The watchdog's log (§15). | text |
 | `weights/` | The dream's pretrained network weights, downloaded on first use. | binary |
 | `media/` | This Mac's media files, ids `local:<relative path>` (plan 32; the shared ones are `<library>/media/`). Subfolders are groups. | any picture or video |
@@ -1299,12 +1388,12 @@ folder of old routing presets is no longer read.
 
 | File | When | Kept first |
 |---|---|---|
-| `presets/<name>.json`, `patches/<name>.json`, `<group>/<name>.json` | A save over it, ⇧F1–F8, × on the PRESETS page (its list or its patches fold), a rename, **update patch**. Never a load or a spawn. | A copy in `trash/<group>/`. A save goes on if the copy fails (and says so); a × or a rename is refused. A save that writes the same text adds nothing. |
-| `projects/<show>.hyp.json` | A pad change, save; a rename of a preset it names. Never a load. | The first write that puts a preset past slot 8: `<show>.hyp.json.bak-v2-bank8` (no copy, no write). A rename: a copy in `trash/projects/`. |
+| `presets/<name>.json`, `patches/<name>.json`, `<group>/<name>.json` | A save over it, ⇧F1–F8, × on the PRESETS page (its list or its patches fold), a rename, **update patch**. Never a load or a spawn. | A copy in this Mac's `trash/<group>/[<folder>/]`. A save goes on if the copy fails (and says so); a × or a rename is refused. A save that writes the same text adds nothing. |
+| `projects/<show>.hyp.json` | A pad change, save; a rename of a preset it names. Never a load. | The first write that puts a preset past slot 8: `<show>.hyp.json.bak-v2-bank8`; the first write over a show holding the stick spring's old ids: `.bak-v2-spring`; the first write over a show holding the eye (plan 43 C2: the presets' now): `.bak-v2-eye` — no copy, no write. A rename: a copy in `trash/projects/`. |
 | `bindings.json` | At launch, when a newer build adds factory rows (the bank pads, OVERDUB, the clip-stop row, Home, the undo keys) where the control or key is free. A row you changed is left as you had it. | `bindings.json.bak-v<schema>` (`.bak-v3` for today's files; a dated name if that exists, never over any `.bak-*`). No copy, no rewrite: the table runs from memory for the session and the next launch tries again. |
 | `hands.json` | A calibration sweep or "reset ranges". A schema-1 file is read as it is and never rewritten at launch. | The first rewrite of a schema-1 file: `hands.json.bak-v1`. |
 | `<group>/…` | Restore from the trash. | Nothing to keep: a restore never writes over a file — a taken name restores as the next free name. |
-| `trash/**` | **Empty trash.** | **Nothing. Emptying the trash is the one action in the app that keeps no copy.** It deletes exactly the files its popup lists, after a second click. |
+| this Mac's `trash/**` | **Empty trash.** | **Nothing. Emptying the trash is the one action in the app that keeps no copy.** It deletes exactly the files its popup lists as this Mac's, after a second click; the library's old trash is left. |
 | `windows.json`, `last_show` | Every quit and Cmd+R / every show load and save as. | Nothing (machine state). |
 
 Every library write is atomic: the text goes to a dot-named temp file
@@ -1315,8 +1404,16 @@ client never syncs a half-written preset.
 
 `library.to_trash` copies a file exclusively (a second copy in the same
 second gets `-2`, `-3`), so nothing in the trash is ever overwritten.
-Restore from the PRESETS page's **trash (n) ▸** popup, or copy a file back
-into `<home>/<group>/` under its plain name.
+The trash is **this Mac's** (plan 48): `<home>/trash/`, the machine
+home, even when `[library] path` puts the library in a shared folder, so
+a × on one Mac never syncs a copy to the other. A copy sits under the
+folder it came from (`trash/presets/party/trip.20261102-221500.json`).
+Restore from the PRESETS page's **trash (n) ▸** popup — back into that
+folder, the next free name if the name is taken there — or copy a file
+back into `<library>/<group>/[<folder>/]` under its plain name. A
+`trash/` left in the shared library by an older build is listed after
+this Mac's, marked old; a restore copies the file back and leaves it there — the app never writes to it or
+empties it.
 
 ### The shared library
 
@@ -1347,14 +1444,30 @@ once (never over a file) and prints the two lines to add;
 - **iCloud / Dropbox.** Mark the folder "Keep Downloaded" / "Available
   offline": an evicted file is invisible to the app.
 - **Both Macs on one library run the newest build** (row 394, the
-  owner's 2026-10-25 decision). Every save is `hyperspace.preset/6`; an
-  older build refuses it with "schema … is not a hyperspace.preset" rather
-  than load it and strip what it does not know on its next save. This build
-  reads every older schema (`/2`–`/5`) and migrates it on load. To move a
-  whole library at once: `uv run python tools/migrate_library.py` (a dry
-  run), then `--apply`. Since plan 40 a preset with a group (GRAPH's
-  **Group**) is `hyperspace.preset/8` and one without stays `/7` (register
-  row 521, pending the owner); a build from before plan 40 refuses an `/8`.
+  owner's 2026-10-25 decision). Every save is **`hyperspace.preset/9`**
+  (plan 43 C2: the eye in `values`, the spin's pose in `pose`; groups or
+  none — row 521 closed by row 576); an older build refuses it with
+  "schema … is not a hyperspace.preset" rather than load it and strip what
+  it does not know on its next save. This build reads every older schema
+  (`/2`–`/8`) and migrates it on load (an old preset takes the eye its old
+  show held). To move a whole library at once — **between shows, both
+  Macs updated together, a backup first** — `uv run python
+  tools/migrate_library.py` (a dry run: the rig's show and its eye, the
+  retaper, every preset's round-trip picture), then `--apply`: it backs
+  the library up to `~/Hyperspace/library-backup-<stamp>/`, measures the
+  unmarked route depths along the effect tapers first (wave 0 T1, register
+  row 561: what `tools/retaper_routes.py --write` does), writes every
+  preset as `/9` with the show's eye, and drops the eye from the shows
+  (`.bak-v2-eye` beside each).
+
+| Schema | What it added | Read | Written |
+|---|---|---|---|
+| `hyperspace.preset/2` | the preset (plan 13) | migrated to `/7` on load | never |
+| `/3`, `/4` | the envelopes and the sequencer (plan 31); media (plan 32) | migrated to `/7` on load | never |
+| `/5`, `/6` | the free graph (plan 33); the wired frame in the new ids (plan 35) | migrated to `/7` on load | never |
+| `/7` | the frame that says everything (plan 36) | as it is, the eye filled in (`graphmigrate.nine`) | never |
+| `/8` | `groups` (plan 40) | as it is, the eye filled in | never |
+| **`/9`** | the one orbit camera: `eye.*` in `values`, the spin's `pose` (plan 43 C2) | as it is | **every save** |
 
 The macro candidates to audition (plan 22) are in the owner's library;
 [`plans/22-macro-candidates.md`](plans/22-macro-candidates.md) says what
@@ -1495,6 +1608,51 @@ as built.
   on a later output makes it publish-only (no window). Output 1 always
   has a window. One SYSTEM line per publisher: `ndi out <name> — 60 fps,
   readback 4.0 ms`, in the warning colour with the error on a failure.
+- **The GRAPH canvas as a source** (2026-11-02). The MEDIA page's Live
+  tab lists `panel:graph` without a `[[devices]]` entry: the node
+  editor's view — output 1 behind it, the faded ground, the grid, the
+  nodes and the cables — as a picture. Put it in a channel's bin and wire
+  the channel wherever a picture goes; onto the backdrop behind the very
+  canvas it shows is a one-frame echo, and meant. It is drawn by
+  draw-list replay (`replay.py`): after the control window's own imgui
+  render, the one draw list the page window owns (the backdrop, the
+  editor and its nodes all land on it; `ImDrawList._owner_name` names it,
+  `Panel.canvas_px` records it) is drawn again with the backend's program
+  into `outputs.CanvasTap`, projected so the canvas rect fills the
+  texture — so the details side pane (a child window's list), menus,
+  popups, tooltips and the held PROJECTOR inset (the foreground list)
+  are never in it. One exception is cut out by index: imgui draws a
+  child window's decorations (its ground, border and scrollbar) on the
+  parent's list inside `begin_child`, so the page notes the indices the
+  pane's took and the replay skips them (`replay.spans`). The tap is the canvas's framebuffer size, at most
+  1280 px on the long side (the projection is scaled, nothing is
+  blitted), alpha set to 1 after. Cost: nothing unless a channel polls
+  the source that frame (`CanvasTap.want` / `take`, as the preview's);
+  then one pass over the frame's draw lists and the canvas's triangles
+  drawn once more (a few thousand vertices), plus a `glFlush`. The tap
+  is a small pool of textures and each grab goes into one no frame
+  holds: a frame carries a lease on its texture (`outputs.Lease`,
+  `MediaFrame.lease`) for exactly as long as it lives, so a channel at
+  rate 0 holding the frame it showed (`channels._freeze`) holds a
+  texture no later grab writes and no canvas resize frees — however
+  many readers grab on beside it, each at full rate — and lets it go
+  with the frame. With every reader live the pool is two textures
+  written in turn; it grows by one per frame held and shrinks back. A
+  grab that fails part way publishes nothing (the last frame stands),
+  and a minimised window (an empty framebuffer, which the backend skips
+  before scaling the clip rects) draws nothing. `media_tex` wraps the
+  frame's texture as any `TEX_2D` GPU frame, one wrapper per distinct
+  texture (name, size and the tap's generation of it — a texture made
+  anew under a reused name is a new GL object with default sampler
+  state, `MediaFrame.tex_gen`) shared by every channel, so a name that
+  changes every frame costs no GL object. Off the GRAPH page the last
+  frame holds 1 s, then the channel reads black and the source says
+  `off page` (read from the panel's own `canvas_px`; its row on MEDIA
+  says why — being on MEDIA is one such time; `lost` is for a page that
+  draws and a tap that gets nothing, a minimised window); back on the
+  page it is `ready` on the first frame. `replay.py` checks the
+  backend's private names it replays with when imported (uv.lock pins
+  imgui_bundle).
 - **Dependencies** (all in the default install, imported only when a
   source opens): `av` (PyAV, bundles FFmpeg), `pillow-heif`,
   `syphon-python[opengl]` and `pyobjc-framework-avfoundation` (macOS
@@ -1686,7 +1844,7 @@ the panel at 540 and the desk takes what is left.
 
 Its fit at the control size is held by
 `tests/test_ui_patterns.py::test_the_page_fits_with_every_row_driven_and_flat_or_the_longest_mode`,
-but in font metrics that are not the Mac's (hand check 120).
+in the bundled fonts' metrics, which are the Mac's too (§16).
 
 **The GRAPH page** (`ui_graph.py` over the model `graphview.py`, plan
 28; `imgui_bundle.imgui_node_editor`, its settings file off). One canvas
@@ -1798,9 +1956,16 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
   `into`.
 - **Right-click**: on a `mod` stub, the param menu's Learn items (Learn
   desk, hand ▸, pad, a role, sink) — the completed row is a cable next
-  frame; on a cable, insert and delete; on a node, delete (a modifier,
-  a macro, an extra effect / hands node / composite), `draw solid` /
-  `draw lines`, `laid over` / `add` / `depth`; on the canvas, the picker:
+  frame; on a cable, insert, **starters ▸** (a picture cable: tracers,
+  tracers + dream, dream on a picture and, wave 0 E1, **feedback** — a
+  delay loop with a blend spliced onto it, a `fade` at
+  `graphview.FEEDBACK_LEVEL` its decay, many allowed) and delete; on a
+  node, delete (a modifier, a macro, an extra effect / hands node /
+  composite), `draw solid` / `draw lines`, `laid over` / `add` / `depth`,
+  and on a picture node **add feedback after** (the loop on the cable out
+  of it, laid under the node's box; a submenu per port when it feeds
+  several, disabled with why when it feeds nothing:
+  `ui_graph.add_feedback_after`, `node_below`); on the canvas, the picker:
   **modifier ▸** a kind, **effect ▸** a file, **hands**, **composite**,
   **macro ▸** an idle one. Delete takes the selection: a session row's
   cable and the rig's nodes are refused in words; a default render cable
@@ -2402,9 +2567,13 @@ how in its side pane, a cable from it onto acid's `fx.acid.mix` mod.
 
 ## 10. Presets, shows and the bank
 
-A **preset** (`presets/<slug>.json`) is one whole performance moment:
-the performance groups' values (`view rot camera pattern dream fx lfo
-macro mod`, `params.PERFORMANCE_GROUPS`), the performer routes, the
+A **preset** (`presets/<slug>.json`) is one whole performance moment —
+a complete look (plan 43): the performance groups' values (`view rot
+camera eye pattern dream fx media backdrop … lfo env seq macro mod`,
+`params.PERFORMANCE_GROUPS`; the eye since C2), the spin's pose (`pose`,
+right after `values`: the six `rot.phase.*`, `view.body` folded in — a
+load sets the turn there; a file without one leaves it spinning), the
+performer routes, the
 desk's preset layer, the macros and the module labels — and, when it has
 them, a `graph` section (§2: its nodes and, since plan 28, its `wires`),
 its `modifiers` (after `routes`: one entry each, `{"id": "mod.1",
@@ -2419,8 +2588,8 @@ Since plan 40 a preset may end with `groups` (after `layout`, one group a
 line: `{"id": "group.1", "name": "acid wash", "patch": "acid-wash",
 "nodes": ["render:acid.2", "mod.3"], "open": false}`, and a
 `kept_by_host` list when a spawn's sheet kept rows for the preset); it is
-written only when a group exists, and then the file is
-`hyperspace.preset/8` (§6, "Groups and patches").
+written only when a group exists (§6, "Groups and patches"). Every save
+is `hyperspace.preset/9` (§4).
 A build from before plans 28 and 30 ignores `modifiers` and `layout` with no
 note and **drops them when it saves**, and opens a `graph` with wires or
 placements as the default graph with a note: keep both Macs of a shared
@@ -2428,8 +2597,8 @@ library on the same build (register row 277). **A load replaces all of
 it** — every performance param lands from the file or its group default,
 every route and preset-layer row is replaced — and never touches a
 session param (`tempo hands ghost band master scene audio output overlay
-ui desk`): a tapped BPM, the hands' feel and the ghost hands survive any
-preset. Anything a file names that it may not (a session id, an unknown
+ui desk cloud`; the eye left this list in plan 43 C2): a tapped BPM, the
+hands' feel and the ghost hands survive any preset. Anything a file names that it may not (a session id, an unknown
 id, a route onto a param that is not modulatable, a desk row on an
 invariant control, a route onto a modifier the file does not hold, a
 `mod.*` id in `values`, an unreadable `layout` entry) is dropped with a
@@ -2445,6 +2614,21 @@ generator and the `party` / `house` shows left the app that day; the
 files live on only as the golden frames' corpus (`tests/corpus/`, §16)
 and nothing in the app reads them. The eleven band **scenes** are code
 data (`hyperspace/scenes/band/`, §13), not presets.
+
+**Folders** (plan 48, stage 1). Make folders under `presets/` in Finder
+and move presets into them; the app lists every folder down (hidden ones
+skipped) and names a preset in one by its folder: `presets/party/trip.json`,
+whose own `name` is `TRIP`, is `party/TRIP` in the list, on the strip,
+on a pad and in a show's bank (a top-level preset's name is bare, as
+before, so every older show reads unchanged). The file keeps only its
+own name; the folder is where it is. **save** writes back to the file
+the preset came from; **as…** writes the name you type, into its folder
+if it has one (`party/NEW`, made if need be); a new preset grown from
+the loaded one — the two-handed save, `preset.save_new`, an empty pad's
+hold — lands beside it, in its folder; **rename** keeps the folder (its
+field holds the name alone). Moving a preset between folders, and making
+or renaming a folder, is Finder's until stage 2; a folder left empty
+stays.
 
 A **show** (`projects/<slug>.hyp.json`; the code says *project*) is the
 room the presets play in: the session's values, the module presets of
@@ -2480,11 +2664,15 @@ shape → scene → All outputs, named `untitled` and dirty until saved),
 **save** (over the loaded preset's file; on `untitled` it asks for a
 name) and **as…**; **the list** — every preset by name, case folded,
 filling the page (never shorter than three rows, scrolling past the room
-it has), the loaded one selected: a click loads, **rename** turns the
-row into a name field, **×** sends the file to the trash; **trash (n) ▸**
+it has), the loaded one selected, a folder's preset drawn `party / TRIP`
+with the folder dim: a click loads, **rename** turns the
+row into a name field, **×** sends the file to this Mac's trash; **trash (n) ▸**
 at the list's foot, only while the trash holds something — every file in
-it, newest first, each with **restore**, then **empty trash…**, which
-asks "delete N files for good? — click again" for 4 s; **patches ▸**,
+it, newest first, each with **restore**, then (when the shared library
+still has an old trash) one dim line saying how many of the rows are
+from it, then **empty trash…**, which
+asks "delete N files for good? — click again" for 4 s and empties this
+Mac's only; **patches ▸**,
 folded — every patch, rename and × (a patch is spawned on GRAPH, never
 loaded here); **show** — one line saying what a show is ("the desk's
 pads, the session, the rig's wires"), then its name ● (red while it
@@ -2666,7 +2854,7 @@ route onto one is dropped at load. The ghost hands are drawn in the
 shape's camera (plan 26, §2): the eye, and the calibration in
 `hands.json` — `"units": {"mm": null, "origin": null, "tilt": 32.0}`,
 "from the box" by default, which fits the padded box (or, with no box,
-the calibrated ranges) into a 16:9 picture of the eye, seen from 32°
+the calibrated ranges) into a 16:9 picture of the rig's reference eye (the default eye, whatever the preset's: plan 43 C2), seen from 32°
 above; an `mm` or `origin` written there wins. `hands.json` is
 `hyperspace.hands/3`; an older file is kept as `hands.json.bak-v2` before
 the first rewrite. A hand leaving fades out over 0.3 s and one coming
@@ -2785,6 +2973,48 @@ never come back and `send` is not read again. To translate an edited
 `send`, remove the role from `"sinks_seeded"`. A `midi-out` entry is a
 sink alone: its own port (§12) and its own sink rows on its role.
 
+**A video's soundtrack** (plan 45 V1; heard through the mixer since V2). A video on
+a channel can decode its audio track to memory beside its picture —
+**once something asks for sound** (`Soundtrack.enable()`, which V2's
+play-audio toggle will call; until then no thread, no open, no read: a
+window decode demuxes the video's packets too, so an unheard track would
+read the whole clip for nothing). `VideoSource.audio` is a `Soundtrack`
+on a thread of its own (`media-audio-<name>`), float32 stereo at 48 kHz
+whatever the file (mono on both sides at −3 dB, surround downmixed),
+always from the original file (a scrub proxy is MJPEG with no audio). **The media transport is the one
+clock and the sound is its slave**: the soundtrack follows the same
+`want(t)` the picture does and has no clock or playhead of its own; a
+later PR reads it at the transport's position, so scrub, reverse and
+rate will sound like tape. A track of 120 s or less is held whole (its
+thread then ends); a longer one as a 120 s window around the position,
+decoded into one buffer (46 MB for a two-hour film, 92 MB while a window
+is re-made as the position moves; a decode the transport has left behind
+is abandoned, one that fails leaves the old window and is tried again
+after a 1 s move). `status` reads `fetching` whenever the transport is
+outside what is held, `ready` only inside it. A file with no track
+is silence, with no line in the log. `src.audio.read(at, n)` is the API
+the mixer consumes: (n, 2) float32 from sample `at`, zeros where nothing
+is held, never blocking. [`plans/45-video-audio.md`](plans/45-video-audio.md).
+
+**The media mixer** (plan 45 V2, `media/mixer.py`). Tick a channel's
+`audio` (`media.<c>.audio`; MEDIA, on the selected channel's source line,
+or the channel node's side pane on GRAPH) and its video's sound plays at
+the channel's `gain` (`media.<c>.gain`: off, then −30…+6 dB, unity at
+the notch). One output stream, 48 kHz stereo, on the default output
+device, opened the first time any channel's sound is on (opened again
+5 s after it fails or the device goes away) and left open until quit;
+unticking lets the video's samples go half a second later; SYSTEM's `media sound` line says whether it is open, how many
+channels play and how many underruns PortAudio reported. Each frame the
+channels hand it the playhead their transports were just stepped to, and
+it reads there — it keeps no position of its own, and the audio and
+display clocks are never locked, so even at rate 1 expect an occasional
+click (a block repeated or skipped) until V4 reads sequentially and slews
+toward the transport; at any other rate it stutters, and a hold, a `once`
+clip parked at its end and reverse are silent (varispeed is V4's). Two loud channels summed clip at
+full scale; the gains are there for it. The analyzer's own WAV playback
+(`audio.py`) is a separate stream and untouched; the analyzer listening
+to the mix is V3's.
+
 ## 14. Outputs
 
 **One output** by default: the render window, from `[output] monitor` /
@@ -2811,7 +3041,9 @@ two or more outputs or a lone entry whose `dim` is under 1,
 set from the config entry at every launch and Cmd+R (defaults scene on,
 hands on, through off, dim 1), never saved, never in a preset, show or
 undo step; a switch flipped mid-set lasts until the restart. They can be
-learned onto a desk button.
+learned onto a desk button. What every output draws through is the
+loaded preset's one camera (plan 43 C2): the window is the rig's, the
+framing is the look's.
 
 | Scene | Hands | Through | The output shows |
 |---|---|---|---|
@@ -2867,7 +3099,15 @@ modules are on the list in dependency order: `modifiers` after
 `motion`, `modgraph` before `routing`, `graphview` after `osc`, `ui_graph`
 before `ui`; `ui_feel`, the live feel plots, before `ui_routing`. A reload of `ui_graph` keeps the GRAPH page's editor
 context (it is held on the panel, not in the module), so the page goes
-on drawing with its zoom and selection.
+on drawing with its zoom and selection. The deck (`deck.py`, plan 44
+D1) is on the list after `learn`, before `midi`: a save re-classes the
+live `Deck` and its objects come from `Deck.targets()`, which `main`'s
+target list takes first, then the rig's. `Deck.build` runs once at
+launch, so a change to it — or a field added to a live object — needs
+Cmd+R, not a save. A reload of `media/mixer.py` keeps the
+media sound playing: the live mixer is re-classed by `MediaState` and
+the stream's callback reaches the new code through the class; adding
+the module itself needed a restart.
 
 **The watchdog** (`watchdog.py`) appends to `<home>/stall.log` a `===
 <kind>` header — the time, the loaded preset, what happened — and every
@@ -2900,6 +3140,94 @@ uv run ruff check .
   applies by name (see "Running the automated tests" in
   `TESTING-GUIDE.md`); the default run is `-n auto` without them. Run
   `--all` before a merge and after touching rendering or presets.
+- **One tier at a time on a shared Mac** (row 589). Every xdist worker
+  that imports torch holds about 1 GB, and `-n auto` is sixteen of them
+  on the M3 Max: two or three `--all` runs from parallel sessions took
+  the machine to 140 GB on 2026-11-01. A session that is not the one
+  merging runs the fast tier with a few workers (`-n 4`), one run at a
+  time, and leaves `--all`, the goldens and `tests/test_media_live.py`
+  to whoever merges.
+- **A hung test fails by name.** pyproject's addopts carry
+  `--timeout=120 --max-worker-restart=0` and its ini key
+  `timeout_method = "thread"`. **Workers use the thread method, a
+  serial run the signal method** (conftest's `pytest_configure`, unless
+  the run names one: `--timeout-method` or `-o timeout_method=`). A test blocked inside a C call (`glfw.init()`, a
+  camera, audio or HID open) never returns to Python, so a signal
+  handler never runs; the thread method's watchdog dumps every
+  thread's stack and `os._exit`s its whole process, which xdist
+  reports as "worker 'gwN' crashed while running '<test>'". In a
+  serial run (`-n0`, the debugger's mode) that would end the run with
+  no summary, so there the signal method fails the test and goes on
+  (a `sleep(130)` under `-n0 --timeout=5`: "1 failed, 2 passed"; with
+  `--timeout-method=thread` named, the process ended with no summary).
+  The slowest fast-tier test takes about 6 s, far under the limit.
+- **The restart cap, measured** (2026-11-02, `-n 2`, one test that
+  `os._exit`s and forty quick ones; "default" is xdist's own cap,
+  `-n` × 4):
+
+  | `--dist` | the crashing test | `--max-worker-restart=0` | default restarts |
+  |---|---|---|---|
+  | `loadgroup` | ungrouped | 1 failed, 11 passed: 29 never ran | stalled, killed after 60 s |
+  | `loadgroup` | in an `xdist_group` | 1 failed, 11 passed: 29 never ran | stalled, killed after 60 s |
+  | `load` | ungrouped | 1 failed, 14 passed: 26 never ran | 1 failed, 40 passed |
+  | `load` | in an `xdist_group` | 1 failed, 14 passed: 26 never ran | 1 failed, 40 passed |
+
+  With the cap a dead worker's queue is lost under either scheduler;
+  without it `load` hands the queue to the replacement and `loadgroup`
+  stalls (`sample` showed the replacement waiting on its channel for
+  work, not in a modal, after the reopen-windows alert below was
+  cleared). So today's `loadgroup` keeps the cap: any crash, even a
+  transient one, ends the run and leaves the dead worker's queue unrun
+  — the summary looks finished, so compare the count with a clean
+  run's (an `--all` with a crash of
+  `test_segment.py::test_vision_frees_each_jobs_memory` said "4297
+  passed" against 4902) — which is cheaper than a run that never ends.
+  `load` without the cap is the follow-up (row 589, "Other options").
+- **Live tests take turns across processes.** Within a run
+  `xdist_group("live")` gives every `live` test to one worker; across
+  runs (two sessions, two worktrees) the autouse fixture
+  `_live_devices_take_turns` holds an `fcntl.flock` on
+  `$TMPDIR/hyperspace-tests-live-<uid>.lock` (`tests/live_lock.py`) for each
+  live test's setup, call and teardown. It waits at most
+  `live_lock.WAIT_S` (60 s) and then skips with "another test run holds
+  the live devices"; the kernel drops the lock when a worker dies.
+  `tests/test_live_lock.py` proves it with two processes. The file is
+  per account (`hyperspace-tests-live-<uid>.lock`); a lock file that
+  cannot be opened or locked is a skip with the reason, never an error.
+  The folder is `tempfile.gettempdir()`, so a session whose `TMPDIR`
+  differs (a sandbox that sets its own) gets a different lock file and
+  does not take turns with the others.
+- **Why `glfwInit()` hangs on the Mac, and the recovery.** A sample of
+  a bare `glfw.init()` ends in `_glfwInitCocoa` → `[NSApplication run]`
+  → the reopen AppleEvent →
+  `-[NSPersistentUIRestorer promptToIgnorePersistentStateWithCrashHistory:]`
+  → `-[NSAlert runModal]`. macOS shows every new Python GUI process
+  (bundle `org.python.python`) a hidden "Python quit unexpectedly while
+  reopening windows" alert, because an earlier process died with a
+  window open (a memory kill, or the thread timeout's `os._exit`), and
+  the new process waits in that modal forever. Any worker that dies with
+  a GLFW window open arms the alert again, which is one more reason live
+  tests take turns. So a test that opens a real GLFW window asks for
+  the `gl_window_ok` fixture (both do:
+  `test_ui_pad.py::test_the_drawings_show_upright_through_real_gl`,
+  which stays in the fast tier so CI checks the orientation under
+  Xvfb, and `test_media_live.py::test_syphon_loopback`):
+  `tests/gl_probe.py` runs `glfw.init()` in a child process with an
+  8 s cap, once per worker, and the test skips with the reason when
+  the child does not answer (SIGTERM, then SIGKILL a second later), when
+  `glfw.init()` says no, or when the child fails (its stderr in the
+  reason). The child is started with `-ApplePersistenceIgnoreState YES`
+  on its argv (NSUserDefaults' argument domain, this process only;
+  nothing is written), meant to keep it from restoring or offering to
+  restore saved windows, and from leaving saved state behind when it is
+  killed at the cap. Neither was tested: that needs the alert armed on
+  purpose in the owner's saved state. What was checked: the probe still
+  answers (0.2 s) and `defaults read org.python.python` is unchanged. To find a stuck process: `ps`,
+  then `sample <pid>` (main thread in CFRunLoop / `mach_msg`). To
+  recover, move
+  `~/Library/Saved Application State/org.python.python.savedState`
+  aside, then run
+  `defaults write org.python.python ApplePersistenceIgnoreState -bool YES`.
 
 - Every test runs against its own temporary home: `tests/conftest.py`
   sets `HYPERSPACE_HOME` to the test's `tmp_path` in `os.environ`
@@ -2932,11 +3260,14 @@ uv run ruff check .
 - The patterns: `tests/test_patterns.py` holds the shader to
   `patterns.py`'s table and checks every input moves every mode;
   `test_the_face_shaders_pass_the_reference_compiler` runs
-  `glslangValidator` and skips where it is missing. Fit tests measure in
-  this machine's font metrics. Off the Mac `ui.py` falls back to DejaVu,
-  which is wider: a test that holds a line whole (or every desk glyph
-  drawn) holds it on the Mac and accepts the fitted form elsewhere
-  (`tests/fonts.py`: `MAC_FONTS`, `as_drawn`).
+  `glslangValidator` and skips where it is missing.
+- The fonts: the panel draws only the faces in `hyperspace/fonts/`
+  (Inter Medium for words, Inter Bold for the tracked labels, JetBrains
+  Mono SemiBold for numbers, DejaVu Sans merged behind all three for
+  the symbols they lack; its README has sources and licences), never a
+  system font, so a fit test measures the same on the Mac and in CI and
+  holds every line whole everywhere. A fit test that breaks is fixed in
+  the layout, not loosened.
 - The golden frames: `tests/test_golden_frames.py` compares 596
   full-resolution frames — every corpus preset in every output state,
   hands absent and present, the other wirings, the fixture presets and a
@@ -3012,7 +3343,9 @@ to `main`: one job, `tests`, on `ubuntu-24.04` — `uv sync --locked`,
 `--timeout 120` (pytest-timeout: a hung test fails alone and names
 itself instead of stalling its worker) and `--max-worker-restart=0` (a
 crashed worker fails the run; xdist's replacement for one stalled the
-`loadgroup` scheduler at 99 %). The fast tier takes about two minutes on
+`loadgroup` scheduler at 99 %) — the same values pyproject's addopts now
+carry, with the thread method, so the explicit flags are redundant but
+consistent. The fast tier takes about two minutes on
 four cores.
 
 - **What it leaves out.** `UV_NO_GROUP="hands dream"`: no Ultraleap SDK
@@ -3022,7 +3355,7 @@ four cores.
   same run on a Linux machine:
 
   ```bash
-  sudo apt-get install libasound2-dev libportaudio2 libgl-dev xvfb fonts-dejavu-core glslang-tools
+  sudo apt-get install libasound2-dev libportaudio2 libgl-dev xvfb glslang-tools
   export UV_NO_GROUP="hands dream"
   uv sync --locked
   xvfb-run -a uv run pytest -q --timeout 120
@@ -3042,8 +3375,12 @@ four cores.
   only), `test_render.py::test_render_performance` (a frame-rate floor
   needs a GPU; it skips on a software rasteriser), the fit tests above,
   and `test_outputs.same_bytes`, which holds two pictures byte for byte
-  on Apple's GL and within one step elsewhere (llvmpipe does not read a
-  texture drawn 1:1 through a LINEAR sampler exactly on its texel).
+  on Apple's GL and within one step elsewhere. Every 1:1 read is a
+  `texelFetch`, exact on every driver; llvmpipe still moves an effect's
+  own pass by a step: it filters in 32-bit float, so a picture held in a
+  half-float pool texture rounds twice on its way to RGBA8 where one
+  painted straight there rounds once, and it interpolates `v_uv` a
+  rounding apart on a multisampled target.
 - **GL memory.** The `ctx` fixture (`tests/conftest.py`) is a context
   per test, released after it. A `Renderer` has no release, so what a
   test builds lives as long as its context; one context per module grew
@@ -3093,9 +3430,9 @@ What only a person at the machine can check is
 - **On a 3D shape, the W planes' readouts keep counting**: `rot.phase.*`
   and ROUTING show the W planes turning though the shape does not; only
   the VIEW page's dimmed W keys say they do nothing.
-- **The FACES page's fit and `patterns.glsl` on Apple's GL are
-  unverified**: both were checked only in a container with Mesa and
-  other font metrics (hand checks 120, 121).
+- **`patterns.glsl` on Apple's GL is unverified**: it was checked only
+  in a container with Mesa (hand check 121). The FACES page's fit is
+  held in the bundled fonts, the same on the Mac (§16).
 - The amber "filled" pad light and the save-as blink use Akai's
   documented velocities and have not been confirmed on an APC40 mk1.
 - Open findings in [`AUDIT-2026-09.md`](AUDIT-2026-09.md): R13, R14,

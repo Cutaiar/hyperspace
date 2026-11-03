@@ -22,7 +22,7 @@ from hyperspace.library import LibraryError
 
 FIXTURES = Path(__file__).parent / "fixtures" / "merge-31-32"
 V2, V3, V4 = "hyperspace.preset/2", "hyperspace.preset/3", "hyperspace.preset/4"
-V6 = "hyperspace.preset/7"   # (plan 36 T3: the save schema, named for the row it pinned)
+V6 = "hyperspace.preset/9"   # (plan 43 C2: the save schema, named for the row it pinned)
 CLIP = "shared:loops/tunnel.mp4"
 
 
@@ -67,9 +67,9 @@ def _pattern_and_bin(app) -> None:
 
 
 def test_the_ladder_is_one_list():
-    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7, 8)   # (plan 35: /6; plan 36 T3: /7; plan 40 T2: /8)
+    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9)   # (… plan 40 T2: /8; plan 43 C2: /9)
     assert (preset.SCHEMA, preset.SCHEMA_V3, preset.MEDIA_SCHEMA) == (V2, V3, V4)
-    assert preset.WIRED_SCHEMA == V6
+    assert preset.SAVE_SCHEMA == V6
 
 
 def test_a_pattern_and_a_bin_save_as_6_and_round_trip(app):

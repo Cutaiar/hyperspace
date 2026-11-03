@@ -14,14 +14,15 @@ import json
 from dataclasses import replace
 
 import pytest
-from fonts import as_drawn
 from imgui_bundle import imgui
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
 from hyperspace import routing, ui_graph, ui_presets, ui_routing
 from hyperspace.bands import CEIL
+from hyperspace.learn import LANE_DEPTH
 from hyperspace.library import LibraryError
+from hyperspace.motion import DEFAULT_ROUTE_FEEL
 from hyperspace.params import Kind
 from hyperspace.routing import Binding, Bindings, Router
 from hyperspace.ui import PAGE_KEYS
@@ -92,8 +93,9 @@ def test_routing_add_and_delete(rig, tmp_path):
     panel, reg = rig.panel, rig.reg
     router = _with_router(rig, tmp_path)
     frame(panel, "routing")
-    b = ui_routing.add_route(panel, "view.bright")
+    b = ui_routing.add_route(panel, "view.bright", depth=0.5)
     assert b.source == "lane:0" and b.op == "push" and b.value == 0.5
+    assert b.motion == DEFAULT_ROUTE_FEEL        # 2026-10-31: a new route is the smooth spring
     assert router.table.routes_to("view.bright") == [b]
     frame(panel)
     reg["band.select"].set(3)
@@ -103,6 +105,25 @@ def test_routing_add_and_delete(rig, tmp_path):
     router.table.remove(b)
     assert not router.table.routes_to("view.bright") and b2 in router.table.routes()
     frame(panel)
+
+
+def test_route_a_lane_here_lands_at_lane_depth(rig, tmp_path):
+    """The owner, after the show of 2026-10-30: band routes far too hot.
+    "Route a lane here…" (`add_route` with no depth) is a push at
+    `learn.LANE_DEPTH`, the depth a lane lands at from a GRAPH cable too
+    (`learn.row_for`) — it was a hand-written 0.5, 0.19 of the throw per
+    nominal band."""
+    from hyperspace.learn import row_for
+
+    panel, reg = rig.panel, rig.reg
+    router = _with_router(rig, tmp_path)
+    frame(panel, "routing")
+    reg["band.select"].set(2)
+    b = ui_routing.add_route(panel, "view.bright")
+    assert (b.source, b.op, b.value, b.rest) == ("lane:2", "push", LANE_DEPTH, None)
+    assert router.table.owner("view.bright") is b
+    cable = row_for("lane:2", reg["view.bright"])
+    assert (cable.op, cable.value) == (b.op, b.value)
 
 
 def _on_disk(tmp_path):
@@ -552,7 +573,7 @@ def test_the_routing_page_is_one_page_over_the_loaded_preset(rig, tmp_path, monk
     assert "bindings" not in lib.kinds                         # no routing-preset strip
     # the routes: a pointer to GRAPH (plan 28 N7), where each row is drawn —
     # with the macro's chip
-    assert as_drawn(texts, ui_routing.POINTER) and "× macro.1" not in texts
+    assert ui_routing.POINTER in texts and "× macro.1" not in texts
     rows(panel)
     assert "view.bright" in previews and "× macro.1" in texts
     # the desk: its rows by glyph (plan 14 WP7: D1 is device knob 1, G5·9
@@ -637,7 +658,7 @@ def test_the_old_routing_presets_step_load_save_as_presets(rig, tmp_path):
     path = lib.save_as("presets", "My Routes")
     assert path == tmp_path / "presets" / "my-routes.json"
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.preset/7" and len(doc["routes"]) == 13
+    assert doc["schema"] == "hyperspace.preset/9" and len(doc["routes"]) == 13
     assert lib.current("presets") == "My Routes" and not lib.is_dirty("presets")
     frame(panel)
     # another preset back: the user route goes, the inputs stay
@@ -927,7 +948,7 @@ def test_a_filtered_page_draws_only_matching_lines_and_keeps_its_ids(rig, monkey
     assert texts.count(ui_routing.NO_MATCH) == 1
     assert "invariant · both layers" not in texts
     assert f"3 of {total} rows" in texts
-    assert not as_drawn(texts, ui_routing.POINTER)           # the unfiltered line is gone
+    assert ui_routing.POINTER not in texts          # the unfiltered line is gone
     dup = {i for i in ids if ids.count(i) > 1}
     assert len(ids) > 12 and not dup, f"conflicting ids {sorted(dup)}"
     # × on a filtered desk line (D4): that row goes, D3 stays
@@ -963,7 +984,7 @@ def test_a_filtered_page_draws_only_matching_lines_and_keeps_its_ids(rig, monkey
         lst.clear()
     frame(panel)
     assert drawn == [] and len(knobs) == 8 and len(table.routes()) == len(routes)
-    assert ui_routing.NO_MATCH not in texts and as_drawn(texts, ui_routing.POINTER)
+    assert ui_routing.NO_MATCH not in texts and ui_routing.POINTER in texts
 
 
 def test_the_filter_is_ui_state(rig, tmp_path):
@@ -1114,7 +1135,7 @@ def test_a_line_in_use_is_not_filtered_away_under_the_hand(rig, monkeypatch):
     frame(panel)
     assert len(knobs) == 8 and "×##find" not in chips and "+ route" not in chips  # (N7)
     assert not any(t.endswith(" rows") for t in texts)
-    assert as_drawn(texts, ui_routing.POINTER)          # N7: the unfiltered line
+    assert ui_routing.POINTER in texts           # N7: the unfiltered line
 
 
 # ------------------------------------------- plan 17 WP4: the picked control's line

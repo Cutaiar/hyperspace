@@ -11,7 +11,6 @@ never may."""
 from types import SimpleNamespace as NS
 
 import pytest
-from fonts import MAC_FONTS
 from imgui_bundle import imgui
 from test_ui_shell import _click, _drawn, _mouse, frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
@@ -101,24 +100,20 @@ def test_banner_lists_missing(rig, monkeypatch):
     state = attach(rig, FakeFolder())
     drawn = _drawn(monkeypatch)
     frame(rig.panel, "media")
-    assert not any("not on this Mac" in s for s in drawn)
+    banner = lambda: [s for s in drawn if s.endswith(" — shows black")]
+    assert not banner()
     state.assign("a", 0, "local:gone.mp4")
     state.assign("c", 3, "camera:FaceTime HD Camera")
     state.assign("d", 1, "local:gone.mp4")              # once each
     drawn.clear()
     frame(rig.panel, "media")
-    lines = [s for s in drawn if "not on this Mac" in s]
-    assert len(lines) == 2
-    assert "local:gone.mp4" in lines[0] and "camera:FaceTime HD Camera" in lines[1]
-    # (off the Mac its wider face fits the longer line shorter: fonts.py)
-    assert all("black" in s or (not MAC_FONTS and s.endswith("…")) for s in lines)
+    assert banner() == ["local:gone.mp4 — shows black", "camera:FaceTime HD Camera — shows black"]
     # many: the first few, then how many more — the page still fits
     for i in range(BIN):
         state.assign("h", i, f"local:x{i}.png")
     drawn.clear()
     frame(rig.panel, "media")
-    lines = [s for s in drawn if "not on this Mac" in s]
-    assert len(lines) == ui_media.BANNER_LINES
+    assert len(banner()) == ui_media.BANNER_LINES
     assert any(s.startswith("and ") and "more" in s for s in drawn)
 
 

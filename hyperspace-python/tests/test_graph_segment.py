@@ -311,7 +311,7 @@ def test_the_fixture_saves_and_loads_as_seven(tmp_path):
         spec = got
         saved = r.presets.save_as("segment-motion").read_text()
         doc = json.loads(saved)
-        assert doc["schema"] == "hyperspace.preset/7"
+        assert doc["schema"] == "hyperspace.preset/9"
         assert {"kind": "segment"} in doc["graph"]["nodes"]
         assert doc["values"]["segment.mode"] == 1
 

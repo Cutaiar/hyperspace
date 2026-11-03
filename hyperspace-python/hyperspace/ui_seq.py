@@ -192,11 +192,12 @@ def add_env(panel, envs) -> int | None:
 
 def remove_env(panel, envs, n: int) -> bool:
     """The ×: extra envelope `n` and its knobs go; a lane pointed at it
-    fires nothing until it is pointed elsewhere. One undo step. A lane
-    envelope, 1–5, is refused: False, and no step."""
+    fires nothing until it is pointed elsewhere. One undo step, with the
+    library's marks (row 563: the envelope may be a GRAPH group's member).
+    A lane envelope, 1–5, is refused: False, and no step."""
     if n in LANE_ENVS or n not in envs:
         return False
-    undo.push(f"delete envelope {n}")
+    undo.push(f"delete envelope {n}", load=True)
     return envs.remove(n)
 
 

@@ -225,6 +225,26 @@ def test_a_lane_envelope_is_refused_an_extra_one_goes(page):
     assert page.u.undo() and r.envs.ids() == [1, 2, 3, 4, 5]
 
 
+def test_a_picker_added_lfo_is_drawn_off_its_idle_line(page, monkeypatch):
+    """2026-10-31: a fresh LFO is idle (nothing in, nothing out), so its
+    area's idle line would hide it until opened — and preset only would
+    too. The picker's add reveals it (`ui_graph.reveal_node`): drawn with
+    the line closed, until it is deleted."""
+    monkeypatch.setattr(ui_graph, "PRESET_ONLY", True)
+    panel = page.panel
+    nid = ui_graph.add_voice(panel, "lfo", at=(10, 20))
+    assert nid == "lfo.5"
+    view = ui_graph.view_of(panel)
+    st = ui_graph._state(panel)
+    st["hide"] = ui_graph.hidden_ids(st, view)
+    n = view.node(nid)
+    assert n is not None and n.idle and n.area not in st["idle_open"]
+    assert nid in st["revealed"] and ui_graph.drawn_node(st, n)
+    assert not isinstance(ui_graph.remove_node(panel, nid), graphview.Refusal)
+    assert nid not in st["revealed"]
+    assert ui_graph.view_of(panel).node(nid) is None
+
+
 def test_the_picker_adds_an_lfo_up_to_the_cap(page):
     r, panel = page.r, page.panel
     assert ui_graph.add_refusal(panel, "lfo") is None

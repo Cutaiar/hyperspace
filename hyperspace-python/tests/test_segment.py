@@ -9,7 +9,12 @@ and the next good result clears it; the thread sleeps until a submit and
 a reason string, never an exception; a backend that will not open is said.
 The real backends — Apple Vision and torchvision's LR-ASPP — run once each
 on a synthetic frame in the `live` tier (`pytest --all`), never on a
-camera."""
+camera. Vision runs every job under an `objc.autorelease_pool` (2026-11-01:
+without one, on the worker's plain Python thread, each job leaked its
+frame's NSData copy — ~1 MB — for the life of the process, 140 GB over a
+half-hour set with two segment nodes); the fast tier checks the pool is
+entered around the run, the live tier that three hundred jobs leave the
+process's memory where it was."""
 
 from __future__ import annotations
 
@@ -224,6 +229,56 @@ def _synthetic(w: int = 640, h: int = 360) -> np.ndarray:
 
 
 # (both in the live tier by name: conftest's `_LIVE_TESTS`)
+def test_vision_runs_each_job_under_an_autorelease_pool():
+    """`VisionBackend.run` enters `objc.autorelease_pool` and runs the job
+    inside it (the worker's thread has no pool of its own: without this
+    every autoreleased object of a run leaks for ever)."""
+    b = segment.VisionBackend()
+    log: list[str] = []
+
+    class Pool:
+        def __enter__(self):
+            log.append("enter")
+
+        def __exit__(self, *exc):
+            log.append("exit")
+
+    b._pool = Pool
+    b._run_pooled = lambda frame, quality: (log.append(f"run {quality}"), frame[..., 0])[1]
+    out = b.run(_frame(7), "balanced")
+    assert log == ["enter", "run balanced", "exit"]
+    assert out.shape == (6, 8) and int(out[0, 0]) == 7
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="Apple Vision is macOS only")
+def test_vision_frees_each_jobs_memory():
+    """Three hundred Vision jobs on the worker's thread leave the process's
+    memory where it was (2026-11-01: ~1 MB a job leaked without the pool;
+    the slack allowed here is a tenth of that)."""
+    import resource
+
+    b = segment.pick_backend({"backend": "vision"})
+    assert isinstance(b, segment.VisionBackend), b
+    w = segment.SegmentWorker(b)
+    frame = _synthetic()
+    try:
+        w.submit(frame, 0)
+        assert w.drain(30.0) and w.error == "", w.error        # (the model loaded)
+        for i in range(1, 21):                                  # the backend warm
+            w.submit(frame, i)
+            assert w.drain(30.0)
+        before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        for i in range(21, 321):
+            w.submit(frame, i)
+            assert w.drain(30.0)
+        grew = (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss - before) / 1e6
+        assert w.error == "", w.error
+        assert w.results >= 321 and w.answered == 320
+        assert grew < 30.0, f"300 jobs grew the process by {grew:.0f} MB"
+    finally:
+        w.close()
+
+
 @pytest.mark.skipif(sys.platform != "darwin", reason="Apple Vision is macOS only")
 def test_vision_runs_once_on_a_synthetic_frame():
     b = segment.pick_backend({"backend": "vision"})

@@ -115,6 +115,7 @@ class Hidden:
         return OUT / name
 
     def close(self) -> None:
+        self.panel.close()          # what the panel holds in GL, while the context is up
         self.impl.shutdown()
         glfw.terminate()
 

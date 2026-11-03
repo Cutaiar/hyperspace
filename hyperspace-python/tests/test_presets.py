@@ -612,7 +612,7 @@ def test_a_preset_round_trips(rig):
     assert path == rig.home / "presets" / "round-trip.json"
     doc = json.loads(path.read_text())
     # (row 394: every save is the newest schema)
-    assert doc["schema"] == "hyperspace.preset/7" and doc["name"] == "Round Trip"
+    assert doc["schema"] == "hyperspace.preset/9" and doc["name"] == "Round Trip"
     assert doc["desk"] == desk and doc["macros"] == macros and doc["note"] == "a note"
     assert doc["modules"] == {"dream": "wake"}
     # every performance base, the media family's too — and no retired id
@@ -1149,7 +1149,10 @@ def test_active_follows_the_loaded_preset_from_one_place(tmp_path):
                preset.Presets._landed):
         src = inspect.getsource(fn)
         assert "follow()" in src and "bank.index" not in src, fn.__qualname__
-    assert inspect.getsource(library).count("bank.index(") == 1
+    # (plan 48: `follow` resolves each slot to its file, so a slot naming
+    # the preset by another spelling lights too — the one look-up is there)
+    assert inspect.getsource(library).count("bank.index(") == 0
+    assert "enumerate(self.bank)" in inspect.getsource(library.Project.follow)
     assert "pr.bank.index(" not in inspect.getsource(preset)
 
 
@@ -1346,25 +1349,25 @@ FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "presets"
 
 
 def test_a_wired_preset_saves_as_v6(rig):
-    """Row 385, row 394: every save is the newest schema — plan 36 T3:
-    `hyperspace.preset/7` — the frame edited or not; the ladder reads `/2`
-    … `/7` — and (plan 40 T2) `/8`, a `/7` with groups, which only a preset
-    holding a group writes — and a `/9` file is refused in its words."""
-    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7, 8)
+    """Row 385, row 394: every save is the newest schema — plan 43 C2:
+    `hyperspace.preset/9` — the frame edited or not; the ladder reads `/2`
+    … `/9` (plan 40 T2's `/8` a `/7` with groups) — and a `/10` file is
+    refused in its words."""
+    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9)
     assert graphmigrate.WIRED_SCHEMA == preset.WIRED_SCHEMA == "hyperspace.preset/7"
     rig.presets.load_doc({"schema": preset.SCHEMA, "name": "edited", "values": {}})
     section = rig.presets.graph.free_doc()
     assert section["frame"] == "wired"
     edited = {**section, "wires": [w for w in section["wires"]
                                    if w["to"] != "lookback.capture"]}
-    assert rig.presets.document("edited")["schema"] == "hyperspace.preset/7"
+    assert rig.presets.document("edited")["schema"] == "hyperspace.preset/9"
     rig.presets.graph.land(G.read_graph(edited), edited)
     doc = rig.presets.document("edited")
-    assert doc["schema"] == "hyperspace.preset/7" and doc["graph"] == edited
-    put(rig.home, "NINE", schema="hyperspace.preset/9")
+    assert doc["schema"] == "hyperspace.preset/9" and doc["graph"] == edited
+    put(rig.home, "TEN", schema="hyperspace.preset/10")
     rig.lib.poll()
     with pytest.raises(LibraryError, match="is not a hyperspace.preset"):
-        rig.lib.read("presets", "NINE")
+        rig.lib.read("presets", "TEN")
 
 
 @pytest.mark.parametrize("name", WIRED_FIXTURES)
@@ -1387,7 +1390,7 @@ def test_a_wired_frame_preset_saves_and_loads(tmp_path, name):
             assert got == spec
         spec = got
         saved = r.presets.save_as(name).read_text()
-        assert json.loads(saved)["schema"] == "hyperspace.preset/7"
+        assert json.loads(saved)["schema"] == "hyperspace.preset/9"
 
 
 # ---------------------------------------------------------------- a new preset (plan 35 T7)
@@ -1562,7 +1565,7 @@ def test_resize_values_save_and_load_with_the_preset(tmp_path):
     assert r.presets.load("CROP") == []
     assert r.reg["resize.2.crop_x"].value == 0.3
     saved = r.presets.save_as("CROP").read_text()
-    assert json.loads(saved)["schema"] == "hyperspace.preset/7"
+    assert json.loads(saved)["schema"] == "hyperspace.preset/9"
     assert json.loads(saved)["values"]["resize.2.crop_x"] == 0.3
     (b / "presets").mkdir(parents=True)
     (b / "presets" / "crop.json").write_text(saved)

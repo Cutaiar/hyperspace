@@ -1141,6 +1141,12 @@ class Renderer:
         # registry (app hands it over; duck-typed: `clouds` and its
         # devices' kinds). None: no cloud is drawn
         self.cloud_source = None
+        # plan 47, the poi: its state (`poi.PoiState`, handed over by app),
+        # whose handle, string and weight the guide draws over each output
+        # that shows the hands (`poi_guide.PoiGuide`, made on first use).
+        # None: nothing is drawn
+        self.poi_source = None
+        self.poi_guide = None
         # plan 36 T1: whoever holds the rig's own wires (the open show,
         # `library.Project.rig`, by `app`); None: every bus cable standing
         self.rig_source = None
@@ -1669,6 +1675,7 @@ class Renderer:
         # while something still asks for them
         self._frame_size = size
         self._prune_sized()
+        self._poi_layer(s, size, target, vp)
         graph = self._graph_for(views)
         # plan 34 D: each delay's pair turns — last frame's write is now
         # what its delay reads
@@ -1706,6 +1713,32 @@ class Renderer:
             timer.end_frame(graph.timed_in(frame))
             stats["gpu_ms"] = timer.medians()
             stats["gpu_note"] = timer.note
+
+    def _poi_layer(self, s: ViewState, size: tuple[int, int], target, vp) -> None:
+        """The poi's guide for this frame (plan 47), drawn once into its
+        own layer before the graph runs, laid over each output by
+        `_compose`. Nothing — no GL touched — with no poi, or the poi or
+        its guide off. A failure is the guide's alone: it is dropped for
+        the frame and the frame goes on."""
+        state = getattr(self, "poi_source", None)
+        guide = getattr(self, "poi_guide", None)
+        if state is None or not getattr(state, "on", False):
+            if guide is not None:
+                guide.shown = False
+            return
+        try:
+            if guide is None:
+                from .poi_guide import PoiGuide
+                guide = self.poi_guide = PoiGuide(self.ctx)
+            if guide.layer(size, s, state):
+                target.use()
+                self.ctx.viewport = vp
+        except Exception as e:  # noqa: BLE001 — the guide must not take the frame down
+            if guide is not None:
+                guide.shown = False
+                guide.error = f"poi guide: {type(e).__name__}: {e}"[:160]
+            target.use()
+            self.ctx.viewport = vp
 
     def _graph_for(self, views: list[View], s: ViewState | None = None) -> Graph:
         """The render graph for these views: the last one while their count
@@ -2201,6 +2234,17 @@ class Renderer:
                     rg.composite_readout(tgt, inner, opaque=opaque, flip=flip)
             except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
                 self._hands_failed(e, tgt, rect)
+        # plan 47: the poi's guide over the hands, on an output that shows
+        # them (its hands switch mutes it too), never through the effects
+        guide = getattr(self, "poi_guide", None)
+        if guide is not None and guide.shown and bool(getattr(v.switches, "hands", True)):
+            try:
+                guide.lay(tgt, inner, opaque=opaque, flip=flip)
+            except Exception as e:  # noqa: BLE001
+                guide.shown = False
+                guide.error = f"poi guide: {type(e).__name__}: {e}"[:160]
+                tgt.use()
+                ctx.viewport = rect
         # the dim, after everything: the scene, the look-back, every effect
         # and the hands dim alike, and the history and the dream worker
         # never hold it. At 1 the pass does not run and the frame is
@@ -2819,7 +2863,7 @@ class Renderer:
             put("u_bmp_alpha", float(s.media_alpha))
             # the layer's own path about the face centre — independent
             # of the instance-grid motion
-            ph = t * s.media_rate
+            ph = float(s.media_phase)    # K3: media_rate integrated by the host
             if s.media_mode == 1:      # orbit
                 ox, oy = math.cos(ph), math.sin(ph)
             elif s.media_mode == 2:    # figure-8
@@ -3183,7 +3227,7 @@ class Renderer:
             return
         # the copies: where each goes, how big, how bright — far to near,
         # those wholly off screen dropped (`_copies_of`)
-        inst = self._copies_of(s, w, h, t_m, P, vp, dpr, legacy)
+        inst = self._copies_of(s, w, h, P, vp, dpr, legacy)
         if not len(inst):
             return                     # every copy is off screen: the ground alone
         self._ibuf.orphan(inst.nbytes)
@@ -3357,14 +3401,14 @@ class Renderer:
         prog["u_model"].write(mats[1])
         prog["u_depth_alpha"].value = depth_alpha
 
-    def _field(self, s: ViewState, w: int, h: int, t: float) -> np.ndarray:
+    def _field(self, s: ViewState, w: int, h: int) -> np.ndarray:
         """The copies this scene pass lays out: `field.field`'s rows
         (centre px, scale, alpha), far to near, none culled — the camera's
         pan handed over in px through the default eye (`CELL`). Its own
         method so a test can see what the pass was handed."""
-        return field(_PanPx(s, SCALE * min(w, h)), w, h, t)
+        return field(_PanPx(s, SCALE * min(w, h)), w, h)
 
-    def _legacy_field(self, s: ViewState, t: float) -> np.ndarray:
+    def _legacy_field(self, s: ViewState) -> np.ndarray:
         """The copies of a flat layout with Fit off, as the field was laid out
         before the instanced draws — the same float arithmetic: (m, 4) rows
         of (x, y) in the world at scale 1 (a cell CELL shape radii, y up),
@@ -3386,7 +3430,7 @@ class Renderer:
                 # trigonometric motion over the field: each instance's
                 # phase comes from its position, so the field moves as
                 # one figure (field._motion's flat formulas)
-                ph = t * s.inst_rate
+                ph = float(s.inst_phase)    # K3: inst_rate integrated by the host
                 if s.inst_motion == 1:    # ORBIT — circles in a traveling wave
                     th = ph + (gx + gy) * 0.9
                     dx, dy = np.cos(th), np.sin(th)
@@ -3404,7 +3448,7 @@ class Renderer:
             inst[:, 1] = (-oy).astype(np.float32)
         return inst
 
-    def _copies_of(self, s: ViewState, w: int, h: int, t: float, P: np.ndarray,
+    def _copies_of(self, s: ViewState, w: int, h: int, P: np.ndarray,
                    vp: np.ndarray, dpr: float, legacy: bool = False) -> np.ndarray:
         """The instance rows for the scene pass, (m, 4) float32: each copy's
         centre in the world (x, y on the plane through the origin, y up),
@@ -3419,7 +3463,7 @@ class Renderer:
         px a unit), so the field keeps its world spacing whatever the eye;
         the camera is in the rows and the world transform is the identity."""
         if legacy:
-            inst = self._legacy_field(s, t)
+            inst = self._legacy_field(s)
             if not len(inst):
                 return np.zeros((0, 4), dtype=np.float32)
             # where the copies land in the world, for the cull alone
@@ -3429,7 +3473,7 @@ class Renderer:
             seen[:, 1] = inst[:, 1] * zoom - float(s.pan[1])
             seen[:, 2] = zoom
         else:
-            rows = self._field(s, w, h, t)
+            rows = self._field(s, w, h)
             if not len(rows):
                 return np.zeros((0, 4), dtype=np.float32)
             ppu0 = SCALE * min(w, h)

@@ -38,14 +38,14 @@ jobs:
       - name: System libraries
         # ALSA headers to build python-rtmidi; PortAudio for sounddevice's
         # import; Mesa + Xvfb for GL and GLFW; libgl-dev for the unversioned
-        # libGL.so moderngl's loader opens; DejaVu, the fonts ui.py falls
-        # back to off the Mac; glslang, the reference compiler test_patterns
-        # holds the face shaders to
+        # libGL.so moderngl's loader opens; glslang, the reference compiler
+        # test_patterns holds the face shaders to. The panel's fonts ship in
+        # the package (hyperspace/fonts/)
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libasound2-dev libportaudio2 libgl-dev libgl1-mesa-dri libglx-mesa0 \
-            libegl1 xvfb xauth fonts-dejavu-core glslang-tools
+            libegl1 xvfb xauth glslang-tools
 
       - uses: astral-sh/setup-uv@v7
         with:

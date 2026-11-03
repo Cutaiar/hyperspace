@@ -20,7 +20,10 @@ Input arrives a frame late (imgui reads the queue at `new_frame`), and imgui
 trickles one change per frame, so every action yields between a move, a
 press and a release. Picking from a combo and typing a value use the
 keyboard (`nav_enable_keyboard`): no row height or grab position is
-guessed. Why not Dear ImGui's Test Engine, which does all this by label:
+guessed. Ctrl is `ctrl`, the key imgui reads as Ctrl: under
+`config_mac_osx_behaviors` (on by default on a Mac) imgui swaps Ctrl and
+Cmd as they enter its queue, so there Ctrl+click is Cmd+click, as it is
+for a person. Why not Dear ImGui's Test Engine, which does all this by label:
 from Python it runs only under imgui-bundle's own runners (HelloImGui,
 ImmApp) — its scripts run on a second thread and need the GIL handed over
 from C++, and the app runs its own GLFW loop.
@@ -137,6 +140,14 @@ class Driver:
         imgui.get_io().add_mouse_pos_event(-1.0, -1.0)
         yield
 
+    @property
+    def ctrl(self) -> imgui.Key:
+        """The key imgui reads as Ctrl: Cmd where `config_mac_osx_behaviors`
+        swaps the two at the queue (a Mac, by default), Ctrl elsewhere."""
+        if imgui.get_io().config_mac_osx_behaviors:
+            return imgui.Key.mod_super
+        return imgui.Key.mod_ctrl
+
     def key(self, key: imgui.Key, *mods: imgui.Key) -> Action:
         """Tap a key, holding the modifiers (``imgui.Key.mod_ctrl`` …).
         Keyboard navigation goes on with the first key: a combo's rows and
@@ -174,14 +185,14 @@ class Driver:
         Ctrl+A, the number, Enter. The number is the slider's own — a
         tapered slider's is its detent, as its readout is not."""
         yield from self.move(slider, frames)
-        io = imgui.get_io()
-        io.add_key_event(imgui.Key.mod_ctrl, True)
+        io, ctrl = imgui.get_io(), self.ctrl
+        io.add_key_event(ctrl, True)
         yield
         yield from self.press(True)
         yield from self.press(False)
-        io.add_key_event(imgui.Key.mod_ctrl, False)
+        io.add_key_event(ctrl, False)
         yield
-        yield from self.key(imgui.Key.a, imgui.Key.mod_ctrl)
+        yield from self.key(imgui.Key.a, ctrl)
         yield from self.type(str(value))
         yield from self.key(imgui.Key.enter)
         yield from self.wait(1)

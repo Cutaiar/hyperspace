@@ -35,6 +35,14 @@ applied, this is the hardware. With no pad (none connected, or
 ``[gamepad] enabled = false``) the picture is the same, drawn from the
 table alone, and the header says so.
 
+**The pad in hand** (plan 42): the picture is the model read
+(`gamepad.layout_for`, `gamepad.shown_model` — while lost, the one the
+entry's ``controller =`` names): a DualSense or an Edge draws its own
+glyphs (✕ where an Xbox pad's A is), its touchpad with each finger on it
+(every ``touch:`` row lights it), a tilt bubble that rings red on a shake
+(every ``motion:`` row), the Edge's back and Fn buttons, and the light
+bar's colour beside the header's word.
+
 Read-only: the hover names the control, its param and its source, and a
 click does nothing. Learn pad is still the way onto a control — the
 binding menu on any param (right-click → Learn pad), which the hover
@@ -47,12 +55,14 @@ SYSTEM page, beside the desk's switch) hides it.
 
 from __future__ import annotations
 
+import math
+
 from imgui_bundle import imgui
 
-from . import gamepad, ui, ui_desk, ui_routing
+from . import gamepad, ui, ui_desk, ui_pad_nvg, ui_pad_views, ui_routing
 from .routing import Binding
 
-SCHEMES = ("pad", "hat", "axis")    # the schemes a pad control's row can have
+SCHEMES = ("pad", "hat", "axis", "touch", "motion")   # the schemes a pad control's row can have
 EDGE = ui_desk.EDGE                 # from the control window's edges, as the desk sits
 PAD = ui_desk.PAD
 GAP = ui_desk.GAP                   # between this and the desk under it
@@ -97,18 +107,51 @@ def rows(table) -> dict[str, Binding]:
     read them. Keyed by the layout's source, so a lane addressed by
     number (``axis:4``) lands on the control it names."""
     out: dict[str, Binding] = {}
+    every = gamepad.layout_for(gamepad.models.MODELS["edge"])   # every control a pad can have
     for b in table.of(*SCHEMES):
         if not b.enabled:
             continue
-        c = gamepad.control(b.source)
+        c = gamepad.control_in(every, b.source)
         if c is not None:
             out.setdefault(c.source, b)
     return out
 
 
+def source_rows(table) -> dict[str, Binding]:
+    """{source: the row that acts} by the exact address a row names — the
+    lanes view's (``touch:pinch`` apart from ``touch:x``), where `rows`
+    folds every touch row onto the touchpad."""
+    out: dict[str, Binding] = {}
+    for b in table.of(*SCHEMES):
+        if b.enabled:
+            out.setdefault(b.source, b)
+    return out
+
+
+def view_of(panel) -> str:
+    """The pad window's readout (`ui.pad_view`): one of ui_pad_views.VIEWS."""
+    k = int(panel.__dict__.get("pad_view", 0) or 0)
+    return ui_pad_views.VIEWS[k] if 0 <= k < len(ui_pad_views.VIEWS) else "map"
+
+
+def step_view(panel) -> None:
+    """The next readout, round: what a click on the header's name does."""
+    k = (ui_pad_views.VIEWS.index(view_of(panel)) + 1) % len(ui_pad_views.VIEWS)
+    reg = getattr(panel, "reg", None)
+    if reg is not None and "ui.pad_view" in reg:
+        reg["ui.pad_view"].set(k)
+    else:
+        panel.pad_view = k
+
+
 def _key(table) -> tuple:
-    return (id(table.bindings), len(table.bindings),
-            tuple(b.source for b in table.of(*SCHEMES)))
+    """What the pad's cached rows depend on, without a scan of the rows
+    (the pad window reads it every frame): the list (its identity and
+    length: a row added, removed, put in another's stead) and the table's
+    serials for a row edited in place (`rows_serial`: enabled, re-pointed,
+    retargeted; `redraw_serial`: a desk or GRAPH edit)."""
+    return (id(table.bindings), len(table.bindings), getattr(table, "rows_serial", 0),
+            getattr(table, "redraw_serial", 0))
 
 
 def rows_cached(panel, table) -> dict[str, Binding]:
@@ -167,7 +210,7 @@ def held(pad, c: gamepad.Control) -> bool:
         return False
     scheme, _, addr = c.source.partition(":")
     if scheme == "pad":
-        return pad.down(gamepad.BUTTONS[addr])
+        return pad.down(gamepad.ALL_BUTTONS[addr])
     if scheme == "hat":
         return bool(pad.hat & gamepad.HATS[addr])
     return False
@@ -182,7 +225,8 @@ def lane(pad, name: str) -> float:
 def _stick(pad, c: gamepad.Control) -> tuple[float, float]:
     """Where a stick is, each in [-1, 1], x right and y **down** (what a
     draw list wants); (0, 0) with no pad."""
-    xa, ya = ("LX", "LY") if c.glyph == "LS" else ("RX", "RY")
+    # by the control, not its glyph: a Sony face calls the left stick L3 (plan 42)
+    xa, ya = ("LX", "LY") if c.source == "pad:LSTICK" else ("RX", "RY")
     return 2 * lane(pad, xa) - 1, 1 - 2 * lane(pad, ya)
 
 
@@ -248,6 +292,51 @@ def _well(dl, pad, c: gamepad.Control, cx: float, cy: float, r: float,
     dl.add_circle_filled(_v(cx + dx * (r - knob), cy + dy * (r - knob)), knob, col)
 
 
+def _lanes(pad, which: str) -> dict[str, float]:
+    """A pad's touch or motion lanes by name ({} with none)."""
+    read = getattr(pad, f"{which}_lanes", None) if pad is not None else None
+    got = read() if read is not None else None
+    names = gamepad.gesture.TOUCH_LANES if which == "touch" else gamepad.gesture.MOTION_LANES
+    return dict(zip(names, got, strict=True)) if got is not None else {}
+
+
+def _touchpad(dl, pad, c: gamepad.Control, x0: float, y0: float, x1: float, y1: float,
+              edge: int, on: bool) -> None:
+    """The touchpad: its face (red while clicked) and each finger on it,
+    where it is (plan 42)."""
+    down = held(pad, c)
+    face = ui.u32(ui.RED) if down else ui.u32(_OFF if on else _DARK)
+    dl.add_rect_filled(_v(x0, y0), _v(x1, y1), face, 4.0)
+    dl.add_rect(_v(x0, y0), _v(x1, y1), edge, 4.0)
+    t = _lanes(pad, "touch")
+    r = max(2.5, 0.18 * (y1 - y0))
+    for xs, ys in (("x", "y"), ("x2", "y2")):
+        x, y = t.get(xs), t.get(ys)
+        if x is None or y is None or not (math.isfinite(x) and math.isfinite(y)):
+            continue
+        dl.add_circle_filled(_v(x0 + x * (x1 - x0), y0 + (1 - y) * (y1 - y0)), r,
+                             ui.u32(_BLACK if down else ui.RED))
+
+
+def _tilt(dl, pad, cx: float, cy: float, r: float, edge: int, on: bool) -> None:
+    """The tilt bubble: a well with a dot where the pad leans — right
+    side down to the right, the far edge up upward — its ring red on a
+    shake (plan 42)."""
+    m = _lanes(pad, "motion")
+    dl.add_circle_filled(_v(cx, cy), r, ui.u32(_WELL))
+    ring = ui.u32(ui.RED) if m.get("shake") else edge
+    dl.add_circle(_v(cx, cy), r, ring, 0, 2.0 if m.get("shake") else 1.0)
+    dl.add_line(_v(cx - r, cy), _v(cx + r, cy), edge, 1.0)
+    dl.add_line(_v(cx, cy - r), _v(cx, cy + r), edge, 1.0)
+    if not m:
+        return
+    dx = 2 * m["roll"] - 1
+    dy = 1 - 2 * m["pitch"]
+    knob = max(3.0, r * 0.22)
+    col = ui.u32(ui.RED) if on else ui.u32(ui.DIM)
+    dl.add_circle_filled(_v(cx + dx * (r - knob), cy + dy * (r - knob)), knob, col)
+
+
 def _draw(panel, dl, pad, c: gamepad.Control, b: Binding | None, said: str,
           x0: float, y0: float, x1: float, y1: float) -> None:
     """One control at the small size: its glyph on its face."""
@@ -256,6 +345,15 @@ def _draw(panel, dl, pad, c: gamepad.Control, b: Binding | None, said: str,
     edge = ui.u32(ui.DIM if on else ui.LINE)
     ink = ui.u32(ui.TEXT if on else ui.FAINT)
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    if c.kind == "touchpad":
+        _touchpad(dl, pad, c, x0, y0, x1, y1, edge, on)
+        ui_desk._text(dl, c.glyph, cx, cy, ink, x1 - x0 - 2)
+        return
+    if c.kind == "tilt":
+        r = min((x1 - x0) / 2, (y1 - y0) / 2) - 1
+        _tilt(dl, pad, cx, y0 + r + 1, r, edge, on)
+        ui_desk._text(dl, c.glyph, cx, y1 - 5, ink, x1 - x0)
+        return
     if c.kind == "button":
         face = ui.u32(ui.RED) if down else ui.u32(_OFF if on else _DARK)
         dl.add_rect_filled(_v(x0, y0), _v(x1, y1), face, 3.0)
@@ -285,6 +383,17 @@ def _draw_big(panel, dl, pad, c: gamepad.Control, b: Binding | None, said: str,
     ink = ui.u32(ui.TEXT if b is not None else ui.DIM)
     cx = (x0 + x1) / 2
     gsz = imgui.calc_text_size(c.glyph)
+    if c.kind == "touchpad":
+        _touchpad(dl, pad, c, x0, y0, x1, y1, edge, on)
+        dl.add_text(_v(x0 + 3, y0 + 1), small, c.glyph)
+        return ui_desk._Job(said, x0 + gsz.x + 7, y0, x1 - 3, y1, 1, ink, "mid") if on else None
+    if c.kind == "tilt":
+        lines = ui_desk.LABEL_LINES
+        r = max(4.0, min((y1 - y0 - lines * lh - 4) / 2, 0.42 * (x1 - x0)))
+        dl.add_text(_v(x0 + 1, y0), small, c.glyph)
+        _tilt(dl, pad, cx, y0 + r + 1, r, edge, on)
+        return ui_desk._Job(said, x0 + 1, y0 + 2 * r + 4, x1 - 1, y1, lines, ink,
+                            "top") if on else None
     if c.kind == "button":
         face = ui.u32(ui.RED) if down else ui.u32(_OFF if on else _DARK)
         dl.add_rect_filled(_v(x0, y0), _v(x1, y1), face, 3.0)
@@ -322,6 +431,7 @@ def diagram(panel) -> None:
     mapped), then every control at its place — in the room `room` gives
     it. `panel._pad_h` is left behind for `ui_desk.room`, which keeps the
     desk clear of it; it is 0 while this is off."""
+    ui_pad_nvg.sweep(panel, imgui.get_frame_count())   # each frame: quiet rooms let go
     if not getattr(panel, "pad_diagram", False):
         panel._pad_h = 0.0
         return
@@ -349,11 +459,15 @@ def inline(panel) -> None:
     the pad node (ui_graph._node_side), whether or not the floating one is up."""
     w = imgui.get_content_region_avail().x
     h = (w - 2 * PAD) / gamepad.LAYOUT_W * gamepad.LAYOUT_H + 2 * PAD + HEAD_H
+    table = _table(panel)
+    if view_of(panel) == "lanes" and table is not None:   # every lane, readable: as tall as that takes
+        h = max(h, ui_pad_views.lanes_height(w - 2 * PAD, _pad(panel) or getattr(panel, "pad", None),
+                                             _says_of(panel, table)) + 2 * PAD + HEAD_H)
     imgui.push_style_var(imgui.StyleVar_.window_padding, _v(PAD, PAD))
     if imgui.begin_child("##pad.inline", _v(w, h), imgui.ChildFlags_.borders
                          | imgui.ChildFlags_.always_use_window_padding,
                          imgui.WindowFlags_.no_scrollbar | imgui.WindowFlags_.no_scroll_with_mouse):
-        _body(panel, _table(panel))
+        _body(panel, table)
     imgui.end_child()
     imgui.pop_style_var()
 
@@ -370,6 +484,15 @@ def state(panel) -> tuple[str, str]:
         return "over USB", f"{read} This one is a wired 360-protocol pad, over libusb."
     if source == "glfw":
         return "on", read
+    if source in ("hid", "tape"):
+        model = getattr(getattr(pad, "model", None), "name", "") or "pad"
+        link = getattr(pad, "link", "") or source
+        bat = getattr(getattr(pad, "report", None), "battery", -1)
+        battery = f", battery {min(100, bat * 10)} %" if isinstance(bat, int) and bat >= 0 else ""
+        word = "tape" if source == "tape" else link
+        return word, (f"{model} over {link}{battery} — read over hidapi (pads/hid.py): the "
+                      "touchpad, the motion sensors and, on an Edge, the back and Fn buttons"
+                      + (", played from a recording" if source == "tape" else "") + ".")
     note = getattr(getattr(pad, "usb_pad", None), "note", "")
     return "no pad", f"{read} None is connected" + (f" — {note}." if note else ".")
 
@@ -383,21 +506,172 @@ def _header(panel, table) -> None:
     ui._micro(word, ui.RED if _pad(panel) is not None else ui.DIM)
     if imgui.is_item_hovered():
         ui.tooltip(f"{why} The picture is the table's, with or without a pad.")
+    light = getattr(getattr(_pad(panel), "effects", None), "light", None)
+    if light is not None and _pad(panel).has("light"):
+        imgui.same_line()
+        p = imgui.get_cursor_screen_pos()
+        side = HEAD_H * 0.55
+        imgui.get_window_draw_list().add_rect_filled(
+            _v(p.x, p.y + (HEAD_H - side) / 2 - 2), _v(p.x + side, p.y + (HEAD_H + side) / 2 - 2),
+            ui.u32(imgui.ImVec4(*(c / 255 for c in light), 1.0)), 2.0)
+        imgui.dummy(_v(side, 1))
+        if imgui.is_item_hovered():
+            ui.tooltip("The light bar now: its identity colour, or what a sink row sends "
+                       "(right-click a param → Learn sink ▸ light bar hue).")
+    imgui.same_line()
+    view = view_of(panel)
+    ui._micro(f"{view} ▸", ui.TEXT)
+    if imgui.is_item_hovered():
+        ui.tooltip(ui_pad_views.VIEW_TIP)
+        if imgui.is_mouse_clicked(imgui.MouseButton_.left):
+            step_view(panel)
+    _totem(panel)
+    _poi(panel)
     if table is not None:
         imgui.same_line()
         n = len(rows_cached(panel, table))
-        imgui.text_colored(ui.DIM, f"{n} mapped")
-        if imgui.is_item_hovered():
-            ui.tooltip("Controls with a row in bindings.json. A grey label is the "
-                              "app's own hand on a free axis, not a row.")
+        room = imgui.get_content_region_avail().x       # narrow in GRAPH's side panel
+        said = next((w for w in (f"{n} mapped", str(n)) if imgui.calc_text_size(w).x <= room), "")
+        if said:
+            imgui.text_colored(ui.DIM, said)
+            if imgui.is_item_hovered():
+                ui.tooltip(f"{n} controls with a row in bindings.json. A grey label is the "
+                           "app's own hand on a free axis, not a row.")
     imgui.set_cursor_pos(start)          # the line is HEAD_H tall whatever is on it
     imgui.dummy(_v(1, HEAD_H - imgui.get_style().item_spacing.y))
 
 
+def totem_word(reg) -> tuple[str, str] | None:
+    """The totem's word for the header (plan 47, an experiment): "totem
+    off", or the three live planes (``totem YZ · XZ · ZW``); None with no
+    totem in the registry. The hover is the button map."""
+    state = getattr(reg, "totem", None)
+    if state is None or "totem.on" not in reg:
+        return None
+    from . import totem
+    tip = ("The Joy-Con as a 4D totem (plan 47, an experiment) — click to switch it "
+           f"{'off' if state.on else 'on'}. Its gyro turns three planes, one per axis "
+           "(x → YZ, y → XZ, z → XY); X / Y / B throw x / y / z into W (XW, YW, ZW); "
+           "A (or ↓) resets the shape to the world's axes from where the pad is; the "
+           "tilt moves the shape.")
+    if not state.on:
+        return "totem off", tip
+    word = f"totem {totem.readout(state)}"
+    if totem.reading(state) is None:       # none taken, or its device gone (LOST_S)
+        word += " (no pad)"
+    return word, tip + (f" Last: {state.note}." if state.note else "")
+
+
+def _totem(panel) -> None:
+    """The totem's word in the header, after the view's; a click switches it."""
+    reg = getattr(panel, "reg", None)
+    said = totem_word(reg) if reg is not None else None
+    if said is None:
+        return
+    word, tip = said
+    imgui.same_line()
+    on = bool(reg["totem.on"].value)
+    ui._micro(word, ui.RED if on else ui.DIM)
+    if imgui.is_item_hovered():
+        ui.tooltip(tip)
+        if imgui.is_mouse_clicked(imgui.MouseButton_.left):
+            reg["totem.on"].set(not on)
+
+
+def poi_word(reg) -> tuple[str, str] | None:
+    """The poi's word for the header (plan 47, the poi): "poi off", or its
+    dials (``poi 1.00 · 0.30 · 0.20``: length, weight, springiness); None
+    with no poi in the registry."""
+    state = getattr(reg, "poi", None)
+    if state is None or "poi.on" not in reg:
+        return None
+    from . import poi
+    tip = ("The Joy-Con as the handle of a poi (plan 47, an experiment) — click to "
+           f"switch it {'off' if state.on else 'on'}. The shape is the weight on the "
+           "string: swing the pad and it flies round. Length · weight · springiness; "
+           "the dials are under this line while it is on. A (or ↓) resets.")
+    if not state.on:
+        return "poi off", tip
+    word = f"poi {poi.readout(state)}"
+    if state.driving is None:
+        word += " (no pad)"
+    return word, tip + (f" Last: {state.note}." if state.note else "")
+
+
+def _poi(panel) -> None:
+    """The poi's word in the header, after the totem's; a click switches it."""
+    reg = getattr(panel, "reg", None)
+    said = poi_word(reg) if reg is not None else None
+    if said is None:
+        return
+    word, tip = said
+    imgui.same_line()
+    on = bool(reg["poi.on"].value)
+    ui._micro(word, ui.RED if on else ui.DIM)
+    if imgui.is_item_hovered():
+        ui.tooltip(tip)
+        if imgui.is_mouse_clicked(imgui.MouseButton_.left):
+            reg["poi.on"].set(not on)
+
+
+POI_DIALS = ("length", "weight", "spring", "gravity", "drag", "hand")
+
+
+def _poi_dials(panel) -> None:
+    """While the poi is on, its dials in two columns under the header: the
+    string's length, the weight, the springiness, then gravity, the air's
+    drag and the hand's push; the depth switch after."""
+    reg = getattr(panel, "reg", None)
+    state = getattr(reg, "poi", None) if reg is not None else None
+    half = getattr(panel, "half", None)
+    if state is None or not state.on or half is None or "poi.length" not in reg:
+        return
+    if imgui.begin_table("##poi", 2, imgui.TableFlags_.sizing_stretch_same):
+        try:
+            for key in POI_DIALS:
+                imgui.table_next_column()
+                half(f"poi.{key}", label=key)
+        finally:
+            imgui.end_table()
+    check = getattr(panel, "_check", None)
+    if check is not None:
+        check("poi.depth", "depth zooms")
+        if "poi.guide" in reg:
+            imgui.same_line()
+            check("poi.guide", "show string")
+
+
+def _says_of(panel, table):
+    """`says(source)` for a view: (the words, the row) — a row's param in
+    the panel's words, else an axis's built-in meaning, else nothing."""
+    st = _state(panel)
+    key = _key(table)
+    if st.get("src_key") != key or st.get("src_table") is not table:
+        st.update(src_key=key, src_table=table, src_rows=source_rows(table))
+    rows_ = st["src_rows"]
+
+    def says_(source: str) -> tuple[str, Binding | None]:
+        b = rows_.get(source)
+        if b is not None:
+            return ui_desk.text(panel.reg, b), b
+        return BUILT_IN.get(source, ""), None
+    return says_
+
+
 def _body(panel, table) -> None:
     _header(panel, table)
+    _poi_dials(panel)
     if table is None:
         imgui.text_disabled("no table")
+        return
+    view = view_of(panel)
+    if view != "map":          # plan 42's readouts: the room is the map's, so the desk keeps
+        origin = imgui.get_cursor_screen_pos()
+        avail = imgui.get_content_region_avail()
+        ui_pad_views.draw(
+            view, panel, imgui.get_window_draw_list(), origin.x, origin.y, avail.x, avail.y,
+            _pad(panel) or getattr(panel, "pad", None), _says_of(panel, table))
+        imgui.dummy(avail)
         return
     mapped = rows_cached(panel, table)
     pad = _pad(panel)
@@ -417,7 +691,9 @@ def _body(panel, table) -> None:
     try:
         st = _state(panel)
         st["origin"], st["unit"] = (origin.x, origin.y), (sx, sy)
-        for c in gamepad.LAYOUT:
+        layout = gamepad.layout_for(gamepad.shown_model(getattr(panel, "pad", None)))
+        st["layout"] = layout
+        for c in layout:
             x0, y0, x1, y1 = rect(panel, c)
             b = mapped.get(c.source)
             said = says(panel, c, b)

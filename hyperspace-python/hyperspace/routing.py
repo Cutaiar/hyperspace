@@ -255,7 +255,7 @@ import json
 import math
 import sys
 import time
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
@@ -266,16 +266,21 @@ from .bands import BANDS, CEIL
 from .modifiers import Modifier, ModState
 from .motion import CUSTOM, OFF, Follower, Motion
 from .params import (
+    DEPTH_TAPER,
+    DEPTH_UNIT,
     DRIVE,
     F_KEYS,
     PERFORMANCE_GROUPS,
     PLANES,
     ROT_RATE_MAX,
     SESSION_GROUPS,
+    UNITS_KEY,
     Kind,
     Param,
     Registry,
+    fx_files,
     part_of,
+    retaper_depths,
 )
 
 SCHEMA = "hyperspace.bindings/3"
@@ -1823,6 +1828,8 @@ def dumps_doc(d: dict) -> str:
     if d.get("sinks_seeded"):            # plan 27 B3: the sinks' `send` lists translated
         text += f' "sinks_seeded": {json.dumps(d["sinks_seeded"])},\n'
     text += f' "bindings": [\n{rows}\n ]'
+    if d.get(UNITS_KEY):                 # wave 0 T1: the depths' units
+        text += f',\n {json.dumps(UNITS_KEY)}: {json.dumps(d[UNITS_KEY])}'
     return text + "\n}\n"
 
 
@@ -1903,6 +1910,11 @@ class Bindings:
     # `to_json` writes rows only, and `is_session_row` is about rows
     modifiers: tuple[Modifier, ...] = ()
     modifiers_serial: int = 0    # bumped by every change: the Router's lanes follow
+    # row 563 (2026-11-02): told after every `set_modifiers` — the preset
+    # points it at `Presets.settle_groups`, so a modifier removed by any
+    # road leaves its GRAPH group in the same call (class-level: an
+    # instance from before a hot reload has it)
+    on_modifiers: Callable[[], None] | None = None
     # the surface page up on the first MIDI role's desk (plan 31 §A): an
     # object with `rows()` (seq_page.SeqPage), or None. Its rows shadow
     # every row on their controls, invariant ones included, while it is up;
@@ -1957,6 +1969,10 @@ class Bindings:
         # an edit of a desk row in place (the ROUTING page): a redraw only,
         # never the faders' catch cleared — no base moved
         self.redraw_serial = 0
+        # any row edited in place (`enable`, `move_route`, `replace_owner`'s
+        # retarget): what a per-frame cache keys on beside the list's identity
+        # and length (ui_pad's), so it never scans the rows to notice
+        self.rows_serial = 0
 
     # ---- construction ----
 
@@ -2091,13 +2107,21 @@ class Bindings:
         schema = data.get("schema")
         if schema not in (SCHEMA, SCHEMA_V2, SCHEMA_V1, None):
             raise ValueError(f"unknown schema {schema!r}")
+        # wave 0 T1: a file without the `units` marker has its rows' depths
+        # onto the effects' retapered params — a button's `set` norm, a
+        # hand-edited push — measured along the linear ranges: read as they
+        # were (`params.retaper_depths`, against the shader folder's effect
+        # files: a session row has no base of its own, so a push is measured
+        # about the effect's default), noted, and the file written back once
+        data, retapered = retaper_depths(data, fx_files())
         rows = [Binding.from_json(b) for b in data.get("bindings", [])]
-        notes: list[str] = []
+        notes: list[str] = list(retapered)
         migrated = schema in (SCHEMA_V1, None)
         if migrated:
-            rows, notes = migrate_v1(rows)
+            rows, v1_notes = migrate_v1(rows)
+            notes += v1_notes
         profile = data.get("profile", "apc40")
-        changed = False
+        changed = bool(retapered)
         if desk and schema != SCHEMA and any(b.is_midi for b in rows):
             rows, sorted_notes = sort_layers(rows, profile)
             notes += sorted_notes
@@ -2131,6 +2155,8 @@ class Bindings:
         seeded = getattr(self, "sinks_seeded", None)      # a table from before a hot reload
         if seeded:
             d["sinks_seeded"] = list(seeded)
+        # wave 0 T1: the rows' depths are measured along the effect tapers
+        d[UNITS_KEY] = {DEPTH_UNIT: DEPTH_TAPER}
         return d
 
     def dumps(self) -> str:
@@ -2459,6 +2485,7 @@ class Bindings:
             b.source = source
         if target is not None:
             b.target = target
+        self.rows_serial = getattr(self, "rows_serial", 0) + 1
         self._follow_route(old, (b.source, b.target))
 
     def _follow_route(self, old: tuple[str, str], new: tuple[str, str] | None) -> None:
@@ -2603,6 +2630,7 @@ class Bindings:
         if any(x is new for x in self.bindings):
             old = (new.source, new.target)
             new.target, new.enabled = pid, True
+            self.rows_serial = getattr(self, "rows_serial", 0) + 1
             self._check(new)
             self._follow_route(old, (new.source, new.target))
         else:
@@ -2623,6 +2651,7 @@ class Bindings:
                 b.enabled = False
                 raise
         b.enabled = on
+        self.rows_serial = getattr(self, "rows_serial", 0) + 1
         self.dropped, self.notes = [], []
 
     def remove(self, b: Binding) -> None:
@@ -2682,6 +2711,8 @@ class Bindings:
         self.modifiers_serial = self.modifiers_serial + 1
         if reg is not None:
             declare_modifiers(reg, self.modifiers)
+        if self.on_modifiers is not None:
+            self.on_modifiers()
         return notes
 
     def add_modifier(self, kind: str, inputs: Iterable[str] = (),
@@ -2977,7 +3008,7 @@ class Router:
                     act(self.reg, b)
 
     def pad(self, pad, now: float | None = None, *, buttons: bool = True,
-            role: str = "") -> None:
+            role: str = "", skip=frozenset()) -> None:
         """One frame of the gamepad (`pad` a gamepad.Pad): its axes fed as
         the `axis` lanes (None while no pad is on, so their routes let go),
         then its pad / hat rows — unless `buttons` is False (the frame's
@@ -2991,7 +3022,13 @@ class Router:
         `role` is the pad's qualifier (plan 27 B6): "" for the primary pad
         — the unqualified rows and the `axis` lanes, as ever — or a second
         pad's role, whose lanes are ``axis@<role>`` and whose rows are
-        those qualified with it (``pad@p2:A``); each pad hears only its own."""
+        those qualified with it (``pad@p2:A``); each pad hears only its own.
+
+        `skip`: the rows' sources, unqualified (``pad:A``, ``hat:DOWN``),
+        that do not fire this frame — the buttons the totem holds while it
+        reads this pad (totem.SKIP, the plan 47 experiment). A skipped
+        `hold` row forgets a press it was timing, so a press that began
+        before the skip does not fire when the skip ends mid-press."""
         axis = qualified("axis", role)
         publish = getattr(pad, "publish", None)
         if publish is not None:
@@ -3013,6 +3050,10 @@ class Router:
             code = self._code(b)
             if code is None or not b.enabled or not (
                     b.device == role or (not role and own and b.device == own)):
+                continue
+            if skip and b.bare in skip:
+                if b.op == "hold":
+                    holds.pop((b.source, b.target), None)
                 continue
             hat = b.scheme == "hat"
             down = bool(pad.hat & code) if hat else pad.down(code)

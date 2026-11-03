@@ -25,7 +25,6 @@ from types import SimpleNamespace as NS
 
 import numpy as np
 import pytest
-from fonts import as_drawn
 from imgui_bundle import imgui
 from test_presets import boot
 from test_ui_shell import frame
@@ -460,6 +459,7 @@ def test_the_routing_page_builds_the_smoothed_energy_times_band_patch(rig):
     assert dict(ui_routing._sources(panel, router))["mod:2"] == "mod 2 combine"
     b = ui_routing.add_route(panel, "fx.acid.mix", source="mod:2", depth=1.0, op="position")
     assert b is not None and router.table.owner("fx.acid.mix") is b
+    b.motion = None            # the new row's spring off: the chain's arithmetic is under test
     # play it: the hand goes to full energy, band 0 at a half
     p = reg["fx.acid.mix"]
     seen = []
@@ -522,7 +522,7 @@ def test_the_modifiers_strip_draws_its_blocks_and_routing_points_to_graph(
     texts.clear()
     ids.clear()
     frame(panel)
-    assert texts.index(as_drawn(texts, ui_routing.POINTER)) < texts.index("DESK  ·  PRESET LAYER")
+    assert texts.index(ui_routing.POINTER) < texts.index("DESK  ·  PRESET LAYER")
     assert "ROUTES" not in texts and "MODIFIERS" not in texts
     texts.clear()
     ids.clear()

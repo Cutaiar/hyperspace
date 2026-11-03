@@ -23,6 +23,7 @@ from hyperspace import devices, gamepad, graphview, learn, ui_graph, ui_pad, ui_
 from hyperspace import graph as G
 from hyperspace.devices import Port
 from hyperspace.learn import Learn
+from hyperspace.motion import DEFAULT_ROUTE_FEEL
 from hyperspace.routing import MOD_OPS, Binding, is_session_row
 
 PKG = Path(__file__).resolve().parents[1] / "hyperspace"
@@ -73,7 +74,8 @@ def test_connecting_a_source_to_a_mod_port_adds_the_route_learn_would(rig):
     of the row the hand learn makes for that pair (`learn.row_for`): a
     one-sided hand axis on a plain param is the `position` fader at 1; a
     centred one (the device says `bipolar`) is a `push` at the hands'
-    Learn depth; a band lane the fader. It lands as one cable next build.
+    Learn depth; a band lane a push at `learn.LANE_DEPTH` (the owner,
+    after the show of 2026-10-30). It lands as one cable next build.
     The same pair learned by a hand lands the same row."""
     reg, table = rig.reg, rig.router.table
     reg["hands.learn_depth"].set(0.4)
@@ -86,7 +88,7 @@ def test_connecting_a_source_to_a_mod_port_adds_the_route_learn_would(rig):
     roll = e.connect(f"mod:{c.id}", "out:hand:right.roll")     # dragged from the input end
     assert roll.op == "push" and roll.value == pytest.approx(0.4)
     lane = e.connect("out:lane:2", f"mod:{b.id}")
-    assert lane.op == "push" and lane.value == learn.PUSH_DEPTH   # a centred target: push
+    assert lane.op == "push" and lane.value == learn.LANE_DEPTH   # a lane: a calm push
     # the hand's own learn of the first pair lands the same row
     table.remove(row)
     lrn = Learn(reg, table)
@@ -386,9 +388,9 @@ def test_render_pins_reach_n4s_methods_and_refuse_as_a_refusal(rig):
     got = e.disconnect(wire)
     assert isinstance(got, graphview.Refusal) and got == graphview.NO_SUCH_WIRE.format(
         wire="hands.layer → output.2.hands")
-    # (plan 35 G: the shape deletes too; the camera is the rig's)
+    # (plan 35 G: the shape deletes too; the camera is the look's one, kept)
     got = e.remove_node("render:camera")
-    assert isinstance(got, graphview.Refusal) and got == graphview.NOT_REMOVABLE.format(
+    assert isinstance(got, graphview.Refusal) and got == graphview.CAMERA_KEPT.format(
         label="Camera")
     for t in graphview.RENDER_TYPES:
         assert ui_graph.CREATE[t] is ui_graph._create_render
@@ -770,7 +772,8 @@ def test_a_move_picks_up_the_performer_not_a_sleeping_route(rig):
 
 def test_deleting_a_node_dispatches_by_kind(rig, monkeypatch):
     """Delete on a node goes by its kind (`DELETE_NODE`): a render or an
-    output node is N4's (the rig's camera refused in words: plan 35 G), a
+    output node is N4's (the camera refused in words: plan 35 G — the look's
+    one since plan 43 C2), a
     kind not listed is the rig's; a macro node's delete goes through the
     table's `set_macros`, its label and subscribers with it."""
     from imgui_bundle import imgui_node_editor as ed
@@ -778,7 +781,7 @@ def test_deleting_a_node_dispatches_by_kind(rig, monkeypatch):
     st = {"note": ""}
     shape = graphview.VNode("render:camera", "render", "Camera")
     ui_graph.DELETE_NODE[shape.kind](rig.panel, st, None, shape)
-    assert st["note"] == graphview.NOT_REMOVABLE.format(label="Camera")
+    assert st["note"] == graphview.CAMERA_KEPT.format(label="Camera")
     assert ui_graph.DELETE_NODE["output"] is ui_graph._delete_render_node
     group = graphview.VNode("group:tempo", "group", "tempo")
     ui_graph.DELETE_NODE.get(group.kind, ui_graph._rig_node_cut)(rig.panel, st, None, group)
@@ -828,7 +831,7 @@ def test_a_render_edit_s_line_goes_at_the_next_edit_or_refusal(rig, monkeypatch)
 
 
 def test_a_selection_delete_keeps_its_first_refusal_s_words(rig, monkeypatch):
-    """Delete on a selection of three: the rig's camera (refused), a
+    """Delete on a selection of three: the camera (refused: the look's one), a
     modifier (it goes) and an LFO (refused) — the head keeps the first
     refusal's words for the frame, not wiped by the modifier's landing nor
     replaced by the LFO's. The next delete starts afresh: a landing alone
@@ -866,7 +869,7 @@ def test_a_selection_delete_keeps_its_first_refusal_s_words(rig, monkeypatch):
     queue[:] = [ui_graph._id(st, f"n:{n.id}") for n in (shape, mod, lfo)]
     ui_graph._delete(panel, st, view)
     assert table.modifier(m.id) is None                     # the modifier went …
-    assert st["note"] == graphview.NOT_REMOVABLE.format(label="Camera")   # … the first words stay
+    assert st["note"] == graphview.CAMERA_KEPT.format(label="Camera")   # … the first words stay
     assert "held" not in st
     m2 = ui_graph.add_modifier(panel, "threshold")
     st["note"] = "an old refusal"
@@ -1171,7 +1174,7 @@ def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
     assert n is not None and n.faint and not n.idle
     assert graphview.summary(n)[0] == graphview.REACHES_NOTHING
     doc = json.loads(rig.presets.save_as("Out").read_text())
-    assert doc["schema"] == "hyperspace.preset/7"
+    assert doc["schema"] == "hyperspace.preset/9"
     assert {"kind": "effect", "file": "acid"} in doc["graph"]["nodes"]
     settle(rig)
     assert rig.undo.undo()           # (both unwires inside one settle: one step)
@@ -1203,7 +1206,7 @@ def test_an_unwired_instance_one_saves_with_its_entry_on_or_off(tmp_path):
     for name, on in (("On", True), ("Off", False)):
         rig.reg["fx.huecycle.on"].set(on)
         doc = json.loads(rig.presets.save_as(name).read_text())
-        assert doc["schema"] == "hyperspace.preset/7", name
+        assert doc["schema"] == "hyperspace.preset/9", name
         assert {"kind": "effect", "file": "huecycle"} in doc["graph"]["nodes"], name
         assert G.run_back(G.read_graph(doc["graph"]), "output.all.image") == (
             "plasma", "kaleido", "zoomblur"), name
@@ -1638,18 +1641,56 @@ def test_an_envelope_on_a_toggle_stays_position(banks):
 
 def test_an_lfo_route_is_unchanged(banks, monkeypatch):
     """The envelope's row is the envelope's alone: an LFO into the same
-    param makes the row it made before (the table's: its out port is not
-    declared centred, so a plain param takes the fader; a centred pin a
-    push at PUSH_DEPTH)."""
+    param makes the table's own LFO row — a push about the base at
+    PUSH_DEPTH, not the headroom push (the owner, after the show of
+    2026-10-30: as the fader an LFO swept the whole throw whatever the
+    base); the same on a centred pin."""
     r, panel, table = banks.r, banks.panel, banks.r.router.table
     p, _ = _glimmer_mix(r)
     drawn_route_from(panel, p, monkeypatch, pick="LFO 1")
     made = next(b for b in table.bindings if b.target == p.id)
     assert made.source.startswith("lfo:")
-    assert (made.op, made.value) == ("position", 1.0)
-    assert learn.row_for("lfo:0", p) == Binding("lfo:0", p.id, "position", 1.0)
+    assert (made.op, made.value, made.rest) == ("push", learn.PUSH_DEPTH, None)
+    assert made.motion == DEFAULT_ROUTE_FEEL          # a new route is the smooth spring
+    assert learn.row_for("lfo:0", p) == Binding("lfo:0", p.id, "push", learn.PUSH_DEPTH,
+                                                motion=DEFAULT_ROUTE_FEEL)
     assert learn.row_for("lfo:0", p, centred=True) == Binding(
-        "lfo:0", p.id, "push", learn.PUSH_DEPTH)
+        "lfo:0", p.id, "push", learn.PUSH_DEPTH, motion=DEFAULT_ROUTE_FEEL)
+
+
+def test_route_from_an_envelope_keeps_auto_feel(banks, monkeypatch):
+    """The owner, 2026-10-31: every new route is a spring — but an
+    envelope's row keeps auto (`motion=None`): it has an attack and a
+    release of its own, and a spring on top would blunt a kick-fired hit.
+    Route from ▸ env 1 lands that; Route from ▸ LFO 1 the spring."""
+    r, panel, table = banks.r, banks.panel, banks.r.router.table
+    p, _ = _glimmer_mix(r)
+    drawn_route_from(panel, p, monkeypatch, pick="env 1")
+    env_row = next(b for b in table.bindings if b.target == p.id)
+    assert env_row.source.startswith("env:") and env_row.motion is None
+    assert "motion" not in env_row.to_json()
+    table.remove(env_row)
+    drawn_route_from(panel, p, monkeypatch, pick="LFO 1")
+    lfo_row = next(b for b in table.bindings if b.target == p.id)
+    assert lfo_row.source.startswith("lfo:") and lfo_row.motion == DEFAULT_ROUTE_FEEL
+
+
+def test_a_graph_cable_into_a_mod_pin_lands_the_smooth_spring(rig):
+    """The owner, 2026-10-31: a cable dragged into a param's mod pin
+    (`Edit.connect` → `route_for` → `row_for`) lands with
+    `motion.DEFAULT_ROUTE_FEEL`, whatever row the table picks: the
+    position fader from a one-sided axis, a push from a centred one or
+    onto a centred target, a band lane's row."""
+    a, b = free_param(rig, centred=False), free_param(rig, centred=True)
+    e, _ = edit(rig, leap())
+    rows = [e.connect("out:hand:right.y", f"mod:{a.id}")]
+    c = free_param(rig, centred=False)                   # free still: `a` is taken now
+    rows.append(e.connect(f"mod:{c.id}", "out:hand:right.roll"))
+    rows.append(e.connect("out:lane:2", f"mod:{b.id}"))
+    assert [r.op for r in rows] == ["position", "push", "push"]
+    assert all(r.motion == DEFAULT_ROUTE_FEEL for r in rows)
+    assert all(r.to_json()["motion"] == {"mode": "spring", "dur": 0.5, "bounce": 0.0}
+               for r in rows)
 
 
 # ---------------------------------------------------------------- plan 35 T5: GRAPH deletes anything
@@ -1896,7 +1937,8 @@ def test_deleting_a_window_unwires_it(tmp_path):
 
 def test_the_picker_groups_by_primitive(tmp_path):
     """The picker in the owner's groups: starters ▸ (plan 36 T5), then scene ▸,
-    look-back ▸, pictures ▸, media ▸ and masks ▸ (plan 39 T5), the effect files, a copy of each effect
+    look-back ▸, pictures ▸, media ▸ (the channels, 2026-10-31; the segment)
+    and masks ▸ (plan 39 T5), the effect files, a copy of each effect
     instance in the section — each item's group `PICKER_GROUP[kind]`."""
     section = {"frame": "wired", "nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
                "wires": [{"from": "scene", "to": "acid.image"},
@@ -1917,7 +1959,9 @@ def test_the_picker_groups_by_primitive(tmp_path):
         ("switch", None, "switch"),
         ("channels", "pattern.media", "faces media"), ("channels", "backdrop.image", "backdrop"),
         ("resize", None, "resize"), ("delay", None, "delay"),
-        # (plan 39 T5, W6: media ▸ the segment; masks ▸ the matte and the cut)
+        # (media ▸ the eight channels, 2026-10-31, and plan 39 T5 (W6)'s
+        # segment; masks ▸ the matte and the cut)
+        *(("channel", c, f"channel {c}") for c in "abcdefgh"),
         ("segment", None, "segment"), ("matte", None, "matte"), ("cut", None, "cut"),
         *(("effect", f, f) for f in files),
         ("copy", "acid", "copy of acid"), ("copy", "acid.2", "copy of acid.2")]
@@ -1998,20 +2042,740 @@ def test_a_frame_node_is_added_once(tmp_path):
 
 
 def test_the_pad_nodes_details_draw_the_pad(rig, monkeypatch):
-    """The pad node selected on GRAPH: its details draw the pad's picture
-    (ui_pad.inline) — every control of its layout — and another device's
-    details do not."""
+    """The pad's node selected on GRAPH, whatever its role is called (plan
+    42: "edge", "xbox", not only "pad"): its details draw the pad's picture
+    (ui_pad.inline) — every control of its layout — under the readout's
+    drop-down (`ui.pad_view`, as on SYSTEM), and not the port lines under
+    it. A second pad's node and another device's draw no picture."""
     panel = rig.panel
     frame(panel, "graph")
     st = ui_graph._state(panel)
+    pad, other = SimpleNamespace(on=False), SimpleNamespace(on=False)
+    panel.pad = pad
     drew, real = [], ui_pad.inline
     monkeypatch.setattr(ui_pad, "inline", lambda p: (drew.append(1), real(p)))
-    for nid, want in (("device:pad", [1]), ("device:apc40", [])):
+    picked, combo = [], panel._combo
+    monkeypatch.setattr(panel, "_combo", lambda pid, **k: (picked.append(pid), combo(pid, **k))[1])
+    said, disabled = [], imgui.text_disabled
+    monkeypatch.setattr(imgui, "text_disabled", lambda s: (said.append(s), disabled(s))[1])
+    port = graphview.VPort("pad:A", "A", "out", patched=True)
+    nodes = (("edge", SimpleNamespace(kind="gamepad", io=pad), [1]),
+             ("pad", SimpleNamespace(kind="gamepad", io=pad), [1]),
+             ("xbox", SimpleNamespace(kind="gamepad", io=other), []),
+             ("off", SimpleNamespace(kind="gamepad", io=None), []),
+             ("apc40", SimpleNamespace(kind="midi", io=pad), []))
+    for role, dev, want in nodes:
         drew.clear()
+        picked.clear()
+        said.clear()
         imgui.new_frame()
         imgui.begin("side")
-        ui_graph._side(panel, st, st["view"], ("node", graphview.VNode(nid, "device", nid[7:])))
+        ui_graph._side(panel, st, st["view"],
+                       ("node", graphview.VNode(f"device:{role}", "device", role, [port], ref=dev)))
         imgui.end()
         imgui.end_frame()
-        assert drew == want
+        assert drew == want, role
+        assert picked == (["ui.pad_view"] if want else []), role   # the readout's drop-down
+        assert ("A: not live" in said) is (not want), role         # the port lines: not under it
     assert ui_pad.rect(panel, gamepad.LAYOUT[0]) is not None    # it really laid the pad out
+
+
+# ---------------------------------------------------------------- 2026-11-01: any picture node onto a cable
+#
+# The owner: "It's not just for effects. We want more or less all nodes
+# that we've been using to be able to be dragged and dropped onto wires
+# and have them intelligently remap. A composite has an over and an under:
+# when you drop that onto a cable, you should be asked where you want this
+# input to go, over or under. There's nothing special about effects."
+# These drive real mouse drags through the node editor (the throwaway
+# harness of 2026-10-31, kept): press on a node's title, move, let go.
+
+def _drag_rig(rig, monkeypatch, *pairs, nodes=(), effects=("acid", "wobble.2"), on=("acid",),
+              layout=None):
+    """The page drawn on preset "Drag" — the wired frame of `pairs` and
+    `nodes` — with a probe on `_moved` (the editor's origin and scale on
+    screen, the press and the last plan lit); every node at `layout`'s
+    place (canvas units) when given. Returns (the section, the probe)."""
+    from types import SimpleNamespace as NS
+
+    from test_graphview import views
+    from test_presets import put
+
+    from hyperspace.outputs import Switches
+    put(rig.lib.home, "Drag", schema="hyperspace.preset/7", graph=_section(*pairs, nodes=nodes),
+        **({"layout": layout} if layout else {}))
+    rig.lib.load("presets", "Drag")
+    gs = rig.lib.presets.graph
+    rig.panel.renderer = NS(_graph=G.build_graph(views(Switches()), gs.spec.wiring(),
+                                                   effects=effects))
+    imgui.get_io().display_size = imgui.ImVec2(1600, 1000)
+    rig.panel.desk = False
+    # the app's canvas: preset only (the conftest starts the page tests on
+    # the full canvas, where a params group sits over the free node's place)
+    ui_graph._state(rig.panel)["preset_only"] = True
+    probe: dict = {}
+    real = ui_graph._moved
+
+    def moved(panel, st, view):
+        from imgui_bundle import imgui_node_editor as ed
+        o = ed.canvas_to_screen(imgui.ImVec2(0, 0))
+        u = ed.canvas_to_screen(imgui.ImVec2(100, 0))
+        probe.update(o=(o.x, o.y), k=(u.x - o.x) / 100.0, zoom=ed.get_current_zoom(),
+                     press=st.get("press"), lit=st.get("onto_lit"))
+        if st.get("onto_lit") is not None:      # the pointer's words, as this frame's view says them
+            probe["words"] = ui_graph.drag_words(view, st["onto_lit"])
+        return real(panel, st, view)
+    monkeypatch.setattr(ui_graph, "_moved", moved)
+    for e in on:
+        if rig.reg.get(f"fx.{e}.on") is not None:
+            rig.reg[f"fx.{e}.on"].set(True)
+    for _ in range(4):
+        frame(rig.panel, "graph")
+    return gs, probe
+
+
+def _to_screen(probe, p):
+    return (probe["o"][0] + p[0] * probe["k"], probe["o"][1] + p[1] * probe["k"])
+
+
+def _node_box(rig, nid):
+    from imgui_bundle import imgui_node_editor as ed
+    st = ui_graph._state(rig.panel)
+    ed.set_current_editor(st["editor"])
+    p = ed.get_node_position(ed.NodeId(ui_graph._id(st, "n:" + nid)))
+    s = ed.get_node_size(ed.NodeId(ui_graph._id(st, "n:" + nid)))
+    return (p.x, p.y), (s.x, s.y)
+
+
+def _cable_mid(rig, dst):
+    """The drawn cable into pin `dst` and its midpoint (canvas units: the
+    pins drawn this frame, a collapsed end's stub)."""
+    st = ui_graph._state(rig.panel)
+    view = st["view"]
+    c = next(c for c in view.cables if c.dst_port == dst)
+    s, d = graphview.node_of(view, c.src_port), graphview.node_of(view, c.dst_port)
+    a = st["pin_xy"].get(c.src_port) or st["pin_xy"][graphview.stub_out(s)]
+    b = st["pin_xy"].get(c.dst_port) or st["pin_xy"][graphview.stub_in(d)]
+    return c, ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
+
+
+def _centre_on(rig, probe, point):
+    """Pan so canvas `point` sits in the middle of the canvas on screen."""
+    st = ui_graph._state(rig.panel)
+    (x0, y0), (x1, y1) = st["seen_rect"]
+    mid = ((x0 + x1) / 2, (y0 + y1) / 2)
+    px, py = st["pan"]
+    st["pan"] = (px + mid[0] - point[0], py + mid[1] - point[1])
+    for _ in range(4):
+        frame(rig.panel)
+
+
+def _cmd(down: bool) -> None:
+    io = imgui.get_io()
+    io.add_key_event(imgui.Key.mod_super, down)
+    io.add_key_event(imgui.Key.left_super, down)
+
+
+def _zoom_out(rig, probe, notches: int) -> None:
+    """⌘ + wheel over the canvas's middle, `notches` clicks out."""
+    st = ui_graph._state(rig.panel)
+    (x0, y0), (x1, y1) = st["seen_rect"]
+    io = imgui.get_io()
+    io.add_mouse_pos_event(*_to_screen(probe, ((x0 + x1) / 2, (y0 + y1) / 2)))
+    frame(rig.panel)
+    for _ in range(notches):
+        _cmd(True)
+        frame(rig.panel)
+        io.add_mouse_wheel_event(0.0, -1.0)
+        frame(rig.panel)
+        _cmd(False)
+        frame(rig.panel)
+    for _ in range(40):                    # the smooth zoom settles
+        frame(rig.panel)
+
+
+def _drag_to(rig, probe, nid, centre_to, cmd=False, steps=12):
+    """A real drag: press on node `nid`'s title, move so its box's centre
+    ends at canvas `centre_to` (⌘ held through it when `cmd`), let go.
+    Returns (what was pressed, the last plan lit)."""
+    io = imgui.get_io()
+    (px, py), (sx, sy) = _node_box(rig, nid)
+    grab = (px + sx * 0.35, py + 6.0)
+    dx, dy = centre_to[0] - (px + sx / 2), centre_to[1] - (py + sy / 2)
+    s0 = _to_screen(probe, grab)
+    k = probe["k"]
+    io.add_mouse_pos_event(*s0)
+    frame(rig.panel)
+    frame(rig.panel)
+    if cmd:
+        _cmd(True)
+        frame(rig.panel)
+    io.add_mouse_button_event(0, True)
+    frame(rig.panel)
+    pressed = probe.get("press")
+    for i in range(1, steps + 1):
+        u = i / steps
+        io.add_mouse_pos_event(s0[0] + dx * k * u, s0[1] + dy * k * u)
+        frame(rig.panel)
+    frame(rig.panel)
+    frame(rig.panel)
+    lit = probe.get("lit")
+    io.add_mouse_button_event(0, False)
+    frame(rig.panel)
+    if cmd:
+        _cmd(False)
+    frame(rig.panel)
+    frame(rig.panel)
+    io.add_mouse_pos_event(-1.0, -1.0)
+    return pressed, lit
+
+
+RUN = (*FRAME0, ("lookback", "output.all.image"))
+# every node at hand on one screen: the run along y = 0, the free node below
+PLACES = {"render:lookback": [0, 0], "render:output.all": [700, 0], "render:scene": [-400, 0],
+          "render:shape": [-800, 0]}
+
+
+def _free_node_rig(rig, monkeypatch, entry: dict, nid: str, *more, effects=("acid", "wobble.2")):
+    """`shape → scene → lookback → output.all` with free node `entry` (`nid`)
+    placed under the run, the canvas centred on the run's last cable."""
+    gs, probe = _drag_rig(rig, monkeypatch, *RUN, *more, nodes=[entry], effects=effects,
+                          layout={**PLACES, nid: [250, 400]})
+    _, mid = _cable_mid(rig, "rin:output.all/image")
+    _centre_on(rig, probe, (mid[0], mid[1] + 150))
+    return gs, probe
+
+
+def test_a_free_composite_dropped_on_a_cable_asks_under_or_over(rig, monkeypatch):
+    """A free composite dragged onto `lookback → output.all.image`: the drag
+    says "then pick under or over", the drop opens the chooser for its
+    inlets and changes nothing; "over" picked wires `lookback →
+    composite.over`, `composite → output.all.image` in one step, and the
+    line says under is open."""
+    _, probe = _free_node_rig(rig, monkeypatch, {"kind": "composite"}, "render:composite")
+    st = ui_graph._state(rig.panel)
+    c, mid = _cable_mid(rig, "rin:output.all/image")
+    pressed, lit = _drag_to(rig, probe, "render:composite", mid)
+    assert pressed and pressed[0] == "render:composite"
+    assert lit and lit["best"] == c.id and lit["ask"] == ("under", "over")
+    assert probe["words"] == (
+        "let go: Composite onto Look-back → All outputs, then pick under or over")
+    held = st["onto"]
+    assert held["node"] == "render:composite" and held["inlets"] == ("under", "over")
+    assert held["cables"] == [c.id]
+    assert wires_of(rig.lib) == set(RUN)        # nothing until the pick
+    view = st["view"]
+    assert ui_graph.put_onto(rig.panel, view, "render:composite", c, "over") is c
+    assert wires_of(rig.lib) == {*FRAME0, ("lookback", "composite.over"),
+                                 ("composite", "output.all.image")}
+    assert st["said"] == ("composite moved: lookback → composite over → output.all.image; "
+                          "composite under is open")
+    assert st["onto"] is None
+
+
+def test_the_chooser_takes_under_too_and_a_switch_asks_its_inputs(rig, monkeypatch):
+    """The other inlet: "under" picked wires the composite's under. A free
+    switch asks between in1 … in8, and the one picked takes the picture;
+    the line says the rest are open."""
+    _, probe = _free_node_rig(rig, monkeypatch, {"kind": "composite"}, "render:composite")
+    st = ui_graph._state(rig.panel)
+    c, mid = _cable_mid(rig, "rin:output.all/image")
+    _drag_to(rig, probe, "render:composite", mid)
+    assert st["onto"] and st["onto"]["inlets"] == ("under", "over")
+    assert ui_graph.put_onto(rig.panel, st["view"], "render:composite", c, "under") is c
+    assert wires_of(rig.lib) == {*FRAME0, ("lookback", "composite.under"),
+                                 ("composite", "output.all.image")}
+    assert st["said"].endswith("; composite over is open")
+    # a switch
+    _, probe = _free_node_rig(rig, monkeypatch, {"kind": "switch"}, "render:switch")
+    st = ui_graph._state(rig.panel)
+    c, mid = _cable_mid(rig, "rin:output.all/image")
+    _, lit = _drag_to(rig, probe, "render:switch", mid)
+    assert lit["ask"] == G.SWITCH_PORTS
+    assert probe["words"].endswith(", then pick in1 … in8")
+    assert st["onto"]["inlets"] == G.SWITCH_PORTS
+    assert ui_graph.put_onto(rig.panel, st["view"], "render:switch", c, "in3") is c
+    assert wires_of(rig.lib) == {*FRAME0, ("lookback", "switch.in3"),
+                                 ("switch", "output.all.image")}
+    assert st["said"] == ("switch moved: lookback → switch in3 → output.all.image; "
+                          "switch in1 … in8 are open")
+
+
+def test_a_channel_dropped_on_a_cable_takes_it_over(rig, monkeypatch):
+    """A source: channel a dragged onto `lookback → output.all.image` feeds
+    the port instead — `channel.a → output.all.image`, the old wire gone,
+    the look-back kept (its own wire in stays) and the line says it feeds
+    nothing now; the drag said so first."""
+    gs, probe = _drag_rig(rig, monkeypatch, *RUN, layout=PLACES)
+    st = ui_graph._state(rig.panel)
+    ui_graph.pick_channel(rig.panel, "a", (250.0, 400.0))       # media ▸ channel a: revealed
+    for _ in range(3):
+        frame(rig.panel)
+    c, mid = _cable_mid(rig, "rin:output.all/image")
+    _centre_on(rig, probe, (mid[0], mid[1] + 150))
+    c, mid = _cable_mid(rig, "rin:output.all/image")
+    pressed, lit = _drag_to(rig, probe, "render:channel.a", mid)
+    assert pressed[0] == "render:channel.a" and lit["source"] and lit["best"] == c.id
+    assert probe["words"] == "let go: Channel A feeds All outputs instead of Look-back"
+    assert wires_of(rig.lib) == {*FRAME0, ("channel.a", "output.all.image")}
+    assert st["said"] == ("channel.a feeds output.all.image instead of lookback; "
+                          "lookback feeds nothing now")
+    assert G.run_back(gs.spec, "output.all.image") == ()
+
+
+def test_cmd_lifts_a_wired_pattern_onto_a_cable_and_closes_its_gap(rig, monkeypatch):
+    """⌘-drag of the pattern (wired `channel.b → pattern.media`, `pattern →
+    shape.faces`) onto `lookback → output.all.image`: out of its place —
+    its source bridged to its consumer, `channel.b → shape.faces` — and
+    spliced: `lookback → pattern.media`, `pattern → output.all.image`.
+    Without ⌘ the drag only moves it and says to hold ⌘."""
+    more = (("channel.b", "pattern.media"), ("pattern", "shape.faces"))
+    _, probe = _drag_rig(rig, monkeypatch, *RUN, *more,
+                          layout={**PLACES, "render:pattern": [250, 400],
+                                  "render:channel.b": [-200, 400]})
+    c, mid = _cable_mid(rig, "rin:output.all/image")
+    _centre_on(rig, probe, (mid[0], mid[1] + 150))
+    c, mid = _cable_mid(rig, "rin:output.all/image")
+    st = ui_graph._state(rig.panel)
+    pressed, lit = _drag_to(rig, probe, "render:pattern", mid)
+    assert pressed[0] == "render:pattern" and lit["hint"] == "over" and not lit["hot"]
+    assert probe["words"].startswith("hold ⌘")
+    assert wires_of(rig.lib) == {*RUN, *more}
+    _centre_on(rig, probe, (mid[0], mid[1] + 150))
+    c, mid = _cable_mid(rig, "rin:output.all/image")
+    pressed, lit = _drag_to(rig, probe, "render:pattern", mid, cmd=True)
+    assert lit["lift"] and lit["hot"] and lit["best"] == c.id
+    assert wires_of(rig.lib) == {*FRAME0, ("channel.b", "shape.faces"),
+                                 ("lookback", "pattern.media"), ("pattern", "output.all.image")}
+    assert st["said"] == "pattern moved: lookback → pattern → output.all.image"
+
+
+def test_a_node_that_never_splices_is_refused_in_words_and_dims_nothing(rig, monkeypatch):
+    """The shape dragged over the picture cable: not hot (nothing dims,
+    every cable cold), the words say it makes geometry, and nothing
+    changes; a matte says it makes a mask."""
+    _, probe = _drag_rig(rig, monkeypatch, *RUN, nodes=[{"kind": "matte"}],
+                          layout={**PLACES, "render:shape": [250, 400], "render:matte": [650, 400]})
+    c, mid = _cable_mid(rig, "rin:output.all/image")
+    _centre_on(rig, probe, (mid[0], mid[1] + 150))
+    c, mid = _cable_mid(rig, "rin:output.all/image")
+    st = ui_graph._state(rig.panel)
+    pressed, lit = _drag_to(rig, probe, "render:shape", mid)
+    assert pressed[0] == "render:shape" and not lit["hot"] and lit["best"] is None
+    assert lit["refused"][c.id] == graphview.GEOMETRY_NODE.format(label="Shape")
+    assert probe["words"] == lit["refused"][c.id]
+    assert {x.id for x in st["view"].cables} <= lit["cold"]
+    assert wires_of(rig.lib) == set(RUN)
+    c, mid = _cable_mid(rig, "rin:output.all/image")
+    pressed, lit = _drag_to(rig, probe, "render:matte", mid)
+    assert lit["refused"][c.id] == graphview.MASK_NODE.format(label="Matte")
+    assert wires_of(rig.lib) == set(RUN)
+
+
+def test_the_other_refusals_are_said_and_cold(rig):
+    """A picture node over a value cable, a modifier over a picture cable,
+    a free effect over the rig's bus cable and over a through wire (an off
+    effect's): each refused in its words, each cable cold (undimmed) while
+    the node is dragged — "won't take it" reads differently from "not
+    near enough"."""
+    st, view, _ = _two_cable_rig(rig)
+    out = next(c for c in view.cables if c.dst_port == "rin:output.all/image")
+    # a value cable under wobble.2
+    val = next(c for c in view.cables if c.type == graphview.VALUE)
+    st["pin_xy"][val.src_port] = (0.0, 500.0)
+    st["pin_xy"][val.dst_port] = (400.0, 500.0)
+    plan = ui_graph.onto_plan(rig.panel, view, "render:wobble.2", (200.0, 500.0))
+    assert plan["best"] is None and plan["refused"][val.id] == ui_graph.PICTURE_ON_VALUE.format(
+        node="wobble 2")
+    assert val.id in plan["cold"] and out.id not in plan["cold"]
+    # the bus cable All outputs → output 1
+    bus = next(c for c in view.cables if c.dst_port == "rin:output.1/image")
+    st["pin_xy"][graphview.stub_in("render:output.1")] = (1000.0, 0.0)
+    plan = ui_graph.onto_plan(rig.panel, view, "render:wobble.2", (850.0, 0.0))
+    assert plan["best"] is None and bus.id in plan["cold"]
+    assert plan["refused"][bus.id] == graphview.BUS_NO_EFFECT.format(
+        wire="output.all.image → output.1.image")
+    # a modifier over the picture cable
+    ui_graph.add_modifier(rig.panel, "smooth", (0.0, 0.0))
+    frame(rig.panel, "graph")
+    st = ui_graph._state(rig.panel)
+    view = st["view"]
+    st["pin_xy"] = {graphview.stub_out("render:acid"): (0.0, 0.0),
+                    graphview.stub_in("render:output.all"): (300.0, 0.0)}
+    mod = next(n for n in view.nodes if n.kind == "modifier")
+    out = next(c for c in view.cables if c.dst_port == "rin:output.all/image")
+    plan = ui_graph.onto_plan(rig.panel, view, mod.id, (150.0, 0.0))
+    assert plan["best"] is None and plan["refused"][out.id] == ui_graph.MOD_ON_PICTURE
+    assert out.id in plan["cold"]
+
+
+def test_a_through_wire_says_what_to_turn_on(rig, monkeypatch):
+    """acid switched off: the drawn `lookback → output.all` wire is a
+    through wire, no cable; a free wobble.2 dragged onto it is refused
+    with "turn it on to splice here", the wire cold."""
+    gs, probe = _drag_rig(rig, monkeypatch, *FRAME0, ("lookback", "acid.image"),
+                          ("acid", "output.all.image"),
+                          nodes=[{"kind": "effect", "file": "wobble", "instance": 2}],
+                          on=(), layout={**PLACES, "render:wobble.2": [250, 400],
+                                         "render:acid": [300, -300]})
+    st = ui_graph._state(rig.panel)
+    thr = list(st["throughs"].values())
+    assert len(thr) == 1 and thr[0].label == "through 1 off effect: acid"
+    a = st["pin_xy"][graphview.stub_out("render:lookback")]
+    b = st["pin_xy"][graphview.stub_in("render:output.all")]
+    mid = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
+    _centre_on(rig, probe, (mid[0], mid[1] + 150))
+    a = st["pin_xy"][graphview.stub_out("render:lookback")]
+    b = st["pin_xy"][graphview.stub_in("render:output.all")]
+    pressed, lit = _drag_to(rig, probe, "render:wobble.2", ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2))
+    assert pressed[0] == "render:wobble.2" and lit["best"] is None
+    assert lit["refused"] == {thr[0].id: "through 1 off effect: acid — turn it on to splice here"}
+    assert thr[0].id in lit["cold"]
+    assert G.run_back(gs.spec, "output.all.image") == ("acid",)
+
+
+@pytest.mark.parametrize("notches", [0, 12])
+def test_the_glow_and_the_drop_agree_at_any_zoom(rig, monkeypatch, notches):
+    """A free wobble.2 dragged so its box's edge just reaches the cable, at
+    zoom 1 and zoomed out: the cable the drag lit is the one the drop
+    lands in — the release acts on the last plan lit, not on a plan
+    re-asked at the editor's grid-snapped position."""
+    gs, probe = _free_node_rig(rig, monkeypatch, {"kind": "effect", "file": "wobble",
+                                                  "instance": 2}, "render:wobble.2")
+    if notches:
+        _zoom_out(rig, probe, notches)
+    c, mid = _cable_mid(rig, "rin:output.all/image")
+    _centre_on(rig, probe, (mid[0], mid[1] + 150))
+    c, mid = _cable_mid(rig, "rin:output.all/image")
+    assert (probe["zoom"] > 2.5) == bool(notches)
+    _, (_, sy) = _node_box(rig, "render:wobble.2")
+    # the box's top edge a hair under the wire: a drop by its box, not its centre
+    reach = graphview.drop_reach(probe["zoom"])
+    pressed, lit = _drag_to(rig, probe, "render:wobble.2", (mid[0], mid[1] + sy / 2 + reach * 0.5))
+    assert pressed[0] == "render:wobble.2"
+    assert lit["best"] == c.id, (lit, probe["zoom"])
+    assert G.run_back(gs.spec, "output.all.image") == ("wobble.2",)
+
+
+def test_a_pin_not_drawn_this_frame_is_no_drop_target(rig, monkeypatch):
+    """acid expanded (its port pins drawn), collapsed again and the canvas
+    panned: `pin_xy` holds only the pins drawn this frame, so the stale
+    port pin never stands in for the drawn stub (a drop 300 units off the
+    wire)."""
+    _drag_rig(rig, monkeypatch, *FRAME0, ("lookback", "acid.image"),
+                          ("acid", "output.all.image"), layout=PLACES)
+    st = ui_graph._state(rig.panel)
+    assert graphview.stub_out("render:acid") in st["pin_xy"] and "rout:acid" not in st["pin_xy"]
+    ui_graph.toggle_open(st, "render:acid")
+    for _ in range(3):
+        frame(rig.panel)
+    assert "rout:acid" in st["pin_xy"]
+    ui_graph.toggle_open(st, "render:acid")
+    px, py = st["pan"]
+    st["pan"] = (px + 300, py + 250)
+    for _ in range(3):
+        frame(rig.panel)
+    assert "rout:acid" not in st["pin_xy"] and graphview.stub_out("render:acid") in st["pin_xy"]
+
+
+def test_a_group_member_dropped_out_onto_a_cable_leaves_and_splices(rig, monkeypatch):
+    """wobble.2 grouped alone, its group open, dragged out of the region
+    onto `lookback → output.all.image`: it leaves the group and is spliced
+    (two steps), as the glow promised."""
+    gs, probe = _free_node_rig(rig, monkeypatch, {"kind": "effect", "file": "wobble",
+                                                  "instance": 2}, "render:wobble.2")
+    st = ui_graph._state(rig.panel)
+    assert ui_graph.group_nodes(rig.panel, ["render:wobble.2"]) is not None
+    for _ in range(3):
+        frame(rig.panel)
+    g = st["view"].groups[0]
+    ui_graph.set_open(rig.panel, g.id, True)
+    for _ in range(4):
+        frame(rig.panel)
+    c, mid = _cable_mid(rig, "rin:output.all/image")
+    _centre_on(rig, probe, (mid[0], mid[1] + 150))
+    c, mid = _cable_mid(rig, "rin:output.all/image")
+    pressed, lit = _drag_to(rig, probe, "render:wobble.2", mid)
+    assert pressed[0] == "render:wobble.2" and lit["best"] == c.id
+    assert G.run_back(gs.spec, "output.all.image") == ("wobble.2",)
+    assert not st["view"].groups or all(
+        "render:wobble.2" not in [m.id for m in x.members] for x in st["view"].groups)
+
+
+def test_insert_node_from_the_cable_menu(rig):
+    """`ui_graph.insert_node`: a composite asked its inlet, then spliced
+    where the menu opened; a delay in one call; `insert_items` disables
+    the look-back the section has; the effect wrapper still stands."""
+    st, view, gs = _two_cable_rig(rig)
+    c = next(c for c in view.cables if c.dst_port == "rin:output.all/image")
+    assert ui_graph.insert_node(rig.panel, c, "composite", at=(321.0, 654.0)) is None
+    held = st["onto"]
+    assert held["insert"] == ("composite", None) and held["inlets"] == ("under", "over")
+    assert G.run_back(gs.spec, "output.all.image") == ("acid",)       # nothing yet
+    assert ui_graph.insert_node(rig.panel, c, "composite", None, "over", (321.0, 654.0)) is None
+    assert wires_of(rig.lib) >= {("acid", "composite.over"), ("composite", "output.all.image")}
+    assert rig.lib.presets.layout["render:composite"] == [321, 654]
+    assert st["said"] == ("composite inserted: acid → composite over → output.all.image; "
+                          "composite under is open")
+    frame(rig.panel, "graph")
+    view = st["view"]
+    c = next(c for c in view.cables if c.dst_port == "rin:composite/over")
+    assert ui_graph.insert_node(rig.panel, c, "delay", at=(1.0, 2.0)) is None
+    assert wires_of(rig.lib) >= {("acid", "delay.image"), ("delay", "composite.over")}
+    e = ui_graph.render_edit(rig.panel)
+    items = {k: why for k, _, why in graphview.insert_items(e)}
+    assert items["lookback"] == (
+        "Look-back is in the graph already: drag it onto the cable")
+    assert items["composite"] is None and items["pattern"] is None
+    assert e.insert_node(c, "channel") == graphview.CHANNEL_INSERT
+    assert e.insert_node(c, "composite") == graphview.PICK_INLET.format(
+        name="composite", ports="under or over", src="acid")
+    assert e.insert_node(c, "switch", None, "in9") == graphview.NOT_AN_INLET.format(
+        name="switch", port="in9", ports="in1 … in8")
+    frame(rig.panel, "graph")
+    c = next(c for c in st["view"].cables if c.dst_port == "rin:delay/image")
+    assert ui_graph.insert_effect(rig.panel, c, "kaleido", (5.0, 6.0)) is None
+    assert {("acid", "kaleido.image"), ("kaleido", "delay.image")} <= wires_of(rig.lib)
+
+
+def test_place_node_lifts_any_kind_by_its_table(tmp_path):
+    """`Edit.place_node` on the section alone: a composite lifted out of its
+    place bridges its `under` to its consumer and keeps its `over`; a
+    segment goes in by its `fg` pin; a source lifted says what lost its
+    feed; a node on the cable already, a kind that never splices and an
+    inlet it has not are refused in words; the effect wrappers stand."""
+    rig, e, pushed = free_rig(
+        tmp_path, ("lookback", "composite.under"), ("channel.c", "composite.over"),
+        ("composite", "acid.image"), ("acid", "output.all.image"), ("channel.a", "backdrop.image"),
+        nodes=[{"kind": "composite"}])
+    assert e.place_node(("acid", "output.all.image"), "composite") == graphview.PICK_INLET.format(
+        name="composite", ports="under or over", src="acid")
+    assert e.place_node(("acid", "output.all.image"), "composite", "between") == \
+        graphview.NOT_AN_INLET.format(name="composite", port="between", ports="under, over")
+    assert e.place_node(("composite", "acid.image"), "composite", "under") == \
+        "composite is on that cable already"
+    assert e.place_node(("acid", "output.all.image"), "composite", "under") is None
+    assert wires_of(rig) == {("lookback", "acid.image"), ("channel.c", "composite.over"),
+                             ("acid", "composite.under"), ("composite", "output.all.image"),
+                             ("channel.a", "backdrop.image")}
+    assert e.said == "composite moved: acid → composite under → output.all.image"
+    assert pushed[-1] == "move composite onto acid → output.all.image"
+    # a source lifted: its old consumer loses its feed, said
+    assert e.place_node(("composite", "output.all.image"), "channel.a") is None
+    assert e.said == ("channel.a feeds output.all.image instead of composite; "
+                      "composite feeds nothing now; backdrop.image fed by nothing now")
+    assert ("channel.a", "backdrop.image") not in wires_of(rig)
+    # a kind that never splices
+    assert e.place_node(("lookback", "acid.image"), "shape") == graphview.GEOMETRY_NODE.format(
+        label="Shape")
+    assert e.place_node(("lookback", "acid.image"), "output.all") == \
+        graphview.OUTPUT_NODE.format(label="All outputs")
+    # a segment: in by image, out by fg
+    assert e.add_node("segment") is None
+    assert e.place_node(("lookback", "acid.image"), "segment") is None
+    assert {("lookback", "segment.image"), ("segment.fg", "acid.image")} <= wires_of(rig)
+    # (a cable from a pin takes no drop yet: `_cable_ends`' rule, as before)
+    assert e.place_node(("segment.fg", "acid.image"), "segment") == \
+        graphview.NO_PICTURE_CABLE.format(wire="segment.fg → acid.image")
+    assert e.place_node(("lookback", "segment.image"), "segment") == "segment is on that cable already"
+    # the effect wrappers stand: a `Refusal`, or None
+    why = e.place_effect(("lookback", "segment.image"), "teapot")
+    assert isinstance(why, graphview.Refusal) and "no teapot effect" in why
+    assert e.place_effect(("segment.fg", "acid.image"), "acid") == \
+        graphview.NO_PICTURE_CABLE.format(wire="segment.fg → acid.image")
+
+
+def test_the_insert_table_names_picture_ports_only():
+    """Every inlet `INSERT_PORTS` names is a picture port of its kind, and
+    every outlet makes a picture (the table and `graph.WIRED_TAKES` /
+    `WIRED_MAKES` agree); every picture-making kind the canvas draws is
+    either in the table or refused in words by `drop_refusal`."""
+    for kind, (ins, out) in graphview.INSERT_PORTS.items():
+        takes = G.WIRED_TAKES[kind]
+        assert all(takes[p] == G.IMAGE for p in ins), kind
+        assert (G.WIRED_MAKES[kind] if not out else G.SEGMENT_PINS[out]) == G.IMAGE, kind
+    pins = (*G.SEGMENT_PINS, "cover", G.DEPTH_PORT, "echo")      # a pin is its node's
+    for kind in G.WIRED_MAKES:
+        if kind in graphview.INSERT_PORTS or kind in pins:
+            continue
+        name = {"output": "output.1", "layer": "hands.layer", "guide": "hands.guide"}.get(kind, kind)
+        assert graphview.kind_of(name) == kind and graphview.drop_refusal(name), kind
+
+
+# ---------------------------------------------------------------- 2026-11-02 (G0, row 563): a group by the mouse
+
+def _box_select(rig, probe, a, b, steps=10):
+    """A real box-select: press on empty canvas at `a`, drag to `b`, let go
+    (canvas units)."""
+    io = imgui.get_io()
+    s0, s1 = _to_screen(probe, a), _to_screen(probe, b)
+    io.add_mouse_pos_event(*s0)
+    frame(rig.panel)
+    frame(rig.panel)
+    io.add_mouse_button_event(0, True)
+    frame(rig.panel)
+    for i in range(1, steps + 1):
+        u = i / steps
+        io.add_mouse_pos_event(s0[0] + (s1[0] - s0[0]) * u, s0[1] + (s1[1] - s0[1]) * u)
+        frame(rig.panel)
+    frame(rig.panel)
+    io.add_mouse_button_event(0, False)
+    frame(rig.panel)
+    frame(rig.panel)
+    io.add_mouse_pos_event(-1.0, -1.0)
+    frame(rig.panel)
+
+
+def _right_click(rig, probe, nid):
+    """A real right-click on node `nid`'s title: the node's menu opens and
+    is drawn on the frames that follow."""
+    io = imgui.get_io()
+    (px, py), (sx, _sy) = _node_box(rig, nid)
+    io.add_mouse_pos_event(*_to_screen(probe, (px + sx * 0.35, py + 6.0)))
+    frame(rig.panel)
+    frame(rig.panel)
+    io.add_mouse_button_event(1, True)
+    frame(rig.panel)
+    io.add_mouse_button_event(1, False)
+    frame(rig.panel)
+    frame(rig.panel)
+    frame(rig.panel)
+
+
+def _left_click(rig, probe, nid):
+    """A real click on node `nid`'s title: selected, alone."""
+    io = imgui.get_io()
+    (px, py), (sx, _sy) = _node_box(rig, nid)
+    io.add_mouse_pos_event(*_to_screen(probe, (px + sx * 0.35, py + 6.0)))
+    frame(rig.panel)
+    frame(rig.panel)
+    io.add_mouse_button_event(0, True)
+    frame(rig.panel)
+    io.add_mouse_button_event(0, False)
+    frame(rig.panel)
+    frame(rig.panel)
+
+
+def _centre_node(rig, probe, nid):
+    """Pan so node `nid` sits in the middle of the canvas; its box after."""
+    (px, py), (sx, sy) = _node_box(rig, nid)
+    _centre_on(rig, probe, (px + sx / 2, py + sy / 2))
+    return _node_box(rig, nid)
+
+
+def _escape(rig):
+    """Escape closes the open menu (keyboard nav on for the press, as
+    test_ui_shell does; the shared io's flags put back after)."""
+    io = imgui.get_io()
+    flags = io.config_flags
+    io.config_flags |= imgui.ConfigFlags_.nav_enable_keyboard
+    try:
+        io.add_mouse_pos_event(-1.0, -1.0)
+        frame(rig.panel)
+        io.add_key_event(imgui.Key.escape, True)
+        frame(rig.panel)
+        io.add_key_event(imgui.Key.escape, False)
+        frame(rig.panel)
+        frame(rig.panel)
+    finally:
+        io.config_flags = flags
+    assert not imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id)
+
+
+def test_a_group_made_taken_apart_and_remade_by_the_mouse(rig, monkeypatch):
+    """Row 563, by the mouse (the real editor, the harness above): two
+    effects in the run box-selected and grouped from the right-click menu;
+    the folded node opened from its menu; one member then the other
+    dragged out of the region — the first leaves its group at once, the
+    second takes the group with it (ungroup, by the mouse); the two
+    regrouped take `group.2`, never `group.1` again; and a member deleted
+    with the Delete key is out of the group's list on that same frame.
+    The one menu item picked on each menu is the patched `menu_item_simple`;
+    everything else is mouse and key events through imgui."""
+    from test_graphview import _in_editor
+    pairs = (*FRAME0, ("lookback", "acid.image"), ("acid", "wobble.image"),
+             ("wobble", "output.all.image"))
+    places = {"render:shape": [-800, 0], "render:scene": [-400, 0], "render:lookback": [0, 0],
+              "render:acid": [320, 0], "render:wobble": [640, 0], "render:output.all": [960, 0]}
+    _gs, probe = _drag_rig(rig, monkeypatch, *pairs, layout=places, effects=("acid", "wobble"), on=("acid", "wobble"))
+    st, pre = ui_graph._state(rig.panel), rig.lib.presets
+    assert pre.groups == []
+    _centre_on(rig, probe, (600.0, 90.0))      # (the page pans by moving the nodes:
+    (ax, ay), (aw, ah) = _node_box(rig, "render:acid")        # read them after)
+    (wx, wy), (ww, wh) = _node_box(rig, "render:wobble")
+    # 1. box-select the two, group them from the menu
+    _box_select(rig, probe, (ax - 30, ay - 80), (wx + ww + 30, max(ay + ah, wy + wh) + 80))
+    _in_editor(rig, lambda: st.__setitem__("menu_sel", ui_graph.selected_ids(st)))
+    assert sorted(st["menu_sel"]) == ["render:acid", "render:wobble"]
+    picked: list[str] = []
+    want = {"pick": "group "}
+
+    def item(label, *a, **k):               # one click on the item wanted, once
+        picked.append(label)
+        if want["pick"] and label.startswith(want["pick"]):
+            want["pick"] = None
+            return True
+        return False
+    monkeypatch.setattr(imgui, "menu_item_simple", item)
+    _right_click(rig, probe, "render:acid")
+    assert "group 2 nodes" in picked, picked
+    assert [(g["id"], sorted(g["nodes"]), g["open"]) for g in pre.groups] == [
+        ("group.1", ["render:acid", "render:wobble"], False)]
+    _escape(rig)
+    frame(rig.panel)
+    assert st["view"].group("group.1") is not None and "render:acid" in st["hide"]
+    # 2. open it from its menu, drag one member out, then the other
+    picked.clear()
+    want["pick"] = "open"
+    _right_click(rig, probe, "group.1")
+    assert "open" in picked and pre.groups[0]["open"] is True
+    _escape(rig)
+    frame(rig.panel)
+    frame(rig.panel)
+    (wx, wy), (ww, wh) = _node_box(rig, "render:wobble")
+    _drag_to(rig, probe, "render:wobble", (wx + ww / 2, wy + wh / 2 + 420))
+    frame(rig.panel)
+    assert pre.groups[0]["nodes"] == ["render:acid"], pre.groups
+    assert st["said"] == "wobble left group 1"
+    (ax, ay), (aw, ah) = _node_box(rig, "render:acid")
+    _drag_to(rig, probe, "render:acid", (ax + aw / 2, ay + ah / 2 - 420))
+    frame(rig.panel)
+    assert pre.groups == []                                 # ungrouped, by the mouse
+    assert st["said"] == "acid left group 1, the last of it: the group is gone"
+    assert wires_of(rig.lib) == set(pairs)                 # the graph is untouched
+    # 3. regrouped, by another box (the two are 840 units apart now: zoomed
+    # out so one box on screen holds both): the next number, never the old
+    _zoom_out(rig, probe, 6)
+    (ax, ay), (aw, ah) = _node_box(rig, "render:acid")
+    (wx, wy), (ww, wh) = _node_box(rig, "render:wobble")
+    _centre_on(rig, probe, ((ax + wx + ww) / 2, (ay + wy + wh) / 2))
+    (ax, ay), (aw, ah) = _node_box(rig, "render:acid")
+    (wx, wy), (ww, wh) = _node_box(rig, "render:wobble")
+    _box_select(rig, probe, (min(ax, wx) - 30, min(ay, wy) - 60),
+                (max(ax + aw, wx + ww) + 30, max(ay + ah, wy + wh) + 60))
+    _in_editor(rig, lambda: st.__setitem__("menu_sel", ui_graph.selected_ids(st)))
+    assert sorted(st["menu_sel"]) == ["render:acid", "render:wobble"]
+    picked.clear()
+    want["pick"] = "group "
+    _right_click(rig, probe, "render:wobble")
+    assert "group 2 nodes" in picked, picked
+    assert [g["id"] for g in pre.groups] == ["group.2"]
+    _escape(rig)
+    frame(rig.panel)
+    # 4. open it, click a member, Delete: out of the list on that frame
+    assert ui_graph.set_open(rig.panel, "group.2", True) is None
+    frame(rig.panel)
+    frame(rig.panel)
+    _centre_node(rig, probe, "render:wobble")
+    _left_click(rig, probe, "render:wobble")
+    io = imgui.get_io()
+    io.add_key_event(imgui.Key.delete, True)
+    frame(rig.panel)                    # the key queues the selection for the editor…
+    frame(rig.panel)                    # …whose query on this frame drops the node
+    io.add_key_event(imgui.Key.delete, False)
+    assert pre.groups == [{"id": "group.2", "name": "group 2", "nodes": ["render:acid"],
+                           "open": True}], (pre.groups, st["note"], st["said"])
+    assert "wobble" not in {w.src for w in pre.graph.spec.wires}
+    frame(rig.panel)
+    assert pre.groups[0]["nodes"] == ["render:acid"]
+

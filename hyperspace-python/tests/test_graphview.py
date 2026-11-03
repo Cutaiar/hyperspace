@@ -313,7 +313,10 @@ def test_old_layout_positions_follow_the_renamed_ids(rig):
     raw["layout"] = {"render:eye": [40, 50], "render:output.1": [60, 70]}
     project.path.write_text(json.dumps(raw))
     project.load("old-show")
-    assert project.layout == {"render:camera": [40, 50], "render:output.1": [60, 70]}
+    # (plan 43 C2: the camera's position is the look's — held for the old
+    # presets this show opens, never the show's own)
+    assert project.layout == {"render:output.1": [60, 70]}
+    assert project.camera_at == [40, 50]
 
 
 def test_layout_round_trips_through_the_preset_and_the_show(rig):
@@ -884,3 +887,12 @@ def test_a_render_nodes_said_is_its_first_line():
     assert getattr(c, "said", "") == ""
     assert graphview.summary(graphview.VNode("render:composite", "render", "composite",
                                              ref=c)) == ["0 params · 0 patched"]
+
+
+def test_a_drops_reach_is_never_under_near_screen_px():
+    """2026-10-31: how near a dropped node must come to a cable (`NEAR`
+    canvas units) grows with the canvas zoomed out, so it is never under
+    `NEAR` screen px; zoomed in it stays `NEAR`."""
+    assert graphview.drop_reach() == graphview.NEAR
+    assert graphview.drop_reach(0.5) == graphview.NEAR
+    assert graphview.drop_reach(4.0) == 4 * graphview.NEAR

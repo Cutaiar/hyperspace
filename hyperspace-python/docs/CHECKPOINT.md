@@ -162,8 +162,43 @@ to set; `startup` stays in the show file for Home. The Drive library's
 as the owner's own, lower-cased (`dial`, `trip`, `plasma heart`,
 `seq-demo`). Dylan's files are untouched. **Both Macs on this build.**
 
+**Plan 42** (2026-11-01, on `plan-42-controllers`): any controller in any
+role and the DualSense Edge over USB and Bluetooth, written from published
+sources the day before Dillon's controller arrived
+([`plans/42-controllers.md`](plans/42-controllers.md)). Its D1–D10 are
+recommendations, pending the owner (register rows 544–553); its hand
+checks 407–415 (group AP) start with `tools/hid_probe.py --check` on the
+real pad — run on Dillon's Edge over USB and Bluetooth on 2026-11-02, every
+question answered (the plan's "What the controller said"). `uv sync` adds hidapi; **restart** rather than hot reload (new
+fields on `Pad`, `PadDevice` and `gamepad.Claims`).
+
+**Plan 46** (2026-11-02, on `worktree-joycon`): the Joy-Con over
+Bluetooth on plan 42's road — one Joy-Con per entry, held like a Wii
+Remote, first of all its six-axis sensor
+([`plans/46-joycon.md`](plans/46-joycon.md)): `pads/nintendo.py` beside
+the Sony codec, models `joycon-l` / `joycon-r` / `procon`, a model saying
+which controls it has (one stick, no D-pad, two outputs), the stick's
+drift calibrated from the flash and its rest, the probe's own Joy-Con
+checks, and the pad window drawing the Joy-Con as itself (Faithful with
+the stick's calibration and the sensors' numbers, Cockpit, Lanes — D6,
+the owner's: no browser lab). D1–D5 are recommendations pending the
+owner (register rows 565–569); hand check 425 ran on the real Joy-Con
+the same day: the flash, every button, the stick's rest and reach, the
+sensors' axes and the outputs all as built (findings and a tape slice in
+the tree, `tests/test_pads_joycon_real.py`); 424 and 426–429 (group AV)
+remain. **Restart** rather than hot reload (the road's module list
+changed).
+
 ## What is left
 
+- **Plan 46, hand checks 424 and 426–429** (the owner's Joy-Con): the
+  app with it — the pad window's views by eye, the six axes in the hand
+  and a Learn, drift in a set, rumble and the lights from sink rows,
+  beside the Edge.
+- **Plan 42, to revisit** (Dillon, 2026-11-02): the back buttons' forward
+  flip, renaming "pad" (proposal: handheld), a role picker in the app —
+  each with where it starts in [`plans/42-controllers.md`](plans/42-controllers.md) "To
+  revisit". Joy-Cons: plan 46.
 - **Plan 37: the owner's list of face patterns** (register row 417, D1).
   The sheets are in `plans/assets/37-faces/`. With the list, the owner
   also says whether to renumber `view.pattern` or keep tombstones, and the

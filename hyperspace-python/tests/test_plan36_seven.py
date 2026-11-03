@@ -34,6 +34,7 @@ FIXTURES = ROOT / "tests" / "fixtures" / "presets"
 SOURCES = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
 SIZE = (240, 150)
 SEVEN = M.WIRED_SCHEMA
+SAVED = M.SAVE_SCHEMA          # plan 43 C2: what a save writes (a /7 read, a /9 written)
 # today's frame: what a section-less old preset migrates to (`wired_of(Wiring())`;
 # plan 36 T4: its look-back off in the old values — none drawn)
 TODAY = [("shape", "scene.geometry"), ("scene", "output.all.image"),
@@ -47,6 +48,35 @@ def _views(n: int = 2) -> list[View]:
 
 def _pairs(section: dict) -> list[tuple[str, str]]:
     return [(w["from"], w["to"]) for w in section.get("wires") or []]
+
+
+# the params whose shipped default moved with the calmer defaults of
+# 2026-10-31 (DECISIONS, "Shipped effect defaults are calm"): every
+# effect's speed, its amount-like faders and an LFO's depth. The corpus
+# files were migrated before that, so where a source names none of these
+# the corpus holds the old default and a migration today lands the new.
+CALMED = {"fx.acid.bend", "fx.acid.twist", "fx.acid.breathe", "fx.deconverge.amount",
+          "fx.deconverge.radial", "fx.displace.amount", "fx.doublevision.amount",
+          "fx.fractals.amount", "fx.glimmer.amount", "fx.plasma.level",
+          "fx.tripcolour.amount", "fx.warp.amount", "fx.wobble.amount", "fx.zoomblur.amount"}
+
+
+def _calmed(key: str) -> bool:
+    return (key in CALMED or (key.startswith("fx.") and key.endswith(".speed"))
+            or (key.startswith("lfo.") and key.endswith(".depth")))
+
+
+def _as_before_calming(made: bytes, source: Path, data: bytes) -> dict:
+    """The fresh migration `made` of `source`, with each calmed default the
+    source left unnamed put back to what the corpus file `data` holds —
+    and nothing else may differ."""
+    doc, want = json.loads(made), json.loads(data)
+    named = json.loads(source.read_text()).get("values") or {}
+    for key, value in doc["values"].items():
+        if value != want["values"].get(key):
+            assert _calmed(key) and key not in named, (source.name, key, value)
+            doc["values"][key] = want["values"][key]
+    return doc
 
 
 def _app_with(tmp_path, name: str, doc: dict):
@@ -82,7 +112,7 @@ def test_a_section_less_seven_loads_black_and_says_so(tmp_path, graph):
     assert gs.fx.specs == {}                           # no effect exists
     assert not [p.id for p in app.reg if p.id.startswith("fx.acid.")]
     saved = app.presets.document("bare")
-    assert saved["schema"] == SEVEN
+    assert saved["schema"] == SAVED
     assert saved["graph"] == {"frame": "wired", "nodes": [{"kind": "hands", "laid": "over"}]}
 
 
@@ -198,10 +228,10 @@ def test_an_old_section_less_preset_migrates_to_todays_frame():
 def test_an_old_file_loads_through_the_migration_with_a_note(tmp_path):
     doc = json.loads((FIXTURES / "acid-scene.json").read_text())
     app = _app_with(tmp_path, "acid-scene", doc)
-    said = M.MIGRATED_NOTE.format(old="hyperspace.preset/2", new=SEVEN)
+    said = M.MIGRATED_NOTE.format(old="hyperspace.preset/2", new=SAVED)
     assert app.presets.migrated == said and app.presets.notes == []     # (not a problem)
     assert app.lib.warning == f"preset acid-scene: {said}"              # (the strip says it)
-    assert app.presets.document("acid-scene")["schema"] == SEVEN
+    assert app.presets.document("acid-scene")["schema"] == SAVED
 
 
 @pytest.mark.parametrize("slug, want", [
@@ -268,7 +298,7 @@ def test_a_cut_migrated_wire_stays_cut_through_a_save_and_a_reload(tmp_path):
     assert e.unwire("pattern", "shape.faces") is None, e.said
     assert ("pattern", "shape.faces") not in _pairs(app.presets.graph.free_doc())
     path = app.presets.save_as("trip")
-    assert json.loads(path.read_text())["schema"] == SEVEN
+    assert json.loads(path.read_text())["schema"] == SAVED
     again = make_app(tmp_path / "home")
     again.lib.load(preset.GROUP, "trip")
     assert ("pattern", "shape.faces") not in _pairs(again.presets.graph.free_doc())
@@ -282,14 +312,15 @@ def test_every_corpus_preset_is_its_sources_seven_and_round_trips(tmp_path):
     untouched it is the same bytes; and it is exactly what
     tools/migrate_library.py makes of its source (`--to`: load the old file,
     save) — so the migration can be re-run from the sources and lands the
-    same files."""
+    same files, up to the defaults a source does not name that moved since
+    (`_as_before_calming`)."""
     paths = sorted((CORPUS / "presets").glob("*.json"))
     assert len(paths) == 25
     assert sorted(p.name for p in SOURCES.glob("*.json")) == [p.name for p in paths]
     for k, path in enumerate(paths):
         data = path.read_bytes()
-        assert json.loads(data)["schema"] == SEVEN, path.name
+        assert json.loads(data)["schema"] == SAVED, path.name
         again, notes, _ = headless.resave(path, tmp_path / f"f{k}")
         assert again == data and notes == [], path.name
         made, _, _ = headless.resave(SOURCES / path.name, tmp_path / f"s{k}")
-        assert made == data, path.name
+        assert _as_before_calming(made, SOURCES / path.name, data) == json.loads(data), path.name

@@ -122,6 +122,7 @@ NO_DEVICE_SCHEMES = (*BUILTIN_SCHEMES, "mod", "key")
 # role). Plan 28 N5's table, moved here from graphview by plan 40 T4
 # (graphview reads it from here: the placeholder node keeps its words)
 SCHEME_ROLE = {"hand": "leap", "hands": "leap", "axis": "pad", "pad": "pad", "hat": "pad",
+               "touch": "pad", "motion": "pad",
                "cc": "apc40", "note": "apc40", "pitch": "apc40"}
 
 
@@ -558,11 +559,43 @@ class PadDevice(Base):
     the entry's ``joystick = n``; the one libusb reader is lent, not
     owned (`gamepad.Claims.lend`): to the pad holding it while it has no
     GLFW joystick, else to the first ``usb = true`` pad with none. A
-    second pad also arms a Learn by its role (`wants_for`)."""
+    second pad also arms a Learn by its role (`wants_for`).
+
+    **Any controller, any role (plan 42).** The entry's ``controller =``
+    says which pads it may take (`pads.models.matches`: ``any``, a model
+    such as ``edge``, a family ``sony`` / ``xbox``, a USB id), ``hid``
+    whether Sony pads are read over hidapi (USB and Bluetooth: the
+    touchpad, the motion sensors, the Edge's back and Fn buttons), and
+    ``tape`` a recording to read instead. Two more schemes are fed beside
+    ``axis`` — ``touch`` and ``motion`` (pads/gesture.py), None while the
+    pad read has no touchpad or sensors — and a pad with outputs has
+    **sink ports** (`SINKS`: the light bar, rumble, each trigger's
+    resistance, the player and mic lights), each a channel a sink row
+    sends a param or a lane to; with no row on a channel the pad shows
+    its identity (``light =``, ``player =``, else one by its place in
+    the list), so whoever holds it can tell which pad is theirs."""
 
     kind = "gamepad"
-    schemes = ("axis", "pad", "hat")
-    feeds = ("axis",)
+    schemes = ("axis", "pad", "hat", "touch", "motion")
+    feeds = ("axis", "touch", "motion")
+    XBOX_SCHEMES, XBOX_FEEDS = ("axis", "pad", "hat"), ("axis",)
+
+    @classmethod
+    def schemes_for(cls, entry: dict | None) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        """(schemes, feeds) an entry publishes: the touch and motion
+        schemes only when it may read a pad that has them — ``hid`` on (or
+        a tape) and ``controller =`` not an Xbox-only choice."""
+        from .pads import models
+        e = entry or {}
+        spec = models.parse_spec(e.get("controller", "any")) or "any"
+        if (e.get("tape") or (e.get("hid", True) and models.may_be_hid(spec))):
+            return cls.schemes, cls.feeds
+        return cls.XBOX_SCHEMES, cls.XBOX_FEEDS
+
+    @classmethod
+    def publishes(cls, role: str, entry: dict | None = None):
+        schemes, feeds = cls.schemes_for(entry)
+        return schemes, feeds, tuple(s for s in schemes if s not in feeds)
 
     @staticmethod
     def wants_for(role: str, qualifier: str) -> tuple[str, ...]:
@@ -580,6 +613,7 @@ class PadDevice(Base):
     def __init__(self, role: str, entry: dict | None = None, ctx: Context | None = None, *,
                  io=None):
         super().__init__(role, entry, ctx, io=io)
+        self.schemes, self.feeds = self.schemes_for(self.entry)
         self._taken = False      # this frame's press completed a learn
         self._dt = 0.0
         self._dialed: set[str] = set()   # the sticks a route reads as a dial (last `act`)
@@ -594,6 +628,11 @@ class PadDevice(Base):
     def open(self) -> None:
         from .gamepad import DIAL_MODES, Claims, Pad
         self.io = Pad(usb=bool(self.entry.get("usb", True)))
+        # plan 42: which controllers it may take, the hid road, a tape
+        tape = self.entry.get("tape")
+        self.io.hid = bool(self.entry.get("hid", True))
+        self.io.controller = str(self.entry.get("controller", "any") or "any")
+        self.io.tape = tape if isinstance(tape, str) and tape else None
         # where each stick's dial reading starts (`dial_left` / `dial_right`)
         for stick, key in (("L", "dial_left"), ("R", "dial_right")):
             mode = self.entry.get(key)
@@ -627,12 +666,27 @@ class PadDevice(Base):
             usb = getattr(io, "usb_pad", None)
             name = getattr(usb, "name", "") if io.source == "usb" else ""
             jid = getattr(io, "jid", None) if io.source == "glfw" else None
-            head = (f"{io.source}: {name}" if name else
-                    f"{io.source} {jid}" if jid is not None else str(io.source))
+            if io.source in ("hid", "tape"):
+                # plan 42: which pad, how it is linked, its battery
+                model = getattr(getattr(io, "model", None), "name", "") or "pad"
+                link = getattr(io, "link", "") or io.source
+                head = f"{io.source}: {model} ({link})"
+                bat = getattr(getattr(io, "report", None), "battery", -1)
+                if isinstance(bat, int) and bat >= 0:
+                    head += f"  ·  battery {min(100, bat * 10)} %"
+            else:
+                head = (f"{io.source}: {name}" if name else
+                        f"{io.source} {jid}" if jid is not None else str(io.source))
             return f"{head}  ·  {own}" if own else head
         pin = getattr(io, "joystick", None)
         why = [f"waiting for joystick {pin}"] if pin is not None else []
-        why += [n for n in (getattr(getattr(io, "usb_pad", None), "note", "") or "", own) if n]
+        spec = getattr(io, "controller", "any") or "any"
+        if spec != "any":
+            why.append(f"waiting for {spec}")
+        hub = getattr(getattr(io, "claims", None), "hub", None)
+        why += [n for n in (getattr(getattr(io, "usb_pad", None), "note", "") or "", own,
+                            getattr(io, "tape_note", "") or "",
+                            getattr(hub, "note", "") or "") if n]
         return "  ·  ".join(why)
 
     @property
@@ -645,19 +699,105 @@ class PadDevice(Base):
 
         def sc(s: str) -> str:
             return f"{s}@{q}" if q else s
+        model = self.model
+
+        def has(n: str) -> bool:      # a single Joy-Con has less than a face (plan 43)
+            return model is None or model.has_control(n)
         axes = [Port(n, lb, rest=r, bipolar=n in g.STICKS,
                      group="sticks" if n in g.STICKS else "triggers", scheme=sc("axis"))
-                for n, lb, r in zip(g.AXES, g.AXIS_LABELS, g.AXIS_RESTS, strict=True)]
+                for n, lb, r in zip(g.AXES, g.AXIS_LABELS, g.AXIS_RESTS, strict=True) if has(n)]
+        named = dict(g.BUTTONS)
+        if model is not None:
+            named = {n: i for n, i in g.ALL_BUTTONS.items()
+                     if (n in g.BUTTONS or (n == "TOUCH" and model.has("touch"))
+                         or (n in ("LP", "RP") and model.has("back"))
+                         or (n in ("LFN", "RFN") and model.has("fn"))) and has(n)}
         buttons = [Port(n, n, kind="trigger", group="buttons", scheme=sc("pad"))
-                   for n in g.BUTTONS]
+                   for n in named]
         hats = [Port(n, f"D-pad {n.lower()}", kind="trigger", group="d-pad", scheme=sc("hat"))
-                for n in g.HATS]
-        return tuple(axes + buttons + hats)
+                for n in g.HATS if has(n)]
+        extra: list[Port] = []
+        from .pads import gesture as ge
+        if model is not None and model.has("touch"):
+            extra += [Port(n, lb, kind="trigger" if n in ge.TOUCH_TRIGGERS else "value",
+                           rest=r, bipolar=n in ge.TOUCH_BIPOLAR, group="touchpad",
+                           scheme=sc(g.TOUCH_SCHEME))
+                      for n, lb, r in zip(ge.TOUCH_LANES, ge.TOUCH_LABELS, ge.TOUCH_RESTS,
+                                          strict=True)]
+        if model is not None and model.has("motion"):
+            extra += [Port(n, lb, kind="trigger" if n in ge.MOTION_TRIGGERS else "value",
+                           rest=r, bipolar=n in ge.MOTION_BIPOLAR, group="motion",
+                           scheme=sc(g.MOTION_SCHEME))
+                      for n, lb, r in zip(ge.MOTION_LANES, ge.MOTION_LABELS, ge.MOTION_RESTS,
+                                          strict=True)]
+        return tuple(axes + buttons + hats + extra)
+
+    @property
+    def model(self):
+        """The pad's model: the one read now, else — while lost — the one
+        ``controller =`` names (so GRAPH and the sink menu show an Edge's
+        ports before it is switched on), else None (any pad: the Xbox face)."""
+        from .pads import models
+        io = self.io
+        m = getattr(io, "model", None) if io is not None and getattr(io, "on", False) else None
+        if models.is_model(m):
+            return m
+        spec = models.parse_spec(self.entry.get("controller", "any"))
+        return models.MODELS.get(spec) if spec else None
+
+    @property
+    def sinks(self) -> tuple[Port, ...]:
+        """The pad's outputs as sink ports (plan 42), ``<role>:<channel>``
+        — `SINKS` — when its model has them."""
+        m = self.model
+        if m is None or not m.outputs:
+            return ()
+        # the channels keep their numbers; a pad shows only those it has (a
+        # Joy-Con: rumble and the player lights, no light bar — plan 43)
+        return tuple(Port(str(k), label, group="feedback", scheme=self.role)
+                     for k, (key, label) in enumerate(SINKS) if SINK_CAP[key] in m.outputs)
+
+    def send(self, reg, analyzer) -> None:
+        """The sink rows on this pad's ports, read after `reg.apply`, as one
+        `Effects` over the pad's identity (`pad_effects`); the hid reader
+        writes it only when it changed."""
+        io = self.io
+        if io is None or not getattr(io, "on", False) or not hasattr(io, "send_effects"):
+            return
+        from .pads import models
+        m = getattr(io, "model", None)
+        if not models.is_model(m) or not m.outputs:
+            return
+        table = self.ctx.table
+        vals: dict[int, float] = {}
+        if table is not None and hasattr(table, "sinks"):
+            from .routing import sink_values
+            vals = sink_values(table.sinks(self.role), reg, analyzer)
+        io.send_effects(pad_effects(vals, self.identity))
+
+    @property
+    def identity(self) -> tuple[tuple[int, int, int], int]:
+        """(light colour, player number) with no sink row on them: the
+        entry's ``light`` / ``player``, else by the pad's place among the
+        pads (`PLAYER_LIGHTS`, as a PlayStation numbers its pads)."""
+        place = 1
+        claims = getattr(self.ctx, "pads", None)
+        io = self.io
+        if claims is not None and io is not None and io in getattr(claims, "order", ()):
+            place = claims.order.index(io) + 1
+        rgb = _hex_rgb(self.entry.get("light"))
+        if rgb is None:
+            rgb = PLAYER_LIGHTS[(place - 1) % len(PLAYER_LIGHTS)]
+        player = self.entry.get("player")
+        if not isinstance(player, int) or isinstance(player, bool) or not 0 <= player <= 5:
+            player = min(place, 5)
+        return rgb, player
 
     def poll(self, dt: float, now: float) -> None:
         self._taken = False
         self._dt = dt
         if self.io is not None:
+            self.io.dt_hint = dt       # the touch and motion lanes' time (plan 42)
             self.io.poll()
 
     def learn(self, learn) -> bool:
@@ -668,8 +808,16 @@ class PadDevice(Base):
         # a stick a route already reads as a dial learns its sectors (the
         # routes as the last frame's `act` saw them: Learn runs before it)
         dialed = self.__dict__.get("_dialed", set())
-        self._taken = bool(gamepad.learn_from(self.io, learn, role=q, dials=lambda: dialed)
-                           if q else gamepad.learn_from(self.io, learn, dials=lambda: dialed))
+        # the buttons the totem holds while it reads this pad learn nothing
+        # either (as their rows do not fire: `act`'s skip) — asked only
+        # while a learn is armed
+        skip = (self._totem_skip(self.ctx.reg if self.ctx.reg is not None
+                                 else getattr(learn, "reg", None), self.io)
+                if getattr(learn, "learning", None) is not None else frozenset())
+        self._taken = bool(gamepad.learn_from(self.io, learn, role=q, dials=lambda: dialed,
+                                              skip=skip)
+                           if q else gamepad.learn_from(self.io, learn, dials=lambda: dialed,
+                                                        skip=skip))
         return self._taken
 
     def act(self, router) -> None:
@@ -685,21 +833,175 @@ class PadDevice(Base):
         # the sticks a route reads as a dial, for the next frame's Learn
         # (gamepad.dialed); asked only while the pad is there, once a frame
         claimed = getattr(router, "claimed", None)     # duck-typed: a shim may have none
+        self._feed_extras(router, io, q)
+        reg = self.ctx.reg if self.ctx.reg is not None else getattr(router, "reg", None)
+        skip = self._totem(io, reg)
         if q:
-            router.pad(io, buttons=not self._taken, role=q)
+            router.pad(io, buttons=not self._taken, role=q, **skip)
             if io.on and claimed is not None:
                 self._dialed = gamepad.dialed(claimed(f"axis@{q}") or ())
             return
-        router.pad(io, buttons=not self._taken)
+        router.pad(io, buttons=not self._taken, **skip)
         if io.on:
             routed = (claimed("axis") or ()) if claimed is not None else ()
             self._dialed = gamepad.dialed(routed)
-            reg = self.ctx.reg if self.ctx.reg is not None else getattr(router, "reg", None)
             if reg is not None:
                 gamepad.steer(io, router, reg, self.__dict__.get("_dt", 0.0), routed=routed)
 
+    def _totem(self, io, reg) -> dict:
+        """The totem and the poi experiments (plan 47, totem.py, poi.py):
+        while `totem.on` the first pad with motion sensors turns the shape,
+        while `poi.on` it swings the shape as a poi's weight; the buttons
+        each uses are held off the pad's rows (`Router.pad`'s `skip`).
+        Nothing while both are off or the registry has neither. Each names
+        the pad by this device's role (unique, "pad" for the first), not
+        the router's qualifier ("" for the primary). The poi steps first,
+        so a reset that fires both finds the pan the poi has let go of."""
+        from . import poi, totem
+        # duck-typed, not isinstance: a hot reload makes a new state class
+        # the live state is not (yet) an instance of
+        swing, state = poi.state_of(reg), totem.state_of(reg)
+        dt = self.__dict__.get("_dt", 0.0)
+        skip: frozenset = frozenset()
+        if swing is not None and swing.on:
+            poi.step(swing, io, reg, dt, self.role)
+            if poi.drives(swing, self.role):
+                skip |= poi.SKIP
+        if state is not None and state.on:
+            totem.step(state, io, reg, dt, self.role)
+            if totem.drives(state, self.role):
+                skip |= totem.SKIP
+        return {"skip": skip} if skip else {}
+
+    def _totem_skip(self, reg, io) -> frozenset:
+        """The buttons the totem and the poi hold off this pad this frame —
+        as they will be once `act` has run their take-over (Learn runs
+        first): none while each reads another pad, or is off."""
+        from . import poi, totem
+        state = totem.state_of(reg)
+        skip = totem.SKIP if totem.will_drive(state, io, self.role) else frozenset()
+        if poi.will_drive(poi.state_of(reg), io, self.role):
+            skip |= poi.SKIP
+        return skip
+
+    def _feed_extras(self, router, io, q: str) -> None:
+        """The ``touch`` and ``motion`` lanes (plan 42): their names,
+        labels, rests, kinds and gates published once per scheme, then this
+        frame's vector — None while the pad read has neither, so their
+        routes let go. A router without `feed` (a shim) is left alone."""
+        from .pads import models
+        model = getattr(io, "model", None)
+        if not hasattr(router, "feed") or not (
+                models.is_model(model) or self.__dict__.get("_fed_extras")):
+            return                     # an Xbox pad (or a shim) feeds no extra scheme
+        from . import gamepad as g
+        from .pads import gesture as ge
+        from .routing import qualified
+        self._fed_extras = models.is_model(model) and (
+            model.has("touch") or model.has("motion"))
+        for scheme, lanes, labels, rests, triggers, gates, read in (
+                (g.TOUCH_SCHEME, ge.TOUCH_LANES, ge.TOUCH_LABELS, ge.TOUCH_RESTS,
+                 ge.TOUCH_TRIGGERS, ge.TOUCH_GATES, getattr(io, "touch_lanes", None)),
+                (g.MOTION_SCHEME, ge.MOTION_LANES, ge.MOTION_LABELS, ge.MOTION_RESTS,
+                 ge.MOTION_TRIGGERS, (), getattr(io, "motion_lanes", None))):
+            sc = qualified(scheme, q)
+            names = getattr(router, "names", None)
+            if isinstance(names, dict) and sc not in names:
+                router.names[sc] = {n: i for i, n in enumerate(lanes)}
+                router.labels[sc] = list(labels)
+                router.rests[sc] = list(rests)
+                kinds = getattr(router, "lane_kinds", None)
+                if isinstance(kinds, dict):
+                    kinds[sc] = ["trigger" if n in triggers else "value" for n in lanes]
+                gate_d = getattr(router, "gates", None)
+                if isinstance(gate_d, dict) and gates:
+                    gate_d[sc] = [(lanes.index(n), labels[lanes.index(n)]) for n in gates]
+            router.feed(sc, read() if read is not None else None)
+
     def targets(self) -> list[tuple]:
         return [(self.io, "gamepad", "Pad")] if self.io is not None else []
+
+
+# ---- the pad's outputs (plan 42) ----
+
+# a pad's sink channels, in order: (key, label) — `pad_effects` reads them
+SINKS = (
+    ("light.hue", "light bar hue"),
+    ("light.level", "light bar level"),
+    ("light.white", "light bar whiteness"),
+    ("rumble.low", "rumble, heavy motor"),
+    ("rumble.high", "rumble, light motor"),
+    ("trigger.left", "left trigger resistance"),
+    ("trigger.right", "right trigger resistance"),
+    ("players", "player lights"),
+    ("mic", "mic light"),
+)
+SINK_CHANNEL = {key: k for k, (key, _) in enumerate(SINKS)}
+# which output cap (models.OUTPUT_CAPS) each channel needs
+SINK_CAP = {"light.hue": "light", "light.level": "light", "light.white": "light",
+            "rumble.low": "rumble", "rumble.high": "rumble",
+            "trigger.left": "triggers", "trigger.right": "triggers",
+            "players": "players", "mic": "mic"}
+# the light bar by the pad's place, as a PlayStation colours its pads
+PLAYER_LIGHTS = ((0, 0, 255), (255, 0, 0), (0, 255, 0), (255, 0, 255), (0, 255, 255))
+TRIGGER_START = 0.15     # where a sink's resistance starts in the trigger's travel
+
+
+def _hex_rgb(v) -> tuple[int, int, int] | None:
+    """``"#ff8800"`` (or ``"ff8800"``) as (r, g, b); None for anything else."""
+    if not isinstance(v, str):
+        return None
+    h = v.strip().lstrip("#")
+    if len(h) != 6:
+        return None
+    try:
+        return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+    except ValueError:
+        return None
+
+
+def pad_effects(vals: dict[int, float], identity) -> object:
+    """One frame's sink readings (channel → u, `routing.sink_values`) as
+    the pad's `sony.Effects`: a channel no row sends keeps the identity —
+    its colour at full level, its player number lit, no rumble, the
+    triggers free. Hue with no whiteness is the full colour; the player
+    lights read as a meter (u × 5 lit from the left)."""
+    import colorsys
+
+    from .pads import sony
+    rgb, player = identity
+
+    def ch(key: str) -> float | None:
+        v = vals.get(SINK_CHANNEL[key])
+        return None if v is None or not math.isfinite(v) else min(1.0, max(0.0, float(v)))
+    level = ch("light.level")
+    level = 1.0 if level is None else level
+    hue, white = ch("light.hue"), ch("light.white")
+    if hue is not None or white is not None:
+        h0, s0, _ = colorsys.rgb_to_hsv(*(c / 255 for c in rgb))
+        h = h0 if hue is None else hue
+        sat = s0 if white is None else 1.0 - white
+        rgb = colorsys.hsv_to_rgb(h, sat, 1.0)
+        rgb = tuple(round(c * 255) for c in rgb)
+    light = tuple(round(c * level) for c in rgb)
+    meter = ch("players")
+    if meter is None:
+        players = sony.player_bits(player)
+    else:
+        n = round(meter * 5)
+        players = (1 << n) - 1
+    mic = ch("mic")
+
+    def trig(key: str) -> sony.Trigger:
+        u = ch(key)
+        if not u:
+            return sony.Trigger()
+        return sony.Trigger("resist", start=TRIGGER_START, strength=u)
+    return sony.Effects(light=light, players=players,
+                        mic=0 if mic is None or mic < 0.5 else 1,
+                        rumble_low=ch("rumble.low") or 0.0,
+                        rumble_high=ch("rumble.high") or 0.0,
+                        left=trig("trigger.left"), right=trig("trigger.right"))
 
 
 class BridgeDevice(Base):
@@ -1358,6 +1660,19 @@ class DeviceRegistry:
         None when none is open."""
         return next((d.io for d in self.devices
                      if d.kind == kind and getattr(d, "io", None) is not None), None)
+
+    def live_adapter(self, kind: str):
+        """The first open adapter of `kind` that has its hardware now (its
+        `on`: a pad with a controller behind it), else `adapter(kind)`.
+        What the pad window reads: with a generic `pad` entry listed before
+        a Joy-Con's, the Joy-Con connecting after launch is the pad drawn,
+        not the empty entry before it. The listeners run again on every
+        status change (`poll`), so the pick follows a pad coming or going."""
+        for d in self.devices:
+            io = getattr(d, "io", None)
+            if d.kind == kind and io is not None and getattr(io, "on", False):
+                return io
+        return self.adapter(kind)
 
     def schemes(self) -> tuple[str, ...]:
         """Every scheme the listed devices publish under, in list order."""

@@ -18,6 +18,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from hyperspace import fx
 from hyperspace.fx import (
     BLENDS,
     FX_DIR,
@@ -118,9 +119,12 @@ def test_declare_makes_ordinary_params():
     assert all(p.group == "fx" for p in r)
     assert r["fx.kaleido.segments"].integer
     assert r["fx.warp.scale"].log
-    # a fader writes the state the chain reads, and back
+    # a fader writes the state the chain reads, and back (wave 0 T1: an
+    # amount is on the zero-safe log taper, so `set_value` lands the
+    # nearest detent, 3.5 % apart)
     r["fx.warp.amount"].set_value(1.25)
-    assert st.values["warp"]["amount"] == pytest.approx(1.25)
+    assert st.values["warp"]["amount"] == pytest.approx(1.25, rel=0.04)
+    assert r["fx.warp.amount"].taper is fx.amount_taper(2.0)
     st.values["warp"]["on"] = True
     assert r["fx.warp.on"].value is True
 
@@ -130,8 +134,8 @@ def test_a_lane_rides_an_effect_param():
     r = Registry()
     declare(r, st)
     p = r["fx.warp.amount"]
-    p.set_value(0.5)
-    p.modulate(0.25)                # a quarter of the 0–2 throw
+    p.set_value(0.5)                # a detent of the log taper (2 · 2^−2)
+    p.modulate(0.1)                 # a tenth of the throw: one of its ten octaves (wave 0 T1)
     r.apply()
     assert st.values["warp"]["amount"] == pytest.approx(1.0)
     assert p.base == pytest.approx(0.5)
@@ -312,6 +316,8 @@ def test_each_effect_changes_the_frame(ctx, name):
         st.values[name]["density"] = 1.0
     if name == "palette":                  # it starts at mix 0 (today's picture): turn it up
         st.values[name].update(mix=1.0, hue_from=155.0, hue_to=245.0)
+    if name == "fade":                     # its level starts at 1 (today's picture): turn it down
+        st.values[name]["level"] = 0.5
     img = render(ctx, st)
     assert ctx.error == "GL_NO_ERROR"
     diff = np.abs(img[..., :3].astype(int) - base[..., :3]).sum()
@@ -377,6 +383,36 @@ def test_blend_and_mix_match_numpy(ctx, fxdir, blend, mix):
     c = np.clip(a + (c - a) * mix, 0, 1)
     c[3] = max(c[3], c[:3].max())                  # a pass covers what it lights
     assert np.allclose(got, c, atol=2 / 255), (got, c)
+
+
+def test_a_pass_reads_its_own_pixel_byte_for_byte(ctx, fxdir, monkeypatch):
+    """The picture under an effect's pixel (FS_TAIL's `here`) and the copy
+    an effect with no program makes are read 1:1 by texelFetch: a
+    half-float picture comes back exactly, into a rect off the corner too.
+    (Through a LINEAR sampler llvmpipe moves ~1 % of such pixels a step.)"""
+    write(fxdir, "const", CONST.format(blend="mix"))
+    st = FxState(fxdir)
+    st.values["const"].update(on=True, mix=0.0)          # c = a: the read alone
+    chain = FxChain(ctx, st)
+    w, h = 64, 40
+    rgb = np.random.default_rng(3).random((h, w, 3), dtype=np.float32)
+    a = rgb.max(axis=2, keepdims=True)                  # premultiplied: alpha covers rgb
+    want = np.concatenate([rgb, a], axis=2).astype(np.float16)
+    (src, _), _ = chain.pool((w, h))
+    src.write(want.tobytes())
+    out = ctx.texture((w + 8, h + 4), 4, dtype="f2")
+    fbo = ctx.framebuffer(color_attachments=[out])
+
+    def through(name):
+        fbo.clear(0.0, 0.0, 0.0, 0.0)
+        fbo.viewport = (8, 4, w, h)
+        chain.run_one(name, src, fbo, 0.0, opaque=0)
+        got = np.frombuffer(out.read(), dtype=np.float16).reshape(h + 4, w + 8, 4)
+        return got[4:, 8:]
+
+    assert np.array_equal(through("const"), want)
+    monkeypatch.setattr(chain, "_program", lambda name: None)
+    assert np.array_equal(through("const"), want)
 
 
 def test_a_generator_lights_a_transparent_ground(ctx):
@@ -832,8 +868,10 @@ def test_the_idle_strips_controls_stay_live(fxpage):
     amount, speed = reg["fx.warp.amount"], reg["fx.warp.speed"]
     was = amount.base
     fxpage.click("fx.warp.amount", 0.9)
-    assert amount.base > was and amount.base == pytest.approx(amount.lo + 0.9 * (
-        amount.hi - amount.lo), abs=0.1 * (amount.hi - amount.lo))
+    # (wave 0 T1: the amount's slider runs over its log taper's detents, so
+    # 9/10 of the throw is the taper's value there — one octave under hi)
+    assert amount.base > was and amount.base == pytest.approx(
+        amount._value_of_norm(0.9), abs=0.1 * (amount.hi - amount.lo))
     fxpage.click("fx.warp.speed", 0.25)
     assert speed.base < 0
     fxpage.click("fx.warp.mix", 0.5)
@@ -1575,7 +1613,7 @@ def test_an_old_preset_saves_no_retired_id(tmp_path):
            "media": {"channels": {"b": ["shared:x.png"]}}}
     assert app.presets.load_doc(doc) == []
     out = app.presets.document("old")
-    assert out["schema"] == "hyperspace.preset/7"
+    assert out["schema"] == "hyperspace.preset/9"
     assert not [k for k in out["values"] if M.retired(k)]
     run = G.run_back(G.read_graph(out["graph"]), "output.all.image")
     assert run == ("warp", "acid")                     # warp (@order 20) before acid (30)
@@ -1593,7 +1631,7 @@ def test_an_old_preset_saves_no_retired_id(tmp_path):
     sec = {**sec, "wires": [*keep[:at], *rerun, *keep[at:]]}
     app.presets.graph.land(G.read_graph(sec), sec)
     out = app.presets.document("old")
-    assert out["schema"] == "hyperspace.preset/7"
+    assert out["schema"] == "hyperspace.preset/9"
     assert G.run_back(G.read_graph(out["graph"]), "output.all.image") == (
         "acid", "warp")
     assert not [k for k in out["values"] if M.retired(k)]

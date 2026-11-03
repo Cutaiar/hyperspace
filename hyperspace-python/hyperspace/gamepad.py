@@ -12,6 +12,26 @@ A pad with a Share button under the Xbox button reports it at 15 and
 are the same, so one map reads both pads. Every other index a pad
 reports has no name here: it is read and ignored.
 
+**Every pad in one vocabulary (plan 42).** A pad is read by one of
+four roads and lands in the same state — `buttons` by the indices
+below (`pads.models.CANON`), the GLFW hat bits, six GLFW-style axes:
+
+  glfw  the raw joystick API, through the map its model needs (the Xbox
+        map below, or `SONY_GLFW_*` for a Sony pad over USB when hidapi
+        is not there)
+  hid   a DualSense or DualSense Edge over USB **or Bluetooth**
+        (pads/hid.py): the face, and the touchpad, the motion sensors,
+        the Edge's back and Fn buttons and every output GLFW never sees
+  usb   a wired Xbox 360 pad over libusb (`UsbPad`)
+  tape  a recorded hid session read back (an entry's ``tape =``)
+
+A pad entry's ``controller =`` says which controllers it may take
+(`pads.models.matches`): ``any`` (the next free one, as before), a model
+(``edge``), a family (``sony``, ``xbox``) or a USB id. The touchpad and
+the sensors are lanes of their own, ``touch:`` and ``motion:``
+(pads/gesture.py); the outputs are `Effects` the device sends
+(`send_effects`).
+
 The Pad class mirrors app.Keys: poll once per frame, then edge-detect
 with pressed(). A disconnect just makes the pad inert; reconnecting is
 picked up on a later poll, no re-pairing dance in code.
@@ -31,9 +51,14 @@ import atexit
 import math
 import sys
 import threading
-from dataclasses import dataclass
+import time
+import warnings
+from dataclasses import dataclass, replace
 
 import glfw
+
+from .pads import gesture, models, sony
+from .pads.models import LFN, LP, RFN, RP, TOUCH
 
 # raw button indices (captured; stick clicks follow the SDL layout). The
 # Xbox button is GUIDE — captured, not in the factory table (on a
@@ -60,6 +85,25 @@ BUTTONS = {"A": A, "B": B, "X": X, "Y": Y, "LB": LB, "RB": RB, "VIEW": VIEW,
            "MENU": MENU, "GUIDE": GUIDE, "LSTICK": LSTICK, "RSTICK": RSTICK,
            "SHARE": SHARE}
 HATS = {"UP": HAT_UP, "RIGHT": HAT_RIGHT, "DOWN": HAT_DOWN, "LEFT": HAT_LEFT}
+# what an Xbox pad lacks (plan 42), at indices no GLFW pad reaches: the
+# touchpad's click, the Edge's back buttons and its Fn buttons. A pad
+# lists them only when its model has them (`Pad.buttons_named`)
+EXTRA_BUTTONS = dict(models.EXTRAS)
+ALL_BUTTONS = {**BUTTONS, **EXTRA_BUTTONS}
+assert all(models.CANON[n] == i for n, i in BUTTONS.items())   # one vocabulary
+
+# a Sony pad over USB through GLFW's raw arrays (no hidapi): raw index →
+# canonical (the Edge's descriptor: square, cross, circle, triangle, L1,
+# R1, L2, R2, create, options, L3, R3, PS, touchpad, mic), and the axes'
+# raw order LX LY RX L2 R2 RY as LX LY RX RY LT RT
+SONY_GLFW_BUTTONS = {0: X, 1: A, 2: B, 3: Y, 4: LB, 5: RB, 8: VIEW, 9: MENU,
+                     10: LSTICK, 11: RSTICK, 12: GUIDE, 13: TOUCH, 14: SHARE}
+SONY_GLFW_AXES = (0, 1, 2, 5, 3, 4)
+XBOX_RAW_MAX = 32          # an Xbox-mapped pad's raw buttons kept, below the extras
+
+# the touchpad's and the sensors' schemes (plan 42), fed by the pad device
+TOUCH_SCHEME, MOTION_SCHEME = "touch", "motion"
+EXTRA_SCHEMES = (TOUCH_SCHEME, MOTION_SCHEME)
 
 # the axes as continuous lanes (routing's `axis` scheme), each in [0, 1]:
 # a stick rests at 0.5 with up and right high, a trigger rests at 0
@@ -130,6 +174,8 @@ _BUTTON_NAMES = {
     "LB": "left bumper", "RB": "right bumper", "VIEW": "BACK (View)",
     "MENU": "START (Menu)", "GUIDE": "Xbox button", "SHARE": "Share",
     "LSTICK": "left stick click", "RSTICK": "right stick click",
+    "TOUCH": "touchpad click", "LP": "left back button", "RP": "right back button",
+    "LFN": "left Fn button", "RFN": "right Fn button",
 }
 
 
@@ -141,11 +187,15 @@ def control_name(source: str) -> str | None:
     if scheme == "pad":
         if addr in ("A", "B", "X", "Y"):
             return f"{addr} button"
-        return _BUTTON_NAMES.get(addr) if addr in BUTTONS else None
+        return _BUTTON_NAMES.get(addr) if addr in ALL_BUTTONS else None
     if scheme == "hat":
         return f"d-pad {addr.lower()}" if addr in HATS else None
     if scheme == "axis":
         return LANE_LABELS[LANES.index(addr)] if addr in LANES else None
+    if scheme == TOUCH_SCHEME and addr in gesture.TOUCH_LANES:
+        return gesture.TOUCH_LABELS[gesture.TOUCH_LANES.index(addr)]
+    if scheme == MOTION_SCHEME and addr in gesture.MOTION_LANES:
+        return gesture.MOTION_LABELS[gesture.MOTION_LANES.index(addr)]
     return None
 
 
@@ -182,6 +232,73 @@ LAYOUT: list[Control] = _layout()
 LAYOUT_W = max(c.x + c.w for c in LAYOUT)
 LAYOUT_H = max(c.y + c.h for c in LAYOUT)
 _BY_SOURCE = {c.source: c for c in LAYOUT}
+
+
+# ---- a pad's own face (plan 42) ----
+# The layout above is the Xbox's. A pad whose model has more draws more,
+# in the room the Xbox face leaves: the touchpad across the top (its click
+# `pad:TOUCH`, every ``touch:`` row on it), a tilt bubble under the left
+# stick (every ``motion:`` row on it), the Edge's back buttons and Fn
+# buttons between the D-pad and the right stick — and every glyph its own
+# face's (✕ for ``pad:A``). The rows keep the canonical names.
+_EXTRA_CONTROLS = {
+    "touch": Control("pad:TOUCH", "touchpad", "TOUCH", 3.0, 0.0, 6.5, 0.8),
+    "motion": Control("motion:roll", "tilt", "TILT", 0.3, 3.75, 2.3, 2.9),
+    "back": (Control("pad:LP", "button", "L4", 5.3, 4.6, 1.6, 0.8),
+             Control("pad:RP", "button", "R4", 7.2, 4.6, 1.6, 0.8)),
+    "fn": (Control("pad:LFN", "button", "LFn", 5.3, 5.55, 1.6, 0.7),
+           Control("pad:RFN", "button", "RFn", 7.2, 5.55, 1.6, 0.7)),
+}
+_LAYOUTS: dict[str, list[Control]] = {}
+
+
+def layout_for(model) -> list[Control]:
+    """The controls to draw for `model` (pads.models.Model, or None: the
+    Xbox face, `LAYOUT`): the Xbox layout with the model's glyphs, then
+    the extras its caps name (`_EXTRA_CONTROLS`). Kept per model."""
+    if not models.is_model(model) or (not model.glyphs and not model.caps):
+        return LAYOUT
+    got = _LAYOUTS.get(model.id)
+    if got is not None:
+        return got
+    out: list[Control] = []
+    for c in LAYOUT:
+        name = c.address if c.source.startswith(("pad:", "axis:")) else ""
+        if c.source.startswith(("pad:", "axis:", "hat:")) and not model.has_control(c.address):
+            continue                   # a single Joy-Con: no right stick, no D-pad (plan 43)
+        out.append(replace(c, glyph=models.glyph(model, name, c.glyph)) if name else c)
+    for cap in ("touch", "motion", "back", "fn"):
+        if model.has(cap):
+            extra = _EXTRA_CONTROLS[cap]
+            for c in (extra if isinstance(extra, tuple) else (extra,)):
+                out.append(replace(c, glyph=models.glyph(model, c.address, c.glyph))
+                           if c.kind == "button" else c)
+    _LAYOUTS[model.id] = out
+    return out
+
+
+def shown_model(pad):
+    """The model the on-screen pad draws: the one read now, else the one
+    the entry's ``controller =`` names, else None (the Xbox face)."""
+    m = getattr(pad, "model", None) if getattr(pad, "on", False) else None
+    if models.is_model(m):
+        return m
+    spec = models.parse_spec(getattr(pad, "controller", "any") or "any")
+    return models.MODELS.get(spec) if spec else None
+
+
+def control_in(layout: list[Control], source: str) -> Control | None:
+    """The control of `layout` a source names: as `control`, and every
+    ``touch:`` row on the touchpad, every ``motion:`` row on the tilt —
+    unqualified sources only, as the layout's own are."""
+    scheme, _, _addr = source.partition(":")
+    if scheme in (TOUCH_SCHEME, MOTION_SCHEME):
+        kind = "touchpad" if scheme == TOUCH_SCHEME else "tilt"
+        return next((c for c in layout if c.kind == kind), None)
+    c = control(source)
+    if c is not None:
+        return next((d for d in layout if d.source == c.source), c)
+    return next((d for d in layout if d.source == source), None)
 
 
 def control(source: str) -> Control | None:
@@ -485,24 +602,45 @@ class Claims:
         self.order: list[Pad] = []
         self.reader: UsbPad | None = None
         self.usb: Pad | None = None
+        self.hub = None        # pads.hid.HidHub, made the first time a `hid` pad looks (plan 42)
 
     def lend(self) -> Pad | None:
         """Who holds the reader this poll: the holder while it still may
-        (attached, `usb` on, no GLFW joystick), else the first such pad in
-        list order; None when no pad may."""
+        (attached, `usb` on, no GLFW joystick, no hid pad), else the first
+        such pad in list order; None when no pad may."""
         def may(p: Pad) -> bool:
-            return p in self.order and getattr(p, "usb", False) and p.jid is None
+            return (p in self.order and getattr(p, "usb", False) and p.jid is None
+                    and getattr(p, "hid_pad", None) is None
+                    and models.matches(getattr(p, "controller", "any"), models.MODELS["x360"]))
         if self.usb is not None and may(self.usb):
             return self.usb
         return next((p for p in self.order if may(p)), None)
 
     def release(self, pad: Pad) -> None:
-        """Everything `pad` held: its joystick, its pin, the USB reader."""
+        """Everything `pad` held: its joystick, its pin, the USB reader,
+        its hid pad."""
         for d in (self.taken, self.pinned):
             for j in [j for j, p in d.items() if p is pad]:
                 del d[j]
         if self.usb is pad:
             self.usb = None
+        if self.hub is not None:
+            self.hub.release(pad)
+
+    def hid_hub(self):
+        """The one hub every `hid` pad borrows from (pads.hid), made on
+        first ask; None where hidapi cannot be imported."""
+        if self.hub is None:
+            if self.__dict__.get("no_hid"):
+                return None
+            from .pads import hid
+            if not hid.available():
+                self.no_hid = True     # asked once: no import retried every frame
+                return None
+            self.hub = hid.HidHub(start=False)
+            self.hub.scan()            # the pads there now, before the first poll looks
+            self.hub.start()
+        return self.hub
 
 
 JOYSTICKS = range(glfw.JOYSTICK_1, glfw.JOYSTICK_LAST + 1)   # GLFW's indices, 0–15
@@ -520,8 +658,23 @@ class Pad:
     `lost` and lets it go; unpinned, it takes the next free one that
     appears."""
 
-    def __init__(self, usb: bool = False):
+    def __init__(self, usb: bool = False, hid: bool = False, controller: str = "any",
+                 tape=None):
         self.jid: int | None = None
+        # plan 42: which controllers this pad may take, the hid road, a tape
+        self.controller = controller or "any"
+        self.hid = hid
+        self.tape = tape                   # a path: read this recording instead
+        self.hid_pad = None                # the pads.hid reader (or tape) read now
+        self.model: models.Model | None = None
+        self.report: sony.Frame | None = None  # the last hid frame (touch, sensors, battery)
+        self.touchpad = gesture.Touchpad()
+        self.motion = gesture.Motion()
+        self.axis_map: gesture.AxisMap | None = None   # set: the sensors' axes, over the reader's own
+        self.effects: sony.Effects | None = None   # what the device asks the pad to show
+        self._t: float | None = None
+        self._guids: dict[int, tuple] = {}         # jid → (vid, pid, model) while present
+        self._own_hub = None                       # a hub of its own, with no claims
         self.buttons: list = []
         self.prev_buttons: list = []
         self.hat = 0
@@ -529,7 +682,7 @@ class Pad:
         self.axes: list[float] = [0.0] * 6
         self.usb = usb
         self.usb_pad: UsbPad | None = None
-        self.source: str | None = None     # "glfw", "usb" or None
+        self.source: str | None = None     # "glfw", "hid", "tape", "usb" or None
         self.claims: Claims | None = None  # shared with the other pads (`attach`)
         self.role = ""
         self.joystick: int | None = None   # pinned GLFW index, or None
@@ -565,7 +718,7 @@ class Pad:
         its index once present. None: no joystick for it now."""
         claims = getattr(self, "claims", None)
         jid = self.jid
-        if jid is not None and glfw.joystick_present(jid) and (
+        if jid is not None and glfw.joystick_present(jid) and self._may_read(jid) and (
                 claims is None or (claims.taken.get(jid, self) is self
                                    and claims.pinned.get(jid, self) is self)):
             if claims is not None:
@@ -578,6 +731,8 @@ class Pad:
         for j in cands:
             if not glfw.joystick_present(j):
                 continue
+            if not self._may_read(j):
+                continue                   # another model, or a Sony pad hid reads
             if claims is not None:
                 if claims.taken.get(j, self) is not self:
                     continue               # another pad reads it
@@ -587,9 +742,115 @@ class Pad:
             return j
         return None
 
+    def _glfw_ids(self, j: int) -> tuple:
+        """(vid, pid, model) of GLFW joystick `j`, from its GUID, asked once
+        while it is present (`_guids`)."""
+        cache = self.__dict__.setdefault("_guids", {})
+        hit = cache.get(j)
+        if hit is None:
+            try:
+                with warnings.catch_warnings():    # GLFW not up (a test): no GUID, no noise
+                    warnings.simplefilter("ignore")
+                    guid = glfw.get_joystick_guid(j)
+            except Exception:  # noqa: BLE001 — a GUID is a nicety: no GUID, the Xbox map
+                guid = None
+            if isinstance(guid, bytes):
+                guid = guid.decode("ascii", "replace")
+            vid, pid = models.glfw_ids(guid)
+            hit = cache[j] = (vid, pid, models.by_ids(vid, pid))
+        return hit
+
+    def _kept(self) -> bool:
+        """Is the joystick this pad read last frame still its to read?"""
+        jid, claims = self.jid, getattr(self, "claims", None)
+        return (jid is not None and glfw.joystick_present(jid) and self._may_read(jid)
+                and (claims is None or (claims.taken.get(jid, self) is self
+                                        and claims.pinned.get(jid, self) is self)))
+
+    def _may_read(self, j: int) -> bool:
+        """May this pad take GLFW joystick `j`? Not when it is a Sony pad
+        the hid road reads (the same pad twice), nor when its model is not
+        one ``controller =`` names. The GUID is asked only when it matters."""
+        spec = getattr(self, "controller", "any") or "any"
+        hub = self._hub(make=False)
+        if spec == "any" and (hub is None or not hub.readers):
+            return True
+        vid, pid, model = self._glfw_ids(j)
+        if hub is not None and vid == models.SONY_VID and hub.holds(vid, pid):
+            return False
+        return models.matches(spec, model, vid, pid)
+
+    def _hub(self, make: bool = True):
+        """The hid hub this pad borrows from: the registry's (`Claims`), or
+        one of its own for a pad no device attached; None with `hid` off or
+        no hidapi."""
+        if not getattr(self, "hid", False) or not models.may_be_hid(
+                getattr(self, "controller", "any")):
+            return None                # an Xbox-only entry opens (and seizes) no hid pad
+        claims = getattr(self, "claims", None)
+        if claims is not None:
+            return claims.hid_hub() if make else claims.hub
+        own = self.__dict__.get("_own_hub")
+        if own is None and make and not self.__dict__.get("no_hid"):
+            from .pads import hid
+            if hid.available():
+                own = self._own_hub = hid.HidHub(start=False)
+                own.scan()
+                own.start()
+            else:
+                self.no_hid = True
+        return own
+
+    def _hid_reader(self):
+        """The hid reader (or tape) this pad reads this poll, or None."""
+        tape = getattr(self, "tape", None)
+        if tape:
+            r = self.__dict__.get("hid_pad")
+            if r is None or getattr(r, "road", "") != "tape":
+                import os
+                try:
+                    stamp = (tape, os.stat(tape).st_mtime)
+                except OSError:
+                    stamp = (tape, None)
+                if self.__dict__.get("_tape_failed") == stamp:
+                    return None        # the same bad file: said once, not re-read each frame
+                from .pads import hid
+                try:
+                    r = hid.TapePad(tape)
+                except Exception as e:  # noqa: BLE001 — a missing or bad tape is said, not raised
+                    self.__dict__["tape_note"] = f"tape: {type(e).__name__}: {e}"[:120]
+                    self.__dict__["_tape_failed"] = stamp
+                    return None
+            return r
+        hub = self._hub()
+        if hub is None:
+            return None
+        return hub.take(self, getattr(self, "controller", "any"))
+
     @property
     def on(self) -> bool:
         return getattr(self, "source", None) is not None
+
+    def has(self, cap: str) -> bool:
+        """Does the pad read now have `cap` ("touch", "motion", "light" …)?"""
+        m = getattr(self, "model", None)
+        return m is not None and m.has(cap)
+
+    @property
+    def buttons_named(self) -> dict[str, int]:
+        """The buttons this pad has, by name: the Xbox face, and the extras
+        its model has (the touchpad's click; the Edge's back and Fn)."""
+        out = dict(BUTTONS)
+        if self.has("touch"):
+            out["TOUCH"] = TOUCH
+        if self.has("back"):
+            out.update(LP=LP, RP=RP)
+        if self.has("fn"):
+            out.update(LFN=LFN, RFN=RFN)
+        m = getattr(self, "model", None)
+        if models.is_model(m) and m.controls is not None:    # a single Joy-Con: less than a face
+            out = {n: i for n, i in out.items() if m.has_control(n)}
+        return out
 
     @property
     def status(self) -> str:
@@ -608,27 +869,148 @@ class Pad:
         under `scheme` (a second pad's ``axis@p2``)."""
         publish(router, scheme)
 
-    def poll(self) -> None:
+    def poll(self, dt: float | None = None) -> None:
+        """Read the pad for this frame: a tape when the entry names one,
+        else a GLFW joystick, else a hid pad, else the libusb reader
+        (plan 42's roads, in that order). `dt` the frame's time, for the
+        touch and motion lanes (None: the clock's since the last poll)."""
         source = getattr(self, "source", None)
-        self.jid = self._find()
+        now = time.monotonic()
+        last = self.__dict__.get("_t")
+        self._t = now
+        if dt is None:
+            dt = self.__dict__.pop("dt_hint", None)       # the device's frame time
+        if dt is None:
+            dt = 0.0 if last is None else min(0.25, now - last)
+        reader, frame, state = None, None, None
+        if getattr(self, "tape", None) or (
+                not self._kept() and getattr(self, "joystick", None) is None):
+            # a tape, or a Sony pad hid lends this entry — never in place of a
+            # joystick it is reading (plugging an Edge in mid-show moves no
+            # one), nor for a pad pinned to a GLFW index
+            reader = self._hid_reader()
+        if reader is not None:
+            # hid first: GLFW sees the same pad (over USB and Bluetooth) but not
+            # its extras; a lent pad not reporting yet (connecting, a BT gap)
+            # is still this entry's — no other road for it meanwhile
+            self.jid = None
+            claims = getattr(self, "claims", None)
+            if claims is not None:
+                for j in [j for j, p in claims.taken.items() if p is self]:
+                    del claims.taken[j]
+            frame = reader.latest()
+        elif getattr(self, "tape", None):
+            self.jid = None            # a tape entry reads its tape or nothing
+        else:
+            self.jid = self._find()
+        self.hid_pad = reader
         claims = getattr(self, "claims", None)
-        if claims is not None and claims.usb is self and self.jid is not None:
-            claims.usb, self.usb_pad = None, None    # reading GLFW: the reader goes back
-        state = None if self.jid is not None else self._usb_state()
-        new = "glfw" if self.jid is not None else "usb" if state is not None else None
+        if claims is not None and claims.usb is self and (self.jid is not None or frame is not None):
+            claims.usb, self.usb_pad = None, None    # reading GLFW or hid: the reader goes back
+        if self.jid is None and reader is None and not getattr(self, "tape", None):
+            state = self._usb_state()      # no joystick, no hid pad lent: the libusb reader
+        new = ("glfw" if self.jid is not None else
+               ("tape" if getattr(reader, "road", "") == "tape" else "hid") if frame is not None else
+               "usb" if state is not None else None)
         if new != source:      # a pad came, went or changed road: no stale edges
             self.buttons, self.hat, self.axes = [], 0, [0.0] * 6
+            self.touchpad, self.motion = gesture.Touchpad(), gesture.Motion()
+            self.report = None
         self.source = new
         self.prev_buttons, self.prev_hat = self.buttons, self.hat
         if new == "glfw":
-            self.buttons = _unwrap(glfw.get_joystick_buttons(self.jid))
-            hats = _unwrap(glfw.get_joystick_hats(self.jid))
-            self.hat = hats[0] if hats else 0
-            ax = _unwrap(glfw.get_joystick_axes(self.jid))
-            if len(ax) >= 6:
-                self.axes = ax
+            # the model from the GUID (kept while the joystick is there): a
+            # Sony pad reads through its own map, hid or no hid
+            self.model = self._glfw_ids(self.jid)[2]
+            self._read_glfw()
+        elif new in ("hid", "tape"):
+            self.model = reader.model
+            self.buttons, self.hat, self.axes = frame.buttons, frame.hat, list(frame.axes)
+            self._extras(frame, reader, dt)
         elif new == "usb":
+            self.model = models.MODELS["x360"]
             self.buttons, self.hat, self.axes = state
+        else:
+            self.model = None
+        guids = self.__dict__.setdefault("_guids", {})
+        for j in [j for j in guids if j != self.jid and not glfw.joystick_present(j)]:
+            del guids[j]                   # a joystick gone: asked afresh when one comes
+
+    def _read_glfw(self) -> None:
+        raw = _unwrap(glfw.get_joystick_buttons(self.jid))
+        hats = _unwrap(glfw.get_joystick_hats(self.jid))
+        self.hat = hats[0] if hats else 0
+        ax = _unwrap(glfw.get_joystick_axes(self.jid))
+        m = getattr(self, "model", None)
+        if m is not None and m.family == "sony":
+            out = [0] * models.N_CANON
+            for i, c in SONY_GLFW_BUTTONS.items():
+                if i < len(raw) and raw[i]:
+                    out[c] = 1
+            self.buttons = out
+            if len(ax) >= 6:
+                self.axes = [ax[i] for i in SONY_GLFW_AXES]
+            return
+        self.buttons = raw[:XBOX_RAW_MAX]
+        if len(ax) >= 6:
+            self.axes = ax
+
+    def _extras(self, frame: sony.Frame, reader, dt: float) -> None:
+        """The touch and motion lanes from a hid frame (a Bluetooth simple
+        report has neither: its lanes stay as they were, not live)."""
+        self.report = frame
+        if not frame.full:
+            return
+        w, h = sony.TOUCH_W - 1, sony.TOUCH_H - 1
+        self.touchpad.step([(t.down, t.id, t.x / w, t.y / h) for t in frame.touches], dt)
+        cal = getattr(reader, "calibration", None) or sony.Calibration()
+        amap = gesture.axis_map_of(self.__dict__.get("axis_map"), reader)   # the one rule
+        gyro = amap.pick(cal.gyro_dps(frame.gyro), amap.gyro)
+        accel = amap.pick(cal.accel_g(frame.accel), amap.accel)
+        take = getattr(reader, "take_turn", None)
+        if take is None:               # a reader that sums nothing (a test's): per frame
+            self.motion.step(gyro, accel, dt)
+            return
+        # the turn the reader summed on its thread, every report (plan 47
+        # review): a slow frame loses none, a stalled pad adds none
+        turn, n = take()
+        self.motion.add_turn(amap.pick(turn, amap.gyro))
+        if n:
+            self.motion.step(gyro, accel, dt, integrate=False)
+        else:
+            self.motion.decay(dt)      # no report: the lanes leak home, nothing turns
+
+    def touch_lanes(self) -> list[float] | None:
+        """The ``touch:`` lanes (gesture.TOUCH_LANES), or None while the
+        pad read has no touchpad or says nothing on it."""
+        f = self.__dict__.get("report")
+        if not self.on or not self.has("touch") or f is None or not f.full:
+            return None
+        return self.touchpad.lanes()
+
+    def motion_lanes(self) -> list[float] | None:
+        """The ``motion:`` lanes (gesture.MOTION_LANES), or None."""
+        f = self.__dict__.get("report")
+        if not self.on or not self.has("motion") or f is None or not f.full:
+            return None
+        return self.motion.lanes()
+
+    def send_effects(self, effects: sony.Effects) -> None:
+        """Ask the pad to show `effects` (light, LEDs, rumble, triggers):
+        handed to the hid reader, which writes only what changed. A pad
+        with no outputs keeps it, unsent."""
+        self.effects = effects
+        r = self.__dict__.get("hid_pad")
+        if r is not None and self.on and hasattr(r, "send"):
+            r.send(effects)
+
+    @property
+    def link(self) -> str:
+        """How the pad read now is connected — "usb", "bluetooth", "tape",
+        "glfw" — for the SYSTEM line."""
+        if self.source in ("hid", "tape"):
+            return getattr(self.hid_pad, "transport", "") or self.source
+        return self.source or ""
 
     def close(self) -> None:
         """Stop the USB reader thread, when one was started (plan 27 B1:
@@ -649,6 +1031,16 @@ class Pad:
                 usb, claims.reader = claims.reader, None
         self.jid, self.source = None, None
         self.buttons, self.prev_buttons, self.hat, self.prev_hat = [], [], 0, 0
+        r, self.hid_pad = self.__dict__.get("hid_pad"), None
+        if getattr(r, "road", "") == "tape":
+            r.close()
+        own = self.__dict__.pop("_own_hub", None)
+        if own is not None:
+            own.close()
+        if claims is not None and claims.hub is not None and not any(
+                getattr(p, "hid", False) for p in claims.order):
+            claims.hub.close()             # no pad left to lend to
+            claims.hub = None
         if usb is not None:
             usb.close()
             thread = getattr(usb, "_thread", None)
@@ -736,7 +1128,8 @@ def dialed(lanes) -> set[str]:
     return {LANES[i].partition(".")[0] for i in lanes if len(AXES) <= i < len(LANES)}
 
 
-def learn_from(pad: Pad, learn, role: str = "", dials=frozenset) -> bool:
+def learn_from(pad: Pad, learn, role: str = "", dials=frozenset,
+               skip=frozenset()) -> bool:
     """The pad completes an armed learn (learn.Learn, duck-typed — this
     module imports nothing from the package): the first button or D-pad
     press this frame lands a button row (`Learn.learn_pad_button`), else
@@ -750,16 +1143,23 @@ def learn_from(pad: Pad, learn, role: str = "", dials=frozenset) -> bool:
     nudged stick never ends the learn. True when the press was the
     learn's, so the router lets that frame's button rows be. `role` is a
     second pad's qualifier (plan 27 B6): its rows read ``pad@p2:A``,
-    ``hat@p2:UP``, ``axis@p2:LX``; "" (the primary pad) leaves them bare."""
+    ``hat@p2:UP``, ``axis@p2:LX``; "" (the primary pad) leaves them bare.
+    `skip`: the buttons, unqualified (``pad:A``, ``hat:DOWN``), that land
+    nothing — the totem's while it reads this pad (as `Router.pad`'s)."""
     if learn is None or getattr(learn, "learning", None) is None or not pad.on:
         return False
     target = learn.target_for(learn.learning)
     q = f"@{role}" if role else ""          # routing.QUALIFIER (nothing imported here)
-    for name, i in BUTTONS.items():
+    named = getattr(pad, "buttons_named", None)      # plan 42: the extras the pad has
+    for name, i in (named if isinstance(named, dict) else BUTTONS).items():
+        if f"pad:{name}" in skip:
+            continue
         if pad.pressed(i) and learn.accepts(f"pad{q}:{name}"):
             learn.learn_pad_button(f"pad{q}:{name}")
             return True
     for name, bit in HATS.items():
+        if f"hat:{name}" in skip:
+            continue
         if pad.hat_pressed(bit) and learn.accepts(f"hat{q}:{name}"):
             learn.learn_pad_button(f"hat{q}:{name}")
             return True
@@ -784,7 +1184,56 @@ def learn_from(pad: Pad, learn, role: str = "", dials=frozenset) -> bool:
         if abs(u - rest) >= LEARN_TRAVEL and learn.accepts(f"axis{q}:{name}"):
             learn.learn_source(f"axis{q}:{name}", centred=name in STICKS)
             return False        # an axis has no button row to hold back
+    got = _learn_extra(pad, learn)
+    if got is not None:
+        scheme, name, centred = got
+        if learn.accepts(f"{scheme}{q}:{name}"):
+            learn.learn_source(f"{scheme}{q}:{name}", centred=centred)
     return False
+
+
+TOUCH_LEARN_TRAVEL = 0.25      # a finger dragged this far (of the pad) lands x or y
+GESTURE_LEARN = 0.2            # pinch / twist / tilt this far from rest lands it
+
+
+def _learn_extra(pad, learn=None) -> tuple[str, str, bool] | None:
+    """The touch or motion lane a Learn pad lands (plan 42), or None: a
+    finger dragged `TOUCH_LEARN_TRAVEL` along x or y (whichever it went
+    further), a pinch or a twist `GESTURE_LEARN` from rest, a tap; a tilt
+    `GESTURE_LEARN` in roll or pitch, a shake. The spin and energy lanes
+    are not learned — a hand moving to press something would land them;
+    they are routed on GRAPH. (scheme, lane, centred)."""
+    touch = pad.touch_lanes() if hasattr(pad, "touch_lanes") else None
+    if touch is not None:
+        t = dict(zip(gesture.TOUCH_LANES, touch, strict=True))
+        for name in ("pinch", "twist"):
+            if math.isfinite(t[name]) and abs(t[name] - 0.5) >= GESTURE_LEARN:
+                return TOUCH_SCHEME, name, True
+        first = getattr(getattr(pad, "touchpad", None), "_first", None)
+        if first is not None and first[4] >= TOUCH_LEARN_TRAVEL and math.isfinite(t["x"]):
+            dx = abs(t["x"] - first[2])
+            dy = abs((1.0 - t["y"]) - first[3])
+            return TOUCH_SCHEME, "x" if dx >= dy else "y", False
+        if t["tap"]:
+            return TOUCH_SCHEME, "tap", False
+    motion = pad.motion_lanes() if hasattr(pad, "motion_lanes") else None
+    if motion is not None:
+        m = dict(zip(gesture.MOTION_LANES, motion, strict=True))
+        if m["shake"]:
+            return MOTION_SCHEME, "shake", False
+        # a tilt counts from where the pad was held when the learn was armed
+        # (a pad in the hand is never level): a fresh baseline per arm, as
+        # the hands' (`armed_n`)
+        key = (getattr(learn, "learning", None), getattr(learn, "want", None),
+               getattr(learn, "armed_n", None))
+        base = pad.__dict__.get("_learn_tilt")
+        if base is None or base[0] != key:
+            pad._learn_tilt = (key, m["roll"], m["pitch"])
+            return None
+        for name, b in (("roll", base[1]), ("pitch", base[2])):
+            if abs(m[name] - b) >= GESTURE_LEARN:
+                return MOTION_SCHEME, name, True
+    return None
 
 
 def publish(router, scheme: str = "axis") -> None:

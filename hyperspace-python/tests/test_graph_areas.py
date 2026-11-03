@@ -1037,3 +1037,78 @@ def test_backspace_with_a_popup_open_deletes_nothing(rig, monkeypatch):
     monkeypatch.setattr(imgui, "is_popup_open", lambda *a: True)
     _press(rig, imgui.Key.backspace)
     assert rig.router.table.modifier(m.id) is not None
+
+
+# ---------------------------------------------------------------- the selection, published
+
+def test_the_panel_publishes_the_selected_node(rig):
+    """2026-10-31: the one selected node's id is on the panel for whoever
+    is not the graph view (`Panel.graph_selected`, `ui_graph.publish`) —
+    None until a node is selected; `Panel.select_graph_node` selects one
+    from any page, the GRAPH page opened; `graph_selected_params` is the
+    node's registry ids, the continuous ones first; Esc lets it go."""
+    from hyperspace.params import Kind
+    st = load(rig, "party-trip")
+    panel = rig.panel
+    assert panel.graph_selected is None and panel.graph_selected_params() == []
+    n = st["view"].node("render:pattern")
+    assert n is not None and ui_graph.drawn_node(st, n)
+    frame(panel, "view")
+    panel.select_graph_node(n.id)
+    assert ui.PAGE_KEYS[panel.reg["ui.page"].value] == "graph"
+    frame(panel)
+    frame(panel)
+    assert ui_graph._selection(st, st["view"]) == ("node", n)
+    assert panel.graph_selected == "render:pattern"
+    at = panel.graph_selected_at
+    assert at == imgui.get_frame_count()
+    frame(panel)
+    assert panel.graph_selected_at == at       # unchanged: not written again
+    ids = panel.graph_selected_params()
+    want = {p.id for p in rig.reg if p.id.startswith("pattern.") and not p.alias}
+    assert set(ids) == want and len(ids) == len(want) and ids
+    assert all(rig.reg[pid].kind is Kind.CONTINUOUS for pid in ids)   # (the pattern's knobs)
+    mixed = ui_graph.node_params(panel, "render:output.1")       # a knob and switches: the knob first
+    kinds = [rig.reg[pid].kind is Kind.CONTINUOUS for pid in mixed]
+    assert kinds == sorted(kinds, reverse=True) and kinds[0] and not kinds[-1]
+    io = imgui.get_io()
+    io.add_key_event(imgui.Key.escape, True)
+    frame(panel)
+    io.add_key_event(imgui.Key.escape, False)
+    frame(panel)
+    assert panel.graph_selected is None and panel.graph_selected_at > at
+    assert panel.graph_selected_params() == []
+
+
+def test_deleting_the_published_node_clears_it(rig):
+    """A modifier selected is published under its own id (`mod.N`), its
+    params the registry's `mod.N.*`; Delete takes it out of the graph and
+    the next frame publishes None, its params with it."""
+    _, m = _modifier_selected(rig)
+    assert rig.panel.graph_selected == m.id and m.id.startswith("mod.")
+    ids = rig.panel.graph_selected_params()
+    assert ids and all(pid.startswith(f"{m.id}.") for pid in ids) and f"{m.id}.on" in ids
+    _press(rig, imgui.Key.delete)
+    assert rig.router.table.modifier(m.id) is None
+    assert rig.panel.graph_selected is None and rig.panel.graph_selected_params() == []
+
+
+def test_a_preset_landing_without_the_node_lets_it_go(rig):
+    """Off the GRAPH page the value is as of the last frame it drew — until
+    a preset lands (`ui_graph.settle`, on any page): one that still names
+    the node keeps it, a new preset (the scene chain alone) lets it go."""
+    st = load(rig, "party-trip")
+    panel = rig.panel
+    st["select_node"] = "render:pattern"
+    frame(panel, "graph")
+    frame(panel, "graph")
+    assert panel.graph_selected == "render:pattern"
+    frame(panel, "view")
+    assert panel.graph_selected == "render:pattern"       # off the page: as it was
+    rig.lib.load("presets", "party-trip")                 # the same frame again: kept
+    frame(panel, "view")
+    assert panel.graph_selected == "render:pattern"
+    at = panel.graph_selected_at
+    rig.lib.presets.new()                                 # shape → scene → output: no pattern
+    frame(panel, "view")
+    assert panel.graph_selected is None and panel.graph_selected_at > at

@@ -21,7 +21,6 @@ from types import SimpleNamespace as NS
 import numpy as np
 import pytest
 from conftest import seed
-from fonts import as_drawn
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
 from test_graphview import _in_editor, stacked, thru
@@ -434,11 +433,10 @@ def test_routing_no_longer_draws_routes_or_modifiers_but_their_functions_stay(
     monkeypatch.setattr(ui_routing, "modifiers", lambda *a: strips.append(a) or mods(*a))
     frame(panel, "routing")
     frame(panel)
-    pointer = as_drawn(texts, ui_routing.POINTER)
-    assert pointer is not None
+    assert ui_routing.POINTER in texts
     assert "ROUTES" not in texts and "MODIFIERS" not in texts and not rows and not strips
     assert {"DESK  ·  PRESET LAYER", "MACROS", "SESSION", "SINKS"} <= set(texts)
-    assert texts.index(pointer) < texts.index("DESK  ·  PRESET LAYER")
+    assert texts.index(ui_routing.POINTER) < texts.index("DESK  ·  PRESET LAYER")
     # the functions stay
     assert ui_routing._sources(panel, router) and ui_routing._targets(panel)
     b = ui_routing.add_route(panel, "fx.acid.mix", source=m.address, depth=0.4)
@@ -528,6 +526,7 @@ def test_the_smoothed_energy_times_band_patch_from_graph_alone(rig, monkeypatch)
     assert st["open"] == set()                                  # nothing was expanded
     b = router.table.owner("fx.acid.mix")
     assert isinstance(b, Binding) and b.source == combine.address
+    b.motion = None            # the new row's spring off: the chain's arithmetic is under test
     assert [m.inputs for m in router.table.modifiers] == [
         ("hand:right.energy",), (smooth.address, "lane:0")]
     # two stubs where neither stands for one output: still refused, in words
@@ -808,6 +807,20 @@ def test_a_big_node_folds_its_groups(rig, monkeypatch):
         flags = [by_param[pid].patched for pid in pids]
         assert flags == sorted(flags, reverse=True), g
 
+
+
+def test_a_channel_side_pane_shows_its_sound(rig, monkeypatch):
+    """Plan 45 V2: a channel node's side pane holds the channel's two sound
+    params beside its transport — the play-audio toggle as its checkbox
+    and the gain as a slider — and draws them inside the narrow pane."""
+    st = party(rig)
+    rows = []
+    one = ui_graph._param_row
+    monkeypatch.setattr(ui_graph, "_param_row", lambda pn, pid: rows.append(pid) or one(pn, pid))
+    ch = pick(rig, st, "render:channel.a")
+    pids = [pid for _, ps in ui_graph.side_groups(rig.panel, ch) for pid in ps]
+    assert {"media.a.audio", "media.a.gain", "media.a.rate"} <= set(pids)
+    assert {"media.a.audio", "media.a.gain"} <= set(rows)
 
 
 def test_the_faces_pattern_side_pane_shows_every_shader_input(rig, monkeypatch):
@@ -1134,3 +1147,64 @@ def test_the_side_column_takes_its_width_from_this_mac_and_a_drag(rig):
     assert not st["side_drag"]
     assert ui_graph.read_side(machine) == 520.0           # written when the drag let go
     assert st["details_rect"][1][0] == 520.0
+
+
+# ---------------------------------------------------------------- pin hit targets (2026-10-31)
+
+def test_a_pins_hit_target_is_finger_sized_at_any_zoom():
+    """The show of 2026-10-30: a cable's drag targets were far too small
+    zoomed out. A pin's hit rect is never under `MIN_PX` on screen: its
+    drawn square zoomed well in, `MIN_PX` × the zoom otherwise, held to its
+    row down and to the pins beside it across — never under the square
+    even when those are smaller."""
+    PIN, ROW, px = ui_graph.PIN, graphview.ROW_H, ui_graph.MIN_PX
+    assert px > PIN                          # (so even zoom 1 grows the square)
+    pitch = PIN + 8.0                        # base / mod / depth, an item_spacing apart
+    assert ui_graph.pin_hit_size(PIN / px, ROW, pitch) == (PIN, PIN)   # zoomed in: the square
+    assert ui_graph.pin_hit_size(0.25, ROW, pitch) == (PIN, PIN)
+    assert ui_graph.pin_hit_size(1.0, ROW, pitch) == (pitch, px)       # 22 px: across, the pins touch
+    assert ui_graph.pin_hit_size(1.5, ROW, pitch) == (pitch, min(px * 1.5, ROW))
+    assert ui_graph.pin_hit_size(4.0, ROW, pitch) == (pitch, ROW)
+    reach, head = ui_graph.STUB_REACH, graphview.HEAD_H
+    assert ui_graph.pin_hit_size(4.0, head, reach) == (reach, head)
+    assert reach > 2 * PIN and head > ROW   # a stub's room: outward and the title line
+    for zoom in (0.25, 1.0, 2.0, 4.0, 8.0):
+        w, h = ui_graph.pin_hit_size(zoom, ROW, pitch)
+        assert PIN <= w <= pitch and PIN <= h <= ROW
+        assert w >= min(px * zoom, pitch) and h >= min(px * zoom, ROW)
+    assert ui_graph.pin_hit_size(4.0, 6.0, 6.0) == (PIN, PIN)      # never under the square
+
+
+def test_the_page_sets_each_stubs_hit_rect_outward_at_a_zoomed_out_canvas(rig, monkeypatch):
+    """Drawn for real on the editor at zoom 4 (four canvas units a screen
+    px): every pin drawn (all stubs, the nodes collapsed) sets a hit rect
+    through `ed.pin_rect` — `STUB_REACH` across, the title line down,
+    the in stub's growing left past the node's edge and the out stub's
+    right, so the label and the + button keep their room — and its pivot
+    on the drawn square, so cables attach where they did."""
+    rects, pivots, ids = [], [], []
+    real_begin, real_rect, real_pivot = ed.begin_pin, ed.pin_rect, ed.pin_pivot_rect
+    monkeypatch.setattr(ui_graph.ed, "get_current_zoom", lambda: 4.0)
+    monkeypatch.setattr(ui_graph.ed, "begin_pin", lambda pid, kind: (ids.append(pid.id()),
+                                                                      real_begin(pid, kind)))
+    monkeypatch.setattr(ui_graph.ed, "pin_rect",
+                        lambda a, b: (rects.append((a.x, a.y, b.x, b.y)), real_rect(a, b)))
+    monkeypatch.setattr(ui_graph.ed, "pin_pivot_rect",
+                        lambda a, b: (pivots.append((a.x, a.y, b.x, b.y)), real_pivot(a, b)))
+    st = party(rig)
+    assert st["zoom"] == 4.0
+    seen = len(st["pin_xy"])                 # the last frame's pins
+    assert seen and len(ids) == len(rects) == len(pivots) >= seen
+    ids, rects, pivots = ids[-seen:], rects[-seen:], pivots[-seen:]
+    PIN = ui_graph.PIN
+    for pid, (x0, y0, x1, y1), (px0, py0, px1, py1) in zip(ids, rects, pivots, strict=True):
+        name = st["names"][pid]
+        cx, cy = st["pin_xy"][name]
+        assert (px0, py0, px1, py1) == (cx - PIN / 2, cy - PIN / 2, cx + PIN / 2, cy + PIN / 2)
+        assert x1 - x0 == pytest.approx(ui_graph.STUB_REACH)
+        assert y1 - y0 == pytest.approx(graphview.HEAD_H)
+        assert (y0 + y1) / 2 == pytest.approx(cy)
+        if name == graphview.stub_in(graphview.stub_node(name)):
+            assert x1 == pytest.approx(cx + PIN / 2)      # grown left, past the node's edge
+        else:
+            assert x0 == pytest.approx(cx - PIN / 2)      # grown right

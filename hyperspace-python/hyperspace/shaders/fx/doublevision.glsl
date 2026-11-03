@@ -1,10 +1,11 @@
 // @label Double vision
 // @order 30
 // @blend mix
+// @speed 0.5
 // @tip Noita's drunk double vision (drugged_doublevision_amount): a ghost of the frame
 // @tip blended over it, offset along a slow circle.
 
-uniform float u_amount;  // @param 0 12 1 "Amount" The ghost's offset: 1 is Noita's drunk stage, half a percent of the frame.
+uniform float u_amount;  // @param 0 12 0.5 amount "Amount" The ghost's offset: 1 is Noita's drunk stage, half a percent of the frame.
 uniform float u_ghost;   // @param 0 1 0.5 "Ghost" The ghost's weight; Noita blends half and half.
 uniform int u_copies;    // @param 1 4 1 "Copies" Ghosts spaced around the circle.
 

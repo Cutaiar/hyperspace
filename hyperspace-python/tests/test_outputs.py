@@ -199,11 +199,16 @@ def px(ctx, f, samples=0):
 
 
 def same_bytes(ctx, a, b) -> bool:
-    """Two pictures (`px`) alike: byte for byte on Apple's GL. Mesa's
-    llvmpipe (the CI runner's) does not read a texture drawn 1:1 through a
-    LINEAR sampler exactly on its texel, so a picture that took one more
-    such pass than the other may differ by a step in a channel there
-    (with NEAREST it is exact)."""
+    """Two pictures (`px`) alike: byte for byte on Apple's GL, within a
+    step in a channel elsewhere. Every 1:1 read is a texelFetch, so the
+    copies are exact on every driver; what Mesa's llvmpipe (the CI
+    runner's) still moves by a step is the effect's own pass, two ways:
+    it filters in 32-bit float, so an effect's picture held in a
+    half-float pool texture then shown into RGBA8 rounds twice where one
+    painted straight into RGBA8 rounds once; and it interpolates `v_uv` a
+    rounding apart on a multisampled target, which moves warp's displaced
+    reads. (Apple filters a half-float texture in half precision, so its
+    pictures agree.)"""
     import numpy as np
 
     if "Apple" in ctx.info["GL_RENDERER"]:
@@ -864,6 +869,10 @@ def test_through_bends_the_hands_with_the_shape(ctx):
 
     S = O.Switches
     r = rig(ctx)
+    # the warp at the amount this was written against: it ships at 0.2
+    # since the calmer defaults (2026-10-31), which bends the hands too
+    # little here to clear the fifth below
+    r.fx.state.values["warp"]["amount"] = 0.5
     over, through = run(ctx, r, wviews(ctx, r, S(scene=False), Thru(scene=False)))
     lit_o = over[..., :3].max(axis=2) > 40
     lit_t = through[..., :3].max(axis=2) > 40
