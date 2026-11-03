@@ -3,6 +3,7 @@ the gyro integrated into three of the six planes, X / Y / B throwing an
 axis into W, A resetting to the world's axes, the tilt onto the pan — and
 nothing at all while it is off."""
 
+import json
 import math
 from itertools import product
 from types import SimpleNamespace
@@ -156,7 +157,7 @@ def test_a_constant_turn_integrates_and_a_flip_carries_on_in_w():
     run(reg, state, pad, 1)
     dps = 90.0
     run(reg, state, pad, 60, gyro=(0.0, 0.0, dps))     # 1 s about z
-    want = math.radians(dps - totem.DEADBAND_DPS)       # the dead band is soft: it subtracts
+    want = math.radians(dps - gesture.TURN_DEADBAND_DPS)       # the dead band is soft: it subtracts
     assert phase(reg, "XY") == pytest.approx(want, abs=1e-6)   # no smoothing: the turn, whole
     for other in ("XZ", "YZ", "XW", "YW", "ZW"):
         assert phase(reg, other) == pytest.approx(0.0, abs=1e-9)
@@ -165,7 +166,7 @@ def test_a_constant_turn_integrates_and_a_flip_carries_on_in_w():
     run(reg, state, pad, 1, gyro=(0.0, 0.0, dps), hold=("B",))
     run(reg, state, pad, 29, gyro=(0.0, 0.0, dps))
     assert phase(reg, "XY") == pytest.approx(xy, abs=1e-9)
-    assert phase(reg, "ZW") == pytest.approx(math.radians(dps - totem.DEADBAND_DPS) * 0.5,
+    assert phase(reg, "ZW") == pytest.approx(math.radians(dps - gesture.TURN_DEADBAND_DPS) * 0.5,
                                              abs=0.01)
 
 
@@ -386,7 +387,7 @@ def test_a_stalled_report_adds_no_turn_and_two_reports_in_a_frame_both_count():
     for _ in range(2):                      # two reports between one frame and the next
         pad.motion.step((0.0, 0.0, 90.0), FLAT, DT)
     totem.step(state, pad, reg, DT)
-    want = math.radians(2 * 90.0 * DT - totem.DEADBAND_DPS * DT)
+    want = math.radians(2 * (90.0 - gesture.TURN_DEADBAND_DPS) * DT)   # the band per report
     assert phase(reg, "XY") - xy == pytest.approx(want, abs=1e-9)
 
 
@@ -550,13 +551,17 @@ def test_a_hold_begun_before_the_skip_does_not_fire_when_the_skip_ends():
     assert reg["camera.yaw"].value == pytest.approx(0.0)
 
 
-def test_config_reads_the_totem_section_as_a_table_and_notes_a_scalar():
-    assert totem.configured_on({}) is False
-    assert totem.configured_on({"totem": {"on": True}}) is True
-    assert totem.configured_on({"totem": {"on": False}}) is False
-    cfg = {"totem": True}
+def test_config_reads_the_totem_section_through_config_load(tmp_path):
+    from hyperspace import config
+    path = tmp_path / "config.toml"
+    path.write_text("totem = true\n")                      # a scalar: config.load reports it
+    cfg = config.load(path)
+    assert "[totem] must be a table" in cfg.get("error", "")
     assert totem.configured_on(cfg) is False                # no AttributeError at launch
-    assert len(cfg["notes"]) == 1 and "[totem] must be a table" in cfg["notes"][0]
+    path.write_text("[totem]\non = true\n")
+    assert totem.configured_on(config.load(path)) is True
+    path.write_text("")
+    assert totem.configured_on(config.load(path)) is False
 
 
 def test_the_totem_names_the_pad_by_its_device_role():
@@ -568,3 +573,205 @@ def test_the_totem_names_the_pad_by_its_device_role():
     assert router.calls[-1].get("role", "") == ""
     assert state.driving == "joy" and state.note.startswith("reading joy")
     assert router.calls[-1]["skip"] == totem.SKIP
+
+
+# ---- the second review (PR #335) ----
+
+def tape(tmp_path, times, gyro_z=2000):
+    """A DualSense USB tape: one report at each of `times`, the gyro's z
+    at `gyro_z` raw."""
+    from test_pads_sony import usb_report
+
+    from hyperspace.pads import hid
+    rep = usb_report()
+    import struct
+    struct.pack_into("<3h", rep, 1 + 15, 0, 0, gyro_z)
+    lines = [json.dumps({"tape": hid.TAPE_SCHEMA, "model": "dualsense", "transport": "usb"})]
+    lines += [json.dumps({"t": t, "r": bytes(rep).hex()}) for t in times]
+    path = tmp_path / "pad.jsonl"
+    path.write_text("\n".join(lines) + "\n")
+    return path, bytes(rep)
+
+
+def one_turn(reader, raw, dt):
+    """What one report of `raw` turns over `dt`, as the reader sums it."""
+    samples = reader.codec.gyro_of(raw, reader)
+    return [dt * v for v in (math.copysign(max(0.0, abs(d) - gesture.TURN_DEADBAND_DPS), d)
+                             for d in reader.calibration.gyro_dps(samples[0]))]
+
+
+def test_a_tape_takes_its_turn_across_the_loops_seam(tmp_path):
+    from hyperspace.pads import hid
+    path, raw = tape(tmp_path, [0.0, 0.01, 0.02, 0.03])     # period 0.04
+    now = [0.035]
+    tp = hid.TapePad(path, clock=lambda: now[0])
+    tp.t0 = 0.0
+    tp.latest()
+    turn, n = tp.take_turn()
+    assert n == 4
+    assert turn[2] == pytest.approx(one_turn(tp, raw, 0.01)[2] * 3)
+    now[0] = 0.045                                          # round the seam: report 0 again
+    tp.latest()
+    turn, n = tp.take_turn()
+    assert n == 1 and turn[2] == pytest.approx(one_turn(tp, raw, 0.01)[2])
+    now[0] = 0.085                                          # a whole loop on: four reports
+    tp.latest()
+    turn, n = tp.take_turn()
+    assert n == 4 and turn[2] == pytest.approx(one_turn(tp, raw, 0.01)[2] * 4)
+    assert tp.take_turn() == ((0.0, 0.0, 0.0), 0)           # nothing new
+
+
+def test_a_one_report_tape_takes_its_report_once_a_loop(tmp_path):
+    from hyperspace.pads import hid
+    path, raw = tape(tmp_path, [0.2])
+    now = [0.25]
+    tp = hid.TapePad(path, clock=lambda: now[0])
+    tp.t0 = 0.0
+    tp.latest()
+    assert tp.take_turn()[1] == 1
+    now[0] = 0.3                                            # the same loop: nothing new
+    tp.latest()
+    assert tp.take_turn()[1] == 0
+    now[0] = 0.25 + tp.period                               # exactly one loop on
+    tp.latest()
+    turn, n = tp.take_turn()
+    assert n == 1 and turn[2] == pytest.approx(one_turn(tp, raw, gesture.REPORT_DT_MAX)[2])
+
+
+def edge_reader():
+    from test_pads_hid import EDGE, FakeDev, stepped
+    return stepped(EDGE, FakeDev())
+
+
+def gyro_report(z=2000):
+    import struct
+
+    from test_pads_sony import usb_report
+    rep = usb_report()
+    struct.pack_into("<3h", rep, 1 + 15, 0, 0, z)
+    return bytes(rep)
+
+
+def test_a_1000_hz_burst_through_a_slow_frame_loses_no_turn_and_decodes_once(monkeypatch):
+    import hyperspace.gamepad as gp
+    from hyperspace.pads import sony
+    r = edge_reader()
+    monkeypatch.setattr(gp.glfw, "joystick_present", lambda j: False)
+    pad = gp.Pad(hid=True)
+    pad._hid_reader = lambda: r
+    raw = gyro_report()
+    t0 = __import__("time").monotonic()
+    r._take(raw, t=t0)
+    pad.poll(DT)
+    pad.motion.take_turn()
+    calls = []
+    real = sony.decode
+    monkeypatch.setattr(sony, "decode", lambda *a, **k: calls.append(1) or real(*a, **k))
+    for k in range(1, 121):                                 # 120 ms of a 1000 Hz pad, one frame
+        r._take(raw, t=t0 + 0.001 * k)
+    assert calls == []                                      # the reader's thread decodes nothing
+    pad.poll(0.12)
+    assert len(calls) <= 1                                  # the frame decodes `latest` only
+    want = one_turn(r, raw, 0.001)[2] * 120
+    assert pad.motion.take_turn()[2] == pytest.approx(want)
+
+
+def test_a_reply_as_the_newest_report_adds_no_second_turn():
+    """Every LED change is acked with a 0x21 reply: it is refused, and the
+    full report before it is integrated once, at its own time."""
+    import test_pads_nintendo as tn
+    pad, reader = tn.joycon_pad()
+    t0 = __import__("time").monotonic()
+    reader._take(tn.full_report(gyro=(0, 0, 0)), t=t0)
+    pad.poll(dt=DT)
+    pad.motion.take_turn()
+    reader._take(tn.full_report(gyro=(0, 0, 4000)), t=t0 + 0.015)
+    reader._take(tn.spi_reply(0x6020, b"\x00"), t=t0 + 0.02)
+    pad.poll(dt=DT)
+    one = pad.motion.take_turn()
+    assert any(one)
+    reader._take(tn.full_report(gyro=(0, 0, 4000)), t=t0 + 0.03)
+    reader._take(tn.spi_reply(0x6020, b"\x00"), t=t0 + 0.035)
+    pad.poll(dt=DT)
+    assert pad.motion.take_turn() == pytest.approx(one)    # once each, not twice
+    reader._take(tn.spi_reply(0x6020, b"\x00"), t=t0 + 0.04)
+    pad.poll(dt=DT)
+    assert pad.motion.take_turn() == (0.0, 0.0, 0.0)       # a reply alone turns nothing
+
+
+def test_the_dead_band_is_per_report_and_a_gap_is_capped():
+    from hyperspace.pads import hid
+    r = edge_reader()
+    cal = r.calibration
+    raw = gyro_report()
+    rate = cal.gyro_dps(r.codec.gyro_of(raw, r)[0])[2]
+    turn = hid.Turn()
+    turn.add(r.codec.gyro_of(raw, r), 0.0, cal)
+    turn.add(r.codec.gyro_of(raw, r), 0.004, cal)          # two reports in one frame
+    turn.add(r.codec.gyro_of(raw, r), 0.008, cal)
+    got, n = turn.take()
+    assert n == 3
+    assert got[2] == pytest.approx(2 * 0.004 * (rate - gesture.TURN_DEADBAND_DPS))
+    turn.add(r.codec.gyro_of(raw, r), 0.308, cal)          # a 300 ms Bluetooth pause
+    got, _ = turn.take()
+    assert got[2] == pytest.approx(gesture.REPORT_DT_MAX * (rate - gesture.TURN_DEADBAND_DPS))
+    slow = gyro_report(z=1)                                 # under the band: nothing
+    turn.add(r.codec.gyro_of(slow, r), 0.312, cal)
+    assert turn.take()[0] == (0.0, 0.0, 0.0)
+
+
+def test_a_stall_lets_the_energy_and_yaw_ease_home(monkeypatch):
+    import hyperspace.gamepad as gp
+    r = edge_reader()
+    monkeypatch.setattr(gp.glfw, "joystick_present", lambda j: False)
+    pad = gp.Pad(hid=True)
+    pad._hid_reader = lambda: r
+    t0 = __import__("time").monotonic()
+    for k in range(30):                                     # a fast turn: energy up
+        r._take(gyro_report(z=20000), t=t0 + 0.004 * k)
+        pad.poll(DT)
+    e0, yaw0 = pad.motion.energy, pad.motion.yaw
+    assert e0 > 0.3
+    turned = pad.motion.take_turn()
+    for _ in range(18):                                     # 300 ms with no report
+        pad.poll(DT)
+    assert pad.motion.energy < e0 * 0.5
+    assert abs(pad.motion.yaw) <= abs(yaw0)
+    assert pad.motion.take_turn() == (0.0, 0.0, 0.0)       # …and nothing turned
+    assert any(turned)
+
+
+def test_a_pad_gone_quiet_gives_the_pan_back_with_no_pad_taking_over():
+    reg, state, _ = rig()
+    reg["totem.on"].set(True)
+    a = FakePad()
+    s, c = math.sin(math.radians(30)), math.cos(math.radians(30))
+    for k in range(30):
+        a.frame()
+        totem.step(state, a, reg, DT, "pad", now=k * DT)
+    for k in range(30, 150):
+        a.frame(accel=(-s, c, 0.0))
+        totem.step(state, a, reg, DT, "pad", now=k * DT)
+    assert reg["camera.pan.x"].value > 0.5
+    b = FakePad()
+    b.on = False                                            # another device, no live pad
+    totem.step(state, b, reg, DT, "p2", now=150 * DT + totem.LOST_S + 0.1)
+    assert state.driving is None
+    assert reg["camera.pan.x"].value == pytest.approx(0.0, abs=1e-9)
+
+
+def test_learn_on_the_frame_the_totem_takes_the_pad_lands_none_of_its_buttons():
+    reg, state, _ = rig()
+    reg["totem.on"].set(True)
+    dev = device(reg)
+    assert state.driving is None                            # no `act` yet: not taken
+    dev.io.frame()
+    dev.io.frame(hold=("A",))
+    learn = ArmedLearn()
+    assert dev.learn(learn) is False and learn.got == []    # it will be, this frame
+    dead = device(reg, "p2")
+    dead.io.on = False                                      # a pad with no sensors live
+    dead.io.frame()
+    dead.io.frame(hold=("A",))
+    learn = ArmedLearn()
+    assert totem.will_drive(state, dead.io, "p2") is False

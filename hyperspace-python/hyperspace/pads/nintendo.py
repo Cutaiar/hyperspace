@@ -507,6 +507,16 @@ def decode_frame(raw: bytes, reader) -> Frame | None:
     return decode(raw, reader.kind, reader.calibration)
 
 
+def gyro_of(raw: bytes, reader) -> tuple[tuple[int, int, int], ...] | None:
+    """The raw gyro samples of one full report — all three, 5 ms apart,
+    oldest first — or None for anything else (a subcommand's reply, the
+    simple report): what the reader's thread integrates every report."""
+    r = raw
+    if not r or r[0] != REPORT_FULL or len(r) < REPORT_LEN:
+        return None
+    return tuple(struct.unpack_from("<3h", r, 13 + 12 * k + 6) for k in range(3))
+
+
 def write(dev, reader, want: Effects, now: float) -> bool:
     """What `want` needs sent now, or nothing (False). Rumble rides the
     reply-free 0x10 report — on change, and again every

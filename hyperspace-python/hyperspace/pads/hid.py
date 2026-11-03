@@ -34,17 +34,15 @@ from __future__ import annotations
 import json
 import threading
 import time
-from collections import deque
 from pathlib import Path
 
-from . import models, nintendo, sony
+from . import gesture, models, nintendo, sony
 
 SCAN_S = 1.0               # how often the hub looks for pads coming and going
 READ_TIMEOUT_MS = 100      # a read waits at most this, so close() is quick
 OUT_HZ = 60.0              # the most output reports a second
 STALE_S = 0.5              # no report for this long: `latest` gives nothing (the pad reads lost)
 DRAIN_MAX = 64             # reports read in one go before the outputs get a turn
-BACKLOG_MAX = 64           # reports kept for `since` between two frames (the motion's)
 TAPE_SCHEMA = "hyperspace.padtape/1"
 
 
@@ -183,9 +181,8 @@ class HidPad:
         self._lock = threading.Lock()
         self._raw: bytes | None = None       # the newest report, decoded on `latest`
         self._raw_t = 0.0
-        # every report since the last `since`, with its arrival time, for
-        # the motion integrated per report (gamepad.Pad._extras)
-        self._backlog: deque[tuple[float, bytes]] = deque(maxlen=BACKLOG_MAX)
+        # the gyro integrated here, every report (`take_turn`)
+        self._turn = Turn()
         self._frame: sony.Frame | None = None
         self._frame_of: bytes | None = None
         self.update_version = 0
@@ -227,20 +224,14 @@ class HidPad:
             self._frame_of = raw
         return self._frame
 
-    def since(self) -> list[tuple[float, sony.Frame]]:
-        """Every report that came since the last call, decoded, with its
-        arrival time (monotonic) — oldest first, a refused one left out:
-        what the motion integrates report by report, so a frame with two
-        reports counts both and a frame with none adds no turn."""
+    def take_turn(self) -> tuple[tuple[float, float, float], int]:
+        """The degrees turned about the sensor's x, y, z (calibrated, not yet
+        through the pad's axis map) since the last call, and how many
+        reports said so — summed on the reader's thread every report, so a
+        1000 Hz pad loses no report to a slow frame and the frame decodes
+        only `latest`. None turned and 0 while no report came."""
         with self._lock:
-            got = list(self._backlog)
-            self._backlog.clear()
-        out = []
-        for t, raw in got:
-            f = self._frame if raw is self._frame_of else self._decode(raw)
-            if f is not None:
-                out.append((t, f))
-        return out
+            return self._turn.take()
 
     def _decode(self, raw: bytes):
         return self.codec.decode_frame(raw, self)
@@ -319,10 +310,17 @@ class HidPad:
             return
         if link == "bluetooth" or not self.transport:   # a BT report settles it; USB only if unsaid
             self.transport = link
+        t = time.monotonic() if t is None else t
+        samples = self._gyro_of(r)
         with self._lock:
-            self._raw, self._raw_t = r, time.monotonic() if t is None else t
-            self._backlog.append((self._raw_t, r))
+            self._raw, self._raw_t = r, t
+            if samples is not None:
+                self._turn.add(samples, t, self.calibration)
             self.reports += 1
+
+    def _gyro_of(self, r: bytes):
+        f = getattr(self.codec, "gyro_of", None)
+        return f(r, self) if f is not None else None
 
     def _write(self, dev) -> None:
         with self._lock:
@@ -427,6 +425,9 @@ class TapePad:
         self.sent: list[sony.Effects] = []
         self._frame: sony.Frame | None = None    # the last decoded frame (a reply leaves it)
         self._i = 0
+        self._loop_n = 0               # how many times round the loop `latest` is
+        self._taken: int | None = None # the position (loop × reports + i) `take_turn` reached
+        self._turn = Turn()
 
     @property
     def length(self) -> float:
@@ -438,8 +439,8 @@ class TapePad:
         t = self.clock() - self.t0
         if self.loop and self.length > 0:
             # the last report holds as long as the one before it did, then round again
-            gap = self.length - self.reports[-2][0] if len(self.reports) > 1 else 0.0
-            t %= self.length + max(1e-3, gap)
+            self._loop_n = int(t // self.period)
+            t %= self.period
         if t < self.reports[min(self._i, len(self.reports) - 1)][0]:
             self._i = 0
         while self._i + 1 < len(self.reports) and self.reports[self._i + 1][0] <= t:
@@ -450,22 +451,31 @@ class TapePad:
             self._frame = f
         return self._frame
 
-    def since(self) -> list[tuple[float, sony.Frame]]:
-        """The tape's reports `latest` passed since the last call, decoded,
-        with their tape times (as `HidPad.since`); round the loop, the one
-        it is on."""
-        i, j = self._i, self.__dict__.get("_since_i")
-        self._since_i = i
-        if not self.reports or i == j:
-            return []
-        idx = range(j + 1, i + 1) if j is not None and i > j else (i,)
-        out = []
-        for k in idx:
+    @property
+    def period(self) -> float:
+        """One time round a looping tape: the last report holds as long as
+        the one before it did."""
+        gap = self.length - self.reports[-2][0] if len(self.reports) > 1 else 0.0
+        return self.length + max(1e-3, gap)
+
+    def take_turn(self) -> tuple[tuple[float, float, float], int]:
+        """As `HidPad.take_turn`: every report `latest` passed since the
+        last call — across the loop's seam, and a whole loop of a one-report
+        tape too — integrated at its tape time (at most one loop's worth)."""
+        n = len(self.reports)
+        if not n:
+            return (0.0, 0.0, 0.0), 0
+        pos = self._loop_n * n + self._i
+        start = max(0 if self._taken is None else self._taken + 1, pos - n + 1)
+        self._taken = pos
+        period = self.period if self.loop and self.length > 0 else 0.0
+        for q in range(start, pos + 1):
+            loop_k, k = divmod(q, n)
             t, raw = self.reports[k]
-            f = self.codec.decode_frame(raw, self)
-            if f is not None:
-                out.append((t, f))
-        return out
+            samples = self.codec.gyro_of(raw, self) if hasattr(self.codec, "gyro_of") else None
+            if samples is not None:
+                self._turn.add(samples, t + loop_k * period, self.calibration)
+        return self._turn.take()
 
     def send(self, effects: sony.Effects) -> None:
         """A tape has no light to set: what was asked is kept, for a test."""
@@ -473,6 +483,34 @@ class TapePad:
 
     def close(self) -> None:
         self.alive = False
+
+
+class Turn:
+    """The gyro integrated report by report: each report's samples, through
+    the calibration and the soft dead band (`gesture.turn_of`), times the
+    time since the report before (at most `gesture.REPORT_DT_MAX`), split
+    evenly between its samples. `take` hands the sum over and starts again."""
+
+    def __init__(self):
+        self.sum = [0.0, 0.0, 0.0]
+        self.n = 0
+        self.last_t: float | None = None
+
+    def add(self, samples, t: float, cal) -> None:
+        last, self.last_t = self.last_t, t
+        dt = 0.0 if last is None else min(gesture.REPORT_DT_MAX, max(0.0, t - last))
+        self.n += 1
+        if not dt or not samples:
+            return
+        each = dt / len(samples)
+        for s in samples:
+            for a, v in enumerate(gesture.turn_of(cal.gyro_dps(s), each)):
+                self.sum[a] += v
+
+    def take(self) -> tuple[tuple[float, float, float], int]:
+        got, n = (self.sum[0], self.sum[1], self.sum[2]), self.n
+        self.sum, self.n = [0.0, 0.0, 0.0], 0
+        return got, n
 
 
 class HidHub:

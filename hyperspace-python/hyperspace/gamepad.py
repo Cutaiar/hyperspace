@@ -104,10 +104,6 @@ XBOX_RAW_MAX = 32          # an Xbox-mapped pad's raw buttons kept, below the ex
 # the touchpad's and the sensors' schemes (plan 42), fed by the pad device
 TOUCH_SCHEME, MOTION_SCHEME = "touch", "motion"
 EXTRA_SCHEMES = (TOUCH_SCHEME, MOTION_SCHEME)
-# the longest time one motion report stands for (a Joy-Con reports every
-# ~15 ms, a DualSense over Bluetooth every 4): a longer gap — a Bluetooth
-# pause — counts as this much, not as a turn held through it
-MOTION_DT_MAX = 0.05
 
 # the axes as continuous lanes (routing's `axis` scheme), each in [0, 1]:
 # a stick rests at 0.5 with up and right high, a trigger rests at 0
@@ -919,7 +915,7 @@ class Pad:
         if new != source:      # a pad came, went or changed road: no stale edges
             self.buttons, self.hat, self.axes = [], 0, [0.0] * 6
             self.touchpad, self.motion = gesture.Touchpad(), gesture.Motion()
-            self.report, self._motion_t = None, None
+            self.report = None
         self.source = new
         self.prev_buttons, self.prev_hat = self.buttons, self.hat
         if new == "glfw":
@@ -969,32 +965,20 @@ class Pad:
         self.touchpad.step([(t.down, t.id, t.x / w, t.y / h) for t in frame.touches], dt)
         cal = getattr(reader, "calibration", None) or sony.Calibration()
         amap = gesture.axis_map_of(self.__dict__.get("axis_map"), reader)   # the one rule
-        for f, d in self._motion_steps(frame, reader, dt):
-            self.motion.step(amap.pick(cal.gyro_dps(f.gyro), amap.gyro),
-                             amap.pick(cal.accel_g(f.accel), amap.accel), d)
-
-    def _motion_steps(self, frame, reader, dt: float) -> list:
-        """The (frame, dt) pairs the motion steps on this frame: each report
-        since the last frame with its own time from the one before (at most
-        MOTION_DT_MAX — a Bluetooth gap is not a turn), from a reader that
-        keeps them (`since`); none while no report came, so a stalled pad
-        turns nothing. A reader without `since` (a test's) steps the latest
-        frame on the frame's `dt`, as before."""
-        since = getattr(reader, "since", None)
-        if since is None:
-            return [(frame, dt)]
-        last = self.__dict__.get("_motion_t")
-        out = []
-        for t, f in since():
-            if not f.full:
-                continue
-            d = 0.0 if last is None else min(MOTION_DT_MAX, max(0.0, t - last))
-            last = t
-            out.append((f, d))
-        self._motion_t = last
-        if not out:
-            self.motion.shake = 0.0          # a trigger lane is one step long
-        return out
+        gyro = amap.pick(cal.gyro_dps(frame.gyro), amap.gyro)
+        accel = amap.pick(cal.accel_g(frame.accel), amap.accel)
+        take = getattr(reader, "take_turn", None)
+        if take is None:               # a reader that sums nothing (a test's): per frame
+            self.motion.step(gyro, accel, dt)
+            return
+        # the turn the reader summed on its thread, every report (plan 47
+        # review): a slow frame loses none, a stalled pad adds none
+        turn, n = take()
+        self.motion.add_turn(amap.pick(turn, amap.gyro))
+        if n:
+            self.motion.step(gyro, accel, dt, integrate=False)
+        else:
+            self.motion.decay(dt)      # no report: the lanes leak home, nothing turns
 
     def touch_lanes(self) -> list[float] | None:
         """The ``touch:`` lanes (gesture.TOUCH_LANES), or None while the

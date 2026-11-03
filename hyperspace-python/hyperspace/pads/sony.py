@@ -451,6 +451,23 @@ def decode_frame(raw: bytes, reader) -> Frame | None:
     return decode(raw, bluetooth=reader.bt_hint)
 
 
+def gyro_of(raw: bytes, reader) -> tuple[tuple[int, int, int], ...] | None:
+    """The raw gyro samples of one report, oldest first — the reader's
+    thread integrates them every report without decoding the rest — or
+    None for a report `decode_frame` refuses or that has no sensors (a
+    simple report, a microphone report, a bad CRC)."""
+    r = raw
+    if not r:
+        return None
+    if r[0] == USB_REPORT_ID and len(r) >= USB_IN_LEN and not reader.bt_hint:
+        return (struct.unpack_from("<3h", r, 1 + 15),)
+    if r[0] == BT_REPORT_ID and len(r) >= BT_IN_LEN:
+        if not bt_crc_ok(r[:BT_IN_LEN]) or (r[1] & 0x0F) not in BT_INPUT_TAGS:
+            return None
+        return (struct.unpack_from("<3h", r, 2 + 15),)
+    return None
+
+
 def setup(dev, reader) -> None:
     """Feature 0x05 — the motion calibration, and over Bluetooth the
     switch to the full report — then 0x20, the firmware's update version

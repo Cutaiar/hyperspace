@@ -46,10 +46,12 @@ orbit does. Note the coupling: tipping the pad to turn the shape about x
 or z also tilts it, so the shape slides as it turns (`totem.pan` off
 for the turn alone).
 
-**The turn is integrated per report**: `gesture.Motion` adds each report's
-gyro times that report's own time to an angle the totem takes each frame
-(`Motion.take_turn`), so a report that stalls adds no turn and two reports
-between frames both count.
+**The turn is integrated per report**, not here: each report's rate,
+less a soft dead band (`gesture.TURN_DEADBAND_DPS`; a still Joy-Con reads
+up to ~2 deg/s), times its own time — summed on the hid reader's thread
+(`hid.Turn`), else by `gesture.Motion.step` — into an angle the totem
+takes each frame (`Motion.take_turn`). A report that stalls adds no turn,
+two reports between frames both count, a slow frame loses none.
 
 **Reset** (A, or the D-pad's down on a pad that has one — on a Joy-Con (L)
 held sideways these are the same arrow): the registry's own `camera.reset`
@@ -95,7 +97,6 @@ HAT_DOWN = 4                      # GLFW's hat bit (gamepad.HAT_DOWN; a test hol
 # the pad's rows the totem holds off while it drives (`Router.pad(skip=)`)
 SKIP = frozenset({*(f"pad:{b}" for b in (*W_BUTTON, RESET_BUTTON)), "hat:DOWN"})
 
-DEADBAND_DPS = 3.0                # a still Joy-Con reads up to ~2 deg/s (the real tape)
 LOST_S = 0.5                      # no step from the pad it reads this long: it lets go
 PAN_PER_RAD = 1.5                 # world units of pan per radian of tilt
 PAN_MAX = 3.0                     # …and no further each way
@@ -136,7 +137,6 @@ class TotemState:
     ang: list[float] = field(default_factory=lambda: [0.0] * 6)   # radians, PLANES order
     driving: str | None = None    # the role of the pad it reads, None while it reads none
     seen: float = 0.0             # when (monotonic) the pad it reads last stepped it
-    rate: list[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])   # rad/s, body axes
     ref: tuple[float, float] | None = None    # (roll, pitch) radians at the reset
     pan_out: list[float] = field(default_factory=lambda: [0.0, 0.0])   # the pan it has added
     note: str = ""                # the last change, for the terminal and the pad window
@@ -199,7 +199,6 @@ def reset(state: TotemState, reg) -> None:
     if p is not None:
         p.fire()
     state.ang = [_base(reg, f"rot.phase.{n}") for n in PLANES]
-    state.rate = [0.0, 0.0, 0.0]
     state.ref = None
     state.pan_out = [0.0, 0.0]          # the reset zeroed the pan, the totem's share with it
     state.say(f"reset — {readout(state)}")
@@ -228,6 +227,19 @@ def _base(reg, pid: str) -> float:
 def drives(state: TotemState | None, role: str) -> bool:
     """Is the totem reading the pad of `role` now?"""
     return state is not None and state.on and state.driving == role
+
+
+def will_drive(state: TotemState | None, pad, role: str, now: float | None = None) -> bool:
+    """Will the totem read the pad of `role` this frame — it reads it now,
+    or it reads none (or a pad gone quiet) and this pad has sensors? What
+    Learn asks before `act` runs the take-over (`step`)."""
+    if state is None or not state.on:
+        return False
+    if state.driving == role:
+        return True
+    now = time.monotonic() if now is None else now
+    free = state.driving is None or now - state.seen > LOST_S
+    return free and _live(pad)
 
 
 def reading(state: TotemState | None, now: float | None = None) -> str | None:
@@ -268,6 +280,7 @@ def step(state: TotemState | None, pad, reg, dt: float, role: str = "",
             return                                # another pad holds it
         state.say(f"{state.driving or 'the pad'} went quiet")
         state.driving = None                      # its device is gone: this one may
+        _give_back_pan(state, reg)                # …and the shape comes back meanwhile
     if not _live(pad):
         if state.driving == role:
             state.driving = None
@@ -281,19 +294,15 @@ def step(state: TotemState | None, pad, reg, dt: float, role: str = "",
         _give_back_pan(state, reg)
         state.driving = role
         state.ang = [_base(reg, f"rot.phase.{n}") for n in PLANES]
-        state.rate = [0.0, 0.0, 0.0]
         state.ref = None
         turn = (0.0, 0.0, 0.0)                    # what it turned before is not ours
         state.say(f"reading {role or 'the pad'} — {readout(state)}")
     state.seen = now
     _buttons(state, pad, reg)
     dt = max(0.0, float(dt))
-    for i in range(3):
-        a = float(turn[i])                        # degrees: each report × its own dt
-        a = math.copysign(max(0.0, abs(a) - DEADBAND_DPS * dt), a)   # a soft dead band
-        state.rate[i] = math.radians(a) / dt if dt > 0 else 0.0
+    for i in range(3):                            # degrees, dead-banded per report
         p = PLANES.index(plane_of(i, state.w[i]))
-        state.ang[p] = _fold(state.ang[p] + AXIS_SIGN[i] * math.radians(a))
+        state.ang[p] = _fold(state.ang[p] + AXIS_SIGN[i] * math.radians(float(turn[i])))
     for p, name in enumerate(PLANES):
         _set(reg, f"rot.phase.{name}", state.ang[p])
     _pan(state, motion, reg, dt)
@@ -338,16 +347,7 @@ def _pan(state: TotemState, motion, reg, dt: float) -> None:
 
 
 def configured_on(cfg) -> bool:
-    """`[totem] on = true` in config.toml? Read as config.py reads a
-    section: a table or nothing — a scalar (`totem = true`) is a note on
-    the SYSTEM page (`cfg["notes"]`) and the totem stays off, never an
-    error at launch."""
-    section = cfg.get("totem") if isinstance(cfg, dict) else None
-    if section is None:
-        return False
-    if not isinstance(section, dict):
-        note = f"config: [totem] must be a table (`[totem]` then `on = true`), not {section!r}"
-        cfg.setdefault("notes", []).append(note)
-        print(note, file=sys.stderr)
-        return False
-    return section.get("on") is True
+    """`[totem] on = true` in config.toml? (config.load keeps only a table
+    and reports a scalar `totem = true` in cfg["error"].)"""
+    section = cfg.get("totem")
+    return isinstance(section, dict) and section.get("on") is True

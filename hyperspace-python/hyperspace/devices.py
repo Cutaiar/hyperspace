@@ -811,7 +811,7 @@ class PadDevice(Base):
         # the buttons the totem holds while it reads this pad learn nothing
         # either (as their rows do not fire: `act`'s skip)
         skip = self._totem_skip(self.ctx.reg if self.ctx.reg is not None
-                                else getattr(learn, "reg", None))
+                                else getattr(learn, "reg", None), self.io)
         self._taken = bool(gamepad.learn_from(self.io, learn, role=q, dials=lambda: dialed,
                                               skip=skip)
                            if q else gamepad.learn_from(self.io, learn, dials=lambda: dialed,
@@ -862,12 +862,13 @@ class PadDevice(Base):
         totem.step(state, io, reg, self.__dict__.get("_dt", 0.0), self.role)
         return {"skip": totem.SKIP} if totem.drives(state, self.role) else {}
 
-    def _totem_skip(self, reg) -> frozenset:
-        """The buttons the totem holds off this pad now (none while it
-        reads another, or is off)."""
+    def _totem_skip(self, reg, io) -> frozenset:
+        """The buttons the totem holds off this pad this frame — as it will
+        be once `act` has run its take-over (Learn runs first): none while
+        it reads another pad, or is off."""
         from . import totem
         state = getattr(reg, "totem", None) if reg is not None else None
-        return totem.SKIP if totem.is_state(state) and totem.drives(state, self.role) \
+        return totem.SKIP if totem.is_state(state) and totem.will_drive(state, io, self.role) \
             else frozenset()
 
     def _feed_extras(self, router, io, q: str) -> None:
