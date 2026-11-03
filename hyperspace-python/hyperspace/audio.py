@@ -12,6 +12,16 @@ preserving transport state; playback loops.
 
 Callback discipline (plan 04 note, honoured here): stream callbacks only
 copy samples into a ring buffer. FFT + chain run on the frame loop.
+
+The third source, ``mix`` (plan 45 V3): the media mixer's output — the
+channels' video sound, summed — pushed by the mixer's own callback into
+this engine's ring as mono at 48 kHz (`media.mixer.Mixer.listen`). The
+engine opens no stream for it (no input device is grabbed) and keeps no
+position: the transport is the video sound's one clock, and the analyzer
+reads the ring once a frame as it reads the mic's. Until the mixer's
+stream is open (V2: the first channel whose sound is on) the mix is
+silence. The file transport below (`_played`) is the second time base
+plan 45 forbids for video sound; `mix` shares nothing with it.
 """
 
 from __future__ import annotations
@@ -23,8 +33,10 @@ import numpy as np
 import sounddevice as sd
 import soundfile as sf
 
-from .analysis import Analyser
+from .analysis import FFT_SIZE, Analyser
 from .analyzer import Analyzer
+
+_SILENCE = np.zeros(FFT_SIZE)    # the analyser's window of nothing (mix mode, no stream)
 
 LOOPBACK_NAMES = ("blackhole", "loopback", "soundflower")
 
@@ -49,6 +61,10 @@ def preselect(devices: list[dict]) -> int:
     one implementation: `AudioEngine.device_sel` reads it, and the panel's
     combo reads `device_sel`."""
     return next((k for k, d in enumerate(devices) if d["loopback"]), 0)
+
+
+def _mix_open(mixer) -> bool:
+    return mixer is not None and getattr(mixer, "state", "") == "open"
 
 
 class _Ring:
@@ -85,14 +101,17 @@ class _Ring:
 
 
 class AudioEngine:
-    """One live source at a time (mic or file), driving one Analyser+Analyzer."""
+    """One live source at a time (mic, file or the media mix), driving one
+    Analyser+Analyzer."""
+
+    MIX_RATE = 48_000.0    # media.video.AUDIO_RATE — not imported: the audio stack stays below media
 
     def __init__(self, sample_rate: float = 48_000.0):
         self.sr = sample_rate               # the capture rate; a file runs at its own (`rate`)
         self.analyser = Analyser(sample_rate)
         self.chain = Analyzer(self.analyser)
         self.on = False
-        self.mode: str | None = None     # "mic" | "file"
+        self.mode: str | None = None     # "mic" | "file" | "mix"
         self.label = ""
         self.error = ""
         self._devices: list[dict] | None = None   # see `devices`
@@ -105,6 +124,7 @@ class AudioEngine:
         self.playing = False
         self._offset = 0            # frames into the track at last start
         self._played = 0            # frames emitted since last start (callback-owned)
+        self._mixer = None          # mix mode: the media mixer pushing into the ring
 
     # ---- the input devices `audio.device` chooses from ----
 
@@ -151,6 +171,11 @@ class AudioEngine:
     # ---- shared teardown ----
 
     def stop(self) -> None:
+        mixer = getattr(self, "_mixer", None)    # an engine from before V3 has none
+        if mixer is not None:
+            self._mixer = None
+            if getattr(mixer, "tap", None) is self._ring:
+                mixer.listen(None)
         if self._stream is not None:
             try:
                 self._stream.stop()
@@ -208,6 +233,22 @@ class AudioEngine:
 
     def _on_input(self, indata, _frames, _t, _status) -> None:
         self._ring.push(indata[:, 0].copy())
+
+    # ---- the media mix (plan 45 V3) ----
+
+    def start_mix(self, mixer) -> bool:
+        """Listen to the media mixer (`media.mixer.Mixer`): its callback
+        pushes the summed video sound, mono, into this engine's ring. No
+        stream is opened here and no device grabbed; with no channel heard
+        (or the mixer's stream not yet open) the bands read silence."""
+        self.stop()
+        if mixer is None or not hasattr(mixer, "listen"):
+            self.error = "no media mixer to listen to"
+            return False
+        self._attach("mix", "video sound (media mix)", self.MIX_RATE)
+        self._mixer = mixer
+        mixer.listen(self._ring)
+        return True
 
     # ---- file transport ----
 
@@ -285,6 +326,10 @@ class AudioEngine:
         pending = self._ring.drain()
         if len(pending):
             self.analyser.feed(pending)
+        elif self.mode == "mix" and not _mix_open(getattr(self, "_mixer", None)):
+            # the mixer's stream is not (or no longer) open: silence, not
+            # the last block held — no callback will come to say so
+            self.analyser.feed(_SILENCE)
         self.chain.step(dt)
 
     def publish(self, router) -> None:

@@ -40,6 +40,16 @@ failure while a channel still asks. The callback never blocks and
 never raises: a voice whose `read` raises or hands back the wrong shape is
 skipped (`errors` counts them) and anything else wrong is silence.
 
+**The analyzer can listen to the mix** (plan 45 V3). `listen(ring)` hands
+the mixer the analyzer's input ring (`audio._Ring`, `AudioEngine.start_mix`);
+each callback then pushes the block it just wrote to the output — after the
+gains and after the clip, what the room hears — as mono, the mean of L and
+R, into that ring, and a callback with no voice pushes a block of zeros so
+the bands decay as they do on a paused track. The push is one more copy into
+a buffer kept for it (`_mono`); it counts nothing and moves nothing: the
+analyzer drains the ring once a frame exactly as it drains the mic's.
+`listen(None)` stops it. The ring is one reference, read once a callback.
+
 `sounddevice` is imported only when the stream is first opened (the
 package's rule: importing the app pulls no adapter library)."""
 
@@ -89,6 +99,8 @@ class Mixer:
         self.errors = 0
         self._mix = np.zeros((BLOCK, AUDIO_CHANNELS), np.float32)   # the callback's own
         self._one = np.zeros((BLOCK, AUDIO_CHANNELS), np.float32)
+        self.tap = None       # plan 45 V3: the analyzer's ring, or None (`listen`)
+        self._mono = np.zeros(BLOCK, np.float32)
 
     # -- the frame thread ---------------------------------------------------
 
@@ -185,6 +197,33 @@ class Mixer:
         return ((t is None or not t.is_alive())
                 and (shut is None or not shut.is_alive()))
 
+    def listen(self, ring) -> None:
+        """The analyzer's input ring (anything with `push(mono)`), or None
+        to stop. From the frame thread; the callback reads it once a block.
+        Opens nothing: the stream still opens when a channel first asks."""
+        self.__dict__.setdefault("_mono", np.zeros(BLOCK, np.float32))  # a Mixer from before V3
+        self.tap = ring
+
+    def _push(self, mix, frames: int) -> None:
+        """The block just written, as mono (mean of L and R), into the
+        analyzer's ring. Called from the callback only; a failure here costs
+        the analyzer one block, never the sound already written."""
+        ring = getattr(self, "tap", None)
+        if ring is None:
+            return
+        try:
+            mono = getattr(self, "_mono", None)
+            if mono is None or len(mono) != frames:      # another size: once
+                mono = self._mono = np.zeros(frames, np.float32)
+            if mix is None:
+                mono.fill(0.0)
+            else:
+                np.add(mix[:, 0], mix[:, 1], out=mono)
+                np.multiply(mono, 0.5, out=mono)
+            ring.push(mono)
+        except Exception:  # noqa: BLE001 — the analyzer's loss, not the room's
+            self.errors += 1
+
     def line(self) -> str:
         """SYSTEM's one line: '' until a channel has asked for the stream
         (`failed` says whether to warn)."""
@@ -205,6 +244,7 @@ class Mixer:
             voices = self.voices          # one read: this frame's or the last
             if not voices:
                 outdata.fill(0.0)
+                self._push(None, frames)        # silence: the bands decay
                 return
             mix, one = self._mix, self._one
             if len(mix) != frames:          # PortAudio asked for another size: once
@@ -222,6 +262,7 @@ class Mixer:
                     self.errors += 1
             np.clip(mix, -CEILING, CEILING, out=mix)
             outdata[:] = mix
+            self._push(mix, frames)           # V3: what is heard, to the analyzer
         except Exception:  # noqa: BLE001 — PortAudio must never see a raise
             try:
                 outdata.fill(0.0)

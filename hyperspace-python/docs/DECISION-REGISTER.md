@@ -626,6 +626,9 @@ here; overturn → the change, then the same.
 | 587 | Plan 48: a save writes back to the preset's own file; as… with a folder in the name writes into it; a new preset grown from the loaded one (two-handed save, `preset.save_new`, an empty pad's hold) lands beside it; ⇧F's `PRESET <n>` at the top | 441 | (rec) — pending the owner; built as recommended |
 | 588 | Plan 48: the PRESETS page draws a folder's preset as `party / TRIP` with the folder dim; the flat list stays; a rename's field holds the leaf and keeps the folder | 440, 441 | (rec) — pending the owner; built as recommended |
 | 589 | Wave 1 T0: the test suite cannot hang the Mac — pytest-timeout's thread method at 120 s for xdist workers (the signal method for a serial run) with no worker restart in pyproject's addopts, so a test blocked in C fails by name and ends the run; `live` tests hold a per-account `flock` (wait 60 s, then skip); one tier at a time on a shared Mac; a real-GLFW test asks a child process first (`gl_window_ok`, #332) and skips if `glfwInit` does not answer | — | (rec) — pending the owner; built as recommended (T0) |
+| 594 | Plan 45 V3, the analyzer listens to the mix: a third source, `mix`, beside `mic` and `file` — the mixer's callback pushes the block it just wrote (after the gains and after the ±1 clip: what the room hears) into the analyzer's ring as mono, the mean of L and R, at 48 kHz; a callback with no voice pushes zeros; the push is one copy into a kept buffer, counts nothing and moves nothing, and the analyzer drains the ring once a frame as it drains the mic's | 446, 447 | (rec) — built as recommended (V3) |
+| 595 | Plan 45 V3, picking it: `audio.mix` ("Video sound"), a toggle beside `audio.mic` on AUDIO ("Listen to video sound"), not persisted, like the mic's; it opens no stream and grabs no input device, and opens nothing on the mixer either (the stream opens as V2 says, the first channel heard); until a channel is heard, or while the mixer's stream is not open, the bands read silence (the analyser's window zeroed each frame); no config key — none names the mic or the file either | 446, 448 | (rec) — built as recommended (V3) |
+| 596 | Plan 45 V3, a hot reload and a failure: the engine's and the mixer's new fields are read with defaults (`getattr`, `MediaState._mixer()`'s fill-in), so a hot reload keeps the live stream and the live capture; the `audio.mix` toggle is a registry param, built at launch, so the button needs one restart; a ring push that raises is counted in the mixer's `errors` and costs the analyzer one block, never the sound already written | 448 | (rec) — built as recommended (V3) |
 
 "—": no hand check shows it; tests only.
 
@@ -10509,3 +10512,71 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   `tests/test_gl_probe.py`; a deliberate `time.sleep(130)` under
   `-n 2 --timeout=5` failed by name in 5.5 s, and under `-n0 --timeout=5`
   failed and the run went on: "1 failed, 2 passed").
+
+### 594. Plan 45 V3: the analyzer listens to the mix
+- **Asked.** Plan 45's third PR: the mixer's summed block pushed into the
+  analyzer's ring as a source beside `mic` and `file`, so the bands, the
+  beat and everything that reads the analyzer follow the show's video
+  sound — one analyser, fed by one more input, under the owner's rule
+  (row 562): no second time base.
+- **Answer.** (rec) — built as recommended
+  ([`plans/45-video-audio.md`](plans/45-video-audio.md),
+  `media/mixer.py`, `audio.py`). `Mixer.listen(ring)` hands the mixer
+  the analyzer's input ring (`audio._Ring`); every callback then pushes
+  the block it just wrote to the output into it, as mono. **After the
+  clip** (rec): the analyzer hears what the room hears, and the AUDIO
+  page's `master.gain` already sets the level into the bands; before the
+  clip two loud tracks would read louder than they sound. **Mono as the
+  mean of L and R** (rec): the mic is one channel, so the bands' tuning
+  carries across; a centred mono soundtrack (put on both sides at −3 dB
+  by V1's resampler) reads at −3 dB, a hard-panned one at −6 dB. 48 kHz,
+  the mixer's one rate (`AudioEngine.MIX_RATE`, equal to
+  `media.video.AUDIO_RATE` by test — not imported, so the audio stack
+  stays below the media package, `test_audio_boundary.py`). A callback
+  with no voice pushes a block of zeros, so the bands decay on their own
+  time constants as on a paused track. The push is one copy into a
+  buffer the mixer keeps (`_mono`), no allocation once warm.
+- **Why it keeps the rule.** Nothing in the callback counts, integrates
+  or keeps a position: the block is the one V2 already read at the
+  transport's playhead, and the analyzer drains the ring once a frame as
+  it drains the mic's. `start_file`'s `_played` is not reused.
+- **What would overturn it.** The owner hearing the bands too quiet on a
+  mono soundtrack (sum rather than mean), or wanting the analyzer to see
+  past the clip (take the block before `np.clip`).
+
+### 595. Plan 45 V3: picking the mix
+- **Answer.** (rec) — built as recommended. `audio.mix` ("Video sound",
+  a toggle in the `audio` group, not persisted, not bound to any key or
+  desk button) beside `audio.mic`; AUDIO draws it as *Listen to video
+  sound* / *Stop video sound* next to the mic's button, and while no
+  channel is heard says "silent until a channel's sound is on (MEDIA)".
+  Turning it on calls `AudioEngine.start_mix(mixer)`: the old source is
+  stopped (its stream closed; the mic's device let go), the trackers made
+  fresh with the bands and the master faders kept (as any source
+  switch), and the mixer told to push into the new ring. **No stream is
+  opened and no input device grabbed**, and the mixer's own stream is not
+  opened either: it opens as V2 says, the first time a channel's sound is
+  on, so picking the mix first reads silence until one is. Picking the
+  mic or a file, or Stop, detaches the mixer (`listen(None)`). While the
+  mixer's stream is not open (never asked, failed, or stopped under us)
+  the analyser's window is zeroed each frame — silence, not the last
+  block held, since no callback will come to say so. **No config key**:
+  the task asked for one where the source is named, but no key names the
+  mic or the file either (the source is picked at the panel each run);
+  `config.py` is untouched.
+- **What would overturn it.** The owner wanting the source to survive a
+  restart (a `[audio] source` key, then the mic's device too).
+
+### 596. Plan 45 V3: hot reload, and a push that fails
+- **Answer.** (rec) — built as recommended. The engine's new field
+  (`_mixer`) and the mixer's (`tap`, `_mono`) are read with defaults —
+  `getattr` in `AudioEngine.stop` / `step` and in the callback,
+  `Mixer.listen`'s `setdefault`, and `MediaState._mixer()`'s fill-in of a
+  reloaded mixer's missing fields — so a hot reload of `audio.py` or
+  `media/mixer.py` keeps the live capture and the live stream, and V2's
+  sound is untouched. The toggle is a registry param and the registry is
+  built at launch, so **the button appears after one restart**. A push
+  into the ring that raises is caught inside the callback after the
+  output is written: counted in the mixer's `errors` (SYSTEM's `read
+  errors`), one block lost to the analyzer, never the room's sound.
+- **Judge it.** Hand check 448.

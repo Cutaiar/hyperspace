@@ -2351,6 +2351,21 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
 
     r.toggle("audio.mic", "Mic", mic_on, set_mic, group=g, persist=False,
              tip="Listen to the selected input device.")
+    # plan 45 V3: the third source — the media mixer's sum, the videos' sound
+    def mix_on() -> bool:
+        return bool(getattr(audio, "on", False) and getattr(audio, "mode", None) == "mix")
+
+    def set_mix(on: bool) -> None:
+        if on and not mix_on() and hasattr(audio, "start_mix"):
+            get = getattr(media, "_mixer", None)
+            audio.start_mix(get() if get is not None else getattr(media, "mixer", None))
+        elif not on and mix_on():
+            audio.stop()
+
+    r.toggle("audio.mix", "Video sound", mix_on, set_mix, group=g, persist=False,
+             tip="Listen to the media mixer: the channels whose sound is on, summed "
+                 "after their gains. Silent until a channel's sound is on; no input "
+                 "device is opened.")
     r.enum("audio.device", "Input device",
            lambda: int(getattr(audio, "device_sel", 0)),
            lambda i: setattr(audio, "device_sel", int(i)),

@@ -1,8 +1,9 @@
 # Plan 45 — video audio: a video's sound, under the transport's clock
 
-**Status: V1, V2 built.** V1 (2026-11-02; review fixes the same day) on
+**Status: V1, V2, V3 built.** V1 (2026-11-02; review fixes the same day) on
 `wave0/v1-video-audio-decode`, merged; V2, the mixer (2026-11-02), on
-`wave1/v2`; V3–V4 are designed here and not built. From the
+`wave1/v2`; V3, the analyzer on the mix (2026-11-02), on `wave2/v3`; V4
+is designed here and not built. From the
 post-show triage of 2026-10-31: PyAV decoded only the video stream, the
 proxies are MJPEG with no audio, and the only output stream was the
 analyzer's WAV playback (`audio.py`) — no mixer, no per-channel gain.
@@ -113,10 +114,12 @@ MediaState.poll ─▶ Transport.step ─▶ VideoSource.want ┘      ▼
   params; SYSTEM a `media sound` line (open, channels playing, underruns).
   `tests/test_media_mixer.py`; register rows 581–583; hand checks 437–439
   (group BB).
-- **V3 — the analyzer listens to the mix.** The mixer's summed block is
-  pushed into the analyzer's ring as a source beside `mic` and `file`
-  (`AudioSource` grows a `mix` mode): the bands follow the show's video
-  sound. One analyser, fed by one more input.
+- **V3 — the analyzer listens to the mix (built).** The mixer's summed
+  block is pushed into the analyzer's ring as a source beside `mic` and
+  `file` (`AudioEngine` grows a `mix` mode): the bands follow the show's
+  video sound. One analyser, fed by one more input. What the build chose
+  is under "What changed in the build" below; register rows 594–596,
+  hand checks 446–448 (group BE), `tests/test_audio_mix.py`.
 - **V4 — sync with video as master; varispeed.** The callback reads at
   the transport's position with the transport's speed: at rate r it
   consumes r × frames source samples per output block and resamples
@@ -218,3 +221,34 @@ video, nothing audible changes, memory stays flat, **no extra read**
   live `VideoSource` and its `Soundtrack` and keeps their threads. A
   `VideoSource` from before this build has no `audio` (guarded with
   `getattr`): restart to hear one.
+
+## What changed in the build (V3)
+
+- **The engine is `audio.AudioEngine`**, not an `AudioSource` (there is
+  none): `start_mix(mixer)` beside `start_mic` and `start_file`, mode
+  `"mix"`. It opens no stream and grabs no input device; it hands the
+  mixer its ring (`Mixer.listen`), and `stop` (which every `start_*` calls
+  first) takes it back (`listen(None)`).
+- **What the analyzer hears** (rec): the block the callback just wrote —
+  after the gains and after the ±1 clip, what the room hears — as mono,
+  the mean of L and R, at 48 kHz (`AudioEngine.MIX_RATE`, held equal to
+  `AUDIO_RATE` by a test rather than imported: `audio.py` may not import
+  the media package). A callback with no voice pushes zeros, so the bands
+  decay. The push is one copy into the mixer's kept `_mono`; it counts
+  nothing and moves nothing — the analyzer drains the ring once a frame
+  as it drains the mic's. `start_file`'s `_played` is not reused.
+- **Silence, not a stale block** (rec): until a channel is heard the
+  mixer's stream is not open (V2, unchanged), so no callback comes; while
+  the source is `mix` and the stream is not `open`, `AudioEngine.step`
+  zeroes the analyser's window each frame. A `mix` with nothing heard is
+  silence, not an error.
+- **The picker is a toggle, `audio.mix`**, beside `audio.mic` (AUDIO:
+  *Listen to video sound*; not persisted, no key or desk binding). There
+  is **no config key** for the source — none names the mic or the file
+  either — so `config.py` is untouched.
+- **Hot reload**: the new fields are read with defaults, so the live
+  stream and capture survive; the toggle is a registry param built at
+  launch, so the button needs one restart. A ring push that raises is
+  counted in `Mixer.errors` after the output is written: the analyzer
+  loses a block, the room loses nothing.
+- **`publish` is untouched** (D2 is changing its signature in parallel).
