@@ -26,7 +26,7 @@ from itertools import pairwise
 
 import numpy as np
 
-from hyperspace.fx import FxChain, FxState
+from hyperspace.fx import FxChain, FxState, clock_rate
 
 W, H = 320, 200
 DT = 1 / 60
@@ -78,20 +78,28 @@ class Run:
 
 def run(ctx, state: FxState, name: str, param: str, before: float, after: float, *,
         values: dict | None = None, phase: float = 3613.7, t0: float = 100.0, frames: int = 6,
-        settle: int = 3, w: int = W, h: int = H) -> Run:
+        settle: int = 3, w: int = W, h: int = H, clocks: dict[str, float] | None = None) -> Run:
     """Effect `name` over the UV source for `frames` still frames, then
     `param` stepped `before` → `after` on the next, then `settle` more.
     `values` sets the effect's other params first (an amount big enough to
     see). `phase` is where the effect's clock stands first (an hour at
     speed 1 — the show's fourth hour at a quarter; not a round number, so a
     jump of whole mirrored screens cannot land back on itself), since the
-    jump grows with it. Every frame is DT apart; the clocks move through
-    `run_one`."""
+    jump grows with it; each `@clock` of the effect stands where that hour
+    at these knobs left it (phase × its rate, `fx.clock_rate` as the app
+    reads it), or where `clocks` (uniform → phase) puts it. Every frame is
+    DT apart; the clocks move through `run_one`."""
     v = state.values[name]
     v.update(on=True, mix=1.0)
     v.update(values or {})
     v[param] = before
     state.phase[name] = phase
+    # its `@clock`s where an hour at these knobs left them: phase × rate
+    # (u_phase is already speed × seconds), wrapped to a period if any
+    at = state.clocks.setdefault(name, {})
+    for c in state.specs[name].clocks:
+        x = (clocks or {}).get(c.uniform, phase * clock_rate(c, v))
+        at[c.uniform] = x % c.period if c.period else x
     chain = FxChain(ctx, state)
     try:
         (src, _), (_, dst) = chain.pool((w, h))

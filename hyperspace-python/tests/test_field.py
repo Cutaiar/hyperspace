@@ -207,7 +207,8 @@ def test_a_lattice_is_drawn_far_to_near_through_its_perspective(layout):
     assert not np.allclose(np.sort(turned[:, 0]), np.sort(rows[:, 0]))
     # every motion moves it, and the eye stays put
     for motion in (1, 2, 3):
-        m = F.field(_view(200, layout, inst_motion=motion, inst_amp=0.5), 1600, 900, t=1.0)
+        m = F.field(_view(200, layout, inst_motion=motion, inst_amp=0.5, inst_phase=1.0),
+                    1600, 900)
         assert np.isfinite(m).all() and not np.allclose(np.sort(m[:, 0]), np.sort(
             F.field(_view(200, layout), 1600, 900)[:, 0]))
 
@@ -234,8 +235,8 @@ def test_any_count_layout_and_motion_is_finite():
             for motion in (0, 1, 2, 3):
                 for n in (0, 1, 2, 5, 64, 4096):
                     s = _view(n, layout, inst_fit=fit, inst_motion=motion, inst_amp=1.0,
-                              inst_spacing=0.5, inst_persp=1.0, zoom=3.0)
-                    rows = F.field(s, 640, 400, t=2.0)
+                              inst_spacing=0.5, inst_persp=1.0, zoom=3.0, inst_phase=2.0)
+                    rows = F.field(s, 640, 400)
                     assert rows.dtype == np.float32 and rows.shape[1] == 4
                     assert len(rows) == n and np.isfinite(rows).all(), (layout, fit, motion, n)
                     assert (rows[:, 2] > 0).all() and (rows[:, 3] > 0).all()

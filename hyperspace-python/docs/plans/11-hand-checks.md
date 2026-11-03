@@ -6630,15 +6630,17 @@ where the file said 0.3 before (the tool's line: `push 0.3 → 0.0737 about
 0.9`).
 ## AR. Continuity: `@clock`, and no shader multiplies time by a param
 Register row 560 (the owner, 2026-11-02; wave 0 K1, `wave0/k1-clock-directive`).
-K1 is the framework only — the directive, the lint and the harness; **no
-shipped effect is ported yet**, so this check waits for K2 (warp and
-tripcolour on `@clock`). Until then the headless proof is
-`tests/test_fx_clock.py` (a synthetic `@clock` effect beside its
-`u_phase * u_rate` twin through the UV harness; warp's drift as a strict
-xfail) and `tests/test_shader_time_lint.py` (the allowlist of today's
-offenders).
+K1 is the framework — the directive, the lint and the harness; K2
+(register row 577) ported warp (drift and scale, one clock at drift ×
+scale) and tripcolour (pulse) onto `@clock`, so this check can be run
+now (group AY, check 434, is the same nudges an hour in). The headless
+proof is `tests/test_fx_clock.py` (a synthetic `@clock` effect beside its
+`u_phase * u_rate` twin through the UV harness; warp's drift and
+tripcolour's pulse stepping continuously; warp's scale re-zooming and no
+longer jumping) and `tests/test_shader_time_lint.py` (the allowlist now
+names only RINGS × colour, K4).
 **419. A knob step on a `@clock` param changes the rate, not the place.** (laptop; after K2; music helps)
-Headless: `tests/test_fx_clock.py` (`test_a_clocked_rate_step_is_continuous_and_the_twins_jumps`, `test_warps_speed_step_is_continuous`), `tests/test_shader_time_lint.py`.
+Headless: `tests/test_fx_clock.py` (`test_a_clocked_rate_step_is_continuous_and_the_twins_jumps`, `test_warps_speed_step_is_continuous`, `test_the_ported_rate_params_step_continuously`, `test_warps_scale_step_re_zooms_and_no_longer_jumps`), `tests/test_shader_time_lint.py`.
 1. Load a preset with Trip warp on (`party-trip`, say) and let it run — the
    longer the better; an hour is the show's shape. Note roughly where the
    warp's ripples sit over the shape.
@@ -6648,15 +6650,102 @@ Headless: `tests/test_fx_clock.py` (`test_a_clocked_rate_step_is_continuous_and_
 3. On Trip colour, nudge Pulse one step while white is on screen.
 4. Open `hyperspace/shaders/fx/warp.glsl`: the `// @clock` lines are at the
    top; nothing in the body multiplies `u_phase` or `u_time` by a `u_` param.
-*Pass:* in 2 each nudge makes the ripples slide faster or finer from where
-they are — nothing re-draws, nothing lurches, the same as Speed; in 3 the
+*Pass:* in 2 a Drift nudge makes the ripples slide faster from where they
+are, the same as Speed; a Scale nudge makes them a touch finer about the
+centre (the rim moves a little more than the middle, the size of the
+nudge) and they slide on — nothing re-draws, nothing lurches; in 3 the
 green pulse keeps its beat and only quickens, no flash; 4 reads as said.
 *Fail:* a nudge on Drift or Scale lands the field somewhere else (the
 2026-10-30 show) — the port multiplies a time by a param somewhere the
 lint's allowlist still names, or a `@clock`'s period is set where the
 shader's use of it is not periodic (a scrolled noise field must run on,
-unwrapped). Before K2 lands, 2 and 3 *do* lurch on Drift, Scale and Pulse:
-that is the recorded fault, not a regression.
+unwrapped). On a build before K2, 2 and 3 *do* lurch on Drift, Scale and
+Pulse: that is the recorded fault K2 fixed.
+
+## AY. Continuity K2: warp and tripcolour on `@clock`
+Register row 577 (wave 1 K2, `wave1/k2`). Warp's scroll is one `@clock`,
+`u_drift_t`, at speed × drift × scale (the scroll counted in noise cells,
+so neither knob moves where the field is); tripcolour's sine is
+`u_pulse_t` at speed × pulse, wrapped to 2π. Check 419 is the first
+look; this one is the show's shape — an hour in, where the old build
+lurched by whole screens.
+**434. An hour in, warp's Drift and Scale and tripcolour's Pulse nudge without a lurch.** (laptop or the rig; an hour of running; music helps)
+Headless: `tests/test_fx_clock.py` (`test_the_ported_rate_params_step_continuously`, `test_warps_scale_step_re_zooms_and_no_longer_jumps`, the harness an hour in), `tests/test_shader_time_lint.py`.
+1. Load `party-noita` (Trip warp and Trip colour both on) and leave it
+   running for an hour — a long set, or the laptop left on with the
+   display awake.
+2. On FX, open Trip warp. Nudge Drift one step up, then one down; then
+   Scale one step up, then one down. Watch the rim, where the warp is
+   strongest.
+3. Open Trip colour and nudge Pulse one step while white is on screen.
+4. With hands, push the right hand forward and back (the preset routes
+   the hand's depth to Scale) and raise the left (Drift).
+*Pass:* in 2 Drift changes how fast the ripples slide and nothing else;
+Scale makes them a touch finer or coarser about the centre and they slide
+on from where they are; in 3 the green pulse keeps its beat and only
+quickens or slows; in 4 the ripples breathe with the hands, no snaps.
+Each the same as in the first minute.
+*Fail:* any nudge an hour in throws the ripples somewhere else or flashes
+the green — the show's fault (2026-10-30) — or the pulse or drift stops
+dead after a nudge (a clock that did not move).
+
+## AW. Decks D1: one `Deck`, nothing changes (plan 44)
+Register row 571, 2026-11-02. Headless: `tests/test_deck.py` (the old
+construction order and `Deck.build` land every corpus preset to the same
+state; `main` builds one deck; `frame`'s order unchanged) and the goldens.
+**430. A launch on the build does everything it did.** (Mac, the rig's
+config, the APC40 plugged in)
+1. Quit and launch (a restart: this build adds a module and a field on
+   live objects, so a hot reload of the old process is not enough). The
+   startup preset lands as before.
+2. PRESETS: load another preset. Turn a knob on the APC40 and drag a
+   slider on the panel; ⌘Z twice, ⇧⌘Z once.
+3. HOLD, change a param on the panel, TAKE; HOLD again, change it, DROP.
+4. Open `hyperspace/deck.py`, add a blank line, save; then the same in
+   `hyperspace/routing.py`. Turn a knob after each.
+5. SYSTEM: the hot reload line.
+*Pass:* (1) the picture, the PRESETS strip and the dirty dot are as on
+the previous build; (2) the preset lands, the knob and the slider move
+the picture, ⌘Z takes back the slider then the knob, ⇧⌘Z puts the slider
+back, the footer names each step; (3) the projector stays on the program
+while held, TAKE shows the change, DROP puts it back, as before; (4) no
+red banner, no error toast, the knob still moves the picture after each
+save; (5) SYSTEM shows "hot: deck …" and then "hot: routing …" with the
+time. Fail: anything that differs from the previous build — a step
+missing from the undo footer, a knob that stops after a save, or a hot
+reload error naming `deck`.
+
+## AZ. Continuity: the media path's and the field's rates (wave 1 K3)
+Register row 578 (under row 560; wave 1 K3, `wave1/k3`). The rates are
+integrated by the host (`ViewState.integrate`): the draw reads a phase,
+never t × rate. Restart the app after pulling (a new field on the live
+`ViewState`).
+**435. A nudge on the media rate or the field rate changes the speed, not the place.** (laptop; any time, but the longer the app has run the better)
+Headless: `tests/test_view_phase.py` (`test_a_knob_step_on_the_field_rate_moves_no_copy_further_than_one_frame`, `test_a_rate_step_changes_the_slope_not_the_value`, `test_the_draw_reads_the_phase_never_the_rate`).
+1. Load a preset with a field in motion (`party-field` or `ember-orbit`:
+   several copies, motion ORBIT or WAVE) and let it run — ten minutes at
+   least; the show's shape is an hour.
+2. Nudge **Field rate** (`view.inst_rate`, the FIELD row; APC40 knob
+   0x35 on the preset layer) one step up, then one down, then sweep it
+   slowly to the top and back to 1.
+3. Put a media channel on the faces (a still on `pattern.media`), set its
+   path to orbit, then figure-8, then sway, and nudge **Media rate**
+   (`view.media_rate`) one step each way in each.
+4. Turn **Media rate** to 0: the picture stops where it is; back up: it
+   moves on from there.
+5. Under hold (plan 38): engage HOLD and nudge Field rate on the preview.
+   Until plan 44's per-deck `ViewState`, a Field rate or Media rate move
+   on the preview also moves the projector — its copies quicken too —
+   and the hold's red line stays silent about it. That is the ruled
+   behaviour (row 578), the same as the turn's speed, not a fault.
+*Pass:* in 2 and 3 every nudge makes the motion quicken or slow from
+where it is — no copy and no picture leaps across the screen, the same as
+nudging the turn's speed; in 4 the picture parks and resumes in place.
+*Fail:* a nudge lands the copies or the picture somewhere else (the
+2026-10-30 show's fault): the draw reads a rate again
+(`tests/test_view_phase.py`'s pin should have caught it), or a phase
+wraps at a period one of its uses does not share (`view.INST_PERIOD`,
+`MEDIA_PERIOD`).
 
 ## BB. Video audio 2 of 4: the mixer, forward play (plan 45 V2)
 Decision register rows 581–583. The play-audio toggle and the gain are

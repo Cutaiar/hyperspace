@@ -60,6 +60,7 @@ def shot(ctx, fbo, values: dict, frames: int, scene: bool = True) -> np.ndarray:
         s.lines = s.points = s.faces = False
     for k in range(frames):
         s.integrate(1 / 60)
+        s.seed_phases(4.0 + k / 60)  # K3: the field's and media path's phases at the pinned clock
         fbo.use()
         ctx.viewport = (0, 0, W, H)
         r.draw(s, W, H, t_now=4.0 + k / 60)
