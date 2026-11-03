@@ -2743,17 +2743,18 @@ class Router:
     without one makes its own, so a bare router (the tests') reads and
     feeds as it always did. Every source-side name the router had —
     `feeds`, `labels`, `rests`, `gates`, `names`, `lane_kinds`, `devices`,
-    `clock`, `use`, `follow_devices`, `schemes`, `lane`, `address`, `feed`,
-    `source_feel`, `felt`, `felt_lanes` — reads and writes the sources, so
-    every caller keeps working. `devices` (keyword) is handed to the
-    sources' `use`."""
+    `clock`, `use`, `follow_devices`, `schemes`, `address`, `feed` — reads
+    and writes the sources, so every caller keeps working. What depends on
+    the table is the router's own: an address resolves against this
+    table's primaries and is cached here (`lane`), a scheme's feel is this
+    table's pad feel (`source_feel`, `felt`). `devices` (keyword) is handed
+    to the sources' `use`."""
 
     def __init__(self, reg: Registry, table: Bindings, sources: Sources | None = None,
                  devices=None):
         self.reg = reg
         self.table = table
         self.sources = sources if sources is not None else Sources()
-        self.sources.follow(table)
         if devices is not None:
             self.use(devices)
         register_desk(reg, table)
@@ -2765,6 +2766,23 @@ class Router:
         self._note_macro_bases()
 
     # ---- the shared sources (routing_sources.py), read through ----
+
+    @property
+    def sources(self) -> Sources:
+        """The shared half this router reads. A router from before plan 44
+        D2 (a hot reload rather than the restart that build asks for) has
+        none: it gets its own, holding what that router had been fed, so
+        the frame goes on over its own sources."""
+        src = self.__dict__.get("_sources")
+        if src is None:
+            src = self.__dict__["_sources"] = _adopt_sources(self)
+            src.follow(self.table)
+        return src
+
+    @sources.setter
+    def sources(self, src: Sources) -> None:
+        self.__dict__["_sources"] = src
+        src.follow(self.table)
 
     @property
     def feeds(self) -> dict[str, np.ndarray | None]:
@@ -2796,11 +2814,23 @@ class Router:
 
     @property
     def clock(self):
+        """The one clock every router's banks step on: the sources' (plan
+        44 §2). Set by the first `use_bank` / `use_sequencer` that hands
+        one in when the sources have none; never replaced (`_clock_from`)."""
         return self.sources.clock
 
-    @clock.setter
-    def clock(self, clock) -> None:
-        self.sources.clock = clock
+    def _clock_from(self, clock) -> None:
+        """The sources' clock is the rig's one: taken from `clock` when the
+        sources have none, and a different clock is refused — a router
+        must not move the beat every other router's banks step on."""
+        src = self.sources
+        if clock is None:
+            return
+        if src.clock is None:
+            src.clock = clock
+        elif clock is not src.clock:
+            raise ValueError("Router: the sources step every bank on one clock; "
+                             "this router was handed another")
 
     def use(self, devices) -> None:
         """`Sources.use`: ask the device registry from now on."""
@@ -2815,11 +2845,32 @@ class Router:
         return self.sources.schemes()
 
     def lane(self, source: str) -> tuple[str, int]:
-        """`Sources.lane`: (scheme, lane index) a source address names."""
-        return self.sources.lane(source)
+        """(scheme, lane index) that a source address names under this
+        table's primaries (`Sources.resolve`), with −1 for an address that
+        names no lane — dormant. Cached per address here, against this
+        table's primaries and the scheme's published map, so the
+        per-frame pass parses nothing."""
+        hit = self._lane_cache().get(source)
+        if hit is None or self.sources.names.get(hit[0]) is not hit[1]:
+            hit = self._resolve_lane(source)
+        return hit[0], hit[2]
+
+    def _lane_cache(self) -> dict:
+        """The resolved addresses, dropped when this table's primaries are
+        a new dict (the device registry republished them)."""
+        d = self.__dict__
+        prim = getattr(self.table, "primaries", None)
+        if d.get("_lanes_prim", _NO_LANES) is not prim:
+            d["_lanes_prim"], d["_lanes"] = prim, {}
+        return d.get("_lanes", _NO_LANES)
 
     def _resolve_lane(self, source: str) -> tuple[str, dict | None, int]:
-        return self.sources._resolve_lane(source)
+        """`lane`'s cache miss: (scheme, the map it was resolved against, index)."""
+        cache = self._lane_cache()
+        if cache is _NO_LANES or len(cache) > 4096:      # addresses typed at the page, say
+            cache = self.__dict__["_lanes"] = {}
+        hit = cache[source] = self.sources.resolve(source, getattr(self.table, "primaries", None))
+        return hit
 
     def address(self, scheme: str, i: int) -> str:
         """`Sources.address`: lane `i` of `scheme` as a row names it."""
@@ -2957,7 +3008,7 @@ class Router:
                  self.__dict__.setdefault("_pad_holds_of", {}).setdefault(role, {}))
         if not pad.on:
             holds.clear()
-            self.sources.felt(axis, None, 0.0)   # the camera job's followers start afresh
+            self.felt(axis, None, 0.0)       # the camera job's followers start afresh
             return
         now = time.monotonic() if now is None else now
         # each pad hears its own rows: a second pad those qualified with its
@@ -3018,8 +3069,9 @@ class Router:
         """`Sources.feed`: this frame's vector for `scheme` (None: not live)."""
         self.sources.feed(scheme, values)
 
-    def gated(self, b: Binding) -> bool:
-        """Is this row allowed to act this frame?
+    def gated(self, b: Binding, feeds: dict | None = None) -> bool:
+        """Is this row allowed to act this frame? (`feeds`: the sources'
+        feeds, handed in by the pass so its per-row reads take no hop.)
 
         A row with no `when` always is. One with `when` waits on that
         source address reading on (≥ 0.5) — a pinch switch, say, so the
@@ -3035,33 +3087,38 @@ class Router:
         if b.when is None:
             return True
         scheme, i = self.lane(b.when)
-        vec = self.feeds.get(scheme)
+        vec = (self.sources.feeds if feeds is None else feeds).get(scheme)
         if vec is None or not 0 <= i < len(vec):
             return False
         u = float(vec[i])
         return not math.isnan(u) and u >= 0.5
 
-    def rest_of(self, source: str) -> float:
+    def rest_of(self, source: str, rests: dict | None = None) -> float:
         """Where `source` rests right now, from its adapter's `rests` — 0
         when the adapter published none (the analyzer's lanes, an unknown
-        address). What a push row without a rest of its own is centred on."""
+        address). What a push row without a rest of its own is centred on.
+        (`rests`: the sources' rests, handed in by the pass.)"""
         scheme, i = self.lane(source)
-        rests = self.rests.get(scheme) or []
+        rests = (self.sources.rests if rests is None else rests).get(scheme) or []
         return float(rests[i]) if 0 <= i < len(rests) else 0.0
 
     # ---- motion (motion.py): the feel a reading travels with ----
 
     def source_feel(self, scheme: str) -> Motion:
-        """`Sources.source_feel`: a scheme's own feel (the pad's for `axis`)."""
-        return self.sources.source_feel(scheme)
+        """A scheme's own feel under this table's pad feel (`table.pad_feel`)
+        — the pad's for `axis`, none for every other source; the rule is
+        `Sources.source_feel`'s, asked here without the hop (per row per
+        frame, through `feel_of`)."""
+        return getattr(self.table, "pad_feel", OFF) if base_scheme(scheme) == "axis" else OFF
 
     def feel_of(self, b: Binding) -> Motion:
         """The motion row `b` runs on its reading: its own, or its source's."""
         return b.motion if b.motion is not None else self.source_feel(b.scheme)
 
     def felt(self, scheme: str, values, dt: float) -> list[float] | None:
-        """`Sources.felt`: `values` through the scheme's own feel."""
-        return self.sources.felt(scheme, values, dt)
+        """`Sources.felt`: `values` through the scheme's own feel, this
+        table's pad feel for `axis`."""
+        return self.sources.felt(scheme, values, dt, getattr(self.table, "pad_feel", OFF))
 
     def felt_now(self, b: Binding) -> float | None:
         """Row `b`'s reading after its feel, as the last `modulate` left
@@ -3075,11 +3132,11 @@ class Router:
         return self.sources.felt_lanes(scheme)
 
     def _move(self, b: Binding, m: Motion, u: float, p: Param, depth: float,
-              dt: float, movers: dict) -> float:
+              dt: float, movers: dict, rests: dict | None = None) -> float:
         """Row `b`'s reading `u` after its motion. A row's follower starts
         where it moves nothing — a push row at its rest, a position row at
         the base — so a source going live glides in from the base."""
-        rest = b.rest if b.rest is not None else self.rest_of(b.source)
+        rest = b.rest if b.rest is not None else self.rest_of(b.source, rests)
         key = (b.source, b.target)
         f = movers.get(key)
         if f is None:
@@ -3098,10 +3155,12 @@ class Router:
         each at its node of the patch, after the knob params it reads have
         landed (decision 7), and it feeds its scheme. Its scheme must be in
         `BANKS`. A bare router (the tests') steps no bank, and whatever
-        feeds the scheme feeds it."""
+        feeds the scheme feeds it. The clock is the sources' one (plan 44
+        §2: one beat for every deck): `clock` becomes it when the sources
+        have none, and a different clock is a ValueError (`_clock_from`)."""
+        self._clock_from(clock)
         banks = self.__dict__.setdefault("banks", {})
         banks[bank.SCHEME] = bank
-        self.clock = clock
 
     def use_lfos(self, lfos, clock) -> None:
         """The LFO bank (lfo.LFOs) and its clock: `use_bank`, and `lfos`
@@ -3118,10 +3177,9 @@ class Router:
         envelope nodes later in it see this frame's fires, stamped at each
         step's exact time. It feeds ``seq:<i>``, trigger lanes resting at 0
         (decision 10), which a route can take to any trigger param. `clock`
-        None: the one `use_bank` gave."""
+        None: the sources' one; given, it must be that one (`_clock_from`)."""
+        self._clock_from(clock)
         self.sequencer, self.seq_envs = seq, envs
-        if clock is not None:
-            self.clock = clock
 
     def _step_sequencer(self, t: float, clock) -> None:
         """The sequencer's frame (`use_sequencer`): its fires and stop
@@ -3345,7 +3403,7 @@ class Router:
 
     # ---- the modifiers (plan 28 N1): their output lanes, ``mod:<n>`` ----
 
-    def _reading(self, address: str, lanes) -> float | None:
+    def _reading(self, address: str, lanes, feeds: dict | None = None) -> float | None:
         """A source address's reading this frame, as a modifier reads its
         input: the analyzer's lane (`lanes`, already normalised) for
         ``lane:``, else the scheme's fed vector; None while it is not
@@ -3353,7 +3411,8 @@ class Router:
         if not address:
             return None
         scheme, i = self.lane(address)
-        vec = lanes if scheme == "lane" else self.feeds.get(scheme)
+        vec = lanes if scheme == "lane" else (
+            self.sources.feeds if feeds is None else feeds).get(scheme)
         if vec is None or not 0 <= i < len(vec):
             return None
         u = float(vec[i])
@@ -3374,11 +3433,12 @@ class Router:
         value, so the loop is exactly one frame late. `cut`: a modifier
         whose input `modgraph` keeps off to break a loop with no delay: dormant."""
         m = self.table.modifier(mid)
-        vec = self.feeds.get(modifiers.SCHEME)
+        feeds = self.sources.feeds
+        vec = feeds.get(modifiers.SCHEME)
         if m is None or vec is None or not 0 <= m.n < len(vec):
             return None
         states = self.__dict__.setdefault("_mod_states", {})
-        reads = [self._reading(a, lanes) for a in m.inputs]
+        reads = [self._reading(a, lanes, feeds) for a in m.inputs]
         if early and m.kind == "delay" and not cut:
             # a delay closing a loop runs before its input (plan 28 N0): its
             # input's lane as it stands is last frame's value — the loop's
@@ -3406,11 +3466,16 @@ class Router:
     def _publish_modifiers(self) -> None:
         """The ``mod`` scheme's labels, rests, gates and signal kinds, as
         an adapter publishes its lanes' — once the table's modifiers
-        change. No modifiers: the scheme is not offered at all."""
+        change, or another router over the same sources published its own
+        (plan 44 D2, row 591: the ``mod`` lanes share the sources until D4).
+        The vector is this router's (`_mod_out`): a new one starts from
+        this router's last outputs, never another router's. No modifiers:
+        the scheme is not offered at all."""
         mods = self.table.modifiers
         if not mods:
             for d in (self.feeds, self.labels, self.rests, self.gates, self.lane_kinds):
                 d.pop(modifiers.SCHEME, None)
+            self.__dict__.pop("_mod_out", None)
             return
         n = max(m.n for m in mods) + 1
         labels, kinds = [""] * n, [modifiers.VALUE] * n
@@ -3423,11 +3488,12 @@ class Router:
         # a threshold's fire is a switch a row's `when` can wait on
         self.gates[sc] = [(m.n, f"mod {m.n} {m.kind}") for m in mods
                           if m.out == modifiers.TRIGGER]
-        old = self.feeds.get(sc)
+        old = self.__dict__.get("_mod_out")
         vec = np.full(n, math.nan)
         if old is not None:                  # last frame's outputs stand until stepped
             vec[:min(n, len(old))] = old[:n]
         self.feed(sc, vec)                   # written in place per node after this
+        self.__dict__["_mod_out"] = self.feeds[sc]
 
     def _sync_modifiers(self) -> None:
         """Once the table's modifiers change (`modifiers_serial`, and on the
@@ -3435,9 +3501,11 @@ class Router:
         removed modifier's memory dropped. The pass then steps each one at
         its node, in dependency order (plan 28 N0) — `_step_modifier`."""
         serial = getattr(self.table, "modifiers_serial", 0)
-        if self.__dict__.get("_mods_seen") == serial and (
-                not self.table.modifiers or modifiers.SCHEME in self.feeds):
-            return
+        d = self.__dict__
+        if d.get("_mods_seen") == serial and (
+                not self.table.modifiers
+                or self.sources.feeds.get(modifiers.SCHEME) is d.get("_mod_out", False)):
+            return                           # still ours: no other router republished
         self.__dict__["_mods_seen"] = serial
         self._publish_modifiers()
         live = {m.id for m in self.table.modifiers}
@@ -3490,8 +3558,8 @@ class Router:
         lanes = None if analyzer is None else analyzer.lanes / CEIL
         # each row's lane — a number, or a name through `names` — from the
         # cache `lane` keeps; a miss or a republished map resolves again
-        names = src.names
-        cache = src.__dict__.get("_lanes", _NO_LANES)
+        names, rests = src.names, src.rests
+        cache = self._lane_cache()
         for step in plan:
             kind = step[0]
             if kind == "bank":
@@ -3506,8 +3574,8 @@ class Router:
             for b, subs in step[2]:
                 hit = cache.get(b.source)
                 if hit is None or names.get(hit[0]) is not hit[1]:
-                    hit = src._resolve_lane(b.source)
-                    cache = src.__dict__["_lanes"]
+                    hit = self._resolve_lane(b.source)
+                    cache = self.__dict__["_lanes"]
                 scheme, _, i = hit
                 vec = lanes if scheme == "lane" else feeds.get(scheme)
                 if vec is None or not 0 <= i < len(vec):
@@ -3515,7 +3583,7 @@ class Router:
                 u = float(vec[i])
                 if math.isnan(u):    # this lane's source is out of view
                     continue
-                if not self.gated(b):
+                if b.when is not None and not self.gated(b, feeds):
                     continue         # gate open: apply() writes the base back
                 p = self.reg.get(b.target)
                 if p is None:
@@ -3539,12 +3607,12 @@ class Router:
                     continue
                 m = self.feel_of(b)
                 if m.on:
-                    u = self._move(b, m, u, p, depth, dt, movers)
+                    u = self._move(b, m, u, p, depth, dt, movers, rests)
                     moved.add((b.source, b.target))
                 if b.op == "push":
                     # centred where the source rests — the row's own number, or
                     # the source's as published this frame: idle adds nothing
-                    rest = b.rest if b.rest is not None else self.rest_of(b.source)
+                    rest = b.rest if b.rest is not None else self.rest_of(b.source, rests)
                     x = depth * (u - rest)
                 else:
                     # position: the source is the fader — the offset that lands
@@ -3559,6 +3627,25 @@ class Router:
                     q.apply(mark)
         for key in [k for k in movers if k not in moved]:
             del movers[key]
+
+
+# what a router from before plan 44 D2 kept in its own __dict__ and the
+# sources hold now: a hot reload moves it across (`_adopt_sources`)
+_ADOPTED = ("feeds", "labels", "gates", "rests", "_names", "_lane_kinds", "_codes",
+            "_felt", "_inverse", "devices", "clock")
+
+
+def _adopt_sources(router) -> Sources:
+    """Sources for a router that has none — one built before plan 44 D2
+    and re-classed by a hot reload: what it had been fed, its names, its
+    device registry and its clock, moved into new sources it reads from
+    now on (the old attributes left where they were, unread)."""
+    src = Sources()
+    old = router.__dict__
+    for k in _ADOPTED:
+        if k in old:
+            src.__dict__[k] = old[k]
+    return src
 
 
 def _modifiers_of(table) -> list:

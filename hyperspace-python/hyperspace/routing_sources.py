@@ -5,11 +5,12 @@ this frame, one for the rig.
 and every deck's pass reads: each scheme's vector this frame (`feeds`),
 the names, rests, gates and signal kinds an adapter publishes for its
 lanes (`labels`, `rests`, `gates`, `lane_kinds`), the address map a scheme
-with named lanes publishes (`names`) and the resolved-address cache over
-it (`lane`, `address`), the device registry it asks which schemes there
+with named lanes publishes (`names`) and what an address means over it
+(`resolve`, `address`), the device registry it asks which schemes there
 are (`use`, `follow_devices`, `schemes`), the scheme's own feel and its
 followers (`source_feel`, `felt`, `felt_lanes`), the key and button
-constants a row names (`code`), and the clock the banks step on. The
+constants a row names (`code`), and the one clock every router's banks
+step on (plan 44 §2: one beat for every deck). The
 evaluator — the patch, the banks, the macros, the modifiers' memory, the
 rows' followers, the key and pad rows — stays `routing.Router`, one per
 deck, built over a `Sources` (`Router(reg, table, sources)`); one `Sources`
@@ -25,13 +26,17 @@ A leaf below `routing`: it imports `motion` and numpy, and `glfw` /
 `gamepad` only lazily, to resolve key and pad names
 (`tests/test_routing_boundary.py`). The rig facts the device registry
 states — which schemes are rows, which MIDI role an unqualified row
-means, which device is a scheme's primary — are written into every
-binding table that follows these sources (`follow`); the first one
-followed is the one whose primaries and pad feel the sources read
-(plan 44 D3 makes that the session table).
+means, which device is a scheme's primary — are written into every live
+binding table that follows these sources (`follow`, held weakly). The
+sources read no table: what an address means under a table's primaries
+(`resolve`) and a scheme's feel under a table's pad feel (`source_feel`,
+`felt`) are asked with that table's facts, so each router resolves
+against its own table and caches the answer itself.
 """
 
 from __future__ import annotations
+
+import weakref
 
 import numpy as np
 
@@ -89,7 +94,8 @@ def is_continuous(scheme: str) -> bool:
     return base_scheme(scheme) not in ROW_SCHEMES
 
 
-_NO_LANES: dict = {}      # `Sources.lane`'s cache before its first miss; never written
+_NO_LANES: dict = {}      # a router's lane cache before its first miss; never written
+_NO_PRIMARIES: dict = {}  # a table that names no primaries; never written
 
 
 class Sources:
@@ -99,14 +105,14 @@ class Sources:
     B2), handed in as an argument — this module imports nothing above it —
     and asked which continuous schemes there are and in what order a page
     offers them (`schemes`); None (bare sources, the tests') offers what
-    has been fed or labelled. `clock` is the tap-tempo clock the routers'
-    banks step on (`Router.use_bank` hands it in)."""
+    has been fed or labelled. `clock` is the tap-tempo clock every router's
+    banks step on — one for the rig: the first `Router.use_bank` sets it
+    when none was given, and a router handed another clock is refused."""
 
     def __init__(self, devices=None, *, clock=None):
-        # the binding tables that follow these sources (`follow`), the
-        # first of them the one whose rig facts the lane cache reads
-        self.table = None
-        self.tables: list = []
+        # the binding tables that follow these sources (`follow`), held
+        # weakly: a router dropped (the panel's swap) lets its table go
+        self._tables: list[weakref.ref] = []
         self.devices = None
         self.clock = clock
         self.feeds: dict[str, np.ndarray | None] = {}   # ext/lfo/hand vectors, per frame
@@ -120,8 +126,7 @@ class Sources:
         # its configured rest value, a presence lane 0, an LFO 0.5); the
         # analyzer's lanes, and any scheme that publishes nothing, rest at 0
         self.rests: dict[str, list[float]] = {}
-        # `names` (scheme → {address name: lane}) and the resolved-address
-        # cache are made on first use
+        # `names` (scheme → {address name: lane}) is made on first use
         self._codes: dict[str, int | None] = {}
         if devices is not None:
             self.use(devices)
@@ -130,16 +135,21 @@ class Sources:
 
     def follow(self, table) -> None:
         """`table` (a routing.Bindings a router runs over) is told the
-        registry's rig facts from now on (`follow_devices`); the first
-        table followed is the one whose primaries and pad feel these
-        sources read."""
-        if any(t is table for t in self.tables):
+        registry's rig facts from now on (`follow_devices`). Held weakly:
+        a table no router keeps is forgotten, never written again."""
+        if any(r() is table for r in self._tables):
             return
-        self.tables.append(table)
-        if self.table is None:
-            self.table = table
+        self._tables.append(weakref.ref(table))
         if self.devices is not None:
             self._tell(table)
+
+    @property
+    def tables(self) -> list:
+        """The live tables that follow these sources, in the order they came."""
+        live = [t for r in self._tables if (t := r()) is not None]
+        if len(live) != len(self._tables):
+            self._tables = [weakref.ref(t) for t in live]
+        return live
 
     # ---- the device registry (plan 27 B2) ----
 
@@ -172,8 +182,9 @@ class Sources:
             table.midi_roles = tuple(roles())
         prim = getattr(devs, "primaries", None)
         if prim is not None:
+            # a new dict: a router's lane cache is kept against its identity,
+            # so an ``axis@pad`` address resolves again (`resolve`)
             table.primaries = dict(prim())
-            self.__dict__.pop("_lanes", None)     # an ``axis@pad`` address may mean another key
 
     def schemes(self) -> tuple[str, ...]:
         """The continuous schemes a route can read, in the order a page
@@ -220,34 +231,27 @@ class Sources:
             d = self.__dict__["_lane_kinds"] = {}
         return d
 
-    def lane(self, source: str) -> tuple[str, int]:
-        """(scheme, lane index) that a source address names — its number,
-        or its name through `names` — with −1 for an address that names no
-        lane (a name the adapter's map lacks, no map yet, garbage), which
-        every reader treats as dormant. Cached per address until the
-        scheme's map is republished, so the per-frame pass parses nothing."""
-        d = self.__dict__
-        hit = d.get("_lanes", _NO_LANES).get(source)
-        if hit is None or self.names.get(hit[0]) is not hit[1]:
-            hit = self._resolve_lane(source)
-        return hit[0], hit[2]
-
-    def _resolve_lane(self, source: str) -> tuple[str, dict | None, int]:
-        """`lane`'s cache miss: (scheme, the map it was resolved against, index)."""
-        cache = self.__dict__.get("_lanes")
-        if cache is None or len(cache) > 4096:       # addresses typed at the page, say
-            cache = self.__dict__["_lanes"] = {}
+    def resolve(self, source: str, primaries: dict | None = None
+                ) -> tuple[str, dict | None, int]:
+        """(scheme, the map it was resolved against, lane index) that a
+        source address names under a table's `primaries` (scheme → the
+        primary device's role, `Bindings.primaries`): its number, or its
+        name through `names`, with −1 for an address that names no lane (a
+        name the adapter's map lacks, no map yet, garbage), which every
+        reader treats as dormant. A source qualified with the primary's own
+        role (``axis@pad:RT``) means the bare scheme's lanes (B6). Not
+        cached here: each router caches against its own table's primaries
+        and the map's identity (`Router.lane`)."""
         scheme, _, addr = source.partition(":")
         base, at, role = scheme.partition(QUALIFIER)
-        if at and role and getattr(self.table, "primaries", {}).get(base) == role:
+        if at and role and (primaries or _NO_PRIMARIES).get(base) == role:
             scheme = base        # qualified with the primary's own role: its lanes (B6)
         m = self.names.get(scheme)
         try:
             i = int(addr)
         except ValueError:
             i = -1 if m is None else m.get(addr, -1)
-        hit = cache[source] = (scheme, m, i)
-        return hit
+        return scheme, m, i
 
     def address(self, scheme: str, i: int) -> str:
         """Lane `i` of `scheme` as a row should name it: by its published
@@ -279,20 +283,22 @@ class Sources:
 
     # ---- motion (motion.py): a source's own feel ----
 
-    def source_feel(self, scheme: str) -> Motion:
-        """A scheme's own feel: the pad's (`table.pad_feel`) for `axis`,
-        none for every other source — the analyzer's lanes have theirs in
-        the chain already, a hand has its own smoothing. One feel for every
-        pad (plan 27 B6): ``axis@p2`` travels with it too."""
-        return getattr(self.table, "pad_feel", OFF) if base_scheme(scheme) == "axis" else OFF
+    def source_feel(self, scheme: str, pad_feel: Motion = OFF) -> Motion:
+        """A scheme's own feel: the pad's (`pad_feel`, the asking table's
+        `Bindings.pad_feel`) for `axis`, none for every other source — the
+        analyzer's lanes have theirs in the chain already, a hand has its
+        own smoothing. One feel for every pad (plan 27 B6): ``axis@p2``
+        travels with it too."""
+        return pad_feel if base_scheme(scheme) == "axis" else OFF
 
-    def felt(self, scheme: str, values, dt: float) -> list[float] | None:
+    def felt(self, scheme: str, values, dt: float,
+             pad_feel: Motion = OFF) -> list[float] | None:
         """`values` — an adapter's lanes for `scheme` — through the scheme's
         own feel, one follower per lane: what the pad's default camera job
         reads (app.py). None while that feel is off or `values` is None,
         and the followers are dropped, so the next one starts where the
-        source is."""
-        m = self.source_feel(scheme)
+        source is. `pad_feel` is the asking table's (`source_feel`)."""
+        m = self.source_feel(scheme, pad_feel)
         felt = self.__dict__.setdefault("_felt", {})
         if values is None or not m.on:
             felt.pop(scheme, None)

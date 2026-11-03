@@ -834,9 +834,6 @@ class PadDevice(Base):
         # the sticks a route reads as a dial, for the next frame's Learn
         # (gamepad.dialed); asked only while the pad is there, once a frame
         claimed = getattr(router, "claimed", None)     # duck-typed: a shim may have none
-        # the touch and motion lanes are a source: the router's shared half
-        # (plan 44 D2), or a shim itself
-        self._feed_extras(getattr(router, "sources", router), io, q)
         reg = self.ctx.reg if self.ctx.reg is not None else getattr(router, "reg", None)
         skip = self._totem(io, reg)
         if q:
@@ -850,6 +847,14 @@ class PadDevice(Base):
             self._dialed = gamepad.dialed(routed)
             if reg is not None:
                 gamepad.steer(io, router, reg, self.__dict__.get("_dt", 0.0), routed=routed)
+
+    def feed(self, sources) -> None:
+        """The pad's touch and motion lanes into the shared sources (plan
+        44 D2), in the feed slot like every device's lanes; its axis lanes
+        are fed by `Router.pad`, in `act`, into the router's sources."""
+        io = self.io
+        if io is not None:
+            self._feed_extras(sources, io, self.qualifier)
 
     def _totem(self, io, reg) -> dict:
         """The totem and the poi experiments (plan 47, totem.py, poi.py):
@@ -887,14 +892,14 @@ class PadDevice(Base):
             skip |= poi.SKIP
         return skip
 
-    def _feed_extras(self, router, io, q: str) -> None:
+    def _feed_extras(self, sources, io, q: str) -> None:
         """The ``touch`` and ``motion`` lanes (plan 42): their names,
         labels, rests, kinds and gates published once per scheme, then this
         frame's vector — None while the pad read has neither, so their
-        routes let go. A router without `feed` (a shim) is left alone."""
+        routes let go. Sources without `feed` (a shim) are left alone."""
         from .pads import models
         model = getattr(io, "model", None)
-        if not hasattr(router, "feed") or not (
+        if not hasattr(sources, "feed") or not (
                 models.is_model(model) or self.__dict__.get("_fed_extras")):
             return                     # an Xbox pad (or a shim) feeds no extra scheme
         from . import gamepad as g
@@ -908,18 +913,18 @@ class PadDevice(Base):
                 (g.MOTION_SCHEME, ge.MOTION_LANES, ge.MOTION_LABELS, ge.MOTION_RESTS,
                  ge.MOTION_TRIGGERS, (), getattr(io, "motion_lanes", None))):
             sc = qualified(scheme, q)
-            names = getattr(router, "names", None)
+            names = getattr(sources, "names", None)
             if isinstance(names, dict) and sc not in names:
-                router.names[sc] = {n: i for i, n in enumerate(lanes)}
-                router.labels[sc] = list(labels)
-                router.rests[sc] = list(rests)
-                kinds = getattr(router, "lane_kinds", None)
+                sources.names[sc] = {n: i for i, n in enumerate(lanes)}
+                sources.labels[sc] = list(labels)
+                sources.rests[sc] = list(rests)
+                kinds = getattr(sources, "lane_kinds", None)
                 if isinstance(kinds, dict):
                     kinds[sc] = ["trigger" if n in triggers else "value" for n in lanes]
-                gate_d = getattr(router, "gates", None)
+                gate_d = getattr(sources, "gates", None)
                 if isinstance(gate_d, dict) and gates:
                     gate_d[sc] = [(lanes.index(n), labels[lanes.index(n)]) for n in gates]
-            router.feed(sc, read() if read is not None else None)
+            sources.feed(sc, read() if read is not None else None)
 
     def targets(self) -> list[tuple]:
         return [(self.io, "gamepad", "Pad")] if self.io is not None else []

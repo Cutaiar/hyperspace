@@ -1154,7 +1154,7 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     and the loop goes on, so the next save can fix it. `imgui.new_frame()`
     has already run (main): `keys.typing` is this frame's value."""
     reg, keys, router, reloader = h.reg, h.keys, h.router, h.reloader
-    sources = h.sources if getattr(h, "sources", None) is not None else router
+    sources = h.sources if h.sources is not None else router
     h.clock.tick(now)   # the clock's "now" for the frame: a trigger and the LFO step agree
 
     # the chain object is recreated on source attach; keep bindings fresh

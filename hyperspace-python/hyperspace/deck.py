@@ -122,7 +122,9 @@ class Deck:
         since the renderer's states are the ones it draws. `media` is the channels' `MediaState`, `restart`
         the `app.restart` param's callback, `clock` / `lfos` a clock and
         an LFO bank to use in place of new ones, `sources` the shared
-        sources the router reads (plan 44 D2; new ones when None). The hooks, each called
+        sources the router reads (plan 44 D2; new ones when None) — their
+        clock, when they have one, is the deck's unless `clock` is given,
+        and a different `clock` is refused there. The hooks, each called
         where `main` builds that rig object, each returning what it made:
         `hands(reg)` the hands' setup, `outputs(reg)` the outputs' params
         and switches, `panel(reg, view, clock=, lfos=, envs=, seq=, hold=,
@@ -161,6 +163,10 @@ class Deck:
         # the tap-tempo clock and the LFO bank (tempo.py, lfo.py; four by
         # default, up to 16, plan 31 B): their knobs are params too, so a
         # preset carries a tempo and an LFO arrangement
+        # one clock for every deck (plan 44 §2): shared sources that have
+        # one bring it, and the router refuses any other (`Router.use_bank`)
+        if clock is None and sources is not None:
+            clock = sources.clock
         clock = clock if clock is not None else tempo.Clock()
         lfos = lfos if lfos is not None else lfo.LFOs()
         tempo.register(reg, clock)

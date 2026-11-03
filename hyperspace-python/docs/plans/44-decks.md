@@ -201,20 +201,29 @@ reads the table). **The router reads through:** every source-side name
 a one-line method on its `sources`, and a router built without sources
 makes its own — so the panel, Learn, the ghost (which reads the table
 and `lane` through the router, unchanged) and the tests keep working.
-**`devices.poll` keeps `router=`** (row 592): `act` lands the deck's rows;
-the pad's lanes reach `router.sources`. `feed`, `audio.publish` and the
-adapters' feeds take the sources; `Host.sources` is the deck's, and a
-host without one feeds its router. **The tables are followed** (row 593):
-`Sources.follow(table)` keeps every table a router over it runs and
-writes the rig facts into each; the first one's primaries and pad feel
-are the ones read. **Not yet split** (row 591): the banks' and the
-modifiers' own lanes still publish into the shared sources; each router
-republishes before it reads, which is enough for one preset on two
-routers (the proof) and is D4's to layer. The proof is
+**`devices.poll` keeps `router=`** (row 592): `act` lands the deck's rows
+and `Router.pad` feeds the axes into the router's sources; the pad's
+touch and motion lanes moved to `PadDevice.feed(sources)`. `feed`,
+`audio.publish` and the adapters' feeds take the sources; `Host.sources`
+is the deck's, and a host without one feeds its router. **The tables are
+followed, never read** (row 593): `Sources.follow(table)` holds every
+router's table weakly and writes the rig facts into each; an address is
+resolved against the asking router's own table (`Sources.resolve(source,
+primaries)`, cached on the router) and a feel under its own pad feel.
+**One clock** (row 590): the sources own it; the first bank's clock sets
+it and a router handed another is refused. **Not yet split** (row 591):
+the banks' and the modifiers' own lanes still publish into the shared
+sources; each router republishes before it reads, and its `mod` vector is
+its own (seeded from its own outputs), so two routers on different
+modifiers each land what they would alone; the names and what the panel
+reads between passes are D4's to layer. A router from before the build,
+re-classed by a hot reload, makes sources of its own from what it held. The proof is
 `tests/test_deck.py::test_one_sources_fed_once_drives_two_routers_as_one_router_did`
 (three headless rigs: one over its own sources, two over one shared;
 every corpus preset; each frame every param of the shared two equals the
-solo one), beside D1's test unchanged.
+solo one) and, from the review,
+`test_two_routers_with_different_modifiers_each_keep_their_own_mod_lanes`
+and `tests/test_routing_sources.py`, beside D1's test unchanged.
 
 **New** `routing_sources.py` (the audit's split list names
 `routing_schemes` / `binding` / `sinks` for `routing.py`; this is the

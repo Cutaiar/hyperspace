@@ -297,6 +297,51 @@ def test_one_sources_fed_once_drives_two_routers_as_one_router_did(tmp_path):
     assert all(driven.values()), driven
 
 
+def _mods(r) -> np.ndarray:
+    """The ``mod`` vector a router's last pass left in its sources."""
+    return np.array(r.router.sources.feeds["mod"], dtype=float)
+
+
+def test_two_routers_with_different_modifiers_each_keep_their_own_mod_lanes(tmp_path):
+    """Plan 44 D2, review: the ``mod`` lanes share the sources until D4
+    (row 591), but each router's vector is its own — seeded from its own
+    last outputs, never from the other router's. Two routers over one
+    `Sources` with different modifiers (three on one, with a delay that
+    reads last frame's lane, one on the other) each leave, after their
+    own pass, exactly the lanes a router over its own sources leaves."""
+    rigs = {k: boot(tmp_path / k) for k in ("solo_a", "solo_b", "a")}
+    shared = rigs["a"].router.sources
+    rigs["b"] = boot(tmp_path / "b", sources=shared)
+
+    def wire(r, many: bool) -> None:
+        t, reg = r.table, r.reg
+        if many:
+            t.add_modifier("smooth", ["lane:0"], reg, release=0.4)     # mod.1, with memory
+            t.add_modifier("scale", ["mod:1"], reg, mul=0.5)           # mod.2
+            t.add_modifier("delay", ["mod:2"], reg)                    # mod.3, a frame late
+        else:
+            t.add_modifier("scale", ["lane:1"], reg, mul=2.0)          # mod.1
+
+    for k, r in rigs.items():
+        wire(r, k.endswith("a"))
+    chain = rigs["a"].chain
+    for k in range(40):
+        chain.out = CEIL * np.array([0.1 + 0.02 * (k % 9), 0.3 - 0.01 * (k % 7)]
+                                    + [0.0] * (len(chain.out) - 2))
+        for name in ("solo_a", "solo_b", "a", "b"):
+            r = rigs[name]
+            r.router.modulate(chain, DT, 100.0 + k * DT)
+            r.reg.apply()
+            solo = rigs["solo_" + name[-1]] if name in ("a", "b") else None
+            if solo is not None:                 # straight after its own pass
+                np.testing.assert_array_equal(_mods(r), _mods(solo), err_msg=f"{name} {k}")
+                assert r.router.sources.feeds["mod"] is r.router.__dict__["_mod_out"]
+    own_a, own_b = (rigs[k].router.__dict__["_mod_out"] for k in ("a", "b"))
+    assert len(own_a) == 4 and len(own_b) == 2          # each router's vector, its size
+    assert shared.feeds["mod"] is own_b                 # the last pass's, until D4 (row 591)
+    assert not np.isnan(own_a[3])                       # the delay ran on a's own lane
+
+
 def test_the_deck_holds_the_rig_boot_hands_out(tmp_path):
     """`boot`'s handles are the deck's objects; a headless deck has no GL:
     no renderer, no hold, and the installed undo is the deck's."""
@@ -310,7 +355,7 @@ def test_the_deck_holds_the_rig_boot_hands_out(tmp_path):
     # plan 44 D2: the router reads the deck's sources (its own while there
     # is one deck), and the clock the banks step on is theirs
     assert d.sources is d.router.sources and d.sources.clock is d.clock
-    assert d.sources.table is d.table and d.router.feeds is d.sources.feeds
+    assert d.sources.tables == [d.table] and d.router.feeds is d.sources.feeds
     assert undo.installed() is d.undo
     assert d.router.lfos is d.lfos and d.router.bank("env") is d.envs
     assert d.router.sequencer is d.seq and d.undo.marks is d.marks

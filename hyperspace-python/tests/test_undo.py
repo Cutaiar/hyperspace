@@ -108,7 +108,10 @@ def boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None, sour
 
     deck = Deck.build(library=lib, control=control, audio=audio, table=load_table,
                       dream=dream, fx=fx, ghost=ghost,
-                      clock=tempo.Clock(now=lambda: r.t), lfos=lfo.LFOs(seed=1),
+                      # shared sources bring their one clock (plan 44 §2)
+                      clock=(sources.clock if sources is not None and sources.clock
+                             is not None else tempo.Clock(now=lambda: r.t)),
+                      lfos=lfo.LFOs(seed=1),
                       hands=hands_setup, outputs=outputs_setup, panel=panel_setup,
                       devices=devices_setup, sources=sources)
     r.__dict__.update(lib=lib, reg=deck.reg, view=deck.view, control=control, chain=chain,
