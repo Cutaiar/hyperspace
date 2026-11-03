@@ -707,6 +707,7 @@ class Panel:
         # until the SYSTEM page's switch asks for the pad
         self.pad_diagram = False
         self.pad_view = 0       # ui_pad_views.VIEWS: map, faithful, lanes, cockpit
+        self.poi_dials = True   # the Poi window (ui_pad.poi_window): shown each time the poi comes on
         self.page = PAGE_KEYS.index("graph")    # index into PAGES; GRAPH opens first
         self.history = PageHistory(self.page)   # ⌘[ / ⌘]: back and forward (app.frame)
         self.ghosts = 0             # ghost markers drawn this frame (tests read it)
@@ -1644,6 +1645,9 @@ class Panel:
             self._draw_cheatsheet()
         # the pad first: the desk reads its height to keep clear of it (ui_desk.room)
         ui_pad.diagram(self)
+        # the poi's dials, their own window while the poi is on (plan 47): out
+        # of the pad window, whose room stays the pad's; GRAPH's side pane too
+        ui_pad.poi_window(self)
         if getattr(self, "desk", True):     # (a Panel from before a hot reload)
             ui_desk.diagram(self)
         if not self.open:

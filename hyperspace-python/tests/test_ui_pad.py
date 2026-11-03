@@ -171,6 +171,7 @@ def _pad_frames(rig, monkeypatch, n=3) -> dict:
     real_draw = ui_pad_views.draw
 
     def draw(*a, **k):
+        out["room"] = a[3:7]           # a view's x, y, w, h: the room under the header
         out["ctx"] = real_draw(*a, **k)
         return out["ctx"]
     monkeypatch.setattr(ui_pad_views, "draw", draw)
@@ -874,26 +875,67 @@ def test_the_drawings_show_upright_through_real_gl(monkeypatch, gl_window_ok):
 
 
 def test_the_poi_says_its_word_and_shows_its_dials_while_on(rig, monkeypatch):
-    """Plan 47, the poi: "poi off" in the header with no dials; on, the
-    header reads its length · weight · springiness and the six dials and
-    the depth switch are drawn under it, and the big pad still never
-    scrolls."""
-    from hyperspace import poi
+    """Plan 47, the poi: "poi off" in the header and no Poi window; on, the
+    header reads its length · weight · springiness, and the six dials are
+    drawn in the Poi window of their own — never in the pad window, whose
+    room under the header (the map's unit, a view's room) is what it was
+    with the poi off. Hidden ("dials"), it comes back when the poi does."""
+    from hyperspace import poi, ui_pad_views
     panel, reg = rig.panel, rig.reg
     poi.register(reg, poi.PoiState())
     imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
     reg["ui.pad_diagram"].set(True)
     reg["ui.panel"].set(False)
-    drawn: list[str] = []
+    drawn: list[tuple[str, str]] = []
     real_half = panel.half
-    monkeypatch.setattr(panel, "half", lambda pid, **k: drawn.append(pid) or real_half(pid, **k))
+
+    def half(pid, **k):
+        drawn.append((imgui.internal.get_current_window().name, pid))
+        return real_half(pid, **k)
+    monkeypatch.setattr(panel, "half", half)
+
+    def rooms() -> tuple:
+        """The map's unit and window, then the lanes view's room; each one's scroll."""
+        reg["ui.pad_view"].set(0)
+        got = _pad_frames(rig, monkeypatch)
+        unit = ui_pad._state(panel)["unit"]
+        reg["ui.pad_view"].set(ui_pad_views.VIEWS.index("lanes"))
+        lanes = _pad_frames(rig, monkeypatch)
+        return unit, got["rect"], got["scroll"], lanes["room"], lanes["scroll"]
+
     assert ui_pad.poi_word(reg)[0] == "poi off"
-    _pad_frames(rig, monkeypatch)
+    off = rooms()
     assert drawn == []
+    assert imgui.internal.find_window_by_name("Poi") is None
     reg["poi.on"].set(True)
     reg["poi.length"].set(1.5)
     word, tip = ui_pad.poi_word(reg)
     assert word == "poi 1.50 · 0.30 · 0.20 (no pad)" and "click" in tip
-    got = _pad_frames(rig, monkeypatch, n=1)
-    assert drawn == [f"poi.{k}" for k in ui_pad.POI_DIALS]
-    assert got["scroll"] == (0.0, 0.0)
+    on = rooms()
+    assert on == off                                  # the pad's room is the pad's
+    assert on[2] == on[4] == (0.0, 0.0)
+    assert drawn and {w for w, _ in drawn} == {"Poi"}
+    assert drawn[:len(ui_pad.POI_DIALS)] == [("Poi", f"poi.{k}") for k in ui_pad.POI_DIALS]
+    # the "dials" word hides the window; the poi coming on again shows it
+    panel.poi_dials = False
+    drawn.clear()
+    _pad_frames(rig, monkeypatch, n=1)
+    assert drawn == []
+    reg["poi.on"].set(False)
+    _pad_frames(rig, monkeypatch, n=1)
+    reg["poi.on"].set(True)
+    _pad_frames(rig, monkeypatch, n=1)
+    assert panel.poi_dials and [p for _, p in drawn] == [f"poi.{k}" for k in ui_pad.POI_DIALS]
+    # off: nothing
+    reg["poi.on"].set(False)
+    drawn.clear()
+    _pad_frames(rig, monkeypatch, n=1)
+    assert drawn == []
+
+
+def test_a_registry_without_the_poi_draws_no_poi_window(rig):
+    """No poi in the registry (headless, a test rig): no Poi window, no word."""
+    assert "poi.on" not in rig.reg
+    frame(rig.panel)
+    assert imgui.internal.find_window_by_name("Poi") is None
+    assert ui_pad.poi_word(rig.reg) is None
