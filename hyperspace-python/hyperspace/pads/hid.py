@@ -34,6 +34,7 @@ from __future__ import annotations
 import json
 import threading
 import time
+from collections import deque
 from pathlib import Path
 
 from . import models, nintendo, sony
@@ -43,6 +44,7 @@ READ_TIMEOUT_MS = 100      # a read waits at most this, so close() is quick
 OUT_HZ = 60.0              # the most output reports a second
 STALE_S = 0.5              # no report for this long: `latest` gives nothing (the pad reads lost)
 DRAIN_MAX = 64             # reports read in one go before the outputs get a turn
+BACKLOG_MAX = 64           # reports kept for `since` between two frames (the motion's)
 TAPE_SCHEMA = "hyperspace.padtape/1"
 
 
@@ -181,6 +183,9 @@ class HidPad:
         self._lock = threading.Lock()
         self._raw: bytes | None = None       # the newest report, decoded on `latest`
         self._raw_t = 0.0
+        # every report since the last `since`, with its arrival time, for
+        # the motion integrated per report (gamepad.Pad._extras)
+        self._backlog: deque[tuple[float, bytes]] = deque(maxlen=BACKLOG_MAX)
         self._frame: sony.Frame | None = None
         self._frame_of: bytes | None = None
         self.update_version = 0
@@ -221,6 +226,21 @@ class HidPad:
                 self._frame = f        # the last good one stands, so nothing re-fires
             self._frame_of = raw
         return self._frame
+
+    def since(self) -> list[tuple[float, sony.Frame]]:
+        """Every report that came since the last call, decoded, with its
+        arrival time (monotonic) — oldest first, a refused one left out:
+        what the motion integrates report by report, so a frame with two
+        reports counts both and a frame with none adds no turn."""
+        with self._lock:
+            got = list(self._backlog)
+            self._backlog.clear()
+        out = []
+        for t, raw in got:
+            f = self._frame if raw is self._frame_of else self._decode(raw)
+            if f is not None:
+                out.append((t, f))
+        return out
 
     def _decode(self, raw: bytes):
         return self.codec.decode_frame(raw, self)
@@ -287,7 +307,9 @@ class HidPad:
         except Exception as e:  # noqa: BLE001 — a pad that will not answer still reads
             self.note = f"setup: {type(e).__name__}: {e}"[:120]
 
-    def _take(self, r: bytes) -> None:
+    def _take(self, r: bytes, t: float | None = None) -> None:
+        """One report off the wire, at `t` (monotonic; now when not said —
+        a test says when its reports came)."""
         if self.recorder is not None:
             self.recorder.write(r)
         if not r:
@@ -298,7 +320,8 @@ class HidPad:
         if link == "bluetooth" or not self.transport:   # a BT report settles it; USB only if unsaid
             self.transport = link
         with self._lock:
-            self._raw, self._raw_t = r, time.monotonic()
+            self._raw, self._raw_t = r, time.monotonic() if t is None else t
+            self._backlog.append((self._raw_t, r))
             self.reports += 1
 
     def _write(self, dev) -> None:
@@ -426,6 +449,23 @@ class TapePad:
         if f is not None:              # a reply on the tape: the last frame stands, as live
             self._frame = f
         return self._frame
+
+    def since(self) -> list[tuple[float, sony.Frame]]:
+        """The tape's reports `latest` passed since the last call, decoded,
+        with their tape times (as `HidPad.since`); round the loop, the one
+        it is on."""
+        i, j = self._i, self.__dict__.get("_since_i")
+        self._since_i = i
+        if not self.reports or i == j:
+            return []
+        idx = range(j + 1, i + 1) if j is not None and i > j else (i,)
+        out = []
+        for k in idx:
+            t, raw = self.reports[k]
+            f = self.codec.decode_frame(raw, self)
+            if f is not None:
+                out.append((t, f))
+        return out
 
     def send(self, effects: sony.Effects) -> None:
         """A tape has no light to set: what was asked is kept, for a test."""

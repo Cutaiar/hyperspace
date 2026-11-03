@@ -275,4 +275,7 @@ class Deck:
             *[(e, "envelope", "Envelope") for e in self.envs.voices],
             (self.seq, "sequencer", "Sequencer"),
             *[(ln, "sequencer", "Lane") for ln in self.seq.lanes],
+            # the totem's state (plan 47), once the panel hook registered it
+            *([(self.reg.totem, "totem", "TotemState")]
+              if hasattr(getattr(self.reg, "totem", None), "driving") else []),
         ]

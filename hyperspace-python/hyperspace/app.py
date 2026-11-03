@@ -1438,8 +1438,8 @@ def main() -> None:
         # the Joy-Con totem (plan 47, an experiment): off unless `[totem] on`
         # says so or the pad window's word is clicked; never saved, so it may
         # register after attach (a fresh extra, library.py); `s` for the reset
-        totem.register(reg, totem.TotemState(), s)
-        if (cfg.get("totem") or {}).get("on") is True:
+        totem.register(reg, totem.TotemState())
+        if totem.configured_on(cfg):
             reg["totem.on"].set(True)
         # after attach, before the router: its ui.* params are the last a
         # launch declares before the table's rows resolve; `output` is what

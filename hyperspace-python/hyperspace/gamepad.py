@@ -104,6 +104,10 @@ XBOX_RAW_MAX = 32          # an Xbox-mapped pad's raw buttons kept, below the ex
 # the touchpad's and the sensors' schemes (plan 42), fed by the pad device
 TOUCH_SCHEME, MOTION_SCHEME = "touch", "motion"
 EXTRA_SCHEMES = (TOUCH_SCHEME, MOTION_SCHEME)
+# the longest time one motion report stands for (a Joy-Con reports every
+# ~15 ms, a DualSense over Bluetooth every 4): a longer gap — a Bluetooth
+# pause — counts as this much, not as a turn held through it
+MOTION_DT_MAX = 0.05
 
 # the axes as continuous lanes (routing's `axis` scheme), each in [0, 1]:
 # a stick rests at 0.5 with up and right high, a trigger rests at 0
@@ -915,7 +919,7 @@ class Pad:
         if new != source:      # a pad came, went or changed road: no stale edges
             self.buttons, self.hat, self.axes = [], 0, [0.0] * 6
             self.touchpad, self.motion = gesture.Touchpad(), gesture.Motion()
-            self.report = None
+            self.report, self._motion_t = None, None
         self.source = new
         self.prev_buttons, self.prev_hat = self.buttons, self.hat
         if new == "glfw":
@@ -965,9 +969,32 @@ class Pad:
         self.touchpad.step([(t.down, t.id, t.x / w, t.y / h) for t in frame.touches], dt)
         cal = getattr(reader, "calibration", None) or sony.Calibration()
         amap = gesture.axis_map_of(self.__dict__.get("axis_map"), reader)   # the one rule
-        gyro = amap.pick(cal.gyro_dps(frame.gyro), amap.gyro)
-        accel = amap.pick(cal.accel_g(frame.accel), amap.accel)
-        self.motion.step(gyro, accel, dt)
+        for f, d in self._motion_steps(frame, reader, dt):
+            self.motion.step(amap.pick(cal.gyro_dps(f.gyro), amap.gyro),
+                             amap.pick(cal.accel_g(f.accel), amap.accel), d)
+
+    def _motion_steps(self, frame, reader, dt: float) -> list:
+        """The (frame, dt) pairs the motion steps on this frame: each report
+        since the last frame with its own time from the one before (at most
+        MOTION_DT_MAX — a Bluetooth gap is not a turn), from a reader that
+        keeps them (`since`); none while no report came, so a stalled pad
+        turns nothing. A reader without `since` (a test's) steps the latest
+        frame on the frame's `dt`, as before."""
+        since = getattr(reader, "since", None)
+        if since is None:
+            return [(frame, dt)]
+        last = self.__dict__.get("_motion_t")
+        out = []
+        for t, f in since():
+            if not f.full:
+                continue
+            d = 0.0 if last is None else min(MOTION_DT_MAX, max(0.0, t - last))
+            last = t
+            out.append((f, d))
+        self._motion_t = last
+        if not out:
+            self.motion.shake = 0.0          # a trigger lane is one step long
+        return out
 
     def touch_lanes(self) -> list[float] | None:
         """The ``touch:`` lanes (gesture.TOUCH_LANES), or None while the
@@ -1117,7 +1144,8 @@ def dialed(lanes) -> set[str]:
     return {LANES[i].partition(".")[0] for i in lanes if len(AXES) <= i < len(LANES)}
 
 
-def learn_from(pad: Pad, learn, role: str = "", dials=frozenset) -> bool:
+def learn_from(pad: Pad, learn, role: str = "", dials=frozenset,
+               skip=frozenset()) -> bool:
     """The pad completes an armed learn (learn.Learn, duck-typed — this
     module imports nothing from the package): the first button or D-pad
     press this frame lands a button row (`Learn.learn_pad_button`), else
@@ -1131,17 +1159,23 @@ def learn_from(pad: Pad, learn, role: str = "", dials=frozenset) -> bool:
     nudged stick never ends the learn. True when the press was the
     learn's, so the router lets that frame's button rows be. `role` is a
     second pad's qualifier (plan 27 B6): its rows read ``pad@p2:A``,
-    ``hat@p2:UP``, ``axis@p2:LX``; "" (the primary pad) leaves them bare."""
+    ``hat@p2:UP``, ``axis@p2:LX``; "" (the primary pad) leaves them bare.
+    `skip`: the buttons, unqualified (``pad:A``, ``hat:DOWN``), that land
+    nothing — the totem's while it reads this pad (as `Router.pad`'s)."""
     if learn is None or getattr(learn, "learning", None) is None or not pad.on:
         return False
     target = learn.target_for(learn.learning)
     q = f"@{role}" if role else ""          # routing.QUALIFIER (nothing imported here)
     named = getattr(pad, "buttons_named", None)      # plan 42: the extras the pad has
     for name, i in (named if isinstance(named, dict) else BUTTONS).items():
+        if f"pad:{name}" in skip:
+            continue
         if pad.pressed(i) and learn.accepts(f"pad{q}:{name}"):
             learn.learn_pad_button(f"pad{q}:{name}")
             return True
     for name, bit in HATS.items():
+        if f"hat:{name}" in skip:
+            continue
         if pad.hat_pressed(bit) and learn.accepts(f"hat{q}:{name}"):
             learn.learn_pad_button(f"hat{q}:{name}")
             return True

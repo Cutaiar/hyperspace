@@ -77,7 +77,7 @@ def rig():
     chain = Analyzer(Analyser())
     reg = build_registry(view, Control(chain), SimpleNamespace(chain=chain), None)
     state = totem.TotemState()
-    totem.register(reg, state, view)
+    totem.register(reg, state)
     return reg, state, view
 
 
@@ -157,7 +157,7 @@ def test_a_constant_turn_integrates_and_a_flip_carries_on_in_w():
     dps = 90.0
     run(reg, state, pad, 60, gyro=(0.0, 0.0, dps))     # 1 s about z
     want = math.radians(dps - totem.DEADBAND_DPS)       # the dead band is soft: it subtracts
-    assert want - 0.03 < phase(reg, "XY") < want        # less the smoothing's lag
+    assert phase(reg, "XY") == pytest.approx(want, abs=1e-6)   # no smoothing: the turn, whole
     for other in ("XZ", "YZ", "XW", "YW", "ZW"):
         assert phase(reg, other) == pytest.approx(0.0, abs=1e-9)
     xy = phase(reg, "XY")
@@ -332,3 +332,239 @@ def test_real_bytes_a_still_joycon_holds_and_a_turn_right_turns_the_shape_right(
     assert reg["camera.pan.x"].value > 0.3                 # right side down: the shape right
     reg, _ = drive(["flat", "far up"])
     assert reg["camera.pan.y"].value < -0.3                # the far end up: the shape up
+
+
+# ---- the review fixes (PR #330's code review) ----
+
+def device(reg, role="pad"):
+    dev = PadDevice(role, {}, Context(reg=reg), io=FakePad())
+    dev._dt = DT
+    return dev
+
+
+def test_a_hot_reload_of_totem_py_leaves_the_pad_device_driving(monkeypatch):
+    reg, state, _ = rig()
+
+    class Fresh(totem.TotemState):          # what a reload's re-execution makes
+        pass
+    monkeypatch.setattr(totem, "TotemState", Fresh)
+    assert not isinstance(state, totem.TotemState)       # the live state is the old class
+    reg["totem.on"].set(True)
+    dev, router = device(reg), ShimRouter(reg)
+    for _ in range(10):
+        dev.io.frame(gyro=(0.0, 0.0, 120.0))
+        dev.act(router)
+    assert router.calls[-1]["skip"] == totem.SKIP
+    assert phase(reg, "XY") > 0.1
+    # …and a stub registry's function on `reg.totem` is no state
+    assert not totem.is_state(lambda: None) and totem.is_state(state)
+
+
+def test_the_deck_lists_the_totem_state_for_a_hot_reload_to_re_class():
+    from hyperspace.deck import Deck
+    reg, state, _ = rig()
+    fake = SimpleNamespace(renderer=None, hold=None, view=ViewState(), reg=reg,
+                           marks=None, undo=None, router=None,
+                           presets=SimpleNamespace(graph=None), learn=None, clock=None,
+                           lfos=SimpleNamespace(lfos=[]), envs=SimpleNamespace(voices=[]),
+                           seq=SimpleNamespace(lanes=[]))
+    assert (state, "totem", "TotemState") in Deck.targets(fake)
+
+
+def test_a_stalled_report_adds_no_turn_and_two_reports_in_a_frame_both_count():
+    reg, state, _ = rig()
+    reg["totem.on"].set(True)
+    pad = FakePad()
+    run(reg, state, pad, 1)
+    pad.frame(gyro=(0.0, 0.0, 90.0))
+    totem.step(state, pad, reg, DT)
+    xy = phase(reg, "XY")
+    assert xy > 0.0
+    for _ in range(30):                     # no report comes: the last one's 90°/s stands
+        totem.step(state, pad, reg, DT)
+    assert phase(reg, "XY") == pytest.approx(xy, abs=1e-12)
+    for _ in range(2):                      # two reports between one frame and the next
+        pad.motion.step((0.0, 0.0, 90.0), FLAT, DT)
+    totem.step(state, pad, reg, DT)
+    want = math.radians(2 * 90.0 * DT - totem.DEADBAND_DPS * DT)
+    assert phase(reg, "XY") - xy == pytest.approx(want, abs=1e-9)
+
+
+def test_a_joycon_whose_reports_stall_holds_its_motion_where_it_was():
+    """Through the real reader and Pad: the motion steps once a report, so
+    frames with no new report turn nothing (gamepad.Pad._motion_steps)."""
+    import test_pads_nintendo as tn
+    pad, reader = tn.joycon_pad()
+    t0 = __import__("time").monotonic()
+    reader._take(tn.full_report(gyro=(0, 0, 0)), t=t0)
+    pad.poll(dt=DT)
+    pad.motion.take_turn()
+    reader._take(tn.full_report(gyro=(0, 0, 4000)), t=t0 + 0.015)
+    pad.poll(dt=DT)
+    one = pad.motion.take_turn()
+    assert abs(one[1]) + abs(one[2]) + abs(one[0]) > 0.0
+    for _ in range(10):                      # the same report, frame after frame
+        pad.poll(dt=DT)
+    assert pad.motion.take_turn() == (0.0, 0.0, 0.0)
+    for k in (2, 3):                         # two reports land before the next frame
+        reader._take(tn.full_report(gyro=(0, 0, 4000)), t=t0 + 0.015 * k)
+    pad.poll(dt=DT)
+    two = pad.motion.take_turn()
+    assert [b for b in two] == pytest.approx([2 * a for a in one])
+
+
+def test_a_pad_gone_quiet_lets_the_totem_go_and_the_header_says_no_pad():
+    from hyperspace import ui_pad
+    reg, state, _ = rig()
+    reg["totem.on"].set(True)
+    a, b = FakePad(), FakePad()
+    a.frame()
+    totem.step(state, a, reg, DT, "pad", now=10.0)
+    assert state.driving == "pad" and totem.reading(state, now=10.1) == "pad"
+    b.frame(gyro=(0.0, 0.0, 90.0))
+    totem.step(state, b, reg, DT, "p2", now=10.2)           # "pad" still heard: held
+    assert state.driving == "pad" and phase(reg, "XY") == pytest.approx(0.0)
+    # "pad"'s device is gone (no `act` steps it any more)
+    assert totem.reading(state, now=10.0 + totem.LOST_S + 0.1) is None
+    state.seen = __import__("time").monotonic() - 1.0        # as the header's clock sees it
+    assert ui_pad.totem_word(reg)[0].endswith("(no pad)")
+    state.seen = 10.0
+    totem.step(state, b, reg, DT, "p2", now=10.0 + totem.LOST_S + 0.1)
+    assert state.driving == "p2" and state.note.startswith("reading p2")
+    b.frame()
+    totem.step(state, b, reg, DT, "p2")                     # on the clock the header reads
+    assert not ui_pad.totem_word(reg)[0].endswith("(no pad)")
+
+
+def test_on_off_on_while_tilted_leaves_the_pan_at_zero():
+    reg, state, _ = rig()
+    pad = FakePad()
+    s, c = math.sin(math.radians(30)), math.cos(math.radians(30))
+    reg["totem.on"].set(True)
+    run(reg, state, pad, 30)                                # level: the reference
+    run(reg, state, pad, 120, accel=(-s, c, 0.0))           # tilted: the pan moves
+    assert reg["camera.pan.x"].value > 0.5
+    for _ in range(2):
+        reg["totem.on"].set(False)                          # off: the pan it added goes
+        assert reg["camera.pan.x"].value == pytest.approx(0.0, abs=1e-9)
+        run(reg, state, pad, 1, accel=(-s, c, 0.0))
+        reg["totem.on"].set(True)                           # on again, still tilted
+        run(reg, state, pad, 120, accel=(-s, c, 0.0))
+        assert reg["camera.pan.x"].value == pytest.approx(0.0, abs=2e-3)   # gravity still settling
+    run(reg, state, pad, 120)                               # levelled from the tilted reference
+    assert reg["camera.pan.x"].value < -0.5
+    reg["totem.on"].set(False)
+    assert reg["camera.pan.x"].value == pytest.approx(0.0, abs=1e-9)
+    assert reg["camera.pan.y"].value == pytest.approx(0.0, abs=1e-9)
+
+
+def test_a_totem_reset_is_the_camera_reset_and_a_re_reference():
+    def posed():
+        reg, state, view = rig()
+        reg["camera.yaw"].set(0.4)
+        reg["camera.pitch"].set(-0.3)
+        reg["camera.zoom"].set(2.5)
+        reg["camera.pan.x"].set(1.2)
+        reg["rot.phase.XW"].set(0.9)
+        view.body = np.eye(4)
+        return reg, state, view
+
+    def snap(reg, view):
+        ids = [p.id for p in reg if p.group == "camera" or p.id.startswith("rot.phase.")]
+        return {i: reg[i].value for i in ids}, view.body
+
+    a_reg, a_state, a_view = posed()
+    a_reg["totem.on"].set(True)
+    pad = FakePad()
+    run(a_reg, a_state, pad, 5)
+    a_state.ref = (0.1, 0.2)
+    a_reg["totem.reset"].fire()
+    b_reg, _, b_view = posed()
+    b_reg["camera.reset"].fire()
+    assert snap(a_reg, a_view) == snap(b_reg, b_view)
+    assert a_state.ref is None and a_state.ang == [0.0] * 6 and a_state.pan_out == [0.0, 0.0]
+
+
+class ArmedLearn:
+    learning = "view.faces"
+
+    def __init__(self):
+        self.got = []
+
+    def target_for(self, x):
+        return None                         # buttons only
+
+    def accepts(self, s):
+        return True
+
+    def learn_pad_button(self, s):
+        self.got.append(s)
+
+
+def test_learn_ignores_the_totems_buttons_while_it_reads_that_pad():
+    reg, _, _ = rig()
+    dev, router = device(reg), ShimRouter(reg)
+    dev.io.buttons_named["LB"] = gamepad.LB
+    reg["totem.on"].set(True)
+    dev.io.frame()
+    dev.act(router)                                     # the totem takes this pad
+    for b in ("A", "X", "Y", "B"):
+        dev.io.frame()
+        dev.io.frame(hold=(b,))
+        learn = ArmedLearn()
+        assert dev.learn(learn) is False and learn.got == [], b
+    dev.io.frame()
+    dev.io.frame(hat=totem.HAT_DOWN)
+    learn = ArmedLearn()
+    assert dev.learn(learn) is False and learn.got == []
+    dev.io.frame()
+    dev.io.frame(hold=("LB",))
+    learn = ArmedLearn()
+    assert dev.learn(learn) is True and learn.got == ["pad:LB"]   # not the totem's: learns
+    reg["totem.on"].set(False)
+    dev.io.frame()
+    dev.io.frame(hold=("A",))
+    learn = ArmedLearn()
+    assert dev.learn(learn) is True and learn.got == ["pad:A"]    # off: A learns again
+
+
+def test_a_hold_begun_before_the_skip_does_not_fire_when_the_skip_ends():
+    from hyperspace.routing import HOLD_S, Binding, Bindings, Router
+    reg, _, _ = rig()
+    router = Router(reg, Bindings([Binding("pad:A", "camera.reset", "hold")]))
+    reg["camera.yaw"].set(0.4)
+    pad = FakePad()
+    pad.frame(hold=("A",))
+    router.pad(pad, now=0.0)                            # the press: timing starts
+    pad.frame(hold=("A",))
+    router.pad(pad, now=0.1, skip=totem.SKIP)           # the totem takes the pad mid-press
+    pad.frame(hold=("A",))
+    router.pad(pad, now=HOLD_S + 1.0)                   # …and lets go, A still down
+    assert reg["camera.yaw"].value == pytest.approx(0.4)
+    pad.frame()
+    router.pad(pad, now=HOLD_S + 1.1)                   # a fresh press holds as ever
+    pad.frame(hold=("A",))
+    router.pad(pad, now=HOLD_S + 1.2)
+    pad.frame(hold=("A",))
+    router.pad(pad, now=2 * HOLD_S + 1.3)
+    assert reg["camera.yaw"].value == pytest.approx(0.0)
+
+
+def test_config_reads_the_totem_section_as_a_table_and_notes_a_scalar():
+    assert totem.configured_on({}) is False
+    assert totem.configured_on({"totem": {"on": True}}) is True
+    assert totem.configured_on({"totem": {"on": False}}) is False
+    cfg = {"totem": True}
+    assert totem.configured_on(cfg) is False                # no AttributeError at launch
+    assert len(cfg["notes"]) == 1 and "[totem] must be a table" in cfg["notes"][0]
+
+
+def test_the_totem_names_the_pad_by_its_device_role():
+    reg, state, _ = rig()
+    reg["totem.on"].set(True)
+    dev, router = device(reg, "joy"), ShimRouter(reg)   # the primary pad: qualifier ""
+    dev.io.frame()
+    dev.act(router)
+    assert router.calls[-1].get("role", "") == ""
+    assert state.driving == "joy" and state.note.startswith("reading joy")
+    assert router.calls[-1]["skip"] == totem.SKIP

@@ -556,7 +556,7 @@ def totem_word(reg) -> tuple[str, str] | None:
     if not state.on:
         return "totem off", tip
     word = f"totem {totem.readout(state)}"
-    if state.driving is None:
+    if totem.reading(state) is None:       # none taken, or its device gone (LOST_S)
         word += " (no pad)"
     return word, tip + (f" Last: {state.note}." if state.note else "")
 

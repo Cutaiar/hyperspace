@@ -46,11 +46,23 @@ orbit does. Note the coupling: tipping the pad to turn the shape about x
 or z also tilts it, so the shape slides as it turns (`totem.pan` off
 for the turn alone).
 
+**The turn is integrated per report**: `gesture.Motion` adds each report's
+gyro times that report's own time to an angle the totem takes each frame
+(`Motion.take_turn`), so a report that stalls adds no turn and two reports
+between frames both count.
+
 **Reset** (A, or the D-pad's down on a pad that has one — on a Joy-Con (L)
-held sideways these are the same arrow): every phase to 0, the pan to 0,
-the camera's orbit (yaw, pitch) to 0 and the 3D switch's held pose
-dropped — the shape congruent with the world's axes — and the pad's pose
-now becomes the reference the tilt is measured from.
+held sideways these are the same arrow): the registry's own `camera.reset`
+(every phase, the orbit, the zoom and the pan to their rests, the 3D
+switch's held pose dropped — the shape congruent with the world's axes),
+then the pad's pose now becomes the reference the tilt is measured from.
+
+**Letting go.** Off, the pan the tilt added is taken back. A pad that
+stops being read for `LOST_S` (its device gone) lets the totem go: the
+header says "(no pad)" and the next pad with sensors takes over. The pad
+is named by its device role (`[[devices]]`'s `role`, "pad" for the
+first), which every pad has its own of — not the router's qualifier,
+which is "" for the primary.
 
 While the totem drives a pad, that pad's rows on the buttons it uses
 (`SKIP`) do not fire (the factory's A / B / X / Y toggles would otherwise
@@ -63,6 +75,8 @@ duck-typed.
 from __future__ import annotations
 
 import math
+import sys
+import time
 from dataclasses import dataclass, field
 
 GROUP = "totem"
@@ -82,7 +96,7 @@ HAT_DOWN = 4                      # GLFW's hat bit (gamepad.HAT_DOWN; a test hol
 SKIP = frozenset({*(f"pad:{b}" for b in (*W_BUTTON, RESET_BUTTON)), "hat:DOWN"})
 
 DEADBAND_DPS = 3.0                # a still Joy-Con reads up to ~2 deg/s (the real tape)
-SMOOTH_S = 0.02                   # the gyro's one-pole smoothing (0: none)
+LOST_S = 0.5                      # no step from the pad it reads this long: it lets go
 PAN_PER_RAD = 1.5                 # world units of pan per radian of tilt
 PAN_MAX = 3.0                     # …and no further each way
 PAN_SMOOTH_S = 0.08
@@ -121,23 +135,21 @@ class TotemState:
     pan: bool = True
     ang: list[float] = field(default_factory=lambda: [0.0] * 6)   # radians, PLANES order
     driving: str | None = None    # the role of the pad it reads, None while it reads none
+    seen: float = 0.0             # when (monotonic) the pad it reads last stepped it
     rate: list[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])   # rad/s, body axes
     ref: tuple[float, float] | None = None    # (roll, pitch) radians at the reset
     pan_out: list[float] = field(default_factory=lambda: [0.0, 0.0])   # the pan it has added
     note: str = ""                # the last change, for the terminal and the pad window
 
     def say(self, note: str) -> None:
-        import sys
         self.note = note
         print(f"totem: {note}", file=sys.stderr)
 
 
-def register(reg, state: TotemState, view=None) -> None:
+def register(reg, state: TotemState) -> None:
     """The `totem.*` params: rig switches, never saved (persist off) and
     never a performer's (modulatable off) — an experiment touches no
-    preset or show file. `reg.totem` is the state the pad device reads;
-    `view` (render.ViewState), when given, has its 3D-held pose dropped
-    on a reset."""
+    preset or show file. `reg.totem` is the state the pad device reads."""
     if f"{GROUP}.on" in reg:
         return
     reg.totem = state
@@ -147,6 +159,8 @@ def register(reg, state: TotemState, view=None) -> None:
         if v != state.on:
             state.on = v
             state.driving = None           # the next step takes over afresh
+            if not v:
+                _give_back_pan(state, reg)
             state.say(f"on — {readout(state)}" if v else "off")
     reg.toggle(f"{GROUP}.on", "Totem", lambda: state.on, set_on, group=GROUP,
                persist=False, modulatable=False,
@@ -171,26 +185,33 @@ def register(reg, state: TotemState, view=None) -> None:
                    "comes back. The stand-in for a position the sensors cannot give.")
 
     def fire_reset() -> None:
-        reset(state, reg, view)
+        reset(state, reg)
     reg.trigger(f"{GROUP}.reset", "Totem reset", fire_reset, group=GROUP, modulatable=False,
-                tip="The shape to the world's axes (every phase, the pan and the orbit "
-                    "to 0) and the pad's pose now the reference. The pad's A.")
+                tip="The view's own reset (every phase, the orbit, the zoom and the pan) "
+                    "and the pad's pose now the reference. The pad's A.")
 
 
-def reset(state: TotemState, reg, view=None) -> None:
-    """Every phase, the pan and the orbit to 0, the 3D switch's held pose
-    dropped; the tilt re-referenced on the next step."""
-    state.ang = [0.0] * 6
+def reset(state: TotemState, reg) -> None:
+    """The registry's `camera.reset` — one reset, not a copy of its list —
+    then the totem's angles read back from the phases it left and the tilt
+    re-referenced on the next step."""
+    p = reg.get("camera.reset") if hasattr(reg, "get") else None
+    if p is not None:
+        p.fire()
+    state.ang = [_base(reg, f"rot.phase.{n}") for n in PLANES]
     state.rate = [0.0, 0.0, 0.0]
     state.ref = None
-    state.pan_out = [0.0, 0.0]
-    for name in PLANES:
-        _set(reg, f"rot.phase.{name}", 0.0)
-    for pid in ("camera.pan.x", "camera.pan.y", "camera.yaw", "camera.pitch"):
-        _set(reg, pid, 0.0)
-    if view is not None and hasattr(view, "body"):
-        view.body = None
+    state.pan_out = [0.0, 0.0]          # the reset zeroed the pan, the totem's share with it
     state.say(f"reset — {readout(state)}")
+
+
+def _give_back_pan(state: TotemState, reg) -> None:
+    """Take back the pan the tilt added (off, or a pad letting go)."""
+    for j, axis in enumerate("xy"):
+        p = reg.get(f"camera.pan.{axis}") if hasattr(reg, "get") else None
+        if state.pan_out[j] and p is not None:
+            p.nudge(-state.pan_out[j])
+    state.pan_out = [0.0, 0.0]
 
 
 def _set(reg, pid: str, v: float) -> None:
@@ -209,6 +230,23 @@ def drives(state: TotemState | None, role: str) -> bool:
     return state is not None and state.on and state.driving == role
 
 
+def reading(state: TotemState | None, now: float | None = None) -> str | None:
+    """The role of the pad the totem reads, or None — off, reading none, or
+    the pad it read not heard from for `LOST_S` (its device gone)."""
+    if state is None or not state.on or state.driving is None:
+        return None
+    now = time.monotonic() if now is None else now
+    return state.driving if now - state.seen <= LOST_S else None
+
+
+def is_state(obj) -> bool:
+    """Duck-typed: is `obj` a totem state? Not `isinstance` — a hot reload
+    of this module makes a new class the live state is not an instance of
+    (until it is re-classed); a stub registry's function is not one."""
+    return (not callable(obj) and isinstance(getattr(obj, "on", None), bool)
+            and hasattr(obj, "driving") and hasattr(obj, "ang"))
+
+
 def _live(pad) -> bool:
     has = getattr(pad, "has", None)
     lanes = getattr(pad, "motion_lanes", None)
@@ -216,36 +254,46 @@ def _live(pad) -> bool:
             and lanes is not None and lanes() is not None)
 
 
-def step(state: TotemState | None, pad, reg, dt: float, role: str = "") -> None:
-    """One frame of the pad of `role` (gamepad.Pad, duck-typed): the
-    buttons, the gyro into the three live planes, the tilt onto the pan.
-    Nothing while the totem is off, or reads another pad."""
+def step(state: TotemState | None, pad, reg, dt: float, role: str = "",
+         now: float | None = None) -> None:
+    """One frame of the pad of device role `role` (gamepad.Pad,
+    duck-typed): the buttons, the turn since the last frame into the three
+    live planes, the tilt onto the pan. Nothing while the totem is off, or
+    reads another pad heard from within `LOST_S` (`now`, monotonic)."""
     if state is None or not state.on:
         return
+    now = time.monotonic() if now is None else now
     if state.driving is not None and state.driving != role:
-        return                                    # another pad holds it
+        if now - state.seen <= LOST_S:
+            return                                # another pad holds it
+        state.say(f"{state.driving or 'the pad'} went quiet")
+        state.driving = None                      # its device is gone: this one may
     if not _live(pad):
         if state.driving == role:
             state.driving = None
+            _give_back_pan(state, reg)
             state.say("the pad's sensors went quiet")
         return
+    motion = pad.motion
+    take = getattr(motion, "take_turn", None)
+    turn = take() if take is not None else (0.0, 0.0, 0.0)
     if state.driving is None:                     # taking over: nothing jumps
+        _give_back_pan(state, reg)
         state.driving = role
         state.ang = [_base(reg, f"rot.phase.{n}") for n in PLANES]
         state.rate = [0.0, 0.0, 0.0]
-        state.ref, state.pan_out = None, [0.0, 0.0]
+        state.ref = None
+        turn = (0.0, 0.0, 0.0)                    # what it turned before is not ours
         state.say(f"reading {role or 'the pad'} — {readout(state)}")
+    state.seen = now
     _buttons(state, pad, reg)
     dt = max(0.0, float(dt))
-    motion = pad.motion
-    gyro = getattr(motion, "gyro", (0.0, 0.0, 0.0))
-    k = _ease(dt, SMOOTH_S)
     for i in range(3):
-        v = float(gyro[i])
-        v = math.copysign(max(0.0, abs(v) - DEADBAND_DPS), v)   # a soft dead band
-        state.rate[i] += (math.radians(v) - state.rate[i]) * k
+        a = float(turn[i])                        # degrees: each report × its own dt
+        a = math.copysign(max(0.0, abs(a) - DEADBAND_DPS * dt), a)   # a soft dead band
+        state.rate[i] = math.radians(a) / dt if dt > 0 else 0.0
         p = PLANES.index(plane_of(i, state.w[i]))
-        state.ang[p] = _fold(state.ang[p] + AXIS_SIGN[i] * state.rate[i] * dt)
+        state.ang[p] = _fold(state.ang[p] + AXIS_SIGN[i] * math.radians(a))
     for p, name in enumerate(PLANES):
         _set(reg, f"rot.phase.{name}", state.ang[p])
     _pan(state, motion, reg, dt)
@@ -287,3 +335,19 @@ def _pan(state: TotemState, motion, reg, dt: float) -> None:
         if d and p is not None:
             p.nudge(d)
     state.pan_out = want
+
+
+def configured_on(cfg) -> bool:
+    """`[totem] on = true` in config.toml? Read as config.py reads a
+    section: a table or nothing — a scalar (`totem = true`) is a note on
+    the SYSTEM page (`cfg["notes"]`) and the totem stays off, never an
+    error at launch."""
+    section = cfg.get("totem") if isinstance(cfg, dict) else None
+    if section is None:
+        return False
+    if not isinstance(section, dict):
+        note = f"config: [totem] must be a table (`[totem]` then `on = true`), not {section!r}"
+        cfg.setdefault("notes", []).append(note)
+        print(note, file=sys.stderr)
+        return False
+    return section.get("on") is True

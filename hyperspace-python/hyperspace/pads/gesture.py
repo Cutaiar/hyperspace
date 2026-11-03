@@ -184,7 +184,11 @@ class Motion:
     pitch: float = 0.0
     yaw: float = 0.0
     spin: tuple[float, float, float] = (0.0, 0.0, 0.0)     # deg/s about z (roll), x (pitch), y (yaw)
-    gyro: tuple[float, float, float] = (0.0, 0.0, 0.0)     # the last reading, deg/s about x, y, z (totem.py)
+    gyro: tuple[float, float, float] = (0.0, 0.0, 0.0)     # the last reading, deg/s about x, y, z
+    # degrees turned about x, y, z since the last `take_turn` — each report
+    # times its own dt, so a stalled report adds nothing and two reports
+    # between frames both count (totem.py integrates this, not `gyro`)
+    turned: tuple[float, float, float] = (0.0, 0.0, 0.0)
     shake: float = 0.0
     energy: float = 0.0
     _since_shake: float = 1e9
@@ -194,6 +198,8 @@ class Motion:
         ax, ay, az = (float(v) for v in accel)
         gx, gy, gz = (float(v) for v in gyro)
         self.gyro = (gx, gy, gz)
+        tx, ty, tz = self.turned
+        self.turned = (tx + gx * dt, ty + gy * dt, tz + gz * dt)
         g = self.gravity
         if g is None:
             g = (ax, ay, az)
@@ -218,6 +224,11 @@ class Motion:
         rate = math.sqrt(gx * gx + gy * gy + gz * gz)
         e = max(rate / ENERGY_DPS, jolt / ENERGY_G)
         self.energy += (min(1.0, e) - self.energy) * _ease(dt, ENERGY_S)
+
+    def take_turn(self) -> tuple[float, float, float]:
+        """The degrees turned about x, y, z since the last call, then 0."""
+        t, self.turned = self.turned, (0.0, 0.0, 0.0)
+        return t
 
     def lanes(self) -> list[float]:
         return [_u(self.roll, TILT_DEG), _u(self.pitch, TILT_DEG), _u(self.yaw, YAW_DEG),
