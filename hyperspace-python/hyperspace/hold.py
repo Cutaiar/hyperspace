@@ -37,7 +37,8 @@ for both:
   integrated once a frame, before either draw (`ViewState.integrate`) —
   so the projector keeps its turn: a preset loaded under hold keeps its
   saved pose back on the hold (`hold_pose`) and it lands at Take (plan 43
-  C2) — Drop forgets it;
+  C2) — Drop forgets it; and the field's and the media path's rates,
+  integrated there into their phases (K3, row 578);
 - the media channels (`media.*`): a channel decodes once for every reader,
   so a source switched shows on both;
 - the modulators (`lfo`, `env`, `seq`, `macro`, `mod`) and the routes:
@@ -91,8 +92,12 @@ HELD_GROUPS = ("view", "camera", "pattern", "dream", "fx", "backdrop", "switch",
 # …less the params the integrator reads before either draw: holding the 3D
 # switch alone would draw the program's pose with the preview's body
 # (plan 38 B3: and the turn's speed and planes, which the draw never reads —
-# held, they would only count as "changed" on the head's red line)
-ONE_FOR_BOTH = ("view.three_d", "view.speed")
+# held, they would only count as "changed" on the head's red line).
+# K3 (row 578): the field's and the media path's rates too — there is one
+# ViewState, and integrate runs once a frame before both draws, folding
+# them into `inst_phase` / `media_phase`; the draw reads the phases, never
+# the rates, so the program moves at the live rate as the turn does
+ONE_FOR_BOTH = ("view.three_d", "view.speed", "view.inst_rate", "view.media_rate")
 ONE_FOR_BOTH_PREFIXES = ("view.plane.",)
 # the preview's long side at most: the GRAPH page's backdrop, not a show
 PREVIEW_MAX = 1280

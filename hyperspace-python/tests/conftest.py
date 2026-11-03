@@ -70,10 +70,38 @@ def pytest_addoption(parser):
                      help="run every tier (golden, slow, live), not just the fast one")
 
 
+def _serial(config) -> bool:
+    """No xdist workers: `-n0`, `-p no:xdist`, and not a worker itself."""
+    if hasattr(config, "workerinput"):
+        return False
+    try:
+        return not config.getoption("numprocesses")
+    except ValueError:                  # xdist not loaded
+        return True
+
+
+def _method_named(config) -> bool:
+    """A timeout method was named for this run: `--timeout-method` (the
+    option is None otherwise: pyproject sets the ini key, not an addopt)
+    or `-o timeout_method=...`."""
+    if config.getoption("timeout_method", None) is not None:
+        return True
+    overrides = getattr(config.option, "override_ini", None) or []
+    return any(o.split("=", 1)[0].strip() == "timeout_method" for o in overrides)
+
+
+@pytest.hookimpl(tryfirst=True)
 def pytest_configure(config):
     # (an explicit `-m` with --all still wins: only the default is lifted)
     if config.getoption("--all") and config.option.markexpr == _FAST:
         config.option.markexpr = ""
+    # Serial = signal method, workers = thread method (row 589). The thread
+    # watchdog ends its whole process with os._exit: in a worker xdist
+    # names the test, but in a serial run (`-n0`, the debugger's mode) it
+    # would end the run with no summary. The signal method there fails the
+    # test and goes on. (tryfirst: before pytest-timeout reads the option)
+    if _serial(config) and not _method_named(config):
+        config.option.timeout_method = "signal"
 
 
 def pytest_collection_modifyitems(config, items):
@@ -88,6 +116,40 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.xdist_group("live"))
         if path in _SLOW_FILES or key in _SLOW_TESTS:
             item.add_marker(pytest.mark.slow)
+
+
+@pytest.fixture(autouse=True)
+def _live_devices_take_turns(request):
+    """A test marked `live` holds the machine-wide live lock
+    (tests/live_lock.py) for its setup, call and teardown, so live tests
+    of two pytest processes (two sessions, two worktrees) take turns;
+    xdist's `xdist_group("live")` only orders one run's. `glfw.init()`
+    and a camera, audio or HID open can block in C, not fail, while
+    another process holds the window system or the device: the lock is
+    the mitigation, the thread timeout (pyproject addopts) the backstop.
+    It waits at most `live_lock.WAIT_S` and then skips — never forever.
+    It is function-scoped: a module- or session-scoped fixture a live test
+    requests is set up before the lock is taken, outside it, so a live
+    test opens its devices in its own body or a function-scoped fixture."""
+    if request.node.get_closest_marker("live") is None:
+        yield
+        return
+    import live_lock
+
+    with live_lock.held() as why_not:
+        if why_not:
+            pytest.skip(why_not)
+        yield
+
+
+@pytest.fixture
+def gl_window_ok():
+    """Skip (with the reason) unless `glfw.init()` completes in a child
+    process (tests/gl_probe.py). A test that opens a real GLFW window asks
+    for this before its own `glfw.init()`; it runs after the live lock."""
+    import gl_probe
+
+    gl_probe.require()
 
 
 @pytest.fixture

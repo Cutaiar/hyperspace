@@ -827,7 +827,7 @@ def test_quiet_rooms_let_go_and_a_failed_start_frees_its_context(rig, monkeypatc
     assert deleted == [made]
 
 
-def test_the_drawings_show_upright_through_real_gl(monkeypatch):
+def test_the_drawings_show_upright_through_real_gl(monkeypatch, gl_window_ok):
     """Real GL (CI runs the suite under Xvfb): what the drawings put at the
     top of the design space is the texture's first row — the row ImGui's
     image shows at its top with the default UVs `_lab` uses — so Faithful

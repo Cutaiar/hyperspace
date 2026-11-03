@@ -809,6 +809,20 @@ def test_a_big_node_folds_its_groups(rig, monkeypatch):
 
 
 
+def test_a_channel_side_pane_shows_its_sound(rig, monkeypatch):
+    """Plan 45 V2: a channel node's side pane holds the channel's two sound
+    params beside its transport — the play-audio toggle as its checkbox
+    and the gain as a slider — and draws them inside the narrow pane."""
+    st = party(rig)
+    rows = []
+    one = ui_graph._param_row
+    monkeypatch.setattr(ui_graph, "_param_row", lambda pn, pid: rows.append(pid) or one(pn, pid))
+    ch = pick(rig, st, "render:channel.a")
+    pids = [pid for _, ps in ui_graph.side_groups(rig.panel, ch) for pid in ps]
+    assert {"media.a.audio", "media.a.gain", "media.a.rate"} <= set(pids)
+    assert {"media.a.audio", "media.a.gain"} <= set(rows)
+
+
 def test_the_faces_pattern_side_pane_shows_every_shader_input(rig, monkeypatch):
     """The owner, 2026-10-27: the faces pattern node's side pane showed the
     selector, the mix and the media, not the shader's own inputs. Now every

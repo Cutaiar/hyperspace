@@ -251,7 +251,13 @@ GOLDENS_SINCE = ("resize-faces", "resize-crop", "edges-scene", "mask-as-picture"
 # lands a little differently (the contact sheet: the same pictures, small
 # shifts along the effects' edges). Nothing structural moved; sha256 and
 # png only.)
-GOLDENS_DIGEST = "270ffef5c350fa37c0927d2de923d25baca8242265464ad1174f7f9a535a263a"
+# (wave 1 K2, register row 577: re-pinned for the 17 goldens re-recorded —
+# party-noita, absent and present, every state that draws trip warp: its
+# scroll is now a `@clock` at drift × scale, summed in the host, so the
+# absent frames differ by float rounding only (no 8-bit step on the
+# contact sheet) and the present ones, whose hands push warp's scale and
+# drift, by at most 15/255 on 716 pixels. sha256 and png only.)
+GOLDENS_DIGEST = "805c41e8520bff5458645e22c98bdb530d1c866bea13431f9ace0b0520f88458"
 # the render names the pipelines' graph used, gone in plan 35 T4 (V2: the
 # render nodes are named in the new ids)
 OLD_RENDER_NAMES = ("ghost", "history", "readout", "capture", "cover", "grounded", "fx",

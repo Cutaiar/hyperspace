@@ -169,23 +169,43 @@ def _watched() -> tuple[str, ...]:
     return MODULES
 
 
+def _triples(node) -> set[tuple[str, str]]:
+    """The (module, class) of every `(obj, "module", "Class")` tuple under `node`."""
+    import ast
+
+    return {(t.elts[1].value, t.elts[2].value)
+            for t in ast.walk(node)
+            if isinstance(t, ast.Tuple) and len(t.elts) == 3
+            and all(isinstance(e, ast.Constant) for e in t.elts[1:])}
+
+
 def _app_swap_targets() -> set[tuple[str, str]]:
     """Every (module, class) pair app.py hands the reloader, read from the
     source of the `HotReloader(targets=lambda: [...])` call itself so the
-    test and the app cannot drift apart."""
+    test and the app cannot drift apart — and, since plan 44 D1, the deck's
+    own (`Deck.targets`, which that lambda splices in first)."""
     import ast
 
     tree = _tree("app")
     for node in ast.walk(tree):
         if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "HotReloader":
             (lam,) = [k.value for k in node.keywords if k.arg == "targets"]
-            pairs = {(t.elts[1].value, t.elts[2].value)
-                     for t in ast.walk(lam.body)
-                     if isinstance(t, ast.Tuple) and len(t.elts) == 3
-                     and all(isinstance(e, ast.Constant) for e in t.elts[1:])}
+            pairs = _triples(lam.body)
             assert pairs
-            return pairs
+            assert "deck.targets()" in ast.unparse(lam.body)
+            return pairs | _deck_swap_targets()
     raise AssertionError("app.py builds no HotReloader")
+
+
+def _deck_swap_targets() -> set[tuple[str, str]]:
+    """The (module, class) pairs `deck.Deck.targets` lists, read from its source."""
+    import ast
+
+    (deck,) = [n for n in _tree("deck").body if isinstance(n, ast.ClassDef) and n.name == "Deck"]
+    (fn,) = [n for n in deck.body if isinstance(n, ast.FunctionDef) and n.name == "targets"]
+    pairs = _triples(fn)
+    assert pairs
+    return pairs
 
 
 def _source(name: str) -> Path:

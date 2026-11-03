@@ -58,6 +58,7 @@ def rendered(res: int):
     s.yaw, s.pitch = 0.4, 0.25
     for k in range(30):
         s.integrate(1 / 60)
+        s.seed_phases(k / 60)  # K3: the field's and media path's phases at the pinned clock
         fbo.use()
         ctx.viewport = (0, 0, W, H)
         r.draw(s, W, H, t_now=k / 60)
