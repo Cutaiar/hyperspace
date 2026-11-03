@@ -22,7 +22,9 @@ Nothing draws while the poi is off or has not yet written the pan.
   dim while slack.
 
 `rows` is the pure part (no GL), tested on its own; `PoiGuide` draws them
-with the hands' `Geometry` (ghost.py: shaded spheres and tubes).
+with the hands' `Geometry` (ghost.py: shaded spheres and tubes) — and,
+knowing the output's size and the eye, tells the poi the box it may swing
+in (`PoiState.box`, `poi.box_for`), once a frame.
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ import math
 import moderngl
 import numpy as np
 
+from . import poi
 from .geometry import EYE_DISTANCE, EYE_FOV, eye_matrix
 from .ghost import COMPOSITE_FS, SAMPLES, Geometry
 from .glsl import QUAD_VS
@@ -172,15 +175,19 @@ class PoiGuide:
         nothing shows. Leaves blending on and the depth test off, and its
         own framebuffer bound: the caller binds its target next."""
         self.shown = False
+        w, h = max(int(size[0]), 1), max(int(size[1]), 1)
+        fov = float(getattr(view, "eye_fov", EYE_FOV))
+        distance = float(getattr(view, "eye_distance", EYE_DISTANCE))
+        if state is not None and hasattr(state, "box"):
+            # the box the poi holds the hand and the weight in: what this
+            # output shows (poi.box_for) — set whether or not the guide draws
+            state.box = poi.box_for(w, h, fov, distance)
         got = rows(state, getattr(view, "pan", (0.0, 0.0)), getattr(view, "zoom", 1.0))
         if got is None:
             return False
-        w, h = max(int(size[0]), 1), max(int(size[1]), 1)
         if not self._build() or not self._ensure((w, h)):
             return False
         ctx = self.ctx
-        fov = float(getattr(view, "eye_fov", EYE_FOV))
-        distance = float(getattr(view, "eye_distance", EYE_DISTANCE))
         vp = eye_matrix(w, h, fov, distance)
         eye = np.array([0.0, 0.0, distance])
         draw = self._msaa if self._msaa is not None else self._fbo

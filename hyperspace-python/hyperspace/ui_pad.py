@@ -617,7 +617,7 @@ def _poi(panel) -> None:
         _poi_dials_word(panel, reg)
 
 
-POI_DIALS = ("length", "weight", "spring", "gravity", "drag", "hand")
+POI_DIALS = ("length", "weight", "spring", "gravity", "drag", "hand", "home")
 POI_W = 300.0                       # the Poi window's width on first use
 
 
@@ -637,7 +637,7 @@ def _poi_dials_word(panel, reg) -> None:
 
 def poi_window(panel) -> None:
     """The Poi window, while the poi is on and its "dials" word has not hidden
-    it: the six dials (`POI_DIALS`), the depth and string switches and reset.
+    it: the seven dials (`POI_DIALS`), the depth and string switches and reset.
     A top-level window of its own, movable, so the pad window's room stays the
     pad's — drawn each frame beside the pad window (Panel._draw), whether the
     header that shows it is the floating pad's or GRAPH's side pane's. It

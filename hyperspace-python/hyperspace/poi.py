@@ -13,20 +13,37 @@ it feels. So the handle is modelled as
 - a *wrist*, starting at the world's origin (the screen's centre), carried
   where the pad is carried (`_hand`): the accelerometer with gravity taken
   out, rotated into the world, integrated into a velocity and that into a
-  place, which **stays where it ends** — no pull home, a reference frame
-  that does not centre itself, as a Wii remote's (the owner, 2026-11-03).
-  Each time the pad is held still its velocity is zeroed, so a double
-  integral's drift cannot run on between moves; what drift a move gathers
-  stays, and A puts the hand home. `poi.hand` scales it (2.5 world units a
-  metre at 1); 0 is the wrist alone.
+  place. A consumer IMU cannot hold a place: on the owner's Joy-Con tape
+  (2026-11-02) a real pickup reads 0.1–0.3 g of error while it moves, and
+  a double integral turns that into several screens of travel in seconds
+  (the 2026-11-03 "stays where it ends" hand ran off every screen it was
+  tried on). So the hand is a **high-passed** place: its velocity bleeds
+  (`HAND_BLEED_S`) so the drift a move gathers dies with the move, it is
+  zeroed whenever the pad is held still, and the place eases home over
+  `poi.home` seconds (0: never, the old frame). A quick carry still lands
+  most of the way (`poi.hand` scales it; 2.5 world units a metre at 1).
+  The wrist and the weight are **held on the screen** (`box`: what the
+  eye sees at depth 0, `box_for`, set by the guide each frame from the
+  real output; a default 16:9 before it), the weight's depth too, so the
+  shape never leaves the picture.
 - the *tip*, `HANDLE` world units out of the wrist along the pad's +z
   (away from the player as the owner holds it), turned by the pad's
   attitude: every report's turn (the reader sums it, `Motion.take_turn`
   with the poi's own tap, so the totem and the poi do not share it), its
-  tilt pulled to gravity while the pad is not being flung (a
-  complementary filter). The string
-  hangs from the tip, so a turn of the wrist swings it, as on a real poi,
-  where small circles of the hand drive the weight round.
+  tilt **always** pulled toward the accelerometer (a complementary filter:
+  hard while the pad is still, gently while it moves and the reading looks
+  like gravity alone — never gated on the attitude being right, which
+  dead-locked the first build: a 6° error read as a push, a push meant
+  "not still", and nothing corrected the 6°). The string hangs from the
+  tip, so a turn of the wrist swings it, as on a real poi, where small
+  circles of the hand drive the weight round.
+
+**Still** (`_stillness`) is judged from the sensors alone — the gyro slow,
+the accel's size near the 1 g this pad reads (`g_mag`, learned while
+still: the calibration's 2 % is a push otherwise) and steady from frame to
+frame — never from the attitude. A reading with no gravity in it (the
+sensor not yet on at connect: zeros for a second and a half on the tape)
+is no reading (`VALID_G`): it pushes nothing and settles nothing.
 
 **The string** has a rest length (`poi.length`, world units — the shape's
 own radius is 1) and pulls only when stretched, never pushes: a slack
@@ -55,9 +72,11 @@ out.
 While the poi is on it owns the pan (the totem's tilt-pan steps aside);
 the totem's turn still turns the shape as it flies.
 
-**Reset** (A, or the D-pad's down, as the totem's): the handle's attitude
-from gravity now (its heading straight ahead), the wrist home, the weight
-hanging still under the tip.
+**Reset** (A, or the D-pad's down, as the totem's, and the registry's
+`camera.reset` — a view reset that left the hand seven units out drew the
+shape home for one frame, then the poi put it back out): the handle's
+attitude from gravity now (its heading straight ahead), the wrist home,
+the weight hanging still under the tip.
 
 A leaf: the standard library only; the registry and the pad are
 duck-typed.
@@ -77,17 +96,22 @@ G_MPS2 = 9.81
 UNITS_PER_M = 2.5                 # a 1-unit string is a real poi's 40 cm: the same period
 G_WORLD = G_MPS2 * UNITS_PER_M    # world units / s², at poi.gravity 1
 HANDLE = 0.3                      # wrist → tip, world units (a hand and a Joy-Con)
-HAND_DEADBAND_G = 0.02            # below this the push is noise
-HAND_LIMIT = 8.0                  # the hand never further than this from home, world units
+HAND_DEADBAND_G = 0.04            # below this the push is noise (a still Joy-Con reads ~0.02)
+VALID_G = (0.3, 3.0)              # a reading outside this has no gravity in it: not a reading
 STILL_DPS = 15.0                  # the pad is still while it turns slower than this…
-STILL_G = 0.06                    # …and its push (gravity taken out) is under this…
-STILL_S = 0.08                    # …for this long: its velocity is zeroed (it is not moving)
+STILL_G = 0.06                    # …its accel's size is within this of the 1 g it reads…
+STILL_JITTER_G = 0.04             # …and within this of its own short average (`STILL_LP_S`)…
+STILL_LP_S = 0.15                 # (a still Joy-Con's reading wanders ~0.02 g; a carry's lags more)
+STILL_S = 0.12                    # …for this long: its velocity is zeroed (it is not moving)
 STALL_S = 0.1                     # no new reading for this long: the push is taken as none
-SPIN_DPS = 120.0                  # turning faster than this, the hand's velocity bleeds…
-SPIN_BLEED = 2.0                  # …at up to this a second (a spin's leaked gravity cannot run)
-CALM_S = 1.5                      # turning slowly and reading 1 g this long while the attitude
-                                  # sees a push is still: the attitude is wrong (a big error
-                                  # would never look still); no hand pushes one way that long
+G_MAG_S = 1.0                     # how fast a still pad's 1 g is learned (`g_mag`)
+HAND_BLEED_S = 5.0                # the hand's velocity leaks away over this (a move's drift dies)
+TILT_GAIN = 3.0                   # rad/s per rad: how fast gravity pulls a still pad's tilt
+TILT_TRUST = 0.15                 # …× this while it moves and the reading looks like gravity
+TILT_SPREAD_G = 0.5               # …falling to none as |accel| strays this far from 1 g
+BOX_MARGIN = 0.0                  # the box reaches the screen's edge (the shape is a unit wide)
+DEPTH_HALF = 2.0                  # the weight's depth no further than this each way (an octave)
+BOX_MIN = 0.5                     # the box never narrower than this each way
 STEP_S = 1.0 / 960.0              # the physics' fixed step
 MAX_STEPS = 96                    # …at most this many a frame (a stall drops the rest)
 K_STIFF = 3000.0                  # the string's stiffness at poi.spring 0 (mass·unit/s² per unit)
@@ -98,9 +122,10 @@ TILT_GAIN = 3.0                   # rad/s per rad: how fast gravity pulls a stil
 DEPTH_OCTAVES = 0.5               # zoom octaves per world unit of depth toward the eye
 
 DEFAULTS = {"weight": 0.3, "length": 1.0, "spring": 0.2, "gravity": 1.0,
-            "drag": 0.15, "hand": 1.0}
+            "drag": 0.15, "hand": 1.0, "home": 4.0}
 RANGES = {"weight": (0.05, 2.0), "length": (0.2, 4.0), "spring": (0.0, 1.0),
-          "gravity": (0.0, 2.0), "drag": (0.0, 1.0), "hand": (0.0, 2.0)}
+          "gravity": (0.0, 2.0), "drag": (0.0, 1.0), "hand": (0.0, 2.0),
+          "home": (0.0, 20.0)}
 
 Vec = list[float]
 
@@ -190,6 +215,24 @@ def from_gravity(up_body) -> list[list[float]]:
     return _rodrigues(_mul(axis, 1.0 / s), math.atan2(s, c))
 
 
+def box_for(w: float, h: float, fov: float, distance: float) -> list[float]:
+    """Half the width, half the height the eye sees at depth 0 through an
+    output `w` × `h` px with `fov` degrees across the shorter side from
+    `distance` world units (geometry.px_per_unit's rule; a test holds them
+    equal), less `BOX_MARGIN` — and `DEPTH_HALF`: the box the wrist and the
+    weight are held in, world units each way from the screen's centre."""
+    w, h = max(float(w), 1.0), max(float(h), 1.0)
+    ppu = min(w, h) / 2.0 / math.tan(math.radians(fov) / 2.0) / max(float(distance), 1e-6)
+    return [max(BOX_MIN, w / 2.0 / ppu - BOX_MARGIN), max(BOX_MIN, h / 2.0 / ppu - BOX_MARGIN),
+            DEPTH_HALF]
+
+
+# a 16:9 output through the default eye: 324 logical px a world unit at
+# 1080p (geometry.PAN_REF_PX; a test holds the two equal)
+DEFAULT_BOX = [max(BOX_MIN, 1920 / 2 / 324.0 - BOX_MARGIN),
+               max(BOX_MIN, 1080 / 2 / 324.0 - BOX_MARGIN), DEPTH_HALF]
+
+
 # ---------------------------------------------------------------- the state
 
 @dataclass
@@ -206,12 +249,15 @@ class PoiState:
     gravity: float = DEFAULTS["gravity"]
     drag: float = DEFAULTS["drag"]
     hand: float = DEFAULTS["hand"]
+    home: float = DEFAULTS["home"]  # seconds for the hand to ease home; 0 never
     driving: str | None = None    # the role of the pad it reads
     att: list = field(default_factory=_ident)       # the handle's attitude, body → world
     wrist: Vec = field(default_factory=lambda: [0.0, 0.0, 0.0])     # the hand, from home
     wrist_v: Vec = field(default_factory=lambda: [0.0, 0.0, 0.0])   # …and its velocity
     still: float = 0.0            # how long the pad has been still (STILL_S)
-    calm: float = 0.0             # how long it has turned slowly and read 1 g (CALM_S)
+    g_mag: float = 1.0            # the 1 g this pad reads, learned while still
+    a_lp: list | None = None      # the reading's short average (STILL_LP_S, STILL_JITTER_G)
+    box: list = field(default_factory=lambda: list(DEFAULT_BOX))   # half-extents, world units
     reading: int = -1             # the pad's last reading seen (`Motion.reports`)
     stale: float = 0.0            # how long since a new one came (STALL_S)
     ball: Vec = field(default_factory=lambda: [0.0, -1.0, 0.0])
@@ -308,6 +354,10 @@ def register(reg, state: PoiState, cfg: dict | None = None) -> None:
         "hand": ("Poi hand push", "{:.2f}×", False,
                  ("How much the hand's push (the accelerometer) moves the handle; 0 is "
                   "the wrist's turn alone.")),
+        "home": ("Poi hand home", "{:.1f} s", False,
+                 ("Seconds for the handle to ease back to the centre after a carry (an "
+                  "IMU cannot hold a place: what it gathers drifts). 0 never: the hand "
+                  "stays where its drift leaves it, within the screen.")),
     }
     for key, (label, f, log, tip) in tips.items():
         lo, hi = RANGES[key]
@@ -335,6 +385,24 @@ def register(reg, state: PoiState, cfg: dict | None = None) -> None:
     reg.trigger(f"{GROUP}.reset", "Poi reset", fire_reset, group=GROUP, modulatable=False,
                 tip="The handle's heading straight ahead from where the pad is, the weight "
                     "hanging still. The pad's A.")
+    _hook_view_reset(reg, state)
+
+
+def _hook_view_reset(reg, state: PoiState) -> None:
+    """The registry's `camera.reset` (the panel's Reset view, the totem's A)
+    puts the hand home too while the poi is on: a view reset that left the
+    hand out drew the shape home for one frame and the poi put it back."""
+    cam = reg.get("camera.reset") if hasattr(reg, "get") else None
+    if cam is None or getattr(cam, "_poi_hooked", False):
+        return
+    inner = cam.fire
+
+    def fire_both() -> None:
+        inner()
+        if state.on:
+            reset(state)
+    cam.fire = fire_both
+    cam._poi_hooked = True
 
 
 def reset(state: PoiState) -> None:
@@ -343,7 +411,7 @@ def reset(state: PoiState) -> None:
     state.settled = False
     state.att = _ident()
     state.wrist, state.wrist_v = [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
-    state.still, state.stale, state.calm = 0.0, 0.0, 0.0
+    state.still, state.stale, state.a_lp = 0.0, 0.0, None
     state.left = 0.0
     state.hang()
     state.say(f"reset — {readout(state)}")
@@ -427,19 +495,23 @@ def step(state: PoiState | None, pad, reg, dt: float, role: str = "") -> None:
         turn = None                    # a Motion without taps: the frame's reading
     if turn is None:
         turn = [v * dt for v in gyro_dps]
-    if not state.settled:
-        state.att = from_gravity(getattr(motion, "gravity", None) or accel)
-        state.settled = True
-        state.hang()
     reports = getattr(motion, "reports", None)
     fresh = reports is None or reports != state.reading
     state.reading = reports if reports is not None else state.reading
     state.stale = 0.0 if fresh else state.stale + dt
-    reading = accel if state.stale < STALL_S else None
+    reading = accel if state.stale < STALL_S and _valid(accel) else None
+    if not state.settled:
+        g = list(getattr(motion, "gravity", None) or accel)
+        if not _valid(g) or reading is None:     # the sensor not yet on: wait for gravity
+            _write(state, reg)
+            return
+        state.att = from_gravity(g)
+        state.settled = True
+        state.hang()
     _stillness(state, reading, gyro_dps, dt)
-    _attitude(state, [math.radians(v) for v in turn], accel, dt)
+    _attitude(state, [math.radians(v) for v in turn], reading, dt)
     tip0 = state.tip()
-    _hand(state, reading, dt, _norm(gyro_dps))
+    _hand(state, reading, dt)
     tip1 = state.tip()
     state.left += dt
     n = min(MAX_STEPS, int(state.left / STEP_S))
@@ -447,7 +519,17 @@ def step(state: PoiState | None, pad, reg, dt: float, role: str = "") -> None:
     for k in range(n):                 # the tip moved over the frame: each step a part of the way
         f = (k + 1) / n
         _physics(state, [a + (b - a) * f for a, b in zip(tip0, tip1, strict=True)], STEP_S)
+    _bound(state, state.ball, state.ball_v)
     _write(state, reg)
+
+
+def _valid(accel) -> bool:
+    """Has the reading gravity in it (`VALID_G`)? A sensor not yet on reads
+    zeros; a glitch reads anything."""
+    if accel is None:
+        return False
+    n = _norm(accel)
+    return math.isfinite(n) and VALID_G[0] <= n <= VALID_G[1]
 
 
 def _buttons(state: PoiState, pad, reg) -> None:
@@ -462,34 +544,69 @@ def _buttons(state: PoiState, pad, reg) -> None:
 
 
 def _stillness(state: PoiState, accel, gyro_dps, dt: float) -> None:
-    """How long the pad has been still: turning slower than `STILL_DPS`
-    with a push (its accel through the attitude, gravity taken out) under
-    `STILL_G`. Not |accel| near 1 g: a gentle push sideways reads near 1 g
-    too, and taking it for gravity would tilt the attitude into it and
-    swallow the move. A stalled pad (no reading) is still."""
+    """How long the pad has been still, from the sensors alone: turning
+    slower than `STILL_DPS`, its accel's size within `STILL_G` of the 1 g
+    it reads (`g_mag`) and the reading within `STILL_JITTER_G` of its own
+    short average (`STILL_LP_S`: a carry's push leads that average by far
+    more than a resting pad's noise; the reading before it alone let a
+    smooth carry pass as still). Not from the push through the attitude: a
+    wrong attitude read as a push, the push meant "not still", and only a
+    still pad was corrected — a dead-lock the tape showed for four seconds
+    with the pad on a table. Still, and with the attitude agreeing, the
+    1 g this pad reads is learned (its calibration is a couple of per cent
+    off, which a fixed 1.0 turns into a push; a steady push is never
+    learned as gravity). A stalled pad (no reading) is still."""
     if accel is None:
         state.still += dt
+        state.a_lp = None
         return
+    a = _norm(accel)
+    lp = state.a_lp if state.a_lp is not None else list(accel)
+    steady = _norm(_sub(accel, lp)) < STILL_JITTER_G
+    k = 1.0 - math.exp(-dt / STILL_LP_S)
+    state.a_lp = [p + (q - p) * k for p, q in zip(lp, accel, strict=True)]
     slow = _norm(gyro_dps) < STILL_DPS
-    lin = _norm(_sub(_apply(state.att, accel), [0.0, 1.0, 0.0]))
-    disagree = slow and lin >= STILL_G and abs(_norm(accel) - 1.0) < STILL_G
-    state.calm = state.calm + dt if disagree else 0.0
-    if slow and (lin < STILL_G or state.calm >= CALM_S):
+    sized = abs(a - state.g_mag) < STILL_G
+    if slow and sized and steady:
         state.still += dt
     else:
         state.still = 0.0
+    if state.still >= STILL_S:
+        lin = _norm(_sub(_apply(state.att, accel), [0.0, state.g_mag, 0.0]))
+        if lin < STILL_G:
+            state.g_mag += (a - state.g_mag) * (1.0 - math.exp(-dt / G_MAG_S))
 
 
 def _attitude(state: PoiState, turn, accel, dt: float) -> None:
     """The frame's turn (radians about the pad's x, y, z, every report's:
-    R ← R·exp(turn)), then — only while the pad is still (`_stillness`),
-    when the accel is gravity alone — the tilt pulled toward it."""
-    w = list(turn)
+    R ← R·exp(turn)), then the tilt pulled toward the accel: at `TILT_GAIN`
+    while the pad is still (the accel is gravity alone), at `TILT_TRUST`
+    of it while it moves and the reading's size is near 1 g (less as it
+    strays `TILT_SPREAD_G` from it) — a complementary filter that never
+    waits for the attitude to be right before correcting it. The pull is
+    `sin(error)` a second × the gain: a 6° error is gone in half a second
+    still, in a few seconds moving; a push a fraction of a second long
+    tilts it a degree or two, which the next calm moment takes back. The
+    reading is the newest, after the turn, so the pull is measured against
+    the turned attitude (against the one before, a 10°-a-frame spin leaned
+    the pull along the turn every frame and the attitude ran a degree a
+    second)."""
+    _rotate(state, turn)
+    if accel is None:
+        return
     a = _norm(accel)
-    if a > 1e-6 and state.still >= STILL_S:
+    if state.still >= STILL_S:
+        trust = 1.0
+    else:
+        trust = TILT_TRUST * max(0.0, 1.0 - abs(a - state.g_mag) / TILT_SPREAD_G)
+    if a > 1e-6 and trust > 0.0:
         measured = _mul(accel, 1.0 / a)               # up, in the pad's axes
         predicted = _apply_t(state.att, [0.0, 1.0, 0.0])
-        w = _add(w, _mul(_cross(measured, predicted), TILT_GAIN * dt))
+        _rotate(state, _mul(_cross(measured, predicted), TILT_GAIN * trust * dt))
+
+
+def _rotate(state: PoiState, w) -> None:
+    """R ← R·exp(w), `w` a rotation vector in the pad's axes (radians)."""
     angle = _norm(w)
     if angle > 1e-9:
         state.att = _orthonormal(_matmul(state.att, _rodrigues(_mul(w, 1.0 / angle), angle)))
@@ -497,43 +614,48 @@ def _attitude(state: PoiState, turn, accel, dt: float) -> None:
 
 def _push(state: PoiState, accel) -> Vec:
     """The hand's push in the world, world units / s²: the specific force
-    turned into the world with gravity's 1 g taken out, × `poi.hand`;
-    below `HAND_DEADBAND_G`, none."""
-    lin = _sub(_apply(state.att, accel), [0.0, 1.0, 0.0])       # in g
+    turned into the world with the 1 g this pad reads (`g_mag`) taken out,
+    × `poi.hand`; below `HAND_DEADBAND_G`, none."""
+    lin = _sub(_apply(state.att, accel), [0.0, state.g_mag, 0.0])       # in g
     if _norm(lin) <= HAND_DEADBAND_G or state.hand <= 0.0:
         return [0.0, 0.0, 0.0]
     return _mul(lin, G_MPS2 * UNITS_PER_M * state.hand)
 
 
-def _hand(state: PoiState, accel, dt: float, rate_dps: float = 0.0) -> None:
-    """The hand where the pad has been carried: its push integrated into
-    a velocity and that into a place, which stays where it ends — no pull
-    home (the owner, 2026-11-03: a reference frame that does not centre
-    itself, as a Wii remote's). While the pad is still (`STILL_*`) its
-    velocity is zeroed, so the drift a double integral gathers cannot run
-    on between moves; A puts the hand home. `accel` None (no new reading
-    for `STALL_S`): no push."""
+def _hand(state: PoiState, accel, dt: float) -> None:
+    """The hand where the pad has been carried, high-passed: its push
+    integrated into a velocity that bleeds over `HAND_BLEED_S` (the drift a
+    move gathers dies with the move) and is zeroed while the pad is still
+    (`STILL_*`), and that into a place that eases home over `poi.home`
+    seconds (0: never). `accel` None (no new reading for `STALL_S`, or no
+    gravity in it): no push. Held in the box (`_bound`)."""
     if state.still >= STILL_S:
         state.wrist_v = [0.0, 0.0, 0.0]
     else:
         push = _push(state, accel) if accel is not None else [0.0, 0.0, 0.0]
-        state.wrist_v = _add(state.wrist_v, _mul(push, dt))
-        # spinning hard (a poi swung round), the attitude's small errors leak
-        # gravity into the push for as long as the spin lasts and no still
-        # moment comes to zero it: the velocity bleeds, more the faster the
-        # spin. A carry turns little, so it is untouched; the place is never
-        # pulled home
-        over = max(0.0, rate_dps - SPIN_DPS) / SPIN_DPS
-        if over:
-            state.wrist_v = _mul(state.wrist_v, math.exp(-min(1.0, over) * SPIN_BLEED * dt))
+        state.wrist_v = _mul(_add(state.wrist_v, _mul(push, dt)), math.exp(-dt / HAND_BLEED_S))
     state.wrist = _add(state.wrist, _mul(state.wrist_v, dt))
-    n = _norm(state.wrist)
-    if n > HAND_LIMIT:                               # held at the edge, not flown off
-        u = _mul(state.wrist, 1.0 / n)
-        state.wrist = _mul(u, HAND_LIMIT)
-        out = _dot(state.wrist_v, u)
-        if out > 0:
-            state.wrist_v = _sub(state.wrist_v, _mul(u, out))
+    if state.home > 0.0:
+        state.wrist = _mul(state.wrist, math.exp(-dt / state.home))
+    _bound(state, state.wrist, state.wrist_v)
+
+
+def _bound(state: PoiState, p: Vec, v: Vec) -> None:
+    """`p` (the wrist or the weight, the poi's space) held inside the box
+    (`box`: half-extents each way from the screen's centre; the pan's
+    home offsets it, y down) and its velocity stopped at the wall, in
+    place. The depth is the weight's offset from the tip at rest."""
+    hx, hy, hz = state.box
+    home = state.pan_home if state.pan_home is not None else (0.0, 0.0)
+    lo = (-hx - home[0], home[1] - hy, HANDLE - hz)
+    hi = (hx - home[0], home[1] + hy, HANDLE + hz)
+    for i in range(3):
+        if p[i] < lo[i]:
+            p[i] = lo[i]
+            v[i] = max(v[i], 0.0)
+        elif p[i] > hi[i]:
+            p[i] = hi[i]
+            v[i] = min(v[i], 0.0)
 
 
 def _physics(state: PoiState, tip, h: float) -> None:

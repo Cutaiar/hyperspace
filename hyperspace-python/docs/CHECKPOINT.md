@@ -189,12 +189,41 @@ the tree, `tests/test_pads_joycon_real.py`); 424 and 426–429 (group AV)
 remain. **Restart** rather than hot reload (the road's module list
 changed).
 
+**The poi's hand, diagnosed on the real tape** (2026-11-03, after #336,
+#338 and #339 — the owner's "runs off the screen and never comes back"):
+the full probe tape (`joycon-check.jsonl`) through the app's exact path
+showed three faults, none in the sensors (the gyro and the accelerometer
+agree to a few degrees over every tilt in it): the sensor's first
+second-and-a-half of zeros read as a 1 g push; "still" was judged from the
+push through the attitude, so a 6° attitude error (0.11 g) was "not still"
+and only a still pad was corrected — a dead-lock the tape held for four
+seconds with the pad on a table while the hand flew ten units; and the
+double integral had no bound at all (eight units out, three screens, the
+depth zoom to 0.05). `poi.py` now gates on a reading having gravity in it,
+judges still from the sensors alone, pulls the tilt in always (against the
+turned attitude: against the one before, a fast spin leaned the pull along
+the turn), learns the 1 g the pad reads, bleeds the hand's velocity, eases
+the hand home over `poi.home` seconds (0 keeps the 2026-11-03 frame), and
+holds the wrist, the weight and its depth inside the box the output shows
+(`box_for`, fed by the guide each frame). `camera.reset` puts the hand
+home too. `tools/poi_probe.py` watches a real Joy-Con through the same
+path and replays a tape; `tests/test_poi_real.py` holds the fix to the
+tape's pickup and hold. Hand check 444 (group AV, the owner at the TV).
+
 ## What is left
 
 - **Plan 46, hand checks 424 and 426–429** (the owner's Joy-Con): the
   app with it — the pad window's views by eye, the six axes in the hand
   and a Learn, drift in a set, rumble and the lights from sink rows,
   beside the Edge.
+- **The poi's hand, hand check 444** (the owner's Joy-Con at the TV, poi
+  on): held still for ten seconds the shape hangs and does not creep; a
+  carry to one side moves it most of the way and it eases back over
+  `poi.home` seconds (0 in the Poi window to keep it where it lands); a
+  shove past the edge stops at the edge, and the weight swung toward the
+  eye never grows past double; Reset view puts the whole thing home; with
+  any doubt, `uv run python tools/poi_probe.py --record ~/Hyperspace/poi.jsonl`
+  with the app closed, the moves named by Enter, and the tape handed back.
 - **Plan 42, to revisit** (Dillon, 2026-11-02): the back buttons' forward
   flip, renaming "pad" (proposal: handheld), a role picker in the app —
   each with where it starts in [`plans/42-controllers.md`](plans/42-controllers.md) "To
