@@ -282,6 +282,12 @@ class MediaState:
                 m.__dict__.setdefault(k, v)
         return m
 
+    def live_mixer(self) -> mixer.Mixer:
+        """The mixer this state feeds — the public door (the analyzer's
+        `mix` source, plan 45 V3); `_mixer` is the hot-reload accessor
+        behind it."""
+        return self._mixer()
+
     def _sound(self) -> _Sound:
         s = self.__dict__.get("sound")
         if s is None:

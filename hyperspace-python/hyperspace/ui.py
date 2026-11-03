@@ -679,9 +679,10 @@ class Panel:
         # (`render:acid.2`, a modifier's id); None while nothing, a cable, a
         # bundle, a group or several nodes are selected. Written by
         # `ui_graph.publish` each frame GRAPH draws, so off the page it is
-        # as of the last frame GRAPH was drawn (the pane-always-on work
-        # removes that), except that a preset landing without the node
-        # (`ui_graph.settle`: a load, a new) lets it go on any page. An
+        # as of the last frame GRAPH was drawn (plan 49 stage 1 keeps the
+        # pane on GRAPH: stage 3 removes that), except that a preset
+        # landing without the node (`ui_graph.settle`: a load, a new) lets
+        # it go on any page. An
         # effect's node is `fx_selected` as well (`ui_graph.share`).
         # `graph_selected_at`: imgui's frame count when it last changed.
         self.graph_selected: str | None = None
@@ -2333,6 +2334,10 @@ class Panel:
         mic_on = a.on and a.mode == "mic"
         self._button("audio.mic", "Stop mic" if mic_on else "Listen to mic")
         imgui.same_line()
+        if "audio.mix" in self.reg:       # plan 45 V3: the videos' sound, summed
+            mix_on = a.on and a.mode == "mix"
+            self._button("audio.mix", "Stop video sound" if mix_on else "Listen to video sound")
+            imgui.same_line()
         if imgui.button("Load track"):
             self._file_dialog = self.open_file_dialog(
                 "Choose a track", ["Audio", "*.wav *.mp3 *.flac *.ogg"])
@@ -2358,6 +2363,12 @@ class Panel:
             # the analyser's rate — the track's for a file, not the capture rate
             rate = getattr(a, "rate", getattr(a, "sr", 0.0))
             imgui.text_disabled(f"{a.label}  ·  {rate / 1000:.1f} kHz")
+            mx = getattr(a, "_mixer", None)
+            if a.mode == "mix" and mx is not None:
+                if getattr(mx, "failed", False):        # the mixer's error is the source's
+                    imgui.text_colored(WARN, f"video sound silent — {mx.state}")
+                elif not getattr(mx, "playing", 0):
+                    imgui.text_disabled("silent until a channel's sound is on (MEDIA)")
         else:
             imgui.text_disabled("no source — the shape spins on its own")
 
@@ -2380,8 +2391,11 @@ class Panel:
         self._fader("master.trim")
 
     def _page_analyzer(self, dt: float) -> None:
-        """Scene, meters, then the band editor (ui_bands.py): the
-        spectrogram with the bands over it and the selected band's strip."""
+        """The ANALYZER page — scene, meters, then the band editor
+        (ui_bands.py): the spectrogram with the bands over it and the
+        selected band's strip. GRAPH's side pane draws it as its
+        analyzer section (ui_pane.py, plan 49): the page is the section at
+        full height."""
         c = self.control
         self._section("bands", "band")
         # scene + reset-all (relabels to Undo while the window is open)
@@ -2415,10 +2429,12 @@ class Panel:
         ui_hands.page(self, dt)
 
     def _page_presets(self, dt: float) -> None:
-        """2026-10-28, top to bottom (ui_presets.page): the preset strip —
-        ◀ name ● ▶ · new · save · as… — then every preset as a list that
-        fills the page, its trash at the foot, the patches fold, one line
-        for the show, and the library's notes."""
+        """The PRESETS page, 2026-10-28, top to bottom
+        (ui_presets.page): the preset strip — ◀ name ● ▶ · new · save ·
+        as… — then every preset as a list that fills the room it has, its
+        trash at the foot, the patches fold, one line for the show, and the
+        library's notes. GRAPH's side pane draws it as its presets section
+        (ui_pane.py, plan 49)."""
         if self.library is None:
             self._section("presets")
             imgui.text_disabled("no library attached")

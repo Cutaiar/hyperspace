@@ -48,6 +48,7 @@ Rows 542–543 come with the Flow mark (`subjects-flow-logo`, PR #214): 543 is t
 Row 560 is the owner's own, 2026-11-02, in the reshaping of the post-show plan (wave 0, K1, on `wave0/k1-clock-directive`): no shader multiplies time by a param; a rate-like param is integrated by the host (`// @clock` in an effect file) and wrapped. It is agreed, not pending; the row is here so the ports that follow it (K2 warp and tripcolour, K3 the media and instance rates, K4 the grid effects) cite one number. Hand check 419, once K2 lands a `@clock` on a shipped effect.
 Rows 554–555 (plan 43, the preset contract, 2026-11-02) are docs only: 554 is the owner's line, "a preset is a complete look; the rig is what is plugged in"; 555 is its first consequence, one camera in the preset, which overturns row 182 and is "(rec) — pending the owner" until C2 builds it ([`plans/43-preset-contract.md`](plans/43-preset-contract.md)).
 Rows 579–580 are K4 of wave 1 (on `wave1/k4`), row 560's port for the RINGS pattern and its measured rule: 579 ports RINGS × colour and records glimmer, wobble and fractals as measured and left alone (no knob of theirs grows with the clock); 580 is the build's ruling, a harness over every shipped knob for what the time lint cannot read. Hand check 436.
+Rows 609–610 are T3 of wave 2 (on `wave2/t3`), row 561's third part: the APC40's momentary fine button. 609 is the button and what it scales, 610 what happens when it is let go; both the build's, for the owner (and Dillon, whose desk it is) to keep or overturn. Hand checks 459–460, group BI.
 Every other one is in the app now (rows 110–213
 on `plan-24-26-27-integration`, rows from 214 on `plan-28-30-integration`,
 until the owner merges them) and waits
@@ -580,16 +581,16 @@ here; overturn → the change, then the same.
 | 541 | The show block is one line that says what a show is; the pads are set on the desk only | 403 | owner — 2026-10-28 |
 | 542 | The depth cue never spreads over less than 0.05, so a plane figure facing the eye draws at full weight | 406 | (rec) — PR #214 |
 | 543 | The Wispr Flow mark is two shapes in the catalog, Flow mark and Flow capsules (indices 99 and 100, for good) | 405 | owner — 2026-10-17 |
-| 544 | Plan 42 D1: Sony pads read over hidapi, on USB and Bluetooth; GLFW only without hidapi | 407, 408 | (rec) — pending the owner |
-| 545 | Plan 42 D2: one vocabulary — a DualSense's buttons by Xbox name and position; the extras from index 32 | 407 | (rec) — pending the owner |
+| 544 | Plan 42 D1: Sony pads read over hidapi, on USB and Bluetooth; GLFW only without hidapi | 407, 408 | owner — 2026-11-03: yes; the cost of Bluetooth polling on the pad's battery to be understood |
+| 545 | Plan 42 D2: one vocabulary — a DualSense's buttons by Xbox name and position; the extras from index 32 | 407 | owner — 2026-11-03: **not Xbox names** — a four-button cluster and the D-pad are north / south / east / west on every pad, since every pad is orientable (the extras from 32 stand); a work item, not built |
 | 546 | Plan 42 D3: `controller =` picks which pads an entry may take, in list order | 409 | (rec) — Dillon asked for it, 2026-11-01; the form pending the owner |
-| 547 | Plan 42 D4: `touch:` and `motion:` are schemes of their own; not live without a finger or a sensor | 407, 412 | (rec) — pending the owner |
-| 548 | Plan 42 D5: a pad's outputs are nine sink ports on its role; an identity light and number with no row | 410, 411 | (rec) — pending the owner |
-| 549 | Plan 42 D6: trigger resistance by the official effects only | 411 | (rec) — pending the owner |
-| 550 | Plan 42 D7: hidapi opens the pad exclusively | 408 | (rec) — pending the owner |
-| 551 | Plan 42 D8: the pad tape is the one recording format | 415 | (rec) — pending the owner |
-| 552 | Plan 42 D9: the on-screen pad draws the model's own face | 407 | (rec) — pending the owner |
-| 553 | Plan 42 D10: the browser lab is a prototype beside the app | — | (rec) — pending the owner |
+| 547 | Plan 42 D4: `touch:` and `motion:` are schemes of their own; not live without a finger or a sensor | 407, 412 | owner — 2026-11-03: yes |
+| 548 | Plan 42 D5: a pad's outputs are nine sink ports on its role; an identity light and number with no row | 410, 411 | owner — 2026-11-03: yes for now; Dylan's sink and feedback-into-the-controller work makes this dynamic — a standalone item the app must be able to receive |
+| 549 | Plan 42 D6: trigger resistance by the official effects only | 411 | owner — 2026-11-03: yes for now; our own effects are coming as a standalone item; the Edge is not the priority |
+| 550 | Plan 42 D7: hidapi opens the pad exclusively | 408 | (rec) — pending the owner, 2026-11-03: open as long as exclusive means this one pad (it does: `open_path` on one device, never the HID system); the Joy-Con is on hidapi already; whether Xbox and rhythm pads should be is not asked here |
+| 551 | Plan 42 D8: the pad tape is the one recording format | 415 | (rec) — pending the owner (explained 2026-11-03: a tape is the raw reports with their times, `hyperspace.padtape/1`, played back as the pad — the tests' and the probe's record) |
+| 552 | Plan 42 D9: the on-screen pad draws the model's own face | 407 | (rec) — pending the owner (explained 2026-11-03: the pad window draws ✕ ○ □ △ on a DualSense while the rows keep `pad:A`) |
+| 553 | Plan 42 D10: the browser lab is a prototype beside the app | — | owner — 2026-11-03: moot in the app (row 570: the lab is the pad window), but the browser lab stays as the place to explore what to build before building it — most of it external to Hyperspace for now |
 | 554 | The preset contract: a preset is a complete look; the rig is what is plugged in — everything that renders in the preset, everything about hardware on the rig and requested | — | owner — 2026-11-02 |
 | 555 | One camera in the preset: `camera.*` and `eye.*` one preset group (C2, `/9`), overturning "the camera is the rig" (row 182) | 431 | owner — 2026-11-02 (as recommended, plus: eye modulatable, pose always saved) |
 | 556 | Plan 44 Q1: N looks, one on air — a deck is a look with its own controls, registry's performance part, routes, graph, renderer, undo and dot; the deck is what controllers (on air), the panel and undo point at | — | owner — 2026-11-02 (as recommended; 558 with the nuance) |
@@ -600,7 +601,7 @@ here; overturn → the change, then the same.
 | 561 | Wave 0 T1: every effect's `speed` on a signed exponential taper and the fourteen amount-type params on a zero-safe log taper; a taper change migrates the route depths in the same PR (`params.retaper_depths` at load, `tools/retaper_routes.py` on the library, no schema bump) | 420 | agreed — the owner's reshaping of 2026-11-02 |
 | 562 | Plan 45 V1: a video's audio track decoded to memory as float32 stereo 48 kHz once something asks for sound, whole to 120 s, else a 120 s window around the transport's position; the transport is the one clock | 421 | owner's rule (2026-11-02, addendum 8); the policy (rec) |
 | 563 | Node groups (post-show G0, 2026-11-02): a group's id is never reused within a preset's life — `group.<n>` is one past the highest the preset has ever allotted (`Presets.group_high`: the file's highest at the load, dropped entries counted; not saved, no schema change), so an ungrouped or undone group's number is not the next group's; and membership is eager — a member node deleted by any road leaves its group's list in the same operation (hooks on the mechanisms: the section's landing, the table's `set_modifiers`, a bank's membership change), the last member taking the group; every node-removing step carries the marks (which carry the floor too) so its undo puts the member back; a refused load leaves the loaded preset's groups whole. Render node ids (`acid` → `acid.2`, the lowest free instance, R25) are untouched: a format question for the one-format PR | 422 | built as recommended — PR (G0) |
-| 564 | Wave 0 E1: delay loops are the trails mechanism, the look-back keeps the dream — the feedback starter (a composite laid over, a delay, a fade at level 0.75: colour and alpha decay alike) on the cable menu and "add feedback after" on the node menu, many allowed; "feedback" not "echo", which names the look-back's frames | 423 | (rec) — pending the owner |
+| 564 | Wave 0 E1: delay loops are the trails mechanism, the look-back keeps the dream — the feedback starter (a composite laid over, a delay, a fade at level 0.75: colour and alpha decay alike) on the cable menu and "add feedback after" on the node menu, many allowed; "feedback" not "echo", which names the look-back's frames | 423 | owner — 2026-11-03: yes (the vocabulary: feedback, not echo) |
 | 565 | Plan 46 D1: one Joy-Con per `[[devices]]` entry, held like a Wii Remote (a pair as one pad not built) | 424–429 | built as recommended — PR #315 |
 | 566 | Plan 46 D2: the Wii-Remote hold frames the vocabulary — one stick is the left stick, the (L)'s arrows the face by position, SL / SR the back pair, L / ZL `LB` + `LT`, no `hat:` | 424–429 | built; checked on the hardware (425, the owner, 2026-11-02) |
 | 567 | Plan 46 D3: `Model.controls` — the ports, Learn, the on-screen pad and the sinks show only what the pad has | 424–429 | built as recommended |
@@ -616,7 +617,7 @@ here; overturn → the change, then the same.
 | 577 | Wave 1 K2: warp's drift and scale on one `@clock` at drift × scale (the scroll counted in cells), tripcolour's pulse on a `@clock` wrapped to 2π; the lint's allowlist loses three pairs; party-noita's 17 goldens re-recorded | 419, 434 | owner's rule (row 560), built |
 | 578 | Wave 1 K3: `view.media_rate` and `view.inst_rate` integrated by the host into `view.media_phase` and `view.inst_phase` (`ViewState.integrate`, wrapped at 2π and 20π), read by the media path and the field's motion in place of t × rate; not params, never saved | 435 | built under row 560 (the owner's rule) — PR (K3) |
 | 579 | Continuity K4: RINGS' colour widens the hue range along the rings and never the drift — `pal((r · f · colour − t · 3/2π) · 0.15 …)` for `pal(ph · 0.15 · colour …)`, the same picture at colour 1; glimmer, wobble and fractals measured and left as they are — their size, frequency and cells knobs change a shape, by the same amount at any hour | 436 | agreed — row 560's port |
-| 580 | A knob step is the same size an hour in as a second in: every shipped effect's every param and every pattern's every input but SPEED, measured (a small step with the clocks stopped, late against early, `tests/test_step_continuity.py`), the space-scaling case the time lint cannot read | 436 | (rec) — the build's, for the owner to keep |
+| 580 | A knob step is the same size an hour in as a second in: every shipped effect's every param and every pattern's every input but SPEED, measured (a small step with the clocks stopped, late against early, `tests/test_step_continuity.py`), the space-scaling case the time lint cannot read | 436 | owner — 2026-11-03: yes |
 | 581 | Plan 45 V2, the mixer: one `sounddevice.OutputStream` (48 kHz stereo float32) owned by the media package; its callback sums each heard channel's `read(round(playhead × 48000), frames)` × gain, where the playhead is the one the frame thread last stepped the transport to (handed in as one tuple a frame), clipped at ±1; the callback integrates nothing, so the glitch is structural: the audio and display clocks are never locked and a block now and then repeats or skips even at rate 1 — an occasional click at rate 1 is expected until V4 reads sequentially and slews toward the transport; any other rate stutters; forward play only (a hold, a parked `once` clip, reverse and pingpong's way back are silent) | 437, 438 | built — V2 PR (the rule is the owner's, row 562) |
 | 582 | Plan 45 V2, the two params a channel: `media.<c>.audio` (toggle, default off — today's silence) and `media.<c>.gain` (linear, default 1.0, `tapers.T_MEDIA_GAIN` = `exp_zero(100, 120)`: off, then −30…+6 dB, unity notch), both performance (`media` group), persisted, learnable, modulatable; no schema move — a file without them loads them at their defaults | 437, 438 | (rec) — built as recommended |
 | 583 | Plan 45 V2, the stream's lifecycle: nothing opened until a channel's sound is first on (on a thread of its own, `media-mixer-open`); then left open playing silence until exit (`MediaState.close`, within its budget); a failed open, or a stream that stops under us (a device unplugged), is said on SYSTEM and retried 5 s after the failure while asked; the toggle's off is acted on 30 frames later (`OFF_FRAMES`: a lane flicking it costs nothing) and its `disable()` runs on the media closer, never at once with an enable (`_Sound`); a slot change leaves the old track to its source's `close` | 439 | (rec) — built as recommended |
@@ -630,6 +631,16 @@ here; overturn → the change, then the same.
 | 591 | Plan 44 D2: the banks' and the modifiers' own lanes (`lfo`, `env`, `seq`, `mod`) still publish into the shared `Sources`, as they did into the one router — each router republishes before it reads, and its `mod` vector is its own (seeded from its own last outputs, put back when another router published), so each of two routers lands what it would alone, even on different modifiers; D4 gives each deck its own layer for them (names, rests, what the panel reads between passes) | — | (rec) — pending the owner; built as recommended |
 | 592 | Plan 44 D2: `devices.poll` keeps `router=` — `act` lands the deck's rows, and the pad's axis lanes reach the sources through `Router.pad`; the pad's touch and motion lanes move to `PadDevice.feed(sources)`, the feed slot; `devices.feed`, the adapters' `feed` and `audio.publish` are handed the sources; `app.frame` hands them `router.sources` — no second handle on the host | 444 | (rec) — pending the owner; built as recommended |
 | 593 | Plan 44 D2: a `Sources` follows every live table a router over it runs (`Sources.follow`, held weakly) and writes the device registry's rig facts (row schemes, MIDI roles, primaries) into each; it reads no table — an address is resolved against the asking router's own table (`Sources.resolve(source, primaries)`, cached on the router), a scheme's feel under that table's pad feel | — | (rec) — pending the owner; built as recommended |
+| 594 | Plan 45 V3, the analyzer listens to the mix: a third source, `mix`, beside `mic` and `file` — the mixer's callback pushes the block it just wrote (after the gains and after the ±1 clip: what the room hears) into the analyzer's ring as mono, the mean of L and R, at 48 kHz; a callback with no voice pushes zeros; the push is one copy into a kept buffer, counts nothing and moves nothing, and the analyzer drains the ring once a frame as it drains the mic's | 446, 447 | (rec) — built as recommended (V3) |
+| 595 | Plan 45 V3, picking it: `audio.mix` ("Video sound"), a toggle beside `audio.mic` on AUDIO ("Listen to video sound"), not persisted, like the mic's; it opens no stream and grabs no input device, and opens nothing on the mixer either (the stream opens as V2 says, the first channel heard); until a channel is heard, or once the mixer has not pushed for `MIX_IDLE_FRAMES` = 6 frames (a stream never opened, failed, stopped or stalled), the bands read silence (the analyser's window zeroed each frame), and a mixer `error: …` is shown in warning colour beside the source's label; declared only when the host's `MediaState` is passed (a stand-in's mixer is fed by nobody); no config key — none names the mic or the file either | 446, 448 | (rec) — built as recommended (V3) |
+| 596 | Plan 45 V3, a hot reload and a failure: the engine's and the mixer's new fields are read with defaults (`getattr`, `MediaState._mixer()`'s fill-in), so a hot reload keeps the live stream and the live capture; the `audio.mix` toggle is a registry param, built at launch, so the button needs one restart; a ring push that raises is counted in the mixer's own `tap_errors` (SYSTEM: `analyzer push errors`, apart from voice read errors) and costs the analyzer one block, never the sound already written | 448 | (rec) — built as recommended (V3) |
+| 597 | Plan 49 U1: GRAPH's side pane always on, as folding sections — selection (`ui_graph._side`, words when nothing is selected), presets, lookback, faces, analyzer — each body the function its page draws (`Panel._page_presets`, `ui_lookback.page`, `ui_patterns.page`, `Panel._page_analyzer`), named in its row of `ui_pane.SECTIONS`; a widget keeps its page's label (`##<param id>`) and each body is drawn under `push_id("pane.<key>")`; headers `##pane.<key>`; every page and the rail unchanged | 449, 451 | (rec) — pending the owner; built as recommended |
+| 598 | Plan 49 U1: which sections are open is this Mac's, one state per layout in `<machine>/ui.json` beside `graph.side_w` — `pane.open` beside the canvas (selection and presets open at first), `pane.below` in the narrow band (selection alone) — written atomically half a second after the last click; only a click unfolds, a selection never does | 450, 452 | (rec) — pending the owner; built as recommended |
+| 599 | Plan 49 U1: beside the canvas open sections share the pane's height evenly, never under 160 px (past that the pane scrolls); in the narrow page's band (#266's) the headers are one row and the open sections share the rest with no floor; each body scrolls by itself; the side grip is a hit test with no item; the details beside / below chip shows on every narrow page | 452, 454 | (rec) — pending the owner; built as recommended |
+| 600 | Plan 49 U1: in a narrow pane the preset strip's name button is squeezed to the room beside its chips and the devices-missing chip (never under 48 px; unchanged on every page; that chip on its own row when even then there is no room) and the show line's chips wrap; the held projector's inset sits left of the pane | 453, 455 | (rec) — pending the owner; built as recommended |
+| 601 | Plan 49 U1: section titles follow the rail's words (`lookback`, not `dream`); the lookback section draws the page as it is — its look-back / dream / shared split is stage 2's to redraw (the owner, 2026-11-02: "a horrid representation") | 449 | (rec) — pending the owner; built as recommended |
+| 609 | Wave 2 T3: SEND B held is FINE — while it is down every APC knob (a ring row, `abs`, on a continuous non-integer param) moves its param a tenth as far, read relatively and written between detents; its LED lit while held; faders, discrete targets and relative rows stay coarse; the button is the adapter's (`apc40.FINE`, `midi.MidiIO`), not a map row, and gives way to any row on SEND B | 459 | (rec) — the build's, for the owner and Dillon to keep |
+| 610 | Wave 2 T3: letting go of FINE re-sends the ring of every knob it moved, so the encoder is re-based onto the param and the next coarse turn continues from there (plan 13 D7's re-base; soft pickup where rings do not re-base); `desk.fine` is the rig's (group desk, never saved, not modulatable) and a reconnect lets go of it | 460 | (rec) — the build's, for the owner and Dillon to keep |
 
 "—": no hand check shows it; tests only.
 
@@ -9396,6 +9407,18 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
   [`plans/42-controllers.md`](plans/42-controllers.md) (D1–D10 = rows
   544–553), the spec it was written against with its sources and
   vectors ([`plans/assets/42-controllers/sony-hid.md`](plans/assets/42-controllers/sony-hid.md)).
+- **Answer.** owner — 2026-11-03, row by row: 544 yes (the Bluetooth
+  cost on the pad's battery to be understood); 545 **overturned** — one
+  vocabulary, but not Xbox names: a four-button cluster and the D-pad are
+  north / south / east / west on every pad, since every pad is
+  orientable (a work item); 547 yes; 548 and 549 yes for now — Dylan's
+  sinks and feedback-into-the-controller work and our own trigger
+  effects land as standalone items the app must be able to receive, the
+  Edge is not the priority; 550 open on one question (does hidapi's
+  exclusive open lock out other controllers? — it opens one device by
+  path, so no; which pads ride hidapi is the real question); 551 and
+  552 explained, pending; 553 moot in the app, the browser lab kept as
+  the exploring ground; 546 not answered.
 - **What would overturn it.** The probe's findings (hand checks 407–408):
   an output length or LED take-over macOS refuses, back buttons that do
   not report their own bits, sensors on other axes. Each is a constant or
@@ -10244,7 +10267,7 @@ and D3 (the per-deck split) are
   time and a param in the source and cannot see a param that scales
   space where the time arrives some other way (inside a builtin it reads
   as opaque, `mod(u_phase, …)`; through a hash; from the host).
-- **Answer.** (rec) — the build's, for the owner to keep or overturn: a
+- **Answer.** owner — 2026-11-03: yes. The build's ruling: a
   measurement over everything shipped, not a second lint.
   `tests/test_step_continuity.py` takes every effect's `speed` and every
   `@param` (amount-type params at half their range so the effect shows)
@@ -10340,7 +10363,7 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   ruling, a typed `/` is a folder.
 - **Judge it.** 440.
 ### 585. The bank names a preset by its folder-qualified name; no schema bump
-- **Answer.** (rec) — pending the owner; built as recommended.
+- **Answer.** owner — 2026-11-03: yes; built as recommended.
 - **Recommended.** `Project.bank` entries are what the list says:
   `party/TRIP`, or a bare `TRIP` for a top-level file. Every show written
   before holds bare names, so it reads and plays unchanged. No
@@ -10362,7 +10385,7 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   presets into folders, or the older one shows those pads dark.
 - **Judge it.** 443.
 ### 586. The trash is this Mac's
-- **Answer.** (rec) — pending the owner; built as recommended.
+- **Answer.** owner — 2026-11-03: yes; built as recommended.
 - **Recommended.** `to_trash(path, root, origin)` writes
   `<root>/trash/<origin>/<stem>.<stamp>[-n].json`; the library passes its
   machine home and the folder the file came from relative to the
@@ -10386,7 +10409,7 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   trash only, so B cannot restore it.
 - **Judge it.** 442.
 ### 587. Where a save lands
-- **Answer.** (rec) — pending the owner; built as recommended.
+- **Answer.** owner — 2026-11-03: yes; built as recommended.
 - **Recommended.** **save** writes over the file the loaded name
   resolves to, wherever it is. **as…** writes the typed name: with a
   folder in it (`party/NEW`) into that folder, made if need be; the
@@ -10405,7 +10428,7 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   any file's.
 - **Judge it.** 441.
 ### 588. The PRESETS page's reading of folders
-- **Answer.** (rec) — pending the owner; built as recommended.
+- **Answer.** owner — 2026-11-03: yes; built as recommended.
 - **Recommended.** The flat list stays (plan 41), sorted by the
   qualified name, so a folder's presets sit together. A folder's row is
   a label-less selectable with `party / ` drawn dim and the name bright
@@ -10432,8 +10455,9 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   inside a C call while another process holds the window system or the
   device, and pytest-timeout's default signal method cannot interrupt a
   blocked C call, so each run sat at 99 % for good.
-- **Answer.** (rec) — pending the owner; built as recommended (wave 1,
-  T0).
+- **Answer.** owner — 2026-11-03: yes; built as recommended (wave 1,
+  T0). `--dist load` goes to wave 2 T1 as recommended, measured under the
+  live lock.
 - **Recommended.** (1) pyproject's addopts carry
   `--timeout=120 --max-worker-restart=0` and its ini key
   `timeout_method = "thread"`, and conftest's `pytest_configure`
@@ -10688,3 +10712,271 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   or drops another's.
 - **Judge it.** — (tests: `tests/test_routing_sources.py`,
   `tests/test_routing.py`'s primary-pad tests, `tests/test_devices.py`).
+
+### 594. Plan 45 V3: the analyzer listens to the mix
+- **Asked.** Plan 45's third PR: the mixer's summed block pushed into the
+  analyzer's ring as a source beside `mic` and `file`, so the bands, the
+  beat and everything that reads the analyzer follow the show's video
+  sound — one analyser, fed by one more input, under the owner's rule
+  (row 562): no second time base.
+- **Answer.** (rec) — built as recommended
+  ([`plans/45-video-audio.md`](plans/45-video-audio.md),
+  `media/mixer.py`, `audio.py`). `Mixer.listen(ring)` hands the mixer
+  the analyzer's input ring (`audio._Ring`); every callback then pushes
+  the block it just wrote to the output into it, as mono. **After the
+  clip** (rec): the analyzer hears what the room hears, and the AUDIO
+  page's `master.gain` already sets the level into the bands; before the
+  clip two loud tracks would read louder than they sound. **Mono as the
+  mean of L and R** (rec): the mic is one channel, so the bands' tuning
+  carries across; a centred mono soundtrack (put on both sides at −3 dB
+  by V1's resampler) reads at −3 dB, a hard-panned one at −6 dB. 48 kHz,
+  the mixer's one rate (`AudioEngine.MIX_RATE`, equal to
+  `media.video.AUDIO_RATE` by test — not imported, so the audio stack
+  stays below the media package, `test_audio_boundary.py`). A callback
+  with no voice pushes a block of zeros, so the bands decay on their own
+  time constants as on a paused track. The push is one copy into a
+  buffer the mixer keeps (`_mono`), no allocation once warm.
+- **Why it keeps the rule.** Nothing in the callback counts, integrates
+  or keeps a position: the block is the one V2 already read at the
+  transport's playhead, and the analyzer drains the ring once a frame as
+  it drains the mic's. `start_file`'s `_played` is not reused.
+- **What would overturn it.** The owner hearing the bands too quiet on a
+  mono soundtrack (sum rather than mean), or wanting the analyzer to see
+  past the clip (take the block before `np.clip`).
+
+### 595. Plan 45 V3: picking the mix
+- **Answer.** (rec) — built as recommended. `audio.mix` ("Video sound",
+  a toggle in the `audio` group, not persisted, not bound to any key or
+  desk button) beside `audio.mic`; AUDIO draws it as *Listen to video
+  sound* / *Stop video sound* next to the mic's button, and while no
+  channel is heard says "silent until a channel's sound is on (MEDIA)"; a mixer that
+  failed or whose stream stopped (`Mixer.failed`) says `video sound
+  silent — <state>` in warning colour instead. The toggle is declared
+  only when the host's `MediaState` is passed to `build_registry` (a
+  stand-in's mixer is polled by nobody, so the toggle would succeed into
+  silence for ever); it reaches the mixer through
+  `MediaState.live_mixer()`, not the hot-reload accessor.
+  Turning it on calls `AudioEngine.start_mix(mixer)`: the old source is
+  stopped (its stream closed; the mic's device let go), the trackers made
+  fresh with the bands and the master faders kept (as any source
+  switch), and the mixer told to push into the new ring. **No stream is
+  opened and no input device grabbed**, and the mixer's own stream is not
+  opened either: it opens as V2 says, the first time a channel's sound is
+  on, so picking the mix first reads silence until one is. Picking the
+  mic or a file, or Stop, detaches the mixer (`listen(None)`). Once the
+  mixer has not pushed for `MIX_IDLE_FRAMES` = 6 frames (a stream never
+  asked, failed, stopped under us, or stalled with `active` still true)
+  the analyser's window is zeroed each frame — silence, not the last
+  block held. The count is of frame-loop steps, independent of the
+  mixer's `state` string (written on other threads); a frame or two
+  without a block is jitter and is not zeroed. **No config key**:
+  the task asked for one where the source is named, but no key names the
+  mic or the file either (the source is picked at the panel each run);
+  `config.py` is untouched.
+- **What would overturn it.** The owner wanting the source to survive a
+  restart (a `[audio] source` key, then the mic's device too).
+
+### 596. Plan 45 V3: hot reload, and a push that fails
+- **Answer.** (rec) — built as recommended. The engine's new field
+  (`_mixer`) and the mixer's (`tap`, `_mono`) are read with defaults —
+  `getattr` in `AudioEngine.stop` / `step` and in the callback (`_push`
+  makes `_mono` when it is missing, the one place), and
+  `MediaState._mixer()`'s fill-in of a
+  reloaded mixer's missing fields — so a hot reload of `audio.py` or
+  `media/mixer.py` keeps the live capture and the live stream, and V2's
+  sound is untouched. The toggle is a registry param and the registry is
+  built at launch, so **the button appears after one restart**. A push
+  into the ring that raises is caught inside the callback after the
+  output is written: counted in the mixer's `tap_errors` (SYSTEM's
+  `analyzer push errors`, kept apart from a voice's `read errors`), one
+  block lost to the analyzer, never the room's sound.
+- **Judge it.** Hand check 448.
+
+### 609. FINE: SEND B held, every knob a tenth as far
+- **Asked.** The owner, after the show of 2026-10-30, in the triage's
+  "coarse and fine control" (row 561): a button on the APC40 held down so
+  that a knob turned meanwhile moves its param in fine steps. T1 (the
+  tapers) and T2 (the panel's shift-drag) are separate PRs.
+- **Answer.** (rec) — the build's: SEND B, ÷10 (`midi.FINE_DIV`). The
+  desk's layout is Dillon's (DECISIONS, "Presets and the desk"); this is
+  one button and comes out whole.
+- **Built.** `apc40.FINE = (N_SEND_B, 0)`. SEND B has no row on either
+  layer, the sequencer page does not shadow it (the clip stops it does),
+  and it sits between the track knobs and the device knobs, a thumb's
+  reach from both. While `desk.fine` is on, an `abs` row with a ring on a
+  continuous, non-integer param reads each message as the knob's move
+  since its last one (`b.last_hw`), divides it by 10 and adds it to the
+  base with `Param.set` between detents (no glide, any glide dropped): a
+  detent is 1/1270 of the throw, under one detent of every param — 0.08
+  of `view.pattern_mix`'s hundred, 0.32 of a speed's 401. The ring
+  follows and re-bases the encoder as ever. A glide in flight lands on
+  its target (what the ring showed) before the fine step. At an end stop
+  the encoder sends its end again for each detent, and each repeat is
+  one MIDI step that way, so fine reaches 0 and 1; a `wrap` param wraps. The button is read by the
+  adapter, not dispatched through the table: `routing.py` is D2's while
+  it is open, and a table row would need `APC_NEW_ROWS` to reach the
+  owner's existing `bindings.json`. So it works on every file at once; it
+  stands down where any enabled row of the device's table names SEND B
+  (that row is the owner's; an off one gives way), worked out once per
+  table change; it is never a learn's candidate. A release goes to the
+  press that held FINE even if a row has landed on SEND B since. Its LED: 1 held, 0
+  not, change-gated, relit after a load darkens the desk. The press goes
+  in the desk log. `desk.fine` is learnable as `desk.slew` is (a learned
+  toggle row would latch it). It is registered by `midi.register_held`,
+  the held-button shape SAVE has; **move it beside `desk.save` in
+  `routing.register_desk` after D2** (routing.py was frozen for D2).
+- **Other options.** A clip stop (1–7 are free, but the sequencer page
+  shadows them); a track select 7–8 (far from the knobs); SEND C or
+  device ◀ ▶ (as free; SEND B is nearer the track knobs). ÷4 or ÷20.
+  A map row through `Bindings.dispatch` with `desk.fine` as a momentary
+  target (the clean shape, after D2: one `APC_NEW_ROWS` line, and the
+  on-screen desk would draw it). Fine on the faders too (a pot's position
+  is its value: every release would leave it out of place).
+- **To reverse.** `apc40.FINE = None` (or the line out): the adapter's
+  `_fine_control` is then None everywhere and nothing else changes.
+- **Rough edge.** The on-screen desk (ui_desk.py) draws SEND B as free:
+  it reads the table, and FINE is not a row. A learn armed while SEND B
+  is pressed ignores the press. An enum or integer knob held fine steps
+  as before. Between a ring sent mid-turn and the encoder taking it, a
+  message already in flight reads a few steps large (the same race the
+  coarse re-base has, ten times smaller here).
+- **Judge it.** Check 459.
+
+### 610. Letting go of FINE: the knob continues from the param
+- **Asked.** T3's brief: on release the knob's absolute position no
+  longer matches the param; handle it as the adapter already handles a
+  mismatch.
+- **Answer.** (rec) — the build's: the ring re-base (plan 13 D7, hand
+  check 31), not a pickup and not a relative read from then on.
+- **Built.** `MidiIO._fine_release`, at the note-off itself (and once a
+  poll when `desk.fine` is turned off any other way): every knob row
+  `_fine_move` touched loses its catch and has its ring re-sent
+  (`last_out = None`). A message the knob sent from where it had wandered,
+  later in the same batch, is read as pickup and moves nothing; then the
+  ring goes out, `_rebase` catches the row at the param's ring and the
+  device's encoder sits there; the next coarse detent is one MIDI step
+  from the param. With `RING_REBASES_KNOB` False the catch stays let go
+  and those knobs pick up as the faders do. `desk.fine` (group desk,
+  `persist=False`, `modulatable=False`) is the rig's; `_enter` lets go of
+  it as of SAVE (one loop over `midi.HELD_PARAMS`) and forgets the knobs
+  it moved, so a lost note-off cannot leave the desk fine; a load forgets
+  them too where rings re-base (its redraw re-sends every ring), and
+  keeps them where they do not, so the release still lets go of their
+  catch.
+- **Other options.** Soft pickup (the knob dead until turned back
+  through the value — up to a tenth of its throw away after a long fine
+  turn); keeping fine's relative read for good (every knob relative, no
+  longer an absolute-with-re-base desk).
+- **To reverse.** `_fine_release`'s loop body to `b.caught = False` alone
+  (soft pickup, the ring left as it was).
+- **Rough edge.** The re-base lands on the param's ring, a 1/127 grid:
+  a fine value between ring steps is kept, and the first coarse detent
+  after it lands on the param's own detent grid again (up to one detent
+  from the fine value).
+- **Judge it.** Check 460.
+
+## Wave 2 — the panel fold, stage 1 (plan 49, rows 597–601)
+
+### 597. The side pane always on, as folding sections
+- **Asked.** The build-order doc's row "Graph always on, pages fold into
+  the side pane", stage 1 (U1); the owner gave the fold to us on
+  2026-11-03.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** On GRAPH the pane (#266's, its width as built) is
+  drawn every frame and holds five sections (`ui_pane.SECTIONS`):
+  selection, presets, lookback, faces, analyzer. Each body is the
+  function its page draws — `Panel._page_presets`, `ui_lookback.page`,
+  `ui_patterns.page`, `Panel._page_analyzer` — named in the section's row
+  of `SECTIONS` (review fix 8: one row per section, no wrapper, no
+  dispatch to keep in step), so no page code is duplicated and the page
+  is the section at full height. A widget keeps its page's
+  label, so the panel driver, Learn's framing and the right-click menu
+  find it by the same id; each body sits under `push_id("pane.<key>")`
+  inside the pane's child, so imgui's ids stay unique when two sections
+  draw preset strips (`tests/test_ui_pane.py` checks every id with all
+  five open). The page and its section are never drawn in one frame.
+- **Other options.** A section that opens its page instead of drawing
+  it (no fold at all); copying each page's body into the pane (two
+  layouts to keep in step); the sections in a tab bar (one at a time, and
+  no shared height).
+- **To reverse.** `ui_graph.page` draws the pane only `if sel`, and calls
+  `_side` instead of `ui_pane.draw`.
+- **Rough edge.** The pages were laid out for the panel's width; in a
+  320 px pane some rows are tight (the FACES browser's chips, the
+  ANALYZER band strip). Stage 2 and the eye decide what needs a narrow
+  layout.
+- **Judge it.** 449, 451.
+
+### 598. The fold state is this Mac's
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** One state per layout in `<machine>/ui.json`, beside
+  `graph.side_w`: `pane.open` for the column beside the canvas
+  (selection and presets open, lookback, faces and analyzer folded — the
+  spectrogram and the thumbnails cost a draw each frame they are open)
+  and `pane.below` for the narrow page's band (selection alone: the band
+  is 240 px). `read_doc` / `write_doc` are `library._read_json` and the
+  atomic `library._write_text` (review fix 6), shared by `read_side` /
+  `write_side`. Read the first frame the machine is known — a library
+  attached after GRAPH first drew is read then (review fix 4), with any
+  fold clicked before it laid over the file's (`pane_clicks`, round 2). A click is
+  written `WRITE_AFTER_S` (0.5 s) after the last one (`ui_pane.flush`),
+  `ui_graph.close` writing what is left, as the width waits for the
+  drag's release. **Only a click unfolds** (review fix 7): a selection
+  leaves the fold alone — a folded selection's header names what is
+  selected — so a section folded on purpose stays folded and no
+  selection writes the file.
+- **Other options.** Saved in the show (then both Macs fight over it);
+  a new selection unfolding selection (built first: it undid a fold the
+  user had just made and wrote ui.json on the UI thread per selection);
+  one state for both layouts (the band cannot hold the column's
+  defaults).
+- **To reverse.** `DEFAULT_OPEN` / `DEFAULT_BELOW`; `WRITE_AFTER_S` to 0.
+- **Judge it.** 450, 452.
+
+### 599. Open sections share the pane's height
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** Beside the canvas the room under the five headers is
+  shared evenly by the open sections, each at least `MIN_BODY_H` (160
+  px; past that the pane scrolls), each body a child scrolling by itself
+  — so one open section has the whole pane, as a page has the whole
+  panel. A narrow page keeps #266's `BELOW_H` band under the canvas
+  (review fix 2): there the headers are one row of chips and the open
+  sections share the rest with no floor, so one open section has the
+  whole band less one row. The side grip is a hit test on the column's
+  left edge with no item (review fix 1: an `invisible_button` pinned to
+  the column's top grew its content by the scroll each frame once the
+  sections made it scroll). The details beside / below chip (shown
+  before only with a selection) shows on every narrow page.
+- **Other options.** Each body as tall as its content, the pane
+  scrolling (the presets list and the band editor fill whatever they
+  are given, so they would need a height anyway); a draggable split.
+- **To reverse.** `ui_pane.body_height`.
+- **Judge it.** 452, 454.
+
+### 600. Narrow strips; the projector inset beside the pane
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** The preset strip's name button is `name_w` where it
+  fits (every page, unchanged) and otherwise the room beside the arrows,
+  the dot, the presets strip's **N devices missing** chip
+  (`ui_graph.wants_chip_w`, review fix 5) and the chips, never under 48
+  px, its words cut to it (`ui_presets.strip_name_w`); where even a
+  48 px name leaves no room for that chip it goes on a row of its own
+  under the strip; the show line's open / save / as… / new
+  start a new row where they would pass the edge (`ui_presets._beside`).
+  The held projector's inset (plan 38) sits in the canvas's top-right
+  corner left of the pane, where it lay under the pane before whenever
+  something was selected; on a narrow page above the band under the
+  canvas, narrowed to fit the room left (`monitor_rect`, review round 2).
+- **To reverse.** `name_w()` back in `strip`; `same_line()` back in
+  `show_line`; `_monitor` given the whole canvas.
+- **Judge it.** 453, 455.
+
+### 601. Section titles follow the rail
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** The sections are named as the rail's pills are
+  (`lookback`, not the brief's `dream`), so a section reads as the page
+  it folds. The lookback section draws the LOOKBACK page as it is; the
+  owner's "a horrid representation of what's going on there" (2026-11-02,
+  the look-back / dream / shared split) is stage 2's to redraw, as the two
+  picture nodes plan 36 made of them.
+- **Judge it.** 449.
