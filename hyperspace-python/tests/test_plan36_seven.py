@@ -34,6 +34,7 @@ FIXTURES = ROOT / "tests" / "fixtures" / "presets"
 SOURCES = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
 SIZE = (240, 150)
 SEVEN = M.WIRED_SCHEMA
+SAVED = M.SAVE_SCHEMA          # plan 43 C2: what a save writes (a /7 read, a /9 written)
 # today's frame: what a section-less old preset migrates to (`wired_of(Wiring())`;
 # plan 36 T4: its look-back off in the old values — none drawn)
 TODAY = [("shape", "scene.geometry"), ("scene", "output.all.image"),
@@ -111,7 +112,7 @@ def test_a_section_less_seven_loads_black_and_says_so(tmp_path, graph):
     assert gs.fx.specs == {}                           # no effect exists
     assert not [p.id for p in app.reg if p.id.startswith("fx.acid.")]
     saved = app.presets.document("bare")
-    assert saved["schema"] == SEVEN
+    assert saved["schema"] == SAVED
     assert saved["graph"] == {"frame": "wired", "nodes": [{"kind": "hands", "laid": "over"}]}
 
 
@@ -207,7 +208,7 @@ def test_the_migration_drops_the_values_of_effects_not_in_the_section():
         "fx.on": True, "fx.acid.on": True, "fx.acid.bend": 0.2,
         "fx.palette.on": False, "fx.palette.hue_from": 10.0}}
     out, _ = M.seven(doc, {"acid": (10, 1.0), "palette": (20, 1.0)})
-    assert out["schema"] == SEVEN
+    assert out["schema"] == SAVED
     assert out["values"] == {"fx.on": True, "fx.acid.on": True, "fx.acid.bend": 0.2}
     assert ("scene", "acid.image") in _pairs(out["graph"])     # (plan 36 T4: no look-back)
 
@@ -218,7 +219,7 @@ def test_an_old_section_less_preset_migrates_to_todays_frame():
     """A `/2` with no section (every corpus preset's source) is today's
     frame, each hidden edge a wire, as `/7`."""
     out, notes = M.seven({"schema": "hyperspace.preset/2", "values": {}}, {})
-    assert out["schema"] == SEVEN and notes == []
+    assert out["schema"] == SAVED and notes == []
     assert sorted(_pairs(out["graph"])) == sorted(TODAY)
     spec = G.read_graph(out["graph"])
     assert spec.wired and spec.notes == ()
@@ -227,10 +228,10 @@ def test_an_old_section_less_preset_migrates_to_todays_frame():
 def test_an_old_file_loads_through_the_migration_with_a_note(tmp_path):
     doc = json.loads((FIXTURES / "acid-scene.json").read_text())
     app = _app_with(tmp_path, "acid-scene", doc)
-    said = M.MIGRATED_NOTE.format(old="hyperspace.preset/2", new=SEVEN)
+    said = M.MIGRATED_NOTE.format(old="hyperspace.preset/2", new=SAVED)
     assert app.presets.migrated == said and app.presets.notes == []     # (not a problem)
     assert app.lib.warning == f"preset acid-scene: {said}"              # (the strip says it)
-    assert app.presets.document("acid-scene")["schema"] == SEVEN
+    assert app.presets.document("acid-scene")["schema"] == SAVED
 
 
 @pytest.mark.parametrize("slug, want", [
@@ -297,7 +298,7 @@ def test_a_cut_migrated_wire_stays_cut_through_a_save_and_a_reload(tmp_path):
     assert e.unwire("pattern", "shape.faces") is None, e.said
     assert ("pattern", "shape.faces") not in _pairs(app.presets.graph.free_doc())
     path = app.presets.save_as("trip")
-    assert json.loads(path.read_text())["schema"] == SEVEN
+    assert json.loads(path.read_text())["schema"] == SAVED
     again = make_app(tmp_path / "home")
     again.lib.load(preset.GROUP, "trip")
     assert ("pattern", "shape.faces") not in _pairs(again.presets.graph.free_doc())
@@ -318,7 +319,7 @@ def test_every_corpus_preset_is_its_sources_seven_and_round_trips(tmp_path):
     assert sorted(p.name for p in SOURCES.glob("*.json")) == [p.name for p in paths]
     for k, path in enumerate(paths):
         data = path.read_bytes()
-        assert json.loads(data)["schema"] == SEVEN, path.name
+        assert json.loads(data)["schema"] == SAVED, path.name
         again, notes, _ = headless.resave(path, tmp_path / f"f{k}")
         assert again == data and notes == [], path.name
         made, _, _ = headless.resave(SOURCES / path.name, tmp_path / f"s{k}")

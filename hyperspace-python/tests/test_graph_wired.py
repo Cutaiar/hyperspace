@@ -318,5 +318,5 @@ def test_a_full_wired_frame_saves_as_it_stands(tmp_path):
     doc = {"schema": M.WIRED_SCHEMA, "name": "full", "values": {}, "graph": section}
     assert app.presets.load_doc(doc) == []
     out = app.presets.document("full")
-    assert out["schema"] == M.WIRED_SCHEMA and out["graph"] == want
+    assert out["schema"] == M.SAVE_SCHEMA and out["graph"] == want
     assert app.presets.load_doc(out) == [] and app.presets.document("full") == out

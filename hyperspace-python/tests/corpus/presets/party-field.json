@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.preset/7",
+ "schema": "hyperspace.preset/9",
  "name": "FIELD",
  "note": "party-field: nine 24-cells orbiting on ember faces, the camera pulled back; the right hand's height fills the screen with them",
  "graph": {"frame": "wired",
@@ -117,6 +117,8 @@
   "camera.pitch": 0.0,
   "camera.pan.x": 0.0,
   "camera.pan.y": 0.0,
+  "eye.fov": 47.611887036915434,
+  "eye.distance": 3.7777777777777777,
   "dream.on": false,
   "dream.mix": 0.7,
   "dream.echo_mix": 0.4,

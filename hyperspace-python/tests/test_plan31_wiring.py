@@ -480,7 +480,8 @@ def test_nan_never_reaches_a_param_from_an_idle_bank():
 
 # ---- plan 31 P: the envelopes and the sequencer in the preset (row 394: /6) ----
 
-V2, V3, V6 = "hyperspace.preset/2", "hyperspace.preset/3", "hyperspace.preset/7"  # (plan 36 T3: V6 is the save schema)
+# (plan 43 C2: V6 is the save schema, named for the row it pinned)
+V2, V3, V6 = "hyperspace.preset/2", "hyperspace.preset/3", "hyperspace.preset/9"
 
 
 def _new_ids(doc) -> list[str]:

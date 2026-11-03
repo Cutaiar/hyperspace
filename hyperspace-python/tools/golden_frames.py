@@ -389,12 +389,15 @@ class Rig:
     the hands chain, the renderer."""
 
     def __init__(self, slug: str, hands: str, ctx: moderngl.Context, *,
-                 source: Path | None = None, library: Path | None = None):
+                 source: Path | None = None, library: Path | None = None,
+                 show: dict | None = None):
         """A corpus preset by its slug, or a fixture (`FIXTURE_PRESETS`):
         copied into the scratch library first and loaded from there. Row
         394: or any preset file `source`, copied in as `slug` — with
         `library`'s desk templates and module presets beside it
-        (`headless.SHARED_FOLDERS`) — for `picture`."""
+        (`headless.SHARED_FOLDERS`) — for `picture`; plan 43 C2: and `show`
+        (`headless.show_seed`, an old show's eye) open, as the migration's
+        resave opens it."""
         self.t = T0
         self.view, self.fx, self.dream, self.ghost = (ViewState(), FxState(), DreamState(),
                                                       GhostState())
@@ -432,6 +435,9 @@ class Rig:
                     shutil.copytree(Path(library) / folder, Path(self._home.name) / folder,
                                     dirs_exist_ok=True,
                                     ignore=shutil.ignore_patterns(".*", "Icon*"))
+        if show:
+            from hyperspace.headless import seed
+            seed(Path(self._home.name), Path(self._home.name), show)
         lib = Library(Path(self._home.name))
         lib.attach(reg)
         self.router = Router(reg, Bindings())
@@ -881,21 +887,24 @@ def _shoot_rig(slug, hands, states, size, logical, dpr, wiring, config, *,
 
 
 def picture(source: Path, *, slug: str = "picture", library: Path | None = None,
-            states=STATES, hands: str = "present") -> tuple[list[str], list[str]]:
+            states=STATES, hands: str = "present", show: dict | None = None
+            ) -> tuple[list[str], list[str]]:
     """Row 394 (tools/migrate_library.py): preset file `source` drawn on the
     golden rig — copied into a scratch library as `slug`, loaded like a
     user's preset, hands `hands`, `states` as its outputs' wiring
     (`rig_section`, as a corpus preset's goldens) for `FRAMES` frames on
     the pinned clock — and (each output's SHA-256, the load's notes). Two
     files that draw the same have the same hashes; the frame is never
-    asserted on, so a preset this build reads with a note still draws."""
+    asserted on, so a preset this build reads with a note still draws.
+    Plan 43 C2: `show` (`headless.show_seed`) is open while it loads — the
+    old show's eye an old preset takes."""
     with shared_programs(context()):
-        return _picture(source, slug, library, states, hands)
+        return _picture(source, slug, library, states, hands, show)
 
 
-def _picture(source, slug, library, states, hands) -> tuple[list[str], list[str]]:
+def _picture(source, slug, library, states, hands, show=None) -> tuple[list[str], list[str]]:
     ctx = context()
-    rig = Rig(slug, hands, ctx, source=source, library=library)
+    rig = Rig(slug, hands, ctx, source=source, library=library, show=show)
     try:
         section = rig_section(rig, slug, states, None)
         rig.renderer.wiring = read_graph(

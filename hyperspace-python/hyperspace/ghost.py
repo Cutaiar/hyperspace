@@ -274,6 +274,17 @@ def camera(box, m: np.ndarray, aspect: float) -> tuple[np.ndarray, np.ndarray]:
 # `shared_camera` (`Ghost.poses`); `camera` above is the hands' own camera
 # they had until then, kept as the reference the default calibration is
 # tuned against (tests/test_hands_node.py).
+#
+# Plan 43 C2 (the owner, 2026-11-02, row 575): the eye is the preset's, and
+# where the hands are drawn decides what it does to them. The calibration
+# (the box into the world) is the rig's: fitted to the **reference eye**
+# (`EYE_FOV` / `EYE_DISTANCE`, the defaults) whatever the preset's eye, so
+# the hands sit in the same world as the shape. Hands drawn **in the scene**
+# are seen through the preset's eye like the shape — a zoomed eye scales
+# both alike. Hands drawn as **a layer** are a screen-space picture: drawn
+# through the reference eye too (`Settled.layer`), they keep their size and
+# place on screen whatever the preset's eye. At the default eye the two are
+# the same matrix, so no picture of before moves.
 
 def calibration(box, m: np.ndarray, units=None, *, fov: float | None = None,
                 distance: float | None = None, aspect: float | None = None) -> np.ndarray:
@@ -289,7 +300,10 @@ def calibration(box, m: np.ndarray, units=None, *, fov: float | None = None,
     projector), as tightly as `camera` frames it on that picture — a room
     setting, so the same on every output (plan 26 A3: A2 fitted the
     square on the shorter side, which drew the hands at about two thirds
-    of their old size on a landscape output). `tilt` (degrees, 32 = ELEVATION)
+    of their old size on a landscape output). The eye fitted to is `fov` /
+    `distance` — the rig's reference eye (`EYE_FOV` / `EYE_DISTANCE`) when
+    None, which is what every draw asks for since plan 43 C2 (row 575):
+    the calibration is the rig's, never the preset's eye. `tilt` (degrees, 32 = ELEVATION)
     turns the stage's up toward the eye: the eye looks along the world's
     −z, and the ghost camera looked down onto the hands from that high."""
     fov = EYE_FOV if fov is None else fov
@@ -328,13 +342,17 @@ def shared_camera(box, m: np.ndarray, aspect: float, units=None, *,
                   ) -> tuple[np.ndarray, np.ndarray]:
     """(view_proj 4×4, eye) like `camera`, but through the shape's eye:
     `geometry.eye_matrix` (the `eye.*` params; the defaults when None)
-    after `calibration`. `view_proj` takes Leap-basis stage points, as
-    `camera`'s does — the calibration's stage basis is undone first — and
-    `eye` is the eye's position in that stage space, for the shading. What
-    the hands node draws with (plan 26 A3)."""
+    after `calibration` — fitted to the rig's reference eye, never to
+    `fov` / `distance` (plan 43 C2, row 575: the hands live in the world,
+    so a preset's zoomed eye sees them as it sees the shape). `view_proj`
+    takes Leap-basis stage points, as `camera`'s does — the calibration's
+    stage basis is undone first — and `eye` is the eye's position in that
+    stage space, for the shading. What the hands node draws with (plan 26
+    A3); with no `fov` / `distance`, the reference eye's view — what a
+    hands layer draws with (`Settled.layer`)."""
     fov = EYE_FOV if fov is None else fov
     distance = EYE_DISTANCE if distance is None else distance
-    cal = calibration(box, m, units, fov=fov, distance=distance)
+    cal = calibration(box, m, units)
     # the ghost's poses are already in the stage (m · leap): the matrix
     # takes stage points, so the basis inside the calibration is undone
     undo = np.eye(4)
@@ -344,6 +362,22 @@ def shared_camera(box, m: np.ndarray, aspect: float, units=None, *,
     eye_world = np.array([0.0, 0.0, float(distance), 1.0])
     eye = np.linalg.solve(stage_to_world, eye_world)[:3]
     return vp, eye
+
+
+class Settled(tuple):
+    """A frame's settled hands (`Ghost.settle`): ``(poses, view_proj, eye)``
+    through the preset's eye — what the scene draws them with — and
+    `layer`, the same poses' ``(view_proj, eye)`` through the rig's
+    reference eye: what a hands layer draws them with, so a layer keeps its
+    size on screen whatever the preset's eye (plan 43 C2, row 575). Unpacks
+    as the three it always was."""
+
+    layer: tuple | None = None
+
+    def __new__(cls, poses, view_proj, eye, layer=None):
+        out = super().__new__(cls, (poses, view_proj, eye))
+        out.layer = layer
+        return out
 
 
 # ------------------------------------------------------------------ poses
@@ -1354,8 +1388,10 @@ class Ghost:
         `eye.*` params, `fov` / `distance`, their defaults when None) after
         the Leap calibration (`HandsIO.units`, from the box when the source
         has none) — the one camera the scene is drawn in, so the hands can
-        be drawn inside the scene and a hands layer's depth compares with
-        the scene's. Steps the fades: call it once a frame (`settle`)."""
+        be drawn inside the scene. Plan 43 C2: a `Settled`, whose `layer`
+        is the same poses through the rig's reference eye, for a hands
+        layer (at the default eye the two are one). Steps the fades: call
+        it once a frame (`settle`)."""
         st = self.state
         if not st.on or st.alpha <= 0.0 or self.source is None:
             for sd in self.sides.values():           # off: no stale hand on the way back
@@ -1374,8 +1410,12 @@ class Ghost:
         cfg = getattr(self.source, "cfg", None) or {}
         m = basis(cfg.get("mode", "desktop"), st.mirror)
         box = box_of(self.source)
-        vp, eye = shared_camera(box, m, aspect, getattr(self.source, "units", None),
-                                fov=fov, distance=distance)
+        units = getattr(self.source, "units", None)
+        vp, eye = shared_camera(box, m, aspect, units, fov=fov, distance=distance)
+        # (plan 43 C2: the reference eye's, for a layer — the same matrix
+        # when the preset's eye is the reference)
+        ref = (vp, eye) if fov in (None, EYE_FOV) and distance in (None, EYE_DISTANCE) \
+            else shared_camera(box, m, aspect, units)
         poses = [pose(side, sk, m, fade) for side, sk, fade in seen]
         if st.guide:
             lo, hi = stage_box(box, m)
@@ -1398,7 +1438,7 @@ class Ghost:
                                 anchors)
                 if st.tethers and rows:
                     p.tethers = tethers(p.side, rows, anchors)
-        return poses, vp, eye
+        return Settled(poses, vp, eye, ref)
 
     def settle(self, t: float, aspect: float, fov: float | None = None,
                distance: float | None = None):
@@ -1497,6 +1537,12 @@ class Ghost:
         framebuffer bound: the caller binds its target next (a raise
         included — `draw` and `Renderer._draw_frame` do).
 
+        Plan 43 C2 (row 575): a layer is screen-space — the hands are
+        drawn through the rig's reference eye (`Settled.layer`), so they
+        keep their size and place on screen whatever the preset's eye;
+        the readout alone (`hands` False: the hands are in the scene) is
+        drawn through the scene's eye, so a gauge on the hand stays on it.
+
         `readout` (a pipeline will put the hands through the effects): the
         guide and the tethers go into a second layer, `readout`, instead —
         the hands drawn there depth-only first, so an ON HAND gauge is
@@ -1518,6 +1564,8 @@ class Ghost:
         if got is None:
             return False
         poses, view_proj, eye = got
+        if hands and getattr(got, "layer", None) is not None:
+            view_proj, eye = got.layer           # (plan 43 C2: the reference eye's)
         ctx = self.ctx
         if self.geometry is None and not self._build():
             return False

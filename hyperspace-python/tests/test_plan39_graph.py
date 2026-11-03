@@ -261,7 +261,7 @@ def test_each_entry_round_trips_through_a_seven_save_with_its_values(tmp_path):
     rig.reg["segment.2.feather"].set(6.0)
     saved = rig.presets.save_as("t5-round").read_text()
     doc = json.loads(saved)
-    assert doc["schema"] == "hyperspace.preset/7"
+    assert doc["schema"] == "hyperspace.preset/9"
     nodes = doc["graph"]["nodes"]
     assert {"kind": "matte"} in nodes and {"kind": "cut"} in nodes
     assert {"kind": "segment"} in nodes and {"kind": "segment", "instance": 2} in nodes

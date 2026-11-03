@@ -612,7 +612,7 @@ def test_a_preset_round_trips(rig):
     assert path == rig.home / "presets" / "round-trip.json"
     doc = json.loads(path.read_text())
     # (row 394: every save is the newest schema)
-    assert doc["schema"] == "hyperspace.preset/7" and doc["name"] == "Round Trip"
+    assert doc["schema"] == "hyperspace.preset/9" and doc["name"] == "Round Trip"
     assert doc["desk"] == desk and doc["macros"] == macros and doc["note"] == "a note"
     assert doc["modules"] == {"dream": "wake"}
     # every performance base, the media family's too — and no retired id
@@ -1357,10 +1357,10 @@ def test_a_wired_preset_saves_as_v6(rig):
     assert section["frame"] == "wired"
     edited = {**section, "wires": [w for w in section["wires"]
                                    if w["to"] != "lookback.capture"]}
-    assert rig.presets.document("edited")["schema"] == "hyperspace.preset/7"
+    assert rig.presets.document("edited")["schema"] == "hyperspace.preset/9"
     rig.presets.graph.land(G.read_graph(edited), edited)
     doc = rig.presets.document("edited")
-    assert doc["schema"] == "hyperspace.preset/7" and doc["graph"] == edited
+    assert doc["schema"] == "hyperspace.preset/9" and doc["graph"] == edited
     put(rig.home, "NINE", schema="hyperspace.preset/9")
     rig.lib.poll()
     with pytest.raises(LibraryError, match="is not a hyperspace.preset"):
@@ -1387,7 +1387,7 @@ def test_a_wired_frame_preset_saves_and_loads(tmp_path, name):
             assert got == spec
         spec = got
         saved = r.presets.save_as(name).read_text()
-        assert json.loads(saved)["schema"] == "hyperspace.preset/7"
+        assert json.loads(saved)["schema"] == "hyperspace.preset/9"
 
 
 # ---------------------------------------------------------------- a new preset (plan 35 T7)
@@ -1562,7 +1562,7 @@ def test_resize_values_save_and_load_with_the_preset(tmp_path):
     assert r.presets.load("CROP") == []
     assert r.reg["resize.2.crop_x"].value == 0.3
     saved = r.presets.save_as("CROP").read_text()
-    assert json.loads(saved)["schema"] == "hyperspace.preset/7"
+    assert json.loads(saved)["schema"] == "hyperspace.preset/9"
     assert json.loads(saved)["values"]["resize.2.crop_x"] == 0.3
     (b / "presets").mkdir(parents=True)
     (b / "presets" / "crop.json").write_text(saved)

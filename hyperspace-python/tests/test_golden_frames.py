@@ -432,7 +432,7 @@ def test_every_preset_resaved_as_seven_draws_its_goldens(ctx, tmp_path, slug, fa
     seven = tmp_path / "seven" / f"{slug}.json"
     seven.parent.mkdir()
     seven.write_bytes(raw)
-    assert json.loads(raw)["schema"] == "hyperspace.preset/7", slug
+    assert json.loads(raw)["schema"] == "hyperspace.preset/9", slug
     if slug in _SHIPPED_FIXTURES:
         got, _ = tool.picture(seven, slug=slug, states=tool.SHIPPED)
         assert got == tool.picture(path, slug=slug, states=tool.SHIPPED)[0], slug
@@ -475,7 +475,7 @@ def test_every_preset_with_its_main_run_grouped_draws_its_goldens(ctx, tmp_path,
     path = tool.CORPUS / f"{slug}.json"
     src = json.loads(path.read_text())
     run = G.run_back(G.read_graph(src["graph"]), "output.all.image")
-    twin = {**src, "schema": preset.GROUPS_SCHEMA,
+    twin = {**src, "schema": preset.SAVE_SCHEMA,
             "groups": [{"id": "group.1", "name": "main run",
                         "nodes": [f"render:{n}" for n in run], "open": False}]}
     grouped = tmp_path / "grouped" / f"{slug}.json"

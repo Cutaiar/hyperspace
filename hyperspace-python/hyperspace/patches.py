@@ -84,9 +84,10 @@ KEYS = ("schema", "name", "note", "nodes", "wires", "values", "modifiers", "rout
 MAY_HOLD = ("effect", "composite", "switch", "delay", "resize", "copy", "matte", "cut",
             "segment", "hands", "layer", "guide")
 HANDS_KINDS = ("hands", "layer", "guide")
-# the rig's render nodes the GRAPH page never deletes — `graphview.spec_name`'s
-# `NOT_REMOVABLE` refusal names the camera and the clouds (the windows are
-# refused by kind, `output`). Copied, not imported (graphview is the app's);
+# the render nodes the GRAPH page never deletes and a patch never holds —
+# `graphview.spec_name` refuses the camera (the look's one, `CAMERA_KEPT`,
+# plan 43 C2) and the clouds (the rig's, `NOT_REMOVABLE`); the windows are
+# refused by kind, `output`. Copied, not imported (graphview is the app's);
 # tests/test_patches.py holds the two lists equal
 RIG_NODES = ("camera", "cloud")
 # the modulation banks a patch carries voices of, and the canvas ids
@@ -108,6 +109,7 @@ ONE_OWNER = ("hand", "axis")
 FRAME_WORDS = "{name} is the frame's; left out"
 WINDOW_WORDS = "{name} is the rig's window; left out — a patch's picture leaves by a port"
 RIG_WORDS = "{name} is the rig's; left out"
+CAMERA_WORDS = "{name} is the look's one camera, never a patch's; left out"   # plan 43 C2
 CHANNEL_WORDS = ("{name} is a media channel, this Mac's files; left out — a patch reads one "
                  "through a port")
 NOT_HELD_WORDS = ("{name}: a patch holds effects, composites, switches, delays, resizes, "
@@ -125,7 +127,7 @@ NO_INPUT_NOTE = "{mid}: its input {k} read {vid}, which did not spawn — left e
 CROSSES_WORDS = "wire {wire} crosses the edge: a port says it"
 # a node entry of a kind that is no node a section declares but names a
 # thing a patch may not hold (`check`): said as that thing
-_KIND_WORDS = {"output": WINDOW_WORDS, "camera": RIG_WORDS, "cloud": RIG_WORDS,
+_KIND_WORDS = {"output": WINDOW_WORDS, "camera": CAMERA_WORDS, "cloud": RIG_WORDS,
                "channel": CHANNEL_WORDS, "media": CHANNEL_WORDS}
 
 
@@ -142,7 +144,7 @@ def slug(name: str) -> str:
 def _kind(name: str) -> str | None:
     """A render node name's kind as the GRAPH page reads it
     (`graphview.kind_of`, restated): a wired frame's kinds, All outputs as
-    an output, the rig's camera and clouds."""
+    an output, the look's camera and the rig's clouds."""
     if not isinstance(name, str):
         return None
     if name == G.ALL_OUTPUTS:
@@ -187,6 +189,8 @@ def held_words(name: str) -> str | None:
     """Why render node `name` may not be in a patch, in words — None when
     it may (P1's list: what can be made twice)."""
     kind = _kind(name)
+    if kind == "camera":
+        return CAMERA_WORDS.format(name=name)
     if kind in RIG_NODES:
         return RIG_WORDS.format(name=name)
     if kind == "output":

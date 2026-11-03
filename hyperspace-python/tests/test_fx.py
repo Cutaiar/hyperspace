@@ -1613,7 +1613,7 @@ def test_an_old_preset_saves_no_retired_id(tmp_path):
            "media": {"channels": {"b": ["shared:x.png"]}}}
     assert app.presets.load_doc(doc) == []
     out = app.presets.document("old")
-    assert out["schema"] == "hyperspace.preset/7"
+    assert out["schema"] == "hyperspace.preset/9"
     assert not [k for k in out["values"] if M.retired(k)]
     run = G.run_back(G.read_graph(out["graph"]), "output.all.image")
     assert run == ("warp", "acid")                     # warp (@order 20) before acid (30)
@@ -1631,7 +1631,7 @@ def test_an_old_preset_saves_no_retired_id(tmp_path):
     sec = {**sec, "wires": [*keep[:at], *rerun, *keep[at:]]}
     app.presets.graph.land(G.read_graph(sec), sec)
     out = app.presets.document("old")
-    assert out["schema"] == "hyperspace.preset/7"
+    assert out["schema"] == "hyperspace.preset/9"
     assert G.run_back(G.read_graph(out["graph"]), "output.all.image") == (
         "acid", "warp")
     assert not [k for k in out["values"] if M.retired(k)]

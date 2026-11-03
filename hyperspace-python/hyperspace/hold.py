@@ -34,7 +34,9 @@ Only the groups the renderer reads are held (`HELD_GROUPS`); what is one
 for both:
 
 - the turn — `rot.*`, speed, the planes, the 3D switch: the angles are
-  integrated once a frame, before either draw (`ViewState.integrate`);
+  integrated once a frame, before either draw (`ViewState.integrate`) —
+  and so is a preset's saved pose (plan 43 C2): a load under hold sets the
+  turn (`ViewState.set_pose`) on the one view, so it lands on both;
 - the media channels (`media.*`): a channel decodes once for every reader,
   so a source switched shows on both;
 - the modulators (`lfo`, `env`, `seq`, `macro`, `mod`) and the routes:
@@ -80,7 +82,11 @@ from .undo import alike
 HELD_GROUPS = ("view", "camera", "pattern", "dream", "fx", "backdrop", "switch", "resize",
                # plan 39 T2–T4: the mattes', cuts' and segments' knobs (the
                # renderer reads their states, as a resize's)
-               "matte", "cut", "segment")
+               "matte", "cut", "segment",
+               # plan 43 C2: the eye, the one orbit camera's other half (the
+               # renderer reads it; a preset loaded under hold keeps the
+               # projector's framing until Take)
+               "eye")
 # …less the params the integrator reads before either draw: holding the 3D
 # switch alone would draw the program's pose with the preview's body
 # (plan 38 B3: and the turn's speed and planes, which the draw never reads —

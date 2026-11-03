@@ -68,9 +68,19 @@ WIRED_SCHEMA = "hyperspace.preset/7"
 SEVEN = 7
 # plan 40 T2 (D4, D7): `/8` is `/7` plus the GRAPH page's groups (`groups`,
 # preset.GROUPS_KEY) — written only by a preset that holds one, so a preset
-# with none writes `/7` byte for byte; nothing is rewritten to it
+# with none wrote `/7` byte for byte, until plan 43 C2 made every save `/9`
 GROUPS_SCHEMA = "hyperspace.preset/8"
 GROUPS_KEY = "groups"
+# plan 43 C2 (rows 572, 576): `/9` is `/8` with the one orbit camera — the
+# eye (`eye.fov`, `eye.distance`) in `values` beside `camera.*`, and the
+# spin's pose (`pose`: the six `rot.phase.*`, `params.POSE_IDS`).
+# What every save writes (row 521 closed: the `/7`-or-`/8` fork is gone);
+# `/7` and `/8` are read through `nine`, the eye filled in on the way
+EYE_SCHEMA = "hyperspace.preset/9"
+NINE = 9
+SAVE_SCHEMA = EYE_SCHEMA
+EYE_IDS = ("eye.fov", "eye.distance")
+CAMERA_NODE = "render:camera"      # the camera's canvas id (`graphview.CAMERA`'s node)
 
 
 def groups_of(doc: Any) -> list:
@@ -1223,6 +1233,40 @@ def section_effects(section: Any) -> set[str]:
 
 
 MIGRATED_NOTE = "{old} migrated to {new} (plan 36): every edge drawn as it ran — save to keep it"
+
+
+# ---------------------------------------------------------------- the one orbit camera (plan 43 C2)
+
+def nine(doc: dict, eye: dict | None = None, camera_at: Any = None) -> dict:
+    """An older preset (before `/9`) as its `/9` reads it — pure, one way,
+    on load (`Presets.load_doc`) and so in tools/migrate_library.py's
+    resave: the eye written into `values` from `eye` (the open show's
+    `session`, read out of an old show by `library.Project`; an id it lacks
+    is left out, and the load fills it from the build's default), and the
+    camera node's GRAPH position from `camera_at` (the old show's layout
+    entry, ``render:camera``) into the preset's `layout` where the file
+    places it nowhere. A value or a position the file already has stays;
+    no pose is added (an old file keeps spinning: row 573). A `/9` and
+    anything that is not a document come back as they are."""
+    version = schema_version(doc)
+    if not isinstance(doc, dict) or (version is not None and version >= NINE):
+        return doc
+    out = dict(doc)
+    raw = out.get("values")
+    values = dict(raw) if isinstance(raw, dict) else ({} if raw is None else None)
+    if values is not None and any(pid in (eye or {}) for pid in EYE_IDS):
+        for pid in EYE_IDS:
+            v = (eye or {}).get(pid)
+            if pid not in values and isinstance(v, (int, float)) and not isinstance(v, bool):
+                values[pid] = v
+        out["values"] = values
+    layout = out.get("layout")
+    if camera_at is not None and (layout is None or isinstance(layout, dict)):
+        layout = dict(layout or {})
+        if CAMERA_NODE not in layout and "render:eye" not in layout:
+            layout[CAMERA_NODE] = list(camera_at)
+            out["layout"] = layout
+    return out
 
 
 # ---------------------------------------------------------------- the look-back split (plan 36 T4)

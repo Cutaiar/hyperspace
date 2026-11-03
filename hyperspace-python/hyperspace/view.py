@@ -10,12 +10,13 @@ V3). render.py re-exports it.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
 
-from .geometry import EYE_DISTANCE, EYE_FOV, RATE, rot_matrix
+from .geometry import EYE_DISTANCE, EYE_FOV, RATE, is_3d, pose_angles, rot_matrix, view_angles
 
 N_MOD = 8   # pattern.mod.* inputs the face shader reads as u_mod[N_MOD]
 RED = (1.0, 43 / 255, 43 / 255)   # the points' colour, and the panel's one accent (ui.RED)
@@ -156,8 +157,10 @@ class ViewState:
     # position in world units (the unit circumradius; pan.y positive down)
     zoom: float = 1.0
     pan: list[float] = field(default_factory=lambda: [0.0, 0.0])
-    # the eye (eye.* — session): the one fixed camera, framed on the Leap
-    # box; the defaults are project_h's divide (geometry.EYE_FOV / EYE_DISTANCE)
+    # the eye (eye.* — the preset's since plan 43 C2): the one fixed camera
+    # the scene is seen through; the defaults are project_h's divide
+    # (geometry.EYE_FOV / EYE_DISTANCE), the rig's reference eye the hands'
+    # calibration is fitted to (ghost.calibration)
     eye_fov: float = EYE_FOV           # degrees across the shorter side
     eye_distance: float = EYE_DISTANCE  # world units from the origin
     # the point clouds (cloud.* — session; plan 26 A4b, graph.PointCloud):
@@ -241,3 +244,33 @@ class ViewState:
         for p in range(6 if not self.three_d else 3):
             if self.planes[p]:
                 self.ang[p] += dt * self.speed * RATE[p] * self.rate[p]
+
+    def pose(self) -> list[float]:
+        """The spin's pose as six plane angles, each in (−π, π] — what a
+        preset saves (plan 43 C2, row 573: `params.POSE_IDS`). With no body
+        turned in (`body` None, the 3D switch not holding) the angles as
+        they stand, so every layer of a scene keeps its own. Else the turn
+        the shape is drawn at — R(its angles)·body, its angles the 3D ones
+        alone while the switch holds (`geometry.view_angles`) — read back
+        as six angles (`geometry.pose_angles`), the body folded in: a load
+        that sets them (`set_pose`) draws the same 4D shape whichever way
+        the switch stands. A 3D shape never had a body (its W planes do
+        nothing to it): its own three angles. A scene that mixes 3D and 4D
+        layers with a body turned in keeps its 4D layers' pose; its 3D
+        layers take the folded XY, XZ and YZ (the one case not exact)."""
+        ang = [float(a) for a in self.ang]
+        if self.body is None and not self.held:
+            return [math.remainder(a, 2.0 * math.pi) + 0.0 for a in ang]
+        if is_3d(self.shape):
+            return [math.remainder(a, 2.0 * math.pi) + 0.0 for a in ang[:3]] + [0.0] * 3
+        B = np.eye(4) if self.body is None else np.asarray(self.body, dtype=np.float64)
+        return pose_angles(rot_matrix(view_angles(self.shape, ang, self.held)) @ B)
+
+    def set_pose(self, angles) -> None:
+        """Set the turn to six plane angles (`pose`): no body, the 3D switch
+        not yet holding — the next `integrate` folds the pose into a fresh
+        body if the switch is on, the same pose either side, and a draw
+        before it sees R(angles) alone, the same picture (plan 43 C2)."""
+        self.ang = [float(a) for a in angles]
+        self.body = None
+        self.held = False

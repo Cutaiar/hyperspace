@@ -54,15 +54,17 @@ def _land(rig, doc):
 
 def test_only_the_looks_render_params_are_held(rig):
     """The groups the renderer reads, persisted, real, set — not the turn's
-    3D switch, the rig, the modulators or a trigger."""
+    3D switch, the rig, the modulators or a trigger. Plan 43 C2: the eye is
+    the look's, held with the camera; the turn (`rot.*`, the pose) is one
+    for both."""
     rig.hold.engage()
     held = set(rig.hold.values)
     # (plan 36: an effect's own params exist only while a preset wires it —
     # the startup preset wires none — so the effects' group is `fx.mix`'s)
-    assert {"view.bright", "view.lines", "camera.zoom", "fx.mix",
+    assert {"view.bright", "view.lines", "camera.zoom", "eye.fov", "eye.distance", "fx.mix",
             "dream.mix", "pattern.mod.1"} <= held
     assert not {p for p in held if p.split(".")[0] in ("lfo", "media", "tempo", "output",
-                                                       "hands", "eye", "rot", "macro")}
+                                                       "hands", "rot", "macro")}
     assert "view.three_d" not in held
     assert all(rig.reg[p].persist and not rig.reg[p].alias for p in held)
 
@@ -1041,3 +1043,46 @@ def test_the_projector_inset_draws_framed_while_held(shell_rig):  # noqa: F811
     finally:
         imgui.end()
         imgui.end_frame()
+
+
+# ---------------------------------------------------------------- plan 43 C2: the one camera
+
+def test_the_held_groups_are_the_renderers_and_take_the_eye():
+    """`HELD_GROUPS` pinned: the look's groups the renderer reads, the eye
+    among them since plan 43 C2 (the one orbit camera is the preset's);
+    the turn stays one for both."""
+    assert H.HELD_GROUPS == ("view", "camera", "pattern", "dream", "fx", "backdrop", "switch",
+                             "resize", "matte", "cut", "segment", "eye")
+    assert "rot" not in H.HELD_GROUPS
+    assert H.ONE_FOR_BOTH == ("view.three_d", "view.speed")
+
+
+def test_a_preset_loaded_under_hold_keeps_the_projectors_eye_and_lands_its_pose_on_both(rig):
+    """Plan 43 C2: a preset loaded while held — its eye is the preview's
+    until Take (the program draws the held framing); its saved pose sets
+    the one turn both draw, so it lands on both at once."""
+    import json
+
+    from conftest import CORPUS
+
+    from hyperspace import preset
+    from hyperspace.params import POSE_IDS
+
+    reg, hold, view = rig.reg, rig.hold, rig.view
+    fov = reg["eye.fov"].base
+    hold.engage()
+    doc = json.loads((CORPUS / "presets" / "dial.json").read_text())
+    doc["values"]["eye.fov"] = 70.0
+    pose = [0.1, -0.2, 0.3, 0.4, -0.5, 0.6]
+    doc[preset.POSE_KEY] = dict(zip(POSE_IDS, pose, strict=True))
+    rig.presets.load_doc(doc)
+    assert view.ang == pose                      # set at once, on the one view
+    settle(rig)
+    assert reg["eye.fov"].base == 70.0 and "eye.fov" in hold.changed()
+    turn = list(view.ang)
+    with hold.program():
+        assert view.eye_fov == pytest.approx(fov)
+        assert view.ang == turn                  # the one turn: the program's too
+    assert view.eye_fov == 70.0 and view.ang == turn
+    hold.take()
+    assert view.eye_fov == 70.0

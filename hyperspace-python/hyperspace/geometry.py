@@ -1626,6 +1626,30 @@ def rot_matrix(ang) -> np.ndarray:
     return rotate4(np.eye(4), ang).T
 
 
+def pose_angles(R) -> list[float]:
+    """The six plane angles whose turn is the 4×4 rotation `R` —
+    `rot_matrix(pose_angles(R)) == R` for any R in SO(4) (plan 43 C2, row
+    573: how a preset's save folds `ViewState.body` into the phases).
+    rot_matrix is G_ZW·G_YW·G_XW·G_YZ·G_XZ·G_XY on column points, so its
+    w column is fixed by the three W planes alone (`G_ZW·G_YW·G_XW·e_w`)
+    and, those undone, what is left turns x, y and z only: its z column by
+    XZ and YZ, then XY is the rest. Each angle is read with atan2 off a
+    non-negative cosine, in (−π, π]."""
+    R = np.asarray(R, dtype=np.float64)
+    v = R[:, 3]
+    a4 = math.atan2(-v[0], math.hypot(v[1], v[2], v[3]))
+    a5 = math.atan2(-v[1], math.hypot(v[2], v[3]))
+    a6 = math.atan2(-v[2], v[3])
+    W = rot_matrix([0.0, 0.0, 0.0, a4, a5, a6])
+    M = W.T @ R                                   # x, y and z only
+    u = M[:, 2]
+    a2 = math.atan2(-u[0], math.hypot(u[1], u[2]))
+    a3 = math.atan2(-u[1], u[2])
+    N = rot_matrix([0.0, a2, a3, 0.0, 0.0, 0.0]).T @ M   # the XY turn left
+    a1 = math.atan2(N[1, 0], N[0, 0])
+    return [a + 0.0 for a in (a1, a2, a3, a4, a5, a6)]     # (no −0.0 in a file)
+
+
 def view_angles(i: int, ang, flat: bool = False):
     """The angles shape i is drawn at. A 3D shape takes the view's 3D
     angles and 0 in every W plane: the W planes would turn it through a w

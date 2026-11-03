@@ -152,6 +152,14 @@ BANK8_BACKUP = "2-bank8"
 # (`desk.pad.hz` / `.damp`, read as today's knobs by routing.renamed_session),
 # <file>.bak-v2-spring
 SPRING_BACKUP = "2-spring"
+# EYE_BACKUP (plan 43 C2): the copy `Project.write` makes before the first
+# write that drops a show's eye — `eye.fov` / `eye.distance` in its
+# `session`, which the presets hold since `/9` (`Project.old_eye`) —
+# <file>.bak-v2-eye
+EYE_BACKUP = "2-eye"
+# the eye's ids (the preset's since plan 43 C2; an old show's session held them)
+EYE_IDS = ("eye.fov", "eye.distance")
+CAMERA_NODE = "render:camera"      # the camera's GRAPH node, the look's since C2
 PRESETS = "presets"       # the presets' group, a document kind (preset.py)
 # <root>/desk/<slug>.json (plan 24 C3): the desk templates — named sets of
 # preset-layer rows a preset's desk can start from (`desk_template`,
@@ -376,6 +384,35 @@ def _json_text(doc: dict) -> str:
     return json.dumps(doc, indent=1) + "\n"
 
 
+def show_text(doc: dict) -> str:
+    """A show (or any library document) as `Project.write` spells it."""
+    return _json_text(doc)
+
+
+def show_without_eye(doc: dict) -> dict | None:
+    """A show file's document without what plan 43 C2 made the presets' —
+    the eye in its `session` (`EYE_IDS`) and the camera node's position in
+    its `layout` (``render:camera``, or the old canvas id ``render:eye``) —
+    as `Project.write` would write it; None when it holds neither (nothing
+    to rewrite). Pure: tools/migrate_library.py's step over the shows."""
+    session = doc.get("session")
+    layout = doc.get(LAYOUT)
+    eye = isinstance(session, dict) and any(k in session for k in EYE_IDS)
+    cam = isinstance(layout, dict) and any(k in layout for k in (CAMERA_NODE, "render:eye"))
+    if not (eye or cam):
+        return None
+    out = dict(doc)
+    if eye:
+        out["session"] = {k: v for k, v in session.items() if k not in EYE_IDS}
+    if cam:
+        rest = {k: v for k, v in layout.items() if k not in (CAMERA_NODE, "render:eye")}
+        if rest:
+            out[LAYOUT] = rest
+        else:
+            out.pop(LAYOUT)
+    return out
+
+
 def _write_json(path: Path, doc: dict) -> None:
     _write_text(path, _json_text(doc))
 
@@ -596,6 +633,14 @@ class Project:
         # those as on disk; the renderer reads `rig` (its `rig_source`)
         self.rig = RigWires()
         self._saved_rig = RigWires()
+        # plan 43 C2: what an old show (before the eye was the preset's) kept
+        # of the camera — the eye in its `session`, the camera node's GRAPH
+        # position in its `layout` — read out of the file by `_take` and
+        # handed to every preset before `/9` a load reads while this show is
+        # open (`graphmigrate.nine`), so the library draws as before; never
+        # written back (`to_doc`; `write` keeps the old file, EYE_BACKUP)
+        self.old_eye: dict[str, Any] = {}
+        self.camera_at: list[float] | None = None
 
     # ---- documents ----
 
@@ -612,6 +657,11 @@ class Project:
         self._stem = where[: -len(PROJECT_SUFFIX)] if where.endswith(PROJECT_SUFFIX) else None
         from .routing import renamed_session  # the stick spring's old ids, as today's
         self.session = renamed_session(dict(doc.get("session") or {}))
+        # plan 43 C2: the eye is the preset's — an old show's is read out of
+        # its session (as the spring's old ids are read as today's), held for
+        # the presets before `/9` (`old_eye`), and never landed or written
+        # as the show's
+        self.old_eye = {pid: self.session.pop(pid) for pid in EYE_IDS if pid in self.session}
         # how many shows this project object has taken: a hands node of a
         # preset's graph is seeded from a show's session once per show
         # opened (plan 26 A4, preset.GraphSection)
@@ -624,6 +674,10 @@ class Project:
         self.active = -1
         self._saved = (list(self.bank), self.startup)
         self.layout, _ = read_layout(doc.get(LAYOUT))
+        # (plan 43 C2: and the camera node's position, the look's now — the
+        # presets before `/9` take it, `old_eye`'s road)
+        at = self.layout.pop(CAMERA_NODE, None)
+        self.camera_at = list(at) if at is not None else None
         self._saved_layout = copy.deepcopy(self.layout)
         self.rig = self._saved_rig = RigWires.read(doc.get(RIG))
 
@@ -663,11 +717,14 @@ class Project:
                 # plan 28 N2: the GRAPH page's positions of the rig's nodes
                 copy.deepcopy(getattr(self, "layout", {})),
                 copy.deepcopy(getattr(self, "_saved_layout", {})),
-                getattr(self, "rig", RigWires()), getattr(self, "_saved_rig", RigWires()))
+                getattr(self, "rig", RigWires()), getattr(self, "_saved_rig", RigWires()),
+                # plan 43 C2: what an old show kept of the camera, for its presets
+                dict(getattr(self, "old_eye", {})), getattr(self, "camera_at", None))
 
     # the mark's fixed head, and where its later parts start
     MARK_LAYOUT = 9          # the GRAPH page's layout, and as on disk (plan 28 N2)
     MARK_RIG = 11            # the rig's wires, and as on disk (plan 36 T1)
+    MARK_EYE = 13            # an old show's eye and camera position (plan 43 C2)
 
     def remark(self, mark: tuple) -> None:
         """Put back what `mark()` returned: the show's own fields, nothing
@@ -680,6 +737,8 @@ class Project:
             self._saved_layout = copy.deepcopy(mark[self.MARK_LAYOUT + 1])
         if len(mark) > self.MARK_RIG:      # plan 36 T1: the rig's wires, and as on disk
             self.rig, self._saved_rig = mark[self.MARK_RIG], mark[self.MARK_RIG + 1]
+        if len(mark) > self.MARK_EYE:      # plan 43 C2: an old show's eye, for its presets
+            self.old_eye, self.camera_at = dict(mark[self.MARK_EYE]), mark[self.MARK_EYE + 1]
         self.session, self.modules = copy.deepcopy(session), copy.deepcopy(modules)
         self.bank = list(bank)
         self._saved = (list(saved[0]), saved[1])
@@ -1138,7 +1197,10 @@ class Project:
         Likewise the first write over a file that holds the stick spring as
         stored before 2026-10-29 (`desk.pad.hz` / `.damp`, which this
         write drops: they were read as today's knobs) keeps it first as
-        ``<file>.bak-v2-spring``; no backup, no write."""
+        ``<file>.bak-v2-spring``; and (plan 43 C2) the first write over a
+        file whose `session` holds the eye (`eye.*`, the preset's since
+        `/9`: this write drops it) keeps it first as ``<file>.bak-v2-eye``.
+        No backup, no write."""
         self.lib.writable()
         path = self.path_for(self.name) if self.path is None else self.path
         try:
@@ -1158,6 +1220,11 @@ class Project:
                     and backup(path, SPRING_BACKUP) is None):
                 raise LibraryError(f"{path.name}: not written — no backup of the show "
                                    "with its stick spring as it was stored could be made")
+            if (isinstance(session, dict) and any(k in session for k in EYE_IDS)
+                    and not _kept(path, EYE_BACKUP)
+                    and backup(path, EYE_BACKUP) is None):
+                raise LibraryError(f"{path.name}: not written — no backup of the show "
+                                   "with its eye could be made")
         self.path = path
         _write_json(self.path, doc)
         self.lib._sync(self.path)

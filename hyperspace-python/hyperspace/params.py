@@ -143,10 +143,22 @@ F_KEYS = 8
 # `segment` (plan 39 T4): each segment node's mode, level, feather, smooth,
 # switch and motion's sense and learn, the preset's, declared while its
 # graph holds the entry (declare_segments)
-PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "media", "backdrop",
-                      "switch", "resize", "matte", "cut", "segment", "lfo", "env", "seq", "macro", "mod")
+# `eye` (plan 43 C2, the owner, 2026-11-02, row 555): the one orbit camera is
+# the look's — `camera.*` (the shape's pose and scale in the world) and
+# `eye.*` (the fixed eye the world is seen through) are one camera in the
+# preset. The ids keep their group (`eye.fov`, a saved id, is a format):
+# the merge is the group's move from the session, not a rename
+PERFORMANCE_GROUPS = ("view", "rot", "camera", "eye", "pattern", "dream", "fx", "media",
+                      "backdrop", "switch", "resize", "matte", "cut", "segment", "lfo", "env",
+                      "seq", "macro", "mod")
 SESSION_GROUPS = ("tempo", "hands", "ghost", "band", "master", "scene", "audio", "output",
-                  "overlay", "ui", "desk", "eye", "cloud")
+                  "overlay", "ui", "desk", "cloud")
+# plan 43 C2 (row 573): the spin's pose — where each plane is in its turn,
+# `view.body` folded in (`ViewState.pose`) — saved by every preset under
+# these ids (its `pose` section, preset.POSE_KEY, beside `values`) and set
+# by its load. The params stay `persist=False`: the turn moves every frame,
+# so it is no base, no undo step and no dirty dot
+POSE_IDS = tuple(f"rot.phase.{name}" for name in PLANE_NAMES)
 PARTS = {"performance": PERFORMANCE_GROUPS, "session": SESSION_GROUPS}
 
 # the reference's fader → rotation-rate factor (its PLANEDRIVE was
@@ -167,7 +179,10 @@ ROT_RATE_MAX = CEIL * DRIVE * tapers.T_DRIVE.map(tapers.T_DRIVE.steps)
 # where it moved ±400 px
 PAN_RANGE = 12.0
 # the eye's ranges: a field of view from a long lens to a wide one, and a
-# distance from just outside a unit shape to far off
+# distance from just outside a unit shape to far off. Both log (plan 43 C2,
+# row 574: the eye is modulatable now): a lane's depth is in octaves, so a
+# push breathes a long lens and a wide one by the same ratio, and the
+# knob's middle sits near the default framing
 EYE_FOV_RANGE = (10.0, 120.0)
 EYE_DISTANCE_RANGE = (1.5, 40.0)
 
@@ -1649,6 +1664,10 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     dream = dream if dream is not None else DreamState()
     media = media if media is not None else media_channels.MediaState()
     r.media = media
+    # plan 43 C2 (row 573): the view the rotation params write — what a
+    # preset's save reads the spin's pose from and its load sets it on
+    # (`ViewState.pose` / `set_pose`; a registry from before is posed by none)
+    r.view = view
     # plan 33 S: the switches' picks live on the view state the renderer
     # reads (`ViewState.switch`); their params come with the preset's graph
     picks = getattr(view, "switch", None)
@@ -1872,9 +1891,11 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     # ---- rotation: per-plane rate and phase ----
     # rate multiplies dt·speed·RATE[p]; signed so a lane can spin a plane
     # backwards, and as wide as the reference's plane drive (ROT_RATE_MAX).
-    # phase is the integrated angle, folded to one turn: not a preset value
-    # (a preset changes the look, not where the spin is) but a modulation
-    # target — a lane adds a phase offset on top of the integrator.
+    # phase is the integrated angle, folded to one turn: not a base (it moves
+    # every frame: no undo step, no dirty dot) but a modulation target — a
+    # lane adds a phase offset on top of the integrator. Plan 43 C2 (row
+    # 573): a preset saves the pose under these ids all the same
+    # (`POSE_IDS`, `ViewState.pose`) and its load sets the turn there.
     g = "rot"
     fold = lambda a: math.remainder(a, 2 * math.pi)   # ±π stay put, the rest folds
     for p, name in enumerate(PLANES):
@@ -1941,21 +1962,26 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     r.trigger("camera.reset", "Reset view", reset_view, group=g,
               tip="Reset rotation phases, orbit, zoom and pan.")
 
-    # ---- the eye (plan 26 A2): the one fixed camera the shape (and, from
-    # A3, the hands) are seen through. Session, like the room it is framed
-    # on: a preset never moves it. The defaults are the old 3D divide, so
-    # the shape lands where it always did; not modulatable — the camera
-    # is the rig, the shape is what moves
+    # ---- the eye (plan 26 A2): the one fixed camera the shape and the
+    # hands drawn in the scene are seen through. Plan 43 C2 (the owner,
+    # 2026-11-02, rows 555, 574): the preset's, part of the one orbit
+    # camera with `camera.*` — a load lands it like any look value — and
+    # modulatable: a lane breathes the framing (row 182's objection, that
+    # a lane would swing the whole room, went with the eye leaving the
+    # room). The defaults are the old 3D divide, so the shape lands where
+    # it always did; the hands' calibration is fitted to those defaults,
+    # the rig's reference eye, never to this one (`ghost.calibration`)
     g = "eye"
     r.continuous("eye.fov", "Eye field of view", *_attr(view, "eye_fov"),
-                 lo=EYE_FOV_RANGE[0], hi=EYE_FOV_RANGE[1],
-                 fmt=lambda v: f"{v:.1f}°", group=g, modulatable=False,
+                 lo=EYE_FOV_RANGE[0], hi=EYE_FOV_RANGE[1], log=True,
+                 fmt=lambda v: f"{v:.1f}°", group=g,
                  tip="How wide the eye sees, across the shorter side of the picture. "
                      f"Wider shows more of the world, smaller; {EYE_FOV:.1f}° is the "
-                     "view the shape was always drawn in.")
+                     "view the shape was always drawn in. The preset's: a lane on it "
+                     "breathes the framing.")
     r.continuous("eye.distance", "Eye distance", *_attr(view, "eye_distance"),
                  lo=EYE_DISTANCE_RANGE[0], hi=EYE_DISTANCE_RANGE[1], log=True,
-                 fmt=lambda v: f"{v:.2f}", group=g, modulatable=False,
+                 fmt=lambda v: f"{v:.2f}", group=g,
                  tip="How far the eye stands from the centre of the world, in shape "
                      "radii. Nearer: a stronger perspective and a bigger shape. "
                      f"{EYE_DISTANCE:.2f} is the view the shape was always drawn in.")
