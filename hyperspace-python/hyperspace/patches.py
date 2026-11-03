@@ -47,6 +47,21 @@ doors as one undo step). A leaf like `graphmigrate.py`: pure data in, pure
 data out — it imports `graph`'s names and helpers, `routing`'s `Binding`
 and scheme split and the modifiers' id rule, and nothing of the app.
 `library` imports it (for `check`), never the reverse.
+
+**One format** (plan 50): a patch, a group and a preset are one document
+shape (`shape_of`). A *preset* is a patch that fills the whole frame — no
+``ports``, every part replaced when it opens (``hyperspace.preset/10``,
+its own ladder in `graphmigrate`); a *group* is a patch not yet saved
+(its members and its boundary pins: `groupable` is the canvas's rule,
+`select` the save's); a *patch* is ``hyperspace.patch/2`` — ``/1`` plus
+the optional ``group`` key: a **patch of one param group**
+(``{"group": "dream", "values": {…}}``, no canvas part) is what a module
+preset was, kept under ``<library>/patches/<group>/`` and opened from that
+group's strip as a spawn that replaces the group's values (`spawn`'s
+`Landing.replaces`). Every fragment comes in through `forward`, the one
+ladder (a ``patch/1`` and a ``hyperspace.preset/1`` module preset are read
+as their ``/2``), so a file of any age reaches `check`, `read` and
+`spawn` in today's words.
 """
 
 from __future__ import annotations
@@ -64,8 +79,28 @@ from . import modifiers as modmod
 from .routing import Binding, base_scheme, is_continuous, is_macro
 
 KIND = "hyperspace.patch"
-VERSION = 1
+# plan 50: `/2` is `/1` plus the optional `group` key (a patch of one param
+# group, what a module preset was). Every save writes `/2`; a load reads
+# either through `forward` (the one ladder); an older build refuses a `/2`
+VERSION = 2
 SCHEMA = f"{KIND}/{VERSION}"
+READS = (1, 2)
+# a module preset as it was before plan 50 — `hyperspace.preset/1` with a
+# `group` (library.PRESET_SCHEMA) — read through `forward` as a `/2`
+MODULE_KIND, MODULE_VERSION = "hyperspace.preset", 1
+# plan 50: the key that makes a patch one param group's, its value the
+# registry group (``"dream"``). Such a patch holds `values` — and, for a
+# group that lays out its own params (the analyzer's bands, `Library.extra`),
+# that group's `layout`: a group patch has no canvas, so the key is the
+# group's — and nothing of the canvas, the rows or the voices
+GROUP_KEY = "group"
+GROUP_KEYS = ("schema", "name", "note", GROUP_KEY, "values", "layout", "units")
+# the one document shape's three readings (`shape_of`)
+PRESET_SHAPE, PATCH_SHAPE, GROUP_SHAPE = "preset", "patch", "group"
+NEWER_WORDS = "{schema} is newer than this build ({newest})"
+NOT_FRAGMENT_WORDS = "schema {schema!r} is not a {kind}"
+GROUP_ONLY_WORDS = ("{key}: a patch of one group ({group}) holds values only — no canvas, "
+                    "rows or voices")
 # the marker that a patch's depths are measured along the effect tapers
 # (wave 0 T1), as a preset's `units` is — `params.UNITS_KEY`, `DEPTH_UNIT`
 # and `DEPTH_TAPER`, spelled here a second time because this module is a
@@ -76,7 +111,7 @@ UNITS_KEY = "units"
 UNITS = {"fx.depth": "taper"}
 # the file's keys, in the order a lift writes them
 KEYS = ("schema", "name", "note", "nodes", "wires", "values", "modifiers", "routes", "desk",
-        "macros", "lfos", "envs", "ports", "layout", UNITS_KEY)
+        "macros", "lfos", "envs", "ports", "layout", UNITS_KEY, GROUP_KEY)
 
 # what a patch may hold of the render graph (P1): what can be made twice —
 # the kinds `graph.wire_node_kind(…, wired=True)` names; `hands`, `layer`
@@ -137,6 +172,112 @@ def slug(name: str) -> str:
     equal)."""
     s = re.sub(r"[^a-z0-9]+", "-", str(name).lower()).strip("-")
     return s or "untitled"
+
+
+# ---------------------------------------------------------------- one format (plan 50)
+
+def _schema(doc: Mapping) -> tuple[str, int | None]:
+    """A document's schema as (kind, version); version None when the
+    string is no ``<kind>/<n>``."""
+    schema = doc.get("schema") if isinstance(doc, Mapping) else None
+    if not isinstance(schema, str):
+        return "", None
+    k, _, v = schema.rpartition("/")
+    return k, int(v) if v.isdigit() else None
+
+
+def _module_step(doc: Mapping) -> dict:
+    """``hyperspace.preset/1`` (a module preset: one group's values) → its
+    ``patch/2``: the same name, note, values and any key beside them (the
+    analyzer's `layout`, the camera's `units`), the `group` kept, the
+    schema the patch's."""
+    out = {"schema": SCHEMA, "name": doc.get("name", ""), **(
+        {"note": doc["note"]} if "note" in doc else {}), GROUP_KEY: doc.get(GROUP_KEY)}
+    out.update((k, v) for k, v in doc.items() if k not in ("schema", "name", "note", GROUP_KEY))
+    return out
+
+
+# the ladder's steps: (kind, version) → that document one version on, in
+# the patch's kind (a module preset's one step lands it on `/2` at once)
+STEPS = {
+    (KIND, 1): lambda doc: {**dict(doc), "schema": f"{KIND}/2"},   # /2 is /1 plus `group`
+    (MODULE_KIND, MODULE_VERSION): _module_step,
+}
+
+
+def forward(doc: Mapping) -> dict:
+    """The one ladder for a fragment (plan 50): a ``patch/1``, a ``patch/2``
+    or a module preset (``hyperspace.preset/1`` with a `group`) → its
+    ``patch/2``, step by step (`STEPS`), a copy — the input is never
+    changed. A whole preset (``hyperspace.preset/2`` and up) is no fragment:
+    its ladder is `graphmigrate`'s, so it is refused here, as is anything
+    newer than this build or of another kind (ValueError, in words)."""
+    kind, version = _schema(doc)
+    if kind == MODULE_KIND and version == MODULE_VERSION and isinstance(
+            doc.get(GROUP_KEY), str):
+        return STEPS[(kind, version)](doc)
+    if kind != KIND or version is None:
+        raise ValueError(NOT_FRAGMENT_WORDS.format(schema=doc.get("schema")
+                                                   if isinstance(doc, Mapping) else None,
+                                                   kind=KIND))
+    if version > VERSION:
+        raise ValueError(NEWER_WORDS.format(schema=doc.get("schema"), newest=SCHEMA))
+    out = dict(doc)
+    while version < VERSION:
+        step = STEPS.get((KIND, version))
+        if step is None:
+            raise ValueError(f"no step from {KIND}/{version}")
+        out = step(out)
+        version += 1
+    return out
+
+
+def shape_of(doc: Mapping) -> str:
+    """Which reading of the one document shape `doc` is (plan 50):
+    `PRESET_SHAPE` — a whole preset, a patch that fills the frame (no
+    ports, its parts replace the open preset's when it opens); `GROUP_SHAPE`
+    — a patch of one param group (its `group` key: what a module preset
+    was; it replaces that group's values); `PATCH_SHAPE` — a fragment of
+    the canvas with its boundary, spawned into the open preset under fresh
+    ids. By the schema's kind, then the `group` key."""
+    kind, version = _schema(doc)
+    if kind == MODULE_KIND and version is not None and version > MODULE_VERSION:
+        return PRESET_SHAPE
+    if isinstance(doc.get(GROUP_KEY), str) and doc.get(GROUP_KEY):
+        return GROUP_SHAPE
+    return PATCH_SHAPE
+
+
+def group_doc(group: str, name: str, values: Mapping[str, Any], *, note: str = "",
+              extra: Mapping[str, Any] | None = None) -> dict:
+    """A patch of one param group (plan 50; what a module preset was):
+    ``{"schema": "hyperspace.patch/2", "name", ["note",] "group", "values",
+    …extra}`` — `extra` the group's own keys beside the values (the
+    analyzer's `layout`, the camera's `units`)."""
+    doc: dict[str, Any] = {"schema": SCHEMA, "name": name}
+    if note:
+        doc["note"] = note
+    doc[GROUP_KEY] = group
+    doc["values"] = dict(values)
+    doc.update(extra or {})
+    return doc
+
+
+def _check_group(doc: Mapping) -> list[str]:
+    """`check` for a patch of one group: its keys (`GROUP_KEYS`), a group
+    named, values a map. Which ids are the group's is the registry's
+    (`Library.resolved` lands only those): not asked here."""
+    out: list[str] = []
+    group = doc.get(GROUP_KEY)
+    if not isinstance(group, str) or not group:
+        out.append("group names a param group")
+    for key in sorted(set(doc) - set(GROUP_KEYS)):
+        out.append(GROUP_ONLY_WORDS.format(key=key, group=group))
+    if not isinstance(doc.get("values", {}), dict):
+        out.append("values is not a map")
+    if not isinstance(doc.get("name", ""), str) or not isinstance(doc.get("note", ""), str):
+        out.append("name and note are text")
+    return out
 
 
 # ---------------------------------------------------------------- names
@@ -518,6 +659,9 @@ class Patch:
     ports: tuple[dict, ...]
     rig_rows: tuple[dict, ...]
     host_ports: tuple[dict, ...]
+    # plan 50: the param group a patch of one group is (`GROUP_KEY`), "" for
+    # a canvas fragment
+    group: str = ""
 
     @property
     def members(self) -> _Members:
@@ -591,7 +735,8 @@ def read(doc: Mapping) -> Patch:
             if a and input_side(m, mod.get("id"), a) == INTO:
                 value_port(to=f"{mod.get('id')}.in{i + 1}", was=a)
     layout = {}
-    for cid, xy in (doc.get("layout") or {}).items():
+    # (a patch of one group has no canvas: its `layout` is the group's own)
+    for cid, xy in ({} if doc.get(GROUP_KEY) else doc.get("layout") or {}).items():
         try:
             x, y = (float(v) for v in xy)
         except (TypeError, ValueError):
@@ -601,7 +746,8 @@ def read(doc: Mapping) -> Patch:
                  nodes=nodes, wires=wires, values=dict(doc.get("values") or {}),
                  modifiers=mods, routes=routes, desk=desk, macros=macros,
                  lfos=tuple(sorted(m.lfos)), envs=tuple(sorted(m.envs)), layout=layout,
-                 ports=ports, rig_rows=tuple(rig), host_ports=tuple(host))
+                 ports=ports, rig_rows=tuple(rig), host_ports=tuple(host),
+                 group=str(doc.get(GROUP_KEY) or ""))
 
 
 def _macro_n(mid: Any) -> int:
@@ -622,6 +768,8 @@ def check(doc: Any) -> list[str]:
     out: list[str] = []
     if doc.get("schema") != SCHEMA:
         out.append(f"schema {doc.get('schema')!r} is not {SCHEMA}")
+    if GROUP_KEY in doc:                  # plan 50: a patch of one param group
+        return out + _check_group(doc)
     extra = sorted(set(doc) - set(KEYS))
     if extra:
         out.append(f"no key {', '.join(map(repr, extra))} in a patch")
@@ -756,6 +904,9 @@ def check(doc: Any) -> list[str]:
 # to the host
 INSIDE, RIG, INTO, OUT = "inside", "rig", "into", "out"
 NESTED_WORDS = "{name} is a group: a group holds nodes, not groups; left out"
+# plan 50: the render kinds no group holds — the rig's windows (an output,
+# All outputs) and clouds, which no preset file holds as a node
+NEVER_GROUPED = ("output", "cloud")
 
 
 def select(spec: G.GraphSpec | None, table, node_ids: Iterable[str]
@@ -765,7 +916,34 @@ def select(spec: G.GraphSpec | None, table, node_ids: Iterable[str]
     a frame singleton, an output, the camera or a cloud, a media channel,
     the sequencer, a lane envelope, a node the section lacks, a modifier
     the table lacks, a copy without its original, a group (no nesting),
-    any other canvas id (a device, the analyzer: the rig's). Pure."""
+    any other canvas id (a device, the analyzer: the rig's). Pure.
+
+    Plan 50: this is the **save's** rule — `Edit.save_patch` asks it, and a
+    group holding what it refuses is not saved, in its words. What a group
+    may hold on the canvas is `groupable`'s, wider."""
+    return _select(spec, table, node_ids, save=True)
+
+
+def groupable(spec: G.GraphSpec | None, table, node_ids: Iterable[str]
+              ) -> tuple[_Members, list[str]]:
+    """The members a **group** may hold, and the words for the rest (plan
+    50, the second half of harden-node-groups: "a group holds any node,
+    checked at save"). A group is a patch not yet saved, so it holds any
+    node the preset file saves: every render node of its section — the
+    frame's singletons (the scene, the shape, the backdrop, the pattern, the
+    look-back, hands 1), the camera, a channel, a copy without its
+    original — its modifiers, its LFOs and envelopes (the lane envelopes
+    too) and the macros. Refused here only what no preset holds and what a
+    group cannot: the rig's windows (an output, All outputs) and clouds, a
+    device, the analyzer, the sequencer, a node or modifier the preset
+    lacks, a group (no nesting). Whether it can be saved as a patch is
+    asked at the save (`select`). Pure."""
+    return _select(spec, table, node_ids, save=False)
+
+
+def _select(spec: G.GraphSpec | None, table, node_ids: Iterable[str], *, save: bool
+            ) -> tuple[_Members, list[str]]:
+    """`select` (`save`: the lift's rule) and `groupable` (the canvas's)."""
     refused: list[str] = []
     names = spec_names(spec)
     render: list[str] = []
@@ -774,7 +952,7 @@ def select(spec: G.GraphSpec | None, table, node_ids: Iterable[str]
     for nid in dict.fromkeys(node_ids):
         if nid.startswith("render:"):
             name = nid[len("render:"):]
-            why = held_words(name)
+            why = held_words(name) if save or _kind(name) in NEVER_GROUPED else None
             if why is None and name not in names:
                 why = NO_NODE_WORDS.format(name=name)
             if why is not None:
@@ -789,14 +967,14 @@ def select(spec: G.GraphSpec | None, table, node_ids: Iterable[str]
             refused.append(NESTED_WORDS.format(name=nid))
         elif vo is None:
             refused.append(RIG_WORDS.format(name=nid))
-        elif vo[0] == ENV and vo[1] in LANE_ENVS:
+        elif save and vo[0] == ENV and vo[1] in LANE_ENVS:
             refused.append(LANE_ENV_WORDS.format(name=nid, first=FIRST_ENV))
         elif vo[0] == MOD and nid not in mods_held:
             refused.append(NO_NODE_WORDS.format(name=nid))
         else:
             voices[vo[0]].append(vo[1])
     entries = {entry_name(e): e for e in (spec.to_json().get("nodes", []) if spec else [])}
-    for name in list(render):
+    for name in list(render) if save else ():
         e = entries.get(name)
         if e is not None and e.get("kind") == "copy" and e.get("of") not in render:
             refused.append(COPY_WORDS.format(name=name, of=e.get("of")))
@@ -1131,6 +1309,19 @@ class Landing:
     conflicts: tuple[Conflict, ...]
     wants: dict[str, tuple[dict, ...]]
     notes: tuple[str, ...]
+    # plan 50: the param group a patch of one group replaces the values of
+    # ("" for a canvas fragment): its `values` are the group's, landed over
+    # the group's fresh values (`Library.resolved`), nothing else moves
+    replaces: str = ""
+
+
+def _group_landing(p: Patch) -> Landing:
+    """`spawn` of a patch of one param group (plan 50; a module preset's
+    load): no node, row or voice, so nothing is renamed and nothing can
+    conflict — the group's values, to replace that group's."""
+    return Landing(renames={}, nodes=(), wires=(), values=dict(p.values), modifiers=(),
+                   routes=(), desk=(), macros={}, lfos=(), envs=(), layout={}, group={},
+                   ports=(), conflicts=(), wants={}, notes=(), replaces=p.group)
 
 
 def _taken(names: Iterable[str]) -> dict[str, set[int]]:
@@ -1184,8 +1375,14 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
 
     Lists the conflicts (`Conflict`) and the wants; a spawn twice into one
     host has its second copy's rig rows collide with the first's, row by
-    row. `patch` is the group's provenance slug (default: the name's)."""
+    row. `patch` is the group's provenance slug (default: the name's).
+
+    Plan 50: a patch of one param group (`GROUP_KEY`, what a module preset
+    was) spawns as its values alone, `Landing.replaces` naming the group
+    (`host` is not read: nothing of it can collide)."""
     p = read(doc)
+    if p.group:
+        return _group_landing(p)
     m = p.members
     rn = _Renamer(m)
     notes: list[str] = []

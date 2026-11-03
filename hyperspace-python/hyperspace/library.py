@@ -187,10 +187,17 @@ PRESETS = "presets"       # the presets' group, a document kind (preset.py)
 # loaded through the group's door — it is spawned (`patches.spawn`) — so
 # the kind's `load` refuses, and its `document` and `signature` are never
 # asked. Read through `read_patch` (the schema and `patches.check`),
-# written through `save_patch`
+# written through `save_patch`.
+# Plan 50 (one format): a module preset is a **patch of one param group**,
+# ``hyperspace.patch/2`` with a ``group`` key, under
+# ``<root>/patches/<group>/<slug>.json`` (`group_dir`) — never listed among
+# the spawnable patches (`_files` reads ``patches/`` one level), opened from
+# its group's strip (`load`: a spawn that replaces the group's values)
 PATCHES = "patches"
-PATCH_SCHEMA = patchdoc.SCHEMA          # "hyperspace.patch/1"
+PATCH_SCHEMA = patchdoc.SCHEMA          # "hyperspace.patch/2" (plan 50)
 PATCH_SPAWNED = "a patch is spawned, not loaded"
+# what `read_patch` says of a patch of one group asked for by name
+GROUP_PATCH_WORDS = "{name} is a patch of the {group} group: open it from that group's strip"
 # the groups `rename` serves: the presets and the patches (a module preset
 # is saved under another name instead)
 RENAMABLE = (PRESETS, PATCHES)
@@ -208,7 +215,9 @@ _TRASHED = re.compile(r"(?P<stem>.+)\.(?P<stamp>\d{8}-\d{6})(?:-(?P<n>\d+))?(?P<
 HOME_ENV = "HYPERSPACE_HOME"
 DEFAULT_HOME = Path("~/Hyperspace")
 
-PRESET_SCHEMA = "hyperspace.preset/1"      # a module preset (one group)
+# a module preset as it was written before plan 50 (one group's values):
+# read through `patches.forward` as its `patch/2`, never written
+PRESET_SCHEMA = "hyperspace.preset/1"
 PERFORMANCE_SCHEMA = "hyperspace.preset/2" # a preset: the performance (preset.py)
 PROJECT_SCHEMA = "hyperspace.project/3"   # plan 44 D3: the rig's session, the pads, startup
 PROJECT_V2 = "hyperspace.project/2"        # read as its /3 (`show_without_look`), once
@@ -712,17 +721,29 @@ def _patch_kind() -> DocKind:
     `read` checks a file as it does a preset's, and the doors that refuse —
     a patch is spawned (`patches.spawn`), never loaded, and what a save
     writes is `save_patch`'s document, never the live state's."""
-    kind, _, v = PATCH_SCHEMA.rpartition("/")
-    return DocKind(kind, (int(v),), _patch_spawned, _patch_spawned, _patch_spawned)
+    # (plan 50: every version the one ladder reads, `patches.forward`)
+    return DocKind(patchdoc.KIND, patchdoc.READS, _patch_spawned, _patch_spawned,
+                   _patch_spawned)
+
+
+def forward_group(doc: dict, where: str = "") -> dict:
+    """A patch of one param group in today's words (plan 50): a module
+    preset (``hyperspace.preset/1``) or a ``patch/1`` / ``/2`` through the
+    one ladder (`patches.forward`) — LibraryError, in words, for a file it
+    cannot read (another kind, a newer build's)."""
+    try:
+        return patchdoc.forward(doc)
+    except ValueError as e:
+        raise LibraryError(f"{where}{': ' if where else ''}{e}") from e
 
 
 def scene_doc(path: Path) -> dict:
-    """A band scene's file (hyperspace/scenes/band/, control.py), lifted to
-    the current module-preset schema — the analyzer's scenes are code data,
-    read without a Library."""
+    """A band scene's file (hyperspace/scenes/band/, control.py) in today's
+    words — a patch of the band group, through the one ladder
+    (`forward_group`; the files are code data, read without a Library)."""
     if not path.is_file():
         raise LibraryError(f"no scene file {path.name}")
-    return migrate_doc(_read_json(path), "hyperspace.preset")
+    return forward_group(_read_json(path), path.name)
 
 
 def _module_values(group: str, doc: dict) -> dict[str, Any]:
@@ -1901,16 +1922,29 @@ class Library:
                 out.update(d.name for d in root.iterdir()
                            if d.is_dir() and d.name not in (PROJECTS, TRASH, *LEGACY_DIRS)
                            and not d.name.startswith("."))
+                # plan 50: a group whose patches of one group have a folder
+                if (root / PATCHES).is_dir():
+                    out.update(d.name for d in (root / PATCHES).iterdir()
+                               if d.is_dir() and not d.name.startswith("."))
         return sorted(out - set(RETIRED_MODULES))
 
+    def group_dir(self, root: Path, group: str) -> Path:
+        """Where `group`'s files live under `root` (plan 50): a document
+        kind's — the presets, the patches — in ``<root>/<group>/``; every
+        other group's, its patches of one group (what module presets
+        were), in ``<root>/patches/<group>/``."""
+        if group in (PRESETS, PATCHES) or group in self._kinds:
+            return root / group
+        return root / PATCHES / group
+
     def _files(self, group: str) -> dict[str, Path]:
-        """file key → path, every file of the group's folder: the stem, and
-        for the presets (plan 48 row 584) the path under ``presets/`` less
-        ``.json`` — ``party/deep/c`` — every folder down, less hidden ones
-        (``.cache``)."""
+        """file key → path, every file of the group's folder (`group_dir`):
+        the stem, and for the presets (plan 48 row 584) the path under
+        ``presets/`` less ``.json`` — ``party/deep/c`` — every folder down,
+        less hidden ones (``.cache``)."""
         out: dict[str, Path] = {}
         for root in self._roots():
-            d = root / group
+            d = self.group_dir(root, group)
             if not d.is_dir():
                 continue
             if group != PRESETS:
@@ -2197,19 +2231,30 @@ class Library:
             if k != kind.schema or not v.isdigit() or int(v) not in kind.versions:
                 raise LibraryError(f"{path.name}: schema {schema!r} is not a {kind.schema}")
             return doc
-        doc = migrate_doc(doc, "hyperspace.preset")
-        if doc.get("group", group) != group:
-            raise LibraryError(f"{path.name} is a {doc['group']} preset, not {group}")
+        # plan 50: a patch of one param group, through the one ladder (a
+        # module preset from before reads as its `patch/2`; one that never
+        # said its group is the folder's)
+        if isinstance(doc, dict) and patchdoc.GROUP_KEY not in doc:
+            doc[patchdoc.GROUP_KEY] = group
+        doc = forward_group(doc, path.name)
+        if doc.get(patchdoc.GROUP_KEY) != group:
+            raise LibraryError(f"{path.name} is a {doc.get(patchdoc.GROUP_KEY)} preset, "
+                               f"not {group}")
         return doc
 
     # ---- patches (plan 40 T1) ----
 
     def read_patch(self, name: str) -> dict:
         """The patch `name`: its file under ``<root>/patches/``, checked —
-        the schema (`read`) and the shape (`patches.check`). A patch that is
-        not there, or that check refuses, raises LibraryError with the
-        reasons in words."""
-        doc = self.read(PATCHES, name)
+        the schema (`read`) and the shape (`patches.check`), after the one
+        ladder (`patches.forward`: a ``patch/1`` reads as its ``/2``, plan
+        50). A patch that is not there, that check refuses, or that is one
+        group's (spawned from that group's strip), raises LibraryError with
+        the reasons in words."""
+        doc = forward_group(self.read(PATCHES, name), name)
+        if patchdoc.shape_of(doc) == patchdoc.GROUP_SHAPE:
+            raise LibraryError(GROUP_PATCH_WORDS.format(name=name,
+                                                        group=doc[patchdoc.GROUP_KEY]))
         refused = patchdoc.check(doc)
         if refused:
             path = self.path_of(PATCHES, name)
@@ -2406,7 +2451,11 @@ class Library:
             if hook is not None and doc.get("layout") is not None:
                 hook(doc["layout"])                    # rebuild params first
                 self._fresh_of(group)                  # …and their build values are "fresh"
-            values = _module_values(group, doc)
+            # plan 50: a patch of one group lands as a spawn that replaces
+            # that group's values (`patches.spawn` → `Landing.replaces`):
+            # nothing of it can collide, so there is no sheet
+            landing = patchdoc.spawn({**doc, patchdoc.GROUP_KEY: group}, patchdoc.Host())
+            values = _module_values(group, {**doc, "values": landing.values})
             # (an old module file's retired ids — plan 33 T7's orders and
             # targets — are no unknown ids: the wires say them now)
             missing = [k for k in values if k not in self.reg and not retired(k)]
@@ -2511,7 +2560,7 @@ class Library:
             doc["name"] = leaf
             name = f"{folder}/{leaf}" if folder else leaf
         elif path is None:
-            path = self.home / group / f"{slug(name)}.json"
+            path = self.group_dir(self.home, group) / f"{slug(name)}.json"   # (plan 50)
         kind = self._kinds.get(group)
         text = (kind.text(doc) if kind is not None and kind.text is not None
                 else _json_text(doc))
@@ -2540,20 +2589,18 @@ class Library:
         group's `extra` hook adds beside the values (the analyzer's layout),
         unless the caller brought its own. Every band document the library
         writes is built here: a file, or a project's inline module copy. A
-        document kind's is its own hook's."""
+        document kind's is its own hook's. Plan 50: a group's document is a
+        patch of one param group (`patches.group_doc`, ``hyperspace.patch/2``)."""
         kind = self._kinds.get(group)
         if kind is not None:
             return kind.document(name)
         reg = self._need_reg()
-        doc = {"schema": PRESET_SCHEMA, "group": group, "name": name,
-               "values": reg.snapshot(group)}
-        if group == "camera":
-            doc[UNITS_KEY] = dict(UNITS)     # its pan is in world units (plan 26 A2)
         if extra is None and group in self._extra_hooks:
             extra = self._extra_hooks[group]()
-        if extra:
-            doc.update(extra)
-        return doc
+        beside = dict(extra or {})
+        if group == "camera":
+            beside[UNITS_KEY] = dict(UNITS)  # its pan is in world units (plan 26 A2)
+        return patchdoc.group_doc(group, name, reg.snapshot(group), extra=beside)
 
     def overwrite(self, group: str, *, extra: dict | None = None) -> Path | None:
         """Save over the current preset (its old text kept in the trash)."""
@@ -2923,10 +2970,15 @@ class Library:
         show = group == PROJECTS
         suffix = PROJECT_SUFFIX if show and filename.endswith(PROJECT_SUFFIX) else ".json"
         stem = filename.removesuffix(suffix)
+        # plan 50: ``trash/patches/<group>/`` is a patch of one group — it
+        # goes back among that group's (`group_dir`)
+        if group == PATCHES and sub and "/" not in sub:
+            group, sub = sub, ""
         # only the presets have folders (plan 48): a file a non-preset group
         # kept deeper goes back where that group lists it
         sub = sub if group == PRESETS else ""
-        folder = self.home / group / sub if sub else self.home / group
+        folder = self.group_dir(self.home, group) / sub if sub else self.group_dir(self.home,
+                                                                                  group)
         pre = f"{sub}/" if sub and group == PRESETS else ""
         data = path.read_bytes()
         try:
@@ -3075,7 +3127,10 @@ class Library:
             for d in root.iterdir():
                 if d.is_dir() and not d.name.startswith("."):
                     # the presets every folder down (plan 48), as `_files` lists them
-                    for f in self._tree(d)[0] if d.name == PRESETS else d.glob("*.json"):
+                    # (plan 50: and the patches of one group, a folder down)
+                    for f in (self._tree(d)[0] if d.name == PRESETS else
+                              [*d.glob("*.json"), *d.glob("*/*.json")] if d.name == PATCHES
+                              else d.glob("*.json")):
                         try:
                             out[f] = f.stat().st_mtime
                         except OSError:
