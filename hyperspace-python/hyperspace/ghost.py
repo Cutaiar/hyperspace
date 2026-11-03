@@ -286,8 +286,7 @@ def camera(box, m: np.ndarray, aspect: float) -> tuple[np.ndarray, np.ndarray]:
 # place on screen whatever the preset's eye. At the default eye the two are
 # the same matrix, so no picture of before moves.
 
-def calibration(box, m: np.ndarray, units=None, *, fov: float | None = None,
-                distance: float | None = None, aspect: float | None = None) -> np.ndarray:
+def calibration(box, m: np.ndarray, units=None) -> np.ndarray:
     """Leap mm → world, 4×4 (column vectors): world = s·R_x(tilt)·(m·p − c).
 
     `m` is the stage basis (`basis`: the tracking mode, `ghost.mirror`
@@ -296,18 +295,17 @@ def calibration(box, m: np.ndarray, units=None, *, fov: float | None = None,
     else the padded box's centre (`stage_box`, what `camera` looks at);
     its `mm` is millimetres per shape unit (s = 1 / mm), else the scale at
     which every corner of the padded box is in the eye's frame of a
-    reference picture `aspect` wide (`CAL_ASPECT`, 16:9, the party
-    projector), as tightly as `camera` frames it on that picture — a room
-    setting, so the same on every output (plan 26 A3: A2 fitted the
-    square on the shorter side, which drew the hands at about two thirds
-    of their old size on a landscape output). The eye fitted to is `fov` /
-    `distance` — the rig's reference eye (`EYE_FOV` / `EYE_DISTANCE`) when
-    None, which is what every draw asks for since plan 43 C2 (row 575):
-    the calibration is the rig's, never the preset's eye. `tilt` (degrees, 32 = ELEVATION)
-    turns the stage's up toward the eye: the eye looks along the world's
-    −z, and the ghost camera looked down onto the hands from that high."""
-    fov = EYE_FOV if fov is None else fov
-    distance = EYE_DISTANCE if distance is None else distance
+    reference picture `CAL_ASPECT` wide (16:9, the party projector), as
+    tightly as `camera` frames it on that picture — a room setting, so the
+    same on every output (plan 26 A3: A2 fitted the square on the shorter
+    side, which drew the hands at about two thirds of their old size on a
+    landscape output). The eye fitted to is the rig's reference eye
+    (`EYE_FOV` / `EYE_DISTANCE`), never the preset's (plan 43 C2, row 575:
+    no argument takes another, so nobody can pass the preset's back in).
+    `tilt` (degrees, 32 = ELEVATION) turns the stage's up toward the eye:
+    the eye looks along the world's −z, and the ghost camera looked down
+    onto the hands from that high."""
+    fov, distance, a = EYE_FOV, EYE_DISTANCE, CAL_ASPECT
     tilt = math.radians(float(getattr(units, "tilt", ELEVATION)))
     ct, st = math.cos(tilt), math.sin(tilt)
     # R_x(tilt): the ghost camera's "back" (0, sin e, cos e) onto +z, the eye
@@ -324,7 +322,6 @@ def calibration(box, m: np.ndarray, units=None, *, fov: float | None = None,
         # half-field's tangents across and up the reference picture (the
         # eye's fov is across its shorter side)
         t = math.tan(math.radians(fov) / 2.0)
-        a = CAL_ASPECT if aspect is None else max(float(aspect), 1e-3)
         tx, ty = (t * a, t) if a >= 1.0 else (t, t / a)
         corners = np.array([(x, y, z) for x in (lo[0], hi[0]) for y in (lo[1], hi[1])
                             for z in (lo[2], hi[2])]) - centre
@@ -350,9 +347,17 @@ def shared_camera(box, m: np.ndarray, aspect: float, units=None, *,
     stage space, for the shading. What the hands node draws with (plan 26
     A3); with no `fov` / `distance`, the reference eye's view — what a
     hands layer draws with (`Settled.layer`)."""
+    return through_eye(calibration(box, m, units), m, aspect, fov, distance)
+
+
+def through_eye(cal: np.ndarray, m: np.ndarray, aspect: float, fov: float | None = None,
+                distance: float | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """`shared_camera`'s second half: (view_proj, eye) of calibration `cal`
+    (stage basis `m`) seen through the eye `fov` / `distance` (the reference
+    eye when None) on a picture `aspect` wide. No fit: `Ghost.poses` fits
+    the calibration once (cached) and looks at it through two eyes."""
     fov = EYE_FOV if fov is None else fov
     distance = EYE_DISTANCE if distance is None else distance
-    cal = calibration(box, m, units)
     # the ghost's poses are already in the stage (m · leap): the matrix
     # takes stage points, so the basis inside the calibration is undone
     undo = np.eye(4)
@@ -1380,6 +1385,20 @@ class Ghost:
                 out.append((side, sd.skel, sd.fade))
         return out
 
+    def calibrated(self, box, m: np.ndarray, units=None) -> np.ndarray:
+        """`calibration(box, m, units)`, fitted once and kept until one of
+        the three changes (plan 43 C2, row 575: the fit is the rig's — the
+        box, the basis with its mirror, hands.json's units — never the eye
+        or the output, so a zoomed eye costs no fit a frame)."""
+        key = (np.asarray(box, dtype=np.float64).tobytes(), np.asarray(m).tobytes(),
+               getattr(units, "mm", None),
+               None if getattr(units, "origin", None) is None else tuple(units.origin),
+               getattr(units, "tilt", None))
+        hit = getattr(self, "_cal", None)
+        if hit is None or hit[0] != key:
+            hit = self._cal = (key, calibration(box, m, units))
+        return hit[1]
+
     def poses(self, t: float, aspect: float, fov: float | None = None,
               distance: float | None = None):
         """This frame's poses and camera, or None when nothing would show.
@@ -1410,12 +1429,12 @@ class Ghost:
         cfg = getattr(self.source, "cfg", None) or {}
         m = basis(cfg.get("mode", "desktop"), st.mirror)
         box = box_of(self.source)
-        units = getattr(self.source, "units", None)
-        vp, eye = shared_camera(box, m, aspect, units, fov=fov, distance=distance)
+        cal = self.calibrated(box, m, getattr(self.source, "units", None))
+        vp, eye = through_eye(cal, m, aspect, fov, distance)
         # (plan 43 C2: the reference eye's, for a layer — the same matrix
         # when the preset's eye is the reference)
         ref = (vp, eye) if fov in (None, EYE_FOV) and distance in (None, EYE_DISTANCE) \
-            else shared_camera(box, m, aspect, units)
+            else through_eye(cal, m, aspect)
         poses = [pose(side, sk, m, fade) for side, sk, fade in seen]
         if st.guide:
             lo, hi = stage_box(box, m)

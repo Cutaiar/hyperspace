@@ -73,7 +73,9 @@ written anywhere but a scratch folder.
 ``--apply`` first copies the whole library folder to a local backup,
 ``~/Hyperspace/library-backup-<YYYYMMDD-HHMMSS>/`` (the machine's home,
 ``$HYPERSPACE_HOME`` if set — never inside the library), and says where;
-then retapers, then rewrites each preset that passed, in place and
+then retapers, then computes and rewrites each preset that passed (against
+the retapered templates; a dry run computes against a retapered scratch
+copy, so it says what --apply writes), in place and
 atomically (a dot-named temp file renamed over it), under its own file
 name, then the shows. A file whose bytes the save would not change
 (already ``/9`` and a fixed point) is left untouched. A preset that failed
@@ -85,7 +87,8 @@ build**: a Mac on an older build refuses a ``/9``.
 
 ``--to FOLDER`` (plan 36 T3) writes each preset that passed into FOLDER
 under its own file name instead — the library is read, never written, so
-no backup is made, nothing is retapered and no show is rewritten. The test
+no backup is made, nothing in the library is retapered and no show is
+rewritten (the presets are computed against a retapered scratch copy). The test
 corpus was made so: ``--library <a copy holding tests/corpus/presets>
 --to tests/corpus/presets`` (with ``$HYPERSPACE_HOME`` pointed at a
 scratch folder; no show, so the build's default eye — what the goldens
@@ -192,13 +195,14 @@ def _read(path: Path) -> dict | None:
 
 
 def rig_show(library: Path, home: Path, name: str | None = None
-             ) -> tuple[Path | None, dict, str]:
+             ) -> tuple[Path | None, dict | None, str]:
     """The show whose eye the presets take (plan 43 C2): `name` (a file
     stem), else this Mac's last show if the library holds it, else the
-    library's only show — (its path or None, its `headless.show_seed`, a
-    line saying which). A show that no longer holds the eye (saved on this
-    build before the migration ran) gives the eye its ``.bak-v2-eye`` kept.
-    Raises LookupError for a `name` the library has no show of."""
+    library's only show — (its path or None, its `headless.show_seed` or
+    None when it kept no eye and no camera position, a line saying which).
+    A show that no longer holds the eye (saved on this build before the
+    migration ran) gives the eye its ``.bak-v2-eye`` kept. Raises
+    LookupError for a `name` the library has no show of."""
     from hyperspace import headless
     from hyperspace.library import EYE_BACKUP, LAST_SHOW
 
@@ -219,19 +223,16 @@ def rig_show(library: Path, home: Path, name: str | None = None
         else:
             why = "no show in the library" if not shows else (
                 f"{len(shows)} shows and none is this Mac's last: name one with --show")
-            return None, {}, f"show: none ({why}) — every preset takes the build's default eye"
-    doc = _read(path) or {}
-    seed = headless.show_seed(doc)
-    if not seed["session"]:
+            return None, None, f"show: none ({why}) — every preset takes the build's default eye"
+    seed = headless.show_seed(_read(path))
+    if seed is None or not seed["session"]:
         for bak in sorted(path.parent.glob(f"{path.name}.bak-v{EYE_BACKUP}*")):
-            kept = headless.show_seed(_read(bak) or {})
-            if kept["session"]:
-                seed["session"] = kept["session"]
-                if "layout" in kept and "layout" not in seed:
-                    seed["layout"] = kept["layout"]
+            kept = headless.show_seed(_read(bak))
+            if kept is not None and kept["session"]:
+                seed = {**kept, **(seed or {}), "session": kept["session"]}
                 how += f", its eye from {bak.name}"
                 break
-    eye = seed["session"]
+    eye = seed["session"] if seed is not None else {}
     said = (", ".join(f"{k} {v:.4g}" for k, v in sorted(eye.items())) if eye
             else "no eye (the build's default)")
     return path, seed, f"show: {path.name[: -len(SHOW_SUFFIX)]} ({how}) — {said}"
@@ -355,6 +356,28 @@ def retaper_write(todo) -> list[str]:
     return said
 
 
+def retapered_copy(library: Path, todo, dest: Path) -> Path:
+    """The folders a preset's load reads beside it (`headless.SHARED_FOLDERS`:
+    the desk templates, the module presets) copied to `dest`, each document
+    of `retaper_plan`'s that lives there written as the retaper writes it —
+    what a dry run or --to computes every preset's /9 against, so it is what
+    --apply (which retapers the library itself first) writes."""
+    from hyperspace.headless import SHARED_FOLDERS
+    for folder in SHARED_FOLDERS:
+        if (library / folder).is_dir():
+            shutil.copytree(library / folder, dest / folder,
+                            ignore=shutil.ignore_patterns(".*", "Icon*"))
+    for path, c in todo:
+        try:
+            rel = path.relative_to(library)
+        except ValueError:                    # (the machine's bindings.json)
+            continue
+        if rel.parts[0] in SHARED_FOLDERS:
+            (dest / rel).write_text(c.text)
+    dest.mkdir(parents=True, exist_ok=True)
+    return dest
+
+
 def show_plan(library: Path) -> list[tuple[Path, bytes]]:
     """Every show in the library that holds the eye or the camera's GRAPH
     position, with its bytes without them (`library.show_without_eye`)."""
@@ -465,7 +488,11 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
     print(said)
     print("(round-trip picture: the old file as this build loads it, the show open, vs its "
           "/9 — not parity with an older build; eyeball dream presets live, hand check 366)")
-    retapers = retaper_plan(library, home) if a.to is None else []
+    # (review 5: every preset's /9 is computed against the templates as the
+    # retaper leaves them — with --apply the library is backed up and
+    # retapered first; a dry run and --to read a retapered scratch copy, so
+    # they report what --apply writes. --to writes only presets.)
+    retapers = retaper_plan(library, home)
     shows = show_plan(library) if a.to is None else []
     if retapers:
         print(f"retaper first: {len(retapers)} document(s) without the taper marker — "
@@ -473,12 +500,20 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
     if shows:
         print(f"shows holding the eye: {len(shows)} — "
               + ", ".join(p.name for p, _ in shows) + " (each kept as .bak-v2-eye)")
+    if a.apply:
+        where = backup(library, home)
+        print(f"backup: {where}")
+        for problem in retaper_write(retapers):
+            print(problem)
+        if retapers:
+            print(f"retapered {len(retapers)} document(s) along the effect tapers")
     forced = set(a.force)
     results: list[Result] = []
     with tempfile.TemporaryDirectory(prefix="hyperspace-migrate-") as scratch:
+        read_from = library if a.apply else retapered_copy(library, retapers,
+                                                           Path(scratch) / "retapered")
         for k, path in enumerate(files):
-            r = check(path, library, Path(scratch) / str(k), picture=picture,
-                      show=seed or None)
+            r = check(path, read_from, Path(scratch) / str(k), picture=picture, show=seed)
             results.append(r)
             print(line(r), flush=True)
     counts: dict[str, int] = {}
@@ -496,12 +531,6 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
             write(a.to / r.file, r.data)
         print(f"wrote {len(writes)} as /9 into {a.to}, skipped {len(skipped)}")
     elif a.apply:
-        where = backup(library, home)
-        print(f"backup: {where}")
-        for problem in retaper_write(retapers):
-            print(problem)
-        if retapers:
-            print(f"retapered {len(retapers)} document(s) along the effect tapers")
         for r in writes:
             write(library / PRESETS / r.file, r.data)
         print(f"rewrote {len(writes)} as /9, left {len(untouched)} untouched (already /9), "

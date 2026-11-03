@@ -123,7 +123,7 @@ from typing import Any
 from . import patches as patchdoc
 from . import undo
 from .graph import RigWires
-from .graphmigrate import renamed_layout, retired
+from .graphmigrate import CAMERA_NODES, renamed_layout, retired
 from .palettecompat import palette_slice
 from .params import (
     F_KEYS,
@@ -398,14 +398,14 @@ def show_without_eye(doc: dict) -> dict | None:
     session = doc.get("session")
     layout = doc.get(LAYOUT)
     eye = isinstance(session, dict) and any(k in session for k in EYE_IDS)
-    cam = isinstance(layout, dict) and any(k in layout for k in (CAMERA_NODE, "render:eye"))
+    cam = isinstance(layout, dict) and any(k in layout for k in CAMERA_NODES)
     if not (eye or cam):
         return None
     out = dict(doc)
     if eye:
         out["session"] = {k: v for k, v in session.items() if k not in EYE_IDS}
     if cam:
-        rest = {k: v for k, v in layout.items() if k not in (CAMERA_NODE, "render:eye")}
+        rest = {k: v for k, v in layout.items() if k not in CAMERA_NODES}
         if rest:
             out[LAYOUT] = rest
         else:
@@ -676,8 +676,10 @@ class Project:
         self.layout, _ = read_layout(doc.get(LAYOUT))
         # (plan 43 C2: and the camera node's position, the look's now — the
         # presets before `/9` take it, `old_eye`'s road)
-        at = self.layout.pop(CAMERA_NODE, None)
-        self.camera_at = list(at) if at is not None else None
+        # (under today's id or the old canvas's, `CAMERA_NODES` — `read_layout`
+        # renames the old one, but neither may stay the show's)
+        found = [self.layout.pop(k) for k in CAMERA_NODES if k in self.layout]
+        self.camera_at = list(found[0]) if found else None
         self._saved_layout = copy.deepcopy(self.layout)
         self.rig = self._saved_rig = RigWires.read(doc.get(RIG))
 
@@ -1198,8 +1200,9 @@ class Project:
         stored before 2026-10-29 (`desk.pad.hz` / `.damp`, which this
         write drops: they were read as today's knobs) keeps it first as
         ``<file>.bak-v2-spring``; and (plan 43 C2) the first write over a
-        file whose `session` holds the eye (`eye.*`, the preset's since
-        `/9`: this write drops it) keeps it first as ``<file>.bak-v2-eye``.
+        file that holds the eye in its `session` (`eye.*`) or the camera's
+        GRAPH position in its `layout` (both the presets' since `/9`: this
+        write drops them) keeps it first as ``<file>.bak-v2-eye``.
         No backup, no write."""
         self.lib.writable()
         path = self.path_for(self.name) if self.path is None else self.path
@@ -1220,8 +1223,9 @@ class Project:
                     and backup(path, SPRING_BACKUP) is None):
                 raise LibraryError(f"{path.name}: not written — no backup of the show "
                                    "with its stick spring as it was stored could be made")
-            if (isinstance(session, dict) and any(k in session for k in EYE_IDS)
-                    and not _kept(path, EYE_BACKUP)
+            # (the eye in its session or the camera's position in its layout:
+            # whatever of either this write drops — `show_without_eye`)
+            if (show_without_eye(old) is not None and not _kept(path, EYE_BACKUP)
                     and backup(path, EYE_BACKUP) is None):
                 raise LibraryError(f"{path.name}: not written — no backup of the show "
                                    "with its eye could be made")

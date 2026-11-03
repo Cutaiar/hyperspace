@@ -81,6 +81,8 @@ NINE = 9
 SAVE_SCHEMA = EYE_SCHEMA
 EYE_IDS = ("eye.fov", "eye.distance")
 CAMERA_NODE = "render:camera"      # the camera's canvas id (`graphview.CAMERA`'s node)
+# …and every id a file may hold it under: today's and the old canvas's (R14)
+CAMERA_NODES = (CAMERA_NODE, "render:eye")
 
 
 def groups_of(doc: Any) -> list:
@@ -1263,7 +1265,7 @@ def nine(doc: dict, eye: dict | None = None, camera_at: Any = None) -> dict:
     layout = out.get("layout")
     if camera_at is not None and (layout is None or isinstance(layout, dict)):
         layout = dict(layout or {})
-        if CAMERA_NODE not in layout and "render:eye" not in layout:
+        if not any(k in layout for k in CAMERA_NODES):
             layout[CAMERA_NODE] = list(camera_at)
             out["layout"] = layout
     return out

@@ -602,7 +602,7 @@ here; overturn → the change, then the same.
 | 564 | Wave 0 E1: delay loops are the trails mechanism, the look-back keeps the dream — the feedback starter (a composite laid over, a delay, a fade at level 0.75: colour and alpha decay alike) on the cable menu and "add feedback after" on the node menu, many allowed; "feedback" not "echo", which names the look-back's frames | 423 | (rec) — pending the owner |
 | 572 | C2 built: the eye keeps its ids (`eye` a performance group beside `camera`, not a rename), every save `hyperspace.preset/9`, an old preset takes the eye its old show held (`Project.old_eye`), and `tools/migrate_library.py` runs the retaper first (one bump moves everything), backs up, writes the rig's show's eye into every preset and drops it from the shows (`.bak-v2-eye`) | 432 | built as decided — owner, 2026-11-02 (plan 43 C2) |
 | 573 | The spin's pose is saved by every preset (a `pose` section of the six `rot.phase.*`, `view.body` folded in) and a load sets the turn there; a file without a pose (every old file, every file the migration rewrote) keeps spinning | 431 | owner — 2026-11-02; the `pose` key beside `values` (rec) |
-| 574 | The eye is modulatable (log ranges; Learn and the referee accept a performer on it): row 182's "a lane would swing the whole room" went with the eye leaving the room | 433 | owner — 2026-11-02 |
+| 574 | The eye is modulatable, its tapers unchanged (`eye.fov` linear, `eye.distance` log; Learn and the referee accept a performer on it): row 182's "a lane would swing the whole room" went with the eye leaving the room | 433 | owner — 2026-11-02 |
 | 575 | The hands' box-to-world calibration is fitted to the rig's reference eye (`EYE_FOV` / `EYE_DISTANCE`), never the preset's: hands drawn in the scene are seen through the preset's eye and scale with the shape; a hands layer is drawn through the reference eye and keeps its size on screen | 433 | owner — 2026-11-02 ("it depends on where the hands are rendered; both"); the translation (rec) |
 | 576 | Row 521 closed: every save is `/9`, groups or none (row 394's "every save the newest schema"); a preset's `modules` labels stay inert until row 540 | — | owner — 2026-11-02 |
 
@@ -9775,7 +9775,8 @@ and D3 (the per-deck split) are
   (rec).
 - **Built.** `Presets.document` writes `"pose": {"rot.phase.XY": …}`
   (`preset.POSE_KEY`, the six `params.POSE_IDS` in radians, rounded to
-  1e-6) right after `values`: `ViewState.pose` folds `view.body` in —
+  1e-6 and held to ±3.141592 so save → load → save is a fixed point at
+  ±π, `preset.pose_angle`) right after `values`: `ViewState.pose` folds `view.body` in —
   the drawn turn R(angles)·body read back as six angles
   (`geometry.pose_angles`, exact on SO(4)) — and `Presets.load_doc`
   sets it (`ViewState.set_pose`: no body, the 3D switch not yet holding,
@@ -9800,13 +9801,17 @@ and D3 (the per-deck split) are
 
 - **Answer.** owner — 2026-11-02.
 - **Built.** `eye.fov` and `eye.distance` lose `modulatable=False` and
-  "the camera is the rig"; both are log (`eye.fov` was linear): a lane's
-  depth is in octaves, so a push breathes a long lens and a wide one by
-  the same ratio. Learn and the referee accept a performer on them (the
-  session check no longer applies). `hold.HELD_GROUPS` holds the eye: a
-  preset loaded under hold keeps the projector's framing until Take.
-- **Other options.** Linear fov (a push of the same depth is a bigger
-  ratio at a long lens).
+  "the camera is the rig". **The tapers are unchanged** — `eye.fov`
+  linear (10–120°), `eye.distance` log (1.5–40), as they were: a desk
+  row, binding or macro learned onto either before (only lanes were ever
+  refused) lands the same value for the same knob position, and no stored
+  value changes units (review 4 of PR #333). Learn and the referee accept
+  a performer on them (the session check no longer applies).
+  `hold.HELD_GROUPS` holds the eye: a preset loaded under hold keeps the
+  projector's framing until Take.
+- **Other options.** A log fov (a push of one depth the same ratio at a
+  long lens and a wide one) — refused: a change of taper is a change of a
+  stored value's units, a format change with a migration of its own.
 - **To reverse.** `modulatable=False` back on the two params.
 - **Rough edge.** A lane on `eye.distance` swings perspective strength
   with size; the fov is the gentler target.

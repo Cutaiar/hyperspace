@@ -78,19 +78,24 @@ SHARED_FOLDERS = ("desk", "fx", "dream", "band", "tempo")
 SEED_SHOW = "migration"        # the scratch show `seed` writes (plan 43 C2)
 
 
-def show_seed(doc: dict) -> dict:
+def show_seed(doc: dict | None) -> dict | None:
     """What an old show (before plan 43 C2) kept of the camera, as a show of
     its own: its session's `eye.*` and its layout's camera node — nothing
-    else of the rig (plan 43 C2: the eye an old preset drew through). A show
-    from C2 on gives an empty seed."""
+    else of the rig (plan 43 C2: the eye an old preset drew through). None
+    when it kept neither (a show from C2 on, or no show): nothing to seed,
+    so an old preset takes the build's default eye."""
+    if not isinstance(doc, dict):
+        return None
+    from .graphmigrate import CAMERA_NODES
     from .library import CAMERA_NODE, EYE_IDS, PROJECT_SCHEMA, read_layout
     session = doc.get("session") if isinstance(doc.get("session"), dict) else {}
     layout, _ = read_layout(doc.get("layout"))
     out: dict = {"schema": PROJECT_SCHEMA, "name": SEED_SHOW,
                  "session": {pid: session[pid] for pid in EYE_IDS if pid in session}}
-    if CAMERA_NODE in layout:
-        out["layout"] = {CAMERA_NODE: layout[CAMERA_NODE]}
-    return out
+    at = next((layout[k] for k in CAMERA_NODES if k in layout), None)
+    if at is not None:
+        out["layout"] = {CAMERA_NODE: at}
+    return out if out["session"] or at is not None else None
 
 
 def seed(home: Path, machine: Path, show: dict | None) -> None:

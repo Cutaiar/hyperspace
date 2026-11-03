@@ -124,15 +124,17 @@ def test_zoom_scales_the_shape_about_the_world_origin_and_pan_moves_it():
 
 def test_the_eye_params_are_the_presets_and_default_to_the_old_view(tmp_path):
     """Plan 43 C2 (rows 555, 574): the eye is the look's — performance, in
-    every preset's values, never the show's session — and modulatable, on
-    a log range (a lane's depth in octaves); the defaults the old view."""
+    every preset's values, never the show's session — and modulatable, its
+    taper as it was (review 4: the fov linear, the distance log, so a row
+    learned before lands the same value); the defaults the old view."""
     rig = boot(tmp_path)
     reg = rig.reg
-    for pid, default, (lo, hi) in (("eye.fov", G.EYE_FOV, EYE_FOV_RANGE),
-                                   ("eye.distance", G.EYE_DISTANCE, EYE_DISTANCE_RANGE)):
+    for pid, default, (lo, hi), log in (
+            ("eye.fov", G.EYE_FOV, EYE_FOV_RANGE, False),
+            ("eye.distance", G.EYE_DISTANCE, EYE_DISTANCE_RANGE, True)):
         p = reg[pid]
         assert p.group == "eye" and part_of(p) == "performance" and p.persist, pid
-        assert p.modulatable and p.log, pid
+        assert p.modulatable and p.log is log and p.taper is None, pid
         assert p.value == pytest.approx(default) and (p.lo, p.hi) == (lo, hi), pid
         assert pid in reg.snapshot(part="performance")
         assert pid not in reg.snapshot(part="session")

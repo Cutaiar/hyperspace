@@ -336,7 +336,7 @@ stay the parity oracle.
 **The eye** is a fixed perspective camera on the world's +z axis looking
 at the origin: `eye.fov` (47.6°, `geometry.EYE_FOV`, across the
 picture's shorter side; 10–120°) and `eye.distance` (3.78 shape radii,
-`EYE_DISTANCE`; 1.5–40, both log), on the CAMERA page in its one
+`EYE_DISTANCE`; 1.5–40, log), on the CAMERA page in its one
 section. Since plan 43 C2 they are the **preset's** — with `camera.*` the
 one orbit camera (group `eye`, a performance group: a load lands the
 framing) — and modulatable: a lane breathes the framing (register rows

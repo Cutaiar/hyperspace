@@ -339,7 +339,8 @@ def test_show_without_eye_is_pure():
 
 def test_a_hand_axis_learns_onto_the_eye_and_breathes_the_framing(tmp_path):
     """Row 574 (row 182 overturned): Learn and the referee accept a
-    performer on the eye; a lane's offset rides on the base, in octaves."""
+    performer on the eye; a lane's offset rides on the base, in the fov's
+    own linear range (its taper unchanged, review 4)."""
     chain = Analyzer(Analyser())
     view = ViewState()
     reg = build_registry(view, Control(chain), NS(chain=chain), L.Library(tmp_path).project)
@@ -351,10 +352,9 @@ def test_a_hand_axis_learns_onto_the_eye_and_breathes_the_framing(tmp_path):
         assert not lrn.refused and table.owner(pid).source == axis, (pid, lrn.last)
     p = reg["eye.fov"]
     base = p.base
-    octaves = math.log2(p.hi / p.lo)
     p.modulate(0.1)
     p.apply()
-    assert view.eye_fov == pytest.approx(base * 2 ** (0.1 * octaves), rel=1e-6)
+    assert view.eye_fov == pytest.approx(base + 0.1 * (p.hi - p.lo), rel=1e-6)
     assert p.base == pytest.approx(base)
     p.apply()                                                    # let go: the base back
     assert view.eye_fov == pytest.approx(base)
@@ -375,9 +375,13 @@ def test_the_hands_calibration_is_the_rigs_reference_eye():
     reference eye whatever the preset's; through a zoomed eye the hands'
     picture scales about the centre as the shape's does (the scene's
     camera), and the reference eye's picture — a layer's — does not move."""
+    import inspect
     m, box = ghost.basis("desktop"), ghost.box_of(None)
+    # no argument takes an eye: nobody can pass the preset's back in
+    assert list(inspect.signature(ghost.calibration).parameters) == ["box", "m", "units"]
     ref = ghost.calibration(box, m)
-    assert np.allclose(ghost.calibration(box, m, fov=G.EYE_FOV, distance=G.EYE_DISTANCE), ref)
+    cal_zoomed = ghost.through_eye(ref, m, 1.6, 30.0)
+    assert np.allclose(cal_zoomed[0], ghost.shared_camera(box, m, 1.6, fov=30.0)[0])
     lo, hi = ghost.stage_box(box, m)
     pts = np.array([lo, hi, (lo + hi) / 2 + [30.0, 20.0, 0.0]])
 
@@ -394,10 +398,28 @@ def test_the_hands_calibration_is_the_rigs_reference_eye():
     a = world @ G.eye_matrix(1.6, 1.0).T
     b = world @ G.eye_matrix(1.6, 1.0, 30.0).T
     assert b[:, :2] / b[:, 3:] == pytest.approx(a[:, :2] / a[:, 3:] * ratio)
-    # a units calibration in mm is the rig's too, eye or no eye
+
+
+def test_the_ghost_fits_its_calibration_once_until_the_rig_changes(monkeypatch):
+    """Review 7: `Ghost.calibrated` fits once and keeps it while the box,
+    the basis and the units stand — whatever the eye or the output's shape
+    — and fits again when one of them moves."""
     from hyperspace.hands import core as hc
+    fits = []
+    real = ghost.calibration
+    monkeypatch.setattr(ghost, "calibration", lambda *a: fits.append(a) or real(*a))
+    gh = ghost.Ghost.__new__(ghost.Ghost)            # no GL: the cache alone
+    m, box = ghost.basis("desktop"), ghost.box_of(None)
+    a = gh.calibrated(box, m)
+    for _ in range(3):
+        assert gh.calibrated(box, m) is a
+    assert len(fits) == 1
+    gh.calibrated(box, ghost.basis("desktop", True))        # the mirror
     u = hc.Units(mm=150.0, origin=(0.0, 200.0, 0.0), tilt=10.0)
-    assert np.allclose(ghost.calibration(box, m, u, fov=30.0), ghost.calibration(box, m, u))
+    gh.calibrated(box, m, u)
+    gh.calibrated(box, m, u)
+    gh.calibrated(((-1.0, 1.0), (0.0, 2.0), (-1.0, 1.0)), m, u)  # another box
+    assert len(fits) == 4
 
 
 # ---------------------------------------------------------------- the migration tool
@@ -580,3 +602,124 @@ def test_hands_in_the_scene_scale_with_the_shape_and_a_layer_keeps_its_size(ctx)
         assert h1 / h0 == pytest.approx(ratio, rel=0.06)
     layer = [_shot(ctx, _rig(ctx, None, shape=False), f) for f in (G.EYE_FOV, wide)]
     assert np.array_equal(layer[0], layer[1]) and _span(layer[0])[0] > 20
+
+
+# ---------------------------------------------------------------- review fixes
+
+
+def test_a_pose_at_the_edge_of_the_turn_saves_loads_and_saves_as_itself(tmp_path):
+    """Review 1: an angle at or near ±π (or any turn past it) is written
+    strictly inside (−π, π) and save → load → save is a fixed point — so
+    the migration's fixed-point check and the file never flip sign."""
+    edges = [math.pi, -math.pi, math.pi - 1e-7, -math.pi + 1e-7, 3.1415925, -3.1415925,
+             7 * math.pi, -5 * math.pi, 2.5, -2.5, 0.0, 1e-9]
+    for a in edges:
+        b = preset.pose_angle(a)
+        assert -math.pi < b < math.pi and preset.pose_angle(b) == b, a
+        assert b == round(b, 6) and math.remainder(b, 2 * math.pi) == b, a
+    rig = boot(tmp_path)
+    for k in range(0, len(edges), 6):
+        rig.view.set_pose((edges[k:k + 6] + [0.0] * 6)[:6])
+        one = rig.presets.document("EDGE")
+        rig.presets.load_doc(one)
+        two = rig.presets.document("EDGE")
+        assert two[preset.POSE_KEY] == one[preset.POSE_KEY]
+        assert preset.dumps(two) == preset.dumps(one)
+
+
+def test_an_old_show_with_the_camera_under_its_old_id_and_no_eye(tmp_path):
+    """Reviews 2 and 3: a show whose layout holds the camera under the old
+    canvas id (`render:eye`) and whose session holds no eye — the position
+    is the old presets' (`camera_at`), never the show's; its write drops it
+    and keeps the file first as ``.bak-v2-eye``."""
+    home = tmp_path / "lib"
+    show = _write(home / "projects" / "rig.hyp.json",
+                  {**old_show(), "session": {"tempo.bpm": 128.0},
+                   "layout": {"render:eye": [7, 8], "device:apc40": [1, 2]}})
+    before = show.read_bytes()
+    rig = boot(home, show="rig")
+    pr = rig.lib.project
+    assert pr.camera_at == [7, 8] and pr.old_eye == {}
+    assert not any(k in pr.layout for k in graphmigrate.CAMERA_NODES)
+    assert L.show_without_eye(json.loads(before)) is not None
+    pr.save()
+    doc = json.loads(show.read_text())
+    assert doc["layout"] == {"device:apc40": [1, 2]}
+    assert (home / "projects" / "rig.hyp.json.bak-v2-eye").read_bytes() == before
+    assert headless.show_seed(json.loads(before)) == {
+        "schema": L.PROJECT_SCHEMA, "name": headless.SEED_SHOW, "session": {},
+        "layout": {"render:camera": [7, 8]}}
+
+
+def test_a_show_with_nothing_of_the_camera_seeds_nothing(tmp_path, monkeypatch, capsys):
+    """Review 6: `show_seed` is None when a show kept no eye and no camera
+    position (or there is no show), so the tool's resaves open no scratch
+    show and its "the build's default" line is what happens; with an eye
+    every resave opens the seed."""
+    assert headless.show_seed(None) is None
+    assert headless.show_seed({"schema": L.PROJECT_SCHEMA, "session": {"tempo.bpm": 1.0}}) is None
+    assert headless.show_seed(old_show())["session"] == EYE
+    lib = _library(tmp_path)
+    _write(lib / "projects" / "rig.hyp.json", {**old_show(), "session": {}, "layout": {}})
+    seen = []
+    real = headless.resave
+
+    def resave(path, scratch, **kw):
+        seen.append(kw.get("show"))
+        return real(path, scratch, **kw)
+
+    monkeypatch.setattr(headless, "resave", resave)
+    tool = _tool()
+    tool.main(["--library", str(lib)], picture=same_picture)
+    assert "show: rig (the library's one show) — no eye (the build's default)" in \
+        capsys.readouterr().out
+    assert seen and all(s is None for s in seen)
+    seen.clear()
+    _write(lib / "projects" / "rig.hyp.json", old_show())
+    tool.main(["--library", str(lib)], picture=same_picture)
+    assert seen and all(s is not None and s["session"] == EYE for s in seen)
+
+
+def test_a_preset_naming_an_unmarked_template_is_computed_against_it_retapered(
+        tmp_path, capsys):
+    """Review 5: the presets' `/9` are computed after the retaper — a
+    preset naming an unmarked desk template is written as it saves against
+    the retapered template (resaved against the library after --apply, it
+    is a fixed point), and the dry run said those same bytes."""
+    from hyperspace.library import DESK_SCHEMA
+    lib = tmp_path / "Drive" / "Hyperspace"
+    _write(lib / "desk" / "old-desk.json", {"schema": DESK_SCHEMA, "name": "old desk", "desk": [
+        {"source": "cc:0:49", "target": "fx.warp.speed", "op": "set", "value": 0.75},
+        {"source": "cc:0:48", "target": "fx.warp.amount", "op": "abs"}]})
+    doc = old_preset(CORPUS / "presets" / "party-noita.json")
+    doc[preset.TEMPLATE_KEY] = "old desk"
+    doc["desk"] = []
+    (lib / "presets").mkdir(parents=True)
+    (lib / "presets" / "noita.json").write_text(preset.dumps(doc))
+    tool = _tool()
+    dry = {}
+
+    def keep(path, *, library=None, show=None):
+        return ["x"] * 8, []
+
+    real_check = tool.check
+
+    def check(path, library, scratch, **kw):
+        r = real_check(path, library, scratch, **kw)
+        dry.setdefault(path.name, r.data)
+        return r
+
+    tool.check = check
+    try:
+        assert tool.main(["--library", str(lib)], picture=keep) == 0
+        assert tool.main(["--library", str(lib), "--apply"], picture=keep) == 0
+    finally:
+        tool.check = real_check
+    capsys.readouterr()
+    written = (lib / "presets" / "noita.json").read_bytes()
+    assert json.loads((lib / "desk" / "old-desk.json").read_text())["units"]["fx.depth"] == \
+        "taper"
+    assert written == dry["noita.json"]                       # the dry run said the same
+    again, _, _ = headless.resave(lib / "presets" / "noita.json", tmp_path / "again",
+                                  library=lib)
+    assert again == written

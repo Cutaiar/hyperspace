@@ -220,6 +220,21 @@ MEDIA_KEY = "media"
 BMP_PREFIX = "view.bmp_"          # the one bitmap file's params, gone in plan 32
 
 
+# the largest saved angle: π rounded *down* to the file's six places, so a
+# written angle is always strictly inside (−π, π) and reads back as itself
+POSE_EDGE = math.floor(math.pi * 1e6) / 1e6
+
+
+def pose_angle(a: float) -> float:
+    """One angle as a pose saves it (plan 43 C2, review 1): folded into
+    (−π, π], rounded to six places, then held to ±`POSE_EDGE` — π itself
+    would round to 3.141593 > π, fold to −π on the next load and save as
+    −3.141593, so save → load → save would not be a fixed point. Every
+    value this returns is its own fold and its own rounding."""
+    r = round(math.remainder(float(a), 2.0 * math.pi), 6)
+    return min(max(r, -POSE_EDGE), POSE_EDGE) + 0.0
+
+
 def read_pose(pose: Any) -> list[float] | None:
     """A file's pose section (plan 43 C2, row 573): its six `rot.phase.*`
     angles in `POSE_IDS` order, each a finite number — else None (no pose,
@@ -1419,7 +1434,7 @@ class Presets:
             return {}
         if getattr(self, "pose_of_file", False) and not getattr(self, "posed", False):
             return {}
-        return {pid: round(float(a), 6) for pid, a in zip(POSE_IDS, view.pose(), strict=True)}
+        return {pid: pose_angle(a) for pid, a in zip(POSE_IDS, view.pose(), strict=True)}
 
     def _values(self) -> dict[str, Any]:
         """The preset's `values`: every performance base but the modifiers'

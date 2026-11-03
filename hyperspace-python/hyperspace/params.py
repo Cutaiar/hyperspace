@@ -179,10 +179,10 @@ ROT_RATE_MAX = CEIL * DRIVE * tapers.T_DRIVE.map(tapers.T_DRIVE.steps)
 # where it moved ±400 px
 PAN_RANGE = 12.0
 # the eye's ranges: a field of view from a long lens to a wide one, and a
-# distance from just outside a unit shape to far off. Both log (plan 43 C2,
-# row 574: the eye is modulatable now): a lane's depth is in octaves, so a
-# push breathes a long lens and a wide one by the same ratio, and the
-# knob's middle sits near the default framing
+# distance from just outside a unit shape to far off. Plan 43 C2 (row 574)
+# made both modulatable and left their tapers as they were — `eye.fov`
+# linear, `eye.distance` log — so a desk row or macro learned onto either
+# before lands the same value for the same knob position
 EYE_FOV_RANGE = (10.0, 120.0)
 EYE_DISTANCE_RANGE = (1.5, 40.0)
 
@@ -1973,7 +1973,7 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     # the rig's reference eye, never to this one (`ghost.calibration`)
     g = "eye"
     r.continuous("eye.fov", "Eye field of view", *_attr(view, "eye_fov"),
-                 lo=EYE_FOV_RANGE[0], hi=EYE_FOV_RANGE[1], log=True,
+                 lo=EYE_FOV_RANGE[0], hi=EYE_FOV_RANGE[1],
                  fmt=lambda v: f"{v:.1f}°", group=g,
                  tip="How wide the eye sees, across the shorter side of the picture. "
                      f"Wider shows more of the world, smaller; {EYE_FOV:.1f}° is the "

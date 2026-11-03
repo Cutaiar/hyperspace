@@ -1058,7 +1058,8 @@ def test_the_held_groups_are_the_renderers_and_take_the_eye():
     assert H.HELD_GROUPS == ("view", "camera", "pattern", "dream", "fx", "backdrop", "switch",
                              "resize", "matte", "cut", "segment", "eye")
     assert "rot" not in H.HELD_GROUPS
-    assert H.ONE_FOR_BOTH == ("view.three_d", "view.speed")
+    # (what C2 needs of the turn's one-for-both list; K3 pins the whole set)
+    assert {"view.three_d", "view.speed"} <= set(H.ONE_FOR_BOTH)
 
 
 def test_a_preset_loaded_under_hold_keeps_the_projectors_eye_and_lands_its_pose_on_both(rig):
