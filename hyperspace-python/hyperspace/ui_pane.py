@@ -120,6 +120,16 @@ def write_doc(machine, doc: dict, who: str = "panel") -> None:
         print(f"{who}: {UI_FILE} not written ({e})", file=sys.stderr)
 
 
+def write_key(machine, key: str, value, who: str = "panel") -> None:
+    """Keep `value` as ui.json's top-level `key`, the rest of the file as
+    it was — for another module's own key beside the pane's (the presets'
+    folds, ``presets``, plan 48 stage 2), deferred by its caller as
+    `flush` defers the pane's (`WRITE_AFTER_S`)."""
+    doc = read_doc(machine)
+    doc[key] = value
+    write_doc(machine, doc, who)
+
+
 def read_open(machine, layout: str = "open") -> dict[str, bool]:
     """Which sections this Mac keeps open in `layout` ("open": beside the
     canvas; "below": the narrow page's band): its defaults overlaid with

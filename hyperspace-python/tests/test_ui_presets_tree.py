@@ -11,11 +11,12 @@ right-click makes a folder inside, renames it, removes it (empty only);
 **new folder** at the list's foot makes one at the top."""
 
 import json
+import time
 
 from imgui_bundle import imgui
 from test_ui_shell import CONTROL_SIZE, _click, _mouse, frame, rig  # noqa: F401 — the fixture
 
-from hyperspace import ui_presets
+from hyperspace import ui_pane, ui_presets
 
 TALL = (CONTROL_SIZE[0], 2400)      # every row in view: the folders sit after the top level
 
@@ -88,6 +89,10 @@ def test_a_header_folds_by_a_click_and_the_fold_is_this_macs(rig):  # noqa: F811
     page = st["page"]
     assert page["folders"] == [("party", False)]                    # its folders go with it
     assert not [n for n, _ in page["rows"] if n.startswith("party/")]
+    # written WRITE_AFTER_S after the click, as the pane's folds are (review of #349)
+    assert "presets" not in json.loads(ui_json.read_text())
+    assert ui_presets.flush_folds(panel, now=time.monotonic() + ui_pane.WRITE_AFTER_S + 0.1)
+    assert not ui_presets.flush_folds(panel, force=True)            # nothing left to write
     doc = json.loads(ui_json.read_text())
     assert doc["presets"] == {"folded": ["party"]}
     assert doc["pane"] == {"open": {"presets": False}} and doc["graph"] == {"side": 300}
@@ -105,7 +110,54 @@ def test_a_header_folds_by_a_click_and_the_fold_is_this_macs(rig):  # noqa: F811
     _click(panel, st["page"]["rects"]["folder.party"])               # and open again
     frame(panel)
     assert ("party", True) in st["page"]["folders"]
+    ui_presets.flush_folds(panel, force=True)
     assert json.loads(ui_json.read_text())["presets"] == {"folded": []}
+
+
+def test_a_fold_read_before_the_machine_is_known_is_read_again(rig):  # noqa: F811
+    """Review of #349: `folded` asked while no machine is known (no
+    library yet) is not the file — once the machine is known it is read,
+    a fold clicked meanwhile laid over it, and the write keeps both."""
+    panel, lib = rig.panel, rig.lib
+    (lib._machine() / "ui.json").write_text(json.dumps({"presets": {"folded": ["party"]}}))
+    panel.library = None
+    assert ui_presets.folded(panel) == set()
+    ui_presets.set_folded(panel, "ambient", True)
+    panel.library = lib
+    assert ui_presets.folded(panel) == {"party", "ambient"}
+    ui_presets.flush_folds(panel, force=True)
+    doc = json.loads((lib._machine() / "ui.json").read_text())
+    assert doc["presets"] == {"folded": ["ambient", "party"]}
+
+
+def test_the_no_presets_hint_shows_while_only_empty_folders_are_there(rig):  # noqa: F811
+    panel, lib = rig.panel, rig.lib
+    for p in list((lib.home / "presets").glob("*.json")):
+        p.unlink()
+    _folders(lib, {"ambient": []})
+    got = []
+    real = imgui.text_disabled
+    imgui.text_disabled = lambda text, *a: (got.append(text), real(text, *a))[1]
+    try:
+        _page(panel)
+    finally:
+        imgui.text_disabled = real
+    assert "no presets — new, then save as… makes one" in got
+    assert ("ambient", True) in ui_presets._state(panel)["page"]["folders"]
+
+
+def test_remove_is_off_for_a_folder_holding_a_hidden_file_and_says_what(rig):  # noqa: F811
+    """Review of #349: the menu asks the library what is in the way
+    (`Library.held`), hidden files too, so the item is never on and then
+    refused."""
+    panel, lib = rig.panel, rig.lib
+    _folders(lib, {"keep": []})
+    (lib.home / "presets" / "keep" / ".notes").write_text("yours")
+    st = _page(panel)
+    _click(panel, st["page"]["rects"]["folder.keep"], button=1)
+    assert st["menu_for"] == "keep" and st["menu_held"] == [".notes"]
+    _click(panel, st["menu"]["remove"])
+    assert "keep" in lib.folders() and (lib.home / "presets" / "keep" / ".notes").is_file()
 
 
 def test_move_to_on_a_rows_menu_moves_the_file_and_the_bank_follows(rig):  # noqa: F811

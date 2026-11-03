@@ -444,7 +444,8 @@ def _walk_dirs(folder: Path, pattern: str = "*.json"):
     for here, dirs, _files in os.walk(folder, followlinks=False):
         dirs[:] = sorted(d for d in dirs if not d.startswith("."))
         h = Path(here)
-        yield h, sorted(h.glob(pattern))
+        # files only (review of #349: a folder named `mix.json` is no preset)
+        yield h, sorted(p for p in h.glob(pattern) if p.is_file())
 
 
 # how long a kept walk of the presets is trusted without a look at the
@@ -2586,18 +2587,8 @@ class Library:
         if new == old:
             return path
         doc = _read_json(path)
-        # what names this file, folded: its listed names and its file key
-        # (and, at the top, its raw stem, as before plan 48)
-        mine = {self._fold(group, n) for n, p in idx.items() if p == path}
-        mine |= {self._fold(group, s) for s, p in files.items() if p == path}
-        if not pre:
-            mine.add(stem)
-        mine -= {None, ""}
-        # review of #334: what each slot resolved to before the rename (a
-        # loose read, as a pad loads it), so a slot naming it by an old
-        # spelling (`Ac/Dc`) follows it too
-        # (`snap`, taken above, is the library as it was before)
-        named = lambda n: self._resolve(group, n, snap, loose=True) == path
+        # (`snap`, taken above, is the library as it was before: steps 4–6,
+        # `_follow_many`, read what named the file from it)
         in_place = slug(leaf) == stem
         # `_taken` less this preset's own stem and name — in its own folder
         taken = ({self._fold(group, s) for s, p in files.items() if p != path}
@@ -2634,41 +2625,17 @@ class Library:
                 dst.unlink(missing_ok=True)
                 raise LibraryError(f"{path.name}: not renamed ({e})") from e
         self._sync(path, dst)                              # 4.
-        cur = self._current.get(group)
-        if cur is not None and (cur == old or self._fold(group, cur) in mine):
-            self._landed(group, new, self._loaded.get(group))
-            hook = self._load_hooks.get(group)
-            if hook is not None:
-                hook(new)
-        if group == PATCHES:
-            self.say(f"renamed {old} → {new}")
-            return dst
-        done, left = self._repoint(old, new, mine, named)  # 5.
-        self.project.follow()                              # 6.
-        self.say(f"renamed {old} → {new} ({done} show{'' if done == 1 else 's'} updated)")
-        if left:
-            self.say(warning=f"renamed {old} → {new}; not updated: {', '.join(left)}")
+        self._follow_many({path: new}, snap, "renamed", f"{old} → {new}",  # 4–6.
+                          group=group)
         return dst
 
-    def _repoint(self, old: str, new: str, mine: set[str],
-                 named=lambda n: False) -> tuple[int, list[str]]:
-        """Step 5 of `rename`: every user show naming the old preset (by its
-        name, or a slug of it or of its file stem) names the new one, each
-        copied to the trash first. Returns (shows written, shows left as
-        they were with why)."""
-
-        def to(n) -> str | None:
-            hit = isinstance(n, str) and bool(n) and (
-                n == old or self._fold(PRESETS, n) in mine or named(n))
-            return new if hit else None
-        return self._repoint_by(to)
-
     def _repoint_by(self, to) -> tuple[int, list[str]]:
-        """`_repoint` over a mapping (plan 48 stage 2: a folder's rename
-        moves many presets at once): `to(n)` is the name a slot or the
+        """Step 5 of `rename` (and of a move, a folder's rename — plan 48
+        stage 2, many presets at once): `to(n)` is the name a slot or the
         startup naming `n` takes now, None to leave it. Every user show with
         a hit is copied to the trash once, then written; the open show
-        through its `Project` (its dot and the bank's light stay right)."""
+        through its `Project` (its dot and the bank's light stay right).
+        Returns (shows written, shows left as they were with why)."""
 
         def hit(n) -> bool:
             return isinstance(n, str) and bool(n) and to(n) is not None
@@ -2739,13 +2706,13 @@ class Library:
                 out.update(self._tree(d)[1])
         return sorted(out, key=str.lower)
 
-    def _owned(self, path: Path, snap: tuple) -> set[str]:
-        """What names the preset file `path`, folded: its listed names and
-        its file key (and, at the top, its raw stem) — `rename`'s `mine`."""
+    def _owned(self, path: Path, snap: tuple, group: str = PRESETS) -> set[str]:
+        """What names the file `path`, folded: its listed names and its file
+        key (and, at the top, its raw stem, as before plan 48)."""
         idx, files = snap[0], snap[1]
-        mine = {self._fold(PRESETS, n) for n, p in idx.items() if p == path}
-        mine |= {self._fold(PRESETS, s) for s, p in files.items() if p == path}
-        if not self._prefix(PRESETS, path):
+        mine = {self._fold(group, n) for n, p in idx.items() if p == path}
+        mine |= {self._fold(group, s) for s, p in files.items() if p == path}
+        if not self._prefix(group, path):
             mine.add(path.name[:-5])
         mine -= {None, ""}
         return mine  # type: ignore[return-value]
@@ -2757,37 +2724,44 @@ class Library:
                 return n
         return self._prefix(PRESETS, path) + self._leaf(PRESETS, path)
 
-    def _follow_many(self, moves: dict[Path, str], snap: tuple,
-                     verb: str, what: str) -> tuple[int, list[str]]:
-        """After preset files moved (`moves`: each old path → the name it is
-        listed by now; `snap` the library as it was before): the loaded
-        preset's name follows, then every show's slots and startup
-        (`_repoint_by`, a slot naming a file by any spelling that found it
-        before), then `Project.follow()`; the status says how many shows."""
+    def _follow_many(self, moves: dict[Path, str], snap: tuple, verb: str, what: str,
+                     *, group: str = PRESETS) -> tuple[int, list[str]]:
+        """After files were renamed or moved (`moves`: each old path → the
+        name it is listed by now; `snap` the library as it was before) —
+        `rename`'s steps 4–6, and a move's and a folder rename's: the loaded
+        preset's name follows (its clean reference kept, the load hook
+        told); then, for the presets, every show's slots and startup
+        (`_repoint_by`: a slot naming a file by any spelling that found it
+        before — its name, its file key, a loose read, review of #334) and
+        `Project.follow()`. The status says how many shows (a patch: none
+        names one)."""
         byfold: dict[str, str] = {}
         for p, now in moves.items():
-            for k in self._owned(p, snap):
+            for k in self._owned(p, snap, group):
                 byfold[k] = now
-        listed = {self._shown_name(p, snap): now for p, now in moves.items()}
+        listed = {n: moves[p] for n, p in snap[0].items() if p in moves}
 
         def to(n) -> str | None:
             if not isinstance(n, str) or not n:
                 return None
             if n in listed:
                 return listed[n]
-            k = self._fold(PRESETS, n)
+            k = self._fold(group, n)
             if k is not None and k in byfold:
                 return byfold[k]
-            target = self._resolve(PRESETS, n, snap, loose=True)
+            target = self._resolve(group, n, snap, loose=True)
             return moves.get(target) if target is not None else None
 
-        cur = self._current.get(PRESETS)
+        cur = self._current.get(group)
         now = to(cur) if cur is not None else None
         if now is not None and now != cur:
-            self._landed(PRESETS, now, self._loaded.get(PRESETS))
-            hook = self._load_hooks.get(PRESETS)
+            self._landed(group, now, self._loaded.get(group))
+            hook = self._load_hooks.get(group)
             if hook is not None:
                 hook(now)
+        if group != PRESETS:
+            self.say(f"{verb} {what}")
+            return 0, []
         done, left = self._repoint_by(to)
         self.project.follow()
         self.say(f"{verb} {what} ({done} show{'' if done == 1 else 's'} updated)")
@@ -2798,10 +2772,17 @@ class Library:
     @staticmethod
     def _folder_name(name: str) -> str:
         """One segment of a folder's name, as typed, stripped; LibraryError
-        for an empty one, one with a ``/`` or a hidden one (``.cache``)."""
+        for an empty one, one with a ``/``, a hidden one (``.cache``), one
+        ending ``.json`` (it would read as a preset's file) or one with a
+        control character (a pasted NUL: review of #349)."""
         name = (name or "").strip()
         if not name:
             raise LibraryError("a folder needs a name")
+        if any(ord(c) < 32 or ord(c) == 127 for c in name):
+            raise LibraryError("a folder's name may not hold a control character")
+        if name.lower().endswith(".json"):
+            raise LibraryError(f"{name}: a folder's name may not end in '.json' "
+                               "(it would read as a preset)")
         if "/" in name:
             raise LibraryError(f"{name}: a folder's name has no '/' — make it inside "
                                "the folder it belongs in")
@@ -2870,7 +2851,7 @@ class Library:
             (self.home / PRESETS / full).mkdir(parents=True, exist_ok=False)
         except FileExistsError as e:
             raise LibraryError(f"{full}: that name is taken (by a file)") from e
-        except OSError as e:
+        except (OSError, ValueError) as e:
             raise LibraryError(f"{full}: {e}") from e
         self._sync()
         self.say(f"made the folder {full}")
@@ -2893,9 +2874,18 @@ class Library:
         full = f"{parent}/{name}" if parent else name
         if full == folder:
             return folder
-        same = fold_folder(full) == fold_folder(folder)     # a change of case only
         src, dst = self.home / PRESETS / folder, self.home / PRESETS / full
-        if not same and (self._folder_on_disk(full) is not None or dst.exists()):
+        # review of #349: taken unless `dst` is this very folder (a change of
+        # case on a disk that folds case) — asked of the disk, not of a fold:
+        # on a case-sensitive volume `Party` beside `party` is another folder
+        try:
+            itself = dst.exists() and src.samefile(dst)
+        except (OSError, ValueError):
+            itself = False
+        if os.path.lexists(dst) and not itself:
+            raise LibraryError(f"{full}: that name is taken — pick another")
+        if (not itself and fold_folder(full) != fold_folder(folder)
+                and self._folder_on_disk(full) is not None):
             raise LibraryError(f"{full}: that name is taken — pick another")
         snap = self._lookup(PRESETS)
         moves: dict[Path, str] = {}
@@ -2907,11 +2897,33 @@ class Library:
             moves[p] = f"{pre}/{self._leaf(PRESETS, p)}"
         try:
             src.rename(dst)
-        except OSError as e:
+        except (OSError, ValueError) as e:
             raise LibraryError(f"{folder}: not renamed ({e})") from e
         self._sync(*moves, *(dst / p.relative_to(src) for p in moves))
         self._follow_many(moves, snap, "renamed the folder", f"{folder} → {full}")
         return full
+
+    HELD_SAID = 3       # entries `held` names before "and n more"
+
+    def held(self, folder: str) -> list[str]:
+        """What keeps the folder `folder` under ``presets/`` from being
+        removed (review of #349): every entry in it but a Finder
+        ``.DS_Store`` — presets, folders, hidden files, anything — by name
+        (a folder with a ``/``), the first HELD_SAID then ``n more``; [] for
+        an empty folder, and for one that is not there."""
+        folder = (folder or "").strip().strip("/")
+        on_disk = self._folder_on_disk(folder) if folder else None
+        if not on_disk:
+            return []
+        try:
+            got = sorted((p.name + "/" if p.is_dir() else p.name)
+                         for p in (self.home / PRESETS / on_disk).iterdir()
+                         if p.name != ".DS_Store")
+        except OSError as e:
+            return [f"(unreadable: {e})"]
+        if len(got) > self.HELD_SAID:
+            got = [*got[: self.HELD_SAID], f"{len(got) - self.HELD_SAID} more"]
+        return got
 
     def remove_folder(self, folder: str) -> None:
         """Remove an empty folder under ``presets/`` (a Finder
@@ -2923,12 +2935,10 @@ class Library:
             raise LibraryError("the top level is not a folder to remove")
         folder = self._existing_folder(folder)
         d = self.home / PRESETS / folder
-        try:
-            held = [p for p in d.iterdir() if p.name != ".DS_Store"]
-        except OSError as e:
-            raise LibraryError(f"{folder}: {e}") from e
+        held = self.held(folder)
         if held:
-            raise LibraryError(f"{folder}: not empty — move or trash what is in it first")
+            raise LibraryError(f"{folder}: not empty — it holds {_and(held)}; move or "
+                               "trash what is in it first")
         try:
             (d / ".DS_Store").unlink(missing_ok=True)
             d.rmdir()

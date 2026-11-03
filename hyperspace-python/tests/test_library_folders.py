@@ -121,6 +121,46 @@ def test_remove_folder_takes_an_empty_folder_only(lib_dirs):  # noqa: F811
         lib.remove_folder("party")
     lib.make_folder("", "keep")
     (lib_dirs.presets / "keep" / ".notes").write_text("a hidden file of yours")
-    with pytest.raises(LibraryError, match="not empty"):
+    with pytest.raises(LibraryError, match="not empty — it holds .notes"):
         lib.remove_folder("keep")
     assert (lib_dirs.presets / "keep" / ".notes").is_file()
+    assert lib.held("keep") == [".notes"] and lib.held("ambient") == []
+    assert lib.held("party") == ["b (Dan's conflicted copy).json", "b.json", "deep/"]
+
+
+# ---------------------------------------------------------------- review of #349
+
+def test_a_folder_named_like_a_preset_file_is_refused_and_never_listed(lib_dirs):  # noqa: F811
+    r = make(lib_dirs)
+    lib = r.lib
+    with pytest.raises(LibraryError, match="may not end in '.json'"):
+        lib.make_folder("", "mix.json")
+    (lib_dirs.presets / "made-in-finder.JSON.json").mkdir()     # a folder made elsewhere
+    lib._sync()
+    assert not [n for n in lib.list(PRESETS) if "made-in-finder" in n]
+    assert "made-in-finder.JSON.json" in lib.folders()          # a folder, as it is
+
+
+def test_a_control_character_in_a_folder_name_is_refused(lib_dirs):  # noqa: F811
+    r = make(lib_dirs)
+    for bad in ("a\0b", "tab\there", "x\x7f"):
+        with pytest.raises(LibraryError, match="control character"):
+            r.lib.make_folder("", bad)
+        with pytest.raises(LibraryError, match="control character"):
+            r.lib.rename_folder("party", bad)
+    assert (lib_dirs.presets / "party").is_dir()
+
+
+def test_a_case_change_renames_and_another_folder_by_that_name_is_refused(
+        lib_dirs, monkeypatch):  # noqa: F811
+    r = make(lib_dirs)
+    lib = r.lib
+    assert lib.rename_folder("party", "Party") == "Party"     # this very folder: allowed
+    assert "Party/B" in lib.list(PRESETS) and lib.project.bank[1] == "Party/B"
+    # a case-sensitive volume: `party` beside `Party` is another folder — the
+    # disk says so (samefile), not the fold, and nothing is replaced
+    lib.make_folder("", "empty")
+    monkeypatch.setattr(type(lib_dirs.presets), "samefile", lambda self, other: False)
+    with pytest.raises(LibraryError, match="taken"):
+        lib.rename_folder("Party", "PARTY")
+    assert (lib_dirs.presets / "Party" / "b.json").is_file()

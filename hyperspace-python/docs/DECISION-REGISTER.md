@@ -641,9 +641,9 @@ here; overturn → the change, then the same.
 | 601 | Plan 49 U1: section titles follow the rail's words (`lookback`, not `dream`); the lookback section draws the page as it is — its look-back / dream / shared split is stage 2's to redraw (the owner, 2026-11-02: "a horrid representation") | 449 | (rec) — pending the owner; built as recommended |
 | 609 | Wave 2 T3: SEND B held is FINE — while it is down every APC knob (a ring row, `abs`, on a continuous non-integer param) moves its param a tenth as far, read relatively and written between detents; its LED lit while held; faders, discrete targets and relative rows stay coarse; the button is the adapter's (`apc40.FINE`, `midi.MidiIO`), not a map row, and gives way to any row on SEND B | 459 | (rec) — the build's, for the owner and Dillon to keep |
 | 610 | Wave 2 T3: letting go of FINE re-sends the ring of every knob it moved, so the encoder is re-based onto the param and the next coarse turn continues from there (plan 13 D7's re-base; soft pickup where rings do not re-base); `desk.fine` is the rig's (group desk, never saved, not modulatable) and a reconnect lets go of it | 460 | (rec) — the build's, for the owner and Dillon to keep |
-| 636 | Plan 48 stage 2 (L2): the PRESETS list is a tree — the top-level presets first, then a folding header per folder alphabetically (its name, its count, and while folded the loaded preset's leaf when it is inside), a folder's presets then its folders, nested; a row under a header is its leaf; every folder open unless folded on this Mac (`presets.folded` in `<machine>/ui.json`, beside the pane's); one drawing on the PRESETS page and in GRAPH's pane | 481 | (rec) — pending the owner; built as recommended |
+| 636 | Plan 48 stage 2 (L2): the PRESETS list is a tree — the top-level presets first, then a folding header per folder alphabetically (its name, its count, and while folded the loaded preset's leaf when it is inside), a folder's presets then its folders, nested; a row under a header is its leaf; every folder open unless folded on this Mac (`presets.folded` in `<machine>/ui.json`, beside the pane's, written `WRITE_AFTER_S` after the last click as the pane's are); one drawing on the PRESETS page and in GRAPH's pane | 481 | (rec) — pending the owner; built as recommended |
 | 637 | Plan 48 stage 2: a preset moves between folders by its row's right-click **move to ▸** (the top level and every folder) or a drag onto a folder's header; `Library.move` keeps the file's bytes and stem, and as a rename does, the loaded preset's name follows and every show naming it is rewritten (the open one written too, each copied to the trash first); no undo step, as a rename has none | 482 | (rec) — pending the owner; built as recommended |
-| 638 | Plan 48 stage 2: **new folder** at the list's foot makes one at the top, a header's right-click one inside it; a folder renames in place (every preset keeps its leaf, the shows follow) and is removed only when empty (a Finder `.DS_Store` aside); `tools/move_library.py` and `tools/migrate_library.py` walk `presets/` every folder down as the library does | 483 | (rec) — pending the owner; built as recommended |
+| 638 | Plan 48 stage 2: **new folder** at the list's foot makes one at the top, a header's right-click one inside it; a folder renames in place (every preset keeps its leaf, the shows follow; never over another folder, asked of the disk) and is removed only when empty (a Finder `.DS_Store` aside; the item off, naming what is in the way); `tools/move_library.py` and `tools/migrate_library.py` walk `presets/` every folder down as the library does | 483 | (rec) — pending the owner; built as recommended |
 
 "—": no hand check shows it; tests only.
 
@@ -10997,9 +10997,13 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   A row under a header is its leaf (`TRIP`); the header says the folder.
   Every folder on disk is a header, an empty one too. A click on a header
   folds it; the fold is this Mac's, `presets.folded` (a list of folders)
-  in `<machine>/ui.json`, read once, written on the click through
-  `ui_pane.read_doc` / `write_doc` with the rest of the file kept (no
-  second file). A folder not named there is open. Folded with the
+  in `<machine>/ui.json` (no second file). It is read once the machine is
+  known (again if it changes), with any fold clicked before that laid
+  over it, and written `ui_pane.WRITE_AFTER_S` after the last click by
+  `ui_presets.flush_folds` through `ui_pane.write_key` (one small helper
+  added to `ui_pane`), the rest of the file kept — deferred as the
+  pane's own folds are (review of #349). A folder not named there is
+  open. Folded with the
   loaded preset inside, the header ends with its leaf (`party · 12 ·
   TRIP`). The strip, rename, ×, the trash and the show line are as they
   were; the strip's arrows still step by the flat list. One function
@@ -11050,13 +11054,21 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   the trash line) makes a folder at the top; a header's right-click
   offers *new folder inside…*, *rename folder…* and *remove folder* —
   the name typed in the rename field's style (Enter, Esc). A name with a
-  `/`, a leading `.` or one already there (case folded) is refused on the
-  footer. A rename is the folder's own rename on disk, in the same
-  parent: every preset inside, every folder down, keeps its file and its
-  leaf (`party/deep/C` → `crowd/deep/C`), the loaded preset and every
-  show follow as a move does, and the folds follow the name. Remove takes
-  an empty folder only (a Finder `.DS_Store` goes with it); with
-  anything else in it, a hidden file too, the item is off. The tools:
+  `/`, a leading `.`, a `.json` ending (it would read as a preset; and
+  the walk lists files only, so a folder made so in Finder is never a
+  preset), a control character, or one already there (case folded) is
+  refused on the footer. A rename is the folder's own rename on disk, in
+  the same parent: every preset inside, every folder down, keeps its
+  file and its leaf (`party/deep/C` → `crowd/deep/C`), the loaded preset
+  and every show follow as a move does (`rename` itself now ends in the
+  same `_follow_many`), and the folds follow the name. The new name is
+  taken unless the disk says it is this very folder (`samefile`: a change
+  of case on a disk that folds case), so on a case-sensitive volume
+  `Party` beside `party` is refused, never replaced (review of #349).
+  Remove takes an empty folder only (a Finder `.DS_Store` goes with it);
+  the menu asks `Library.held` — the same test the remove makes, hidden
+  files and folders too — so the item is off while anything is in the
+  way, its hover and the refusal naming what. The tools:
   `move_library.files` and `migrate_library.preset_files` walk `presets/`
   as the library does (`library._walk`: hidden folders skipped, never
   through a link); the migration's report, `--force` and `--to` name a

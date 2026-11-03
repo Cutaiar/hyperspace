@@ -30,18 +30,23 @@ HERE = Path(__file__).resolve().parent.parent
 SKIP_DIRS = {"weights", "trash", "bindings"}
 
 
-def _home() -> Path:
-    sys.path.insert(0, str(HERE))
+def _library():
+    """The app's `hyperspace.library`, imported late (the tool runs from
+    anywhere): the repo put on ``sys.path`` once."""
+    if str(HERE) not in sys.path:
+        sys.path.insert(0, str(HERE))
     from hyperspace import library
-    return Path(library.home())
+    return library
+
+
+def _home() -> Path:
+    return Path(_library().home())
 
 
 def _walk(folder: Path) -> list[Path]:
     """`library._walk`: every ``*.json`` under `folder`, every folder down,
     less hidden folders and never through a link to a folder (plan 48)."""
-    sys.path.insert(0, str(HERE))
-    from hyperspace import library
-    return library._walk(folder)
+    return _library()._walk(folder)
 
 
 def files(root: Path) -> list[Path]:

@@ -54,6 +54,8 @@ compare and is cheap enough to ask each frame for the page on screen.
 
 from __future__ import annotations
 
+import time
+
 from imgui_bundle import imgui
 
 from . import preset, ui
@@ -576,11 +578,12 @@ def preset_list(panel) -> None:
         a, b = imgui.get_item_rect_min(), imgui.get_item_rect_max()
         drawn["rects"][key] = (a.x, a.y, b.x, b.y)
 
+    flush_folds(panel)                  # a fold clicked WRITE_AFTER_S ago, kept
     tree = _tree(lib, rows, folder_list(panel))
     room = imgui.get_content_region_avail().y - _reserve()
     height = max(room, list_row_h() * MIN_ROWS)
     if imgui.begin_child("##presets.rows", imgui.ImVec2(0, height)):
-        if not rows and not tree["kids"].get(""):
+        if not tree["count"].get(""):  # no preset anywhere, folders or none
             imgui.text_disabled("no presets — new, then save as… makes one")
         _folder_body(panel, "", tree, cur, drawn, rect)
     imgui.end_child()
@@ -709,7 +712,7 @@ def _folder(panel, folder: str, tree: dict, cur, drawn: dict, rect) -> None:
                 _move(panel, name, folder)
         imgui.end_drag_drop_target()
     if imgui.begin_popup_context_item(f"folder.menu.{folder}"):
-        _folder_menu(panel, folder, n == 0 and not tree["kids"].get(folder))
+        _folder_menu(panel, folder)
         imgui.end_popup()
     if opened:
         _folder_body(panel, folder, tree, cur, drawn, rect)
@@ -743,12 +746,18 @@ def _row_menu(panel, name: str, folder: str) -> None:
     imgui.end_menu()
 
 
-def _folder_menu(panel, folder: str, empty: bool) -> None:
+def _folder_menu(panel, folder: str) -> None:
     """A folder's right-click: a new folder inside, rename, remove (an
-    empty folder only — the item is off otherwise)."""
+    empty folder only — the item is off otherwise, its hover naming what
+    is in the way: `Library.held`, the same test the remove makes, hidden
+    files and all; review of #349). Drawn only while the menu is open,
+    so the folder is listed only then."""
     st = _state(panel)
     st["menu"] = {}
     st["menu_for"] = folder
+    held = _guard(panel, panel.library.held, folder) or []
+    empty = not held
+    st["menu_held"] = held
     if imgui.menu_item_simple("new folder inside…"):
         set_folded(panel, folder, False)
         _begin_naming(panel, f"newfolder:{folder}", "")
@@ -762,7 +771,8 @@ def _folder_menu(panel, folder: str, empty: bool) -> None:
         _changed(panel)
     _menu_rect(panel, "remove")
     if not empty and imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-        ui.tooltip("Only an empty folder is removed: move or trash its presets first")
+        ui.tooltip("Only an empty folder is removed — it holds "
+                   + ", ".join(held) + ": move or trash them first")
 
 
 def _changed(panel) -> None:
@@ -789,7 +799,8 @@ def _rename_folder(panel, folder: str, name: str) -> None:
             shut.discard(f)
             shut.add(new + f[len(folder):])
         if moved:
-            _write_folded(panel)
+            _folds_dirty(panel, clicks={**{f: False for f in moved},
+                                        **{new + f[len(folder):]: True for f in moved}})
     _changed(panel)
 
 
@@ -805,42 +816,61 @@ def _machine(panel):
 
 def folded(panel) -> set[str]:
     """The folders folded on this Mac — ``presets.folded`` in
-    ``<machine>/ui.json`` (`ui_pane.read_doc`), read once; a folder not
-    named there is open."""
+    ``<machine>/ui.json`` (`ui_pane.read_doc`). Read once the machine is
+    known, and again if it changes (review of #349, as `ui_pane.opened`:
+    a draw before the library attached must not stand for the file), any
+    fold clicked before that laid over what the file says
+    (``fold_clicks``), so the next write keeps both. A folder not named
+    there is open."""
     st = _state(panel)
-    if "folded" not in st:
-        from . import ui_pane  # (late: ui_pane imports this module)
-        machine = _machine(panel)
-        doc = ui_pane.read_doc(machine) if machine is not None else {}
-        sec = doc.get(UI_KEY)
-        held = sec.get("folded") if isinstance(sec, dict) else None
-        st["folded"] = ({f for f in held if isinstance(f, str)}
-                        if isinstance(held, list) else set())
+    machine = _machine(panel)
+    if "folded" not in st or (machine is not None and st.get("folded_from") != machine):
+        held = None
+        if machine is not None:
+            from . import ui_pane  # (late: ui_pane imports this module)
+            sec = ui_pane.read_doc(machine).get(UI_KEY)
+            held = sec.get("folded") if isinstance(sec, dict) else None
+        got = {f for f in held if isinstance(f, str)} if isinstance(held, list) else set()
+        for f, shut in (st.get("fold_clicks") or {}).items():
+            (got.add if shut else got.discard)(f)
+        st["folded"], st["folded_from"] = got, machine
     return st["folded"]
 
 
-def set_folded(panel, folder: str, shut: bool) -> None:
-    """Fold or unfold `folder` and keep it in this Mac's ui.json."""
+def set_folded(panel, folder: str, shut: bool, now: float | None = None) -> None:
+    """Fold or unfold `folder`; kept in this Mac's ui.json `WRITE_AFTER_S`
+    after the last change (`flush_folds`), as the pane's folds are."""
     s = folded(panel)
     if (folder in s) == shut:
         return
     (s.add if shut else s.discard)(folder)
-    _write_folded(panel)
+    _folds_dirty(panel, now, {folder: shut})
 
 
-def _write_folded(panel) -> None:
-    """``presets.folded`` into ui.json, the rest of the file as it was
-    (the pane's sections, the side width)."""
+def _folds_dirty(panel, now: float | None = None, clicks: dict | None = None) -> None:
+    st = _state(panel)
+    st.setdefault("fold_clicks", {}).update(clicks or {})
+    st["folds_dirty_at"] = time.monotonic() if now is None else now
+
+
+def flush_folds(panel, now: float | None = None, force: bool = False) -> bool:
+    """Write ``presets.folded`` (`ui_pane.write_key`, the rest of ui.json
+    as it was) once `ui_pane.WRITE_AFTER_S` has passed since the last fold
+    (`force`: now). Called each frame the list draws; True when it wrote."""
     from . import ui_pane
+    st = _state(panel)
+    at = st.get("folds_dirty_at")
     machine = _machine(panel)
-    if machine is None:
-        return
-    doc = ui_pane.read_doc(machine)
-    sec = doc.get(UI_KEY)
-    if not isinstance(sec, dict):
-        sec = doc[UI_KEY] = {}
-    sec["folded"] = sorted(folded(panel), key=str.lower)
-    ui_pane.write_doc(machine, doc, "presets")
+    if at is None or machine is None:
+        return False
+    now = time.monotonic() if now is None else now
+    if not force and now - at < ui_pane.WRITE_AFTER_S:
+        return False
+    ui_pane.write_key(machine, UI_KEY, {"folded": sorted(folded(panel), key=str.lower)},
+                      "presets")
+    st.pop("folds_dirty_at", None)
+    st.pop("fold_clicks", None)
+    return True
 
 
 def _trash_popup(panel, bin_: list) -> None:
