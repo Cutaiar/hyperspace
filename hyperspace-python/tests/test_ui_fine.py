@@ -174,3 +174,93 @@ def test_the_tooltip_says_fine_while_shift_is_held(view_page, monkeypatch):
     d.run(d.move("view.instances"), d.wait(1))   # an integer: no fine mode, no word
     assert not any("FINE" in s for s in said)
     d.run(shift(False), d.park())
+
+
+def test_shift_joining_mid_drag_does_not_step_back(view_page):
+    """⇧ pressed in the same frame the mouse moves: that frame's movement
+    counts at the fine rate from where the grab was — not lost, and the
+    grab never steps back to last frame's value (review, PR #348)."""
+    r, d = view_page
+    p = r.reg["view.inst_persp"]
+    x0, y0, x1, y1 = d.rect("view.inst_persp")
+    x, y = (x0 + x1) / 2, (y0 + y1) / 2
+    d.run(d.move((x, y)), d.press(True), d.move((x + 40, y), 4))   # a plain drag
+    coarse = p.base
+    io = imgui.get_io()
+
+    def join():
+        io.add_key_event(imgui.Key.mod_shift, True)
+        d.mouse = (x + 70, y)
+        io.add_mouse_pos_event(*d.mouse)                           # the same frame
+        yield
+    d.run(join())
+    joined = p.base
+    assert joined > coarse                                         # no step back
+    d.run(d.move((x + 130, y), 4))
+    fine_60 = p.base - joined
+    d.run(d.press(False), shift(False), d.park())
+    assert joined - coarse == pytest.approx(fine_60 / 2, rel=0.15)  # the join frame's 30 px, fine
+
+
+def test_a_shift_press_on_a_log_slider_writes_nothing(view_page):
+    """`view.inst_spacing` is a log range: a press that has not moved
+    leaves its base bit-for-bit, so no undo step opens (review, PR #348)."""
+    r, d = view_page
+    p = r.reg["view.inst_spacing"]
+    u = undo.Undo(r.reg, r.router.table)
+    clock = [0.0]
+
+    def step():
+        frame(r.panel, "view")
+        clock[0] += 1 / 60
+        u.tick(clock[0])
+
+    p.set_value(1.34)                            # a value log2 / 2** does not round-trip
+    d.step = step
+    d.run(d.wait(40))
+    u.clear()
+    was = p.base
+    x0, y0, x1, y1 = d.rect("view.inst_spacing")
+    d.run(shift(True), d.move((x0 + (x1 - x0) * 0.85, (y0 + y1) / 2)), d.press(True),
+          d.wait(3), d.press(False), shift(False), d.park(), d.wait(40))
+    assert p.base == was
+    assert not u.undo()
+
+
+def test_a_tapered_slider_keeps_a_base_between_detents_on_a_shift_press(tmp_path, monkeypatch):
+    """`Panel._slider` on a tapered param (as MEDIA draws a channel's gain)
+    with a base between detents — where a lane or a drive left it: a ⇧
+    press does not snap it to a detent; a ⇧ drag then walks a tenth as far
+    as a plain one (review, PR #348)."""
+    with build_rig(tmp_path) as r:
+        imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+
+        def step():
+            imgui.new_frame()
+            r.panel._fine_frame()
+            imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+            imgui.set_next_window_size(imgui.ImVec2(700, 200))
+            imgui.begin("fine test")
+            r.panel._slider("view.bright", 600)
+            imgui.end()
+            imgui.end_frame()
+
+        d = Driver(step=step)
+        d.record(monkeypatch.setattr)
+        d.run(d.wait(2))
+        p = r.reg["view.bright"]
+        x0, y0, x1, y1 = d.rect("view.bright")
+        x, y = x0 + (x1 - x0) * 0.8, (y0 + y1) / 2
+        d.run(d.move((x, y)), d.press(True))
+        at_press = p.position()
+        d.run(d.move((x - 2 * DX, y), 8), d.press(False), d.park())
+        plain = at_press - p.position()                # detents, plain
+        assert plain >= 20
+        p.set(p.taper.map(30.5))                       # half-way between detents 30 and 31
+        was = p.base
+        d.run(d.wait(1))
+        d.run(shift(True), d.move((x, y)), d.press(True), d.wait(3))
+        assert p.base == was                           # no snap, no jump to the mouse
+        d.run(d.move((x - 2 * DX, y), 8), d.press(False), shift(False), d.park())
+        fine = 30.5 - p.position()
+        assert fine == pytest.approx(plain * ui.FINE, abs=1)

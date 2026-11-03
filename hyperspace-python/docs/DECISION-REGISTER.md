@@ -635,7 +635,7 @@ here; overturn → the change, then the same.
 | 599 | Plan 49 U1: beside the canvas open sections share the pane's height evenly, never under 160 px (past that the pane scrolls); in the narrow page's band (#266's) the headers are one row and the open sections share the rest with no floor; each body scrolls by itself; the side grip is a hit test with no item; the details beside / below chip shows on every narrow page | 452, 454 | (rec) — pending the owner; built as recommended |
 | 600 | Plan 49 U1: in a narrow pane the preset strip's name button is squeezed to the room beside its chips and the devices-missing chip (never under 48 px; unchanged on every page; that chip on its own row when even then there is no room) and the show line's chips wrap; the held projector's inset sits left of the pane | 453, 455 | (rec) — pending the owner; built as recommended |
 | 601 | Plan 49 U1: section titles follow the rail's words (`lookback`, not `dream`); the lookback section draws the page as it is — its look-back / dream / shared split is stage 2's to redraw (the owner, 2026-11-02: "a horrid representation") | 449 | (rec) — pending the owner; built as recommended |
-| 607 | Wave 2 T2 (after row 561): ⇧ held while dragging a continuous panel slider or fader moves the value a tenth as far (`ui.FINE` = 0.1, ÷10 as the APC40's fine button on #344); the panel's own relative drag, not imgui's modifier (a slider has none — Alt slows only a drag widget, and Shift speeds one up); once ⇧ joins a drag the rest of it is relative, so a ⇧ press does not jump to the mouse and letting ⇧ go returns to coarse without a jump; one drag, one undo step; an enum, an integer and a toggle are untouched | 457 | (rec) — built as recommended (T2) |
+| 607 | Wave 2 T2 (after row 561): ⇧ held while dragging a continuous panel slider or fader moves the value a tenth as far (`ui.FINE` = 0.1, ÷10 as the APC40's fine button on #344); the panel's own relative drag, not imgui's modifier (a slider has none — Alt slows only a drag widget, and Shift speeds one up); once ⇧ joins a drag the rest of it is relative, so a ⇧ press does not jump to the mouse and writes nothing (a log or between-detents base stays bit for bit), ⇧ joining mid-drag counts that frame's movement fine, and letting ⇧ go returns to coarse without a jump; one drag, one undo step; an enum, an integer and a toggle are untouched | 457 | (rec) — built as recommended (T2) |
 | 608 | Wave 2 T2, its reach and its word: every slider and fader `ui.py` draws for a param (`Panel._slider`, `Panel._fader`, so every page's `_row` and `half`); the tooltip leads with `FINE` while ⇧ is held over one; not the raw sliders on ROUTING (a route's depth and rest, a modifier's knobs, a span's from / to) or GRAPH's backdrop, which are other files; no arrow keys (keyboard navigation is off in the panel); a fader's imgui label is now its param id, so the driver finds it; hot reload carries it | 457, 458 | (rec) — built as recommended (T2) |
 | 609 | Wave 2 T3: SEND B held is FINE — while it is down every APC knob (a ring row, `abs`, on a continuous non-integer param) moves its param a tenth as far, read relatively and written between detents; its LED lit while held; faders, discrete targets and relative rows stay coarse; the button is the adapter's (`apc40.FINE`, `midi.MidiIO`), not a map row, and gives way to any row on SEND B | 459 | (rec) — the build's, for the owner and Dillon to keep |
 | 610 | Wave 2 T3: letting go of FINE re-sends the ring of every knob it moved, so the encoder is re-based onto the param and the next coarse turn continues from there (plan 13 D7's re-base; soft pickup where rings do not re-base); `desk.fine` is the rig's (group desk, never saved, not modulatable) and a reconnect lets go of it | 460 | (rec) — the build's, for the owner and Dillon to keep |
@@ -10628,10 +10628,17 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   press or mid-drag) is taken over from the value it had, and each frame
   adds the mouse's movement along the throw × 0.1 while ⇧ is held, × 1
   once it is let go — relative until the button comes up, so neither edge
-  jumps (a ⇧ press does not jump to the mouse either). A tapered control
-  keeps the fraction between detents, so a slow fine drag still walks
-  them. The writes come every frame the mouse moves, as a plain drag's
-  do: one drag is one undo step (`undo.SETTLE_S`).
+  jumps. The press's own frame writes nothing: the slider's jump to the
+  mouse is dropped, and a base on a log range or between a taper's
+  detents (where a lane or a drive left it) stays bit for bit, so no undo
+  step opens. ⇧ joining mid-drag anchors at the mouse's last-frame place
+  (`io.mouse_pos_prev`), so that frame's movement counts, fine, and the
+  grab never steps back. A tapered control keeps the fraction between
+  detents, so a slow fine drag still walks them. ⇧ and the button are
+  read once a frame (`Panel._fine_frame`, before any widget), which also
+  forgets a drag whose button is up, drawn or not. The writes come every
+  frame the mouse moves, as a plain drag's do: one drag is one undo step
+  (`undo.SETTLE_S`).
 - **Why not imgui's own.** imgui's sliders are absolute — the grab goes
   where the mouse is — and have no slow modifier: the Alt ÷100 / Shift
   ×10 pair belongs to `drag_float` / `drag_int`, which the panel does not
@@ -10660,8 +10667,9 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   panel does not turn on imgui's keyboard navigation, so a slider takes no
   arrows to make finer. A fader's imgui label is its param id now
   (`##view.bright`, was `##s` under the id's push), so the driver finds
-  each by id. A hot reload of `ui.py` carries it: the panel reads its one
-  new field with a default.
+  each by id. A hot reload of `ui.py` carries it: the panel's three new
+  fields (`_fine_drag`, `_shift`, `_mouse_down`) are read with defaults
+  and written by `draw` each frame.
 - **What would overturn it.** The owner wanting ROUTING's depths fine too
   (the next step), or `FINE` on the readout rather than in the tooltip.
 - **Judge it.** Hand checks 457–458.
