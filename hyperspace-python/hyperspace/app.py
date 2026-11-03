@@ -82,6 +82,7 @@ from . import (
     placement,
     replay,
     tempo,
+    totem,
 )
 from .audio import AudioEngine
 from .bands import CEIL
@@ -1429,6 +1430,12 @@ def main() -> None:
 
     def panel_setup(reg: Registry, s: ViewState, *, clock, lfos, envs, seq, hold,
                     output) -> Panel:
+        # the Joy-Con totem (plan 47, an experiment): off unless `[totem] on`
+        # says so or the pad window's word is clicked; never saved, so it may
+        # register after attach (a fresh extra, library.py); `s` for the reset
+        totem.register(reg, totem.TotemState(), s)
+        if (cfg.get("totem") or {}).get("on") is True:
+            reg["totem.on"].set(True)
         # after attach, before the router: its ui.* params are the last a
         # launch declares before the table's rows resolve; `output` is what
         # the outputs hook returned

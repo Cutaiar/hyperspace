@@ -3008,7 +3008,7 @@ class Router:
                     act(self.reg, b)
 
     def pad(self, pad, now: float | None = None, *, buttons: bool = True,
-            role: str = "") -> None:
+            role: str = "", skip=frozenset()) -> None:
         """One frame of the gamepad (`pad` a gamepad.Pad): its axes fed as
         the `axis` lanes (None while no pad is on, so their routes let go),
         then its pad / hat rows — unless `buttons` is False (the frame's
@@ -3022,7 +3022,11 @@ class Router:
         `role` is the pad's qualifier (plan 27 B6): "" for the primary pad
         — the unqualified rows and the `axis` lanes, as ever — or a second
         pad's role, whose lanes are ``axis@<role>`` and whose rows are
-        those qualified with it (``pad@p2:A``); each pad hears only its own."""
+        those qualified with it (``pad@p2:A``); each pad hears only its own.
+
+        `skip`: the rows' sources, unqualified (``pad:A``, ``hat:DOWN``),
+        that do not fire this frame — the buttons the totem holds while it
+        reads this pad (totem.SKIP, the plan 47 experiment)."""
         axis = qualified("axis", role)
         publish = getattr(pad, "publish", None)
         if publish is not None:
@@ -3044,6 +3048,8 @@ class Router:
             code = self._code(b)
             if code is None or not b.enabled or not (
                     b.device == role or (not role and own and b.device == own)):
+                continue
+            if skip and b.bare in skip:
                 continue
             hat = b.scheme == "hat"
             down = bool(pad.hat & code) if hat else pad.down(code)
