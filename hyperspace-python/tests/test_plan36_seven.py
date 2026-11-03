@@ -208,7 +208,7 @@ def test_the_migration_drops_the_values_of_effects_not_in_the_section():
         "fx.on": True, "fx.acid.on": True, "fx.acid.bend": 0.2,
         "fx.palette.on": False, "fx.palette.hue_from": 10.0}}
     out, _ = M.seven(doc, {"acid": (10, 1.0), "palette": (20, 1.0)})
-    assert out["schema"] == SAVED
+    assert out["schema"] == SEVEN
     assert out["values"] == {"fx.on": True, "fx.acid.on": True, "fx.acid.bend": 0.2}
     assert ("scene", "acid.image") in _pairs(out["graph"])     # (plan 36 T4: no look-back)
 
@@ -219,7 +219,7 @@ def test_an_old_section_less_preset_migrates_to_todays_frame():
     """A `/2` with no section (every corpus preset's source) is today's
     frame, each hidden edge a wire, as `/7`."""
     out, notes = M.seven({"schema": "hyperspace.preset/2", "values": {}}, {})
-    assert out["schema"] == SAVED and notes == []
+    assert out["schema"] == SEVEN and notes == []
     assert sorted(_pairs(out["graph"])) == sorted(TODAY)
     spec = G.read_graph(out["graph"])
     assert spec.wired and spec.notes == ()

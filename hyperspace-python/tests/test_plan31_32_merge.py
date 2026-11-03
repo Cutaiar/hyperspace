@@ -67,7 +67,7 @@ def _pattern_and_bin(app) -> None:
 
 
 def test_the_ladder_is_one_list():
-    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7, 8)   # (plan 35: /6; plan 36 T3: /7; plan 40 T2: /8)
+    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9)   # (… plan 40 T2: /8; plan 43 C2: /9)
     assert (preset.SCHEMA, preset.SCHEMA_V3, preset.MEDIA_SCHEMA) == (V2, V3, V4)
     assert preset.SAVE_SCHEMA == V6
 
