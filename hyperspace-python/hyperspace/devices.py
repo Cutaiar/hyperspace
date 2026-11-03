@@ -849,28 +849,40 @@ class PadDevice(Base):
                 gamepad.steer(io, router, reg, self.__dict__.get("_dt", 0.0), routed=routed)
 
     def _totem(self, io, reg) -> dict:
-        """The totem experiment (plan 47, totem.py): while `totem.on`, the
-        first pad with motion sensors turns the shape; its buttons the totem
-        uses are held off its rows (`Router.pad`'s `skip`). Nothing while
-        the totem is off or the registry has none. The totem names the pad
-        by this device's role (unique, "pad" for the first), not the
-        router's qualifier ("" for the primary)."""
-        from . import totem
-        # duck-typed, not isinstance: a hot reload of totem.py makes a new
-        # TotemState class the live state is not (yet) an instance of
-        state = totem.state_of(reg)
-        if state is None or not state.on:
-            return {}
-        totem.step(state, io, reg, self.__dict__.get("_dt", 0.0), self.role)
-        return {"skip": totem.SKIP} if totem.drives(state, self.role) else {}
+        """The totem and the poi experiments (plan 47, totem.py, poi.py):
+        while `totem.on` the first pad with motion sensors turns the shape,
+        while `poi.on` it swings the shape as a poi's weight; the buttons
+        each uses are held off the pad's rows (`Router.pad`'s `skip`).
+        Nothing while both are off or the registry has neither. Each names
+        the pad by this device's role (unique, "pad" for the first), not
+        the router's qualifier ("" for the primary). The poi steps first,
+        so a reset that fires both finds the pan the poi has let go of."""
+        from . import poi, totem
+        # duck-typed, not isinstance: a hot reload makes a new state class
+        # the live state is not (yet) an instance of
+        swing, state = poi.state_of(reg), totem.state_of(reg)
+        dt = self.__dict__.get("_dt", 0.0)
+        skip: frozenset = frozenset()
+        if swing is not None and swing.on:
+            poi.step(swing, io, reg, dt, self.role)
+            if poi.drives(swing, self.role):
+                skip |= poi.SKIP
+        if state is not None and state.on:
+            totem.step(state, io, reg, dt, self.role)
+            if totem.drives(state, self.role):
+                skip |= totem.SKIP
+        return {"skip": skip} if skip else {}
 
     def _totem_skip(self, reg, io) -> frozenset:
-        """The buttons the totem holds off this pad this frame — as it will
-        be once `act` has run its take-over (Learn runs first): none while
-        it reads another pad, or is off."""
-        from . import totem
+        """The buttons the totem and the poi hold off this pad this frame —
+        as they will be once `act` has run their take-over (Learn runs
+        first): none while each reads another pad, or is off."""
+        from . import poi, totem
         state = totem.state_of(reg)
-        return totem.SKIP if totem.will_drive(state, io, self.role) else frozenset()
+        skip = totem.SKIP if totem.will_drive(state, io, self.role) else frozenset()
+        if poi.will_drive(poi.state_of(reg), io, self.role):
+            skip |= poi.SKIP
+        return skip
 
     def _feed_extras(self, router, io, q: str) -> None:
         """The ``touch`` and ``motion`` lanes (plan 42): their names,

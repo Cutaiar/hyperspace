@@ -207,6 +207,7 @@ class Motion:
     # pad's reader sums it on its thread, every report (`add_turn`); a pad
     # stepped without one, here per `step`. A stalled report adds nothing
     turned: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    accel: tuple[float, float, float] = (0.0, 1.0, 0.0)    # the last reading, g along x, y, z (poi.py)
     shake: float = 0.0
     energy: float = 0.0
     _since_shake: float = 1e9
@@ -219,6 +220,7 @@ class Motion:
         ax, ay, az = (float(v) for v in accel)
         gx, gy, gz = (float(v) for v in gyro)
         self.gyro = (gx, gy, gz)
+        self.accel = (ax, ay, az)
         if integrate:
             self.add_turn(turn_of((gx, gy, gz), dt))
         g = self.gravity
