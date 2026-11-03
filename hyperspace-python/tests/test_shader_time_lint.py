@@ -29,7 +29,6 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("warp", "u_drift"): "K2: `t = u_phase * u_drift` scrolls the noise field",
     ("warp", "u_scale"): "K2: `(p + vec2(t) * 0.1) * u_scale` scales the scrolled offset",
     ("tripcolour", "u_pulse"): "K2: `sin(u_phase * u_pulse)` is the pulse's rate",
-    ("patterns", "m_colour"): "K4: RINGS' `pal(ph * 0.15 * m_colour() …)` — `ph` carries u_ptime",
 }
 
 # the patterns' param symbols: a mode reads its inputs only through these

@@ -333,7 +333,11 @@ vec4 design(int mode, vec2 uv, float fid) {
         float a = sin(ph * TAU * 0.5);
         float b = sin(r * f * TAU * 0.31 + t * 1.7 + face_rad(fid, 0.7));
         float v = sharpen(0.5 + 0.5 * a * b);
-        vec3 col = pal(ph * 0.15 * m_colour() + face_turn(fid, 0.03),
+        // COLOUR widens the hue range along the rings (the radius term)
+        // and never the drift: `ph * m_colour()` carried t, so a step
+        // turned the palette by t · Δcolour — whole cycles hours in
+        // (register row 579). At COLOUR 1 this is `ph * 0.15` as before.
+        vec3 col = pal((r * f * m_colour() - t * 3.0 / TAU) * 0.15 + face_turn(fid, 0.03),
                        vec3(0.55), vec3(0.45), vec3(1.0), vec3(0.0, 0.33, 0.67));
         return vec4(col, v);
     }

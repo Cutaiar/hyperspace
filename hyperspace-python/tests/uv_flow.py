@@ -109,3 +109,34 @@ def run(ctx, state: FxState, name: str, param: str, before: float, after: float,
         return Run(rest=d[:frames - 1], step=d[frames - 1], after=d[frames:])
     finally:
         chain.release()
+
+
+# ---------------------------------------------------------------- the step alone
+
+def stand(state: FxState, name: str, phase: float) -> None:
+    """Every clock of effect `name` at `phase`: `u_phase` and each `@clock`
+    (wrapped to its period, as `advance` keeps it). Call it after the
+    frame's `advance_to`, so the pass that follows moves nothing."""
+    state.phase[name] = phase
+    for c in state.files[name].clocks:
+        state.clocks.setdefault(name, {})[c.uniform] = phase % c.period if c.period else phase
+
+
+def jump(chain: FxChain, src, dst, name: str, param: str, before: float, after: float,
+         phase: float, w: int = W, h: int = H) -> float:
+    """The step alone, px (register row 580): effect `name`'s field over
+    the UV source already in `src` with `param` at `before`, then at
+    `after`, both with every clock and the wall clock (`u_time`) at
+    `phase` — no frame's motion between, so a param the host integrates
+    (`speed`, a `@clock`'s rate) moves nothing, and any other moves only
+    what it changes in the picture at that phase."""
+    state = chain.state
+    v = state.values[name]
+    fields = []
+    for x in (before, after):
+        v[param] = x
+        state.advance_to(phase)
+        stand(state, name, phase)
+        chain.run_one(name, src, dst, phase)
+        fields.append(decode(dst.read(components=4, dtype="f2"), w, h))
+    return displacement(*fields)
