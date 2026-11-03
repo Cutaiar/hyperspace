@@ -7159,6 +7159,30 @@ back. Fail: the canvas re-centres its nodes as the pane moves.
 the pane's headers are not covered. (2) the inset stays above the band,
 smaller if it must, never over its chips.
 
+## BG. Two test runs at once take turns (wave 2 I1)
+Register rows 605–606, 2026-11-03. Headless: `tests/test_live_lock.py`
+(two processes; an inner `-n 2 --dist load` run whose two live tests run
+one after the other). Nothing of the app changes.
+**456. Two runs at once on the shared Mac: the live tests take turns,
+neither hangs.** (the Mac, two terminals in two checkouts on this build,
+no other test run going)
+1. In both terminals at once:
+   `cd hyperspace-python && uv run pytest -q -n 4 -p no:cacheprovider`
+   (the fast tier). Wait for both.
+2. In both at once:
+   `uv run pytest -q -n 4 -p no:cacheprovider -m live -rs`
+   (the live tier: Syphon, NDI, the camera list, Vision, torch, the
+   dream). Note each run's time; then run it once alone for comparison.
+*Pass:* (1) both end with "passed" and the same count, in about a
+minute and a half each; neither sits at 99 %. (2) both end; every live
+test passes in each, or a few skip with "another test run holds the live
+devices (xdist-…) past 60 s" (the other run's id, never this run's);
+at least one of the two takes clearly longer than the run alone (it
+waited its turns; the wait is not in `--durations`, it is outside the
+test's timing) and no NDI or Syphon loopback fails. Fail: a run sits at 99 % for minutes
+(kill it, ENGINEERING §16's recovery), a loopback fails in one run while
+the other runs, or "worker 'gwN' crashed".
+
 ## BI. FINE: SEND B held, a knob a tenth as far (wave 2 T3)
 Register rows 609–610. Headless: `tests/test_midi.py` (the fine
 section: a synthetic encoder that the host's rings re-base). Restart
