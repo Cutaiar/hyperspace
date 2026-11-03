@@ -7473,6 +7473,63 @@ Finder under `presets/`. (2) the header reads `chill`, the preset under
 (3) remove is greyed with a hover saying why; once empty each goes, from
 Finder too. Fail: any preset file gone with a folder.
 
+## BM. One saved format: patch, group and preset (plan 50)
+Register rows 639–647, 2026-11-03. Headless:
+`tests/test_patches_one_format.py` (the one ladder and the one shape,
+a module preset loading as a patch of its group from
+`patches/<group>/`, an old module preset and an old `patch/1` opened end
+to end, a corpus preset round-tripping byte for byte, the migration
+tool's step on a scratch library with a dry run and `--apply`),
+`tests/test_graph_groups.py` (a group holding the scene, refused at
+save in words) and `tests/test_patches.py`. Both Macs on this build
+first, and the library migrated once (485): an older build refuses a
+`patch/2` and finds no module presets where this one keeps them.
+**484. A group holds the scene; the save says no.** (either Mac)
+1. Load `party-noita`, open GRAPH. Select `scene` and `warp`; right-click
+   → **Group**.
+2. Right-click the group → **Save as patch…**, name it `with scene`.
+3. Ungroup; group `warp` and `doublevision`; save that as `noita two`.
+*Pass:* (1) one folded group holding both; the footer says nothing was
+left out; the projector unchanged. (2) the footer reads "group 1 not
+saved as a patch: scene is the frame's; left out"; no file in
+`patches/`; the group stays. (3) `patches/noita-two.json` is written,
+its first line `"schema": "hyperspace.patch/2"`. Fail: Group refuses the
+scene, or the save writes a file holding it.
+**485. The migration moves the module presets, once.** (Mac A, between
+shows, Mac B on this build too)
+1. `uv run python tools/migrate_library.py` (the dry run).
+2. `uv run python tools/migrate_library.py --apply`.
+3. Open Finder at the library.
+*Pass:* (1) a line "patches to write as hyperspace.patch/2: n — dream/wake.json →
+patches/dream/wake.json, …"; nothing on disk changes. (2) "backup:
+~/Hyperspace/library-backup-…" first, then "wrote n patch(es)". (3) every
+group's presets under `patches/<group>/`; the old `dream/`, `band/`,
+`camera/` … folders gone (or holding only dot-files); `fx/` left as it
+was. Fail: a module preset gone with no copy in the backup.
+**486. A strip still lists, loads, saves and resets.** (Mac A after 485)
+1. On LOOKBACK, the dream strip: open its list, pick `wake`.
+2. Move `dream.mix`; **save** (the dot was lit), then **as…** `wake loud`.
+3. **reset**; then × `wake loud` from the list.
+*Pass:* (1) the list is the group's presets as before; the look-back
+looks as it did before the migration. (2) `patches/dream/wake-loud.json`,
+`"group": "dream"`; the GRAPH patches chip does not list it. (3) the dream
+group goes back to its default; `wake loud` is in the trash and restores
+into the dream list. Fail: a strip list empty after 485, or a module
+preset listed among GRAPH's patches.
+**487. A band preset keeps its bands.** (Mac A after 485, audio playing)
+1. SESSION's bands strip: load a band preset of yours with a layout of
+   its own (not six bands), then another.
+2. Save as… `my bands`; reopen the show.
+*Pass:* (1) the bands rebuild to each preset's layout, as before.
+(2) `patches/band/my-bands.json` holds `layout` beside `values`; the show
+reopens on it. Fail: the layout lost, or the show's band name not found.
+**488. An old patch still spawns.** (Mac A, a `patch/1` saved before
+plan 50 copied back from the backup into `patches/`)
+1. GRAPH → patches chip → spawn it into `party-trip`.
+*Pass:* it lands as before (the sheet if a knob collides); a save of the
+preset and an **Update patch** write `patch/2`. Fail: "is not a
+hyperspace.patch".
+
 ## What no test covers
 
 Only a person can settle these:

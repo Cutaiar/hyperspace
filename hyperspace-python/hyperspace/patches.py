@@ -111,7 +111,8 @@ UNITS_KEY = "units"
 UNITS = {"fx.depth": "taper"}
 # the file's keys, in the order a lift writes them
 KEYS = ("schema", "name", "note", "nodes", "wires", "values", "modifiers", "routes", "desk",
-        "macros", "lfos", "envs", "ports", "layout", UNITS_KEY, GROUP_KEY)
+        "macros", "lfos", "envs", "ports", "layout", UNITS_KEY)
+# (a patch of one group's keys are `GROUP_KEYS`, plan 50: `check` reads it apart)
 
 # what a patch may hold of the render graph (P1): what can be made twice —
 # the kinds `graph.wire_node_kind(…, wired=True)` names; `hands`, `layer`
