@@ -7,6 +7,11 @@ the two PRs that act on it — **C2** (one orbit camera: `camera.*` and
 `eye.*` as one preset group) and **D3** (the per-deck versus rig
 migration) — their exact worklists.
 
+**Status (2026-11-02): C2 built** (wave 1, branch `wave1/c2`; register
+rows 572–576; hand checks 431–433, group AX) — §5 says what it did and
+where it differed, §7 records the owner's answers. D3 is next. The audit
+below is as read at 72da1ed, before C2.
+
 Agreed by the owner on 2026-11-02, from the triage of the 2026-10-30
 show (2026-10-31): "camera not restored" — a preset saved after the
 operator framed the picture came back framed differently, because the
@@ -193,6 +198,50 @@ default-module fallback (D3). After D3 a show's `session` holds only
 
 ## 5. What C2 must do — one orbit camera
 
+**Done** (2026-11-02, wave 1). What differed from the list below:
+
+- **Ids kept, `eye` a performance group** (§7.1): `eye` joins
+  `PERFORMANCE_GROUPS` beside `camera` rather than folding the two params
+  into the `camera` group's registration — `tests/test_params.py` holds
+  every persisted id's first segment to its group, and the group move
+  keeps both without a rename.
+- **The pose is a `pose` section, not in `values`** (step 2): the six
+  `rot.phase.*` under `"pose"` beside `values`, `view.body` folded in by
+  `geometry.pose_angles` / `ViewState.pose`, set by `ViewState.set_pose`.
+  The phases stay `persist=False` (the turn moves every frame: no base, no
+  undo step, no dirty dot), and `values` stays the bases' snapshot. Old
+  files keep spinning; the migration's resave writes no pose
+  (`Presets.pose_of_file`).
+- **"The first load"** (step 2): an old preset takes the old show's eye
+  on *every* load while that show is open (`Project.old_eye`, read out of
+  the session by `_take`), not just the first — the same eye the tool
+  writes into every preset, so a preset draws the same before and after
+  the migration. Nothing in `app.main`.
+- **The camera node's layout** (step 6): the camera's `render:` node was
+  already homed in the preset's layout (`graphview.home`); C2 moves an old
+  show's `render:camera` entry into the old presets' layout
+  (`Project.camera_at`, `graphmigrate.nine`) and drops it from the show.
+  `RIG_KINDS` loses `camera` (`ALWAYS_KINDS` keeps it for a patch's
+  wire-as-saved); deleting the camera says `CAMERA_KEPT` ("the look's one
+  camera"), not `NOT_REMOVABLE`; `patches.RIG_NODES` still keeps it out of
+  a patch, in its own words.
+- **The hands** (step 5, §7.7, both): the calibration is fitted to the
+  reference eye; hands in the scene go through the preset's eye (they
+  scale with the shape); a hands layer is drawn through the reference eye
+  (`ghost.Settled.layer`) and keeps its size; render.py 3079 needed no
+  change.
+- **The migration** (step 3): `tools/migrate_library.py` runs the retaper
+  first (`tools/retaper_routes.py`'s rewrite of unmarked patches, desk
+  templates and `bindings.json`; presets by their own resave), backs up,
+  picks the rig's show (`--show`, else this Mac's last show, else the
+  library's only show; an eye already moved to `.bak-v2-eye` is read
+  there), writes `/9` with that show open (the round-trip picture drawn
+  with it open too), then rewrites the shows. The corpus was rewritten
+  with the tool (`--to`), the build's default eye: no golden moved.
+- **Hold** (step 7): `HELD_GROUPS` gains `eye` (the eye is its own group,
+  so not held through `camera`); the pose is one for both
+  (`ONE_FOR_BOTH`'s turn), so a pose loaded under hold lands on both.
+
 Schema **`/9`** (not `/8`; §2). Files, in order:
 
 1. `hyperspace/params.py`: take `"eye"` out of `SESSION_GROUPS`; register
@@ -297,7 +346,22 @@ it, whatever shape the decks take. Schema **`/10`** (after C2's `/9`).
 
 ## 7. What the code could not tell me
 
-Open for the owner, each a one-line answer:
+Open for the owner, each a one-line answer. **Answered by the owner on
+2026-11-02** (register rows 555, 572–576):
+
+1. Ids: **kept** (`eye.fov`, `eye.distance`; a group move).
+2. The pose: **always saved**, and a load sets the turn; an old file keeps
+   spinning.
+3. The eye: **modulatable** (row 182 overturned, row 574).
+4. `ghost.mirror`: **a room setting** — D3's business, nothing for C2.
+5. Row 521: **closed** — every save `/9` (row 576).
+6. `modules` labels: **inert for now** (row 540 later).
+7. The hands' calibration: **both** — "it depends on where the hands are
+   rendered": in the scene they scale with the shape, as a layer they keep
+   their size; the calibration is fitted to the reference eye (row 575).
+8. Desk templates: D3's to count.
+
+The questions as they were put:
 
 1. **Ids.** Keep `eye.fov` / `eye.distance` (group move only) or rename
    to `camera.fov` / `camera.distance` (a read map, a backup, one more
