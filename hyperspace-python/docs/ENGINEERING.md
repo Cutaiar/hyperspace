@@ -473,7 +473,15 @@ KALEIDO six wedges, whatever the inputs. FLAT reads none.
 to 64 one detent apart, then 40 detents a doubling): copies laid out by
 `view.inst_layout` and moved by `view.inst_motion` (STILL, ORBIT, WAVE,
 RIPPLE) with `inst_amp` and `inst_rate`. At 0 nothing is drawn but the
-ground, the echoes, the effects and the hands carry on.
+ground, the echoes, the effects and the hands carry on. The motion's
+phase is `view.inst_phase`, `inst_rate` integrated by the host in
+`ViewState.integrate` (wrapped at 20π, a whole period of every use: ph,
+0.7·ph, 0.9·ph), not t × rate in the draw — so a step on the rate changes
+how fast the field moves and never where it is (register row 578, K3);
+the media path (`view.media_mode`, orbit / figure-8 / sway) reads
+`view.media_phase`, `media_rate` integrated the same way (wrapped at 2π).
+Neither is a param or saved; like the turn's angles, the draw only reads
+them (`field.field`, `Renderer._legacy_field`, `_face_uniforms`).
 
 - *Flat layouts*, in the screen's plane: **GRID** (rows of ⌈√n⌉),
   **HEX** (a honeycomb spiral from the centre; a copy never moves as the
@@ -904,8 +912,11 @@ every call but a constructor opaque, so `u_amount * sin(u_phase)` is an
 amplitude and passes — with an allowlist of today's offenders as exact
 (shader, param) pairs: `warp` × `u_drift`, `warp` × `u_scale`,
 `tripcolour` × `u_pulse`, the RINGS pattern × `m_colour`; K2 (warp,
-tripcolour), K3 (`view.media_rate`, `view.inst_rate`, Python-side) and
-K4 (the grids, RINGS) shrink it to empty. `tests/uv_flow.py` is the
+tripcolour) and K4 (the grids, RINGS) shrink it to empty; K3
+(`view.media_rate`, `view.inst_rate`) was Python-side, outside the lint —
+`ViewState.integrate` moves `media_phase` and `inst_phase`, and
+`tests/test_view_phase.py` pins that render.py and field.py read no rate
+and measures a field-rate step against one frame's motion (row 578). `tests/uv_flow.py` is the
 continuity harness: an effect run over a UV-encoded source gives its
 sampling field exactly, and the mean displacement between consecutive
 frames (an optical-flow proxy with the flow known) on the frame a param

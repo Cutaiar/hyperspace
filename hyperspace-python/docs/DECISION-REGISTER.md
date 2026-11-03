@@ -600,6 +600,7 @@ here; overturn → the change, then the same.
 | 562 | Plan 45 V1: a video's audio track decoded to memory as float32 stereo 48 kHz once something asks for sound, whole to 120 s, else a 120 s window around the transport's position; the transport is the one clock | 421 | owner's rule (2026-11-02, addendum 8); the policy (rec) |
 | 563 | Node groups (post-show G0, 2026-11-02): a group's id is never reused within a preset's life — `group.<n>` is one past the highest the preset has ever allotted (`Presets.group_high`: the file's highest at the load, dropped entries counted; not saved, no schema change), so an ungrouped or undone group's number is not the next group's; and membership is eager — a member node deleted by any road leaves its group's list in the same operation (hooks on the mechanisms: the section's landing, the table's `set_modifiers`, a bank's membership change), the last member taking the group; every node-removing step carries the marks (which carry the floor too) so its undo puts the member back; a refused load leaves the loaded preset's groups whole. Render node ids (`acid` → `acid.2`, the lowest free instance, R25) are untouched: a format question for the one-format PR | 422 | built as recommended — PR (G0) |
 | 564 | Wave 0 E1: delay loops are the trails mechanism, the look-back keeps the dream — the feedback starter (a composite laid over, a delay, a fade at level 0.75: colour and alpha decay alike) on the cable menu and "add feedback after" on the node menu, many allowed; "feedback" not "echo", which names the look-back's frames | 423 | (rec) — pending the owner |
+| 578 | Wave 1 K3: `view.media_rate` and `view.inst_rate` integrated by the host into `view.media_phase` and `view.inst_phase` (`ViewState.integrate`, wrapped at 2π and 20π), read by the media path and the field's motion in place of t × rate; not params, never saved | 435 | built under row 560 (the owner's rule) — PR (K3) |
 
 "—": no hand check shows it; tests only.
 
@@ -9716,3 +9717,57 @@ and D3 (the per-deck split) are
   the contract working as intended and a change from today.
 - **Judge it.** — (C2's hand check: frame, save, load another, load it
   back; the framing is back).
+
+### 578. The media path's and the field's rates are integrated by the host
+- **Asked.** Row 560 (the owner, 2026-11-02, after the show of
+  2026-10-30): no shader multiplies time by a param. It named
+  `view.media_rate` and `view.inst_rate` as the same fault on the Python
+  side: the media path's phase was `t * s.media_rate` (render.py,
+  `_face_uniforms`) and the field's motion `t * s.inst_rate` (render.py
+  `_legacy_field`, field.py `field`), so a knob step an hour into a set
+  moved the phase by t · Δrate — the picture over the faces and every copy
+  of the shape jumped to somewhere else.
+- **Answer.** Built under row 560 (wave 1 K3); the rule is the owner's,
+  the shape below the build's.
+- **Built.** `ViewState` gains `inst_phase` and `media_phase` (floats, 0,
+  rad), plain fields like the turn's `ang`: not params, never saved, no
+  schema change. `ViewState.integrate(dt)` adds `dt · inst_rate` and
+  `dt · media_rate` every frame, before the turn's own update and whether
+  or not the turn is playing (they ran on the wall clock before), wrapped
+  at a whole period of every use: the path reads sin/cos of ph and 2·ph
+  (`MEDIA_PERIOD` 2π); the field reads ph, 0.7·ph and 0.9·ph
+  (`field._motion`), whose common period is 20π (`INST_PERIOD`). The
+  draw reads the phases and no rate: `field.field` and
+  `Renderer._field` / `_legacy_field` / `_copies_of` lost their now-unused
+  `t`. From rest at a constant rate the phase is rate · t, the picture
+  before K3. The golden harness (`tools/golden_frames.py`) starts each
+  rig's phases at `T0 · rate` — as if the rate had always been what the
+  preset says, `Renderer._pattern_clock`'s first call (row 99) — so frame
+  k reads (T0 + k·DT) · rate as it did: no golden moved.
+  `tests/test_view_phase.py`: a step changes the slope, not the value; the
+  wrap is invisible in the field; render.py and field.py read no rate (an
+  AST pin); a field-rate nudge ten seconds in moves no copy further than
+  one frame's motion at the new rate, where t × rate moved them several
+  times that.
+- **Other options.** Integrate in the renderer, keyed on the frame's `t`
+  (`_pattern_clock`'s shape): the held program and the preview are two
+  renderers over one `ViewState`, so each would keep its own phase — but
+  `field.field` is called with a view, not a renderer, and the turn (the
+  closer precedent) is integrated on the view. A `@clock` in a shader:
+  these paths are computed in Python, not in a shader.
+- **To reverse.** The two fields and the two lines in `integrate` out;
+  `ph = t * s.media_rate` / `t * s.inst_rate` back in render.py and
+  field.py with `t` threaded back through `field` and the scene pass; the
+  harness's seed out.
+- **Rough edge.** The hold (plan 38): there is one `ViewState` and
+  `integrate` runs once a frame before either draw, so the phase is one
+  for both — under hold an operator's change to either rate moves the
+  projector's motion's speed too, where before K3 the program kept its
+  held rate. This is how the turn already behaves (`view.speed` and the
+  planes are in `hold.ONE_FOR_BOTH`); the two rate params should join that
+  list so the hold's red line does not count them as changed, which is a
+  one-line change to `hold.py` left to the orchestrator (frozen for D1).
+  A paused turn (`view.playing` off) leaves the field and the path
+  moving, as before.
+- **Judge it.** Hand check 435 (group AZ).
+

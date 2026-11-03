@@ -361,9 +361,10 @@ def perspective(z: np.ndarray, radius: float, persp: float) -> np.ndarray:
     return eye / np.maximum(eye - z, 0.25 * eye)     # never past 4×, whatever moves
 
 
-def field(s, w: float, h: float, t: float = 0.0, radius_px: float | None = None,
+def field(s, w: float, h: float, radius_px: float | None = None,
           pad_px: float = PAD_PX) -> np.ndarray:
-    """Where the copies of view `s` go in a (w, h) viewport at time `t`:
+    """Where the copies of view `s` go in a (w, h) viewport at its motion's
+    phase `s.inst_phase` (K3, row 578: `inst_rate` integrated by the host):
     (m, 4) float32 rows of (cx, cy, k, alpha) — each drawn copy's centre
     on screen (logical px), its scale against the shape at zoom 1, and its
     alpha. Ordered far to near; copies wholly off screen are dropped when
@@ -385,7 +386,7 @@ def field(s, w: float, h: float, t: float = 0.0, radius_px: float | None = None,
     # the widest a copy draws at scale 1, in cells — never under one, so a
     # fitted copy keeps the gap it has a cell from its neighbour
     size = max(1.0, (SHAPE_EXTENT * cell0 + 2.0 * max(pad_px, 0.0)) / cell0)
-    ph = t * float(s.inst_rate)
+    ph = float(getattr(s, "inst_phase", 0.0))
     mode, amp = int(s.inst_motion), float(s.inst_amp)
     if n == 1 and not fit:
         return np.array([[w / 2 + pan[0], h / 2 + pan[1], zoom, 1.0]], dtype=np.float32)

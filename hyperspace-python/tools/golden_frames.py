@@ -440,6 +440,13 @@ class Rig:
         presets = self.presets = Presets(lib, reg, self.router)
         self.missing = presets.load(slug)
         self.notes = list(presets.notes)
+        # K3 (row 578): the field's motion and the media path are phases the
+        # host integrates (ViewState.integrate), no longer t × rate; set at
+        # the pinned clock's start as if the rate had always been what the
+        # preset says (Renderer._pattern_clock's first call), so frame k
+        # reads (T0 + k·DT) · rate as before
+        self.view.inst_phase = T0 * self.view.inst_rate
+        self.view.media_phase = T0 * self.view.media_rate
         reg["ghost.on"].set(True)
         # plan 28 N4: a second hands node the graph declares shows too (its
         # own `ghost.<n>.on`, the session's like `ghost.on`); only a fixture

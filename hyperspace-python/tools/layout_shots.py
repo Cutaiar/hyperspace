@@ -48,7 +48,7 @@ T = 3.1                       # the pinned clock: mid-motion on the last row
 def view(n: int, layout: int, motion: int = 0) -> ViewState:
     s = ViewState(shape=3, faces=True, pattern=2, bright=1.4, points=True, lines=True,
                   instances=n, inst_layout=layout, inst_motion=motion, inst_amp=0.35,
-                  inst_rate=1.0)
+                  inst_rate=1.0, inst_phase=T * 1.0)   # K3: the phase the host integrates
     s.ang = [0.3, 0.7, 1.1, 0.5, 0.9, 1.3]
     s.yaw, s.pitch = 0.4, 0.25
     gx, gy = inst_positions(n, layout)

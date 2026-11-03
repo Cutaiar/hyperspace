@@ -20,6 +20,13 @@ from .geometry import EYE_DISTANCE, EYE_FOV, RATE, rot_matrix
 N_MOD = 8   # pattern.mod.* inputs the face shader reads as u_mod[N_MOD]
 RED = (1.0, 43 / 255, 43 / 255)   # the points' colour, and the panel's one accent (ui.RED)
 
+# K3 (row 578): the periods the integrated phases wrap at — a whole period
+# of every use. The media path reads sin/cos of ph and 2·ph (2π); the
+# field's motion reads ph, 0.7·ph and 0.9·ph (field._motion), whose common
+# period is 20π (0.7·20π = 14π, 0.9·20π = 18π)
+MEDIA_PERIOD = 2.0 * np.pi
+INST_PERIOD = 20.0 * np.pi
+
 # plan 34 Z (row 368): a resize node's choices — the long side it makes its
 # picture at (`resize[.n].size`, an index: 4 is 256), the shape (the input's
 # aspect, or square), how the crop is laid into that size (`media_tex.FITS`'
@@ -177,6 +184,10 @@ class ViewState:
     inst_motion: int = 0         # field motion: 0 still, 1 orbit, 2 wave, 3 ripple
     inst_amp: float = 0.25       # motion amplitude, fraction of a cell (the neighbour spacing)
     inst_rate: float = 1.0       # motion angular rate, rad/s
+    # K3 (row 578): the motion's phase, rad — inst_rate integrated by the
+    # host (integrate), so a step on the rate changes how fast the field
+    # moves and never where it is; not a param, never saved
+    inst_phase: float = 0.0
     pattern: int = 0             # face pattern mode (0 = flat fill)
     pattern_mix: float = 1.0     # flat ↔ pattern blend
     # plan 32 (row 331): a media channel over the face pattern, where the
@@ -188,6 +199,9 @@ class ViewState:
     media_mode: int = 0          # its path: 0 still, 1 orbit, 2 fig-8, 3 sway
     media_amp: float = 0.15      # path amplitude about the face centre, UV units
     media_rate: float = 1.0      # path angular rate, rad/s
+    # K3 (row 578): the path's phase, rad — media_rate integrated by the
+    # host, as inst_phase; not a param, never saved
+    media_phase: float = 0.0
     # the backdrop (row 330): a picture under the scene — which one is the
     # preset graph's wire into `backdrop.image` (plan 33 T7: `backdrop.channel`
     # is retired)
@@ -229,7 +243,16 @@ class ViewState:
         takes the pose R(ang)·body had, less the 3D turn T(ang) about to be
         put back on it; going off, the reverse. The pose is the same either
         side of the switch, so nothing jumps; while it is on, w is held and
-        the 3D planes turn the shape rigidly; the W planes stop."""
+        the 3D planes turn the shape rigidly; the W planes stop.
+
+        K3 (row 578): the field's motion and the media path, integrated
+        here and not as t × rate in the draw — a step on `inst_rate` or
+        `media_rate` changes the slope of the phase, never its value. Each
+        is wrapped at a period of every use (`INST_PERIOD`, `MEDIA_PERIOD`)
+        so it never grows. They run whether or not the turn is playing, as
+        the wall clock they replace did."""
+        self.inst_phase = (self.inst_phase + dt * self.inst_rate) % INST_PERIOD
+        self.media_phase = (self.media_phase + dt * self.media_rate) % MEDIA_PERIOD
         if self.three_d != self.held:
             R = rot_matrix(self.ang)
             T = rot_matrix([*self.ang[:3], 0.0, 0.0, 0.0])
