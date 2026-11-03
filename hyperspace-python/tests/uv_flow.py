@@ -21,6 +21,7 @@ frame's displacement is far off the rest's.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from itertools import pairwise
 
@@ -114,29 +115,38 @@ def run(ctx, state: FxState, name: str, param: str, before: float, after: float,
 # ---------------------------------------------------------------- the step alone
 
 def stand(state: FxState, name: str, phase: float) -> None:
-    """Every clock of effect `name` at `phase`: `u_phase` and each `@clock`
-    (wrapped to its period, as `advance` keeps it). Call it after the
-    frame's `advance_to`, so the pass that follows moves nothing."""
+    """Every clock of effect `name` where `phase` of running at its knobs
+    as they are now leaves it: `u_phase` at `phase`, and each `@clock` at
+    phase × the product of its rate's factors (`ClockSpec.factors`, or the
+    rate's `*`-separated keys on a spec from before them), wrapped to its
+    period, as `run` seeds them. Call it after the frame's `advance_to`, so
+    the pass that follows moves nothing."""
     state.phase[name] = phase
+    v = state.values[name]
+    clocks = state.clocks.setdefault(name, {})
     for c in state.files[name].clocks:
-        state.clocks.setdefault(name, {})[c.uniform] = phase % c.period if c.period else phase
+        factors = getattr(c, "factors", None) or tuple(c.rate.split("*"))
+        x = phase * math.prod(float(v[k]) for k in factors)
+        clocks[c.uniform] = x % c.period if c.period else x
 
 
 def jump(chain: FxChain, src, dst, name: str, param: str, before: float, after: float,
          phase: float, w: int = W, h: int = H) -> float:
     """The step alone, px (register row 580): effect `name`'s field over
     the UV source already in `src` with `param` at `before`, then at
-    `after`, both with every clock and the wall clock (`u_time`) at
-    `phase` — no frame's motion between, so a param the host integrates
-    (`speed`, a `@clock`'s rate) moves nothing, and any other moves only
-    what it changes in the picture at that phase."""
+    `after`, with every clock and the wall clock (`u_time`) where `phase`
+    at `before` left them (`stand`, once) and not moved between — so a
+    param the host integrates (`speed`, a `@clock`'s rate) moves nothing,
+    and any other moves only what it changes in the picture at that
+    phase."""
     state = chain.state
     v = state.values[name]
     fields = []
-    for x in (before, after):
+    for k, x in enumerate((before, after)):
         v[param] = x
         state.advance_to(phase)
-        stand(state, name, phase)
+        if k == 0:
+            stand(state, name, phase)
         chain.run_one(name, src, dst, phase)
         fields.append(decode(dst.read(components=4, dtype="f2"), w, h))
     return displacement(*fields)

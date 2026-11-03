@@ -9,9 +9,10 @@ effect's `// @clock` (fx.py), the patterns' `u_ptime`
 
 The allowlist below is today's offenders, found by this lint on
 2026-11-02, as exact (shader, param) pairs: a new product anywhere fails,
-and so does a stale entry once its shader is ported — K2 (warp,
-tripcolour) and K4 (the grid effects; the RINGS pattern's hue is the
-same shape) shrink it to empty, one pair at a time.
+and so does a stale entry once its shader is ported. K4 (register row
+579) ported RINGS × colour, the pattern's hue; the grid effects it was
+also given (glimmer, wobble, fractals) were measured and left alone — no
+knob of theirs grows with the clock (`tests/test_step_continuity.py`).
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ from hyperspace.fx import FxState, parse
 
 # ---------------------------------------------------------------- the allowlist
 
-# (shader, param symbol) → why it is still there. Shrinks to {} with K2–K4.
+# (shader, param symbol) → why it is still there. K4 took out RINGS × colour (row 579).
 ALLOWLIST: dict[tuple[str, str], str] = {
     ("warp", "u_drift"): "K2: `t = u_phase * u_drift` scrolls the noise field",
     ("warp", "u_scale"): "K2: `(p + vec2(t) * 0.1) * u_scale` scales the scrolled offset",
