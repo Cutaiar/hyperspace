@@ -342,7 +342,7 @@ def test_a_part_is_cached_on_the_param_and_a_duplicate_is_refused_once():
     """Findings 6, 7: `part_of` reads the param's cached part; a second
     declaration of a session id on any deck is refused by the session."""
     from hyperspace.params import part_of
-    session, a, b = _two_decks()
+    _session, a, b = _two_decks()
     p = a["ghost.mirror"]
     assert p._part == "session" == part_of(p)
     assert a["view.bright"]._part == "performance"
@@ -370,7 +370,7 @@ def test_the_mirror_is_the_rooms_one_setting_and_a_rebuilt_deck_lets_its_old_sta
 
     from hyperspace.ghost import GhostState, RoomSetting
     from hyperspace.ghost import register as declare_ghost
-    session, a, b = _two_decks()
+    session, _a, b = _two_decks()         # (deck a held: it stays live)
     p = session["ghost.mirror"]
     room = p.room
     assert isinstance(room, RoomSetting) and len(room.states) == 2
