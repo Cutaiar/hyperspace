@@ -42,6 +42,14 @@ SCAN_S = 1.0               # how often the hub looks for pads coming and going
 READ_TIMEOUT_MS = 100      # a read waits at most this, so close() is quick
 OUT_HZ = 60.0              # the most output reports a second
 STALE_S = 0.5              # no report for this long: `latest` gives nothing (the pad reads lost)
+# a Joy-Con that was asleep when it was opened (paired, so the system lists
+# it, but not answering) wakes on a button press in its default mode — the
+# simple report, buttons only — or on a new connection the old handle never
+# hears from. So: simple reports and no full one for RESETUP_S, its setup
+# is sent again; nothing at all for QUIET_S, the reader lets go and the
+# hub's next scan opens the pad afresh
+RESETUP_S = 1.0
+QUIET_S = 3.0
 DRAIN_MAX = 64             # reports read in one go before the outputs get a turn
 TAPE_SCHEMA = "hyperspace.padtape/1"
 
@@ -196,6 +204,9 @@ class HidPad:
         self._alive = True
         self._started_full = False
         self.reports = 0
+        self._seen: dict[int, float] = {}    # report id → when it last came (`_tend`)
+        self._opened_t = time.monotonic()
+        self._setup_t = self._opened_t
         self._thread = None
         if start:
             self._thread = threading.Thread(target=self._run, name="hyperspace-hidpad",
@@ -266,7 +277,9 @@ class HidPad:
             hint = _bt_hint(self.info)
             if hint is not None:
                 self.transport = "bluetooth" if hint else "usb"
+            self._opened_t = time.monotonic()
             self._calibrate(dev)
+            self._setup_t = time.monotonic()    # quiet is counted from here: a deaf setup is slow
             in_len = self.codec.IN_LEN
             while self._alive:
                 data = dev.read(in_len, READ_TIMEOUT_MS)
@@ -276,6 +289,8 @@ class HidPad:
                     n += 1
                     data = dev.read(in_len, 1) if n < DRAIN_MAX else None
                 self._write(dev)
+                if not self._tend(dev, time.monotonic()):
+                    break
             self._neutral(dev)
         except Exception as e:  # noqa: BLE001 — unplugged, refused, a Bluetooth drop
             self.note = f"{type(e).__name__}: {e}"[:120]
@@ -286,6 +301,26 @@ class HidPad:
                     dev.close()
                 except Exception:  # noqa: BLE001, S110 — closing a gone device is best-effort
                     pass
+
+    def _tend(self, dev, now: float) -> bool:
+        """A Joy-Con woken after it was opened (`RESETUP_S`, `QUIET_S`):
+        its setup sent again when it reads only the simple report; False —
+        the reader lets go, the hub opens it afresh — when nothing at all
+        has come for `QUIET_S` since the open or the last report. A Sony
+        pad streams from the moment it is open: nothing to tend."""
+        if not self.nintendo:
+            return True
+        last = max(self._seen.values(), default=self._opened_t)
+        if now - max(last, self._setup_t) > QUIET_S:
+            self.note = "quiet — opened again (asleep, or a new connection)"
+            return False
+        full = self._seen.get(nintendo.REPORT_FULL, float("-inf"))
+        simple = self._seen.get(nintendo.REPORT_SIMPLE, float("-inf"))
+        if simple > full and now - max(full, self._setup_t) > RESETUP_S:
+            self._setup_t = now
+            self._calibrate(dev)
+            self._setup_t = time.monotonic()
+        return True
 
     def _calibrate(self, dev) -> None:
         """The codec's connect sequence (`setup`): a Sony pad's feature
@@ -311,6 +346,7 @@ class HidPad:
         if link == "bluetooth" or not self.transport:   # a BT report settles it; USB only if unsaid
             self.transport = link
         t = time.monotonic() if t is None else t
+        self._seen[r[0]] = t
         samples = self._gyro_of(r)
         with self._lock:
             self._raw, self._raw_t = r, t

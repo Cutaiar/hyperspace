@@ -589,7 +589,8 @@ def poi_word(reg) -> tuple[str, str] | None:
     tip = ("The Joy-Con as the handle of a poi (plan 47, an experiment) — click to "
            f"switch it {'off' if state.on else 'on'}. The shape is the weight on the "
            "string: swing the pad and it flies round. Length · weight · springiness; "
-           "the dials are under this line while it is on. A (or ↓) resets.")
+           "its dials are in the Poi window (\"dials\" beside this) while it is on. "
+           "A (or ↓) resets.")
     if not state.on:
         return "poi off", tip
     word = f"poi {poi.readout(state)}"
@@ -612,33 +613,70 @@ def _poi(panel) -> None:
         ui.tooltip(tip)
         if imgui.is_mouse_clicked(imgui.MouseButton_.left):
             reg["poi.on"].set(not on)
+    if on:
+        _poi_dials_word(panel, reg)
 
 
 POI_DIALS = ("length", "weight", "spring", "gravity", "drag", "hand")
+POI_W = 300.0                       # the Poi window's width on first use
 
 
-def _poi_dials(panel) -> None:
-    """While the poi is on, its dials in two columns under the header: the
-    string's length, the weight, the springiness, then gravity, the air's
-    drag and the hand's push; the depth switch after."""
+def _poi_dials_word(panel, reg) -> None:
+    """After the poi's word while it is on: "dials", a click shows or hides
+    the Poi window (`poi_window`)."""
+    imgui.same_line()
+    shown = bool(getattr(panel, "poi_dials", True))
+    ui._micro("dials", ui.TEXT if shown else ui.DIM)
+    if imgui.is_item_hovered():
+        ui.tooltip(f"The poi's dials in their own window — click to {'hide' if shown else 'show'} "
+                   "it. Length, weight, springiness, gravity, drag, the hand's push; the "
+                   "depth and string switches; reset.")
+        if imgui.is_mouse_clicked(imgui.MouseButton_.left):
+            panel.poi_dials = not shown
+
+
+def poi_window(panel) -> None:
+    """The Poi window, while the poi is on and its "dials" word has not hidden
+    it: the six dials (`POI_DIALS`), the depth and string switches and reset.
+    A top-level window of its own, movable, so the pad window's room stays the
+    pad's — drawn each frame beside the pad window (Panel._draw), whether the
+    header that shows it is the floating pad's or GRAPH's side pane's. It
+    keeps in front of the panel, as the alert banner does, but never of an
+    open popup (a slider's Learn menu). Shown again each time the poi comes
+    on (`panel._poi_was_on`)."""
     reg = getattr(panel, "reg", None)
     state = getattr(reg, "poi", None) if reg is not None else None
-    half = getattr(panel, "half", None)
-    if state is None or not state.on or half is None or "poi.length" not in reg:
+    on = state is not None and "poi.on" in reg and bool(reg["poi.on"].value)
+    if on and not getattr(panel, "_poi_was_on", False):
+        panel.poi_dials = True
+    panel._poi_was_on = on
+    if not on or not getattr(panel, "poi_dials", True) or "poi.length" not in reg:
         return
-    if imgui.begin_table("##poi", 2, imgui.TableFlags_.sizing_stretch_same):
-        try:
+    io = imgui.get_io()
+    imgui.set_next_window_pos(_v(io.display_size.x / 2, EDGE), imgui.Cond_.first_use_ever,
+                              _v(0.5, 0.0))
+    imgui.set_next_window_size(_v(POI_W, 0), imgui.Cond_.first_use_ever)
+    opened, shown = imgui.begin("Poi", True, imgui.WindowFlags_.no_focus_on_appearing
+                                | imgui.WindowFlags_.no_collapse)
+    try:
+        if not imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id):
+            try:
+                imgui.internal.bring_window_to_display_front(imgui.internal.get_current_window())
+            except Exception:  # noqa: BLE001, S110 — an imgui without the internal call
+                pass
+        if opened:
             for key in POI_DIALS:
-                imgui.table_next_column()
-                half(f"poi.{key}", label=key)
-        finally:
-            imgui.end_table()
-    check = getattr(panel, "_check", None)
-    if check is not None:
-        check("poi.depth", "depth zooms")
-        if "poi.guide" in reg:
-            imgui.same_line()
-            check("poi.guide", "show string")
+                panel.half(f"poi.{key}", label=key)
+            panel._check("poi.depth", "depth zooms")
+            if "poi.guide" in reg:
+                imgui.same_line()
+                panel._check("poi.guide", "show string")
+            if "poi.reset" in reg:
+                panel._button("poi.reset", "reset")
+    finally:
+        imgui.end()
+    if not shown:
+        panel.poi_dials = False
 
 
 def _says_of(panel, table):
@@ -660,7 +698,6 @@ def _says_of(panel, table):
 
 def _body(panel, table) -> None:
     _header(panel, table)
-    _poi_dials(panel)
     if table is None:
         imgui.text_disabled("no table")
         return
