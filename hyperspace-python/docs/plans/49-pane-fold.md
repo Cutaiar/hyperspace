@@ -1,7 +1,8 @@
 # Plan 49 — the panel fold: graph always on, pages fold into the side pane
 
-Wave 2 item U1 of the post-show plan (2026-11-03): stage 1 of three.
-Register rows 597–601, hand checks 449–455 (group BF).
+Wave 2 items U1 and U2 of the post-show plan (2026-11-03): stages 1 and
+2 of three. Register rows 597–601 and 626–632, hand checks 449–455
+(group BF) and 471–479 (group BK).
 
 ## The ask
 
@@ -90,6 +91,61 @@ started; on 2026-11-03 the owner gave it to us, on its own schedule.
   the canvas's corner left of the column, or above the band on a narrow
   page (`monitor_rect` keeps it under the room's height).
 
+## What stage 2 does (U2)
+
+- **Seven more sections** (`ui_pane.SECTIONS`, one row each): **fx**
+  (`ui_fx.page`), **media** (`ui_media.draw`), **lfo** (`ui_lfo.page`),
+  **seq** (`ui_seq.page`), **audio**, **camera**, **output**
+  (`Panel._page_audio` / `_page_camera` / `_page_output`, the bodies as
+  they stand — as U1 used `_page_presets`). Down the pane: selection,
+  presets, fx, lookback, faces, media, lfo, seq, analyzer, audio,
+  camera, output. Every new one folded at first, beside and in the band
+  (rec). The ids are the pages' (`##<param id>`), under
+  `push_id("pane.<key>")`; all twelve open draw with no conflicting id.
+- **The FX page retired.** The rail draws no FX pill and
+  `Panel._page_fx` is gone; the browser (effect nodes grouped by where
+  each ends, plan 33 U) is the fx section. `ui.page`'s value is an index
+  and a binding's `set` stores it, so the FX row stays in `ui.PAGES`
+  (`ui.RETIRED`): landing on it — the param, a page set straight by ⌘[ /
+  ⌘], GRAPH's **open on FX** chip — opens GRAPH with the fx section
+  unfolded and scrolled to the pane's top (`ui_pane.focus`: a request the
+  next draw acts on in its own layout, beside or in the narrow band; kept
+  as a click's unfold). The hand checks that name the FX page carry a line
+  saying so (retired in place, not deleted).
+- **Narrow.** Checked with the panel driver at `SIDE_MIN` (240 px) and
+  `SIDE_W` (320 px): no control's rect passes the pane's right edge.
+  `ui.beside(w)` replaces `same_line()` where a row can spill (AUDIO's
+  buttons, OUTPUT's toggles, each output block's ticks and flips — the
+  ticks under the name in the pane — the band's twelve header chips,
+  which wrap to rows); `Panel._section` cuts a note to what its title
+  leaves. **MEDIA** goes four channels to a row (A–D over E–H) where a
+  column would be under 40 px (`COL_MIN`), each column as on the page;
+  **Add file…** gets a row of its own. **SEQ** keeps the eight steps
+  across (the APC40's grid): under 320 px the lane column is 56 px and a
+  cell may thin to 12 px (16 on the page), and the beat light and step go
+  under the transport; the folded envelopes go one to a line and an open
+  strip's scope sits over its knobs. **LFO**: the scope over the knobs
+  where fewer than 220 px are beside it; the pickers share what
+  **reset** leaves; a folded line's bar shortens. **LOOKBACK**'s cells
+  go one to a row under 360 px. The pages at the panel's width draw as
+  before (every page-fit test unchanged).
+- **LOOKBACK redrawn** (the owner's "a horrid representation"): the page
+  and the section, one function, draw plan 36's two picture nodes, each
+  a head drawn as a node's band — **LOOK-BACK** (picture in → trail out;
+  how far back it reaches) over what it records, its eight knobs
+  (`params.LOOKBACK_KEYS`) and its echoes; **DREAM** (picture in →
+  dreamed picture out; `dream.on` after its name, off passes the picture
+  through) over its worker's line beside the dream buffer, the layer and
+  its knobs. A head says "not on the canvas" when the loaded graph has no
+  such node; its hover is the whole band, and the dream's names
+  `[dream]` in config.toml as where its worker is set up. "Both" is gone: darken, contrast and detail are the
+  look-back's knobs, which the dream reads (one state), and a line under
+  the dream says so. The page still fits the control window.
+- **Height and cost.** With many sections open the pane scrolls; a body
+  scrolled out of view is not drawn (imgui skips the child). Each drawn
+  body's time is a running mean (`st["pane_ms"]`); SYSTEM shows "side
+  pane: …" under GRAPH's own line, the dearest first.
+
 ## What stays
 
 Every page, the rail, `ui.page`, the page history, the cheat sheet, the
@@ -116,6 +172,18 @@ content — no node, edge or position is added, hidden or laid out
 - **601** — section titles follow the rail's words (`lookback`, not
   `dream`); the lookback section draws the page as it is until stage 2.
   (rec)
+- **626** — stage 2's seven sections, their order, all folded at first.
+  (rec)
+- **627** — the FX page retired, its `ui.page` slot kept and opening
+  GRAPH with the fx section unfolded. (rec)
+- **628** — narrow layouts: rows wrap (`ui.beside`), notes cut, cells and
+  folds one to a row, scopes over knobs. (rec)
+- **629** — MEDIA four channels to a row under 40 px a column. (rec)
+- **630** — SEQ eight steps across, a 56 px lane column and 12 px cells
+  at the narrowest. (rec)
+- **631** — LOOKBACK as the two picture nodes, "both" named as the
+  look-back's grade the dream reads. (rec)
+- **632** — SYSTEM's per-section cost line. (rec)
 
 ## What changed in the build
 
@@ -147,3 +215,45 @@ content — no node, edge or position is added, hidden or laid out
   deferred; 8 the bodies in `SECTIONS`, the page wrappers dropped.
   Round 2: a fold clicked before the library attached kept over the
   file's (`pane_clicks`); the projector's inset above the narrow band.
+
+## What changed in the build (stage 2, U2)
+
+- `hyperspace/ui_pane.py`: seven rows in `SECTIONS` (bodies `_fx`,
+  `_media`, `_lfo`, `_seq`, `_audio`, `_camera`, `_output`),
+  `DEFAULT_OPEN` from the keys, `focus`, `timing_line`, `_body` timing
+  each body (`pane_ms`), `pane_focus` acted on in either layout, the band's header chips
+  wrapping (`_header(first=)`).
+- `hyperspace/ui.py`: `RETIRED`, `Panel.go_page` (`ui.page`'s setter,
+  and `draw` for a page set straight), the rail skipping retired rows,
+  `_page_fx` dropped (and `ui_fx` no longer imported), `beside`,
+  `check_w`, `NAME_ROOM`; `_section`'s note cut to fit; the AUDIO,
+  CAMERA and OUTPUT bodies' rows wrapping; SYSTEM's side pane line.
+- `hyperspace/ui_lookback.py`: the page redrawn (`SECTIONS` by node,
+  `PORTS`, `GRADE_LINE`, `_node_head`, `_dream_word`, `_held`,
+  `_dream_thumb`, `TWO_UP`); `_status` dropped.
+- `hyperspace/ui_media.py`: `COL_MIN`, the channels four to a row,
+  **Add file…** wrapping. `hyperspace/ui_seq.py`: `ROOMY`,
+  `LANE_W_NARROW`, `CELL_MIN`, `BESIDE_SCOPE`, the lane width passed
+  down, the transport's light wrapping, fitted strip heads.
+  `hyperspace/ui_lfo.py`: `BESIDE_SCOPE`, `fit_micro`, the strip's
+  pickers sized to the room, the folded line's bar.
+- `tools/lookback_page_shots.py`: its labels table reads `SECTIONS` as
+  it now is (one line).
+- Tests: `tests/test_ui_pane.py` (the stage-2 sections at 240 and 320 px,
+  MEDIA and SEQ in the pane, the redrawn lookback, the FX retirement,
+  `focus`, the cost line; U1's band test now says the chips wrap, the
+  late-library test reads the fold, the click test opens the lookback
+  section alone in a tall window); `tests/test_lookback.py` (the two
+  nodes); `tests/test_fx.py` (the browser at the panel's size, not the
+  retired page); `tests/test_ui_shell.py` (the page loops skip the
+  retired FX).
+- Restart, not hot reload: `Panel.go_page` is new and `ui.page`'s setter
+  is bound at launch; `ui_pane` imports four more page modules.
+- **Review fixes** (PR #350, one round): 1 `focus` a pending request the
+  next draw unfolds and scrolls to in its own layout (the band had
+  ignored it); 2 a node head's hover the whole band; 3 the track readout
+  measured as printed; 4 MEDIA's and SEQ's flush-right rows through
+  `ui.beside`; 5 `ui.fit_micro`, one helper for four callers; 6 the
+  look-back's node names asked once per graph; 7 `[dream] in config.toml`
+  back on the dream's hover; 8 `ui_pane.timing_line(panel)` fetches the
+  state itself.
