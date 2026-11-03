@@ -241,3 +241,32 @@ def test_the_real_picture_check_passes_an_old_preset(tmp_path, capsys):
     for name in ("trip-night", "glimmer-bug", "acid-scene"):
         assert json.loads((lib / "presets" / f"{name}.json").read_text())["schema"] == \
             "hyperspace.preset/9"
+
+
+def test_a_folder_made_after_the_last_run_is_migrated_too(tmp_path, capsys):
+    """Plan 48 stage 2: the tool lists ``presets/`` every folder down, as
+    the library does — ``party/`` and ``party/deep/`` migrated in place,
+    a hidden folder (``.cache``) never read; ``--to`` keeps the folders."""
+    lib = _library(tmp_path)
+    presets = lib / "presets"
+    (presets / "party" / "deep").mkdir(parents=True)
+    shutil.copyfile(SOURCES / "party-trip.json", presets / "party" / "night.json")
+    shutil.copyfile(FIXTURES / "glimmer-bug.json", presets / "party" / "deep" / "bug.json")
+    (presets / ".cache").mkdir()
+    shutil.copyfile(SOURCES / "party-trip.json", presets / ".cache" / "x.json")
+    got = [p.relative_to(presets).as_posix() for p in _tool().preset_files(lib)]
+    assert got == ["acid-scene.json", "broken.json", "glimmer-bug.json", "trip-night.json",
+                   "party/night.json", "party/deep/bug.json"]
+    out_dir = tmp_path / "out"
+    _tool().main(["--library", str(lib), "--to", str(out_dir)], picture=same_picture)
+    assert json.loads((out_dir / "party" / "deep" / "bug.json").read_text())["schema"] \
+        == "hyperspace.preset/9"
+    capsys.readouterr()
+    hidden = (presets / ".cache" / "x.json").read_bytes()
+    assert _tool().main(["--library", str(lib), "--apply"], picture=same_picture) == 1
+    out = capsys.readouterr().out
+    assert "party/night.json" in out and "party/deep/bug.json" in out
+    for rel in ("party/night.json", "party/deep/bug.json"):
+        assert json.loads((presets / rel).read_text())["schema"] == "hyperspace.preset/9", rel
+    assert (presets / ".cache" / "x.json").read_bytes() == hidden
+    assert "rewrote 4 as /9" in out

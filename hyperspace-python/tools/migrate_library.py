@@ -13,8 +13,9 @@ edge a wire, ``/7``), the GRAPH page's groups (``/8``), and the one orbit
 camera: the eye (``eye.fov``, ``eye.distance``) in every preset's
 ``values``, where until now the open show held it. A load reads an older
 file through the one-way migration (`graphmigrate.seven`, then
-`graphmigrate.nine`). Each preset in ``<library>/presets/*.json`` (not
-``trash/``, not a backup, not a dot-file) is loaded and saved untouched
+`graphmigrate.nine`). Each preset under ``<library>/presets/``, every
+folder down as the library lists it (plan 48 stage 2: hidden folders
+skipped; not ``trash/``, not a backup, not a dot-file), is loaded and saved untouched
 by the app itself (`hyperspace.headless.resave`: the registry, library,
 router and presets the tests save through) in a scratch library — the
 library's desk templates and module presets beside it, and **the rig's
@@ -131,7 +132,7 @@ NOT_READ = "not read — black"
 class Result:
     """What one preset's checks found."""
 
-    file: str                       # the file's name, kept
+    file: str                       # the file's path under presets/ (party/trip.json), kept
     name: str = ""                  # the preset's own name
     old: str = "?"                  # its schema as found
     new: str = ""                   # the schema it saves as
@@ -166,14 +167,17 @@ def configured_library(home: Path) -> Path:
 
 
 def preset_files(library: Path) -> list[Path]:
-    """The library's presets: ``presets/*.json`` one level down — a dot-file
-    (a write's temp file), a backup (``.bak-``) and anything in ``trash/``
-    left out."""
+    """The library's presets: ``presets/`` every folder down, as the library
+    lists them (`library._walk`, plan 48 stage 2: hidden folders skipped,
+    never through a link) — a dot-file (a write's temp file), a backup
+    (``.bak-``) and anything in ``trash/`` left out."""
+    from hyperspace.library import _walk
+
     folder = library / PRESETS
     if not folder.is_dir():
         return []
-    return sorted(p for p in folder.glob("*.json")
-                  if p.is_file() and not p.name.startswith(".") and ".bak-" not in p.name)
+    return [p for p in _walk(folder)
+            if p.is_file() and not p.name.startswith(".") and ".bak-" not in p.name]
 
 
 def show_files(library: Path) -> list[Path]:
@@ -237,15 +241,17 @@ def rig_show(library: Path, home: Path, name: str | None = None
 
 
 def check(path: Path, library: Path, scratch: Path, *, picture=None,
-          show: dict | None = None) -> Result:
+          show: dict | None = None, file: str | None = None) -> Result:
     """Load, save, re-save and draw preset file `path` (`picture`: the
     golden rig's, `golden_frames.picture`; a test may hand its own), the
     rig's show `show` (a `headless.show_seed`) open. An old file whose
-    section the load did not read is an error: never written (`NOT_READ`)."""
+    section the load did not read is an error: never written (`NOT_READ`).
+    `file` is what the result calls it — its path under ``presets/``
+    (``party/trip.json``, plan 48 stage 2), else its file name."""
     from hyperspace import graphmigrate, headless
     from hyperspace.library import LibraryError
 
-    res = Result(path.name)
+    res = Result(file or path.name)
     original = path.read_bytes()
     try:
         res.old = str(json.loads(original).get("schema") or "?")
@@ -527,7 +533,8 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
         read_from = (retapered_copy(library, retapers, Path(scratch) / "retapered")
                      if not a.apply and shared_retapers(library, retapers) else library)
         for k, path in enumerate(files):
-            r = check(path, read_from, Path(scratch) / str(k), picture=picture, show=seed)
+            r = check(path, read_from, Path(scratch) / str(k), picture=picture, show=seed,
+                      file=path.relative_to(library / PRESETS).as_posix())
             results.append(r)
             print(line(r), flush=True)
     counts: dict[str, int] = {}
@@ -542,6 +549,7 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
     if a.to is not None:
         a.to.mkdir(parents=True, exist_ok=True)
         for r in writes:
+            (a.to / r.file).parent.mkdir(parents=True, exist_ok=True)   # a folder's preset
             write(a.to / r.file, r.data)
         print(f"wrote {len(writes)} as /9 into {a.to}, skipped {len(skipped)}")
     elif a.apply:
