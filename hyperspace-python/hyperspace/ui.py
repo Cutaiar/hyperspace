@@ -2380,6 +2380,11 @@ class Panel:
         self._section("audio source")
         mic_on = a.on and a.mode == "mic"
         self._button("audio.mic", "Stop mic" if mic_on else "Listen to mic")
+        if "audio.mix" in self.reg:       # plan 45 V3: the videos' sound, summed
+            mix_on = a.on and a.mode == "mix"
+            words = "Stop video sound" if mix_on else "Listen to video sound"
+            beside(button_w(words))
+            self._button("audio.mix", words)
         beside(button_w("Load track"))
         if imgui.button("Load track"):
             self._file_dialog = self.open_file_dialog(
@@ -2406,6 +2411,12 @@ class Panel:
             # the analyser's rate — the track's for a file, not the capture rate
             rate = getattr(a, "rate", getattr(a, "sr", 0.0))
             imgui.text_disabled(f"{a.label}  ·  {rate / 1000:.1f} kHz")
+            mx = getattr(a, "_mixer", None)
+            if a.mode == "mix" and mx is not None:
+                if getattr(mx, "failed", False):        # the mixer's error is the source's
+                    imgui.text_colored(WARN, f"video sound silent — {mx.state}")
+                elif not getattr(mx, "playing", 0):
+                    imgui.text_disabled("silent until a channel's sound is on (MEDIA)")
         else:
             imgui.text_disabled("no source — the shape spins on its own")
 
