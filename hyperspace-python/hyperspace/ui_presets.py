@@ -57,6 +57,7 @@ from .library import (
     PRESETS,
     RETIRED_MODULES,
     LibraryError,
+    split_name,
 )
 
 LIST_POLL = 1.0      # seconds between re-listings of a group's presets
@@ -75,6 +76,13 @@ SHOW_TIP = ("A show is the room the presets play in: which preset each of the de
             "session (tempo, hands, the analyzer, the outputs), the band scene, and the "
             "bus cables cut on GRAPH. A preset is the look; the show is everything "
             "around it. Open another, save this one, or start a new one here.")
+
+
+def preset_parts(name: str) -> tuple[str, str]:
+    """A listed preset's folder and leaf, for the list's row (plan 48 row
+    588): ``party/TRIP`` → (``party``, ``TRIP``), drawn ``party / TRIP``
+    with the folder dim; a bare name has no folder."""
+    return split_name(name)
 
 
 # ---- state on the panel, created on first use ----
@@ -383,11 +391,22 @@ def _list_row(panel, group: str, name: str, cur: str | None, drawn: dict, rect) 
         drawn["rows"].append((name, ("field",)))
         _name_field(panel, key, lambda n, old=name: _rename(panel, old, n, group))
         return
+    # plan 48 row 588: a preset from a folder reads "party / TRIP", the
+    # folder dim — the row's text drawn over a label-less selectable; a
+    # top-level name is the selectable's own label, as before
+    folder, leaf = preset_parts(name) if group == PRESETS else ("", name)
+    x = imgui.get_cursor_pos_x()
     imgui.push_style_color(imgui.Col_.text, imgui.ImVec4(0.92, 0.92, 0.92, 1))
-    picked, _ = imgui.selectable(f"{name}##pick", name == cur,
-                                 imgui.SelectableFlags_.allow_overlap)
-    imgui.pop_style_color()
+    picked, _ = imgui.selectable(f"##{name}##pick" if folder else f"{name}##pick",
+                                 name == cur, imgui.SelectableFlags_.allow_overlap)
     rect(f"row.{name}")
+    if folder:
+        imgui.same_line(x, 0)
+        imgui.text_colored(ui.DIM, f"{folder.replace('/', ' / ')} / ")
+        imgui.same_line(0, 0)
+        imgui.text(leaf)
+    imgui.pop_style_color()
+    drawn.setdefault("text", []).append((folder, leaf))
     if picked and not patch:
         _guard(panel, lib.load, group, name)
     chips = ("rename", "×") if renamable else ("×",)
@@ -406,7 +425,7 @@ def _list_row(panel, group: str, name: str, cur: str | None, drawn: dict, rect) 
         if not hit:
             continue
         if chip == "rename":
-            _begin_naming(panel, key, name)
+            _begin_naming(panel, key, leaf)      # a rename keeps the folder
         else:
             _guard(panel, lib.delete, group, name)
         invalidate(panel, group)
@@ -571,6 +590,18 @@ def _trash_popup(panel, bin_: list) -> None:
                 invalidate(panel, PRESETS)
         imgui.end_child()
         rect("rows")
+    # plan 48 row 586: the trash is this Mac's; what the library's own
+    # trash kept from before is listed and restorable, never emptied here
+    old = sum(1 for t in bin_ if getattr(t, "old", False))
+    drawn["old"] = old
+    if old:
+        ui._micro(f"{old} from the library's old trash — empty leaves them")
+        if imgui.is_item_hovered():
+            ui.tooltip("Deletes and overwritten files now go to this Mac's trash "
+                       f"({lib._trash_dir()}), never the shared library. The "
+                       f"library's old trash ({lib.home / 'trash'}) is shown so its files "
+                       "can be restored; clear it in Finder.")
+    n -= old
     imgui.separator()
     now = imgui.get_time()
     armed = st.get("empty_armed")

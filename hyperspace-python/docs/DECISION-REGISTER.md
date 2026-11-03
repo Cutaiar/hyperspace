@@ -600,6 +600,11 @@ here; overturn → the change, then the same.
 | 562 | Plan 45 V1: a video's audio track decoded to memory as float32 stereo 48 kHz once something asks for sound, whole to 120 s, else a 120 s window around the transport's position; the transport is the one clock | 421 | owner's rule (2026-11-02, addendum 8); the policy (rec) |
 | 563 | Node groups (post-show G0, 2026-11-02): a group's id is never reused within a preset's life — `group.<n>` is one past the highest the preset has ever allotted (`Presets.group_high`: the file's highest at the load, dropped entries counted; not saved, no schema change), so an ungrouped or undone group's number is not the next group's; and membership is eager — a member node deleted by any road leaves its group's list in the same operation (hooks on the mechanisms: the section's landing, the table's `set_modifiers`, a bank's membership change), the last member taking the group; every node-removing step carries the marks (which carry the floor too) so its undo puts the member back; a refused load leaves the loaded preset's groups whole. Render node ids (`acid` → `acid.2`, the lowest free instance, R25) are untouched: a format question for the one-format PR | 422 | built as recommended — PR (G0) |
 | 564 | Wave 0 E1: delay loops are the trails mechanism, the look-back keeps the dream — the feedback starter (a composite laid over, a delay, a fade at level 0.75: colour and alpha decay alike) on the cable menu and "add feedback after" on the node menu, many allowed; "feedback" not "echo", which names the look-back's frames | 423 | (rec) — pending the owner |
+| 584 | Plan 48: the library lists `presets/` every folder down (hidden folders skipped); a preset's name is folder-qualified (`party/TRIP`), the file keeps the leaf; `path_slug` for a preset's file key, `slug` stays flat | 440 | (rec) — the owner's ask (L1, 2026-11-02); built as recommended |
+| 585 | Plan 48: the bank names a preset by its folder-qualified name, a bare name a top-level file; no `hyperspace.project` schema bump — an older build reads a folder slot as filled-but-missing | 443 | (rec) — pending the owner; built as recommended |
+| 586 | Plan 48: the trash is this Mac's (`<machine>/trash/<origin folder>/`), never in a synced library; the old library trash listed (marked old), restorable, never written or emptied — not migrated | 442 | (rec) — pending the owner; built as recommended |
+| 587 | Plan 48: a save writes back to the preset's own file; as… with a folder in the name writes into it; a new preset grown from the loaded one (two-handed save, `preset.save_new`, an empty pad's hold) lands beside it; ⇧F's `PRESET <n>` at the top | 441 | (rec) — pending the owner; built as recommended |
+| 588 | Plan 48: the PRESETS page draws a folder's preset as `party / TRIP` with the folder dim; the flat list stays; a rename's field holds the leaf and keeps the folder | 440, 441 | (rec) — pending the owner; built as recommended |
 | 589 | Wave 1 T0: the test suite cannot hang the Mac — pytest-timeout's thread method at 120 s for xdist workers (the signal method for a serial run) with no worker restart in pyproject's addopts, so a test blocked in C fails by name and ends the run; `live` tests hold a per-account `flock` (wait 60 s, then skip); one tier at a time on a shared Mac; a real-GLFW test asks a child process first (`gl_window_ok`, #332) and skips if `glfwInit` does not answer | — | (rec) — pending the owner; built as recommended (T0) |
 
 "—": no hand check shows it; tests only.
@@ -9717,6 +9722,124 @@ and D3 (the per-deck split) are
   the contract working as intended and a change from today.
 - **Judge it.** — (C2's hand check: frame, save, load another, load it
   back; the framing is back).
+
+## Plan 48 — preset folders, stage 1 (rows 584–588)
+Wave 1 L1, 2026-11-02: [`plans/48-preset-folders.md`](plans/48-preset-folders.md).
+Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
+`tests/test_ui_presets.py`.
+### 584. The library lists every folder down; names are folder-qualified
+- **Asked.** The owner, after the 2026-10-30 show: sort the presets into
+  folders in Finder and have both Macs follow. Overturns DECISIONS
+  "Decided not to build — Preset folders" (one tier took hiding away).
+- **Answer.** (rec) — the owner's ask; built as recommended.
+- **Recommended.** `Library._files("presets")` walks `presets/**/*.json`
+  (`library._walk`: `os.walk` with no link following, hidden folders
+  pruned). A preset in a folder is listed as `<folder>/<its own name>`
+  (`party/TRIP` for `presets/party/trip.json` whose `name` is `TRIP`); a
+  top-level one is bare. The file holds the leaf only; the folder is the
+  path, so a move in Finder is a rename of the listed name and nothing
+  in the file changes. A name also resolves by its file key,
+  `path_slug(name)` (`party/trip`: the folder as on disk, the leaf
+  slugged); `path_slug` refuses an empty, `.`, `..` or hidden segment,
+  so `../x` and `/etc/x` name nothing (`path_of` → None, a save
+  raises). `slug` itself stays flat: shows, module presets and patches
+  have no folders and `Project.path_for` must never make one. Two files
+  of one folder with one inner name keep plan 25's conflict rule per
+  folder. Only `presets/` recurses.
+- **Other options.** Change `slug` to keep `/` (the brief's wording): a
+  show or patch called `AC/DC` would then write `projects/ac/dc.hyp.json`.
+  Keep the file's own `name` as the whole qualified name: a Finder move
+  would leave the file saying the old folder. List folders as headers:
+  stage 2's.
+- **To reverse.** `_files` back to one glob; the folder names stop
+  resolving (filled-but-missing slots, row 585) until the files are moved
+  back to the top.
+- **Rough edge.** A top-level preset whose own name holds a `/`
+  (`AC/DC`) lists as `AC/DC` and looks like a folder on the page (its
+  prefix is drawn dim, and its rename field is seeded with `DC`);
+  `folder_of` reads the file, so a save and a two-handed save still
+  treat it as top-level. Typing `AC/DC` into as… makes a folder `AC`.
+- **Judge it.** 440.
+### 585. The bank names a preset by its folder-qualified name; no schema bump
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** `Project.bank` entries are what the list says:
+  `party/TRIP`, or a bare `TRIP` for a top-level file. Every show written
+  before holds bare names, so it reads and plays unchanged. No
+  `hyperspace.project` bump: an older build looks a slot up as a listed
+  name, then as `slug(name)` (`party-trip`), finds neither and says
+  "no preset 'party/TRIP'" — a filled slot that loads nothing; the string
+  is kept and written back as held, so a show round-trips through an
+  older build intact. `still_named` and a rename's repoint compare by
+  `Library._fold` (folder and leaf), so a bare `TRIP` and `party/TRIP`
+  are two presets.
+- **Other options.** Bump to `hyperspace.project/3` so an older build
+  refuses the show: one folder slot would take the whole show away from
+  the older Mac, worse than one dark pad. Store the file key
+  (`party/trip`) instead of the name: the bank would stop reading the
+  same as the list.
+- **To reverse.** Move the files back to the top and rename the slots;
+  nothing else stores a folder.
+- **Rough edge.** Both Macs should run this build before anyone sorts
+  presets into folders, or the older one shows those pads dark.
+- **Judge it.** 443.
+### 586. The trash is this Mac's
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** `to_trash(path, root, origin)` writes
+  `<root>/trash/<origin>/<stem>.<stamp>[-n].json`; the library passes its
+  machine home and the folder the file came from relative to the
+  library (`Library._to_trash`: `presets/party`), so the trash mirrors
+  the tree. `trash()` lists the machine's; `restore_trash` reads the
+  group and folder from where the file lies (never from the caller's
+  `Trashed`) and puts it back there, next free name if taken in that
+  folder; `empty_trash` empties the machine's and removes its empty
+  folders bottom-up. With no `[library] path` the machine home is the
+  library: nothing moves. The old `<library>/trash/` is **listed, not
+  migrated**: marked `old`, at the end of the popup under one dim line,
+  restorable, never written and never emptied by the app.
+- **Other options.** Migrate it once on first use: both Macs would race
+  to move one shared folder, each ending with half, and a migration is a
+  write into the cloud folder the row exists to stop. Ignore it: files
+  a Mac kept before would be unreachable from the app.
+- **To reverse.** `_to_trash` passes `self.home` again; the listing's
+  old/new split goes.
+- **Rough edge.** A file restored on Mac A from the old trash disappears
+  from Mac B's list too (it is one folder); a file × on Mac A is in A's
+  trash only, so B cannot restore it.
+- **Judge it.** 442.
+### 587. Where a save lands
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** **save** writes over the file the loaded name
+  resolves to, wherever it is. **as…** writes the typed name: with a
+  folder in it (`party/NEW`) into that folder, made if need be; the
+  field is seeded with the loaded preset's full name, so a plain edit of
+  the leaf lands beside it. The two-handed save, `preset.save_new` and
+  an empty pad's hold grow the name from the loaded preset (`next_name`
+  per folder: `party/TRIP` → `party/TRIP 2`) and write it **in the
+  loaded preset's folder** (`Library.folder_of` reads the file, not the
+  string); with none loaded, or `untitled`, at the top. ⇧F on an empty
+  slot (`PRESET <n>`) is at the top: it is not grown from the loaded one.
+- **Other options.** Every new preset at the top: the owner sorts by
+  hand after every show. A "new presets" folder: a folder the owner did
+  not make.
+- **To reverse.** `_save_new` back to `next_name(current, taken)` alone.
+- **Rough edge.** A loaded conflict copy's folder is its own folder, as
+  any file's.
+- **Judge it.** 441.
+### 588. The PRESETS page's reading of folders
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** The flat list stays (plan 41), sorted by the
+  qualified name, so a folder's presets sit together. A folder's row is
+  a label-less selectable with `party / ` drawn dim and the name bright
+  over it; a top-level row is drawn exactly as before. `rename` seeds
+  the field with the leaf and keeps the folder (a `/` refused). × trashes
+  to this Mac; a folder left empty stays on disk. The trash popup lists
+  a folder's preset by its qualified name.
+- **Other options.** `party / TRIP` all in one ink: the folder fights
+  the name at distance. A folding header per folder: more page, more
+  clicks, stage 2.
+- **To reverse.** `_list_row` back to the one selectable.
+- **Rough edge.** A long folder path eats the row; nothing elides it yet.
+- **Judge it.** 440, 441.
 
 ## Wave 1 — the test suite (row 589)
 ### 589. The test suite cannot hang the Mac

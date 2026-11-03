@@ -732,7 +732,7 @@ def test_a_save_over_a_preset_keeps_the_old_file_in_the_trash(rig, tmp_path, mon
     lib.overwrite("band")
     assert len(trash(tmp_path, "band")) == 1
     # a copy that fails: the save goes on, and says the old file was not kept
-    monkeypatch.setattr(library, "to_trash", lambda path, root: None)
+    monkeypatch.setattr(library, "to_trash", lambda path, root, origin=None: None)
     lib.warning = ""
     reg["view.bright"].set(3.0)
     assert lib.overwrite("view") == path
@@ -760,7 +760,7 @@ def test_a_delete_keeps_the_file_in_the_trash_or_does_not_delete(rig, tmp_path, 
     (blocked / library.TRASH).write_text("not a folder")
     assert library.to_trash(path, blocked) is None
     assert "not copied to the trash" in capsys.readouterr().err
-    monkeypatch.setattr(library, "to_trash", lambda path, root: None)
+    monkeypatch.setattr(library, "to_trash", lambda path, root, origin=None: None)
     with pytest.raises(LibraryError, match="not deleted"):
         lib.delete("camera", "Tall")
     assert path.exists() and lib.list("camera") == ["Tall"] and lib.current("camera") == "Tall"
@@ -1265,7 +1265,8 @@ def test_rename_updates_every_show_and_keeps_each_old_file(owner_home):
     real = library.to_trash
     with pytest.MonkeyPatch.context() as m:
         m.setattr(library, "to_trash",
-                  lambda p, root: None if p.name == "spare.hyp.json" else real(p, root))
+                  lambda p, root, origin=None: None if p.name == "spare.hyp.json"
+                  else real(p, root, origin))
         new = lib.rename("presets", "NIGHT TWO", "SUNRISE")
     assert new == home / "presets" / "sunrise.json"
     assert not (home / "presets" / "night-two.json").exists()
@@ -1340,7 +1341,7 @@ def test_a_rename_that_cannot_keep_the_old_file_changes_nothing(owner_home):
     lib = r.lib
     before = tree(home)
     with pytest.MonkeyPatch.context() as m:
-        m.setattr(library, "to_trash", lambda path, root: None)
+        m.setattr(library, "to_trash", lambda path, root, origin=None: None)
         for new in ("SUNRISE", "night two"):
             with pytest.raises(LibraryError, match="could not be kept in the trash"):
                 lib.rename("presets", "NIGHT TWO", new)

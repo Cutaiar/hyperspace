@@ -6658,6 +6658,65 @@ shader's use of it is not periodic (a scrolled noise field must run on,
 unwrapped). Before K2 lands, 2 and 3 *do* lurch on Drift, Scale and Pulse:
 that is the recorded fault, not a regression.
 
+## BC. Preset folders, stage 1 (plan 48)
+Register rows 584–588, 2026-11-02. Headless:
+`tests/test_preset_folders.py` (a temp library and a temp machine home:
+the listing, `path_slug`'s refusals, load/save in place, the watcher,
+rename, the bank, the two-handed save, the trash and its restore) and
+`tests/test_ui_presets.py::test_a_folder_preset_reads_folder_then_name_and_renames_in_its_folder`.
+Both Macs on this build first (row 585).
+**440. A folder in the Drive library shows on both Macs and loads from
+the pad.** (Mac A and Mac B, the shared library, the APC40 on one)
+1. On Mac A, in Finder, make `presets/party/` in the Drive library and
+   drag two presets into it (say `trip.json` and `wake.json`).
+2. Wait for Drive to sync; look at the PRESETS page on both Macs.
+3. On one Mac, click `party / TRIP` in the list. Then put it on a pad
+   (hold an empty pad after loading it, or SAVE + a pad) and tap another
+   pad, then that pad.
+*Pass:* (2) both lists show `party / TRIP` and `party / WAKE` (the
+folder dim, the name bright), next to each other, and neither under its
+old bare name; the page does not scroll across. (3) the click loads it
+(the strip reads `party/TRIP`); the pad loads it and lights; the show
+file's bank says `"party/TRIP …"`. Fail: a bare `TRIP` still listed
+(the old file not moved, or the list not walking folders).
+**441. A two-handed save lands beside a folder preset; a rename keeps
+the folder.** (Mac, the APC40, a preset in `presets/party/` loaded)
+1. Load `party / TRIP`. Hold SAVE and tap an empty pad.
+2. On the PRESETS page, **rename** the new row: the field holds the name
+   alone (`TRIP 2`). Type `TRIP LATE`, Enter.
+3. Load `party / TRIP`, **as…**, edit the field to `party/TRIP B`, Enter.
+*Pass:* (1) a new `party / TRIP 2` in the list, `presets/party/trip-2.json`
+in Finder, the pad points at it, nothing new at the top of `presets/`.
+(2) `party / TRIP LATE` in the list, `presets/party/trip-late.json`; the
+pad still loads it; the field never offered the folder. (3)
+`presets/party/trip-b.json`. Fail: any new file at the top of `presets/`.
+**442. × keeps the file on this Mac, not in Drive; restore puts it back
+in its folder.** (Mac with `[library] path` set to the Drive folder)
+1. × `party / TRIP B` on the PRESETS page.
+2. In Finder: `~/Hyperspace/trash/presets/party/` and the Drive
+   library's `trash/`.
+3. On the page, **trash (n) ▸**: restore it.
+4. If the Drive library has an old `trash/` with files in it: open the
+   trash popup again and look at its foot; then **empty trash…** twice.
+*Pass:* (2) `trip-b.<date>-<time>.json` is in `~/Hyperspace/trash/presets/party/`
+and nothing new appeared in Drive's `trash/` (nor on the other Mac).
+(3) `party / TRIP B` is back in the list and in `presets/party/`. (4) the
+old files are listed after this Mac's under "N from the library's old
+trash — empty leaves them", and after emptying they are still in Drive's
+`trash/` while this Mac's trash is empty.
+**443. An old show's bare slot still loads; a folder slot on an older
+build is filled but missing.** (Mac on this build; a second Mac or a
+checkout on a build before plan 48)
+1. On this build, open a show saved before plan 48 whose pads name
+   top-level presets; tap each pad.
+2. Put `party / TRIP` on a pad and save the show. Open the same show on
+   the older build and tap that pad; save the show there; reopen it on
+   this build.
+*Pass:* (1) every pad loads as it did. (2) the older build says "no
+preset 'party/TRIP'" and loads nothing, the pad still drawn as filled;
+the show opens (no schema refusal); back on this build the pad still
+loads `party / TRIP`.
+
 ## What no test covers
 
 Only a person can settle these:
