@@ -20,6 +20,9 @@
 //                          at the top of a file: a phase fx.py integrates
 //                          every frame at speed × that param (wrapped to the
 //                          period if one is given) and declares beside u_phase.
+//                          The rate may be a product, `drift*scale` (each of
+//                          the file's own params once): warp's scroll counted
+//                          in cells, so a scale step slides nothing.
 //                          THE RULE: no shader multiplies u_phase or u_time by
 //                          a param — `u_phase * u_drift` jumps the field by
 //                          phase × Δdrift on a knob step, hours into a set;
