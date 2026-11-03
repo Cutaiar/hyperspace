@@ -1288,7 +1288,12 @@ class MidiIO:
         there, so a fader moved on the other layer picks up its own param
         instead of jumping it. A load's rule above wins over this one."""
         if load:
-            self.__dict__["_fine_moved"] = set()     # a new desk: every ring re-sent below
+            if getattr(self.profile, "RING_REBASES_KNOB", False):
+                # every ring is re-sent below, re-basing each knob: nothing
+                # left for a release to do. Where rings do not re-base the
+                # knobs fine moved keep their place, so a release still
+                # lets go of their catch (review of #344, round 2)
+                self.__dict__["_fine_moved"] = set()
             slews = self._slew_state()
             for pid in [pid for pid in slews if not is_session_id(pid)]:
                 del slews[pid]

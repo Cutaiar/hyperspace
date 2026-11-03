@@ -1714,3 +1714,24 @@ def test_a_row_landing_on_send_b_while_held_still_lets_go_of_fine(rig):
         Binding(f"note:0:{FINE}", "view.lines", "toggle", feedback="led"))
     push(rig, note(FINE, 0))
     assert not rig.reg[midi.FINE_PARAM].value
+
+
+def test_a_load_while_fine_is_held_keeps_the_release_on_a_desk_that_does_not_re_base(
+        rig, monkeypatch):
+    """Review of #344, round 2: a load under a held FINE must not forget
+    the knobs fine moved where rings do not re-base — their release still
+    lets go of the catch, so the first coarse turn picks up, not jumps."""
+    monkeypatch.setattr(apc40, "RING_REBASES_KNOB", False)
+    mix = rig.reg["view.pattern_mix"]
+    b = next(x for x in rig.midi.bindings if x.target == "view.pattern_mix")
+    mix.set_norm(50 / 127)
+    push(rig, cc(K_MIX, 50))                       # on the value: caught
+    assert b.caught
+    push(rig, note(FINE))
+    push(rig, cc(K_MIX, 60))
+    held = mix.norm
+    rig.midi.redraw(load=True)
+    push(rig, note(FINE, 0))
+    assert not b.caught
+    push(rig, cc(K_MIX, 61))                       # far from the value: soft pickup
+    assert mix.norm == held

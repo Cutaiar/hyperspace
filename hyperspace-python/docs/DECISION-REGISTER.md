@@ -10581,7 +10581,9 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   `persist=False`, `modulatable=False`) is the rig's; `_enter` lets go of
   it as of SAVE (one loop over `midi.HELD_PARAMS`) and forgets the knobs
   it moved, so a lost note-off cannot leave the desk fine; a load forgets
-  them too (its redraw re-sends every ring).
+  them too where rings re-base (its redraw re-sends every ring), and
+  keeps them where they do not, so the release still lets go of their
+  catch.
 - **Other options.** Soft pickup (the knob dead until turned back
   through the value — up to a tenth of its throw away after a long fine
   turn); keeping fine's relative read for good (every knob relative, no
