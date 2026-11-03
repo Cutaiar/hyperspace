@@ -697,7 +697,8 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
             print(problem)
         if retapers:
             print(f"retapered {len(retapers)} document(s) along the effect tapers")
-        moves, _ = group_plan(library)          # (over what the retaper wrote)
+        if a.to is None:                        # (--to moves none, as above)
+            moves, _ = group_plan(library)      # (over what the retaper wrote)
     forced = set(a.force)
     results: list[Result] = []
     with tempfile.TemporaryDirectory(prefix="hyperspace-migrate-") as scratch:

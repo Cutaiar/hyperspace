@@ -320,3 +320,24 @@ def test_a_headless_resave_sees_the_librarys_patches(tmp_path):
     home = tmp_path / "scratch" / "library"
     assert (home / PATCHES / "dream" / "wake.json").is_file()
     assert (home / PATCHES / "acid-wash.json").is_file()
+
+
+def test_to_moves_no_patch_with_or_without_apply(tmp_path, monkeypatch, capsys):
+    """Review round 2: `--to` moves none — alone it writes only presets into
+    the folder; with `--apply` the tool refuses the pair before anything is
+    read (and the apply path guards its plan the same way), so the module
+    presets and the `/1` patch are left as they were."""
+    tool = _tool()
+    root = _old_library(tmp_path / "lib")
+    monkeypatch.setenv("HYPERSPACE_HOME", str(tmp_path / "machine"))
+    before = {p.relative_to(root).as_posix(): p.read_bytes()
+              for p in root.rglob("*") if p.is_file()}
+    with pytest.raises(SystemExit):
+        tool.main(["--library", str(root), "--to", str(tmp_path / "out"), "--apply"])
+    assert tool.main(["--library", str(root), "--to", str(tmp_path / "out")]) == 0
+    assert "patches to write" not in capsys.readouterr().out
+    after = {p.relative_to(root).as_posix(): p.read_bytes()
+             for p in root.rglob("*") if p.is_file()}
+    assert after == before
+    assert not (tmp_path / "machine").exists() or not any(
+        p.name.startswith(tool.BACKUP_PREFIX) for p in (tmp_path / "machine").iterdir())
