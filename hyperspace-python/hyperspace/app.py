@@ -1446,7 +1446,9 @@ def main() -> None:
         # dials start from `[poi]` (weight, length, spring, gravity, drag,
         # hand, depth), the only way they outlast a launch
         poi_cfg = poi.configured(cfg)
-        poi.register(reg, poi.PoiState(), poi_cfg)
+        swing = poi.PoiState()
+        poi.register(reg, swing, poi_cfg)
+        renderer.poi_source = swing          # its guide over the outputs (poi_guide.py)
         if poi_cfg.get("on") is True:
             reg["poi.on"].set(True)
         # after attach, before the router: its ui.* params are the last a
