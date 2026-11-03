@@ -7024,6 +7024,34 @@ it is down.
 Fail: a frozen meter after the untick points at the no-voice block not
 being pushed (`Mixer._push`).
 
+## BI. FINE: SEND B held, a knob a tenth as far (wave 2 T3)
+Register rows 609–610. Headless: `tests/test_midi.py` (the fine
+section: a synthetic encoder that the host's rings re-base). Restart
+the app after pulling (a new field on the adapter).
+**459. Held, a knob creeps; let go, it is coarse again.** (Mac, the APC40)
+1. Load any preset. Turn K4 (pattern mix) a few detents and watch its
+   readout on the panel.
+2. Hold SEND B. Turn K4 ten detents up, slowly; then a few down.
+3. Still holding, turn D4 (pattern) a detent; then move the crossfader.
+4. Let go of SEND B.
+*Pass:* (2) SEND B lights while held; ten detents move the readout about
+as far as one detent did in (1), smoothly, and the ring creeps a step
+every ten or so; (3) the pattern steps as it always does and the
+crossfader dims as always (neither is fine); (4) SEND B goes dark. The
+desk log (SYSTEM) has the press. Fail: the value jumps on the first fine
+detent, or nothing moves.
+**460. After letting go, the knob carries on from where the value is.**
+(Mac, the APC40)
+1. Hold SEND B and turn K4 twenty detents up (two coarse steps' worth).
+2. Let go of SEND B; turn K4 one detent up, then one down.
+3. Unplug the APC40's USB while holding SEND B; plug it back in; let go.
+*Pass:* (2) the first detent moves the value by one ordinary step from
+where fine left it — no jump of twenty steps back to where the knob had
+wandered — and the second brings it back about as far; (3) after the
+reconnect SEND B is dark and K4 is coarse. Fail: a jump on the first
+detent, or K4 dead until turned a long way (that is soft pickup: say so —
+hand check 31's re-base did not happen).
+
 ## What no test covers
 
 Only a person can settle these:
