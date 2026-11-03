@@ -246,7 +246,10 @@ def test_a_clock_stands_where_the_hour_left_it_and_its_rate_step_moves_nothing(c
 
 def test_the_harness_sees_a_param_scaling_a_scrolled_coordinate_the_lint_cannot(ctx, made):
     """`(uv + mod(u_phase, 1e4) · 0.001) · u_scale`: the lint reads `mod(…)`
-    as opaque and passes it; the harness measures the step and fails it.
+    as opaque and passes it; the harness measures the step and fails it —
+    not a near miss: late is past twice the rule's bound (4 · early + 0.5),
+    a margin of the rule's own, since the bare ratio depends on the driver
+    (17× on Mesa's llvmpipe, more on the Mac).
     The time offset added after the scale (`uv · u_scale + …`) and a scale
     over a bounded wobble both pass."""
     from shader_lint import TIME_UNIFORMS, findings
@@ -255,7 +258,8 @@ def test_the_harness_sees_a_param_scaling_a_scrolled_coordinate_the_lint_cannot(
     r = declared(state)
     early, late = effect_report(ctx, state, r, "scaled", ["scale"])["scale"]
     assert grows(early, late, FX_FLOOR_PX), (early, late)
-    assert late > 20 * early, (early, late)                          # not a near miss
+    bound = FACTOR * early + FX_FLOOR_PX
+    assert late > 2 * bound, (early, late, bound)                    # not a near miss
     for name in ("fixed", "bounded"):
         e, l = effect_report(ctx, state, r, name, ["scale"])["scale"]
         assert not grows(e, l, FX_FLOOR_PX), (name, e, l)
