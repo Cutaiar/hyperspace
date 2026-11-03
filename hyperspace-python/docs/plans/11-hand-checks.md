@@ -6970,6 +6970,41 @@ preset 'party/TRIP'" and loads nothing, the pad still drawn as filled;
 the show opens (no schema refusal); back on this build the pad still
 loads `party / TRIP`.
 
+## BD. Decks D2: the router's sources split from its evaluator, nothing changes (plan 44)
+Register rows 590–593, 2026-11-03. Headless:
+`tests/test_deck.py::test_one_sources_fed_once_drives_two_routers_as_one_router_did`
+(one `Sources` fed once, two routers over two registries land every
+corpus preset's params as one router does, every frame),
+`tests/test_deck.py::test_a_deck_built_the_old_way_and_the_new_way_reach_the_same_state`,
+`tests/test_app_boundary.py::test_the_frame_feeds_the_shared_sources_not_the_router`,
+`tests/test_routing_boundary.py` (the import wall and the pin over
+`routing_sources.py`) and the goldens.
+**444. Every source moves the picture as on the previous build.** (Mac,
+the rig's config: the APC40, the pad, the hands if they are set up)
+1. Quit and launch (a restart: this build adds a module and a field on
+   live objects). The startup preset lands as before.
+2. Load a preset with hand, pad-stick and band routes (TRIP or TUMBLE).
+   Move a hand in the box, push each stick, play music into the mic.
+3. Turn an APC40 knob; press a pad button with a row (A, say) and a key
+   row (R).
+4. ROUTING: read the source names on the routes (`R height`, a band's
+   name, `LFO 1`); SYSTEM: the pad's feel plot while a stick moves.
+*Pass:* (2) each route moves what it moved on the previous build, as
+much; (3) the knob, the button and the key act once each; (4) the names
+read as before, the pad plot follows the stick. Fail: a route that no
+longer moves (a feed that went nowhere), a name shown as `hand:9` where
+it read `R roll`, or a red banner naming `routing_sources`.
+**445. A hot reload of the new module and of routing keeps the routes
+moving.** (Mac, after 444, a preset with a hand or stick route loaded)
+1. Open `hyperspace/routing_sources.py`, add a blank line, save; move the
+   hand or stick.
+2. The same in `hyperspace/routing.py`; move it again, and turn a knob.
+3. SYSTEM: the hot reload line.
+*Pass:* (1–2) no red banner, no error toast, the route and the knob move
+the picture after each save; (3) "hot: routing_sources …" and then
+"hot: routing …" with the time. Fail: a route that stops after a save, or
+a hot reload error naming `Sources` or `Router`.
+
 ## BE. Video audio 3 of 4: the analyzer listens to the mix (plan 45 V3)
 Decision register rows 594–596. The source is `audio.mix` (AUDIO,
 *Listen to video sound*, beside the mic's button): the mixer's sum —
@@ -7023,40 +7058,6 @@ and AUDIO says `video sound silent — error: …` in warning colour while
 it is down.
 Fail: a frozen meter after the untick points at the no-voice block not
 being pushed (`Mixer._push`).
-## BH. Shift-drag fine mode in the panel (wave 2 T2)
-Decision register rows 607–608 (after row 561). A panel gesture: hold ⇧
-while dragging a continuous slider or fader and it moves a tenth as far.
-Nothing is saved; a save of `ui.py` carries it (no restart).
-**457. A fine drag lands a tenth, lets go without a jump, undoes in one.** (laptop, no hardware)
-Headless: `tests/test_ui_fine.py`.
-1. VIEW: drag *Brightness* left to right a hand's width; note how far the
-   readout moved. Put it back.
-2. Hold ⇧, press on the fader (anywhere), drag the same hand's width.
-3. Mid-drag, still holding the button, let ⇧ go; keep dragging.
-4. Release the button; ⌘Z once.
-5. Hold ⇧ and press on *Field depth* (a lattice, 12 copies) away from its
-   grab; drag a little.
-*Pass:* (2) the press does not jump the grab to the mouse, and the
-readout moves about a tenth of (1)'s distance, a detent at a time; (3)
-nothing jumps when ⇧ is let go, and the drag goes back to full speed
-from where it was; (4) one ⌘Z puts Brightness back where (2) started;
-(5) the same on an untapered slider: no jump at the press, a slow walk.
-Fail: a jump to the mouse at (2) or (3) points at the take-over
-(`Panel._fine`'s first frame); two ⌘Z needed points at a drag that
-paused past `undo.SETTLE_S` (row 43), not this.
-**458. The word FINE, and what fine mode leaves alone.** (laptop, no hardware)
-Headless: `tests/test_ui_fine.py`.
-1. Hover *Field depth*, then hold ⇧ still hovering.
-2. Still holding ⇧, hover *Instances*; ⇧-click *Fit*; ⇧-click on the
-   *Shape* menu.
-3. ⇧-drag *Field depth* and pull the mouse up off the slider while
-   dragging.
-*Pass:* (1) the tooltip is the param's tip, then leads with `FINE · ⇧
-held: a drag moves a tenth as far` while ⇧ is down; (2) Instances shows
-no FINE and slides as it always did (an integer), Fit toggles, the menu
-opens — ⇧ changes nothing on them; (3) the FINE tooltip stays while the
-drag goes on off the track. Fail: a route's depth on ROUTING not going
-fine is expected (row 608: not reached yet).
 
 ## BF. The panel fold, stage 1: the side pane always on (plan 49)
 Register rows 597–601, 2026-11-03. Headless: `tests/test_ui_pane.py`
@@ -7134,6 +7135,65 @@ back. Fail: the canvas re-centres its nodes as the pane moves.
 *Pass:* (1) the red-framed PROJECTOR inset is left of the pane, whole;
 the pane's headers are not covered. (2) the inset stays above the band,
 smaller if it must, never over its chips.
+
+## BG. Two test runs at once take turns (wave 2 I1)
+Register rows 605–606, 2026-11-03. Headless: `tests/test_live_lock.py`
+(two processes; an inner `-n 2 --dist load` run whose two live tests run
+one after the other). Nothing of the app changes.
+**456. Two runs at once on the shared Mac: the live tests take turns,
+neither hangs.** (the Mac, two terminals in two checkouts on this build,
+no other test run going)
+1. In both terminals at once:
+   `cd hyperspace-python && uv run pytest -q -n 4 -p no:cacheprovider`
+   (the fast tier). Wait for both.
+2. In both at once:
+   `uv run pytest -q -n 4 -p no:cacheprovider -m live -rs`
+   (the live tier: Syphon, NDI, the camera list, Vision, torch, the
+   dream). Note each run's time; then run it once alone for comparison.
+*Pass:* (1) both end with "passed" and the same count, in about a
+minute and a half each; neither sits at 99 %. (2) both end; every live
+test passes in each, or a few skip with "another test run holds the live
+devices (xdist-…) past 60 s" (the other run's id, never this run's);
+at least one of the two takes clearly longer than the run alone (it
+waited its turns; the wait is not in `--durations`, it is outside the
+test's timing) and no NDI or Syphon loopback fails. Fail: a run sits at 99 % for minutes
+(kill it, ENGINEERING §16's recovery), a loopback fails in one run while
+the other runs, or "worker 'gwN' crashed".
+
+## BH. Shift-drag fine mode in the panel (wave 2 T2)
+Decision register rows 607–608 (after row 561). A panel gesture: hold ⇧
+while dragging a continuous slider or fader and it moves a tenth as far.
+Nothing is saved; a save of `ui.py` carries it (no restart).
+**457. A fine drag lands a tenth, lets go without a jump, undoes in one.** (laptop, no hardware)
+Headless: `tests/test_ui_fine.py`.
+1. VIEW: drag *Brightness* left to right a hand's width; note how far the
+   readout moved. Put it back.
+2. Hold ⇧, press on the fader (anywhere), drag the same hand's width.
+3. Mid-drag, still holding the button, let ⇧ go; keep dragging.
+4. Release the button; ⌘Z once.
+5. Hold ⇧ and press on *Field depth* (a lattice, 12 copies) away from its
+   grab; drag a little.
+*Pass:* (2) the press does not jump the grab to the mouse, and the
+readout moves about a tenth of (1)'s distance, a detent at a time; (3)
+nothing jumps when ⇧ is let go, and the drag goes back to full speed
+from where it was; (4) one ⌘Z puts Brightness back where (2) started;
+(5) the same on an untapered slider: no jump at the press, a slow walk.
+Fail: a jump to the mouse at (2) or (3) points at the take-over
+(`Panel._fine`'s first frame); two ⌘Z needed points at a drag that
+paused past `undo.SETTLE_S` (row 43), not this.
+**458. The word FINE, and what fine mode leaves alone.** (laptop, no hardware)
+Headless: `tests/test_ui_fine.py`.
+1. Hover *Field depth*, then hold ⇧ still hovering.
+2. Still holding ⇧, hover *Instances*; ⇧-click *Fit*; ⇧-click on the
+   *Shape* menu.
+3. ⇧-drag *Field depth* and pull the mouse up off the slider while
+   dragging.
+*Pass:* (1) the tooltip is the param's tip, then leads with `FINE · ⇧
+held: a drag moves a tenth as far` while ⇧ is down; (2) Instances shows
+no FINE and slides as it always did (an integer), Fit toggles, the menu
+opens — ⇧ changes nothing on them; (3) the FINE tooltip stays while the
+drag goes on off the track. Fail: a route's depth on ROUTING not going
+fine is expected (row 608: not reached yet).
 
 ## BI. FINE: SEND B held, a knob a tenth as far (wave 2 T3)
 Register rows 609–610. Headless: `tests/test_midi.py` (the fine
