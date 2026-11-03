@@ -97,6 +97,23 @@ def test_the_bands_see_the_videos_tone_as_they_would_the_mics():
     assert abs(int(np.argmax(spec)) - want) <= 1
 
 
+def test_blocks_queued_before_a_drain_land_distinct_not_the_last_repeated():
+    m, f = heard(1, amp=0.5)
+    a = AudioEngine()
+    a.start_mix(m.mixer)
+    m.poll(DT, 0.0)
+    s = opened(m, f)
+    first = s.pull().mean(axis=1)             # the mixer's `_mono` is reused for both
+    m.channels["a"].gain = 0.25               # another block (a 1500 Hz frame repeats whole)
+    m.poll(DT, 0.1)
+    second = s.pull().mean(axis=1)
+    assert not np.allclose(first, second)
+    got = a._ring.drain()
+    assert len(got) == 2 * M.BLOCK
+    np.testing.assert_allclose(got[: M.BLOCK], first, atol=1e-6)
+    np.testing.assert_allclose(got[M.BLOCK:], second, atol=1e-6)
+
+
 def test_the_mix_is_taken_after_the_clip():
     m, f = heard(2, amp=0.9)                  # two channels at 0.9: the peaks clip at 1
     a = AudioEngine()

@@ -77,6 +77,9 @@ class _Ring:
         self.lock = threading.Lock()
 
     def push(self, x: np.ndarray) -> None:
+        """Copy `x` into the ring's own buffer, under the lock: no reference
+        to `x` is kept, so a caller may reuse it at once (the mixer's
+        `_mono`, plan 45 V3)."""
         n = len(x)
         with self.lock:
             i = self.w % self.cap
