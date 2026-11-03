@@ -157,7 +157,7 @@ def test_a_constant_turn_integrates_and_a_flip_carries_on_in_w():
     run(reg, state, pad, 1)
     dps = 90.0
     run(reg, state, pad, 60, gyro=(0.0, 0.0, dps))     # 1 s about z
-    want = math.radians(dps - gesture.TURN_DEADBAND_DPS)       # the dead band is soft: it subtracts
+    want = math.radians(gesture._banded(dps))       # the dead band passes a real turn exact
     assert phase(reg, "XY") == pytest.approx(want, abs=1e-6)   # no smoothing: the turn, whole
     for other in ("XZ", "YZ", "XW", "YW", "ZW"):
         assert phase(reg, other) == pytest.approx(0.0, abs=1e-9)
@@ -166,7 +166,7 @@ def test_a_constant_turn_integrates_and_a_flip_carries_on_in_w():
     run(reg, state, pad, 1, gyro=(0.0, 0.0, dps), hold=("B",))
     run(reg, state, pad, 29, gyro=(0.0, 0.0, dps))
     assert phase(reg, "XY") == pytest.approx(xy, abs=1e-9)
-    assert phase(reg, "ZW") == pytest.approx(math.radians(dps - gesture.TURN_DEADBAND_DPS) * 0.5,
+    assert phase(reg, "ZW") == pytest.approx(math.radians(gesture._banded(dps)) * 0.5,
                                              abs=0.01)
 
 
@@ -387,7 +387,7 @@ def test_a_stalled_report_adds_no_turn_and_two_reports_in_a_frame_both_count():
     for _ in range(2):                      # two reports between one frame and the next
         pad.motion.step((0.0, 0.0, 90.0), FLAT, DT)
     totem.step(state, pad, reg, DT)
-    want = math.radians(2 * (90.0 - gesture.TURN_DEADBAND_DPS) * DT)   # the band per report
+    want = math.radians(2 * gesture._banded(90.0) * DT)   # the band per report
     assert phase(reg, "XY") - xy == pytest.approx(want, abs=1e-9)
 
 
@@ -599,7 +599,7 @@ def tape(tmp_path, times, gyro_z=2000):
 def one_turn(reader, raw, dt):
     """What one report of `raw` turns over `dt`, as the reader sums it."""
     samples = reader.codec.gyro_of(raw, reader)
-    return [dt * v for v in (math.copysign(max(0.0, abs(d) - gesture.TURN_DEADBAND_DPS), d)
+    return [dt * v for v in (gesture._banded(d)
                              for d in reader.calibration.gyro_dps(samples[0]))]
 
 
@@ -716,10 +716,10 @@ def test_the_dead_band_is_per_report_and_a_gap_is_capped():
     turn.add(r.codec.gyro_of(raw, r), 0.008, cal)
     got, n = turn.take()
     assert n == 3
-    assert got[2] == pytest.approx(2 * 0.004 * (rate - gesture.TURN_DEADBAND_DPS))
+    assert got[2] == pytest.approx(2 * 0.004 * gesture._banded(rate))
     turn.add(r.codec.gyro_of(raw, r), 0.308, cal)          # a 300 ms Bluetooth pause
     got, _ = turn.take()
-    assert got[2] == pytest.approx(gesture.REPORT_DT_MAX * (rate - gesture.TURN_DEADBAND_DPS))
+    assert got[2] == pytest.approx(gesture.REPORT_DT_MAX * gesture._banded(rate))
     slow = gyro_report(z=1)                                 # under the band: nothing
     turn.add(r.codec.gyro_of(slow, r), 0.312, cal)
     assert turn.take()[0] == (0.0, 0.0, 0.0)

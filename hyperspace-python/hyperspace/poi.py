@@ -10,16 +10,21 @@ weight is. Off by default (`poi.on`); nothing here runs while it is off.
 **The handle.** A pad cannot say where it is, only how it turns and what
 it feels. So the handle is modelled as
 
-- a *wrist*, at the world's origin (the screen's centre), that the hand's
-  push moves about: the accelerometer with gravity taken out, rotated into
-  the world, drives a point held home by a critically damped spring
-  (`HAND_HZ`) — a quick push or a hand circling registers, a slow drift
-  (and the attitude's error, which leaks a little gravity) does not.
-  `poi.hand` scales it; 0 is the wrist alone.
-- the *tip*, `HANDLE` world units out of the wrist along the pad's far
-  end (−z in the pad's axes, toward the screen held face up), turned by
-  the pad's attitude: the gyro integrated, its tilt pulled to gravity
-  while the pad is not being flung (a complementary filter). The string
+- a *wrist*, starting at the world's origin (the screen's centre), carried
+  where the pad is carried (`_hand`): the accelerometer with gravity taken
+  out, rotated into the world, integrated into a velocity and that into a
+  place, which **stays where it ends** — no pull home, a reference frame
+  that does not centre itself, as a Wii remote's (the owner, 2026-11-03).
+  Each time the pad is held still its velocity is zeroed, so a double
+  integral's drift cannot run on between moves; what drift a move gathers
+  stays, and A puts the hand home. `poi.hand` scales it (2.5 world units a
+  metre at 1); 0 is the wrist alone.
+- the *tip*, `HANDLE` world units out of the wrist along the pad's +z
+  (away from the player as the owner holds it), turned by the pad's
+  attitude: every report's turn (the reader sums it, `Motion.take_turn`
+  with the poi's own tap, so the totem and the poi do not share it), its
+  tilt pulled to gravity while the pad is not being flung (a
+  complementary filter). The string
   hangs from the tip, so a turn of the wrist swings it, as on a real poi,
   where small circles of the hand drive the weight round.
 
@@ -72,16 +77,24 @@ G_MPS2 = 9.81
 UNITS_PER_M = 2.5                 # a 1-unit string is a real poi's 40 cm: the same period
 G_WORLD = G_MPS2 * UNITS_PER_M    # world units / s², at poi.gravity 1
 HANDLE = 0.3                      # wrist → tip, world units (a hand and a Joy-Con)
-HAND_HZ = 0.7                     # the wrist's spring home: below this the hand's push fades
-HAND_DEADBAND_G = 0.04            # a still pad's accel noise and the attitude's leak
+HAND_DEADBAND_G = 0.02            # below this the push is noise
+HAND_LIMIT = 8.0                  # the hand never further than this from home, world units
+STILL_DPS = 15.0                  # the pad is still while it turns slower than this…
+STILL_G = 0.06                    # …and its push (gravity taken out) is under this…
+STILL_S = 0.08                    # …for this long: its velocity is zeroed (it is not moving)
+STALL_S = 0.1                     # no new reading for this long: the push is taken as none
+SPIN_DPS = 120.0                  # turning faster than this, the hand's velocity bleeds…
+SPIN_BLEED = 2.0                  # …at up to this a second (a spin's leaked gravity cannot run)
+CALM_S = 1.5                      # turning slowly and reading 1 g this long while the attitude
+                                  # sees a push is still: the attitude is wrong (a big error
+                                  # would never look still); no hand pushes one way that long
 STEP_S = 1.0 / 960.0              # the physics' fixed step
 MAX_STEPS = 96                    # …at most this many a frame (a stall drops the rest)
 K_STIFF = 3000.0                  # the string's stiffness at poi.spring 0 (mass·unit/s² per unit)
 K_SOFT = 6.0                      # …and at 1, geometric between
 STRING_ZETA = 0.25                # the string's damping along its line, of critical
 MAX_STRETCH = 4.0                 # the string never longer than this × its length
-TILT_GAIN = 2.0                   # rad/s per rad: how fast gravity pulls the attitude's tilt
-TILT_TRUST_G = 0.15               # gravity is trusted while |accel| is within this of 1 g
+TILT_GAIN = 3.0                   # rad/s per rad: how fast gravity pulls a still pad's tilt
 DEPTH_OCTAVES = 0.5               # zoom octaves per world unit of depth toward the eye
 
 DEFAULTS = {"weight": 0.3, "length": 1.0, "spring": 0.2, "gravity": 1.0,
@@ -195,8 +208,12 @@ class PoiState:
     hand: float = DEFAULTS["hand"]
     driving: str | None = None    # the role of the pad it reads
     att: list = field(default_factory=_ident)       # the handle's attitude, body → world
-    wrist: Vec = field(default_factory=lambda: [0.0, 0.0, 0.0])
-    wrist_v: Vec = field(default_factory=lambda: [0.0, 0.0, 0.0])
+    wrist: Vec = field(default_factory=lambda: [0.0, 0.0, 0.0])     # the hand, from home
+    wrist_v: Vec = field(default_factory=lambda: [0.0, 0.0, 0.0])   # …and its velocity
+    still: float = 0.0            # how long the pad has been still (STILL_S)
+    calm: float = 0.0             # how long it has turned slowly and read 1 g (CALM_S)
+    reading: int = -1             # the pad's last reading seen (`Motion.reports`)
+    stale: float = 0.0            # how long since a new one came (STALL_S)
     ball: Vec = field(default_factory=lambda: [0.0, -1.0, 0.0])
     ball_v: Vec = field(default_factory=lambda: [0.0, 0.0, 0.0])
     left: float = 0.0             # time not yet stepped (less than STEP_S)
@@ -218,8 +235,9 @@ class PoiState:
 
     def tip(self) -> Vec:
         """Where the string hangs from: the wrist, and the handle along the
-        pad's far end (−z in its axes)."""
-        return _add(self.wrist, _apply(self.att, [0.0, 0.0, -HANDLE]))
+        pad's +z — away from the player as the owner holds the Joy-Con
+        (2026-11-03: −z drew the tip toward them)."""
+        return _add(self.wrist, _apply(self.att, [0.0, 0.0, HANDLE]))
 
     def hang(self) -> None:
         """The weight still under the tip, the string stretched by its
@@ -231,9 +249,9 @@ class PoiState:
 
     def offset(self) -> Vec:
         """The weight in the world: where the shape is drawn from home. Its
-        depth is measured from the tip's at rest (`HANDLE` into the
-        screen), so a weight hanging still is drawn at home's size."""
-        return [self.ball[0], self.ball[1], self.ball[2] + HANDLE]
+        depth is measured from the tip's at rest (`HANDLE` toward the
+        eye), so a weight hanging still is drawn at home's size."""
+        return [self.ball[0], self.ball[1], self.ball[2] - HANDLE]
 
 
 def readout(state: PoiState) -> str:
@@ -325,6 +343,7 @@ def reset(state: PoiState) -> None:
     state.settled = False
     state.att = _ident()
     state.wrist, state.wrist_v = [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
+    state.still, state.stale, state.calm = 0.0, 0.0, 0.0
     state.left = 0.0
     state.hang()
     state.say(f"reset — {readout(state)}")
@@ -398,20 +417,36 @@ def step(state: PoiState | None, pad, reg, dt: float, role: str = "") -> None:
     _buttons(state, pad, reg)
     dt = min(max(0.0, float(dt)), MAX_STEPS * STEP_S)
     motion = pad.motion
-    gyro = [math.radians(float(v)) for v in getattr(motion, "gyro", (0.0, 0.0, 0.0))]
+    gyro_dps = [float(v) for v in getattr(motion, "gyro", (0.0, 0.0, 0.0))]
     accel = [float(v) for v in getattr(motion, "accel", None) or
              getattr(motion, "gravity", None) or (0.0, 1.0, 0.0)]
+    take = getattr(motion, "take_turn", None)
+    try:
+        turn = take("poi") if take is not None else None    # every report's, our own share
+    except TypeError:
+        turn = None                    # a Motion without taps: the frame's reading
+    if turn is None:
+        turn = [v * dt for v in gyro_dps]
     if not state.settled:
         state.att = from_gravity(getattr(motion, "gravity", None) or accel)
         state.settled = True
         state.hang()
-    _attitude(state, gyro, accel, dt)
-    push = _push(state, accel)
+    reports = getattr(motion, "reports", None)
+    fresh = reports is None or reports != state.reading
+    state.reading = reports if reports is not None else state.reading
+    state.stale = 0.0 if fresh else state.stale + dt
+    reading = accel if state.stale < STALL_S else None
+    _stillness(state, reading, gyro_dps, dt)
+    _attitude(state, [math.radians(v) for v in turn], accel, dt)
+    tip0 = state.tip()
+    _hand(state, reading, dt, _norm(gyro_dps))
+    tip1 = state.tip()
     state.left += dt
     n = min(MAX_STEPS, int(state.left / STEP_S))
     state.left -= n * STEP_S
-    for _ in range(n):
-        _physics(state, push, STEP_S)
+    for k in range(n):                 # the tip moved over the frame: each step a part of the way
+        f = (k + 1) / n
+        _physics(state, [a + (b - a) * f for a, b in zip(tip0, tip1, strict=True)], STEP_S)
     _write(state, reg)
 
 
@@ -426,43 +461,88 @@ def _buttons(state: PoiState, pad, reg) -> None:
             reset(state)
 
 
-def _attitude(state: PoiState, gyro, accel, dt: float) -> None:
-    """The gyro integrated (body rates: R ← R·exp(ω dt)), the tilt pulled
-    toward gravity while the pad is near 1 g (not being flung)."""
-    w = list(gyro)
+def _stillness(state: PoiState, accel, gyro_dps, dt: float) -> None:
+    """How long the pad has been still: turning slower than `STILL_DPS`
+    with a push (its accel through the attitude, gravity taken out) under
+    `STILL_G`. Not |accel| near 1 g: a gentle push sideways reads near 1 g
+    too, and taking it for gravity would tilt the attitude into it and
+    swallow the move. A stalled pad (no reading) is still."""
+    if accel is None:
+        state.still += dt
+        return
+    slow = _norm(gyro_dps) < STILL_DPS
+    lin = _norm(_sub(_apply(state.att, accel), [0.0, 1.0, 0.0]))
+    disagree = slow and lin >= STILL_G and abs(_norm(accel) - 1.0) < STILL_G
+    state.calm = state.calm + dt if disagree else 0.0
+    if slow and (lin < STILL_G or state.calm >= CALM_S):
+        state.still += dt
+    else:
+        state.still = 0.0
+
+
+def _attitude(state: PoiState, turn, accel, dt: float) -> None:
+    """The frame's turn (radians about the pad's x, y, z, every report's:
+    R ← R·exp(turn)), then — only while the pad is still (`_stillness`),
+    when the accel is gravity alone — the tilt pulled toward it."""
+    w = list(turn)
     a = _norm(accel)
-    if a > 1e-6 and abs(a - 1.0) < TILT_TRUST_G:
+    if a > 1e-6 and state.still >= STILL_S:
         measured = _mul(accel, 1.0 / a)               # up, in the pad's axes
         predicted = _apply_t(state.att, [0.0, 1.0, 0.0])
-        w = _add(w, _mul(_cross(measured, predicted), TILT_GAIN))
-    rate = _norm(w)
-    if rate * dt > 1e-9:
-        state.att = _orthonormal(_matmul(state.att, _rodrigues(_mul(w, 1.0 / rate), rate * dt)))
+        w = _add(w, _mul(_cross(measured, predicted), TILT_GAIN * dt))
+    angle = _norm(w)
+    if angle > 1e-9:
+        state.att = _orthonormal(_matmul(state.att, _rodrigues(_mul(w, 1.0 / angle), angle)))
 
 
 def _push(state: PoiState, accel) -> Vec:
     """The hand's push in the world, world units / s²: the specific force
-    turned into the world with gravity's 1 g taken out, a dead band off
-    the top, × `poi.hand`."""
+    turned into the world with gravity's 1 g taken out, × `poi.hand`;
+    below `HAND_DEADBAND_G`, none."""
     lin = _sub(_apply(state.att, accel), [0.0, 1.0, 0.0])       # in g
-    n = _norm(lin)
-    if n <= HAND_DEADBAND_G or state.hand <= 0.0:
+    if _norm(lin) <= HAND_DEADBAND_G or state.hand <= 0.0:
         return [0.0, 0.0, 0.0]
-    return _mul(lin, (n - HAND_DEADBAND_G) / n * G_MPS2 * UNITS_PER_M * state.hand)
+    return _mul(lin, G_MPS2 * UNITS_PER_M * state.hand)
 
 
-def _physics(state: PoiState, push, h: float) -> None:
-    """One fixed step: the wrist on its spring home, then the weight on its
-    string from the tip (semi-implicit Euler: velocities, then positions)."""
-    wn = 2.0 * math.pi * HAND_HZ
-    acc = _sub(push, _add(_mul(state.wrist, wn * wn), _mul(state.wrist_v, 2.0 * wn)))
-    state.wrist_v = _add(state.wrist_v, _mul(acc, h))
-    state.wrist = _add(state.wrist, _mul(state.wrist_v, h))
+def _hand(state: PoiState, accel, dt: float, rate_dps: float = 0.0) -> None:
+    """The hand where the pad has been carried: its push integrated into
+    a velocity and that into a place, which stays where it ends — no pull
+    home (the owner, 2026-11-03: a reference frame that does not centre
+    itself, as a Wii remote's). While the pad is still (`STILL_*`) its
+    velocity is zeroed, so the drift a double integral gathers cannot run
+    on between moves; A puts the hand home. `accel` None (no new reading
+    for `STALL_S`): no push."""
+    if state.still >= STILL_S:
+        state.wrist_v = [0.0, 0.0, 0.0]
+    else:
+        push = _push(state, accel) if accel is not None else [0.0, 0.0, 0.0]
+        state.wrist_v = _add(state.wrist_v, _mul(push, dt))
+        # spinning hard (a poi swung round), the attitude's small errors leak
+        # gravity into the push for as long as the spin lasts and no still
+        # moment comes to zero it: the velocity bleeds, more the faster the
+        # spin. A carry turns little, so it is untouched; the place is never
+        # pulled home
+        over = max(0.0, rate_dps - SPIN_DPS) / SPIN_DPS
+        if over:
+            state.wrist_v = _mul(state.wrist_v, math.exp(-min(1.0, over) * SPIN_BLEED * dt))
+    state.wrist = _add(state.wrist, _mul(state.wrist_v, dt))
+    n = _norm(state.wrist)
+    if n > HAND_LIMIT:                               # held at the edge, not flown off
+        u = _mul(state.wrist, 1.0 / n)
+        state.wrist = _mul(u, HAND_LIMIT)
+        out = _dot(state.wrist_v, u)
+        if out > 0:
+            state.wrist_v = _sub(state.wrist_v, _mul(u, out))
 
+
+def _physics(state: PoiState, tip, h: float) -> None:
+    """One fixed step of the weight on its string from `tip` (where the
+    tip is this far into the frame; semi-implicit Euler: velocity, then
+    place)."""
     m = max(state.weight, 1e-3)
     L = max(state.length, 1e-3)
     k = state.stiffness()
-    tip = state.tip()
     d = _sub(state.ball, tip)
     dist = _norm(d)
     force = [0.0, -G_WORLD * state.gravity * m, 0.0]

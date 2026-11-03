@@ -59,7 +59,7 @@ def test_the_weight_sits_on_the_shape_and_the_string_runs_tip_to_weight():
 def test_the_handle_follows_the_pan_home_and_the_marker_grows_with_the_depth_zoom():
     reg, state, view, pad = hanging(gravity=0.0, drag=0.0)
     reg["camera.pan.x"].set(1.0)                      # a knob moves home
-    state.ball = [0.0, 0.0, 1.0 - poi.HANDLE]         # toward the eye
+    state.ball = [0.0, 0.0, 1.0 + poi.HANDLE]         # toward the eye
     state.ball_v = [0.0, 0.0, 0.0]
     for _ in range(2):
         pad.frame()

@@ -607,3 +607,114 @@ def test_the_lab_draws_a_joycon_as_itself():
         assert {"pad:A", "axis:RT", "pad:RB", "pad:MENU", "pad:GUIDE", "pad:LSTICK",
                 "axis:LX"} <= got, (view, got)
         assert not got & {"axis:LT", "pad:LB", "pad:VIEW", "pad:SHARE", "pad:RSTICK"}, (view, got)
+
+
+# ---- a Joy-Con asleep when it was opened (paired, listed, not answering) ----
+
+def simple_report() -> bytes:
+    r = bytearray(12)
+    r[0] = nintendo.REPORT_SIMPLE
+    return bytes(r)
+
+
+class SleepyJoyCon(FakeJoyCon):
+    """Asleep: reads nothing and hears nothing. Woken (a button press): it
+    is back in its default mode, sending the simple report, until a setup
+    sets the full mode again; then it streams full reports."""
+
+    def __init__(self):
+        super().__init__(reports=[full_report(timer=k % 256) for k in range(100000)])
+        self.awake = False
+
+    def read(self, n, timeout=0):
+        if not self.awake:
+            return []
+        if self.mode != nintendo.FULL_MODE and not self.queue:
+            return list(simple_report()[:n])
+        return super().read(n, timeout)
+
+    def write(self, data):
+        if not self.awake:
+            return len(bytes(data))
+        return super().write(data)
+
+    def wake(self):
+        self.mode = None
+        self.awake = True
+
+
+def test_a_joycon_woken_after_launch_is_set_up_again_and_streams(monkeypatch):
+    """The owner's case: the Joy-Con asleep when the app opened it, then a
+    button pressed. It wakes sending the simple report (buttons only);
+    the reader sends its setup again and the full report — the sensors —
+    comes, with no restart."""
+    import threading
+
+    monkeypatch.setattr(nintendo, "REPLY_TIMEOUT_S", 0.02)
+    monkeypatch.setattr(hid, "RESETUP_S", 0.05)
+    monkeypatch.setattr(hid, "QUIET_S", 30.0)
+    dev = SleepyJoyCon()
+    r = hid.HidPad(JOYCON_L, start=False, opener=lambda i: dev)
+    t = threading.Thread(target=r._run, daemon=True)
+    t.start()
+    try:
+        time.sleep(0.4)                      # the setup went unanswered: asleep
+        assert dev.mode is None and r.latest() is None
+        dev.wake()
+        end = time.monotonic() + 5.0
+        f = None
+        while time.monotonic() < end:
+            f = r.latest()
+            if f is not None and f.full:
+                break
+            time.sleep(0.02)
+        assert f is not None and f.full                  # the sensors are back
+        assert dev.mode == nintendo.FULL_MODE
+    finally:
+        r.close()
+        t.join(1.0)
+
+
+def test_a_joycon_that_says_nothing_is_let_go_for_the_hub_to_open_afresh():
+    """No report at all for QUIET_S after the setup (a new connection the
+    old handle never hears from): the reader lets go, saying why; the
+    hub's next scan finds the path again and opens a new reader."""
+    dev = SleepyJoyCon()
+    r = hid.HidPad(JOYCON_L, start=False, opener=lambda i: dev)
+    r._opened_t = r._setup_t = 100.0
+    assert r._tend(dev, 100.0 + hid.QUIET_S - 0.1)
+    assert not r._tend(dev, 100.0 + hid.QUIET_S + 0.1)
+    assert "opened again" in r.note
+    r._take(full_report(), t=104.0)                  # a streaming one is never let go
+    assert r._tend(dev, 104.0 + hid.QUIET_S - 0.1)
+
+
+def test_a_streaming_joycon_is_never_set_up_again_and_a_sony_pad_is_not_tended(monkeypatch):
+    dev = SleepyJoyCon()
+    r = hid.HidPad(JOYCON_L, start=False, opener=lambda i: dev)
+    calls = []
+    monkeypatch.setattr(r, "_calibrate", lambda d: calls.append(d))
+    r._setup_t = 0.0
+    r._take(simple_report(), t=1.0)
+    r._take(full_report(), t=1.5)                    # the full report came after: set up
+    assert r._tend(dev, 3.0) and calls == []
+    r._take(simple_report(), t=1.5 + hid.RESETUP_S / 2)   # a stray simple, the full just gone
+    assert r._tend(dev, 1.5 + hid.RESETUP_S * 0.9) and calls == []
+    r._take(simple_report(), t=4.0)                  # back to simple: asleep and woken
+    assert r._tend(dev, 4.1) and calls == [dev]      # the full stopped long ago: set up again
+    assert r._tend(dev, 4.2) and calls == [dev]      # once, not every loop
+    sony_pad = hid.HidPad({"path": b"ds", "vendor_id": 0x054C, "product_id": 0x0CE6},
+                          start=False, opener=lambda i: dev)
+    assert sony_pad._tend(dev, 1e9)
+
+
+def test_the_hub_opens_a_let_go_joycon_afresh_on_its_next_scan():
+    dev = SleepyJoyCon()
+    hub = hid.HidHub(start=False, enumerate_=lambda vid, pid: [JOYCON_L] if vid == 0x057E else [],
+                     opener=lambda i: dev, start_readers=False)
+    hub.scan()
+    first = hub.readers[JOYCON_L["path"]]
+    first._alive = False                             # let go (quiet)
+    hub.scan()
+    again = hub.readers[JOYCON_L["path"]]
+    assert again is not first and again.alive

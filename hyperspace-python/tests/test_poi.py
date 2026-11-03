@@ -38,13 +38,32 @@ def pan(reg):
     return reg["camera.pan.x"].value, reg["camera.pan.y"].value
 
 
-def circle(reg, state, pad, seconds, f=0.8, amp=150.0, dt=DT, t0=0.0):
+class Truth:
+    """Where a real pad would be: its attitude turned by the gyro it is fed,
+    so its accelerometer reads gravity as a turned pad does (a fake pad fed
+    a turn but a fixed accel would read a push that is not there)."""
+
+    def __init__(self):
+        self.R = poi._ident()
+
+    def frame(self, pad, gyro, dt, push=(0.0, 0.0, 0.0)):
+        w = [math.radians(v) for v in gyro]
+        a = math.sqrt(sum(v * v for v in w)) * dt
+        if a > 1e-12:
+            self.R = poi._matmul(self.R, poi._rodrigues([v * dt / a for v in w], a))
+        up = [0.0 + push[0], 1.0 + push[1], 0.0 + push[2]]     # specific force, world, in g
+        pad.frame(gyro=gyro, accel=tuple(poi._apply_t(self.R, up)), dt=dt)
+
+
+def circle(reg, state, pad, seconds, f=0.8, amp=150.0, dt=DT, t0=0.0, truth=None):
     """The wrist circling: the far end traces a cone (gyro about x and z
-    in quadrature) — what drives a poi round."""
+    in quadrature) — what drives a poi round. The pad's accel turns with
+    it (`Truth`)."""
+    truth = truth if truth is not None else pad.__dict__.setdefault("truth", Truth())
     for i in range(int(seconds / dt)):
         t = t0 + i * dt
         w = 2 * math.pi * f * t
-        pad.frame(gyro=(amp * math.cos(w), 0.0, amp * math.sin(w)), dt=dt)
+        truth.frame(pad, (amp * math.cos(w), 0.0, amp * math.sin(w)), dt)
         poi.step(state, pad, reg, dt)
 
 
@@ -119,17 +138,17 @@ def test_circling_the_wrist_swings_the_weight_round_and_the_string_holds_it():
         peak = max(peak, reach(state))
     assert peak > 0.8 * state.length                  # out to the string's length
     assert peak <= poi.MAX_STRETCH * state.length + poi.HANDLE + 1e-6
-    assert min(seen_x) < -0.3 and max(seen_x) > 0.3  # round: both sides of the hand
+    assert max(seen_x) - min(seen_x) > 0.6           # round: a wide swing across the hand
 
 
 def test_a_slack_string_never_pushes_and_without_gravity_the_weight_floats():
     reg, state, _ = rig(gravity=0.0, drag=0.0)
     pad = FakePad()
     on(reg, state, pad, settle=2)
-    state.ball = [0.2, -0.1, -poi.HANDLE]            # inside the string's reach
+    state.ball = [0.2, -0.1, poi.HANDLE]            # inside the string's reach
     state.ball_v = [0.0, 0.0, 0.0]
     run(reg, state, pad, 120)
-    assert state.ball == pytest.approx([0.2, -0.1, -poi.HANDLE], abs=1e-9)
+    assert state.ball == pytest.approx([0.2, -0.1, poi.HANDLE], abs=1e-9)
     state.ball_v = [0.5, 0.0, 0.0]                    # thrown: it coasts until the string bites
     run(reg, state, pad, 30)
     assert state.ball[0] > 0.2 + 0.2
@@ -140,7 +159,7 @@ def test_the_air_takes_the_swing_out_and_a_heavy_weight_keeps_it_longer():
         reg, state, _ = rig(weight=weight, drag=0.3)
         pad = FakePad()
         on(reg, state, pad)
-        state.ball = [state.length, state.tip()[1], -poi.HANDLE]   # held out level, let go
+        state.ball = [state.length, state.tip()[1], poi.HANDLE]   # held out level, let go
         state.ball_v = [0.0, 0.0, 0.0]
         run(reg, state, pad, 300)
         return reach(state), abs(state.ball[0])
@@ -164,14 +183,81 @@ def test_the_hands_push_moves_the_handle_and_none_with_the_hand_at_zero():
     assert still == pytest.approx(0.0, abs=1e-9) and wrist0 == [0.0, 0.0, 0.0]
 
 
-def test_the_wrist_comes_home_after_a_push():
+def carry(reg, state, pad, metres, seconds=1.0, axis=0, dt=DT):
+    """The pad carried `metres` along a world axis in `seconds`, held level:
+    a push one way for half the time, the other way for the rest (a
+    triangle of speed, starting and ending still)."""
+    a_mps2 = 4.0 * metres / seconds ** 2
+    half = int(seconds / dt / 2)
+    for sign in (1.0, -1.0):
+        for _ in range(half):
+            push = [0.0, 0.0, 0.0]
+            push[axis] = sign * a_mps2 / poi.G_MPS2
+            pad.frame(accel=(push[0], 1.0 + push[1], push[2]), dt=dt)
+            poi.step(state, pad, reg, dt)
+
+
+def test_a_hand_carried_a_metre_stays_there_and_a_resets_it_home():
+    """The owner, 2026-11-03: the Joy-Con moved a metre to one side moves
+    the shape that far and it stays — no pull back to the centre."""
     reg, state, _ = rig()
     pad = FakePad()
     on(reg, state, pad)
-    run(reg, state, pad, 10, accel=(1.0, 1.0, 0.0))
-    assert math.hypot(*state.wrist) > 0.01
-    run(reg, state, pad, 600)
-    assert math.hypot(*state.wrist) < 1e-3
+    carry(reg, state, pad, 1.0)
+    there = state.wrist[0]
+    assert there == pytest.approx(poi.UNITS_PER_M, rel=0.1)       # a metre, in world units
+    run(reg, state, pad, 300)                                      # five seconds still
+    assert state.wrist[0] == pytest.approx(there, abs=1e-6)
+    assert pan(reg)[0] == pytest.approx(there + state.ball[0] - state.wrist[0], abs=1e-6)
+    carry(reg, state, pad, -0.4)                                   # back a way: it follows
+    assert state.wrist[0] == pytest.approx(there - 0.4 * poi.UNITS_PER_M, rel=0.1)
+    pad.frame(hold=("A",))
+    poi.step(state, pad, reg, DT)
+    assert math.hypot(*state.wrist) < 1e-2
+
+
+def test_a_still_pad_with_a_leaking_tilt_does_not_drift_away():
+    """A still pad whose attitude is a few degrees off reads a little of
+    gravity as a push. Still, its velocity is zeroed: the hand holds."""
+    reg, state, _ = rig()
+    pad = FakePad()
+    on(reg, state, pad)
+    off = math.radians(3.0)
+    run(reg, state, pad, 600, accel=(math.sin(off), math.cos(off), 0.0))
+    assert math.hypot(*state.wrist) < 0.05
+
+
+def test_the_hand_is_held_at_its_limit():
+    reg, state, _ = rig()
+    pad = FakePad()
+    on(reg, state, pad)
+    carry(reg, state, pad, 20.0, seconds=2.0)
+    assert math.hypot(*state.wrist) <= poi.HAND_LIMIT + 1e-9
+
+
+def test_a_stalled_pad_pushes_nothing():
+    """No new reading (the pad's reports stopped): its last accel is not
+    integrated on and on."""
+    reg, state, _ = rig()
+    pad = FakePad()
+    on(reg, state, pad)
+    pad.frame(accel=(0.5, 1.0, 0.0))
+    poi.step(state, pad, reg, DT)
+    v = list(state.wrist_v)
+    for _ in range(60):                      # the same reading, frame after frame
+        poi.step(state, pad, reg, DT)
+    assert math.hypot(*state.wrist_v) <= math.hypot(*v) + 0.5 * poi.STALL_S * poi.G_WORLD
+
+
+def test_the_poi_and_the_totem_each_get_every_degree():
+    from hyperspace.pads import gesture
+    m = gesture.Motion()
+    m.take_turn("poi")
+    m.add_turn((10.0, 0.0, 0.0))
+    m.add_turn((5.0, 1.0, 0.0))
+    assert m.take_turn() == (15.0, 1.0, 0.0)            # the totem's
+    assert m.take_turn("poi") == (15.0, 1.0, 0.0)       # the poi's, the same degrees
+    assert m.take_turn("poi") == (0.0, 0.0, 0.0)
 
 
 def test_the_stiffest_string_on_the_lightest_weight_stays_finite_under_a_violent_pad():
@@ -238,7 +324,7 @@ def test_depth_toward_the_eye_grows_the_shape_and_the_switch_turns_it_off():
     reg, state, _ = rig(gravity=0.0, drag=0.0)
     pad = FakePad()
     on(reg, state, pad, settle=2)
-    state.ball = [0.0, 0.0, 1.0 - poi.HANDLE]
+    state.ball = [0.0, 0.0, 1.0 + poi.HANDLE]
     state.ball_v = [0.0, 0.0, 0.0]
     run(reg, state, pad, 1)
     assert reg["camera.zoom"].value == pytest.approx(2 ** poi.DEPTH_OCTAVES, rel=0.01)
@@ -255,8 +341,9 @@ def test_a_resets_the_weight_to_hang_still_and_the_wrist_home():
     assert reach(state) > 0.3 and math.hypot(*state.ball_v) > 0.1
     pad.frame(hold=("A",))
     poi.step(state, pad, reg, DT)
-    assert state.wrist == [0.0, 0.0, 0.0]
-    assert math.hypot(state.ball[0], state.ball[2] + poi.HANDLE) < 0.01
+    assert math.hypot(*state.wrist) < 0.01                  # home (this frame's push after)
+    tip = state.tip()                                        # hanging under the tip
+    assert math.hypot(state.ball[0] - tip[0], state.ball[2] - tip[2]) < 0.02
     assert math.hypot(*state.ball_v) < 0.2
     pad.frame(hat=gamepad.HAT_DOWN)                    # the D-pad's down too
     state.ball_v = [1.0, 0.0, 0.0]
@@ -390,3 +477,20 @@ def test_a_scalar_poi_in_the_config_is_no_table():
     assert poi.configured({"poi": True}) == {}
     assert poi.configured({"poi": {"length": 2.0}}) == {"length": 2.0}
     assert poi.configured({}) == {}
+
+
+def test_fast_swings_with_no_travel_leave_the_hand_where_it_was():
+    """The owner's drift: the wrist swung hard (600 deg/s, the pad turning
+    about itself, not carried) gathers no travel, and held still after,
+    nothing creeps."""
+    reg, state, _ = rig()
+    pad = FakePad()
+    on(reg, state, pad)
+    circle(reg, state, pad, 4.0, f=1.5, amp=600.0)
+    after = list(state.wrist)
+    assert math.hypot(*after) < 0.3
+    truth = pad.truth
+    for _ in range(300):                                  # held still where it ended
+        truth.frame(pad, (0.0, 0.0, 0.0), DT)
+        poi.step(state, pad, reg, DT)
+    assert math.dist(state.wrist, after) < 0.05
