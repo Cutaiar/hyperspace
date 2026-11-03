@@ -114,14 +114,15 @@ load` follow-up (row 589).
 
 ## Checkpoint 2026-11-03 (the owner's answers; do not re-ask)
 
-- The `/9` migration (C2) had **not** been run on the Drive library at the
-  checkpoint (106 presets `/7`, one each `/8`, `/5`, `/2`; the shows
-  `hyperspace.project/2`; the 2026-11-02 00:31 backup was the retaper's).
-  The owner runs it before D3; D3's tool stacks on it. Check the library's
-  schemas before D3's migration is briefed.
-- #299 (`--laptop`) is merged (1a0d13f). **#338** (the poi follow-ups:
-  `devices.py`, `app.py`, `render.py`, `ui_graph.py`) merges before D2 is
-  briefed — D2's freeze would otherwise block it.
+- The `/9` migration (C2) was run by the owner on 2026-11-03 (backup
+  `~/Hyperspace/library-backup-20261102-214757`): every Drive preset is
+  `hyperspace.preset/9`, the shows' eye dropped (`.bak-v2-eye`), the shows
+  still `hyperspace.project/2`. D3's tool stacks on it.
+- #299 (`--laptop`, 1a0d13f), #338 and #339 (the poi follow-ups:
+  `devices.py`, `app.py`, `render.py`, `ui_graph.py`, `ui_pad.py`) are
+  merged, so D2's freeze starts from a `main` that holds them (98ee981).
+  #340 (the Edge Lab trigger bench, `prototypes/` only) is the owner's and
+  outside every freeze.
 - **U2** is not wave 2; it is scheduled where the six-wave doc puts it.
 - **D3**: desk templates **retired** (none exist in the Drive library or
   `~/Hyperspace`, so the inlining is a no-op and the code goes); the
@@ -137,8 +138,9 @@ load` follow-up (row 589).
 - Two items the owner raised with no wave yet: the **grand cleanup pass**
   (every preset normalised to the newest format, old cruft dropped) and
   the **north / south / east / west vocabulary** (545).
-- The plan doc was still unreadable from the orchestrator's account at the
-  checkpoint; the wave 2 table above is unverified against it.
+- The plan doc was still unreadable from the orchestrator's account
+  (daniel.allman@capx.io) after two shares; the wave 2 table above is
+  unverified against it. Ask for the "PR list by wave" section pasted.
 
 ## How to run it
 
