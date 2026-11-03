@@ -1853,19 +1853,47 @@ class SessionTable:
     its rows by reference beside the deck's own (routes, the desk's preset
     layer, the macros, the modifiers), so a deck's table is still one list;
     a session row a deck learns, edits or drops is handed to every other
-    deck's table at once (`Bindings._share`). The file's doors are here:
-    `load` (`Bindings.load`'s reading, with the old file's migrations —
-    `migrate_v1`, `remap_factory` — and its `backup` first), `to_json`,
-    `dumps`, `write`."""
+    deck's table at once (`Bindings._share`). The file is read by
+    `Bindings.load(path)` into a first deck's table (its `.session` is this
+    table; the old file's migrations — `migrate_v1`, `remap_factory` — and
+    its `backup` first) and written here: `to_json`, `dumps`, `write`."""
 
-    # on the class, as `Bindings` had them, for an instance from before a
-    # hot reload (see `Bindings`)
+    # knob smoothing in seconds (`desk.slew`, register_desk; midi.py reads
+    # it): the session's — a show keeps it, bindings.json never does. On
+    # the class, so a session from before a hot reload has it too
     slew: float = 0.0
+    # the pad's feel (`pad.feel` …, register_desk): the motion an `axis`
+    # lane travels with when its row names none, and the sticks' default
+    # camera job's (app.py). The session's, on the class like `slew`
     pad_feel: Motion = OFF
+    # no backup, no rewrite (plan 19 fork 12): the schema number the file
+    # was read at while a load changed the table in memory (a migration, a
+    # factory remap) and the copy of the file as it was could not be made.
+    # The file is then left as it is; `write` tries the copy again before
+    # anything is written over it, and the next launch tries the lot again.
+    # None once the copy exists (or was never needed)
     unbacked: str | None = None
+    # what the launch did to the file, in one line, for the SYSTEM page
+    # (`announce`; app.py adds it to the page's notes). `notes` holds the
+    # rows one by one until the next edit — and the startup preset's load
+    # is an edit (`set_routes`), so they are gone before the first frame;
+    # this line stays for the session. "" when the load wrote nothing
     said: str = ""
+    # the MIDI devices' roles (plan 27 B2; the device registry sets them,
+    # `DeviceRegistry.midi_roles`: the desk of this table's profile first,
+    # then `[[devices]]` order): an unqualified MIDI row is the first
+    # one's, another device's rows carry its role (``cc@launch:0:7``).
+    # Empty — a bare table, the tests' — every unqualified row is the
+    # one desk's, as before
     midi_roles: tuple[str, ...] = ()
+    # every other scheme's primary device (plan 27 B6; the registry sets
+    # it, `DeviceRegistry.primaries`): scheme → the role of the first
+    # enabled device of its kind in list order, whose rows are unqualified
+    # (``pad:A`` is the first pad's; a second pad's carry its role,
+    # ``pad@p2:A``). Empty — a bare table — names no role
     primaries: dict[str, str] = {}  # noqa: RUF012 — never mutated: replaced whole
+    # the schemes delivered as rows, never read as lanes (`_check`): the
+    # table's own kinds, and any a device of this rig adds (`Router.use`)
     row_schemes: tuple[str, ...] = ROW_SCHEMES
 
     # the file's migrations and its backup (module functions, the one copy)
@@ -1917,14 +1945,6 @@ class SessionTable:
                 and (role is None or b.sink[0] == role)]
 
     # ---- the file ----
-
-    @classmethod
-    def load(cls, path: Path | None, profile: str = "apc40",
-             legacy_midi: Path | None = LEGACY_MIDI_FILE) -> Bindings:
-        """The file at `path` read into a first deck's table (`Bindings.load`:
-        the factory table when there is none); that table's `session` is
-        the session table."""
-        return Bindings.load(path, profile, legacy_midi)
 
     def to_json(self, rows: Iterable[Binding] | None = None) -> dict:
         """The file's dict: the session's rows only (`is_session_row`) — never
@@ -1986,43 +2006,6 @@ class Bindings:
     latch, the rig facts, what the launch did to the file) is read and
     written through this table onto the session table."""
 
-    # knob smoothing in seconds (`desk.slew`, register_desk; midi.py reads
-    # it): the session's — a show keeps it, bindings.json never does. On
-    # the class, so a table from before a hot reload has it too
-    slew = _session_attr('slew')
-    # the pad's feel (`pad.feel` …, register_desk): the motion an `axis`
-    # lane travels with when its row names none, and the sticks' default
-    # camera job's (app.py). The session's, on the class like `slew`
-    pad_feel = _session_attr('pad_feel')
-    # no backup, no rewrite (plan 19 fork 12): the schema number the file
-    # was read at while a load changed the table in memory (a migration, a
-    # factory remap) and the copy of the file as it was could not be made.
-    # The file is then left as it is; `write` tries the copy again before
-    # anything is written over it, and the next launch tries the lot again.
-    # None once the copy exists (or was never needed)
-    unbacked = _session_attr('unbacked')
-    # what the launch did to the file, in one line, for the SYSTEM page
-    # (`announce`; app.py adds it to the page's notes). `notes` holds the
-    # rows one by one until the next edit — and the startup preset's load
-    # is an edit (`set_routes`), so they are gone before the first frame;
-    # this line stays for the session. "" when the load wrote nothing
-    said = _session_attr('said')
-    # the MIDI devices' roles (plan 27 B2; the device registry sets them,
-    # `DeviceRegistry.midi_roles`: the desk of this table's profile first,
-    # then `[[devices]]` order): an unqualified MIDI row is the first
-    # one's, another device's rows carry its role (``cc@launch:0:7``).
-    # Empty — a bare table, the tests' — every unqualified row is the
-    # one desk's, as before
-    midi_roles = _session_attr('midi_roles')
-    # every other scheme's primary device (plan 27 B6; the registry sets
-    # it, `DeviceRegistry.primaries`): scheme → the role of the first
-    # enabled device of its kind in list order, whose rows are unqualified
-    # (``pad:A`` is the first pad's; a second pad's carry its role,
-    # ``pad@p2:A``). Empty — a bare table — names no role
-    primaries = _session_attr('primaries')
-    # the schemes delivered as rows, never read as lanes (`_check`): the
-    # table's own kinds, and any a device of this rig adds (`Router.use`)
-    row_schemes = _session_attr('row_schemes')
     # the loaded preset's modifiers (plan 28 N1, `modifiers.Modifier`), in
     # id order: a tuple, always replaced whole (`set_modifiers`,
     # `add_modifier`, `remove_modifier`), so a table from before a hot
@@ -2044,18 +2027,9 @@ class Bindings:
     page: object | None = None
     page_serial: int = 0
 
-    # plan 44 D3: the session table's state, through this table
-    path = _session_attr("path")
-    profile = _session_attr("profile")
-    carried = _session_attr("carried")
-    error = _session_attr("error")
-    migrated = _session_attr("migrated")
-    read_at = _session_attr("read_at")
-    changed = _session_attr("changed")
-    sinks_seeded = _session_attr("sinks_seeded")
-    layer = _session_attr("layer")
-    layers = _session_attr("layers")
-    layer_serial = _session_attr("layer_serial")
+    # plan 44 D3: the session table's state (`SESSION_ATTRS`) is read and
+    # written through this table — one property per name, made from the
+    # list below the class (review of #351: one list, one copy)
 
     @property
     def session(self) -> SessionTable:
@@ -2089,16 +2063,30 @@ class Bindings:
             t.rows_serial = getattr(t, "rows_serial", 0) + 1
 
     def __init__(self, bindings: Iterable[Binding] = (), *, path: Path | None = None,
-                 profile: str = "apc40", session: SessionTable | None = None):
+                 profile: str | None = None, session: SessionTable | None = None):
         # plan 44 D3: the session table this deck's table follows — given,
         # its rows are this table's first (by reference) and `path` and
-        # `profile` are its; else a new one over `path` and `profile`
+        # `profile` are its (one naming another is refused: the file is the
+        # session's); else a new one over `path` and `profile`
         own = list(bindings)
+        shared = False
         if session is None:
-            session = SessionTable(path=path, profile=profile)
+            session = SessionTable(path=path, profile=profile or "apc40")
             self.bindings: list[Binding] = own
+        elif (path is not None and path != session.path) or (
+                profile is not None and profile != session.profile):
+            raise ValueError("Bindings(session=): the path and profile are the session's — "
+                             f"{session.path} / {session.profile}")
         elif session.tables:
-            self.bindings = [*session.rows, *(b for b in own if not is_session_row(b))]
+            # (review of #351, round 2: a session row given that the session
+            # lacks is shared, never dropped — added after the session's,
+            # and handed to every deck by the `_share` below)
+            have = session.rows
+            known = {json.dumps(b.to_json(), sort_keys=True) for b in have}
+            extra = [b for b in own if is_session_row(b)
+                     and json.dumps(b.to_json(), sort_keys=True) not in known]
+            self.bindings = [*have, *extra, *(b for b in own if not is_session_row(b))]
+            shared = bool(extra)
         else:
             # (review of #351: a session no table follows yet holds no rows —
             # the first table to follow it seeds them, its own given ones)
@@ -2140,6 +2128,8 @@ class Bindings:
         # retarget): what a per-frame cache keys on beside the list's identity
         # and length (ui_pad's), so it never scans the rows to notice
         self.rows_serial = 0
+        if shared:
+            self._share()                 # (the session rows it added, every deck's)
 
     # ---- construction ----
 
@@ -2916,6 +2906,14 @@ class Bindings:
 
 
 # ---------------------------------------------------------------- router
+
+# plan 44 D3 (review of #351): every name of `SESSION_ATTRS` a property of
+# a deck's table onto its session — generated from the one list, which
+# `Bindings._sess` also migrates on a hot reload
+for _name in SESSION_ATTRS:
+    setattr(Bindings, _name, _session_attr(_name))
+del _name
+
 
 class Router:
     """One deck's evaluator over one table: the adapters' row lookup (keys,

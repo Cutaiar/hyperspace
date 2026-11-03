@@ -286,12 +286,19 @@ order across the line, row 624). `ghost.mirror` is a session **key** of
 the `ghost` group (`params.SESSION_KEYS`, row 612), written to every
 deck's hands state (a `ghost.RoomSetting` on the session's param, each
 state held weakly). A session param is applied **once a frame**, by the
-session's lead deck alone, and every deck's pass in a frame shares the
-session's mark (review of #351: two decks would otherwise release each
-other's modulation). **The table** (row 614): `SessionTable` reads its rows
+session's lead deck alone — named, the deck on air (`Deck.build(on_air=)`;
+the first follower only until one is named) — and every deck's pass in a
+frame shares the session's mark, which the session's own `apply` dedups
+by too (review of #351: two decks would otherwise release each other's
+modulation). A group's session key is outside the group's per-group
+roads (`params.in_group`: a ghost reset, a ghost module preset, the
+strip's dot leave the mirror alone). **The table** (row 614): `SessionTable` reads its rows
 off the deck tables that follow it and owns the file and the session's
 state; a deck's `Bindings` holds the session rows by reference and
-proxies `SESSION_ATTRS`; a session row bound, added or removed on one
+proxies `SESSION_ATTRS` (generated from the one list; a later deck's
+table adds the session rows it brings that the session lacks, one naming
+another file is refused; the file is read by `Bindings.load(path)`); a
+session row bound, added or removed on one
 deck is handed to every other (`_share`); `Sources.follow` follows the
 session table. **The library** (row 615): `Presets.landing` /
 `current` / `loaded` / `is_dirty`, the library asking `Library._owner`.
