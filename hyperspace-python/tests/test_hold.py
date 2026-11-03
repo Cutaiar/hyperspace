@@ -505,17 +505,20 @@ def test_drop_goes_back_to_the_hold_point_as_one_undo_step(rig):
     from hyperspace.graph import read_graph
 
     zoom0, fov0 = reg["camera.zoom"].base, reg["eye.fov"].base
+    bpm0 = reg["tempo.bpm"].base
     wiring0 = r.wiring
     hold.engage()
     reg["camera.zoom"].set(zoom0 * 2)
-    reg["eye.fov"].set(fov0 + 10)          # the room's, not the look's
+    reg["eye.fov"].set(fov0 + 10)          # the look's since plan 43 C2
+    reg["tempo.bpm"].set(bpm0 + 10)        # the room's, not the look's
     rig.presets.graph.land(read_graph({"frame": "wired"}))
     settle(rig)
     assert r.wiring != wiring0 and hold.rewired()
     assert hold.drop() and not hold.on
     settle(rig)
     assert reg["camera.zoom"].base == pytest.approx(zoom0)
-    assert reg["eye.fov"].base == pytest.approx(fov0 + 10)
+    assert reg["eye.fov"].base == pytest.approx(fov0)
+    assert reg["tempo.bpm"].base == pytest.approx(bpm0 + 10)
     assert r.wiring == wiring0
     assert rig.undo.undo()
     assert reg["camera.zoom"].base == pytest.approx(zoom0 * 2)
@@ -606,7 +609,7 @@ def test_drop_after_a_whole_new_look_is_one_undo_step_back_and_one_forward(rig):
     """Hand check AI.4, headless (plan 38 B2). Held on a clean TUMBLE: three
     of the look's params moved, the graph rewired on GRAPH, another preset
     loaded (TRIP: other values, routes, desk, graph), its macros and a
-    route edited, a rig param (the eye's) moved. DROP: the values, the
+    route edited, a rig param (the tempo) moved. DROP: the values, the
     graph, the routes, the desk's preset layer, the macros and the name are
     the hold point's — the dirty dot out as it was — and the rig's param is
     left. One step: the stack grows by one, and one ⌘Z brings the whole
@@ -619,7 +622,8 @@ def test_drop_after_a_whole_new_look_is_one_undo_step_back_and_one_forward(rig):
     reg, lib, hold, r, table = rig.reg, rig.lib, rig.hold, rig.renderer, rig.table
     rig.undo.clear()
     assert lib.current(PRESETS) == "TUMBLE" and not lib.is_dirty(PRESETS)
-    at_hold, wiring0, fov0 = look(rig), r.wiring, reg["eye.fov"].base
+    # (the rig's param is the tempo: the eye is the look's since plan 43 C2)
+    at_hold, wiring0, fov0 = look(rig), r.wiring, reg["tempo.bpm"].base
     hold.engage()
     for pid, k in (("view.bright", 3), ("camera.zoom", 4), ("fx.mix", -5)):
         reg[pid].step(k)
@@ -632,7 +636,7 @@ def test_drop_after_a_whole_new_look_is_one_undo_step_back_and_one_forward(rig):
     table.set_macros({"macro.1": {"label": "mine", "subs": [
         {"base": "view.speed", "from": 0.2, "to": 0.9}]}}, reg)
     table.remove(table.routes()[0])
-    reg["eye.fov"].set(fov0 + 10)                              # the room's, not the look's
+    reg["tempo.bpm"].set(fov0 + 10)                            # the room's, not the look's
     settle(rig)
     assert lib.is_dirty(PRESETS) and hold.rewired()
     dropped, wiring1, depth = look(rig), r.wiring, len(rig.undo.stack)
@@ -642,7 +646,7 @@ def test_drop_after_a_whole_new_look_is_one_undo_step_back_and_one_forward(rig):
     assert hold.drop() and not hold.on
     assert same_look(look(rig), at_hold) and r.wiring == wiring0
     assert lib.current(PRESETS) == "TUMBLE" and not lib.is_dirty(PRESETS)
-    assert reg["eye.fov"].base == pytest.approx(fov0 + 10)
+    assert reg["tempo.bpm"].base == pytest.approx(fov0 + 10)
     assert len(rig.undo.stack) == depth + 1 and rig.undo.stack[-1].label == "drop the preview"
     settle(rig)
     assert same_look(look(rig), at_hold) and r.wiring == wiring0   # nothing re-lands
@@ -650,7 +654,7 @@ def test_drop_after_a_whole_new_look_is_one_undo_step_back_and_one_forward(rig):
     assert rig.undo.undo()                                     # one step, not several
     assert same_look(look(rig), dropped) and r.wiring == wiring1
     assert lib.current(PRESETS) == "TRIP" and lib.is_dirty(PRESETS)
-    assert reg["eye.fov"].base == pytest.approx(fov0 + 10)
+    assert reg["tempo.bpm"].base == pytest.approx(fov0 + 10)
     assert len(rig.undo.stack) == depth
 
 
