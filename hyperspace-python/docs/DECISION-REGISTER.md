@@ -602,6 +602,7 @@ here; overturn → the change, then the same.
 | 564 | Wave 0 E1: delay loops are the trails mechanism, the look-back keeps the dream — the feedback starter (a composite laid over, a delay, a fade at level 0.75: colour and alpha decay alike) on the cable menu and "add feedback after" on the node menu, many allowed; "feedback" not "echo", which names the look-back's frames | 423 | (rec) — pending the owner |
 | 571 | Plan 44 D1: today's per-deck singletons (registry, view, table, router, the three banks, presets and their graph section, learn, undo and its marks, renderer, hold) bundled in one `deck.Deck`; `Deck.build` is the one construction order — `app.main` and `tests/test_undo.boot` both call it, the rig's objects built between its lines passed in as hooks at their old places; no behaviour change (`tests/test_deck.py`) | 430 | built as recommended — PR (D1) |
 | 577 | Wave 1 K2: warp's drift and scale on one `@clock` at drift × scale (the scroll counted in cells), tripcolour's pulse on a `@clock` wrapped to 2π; the lint's allowlist loses three pairs; party-noita's 17 goldens re-recorded | 419, 434 | owner's rule (row 560), built |
+| 578 | Wave 1 K3: `view.media_rate` and `view.inst_rate` integrated by the host into `view.media_phase` and `view.inst_phase` (`ViewState.integrate`, wrapped at 2π and 20π), read by the media path and the field's motion in place of t × rate; not params, never saved | 435 | built under row 560 (the owner's rule) — PR (K3) |
 | 589 | Wave 1 T0: the test suite cannot hang the Mac — pytest-timeout's thread method at 120 s for xdist workers (the signal method for a serial run) with no worker restart in pyproject's addopts, so a test blocked in C fails by name and ends the run; `live` tests hold a per-account `flock` (wait 60 s, then skip); one tier at a time on a shared Mac; a real-GLFW test asks a child process first (`gl_window_ok`, #332) and skips if `glfwInit` does not answer | — | (rec) — pending the owner; built as recommended (T0) |
 
 "—": no hand check shows it; tests only.
@@ -9729,6 +9730,79 @@ and D3 (the per-deck split) are
   the contract working as intended and a change from today.
 - **Judge it.** — (C2's hand check: frame, save, load another, load it
   back; the framing is back).
+
+### 578. The media path's and the field's rates are integrated by the host
+- **Asked.** Row 560 (the owner, 2026-11-02, after the show of
+  2026-10-30): no shader multiplies time by a param. It named
+  `view.media_rate` and `view.inst_rate` as the same fault on the Python
+  side: the media path's phase was `t * s.media_rate` (render.py,
+  `_face_uniforms`) and the field's motion `t * s.inst_rate` (render.py
+  `_legacy_field`, field.py `field`), so a knob step an hour into a set
+  moved the phase by t · Δrate — the picture over the faces and every copy
+  of the shape jumped to somewhere else.
+- **Answer.** Built under row 560 (wave 1 K3); the rule is the owner's,
+  the shape below the build's.
+- **Built.** `ViewState` gains `inst_phase` and `media_phase` (floats, 0,
+  rad), plain fields like the turn's `ang`: not params, never saved, no
+  schema change. `ViewState.integrate(dt)` adds `dt · inst_rate` and
+  `dt · media_rate` every frame, before the turn's own update and whether
+  or not the turn is playing (they ran on the wall clock before), wrapped
+  at a whole period of every use: the path reads sin/cos of ph and 2·ph
+  (`MEDIA_PERIOD` 2π); the field reads ph, 0.7·ph and 0.9·ph
+  (`field._motion`), whose common period is 20π (`INST_PERIOD`). The
+  draw reads the phases and no rate: `field.field` and
+  `Renderer._field` / `_legacy_field` / `_copies_of` lost their now-unused
+  `t`. From rest at a constant rate the phase is rate · t, the picture
+  before K3. The golden harness (`tools/golden_frames.py`) sets each
+  rig's phases on its first frame, after the first `reg.apply`, with
+  `ViewState.seed_phases(T0)` from the rate that frame's modulation
+  leaves — as if the rate had always been that, `Renderer._pattern_clock`'s
+  first call (row 99) — so frame k reads (T0 + k·DT) · rate as it did: no
+  golden moved. The shot tools (`layout_shots`, `dream_shots`, `fx_shots`,
+  `lookback_shots`, `hands_tape`, `dream_layer_sheet`) seed at their
+  pinned clock the same way; their committed sheets were not regenerated.
+  `field.field`'s `radius_px` and `pad_px` are keyword-only, so a caller
+  still passing a time cannot land it on the cull radius.
+  `app.frame` runs `view.integrate` in a guarded block of its own after
+  the step's (the order unchanged), so a step that raises every frame no
+  longer stops the motion with it.
+  `tests/test_view_phase.py`: a step changes the slope, not the value; the
+  wrap is invisible in the field; render.py and field.py read no rate (an
+  AST pin); a field-rate nudge ten seconds in moves no copy further than
+  one frame's motion at the new rate, where t × rate moved them several
+  times that.
+- **Other options.** Integrate per renderer, keyed on the frame's `t`
+  (`Renderer._pattern_clock`'s shape): the held program and the preview
+  are two renderers over one `ViewState`, so each would keep its own
+  phase and the hold would need no edit. Not taken (the orchestrator's
+  ruling on review): plan 44 makes `ViewState` per deck — one look, one
+  turn, one phase — and the turn's `rot.phase.*` is the precedent on the
+  view; the hold's one-for-both is a plan 38 consequence that plan 44's
+  D5 removes. `field.field` is also called with a view, not a renderer. A `@clock` in a shader:
+  these paths are computed in Python, not in a shader.
+- **To reverse.** The two fields and the two lines in `integrate` out;
+  `ph = t * s.media_rate` / `t * s.inst_rate` back in render.py and
+  field.py with `t` threaded back through `field` and the scene pass; the
+  harness's seed out.
+- **Rough edge.** The hold (plan 38): there is one `ViewState` and
+  `integrate` runs once a frame before either draw, so the phase is one
+  for both — under hold an operator's change to either rate moves the
+  projector's motion's speed too, where before K3 the program kept its
+  held rate. This is how the turn already behaves, and the two rate
+  params join `view.speed` in `hold.ONE_FOR_BOTH` (the orchestrator's
+  ruling) so the hold neither holds them nor counts them as changed on
+  its red line (`tests/test_hold.py`). Plainly: until plan 44's
+  per-deck `ViewState`, a Field rate or Media rate move on the preview
+  also moves the projector, and the hold's red line stays silent about
+  it.
+  A paused turn (`view.playing` off) leaves the field and the path
+  moving, as before. And `app.frame` integrates even on a frame whose step
+  raised before `reg.apply()`, so the phases then advance on the last
+  applied rates — the motion carries on at stale values where before K3
+  the field and path still ran on the wall clock and the turn stopped
+  (intended: the picture keeps moving through a broken step; the red
+  banner names the step).
+- **Judge it.** Hand check 435 (group AZ).
 
 ### 577. Continuity K2: warp's drift and scale and tripcolour's pulse on `@clock`
 - **Asked.** Row 560 (the owner, 2026-11-02, after the show of

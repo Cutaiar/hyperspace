@@ -1269,9 +1269,14 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
             devs.send(reg, chain)
             if devs.error and ok:
                 ok, reloader.runtime_error = False, devs.error
-        h.view.integrate(dt)
     except Exception as e:  # noqa: BLE001
         ok, reloader.runtime_error = False, _err("step", e)
+    # the integrator on its own (K3, row 578): the turn, the field's motion
+    # and the media path keep moving through a step that raised every frame
+    try:
+        h.view.integrate(dt)
+    except Exception as e:  # noqa: BLE001
+        ok, reloader.runtime_error = False, _err("view.integrate", e)
     # the analyzer's lanes as a route reads them (out / CEIL), for the
     # patterns that draw the bands themselves (u_levels, plan 22 B3): render
     # input, read-only, like the dim — never a param

@@ -163,18 +163,24 @@ def test_instances_grid(ctx):
 def test_instance_motion(ctx):
     import numpy as np
 
-    still = render_offscreen(
-        ViewState(shape=3, ang=list(VIEW["ang"]), instances=9), 800, 600,
-        ctx=ctx, t_now=2.0,
-    )
-    for motion in (1, 2, 3):
-        moving = render_offscreen(
+    still = render_offscreen(ViewState(shape=3, ang=list(VIEW["ang"]), instances=9), 800, 600,
+                             ctx=ctx)
+
+    def at(motion, phase):
+        # K3: the motion's phase is the host's (ViewState.integrate), not
+        # the frame's clock
+        return render_offscreen(
             ViewState(shape=3, ang=list(VIEW["ang"]), instances=9,
-                      inst_motion=motion, inst_amp=0.4),
-            800, 600, ctx=ctx, t_now=2.0,
-        )
-        assert np.abs(moving.astype(int) - still.astype(int)).mean() > 0.01, (
+                      inst_motion=motion, inst_amp=0.4, inst_phase=phase),
+            800, 600, ctx=ctx)
+
+    for motion in (1, 2, 3):
+        a, b = at(motion, 2.0), at(motion, 3.1)
+        assert np.abs(a.astype(int) - still.astype(int)).mean() > 0.01, (
             f"instance motion mode {motion} leaves the grid static"
+        )
+        assert np.abs(a.astype(int) - b.astype(int)).mean() > 0.01, (
+            f"instance motion mode {motion} does not move with its phase"
         )
 
 
@@ -223,9 +229,11 @@ def test_bitmap_path_oscillates(ctx):
     card = CardMedia(np.full((8, 8, 4), (220, 40, 200, 255), dtype=np.uint8))
 
     def shot(mode, t):
+        # K3: the path's phase is the host's (ViewState.integrate), t seconds
+        # at media_rate 1 — the frame's own clock no longer moves it
         return render_offscreen(
             ViewState(shape=3, ang=list(VIEW["ang"]), faces=True,
-                      media_mode=mode, media_amp=0.25, media_scale=0.4),
+                      media_mode=mode, media_amp=0.25, media_scale=0.4, media_phase=t),
             600, 400, ctx=ctx, t_now=t, media=card, wiring=_on_faces("a"),
         )
 
@@ -1763,13 +1771,13 @@ def _layout_view(n, layout=0, motion=0, **kw) -> ViewState:
     return s
 
 
-def _offsets(s, w, h, t):
+def _offsets(s, w, h):
     """Every copy's centre from the camera's (the viewport's centre plus the
     pan), as `field.field` places them before the cull: what the pre-field
     renderer called the copies' offsets."""
     from hyperspace import field
 
-    rows = field.field(s, w, h, t)
+    rows = field.field(s, w, h)
     return rows[:, :2] - np.array([w / 2 + s.pan[0], h / 2 + s.pan[1]], dtype=np.float32)
 
 
@@ -1787,15 +1795,16 @@ def _scene(ctx, r, s, t=2.0):
     copies' offsets in px from the camera's centre for each time the pass
     asked for the field — once a pass that draws anything, never one with
     no copies). The field is field.py's (Fit, a lattice) or the flat
-    field as it always was (`_legacy_field`), whichever the pass asked."""
+    field as it always was (`_legacy_field`), whichever the pass asked.
+    The motion's phase is the one `t` seconds at `inst_rate` give (K3: the
+    host integrates it, `ViewState.integrate`)."""
+    s.inst_phase = t * s.inst_rate
     seen = []
     real = r._field
-    r._field = lambda s_, w, h, t_: (seen.append(_offsets(s_, w, h, t_)),
-                                     real(s_, w, h, t_))[1]
+    r._field = lambda s_, w, h: (seen.append(_offsets(s_, w, h)), real(s_, w, h))[1]
     real_legacy = r._legacy_field
-    r._legacy_field = lambda s_, t_: (seen.append(_legacy_offsets(s_, real_legacy(s_, t_),
-                                                                  LW, LH)),
-                                      real_legacy(s_, t_))[1]
+    r._legacy_field = lambda s_: (seen.append(_legacy_offsets(s_, real_legacy(s_), LW, LH)),
+                                  real_legacy(s_))[1]
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((LW, LH), 4)])
     fbo.use()
     ctx.viewport = (0, 0, LW, LH)

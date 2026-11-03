@@ -6715,6 +6715,38 @@ time. Fail: anything that differs from the previous build — a step
 missing from the undo footer, a knob that stops after a save, or a hot
 reload error naming `deck`.
 
+## AZ. Continuity: the media path's and the field's rates (wave 1 K3)
+Register row 578 (under row 560; wave 1 K3, `wave1/k3`). The rates are
+integrated by the host (`ViewState.integrate`): the draw reads a phase,
+never t × rate. Restart the app after pulling (a new field on the live
+`ViewState`).
+**435. A nudge on the media rate or the field rate changes the speed, not the place.** (laptop; any time, but the longer the app has run the better)
+Headless: `tests/test_view_phase.py` (`test_a_knob_step_on_the_field_rate_moves_no_copy_further_than_one_frame`, `test_a_rate_step_changes_the_slope_not_the_value`, `test_the_draw_reads_the_phase_never_the_rate`).
+1. Load a preset with a field in motion (`party-field` or `ember-orbit`:
+   several copies, motion ORBIT or WAVE) and let it run — ten minutes at
+   least; the show's shape is an hour.
+2. Nudge **Field rate** (`view.inst_rate`, the FIELD row; APC40 knob
+   0x35 on the preset layer) one step up, then one down, then sweep it
+   slowly to the top and back to 1.
+3. Put a media channel on the faces (a still on `pattern.media`), set its
+   path to orbit, then figure-8, then sway, and nudge **Media rate**
+   (`view.media_rate`) one step each way in each.
+4. Turn **Media rate** to 0: the picture stops where it is; back up: it
+   moves on from there.
+5. Under hold (plan 38): engage HOLD and nudge Field rate on the preview.
+   Until plan 44's per-deck `ViewState`, a Field rate or Media rate move
+   on the preview also moves the projector — its copies quicken too —
+   and the hold's red line stays silent about it. That is the ruled
+   behaviour (row 578), the same as the turn's speed, not a fault.
+*Pass:* in 2 and 3 every nudge makes the motion quicken or slow from
+where it is — no copy and no picture leaps across the screen, the same as
+nudging the turn's speed; in 4 the picture parks and resumes in place.
+*Fail:* a nudge lands the copies or the picture somewhere else (the
+2026-10-30 show's fault): the draw reads a rate again
+(`tests/test_view_phase.py`'s pin should have caught it), or a phase
+wraps at a period one of its uses does not share (`view.INST_PERIOD`,
+`MEDIA_PERIOD`).
+
 ## What no test covers
 
 Only a person can settle these:
