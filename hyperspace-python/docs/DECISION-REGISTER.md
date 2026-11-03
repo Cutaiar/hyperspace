@@ -622,11 +622,11 @@ here; overturn → the change, then the same.
 | 582 | Plan 45 V2, the two params a channel: `media.<c>.audio` (toggle, default off — today's silence) and `media.<c>.gain` (linear, default 1.0, `tapers.T_MEDIA_GAIN` = `exp_zero(100, 120)`: off, then −30…+6 dB, unity notch), both performance (`media` group), persisted, learnable, modulatable; no schema move — a file without them loads them at their defaults | 437, 438 | (rec) — built as recommended |
 | 583 | Plan 45 V2, the stream's lifecycle: nothing opened until a channel's sound is first on (on a thread of its own, `media-mixer-open`); then left open playing silence until exit (`MediaState.close`, within its budget); a failed open, or a stream that stops under us (a device unplugged), is said on SYSTEM and retried 5 s after the failure while asked; the toggle's off is acted on 30 frames later (`OFF_FRAMES`: a lane flicking it costs nothing) and its `disable()` runs on the media closer, never at once with an enable (`_Sound`); a slot change leaves the old track to its source's `close` | 439 | (rec) — built as recommended |
 | 584 | Plan 48: the library lists `presets/` every folder down (hidden folders skipped); a preset's name is folder-qualified (`party/TRIP`), the file keeps the leaf; `path_slug` for a preset's file key, `slug` stays flat | 440 | (rec) — the owner's ask (L1, 2026-11-02); built as recommended |
-| 585 | Plan 48: the bank names a preset by its folder-qualified name, a bare name a top-level file; no `hyperspace.project` schema bump — an older build reads a folder slot as filled-but-missing | 443 | (rec) — pending the owner; built as recommended |
-| 586 | Plan 48: the trash is this Mac's (`<machine>/trash/<origin folder>/`), never in a synced library; the old library trash listed (marked old), restorable as a copy (the file stays), never written or emptied — not migrated | 442 | (rec) — pending the owner; built as recommended |
-| 587 | Plan 48: a save writes back to the preset's own file; as… with a folder in the name writes into it; a new preset grown from the loaded one (two-handed save, `preset.save_new`, an empty pad's hold) lands beside it; ⇧F's `PRESET <n>` at the top | 441 | (rec) — pending the owner; built as recommended |
-| 588 | Plan 48: the PRESETS page draws a folder's preset as `party / TRIP` with the folder dim; the flat list stays; a rename's field holds the leaf and keeps the folder | 440, 441 | (rec) — pending the owner; built as recommended |
-| 589 | Wave 1 T0: the test suite cannot hang the Mac — pytest-timeout's thread method at 120 s for xdist workers (the signal method for a serial run) with no worker restart in pyproject's addopts, so a test blocked in C fails by name and ends the run; `live` tests hold a per-account `flock` (wait 60 s, then skip); one tier at a time on a shared Mac; a real-GLFW test asks a child process first (`gl_window_ok`, #332) and skips if `glfwInit` does not answer | — | (rec) — pending the owner; built as recommended (T0) |
+| 585 | Plan 48: the bank names a preset by its folder-qualified name, a bare name a top-level file; no `hyperspace.project` schema bump — an older build reads a folder slot as filled-but-missing | 443 | owner — 2026-11-03: yes; and a grand cleanup pass later normalises every preset to the newest format and drops the old cruft |
+| 586 | Plan 48: the trash is this Mac's (`<machine>/trash/<origin folder>/`), never in a synced library; the old library trash listed (marked old), restorable as a copy (the file stays), never written or emptied — not migrated | 442 | owner — 2026-11-03: yes |
+| 587 | Plan 48: a save writes back to the preset's own file; as… with a folder in the name writes into it; a new preset grown from the loaded one (two-handed save, `preset.save_new`, an empty pad's hold) lands beside it; ⇧F's `PRESET <n>` at the top | 441 | owner — 2026-11-03: yes |
+| 588 | Plan 48: the PRESETS page draws a folder's preset as `party / TRIP` with the folder dim; the flat list stays; a rename's field holds the leaf and keeps the folder | 440, 441 | owner — 2026-11-03: yes |
+| 589 | Wave 1 T0: the test suite cannot hang the Mac — pytest-timeout's thread method at 120 s for xdist workers (the signal method for a serial run) with no worker restart in pyproject's addopts, so a test blocked in C fails by name and ends the run; `live` tests hold a per-account `flock` (wait 60 s, then skip); one tier at a time on a shared Mac; a real-GLFW test asks a child process first (`gl_window_ok`, #332) and skips if `glfwInit` does not answer | — | owner — 2026-11-03: yes; `--dist load` goes to wave 2 T1 as recommended (measured under the live lock) |
 | 590 | Plan 44 D2: the router split — `routing_sources.Sources` (the feeds, labels, rests, gates, kinds, names and the lane cache, the device registry and `schemes`, the source-feel rule, the key-code cache, the one clock) is the shared half every source feeds; `Router(reg, table, sources)` keeps the evaluator (the patch, the banks, the macros, the modifiers' memory and their own `mod` vector, the rows' and the camera job's followers, key and pad rows; `sources=` keyword-only) and what depends on its table (an address resolved and cached against its own primaries, its pad feel); every other old source-side name on `Router` reads through to its sources (a router from before the build, after a hot reload, gets sources of its own), a router handed a second clock is refused, and `routing.py` re-exports `Sources` and the scheme grammar it moved, so no importer changes; no behaviour change (`tests/test_deck.py::test_one_sources_fed_once_drives_two_routers_as_one_router_did`) | 444, 445 | built as recommended — PR (D2) |
 | 591 | Plan 44 D2: the banks' and the modifiers' own lanes (`lfo`, `env`, `seq`, `mod`) still publish into the shared `Sources`, as they did into the one router — each router republishes before it reads, and its `mod` vector is its own (seeded from its own last outputs, put back when another router published), so each of two routers lands what it would alone, even on different modifiers; D4 gives each deck its own layer for them (names, rests, what the panel reads between passes) | — | (rec) — pending the owner; built as recommended |
 | 592 | Plan 44 D2: `devices.poll` keeps `router=` — `act` lands the deck's rows, and the pad's axis lanes reach the sources through `Router.pad`; the pad's touch and motion lanes move to `PadDevice.feed(sources)`, the feed slot; `devices.feed`, the adapters' `feed` and `audio.publish` are handed the sources; `app.frame` hands them `router.sources` — no second handle on the host | 444 | (rec) — pending the owner; built as recommended |
@@ -641,6 +641,8 @@ here; overturn → the change, then the same.
 | 601 | Plan 49 U1: section titles follow the rail's words (`lookback`, not `dream`); the lookback section draws the page as it is — its look-back / dream / shared split is stage 2's to redraw (the owner, 2026-11-02: "a horrid representation") | 449 | (rec) — pending the owner; built as recommended |
 | 605 | Wave 2 I1: `--dist load` with up to four worker restarts (pyproject now; CI once the owner lands the workflow edit), so a crash or hang costs its one test, not the run's queue; the live lock alone keeps two live tests apart, taken outside the per-test timeout, a run's own live tests waiting for each other without bound (the holder's run id in the file), another run's 60 s and a holder naming no run 90 s, then a skip that says which; a live test's fixture wider than the test fails that test by name before it is set up; the dream's real VGG test joins the live tier | 456 | owner (2026-11-03) for `--dist load`; the rest (rec) — pending the owner; built as recommended (I1) |
 | 606 | Wave 2 I1: the four flakes of wave 1 — the Xbox pad test's order dependence was the Mac's real Joy-Con read once a real-GL test had initialised GLFW (fixed: no test reads a real joystick); the segment crashes and the `test_shape_renders` failures did not reproduce (what was tried is recorded); `tests/fixtures/real.mp3` is used by no test; `tools/sort_register.py` sorts this file | — | (rec) — pending the owner; built as recommended (I1) |
+| 607 | Wave 2 T2 (after row 561): ⇧ held while dragging a continuous panel slider or fader moves the value a tenth as far (`ui.FINE` = 0.1, ÷10 as the APC40's fine button on #344); the panel's own relative drag, not imgui's modifier (a slider has none — Alt slows only a drag widget, and Shift speeds one up); once ⇧ joins a drag the rest of it is relative, so a ⇧ press does not jump to the mouse and writes nothing (a log or between-detents base stays bit for bit), ⇧ joining mid-drag counts that frame's movement fine, and letting ⇧ go returns to coarse without a jump; one drag, one undo step; an enum, an integer and a toggle are untouched | 457 | (rec) — built as recommended (T2) |
+| 608 | Wave 2 T2, its reach and its word: every slider and fader `ui.py` draws for a param (`Panel._slider`, `Panel._fader`, so every page's `_row` and `half`); the tooltip leads with `FINE` while ⇧ is held over one; not the raw sliders on ROUTING (a route's depth and rest, a modifier's knobs, a span's from / to) or GRAPH's backdrop, which are other files; no arrow keys (keyboard navigation is off in the panel); a fader's imgui label is now its param id, so the driver finds it; hot reload carries it | 457, 458 | (rec) — built as recommended (T2) |
 | 609 | Wave 2 T3: SEND B held is FINE — while it is down every APC knob (a ring row, `abs`, on a continuous non-integer param) moves its param a tenth as far, read relatively and written between detents; its LED lit while held; faders, discrete targets and relative rows stay coarse; the button is the adapter's (`apc40.FINE`, `midi.MidiIO`), not a map row, and gives way to any row on SEND B | 459 | (rec) — the build's, for the owner and Dillon to keep |
 | 610 | Wave 2 T3: letting go of FINE re-sends the ring of every knob it moved, so the encoder is re-based onto the param and the next coarse turn continues from there (plan 13 D7's re-base; soft pickup where rings do not re-base); `desk.fine` is the rig's (group desk, never saved, not modulatable) and a reconnect lets go of it | 460 | (rec) — the build's, for the owner and Dillon to keep |
 | 626 | Plan 49 U2: the rest of the pages are sections of GRAPH's side pane — fx, media, lfo, seq, audio, camera, output, after U1's five, in the order selection · presets · fx · lookback · faces · media · lfo · seq · analyzer · audio · camera · output — each body the function its page draws (`ui_fx.page`, `ui_media.draw`, `ui_lfo.page`, `ui_seq.page`, `Panel._page_audio` / `_page_camera` / `_page_output`), one row of `ui_pane.SECTIONS`; every new section folded at first, beside and in the band | 471, 478 | (rec) — pending the owner; built as recommended |
@@ -11099,6 +11101,66 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   (a worker's stderr), so the next one should be rerun as
   `-n0 -k <test>` at once.
 - **Judge it.** — (tests only: the pair above; `tests/test_live_lock.py`).
+
+
+### 607. Wave 2 T2: Shift-drag fine mode in the panel
+- **Asked.** The owner's coarse-and-fine ask after the show of 2026-10-30
+  (row 561's): T1 reshaped the tapers, T3 is the APC40's fine button; T2
+  is the panel's gesture — hold ⇧ and a drag moves the value finely.
+- **Answer.** (rec) — built as recommended. **÷10** (`ui.FINE`), the
+  APC40's fine button's factor (#344), so one word means one rate on both
+  surfaces. It is a panel gesture, not a param: nothing is saved, routed
+  or learnable (`desk.fine` is the desk's).
+- **Built.** `Panel._fine`, called after each continuous slider's draw:
+  while the item is active and the button down, the drag ⇧ joins (at the
+  press or mid-drag) is taken over from the value it had, and each frame
+  adds the mouse's movement along the throw × 0.1 while ⇧ is held, × 1
+  once it is let go — relative until the button comes up, so neither edge
+  jumps. The press's own frame writes nothing: the slider's jump to the
+  mouse is dropped, and a base on a log range or between a taper's
+  detents (where a lane or a drive left it) stays bit for bit, so no undo
+  step opens. ⇧ joining mid-drag anchors at the mouse's last-frame place
+  (`io.mouse_pos_prev`), so that frame's movement counts, fine, and the
+  grab never steps back. A tapered control keeps the fraction between
+  detents, so a slow fine drag still walks them. ⇧ and the button are
+  read once a frame (`Panel._fine_frame`, before any widget), which also
+  forgets a drag whose button is up, drawn or not. The writes come every
+  frame the mouse moves, as a plain drag's do: one drag is one undo step
+  (`undo.SETTLE_S`).
+- **Why not imgui's own.** imgui's sliders are absolute — the grab goes
+  where the mouse is — and have no slow modifier: the Alt ÷100 / Shift
+  ×10 pair belongs to `drag_float` / `drag_int`, which the panel does not
+  draw. Mapping ⇧ onto it would mean turning every slider into a drag
+  widget (no track to click, a different look), and Shift would still be
+  imgui's *fast* key there. So the drag math is ours, in one place.
+- **Other options.** ÷100 (imgui's Alt rate: too slow on a 100-detent
+  fader, a detent per 30 px); ⌥ instead of ⇧ (the ask names ⇧); absolute
+  again on release (the jump the ask rules out).
+- **To reverse.** Delete the two `self._fine(…)` blocks in `_slider` and
+  `_fader`, and `_fine_tip` back to `_tip`: minutes.
+- **Judge it.** Hand check 457.
+
+### 608. Wave 2 T2: what fine mode reaches, and how it says so
+- **Answer.** (rec) — built as recommended. Every slider and fader
+  `ui.py` draws for a param — `Panel._slider` and `Panel._fader`, so every
+  page's `_row` and `half` and every knob drawn through them. An enum (a
+  combo), an integer (`view.instances`, a lattice's echoes) and a toggle
+  are untouched: a ⇧ click is a click. While ⇧ is held over one that has
+  the mode, its tooltip leads with `FINE · ⇧ held: a drag moves a tenth as
+  far`, and a fine drag that leaves the track still shows the word. **Not
+  reached**: ROUTING's own sliders (a route's depth and rest, a
+  modifier's knobs, a span's from / to, `ui_routing.py`) and GRAPH's
+  backdrop (`ui_graph.py`, U1's on #345) — they call imgui directly; a
+  later PR can pass them through `Panel._fine`. **No arrow keys**: the
+  panel does not turn on imgui's keyboard navigation, so a slider takes no
+  arrows to make finer. A fader's imgui label is its param id now
+  (`##view.bright`, was `##s` under the id's push), so the driver finds
+  each by id. A hot reload of `ui.py` carries it: the panel's three new
+  fields (`_fine_drag`, `_shift`, `_mouse_down`) are read with defaults
+  and written by `draw` each frame.
+- **What would overturn it.** The owner wanting ROUTING's depths fine too
+  (the next step), or `FINE` on the readout rather than in the tooltip.
+- **Judge it.** Hand checks 457–458.
 
 ### 609. FINE: SEND B held, every knob a tenth as far
 - **Asked.** The owner, after the show of 2026-10-30, in the triage's
