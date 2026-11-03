@@ -34,7 +34,8 @@ SKIP_REASON = "another test run holds the live devices"
 
 
 def lock_path() -> Path:
-    return Path(tempfile.gettempdir()) / "hyperspace-tests-live.lock"
+    """One file per account (a file another account made may refuse us)."""
+    return Path(tempfile.gettempdir()) / f"hyperspace-tests-live-{os.getuid()}.lock"
 
 
 def acquire(path: Path | None = None, wait_s: float | None = None,
@@ -44,17 +45,21 @@ def acquire(path: Path | None = None, wait_s: float | None = None,
     had within `wait_s` seconds (`WAIT_S`, read at the call)."""
     path = lock_path() if path is None else Path(path)
     wait_s = WAIT_S if wait_s is None else wait_s
-    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o666)
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
     deadline = time.monotonic() + wait_s
-    while True:
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            return fd
-        except BlockingIOError:
-            if time.monotonic() >= deadline:
-                os.close(fd)
-                return None
-            time.sleep(poll_s)
+    try:
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return fd
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    os.close(fd)
+                    return None
+                time.sleep(poll_s)
+    except BaseException:
+        os.close(fd)
+        raise
 
 
 def release(fd: int) -> None:
@@ -66,11 +71,16 @@ def release(fd: int) -> None:
 
 @contextlib.contextmanager
 def held(path: Path | None = None, wait_s: float | None = None, poll_s: float = POLL_S):
-    """Hold the lock for the block; yields True when held, False when it
-    could not be had in time (the caller skips)."""
-    fd = acquire(path, wait_s, poll_s)
+    """Hold the lock for the block. Yields None when held, else the reason
+    the caller skips with: another run holds it past the wait, or the lock
+    file cannot be opened or locked (an OSError: permissions, ENOLCK)."""
     try:
-        yield fd is not None
+        fd = acquire(path, wait_s, poll_s)
+    except OSError as e:
+        yield f"the live-device lock cannot be taken: {e}"
+        return
+    try:
+        yield None if fd is not None else SKIP_REASON
     finally:
         if fd is not None:
             release(fd)

@@ -519,10 +519,7 @@ def _gl_context():
         import moderngl
     except ImportError:
         return None
-    import gl_probe
-
-    gl_probe.require()                  # skips where glfw.init() would hang
-    if not glfw.init():
+    if not glfw.init():         # (its caller asks for gl_window_ok first)
         return None
     glfw.window_hint(glfw.VISIBLE, False)
     glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
@@ -541,7 +538,7 @@ def _gl_context():
         return None
 
 
-def test_syphon_loopback():
+def test_syphon_loopback(gl_window_ok):
     syphon = pytest.importorskip("syphon")
     made = _gl_context()
     if made is None:

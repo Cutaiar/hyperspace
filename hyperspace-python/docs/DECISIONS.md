@@ -573,7 +573,7 @@ rows 554 and 555.
 | **A run that builds mechanisms edits and adds no preset** (plans 24, 26 and 27, 2026-10-14; plans 28 and 30, 2026-10-16): every file under `hyperspace/library/` stays byte-identical, and every proof is a fixture under `tests/fixtures/` (force-added: the folder is gitignored) loaded through a scratch library. Fader sets, hand mappings, dance presets, palettes, templates and the factory presets' graph wiring are the owners' creative pass. | owner |
 | **Every new param defaults to today's picture**: a new mix or opacity at what the frame does now, a new switch off, a new source at its rest. | owner |
 | **Plans 24, 26 and 27 ran in parallel** (2026-10-12): the render graph is the top priority, the device registry the highest-leverage piece. | owner |
-| **The test suite cannot hang the Mac** (wave 1 T0, 2026-11-02): a hung test fails by name (pytest-timeout's thread method, 120 s, no worker restart); `live` tests take turns across processes on a machine-wide lock and skip after 60 s; one tier at a time on a shared Mac; a test that opens a real window or device is `live`. | row 589 |
+| **The test suite cannot hang the Mac** (wave 1 T0, 2026-11-02): a hung test fails by name (pytest-timeout at 120 s: the thread method in xdist workers, the signal method in a serial run; no worker restart); `live` tests take turns across processes on a per-account lock and skip after 60 s; one tier at a time on a shared Mac; a test that opens a real GLFW window asks `gl_window_ok` first. | row 589 |
 
 ## Decided not to build
 

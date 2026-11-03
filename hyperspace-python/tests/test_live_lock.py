@@ -24,7 +24,7 @@ def _hold(path, held, release):
     fd = live_lock.acquire(Path(path), wait_s=5)
     assert fd is not None
     held.set()
-    release.wait(10)
+    release.wait(120)       # (set once the caller is done; a safety cap)
     live_lock.release(fd)
 
 
@@ -59,8 +59,8 @@ def test_a_waiter_gets_it_when_the_holder_lets_go(tmp_path):
     t = time.monotonic()
     let_go.start()
     try:
-        with live_lock.held(path, wait_s=10, poll_s=0.05) as ok:
-            assert ok
+        with live_lock.held(path, wait_s=10, poll_s=0.05) as why_not:
+            assert why_not is None
             assert time.monotonic() - t >= 0.35
     finally:
         let_go.cancel()
@@ -81,8 +81,8 @@ def test_a_dead_holder_leaves_it_free(tmp_path):
 def test_held_releases_when_the_block_raises(tmp_path):
     path = tmp_path / "live.lock"
     try:
-        with live_lock.held(path, wait_s=1) as ok:
-            assert ok
+        with live_lock.held(path, wait_s=1) as why_not:
+            assert why_not is None
             raise RuntimeError("the test failed")
     except RuntimeError:
         pass
@@ -174,7 +174,7 @@ def test_the_fixture_holds_it_for_a_live_test_and_lets_go_when_it_raises(tmp_pat
 def test_the_fixture_skips_a_live_test_another_run_holds_it_for(tmp_path):
     temp = tmp_path / "temp"
     temp.mkdir()
-    p, release = _holder(temp / "hyperspace-tests-live.lock")
+    p, release = _holder(temp / live_lock.lock_path().name)
     try:
         out = _inner_pytest(tmp_path, temp)
     finally:
@@ -184,3 +184,29 @@ def test_the_fixture_skips_a_live_test_another_run_holds_it_for(tmp_path):
     assert live_lock.SKIP_REASON in out.stdout
     # (the plain tests ran, and found it held by the other process)
     assert "2 failed" in out.stdout
+
+
+def test_a_lock_file_that_cannot_be_opened_is_a_skip_reason(tmp_path):
+    path = tmp_path / "live.lock"
+    path.write_text("")
+    path.chmod(0o400)                   # (as if another account owned it)
+    with live_lock.held(path, wait_s=0) as why_not:
+        assert why_not and "cannot be taken" in why_not
+
+
+def test_a_flock_error_closes_the_file_and_is_a_skip_reason(tmp_path, monkeypatch):
+    opened, closed = [], []
+    real_open, real_close = os.open, os.close
+    monkeypatch.setattr(live_lock.os, "open", lambda *a: opened.append(real_open(*a)) or opened[-1])
+    monkeypatch.setattr(live_lock.os, "close", lambda fd: closed.append(fd) or real_close(fd))
+
+    def no_locks(fd, op):
+        raise OSError(77, "No locks available")
+    monkeypatch.setattr(live_lock.fcntl, "flock", no_locks)
+    with live_lock.held(tmp_path / "live.lock", wait_s=0) as why_not:
+        assert "No locks available" in why_not
+    assert opened and closed == opened
+
+
+def test_the_lock_file_is_the_accounts_own():
+    assert str(os.getuid()) in live_lock.lock_path().name

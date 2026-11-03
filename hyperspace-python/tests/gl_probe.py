@@ -17,8 +17,8 @@ import sys
 
 TIMEOUT_S = 8.0
 NO_DISPLAY = "no display for GL"
-STUCK = ("glfw.init() did not complete in 8 s: a modal alert or no window "
-         "server; see ENGINEERING §16")
+STUCK = (f"glfw.init() did not complete in {TIMEOUT_S:g} s: a modal alert or no "
+         "window server; see ENGINEERING §16")
 PROBE_CODE = "import glfw,sys; sys.exit(0 if glfw.init() else 2)"
 
 _cache: list = []                       # [None] or [reason]

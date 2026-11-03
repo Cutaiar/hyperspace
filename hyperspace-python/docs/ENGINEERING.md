@@ -3053,38 +3053,47 @@ uv run ruff check .
   to whoever merges.
 - **A hung test fails by name.** pyproject's addopts carry
   `--timeout=120 --timeout-method=thread --max-worker-restart=0`.
-  The thread method, not the default signal one: a test blocked inside
-  a C call (`glfw.init()` while another process holds the window
-  system, a camera, audio or HID open) never returns to Python, so a
-  signal handler never runs; the thread method's watchdog dumps every
-  thread's stack and `os._exit`s the worker, and xdist reports
-  "worker 'gwN' crashed while running '<test>'". With no restart that
-  ends the run (the dead worker's queued tests are not run); with
-  xdist's default restarts the replacement worker sat idle and the run
-  stalled at 75 % for good (measured on a deliberate `sleep(130)` with
-  `--timeout=5`, twice, the second time after the reopen-windows alert
-  below was cleared). It is the `loadgroup` scheduler, not the Mac:
-  `sample` shows the replacement waiting on its channel for work, the
-  dead worker's queued tests are never handed to it, and the same
-  probe under `--dist load` replaces the worker and runs them. So the
-  cap stays: a crash, even a transient one with no hang, ends the run
-  and leaves the dead worker's queue unrun ("1 failed, N passed" looks
-  finished — count the tests), which is cheaper than a run that never
-  ends. The slowest fast-tier test takes about 6 s, far under the
-  limit.
+  **Workers use the thread method, a serial run the signal method**
+  (conftest's `pytest_configure`, unless `--timeout-method` is named on
+  the command line). A test blocked inside a C call (`glfw.init()`, a
+  camera, audio or HID open) never returns to Python, so a signal
+  handler never runs; the thread method's watchdog dumps every
+  thread's stack and `os._exit`s its whole process, which xdist
+  reports as "worker 'gwN' crashed while running '<test>'". In a
+  serial run (`-n0`, the debugger's mode) that would end the run with
+  no summary, so there the signal method fails the test and goes on
+  (a `sleep(130)` under `-n0 --timeout=5`: "1 failed, 2 passed"; with
+  `--timeout-method=thread` named, the process ended with no summary).
+  The slowest fast-tier test takes about 6 s, far under the limit.
+- **The restart cap, measured** (2026-11-02, `-n 2`, one test that
+  `os._exit`s and forty quick ones, `--dist loadgroup`):
+
+  | the crashing test | `--max-worker-restart=0` | default restarts |
+  |---|---|---|
+  | ungrouped | "1 failed, 11 passed" in 16 s: 29 never ran | stalled, killed after 60 s |
+  | in an `xdist_group` | "1 failed, 11 passed" in 1.5 s: 29 never ran | stalled, killed after 60 s |
+
+  Under `--dist load` with default restarts the same probe ended at
+  "1 failed, 40 passed": `loadgroup` does not hand a dead worker's
+  queue to its replacement (`sample` showed the replacement waiting on
+  its channel for work, not in a modal; it stalled the same way after
+  the reopen-windows alert below was cleared). So the cap stays: any
+  crash, even a transient one with no hang, ends the run and leaves the
+  dead worker's queue unrun — the summary looks finished, so compare
+  the count with a clean run's (an `--all` with a crash of
+  `test_segment.py::test_vision_frees_each_jobs_memory` said "4297
+  passed" against 4902) — which is cheaper than a run that never ends.
 - **Live tests take turns across processes.** Within a run
   `xdist_group("live")` gives every `live` test to one worker; across
   runs (two sessions, two worktrees) the autouse fixture
   `_live_devices_take_turns` holds an `fcntl.flock` on
-  `$TMPDIR/hyperspace-tests-live.lock` (`tests/live_lock.py`) for each
+  `$TMPDIR/hyperspace-tests-live-<uid>.lock` (`tests/live_lock.py`) for each
   live test's setup, call and teardown. It waits at most
   `live_lock.WAIT_S` (60 s) and then skips with "another test run holds
   the live devices"; the kernel drops the lock when a worker dies.
-  `tests/test_live_lock.py` proves it with two processes. A test that
-  opens a real window, audio stream, camera or HID device belongs in
-  the live tier (`_LIVE_TESTS`): the fast tier's one real-GLFW test,
-  `test_ui_pad.py::test_the_drawings_show_upright_through_real_gl`,
-  hung in `glfwInit()` on the Mac and moved there (row 589).
+  `tests/test_live_lock.py` proves it with two processes. The file is
+  per account (`hyperspace-tests-live-<uid>.lock`); a lock file that
+  cannot be opened or locked is a skip with the reason, never an error.
 - **Why `glfwInit()` hangs on the Mac, and the recovery.** A sample of
   a bare `glfw.init()` ends in `_glfwInitCocoa` → `[NSApplication run]`
   → the reopen AppleEvent →
@@ -3096,11 +3105,13 @@ uv run ruff check .
   the new process waits in that modal forever. Any worker that dies with
   a GLFW window open arms the alert again, which is one more reason live
   tests take turns. So a test that opens a real GLFW window asks for
-  the `gl_window_ok` fixture (or calls `gl_probe.require()`, as
-  `test_media_live.py`'s `_gl_context` does) before its own
-  `glfw.init()`: `tests/gl_probe.py` runs `glfw.init()` in a child
-  process with an 8 s cap, once per worker, and the test skips with the
-  reason when the child does not answer. To find a stuck process: `ps`,
+  the `gl_window_ok` fixture (both do:
+  `test_ui_pad.py::test_the_drawings_show_upright_through_real_gl`,
+  which stays in the fast tier so CI checks the orientation under
+  Xvfb, and `test_media_live.py::test_syphon_loopback`):
+  `tests/gl_probe.py` runs `glfw.init()` in a child process with an
+  8 s cap, once per worker, and the test skips with the reason when
+  the child does not answer. To find a stuck process: `ps`,
   then `sample <pid>` (main thread in CFRunLoop / `mach_msg`). To
   recover, move
   `~/Library/Saved Application State/org.python.python.savedState`

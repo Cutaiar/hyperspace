@@ -36,9 +36,6 @@ _LIVE_TESTS = {
     "test_segment.py::test_vision_runs_once_on_a_synthetic_frame",
     "test_segment.py::test_vision_frees_each_jobs_memory",     # 300 Vision jobs, ~2 s
     "test_segment.py::test_torch_runs_once_on_a_synthetic_frame",
-    # a real GLFW window: `glfw.init()` blocked in C, serially as well, on
-    # the owner's Mac on 2026-11-02 (the fast tier's hang at 99 %, row 589)
-    "test_ui_pad.py::test_the_drawings_show_upright_through_real_gl",
 }
 _SLOW_TESTS = {
     "test_media_core.py::test_heic_opens",
@@ -73,10 +70,35 @@ def pytest_addoption(parser):
                      help="run every tier (golden, slow, live), not just the fast one")
 
 
+def _serial(config) -> bool:
+    """No xdist workers: `-n0`, `-p no:xdist`, and not a worker itself."""
+    if hasattr(config, "workerinput"):
+        return False
+    try:
+        return not config.getoption("numprocesses")
+    except ValueError:                  # xdist not loaded
+        return True
+
+
+def _method_named(config) -> bool:
+    """The person named a timeout method on the command line or in
+    PYTEST_ADDOPTS (pyproject's addopts do not count)."""
+    words = [*config.invocation_params.args, *os.environ.get("PYTEST_ADDOPTS", "").split()]
+    return any(str(w).startswith(("--timeout-method", "--timeout_method")) for w in words)
+
+
+@pytest.hookimpl(tryfirst=True)
 def pytest_configure(config):
     # (an explicit `-m` with --all still wins: only the default is lifted)
     if config.getoption("--all") and config.option.markexpr == _FAST:
         config.option.markexpr = ""
+    # Serial = signal method, workers = thread method (row 589). The thread
+    # watchdog ends its whole process with os._exit: in a worker xdist
+    # names the test, but in a serial run (`-n0`, the debugger's mode) it
+    # would end the run with no summary. The signal method there fails the
+    # test and goes on. (tryfirst: before pytest-timeout reads the option)
+    if _serial(config) and not _method_named(config):
+        config.option.timeout_method = "signal"
 
 
 def pytest_collection_modifyitems(config, items):
@@ -108,9 +130,9 @@ def _live_devices_take_turns(request):
         return
     import live_lock
 
-    with live_lock.held() as ok:
-        if not ok:
-            pytest.skip(live_lock.SKIP_REASON)
+    with live_lock.held() as why_not:
+        if why_not:
+            pytest.skip(why_not)
         yield
 
 
