@@ -65,6 +65,10 @@ The sequencer page (plan 31 §A, seq_page.py) is not a layer: while SEND A
 scene launch 1–5 on both layers, invariant rows included; the rest of the
 desk is as it was. Its lights are `SHADE`'s.
 
+FINE (wave 2 T3) is SEND B held: while it is down a knob moves its param
+a tenth as far, and its LED is lit. It is the adapter's (`FINE`, midi.py),
+not a map row, and gives way to any row the table puts on SEND B.
+
 The device and track knobs are endless encoders whose position the host
 sets with the same CC that draws the ring (`RING_REBASES_KNOB`), so a
 knob continues from its ring after a layer switch or a load and needs no
@@ -495,6 +499,15 @@ TOGGLES = ("view.points", "view.lines", "view.faces", "view.rotate")
 # The desk's SAVE button (plan 24 C1, the owner's choice of 2026-10-14):
 # (note, channel) of track 8's clip stop, free since PR #158
 SAVE: tuple[int, int] = (N_CLIPSTOP, 7)
+
+# The desk's FINE button (wave 2 T3, register row 609): (note, channel) of
+# SEND B, free on both layers and outside the sequencer page's shadow,
+# between the track knobs and the device knobs. Held, every knob moves its
+# param a tenth as far (midi.FINE_DIV); its LED is lit while held. It is
+# the adapter's, not a row of this map (midi.MidiIO reads it, `desk.fine`
+# carries the state) — so a bindings.json written before it has it too —
+# and it stands down on a desk whose table puts any row on SEND B
+FINE: tuple[int, int] = (N_SEND_B, 0)
 
 # The track faders S1–S8 (plan 24 C2, decision 17): the channel of track
 # fader k + 1 is k. On the preset layer they are each preset's own targets,
