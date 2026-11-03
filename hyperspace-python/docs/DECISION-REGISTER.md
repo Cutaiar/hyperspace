@@ -600,6 +600,7 @@ here; overturn → the change, then the same.
 | 562 | Plan 45 V1: a video's audio track decoded to memory as float32 stereo 48 kHz once something asks for sound, whole to 120 s, else a 120 s window around the transport's position; the transport is the one clock | 421 | owner's rule (2026-11-02, addendum 8); the policy (rec) |
 | 563 | Node groups (post-show G0, 2026-11-02): a group's id is never reused within a preset's life — `group.<n>` is one past the highest the preset has ever allotted (`Presets.group_high`: the file's highest at the load, dropped entries counted; not saved, no schema change), so an ungrouped or undone group's number is not the next group's; and membership is eager — a member node deleted by any road leaves its group's list in the same operation (hooks on the mechanisms: the section's landing, the table's `set_modifiers`, a bank's membership change), the last member taking the group; every node-removing step carries the marks (which carry the floor too) so its undo puts the member back; a refused load leaves the loaded preset's groups whole. Render node ids (`acid` → `acid.2`, the lowest free instance, R25) are untouched: a format question for the one-format PR | 422 | built as recommended — PR (G0) |
 | 564 | Wave 0 E1: delay loops are the trails mechanism, the look-back keeps the dream — the feedback starter (a composite laid over, a delay, a fade at level 0.75: colour and alpha decay alike) on the cable menu and "add feedback after" on the node menu, many allowed; "feedback" not "echo", which names the look-back's frames | 423 | (rec) — pending the owner |
+| 589 | Wave 1 T0: the test suite cannot hang the Mac — pytest-timeout's thread method at 120 s with no xdist worker restart in pyproject's addopts, so a test blocked in C fails by name and ends the run; `live` tests hold a machine-wide `flock` (wait 60 s, then skip); one tier at a time on a shared Mac; the fast tier's one real-GLFW test (`test_ui_pad.py`, hung in `glfwInit`) moves to the live tier | — | (rec) — pending the owner; built as recommended (T0) |
 
 "—": no hand check shows it; tests only.
 
@@ -9716,3 +9717,60 @@ and D3 (the per-deck split) are
   the contract working as intended and a change from today.
 - **Judge it.** — (C2's hand check: frame, save, load another, load it
   back; the framing is back).
+
+## Wave 1 — the test suite (row 589)
+### 589. The test suite cannot hang the Mac
+- **Asked.** On 2026-11-01 the owner's Mac reached 140 GB: several
+  `uv run pytest --all` runs from parallel Claude sessions hung at once,
+  each with sixteen xdist workers holding torch (~1 GB each). The hang:
+  `tests/test_media_live.py::test_syphon_loopback` (and anything that
+  calls `glfw.init()` or opens a camera, audio or a real HID pad) blocks
+  inside a C call while another process holds the window system or the
+  device, and pytest-timeout's default signal method cannot interrupt a
+  blocked C call, so each run sat at 99 % for good.
+- **Answer.** (rec) — pending the owner; built as recommended (wave 1,
+  T0).
+- **Recommended.** Three things. (1) pyproject's addopts carry
+  `--timeout=120 --timeout-method=thread --max-worker-restart=0`: the
+  thread method's watchdog dumps every thread's stack and `os._exit`s
+  the worker, which xdist reports as "worker 'gwN' crashed while running
+  '<test>'"; with no restart that ends the run (measured: with xdist's
+  default restarts the replacement worker sat idle and the run stalled
+  at 75 % for good). CI keeps its own `--timeout 120
+  --max-worker-restart=0`, the same values. (2) Every
+  test marked `live` holds an `fcntl.flock` on
+  `$TMPDIR/hyperspace-tests-live.lock` for its setup, call and teardown
+  (`tests/live_lock.py`, conftest's `_live_devices_take_turns`), so live
+  tests of two pytest processes take turns; it waits at most 60 s
+  (`live_lock.WAIT_S`) and then skips with "another test run holds the
+  live devices", never blocks. `xdist_group("live")` still orders one
+  run's. (3) The rule for sessions: one tier at a time on a shared Mac;
+  a session that is not merging runs the fast tier with `-n 4`, and
+  `--all`, the goldens and `test_media_live.py` are the merger's
+  (ENGINEERING §16). (4) The fast tier's own hang, found with the
+  thread dump: `tests/test_ui_pad.py::test_the_drawings_show_upright_through_real_gl`
+  blocks in `glfwInit()` on the owner's Mac (serially too, `-n0`); it is
+  the only fast-tier test that opened a real window, and it moves to the
+  live tier (`_LIVE_TESTS`). Every other `glfw`, `sounddevice` and `hid`
+  use in the fast tier is over a fake.
+- **Other options.** Keep the signal method and add the lock only: a
+  test blocked in C would still hang its worker for good. A per-test
+  `timeout` marker on the live tests only: the next hang is somewhere
+  else. Cap `-n` in addopts (say `-n 8`): halves the memory of a run but
+  slows CI and the merger's run, and two sessions still add up; the
+  rule says it instead. Block on the lock with no bound: two sessions'
+  live tests would queue, and a stuck holder would hang the other run
+  exactly as before.
+- **To reverse.** Drop the three flags from addopts and delete
+  the fixture and `tests/live_lock.py`; nothing on disk outside the
+  tests reads either.
+- **Rough edge.** With no worker restart, one hang ends the run and
+  the dead worker's queued tests are not run: the run says which test
+  hung but not how the rest fared, so fix it and run again. The thread
+  method's stack dump goes to the worker's stderr, which xdist does not
+  show; `-n0 -k <test>` shows it. The lock is per test, so between two
+  live tests of one run another run can take its turn. The lock wait
+  counts toward the test's 120 s.
+- **Judge it.** — (tests only: `tests/test_live_lock.py`; a deliberate
+  `time.sleep(130)` under `-n 2 --timeout=5 --timeout-method=thread`
+  failed by name in 5.5 s with `--max-worker-restart=0`).

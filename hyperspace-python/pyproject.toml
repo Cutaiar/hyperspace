@@ -89,7 +89,7 @@ dev = [
     "playwright>=1.49",
     "pytest-xdist>=3.8.0",
     # a hung test fails alone instead of stalling its xdist worker (and the
-    # whole run) at 99 %: CI passes --timeout
+    # whole run) at 99 %: addopts carries --timeout (thread method)
     "pytest-timeout>=2.3",
     # vendor/leapc-cffi/setup.py's own tests import it (tests/test_leapc_build.py)
     "setuptools",
@@ -106,11 +106,17 @@ packages = ["hyperspace"]
 testpaths = ["tests"]
 # Tiers (tests/conftest.py applies the markers by name): a bare `pytest` runs
 # the fast tier in parallel; `pytest --all` runs everything; -n0 = serial.
-addopts = "-n auto --dist loadgroup -m 'not golden and not slow and not live'"
+# A hung test fails by name (ENGINEERING §16, row 589): the thread method,
+# because the signal method cannot interrupt a call blocked in C
+# (`glfw.init()`, a device open) — it dumps the stacks and exits the worker;
+# --max-worker-restart=0 so that crashed worker ends the run, where xdist's
+# replacement would stall the loadgroup scheduler at 99 % for ever.
+addopts = """-n auto --dist loadgroup -m 'not golden and not slow and not live' \
+--timeout=120 --timeout-method=thread --max-worker-restart=0"""
 markers = [
     "golden: golden-frame draws (tests/test_golden_frames.py), one test per rig job, ~12 s with -n auto",
     "slow: ~1 s or more each (torch dream, undo, plan 12 presets, whole-library sweeps)",
-    "live: Syphon / NDI / real-file loopbacks with timeouts, flaky under load",
+    "live: Syphon / NDI / real-file loopbacks with timeouts, flaky under load; one at a time across every pytest process on the machine (tests/live_lock.py)",
     "empty_frame: a bare Renderer keeps the app's empty frame (plan 36 T3)",
 ]
 

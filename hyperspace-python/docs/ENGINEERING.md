@@ -3044,6 +3044,39 @@ uv run ruff check .
   applies by name (see "Running the automated tests" in
   `TESTING-GUIDE.md`); the default run is `-n auto` without them. Run
   `--all` before a merge and after touching rendering or presets.
+- **One tier at a time on a shared Mac** (row 589). Every xdist worker
+  that imports torch holds about 1 GB, and `-n auto` is sixteen of them
+  on the M3 Max: two or three `--all` runs from parallel sessions took
+  the machine to 140 GB on 2026-11-01. A session that is not the one
+  merging runs the fast tier with a few workers (`-n 4`), one run at a
+  time, and leaves `--all`, the goldens and `tests/test_media_live.py`
+  to whoever merges.
+- **A hung test fails by name.** pyproject's addopts carry
+  `--timeout=120 --timeout-method=thread --max-worker-restart=0`.
+  The thread method, not the default signal one: a test blocked inside
+  a C call (`glfw.init()` while another process holds the window
+  system, a camera, audio or HID open) never returns to Python, so a
+  signal handler never runs; the thread method's watchdog dumps every
+  thread's stack and `os._exit`s the worker, and xdist reports
+  "worker 'gwN' crashed while running '<test>'". With no restart that
+  ends the run (the dead worker's queued tests are not run); with
+  xdist's default restarts the replacement worker sat idle and the run
+  stalled at 75 % for good (measured on a deliberate `sleep(130)` with
+  `--timeout=5`). The slowest fast-tier test takes about 6 s, far
+  under the limit.
+- **Live tests take turns across processes.** Within a run
+  `xdist_group("live")` gives every `live` test to one worker; across
+  runs (two sessions, two worktrees) the autouse fixture
+  `_live_devices_take_turns` holds an `fcntl.flock` on
+  `$TMPDIR/hyperspace-tests-live.lock` (`tests/live_lock.py`) for each
+  live test's setup, call and teardown. It waits at most
+  `live_lock.WAIT_S` (60 s) and then skips with "another test run holds
+  the live devices"; the kernel drops the lock when a worker dies.
+  `tests/test_live_lock.py` proves it with two processes. A test that
+  opens a real window, audio stream, camera or HID device belongs in
+  the live tier (`_LIVE_TESTS`): the fast tier's one real-GLFW test,
+  `test_ui_pad.py::test_the_drawings_show_upright_through_real_gl`,
+  hung in `glfwInit()` on the Mac and moved there (row 589).
 
 - Every test runs against its own temporary home: `tests/conftest.py`
   sets `HYPERSPACE_HOME` to the test's `tmp_path` in `os.environ`
@@ -3159,7 +3192,9 @@ to `main`: one job, `tests`, on `ubuntu-24.04` — `uv sync --locked`,
 `--timeout 120` (pytest-timeout: a hung test fails alone and names
 itself instead of stalling its worker) and `--max-worker-restart=0` (a
 crashed worker fails the run; xdist's replacement for one stalled the
-`loadgroup` scheduler at 99 %). The fast tier takes about two minutes on
+`loadgroup` scheduler at 99 %) — the same values pyproject's addopts now
+carry, with the thread method, so the explicit flags are redundant but
+consistent. The fast tier takes about two minutes on
 four cores.
 
 - **What it leaves out.** `UV_NO_GROUP="hands dream"`: no Ultraleap SDK

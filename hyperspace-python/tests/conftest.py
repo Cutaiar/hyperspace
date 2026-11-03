@@ -36,6 +36,9 @@ _LIVE_TESTS = {
     "test_segment.py::test_vision_runs_once_on_a_synthetic_frame",
     "test_segment.py::test_vision_frees_each_jobs_memory",     # 300 Vision jobs, ~2 s
     "test_segment.py::test_torch_runs_once_on_a_synthetic_frame",
+    # a real GLFW window: `glfw.init()` blocked in C, serially as well, on
+    # the owner's Mac on 2026-11-02 (the fast tier's hang at 99 %, row 589)
+    "test_ui_pad.py::test_the_drawings_show_upright_through_real_gl",
 }
 _SLOW_TESTS = {
     "test_media_core.py::test_heic_opens",
@@ -88,6 +91,27 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.xdist_group("live"))
         if path in _SLOW_FILES or key in _SLOW_TESTS:
             item.add_marker(pytest.mark.slow)
+
+
+@pytest.fixture(autouse=True)
+def _live_devices_take_turns(request):
+    """A test marked `live` holds the machine-wide live lock
+    (tests/live_lock.py) for its setup, call and teardown, so live tests
+    of two pytest processes (two sessions, two worktrees) take turns;
+    xdist's `xdist_group("live")` only orders one run's. `glfw.init()`
+    and a camera, audio or HID open can block in C, not fail, while
+    another process holds the window system or the device: the lock is
+    the mitigation, the thread timeout (pyproject addopts) the backstop.
+    It waits at most `live_lock.WAIT_S` and then skips — never forever."""
+    if request.node.get_closest_marker("live") is None:
+        yield
+        return
+    import live_lock
+
+    with live_lock.held() as ok:
+        if not ok:
+            pytest.skip(live_lock.SKIP_REASON)
+        yield
 
 
 @pytest.fixture
