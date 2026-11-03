@@ -711,7 +711,7 @@ Every settable thing is a `Param` with a stable id (`view.bright`,
 
 | Flag | Means |
 |---|---|
-| `persist` | belongs in a snapshot. Its group puts it in the **performance** part (a preset's `values`) or the **session** part (a show's `session`): `params.PERFORMANCE_GROUPS` / `SESSION_GROUPS`, `part_of`. On by default; never for triggers |
+| `persist` | belongs in a snapshot. Its group puts it in the **performance** part (a preset's `values`) or the **session** part (a show's `session`): `params.PERFORMANCE_GROUPS` / `SESSION_GROUPS`, `part_of` — by the contract "a preset is a complete look; the rig is what is plugged in" (plan 43; the eye is performance since C2). On by default; never for triggers. The rotation phases (`rot.phase.*`) are `persist=False` — the turn moves every frame, so it is no base — yet a preset saves them as its `pose` (`params.POSE_IDS`, `ViewState.pose`) and a load sets the turn |
 | `modulatable` | a performer may drive it. Off for rig settings (`output.monitor`, `.fullscreen`, `.overlay`, `.passthrough`, `.dim`, every `hands.*`), UI state, aliases, `tempo.tap`, the dream params whose change rebuilds something (`dream.gap`, `dream.res`, `dream.layer`), the per-output switches, and `ghost.style` / `.mirror` / `.guide` / `.tethers`. A route onto one is dormant; a hand Learn onto one is refused in words (`Learn.learn_source`), and a preset's route onto one is dropped at load with a note (`Presets.load_doc`) |
 | `alias` | a view onto another param (`band.sel.*` follows the selected band); never persists or modulates. `Registry.real` resolves it |
 
@@ -1233,7 +1233,16 @@ Behaviour the code has today that the model does not guard:
   typed BPM (the `tempo` group is `undo.EXCLUDED_GROUPS`); the bank (a pad
   change is written to the show at once); a save, a rename or a delete
   (the trash is their net); an edit in
-  the `undo.ABSORB_FRAMES` frames after a restore.
+  the `undo.ABSORB_FRAMES` frames after a restore; the turn a preset load
+  set from its `pose` (plan 43 C2: the phases are no base).
+- A preset's pose is exact for a shape, a 4D shape under the 3D switch
+  and a 3D shape; a scene that mixes 3D and 4D layers with a body turned
+  in keeps its 4D layers' pose and folds its 3D layers' (plan 43 C2,
+  `ViewState.pose`). A preset loaded under hold lands its pose at Take
+  (`Hold.hold_pose`), not at the load (row 573).
+- An old preset (before `/9`) takes the eye the open show's old session
+  held only while that show is open (`Project.old_eye`); the migration
+  tool is what makes it the preset's for good.
 - Knob smoothing infers a glide's ownership by reading the norm back, not
   from a write counter; a preset load drops a performance param's glide
   without landing it; an uncaught fader's pickup can catch on a value a
@@ -1675,9 +1684,9 @@ until one of those changes, and `Graph.evaluate` runs it (§2). The shape
 and the hands share one camera: the CPU takes the shape to 3D
 (`geometry.world_points`: `rot.*`, the 4D divide, the yaw/pitch
 turntable), the vertex shaders through `u_model` (`camera.zoom`,
-`camera.pan` in world units) and `u_vp` (the eye, `eye.*`, session); the
-hands through `ghost.shared_camera` (the eye and the Leap calibration in
-`hands.json`). Edges and points are quads with a real depth; the scene
+`camera.pan` in world units) and `u_vp` (the eye, `eye.*`, the preset's since plan 43 C2); the
+hands through `ghost.shared_camera` (the eye, and the Leap calibration in
+`hands.json` fitted to the rig's reference eye). Edges and points are quads with a real depth; the scene
 has a depth attachment, the see-through shape writing its visible
 surface after its colour. A preset's `graph` section
 (`preset.GraphSection` → `graph.read_graph` → a `GraphSpec`) sets the

@@ -171,6 +171,23 @@ def axis_map_of(override, reader) -> AxisMap:
     return own if own is not None else AxisMap()
 
 
+# the turn a gyro reports (`Motion.turned`, the hid reader's `take_turn`):
+# a soft dead band per report — a still Joy-Con reads up to ~2 deg/s (the
+# real tape), and a rate below the band turns nothing for that report's
+# time — and the longest time one report stands for: a Joy-Con reports every
+# ~15 ms, a DualSense every 1–4, so a longer gap (a Bluetooth pause) counts
+# as this much, not as a turn held through it
+TURN_DEADBAND_DPS = 3.0
+REPORT_DT_MAX = 0.05
+
+
+def turn_of(dps, dt: float) -> tuple[float, float, float]:
+    """Degrees turned about x, y, z by one report: its rate, less the soft
+    dead band (`TURN_DEADBAND_DPS`), times its own time."""
+    return tuple(math.copysign(max(0.0, abs(float(v)) - TURN_DEADBAND_DPS), float(v)) * dt
+                 for v in dps)
+
+
 @dataclass
 class Motion:
     """The motion lanes from calibrated readings: `step(gyro_dps, accel_g,
@@ -184,16 +201,26 @@ class Motion:
     pitch: float = 0.0
     yaw: float = 0.0
     spin: tuple[float, float, float] = (0.0, 0.0, 0.0)     # deg/s about z (roll), x (pitch), y (yaw)
-    gyro: tuple[float, float, float] = (0.0, 0.0, 0.0)     # the last reading, deg/s about x, y, z (totem.py)
+    gyro: tuple[float, float, float] = (0.0, 0.0, 0.0)     # the last reading, deg/s about x, y, z
+    # degrees turned about x, y, z since the last `take_turn` (totem.py):
+    # each report's rate (dead-banded, `turn_of`) times its own time. A hid
+    # pad's reader sums it on its thread, every report (`add_turn`); a pad
+    # stepped without one, here per `step`. A stalled report adds nothing
+    turned: tuple[float, float, float] = (0.0, 0.0, 0.0)
     shake: float = 0.0
     energy: float = 0.0
     _since_shake: float = 1e9
 
-    def step(self, gyro, accel, dt: float) -> None:
+    def step(self, gyro, accel, dt: float, integrate: bool = True) -> None:
+        """One report (or the frame's newest): the lanes on `dt`, and —
+        unless `integrate` is off, because the reader summed the turn
+        already — its turn into `turned`."""
         dt = max(0.0, float(dt))
         ax, ay, az = (float(v) for v in accel)
         gx, gy, gz = (float(v) for v in gyro)
         self.gyro = (gx, gy, gz)
+        if integrate:
+            self.add_turn(turn_of((gx, gy, gz), dt))
         g = self.gravity
         if g is None:
             g = (ax, ay, az)
@@ -218,6 +245,24 @@ class Motion:
         rate = math.sqrt(gx * gx + gy * gy + gz * gz)
         e = max(rate / ENERGY_DPS, jolt / ENERGY_G)
         self.energy += (min(1.0, e) - self.energy) * _ease(dt, ENERGY_S)
+
+    def decay(self, dt: float) -> None:
+        """A frame with no report: nothing turns, the lanes that leak home
+        do (the yaw, the energy) and a shake is one step long."""
+        dt = max(0.0, float(dt))
+        self.yaw *= 1.0 - _ease(dt, YAW_LEAK_S)
+        self.shake = 0.0
+        self._since_shake += dt
+        self.energy -= self.energy * _ease(dt, ENERGY_S)
+
+    def add_turn(self, turn) -> None:
+        tx, ty, tz = self.turned
+        self.turned = (tx + turn[0], ty + turn[1], tz + turn[2])
+
+    def take_turn(self) -> tuple[float, float, float]:
+        """The degrees turned about x, y, z since the last call, then 0."""
+        t, self.turned = self.turned, (0.0, 0.0, 0.0)
+        return t
 
     def lanes(self) -> list[float]:
         return [_u(self.roll, TILT_DEG), _u(self.pitch, TILT_DEG), _u(self.yaw, YAW_DEG),

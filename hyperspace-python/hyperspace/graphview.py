@@ -40,8 +40,9 @@ this one read the same rows, so an edit on either is on both next frame.
   ``rin:lookback/capture``) and, as input ports, the params of the node
   that owns them (`OWNERS`, the one table); ``render:output.all`` and each
   window ``render:output.<n>`` always; ``render:camera`` — the shared
-  camera (`camera.*`, `eye.*`), the rig's, which draws through every scene
-  and so has no picture port; a cloud, the rig's; a node the section
+  camera (`camera.*`, `eye.*`), the look's one orbit camera (plan 43 C2:
+  its params and its position are the preset's), always there, which
+  draws through every scene and so has no picture port; a cloud, the rig's; a node the section
   declares or wires that reaches nothing (`unreached`) ``faint``
   ("reaches nothing");
 - ``channel`` — the eight media channels (``render:channel.<c>``, plan 32
@@ -410,9 +411,10 @@ def _resize_owner(pid: str, ctx: _Ctx) -> str | None:
 # the ids are the wired frame's, the params keep theirs (`graph.
 # param_prefix`: `dream.*` the look-back's, `ghost.2.*` hands 2's). A node
 # the section does not name (no look-back, no backdrop) leaves the param
-# to its group's node. `CAMERA` is the shared camera's node, the rig's,
-# which no section names. A group not listed here has no render node: a
-# node per group (`group:<group>`)
+# to its group's node. `CAMERA` is the shared camera's node — the look's
+# one orbit camera since plan 43 C2, always there — which no section
+# names. A group not listed here has no render node: a node per group
+# (`group:<group>`)
 OWNERS: dict[str, str | Callable[[str, _Ctx], str | None]] = {
     "view": _view_owner,
     "rot": "shape",
@@ -768,7 +770,7 @@ def _port_type(kind: str) -> str:
 # the owner's ids (V2, row 373). The canvas draws the section itself: a
 # node per name (`frame_names`), a cable per wire, All outputs and each
 # window always, the eight channels (idle while empty and unwired, plan 28
-# N9's idle line), the rig's camera and clouds. Each node's `ref` is the
+# N9's idle line), the look's camera and the rig's clouds. Each node's `ref` is the
 # render node the renderer built for that name, else a stand-in of its
 # kind (`_stand_in`: never built into a graph, never run), so its area, its
 # side panel and its page are its kind's whatever was built. A node the
@@ -952,7 +954,7 @@ def thumb_of(name: str, ref=None) -> str | None:
 
 def kind_of(name: str) -> str | None:
     """A canvas name's kind (plan 35 G): a wired frame's (`graph.
-    wire_node_kind(…, wired=True)`), All outputs' own key, the rig's camera
+    wire_node_kind(…, wired=True)`), All outputs' own key, the look's camera
     and clouds, and (R13) `ground` — no render node, but drawn so its wires
     are seen; None for a name no wired frame has a node for (an old id,
     `frame`, `fx`)."""
@@ -3059,7 +3061,11 @@ SAVED_PATCH = "saved {name} as a patch"
 UPDATED_PATCH = "updated patch {name}"
 PATCH_NEEDS_NAME = "a patch needs a name"
 PATCH_EXISTS = "a patch named {name} exists — Update patch, or another name"
-RIG_KINDS = ("output", "channel", "camera", "cloud")   # always there: the rig's own nodes
+RIG_KINDS = ("output", "channel", "cloud")   # always there: the rig's own nodes
+# …and the look's one camera (plan 43 C2: the camera is the preset's, not
+# the rig's), always there too: what a patch's wire may name though no
+# section does
+ALWAYS_KINDS = (*RIG_KINDS, "camera")
 
 
 def group_pin(gid: str, direction: str, key: str) -> str:
@@ -3497,6 +3503,8 @@ ROUTE_END = "a route's end moves to another param's mod"
 SESSION_ROW = "{what} is the session's (bindings.json): edit it on ROUTING"
 SHIFT_NODE = "{addr} on the SHIFT node is the session's (bindings.json): map it on ROUTING"
 NOT_REMOVABLE = "{label}: the rig's, not the preset's (nothing to delete)"
+# plan 43 C2: the camera is the preset's, and every look has exactly one
+CAMERA_KEPT = "{label}: the look's one camera, always there (nothing to delete)"
 NO_SUCH_MOD = "no modifier {kind}"
 # plan 31 G1: the banks' nodes and the sequencer's bindings
 LANE_ENV_KEPT = "{label} is a sequencer lane's envelope: it stays (an extra one can go)"
@@ -4636,7 +4644,7 @@ class Edit:
                 if was in into and was not in rgraph.MANY_PORTS:
                     refused.append(PORT_TAKEN.format(port=was))
                     continue
-            if node not in have and kind_of(node) not in RIG_KINDS:
+            if node not in have and kind_of(node) not in ALWAYS_KINDS:
                 refused.append(NO_HOST_NODE.format(name=node))
                 continue
             trial = copy.deepcopy(doc)
@@ -4836,9 +4844,9 @@ def onto_words(view: View, c: VCable) -> str:
 # Plan 35 G: the section is a wired frame in the owner's ids, and the page
 # edits it as it stands — every node and wire of it deletes (the old
 # frame's own nodes, its run and its default edges were refused; there
-# are none now). What stays refused: a type error, a loop, and the rig's
-# own — a window (delete takes its wires: `OUTPUT_UNWIRED`), the camera and
-# a cloud (`NOT_REMOVABLE`).
+# are none now). What stays refused: a type error, a loop, the rig's own —
+# a window (delete takes its wires: `OUTPUT_UNWIRED`) and a cloud
+# (`NOT_REMOVABLE`) — and the look's one camera (`CAMERA_KEPT`, plan 43 C2).
 
 
 def spec_name(pin: str, render_graph=None) -> tuple[str | None, str | None]:
@@ -4847,7 +4855,8 @@ def spec_name(pin: str, render_graph=None) -> tuple[str | None, str | None]:
     name — `hands.2`, `acid.2`, `output.2.hands`, `scene.geometry` —,
     None), or (None, why it is no name a wire may use). Plan 35 G: the
     canvas's names are the section's (V2), so a pin is its name; the
-    camera and a cloud are the rig's, no name a section says.
+    camera (the look's one, plan 43 C2) and a cloud (the rig's) are no
+    name a section says.
     (`render_graph` is no longer asked: kept for the callers' signature.)"""
     head, _, rest = pin.partition(":")
     if head not in ("rout", "rin", "render") or not rest:
@@ -4859,7 +4868,9 @@ def spec_name(pin: str, render_graph=None) -> tuple[str | None, str | None]:
     kind = kind_of(name)
     if head == "rout" and kind == "cloud":
         return name, None                    # plan 36 T2: a cloud's wire is the rig's
-    if kind in (CAMERA, "cloud"):
+    if kind == CAMERA:
+        return None, CAMERA_KEPT.format(label=label_of(name))
+    if kind == "cloud":
         return None, NOT_REMOVABLE.format(label=label_of(name))
     if kind is None:
         return None, f"no node {name!r}"

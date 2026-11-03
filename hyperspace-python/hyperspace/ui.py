@@ -2307,15 +2307,15 @@ class Panel:
         self._row("camera.pan.x")
         self._row("camera.pan.y")
         imgui.spacing()
+        # plan 43 C2: one orbit camera, the preset's — zoom and pan move the
+        # shape in the world, the eye (plan 26 A2) is what the world is seen
+        # through; one section, saved with the preset
+        self._row("eye.fov")
+        self._row("eye.distance")
+        imgui.spacing()
         self._button("camera.reset", "Reset view")
         imgui.same_line()
         imgui.text_disabled("R  ·  stick click")
-        # plan 26 A2: the one fixed camera the shape is seen through — the
-        # room's, not the preset's (eye.* is session); zoom and pan above
-        # move the shape in front of it
-        self._section("eye", note="the room's camera, not the preset's")
-        self._row("eye.fov")
-        self._row("eye.distance")
 
     def _page_lookback(self, dt: float) -> None:
         ui_lookback.page(self, dt)     # the frame history and its composite

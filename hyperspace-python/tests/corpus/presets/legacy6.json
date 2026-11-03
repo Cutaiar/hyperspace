@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.preset/7",
+ "schema": "hyperspace.preset/9",
  "name": "legacy6",
  "note": "The reference's band \u2192 plane table on bases of 0: the parity anchor (the planes stand still until the music drives them). The bands push the pattern inputs on 1, at the factory depth.",
  "graph": {"frame": "wired",
@@ -133,6 +133,8 @@
   "camera.pitch": 0.0,
   "camera.pan.x": 0.0,
   "camera.pan.y": 0.0,
+  "eye.fov": 47.611887036915434,
+  "eye.distance": 3.7777777777777777,
   "dream.on": false,
   "dream.mix": 0.7,
   "dream.echo_mix": 0.4,

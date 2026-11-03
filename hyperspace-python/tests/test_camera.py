@@ -122,16 +122,22 @@ def test_zoom_scales_the_shape_about_the_world_origin_and_pan_moves_it():
     assert abs((new_x[0] - w / 2) - 2.0 * (old_x[0] - w / 2)) > 10.0
 
 
-def test_the_eye_params_are_the_rooms_and_default_to_the_old_view(tmp_path):
+def test_the_eye_params_are_the_presets_and_default_to_the_old_view(tmp_path):
+    """Plan 43 C2 (rows 555, 574): the eye is the look's — performance, in
+    every preset's values, never the show's session — and modulatable, its
+    taper as it was (review 4: the fov linear, the distance log, so a row
+    learned before lands the same value); the defaults the old view."""
     rig = boot(tmp_path)
     reg = rig.reg
-    for pid, default, (lo, hi) in (("eye.fov", G.EYE_FOV, EYE_FOV_RANGE),
-                                   ("eye.distance", G.EYE_DISTANCE, EYE_DISTANCE_RANGE)):
+    for pid, default, (lo, hi), log in (
+            ("eye.fov", G.EYE_FOV, EYE_FOV_RANGE, False),
+            ("eye.distance", G.EYE_DISTANCE, EYE_DISTANCE_RANGE, True)):
         p = reg[pid]
-        assert p.group == "eye" and part_of(p) == "session" and p.persist, pid
-        assert not p.modulatable, pid
+        assert p.group == "eye" and part_of(p) == "performance" and p.persist, pid
+        assert p.modulatable and p.log is log and p.taper is None, pid
         assert p.value == pytest.approx(default) and (p.lo, p.hi) == (lo, hi), pid
-        assert pid not in reg.snapshot(part="performance")
+        assert pid in reg.snapshot(part="performance")
+        assert pid not in reg.snapshot(part="session")
     assert rig.view.eye_fov == pytest.approx(G.EYE_FOV)
     pan = reg["camera.pan.x"]
     assert (pan.lo, pan.hi) == (-PAN_RANGE, PAN_RANGE) and pan.text() == "+0.00"
@@ -321,7 +327,7 @@ def test_a_saved_preset_says_its_pan_is_in_world_units_and_loads_as_saved(tmp_pa
     rig.reg["camera.pan.y"].set(-0.75)
     path = rig.presets.save_as("WORLD PAN")
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.preset/7"     # (row 394); a key marks the units
+    assert doc["schema"] == "hyperspace.preset/9"     # (row 394); a key marks the units
     assert doc[preset.UNITS_KEY] == preset.UNITS       # (…and the depths' taper, wave 0 T1)
     assert doc[preset.UNITS_KEY]["camera.pan"] == "world"
     assert doc["values"]["camera.pan.x"] == 2.5

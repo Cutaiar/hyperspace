@@ -222,7 +222,7 @@ def test_a_branch_saves_as_v6_and_reloads(tmp_path):
     assert app.presets.load_doc(copy.deepcopy(doc)) == []
     saved = app.presets.document("t")
     wired, _ = M.seven(doc, app.presets.graph.specs())
-    assert saved["schema"] == M.WIRED_SCHEMA
+    assert saved["schema"] == M.SAVE_SCHEMA
     assert saved["graph"] == G.read_graph(wired["graph"]).to_json()     # (plan 36 T3: hands)
     assert saved["graph"][G.FRAME_KEY] == G.WIRED_FRAME
     assert app.presets.load_doc(copy.deepcopy(saved)) == []
@@ -240,9 +240,9 @@ def test_v6_is_refused_by_the_ladder_below(tmp_path):
                                                "to": "output.all.image"}]}})
     app.presets.save_as("six")
     lib = app.lib
-    assert lib.read("presets", "six")["schema"] == M.WIRED_SCHEMA
+    assert lib.read("presets", "six")["schema"] == M.SAVE_SCHEMA
     kinds = lib._kinds
-    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7, 8)   # (plan 40 T2: /8, a /7 with groups)
+    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9)   # (plan 40 T2: /8; plan 43 C2: /9)
     try:
         kinds["presets"] = replace(kinds["presets"], versions=(2, 3, 4, 5))
         with pytest.raises(LibraryError, match="is not a hyperspace.preset"):

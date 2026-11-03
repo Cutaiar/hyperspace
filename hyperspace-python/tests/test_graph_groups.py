@@ -77,7 +77,7 @@ def watch(rig):
 
 def grouped_twin(doc: dict, ids: list[str], name: str = "main run") -> dict:
     """`doc` with one folded group of `ids` — what a save of it writes."""
-    out = {**doc, "schema": preset.GROUPS_SCHEMA,
+    out = {**doc, "schema": preset.SAVE_SCHEMA,
            preset.GROUPS_KEY: [{"id": "group.1", "name": name, "nodes": ids, "open": False}]}
     if "media" in out:                              # (`document`'s order: groups before media)
         out["media"] = out.pop("media")
@@ -130,7 +130,7 @@ def test_a_preset_with_groups_round_trips_through_document_and_load_doc(tmp_path
     app.lib.load("presets", "party-noita")
     app.presets.groups = [dict(ENTRY, patch="noita-core")]
     doc = app.presets.document("noita grouped")
-    assert doc["schema"] == "hyperspace.preset/8"
+    assert doc["schema"] == "hyperspace.preset/9"          # (plan 43 C2: every save)
     assert doc["groups"] == [{"id": "group.1", "name": "noita core", "patch": "noita-core",
                               "nodes": NOITA_CORE, "open": False}]
     keys = list(doc)
@@ -145,11 +145,11 @@ def test_a_preset_with_groups_round_trips_through_document_and_load_doc(tmp_path
 
 
 def test_the_fixture_twin_resaves_byte_for_byte(tmp_path):
-    """The grouped fixture (party-noita and one group, `/8`) loaded and saved
-    untouched is the same bytes — and so is every corpus preset, with no
-    groups, its `/7` (a preset from before this plan saves byte for byte)."""
+    """The grouped fixture (party-noita and one group; `/9` since plan 43
+    C2) loaded and saved untouched is the same bytes — and so is every
+    corpus preset, with no groups (a `/9` without the key)."""
     raw = FIXTURE.read_bytes()
-    assert json.loads(raw)["schema"] == "hyperspace.preset/8"
+    assert json.loads(raw)["schema"] == "hyperspace.preset/9"
     again, notes, _ = headless.resave(FIXTURE, tmp_path / "twin")
     assert notes == [] and again == raw
     for k, path in enumerate(CORPUS_PRESETS):
@@ -215,7 +215,7 @@ def test_signature_changes_when_a_group_is_made_and_a_save_drops_a_deleted_membe
     assert app.presets.document("x")["groups"] == [dict(ENTRY, nodes=["render:warp"])]
     app.presets.groups = [dict(ENTRY, nodes=["render:acid.4"])]
     doc = app.presets.document("x")
-    assert "groups" not in doc and doc["schema"] == "hyperspace.preset/7"
+    assert "groups" not in doc and doc["schema"] == "hyperspace.preset/9"   # (C2: /9 either way)
 
 
 # ---------------------------------------------------------------- the proof: the renderer learns nothing
@@ -599,7 +599,7 @@ def test_a_groups_number_is_never_handed_out_twice(rig):
     # a reload starts from the file's own numbers — every id it names, kept
     # or dropped at the load (no counter is saved: the schema is as it was)
     doc = rig.lib.presets.document("x")
-    assert "group_high" not in doc and doc["schema"] == preset.GROUPS_SCHEMA
+    assert "group_high" not in doc and doc["schema"] == preset.SAVE_SCHEMA
     doc["groups"].append({"id": "group.9", "name": "gone", "nodes": ["render:kaleido"]})
     rig.lib.presets.load_doc(doc)
     assert [g["id"] for g in rig.lib.presets.groups] == ["group.1", "group.4"]

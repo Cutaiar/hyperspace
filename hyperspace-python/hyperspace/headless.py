@@ -8,10 +8,18 @@ tools/migrate_library.py rewrites a library with (row 394).
 as a user's preset, loaded by the library, saved untouched under the name
 it loaded as (`Library.save_as`, the strip's save), the bytes written read
 back. Nothing here touches the library a file came from.
+
+Plan 43 C2: a resave is the migration's, so it writes the spin's pose only
+where the file had one (the app saves one every time; the resave takes it
+back out of a file that had none — an old file keeps spinning, and its
+`/9` is a fixed point); and with `show` — what an old show kept of
+the camera (`show_seed`) — the scratch library opens a show holding just
+that, so an old preset takes the rig's eye as the app takes it.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 from pathlib import Path
@@ -68,16 +76,64 @@ def make_app(home: Path, plan31: bool = True, *, machine: Path | None = None):
 # the library folders a preset's load reads beside its own file: the desk
 # templates it may name (plan 24 C3) and the module presets it labels
 SHARED_FOLDERS = ("desk", "fx", "dream", "band", "tempo")
+def _link_or_copy(src, dst):
+    """A hard link where the disk allows one, else a copy."""
+    try:
+        os.link(src, dst)
+    except OSError:
+        shutil.copy2(src, dst)
+    return dst
 
 
-def resave(path: Path, scratch: Path, *, library: Path | None = None
-           ) -> tuple[bytes, list[str], str]:
+SEED_SHOW = "migration"        # the scratch show `seed` writes (plan 43 C2)
+
+
+def show_seed(doc: dict | None, eye: dict | None = None,
+              camera_at: list | None = None) -> dict | None:
+    """What an old show (before plan 43 C2) kept of the camera, as a show of
+    its own: its session's `eye.*` and its layout's camera node
+    (`library.show_eye`, the one reader) — nothing else of the rig (plan 43
+    C2: the eye an old preset drew through). `eye` / `camera_at` stand in
+    where `doc` kept none (a `.bak-v2-eye` copy's, `library.kept_eye`).
+    None when there is neither: nothing to seed, so an old preset takes the
+    build's default eye."""
+    from .graphmigrate import CAMERA_NODE
+    from .library import PROJECT_SCHEMA, show_eye
+    own_eye, own_at = show_eye(doc)
+    eye = own_eye or dict(eye or {})
+    at = own_at if own_at is not None else camera_at
+    if not eye and at is None:
+        return None
+    out: dict = {"schema": PROJECT_SCHEMA, "name": SEED_SHOW, "session": eye}
+    if at is not None:
+        out["layout"] = {CAMERA_NODE: list(at)}
+    return out
+
+
+def seed(home: Path, machine: Path, show: dict | None) -> None:
+    """Open `show` (a `show_seed`) at the next launch over the library at
+    `home`: written as ``projects/migration.hyp.json`` and named in the
+    machine's ``last_show``. None writes nothing."""
+    if not show:
+        return
+    from .library import LAST_SHOW, PROJECT_SUFFIX, PROJECTS
+    folder = Path(home) / PROJECTS
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / f"{SEED_SHOW}{PROJECT_SUFFIX}").write_text(json.dumps(show))
+    Path(machine).mkdir(parents=True, exist_ok=True)
+    (Path(machine) / LAST_SHOW).write_text(f"{SEED_SHOW}\n")
+
+
+def resave(path: Path, scratch: Path, *, library: Path | None = None,
+           show: dict | None = None) -> tuple[bytes, list[str], str]:
     """Preset file `path` loaded and saved untouched by the app (`make_app`)
     in a scratch library at `scratch` — `path` copied in as a preset of its
     own, with `library`'s desk templates and module presets beside it when
-    given: (the bytes the save wrote, the load's notes, the name it loaded
-    as). Raises what the load raises (`LibraryError`) for a file that does
-    not load. `scratch` is created; nothing outside it is written."""
+    given, and `show` (a `show_seed`: the rig's old eye) open: (the bytes
+    the save wrote, the load's notes, the name it loaded as). The pose is
+    written only where the file had one. Raises
+    what the load raises (`LibraryError`) for a file that does not load.
+    `scratch` is created; nothing outside it is written."""
     scratch = Path(scratch)
     home, machine = scratch / "library", scratch / "machine"
     (home / preset.GROUP).mkdir(parents=True, exist_ok=True)
@@ -86,8 +142,12 @@ def resave(path: Path, scratch: Path, *, library: Path | None = None
         for folder in SHARED_FOLDERS:
             src = Path(library) / folder
             if src.is_dir():
+                # (hard links where the disk allows: a library's folders are
+                # read, never written, by a resave — one copy per run, not
+                # one per preset; review 2.7)
                 shutil.copytree(src, home / folder, dirs_exist_ok=True,
-                                ignore=shutil.ignore_patterns(".*", "Icon*"))
+                                ignore=shutil.ignore_patterns(".*", "Icon*"),
+                                copy_function=_link_or_copy)
     before = os.environ.get("HYPERSPACE_HOME")
     os.environ["HYPERSPACE_HOME"] = str(machine)    # (nothing reaches ~/Hyperspace)
     try:
@@ -95,11 +155,23 @@ def resave(path: Path, scratch: Path, *, library: Path | None = None
         # `factory--dial.json`, `My Look.json` — still loads by it)
         stem = slug(Path(path).stem)
         shutil.copyfile(path, home / preset.GROUP / f"{stem}.json")
+        seed(home, machine, show)
         app = make_app(home, machine=machine)
         app.lib.load(preset.GROUP, stem)
         name = app.lib.current(preset.GROUP) or stem
         notes = list(app.presets.notes)
         out = app.presets.save_as(name)
+        # (plan 43 C2: the app saves the pose every time; the migration
+        # writes one only where the file had one — an old file keeps
+        # spinning — so a file without one has it taken back out)
+        try:
+            had = preset.POSE_KEY in json.loads(Path(path).read_text())
+        except (OSError, ValueError, TypeError):
+            had = True
+        if not had:
+            doc = json.loads(out.read_text())
+            if doc.pop(preset.POSE_KEY, None) is not None:
+                out.write_text(preset.dumps(doc))
         return out.read_bytes(), notes, name
     finally:
         if before is None:

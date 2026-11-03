@@ -187,7 +187,7 @@ def test_every_schema_is_among_the_sources():
 def _six(raw: bytes, name: str) -> dict:
     """A save's document, checked for the newest schema in today's words."""
     doc = json.loads(raw)
-    assert doc["schema"] == "hyperspace.preset/7", name
+    assert doc["schema"] == "hyperspace.preset/9", name
     graph = doc.get("graph")
     assert isinstance(graph, dict) and graph.get(G.FRAME_KEY) == G.WIRED_FRAME, name
     from hyperspace import graphmigrate as M
@@ -246,7 +246,7 @@ def test_a_moved_node_in_an_old_layout_saves_in_todays_ids(tmp_path):
     pr.layout["render:channel.a"] = [10, 20]
     pr.layout["render:hands.2"] = [30, 40]
     doc = pr.document("glimmer-bug")
-    assert doc["schema"] == "hyperspace.preset/7"
+    assert doc["schema"] == "hyperspace.preset/9"
     lay = doc["layout"]
     assert lay["render:channel.a"] == [10, 20] and lay["render:hands.2"] == [30, 40]
     assert not [k for k in lay if k.startswith(("render:media.", "render:ghost"))]
@@ -279,7 +279,7 @@ def test_an_edited_frame_saves_as_six_as_edited(tmp_path):
         edited = {**wired, "wires": wires}
         gs.land(G.read_graph(edited), copy.deepcopy(edited))
         doc = app.presets.document("branch-two-sizes")
-        assert doc["schema"] == "hyperspace.preset/7", name
+        assert doc["schema"] == "hyperspace.preset/9", name
         assert doc["graph"] == G.read_graph(edited).to_json(), name
         assert "backdrop.history" not in doc["values"], name
 
@@ -292,7 +292,7 @@ def test_an_untouched_corpus_preset_saves_as_its_load(tmp_path):
     app = make_app(tmp_path)
     app.lib.load("presets", "party-trip")
     doc = app.presets.document("party-trip")
-    assert doc["schema"] == "hyperspace.preset/7"
+    assert doc["schema"] == "hyperspace.preset/9"
     assert doc["graph"] == app.presets.graph.free_doc()
 
 
@@ -349,7 +349,7 @@ def test_the_missing_effects_wires_survive_a_save(tmp_path):
     assert app.presets.load_doc(doc) == [] and app.presets.notes == []
     assert main_run(app.presets.graph.spec) == ("foo", "acid")
     out = app.presets.document("t")
-    assert out["schema"] == "hyperspace.preset/7"
+    assert out["schema"] == "hyperspace.preset/9"
     assert main_run(G.read_graph(out["graph"])) == ("foo", "acid")
 
 
@@ -379,7 +379,7 @@ def test_a_driven_channel_choice_loads_as_a_switch_and_saves_as_six(tmp_path):
                 assert {"from": f"channel.{c}", "to": f"{sw}.in{i}"} in free["wires"]
             assert not [w for w in free["wires"] if w["to"] == end and w["from"] != sw]
         doc = app.presets.document(name)
-        assert doc["schema"] == "hyperspace.preset/7", name          # (row 394)
+        assert doc["schema"] == "hyperspace.preset/9", name          # (row 394)
         assert [n for n in doc["graph"]["nodes"] if n["kind"] == "switch"] == [
             {"kind": "switch", **({"instance": 2} if sw == "switch.2" else {})}
             for sw, *_ in switches]
@@ -408,7 +408,7 @@ def test_an_effect_switched_on_in_no_run_adds_nothing_and_saves_as_six(tmp_path)
     app.reg[f"fx.{off}.on"].set(True)
     assert main_run(gs.spec) == run
     doc = app.presets.document("after")
-    assert doc["schema"] == "hyperspace.preset/7" and main_run(G.read_graph(doc["graph"])) == run
+    assert doc["schema"] == "hyperspace.preset/9" and main_run(G.read_graph(doc["graph"])) == run
 
 
 def _loaded(ctx, tmp_path, slug: str | None = None, doc: dict | None = None):
