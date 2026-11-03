@@ -177,7 +177,13 @@ def register(reg, state: GhostState, n: int = 1) -> None:
                    tip="How solid the ghost hands are over the picture.")
     mirror = reg.get(f"{pre}.mirror")
     room = mirror.__dict__.get("room") if mirror is not None else None
-    if not isinstance(room, RoomSetting):
+    if mirror is not None and not isinstance(room, RoomSetting):
+        # a param from before this build (a hot reload): its setting kept,
+        # given a room of its own — never declared twice (review of #351)
+        room = RoomSetting(bool(mirror.get()))
+        mirror.get, mirror.put = (lambda: room.value), room.set
+        mirror.__dict__["room"] = room
+    elif not isinstance(room, RoomSetting):
         # the session's (plan 44 D3): one setting for the room, owned by the
         # session's param and read from there — written to every live deck's
         # hands state, held weakly so a deck rebuilt lets its old state go
