@@ -1204,7 +1204,7 @@ const RECIPES = [
       const at = new Set(Array.from({ length: n }, (_, i) => from + Math.round(i * (span - 1) / (n - 1))));
       return { mode: 'feedback', zones: Array.from({ length: ZONES }, (_, z) => (at.has(z) ? p.force : 0)) }; } },
   { id: 'buzz', name: 'buzz', mode: 'Vibration 0x26',
-    blurb: 'what if it just vibrated? The voice coil hums under the finger instead of pushing back — amplitude and Hz, over the zones you pick. Low Hz is a knock, high Hz is a tone.',
+    blurb: 'what if it just pushed back over and over? The same geared motor that makes the wall drives the stop in and out instead — amplitude and Hz, over the zones you pick. Low Hz is a knock, high Hz is a hum.',
     params: ['from', 'amp', 'hz'],
     make: p => ({ mode: 'vibration', zones: flat(p.from, p.amp), freq: p.hz }) },
   { id: 'rev', name: 'engine', mode: 'Vibration 0x26, re-sent',
@@ -1213,7 +1213,7 @@ const RECIPES = [
     make: (p, u) => ({ mode: 'vibration', zones: flat(p.from, p.amp),
       freq: pyRound(p.hz + (p.hz2 - p.hz) * clamp01((u - zoneU(p.from)) / Math.max(0.05, 1 - zoneU(p.from)))) }) },
   { id: 'recoil', name: 'recoil', mode: 'Feedback 0x21 ⇄ Vibration 0x26',
-    blurb: 'a wall that fires. Cross it and the wall drops for a moment and the coil kicks instead, with the heavy motor behind it; then the wall comes back. One shot per squeeze, or hold for full auto.',
+    blurb: 'a wall that fires. Cross it and the wall drops for a moment and the trigger motor rattles instead, with the body\'s heavy motor behind it; then the wall comes back. One shot per squeeze, or hold for full auto.',
     params: ['brk', 'force', 'kickHz', 'kickMs', 'rate', 'thump'],
     breakAt: p => zoneU(p.brk), auto: p => p.rate,
     make: (p, u, t, st) => {

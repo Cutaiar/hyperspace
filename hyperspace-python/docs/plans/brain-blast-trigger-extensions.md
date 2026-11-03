@@ -234,8 +234,8 @@ and gas, semi-auto, full auto, notches.
 
 - Can a finger tell ten zones apart, or is the useful resolution three or
   four? That decides whether a *curve* is one node or a gimmick.
-- Does the coil's kick read as recoil, or just as a buzz? Does the heavy
-  motor behind it matter?
+- Does the trigger motor's rattle read as recoil, or just as a buzz? Does
+  the body's heavy motor behind it matter?
 - How much of the sniper's three stages survives at the real break? Dan's
   distinction is slack / wall / break — the bench's trace will say whether
   the hand finds the wall or just squeezes through it.

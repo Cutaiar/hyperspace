@@ -98,7 +98,8 @@ device list is empty or no reports arrive, check System Settings ▸ Privacy
     them, clicks the finger can count · *buzz* (Vibration 0x26) — it just
     vibrates, amplitude and Hz · *engine* — the pitch rises with the travel
     · *recoil* — a wall that fires: cross it and the wall drops for a
-    moment while the coil kicks and the heavy motor thumps, one shot per
+    moment while the trigger motor rattles and the body's heavy motor
+    thumps, one shot per
     squeeze or full auto · *bowstring* — harder as you draw, then it lets
     go · *gallop* — a heavy foot and a light one on a period.
   - **Pairs worth feeling** load both sides at once: the sniper, linear vs
