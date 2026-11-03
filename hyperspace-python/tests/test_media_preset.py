@@ -136,7 +136,7 @@ def test_preset_without_media_keeps_every_value_in_six(tmp_path, name):
     assert r.presets.load(name) == []
     base = json.loads((BASE / f"{name}.json").read_text())
     doc = json.loads(save_text(r, name))
-    assert doc["schema"] == preset.WIRED_SCHEMA
+    assert doc["schema"] == preset.SAVE_SCHEMA
     # (plan 36 T3: an effect the migrated section does not name — off, in
     # no run — has its values dropped with it)
     held = M.section_effects(doc["graph"])
@@ -155,11 +155,11 @@ def test_a_media_preset_and_one_without_are_both_six(rig):
     """Row 394: with media or without, the save is `/6`, with the bins (an
     empty section when none is assigned) and every media-family value."""
     doc = rig.presets.document("x")
-    assert doc["schema"] == preset.WIRED_SCHEMA == "hyperspace.preset/7"
+    assert doc["schema"] == preset.SAVE_SCHEMA == "hyperspace.preset/9"
     assert doc[preset.MEDIA_KEY] == {"channels": {}}
     rig.reg.media.assign("a", 0, "shared:loops/tunnel.mp4")
     doc = rig.presets.document("x")
-    assert doc["schema"] == preset.WIRED_SCHEMA
+    assert doc["schema"] == preset.SAVE_SCHEMA
     assert doc[preset.MEDIA_KEY] == {"channels": {"a": ["shared:loops/tunnel.mp4"]}}
     assert doc["values"]["media.a.slot"] == 0
     for pid, v in (("media.b.rate", 2.0), ("view.media_alpha", 0.5),
@@ -176,24 +176,24 @@ def test_a_row_on_a_media_param_survives_the_save(rig):
                                      "op": "push", "value": 0.2}])
     assert rig.presets.load("LFOPOS") == []
     doc = rig.presets.document("LFOPOS")
-    assert doc["schema"] == preset.WIRED_SCHEMA
+    assert doc["schema"] == preset.SAVE_SCHEMA
     assert any(r["target"] == "media.a.pos" for r in doc["routes"])
     put(rig.home, "MACROALPHA", macros={"macro.1": {"subs": [
         {"base": "backdrop.alpha", "from": 0, "to": 1}]}})
     assert rig.presets.load("MACROALPHA") == []
     doc = rig.presets.document("MACROALPHA")
-    assert doc["schema"] == preset.WIRED_SCHEMA
+    assert doc["schema"] == preset.SAVE_SCHEMA
     assert doc["macros"]["macro.1"]["subs"][0]["base"] == "backdrop.alpha"
     put(rig.home, "DESKALPHA", desk=[{"source": "cc:0:48", "target": "backdrop.alpha",
                                       "op": "set"}])
     assert rig.presets.load("DESKALPHA") == []
     doc = rig.presets.document("DESKALPHA")
-    assert doc["schema"] == preset.WIRED_SCHEMA
+    assert doc["schema"] == preset.SAVE_SCHEMA
     assert any(r.get("target") == "backdrop.alpha" for r in doc["desk"])
     put(rig.home, "PLAIN", routes=[{"source": "lfo:0", "target": "camera.zoom",
                                     "op": "push", "value": 0.1}])
     assert rig.presets.load("PLAIN") == []
-    assert rig.presets.document("PLAIN")["schema"] == preset.WIRED_SCHEMA
+    assert rig.presets.document("PLAIN")["schema"] == preset.SAVE_SCHEMA
 
 
 def test_bins_round_trip(rig, tmp_path):
@@ -204,7 +204,7 @@ def test_bins_round_trip(rig, tmp_path):
     rig.reg["media.a.slot"].set(1)
     path = rig.presets.save_as("MEDIA")
     text = path.read_text()
-    assert '"schema": "hyperspace.preset/7"' in text
+    assert '"schema": "hyperspace.preset/9"' in text
     assert '  "a": ["shared:loops/tunnel.mp4", "camera:FaceTime HD Camera"]' in text
     want = m.to_json()
     m.from_json({})
@@ -258,7 +258,7 @@ def test_bmp_alpha_is_an_alias_of_media_alpha(rig):
     assert reg.snapshot()["view.media_alpha"] == 0.3
     doc = rig.presets.document("x")
     assert "view.bmp_alpha" not in doc["values"]
-    assert doc["values"]["view.media_alpha"] == 0.3 and doc["schema"] == preset.WIRED_SCHEMA
+    assert doc["values"]["view.media_alpha"] == 0.3 and doc["schema"] == preset.SAVE_SCHEMA
     put(rig.home, "OLDALPHA", values={"view.bmp_alpha": 0.25})
     assert rig.presets.load("OLDALPHA") == [] and rig.presets.notes == []
     assert real.value == 0.25

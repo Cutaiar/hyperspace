@@ -218,7 +218,7 @@ here; overturn → the change, then the same.
 | 179 | Nodes and ports: made images pulled, painted images drawn into the consumer | 194 | |
 | 180 | The default graph keyed by switches, wiring and clouds; reused (plan 30 adds the effect list and the placements to the key: rows 215, 219) | 194, 195 | |
 | 181 | The cover mask as a Layer node | 194 | |
-| 182 | The eye: `eye.fov`, `eye.distance`, session, the old divide | 196 | |
+| 182 | The eye: `eye.fov`, `eye.distance`, session, the old divide | 196 | overturned 2026-11-02 (the owner): the eye is the preset's (row 555) and modulatable (row 574); the defaults stand, the rig's reference eye |
 | 183 | `camera.pan` in world units (±12), marked by `units`, through 1080p | 199, 201 | |
 | 184 | `camera.zoom` the shape's world scale; copies in the world (its stroke sentence superseded by row 189) | 197 | |
 | 185 | The shape's depth: never against itself; alpha > 0.25 written after | 205 | |
@@ -557,7 +557,7 @@ here; overturn → the change, then the same.
 | 518 | Open / fold is a preset edit, one undo step | 394 | controller — 2026-10-27 |
 | 519 | A deleted member leaves its group lazily | 394 | controller — 2026-10-27 |
 | 520 | Leaves when wholly outside; the folded node drags all; several leavers one step; a stub drop refused | 394 | controller — 2026-10-27 |
-| 521 | A save with no group stays `/7`; `/8` only with a group (controller recommends every save `/8`, row 394) | 394 | **pending the owner** |
+| 521 | A save with no group stays `/7`; `/8` only with a group (controller recommends every save `/8`, row 394) | 394 | closed — owner, 2026-11-02 (row 576): every save is `/9`, groups or none |
 | 522 | The folded node's pins: picture pins, out lanes, param rows, modifier inputs | 394 | controller — 2026-10-27 |
 | 523 | A spawn's open pins and rename map last the session | 395 | controller — 2026-10-27 |
 | 524 | Wire as saved takes only free ports; a take-over chip? | 395 | **pending the owner** |
@@ -591,7 +591,7 @@ here; overturn → the change, then the same.
 | 552 | Plan 42 D9: the on-screen pad draws the model's own face | 407 | (rec) — pending the owner |
 | 553 | Plan 42 D10: the browser lab is a prototype beside the app | — | (rec) — pending the owner |
 | 554 | The preset contract: a preset is a complete look; the rig is what is plugged in — everything that renders in the preset, everything about hardware on the rig and requested | — | owner — 2026-11-02 |
-| 555 | One camera in the preset: `camera.*` and `eye.*` one preset group (C2, `/9`), overturning "the camera is the rig" (row 182) | — | (rec) — pending the owner |
+| 555 | One camera in the preset: `camera.*` and `eye.*` one preset group (C2, `/9`), overturning "the camera is the rig" (row 182) | 431 | owner — 2026-11-02 (as recommended, plus: eye modulatable, pose always saved) |
 | 556 | Plan 44 Q1: N looks, one on air — a deck is a look with its own controls, registry's performance part, routes, graph, renderer, undo and dot; the deck is what controllers (on air), the panel and undo point at | — | owner — 2026-11-02 (as recommended; 558 with the nuance) |
 | 557 | Plan 44 Q2: hold becomes copy A into B (a deck operation; `output.hold` / `.take` / `.drop` keep their ids); no hotfix of plan 38's hold | — | owner — 2026-11-02 (as recommended; 558 with the nuance) |
 | 558 | Plan 44 Q3: shared and lent — the dream worker lent to the deck going on air; segment workers per renderer with the model shared (as today); media sources shared, the channels' state per deck; the analyzer and the clock shared | — | owner — 2026-11-02 (as recommended; 558 with the nuance) |
@@ -602,6 +602,11 @@ here; overturn → the change, then the same.
 | 563 | Node groups (post-show G0, 2026-11-02): a group's id is never reused within a preset's life — `group.<n>` is one past the highest the preset has ever allotted (`Presets.group_high`: the file's highest at the load, dropped entries counted; not saved, no schema change), so an ungrouped or undone group's number is not the next group's; and membership is eager — a member node deleted by any road leaves its group's list in the same operation (hooks on the mechanisms: the section's landing, the table's `set_modifiers`, a bank's membership change), the last member taking the group; every node-removing step carries the marks (which carry the floor too) so its undo puts the member back; a refused load leaves the loaded preset's groups whole. Render node ids (`acid` → `acid.2`, the lowest free instance, R25) are untouched: a format question for the one-format PR | 422 | built as recommended — PR (G0) |
 | 564 | Wave 0 E1: delay loops are the trails mechanism, the look-back keeps the dream — the feedback starter (a composite laid over, a delay, a fade at level 0.75: colour and alpha decay alike) on the cable menu and "add feedback after" on the node menu, many allowed; "feedback" not "echo", which names the look-back's frames | 423 | (rec) — pending the owner |
 | 571 | Plan 44 D1: today's per-deck singletons (registry, view, table, router, the three banks, presets and their graph section, learn, undo and its marks, renderer, hold) bundled in one `deck.Deck`; `Deck.build` is the one construction order — `app.main` and `tests/test_undo.boot` both call it, the rig's objects built between its lines passed in as hooks at their old places; no behaviour change (`tests/test_deck.py`) | 430 | built as recommended — PR (D1) |
+| 572 | C2 built: the eye keeps its ids (`eye` a performance group beside `camera`, not a rename), every save `hyperspace.preset/9`, an old preset takes the eye its old show held (`Project.old_eye`), and `tools/migrate_library.py` runs the retaper first (one bump moves everything), backs up, writes the rig's show's eye into every preset and drops it from the shows (`.bak-v2-eye`) | 432 | built as decided — owner, 2026-11-02 (plan 43 C2) |
+| 573 | The spin's pose is saved by every preset (a `pose` section of the six `rot.phase.*`, `view.body` folded in) and a load sets the turn there; a file without a pose (every old file, every file the migration rewrote) keeps spinning | 431 | owner — 2026-11-02; the `pose` key beside `values` (rec) |
+| 574 | The eye is modulatable, its tapers unchanged (`eye.fov` linear, `eye.distance` log; Learn and the referee accept a performer on it): row 182's "a lane would swing the whole room" went with the eye leaving the room | 433 | owner — 2026-11-02 |
+| 575 | The hands' box-to-world calibration is fitted to the rig's reference eye (`EYE_FOV` / `EYE_DISTANCE`), never the preset's: hands drawn in the scene are seen through the preset's eye and scale with the shape; a hands layer is drawn through the reference eye and keeps its size on screen | 433 | owner — 2026-11-02 ("it depends on where the hands are rendered; both"); the translation (rec) |
+| 576 | Row 521 closed: every save is `/9`, groups or none (row 394's "every save the newest schema"); a preset's `modules` labels stay inert until row 540 | — | owner — 2026-11-02 |
 | 577 | Wave 1 K2: warp's drift and scale on one `@clock` at drift × scale (the scroll counted in cells), tripcolour's pulse on a `@clock` wrapped to 2π; the lint's allowlist loses three pairs; party-noita's 17 goldens re-recorded | 419, 434 | owner's rule (row 560), built |
 | 578 | Wave 1 K3: `view.media_rate` and `view.inst_rate` integrated by the host into `view.media_phase` and `view.inst_phase` (`ViewState.integrate`, wrapped at 2π and 20π), read by the media path and the field's motion in place of t × rate; not params, never saved | 435 | built under row 560 (the owner's rule) — PR (K3) |
 | 579 | Continuity K4: RINGS' colour widens the hue range along the rings and never the drift — `pal((r · f · colour − t · 3/2π) · 0.15 …)` for `pal(ph · 0.15 · colour …)`, the same picture at colour 1; glimmer, wobble and fractals measured and left as they are — their size, frequency and cells knobs change a shape, by the same amount at any hour | 436 | agreed — row 560's port |
@@ -3566,6 +3571,12 @@ among them. No preset was edited or added: no factory preset carries a
   picture (no golden covers it). Past zoom ≈ 3.8 the eye is inside the
   shape (row 188).
 - **Judge it.** Check 196.
+- **Overturned** (the owner, 2026-11-02; plan 43 C2): the eye is the
+  preset's, part of the one orbit camera (row 555), and modulatable (row
+  574) — "a lane would swing the whole room" no longer holds once the eye
+  is the look's. The ids, ranges and defaults stand; the defaults are now
+  the rig's reference eye the hands' calibration is fitted to (row 575).
+  The CAMERA page draws one section.
 
 ### 183. `camera.pan` is in world units (±12 shape radii), marked by a `units` key, converted through the 1080p screen
 
@@ -9071,9 +9082,11 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
 - **Rough edge.** A large region needs a long drag to leave; leavers from two open groups in one drop are one step.
 - **Judge it.** Check 394 (steps 4, 8).
 
-### 521. A save with no group stays `/7`; `/8` only when a group exists — **pending the owner**
+### 521. A save with no group stays `/7`; `/8` only when a group exists — **closed by row 576**
 
-- **Answer.** **pending the owner.** Built as T2's ruling (the build plan's "a preset without `groups` saves byte for byte as before" and "the factory presets and the library are not rewritten"). The controller recommends the other way: row 394, the owner's own of 2026-10-25, is "every save is the newest schema; migrate the library forward", and D7 cites it — so every save would write `/8`, reading `/7` the identity, the factory files and the Drive library migrated by `tools/migrate_library.py` as plan 36 did (a schema-line rewrite, backups as before).
+- **Answer.** **Closed — the owner, 2026-11-02 (row 576):** every save is
+  the newest schema, `/9` since plan 43 C2, groups or none; the fork below
+  is gone. Was: **pending the owner.** Built as T2's ruling (the build plan's "a preset without `groups` saves byte for byte as before" and "the factory presets and the library are not rewritten"). The controller recommends the other way: row 394, the owner's own of 2026-10-25, is "every save is the newest schema; migrate the library forward", and D7 cites it — so every save would write `/8`, reading `/7` the identity, the factory files and the Drive library migrated by `tools/migrate_library.py` as plan 36 did (a schema-line rewrite, backups as before).
 - **Built.** `Presets.document` writes `groups` and `hyperspace.preset/8` only when a live group exists; otherwise the file is `/7` byte for byte, so no factory file and no library file moved. This partly revives "the lowest schema that loses nothing" (R10), which row 394 superseded.
 - **Other options.** Every save `/8` (the recommendation): every preset's first line changes on its next save, and the factory resave test moves with it.
 - **To reverse.** One rule in `Presets.document`, then a migration run over the factory files and the library.
@@ -9661,9 +9674,10 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
   kept), so a step reverts alone.
 - **Judge it.** Hand checks come with D4 and D5: a HOLD, an edit of every
   kind on the panel, the projector unmoved; a TAKE on the bar.
-## Plan 43 — the preset contract (rows 554–555)
+## Plan 43 — the preset contract (rows 554–555, 572–576)
 Docs only (wave 0, C1, 2026-11-02): the line is written down and the code
-audited; nothing moved. The audit and the worklists for C2 (the camera)
+audited. C2 (wave 1, 2026-11-02, rows 572–576) moved the camera: the eye,
+the pose, schema `/9`, the migration. The audit and the worklists for C2 (the camera)
 and D3 (the per-deck split) are
 [`plans/43-preset-contract.md`](plans/43-preset-contract.md).
 ### 554. A preset is a complete look; the rig is what is plugged in
@@ -9706,7 +9720,8 @@ and D3 (the per-deck split) are
   are plan 43 §7's questions for the owner.
 - **Judge it.** — (nothing to see yet; C2's and D3's checks).
 ### 555. One camera in the preset: `camera.*` and `eye.*` are one group
-- **Answer.** (rec) — pending the owner. The contract (row 554) puts the
+- **Answer.** owner — 2026-11-02 (as recommended, plus: eye modulatable,
+  pose always saved). Built as rows 572–576. Was: (rec). The contract (row 554) puts the
   eye in the preset; this row is the recorded "camera is the rig" (row
   182, DECISIONS "A fixed camera, the eye", `params.py` 1791 "not
   modulatable — the camera is the rig, the shape is what moves") being
@@ -9736,6 +9751,142 @@ and D3 (the per-deck split) are
   the contract working as intended and a change from today.
 - **Judge it.** — (C2's hand check: frame, save, load another, load it
   back; the framing is back).
+
+### 572. C2 built: ids kept, `/9`, the migration tool runs the retaper first
+
+- **Answer.** owner — 2026-11-02 (row 555 as recommended); built by C2.
+- **Built.** `eye` joins `params.PERFORMANCE_GROUPS` beside `camera`
+  (folding the two params into the `camera` group would break "an id's
+  first segment is its group", which `tests/test_params.py` holds for
+  every persisted param; the group move keeps both). Every save is
+  `hyperspace.preset/9` (`preset.SAVE_SCHEMA`, `graphmigrate.EYE_SCHEMA`);
+  `VERSIONS` reads `/2`–`/9`. A load of a file before `/9` runs
+  `graphmigrate.nine`: the eye an old show's `session` held
+  (`library.Project.old_eye`, read out of the session by `_take`, never
+  landed or written as the show's) is written into its values, and the
+  camera node's GRAPH position the old show's layout kept
+  (`Project.camera_at`) into its layout; an id still missing takes the
+  build's default. `Project.write`'s first write over a show holding the
+  eye keeps `<file>.bak-v2-eye` (no backup, no write).
+  `tools/migrate_library.py --apply` backs the library up, retapers every
+  unmarked patch, desk template and `bindings.json`
+  (`tools/retaper_routes.py`'s rewrite; a preset is retapered by its own
+  resave), rewrites every preset as `/9` with the rig's show open
+  (`--show`, else this Mac's last show, else the library's one show;
+  `headless.show_seed`), and rewrites every show without the eye. The
+  round-trip picture check draws both sides with that show open. The
+  test corpus and the grouped fixture are `/9`, the build's default eye:
+  no golden moved.
+- **Other options.** Rename to `camera.fov` / `camera.distance` (a read
+  map, a second format for no new meaning). Refuse an unmarked library
+  instead of retapering it (two runs for the owner where one does).
+- **To reverse.** The group move back, `SAVE_SCHEMA` back to `/8`, and a
+  migration writing the loaded preset's eye into the show.
+- **Rough edge.** A library with several shows takes one show's eye for
+  every preset (`--show` picks); an old preset opened on the new build
+  before the migration takes the open show's eye only while that show is
+  open — after the show is saved on the new build the eye is in its
+  `.bak-v2-eye` (the tool reads it there), not in the show.
+- **Judge it.** Check 432.
+
+### 573. The pose is saved and set on load; old files keep spinning
+
+- **Answer.** owner — 2026-11-02 ("pose always saved"); the `pose` key
+  (rec).
+- **Built.** `Presets.document` writes `"pose": {"rot.phase.XY": …}`
+  (`preset.POSE_KEY`, the six `params.POSE_IDS` in radians, rounded to
+  1e-6 and held to ±3.141592 so save → load → save is a fixed point at
+  ±π, `preset.pose_angle`) right after `values`: `ViewState.pose` folds `view.body` in —
+  the drawn turn R(angles)·body read back as six angles
+  (`geometry.pose_angles`, exact on SO(4); one road per picture —
+  review 2.4: a 3D shape its folded XY/XZ/YZ and W 0, body or none; a 4D
+  shape with no body its drawn angles each folded on its own plane (review
+  3.1: the same motion after a load), with a body `pose_angles` of the
+  turn; a scene
+  its angles unfolded, its layers spinning at fractions of them) — and `Presets.load_doc`
+  sets it (`ViewState.set_pose`: no body, the 3D switch not yet holding,
+  so the shape is drawn the same before and after the next `integrate`).
+  The phases stay `persist=False`: the turn moves every frame, so it is
+  no base — not in `values`, no undo step, no dirty dot. A pose that is
+  not six finite numbers is said and ignored. The migration's resave
+  (`headless.resave`) takes the pose back out of a file that had none,
+  so a migrated old file keeps spinning and its `/9` is a fixed point
+  (`save` stays one road). **Under hold** (review 2.3, the ruling): the
+  one turn both renderers draw is the projector's, so a load keeps its
+  pose back on the hold (`Hold.hold_pose`) — the held picture and its 3D
+  body do not jump — and Take lands it; Drop forgets it; a save while
+  held writes the loaded preset's pose.
+- **Other options.** The six phases in `values` (they are no bases, and
+  every check that `values` is the bases' snapshot would carry an
+  exception); a save chip ("save the turn") — the owner chose always.
+- **To reverse.** Drop the key from `document`; a load ignores it.
+- **Rough edge.** A 3D-and-4D scene with a body turned in keeps its 4D
+  layers' pose exactly, its 3D layers take the folded XY, XZ, YZ.
+  An undo of a load does not put the turn back (the turn is no base).
+- **Judge it.** Check 431.
+
+### 574. The eye is modulatable; row 182 overturned
+
+- **Answer.** owner — 2026-11-02.
+- **Built.** `eye.fov` and `eye.distance` lose `modulatable=False` and
+  "the camera is the rig". **The tapers are unchanged** — `eye.fov`
+  linear (10–120°), `eye.distance` log (1.5–40), as they were: a desk
+  row, binding or macro learned onto either before (only lanes were ever
+  refused) lands the same value for the same knob position, and no stored
+  value changes units (review 4 of PR #333). Learn and the referee accept
+  a performer on them (the session check no longer applies).
+  `hold.HELD_GROUPS` holds the eye: a preset loaded under hold keeps the
+  projector's framing until Take.
+- **Other options.** A log fov (a push of one depth the same ratio at a
+  long lens and a wide one) — refused: a change of taper is a change of a
+  stored value's units, a format change with a migration of its own.
+- **To reverse.** `modulatable=False` back on the two params.
+- **Rough edge.** A lane on `eye.distance` swings perspective strength
+  with size; the fov is the gentler target.
+- **Judge it.** Check 433.
+
+### 575. The hands' calibration against the reference eye; in-scene hands scale, the layer keeps its size
+
+- **Answer.** owner — 2026-11-02: "it depends on where the hands are
+  rendered, and both behaviours are wanted". Translated (rec) as below.
+- **Built.** `ghost.calibration` with `mm = null` ("from the box") is
+  fitted to the rig's reference eye (`EYE_FOV` / `EYE_DISTANCE`) whatever
+  the preset's eye (`ghost.shared_camera` no longer passes the eye in):
+  the hands live in the world, like the shape. Hands drawn **in the
+  scene** are seen through the preset's eye and scale with the shape.
+  Hands drawn **as a layer** are drawn through the reference eye
+  (`ghost.Settled.layer`, the settle's second camera), so they keep
+  their size and place on screen whatever the preset's eye; the readout
+  alone (hands in the scene) follows the scene's eye, so a gauge stays
+  on its hand. **A layer laid depth-aware** (review 2.1, the ruling: at
+  an output, its `laid` "depth", or by a depth composite) compares its
+  depth with the scene's, so it is "in the world": drawn through the
+  scene's eye (`HandsLayer.in_world`, `Ghost.layer(world=True)`), one
+  projection for both depth buffers; only a layer laid without depth
+  keeps the reference eye and its screen size. At the default eye the
+  cameras are one: no picture of before moved. The fit is cached by box,
+  basis and units (`Ghost.calibrated`); each eye is one 4×4 product
+  (`ghost.through_eye`).
+- **Other options.** Calibrate against the preset's eye (today's maths:
+  every hand keeps its screen size, the shape does not — the hands leave
+  the world); write `mm` at calibration time (a hands.json change).
+- **To reverse.** Pass the eye to `calibration` again and drop
+  `Settled.layer`.
+- **Rough edge.** A depth-aware layer does not keep its screen size
+  when the eye zooms (it is in the world, by the ruling).
+- **Judge it.** Check 433.
+
+### 576. Row 521 closed: every save `/9`; `modules` labels inert pending row 540
+
+- **Answer.** owner — 2026-11-02.
+- **Built.** `Presets.document` writes `/9` for every preset; `groups`
+  is written when there is one, with no schema of its own. A preset's
+  `modules` labels are written and read as before (a label and a clean
+  dot, never a load); whether they go is row 540's.
+- **To reverse.** n/a (a schema line).
+- **Rough edge.** Every preset's first line changes on its next save.
+- **Judge it.** Check 432.
+
 ### 581. Plan 45 V2: the mixer — one stream, read at the transport's position
 - **Asked.** Plan 45's second PR: a mixer with a per-channel gain and a
   play-audio toggle, one output stream, under the owner's rule (row 562):

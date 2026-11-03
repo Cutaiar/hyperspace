@@ -10,12 +10,22 @@ V3). render.py re-exports it.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
 
-from .geometry import EYE_DISTANCE, EYE_FOV, RATE, rot_matrix
+from .geometry import (
+    EYE_DISTANCE,
+    EYE_FOV,
+    RATE,
+    SHAPES,
+    is_3d,
+    pose_angles,
+    rot_matrix,
+    view_angles,
+)
 
 N_MOD = 8   # pattern.mod.* inputs the face shader reads as u_mod[N_MOD]
 RED = (1.0, 43 / 255, 43 / 255)   # the points' colour, and the panel's one accent (ui.RED)
@@ -163,8 +173,10 @@ class ViewState:
     # position in world units (the unit circumradius; pan.y positive down)
     zoom: float = 1.0
     pan: list[float] = field(default_factory=lambda: [0.0, 0.0])
-    # the eye (eye.* — session): the one fixed camera, framed on the Leap
-    # box; the defaults are project_h's divide (geometry.EYE_FOV / EYE_DISTANCE)
+    # the eye (eye.* — the preset's since plan 43 C2): the one fixed camera
+    # the scene is seen through; the defaults are project_h's divide
+    # (geometry.EYE_FOV / EYE_DISTANCE), the rig's reference eye the hands'
+    # calibration is fitted to (ghost.calibration)
     eye_fov: float = EYE_FOV           # degrees across the shorter side
     eye_distance: float = EYE_DISTANCE  # world units from the origin
     # the point clouds (cloud.* — session; plan 26 A4b, graph.PointCloud):
@@ -274,3 +286,47 @@ class ViewState:
         for p in range(6 if not self.three_d else 3):
             if self.planes[p]:
                 self.ang[p] += dt * self.speed * RATE[p] * self.rate[p]
+
+    def pose(self) -> list[float]:
+        """The spin's pose as six plane angles, each in (−π, π] — what a
+        preset saves (plan 43 C2, row 573: `params.POSE_IDS`) — one pose
+        per picture, by one road (review 2.4):
+
+        - a 3D shape: its own XY, XZ and YZ folded, the W planes 0 — body
+          or none (its W planes and any body do nothing to it);
+        - a 4D shape with no body turned in: its angles as drawn
+          (`geometry.view_angles`: the 3D ones alone while the switch
+          holds), each folded on its own plane — the same rotation *and*
+          the same motion after a load (review 3.1: re-deriving the six
+          from the matrix can pick another branch, cos < 0 on a plane,
+          which turns that plane backwards once the integrator adds to it);
+        - a 4D shape with a body: the turn it is drawn at — R(its
+          angles)·body — read back as six angles (`geometry.pose_angles`),
+          the body folded in, so a load that sets them (`set_pose`) draws
+          it the same whichever way the switch stands;
+        - a scene (`Shape.layers`): its layers turn at fractions of the
+          angles (`spin` 0.4, −0.7 …), so a turn is not a fold of one — the
+          angles as they stand, unfolded (a 3D scene's W planes 0); a 4D
+          scene with a body turned in folds it as a 4D shape does, its 3D
+          layers taking the folded XY, XZ and YZ (the one case not exact).
+
+        The folded roads return angles in (−π, π]; a scene's are as they
+        stand (`preset.pose_angle` rounds both the same way)."""
+        ang = [float(a) for a in self.ang]
+        scene = bool(SHAPES[self.shape].layers)
+        if scene and (is_3d(self.shape) or (self.body is None and not self.held)):
+            return ang[:3] + [0.0] * 3 if is_3d(self.shape) else ang
+        if is_3d(self.shape) or self.body is None:
+            drawn = view_angles(self.shape, ang, self.held)
+            return [math.remainder(float(a), 2.0 * math.pi) + 0.0 for a in drawn]
+        B = np.asarray(self.body, dtype=np.float64)
+        return pose_angles(rot_matrix(view_angles(self.shape, ang, self.held)) @ B)
+
+    def set_pose(self, angles) -> None:
+        """Set the turn to six plane angles (`pose`): no body, the 3D switch
+        not yet holding — the next `integrate` folds the pose into a fresh
+        body if the switch is on, the same pose either side, and a draw
+        before it sees R(angles) alone, the same picture (plan 43 C2)."""
+        self.ang = [float(a) for a in angles]
+        self.body = None
+        self.held = False

@@ -336,9 +336,12 @@ stay the parity oracle.
 **The eye** is a fixed perspective camera on the world's +z axis looking
 at the origin: `eye.fov` (47.6°, `geometry.EYE_FOV`, across the
 picture's shorter side; 10–120°) and `eye.distance` (3.78 shape radii,
-`EYE_DISTANCE`; 1.5–40), on the CAMERA page under **eye**. They are
-session params (group `eye`: no preset moves them) and not modulatable
-(the camera is the rig; the shape is what moves). The defaults are
+`EYE_DISTANCE`; 1.5–40, log), on the CAMERA page in its one
+section. Since plan 43 C2 they are the **preset's** — with `camera.*` the
+one orbit camera (group `eye`, a performance group: a load lands the
+framing) — and modulatable: a lane breathes the framing (register rows
+555, 574). The defaults are the rig's **reference eye** too: the hands'
+calibration is fitted to them, never to the preset's eye. The defaults are
 `project_h`'s old 3D divide: at zoom 1 and pan 0 every vertex lands
 within 2.3e-13 px of `project_h` in float64 and 1.1e-4 px in float32,
 against a bar of half a pixel
@@ -609,8 +612,12 @@ line, and the LOOKBACK page "history: the scene · with the hands"
 **The hands** (`graph.Hands`, the `ghost.*` params' node) are `ghost.py`'s
 five styles as geometry in the shared camera: `ghost.shared_camera`
 takes the Leap's millimetres into the world through the calibration in
-`hands.json` (§12) and the eye. A frame's poses are settled once
-(`Ghost.settle`) for every draw of them. A hands node is timed by its
+`hands.json` (§12) — fitted to the rig's reference eye, whatever the
+preset's (plan 43 C2, row 575) — and the eye. A frame's poses are settled
+once (`Ghost.settle`) for every draw of them: hands drawn **in the scene**
+go through the preset's eye and scale with the shape as it zooms; a
+**hands layer** is drawn through the reference eye (`Settled.layer`) and
+keeps its size on screen. A hands node is timed by its
 consumer: inside a scene its draw is its own SYSTEM line (`ghost`); its
 layer's draw is the layer's line (`hands`).
 
@@ -1381,7 +1388,7 @@ folder of old routing presets is no longer read.
 | File | When | Kept first |
 |---|---|---|
 | `presets/<name>.json`, `patches/<name>.json`, `<group>/<name>.json` | A save over it, ⇧F1–F8, × on the PRESETS page (its list or its patches fold), a rename, **update patch**. Never a load or a spawn. | A copy in `trash/<group>/`. A save goes on if the copy fails (and says so); a × or a rename is refused. A save that writes the same text adds nothing. |
-| `projects/<show>.hyp.json` | A pad change, save; a rename of a preset it names. Never a load. | The first write that puts a preset past slot 8: `<show>.hyp.json.bak-v2-bank8` (no copy, no write). A rename: a copy in `trash/projects/`. |
+| `projects/<show>.hyp.json` | A pad change, save; a rename of a preset it names. Never a load. | The first write that puts a preset past slot 8: `<show>.hyp.json.bak-v2-bank8`; the first write over a show holding the stick spring's old ids: `.bak-v2-spring`; the first write over a show holding the eye (plan 43 C2: the presets' now): `.bak-v2-eye` — no copy, no write. A rename: a copy in `trash/projects/`. |
 | `bindings.json` | At launch, when a newer build adds factory rows (the bank pads, OVERDUB, the clip-stop row, Home, the undo keys) where the control or key is free. A row you changed is left as you had it. | `bindings.json.bak-v<schema>` (`.bak-v3` for today's files; a dated name if that exists, never over any `.bak-*`). No copy, no rewrite: the table runs from memory for the session and the next launch tries again. |
 | `hands.json` | A calibration sweep or "reset ranges". A schema-1 file is read as it is and never rewritten at launch. | The first rewrite of a schema-1 file: `hands.json.bak-v1`. |
 | `<group>/…` | Restore from the trash. | Nothing to keep: a restore never writes over a file — a taken name restores as the next free name. |
@@ -1428,17 +1435,30 @@ once (never over a file) and prints the two lines to add;
 - **iCloud / Dropbox.** Mark the folder "Keep Downloaded" / "Available
   offline": an evicted file is invisible to the app.
 - **Both Macs on one library run the newest build** (row 394, the
-  owner's 2026-10-25 decision). Every save is `hyperspace.preset/6`; an
-  older build refuses it with "schema … is not a hyperspace.preset" rather
-  than load it and strip what it does not know on its next save. This build
-  reads every older schema (`/2`–`/5`) and migrates it on load. To move a
-  whole library at once: `uv run python tools/migrate_library.py` (a dry
-  run), then `--apply`. The route depths onto the effects' `speed` and
-  `amount` params (wave 0 T1, register row 561) are moved the same way:
-  `uv run python tools/retaper_routes.py` (a dry run), then `--write` —
-  **before the next show**, both Macs on this build. Since plan 40 a preset with a group (GRAPH's
-  **Group**) is `hyperspace.preset/8` and one without stays `/7` (register
-  row 521, pending the owner); a build from before plan 40 refuses an `/8`.
+  owner's 2026-10-25 decision). Every save is **`hyperspace.preset/9`**
+  (plan 43 C2: the eye in `values`, the spin's pose in `pose`; groups or
+  none — row 521 closed by row 576); an older build refuses it with
+  "schema … is not a hyperspace.preset" rather than load it and strip what
+  it does not know on its next save. This build reads every older schema
+  (`/2`–`/8`) and migrates it on load (an old preset takes the eye its old
+  show held). To move a whole library at once — **between shows, both
+  Macs updated together, a backup first** — `uv run python
+  tools/migrate_library.py` (a dry run: the rig's show and its eye, the
+  retaper, every preset's round-trip picture), then `--apply`: it backs
+  the library up to `~/Hyperspace/library-backup-<stamp>/`, measures the
+  unmarked route depths along the effect tapers first (wave 0 T1, register
+  row 561: what `tools/retaper_routes.py --write` does), writes every
+  preset as `/9` with the show's eye, and drops the eye from the shows
+  (`.bak-v2-eye` beside each).
+
+| Schema | What it added | Read | Written |
+|---|---|---|---|
+| `hyperspace.preset/2` | the preset (plan 13) | migrated to `/7` on load | never |
+| `/3`, `/4` | the envelopes and the sequencer (plan 31); media (plan 32) | migrated to `/7` on load | never |
+| `/5`, `/6` | the free graph (plan 33); the wired frame in the new ids (plan 35) | migrated to `/7` on load | never |
+| `/7` | the frame that says everything (plan 36) | as it is, the eye filled in (`graphmigrate.nine`) | never |
+| `/8` | `groups` (plan 40) | as it is, the eye filled in | never |
+| **`/9`** | the one orbit camera: `eye.*` in `values`, the spin's `pose` (plan 43 C2) | as it is | **every save** |
 
 The macro candidates to audition (plan 22) are in the owner's library;
 [`plans/22-macro-candidates.md`](plans/22-macro-candidates.md) says what
@@ -2538,9 +2558,13 @@ how in its side pane, a cable from it onto acid's `fx.acid.mix` mod.
 
 ## 10. Presets, shows and the bank
 
-A **preset** (`presets/<slug>.json`) is one whole performance moment:
-the performance groups' values (`view rot camera pattern dream fx lfo
-macro mod`, `params.PERFORMANCE_GROUPS`), the performer routes, the
+A **preset** (`presets/<slug>.json`) is one whole performance moment —
+a complete look (plan 43): the performance groups' values (`view rot
+camera eye pattern dream fx media backdrop … lfo env seq macro mod`,
+`params.PERFORMANCE_GROUPS`; the eye since C2), the spin's pose (`pose`,
+right after `values`: the six `rot.phase.*`, `view.body` folded in — a
+load sets the turn there; a file without one leaves it spinning), the
+performer routes, the
 desk's preset layer, the macros and the module labels — and, when it has
 them, a `graph` section (§2: its nodes and, since plan 28, its `wires`),
 its `modifiers` (after `routes`: one entry each, `{"id": "mod.1",
@@ -2555,8 +2579,8 @@ Since plan 40 a preset may end with `groups` (after `layout`, one group a
 line: `{"id": "group.1", "name": "acid wash", "patch": "acid-wash",
 "nodes": ["render:acid.2", "mod.3"], "open": false}`, and a
 `kept_by_host` list when a spawn's sheet kept rows for the preset); it is
-written only when a group exists, and then the file is
-`hyperspace.preset/8` (§6, "Groups and patches").
+written only when a group exists (§6, "Groups and patches"). Every save
+is `hyperspace.preset/9` (§4).
 A build from before plans 28 and 30 ignores `modifiers` and `layout` with no
 note and **drops them when it saves**, and opens a `graph` with wires or
 placements as the default graph with a note: keep both Macs of a shared
@@ -2564,8 +2588,8 @@ library on the same build (register row 277). **A load replaces all of
 it** — every performance param lands from the file or its group default,
 every route and preset-layer row is replaced — and never touches a
 session param (`tempo hands ghost band master scene audio output overlay
-ui desk`): a tapped BPM, the hands' feel and the ghost hands survive any
-preset. Anything a file names that it may not (a session id, an unknown
+ui desk cloud`; the eye left this list in plan 43 C2): a tapped BPM, the
+hands' feel and the ghost hands survive any preset. Anything a file names that it may not (a session id, an unknown
 id, a route onto a param that is not modulatable, a desk row on an
 invariant control, a route onto a modifier the file does not hold, a
 `mod.*` id in `values`, an unreadable `layout` entry) is dropped with a
@@ -2802,7 +2826,7 @@ route onto one is dropped at load. The ghost hands are drawn in the
 shape's camera (plan 26, §2): the eye, and the calibration in
 `hands.json` — `"units": {"mm": null, "origin": null, "tilt": 32.0}`,
 "from the box" by default, which fits the padded box (or, with no box,
-the calibrated ranges) into a 16:9 picture of the eye, seen from 32°
+the calibrated ranges) into a 16:9 picture of the rig's reference eye (the default eye, whatever the preset's: plan 43 C2), seen from 32°
 above; an `mm` or `origin` written there wins. `hands.json` is
 `hyperspace.hands/3`; an older file is kept as `hands.json.bak-v2` before
 the first rewrite. A hand leaving fades out over 0.3 s and one coming
@@ -2989,7 +3013,9 @@ two or more outputs or a lone entry whose `dim` is under 1,
 set from the config entry at every launch and Cmd+R (defaults scene on,
 hands on, through off, dim 1), never saved, never in a preset, show or
 undo step; a switch flipped mid-set lasts until the restart. They can be
-learned onto a desk button.
+learned onto a desk button. What every output draws through is the
+loaded preset's one camera (plan 43 C2): the window is the rig's, the
+framing is the look's.
 
 | Scene | Hands | Through | The output shows |
 |---|---|---|---|

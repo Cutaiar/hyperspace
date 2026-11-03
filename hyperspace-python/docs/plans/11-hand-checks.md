@@ -6661,6 +6661,80 @@ lint's allowlist still names, or a `@clock`'s period is set where the
 shader's use of it is not periodic (a scrolled noise field must run on,
 unwrapped). On a build before K2, 2 and 3 *do* lurch on Drift, Scale and
 Pulse: that is the recorded fault K2 fixed.
+## AX. One orbit camera: the eye and the pose are the preset's (plan 43 C2)
+Register rows 555, 572–576 (the owner, 2026-11-02). Both Macs on this
+build. Until the owner has run `tools/migrate_library.py` on the library
+(431 and 433 may run before it on a fresh preset), an old preset takes the
+open show's eye only while that show is open.
+**431. Frame a picture, save, load another, load it back: the framing and the turn are back.** (laptop; the 3D switch for step 3)
+Headless: `tests/test_one_camera.py` (`test_frame_save_load_another_and_load_back_puts_the_framing_and_the_turn_back`, `test_a_saved_pose_draws_the_same_shape_whichever_way_the_switch_stands`), `tests/test_hold.py` (`test_a_preset_loaded_under_hold_keeps_the_projectors_eye_and_lands_its_pose_on_both`).
+1. Load any preset with a 4D shape turning. CAMERA: one section — zoom,
+   yaw, pitch, pan, then Eye field of view and Eye distance (no "the
+   room's camera" note). Set the fov to about 35°, the zoom to 1.5×, pan
+   the shape a little right.
+2. Stop the rotation (`view.rotate` off) on a turn you would recognise.
+   Save it as `C2 FRAME`.
+3. Turn the rotation on, switch 3D on, let it turn a few seconds, switch
+   rotation off again on a new turn. Save over `C2 FRAME`.
+4. Load another preset (a corpus one: `TUMBLE`). Then load `C2 FRAME`.
+5. Load `TUMBLE` again and leave it spinning; HOLD; load `C2 FRAME`
+   under the hold; TAKE.
+*Pass:* (4) `C2 FRAME` comes back with the framing of step 3 — the same
+fov, zoom and pan — and on the very turn the shape was saved on, 3D still
+holding (the shape is where it was, not where `TUMBLE` left the spin);
+`TUMBLE` itself kept spinning from wherever it was (it has no pose); no
+dirty dot while the shape turns. (5) Under the hold the projector keeps
+`TUMBLE`'s framing *and its turn* (no jump, 3D unchanged) until TAKE;
+TAKE brings the framing and puts the shape on the saved turn at once. A
+DROP instead leaves the projector turning where it was.
+**432. The migration, on a copy then on the library, between shows.** (laptop, then the second Mac; no show that night)
+Headless: `tests/test_one_camera.py` (`test_the_tool_retapers_backs_up_and_moves_the_eye_into_every_preset`, `test_the_tool_draws_the_old_file_with_the_show_open_as_its_nine`, `test_an_old_show_hands_its_eye_to_old_presets_and_keeps_none_itself`), `tests/test_migrate_library.py`.
+1. Copy the Drive library folder somewhere local (Finder ▸ Duplicate).
+   Run `uv run python tools/migrate_library.py --library <the copy>` (a
+   dry run): read the `show:` line (the rig's show and its eye), the
+   `retaper first:` and `shows holding the eye:` lines, and every
+   preset's `round-trip picture: same`.
+2. Run it again with `--apply` on the copy. Open the app on the copy
+   (`[library] path` pointed at it, or `HYPERSPACE_HOME`), open the show
+   and step through a dozen presets.
+3. Between shows, both Macs on this build: run the tool with `--apply` on
+   the real library (no `--library`: the config's path). Note the
+   `backup:` line. Open the app; open the show; step through every preset
+   on the bank.
+4. Open `<library>/projects/<show>.hyp.json` in a text editor.
+5. On the second Mac (pulled, the same build): open the show; load three
+   presets.
+*Pass:* (1) the dry run writes nothing (the folder's dates unchanged) and
+every preset reads `round-trip picture: same`; (2)/(3) every preset draws
+as it did before the run (the same framing as on the old build with the
+show open); `~/Hyperspace/library-backup-<stamp>/` holds the library as it
+was; (4) the show's `session` has no `eye.fov` / `eye.distance` and
+`<show>.hyp.json.bak-v2-eye` sits beside it with them; (5) the second Mac
+loads them as the first does. *Fail:* a preset skipped ("not written") —
+note its line; a Mac on an older build refuses the `/9` files (expected:
+update it).
+**433. Zoom the eye on a preset with hands in the scene and one with a hands layer; a hand axis on the fov.** (laptop, the Leap; hands present)
+Headless: `tests/test_one_camera.py` (`test_hands_in_the_scene_scale_with_the_shape_and_a_layer_keeps_its_size`, `test_a_layer_laid_depth_aware_is_in_the_world_through_the_presets_eye`, `test_the_hands_calibration_is_the_rigs_reference_eye`, `test_a_hand_axis_learns_onto_the_eye_and_breathes_the_framing`).
+1. A preset whose graph wires the hands into the scene (`hands → scene`).
+   Hands in the box, still. Move Eye field of view from 47.6° to 30°, then
+   to 70°; back to 47.6°.
+2. A preset whose graph lays a hands layer (`hands → hands.layer →`
+   an output's hands). The same three fov moves. Then lay that layer
+   depth-aware (its hands entry's `laid: depth`, or a composite with
+   blend depth over the scene) and do the three moves again with a hand
+   behind the shape.
+3. Learn hand: arm `eye.fov` (CAMERA ▸ the row's Learn hand), then raise
+   the right hand. Move the hand up and down the box.
+*Pass:* (1) the shape and the hands grow and shrink together, the hands
+staying where they are against the shape (a finger on an edge stays on
+that edge); at 47.6° nothing differs from before this build. (2) the
+shape grows and shrinks, the layer's hands keep their size and place on
+screen; laid depth-aware they grow and shrink with the shape (they are in
+the world) and a hand behind the shape stays hidden exactly where the
+shape covers it at every fov. (3) the row learns (no "can't follow a hand"), and the framing
+breathes with the hand — wider as it goes one way, tighter the other —
+and settles back to the knob's value when the hand leaves.
+
 
 ## AY. Continuity K2: warp and tripcolour on `@clock`
 Register row 577 (wave 1 K2, `wave1/k2`). Warp's scroll is one `@clock`,

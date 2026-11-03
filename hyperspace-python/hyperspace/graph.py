@@ -5451,6 +5451,17 @@ class HandsLayer(Node):
         # — what reads the layer, followed on (`_Build._split`) — is live
         self.readout = readout
         self.downstream: tuple[str, ...] = ()
+        # plan 43 C2: laid depth-aware by a composite (`_Build.build` marks it)
+        self.depth_laid = False
+
+    @property
+    def in_world(self) -> bool:
+        """Plan 43 C2 (review 2.1): whether this layer is laid depth-aware —
+        at an output (`laid` "depth") or by a depth composite — and so drawn
+        through the scene's (the preset's) eye, its depth comparable with the
+        scene's. Otherwise it is a screen-space picture through the rig's
+        reference eye, keeping its size whatever the preset's eye."""
+        return getattr(self, "laid", "over") == "depth" or getattr(self, "depth_laid", False)
 
     def split(self, frame: Frame) -> bool:
         """Whether the guide is split out of the layer this frame (once a
@@ -5491,7 +5502,7 @@ class HandsLayer(Node):
             with frame.timed(self.name):
                 kw = {"lines": True} if getattr(geo, "draw_as", "solid") == "lines" else {}
                 drew = gh.layer(frame.size, frame.t, readout=split, now=geo.now(frame),
-                                settled=True, **kw)
+                                settled=True, world=self.in_world, **kw)
         except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
             r._hands_failed(e, frame.target, frame.vp, ghost=gh)
             drew = False
@@ -6669,12 +6680,38 @@ def _effects_of(node: Node | None) -> list[Effect]:
     return out
 
 
-def _laid_of(node: Node | None) -> str:
+def layers_behind(node: Node | None, writes: dict[str, Node] | None = None) -> list[HandsLayer]:
+    """The hands layers picture `node` shows, through every pass that hands
+    one picture on unchanged in kind — an effect or a copy (`image`), a
+    resize (`image`), a delay (its write's `image`: `writes`, delay name →
+    `DelayWrite`) and a switch (any of its inputs: which one is a value)
+    — the one walk for how a layer is laid on (`_laid_of`) and for a depth
+    composite's layer (plan 43 C2, review 3.3: `HandsLayer.in_world`)."""
+    out: list[HandsLayer] = []
+    todo, seen = [node], set()
+    while todo:
+        n = todo.pop()
+        if n is None or id(n) in seen:
+            continue
+        seen.add(id(n))
+        if isinstance(n, HandsLayer):
+            out.append(n)
+        elif isinstance(n, (Effect, ResizeNode)):
+            todo.append(n.inputs.get("image"))
+        elif isinstance(n, SwitchNode):
+            todo.extend(reversed([n.inputs.get(p) for p in SWITCH_PORTS]))
+        elif isinstance(n, Delay) and writes:
+            w = writes.get(n.name)
+            todo.append(w.inputs.get("image") if w is not None else None)
+    return out
+
+
+def _laid_of(node: Node | None, writes: dict[str, Node] | None = None) -> str:
     """How a picture on an output's hands port is laid on (plan 36 T2): a
-    hands layer's own `laid` (through the effects placed on it), else over."""
-    while isinstance(node, Effect):
-        node = node.inputs["image"]
-    return getattr(node, "laid", "over") if isinstance(node, HandsLayer) else "over"
+    hands layer's own `laid` (through the passes placed on it,
+    `layers_behind`), else over."""
+    found = layers_behind(node, writes)
+    return getattr(found[0], "laid", "over") if found else "over"
 
 
 def _through_chain(node: Node | None) -> bool:
@@ -7079,13 +7116,23 @@ class _Build:
             self.cover.wanted_by = tuple(lb.name for lb in self.lookbacks
                                          if lb.inputs["cover"] is self.cover)
         outputs = []
+        # (each delay's write, so a walk back through a delay finds its picture)
+        writes_of = {w.delay: w for w in [*self.built, *writes] if isinstance(w, DelayWrite)}
         for i, (p, end) in enumerate(zip(ports, shown)):
             # plan 36 T2: the hands laid on as their layer says (`laid`, its
             # hands entry's), depth-aware against the wire into `depth`
             outputs.append(Output(f"output.{i + 1}", i, after=tuple(captures),
-                                  blend=_laid_of(p["hands"]), image=end,
+                                  blend=_laid_of(p["hands"], writes_of), image=end,
                                   hands=p["hands"], readout=p["guide"],
                                   depth=p[DEPTH_PORT] if p["hands"] is not None else None))
+        # plan 43 C2 (review 2.1, the ruling): a hands layer laid depth-aware
+        # anywhere — at an output (its `laid`) or by a depth composite — is
+        # "in the world": drawn through the scene's eye, so its depth and the
+        # scene's describe one projection; any other keeps the reference eye
+        for node in [*self.built, *outputs]:
+            if isinstance(node, Composite) and node.blend == "depth":
+                for layer in layers_behind(node.inputs["over"], writes_of):
+                    layer.depth_laid = True
         self._mute_hands(ports, [*self.built, *self.ends, *writes, *captures])
         # into the graph in the default graph's order: the frame's own
         # nodes, the run, each through's composite and copies, the

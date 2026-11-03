@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.preset/7",
+ "schema": "hyperspace.preset/9",
  "name": "WAKE",
  "note": "party-wake: a 16-cell on plasma faces and points, spun by the music in the 4D planes, trailing 24 echoes over 1.2 s (each halving in 0.6 s; plan 14 WP6) and the dream under them",
  "graph": {"frame": "wired",
@@ -141,6 +141,8 @@
   "camera.pitch": 0.0,
   "camera.pan.x": 0.0,
   "camera.pan.y": 0.0,
+  "eye.fov": 47.611887036915434,
+  "eye.distance": 3.7777777777777777,
   "dream.on": true,
   "dream.mix": 0.5,
   "dream.echo_mix": 0.6,

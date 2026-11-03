@@ -224,6 +224,7 @@ def test_every_corpus_preset_loads_and_saves_its_plain_desk_as_before(rig):
         assert TEMPLATE_KEY not in doc
         assert doc["desk"] == desk_of(rig)
         assert [k for k in doc if k != "note"] == ["schema", "name", "graph", "values",
+                                                   "pose",          # plan 43 C2
                                                    "routes", "desk", "macros", "modules",
                                                    "units",       # plan 26 A2's pan marker
                                                    "media"]

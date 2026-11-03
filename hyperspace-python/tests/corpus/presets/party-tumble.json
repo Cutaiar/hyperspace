@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.preset/7",
+ "schema": "hyperspace.preset/9",
  "name": "TUMBLE",
  "note": "party-tumble: a 24-cell turned inside out by the music in the three 4D planes; the left hand turns it in the 3D planes",
  "graph": {"frame": "wired",
@@ -133,6 +133,8 @@
   "camera.pitch": 0.0,
   "camera.pan.x": 0.0,
   "camera.pan.y": 0.0,
+  "eye.fov": 47.611887036915434,
+  "eye.distance": 3.7777777777777777,
   "dream.on": false,
   "dream.mix": 0.7,
   "dream.echo_mix": 0.4,
