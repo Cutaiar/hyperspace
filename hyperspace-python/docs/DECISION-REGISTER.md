@@ -626,6 +626,8 @@ here; overturn → the change, then the same.
 | 587 | Plan 48: a save writes back to the preset's own file; as… with a folder in the name writes into it; a new preset grown from the loaded one (two-handed save, `preset.save_new`, an empty pad's hold) lands beside it; ⇧F's `PRESET <n>` at the top | 441 | (rec) — pending the owner; built as recommended |
 | 588 | Plan 48: the PRESETS page draws a folder's preset as `party / TRIP` with the folder dim; the flat list stays; a rename's field holds the leaf and keeps the folder | 440, 441 | (rec) — pending the owner; built as recommended |
 | 589 | Wave 1 T0: the test suite cannot hang the Mac — pytest-timeout's thread method at 120 s for xdist workers (the signal method for a serial run) with no worker restart in pyproject's addopts, so a test blocked in C fails by name and ends the run; `live` tests hold a per-account `flock` (wait 60 s, then skip); one tier at a time on a shared Mac; a real-GLFW test asks a child process first (`gl_window_ok`, #332) and skips if `glfwInit` does not answer | — | (rec) — pending the owner; built as recommended (T0) |
+| 605 | Wave 2 I1: `--dist load` with up to four worker restarts (pyproject and CI), so a crash or hang costs its one test, not the run's queue; the live lock alone keeps two live tests apart, a run's own live tests queueing on it for up to 90 s (the holder's run id in the file) and another run's for 60 s; a live test's fixture wider than the test is refused at collection; the dream's real VGG test joins the live tier | 456 | owner (2026-11-03) for `--dist load`; the rest (rec) — pending the owner; built as recommended (I1) |
+| 606 | Wave 2 I1: the four flakes of wave 1 — the Xbox pad test's order dependence was the Mac's real Joy-Con read once a real-GL test had initialised GLFW (fixed: no test reads a real joystick); the segment crashes and the `test_shape_renders` failures did not reproduce (what was tried is recorded); `tests/fixtures/real.mp3` is used by no test; `tools/sort_register.py` sorts this file | — | (rec) — pending the owner; built as recommended (I1) |
 
 "—": no hand check shows it; tests only.
 
@@ -10509,3 +10511,156 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   `tests/test_gl_probe.py`; a deliberate `time.sleep(130)` under
   `-n 2 --timeout=5` failed by name in 5.5 s, and under `-n0 --timeout=5`
   failed and the run went on: "1 failed, 2 passed").
+
+## Wave 2 — the test suite's follow-ups (rows 605–606)
+### 605. `--dist load`: a crash costs one test; the live lock keeps live tests apart
+- **Asked.** Row 589's "Other options": under `loadgroup` with no
+  worker restart, one crash ended the run and lost the dead worker's
+  queue; `load` hands that queue to a replacement. The owner said go on
+  2026-11-03. Row 589's caveats: without `xdist_group("live")` a run's
+  live tests wait on each other through the lock and could start
+  skipping past its 60 s wait; and a module- or session-scoped fixture
+  of a live test is set up outside the per-test lock.
+- **Answer.** Owner (2026-11-03) for `--dist load`; the restart cap,
+  the lock's own-run wait, the collection check and the dream test
+  (rec) — pending the owner; built as recommended (wave 2, I1).
+- **Recommended.** (1) pyproject's addopts and CI's flags (kept equal)
+  carry `--dist load --timeout=120 --max-worker-restart=4`: a crash or
+  a hang (the thread timeout `os._exit`s its worker) costs its one
+  test and the replacement takes the queue; a fifth crash ends the run,
+  so a hang that recurs ends it instead of costing 120 s per test. The
+  probe (`-n 2` / `-n 4`, one `os._exit` test among forty quick ones,
+  `--dist load`): cap 0 "1 failed, 30 passed" / "1 failed, 31 passed";
+  cap 4 "1 failed, 40 passed" at both; six crashing tests, cap 4,
+  `-n 2`: "6 failed, 39 passed" and the run ended. (2) The live lock is
+  the one thing keeping two live tests apart, inside a run as across
+  runs; `xdist_group("live")` is gone (`load` ignores it, and no other
+  group existed — none was there for ordering). The holder writes its
+  run's id into the lock file (xdist's `testrunuid`, read from the
+  config so a pytest a test starts in a subprocess is another run;
+  `pid-<n>` serially); a waiter whose own run holds it waits up to
+  `RUN_WAIT_S` (90 s, under the 120 s timeout the wait counts toward),
+  one of another run `WAIT_S` (60 s), then skips. The lock has no
+  queue, so the bound is the rest of the run's live tier, ~25 s
+  serially for 35 tests. Measured: `-m live -n 4` under `load`, "34
+  passed in 23.43s" (the longest wait 16.8 s), then with (4) "35 passed
+  in 39.34s" (22.8 s), at load averages of 22–64 from the other
+  builders; a serial `-m live`, "34 passed … in 25.18s". The fast tier
+  holds no live test, so two fast-tier runs never meet on the lock;
+  `tests/test_live_lock.py::test_two_workers_of_one_load_run_take_turns_and_neither_skips`
+  runs an inner `-n 2 --dist load` pytest whose two live tests each
+  sleep 0.8 s on gw0 and gw1: they run one after the other, both pass,
+  and both saw the run's own id; without the id the second skipped
+  ("1 passed, 1 skipped"). (3) Collection refuses a live test that uses
+  a fixture wider than the test (module, class, package or session
+  scoped), bar pytest's own deviceless ones (`tmp_path_factory`,
+  `worker_id` …), with a usage error naming the test and the fixture
+  (`conftest._wide_fixtures`); `--setup-plan` of the live tier showed
+  none today (only `tmp_path_factory`, session-scoped). The torch
+  model `segment._shared_model` keeps is a per-process cache of
+  weights, not a device; it stays. (4)
+  `test_dream.py::test_end_to_end_offscreen`, the dream's real VGG on
+  MPS and its file's only MPS test, joins the live tier (it was only
+  `slow`), so it never shares MPS with the segment's torch test —
+  conftest's own rule for those, which it broke in an `--all` run.
+- **Other options.** `load` with no cap (xdist's default, `-n` × 4,
+  sixty-four at `-n auto`): a hang that recurs on every GL test would
+  cost 120 s a time for an hour. Keep `loadgroup` and the cap of 0:
+  the run ends at the first crash, as in wave 1. A custom xdist
+  scheduler that keeps `loadgroup`'s group and redistributes on a crash:
+  more code than the lock already covers. A FIFO lock (a ticket file):
+  fairness the wait bound does not need while the live tier is short.
+  Leave the dream test `slow` only: torch on MPS twice at once in an
+  `--all` run.
+- **To reverse.** `--dist loadgroup --max-worker-restart=0` in addopts
+  and CI, the `xdist_group("live")` marker back in conftest; the run id
+  and `RUN_WAIT_S` can stay (unused).
+- **Rough edge.** The own-run wait has no queue: a live tier much
+  longer than 90 s would skip again, and grows with every live test
+  added. The lock is per test, so another run's live tests interleave
+  with this run's one test at a time; a waiter of either may lose the
+  race repeatedly and skip at its bound. The wait counts toward the
+  120 s timeout: a 90 s wait before a 30 s test is killed by the
+  watchdog (now one test lost, not the run). CI's two-line edit
+  (`.github/workflows/tests.yml`: `--dist load` and
+  `--max-worker-restart=4`) is the owner's to push — the builder's
+  token has no `workflow` scope; until then CI's own
+  `--max-worker-restart=0` wins over addopts and a crash in CI loses
+  the dead worker's queue, as in wave 1.
+- **Judge it.** 456 (the owner, two runs at once on the shared Mac).
+  Headless: `tests/test_live_lock.py`.
+
+### 606. The four flakes of wave 1, and the register's order
+- **Asked.** Wave 1 left four flakes (wave-2 session prompt): two
+  segment tests each crashed a worker once under GPU contention, the
+  Xbox pad test failed once under one order, `test_shape_renders`
+  failed twice under load; and the register's sections after 543 were
+  out of order.
+- **Answer.** (rec) — pending the owner; built as recommended (wave 2,
+  I1).
+- **Recommended.** (1)
+  `test_pads_hid.py::test_an_xbox_pad_has_no_extras_and_a_simple_report_none`
+  — **found and fixed.** It fakes GLFW joystick 0's presence and
+  buttons but not its GUID; `Pad` asks the real
+  `glfw.get_joystick_guid(0)` for the model. Before `glfw.init()` that
+  says nothing (the Xbox map); after
+  `test_ui_pad.py::test_the_drawings_show_upright_through_real_gl` has
+  run `glfw.init()` in the same worker (it never terminates GLFW) it
+  reads the Mac's real pad — a Joy-Con (L) on index 0 on 2026-11-03 —
+  and the button set has LP/RP and lacks GUIDE/MENU. Reproduced
+  serially with exactly those two tests ("1 failed, 1 passed"). The
+  fix is conftest's autouse `_no_real_joysticks` (beside
+  `_no_real_midi` and `_no_real_hid`): no joystick present, the GUID,
+  buttons, hats and axes empty, unless a test patches the getter
+  itself; the same pair then "2 passed". (2)
+  `test_segment.py::test_vision_frees_each_jobs_memory` and
+  `::test_torch_runs_once_on_a_synthetic_frame` — **not reproduced.**
+  Both were already live (behind the lock since T0). Tried: each alone
+  (`-n0 --all tests/test_segment.py`: 13 passed; torch 13.9 s and
+  Vision's 300 jobs 6.0 s at a load average of 25); `-n 4 --all` over
+  `test_segment.py`, `test_render.py`, `test_graph_frame.py`,
+  `test_media_render.py` and `test_dream.py` twice ("407 passed" both);
+  the live tier at `-n 4` twice (above). The wave-1 crashes were under
+  `-n auto` `--all` runs with the goldens, which this builder may not
+  run on the shared Mac. A "crash" there is either a native crash or
+  the 120 s watchdog, which xdist reports alike. Two changes, neither
+  a retry: the dream's MPS test joins the live tier (row 605 (4)), the
+  one other torch-on-MPS test an `--all` run had alongside; and the
+  torch test's `drain` is 60 s, not 120 s, so a slow MPS fails by its
+  own assertion rather than as the watchdog killing the worker. (3)
+  `test_render.py::test_shape_renders[...]` (Clifford torus, then Five
+  cubes, on PR #333's `-n 4` runs; no failure text was kept) — **not
+  reproduced.** Tried: `-k shape_renders -n 4` three times (101
+  passed each), after the real-GL test serially (184 passed), and two
+  whole fast tiers at `-n 4` (no failure). Read: the frame is
+  deterministic (`t_now` 0, a context per test); the geometry caches
+  are filled under per-shape locks by the render thread and by any
+  `Deck.build`'s background `warm_all` (many tests start one, and
+  under load it outlives its test), and nothing was found that writes
+  a cache entry partly or mutates one. Left as is, to be caught with
+  its message the next time. (4) `tests/fixtures/real.mp3` — **no test
+  reads it.** The audio manifest's `real.mp3:default` entry is checked
+  by `test_golden.py::test_audio_manifest` against its trace
+  `tests/golden/audio/real-default.jsonl`, which is tracked; the mp3 is
+  only `tools/record_golden.py`'s input for re-recording, and it skips
+  a missing clip itself. Nothing to skip. (5) `tools/sort_register.py`
+  sorts the answer sheet's rows and the `### <n>.` sections from 544 on
+  (a `## ` heading moves with the section under it), changing no text:
+  run on this file it moved 561, 562, 556–559, 554–555, 565–570 and
+  571–583 into order (the same lines, the first 9382 unchanged; a
+  second run changes nothing). The older sections (169–209 after
+  210–213) keep their plan grouping; `sort_register.py 1` sorts those
+  too.
+- **Other options.** A retry (`pytest-rerunfailures`) on the three
+  unreproduced tests: it hides the next real failure. Terminate GLFW at
+  the end of the real-GL test instead of the guard: the next test that
+  initialises GLFW would bring it back. Add `real.mp3` to the tree: it
+  is a commercial master (`tools/record_golden.py` says so) and the
+  repository is public; nothing in CI needs it.
+- **To reverse.** Delete `_no_real_joysticks`; take the dream test out
+  of `_LIVE_TESTS`; `drain(120.0)`.
+- **Rough edge.** The render flake and the segment crashes stay
+  unexplained; xdist does not show the thread watchdog's stack dump
+  (a worker's stderr), so the next one should be rerun as
+  `-n0 -k <test>` at once.
+- **Judge it.** — (tests only: the pair above; `tests/test_live_lock.py`).

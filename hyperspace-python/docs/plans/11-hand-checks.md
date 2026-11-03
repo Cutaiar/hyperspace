@@ -6970,6 +6970,29 @@ preset 'party/TRIP'" and loads nothing, the pad still drawn as filled;
 the show opens (no schema refusal); back on this build the pad still
 loads `party / TRIP`.
 
+## BG. Two test runs at once take turns (wave 2 I1)
+Register rows 605–606, 2026-11-03. Headless: `tests/test_live_lock.py`
+(two processes; an inner `-n 2 --dist load` run whose two live tests run
+one after the other). Nothing of the app changes.
+**456. Two runs at once on the shared Mac: the live tests take turns,
+neither hangs.** (the Mac, two terminals in two checkouts on this build,
+no other test run going)
+1. In both terminals at once:
+   `cd hyperspace-python && uv run pytest -q -n 4 -p no:cacheprovider`
+   (the fast tier). Wait for both.
+2. In both at once:
+   `uv run pytest -q -n 4 -p no:cacheprovider -m live -rs --durations=8`
+   (the live tier: Syphon, NDI, the camera list, Vision, torch, the
+   dream).
+*Pass:* (1) both end with "passed" and the same count, in about a
+minute and a half each; neither sits at 99 %. (2) both end; every live
+test passes in each, or a few skip with "another test run holds the live
+devices"; the `setup` times in `--durations` (the waits for the lock)
+reach tens of seconds in at least one run — the other run's turn — and
+no NDI or Syphon loopback fails. Fail: a run sits at 99 % for minutes
+(kill it, ENGINEERING §16's recovery), a loopback fails in one run while
+the other runs, or "worker 'gwN' crashed".
+
 ## What no test covers
 
 Only a person can settle these:

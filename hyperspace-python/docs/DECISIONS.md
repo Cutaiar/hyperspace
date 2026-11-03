@@ -590,6 +590,7 @@ nuance). Built so far: D1.
 | **Every new param defaults to today's picture**: a new mix or opacity at what the frame does now, a new switch off, a new source at its rest. | owner |
 | **Plans 24, 26 and 27 ran in parallel** (2026-10-12): the render graph is the top priority, the device registry the highest-leverage piece. | owner |
 | **The test suite cannot hang the Mac** (wave 1 T0, 2026-11-02): a hung test fails by name (pytest-timeout at 120 s: the thread method in xdist workers, the signal method in a serial run; no worker restart); `live` tests take turns across processes on a per-account lock and skip after 60 s; one tier at a time on a shared Mac; a test that opens a real GLFW window asks `gl_window_ok` first. | row 589 |
+| **A crash costs one test, not the run** (wave 2 I1, 2026-11-03): `--dist load` with up to four worker restarts, in pyproject and CI alike; the live lock alone keeps two live tests apart, a run's own waiting up to 90 s and another run's 60 s; a live test's fixture wider than the test is refused at collection; no test reads a real GLFW joystick. | owner (`--dist load`); rows 605–606 |
 
 ## Decided not to build
 

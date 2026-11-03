@@ -36,6 +36,9 @@ _LIVE_TESTS = {
     "test_segment.py::test_vision_runs_once_on_a_synthetic_frame",
     "test_segment.py::test_vision_frees_each_jobs_memory",     # 300 Vision jobs, ~2 s
     "test_segment.py::test_torch_runs_once_on_a_synthetic_frame",
+    # the dream's real VGG on MPS (its file's only MPS test; also slow, by
+    # file): the same rule, so it never shares MPS with the segment's torch
+    "test_dream.py::test_end_to_end_offscreen",
 }
 _SLOW_TESTS = {
     "test_media_core.py::test_heic_opens",
@@ -111,35 +114,71 @@ def pytest_collection_modifyitems(config, items):
         if path in _GOLDEN_FILES:
             item.add_marker(pytest.mark.golden)
         if path in _LIVE_FILES or key in _LIVE_TESTS:
+            # loopbacks share global Syphon / NDI names, torch and Vision the
+            # GPU: one at a time across every worker and run (the live lock)
             item.add_marker(pytest.mark.live)
-            # loopbacks share global Syphon / NDI names: one worker at a time
-            item.add_marker(pytest.mark.xdist_group("live"))
         if path in _SLOW_FILES or key in _SLOW_TESTS:
             item.add_marker(pytest.mark.slow)
+    wide = [f"{item.nodeid} uses {name} ({scope}-scoped)"
+            for item in items if item.get_closest_marker("live") is not None
+            for name, scope in _wide_fixtures(item)]
+    if wide:
+        raise pytest.UsageError(
+            "a live test's fixture wider than the test is set up outside the live "
+            "lock (tests/live_lock.py): open the device in the test or a "
+            "function-scoped fixture — " + "; ".join(wide))
+
+
+# pytest's own fixtures wider than a test, which hold no device
+_WIDE_OK = {"tmp_path_factory", "tmpdir_factory", "pytestconfig", "worker_id",
+            "testrun_uid", "cache", "record_testsuite_property", "doctest_namespace"}
+
+
+def _wide_fixtures(item):
+    """(name, scope) of each fixture `item` uses that outlives one test and
+    is not one of pytest's deviceless own (`_WIDE_OK`): the live lock is
+    held per test, so such a fixture would hold its device outside it."""
+    info = getattr(item, "_fixtureinfo", None)
+    for name, defs in (info.name2fixturedefs.items() if info else ()):
+        scope = getattr(defs[-1], "scope", "function") if defs else "function"
+        if scope != "function" and name not in _WIDE_OK:
+            yield name, scope
 
 
 @pytest.fixture(autouse=True)
 def _live_devices_take_turns(request):
     """A test marked `live` holds the machine-wide live lock
-    (tests/live_lock.py) for its setup, call and teardown, so live tests
-    of two pytest processes (two sessions, two worktrees) take turns;
-    xdist's `xdist_group("live")` only orders one run's. `glfw.init()`
-    and a camera, audio or HID open can block in C, not fail, while
-    another process holds the window system or the device: the lock is
-    the mitigation, the thread timeout (pyproject addopts) the backstop.
-    It waits at most `live_lock.WAIT_S` and then skips — never forever.
-    It is function-scoped: a module- or session-scoped fixture a live test
-    requests is set up before the lock is taken, outside it, so a live
-    test opens its devices in its own body or a function-scoped fixture."""
+    (tests/live_lock.py) for its setup, call and teardown, so no two live
+    tests run at once: not two workers of one run (`--dist load` hands a
+    test to any worker, row 605) and not two pytest processes (two
+    sessions, two worktrees). `glfw.init()` and a camera, audio or HID
+    open can block in C, not fail, while another process holds the window
+    system or the device: the lock is the mitigation, the thread timeout
+    (pyproject addopts) the backstop. It waits at most `live_lock.WAIT_S`
+    for another run and `live_lock.RUN_WAIT_S` for its own, then skips —
+    never forever. It is function-scoped: a module- or session-scoped
+    fixture a live test requested would be set up before the lock is
+    taken, outside it, so collection refuses one (`_wide_fixtures`): a
+    live test opens its devices in its own body or a function-scoped
+    fixture."""
     if request.node.get_closest_marker("live") is None:
         yield
         return
     import live_lock
 
-    with live_lock.held() as why_not:
+    with live_lock.held(run=_run_id(request.config)) as why_not:
         if why_not:
             pytest.skip(why_not)
         yield
+
+
+def _run_id(config) -> str:
+    """This run's id, the same in each of its xdist workers (xdist's
+    `testrunuid`), this process's own in a serial run — read from the
+    config, not the environment, so a pytest a test starts in a
+    subprocess (it inherits `PYTEST_XDIST_TESTRUNUID`) is another run."""
+    wi = getattr(config, "workerinput", None)
+    return f"xdist-{wi['testrunuid']}" if wi and wi.get("testrunuid") else f"pid-{os.getpid()}"
 
 
 @pytest.fixture
@@ -212,6 +251,23 @@ def _no_real_hid(monkeypatch):
     and opener, or patches `available` back (a later setattr wins)."""
     from hyperspace.pads import hid
     monkeypatch.setattr(hid, "available", lambda: False)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_joysticks(monkeypatch):
+    """No test reads the machine's GLFW joysticks: none is present and a
+    GUID, buttons, hats and axes are empty, unless the test patches the
+    getter itself (a later setattr wins). Before GLFW is initialised the
+    real getters say nothing anyway; after a test in the same worker has
+    called `glfw.init()` (the real-GL ones) they read whatever pad the Mac
+    has on index 0 — a Joy-Con (L), 2026-11-03 — and a test that faked
+    the buttons but not the GUID read that pad's model (row 605)."""
+    import glfw
+
+    monkeypatch.setattr(glfw, "joystick_present", lambda j: False)
+    monkeypatch.setattr(glfw, "get_joystick_guid", lambda j: None)
+    for name in ("get_joystick_buttons", "get_joystick_hats", "get_joystick_axes"):
+        monkeypatch.setattr(glfw, name, lambda j: None)
 
 
 @pytest.fixture(autouse=True)
