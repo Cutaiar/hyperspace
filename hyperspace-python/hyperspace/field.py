@@ -386,7 +386,7 @@ def field(s, w: float, h: float, radius_px: float | None = None,
     # the widest a copy draws at scale 1, in cells — never under one, so a
     # fitted copy keeps the gap it has a cell from its neighbour
     size = max(1.0, (SHAPE_EXTENT * cell0 + 2.0 * max(pad_px, 0.0)) / cell0)
-    ph = float(getattr(s, "inst_phase", 0.0))
+    ph = float(s.inst_phase)
     mode, amp = int(s.inst_motion), float(s.inst_amp)
     if n == 1 and not fit:
         return np.array([[w / 2 + pan[0], h / 2 + pan[1], zoom, 1.0]], dtype=np.float32)

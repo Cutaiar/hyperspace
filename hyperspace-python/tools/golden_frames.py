@@ -440,13 +440,7 @@ class Rig:
         presets = self.presets = Presets(lib, reg, self.router)
         self.missing = presets.load(slug)
         self.notes = list(presets.notes)
-        # K3 (row 578): the field's motion and the media path are phases the
-        # host integrates (ViewState.integrate), no longer t × rate; set at
-        # the pinned clock's start as if the rate had always been what the
-        # preset says (Renderer._pattern_clock's first call), so frame k
-        # reads (T0 + k·DT) · rate as before
-        self.view.inst_phase = T0 * self.view.inst_rate
-        self.view.media_phase = T0 * self.view.media_rate
+        self.seeded = False          # K3: the phases, set on the first frame (`frame`)
         reg["ghost.on"].set(True)
         # plan 28 N4: a second hands node the graph declares shows too (its
         # own `ghost.<n>.on`, the session's like `ghost.on`); only a fixture
@@ -516,6 +510,17 @@ class Rig:
         self.clock.tick(self.t)
         self.router.modulate()
         self.reg.apply()
+        if not self.seeded:
+            # K3 (row 578): the field's motion and the media path are phases
+            # the host integrates (ViewState.integrate), no longer t × rate.
+            # On the first frame, after the first apply (the rates as this
+            # frame's modulation leaves them, not the stored bases), each is
+            # set as if its rate had always been this one
+            # (Renderer._pattern_clock's first call), so frame k reads
+            # (T0 + k·DT) · rate at a constant rate, as before K3
+            v, self.seeded = self.view, True
+            v.inst_phase = (self.t - DT) * v.inst_rate
+            v.media_phase = (self.t - DT) * v.media_rate
         self.view.integrate(DT)
         self.renderer.draw_outputs(self.view, *logical, dpr, views, t_now=self.t)
 

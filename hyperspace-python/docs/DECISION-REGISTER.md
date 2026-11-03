@@ -9740,20 +9740,27 @@ and D3 (the per-deck split) are
   draw reads the phases and no rate: `field.field` and
   `Renderer._field` / `_legacy_field` / `_copies_of` lost their now-unused
   `t`. From rest at a constant rate the phase is rate · t, the picture
-  before K3. The golden harness (`tools/golden_frames.py`) starts each
-  rig's phases at `T0 · rate` — as if the rate had always been what the
-  preset says, `Renderer._pattern_clock`'s first call (row 99) — so frame
-  k reads (T0 + k·DT) · rate as it did: no golden moved.
+  before K3. The golden harness (`tools/golden_frames.py`) sets each
+  rig's phases on its first frame, after the first `reg.apply`, at
+  `T0 · rate` from the rate that frame's modulation leaves — as if the
+  rate had always been that, `Renderer._pattern_clock`'s first call (row
+  99) — so frame k reads (T0 + k·DT) · rate as it did: no golden moved.
+  `app.frame` runs `view.integrate` in a guarded block of its own after
+  the step's (the order unchanged), so a step that raises every frame no
+  longer stops the motion with it.
   `tests/test_view_phase.py`: a step changes the slope, not the value; the
   wrap is invisible in the field; render.py and field.py read no rate (an
   AST pin); a field-rate nudge ten seconds in moves no copy further than
   one frame's motion at the new rate, where t × rate moved them several
   times that.
-- **Other options.** Integrate in the renderer, keyed on the frame's `t`
-  (`_pattern_clock`'s shape): the held program and the preview are two
-  renderers over one `ViewState`, so each would keep its own phase — but
-  `field.field` is called with a view, not a renderer, and the turn (the
-  closer precedent) is integrated on the view. A `@clock` in a shader:
+- **Other options.** Integrate per renderer, keyed on the frame's `t`
+  (`Renderer._pattern_clock`'s shape): the held program and the preview
+  are two renderers over one `ViewState`, so each would keep its own
+  phase and the hold would need no edit. Not taken (the orchestrator's
+  ruling on review): plan 44 makes `ViewState` per deck — one look, one
+  turn, one phase — and the turn's `rot.phase.*` is the precedent on the
+  view; the hold's one-for-both is a plan 38 consequence that plan 44's
+  D5 removes. `field.field` is also called with a view, not a renderer. A `@clock` in a shader:
   these paths are computed in Python, not in a shader.
 - **To reverse.** The two fields and the two lines in `integrate` out;
   `ph = t * s.media_rate` / `t * s.inst_rate` back in render.py and
@@ -9763,10 +9770,10 @@ and D3 (the per-deck split) are
   `integrate` runs once a frame before either draw, so the phase is one
   for both — under hold an operator's change to either rate moves the
   projector's motion's speed too, where before K3 the program kept its
-  held rate. This is how the turn already behaves (`view.speed` and the
-  planes are in `hold.ONE_FOR_BOTH`); the two rate params should join that
-  list so the hold's red line does not count them as changed, which is a
-  one-line change to `hold.py` left to the orchestrator (frozen for D1).
+  held rate. This is how the turn already behaves, and the two rate
+  params join `view.speed` in `hold.ONE_FOR_BOTH` (the orchestrator's
+  ruling) so the hold neither holds them nor counts them as changed on
+  its red line (`tests/test_hold.py`).
   A paused turn (`view.playing` off) leaves the field and the path
   moving, as before.
 - **Judge it.** Hand check 435 (group AZ).

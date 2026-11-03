@@ -126,11 +126,30 @@ def test_a_knob_step_on_the_field_rate_moves_no_copy_further_than_one_frame(moti
 
 # ---------------------------------------------------------------- the pin
 
+RATES = ("inst_rate", "media_rate")
+
+
 def _rate_reads(name: str) -> list[int]:
-    """Lines in `name` that read `.inst_rate` or `.media_rate`."""
-    tree = ast.parse((PKG / name).read_text())
+    """Lines in `name` that reach a rate: an attribute `.inst_rate` /
+    `.media_rate`, or a string naming one — `getattr(s, "media_rate")`,
+    `vars(s)["inst_rate"]`, the param ids `reg["view.inst_rate"]`. A
+    docstring (a string standing alone as a statement) is prose, not a read."""
+    return _reads(ast.parse((PKG / name).read_text()))
+
+
+def _reads(tree: ast.AST) -> list[int]:
+    prose = {id(n.value) for n in ast.walk(tree) if isinstance(n, ast.Expr)}
     return [n.lineno for n in ast.walk(tree)
-            if isinstance(n, ast.Attribute) and n.attr in ("inst_rate", "media_rate")]
+            if (isinstance(n, ast.Attribute) and n.attr in RATES)
+            or (isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in prose
+                and any(r in n.value for r in RATES))]
+
+
+def test_the_pin_sees_every_road_to_a_rate():
+    for src in ('ph = t * s.media_rate', 'ph = t * getattr(s, "inst_rate")',
+                'ph = vars(s)["media_rate"]', 'r = reg["view.inst_rate"].value'):
+        assert _reads(ast.parse(src)), src
+    assert not _reads(ast.parse('def f(s):\n    """reads inst_rate"""\n    return s.inst_phase'))
 
 
 @pytest.mark.parametrize("name", ("render.py", "field.py"))

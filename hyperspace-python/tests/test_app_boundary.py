@@ -477,6 +477,9 @@ def test_a_raising_step_is_recorded_and_the_windows_still_draw():
     assert h.reloader.runtime_error.startswith("step: RuntimeError: boom")
     assert "reg.apply" not in log                    # the pass stopped where it raised
     assert log[-2:] == ["render.draw", "panel.draw"]
+    # K3 (row 578): the integrator is guarded on its own, so the turn, the
+    # field's motion and the media path keep moving through it
+    assert log[-3] == "view.integrate"
 
 
 def test_a_raising_adapter_is_a_note_that_survives_the_frame():
