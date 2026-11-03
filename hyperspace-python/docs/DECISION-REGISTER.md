@@ -10610,10 +10610,9 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   and host: a restart, not a hot reload, takes this build (a hot reload
   degrades to each router over its own sources;
   `tests/test_routing_sources.py::test_a_router_from_before_the_split_survives_a_hot_reload`
-  holds that). Two tests that
-  read the router's private caches (`tests/test_routing.py`'s copy of the
-  old pass, `tests/test_motion.py`'s `_felt`) now read them on
-  `router.sources`.
+  holds that). The lane cache and the camera job's followers stay on
+  the router, so the tests that read them (`tests/test_routing.py`'s
+  copy of the old pass, `tests/test_motion.py`'s `_felt`) are unchanged.
 - **Judge it.** Hand checks 444–445 (group BD).
 
 ### 591. Plan 44 D2: the banks' and modifiers' lanes stay in the shared sources for now
