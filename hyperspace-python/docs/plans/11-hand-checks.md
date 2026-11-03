@@ -7160,6 +7160,41 @@ test's timing) and no NDI or Syphon loopback fails. Fail: a run sits at 99 % for
 (kill it, ENGINEERING §16's recovery), a loopback fails in one run while
 the other runs, or "worker 'gwN' crashed".
 
+## BH. Shift-drag fine mode in the panel (wave 2 T2)
+Decision register rows 607–608 (after row 561). A panel gesture: hold ⇧
+while dragging a continuous slider or fader and it moves a tenth as far.
+Nothing is saved; a save of `ui.py` carries it (no restart).
+**457. A fine drag lands a tenth, lets go without a jump, undoes in one.** (laptop, no hardware)
+Headless: `tests/test_ui_fine.py`.
+1. VIEW: drag *Brightness* left to right a hand's width; note how far the
+   readout moved. Put it back.
+2. Hold ⇧, press on the fader (anywhere), drag the same hand's width.
+3. Mid-drag, still holding the button, let ⇧ go; keep dragging.
+4. Release the button; ⌘Z once.
+5. Hold ⇧ and press on *Field depth* (a lattice, 12 copies) away from its
+   grab; drag a little.
+*Pass:* (2) the press does not jump the grab to the mouse, and the
+readout moves about a tenth of (1)'s distance, a detent at a time; (3)
+nothing jumps when ⇧ is let go, and the drag goes back to full speed
+from where it was; (4) one ⌘Z puts Brightness back where (2) started;
+(5) the same on an untapered slider: no jump at the press, a slow walk.
+Fail: a jump to the mouse at (2) or (3) points at the take-over
+(`Panel._fine`'s first frame); two ⌘Z needed points at a drag that
+paused past `undo.SETTLE_S` (row 43), not this.
+**458. The word FINE, and what fine mode leaves alone.** (laptop, no hardware)
+Headless: `tests/test_ui_fine.py`.
+1. Hover *Field depth*, then hold ⇧ still hovering.
+2. Still holding ⇧, hover *Instances*; ⇧-click *Fit*; ⇧-click on the
+   *Shape* menu.
+3. ⇧-drag *Field depth* and pull the mouse up off the slider while
+   dragging.
+*Pass:* (1) the tooltip is the param's tip, then leads with `FINE · ⇧
+held: a drag moves a tenth as far` while ⇧ is down; (2) Instances shows
+no FINE and slides as it always did (an integer), Fit toggles, the menu
+opens — ⇧ changes nothing on them; (3) the FINE tooltip stays while the
+drag goes on off the track. Fail: a route's depth on ROUTING not going
+fine is expected (row 608: not reached yet).
+
 ## BI. FINE: SEND B held, a knob a tenth as far (wave 2 T3)
 Register rows 609–610. Headless: `tests/test_midi.py` (the fine
 section: a synthetic encoder that the host's rings re-base). Restart
