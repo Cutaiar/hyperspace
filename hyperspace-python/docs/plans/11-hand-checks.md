@@ -7561,6 +7561,9 @@ has dream, and a frame holds one of each — delete it here first; nothing
 landed"; no sheet; the preset's dot does not light; ⌘Z has nothing new.
 3. Delete `dream`; spawn again. *Pass:* it lands. Fail: `dream.2` on the
 canvas, or a picture change on the refused spawn.
+4. Delete nothing; engage the output hold on a look holding a dream, load
+   `party-noita`, spawn `dream wash`. *Pass:* the head says "the output hold
+   still plays dream" and to drop the hold. Drop it and spawn again: it lands.
 **499. The frame's other kinds.** (either Mac)
 1. On `party-wake`, group `lookback` alone; save as `ring`. Spawn it back.
 2. Group `hands` and `hands.layer`; save as `ghosts`. Spawn it back.

@@ -84,6 +84,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
+from functools import cached_property
 from typing import Any
 
 from . import envelope as envmod
@@ -91,6 +92,7 @@ from . import graph as G
 from . import lfo as lfomod
 from . import modbank
 from . import modifiers as modmod
+from .lookback import LOOKBACK_KEYS
 from .routing import Binding, base_scheme, is_continuous, is_macro
 
 KIND = "hyperspace.patch"
@@ -143,10 +145,6 @@ MAY_HOLD = ("effect", "composite", "switch", "delay", "resize", "copy", "matte",
 # Hands 1 is no such thing — every other hands is a new number — nor is a
 # look-back (`lookback.2`)
 ONE_PER_FRAME = ("scene", "shape", "backdrop", "pattern", "dream")
-# a look-back's own knobs among `dream.*`, the rest the dream node's —
-# `params.LOOKBACK_KEYS`, spelled again because this module is a leaf
-# (tests/test_patches_frame_kinds.py holds the two spellings equal)
-LOOKBACK_KEYS = ("echo_mix", "fade", "echoes", "gap", "darken", "contrast", "occlude", "res")
 # the render nodes the GRAPH page never deletes and a patch never holds —
 # `graphview.spec_name` refuses the camera (the look's one, `CAMERA_KEPT`,
 # plan 43 C2) and the clouds (the rig's, `NOT_REMOVABLE`); the windows are
@@ -178,12 +176,17 @@ NOT_HELD_WORDS = "{name} is no node a patch holds; left out"
 # (a spawn, wave 3 P1) the single-instance nodes the host already has
 TAKEN_WORDS = ("{name} not spawned: this preset already has {nodes}, and a frame holds one "
                "of each — delete it here first; nothing landed")
+# (the same, of what only the held program keeps: nothing here to delete)
+HELD_TAKEN_WORDS = ("{name} not spawned: the output hold still plays {nodes}, and a frame "
+                    "holds one of each — drop the hold first; nothing landed")
+SECOND_DREAM_WORDS = "{name} is a second dream, which no wire may touch (one live dream); left out"
 SEQ_WORDS = "the sequencer is the rig's; left out"
 LANE_ENV_WORDS = ("{name} is a sequencer lane's envelope; left out (a patch's envelope "
                   "spawns as {first} or more)")
 NO_NODE_WORDS = "{name}: no such node; left out"
 COPY_WORDS = "{name} draws {of} again: take {of} with it; left out"
-LAYER_WORDS = "{name} draws {of}: take {of} with it; left out"   # (a layer's params are its hands')
+# (at a save only: a file an older build saved with a layer alone still reads)
+LAYER_WORDS = "{name} draws {of}: take {of} with it; left out"
 HOST_MACRO_WORDS = ("{mid} is not in the patch: its subscriber on {pid} stays the preset's "
                     "(take {mid} with it)")
 NO_MACRO_NOTE = "{mid}: no free macro — its subscribers not spawned"
@@ -366,7 +369,7 @@ def _join(base: str, n: int, suffix: str = "") -> str:
 
 def held_words(name: str) -> str | None:
     """Why render node `name` may not be in a patch, in words — None when
-    it may (P1's list: what can be made twice)."""
+    it may (`MAY_HOLD`; wave 3 P1: the frame's kinds too)."""
     kind = _kind(name)
     if kind == "camera":
         return CAMERA_WORDS.format(name=name)
@@ -376,6 +379,8 @@ def held_words(name: str) -> str | None:
         return WINDOW_WORDS.format(name=name)
     if kind == "channel":
         return CHANNEL_WORDS.format(name=name)
+    if kind == "dream" and name != "dream":
+        return SECOND_DREAM_WORDS.format(name=name)
     if kind not in MAY_HOLD:
         return NOT_HELD_WORDS.format(name=name) if kind is not None else (
             NO_NODE_WORDS.format(name=name))
@@ -473,6 +478,7 @@ class _Members:
     def ids(self, scheme: str) -> tuple[int, ...]:
         return {MOD: self.mods, LFO: self.lfos, ENV: self.envs, MACRO: self.macros}[scheme]
 
+    @cached_property
     def param_rows(self) -> tuple[_ParamRow, ...]:
         """Which params the members own: each ``(prefix, member, keys)``
         (`fx.acid.2` is `acid.2`'s, `ghost.2` `hands.2`'s, `lfo.3` `lfo.3`'s,
@@ -486,7 +492,7 @@ class _Members:
         return tuple(out)
 
     def owns(self, pid: Any) -> bool:
-        return _owner(pid, self.param_rows(), self.macros) is not None
+        return _owner(pid, self.param_rows, self.macros) is not None
 
     def own_lane(self, addr: Any) -> bool:
         hit = _lane(addr)
@@ -516,23 +522,27 @@ def _is_dream_key(key: str) -> bool:
     return key not in LOOKBACK_KEYS
 
 
-def _is_pattern_view_key(key: str) -> bool:
-    return key.startswith(("pattern", "media_"))    # `graphview._view_owner`'s rule
+def is_pattern_view_key(key: str) -> bool:
+    """Is `view.<key>` the faces pattern's (the pattern and its media layer),
+    not the shape's? The one spelling: `graphview._view_owner` asks here."""
+    return key.startswith(("pattern", "media_"))
 
 
 def _is_shape_view_key(key: str) -> bool:
-    return not _is_pattern_view_key(key)
+    return not is_pattern_view_key(key)
 
 
 def _param_rows(name: str) -> list[tuple[str, Callable[[str], bool]]]:
     """Render node `name`'s params as ``(prefix, keys)`` — what is its to
-    carry (D5) and to rename. The canvas's owners (`graphview.OWNERS`) where
-    a frame kind's params are not under its own name: `rot.*`, `view.*` and
-    `fx.face_map` the shape's, `pattern.*`, `view.pattern*` and `view.media_*`
-    the pattern's; `dream.*` split by key between a look-back and the dream
-    (`params.is_lookback_knob`), so either can be in a patch, and land, without
-    the other's values. The scene has none: `scene.*` is the band scene's
-    (a session group); a copy's knobs are its original's."""
+    carry (D5) and to rename. The canvas's owners where a frame kind's
+    params are not under its own name (`graphview.OWNERS`, the app's, so
+    restated here; tests/test_patches_frame_kinds.py holds the two equal):
+    `rot.*`, `view.*` and `fx.face_map` the shape's, `pattern.*`,
+    `view.pattern*` and `view.media_*` the pattern's; `dream.*` split by
+    key between a look-back and the dream (`params.is_lookback_knob`), so
+    either can be in a patch, and land, without the other's values. The
+    scene has none: `scene.*` is the band scene's (a session group); a
+    copy's knobs are its original's."""
     kind = _kind(name)
     if kind in ("copy", "scene"):
         return []
@@ -540,7 +550,7 @@ def _param_rows(name: str) -> list[tuple[str, Callable[[str], bool]]]:
         return [("rot", _any_key), ("view", _is_shape_view_key),
                 ("fx", lambda key: key == "face_map")]
     if kind == "pattern":
-        return [("pattern", _any_key), ("view", _is_pattern_view_key)]
+        return [("pattern", _any_key), ("view", is_pattern_view_key)]
     if kind == "lookback":
         return [(G.param_prefix(name), _is_lookback_key)]
     if kind == "dream":
@@ -604,7 +614,7 @@ class _Renamer:
     gone: dict[str, set[int]] = field(default_factory=dict)    # members that did not spawn
 
     def __post_init__(self) -> None:
-        self._rows = self.members.param_rows()
+        self._rows = self.members.param_rows
         self._families = {_family(name)[:2] for name in self.members.render}
 
     # names
@@ -720,6 +730,8 @@ class _Renamer:
             out["to"] = self.dst(out["to"])
         if isinstance(out.get("from"), str):
             out["from"] = self.src(out["from"])
+        if isinstance(out.get("before"), str):
+            out["before"] = self.src(out["before"])
         return out
 
 
@@ -761,6 +773,14 @@ class Patch:
 
 def _wire_key(w: Mapping) -> tuple[str, str]:
     return (str(w.get("from")), str(w.get("to")))
+
+
+def _port_order(p: Mapping) -> tuple[str, int, str]:
+    """A port's place in `read`'s fixed order: `in`, `in.2`, `in.10`, `out` —
+    by number, so a port's order is the order the wires crossed in."""
+    pid = str(p.get("id"))
+    head, dot, n = pid.rpartition(".")
+    return (head, int(n), pid) if dot and n.isdecimal() else (pid, 1, pid)
 
 
 def _in_order(wires: Iterable[dict]) -> tuple[dict, ...]:
@@ -806,7 +826,7 @@ def read(doc: Mapping) -> Patch:
                                            key=lambda kv: _macro_n(kv[0]))
               if isinstance(v, Mapping)}
     ports = tuple(sorted((dict(p) for p in doc.get("ports") or () if isinstance(p, Mapping)),
-                         key=lambda p: str(p.get("id"))))
+                         key=_port_order))
     rig: list[dict] = []
     host: list[dict] = list(ports)
     k = 0
@@ -899,8 +919,6 @@ def check(doc: Any) -> list[str]:
             out.append(why)
         elif e.get("kind") == "copy" and e.get("of") not in m.render:
             out.append(COPY_WORDS.format(name=name, of=e.get("of")))
-        elif e.get("kind") in ("layer", "guide") and G.hands_of(name) not in m.render:
-            out.append(LAYER_WORDS.format(name=name, of=G.hands_of(name)))
     if len(set(m.render)) != len(m.render):
         out.append("a node named twice")
     held = set(m.render)
@@ -1043,8 +1061,8 @@ def groupable(spec: G.GraphSpec | None, table, node_ids: Iterable[str]
     macros. Refused here only what no preset holds and what a group cannot:
     the rig's render kinds (`RIG_KINDS`: a window, All outputs, a media
     channel, a cloud), a device, the analyzer, the sequencer, a node or
-    modifier the preset lacks, a group (no nesting). Whether it can be saved as a patch is
-    asked at the save (`select`). Pure."""
+    modifier the preset lacks, a group (no nesting). Whether it can be saved
+    as a patch is asked at the save (`select`). Pure."""
     return _select(spec, table, node_ids, save=False)
 
 
@@ -1196,7 +1214,9 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
 
     Returns ``(doc, refused)``: the file's dict (``schema``, ``name`` and
     ``note`` empty, for the caller to fill) and, in words, every id it left
-    out — an output, the camera or a cloud, a media channel, the sequencer, a lane envelope, a copy without its original,
+    out — an output, the camera or a cloud, a media channel, a second dream,
+    the sequencer, a lane envelope, a copy without its original, a hands'
+    layer or guide without its hands,
     a host macro's subscriber on a member. The caller says them and saves
     the rest.
 
@@ -1240,13 +1260,21 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
     nodes.sort(key=lambda e: entry_name(e) or "")
     wires, ports = [], []
     ins = outs = 0
-    for w, where in crossing(spec, render):
+    crossed = crossing(spec, render)
+    for k, (w, where) in enumerate(crossed):
         if where == INSIDE:
             wires.append(rn.wire(w.to_json()))
         elif where == INTO:
             ins += 1
-            ports.append({"id": _join("in", ins), "type": wire_type(w, where),
-                          "to": rn.dst(w.dst), "was": w.src})
+            port = {"id": _join("in", ins), "type": wire_type(w, where),
+                    "to": rn.dst(w.dst), "was": w.src}
+            # a many-wire port's order is the draw order: where this inlet
+            # sits among the patch's own wires into it (absent: after them)
+            nxt = next((x for x, at in crossed[k + 1:]
+                        if at == INSIDE and x.dst == w.dst), None)
+            if w.dst in G.MANY_PORTS and nxt is not None:
+                port["before"] = rn.src(nxt.src)
+            ports.append(port)
         else:
             outs += 1
             ports.append({"id": _join("out", outs), "type": wire_type(w, where),
@@ -1321,6 +1349,8 @@ class Host:
     macros: frozenset[str] = frozenset()
     desk: tuple[Binding, ...] = ()
     routes: tuple[Binding, ...] = ()
+    # those of `names` only a held program keeps (wave 3 P1: `Landing.held_taken`)
+    held: frozenset[str] = frozenset()
 
     @classmethod
     def of(cls, spec: G.GraphSpec | None, table, banks: Mapping[str, Any] | None = None,
@@ -1353,7 +1383,8 @@ class Host:
                    modifiers=tuple(m.id for m in getattr(table, "modifiers", ())),
                    next_voice=nxt, room=room, macros=frozenset(used),
                    desk=tuple(replace(b) for b in table.desk()),
-                   routes=tuple(replace(b) for b in table.routes()))
+                   routes=tuple(replace(b) for b in table.routes()),
+                   held=frozenset(held) - spec_names(spec))
 
     def owner(self, pid: str) -> Binding | None:
         """`Bindings.owner`: the one performer on `pid`, or None."""
@@ -1424,16 +1455,21 @@ class Landing:
     # the group's fresh values (`Library.resolved`), nothing else moves
     replaces: str = ""
     # wave 3 P1: the patch's single-instance nodes (`ONE_PER_FRAME`) the host
-    # already has. Not empty: this landing does not land (`refusal`)
+    # already has. Not empty: this landing does not land (`refusal`).
+    # `held_taken`: those of them only the held program keeps
     taken: tuple[str, ...] = ()
+    held_taken: tuple[str, ...] = ()
 
     @property
     def refusal(self) -> str | None:
-        """Why this landing cannot land, in words (`TAKEN_WORDS`), or None."""
+        """Why this landing cannot land, in words, or None: what the preset
+        has to delete first (`TAKEN_WORDS`), else what the hold keeps
+        (`HELD_TAKEN_WORDS`)."""
         if not self.taken:
             return None
-        return TAKEN_WORDS.format(name=self.group.get("name") or "the patch",
-                                  nodes=", ".join(self.taken))
+        own = [n for n in self.taken if n not in self.held_taken]
+        words, nodes = (TAKEN_WORDS, own) if own else (HELD_TAKEN_WORDS, self.held_taken)
+        return words.format(name=self.group.get("name") or "the patch", nodes=", ".join(nodes))
 
 
 def _group_landing(p: Patch) -> Landing:
@@ -1518,11 +1554,11 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
         if (base, n) in rn.render:
             continue
         hold = taken.setdefault(base, set())
-        if _kind(name) in ONE_PER_FRAME and n == 1:
+        if _kind(name) in ONE_PER_FRAME:     # never renumbered (`dream.2` is no `dream`)
             if name in host.names:
                 singles.append(name)
-            hold.add(1)
-            rn.render[(base, 1)] = 1
+            hold.add(n)
+            rn.render[(base, n)] = n
             continue
         new = next(k for k in range(1, len(hold) + 2) if k not in hold)
         hold.add(new)
@@ -1654,7 +1690,8 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
                    routes=routes, desk=desk, macros=macros, lfos=lfos, envs=envs,
                    layout=layout, group=group, ports=ports, conflicts=tuple(conflicts),
                    wants={k: tuple(v) for k, v in wants.items()}, notes=tuple(notes),
-                   taken=tuple(singles))
+                   taken=tuple(singles),
+                   held_taken=tuple(n for n in singles if n in host.held))
 
 
 def is_rig_source(addr: str) -> bool:

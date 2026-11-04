@@ -136,14 +136,17 @@ What changed in the build:
   `check`) now holds the scene, the shape, the backdrop, the pattern, a
   look-back, the dream, hands 1, its layer and its guide. It refuses the
   rig's kinds (`RIG_KINDS`, unchanged), the look's one camera, a lane
-  envelope, a copy without its original and, new, a hands' layer or guide
-  without its hands. The words at the save above ("scene is the frame's")
+  envelope, a copy without its original and, new, a second dream and a
+  hands' layer or guide without its hands. Only the save refuses a layer
+  alone: a file an older build saved with one still reads and spawns as it
+  did (files on disk are a format). The words at the save above ("scene is the frame's")
   are gone; `groupable` is unchanged.
 - **A spawn into a host that has one** (row 658). `patches.ONE_PER_FRAME`
   keep their names (`scene.2` is no node; a wire to `dream.2` is refused,
   one live dream). One the host already has goes in `Landing.taken`, and
   `Landing.refusal` refuses the whole spawn in words, before any sheet and
-  in `Edit._spawn_refusal`. P2 owns "replace the host's dream": a sheet row
+  in `Edit._spawn_refusal` (what only the output hold keeps says to drop the
+  hold, `Landing.held_taken`). P2 owns "replace the host's dream": a sheet row
   over `Landing.taken`. Hands 1 lands as the next hands, a look-back as the
   next look-back.
 - **Whose params** (row 659). `patches._param_rows` replaces the one-prefix
@@ -152,11 +155,15 @@ What changed in the build:
   and the dream the rest of `dream.*` — a dream patch never sets the host's
   look-back. A member that keeps its name keeps its ids. The canvas still
   draws the dream's params on the look-back: P2's.
-- **Two fixes the kinds needed.** `read` keeps the order of the wires into
-  `scene.geometry` (the draw order); `graphview._node_name` names
+- **Fixes the kinds needed.** `read` keeps the order of the wires into
+  `scene.geometry` (the draw order) and orders ports by number; an inlet into
+  it says where it drew (a port's optional `before`), **wire as saved**
+  honours it, and that port stays open beside its other wires;
+  `graphview._node_name` names
   `lookback.2` and `dream.2` (it said `lookback` and `dream`) and `_land`
   keeps `lookback.2`'s entry when a wire names it, the entry being what
-  declares it.
+  declares it (`graph.entry_declares`). `LOOKBACK_KEYS` moved to `lookback.py`,
+  where `params` and `patches` both read it.
 - **The empty frame** (row 660). Every corpus preset lifted whole and spawned
   into an empty frame, its pins wired as saved, is the section again, hands one
   number on. `Presets.load_doc` is **not** rewritten as a spawn, and a preset

@@ -391,8 +391,7 @@ def _media_owner(pid: str, ctx: _Ctx) -> str | None:
 def _view_owner(pid: str, ctx: _Ctx) -> str | None:
     # plan 33 U: the face pattern and its media layer (`view.pattern*`,
     # `view.media_*`) are the pattern node's; the rest of `view.*` the shape's
-    key = pid.partition(".")[2]
-    return "pattern" if key.startswith(("pattern", "media_")) else "shape"
+    return "pattern" if patches.is_pattern_view_key(pid.partition(".")[2]) else "shape"
 
 
 def _switch_owner(pid: str, ctx: _Ctx) -> str | None:
@@ -3325,7 +3324,11 @@ def open_ports(spec, entry: Mapping) -> list[dict]:
     for p in ports:
         if not isinstance(p, Mapping) or p.get("type") not in RENDER_TYPES:
             continue
-        if isinstance(p.get("to"), str):
+        if isinstance(p.get("to"), str) and p["to"] in rgraph.MANY_PORTS:
+            # (wave 3 P1: the scene's geometry takes several; its other wires
+            # leave this one open)
+            free = not any(w.dst == p["to"] and w.src == p.get("was") for w in wires)
+        elif isinstance(p.get("to"), str):
             free = not any(w.dst == p["to"] for w in wires)
         elif isinstance(p.get("from"), str):
             free = not any(w.src == p["from"] and w.node not in inside for w in wires)
@@ -4404,8 +4407,11 @@ class Edit:
         words (the preset moved under the sheet; nothing is written)."""
         if self.graph is None or self.presets is None or self.table is None:
             return NO_PRESET_SPAWN
-        if landing.refusal is not None:
-            return landing.refusal      # (wave 3 P1) a dream the host already has …
+        # (wave 3 P1) a dream the host already has …; `getattr`: a sheet held
+        # open across a hot reload holds a `Landing` of the class before it
+        why = getattr(landing, "refusal", None)
+        if why is not None:
+            return why
         name = landing.group.get("name") or "the patch"
         have = patches.spec_names(getattr(self.graph, "spec", None))
         if any(c.startswith("render:") and c[7:] in have for c in landing.group.get("nodes", ())):
@@ -4627,7 +4633,7 @@ class Edit:
                 refused.append(NO_HOST_NODE.format(name=node))
                 continue
             trial = copy.deepcopy(doc)
-            trial["wires"] = [*trial.get("wires", []), w]
+            trial["wires"] = _wire_placed(trial.get("wires", []), w, p.get("before"))
             why = _land(self, trial, "", "", dry=True)
             if why is not None:
                 refused.append(f"{w['from']} → {w['to']}: {why}")
@@ -4685,6 +4691,15 @@ class Edit:
         self.said = "; ".join([(UPDATED_PATCH if update else SAVED_PATCH).format(name=name),
                                *said])
         return None
+
+
+def _wire_placed(wires: list[dict], w: dict, before: Any) -> list[dict]:
+    """`wires` with `w` added: just before the wire from `before` into its
+    port (a many-wire port's order is the draw order, `patches.lift`), else
+    last."""
+    at = next((k for k, x in enumerate(wires)
+               if x["to"] == w["to"] and x["from"] == before), len(wires))
+    return [*wires[:at], w, *wires[at:]]
 
 
 # ---- a node dropped onto a cable: the geometry ----
@@ -5082,11 +5097,10 @@ def _land(edit: Edit, doc: dict, label: str, said: str, dry: bool = False,
     # a frame node's bare entry is only what keeps it unwired (`_keep_declared`):
     # once a wire names it again, the wire says it
     wired = {n for x in doc.get("wires", []) for n in (x["from"], x["to"].rpartition(".")[0])}
-    # (`lookback.2` is the exception: only its entry declares it, wired or not)
     doc["nodes"] = [e for e in doc["nodes"] if not (
         e.get("kind") in rgraph.FRAME_KINDS and set(e) <= {"kind", "instance"}
         and _node_name(e) in wired
-        and not (e.get("kind") == "lookback" and e.get("instance", 1) != 1))]
+        and not rgraph.entry_declares(e.get("kind"), e.get("instance", 1)))]
     doc["wires"] = _frame_order(doc.get("wires", []))
     if not doc.get("wires"):
         doc.pop("wires", None)
@@ -5132,12 +5146,12 @@ def _node_name(e: dict) -> str | None:
         return f"{rgraph.wired_hands_name(n)}.{kind}"
     if kind == "echo":
         return f"echo.{e.get('index')}"
-    if kind in ("lookback", "dream"):      # (each may be declared again: `lookback.2`)
+    # (`lookback` and `dream` may be declared again: `lookback.2`)
+    if kind in ("composite", "switch", "delay", "resize", "copy", "matte", "cut", "segment",
+                "lookback", "dream"):
         return kind if n == 1 else f"{kind}.{n}"
     if kind in rgraph.FRAME_KINDS:
         return kind
-    if kind in ("composite", "switch", "delay", "resize", "copy", "matte", "cut", "segment"):
-        return kind if n == 1 else f"{kind}.{n}"
     return None
 
 

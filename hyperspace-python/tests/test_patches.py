@@ -171,8 +171,6 @@ def test_the_example_is_a_patch():
 
 
 @pytest.mark.parametrize("edit, said", [
-    (lambda d: d["nodes"].append({"kind": "layer"}),
-     "hands.layer draws hands: take hands with it; left out"),
     (lambda d: d["nodes"].append({"kind": "camera"}),
      "camera is the look's one camera, never a patch's; left out"),
     (lambda d: d["nodes"].append({"kind": "cloud"}), "cloud is the rig's; left out"),

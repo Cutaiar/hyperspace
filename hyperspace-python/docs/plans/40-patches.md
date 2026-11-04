@@ -762,8 +762,8 @@ Group. See [`50-one-format.md`](50-one-format.md), register rows 639–647.
 The "what a patch may hold" list above is wider: a patch holds the frame's
 kinds too (the scene, the shape, the backdrop, the pattern, a look-back, the
 dream, hands 1, its layer and guide). Still refused: the rig's kinds, the
-look's one camera, the lane envelopes, a copy without its original, and a
-hands' layer without its hands. A spawn whose single-instance node the host
+look's one camera, the lane envelopes, a copy without its original, a second
+dream and, at a save only, a hands' layer without its hands. A spawn whose single-instance node the host
 already has is refused in words, nothing landed (`Landing.taken`, row 658).
 D5 stands, with a frame kind's params read from the canvas's owners
 (row 659). Register rows 657–660; [`50-one-format.md`](50-one-format.md).

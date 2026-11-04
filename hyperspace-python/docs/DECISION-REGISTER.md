@@ -681,7 +681,7 @@ here; overturn → the change, then the same.
 | 647 | Plan 50: hands 1 in a group — a wired frame always holds it, so a "delete" leaves it held and a member (as a macro is) | — | (rec) — pending the owner; built as recommended |
 | 657 | Wave 3 P1: a patch holds the frame's kinds (scene, shape, backdrop, pattern, look-back, dream, hands 1, its layer and guide); the rig's (`patches.RIG_KINDS`) and the look's one camera stay refused, a lane envelope and a copy without its original too; **no `patch/3`**: the file's keys are unchanged and an older build's `check` refuses such a file in words | 497 | (rec) — pending the owner; built as recommended |
 | 658 | Wave 3 P1: a patch's single-instance node the host already has (`patches.ONE_PER_FRAME`: scene, shape, backdrop, pattern, dream) refuses the whole spawn in words, nothing landed, no sheet — P2 turns the dream's into "replace the host's dream"; hands 1 lands as the next hands, a look-back as the next look-back | 498 | (rec) — pending the owner; built as recommended |
-| 659 | Wave 3 P1: what a frame kind carries is its own params, the canvas's owners (`patches._param_rows`): `rot.*`, most of `view.*` and `fx.face_map` the shape's; `pattern.*`, `view.pattern*`, `view.media_*` the pattern's; `dream.*` split by key between a look-back (`LOOKBACK_KEYS`) and the dream; `scene.*` no node's. The spin's pose stays the host's. A hands' layer or guide needs its hands in the patch, said at the save and at a read | 497, 499 | (rec) — pending the owner; built as recommended |
+| 659 | Wave 3 P1: what a frame kind carries is its own params, the canvas's owners (`patches._param_rows`): `rot.*`, most of `view.*` and `fx.face_map` the shape's; `pattern.*`, `view.pattern*`, `view.media_*` the pattern's; `dream.*` split by key between a look-back (`LOOKBACK_KEYS`) and the dream; `scene.*` no node's. The spin's pose stays the host's. A hands' layer or guide needs its hands at a **save**, in words; a file an older build saved with `hands.2.layer` alone still reads and spawns as it did. A second dream (`dream.2`) is refused at a save and at a read, and never renumbered onto `dream`. An inlet into `scene.geometry` keeps its draw order (the port's optional `before`) | 497, 499 | (rec) — pending the owner; built as recommended |
 | 660 | Wave 3 P1: the "empty frame" row 641 left open — a whole preset lifted and spawned into an empty frame is that frame (proved over the corpus, hands one number on), but `Presets.load_doc` stays the replace landing, and no preset file is spawned directly (save it as a patch). A new preset holds the scene chain, so a whole-frame patch is refused there in words | — | (rec) — pending the owner; the literal merge not built |
 
 "—": no hand check shows it; tests only.
@@ -11974,8 +11974,10 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Answer.** (rec) — pending the owner; built as recommended.
 - **Recommended.** Refuse the whole spawn, nothing landed and no sheet:
   "dream wash not spawned: this preset already has dream, and a frame holds
-  one of each — delete it here first; nothing landed". `patches.spawn`
-  reports the names in `Landing.taken`, so P2 can turn the dream's into a
+  one of each — delete it here first; nothing landed". What only a held
+  program keeps (`Host.held`, `Landing.held_taken`) says to drop the hold
+  instead, there being nothing to delete. `patches.spawn` reports the names
+  in `Landing.taken`, so P2 can turn the dream's into a
   sheet row without touching the rest; the same door could take the scene's
   and the shape's later. Landing the rest without the node was rejected:
   the patch's composite would lose the dream it was saved around, quietly.
@@ -12007,15 +12009,25 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   on the look-back: P2's.) `scene.*` is the band scene's, a session group,
   and no node's. The spin's pose is outside `values`, so it stays the
   host's. A hands' layer or guide without its hands is refused in words at
-  the save and at a read, as a copy without its original is: alone it landed
-  a layer of a hands no one holds, whose port refused `hands` and whose
-  values were for no param.
+  the save, as a copy without its original is: alone it lands a layer of a
+  hands no one holds, whose port refuses `hands` and whose values are for
+  no param. **Only at the save**: an older build could legally save
+  `hands.2.layer` alone, and files on disk are a format, so `check` still
+  reads one and it spawns as it did, its values said. A second dream
+  (`dream.2`, unwirable, no params) is refused at a save and a read (no
+  older build could hold a dream at all) and a spawn never renumbers it
+  onto the live `dream`.
 - **Other options.** The old prefix rule (`shape.*`, which is nothing;
   `dream.*` whole, which would overwrite the host's look-back).
 - **To reverse.** `patches._param_rows`.
 - **Built.** `patches._param_rows`, `_Members.param_rows`, `LAYER_WORDS`;
   `read` also keeps the order of the wires into `scene.geometry`, the draw
-  order, rather than sorting it away.
+  order, rather than sorting it away, and orders ports by number. An inlet
+  into that port carries an optional `before` (the patch's own wire it drew
+  before, renamed with the rest), which **wire as saved** honours, and a
+  many-wire port stays open beside its other wires. It is no schema move:
+  such a port exists only with the scene in the patch, a file no older
+  build reads.
 - **Judge it.** 497, 499.
 
 ### 660. The empty frame

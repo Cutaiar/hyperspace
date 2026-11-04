@@ -13,6 +13,7 @@ the rest are held by a patch, so a "dream + fx + composite" patch exists.
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import pytest
 from conftest import CORPUS, seed
@@ -102,8 +103,8 @@ def test_save_still_refuses_the_camera_and_a_lane_envelope_in_words():
 
 # ---------------------------------------------------------------- whose params
 
-def test_the_leaf_spells_the_look_backs_keys_as_params_does():
-    assert patches.LOOKBACK_KEYS == params.LOOKBACK_KEYS
+def test_the_leaf_and_params_share_the_look_backs_keys():
+    assert patches.LOOKBACK_KEYS is params.LOOKBACK_KEYS
 
 
 def test_a_frame_kinds_params_are_the_canvas_owners(tmp_path):
@@ -117,7 +118,7 @@ def test_a_frame_kinds_params_are_the_canvas_owners(tmp_path):
     owned = 0
     for p in app.reg:
         pid = p.id
-        who = patches._owner(pid, mem.param_rows(), ())
+        who = patches._owner(pid, mem.param_rows, ())
         if who is None:
             continue
         owned += 1
@@ -195,8 +196,40 @@ def test_the_host_having_only_a_second_dream_leaves_the_first_free():
     assert spawn(cut(), Host(names=patches.spec_names(spec))).taken == ()
 
 
-def test_a_held_programs_dream_is_taken_too():
-    assert spawn(cut(), Host(names=frozenset({"dream"}))).taken == ("dream",)
+def test_a_held_programs_dream_is_taken_too_and_said_as_the_holds():
+    """With an output hold on and no dream in the preset there is nothing to
+    delete: the words say to drop the hold."""
+    spec, table = parts(preset("party-noita"))[:2]
+    landing = spawn(cut("dreamy"), Host.of(spec, table, held=("dream",)))
+    assert landing.taken == landing.held_taken == ("dream",)
+    assert landing.refusal == patches.HELD_TAKEN_WORDS.format(name="dreamy", nodes="dream")
+    spec, table = parts(wake_doc())[:2]                    # in the preset as well: delete it
+    landing = spawn(cut("dreamy"), Host.of(spec, table, held=("dream",)))
+    assert landing.held_taken == ()
+    assert landing.refusal == patches.TAKEN_WORDS.format(name="dreamy", nodes="dream")
+
+
+def test_a_second_dream_stays_out_and_never_becomes_the_live_one():
+    """`dream.2` may be declared but no wire may touch it: a save refuses it
+    in words; a file holding it (never saved: `check` refuses it) is not
+    renumbered onto `dream`."""
+    spec = G.read_graph({"frame": "wired", "nodes": [{"kind": "dream", "instance": 2}]})
+    mem, said = patches.select(spec, Bindings([]), ["render:dream.2"])
+    assert mem.render == () and said == [patches.SECOND_DREAM_WORDS.format(name="dream.2")]
+    doc = {"schema": patches.SCHEMA, "name": "d", "nodes": [{"kind": "dream", "instance": 2}]}
+    assert patches.check(doc) == [patches.SECOND_DREAM_WORDS.format(name="dream.2")]
+    landing = spawn(doc, Host())
+    assert landing.renames == {} and landing.taken == ()
+    assert spawn(doc, Host(names=frozenset({"dream"}))).taken == ()
+    assert spawn(doc, Host(names=frozenset({"dream.2"}))).taken == ("dream.2",)
+
+
+def test_a_landing_from_before_a_hot_reload_still_lands(rig):
+    """A sheet held open across a reload holds an old class's `Landing`,
+    with no `refusal`: not an AttributeError."""
+    on_graph(rig, "party-noita")
+    old = SimpleNamespace(group={"nodes": []}, modifiers=(), lfos=(), envs=())
+    assert ui_graph.group_edit(rig.panel)._spawn_refusal(old) is None
 
 
 def test_a_spawn_of_a_dream_into_a_preset_with_one_refuses_nothing_landed(rig):
@@ -333,9 +366,64 @@ def test_a_hands_layer_is_taken_with_its_hands(rig):
     assert "no param" not in said, said
     assert {"hands.2", "hands.2.layer"} <= patches.spec_names(rig.lib.presets.graph.spec)
     assert rig.reg["ghost.2.alpha"].value == doc["values"]["ghost.2.alpha"]
-    bad = {**doc, "nodes": [{"kind": "layer", "instance": 2}], "wires": [], "values": {},
-           "ports": []}
-    assert patches.check(bad) == [patches.LAYER_WORDS.format(name="hands.2.layer", of="hands.2")]
+
+
+def test_a_file_an_older_build_saved_with_a_layer_alone_still_reads():
+    """Files on disk are a format: `hands.2.layer` without `hands.2` was a
+    legal save, so only a new save refuses it. It reads, and spawns as it
+    did, its values for no param said by the landing."""
+    doc = {"schema": "hyperspace.patch/1", "name": "old layer",
+           "nodes": [{"kind": "layer", "instance": 2}], "values": {"ghost.2.alpha": 0.5}}
+    assert patches.check(doc) == []
+    landing = spawn(patches.forward(doc), Host())
+    assert [patches.entry_name(e) for e in landing.nodes] == ["hands.2.layer"]
+    assert landing.values == {"ghost.2.alpha": 0.5}
+
+
+SCENE_THREE = {"frame": "wired", "nodes": [{"kind": "hands", "instance": 2}],
+               "wires": [{"from": "hands.2", "to": "scene.geometry"},
+                         {"from": "shape", "to": "scene.geometry"},
+                         {"from": "hands", "to": "scene.geometry"}]}
+
+
+def test_an_inlet_into_the_scene_says_where_it_drew():
+    """The scene and two hands lifted without the shape between them: the
+    shape's inlet says which of the patch's own wires it drew before."""
+    spec = G.read_graph(SCENE_THREE)
+    doc, refused = patches.lift(spec, Bindings([]), {}, {},
+                                ["render:scene", "render:hands", "render:hands.2"])
+    assert refused == []
+    port = next(p for p in doc["ports"] if p["was"] == "shape")
+    assert port["before"] == "hands.2"                # (hands 1 lifts as hands.2)
+    landed = spawn({**doc, "name": "s"}, Host(names=frozenset({"hands.2"})))
+    assert next(p for p in landed.ports if p["was"] == "shape")["before"] == "hands.3"
+
+
+def test_wire_as_saved_puts_a_scene_inlet_back_in_its_draw_order(rig):
+    """Host order hands.2, shape, hands; the scene and both hands cut and
+    spawned where only the shape is left; wire as saved: the shape draws
+    between them again, not last."""
+    on_graph(rig, "party-noita")
+    doc, refused = patches.lift(G.read_graph(SCENE_THREE), Bindings([]), {}, {},
+                                ["render:scene", "render:hands", "render:hands.2"])
+    assert refused == []
+    slug = put(rig, {**doc, "name": "three", "ports": [
+        p for p in doc["ports"] if p["was"] == "shape"]})
+    host = preset("party-noita")
+    host["graph"] = {"frame": "wired", "nodes": [{"kind": "shape"}]}
+    assert rig.lib.presets.load_doc(host) is not None
+    assert spawned(rig, slug) is None, ui_graph._state(rig.panel).get("note")
+    gid = rig.lib.presets.groups[-1]["id"]
+    assert graphview.open_ports(rig.lib.presets.graph.spec, rig.lib.presets.groups[-1])
+    e = ui_graph.group_edit(rig.panel)
+    assert e.wire_as_saved(gid) is None, e.said
+    into = [w.src for w in rig.lib.presets.graph.spec.all_wires() if w.dst == "scene.geometry"]
+    assert into == ["hands.3", "shape", "hands.2"]
+
+
+def test_a_read_orders_ports_by_number():
+    doc = {"ports": [{"id": f"in.{n}"} for n in (10, 2, 3)] + [{"id": "out"}, {"id": "in"}]}
+    assert [p["id"] for p in patches.read(doc).ports] == ["in", "in.2", "in.3", "in.10", "out"]
 
 
 def test_read_keeps_the_scenes_draw_order():
