@@ -141,6 +141,7 @@ from .routing import (
     is_session_id,
     led_lit,
     led_shade,
+    let_go_lost,
     press_momentary,
     register_desk,
 )
@@ -500,18 +501,17 @@ class MidiIO:
             self.redraw(whole=True)     # every control: lit by a row, else dark
 
     def _let_go_held(self) -> None:
-        """Every held button up (`HELD_PARAMS`): a press this desk can no
-        longer end."""
+        """Every press this desk can no longer end (`routing.let_go_lost`), and
+        every held button (`HELD_PARAMS`) up, unless another device's button
+        still has it. FINE records no press, so this is what lets it go."""
+        let_go_lost(self.reg, lambda source: Binding(source, "").is_midi)
         for pid in HELD_PARAMS:
             held = self.reg.get(pid)
-            if held is None:
-                continue
-            by = held.__dict__.setdefault("_pressed_by", set())
-            by -= {s for s in by if s.partition(":")[0].partition("@")[0] == "note"}
-            if held.value and not by:   # a pad's button may still have it
+            if held is not None and held.value and not held.__dict__.get("_pressed_by"):
                 held.set(False)
 
     def close(self) -> None:
+        self._let_go_held()     # no poll follows, so `poll`'s cable check will not (plan 52)
         self._land_all()        # knob smoothing: no value is left between detents at exit
         if self.out is not None:
             try:
@@ -746,6 +746,10 @@ class MidiIO:
         for b in rows:
             p = self.reg.get(b.target)
             if p is None or not b.enabled:
+                # a row switched off under its held button: its release still counts
+                if (p is not None and not pressed
+                        and b.source in p.__dict__.get("_pressed_by", ())):
+                    press_momentary(p, b.source, False)
                 self._passed_over(b, value)
                 continue
             if b.op == "hold":      # timed, never applied; only a note has a press

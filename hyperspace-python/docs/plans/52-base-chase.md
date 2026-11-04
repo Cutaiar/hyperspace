@@ -157,7 +157,8 @@ The pad's factory row holds it on BACK (`pad:VIEW`, `momentary`; the owner,
 moves there at the next load; a file with nothing on BACK stays so, as the owner
 may have deleted it; and a row of the owner's on BACK stays, leaving that pad
 without a chase. It stays on until every source holding it has let go
-(`routing.press_momentary`), and a pad device closed lets go (`Router.pad_lost`). A Joy-Con (R) has
+(`routing.press_momentary`), and a source that can never release goes through
+`routing.let_go_lost`: a pad device closed, a desk closed, an OSC sender silent. A Joy-Con (R) has
 no BACK, so it is the same (row 724); the (L)'s − has it. Learn pad is armed from a
 widget and this param has none, so a second pad button today is a line in the file.
 A test presses it, and Learn lands a note or a pad button on
