@@ -137,15 +137,38 @@ tuned to facilitate a performance and should not be actively modified during one
   wanted either, so nothing is lost. A desk row on `master.gain` (the APC's MASTER fader) is
   the meta controller's own control and stays.
 
-**Still open:** the smaller questions below (DQ1, DQ3–DQ8, NQ2, NQ4–NQ8). Wave 4 starts
-when they are answered.
+**Fifth round, 2026-11-04.**
+- **The absolute rule: no preset can affect another preset.** Not a question to ask. Any
+  path by which one can is a bug, or a sign the thing belongs in the preset. D5d's leak
+  test runs both ways. A row acts only on the `Deck` its player is on, which answers DQ4.
+  The one accepted exception is the shared dream worker (DQ8), a known limitation.
+- **The dim and the crossfade are separate controls.** The master dim is the meta
+  controller's. Overturns row 559 and plan 44 §5. **A crossfade may fade into an empty
+  `Deck`, which renders black,** as a DJ mixer fades into silence. The refusal in DQ3 is
+  gone.
+- **Changing what is on air is intentional, never from the desk.** Bank pads, the D-pad's
+  preset list and `preset.next` load only into the off-air `Deck`. Answers DQ6.
+- **The playlist is for installations:** leave the cart running, a new look every five
+  minutes. It is not used alongside live editing, so it needs no guards against the
+  operator. D6 gets smaller; DQ5 is answered: seconds, `playlists/`, no pausing.
+- **No second dream worker.** DQ8: a known limitation. DQ7 as recommended.
+- **Node mode:** no latch button and no paging. A node's params fill the controller's
+  degrees of freedom, faders and knobs both. A node that does not fit is a node with too
+  many params: list them, as the meta routes rule lists its rows; do not page. You enter
+  from the panel, with a node already selected; a node with no params cannot be entered
+  (NQ4). A mapping already on that node's params stays, and the rest fill what is left
+  (NQ6). NQ5 and NQ7 as recommended.
+
+**Last questions, pending:** HT (HOLD, TAKE, DROP), XF (the crossfader), B2's button.
+
 
 ## The semantic migration (SEM)
 
 **Slot it right after D5d, as stage 4.5.** D5d deletes `hold.py` and settles the deck
 model; before it, the names are still moving, and from stage 5 four parallel lanes write
 new code against them. It is a rename and nothing else, so it needs a quiet moment rather
-than a long one: no other PR open, one builder, goldens unmoved, a mechanical diff.
+than a long one: no other PR open, one builder, goldens unmoved. The rename is mechanical;
+the wall it adds (below) is not, so it is sized M–L, and it may be two PRs.
 
 | The owner's word | The code today | Note |
 | --- | --- | --- |
@@ -172,7 +195,7 @@ Three rules, starting now:
    `band.*`) is a format move and rides the one migration. SEM touches only names in code.
    If a saved name cannot change cheaply, it stays and the glossary says so.
 
-Merge order is unchanged by it. It costs one short pause between D5d and stage 5.
+Merge order is unchanged by it. It holds the lanes between D5d and stage 5.
 
 ## The schedule
 
