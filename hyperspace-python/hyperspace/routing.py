@@ -3887,7 +3887,7 @@ class Router:
         `_end_turns` forgets a row that did not act, so a closing clutch or a
         returning hand never jumps. Dormant with no clutch, on a source that
         is no circle, or on a target it cannot turn. A row in `_turn_cut` only
-        reads until it has let go."""
+        reads."""
         if (b.when is None or not whole_circle(b.source) or p.kind is not Kind.CONTINUOUS
                 or p.integer or not p.modulatable):
             return
@@ -3913,9 +3913,9 @@ class Router:
         still the hand goes (`Undo.keep_open`, the base chase's), on the `Undo`
         that watches this deck's registry, chosen here each closure. Whatever
         else closes the step (an undo, a load, the hold, a chase's press) cuts
-        the rows acting then, each until it has let go, so a fist still closed
-        cannot run on from what was just put back, and it has no step left to
-        close. A step someone else is keeping (a held chase) is left to them:
+        the rows acting then, each until it has not acted for TURN_GRACE_S (a
+        dropout is not letting go), so a fist still closed cannot run on from
+        what was just put back, and it has no step left to close. A step someone else is keeping (a held chase) is left to them:
         this turn's edits land in it and no verb is ended by a fist."""
         d = self.__dict__
         steps = undo_steps.watching(self.reg)
@@ -3924,27 +3924,30 @@ class Router:
         d["_turn_held"], d["_turn_undo"], d["_turn_idle"] = True, steps, 0.0
 
         def closed() -> None:
-            d["_turn_cut"] = set(d.get("_turns", ()))
+            d.setdefault("_turn_cut", {}).update(dict.fromkeys(d.get("_turns", ()), 0.0))
             d["_turn_held"], d["_turn_undo"] = False, None
 
         if steps is not None:
             undo_steps.keep_open("orbit", steps, on_end=closed)
 
     def _end_turns(self, dt: float) -> None:
-        """The pass's end: a row that did not act forgets its reading and is
-        no longer cut. When none has acted for TURN_GRACE_S the closure is
-        over and its undo step closes."""
+        """The pass's end: a row that did not act forgets its reading. A cut
+        row and a held closure each last until TURN_GRACE_S with nothing
+        acting: the row is then no longer cut, and the closure over, its undo
+        step closed."""
         d = self.__dict__
         turns = d.get("_turns")
-        if not turns and not d.get("_turn_held"):
+        cut = d.get("_turn_cut")
+        if not turns and not cut and not d.get("_turn_held"):
             return
         turned = d.setdefault("_turned", set())
-        for key in [k for k in turns if k not in turned]:
+        for key in [k for k in (turns or ()) if k not in turned]:
             del turns[key]
-        cut = d.get("_turn_cut")
-        if cut:
-            cut &= turned
-        acting = bool(turned - cut) if cut else bool(turned)
+        for key in list(cut or ()):
+            cut[key] = 0.0 if key in turned else cut[key] + dt
+            if cut[key] >= TURN_GRACE_S:
+                del cut[key]
+        acting = any(key not in cut for key in turned) if cut else bool(turned)
         turned.clear()
         if not d.get("_turn_held"):
             return

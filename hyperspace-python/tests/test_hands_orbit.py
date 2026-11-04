@@ -633,7 +633,7 @@ def test_an_undo_with_the_fist_still_closed_stops_the_turn_until_it_opens(deck, 
 
     script = (closing() + [fist(yaw=float(k)) for k in range(31)]
               + [fist(yaw=30.0 + k) for k in range(30)]                # still turning
-              + opening(yaw=60.0)
+              + opening(yaw=60.0) + [opened(yaw=60.0)] * LONG_OPEN
               + closing(yaw=60.0) + [fist(yaw=60.0 + k) for k in range(11)] + opening(yaw=70.0)
               + [opened(yaw=70.0)] * LONG_OPEN)
     r = Run(deck, tmp_path, script, steps=deck.undo, each=each)
@@ -642,6 +642,43 @@ def test_an_undo_with_the_fist_still_closed_stops_the_turn_until_it_opens(deck, 
     assert r.yaw[-1] == pytest.approx(10.0, abs=0.3)
     assert _orbits(deck) == ["orbit"]                                  # the second; the first redoable
     assert len(deck.undo.redos) == 0                                   # a new edit clears the redo
+
+
+def test_a_dropout_with_the_fist_closed_is_not_letting_go_of_the_cut(deck, tmp_path):
+    """Undo mid-orbit, then a one-frame NaN, and the fist comes back still closed:
+    the turn stays cut, and the next real closure turns from what was put back."""
+    n = len(closing()) + 11
+    back = n + 5
+
+    def each(io, k):
+        if k == n:
+            deck.undo.undo()
+
+    fists = [fist(yaw=float(k)) for k in range(21)]
+    script = (closing() + fists + [None] + closing(yaw=20.0)
+              + [fist(yaw=20.0 + k) for k in range(21)])
+    total = len(script)
+    script += (opening(yaw=40.0) + [opened(yaw=40.0)] * LONG_OPEN
+               + closing(yaw=40.0) + [fist(yaw=40.0 + k) for k in range(11)]
+               + opening(yaw=50.0) + [opened(yaw=50.0)] * LONG_OPEN)
+    r = Run(deck, tmp_path, script, steps=deck.undo, each=each)
+    assert all(v == pytest.approx(0.0, abs=1e-3) for v in r.yaw[back:total])
+    assert r.yaw[-1] == pytest.approx(10.0, abs=0.5)
+
+
+def test_a_cut_clears_after_the_same_grace_with_the_hand_gone(deck, tmp_path):
+    n = len(closing()) + 11
+
+    def each(io, k):
+        if k == n:
+            deck.undo.undo()
+
+    script = (closing() + [fist(yaw=float(k)) for k in range(21)] + [None] * LONG_OPEN
+              + closing(yaw=20.0) + [fist(yaw=20.0 + k) for k in range(11)]
+              + opening(yaw=30.0) + [opened(yaw=30.0)] * LONG_OPEN)
+    r = Run(deck, tmp_path, script, steps=deck.undo, each=each)
+    assert r.yaw[-1] == pytest.approx(10.0, abs=0.5)
+    assert not deck.router.__dict__["_turn_cut"]
 
 
 def test_the_cut_is_each_rows_own(deck, tmp_path):

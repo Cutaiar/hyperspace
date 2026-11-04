@@ -279,9 +279,10 @@ moved nothing leaves none.
   ends the step, so it is two steps. An edit made during a closure (a knob) is in the
   orbit's step, as with the chase.
 - **Anything else that closes the step cuts the turn** (an undo, a load, the hold's
-  engage, a chase's press): each row acting then only reads until it has let go, so a
-  fist still closed does not run on from what was just put back. The cut is per row: a
-  row that has let go and closed again turns, while one still held stays cut. The
+  engage, a chase's press): each row acting then only reads until it has not acted for
+  `TURN_GRACE_S`, so a fist still closed does not run on from what was just put back,
+  and a dropout is not letting go. The cut is per row: a row that has let go and closed
+  again turns, while one still held stays cut. The
   router also drops its hold on the step then, so a fist opening later closes nothing
   of anyone else's.
 - **With a chase held** (plan 52; `Undo` keeps one step at a time). An orbit starting
