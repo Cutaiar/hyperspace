@@ -452,11 +452,7 @@ def preview_renderer(main):
     and the same clock, so an effect's phase moves once a frame. Its
     look-back has no dream worker: the preview shows the echoes, the dream
     is the projector's."""
-    from .render import Renderer
-
-    pr = Renderer(main.ctx, dream=main.lookback.state, fx=main.fx.state,
-                  ghost=main.ghost.state)
-    pr._t0 = main._t0
+    pr = main.sibling(dream=main.lookback.state, fx=main.fx.state, ghost=main.ghost.state)
     mirror(main, pr)
     return pr
 

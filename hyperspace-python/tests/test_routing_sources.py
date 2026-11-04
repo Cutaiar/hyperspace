@@ -54,9 +54,10 @@ def test_each_router_reads_the_pad_feel_of_its_own_table():
     assert "_felt" not in vars(a.sources)
 
 
-def test_a_router_without_modifiers_leaves_the_others_mod_lanes():
-    """B has no modifiers: its pass takes nothing of A's ``mod`` lanes out
-    of the shared sources — A's vector, labels and rests stand."""
+def test_a_routers_modifiers_stay_off_the_sources():
+    """Plan 44 D4 (row 591): each router's ``mod`` lanes are its own layer's:
+    the shared sources never hold them, and the panel, reading through the
+    router, sees its own deck's whichever pass ran last."""
     from types import SimpleNamespace
 
     from hyperspace.bands import CEIL
@@ -65,39 +66,34 @@ def test_a_router_without_modifiers_leaves_the_others_mod_lanes():
     a.table.add_modifier("scale", ["lane:0"], a.reg, mul=2.0)
     chain = SimpleNamespace(lanes=np.array([0.2 * CEIL, 0.0]))
     a.modulate(chain)
-    vec, labels = src.feeds["mod"], src.labels["mod"]
+    vec, labels = a.feeds["mod"], a.labels["mod"]
     assert vec[1] == pytest.approx(0.4) and labels == ["", "1 scale"]
     b.modulate(chain)
-    assert src.feeds["mod"] is vec and src.labels["mod"] is labels
-    assert src.rests["mod"] == [0.0, 0.0]
-    # a's own last modifier removed: its entry goes, as before D2
+    assert "mod" not in src.feeds and "mod" not in src.labels
+    assert "mod" not in b.feeds and a.feeds["mod"] is vec and a.labels["mod"] is labels
+    assert a.rests["mod"] == [0.0, 0.0]
     a.table.remove_modifier("mod.1", a.reg)
     a.modulate(chain)
-    assert "mod" not in src.feeds and "mod" not in src.labels
+    assert "mod" not in a.feeds and "mod" not in a.labels
 
 
-def test_two_routers_with_modifiers_swap_their_lanes_in_without_rebuilding():
-    """Both routers have modifiers: each pass puts its own ``mod`` entries
-    back (row 591) by assignment — the vector and the lists it built when
-    its modifiers changed, never rebuilt per frame."""
+def test_a_routers_mod_vector_is_built_when_its_modifiers_change_and_never_per_frame():
     from types import SimpleNamespace
 
     from hyperspace.bands import CEIL
 
-    src, a, b = _pair()
+    _src, a, b = _pair()
     a.table.add_modifier("scale", ["lane:0"], a.reg, mul=2.0)
     b.table.add_modifier("scale", ["lane:1"], b.reg)
     b.table.add_modifier("scale", ["mod:1"], b.reg, mul=0.5)
     chain = SimpleNamespace(lanes=np.array([0.2 * CEIL, 0.6 * CEIL]))
     a.modulate(chain)
     b.modulate(chain)
-    built = {r: (r.__dict__["_mod_out"], r.__dict__["_mod_pub"]) for r in (a, b)}
+    built = {r: (r.feeds["mod"], r.labels["mod"]) for r in (a, b)}
     for _ in range(5):
         for r in (a, b):
             r.modulate(chain)
-            out, pub = built[r]
-            assert r.__dict__["_mod_out"] is out and r.__dict__["_mod_pub"] is pub
-            assert src.feeds["mod"] is out and src.labels["mod"] is pub[0]
+            assert r.feeds["mod"] is built[r][0] and r.labels["mod"] is built[r][1]
     assert built[a][0][1] == pytest.approx(0.4)
     assert built[b][0][1] == pytest.approx(0.6) and built[b][0][2] == pytest.approx(0.3)
 

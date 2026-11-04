@@ -139,6 +139,22 @@ shape and it follows the hand; open it to let go" is `position` rows from
 the hand's roll / pitch / yaw, each `when` ``hand:right.grab``. Like the
 dance sources it has no setup params and no DAW note; it needs the
 skeleton, so with none it never closes.
+
+The room lanes (plan 51, room.py) sit after the grabs: the palm's
+orientation in the room's frame rather than the sensor's, the same reading
+on both hands, whatever the camera does:
+
+  hand:<side>.room.roll     about the fingers
+  hand:<side>.room.pitch    about the palm's sideways axis
+  hand:<side>.room.yaw      about the room's up
+
+Each is the whole circle, 0.5 + degrees / 360, filtered unwrapped so ±180°
+is a seam and never a sweep; NaN while the hand is away or has no skeleton.
+The frame is the tracking mode's, optionally levelled from a flat hand
+(`HandsIO.start_level`), kept as ``"room": {"mode", "level"}`` in hands.json
+only when set: a key a file may lack, so no schema move. It applies only in
+the mode it was made in, and never to a tape, which plays in its own frame. Like the dance sources they have no
+setup params, no DAW output and no Learn.
 """
 
 from __future__ import annotations
@@ -155,6 +171,18 @@ from pathlib import Path
 
 import mido
 
+from .room import (
+    MODES,
+    ROOM,
+    ROOM_REST,
+    Mat,
+    Palm,
+    frame,
+    is_rotation,
+    level_of,
+    mode_name,
+    palm_axes,
+)
 from .signal import (
     FULL,
     HYST_14,
@@ -162,8 +190,10 @@ from .signal import (
     RESTS,
     Flick,
     Follower,
+    OneEuro,
     Smooth,
     describe,
+    dot,
     encode,
     quantize,
     shape,
@@ -189,6 +219,15 @@ BOX_AXES = ("x", "y", "z")
 BOX_MARGIN = 40.0     # mm: the sweep's box stands this far outside what the palms covered
 BOX_EDGE = 15.0       # mm: a hand that is in stays in until it is this far past a face
 BOX_MIN_SPAN = 120.0  # mm: a coordinate swept over less than this is left open
+# levelling the room from a flat hand (plan 51): held at least LEVEL_S, then
+# on until CAL_MIN_SAMPLES frames arrived, for at most LEVEL_WAIT_S more (so a
+# slow frame rate can still pass). Refused when any frame's palm strayed past
+# LEVEL_STILL_DEG from the mean, or the palm's up is past LEVEL_TILT_DEG from
+# the stage's: a mount tilted that far is not what the gesture is for
+LEVEL_S = 1.0
+LEVEL_WAIT_S = 3.0
+LEVEL_STILL_DEG = 10.0
+LEVEL_TILT_DEG = 60.0
 # "x" / "y" / "z" → (lo, hi) in mm, or None for an open coordinate
 Box = dict[str, tuple[float, float] | None]
 GROUP = "hands"
@@ -424,12 +463,8 @@ def _sub(a, b) -> tuple[float, float, float]:
     return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
 
 
-def _dot(a, b) -> float:
-    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-
-
 def _len(a) -> float:
-    return math.sqrt(_dot(a, a))
+    return math.sqrt(dot(a, a))
 
 
 def _angle(a, b) -> float | None:
@@ -437,7 +472,7 @@ def _angle(a, b) -> float | None:
     la, lb = _len(a), _len(b)
     if la < 1e-6 or lb < 1e-6:
         return None
-    return math.degrees(math.acos(min(1.0, max(-1.0, _dot(a, b) / (la * lb)))))
+    return math.degrees(math.acos(min(1.0, max(-1.0, dot(a, b) / (la * lb)))))
 
 
 def bend(bones: list) -> float:
@@ -472,7 +507,7 @@ def spread(skel: dict | None) -> float | None:
     for f in ("index", "pinky"):
         b = digits[DIGITS.index(f)][1]                  # the proximal bone
         d = _sub(b["next"], b["prev"])
-        k = _dot(d, n) / (nn * nn)
+        k = dot(d, n) / (nn * nn)
         p = (d[0] - k * n[0], d[1] - k * n[1], d[2] - k * n[2])
         if _len(d) < 1e-6 or _len(p) < SPREAD_MIN_FLAT * _len(d):
             return 0.0
@@ -604,40 +639,6 @@ class Dance:
         nan = lambda y: math.nan if y is None else y
         return ([nan(self.curl[f].y) for f in DIGITS]
                 + [nan(self.spread.y), nan(self.energy.y), self.flick.y])
-
-
-class OneEuro:
-    """The One Euro filter (Casiez et al. 2012) over a scalar: a low-pass
-    whose cutoff rises with speed — a still hand does not shimmer, a moving
-    one does not lag. `reset` forgets the history."""
-
-    def __init__(self, min_cutoff: float = 1.0, beta: float = 4.0, d_cutoff: float = 1.0):
-        self.min_cutoff, self.beta, self.d_cutoff = min_cutoff, beta, d_cutoff
-        self.reset()
-
-    def reset(self) -> None:
-        self.x: float | None = None
-        self.dx = 0.0
-        self.t = 0.0
-
-    @staticmethod
-    def _alpha(cutoff: float, dt: float) -> float:
-        tau = 1.0 / (2.0 * math.pi * cutoff)
-        return 1.0 / (1.0 + tau / dt)
-
-    def __call__(self, x: float, t: float) -> float:
-        if self.x is None:
-            self.x, self.t = x, t
-            return x
-        dt = t - self.t
-        if dt <= 0.0:
-            return self.x
-        self.t = t
-        a_d = self._alpha(self.d_cutoff, dt)
-        self.dx += a_d * ((x - self.x) / dt - self.dx)
-        a = self._alpha(self.min_cutoff + self.beta * abs(self.dx), dt)
-        self.x += a * (x - self.x)
-        return self.x
 
 
 # ------------------------------------------------------------- settings
@@ -1075,8 +1076,31 @@ def load_units(path: Path | None) -> Units:
     return out
 
 
+def load_room(path: Path | None) -> dict | None:
+    """The room's levelling in the file (plan 51) as ``{"mode", "level"}``,
+    the tracking mode it was made in and its stage → room rotation; None when
+    it has none: no file, no key, ``"room": null``. A bad entry is ignored and
+    said once on stderr."""
+    if path is None or not path.exists():
+        return None
+    try:
+        raw = json.loads(path.read_text()).get("room")
+    except (OSError, ValueError, AttributeError):
+        return None
+    if raw is None:
+        return None
+    ok = (isinstance(raw, dict) and isinstance(raw.get("mode"), str)
+          and raw["mode"] in MODES and is_rotation(raw.get("level")))
+    if not ok:
+        print(f"hands: {path.name}: room: not a mode and a rotation ({str(raw)[:40]!r}); "
+              "the tracking mode's frame", file=sys.stderr)
+        return None
+    return {"mode": raw["mode"], "level": tuple(tuple(float(n) for n in r) for r in raw["level"])}
+
+
 def save_calibration(path: Path, ranges: dict[str, tuple[float, float]],
-                     box: Box | None = None, units: Units | None = None) -> None:
+                     box: Box | None = None, units: Units | None = None,
+                     room: dict | None = None) -> None:
     data = {"schema": CAL_SCHEMA,
             "axes": {k: {"lo": round(lo, 3), "hi": round(hi, 3)}
                      for k, (lo, hi) in ranges.items()},
@@ -1084,6 +1108,9 @@ def save_calibration(path: Path, ranges: dict[str, tuple[float, float]],
             {c: None if box.get(c) is None else [round(n, 3) for n in box[c]]
              for c in BOX_AXES},
             "units": (units or Units()).to_json()}
+    if room is not None:        # only when levelled: an unlevelled file stays as it was
+        data["room"] = {"mode": room["mode"],
+                        "level": [[round(n, 6) for n in row] for row in room["level"]]}
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=1) + "\n")
 
@@ -1299,12 +1326,14 @@ def addresses(axes: list[AxisSettings]) -> list[str]:
     "left.present" / "right.present", then the pinch switches
     ("left.pinch.index" … "right.pinch.pinky"), then each hand's dance
     sources ("left.curl.thumb" … "left.flick", then the right's: `DANCE`),
-    then the grab switches ("left.grab", "right.grab": `grab_name`).
+    then the grab switches ("left.grab", "right.grab": `grab_name`), then
+    each hand's room lanes ("left.room.roll" … "right.room.yaw": `ROOM`).
     The two-hand sources are a scheme of their own: `pair_addresses`."""
     return ([a.name for a in axes] + [f"{s}.present" for s in SIDES]
             + [pinch_name(s, f) for s in SIDES for f in PINCHES]
             + [f"{s}.{k}" for s in SIDES for k in DANCE]
-            + [grab_name(s) for s in SIDES])
+            + [grab_name(s) for s in SIDES]
+            + [f"{s}.room.{k}" for s in SIDES for k in ROOM])
 
 
 def _dance_label(kind: str) -> str:
@@ -1336,10 +1365,10 @@ class Layout:
     so a row keeps its axis whatever order or subset `dofs` lists, and a
     name this rig lacks is dormant. ``hand:<i>`` — the lane at index i —
     still reads, which is why every lane added since goes after the
-    switches (the dance sources, plan 24 C4; then the grab switches, C5):
-    no older lane moves. The labels and the gate list are published beside
+    switches (the dance sources, plan 24 C4; then the grab switches, C5;
+    then the room lanes, plan 51): no older lane moves. The labels and the gate list are published beside
     it (`labels["hand"]`, `gates["hand"]`: the eight pinches, then the two
-    grabs); `presence`, `gate`, `dance` and `grab` are the index maps
+    grabs); `presence`, `gate`, `dance`, `grab` and `room` are the index maps
     `lanes()` and `rests()` fill by. Every count here is derived — a
     caller reads `n`, never a number of its own.
 
@@ -1349,7 +1378,7 @@ class Layout:
     """
 
     __slots__ = ("addresses", "dance", "gate", "gates", "grab", "index", "n", "n_axes",
-                 "names", "pair_addresses", "pair_index", "pair_names", "presence")
+                 "names", "pair_addresses", "pair_index", "pair_names", "presence", "room")
 
     def __init__(self, axes: list[AxisSettings]):
         self.n_axes = len(axes)
@@ -1361,12 +1390,16 @@ class Layout:
                       for i, s in enumerate(SIDES) for j, k in enumerate(DANCE)}
         base += len(SIDES) * len(DANCE)
         self.grab = {s: base + i for i, s in enumerate(SIDES)}
-        self.n = base + len(SIDES)
+        base += len(SIDES)
+        self.room = {(s, k): base + i * len(ROOM) + j
+                     for i, s in enumerate(SIDES) for j, k in enumerate(ROOM)}
+        self.n = base + len(SIDES) * len(ROOM)
         self.names = ([a.label for a in axes]
                       + [f"{s[0].upper()} in" for s in SIDES]
                       + [f"{s[0].upper()} {f[:3]}" for s in SIDES for f in PINCHES]
                       + [f"{s[0].upper()} {_dance_label(k)}" for s in SIDES for k in DANCE]
-                      + [f"{s[0].upper()} grab" for s in SIDES])
+                      + [f"{s[0].upper()} grab" for s in SIDES]
+                      + [f"{s[0].upper()} room {k}" for s in SIDES for k in ROOM])
         self.addresses = addresses(axes)
         self.index = {name: i for i, name in enumerate(self.addresses)}
         self.gates = ([(self.gate[(s, f)], self.names[self.gate[(s, f)]])
@@ -1411,6 +1444,12 @@ class HandsIO:
             source = TapeSource(Path(self.cfg["tape"]), clock)
             self.cfg["mode"] = source.mode
         self.source = source if source is not None else LeapSource(self.cfg["mode"], clock)
+        # the room's levelling (plan 51): the file's entry, kept whole so a save
+        # never loses one this run does not apply; `level` what applies now,
+        # None for the tracking mode's frame
+        self._room_doc: dict | None = load_room(cal_path)
+        self.level: Mat | None = self._level_from(self._room_doc)
+        self._room_m: Mat | None = None       # Leap → room, built when first read
         self.layout = Layout(settings.axes)
         self._rests: list[float] | None = None      # the rests vector last published
         self.error = ""
@@ -1429,6 +1468,11 @@ class HandsIO:
         self.pair = {k: Smooth() for k in PAIR}
         # the grab switches (plan 24 C5): a closed fist, from the curls
         self.grab = {s: Gate() for s in SIDES}
+        # the room lanes (plan 51): each hand's palm in the room's frame
+        self.room = {s: Palm() for s in SIDES}
+        # a levelling in progress: (normal, direction) of each frame's one palm
+        self._level_seen: list[tuple] | None = None
+        self._level_until = 0.0
         self.frame: dict[str, dict | None] = {s: None for s in SIDES}  # native features
         # side → the features of a hand the tracker sees but the box keeps
         # out: absent to everything, drawn hollow on the HANDS page
@@ -1506,7 +1550,9 @@ class HandsIO:
         Then presence (1 in view, 0 not), the pinch switches (1 closed),
         each hand's dance sources (`DANCE`: NaN while the hand is away,
         or for a reading its source cannot give — no skeleton, no curls),
-        and the grab switches (1 a closed fist, 0 open or away)."""
+        the grab switches (1 a closed fist, 0 open or away) and the room
+        lanes (the whole circle, 0.5 level, NaN while away or without a
+        skeleton)."""
         lay = self._layout()
         out = [math.nan] * lay.n
         out[:lay.n_axes] = [st.y if st.follow.live else math.nan for st in self.state]
@@ -1518,16 +1564,20 @@ class HandsIO:
                 for k, v in zip(DANCE, self.dance[s].values()):
                     out[lay.dance[(s, k)]] = v
             out[lay.grab[s]] = 1.0 if self._grabs()[s].on else 0.0
+            for k in ROOM:
+                out[lay.room[(s, k)]] = self._rooms()[s].value(k)
         return out
 
     def rests(self) -> list[float]:
         """Where each lane idles — the axis's own configured rest, so a
         push row centred on it pushes nothing from an absent hand whatever
         the setup says `rest` is; presence, pinches, the dance sources and
-        the grabs 0 (an open, still hand)."""
+        the grabs 0 (an open, still hand); the room lanes level."""
         lay = self._layout()
         out = [0.0] * lay.n
         out[:lay.n_axes] = [float(a.rest_value) for a in self.axes]
+        for i in lay.room.values():
+            out[i] = ROOM_REST
         return out
 
     def pair_lanes(self) -> list[float]:
@@ -1566,11 +1616,77 @@ class HandsIO:
             self.grab = {s: Gate() for s in SIDES}
         return self.grab
 
+    def _rooms(self) -> dict[str, Palm]:
+        """The room lanes' state, made for a HandsIO from before a hot reload."""
+        if getattr(self, "room", None) is None:
+            self.room = {s: Palm() for s in SIDES}
+            self._room_doc = load_room(getattr(self, "cal_path", None))
+            self.level = self._level_from(self._room_doc)
+            self._room_m, self._level_seen, self._level_until = None, None, 0.0
+        return self.room
+
+    @property
+    def on_tape(self) -> bool:
+        """Is a tape playing instead of the camera? It has its own mode and
+        no rig: no levelling applies to it, and none is made or cleared. By
+        what it holds, not `isinstance`: a tape from before a hot reload is
+        an instance of the old class."""
+        return isinstance(getattr(self.source, "tape", None), dict)
+
+    def _level_from(self, doc: dict | None) -> Mat | None:
+        """The levelling that applies now: the file's, unless a tape is
+        playing or it was made in another tracking mode (said once on stderr;
+        the entry stays in the file)."""
+        if doc is None or self.on_tape:
+            return None
+        if doc["mode"] != mode_name(self.cfg["mode"]):
+            print(f"hands: room: levelled in {doc['mode']}, tracking in {self.cfg['mode']}; "
+                  "the tracking mode's frame", file=sys.stderr)
+            return None
+        return doc["level"]
+
+    def _frame(self) -> Mat:
+        """Leap → room, cached until the levelling changes."""
+        if self._room_m is None:
+            mode = self.source.mode if self.on_tape else self.cfg["mode"]
+            self._room_m = frame(mode, self.level)
+        return self._room_m
+
+    def _step_rooms(self, t: float, fresh: bool) -> None:
+        """Each hand's palm in the room, from this frame's skeleton; a hand
+        away, or with no skeleton to read, forgets."""
+        rooms, g = self._rooms(), self.settings
+        for s in SIDES:
+            sk = self.skeleton.get(s)
+            n, d = (sk.get("normal"), sk.get("direction")) if sk else (None, None)
+            axes = palm_axes(n, d, self._frame()) if n and d else None
+            if axes is None:
+                if rooms[s].deg:
+                    rooms[s].reset()
+            elif fresh or not rooms[s].deg:
+                rooms[s].step(axes, t, g.smooth, g.response)
+        if self._level_seen is not None and fresh:
+            self._level_sample()
+
+    def _level_sample(self) -> None:
+        """This frame's palm for a levelling in progress. One hand only: a
+        second one would be averaged in and saved as a wrong rotation, so it
+        ends the levelling, whichever hand pressed the button."""
+        if all(self.present[s] for s in SIDES):
+            self._level_seen = None
+            self.cal_note = "room left as it was (two hands in view: level with one)"
+            return
+        sk = next((self.skeleton[s] for s in SIDES if s in self.skeleton), None)
+        n, d = (sk.get("normal"), sk.get("direction")) if sk else (None, None)
+        if n and d:
+            self._level_seen.append((n, d))
+
     def _layout(self) -> Layout:
         """The layout, rebuilt when it is one from before a hot reload
-        (no address map, no dance, pair or grab lanes)."""
+        (no address map, no dance, pair, grab or room lanes)."""
         if (getattr(self.layout, "pair_index", None) is None
-                or getattr(self.layout, "grab", None) is None):
+                or getattr(self.layout, "grab", None) is None
+                or getattr(self.layout, "room", None) is None):
             self.layout = Layout(self.axes)
         return self.layout
 
@@ -1663,6 +1779,7 @@ class HandsIO:
             msgs += self._pinches(side, s, here, t)
         self._skeletons(skel)
         self._dances(dt, t, fresh)
+        self._step_rooms(t, fresh)
         for i, (a, st) in enumerate(zip(self.axes, self.state)):
             h = hands.get(a.side) if self.present[a.side] else None
             if h is None:
@@ -1692,6 +1809,7 @@ class HandsIO:
                 st.next_ok = now + (1.0 / g.rate if g.rate > 0 else 0.0)
                 msgs += encode(a.out, a.channel - 1, a.number, q)
         self._finish_calibration(now)
+        self._finish_level(now)
         if getattr(self, "out", None) is not None:
             self._deliver(msgs, self._send)
         else:
@@ -1863,6 +1981,8 @@ class HandsIO:
         self._cal = {a.name: [] for a in self.axes}
         self._palm = []
         self._cal_until = self.clock() + seconds
+        self._rooms()
+        self._level_seen = None         # moving palms are no levelling
         self.cal_note = "sweep every axis end to end"
 
     def cancel_calibration(self) -> None:
@@ -1923,6 +2043,73 @@ class HandsIO:
             return f"box: {', '.join(is_open)} open (not swept)"
         return "box " + " × ".join(f"{box[c][1] - box[c][0]:.0f}" for c in BOX_AXES) + " mm"
 
+    @property
+    def levelling(self) -> float:
+        """Seconds left in a levelling, 0 when none is running."""
+        self._rooms()
+        if self._level_seen is None:
+            return 0.0
+        wait = 0.0 if len(self._level_seen) >= CAL_MIN_SAMPLES else LEVEL_WAIT_S
+        return max(0.0, self._level_until + wait - self.clock())
+
+    def start_level(self, seconds: float = LEVEL_S) -> None:
+        """Level the room from the palm held flat for `seconds`: its axes
+        become the room's, so a tilted mount reads level and its fingers
+        point the way "forward" means (plan 51). Not during a sweep, whose
+        palms are moving, and not from a tape, which is not this rig."""
+        self._rooms()
+        if self.calibrating > 0:
+            return
+        if self.on_tape:
+            self.cal_note = "room left as it was (a tape plays in its own frame)"
+            return
+        self._level_seen = []
+        self._level_until = self.clock() + seconds
+        self.cal_note = "levelling: hold one hand flat, fingers forward"
+
+    def clear_level(self) -> None:
+        """Back to the tracking mode's own frame. Not from a tape: the file
+        is the rig's."""
+        self._rooms()
+        if self.on_tape:
+            return
+        self.level, self._level_seen, self._room_doc, self._room_m = None, None, None, None
+        for p in self.room.values():
+            p.reset()
+        self.cal_note = "room: the tracking mode's frame"
+        self.save_ranges()
+
+    def _finish_level(self, now: float) -> None:
+        seen = self._level_seen
+        if seen is None or now < self._level_until:
+            return
+        if len(seen) < CAL_MIN_SAMPLES:
+            if now < self._level_until + LEVEL_WAIT_S:
+                return
+            self._level_seen = None
+            self.cal_note = "room left as it was (too few frames of a palm)"
+            return
+        self._level_seen = None
+        mean = [tuple(sum(p[i][c] for p in seen) / len(seen) for c in range(3)) for i in (0, 1)]
+        level = level_of(mean[0], mean[1], self.cfg["mode"])
+        if level is None:
+            self.cal_note = "room left as it was (no palm to read)"
+            return
+        off = max((_angle(p[i], mean[i]) or 0.0) for p in seen for i in (0, 1))
+        if off > LEVEL_STILL_DEG:
+            self.cal_note = f"room left as it was (the hand moved {off:.0f}°: keep it still)"
+            return
+        if level[1][1] < math.cos(math.radians(LEVEL_TILT_DEG)):
+            self.cal_note = "room left as it was (hold the palm flat, facing down)"
+            return
+        self.level = level
+        self._room_doc = {"mode": mode_name(self.cfg["mode"]), "level": level}
+        self._room_m = None
+        for p in self.room.values():       # the frame moved: no step across it
+            p.reset()
+        self.cal_note = f"room levelled on {len(seen)} frames"
+        self.save_ranges()
+
     def reset_ranges(self) -> None:
         for a, st in zip(self.axes, self.state):
             st.lo, st.hi = default_range(a.side, a.feature)
@@ -1948,7 +2135,8 @@ class HandsIO:
         try:
             save_calibration(self.cal_path,
                              {a.name: (st.lo, st.hi) for a, st in zip(self.axes, self.state)},
-                             getattr(self, "box", None), getattr(self, "units", None))
+                             getattr(self, "box", None), getattr(self, "units", None),
+                             getattr(self, "_room_doc", None))
         except OSError as e:
             self.cal_note = f"save: {e}"[:120]
 

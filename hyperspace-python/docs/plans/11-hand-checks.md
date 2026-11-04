@@ -7533,6 +7533,47 @@ plan 50 copied back from the backup into `patches/`)
 preset and an **Update patch** write `patch/2`. Fail: "is not a
 hyperspace.patch".
 
+## BN. Deck 2 offscreen and the one fade (plan 44 D4)
+Register rows 648–653, 2026-11-03. Headless and on GL:
+`tests/test_deck_fade.py` (deck 2 at `xfade` 1 equals deck 1 on the same
+preset byte for byte over the corpus, half white over black within one step,
+a raise in deck 2 costing the on-air deck nothing) and `tests/test_deck.py`.
+Deck 2 is empty in this build, so every fade here goes to **black**; that is
+the test. Learning a fader adds a row to `bindings.json`: clear it after 493.
+**489. Nothing changes at 0.** (the rig, a heavy preset)
+1. Launch, load `party-trip`, leave it a minute.
+2. Open SYSTEM, the GPU lines.
+*Pass:* (1) the picture and frame rate as on the last build. (2) the usual
+block, then "deck 2: off air, draws nothing". Fail: a stall, a changed picture,
+or anything else of deck 2 on any page.
+**490. A learned fader fades, under the dim.** (the APC40 on)
+1. Learn `output.xfade` onto a free fader (the crossfader stays the dim).
+2. Raise it slowly to the top and back.
+3. At half, pull the crossfader down.
+*Pass:* (2) the picture goes smoothly to black and back, with no step at either
+end; SYSTEM shows "deck 2 gpu per node" while it is up. (3) the dim still dims
+the half-faded picture to black. Fail: a jump, or the crossfader moving the fade.
+**491. Every output fades together, and the sound stays.** (the rig's two
+outputs and a Syphon or NDI publish, a preset with a clip with sound on a
+channel and a live feed on another)
+1. Raise the fade to half.
+*Pass:* both windows and the receiver show the same half-faded picture, the
+flips and each window's own dim as before; the clip's sound does not change
+through the fade; the Syphon feed does not stutter. Fail: one output unfaded,
+or the sound dipping.
+**492. The dream stays with the deck on air.** (`[dream] enabled`, a preset
+with the dream on; deck 2 is empty, so it has no dream to take the worker)
+1. Raise the fade to half, for ten seconds, and bring it back to 0.
+*Pass:* deck 1's dream keeps deepening under the fade and is not restarted at
+0; SYSTEM's dream line keeps counting. Fail: the dream freezes or wipes. (A deck
+2 with a dream takes the worker from D5 on; the tests cover the lend.)
+**493. No file moved.** (after 489–492, `git`-free: Finder's dates)
+1. Quit, note the dates on the show, the presets and `bindings.json`.
+2. Launch and quit without touching anything.
+*Pass:* no date moves but `windows.json`'s; the fade is back at 0 at launch;
+the fader's row is the only change 490 made to `bindings.json`. Fail: a preset
+or the show rewritten.
+
 ## BO. The base chase: commit the performer into the base (plan 52)
 Register rows 654–656, 2026-11-03. Headless: `tests/test_base_chase.py`
 (what shows while held against a twin the verb never touches, no jump at a
@@ -7568,6 +7609,133 @@ or the swing running off the end of the range.
 *Pass:* (1) the button stays dark and neither the projector nor the panel ticks
 move. (2) HOLD lets the verb go with no step on the projector; DROP lands what
 showed when HOLD was pressed, the commit in it. Fail: the projector jumps.
+
+## BS. The panel fold, stage 3: the rail gone, `ui.page` the focus (plan 49)
+Register rows 668–672, 2026-11-03. Headless: `tests/test_ui_pane.py` (the
+four new sections at 240 and 320 px, nothing past the pane's edge; every
+slot a section but GRAPH's; the focus and the fold; the focused header at
+the pane's top; the band growing; `graph_selected` live; no router),
+`tests/test_ui_shell.py`'s dimming tests, the bodies' own tests through
+`page_frame`. A restart after pulling. Earlier checks that say "open the X
+page" now mean: focus the X section (click its header, or the row).
+**506. A saved row still lands.** (Mac, the rig's bindings, a key or pad row
+that sets `ui.page` if the rig has one; else GRAPH's **open on …** chip)
+1. Press the row; ⌘[ and ⌘] after a few.
+Right if: there is no rail; the section of the page's name comes up each
+time, at the top of the pane; GRAPH never leaves the screen; the slot that
+named GRAPH lets the section go. Wrong if: another section comes up than the
+page's name, or the canvas blanks.
+**507. Walking the sections leaves no mess.**
+1. Walk ten sections with ⌘] or a row, then quit and relaunch.
+Right if: each comes up with room (not a 160 px slit) and the one before
+folds back; the headers after it stay in view; the fold you last clicked is
+what comes back. A click on another header unfolds it and the focused one
+stays. Wrong if: everything is left open, or the pane jumps while you drag a
+fader in the focused section.
+**508. The four new sections read at the pane's width.** (the control window
+at launch size, the grip at its narrowest, then at 320 px, then the desk up)
+1. view, routing, hands (tracker on), system, each in turn; a preset strip.
+Right if: every control can be reached, nothing runs past the edge, long
+lines wrap. With the desk up (the narrow panel) the band is tall while a
+section is focused and a chip brings it back to its small height. Wrong if: a
+row overlaps, or a control cannot be reached by scrolling.
+**509. The feel at a show, and a picked control.**
+1. Pick a desk control on the diagram. Click a param in the view section.
+2. Pick again, focus routing: its line is framed and it is not dimmed.
+3. With a heavy preset (the show's biggest), any section focused: watch the FPS
+   readout against the same preset before this build (GRAPH always drawn).
+Right if: 1 maps it; 2 reads as before; 3 no frame cost you can see. Wrong if:
+headers go dead while picking, or the panel drops the output's frame rate.
+
+## BT. Video audio 4 of 4: sync and varispeed (plan 45 V4)
+Decision register rows 673–677. A channel's sound now follows its transport
+at any rate, in either direction, and the occasional click at rate 1 that
+checks 437 and 446 expected is gone: a click there is now a fail. No restart
+is needed after updating, though one does no harm.
+**510. Rate 1 stays in sync, with no clicks, for ten minutes.** (Mac, speakers or headphones, a show video with speech or a clear beat)
+Headless: `tests/test_media_varispeed.py` (`test_rate_1_with_the_clocks_out_of_phase_repeats_and_skips_nothing`,
+`test_a_slower_audio_clock_is_held_in_sync_by_a_bend_too_small_to_hear`).
+1. Slot the video on channel A, wire it to an output, tick `audio` on A.
+2. Let it play ten minutes. Open a heavy preset partway through, so the frame
+   rate drops for a moment.
+*Pass:* no clicks; lips or hits stay on the picture, and stay there after the
+frame-rate drop; SYSTEM's `media sound` line shows no read errors. Fail: a
+regular tick, a wow in the pitch (the slew's `DEAD` or `TAU_S` wants tuning),
+or the sound walking away from the picture.
+**511. Rate, reverse and a stop sound like tape.** (Mac, same clip)
+Headless: `test_any_rate_reads_that_many_samples_a_sample`,
+`test_a_rate_change_glides_inside_one_block`,
+`test_rate_0_is_silence_after_one_block_fading_and_reads_nothing`.
+1. Move A's `rate` slowly through 2, 1, 0.5, 0, −0.5, −1, −2, and back.
+2. Spin `jog` and let it go.
+3. Set the rate to 0 and listen; set it back to 1.
+*Pass:* pitch follows the rate with no stutter, and reverse is the clip
+backwards; the jog is a platter spun and coasting out; rate 0 is true silence,
+with no hum and no click in or out. Fast rates sounding harsh is the linear
+resampler: note it, and whether a windowed sinc is worth it (row 674).
+**512. Loop wraps: a short clip, and one over two minutes.** (Mac, a clip cut to loop, a clip not cut to loop, a clip over two minutes)
+Headless: `test_a_loop_wrap_reads_straight_through_the_seam_in_order`,
+`test_a_short_clip_needs_no_prefetch_a_whole_track_wraps_on_what_it_holds`,
+`test_a_long_tracks_wrap_fades_out_and_back_when_the_window_arrives`.
+1. Loop the clip cut to loop, with `loop` on, at rate 1, then at −1.
+2. The same with the clip not cut to loop.
+3. Scrub the long clip near its end and let it wrap. Do this from a cloud-only
+   file too.
+4. Set `pingpong`, then `once`, and let each reach its end.
+*Pass:* the clip cut to loop is seamless; the one not cut has at most the click
+of its own two ends (decide: is that acceptable, row 675?); the long clip has a
+brief soft gap at the wrap, back on the picture when it returns (decide: is it
+short enough, row 676?); pingpong turns round; `once` fades out at the end and
+stays silent. Fail: a gap on the short clip, or a long clip's sound coming back
+off the picture.
+**513. A scrub and a drag, with the analyzer listening.** (Mac, same clip)
+Headless: `test_a_far_scrub_is_a_crossfade_within_one_block_then_on_the_transport`,
+`test_a_drag_of_pos_reads_at_the_speed_of_the_drag`,
+`test_the_mix_still_lands_in_the_analyzers_ring_as_it_is_heard`.
+1. AUDIO: *Listen to video sound*.
+2. Click `pos` far away. Then drag it slowly, at rate 1 and at rate 0.
+3. Learn an LFO to `pos`, slow.
+*Pass:* the far click is a soft cut landing with the picture; the drag sounds
+like tape under a thumb, and silent as soon as a rate-0 drag rests; the LFO
+sounds like a scratch and not a stutter; the meters follow what is heard all
+through. Fail: a click on the cut, or the meters moving when the sound is silent.
+
+## BU. The room lanes (plan 51 O1)
+Register rows 678–681, 2026-11-03. **Nothing here has run on a real sensor**:
+`tests/test_hands_room.py` plays tapes written from computed poses through
+`TapeSource` and `HandsIO`, and that is the whole of the proof. No preset or
+binding uses these lanes yet. To read them: HANDS page, the `L room` and `R
+room` bars (roll, pitch, yaw); hover a bar for its address and value.
+**514. The signs in the room.** (the Mac with the Leap, the mode you use)
+1. A flat hand, palm down, fingers away from you: read the bars.
+2. Swing the fingers left; raise them; raise the hand's right edge.
+3. The same with the other hand.
+*Pass:* (1) all three at the middle, within a few degrees. (2) Yaw, then
+pitch, then roll each climbs by itself. (3) The same direction on both
+hands. Fail: a bar falls, two bars move together for one turn, or the hands
+disagree. In screentop or HMD the table was never measured: a whole-frame
+error there is the table's, `room.MODES` and `ghost.MODES` together.
+**515. The seam, and over the top.** (same)
+1. Hold the palm turned up, on and around the roll bar's end.
+2. Bring the fingers up to vertical and on over, toward yourself.
+3. Fingers vertical, twist the hand about them; lower it again.
+*Pass:* (1) the bar sits at its ends and jumps between them, without a
+crawl through the middle. (2) Pitch keeps climbing and neither other bar
+jumps by half a turn. (3) Roll carries the twist; on the way down yaw may
+step, up to a quarter turn, the one step this design keeps (row 679). Say if
+it is more than a tracker glitch would be: O2 would need a guard.
+**516. Level room, a lost hand, and stillness.** (same)
+1. Open **feel & calibration**, one hand in view, hold it flat, press **level
+   room** with the mouse, hold it a second; if you can, with the Leap on a wedge
+   first. Then try it with both hands in view: it should refuse in words.
+2. Check 514's first step, restart the app, and again.
+3. Take the hand out of view and bring it back turned.
+4. Hold it still for ten seconds with no support.
+*Pass:* (1) the note says levelled; the bars read level on that pose. (2)
+They still do after the restart; **clear** goes back. (3) The bars go hollow
+at once, and come back at the new angle without a glide. (4) The bars do not
+visibly shimmer: this filter is the page's `smooth` and `response`, untuned
+for a camera. Fail: a shimmer you would see on a shape (tell O2 to tune it).
 
 ## What no test covers
 
@@ -7703,6 +7871,10 @@ Only a person can settle these:
   - that the control window sees this frame's thumbnails (`_thumbnails` flushes);
   - the face patterns themselves (375), which only the owner can name;
   - the moved effect's area frame on a preset saved before plan 37 (376).
+- video sound by ear (510–513): the tests read a ramp through the callback by
+  hand with no audio device, so the slew's numbers, the linear resampler's
+  sound above rate 1, an uncut clip's seam and a long clip's gap at its wrap
+  are for a person;
 - NanoVG in the control window on the Mac's GL (417): the tests draw the
   lab's drawings through a stand-in NanoVG, and the shots were rendered
   on Mesa's software rasteriser; one look on Dillon's Mac so far.

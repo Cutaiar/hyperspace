@@ -1041,7 +1041,7 @@ class Project:
             if hook is not None:
                 hook(name)
         # a session group the show names no module preset for: clean as the
-        # show left it — the rail's dot compares against the show, not fresh
+        # show left it — the section's dot compares against the show, not fresh
         # defaults (plan 14 WP4)
         if lib.reg is not None:
             named = {g for g, _n, _d in docs}
@@ -2415,7 +2415,7 @@ class Library:
         module label (plan 13 D3): the strip shows the name and a clean
         dot, and nothing is loaded. None: no module preset, but the state
         as it stands is still what "clean" means — a preset that names no
-        module for the group landed it, and the rail's dot compares against
+        module for the group landed it, and the section's dot compares against
         that, not fresh defaults (plan 14 WP4)."""
         loaded = self.reg.snapshot(group) if self.reg is not None else None
         self._landed(group, name, loaded)

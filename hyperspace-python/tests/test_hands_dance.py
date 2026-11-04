@@ -119,7 +119,7 @@ def test_the_new_lanes_follow_the_switches_and_no_older_lane_moves():
     names = hands.default_addresses()
     assert names[:22] == OLD and names[22:38] == NEW
     lay = hands.Layout(HandSettings.from_config({}).axes)
-    assert lay.n == 40 == len(lay.names) and lay.addresses == names
+    assert lay.n == 46 == len(lay.names) and lay.addresses == names
     assert lay.names[22:30] == ["L curl thu", "L curl ind", "L curl mid", "L curl rin",
                                 "L curl pin", "L spread", "L energy", "L flick"]
     assert all(lay.dance[(s, k)] == names.index(f"{s}.{k}")
@@ -145,7 +145,7 @@ def test_the_hands_scheme_is_published_like_the_hand_one():
     assert router.gates["hands"] == []                    # no switches among them
     assert router.rests["hands"] == [0.0, 0.5]            # gap closed, twist level
     assert router.rests["hand"][22:38] == [0.0] * 16      # the dance lanes rest at 0
-    assert len(router.fed["hand"]) == 40 and len(router.fed["hands"]) == 2
+    assert len(router.fed["hand"]) == 46 and len(router.fed["hands"]) == 2
     # a source that is not live: both schemes let go
     r.io.source = NS(on=False, status="lost", latest=lambda: (0, 0.0, {}))
     _play(r, 2, router)
@@ -426,7 +426,8 @@ def test_the_hands_page_shows_every_new_source(monkeypatch, tmp_path):
             drawn.clear()
             frame(rig.panel, "hands")
         got = {a: v for a, v, _ in drawn}
-        assert set(got) == {f"hand:{n}" for n in NEW} | {"hands:gap", "hands:twist"}
+        room = {f"hand:{s}.room.{k}" for s in hands.SIDES for k in hands.ROOM}     # plan 51
+        assert set(got) == {f"hand:{n}" for n in NEW} | room | {"hands:gap", "hands:twist"}
         assert got["hand:right.curl.index"] == pytest.approx(1.0, abs=1e-3)
         assert max(x for *_, x in drawn) <= CONTROL_SIZE[0]
 

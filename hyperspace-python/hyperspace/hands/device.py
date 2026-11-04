@@ -32,7 +32,7 @@ class HandsDevice(Base):
     """`hands.HandsIO` as a device. Its `wants` are the two hands (a Learn
     armed "hand:left" completes from the left hand's axes only); its
     `schemes` and `feeds` are ``hand`` (each hand: axes, presence, switches,
-    the dance sources, the grab) and ``hands`` (the two together: gap,
+    the dance sources, the grab, the room lanes) and ``hands`` (the two together: gap,
     twist). Status: `connected` while the tracker (or a tape) gives
     frames, `lost` while it looks for one, ``error: …`` when the tracker
     says why it cannot."""
@@ -79,13 +79,14 @@ class HandsDevice(Base):
         (group ``axes``, with their rests and whether they are centred),
         the switches (``switches``: the pinches and the grabs, the layout's
         `gates`), the presence lanes (``presence``), the dance sources
-        (``dance``) — all under ``hand`` — then the pair's lanes under
+        (``dance``), the room lanes (``room``, plan 51) — all under ``hand`` — then the pair's lanes under
         ``hands`` (gap, twist; group ``dance``). Counts are the layout's."""
         io = self.io
         if io is None:
             return ()
         lay, axes, rests = io.layout, io.axes, io.rests()
         gates = dict(lay.gates)
+        room = set((getattr(lay, "room", None) or {}).values())   # hot reload: a layout from before
         out = []
         for i, (addr, label) in enumerate(zip(lay.addresses, lay.names, strict=True)):
             if i < lay.n_axes:
@@ -95,6 +96,9 @@ class HandsDevice(Base):
                 out.append(Port(addr, label, group="switches", scheme="hand"))   # pinches, grabs
             elif addr.endswith(".present"):
                 out.append(Port(addr, label, group="presence", scheme="hand"))
+            elif i in room:
+                out.append(Port(addr, label, rest=rests[i], bipolar=True, group="room",
+                                scheme="hand"))
             else:   # plan 24 C4's dance sources (curl, spread, energy, flick)
                 out.append(Port(addr, label, rest=rests[i], group="dance", scheme="hand"))
         pair = getattr(lay, "pair_addresses", None) or []
