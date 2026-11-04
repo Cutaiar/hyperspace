@@ -164,15 +164,16 @@ AUTO = "auto"            # the chip that gives a push row its source's rest back
 GATE_W = 62.0            # the pinch-gate combo on line 2
 MACRO_LABEL_W = 22.0     # a knob's number beside it; the section says "macros"
 MACRO_NAME_W = 96.0      # a macro's editable label
+MACRO_SLIDER_MIN = 60.0  # the knob's slider beside the chips, or the chips under it
 SUB_W = 58.0             # a subscriber's from / to fields
 CONTROL_W = 56.0         # the desk and session lines' control column: a glyph (plan 14 WP7)
 INDENT = 18.0            # a subscriber line under its macro
 PROMPT = "replace##routing"   # the Replace / Keep modal's popup id
 PROMPT_W = 360.0
 FIND_W = 120.0           # the filter field on the pointer line
-POINTER = "routes and modifiers: the GRAPH page"     # plan 28 N7: where they went
-POINTER_TIP = ("The routes and the modifiers are edited on the GRAPH page now — drag a "
-               "cable, select it for its row; click to go there")
+POINTER = "routes and modifiers: on the canvas"     # plan 28 N7: where they went
+POINTER_TIP = ("The routes and the modifiers are edited on the canvas now — drag a "
+               "cable, select it for its row in the selection section")
 # the feel chip (motion.py) cycles auto → follow → spring → still → auto:
 # auto is the source's own feel (Router.feel_of), still turns even that off
 FEEL_CYCLE = (None, "follow", "spring", "off")
@@ -685,7 +686,6 @@ def ctx_item(panel, p: Param) -> None:
         b = add_route(panel, real.id)
         if b is not None:           # plan 28 N7: GRAPH selects it, its row in the pane
             _state(panel)["reveal"] = b
-        panel.reg["ui.page"].set(ui.PAGE_KEYS.index("graph"))     # plan 28 N7: the routes' page
 
 
 # ---- the rows ----
@@ -1203,7 +1203,7 @@ def _preset_line(panel, pr, table) -> None:
     imgui.text(cur or ("—" if pr is not None else "no preset library"))
     if imgui.is_item_hovered():
         ui.tooltip("The loaded preset: its routes, its desk and its macros are "
-                          "this page. A learn or an edit here changes it — the dot — "
+                          "this section. A learn or an edit here changes it — the dot — "
                           "and writes nothing until save" if cur else "no preset loaded")
     edited = pr is not None and cur is not None and ui_presets.dirty(panel, PRESETS)
     rects = ui_presets._state(panel)["rects"]
@@ -1215,14 +1215,17 @@ def _preset_line(panel, pr, table) -> None:
     layer = f"desk layer: {'global' if glob else 'preset'}"
     word = ui_presets.save_label(lib, PRESETS) if lib is not None else "save"
     sp = imgui.get_style().item_spacing.x
-    imgui.same_line(imgui.get_content_region_avail().x
-                    - ui.chip_w(word, "as…") - ui._micro_width(layer) - sp)
+    # flush right; in a narrow pane on a row of its own (plan 49 stage 3)
+    right = ui.chip_w(word, "as…") + ui._micro_width(layer) + sp
+    avail = imgui.get_content_region_avail().x
+    if imgui.get_item_rect_max().x + sp + right <= imgui.get_cursor_screen_pos().x + avail:
+        imgui.same_line(avail - right)
     ui._micro(layer, ui.RED if glob else ui.DIM)
     if imgui.is_item_hovered():
         ui.tooltip("The desk's layer — SHIFT latches it (desk.shift). Global: "
                           "the session's controls, never learned (a learn is refused); "
                           "preset: the loaded preset's desk. A preset load drops to it.")
-    imgui.same_line()
+    ui.beside(ui.chip_w(word, "as…"))
     # the preset strip's own save chip,
     # lit while there is something to save (plan 19 WP5)
     if lib is None:
@@ -1591,8 +1594,12 @@ def macros(panel, router: Router) -> None:
         if changed:
             _macro(table, p.id).label = text
         imgui.same_line()
-        panel._slider(p.id, -(ui.chip_w("+ base", "+ depth") + sp))
-        imgui.same_line()
+        # plan 49 stage 3: in a narrow pane the chips go on a row of their own
+        chips = ui.chip_w("+ base", "+ depth") + sp
+        roomy = imgui.get_content_region_avail().x - chips >= MACRO_SLIDER_MIN
+        panel._slider(p.id, -chips if roomy else -1)
+        if roomy:
+            imgui.same_line()
         if ui.chip("+ base"):
             q = panel.reg.get("view.bright") or base_targets(panel)[0]
             # from where the param sits to its fader's end (row 537)
@@ -2003,15 +2010,13 @@ def page(panel, dt: float) -> None:
         if imgui.is_item_hovered():
             ui.tooltip("The filter hides the rest — × beside it shows every row")
     else:
-        # plan 28 N7: the routes and the modifiers are the GRAPH page's now;
-        # their line here points there (a click opens it)
+        # plan 28 N7: the routes and the modifiers are the canvas's now;
+        # their line here points there
         room = (imgui.get_content_region_avail().x - _find_w(False)
                 - imgui.get_style().item_spacing.x)
         imgui.text_disabled(ui.fit_text(POINTER, room))
         if imgui.is_item_hovered():
             ui.tooltip(POINTER_TIP)
-        if imgui.is_item_clicked():
-            panel.reg["ui.page"].set(ui.PAGE_KEYS.index("graph"))
     _find_field(panel)
     imgui.dummy(imgui.ImVec2(0, 0))             # ends the line the field leaves open
     # the desk, the macros, the session and the sinks scroll together if
