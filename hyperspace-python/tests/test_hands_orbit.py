@@ -419,7 +419,9 @@ def test_the_op_chip_goes_between_position_and_turn_from_a_room_lane():
     assert ui_routing._next_op(room, True) == "position"
     room.op = "position"
     assert ui_routing._next_op(room, True) == TURN_OP
-    assert ui_routing._next_op(room, False) == "position"       # a clamped target: as row_for
+    assert ui_routing._next_op(room, False) == "push"           # a clamped target: as ever
+    room.op = "push"
+    assert ui_routing._next_op(room, True) == ui_routing._next_op(room, False) == "position"
     plain = Binding("lane:0", "camera.yaw", "position")
     assert ui_routing._next_op(plain, True) == "push"
     assert ui_routing.OP_CHIP[TURN_OP] == "turn"
@@ -432,9 +434,38 @@ def test_flipping_to_turn_lands_as_a_wire_does():
     assert (row.op, row.when, row.motion) == (TURN_OP, GRAB, None)
     ui_routing._flip_op(row, True)
     assert row.op == "position" and row.motion is None          # no stale spring back
+    assert row.when is None                                     # the clutch it landed with
     chosen = Binding(YAW, "camera.yaw", "position", when="hand:right.pinch.index")
     ui_routing._flip_op(chosen, True)
     assert chosen.when == "hand:right.pinch.index"
+    ui_routing._flip_op(chosen, True)
+    assert (chosen.op, chosen.when) == ("position", "hand:right.pinch.index")
+
+
+def test_the_chip_always_moves_a_room_row_on_a_clamped_target():
+    row = Binding(YAW, "view.bright", "position")
+    seen = []
+    for _ in range(3):
+        ui_routing._flip_op(row, False)
+        seen.append(row.op)
+    assert seen == ["push", "position", "push"]
+
+
+def test_a_pass_with_no_dt_runs_a_closure_through_its_grace(app, tmp_path):
+    """`modulate` makes a None dt its 60 Hz frame before `_end_turns` reads it."""
+    p = app.reg["camera.yaw"]
+    seen = []
+
+    def each(io, k):
+        app.router.modulate()
+        app.reg.apply()
+        seen.append(p.base)
+
+    script = closing() + [fist(yaw=float(k)) for k in range(11)] + opening(yaw=10.0)
+    play(write(tmp_path / "t.json", script + [opened(yaw=10.0)] * LONG_OPEN),
+         router=app.router, each=each)
+    assert math.degrees(seen[-1]) == pytest.approx(10.0, abs=0.3)
+    assert not app.router.__dict__["_turn_held"]
 
 
 def test_moving_to_the_other_hand_takes_its_clutch(app):
@@ -493,6 +524,9 @@ def test_a_cable_moved_on_the_graph_lands_as_a_wire_does(tmp_path):
         row = table.owner("camera.yaw")
         view = graphview.build(table, reg, rig.router, None, None, None)
         e = graphview.Edit(table, reg, rig.router, view)
+        # refused: nothing about the row moves, its op and clutch least of all
+        assert isinstance(e.move("mod:camera.yaw", "mod:no.such.param"), graphview.Refusal)
+        assert (row.target, row.op, row.when) == ("camera.yaw", TURN_OP, GRAB)
         got = e.move("mod:camera.yaw", "mod:view.bright")
         assert not isinstance(got, graphview.Refusal), got
         assert row.target == "view.bright" and (row.op, row.when) == ("position", None)

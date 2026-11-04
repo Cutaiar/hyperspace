@@ -184,8 +184,11 @@ wrapping param and clamped on any other continuous one. It never calls
 - **It is a performer.** In `MOD_OPS`, so it owns its target under the referee,
   is saved with the preset's routes, is drawn on GRAPH and is listed on ROUTING,
   where the op chip goes `position` ↔ `turn` from a room lane on a wrapping
-  target. The chip's flip lands as a wire does: the hand's clutch if the row has
-  no gate, and no feel. ROUTING draws no feel chip on a turn row. A scene-setter
+  target (elsewhere it goes `push` ↔ `position`). The chip's flip lands as a wire
+  does: the hand's clutch if the row has no gate, and no feel. Flipping back takes
+  that clutch off and leaves a gate someone picked; a row does not say who set it,
+  so a person picking that same hand's grab is read as the automatic one (the same
+  in `land_moved`). ROUTING draws no feel chip on a turn row. A scene-setter
   (a knob, the pad's stick) still writes the same base.
 - **Dormant without a circle or a clutch.** A source that is no whole-circle lane
   has no shortest way (a linear 0.1 to 0.8 is not −0.3). A row with no `when`

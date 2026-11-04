@@ -360,6 +360,12 @@ def clutch_of(source: str) -> str:
     return f"{head}:{name.partition('.room.')[0]}.grab"
 
 
+def is_auto_clutch(source: str, when: str | None) -> bool:
+    """Is `when` the gate a room lane lands with? A row does not say who set it,
+    so a person picking that very gate is read as the automatic one."""
+    return whole_circle(source) and when == clutch_of(source)
+
+
 def row_for(source: str, p: Param, when: str | None = None, *,
             centred: bool = False, depth: float | None = None) -> Binding:
     """The row a hand learn makes (plan 18 WP3): its op and depth.
@@ -436,8 +442,7 @@ def land_moved(b: Binding, old_source: str, p: Param | None) -> None:
     that is no circle becomes that target's row; a turn stays at its depth."""
     if p is None or (b.op != TURN_OP and not whole_circle(b.source)):
         return
-    auto = whole_circle(old_source) and b.when == clutch_of(old_source)
-    new = row_for(b.source, p, None if auto else b.when)
+    new = row_for(b.source, p, None if is_auto_clutch(old_source, b.when) else b.when)
     if b.op == new.op == TURN_OP:
         b.when = new.when
         return
@@ -445,11 +450,12 @@ def land_moved(b: Binding, old_source: str, p: Param | None) -> None:
 
 
 def move_route(table: Bindings, reg: Registry, b: Binding, *, source: str | None = None,
-               target: str | None = None) -> None:
+               target: str | None = None):
     """`Bindings.move_route`, and the row landing as `row_for` would (`land_moved`)."""
     old = b.source
-    table.move_route(b, source=source, target=target)
+    got = table.move_route(b, source=source, target=target)
     land_moved(b, old, reg.get(b.target))
+    return got
 
 
 class Learn:

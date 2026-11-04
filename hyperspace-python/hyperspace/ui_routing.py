@@ -125,7 +125,7 @@ from imgui_bundle import imgui
 
 from . import apc40, motion, ui, ui_feel, ui_presets, undo
 from .bands import CEIL
-from .learn import LANE_DEPTH, clutch_of, land_moved, move_route
+from .learn import LANE_DEPTH, clutch_of, is_auto_clutch, land_moved, move_route
 from .library import PRESETS
 from .modifiers import KINDS as MOD_KINDS
 from .modifiers import PARAMS as MOD_PARAMS
@@ -1287,23 +1287,25 @@ def _control_cell(table, b: Binding, color=None) -> None:
 def _next_op(b: Binding, wraps: bool) -> str:
     """What the op chip's click makes of a row: a whole-circle lane on a
     wrapping target goes between position and turn (plan 51), as `row_for`
-    would land it."""
+    would land it; anything else between push and position, as ever."""
     if b.op == "position" and wraps and whole_circle(b.source):
         return TURN_OP
-    if b.op == TURN_OP or not whole_circle(b.source):
-        return NEXT_OP.get(b.op, "push")
-    return "position"
+    return NEXT_OP.get(b.op, "push")
 
 
 def _flip_op(b: Binding, wraps: bool) -> None:
     """The op chip's click. Landing on `turn` is landing as a dropped wire does:
     the hand's clutch if the row has no gate, and no feel, so an old spring does
-    not come back unseen when it flips away again."""
+    not come back unseen when it flips away again. Leaving `turn`, the hand's own
+    clutch goes with it, as `land_moved` does, and a gate someone picked stays."""
+    was = b.op
     b.op = _next_op(b, wraps)
     if b.op == TURN_OP:
         b.motion = None
         if b.when is None:
             b.when = clutch_of(b.source)
+    elif was == TURN_OP and is_auto_clutch(b.source, b.when):
+        b.when = None
 
 
 def _op_text(b: Binding) -> str:
