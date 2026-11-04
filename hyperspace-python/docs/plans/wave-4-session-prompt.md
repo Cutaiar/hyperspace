@@ -96,21 +96,63 @@ tuned to facilitate a performance and should not be actively modified during one
   serials") are the seam. Today's bare `pad:` and `axis:` rows read as player 1, with
   no file change. See PL.
 
-**Pending from this round:**
-- **Q8.** A player's deck across a TAKE. Rec: a player follows a duty, not a slot:
-  "on air" stays on air through a swap, "off air" moves to the deck off air.
-- **U1.** Which stack ⌘Z takes. Rec: by where you are. The panel's slot, except inside
-  a meta section (analyzer, hands, output), which takes the meta stack. Not newest of
-  all stacks: a ⌘Z meant for a knob on B must not undo an analyzer tweak from an hour ago.
-- **U2.** What "scoped to its preset" does at a load. Rec: a load is a step on the
-  slot's stack, as today, so ⌘Z recovers a mistaken load. A swap leaves each stack with
-  its slot.
-- **Q9.** Routes onto the meta controller. Today a preset may route onto `master.gain`
-  (TUMBLE does; D4 lets only the lead deck land it). Under "we don't want to automate
-  them", should a route onto a meta param be refused? Rec: leave existing rows running,
-  and stop offering them in the picker, until a library count says what breaks.
+**Third round, 2026-11-04.**
+- **Two slots only: on air and off air.** Not four yet. Row 556's "N free" waits.
+- **Q8 answered, players and duties.** A player registers any number of controllers
+  and holds a duty: on air or off air. It stays until someone moves it. An off-air
+  player stays with the off-air preset. The workflow to serve: explore a new preset on
+  the graph, promote it, then join Dylan exploring it on air.
+- **PS, the player select screen.** Like a console party game's team screen: every
+  active player, the controllers they hold, and two lanes, On Air and Off Air. Move a
+  player across by stick or mouse. It must be effortless. Built on PL.
+- **Q9 answered: a hard rule.** No route from a preset onto a meta param. Tuning like
+  `master.gain` happens before the show, and the refusal shows quickly which meta params
+  belong in the preset. Item MR. Read-only count of the Drive library, 2026-11-04: **49
+  rows in 48 of 110 presets are one row, `hand:left.y → master.gain`, push 0.375**,
+  copied down from `party-tumble`; 2 more are `axis:RX → master.dyn`. So the rule's first
+  visible result is that the left hand stops driving audio in those looks.
+- **U1, U2 as recommended:** ⌘Z by where you are; a load is a step on the slot's stack.
+- **Q1, Q2 as recommended:** merge on green for wave 4; checks 489–492 before D5d, and
+  506–509 before N1.
+- **The names (SEM).** The code's concepts must come to follow the owner's words, once.
+  See "The semantic migration" below.
 
-Merge authority and the merge gates (Q1, Q2) are still open.
+**Still open:** the smaller questions below (DQ1, DQ3–DQ8, NQ2, NQ4–NQ8), plus PS1 and
+MR1 from this round.
+- **PS1.** A stick is already doing a job. Rec: while the screen is open, an off-air
+  player's stick moves their token; an on-air player's stick keeps playing the room, so
+  it does not cut the picture, and that player moves by a held button or the mouse.
+- **MR1.** A preset with such a row at load. Rec: drop it with a note, as a non-modulatable
+  target is today; **a later save then removes it from that file for good**, which is the
+  discovery you asked for, and the note names it first. A rig desk row (the APC's MASTER
+  fader on `master.gain`) is the meta controller's own control and stays.
+
+## The semantic migration (SEM)
+
+**Slot it right after D5d, as stage 4.5.** D5d deletes `hold.py` and settles the deck
+model; before it, the names are still moving, and from stage 5 four parallel lanes write
+new code against them. It is a rename and nothing else, so it needs a quiet moment rather
+than a long one: no other PR open, one builder, goldens unmoved, a mechanical diff.
+
+| The owner's word | The code today | Note |
+| --- | --- | --- |
+| meta controller | session (`SessionRegistry`, `SessionTable`, `part_of == "session"`; 486 uses of `session`), and `rig` (517 uses, `RigWires`, `RigMade`) | Whether rig and session are one word, and what "the rig goes away" means, must be settled first |
+| slot (on air, off air) | `Deck` | **The mismatch to fix first:** the owner's "deck" is close to the whole device, while `Deck` is one slot |
+| analyzer | `band` (336 uses) | Words in AZ; ids in the format lane or never |
+| player, duty | none yet | New: named right from PL |
+| preset | preset | Holds: "performance" (`part_of`) is its other name; pick one |
+
+Three rules, starting now:
+1. **A glossary first.** D5a's PR adds `docs/GLOSSARY.md`, one row per concept, and the
+   owner signs it. It saves arguing in every PR.
+2. **New code uses the new words from today.** D5a is about to add a `Decks` class: it
+   must not. Name it from the glossary, and PL's `Player` and `Duty` likewise. Old names
+   stay until SEM, so no PR renames in passing.
+3. **Code in SEM; files in the format lane.** A saved key or id (`session` in a show,
+   `band.*`) is a format move and rides the one migration. SEM touches only names in code.
+   If a saved name cannot change cheaply, it stays and the glossary says so.
+
+Merge order is unchanged by it. It costs one short pause between D5d and stage 5.
 
 ## The schedule
 
@@ -120,11 +162,12 @@ owner's hand checks and show dates, not build time.
 
 | Stage | Serial spine | In parallel | Merges when |
 | --- | --- | --- | --- |
-| 0 | Owner: Q1, Q2, Q8, Q9, U1, U2, DQ1, DQ3–DQ8, NQ2, NQ4–NQ8 | #363; #365 when its pad charges | now |
-| 1 | **D5a** pointers, with one deck pointer per player | B2, AZ, PC, NSEW design | green |
-| 2 | **D5b** per-slot and meta undo → **PL** players | NSEW build | green |
-| 3 | **D5c** copy, swap, take | NM0 (saved node mode, needs PL); the format lane | green |
+| 0 | Owner: PS1, MR1, DQ1, DQ3–DQ8, NQ2, NQ4–NQ8; sign the glossary at D5a | #363; #365 when its pad charges | now |
+| 1 | **D5a** pointers, with one deck pointer per player; `docs/GLOSSARY.md` | B2, AZ, MR, PC, NSEW design | green |
+| 2 | **D5b** per-slot and meta undo → **PL** players and duties | NSEW build | green |
+| 3 | **D5c** copy, swap, take | **PS** the select screen; NM0 (needs PL); the format lane | green |
 | 4 | **D5d** controls, `hold.py` gone | none on `ui_graph.py`, `preset.py`, chase lines | checks 489–492, between shows |
+| 4.5 | **SEM**, the rename, alone | nothing open | green, goldens unmoved |
 | 5 | **N1a + N1b**, stacked | D5e; D6a; #287 | N1: checks 506–509 |
 | 6 | **N2a + N2b** | D6b | green |
 | 7 | | PC words pass, row 668 if wanted | green |
@@ -169,7 +212,10 @@ owner's hand checks and show dates, not build time.
 | D5e | Deck indicator, ROUTING's dormant words, desk diagram, SYSTEM | UI | S | D5d, DQ7 | UI only |
 | D6a | `playlist.py`, its file kind, `tick` over stand-ins | Library | M | D5d, DQ5 | no behaviour yet |
 | D6b | Triggers, the frame hook, a pane section, the warm draw | Library | S–M | D6a | |
-| PL | Players 1–4: a player names a device on this Mac, holds one deck pointer and a duty; bare rows read as player 1; plan 55 | Core | M | D5b, Q8 | yes while one deck is pointed at |
+| PL | Players 1–4: a player registers controllers on this Mac and holds a duty, on air or off air; bare rows read as player 1; plan 55 | Core | M | D5b | yes while one slot is pointed at |
+| PS | The player select screen: active players, their controllers, the On Air and Off Air lanes; stick or mouse | UI | M | PL, PS1 | no |
+| MR | The hard rule: no preset row onto a meta param; refused at Learn, in the picker, at load with a note; a report of what dropped | Core | S | MR1 | no: the left hand stops driving audio in 48 presets |
+| SEM | The one-time rename of code concepts to the glossary | All | M | D5d; no other PR open | yes |
 | AZ | "Band" becomes the analyzer in the panel's words | UI | S | nothing | words only |
 | NM0 | The saved node mode: player, node, page in the preset, the cable kind and its colour; in the format lane | Format | M | PL | format |
 | N1a, N1b | APC: the rows from the saved state, per player and per deck; then the drawing | Core + UI | M + M | NM0, D5d, NQ2, NQ4; **merge gate: checks 506–509** | no |
@@ -194,9 +240,9 @@ Ask at the start, with the recommendations, and proceed with what is not gated.
 Details are in the two plan documents.
 
 **Asked once, wave-wide:**
-- **Q1.** Merge authority for the wave (ask again; it does not carry).
-- **Q2.** The merge gates: 489–492 before D5d, 506–509 before N1. Rec yes: build
-  freely, gate merges only.
+- **Q1.** Merge authority for the wave. **Answered, 2026-11-04:** merge on green.
+- **Q2.** The merge gates. **Answered:** 489–492 before D5d, 506–509 before N1;
+  build freely, gate merges only.
 - **Q3.** NSEW in this wave, after #365? Rec yes. And row 546 (`controller =`'s
   form), row 552 (the pad draws its own face), which it touches.
 - **Q4.** #287: Dillon or us? Rec ask Dillon; it must follow D5d either way.
@@ -263,6 +309,9 @@ BW. Pre-assign (unused ones are fine; do not reuse 602–604 or 633–635):
 | PC | 731–732 | 561–562 | CK |
 | PL | 733–736 | 563–565 | CL |
 | AZ | 737–738 | 566–567 | CM |
+| PS | 739–742 | 568–571 | CN |
+| MR | 743–745 | 572–573 | CO |
+| SEM | 746–747 | 574 | CP |
 
 ## Lessons from wave 3
 
