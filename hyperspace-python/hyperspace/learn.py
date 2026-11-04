@@ -351,6 +351,13 @@ def _switched_on(pid: str, values, drawn: frozenset[str] | None = None) -> bool:
     return False
 
 
+def whole_circle(source: str) -> bool:
+    """A hand's room lane (plan 51, `hands.room`): the whole circle, its seam
+    a jump a push's depth or a feel's glide would make a sweep."""
+    head, _, name = source.partition(":")
+    return base_scheme(head) == "hand" and ".room." in name
+
+
 def row_for(source: str, p: Param, when: str | None = None, *,
             centred: bool = False, depth: float | None = None) -> Binding:
     """The row a hand learn makes (plan 18 WP3): its op and depth.
@@ -393,8 +400,15 @@ def row_for(source: str, p: Param, when: str | None = None, *,
     envelope's, on any target, which keeps `motion=None`: an envelope has
     an attack and a release of its own, and a half-second spring on top
     would blunt a kick-fired hit. A saved row keeps whatever feel it has;
-    nothing here rewrites one."""
+    nothing here rewrites one.
+
+    A hand's room lane (`whole_circle`, plan 51) on a continuous target is
+    the `position` fader at 1 with no feel, centred or not: depth 1 is what
+    makes a palm's turn the camera's turn, one for one, and a spring would
+    glide across the seam through the whole range."""
     stepped = p.kind is not Kind.CONTINUOUS or p.integer
+    if not stepped and whole_circle(source):
+        return Binding(source, p.id, "position", 1.0, when=when)
     env = base_scheme(source.partition(":")[0]) == ENV_SCHEME
     feel = None if env else DEFAULT_ROUTE_FEEL
     if not stepped and env:

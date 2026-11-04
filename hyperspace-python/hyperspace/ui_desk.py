@@ -81,7 +81,7 @@ from dataclasses import dataclass, replace
 
 from imgui_bundle import imgui
 
-from . import apc40, learn, ui, ui_routing
+from . import apc40, learn, ui, ui_pane, ui_routing
 from .apc40 import GREEN, GREEN_BLINK, RED, RED_BLINK, YELLOW, YELLOW_BLINK
 from .params import PERFORMANCE_GROUPS, Kind
 from .routing import Binding, led_shade
@@ -306,9 +306,9 @@ def pick_line(panel, table, c: apc40.Control) -> tuple[str, bool]:
     does ("S3 (track fader 3) is invariant (the session's): SUB Post-drive")."""
     why = mappable(table, c)
     if why is None:
-        if panel.open and ui.PAGE_KEYS[panel.page] == "routing":
+        if panel.open and ui_pane.shown(panel, ui_pane.ROUTING):
             # ROUTING is never dimmed: a click there is the widget's own
-            return (f"{c.glyph} picked: its line is framed · on any other page, click a "
+            return (f"{c.glyph} picked: its line is framed · in any other section, click a "
                     f"param to put it there · click {c.glyph} again to let go"), True
         return (f"{c.glyph} picked: click a param to put it here · click {c.glyph} again "
                 "to let go"), True
@@ -328,8 +328,8 @@ def footer_line(panel, now: float | None = None) -> tuple[str, bool] | None:
     secs = math.ceil(left(panel, now))
     if not can:
         return f"{line} ({secs} s)", False
-    if ui.PAGE_KEYS[panel.page] == "routing":
-        return f"{c.glyph} picked ({secs} s): click a param on any other page", True
+    if ui_pane.shown(panel, ui_pane.ROUTING):
+        return f"{c.glyph} picked ({secs} s): click a param in any other section", True
     return f"{c.glyph} picked ({secs} s): click a param to put it here", True
 
 
@@ -1046,7 +1046,7 @@ def _chip(panel) -> None:
     if ui.chip(f"{CLOSE}##desk"):
         _close(panel)
     if imgui.is_item_hovered():
-        ui.tooltip("Close the desk diagram (SYSTEM page: Desk diagram brings it back)")
+        ui.tooltip("Close the desk diagram (the system section's Desk diagram brings it back)")
 
 
 def _close(panel) -> None:

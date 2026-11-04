@@ -19,9 +19,10 @@ corpus as the tests' homes are (`conftest.seed`: the corpus presets and
 the party show, opened at launch — an empty home opens an unwired preset
 and a black output), a config with no devices and no dream, the mouse
 parked. ``--empty`` skips the corpus. The panel opens where a fresh home
-opens it (GRAPH): a script clicks its page's tab first —
-``d.click(f"page{PAGE_KEYS.index('view')}")`` — and loads a preset with
-``panel.presets.load(name)`` if it wants another.
+opens it (GRAPH, nothing focused): a script focuses the section it wants
+first — ``panel.reg["ui.page"].set(PAGE_KEYS.index("view"))``, a frame or two
+before it looks for a control, or ``d.click("pane.view")`` on the header —
+and loads a preset with ``panel.presets.load(name)`` if it wants another.
 
 Off the Mac, run it under the virtual display (the cloud session's
 DISPLAY=:99, or ``xvfb-run -a``). The software rasteriser draws what the
@@ -131,6 +132,7 @@ def run(script, out: Path, every: int = 2, home: Path | None = None, settle: int
 
     ui.Panel.draw = stepped
     glfw.swap_buffers = captured
+    sys.argv = sys.argv[:1]         # app.main parses its own flags: these were this tool's
     try:
         app.main()
     finally:

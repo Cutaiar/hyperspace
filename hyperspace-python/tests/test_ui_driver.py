@@ -8,14 +8,16 @@ from imgui_bundle import imgui
 from test_ui_shell import build_rig, frame
 from ui_driver import Driver
 
-from hyperspace.app import CONTROL_SIZE
 from hyperspace.field import NAMES
 
 
 @pytest.fixture()
 def view_page(tmp_path, monkeypatch):
     with build_rig(tmp_path) as r:
-        imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+        # the real route: the VIEW section focused in the pane, the window
+        # tall enough to hold the whole of it
+        r.panel.desk = False
+        imgui.get_io().display_size = imgui.ImVec2(1600, 2000)
         d = Driver(step=lambda: frame(r.panel, "view"))
         d.record(monkeypatch.setattr)
         d.run(d.wait(2))

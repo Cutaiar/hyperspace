@@ -29,7 +29,7 @@ from hyperspace.devices import Port
 from hyperspace.graphmigrate import wired_wiring
 from hyperspace.outputs import Switches, View
 from hyperspace.routing import MOD_OPS
-from hyperspace.ui import PAGES
+from hyperspace.ui import PAGE_KEYS
 
 PKG = Path(__file__).resolve().parents[1] / "hyperspace"
 
@@ -448,9 +448,7 @@ def test_the_routing_page_and_the_graph_page_show_one_table(rig):
 # ---------------------------------------------------------------- the page
 
 def test_the_graph_page_sits_after_routing():
-    keys = [k for k, _, _ in PAGES]
-    assert keys.index("graph") == keys.index("routing") + 1
-    assert PAGES[keys.index("graph")][2] == PAGES[keys.index("routing")][2]
+    assert PAGE_KEYS.index("graph") == PAGE_KEYS.index("routing") + 1
 
 
 def test_the_page_draws_with_a_corpus_preset_and_a_render_graph(rig):
@@ -544,9 +542,8 @@ def test_the_editor_context_is_made_once_kept_across_a_reload_and_destroyed_on_c
     monkeypatch.setattr(ed, "create_editor", lambda cfg: made.append(cfg.settings_file)
                         or real_create(cfg))
     monkeypatch.setattr(ed, "destroy_editor", lambda c: gone.append(c) or real_destroy(c))
-    frame(rig.panel, "view")                         # another page: no context yet
-    assert made == []
-    frame(rig.panel, "graph")
+    assert made == []                                # no context before the panel draws
+    frame(rig.panel, "view")                         # plan 49 stage 3: GRAPH is always drawn
     frame(rig.panel, "graph")
     assert made == [""]                              # the widget's settings file is off
     first = ui_graph._state(rig.panel)["editor"]

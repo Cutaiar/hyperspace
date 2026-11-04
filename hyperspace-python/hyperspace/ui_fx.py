@@ -1,8 +1,8 @@
 """The fx browser — the effect nodes in the loaded graph (plan 33 U).
 
 Plan 49 stage 2 retired the FX page: this browser is GRAPH's side pane's
-fx section (`ui_pane.SECTIONS`), and `ui.page` landing on FX opens GRAPH
-with that section unfolded. "The page" below is that section's body.
+fx section (`ui_pane.SECTIONS`), and `ui.page` on FX focuses that section.
+"The page" below is that section's body.
 
 The owner's "file explorer" over the graph (row 348): the page lists every
 effect instance the loaded preset's graph holds — in the run, on a branch,
@@ -212,7 +212,7 @@ def page(panel, dt: float) -> None:
             from . import ui_graph  # (late: ui_graph imports this page for its strip)
             ui_graph.select_effect(panel, sel)
         if imgui.is_item_hovered():
-            ui.tooltip("select this effect's node on the GRAPH page and bring it "
+            ui.tooltip("select this effect's node on the canvas and bring it "
                               "on screen")
     strip(panel, sel)
 
