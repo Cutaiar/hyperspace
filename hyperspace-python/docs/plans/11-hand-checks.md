@@ -5917,6 +5917,8 @@ Headless: `tests/test_graph_groups.py::test_save_as_patch_writes_that_file_and_n
    **spawn ▸** noita core.
 4. Hover the new group; press `+`, then `−`. Drag `scene` onto its `in`
    pin and its `out` pin onto All outputs' `image`. Then ⌘Z three times.
+   (The `out` pin stays open after the drag, since it was saved feeding
+   `tripcolour.image`: row 665.)
 5. Press **new** again, spawn noita core, and press **wire as saved** on
    its side pane. ⌘Z once. (No take-over chip here: nothing is taken; that
    chip is 503.)
@@ -7642,14 +7644,15 @@ or any patch whose outlet was All outputs)
 1. Load `party-trip`, spawn the patch, select its group and read the pane.
 2. Press **wire as saved**.
 3. Press the chip under it, naming `huecycle → All outputs`.
-4. ⌘Z once. Press the second chip without the first.
+4. ⌘Z once, then ⌘Z again. Press the second chip without the plain one first.
 *Pass:* (1) two chips; the second reads "wire as saved, replacing / huecycle → All
 outputs", every word inside the pane, and its hover lists the same cut. (2) the head
 says what landed and "output.all.image is taken"; huecycle still feeds All outputs;
 the second chip stays. (3) the picture moves to the patch's run, one cable into All
 outputs, huecycle drawn with nothing out of it (faint if it reaches nothing); the head
-says "cut huecycle → All outputs"; both chips are gone. (4) one ⌘Z gives the cable and
-the chips back; one press lands every pin and the cut. *Fail:* the plain chip cutting
+says "cut huecycle → All outputs"; both chips are gone. (4) the first ⌘Z gives the cable and
+the chips back with the plain press still landed; the second takes the plain press
+back; then one press lands every pin and the cut. *Fail:* the plain chip cutting
 anything, a chip whose label is clipped, a cable no cut named going, or huecycle wired
 to anything new.
 **504. What it does not take.** (either Mac, the copy)
@@ -7669,6 +7672,8 @@ nothing.
    into All outputs with a second hand. Let go over the chip.
 *Pass:* the head says "the preset changed under that chip: nothing cut"; nothing has
 moved and ⌘Z has no new step. Pressing again reads and does what the chip now says.
+The same words when the pad's preset has no such group, or the port came free, so no
+chip is left under the mouse. Let go off the chip: nothing is said.
 *Fail:* any cable cut by the old words.
 
 ## What no test covers

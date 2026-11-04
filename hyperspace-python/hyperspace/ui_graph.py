@@ -754,6 +754,7 @@ def page(panel, dt: float) -> None:
                      (lambda: _side(panel, st, view, sel)) if sel else None,
                      sel_words(sel), below=not wide)
     imgui.end_child()
+    _settle_take_over(st)
     imgui.pop_style_color()
     panel.canvas_px = (*panel.canvas_px[:4], omit)
     times = st["times"]
@@ -1954,6 +1955,7 @@ def group_edit(panel) -> graphview.Edit | None:
         return None
     e.push = lambda label: undo.push(label, load=True)
     e.presets = getattr(getattr(panel, "library", None), "presets", None)
+    e.slots = getattr(panel, "outputs", None) or ()     # (a window's name, in the chip's words)
     return e
 
 
@@ -2346,14 +2348,29 @@ def take_over_plan(panel, gid: str) -> graphview.TakeOver | None:
     afresh only when the section moved: a press re-reads it and refuses a plan
     that no longer holds, so a frame need not pay for a trial read."""
     st = _state(panel)
-    spec = getattr(st.get("view"), "spec", None)
+    e = group_edit(panel)
+    if e is None:
+        return None
+    spec = getattr(e.graph, "spec", None)
     held = st.get("take_over_plan")
     if held is not None and held[0] is spec and held[1] == gid:
         return held[2]
-    e = group_edit(panel)
-    plan = e.take_over_of(gid) if e is not None else None
+    plan = e.take_over_of(gid)
     st["take_over_plan"] = (spec, gid, plan)
     return plan
+
+
+def take_over_lines(plan: graphview.TakeOver, width: float) -> list[str]:
+    """The chip's lines at `width` pixels of text: a cut too wide breaks after
+    its arrow, and what is still too wide ends in an ellipsis (the hover has
+    all of it)."""
+    out: list[str] = []
+    for line in plan.lines:
+        src, arrow, dst = line.partition(" → ")
+        parts = ([f"{src} →", dst]
+                 if arrow and imgui.calc_text_size(line).x > width else [line])
+        out += [ui.fit_text(part, width) for part in parts]
+    return out
 
 
 def _take_over_chip(panel, st: dict, gid: str) -> None:
@@ -2363,15 +2380,34 @@ def _take_over_chip(panel, st: dict, gid: str) -> None:
     plan = take_over_plan(panel, gid)
     if plan is None:
         return
+    width = imgui.get_content_region_avail().x - 2 * ui.CHIP_PAD.x
     # (### : the same control whatever the label says, so a press under a label
     # that moved reaches the refusal instead of doing nothing)
-    hit = ui.chip(plan.label + "###graph.group.take_over")
+    hit = ui.chip("\n".join(take_over_lines(plan, width)) + "###graph.group.take_over")
     if imgui.is_item_activated():
-        st["take_over_asked"] = plan
+        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        st["take_over_asked"] = (plan, (lo.x, lo.y, hi.x, hi.y))
     if imgui.is_item_hovered():
-        ui.tooltip("\n".join((TAKE_OVER_TIP, *plan.words)))
+        ui.tooltip(plan.tip)
     if hit:
-        take_over(panel, gid, st.pop("take_over_asked", plan))
+        asked = st.pop("take_over_asked", None)
+        take_over(panel, asked[0] if asked is not None else plan)
+
+
+def _settle_take_over(st: dict) -> None:
+    """After the pane each frame: a held take-over chip whose mouse came up with
+    no press of it. Over where it was, the chip is no longer there to press (a
+    load took its group, or the port came free): refused in words, as any press
+    that no longer holds. Anywhere else the person let go of it: nothing."""
+    held = st.get("take_over_asked")
+    if held is None or imgui.is_mouse_down(0):
+        return
+    del st["take_over_asked"]
+    plan, (x0, y0, x1, y1) = held
+    m = imgui.get_mouse_pos()
+    if x0 <= m.x <= x1 and y0 <= m.y <= y1:
+        st["note"] = graphview.TAKE_OVER_STALE.format(name=plan.name)
+        st["said"] = ""
 
 
 # ---------------------------------------------------------------- plan 40 T3: patches
@@ -2398,9 +2434,6 @@ PATCHES_TIP = ("The patches: a click spawns one at the canvas's centre, its pins
 NO_PATCHES = "no patches yet — a group's menu: save as patch…"
 WIRE_AS_SAVED_TIP = ("Wire each open pin as the patch was saved, where this preset has that "
                      "node and the port is free — the rest said, nothing else touched")
-TAKE_OVER_TIP = ("Wire each open pin as the patch was saved, and cut what feeds a port it "
-                 "needs: the node it came from stays on the canvas, not re-wired. One undo step. "
-                 "It cuts:")
 SAVE_PATCH_TIP = ("Save this group as a patch: its nodes, values, wires, rows and the cables "
                   "across its edge — the patch's file, nothing else written")
 SHEET_UP = "{n} control{s} the preset already uses: the sheet asks which keeps each"
@@ -2596,15 +2629,15 @@ def wire_as_saved(panel, gid: str) -> str | None:
     return why
 
 
-def take_over(panel, gid: str, asked: graphview.TakeOver | None = None) -> str | None:
-    """The take-over chip on group `gid` (`Edit.wire_taking_over`): what landed
-    and what was cut on the head's line, what stays refused as its note. `asked`
-    is the plan the chip showed (None: whatever would be cut now)."""
+def take_over(panel, asked: graphview.TakeOver) -> str | None:
+    """The take-over chip pressed (`Edit.wire_taking_over`): what landed and what
+    was cut on the head's line, what stays refused as its note. `asked` is the
+    plan the chip showed."""
     e = group_edit(panel)
     if e is None:
         return None
     e.said = ""
-    why = e.wire_taking_over(gid, asked)
+    why = e.wire_taking_over(asked)
     st = _state(panel)
     st["take_over_plan"] = None     # (a refused plan is read again, not drawn again)
     st["note"] = why or ""

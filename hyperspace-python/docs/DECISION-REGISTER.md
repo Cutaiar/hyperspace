@@ -12173,9 +12173,11 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Recommended.** A second chip directly under **wire as saved**, drawn only while
   a press of the plain chip would refuse a taken port and this press could take it.
   Its label names what it cuts: "wire as saved, replacing / huecycle → All outputs",
-  each cut on its own line because the pane is 320 px wide and a single line would be
-  clipped. Up to three cuts are named; past that it says "wire as saved, replacing
-  4 cables" and the hover lists them. One press lands everything the plain chip would
+  each cut on its own line because the pane is 240–320 px wide and a single line would
+  be clipped. A cut too wide breaks after its arrow, and what is still too wide ends in
+  an ellipsis. Names are the canvas's (`label_of`: a window's name, "acid 2"). Up to
+  three cuts are named; past that it says "wire as saved, replacing / 4 cables". The
+  hover lists every cut, every wire and what stays refused. One press lands everything the plain chip would
   land as well as the outlets it takes over, as one undo step. The head then says
   "wired as saved: …; cut huecycle → All outputs". The plain chip's behaviour and
   words are unchanged: it never cuts.
@@ -12188,16 +12190,24 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   chip (the label already says what the sheet would).
 - **To reverse.** Drop `ui_graph._take_over_chip`.
 - **Built.** `graphview.TakeOver`, `Edit.take_over_of`, `Edit.wire_taking_over`,
-  `Edit._saved_pins` (shared with `wire_as_saved`), `port_said`;
-  `ui_graph.take_over_plan`, `_take_over_chip`, `take_over`.
-- **Rough edge.** Open pins follow `open_ports`: one member feeding two host ports
-  has two outlets, and once one lands the other is no longer open. So a plain press
-  that lands the free one hides the chip for the taken one. Pressing the take-over
-  chip first lands both. Left as it is: changing it moves what the canvas draws as
-  open.
+  `Edit._saved_pins` (shared with `wire_as_saved`), `port_said`, `source_said`;
+  `ui_graph.take_over_plan`, `take_over_lines`, `_take_over_chip`, `_settle_take_over`,
+  `take_over`.
 - **Rough edge.** The section body can scroll: at 900 px with **presets** open too,
   both chips sit below the selection body's fold. The plain chip was already there.
-- **Judge it.** 503.
+- **The plain chip's path.** The review of P3 lifted "the plain chip does not change"
+  for two bugs, and it still never cuts. (1) `open_ports` closes an outlet only on
+  `from → was`. Before, any wire out of the group closed it, so a member feeding two
+  host ports lost the second pin once the first landed, and a plain press could hide
+  this chip for good. **What changes on the canvas:** a pin dragged by hand somewhere
+  other than its `was` stays open, still reading "open (was …)", and **wire as saved**
+  still offers it; a cut outlet's pin reopens even if its member has another cable out.
+  (2) `graphview.ALWAYS_KINDS` holds All outputs, whose kind is its own, so an outlet
+  lands on it with nothing wired in; it said "no node output.all". Nothing else reads
+  the tuple, neither the picker nor any render path.
+- **Rough edge.** A pin dragged elsewhere by hand reads open though its member is
+  wired. The owner may want it to close, which needs a record of "answered".
+- **Judge it.** 395 step 4, 503.
 
 ### 666. What the chip does not take
 
@@ -12229,6 +12239,9 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   refuses with "the preset changed under that chip: nothing cut — read <group>'s chip
   again", with no undo step. The chip's id does not hold its label (`###`), so a
   release over a label that changed reaches this refusal and is not silently dropped.
+  A release where the chip was, after it stopped being drawn (a load took its group,
+  the port came free), says the same words (`_settle_take_over`); a release elsewhere
+  says nothing.
   A reload of the same preset also refuses, as P2's sheet does. A value moving does not.
 - **Other options.** Compare only the words (a reload of the same preset would press
   through); judge against the frame of the release (the words the person read may be

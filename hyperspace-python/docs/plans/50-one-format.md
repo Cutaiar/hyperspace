@@ -222,19 +222,23 @@ What changed in the build:
 
 - **The second chip** (rows 524, 665). `ui_graph._take_over_chip` under **wire as
   saved**, drawn only while `Edit.take_over_of` has a plan. Its label names each cut
-  on a line of its own, since a single line would be clipped by the pane, and past
-  three says the count; the hover lists them. `Edit.wire_taking_over` lands every pin
+  on a line of its own, breaking after the arrow and then ending in an ellipsis to fit
+  `SIDE_MIN`, in the canvas's names (`label_of`); past three it says the count; the
+  hover lists every cut, wire and refusal. `Edit.wire_taking_over` lands every pin
   the plain chip would and each taken outlet, one undo step, then "cut huecycle → All
   outputs" on the head. The plan is cached by the section's identity, so a frame pays
   for no trial read.
-- **The plain chip is unmoved.** `Edit.wire_as_saved` and the new press share
-  `Edit._saved_pins`; only `take_over=True` cuts, and the plain words are the same.
+- **The plain chip never cuts.** `Edit.wire_as_saved` and the new press share
+  `Edit._saved_pins`; only `take_over=True` cuts. Two bugs on its path were fixed at
+  the review's word (row 665): an outlet's pin is per port (`open_ports`), and a free
+  All outputs takes a wire (`ALWAYS_KINDS`).
 - **What is not taken** (row 666). A taken inlet is no open pin; `scene.geometry` has
   nothing to cut and keeps its `before`; another refusal stays refused; the rig's bus
   cable is not a preset wire; a cut the read refuses draws no chip.
 - **WYSIWYG.** The cut's source stays on the canvas (`_keep_declared`), not re-wired.
 - **Staleness** (row 667). The chip's plan is taken at the mouse-down and the press
-  compares it, section by identity, or refuses in `TAKE_OVER_STALE`, nothing cut.
+  compares it, section by identity, or refuses in `TAKE_OVER_STALE`, nothing cut. A
+  release where the chip was, once it is no longer drawn, says the same.
 
 Tests: `tests/test_wire_take_over.py` (new). `tests/test_graph_groups.py`'s plain
 chip tests pass untouched.

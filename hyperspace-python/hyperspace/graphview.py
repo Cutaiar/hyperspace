@@ -3059,6 +3059,11 @@ NOTHING_OPEN = "no pin of {name} is open"
 TAKE_OVER_CHIP = "wire as saved, replacing"
 TAKE_OVER_COUNT = "{n} cables"
 TAKE_OVER_NAMED = 3        # a chip names this many cuts, a line each; past it, the count
+TAKE_OVER_TIP = ("Wire each open pin as the patch was saved, and cut what feeds a port it "
+                 "needs: the node it came from stays on the canvas, not re-wired. One undo step.")
+TAKE_OVER_CUTS = "It cuts: {words}"
+TAKE_OVER_WIRES = "It wires: {wires}"
+TAKE_OVER_REFUSED = "Still refused: {why}"
 CUT_SAID = "cut {cuts}"
 TAKE_OVER_UNDO = "wire {name} as saved, replacing {cuts}"
 TAKE_OVER_STALE = ("the preset changed under that chip: nothing cut — read {name}'s chip "
@@ -3075,7 +3080,9 @@ RIG_KINDS = patches.RIG_KINDS   # always there: the rig's own nodes (one list, p
 # …and the look's one camera (plan 43 C2: the camera is the preset's, not
 # the rig's), always there too: what a patch's wire may name though no
 # section does
-ALWAYS_KINDS = (*RIG_KINDS, "camera")
+# (wave 3 P3: and All outputs, whose kind is its own, so an outlet lands on it
+# with nothing yet wired in)
+ALWAYS_KINDS = (*RIG_KINDS, "camera", rgraph.ALL_OUTPUTS)
 
 
 def group_pin(gid: str, direction: str, key: str) -> str:
@@ -3337,24 +3344,19 @@ PICTURE_NOUNS = {IMAGE: "picture", GEOMETRY: "geometry", MASK: "mask"}
 OPEN_PIN = "{id} · open (was {was})"
 
 
-def _members_named(entry: Mapping) -> set[str]:
-    """The render node names a group entry holds (``render:acid.2`` → ``acid.2``)."""
-    return {cid.partition(":")[2] for cid in entry.get("nodes") or ()
-            if isinstance(cid, str) and cid.startswith("render:")}
-
-
 def open_ports(spec, entry: Mapping) -> list[dict]:
     """Plan 40 T3 (D2): the host ports a spawn left open on group `entry`
     (its session-only ``ports``, `patches.Landing.ports` as landed — never
     saved) that are open still: an inlet whose member port nothing is
-    wired into, an outlet whose member sends nothing out of the group.
+    wired into, an outlet whose member does not yet feed the port it was
+    saved feeding (wave 3 P3: that one wire, so a member feeding another
+    port leaves this one reachable).
     Picture, geometry and mask ports only (a value port is a row, landed
     or kept with the rows). Pure."""
     ports = entry.get("ports") if isinstance(entry, Mapping) else None
     if not ports:
         return []
     wires = list(spec.all_wires()) if spec is not None else []
-    inside = _members_named(entry)
     out = []
     for p in ports:
         if not isinstance(p, Mapping) or p.get("type") not in RENDER_TYPES:
@@ -3366,7 +3368,7 @@ def open_ports(spec, entry: Mapping) -> list[dict]:
         elif isinstance(p.get("to"), str):
             free = not any(w.dst == p["to"] for w in wires)
         elif isinstance(p.get("from"), str):
-            free = not any(w.src == p["from"] and w.node not in inside for w in wires)
+            free = not any(w.src == p["from"] and w.dst == p.get("was") for w in wires)
         else:
             free = False
         if free:
@@ -3374,38 +3376,55 @@ def open_ports(spec, entry: Mapping) -> list[dict]:
     return out
 
 
-def port_said(port: str) -> str:
-    """A wire's far end in a person's words: All outputs' picture is "All
-    outputs" and its other ports "All outputs hands"; any other port its name."""
+def port_said(port: str, slots=()) -> str:
+    """A wire's far end as the canvas titles it (`label_of`, `slots` for a
+    window's name): a window's and All outputs' picture their title alone ("All
+    outputs"), any other port the title and the port ("Composite over")."""
     head, _, name = port.rpartition(".")
-    if head != rgraph.ALL_OUTPUTS:
-        return port
-    return LABELS[rgraph.ALL_OUTPUTS] + ("" if name == "image" else f" {name}")
+    title = label_of(head, slots)
+    if name == "image" and kind_of(head) in ("output", rgraph.ALL_OUTPUTS):
+        return title
+    return f"{title} {name}"
+
+
+def source_said(src: str, slots=()) -> str:
+    """A wire's near end as the canvas titles it: "acid 2", "Scene cover"."""
+    node = rgraph.pin_node(src) or src
+    title = label_of(node, slots)
+    return title if node == src else f"{title} {src[len(node) + 1:]}"
 
 
 @dataclass(frozen=True)
 class TakeOver:
     """What one press of the take-over chip would do to a group (wave 3 P3):
     the very section it read (`spec`, a landing makes a new one), the cables
-    it cuts and the wires it lands, and what stays refused. The chip's label
-    comes from here, and a press hands the chip's plan back to be checked."""
+    it cuts (`words`: the same, as the canvas titles them), the wires it lands
+    and what stays refused. The chip's lines come from here, and a press hands
+    the chip's plan back to be checked."""
+    gid: str
+    name: str
     spec: Any
     cuts: tuple[tuple[str, str], ...]
+    words: tuple[str, ...]
     wires: tuple[str, ...]
     refused: tuple[str, ...] = ()
 
     @property
-    def words(self) -> list[str]:
-        return [f"{a} → {port_said(b)}" for a, b in self.cuts]
-
-    @property
-    def label(self) -> str:
-        """The chip's words, a line each, so none is clipped by the pane:
+    def lines(self) -> tuple[str, ...]:
+        """The chip's words, a line each so the pane's width can hold them:
         every cut named, or past `TAKE_OVER_NAMED` the count (the hover has
         them all)."""
         if len(self.cuts) > TAKE_OVER_NAMED:
-            return f"{TAKE_OVER_CHIP} {TAKE_OVER_COUNT.format(n=len(self.cuts))}"
-        return "\n".join((TAKE_OVER_CHIP, *self.words))
+            return (TAKE_OVER_CHIP, TAKE_OVER_COUNT.format(n=len(self.cuts)))
+        return (TAKE_OVER_CHIP, *self.words)
+
+    @property
+    def tip(self) -> str:
+        """All of what a press does: every cut, every wire, what stays refused."""
+        return "\n".join((TAKE_OVER_TIP, TAKE_OVER_CUTS.format(words=", ".join(self.words)),
+                          TAKE_OVER_WIRES.format(wires=", ".join(self.wires)),
+                          *([TAKE_OVER_REFUSED.format(why="; ".join(self.refused))]
+                            if self.refused else [])))
 
 
 def _open_pins(view: View, g: VGroup, entry: Mapping) -> None:
@@ -4833,29 +4852,23 @@ class Edit:
         got = self._take_over(gid)
         return got[0] if got is not None else None
 
-    def wire_taking_over(self, gid: str, asked: TakeOver | None = None) -> str | None:
+    def wire_taking_over(self, asked: TakeOver) -> str | None:
         """The take-over chip (wave 3 P3, row 524, the owner's yes): what
         **wire as saved** does, and each outlet's taken port is cut for it,
-        every cut named on the chip (`asked`), all of it **one undo step**,
-        the cut said after. The source of a cut cable stays on the canvas,
-        unwired (`_keep_declared`), and nothing re-wires it: the graph stays
-        WYSIWYG. `asked` is what the chip said when the mouse went down: a
-        section or a plan that has moved since refuses in words, nothing cut
-        (a bank press may load another preset under a held chip). A pin
-        refused for another reason stays refused, returned joined as ever."""
-        g = self._group(gid)
-        if g is None:
-            return NO_GROUP.format(gid=gid)
-        got = self._take_over(gid)
-        if asked is not None and (got is None or asked.spec is not got[0].spec
-                                  or asked.cuts != got[0].cuts
-                                  or asked.wires != got[0].wires):
-            return TAKE_OVER_STALE.format(name=g["name"])
-        if got is None:
-            return self.wire_as_saved(gid)    # nothing to take over: only what it says
+        every cut named on the chip, all of it **one undo step**, the cut said
+        after. The source of a cut cable stays on the canvas, unwired
+        (`_keep_declared`), and nothing re-wires it: the graph stays WYSIWYG.
+        `asked` is what the chip said when the mouse went down: a section, a
+        group or a plan that has moved since refuses in words, nothing cut (a
+        bank press may load another preset under a held chip). A pin refused
+        for another reason stays refused, returned joined as ever."""
+        got = self._take_over(asked.gid)
+        if (got is None or asked.spec is not got[0].spec or asked.cuts != got[0].cuts
+                or asked.wires != got[0].wires):
+            return TAKE_OVER_STALE.format(name=asked.name)
         plan, doc = got
         cuts = ", ".join(plan.words)
-        label = TAKE_OVER_UNDO.format(name=g["name"], cuts=cuts)
+        label = TAKE_OVER_UNDO.format(name=plan.name, cuts=cuts)
         self._step(label)
         said = "; ".join((WIRED_AS_SAVED.format(wires=", ".join(plan.wires)),
                           CUT_SAID.format(cuts=cuts)))
@@ -4872,7 +4885,11 @@ class Edit:
         doc, wired, cuts, refused = self._saved_pins(ports, take_over=True)
         if not cuts:
             return None
-        plan = TakeOver(spec=spec, cuts=tuple((x["from"], x["to"]) for x in cuts),
+        slots = getattr(self, "slots", ())
+        plan = TakeOver(gid=gid, name=g["name"], spec=spec,
+                        cuts=tuple((x["from"], x["to"]) for x in cuts),
+                        words=tuple(f"{source_said(x['from'], slots)} → {port_said(x['to'], slots)}"
+                                    for x in cuts),
                         wires=tuple(wired), refused=tuple(refused))
         return plan, doc
 
