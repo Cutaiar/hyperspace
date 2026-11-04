@@ -137,6 +137,14 @@ MAX_ECHOES = 32
 # a look-back's own knobs among `dream.*` (`dream.<key>`, `dream.<n>.<key>`), the
 # rest the dream node's: `params.is_lookback_knob`, `patches._param_rows`
 LOOKBACK_KEYS = ("echo_mix", "fade", "echoes", "gap", "darken", "contrast", "occlude", "res")
+
+
+def is_lookback_key(key: str) -> bool:
+    """Is `key`, of `dream.<key>` or `dream.<n>.<key>`, a look-back's? The one
+    test: `params.is_lookback_knob` and `patches.dream_owner` ask here."""
+    return key in LOOKBACK_KEYS
+
+
 RES = [128, 192, 256, 384]              # dream.res: the echo's short side, px
 # dream.layer's choices in their stored order: a preset saves the index, so
 # a new layer is appended, never inserted. The menu's order is LAYER_INFO's.

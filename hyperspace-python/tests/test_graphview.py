@@ -175,7 +175,8 @@ def test_params_group_under_the_render_node_that_owns_them(rig):
     assert owner_of(view, "fx.acid.mix") == "render:acid"
     assert owner_of(view, "fx.palette.mix") == "render:palette"
     assert owner_of(view, "fx.mix") == "group:fx"            # (no pipeline end to own it)
-    assert owner_of(view, "dream.mix") == "render:lookback"
+    assert owner_of(view, "dream.fade") == "render:lookback"
+    assert owner_of(view, "dream.mix") == "group:dream"      # (P2: the dream's; none here)
     assert owner_of(view, "camera.zoom") == "render:camera"
     assert owner_of(view, "ghost.alpha") == "render:hands"
     assert owner_of(view, out1) == "render:output.1"

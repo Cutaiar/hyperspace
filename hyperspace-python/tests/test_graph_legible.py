@@ -931,7 +931,8 @@ def test_every_node_has_a_label_and_a_hover(rig):
     assert graphview.label_of("output.all") == "All outputs"
     assert graphview.label_of("output.2") == "Output 2"
     assert graphview.label_of("output.2", [NS(n=2, name="projector")]) == "projector"
-    assert graphview.hover_of("lookback").endswith(" · id lookback · params dream.*")
+    assert graphview.hover_of("lookback").endswith(" · id lookback · params dream.* (its own knobs)")
+    assert graphview.hover_of("dream").endswith(" · id dream · params dream.* (its own knobs)")
     assert graphview.hover_of("output.2").endswith(" · id output.2")
     for fixture in fixtures:
         st = load_fixture(rig, fixture)

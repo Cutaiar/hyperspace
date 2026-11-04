@@ -767,3 +767,12 @@ dream and, at a save only, a hands' layer without its hands. A spawn whose singl
 already has is refused in words, nothing landed (`Landing.taken`, row 658).
 D5 stands, with a frame kind's params read from the canvas's owners
 (row 659). Register rows 657–660; [`50-one-format.md`](50-one-format.md).
+
+## Since: wave 3 P2 (2026-11-03)
+
+The conflict sheet above asks one more thing: a patch holding a dream, into a
+preset with one, gets a row "the patch's replaces this preset's", with what the
+host's dream loses in words, and **Spawn** reads **Replace and spawn**. That row
+is not two-way (D3's two answers are the controls'), and D9's preselection does
+not reach it: a replace nobody answered does not land. D2 stands: the replacing
+dream's pins are open. Register rows 661–664.
