@@ -147,6 +147,14 @@ def _quiet(fn) -> None:
         pass
 
 
+def _close_each(closes) -> None:
+    """Every one of `closes` called, whichever raises: one output's or deck's
+    teardown never leaves another's open (plan 44 D4: deck 2's segment workers
+    outlive a raise in deck 1's close otherwise)."""
+    for close in closes:
+        _quiet(close)
+
+
 @dataclass
 class _Closer:
     """Something `close_all` closes that is a function, not an object."""
@@ -1597,7 +1605,7 @@ def main(argv: list[str] | None = None) -> None:
             renderer.dreamer.source = dream_io
         renderer.segment_cfg = cfg.get("segment", {})   # the segment workers' backend (plan 39 T4)
         # …closed with the adapters, at quit and restart — deck 2's too (plan 44 D4)
-        segmenters = _Closer(lambda: [r.close() for r in rendering])
+        segmenters = _Closer(lambda: _close_each([r.close for r in rendering]))
         # the sticks as dials (gamepad.dial, a prototype): session params on
         # whichever pad is the primary now
         _register_dial(reg, lambda: rig.adapter("gamepad"))
@@ -1722,8 +1730,9 @@ def main(argv: list[str] | None = None) -> None:
     dream_check(library.current("presets"))     # the startup preset has already landed
 
     # both exits close the publishers, in output 1's context (plan 32 T9)
-    publishers = _Closer(lambda: (_close_publishers(render_win, slots), panel.preview.close(),
-                                          panel.monitor.close(), fade.close()))
+    publishers = _Closer(lambda: _close_each((lambda: _close_publishers(render_win, slots),
+                                              panel.preview.close, panel.monitor.close,
+                                              fade.close)))
 
     def all_windows() -> list:            # both exits destroy these before terminate
         return [*(sl.win for sl in slots[1:]), ctrl_win, render_win]

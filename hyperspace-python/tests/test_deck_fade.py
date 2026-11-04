@@ -924,6 +924,25 @@ def test_the_frame_runs_the_off_air_deck_after_the_lead_and_its_raises_cost_noth
     assert "render.draw" in log and "panel.draw" in log
 
 
+def test_a_raise_in_one_close_leaves_the_others_to_close():
+    """Second review pass: at quit or ⌘R a raise in deck 1's renderer close
+    must not leave deck 2's segment workers alive, and `main` closes through
+    this one road."""
+    import inspect
+
+    closed = []
+
+    def boom():
+        closed.append("deck 1")
+        raise RuntimeError("boom")
+
+    app._close_each([boom, lambda: closed.append("deck 2")])
+    assert closed == ["deck 1", "deck 2"]
+    src = inspect.getsource(app.main)
+    assert "_close_each([r.close for r in rendering])" in src
+    assert "[r.close() for r in rendering]" not in src
+
+
 def test_main_builds_deck_2_beside_the_first_and_points_nothing_at_it():
     """The AST of `main`: one `Deck.beside`, its result handed only to the
     fade, the host's off-air list and the reloader, never to a device, a page
