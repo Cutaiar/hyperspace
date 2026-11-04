@@ -25,7 +25,6 @@ from hyperspace import learn, preset, ui_routing, undo
 from hyperspace.hands import core as hc
 from hyperspace.hands import room as R
 from hyperspace.hands import tape as T
-from hyperspace.params import Registry
 from hyperspace.routing import MOD_OPS, TURN_GRACE_S, TURN_OP, Binding, Owned, is_session_row
 
 YAW, PITCH = "hand:right.room.yaw", "hand:right.room.pitch"
@@ -848,12 +847,7 @@ def test_engaging_the_hold_mid_orbit_cuts_it_with_the_step_closed(deck, tmp_path
 
 
 # ------------------------------------------------------------ with the base chase (plan 52)
-# B1 lands before O2; until then there is no verb to hold. These lift when it exists
 
-chase = pytest.mark.skipif(not hasattr(Registry, "base_chase"), reason="B1 not on this branch")
-
-
-@chase
 def test_an_orbit_starting_under_a_held_chase_leaves_the_verb_on(deck, tmp_path):
     """The chase keeps its step; the orbit lands in it, and a fist ends no verb."""
     assert deck.reg.base_chase(True, steps=deck.undo)
@@ -868,7 +862,6 @@ def test_an_orbit_starting_under_a_held_chase_leaves_the_verb_on(deck, tmp_path)
     assert math.degrees(deck.reg["camera.yaw"].base) == pytest.approx(0.0, abs=1e-3)
 
 
-@chase
 def test_a_chase_pressed_during_an_orbit_cuts_the_turn_and_the_fist_opening_leaves_the_verb(
         deck, tmp_path):
     n = len(closing()) + 11

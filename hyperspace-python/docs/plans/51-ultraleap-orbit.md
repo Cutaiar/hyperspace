@@ -270,9 +270,9 @@ moved nothing leaves none.
   than the grace, a person's fist being slower than that; if a re-clutch ever did land
   inside it, the two would be one step.
 - **The mechanism is the base chase's** (plan 52): `Undo.keep_open` / `let_close`, and
-  their module-level forms, the same lines as B1's head (18c30a5), without its `trims`,
-  so one mechanism remains and either PR landing second merges them as identical
-  changes. `Param._commit` / `_trim` are not shared: a chase commits what an offset
+  their module-level forms, are B1's: one mechanism, called here with the `Undo` the
+  closure found. `State.trims` beside them is the chase's ledger, which a turn does
+  not use. `Param._commit` / `_trim` are not shared: a chase commits what an offset
   landed and must count it, and a turn has no offset, so it needs no ledger and touches
   nothing in `params.py`.
 - **Exceptions, stated.** A hand lost past the grace or a blind stretch past the grace
@@ -288,9 +288,7 @@ moved nothing leaves none.
 - **With a chase held** (plan 52; `Undo` keeps one step at a time). An orbit starting
   under a held chase opens no step: its edits land in the chase's, and the verb stays
   on. A chase pressed during an orbit closes the orbit's step and cuts the turn, and
-  the fist opening afterwards leaves the verb on. Tested in `test_hands_orbit.py` under
-  a skip that lifts when `Registry.base_chase` exists; both passed on a trial merge of
-  B1's 18c30a5.
+  the fist opening afterwards leaves the verb on. Tested in `test_hands_orbit.py`.
 - **Which `Undo`.** `undo.watching(reg)`, chosen at each closure: every `Undo` is
   found by the registry it watches, so a deck that is not the installed one has its own
   step and cut, and installing another deck mid-closure changes nothing. No `deck.py`
