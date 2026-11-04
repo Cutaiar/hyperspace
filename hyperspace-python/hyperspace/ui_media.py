@@ -344,11 +344,11 @@ def _row(panel, st: dict, it: Item) -> None:
 
 def hint(status: str) -> str:
     """The line a row's tooltip adds under a status word that needs one:
-    `off page` (`panel:graph` while GRAPH is not on screen — being here,
-    on MEDIA, is one such time) says why the preview is dark."""
+    `off page` (`panel:graph` while the panel is hidden, the only time GRAPH
+    is not drawn: plan 49 stage 3) says why the preview is dark."""
     if status == OFF_PAGE:
-        return ("\nthe GRAPH canvas is drawn only while the GRAPH page is on screen "
-                f"(not here): a channel on it holds the last picture {HOLD_S:g} s, then shows black")
+        return ("\nthe GRAPH canvas is drawn only while the panel is up (it was hidden): "
+                f"a channel on it holds the last picture {HOLD_S:g} s, then shows black")
     return ""
 
 

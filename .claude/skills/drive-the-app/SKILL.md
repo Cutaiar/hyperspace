@@ -63,9 +63,14 @@ worked example.
 ## Driving rules
 
 - **Find controls by id**, never by coordinates: the text after `##` —
-  the param id for everything `ui.py` draws for a param; page tabs are
-  `page<n>` (`PAGE_KEYS.index("view")`). A missing id raises with what was
+  the param id for everything `ui.py` draws for a param; a side pane
+  section's header is `pane.<key>`. A missing id raises with what was
   drawn: read it, it names the right one.
+- **There are no pages** (plan 49): GRAPH is always drawn and the rest are
+  sections of its side pane. `panel.reg["ui.page"].set(PAGE_KEYS.index("view"))`
+  focuses one — unfolded, scrolled to the pane's top; do that a frame or two
+  before looking for its controls. A body can be taller than the pane: the
+  driver's actions scroll a control into view first (`Driver.reveal`).
 - **Menus and exact values by keyboard**: `pick` opens a combo and walks
   it with the arrow keys; `enter` Ctrl+clicks a slider and types (Cmd on a
   Mac, where imgui swaps the two: the driver sends `d.ctrl`). A tapered

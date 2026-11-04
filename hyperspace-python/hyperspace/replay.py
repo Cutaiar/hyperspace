@@ -17,7 +17,7 @@ current window's list; it opens no child). So:
   picture;
 - **dropped**: everything else — the details side pane (a child window,
   `…/##graph.side_…`), every popup, menu and tooltip (their own windows),
-  the desk and the rail, and the viewport's background and foreground
+  the desk, and the viewport's background and foreground
   lists (the held PROJECTOR inset is on the foreground list);
 - **cut out**: the side pane's decorations — its ground, border and
   scrollbar — which imgui draws on the *parent's* list inside
