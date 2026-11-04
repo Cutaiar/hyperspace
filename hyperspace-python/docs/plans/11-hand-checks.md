@@ -7553,13 +7553,15 @@ unchanged (nothing is attached by itself); the footer names no value for no
 param. (3) what is wired says so; the dream moves on the picture wired in.
 (4) the preset as it was, `dream.mix` back. Fail: the host's look-back knobs
 moved by the spawn, or a wire the canvas does not draw.
-**498. A host that has one says so.** (either Mac)
-1. Load `party-wake`; patches chip → `dream wash`.
-2. Drag `dream wash` onto a picture cable.
-*Pass:* (1), (2) the head reads "dream wash not spawned: this preset already
-has dream, and a frame holds one of each — delete it here first; nothing
+**498. A host that has one says so.** (either Mac; since P2 the dream's own
+answer is 500, so this asks of the shape)
+1. On a preset, group `shape`; save as `shapely`. Load `party-wake`; patches
+   chip → `shapely`.
+2. Drag `shapely` onto a picture cable.
+*Pass:* (1), (2) the head reads "shapely not spawned: this preset already
+has shape, and a frame holds one of each — delete it here first; nothing
 landed"; no sheet; the preset's dot does not light; ⌘Z has nothing new.
-3. Delete `dream`; spawn again. *Pass:* it lands. Fail: `dream.2` on the
+3. Delete `shape`; spawn again. *Pass:* it lands. Fail: `shape.2` on the
 canvas, or a picture change on the refused spawn.
 4. Delete nothing; engage the output hold on a look holding a dream, load
    `party-noita`, spawn `dream wash`. *Pass:* the head says "the output hold
@@ -7576,12 +7578,58 @@ knobs. (2) `hands.2` and its layer, the hands look as saved. (3) refused:
 the projector as saved, but for its turn (the pose stays the host's). Fail:
 a host param moved at (1) or (2), or a second scene at (4).
 
+## BQ. Replace the host's dream, and the dream's own params (wave 3 P2)
+Register rows 661–664, 2026-11-03. Headless:
+`tests/test_patches_replace_dream.py` (the sheet, one press and one undo step,
+what goes and what stays, a host group letting go, the splice, the hold, whose
+params over the whole registry, a saved preset unmoved). Nobody has seen the
+sheet drawn: the tests draw it and read its state.
+**500. Replace the dream.** (either Mac, the dream worker running; `dream wash`
+from 497)
+1. Load `party-wake`; move `Dream brightness`. Patches chip → `dream wash`.
+2. Read the sheet; press **Cancel**.
+3. Spawn again; press **Replace and spawn**.
+4. Press **wire as saved** on the group, or wire its pins by hand.
+5. ⌘Z until the preset is as it was.
+6. Drag `dream wash` onto the cable `dream → composite.over`.
+*Pass:* (1) "dream: the patch's replaces this preset's", and under it its wires
+in words ("lookback → dream.image, dream → composite.over"), how many settings
+differ, and how many rows stay; nothing has moved yet. (2) nothing landed, the
+head says so, ⌘Z has nothing new. (3) one `dream` on the canvas, in the new
+group; the head says what it replaced; the trail stops feeding it until (4), and
+what the old dream had painted fades at the new one's speed, without a flash
+(by eye). (5) one ⌘Z for the whole of (3): wires, values, the old dream's place.
+(6) refused on the head: "that cable is the dream it would replace". Fail:
+`dream.2`, a look-back knob moved by (3), or a wire no cable draws.
+**501. What stays.** (either Mac)
+1. On `party-wake`, with a knob on `Dream brightness` and a hand on `Dream hue`,
+   spawn a `dream wash` saved with no rows, replacing the dream.
+2. Turn the knob; move the hand.
+3. Group `dream` and one other node, then spawn `dream wash` again, replacing it.
+*Pass:* (1) the sheet says those rows stay. (2) they drive the new dream. (3) the
+sheet says its place in that group goes; the group keeps the other node and has
+no open pin left on the dream. Fail: a row gone quiet, or an open pin that wires
+into the new dream from the old group.
+**502. The dream's own knobs.** (either Mac)
+1. Load `party-wake`, open GRAPH. Select `Dream`, then `Look-back`.
+2. Hover a route onto `Dream brightness` and one onto `Echo brightness`.
+3. Load a preset with a look-back and no dream that routes onto `dream.mix`, if
+   the library has one.
+4. Open the pane's lookback section beside the canvas.
+*Pass:* (1) the dream's rows (brightness, speed, hue …) under `Dream`, the
+look-back's (brightness, fade time, count …) under `Look-back`, none under both.
+(2) each cable lands on its own node. (3) the route on the idle `dream` group,
+not on the look-back. (4) the same two lists as the canvas. Saved presets play as
+they did. Fail: a knob on neither node, or a picture change on any load.
+
 ## What no test covers
 
 Only a person can settle these:
 - the dream's look (9) and the default hand feel (16);
 - a spawned dream patch's picture with a worker running (497): the tests read
   the section and the values, no worker;
+- the sheet's "replace" row as drawn, and the old dream buffer fading under the
+  new dream (500);
 - the hand-to-picture delay (25): a target, not a measurement;
 - the frame rate and tearing with two real screens (107): the tests pin
   which swap waits, not what the screens do;

@@ -128,7 +128,7 @@ from . import learn as learnmod
 from . import modifiers as modmod
 from . import sequencer as seqmod
 from .devices import SCHEME_ROLE  # plan 40 T4: the table lives in devices; read here
-from .params import PERFORMANCE_GROUPS, Kind, Param, Registry
+from .params import PERFORMANCE_GROUPS, Kind, Param, Registry, is_lookback_knob
 from .routing import (
     MOD_OPS,
     SAVE_PARAM,
@@ -394,6 +394,22 @@ def _view_owner(pid: str, ctx: _Ctx) -> str | None:
     return "pattern" if patches.is_pattern_view_key(pid.partition(".")[2]) else "shape"
 
 
+def _dream_owner(pid: str, ctx: _Ctx | None) -> str | None:
+    # wave 3 P2: `dream.*` split by key, `patches._param_rows`' rule: a
+    # look-back's knobs on its node (`dream.2.fade` on `lookback.2`), the rest
+    # on the dream's. Params keep their ids, so no saved value moves
+    if not is_lookback_knob(pid):
+        return "dream"
+    n = pid.split(".")[1:-1]
+    return f"{rgraph.LOOKBACK}.{n[0]}" if n else rgraph.LOOKBACK
+
+
+def owned_by(name: str, pid: str) -> bool:
+    """Is `dream.*` param `pid` node `name`'s, of the nodes `params_of` gives
+    one prefix (a look-back and the dream)? True for any other node."""
+    return kind_of(name) not in (rgraph.LOOKBACK, "dream") or _dream_owner(pid, None) == name
+
+
 def _switch_owner(pid: str, ctx: _Ctx) -> str | None:
     # plan 33 S: `switch[.<n>].select` on its switch's node
     return pid.rpartition(".")[0] or None
@@ -407,7 +423,8 @@ def _resize_owner(pid: str, ctx: _Ctx) -> str | None:
 # a param's group → the canvas node that owns it: a node id, or a rule
 # over the param id (an instance's number, an effect's name). Plan 35 V2:
 # the ids are the wired frame's, the params keep theirs (`graph.
-# param_prefix`: `dream.*` the look-back's, `ghost.2.*` hands 2's). A node
+# param_prefix`: `dream.*` a look-back's and the dream's by key, `ghost.2.*`
+# hands 2's). A node
 # the section does not name (no look-back, no backdrop) leaves the param
 # to its group's node. `CAMERA` is the shared camera's node — the look's
 # one orbit camera since plan 43 C2, always there — which no section
@@ -432,7 +449,7 @@ OWNERS: dict[str, str | Callable[[str, _Ctx], str | None]] = {
     "segment": _resize_owner,
     "ghost": _hands_owner,
     "cloud": _cloud_owner,
-    "dream": rgraph.LOOKBACK,
+    "dream": _dream_owner,
     "fx": _effect_owner,
     "camera": CAMERA,
     "eye": CAMERA,
@@ -778,8 +795,7 @@ HOVERS: dict[str, str] = {
     "cloud": "A listed cloud device, drawn in every scene.",
     "camera": "The shared eye every scene draws through.",
     "backdrop": "Lays the scene over a picture, at backdrop alpha.",
-    "lookback": ("Echoes and the dream of past frames, over its picture; records what is "
-                 "wired into capture."),
+    "lookback": "Echoes of past frames, its trail; records the picture wired into it.",
     "pattern": ("What the faces show unless a picture is wired into them, and its media "
                 "layer."),
     "channel": "A clip, still or live feed.",
@@ -796,7 +812,7 @@ HOVERS: dict[str, str] = {
     "segment": ("Cuts its picture into a foreground and a background — a person, or what "
                 "moves — with the matte between them as a mask."),
     "echo": "The k-th newest look-back frame.",
-    "dream": "The dream buffer.",
+    "dream": "Its picture, dreamed: laid over what it takes in, with knobs of its own.",
     "output": "A window: shows its picture, the hands over it, the guide over all.",
     rgraph.ALL_OUTPUTS: ("The rig's bus: a window shows it by a cable from here, unless the "
                          "preset cuts that cable or wires that port itself."),
@@ -3020,6 +3036,15 @@ GROUP_NO_DELETE = ("{name} is a group: Ungroup it from its menu (its nodes stay)
 PATCH_SIDE, PRESET_SIDE = "patch", "preset"     # a conflict's two answers (the sheet's, D3)
 NO_PRESET_SPAWN = "no preset is loaded: nothing to spawn into"
 SPAWN_STALE = "the preset changed while the sheet was up: spawn {name} again"
+# (wave 3 P2) what replacing the host's dream costs it, in words
+LOSES_WIRES = "its wires: {wires}"
+LOSES_VALUES = "{n} setting{s}: {names}"
+LOSES_GROUP = "its place in {name}"
+ROWS_STAY = "{n} row{s} on its params stay, and drive the patch's {node}"
+REPLACED_SAID = "replaced this preset's {node}: {lost}"
+NOTHING_LOST = "nothing but its name"
+SPLICE_REPLACED = ("{name} not spliced: that cable is the {node} it would replace, which goes "
+                   "with its wires; spawn it, then wire it")
 SPAWNED = "spawned {name}: {n} node{s}, its pins open — nothing wired to the preset"
 SPLICED = "spliced {name} into {s} → {d}"
 KEPT_SAID = "{n} row{s} kept by the preset"
@@ -4400,9 +4425,10 @@ class Edit:
     # (`_land` is run with the push held). Each returns a refusal in words,
     # nothing changed, or None (its words in `said`) ----
 
-    def _spawn_refusal(self, landing) -> str | None:
+    def _spawn_refusal(self, landing, choices: Mapping | None = None) -> str | None:
         """Whether `landing` (a `patches.Landing` read off the preset as it
-        stood) still lands as it says: its render names free, its modifier
+        stood) still lands as it says: its render names free but for what the
+        sheet was asked to replace (`choices`), its modifier
         ids the next ones, its voices free in banks there are — else the
         words (the preset moved under the sheet; nothing is written)."""
         if self.graph is None or self.presets is None or self.table is None:
@@ -4412,8 +4438,13 @@ class Edit:
         why = getattr(landing, "refusal", None)
         if why is not None:
             return why
+        asks = getattr(landing, "unanswered", None)      # (wave 3 P2; the same `getattr`)
+        why = asks(choices) if asks is not None else None
+        if why is not None:
+            return why
         name = landing.group.get("name") or "the patch"
-        have = patches.spec_names(getattr(self.graph, "spec", None))
+        have = (patches.spec_names(getattr(self.graph, "spec", None))
+                - set(getattr(landing, "replacing", ())))
         if any(c.startswith("render:") and c[7:] in have for c in landing.group.get("nodes", ())):
             return SPAWN_STALE.format(name=name)
         held = {m.id for m in getattr(self.table, "modifiers", ())}
@@ -4428,6 +4459,79 @@ class Edit:
             if any(n in bank for n in ids):
                 return SPAWN_STALE.format(name=name)
         return None
+
+    def replace_words(self, landing) -> list[str]:
+        """What the host's node loses to `landing` (wave 3 P2), in words, for
+        the sheet and the head: its wires, the settings that will differ, its
+        place in a group; then what it does not lose, the rows on its params.
+        Reads only."""
+        names = set(getattr(landing, "replacing", ()))
+        if not names:
+            return []
+        out = []
+        wires = [x for x in _doc(self).get("wires", []) if _touches(x, names)]
+        if wires:
+            out.append(LOSES_WIRES.format(wires=", ".join(f"{x['from']} → {x['to']}"
+                                                          for x in wires)))
+        reg, gone = self.reg, patches.node_members(sorted(names))
+        after = self._replaced_values(landing)
+        moved = [p.label or p.id for p in reg if p.id in after and p.base != after[p.id]]
+        if moved:
+            shown = ", ".join(moved[:3]) + (f" and {len(moved) - 3} more" if len(moved) > 3 else "")
+            out.append(LOSES_VALUES.format(n=len(moved), s="" if len(moved) == 1 else "s",
+                                           names=shown))
+        cids = {f"render:{n}" for n in names}
+        out += [LOSES_GROUP.format(name=g.get("name")) for g in self._groups() or ()
+                if cids & set(g.get("nodes", ()))]
+        table = self.table
+        asked = {(c.host_row.get("source"), c.host_row.get("target")) for c in landing.conflicts}
+        rows = sum(1 for b in (*table.routes(), *table.desk())
+                   if gone.owns(b.target) and (b.source, b.target) not in asked)
+        rows += sum(1 for m in table.macros.values() for s in m.subs
+                    if gone.owns(s.base if s.depth is None else s.depth[1]))
+        if rows:
+            out.append(ROWS_STAY.format(n=rows, s="" if rows == 1 else "s",
+                                        node=" and ".join(sorted(names))))
+        return out
+
+    def _replaced_values(self, landing) -> dict[str, Any]:
+        """The values the replaced nodes' params take: the patch's over their
+        group's fresh values, as a patch of one group lands (`Library.resolved`),
+        so the node is the patch's whatever the file leaves out. {} for a
+        landing that replaces nothing."""
+        names = tuple(getattr(landing, "replacing", ()))
+        lib = getattr(self.presets, "lib", None)
+        if not names or lib is None:
+            return {}
+        gone = patches.node_members(names)
+        out: dict[str, Any] = {}
+        for name in names:
+            for k, v in lib.resolved(rgraph.param_prefix(name), {}).items():
+                if gone.owns(k):
+                    out[k] = v
+        out.update((k, v) for k, v in landing.values.items() if gone.owns(k))
+        return out
+
+    def _leave_groups(self, names: Iterable[str]) -> None:
+        """The replaced nodes off the groups that held them, each group's open
+        pins on them with them (an emptied group goes, as `group` does it): the
+        node that lands under their name is its spawn group's."""
+        names = set(names)
+        cids = {f"render:{n}" for n in names}
+        groups = self._groups() or []
+
+        def on_them(p: Mapping) -> bool:
+            at = p.get("to") or p.get("from") or ""
+            return (rgraph.pin_node(at) or at) in names or at.rpartition(".")[0] in names
+
+        for g in list(groups):
+            if not cids & set(g.get("nodes", ())):
+                continue
+            g["nodes"] = [c for c in g["nodes"] if c not in cids]
+            if "ports" in g:
+                g["ports"] = [p for p in g["ports"] if not on_them(p)]
+            if not g["nodes"]:
+                groups.remove(g)
 
     def _land_quiet(self, doc: dict, label: str, said: str) -> str | None:
         """`_land` with no undo step of its own (the verb pushed one)."""
@@ -4460,17 +4564,31 @@ class Edit:
 
         `choices`: conflict index → ``"patch"`` or ``"preset"`` (D9: a row
         not answered is the patch's). Nothing is attached by itself (D2):
-        with no `splice` every host port is an open pin. No file is written."""
-        why = self._spawn_refusal(landing)
+        with no `splice` every host port is an open pin. No file is written.
+
+        Wave 3 P2: `landing.replacing`, answered by the sheet (`patches.
+        replace_key` in `choices`) — the host's node goes first, as a delete
+        takes it (its entry and every wire touching it), in this one step,
+        its values the patch's over fresh and its rows staying: the same id,
+        now the patch's node. `replace_words` said so before the press."""
+        why = self._spawn_refusal(landing, choices)
         if why is not None:
             return why
         name = landing.group.get("name") or "patch"
         doc = _doc(self)
+        replacing = tuple(getattr(landing, "replacing", ()))
+        lost = self.replace_words(landing)
+        gone = _take_out(doc, set(replacing))
         doc["nodes"] = [*doc.get("nodes", []), *copy.deepcopy(list(landing.nodes))]
         doc["wires"] = [*doc.get("wires", []), *copy.deepcopy(list(landing.wires))]
+        _keep_declared(doc, [n for x in gone for n in (x["from"], x["to"].rpartition(".")[0])
+                             if n not in replacing])
         ends = None
         if splice is not None:
             s, d, why = _cable_ends(self, splice)
+            if why is not None:
+                return why
+            why = _splice_replaced(name, s, d, replacing)
             if why is not None:
                 return why
             why = splice_refusal(name, landing.ports, IMAGE)
@@ -4505,8 +4623,9 @@ class Edit:
             if got is None or got.id != m.id:          # (the refusal above rules it out)
                 notes.append(f"{m.id} landed as {getattr(got, 'id', '?')}")
         lib = getattr(self.presets, "lib", None)
-        if landing.values and lib is not None:
-            missing = lib.restore(dict(landing.values))
+        values = {**self._replaced_values(landing), **landing.values}
+        if values and lib is not None:
+            missing = lib.restore(values)
             if missing:
                 notes.append(f"{len(missing)} value(s) for no param: " + ", ".join(missing[:4]))
         kept = self._spawn_rows(landing, choices or {}, notes)
@@ -4518,6 +4637,7 @@ class Edit:
             lay = self.presets.layout = {}
         for cid, xy in landing.layout.items():
             lay[cid] = [round(float(xy[0])), round(float(xy[1]))]
+        self._leave_groups(replacing)
         entry = self.land_group({**landing.group, "kept_by_host": kept})
         if ends is None and landing.ports:
             entry["ports"] = copy.deepcopy([dict(p) for p in landing.ports])
@@ -4530,6 +4650,9 @@ class Edit:
                 else SPAWNED.format(name=entry["name"], n=k, s="" if k == 1 else "s"))
         if kept:
             said += " · " + KEPT_SAID.format(n=len(kept), s="" if len(kept) == 1 else "s")
+        if replacing:
+            said += " · " + REPLACED_SAID.format(node=" and ".join(replacing),
+                                                 lost="; ".join(lost) or NOTHING_LOST)
         self.said = "; ".join([said, *notes])
         return None
 
@@ -5991,12 +6114,24 @@ def _said_onto(doc: dict, name: str, s: str, d: str, inlet: str | None,
     return words
 
 
-def splice_target(edit: Edit, cable, name: str, ports) -> str | None:
+def _splice_replaced(name: str, s: str, d: str, replacing: Iterable[str]) -> str | None:
+    """A splice onto a cable of the very node the spawn replaces (wave 3 P2)
+    would wire the patch to what it took out: refused, in words."""
+    ends = {rgraph.pin_node(s) or s, d.rpartition(".")[0]} & set(replacing)
+    return SPLICE_REPLACED.format(name=name, node=min(ends)) if ends else None
+
+
+def splice_target(edit: Edit, cable, name: str, ports, replacing: Iterable[str] = ()
+                  ) -> str | None:
     """May a patch named `name` with `ports` be spliced into `cable` (plan 40
     T3: a browser line dropped on it)? A picture cable of the section
-    (`_cable_ends`' rule: not the rig's bus) and the patch's one inlet and
+    (`_cable_ends`' rule: not the rig's bus), not one of what the spawn
+    replaces (`_splice_replaced`), and the patch's one inlet and
     one outlet of that type (`splice_refusal`); else the words why not."""
-    _, _, why = _cable_ends(edit, cable)
+    s, d, why = _cable_ends(edit, cable)
+    if why is not None:
+        return why
+    why = _splice_replaced(name, s, d, replacing)
     if why is not None:
         return why
     return splice_refusal(name, ports, getattr(cable, "type", IMAGE) or IMAGE)
@@ -6170,6 +6305,16 @@ def render_place(edit: Edit, cable, name: str, inlet: str | None = None) -> str 
                  _said_onto(doc, nm, s, d, inlet, lost, moved=True))
 
 
+def _take_out(doc: dict, names: set[str]) -> list[dict]:
+    """Nodes `names` out of section `doc`: their entries, every wire touching
+    them and any placement after them. Returns the wires that went."""
+    doc["nodes"] = [e for e in doc.get("nodes", []) if _node_name(e) not in names]
+    gone = [x for x in doc.get("wires", []) if _touches(x, names)]
+    doc["wires"] = [x for x in doc.get("wires", []) if not _touches(x, names)]
+    _unplace(doc, lambda e, key, where: where in names)
+    return gone
+
+
 def render_drop(edit: Edit, node: str) -> str | None:
     """Plan 35 G: any node of the section goes — its entry and every wire
     touching it, one undo step (an effect or a copy lifted first, so the
@@ -6234,11 +6379,8 @@ def render_drop(edit: Edit, node: str) -> str | None:
             joined = [{"from": under, "to": x["to"]} for x in wires
                       if x["from"] == name and not _touches({"from": under, "to": x["to"]},
                                                             names)]
-    doc["nodes"] = [e for e in doc.get("nodes", []) if _node_name(e) not in names]
-    gone = [x for x in doc.get("wires", []) if _touches(x, names)]
-    doc["wires"] = [x for x in doc.get("wires", []) if not _touches(x, names)]
+    gone = _take_out(doc, names)
     doc["wires"] += [x for x in joined if x not in doc["wires"]]
-    _unplace(doc, lambda e, key, where: where in names)
     if doc == before:
         return f"{label} is not in the preset's graph"
     _keep_declared(doc, [n for x in gone for n in (x["from"], x["to"].rpartition(".")[0])

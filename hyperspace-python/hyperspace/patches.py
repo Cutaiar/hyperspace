@@ -75,8 +75,10 @@ frame kind only that kind's params (`_param_rows`: `rot.*` and most of
 twice is renamed as ever (hands 1 lands as `hands.2`, a look-back as
 `lookback.2`); what a frame holds one of (`ONE_PER_FRAME`) keeps its name,
 and a host that already has it refuses the spawn in words, nothing landed
-(`Landing.taken`, `Landing.refusal`) — P2's conflict sheet is where "replace
-the host's dream" will be asked.
+(`Landing.taken`, `Landing.refusal`) — but for the dream (`REPLACEABLE`,
+wave 3 P2): the conflict sheet asks to replace the host's, whose wires and
+values go (`Landing.replacing`, `graphview.Edit.spawn`), and only what the
+held program alone keeps stays refused, there being nothing to replace.
 """
 
 from __future__ import annotations
@@ -145,6 +147,10 @@ MAY_HOLD = ("effect", "composite", "switch", "delay", "resize", "copy", "matte",
 # Hands 1 is no such thing — every other hands is a new number — nor is a
 # look-back (`lookback.2`)
 ONE_PER_FRAME = ("scene", "shape", "backdrop", "pattern", "dream")
+# (wave 3 P2, row 661) of those, what the conflict sheet may replace rather
+# than refuse. The dream alone for now; a kind added here gets the sheet's row
+# and `Edit.spawn`'s door as they are, its own group's fresh values included
+REPLACEABLE = ("dream",)
 # the render nodes the GRAPH page never deletes and a patch never holds —
 # `graphview.spec_name` refuses the camera (the look's one, `CAMERA_KEPT`,
 # plan 43 C2) and the clouds (the rig's, `NOT_REMOVABLE`); the windows are
@@ -1459,17 +1465,51 @@ class Landing:
     # `held_taken`: those of them only the held program keeps
     taken: tuple[str, ...] = ()
     held_taken: tuple[str, ...] = ()
+    # wave 3 P2: what replacing `replacing` costs the host, in words, the
+    # sheet's (`dataclasses.replace` by `ui_graph.spawn`: this module cannot
+    # see the registry; `graphview.Edit.replace_words`)
+    loses: tuple[str, ...] = ()
+
+    @property
+    def replacing(self) -> tuple[str, ...]:
+        """Of `taken`, what the conflict sheet may replace (`REPLACEABLE`):
+        on the preset, so there is something to replace; what only the held
+        program keeps is refused (`refusal`)."""
+        return tuple(n for n in self.taken
+                     if n not in self.held_taken and _kind(n) in REPLACEABLE)
 
     @property
     def refusal(self) -> str | None:
         """Why this landing cannot land, in words, or None: what the preset
         has to delete first (`TAKEN_WORDS`), else what the hold keeps
-        (`HELD_TAKEN_WORDS`)."""
-        if not self.taken:
-            return None
-        own = [n for n in self.taken if n not in self.held_taken]
+        (`HELD_TAKEN_WORDS`). What it may replace (`replacing`) is no refusal
+        but a row of the sheet."""
+        own = [n for n in self.taken if n not in self.held_taken and n not in self.replacing]
         words, nodes = (TAKEN_WORDS, own) if own else (HELD_TAKEN_WORDS, self.held_taken)
+        if not nodes:
+            return None
         return words.format(name=self.group.get("name") or "the patch", nodes=", ".join(nodes))
+
+    def unanswered(self, choices: Mapping | None) -> str | None:
+        """The words for a landing that would replace a node nobody said to
+        (`replace_key` not in `choices`: only the sheet says it), or None. A
+        node is more than a row: D9's "not answered is the patch's" stops here."""
+        left = [n for n in self.replacing if replace_key(n) not in (choices or {})]
+        if not left:
+            return None
+        return TAKEN_WORDS.format(name=self.group.get("name") or "the patch",
+                                  nodes=", ".join(left))
+
+
+def node_members(names: Iterable[str]) -> _Members:
+    """Render nodes `names` as members, to ask whose a param is (`owns`)."""
+    return _Members(tuple(names))
+
+
+def replace_key(name: str) -> str:
+    """The sheet's answer "replace the host's `name`" in `Edit.spawn`'s
+    choices, beside its rows' numbers (`keep all existing` leaves it alone)."""
+    return f"replace:{name}"
 
 
 def _group_landing(p: Patch) -> Landing:
@@ -1518,7 +1558,8 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
     `acid` → `acid.2` where the host has `acid`; a hands node and its layer
     and guide move together, hands 1 being always the frame's; a node a
     frame holds one of, `ONE_PER_FRAME`, keeps its name, and one the host
-    already has is said in `Landing.taken`, which refuses the landing); a
+    already has is said in `Landing.taken`, which refuses the landing or,
+    for the dream, makes it the sheet's to replace, `Landing.replacing`); a
     modifier one past the highest the host
     holds (`modifiers.next_id`); an LFO or envelope the bank's next id (its
     high-water rule; an envelope 6 or more), none when the bank is full or
@@ -1703,5 +1744,5 @@ def is_rig_source(addr: str) -> bool:
 
 __all__ = ["INSIDE", "INTO", "KIND", "OUT", "RIG", "SCHEMA", "Conflict", "Host", "Landing",
            "Patch", "check", "crossing", "entry_name", "held_words", "input_side",
-           "is_rig_source", "lift", "read", "select", "side", "slug", "spawn", "spec_names",
-           "sub_side", "touches", "wire_type"]
+           "is_rig_source", "lift", "read", "replace_key", "select", "side", "slug", "spawn",
+           "spec_names", "sub_side", "touches", "wire_type"]

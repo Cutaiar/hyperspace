@@ -680,9 +680,13 @@ here; overturn → the change, then the same.
 | 646 | Plan 50, not done: the show's `modules` key (a session group's band preset by name) stays — renaming it is a show schema move; `RETIRED_MODULES` and `_fresh_of` are already what the fallback needs; the band scene files (code data) stay `preset/1`, read through the one ladder; `library.migrate_doc` serves the shows alone (the preset entry, `CURRENT["hyperspace.preset"]` and `PRESET_SCHEMA` removed, review fix 8); `headless.SHARED_FOLDERS` is `patches/` alone, every folder down (review fix 2) | — | (rec) — pending the owner |
 | 647 | Plan 50: hands 1 in a group — a wired frame always holds it, so a "delete" leaves it held and a member (as a macro is) | — | (rec) — pending the owner; built as recommended |
 | 657 | Wave 3 P1: a patch holds the frame's kinds (scene, shape, backdrop, pattern, look-back, dream, hands 1, its layer and guide); the rig's (`patches.RIG_KINDS`) and the look's one camera stay refused, a lane envelope and a copy without its original too; **no `patch/3`**: the file's keys are unchanged and an older build's `check` refuses such a file in words | 497 | (rec) — pending the owner; built as recommended |
-| 658 | Wave 3 P1: a patch's single-instance node the host already has (`patches.ONE_PER_FRAME`: scene, shape, backdrop, pattern, dream) refuses the whole spawn in words, nothing landed, no sheet — P2 turns the dream's into "replace the host's dream"; hands 1 lands as the next hands, a look-back as the next look-back | 498 | (rec) — pending the owner; built as recommended |
+| 658 | Wave 3 P1: a patch's single-instance node the host already has (`patches.ONE_PER_FRAME`: scene, shape, backdrop, pattern, dream) refuses the whole spawn in words, nothing landed, no sheet — the dream's is now "replace the host's dream" (row 661); hands 1 lands as the next hands, a look-back as the next look-back | 498 | (rec) — pending the owner; built as recommended |
 | 659 | Wave 3 P1: what a frame kind carries is its own params, the canvas's owners (`patches._param_rows`): `rot.*`, most of `view.*` and `fx.face_map` the shape's; `pattern.*`, `view.pattern*`, `view.media_*` the pattern's; `dream.*` split by key between a look-back (`LOOKBACK_KEYS`) and the dream; `scene.*` no node's. The spin's pose stays the host's. A hands' layer or guide needs its hands at a **save**, in words; a file an older build saved with `hands.2.layer` alone still reads and spawns as it did. A second dream (`dream.2`) is refused at a save and at a read, and never renumbered onto `dream`. An inlet into `scene.geometry` keeps its draw order (the port's optional `before`) | 497, 499 | (rec) — pending the owner; built as recommended |
 | 660 | Wave 3 P1: the "empty frame" row 641 left open — a whole preset lifted and spawned into an empty frame is that frame (proved over the corpus, hands one number on), but `Presets.load_doc` stays the replace landing, and no preset file is spawned directly (save it as a patch). A new preset holds the scene chain, so a whole-frame patch is refused there in words | — | (rec) — pending the owner; the literal merge not built |
+| 661 | Wave 3 P2: a spawn holding a dream into a host with one is a row of the conflict sheet, "replace the host's dream": one press (**Replace and spawn**), one undo step, what the host's loses in words. No two-way row, Cancel being what keeps the preset's; **keep all existing** answers only the controls. Scope: the dream alone (`patches.REPLACEABLE`), the same door open to the other single-instance kinds. A dream only the output hold keeps stays refused in the hold's words | 500 | (rec) — pending the owner; built as recommended |
+| 662 | Wave 3 P2: what a replaced dream loses and keeps — its entry, every wire touching it and its place in a group go, as a delete takes them, and nothing is attached by itself (D2; **wire as saved** puts it on the host's picture); its values are the patch's over the group's fresh values; rows and macro subscribers on its params stay and drive the patch's dream, the sheet's own rows answering any that collide | 500, 501 | (rec) — pending the owner; built as recommended |
+| 663 | Wave 3 P2: the dream owns its params — `graphview.OWNERS` splits `dream.*` by key as `patches._param_rows` does, a look-back's `LOOKBACK_KEYS` on that look-back (`dream.2.fade` on `lookback.2`) and the rest on the dream, and `ui_graph.node_params` the same. A section with no such node leaves them on `group:dream`, as any param of a node the section lacks. No param renamed, no schema moved, no saved value touched | 502 | (rec) — pending the owner; built as recommended |
+| 664 | Wave 3 P2: a splice onto a cable of the dream being replaced is refused in words before the sheet (the cable goes with the dream, so the patch would be wired to what it took out); a splice onto any other cable replaces and splices in one step. The dream buffer is not cleared by a replace: the old picture fades under the new dream's speed | 500 | (rec) — pending the owner; built as recommended |
 
 "—": no hand check shows it; tests only.
 
@@ -11971,7 +11975,8 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Asked.** "Decide what a spawn does when the host already has a
   single-instance frame node, and refuse in words for now if P2 owns the
   answer."
-- **Answer.** (rec) — pending the owner; built as recommended.
+- **Answer.** (rec) — pending the owner; built as recommended. **The dream's
+  half is row 661 since P2**: the sheet asks to replace it.
 - **Recommended.** Refuse the whole spawn, nothing landed and no sheet:
   "dream wash not spawned: this preset already has dream, and a frame holds
   one of each — delete it here first; nothing landed". What only a held
@@ -12006,7 +12011,7 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   backdrop's. `dream.*` is split by key, `params.is_lookback_knob`'s rule:
   a look-back owns `LOOKBACK_KEYS`, the dream the rest, so a dream patch
   never sets the host's look-back knobs. (The canvas still draws them all
-  on the look-back: P2's.) `scene.*` is the band scene's, a session group,
+  on the look-back: P2's, since row 663.) `scene.*` is the band scene's, a session group,
   and no node's. The spin's pose is outside `values`, so it stays the
   host's. A hands' layer or guide without its hands is refused in words at
   the save, as a copy without its original is: alone it lands a layer of a
@@ -12048,3 +12053,92 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **To reverse.** — (nothing to undo).
 - **Built.** `tests/test_patches_frame_kinds.py::test_a_whole_preset_spawned_into_an_empty_frame_is_that_preset`.
 - **Judge it.** —.
+
+### 661. Replace the host's dream, a row of the sheet
+
+- **Asked.** Row 658 left this to P2: "the conflict sheet is where replace the
+  host's dream will be asked". Scope was row 658's recommendation.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** A spawn whose patch holds a dream, into a host that has one,
+  puts up the sheet with a row "dream: the patch's replaces this preset's" and
+  what the host's loses under it. **Replace and spawn** is the one press and
+  one undo step; **Cancel** lands nothing. There is no two-way row, because
+  landing the patch without its dream was rejected in row 658, so the only other
+  answer is Cancel. **keep all existing** answers only the controls' rows. A
+  landing nobody answered (`Edit.spawn` called with no `patches.replace_key`)
+  is refused, a node being more than a row: D9's "not answered is the patch's"
+  stops there. Only the dream: `patches.REPLACEABLE` is the door for the scene,
+  the shape, the backdrop and the pattern, which still refuse in row 658's
+  words, naming only themselves when a patch holds a dream as well. A dream
+  only the held program keeps stays refused in `HELD_TAKEN_WORDS`, there being
+  nothing on the preset to replace; one on the preset is replaced whatever the
+  hold keeps.
+- **Other options.** A two-way row whose "the preset" lands nothing; replacing
+  every single-instance kind now; a separate modal.
+- **To reverse.** `patches.REPLACEABLE = ()`: every dream refuses as in row 658.
+- **Built.** `patches.REPLACEABLE`, `replace_key`, `Landing.replacing`,
+  `Landing.unanswered`, `Landing.loses`; `graphview.Edit.spawn`,
+  `Edit._spawn_refusal`; `ui_graph.spawn`; `ui_routing._sheet`, `_control_rows`.
+- **Judge it.** 500.
+
+### 662. What a replaced dream loses and keeps
+
+- **Asked.** Follows from 661: "with what the host's dream loses said in words".
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** It goes as a delete takes it: its entry, every wire touching
+  it, and its place in a group, with that group's open pins on it (an emptied
+  group goes). D2 stands: the patch's dream lands with its pins open, so the
+  host's picture through the old dream is cut until **wire as saved** or a hand
+  wires it, and the sheet says which wires go. Its values are the patch's over
+  the group's fresh values, as a patch of one group lands, so a file that leaves
+  a param out gets the fresh value, not the host's; the look-back's knobs are
+  never touched (row 659). Rows and macro subscribers on its params are the
+  preset's and stay, driving the patch's dream under the same ids; the sheet
+  counts them and its own rows answer any that collide.
+- **Other options.** Keep the host's wires on the new dream (attaches by itself,
+  against D2); drop the rows too (a preset's knob would go quiet with no row to
+  say so); leave values the file omits at the host's (the node would then be
+  neither's).
+- **To reverse.** `graphview.Edit.spawn`, `_replaced_values`, `_leave_groups`.
+- **Built.** `graphview._take_out` (shared with `render_drop`),
+  `Edit.replace_words`, `Edit._replaced_values`, `Edit._leave_groups`.
+- **Judge it.** 500, 501.
+
+### 663. The dream owns its params
+
+- **Asked.** "The dream owning its own params": row 659 split the save, but the
+  canvas drew every `dream.*` on the look-back.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** One rule three ways: `graphview.OWNERS["dream"]` is
+  `_dream_owner`, `ui_graph.node_params` asks `graphview.owned_by`, and a test
+  over the whole registry holds them equal to `patches._param_rows`;
+  `ui_lookback.SECTIONS` is tested to be the same split and did not need to
+  change. A section with no such node leaves the params on `group:dream`, as any
+  param of a node the section lacks: a preset with a look-back and no dream now
+  shows its routes onto `dream.mix` there, where they were drawn on the look-back
+  though no dream reads them. Behaviour-neutral for a saved preset: no param
+  renamed, no schema moved, no value touched; only which canvas node draws a
+  port. `lookback.2`'s knobs now sit on `lookback.2`, and the look-back's selected
+  params no longer include them. The dream still reads the look-back's darken,
+  contrast and detail (`ui_lookback.GRADE_LINE`), which stay the look-back's.
+- **Other options.** Rename `dream.fade` and friends to `lookback.*` (a schema
+  move, not needed).
+- **To reverse.** `OWNERS["dream"] = rgraph.LOOKBACK`, and `node_params`.
+- **Built.** `graphview._dream_owner`, `owned_by`, `HOVERS`; `ui_graph.node_params`.
+- **Judge it.** 502.
+
+### 664. A splice onto the replaced dream's cable, and the dream buffer
+
+- **Asked.** Two edges of 661 that nobody had said.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** A patch dropped on a cable of the very dream it replaces is
+  refused in words, before the sheet: that cable goes with the dream, so the
+  patch would be wired to what it took out. On any other cable it replaces and
+  splices in one step. The dream buffer belongs to the worker and is not cleared
+  by a replace (nothing of `render.py` changes): the old picture fades at the new
+  dream's speed, which the tests cannot see, so check 500 asks for it by eye.
+- **Other options.** Splice into the cable's far end anyway; clear the buffer
+  (needs the renderer, outside this item, and would cut the picture to none).
+- **To reverse.** `graphview._splice_replaced`.
+- **Built.** `graphview._splice_replaced`, `splice_target`, `SPLICE_REPLACED`.
+- **Judge it.** 500.

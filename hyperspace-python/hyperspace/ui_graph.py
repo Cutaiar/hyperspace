@@ -198,6 +198,7 @@ the preset's and the show's, never a NodeEditor.json beside the app.
 from __future__ import annotations
 
 import colorsys
+import dataclasses
 import math
 import time
 
@@ -1014,7 +1015,9 @@ def node_params(panel, nid: str) -> list[str]:
     of = getattr(n.ref, "effect", "") if n is not None and graphview.kind_of(name) == "copy" else ""
     pre = graphview.params_of(name, of)
     head = pre + "."
-    ids = [p.id for p in reg if not p.alias and (p.id == pre or p.id.startswith(head))]
+    # (wave 3 P2: `dream.*` is a look-back's and the dream's, by key)
+    ids = [p.id for p in reg if not p.alias and (p.id == pre or p.id.startswith(head))
+           and graphview.owned_by(name, p.id)]
     return sorted(ids, key=lambda pid: reg[pid].kind is not Kind.CONTINUOUS)
 
 
@@ -2363,6 +2366,7 @@ WIRE_AS_SAVED_TIP = ("Wire each open pin as the patch was saved, where this pres
 SAVE_PATCH_TIP = ("Save this group as a patch: its nodes, values, wires, rows and the cables "
                   "across its edge — the patch's file, nothing else written")
 SHEET_UP = "{n} control{s} the preset already uses: the sheet asks which keeps each"
+SHEET_REPLACES = "this preset already has {nodes}: the sheet asks to replace it"
 SPAWN_CANCELLED = "spawn of {name} cancelled: nothing landed"
 NO_LIBRARY = "no library: nothing to spawn"
 WAITS_FOR = "waits for "    # plan 40 P4: a spawn's rows the rig lacks (`devices.want_words`')
@@ -2461,7 +2465,9 @@ def spawn(panel, slug: str, at=None, splice=None) -> str | None:
     `at` (layout units; None: the canvas's centre) — and, when its rig rows
     collide with the preset's, the conflict sheet first
     (`panel.spawn_question`, drawn by `ui_routing.modal`: every row the
-    patch's, D9), else landed at once (`land_spawn`: one undo step).
+    patch's, D9) — as when it holds a dream and the preset has one (wave 3
+    P2: its row says what the host's loses, `Landing.loses`) — else landed
+    at once (`land_spawn`: one undo step).
     `splice`: a picture cable it was dropped on. Returns the refusal (said
     on the head), or None."""
     st = _state(panel)
@@ -2486,21 +2492,25 @@ def spawn(panel, slug: str, at=None, splice=None) -> str | None:
     if landing.refusal is not None:      # (wave 3 P1) before any sheet could ask
         _note(st, landing.refusal)
         return landing.refusal
+    replacing = landing.replacing        # (wave 3 P2) the host's dream: the sheet's to ask
     if splice is not None:
         why = graphview.splice_target(e, splice, landing.group.get("name") or stem,
-                                      landing.ports)
+                                      landing.ports, replacing)
         if why is not None:
             _note(st, why)
             return why
-    if not landing.conflicts:
+    if not landing.conflicts and not replacing:
         return land_spawn(panel, landing, {}, splice)
     name = landing.group.get("name") or stem
+    landing = dataclasses.replace(landing, loses=tuple(e.replace_words(landing)))
 
     def cancelled() -> None:
         _note(st, None)
         st["said"] = SPAWN_CANCELLED.format(name=name)
-    panel.spawn_question = (landing, {k: graphview.PATCH_SIDE
-                                      for k in range(len(landing.conflicts))},
+    panel.spawn_question = (landing, {**{k: graphview.PATCH_SIDE
+                                         for k in range(len(landing.conflicts))},
+                                      **{patches.replace_key(n): graphview.PATCH_SIDE
+                                         for n in replacing}},
                             lambda choices: land_spawn(panel, landing, choices, splice),
                             cancelled)
     lrn = getattr(panel, "learn", None)
@@ -2508,7 +2518,8 @@ def spawn(panel, slug: str, at=None, splice=None) -> str | None:
         lrn.hold(True)                      # the hands learn nothing while it asks
     k = len(landing.conflicts)
     _note(st, None)
-    st["said"] = SHEET_UP.format(n=k, s="" if k == 1 else "s")
+    st["said"] = (SHEET_REPLACES.format(nodes=", ".join(replacing)) if replacing
+                  else SHEET_UP.format(n=k, s="" if k == 1 else "s"))
     return None
 
 

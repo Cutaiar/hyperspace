@@ -16,7 +16,7 @@ a patch that fills the whole frame; a module preset is a patch of one
 group (row 540)*. Inside it, the rest of harden-node-groups (split from
 G0): *a group holds any node, checked at save*. Not here: P1 (frame kinds
 in groups and patches: **built since**, [below](#p1-frame-kinds-in-patches-wave-3)),
-P2 (replace the host's dream), P3 (wire-as-saved
+P2 (replace the host's dream: **built since**, [below](#p2-replace-the-hosts-dream-wave-3)), P3 (wire-as-saved
 take-over, row 524) — wave 3; Dillon's #314 and #287 rebase on this in
 wave 4 (pad rows can ride in a patch: a patch's `desk` rows are any desk
 control's, unchanged).
@@ -146,15 +146,14 @@ What changed in the build:
   one live dream). One the host already has goes in `Landing.taken`, and
   `Landing.refusal` refuses the whole spawn in words, before any sheet and
   in `Edit._spawn_refusal` (what only the output hold keeps says to drop the
-  hold, `Landing.held_taken`). P2 owns "replace the host's dream": a sheet row
-  over `Landing.taken`. Hands 1 lands as the next hands, a look-back as the
+  hold, `Landing.held_taken`). The dream's is P2's sheet row since, below. Hands 1 lands as the next hands, a look-back as the
   next look-back.
 - **Whose params** (row 659). `patches._param_rows` replaces the one-prefix
   rule, the canvas's owners held equal by a test: the shape's `rot.*` and
   `view.*`, the pattern's `view.pattern*`, the look-back's `LOOKBACK_KEYS`
   and the dream the rest of `dream.*` — a dream patch never sets the host's
-  look-back. A member that keeps its name keeps its ids. The canvas still
-  draws the dream's params on the look-back: P2's.
+  look-back. A member that keeps its name keeps its ids. The canvas drew the
+  dream's params on the look-back until P2.
 - **Fixes the kinds needed.** `read` keeps the order of the wires into
   `scene.geometry` (the draw order) and orders ports by number; an inlet into
   it says where it drew (a port's optional `before`), **wire as saved**
@@ -174,6 +173,40 @@ What changed in the build:
 
 Tests: `tests/test_patches_frame_kinds.py` (new); the tests that named the
 scene as the refused thing now name what still is.
+
+## P2: replace the host's dream (wave 3)
+
+**Status: built (2026-11-03)**, register rows 661–664, every one (rec) pending
+the owner; hand checks 500–502, group BQ. **Hot reload is enough**; no schema
+moves, no param renamed, stacked on P1.
+
+What changed in the build:
+
+- **The sheet's row** (row 661). `patches.REPLACEABLE` is `("dream",)`;
+  `Landing.replacing` is what of `taken` it may replace, and `Landing.refusal`
+  no longer counts it. `ui_graph.spawn` puts up the sheet for it, with or without
+  a control in question, and `ui_routing._sheet` draws the row, what the host's
+  loses (`Landing.loses`, from `Edit.replace_words`, the leaf having no registry)
+  and **Replace and spawn**. The answer travels in `choices` under
+  `patches.replace_key`, and `Edit.spawn` refuses a replace nobody answered. No
+  two-way row: Cancel is what keeps the preset's. The conflict sheet lives in
+  `ui_routing.py`, not `ui_graph.py`.
+- **What goes and stays** (row 662). `graphview._take_out`, now shared with
+  `render_drop`, takes the entry and the wires; D2 stands, so the new dream's
+  pins are open; values are the patch's over the group's fresh ones; rows on its
+  params stay; a host group lets the node and its open pins go.
+- **The door.** Adding a kind to `REPLACEABLE` is the whole of the sheet's
+  change; which kind should go next is the owner's.
+- **Whose params** (row 663). `graphview.OWNERS["dream"]` is `_dream_owner`, the
+  split `patches._param_rows` already had; `ui_graph.node_params` agrees
+  (`owned_by`). `ui_lookback.py` needed no change: `SECTIONS` was already the
+  split, now tested to be.
+- **The edges** (row 664). A splice onto the replaced dream's own cable is refused;
+  the dream buffer is not cleared (`render.py` untouched).
+
+Tests: `tests/test_patches_replace_dream.py` (new); P1's tests that named the
+dream as refused now name the shape, and the registry-wide owners test lost its
+exception for the dream.
 
 ## Review fixes (PR #352)
 
