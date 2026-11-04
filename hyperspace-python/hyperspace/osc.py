@@ -387,7 +387,7 @@ def fire(reg, b, velocity: float) -> None:
     `momentary` holds a toggle while it is above 0, `hold` does nothing (no
     OSC hit has a duration), any other op acts when it is above 0."""
     from .params import Kind
-    from .routing import act, land
+    from .routing import act, land, press_momentary
 
     p = reg.get(b.target)
     if p is None or not b.enabled:
@@ -401,7 +401,7 @@ def fire(reg, b, velocity: float) -> None:
             land(p, velocity)
     elif b.op == "momentary":
         if p.kind is Kind.TOGGLE:
-            p.set(pressed)
+            press_momentary(p, b.source, pressed)
         elif pressed:
             p.toggle()
     elif b.op == "hold":

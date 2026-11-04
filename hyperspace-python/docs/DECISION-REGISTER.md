@@ -12755,18 +12755,31 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   default on every controller, "extremely sensitive"; no swapping presets from a
   controller or a pad. It overrules plan 53's `pad:LP`.
 - **Built.** `padmap` and `PAD_NEW_ROWS`: `pad:VIEW → deck.chase`, `momentary`.
-  `PAD_LAYOUT_11_04` in `PAD_REMAP`: the exact old factory row on BACK becomes the
+  `PAD_LAYOUTS["2026-11-04"]`: the exact old factory row on BACK becomes the
   chase, the exact rows on ← / → are dropped, with a note and the file's backup. The
   older speed rows on ← / → drop too, straight: through the walk of 2026-10-29, one
   load would have left a row for the next to remove. Not a schema move.
+- **Delete sticks.** BACK's row is not in `PAD_NEW_ROWS`: it arrives by moving the row every
+  file since 2026-10-29 holds. A file with nothing on BACK stays that way, including a file
+  last opened between 2026-10-14 and 2026-10-29 (one line by hand). START's row, in
+  `PAD_NEW_ROWS` since 2026-10-14, still comes back if deleted; set `"enabled": false`.
 - **Stays.** A row of the owner's on BACK, however close: Learn pad writes
   `tempo.tap` as `fire` with value 0, not the factory's 1, so it is kept. That pad has
   no chase until Learn gives it one. The same on ← / →. TAP TEMPO on the APC
   (`apc40.py`), and the keyboard's `key:B`, which is not a controller. The APC's bank
   pads and `preset.next`. No Edge default: Learn covers it.
+- **Two holders.** `routing.press_momentary`: a toggle on a `momentary` row stays on until
+  every source holding it has let go, across pads, the desk and osc. A desk cable lost lets
+  go only of the desk's; a device closed lets go of the pad's (`Router.pad_lost`).
+- **Qualified rows.** `pad@…` and `hat@…` are never moved: the factory has never written
+  one, and at load the table does not know which role is primary. If a second pad has become
+  the primary, its qualified row and a bare one on the same button both fire, on every button
+  and as before this row.
 - **Limit.** The factory rows name no pad, so they are the primary's; a second pad
-  still starts with none (row 212). A row added for the chase sits beside
-  BACK's: both hold it, and letting go of either lets it go.
+  still starts with none (row 212). An old factory row is recognised by its exact value,
+  so a hand-written row identical to it is taken at every load, and the file cannot say who
+  wrote it. A layout stamp in the file would settle that and is a saved-format change, left
+  to the format lane (row 724).
 - **Judge it.** 554.
 
 ### 724. A Joy-Con (R)'s chase, and whether Learn offers the list

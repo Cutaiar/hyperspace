@@ -141,6 +141,7 @@ from .routing import (
     is_session_id,
     led_lit,
     led_shade,
+    press_momentary,
     register_desk,
 )
 
@@ -503,7 +504,11 @@ class MidiIO:
         longer end."""
         for pid in HELD_PARAMS:
             held = self.reg.get(pid)
-            if held is not None and held.value:
+            if held is None:
+                continue
+            by = held.__dict__.setdefault("_pressed_by", set())
+            by -= {s for s in by if s.partition(":")[0].partition("@")[0] == "note"}
+            if held.value and not by:   # a pad's button may still have it
                 held.set(False)
 
     def close(self) -> None:
@@ -916,7 +921,7 @@ class MidiIO:
             pressed = value > 0
             if op == "momentary":
                 if p.kind is Kind.TOGGLE:
-                    p.set(pressed)
+                    press_momentary(p, b.source, pressed)
                 elif pressed:
                     p.toggle()
             elif not pressed:
