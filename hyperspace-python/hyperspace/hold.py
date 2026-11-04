@@ -74,6 +74,7 @@ from typing import Any
 
 from .params import (
     PERFORMANCE_GROUPS,
+    POSE_IDS,
     cut_ids,
     lookback_ids,
     matte_ids,
@@ -153,6 +154,11 @@ class Hold:
         if self.on:
             return False
         r, reg = self.renderer, self.reg
+        # the base chase ends here (plan 52, row 656), as the point Drop goes
+        # back to is taken, and the hold's bases stay put
+        let_go = getattr(reg, "base_chase", None)
+        if let_go is not None:
+            let_go(False)
         self.wiring = getattr(r, "wiring", None)
         self.rig = _rig(r)
         self.ghosts = dict(getattr(r, "ghost_states", None) or {})
@@ -180,6 +186,7 @@ class Hold:
         view = getattr(self.reg, "view", None)
         if pose is not None and callable(getattr(view, "set_pose", None)):
             view.set_pose(pose)
+            self.reg.forget_commits(POSE_IDS)    # (a load's pose holds no commit: plan 52)
         if loaded:                      # R19: a load's delays start empty — on the projector now
             reset = getattr(self.renderer, "reset_delays", None)
             if callable(reset):
@@ -455,6 +462,9 @@ def register(reg, hold: Hold, now: Callable[[], float] = lambda: 0.0) -> list[st
     `output.drop` — rig controls like `output.fullscreen`: group `output`,
     never persisted, not modulatable; learnable onto a desk button."""
     rig = {"group": "output", "modulatable": False}
+    # plan 52 (row 656): the operator's edits are the preview, the performer
+    # rides on both: under a hold nothing commits the performer anywhere
+    reg.chase_guard = lambda: hold.on
     reg.toggle("output.hold", "Hold projector", lambda: hold.on,
                lambda v: hold.toggle(bool(v), now()), tip=ENGAGE_TIP, persist=False, **rig)
     # lit while held: a desk button learned onto either says there is a preview

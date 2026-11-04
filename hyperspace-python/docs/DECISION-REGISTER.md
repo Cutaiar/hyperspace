@@ -685,6 +685,9 @@ here; overturn → the change, then the same.
 | 651 | Plan 44 D4: each deck's `lfo`, `env`, `seq`, `mod` lanes are its own layer (`Router.lanes`), read over the sources; the sources hold none. Changes row 591 | — | (rec) — pending the owner; built as recommended |
 | 652 | Plan 44 D4: each media source is read once a frame on `MediaSources`, both renderers handed the same `MediaFrame`; deck 2 is silent, only the on-air deck feeds the mixer | 491 | (rec) — pending the owner; built as recommended |
 | 653 | Plan 44 D4: one dream worker, lent while a fade is up and the receiving deck has a dream on, the dream restarting; the deck giving it up holds its last dream. Row 558's question (a second, lower-resolution worker for the panel's deck) measured here, **not decided** | 492 | (rec) — pending the owner; the second worker is the owner's to decide |
+| 654 | Plan 52: the base chase — while held, every continuous, modulatable param of this deck writes what it shows into its base; nothing shows differently while held; a source going home **while still held** takes the look with it (what shows is what commits); after the release a ledger absorbs the offset, so a source going home moves nothing; an undo, a load or a learn under the verb ends it, so one hold is at most one step | 494, 495 | (rec) — pending the owner; built as recommended |
+| 655 | Plan 52: macros are outside the verb — a commit would move a macro's base subscribers, which its offset never did | — | (rec) — pending the owner; built as recommended |
+| 656 | Plan 52: a press under the projector's hold is refused, and engaging a hold lets the verb go, its commit kept | 496 | (rec) — pending the owner; built as recommended |
 | 657 | Wave 3 P1: a patch holds the frame's kinds (scene, shape, backdrop, pattern, look-back, dream, hands 1, its layer and guide); the rig's (`patches.RIG_KINDS`) and the look's one camera stay refused, a lane envelope and a copy without its original too; **no `patch/3`**: the file's keys are unchanged and an older build's `check` refuses such a file in words | 497 | (rec) — pending the owner; built as recommended |
 | 658 | Wave 3 P1: a patch's single-instance node the host already has (`patches.ONE_PER_FRAME`: scene, shape, backdrop, pattern, dream) refuses the whole spawn in words, nothing landed, no sheet — P2 turns the dream's into "replace the host's dream"; hands 1 lands as the next hands, a look-back as the next look-back | 498 | (rec) — pending the owner; built as recommended |
 | 659 | Wave 3 P1: what a frame kind carries is its own params, the canvas's owners (`patches._param_rows`): `rot.*`, most of `view.*` and `fx.face_map` the shape's; `pattern.*`, `view.pattern*`, `view.media_*` the pattern's; `dream.*` split by key between a look-back (`LOOKBACK_KEYS`) and the dream; `scene.*` no node's. The spin's pose stays the host's. A hands' layer or guide needs its hands at a **save**, in words; a file an older build saved with `hands.2.layer` alone still reads and spawns as it did. A second dream (`dream.2`) is refused at a save and at a read, and never renumbered onto `dream`. An inlet into `scene.geometry` keeps its draw order (the port's optional `before`) | 497, 499 | (rec) — pending the owner; built as recommended |
@@ -12081,6 +12084,55 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Rough edge.** The deck giving the worker up holds its last dream for the
   fade. A fader jittering across 0.05 and all the way to 0 still restarts it.
 - **Judge it.** Check 492.
+
+## Wave 3 — the base chase (plan 52, rows 654–656)
+
+### 654. What the verb commits, and when the look comes back
+
+- **Asked.** The triage's "Base chase modifier"; no written spec. What does a
+  source do once its motion is in the base?
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** The verb tracks what shows, frame by frame, so holding it
+  changes nothing on screen and a release leaves the look at what showed last.
+  The offset then counts only past where it was let go, until it comes home.
+  So: hold, push the stick, let go of the verb, let go of the stick, and the
+  look stays. The alternative was a ratchet, where the look also stays when a
+  source goes home under the held verb. It keeps a stick's throw with either
+  order of release, but an LFO under it would show half its swing while held,
+  so the press would no longer be invisible. Worth judging with B2 on a
+  gamepad; it would be a change to `Param.apply` alone. An undo under the verb
+  ends it, rather than committing again on the bases it put back. A base goes
+  back with the ledger it had (`State.trims`): undoing a hold with a push still
+  out shows the old base plus the push, as if the verb had never been held. A
+  load empties the ledger: a look holds no commit it never made.
+- **Built.** `Registry.base_chase`, `Param._commit`, `params._came_home`,
+  `tests/test_base_chase.py`.
+- **Judge it.** Checks 494, 495.
+
+### 655. Macros
+
+- **Asked.** Found in the build: `macro.*` is continuous and modulatable.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** Left out. `Router.follow_macros` moves base subscribers when
+  a macro's base moves and never for an offset, so a commit would move them for
+  the first time, a jump the moment the verb is pressed. Left out, a routed
+  macro shows as it did and nothing changes. Its subscribers' own params are
+  reached if a route lands on them.
+- **Built.** `params.CHASE_REFUSED_GROUPS`.
+- **Judge it.** —.
+
+### 656. Under the projector's hold
+
+- **Asked.** Plan 38's hold keeps the program's bases and adds this frame's
+  offset, read as `value − base`.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** Refuse the press while held. A commit empties `value − base`,
+  so the program would lose the performer and the projector would jump; and
+  what it would commit into is the preview, which the room is not watching.
+  Engaging a hold lets the verb go first, so its undo step closes before the
+  point Drop goes back to. D5 retires `hold.py` and this rule with it.
+- **Built.** `Registry.chase_guard` (set by `hold.register`), `Hold.engage`.
+- **Judge it.** Check 496.
 
 ## Wave 3 — frame kinds in patches (plan 50 P1, rows 657–660)
 
