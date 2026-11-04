@@ -152,6 +152,7 @@ from .library import (
     PERFORMANCE_SCHEMA,
     PRESETS,
     RETIRED_MODULES,
+    DocKind,
     read_positions,
 )
 from .lookback import (
@@ -839,7 +840,18 @@ class Presets:
     bus: RigWires = RigWires()
 
     def __init__(self, lib, reg, router):
-        self.lib, self.reg, self.router = lib, reg, router
+        self.reg, self.router = reg, router
+        # plan 44 D5a: the library as this deck sees it, so nothing this object
+        # does through it can reach another deck, whichever the panel is on
+        on_deck = getattr(lib, "on_deck", None)
+        self.lib = lib = on_deck(self) if on_deck is not None else lib
+        base = getattr(lib, "base", lib)
+        # the performance groups' landings (`Library._labels`) and the bank's
+        # lit slot (`Project.active`) on this deck
+        self.labels: dict[str, tuple] = {}
+        first = getattr(base, "presets", None) is None
+        self.active_slot = (getattr(base.project, "__dict__", {}).get("active", -1)
+                            if first and hasattr(base, "project") else -1)
         self.note = ""
         self.notes: list[str] = []       # step 1's notes from the last load
         self.migrated = ""               # plan 36 T3: "/N migrated to /9" when that load was old
@@ -874,19 +886,24 @@ class Presets:
         router.table.on_modifiers = self.settle_groups
         for bank in self.banks().values():
             bank.on_change = self.settle_groups
-        # the library's presets kind is one, and its hooks read through
-        # `lib.presets`, the presets of the deck the panel is on (plan 44 D5a):
-        # the first `Presets` over a library declares it and is that until a
-        # pointer takes over; a deck beside the first changes nothing here
-        if getattr(lib, "presets", None) is None:
-            lib.kind(GROUP, SCHEMA.rpartition("/")[0],
-                     load=lambda doc, path: lib.presets.load_doc(doc, path),
-                     document=lambda name: lib.presets.document(name),
-                     signature=lambda: lib.presets.signature(),
-                     versions=VERSIONS,
-                     text=lambda doc: dumps(doc))
-            lib.on_load(GROUP, lambda name: lib.presets._landed(name))
-            lib.presets = self
+        # this deck's hooks for the presets kind (`DeckLibrary._kinds`); the
+        # one library's read through `lib.presets`, the presets of the deck the
+        # panel is on (plan 44 D5a): the first `Presets` over a library declares
+        # them and is that until a pointer takes over
+        self.doc_kind = DocKind(SCHEMA.rpartition("/")[0], tuple(VERSIONS),
+                                lambda doc, path: self.load_doc(doc, path),
+                                lambda name: self.document(name),
+                                lambda: self.signature(),
+                                lambda doc: dumps(doc))
+        if first:
+            base.kind(GROUP, SCHEMA.rpartition("/")[0],
+                      load=lambda doc, path: base.presets.load_doc(doc, path),
+                      document=lambda name: base.presets.document(name),
+                      signature=lambda: base.presets.signature(),
+                      versions=VERSIONS,
+                      text=lambda doc: dumps(doc))
+            base.on_load(GROUP, lambda name: base.presets._landed(name))
+            base.presets = self
         self.listeners: list = []        # called with the name after every load (app.py)
 
     # ---- the API ----
@@ -925,16 +942,15 @@ class Presets:
     def load(self, name: str) -> list[str]:
         """Load a preset by name through the library (which records it as
         the strip's current and its clean reference); returns the ids the
-        file names that nothing has. Into this deck, whichever the panel is on."""
-        missing = self.lib.load(GROUP, name, into=self)
+        file names that nothing has."""
+        missing = self.lib.load(GROUP, name)
         self._warn(name)
         return missing
 
     def save_as(self, name: str) -> Path:
         """The live state as a preset (a file of that name is written over,
-        its old text kept in the trash). This deck's, whichever the panel is on."""
-        with self.lib.into(self):
-            return self.lib.save_as(GROUP, name)
+        its old text kept in the trash)."""
+        return self.lib.save_as(GROUP, name)
 
     def new(self, at: tuple[float, float] = (0.0, 0.0)) -> list[str]:
         """A new preset (plan 35 T7, row 387): the library's fresh values
@@ -1295,8 +1311,7 @@ class Presets:
         for group in PERFORMANCE_GROUPS:
             if group in NO_MODULE and group not in RETIRED_MODULES:
                 continue
-            if lib.presets is self:      # (the strip is the deck that holds the library's)
-                lib.label(group, None)
+            lib.label(group, None)
         # 6¼. the bus cuts (plan 44 D3): the file's, else every cable standing
         self.bus = RigWires.read(doc.get(BUS_KEY))
         # 6½. where the GRAPH page's nodes sit (plan 28 N2): none is the

@@ -193,8 +193,10 @@ class Deck:
                 and clock is not sources.clock):
             raise ValueError("Deck.build: the sources step every bank on their own clock; "
                              "a different `clock` was given")
+        library = library.base           # (a deck's own view, `Deck.beside`: the one library)
+        on_deck = library.on_deck()      # this deck's bank and presets (plan 44 D5a)
         s = ViewState()
-        reg = build_registry(s, control, audio, library.project,
+        reg = build_registry(s, control, audio, on_deck.project,
                              dream=dream if dream is not None else DreamState(),
                              fx=fx if fx is not None else FxState(),
                              ghost=ghost if ghost is not None else GhostState(),
@@ -255,7 +257,7 @@ class Deck:
         router.use_sequencer(seq, envs)        # after the banks begin, before the plan
         # the presets (preset.py): the library's `presets/` files, landed on the
         # registry and the table; the project's bank loads through it
-        presets = Presets(library, reg, router)
+        presets = Presets(on_deck, reg, router)
         if renderer is not None:
             # plan 26 A4: a preset's graph section sets the renderer's wiring and
             # hands an extra hands node its own state (`Renderer.ghost_states`)
@@ -286,7 +288,7 @@ class Deck:
         # parts through the table, what is loaded through the library's marks;
         # the bands' names in strip order say which layout a strip's values
         # belong to, and a restore tells the router its macros are acted on
-        marks = Marks(library, presets)
+        marks = Marks(presets.lib)
         undo_obj = undos.Undo(reg, router.table, marks=marks,
                               tag=tag if tag is not None else (
                                   lambda: tuple(s.name for s in audio.chain.spec)),
@@ -363,6 +365,9 @@ class Deck:
               if (src := getattr(self, "sources", None)) is not None else []),
             (self.router, "routing", "Router"),
             (self.presets, "preset", "Presets"),
+            # plan 44 D5a: its view of the library (getattr: a stand-in deck has none)
+            *([(on, "library", "DeckLibrary"), (on.project, "library", "DeckProject")]
+              if (on := getattr(self.presets, "lib", None)) is not None else []),
             (self.presets.graph, "preset", "GraphSection"),      # plan 26 A4
             (self.learn, "learn", "Learn"),
             (self.clock, "tempo", "Clock"),

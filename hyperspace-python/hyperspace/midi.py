@@ -636,24 +636,33 @@ class MidiIO:
 
     def _follow_pointer(self) -> None:
         """The pointer moved since the last look: nothing of the deck left may
-        act on the deck arrived at. Its held buttons let go on it; a press or
-        a hold still down is forgotten, its release going nowhere; and the
-        new table's rows are drawn and re-armed as a load's are. One identity
-        test a frame."""
+        act on the deck arrived at. Each press still down is released now on
+        the deck it pressed, by the road a note-off takes, and its real note-off
+        goes nowhere (its key stays, mapped to no rows); its held buttons let go
+        there too; a timed hold is forgotten; a glide or a catch on a preset's
+        param goes, a session param's stays (`is_session_id`: the same object
+        on both); and the new table's rows are drawn and re-armed as a load's
+        are. One identity test a frame."""
         was = self.__dict__.get("_on")
         table = self.table
         if was is None or was[1] is table:
             self._on = (self.reg, table)
             return
+        for key, rows in self._held.items():
+            for b in rows:
+                p = was[0].get(b.target)
+                if p is not None and b.enabled and b.op != "hold":
+                    self._apply(b, p, 0)
+            self._held[key] = []
         self._let_go_held(was[0])
         self._on = (self.reg, table)
         holds, blinks = self._hold_state()
         holds.clear()
         blinks.clear()
-        self._held.clear()
-        self._writes.clear()
+        for pid in [pid for pid in self._writes if not is_session_id(pid)]:
+            del self._writes[pid]
         self._seen = self._serials()
-        self.redraw(load=True, switch=True)
+        self.redraw(load=True)
 
     def _follow_table(self) -> None:
         """A layer switch or a desk replacement since the last look: redraw
