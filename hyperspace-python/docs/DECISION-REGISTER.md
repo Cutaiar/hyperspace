@@ -12130,8 +12130,10 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   so the program would lose the performer and the projector would jump; and
   what it would commit into is the preview, which the room is not watching.
   Engaging a hold lets the verb go first, so its undo step closes before the
-  point Drop goes back to. D5 retires `hold.py` and this rule with it.
-- **Built.** `Registry.chase_guard` (set by `hold.register`), `Hold.engage`.
+  point Drop goes back to. One hold for the rig, so the rule is the rig's: every
+  deck is refused and let go. D5 retires `hold.py` and this rule with it.
+- **Built.** `Registry.chase_guard` (set on the session by `hold.register`),
+  `Hold.engage`.
 - **Judge it.** Check 496.
 
 ### 668. The rail goes; `ui.page` is the focus

@@ -126,6 +126,11 @@ nothing (`undo.alike` reads the round-off as no edit).
 
 ## The projector's hold (row 656)
 
+There is one hold for the rig, built by the first deck only, so its guard lives
+on the session: a press on **any** deck is refused under it, and `Hold.engage`
+lets the verb go on every deck. A deck beside has no program to protect today,
+so that is the rule kept whole, not a jump prevented there.
+
 Under plan 38's hold the operator's edits are the preview, and the performer
 rides on both. `hold.program_value` reads the offset as `value − base`, and a
 commit makes that 0, so the program would lose it and the projector would
@@ -159,17 +164,12 @@ A release that will never come lets go at once: the desk's cable pulled
 a pad gone to sleep or unplugged, or the totem taking its button (`Router.pad`,
 only for what that pad holds).
 
-**No frame hook is wanted.** While D4 holds `deck.py` frozen, the one seam
-left is this method, for after D4:
-
-```python
-def chase(self, on: bool) -> bool:
-    return self.reg.base_chase(on, steps=self.undo)
-```
-
-It names the deck's own `Undo`. Until it lands, `deck.chase` uses the
-installed `Undo` (`undo.installed()`), which is the deck on air's, so a second
-deck's hold would not be kept as one step on its own stack.
+**No frame hook is wanted.** The deck's operation is `Deck.chase(on)`, added
+once D4 merged: `self.reg.base_chase(on, steps=self.undo)`. `Deck.build` hands
+each registry its own undo (`Registry.chase_undo`), so the `deck.chase` control
+takes the same road. A chase on deck 2 keeps its step on deck 2's stack and
+writes nothing on deck 1 (`test_a_chase_on_deck_2_keeps_its_step_there_and_writes_nothing_on_deck_1`).
+A bare registry, with no deck, has no steps.
 
 ## Not done
 

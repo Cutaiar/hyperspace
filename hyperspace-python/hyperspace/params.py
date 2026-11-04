@@ -846,10 +846,13 @@ class Registry:
     # for a registry of its own (a bare one, the tests'; and one from
     # before a hot reload, on the class)
     session: SessionRegistry | None = None
-    # the base chase (plan 52): held now; and who may refuse a press (the
-    # projector's hold, `hold.register`), None: nobody
+    # the base chase (plan 52): held now; who may refuse a press (the
+    # projector's hold, one for the rig: `hold.register` sets it on the
+    # session), None: nobody; this deck's `undo.Undo` (`Deck.build`), None: a
+    # bare registry has no steps
     chasing: bool = False
     chase_guard: Callable[[], bool] | None = None
+    chase_undo: Any = None
     _chase_steps: Any = None             # the `undo.Undo` the press opened its step on
 
     def __init__(self, session: SessionRegistry | None = None):
@@ -1042,27 +1045,30 @@ class Registry:
         landing (`Param._commit`), with no per-frame scan and no change to
         what is shown. Let go, the look stays where the performer left it.
 
-        One hold is one undo step on `steps` (a `undo.Undo`; None: the
-        installed one, today's lead deck), remembered at the press so any
+        One hold is one undo step on `steps` (a `undo.Undo`; None: this
+        deck's, `chase_undo`), remembered at the press so any
         let-go closes that one; what closes the step otherwise (an undo, a
         load, a learn under the verb) ends the verb with it. A press under
         the projector's hold is refused (`chase_guard`, row 656). Returns
         whether the verb is on now."""
         on = bool(on)
-        if on and self.chase_guard is not None and self.chase_guard():
+        rig = self.session if self.session is not None else self
+        if on and rig.chase_guard is not None and rig.chase_guard():
             on = False
         if on == self.chasing:
             return on
         if on:
-            self._chase_steps = steps if steps is not None else undo.installed()
-            undo.keep_open(CHASE_LABEL, self._chase_steps,    # before any base moves
-                           on_end=lambda: self.base_chase(False))
+            self._chase_steps = steps if steps is not None else self.chase_undo
+            if self._chase_steps is not None:                 # before any base moves
+                undo.keep_open(CHASE_LABEL, self._chase_steps,
+                               on_end=lambda: self.base_chase(False))
         self.chasing = on
         for p in self._p.values():
             p._chase = on and chase_reaches(p)
         if not on:
             opened, self._chase_steps = self._chase_steps, None
-            undo.let_close(opened)
+            if opened is not None:
+                undo.let_close(opened)
         return on
 
     # ---- persistence: the one serialization every preset is made of ----
@@ -2228,8 +2234,8 @@ def build_performance(view, bank=None, dream=None, fx=None, ghost=None, media=No
             pass
     r.switch_state = picks
     # plan 52: the base chase, held. The deck's rig control, so every deck has
-    # its own: a test or a learned button presses it; `Deck.chase` can call
-    # `base_chase` once D4 lets deck.py be touched
+    # its own: a test or a learned button presses it, and it is `Deck.chase`'s
+    # road: `base_chase` with this deck's undo (`chase_undo`)
     r.toggle(CHASE_PARAM, "Base chase", lambda: r.chasing, lambda v: r.base_chase(bool(v)),
              group="deck", persist=False, modulatable=False,
              tip="While held, whatever the performers are doing to the look is written "

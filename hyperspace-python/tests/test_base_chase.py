@@ -17,9 +17,11 @@ import pytest
 from test_undo import boot, frames, labels
 
 from hyperspace import hold as H
+from hyperspace import lfo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
+from hyperspace.deck import Deck
 from hyperspace.params import (
     CHASE_LABEL,
     CHASE_PARAM,
@@ -734,6 +736,74 @@ def test_drop_does_not_jump_with_the_source_still_out(held):
     held.hold.drop()
     go(held, 2)
     assert p.value == pytest.approx(shown)
+
+
+# ---------------------------------------------------------------- two decks
+
+def beside(r):
+    """A second deck over `r`'s session, sources and clock, with the same
+    route `routed` gives the first."""
+    b = Deck.beside(r.deck, lfos=lfo.LFOs(seed=1))
+    b.table.add(Binding("hand:0", "view.bright", "push", 1.0, rest=0.5))
+    return b
+
+
+def go_both(r, b, n=2):
+    for _ in range(n):
+        go(r)
+        b.undo.tick(r.t)
+        b.router.modulate(None)
+        b.reg.apply()
+
+
+def test_a_chase_on_deck_2_keeps_its_step_there_and_writes_nothing_on_deck_1(rig):
+    p1 = routed(rig)
+    b = beside(rig)
+    p2 = b.reg["view.bright"]
+    go_both(rig, b)
+    b.undo.clear()
+    rig.undo.clear()
+    start1, start2 = p1.base, p2.base
+    rig.out_value[0] = 0.6
+    go_both(rig, b)
+    assert b.chase(True) and b.reg.chasing and not rig.reg.chasing
+    go_both(rig, b, int(SETTLE_S * 60) + 5)    # past the settle time, still one step
+    assert p2.base != pytest.approx(start2), "deck 2's look took it"
+    assert p2.base == pytest.approx(p2.value)
+    assert p1.base == pytest.approx(start1) and not p1._trim, "deck 1's did not"
+    assert p1.value != pytest.approx(start1), "and its route rides on as ever"
+    assert not b.chase(False)
+    assert [s.label for s in b.undo.stack] == [CHASE_LABEL]
+    assert labels(rig) == [] and rig.undo._kept is None
+    assert b.undo.undo()
+    assert p2.base == pytest.approx(start2)
+
+
+def test_deck_2s_control_uses_deck_2s_undo(rig):
+    routed(rig)
+    b = beside(rig)
+    go_both(rig, b)
+    b.undo.clear()
+    rig.undo.clear()
+    b.reg[CHASE_PARAM].set(True)
+    assert b.undo._kept is not None and rig.undo._kept is None
+    rig.out_value[0] = 0.6
+    go_both(rig, b)
+    b.reg[CHASE_PARAM].set(False)
+    assert b.undo._kept is None
+    assert [s.label for s in b.undo.stack] == [CHASE_LABEL] and labels(rig) == []
+
+
+def test_the_hold_refuses_and_lets_go_on_every_deck(held):
+    routed(held)
+    b = beside(held)
+    assert b.chase(True)
+    go_both(held, b)
+    assert held.hold.engage()
+    assert not b.reg.chasing and b.undo._kept is None, "engaging lets deck 2 go too"
+    assert not b.chase(True) and not b.reg[CHASE_PARAM].value, "and a press there is refused"
+    held.hold.take()
+    assert b.chase(True)
 
 
 # ---------------------------------------------------------------- pressing it
