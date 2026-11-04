@@ -164,6 +164,9 @@ class State:
     marks: Any = None
     modifiers: Any = None     # the modifiers' document (plan 28 N1); None: not taken
     banks: Any = None         # each bank's ids by scheme (plan 31 B); None: not taken
+    # how much of a route's offset each base held then, those that held any
+    # (the base chase's ledger, plan 52), so a base goes back with its own
+    trims: Any = None
 
 
 @dataclass
@@ -293,11 +296,41 @@ class Undo:
                      tuple(replace(b) for b in table.desk()), table.macros_doc(),
                      self._tag(),
                      self.marks.take() if marks and self.marks is not None else None,
-                     modifiers=self._mods(), banks=self._bank_ids())
+                     modifiers=self._mods(), banks=self._bank_ids(),
+                     trims={p.id: t for p in self._params() if (t := p._trim)})
 
     def _read_lands(self):
         lands = getattr(self.marks, "lands", None)
         return lands() if lands is not None else None
+
+    # ---- a step a held control keeps open (plan 52, the base chase) ----
+
+    # on a class: a live `Undo` from before a hot reload reads them
+    _kept: Step | None = None     # the step no quiet closes
+    _on_end = None                # what to tell the holder when it closes
+
+    def keep_open(self, label: str, on_end=None) -> None:
+        """A held control's step, its own: whatever was open closes first,
+        and no quiet closes this one, so one hold is one step however still
+        the hold goes. `let_close` ends it. Anything else that closes it (an
+        undo, an action's push, a band reshape, `clear`) ends the hold too:
+        `on_end` is called, so the held control lets go and one hold is
+        never more than one step."""
+        self._flush()
+        self.push(label)
+        self._action_frame = -1           # the next push is an action of its own
+        self._kept, self._on_end = self._open, on_end
+
+    def let_close(self) -> None:
+        """The hold is over: its step closes now (taken off the stack if the
+        hold moved nothing, as any empty step is). Nothing kept: nothing."""
+        if self._kept is not None:
+            self._flush()
+
+    def _end_kept(self) -> None:
+        on_end, self._kept, self._on_end = self._on_end, None, None
+        if on_end is not None:
+            on_end()
 
     # ---- the frame ----
 
@@ -311,7 +344,8 @@ class Undo:
         if self._open is None:
             self._lands = self._read_lands()
         # quiet this frame: an open step closes once the settle time has passed
-        if self._open is not None and now - self._changed_at >= SETTLE_S:
+        if (self._open is not None and self._open is not self._kept
+                and now - self._changed_at >= SETTLE_S):
             self._close()
 
     def _observe(self, fp: tuple) -> bool:
@@ -358,6 +392,8 @@ class Undo:
         self._settled = now = self._take()
         if step is None:
             return
+        if step is self._kept:
+            self._end_kept()
         ids, parts, _left = self._differs(step.before, now, tagged=False)
         empty = not ids and not parts and step.before.tag == now.tag
         if empty and step.load and self.marks is not None:
@@ -466,6 +502,8 @@ class Undo:
         self.stack.clear()
         self.redos.clear()
         self._open, self._absorb, self._action_frame = None, 0, -1
+        if self._kept is not None:
+            self._end_kept()
         self._fp = self._fingerprint()
         self._settled = self._take()
 
@@ -573,7 +611,7 @@ class Undo:
                     todo[p.id] = list(v) if isinstance(v, list) else v
                 if not todo:
                     break
-                reg.restore(todo)
+                reg.restore(todo, trims=state.trims)
             # 6. the macros' bases are acted on: nothing re-lands next frame
             if self.on_restore is not None:
                 self.on_restore()
@@ -642,10 +680,11 @@ def installed() -> Undo | None:
     return _installed
 
 
-def _guarded(what: str, fn) -> None:
+def _guarded(what: str, fn, on: Undo | None = None) -> None:
     """The safety net must not be what breaks a load or a frame: a raise
-    in here is said (stderr, the status line) and the caller goes on."""
-    u = _installed
+    in here is said (stderr, the status line) and the caller goes on. `on`:
+    a deck's own `Undo`; None, the installed one."""
+    u = on if on is not None else _installed
     try:
         fn(u)
     except Exception as e:  # noqa: BLE001
@@ -658,6 +697,16 @@ def push(label: str, *, load: bool = False) -> None:
     Call it before a replacing action changes anything."""
     if _installed is not None:
         _guarded("push", lambda u: u.push(label, load=load))
+
+
+def keep_open(label: str, on: Undo, *, on_end=None) -> None:
+    """`Undo.keep_open` on a deck's `Undo`, guarded as `push` is."""
+    _guarded("keep open", lambda u: u.keep_open(label, on_end), on)
+
+
+def let_close(on: Undo) -> None:
+    """`Undo.let_close` on a deck's `Undo`, guarded as `push` is."""
+    _guarded("let close", lambda u: u.let_close(), on)
 
 
 def undo() -> None:
