@@ -6,7 +6,8 @@ the rest are held by a patch, so a "dream + fx + composite" patch exists.
   and the dream's split by key, the band scene's no node's;
 - what can be made twice is renamed (hands 1 lands as `hands.2`, a look-back
   as `lookback.2`); what a frame holds one of keeps its name, and a host that
-  already has it refuses the spawn in words, nothing landed;
+  already has it refuses the spawn in words, nothing landed (the dream's is
+  the sheet's since P2: tests/test_patches_replace_dream.py);
 - a spawn into an empty frame is the frame: every corpus preset, whole.
 """
 
@@ -23,7 +24,7 @@ from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
 from hyperspace import graph as G
-from hyperspace import graphview, headless, params, patches, ui_graph, undo
+from hyperspace import graphview, headless, params, patches, ui_graph, ui_routing, undo
 from hyperspace.library import PATCHES
 from hyperspace.patches import Host, spawn
 from hyperspace.routing import Bindings
@@ -104,14 +105,14 @@ def test_save_still_refuses_the_camera_and_a_lane_envelope_in_words():
 # ---------------------------------------------------------------- whose params
 
 def test_the_leaf_and_params_share_the_look_backs_keys():
-    assert patches.LOOKBACK_KEYS is params.LOOKBACK_KEYS
+    assert patches.is_lookback_key is params.is_lookback_key
 
 
 def test_a_frame_kinds_params_are_the_canvas_owners(tmp_path):
     """Over the whole registry: where `patches._param_rows` gives a frame
     kind's param an owner it is the node the canvas puts it on
-    (`graphview.OWNERS`), but for the dream's, which the canvas draws on the
-    look-back (P2's to move); no frame kind owns a session group's param."""
+    (`graphview.OWNERS`, the dream's on the dream's since P2); no frame kind
+    owns a session group's param."""
     app = headless.make_app(tmp_path)
     frame_kinds = ("scene", "shape", "backdrop", "pattern", "lookback", "dream")
     mem = patches._Members(frame_kinds)
@@ -126,10 +127,7 @@ def test_a_frame_kinds_params_are_the_canvas_owners(tmp_path):
         rule = graphview.OWNERS.get(p.group)
         got = rule(pid, None) if callable(rule) and p.group != "fx" else (
             "shape" if pid == "fx.face_map" else rule)
-        if who == "dream":
-            assert got == "lookback" and not params.is_lookback_knob(pid), pid
-        else:
-            assert got == who, pid
+        assert got == who, pid
     assert owned > 50
 
 
@@ -178,17 +176,17 @@ def test_a_dream_patch_spawns_where_the_host_has_no_dream():
     assert landing.values["dream.mix"] == wake_doc()["values"]["dream.mix"]
 
 
-def test_the_host_keeps_a_dream_it_has_and_says_so():
-    """P2 owns "replace the host's dream": until then the spawn refuses in
-    words, whichever of the frame's single-instance nodes it is."""
+def test_a_host_has_a_single_instance_node_and_the_landing_says_so():
+    """`Landing.taken` names it, whichever it is; the dream's is the sheet's
+    since P2 (`Landing.replacing`), the rest refuse in words."""
     p = parts(wake_doc())
     landing = spawn(cut("dreamy"), Host.of(*p[:2]))
-    assert landing.taken == ("dream",)
-    assert landing.refusal == patches.TAKEN_WORDS.format(name="dreamy", nodes="dream")
+    assert landing.taken == ("dream",) and landing.refusal is None
     whole, _ = patches.lift(*p, ["render:scene", "render:shape", "render:dream"])
     landing = spawn({**whole, "name": "x"}, Host.of(*p[:2]))
     assert landing.taken == ("dream", "scene", "shape")
     assert all(patches.entry_name(e) in landing.taken for e in landing.nodes)
+    assert landing.refusal == patches.TAKEN_WORDS.format(name="x", nodes="scene, shape")
 
 
 def test_the_host_having_only_a_second_dream_leaves_the_first_free():
@@ -203,10 +201,9 @@ def test_a_held_programs_dream_is_taken_too_and_said_as_the_holds():
     landing = spawn(cut("dreamy"), Host.of(spec, table, held=("dream",)))
     assert landing.taken == landing.held_taken == ("dream",)
     assert landing.refusal == patches.HELD_TAKEN_WORDS.format(name="dreamy", nodes="dream")
-    spec, table = parts(wake_doc())[:2]                    # in the preset as well: delete it
+    spec, table = parts(wake_doc())[:2]                    # in the preset as well: not the hold's
     landing = spawn(cut("dreamy"), Host.of(spec, table, held=("dream",)))
     assert landing.held_taken == ()
-    assert landing.refusal == patches.TAKEN_WORDS.format(name="dreamy", nodes="dream")
 
 
 def test_a_second_dream_stays_out_and_never_becomes_the_live_one():
@@ -232,15 +229,15 @@ def test_a_landing_from_before_a_hot_reload_still_lands(rig):
     assert ui_graph.group_edit(rig.panel)._spawn_refusal(old) is None
 
 
-def test_a_spawn_of_a_dream_into_a_preset_with_one_refuses_nothing_landed(rig):
+def test_a_spawn_of_a_shape_into_a_preset_with_one_refuses_nothing_landed(rig):
     on_graph(rig, "party-wake")
-    slug = put(rig, cut("dreamy"))
+    slug = put(rig, cut("shapely", ["render:shape"]))
     before, home = state(rig), files(rig.lib.home)
     u = watch(rig)
     try:
         n = len(u.stack)
         said = ui_graph.spawn(rig.panel, slug, (0.0, 0.0))
-        assert said == patches.TAKEN_WORDS.format(name="dreamy", nodes="dream")
+        assert said == patches.TAKEN_WORDS.format(name="shapely", nodes="shape")
         assert ui_graph._state(rig.panel)["note"] == said
         assert getattr(rig.panel, "spawn_question", None) is None    # no sheet: it could not land
         assert state(rig) == before and files(rig.lib.home) == home and len(u.stack) == n
@@ -250,8 +247,9 @@ def test_a_spawn_of_a_dream_into_a_preset_with_one_refuses_nothing_landed(rig):
 
 def test_the_edit_refuses_a_landing_with_a_taken_node_as_well(rig):
     on_graph(rig, "party-wake")
-    landing = spawn(cut("dreamy"), Host(names=frozenset({"dream"})))
+    landing = spawn(cut("shapely", ["render:shape"]), Host(names=frozenset({"shape"})))
     before = state(rig)
+    assert landing.refusal is not None
     assert ui_graph.group_edit(rig.panel).spawn(landing) == landing.refusal
     assert state(rig) == before
 
@@ -272,9 +270,10 @@ def test_dream_fx_composite_saved_spawned_and_undone_through_the_doors(rig):
     assert patches.check(doc) == []
     assert {patches.entry_name(n) for n in doc["nodes"]} == {"dream", "composite", "acid"}
 
-    # back on its own preset: refused, it has that dream
-    assert ui_graph.spawn(rig.panel, "dream-wash") == patches.TAKEN_WORDS.format(
-        name="dream wash", nodes="dream")
+    # back on its own preset the sheet asks to replace that dream (P2), not here
+    assert ui_graph.spawn(rig.panel, "dream-wash") is None
+    assert ui_routing.sheet(rig.panel)[0].replacing == ("dream",)
+    assert ui_routing.settle_sheet(rig.panel, False) is None
 
     on_graph(rig, "party-noita")
     pre = rig.lib.presets
