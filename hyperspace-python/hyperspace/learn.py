@@ -91,9 +91,9 @@ from .motion import DEFAULT_ROUTE_FEEL
 from .params import PERFORMANCE_GROUPS, Kind, Param, Registry, is_lookback_knob
 from .routing import (
     MOD_OPS,
-    TURN_OP,
     SAVE_PARAM,
     SINK_OP,
+    TURN_OP,
     Binding,
     Bindings,
     Owned,

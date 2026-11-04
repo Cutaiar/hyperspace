@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import math
+from itertools import pairwise
 from types import SimpleNamespace
 
 import pytest
@@ -96,7 +97,7 @@ class Run:
 
 def steps_of(seq):
     """Each frame's move, shortest way round."""
-    return [R.wrap(b - a) for a, b in zip(seq, seq[1:])]
+    return [R.wrap(b - a) for a, b in pairwise(seq)]
 
 
 @pytest.fixture()
@@ -165,6 +166,16 @@ def test_the_palm_crossing_the_seam_is_one_turn_with_no_sweep(app, tmp_path):
     assert max(lanes) - min(lanes) > 0.9                         # the lane did step across
     assert all(abs(s) < 1.01 for s in steps_of(r.yaw))
     assert r.yaw[-1] == pytest.approx(20.0, abs=0.3)
+
+
+@pytest.mark.parametrize("depth", [0.5, -0.5])
+def test_the_seam_is_the_shortest_way_at_any_depth(app, tmp_path, depth):
+    """At depth 1 a wrapping target would hide a linear difference (a whole
+    throw wraps to nothing); off 1 the seam shows whether it is read as a turn."""
+    orbit_rows(app.table, Binding(YAW, "camera.yaw", TURN_OP, depth, when=GRAB))
+    r = Run(app, tmp_path, closing(yaw=170.0) + [fist(yaw=170.0 + k) for k in range(21)])
+    assert all(abs(s) < 0.51 for s in steps_of(r.yaw))
+    assert r.yaw[-1] == pytest.approx(20.0 * depth, abs=0.3)
 
 
 def test_the_camera_crossing_its_own_seam_wraps(app, tmp_path):

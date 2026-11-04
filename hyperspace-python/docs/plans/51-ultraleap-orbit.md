@@ -6,9 +6,9 @@ as lanes that mean the same thing whatever the camera does; O2 adds the
 clutch and the routes onto the one camera (plan 43 C2).
 
 **Status.** O1 built (wave 3, 2026-11-03; register rows 678–681, hand
-checks 514–516, group BU). O2 is the sketch in §6, not built. Nothing here
-has run on a real sensor: the proof is tape-driven
-(`tests/test_hands_room.py`).
+checks 514–516, group BU). O2 built (§6; rows 682–685, hand checks 517–519,
+group BV). Nothing here has run on a real sensor: the proof is tape-driven
+(`tests/test_hands_room.py`, `tests/test_hands_orbit.py`).
 
 ## 1. Why new lanes
 
@@ -99,8 +99,9 @@ at 0.5. Depth 1 onto a wrapping param with a full-circle range (`camera.yaw`,
 of the shape, and the seam at 0 / 1 lands on the same orientation in both.
 
 **A dropped wire lands that row.** `learn.row_for` makes a room lane a
-`position` row at depth 1 with no feel, on any continuous target (GRAPH's cable
-and Route from ▸ both go through it). The default it would otherwise get, a
+`position` row at depth 1 with no feel, on a continuous target that does not
+wrap, and since O2 a clutched `turn` on one that does (§6). GRAPH's cable and
+Route from ▸ both go through it. The default it would otherwise get, a
 push at the hands' Learn depth on the `smooth` spring, is not one-to-one, and
 the spring glides across the seam through the whole range. This is the one line
 of knowledge outside `hands/`: `learn.whole_circle` reads the address, because
@@ -127,8 +128,9 @@ of knowledge outside `hands/`: `learn.whole_circle` reads the address, because
   just more turn", as `camera.pitch` does), with no 180° flip in any lane. The
   costs: a hand back at level after going over the top may read pitch 180°
   rather than yaw 180° and roll 180°, the same orientation, until it leaves
-  the box; and a twist made inside the cone shows as a yaw step of up to 90°
-  on the way out, softened only by the filter.
+  the box. A twist made inside the cone would show as a yaw step of up to 90°
+  on the way out, so past `POLE_STEP_DEG` (5°) the hand reads NaN that frame
+  and restarts, as a returning hand does (O2; §6). A smaller step goes through.
 
 ## 5. What a lost hand does
 
@@ -147,28 +149,136 @@ axes only): pick them under **Route from**. `[hands] dofs`, the twelve axes
 and every older lane index stay as they are; these lanes come after the grabs
 (`Layout.room`), per side, in the order roll, pitch, yaw.
 
-## 6. O2, the sketch
+## 6. O2: the clutch and the `turn` row
 
-Not built here; O2's builder may overturn any of it.
+Built (wave 3, 2026-11-03). **Close a fist and the shape turns with the hand;
+open it and the hand moves freely while the shape stays; close it again and
+the turn goes on from where the shape sits, like lifting a mouse.** To set it
+up, wire `room.yaw` → Yaw and `room.pitch` → Pitch on GRAPH: each cable lands
+the row below, and a save keeps it.
 
-- **The clutch.** A `position` row gated by `hand:right.grab` is not an orbit:
-  closing the fist slams the camera to the palm's absolute angle, and opening
-  returns it to the base. An orbit is **relative and it stays**: while the hand
-  is closed, its turn since the last frame is added to the camera's **base**,
-  and opening leaves the camera where it is. So O2 needs a row that writes a
-  base: a new op (say `turn`) reading a whole-circle lane's shortest change,
-  with `Param.nudge`'s wrap, gated by the existing `when`. Being a route it is
-  visible and saved like any other, which the WYSIWYG rule asks for. The
-  gate is the grab that exists; no new gesture.
-- **Which turns go where.** `room.yaw` → `camera.yaw` and `room.pitch` →
-  `camera.pitch`, depth 1, sign as §2. Roll has no target on the one camera
-  (it has no roll); a 4D plane is a preset's choice.
-- **A lost hand mid-clutch.** The lane reads NaN and the grab drops: the row
-  moves nothing, and the camera stays at the last turn (on the base, so a
-  preset save has it). The first frame back has no previous reading, so no
-  jump.
-- **Saved and held.** Because it writes the base, `hold.HELD_GROUPS`, the save
-  and undo all see an ordinary camera move.
-- **Open questions for O2.** Whether the yaw step on leaving the pole cone
-  (§4) needs a guard; `Palm.pole` is there to read, and the hysteresis uses it. Whether `ghost.mirror`
-  should flip the row's sign. Whether one hand or either hand may clutch.
+### The row
+
+```json
+{"source": "hand:right.room.yaw", "target": "camera.yaw", "op": "turn", "when": "hand:right.grab"}
+```
+
+A `position` row gated by the grab is not an orbit: closing slams the camera to
+the palm's absolute angle, and opening returns it to the base. So **`turn` is a
+new performer op that writes the base** (`routing.TURN_OP`, `Router._turn`, one
+branch in `Router.modulate`). While the row acts, `depth · scale ·` the reading's
+shortest change since the last frame is added to the target's base, wrapped on a
+wrapping param and clamped on any other continuous one. It never calls
+`Param.modulate`, so nothing rides on the base and nothing is left to let go.
+
+- **No jump, one rule.** The frame a row starts acting it only reads. A frame it
+  does not act (`when` shut, the source NaN, the row disabled) it forgets
+  (`Router._end_turns`, once a pass). A closing clutch and a returning hand are
+  the same case.
+- **The seam.** The difference is read as a circle, so ±180° is one-to-one at any
+  depth, with no sweep.
+- **No feel.** A row's `motion` is not read: a follower would glide across the
+  seam. The palm's own filter (`smooth`, `response`) is the row's only smoothing.
+- **It is a performer.** In `MOD_OPS`, so it owns its target under the referee,
+  is saved with the preset's routes, is drawn on GRAPH and is listed on ROUTING,
+  where the op chip goes `position` ↔ `turn` from a room lane. A scene-setter
+  (a knob, the pad's stick) still writes the same base.
+- **A target that cannot turn** (not continuous, integer, not modulatable) is
+  dormant, as a row to an unknown param is.
+
+### What closes the clutch
+
+**The same hand's grab**, `hand:<side>.grab`: `learn.clutch_of` names it when a
+wire lands. It is the existing Schmitt-and-debounce switch, and "turn a closed
+hand" is the owner's own picture. The row's `when` is an ordinary gate, so a preset
+can pick otherwise:
+
+| Alternative | For | Against |
+| --- | --- | --- |
+| A pinch (`hand:right.pinch.index`) | The hand stays open, which may suit the tracker better | Presets already use pinches as gates; easier to hold by accident |
+| The other hand's grab | The turning hand keeps a relaxed pose | Two hands busy; the ghost hands show both |
+| No gate | Nothing to learn | The camera follows whenever a hand is in view, so a hand cannot get to where it starts a turn |
+| A button lane (`axis:RT`, any fed lane) | No gesture at all | A hand on a controller |
+
+Which reads best on the sensor is hand check 518. Whether closing a fist itself
+tips the palm's reading is untested: the proof's fist has the same palm vectors
+as its open hand, and the clutch closes only after `GRAB_HOLD_S`, so a real
+fist's closing motion mostly falls before it, and an opening's falls inside it.
+
+**One hand per target.** The referee holds a target to one performer, so "either
+hand may clutch" is not offered: a second hand's row asks Replace / Keep. Yaw from
+one hand and pitch from the other is allowed.
+
+### A lost hand
+
+The lanes read NaN and the grab drops at once (§5), so the row does not act and
+forgets. The camera stays where it was, on its base: **a lost hand is an opened
+clutch.** It does not fall back to anything. A hand coming back reads afresh and
+the clutch has to close again, debounce included, so it returns with no jump
+however it is turned.
+
+### The cone (the open question from O1, answered)
+
+A twist made inside the pole's cone would come out as a yaw step of up to 90°, and
+on a `turn` row that is a camera jump. So `Palm.step` treats a yaw step above
+`POLE_STEP_DEG` (5°) on leaving the cone as no turn of the hand: all three lanes
+read NaN for that one frame and the filter restarts. A `turn` row forgets and goes
+on with no jump. The cost falls on `position` rows on room lanes: one frame at the
+base, where they would have had the step anyway. A `turn` row's undo step also
+ends there (below).
+
+### Undo: one step per closure
+
+The first row acting opens a step named "orbit" and no quiet closes it, so a fist
+held still past `SETTLE_S` is still one step; when no row acts, it closes at once.
+Two rows on one gate are one step. A closure that moved nothing leaves none.
+
+- **The mechanism is the base chase's** (plan 52): `Undo.keep_open` / `let_close`,
+  and their module-level forms. B1 is not this branch's base, so those lines are
+  **copied from #356 unchanged**, without its `trims`, and either PR landing second
+  merges them as identical changes. `Param._commit` / `_trim` are not shared: a chase
+  commits what an offset landed and must count it, and a turn has no offset, so it
+  needs no ledger and touches nothing in `params.py`.
+- **Exceptions, stated.** A lost hand or a cone restart mid-orbit ends the step, so
+  it is two steps. An edit made during a closure (a knob) is in the orbit's step, as
+  with the chase.
+- **Anything else that closes the step cuts the turn** (an undo, a load, the hold's
+  engage): the row keeps reading and writes nothing until every row has let go. A
+  fist still closed does not run on from what was just put back. The step is kept
+  only on an `Undo` watching this registry; on another deck the edits settle by the
+  quiet, as a knob's do, until D4 gives each deck its own `Undo` in the call.
+
+### Saved, held, and two decks
+
+- **Saved.** The row is the preset's (plan 43 C2) and the camera's new base is in
+  `values`; the dirty dot lights by the ordinary compare, as for the pad's stick.
+- **The hold.** It writes the base, so under the hold it moves the preview and the
+  projector keeps the held camera, as a knob does, not as a performer riding on both
+  does. Row 684.
+- **Two decks.** Each router keeps its own readings and writes its own deck's camera.
+  D4's dormant rule on a session param comes first, because the turn branch sits
+  after that check.
+
+### Format
+
+**No schema move** (row 683, accepted as a recommendation by the wave's orchestrator,
+pending the owner). A new op changes what an older build reads: `preset.py` drops the
+row with the note "(turn): not a performer row", the rest of the file lands, and a
+save from that build loses the row. The alternatives are worse: a `position` row with
+a flag slams the camera on an older build, which ignores the flag, and a schema move
+refuses the whole file for one camera row. Nothing in the library holds a turn row
+until someone wires one, and both Macs update together.
+
+### Known limits
+
+- **It is not a trackball.** The one camera is yaw then pitch, so with the camera
+  pitched far over a palm's yaw turns the shape about its own axis, not the screen's.
+  Matching the palm exactly would take a rotation for a base, which the camera lacks.
+- **Roll has no target** on the one camera. A wire from `room.roll` onto a 4D plane
+  (`rot.phase.*`, which wraps) lands a turn.
+- **`ghost.mirror` does not flip it.** The mirror is the room's and the row the
+  preset's; a mirror in the room is answered by the row's depth, −1. Row 685.
+- **After going over the top** a hand may read pitch 180° (§4). A `turn` row takes
+  differences, so it does not jump, but a pitch made from there reads reversed until
+  the hand leaves the box.
+- **No real sensor has run any of this.** Hand checks 517–519.
