@@ -232,8 +232,8 @@ def test_a_grouped_preset_builds_the_graph_of_its_ungrouped_twin(tmp_path):
     of it the same `graph.signature`. The presets with no main run are
     named (T1's `NO_RUN`): none has an effect, so each is proved with every
     node a group may hold grouped instead (review fix) — party-tracer's and
-    party-wake's look-back, composite (and dream); the other fourteen hold
-    only the frame's own nodes, which no group may (`patches.select`)."""
+    party-wake's look-back, composite (and dream); wave 3 P1: the other
+    fourteen's frame nodes too, which a patch now holds (`patches.select`)."""
     assert NO_RUN == {"big-blue-wave", "ember-orbit", "hands-orbit", "hands-play",
                       "hex-engine", "inverse-halo", "legacy6", "party-faces", "party-field",
                       "party-tumble", "party-wake", "plasma-heart", "spiral-silk",
@@ -262,7 +262,7 @@ def test_a_grouped_preset_builds_the_graph_of_its_ungrouped_twin(tmp_path):
         assert G.signature(G.build_graph(_views(), spec.wiring())) == want, path.stem
         done.append(path.stem)
     assert len(done) - len(others) == len(CORPUS_PRESETS) - len(NO_RUN) >= 9
-    assert others == ["party-tracer", "party-wake"]
+    assert sorted(others) == sorted(NO_RUN)
 
 
 def test_graph_and_render_never_hear_the_word():
@@ -333,17 +333,19 @@ def test_a_rig_node_is_never_a_member_and_preset_only_keeps_the_group(rig):
 
 # ---------------------------------------------------------------- the verbs
 
-def test_a_group_holds_the_scene_and_the_save_refuses_it_in_words(rig):
+def test_a_group_holds_a_copy_alone_and_the_save_refuses_it_in_words(rig):
     """Plan 50 (harden-node-groups' second half): a group holds any node
-    the preset saves — the scene, a frame singleton, too — and the check
-    that it can be saved as a patch runs at the save: refused in words,
-    nothing written, the group as it was."""
+    the preset saves — a copy without its original too, which no patch can
+    carry — and the check that it can be saved as a patch runs at the save:
+    refused in words, nothing written, the group as it was."""
     noita(rig)
-    entry = ui_graph.group_nodes(rig.panel, ["render:scene", "render:warp"])
-    assert entry["nodes"] == ["render:scene", "render:warp"]
+    assert graphview.render_add(ui_graph.group_edit(rig.panel), "copy", "warp") is None
+    entry = ui_graph.group_nodes(rig.panel, ["render:copy", "render:doublevision"])
+    assert entry["nodes"] == ["render:copy", "render:doublevision"]
     home = files(rig.lib.home)
-    assert ui_graph.save_patch(rig.panel, "group.1", "with the scene", "") == (
-        graphview.SAVE_REFUSED.format(name="group 1", why="scene is the frame's; left out"))
+    assert ui_graph.save_patch(rig.panel, "group.1", "with the copy", "") == (
+        graphview.SAVE_REFUSED.format(name="group 1", why=patches.COPY_WORDS.format(
+            name="copy", of="warp")))
     assert files(rig.lib.home) == home
     assert rig.lib.presets.groups == [entry] and "patch" not in entry
     # the preset saves it and reads it back as it was
@@ -1008,8 +1010,8 @@ def test_one_selector_two_rules_the_save_and_the_canvas():
     assert canvas.render == ("scene", "warp") and canvas.envs == (2,)
     assert said == [patches.WINDOW_WORDS.format(name="output.all")]
     saved, said = patches.select(spec, None, ids)
-    assert saved.render == ("warp",) and saved.envs == ()
-    assert len(said) == 3
+    assert saved.render == ("scene", "warp") and saved.envs == ()
+    assert len(said) == 2
 
 
 # ---------------------------------------------------------------- plan 40 T3: save, browse, spawn
@@ -1452,9 +1454,10 @@ def test_save_as_patch_writes_that_file_and_nothing_else(rig):
         assert ui_graph.save_patch(rig.panel, "group.1", "noita core", "the middle") is None
         assert files(rig.lib.home) == after             # the same text: nothing moved
         assert ui_graph._state(rig.panel)["said"] == "updated patch noita core"
-        rig.lib.presets.groups[0]["nodes"].append("render:scene")
+        rig.lib.presets.groups[0]["nodes"].append("env.2")
         assert ui_graph.save_patch(rig.panel, "group.1", "bad", "") == (
-            "noita core not saved as a patch: scene is the frame's; left out")
+            "noita core not saved as a patch: " + patches.LANE_ENV_WORDS.format(
+                name="env.2", first=patches.FIRST_ENV))
         assert files(rig.lib.home) == after
     finally:
         undo.install(None)
