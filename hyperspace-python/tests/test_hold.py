@@ -18,9 +18,11 @@ import pytest
 from test_ui_shell import rig as shell_rig  # noqa: F401 — an imgui context, for the inset
 from test_undo import boot, frames, settle
 
+from hyperspace import apc40
 from hyperspace import graph as G
 from hyperspace import hold as H
 from hyperspace.graph import Wiring
+from hyperspace.routing import Binding
 
 DT = 1 / 60
 
@@ -672,21 +674,22 @@ def test_drop_after_a_whole_new_look_is_one_undo_step_back_and_one_forward(rig):
 
 def test_learned_desk_buttons_light_while_held(rig):
     """Hand check AI.5, headless (plan 38 B2): `output.hold` and
-    `output.take` learned onto the two free APC40 buttons (a press on each
-    while armed, as at the desk, lands a preset-layer row). A press on hold
-    holds and both LEDs go on; a press on take lets go and both go dark.
-    Held again, DROP (from the panel) puts both out too."""
+    `output.take` on the two free APC40 buttons, as rows of the meta
+    controller's (register row 743 refuses a preset-layer row on them). A
+    press on hold holds and both LEDs go on; a press on take lets go and both
+    go dark. Held again, DROP (from the panel) puts both out too."""
     from test_midi import note, push
 
     H.register(rig.reg, rig.hold, now=lambda: rig.t)
     free = (0x3C, 0x3D)                        # unbound on the startup desk
     assert not any(rig.table.route("note", 0, n) for n in free)
     for pid, n in zip(("output.hold", "output.take"), free, strict=True):
-        rig.learn.arm(pid)
-        push(rig, note(n), note(n, 0))
-        assert rig.learn.learning is None and not rig.learn.refused, rig.learn.last
+        fb = apc40.feedback_for("note", 0, n)
+        rig.table.bind(Binding(f"note:0:{n}", pid, "toggle", feedback=fb["feedback"],
+                               on=fb.get("on", 127), off=fb.get("off", 0)), write=False)
         assert [b.target for b in rig.table.route("note", 0, n)] == [pid]
-    assert not rig.hold.on                     # a learning press does not fire
+    rig.table.redraw_serial += 1
+    assert not rig.hold.on
 
     def leds():
         on = {}

@@ -623,11 +623,10 @@ def test_route_a_lane_here_jumps_to_the_page(rig, tmp_path):
     panel, reg = rig.panel, rig.reg
     _with_router(rig, tmp_path)
     frame(panel, "view")
-    p = reg["band.sel.atk"]                     # an alias: the route goes to the real param
-    real = panel._real(p)
+    real = panel._real(reg["view.bright"])
     ui_routing.add_route(panel, real.id)
     reg["ui.page"].set(PAGE_KEYS.index("graph"))      # plan 28 N7: the routes' page
-    assert panel.router.table.routes_to("band.0.atk")
+    assert panel.router.table.routes_to(real.id)
     frame(panel)
     assert panel.page == PAGE_KEYS.index("graph")
 
@@ -675,25 +674,6 @@ def test_the_old_routing_presets_step_load_save_as_presets(rig, tmp_path):
     lib.error = "library: presets: no preset 'no-such'"     # what the strip's guard records
     frame(panel)
     assert lib.delete("presets", "My Routes")
-
-
-def test_a_route_on_a_session_param_is_marked_session(rig, monkeypatch):
-    """Decision register row 19 (a): a preset's route may perform a session
-    param — TUMBLE's left height pushes the drive (`master.gain`) — and the
-    load keeps it; the page marks that row with a dim "session" and no other."""
-    panel, lib, router = rig.panel, rig.panel.library, rig.router
-    lib.load("presets", "TUMBLE")
-    drive = [b for b in router.table.routes() if b.target == "master.gain"]
-    assert [(b.source, b.op) for b in drive] == [("hand:left.y", "push")]
-    assert ui_routing.is_session_target(panel, drive[0])
-    assert not any(ui_routing.is_session_target(panel, b) for b in router.table.routes()
-                   if b is not drive[0])
-    texts, _ = _drawn(monkeypatch)
-    rows(panel)
-    texts.clear()
-    rows(panel)                                     # one frame: one mark, on one row
-    assert texts.count(ui_routing.SESSION_MARK) == 1
-    assert "never changed" in ui_routing.SESSION_TIP
 
 
 def test_the_base_picker_offers_performance_params_only(rig):
@@ -1146,7 +1126,8 @@ def _many_routes(rig, n=30) -> None:
     for p in reg:
         if len(table.routes()) >= n:
             break
-        if p.kind is Kind.CONTINUOUS and p.modulatable and table.owner(p.id) is None:
+        if (p.kind is Kind.CONTINUOUS and ui_routing.route_target(p)
+                and table.owner(p.id) is None):
             try:
                 table.add(Binding("lfo:1", p.id, "push", 0.1))
             except routing.Owned:

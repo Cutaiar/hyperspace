@@ -2514,8 +2514,9 @@ typed word, matched anywhere — a desk line's glyph, Akai's name and
 target; a macro's id, label and subscribers; a session or sink row. It is UI state:
 not saved, no undo step, empty at launch, left alone by a preset load;
 its × and a click on a desk control clear it. A route's `scale` can only
-be a session param; a route may perform a session param, marked
-"session" on its row.
+be a session param, which it only reads. No route lands on a session
+param at all (register row 743): the target combo does not offer one,
+and the param's menu says why.
 
 **The order the routes run in** (plan 28 N0). `Router.modulate` runs
 the table as a graph (`modgraph.py`, ARCHITECTURE §2), each node after

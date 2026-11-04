@@ -1281,12 +1281,18 @@ def referee(rows: Iterable[Binding]) -> tuple[list[Binding], list[tuple[Binding,
     """First performer per target wins: (kept, [(dropped row, why)]).
 
     What a preset or a file gets instead of a prompt — the loader asks
-    nothing, so the rule is fixed: table order decides.
+    nothing, so the rule is fixed: table order decides. A preset's row on a
+    meta controller param (`meta_row_refusal`, register row 743) goes first,
+    on or off: it owns nothing and nothing may keep it.
     """
     kept: list[Binding] = []
     dropped: list[tuple[Binding, str]] = []
     owners: dict[str, Binding] = {}
     for b in rows:
+        why = meta_row_refusal(b)
+        if why is not None:
+            dropped.append((b, why))
+            continue
         if b.is_performer:
             cur = owners.get(b.target)
             if cur is not None:
@@ -1531,11 +1537,35 @@ def macros_of(doc: dict | None) -> dict[str, Macro]:
     return {mid: Macro.from_json(m) for mid, m in (doc or {}).items()}
 
 
+# the words every door refuses a preset's row on a meta param in (row 743)
+META_WORDS = "{pid} is the meta controller's, tuned before the show; no preset row may drive it"
+
+
 def is_session_id(pid: str | None) -> bool:
     """Does `pid` name a session param (params.SESSION_GROUPS, plan 13 §4)?
     By its group prefix, so a param this registry lacks (a band a layout
     has not built yet) is still classed."""
     return bool(pid) and part_of_id(pid) == "session"
+
+
+def meta_refusal(pid: str | None) -> str | None:
+    """Why no row of a preset may drive `pid`, or None when one may. The hard
+    rule (the owner, 2026-11-04, register row 743; overturns the old "a route
+    may perform a session param"): tuning like `master.gain` happens before
+    the show, and the refusal says which params belong in the preset. By the
+    id's group (`is_session_id`), so a param this build has not made yet is
+    still classed; `part_of == "session"` is the whole test."""
+    return META_WORDS.format(pid=pid) if is_session_id(pid) else None
+
+
+def meta_row_refusal(b: Binding, target: str | None = None) -> str | None:
+    """`meta_refusal` for row `b` (aimed at `target`, when it is moving), but
+    only if the row is a preset's. The line is `is_session_row`, what the
+    meta controller's table holds, and no list of ids: a route of any op and
+    a preset-layer desk row are a preset's; an invariant or global-layer desk
+    row (the APC's MASTER fader on `master.gain`), a key, a pad button and a
+    sink are the meta controller's own and stay."""
+    return None if is_session_row(b) else meta_refusal(b.target if target is None else target)
 
 
 def base_refusal(pid: str, reg: Registry | None = None) -> str | None:
@@ -1564,19 +1594,23 @@ def base_refusal(pid: str, reg: Registry | None = None) -> str | None:
 def settle_bases(doc: dict | None, reg: Registry | None = None
                  ) -> tuple[dict[str, Macro], list[str]]:
     """A file's `macros` key as {id: Macro}, each base subscriber that may
-    not be one (`base_refusal`) dropped with a note. Depth subscribers are
-    untouched: a route may perform a session param (decision register row
-    19 (a)), and its depth subscriber with it."""
+    not be one (`base_refusal`) dropped with a note, and each depth
+    subscriber on a route onto a meta param (`meta_refusal`, row 743): no
+    such route lands, so there is nothing for it to scale."""
     macros = macros_of(doc)
     notes: list[str] = []
     for mid, m in macros.items():
         keep = []
         for s in m.subs:
             why = base_refusal(s.base, reg) if s.base is not None else None
-            if why is None:
-                keep.append(s)
-            else:
+            depth = meta_refusal(s.depth[1]) if s.depth is not None else None
+            if why is not None:
                 notes.append(f"dropped {mid}'s base subscriber {s.base}: {why}")
+            elif depth is not None:
+                notes.append(f"dropped {mid}'s depth subscriber on {s.depth[0]} → "
+                             f"{s.depth[1]}: {depth}")
+            else:
+                keep.append(s)
         m.subs = keep
     return macros, notes
 
@@ -2655,8 +2689,9 @@ class Bindings:
 
     def set_desk(self, rows: Iterable[Binding | dict], *, load: bool = True) -> list[str]:
         """Replace every preset-layer row with `rows` (layer forced to
-        "preset"), dropping with a note each row that is not a MIDI control
-        and each on an invariant control (D6) — but one of
+        "preset"), dropping with a note each row that is not a MIDI control,
+        each on a meta param (row 743) and each on an invariant control
+        (D6) — but one of
         `RETIRED_DESK_ROWS` on an invariant control goes without a note:
         it is a factory row of an older desk (plan 19: the sixteen shape
         pads every earlier preset holds), nothing the owner mapped. Drop
@@ -2685,6 +2720,8 @@ class Bindings:
                     continue
                 notes.append(f"dropped {b.source} → {b.target}: that control is "
                              "invariant, the session's (plan 13 D6)")
+            elif meta_row_refusal(b) is not None:
+                notes.append(f"dropped {b.source} → {b.target}: {meta_row_refusal(b)}")
             else:
                 new.append(b)
         self.bindings = keep + new
@@ -2725,7 +2762,12 @@ class Bindings:
                    target: str | None = None) -> None:
         """Re-point a route's source or target, its depth subscribers with
         it — a subscriber names its route by (source, target), so an edit
-        that moved only the row would leave the macro behind."""
+        that moved only the row would leave the macro behind. Raises
+        `ValueError` before anything moves when a preset's row is aimed at a
+        meta param (row 743)."""
+        why = meta_row_refusal(b, target) if target is not None else None
+        if why is not None:
+            raise ValueError(why)
         old = (b.source, b.target)
         if source is not None:
             b.source = source
@@ -2761,7 +2803,7 @@ class Bindings:
     def refusal(self, b: Binding) -> str | None:
         """The words `_check` raises `ValueError` with for `b` whoever holds
         its target — a sink's refusal, an op a continuous source has not, a
-        row no file may hold — or None. Read-only: a caller about to move
+        row no file may hold, a preset's row on a meta param — or None. Read-only: a caller about to move
         other rows for `b` asks first (plan 40's spawn: a one-owner
         source's other rows go only once `b` is sure to land)."""
         if b.is_sink:
@@ -2769,7 +2811,7 @@ class Bindings:
         if self._lane_only(b) and b.op not in MOD_OPS:
             return (f"{b.op!r} is not an op for a {b.scheme} source; "
                     f"one of {', '.join(MOD_OPS)}")
-        return latch_refusal(b)
+        return latch_refusal(b) or meta_row_refusal(b)
 
     def _check(self, b: Binding) -> None:
         """The referee: a performer joining the table (or waking up) must
@@ -2803,7 +2845,7 @@ class Bindings:
         is written unless `write` is False (a knob Learn: the row is the
         loaded preset's, plan 13 §3.3). Returns the rows dropped.
         """
-        why = latch_refusal(b)
+        why = latch_refusal(b) or meta_row_refusal(b)
         if why is not None:
             raise ValueError(why)
         if not b.is_midi:
@@ -2870,8 +2912,12 @@ class Bindings:
         slept. Returns the row removed (None when the target was free).
         Raises only for what the referee can't allow whatever goes: a bad
         op on a continuous source (`ValueError`), or a second owner still
-        standing after the swap (`Owned`)."""
+        standing after the swap (`Owned`), or a preset's row on a meta param
+        (`ValueError`, row 743), said before anything moves."""
         pid = new.target if target is None else target
+        why = meta_row_refusal(new, pid)
+        if why is not None:
+            raise ValueError(why)
         if self._lane_only(new) and new.op not in MOD_OPS:
             self._check(new)                     # says why, before anything moves
         cur = self.owner(pid)
@@ -3947,14 +3993,9 @@ class Router:
         rows' motion (`feel_of`); None, a 60 Hz frame. A row that does not
         act this frame — its source not live, its gate shut — loses its
         follower, and starts afresh. A cable `modgraph` keeps off to break a
-        loop does not run. Plan 44 D4 (row 625, §7's recommendation): on a
-        deck that is not the session's lead, a row onto a session param is
-        dormant — the on-air deck's rows move the room, and the deck's own
-        `apply` could not land it anyway."""
+        loop does not run."""
         dt = 1 / 60 if dt is None else dt
         reg = self.reg
-        session = getattr(reg, "session", None)
-        follower = session is not None and session is not reg and session.lead is not reg
         self._sync_modifiers()                   # plan 28 N1: the ``mod:<n>`` lanes
         self.modgraph                                # noqa: B018 — the cached plan, current
         plan = self.__dict__["_plan"]
@@ -4008,8 +4049,8 @@ class Router:
                 if b.when is not None and not self.gated(b, feeds):
                     continue         # gate open: apply() writes the base back
                 p = reg.get(b.target)
-                if p is None or (follower and not reg.lands(p)):
-                    continue         # (plan 44 D4: a session param is the lead's to move)
+                if p is None:
+                    continue
                 depth = b.value
                 if b.scale is not None:
                     sp = self.reg.get(b.scale)

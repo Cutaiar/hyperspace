@@ -14,7 +14,7 @@ import pytest
 from conftest import seed
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
-from hyperspace import apc40, devices, graphview, ui_graph
+from hyperspace import apc40, devices, graphview, ui_graph, ui_routing
 from hyperspace.devices import Port
 from hyperspace.routing import Binding
 
@@ -167,7 +167,7 @@ def test_a_drag_from_the_shift_node_into_base_is_refused_whatever_the_latch(rig)
     port = next(p for p in shift.ports if p.addr.startswith("cc:"))
     src = port.pins[0]
     assert src == f"out:{port.addr}|global"
-    pid = next(p.id for p in rig.reg if p.modulatable and not p.alias
+    pid = next(p.id for p in rig.reg if ui_routing.route_target(p) and not p.alias
                and not any(b.target == p.id for b in table.bindings))
     ed = graphview.Edit(table, rig.reg, rig.router, view, apc40)
     for latched in (False, True):
@@ -224,7 +224,7 @@ def test_a_missing_role_is_a_grey_placeholder_with_dormant_cables(rig):
     (the same node id, so it takes the placeholder's place)."""
     table = rig.router.table
     rig.lib.load("presets", "party-trip")
-    free = [p.id for p in rig.reg if p.modulatable and not p.alias
+    free = [p.id for p in rig.reg if ui_routing.route_target(p) and not p.alias
             and table.owner(p.id) is None][:2]
     table.add(Binding("axis@p2:LX", free[0], "push", 0.3))
     table.add(Binding("hand:right.y", free[1], "position"))

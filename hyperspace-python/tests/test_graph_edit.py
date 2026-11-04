@@ -56,7 +56,8 @@ def free_param(rig, *, centred=None):
     from hyperspace.params import Kind
     table = rig.router.table
     for p in rig.reg:
-        if (p.modulatable and not p.alias and p.kind is Kind.CONTINUOUS and not p.integer
+        if (ui_routing.route_target(p) and not p.alias and p.kind is Kind.CONTINUOUS
+                and not p.integer
                 and table.owner(p.id) is None and not table.routes_to(p.id)
                 and (centred is None or learn.centred_target(p) == centred)):
             return p
