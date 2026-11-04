@@ -1876,7 +1876,8 @@ class Carried:
 # table as before (`Bindings.<name>` is a property onto `session`)
 SESSION_ATTRS = ("path", "profile", "slew", "pad_feel", "unbacked", "said", "midi_roles",
                  "primaries", "row_schemes", "carried", "error", "migrated", "read_at",
-                 "changed", "sinks_seeded", "layer", "layers", "layer_serial")
+                 "changed", "sinks_seeded", "layer", "layers", "layer_serial",
+                 "page", "page_serial")
 
 
 class SessionTable:
@@ -1903,6 +1904,10 @@ class SessionTable:
     # it): the session's — a show keeps it, bindings.json never does. On
     # the class, so a session from before a hot reload has it too
     slew: float = 0.0
+    # the surface page up on the desk (`Bindings.page`): the desk's, so it
+    # stays up whichever deck the desk is on (plan 44 D5a). On the class too
+    page: object | None = None
+    page_serial: int = 0
     # the pad's feel (`pad.feel` …, register_desk): the motion an `axis`
     # lane travels with when its row names none, and the sticks' default
     # camera job's (app.py). The session's, on the class like `slew`
@@ -2064,9 +2069,7 @@ class Bindings:
     # every row on their controls, invariant ones included, while it is up;
     # they are in memory only — never in `bindings`, never saved, never
     # Learnable. `page_serial` counts the flips (`set_page`): midi.py
-    # redraws the whole desk on one. On the class, for a hot reload
-    page: object | None = None
-    page_serial: int = 0
+    # redraws the whole desk on one. The session table's (`SESSION_ATTRS`)
 
     # plan 44 D3: the session table's state (`SESSION_ATTRS`) is read and
     # written through this table — one property per name, made from the
@@ -3254,10 +3257,7 @@ class Router:
         # the toggles this pad holds down through a momentary row
         down_now = self.__dict__.setdefault("_pad_down", {}).setdefault(role, set())
         if not pad.on:
-            holds.clear()
-            for pid in list(down_now):
-                self._let_go_pad(down_now, pid)
-            self.felt(axis, None, 0.0)       # the camera job's followers start afresh
+            self.pad_left(role)
             return
         now = time.monotonic() if now is None else now
         # each pad hears its own rows: a second pad those qualified with its
@@ -3301,12 +3301,25 @@ class Router:
                         down_now.add(b.target)
                     else:
                         p.toggle()
-                elif released and p.kind is Kind.TOGGLE:
+                elif released and p.kind is Kind.TOGGLE and b.target in down_now:
+                    # (only what this press put down: a press this router
+                    # never heard, on another deck or a learn's, lets go of nothing)
                     p.set(False)
                     down_now.discard(b.target)
                 continue
             if pressed and buttons:
                 act(self.reg, b)
+
+    def pad_left(self, role: str = "") -> None:
+        """The pad has gone, or moved to another deck (plan 44 D5a): no press of
+        it stays on this one. Its timed holds are forgotten, the toggles it
+        holds let go, the camera job's followers start afresh."""
+        (self.__dict__.setdefault("_pad_holds", {}) if not role else
+         self.__dict__.setdefault("_pad_holds_of", {}).setdefault(role, {})).clear()
+        down = self.__dict__.setdefault("_pad_down", {}).setdefault(role, set())
+        for pid in list(down):
+            self._let_go_pad(down, pid)
+        self.felt(qualified("axis", role), None, 0.0)
 
     def _let_go_pad(self, down: set, pid: str) -> None:
         """A toggle a pad held through a momentary row, its release lost."""

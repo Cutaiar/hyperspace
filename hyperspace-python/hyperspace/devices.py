@@ -853,6 +853,12 @@ class PadDevice(Base):
         if io is None:
             return
         q = self.qualifier
+        # moved to another deck since last frame (plan 44 D5a): that deck's
+        # router lets go of this pad, as MIDI's `_follow_pointer` does
+        was = self.__dict__.get("_acted_on")
+        if was is not None and was is not router:
+            was.pad_left(q)
+        self._acted_on = router
         from . import gamepad
         # the sticks a route reads as a dial, for the next frame's Learn
         # (gamepad.dialed); asked only while the pad is there, once a frame

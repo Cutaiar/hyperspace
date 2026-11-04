@@ -1233,7 +1233,7 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     bases beside the on-air deck's and runs its pass and apply straight
     **after** the on-air deck's, so what it reads of a session param (a
     route's scale on `master.gain`) is this frame's, landed by the on-air
-    deck, whose rows alone move one; then its integrator."""
+    deck, the session's lead; then its integrator."""
     reg, keys, router, reloader = h.reg, h.keys, h.router, h.reloader
     # the router's shared half (routing_sources.Sources, plan 44 D2): where
     # the audio lanes' names and the devices' feeds go — the router's own,

@@ -468,7 +468,7 @@ exactly two `Deck`s; the seam is a `pointer.Pointer` per holder, not "controller
 panel to B": `pointer(role)` for each controller, the keys and the mouse, `panel_pointer`
 for the panel, `on_air_pointer` for what the outputs show (deck 1 until the crossfader
 decides, D5c). `MidiIO`, the pad, the bridge, `Mouse`, `SeqPage`, `Host`, `Panel` and
-`Library` read through theirs; nothing in `main` moves one, `hold.py` stands, and the
+`Library` read through theirs, and a deck's `Presets` hold a `DeckLibrary`, so their verbs are that deck's whichever the panel is on; nothing in `main` moves one, `hold.py` stands, and the
 frame's order is unchanged. A pointer moves rows and base writes, not lanes: `Sources`
 is shared, so routes on a hand or a stick run in each deck's pass (register 688).
 What the text below calls `Decks` is `MetaController`; `Context` stays what factories get.

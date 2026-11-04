@@ -717,9 +717,9 @@ here; overturn → the change, then the same.
 | 683 | Plan 51 O2: no schema move for `turn`: an older build drops the row with a note and lands the rest, and a save there loses it; both Macs update together | — | (rec) — pending the owner |
 | 684 | Plan 51 O2: the clutch is the same hand's grab, landed in the preset's row; a lost hand is an opened clutch; one undo step per closure with a 0.15 s grace; under the hold it moves the preview as a knob does | — | (rec) — pending the owner |
 | 685 | Plan 51 O2: within 20° of vertical, a yaw straying 20° or stepping 5° on leaving the cone makes the hand read NaN until it has left, then restart, not a camera jump; `ghost.mirror` does not flip a turn row, its depth does; a room lane on a clamped target stays `position`; a moved row lands as `row_for` would | — | (rec) — pending the owner |
-| 688 | Plan 44 D5a: the owner of the two `Deck`s is `deck.MetaController`, named from the glossary; a `Pointer` per holder (each controller by role, the keys, the mouse) and the panel's apart; exactly two `Deck`s; no `swap` | — | "name the owner of the two Decks from the glossary"; "Two fixed Decks and no swapping" (owner, 2026-11-04) |
-| 689 | Plan 44 D5a: the holders moved onto pointers, those the reading named (`SeqPage.reg`, `Library.reg` and `presets`, `dream_check`, `Mouse`'s params, `draw_render`, `Marks`) and those found while building (`rig.said`'s table, deck 2's `Learn.devices`, the totem's and poi's params, the watchdog's preset, `Presets.load` / `save_as` / its undo push); `claim` retired | — | (rec) — pending the owner |
-| 690 | Plan 44 D5a: `docs/GLOSSARY.md`, one row per concept; a desk moved mid-gesture forgets its held notes and glides and lets its held buttons go on the deck it left | — | (rec) — pending the owner's signature on the glossary |
+| 688 | Plan 44 D5a: the owner of the two `Deck`s is `deck.MetaController`, named from the glossary; a `Pointer` per holder (each controller by role, the keys, the mouse) and the panel's apart; exactly two `Deck`s; no `swap`; a deck's presets see the library through `library.DeckLibrary`, so they cannot reach another deck | — | "name the owner of the two Decks from the glossary"; "Two fixed Decks and no swapping" (owner, 2026-11-04) |
+| 689 | Plan 44 D5a: the holders moved onto pointers, those the reading named (`SeqPage.reg`, `Library.reg` and `presets`, `dream_check`, `Mouse`'s params, `draw_render`, `Marks`) and those found while building (`rig.said`'s table, deck 2's `Learn.devices`, the totem's and poi's params, the watchdog's preset, the bank's verbs, its lit slot and the section references); `Bindings.page` is the session's; `claim` retired | — | (rec) — pending the owner |
+| 690 | Plan 44 D5a: `docs/GLOSSARY.md`, one row per concept; a controller moved mid-gesture releases what it holds on the deck it left, and its real release goes nowhere | — | (rec) — pending the owner's signature on the glossary |
 
 "—": no hand check shows it; tests only.
 
@@ -12764,6 +12764,12 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   assignment raises because it would be ignored. `Host`'s fields stay required fields of
   its `__init__`; `Library.reg` and `presets` are properties, since `Library.into` also
   overrides them.
+- **Review of #370: a view, not a scope.** A first cut had `with lib.into(presets)`, which
+  any verb could omit, and four did. Now `Presets.lib` is a `DeckLibrary`, sharing the one
+  library's `__dict__` with `presets` and `reg` fixed to that deck, and `DeckLibrary.project`
+  a `DeckProject` likewise; the deck's `preset.*` params close over it. So a load, a save, a
+  new, a bank pad and the marks are that deck's with nothing to remember. The plain
+  `Library` is the panel's view of the same state.
 - **A limit, stated.** Pointers move what a controller fires and writes. Lanes are the
   shared `Sources`, so a route on a hand or a stick runs in every deck's pass whoever
   holds the controller: DQ4's "a row acts only on the `Deck` its player is on" is PL's
@@ -12778,25 +12784,31 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   had no `devices`; `totem.*` and `poi.*` are registered by the panel hook on deck 1 only and
   are no session group, so a pad on deck 2 lost them (`app._share_experiments`, one state);
   the watchdog named the panel's preset where a stall log wants the one on air;
-  `Presets.load` and `save_as` went by the kind's hooks to the panel's deck and
-  `load_doc` pushed on the installed undo (`Library.into`, `undo.push_on`).
-  `Marks(lib, presets)` lands here rather than in D5b, because `lib.presets` moving would
-  otherwise have made deck 1's marks read deck 2. `claim` is gone: the first `Presets` over
-  a library declares the kind, whose hooks read `lib.presets`.
+  `Presets.load`, `save_as`, `new`, the bank's verbs and `load_doc`'s push reached the
+  panel's deck (row 688's view, `undo.push_on`). `Marks(presets.lib)` lands here rather than
+  in D5b, because `lib.presets` moving would otherwise have made deck 1's marks read deck 2.
+  `claim` is gone: the first `Presets` over a library declares the kind, whose hooks read
+  `lib.presets`. Review of #370 added: a performance group's landing is on the deck's presets
+  (`Presets.labels`), and the bank's lit slot too (`Presets.active_slot`), since both were
+  one library-wide value; `Bindings.page` joins `SESSION_ATTRS`, since the reading's probe saw
+  "one object on both tables" only because both were None.
 - **Left for later, deliberately.** `session.lead`, `Fade.on_air`, `media.off_air`, the
   dream's lend and `hand_over`'s direction are on-air's, D5c's. Deck 2's undo is ticked by
   D5b. `graph_selected` is let go by `ui_graph.settle`'s spec test, but `fx_selected` and
   the canvas's pins are not touched by a panel move: `on_panel` is the seam, unwired. A file
-  edited on disk re-lands on the panel's deck only.
+  edited on disk re-lands on the panel's deck only. Session groups' labels are the meta
+  controller's one strip, and a deck's undo still relands them: D5b's stacks settle that.
 - **Judge it.** 522.
 
 ### 690. The glossary, and a desk moved mid-gesture
 
 - **Answer.** (rec) — pending the owner's signature on `docs/GLOSSARY.md`.
-- **Built.** `MidiIO._follow_pointer`, one identity test a frame: held buttons let go on the
-  deck the desk left, notes and holds still down forgotten so a release fires nowhere, and
-  the new table drawn and re-armed as a load is. Nothing moves a pointer in the app yet, so
-  this runs only in tests until PL.
-- **Alternative.** Fire each held row's release on the deck it pressed: more code for a
-  gesture nobody can make until PL. Say if PL finds it matters.
+- **Built.** `MidiIO._follow_pointer`, one identity test a frame: each press still down is
+  released on the deck it pressed by the note-off's own road, and its real note-off then goes
+  nowhere, so a `momentary` row on the new deck hears no release; a preset param's glide and
+  catch go, a session param's stay; the new table is drawn and re-armed as a load is.
+  `PadDevice.act` does the same through `Router.pad_left`, and a pad's `momentary` release now
+  lets go only of what that press put down (`down_now`), so the release of a press a learn
+  took no longer turns a latched toggle off: a small change to one deck's behaviour too.
+  Nothing moves a pointer in the app yet, so the rest runs only in tests until PL.
 - **Judge it.** 523.
