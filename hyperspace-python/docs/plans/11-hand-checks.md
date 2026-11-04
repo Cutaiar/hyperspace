@@ -7743,6 +7743,43 @@ like tape under a thumb, and silent as soon as a rate-0 drag rests; the LFO
 sounds like a scratch and not a stutter; the meters follow what is heard all
 through. Fail: a click on the cut, or the meters moving when the sound is silent.
 
+## BU. The room lanes (plan 51 O1)
+Register rows 678–681, 2026-11-03. **Nothing here has run on a real sensor**:
+`tests/test_hands_room.py` plays tapes written from computed poses through
+`TapeSource` and `HandsIO`, and that is the whole of the proof. No preset or
+binding uses these lanes yet. To read them: HANDS page, the `L room` and `R
+room` bars (roll, pitch, yaw); hover a bar for its address and value.
+**514. The signs in the room.** (the Mac with the Leap, the mode you use)
+1. A flat hand, palm down, fingers away from you: read the bars.
+2. Swing the fingers left; raise them; raise the hand's right edge.
+3. The same with the other hand.
+*Pass:* (1) all three at the middle, within a few degrees. (2) Yaw, then
+pitch, then roll each climbs by itself. (3) The same direction on both
+hands. Fail: a bar falls, two bars move together for one turn, or the hands
+disagree. In screentop or HMD the table was never measured: a whole-frame
+error there is the table's, `room.MODES` and `ghost.MODES` together.
+**515. The seam, and over the top.** (same)
+1. Hold the palm turned up, on and around the roll bar's end.
+2. Bring the fingers up to vertical and on over, toward yourself.
+3. Fingers vertical, twist the hand about them; lower it again.
+*Pass:* (1) the bar sits at its ends and jumps between them, without a
+crawl through the middle. (2) Pitch keeps climbing and neither other bar
+jumps by half a turn. (3) Roll carries the twist; on the way down yaw may
+step, up to a quarter turn, the one step this design keeps (row 679). Say if
+it is more than a tracker glitch would be: O2 would need a guard.
+**516. Level room, a lost hand, and stillness.** (same)
+1. Open **feel & calibration**, one hand in view, hold it flat, press **level
+   room** with the mouse, hold it a second; if you can, with the Leap on a wedge
+   first. Then try it with both hands in view: it should refuse in words.
+2. Check 514's first step, restart the app, and again.
+3. Take the hand out of view and bring it back turned.
+4. Hold it still for ten seconds with no support.
+*Pass:* (1) the note says levelled; the bars read level on that pose. (2)
+They still do after the restart; **clear** goes back. (3) The bars go hollow
+at once, and come back at the new angle without a glide. (4) The bars do not
+visibly shimmer: this filter is the page's `smooth` and `response`, untuned
+for a camera. Fail: a shimmer you would see on a shape (tell O2 to tune it).
+
 ## What no test covers
 
 Only a person can settle these:
