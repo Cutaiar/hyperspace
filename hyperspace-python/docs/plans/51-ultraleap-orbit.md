@@ -129,8 +129,8 @@ of knowledge outside `hands/`: `learn.whole_circle` reads the address, because
   costs: a hand back at level after going over the top may read pitch 180°
   rather than yaw 180° and roll 180°, the same orientation, until it leaves
   the box. A twist made inside the cone would show as a yaw step of up to 90°
-  on the way out, so past `POLE_STEP_DEG` (5°) the hand reads NaN that frame
-  and restarts, as a returning hand does (O2; §6). A smaller step goes through.
+  on the way out, and a hand passing just outside it would sweep yaw most of
+  half a turn, so near the pole the hand can go blind and restart (O2; §6).
 
 ## 5. What a lost hand does
 
@@ -163,6 +163,8 @@ the row below, and a save keeps it.
 {"source": "hand:right.room.yaw", "target": "camera.yaw", "op": "turn", "when": "hand:right.grab"}
 ```
 
+(`value`, the depth, is 1 and left out of the file as a default.)
+
 A `position` row gated by the grab is not an orbit: closing slams the camera to
 the palm's absolute angle, and opening returns it to the base. So **`turn` is a
 new performer op that writes the base** (`routing.TURN_OP`, `Router._turn`, one
@@ -181,10 +183,22 @@ wrapping param and clamped on any other continuous one. It never calls
   seam. The palm's own filter (`smooth`, `response`) is the row's only smoothing.
 - **It is a performer.** In `MOD_OPS`, so it owns its target under the referee,
   is saved with the preset's routes, is drawn on GRAPH and is listed on ROUTING,
-  where the op chip goes `position` ↔ `turn` from a room lane. A scene-setter
+  where the op chip goes `position` ↔ `turn` from a room lane on a wrapping
+  target. The chip's flip lands as a wire does: the hand's clutch if the row has
+  no gate, and no feel. ROUTING draws no feel chip on a turn row. A scene-setter
   (a knob, the pad's stick) still writes the same base.
-- **A target that cannot turn** (not continuous, integer, not modulatable) is
-  dormant, as a row to an unknown param is.
+- **Dormant without a circle or a clutch.** A source that is no whole-circle lane
+  has no shortest way (a linear 0.1 to 0.8 is not −0.3). A row with no `when`
+  would never stop acting: no closure to be a step, and no way to reposition the
+  hand. A target that cannot turn (not continuous, integer, not modulatable) is
+  dormant too, as a row to an unknown param is. `Binding.describe` says "(dormant)"
+  for the first two.
+- **A moved row lands as `row_for` would** (`learn.move_route`, `learn.land_moved`):
+  from one hand to the other an automatic clutch follows and a gate someone picked
+  stays; onto a clamped target or a source that is no circle a `turn` becomes that
+  target's row; a room row moved onto a wrapping target becomes the orbit. Any other
+  row keeps its op, depth and feel, as it always did. A modifier dropped on a turn
+  row's cable counts as moving it to that lane: it stops being a turn.
 
 ### What closes the clutch
 
@@ -197,7 +211,7 @@ can pick otherwise:
 | --- | --- | --- |
 | A pinch (`hand:right.pinch.index`) | The hand stays open, which may suit the tracker better | Presets already use pinches as gates; easier to hold by accident |
 | The other hand's grab | The turning hand keeps a relaxed pose | Two hands busy; the ghost hands show both |
-| No gate | Nothing to learn | The camera follows whenever a hand is in view, so a hand cannot get to where it starts a turn |
+| No gate | Nothing to learn | Not offered: a turn row with no `when` is dormant, because the camera would follow whenever a hand is in view and the closure would never end |
 | A button lane (`axis:RT`, any fed lane) | No gesture at all | A hand on a controller |
 
 Which reads best on the sensor is hand check 518. Whether closing a fist itself
@@ -217,36 +231,67 @@ clutch.** It does not fall back to anything. A hand coming back reads afresh and
 the clutch has to close again, debounce included, so it returns with no jump
 however it is turned.
 
-### The cone (the open question from O1, answered)
+### Near the pole (the open question from O1, answered)
 
-A twist made inside the pole's cone would come out as a yaw step of up to 90°, and
-on a `turn` row that is a camera jump. So `Palm.step` treats a yaw step above
-`POLE_STEP_DEG` (5°) on leaving the cone as no turn of the hand: all three lanes
-read NaN for that one frame and the filter restarts. A `turn` row forgets and goes
-on with no jump. The cost falls on `position` rows on room lanes: one frame at the
-base, where they would have had the step anyway. A `turn` row's undo step also
-ends there (below).
+Two cases make yaw move far when the hand barely has, and on a `turn` row each is a
+camera jump:
+
+- **A twist made inside the cone** comes out as a yaw step of up to 90°.
+- **A hand passing just outside the cone** (about 9° off vertical) never enters it,
+  and `atan2` swings most of half a turn in a few frames, each step short of the flip
+  check.
+
+So `Palm.step` watches a zone wider than the cone, `POLE_NEAR_DEG` (20°). Inside it
+yaw may stray `POLE_SWING_DEG` (20°) from where it came in, and may step at most
+`POLE_STEP_DEG` (5°) on leaving the cone. Past either, the hand goes **blind**: all
+three lanes read NaN until the fingers have left the zone, and it then restarts like
+a returning hand. A `turn` row holds where it was. This is a range rather than a
+rate, so a slow pass is caught as well as a fast one, and noise cannot add up.
+
+The costs: a real twist of more than 20° with the fingers within 20° of vertical
+reads nothing; a pitch made during the blind stretch is lost, since a `turn` row
+holds and restarts; a `position` row on a room lane sits at its base for that stretch.
+Up to `POLE_SWING_DEG` of the swing still reaches the camera, plus whatever real yaw
+it had on the way into the zone (under 45° in the test).
 
 ### Undo: one step per closure
 
 The first row acting opens a step named "orbit" and no quiet closes it, so a fist
-held still past `SETTLE_S` is still one step; when no row acts, it closes at once.
-Two rows on one gate are one step. A closure that moved nothing leaves none.
+held still past `SETTLE_S` is still one step. When no row has acted for
+`TURN_GRACE_S` (0.15 s) it closes. Two rows on one gate are one step. A closure that
+moved nothing leaves none.
 
-- **The mechanism is the base chase's** (plan 52): `Undo.keep_open` / `let_close`,
-  and their module-level forms. B1 is not this branch's base, so those lines are
-  **copied from #356 unchanged**, without its `trims`, and either PR landing second
-  merges them as identical changes. `Param._commit` / `_trim` are not shared: a chase
-  commits what an offset landed and must count it, and a turn has no offset, so it
-  needs no ledger and touches nothing in `params.py`.
-- **Exceptions, stated.** A lost hand or a cone restart mid-orbit ends the step, so
-  it is two steps. An edit made during a closure (a knob) is in the orbit's step, as
-  with the chase.
+- **The grace** is why a tracker dropout is not a new step: the row forgets its
+  reading at once, so no jump, but the step stays. Twenty one-frame dropouts are one
+  step and no `_flush` / `_take` on the frame path. A real open and close takes longer
+  than the grace, a person's fist being slower than that; if a re-clutch ever did land
+  inside it, the two would be one step.
+- **The mechanism is the base chase's** (plan 52): `Undo.keep_open` / `let_close`, and
+  their module-level forms, the same lines as B1's head (18c30a5), without its `trims`,
+  so one mechanism remains and either PR landing second merges them as identical
+  changes. `Param._commit` / `_trim` are not shared: a chase commits what an offset
+  landed and must count it, and a turn has no offset, so it needs no ledger and touches
+  nothing in `params.py`.
+- **Exceptions, stated.** A hand lost past the grace or a blind stretch past the grace
+  ends the step, so it is two steps. An edit made during a closure (a knob) is in the
+  orbit's step, as with the chase.
 - **Anything else that closes the step cuts the turn** (an undo, a load, the hold's
-  engage): the row keeps reading and writes nothing until every row has let go. A
-  fist still closed does not run on from what was just put back. The step is kept
-  only on an `Undo` watching this registry; on another deck the edits settle by the
-  quiet, as a knob's do, until D4 gives each deck its own `Undo` in the call.
+  engage, a chase's press): each row acting then only reads until it has let go, so a
+  fist still closed does not run on from what was just put back. The cut is per row: a
+  row that has let go and closed again turns, while one still held stays cut. The
+  router also drops its hold on the step then, so a fist opening later closes nothing
+  of anyone else's.
+- **With a chase held** (plan 52; `Undo` keeps one step at a time). An orbit starting
+  under a held chase opens no step: its edits land in the chase's, and the verb stays
+  on. A chase pressed during an orbit closes the orbit's step and cuts the turn, and
+  the fist opening afterwards leaves the verb on. Tested in `test_hands_orbit.py` under
+  a skip that lifts when `Registry.base_chase` exists; both passed on a trial merge of
+  B1's 18c30a5.
+- **Which `Undo`.** `undo.watching(reg)`, chosen at each closure: every `Undo` is
+  found by the registry it watches, so a deck that is not the installed one has its own
+  step and cut, and installing another deck mid-closure changes nothing. No `deck.py`
+  seam is needed. An `Undo` from before a hot reload is not in the map, and falls back
+  on the installed one if it is over that registry.
 
 ### Saved, held, and two decks
 

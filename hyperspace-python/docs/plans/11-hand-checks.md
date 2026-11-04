@@ -7555,7 +7555,7 @@ error there is the table's, `room.MODES` and `ghost.MODES` together.
 *Pass:* (1) the bar sits at its ends and jumps between them, without a
 crawl through the middle. (2) Pitch keeps climbing and neither other bar
 jumps by half a turn. (3) Roll carries the twist; on the way down yaw may
-may read no value for one frame and restart if the twist was over 5° (row 685,
+may read no value for a moment and restart if the twist was over 5° (row 685,
 O2's guard, which replaced a yaw step of up to a quarter turn). A smaller step
 goes through.
 **516. Level room, a lost hand, and stillness.** (same)
@@ -7601,9 +7601,12 @@ back and stays until the fist has opened and closed again.
 1. Orbit, save the preset, load another, load it back.
 2. Engage the hold and orbit.
 3. A fist with the fingers straight up, twist it about them, lower it.
+4. A fist swept past vertical a little to one side, fast and then slowly.
 *Pass:* (1) the camera is where you left it, and the rows are there, on the other Mac
 too once it has this build. (2) The preview turns and the projector does not. Say if
 you wanted the orbit on the projector (row 684). (3) No camera jump on the way down.
+(4) The camera holds through the pass with no sweep. Say if it holds so often near
+vertical that the 20° zone wants to be smaller (row 685).
 ## What no test covers
 
 Only a person can settle these:

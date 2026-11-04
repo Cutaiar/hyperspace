@@ -12,7 +12,6 @@ import json
 import math
 from itertools import pairwise
 from types import SimpleNamespace
-from types import SimpleNamespace as NS
 
 import pytest
 from fake_hands import hand as fake_hand
@@ -685,16 +684,19 @@ def test_a_deck_that_is_not_installed_has_its_own_step_and_cut(tmp_path):
     assert undo.watching(a.reg) is steps and undo.watching(other.reg) is other_steps
 
 
-def test_watching_falls_back_on_the_installed_one_and_outlives_nothing():
-    reg = NS(params=())
-
+def test_watching_knows_no_stand_in_and_finds_the_installed_one():
     class Stand:
         pass
 
-    bare = Stand()
-    assert undo.watching(bare) is None
+    assert undo.watching(Stand()) is None
     assert undo.watching({}) is None                             # not hashable: no error
-    assert reg is not None
+    reg = Stand()
+    was = undo.installed()
+    undo.install(SimpleNamespace(reg=reg))                       # as an `Undo` from before a reload
+    try:
+        assert undo.watching(reg) is undo.installed()
+    finally:
+        undo.install(was)
 
 
 def test_another_decks_turn_keeps_no_step_on_this_undo(deck, tmp_path):
