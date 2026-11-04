@@ -5,7 +5,9 @@
 hand check 430, group AW); D2 built (2026-11-03, rows 590–593); **D3
 built** (2026-11-03, wave 2: rows 611–625, hand checks 461–470, group BJ);
 **D4 built** (2026-11-03, wave 3: rows 648–653, hand checks 489–493, group
-BN); D5–D6 a plan, not built. Written 2026-11-02 as
+BN); **D5a built** (2026-11-04, wave 4: `deck.MetaController` and a pointer per
+holder, every one on deck 1, rows 688–690, hand checks 522–523, group BX); the rest of
+D5, and D6, a plan, not built. Written 2026-11-02 as
 wave 0 item D0 of the post-show sequencing. Written against `main` at 72da1ed: every symbol below is in
 the code today unless the text says it is new. Its four decisions are
 register rows 556–559, answered by the owner on 2026-11-02 (as recommended; 558 with a nuance, §7). The build is six PRs,
@@ -458,6 +460,18 @@ says. The SYSTEM page's GPU lines gain a second block.
   file.
 
 ### D5 — controllers to A, the panel to B; dirty dot and undo per deck; hold = copy A into B (L)
+
+**Superseded in part, 2026-11-04.** D5 is split into D5a–D5e, and the owner's answers in
+`wave-4-session-prompt.md` overrule this section where they differ: no `Decks` class,
+HOLD, TAKE and DROP go, and there is no swap. **D5a, built:** `deck.MetaController` owns
+exactly two `Deck`s; the seam is a `pointer.Pointer` per holder, not "controllers to A,
+panel to B": `pointer(role)` for each controller, the keys and the mouse, `panel_pointer`
+for the panel, `on_air_pointer` for what the outputs show (deck 1 until the crossfader
+decides, D5c). `MidiIO`, the pad, the bridge, `Mouse`, `SeqPage`, `Host`, `Panel` and
+`Library` read through theirs; nothing in `main` moves one, `hold.py` stands, and the
+frame's order is unchanged. A pointer moves rows and base writes, not lanes: `Sources`
+is shared, so routes on a hand or a stick run in each deck's pass (register 688).
+What the text below calls `Decks` is `MetaController`; `Context` stays what factories get.
 
 The first PR a performer notices. **New** `deck.Decks`: the list, `on_air`
 and `panel` indices, `take(seconds)`, `copy(src, dst)`. The retargets:

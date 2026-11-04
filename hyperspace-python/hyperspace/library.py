@@ -132,6 +132,7 @@ import shutil
 import sys
 import time
 from collections.abc import Callable
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -1626,10 +1627,48 @@ class Marks:
     after undoing a load the library says the earlier preset is loaded
     again, and Save cannot write the earlier look over the later file."""
 
-    def __init__(self, lib: Library):
+    def __init__(self, lib: Library, presets=None):
         self.lib = lib
+        # whose: a deck's marks read that deck's presets whichever the panel
+        # is on (plan 44 D5a, `Library.into`). None: the library's
+        self.presets = presets
 
     def take(self) -> tuple:
+        with self.lib.into(self.presets):
+            return self._take()
+
+    def lands(self) -> dict:
+        """{group: landed} — every group's name, reference and re-apply
+        road, by reference: cheap enough to read every frame."""
+        with self.lib.into(self.presets):
+            lib = self.lib
+            return {g: lib.landed(g) for g in lib.landed_groups()}
+
+    def mend(self, pre: dict, lands: dict) -> None:
+        """After the restore of a step that is not a load: a group whose
+        landed state the restore itself moved (`pre` is `lands()` from
+        just before it) — a `scene.select` put back adopts its scene —
+        gets the step's own back, so the strip names what it named before
+        the step. A group the restore left alone is left alone: a slider
+        undone after a save-as stays on the new name (plan 15 fork 2)."""
+        with self.lib.into(self.presets):
+            lib = self.lib
+            now = self.lands()
+            for group in {*pre, *now}:
+                if now.get(group) != pre.get(group):
+                    lib.reland(group, lands.get(group, (None, None, None)))
+
+    def before(self, mark: tuple) -> None:
+        """First in a restore: `_before`, on this deck's presets."""
+        with self.lib.into(self.presets):
+            self._before(mark)
+
+    def put(self, mark: tuple) -> None:
+        """Last in a restore: `_put`, on this deck's presets."""
+        with self.lib.into(self.presets):
+            self._put(mark)
+
+    def _take(self) -> tuple:
         """(the show's mark, {group: landed}, {group: its `extra` hook's
         dict — the band layout}, the loaded preset's note and the notes
         its load left for the panel, the loaded preset's graph — plan 26
@@ -1658,26 +1697,7 @@ class Marks:
         media = getattr(pre, "media", None)
         return media.to_json() if media is not None else None
 
-    def lands(self) -> dict:
-        """{group: landed} — every group's name, reference and re-apply
-        road, by reference: cheap enough to read every frame."""
-        lib = self.lib
-        return {g: lib.landed(g) for g in lib.landed_groups()}
-
-    def mend(self, pre: dict, lands: dict) -> None:
-        """After the restore of a step that is not a load: a group whose
-        landed state the restore itself moved (`pre` is `lands()` from
-        just before it) — a `scene.select` put back adopts its scene —
-        gets the step's own back, so the strip names what it named before
-        the step. A group the restore left alone is left alone: a slider
-        undone after a save-as stays on the new name (plan 15 fork 2)."""
-        lib = self.lib
-        now = self.lands()
-        for group in {*pre, *now}:
-            if now.get(group) != pre.get(group):
-                lib.reland(group, lands.get(group, (None, None, None)))
-
-    def before(self, mark: tuple) -> None:
+    def _before(self, mark: tuple) -> None:
         """First in a restore: a group whose layout differs from the
         mark's gets it back through its own `on_layout` hook, so its
         params exist before their values land — the order `_apply_doc`
@@ -1696,7 +1716,7 @@ class Marks:
                 hook(extra["layout"])
                 lib._fresh_of(group)
 
-    def put(self, mark: tuple) -> None:
+    def _put(self, mark: tuple) -> None:
         """Last in a restore: every group's name, reference and re-apply
         road as they were (`Library.reland`; a group that had none then
         has none now), the loaded preset's note and its load's notes for the
@@ -1771,7 +1791,7 @@ class Library:
             _missing.discard(self.home)
             (self.home / PROJECTS).mkdir(parents=True, exist_ok=True)
         self.period = period
-        self.reg: Registry | None = None
+        self.reg = None            # (`reg`, below: the panel's deck's, once pointed)
         self.status = ""
         self.error = ""
         self.warning = ""
@@ -1793,7 +1813,7 @@ class Library:
         self._docs: dict[Path, tuple[float, dict]] = {}   # parsed files, by mtime
         self._mtimes: dict[Path, float] = {}
         self._next = 0.0
-        self.presets = None        # preset.Presets, set by its constructor
+        self.presets = None        # preset.Presets, set by its constructor (`presets`, below)
         self.project = Project(self)
         if self.missing is not None:
             text = missing_text(self.missing)
@@ -1825,6 +1845,51 @@ class Library:
         if warning is not None:
             self.warning = warning
             said["warning"] = said.get("warning", 0) + 1
+
+    # ---- which deck: the panel's (plan 44 D5a) ----
+
+    @property
+    def reg(self) -> Registry | None:
+        """The registry the library's verbs land on: the panel's deck's, or
+        the deck's a `with lib.into(presets)` names."""
+        into, p = self.__dict__.get("_into"), self.__dict__.get("pointer")
+        if into is not None:
+            return into.reg
+        return p.deck.reg if p is not None else self.__dict__.get("reg")
+
+    @reg.setter
+    def reg(self, reg) -> None:
+        if self.__dict__.get("pointer") is not None:
+            raise AttributeError("Library.reg reads through its pointer")
+        self.__dict__["reg"] = reg
+
+    @property
+    def presets(self):
+        """The `Presets` the presets kind's hooks reach: the panel's deck's, or
+        the one a `with lib.into(presets)` names."""
+        into, p = self.__dict__.get("_into"), self.__dict__.get("pointer")
+        if into is not None:
+            return into
+        return p.deck.presets if p is not None else self.__dict__.get("presets")
+
+    @presets.setter
+    def presets(self, presets) -> None:
+        if self.__dict__.get("pointer") is not None:
+            raise AttributeError("Library.presets reads through its pointer")
+        self.__dict__["presets"] = presets
+
+    @contextmanager
+    def into(self, presets):
+        """For this block the library works on `presets` and its registry,
+        whichever deck the panel is on; None: no change. How a deck's own
+        verbs and its undo's marks stay that deck's."""
+        was = self.__dict__.get("_into")
+        if presets is not None:
+            self.__dict__["_into"] = presets
+        try:
+            yield
+        finally:
+            self.__dict__["_into"] = was
 
     def attach(self, reg: Registry) -> list[str]:
         """Bind the registry; its state right now is what "default" means.
@@ -2432,7 +2497,7 @@ class Library:
         D3): the presets kind's `Presets` — its `landing`, (current, what
         its load produced, how to re-apply) — so a deck's dirty dot is its
         own; None for every other group."""
-        pre = self.__dict__.get("presets")
+        pre = self.presets
         if group == PRESETS and pre is not None and hasattr(type(pre), "landing"):
             return pre
         return None
@@ -2474,12 +2539,14 @@ class Library:
             return owner.landing[0]
         return self._current.get(group)
 
-    def load(self, group: str, name: str) -> list[str]:
-        """Apply a preset; returns the ids it names that this registry lacks."""
+    def load(self, group: str, name: str, *, into=None) -> list[str]:
+        """Apply a preset; returns the ids it names that this registry lacks.
+        `into`: a deck's `Presets` to land it on, not the panel's (plan 44 D5a)."""
         if group not in self._kinds:
             self._need_reg()
         doc = self.read(group, name)
-        return self._apply_doc(group, name, doc, path=self.path_of(group, name, loose=True))
+        with self.into(into):
+            return self._apply_doc(group, name, doc, path=self.path_of(group, name, loose=True))
 
     def _apply_doc(self, group: str, name: str, doc: dict, *, path: Path | None = None,
                    quiet: bool = False) -> list[str]:
@@ -2506,7 +2573,7 @@ class Library:
         else:
             # a module preset load, step or file-watch re-apply: one undo
             # step, the layout it may rebuild included (undo.py, plan 15)
-            undo.push(f"{group}: {doc.get('name') or name}", load=True)
+            undo.push_on(self.reg, f"{group}: {doc.get('name') or name}", load=True)
             hook = self._layout_hooks.get(group)
             if hook is not None and doc.get("layout") is not None:
                 hook(doc["layout"])                    # rebuild params first

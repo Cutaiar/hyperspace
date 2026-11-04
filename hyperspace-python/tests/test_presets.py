@@ -1135,7 +1135,7 @@ def test_active_follows_the_loaded_preset_from_one_place(tmp_path):
         pr.follow()
     assert pr.active == -1
     # the four sites call it, and nothing else looks a preset up in the bank
-    for fn in (library.Project._set_slot, library.Project._apply, library.Marks.put,
+    for fn in (library.Project._set_slot, library.Project._apply, library.Marks._put,
                preset.Presets._landed):
         src = inspect.getsource(fn)
         assert "follow()" in src and "bank.index" not in src, fn.__qualname__

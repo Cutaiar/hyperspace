@@ -7918,6 +7918,21 @@ you wanted the orbit on the projector (row 684). (3) No camera jump on the way d
 (4) The camera holds through the pass with no sweep. Say if it holds so often near
 vertical that the 20° zone wants to be smaller (row 685).
 
+## BX. The meta controller's pointers (plan 44 D5a)
+Register rows 688–690, 2026-11-04. **Nothing should look or feel different:** every
+pointer is on deck 1 and nothing in the app moves one. Tests cover pointing at deck 2
+(`tests/test_meta_controller.py`); these two check the real app, after a restart.
+**522. The same app.** (the rig, or a laptop with the desk)
+1. Load two presets. Turn a knob on the desk, drive a pad button, orbit with the mouse,
+   press ↑ and a key row, edit on GRAPH, ⌘Z.
+2. Engage HOLD, edit, TAKE; engage HOLD, edit, DROP.
+3. Latch SEND A and step a sequencer lane.
+*Pass:* all as yesterday. Fail: a control that does nothing, a red toast naming
+`reads through`, or the panel showing a different preset from the projector when not held.
+**523. Sign the words.** (anywhere)
+Read `docs/GLOSSARY.md`. *Pass:* each row says what you mean. Say which to change;
+SEM renames the code from it.
+
 ## What no test covers
 
 Only a person can settle these:
