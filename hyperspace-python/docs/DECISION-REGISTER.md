@@ -679,6 +679,10 @@ here; overturn → the change, then the same.
 | 645 | Plan 50: the migration step — `tools/migrate_library.py` moves every module preset to `patches/<group>/` as `patch/2` and rewrites every `patch/1` as `/2` in place, after the run's backup; the dry run lists them; a retired group's files (`fx/`) and an unreadable file (a module folder's or `patches/`'s) are left, said; `--to` moves none | 485 | (rec) — pending the owner; built as recommended |
 | 646 | Plan 50, not done: the show's `modules` key (a session group's band preset by name) stays — renaming it is a show schema move; `RETIRED_MODULES` and `_fresh_of` are already what the fallback needs; the band scene files (code data) stay `preset/1`, read through the one ladder; `library.migrate_doc` serves the shows alone (the preset entry, `CURRENT["hyperspace.preset"]` and `PRESET_SCHEMA` removed, review fix 8); `headless.SHARED_FOLDERS` is `patches/` alone, every folder down (review fix 2) | — | (rec) — pending the owner |
 | 647 | Plan 50: hands 1 in a group — a wired frame always holds it, so a "delete" leaves it held and a member (as a macro is) | — | (rec) — pending the owner; built as recommended |
+| 678 | Plan 51 O1: the palm's orientation as new lanes in the room's frame, `hand:<side>.room.roll / pitch / yaw`, the same reading on both hands, after the grabs so no older lane moves; the anatomical axes stay as they are | — | (rec) — pending the owner |
+| 679 | Plan 51 O1: a room lane is the whole circle, `0.5 + degrees / 360`, filtered unwrapped; the seam is one frame and never a sweep; pitch runs on past ±90° and yaw holds inside 8° of vertical, so no lane flips | — | (rec) — pending the owner |
+| 680 | Plan 51 O1: the room is the tracking mode's stage, levelled optionally from one flat hand (HANDS, **level room**); kept as an optional `room` key in `hands.json`, `/3` unchanged, written only when set | — | (rec) — pending the owner |
+| 681 | Plan 51 O1: a lost hand reads NaN on the room lanes that frame and returns at its new reading with no glide; they have no setup params, no DAW output and no Learn | — | (rec) — pending the owner |
 
 "—": no hand check shows it; tests only.
 
@@ -11937,3 +11941,46 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   leaves it held and the group keeps it, as a macro "deleted" is kept.
 - **Built.** `tests/test_graph_groups.py::test_groups_keep_their_invariants_over_the_corpus`.
 - **Judge it.** —.
+
+### 678. The room lanes
+
+- **Answer.** (rec) — pending the owner.
+- **Built.** `hands/room.py`, `Layout.room`: six lanes after the grabs, a
+  `room` port group. Up = −normal, back = −direction on either hand, so the
+  two hands read alike; `Ry(yaw) · Rx(pitch) · Rz(roll)`, right-handed about
+  the room's axes, the same way round as `geometry._camera`. The hands package
+  has no way to read the camera, and a test orbits it between frames.
+- **Judge it.** 514.
+
+### 679. A whole-circle lane, and over the top
+
+- **Answer.** (rec) — pending the owner. The other way, a clamped ±range like
+  the anatomical axes, cannot reach a camera that goes all the way round.
+- **Built.** `room.Palm` adds each frame's shortest step to a running angle,
+  runs the One Euro filter on it and wraps after. `room.angles` holds yaw
+  inside `POLE_DEG` and otherwise takes the solution nearest the last yaw. The
+  costs, in plan 51 §4: a level hand after going over the top may read pitch
+  180° rather than yaw and roll 180°, until it leaves; a twist made inside the
+  cone is a yaw step of up to 90° on the way out.
+- **Judge it.** 515.
+
+### 680. The room's calibration
+
+- **Answer.** (rec) — pending the owner.
+- **Built.** `room.frame` (the mode's stage, then the levelling);
+  `HandsIO.start_level` (a second, at least `CAL_MIN_SAMPLES` frames, the mean
+  palm's axes), `clear_level`; `core.load_room`, `save_calibration(room=)`. No
+  schema move: an older build ignores the key and drops it at its next save,
+  which costs one more press, and the two Macs each keep their own
+  `hands.json`. The frame leaves out `Units.tilt` and `ghost.mirror`, which are
+  about the drawing.
+- **Judge it.** 516.
+
+### 681. A lost hand on the room lanes
+
+- **Answer.** (rec) — pending the owner.
+- **Built.** `HandsIO._step_rooms` resets a `Palm` for a hand that is not
+  present or gives no frame; NaN lets a row go as any hand lane does. A glide
+  back has no right direction on a circle, so there is none. Nothing routes
+  them by default: no preset or binding changed.
+- **Judge it.** 516.

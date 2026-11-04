@@ -71,6 +71,7 @@ from .core import (
     grab_name,
     mirror,
 )
+from .room import ROOM
 from .signal import shape
 
 ROW_LABEL_W = 62.0
@@ -582,8 +583,9 @@ DANCE_GAP = 14.0       # … this much of it a gap
 def _dance(io, h: float) -> None:
     """The dance sources (plan 24 C4), live, in a column beside the axes:
     per hand a row of the five curls (thumb … pinky) and the grab switch
-    (C5: ● while the hand is a closed fist), and a row of spread, energy
-    and flick; then a row for the two hands together — gap, twist.
+    (C5: ● while the hand is a closed fist), a row of spread, energy and
+    flick, and a row of the room lanes (plan 51: roll, pitch, yaw); then a
+    row for the two hands together — gap, twist.
     Each a small bar like an axis's output, hollow while it reads nothing
     (the hand away, no skeleton). Hover a bar for its address and value:
     what a ROUTING row names."""
@@ -606,6 +608,10 @@ def _dance(io, h: float) -> None:
             if label.endswith("curl"):
                 imgui.same_line(0.0, 6.0)
                 _grab(io, s, lanes[lay.grab[s]])
+        imgui.text_colored(col, f"{side} room")     # plan 51: the whole circle, level centred
+        for kind in ROOM:
+            imgui.same_line(0.0, 3.0)
+            _dance_bar(f"hand:{s}.room.{kind}", lanes[lay.room[(s, kind)]], h, centred=True)
     for k, name in enumerate(lay.pair_names):
         if k:
             imgui.same_line(0.0, 6.0)
@@ -777,5 +783,28 @@ def _calibrate(io, settings, k: int) -> None:
     imgui.text_disabled(f"{a.name}: {st.lo:.1f} … {st.hi:.1f} {FEATURES[a.feature][0]}")
     said = _box_text(getattr(io, "box", None))
     imgui.text_disabled(f"box {said}" if said else "box open")
+    _level(io)
     if io.cal_note:
         imgui.text_disabled(io.cal_note)
+
+
+def _level(io) -> None:
+    """The room's frame (plan 51): level it from a flat hand, or clear it."""
+    if io.levelling > 0:
+        imgui.text_colored(ui.RED, "levelling… hold one hand flat, fingers forward")
+        return
+    if imgui.small_button("level room"):
+        io.start_level()
+    if imgui.is_item_hovered():
+        ui.tooltip("Hold one hand flat with the fingers pointing where forward is, "
+                   "press, and keep still for a second. That palm becomes the room's "
+                   "axes for the room lanes (hand:<side>.room.*), saved to hands.json "
+                   "for this box: the answer to a sensor mounted at an angle.")
+    imgui.same_line()
+    if getattr(io, "level", None) is not None:
+        if imgui.small_button("clear##level"):
+            io.clear_level()
+        imgui.same_line()
+        imgui.text_disabled("room levelled")
+    else:
+        imgui.text_disabled("room: the tracking mode's frame")
