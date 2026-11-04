@@ -289,6 +289,7 @@ class Deck:
                               # the LFOs' membership (plan 31 B), read off the
                               # router at each step, so a re-classed router counts
                               banks=lambda: router._banks())
+        reg.chase_undo = undo_obj          # one base chase hold, one step here (plan 52)
         if install:
             undos.install(undo_obj)        # what undo.push and the edit.* triggers reach
         if hold is not None:
@@ -296,6 +297,12 @@ class Deck:
         return cls(reg=reg, view=s, table=router.table, router=router, lfos=lfos, envs=envs,
                    seq=seq, clock=clock, presets=presets, learn=learn, undo=undo_obj, marks=marks,
                    renderer=renderer, hold=hold, sources=sources)
+
+    def chase(self, on: bool) -> bool:
+        """Hold or let go of the base chase on this deck (plan 52): the
+        performer into this deck's bases, one step on this deck's undo.
+        Returns whether it is on now. `deck.chase` is the same road."""
+        return self.reg.base_chase(on, steps=self.undo)
 
     @classmethod
     def beside(cls, first: Deck, *, renderer=None, media=None, lfos=None) -> Deck:

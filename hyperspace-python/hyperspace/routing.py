@@ -91,8 +91,22 @@ and returns to. The last two are the *performer* ops:
              [0, 1]), along its own taper and without detents; the base
              returns when the source stops. Depth 1 is the whole control
              whatever its units or curve — what a learned hand is
+  turn       the performer turns the base, and it stays (plan 51 O2): while
+             the row acts, ``depth · scale ·`` the source's shortest change
+             since the last frame, read as a circle, is added to the target's
+             base, wrapped on a wrapping param and clamped on any other
+             continuous one. The frame it starts acting it only reads, and a
+             frame it does not act (its `when` shut, its source NaN) it
+             forgets, so a clutch closing again and a lost hand coming back
+             continue from where the target sits with no jump, like lifting a
+             mouse. Depth 1 from a whole-circle lane onto a full-circle param
+             is one for one. No feel: a follower would glide across the seam.
+             It needs a whole-circle source (`whole_circle`) and a `when`, the
+             clutch; without either it is dormant, since a linear lane has no
+             shortest way and a row that never stops acting would be one undo
+             step for ever. One undo step per closure (`Router._turn`)
 
-Both go through the same modulate(): position's offset is ``clamp(depth ·
+Push and position go through the same modulate(): position's offset is ``clamp(depth ·
 scale · u) − base_norm``, so range, wrap and dormancy are push's. Rows to
 unknown or unmodulatable params, or with an unknown scale param, are
 dormant no-ops.
@@ -263,10 +277,12 @@ from pathlib import Path
 import numpy as np
 
 from . import apc40, envelope, lfo, modgraph, modifiers, motion, seq_page
+from . import undo as undo_steps
 from .bands import BANDS, CEIL
 from .modifiers import Modifier, ModState
 from .motion import CUSTOM, OFF, Follower, Motion
 from .params import (
+    CHASE_PARAM,
     DEPTH_TAPER,
     DEPTH_UNIT,
     DRIVE,
@@ -323,7 +339,21 @@ BANKS: dict[str, type] = {lfo.LFOs.SCHEME: lfo.LFOs,
 # `QUALIFIER`, `base_scheme`, `qualified`, `is_continuous` — is the shared
 # sources' (routing_sources.py, plan 44 D2), imported above and re-exported
 # from here so no importer changes
-MOD_OPS = ("push", "position")                 # the performer ops: the Router's rows
+TURN_OP = "turn"                               # writes the base, not an offset (plan 51 O2)
+MOD_OPS = ("push", "position", TURN_OP)        # the performer ops: the Router's rows
+# a closure's undo step outlives its rows by this long: a tracker dropout and the
+# grab's debounce coming back (GRAB_HOLD_S) are the same closure, and a person
+# opening and closing a fist takes longer than this
+TURN_GRACE_S = 0.15
+
+
+def whole_circle(source: str) -> bool:
+    """A hand's room lane (plan 51, `hands.room`): the whole circle, its seam
+    a jump a push's depth or a feel's glide would make a sweep."""
+    head, _, name = source.partition(":")
+    return base_scheme(head) == "hand" and ".room." in name
+
+
 # `hold` is a button row's op (plan 15 WP4, fork 13): the target fires
 # once the button has been down HOLD_S, and a shorter press does nothing —
 # the adapter times it (midi.py a note, `Router.pad` a pad button or the
@@ -350,6 +380,10 @@ SHIFT_PARAM = "desk.shift"
 # the desk's SAVE (plan 24 C1): held, a bank pad's tap saves into its slot
 # (midi.MidiIO._save_tap); a momentary row on apc40.SAVE, track 8's clip stop
 SAVE_PARAM = "desk.save"
+# what only a held button may drive: a row that could leave one on is refused
+# (`latch_refusal`). By id, because the referee has a row and no registry.
+# `desk.fine` is left out: a learned toggle on it is allowed (`midi._follow_fine`)
+HELD_ONLY = (SAVE_PARAM, CHASE_PARAM)
 # the sequencer page's latch (plan 31 §A, decision 7): SEND A, invariant,
 # a session toggle (seq_page.register) — while it is on the page's rows
 # shadow the clip grid, the clip stops and scene launch 1–5
@@ -836,6 +870,9 @@ class Binding:
             when = f" while {gate or self.when}" if self.when else ""
             if self.op == "push":
                 return f"{who} pushes {self.value:+.3g}{by}{when}"
+            if self.op == TURN_OP:
+                dormant = "" if self.when and whole_circle(self.source) else " (dormant)"
+                return f"{who} turns {self.value:+.3g}{by}{when}{dormant}"
             depth = "" if self.value == 1.0 else f" {self.value:.3g}"
             return f"{who} positions{depth}{by}{when}"
         return who
@@ -1113,21 +1150,22 @@ def legacy6_routes() -> list[Binding]:
     return rows
 
 
-def save_refusal(b: Binding) -> str | None:
-    """Why `b` may not drive the desk's SAVE (plan 24 C1), or None: only a
-    `momentary` row may — anything that could leave `desk.save` on (a
-    toggle, a set, a key or pad row that fires) would turn every bank pad's
-    tap into a new preset until something turned it off."""
-    if b.target == SAVE_PARAM and b.op != "momentary":
-        return f"{SAVE_PARAM} takes only a momentary row (held, never latched)"
+def latch_refusal(b: Binding) -> str | None:
+    """Why `b` may not drive a held-only param (`HELD_ONLY`), or None: only a
+    `momentary` row may — anything that could leave it on (a toggle, a set, a
+    key or pad row that fires) would turn every bank pad's tap into a new
+    preset (the desk's SAVE, plan 24 C1) or go on committing the performer
+    into the look (the base chase, plan 52) until something turned it off."""
+    if b.target in HELD_ONLY and b.op != "momentary":
+        return f"{b.target} takes only a momentary row (held, never latched)"
     return None
 
 
-def _drop_save_latches(rows: list[Binding]) -> tuple[list[Binding], list[str]]:
-    """`rows` less any row `save_refusal` refuses, with a note for each."""
+def _drop_latches(rows: list[Binding]) -> tuple[list[Binding], list[str]]:
+    """`rows` less any row `latch_refusal` refuses, with a note for each."""
     kept, notes = [], []
     for b in rows:
-        why = save_refusal(b)
+        why = latch_refusal(b)
         if why is None:
             kept.append(b)
         else:
@@ -2292,7 +2330,7 @@ class Bindings:
         changed = changed or bool(moved)
         # a hand-edited row that would latch SAVE on (plan 24 C1): dropped,
         # said, and the file written back once without it
-        rows, latched = _drop_save_latches(rows)
+        rows, latched = _drop_latches(rows)
         notes += latched
         changed = changed or bool(latched)
         t = cls(rows, path=path, profile=profile)
@@ -2571,8 +2609,8 @@ class Bindings:
             b.layer = "preset"
             if not b.is_midi:
                 notes.append(f"dropped {b.source} → {b.target}: not a desk control")
-            elif save_refusal(b) is not None:
-                notes.append(f"dropped {b.source} → {b.target} ({b.op}): {save_refusal(b)}")
+            elif latch_refusal(b) is not None:
+                notes.append(f"dropped {b.source} → {b.target} ({b.op}): {latch_refusal(b)}")
             elif self.is_invariant(b, inv):
                 if (b.source, b.target, b.op, float(b.value)) in RETIRED_DESK_ROWS:
                     continue
@@ -2660,7 +2698,7 @@ class Bindings:
         if self._lane_only(b) and b.op not in MOD_OPS:
             return (f"{b.op!r} is not an op for a {b.scheme} source; "
                     f"one of {', '.join(MOD_OPS)}")
-        return save_refusal(b)
+        return latch_refusal(b)
 
     def _check(self, b: Binding) -> None:
         """The referee: a performer joining the table (or waking up) must
@@ -2694,7 +2732,7 @@ class Bindings:
         is written unless `write` is False (a knob Learn: the row is the
         loaded preset's, plan 13 §3.3). Returns the rows dropped.
         """
-        why = save_refusal(b)
+        why = latch_refusal(b)
         if why is not None:
             raise ValueError(why)
         if not b.is_midi:
@@ -3201,7 +3239,9 @@ class Router:
         that do not fire this frame — the buttons the totem holds while it
         reads this pad (totem.SKIP, the plan 47 experiment). A skipped
         `hold` row forgets a press it was timing, so a press that began
-        before the skip does not fire when the skip ends mid-press."""
+        before the skip does not fire when the skip ends mid-press. A
+        `momentary` row's toggle this pad holds is let go by a skip or by
+        the pad going away, whose release would never come (plan 52)."""
         axis = qualified("axis", role)
         publish = getattr(pad, "publish", None)
         if publish is not None:
@@ -3211,8 +3251,12 @@ class Router:
         # source → press time (None once fired), one dict per pad
         holds = (self.__dict__.setdefault("_pad_holds", {}) if not role else
                  self.__dict__.setdefault("_pad_holds_of", {}).setdefault(role, {}))
+        # the toggles this pad holds down through a momentary row
+        down_now = self.__dict__.setdefault("_pad_down", {}).setdefault(role, set())
         if not pad.on:
             holds.clear()
+            for pid in list(down_now):
+                self._let_go_pad(down_now, pid)
             self.felt(axis, None, 0.0)       # the camera job's followers start afresh
             return
         now = time.monotonic() if now is None else now
@@ -3228,6 +3272,8 @@ class Router:
             if skip and b.bare in skip:
                 if b.op == "hold":
                     holds.pop((b.source, b.target), None)
+                elif b.target in down_now:
+                    self._let_go_pad(down_now, b.target)
                 continue
             hat = b.scheme == "hat"
             down = bool(pad.hat & code) if hat else pad.down(code)
@@ -3250,12 +3296,24 @@ class Router:
                 if p is None:
                     continue
                 if pressed and buttons:
-                    p.set(True) if p.kind is Kind.TOGGLE else p.toggle()
+                    if p.kind is Kind.TOGGLE:
+                        p.set(True)
+                        down_now.add(b.target)
+                    else:
+                        p.toggle()
                 elif released and p.kind is Kind.TOGGLE:
                     p.set(False)
+                    down_now.discard(b.target)
                 continue
             if pressed and buttons:
                 act(self.reg, b)
+
+    def _let_go_pad(self, down: set, pid: str) -> None:
+        """A toggle a pad held through a momentary row, its release lost."""
+        down.discard(pid)
+        p = self.reg.get(pid)
+        if p is not None:
+            p.set(False)
 
     def claimed(self, scheme: str) -> set[int]:
         """The lanes of `scheme` an enabled route reads — a pad axis with
@@ -3556,6 +3614,14 @@ class Router:
         self.modgraph                                # noqa: B018 — current
         return self.__dict__["_modgraph_cut"]
 
+    def _forget_lost_rows(self, by_target: dict[str, list]) -> None:
+        """A param none of whose rows is left has lost the source its base
+        chase ledger was about (plan 52): a row made later rides in full."""
+        had = self.__dict__.get("_row_sources", {})
+        now = {t: {b.source for b, _ in rows} for t, rows in by_target.items()}
+        self.reg.forget_commits(t for t, was in had.items() if not was & now.get(t, set()))
+        self._row_sources = now
+
     def _rebuild_modgraph(self, key: tuple) -> None:
         g = self.build_modgraph()
         t = self.table
@@ -3610,6 +3676,7 @@ class Router:
         early = {e.dst for e in live if id(e) not in ordered}
         dormant = {node for _, node in cut_in}
         plan: list[tuple] = []
+        self._forget_lost_rows(by_target)
         for node in modgraph.order(g):
             if node.kind in banks:
                 i = int(node.id.split(":")[1])
@@ -3834,6 +3901,9 @@ class Router:
                     depth *= s.at(float(mp.value))
                 if dormant:
                     continue
+                if b.op == TURN_OP:
+                    self._turn(b, p, u, depth)
+                    continue
                 m = self.feel_of(b)
                 if m.on:
                     u = self._move(b, m, u, p, depth, dt, movers, rests)
@@ -3849,13 +3919,97 @@ class Router:
                     if p.kind is Kind.TEXT or not p.modulatable:
                         continue
                     x = min(1.0, max(0.0, depth * u)) - p.norm
-                p.modulate(x)
+                # (a position row's share: the base chase's ledger leaves it out)
+                p.modulate(x, position=b.op != "push")
             if step[3]:              # something later in the pass reads it: land it now
                 q = reg.get(step[1])
                 if q is not None and q._base is not None and reg.lands(q):
                     q.apply(mark)
         for key in [k for k in movers if k not in moved]:
             del movers[key]
+        self._end_turns(dt)
+
+    # ---- the turn rows (plan 51 O2): a performer that writes the base ----
+
+    def _turn(self, b: Binding, p: Param, u: float, depth: float) -> None:
+        """A `turn` row acting this frame: the reading's shortest change since
+        the last frame onto the target's base. Its first frame only reads, and
+        `_end_turns` forgets a row that did not act, so a closing clutch or a
+        returning hand never jumps. Dormant with no clutch, on a source that
+        is no circle, or on a target it cannot turn. A row in `_turn_cut` only
+        reads."""
+        if (b.when is None or not whole_circle(b.source) or p.kind is not Kind.CONTINUOUS
+                or p.integer or not p.modulatable):
+            return
+        d = self.__dict__
+        turns = d.setdefault("_turns", {})
+        key = (b.source, b.target)
+        last = turns.get(key)
+        turns[key] = u
+        d.setdefault("_turned", set()).add(key)
+        if key in d.get("_turn_cut", ()):
+            return
+        if not d.get("_turn_held"):
+            self._turn_opens()
+        if last is None:
+            return
+        x = depth * ((u - last + 0.5) % 1.0 - 0.5)
+        if x:
+            n = p.norm + x
+            p.set(p._value_of_norm(n % 1.0 if p.wrap else min(1.0, max(0.0, n))))
+
+    def _turn_opens(self) -> None:
+        """A closure begins: one undo step from here until no row acts, however
+        still the hand goes (`Undo.keep_open`, the base chase's), on the `Undo`
+        that watches this deck's registry, chosen here each closure. Whatever
+        else closes the step (an undo, a load, the hold, a chase's press) cuts
+        the rows acting then, each until it has not acted for TURN_GRACE_S (a
+        dropout is not letting go), so a fist still closed cannot run on from
+        what was just put back, and it has no step left to close. A step someone else is keeping (a held chase) is left to them:
+        this turn's edits land in it and no verb is ended by a fist."""
+        d = self.__dict__
+        steps = undo_steps.watching(self.reg)
+        if steps is not None and steps._kept is not None:
+            steps = None
+        d["_turn_held"], d["_turn_undo"], d["_turn_idle"] = True, steps, 0.0
+
+        def closed() -> None:
+            d.setdefault("_turn_cut", {}).update(dict.fromkeys(d.get("_turns", ()), 0.0))
+            d["_turn_held"], d["_turn_undo"] = False, None
+
+        if steps is not None:
+            undo_steps.keep_open("orbit", steps, on_end=closed)
+
+    def _end_turns(self, dt: float) -> None:
+        """The pass's end: a row that did not act forgets its reading. A cut
+        row and a held closure each last until TURN_GRACE_S with nothing
+        acting: the row is then no longer cut, and the closure over, its undo
+        step closed."""
+        d = self.__dict__
+        turns = d.get("_turns")
+        cut = d.get("_turn_cut")
+        if not turns and not cut and not d.get("_turn_held"):
+            return
+        turned = d.setdefault("_turned", set())
+        for key in [k for k in (turns or ()) if k not in turned]:
+            del turns[key]
+        for key in list(cut or ()):
+            cut[key] = 0.0 if key in turned else cut[key] + dt
+            if cut[key] >= TURN_GRACE_S:
+                del cut[key]
+        acting = any(key not in cut for key in turned) if cut else bool(turned)
+        turned.clear()
+        if not d.get("_turn_held"):
+            return
+        if acting:
+            d["_turn_idle"] = 0.0
+            return
+        d["_turn_idle"] = d.get("_turn_idle", 0.0) + dt
+        if d["_turn_idle"] >= TURN_GRACE_S:
+            steps = d.get("_turn_undo")
+            d["_turn_held"], d["_turn_undo"] = False, None
+            if steps is not None:
+                undo_steps.let_close(steps)
 
 
 # what a router from before plan 44 D2 kept in its own __dict__ and the

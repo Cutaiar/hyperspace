@@ -7483,21 +7483,22 @@ a module preset loading as a patch of its group from
 `patches/<group>/`, an old module preset and an old `patch/1` opened end
 to end, a corpus preset round-tripping byte for byte, the migration
 tool's step on a scratch library with a dry run and `--apply`),
-`tests/test_graph_groups.py` (a group holding the scene, refused at
+`tests/test_graph_groups.py` (a group holding a copy alone, refused at
 save in words) and `tests/test_patches.py`. Both Macs on this build
 first, and the library migrated once (485): an older build refuses a
 `patch/2` and finds no module presets where this one keeps them.
-**484. A group holds the scene; the save says no.** (either Mac)
-1. Load `party-noita`, open GRAPH. Select `scene` and `warp`; right-click
-   → **Group**.
-2. Right-click the group → **Save as patch…**, name it `with scene`.
+**484. A group holds a copy alone; the save says no.** (either Mac;
+wave 3 P1 moved this from the scene, which a patch now holds)
+1. Load `party-noita`, open GRAPH. Add a copy of `warp`; select it and
+   `doublevision`; right-click → **Group**.
+2. Right-click the group → **Save as patch…**, name it `with copy`.
 3. Ungroup; group `warp` and `doublevision`; save that as `noita two`.
 *Pass:* (1) one folded group holding both; the footer says nothing was
 left out; the projector unchanged. (2) the footer reads "group 1 not
-saved as a patch: scene is the frame's; left out"; no file in
-`patches/`; the group stays. (3) `patches/noita-two.json` is written,
-its first line `"schema": "hyperspace.patch/2"`. Fail: Group refuses the
-scene, or the save writes a file holding it.
+saved as a patch: copy draws warp again: take warp with it; left out"; no
+file in `patches/`; the group stays. (3) `patches/noita-two.json` is
+written, its first line `"schema": "hyperspace.patch/2"`. Fail: Group
+refuses the copy, or the save writes a file holding it.
 **485. The migration moves the module presets, once.** (Mac A, between
 shows, Mac B on this build too)
 1. `uv run python tools/migrate_library.py` (the dry run).
@@ -7573,6 +7574,84 @@ with the dream on; deck 2 is empty, so it has no dream to take the worker)
 *Pass:* no date moves but `windows.json`'s; the fade is back at 0 at launch;
 the fader's row is the only change 490 made to `bindings.json`. Fail: a preset
 or the show rewritten.
+
+## BO. The base chase: commit the performer into the base (plan 52)
+Register rows 654–656, 2026-11-03. Headless: `tests/test_base_chase.py`
+(what shows while held against a twin the verb never touches, no jump at a
+release, a range's end, a fader row, one undo step, the dirty dot, the hold's
+refusal, two decks, Learn). For all three: on GRAPH or the on-screen desk, pick
+a free desk button, then **all params ▾ → deck → deck.chase**, so the button is
+held. Load a preset with a hand or an LFO routed onto something you can see.
+**494. Hold, move, let go: the look stays.** (the hands or a gamepad stick
+pushing a param you can see)
+1. Move the hand off its rest and stop. Hold the button: nothing moves.
+2. Move the hand again with the button down: the look follows as ever, and the
+   param's panel tick (its base) goes with it.
+3. Let go of the button with the hand still out. Then bring the hand to rest.
+*Pass:* (1) no jump. (3) no jump at the release, and the look stays where it was
+as the hand comes home. Moving out past the same spot moves the look on from
+there. Fail: a step at the press or the release, or the look returning to the
+old value.
+**495. An LFO, one undo.** (an LFO routed onto brightness or a camera axis)
+1. Hold the button for a few swings, including a still moment; let go mid-swing.
+2. Watch a whole swing. ⌘Z once, ⌘Z no further.
+3. Hold the button again, move the LFO's depth or wait a swing, and ⌘Z with it
+   still down.
+*Pass:* (1) no jump at the release; the look holds until the LFO crosses its
+zero, then swings about the value you left it at. The dirty dot is lit. (2) one
+⌘Z takes back the whole hold ("undid base chase") and the swing is about the old
+value. (3) the hold is taken back and the verb lets go though the button is down.
+Fail: several steps for one hold,
+or the swing running off the end of the range.
+**496. Under the projector's hold.** (rig on; hold engaged)
+1. With HOLD on, press the button.
+2. HOLD off (Take). Hold the button with a hand moving, and press HOLD with it
+   still down. Press DROP.
+*Pass:* (1) the button stays dark and neither the projector nor the panel ticks
+move. (2) HOLD lets the verb go with no step on the projector; DROP lands what
+showed when HOLD was pressed, the commit in it. Fail: the projector jumps.
+
+## BP. Frame kinds in patches (wave 3 P1)
+Register rows 657–660, 2026-11-03. Headless:
+`tests/test_patches_frame_kinds.py` (what a patch holds and refuses, whose
+params, the dream cut saved, spawned and undone through the doors, a host
+with a dream refused with nothing landed, every corpus preset whole into an
+empty frame). Check 484's refusal is now of a copy without its original, not
+the scene.
+**497. A dream patch.** (either Mac, the dream worker running)
+1. Load `party-wake`, open GRAPH. Select `dream`, its `composite` and an
+   effect you add; right-click → **Group**; **Save as patch…** `dream wash`.
+2. Load `party-noita` (no dream); patches chip → `dream wash`.
+3. Press **wire as saved** on the group, or wire its pins by hand.
+4. ⌘Z twice.
+*Pass:* (1) `patches/dream-wash.json` written, `"schema":
+"hyperspace.patch/2"`. (2) one folded group with open pins; the projector
+unchanged (nothing is attached by itself); the footer names no value for no
+param. (3) what is wired says so; the dream moves on the picture wired in.
+(4) the preset as it was, `dream.mix` back. Fail: the host's look-back knobs
+moved by the spawn, or a wire the canvas does not draw.
+**498. A host that has one says so.** (either Mac)
+1. Load `party-wake`; patches chip → `dream wash`.
+2. Drag `dream wash` onto a picture cable.
+*Pass:* (1), (2) the head reads "dream wash not spawned: this preset already
+has dream, and a frame holds one of each — delete it here first; nothing
+landed"; no sheet; the preset's dot does not light; ⌘Z has nothing new.
+3. Delete `dream`; spawn again. *Pass:* it lands. Fail: `dream.2` on the
+canvas, or a picture change on the refused spawn.
+4. Delete nothing; engage the output hold on a look holding a dream, load
+   `party-noita`, spawn `dream wash`. *Pass:* the head says "the output hold
+   still plays dream" and to drop the hold. Drop it and spawn again: it lands.
+**499. The frame's other kinds.** (either Mac)
+1. On `party-wake`, group `lookback` alone; save as `ring`. Spawn it back.
+2. Group `hands` and `hands.layer`; save as `ghosts`. Spawn it back.
+3. Group `hands.layer` alone; try to save.
+4. Delete the scene and the shape from a new preset; spawn a patch saved
+   holding `shape`, `scene` and `pattern`; wire as saved.
+*Pass:* (1) `lookback.2`, the first's knobs unmoved, its own `Look-back`
+knobs. (2) `hands.2` and its layer, the hands look as saved. (3) refused:
+"hands.layer draws hands: take hands with it; left out". (4) the shape on
+the projector as saved, but for its turn (the pose stays the host's). Fail:
+a host param moved at (1) or (2), or a second scene at (4).
 
 ## BS. The panel fold, stage 3: the rail gone, `ui.page` the focus (plan 49)
 Register rows 668–672, 2026-11-03. Headless: `tests/test_ui_pane.py` (the
@@ -7686,8 +7765,9 @@ error there is the table's, `room.MODES` and `ghost.MODES` together.
 *Pass:* (1) the bar sits at its ends and jumps between them, without a
 crawl through the middle. (2) Pitch keeps climbing and neither other bar
 jumps by half a turn. (3) Roll carries the twist; on the way down yaw may
-step, up to a quarter turn, the one step this design keeps (row 679). Say if
-it is more than a tracker glitch would be: O2 would need a guard.
+may read no value for a moment and restart if the twist was over 5° (row 685,
+O2's guard, which replaced a yaw step of up to a quarter turn). A smaller step
+goes through.
 **516. Level room, a lost hand, and stillness.** (same)
 1. Open **feel & calibration**, one hand in view, hold it flat, press **level
    room** with the mouse, hold it a second; if you can, with the Leap on a wedge
@@ -7701,10 +7781,48 @@ at once, and come back at the new angle without a glide. (4) The bars do not
 visibly shimmer: this filter is the page's `smooth` and `response`, untuned
 for a camera. Fail: a shimmer you would see on a shape (tell O2 to tune it).
 
+## BV. The orbit (plan 51 O2)
+Register rows 682–685, 2026-11-03. **Nothing here has run on a real sensor**:
+`tests/test_hands_orbit.py` plays tapes from computed poses through `TapeSource`,
+`HandsIO` and `Router.modulate`, and the tape's fist has the same palm vectors as
+its open hand. Set up: on GRAPH, wire the hands node's `R room yaw` to the camera's
+Yaw and `R room pitch` to its Pitch. Each row should read `turn`, gated by R grab.
+**517. The orbit.** (the Mac with the Leap, a shape on screen)
+1. Close a fist and turn it left and right, then tip it up and down.
+2. Open the hand, swing it elsewhere, close it there, turn again.
+3. With a fist, turn on past where the camera's Yaw reads ±180°.
+*Pass:* (1) the shape follows, about as far as the hand turned. (2) Nothing moves
+while open, and nothing jumps at the close: the turn goes on from where the shape
+sat. (3) No sweep and no snap at the seam. Fail: a jump on closing, the direction
+reversed, or the shape drifting with the fist still. Say if the sense feels wrong
+with the camera pitched far over: it is yaw then pitch, not a trackball (plan 51 §6).
+**518. The clutch itself, and undo.** (same)
+1. Close and open the fist a few times without meaning to turn.
+2. Mid-orbit, take the hand out of the box and bring it back turned, still a fist.
+3. Orbit twice with an open hand between, once holding the fist dead still for a
+   second in the middle. Press undo twice.
+4. Orbit with the fist still closed and press undo mid-turn.
+*Pass:* (1) the shape barely moves: say how much, since closing a real fist may tip
+the palm's reading, and whether a pinch would serve better (change the row's gate on
+ROUTING). (2) The shape stays when the hand goes, and nothing jumps when it returns.
+(3) Each undo takes back one whole orbit, the pause not splitting it. (4) It goes
+back and stays until the fist has opened and closed again.
+**519. Saved, held, and the cone.** (same)
+1. Orbit, save the preset, load another, load it back.
+2. Engage the hold and orbit.
+3. A fist with the fingers straight up, twist it about them, lower it.
+4. A fist swept past vertical a little to one side, fast and then slowly.
+*Pass:* (1) the camera is where you left it, and the rows are there, on the other Mac
+too once it has this build. (2) The preview turns and the projector does not. Say if
+you wanted the orbit on the projector (row 684). (3) No camera jump on the way down.
+(4) The camera holds through the pass with no sweep. Say if it holds so often near
+vertical that the 20° zone wants to be smaller (row 685).
 ## What no test covers
 
 Only a person can settle these:
 - the dream's look (9) and the default hand feel (16);
+- a spawned dream patch's picture with a worker running (497): the tests read
+  the section and the values, no worker;
 - the hand-to-picture delay (25): a target, not a measurement;
 - the frame rate and tearing with two real screens (107): the tests pin
   which swap waits, not what the screens do;

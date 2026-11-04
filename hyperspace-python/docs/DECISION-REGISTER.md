@@ -685,6 +685,13 @@ here; overturn → the change, then the same.
 | 651 | Plan 44 D4: each deck's `lfo`, `env`, `seq`, `mod` lanes are its own layer (`Router.lanes`), read over the sources; the sources hold none. Changes row 591 | — | (rec) — pending the owner; built as recommended |
 | 652 | Plan 44 D4: each media source is read once a frame on `MediaSources`, both renderers handed the same `MediaFrame`; deck 2 is silent, only the on-air deck feeds the mixer | 491 | (rec) — pending the owner; built as recommended |
 | 653 | Plan 44 D4: one dream worker, lent while a fade is up and the receiving deck has a dream on, the dream restarting; the deck giving it up holds its last dream. Row 558's question (a second, lower-resolution worker for the panel's deck) measured here, **not decided** | 492 | (rec) — pending the owner; the second worker is the owner's to decide |
+| 654 | Plan 52: the base chase — while held, every continuous, modulatable param of this deck writes what it shows into its base; nothing shows differently while held; a source going home **while still held** takes the look with it (what shows is what commits); after the release a ledger absorbs the offset, so a source going home moves nothing; an undo, a load or a learn under the verb ends it, so one hold is at most one step | 494, 495 | (rec) — pending the owner; built as recommended |
+| 655 | Plan 52: macros are outside the verb — a commit would move a macro's base subscribers, which its offset never did | — | (rec) — pending the owner; built as recommended |
+| 656 | Plan 52: a press under the projector's hold is refused, and engaging a hold lets the verb go, its commit kept | 496 | (rec) — pending the owner; built as recommended |
+| 657 | Wave 3 P1: a patch holds the frame's kinds (scene, shape, backdrop, pattern, look-back, dream, hands 1, its layer and guide); the rig's (`patches.RIG_KINDS`) and the look's one camera stay refused, a lane envelope and a copy without its original too; **no `patch/3`**: the file's keys are unchanged and an older build's `check` refuses such a file in words | 497 | (rec) — pending the owner; built as recommended |
+| 658 | Wave 3 P1: a patch's single-instance node the host already has (`patches.ONE_PER_FRAME`: scene, shape, backdrop, pattern, dream) refuses the whole spawn in words, nothing landed, no sheet — P2 turns the dream's into "replace the host's dream"; hands 1 lands as the next hands, a look-back as the next look-back | 498 | (rec) — pending the owner; built as recommended |
+| 659 | Wave 3 P1: what a frame kind carries is its own params, the canvas's owners (`patches._param_rows`): `rot.*`, most of `view.*` and `fx.face_map` the shape's; `pattern.*`, `view.pattern*`, `view.media_*` the pattern's; `dream.*` split by key between a look-back (`LOOKBACK_KEYS`) and the dream; `scene.*` no node's. The spin's pose stays the host's. A hands' layer or guide needs its hands at a **save**, in words; a file an older build saved with `hands.2.layer` alone still reads and spawns as it did. A second dream (`dream.2`) is refused at a save and at a read, and never renumbered onto `dream`. An inlet into `scene.geometry` keeps its draw order (the port's optional `before`) | 497, 499 | (rec) — pending the owner; built as recommended |
+| 660 | Wave 3 P1: the "empty frame" row 641 left open — a whole preset lifted and spawned into an empty frame is that frame (proved over the corpus, hands one number on), but `Presets.load_doc` stays the replace landing, and no preset file is spawned directly (save it as a patch). A new preset holds the scene chain, so a whole-frame patch is refused there in words | — | (rec) — pending the owner; the literal merge not built |
 | 668 | Plan 49 U3: the rail is gone and GRAPH is always drawn; `ui.page` is the focus, `ui.PAGE_KEYS` keeps its sixteen slots in order so a saved index names the section of the name its page had; GRAPH's slot lets go of the focus; "every page fits the window" retired | 506 | (rec) — pending the owner; built as recommended |
 | 669 | Plan 49 U3: the focus leaves the fold alone — a section shows while focused and folds back when the focus moves on or lets go; nothing written to `ui.json` (changes the end of row 627, "kept as a click's unfold") | 507 | (rec) — pending the owner; built as recommended |
 | 670 | Plan 49 U3: the focused section's room — beside the canvas, its header at the pane's top and its body down to the headers after it; in the narrow band, alone, the band leaving `CANVAS_MIN` of canvas, a chip letting go | 507, 508 | (rec) — pending the owner; built as recommended |
@@ -699,6 +706,10 @@ here; overturn → the change, then the same.
 | 679 | Plan 51 O1: a room lane is the whole circle, `0.5 + degrees / 360`, filtered unwrapped; the seam is one frame and never a sweep; pitch runs on past ±90° and yaw holds inside 8° of vertical (out at 11°), so no lane flips; a dropped wire lands a `position` row at depth 1 with no feel (`learn.row_for`) | — | (rec) — pending the owner |
 | 680 | Plan 51 O1: the room is the tracking mode's stage, levelled optionally from one flat hand (HANDS, **level room**); kept as an optional `room: {mode, level}` in `hands.json`, `/3` unchanged, written only when set; applied only in its own mode and never to a tape | — | (rec) — pending the owner |
 | 681 | Plan 51 O1: a lost hand reads NaN on the room lanes that frame and returns at its new reading with no glide; they have no setup params, no DAW output and no Learn | — | (rec) — pending the owner |
+| 682 | Plan 51 O2: an orbit is a new performer op, `turn`, that adds the source's shortest change to the target's base while its gate is on; first acting frame reads, a frame not acting forgets; no feel; dormant with no gate or a source that is no whole-circle lane | — | (rec) — pending the owner |
+| 683 | Plan 51 O2: no schema move for `turn`: an older build drops the row with a note and lands the rest, and a save there loses it; both Macs update together | — | (rec) — pending the owner |
+| 684 | Plan 51 O2: the clutch is the same hand's grab, landed in the preset's row; a lost hand is an opened clutch; one undo step per closure with a 0.15 s grace; under the hold it moves the preview as a knob does | — | (rec) — pending the owner |
+| 685 | Plan 51 O2: within 20° of vertical, a yaw straying 20° or stepping 5° on leaving the cone makes the hand read NaN until it has left, then restart, not a camera jump; `ghost.mirror` does not flip a turn row, its depth does; a room lane on a clamped target stays `position`; a moved row lands as `row_for` would | — | (rec) — pending the owner |
 | 686 | The Joy-Con's version 0 is buttons, sticks, the gyro and shake: its sensors move no position (`poi.no_position`); the Edge and `motion:shake` are unchanged. An idealized control object for the acceleration comes later | 520, 521 | owner — 2026-11-04 |
 | 687 | The hid reader learns a Joy-Con's gyro rest offset (`hid.Turn(learn=True)`): every axis within 3 deg/s for one sensor second, none past 20 deg/s | 520 | (rec) — pending the owner |
 
@@ -12084,6 +12095,164 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   fade. A fader jittering across 0.05 and all the way to 0 still restarts it.
 - **Judge it.** Check 492.
 
+## Wave 3 — the base chase (plan 52, rows 654–656)
+
+### 654. What the verb commits, and when the look comes back
+
+- **Asked.** The triage's "Base chase modifier"; no written spec. What does a
+  source do once its motion is in the base?
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** The verb tracks what shows, frame by frame, so holding it
+  changes nothing on screen and a release leaves the look at what showed last.
+  The offset then counts only past where it was let go, until it comes home.
+  So: hold, push the stick, let go of the verb, let go of the stick, and the
+  look stays. The alternative was a ratchet, where the look also stays when a
+  source goes home under the held verb. It keeps a stick's throw with either
+  order of release, but an LFO under it would show half its swing while held,
+  so the press would no longer be invisible. Worth judging with B2 on a
+  gamepad; it would be a change to `Param.apply` alone. An undo under the verb
+  ends it, rather than committing again on the bases it put back. A base goes
+  back with the ledger it had (`State.trims`): undoing a hold with a push still
+  out shows the old base plus the push, as if the verb had never been held. A
+  load empties the ledger: a look holds no commit it never made.
+- **Built.** `Registry.base_chase`, `Param._commit`, `params._came_home`,
+  `tests/test_base_chase.py`.
+- **Judge it.** Checks 494, 495.
+
+### 655. Macros
+
+- **Asked.** Found in the build: `macro.*` is continuous and modulatable.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** Left out. `Router.follow_macros` moves base subscribers when
+  a macro's base moves and never for an offset, so a commit would move them for
+  the first time, a jump the moment the verb is pressed. Left out, a routed
+  macro shows as it did and nothing changes. Its subscribers' own params are
+  reached if a route lands on them.
+- **Built.** `params.CHASE_REFUSED_GROUPS`.
+- **Judge it.** —.
+
+### 656. Under the projector's hold
+
+- **Asked.** Plan 38's hold keeps the program's bases and adds this frame's
+  offset, read as `value − base`.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** Refuse the press while held. A commit empties `value − base`,
+  so the program would lose the performer and the projector would jump; and
+  what it would commit into is the preview, which the room is not watching.
+  Engaging a hold lets the verb go first, so its undo step closes before the
+  point Drop goes back to. One hold for the rig, so the rule is the rig's: every
+  deck is refused and let go. D5 retires `hold.py` and this rule with it.
+- **Built.** `Registry.chase_guard` (set on the session by `hold.register`),
+  `Hold.engage`.
+- **Judge it.** Check 496.
+
+## Wave 3 — frame kinds in patches (plan 50 P1, rows 657–660)
+
+### 657. A patch holds the frame's kinds; no `patch/3`
+
+- **Asked.** Build order P1: frame kinds allowed in groups and patches, so
+  a "dream + fx + composite" patch can exist; `patches.RIG_KINDS` stays
+  refused.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** `patches.MAY_HOLD` takes the scene, the shape, the
+  backdrop, the pattern, the look-back and the dream; hands 1, its layer
+  and guide are no longer refused. Still refused: a window, All outputs, a
+  media channel, a cloud (`RIG_KINDS`); the look's one camera (plan 43 C2:
+  there is one, always there, so a patch could only set it, against D5); a
+  lane envelope; a copy without its original. **No schema move**: every
+  key of `patch/2` means what it did, the new entries are kinds a section
+  already reads, and an older build's `check` refuses the file in words
+  rather than misreading it. Both Macs update together in any case.
+- **Other options.** `patch/3` with a migration, for a change no existing
+  file needs; the camera held too, as a set-on-spawn: against D5.
+- **To reverse.** Take the kinds back out of `MAY_HOLD`.
+- **Built.** `patches.MAY_HOLD`, `held_words`,
+  `tests/test_patches_frame_kinds.py`.
+- **Judge it.** 497.
+
+### 658. A single-instance node the host already has
+
+- **Asked.** "Decide what a spawn does when the host already has a
+  single-instance frame node, and refuse in words for now if P2 owns the
+  answer."
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** Refuse the whole spawn, nothing landed and no sheet:
+  "dream wash not spawned: this preset already has dream, and a frame holds
+  one of each — delete it here first; nothing landed". What only a held
+  program keeps (`Host.held`, `Landing.held_taken`) says to drop the hold
+  instead, there being nothing to delete. `patches.spawn` reports the names
+  in `Landing.taken`, so P2 can turn the dream's into a
+  sheet row without touching the rest; the same door could take the scene's
+  and the shape's later. Landing the rest without the node was rejected:
+  the patch's composite would lose the dream it was saved around, quietly.
+  What can be made twice stays renamed: `hands` → `hands.2`, `lookback` →
+  `lookback.2` with its own `dream.2.*`. A consequence said plainly: nearly
+  every preset holds a scene and a shape, so a patch holding them lands
+  only where they have been deleted.
+- **Other options.** Replace the host's node at once (P2's question, and it
+  would drop the host's wires without asking); leave the node out and land
+  the rest.
+- **To reverse.** Drop the check in `ui_graph.spawn` and
+  `Edit._spawn_refusal`.
+- **Built.** `patches.ONE_PER_FRAME`, `TAKEN_WORDS`, `Landing.taken`,
+  `Landing.refusal`, `graphview.Edit._spawn_refusal`, `ui_graph.spawn`.
+- **Judge it.** 498.
+
+### 659. What a frame kind carries
+
+- **Asked.** Follows from 657: D5 says a patch's `values` hold only its
+  members' params, and a frame kind's params are not all under its name.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** The canvas's owners (`graphview.OWNERS`) are the rule,
+  restated in the leaf and held equal by a test over the whole registry:
+  `rot.*`, `view.*` and `fx.face_map` the shape's; `pattern.*`,
+  `view.pattern*` and `view.media_*` the pattern's; `backdrop.*` the
+  backdrop's. `dream.*` is split by key, `params.is_lookback_knob`'s rule:
+  a look-back owns `LOOKBACK_KEYS`, the dream the rest, so a dream patch
+  never sets the host's look-back knobs. (The canvas still draws them all
+  on the look-back: P2's.) `scene.*` is the band scene's, a session group,
+  and no node's. The spin's pose is outside `values`, so it stays the
+  host's. A hands' layer or guide without its hands is refused in words at
+  the save, as a copy without its original is: alone it lands a layer of a
+  hands no one holds, whose port refuses `hands` and whose values are for
+  no param. **Only at the save**: an older build could legally save
+  `hands.2.layer` alone, and files on disk are a format, so `check` still
+  reads one and it spawns as it did, its values said. A second dream
+  (`dream.2`, unwirable, no params) is refused at a save and a read (no
+  older build could hold a dream at all) and a spawn never renumbers it
+  onto the live `dream`.
+- **Other options.** The old prefix rule (`shape.*`, which is nothing;
+  `dream.*` whole, which would overwrite the host's look-back).
+- **To reverse.** `patches._param_rows`.
+- **Built.** `patches._param_rows`, `_Members.param_rows`, `LAYER_WORDS`;
+  `read` also keeps the order of the wires into `scene.geometry`, the draw
+  order, rather than sorting it away, and orders ports by number. An inlet
+  into that port carries an optional `before` (the patch's own wire it drew
+  before, renamed with the rest), which **wire as saved** honours, and a
+  many-wire port stays open beside its other wires. It is no schema move:
+  such a port exists only with the scene in the patch, a file no older
+  build reads.
+- **Judge it.** 497, 499.
+
+### 660. The empty frame
+
+- **Asked.** Row 641 left "load = spawn into an empty frame" for P1.
+- **Answer.** (rec) — pending the owner; the literal merge not built, said.
+- **Recommended.** What is now true and proved: every corpus preset's
+  section, lifted whole and spawned into an empty frame with its pins wired
+  as saved, is that section again, hands one number on (hands 1 being always
+  the frame's), with the scene's draw order. What stays two: `Presets.load_doc`
+  replaces every part, refuses whole and re-saves byte for byte; `Edit.spawn`
+  merges under fresh ids and renames hands. Making the load a spawn would
+  put a load's picture behind the hands rename for no change a user sees.
+  A preset file is not spawned directly: save its group as a patch. A new
+  preset holds `shape → scene → output.all`, so it is not an empty frame and
+  a whole-frame patch is refused there, in 658's words.
+- **Other options.** The literal merge; a preset listed in spawn ▸.
+- **To reverse.** — (nothing to undo).
+- **Built.** `tests/test_patches_frame_kinds.py::test_a_whole_preset_spawned_into_an_empty_frame_is_that_preset`.
+- **Judge it.** —.
+
 ### 668. The rail goes; `ui.page` is the focus
 
 - **Asked.** Plan 49's third stage: "the rail is removed and `ui.page`
@@ -12323,6 +12492,57 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   back has no right direction on a circle, so there is none. Nothing routes
   them by default: no preset or binding changed.
 - **Judge it.** 516.
+
+### 682. The `turn` op
+
+- **Answer.** (rec) — pending the owner.
+- **Built.** `routing.TURN_OP` in `MOD_OPS`, `Router._turn`, `Router._end_turns`.
+  A gated `position` row slams to the palm's angle and returns to the base, so an
+  orbit needs a row that writes the base. It never calls `Param.modulate`, so no
+  offset or ledger exists. On a clamped target it adds up and stops at the end.
+  Dormant with no `when` (it would never stop acting, so one undo step for ever)
+  and on a source that is no whole-circle lane (a linear lane has no shortest way).
+- **Judge it.** 517.
+
+### 683. No schema move for a new op
+
+- **Answer.** (rec) — pending the owner. Accepted on this basis by the wave's
+  orchestrator, 2026-11-03.
+- **Built.** Presets stay `/10`. `preset.py` on an older build drops an op it lacks
+  with "(turn): not a performer row" and lands the rest; a save from that build
+  loses the row. Read from the code and simulated with an older `MOD_OPS`
+  (`test_what_an_older_build_does_with_the_row`), not run on an older build.
+- **Rejected.** A flag on a `position` row: an older build ignores it and slams the
+  camera. A schema move: an older build refuses the whole file for one camera row.
+
+### 684. The clutch, a lost hand, undo and the hold
+
+- **Answer.** (rec) — pending the owner.
+- **Built.** `learn.clutch_of`: the same hand's grab, in the row's `when`; alternatives
+  in plan 51 §6. A lost hand drops the gate and NaNs the lane, so the camera stays on
+  its base. One step per closure through `Undo.keep_open` / `let_close`, B1's lines, on
+  `undo.watching(reg)`. A step outlives its rows by `TURN_GRACE_S` (0.15 s), so a dropout
+  is not a new step. Anything else closing it cuts each row acting until it lets go. A
+  step a held chase is keeping is left alone, so a fist ends no verb. A hand lost or
+  blind past the grace makes two steps.
+- **The question for the rig.** Under the hold a turn moves the preview only, as a
+  knob, because it writes the base; a push or position performer rides on both. The
+  alternative, an orbit that reaches the program, would need an offset, which is what
+  this op does not have.
+- **Judge it.** 518.
+
+### 685. The cone, the mirror and clamped targets
+
+- **Answer.** (rec) — pending the owner.
+- **Built.** `Palm.step` answers plan 51's open question. Within `POLE_NEAR_DEG` (20°)
+  of vertical, a yaw straying `POLE_SWING_DEG` (20°) from where it came in, or stepping
+  `POLE_STEP_DEG` (5°) on leaving the cone, makes the hand blind until it has left; then
+  it restarts. A range, not a rate, so a slow pass is caught. Costs in plan 51 §6.
+  `ghost.mirror` is the room's and the row the preset's, so no flip: depth −1 answers
+  a mirror. `learn.row_for` lands `turn` only on a wrapping target; on any other
+  continuous target it stays O1's `position`. `learn.move_route` lands a moved row the
+  same way.
+- **Judge it.** 519.
 
 ### 686. The Joy-Con's version 0: buttons, sticks, the gyro and shake
 

@@ -1237,6 +1237,7 @@ class Presets:
                 hold.hold_pose(turn)          # (None: a load with no pose clears it)
             elif turn is not None and callable(getattr(view, "set_pose", None)):
                 view.set_pose(turn)
+                reg.forget_commits(POSE_IDS)    # (a load's pose holds no commit: plan 52)
         except BaseException:
             if table.modifiers_doc(reg) != held_mods:     # the modifiers as they were
                 table.set_modifiers(held_mods, reg)

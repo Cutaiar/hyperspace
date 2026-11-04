@@ -29,6 +29,16 @@ POLE_DEG = 8.0
 POLE_EXIT_DEG = 11.0
 _POLE = math.sin(math.radians(POLE_DEG))
 _POLE_EXIT = math.sin(math.radians(POLE_EXIT_DEG))
+# a twist made inside the cone, seen as a yaw step on the way out: past this the
+# reading restarts rather than step (plan 51 §4, `Palm.step`)
+POLE_STEP_DEG = 5.0
+# near vertical yaw swings far for a small move of the fingers (a hand passing
+# just outside the cone sweeps up to half a turn in a few frames, each step short
+# of a flip). Fingers this near: yaw may stray this far from where it came in,
+# and past that the hand reads nothing until it has left, then starts afresh
+POLE_NEAR_DEG = 20.0
+POLE_SWING_DEG = 20.0
+_POLE_NEAR = math.sin(math.radians(POLE_NEAR_DEG))
 _EPS = 1e-6
 
 Vec = tuple[float, float, float]
@@ -153,7 +163,7 @@ class Palm:
     seen inside the pole's margin; `pole` says the fingers are inside the cone
     where yaw holds."""
 
-    __slots__ = ("_filt", "_turn", "_yaw", "deg", "pole")
+    __slots__ = ("_blind", "_filt", "_near", "_turn", "_yaw", "deg", "pole")
 
     def __init__(self) -> None:
         self._filt = {k: OneEuro() for k in ROOM}
@@ -165,17 +175,39 @@ class Palm:
             f.reset()
         self._turn: dict[str, float] = {}
         self._yaw: float | None = None
+        self._near: float | None = None     # the yaw it came near the pole with
+        self._blind = False                 # strayed there: nothing until it leaves
         self.deg: dict[str, float] = {}
         self.pole = False
 
     def step(self, axes: Mat, t: float, smooth: float, response: float) -> None:
         """One tracking frame: each angle's shortest step onto its running
         turn, the filter on that (in half turns, as a ±90° axis is shaped),
-        wrapped only after."""
+        wrapped only after. Leaving the cone with a yaw more than
+        POLE_STEP_DEG from the one it held, or straying POLE_SWING_DEG near
+        the pole, is no turn of the hand: it reads NaN until the fingers are
+        POLE_NEAR_DEG off vertical and restarts, as a returning hand does, so
+        nothing taking differences sees a step or a sweep."""
+        held = self._yaw if self.pole else None
         read = angles(axes, self._yaw, self.pole)
         if read is None:
             return
         roll, pitch, self._yaw, self.pole = read
+        z = axes[2]
+        if math.hypot(z[0], z[2]) < _POLE_NEAR:
+            if self._near is None:
+                self._near = self._yaw if held is None else held
+            if (abs(wrap(self._yaw - self._near)) > POLE_SWING_DEG
+                    or (held is not None and not self.pole
+                        and abs(wrap(self._yaw - held)) > POLE_STEP_DEG)):
+                self._blind = True
+        else:
+            self._near, self._blind = None, False
+        if self._blind:
+            for f in self._filt.values():
+                f.reset()
+            self._turn, self.deg = {}, {}
+            return
         for k, raw in zip(ROOM, (roll, pitch, self._yaw)):
             turn = self._turn.get(k, raw)
             turn += wrap(raw - turn)

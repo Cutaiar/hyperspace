@@ -1277,8 +1277,8 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     # ---- undo: every scene-setter of this frame has written its base
     # (the panel's edits are last frame's tail), so compare the bases and
     # the preset's table against last frame's — a change opens a step, a
-    # settle time closes it. No performer has run yet, and none writes a
-    # base (undo.py, plan 15 WP1) ----
+    # settle time closes it. No performer has run yet; a performer writes a
+    # base only on a step it holds open (undo.py, plan 15 WP1; plan 51 O2) ----
     if h.undo is not None:
         try:
             h.undo.tick(now)
