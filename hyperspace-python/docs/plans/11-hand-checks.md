@@ -7561,13 +7561,12 @@ channel and a live feed on another)
 flips and each window's own dim as before; the clip's sound does not change
 through the fade; the Syphon feed does not stutter. Fail: one output unfaded,
 or the sound dipping.
-**492. The dream goes quiet, and comes back.** (`[dream] enabled`, a preset
-with the dream on)
-1. Raise the fade a little, for ten seconds.
-2. Bring it back to 0.
-*Pass:* (1) deck 1's dream holds still under the fade, no crash, and SYSTEM's
-dream line stops counting steps. (2) the dream starts afresh within a second
-and deepens as after a launch. Fail: the dream frozen after 0.
+**492. The dream stays with the deck on air.** (`[dream] enabled`, a preset
+with the dream on; deck 2 is empty, so it has no dream to take the worker)
+1. Raise the fade to half, for ten seconds, and bring it back to 0.
+*Pass:* deck 1's dream keeps deepening under the fade and is not restarted at
+0; SYSTEM's dream line keeps counting. Fail: the dream freezes or wipes. (A deck
+2 with a dream takes the worker from D5 on; the tests cover the lend.)
 **493. No file moved.** (after 489–492, `git`-free: Finder's dates)
 1. Quit, note the dates on the show, the presets and `bindings.json`.
 2. Launch and quit without touching anything.

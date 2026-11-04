@@ -1059,7 +1059,13 @@ class Presenter:
         mix = getattr(ho, "mix", None)
         if mix is None or k <= 0.0:
             return
-        ctx = self.ctx
+        ctx, prog = self.ctx, self._prog
+        self._wrap(mix).use(location=0)              # settled before anything is multiplied
+        prog["u_flip"].value = (0, 0)                # it was mirrored when it was drawn
+        prog["u_scaled"].value = int(tuple(mix.size) != tuple(full[2:]))
+        prog["u_origin"].value = (0, 0)
+        prog["u_k"].value = k
+        prog["u_opaque"].value = 0
         ctx.viewport = full
         ctx.enable(moderngl.BLEND)
         ctx.blend_func = (moderngl.ZERO, moderngl.SRC_ALPHA, moderngl.ZERO,
@@ -1068,13 +1074,6 @@ class Presenter:
         self._dim_vao.render(moderngl.TRIANGLES, vertices=3)
         ctx.blend_func = (moderngl.ONE, moderngl.ONE,
                           moderngl.ZERO if opaque else moderngl.ONE, moderngl.ONE)
-        prog = self._prog
-        self._wrap(mix).use(location=0)
-        prog["u_flip"].value = (0, 0)                # it was mirrored when it was drawn
-        prog["u_scaled"].value = int(tuple(mix.size) != tuple(full[2:]))
-        prog["u_origin"].value = (0, 0)
-        prog["u_k"].value = k
-        prog["u_opaque"].value = 0
         self._vao.render(moderngl.TRIANGLES, vertices=3)
 
     def on_reload(self) -> None:

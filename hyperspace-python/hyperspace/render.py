@@ -1254,6 +1254,25 @@ class Renderer:
         ctx.enable(moderngl.BLEND | moderngl.PROGRAM_POINT_SIZE)
         ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
 
+    def sibling(self, dream: DreamState | None = None, fx: FxState | None = None,
+                ghost: GhostState | None = None) -> Renderer:
+        """A second renderer on this one's context and its one wall clock, on
+        the states given (each a fresh one of its own when None): the hold's
+        preview, deck 2's (plan 44 D4). This context must be current."""
+        r = Renderer(self.ctx, dream=dream, fx=fx, ghost=ghost)
+        r._t0 = self._t0
+        return r
+
+    def release_sized(self) -> None:
+        """Plan 44 D4: the frame-sized targets let go, made again at the next
+        draw; a deck off air's after a fade. Its look-back rings and delays
+        stay: they are the look's memory. This context must be current."""
+        self._thumb_frame = None
+        self.scene.release()
+        self.cover.release()
+        self._release_frames()
+        self._release_pools()
+
     def _build_wire_programs(self) -> None:
         """Compile the line, point and coverage programs and their VAOs; the
         live ones are replaced only once every new one exists, so a shader
@@ -1331,6 +1350,12 @@ class Renderer:
                 res.release()
         self._dim_prog = self._dim_vao = None
         self.dim_error = ""
+        # the deck fade's (plan 44 D4), likewise
+        for res in (getattr(self, "_mix_vao", None), getattr(self, "_mix_prog", None)):
+            if res is not None:
+                res.release()
+        self._mix_prog = self._mix_vao = None
+        self.mix_error = ""
         # plan 39 T2: the mask passes, likewise — compiled again from
         # masks.py as it is now on the next ask (`mask_passes`)
         mp = self.__dict__.pop("_mask_passes", None)
@@ -3079,32 +3104,39 @@ class Renderer:
 
         Before the dim (`_compose`), so the dim stays the last pass (decision
         28). Leaves `target` bound with that viewport and the scene pass's
-        blend function. A driver that refuses the program leaves the frame
-        the on-air deck's, says why once on `mix_error`, and is not asked
-        again until a reload. True when it mixed."""
+        blend function. The program and its inputs are settled before anything
+        is multiplied, so a refusal there leaves the on-air picture as it was.
+        Whatever goes wrong is said on `mix_error` (the SYSTEM page shows it)
+        and never raised; a program that will not build is not asked for again
+        until a reload. True when it mixed."""
         ctx = self.ctx
         k = clamp(float(k), 0.0, 1.0)
         if getattr(self, "_mix_prog", None) is None and not self._build_mix():
             return False
-        if not self.dim_pass(target, vp, 1.0 - k, opaque=opaque):
-            return False
         prog = self._mix_prog
         try:
-            target.use()
-            ctx.viewport = vp
-            ctx.enable(moderngl.BLEND)
-            ctx.blend_func = (moderngl.ONE, moderngl.ONE,
-                              moderngl.ZERO if opaque else moderngl.ONE, moderngl.ONE)
             tex.use(location=0)
             prog["u_src"].value = 0
             prog["u_scaled"].value = int(tuple(tex.size) != tuple(vp[2:]))
             prog["u_origin"].value = (int(vp[0]), int(vp[1]))
             prog["u_k"].value = k
+            if not self.dim_pass(target, vp, 1.0 - k, opaque=opaque):
+                self.mix_error = f"mix: no dim to mix with: {self.dim_error}"[:160]
+                return False
+            target.use()
+            ctx.viewport = vp
+            ctx.enable(moderngl.BLEND)
+            ctx.blend_func = (moderngl.ONE, moderngl.ONE,
+                              moderngl.ZERO if opaque else moderngl.ONE, moderngl.ONE)
             self._mix_vao.render(moderngl.TRIANGLES, vertices=3)
+        except Exception as e:  # noqa: BLE001 — the fade must not take the frame down
+            self.mix_error = f"mix: {type(e).__name__}: {e}"[:160]
+            return False
         finally:
             ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
             target.use()
             ctx.viewport = vp
+        self.mix_error = ""
         return True
 
     def _build_mix(self) -> bool:

@@ -684,7 +684,7 @@ here; overturn → the change, then the same.
 | 650 | Plan 44 D4: the pass order — the on-air deck first, a deck off air straight after, reading this frame's session values; a row onto a session param on a deck off air is dormant (§7's recommendation), so none lands late and none doubles on the room. Changes row 625 | — | (rec) — pending the owner; built as recommended |
 | 651 | Plan 44 D4: each deck's `lfo`, `env`, `seq`, `mod` lanes are its own layer (`Router.lanes`), read over the sources; the sources hold none. Changes row 591 | — | (rec) — pending the owner; built as recommended |
 | 652 | Plan 44 D4: each media source is read once a frame on `MediaSources`, both renderers handed the same `MediaFrame`; deck 2 is silent, only the on-air deck feeds the mixer | 491 | (rec) — pending the owner; built as recommended |
-| 653 | Plan 44 D4: one dream worker, lent from a fade's first frame, the dream restarting; the deck giving it up holds its last dream. Row 558's question (a second, lower-resolution worker for the panel's deck) measured here, **not decided** | 492 | (rec) — pending the owner; the second worker is the owner's to decide |
+| 653 | Plan 44 D4: one dream worker, lent while a fade is up and the receiving deck has a dream on, the dream restarting; the deck giving it up holds its last dream. Row 558's question (a second, lower-resolution worker for the panel's deck) measured here, **not decided** | 492 | (rec) — pending the owner; the second worker is the owner's to decide |
 
 "—": no hand check shows it; tests only.
 
@@ -11959,9 +11959,14 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   not claim the library's kind (`claim=False`). `Presets.load_doc` now lands
   on its own registry, not the library's attached one. It is built on the
   render context (`main` makes that current; the control window's is current
-  there), with the first's `_t0`. Launch costs a second `Renderer`.
+  there), with the first's `_t0` (`Renderer.sibling`), and its own `GhostState`:
+  D3 made `ghost.*` per deck, `ghost.mirror` reaching it through `RoomSetting`.
+  Launch costs a second `Renderer`.
 - **Other options.** Build its renderer on first use, as the hold did: saves
-  launch time, moves a shader compile into the first frame of a fade.
+  launch time (33 ms, Renderer() here, M3 Max), but moves a shader compile into the first frame of
+  a fade, a stall the room sees, and D5 draws this renderer whenever GRAPH is
+  open anyway. Kept eager; 2 s after a fade its frame-sized targets are let go
+  (`Fade.begin_frame`, `Renderer.release_sized`), its rings and delays kept.
 - **To reverse.** Drop the `Deck.beside` lines in `main`.
 - **Rough edge.** Deck 2 is empty until D5, so `output.xfade` fades to black.
   `Library._fresh_of` still reads the library's attached registry, so a value
@@ -11981,7 +11986,9 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Other options.** A premultiplied *over*, as the plan's words had it: one
   triangle, but anything transparent in deck 2 leaves deck 1 showing at k 1.
 - **To reverse.** No caller, no pass: `_draw_render(fade=None)`.
-- **Rough edge.** `output.xfade_s` is read by nothing until D5's take. A fader
+- **Rough edge.** A mix that fails is said on SYSTEM (`mix_error`); one that
+  raises in its second triangle leaves that frame multiplied. `output.xfade_s` is
+  read by nothing until D5's take. A fader
   learned onto `output.xfade` stays up at 1 (no swap until D5).
 - **Judge it.** Checks 489–491.
 
@@ -11992,7 +11999,8 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Answer.** (rec) — pending the owner; built as §7 recommends.
 - **Built.** `app.frame`: the on-air deck's pass and apply, then each deck off
   air's. `Router.modulate`: on a deck that is not the session's lead, a row
-  whose target it does not land (`Registry.lands`) is dormant. So the lead's
+  whose target it does not land (`Registry.lands`) is dormant, and so is a macro
+  base subscriber on one (`follow_macros`). So the lead's
   offsets land in the frame of its pass, a follower reads this frame's value,
   and naming another lead moves the rows that act (the D5 swap).
 - **Other options.** Followers first, all rows landing, which was built first
@@ -12010,8 +12018,8 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Built.** `routing_sources.LaneLayer`, `Layered`, `DECK_SCHEMES`;
   `Router.lanes`. A write through the router of a deck's scheme lands in the
   layer, any other in the sources; a read falls through, so a bare feed of
-  `lfo` still feeds. `Router.schemes` appends the layer's. The pass flattens
-  the two for its walk. `_put_modifiers`, `_mod_out` and `_mod_pub` are gone.
+  `lfo` still feeds. `Router.schemes` appends the layer's. The pass reads
+  the same views in its walk. `_put_modifiers`, `_mod_out` and `_mod_pub` are gone.
 - **To reverse.** Not cleanly: it is the panel's read between passes.
 - **Rough edge.** `mod` is now offered last among the schemes.
 - **Judge it.** Tests only.
@@ -12041,7 +12049,8 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   **not decided**.
 - **Built.** `DreamWorker.lend(reg)`, `Fade.lend`. The plan said `submit` should
   carry the params; the lend repoints the registry `submit` reads instead, since
-  the GL half has none to pass.
+  the GL half has none to pass. Lent only while the receiving deck's graph holds
+  a dream node that is on, from `xfade` 0.05 (`LEND_AT`) until back at 0.
 - **Measured** (2026-11-03, M3 Max, MPS, `dream_step` × 2 at 16:9 on VGG16
   `conv4_2` with **random weights**, so no weights file and no library; the Mac
   was shared, load average 8–12, so read the ratios). One worker alone, p50 per
@@ -12056,5 +12065,5 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   plasma-heart 0.68 → 1.32. An empty deck's frame steps off air: 118 µs.
 - **To reverse.** Drop `Fade.lend`; the worker stays deck 1's.
 - **Rough edge.** The deck giving the worker up holds its last dream for the
-  fade, even when the borrower has no dream node.
+  fade. A fader jittering across 0.05 and all the way to 0 still restarts it.
 - **Judge it.** Check 492.

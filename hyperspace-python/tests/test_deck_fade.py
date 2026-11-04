@@ -21,7 +21,16 @@ from test_undo import DT, boot
 
 from hyperspace import app, envelope, lfo, modifiers, routing, sequencer
 from hyperspace.analyzer import CEIL
-from hyperspace.deck import Deck, Fade, Mix, draw_size, hand_over, register_xfade
+from hyperspace.deck import (
+    LEND_AT,
+    REST_FRAMES,
+    Deck,
+    Fade,
+    Mix,
+    draw_size,
+    hand_over,
+    register_xfade,
+)
 from hyperspace.library import PRESETS
 from hyperspace.media.channels import Channels, MediaSources
 from hyperspace.media.frame import MediaFrame
@@ -234,6 +243,39 @@ def test_a_deck_off_air_reads_this_frames_session_values(tmp_path):
     assert q.eff_norm == pytest.approx(base + 0.0625 * float(p.value), rel=1e-6)
 
 
+def test_a_macro_on_a_deck_off_air_never_writes_a_session_base(tmp_path):
+    """Review finding 2: `follow_macros` runs off air now, and a session base
+    is the lead's. Its own params still follow."""
+    a, b = _pair(tmp_path)
+    p, own = a.reg["master.gain"], b.reg["view.bright"]
+    was, own_was = p.base, own.base
+    b.table.macros = {"macro.1": routing.Macro("m", [routing.Sub(base="master.gain"),
+                                                     routing.Sub(base="view.bright")])}
+    b.reg["macro.1"].set(0.5)
+    assert b.router.follow_macros(force=True) == ["view.bright"]
+    assert p.base == was and own.base != own_was
+
+
+def test_a_deck_schemes_rests_reach_the_feel_and_the_row(tmp_path, monkeypatch):
+    """Review finding 10: `felt` read the sources' rests, so a deck scheme's
+    read 0."""
+    seen = []
+
+    class Rec(routing.Follower):
+        __slots__ = ()
+
+        def step(self, target, dt, m, rest=0.0):
+            seen.append(rest)
+            return float(target)
+
+    monkeypatch.setattr(routing, "Follower", Rec)
+    r = Router_stub(Sources())
+    r.source_feel = lambda scheme: routing.Motion()
+    r.rests["lfo"] = [0.5]
+    r.felt("lfo", [0.25], DT)
+    assert seen == [0.5]
+
+
 # --------------------------------------------------------- media: read once
 
 class _Feed:
@@ -335,11 +377,17 @@ class _R:
     bg_alpha, max_frame, dim = 1.0, None, 1.0
     bands = ()
 
+    mix_error = ""
+
     def __init__(self, log, name, boom=False):
         self.log, self.name, self.boom = log, name, boom
         self.ghost = SimpleNamespace(source=None)
-        self.dreamer = SimpleNamespace(source=None)
+        self.dreamer = SimpleNamespace(source=None, state=SimpleNamespace(on=True))
         self.calls = []
+        self.released = 0
+
+    def release_sized(self):
+        self.released += 1
 
     def draw_outputs(self, s, w, h, dpr, views, t_now=None):
         self.log.append(f"draw {self.name}")
@@ -352,6 +400,7 @@ class _Target:
     def __init__(self, ctx):
         self.tex = SimpleNamespace(size=None)
         self.sizes = []
+        self.released = 0
 
     def fit(self, size):
         self.sizes.append(size)
@@ -359,12 +408,14 @@ class _Target:
         return f"fbo{size}"
 
     def release(self):
-        pass
+        self.released += 1
 
 
-def _fade(log, k=0.0, dream=None, boom=False):
+def _fade(log, k=0.0, dream=None, boom=False, dreams=True):
     a = SimpleNamespace(renderer=_R(log, "a"), reg="reg a", view="view a")
-    b = SimpleNamespace(renderer=_R(log, "b", boom), reg="reg b", view="view b")
+    b = SimpleNamespace(renderer=_R(log, "b", boom), reg="reg b", view="view b",
+                        graph=SimpleNamespace(spec=SimpleNamespace(
+                            dream="node" if dreams else None)))
     a.renderer.dreamer.source = dream
     return Fade(a, b, Mix(xfade=k), None, dream=dream, make_target=_Target)
 
@@ -416,26 +467,70 @@ def test_a_raise_in_deck_2s_draw_costs_the_on_air_deck_nothing(monkeypatch):
     assert "deck 2 is broken" in fade.error and not fade.drew
 
 
-def test_the_one_dream_worker_is_lent_for_the_fade_and_back(monkeypatch):
+def test_the_one_dream_worker_is_lent_for_the_fade_and_back():
     lent = []
     worker = SimpleNamespace(lend=lent.append)
     fade = _fade([], 0.0, dream=worker)
     a, b = fade.on_air.renderer, fade.off_air.renderer
     fade.lend()
     assert lent == [] and a.dreamer.source is worker and b.dreamer.source is None
-    fade.mix.xfade = 0.01
+    fade.mix.xfade = LEND_AT
     fade.lend()
     fade.lend()                                  # once a fade
     assert lent == ["reg b"] and b.dreamer.source is worker and a.dreamer.source is None
+    fade.mix.xfade = 0.01                        # on its way down: still lent
+    fade.lend()
+    assert lent == ["reg b"]
     fade.mix.xfade = 0.0
     fade.lend()
     assert lent == ["reg b", "reg a"] and a.dreamer.source is worker and b.dreamer.source is None
 
 
+def test_a_fader_at_the_bottom_of_its_throw_leaves_the_dream_alone():
+    lent = []
+    worker = SimpleNamespace(lend=lent.append)
+    fade = _fade([], 0.0, dream=worker)
+    for k in (0.02, 0.0, 0.04, 0.0, 0.01):
+        fade.mix.xfade = k
+        fade.lend()
+    assert lent == [] and fade.on_air.renderer.dreamer.source is worker
+
+
+@pytest.mark.parametrize("why", ["no node", "off"])
+def test_a_deck_with_no_dream_on_never_takes_the_worker(why):
+    lent = []
+    worker = SimpleNamespace(lend=lent.append)
+    fade = _fade([], 1.0, dream=worker, dreams=why != "no node")
+    fade.off_air.renderer.dreamer.state.on = why != "off"
+    fade.on_air.renderer.dreamer.source = worker
+    fade.lend()
+    assert lent == [] and fade.on_air.renderer.dreamer.source is worker
+
+
+def test_back_at_0_the_system_page_forgets_the_fade_and_its_targets_go():
+    log: list[str] = []
+    fade = _fade(log, 0.5)
+    fade.draw([View(Switches(), (8, 8), target="t")], 8, 8, 1.0)
+    fade.error = "stale"
+    assert fade.drew and len(fade.targets) == 1
+    tgt = fade.targets[0]
+    fade.begin_frame()
+    assert fade.drew and fade.resting == 0       # still up
+    fade.mix.xfade = 0.0
+    fade.begin_frame()
+    assert not fade.drew and fade.error == ""
+    assert fade.targets == [tgt]                 # a fader back up at once finds them
+    for _ in range(REST_FRAMES):
+        fade.begin_frame()
+    assert fade.targets == [] and tgt.released == 1
+    assert fade.off_air.renderer.released == 1   # once
+    assert fade.resting == REST_FRAMES
+
+
 def test_no_worker_is_nothing_to_lend():
     fade = _fade([], 0.5)
     fade.lend()
-    assert fade.off_air.renderer.dreamer.source is None
+    assert fade.lent_to is fade.off_air and fade.off_air.renderer.dreamer.source is None
 
 
 def test_the_worker_lent_dreams_with_the_borrowers_params_from_a_clean_buffer():
@@ -467,6 +562,19 @@ def test_the_worker_lent_dreams_with_the_borrowers_params_from_a_clean_buffer():
     assert w._pending is None and w.latest() is None and w.reg is b
     w._process(stale)
     assert w.latest() is None                    # the last deck's frame publishes nothing
+    # …nor one lent out from under it mid-step: the check is at the publish
+    w.submit(np.full(shape, 255, dtype=np.uint8), 3)
+    running, w._pending = w._pending, None
+    step = w.step_fn
+
+    def lent_mid_step(D, mask, p):
+        w.lend(b)
+        return step(D, mask, p)
+
+    w.step_fn = lent_mid_step
+    w._process(running)
+    w.step_fn = step
+    assert w.latest() is None
     w.submit(np.zeros(shape, dtype=np.uint8), 1)
     job = w._pending
     assert job.params["k"] == 0.25
@@ -490,6 +598,8 @@ def test_the_system_page_shows_a_second_gpu_block_and_nothing_else_of_deck_2():
     assert lines[0].startswith("deck 2 gpu per node") and "scene" in lines[1]
     fade.error = "boom"
     assert Panel.deck2_gpu_lines(p)[-1] == "deck 2: boom"
+    fade.on_air.renderer.mix_error = "mix: refused"      # a dead fader is said
+    assert Panel.deck2_gpu_lines(p)[-1] == "deck 2: mix: refused"
 
 
 # ---------------------------------------------------------------- the real pass
@@ -545,6 +655,35 @@ def test_a_transparent_part_of_the_other_deck_shows_nothing_of_the_leaving_one_a
     _, fbo = _target(ctx, size, (200, 200, 200, 255))
     assert r.mix_pass(fbo, (0, 0, *size), clear, 1.0, opaque=False)
     assert (_read(fbo, size) == 0).all()
+
+
+def test_a_mix_that_cannot_run_leaves_the_picture_and_says_so(ctx):
+    """Findings of the review: a bad texture is refused before anything is
+    multiplied; a raise in the add is said, never raised; a dim that will not
+    build is named; a reload builds the program again and clears the word."""
+    r, size = _renderer(ctx), (8, 8)
+    white = _solid(ctx, size, (255, 255, 255, 255))
+    _, fbo = _target(ctx, size, (200, 200, 200, 255))
+    vp = (0, 0, *size)
+
+    def boom(*_a, **_k):
+        raise RuntimeError("boom")
+
+    assert not r.mix_pass(fbo, vp, SimpleNamespace(size=size, use=boom), 0.5)
+    assert "boom" in r.mix_error
+    assert (_read(fbo, size)[..., :3] == 200).all()      # the on-air picture as it was
+    assert r.mix_pass(fbo, vp, white, 0.0) and r.mix_error == ""   # and it recovers
+    vao, r._mix_vao = r._mix_vao, SimpleNamespace(render=boom)
+    assert not r.mix_pass(fbo, vp, white, 0.5)
+    assert "boom" in r.mix_error
+    r._mix_vao = vao
+    r._dim_prog, r.dim_error = None, "dim: refused"
+    assert not r.mix_pass(fbo, vp, white, 0.5)
+    assert "dim: refused" in r.mix_error
+    r.on_reload()
+    assert r._mix_prog is None and r.mix_error == "" and r.dim_error == ""
+    assert r.mix_pass(fbo, vp, white, 1.0)
+    assert (_read(fbo, size)[..., :3] == 255).all()
 
 
 def test_the_mix_comes_before_the_dim(ctx):
@@ -625,8 +764,7 @@ def _gl_rig(ctx, home, renderer_cls):
     seeded = boot(home)
     lib, control, chain = seeded.lib, seeded.control, seeded.chain
     r1 = renderer_cls(ctx)
-    r2 = renderer_cls(ctx, ghost=r1.ghost.state)
-    r2._t0 = r1._t0
+    r2 = r1.sibling()
     audio = SimpleNamespace(chain=chain, on=True)
     first = Deck.build(library=lib, control=control, audio=audio,
                        table=lambda reg: Bindings([]), renderer=r1,
@@ -660,6 +798,62 @@ def _fade_frame(ctx, fade, size, t):
     fade.on_air.renderer.draw_outputs(fade.on_air.view, *size, 1.0, [v], t_now=t)
     assert not v.error, v.error
     return _read(fbo, size)
+
+
+def _object_state(deck) -> dict:
+    """What deck's renderer draws from: every performance param as its object
+    holds it, and its states' own fields."""
+    from dataclasses import asdict
+
+    from hyperspace.params import part_of
+
+    r = deck.renderer
+    return {"params": {p.id: repr(p.get()) for p in deck.reg if part_of(p) == "performance"},
+            "ghost": asdict(r.ghost.state), "dream": repr(asdict(r.lookback.state)),
+            "view": repr(deck.view.pose())}
+
+
+@pytest.mark.empty_frame
+def test_deck_2_on_another_preset_moves_nothing_of_the_on_air_deck(ctx, tmp_path):
+    """Review finding 1: two different looks. Every corpus preset landed on deck
+    2, with its ghost, look-back and view values moved besides, leaves deck 1's
+    params, its objects and, at xfade 0, its picture byte for byte. Only the
+    room's mirror reaches both."""
+    from hyperspace.render import Renderer
+
+    rig = _gl_rig(ctx, tmp_path / "rig", Renderer)
+    size = (160, 100)
+    rig.a.presets.load_doc(json.loads((_corpus_dir() / "party-acid.json").read_text()), None)
+    assert rig.a.renderer.ghost.state is not rig.b.renderer.ghost.state
+    before, picture = _object_state(rig.a), _frame(ctx, rig.a, size, 2.0)
+    for path in _corpus_docs():
+        rig.b.presets.load_doc(json.loads(path.read_text()), None)
+        for pid, v in (("ghost.alpha", 0.2), ("ghost.on", False), ("view.bright", 0.7)):
+            rig.b.reg[pid].set(v)
+        rig.b.reg.apply()
+        assert _object_state(rig.a) == before, path.stem
+    assert rig.b.renderer.ghost.state.alpha == 0.2
+    assert (_frame(ctx, rig.a, size, 2.0) == picture).all()
+    rig.a.reg["ghost.mirror"].set(True)
+    assert rig.a.renderer.ghost.state.mirror and rig.b.renderer.ghost.state.mirror
+
+
+def test_a_fade_after_the_rest_draws_again(ctx, tmp_path):
+    from hyperspace.render import Renderer
+
+    rig = _gl_rig(ctx, tmp_path / "rig", Renderer)
+    size = (160, 100)
+    doc = json.loads((_corpus_dir() / "party-acid.json").read_text())
+    rig.b.presets.load_doc(doc, None)
+    fade = Fade(rig.a, rig.b, Mix(xfade=1.0), ctx)
+    first = _fade_frame(ctx, fade, size, 2.0)
+    fade.mix.xfade = 0.0
+    for _ in range(REST_FRAMES):
+        fade.begin_frame()
+    assert fade.targets == [] and rig.b.renderer.scene.tex is None
+    fade.mix.xfade = 1.0
+    assert (_fade_frame(ctx, fade, size, 2.0) == first).all()
+    assert ctx.error == "GL_NO_ERROR"
 
 
 def test_deck_2_draws_at_the_windows_sample_count(ctx, tmp_path):

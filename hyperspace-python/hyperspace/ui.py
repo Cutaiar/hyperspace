@@ -2678,7 +2678,8 @@ class Panel:
         fade = getattr(self, "fade", None)
         if fade is None:
             return []
-        said = [f"deck 2: {fade.error}"] if fade.error else []
+        mixed = getattr(fade.on_air.renderer, "mix_error", "")
+        said = [f"deck 2: {e}" for e in (fade.error, mixed) if e]
         if not fade.drew:
             return ["deck 2: off air, draws nothing", *said]
         stats = getattr(fade.off_air.renderer, "stats", None) or {}

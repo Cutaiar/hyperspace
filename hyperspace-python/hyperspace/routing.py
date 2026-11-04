@@ -3124,6 +3124,8 @@ class Router:
                 q = self.reg.real(q)
                 if q.kind in (Kind.TRIGGER, Kind.TEXT):
                     continue
+                if not self.reg.lands(q):
+                    continue                  # (plan 44 D4: a session param is the lead's)
                 q.set(q._value_of_norm(min(1.0, max(0.0, s.at(m)))))
                 written.append(q.id)
         return written
@@ -3334,7 +3336,7 @@ class Router:
         if values is None or not m.on:
             felt.pop(scheme, None)
             return None
-        rests = self.sources.rests.get(scheme) or []
+        rests = self.rests.get(scheme) or []
         fs = felt.get(scheme)
         if fs is None or len(fs) != len(values):
             fs = felt[scheme] = [Follower(v) for v in values]
@@ -3778,15 +3780,14 @@ class Router:
         # plan 31 W1: after every `begin` (a held global trigger has moved
         # the epoch), before the plan (the envelopes step at their nodes)
         self._step_sequencer(t, clock)
-        # this frame's reads: this deck's lanes over the rig's (plan 44 D4) —
-        # flat for the walk, the same vectors the voices write into
-        feeds = {**src.feeds, **layer.feeds}
+        # this frame's reads: this deck's lanes over the rig's (plan 44 D4)
+        feeds = self.feeds
         movers = self.__dict__.setdefault("_movers", {})
         moved: set = set()
         lanes = None if analyzer is None else analyzer.lanes / CEIL
         # each row's lane — a number, or a name through `names` — from the
         # cache `lane` keeps; a miss or a republished map resolves again
-        names, rests = src.names, {**src.rests, **layer.rests}
+        names, rests = src.names, self.rests
         cache = self._lane_cache()
         for step in plan:
             kind = step[0]

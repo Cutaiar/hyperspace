@@ -458,7 +458,7 @@ class DreamWorker:
             self.reg = reg
             self.lent += 1
             self._pending = None
-        self._latest = None
+            self._latest = None
 
     # ---- params, from the registry each submit ----
 
@@ -596,11 +596,12 @@ class DreamWorker:
         self.calls += 1
         if pixels.shape != self.shape:        # resized under us: this one is stale
             return
-        if job.lent != self.lent:             # lent since it started: not the new deck's
-            return
-        self._published = next(i for i, o in enumerate(self._outs) if o is out)
-        self._latest = (self._published, pixels, job.frame)
-        self.answered = job.frame
+        with self._cv:                        # one step with `lend`'s clearing
+            if job.lent != self.lent:         # lent since it started: not the new deck's
+                return
+            self._published = next(i for i, o in enumerate(self._outs) if o is out)
+            self._latest = (self._published, pixels, job.frame)
+            self.answered = job.frame
 
     def _pick_output(self) -> Slot:
         """An output buffer the reader is not looking at: neither the one

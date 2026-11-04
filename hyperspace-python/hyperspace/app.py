@@ -708,7 +708,7 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
                 views.append(View(sl.switches, sl.size, target=sl.offscreen.fit(sl.size),
                                   publish=sl.publishers))
         if fade is not None:
-            fade.lend()
+            fade.begin_frame()
             if fade.k > 0.0:
                 fade.draw(views, max(w, 1), max(h, 1), fbw / max(w, 1), _samples_of(ctx, ctx.screen))
                 ctx.screen.use()                  # output 1's window again, with its viewport
@@ -1616,12 +1616,12 @@ def main(argv: list[str] | None = None) -> None:
     panel.undo = undo_obj              # the footer's message slot
     panel.deck = deck                  # plan 44 D1: beside its handles; D5 reads through it
     # deck 2 (plan 44 D4): its own look over the same session, sources and
-    # clock, and a renderer on the render context (which is not current here:
-    # the control window's is). Nothing points at it: no controller, no page,
-    # no undo, no file. Its hands' node 1 look is the session's one state
+    # clock, and a renderer of its own states on the render context (which is
+    # not current here: the control window's is). Nothing points at it: no
+    # controller, no page, no undo, no file. Built now, not on a fade's first
+    # frame: compiling its shaders then would stall the room (rec, row 648)
     glfw.make_context_current(render_win)
-    renderer2 = Renderer(ctx, ghost=renderer.ghost.state)
-    renderer2._t0 = renderer._t0                # the one wall clock
+    renderer2 = renderer.sibling()
     glfw.make_context_current(ctrl_win)
     renderer2.segment_cfg = renderer.segment_cfg
     channels2 = Channels(sources=media.state.sources)

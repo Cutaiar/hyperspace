@@ -413,9 +413,15 @@ over the sources; `_put_modifiers` and its swap are gone. **Media** (row 652):
 on-air deck feeds the mixer, once a frame. **The dream** (row 653):
 `DreamWorker.lend(reg)` repoints the registry `submit` reads, rather than a
 third argument on `submit` (the GL half has no registry to hand it), bumps a
-counter so a job for the last deck publishes nothing, and restarts `D`. The
-deck that gives the worker up holds its last dream through the fade; a fader
-drawn back to 0 lends it back and the dream restarts. **The preview size**:
+counter so a job for the last deck publishes nothing, and restarts `D`. Lent
+only while deck 2's graph holds a dream node that is on, from `xfade` 0.05
+(`deck.LEND_AT`) until back at 0, not from the first frame as §4 words it: a
+fader nudged at the bottom of its throw must not wipe deck 1's dream. The deck
+that gives the worker up holds its last dream; back at 0 the dream restarts.
+**Its hands** (review): deck 2 has its own `GhostState`, not node 1's shared one
+as §2's table says, since D3 made `ghost.*` per deck; only `ghost.mirror` is
+the room's. **The rest** (review): `REST_FRAMES` after a fade its targets go
+(`Fade.close`, `Renderer.release_sized`). **The preview size**:
 `deck.draw_size(full, cap, fading)` is the rule, but off air deck 2 draws
 nothing at all in D4 (the proof demands it), so the preview-size branch is
 D5's to call from the GRAPH backdrop. **Row 558's question**, measured and not

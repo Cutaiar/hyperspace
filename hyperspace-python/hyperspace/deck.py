@@ -432,12 +432,27 @@ def hand_over(main, off_air) -> None:
         og.source = g.source
 
 
+# the fade at which a deck with a dream takes the worker, and how long after a
+# fade the deck off air keeps its frame-sized targets (frames, 2 s at 60 Hz)
+LEND_AT = 0.05
+REST_FRAMES = 120
+
+
+def _dreams(deck) -> bool:
+    """Does this deck's look use the dream worker now: a dream node in its
+    graph, turned on?"""
+    spec = deck.graph.spec
+    return spec is not None and spec.dream is not None and bool(deck.renderer.dreamer.state.on)
+
+
 class Fade:
     """The one mix between the on-air deck and the deck beside it (plan 44
-    D4). `k` is `output.xfade`. Above 0, once a frame before the on-air
-    deck draws: the dream worker is lent (`lend`) and deck 2 draws (`draw`);
-    each view then carries deck 2's picture for `Renderer._compose` to mix.
-    `targets` are its frame textures, one per output, kept once made."""
+    D4). `k` is `output.xfade`. Once a frame before the on-air deck draws:
+    `begin_frame` (the dream worker's lend, and at 0 the fade's rest); above
+    0, deck 2 draws (`draw`) and each view carries its picture for
+    `Renderer._compose` to mix. `targets` are its frame textures, one per
+    output, let go `REST_FRAMES` after the fade with deck 2's other
+    frame-sized targets."""
 
     def __init__(self, on_air: Deck, off_air: Deck, mix: Mix, ctx=None, *, dream=None,
                  make_target: Callable[[Any], Any] = Offscreen):
@@ -448,16 +463,37 @@ class Fade:
         self.lent_to = on_air
         self.error = ""
         self.drew = False                  # did deck 2 draw the last frame?
+        self.resting = REST_FRAMES         # frames at 0 since it last did
 
     @property
     def k(self) -> float:
         return self.mix.xfade
 
+    def begin_frame(self) -> None:
+        """The frame's start, whatever `k`: the lend; and at 0 what the fade
+        said is forgotten, and after `REST_FRAMES` its frame-sized targets are
+        let go (the render context is current)."""
+        self.lend()
+        if self.k > 0.0:
+            self.resting = 0
+            return
+        self.drew, self.error = False, ""
+        if self.resting < REST_FRAMES:
+            self.resting += 1
+            if self.resting == REST_FRAMES:
+                self.close()
+                self.off_air.renderer.release_sized()
+
     def lend(self) -> None:
-        """One dream worker (§2, row 558): the on-air deck's, and from a
-        fade's first frame the deck going on air's; the deck that gave it up
-        holds its last dream. One comparison a frame until the fade moves."""
-        to = self.off_air if self.k > 0.0 else self.on_air
+        """One dream worker (§2, row 558): the on-air deck's, and the deck
+        going on air's while a fade is up and its look has a dream on
+        (`_dreams`) — from `LEND_AT` on and until the fade is back at 0, so a
+        fader nudged or jittering at the bottom of its throw never wipes the
+        on-air deck's dream. The deck that gave it up holds its last dream.
+        One comparison a frame until the answer moves."""
+        k = self.k
+        take = k > 0.0 and _dreams(self.off_air) and (self.lent_to is self.off_air or k >= LEND_AT)
+        to = self.off_air if take else self.on_air
         if to is self.lent_to:
             return
         self.lent_to = to
@@ -478,6 +514,7 @@ class Fade:
         k = self.k
         if k <= 0.0:
             return False
+        self.resting = 0
         r = self.off_air.renderer
         try:
             hand_over(self.on_air.renderer, r)
