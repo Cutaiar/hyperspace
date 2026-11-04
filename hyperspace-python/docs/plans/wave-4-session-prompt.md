@@ -117,15 +117,28 @@ tuned to facilitate a performance and should not be actively modified during one
 - **The names (SEM).** The code's concepts must come to follow the owner's words, once.
   See "The semantic migration" below.
 
-**Still open:** the smaller questions below (DQ1, DQ3–DQ8, NQ2, NQ4–NQ8), plus PS1 and
-MR1 from this round.
-- **PS1.** A stick is already doing a job. Rec: while the screen is open, an off-air
-  player's stick moves their token; an on-air player's stick keeps playing the room, so
-  it does not cut the picture, and that player moves by a held button or the mouse.
-- **MR1.** A preset with such a row at load. Rec: drop it with a note, as a non-modulatable
-  target is today; **a later save then removes it from that file for good**, which is the
-  discovery you asked for, and the note names it first. A rig desk row (the APC's MASTER
-  fader on `master.gain`) is the meta controller's own control and stays.
+**Fourth round, 2026-11-04: two layers, and they do not leak.**
+- **The concept:** there are two layers of granularity and no others.
+  - **The meta controller:** everything set for a performance, tuned for a performance
+    or an install.
+  - **The preset:** where anything can change anything, a complete visual look you can
+    play.
+- **`rig`, `session` and lowercase "deck" all become the meta controller.** That is what
+  "the rig goes away" means: the rig was a leaky, non-isolated abstraction, and the word
+  goes with it. **Capital `Deck` stays:** it lives inside the meta controller and just
+  represents a loaded preset.
+- **Misplaced params present themselves later.** Nothing moves between the layers now. A
+  param in the wrong layer is found in use and moved then. To trust that, the two layers
+  must be completely consolidated and orthogonal, so that neither can leak into the other.
+- **PS1 answered:** the party-game lanes are how it is drawn, not how it is driven. **The
+  mouse moves players.** No stick input on the select screen.
+- **MR1 answered:** drop the row with a note; a later save removes it. The owner: the
+  `hand:left.y → master.gain` row is "quite annoying", and `axis:RX → master.dyn` is not
+  wanted either, so nothing is lost. A desk row on `master.gain` (the APC's MASTER fader) is
+  the meta controller's own control and stays.
+
+**Still open:** the smaller questions below (DQ1, DQ3–DQ8, NQ2, NQ4–NQ8). Wave 4 starts
+when they are answered.
 
 ## The semantic migration (SEM)
 
@@ -136,11 +149,18 @@ than a long one: no other PR open, one builder, goldens unmoved, a mechanical di
 
 | The owner's word | The code today | Note |
 | --- | --- | --- |
-| meta controller | session (`SessionRegistry`, `SessionTable`, `part_of == "session"`; 486 uses of `session`), and `rig` (517 uses, `RigWires`, `RigMade`) | Whether rig and session are one word, and what "the rig goes away" means, must be settled first |
-| slot (on air, off air) | `Deck` | **The mismatch to fix first:** the owner's "deck" is close to the whole device, while `Deck` is one slot |
+| meta controller | `session` (486 uses; `SessionRegistry`, `SessionTable`, `part_of == "session"`), `rig` (517 uses; `RigWires`, `RigMade`), lowercase "deck" in prose | **One concept, settled 2026-11-04.** The word `rig` goes |
+| `Deck` | `Deck` | **Stays:** a loaded preset, living inside the meta controller. "Slot" is not a type: on air and off air say which `Deck` |
 | analyzer | `band` (336 uses) | Words in AZ; ids in the format lane or never |
 | player, duty | none yet | New: named right from PL |
-| preset | preset | Holds: "performance" (`part_of`) is its other name; pick one |
+| preset | preset, and "performance" (`part_of`) | One word: preset |
+
+**SEM must also make the line hold mechanically,** not only rename it: every param is in
+exactly one layer, a test fails on anything in neither or both, and an import wall keeps
+the preset layer from reaching into the meta controller except through its named surface.
+D3 made `part_of` mechanical; this finishes the job. **#223 venues** and `config.toml.rig`
+are the meta controller's install side, to be folded in at SEM or just after: ask then, and
+Dillon owns that PR.
 
 Three rules, starting now:
 1. **A glossary first.** D5a's PR adds `docs/GLOSSARY.md`, one row per concept, and the
@@ -213,9 +233,9 @@ owner's hand checks and show dates, not build time.
 | D6a | `playlist.py`, its file kind, `tick` over stand-ins | Library | M | D5d, DQ5 | no behaviour yet |
 | D6b | Triggers, the frame hook, a pane section, the warm draw | Library | S–M | D6a | |
 | PL | Players 1–4: a player registers controllers on this Mac and holds a duty, on air or off air; bare rows read as player 1; plan 55 | Core | M | D5b | yes while one slot is pointed at |
-| PS | The player select screen: active players, their controllers, the On Air and Off Air lanes; stick or mouse | UI | M | PL, PS1 | no |
-| MR | The hard rule: no preset row onto a meta param; refused at Learn, in the picker, at load with a note; a report of what dropped | Core | S | MR1 | no: the left hand stops driving audio in 48 presets |
-| SEM | The one-time rename of code concepts to the glossary | All | M | D5d; no other PR open | yes |
+| PS | The player select screen: active players, their controllers, the On Air and Off Air lanes drawn like a party game; moved by mouse | UI | S–M | PL | no |
+| MR | The hard rule: no preset row onto a meta param; refused at Learn, in the picker, at load with a note; a report of what dropped | Core | S | nothing | no: the left hand stops driving audio in 48 presets, as wanted |
+| SEM | `rig`, `session` and lowercase deck become the meta controller in code; the two layers held apart by test and import wall | All | M–L | D5d; no other PR open | yes |
 | AZ | "Band" becomes the analyzer in the panel's words | UI | S | nothing | words only |
 | NM0 | The saved node mode: player, node, page in the preset, the cable kind and its colour; in the format lane | Format | M | PL | format |
 | N1a, N1b | APC: the rows from the saved state, per player and per deck; then the drawing | Core + UI | M + M | NM0, D5d, NQ2, NQ4; **merge gate: checks 506–509** | no |
@@ -349,5 +369,5 @@ for a new module or a field on a long-lived object; docs land with the code; rep
 failing tests with their output, a skipped step as skipped.
 
 After the last merge, both Macs pull, `uv sync` and restart; hand checks for the
-wave; write up what wave 5 inherits (the grand cleanup pass first, then what "the
-rig goes away" means, with #223) and stop.
+wave; write up what wave 5 inherits (the grand cleanup pass first, and which params
+have shown themselves misplaced between the two layers) and stop.
