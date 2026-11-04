@@ -129,7 +129,7 @@ import mido
 
 from . import apc40, generic
 from .learn import Learn
-from .params import Kind, Param, Registry
+from .params import CHASE_PARAM, Kind, Param, Registry
 from .routing import (
     PICKUP_TOL,
     SAVE_PARAM,
@@ -177,7 +177,7 @@ __all__ = ["FINE_DIV", "FINE_PARAM", "PICKUP_TOL", "Binding", "DeskEvent", "Desk
 # the desk's held buttons: a toggle the hand holds on, never saved, never
 # performed, that a reconnect lets go of (`MidiIO._enter`) so a lost
 # note-off cannot leave it down — SAVE (routing.register_desk) and FINE
-HELD_PARAMS = (SAVE_PARAM, FINE_PARAM)
+HELD_PARAMS = (SAVE_PARAM, FINE_PARAM, CHASE_PARAM)   # (the base chase: plan 52)
 
 
 def register_held(reg: Registry, pid: str, label: str, tip: str) -> None:

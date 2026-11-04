@@ -7533,6 +7533,39 @@ plan 50 copied back from the backup into `patches/`)
 preset and an **Update patch** write `patch/2`. Fail: "is not a
 hyperspace.patch".
 
+## BO. The base chase: commit the performer into the base (plan 52)
+Register rows 654–656, 2026-11-03. Headless: `tests/test_base_chase.py`
+(what shows while held against a twin the verb never touches, no jump at a
+release, a range's end, a fader row, one undo step, the dirty dot, the hold's
+refusal, two decks, Learn). For all three: on GRAPH or the on-screen desk, pick
+a free desk button, then **all params ▾ → deck → deck.chase**, so the button is
+held. Load a preset with a hand or an LFO routed onto something you can see.
+**494. Hold, move, let go: the look stays.** (the hands or a gamepad stick
+pushing a param you can see)
+1. Move the hand off its rest and stop. Hold the button: nothing moves.
+2. Move the hand again with the button down: the look follows as ever, and the
+   param's panel tick (its base) goes with it.
+3. Let go of the button with the hand still out. Then bring the hand to rest.
+*Pass:* (1) no jump. (3) no jump at the release, and the look stays where it was
+as the hand comes home. Moving out past the same spot moves the look on from
+there. Fail: a step at the press or the release, or the look returning to the
+old value.
+**495. An LFO, one undo.** (an LFO routed onto brightness or a camera axis)
+1. Hold the button for a few swings, including a still moment; let go mid-swing.
+2. Watch a whole swing. ⌘Z once, ⌘Z no further.
+*Pass:* (1) no jump at the release; the look holds until the LFO crosses its
+zero, then swings about the value you left it at. The dirty dot is lit. (2) one
+⌘Z takes back the whole hold ("undid base chase") and the swing is about the old
+value. Fail: several steps for one hold, or the swing running off the end of the
+range.
+**496. Under the projector's hold.** (rig on; hold engaged)
+1. With HOLD on, press the button.
+2. HOLD off (Take). Hold the button with a hand moving, and press HOLD with it
+   still down. Press DROP.
+*Pass:* (1) the button stays dark and neither the projector nor the panel ticks
+move. (2) HOLD lets the verb go with no step on the projector; DROP lands what
+showed when HOLD was pressed, the commit in it. Fail: the projector jumps.
+
 ## What no test covers
 
 Only a person can settle these:

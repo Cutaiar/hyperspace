@@ -299,6 +299,23 @@ class Undo:
         lands = getattr(self.marks, "lands", None)
         return lands() if lands is not None else None
 
+    # ---- a step a held control keeps open (plan 52, the base chase) ----
+
+    _keep = False     # on a class: a live `Undo` from before a hot reload reads it
+
+    def keep_open(self, label: str) -> None:
+        """A held control's step: pushed as `push` does, and no quiet closes
+        it, so one hold is one step however still the hold goes. `let_close`
+        ends it."""
+        self.push(label)
+        self._keep = True
+
+    def let_close(self) -> None:
+        """The hold is over: its step closes now (taken off the stack if the
+        hold moved nothing, as any empty step is)."""
+        self._keep = False
+        self._flush()
+
     # ---- the frame ----
 
     def tick(self, now: float) -> None:
@@ -311,7 +328,7 @@ class Undo:
         if self._open is None:
             self._lands = self._read_lands()
         # quiet this frame: an open step closes once the settle time has passed
-        if self._open is not None and now - self._changed_at >= SETTLE_S:
+        if self._open is not None and not self._keep and now - self._changed_at >= SETTLE_S:
             self._close()
 
     def _observe(self, fp: tuple) -> bool:
@@ -466,6 +483,7 @@ class Undo:
         self.stack.clear()
         self.redos.clear()
         self._open, self._absorb, self._action_frame = None, 0, -1
+        self._keep = False
         self._fp = self._fingerprint()
         self._settled = self._take()
 
@@ -642,10 +660,11 @@ def installed() -> Undo | None:
     return _installed
 
 
-def _guarded(what: str, fn) -> None:
+def _guarded(what: str, fn, on: Undo | None = None) -> None:
     """The safety net must not be what breaks a load or a frame: a raise
-    in here is said (stderr, the status line) and the caller goes on."""
-    u = _installed
+    in here is said (stderr, the status line) and the caller goes on. `on`:
+    a deck's own `Undo`; None, the installed one."""
+    u = on if on is not None else _installed
     try:
         fn(u)
     except Exception as e:  # noqa: BLE001
@@ -658,6 +677,18 @@ def push(label: str, *, load: bool = False) -> None:
     Call it before a replacing action changes anything."""
     if _installed is not None:
         _guarded("push", lambda u: u.push(label, load=load))
+
+
+def keep_open(label: str, on: Undo | None = None) -> None:
+    """`Undo.keep_open` on `on`, else the installed instance; neither: a no-op."""
+    if on is not None or _installed is not None:
+        _guarded("keep open", lambda u: u.keep_open(label), on)
+
+
+def let_close(on: Undo | None = None) -> None:
+    """`Undo.let_close` on `on`, else the installed instance; neither: a no-op."""
+    if on is not None or _installed is not None:
+        _guarded("let close", lambda u: u.let_close(), on)
 
 
 def undo() -> None:

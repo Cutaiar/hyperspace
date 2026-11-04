@@ -88,7 +88,7 @@ from . import lfo, modifiers, undo
 from .envelope import GROUP as ENV_SCHEME
 from .graph import pin_node, source_into
 from .motion import DEFAULT_ROUTE_FEEL
-from .params import PERFORMANCE_GROUPS, Kind, Param, Registry, is_lookback_knob
+from .params import CHASE_PARAM, PERFORMANCE_GROUPS, Kind, Param, Registry, is_lookback_knob
 from .routing import (
     MOD_OPS,
     SAVE_PARAM,
@@ -586,7 +586,7 @@ class Learn:
             elif p.kind is Kind.TRIGGER:
                 b.op = "toggle"
         elif kind == "note":
-            b.op = "toggle"
+            b.op = "momentary" if pid == CHASE_PARAM else "toggle"  # the verb is held (plan 52)
         fb = profile.feedback_for(kind, b.channel, number) if profile is not None else None
         if fb:
             b.feedback, b.ring = fb["feedback"], fb.get("ring", b.ring)
@@ -664,6 +664,8 @@ class Learn:
         elif p.kind is Kind.CONTINUOUS:
             down = Binding(source, pid).bare in ("hat:DOWN", "hat:LEFT")   # any pad's
             op, value = "step", (-1.0 if down else 1.0)
+        elif pid == CHASE_PARAM:
+            op, value = "momentary", 0.0     # the verb is held (plan 52)
         else:
             op, value = "toggle", 0.0
         self.take()

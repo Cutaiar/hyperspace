@@ -3828,14 +3828,14 @@ class Router:
                     # centred where the source rests — the row's own number, or
                     # the source's as published this frame: idle adds nothing
                     rest = b.rest if b.rest is not None else self.rest_of(b.source, rests)
-                    x = depth * (u - rest)
+                    x, fader = depth * (u - rest), False
                 else:
                     # position: the source is the fader — the offset that lands
                     # it (p.norm is the base while modulated, the object before)
                     if p.kind is Kind.TEXT or not p.modulatable:
                         continue
-                    x = min(1.0, max(0.0, depth * u)) - p.norm
-                p.modulate(x)
+                    x, fader = min(1.0, max(0.0, depth * u)) - p.norm, True
+                p.modulate(x, position=fader)    # (the base chase's ledger: plan 52)
             if step[3]:              # something later in the pass reads it: land it now
                 q = self.reg.get(step[1])
                 if q is not None and q._base is not None:
