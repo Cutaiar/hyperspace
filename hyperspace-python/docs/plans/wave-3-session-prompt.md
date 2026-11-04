@@ -79,25 +79,26 @@ squash, each behind a green CI run; the union tier before each):
 | #351 | D3 | the session / performance line made mechanical: `build_session` / `build_performance`, `SessionTable` + a deck's `Bindings` by reference, `Presets` owns current/dirty, `MediaSources` + `Channels`, the bus cuts the preset's, `ghost.mirror` a session key, desk templates and `modules` gone; **schema `/10`, show `/3`**, `tools/migrate_library.py` extended (backs up, every folder down); rows 611–625 |
 | #352 | F1 | plan 50: one reader for presets (`/10`) and patches (`/2`, an optional `group`); module presets are patches of one group under `patches/<group>/`; a group holds any node the preset saves, the full rule at save; the migration's patch step; rows 639–647 |
 
-(#351 and #352 merge at the owner's word, between shows, both Macs together —
-check `gh pr list` and `git log origin/main` for whether they have landed
-before briefing anyone; D4, P1–P3 and B1 stack on them.)
+Both schema PRs are merged (#351 at 160ed30, #352 at ab69af6, 2026-11-04;
+`main` is ab69af6 or later) and the wave 2 session ran the migration on the
+Drive library the same day: 109 presets at `/10`, 6 shows at `/3` with a
+`.bak-v2-look` beside each, 8 patches under `patches/<group>/` at `patch/2`,
+backup `~/Hyperspace/library-backup-20261103-173524`. D4, P1–P3 and B1
+build on them.
 
 - **Numbers taken:** plans through 50; register rows through 647 (602–604,
   633–635 and 648–655 were pre-assigned and unused — reuse them); hand
   checks through 488 (480 unused); hand-check groups through BM.
   **Pre-assign** to builders: wave 3 starts at plan 51, row 648, check 489,
   group BN.
-- **Owner to-dos from wave 2** (check they happened): both Macs pulled,
-  `uv sync`, restarted; after #351/#352 merge, on the Mac with the library:
-  `uv run python tools/migrate_library.py` (dry run), then `--apply` (it
-  backs up to `~/Hyperspace/library-backup-<stamp>`, runs the retaper,
-  rewrites every preset to `/10`, every show to `/3` with a `.bak-v2-look`,
-  moves module presets to `patches/<group>/` and rewrites patches to `/2`);
-  the CI workflow's `--dist load --max-worker-restart=4` flags (the diff is
-  in #347's body; a session token lacks the `workflow` scope); hand checks
-  444–488 (groups BD–BM; 476 is the two-node LOOKBACK by eye, 470 the
-  wanted-window line).
+- **Owner to-dos from wave 2** (check they happened): **the other Mac**
+  pulled, `uv sync`, restarted before it opens the library (the migration is
+  applied; an older build refuses `/10` and `/3`); the CI workflow's
+  `--dist load --max-worker-restart=4` flags (the diff is in #347's body and
+  on the local branch `wave2/i1-with-ci`; a session token lacks the
+  `workflow` scope); hand checks 444–488 (groups BD–BM; 476 is the two-node
+  LOOKBACK by eye, 470 the wanted-window line, 461–470 the `/10` library
+  on both Macs).
 - **Rows pending the owner:** 546, 550–552 (plan 42), 591–593 (D2: the
   bank/modifier lanes shared until D4; `devices.poll` keeps `router=`;
   follow every live table, read none), and every "(rec)" in 594–647.
@@ -146,7 +147,7 @@ for the wave (ask again).
 ## How to run it
 
 1. Confirm `main` is the springboard (`git fetch`, `git log -1 origin/main`;
-   #351 and #352 merged), the fast tier passes there
+   ab69af6 or later), the fast tier passes there
    (`uv run pytest -q -n 4 -p no:cacheprovider`), and no wave 2 builder
    branch is still open (`gh pr list`).
 2. Brief each builder with: its row above, the files it owns and must not
