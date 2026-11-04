@@ -1045,7 +1045,7 @@ def test_the_panel_publishes_the_selected_node(rig):
     """2026-10-31: the one selected node's id is on the panel for whoever
     is not the graph view (`Panel.graph_selected`, `ui_graph.publish`) —
     None until a node is selected; `Panel.select_graph_node` selects one
-    from any page, the GRAPH page opened; `graph_selected_params` is the
+    from any section, the focus left where it is; `graph_selected_params` is the
     node's registry ids, the continuous ones first; Esc lets it go."""
     from hyperspace.params import Kind
     st = load(rig, "party-trip")
@@ -1055,7 +1055,7 @@ def test_the_panel_publishes_the_selected_node(rig):
     assert n is not None and ui_graph.drawn_node(st, n)
     frame(panel, "view")
     panel.select_graph_node(n.id)
-    assert ui.PAGE_KEYS[panel.reg["ui.page"].value] == "graph"
+    assert ui.PAGE_KEYS[panel.reg["ui.page"].value] == "view"
     frame(panel)
     frame(panel)
     assert ui_graph._selection(st, st["view"]) == ("node", n)

@@ -10,17 +10,19 @@ of sections, each a header that folds and unfolds by a click:
   page's own function (`Panel._page_presets`, `ui_fx.page`, …), so a
   section is one row there.
 
-**The focus** (`focus`; stage 3). `ui.page` no longer switches a page: what
-a key row, a pad or ⌘[ / ⌘] moves names a section (`ui.PAGES`, by index, so
-every saved binding keeps its meaning; `section_of`), and the pane's next
-draw scrolls to it, shows it however it was folded and gives it the room
-under the headers (`draw`). The focus does not touch the fold: the section
-goes back to what a click left it when the focus moves on (a walk through
-the sections leaves no pile of open ones) or lets go (`ui.page` on GRAPH's
-slot, `focus(st, None)`; a click on its own header). A click on another
+**The focus** (stage 3). `ui.page` no longer switches a page: what a key
+row, a pad or ⌘[ / ⌘] moves names a section (`ui.PAGE_KEYS`, by index, so
+every saved binding keeps its meaning; `section_of`). `Panel.page` is the
+one owner of the focus (`focused` reads it); the pane's next draw scrolls to
+the section (`scroll_to`), shows it however it is folded and gives it the
+room under the headers (`draw`). The focus does not touch the fold: the
+section goes back to what a click left it when the focus moves on (a walk
+through the sections leaves no pile of open ones) or lets go (`ui.page` on
+GRAPH's slot; a click on its own header, `let_go`). A click on another
 header beside the canvas leaves the focus alone. In the narrow band the
-focused section is the only body, the band grows to leave `CANVAS_MIN` of
-canvas (`ui_graph.band_height`) and a click on any chip lets go.
+focused section is the only body, the only lit chip, the band grows to
+leave `CANVAS_MIN` of canvas (`ui_graph.band_height`) and a click on any
+chip lets go and shows what it asked for.
 
 The open sections share the pane's height evenly; each body is a child
 of its own, so a long one scrolls by itself. Beside the canvas a body is
@@ -235,26 +237,39 @@ def set_open(st: dict, key: str, on: bool, layout: str = "open",
 
 
 def section_of(page: str | None) -> str | None:
-    """The section `ui.PAGES`' row `page` focuses: the one of its name, or
+    """The section `ui.PAGE_KEYS`' name `page` focuses: the one of its name, or
     None for a row with none (GRAPH's: the canvas is always there)."""
     return page if page in KEYS else None
 
 
-def focus(st: dict, key: str | None) -> None:
-    """Focus section `key` (None: no section): the pane's next draw, in
-    whichever layout that is (beside the canvas, or the narrow page's
-    band), scrolls it into view — with `key` None, to the pane's top — and
-    from then on it shows, with the room under the headers, however it is
-    folded, until the focus moves or lets go. Not a click: `opened` and the
-    file are untouched."""
-    st["pane_focused"] = key
+def focused(panel) -> str | None:
+    """The section focused now: what `Panel.page`, the one owner of the
+    focus, names (`ui.page`, the history and this always agree)."""
+    page, keys = getattr(panel, "page", None), ui.PAGE_KEYS
+    return section_of(keys[page]) if isinstance(page, int) and 0 <= page < len(keys) else None
+
+
+def scroll_to(st: dict) -> None:
+    """Ask the pane's next draw, in whichever layout that is, to scroll the
+    focused section into view — with none focused, to the pane's top. Not a
+    click: `opened` and the file are untouched."""
     st["pane_scroll"] = True
 
 
-def focused(st: dict) -> str | None:
-    """The section focused now, if it (still) is one."""
-    key = st.get("pane_focused")
-    return key if key in KEYS else None
+def let_go(panel) -> None:
+    """A click on a header lets go of the focus: `Panel.page` on GRAPH's
+    slot, so `ui.page` and the history say so too. The pane stays where it
+    is: the click was on it."""
+    panel.page = panel._focus_seen = ui.PAGE_KEYS.index("graph")
+
+
+def shown(panel, key: str) -> bool:
+    """Did section `key`'s body draw (the latest draw; a body scrolled out of
+    the pane's view does not): is it on screen, for the words of whoever
+    is not the pane."""
+    from . import ui_graph  # (late: ui_graph imports this module)
+    st = panel.__dict__.get(ui_graph.STATE) or {}
+    return key in (st.get("pane_drawn") or ())
 
 
 def flush(st: dict, now: float | None = None, force: bool = False) -> bool:
@@ -293,10 +308,10 @@ def draw(panel, st: dict, dt: float, selection: Callable[[], None] | None,
     sharing the rest with no floor."""
     layout = "below" if below else "open"
     got = opened(st, layout)
-    held = focused(st)                   # shown however it is folded (`focus`)
+    held = focused(panel)                # shown however it is folded
     scroll = st.pop("pane_scroll", False)
-    if scroll and held is None:
-        imgui.set_scroll_y(0.0)
+    if scroll and (below or held is None):
+        imgui.set_scroll_y(0.0)          # (the band: the focused body is under its chips)
     n_open = sum(1 for k in KEYS if got.get(k))
     # the sections whose bodies drew: last frame's for `timing_line`, which
     # the SYSTEM section asks mid-draw (the tests read this frame's)
@@ -304,12 +319,15 @@ def draw(panel, st: dict, dt: float, selection: Callable[[], None] | None,
     drawn = st["pane_drawn"] = []
     if below:
         for i, (key, title, groups, _) in enumerate(SECTIONS):
-            on = bool(got.get(key)) or key == held
+            # with one focused it is the only body, so the only chip lit: a
+            # click on another asks for that one, whatever its fold says
+            on = key == held if held else bool(got.get(key))
             if _header(panel, key, title, on, said if key == "selection" else "", groups,
                        chip=True, first=i == 0):
                 set_open(st, key, not on, layout)
-                st["pane_focused"] = None       # a chip lets go: the band as it was clicked
-        held = focused(st)
+                if held:                        # a chip lets go: the band as it was clicked
+                    let_go(panel)
+                    held = None
         room = imgui.get_content_region_avail().y
         n_open = sum(1 for k in KEYS if got.get(k))
         h = body_height(room, 1 if held else n_open, 0.0)
@@ -321,10 +339,11 @@ def draw(panel, st: dict, dt: float, selection: Callable[[], None] | None,
         head_h = imgui.get_text_line_height_with_spacing()
         imgui.pop_font()
         pane_h = imgui.get_content_region_avail().y
-        h = body_height(pane_h - head_h * len(SECTIONS), n_open)
+        gap = imgui.get_style().item_spacing.y               # after each body but the last
+        h = body_height(pane_h - head_h * len(SECTIONS) - gap * max(n_open - 1, 0), n_open)
         # the focused body, with its header scrolled to the top: down to the
         # headers after it, which stay in view for the next click
-        held_h = (body_height(pane_h - head_h * (len(KEYS) - KEYS.index(held)), 1)
+        held_h = (body_height(pane_h - head_h * (len(KEYS) - KEYS.index(held)) - gap, 1)
                   if held else h)
         for key, title, groups, body in SECTIONS:
             on = bool(got.get(key)) or key == held
@@ -332,7 +351,8 @@ def draw(panel, st: dict, dt: float, selection: Callable[[], None] | None,
                 set_open(st, key, not on, layout)
                 on = not on
                 if key == held:                 # its own header lets go
-                    st["pane_focused"] = held = None
+                    let_go(panel)
+                    held = None
             if key == held and scroll:
                 imgui.set_scroll_here_y(0.0)    # the focused section's header at the top
             if on:

@@ -212,7 +212,7 @@ def page(panel, dt: float) -> None:
             from . import ui_graph  # (late: ui_graph imports this page for its strip)
             ui_graph.select_effect(panel, sel)
         if imgui.is_item_hovered():
-            ui.tooltip("select this effect's node on the GRAPH page and bring it "
+            ui.tooltip("select this effect's node on the canvas and bring it "
                               "on screen")
     strip(panel, sel)
 

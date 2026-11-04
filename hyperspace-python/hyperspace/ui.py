@@ -18,7 +18,7 @@ The surface is GRAPH, always drawn, with a side pane of folding sections
 (ui_pane.py, plan 49): each section is a page's body, one per registry
 group or two, and a block in it whose group the library knows carries its
 preset strip (ui_presets.py) under the title. `ui.page` is the focus: the
-section a key row, a pad or ⌘[ / ⌘] unfolds and scrolls to (`PAGES`,
+section a key row, a pad or ⌘[ / ⌘] unfolds and scrolls to (`PAGE_KEYS`,
 `Panel.go_page`). A modulated param
 draws its *base* as the handle and a white ghost bar at the *effective*
 value (params.py: `base` vs `eff_norm`), so the setting stays where the
@@ -645,34 +645,19 @@ CHEATSHEET = [
     ("APC40 MASTER PAN", "overlay · click-through (if config allows)"),
 ]
 
-# ---- `ui.page`'s slots: (key, name, the group — or groups — of its params) ----
+# ---- `ui.page`'s slots ----
 # Plan 49 stage 3: there are no pages to switch. GRAPH is always drawn and
-# every other row is a section of its side pane (`ui_pane.SECTIONS`), drawn
-# by the body that was the page: `ui.page` is the focus, and setting it
-# unfolds and scrolls to the section of that name (`Panel.go_page`). The
-# table stays, in its order, because the param's value is an index and a
-# binding's `set` stores it: every index a key row, a pad or an old show
-# holds names what it always named. FX's row is the fx section. GRAPH's row
-# has no section (the canvas is always there): it lets go of the focus.
-PAGES = [
-    ("output", "output", "output"),
-    ("view", "view", "view"),
-    ("faces", "faces", "pattern"),
-    ("media", "media", ("media", "backdrop")),   # plan 32 U: the channels (ui_media.py)
-    ("camera", "camera", "camera"),
-    ("lookback", "lookback", "dream"),
-    ("fx", "fx", "fx"),           # GRAPH's effects, grouped by where each ends (ui_fx.py)
-    ("audio", "audio", "master"),
-    ("analyzer", "analyzer", "band"),
-    ("routing", "routing", None),
-    ("graph", "graph", None),        # plan 28 N2: both graphs on one canvas (ui_graph.py)
-    ("lfo", "lfo", ("lfo", "tempo")),
-    ("seq", "seq", ("seq", "env")),       # plan 31 U: the step grid and envelopes (ui_seq.py)
-    ("hands", "hands", "hands"),
-    ("presets", "presets", "presets"),     # the loaded preset's dirty dot
-    ("system", "system", None),
-]
-PAGE_KEYS = [k for k, _, _ in PAGES]
+# every other name is a section of its side pane (`ui_pane.SECTIONS`, which
+# also holds what each one's params are), drawn by the body that was the
+# page: `ui.page` is the focus, and setting it unfolds and scrolls to the
+# section of that name (`Panel.go_page`). The list stays, in its order,
+# because the param's value is an index and a binding's `set` stores it:
+# every index a key row, a pad or an old show holds names what it always
+# named. Never reorder it; a new section goes at the end. FX's slot is the
+# fx section. GRAPH's has no section (the canvas is always there): it lets
+# go of the focus.
+PAGE_KEYS = ["output", "view", "faces", "media", "camera", "lookback", "fx", "audio", "analyzer",
+             "routing", "graph", "lfo", "seq", "hands", "presets", "system"]
 
 
 class PageHistory:
@@ -746,8 +731,8 @@ class Panel:
         self.pad_diagram = False
         self.pad_view = 0       # ui_pad_views.VIEWS: map, faithful, lanes, cockpit
         self.poi_dials = True   # the Poi window (ui_pad.poi_window): shown each time the poi comes on
-        # the focus, an index into PAGES (`ui.page`, `go_page`); GRAPH's row
-        # is no section, so nothing is focused at launch
+        # the focus, an index into PAGE_KEYS (`ui.page`, `go_page`), its one
+        # owner (`ui_pane.focused`); GRAPH's slot is no section, so nothing is focused at launch
         self.page = PAGE_KEYS.index("graph")
         self._focus_seen = self.page            # what `go_page` last acted on (`_draw`)
         self.history = PageHistory(self.page)   # ⌘[ / ⌘]: back and forward (app.frame)
@@ -836,22 +821,21 @@ class Panel:
                lambda i: setattr(self, "pad_view", int(i)), list(ui_pad_views.VIEW_LABELS),
                group="ui", persist=False, modulatable=False, tip=ui_pad_views.VIEW_TIP)
         r.enum("ui.page", "Focus section", lambda: self.page, lambda i: Panel.go_page(self, i),
-               [lb for _, lb, _ in PAGES], group="ui", persist=False, modulatable=False,
+               list(PAGE_KEYS), group="ui", persist=False, modulatable=False,
                tip="Which section of GRAPH's side pane to bring up: it unfolds and scrolls "
                    "to the top of the pane, and folds again when the focus moves on unless "
                    "you unfolded it yourself. graph lets go of the focus.")
 
     def go_page(self, i) -> None:
         """`ui.page`'s setter, and `_draw` for an index set straight (⌘[ /
-        ⌘]): focus slot `i` of `PAGES` — its section unfolded and scrolled
-        to on the pane's next draw (`ui_pane.focus`), or, for GRAPH's slot,
+        ⌘]): focus slot `i` of `PAGE_KEYS` — its section shown and scrolled
+        to on the pane's next draw (`ui_pane.scroll_to`), or, for GRAPH's slot,
         no section. Plan 49 stage 3: no page changes; the canvas is always
         drawn. Saved indices mean what they meant: the section of the name
         the page had."""
         i = int(i)
         self.page = self._focus_seen = i
-        key = PAGE_KEYS[i] if 0 <= i < len(PAGE_KEYS) else None
-        ui_pane.focus(ui_graph._state(self), ui_pane.section_of(key))
+        ui_pane.scroll_to(ui_graph._state(self))
 
     # ---- binding menu: every widget gets one on right-click ----
 
@@ -1823,7 +1807,7 @@ class Panel:
             imgui.end()
             return
         self.ghosts = 0
-        self.page = max(0, min(self.page, len(PAGES) - 1))
+        self.page = max(0, min(self.page, len(PAGE_KEYS) - 1))
         if self.page != getattr(self, "_focus_seen", None):   # set straight, not through ui.page
             self.go_page(self.page)
         foot = imgui.get_frame_height_with_spacing()
@@ -1961,7 +1945,7 @@ class Panel:
             imgui.same_line(imgui.get_content_region_avail().x - imgui.calc_text_size(text).x)
             imgui.text_colored(RED if proj.is_dirty() else DIM, text)
             if imgui.is_item_hovered():
-                tooltip("the open show — PRESETS page")
+                tooltip("the open show — the presets section")
 
     # ---- pages ----
 
@@ -2203,8 +2187,8 @@ class Panel:
             if chip(f"{OPEN_ON_GRAPH}##graph.{pre}"):
                 ui_graph.select_node(self, pre)
             if imgui.is_item_hovered():
-                tooltip(f"select {graphview.label_of(pre, slots)} on the GRAPH "
-                                  "page and bring it on screen")
+                tooltip(f"select {graphview.label_of(pre, slots)} on the canvas "
+                                  "and bring it on screen")
             for pid, t in flips:            # no dim row: the ticks at the right of this one
                 beside(check_w(t))
                 self._check(pid, t)

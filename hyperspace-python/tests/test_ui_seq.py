@@ -144,19 +144,6 @@ def test_the_page_says_so_without_a_sequencer(rig):
     frame(rig.panel)
 
 
-def test_the_default_page_fits_the_control_window(rig, monkeypatch):
-    over = {}
-    draw = Panel._page_seq
-
-    def measured(self, dt):
-        draw(self, dt)
-        over["seq"] = imgui.get_scroll_max_y()
-    monkeypatch.setattr(Panel, "_page_seq", measured)
-    for _ in range(3):
-        page_frame(rig.panel, "seq")
-    assert over["seq"] == 0
-
-
 @pytest.mark.parametrize("extras", [0, 3, 11])
 def test_no_conflicting_ids(rig, monkeypatch, extras):
     """With the five lane envelopes, and with extras up to the cap."""

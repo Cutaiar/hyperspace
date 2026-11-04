@@ -15,7 +15,6 @@ import hyperspace.gamepad as gp
 from hyperspace import app, modifiers, motion, ui_feel, ui_graph, ui_routing
 from hyperspace.motion import Motion
 from hyperspace.routing import Binding, Bindings, Router
-from hyperspace.ui import Panel
 from hyperspace.ui_feel import (
     KEEP,
     RING_CYCLES,
@@ -249,18 +248,10 @@ def test_the_pad_plot_shows_the_stick_that_moved_after_the_pads_feel(tmp_path, m
 
 
 @pytest.mark.parametrize("mode", ["off", "follow", "spring"])
-def test_the_system_page_fits_with_the_sticks_feel_plotted(tmp_path, monkeypatch, mode):
-    """The gamepad section's live plot beside the feel's knobs, above both
-    dials: SYSTEM still fits the control window, across and down (no page
-    scrolls, test_ui_shell.test_every_page_fits_the_control_window)."""
+def test_the_sticks_feel_plots_inside_the_system_body(tmp_path, monkeypatch, mode):
+    """The gamepad block's live plot beside the feel's knobs, above both
+    dials, inside the SYSTEM body's width."""
     drawn = _draws(monkeypatch)
-    room = []
-    real = Panel._page_system
-
-    def measured(self, dt):
-        real(self, dt)
-        room.append(imgui.get_scroll_max_y())
-    monkeypatch.setattr(Panel, "_page_system", measured)
     with build_rig(tmp_path) as r:
         pad = gp.Pad()
         r.panel.pad = pad
@@ -273,4 +264,3 @@ def test_the_system_page_fits_with_the_sticks_feel_plotted(tmp_path, monkeypatch
             assert not drawn
         else:
             assert drawn[-1][0].mode == mode and drawn[-1][3]   # drawn, inside the window
-        assert room[-1] <= 0

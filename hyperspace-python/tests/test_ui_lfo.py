@@ -5,7 +5,6 @@ from types import SimpleNamespace
 
 import pytest
 from imgui_bundle import imgui, implot
-from test_ui_shell import page_frame
 
 from hyperspace import lfo, tempo, ui_lfo
 from hyperspace.analysis import Analyser
@@ -69,19 +68,6 @@ def test_the_page_says_so_without_a_clock(rig):
     rig.panel.clock = rig.panel.lfos = None
     frame(rig.panel)
     frame(rig.panel)
-
-
-def test_the_page_fits_the_control_window(rig, monkeypatch):
-    over = {}
-    draw = Panel._page_lfo
-
-    def measured(self, dt):
-        draw(self, dt)
-        over["lfo"] = imgui.get_scroll_max_y()
-    monkeypatch.setattr(Panel, "_page_lfo", measured)
-    for _ in range(3):
-        page_frame(rig.panel, "lfo")
-    assert over["lfo"] == 0
 
 
 def test_the_page_has_no_conflicting_ids(rig, monkeypatch):
@@ -212,12 +198,6 @@ def test_the_page_draws_n_strips_and_gaps(rig, monkeypatch, ids):
     else:
         assert len(resets) == 1 and len(opens) == len(ids) - 1
         assert ui_lfo.selected(rig.panel, rig.lfos) == ids[0]
-
-
-def test_four_lfos_do_not_fold_and_still_fit(rig, monkeypatch):
-    """The default page is what it was: four full strips, no scroll."""
-    assert rig.lfos.ids() == [1, 2, 3, 4]
-    test_the_page_fits_the_control_window(rig, monkeypatch)
 
 
 def test_sixteen_lfos_scroll_and_one_is_open(rig, monkeypatch):

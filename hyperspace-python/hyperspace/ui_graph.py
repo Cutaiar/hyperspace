@@ -740,7 +740,7 @@ def page(panel, dt: float) -> None:
     # so a narrow window never shrinks what a wide one was set to)
     side = side_width(st["side_w"], avail.x)
     pos, size = details_rect((origin.x, origin.y), (avail.x, avail.y), wide, side,
-                             band_height(avail.y, ui_pane.focused(st) is not None))
+                             band_height(avail.y, ui_pane.focused(panel) is not None))
     # the node editor still sees a right-click over the details (they lie on
     # its canvas): noted here, before it draws, so `_menus` opens no graph
     # menu there and the control's own Learn menu opens (the owner, 2026-10-24)
@@ -961,21 +961,17 @@ def select_effect(panel, name: str) -> None:
 
 def select_node(panel, name: str) -> None:
     """Select frame node `name` (plan 35 U, OUTPUT's "open on GRAPH":
-    `output.2`, `output.all`) and centre it on the canvas next frame, the
-    GRAPH page opened."""
+    `output.2`, `output.all`) and centre it on the canvas next frame."""
     select_id(panel, f"render:{name}")
 
 
 def select_id(panel, nid: str) -> None:
     """Select canvas node `nid` — `Panel.graph_selected`'s form: a frame
     node's `render:acid.2`, a modifier's own id — and centre it on the
-    canvas next frame (`_select`), the GRAPH page opened: the one request
-    path, `select_node`'s and `Panel.select_graph_node`'s."""
-    st = _state(panel)
-    st["select_node"] = nid
-    pid = "ui.page"
-    if pid in panel.reg:
-        panel.reg[pid].set(ui.PAGE_KEYS.index("graph"))
+    canvas next frame (`_select`): the one request path, `select_node`'s
+    and `Panel.select_graph_node`'s. The canvas is always drawn, so the
+    focus stays where it is: a section being worked in is not thrown away."""
+    _state(panel)["select_node"] = nid
 
 
 # ---------------------------------------------------------------- the selection, published
@@ -3534,7 +3530,7 @@ def _wireframe(panel) -> None:
 
 FOLD_AT = 12             # more param rows than this: each group under its own header
 UNWIRED = imgui.ImVec4(0.58, 0.58, 0.61, 0.55)   # an input chip nothing feeds: faint
-OPEN_TIP = "Open this node's page, with it selected there"
+OPEN_TIP = "Bring up this node's section of the side pane, with it selected there"
 
 
 def side_groups(panel, n: graphview.VNode) -> list[tuple[str, list[str]]]:
@@ -3609,9 +3605,9 @@ def _param_row(panel, pid: str) -> None:
 
 
 def _page_of_group(group: str) -> str | None:
-    """The page whose params are group `group` (`ui.PAGES`' third field)."""
-    for key, _, groups in ui.PAGES:
-        if group == groups or (isinstance(groups, tuple) and group in groups):
+    """The section whose params are group `group` (`ui_pane.SECTIONS`)."""
+    for key, _, groups, _ in ui_pane.SECTIONS:
+        if group in groups:
             return key
     return None
 

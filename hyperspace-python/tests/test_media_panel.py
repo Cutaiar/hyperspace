@@ -334,11 +334,11 @@ def test_the_media_page_lists_panel_graph_among_the_live_feeds(tmp_path):
         ui_media._state(rig.panel)["search"] = "graph"
         assert [i.sid for i in ui_media.items(rig.panel, 2)] == [GRAPH]
         page_frame(rig.panel, "media")                     # the page draws it
-        # on MEDIA the page draws no canvas: the row says `off page`, with why
-        src.on_page = lambda: rig.panel.canvas_px is not None
+        # the panel hidden, no canvas: the row says `off page`, with why
+        src.on_page = lambda: False
         [row] = ui_media.items(rig.panel, 2)
         assert row.status == OFF_PAGE
-        assert "GRAPH page is on screen" in ui_media.hint(OFF_PAGE) and ui_media.hint(LOST) == ""
+        assert "while the panel is up" in ui_media.hint(OFF_PAGE) and ui_media.hint(LOST) == ""
         assert f"{live.HOLD_S:g} s" in ui_media.hint(OFF_PAGE)
         page_frame(rig.panel, "media")
 

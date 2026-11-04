@@ -153,12 +153,13 @@ started; on 2026-11-03 the owner gave it to us, on its own schedule.
   `ui_graph.page` every frame the panel is up, so `Panel.graph_selected`
   and `canvas_px` are live on all of them. `ui.RETIRED` is gone: FX is a
   section like the rest.
-- **`ui.page` is the focus.** Same param id, same sixteen rows in the same
-  order (`ui.PAGES`), labelled "Focus section": a saved index names the
+- **`ui.page` is the focus.** Same param id, same sixteen slots in the same
+  order (`ui.PAGE_KEYS`; `Panel.page` its one owner), labelled "Focus section": a saved index names the
   section of the name its page had; GRAPH's slot (10) has no section and
   lets go of the focus, scrolling the pane to its top. `Panel.go_page` is
   the setter; `_draw` sees an index set straight (`app.frame`'s ⌘[ / ⌘],
-  which is untouched: it still sets `panel.page`).
+  which is untouched: it still sets `panel.page`). A click that lets go moves
+  it to GRAPH's slot; selecting a node does not move it.
 - **Four more sections**: view, hands, routing, system, folded at first.
   Down the pane: selection, presets, view, fx, lookback, faces, media, lfo,
   seq, hands, routing, analyzer, audio, camera, output, system. No page
@@ -291,13 +292,15 @@ content — no node, edge or position is added, hidden or laid out
 
 ## What changed in the build (stage 3, U3)
 
-- `hyperspace/ui.py`: `_rail`, `RAIL_W`, `RETIRED` gone (`RAIL_DOT_R` is
+- `hyperspace/ui.py`: `_rail`, `RAIL_W`, `RETIRED` gone, `PAGES` now
+  `PAGE_KEYS` alone (the groups are `ui_pane.SECTIONS`) (`RAIL_DOT_R` is
   `HEADER_DOT_R`); `_draw` always GRAPH, `_focus_seen`; `go_page` is the focus;
   the `Panel._page_<key>` methods stay as the sections' bodies; VIEW's and
   SYSTEM's rows through `beside`, `SLIDER_MIN`.
 - `hyperspace/ui_pane.py`: four rows; `_paged`, `_wrapped`; `section_of`,
-  `focus(st, key | None)`, `focused`; `draw`'s focus handling and headers'
-  height; `_body` dims; `pane_last` for `timing_line` (the line asks mid-draw).
+  `focused`, `scroll_to`, `let_go`, `shown` (`focus` gone); `draw`'s focus
+  handling and headers' height; `_body` dims; `pane_last` for `timing_line`
+  (the line asks mid-draw).
 - `hyperspace/ui_graph.py`: `_dimmed`, `band_height`, `details_rect(band_h)`;
   the sections drawn with no router.
 - `hyperspace/hands/panel.py`, `ui_routing.py`, `ui_presets.py`: the narrow
@@ -308,8 +311,20 @@ content — no node, edge or position is added, hidden or laid out
   tabs. Every other tool sets `ui.page` and still lands. `tests/ui_driver.py`:
   `Driver.reveal`, each action scrolling its control into view first.
 - Tests: `test_ui_shell.page_frame`, a section's body alone in a window the
-  size a page was, for the body tests (layout, clicks, fits); the real route
-  is `frame` and `tests/test_ui_pane.py`. `test_ui_driver.py` runs the real
-  route in a tall window. `test_graph_edit.py::test_a_channel_dropped_…` waits
-  out the editor's glide to the selection (it had raced it by three frames).
+  size a page was, for the body tests (layout, clicks); the height-fit tests
+  removed; the real route is `frame` and `tests/test_ui_pane.py`, with
+  `test_every_section_focused_lands_in_view_and_inside_the_pane` as the rule
+  now. `test_ui_driver.py` runs the real route in a tall window.
+  `test_graph_edit.py::test_a_channel_dropped_…` waits out the editor's glide
+  to the selection: its drag raced the glide, and reproduces on the base build
+  (fails there at a 1712 px page; passes at 1600 px with the rail).
 - Restart: `Panel.__init__` has a new field and the param's label changed.
+- **Review fixes** (PR #360, one round): 1 a chip hidden by the focus unlit and
+  opening what it asks for; 2 the spacing after each open body counted (no
+  scrollbar on a fresh launch); 3 the pick's words ask `ui_pane.shown`; 4
+  `Panel.page` the one owner of the focus (`let_go`); 5 `select_id` no longer
+  moves the focus; 6 the macro row's room counted once; 7 the false words
+  (`off page`, `POINTER`, the desk's close, the show's name, `OPEN_TIP`, the
+  "on the GRAPH page" tips); 8 the band scrolls on a focus; 9 `REVIEW.md`,
+  `ARCHITECTURE.md`, the fit tests; 10 `PAGE_KEYS` names only, the groups in
+  `SECTIONS`. Found by the new test: ANALYZER's band row wraps at 240 px.

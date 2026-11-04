@@ -255,21 +255,6 @@ def test_a_thumbnail_is_decoded_once_off_the_ui_thread(rig, tmp_path, monkeypatc
     assert key[0] == "shared:a.png" and tex.size == (16, 9)
 
 
-def test_the_media_page_fits(rig, monkeypatch):
-    """Full: a library of many items, every bin full, a missing banner at
-    its most — the page still draws without scrolling at the control size."""
-    from test_ui_shell import _page_scroll
-
-    folder = FakeFolder([entry(f"shared:clip{i}.mp4", kind="video") for i in range(40)])
-    state = attach(rig, folder)
-    for c in CHANNELS:
-        for i in range(BIN):
-            state.assign(c, i, f"local:missing-{c}{i}.mp4")
-    over = _page_scroll(rig, monkeypatch)
-    assert over["media"] <= 0
-    imgui.get_io().display_size = imgui.ImVec2(820, 820)
-
-
 def test_a_bin_edit_is_one_undo_step(tmp_path):
     """Putting a source in a cell, or emptying one, is an undo step of its
     own (`undo.push(…, load=True)`: the marks carry the bins), named for

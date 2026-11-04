@@ -19,15 +19,14 @@ from test_ui_routing import _drawn
 from test_ui_shell import (  # noqa: F401 — the fixture
     CONTROL_SIZE,
     _click,
-    _page_scroll,
     frame,
     page_frame,
     rig,
 )
 
-from hyperspace import ui, ui_presets
+from hyperspace import ui, ui_pane, ui_presets
 from hyperspace.library import HOME_UNSET, PATCHES, Library
-from hyperspace.ui import PAGES
+from hyperspace.ui import PAGE_KEYS
 
 ACID_WASH = Path(__file__).resolve().parent / "fixtures" / "patches" / "acid-wash.json"
 # what the page must never say (the owner, 2026-10-28): whole words, lower case
@@ -271,8 +270,7 @@ def test_the_trash_foot_shows_only_while_the_trash_holds_something_and_restores(
 def test_the_list_fills_the_page_and_never_pushes_the_show_line_off(rig, monkeypatch):  # noqa: F811
     """The list is a child that takes the page's room — never shorter than
     MIN_ROWS rows, scrolling inside itself past that — so the show line
-    sits under it on a short window and a tall one, and the page itself
-    does not scroll at the control size."""
+    sits under it on a short window and a tall one."""
     panel, lib = rig.panel, rig.lib
     lib.load("presets", "TRIP")
     lib.warning = ""        # (the rig has no envelopes: the `/7`'s env ids are unknown here)
@@ -284,7 +282,6 @@ def test_the_list_fills_the_page_and_never_pushes_the_show_line_off(rig, monkeyp
         assert rows[3] - rows[1] >= ui_presets.MIN_ROWS * ui_presets.list_row_h() - 1
         assert rows[3] <= line[1], size                           # the show line under the list
         assert rows[1] < rows[3] <= size[1] and line[3] <= size[1], size
-    assert _page_scroll(rig, monkeypatch)["presets"] == 0
 
 
 def test_the_shows_row_is_never_covered(rig):  # noqa: F811
@@ -321,8 +318,7 @@ def test_the_dots_are_clean_after_a_load(rig):  # noqa: F811
     panel, lib, reg = rig.panel, rig.lib, rig.reg
     for name in ("TRIP", "WAKE", "BIG BLUE WAVE"):
         lib.load("presets", name)
-        groups = [g for _k, _l, grp in PAGES
-                  for g in ((grp,) if isinstance(grp, str) else (grp or ()))]
+        groups = [g for _k, _t, grp, _b in ui_pane.SECTIONS for g in grp]
         lit = [g for g in groups if ui_presets.dirty(panel, g)]
         assert lit == [], f"{name}: dirty dots on {lit}"
         assert not lib.project.is_dirty(), "the show is not unsaved"
@@ -420,7 +416,6 @@ def test_the_preset_strip_has_no_reset_and_does_not_overlap(rig, monkeypatch):  
         for b in keys[i + 1:]:
             assert not _overlap(items[a], items[b]), (a, b)
     assert not any(k.startswith("strip.") and not k.startswith("strip.presets.") for k in rects)
-    assert _page_scroll(rig, monkeypatch)["presets"] == 0
 
 
 def test_the_strip_has_a_new_chip(rig, monkeypatch):  # noqa: F811
@@ -862,7 +857,7 @@ def test_a_line_assigned_every_frame_does_not_pin_the_footer(rig, monkeypatch): 
         clock[0] += 0.1
         lib.warning = HOME_UNSET                              # the same words, every frame
         lib.status = "show: party"
-        frame(panel, PAGES[k % len(PAGES)][0])                # every page's own code runs
+        frame(panel, PAGE_KEYS[k % len(PAGE_KEYS)])                # every page's own code runs
         shown.append(panel._message()[0])
     assert shown[0] == HOME_UNSET and shown[-1] == "" and lib.said == said
     assert "" in shown and all(s == "" for s in shown[shown.index(""):])

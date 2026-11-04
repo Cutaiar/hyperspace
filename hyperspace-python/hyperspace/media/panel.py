@@ -23,8 +23,8 @@ free again the moment the channel lets the frame go.
 reads a channel): it asks the tap to draw the canvas at the end of this
 frame (`want`) and hands back the texture the tap wrote last — one frame
 of latency, which round a loop (the channel on the backdrop behind the
-canvas it pictures) is the intended echo. Off the GRAPH page nothing is
-drawn: the last frame holds `live.HOLD_S`, then the source reads None
+canvas it pictures) is the intended echo. With the panel hidden (plan 49
+stage 3: the only time GRAPH is not drawn) nothing is drawn: the last frame holds `live.HOLD_S`, then the source reads None
 (black) and says `off page` (the page says it is not drawing: not
 `lost`, which is for a page that draws and a tap that gets nothing — a
 minimised window) — the owner's default — and is `ready` again on the
@@ -38,7 +38,7 @@ from .frame import TEX_2D, MediaFrame
 from .live import SharedSource
 
 GRAPH = "panel:graph"
-OFF_PAGE = "off page"    # the GRAPH page is not on screen: nothing to draw
+OFF_PAGE = "off page"    # the panel is hidden, so no GRAPH canvas: nothing to draw
 
 
 class PanelSource(SharedSource):
@@ -56,7 +56,7 @@ class PanelSource(SharedSource):
         self.on_page = on_page if on_page is not None else (lambda: True)
 
     def _idle(self) -> str:
-        """`off page` while GRAPH is not on screen (no frame can come, so
+        """`off page` while the panel is hidden (no frame can come, so
         not `fetching`), else a live feed's words."""
         if self.tap is not None and not self.on_page():
             return OFF_PAGE

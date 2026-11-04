@@ -33,7 +33,6 @@ from hyperspace.routing import Binding, Bindings, Owned, Router, keymap, padmap
 from hyperspace.ui import (
     CHEATSHEET,
     PAGE_KEYS,
-    PAGES,
     PageHistory,
     Panel,
     apply_style,
@@ -195,12 +194,11 @@ def test_the_panel_opens_on_graph_filling_the_window(tmp_path):
 
 
 def test_every_page_draws_with_a_library(rig):
-    for k, (key, _, _) in enumerate(PAGES):
+    for k in range(len(PAGE_KEYS)):
         rig.reg["ui.page"].set(k)
         assert rig.panel.page == k      # the focus: every slot keeps its index (plan 49)
         for _ in range(2):
             frame(rig.panel)
-        assert PAGE_KEYS[k] == key
 
 
 def test_system_page_shows_a_config_error_and_notes(rig, monkeypatch):
@@ -357,10 +355,10 @@ def test_the_lookback_page_says_why_the_worker_is_off(rig, monkeypatch):
 def test_page_param_is_ui_state_not_a_preset(rig):
     p = rig.reg["ui.page"]
     assert p.group == "ui" and not p.persist and not p.modulatable
-    assert p.names == [label for _, label, _ in PAGES]
+    assert p.names == PAGE_KEYS
     p.set(99)                       # out of range lands on the last page
     frame(rig.panel)
-    assert rig.panel.page == len(PAGES) - 1
+    assert rig.panel.page == len(PAGE_KEYS) - 1
 
 
 # the sections `ui.page` focuses with a `_page_<key>` body of their own
@@ -385,19 +383,6 @@ def _page_scroll(rig, monkeypatch) -> dict[str, float]:
         for _ in range(3):              # the window settles its size, then its content
             page_frame(rig.panel, key)
     return over
-
-
-def test_every_page_fits_the_control_window(rig, monkeypatch):
-    """No page scrolls at the app's control-window size: a control that has
-    to be scrolled to is one that cannot be found in a hurry. The rig has
-    a hands setup with a tracker, an Output and a Router with the factory
-    rows, so HANDS, OUTPUT and ROUTING are measured full (audit U1)."""
-    assert rig.panel.hands is not None and rig.panel.output is not None
-    assert rig.panel.desk                   # the desk diagram on (plan 14 WP7)
-    assert rig.router.table.routes()
-    over = _page_scroll(rig, monkeypatch)
-    assert set(over) == set(DRAWN)
-    assert {k: v for k, v in over.items() if v > 0} == {}
 
 
 def _hands_page_text(rig, monkeypatch) -> tuple[list[str], float]:
@@ -522,15 +507,12 @@ def _every_ghost_line(rig) -> None:
     rig.panel.renderer = SimpleNamespace(ghost=SimpleNamespace(error=LONG_GHOST_ERROR))
 
 
-def test_the_hands_page_fits_with_every_ghost_line(rig, monkeypatch):
-    """The HANDS page at its tallest for the ghost: on, a guide, tethers,
-    an unmeasured mode and an error — and it still does not scroll. The
-    ghost is two lines; the notes are in its "more ▸" popup, whole."""
+def test_the_ghost_notes_are_in_the_more_popup_with_every_ghost_line(rig, monkeypatch):
+    """The HANDS body at its tallest for the ghost: on, a guide, tethers,
+    an unmeasured mode and an error. The ghost is two lines; the notes are in its "more ▸" popup, whole."""
     import hyperspace.hands.panel as hp
 
     _every_ghost_line(rig)
-    _, over = _hands_page_text(rig, monkeypatch)
-    assert over <= 0
     labels, lines, _ = _ghost_more(rig, monkeypatch)
     assert labels == [hp.GHOST_MORE_WARN]
     assert LONG_GHOST_ERROR in lines and any("unmeasured" in s for s in lines)
@@ -685,143 +667,9 @@ NO_TORCH = ("dream worker off: torch is not installed — run `uv sync`, "
             "then launch with `uv run hyperspace`")
 
 
-def lookback_page_room(tmp_path, monkeypatch) -> dict[str, tuple[float, float]]:
-    """The look-back page drawn as the app draws it — over a real offscreen
-    `Renderer` whose look-back has captured eight echoes, so the thumbnail
-    row is its 48 px row of images and not the one line of text a page gets
-    with no renderer — in every state that changes its height. Returns
-    state → (scroll range, room left under the last row), in pixels at the
-    control size."""
-    moderngl = pytest.importorskip("moderngl")
-    from hyperspace.render import Renderer
-
-    try:
-        gl = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    w, h = 1280, 820
-    tex = gl.texture((w, h), 4)
-    fbo = gl.framebuffer(color_attachments=[tex])
-    renderer = Renderer(gl)
-    # (plan 36 T4: the look-back and the dream drawn — an old preset's with
-    # both on — and the worker the dream node's)
-    from hyperspace.graph import Wiring
-    from hyperspace.graphmigrate import wired_wiring
-    renderer.wiring = wired_wiring(Wiring(), "dream")
-    lb, dr, t = renderer.lookback, renderer.dreamer, [0.0]
-    room: dict[str, tuple[float, float]] = {}
-    try:
-        with build_rig(tmp_path, renderer) as rig:
-            imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
-            panel, reg, view = rig.panel, rig.reg, rig.view
-            view.shape = 3
-            got: list[tuple[float, float]] = []
-            draw = Panel._page_lookback
-
-            def measured(self, dt):
-                draw(self, dt)
-                got.append((imgui.get_scroll_max_y(),
-                            imgui.get_content_region_avail().y + imgui.get_style().item_spacing.y))
-            monkeypatch.setattr(Panel, "_page_lookback", measured)
-
-            def render(n: int) -> None:
-                for _ in range(n):
-                    t[0] += 1 / 60
-                    view.ang[3] += 0.03
-                    fbo.use()
-                    gl.viewport = (0, 0, w, h)
-                    renderer.draw(view, w, h, t_now=t[0])
-
-            def measure(state: str) -> None:
-                render(4)
-                for _ in range(3):          # the window settles its size, then its content
-                    page_frame(panel, "lookback")
-                room[state] = got[-1]
-
-            reg["dream.on"].set(True)
-            assert reg["dream.echoes"].value == 8 and lb.state.on
-            dr.source = StandInWorker(WORKER_SHORT)
-            render(40)
-            assert len(lb.thumbnails()) == 8 and dr.dream_frame >= 0 and lb.atlas is not None
-            measure("on, worker")
-            dr.source.line = WORKER_LONG
-            measure("on, worker saying everything")
-            lb.error = "_common.glsl:1: syntax error"     # the post pass on its fallback
-            measure("on, worker saying everything, GLSL error")
-            lb.error = ""
-            reg["dream.tint_from"].set(1)                 # the tint from the scene
-            measure("on, tint from the scene")
-            reg["dream.tint_from"].set(0)
-            dr.source = None
-            panel.dream_error = NO_TORCH
-            measure("on, no worker: torch missing")
-            panel.dream_error = ""
-            measure("on, no worker")
-            reg["dream.on"].set(False)
-            measure("off, no worker")
-            dr.source = StandInWorker(WORKER_LONG)
-            measure("off, worker saying everything")
-    finally:
-        fbo.release()
-        tex.release()
-        gl.release()
-    return room
-
-
-def test_the_look_back_page_fits_with_thumbnails(tmp_path, monkeypatch):
-    """Plan 20 WP4: the look-back page does not scroll in the app. The page
-    test above draws it with no renderer, where the thumbnail row is a line
-    of text; with a renderer and echoes it is a 48 px row of images, and the
-    page as it was overflowed by 23 px there. Measured here with a real
-    `Renderer` that has captured eight echoes, a source with a status line
-    and a dream frame shown, the dream on and off, and the worker's status
-    at its longest."""
-    room = lookback_page_room(tmp_path, monkeypatch)
-    assert len(room) == 8
-    assert {k: v for k, v in room.items() if v[0] > 0 or v[1] < 0} == {}
-
-
 # the VIEW page's field row (plan 20 WP6): the controls it rearranged
 FIELD_ROW = ("view.inst_layout", "view.inst_motion", "view.inst_amp", "view.inst_rate")
 ROT_RATES = tuple(f"rot.rate.{name}" for name in PLANES)
-
-
-def view_page_room(rig, monkeypatch) -> dict[tuple[int, int, int], tuple[float, float]]:
-    """The VIEW page at the control size with the field row showing: every
-    (count, layout, motion) that changes the row. Returns state → (scroll
-    range, room left under the last row), in pixels."""
-    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
-    got: list[tuple[float, float]] = []
-    draw = Panel._page_view
-
-    def measured(self, dt):
-        draw(self, dt)
-        got.append((imgui.get_scroll_max_y(),
-                    imgui.get_content_region_avail().y + imgui.get_style().item_spacing.y))
-    monkeypatch.setattr(Panel, "_page_view", measured)
-    room = {}
-    for n in (1, 7, 9, 4096):
-        for layout in (0, 1, 2, 5):         # a 3D lattice adds the field's depth
-            for motion in (0, 1):
-                rig.reg["view.instances"].set(n)
-                rig.reg["view.inst_layout"].set(layout)
-                rig.reg["view.inst_motion"].set(motion)
-                rig.reg["view.inst_fit"].set(n == 9)
-                for _ in range(3):          # the window settles its size, then its content
-                    page_frame(rig.panel, "view")
-                room[(n, layout, motion)] = got[-1]
-    return room
-
-
-def test_the_view_page_fits_with_a_field_in_motion(rig, monkeypatch):
-    """Plan 20 WP6: the VIEW page does not scroll with more than one copy.
-    The page test above draws it at one copy, where the field rows are
-    hidden; above one they show (and the page as it was scrolled by 19 px
-    there). Measured with 7, 9 (fitted) and 4096 copies in the flat layouts
-    and a lattice, still and in motion, and at one copy."""
-    room = view_page_room(rig, monkeypatch)
-    assert len(room) == 32
-    assert {k: v for k, v in room.items() if v[0] > 0 or v[1] < 0} == {}
 
 
 def test_the_field_row_and_the_rate_cells_keep_their_menus(rig, monkeypatch):
@@ -1003,14 +851,6 @@ def test_the_routing_page_fits_over_a_loaded_preset_and_a_full_desk(rig, monkeyp
         f"note:{k}:{0x37}" for k in range(3)]
     over = _page_scroll(rig, monkeypatch)
     assert over["routing"] == 0, "the ROUTING page scrolled with a full desk"
-
-
-def test_the_hands_page_fits_with_the_tracker_off(rig, monkeypatch):
-    """The setup still edits and saves with no tracker: the page draws
-    without the switches beside the box and still fits."""
-    rig.panel.hands = None
-    over = _page_scroll(rig, monkeypatch)
-    assert over["hands"] == 0
 
 
 def test_the_meter_tooltip_names_the_plane_from_the_live_table(rig):
@@ -2227,15 +2067,13 @@ def _output_page(rig, monkeypatch, page="output", body=False) -> tuple[list[str]
     return drawn, list(edges)
 
 
-def test_the_output_page_fits_with_four_outputs_and_overlays_rows(rig, monkeypatch):
+def test_the_output_body_with_four_outputs_and_overlays_rows_stays_inside(rig, monkeypatch):
     """Four outputs (the most), each block's three lines, a missing
-    output's line and overlay's three rows showing: the OUTPUT page does not
-    scroll at the control size and no line runs past the page's right edge."""
+    output's line and overlay's three rows showing: no line runs past the
+    body's right edge."""
     rig.panel.output.allowed = True
     for sl in rig.slots:
         sl.error = "present: RuntimeError: a long error that the page must cut to fit"
-    over = _page_scroll(rig, monkeypatch)
-    assert over["output"] <= 0
     drawn, edges = _output_page(rig, monkeypatch, body=True)
     # (plan 35 T4: the two mutes; "through" is the preset's wiring)
     assert drawn.count("picture") == 4 and drawn.count("through effects") == 0
