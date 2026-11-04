@@ -29,13 +29,55 @@ branch proving the PRs together before anything merges.
 5. `REVIEW.md`, `docs/ENGINEERING.md` §15 and §16, `docs/ARCHITECTURE.md`
    §3–§4, and plans 49, 51, 52.
 
+## The owner's answers, 2026-11-04 (these overrule anything below)
+
+**The preset is the authority; a deck is a device.** A deck is the mechanism for
+swapping quickly between presets and choosing which graph renders, holding only
+what must be shared to keep decks in step, such as the clock. Any work in this
+wave is judged against that line.
+
+**The session count.** The owner asked why 256 of the 548 params undo watches
+are session params. Counted at 0ab49d7 (`boot`, no effect files loaded, so `fx.*`
+effect knobs are not in the 548):
+
+| Session group | Params | What they are |
+| --- | --- | --- |
+| `hands` | 165 | 9 global + 13 shaping knobs × 12 axes |
+| `band` | 78 | 6 audio bands × 13 knobs |
+| `desk`, `master`, `output`, `scene`, `ghost.mirror` | 13 | the rig's feel and master levels |
+
+A session param is **not** held by a deck: it is one object both decks share, and
+none is in a preset. 243 of the 256 are those two tables of shaping knobs. Plan 43
+ruled both "the rig" (`43-preset-contract.md`, the `hands.*` and `band.*` rows:
+"the picture is the same with the music off"). Whether `band.*` stays there under
+the line above is **Q7**, open. The undo problem is not a size problem: one shared
+param has it as much as 256, so DQ2 stands whatever Q7 answers.
+
+**Node mode** (overrules NQ1, NQ3, NQ9, and N3 as written; `53-node-mode.md` is
+updated):
+- **You choose the deck, per controller.** A controller can enter node mode on a
+  preset being built off air, while someone else plays the on-air preset with a
+  different controller. From the on-air graph, an operator can attach a controller
+  a performer is holding to a node ("you're on the wobble node for a while"). So
+  the panel must be able to look at either deck's graph, not only the one HOLD
+  gives it, which D5a and D5d have to allow.
+- **The cables are not temporary.** A node mode cable is its own cable kind, a
+  colour other than the white control cables, drawn and labelled, and **saved in the
+  preset**. Whether a controller is in node mode and which node it points at are
+  preset state. Open the preset and they are back; choose another node and it
+  switches. So **N3, "keep this one", is gone**, NQ9 with it, and NQ3 is answered.
+- The consequences to build: a preset format move (see NM0), and re-pointing a
+  controller is an edit of the preset.
+
+Merge authority and the merge gates (Q1, Q2) wait until these are settled.
+
 ## What changed against the build order
 
 - **D5 is five PRs, D6 two.** Pointers, undo, copy-and-swap, the controls, the
   words. No schema moves in either.
-- **N1 and N2 split in two**, drawing apart from behaviour, and N3 by road.
-  N1a must not reach a show without N1b: rows that act and are not drawn are
-  hidden edges. Stack them and merge together.
+- **N1 and N2 split in two**, drawing apart from behaviour; NM0 is new and N3 is
+  gone. N1a must not reach a show without N1b: rows that act and are not drawn
+  are hidden edges. Stack them and merge together.
 - **Row 4.7 is smaller.** #314 merged on 2026-11-02 (cf96377), so nothing
   rebases. Its "pad rows ride in patches" is not true of the code:
   `patches.check` refuses them, and riding needs app code and a ruling on row
@@ -59,10 +101,9 @@ branch proving the PRs together before anything merges.
 | D5e | Deck indicator, ROUTING's dormant words, desk diagram, SYSTEM | UI | S | D5d, DQ7 | UI only |
 | D6a | `playlist.py`, its file kind, `tick` over stand-ins | Library | M | D5d, DQ5 | no behaviour yet |
 | D6b | Triggers, the frame hook, a pane section, the warm draw | Library | S–M | D6a | |
-| N1a, N1b | `node_page.py`, a second page slot, MIDI; then cables, banner, on-screen desk. Stacked | Core + UI | M + M | D5d, NQ1–NQ4; **merge gate: checks 506–509** | no |
-| N3a | `Learn.keep`, APC slice | Core + UI | S–M | N1b, NQ9 | no |
-| N2a, N2b | Overlay rows in the Router, steer off; pad page keys, pad window, drawing | Core + UI | M + M | N1a, #365, NQ5–NQ7 | no |
-| N3b | Keep for pad rows | Core + UI | S | N2a, N3a | no |
+| NM0 | The saved node mode: controller by role, node, page in the preset, the cable kind and its colour; a format move with its migration if the build shows it needs one | Format | M | D5a, NM1–NM3 | format |
+| N1a, N1b | APC: the rows from the saved state, per controller and per deck; then the drawing | Core + UI | M + M | NM0, D5d, NQ2, NQ4; **merge gate: checks 506–509** | no |
+| N2a, N2b | Pad: rows in the Router, steer off; pad page keys, pad window, drawing | Core + UI | M + M | N1a, #365, NQ5–NQ7 | no |
 | B2 | Factory `pad:LP` row for `deck.chase` | Core | XS | NQ8; can go first | no |
 | NSEW | North / south / east / west, with its migration | Controllers | M | #365, rows 546 and 552 | format move |
 | #287 | Dial readings rewritten on main, beside N2 | UI | S–M | D5d; who does it, Q4 | no |
@@ -93,6 +134,11 @@ Details are in the two plan documents.
   §2), calling out 669, 668, 641. Rec ask once. Only 653 and 609 gate this wave.
 - **Q6.** Merge #363 (the CI flags, green, one file). Close #342 once #365 lands,
   keeping `tools/poi_probe.py`.
+- **Q7.** Do the 78 `band.*` knobs move into the preset? They change how hard a look
+  answers the music, which favours the preset; but the analyzer is one and shared, so
+  two decks with different tuning need a band stage per deck. Hands shaping is how a
+  sensor reads one person in one room, so it stays the rig's. Rec: decide before D5b,
+  since moving them is a format move and changes what the decks share.
 
 **D5 and D6** (`44-decks-d5-d6-reading.md` §6):
 | | Question | Rec |
@@ -109,19 +155,22 @@ Details are in the two plan documents.
 **Node mode and B2** (`53-node-mode.md` §6):
 | | Question | Rec |
 | --- | --- | --- |
-| NQ1 | Which deck does node mode reach? The most consequential here | The panel's deck, while the page is up |
+| NQ1 | ~~Which deck?~~ **Answered:** you choose, per controller | |
 | NQ2 | APC keys (the desk is Dillon's; he signs) | SEND C latches, ◀ ▶ flip, sixteen knobs |
-| NQ3 | Does a temporary cable pass the WYSIWYG hard rule? **Ask before N1b** | Yes, on four conditions: drawn whenever it acts, looks different, says so, nothing saves it |
-| NQ4 | Latched with nothing selected | The desk returns to its layers |
+| NQ3 | ~~Temporary cables?~~ **Answered:** a saved cable kind of its own colour | |
+| NQ4 | In node mode with nothing to point at | The desk returns to its layers |
+| NM1 | Does re-pointing a controller light the dirty dot? It is now an edit of the preset, and the playlist pauses on the dot (DQ5) | Yes, it lights the dot; the playlist pauses only for the deck on air |
+| NM2 | A preset goes on air saying "pad → wobble": does it take that pad from whoever holds it, and from camera steer? | Yes, as the file says, and the pad window says so at once; a controller the rig lacks stays dormant and drawn |
+| NM3 | Both decks' presets claim one controller | It answers one deck at a time: the last choice wins, and the other deck draws its cable dormant |
 | NQ5 | A stick on the page | Push: the look comes back on release; chase keeps it |
 | NQ6 | Axes a saved route already reads | Free axes only |
 | NQ7 | The pad's latch, with no free button | A chip per controller, learnable; factory `pad:RP` only |
 | NQ8 | B2's button | Factory `pad:LP`; the 360's GUIDE by one Learn |
-| NQ9 | Keep on a taken knob | Ask Replace / Keep |
+| NQ9 | ~~Keep on a taken knob~~ **Gone** with N3 | |
 
-NQ1 and DQ6 must agree, and B2 meets them: a chase on the controllers' deck
-misses what a page on deck 2 pushes, so under NQ1 a press while a page is up
-targets the page's deck.
+B2 meets NQ1: a chase on the controllers' deck misses what a node mode on another
+deck pushes, so a press from a controller in node mode targets that controller's
+deck.
 
 ## Numbers
 
@@ -139,7 +188,7 @@ BW. Pre-assign (unused ones are fine; do not reuse 602–604 or 633–635):
 | D6a | 705–707 | 537–538 | CC |
 | D6b | 708–709 | 539–540 | CD |
 | N1 | 710–714 | 541–545 | CE |
-| N3 | 715–717 | 546–548 | CF |
+| NM0 | 715–717 | 546–548 | CF |
 | N2 | 718–722 | 549–553 | CG |
 | B2 | 723–724 | 554–555 | CH |
 | NSEW | 725–728 | 556–558 | CI |

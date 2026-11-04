@@ -1,5 +1,21 @@
 # Plan 53 — node mode: outline (N1, N2, N3) and B2 (wave 4 planning, 2026-11-04)
 
+> **The owner's answers, 2026-11-04, overrule this outline where they differ.**
+> It was written for a temporary overlay; node mode is now saved.
+> - **The deck is chosen, per controller:** on the preset being built off air, or on
+>   the on-air graph for a controller someone else is holding. NQ1 is answered, and
+>   §2's "one `Bindings.overlay` on the session" and §6's single page need rethinking:
+>   each controller holds its own (deck, node).
+> - **A node mode cable is a kind of its own, in a colour other than the white control
+>   cables, saved in the preset.** Whether a controller is in node mode and which node it
+>   points at are preset state. NQ3 is answered. §1's "a page cannot move the dirty dot or
+>   the file" no longer holds as a goal: re-pointing is an edit (NM1).
+> - **N3 and NQ9 are gone:** there is nothing to keep. §4 stands only as a record of the
+>   Learn prompt's doors.
+> - **New:** NM0, the saved form, likely a format move; §1's gaps in `midi.py`, the learn
+>   collisions, the graph seams and all of §5 still apply.
+> The rewritten questions are in `wave-4-session-prompt.md` (NM1–NM3).
+
 Read at origin/main ff58ee2 (2026-11-04), with #361 and #364 read from `gh pr` metadata and diff. Paths are under `hyperspace-python/hyperspace/` unless they start with `docs/` or `tests/`. No plan doc existed; this is its outline, to be numbered when it lands (53 is next).
 Tags: **[V]** read in the code. **[I]** inferred, not run. **[Rec]** my recommendation.
 
