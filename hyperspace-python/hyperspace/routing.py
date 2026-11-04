@@ -267,6 +267,7 @@ from .bands import BANDS, CEIL
 from .modifiers import Modifier, ModState
 from .motion import CUSTOM, OFF, Follower, Motion
 from .params import (
+    CHASE_PARAM,
     DEPTH_TAPER,
     DEPTH_UNIT,
     DRIVE,
@@ -287,9 +288,12 @@ from .params import (
 from .routing_sources import (  # noqa: F401
     _NO_LANES,
     BUILTIN_LANES,
+    DECK_SCHEMES,
     MIDI_SCHEMES,
     QUALIFIER,
     ROW_SCHEMES,
+    LaneLayer,
+    Layered,
     Sources,
     base_scheme,
     is_continuous,
@@ -347,6 +351,10 @@ SHIFT_PARAM = "desk.shift"
 # the desk's SAVE (plan 24 C1): held, a bank pad's tap saves into its slot
 # (midi.MidiIO._save_tap); a momentary row on apc40.SAVE, track 8's clip stop
 SAVE_PARAM = "desk.save"
+# what only a held button may drive: a row that could leave one on is refused
+# (`latch_refusal`). By id, because the referee has a row and no registry.
+# `desk.fine` is left out: a learned toggle on it is allowed (`midi._follow_fine`)
+HELD_ONLY = (SAVE_PARAM, CHASE_PARAM)
 # the sequencer page's latch (plan 31 §A, decision 7): SEND A, invariant,
 # a session toggle (seq_page.register) — while it is on the page's rows
 # shadow the clip grid, the clip stops and scene launch 1–5
@@ -1110,21 +1118,22 @@ def legacy6_routes() -> list[Binding]:
     return rows
 
 
-def save_refusal(b: Binding) -> str | None:
-    """Why `b` may not drive the desk's SAVE (plan 24 C1), or None: only a
-    `momentary` row may — anything that could leave `desk.save` on (a
-    toggle, a set, a key or pad row that fires) would turn every bank pad's
-    tap into a new preset until something turned it off."""
-    if b.target == SAVE_PARAM and b.op != "momentary":
-        return f"{SAVE_PARAM} takes only a momentary row (held, never latched)"
+def latch_refusal(b: Binding) -> str | None:
+    """Why `b` may not drive a held-only param (`HELD_ONLY`), or None: only a
+    `momentary` row may — anything that could leave it on (a toggle, a set, a
+    key or pad row that fires) would turn every bank pad's tap into a new
+    preset (the desk's SAVE, plan 24 C1) or go on committing the performer
+    into the look (the base chase, plan 52) until something turned it off."""
+    if b.target in HELD_ONLY and b.op != "momentary":
+        return f"{b.target} takes only a momentary row (held, never latched)"
     return None
 
 
-def _drop_save_latches(rows: list[Binding]) -> tuple[list[Binding], list[str]]:
-    """`rows` less any row `save_refusal` refuses, with a note for each."""
+def _drop_latches(rows: list[Binding]) -> tuple[list[Binding], list[str]]:
+    """`rows` less any row `latch_refusal` refuses, with a note for each."""
     kept, notes = [], []
     for b in rows:
-        why = save_refusal(b)
+        why = latch_refusal(b)
         if why is None:
             kept.append(b)
         else:
@@ -2289,7 +2298,7 @@ class Bindings:
         changed = changed or bool(moved)
         # a hand-edited row that would latch SAVE on (plan 24 C1): dropped,
         # said, and the file written back once without it
-        rows, latched = _drop_save_latches(rows)
+        rows, latched = _drop_latches(rows)
         notes += latched
         changed = changed or bool(latched)
         t = cls(rows, path=path, profile=profile)
@@ -2568,8 +2577,8 @@ class Bindings:
             b.layer = "preset"
             if not b.is_midi:
                 notes.append(f"dropped {b.source} → {b.target}: not a desk control")
-            elif save_refusal(b) is not None:
-                notes.append(f"dropped {b.source} → {b.target} ({b.op}): {save_refusal(b)}")
+            elif latch_refusal(b) is not None:
+                notes.append(f"dropped {b.source} → {b.target} ({b.op}): {latch_refusal(b)}")
             elif self.is_invariant(b, inv):
                 if (b.source, b.target, b.op, float(b.value)) in RETIRED_DESK_ROWS:
                     continue
@@ -2657,7 +2666,7 @@ class Bindings:
         if self._lane_only(b) and b.op not in MOD_OPS:
             return (f"{b.op!r} is not an op for a {b.scheme} source; "
                     f"one of {', '.join(MOD_OPS)}")
-        return save_refusal(b)
+        return latch_refusal(b)
 
     def _check(self, b: Binding) -> None:
         """The referee: a performer joining the table (or waking up) must
@@ -2691,7 +2700,7 @@ class Bindings:
         is written unless `write` is False (a knob Learn: the row is the
         loaded preset's, plan 13 §3.3). Returns the rows dropped.
         """
-        why = save_refusal(b)
+        why = latch_refusal(b)
         if why is not None:
             raise ValueError(why)
         if not b.is_midi:
@@ -2927,7 +2936,11 @@ class Router:
     feeds as it always did. Every source-side name the router had —
     `feeds`, `labels`, `rests`, `gates`, `names`, `lane_kinds`, `devices`,
     `clock`, `use`, `follow_devices`, `schemes`, `address`, `feed` — reads
-    and writes the sources, so every caller keeps working. What depends on
+    and writes the sources, so every caller keeps working; but the lanes
+    this deck makes itself (`DECK_SCHEMES`: its banks', its modifiers') are
+    its own layer's (`lanes`, plan 44 D4), which `feeds`, `labels`, `rests`,
+    `gates` and `lane_kinds` read over the sources' and write into, so the
+    panel and the pass see this deck's and no other's. What depends on
     the table is the router's own: an address resolves against this
     table's primaries and is cached here (`lane`), a scheme's feel is this
     table's pad feel (`source_feel`, `felt`). `devices` (keyword) is handed
@@ -2968,28 +2981,38 @@ class Router:
         src.follow(self.table)
 
     @property
-    def feeds(self) -> dict[str, np.ndarray | None]:
-        return self.sources.feeds
+    def lanes(self) -> LaneLayer:
+        """This deck's own lanes (plan 44 D4, row 591): its banks' and its
+        modifiers' (`DECK_SCHEMES`), never in the shared sources. Made here
+        too, for a router from before D4 re-classed by a hot reload."""
+        layer = self.__dict__.get("_lanes_own")
+        if layer is None:
+            layer = self.__dict__["_lanes_own"] = LaneLayer()
+        return layer
 
     @property
-    def labels(self) -> dict[str, list[str]]:
-        return self.sources.labels
+    def feeds(self) -> Layered:
+        return Layered(self.lanes.feeds, self.sources.feeds)
 
     @property
-    def gates(self) -> dict[str, list[tuple[int, str]]]:
-        return self.sources.gates
+    def labels(self) -> Layered:
+        return Layered(self.lanes.labels, self.sources.labels)
 
     @property
-    def rests(self) -> dict[str, list[float]]:
-        return self.sources.rests
+    def gates(self) -> Layered:
+        return Layered(self.lanes.gates, self.sources.gates)
+
+    @property
+    def rests(self) -> Layered:
+        return Layered(self.lanes.rests, self.sources.rests)
 
     @property
     def names(self) -> dict[str, dict[str, int]]:
         return self.sources.names
 
     @property
-    def lane_kinds(self) -> dict[str, list[str]]:
-        return self.sources.lane_kinds
+    def lane_kinds(self) -> Layered:
+        return Layered(self.lanes.lane_kinds, self.sources.lane_kinds)
 
     @property
     def devices(self):
@@ -3024,8 +3047,11 @@ class Router:
         self.sources.follow_devices()
 
     def schemes(self) -> tuple[str, ...]:
-        """`Sources.schemes`: the continuous schemes, in offer order."""
-        return self.sources.schemes()
+        """`Sources.schemes`, the continuous schemes in offer order, then any
+        this deck's own layer offers (`mod`, once it has modifiers)."""
+        out = self.sources.schemes()
+        own = [s for s in self.lanes.labels if s not in out]
+        return (*out, *own) if own else out
 
     def lane(self, source: str) -> tuple[str, int]:
         """(scheme, lane index) that a source address names under this
@@ -3104,6 +3130,8 @@ class Router:
                 q = self.reg.real(q)
                 if q.kind in (Kind.TRIGGER, Kind.TEXT):
                     continue
+                if not self.reg.lands(q):
+                    continue                  # (plan 44 D4: a session param is the lead's)
                 q.set(q._value_of_norm(min(1.0, max(0.0, s.at(m)))))
                 written.append(q.id)
         return written
@@ -3179,7 +3207,9 @@ class Router:
         that do not fire this frame — the buttons the totem holds while it
         reads this pad (totem.SKIP, the plan 47 experiment). A skipped
         `hold` row forgets a press it was timing, so a press that began
-        before the skip does not fire when the skip ends mid-press."""
+        before the skip does not fire when the skip ends mid-press. A
+        `momentary` row's toggle this pad holds is let go by a skip or by
+        the pad going away, whose release would never come (plan 52)."""
         axis = qualified("axis", role)
         publish = getattr(pad, "publish", None)
         if publish is not None:
@@ -3189,8 +3219,12 @@ class Router:
         # source → press time (None once fired), one dict per pad
         holds = (self.__dict__.setdefault("_pad_holds", {}) if not role else
                  self.__dict__.setdefault("_pad_holds_of", {}).setdefault(role, {}))
+        # the toggles this pad holds down through a momentary row
+        down_now = self.__dict__.setdefault("_pad_down", {}).setdefault(role, set())
         if not pad.on:
             holds.clear()
+            for pid in list(down_now):
+                self._let_go_pad(down_now, pid)
             self.felt(axis, None, 0.0)       # the camera job's followers start afresh
             return
         now = time.monotonic() if now is None else now
@@ -3206,6 +3240,8 @@ class Router:
             if skip and b.bare in skip:
                 if b.op == "hold":
                     holds.pop((b.source, b.target), None)
+                elif b.target in down_now:
+                    self._let_go_pad(down_now, b.target)
                 continue
             hat = b.scheme == "hat"
             down = bool(pad.hat & code) if hat else pad.down(code)
@@ -3228,12 +3264,24 @@ class Router:
                 if p is None:
                     continue
                 if pressed and buttons:
-                    p.set(True) if p.kind is Kind.TOGGLE else p.toggle()
+                    if p.kind is Kind.TOGGLE:
+                        p.set(True)
+                        down_now.add(b.target)
+                    else:
+                        p.toggle()
                 elif released and p.kind is Kind.TOGGLE:
                     p.set(False)
+                    down_now.discard(b.target)
                 continue
             if pressed and buttons:
                 act(self.reg, b)
+
+    def _let_go_pad(self, down: set, pid: str) -> None:
+        """A toggle a pad held through a momentary row, its release lost."""
+        down.discard(pid)
+        p = self.reg.get(pid)
+        if p is not None:
+            p.set(False)
 
     def claimed(self, scheme: str) -> set[int]:
         """The lanes of `scheme` an enabled route reads — a pad axis with
@@ -3249,7 +3297,11 @@ class Router:
     # ---- continuous sources ----
 
     def feed(self, scheme: str, values) -> None:
-        """`Sources.feed`: this frame's vector for `scheme` (None: not live)."""
+        """This frame's vector for `scheme` (None: not live): into the
+        deck's own layer for a deck's scheme, else `Sources.feed`."""
+        if scheme in DECK_SCHEMES:
+            self.lanes.feeds[scheme] = None if values is None else np.asarray(values, dtype=float)
+            return
         self.sources.feed(scheme, values)
 
     def gated(self, b: Binding, feeds: dict | None = None) -> bool:
@@ -3270,7 +3322,7 @@ class Router:
         if b.when is None:
             return True
         scheme, i = self.lane(b.when)
-        vec = (self.sources.feeds if feeds is None else feeds).get(scheme)
+        vec = (self.feeds if feeds is None else feeds).get(scheme)
         if vec is None or not 0 <= i < len(vec):
             return False
         u = float(vec[i])
@@ -3282,7 +3334,7 @@ class Router:
         address). What a push row without a rest of its own is centred on.
         (`rests`: the sources' rests, handed in by the pass.)"""
         scheme, i = self.lane(source)
-        rests = (self.sources.rests if rests is None else rests).get(scheme) or []
+        rests = (self.rests if rests is None else rests).get(scheme) or []
         return float(rests[i]) if 0 <= i < len(rests) else 0.0
 
     # ---- motion (motion.py): the feel a reading travels with ----
@@ -3310,7 +3362,7 @@ class Router:
         if values is None or not m.on:
             felt.pop(scheme, None)
             return None
-        rests = self.sources.rests.get(scheme) or []
+        rests = self.rests.get(scheme) or []
         fs = felt.get(scheme)
         if fs is None or len(fs) != len(values):
             fs = felt[scheme] = [Follower(v) for v in values]
@@ -3530,6 +3582,14 @@ class Router:
         self.modgraph                                # noqa: B018 — current
         return self.__dict__["_modgraph_cut"]
 
+    def _forget_lost_rows(self, by_target: dict[str, list]) -> None:
+        """A param none of whose rows is left has lost the source its base
+        chase ledger was about (plan 52): a row made later rides in full."""
+        had = self.__dict__.get("_row_sources", {})
+        now = {t: {b.source for b, _ in rows} for t, rows in by_target.items()}
+        self.reg.forget_commits(t for t, was in had.items() if not was & now.get(t, set()))
+        self._row_sources = now
+
     def _rebuild_modgraph(self, key: tuple) -> None:
         g = self.build_modgraph()
         t = self.table
@@ -3584,6 +3644,7 @@ class Router:
         early = {e.dst for e in live if id(e) not in ordered}
         dormant = {node for _, node in cut_in}
         plan: list[tuple] = []
+        self._forget_lost_rows(by_target)
         for node in modgraph.order(g):
             if node.kind in banks:
                 i = int(node.id.split(":")[1])
@@ -3612,7 +3673,7 @@ class Router:
             return None
         scheme, i = self.lane(address)
         vec = lanes if scheme == "lane" else (
-            self.sources.feeds if feeds is None else feeds).get(scheme)
+            self.feeds if feeds is None else feeds).get(scheme)
         if vec is None or not 0 <= i < len(vec):
             return None
         u = float(vec[i])
@@ -3633,8 +3694,8 @@ class Router:
         value, so the loop is exactly one frame late. `cut`: a modifier
         whose input `modgraph` keeps off to break a loop with no delay: dormant."""
         m = self.table.modifier(mid)
-        feeds = self.sources.feeds
-        vec = feeds.get(modifiers.SCHEME)
+        feeds = self.feeds
+        vec = self.lanes.feeds.get(modifiers.SCHEME)
         if m is None or vec is None or not 0 <= m.n < len(vec):
             return None
         states = self.__dict__.setdefault("_mod_states", {})
@@ -3664,48 +3725,32 @@ class Router:
         return float(out)
 
     def _publish_modifiers(self) -> None:
-        """The ``mod`` scheme's labels, rests, gates and signal kinds, as
-        an adapter publishes its lanes' — built once the table's modifiers
-        change and kept on this router (`_mod_pub`), with its own output
-        vector (`_mod_out`): a new vector starts from this router's last
-        outputs, never another router's. No modifiers: the scheme is not
-        offered — taken out of the sources only while the entry there is
-        this router's, so another router's lanes stand (plan 44 D2)."""
+        """The ``mod`` scheme's labels, rests, gates, signal kinds and output
+        vector, as an adapter publishes its lanes' — built once the table's
+        modifiers change, in this deck's own layer (`lanes`, plan 44 D4): a
+        new vector starts from this router's last outputs. No modifiers:
+        the scheme is not offered."""
         mods = self.table.modifiers
         sc = modifiers.SCHEME
-        d = self.__dict__
+        layer = self.lanes
         if not mods:
-            own = d.pop("_mod_out", None)
-            d.pop("_mod_pub", None)
-            if own is not None and self.sources.feeds.get(sc) is own:
-                for m in (self.feeds, self.labels, self.rests, self.gates, self.lane_kinds):
-                    m.pop(sc, None)
+            layer.drop(sc)
             return
         n = max(m.n for m in mods) + 1
         labels, kinds = [""] * n, [modifiers.VALUE] * n
         for m in mods:
             labels[m.n] = f"{m.n} {m.kind}"
             kinds[m.n] = m.out
-        # a threshold's fire is a switch a row's `when` can wait on
-        gates = [(m.n, f"mod {m.n} {m.kind}") for m in mods if m.out == modifiers.TRIGGER]
-        old = d.get("_mod_out")
+        old = layer.feeds.get(sc)
         vec = np.full(n, math.nan)
         if old is not None:                  # last frame's outputs stand until stepped
             vec[:min(n, len(old))] = old[:n]
-        d["_mod_out"] = vec                  # written in place per node after this
-        d["_mod_pub"] = (labels, [modifiers.REST] * n, kinds, gates)
-        self._put_modifiers()
-
-    def _put_modifiers(self) -> None:
-        """This router's ``mod`` entries into the sources: five dict
-        writes of what `_publish_modifiers` built, nothing rebuilt — what
-        a pass does when another router over the same sources published
-        its own since (row 591)."""
-        d, sc, src = self.__dict__, modifiers.SCHEME, self.sources
-        labels, rests, kinds, gates = d["_mod_pub"]
-        src.labels[sc], src.rests[sc], src.gates[sc] = labels, rests, gates
-        src.lane_kinds[sc] = kinds
-        src.feeds[sc] = d["_mod_out"]
+        layer.feeds[sc] = vec                # written in place per node after this
+        layer.labels[sc], layer.rests[sc] = labels, [modifiers.REST] * n
+        layer.lane_kinds[sc] = kinds
+        # a threshold's fire is a switch a row's `when` can wait on
+        layer.gates[sc] = [(m.n, f"mod {m.n} {m.kind}") for m in mods
+                           if m.out == modifiers.TRIGGER]
 
     def _sync_modifiers(self) -> None:
         """Once the table's modifiers change (`modifiers_serial`, and on the
@@ -3714,17 +3759,13 @@ class Router:
         its node, in dependency order (plan 28 N0) — `_step_modifier`."""
         serial = getattr(self.table, "modifiers_serial", 0)
         d = self.__dict__
-        if d.get("_mods_seen") == serial:
-            if not self.table.modifiers or self.sources.feeds.get(modifiers.SCHEME) is d.get(
-                    "_mod_out", False):
-                return                       # still ours: no other router published since
-            if "_mod_pub" in d:
-                self._put_modifiers()        # another's: put ours back, O(1)
-                return
-        self.__dict__["_mods_seen"] = serial
+        if d.get("_mods_seen") == serial and (
+                not self.table.modifiers or modifiers.SCHEME in self.lanes.feeds):
+            return
+        d["_mods_seen"] = serial
         self._publish_modifiers()
         live = {m.id for m in self.table.modifiers}
-        states = self.__dict__.setdefault("_mod_states", {})
+        states = d.setdefault("_mod_states", {})
         for mid in [k for k in states if k not in live]:
             del states[mid]
 
@@ -3748,8 +3789,14 @@ class Router:
         rows' motion (`feel_of`); None, a 60 Hz frame. A row that does not
         act this frame — its source not live, its gate shut — loses its
         follower, and starts afresh. A cable `modgraph` keeps off to break a
-        loop does not run."""
+        loop does not run. Plan 44 D4 (row 625, §7's recommendation): on a
+        deck that is not the session's lead, a row onto a session param is
+        dormant — the on-air deck's rows move the room, and the deck's own
+        `apply` could not land it anyway."""
         dt = 1 / 60 if dt is None else dt
+        reg = self.reg
+        session = getattr(reg, "session", None)
+        follower = session is not None and session is not reg and session.lead is not reg
         self._sync_modifiers()                   # plan 28 N1: the ``mod:<n>`` lanes
         self.modgraph                                # noqa: B018 — the cached plan, current
         plan = self.__dict__["_plan"]
@@ -3758,22 +3805,24 @@ class Router:
         banks = self._banks()
         fed: dict[str, np.ndarray] = {}
         src = self.sources
-        feeds = src.feeds
+        layer = self.lanes
         clock = src.clock
         t = now if now is not None else getattr(clock, "t", 0.0)
         for scheme, bank in banks.items():
             bank.begin(t, clock)
             bank.publish(self)                   # names, rests; each lane as its voice steps
-            fed[scheme] = feeds[scheme]
+            fed[scheme] = layer.feeds[scheme]
         # plan 31 W1: after every `begin` (a held global trigger has moved
         # the epoch), before the plan (the envelopes step at their nodes)
         self._step_sequencer(t, clock)
+        # this frame's reads: this deck's lanes over the rig's (plan 44 D4)
+        feeds = self.feeds
         movers = self.__dict__.setdefault("_movers", {})
         moved: set = set()
         lanes = None if analyzer is None else analyzer.lanes / CEIL
         # each row's lane — a number, or a name through `names` — from the
         # cache `lane` keeps; a miss or a republished map resolves again
-        names, rests = src.names, src.rests
+        names, rests = src.names, self.rests
         cache = self._lane_cache()
         for step in plan:
             kind = step[0]
@@ -3800,9 +3849,9 @@ class Router:
                     continue
                 if b.when is not None and not self.gated(b, feeds):
                     continue         # gate open: apply() writes the base back
-                p = self.reg.get(b.target)
-                if p is None:
-                    continue
+                p = reg.get(b.target)
+                if p is None or (follower and not reg.lands(p)):
+                    continue         # (plan 44 D4: a session param is the lead's to move)
                 depth = b.value
                 if b.scale is not None:
                     sp = self.reg.get(b.scale)
@@ -3835,10 +3884,11 @@ class Router:
                     if p.kind is Kind.TEXT or not p.modulatable:
                         continue
                     x = min(1.0, max(0.0, depth * u)) - p.norm
-                p.modulate(x)
+                # (a position row's share: the base chase's ledger leaves it out)
+                p.modulate(x, position=b.op != "push")
             if step[3]:              # something later in the pass reads it: land it now
-                q = self.reg.get(step[1])
-                if q is not None and q._base is not None:
+                q = reg.get(step[1])
+                if q is not None and q._base is not None and reg.lands(q):
                     q.apply(mark)
         for key in [k for k in movers if k not in moved]:
             del movers[key]

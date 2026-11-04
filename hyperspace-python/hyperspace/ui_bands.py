@@ -343,9 +343,12 @@ def band_row(panel) -> None:
     imgui.end_disabled()
     if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
         ui.tooltip("Move the band one strip later")
-    imgui.same_line(0, 10)
+    ui.beside(120)                      # (plan 49 stage 3: rows wrap in a narrow pane)
     panel._combo("band.select", 120)
-    imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("Reset"))
+    avail, reset_w = imgui.get_content_region_avail().x, ui.chip_w("Reset")
+    if (imgui.get_item_rect_max().x + imgui.get_style().item_spacing.x + reset_w
+            <= imgui.get_cursor_screen_pos().x + avail):
+        imgui.same_line(avail - reset_w)
     panel._button("band.reset", "Reset", small=True)
 
 

@@ -23,6 +23,12 @@ the sources resolve it: `BUILTIN_LANES`, `MIDI_SCHEMES`, `ROW_SCHEMES`,
 `QUALIFIER`, `base_scheme`, `qualified`, `is_continuous`. `routing.py`
 imports them back, and re-exports `Sources`, so no importer changes.
 
+What is a deck's stays off the sources (plan 44 D4, row 591 changed): the
+lanes a deck makes for itself — its LFOs', envelopes', sequencer's and
+modifiers' (`DECK_SCHEMES`) — live in that router's own `LaneLayer`, read
+over these sources through `Layered`. A scheme the layer does not hold falls
+through to the sources, so whatever feeds one with no bank still feeds it.
+
 A leaf below `routing`: it imports `motion` and numpy, and `glfw` /
 `gamepad` only lazily, to resolve key and pad names
 (`tests/test_routing_boundary.py`). The rig facts the device registry
@@ -38,6 +44,8 @@ against its own table and caches the answer itself.
 from __future__ import annotations
 
 import weakref
+from collections.abc import Iterator, MutableMapping
+from typing import Any
 
 import numpy as np
 
@@ -48,6 +56,11 @@ from .motion import OFF, Motion
 # BUILTIN_SCHEMES, restated (routing never imports devices), the two held
 # equal by tests/test_plan31_wiring.py
 BUILTIN_LANES = ("lane", "lfo", "env", "seq")
+# the schemes a deck makes for itself and no device feeds: its banks' lanes
+# and its modifiers' (plan 44 D4, row 591). Each router keeps its own
+# (`LaneLayer`), so two decks' `lfo:0` are two lanes; held equal to the
+# banks' and `modifiers.SCHEME` by tests/test_routing_sources.py
+DECK_SCHEMES = frozenset(("lfo", "env", "seq", "mod"))
 
 MIDI_SCHEMES = ("cc", "note", "pitch")
 # the row kinds the table dispatches itself (plan 27 B2): the keys
@@ -93,6 +106,65 @@ def is_continuous(scheme: str) -> bool:
     dispatches (`ROW_SCHEMES`)? Open-ended: a scheme no device of this rig
     publishes is continuous too, its rows dormant (decision 11)."""
     return base_scheme(scheme) not in ROW_SCHEMES
+
+
+class Layered(MutableMapping):
+    """One of a router's views of a per-scheme dict: its deck's own layer
+    over the shared sources' (plan 44 D4). A read finds the layer's entry,
+    else the sources'; a write of a deck's scheme (`DECK_SCHEMES`) lands in
+    the layer, any other in the sources, so an adapter handed the router
+    writes where it always did."""
+
+    __slots__ = ("own", "shared")
+
+    def __init__(self, own: dict, shared: dict):
+        self.own, self.shared = own, shared
+
+    def __getitem__(self, scheme: str) -> Any:
+        own = self.own
+        return own[scheme] if scheme in own else self.shared[scheme]
+
+    def get(self, scheme: str, default: Any = None) -> Any:
+        own = self.own
+        return own[scheme] if scheme in own else self.shared.get(scheme, default)
+
+    def __contains__(self, scheme: object) -> bool:
+        return scheme in self.own or scheme in self.shared
+
+    def __setitem__(self, scheme: str, value: Any) -> None:
+        (self.own if scheme in DECK_SCHEMES else self.shared)[scheme] = value
+
+    def __delitem__(self, scheme: str) -> None:
+        del (self.own if scheme in self.own else self.shared)[scheme]
+
+    def __iter__(self) -> Iterator[str]:
+        yield from self.shared
+        for scheme in self.own:
+            if scheme not in self.shared:
+                yield scheme
+
+    def __len__(self) -> int:
+        return len(self.shared) + sum(s not in self.shared for s in self.own)
+
+
+class LaneLayer:
+    """One deck's own lanes (plan 44 D4, row 591): what its banks and its
+    modifiers publish — the five per-scheme dicts the sources hold for the
+    rig's — and nobody else's pass or panel reads."""
+
+    __slots__ = ("feeds", "gates", "labels", "lane_kinds", "rests")
+
+    def __init__(self) -> None:
+        self.feeds: dict[str, np.ndarray | None] = {}
+        self.labels: dict[str, list[str]] = {}
+        self.rests: dict[str, list[float]] = {}
+        self.gates: dict[str, list[tuple[int, str]]] = {}
+        self.lane_kinds: dict[str, list[str]] = {}
+
+    def drop(self, scheme: str) -> None:
+        """`scheme` no longer offered by this deck."""
+        for name in self.__slots__:
+            getattr(self, name).pop(scheme, None)
 
 
 _NO_LANES: dict = {}      # a router's lane cache before its first miss; never written

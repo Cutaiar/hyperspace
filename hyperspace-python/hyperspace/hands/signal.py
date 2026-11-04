@@ -168,6 +168,45 @@ def unit(v: float, lo: float, hi: float) -> float:
     return min(1.0, max(0.0, (v - lo) / (hi - lo))) if hi != lo else 0.0
 
 
+def dot(a, b) -> float:
+    """Two 3-vectors' dot product: the one both core.py and room.py use."""
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+class OneEuro:
+    """The One Euro filter (Casiez et al. 2012) over a scalar: a low-pass
+    whose cutoff rises with speed — a still hand does not shimmer, a moving
+    one does not lag. `reset` forgets the history."""
+
+    def __init__(self, min_cutoff: float = 1.0, beta: float = 4.0, d_cutoff: float = 1.0):
+        self.min_cutoff, self.beta, self.d_cutoff = min_cutoff, beta, d_cutoff
+        self.reset()
+
+    def reset(self) -> None:
+        self.x: float | None = None
+        self.dx = 0.0
+        self.t = 0.0
+
+    @staticmethod
+    def _alpha(cutoff: float, dt: float) -> float:
+        tau = 1.0 / (2.0 * math.pi * cutoff)
+        return 1.0 / (1.0 + tau / dt)
+
+    def __call__(self, x: float, t: float) -> float:
+        if self.x is None:
+            self.x, self.t = x, t
+            return x
+        dt = t - self.t
+        if dt <= 0.0:
+            return self.x
+        self.t = t
+        a_d = self._alpha(self.d_cutoff, dt)
+        self.dx += a_d * ((x - self.x) / dt - self.dx)
+        a = self._alpha(self.min_cutoff + self.beta * abs(self.dx), dt)
+        self.x += a * (x - self.x)
+        return self.x
+
+
 class Smooth:
     """One reading through `slew`: attack rising, decay falling. Starts
     where the first reading is (no glide in from nothing); a None reading

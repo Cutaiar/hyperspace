@@ -157,7 +157,7 @@ def trashed(panel) -> list:
 
 
 def dirty(panel, group: str, *, polled: bool = False) -> bool:
-    """``is_dirty(group)`` — live, or on the poll cadence for the rail dots."""
+    """``is_dirty(group)`` — live, or on the poll cadence for the section headers' dots."""
     lib = panel.library
     if lib is None or lib.reg is None:
         return False
@@ -189,10 +189,13 @@ def strip_name_w(avail: float, chips: tuple[str, ...], dirty_: bool,
     dot, `extra` (the presets strip's "N devices missing" chip after ▶,
     `ui_graph.wants_chip_w`) and the right-hand chips (GRAPH's side pane, a
     few hundred px), never under `NAME_MIN`."""
-    style = imgui.get_style()
-    beside = (2 * imgui.get_frame_height() + 4 + ui.chip_w(*chips) + style.item_spacing.x
-              + (2 * ui.DOT_R + 2 if dirty_ else 0.0) + extra)
-    return max(NAME_MIN, min(name_w(), avail - beside))
+    return max(NAME_MIN, min(name_w(), avail - _strip_beside(chips, dirty_, extra)))
+
+
+def _strip_beside(chips: tuple[str, ...], dirty_: bool, extra: float = 0.0) -> float:
+    """What a strip's row holds besides its name button."""
+    return (2 * imgui.get_frame_height() + 4 + ui.chip_w(*chips) + imgui.get_style().item_spacing.x
+            + (2 * ui.DOT_R + 2 if dirty_ else 0.0) + extra)
 
 
 def _guard(panel, fn, *args):
@@ -315,7 +318,13 @@ def strip(panel, group: str) -> None:
     # "N devices missing" beside ▶ where it fits by a squeezed name, else
     # on a row of its own under the strip (a narrow pane, plan 49)
     wants_beside = wants == 0.0 or strip_name_w(avail, chips, is_dirty) - wants >= NAME_MIN
-    width = strip_name_w(avail, chips, is_dirty, wants if wants_beside else 0.0)
+    extra = wants if wants_beside else 0.0
+    width = strip_name_w(avail, chips, is_dirty, extra)
+    # plan 49 stage 3: narrower still (a pane with its scrollbars), the chips
+    # go on a row of their own under ◀ name ▶ and the name has that row's room
+    roomy = avail - _strip_beside(chips, is_dirty, extra) >= NAME_MIN
+    if not roomy:
+        width = strip_name_w(avail, (), is_dirty)
 
     # ◀ name ▶ — the arrows step by name order; a module strip's name opens its list
     imgui.begin_disabled(not listing)
@@ -357,7 +366,8 @@ def strip(panel, group: str) -> None:
         _list_popup(panel, group, listing, cur)
 
     # (new ·) save · as… (· reset on a module strip), flush right
-    imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w(*chips))
+    if roomy:
+        imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w(*chips))
     if presets is not None:
         if ui.chip("new##new"):
             from . import ui_graph  # (late: ui_graph imports ui_routing, which imports this)

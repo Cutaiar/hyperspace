@@ -836,7 +836,7 @@ class Presets:
     landing: tuple = (None, None, None)
     bus: RigWires = RigWires()
 
-    def __init__(self, lib, reg, router):
+    def __init__(self, lib, reg, router, *, claim: bool = True):
         self.lib, self.reg, self.router = lib, reg, router
         self.note = ""
         self.notes: list[str] = []       # step 1's notes from the last load
@@ -872,14 +872,18 @@ class Presets:
         router.table.on_modifiers = self.settle_groups
         for bank in self.banks().values():
             bank.on_change = self.settle_groups
-        lib.kind(GROUP, SCHEMA.rpartition("/")[0],
-                 load=lambda doc, path: self.load_doc(doc, path),
-                 document=lambda name: self.document(name),
-                 signature=lambda: self.signature(),
-                 versions=VERSIONS,
-                 text=lambda doc: dumps(doc))
-        lib.on_load(GROUP, lambda name: self._landed(name))
-        lib.presets = self
+        # the library's presets kind has one owner until D5 points it at the
+        # panel's deck: a deck built beside the first passes `claim` False
+        # (plan 44 D4), so the strip, the dot and a load stay the first's
+        if claim:
+            lib.kind(GROUP, SCHEMA.rpartition("/")[0],
+                     load=lambda doc, path: self.load_doc(doc, path),
+                     document=lambda name: self.document(name),
+                     signature=lambda: self.signature(),
+                     versions=VERSIONS,
+                     text=lambda doc: dumps(doc))
+            lib.on_load(GROUP, lambda name: self._landed(name))
+            lib.presets = self
         self.listeners: list = []        # called with the name after every load (app.py)
 
     # ---- the API ----
@@ -961,6 +965,12 @@ class Presets:
         self.unsaved = True               # (after the load hook cleared it)
         lib.say(NEW_SAID)
         return [NEW_SAID]
+
+    def _restore(self, values: dict) -> None:
+        """Values onto this deck's own registry, in its order (plan 44 D4:
+        `Library.restore`'s rule, whichever registry the library attached)."""
+        reg = self.reg
+        reg.restore({p.id: values[p.id] for p in reg if p.id in values})
 
     def load_doc(self, doc: dict, path: Path | None = None) -> list[str]:
         """Apply a preset document — the kind's loader (plan 13 §5).
@@ -1212,9 +1222,9 @@ class Presets:
             # last: the state as it was goes back and the load is refused whole
             before = reg.snapshot(part="performance")
             try:
-                lib.restore(landed)
+                self._restore(landed)
             except (ValueError, TypeError) as e:
-                lib.restore(before)
+                self._restore(before)
                 raise ValueError(f"a value would not land ({e}); nothing loaded") from e
             # 2. and the turn (plan 43 C2): set to the file's pose. The one
             #    view is what both renderers draw (hold.ONE_FOR_BOTH), so
@@ -1227,6 +1237,7 @@ class Presets:
                 hold.hold_pose(turn)          # (None: a load with no pose clears it)
             elif turn is not None and callable(getattr(view, "set_pose", None)):
                 view.set_pose(turn)
+                reg.forget_commits(POSE_IDS)    # (a load's pose holds no commit: plan 52)
         except BaseException:
             if table.modifiers_doc(reg) != held_mods:     # the modifiers as they were
                 table.set_modifiers(held_mods, reg)
@@ -1240,7 +1251,7 @@ class Presets:
             # voice's that the load removed and the line above re-added
             # fresh (`held_values` was taken before `bank.set`): a refused
             # load leaves LFO 5's depth where it stood, not at its default
-            lib.restore({k: v for k, v in held_values.items() if k in reg})
+            self._restore({k: v for k, v in held_values.items() if k in reg})
             self.groups, self.group_high = held_groups, held_high
             raise
         # 2½. the bins (plan 32): each channel opens what its slot names at
@@ -1277,7 +1288,8 @@ class Presets:
         for group in PERFORMANCE_GROUPS:
             if group in NO_MODULE and group not in RETIRED_MODULES:
                 continue
-            lib.label(group, None)
+            if lib.presets is self:      # (the strip is the deck that holds the library's)
+                lib.label(group, None)
         # 6¼. the bus cuts (plan 44 D3): the file's, else every cable standing
         self.bus = RigWires.read(doc.get(BUS_KEY))
         # 6½. where the GRAPH page's nodes sit (plan 28 N2): none is the
