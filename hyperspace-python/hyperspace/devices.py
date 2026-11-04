@@ -2241,7 +2241,7 @@ def _rows_of(table) -> list[tuple[str, str]]:
     for b in getattr(table, "bindings", ()) or ():
         if not b.enabled:
             continue
-        if b.op in ("push", "position") or (b.is_midi and b.layer == "preset"):
+        if b.op in ("push", "position", "turn") or (b.is_midi and b.layer == "preset"):
             out.append((b.source, b.target))
     for m in getattr(table, "modifiers", ()) or ():
         for src in m.inputs:

@@ -125,7 +125,7 @@ from imgui_bundle import imgui
 
 from . import apc40, motion, ui, ui_feel, ui_presets, undo
 from .bands import CEIL
-from .learn import LANE_DEPTH
+from .learn import LANE_DEPTH, whole_circle
 from .library import PRESETS
 from .modifiers import KINDS as MOD_KINDS
 from .modifiers import PARAMS as MOD_PARAMS
@@ -147,11 +147,13 @@ from .routing import (
 
 NAMING = "routing.preset"  # the head's save as… name field (ui_presets._name_field)
 DEPTH_MOD = 1.0           # ±, the depth slider's throw
-# the op chip cycles push ↔ position; what each one's depth means
-OP_CHIP = {"push": "push", "position": "pos"}
-NEXT_OP = {"push": "position", "position": "push"}
+# the op chip cycles push ↔ position, or position ↔ turn from a whole-circle
+# lane (`_next_op`); what each one's depth means
+OP_CHIP = {"push": "push", "position": "pos", "turn": "turn"}
+NEXT_OP = {"push": "position", "position": "push", "turn": "position"}
 DEPTH_TIP = {"push": " — 1 is the full throw at a lane's asymptote",
-             "position": " — a fraction of the target's throw; 1 is all of it"}
+             "position": " — a fraction of the target's throw; 1 is all of it",
+             "turn": " — of the target's throw per whole turn of the source; 1 is one for one"}
 BAR_W = 56.0
 SRC_W = 84.0             # the source combo: a lane's number and name
 DEPTH_W = 112.0
@@ -932,11 +934,13 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     imgui.same_line()
     label = OP_CHIP.get(b.op, "push")
     if ui.lit_chip(f"{label}##op", b.op != "push", ui.DIM, imgui.ImVec2(op_w, 0)):
-        b.op = NEXT_OP.get(b.op, "push")
+        b.op = _next_op(b)
     if imgui.is_item_hovered():
         ui.tooltip("push: depth × (source − rest) added to the base\n"
                           "pos:  depth × source is the position across the whole\n"
                           "      control, along its curve, while the source is live\n"
+                          "turn: the source's change is added to the base and stays;\n"
+                          "      shut the gate, move freely, open it: no jump\n"
                           "click to switch")
     imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("×"))
     imgui.push_style_color(imgui.Col_.text, ui.DIM)
@@ -1270,6 +1274,14 @@ def _control_cell(table, b: Binding, color=None) -> None:
         imgui.text_colored(color, control_glyph(table, b))
     if imgui.is_item_hovered():
         ui.tooltip(f"{control_name(table, b)}  ·  {b.describe()}")
+
+
+def _next_op(b: Binding) -> str:
+    """What the op chip's click makes of a row: a whole-circle lane's choices
+    are position and turn, a push there being no use (plan 51)."""
+    if b.op == "position" and whole_circle(b.source):
+        return "turn"
+    return NEXT_OP.get(b.op, "push")
 
 
 def _op_text(b: Binding) -> str:

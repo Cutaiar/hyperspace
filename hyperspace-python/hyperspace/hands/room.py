@@ -29,6 +29,9 @@ POLE_DEG = 8.0
 POLE_EXIT_DEG = 11.0
 _POLE = math.sin(math.radians(POLE_DEG))
 _POLE_EXIT = math.sin(math.radians(POLE_EXIT_DEG))
+# a twist made inside the cone, seen as a yaw step on the way out: past this the
+# reading restarts rather than step (plan 51 §4, `Palm.step`)
+POLE_STEP_DEG = 5.0
 _EPS = 1e-6
 
 Vec = tuple[float, float, float]
@@ -171,11 +174,20 @@ class Palm:
     def step(self, axes: Mat, t: float, smooth: float, response: float) -> None:
         """One tracking frame: each angle's shortest step onto its running
         turn, the filter on that (in half turns, as a ±90° axis is shaped),
-        wrapped only after."""
+        wrapped only after. Leaving the cone with a yaw more than
+        POLE_STEP_DEG from the one it held is no turn of the hand: it reads
+        NaN this frame and restarts, as a returning hand does, so nothing
+        taking differences sees a step."""
+        held = self._yaw if self.pole else None
         read = angles(axes, self._yaw, self.pole)
         if read is None:
             return
         roll, pitch, self._yaw, self.pole = read
+        if held is not None and not self.pole and abs(wrap(self._yaw - held)) > POLE_STEP_DEG:
+            for f in self._filt.values():
+                f.reset()
+            self._turn, self.deg = {}, {}
+            return
         for k, raw in zip(ROOM, (roll, pitch, self._yaw)):
             turn = self._turn.get(k, raw)
             turn += wrap(raw - turn)

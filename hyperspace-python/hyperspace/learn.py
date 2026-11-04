@@ -91,6 +91,7 @@ from .motion import DEFAULT_ROUTE_FEEL
 from .params import PERFORMANCE_GROUPS, Kind, Param, Registry, is_lookback_knob
 from .routing import (
     MOD_OPS,
+    TURN_OP,
     SAVE_PARAM,
     SINK_OP,
     Binding,
@@ -358,6 +359,13 @@ def whole_circle(source: str) -> bool:
     return base_scheme(head) == "hand" and ".room." in name
 
 
+def clutch_of(source: str) -> str:
+    """The gate a room lane's `turn` row lands with: the same hand's closed
+    fist, ``hand:right.room.yaw`` → ``hand:right.grab`` (plan 51 O2)."""
+    head, _, name = source.partition(":")
+    return f"{head}:{name.partition('.room.')[0]}.grab"
+
+
 def row_for(source: str, p: Param, when: str | None = None, *,
             centred: bool = False, depth: float | None = None) -> Binding:
     """The row a hand learn makes (plan 18 WP3): its op and depth.
@@ -402,12 +410,16 @@ def row_for(source: str, p: Param, when: str | None = None, *,
     would blunt a kick-fired hit. A saved row keeps whatever feel it has;
     nothing here rewrites one.
 
-    A hand's room lane (`whole_circle`, plan 51) on a continuous target is
-    the `position` fader at 1 with no feel, centred or not: depth 1 is what
-    makes a palm's turn the camera's turn, one for one, and a spring would
+    A hand's room lane (`whole_circle`, plan 51) on a wrapping target is the
+    orbit: a `turn` at 1 with no feel, clutched by that hand's fist unless the
+    caller names a gate (`clutch_of`). On any other continuous target it is
+    the `position` fader at 1 with no feel, centred or not. Depth 1 is what
+    makes a palm's turn the target's turn, one for one, and a spring would
     glide across the seam through the whole range."""
     stepped = p.kind is not Kind.CONTINUOUS or p.integer
     if not stepped and whole_circle(source):
+        if p.wrap:
+            return Binding(source, p.id, TURN_OP, 1.0, when=when or clutch_of(source))
         return Binding(source, p.id, "position", 1.0, when=when)
     env = base_scheme(source.partition(":")[0]) == ENV_SCHEME
     feel = None if env else DEFAULT_ROUTE_FEEL

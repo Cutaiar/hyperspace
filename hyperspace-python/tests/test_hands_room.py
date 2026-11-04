@@ -619,7 +619,10 @@ def test_a_dropped_wire_lands_one_for_one_with_no_feel(tmp_path):
         e = graphview.Edit(table, reg, rig.router, view)
         assert e.refusal("out:hand:right.room.yaw", "mod:camera.yaw") is None
         row = e.connect("out:hand:right.room.yaw", "mod:camera.yaw")
-        assert (row.op, row.value, row.motion) == ("position", 1.0, None)
+        # O2: a wrapping target lands the orbit, clutched by the same hand's fist;
+        # this test goes on to prove the position row a chip click makes of it
+        assert (row.op, row.value, row.motion, row.when) == ("turn", 1.0, None, "hand:right.grab")
+        row.op, row.when = "position", None
         plain = e.connect("out:hand:right.room.pitch", "mod:view.bright")
         assert (plain.op, plain.value, plain.motion) == ("position", 1.0, None)
         # the anatomical axis beside it lands as it always did
