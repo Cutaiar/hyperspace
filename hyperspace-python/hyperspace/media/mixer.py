@@ -1,33 +1,60 @@
-"""The media mixer (plan 45 V2): the channels' video sound, summed into one
-output stream, read at the transport's position.
+"""The media mixer (plan 45 V2, V4): the channels' video sound, summed into
+one output stream, its read heads the transport's slaves.
 
 **The transport is the one clock** (plan 45, "no second time base"). The
 frame thread hands the mixer, once a frame (`MediaState.poll`, after the
-transports are stepped), a tuple of *voices*: for each channel whose
-play-audio toggle is on and whose source has a soundtrack, the
-`Soundtrack`, the playhead in seconds the transport was just stepped to,
-and the channel's gain. The stream's callback reads that tuple — one
-reference, swapped whole, so the callback sees last frame's voices or
-this frame's, never a mix — and for each voice asks
-`read(round(playhead × AUDIO_RATE), frames)`, multiplies by the gain and
-sums into one float32 stereo block, clipped at ±1. **The callback
-integrates nothing**: no sample counter, no stream time, no position of
-its own (`audio.py`'s `_played` is the model it must not copy). The
-glitch that buys is structural, not a matter of rate: the audio clock and
-the display clock are never locked, so even at rate 1 a callback now and
-then lands twice between two steps (a block repeated) or a step passes
-with no callback (a block skipped) — an occasional click, expected until
-V4 reads sequentially and slews toward the transport. The block is one
-60 Hz frame long (`BLOCK`), so at the rig's frame rate a callback and a
-step roughly alternate; any rate ≠ 1 stutters or skips outright. A voice
-not moving forward (`MediaState._voices`: a hold, a jog's coast dying
-out, a `once` clip parked at its end, reverse, pingpong's way back) is
-left out — silence, not one block buzzing; reverse is V4's.
+transports are stepped), a tuple of `Voice`s: for each channel whose
+play-audio toggle is on and whose source has a soundtrack, the `Soundtrack`,
+the playhead in seconds the transport was just stepped to, the channel's
+gain, the transport's `velocity` (signed), its `wrap` (the loop's length) and
+a key saying whose it is.
 
-The callback allocates nothing once warm: one mix buffer and one voice
-buffer of the block's size are kept (`_mix`, `_one`, remade only if
-PortAudio asks for another size), each voice is read into `_one` through
-`Soundtrack.read(..., out=)` and scaled and summed in place.
+**The callback reads sequentially from a head of its own, slewed toward the
+transport** (V4). The audio and display clocks are never locked, so reading
+each block at the last playhead (V2) repeated or skipped a block now and
+then. Each voice now has a `_Head`, written only by the callback, that moves
+`speed × frames` source samples a block and is resampled (linear) by that
+speed, which glides from last block's to this block's inside the block: at
+rate 1 the samples come out one after another, whatever the phase of the two
+clocks, and any other rate, reverse and a drag of `pos` sound like tape.
+
+**The head is a slave, not a second time base.** Nothing reads it but the
+callback: the picture, the window, the analyzer and the transport never ask
+where it is, and it has no way to run on alone. Against the playhead,
+carried forward by the velocity for the blocks since that playhead came
+(`since`, zeroed by every feed), it does one of these a block:
+
+- within `DEAD` samples: nothing. That is the jitter of the two clocks;
+- beyond that and up to `CUT`: slews, the speed trimmed by the excess over
+  `TAU_S`, so a small error is a small bend of pitch and never a jump (the
+  trim at most the speed itself, so it never stops the tape or turns it);
+- beyond `CUT` (a scrub, a far jog): cuts, the block a crossfade from where
+  the head was to where the transport is;
+- the transport at rest, or no feed for `STALE_S` (the frame thread stuck):
+  it stops and fades, and once silent sits on the playhead. It never creeps
+  toward a stopped transport, and it never free-runs.
+
+**The level glides too**, one block at a time, so no start or stop clicks: it
+goes to the gain × `fade(speed)`, which is 1 from `FADE_SPEED` up, falling to
+0 at `HOLD_SPEED` — **rate 0 is silence**, not one sample held as DC — and to
+0 for a block not wholly held in memory (`Soundtrack.holds`): **a block
+outside the window is zeros**, and the window arriving fades back in. A
+silent voice's head sits on the transport, so it starts exactly there. A
+voice gone from the tuple (its toggle off, its gain 0, its slot changed) gets
+one more block, fading out (`_bind`).
+
+**The loop wrap** (`wrap`): the head counts modulo the loop and reads straight
+through the seam, sample after sample in either direction, the error measured
+the short way round. So the wrap is neither a jump nor a gap, and a clip cut
+to loop is seamless; a clip that was not has the click of its own two ends
+(no splice fade: heard first, plan 45). **No head is prefetched**: a clip up
+to `AUDIO_WINDOW_S` is held whole, and a longer one's wrap is a fade out and
+back in, one window decode later (plan 45, "What changed in the build (V4)").
+
+The callback allocates nothing once warm: its buffers are kept (`_warm`,
+remade only if PortAudio asks for another size), a voice is read through
+`Soundtrack.read(..., out=)` into `_src` and resampled into `_one` with
+`out=`. A `_Head` is made on the frame thread (`_bind`), never here.
 
 The stream is opened lazily — never until a channel's sound is first
 turned on (nothing until something asks, as V1's soundtrack; a hold or a
@@ -55,9 +82,11 @@ package's rule: importing the app pulls no adapter library)."""
 
 from __future__ import annotations
 
+import math
 import threading
 import time
 from collections.abc import Callable
+from typing import Any, NamedTuple
 
 import numpy as np
 
@@ -69,7 +98,44 @@ RETRY_S = 5.0                 # a failed open is tried again this long after, wh
 CLOSE_BUDGET_S = 0.5          # how long `close` waits for an open still under way
 CEILING = 1.0                 # the sum is clipped here: gain is the performer's to set
 
-Voice = tuple   # (soundtrack, playhead seconds, gain)
+# -- the read head (V4; the numbers are judged by ear: hand checks 510-513)
+HOLD_SPEED = 1e-3             # slower than this (a hold, a jog's coast dying out) is silent
+FADE_SPEED = 0.05             # slower than this the level falls with the speed
+MAX_SPEED = 16.0              # the most source a block reads: × BLOCK bounds `_src`
+DEAD = float(BLOCK)           # samples: inside this the two clocks' jitter is left alone
+TAU_S = 0.25                  # the slew: the error beyond `DEAD` is closed at this time constant
+CUT = 0.25 * AUDIO_RATE       # samples: beyond this the head does not slew, it cuts
+STALE_S = 1.0                 # no feed for this long and the head stops: never free-runs
+MIN_WRAP = AUDIO_RATE // 1000 # a loop shorter than this is no loop: bounds `_fetch`'s reads
+
+
+class Voice(NamedTuple):
+    """One channel heard, this frame (the frame thread's, read by the
+    callback). `speed` is the transport's signed velocity, `wrap` the length
+    it loops on in seconds (0: no loop), `key` whose voice it is across
+    frames — the head follows the key — and the track when None."""
+
+    track: Any
+    at: float                 # the playhead just stepped, in seconds
+    gain: float
+    speed: float = 1.0
+    wrap: float = 0.0
+    key: Any = None
+
+
+class _Head:
+    """A voice's read position, made on the frame thread and from then on
+    written only by the callback (module docstring). `seen` is the feed it
+    last read, `since` the samples it has moved since that feed."""
+
+    __slots__ = ("at", "level", "seen", "since", "speed")
+
+    def __init__(self):
+        self.at: float | None = None      # None: the first block starts at the transport
+        self.speed = 0.0
+        self.level = 0.0
+        self.seen = None
+        self.since = 0
 
 
 def _default_stream(**kw):
@@ -83,7 +149,7 @@ class Mixer:
     The frame thread calls `feed(voices, asked)` once a frame and `close` at
     exit; the stream's thread calls `_callback`. `state` is "off" (never
     asked), "opening", "open", "closed" or "error: …"; `playing` the voices
-    in the last feed, `underruns` the callbacks PortAudio flagged as an
+    in the last feed that are moving, `underruns` the callbacks PortAudio flagged as an
     output underflow, `errors` the voice reads that raised."""
 
     def __init__(self, make: Callable | None = None):
@@ -94,11 +160,12 @@ class Mixer:
         self._failed_at = -1e9
         self._closed = False
         self.voices: tuple[Voice, ...] = ()
+        self._heads: dict = {}       # the frame thread's: key → (head, its last voice)
+        self._live: tuple = ()       # (voice, head) for the callback: one swap, one read
         self.state = "off"
         self.underruns = 0
         self.errors = 0
-        self._mix = np.zeros((BLOCK, AUDIO_CHANNELS), np.float32)   # the callback's own
-        self._one = np.zeros((BLOCK, AUDIO_CHANNELS), np.float32)
+        self._warm(BLOCK)            # the callback's own buffers
         self.tap = None       # plan 45 V3: the analyzer's ring, or None (`listen`)
         self.tap_errors = 0   # pushes into that ring that raised (not voice reads)
         self._mono = np.zeros(BLOCK, np.float32)
@@ -107,7 +174,7 @@ class Mixer:
 
     @property
     def playing(self) -> int:
-        return len(self.voices)
+        return sum(abs(v.speed) >= HOLD_SPEED for v in self.voices)
 
     @property
     def failed(self) -> bool:
@@ -121,7 +188,8 @@ class Mixer:
         that has stopped under us (a device unplugged, CoreAudio gone) is
         dropped and opened again `RETRY_S` later. Returns at once: the open
         and the drop run on threads of their own."""
-        self.voices = tuple(voices)
+        self.voices = tuple(Voice(*v) for v in voices)
+        self._live = self._bind(self.voices)
         if self._closed:
             return
         s = self._stream
@@ -149,6 +217,26 @@ class Mixer:
         t = self._opener = threading.Thread(target=self._open, name="media-mixer-open",
                                             daemon=True)
         t.start()
+
+    def _bind(self, voices: tuple[Voice, ...]) -> tuple:
+        """Each voice with its head, a new one made here and not in the
+        callback; a voice gone from the tuple stays one more block at gain 0
+        while it still sounds, so it fades instead of stopping dead."""
+        heads, live, seen = self._heads, [], set()
+        for v in voices:
+            key = v.track if v.key is None else v.key
+            seen.add(key)
+            held = heads.get(key)
+            head = held[0] if held is not None else _Head()
+            heads[key] = (head, v)
+            live.append((v, head))
+        for key in [k for k in heads if k not in seen]:
+            head, v = heads[key]
+            if head.level > 0.0:
+                live.append((v._replace(gain=0.0), head))
+            else:
+                del heads[key]
+        return tuple(live)
 
     def _open(self) -> None:
         try:
@@ -183,6 +271,7 @@ class Mixer:
         with self._lock:
             self._closed = True
             self.voices = ()
+            self._live = ()
             t = self._opener
         if t is not None:
             t.join(max(end - time.monotonic(), 0.0))
@@ -238,29 +327,143 @@ class Mixer:
 
     # -- the stream's thread ------------------------------------------------
 
+    def _warm(self, frames: int) -> None:
+        """Every buffer the callback uses, for a block of `frames`: at the
+        start and when PortAudio asks for another size, never otherwise."""
+        i = np.arange(frames, dtype=np.float64)
+        self._mix = np.zeros((frames, AUDIO_CHANNELS), np.float32)
+        self._one = np.zeros((frames, AUDIO_CHANNELS), np.float32)
+        self._two = np.zeros((frames, AUDIO_CHANNELS), np.float32)
+        self._src = np.zeros((int(MAX_SPEED * frames) + 4, AUDIO_CHANNELS), np.float32)
+        self._i = i                                 # the speed's share of a sample's place
+        self._ease = i * i / (2.0 * frames)         # its glide's share
+        self._pos = np.zeros(frames, np.float64)
+        self._pos1 = self._pos.reshape(-1, 1)       # the same memory, by the channels
+        self._tmp = np.zeros(frames, np.float64)
+        self._idx = np.zeros(frames, np.intp)
+        # (frames, channels), not broadcast from (frames, 1): a broadcasting ufunc
+        # with `out=` makes an iterator on the heap every call
+        self._frac = np.zeros((frames, AUDIO_CHANNELS), np.float32)
+        self._ramp = np.repeat(((i + 1.0) / frames).astype(np.float32).reshape(-1, 1),
+                               AUDIO_CHANNELS, axis=1)
+        self._env = np.zeros((frames, AUDIO_CHANNELS), np.float32)
+
+    def _fetch(self, st, at: int, n: int, wrap: int) -> bool:
+        """`n` source samples from `at` into `_src`, round the loop when it
+        wraps (each piece one `read`); whether all of them are held."""
+        src, held, k = self._src, True, 0
+        at = at % wrap if wrap else at
+        while k < n:
+            c = min(n - k, wrap - at) if wrap else n
+            view = src[k:k + c]
+            block = st.read(at, c, out=view)
+            if block.shape != view.shape:
+                raise ValueError(f"read gave {block.shape}")
+            held = held and st.holds(at, c)
+            k += c
+            at = 0
+        return held
+
+    def _tape(self, st, at: float, v0: float, v1: float, wrap: int) -> bool:
+        """The block from head place `at`, the speed gliding v0 → v1, linearly
+        resampled into `_one`; whether its source is all held."""
+        pos, tmp, idx, one, two = self._pos, self._tmp, self._idx, self._one, self._two
+        np.multiply(self._i, v0, out=pos)
+        np.multiply(self._ease, v1 - v0, out=tmp)
+        np.add(pos, tmp, out=pos)
+        np.add(pos, at, out=pos)
+        lo = math.floor(pos.min())
+        n = math.ceil(pos.max()) - lo + 1
+        held = self._fetch(st, lo, n, wrap)
+        np.floor(pos, out=tmp)
+        np.subtract(pos, tmp, out=pos)              # `pos` is now each sample's fraction
+        np.copyto(self._frac, self._pos1, casting="unsafe")
+        np.subtract(tmp, lo, out=tmp)
+        np.copyto(idx, tmp, casting="unsafe")
+        np.take(self._src, idx, axis=0, out=one, mode="clip")
+        np.add(idx, 1, out=idx)
+        np.minimum(idx, n - 1, out=idx)
+        np.take(self._src, idx, axis=0, out=two, mode="clip")
+        np.subtract(two, one, out=two)
+        np.multiply(two, self._frac, out=two)
+        np.add(one, two, out=one)
+        return held
+
+    def _lay(self, mix, l0: float, l1: float) -> None:
+        """`_one` into the mix, its level gliding l0 → l1 across the block."""
+        one = self._one
+        if l0 == l1:
+            np.multiply(one, l0, out=one, casting="unsafe")
+        else:
+            env = self._env
+            np.multiply(self._ramp, l1 - l0, out=env, casting="unsafe")
+            np.add(env, l0, out=env, casting="unsafe")
+            np.multiply(one, env, out=one)
+        np.add(mix, one, out=mix)
+
+    def _voice(self, v: Voice, head: _Head, frames: int, mix) -> None:
+        """One voice's block into the mix, and its head moved on (module
+        docstring: the head against the transport)."""
+        if head.seen is not v:
+            head.seen, head.since = v, 0
+        speed = max(-MAX_SPEED, min(v.speed, MAX_SPEED))
+        wrap = round(v.wrap * AUDIO_RATE)
+        if wrap < MIN_WRAP:
+            wrap = 0
+        target = round(v.at * AUDIO_RATE) + speed * head.since
+        if wrap:
+            target %= wrap
+        started = head.at is not None
+        at = head.at if started else target
+        was, was_speed = head.level, head.speed if started else speed
+        err = target - at
+        if wrap:
+            err = (err + wrap / 2) % wrap - wrap / 2      # the short way round the loop
+        if head.since >= STALE_S * AUDIO_RATE or abs(speed) < HOLD_SPEED:
+            speed = 0.0     # the master has stopped saying, or stopped: no creeping to it
+        elif abs(err) > CUT:
+            if was > 0.0:                                 # the crossfade's way out
+                self._tape(v.track, at, was_speed, was_speed, wrap)
+                self._lay(mix, was, 0.0)
+            at, was, was_speed = target, 0.0, speed
+        elif abs(err) > DEAD:
+            trim = (abs(err) - DEAD) / (TAU_S * AUDIO_RATE)
+            trim = min(trim, abs(speed))                  # it never turns the tape round
+            speed = max(-MAX_SPEED, min(speed + math.copysign(trim, err), MAX_SPEED))
+        amount = abs(speed)
+        want = (v.gain * min(amount / FADE_SPEED, 1.0)) if amount >= HOLD_SPEED else 0.0
+        level = 0.0
+        if want > 0.0 or was > 0.0:
+            held = self._tape(v.track, at, was_speed, speed, wrap)
+            level = want if held else 0.0
+            if level > 0.0 or was > 0.0:
+                self._lay(mix, was, level)
+            at += (was_speed + speed) / 2.0 * frames
+            if wrap:
+                at %= wrap
+        else:
+            at = target                                   # silent: it sits on the transport
+        head.at, head.speed, head.level = at, speed, level
+        head.since += frames
+
     def _callback(self, outdata, frames, _time, status) -> None:
-        """Sum each voice's `read(round(playhead × rate), frames)` × gain.
-        Never blocks, never raises, never moves a position."""
+        """Sum each voice's block from its read head × its level. Never
+        blocks, never raises, never moves the transport."""
         try:
             if status is not None and getattr(status, "output_underflow", False):
                 self.underruns += 1
-            voices = self.voices          # one read: this frame's or the last
-            if not voices:
+            live = self._live             # one read: this frame's or the last
+            if not live:
                 outdata.fill(0.0)
                 self._push(None, frames)        # silence: the bands decay
                 return
-            mix, one = self._mix, self._one
-            if len(mix) != frames:          # PortAudio asked for another size: once
-                mix = self._mix = np.zeros((frames, AUDIO_CHANNELS), np.float32)
-                one = self._one = np.zeros((frames, AUDIO_CHANNELS), np.float32)
+            if len(self._mix) != frames:    # PortAudio asked for another size: once
+                self._warm(frames)
+            mix = self._mix
             mix.fill(0.0)
-            for st, at, gain in voices:
+            for v, head in live:
                 try:
-                    block = st.read(round(at * AUDIO_RATE), frames, out=one)
-                    if block.shape != mix.shape:
-                        raise ValueError(f"read gave {block.shape}")
-                    np.multiply(block, gain, out=one, casting="unsafe")
-                    np.add(mix, one, out=mix)
+                    self._voice(v, head, frames, mix)
                 except Exception:  # noqa: BLE001 — one bad voice is silence, not a dead stream
                     self.errors += 1
             np.clip(mix, -CEILING, CEILING, out=mix)

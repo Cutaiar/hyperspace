@@ -7533,6 +7533,59 @@ plan 50 copied back from the backup into `patches/`)
 preset and an **Update patch** write `patch/2`. Fail: "is not a
 hyperspace.patch".
 
+## BT. Video audio 4 of 4: sync and varispeed (plan 45 V4)
+Decision register rows 673–677. A channel's sound now follows its transport
+at any rate, in either direction, and the occasional click at rate 1 that
+checks 437 and 446 expected is gone: a click there is now a fail. No restart
+is needed after updating, though one does no harm.
+**510. Rate 1 stays in sync, with no clicks, for ten minutes.** (Mac, speakers or headphones, a show video with speech or a clear beat)
+Headless: `tests/test_media_varispeed.py` (`test_rate_1_with_the_clocks_out_of_phase_repeats_and_skips_nothing`,
+`test_a_slower_audio_clock_is_held_in_sync_by_a_bend_too_small_to_hear`).
+1. Slot the video on channel A, wire it to an output, tick `audio` on A.
+2. Let it play ten minutes. Open a heavy preset partway through, so the frame
+   rate drops for a moment.
+*Pass:* no clicks; lips or hits stay on the picture, and stay there after the
+frame-rate drop; SYSTEM's `media sound` line shows no read errors. Fail: a
+regular tick, a wow in the pitch (the slew's `DEAD` or `TAU_S` wants tuning),
+or the sound walking away from the picture.
+**511. Rate, reverse and a stop sound like tape.** (Mac, same clip)
+Headless: `test_any_rate_reads_that_many_samples_a_sample`,
+`test_a_rate_change_glides_inside_one_block`,
+`test_rate_0_is_silence_after_one_block_fading_and_reads_nothing`.
+1. Move A's `rate` slowly through 2, 1, 0.5, 0, −0.5, −1, −2, and back.
+2. Spin `jog` and let it go.
+3. Set the rate to 0 and listen; set it back to 1.
+*Pass:* pitch follows the rate with no stutter, and reverse is the clip
+backwards; the jog is a platter spun and coasting out; rate 0 is true silence,
+with no hum and no click in or out. Fast rates sounding harsh is the linear
+resampler: note it, and whether a windowed sinc is worth it (row 674).
+**512. Loop wraps: a short clip, and one over two minutes.** (Mac, a clip cut to loop, a clip not cut to loop, a clip over two minutes)
+Headless: `test_a_loop_wrap_reads_straight_through_the_seam_in_order`,
+`test_a_short_clip_needs_no_prefetch_a_whole_track_wraps_on_what_it_holds`,
+`test_a_long_tracks_wrap_fades_out_and_back_when_the_window_arrives`.
+1. Loop the clip cut to loop, with `loop` on, at rate 1, then at −1.
+2. The same with the clip not cut to loop.
+3. Scrub the long clip near its end and let it wrap. Do this from a cloud-only
+   file too.
+4. Set `pingpong`, then `once`, and let each reach its end.
+*Pass:* the clip cut to loop is seamless; the one not cut has at most the click
+of its own two ends (decide: is that acceptable, row 675?); the long clip has a
+brief soft gap at the wrap, back on the picture when it returns (decide: is it
+short enough, row 676?); pingpong turns round; `once` fades out at the end and
+stays silent. Fail: a gap on the short clip, or a long clip's sound coming back
+off the picture.
+**513. A scrub and a drag, with the analyzer listening.** (Mac, same clip)
+Headless: `test_a_far_scrub_is_a_crossfade_within_one_block_then_on_the_transport`,
+`test_a_drag_of_pos_reads_at_the_speed_of_the_drag`,
+`test_the_mix_still_lands_in_the_analyzers_ring_as_it_is_heard`.
+1. AUDIO: *Listen to video sound*.
+2. Click `pos` far away. Then drag it slowly, at rate 1 and at rate 0.
+3. Learn an LFO to `pos`, slow.
+*Pass:* the far click is a soft cut landing with the picture; the drag sounds
+like tape under a thumb, and silent as soon as a rate-0 drag rests; the LFO
+sounds like a scratch and not a stutter; the meters follow what is heard all
+through. Fail: a click on the cut, or the meters moving when the sound is silent.
+
 ## What no test covers
 
 Only a person can settle these:
@@ -7667,6 +7720,10 @@ Only a person can settle these:
   - that the control window sees this frame's thumbnails (`_thumbnails` flushes);
   - the face patterns themselves (375), which only the owner can name;
   - the moved effect's area frame on a preset saved before plan 37 (376).
+- video sound by ear (510–513): the tests read a ramp through the callback by
+  hand with no audio device, so the slew's numbers, the linear resampler's
+  sound above rate 1, an uncut clip's seam and a long clip's gap at its wrap
+  are for a person;
 - NanoVG in the control window on the Mac's GL (417): the tests draw the
   lab's drawings through a stand-in NanoVG, and the shots were rendered
   on Mesa's software rasteriser; one look on Dillon's Mac so far.

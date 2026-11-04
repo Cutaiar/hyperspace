@@ -276,6 +276,13 @@ class Soundtrack(_Follower):
             out[lo - at:hi - at] = w.data[lo - w.start:hi - w.start]
         return out
 
+    def holds(self, at: int, n: int) -> bool:
+        """Whether all of the `n` samples from `at` are in memory: the mixer's
+        fade (plan 45 V4), so a window arriving or left is not a click.
+        Never blocks: one read of the one reference."""
+        w = self._win
+        return w is not None and w.start <= at and at + n <= w.end
+
     @property
     def held(self) -> tuple[float, float] | None:
         """(from, to) in seconds of the samples in memory; None with none."""

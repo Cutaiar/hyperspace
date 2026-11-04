@@ -1,9 +1,9 @@
 # Plan 45 — video audio: a video's sound, under the transport's clock
 
-**Status: V1, V2, V3 built.** V1 (2026-11-02; review fixes the same day) on
+**Status: V1, V2, V3, V4 built.** V1 (2026-11-02; review fixes the same day) on
 `wave0/v1-video-audio-decode`, merged; V2, the mixer (2026-11-02), on
-`wave1/v2`; V3, the analyzer on the mix (2026-11-02), on `wave2/v3`; V4
-is designed here and not built. From the
+`wave1/v2`; V3, the analyzer on the mix (2026-11-02), on `wave2/v3`; V4,
+sync and varispeed (2026-11-03), on `wave3/v4`. From the
 post-show triage of 2026-10-31: PyAV decoded only the video stream, the
 proxies are MJPEG with no audio, and the only output stream was the
 analyzer's WAV playback (`audio.py`) — no mixer, no per-channel gain.
@@ -24,6 +24,14 @@ mic and the WAV file — not a second engine with a position of its own.
 What `audio.py`'s file transport does today (`_played` counted against the
 stream's callbacks, `position()` derived from it) is exactly the second
 time base this rule forbids for video sound, and V4 must not copy it.
+
+V4's read head is how this rule is kept and is not an exception to it: a
+position the callback moves between the transport's steps, because the two
+clocks are not locked, set by the transport (it starts there, it slews or
+cuts to it every block, it stops within a second of the transport going
+quiet) and read by nothing else. `_played` was the other way about: a count
+that `position()` reported, for others to follow. "What changed in the build
+(V4)" below.
 
 ## The data path
 
@@ -120,14 +128,16 @@ MediaState.poll ─▶ Transport.step ─▶ VideoSource.want ┘      ▼
   video sound. One analyser, fed by one more input. What the build chose
   is under "What changed in the build" below; register rows 594–596,
   hand checks 446–448 (group BE), `tests/test_audio_mix.py`.
-- **V4 — sync with video as master; varispeed.** The callback reads at
-  the transport's position with the transport's speed: at rate r it
-  consumes r × frames source samples per output block and resamples
+- **V4 — sync with video as master; varispeed (built).** The callback
+  reads at the transport's position with the transport's speed: at rate r
+  it consumes r × frames source samples per output block and resamples
   them (linear first; a windowed sinc if it is heard), so scrub, reverse
   and a rate change sound like tape, and rate 0 is silence. A block that
   reaches outside the held window is zeros. V4 also decides the window's
   wrap case (below) and whether a short clip's loop needs the head
-  prefetched.
+  prefetched. Both are decided under "What changed in the build (V4)";
+  register rows 673–677, hand checks 510–513 (group BT),
+  `tests/test_media_varispeed.py`.
 
 ## The memory policy
 
@@ -160,7 +170,8 @@ A two-hour film must not allocate gigabytes on open. The policy, in
   re-centre threshold's margin never leaves the window; a scrub far away
   reads zeros until the window arrives (one decode later). A loop wrap on
   a long file reads zeros at the head for that same moment — V4's problem
-  to judge by ear, not V1's.
+  to judge by ear, not V1's. (V4 built it as a fade out and back in, and
+  prefetches nothing: "What changed in the build (V4)".)
 
 Why not whole-decode to N minutes and window past it: one code path.
 A short clip is simply a window that covers it and never moves.
@@ -214,8 +225,8 @@ video, nothing audible changes, memory stays flat, **no extra read**
   `start_file`'s model for video sound.
 - `Transport.step` runs on the frame thread, so the position the audio
   callback reads is at most one frame old and advances in frame-sized
-  steps; V4 smooths within a block by the transport's `speed`, never by
-  a clock of its own.
+  steps; V4 smooths within a block by the transport's `speed` (built: its
+  `velocity`), never by a clock of its own.
 - The soundtrack is not in `hotreload.MODULES` as a module of its own
   because it lives in `media.video`, which is; a hot reload re-classes a
   live `VideoSource` and its `Soundtrack` and keeps their threads. A
@@ -259,3 +270,68 @@ video, nothing audible changes, memory stays flat, **no extra read**
   from voice read errors) after the output is written: the analyzer
   loses a block, the room loses nothing.
 - **`publish` is untouched** (D2 is changing its signature in parallel).
+
+## What changed in the build (V4)
+
+- **The head (rec, row 673).** Each voice has a `mixer._Head`, keyed by its
+  transport so a slot change is a new one, made on the frame thread and from
+  then on written only by the callback. It moves `speed × frames` samples a
+  block. Its error against the playhead, carried forward by the speed for the
+  blocks since that playhead came (the count is zeroed by every feed, so no
+  clock is kept), is left alone inside `DEAD` (one block, 16.7 ms: the two
+  clocks' jitter), slewed beyond it (the excess over `TAU_S` = 0.25 s, the
+  trim at most the speed itself), and cut beyond `CUT` (0.25 s: one block's
+  crossfade). With no feed for `STALE_S` = 1 s it stops and fades. So a hitch
+  is ridden through and a stuck frame thread goes quiet. Every number is
+  judged by ear (hand checks 510–513).
+- **The transport says how it is moving (rec, row 674).** `speed` could not:
+  it stays 1 at a parked `once` end, and it is the rate during a scrub.
+  `Transport.velocity` is signed and true: 0 at a parked end, pingpong's sign
+  on the way back, a drag of `pos` at the drag's own speed (up to
+  `SCRUB_TAPE` = 8× the clip) and a jump at the rate. `wrap` is the loop's
+  length. A `Voice` carries both; `_forward` is gone and every heard channel
+  is a voice, held ones at velocity 0. A clip not yet probed (duration 0)
+  does not move, so it is silent until it does.
+- **Resampling (rec, row 674).** Linear, with the speed gliding from last
+  block's to this block's inside the block, so a rate change, a turn and a
+  slew never step. At rate 1 the head stays on whole samples and the output
+  is the track's samples exactly. There is no anti-alias filter: above rate 1
+  it aliases as a cheap tape does. A windowed sinc only if it is heard.
+  `MAX_SPEED` = 16 bounds what one block may read.
+- **Silence and level (rec, row 677).** The level glides per block too: to
+  gain × the speed's fade (1 from `FADE_SPEED` = 0.05 up, 0 under
+  `HOLD_SPEED`). So rate 0 fades in one block and then is exact zeros with no
+  read, and a voice starting, a gain move and a voice leaving (`_bind` keeps
+  it one more block at gain 0) are all ramps. A transport at rest has no slew:
+  the head fades, and once silent sits on the playhead. `Soundtrack.holds(at,
+  n)` is new: a block not wholly held takes the level to 0, so a window
+  arriving fades in rather than clicking.
+- **The wrap (rec, row 675).** The head counts modulo the loop and reads
+  straight through the seam, in pieces, sample after sample, either way; the
+  error is measured the short way round. A wrap is no jump and no gap, and a
+  clip cut to loop is seamless. **No splice fade**: a clip not cut to loop has
+  the click of its own two ends, and a fade at the seam would put a dip in
+  every clip that was cut well. A track shorter than the picture fades out
+  over its last block and back in after the wrap. Hand check 512 judges it; a
+  fade is a small change if it is heard. A `once` or pingpong clip does not
+  wrap (`wrap` 0): reading past the track is zeros.
+- **No prefetch (rec, row 676).** A clip up to 120 s is held whole, so its
+  head is always there and needs nothing. A longer clip's wrap has let its
+  head go: `want(0)` starts the one window decode (a fraction of a second)
+  and the sound fades out and back in on the transport, the head having kept
+  up. That is one gap per wrap of a clip longer than two minutes. Holding its
+  first seconds would cost a second seek and demux of a big file, on a
+  cloud-synced library, for every channel enabled, to cover that one case.
+  Hand check 512 is where to change this.
+- **The callback's cost.** Nothing the size of a block is allocated once warm:
+  `tests/test_media_varispeed.py::test_the_callback_allocates_nothing_once_warm`
+  holds a callback under 800 bytes by `tracemalloc` at rate 1.37 with a wrap
+  and a gain move, real `Soundtrack`. What is left is python's small objects
+  (a float, a view), as V2 had. The per-channel arrays are (frames, channels)
+  on purpose: a broadcasting ufunc with `out=` allocates 7 kB each call.
+- **Not touched.** `channels.py`'s frame-read paths and `publish.py`: only
+  `_voices` changed there (D4 is on the read seam). The analyzer's `mix`
+  source is V3's, unchanged; its test pulls one fade-in block first.
+- **Hot reload**: a live `Mixer`'s new fields come from `Channels._mixer`'s
+  fill-in, a live `Transport` has `velocity` and `wrap` from its class until
+  its next step, and `Soundtrack` is re-classed. No restart.

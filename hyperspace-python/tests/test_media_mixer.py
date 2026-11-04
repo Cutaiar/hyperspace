@@ -5,8 +5,9 @@ No audio device: the mixer is handed a fake stream factory whose stream
 keeps its callback for the test to pull blocks through, and the channels
 hold fake video sources whose `audio` is a fake soundtrack recording each
 `read(at, n)` and each `enable` / `disable`. The rule under test is plan
-45's: the transport is the one clock — the callback reads at the position
-the last poll stepped it to, and moves nothing itself."""
+45's: the transport is the one clock, and the callback moves nothing of it.
+A voice's first block fades in (V4), so a test of its level pulls one first
+(`warm`); the read head itself is `tests/test_media_varispeed.py`."""
 
 import threading
 import time
@@ -16,7 +17,7 @@ import pytest
 from test_media_channels import FakeOpener, FakeSource, Here
 
 from hyperspace.media import mixer as M
-from hyperspace.media.channels import HOLD_SPEED, OFF_FRAMES, MediaState
+from hyperspace.media.channels import OFF_FRAMES, MediaState
 from hyperspace.media.video import AUDIO_RATE
 
 DT = 1 / 60
@@ -39,6 +40,9 @@ class FakeTrack:
     def disable(self):
         self.enabled = False
         self.disables += 1
+
+    def holds(self, at, n):
+        return True
 
     def read(self, at, n, out=None):
         self.reads.append((at, n))
@@ -144,6 +148,12 @@ def track(m, c):
     return m.channels[c].source.audio
 
 
+def warm(s: FakeStream) -> FakeStream:
+    """One block pulled: a new voice's fade-in, so the next is at its level."""
+    s.pull()
+    return s
+
+
 # ---------------------------------------------------------------- the sum
 
 def test_the_callback_sums_each_heard_channel_read_at_its_playhead_times_its_gain():
@@ -156,12 +166,12 @@ def test_the_callback_sums_each_heard_channel_read_at_its_playhead_times_its_gai
     m.poll(DT, 0.0)
     s = opened(m, f)
     assert s.kw["samplerate"] == AUDIO_RATE and s.kw["channels"] == 2 and s.started
-    out = s.pull()
+    out = warm(s).pull()
     assert out.dtype == np.float32 and out.shape == (M.BLOCK, 2)
     assert np.allclose(out, 0.2 * 0.5 + 0.3)
     for ch in (a, b):
         at = round(ch.transport.playhead * AUDIO_RATE)
-        assert ch.source.audio.reads == [(at, M.BLOCK)]
+        assert ch.source.audio.reads == [(at, M.BLOCK), (at + M.BLOCK, M.BLOCK)]
     assert track(m, "c").reads == [] and not track(m, "c").enabled
 
 
@@ -171,7 +181,7 @@ def test_the_sum_is_clipped_at_one():
     for c in "ab":
         m.channels[c].play_audio = True
     m.poll(DT, 0.0)
-    assert np.allclose(opened(m, f).pull(), M.CEILING)
+    assert np.allclose(warm(opened(m, f)).pull(), M.CEILING)
 
 
 def test_no_voice_is_silence():
@@ -181,33 +191,23 @@ def test_no_voice_is_silence():
     s = opened(m, f)
     m.channels["a"].play_audio = False
     m.poll(DT, 0.1)
-    assert not s.pull().any()
+    assert not s.pull().any(), "never heard: nothing to fade out"
 
 
 # ---------------------------------------------------------------- the one clock
 
-def test_the_callback_reads_the_transports_stepped_position_and_moves_nothing():
+def test_the_callback_starts_at_the_transports_position_and_moves_nothing_of_it():
     m, _, f = rig("shared:a.mp4")
     ch = m.channels["a"]
     ch.play_audio = True
     m.poll(DT, 0.0)
     s, tr = opened(m, f), ch.transport
     s.pull()
-    s.pull()                                    # no step between: the same `at`
     reads = track(m, "a").reads
-    assert reads[0] == reads[1] == (round(tr.playhead * AUDIO_RATE), M.BLOCK)
+    assert reads[0] == (round(tr.playhead * AUDIO_RATE), M.BLOCK)
     before = tr.playhead
     s.pull()
     assert tr.playhead == before, "the callback never moves the transport"
-    m.poll(DT, 0.1)                             # one step: the next callback is there
-    assert tr.playhead == pytest.approx(before + DT)
-    s.pull()
-    assert reads[-1] == (round(tr.playhead * AUDIO_RATE), M.BLOCK)
-    assert reads[-1][0] - reads[0][0] == round(DT * AUDIO_RATE)
-    ch.pos = 0.5                                # a scrub: the sound lands with the picture
-    m.poll(DT, 0.2)
-    s.pull()
-    assert reads[-1][0] == round(5.0 * AUDIO_RATE)
     assert not any(hasattr(m.mixer, k) for k in ("_played", "position", "_offset"))
 
 
@@ -384,9 +384,9 @@ def test_a_jogs_dying_coast_is_silence():
     tr = ch.transport
     for k in range(600):
         m.poll(DT, 1.0 + k * DT)
-        if abs(tr.speed) < HOLD_SPEED:
+        if abs(tr.speed) < M.HOLD_SPEED:
             assert m.mixer.playing == 0, tr.speed
-    assert 0.0 < abs(tr.speed) < HOLD_SPEED or tr.speed == 0.0
+    assert 0.0 < abs(tr.speed) < M.HOLD_SPEED or tr.speed == 0.0
     assert m.mixer.playing == 0 and not opened(m, f).pull().any()
 
 
@@ -418,10 +418,10 @@ def test_a_once_clip_parked_at_its_end_is_silence():
     assert m.mixer.playing == 0 and not opened(m, f).pull().any()
 
 
-def test_reverse_and_pingpongs_way_back_are_silence():
-    """Second review 1: a forward block under a backward picture is wrong;
-    reverse is V4's, so a channel moving backwards is left out — a
-    negative rate, and pingpong's return leg at a positive one."""
+def test_reverse_and_pingpongs_way_back_are_heard():
+    """V4 reads them backwards (`test_media_varispeed.py` for what is heard):
+    the voice carries the transport's sign — a negative rate, and pingpong's
+    return leg at a positive one."""
     m, _, _ = rig("shared:a.mp4", "shared:b.mp4")
     a, b = m.channels["a"], m.channels["b"]
     a.play_audio, a.rate = True, -1.0
@@ -433,8 +433,7 @@ def test_reverse_and_pingpongs_way_back_are_silence():
     for k in range(10):                             # past the end: on the way back
         m.poll(DT, 0.2 + k * DT)
     assert b.transport.direction == -1.0 and b.transport.speed == 1.0
-    assert m.mixer.voices == ()
-    assert m.mixer.state != "off", "both still ask: the stream is up for when they turn"
+    assert [v.speed for v in m.mixer.voices] == [-1.0, -1.0] and m.mixer.playing == 2
 
 
 def test_an_enable_that_raises_is_tried_again_next_frame():
@@ -462,9 +461,9 @@ def test_an_enable_that_raises_is_tried_again_next_frame():
 
 def test_the_callback_reads_into_its_own_buffers():
     """Second review 6: once warm the callback allocates nothing: every
-    voice is read into the mixer's one voice buffer (`read(..., out=)`)
-    and summed into its one mix buffer, the same arrays callback after
-    callback."""
+    voice is read into the mixer's one source buffer (`read(..., out=)`),
+    resampled into its voice buffer and summed into its one mix buffer, the
+    same arrays callback after callback."""
     m, _, f = rig("shared:a.mp4", "shared:b.mp4",
                   values={"shared:a.mp4": 0.25, "shared:b.mp4": 0.5})
     for c in "ab":
@@ -472,12 +471,13 @@ def test_the_callback_reads_into_its_own_buffers():
     m.channels["b"].gain = 0.5
     m.poll(DT, 0.0)
     s = opened(m, f)
-    mix, one = m.mixer._mix, m.mixer._one
+    mix, one, src = m.mixer._mix, m.mixer._one, m.mixer._src
+    warm(s)
     for _ in range(3):
         assert np.allclose(s.pull(), 0.25 + 0.25)
-    assert m.mixer._mix is mix and m.mixer._one is one
+    assert m.mixer._mix is mix and m.mixer._one is one and m.mixer._src is src
     for c in "ab":
-        assert all(o is one for o in track(m, c).outs)
+        assert all(o.base is src for o in track(m, c).outs)
 
 
 def test_a_read_that_raises_is_contained():
@@ -486,8 +486,8 @@ def test_a_read_that_raises_is_contained():
     for c in "ab":
         m.channels[c].play_audio = True
     m.poll(DT, 0.0)
-    out = opened(m, f).pull()
-    assert np.allclose(out, 0.5) and m.mixer.errors == 1
+    out = warm(opened(m, f)).pull()
+    assert np.allclose(out, 0.5) and m.mixer.errors == 2      # one a block
 
 
 def test_a_wrong_shape_and_a_broken_voice_list_are_silence_not_a_raise():
@@ -497,11 +497,11 @@ def test_a_wrong_shape_and_a_broken_voice_list_are_silence_not_a_raise():
         def read(self, at, n, out=None):
             return np.zeros((n - 1, 2), np.float32)
 
-    mx.voices = ((Short(), 0.0, 1.0),)
+    mx.feed(((Short(), 0.0, 1.0),), asked=False)
     out = np.ones((8, 2), np.float32)
     mx._callback(out, 8, None, None)
     assert not out.any() and mx.errors == 1
-    mx.voices = (("not a voice",),)
+    mx._live = (("not a voice",),)
     out[:] = 1
     mx._callback(out, 8, None, None)            # anything else wrong: silence
     assert not out.any()
@@ -731,7 +731,8 @@ def test_a_reload_of_the_module_keeps_the_stream_and_reaches_the_new_callback(mo
     old = M.Mixer._callback
     monkeypatch.setattr(M.Mixer, "_callback",
                         lambda self, *a: seen.append(1) or old(self, *a))
-    assert np.allclose(s.pull(), 0.5) and seen == [1]
+    s.pull()                                    # (its first block fades in)
+    assert np.allclose(s.pull(), 0.5) and seen == [1, 1]
 
 
 def test_a_mixer_of_another_class_is_left_as_it_is():
@@ -784,8 +785,9 @@ def test_a_real_clip_through_the_channel_and_the_mixer(tmp_path):
         ch.play_audio, ch.gain = True, 0.5
         ch.pos = 1 / 3                          # scrub to 1 s of the 3 s clip
         m.poll(DT, 0.1)
-        assert _until(lambda: a.status == video.READY)
-        out = opened(m, f).pull(AUDIO_RATE // 2)
+        assert _until(lambda: a.status == video.READY and ch.source.duration > 0.0)
+        m.poll(DT, 0.11)                        # (a clip not probed yet does not move: V4)
+        out = warm(opened(m, f)).pull(AUDIO_RATE // 2)
         assert _peak_hz(out[:, 0]) == pytest.approx(440.0, abs=4.0)
         assert _peak_hz(out[:, 1]) == pytest.approx(880.0, abs=4.0)
         assert np.abs(out).max() == pytest.approx(0.25, abs=0.02)
