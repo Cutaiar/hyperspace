@@ -407,6 +407,11 @@ def claims(lanes) -> set[int]:
     return out
 
 
+def left_stick_lanes() -> frozenset[int]:
+    """The `axis` lanes the left stick feeds: its two axes and its dial's."""
+    return frozenset({AX_LX, AX_LY} | {i for i, n in enumerate(LANES) if n.startswith("L.")})
+
+
 def _unwrap(ret) -> list:
     """pyGLFW's raw joystick getters return a (pointer, count) pair."""
     if not ret:

@@ -71,6 +71,12 @@ class Model:
     caps: frozenset[str] = frozenset()
     glyphs: dict[str, str] = field(default_factory=dict)
     controls: frozenset[str] | None = None
+    # a pad's own controls (the owner, 2026-11-04, a Joy-Con's): (control,
+    # param, op, value) rows that stand in for every table row on that
+    # control, whichever table is loaded; and (control, param) table rows
+    # this pad does not hear, the control left free for a learned row
+    layout: tuple[tuple[str, str, str, float], ...] = ()
+    drops: tuple[tuple[str, str], ...] = ()
 
     def has(self, cap: str) -> bool:
         return cap in self.caps
@@ -107,6 +113,15 @@ _SONY_OUT = frozenset({"touch", "motion", "light", "rumble", "triggers", "player
 # — no light bar, no trigger resistance, no mic light.
 _JOYCON_CAPS = frozenset({"motion", "back", "rumble", "players"})
 _JOYCON_COMMON = frozenset({"LX", "LY", "LSTICK", "A", "B", "X", "Y", "LP", "RP"})
+# the Joy-Con's own layout (the owner, 2026-11-04): SL / SR the shape in every
+# mode, the stick's click the view's reset; − (+ on the R) the totem's reset,
+# capture (HOME on the R) the totem on and off. L / ZL (R / ZR) are free
+_JOYCON_ROWS = (("LP", "view.shape", "step", -1.0), ("RP", "view.shape", "step", 1.0),
+                ("LSTICK", "camera.reset", "fire", 1.0))
+_JOYCON_L_LAYOUT = (*_JOYCON_ROWS, ("VIEW", "totem.reset", "fire", 1.0),
+                    ("SHARE", "totem.on", "toggle", 1.0))
+_JOYCON_R_LAYOUT = (*_JOYCON_ROWS, ("MENU", "totem.reset", "fire", 1.0),
+                    ("GUIDE", "totem.on", "toggle", 1.0))
 _JOYCON_L_GLYPHS = {
     "A": "↓", "B": "→", "X": "←", "Y": "↑", "LB": "L", "LT": "ZL", "LP": "SL", "RP": "SR",
     "VIEW": "−", "SHARE": "◉", "LSTICK": "L3",
@@ -130,10 +145,12 @@ MODELS: dict[str, Model] = {m.id: m for m in (
           _SONY_OUT | {"back", "fn"}, {**_SONY_GLYPHS}),
     Model("joycon-l", "Joy-Con (L)", "nintendo", "hid", ((NINTENDO_VID, 0x2006),),
           _JOYCON_CAPS, {**_JOYCON_L_GLYPHS},
-          _JOYCON_COMMON | {"LB", "LT", "VIEW", "SHARE"}),
+          _JOYCON_COMMON | {"LB", "LT", "VIEW", "SHARE"},
+          _JOYCON_L_LAYOUT, (("LB", "view.shape"),)),
     Model("joycon-r", "Joy-Con (R)", "nintendo", "hid", ((NINTENDO_VID, 0x2007),),
           _JOYCON_CAPS, {**_JOYCON_R_GLYPHS},
-          _JOYCON_COMMON | {"RB", "RT", "MENU", "GUIDE"}),
+          _JOYCON_COMMON | {"RB", "RT", "MENU", "GUIDE"},
+          _JOYCON_R_LAYOUT, (("RB", "view.shape"),)),
     # the Pro Controller speaks the Joy-Con's protocol with the whole face
     # (both sticks, a D-pad): the codec reads it; no hand has checked one
     Model("procon", "Pro Controller", "nintendo", "hid", ((NINTENDO_VID, 0x2009),),
