@@ -77,6 +77,7 @@ from .lookback import (
     GAP_HI,
     GAP_LO,
     LAYERS,
+    LOOKBACK_KEYS,
     MAX_ECHOES,
     OCTAVES,
     RES,
@@ -1743,7 +1744,6 @@ def declare_segments(r: Registry, names: Iterable[str]) -> list[str]:
 # `lookback.<n>` (n ≥ 2) has its own ring and trail: `dream.<n>.<key>` for
 # the look-back's own knobs (`lookback`'s are `dream.<key>`, as ever), in
 # the look-back's group, declared while the preset's graph holds the entry
-LOOKBACK_KEYS = ("echo_mix", "fade", "echoes", "gap", "darken", "contrast", "occlude", "res")
 _LOOKBACK_ID = re.compile(r"dream\.(?:[2-9]|[1-9][0-9]+)\.(" + "|".join(LOOKBACK_KEYS) + ")")
 
 
