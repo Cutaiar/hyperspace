@@ -22,6 +22,7 @@ from hyperspace.app import CONTROL_SIZE, LOOP_KEYS
 # the narrowest control window that opens the panel at ui.PANEL_W (the
 # default before the 4:3 split): the small desk, glyphs only, beside it
 NARROW_CONTROL = (960, 900)
+from hyperspace import ui_fx
 from hyperspace.control import Control
 from hyperspace.library import Library
 from hyperspace.outputs import Slot
@@ -32,12 +33,11 @@ from hyperspace.routing import Binding, Bindings, Owned, Router, keymap, padmap
 from hyperspace.ui import (
     CHEATSHEET,
     PAGE_KEYS,
-    PAGES,
-    RETIRED,
     PageHistory,
     Panel,
     apply_style,
     load_fonts,
+    panel_w,
 )
 from hyperspace.view import ViewState
 
@@ -143,8 +143,36 @@ def rig(tmp_path):
 def frame(panel, page=None):
     if page is not None:
         panel.reg["ui.page"].set(PAGE_KEYS.index(page))
+        panel.__dict__.pop("_body_frames", None)    # the real route again (`_mouse`)
     imgui.new_frame()
     panel.draw(1 / 60, 60.0)
+    imgui.end_frame()
+
+
+def page_frame(panel, page=None):
+    """One frame of a section's body alone, in a window the size the page
+    was: plan 49 stage 3 took the pages away, and a body's own layout and
+    widgets are tested so. The real route — GRAPH, the pane, `ui.page`
+    focusing a section — is `frame` (tests/test_ui_pane.py)."""
+    panel._body_frames = True           # `_mouse`'s frames are these from now on
+    if page is not None:
+        panel.reg["ui.page"].set(PAGE_KEYS.index(page))
+    key = PAGE_KEYS[panel.page]
+    io = imgui.get_io()
+    size = (io.display_size.x, io.display_size.y)
+    imgui.new_frame()
+    panel._fine_frame()
+    panel.ghosts = 0
+    imgui.set_next_window_pos(imgui.ImVec2(12, 12))
+    imgui.set_next_window_size(imgui.ImVec2(panel_w(size), size[1] - 24))
+    imgui.begin("CONTROLS")
+    if imgui.begin_child("##page", imgui.ImVec2(0, -imgui.get_frame_height_with_spacing())):
+        if key == "fx":
+            ui_fx.page(panel, 1 / 60)
+        else:
+            getattr(panel, f"_page_{key}")(1 / 60)
+    imgui.end_child()
+    imgui.end()
     imgui.end_frame()
 
 
@@ -166,13 +194,11 @@ def test_the_panel_opens_on_graph_filling_the_window(tmp_path):
 
 
 def test_every_page_draws_with_a_library(rig):
-    for k, (key, _, _) in enumerate(PAGES):
+    for k in range(len(PAGE_KEYS)):
         rig.reg["ui.page"].set(k)
-        # a retired page (plan 49 stage 2: FX) opens the page it went to
-        assert rig.panel.page == (PAGE_KEYS.index(RETIRED[key][0]) if key in RETIRED else k)
+        assert rig.panel.page == k      # the focus: every slot keeps its index (plan 49)
         for _ in range(2):
             frame(rig.panel)
-        assert PAGE_KEYS[k] == key
 
 
 def test_system_page_shows_a_config_error_and_notes(rig, monkeypatch):
@@ -216,7 +242,7 @@ def test_system_page_shows_one_line_per_device(rig, monkeypatch):
 
     def shown() -> list[tuple[str, bool]]:
         drawn.clear()
-        frame(rig.panel, "system")
+        page_frame(rig.panel, "system")
         imgui.end_frame()
         return [(s, warn) for s, warn in drawn
                 if s.startswith(("no device", "pad  ·", "apc40  ·", "leap  ·", "bridge  ·"))]
@@ -329,14 +355,15 @@ def test_the_lookback_page_says_why_the_worker_is_off(rig, monkeypatch):
 def test_page_param_is_ui_state_not_a_preset(rig):
     p = rig.reg["ui.page"]
     assert p.group == "ui" and not p.persist and not p.modulatable
-    assert p.names == [label for _, label, _ in PAGES]
+    assert p.names == PAGE_KEYS
     p.set(99)                       # out of range lands on the last page
     frame(rig.panel)
-    assert rig.panel.page == len(PAGES) - 1
+    assert rig.panel.page == len(PAGE_KEYS) - 1
 
 
-# the pages the rail opens (plan 49 stage 2: FX is GRAPH's fx section)
-DRAWN = [k for k in PAGE_KEYS if k not in RETIRED]
+# the sections `ui.page` focuses with a `_page_<key>` body of their own
+# (plan 49 stage 3: GRAPH is always drawn, the fx section is `ui_fx.page`'s)
+DRAWN = [k for k in PAGE_KEYS if k not in ("fx", "graph")]
 
 
 def _page_scroll(rig, monkeypatch) -> dict[str, float]:
@@ -354,21 +381,8 @@ def _page_scroll(rig, monkeypatch) -> dict[str, float]:
         monkeypatch.setattr(Panel, f"_page_{key}", measured)
     for key in drawn:
         for _ in range(3):              # the window settles its size, then its content
-            frame(rig.panel, key)
+            page_frame(rig.panel, key)
     return over
-
-
-def test_every_page_fits_the_control_window(rig, monkeypatch):
-    """No page scrolls at the app's control-window size: a control that has
-    to be scrolled to is one that cannot be found in a hurry. The rig has
-    a hands setup with a tracker, an Output and a Router with the factory
-    rows, so HANDS, OUTPUT and ROUTING are measured full (audit U1)."""
-    assert rig.panel.hands is not None and rig.panel.output is not None
-    assert rig.panel.desk                   # the desk diagram on (plan 14 WP7)
-    assert rig.router.table.routes()
-    over = _page_scroll(rig, monkeypatch)
-    assert set(over) == set(DRAWN)
-    assert {k: v for k, v in over.items() if v > 0} == {}
 
 
 def _hands_page_text(rig, monkeypatch) -> tuple[list[str], float]:
@@ -391,7 +405,7 @@ def _hands_page_text(rig, monkeypatch) -> tuple[list[str], float]:
         m.setattr(Panel, "_page_hands", measured)
         for _ in range(3):
             drawn.clear()
-            frame(rig.panel, "hands")
+            page_frame(rig.panel, "hands")
     return drawn, room[-1]
 
 
@@ -424,15 +438,17 @@ def _ghost_more(rig, monkeypatch) -> tuple[list[str], list[str], tuple]:
         m.setattr(hp.imgui, "text_disabled", lambda s: (
             inside[0] and lines.append(s), real_disabled(s))[1])
         imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+        page_frame(rig.panel, "hands")
+        _click(rig.panel, (1, 1, 3, 3))     # let an earlier caller's popup go
         for _ in range(3):
             chips.clear()
-            frame(rig.panel, "hands")
+            page_frame(rig.panel, "hands")
         more = [(lb, r) for lb, r in chips if lb.endswith("##ghost.more")]
         assert len(more) == 1, chips
         label, rect = more[0]
         _click(rig.panel, rect)
         lines.clear()
-        frame(rig.panel, "hands")
+        page_frame(rig.panel, "hands")
     return [label.split("##")[0]], list(lines), rect
 
 
@@ -491,15 +507,12 @@ def _every_ghost_line(rig) -> None:
     rig.panel.renderer = SimpleNamespace(ghost=SimpleNamespace(error=LONG_GHOST_ERROR))
 
 
-def test_the_hands_page_fits_with_every_ghost_line(rig, monkeypatch):
-    """The HANDS page at its tallest for the ghost: on, a guide, tethers,
-    an unmeasured mode and an error — and it still does not scroll. The
-    ghost is two lines; the notes are in its "more ▸" popup, whole."""
+def test_the_ghost_notes_are_in_the_more_popup_with_every_ghost_line(rig, monkeypatch):
+    """The HANDS body at its tallest for the ghost: on, a guide, tethers,
+    an unmeasured mode and an error. The ghost is two lines; the notes are in its "more ▸" popup, whole."""
     import hyperspace.hands.panel as hp
 
     _every_ghost_line(rig)
-    _, over = _hands_page_text(rig, monkeypatch)
-    assert over <= 0
     labels, lines, _ = _ghost_more(rig, monkeypatch)
     assert labels == [hp.GHOST_MORE_WARN]
     assert LONG_GHOST_ERROR in lines and any("unmeasured" in s for s in lines)
@@ -542,9 +555,11 @@ def _ghost_rects(rig, monkeypatch, display=CONTROL_SIZE, panel_w=None):
         imgui.get_io().display_size = imgui.ImVec2(*display)
         for _ in range(3):
             rects.clear()
+            if panel_w is None:         # the section at the panel's own width
+                page_frame(rig.panel, "hands")
+                continue
             imgui.new_frame()
-            if panel_w is not None:
-                imgui.set_window_size("CONTROLS", imgui.ImVec2(panel_w, display[1] - 24))
+            imgui.set_window_size("CONTROLS", imgui.ImVec2(panel_w, display[1] - 24))
             rig.panel.reg["ui.page"].set(PAGE_KEYS.index("hands"))
             rig.panel.draw(1 / 60, 60.0)
             imgui.end_frame()
@@ -652,143 +667,9 @@ NO_TORCH = ("dream worker off: torch is not installed — run `uv sync`, "
             "then launch with `uv run hyperspace`")
 
 
-def lookback_page_room(tmp_path, monkeypatch) -> dict[str, tuple[float, float]]:
-    """The look-back page drawn as the app draws it — over a real offscreen
-    `Renderer` whose look-back has captured eight echoes, so the thumbnail
-    row is its 48 px row of images and not the one line of text a page gets
-    with no renderer — in every state that changes its height. Returns
-    state → (scroll range, room left under the last row), in pixels at the
-    control size."""
-    moderngl = pytest.importorskip("moderngl")
-    from hyperspace.render import Renderer
-
-    try:
-        gl = moderngl.create_context(standalone=True)
-    except Exception as e:  # noqa: BLE001 — any GL failure means skip
-        pytest.skip(f"no standalone GL context available: {e}")
-    w, h = 1280, 820
-    tex = gl.texture((w, h), 4)
-    fbo = gl.framebuffer(color_attachments=[tex])
-    renderer = Renderer(gl)
-    # (plan 36 T4: the look-back and the dream drawn — an old preset's with
-    # both on — and the worker the dream node's)
-    from hyperspace.graph import Wiring
-    from hyperspace.graphmigrate import wired_wiring
-    renderer.wiring = wired_wiring(Wiring(), "dream")
-    lb, dr, t = renderer.lookback, renderer.dreamer, [0.0]
-    room: dict[str, tuple[float, float]] = {}
-    try:
-        with build_rig(tmp_path, renderer) as rig:
-            imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
-            panel, reg, view = rig.panel, rig.reg, rig.view
-            view.shape = 3
-            got: list[tuple[float, float]] = []
-            draw = Panel._page_lookback
-
-            def measured(self, dt):
-                draw(self, dt)
-                got.append((imgui.get_scroll_max_y(),
-                            imgui.get_content_region_avail().y + imgui.get_style().item_spacing.y))
-            monkeypatch.setattr(Panel, "_page_lookback", measured)
-
-            def render(n: int) -> None:
-                for _ in range(n):
-                    t[0] += 1 / 60
-                    view.ang[3] += 0.03
-                    fbo.use()
-                    gl.viewport = (0, 0, w, h)
-                    renderer.draw(view, w, h, t_now=t[0])
-
-            def measure(state: str) -> None:
-                render(4)
-                for _ in range(3):          # the window settles its size, then its content
-                    frame(panel, "lookback")
-                room[state] = got[-1]
-
-            reg["dream.on"].set(True)
-            assert reg["dream.echoes"].value == 8 and lb.state.on
-            dr.source = StandInWorker(WORKER_SHORT)
-            render(40)
-            assert len(lb.thumbnails()) == 8 and dr.dream_frame >= 0 and lb.atlas is not None
-            measure("on, worker")
-            dr.source.line = WORKER_LONG
-            measure("on, worker saying everything")
-            lb.error = "_common.glsl:1: syntax error"     # the post pass on its fallback
-            measure("on, worker saying everything, GLSL error")
-            lb.error = ""
-            reg["dream.tint_from"].set(1)                 # the tint from the scene
-            measure("on, tint from the scene")
-            reg["dream.tint_from"].set(0)
-            dr.source = None
-            panel.dream_error = NO_TORCH
-            measure("on, no worker: torch missing")
-            panel.dream_error = ""
-            measure("on, no worker")
-            reg["dream.on"].set(False)
-            measure("off, no worker")
-            dr.source = StandInWorker(WORKER_LONG)
-            measure("off, worker saying everything")
-    finally:
-        fbo.release()
-        tex.release()
-        gl.release()
-    return room
-
-
-def test_the_look_back_page_fits_with_thumbnails(tmp_path, monkeypatch):
-    """Plan 20 WP4: the look-back page does not scroll in the app. The page
-    test above draws it with no renderer, where the thumbnail row is a line
-    of text; with a renderer and echoes it is a 48 px row of images, and the
-    page as it was overflowed by 23 px there. Measured here with a real
-    `Renderer` that has captured eight echoes, a source with a status line
-    and a dream frame shown, the dream on and off, and the worker's status
-    at its longest."""
-    room = lookback_page_room(tmp_path, monkeypatch)
-    assert len(room) == 8
-    assert {k: v for k, v in room.items() if v[0] > 0 or v[1] < 0} == {}
-
-
 # the VIEW page's field row (plan 20 WP6): the controls it rearranged
 FIELD_ROW = ("view.inst_layout", "view.inst_motion", "view.inst_amp", "view.inst_rate")
 ROT_RATES = tuple(f"rot.rate.{name}" for name in PLANES)
-
-
-def view_page_room(rig, monkeypatch) -> dict[tuple[int, int, int], tuple[float, float]]:
-    """The VIEW page at the control size with the field row showing: every
-    (count, layout, motion) that changes the row. Returns state → (scroll
-    range, room left under the last row), in pixels."""
-    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
-    got: list[tuple[float, float]] = []
-    draw = Panel._page_view
-
-    def measured(self, dt):
-        draw(self, dt)
-        got.append((imgui.get_scroll_max_y(),
-                    imgui.get_content_region_avail().y + imgui.get_style().item_spacing.y))
-    monkeypatch.setattr(Panel, "_page_view", measured)
-    room = {}
-    for n in (1, 7, 9, 4096):
-        for layout in (0, 1, 2, 5):         # a 3D lattice adds the field's depth
-            for motion in (0, 1):
-                rig.reg["view.instances"].set(n)
-                rig.reg["view.inst_layout"].set(layout)
-                rig.reg["view.inst_motion"].set(motion)
-                rig.reg["view.inst_fit"].set(n == 9)
-                for _ in range(3):          # the window settles its size, then its content
-                    frame(rig.panel, "view")
-                room[(n, layout, motion)] = got[-1]
-    return room
-
-
-def test_the_view_page_fits_with_a_field_in_motion(rig, monkeypatch):
-    """Plan 20 WP6: the VIEW page does not scroll with more than one copy.
-    The page test above draws it at one copy, where the field rows are
-    hidden; above one they show (and the page as it was scrolled by 19 px
-    there). Measured with 7, 9 (fitted) and 4096 copies in the flat layouts
-    and a lattice, still and in motion, and at one copy."""
-    room = view_page_room(rig, monkeypatch)
-    assert len(room) == 32
-    assert {k: v for k, v in room.items() if v[0] > 0 or v[1] < 0} == {}
 
 
 def test_the_field_row_and_the_rate_cells_keep_their_menus(rig, monkeypatch):
@@ -824,21 +705,21 @@ def test_the_field_row_and_the_rate_cells_keep_their_menus(rig, monkeypatch):
     rig.reg["view.inst_layout"].set(1)
     rig.reg["view.inst_motion"].set(1)
     for _ in range(3):
-        frame(rig.panel, "view")
+        page_frame(rig.panel, "view")
     row = [rects[pid] for pid in FIELD_ROW]
     assert len({round(r[1]) for r in row}) == 1                    # one line
     assert all(row[k][2] < row[k + 1][0] for k in range(3))        # none overlaps the next
     # the count and Fit share a line; spacing and a lattice's depth the next
     rig.reg["view.inst_layout"].set(5)
     for _ in range(3):
-        frame(rig.panel, "view")
+        page_frame(rig.panel, "view")
     count, depth = rects["view.instances"], (rects["view.inst_spacing"],
                                              rects["view.inst_persp"])
     assert count[2] <= CONTROL_SIZE[0] and depth[0][2] < depth[1][0]
     assert round(depth[0][1]) == round(depth[1][1]) > round(rects["view.inst_layout"][1])
     rig.reg["view.inst_layout"].set(1)
     for _ in range(3):
-        frame(rig.panel, "view")
+        page_frame(rig.panel, "view")
     cells = [rects[pid] for pid in ROT_RATES]
     assert len({round(r[1]) for r in cells}) == 3                  # three rows of two
     assert all(cells[k][2] < cells[k + 1][0] for k in (0, 2, 4))
@@ -861,20 +742,20 @@ def test_the_field_row_and_the_rate_cells_keep_their_menus(rig, monkeypatch):
         x0, y0, x1, y1 = rects[pid]
         opened.clear()
         io.add_mouse_pos_event((x0 + x1) / 2, (y0 + y1) / 2)
-        frame(rig.panel)
+        page_frame(rig.panel)
         io.add_mouse_button_event(1, True)
-        frame(rig.panel)
+        page_frame(rig.panel)
         io.add_mouse_button_event(1, False)
-        frame(rig.panel)
-        frame(rig.panel)
+        page_frame(rig.panel)
+        page_frame(rig.panel)
         assert f"##ctx.{pid}" in opened, (pid, opened)
         assert set(opened) == {f"##ctx.{pid}"}, (pid, opened)
         io.add_mouse_pos_event(-1.0, -1.0)
         io.add_key_event(imgui.Key.escape, True)
-        frame(rig.panel)
+        page_frame(rig.panel)
         io.add_key_event(imgui.Key.escape, False)
-        frame(rig.panel)
-        frame(rig.panel)
+        page_frame(rig.panel)
+        page_frame(rig.panel)
     # a right-click sets nothing
     assert rig.view.instances == 7 and rig.view.inst_layout == 1 and rig.view.inst_motion == 1
 
@@ -970,14 +851,6 @@ def test_the_routing_page_fits_over_a_loaded_preset_and_a_full_desk(rig, monkeyp
         f"note:{k}:{0x37}" for k in range(3)]
     over = _page_scroll(rig, monkeypatch)
     assert over["routing"] == 0, "the ROUTING page scrolled with a full desk"
-
-
-def test_the_hands_page_fits_with_the_tracker_off(rig, monkeypatch):
-    """The setup still edits and saves with no tracker: the page draws
-    without the switches beside the box and still fits."""
-    rig.panel.hands = None
-    over = _page_scroll(rig, monkeypatch)
-    assert over["hands"] == 0
 
 
 def test_the_meter_tooltip_names_the_plane_from_the_live_table(rig):
@@ -1683,7 +1556,13 @@ def _mouse(panel, x, y, button=None, down=False):
     io.add_mouse_pos_event(x, y)
     if button is not None:
         io.add_mouse_button_event(button, down)
-    frame(panel)
+    _again(panel)
+
+
+def _again(panel):
+    """One more frame the way the test has been drawing: the real route, or
+    the section's body alone since a `page_frame`."""
+    (page_frame if panel.__dict__.get("_body_frames") else frame)(panel)
 
 
 def _click(panel, rect, button=0):
@@ -1691,7 +1570,7 @@ def _click(panel, rect, button=0):
     _mouse(panel, x, y)
     _mouse(panel, x, y, button, True)
     _mouse(panel, x, y, button, False)
-    frame(panel)
+    _again(panel)
 
 
 def _popups(monkeypatch) -> tuple[list[str], list[str]]:
@@ -1740,8 +1619,8 @@ def test_a_rows_label_opens_its_params_menu(rig, monkeypatch):
                       ("lfo", "tempo.bpm"),           # a `half`, in a table cell
                       ("lookback", "dream.tint_hue")):
         labels.clear()
-        frame(panel, page)
-        frame(panel)
+        page_frame(panel, page)
+        page_frame(panel)
         assert pid in labels, f"{pid}: no label on {page}"
         rect = labels[pid]
         assert rect[2] - rect[0] > 8 and rect[3] - rect[1] > 8
@@ -1904,7 +1783,8 @@ def test_a_click_on_a_param_maps_the_picked_control(rig, monkeypatch):
     from hyperspace import ui_desk, undo
 
     panel, table, reg = rig.panel, rig.router.table, rig.reg
-    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    # (tall: every control of a focused section in view, none to scroll to)
+    imgui.get_io().display_size = imgui.ImVec2(CONTROL_SIZE[0], 2400)
     lrn = _learn_over(rig)
     pushes: list[str] = []
     push = undo.push
@@ -2038,7 +1918,7 @@ def test_the_footer_says_what_is_picked_and_a_click_lets_go(rig, monkeypatch):
         assert said[1] == rgb(ui.RED)
     # ROUTING is not dimmed — a click there is the widget's own — and both lines say so
     (said,) = footer("routing")
-    assert said[0].startswith("·  D3 picked (20 s): click a param on any other page")
+    assert said[0].startswith("·  D3 picked (20 s): click a param in any other section")
     assert [x for x in lines() if x[0].startswith("D3 picked: its line is framed")]
     frame(panel, "view")
     clock[0] += 7.2
@@ -2124,8 +2004,8 @@ def test_the_click_wording_is_switched_on(rig, monkeypatch):
                          imgui.get_window_pos().x + imgui.get_window_width()))
         return out
     monkeypatch.setattr(imgui, "text_colored", text_colored)
-    frame(panel, "routing")
-    frame(panel)
+    page_frame(panel, "routing")
+    page_frame(panel)
     assert hint and hint[-1][0].endswith(", or click a control")
     assert hint[-1][1] <= hint[-1][2], "the desk section's hint runs past its child"
 
@@ -2152,10 +2032,11 @@ def test_the_ghost_style_is_on_the_hands_page_while_the_ghost_is_on(rig, monkeyp
 
 # ---- plan 21 WP4: the OUTPUT page's blocks and the footer ----
 
-def _output_page(rig, monkeypatch, page="output") -> tuple[list[str], list[tuple]]:
-    """Every text and checkbox label the page (and the footer) draws, and
-    each closed combo's words (plan 35 T6: "shows:" is a picture combo), and
-    each item's right edge against its window's, at the control size."""
+def _output_page(rig, monkeypatch, page="output", body=False) -> tuple[list[str], list[tuple]]:
+    """Every text and checkbox label the section (and GRAPH and the footer,
+    but with `body`) draws, and each closed combo's words (plan 35 T6:
+    "shows:" is a picture combo), and each item's right edge against its
+    window's, at the control size."""
     import hyperspace.ui as ui_mod
 
     drawn: list[str] = []
@@ -2182,20 +2063,18 @@ def _output_page(rig, monkeypatch, page="output") -> tuple[list[str], list[tuple
         for _ in range(3):
             drawn.clear()
             edges.clear()
-            frame(rig.panel, page)
+            (page_frame if body else frame)(rig.panel, page)
     return drawn, list(edges)
 
 
-def test_the_output_page_fits_with_four_outputs_and_overlays_rows(rig, monkeypatch):
+def test_the_output_body_with_four_outputs_and_overlays_rows_stays_inside(rig, monkeypatch):
     """Four outputs (the most), each block's three lines, a missing
-    output's line and overlay's three rows showing: the OUTPUT page does not
-    scroll at the control size and no line runs past the page's right edge."""
+    output's line and overlay's three rows showing: no line runs past the
+    body's right edge."""
     rig.panel.output.allowed = True
     for sl in rig.slots:
         sl.error = "present: RuntimeError: a long error that the page must cut to fit"
-    over = _page_scroll(rig, monkeypatch)
-    assert over["output"] <= 0
-    drawn, edges = _output_page(rig, monkeypatch)
+    drawn, edges = _output_page(rig, monkeypatch, body=True)
     # (plan 35 T4: the two mutes; "through" is the preset's wiring)
     assert drawn.count("picture") == 4 and drawn.count("through effects") == 0
     for s, right, edge in edges:
@@ -2238,7 +2117,7 @@ def test_the_output_page_says_what_each_output_shows(rig, monkeypatch):
     reg["output.3.scene"].set(False)
     reg["output.3.hands"].set(False)
     slots[1].error = "present: RuntimeError: lost the context"
-    drawn, _ = _output_page(rig, monkeypatch)
+    drawn, _ = _output_page(rig, monkeypatch, body=True)
     assert "1  glass" in drawn and "2  projector" in drawn
     # plan 35 T6: each window's picture combo says its port's wire (the
     # factory frame: none of its own), then why it is black, or its dim;
@@ -2253,13 +2132,13 @@ def test_the_output_page_says_what_each_output_shows(rig, monkeypatch):
     assert "present: RuntimeError: lost the context" in drawn
     # ghost hands off: said beside the outputs whose hands are on; no effect: said on 4
     reg["ghost.on"].set(False)
-    drawn, _ = _output_page(rig, monkeypatch)
+    drawn, _ = _output_page(rig, monkeypatch, body=True)
     why = [s for s in drawn if s.startswith(("hands:", "through:"))]
     assert why[0] == why[-1] == "hands: ghost hands are off (HANDS page)"
     assert "paced by output 1 · frame 1920×1080 · below: output 1's window" in drawn
     # an output the config lists but that did not open: one line, why
     slots[1].win, slots[1].missing = None, "screen 2 is not connected"
-    drawn, _ = _output_page(rig, monkeypatch)
+    drawn, _ = _output_page(rig, monkeypatch, body=True)
     assert "2  projector — screen 2 is not connected" in drawn
     assert len([s for s in drawn if s.startswith("shows: as All")]) == 3
 

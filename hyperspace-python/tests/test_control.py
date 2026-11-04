@@ -129,7 +129,7 @@ def test_panel_draws_headless():
     from imgui_bundle import imgui
 
     from hyperspace.audio import AudioEngine
-    from hyperspace.ui import PAGE_KEYS, PAGES, Panel, apply_style, load_fonts
+    from hyperspace.ui import PAGE_KEYS, Panel, apply_style, load_fonts
     from hyperspace.view import ViewState
 
     ctx = imgui.create_context()
@@ -142,7 +142,7 @@ def test_panel_draws_headless():
         audio = AudioEngine()
         panel = Panel(Control(audio.chain), audio, ViewState())  # no library: no strips
         # every page of the rail, twice (the second frame has layout state)
-        for k in range(len(PAGES)):
+        for k in range(len(PAGE_KEYS)):
             panel.reg["ui.page"].set(k)
             for _ in range(2):
                 imgui.new_frame()

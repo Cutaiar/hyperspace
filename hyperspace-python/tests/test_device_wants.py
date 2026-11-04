@@ -442,8 +442,8 @@ def test_a_window_the_rig_lacks_is_said_on_output_and_the_graph_head(shell_rig, 
     want = [graphview.WINDOW_WANTED.format(n=n) for n in (5, 6)]
     assert ui_graph.window_wants(p) == want
     texts.clear()
-    ui_frame(p, "output")
-    assert [t for t in texts if t in want] == want
+    ui_frame(p, "output")           # the head, always drawn, and the focused section
+    assert [t for t in texts if t in want] == [*want, *want]
     texts.clear()
     ui_frame(p, "graph")
     assert [t for t in texts if t in want] == want

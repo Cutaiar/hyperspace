@@ -1022,11 +1022,11 @@ def test_delete_or_backspace_deletes_the_selected_node(rig, key):
 
 
 def test_backspace_off_the_canvas_deletes_nothing(rig):
-    """⌫ with the canvas not focused (a click on the rail took the keys) is
-    not GRAPH's: the node stays."""
+    """⌫ with the canvas not focused (a click in the side pane took the keys)
+    is not GRAPH's: the node stays."""
     _, m = _modifier_selected(rig)
-    rail = next(w for w in imgui.get_current_context().windows if "##rail" in w.name)
-    imgui.internal.focus_window(rail)
+    pane = next(w for w in imgui.get_current_context().windows if "##graph.side" in w.name)
+    imgui.internal.focus_window(pane)
     _press(rig, imgui.Key.backspace, focus=False)
     assert rig.router.table.modifier(m.id) is not None
 
@@ -1045,7 +1045,7 @@ def test_the_panel_publishes_the_selected_node(rig):
     """2026-10-31: the one selected node's id is on the panel for whoever
     is not the graph view (`Panel.graph_selected`, `ui_graph.publish`) —
     None until a node is selected; `Panel.select_graph_node` selects one
-    from any page, the GRAPH page opened; `graph_selected_params` is the
+    from any section, the focus left where it is; `graph_selected_params` is the
     node's registry ids, the continuous ones first; Esc lets it go."""
     from hyperspace.params import Kind
     st = load(rig, "party-trip")
@@ -1055,7 +1055,7 @@ def test_the_panel_publishes_the_selected_node(rig):
     assert n is not None and ui_graph.drawn_node(st, n)
     frame(panel, "view")
     panel.select_graph_node(n.id)
-    assert ui.PAGE_KEYS[panel.reg["ui.page"].value] == "graph"
+    assert ui.PAGE_KEYS[panel.reg["ui.page"].value] == "view"
     frame(panel)
     frame(panel)
     assert ui_graph._selection(st, st["view"]) == ("node", n)

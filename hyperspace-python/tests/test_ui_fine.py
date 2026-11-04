@@ -12,7 +12,7 @@ untapered float slider (`Panel._slider`), `view.bright` a tapered fader
 
 import pytest
 from imgui_bundle import imgui
-from test_ui_shell import build_rig, frame
+from test_ui_shell import build_rig, page_frame
 from ui_driver import Driver
 
 from hyperspace import ui, undo
@@ -27,7 +27,7 @@ def view_page(tmp_path, monkeypatch):
     with build_rig(tmp_path) as r:
         imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
         r.view.instances, r.view.inst_layout = 12, NAMES.index("FCC")   # the depth slider shows
-        d = Driver(step=lambda: frame(r.panel, "view"))
+        d = Driver(step=lambda: page_frame(r.panel, "view"))
         d.record(monkeypatch.setattr)
         d.run(d.wait(2))
         yield r, d
@@ -127,7 +127,7 @@ def test_a_fine_drag_is_one_undo_step(view_page):
     clock = [0.0]
 
     def step():
-        frame(r.panel, "view")
+        page_frame(r.panel, "view")
         clock[0] += 1 / 60
         u.tick(clock[0])
 
@@ -170,8 +170,9 @@ def test_the_tooltip_says_fine_while_shift_is_held(view_page, monkeypatch):
     said.clear()
     d.run(shift(True), d.wait(1))
     assert said and said[-1].startswith(ui.FINE_TIP)
+    d.run(d.move("view.instances"))
     said.clear()
-    d.run(d.move("view.instances"), d.wait(1))   # an integer: no fine mode, no word
+    d.run(d.wait(1))                             # an integer: no fine mode, no word
     assert not any("FINE" in s for s in said)
     d.run(shift(False), d.park())
 
@@ -211,7 +212,7 @@ def test_a_shift_press_on_a_log_slider_writes_nothing(view_page):
     clock = [0.0]
 
     def step():
-        frame(r.panel, "view")
+        page_frame(r.panel, "view")
         clock[0] += 1 / 60
         u.tick(clock[0])
 
