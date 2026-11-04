@@ -140,6 +140,7 @@ from . import patches as patchdoc
 from . import undo
 from .graph import RigWires
 from .graphmigrate import CAMERA_NODES, EYE_IDS, is_look_id, renamed_layout, retired
+from .groupwords import group_word
 from .palettecompat import palette_slice
 from .params import (
     F_KEYS,
@@ -2300,7 +2301,7 @@ class Library:
     def read(self, group: str, name: str) -> dict:
         path = self.path_of(group, name, loose=True)
         if path is None:
-            raise LibraryError(f"{group}: no preset {name!r}")
+            raise LibraryError(f"{group_word(group)}: no preset {name!r}")
         doc = copy.deepcopy(self._doc(path))
         kind = self._kinds.get(group)
         if kind is not None:                       # its own format: checked, not lifted
@@ -2323,15 +2324,17 @@ class Library:
             what = ("a whole preset" if patchdoc.shape_of(doc) == patchdoc.PRESET_SHAPE
                     else "a canvas patch" if str(doc.get("schema", "")).startswith(
                         f"{patchdoc.KIND}/") else f"schema {doc.get('schema')!r}")
-            raise LibraryError(NOT_GROUP_WORDS.format(file=path.name, what=what, group=group))
+            raise LibraryError(NOT_GROUP_WORDS.format(file=path.name, what=what,
+                                                      group=group_word(group)))
         doc = forward_group(doc, path.name)
         refused = patchdoc.check(doc)
         if refused:
             raise LibraryError(f"{path.name}: " + "; ".join(refused))
         if doc[patchdoc.GROUP_KEY] != group:
             raise LibraryError(NOT_GROUP_WORDS.format(
-                file=path.name, what=f"a patch of the {doc[patchdoc.GROUP_KEY]} group",
-                group=group))
+                file=path.name,
+                what=f"a patch of the {group_word(doc[patchdoc.GROUP_KEY])} group",
+                group=group_word(group)))
         return doc
 
     # ---- patches (plan 40 T1) ----
@@ -2345,8 +2348,8 @@ class Library:
         the reasons in words."""
         doc = forward_group(self.read(PATCHES, name), name)
         if patchdoc.names_group(doc):
-            raise LibraryError(GROUP_PATCH_WORDS.format(name=name,
-                                                        group=doc[patchdoc.GROUP_KEY]))
+            raise LibraryError(GROUP_PATCH_WORDS.format(
+                name=name, group=group_word(doc[patchdoc.GROUP_KEY])))
         refused = patchdoc.check(doc)      # (an empty `group`: one line, review fix 6)
         if refused:
             path = self.path_of(PATCHES, name)
@@ -2543,7 +2546,7 @@ class Library:
             try:
                 missing = list(kind.load(doc, path) or [])
             except (ValueError, KeyError, TypeError, AttributeError, OSError) as e:
-                raise LibraryError(f"{group}/{name}: {e}") from e
+                raise LibraryError(f"{group_word(group)}/{name}: {e}") from e
             if path is not None:
                 self._sync(path)                       # a migrated user file, rewritten once
             # its listed name: the file's own, under its folder (plan 48) —
@@ -2557,7 +2560,7 @@ class Library:
         else:
             # a module preset load, step or file-watch re-apply: one undo
             # step, the layout it may rebuild included (undo.py, plan 15)
-            undo.push_on(self.reg, f"{group}: {doc.get('name') or name}", load=True)
+            undo.push_on(self.reg, f"{group_word(group)}: {doc.get('name') or name}", load=True)
             hook = self._layout_hooks.get(group)
             if hook is not None and doc.get("layout") is not None:
                 hook(doc["layout"])                    # rebuild params first
@@ -2585,9 +2588,9 @@ class Library:
                     resolved = late
                 missing = [k for k in values if k not in self.reg and not retired(k)]
             self._landed(group, doc.get("name") or name, resolved)
-        self.report(missing, f"{group}/{name}")
+        self.report(missing, f"{group_word(group)}/{name}")
         if not quiet:
-            self.say(f"{group}: {self.current(group)}")
+            self.say(f"{group_word(group)}: {self.current(group)}")
         hook = self._load_hooks.get(group)
         if hook is not None:
             hook(self.current(group))
@@ -2617,9 +2620,9 @@ class Library:
             # the same scene set again — a knob on `scene.select` sends the
             # same choice many times in one turn: no news, and the footer's
             # slot is not taken from a line that is (review of PR #92)
-            self.status = f"{group}: {name}"
+            self.status = f"{group_word(group)}: {name}"
         else:
-            self.say(f"{group}: {name}")
+            self.say(f"{group_word(group)}: {name}")
 
     def _step(self, group: str, n: int) -> str | None:
         names = self.list(group)
@@ -2689,7 +2692,8 @@ class Library:
                      else self.resolved(group, doc["values"]))
         # review of #334: a file's own "/" written as " - " is said, once —
         # the next save finds the name it now holds
-        self.say(f"{group}: saved {name}" + (f" (was {renamed})" if renamed else ""))
+        self.say(f"{group_word(group)}: saved {name}"
+                 + (f" (was {renamed})" if renamed else ""))
         hook = self._load_hooks.get(group)
         if kind is not None and hook is not None:   # a kind's current moved: say so
             hook(name)                               # (the bank's light, preset.py)
@@ -2793,7 +2797,7 @@ class Library:
         # plan 40 T1: a patch renames the same way, less step 5 (no show
         # names a patch; a group's provenance slug is the preset's to keep)
         if group not in RENAMABLE:
-            raise LibraryError(f"{group}: only a preset can be renamed (or a patch)")
+            raise LibraryError(f"{group_word(group)}: only a preset can be renamed (or a patch)")
         snap = self._lookup(group)                 # one look for the whole rename
         idx, files = snap[0], snap[1]
         path = self._resolve(group, old, snap, loose=False)
@@ -3457,7 +3461,8 @@ class Library:
         if group in self._kinds:
             return None
         self._need_reg()
-        undo.push_on(self.reg, f"reset {group}", load=True)   # the other branch pushes in `load`
+        # (the other branch pushes in `load`)
+        undo.push_on(self.reg, f"reset {group_word(group)}", load=True)
         self.restore(self.resolved(group, {}))
         self._landed(group, None, None)
         return None
@@ -3519,7 +3524,7 @@ class Library:
                         reapply()
                     else:
                         self.load(group, name)
-                    hit.append(f"{group}/{name}")
+                    hit.append(f"{group_word(group)}/{name}")
             if self.project.path in changed:
                 self.project.load(self.project.path, startup=False)
                 hit.append(f"project {self.project.name}")

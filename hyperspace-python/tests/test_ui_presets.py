@@ -870,7 +870,7 @@ def test_a_line_assigned_every_frame_does_not_pin_the_footer(rig, monkeypatch): 
     clock[0] += ui.MESSAGE_S + 1
     scene.set(1)
     line = lib.status
-    assert line.startswith("band: ") and panel._message() == (line, False)
+    assert line.startswith("analyzer: ") and panel._message() == (line, False)
     said = dict(lib.said)
     lib.say(warning=HOME_UNSET)                               # news, a frame later
     seen = []

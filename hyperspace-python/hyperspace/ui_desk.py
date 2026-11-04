@@ -83,6 +83,7 @@ from imgui_bundle import imgui
 
 from . import apc40, learn, ui, ui_pane, ui_routing
 from .apc40 import GREEN, GREEN_BLINK, RED, RED_BLINK, YELLOW, YELLOW_BLINK
+from .groupwords import group_part, group_word
 from .params import PERFORMANCE_GROUPS, Kind
 from .routing import Binding, led_shade
 
@@ -401,7 +402,7 @@ def _offer_all(panel, used, rest) -> None:
             take(panel, pid)
     imgui.separator()
     for group, ids in rest:
-        if imgui.begin_menu(f"{group}##all.{group}"):
+        if imgui.begin_menu(f"{group_word(group)}##all.{group}"):
             for pid in ids:
                 p = panel.reg.get(pid)
                 if imgui.menu_item_simple(f"{p.label if p is not None else pid}##all.{pid}"):
@@ -607,25 +608,28 @@ def _room(panel) -> tuple[float, float, float, float]:
 # What a few targets do, where their label alone does not say it on the
 # desk (the owner's findings, 2026-10-16): MASTER select and PAN only
 # matter in overlay mode, which config.toml's [output] overlay must allow;
-# STOP ALL resets the bands to the selected scene and a second press within
+# STOP ALL resets the analyzer to the selected scene and a second press within
 # 8 s undoes it; QUANT walks the bank, not the preset list
 DESK_WORDS = {
     "overlay.on": "Overlay (if config allows)",
     "overlay.passthrough": "Click-through (overlay)",
-    "scene.reset_all": "Reset all bands (again: undo)",
+    "scene.reset_all": "Reset analyzer (again: undo)",
     "preset.next": "Next bank preset",
 }
 # an enum `set` row whose choice's name alone does not say what the
 # button does: the word goes before the name (the track-select row, G7:
-# "band SUB" — the band strip the device knobs follow under SHIFT)
-SET_WORDS = {"band.select": "band"}
+# "analyzer SUB" — the strip the device knobs follow under SHIFT)
+SET_WORDS = {"band.select": group_word("band")}
+# a `step` row's word where the param's label is too long for a small button
+# at a size a person can read (B18, B19: "Band +1", the next band's strip)
+STEP_WORDS = {"band.select": group_part("band").capitalize()}
 
 
 def text(reg, b: Binding) -> str:
     """What a lit control does, in the panel's words (plan 17 fork 8): a
     `set` row on an enum → that value's name (the bank row reads the
     presets' names, a scene pad the scene's; `SET_WORDS` puts a word
-    before it — "band SUB"); a `step` row → the label and the step
+    before it — "analyzer SUB"); a `step` row → the label and the step
     ("Brightness +3"); a toggle row on an enum, which steps it → the
     label, the value now and "next" ("SUB Transfer: SQ · next"); a target
     in `DESK_WORDS` → its words; anything else → the param's label; a
@@ -650,7 +654,7 @@ def text(reg, b: Binding) -> str:
     if b.target in DESK_WORDS:
         return DESK_WORDS[b.target]
     if b.op == "step":
-        return f"{p.label or b.target} {b.value:+g}"
+        return f"{STEP_WORDS.get(b.target) or p.label or b.target} {b.value:+g}"
     return p.label or b.target
 
 

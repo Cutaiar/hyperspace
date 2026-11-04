@@ -911,7 +911,7 @@ def row_words(row: Binding | str, names=None) -> str:
     through to the row's own words —
 
       ``hand:right.y`` → "right hand y"    ``hands:gap`` → "hands gap"
-      ``lane:0`` → "band 1"                ``pad:A`` → "pad A"
+      ``lane:0`` → "analyzer 1"            ``pad:A`` → "pad A"
       ``hat:UP`` → "d-pad up"              ``axis@p2:LX`` → "axis LX"
       ``cc:0:48`` → "CC 48 ch1"            ``pitch:*`` → "pitch bend any ch"
       ``lfo:0`` → "LFO 1"                  ``mod:3`` → "mod.3"
@@ -938,7 +938,7 @@ def row_words(row: Binding | str, names=None) -> str:
     n = addr.split(":")[0]
     k = int(n) + 1 if n.isdecimal() else None
     if scheme == "lane":
-        return f"band {k}" if k is not None else f"band {addr}"
+        return f"analyzer {k}" if k is not None else f"analyzer {addr}"
     if scheme in ("lfo", "env"):
         return f"{scheme.upper() if scheme == 'lfo' else scheme} {k if k is not None else addr}"
     if scheme == "seq":
@@ -1791,7 +1791,7 @@ def register_desk(reg: Registry, table: Bindings) -> None:
                    lambda v: table.set_layer("global" if v else "preset"), group="desk",
                    persist=False, modulatable=False,
                    tip="The APC40's SHIFT, latched: on, the desk shows the global layer "
-                       "(the band strip, the hand feel, BPM, the band scenes); off, the "
+                       "(the analyzer strip, the hand feel, BPM, the analyzer scenes); off, the "
                        "loaded preset's. Loading a preset turns it off.")
     if SAVE_PARAM not in reg:
         # held by the hand on SAVE, never saved: a reconnect lets go of it

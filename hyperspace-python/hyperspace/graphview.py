@@ -128,6 +128,7 @@ from . import learn as learnmod
 from . import modifiers as modmod
 from . import sequencer as seqmod
 from .devices import SCHEME_ROLE  # plan 40 T4: the table lives in devices; read here
+from .groupwords import group_title
 from .params import PERFORMANCE_GROUPS, Kind, Param, Registry
 from .routing import (
     MOD_OPS,
@@ -1889,7 +1890,8 @@ def _sub_group(pid: str, p: Param | None) -> str:
 
 def _group_node(nodes: dict[str, VNode], group: str, add_node) -> VNode:
     nid = f"group:{group}"
-    return nodes.get(nid) or add_node(VNode(nid, "group", group))
+    # the id keeps the key, a saved layout key; only its title is words
+    return nodes.get(nid) or add_node(VNode(nid, "group", group_title(group)))
 
 
 def refresh(view: View, reg: Registry, router: Router | None, lanes=None,
@@ -2761,6 +2763,8 @@ def summary(n: VNode) -> list[str]:
     patched = sum(p.patched for p in n.ports)
     lines: list[str]
     if n.kind in ("device", "source", "analyzer"):
+        # "band" here is the plain audio word for one of the analyzer's
+        # parts, not the fixture's name (register row 737)
         noun = "band" if n.kind == "analyzer" else "port"
         lines = [f"{_count(len(n.ports), noun)} · {patched} patched",
                  _loudest(p for p in outs if p.patched)]
@@ -3489,7 +3493,7 @@ def splice_refusal(name: str, ports: Iterable[Mapping], typ: str = IMAGE) -> str
 
 def patch_words(doc: Mapping, names: Callable[[str], str | None] | None = None) -> str:
     """A patch's boundary in words, for the browser (plan 40 T3): "in:
-    picture · out: picture · wants: K1, right hand y, band 1" — its picture
+    picture · out: picture · wants: K1, right hand y, analyzer 1" — its picture
     ports by direction and type, then every rig-side source its rows and
     modifiers read, once, in `routing.row_words`' words (`names`: the
     desk's glyph, as `cable_words` passes the port's name). Pure."""
@@ -3604,7 +3608,7 @@ LANE_NO_DELETE = ("a lane always fires an envelope: drag its pin onto another "
 LANE_BOUND = "lane {lane} fires env {env} already"
 
 # a continuous scheme's noun for the refusals ("a hand sets no base")
-NOUNS = {"hand": "a hand", "hands": "the hands", "lane": "a band", "lfo": "an LFO",
+NOUNS = {"hand": "a hand", "hands": "the hands", "lane": "the analyzer", "lfo": "an LFO",
          "env": "an envelope", SEQ: "a sequencer lane",
          "mod": "a modifier", "axis": "a stick", "pair": "a pair of pad buttons",
          "ext": "an outside lane"}

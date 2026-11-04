@@ -724,6 +724,8 @@ here; overturn → the change, then the same.
 | 690 | Plan 44 D5a: `docs/GLOSSARY.md`, one row per concept; a controller moved mid-gesture releases what it holds on the deck it left, and its real release goes nowhere | — | (rec) — pending the owner's signature on the glossary |
 | 723 | Wave 4 B2: `pad:VIEW` holds `deck.chase`; `pad:VIEW → tempo.tap` and `hat:LEFT` / `hat:RIGHT → preset.list.*` leave the pad's factory rows; an old factory row moves at the next load, one the owner changed stays | 654 | owner — 2026-11-04: base chase is Back; tap tempo is not a default on every controller, "extremely sensitive"; no swapping presets from a controller or a pad |
 | 724 | Wave 4 B2: a Joy-Con (R) has no BACK and gets no factory chase, a row on its SL gives it one; Learn goes on accepting `preset.list.*` and `tempo.tap`, unrefused, and no widget is added to arm the first two | 723 | (rec) — pending the owner |
+| 737 | Wave 4 AZ: the panel says "analyzer" for the fixture and its tuning; a part reads its own name (SUB … AIR) or "analyzer 3", and "band" stays only as the plain audio word for one of the parts | 566 | The fixture: the owner, 2026-11-04. The parts' word: (rec) — pending the owner |
+| 738 | Wave 4 AZ: words only; `band.*` ids, `lane:` addresses, the `band` group key, the library's `band` folders, `SECTIONS` and `PAGE_KEYS` all stay; ROUTING's target list keeps printing raw ids | 567 | The owner, 2026-11-04 |
 | 743 | Wave 4 MR: the hard rule. No row of a preset may drive a meta controller param (`part_of(p) == "session"`); refused in words at Learn, at the pickers and at `Bindings`' doors, dropped with a note at a load, removed by the next save; the meta controller's own rows stay, the line being `is_session_row`. Overturns row 19 (a) | 572, 573 | owner — 2026-11-04: "a hard rule" |
 | 744 | Wave 4 MR: macro base and depth subscribers on a meta param drop at `set_macros`; a modifier has no target, so its route is what is refused; a patch naming one is refused whole by `check`, and a spawn's doors drop what reaches them with a note | 573 | (rec) — pending the owner |
 | 745 | Wave 4 MR: row 650's dormant test stays in `Router.modulate` for a row a hot reload left standing, and a save filters such rows; `party-tumble` loses its row, and `tools/meta_routes.py` lists the library's without writing | 572 | (rec) — pending the owner |
@@ -12930,6 +12932,38 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   it, as the exact-row rule must, since the file cannot say who wrote it. The same goes
   for `tempo.tap` by hand on BACK (`fire`, default value): it moves to the chase.
 - **Judge it.** 555.
+
+### 737. What the panel calls the analyzer
+
+- **Answer.** The owner, 2026-11-04: "Band is a ridiculous name for this thing." The
+  analyzer is a fixture on the graph, shared, and every preset may wire from it. The
+  word for its six parts was left to the builder: (rec) — pending the owner.
+- **Built.** "Analyzer" for the fixture and its tuning: the section's head ("analyzer
+  tuning"), the group node's title, status and undo lines, the desk, the cheat sheet
+  and refusals ("the analyzer sets no base"). A part reads its own name (SUB, BASS,
+  MIDB, MID, UPR, AIR), or "analyzer 3" where a route only has its number. "Band"
+  stays as the plain audio word for one slice of the spectrum, in a count ("6 bands")
+  and a sentence ("Add analyzer band"); that includes the node's noun in
+  `graphview.summary` and the desk's B18 and B19, "Band +1" and "Band -1", which move
+  which band's strip is open.
+- **Rejected.** "Low", "mid" and so on as the noun: they are names, not a noun, so
+  "Add low" says nothing, and a layout may hold 1 to `N_MAX` parts under any names,
+  with SUB to AIR already saying where each listens. A new word ("range", "slice"):
+  nobody in audio says it, and a graphic EQ's parts are bands.
+
+### 738. Which saved names stayed
+
+- **Answer.** The owner, 2026-11-04, by the brief: words only.
+- **Stayed.** `band.*` param ids, `lane:` addresses, the `band` group key in a show's
+  `modules`, the `band` library and `scenes/band` folders, the `group:band` layout key,
+  `SECTIONS` keys and `PAGE_KEYS`. A rename is the format lane's question.
+- **Where a person still reads one.** ROUTING's target list prints raw ids
+  (`band.0.atk`), as for every group; a trash row's hover and a file-overwrite warning
+  name the folder (`band/`), because that is where the file is.
+- **Built.** `groupwords.py`, a leaf, holds one record per group: its short word
+  ("analyzer"), its title ("analyzer tuning") and its part ("band"). Everywhere that
+  printed the key now reads the record, including a patch's refusal and "only a preset
+  can be renamed". `undo.py` must stay a leaf, so it asks through `Registry.group_word`.
 
 ### 743. No row of a preset on a meta param
 
