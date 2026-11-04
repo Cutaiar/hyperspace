@@ -1210,7 +1210,8 @@ def press_momentary(p: Param, source: str, down: bool) -> None:
     by (`Router.pad`, `MidiIO._apply`, osc): the toggle stays on while any
     source holds it, so brushing BACK does not end a chase the APC's button is
     still holding, or the other way about. `source` is the row's, which names
-    its device. Kept on the param, the one thing the roads share."""
+    its device. Kept on the param, the one thing the roads share. A road that
+    records a press owes `let_go_lost` when its source can no longer release."""
     by = p.__dict__.setdefault("_pressed_by", set())
     if down:
         by.add(source)
@@ -1219,6 +1220,22 @@ def press_momentary(p: Param, source: str, down: bool) -> None:
         by.discard(source)
         if not by:
             p.set(False)
+
+
+def let_go_lost(reg, lost) -> None:
+    """The one door for a source that will never release (a pad gone, a desk's
+    cable, an OSC sender silent): every press whose source `lost(source)` says so
+    is forgotten, and a toggle nothing holds any more goes off. A stale press
+    would otherwise keep the toggle up against every later release, and a base
+    chase left on goes on writing into the bases. Walks the registry, so a road
+    calls it when something is lost, never once a frame."""
+    for p in reg:
+        by = p.__dict__.get("_pressed_by")
+        if by:
+            gone = {s for s in by if lost(s)}
+            by -= gone
+            if gone and not by:
+                p.set(False)
 
 
 def latch_refusal(b: Binding) -> str | None:
@@ -3485,8 +3502,10 @@ class Router:
         shared half's, and the deck it moved to reads them."""
         self._pad_timing(role).clear()
         down = self._pad_pressed(role)
-        for key in list(down):
-            self._let_go_pad(down, key)
+        if down:
+            gone = {source for source, _target in down}
+            down.clear()
+            let_go_lost(self.reg, gone.__contains__)
         self.felt(qualified("axis", role), None, 0.0)
 
     def _let_go_pad(self, down: set, key: tuple[str, str]) -> None:
