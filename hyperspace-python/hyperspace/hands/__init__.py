@@ -1,7 +1,7 @@
 """Ultraleap hands — a self-contained instrument, host optional.
 
 This package is written to be lifted out whole. The rule that keeps it
-liftable: **core.py and signal.py import nothing from hyperspace.** They
+liftable: **core.py, room.py and signal.py import nothing from hyperspace.** They
 are the instrument — tracking, features, the analog chain, the pinch
 switches, MIDI out. Everything they need from a host arrives as an
 argument, duck-typed, never imported:
@@ -18,8 +18,9 @@ argument, duck-typed, never imported:
                               (and, to resolve ``hand:right.roll``, .names)
                               dicts that poll fills — for two schemes: ``hand``
                               (each hand: axes, presence, pinches, the dance
-                              sources, the grab) and ``hands`` (the two together: gap,
-                              twist). Pass neither and the hands still run.
+                              sources, the grab, the room lanes) and ``hands``
+                              (the two together: gap, twist). Pass neither and
+                              the hands still run.
 
 panel.py is the one piece that knows this host: it draws the HANDS page
 with the host's imgui panel and palette. Extracting the package means
@@ -65,11 +66,12 @@ from .core import (
     skeleton,
     spread,
 )
+from .room import ROOM
 
 # what the host, the panel, the tools and the tests reach for; everything
 # else (calibration files, the tracking source, the constants) is core's
 __all__ = [
-    "DANCE", "DEFAULTS", "FEATURES", "GROUP", "PAIR", "PALM_W", "PINCHES", "SIDES",
+    "DANCE", "DEFAULTS", "FEATURES", "GROUP", "PAIR", "PALM_W", "PINCHES", "ROOM", "SIDES",
     "AxisSettings", "Dance", "Gate", "HandSettings", "HandsIO", "Layout", "addresses",
     "conflicts", "curls", "default_addresses", "features", "fist", "grab_name", "mirror",
     "pair_addresses", "pinch_name", "pinches", "register", "skeleton", "spread",

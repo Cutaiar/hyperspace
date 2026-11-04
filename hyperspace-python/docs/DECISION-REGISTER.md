@@ -689,6 +689,10 @@ here; overturn → the change, then the same.
 | 675 | Plan 45 V4, the loop-wrap case: the head counts modulo the loop and reads straight through the seam, either way; no splice fade, so a clip not cut to loop has the click of its own two ends; a track ending within 50 ms before the picture is bridged at full level, one ending earlier fades out and back, one running past it is cut there | — | (rec) — pending the owner; built as recommended |
 | 676 | Plan 45 V4, prefetch: none. A clip up to 120 s is held whole; a longer clip's wrap fades out and back in one window decode later | — | (rec) — pending the owner; built as recommended |
 | 677 | Plan 45 V4, silence and level: the level glides per block to gain × a fade on the speed (1 from 0.05 up, 0 under 1e-3), so rate 0 is a block's fade then exact zeros with no read; a block whose next block is not wholly held takes the level to 0 (`Soundtrack.holds`), so running out is a fade; a voice leaving gets one more block; a clip not yet probed is silent | — | (rec) — pending the owner; built as recommended |
+| 678 | Plan 51 O1: the palm's orientation as new lanes in the room's frame, `hand:<side>.room.roll / pitch / yaw`, the same reading on both hands, after the grabs so no older lane moves; the anatomical axes stay as they are | — | (rec) — pending the owner |
+| 679 | Plan 51 O1: a room lane is the whole circle, `0.5 + degrees / 360`, filtered unwrapped; the seam is one frame and never a sweep; pitch runs on past ±90° and yaw holds inside 8° of vertical (out at 11°), so no lane flips; a dropped wire lands a `position` row at depth 1 with no feel (`learn.row_for`) | — | (rec) — pending the owner |
+| 680 | Plan 51 O1: the room is the tracking mode's stage, levelled optionally from one flat hand (HANDS, **level room**); kept as an optional `room: {mode, level}` in `hands.json`, `/3` unchanged, written only when set; applied only in its own mode and never to a tape | — | (rec) — pending the owner |
+| 681 | Plan 51 O1: a lost hand reads NaN on the room lanes that frame and returns at its new reading with no glide; they have no setup params, no DAW output and no Learn | — | (rec) — pending the owner |
 
 "—": no hand check shows it; tests only.
 
@@ -12138,3 +12142,52 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   `test_a_voice_turned_off_fades_in_one_block_and_is_let_go`,
   `test_the_callback_allocates_nothing_once_warm`.
 - **Judge it.** Hand checks 511 and 512.
+
+### 678. The room lanes
+
+- **Answer.** (rec) — pending the owner.
+- **Built.** `hands/room.py`, `Layout.room`: six lanes after the grabs, a
+  `room` port group. Up = −normal, back = −direction on either hand, so the
+  two hands read alike; `Ry(yaw) · Rx(pitch) · Rz(roll)`, right-handed about
+  the room's axes, the same way round as `geometry._camera`. The hands package
+  has no way to read the camera, and a test orbits it between frames.
+- **Judge it.** 514.
+
+### 679. A whole-circle lane, and over the top
+
+- **Answer.** (rec) — pending the owner. The other way, a clamped ±range like
+  the anatomical axes, cannot reach a camera that goes all the way round.
+- **Built.** `room.Palm` adds each frame's shortest step to a running angle,
+  runs the One Euro filter on it and wraps after. `room.angles` holds yaw
+  inside `POLE_DEG` and otherwise takes the solution nearest the last yaw. The
+  costs, in plan 51 §4: a level hand after going over the top may read pitch
+  180° rather than yaw and roll 180°, until it leaves; a twist made inside the
+  cone is a yaw step of up to 90° on the way out. Yaw lets go at
+  `POLE_EXIT_DEG`, and a hand first seen in the margin reads NaN until it
+  leaves. `learn.row_for` lands a room lane as `position`, depth 1, no feel
+  (`learn.whole_circle`, the one line outside `hands/`): the default push on a
+  spring is not one-to-one and glides through the whole range at the seam.
+- **Judge it.** 515.
+
+### 680. The room's calibration
+
+- **Answer.** (rec) — pending the owner.
+- **Built.** `room.frame` (the mode's stage, then the levelling);
+  `HandsIO.start_level` (at least a second and `CAL_MIN_SAMPLES` frames, up to
+  `LEVEL_WAIT_S` more; one hand, still, palm down, or it refuses in words; not
+  during a sweep), `clear_level`; `core.load_room`, `save_calibration(room=)`.
+  The entry records its tracking mode: another mode ignores it and keeps it in
+  the file, and a tape neither uses, makes nor clears one. No schema move: an older build ignores the key and drops it at its next save,
+  which costs one more press, and the two Macs each keep their own
+  `hands.json`. The frame leaves out `Units.tilt` and `ghost.mirror`, which are
+  about the drawing.
+- **Judge it.** 516.
+
+### 681. A lost hand on the room lanes
+
+- **Answer.** (rec) — pending the owner.
+- **Built.** `HandsIO._step_rooms` resets a `Palm` for a hand that is not
+  present or gives no frame; NaN lets a row go as any hand lane does. A glide
+  back has no right direction on a circle, so there is none. Nothing routes
+  them by default: no preset or binding changed.
+- **Judge it.** 516.
