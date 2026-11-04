@@ -846,7 +846,8 @@ class PadDevice(Base):
             routed = (claimed("axis") or ()) if claimed is not None else ()
             self._dialed = gamepad.dialed(routed)
             if reg is not None:
-                gamepad.steer(io, router, reg, self.__dict__.get("_dt", 0.0), routed=routed)
+                gamepad.steer(io, router, reg, self.__dict__.get("_dt", 0.0),
+                              routed={*routed, *self._no_camera_job(io, reg)})
 
     def feed(self, sources) -> None:
         """The pad's touch and motion lanes into the shared sources (plan
@@ -878,19 +879,32 @@ class PadDevice(Base):
         if state is not None and state.on:
             totem.step(state, io, reg, dt, self.role)
             if totem.drives(state, self.role):
-                skip |= totem.SKIP
+                skip |= totem.skip_of(io)
         return {"skip": skip} if skip else {}
+
+    def _no_camera_job(self, io, reg) -> tuple[int, ...]:
+        """The axes a pad with a layout of its own (a Joy-Con) keeps off the
+        sticks' camera job (`gamepad.steer`), free for a learned route: its
+        triggers always, and its stick while the totem reads this pad, whose
+        gyro has the rotation."""
+        from . import gamepad, totem
+        if not getattr(getattr(io, "model", None), "layout", ()):
+            return ()
+        free = (gamepad.AX_LT, gamepad.AX_RT)
+        if totem.drives(totem.state_of(reg), self.role):
+            free += (gamepad.AX_LX, gamepad.AX_LY)
+        return free
 
     def _totem_skip(self, reg, io) -> frozenset:
         """The buttons the totem and the poi hold off this pad this frame —
         as they will be once `act` has run their take-over (Learn runs
         first): none while each reads another pad, or is off."""
-        from . import poi, totem
+        from . import poi, routing, totem
         state = totem.state_of(reg)
-        skip = totem.SKIP if totem.will_drive(state, io, self.role) else frozenset()
+        skip = totem.skip_of(io) if totem.will_drive(state, io, self.role) else frozenset()
         if poi.will_drive(poi.state_of(reg), io, self.role):
             skip |= poi.SKIP
-        return skip
+        return skip | routing.layout_of(getattr(io, "model", None)).sources
 
     def _feed_extras(self, sources, io, q: str) -> None:
         """The ``touch`` and ``motion`` lanes (plan 42): their names,

@@ -273,6 +273,7 @@ import weakref
 from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 
@@ -954,6 +955,41 @@ def _macro_n(mid: str) -> int:
 
 
 # ------------------------------------------------------------------- ops
+
+class PadLayout(NamedTuple):
+    """A pad model's own controls as rows (`models.Model.layout`): `rows`
+    stand in for every table row on `sources`, and the table's `drops` are
+    not heard. Empty for a pad with none: its table as ever."""
+
+    rows: tuple[Binding, ...] = ()
+    sources: frozenset[str] = frozenset()
+    drops: frozenset[tuple[str, str]] = frozenset()
+
+    def hides(self, b: Binding) -> bool:
+        """Is this table row not heard by this pad?"""
+        return b.bare in self.sources or (b.bare, b.target) in self.drops
+
+
+NO_LAYOUT = PadLayout()
+_layouts: dict[tuple[str, str], PadLayout] = {}
+
+
+def layout_of(model, role: str = "") -> PadLayout:
+    """`model`'s `PadLayout`, its rows under the qualifier `role` ("" the
+    primary pad's bare rows)."""
+    spec = getattr(model, "layout", ())
+    if not spec:
+        return NO_LAYOUT
+    key = (model.id, role)
+    got = _layouts.get(key)
+    if got is None:
+        head = f"pad{QUALIFIER}{role}" if role else "pad"
+        got = _layouts[key] = PadLayout(
+            tuple(Binding(f"{head}:{c}", t, op, v) for c, t, op, v in spec),
+            frozenset(f"pad:{c}" for c, _, _, _ in spec),
+            frozenset((f"pad:{c}", t) for c, t in getattr(model, "drops", ())))
+    return got
+
 
 def act(reg: Registry, b: Binding) -> None:
     """A discrete row fires: keys, pad buttons and MIDI buttons share this.
@@ -3241,7 +3277,10 @@ class Router:
         `hold` row forgets a press it was timing, so a press that began
         before the skip does not fire when the skip ends mid-press. A
         `momentary` row's toggle this pad holds is let go by a skip or by
-        the pad going away, whose release would never come (plan 52)."""
+        the pad going away, whose release would never come (plan 52).
+
+        A pad model with a layout of its own (`layout_of`, a Joy-Con's) hears
+        those rows in place of the table's on the same controls."""
         axis = qualified("axis", role)
         publish = getattr(pad, "publish", None)
         if publish is not None:
@@ -3264,12 +3303,15 @@ class Router:
         # role; the primary the bare ones and — as a desk's `serves` — any
         # qualified with the primary's own role (``pad@pad:A``)
         own = role or getattr(self.table, "primaries", {}).get("pad", "")
-        for b in self.table.of("pad", "hat"):
+        layout = layout_of(getattr(pad, "model", None), role)
+        table_rows = self.table.of("pad", "hat")
+        n_table = len(table_rows)
+        for i, b in enumerate((*table_rows, *layout.rows)):
             code = self._code(b)
             if code is None or not b.enabled or not (
                     b.device == role or (not role and own and b.device == own)):
                 continue
-            if skip and b.bare in skip:
+            if i < n_table and ((skip and b.bare in skip) or layout.hides(b)):
                 if b.op == "hold":
                     holds.pop((b.source, b.target), None)
                 elif b.target in down_now:

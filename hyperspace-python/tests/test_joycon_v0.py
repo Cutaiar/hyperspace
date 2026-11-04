@@ -14,7 +14,7 @@ from test_poi import rig as poi_rig
 from test_totem import DT, FakePad, ShimRouter, phase
 from test_totem import rig as totem_rig
 
-from hyperspace import poi, totem
+from hyperspace import gamepad, poi, routing, totem
 from hyperspace.devices import Context, PadDevice
 from hyperspace.pads import gesture, hid, models, nintendo
 
@@ -101,7 +101,7 @@ def test_every_real_button_press_reaches_the_pad(button):
     assert button in down
 
 
-def test_the_real_stick_orbits_the_view_and_the_trigger_rides_the_depth():
+def test_the_real_stick_orbits_the_view_with_the_totem_off_and_zl_is_free():
     reg, _, _ = driven("rest")
     assert reg["camera.yaw"].base == pytest.approx(0.0, abs=1e-3)      # at rest: nothing
     assert reg["camera.pitch"].base == pytest.approx(0.0, abs=1e-3)
@@ -110,14 +110,138 @@ def test_the_real_stick_orbits_the_view_and_the_trigger_rides_the_depth():
     reg, _, _ = driven("stick up")
     assert abs(reg["camera.pitch"].base) > 1e-3
     reg, _, _ = driven("axis:LT")
-    assert reg["view.depth4"].base != pytest.approx(totem_rig()[0]["view.depth4"].base, abs=1e-6)
+    assert reg["view.depth4"].base == pytest.approx(totem_rig()[0]["view.depth4"].base, abs=1e-9)
 
 
-def test_with_the_totem_on_it_takes_the_four_arrows_and_leaves_the_rest_to_their_rows():
+def test_with_the_totem_on_the_real_stick_is_free():
+    reg, _, _ = driven("stick right", totem_on=True)
+    assert reg["camera.yaw"].base == pytest.approx(0.0, abs=1e-9)
+    reg, _, _ = driven("stick up", totem_on=True)
+    assert reg["camera.pitch"].base == pytest.approx(0.0, abs=1e-9)
+
+
+def test_with_the_totem_on_it_takes_three_arrows_and_gives_the_down_arrow_back():
     _, _, call = driven("rest", totem_on=True)
     skip = call["skip"]
-    assert {"pad:A", "pad:B", "pad:X", "pad:Y"} <= skip
-    assert not skip & {"pad:LB", "pad:LP", "pad:RP", "pad:VIEW", "pad:SHARE", "pad:LSTICK"}
+    assert {"pad:B", "pad:X", "pad:Y"} <= skip and "pad:A" not in skip
+
+
+# ---------------------------------------------------------------- the Joy-Con's own layout
+
+def layout_rig(model=JOYCON, table_rows=()):
+    """A real router and table over the factory's pad rows, and a pad of
+    `model` that holds what `press` says."""
+    reg, state, _ = totem_rig()
+    table = routing.Bindings([
+        routing.Binding("pad:A", "view.faces", "toggle"),
+        routing.Binding("pad:LB", "view.shape", "step", -1.0),
+        routing.Binding("pad:RB", "view.shape", "step", 1.0),
+        routing.Binding("pad:VIEW", "tempo.tap", "fire"),
+        routing.Binding("pad:LSTICK", "view.points", "toggle"),     # an old row: not heard
+        routing.Binding("pad:LP", "view.lines", "toggle"),          # the ridiculous one
+        routing.Binding("pad:MENU", "view.lines", "toggle"),
+        *table_rows,
+    ])
+    router = routing.Router(reg, table)
+    pad = FakePad()
+    pad.model = model
+    pad.buttons_named = {**gamepad.BUTTONS, "LP": models.LP, "RP": models.RP}
+    return reg, state, router, pad
+
+
+def press(router, pad, name):
+    pad.frame(hold=(name,))
+    router.pad(pad, buttons=True)
+    pad.frame()
+    router.pad(pad, buttons=True)
+
+
+@pytest.mark.parametrize("model", [JOYCON, models.MODELS["joycon-r"]])
+@pytest.mark.parametrize("totem_on", [False, True])
+def test_sl_and_sr_step_the_shape_in_both_modes(model, totem_on):
+    reg, _, router, pad = layout_rig(model)
+    reg["totem.on"].set(totem_on)
+    start = reg["view.shape"].base
+    press(router, pad, "RP")
+    assert reg["view.shape"].base == start + 1
+    press(router, pad, "LP")
+    assert reg["view.shape"].base == start
+
+
+def test_the_old_rows_on_those_controls_are_not_heard():
+    reg, _, router, pad = layout_rig()
+    lines, points = reg["view.lines"].value, reg["view.points"].value
+    for name in ("LP", "RP", "LSTICK"):
+        press(router, pad, name)
+    assert reg["view.lines"].value == lines and reg["view.points"].value == points
+
+
+@pytest.mark.parametrize(("model", "reset", "switch"), [(JOYCON, "VIEW", "SHARE"),
+                                                        (models.MODELS["joycon-r"], "MENU", "GUIDE")])
+def test_minus_resets_the_totem_and_capture_switches_it(model, reset, switch):
+    reg, state, router, pad = layout_rig(model)
+    assert reg["totem.on"].value is False
+    press(router, pad, switch)
+    assert reg["totem.on"].value is True
+    state.ang[0] = 1.0
+    press(router, pad, reset)
+    assert state.ang == [0.0] * 6
+    press(router, pad, switch)
+    assert reg["totem.on"].value is False
+
+
+def test_the_sticks_click_resets_the_view_and_the_totem_keeps_the_rotation():
+    reg, state, router, pad = layout_rig()
+    reg["totem.on"].set(True)
+    state.ang[0] = 1.0
+    reg["camera.zoom"].set(2.0)
+    press(router, pad, "LSTICK")
+    assert reg["camera.zoom"].value == 1.0 and state.ang[0] == 1.0
+
+
+def test_l_is_free_and_a_learned_row_on_it_fires():
+    reg, _, router, pad = layout_rig(table_rows=[routing.Binding("pad:LB", "view.points", "toggle")])
+    shape, points = reg["view.shape"].base, reg["view.points"].value
+    press(router, pad, "LB")
+    assert reg["view.shape"].base == shape                  # the factory's row: dropped
+    assert reg["view.points"].value != points               # the learned one: heard
+
+
+def test_a_learn_ignores_the_layouts_controls_and_takes_a_free_one():
+    reg, _, _, pad = layout_rig()
+    dev = PadDevice("joy", {}, Context(reg=reg), io=pad)
+    skip = dev._totem_skip(reg, pad)
+    assert {"pad:LP", "pad:RP", "pad:LSTICK", "pad:VIEW", "pad:SHARE"} <= skip
+    assert "pad:LB" not in skip and "pad:A" not in skip
+
+
+def test_the_pad_window_says_the_layout_and_leaves_the_edge_its_table():
+    from hyperspace import ui_pad
+    _, _, router, _ = layout_rig()
+    said = ui_pad.source_rows(router.table, JOYCON)
+    assert said["pad:RP"].target == "view.shape" and said["pad:SHARE"].target == "totem.on"
+    assert said["pad:VIEW"].target == "totem.reset" and "pad:LB" not in said
+    edge = ui_pad.source_rows(router.table, EDGE)
+    assert edge["pad:VIEW"].target == "tempo.tap" and edge["pad:LB"].target == "view.shape"
+    assert ui_pad.rows(router.table, JOYCON)["pad:LSTICK"].target == "camera.reset"
+
+
+def test_the_edge_keeps_its_table_its_a_reset_and_its_camera_job():
+    reg, state, router, pad = layout_rig(EDGE)
+    start, lines = reg["view.shape"].base, reg["view.lines"].value
+    press(router, pad, "LB")
+    assert reg["view.shape"].base != start                  # the factory's row
+    press(router, pad, "LP")
+    assert reg["view.lines"].value != lines
+    assert totem.skip_of(pad) == totem.SKIP
+    dev = PadDevice("edge", {}, Context(reg=reg), io=pad)
+    reg["totem.on"].set(True)
+    state.driving = "edge"
+    assert dev._no_camera_job(pad, reg) == ()
+    state.ang[0] = 1.0
+    pad.frame(hold=("A",))
+    totem.step(state, pad, reg, DT, "edge")
+    assert state.ang[0] == pytest.approx(0.0, abs=1e-6)     # A resets the Edge's totem
 
 
 # ---------------------------------------------------------------- shake

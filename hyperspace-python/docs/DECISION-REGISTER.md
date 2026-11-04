@@ -719,6 +719,7 @@ here; overturn → the change, then the same.
 | 685 | Plan 51 O2: within 20° of vertical, a yaw straying 20° or stepping 5° on leaving the cone makes the hand read NaN until it has left, then restart, not a camera jump; `ghost.mirror` does not flip a turn row, its depth does; a room lane on a clamped target stays `position`; a moved row lands as `row_for` would | — | (rec) — pending the owner |
 | 686 | The Joy-Con's version 0 is buttons, sticks, the gyro and shake: its sensors move no position (`poi.no_position`); the Edge and `motion:shake` are unchanged. An idealized control object for the acceleration comes later | 520, 521 | owner — 2026-11-04 |
 | 687 | The hid reader learns a Joy-Con's gyro rest offset (`hid.Turn(learn=True)`): every axis within 3 deg/s for one sensor second, none past 20 deg/s | 520 | (rec) — pending the owner |
+| 688 | The Joy-Con's own layout (`models.Model.layout`, `routing.layout_of`): SL / SR the shape, stick click the view's reset, − (+ on the R) the totem's reset, capture (HOME on the R) the totem on and off; L / ZL free; the stick free of the camera job while the totem reads it. Replaces the table on those controls for this pad only | 521 | owner — 2026-11-04 |
 
 "—": no hand check shows it; tests only.
 
@@ -12770,3 +12771,21 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Limit.** A pad held in the hand and never set down learns nothing.
 - **To reverse.** Build `Turn` without `learn`.
 - **Judge it.** 520.
+
+### 688. The Joy-Con's own controls
+
+- **Answer.** Owner, 2026-11-04, the layout above. Left to the controller: the
+  layout lives on the pad model, not in `bindings.json`, so no other pad and no
+  table changes; ↓ goes back to its row now the reset is on − (it was the
+  totem's); X, Y and B stay the totem's W planes.
+- **Built.** `Router.pad` hears `layout_of(pad.model, role)`'s rows and hides
+  the table's on those controls. `PadDevice._no_camera_job` frees ZL / ZR
+  always and the stick while the totem reads the pad. Learn ignores the
+  layout's controls. The pad window says what the pad will do.
+- **Limits.** Those controls cannot be relearned without editing the layout. A
+  route learned onto the stick runs with the totem off too, and takes the stick
+  off the orbit then. GRAPH's rig cables show the table's rows, not the layout.
+  The totem still applies its turn as angles in a fixed plane order, so a big
+  turn about two axes lands where Euler angles do.
+- **To reverse.** Empty `layout` and `drops` on the two Joy-Con models.
+- **Judge it.** 521.
