@@ -71,9 +71,11 @@ Two things the object owns:
 
 ``learn_source`` resolves a ``band.sel.*`` alias to the band it stands
 for (audit B4): an alias is not modulatable, so a route on it would sit
-in the table doing nothing. The MIDI path binds the alias on purpose —
-a knob on "the selected band's threshold" should follow the selection —
-so that resolution is this object's, not the table's. The rule itself is
+in the table doing nothing. So that resolution is this object's, not the
+table's. A band, though, is the meta controller's, so that learn is then
+refused: **no row of a preset may drive a meta param** (register row 743,
+`routing.meta_refusal`), and both learns say so. The factory's own desk
+rows on them are the meta controller's and stay. The rule itself is
 the registry's (``Registry.real``, installed by ``build_registry``), the
 same one the panel's widgets read through; a registry without it (a
 bare test rig) learns the alias as armed.
@@ -99,6 +101,7 @@ from .routing import (
     Bindings,
     Owned,
     base_scheme,
+    meta_refusal,
     parse_sink,
     whole_circle,
 )
@@ -401,8 +404,10 @@ def row_for(source: str, p: Param, when: str | None = None, *,
     push of D about a toggle's base never crosses `params.MOD_ON`, and
     about a whole-number param with a short throw (`dream.steps`, 1–3)
     never reaches the next step: the learn would land and do nothing.
-    Nothing reads the target's id or group and nothing is refused: a
-    rate-type param lands by the same table as any other.
+    Nothing reads the target's id or group and nothing is refused here: a
+    rate-type param lands by the same table as any other. A meta param's row
+    (register row 743) is refused where it would land: `Learn.learn_source`
+    says so first and `Bindings.add` is the door.
 
     Every row lands with the default feel, `motion.DEFAULT_ROUTE_FEEL`
     (the named `smooth` spring; the owner, 2026-10-31) — except an
@@ -595,11 +600,13 @@ class Learn:
         the op, the feedback and the control's name; None gives a plain
         `abs` row named by `Binding.describe`.
 
-        It binds the param as armed — a ``band.sel.*`` alias included, on
-        purpose: a knob on "the selected band's threshold" should follow
-        the selection. Refused, with the reason in `last`, nothing changed
-        and **the learn still armed**, on an invariant control (D6) and
-        while the global layer is up (D5): both are the session's.
+        It binds the param as armed. Refused, with the reason in `last`,
+        nothing changed and **the learn still armed**, on an invariant
+        control (D6) and while the global layer is up (D5): both are the
+        session's. A meta param (row 743) is refused whatever the control:
+        this row would be the preset's, and no preset row may drive one. A
+        learn armed for the desk is then over, since no control can land it;
+        a bare arm still waits for a pad button, which can.
         Otherwise the row replaces every preset-layer row on the control
         (an any-channel row on it included, `Binding.overlaps`) and the
         param's previous preset-layer row in the same role
@@ -615,6 +622,12 @@ class Learn:
             return False
         if pid == SAVE_PARAM:
             self.refuse(SAVE_REFUSAL)
+            return False
+        why = meta_refusal(pid)
+        if why is not None:
+            if self.want == "desk":
+                self.take()
+            self.refuse(f"{why} — not learned")
             return False
         table = self.table
         b = Binding(source, pid, "abs", layer="preset")
@@ -818,7 +831,9 @@ class Learn:
         A target that is not modulatable (`Param.modulatable`: a rig or
         show setting such as ``ghost.mirror``) is refused with a line the
         performer can read in `last`, the table untouched: the panel never
-        offers Learn hand there, and this is the door's own check.
+        offers Learn hand there, and this is the door's own check. A meta
+        param (register row 743: ``master.gain``) is refused the same way, in
+        its own words: a route is a preset's, and no preset row may drive one.
         """
         if not self.accepts(source):     # nothing armed, or armed for something else
             return
@@ -827,6 +842,10 @@ class Learn:
             return
         p = self.target_for(pid)
         if p is None:
+            return
+        why = meta_refusal(p.id)
+        if why is not None:
+            self.refuse(f"{why} — not learned")
             return
         if not p.modulatable:
             # a setting no performer may drive (ghost.mirror, a rig switch):

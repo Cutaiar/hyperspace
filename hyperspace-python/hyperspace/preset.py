@@ -74,8 +74,10 @@ replaces rows, never an offset. In order (plan 13 §5):
 1. note what the file names that a preset may not: a session param
    ("`tempo.bpm` is the session's, ignored"), an id nobody has, a
    ``routes`` row that is not a performer row or that aims at a param
-   that is not modulatable (dropped), a second performer on one target
-   (the referee's, below);
+   that is not modulatable (dropped), a row on a meta param (dropped: the
+   hard rule, register row 743; the file is not rewritten, and the next
+   save leaves it out), a second performer on one target (the referee's,
+   below);
 2. land the values: **every** persisted param of every performance group
    gets the file's value or the value its object was built with
    (`Library._fresh_of` — never a group's ``default.json``, plan 44 D3),
@@ -86,7 +88,7 @@ replaces rows, never an offset. In order (plan 13 §5):
    the referee is first-wins, the rest in ``table.dropped`` for the
    ROUTING page);
 4. replace the desk's preset layer with ``desk`` (`Bindings.set_desk`: a
-   row on an invariant control is dropped and its note joins step 1's;
+   row on an invariant control or a meta param is dropped and its note joins step 1's;
    the desk drops to the preset layer, D4, and the MIDI adapter redraws
    every ring and LED with the faders' catch cleared). A file with **no**
    ``desk`` key gets the default preset layer (`routing.factory_desk`'s
@@ -95,7 +97,7 @@ replaces rows, never an offset. In order (plan 13 §5):
 5. replace the macros' labels and subscribers with ``macros``
    (`Bindings.set_macros`: a base subscriber on anything but a
    performance param — a session one, D9 — is dropped and its note joins
-   step 1's) and land the base subscribers at once from the macros' bases
+   step 1's, as is a depth subscriber on a meta param's route, row 743) and land the base subscribers at once from the macros' bases
    just landed (`Router.follow_macros(force=True)`). The macro is the
    scene-setter of record: a param a base subscriber names ends at the
    subscriber's value even when ``values`` names it too;
@@ -193,7 +195,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
     part_of,
     retaper_depths,
 )
-from .routing import MOD_OPS, Binding, is_continuous
+from .routing import MOD_OPS, Binding, is_continuous, is_session_id
 
 SCHEMA = PERFORMANCE_SCHEMA
 # the schemas a load reads (each migrated on load; row 394: a save writes
@@ -1110,9 +1112,11 @@ class Presets:
             # a route on a param no performer may drive — one saved before
             # it stopped being modulatable (ghost.mirror / .guide /
             # .tethers, plan 21 R12) — is dropped with a note; the file is
-            # not rewritten. An id this build lacks is kept (dormant)
+            # not rewritten. An id this build lacks is kept (dormant). A row
+            # on a meta param goes on to the referee, which drops it in its
+            # own words (row 743), so a later save writes the file without it
             tp = reg.get(b.target)
-            if tp is not None and not tp.modulatable:
+            if tp is not None and not tp.modulatable and not is_session_id(b.target):
                 notes.append(f"dropped {b.source} → {b.target}: not modulatable")
                 continue
             routes.append(b)

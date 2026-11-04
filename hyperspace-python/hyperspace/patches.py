@@ -95,7 +95,7 @@ from . import lfo as lfomod
 from . import modbank
 from . import modifiers as modmod
 from .lookback import is_lookback_key
-from .routing import Binding, base_scheme, is_continuous, is_macro
+from .routing import Binding, base_scheme, is_continuous, is_macro, meta_refusal
 
 KIND = "hyperspace.patch"
 # plan 50: `/2` is `/1` plus the optional `group` key (a patch of one param
@@ -1004,11 +1004,20 @@ def check(doc: Any) -> list[str]:
                 out.append(f"route {b.source} → {b.target}: not a performer row")
             if not (m.owns(b.target) or m.own_lane(b.source)):
                 out.append(f"{key} row {b.source} → {b.target}: nothing of the patch's")
+            elif meta_refusal(b.target) is not None:    # register row 744
+                out.append(f"{key} row {b.source} → {b.target}: {meta_refusal(b.target)}")
     for mid, mac in (doc.get("macros") or {}).items():
         if not (isinstance(mid, str) and is_macro(mid) and 1 <= _macro_n(mid) <= MACROS):
             out.append(f"macros: {mid!r} is no macro (macro.1 … macro.{MACROS})")
         elif not isinstance(mac, Mapping) or not isinstance(mac.get("subs", []), list):
             out.append(f"{mid}: a macro is {{label, subs}}")
+        else:
+            for s in mac.get("subs") or ():              # register row 744
+                dep = s.get("depth") if isinstance(s, Mapping) else None
+                pid = s.get("base") if isinstance(s, Mapping) else None
+                pid = dep.get("target") if isinstance(dep, Mapping) else pid
+                if isinstance(pid, str) and meta_refusal(pid) is not None:
+                    out.append(f"{mid}'s subscriber: {meta_refusal(pid)}")
     for key in ("lfos", "envs"):
         vals = doc.get(key) or []
         if len(_ints(vals)) != len(vals) or any(v < 1 for v in _ints(vals)):

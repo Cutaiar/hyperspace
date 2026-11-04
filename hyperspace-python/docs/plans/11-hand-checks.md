@@ -548,7 +548,7 @@ Fractals amount, Fractals size, Double vision amount, Double vision
 ghost; TRACER — Echo brightness, Echo fade time, Echo count, Echo time
 apart, Darken, Contrast, Shape hides wake, 4D depth; TUMBLE, FACES,
 FIELD: D1–D4 4D depth, yaw, pitch, pattern, D5–D8 dark; TUMBLE's left
-height pushes audio drive, ROUTING row "session". *Fail:* (a)
+height moves nothing but its own hand on screen, no ROUTING row on the audio drive (check 572). *Fail:* (a)
 `view.bright` in `library/presets/party-*.json`; (b) `preset.TURN`
 (0.25; try 0.35), axes' Return; (c) depth sign in
 `preset.party_*_routes`; flipped on every preset → mounting:
@@ -906,11 +906,10 @@ F1 (TUMBLE). Left hand still in box; right on trackpad: CAMERA,
 right-click Zoom → **Learn hand ▸ left**. Wave right hand over box 5 s.
 *Pass:* nothing learned; footer "learning camera.zoom — move the
 left hand… (click to cancel)". Raise left slowly: "learned
-camera.zoom ← hand left.y positions (into the preset; moved from
-master.gain)" (fader, check 76; TUMBLE's left-height audio drive row
-leaves, check 77); ROUTING lists "L height"; Zoom follows left only. A
+camera.zoom ← hand left.y positions (into the preset)" (fader, check
+76); ROUTING lists "L height"; Zoom follows left only. A
 tilt that travelled furthest is named instead ("hand left.roll pushes
-+0.25"): any left axis passes. ⌘Z (drive row back); repeat **Learn
++0.25"): any left axis passes. ⌘Z; repeat **Learn
 hand ▸ right**, hands swapped. Arm **left**, cancel via footer, re-arm
 at once, hands still: nothing until left moves. *Fail:* right hand took
 it → `moved` list in `HandsIO._learn`, or `Learn.accepts` (`hand:left.`
@@ -5466,15 +5465,15 @@ state and needs a second press: Drop pushes more than one step.
 **381. The desk buttons light while held.** (the rig, APC40)
 Headless: `::test_learned_desk_buttons_light_while_held`,
 `::test_the_output_controls`.
-1. With no hold on, learn `output.hold` and `output.take` onto two free
-   desk buttons.
+1. With no hold on, put `output.hold` and `output.take` on two free desk
+   buttons as invariant rows in `bindings.json` (Learn desk refuses a meta
+   param since row 743).
 2. Press the hold button.
 3. Press the take button.
 4. Hold again, then press **drop** on GRAPH.
 
 *Pass:* both LEDs are on while held, and dark after take and after drop.
-The press that learns a button does not hold. (A button learned *during*
-a hold is unlearned by Drop: row 438. Learn before holding.)
+(A preset's button learned *during* a hold is unlearned by Drop: row 438.)
 *Fail:* the take LED stays dark while held, which points to its `lit=`
 callback not read by `routing.led_lit`. A learning press engages the hold.
 
@@ -7917,6 +7916,26 @@ too once it has this build. (2) The preview turns and the projector does not. Sa
 you wanted the orbit on the projector (row 684). (3) No camera jump on the way down.
 (4) The camera holds through the pass with no sweep. Say if it holds so often near
 vertical that the 20° zone wants to be smaller (row 685).
+
+## CO. No preset row on a meta param (wave 4 MR)
+Register rows 743–745, 2026-11-04.
+**572. The left hand stops driving audio.** (the Mac with the Leap and audio) Before
+this, run `uv run python tools/meta_routes.py "<your library path>"`: it writes
+nothing and lists each row that will drop. Then load TUMBLE from the corpus's copy, or
+a preset the tool named. Raise and lower the left hand with music playing. Pass: the
+sound's drive and the rotation's speed do not follow the hand, and the MASTER fader
+still moves the drive. On a preset the tool named, the panel says "dropped hand:left.y
+→ master.gain: master.gain is the meta controller's, tuned before the show; no preset
+row may drive it", and no dirty dot. Save it, load it again: no such line, and the
+tool no longer lists it. Fail: the drive follows the hand, or MASTER does nothing.
+**573. Every door says so.** (a shape on screen, a pad if you have one) Right-click
+the MASTER drive on the audio page. Pass: the menu reads "the meta controller's: tuned
+before the show", with no Learn desk, Learn hand or Route from LFO; Learn pad, when a
+pad is connected, is still there and a button lands on it. On GRAPH drag a hand axis
+towards a meta param that has a row (the master node): the head reads the refusal, and
+no cable lands. On ROUTING, open a route's target combo: no audio, tempo or band param
+is offered. Fail: a route lands on one, or a menu offers one and then nothing happens
+with no words.
 
 ## What no test covers
 
