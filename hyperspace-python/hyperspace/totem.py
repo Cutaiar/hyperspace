@@ -2,11 +2,8 @@
 
 A pad with motion sensors (a Joy-Con, a DualSense) held in the hand turns
 the shape: its gyro, integrated, drives **three of the six rotation
-planes**. Off by default (`totem.on`), and nothing here runs while it is off.
-
-**Version 0 of this pad is the gyro and shake only** (the owner, 2026-11-04):
-nothing the sensors say moves the shape's position by default. `totem.pan`,
-the tilt stand-in below, stays as a switch, off.
+planes**, and its tilt holds the shape off centre. Off by default
+(`totem.on`), and nothing here runs while it is off.
 
 **The planes.** A turn about one of the pad's axes is a turn in the plane
 that leaves that axis out. The pad's axes (pads/gesture.py: x right, y up
@@ -37,7 +34,7 @@ integrator) is held where the totem has it. A performer route on a phase
 scene-setter does (`Param.set`), and adds no writer path (ARCHITECTURE
 §3.2). Off, the integrator carries on from where the totem left it.
 
-**Position (off by default, `totem.pan`).** The sensors cannot give one: the accelerometer integrated
+**Position.** The sensors cannot give one: the accelerometer integrated
 twice drifts away in seconds. The stand-in is tilt — the pad's roll and
 pitch from gravity (`gesture.Motion`), against the pose at the last reset —
 moved onto `camera.pan` (`PAN_PER_RAD` world units a radian, at most
@@ -138,7 +135,7 @@ class TotemState:
 
     on: bool = False
     w: list[bool] = field(default_factory=lambda: [False, False, False])
-    pan: bool = False             # version 0: the gyro alone (the module's docstring)
+    pan: bool = True
     ang: list[float] = field(default_factory=lambda: [0.0] * 6)   # radians, PLANES order
     driving: str | None = None    # the role of the pad it reads, None while it reads none
     seen: float = 0.0             # when (monotonic) the pad it reads last stepped it
@@ -170,8 +167,8 @@ def register(reg, state: TotemState) -> None:
     reg.toggle(f"{GROUP}.on", "Totem", lambda: state.on, set_on, group=GROUP,
                persist=False, modulatable=False,
                tip="The Joy-Con as a 4D totem (an experiment, plan 47): its gyro turns "
-                   "three of the six rotation planes. X / Y / B throw the x / y / z turn "
-                   "into the W planes; A resets.")
+                   "three of the six rotation planes, its tilt moves the shape. X / Y / B "
+                   "throw the x / y / z turn into the W planes; A resets.")
     for i, axis in enumerate(AXES):
         def set_w(v, i=i, axis=axis) -> None:
             v = bool(v)
@@ -327,7 +324,7 @@ def step(state: TotemState | None, pad, reg, dt: float, role: str = "",
         state.ang[p] = _fold(state.ang[p] + AXIS_SIGN[i] * math.radians(float(turn[i])))
     for p, name in enumerate(PLANES):
         _set(reg, f"rot.phase.{name}", state.ang[p])
-    _pan(state, motion, reg, dt)
+    _pan(state, motion, reg, dt, pad)
 
 
 def _buttons(state: TotemState, pad, reg) -> None:
@@ -345,13 +342,14 @@ def _buttons(state: TotemState, pad, reg) -> None:
             p.fire()
 
 
-def _pan(state: TotemState, motion, reg, dt: float) -> None:
+def _pan(state: TotemState, motion, reg, dt: float, pad=None) -> None:
     """The tilt against the reference onto camera.pan, as a relative move
     of what the totem added last frame: x right for the right side down,
-    up (pan.y −) for the far end up. Off, or while a poi owns the pan
-    (poi.py), what it added is taken back."""
+    up (pan.y −) for the far end up. Off, while a poi owns the pan (poi.py),
+    or for a pad whose sensors move no position (`poi.no_position`, a
+    Joy-Con), what it added is taken back."""
     want = [0.0, 0.0]
-    if state.pan and not poi.owns_pan(reg):       # a poi swinging the shape owns the pan
+    if state.pan and not poi.owns_pan(reg) and not poi.no_position(pad):
         roll, pitch = math.radians(motion.roll), math.radians(motion.pitch)
         if state.ref is None:
             state.ref = (roll, pitch)

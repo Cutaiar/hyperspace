@@ -18,11 +18,8 @@ every routing lane, published by the pad device under the pad's role
             turn about the vertical (to the right high), the gyro integrated and leaking back
             to centre over `YAW_LEAK_S`; ``spin.roll``, ``spin.pitch``,
             ``spin.yaw`` the turning speed, ±`SPIN_DPS` to the ends;
-            ``shake`` one frame at 1 on a real shake (a trigger, refractory
-            `SHAKE_GAP_S`): `SHAKE_PEAKS` pushes over `SHAKE_G`, each opposing
-            the one before and within `SHAKE_WINDOW_S` of it, so one jolt (a
-            thrust, a pickup, sitting down) and a slow swing never fire it
-            (the owner's Joy-Con tapes, 2026-11-04); ``energy`` how hard the
+            ``shake`` one frame at 1 on a jolt over `SHAKE_G` (a
+            trigger, refractory `SHAKE_GAP_S`); ``energy`` how hard the
             pad is being moved, smoothed, 0 still.
 
 The sensors' axes: x right, y up out of the face, z toward the player
@@ -64,9 +61,7 @@ TILT_DEG = 60.0
 SPIN_DPS = 360.0
 YAW_DEG = 90.0
 YAW_LEAK_S = 3.0          # the yaw lane's way back to centre (a time constant)
-SHAKE_G = 1.0             # a push this far from the slow average of the accel is a peak
-SHAKE_PEAKS = 4           # …this many, each opposing the last, is a shake
-SHAKE_WINDOW_S = 0.35     # …each within this of the one before
+SHAKE_G = 1.4             # a jolt this far from 1 g (high-passed) is a shake
 SHAKE_GAP_S = 0.18
 ENERGY_DPS = 400.0        # spin that reads as full energy …
 ENERGY_G = 1.5            # … or this much jolt
@@ -230,9 +225,6 @@ class Motion:
     # totem and the poi read one pad without taking each other's degrees
     taps: dict = field(default_factory=dict)
     _since_shake: float = 1e9
-    _peak: tuple | None = None     # the last peak's push (`SHAKE_PEAKS`)
-    _peaks: int = 0                # …how many in a row
-    _since_peak: float = 1e9
 
     def step(self, gyro, accel, dt: float, integrate: bool = True) -> None:
         """One report (or the frame's newest): the lanes on `dt`, and —
@@ -263,32 +255,13 @@ class Motion:
         k_yaw = _ease(dt, YAW_LEAK_S)
         self.yaw = (self.yaw - gy * dt) * (1.0 - k_yaw)
         jolt = math.dist((ax, ay, az), g)
-        self._shaking((ax - g[0], ay - g[1], az - g[2]), jolt, dt)
+        self._since_shake += dt
+        self.shake = 0.0
+        if jolt > SHAKE_G and self._since_shake >= SHAKE_GAP_S:
+            self.shake, self._since_shake = 1.0, 0.0
         rate = math.sqrt(gx * gx + gy * gy + gz * gz)
         e = max(rate / ENERGY_DPS, jolt / ENERGY_G)
         self.energy += (min(1.0, e) - self.energy) * _ease(dt, ENERGY_S)
-
-    def _shaking(self, push, size: float, dt: float) -> None:
-        """Count the pushes over `SHAKE_G` that reverse the last one; the
-        `SHAKE_PEAKS`-th inside the window fires, and goes on firing every
-        `SHAKE_GAP_S` while the shake lasts."""
-        self._since_shake += dt
-        self._since_peak += dt
-        self.shake = 0.0
-        if self._since_peak > SHAKE_WINDOW_S:
-            self._peak, self._peaks = None, 0
-        if size <= SHAKE_G:
-            return
-        last = self._peak
-        if last is None:
-            self._peak, self._peaks, self._since_peak = push, 1, 0.0
-        elif sum(a * b for a, b in zip(push, last, strict=True)) < 0.0:
-            self._peak, self._since_peak = push, 0.0
-            self._peaks += 1
-            if self._peaks >= SHAKE_PEAKS and self._since_shake >= SHAKE_GAP_S:
-                self.shake, self._since_shake = 1.0, 0.0
-        elif size > math.sqrt(sum(a * a for a in last)):
-            self._peak = push          # the same push still growing: not a new peak
 
     def decay(self, dt: float) -> None:
         """A frame with no report: nothing turns, the lanes that leak home
@@ -297,7 +270,6 @@ class Motion:
         self.yaw *= 1.0 - _ease(dt, YAW_LEAK_S)
         self.shake = 0.0
         self._since_shake += dt
-        self._since_peak += dt
         self.energy -= self.energy * _ease(dt, ENERGY_S)
 
     def add_turn(self, turn) -> None:

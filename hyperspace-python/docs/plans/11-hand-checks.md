@@ -7845,9 +7845,6 @@ Only a person can settle these:
 
 ### Group BW: the Joy-Con's version 0 (2026-11-04)
 
-**520. Gyro only.** With the totem on, turn the pad about each axis: the shape turns with it. Tip it and fling it: the shape's position does not move. Set it on the desk for 30 seconds: the shape holds still. There is no "poi off" word in the pad window's header.
+**520. Gyro.** With the totem on, turn the pad about each axis: the shape turns with it. Tip it and fling it: the shape's position does not move. Set it on the desk for 30 seconds: the shape holds still. Walk across the room and back: the shape keeps following, with no jump when the signal recovers.
 
-**521. Shake.** Shake the pad hard for two seconds: the tilt ring in the pad window pulses, more than once. Pick it up, put it down, stand up and sit down with it, swing it like a sword and thrust it: no pulse. If a real shake does not fire, record it and hand the tape back; the thresholds were set without one.
-
-**522. Rest and a dropped link.** Walk across the room with the pad and come back: the shape keeps following, with no jump when the signal recovers. Press A: the shape resets.
-
+**521. Buttons, stick and shake.** The stick orbits the view. With the totem off, each button does what its row says; with it on, the four arrows are the totem's (X, Y and B the W planes, A the reset). Learn a shake onto a param and shake or thrust the pad: the row fires, and the tilt ring in the pad window pulses.

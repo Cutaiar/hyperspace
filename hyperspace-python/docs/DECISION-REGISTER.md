@@ -699,9 +699,8 @@ here; overturn → the change, then the same.
 | 679 | Plan 51 O1: a room lane is the whole circle, `0.5 + degrees / 360`, filtered unwrapped; the seam is one frame and never a sweep; pitch runs on past ±90° and yaw holds inside 8° of vertical (out at 11°), so no lane flips; a dropped wire lands a `position` row at depth 1 with no feel (`learn.row_for`) | — | (rec) — pending the owner |
 | 680 | Plan 51 O1: the room is the tracking mode's stage, levelled optionally from one flat hand (HANDS, **level room**); kept as an optional `room: {mode, level}` in `hands.json`, `/3` unchanged, written only when set; applied only in its own mode and never to a tape | — | (rec) — pending the owner |
 | 681 | Plan 51 O1: a lost hand reads NaN on the room lanes that frame and returns at its new reading with no glide; they have no setup params, no DAW output and no Learn | — | (rec) — pending the owner |
-| 686 | The Joy-Con's version 0 is the gyro and shake: nothing the sensors say moves the shape's position by default (`totem.pan` off; the poi has no header word and needs `[poi] on = true`). An idealized control object for the acceleration comes later | 520 | owner — 2026-11-04 |
-| 687 | `motion:shake` fires on four pushes over 1 g, each opposing the last within 0.35 s, for every motion pad; a single jolt no longer fires it | 521 | (rec) — pending the owner |
-| 688 | The hid reader learns each gyro's rest offset (`hid.Turn`): every axis within 3 deg/s for one sensor second, none past 20 deg/s | 522 | (rec) — pending the owner |
+| 686 | The Joy-Con's version 0 is buttons, sticks, the gyro and shake: its sensors move no position (`poi.no_position`); the Edge and `motion:shake` are unchanged. An idealized control object for the acceleration comes later | 520, 521 | owner — 2026-11-04 |
+| 687 | The hid reader learns a Joy-Con's gyro rest offset (`hid.Turn(learn=True)`): every axis within 3 deg/s for one sensor second, none past 20 deg/s | 520 | (rec) — pending the owner |
 
 "—": no hand check shows it; tests only.
 
@@ -12325,38 +12324,25 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   them by default: no preset or binding changed.
 - **Judge it.** 516.
 
-### 686. The Joy-Con's version 0: the gyro and shake
+### 686. The Joy-Con's version 0: buttons, sticks, the gyro and shake
 
-- **Answer.** Owner, 2026-11-04: drop position for now; an idealized control
-  object for the acceleration takes tuning there is no time for yet.
-- **Built.** `totem.pan` defaults off (the switch stays); `ui_pad.poi_word`
-  shows nothing while the poi is off, so `[poi] on = true` is the only way to
-  it. `poi.py` itself is unchanged. Draft PR #342 is the record of the
-  position work and is not in this.
-- **To reverse.** Default `TotemState.pan` to True; show "poi off" again.
-- **Judge it.** 520.
+- **Answer.** Owner, 2026-11-04: drop position for this pad for now, and leave
+  the DualSense Edge and the meaning of a shake as they are. An idealized
+  control object for the acceleration takes tuning there is no time for yet.
+- **Built.** `poi.no_position(pad)`, true for the Nintendo family: the poi does
+  not read such a pad and the totem's tilt adds no pan from it. `motion:shake`
+  is unchanged. Draft PR #342 is the record of the position work.
+- **To reverse.** Make `no_position` answer False.
+- **Judge it.** 520, 521.
 
-### 687. What counts as a shake
-
-- **Answer.** (rec) — pending the owner.
-- **Built.** `gesture.Motion._shaking`. The old rule, one push over 1.4 g,
-  fired on a pickup, on standing up with the pad, and repeatedly through sword
-  swings and thrusts on the owner's two Joy-Con tapes. The new rule fired on
-  none of the five minutes of those tapes.
-- **Other options.** Keeping the jolt as a separate lane for a thrust: not
-  asked for; the owner can ask once a thrust has a job.
-- **Limit.** Neither tape holds a deliberate shake: the firing side is proven
-  on a simulated one only, and the new thresholds apply to the Edge too.
-- **To reverse.** Restore the single-jolt test in `Motion.step`.
-- **Judge it.** 521.
-
-### 688. Learning the gyro's rest offset
+### 687. Learning a Joy-Con's gyro rest offset
 
 - **Answer.** (rec) — pending the owner.
-- **Built.** `hid.Turn._learn`. The turn is otherwise unchanged: on both tapes,
-  neither a longer gap allowance nor bridging gaps was reliably better, so the
-  50 ms limit stands. The offset only matters for a pad whose rest reads past
-  the 3 deg/s dead band, which the owner's does not (about 0.2 deg/s).
+- **Built.** `hid.Turn(learn=True)` for a Nintendo pad only. The turn is
+  otherwise unchanged: on both tapes, neither a longer gap allowance nor
+  bridging gaps was reliably better, so the 50 ms limit stands. The offset only
+  matters for a pad whose rest reads past the 3 deg/s dead band, which the
+  owner's does not (about 0.2 deg/s).
 - **Limit.** A pad held in the hand and never set down learns nothing.
-- **To reverse.** Drop `_learn` and the subtraction in `Turn.add`.
-- **Judge it.** 522.
+- **To reverse.** Build `Turn` without `learn`.
+- **Judge it.** 520.

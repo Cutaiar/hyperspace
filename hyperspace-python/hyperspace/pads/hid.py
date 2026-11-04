@@ -190,7 +190,7 @@ class HidPad:
         self._raw: bytes | None = None       # the newest report, decoded on `latest`
         self._raw_t = 0.0
         # the gyro integrated here, every report (`take_turn`)
-        self._turn = Turn()
+        self._turn = Turn(learn=self.nintendo)
         self._frame: sony.Frame | None = None
         self._frame_of: bytes | None = None
         self.update_version = 0
@@ -463,7 +463,7 @@ class TapePad:
         self._i = 0
         self._loop_n = 0               # how many times round the loop `latest` is
         self._taken: int | None = None # the position (loop × reports + i) `take_turn` reached
-        self._turn = Turn()
+        self._turn = Turn(learn=self.nintendo)
 
     @property
     def length(self) -> float:
@@ -544,14 +544,16 @@ class Turn:
     have wrapped through; at most `gesture.REPORT_DT_MAX` a report (the
     first after a real gap). `take` hands the sum over and starts again.
 
-    **The gyro's offset is learned here**, so a pad whose rest reads past the
-    dead band never turns the shape on its own: a sensor axis that holds
+    **A Joy-Con's gyro offset is learned here** (`learn`; other pads as they
+    were), so a pad whose rest reads past the dead band never turns the shape
+    on its own: a sensor axis that holds
     within `OFFSET_SPREAD_DPS`, under `OFFSET_MAX_DPS` on all three, for
     `OFFSET_S` of sensor time is at rest, and its mean becomes the offset
     taken off every reading after. A hand is never that steady, so a slow
     real turn is not learned away."""
 
-    def __init__(self):
+    def __init__(self, learn: bool = False):
+        self.learn = learn
         self.sum = [0.0, 0.0, 0.0]
         self.n = 0
         self.last_t: float | None = None
@@ -597,7 +599,8 @@ class Turn:
         each = dt / len(samples)
         for s in samples:
             rate = cal.gyro_dps(s)
-            self._learn(rate, each)
+            if self.learn:
+                self._learn(rate, each)
             less = [v - o for v, o in zip(rate, self.offset, strict=True)]
             for a, v in enumerate(gesture.turn_of(less, each)):
                 self.sum[a] += v

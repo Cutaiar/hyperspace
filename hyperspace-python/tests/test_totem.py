@@ -79,7 +79,6 @@ def rig():
     reg = build_registry(view, Control(chain), SimpleNamespace(chain=chain), None)
     state = totem.TotemState()
     totem.register(reg, state)
-    state.pan = True                # the tilt-pan's own tests (off by default: its test)
     return reg, state, view
 
 

@@ -387,9 +387,19 @@ def owns_pan(reg) -> bool:
     return state is not None and state.on
 
 
+def no_position(pad) -> bool:
+    """Is `pad` one whose sensors move no position? The Nintendo pads, for
+    now (the owner, 2026-11-04: their version 0 is buttons, sticks, the gyro
+    and shake; an IMU this size cannot hold a place). Every other pad is as
+    it was."""
+    return getattr(getattr(pad, "model", None), "family", "") == "nintendo"
+
+
 def _live(pad) -> bool:
     has = getattr(pad, "has", None)
     lanes = getattr(pad, "motion_lanes", None)
+    if no_position(pad):
+        return False
     return (bool(getattr(pad, "on", False)) and has is not None and has("motion")
             and lanes is not None and lanes() is not None)
 

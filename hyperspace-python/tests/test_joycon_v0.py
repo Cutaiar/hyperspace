@@ -1,28 +1,28 @@
-"""Version 0 of the Joy-Con (the owner, 2026-11-04): the gyro and shake,
-nothing driving the shape's position. Real moves from the owner's two tapes
-(`tests/fixtures/pads/joycon-v0-moves.jsonl`): a rest, a pickup off the table,
-a carry, a sword swing, thrusts, standing up and sitting down.
+"""Version 0 of the Joy-Con (the owner, 2026-11-04): its buttons and stick, the
+gyro and shake, with its sensors moving no position, and every other pad as it
+was. Real bytes from the owner's tapes (`joycon-bt-excerpt.jsonl`,
+`joycon-v0-moves.jsonl`)."""
 
-The shakes here are simulated: neither tape holds a deliberate shake, so the
-firing side still has to be judged on the real pad (hand check 521)."""
-
-import itertools
 import json
 import math
-import random
 from pathlib import Path
 
 import pytest
-from test_totem import DT, FakePad, phase
+import test_pads_joycon_real as real
+from test_pads_nintendo import joycon_pad
+from test_poi import rig as poi_rig
+from test_totem import DT, FakePad, ShimRouter, phase
 from test_totem import rig as totem_rig
 
-from hyperspace import totem
-from hyperspace.pads import gesture, hid, nintendo
+from hyperspace import poi, totem
+from hyperspace.devices import Context, PadDevice
+from hyperspace.pads import gesture, hid, models, nintendo
 
 HERE = Path(__file__).resolve().parent
 TAPE = HERE / "fixtures" / "pads" / "joycon-v0-moves.jsonl"
 FINDINGS = HERE.parent / "docs" / "plans" / "assets" / "46-joycon" / "joycon-findings.json"
 amap = nintendo.AXIS_MAP
+JOYCON, EDGE = models.MODELS["joycon-l"], models.MODELS["edge"]
 
 
 def calibration(offset_counts=0):
@@ -47,9 +47,8 @@ def windows():
     return out
 
 
-def turned(reports, cal, turn=None):
+def turned(reports, cal, turn):
     """The reader's turn over `reports`, degrees about the sensor's axes."""
-    turn = turn or hid.Turn()
     total = [0.0, 0.0, 0.0]
     for t, r in reports:
         samples = nintendo.gyro_of(r, None)
@@ -57,11 +56,10 @@ def turned(reports, cal, turn=None):
             turn.add(samples, t, cal, nintendo.report_clock(r))
         got, _ = turn.take()
         total = [a + b for a, b in zip(total, got, strict=True)]
-    return total, turn
+    return total
 
 
 def shakes_of(reports, cal):
-    """The frames the shake lane fires over `reports`, as the app reads them."""
     m, last, fired = gesture.Motion(), None, []
     for t, r in reports:
         f = nintendo.decode(r, "l", cal)
@@ -75,100 +73,138 @@ def shakes_of(reports, cal):
     return fired
 
 
-def shaken(hz=6.0, g=1.5, seconds=2.0, drop=0.0, axis=0):
-    """Fires of a simulated shake at the Joy-Con's report rate."""
-    rnd = random.Random(1)
-    m, last, t, fired = gesture.Motion(), 0.0, 0.0, []
-    while t < seconds:
-        if rnd.random() >= drop:
-            a = [0.0, 1.0, 0.0]
-            a[axis] += g * math.sin(2 * math.pi * hz * t)
-            m.step((0.0, 0.0, 0.0), a, t - last)
-            last = t
-            if m.shake:
-                fired.append(t)
-        t += 0.015
-    return fired
+def driven(name, totem_on=False):
+    """One of the owner's button and stick recordings through the real pad
+    and the pad device, as a frame runs them: the registry, the buttons seen
+    down, the rows' last keywords."""
+    reg, _, _ = totem_rig()
+    pad, reader = joycon_pad()
+    reader.calibration = real.calibration()
+    dev = PadDevice("joy", {}, Context(reg=reg), io=pad)
+    dev._dt = DT
+    router = ShimRouter(reg)
+    reg["totem.on"].set(totem_on)
+    down: set[str] = set()
+    for _t, r in real.windows()[name]:
+        reader._take(r)
+        pad.poll(dt=DT)
+        down |= {n for n, code in pad.buttons_named.items() if pad.down(code)}
+        dev.act(router)
+    return reg, down, router.calls[-1]
 
 
-@pytest.mark.parametrize("move", ["rest", "pickup", "carry", "swing", "thrust", "stand up", "sit down"])
-def test_real_moves_that_are_not_a_shake_never_fire_it(move):
-    assert shakes_of(windows()[move], calibration()) == []
+# ---------------------------------------------------------------- buttons and the stick
+
+@pytest.mark.parametrize("button", ["A", "Y", "B", "X", "LP", "RP", "LB", "VIEW", "SHARE", "LSTICK"])
+def test_every_real_button_press_reaches_the_pad(button):
+    _, down, _ = driven(button)
+    assert button in down
 
 
-@pytest.mark.parametrize(("hz", "g", "drop"), [(3, 1.5, 0.0), (6, 1.5, 0.0), (8, 2.0, 0.0),
-                                               (6, 1.5, 0.15), (6, 1.5, 0.3)])
-def test_a_shake_fires_soon_and_keeps_firing_even_with_reports_lost(hz, g, drop):
-    fired = shaken(hz, g, drop=drop)
-    assert fired and fired[0] < 1.0
-    assert len(fired) >= 3
-    assert all(b - a >= gesture.SHAKE_GAP_S - 1e-9 for a, b in itertools.pairwise(fired))
+def test_the_real_stick_orbits_the_view_and_the_trigger_rides_the_depth():
+    reg, _, _ = driven("rest")
+    assert reg["camera.yaw"].base == pytest.approx(0.0, abs=1e-3)      # at rest: nothing
+    assert reg["camera.pitch"].base == pytest.approx(0.0, abs=1e-3)
+    reg, _, _ = driven("stick right")
+    assert abs(reg["camera.yaw"].base) > 1e-3
+    reg, _, _ = driven("stick up")
+    assert abs(reg["camera.pitch"].base) > 1e-3
+    reg, _, _ = driven("axis:LT")
+    assert reg["view.depth4"].base != pytest.approx(totem_rig()[0]["view.depth4"].base, abs=1e-6)
 
 
-def test_one_jolt_is_not_a_shake():
+def test_with_the_totem_on_it_takes_the_four_arrows_and_leaves_the_rest_to_their_rows():
+    _, _, call = driven("rest", totem_on=True)
+    skip = call["skip"]
+    assert {"pad:A", "pad:B", "pad:X", "pad:Y"} <= skip
+    assert not skip & {"pad:LB", "pad:LP", "pad:RP", "pad:VIEW", "pad:SHARE", "pad:LSTICK"}
+
+
+# ---------------------------------------------------------------- shake
+
+def test_a_real_thrust_and_swing_fire_shake_and_a_real_rest_does_not():
+    moves, cal = windows(), calibration()
+    assert shakes_of(moves["rest"], cal) == []
+    assert len(shakes_of(moves["thrust"], cal)) >= 3
+    assert len(shakes_of(moves["swing"], cal)) >= 3
+
+
+def test_one_jolt_is_a_shake_as_ever():
     m = gesture.Motion()
-    for i in range(60):
-        push = 3.0 if 20 <= i < 24 else 0.0
-        m.step((0.0, 0.0, 0.0), (push, 1.0, 0.0), DT)
-        assert m.shake == 0.0
+    m.step((0.0, 0.0, 0.0), (0.0, 1.0, 0.0), DT)
+    m.step((0.0, 0.0, 0.0), (0.0, 3.0, 0.0), DT)
+    assert m.shake == 1.0
 
 
-def test_a_shake_is_one_frame_long():
-    m, seen = gesture.Motion(), []
-    for i in range(120):
-        m.step((0.0, 0.0, 0.0), (1.5 * math.sin(2 * math.pi * 6 * i * 0.015), 1.0, 0.0), 0.015)
-        seen.append(m.shake)
-    assert 1.0 in seen
-    assert all(not (a and b) for a, b in itertools.pairwise(seen))
-
+# ---------------------------------------------------------------- the gyro
 
 def test_a_real_rest_turns_nothing():
-    total, _ = turned(windows()["rest"], calibration())
+    total = turned(windows()["rest"], calibration(), hid.Turn(learn=True))
     assert max(abs(v) for v in total) < 0.01
 
 
-def test_the_rest_measures_this_pads_small_offset():
-    _, turn = turned(windows()["rest"], calibration())
-    assert 0.05 < abs(turn.offset[0]) + abs(turn.offset[1]) + abs(turn.offset[2]) < 1.0
-
-
-def test_a_pad_whose_rest_reads_past_the_dead_band_stops_turning_within_seconds():
-    """Rest read 8 deg/s off, far past the 3 deg/s band: unlearned, the shape
+def test_a_joycon_whose_rest_reads_past_the_dead_band_stops_turning_within_seconds():
+    """Rest read 8 deg/s off, past the 3 deg/s band: unlearned, the shape
     would spin at that rate for ever."""
-    counts = round(8.0 / 0.061)
-    reports = windows()["rest"]
-    cal = calibration(counts)
-    first_s = reports[0][0] + 3.0
-    early, turn = turned([x for x in reports if x[0] <= first_s], cal)
-    assert max(abs(v) for v in early) < 30.0                     # the seconds before it is learned
-    late, turn = turned([x for x in reports if x[0] > first_s], cal, turn)
-    assert max(abs(v) for v in late) < 0.05                      # the rest of the rest: nothing
-    assert max(abs(v) for v in turn.offset) == pytest.approx(8.0, abs=0.5)
+    reports, cal = windows()["rest"], calibration(round(8.0 / 0.061))
+    split = reports[0][0] + 3.0
+    turn = hid.Turn(learn=True)
+    early = turned([x for x in reports if x[0] <= split], cal, turn)
+    assert max(abs(v) for v in early) < 30.0
+    late = turned([x for x in reports if x[0] > split], cal, turn)
+    assert max(abs(v) for v in late) < 0.05
 
 
 def test_a_real_moving_hand_is_never_learned_as_an_offset():
     for move in ("carry", "swing", "thrust"):
-        reports = windows()[move]
-        turn = hid.Turn()
-        before = None
-        for t, r in reports:
-            samples = nintendo.gyro_of(r, None)
-            if samples is not None:
-                turn.add(samples, t, calibration(), nintendo.report_clock(r))
-            if max(abs(v) for v in turn.offset) > 1.0:
-                before = t
-        assert before is None, move
+        turn = hid.Turn(learn=True)
+        turned(windows()[move], calibration(), turn)
+        assert max(abs(v) for v in turn.offset) < 1.0, move
 
 
-def test_version_0_moves_nothing_but_the_turn():
-    """A tilted, flung pad: the totem turns the shape and the pan stays put."""
+def test_only_a_joycons_reader_learns_an_offset():
+    joycon = hid.HidPad({"vendor_id": 0x057E, "product_id": 0x2006}, start=False)
+    assert joycon._turn.learn is True
+    edge = hid.HidPad({"vendor_id": 0x054C, "product_id": 0x0DF2}, start=False)
+    assert edge._turn.learn is False
+    plain = hid.Turn()
+    turned(windows()["rest"], calibration(round(8.0 / 0.061)), plain)
+    assert plain.offset == [0.0, 0.0, 0.0]
+
+
+# ---------------------------------------------------------------- no position from a Joy-Con; the Edge as it was
+
+def flung(model):
+    """A tilted, flung pad of `model` under the totem."""
     reg, state, _ = totem_rig()
-    state.pan = totem.TotemState().pan                            # the real default
-    assert state.pan is False and reg["totem.pan"].value is False
     pad = FakePad()
+    pad.model = model
     reg["totem.on"].set(True)
     for i in range(100):
         pad.frame(gyro=(0.0, 0.0, 90.0), accel=(2.0 * math.sin(i), 1.0, -1.0))
         totem.step(state, pad, reg, DT)
+    return reg
+
+
+def test_a_joycons_sensors_turn_the_shape_and_move_no_position():
+    reg = flung(JOYCON)
     assert reg["camera.pan.x"].value == 0.0 and reg["camera.pan.y"].value == 0.0
     assert abs(phase(reg, "XY")) > 1.0
+
+
+def test_the_edges_tilt_still_pans_under_the_totem():
+    reg = flung(EDGE)
+    assert reg["camera.pan.x"].value != 0.0 or reg["camera.pan.y"].value != 0.0
+
+
+def test_the_poi_reads_no_joycon_and_still_reads_an_edge():
+    for model, reads in ((JOYCON, False), (EDGE, True)):
+        reg, state, _ = poi_rig()
+        pad = FakePad()
+        pad.model = model
+        reg["poi.on"].set(True)
+        for _ in range(60):
+            pad.frame()
+            poi.step(state, pad, reg, DT)
+        assert (state.driving is not None) is reads
+        assert (reg["camera.pan.y"].value != 0.0) is reads
