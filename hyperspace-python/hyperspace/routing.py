@@ -101,7 +101,10 @@ and returns to. The last two are the *performer* ops:
              continue from where the target sits with no jump, like lifting a
              mouse. Depth 1 from a whole-circle lane onto a full-circle param
              is one for one. No feel: a follower would glide across the seam.
-             One undo step per acting stretch (`Router._turn`)
+             It needs a whole-circle source (`whole_circle`) and a `when`, the
+             clutch; without either it is dormant, since a linear lane has no
+             shortest way and a row that never stops acting would be one undo
+             step for ever. One undo step per closure (`Router._turn`)
 
 Push and position go through the same modulate(): position's offset is ``clamp(depth ·
 scale · u) − base_norm``, so range, wrap and dormancy are push's. Rows to
@@ -334,6 +337,19 @@ BANKS: dict[str, type] = {lfo.LFOs.SCHEME: lfo.LFOs,
 # from here so no importer changes
 TURN_OP = "turn"                               # writes the base, not an offset (plan 51 O2)
 MOD_OPS = ("push", "position", TURN_OP)        # the performer ops: the Router's rows
+# a closure's undo step outlives its rows by this long: a tracker dropout and the
+# grab's debounce coming back (GRAB_HOLD_S) are the same closure, and a person
+# opening and closing a fist takes longer than this
+TURN_GRACE_S = 0.15
+
+
+def whole_circle(source: str) -> bool:
+    """A hand's room lane (plan 51, `hands.room`): the whole circle, its seam
+    a jump a push's depth or a feel's glide would make a sweep."""
+    head, _, name = source.partition(":")
+    return base_scheme(head) == "hand" and ".room." in name
+
+
 # `hold` is a button row's op (plan 15 WP4, fork 13): the target fires
 # once the button has been down HOLD_S, and a shorter press does nothing —
 # the adapter times it (midi.py a note, `Router.pad` a pad button or the
@@ -847,7 +863,8 @@ class Binding:
             if self.op == "push":
                 return f"{who} pushes {self.value:+.3g}{by}{when}"
             if self.op == TURN_OP:
-                return f"{who} turns {self.value:+.3g}{by}{when}"
+                dormant = "" if self.when and whole_circle(self.source) else " (dormant)"
+                return f"{who} turns {self.value:+.3g}{by}{when}{dormant}"
             depth = "" if self.value == 1.0 else f" {self.value:.3g}"
             return f"{who} positions{depth}{by}{when}"
         return who
@@ -3860,7 +3877,7 @@ class Router:
                     q.apply(mark)
         for key in [k for k in movers if k not in moved]:
             del movers[key]
-        self._end_turns()
+        self._end_turns(dt)
 
     # ---- the turn rows (plan 51 O2): a performer that writes the base ----
 
@@ -3868,8 +3885,11 @@ class Router:
         """A `turn` row acting this frame: the reading's shortest change since
         the last frame onto the target's base. Its first frame only reads, and
         `_end_turns` forgets a row that did not act, so a closing clutch or a
-        returning hand never jumps. A target it cannot turn is dormant."""
-        if p.kind is not Kind.CONTINUOUS or p.integer or not p.modulatable:
+        returning hand never jumps. Dormant with no clutch, on a source that
+        is no circle, or on a target it cannot turn. A row in `_turn_cut` only
+        reads until it has let go."""
+        if (b.when is None or not whole_circle(b.source) or p.kind is not Kind.CONTINUOUS
+                or p.integer or not p.modulatable):
             return
         d = self.__dict__
         turns = d.setdefault("_turns", {})
@@ -3877,9 +3897,11 @@ class Router:
         last = turns.get(key)
         turns[key] = u
         d.setdefault("_turned", set()).add(key)
+        if key in d.get("_turn_cut", ()):
+            return
         if not d.get("_turn_held"):
             self._turn_opens()
-        if last is None or d.get("_turn_cut"):
+        if last is None:
             return
         x = depth * ((u - last + 0.5) % 1.0 - 0.5)
         if x:
@@ -3887,38 +3909,52 @@ class Router:
             p.set(p._value_of_norm(n % 1.0 if p.wrap else min(1.0, max(0.0, n))))
 
     def _turn_opens(self) -> None:
-        """The first turn row acting: one undo step from here until none acts,
-        however still the hand goes (`Undo.keep_open`, the base chase's). Only
-        on the `Undo` that watches this deck's registry; any other deck's edits
-        settle by the quiet, as a knob's do. Whatever else closes the step (an
-        undo, a load, the hold) cuts the turn until every row has let go, so a
-        fist still closed cannot run on from what was just put back."""
+        """A closure begins: one undo step from here until no row acts, however
+        still the hand goes (`Undo.keep_open`, the base chase's), on the `Undo`
+        that watches this deck's registry, chosen here each closure. Whatever
+        else closes the step (an undo, a load, the hold, a chase's press) cuts
+        the rows acting then, each until it has let go, so a fist still closed
+        cannot run on from what was just put back, and it has no step left to
+        close. A step someone else is keeping (a held chase) is left to them:
+        this turn's edits land in it and no verb is ended by a fist."""
         d = self.__dict__
-        steps = undo_steps.installed()
-        steps = steps if steps is not None and steps.reg is self.reg else None
-        d["_turn_held"], d["_turn_undo"] = True, steps
+        steps = undo_steps.watching(self.reg)
+        if steps is not None and steps._kept is not None:
+            steps = None
+        d["_turn_held"], d["_turn_undo"], d["_turn_idle"] = True, steps, 0.0
 
         def closed() -> None:
-            if d.get("_turn_held"):
-                d["_turn_cut"] = True
+            d["_turn_cut"] = set(d.get("_turns", ()))
+            d["_turn_held"], d["_turn_undo"] = False, None
 
         if steps is not None:
             undo_steps.keep_open("orbit", steps, on_end=closed)
 
-    def _end_turns(self) -> None:
-        """The pass's end: a row that did not act forgets its reading, and
-        when none acted the turn is over and its undo step closes."""
+    def _end_turns(self, dt: float) -> None:
+        """The pass's end: a row that did not act forgets its reading and is
+        no longer cut. When none has acted for TURN_GRACE_S the closure is
+        over and its undo step closes."""
         d = self.__dict__
         turns = d.get("_turns")
-        if not turns:
+        if not turns and not d.get("_turn_held"):
             return
         turned = d.setdefault("_turned", set())
         for key in [k for k in turns if k not in turned]:
             del turns[key]
+        cut = d.get("_turn_cut")
+        if cut:
+            cut &= turned
+        acting = bool(turned - cut) if cut else bool(turned)
         turned.clear()
-        if not turns:
+        if not d.get("_turn_held"):
+            return
+        if acting:
+            d["_turn_idle"] = 0.0
+            return
+        d["_turn_idle"] = d.get("_turn_idle", 0.0) + dt
+        if d["_turn_idle"] >= TURN_GRACE_S:
             steps = d.get("_turn_undo")
-            d["_turn_held"], d["_turn_cut"], d["_turn_undo"] = False, False, None
+            d["_turn_held"], d["_turn_undo"] = False, None
             if steps is not None:
                 undo_steps.let_close(steps)
 

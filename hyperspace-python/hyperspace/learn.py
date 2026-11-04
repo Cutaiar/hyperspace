@@ -99,6 +99,7 @@ from .routing import (
     Owned,
     base_scheme,
     parse_sink,
+    whole_circle,
 )
 
 # plan 24 C1: the desk's SAVE is held, never latched — a learned toggle or
@@ -352,13 +353,6 @@ def _switched_on(pid: str, values, drawn: frozenset[str] | None = None) -> bool:
     return False
 
 
-def whole_circle(source: str) -> bool:
-    """A hand's room lane (plan 51, `hands.room`): the whole circle, its seam
-    a jump a push's depth or a feel's glide would make a sweep."""
-    head, _, name = source.partition(":")
-    return base_scheme(head) == "hand" and ".room." in name
-
-
 def clutch_of(source: str) -> str:
     """The gate a room lane's `turn` row lands with: the same hand's closed
     fist, ``hand:right.room.yaw`` → ``hand:right.grab`` (plan 51 O2)."""
@@ -432,6 +426,30 @@ def row_for(source: str, p: Param, when: str | None = None, *,
         d = PUSH_DEPTH if depth is None else float(depth)
         return Binding(source, p.id, "push", d, when=when, motion=feel)
     return Binding(source, p.id, "position", 1.0, when=when, motion=feel)
+
+
+def land_moved(b: Binding, old_source: str, p: Param | None) -> None:
+    """A row just re-pointed lands as `row_for` would when a room lane or a
+    `turn` is in it (any other row keeps its op, depth and feel, as it always
+    did): a clutch that was the old hand's fist follows to the new one, a gate
+    someone picked stays; a `turn` on a target that no longer wraps or a source
+    that is no circle becomes that target's row; a turn stays at its depth."""
+    if p is None or (b.op != TURN_OP and not whole_circle(b.source)):
+        return
+    auto = whole_circle(old_source) and b.when == clutch_of(old_source)
+    new = row_for(b.source, p, None if auto else b.when)
+    if b.op == new.op == TURN_OP:
+        b.when = new.when
+        return
+    b.op, b.value, b.when, b.motion, b.rest = new.op, new.value, new.when, new.motion, new.rest
+
+
+def move_route(table: Bindings, reg: Registry, b: Binding, *, source: str | None = None,
+               target: str | None = None) -> None:
+    """`Bindings.move_route`, and the row landing as `row_for` would (`land_moved`)."""
+    old = b.source
+    table.move_route(b, source=source, target=target)
+    land_moved(b, old, reg.get(b.target))
 
 
 class Learn:

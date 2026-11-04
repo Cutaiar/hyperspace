@@ -12,6 +12,7 @@ import json
 import math
 from itertools import pairwise
 from types import SimpleNamespace
+from types import SimpleNamespace as NS
 
 import pytest
 from fake_hands import hand as fake_hand
@@ -25,11 +26,13 @@ from hyperspace import learn, preset, ui_routing, undo
 from hyperspace.hands import core as hc
 from hyperspace.hands import room as R
 from hyperspace.hands import tape as T
-from hyperspace.routing import MOD_OPS, TURN_OP, Binding, Owned, is_session_row
+from hyperspace.params import Registry
+from hyperspace.routing import MOD_OPS, TURN_GRACE_S, TURN_OP, Binding, Owned, is_session_row
 
 YAW, PITCH = "hand:right.room.yaw", "hand:right.room.pitch"
 GRAB = "hand:right.grab"
 SETTLE_FRAMES = round(hc.GRAB_HOLD_S * FPS) + 2      # a fist held long enough to close
+LONG_OPEN = round((TURN_GRACE_S + 0.1) * FPS)        # long enough to be another closure
 
 
 def fist(**kw):
@@ -227,6 +230,53 @@ def test_a_hand_the_box_keeps_out_moves_nothing(app, tmp_path):
     assert all(v == 0.0 for v in r.yaw)
 
 
+def test_a_hand_passing_just_outside_the_cone_does_not_sweep_the_camera(app, tmp_path):
+    """About 9° off vertical, never in the cone: `atan2` swings most of half a
+    turn in a few frames, each step short of a flip."""
+    def over(k):
+        # the fingers' tilt from vertical: 9° to the side, sliding front to back
+        a, b = math.radians(9.0), math.radians(k - 30.0)
+        z = (math.sin(a), math.cos(a) * math.cos(b), math.cos(a) * math.sin(b))
+        return z
+
+    def palm(k):
+        back = over(k)
+        up = (back[0], -back[2], back[1])
+        d = sum(u * v for u, v in zip(up, back))
+        up = tuple(u - d * v for u, v in zip(up, back))
+        n = math.sqrt(sum(u * u for u in up))
+        normal = tuple(-u / n for u in up)
+        return (normal, tuple(-v for v in back))
+
+    script = [(palm(0), True)] * SETTLE_FRAMES + [(palm(k), True) for k in range(61)]
+    r = Run(app, tmp_path, script)
+    yaw = lane(r.run, "right.room.yaw")
+    live = [v for v in yaw if not math.isnan(v)]
+    assert any(math.isnan(v) for v in yaw)                      # it went blind
+    assert live
+    moved = max(abs(v) for v in r.yaw)
+    assert moved < 45.0       # outside the zone its real yaw, inside POLE_SWING_DEG; not ~160°
+
+
+def test_a_hand_that_went_blind_starts_afresh_on_leaving(tmp_path):
+    palm = R.Palm()
+    m = R.stage("desktop")
+
+    def at(t, **kw):
+        n, d = pose(**kw)
+        palm.step(R.palm_axes(n, d, m), t, 1e6, 0.0)
+
+    at(0.00, pitch=80.0, yaw=0.0)
+    palm._near = 0.0
+    at(0.01, pitch=80.0, yaw=60.0)                               # strayed near the pole
+    assert palm.deg == {}
+    at(0.02, pitch=75.0, yaw=60.0)                               # still near
+    assert palm.deg == {}
+    at(0.03, pitch=60.0, yaw=60.0)                               # away: afresh, no glide
+    assert palm.deg["yaw"] == pytest.approx(60.0, abs=0.01)
+    assert not palm._blind and palm._near is None
+
+
 def test_a_twist_inside_the_cone_is_no_step_on_the_way_out(app, tmp_path):
     """Up to vertical, twisted there, back down: the yaw the hand left the cone
     with is no turn of it, so the lane restarts and the camera does not step."""
@@ -237,8 +287,8 @@ def test_a_twist_inside_the_cone_is_no_step_on_the_way_out(app, tmp_path):
     r = Run(app, tmp_path, closing(yaw=10.0) + climb + twist + down)
     assert max(abs(s) for s in steps_of(r.yaw)) < 2.0
     lanes = lane(r.run, "right.room.yaw")
-    assert any(math.isnan(v) for v in lanes)                     # the one frame it restarted
-    assert sum(math.isnan(v) for v in lanes) <= 2
+    assert any(math.isnan(v) for v in lanes)                     # blind until away from the pole
+    assert sum(math.isnan(v) for v in lanes) <= 8
 
 
 def test_a_small_step_out_of_the_cone_does_not_restart():
@@ -273,10 +323,21 @@ def test_yaw_and_pitch_turn_together(app, tmp_path):
     assert math.degrees(app.reg["camera.pitch"].base) == pytest.approx(15.0, abs=0.3)
 
 
-def test_a_row_with_no_gate_turns_whenever_the_hand_is_there(app, tmp_path):
+def test_a_row_with_no_gate_is_dormant_and_says_so(app, tmp_path):
+    """It would never stop acting: no closure to be one undo step, and no way to
+    reposition the hand."""
     orbit_rows(app.table, Binding(YAW, "camera.yaw", TURN_OP))
     r = Run(app, tmp_path, [opened(yaw=float(k)) for k in range(31)])
-    assert r.yaw[-1] == pytest.approx(30.0, abs=0.2)
+    assert all(v == 0.0 for v in r.yaw)
+    assert app.table.owner("camera.yaw").describe("R room yaw").endswith("(dormant)")
+
+
+@pytest.mark.parametrize("source", ["hand:right.x", "hand:right.yaw", "hands:gap"])
+def test_a_source_that_is_no_circle_is_dormant(app, tmp_path, source):
+    """A linear lane has no shortest way: 0.1 to 0.8 is not −0.3."""
+    orbit_rows(app.table, Binding(source, "camera.yaw", TURN_OP, when=GRAB))
+    r = Run(app, tmp_path, closing() + [fist(yaw=float(k), pitch=k / 2.0) for k in range(31)])
+    assert all(v == 0.0 for v in r.yaw)
 
 
 def test_a_clamped_target_stops_at_its_end(app, tmp_path):
@@ -356,12 +417,86 @@ def test_a_room_lane_on_a_clamped_target_stays_the_fader(app):
 
 def test_the_op_chip_goes_between_position_and_turn_from_a_room_lane():
     room = Binding(YAW, "camera.yaw", TURN_OP)
-    assert ui_routing._next_op(room) == "position"
+    assert ui_routing._next_op(room, True) == "position"
     room.op = "position"
-    assert ui_routing._next_op(room) == TURN_OP
+    assert ui_routing._next_op(room, True) == TURN_OP
+    assert ui_routing._next_op(room, False) == "position"       # a clamped target: as row_for
     plain = Binding("lane:0", "camera.yaw", "position")
-    assert ui_routing._next_op(plain) == "push"
+    assert ui_routing._next_op(plain, True) == "push"
     assert ui_routing.OP_CHIP[TURN_OP] == "turn"
+
+
+def test_flipping_to_turn_lands_as_a_wire_does():
+    from hyperspace.motion import DEFAULT_ROUTE_FEEL
+    row = Binding(YAW, "camera.yaw", "position", motion=DEFAULT_ROUTE_FEEL)
+    ui_routing._flip_op(row, True)
+    assert (row.op, row.when, row.motion) == (TURN_OP, GRAB, None)
+    ui_routing._flip_op(row, True)
+    assert row.op == "position" and row.motion is None          # no stale spring back
+    chosen = Binding(YAW, "camera.yaw", "position", when="hand:right.pinch.index")
+    ui_routing._flip_op(chosen, True)
+    assert chosen.when == "hand:right.pinch.index"
+
+
+def test_moving_to_the_other_hand_takes_its_clutch(app):
+    row = app.table.owner("camera.yaw")
+    row.value = -1.0
+    learn.move_route(app.table, app.reg, row, source="hand:left.room.yaw")
+    assert (row.op, row.when, row.value) == (TURN_OP, "hand:left.grab", -1.0)
+
+
+def test_moving_keeps_a_gate_someone_picked(app):
+    row = app.table.owner("camera.yaw")
+    row.when = "hand:right.pinch.index"
+    learn.move_route(app.table, app.reg, row, source="hand:left.room.yaw")
+    assert row.when == "hand:right.pinch.index"
+
+
+def test_moving_onto_a_clamped_target_lands_the_fader(app):
+    row = app.table.owner("camera.yaw")
+    learn.move_route(app.table, app.reg, row, target="view.bright")
+    assert (row.op, row.value, row.when, row.motion) == ("position", 1.0, None, None)
+
+
+def test_moving_to_a_source_that_is_no_circle_lands_its_row(app):
+    row = app.table.owner("camera.yaw")
+    learn.move_route(app.table, app.reg, row, source="lane:0")
+    want = learn.row_for("lane:0", app.reg["camera.yaw"])
+    assert (row.op, row.value, row.when) == (want.op, want.value, None)
+    assert row.op != TURN_OP
+
+
+def test_moving_a_plain_row_keeps_what_it_was(app):
+    app.table.add(Binding("lane:0", "view.bright", "push", 0.3))
+    row = app.table.owner("view.bright")
+    learn.move_route(app.table, app.reg, row, source="lane:1")
+    assert (row.op, row.value) == ("push", 0.3)
+
+
+def test_moving_a_room_row_onto_a_wrapping_target_lands_the_orbit(app):
+    app.table.add(Binding(PITCH, "view.bright", "position"))
+    row = app.table.owner("view.bright")
+    learn.move_route(app.table, app.reg, row, target="camera.pitch")
+    assert (row.op, row.when) == (TURN_OP, GRAB)
+
+
+def test_a_cable_moved_on_the_graph_lands_as_a_wire_does(tmp_path):
+    from test_ui_shell import build_rig
+
+    from hyperspace import graphview
+
+    with build_rig(tmp_path) as rig:
+        table, reg = rig.router.table, rig.reg
+        for b in list(table.bindings):
+            if b.target in ("camera.yaw", "view.bright"):
+                table.remove(b)
+        table.add(Binding(YAW, "camera.yaw", TURN_OP, when=GRAB))
+        row = table.owner("camera.yaw")
+        view = graphview.build(table, reg, rig.router, None, None, None)
+        e = graphview.Edit(table, reg, rig.router, view)
+        got = e.move("mod:camera.yaw", "mod:view.bright")
+        assert not isinstance(got, graphview.Refusal), got
+        assert row.target == "view.bright" and (row.op, row.when) == ("position", None)
 
 
 # ------------------------------------------------------------ undo
@@ -386,8 +521,9 @@ def _orbits(r):
 
 def test_one_clutch_closure_is_one_undo_step(deck, tmp_path):
     script = (closing() + [fist(yaw=float(k)) for k in range(31)] + opening(yaw=30.0)
+              + [opened(yaw=30.0)] * LONG_OPEN
               + closing(yaw=30.0) + [fist(yaw=30.0 + k) for k in range(21)]
-              + opening(yaw=50.0))
+              + opening(yaw=50.0) + [opened(yaw=50.0)] * LONG_OPEN)
     before = len(deck.undo.stack)
     Run(deck, tmp_path, script, steps=deck.undo)
     assert _orbits(deck) == ["orbit", "orbit"]
@@ -405,7 +541,8 @@ def test_one_clutch_closure_is_one_undo_step(deck, tmp_path):
 def test_a_still_fist_past_the_settle_time_is_still_one_step(deck, tmp_path):
     still = [fist(yaw=15.0)] * round(FPS * (undo.SETTLE_S + 0.3))
     script = (closing() + [fist(yaw=k / 2.0) for k in range(31)] + still
-              + [fist(yaw=15.0 + k / 2.0) for k in range(31)] + opening(yaw=30.0))
+              + [fist(yaw=15.0 + k / 2.0) for k in range(31)] + opening(yaw=30.0)
+              + [opened(yaw=30.0)] * LONG_OPEN)
     Run(deck, tmp_path, script, steps=deck.undo)
     assert _orbits(deck) == ["orbit"]
 
@@ -416,21 +553,40 @@ def test_two_rows_turning_together_are_one_step(deck, tmp_path):
     settle(deck)
     deck.undo.tick(deck.t)
     script = (closing() + [fist(yaw=float(k), pitch=k / 2.0) for k in range(21)]
-              + opening(yaw=20.0, pitch=10.0))
+              + opening(yaw=20.0, pitch=10.0) + [opened(yaw=20.0, pitch=10.0)] * LONG_OPEN)
     Run(deck, tmp_path, script, steps=deck.undo)
     assert _orbits(deck) == ["orbit"]
 
 
 def test_a_closure_that_moved_nothing_leaves_no_step(deck, tmp_path):
-    Run(deck, tmp_path, closing() * 2 + opening(), steps=deck.undo)
+    Run(deck, tmp_path, closing() * 2 + opening() + [opened()] * LONG_OPEN, steps=deck.undo)
     assert _orbits(deck) == []
+    assert deck.undo._kept is None
 
 
-def test_a_lost_hand_closes_the_step(deck, tmp_path):
-    script = (closing() + [fist(yaw=float(k)) for k in range(21)] + [None] * 20
-              + closing(yaw=20.0) + [fist(yaw=20.0 + k) for k in range(11)] + opening(yaw=30.0))
+def test_a_hand_lost_past_the_grace_closes_the_step(deck, tmp_path):
+    script = (closing() + [fist(yaw=float(k)) for k in range(21)] + [None] * LONG_OPEN
+              + closing(yaw=20.0) + [fist(yaw=20.0 + k) for k in range(11)] + opening(yaw=30.0)
+              + [opened(yaw=30.0)] * LONG_OPEN)
     Run(deck, tmp_path, script, steps=deck.undo)
     assert _orbits(deck) == ["orbit", "orbit"]
+
+
+def test_twenty_dropouts_are_still_one_step(deck, tmp_path):
+    """Each a frame with no hand, the grab's debounce coming back after it: the
+    row forgets each time (no jump), and the closure is one step, with no
+    `_flush` / `_take` on the frame path for each."""
+    script = closing()
+    a = 0.0
+    for _ in range(20):
+        script = script + [None] + closing(yaw=a) + [fist(yaw=a + k) for k in range(3)]
+        a += 2.0
+    script += opening(yaw=a) + [opened(yaw=a)] * LONG_OPEN
+    opens = []
+    keep = deck.undo.keep_open
+    deck.undo.keep_open = lambda *x, **k: (opens.append(1), keep(*x, **k))[1]
+    Run(deck, tmp_path, script, steps=deck.undo)
+    assert _orbits(deck) == ["orbit"] and len(opens) == 1
 
 
 def test_an_undo_with_the_fist_still_closed_stops_the_turn_until_it_opens(deck, tmp_path):
@@ -445,13 +601,100 @@ def test_an_undo_with_the_fist_still_closed_stops_the_turn_until_it_opens(deck, 
     script = (closing() + [fist(yaw=float(k)) for k in range(31)]
               + [fist(yaw=30.0 + k) for k in range(30)]                # still turning
               + opening(yaw=60.0)
-              + closing(yaw=60.0) + [fist(yaw=60.0 + k) for k in range(11)] + opening(yaw=70.0))
+              + closing(yaw=60.0) + [fist(yaw=60.0 + k) for k in range(11)] + opening(yaw=70.0)
+              + [opened(yaw=70.0)] * LONG_OPEN)
     r = Run(deck, tmp_path, script, steps=deck.undo, each=each)
     assert r.yaw[n + 1] == pytest.approx(0.0, abs=1e-3)
     assert all(v == pytest.approx(0.0, abs=1e-3) for v in r.yaw[n + 1:n + 30])
     assert r.yaw[-1] == pytest.approx(10.0, abs=0.3)
     assert _orbits(deck) == ["orbit"]                                  # the second; the first redoable
     assert len(deck.undo.redos) == 0                                   # a new edit clears the redo
+
+
+def test_the_cut_is_each_rows_own(deck, tmp_path):
+    """Undo with both rows acting: the clutched row, once its fist has opened and
+    closed, turns again while the other, never let go, stays cut."""
+    orbit_rows(deck.table, Binding(YAW, "camera.yaw", TURN_OP, when="hand:right.present"),
+               Binding(PITCH, "camera.pitch", TURN_OP, when=GRAB))
+    settle(deck)
+    deck.undo.tick(deck.t)
+    n = len(closing()) + 11
+
+    def each(io, k):
+        if k == n:
+            deck.undo.undo()
+
+    pitch = deck.reg["camera.pitch"]
+    pitch.set(0.0)
+    script = (closing() + [fist(yaw=float(k), pitch=float(k)) for k in range(21)]
+              + opening(yaw=20.0, pitch=20.0) + [opened(yaw=20.0, pitch=20.0)] * LONG_OPEN
+              + closing(yaw=20.0, pitch=20.0)
+              + [fist(yaw=20.0 + k, pitch=20.0 + k) for k in range(11)])
+    r = Run(deck, tmp_path, script, steps=deck.undo, each=each)
+    assert math.degrees(pitch.base) == pytest.approx(10.0, abs=0.5)
+    assert r.yaw[-1] == pytest.approx(r.yaw[n + 1], abs=1e-6)
+
+
+def test_a_load_with_the_fist_closed_cuts_the_new_presets_row_only_until_it_opens(deck, tmp_path):
+    deck.presets.save_as("ORBIT")
+    n = len(closing()) + 11
+
+    def each(io, k):
+        if k == n:
+            assert deck.presets.load("ORBIT") == []
+
+    script = (closing() + [fist(yaw=float(k)) for k in range(31)]
+              + opening(yaw=30.0) + [opened(yaw=30.0)] * LONG_OPEN
+              + closing(yaw=30.0) + [fist(yaw=30.0 + k) for k in range(11)]
+              + opening(yaw=40.0) + [opened(yaw=40.0)] * LONG_OPEN)
+    r = Run(deck, tmp_path, script, steps=deck.undo, each=each)
+    assert r.yaw[-1] == pytest.approx(10.0, abs=0.5)             # 0 at the load; only the last 10°
+
+
+def test_a_deck_that_is_not_installed_has_its_own_step_and_cut(tmp_path):
+    """Deck B's `Undo`, found by its registry, one step a closure; and installing
+    another deck mid-closure changes nothing for it."""
+    a = make_app(tmp_path)
+    orbit_rows(a.table)
+    a.reg["camera.yaw"].set(0.0)
+    steps = undo.Undo(a.reg, a.table)
+    was = undo.installed()
+    (tmp_path / "other").mkdir()
+    other = make_app(tmp_path / "other")
+    other_steps = undo.Undo(other.reg, other.table)
+    undo.install(other_steps)
+    n = len(closing()) + 11
+
+    def each(io, k):
+        if k == n:
+            undo.install(steps)
+        if k == n + 5:
+            steps.undo()
+
+    try:
+        script = (closing() + [fist(yaw=float(k)) for k in range(31)]
+                  + opening(yaw=30.0) + [opened(yaw=30.0)] * LONG_OPEN
+                  + closing(yaw=30.0) + [fist(yaw=30.0 + k) for k in range(11)]
+                  + opening(yaw=40.0) + [opened(yaw=40.0)] * LONG_OPEN)
+        r = Run(a, tmp_path, script, steps=steps, each=each)
+    finally:
+        undo.install(was)
+    assert r.yaw[n + 6] == pytest.approx(0.0, abs=1e-3)          # the undo stood, no running on
+    assert r.yaw[-1] == pytest.approx(10.0, abs=0.5)
+    assert other_steps.stack == []
+    assert undo.watching(a.reg) is steps and undo.watching(other.reg) is other_steps
+
+
+def test_watching_falls_back_on_the_installed_one_and_outlives_nothing():
+    reg = NS(params=())
+
+    class Stand:
+        pass
+
+    bare = Stand()
+    assert undo.watching(bare) is None
+    assert undo.watching({}) is None                             # not hashable: no error
+    assert reg is not None
 
 
 def test_another_decks_turn_keeps_no_step_on_this_undo(deck, tmp_path):
@@ -528,4 +771,47 @@ def test_engaging_the_hold_mid_orbit_cuts_it_with_the_step_closed(deck, tmp_path
     script = closing() + [fist(yaw=float(k)) for k in range(41)]
     r = Run(deck, tmp_path, script, steps=deck.undo, each=each)
     assert r.yaw[-1] == pytest.approx(r.yaw[n])              # cut until the fist opens
+    assert deck.undo._kept is None
+
+
+# ------------------------------------------------------------ with the base chase (plan 52)
+# B1 lands before O2; until then there is no verb to hold. These lift when it exists
+
+chase = pytest.mark.skipif(not hasattr(Registry, "base_chase"), reason="B1 not on this branch")
+
+
+@chase
+def test_an_orbit_starting_under_a_held_chase_leaves_the_verb_on(deck, tmp_path):
+    """The chase keeps its step; the orbit lands in it, and a fist ends no verb."""
+    assert deck.reg.base_chase(True, steps=deck.undo)
+    script = (closing() + [fist(yaw=float(k)) for k in range(21)]
+              + opening(yaw=20.0) + [opened(yaw=20.0)] * LONG_OPEN)
+    r = Run(deck, tmp_path, script, steps=deck.undo)
+    assert deck.reg.chasing
+    assert r.yaw[-1] == pytest.approx(20.0, abs=0.3)
+    assert _orbits(deck) == []
+    deck.reg.base_chase(False)
+    deck.undo.undo()
+    assert math.degrees(deck.reg["camera.yaw"].base) == pytest.approx(0.0, abs=1e-3)
+
+
+@chase
+def test_a_chase_pressed_during_an_orbit_cuts_the_turn_and_the_fist_opening_leaves_the_verb(
+        deck, tmp_path):
+    n = len(closing()) + 11
+    k_open = len(closing()) + 21 + len(opening()) + LONG_OPEN
+
+    def each(io, k):
+        if k == n:
+            assert deck.reg.base_chase(True, steps=deck.undo)
+        if k > k_open:
+            assert deck.reg.chasing                     # (c) the fist opening let it be
+
+    script = (closing() + [fist(yaw=float(k)) for k in range(21)]
+              + opening(yaw=20.0) + [opened(yaw=20.0)] * (LONG_OPEN + 3))
+    r = Run(deck, tmp_path, script, steps=deck.undo, each=each)
+    assert r.yaw[-1] == pytest.approx(r.yaw[n], abs=1e-6)        # (b) cut from the press
+    assert deck.reg.chasing and deck.undo._kept is not None
+    assert _orbits(deck) == ["orbit"]                            # its own, closed by the press
+    deck.reg.base_chase(False)
     assert deck.undo._kept is None
