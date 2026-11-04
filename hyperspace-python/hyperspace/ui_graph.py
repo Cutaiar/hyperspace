@@ -1993,8 +1993,8 @@ def _group_said(panel, e: graphview.Edit, why: str | None) -> str | None:
 
 def group_nodes(panel, ids) -> dict | None:
     """Group (plan 40 T2): canvas ids `ids` made one group, folded — what
-    the lift's rule leaves out said on the head ("scene is the frame's;
-    left out"). Returns the entry, or None."""
+    group's rule leaves out said on the head ("output.all is the rig's
+    window; left out"). Returns the entry, or None."""
     e = group_edit(panel)
     if e is None:
         return None
@@ -2513,6 +2513,9 @@ def spawn(panel, slug: str, at=None, splice=None) -> str | None:
     gs = pre.graph
     host = patches.Host.of(gs.spec, e.table, pre.banks(), _held_names(gs))
     landing = patches.spawn(doc, host, at, patch=stem)
+    if landing.refusal is not None:      # (wave 3 P1) before any sheet could ask
+        _note(st, landing.refusal)
+        return landing.refusal
     if splice is not None:
         why = graphview.splice_target(e, splice, landing.group.get("name") or stem,
                                       landing.ports)

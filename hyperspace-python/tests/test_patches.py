@@ -171,10 +171,6 @@ def test_the_example_is_a_patch():
 
 
 @pytest.mark.parametrize("edit, said", [
-    (lambda d: d["nodes"].append({"kind": "scene"}), "scene is the frame's; left out"),
-    (lambda d: d["nodes"].append({"kind": "hands"}), "hands is the frame's; left out"),
-    (lambda d: d["nodes"].append({"kind": "lookback", "instance": 2}),
-     "lookback.2 is the frame's; left out"),
     (lambda d: d["nodes"].append({"kind": "camera"}),
      "camera is the look's one camera, never a patch's; left out"),
     (lambda d: d["nodes"].append({"kind": "cloud"}), "cloud is the rig's; left out"),
@@ -311,13 +307,12 @@ def test_lift_of_noitas_core():
     assert len(p.rig_rows) == len(doc["desk"]) + len(doc["routes"])
 
 
-def test_a_lift_that_names_scene_refuses_it_and_keeps_the_rest():
+def test_a_lift_that_names_the_rigs_refuses_it_and_keeps_the_rest():
     noita = preset("party-noita")
     doc, refused = patches.lift(*parts(noita),
-                                ["render:scene", "render:warp", "render:output.all",
+                                ["render:warp", "render:output.all",
                                  "render:camera", "seq", "env.2", "device:apc40"])
-    assert refused == ["scene is the frame's; left out",
-                       ("output.all is the rig's window; left out — a patch's picture "
+    assert refused == [("output.all is the rig's window; left out — a patch's picture "
                         "leaves by a port"),
                        "camera is the look's one camera, never a patch's; left out",
                        "the sequencer is the rig's; left out",
@@ -647,11 +642,11 @@ def test_select_is_the_lifts_rule_and_refuses_a_group():
     lift's members and words, and a group named among the ids — no
     nesting — left out in words."""
     spec, table, _values, _layout = parts(preset("party-noita"))
-    mem, refused = patches.select(spec, table, ["render:scene", "render:warp", "group.2",
+    mem, refused = patches.select(spec, table, ["render:output.1", "render:warp", "group.2",
                                                 "macro.3", "env.2", "env.7", "mod.1"])
     assert mem.render == ("warp",) and mem.macros == (3,) and mem.envs == (7,)
     assert mem.canvas() == ["render:warp", "env.7", "macro.3"]
-    assert refused == ["scene is the frame's; left out",
+    assert refused == [patches.WINDOW_WORDS.format(name="output.1"),
                        "group.2 is a group: a group holds nodes, not groups; left out",
                        ("env.2 is a sequencer lane's envelope; left out (a patch's envelope "
                         "spawns as 6 or more)"),
@@ -737,8 +732,8 @@ def test_a_bad_patch_is_a_library_error(lib):
     with pytest.raises(LibraryError, match="is not a hyperspace.patch"):
         lib.read_patch("old")
     (lib.home / PATCHES / "bad.json").write_text(json.dumps(
-        {**doc, "name": "bad", "nodes": [*doc["nodes"], {"kind": "scene"}]}))
-    with pytest.raises(LibraryError, match="scene is the frame's; left out"):
+        {**doc, "name": "bad", "nodes": [*doc["nodes"], {"kind": "camera"}]}))
+    with pytest.raises(LibraryError, match="camera is the look's one camera"):
         lib.read_patch("bad")
     with pytest.raises(LibraryError, match="a patch is spawned, not loaded"):
         lib.load(PATCHES, "acid wash")

@@ -1142,6 +1142,13 @@ DEPTH_TAKES = ("{dst} takes the scene's depth (scene.depth), for the hands laid 
 LAYER_TAKES_HANDS = "{dst} takes a hands node (hands, hands.2 …): the hands it draws"
 
 
+def entry_declares(kind: Any, n: Any = 1) -> bool:
+    """Is a frame kind's entry of instance `n` what declares its node, wired
+    or not? `lookback.<n>`'s is (`LookbackAt`); any other frame kind's is
+    only what keeps it while it is unwired, a wire naming it declaring it."""
+    return kind == "lookback" and n != 1
+
+
 def pin_node(name: Any) -> str | None:
     """The node pin `name` (`scene.cover`, `scene.depth`) is an output of,
     or None for a name that is no pin (plan 36 T2). Plan 36 T4: and a
