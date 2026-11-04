@@ -3344,13 +3344,20 @@ PICTURE_NOUNS = {IMAGE: "picture", GEOMETRY: "geometry", MASK: "mask"}
 OPEN_PIN = "{id} · open (was {was})"
 
 
+def _members_named(entry: Mapping) -> set[str]:
+    """The render node names a group entry holds (``render:acid.2`` → ``acid.2``)."""
+    return {cid.partition(":")[2] for cid in entry.get("nodes") or ()
+            if isinstance(cid, str) and cid.startswith("render:")}
+
+
 def open_ports(spec, entry: Mapping) -> list[dict]:
     """Plan 40 T3 (D2): the host ports a spawn left open on group `entry`
     (its session-only ``ports``, `patches.Landing.ports` as landed — never
     saved) that are open still: an inlet whose member port nothing is
     wired into, an outlet whose member does not yet feed the port it was
     saved feeding (wave 3 P3: that one wire, so a member feeding another
-    port leaves this one reachable).
+    port leaves this one reachable; an outlet that names no such port, none
+    to match, while its member sends nothing out of the group).
     Picture, geometry and mask ports only (a value port is a row, landed
     or kept with the rows). Pure."""
     ports = entry.get("ports") if isinstance(entry, Mapping) else None
@@ -3368,7 +3375,9 @@ def open_ports(spec, entry: Mapping) -> list[dict]:
         elif isinstance(p.get("to"), str):
             free = not any(w.dst == p["to"] for w in wires)
         elif isinstance(p.get("from"), str):
-            free = not any(w.src == p["from"] and w.dst == p.get("was") for w in wires)
+            was, inside = p.get("was"), _members_named(entry)
+            free = not any(w.src == p["from"] and (w.dst == was if isinstance(was, str) and was
+                                                   else w.node not in inside) for w in wires)
         else:
             free = False
         if free:

@@ -12202,6 +12202,8 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   this chip for good. **What changes on the canvas:** a pin dragged by hand somewhere
   other than its `was` stays open, still reading "open (was …)", and **wire as saved**
   still offers it; a cut outlet's pin reopens even if its member has another cable out.
+  An outlet with no `was` has nothing to match and closes as before, once its member
+  feeds anything outside the group.
   (2) `graphview.ALWAYS_KINDS` holds All outputs, whose kind is its own, so an outlet
   lands on it with nothing wired in; it said "no node output.all". Nothing else reads
   the tuple, neither the picker nor any render path.

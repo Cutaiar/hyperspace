@@ -342,6 +342,24 @@ def test_a_member_feeding_another_port_leaves_its_other_pin_open():
     assert graphview.open_ports(gs.spec, entry) == []
 
 
+@pytest.mark.parametrize("was", [{}, {"was": ""}], ids=["absent", "empty"])
+def test_an_outlet_saying_nothing_it_fed_closes_once_its_member_feeds_outside(was):
+    """No `was` to match: the old rule. Wired by hand, the pin closes, and a press
+    has no "the patch says nothing it was wired to" left to repeat."""
+    port = {"id": "out", "type": "image", "from": "warp", **was}
+    e, gs, _ = on_section({"nodes": EFFECTS}, port)
+    entry = e.presets.groups[0]
+    assert [p["id"] for p in graphview.open_ports(gs.spec, entry)] == ["out"]
+    assert e.wire_as_saved(GID) == graphview.NO_WAS.format(port="out")
+    gs.spec = G.read_graph({"frame": "wired", "nodes": EFFECTS,
+                            "wires": [{"from": "warp", "to": "acid.image"}]})
+    entry["nodes"] = ["render:warp", "render:acid"]
+    assert [p["id"] for p in graphview.open_ports(gs.spec, entry)] == ["out"]  # inside: still open
+    entry["nodes"] = ["render:warp"]
+    assert graphview.open_ports(gs.spec, entry) == []                          # outside: closed
+    assert e.wire_as_saved(GID) == graphview.NOTHING_OPEN.format(name="g")
+
+
 def test_the_plain_chip_never_cuts_whatever_feeds_the_port():
     for src in ("acid", "scene"):
         e, gs, pushed = on_section(
