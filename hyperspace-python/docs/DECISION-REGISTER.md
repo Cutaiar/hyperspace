@@ -561,7 +561,7 @@ here; overturn → the change, then the same.
 | 521 | A save with no group stays `/7`; `/8` only with a group (controller recommends every save `/8`, row 394) | 394 | closed — owner, 2026-11-02 (row 576): every save is `/9`, groups or none |
 | 522 | The folded node's pins: picture pins, out lanes, param rows, modifier inputs | 394 | controller — 2026-10-27 |
 | 523 | A spawn's open pins and rename map last the session | 395 | controller — 2026-10-27 |
-| 524 | Wire as saved takes only free ports; a take-over chip? | 395 | **pending the owner** |
+| 524 | Wire as saved takes only free ports; a take-over chip? | 395, 503 | owner — 2026-11-04: yes, the take-over chip |
 | 525 | Save as patch refuses a bad member or another patch's name; one step for `patch`; update beside it | 395 | controller — 2026-10-27 |
 | 526 | A kept row stored with its words; a stale landing refused | 397, 401 | controller — 2026-10-27 |
 | 527 | `Learn.hold` while the sheet is up | 397 | controller — 2026-10-27 |
@@ -689,9 +689,16 @@ here; overturn → the change, then the same.
 | 655 | Plan 52: macros are outside the verb — a commit would move a macro's base subscribers, which its offset never did | — | (rec) — pending the owner; built as recommended |
 | 656 | Plan 52: a press under the projector's hold is refused, and engaging a hold lets the verb go, its commit kept | 496 | (rec) — pending the owner; built as recommended |
 | 657 | Wave 3 P1: a patch holds the frame's kinds (scene, shape, backdrop, pattern, look-back, dream, hands 1, its layer and guide); the rig's (`patches.RIG_KINDS`) and the look's one camera stay refused, a lane envelope and a copy without its original too; **no `patch/3`**: the file's keys are unchanged and an older build's `check` refuses such a file in words | 497 | (rec) — pending the owner; built as recommended |
-| 658 | Wave 3 P1: a patch's single-instance node the host already has (`patches.ONE_PER_FRAME`: scene, shape, backdrop, pattern, dream) refuses the whole spawn in words, nothing landed, no sheet — P2 turns the dream's into "replace the host's dream"; hands 1 lands as the next hands, a look-back as the next look-back | 498 | (rec) — pending the owner; built as recommended |
+| 658 | Wave 3 P1: a patch's single-instance node the host already has (`patches.ONE_PER_FRAME`: scene, shape, backdrop, pattern, dream) refuses the whole spawn in words, nothing landed, no sheet — the dream's is now "replace the host's dream" (row 661); hands 1 lands as the next hands, a look-back as the next look-back | 498 | (rec) — pending the owner; built as recommended |
 | 659 | Wave 3 P1: what a frame kind carries is its own params, the canvas's owners (`patches._param_rows`): `rot.*`, most of `view.*` and `fx.face_map` the shape's; `pattern.*`, `view.pattern*`, `view.media_*` the pattern's; `dream.*` split by key between a look-back (`LOOKBACK_KEYS`) and the dream; `scene.*` no node's. The spin's pose stays the host's. A hands' layer or guide needs its hands at a **save**, in words; a file an older build saved with `hands.2.layer` alone still reads and spawns as it did. A second dream (`dream.2`) is refused at a save and at a read, and never renumbered onto `dream`. An inlet into `scene.geometry` keeps its draw order (the port's optional `before`) | 497, 499 | (rec) — pending the owner; built as recommended |
 | 660 | Wave 3 P1: the "empty frame" row 641 left open — a whole preset lifted and spawned into an empty frame is that frame (proved over the corpus, hands one number on), but `Presets.load_doc` stays the replace landing, and no preset file is spawned directly (save it as a patch). A new preset holds the scene chain, so a whole-frame patch is refused there in words | — | (rec) — pending the owner; the literal merge not built |
+| 661 | Wave 3 P2: a spawn holding a dream into a host with one is a row of the conflict sheet, "replace the host's dream": one press (**Replace and spawn**), one undo step, what the host's loses in words. No two-way row, Cancel being what keeps the preset's; **keep all existing** answers only the controls. Scope: the dream alone (`patches.REPLACEABLE`), the same door open to the other single-instance kinds. A dream only the output hold keeps stays refused in the hold's words | 500 | (rec) — pending the owner; built as recommended |
+| 662 | Wave 3 P2: what a replaced dream loses and keeps — its entry, every wire touching it and its place in a group go, as a delete takes them, and nothing is attached by itself (D2; **wire as saved** puts it on the host's picture); its values are the patch's over fresh; a macro's **base** subscribers on those params let go, said, since they would overwrite them at the next re-landing; routes, desk rows and depth subscribers on its params stay and drive the patch's dream, the sheet's own rows answering any that collide. A sheet whose preset changed under it refuses, nothing landed | 500, 501 | (rec) — pending the owner; built as recommended |
+| 663 | Wave 3 P2: the dream owns its params — `graphview.OWNERS` splits `dream.*` by key as `patches._param_rows` does, a look-back's `LOOKBACK_KEYS` on that look-back (`dream.2.fade` on `lookback.2`) and the rest on the dream, and `ui_graph.node_params` the same. A section with no such node leaves them on `group:dream`, as any param of a node the section lacks. No param renamed, no schema moved, no saved value touched | 502 | (rec) — pending the owner; built as recommended |
+| 664 | Wave 3 P2: a splice onto a cable of the dream being replaced is refused in words before the sheet (the cable goes with the dream, so the patch would be wired to what it took out); a splice onto any other cable replaces and splices in one step. The dream buffer is not cleared by a replace: the old picture fades under the new dream's speed | 500 | (rec) — pending the owner; built as recommended |
+| 665 | Wave 3 P3: the take-over chip under **wire as saved**, drawn only while a press of the plain chip would refuse a taken port this one could take; its label names each cut, a line each, up to three, then the count; one press, one undo step, its result drawn, the cut said after; the cut's source stays on the canvas, not re-wired | 503 | (rec) — pending the owner; the chip is row 524's answer, the details built as recommended |
+| 666 | Wave 3 P3: what the chip does not take — a taken inlet is no open pin, so a hand's wire stays; `scene.geometry` takes many, so nothing is cut and `before` holds the draw order; a pin refused for another reason ("no node tripcolour") stays refused beside a take-over; the rig's bus cable is not a cut; a cut the read would refuse draws no chip | 504 | (rec) — pending the owner; built as recommended |
+| 667 | Wave 3 P3: a press is judged against what the chip said as the mouse went down; if the section or the plan has moved since, it refuses in words and nothing is cut | 505 | (rec) — pending the owner; built as recommended |
 | 668 | Plan 49 U3: the rail is gone and GRAPH is always drawn; `ui.page` is the focus, `ui.PAGE_KEYS` keeps its sixteen slots in order so a saved index names the section of the name its page had; GRAPH's slot lets go of the focus; "every page fits the window" retired | 506 | (rec) — pending the owner; built as recommended |
 | 669 | Plan 49 U3: the focus leaves the fold alone — a section shows while focused and folds back when the focus moves on or lets go; nothing written to `ui.json` (changes the end of row 627, "kept as a click's unfold") | 507 | (rec) — pending the owner; built as recommended |
 | 670 | Plan 49 U3: the focused section's room — beside the canvas, its header at the pane's top and its body down to the headers after it; in the narrow band, alone, the band leaving `CANVAS_MIN` of canvas, a chip letting go | 507, 508 | (rec) — pending the owner; built as recommended |
@@ -9208,14 +9215,14 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
 - **Rough edge.** As said: the chip is gone after a reload.
 - **Judge it.** Check 395 (step 4).
 
-### 524. **Wire as saved** takes only free ports and never takes one over — whether a take-over chip should exist is **pending the owner**
+### 524. **Wire as saved** takes only free ports and never takes one over; a second, explicit chip takes one over
 
-- **Answer.** **pending the owner** on the take-over chip. Built (T3) as D2 says: "if the host has those nodes and the ports are free, refused in words otherwise." The reviewers agree refusing is right under D2; a press that silently cut the host's run would be a hidden edit.
+- **Answer.** owner — 2026-11-04: yes, the take-over chip. Built in wave 3 P3, rows 665–667; the plain chip stays as below. Built (T3) as D2 says: "if the host has those nodes and the ports are free, refused in words otherwise." The reviewers agree refusing is right under D2; a press that silently cut the host's run would be a hidden edit.
 - **Built.** An inlet lands when the preset has its `was` node (the rig's outputs, channels, camera and clouds always count); an outlet when nothing is wired into its `was` port yet (`scene.geometry`, which takes many, excepted). Every other pin is refused in words — "output.all.image is taken", "no node tripcolour" — the whole press one undo step; the chip hides once no pin is open. In `party-trip` the patch's out → `output.all.image` is refused while huecycle feeds it.
-- **Other options.** A second, explicit chip: "wire as saved, replacing huecycle → All outputs", one press, its result drawn. Without it, in every host whose run already feeds All outputs (most), the outlet always refuses and splice is the real path.
-- **To reverse.** One line in `Edit.wire_as_saved` (or a new chip).
+- **Other options.** No second chip: in every host whose run already feeds All outputs (most), the outlet always refuses and splice is the real path. The owner took the chip.
+- **To reverse.** Drop `ui_graph._take_over_chip`; the plain chip never depended on it.
 - **Rough edge.** As said.
-- **Judge it.** Check 395 (step 5).
+- **Judge it.** Checks 395 (step 5), 503.
 
 ### 525. Save as patch: refused on a member a patch may not hold or on another patch's name; one undo step for the group's `patch`; **update patch** beside it
 
@@ -12175,7 +12182,8 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Asked.** "Decide what a spawn does when the host already has a
   single-instance frame node, and refuse in words for now if P2 owns the
   answer."
-- **Answer.** (rec) — pending the owner; built as recommended.
+- **Answer.** (rec) — pending the owner; built as recommended. **The dream's
+  half is row 661 since P2**: the sheet asks to replace it.
 - **Recommended.** Refuse the whole spawn, nothing landed and no sheet:
   "dream wash not spawned: this preset already has dream, and a frame holds
   one of each — delete it here first; nothing landed". What only a held
@@ -12210,7 +12218,7 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   backdrop's. `dream.*` is split by key, `params.is_lookback_knob`'s rule:
   a look-back owns `LOOKBACK_KEYS`, the dream the rest, so a dream patch
   never sets the host's look-back knobs. (The canvas still draws them all
-  on the look-back: P2's.) `scene.*` is the band scene's, a session group,
+  on the look-back: P2's, since row 663.) `scene.*` is the band scene's, a session group,
   and no node's. The spin's pose is outside `values`, so it stays the
   host's. A hands' layer or guide without its hands is refused in words at
   the save, as a copy without its original is: alone it lands a layer of a
@@ -12252,6 +12260,202 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **To reverse.** — (nothing to undo).
 - **Built.** `tests/test_patches_frame_kinds.py::test_a_whole_preset_spawned_into_an_empty_frame_is_that_preset`.
 - **Judge it.** —.
+
+### 661. Replace the host's dream, a row of the sheet
+
+- **Asked.** Row 658 left this to P2: "the conflict sheet is where replace the
+  host's dream will be asked". Scope was row 658's recommendation.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** A spawn whose patch holds a dream, into a host that has one,
+  puts up the sheet with a row "dream: the patch's replaces this preset's" and
+  what the host's loses under it. **Replace and spawn** is the one press and
+  one undo step; **Cancel** lands nothing. There is no two-way row, because
+  landing the patch without its dream was rejected in row 658, so the only other
+  answer is Cancel. **keep all existing** answers only the controls' rows. A
+  landing nobody answered (`Edit.spawn` called with no `patches.replace_key`)
+  is refused, a node being more than a row: D9's "not answered is the patch's"
+  stops there. Only the dream: `patches.REPLACEABLE` is the door for the scene,
+  the shape, the backdrop and the pattern, which still refuse in row 658's
+  words, naming only themselves when a patch holds a dream as well. A dream
+  only the held program keeps stays refused in `HELD_TAKEN_WORDS`, there being
+  nothing on the preset to replace; one on the preset is replaced whatever the
+  hold keeps.
+- **Other options.** A two-way row whose "the preset" lands nothing; replacing
+  every single-instance kind now; a separate modal.
+- **To reverse.** `patches.REPLACEABLE = ()`: every dream refuses as in row 658.
+- **Built.** `patches.REPLACEABLE`, `replace_key`, `Landing.replacing`,
+  `Landing.unanswered`, `replaceable`; `graphview.Edit.spawn`,
+  `Edit._spawn_refusal`; `ui_graph.spawn`; `ui_routing._sheet`, `_control_rows`.
+- **Judge it.** 500.
+
+### 662. What a replaced dream loses and keeps
+
+- **Asked.** Follows from 661: "with what the host's dream loses said in words".
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** It goes as a delete takes it: its entry, every wire touching
+  it, and its place in a group, with that group's open pins on it (an emptied
+  group goes). D2 stands: the patch's dream lands with its pins open, so the
+  host's picture through the old dream is cut until **wire as saved** or a hand
+  wires it, and the sheet says which wires go. Its values are the patch's over
+  the group's fresh values, as a patch of one group lands, so a file that leaves
+  a param out gets the fresh value, not the host's; the look-back's knobs are
+  never touched (row 659). A macro's base subscriber on such a param lets go, and
+  the sheet says so under what the dream loses: `Router.follow_macros` writes a
+  base subscriber's value whenever its macro moves and on every macro after any
+  `set_macros` (the next frame, so a patch with a macro would lose its value at
+  once), and a saved preset would come back at the macro's value, not the
+  patch's. Routes, desk rows and depth subscribers are the preset's and stay,
+  driving the patch's dream under the same ids: they act on top or on a turn, and
+  leave the landed value standing; the sheet lists them apart, under what stays,
+  and its own rows answer any that collide. The modal stops the panel, not a pad
+  or a bank press, so what the sheet asked about is recorded (`Landing.asked`: the
+  section, the rows and groups touching the node) and a press after it changed is
+  `SPAWN_STALE`, nothing landed; a value moving under the sheet is the same
+  question, and is not stale.
+- **Other options.** Keep the host's wires on the new dream (attaches by itself,
+  against D2); drop every row too (a preset's knob would go quiet); keep the
+  macro's subscriber and let the macro win (the patch's value lands and is gone
+  a frame later); rewrite its range to pass through the patch's value (out of
+  range for most positions, none at the top of the throw); leave values the file
+  omits at the host's (the node would then be neither's).
+- **To reverse.** `graphview.Edit.spawn`, `_replaced_values`,
+  `_drop_replaced_macros`, `_replaced_leave_groups`.
+- **Built.** `graphview._take_out` (shared with `render_drop`), `_drop_members`
+  (shared with `Edit.group` and `leave_groups`), `Edit.replace_said`, `Edit._asked`,
+  `Edit._replaced_values`, `Edit._drop_replaced_macros`, `Edit._replaced_leave_groups`;
+  `Landing.loses`, `keeps`, `asked`.
+- **Judge it.** 500, 501.
+
+### 663. The dream owns its params
+
+- **Asked.** "The dream owning its own params": row 659 split the save, but the
+  canvas drew every `dream.*` on the look-back.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** One rule: `patches.dream_owner` over `lookback.is_lookback_key`,
+  asked by `graphview.OWNERS["dream"]` and `ui_graph.node_params`, and a test
+  over the whole registry holds them equal to `patches._param_rows`;
+  `ui_lookback.SECTIONS` is tested to be the same split and did not need to
+  change. A section with no such node leaves the params on `group:dream`, as any
+  param of a node the section lacks: a preset with a look-back and no dream now
+  shows its routes onto `dream.mix` there, where they were drawn on the look-back
+  though no dream reads them. Behaviour-neutral for a saved preset: no param
+  renamed, no schema moved, no value touched; only which canvas node draws a
+  port. `lookback.2`'s knobs now sit on `lookback.2`, and the look-back's selected
+  params no longer include them. The hover and the side head say "params dream.*
+  (its own knobs)" on both. The dream still reads the look-back's darken,
+  contrast and detail (`ui_lookback.GRADE_LINE`), which stay the look-back's.
+- **Other options.** Rename `dream.fade` and friends to `lookback.*` (a schema
+  move, not needed).
+- **To reverse.** `OWNERS["dream"] = rgraph.LOOKBACK`, and `node_params`.
+- **Built.** `patches.dream_owner`, `lookback.is_lookback_key`; `graphview.OWNERS`,
+  `_params_said`, `HOVERS`; `ui_graph.node_params`.
+- **Judge it.** 502.
+
+### 664. A splice onto the replaced dream's cable, and the dream buffer
+
+- **Asked.** Two edges of 661 that nobody had said.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** A patch dropped on a cable of the very dream it replaces is
+  refused in words, before the sheet, and the drag's hover does not light it:
+  that cable goes with the dream, so the patch would be wired to what it took
+  out. On any other cable it replaces and
+  splices in one step. The dream buffer belongs to the worker and is not cleared
+  by a replace (nothing of `render.py` changes): the old picture fades at the new
+  dream's speed, which the tests cannot see, so check 500 asks for it by eye.
+- **Other options.** Splice into the cable's far end anyway; clear the buffer
+  (needs the renderer, outside this item, and would cut the picture to none).
+- **To reverse.** `graphview._splice_replaced`.
+- **Built.** `graphview._splice_replaced`, `splice_target`, `SPLICE_REPLACED`.
+- **Judge it.** 500.
+
+### 665. The take-over chip
+
+- **Asked.** Row 524, answered by the owner on 2026-11-04: "yes, the take-over chip".
+  That row's sketch is the label; the rest was this item's to decide.
+- **Answer.** (rec) — pending the owner; the chip is the owner's, the details built
+  as recommended.
+- **Recommended.** A second chip directly under **wire as saved**, drawn only while
+  a press of the plain chip would refuse a taken port and this press could take it.
+  Its label names what it cuts: "wire as saved, replacing / huecycle → All outputs",
+  each cut on its own line because the pane is 240–320 px wide and a single line would
+  be clipped. A cut too wide breaks after its arrow, and what is still too wide ends in
+  an ellipsis. Names are the canvas's (`label_of`: a window's name, "acid 2"). Up to
+  three cuts are named; past that it says "wire as saved, replacing / 4 cables". The
+  hover lists every cut, every wire and what stays refused. One press lands everything the plain chip would
+  land as well as the outlets it takes over, as one undo step. The head then says
+  "wired as saved: …; cut huecycle → All outputs". The plain chip's behaviour and
+  words are unchanged: it never cuts.
+- **After the press.** The cut cable's source stays on the canvas, drawn faint if it
+  now reaches nothing (`_keep_declared`), and nothing re-wires it. If the cut cable
+  was another group's outlet, that group's pin is open again and its own chip would
+  take the port back.
+- **Other options.** Beside the plain chip on one line (the two do not fit in the
+  pane); a single line clipped by the pane; always the count; a sheet in place of a
+  chip (the label already says what the sheet would).
+- **To reverse.** Drop `ui_graph._take_over_chip`.
+- **Built.** `graphview.TakeOver`, `Edit.take_over_of`, `Edit.wire_taking_over`,
+  `Edit._saved_pins` (shared with `wire_as_saved`), `port_said`, `source_said`;
+  `ui_graph.take_over_plan`, `take_over_lines`, `_take_over_chip`, `_settle_take_over`,
+  `take_over`.
+- **Rough edge.** The section body can scroll: at 900 px with **presets** open too,
+  both chips sit below the selection body's fold. The plain chip was already there.
+- **The plain chip's path.** The review of P3 lifted "the plain chip does not change"
+  for two bugs, and it still never cuts. (1) `open_ports` closes an outlet only on
+  `from → was`. Before, any wire out of the group closed it, so a member feeding two
+  host ports lost the second pin once the first landed, and a plain press could hide
+  this chip for good. **What changes on the canvas:** a pin dragged by hand somewhere
+  other than its `was` stays open, still reading "open (was …)", and **wire as saved**
+  still offers it; a cut outlet's pin reopens even if its member has another cable out.
+  An outlet with no `was` has nothing to match and closes as before, once its member
+  feeds anything outside the group.
+  (2) `graphview.ALWAYS_KINDS` holds All outputs, whose kind is its own, so an outlet
+  lands on it with nothing wired in; it said "no node output.all". Nothing else reads
+  the tuple, neither the picker nor any render path.
+- **Rough edge.** A pin dragged elsewhere by hand reads open though its member is
+  wired. The owner may want it to close, which needs a record of "answered".
+- **Judge it.** 395 step 4, 503.
+
+### 666. What the chip does not take
+
+- **Asked.** Row 524 describes an outlet's taken port only.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** An inlet's port belongs to the patch, and a wire in it closes the
+  pin (`open_ports`), so a hand's wire there is what the person chose: it is neither
+  cut nor counted. `scene.geometry` takes many wires, so there is nothing to cut; an
+  outlet into it is the plain chip's, and an inlet lands at its `before` in either
+  press. A pin refused for any other reason ("no node tripcolour", no `was`) stays
+  refused and is the press's note, beside what it took. Two outlets wanting one port
+  cut one cable: the first lands, the second is refused as taken. Only a preset's
+  wire is cut: a window's port fed by the rig's bus cable is free, as it always was.
+  A cut whose result the read would refuse (a loop) is refused and draws no chip.
+- **Other options.** Take an inlet too (cuts what a person just wired); offer to
+  re-wire what was cut (a hidden edit, against the WYSIWYG rule).
+- **To reverse.** The `taking` branch of `Edit._saved_pins`.
+- **Built.** `Edit._saved_pins`.
+- **Judge it.** 504.
+
+### 667. A chip that no longer holds
+
+- **Asked.** P2's `Landing.asked`: a chip that names a cable must not cut a different
+  one if the preset changed under it.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** The chip keeps the plan it showed as the mouse went down. The
+  press re-reads the plan and compares the very section (a `GraphSpec` is frozen, and
+  every landing makes a new one, a load's too), the cuts and the wires. Any difference
+  refuses with "the preset changed under that chip: nothing cut — read <group>'s chip
+  again", with no undo step. The chip's id does not hold its label (`###`), so a
+  release over a label that changed reaches this refusal and is not silently dropped.
+  A release where the chip was, after it stopped being drawn (a load took its group,
+  the port came free), says the same words (`_settle_take_over`); a release elsewhere
+  says nothing.
+  A reload of the same preset also refuses, as P2's sheet does. A value moving does not.
+- **Other options.** Compare only the words (a reload of the same preset would press
+  through); judge against the frame of the release (the words the person read may be
+  gone by then).
+- **To reverse.** The comparison at the head of `Edit.wire_taking_over`.
+- **Built.** `graphview.TAKE_OVER_STALE`, `Edit.wire_taking_over`;
+  `st["take_over_asked"]` in `ui_graph._take_over_chip`.
+- **Judge it.** 505.
 
 ### 668. The rail goes; `ui.page` is the focus
 

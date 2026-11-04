@@ -767,3 +767,20 @@ dream and, at a save only, a hands' layer without its hands. A spawn whose singl
 already has is refused in words, nothing landed (`Landing.taken`, row 658).
 D5 stands, with a frame kind's params read from the canvas's owners
 (row 659). Register rows 657–660; [`50-one-format.md`](50-one-format.md).
+
+## Since: wave 3 P2 (2026-11-03)
+
+The conflict sheet above asks one more thing: a patch holding a dream, into a
+preset with one, gets a row "the patch's replaces this preset's", with what the
+host's dream loses in words, and **Spawn** reads **Replace and spawn**. That row
+is not two-way (D3's two answers are the controls'), and D9's preselection does
+not reach it: a replace nobody answered does not land. D2 stands: the replacing
+dream's pins are open. Register rows 661–664.
+
+## Since: wave 3 P3 (2026-11-04)
+
+D2 stands: nothing is attached by itself. The owner answered row 524, "yes, the
+take-over chip": a second chip under **wire as saved**, shown only when a press of
+it would refuse a taken port this one could take, naming what it cuts, one press and
+one undo step. **Wire as saved** itself is unchanged. Register rows 665–667;
+[`50-one-format.md`](50-one-format.md).

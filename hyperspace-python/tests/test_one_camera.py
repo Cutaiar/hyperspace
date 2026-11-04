@@ -13,6 +13,7 @@ writes ~/Hyperspace (conftest's HYPERSPACE_HOME)."""
 
 from __future__ import annotations
 
+import gc
 import importlib.util
 import json
 import math
@@ -685,6 +686,14 @@ def test_the_tool_draws_the_old_file_with_the_show_open_as_its_nine(tmp_path, ca
     with_show, _ = golden_frames.picture(old, show=seed, **kw)
     assert golden_frames.picture(nine, **kw)[0] == with_show
     assert golden_frames.picture(old, **kw)[0] != with_show
+    # the rig's GL objects went with the picture: collected later, on a test's
+    # own context, they would delete that context's objects of the same names
+    released = []
+    moderngl = sys.modules["moderngl"]
+    with pytest.MonkeyPatch.context() as m:
+        m.setattr(moderngl.VertexArray, "release", lambda self: released.append(self))
+        gc.collect()
+    assert released == []
 
 
 # ---------------------------------------------------------------- the hands, drawn (GL)

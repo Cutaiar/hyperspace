@@ -471,6 +471,15 @@ def answer(panel, replace_it: bool) -> None:
 SHEET_W = 560.0
 SHEET_TIP = ("Each row: which keeps this control — the patch's row, or the one the preset "
              "has. A row the preset keeps is not added; the group says so")
+# (wave 3 P2, row 661) a node the frame holds one of: no two-way row, since
+# without it the patch is not the patch it was saved as (row 658): the answer
+# that keeps the preset's is Cancel, and the press that takes the patch's is Spawn
+REPLACE_ROW = "{name}: the patch's replaces this preset's"
+REPLACE_LOSES = "this preset's {name} loses"
+REPLACE_KEEPS = "what stays"
+REPLACE_TIP = ("A frame holds one. Spawn takes out this preset's and lands the patch's, one "
+               "undo step; Cancel lands nothing and keeps it")
+REPLACE_GO = "Replace and spawn##sheet"
 
 
 def sheet(panel):
@@ -564,9 +573,50 @@ def sheet_title(panel, landing) -> str:
 def _sheet(panel, landing, choices) -> None:
     """The sheet's body (inside the modal): the title, a row per conflict —
     its words, then **the patch** / **the preset**, lit as answered — then
-    **keep all existing** and **take all**, the wants, **Spawn** / **Cancel**."""
+    **keep all existing** and **take all**, the wants, **Spawn** / **Cancel**.
+    A node it replaces (wave 3 P2) comes first, what the host's loses under it;
+    with no control in question the rows' lines are left out."""
     ui._micro("conflicts")
     imgui.text_wrapped(sheet_title(panel, landing))
+    replacing = getattr(landing, "replacing", ())
+    for name in replacing:
+        imgui.spacing()
+        imgui.text_colored(ui.WARN, REPLACE_ROW.format(name=name))
+        if imgui.is_item_hovered():
+            ui.tooltip(REPLACE_TIP)
+    if replacing and getattr(landing, "loses", ()):
+        ui._micro(REPLACE_LOSES.format(name=" and ".join(replacing)))
+        for line in landing.loses:
+            imgui.text_wrapped(line)
+    if replacing and getattr(landing, "keeps", ()):
+        ui._micro(REPLACE_KEEPS)
+        for line in landing.keeps:
+            imgui.text_wrapped(line)
+    if landing.conflicts:
+        _control_rows(panel, landing, choices)
+    wants = sheet_wants(panel, landing)
+    if wants:
+        imgui.spacing()
+        ui._micro("waits for")
+        for line in wants:
+            imgui.text_colored(ui.WARN, line)
+    imgui.separator()
+    if ui.chip(REPLACE_GO if replacing else "Spawn##sheet"):
+        settle_sheet(panel, True)
+        imgui.close_current_popup()
+    if imgui.is_item_hovered():
+        ui.tooltip("Land the patch with these answers — one undo step")
+    imgui.same_line()
+    if ui.chip("Cancel##sheet"):
+        settle_sheet(panel, False)
+        imgui.close_current_popup()
+    if imgui.is_item_hovered():
+        ui.tooltip("Land nothing")
+
+
+def _control_rows(panel, landing, choices) -> None:
+    """The sheet's two-way rows: a row per conflict, **keep all existing**
+    and **take all**."""
     imgui.text_disabled(f"{len(landing.conflicts)} control"
                         f"{'' if len(landing.conflicts) == 1 else 's'} the preset already "
                         "uses: which keeps each?")
@@ -592,24 +642,6 @@ def _sheet(panel, landing, choices) -> None:
         keep_all(panel, "patch")
     if imgui.is_item_hovered():
         ui.tooltip("Every row back to the patch")
-    wants = sheet_wants(panel, landing)
-    if wants:
-        imgui.spacing()
-        ui._micro("waits for")
-        for line in wants:
-            imgui.text_colored(ui.WARN, line)
-    imgui.separator()
-    if ui.chip("Spawn##sheet"):
-        settle_sheet(panel, True)
-        imgui.close_current_popup()
-    if imgui.is_item_hovered():
-        ui.tooltip("Land the patch with these answers — one undo step")
-    imgui.same_line()
-    if ui.chip("Cancel##sheet"):
-        settle_sheet(panel, False)
-        imgui.close_current_popup()
-    if imgui.is_item_hovered():
-        ui.tooltip("Land nothing")
 
 
 def modal(panel) -> None:

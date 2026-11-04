@@ -199,6 +199,7 @@ the preset's and the show's, never a NodeEditor.json beside the app.
 from __future__ import annotations
 
 import colorsys
+import dataclasses
 import math
 import time
 from contextlib import contextmanager
@@ -785,6 +786,7 @@ def page(panel, dt: float) -> None:
                      (lambda: _side(panel, st, view, sel)) if sel else None,
                      sel_words(sel), below=not wide)
     imgui.end_child()
+    _settle_take_over(st)
     imgui.pop_style_color()
     panel.canvas_px = (*panel.canvas_px[:4], omit)
     times = st["times"]
@@ -1044,7 +1046,10 @@ def node_params(panel, nid: str) -> list[str]:
     of = getattr(n.ref, "effect", "") if n is not None and graphview.kind_of(name) == "copy" else ""
     pre = graphview.params_of(name, of)
     head = pre + "."
-    ids = [p.id for p in reg if not p.alias and (p.id == pre or p.id.startswith(head))]
+    # (wave 3 P2: `dream.*` is a look-back's and the dream's, by key; no other
+    # node's prefix starts so)
+    ids = [p.id for p in reg if not p.alias and (p.id == pre or p.id.startswith(head))
+           and (not p.id.startswith("dream.") or patches.dream_owner(p.id) == name)]
     return sorted(ids, key=lambda pid: reg[pid].kind is not Kind.CONTINUOUS)
 
 
@@ -1980,6 +1985,7 @@ def group_edit(panel) -> graphview.Edit | None:
         return None
     e.push = lambda label: undo.push(label, load=True)
     e.presets = getattr(getattr(panel, "library", None), "presets", None)
+    e.slots = getattr(panel, "outputs", None) or ()     # (a window's name, in the chip's words)
     return e
 
 
@@ -2349,6 +2355,7 @@ def _group_chips(panel, g) -> None:
             wire_as_saved(panel, g.id)
         if imgui.is_item_hovered():
             ui.tooltip(WIRE_AS_SAVED_TIP + "\n" + saved_words(ports))
+        _take_over_chip(panel, st, g.id)
     form = st.get("patch_form")
     if form is not None and form[0] == g.id:
         _patch_form(panel, g, form)
@@ -2364,6 +2371,73 @@ def _group_chips(panel, g) -> None:
             open_patch_form(panel, g, update=True)
         if imgui.is_item_hovered():
             ui.tooltip(f"Write this group over patch {g.patch} (its old text to the trash)")
+
+
+def take_over_plan(panel, gid: str) -> graphview.TakeOver | None:
+    """The take-over chip's plan for group `gid`, or None for no chip. Read
+    afresh only when the section moved: a press re-reads it and refuses a plan
+    that no longer holds, so a frame need not pay for a trial read."""
+    st = _state(panel)
+    e = group_edit(panel)
+    if e is None:
+        return None
+    spec = getattr(e.graph, "spec", None)
+    held = st.get("take_over_plan")
+    if held is not None and held[0] is spec and held[1] == gid:
+        return held[2]
+    plan = e.take_over_of(gid)
+    st["take_over_plan"] = (spec, gid, plan)
+    return plan
+
+
+def take_over_lines(plan: graphview.TakeOver, width: float) -> list[str]:
+    """The chip's lines at `width` pixels of text: a cut too wide breaks after
+    its arrow, and what is still too wide ends in an ellipsis (the hover has
+    all of it)."""
+    out: list[str] = []
+    for line in plan.lines:
+        src, arrow, dst = line.partition(" → ")
+        parts = ([f"{src} →", dst]
+                 if arrow and imgui.calc_text_size(line).x > width else [line])
+        out += [ui.fit_text(part, width) for part in parts]
+    return out
+
+
+def _take_over_chip(panel, st: dict, gid: str) -> None:
+    """Wave 3 P3 (row 524): under **wire as saved**, only while its press would
+    refuse a taken port this one could take: the label names what is cut. What
+    the press is judged against is what the chip said as the mouse went down."""
+    plan = take_over_plan(panel, gid)
+    if plan is None:
+        return
+    width = imgui.get_content_region_avail().x - 2 * ui.CHIP_PAD.x
+    # (### : the same control whatever the label says, so a press under a label
+    # that moved reaches the refusal instead of doing nothing)
+    hit = ui.chip("\n".join(take_over_lines(plan, width)) + "###graph.group.take_over")
+    if imgui.is_item_activated():
+        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        st["take_over_asked"] = (plan, (lo.x, lo.y, hi.x, hi.y))
+    if imgui.is_item_hovered():
+        ui.tooltip(plan.tip)
+    if hit:
+        asked = st.pop("take_over_asked", None)
+        take_over(panel, asked[0] if asked is not None else plan)
+
+
+def _settle_take_over(st: dict) -> None:
+    """After the pane each frame: a held take-over chip whose mouse came up with
+    no press of it. Over where it was, the chip is no longer there to press (a
+    load took its group, or the port came free): refused in words, as any press
+    that no longer holds. Anywhere else the person let go of it: nothing."""
+    held = st.get("take_over_asked")
+    if held is None or imgui.is_mouse_down(0):
+        return
+    del st["take_over_asked"]
+    plan, (x0, y0, x1, y1) = held
+    m = imgui.get_mouse_pos()
+    if x0 <= m.x <= x1 and y0 <= m.y <= y1:
+        st["note"] = graphview.TAKE_OVER_STALE.format(name=plan.name)
+        st["said"] = ""
 
 
 # ---------------------------------------------------------------- plan 40 T3: patches
@@ -2393,6 +2467,7 @@ WIRE_AS_SAVED_TIP = ("Wire each open pin as the patch was saved, where this pres
 SAVE_PATCH_TIP = ("Save this group as a patch: its nodes, values, wires, rows and the cables "
                   "across its edge — the patch's file, nothing else written")
 SHEET_UP = "{n} control{s} the preset already uses: the sheet asks which keeps each"
+SHEET_REPLACES = "this preset already has {nodes}: the sheet asks to replace it"
 SPAWN_CANCELLED = "spawn of {name} cancelled: nothing landed"
 NO_LIBRARY = "no library: nothing to spawn"
 WAITS_FOR = "waits for "    # plan 40 P4: a spawn's rows the rig lacks (`devices.want_words`')
@@ -2450,7 +2525,8 @@ def patch_list(panel) -> list[dict]:
             continue
         out.append({"name": name, "slug": path.name[:-5], "note": str(doc.get("note") or ""),
                     "words": graphview.patch_words(doc, _glyph(panel)),
-                    "ports": tuple(patches.read(doc).ports)})
+                    "ports": tuple(patches.read(doc).ports),
+                    "replaces": patches.replaceable(patches.read(doc).members.render)})
     st["patch_list"] = (listed, key, out)
     return out
 
@@ -2491,7 +2567,9 @@ def spawn(panel, slug: str, at=None, splice=None) -> str | None:
     `at` (layout units; None: the canvas's centre) — and, when its rig rows
     collide with the preset's, the conflict sheet first
     (`panel.spawn_question`, drawn by `ui_routing.modal`: every row the
-    patch's, D9), else landed at once (`land_spawn`: one undo step).
+    patch's, D9) — as when it holds a dream and the preset has one (wave 3
+    P2: its row says what the host's loses, `Landing.loses`) — else landed
+    at once (`land_spawn`: one undo step).
     `splice`: a picture cable it was dropped on. Returns the refusal (said
     on the head), or None."""
     st = _state(panel)
@@ -2516,21 +2594,28 @@ def spawn(panel, slug: str, at=None, splice=None) -> str | None:
     if landing.refusal is not None:      # (wave 3 P1) before any sheet could ask
         _note(st, landing.refusal)
         return landing.refusal
+    replacing = landing.replacing        # (wave 3 P2) the host's dream: the sheet's to ask
     if splice is not None:
         why = graphview.splice_target(e, splice, landing.group.get("name") or stem,
-                                      landing.ports)
+                                      landing.ports, replacing)
         if why is not None:
             _note(st, why)
             return why
-    if not landing.conflicts:
+    if not landing.conflicts and not replacing:
         return land_spawn(panel, landing, {}, splice)
     name = landing.group.get("name") or stem
+    if replacing:
+        loses, keeps = e.replace_said(landing)
+        landing = dataclasses.replace(landing, loses=tuple(loses), keeps=tuple(keeps),
+                                      asked=e._asked(replacing))
 
     def cancelled() -> None:
         _note(st, None)
         st["said"] = SPAWN_CANCELLED.format(name=name)
-    panel.spawn_question = (landing, {k: graphview.PATCH_SIDE
-                                      for k in range(len(landing.conflicts))},
+    panel.spawn_question = (landing, {**{k: graphview.PATCH_SIDE
+                                         for k in range(len(landing.conflicts))},
+                                      **{patches.replace_key(n): graphview.PATCH_SIDE
+                                         for n in replacing}},
                             lambda choices: land_spawn(panel, landing, choices, splice),
                             cancelled)
     lrn = getattr(panel, "learn", None)
@@ -2538,7 +2623,9 @@ def spawn(panel, slug: str, at=None, splice=None) -> str | None:
         lrn.hold(True)                      # the hands learn nothing while it asks
     k = len(landing.conflicts)
     _note(st, None)
-    st["said"] = SHEET_UP.format(n=k, s="" if k == 1 else "s")
+    st["said"] = " · ".join(
+        [*([SHEET_REPLACES.format(nodes=", ".join(replacing))] if replacing else []),
+         *([SHEET_UP.format(n=k, s="" if k == 1 else "s")] if k else [])])
     return None
 
 
@@ -2567,6 +2654,22 @@ def wire_as_saved(panel, gid: str) -> str | None:
         return None
     why = e.wire_as_saved(gid)
     st = _state(panel)
+    st["note"] = why or ""
+    st["said"] = e.said if e.said else ""
+    return why
+
+
+def take_over(panel, asked: graphview.TakeOver) -> str | None:
+    """The take-over chip pressed (`Edit.wire_taking_over`): what landed and what
+    was cut on the head's line, what stays refused as its note. `asked` is the
+    plan the chip showed."""
+    e = group_edit(panel)
+    if e is None:
+        return None
+    e.said = ""
+    why = e.wire_taking_over(asked)
+    st = _state(panel)
+    st["take_over_plan"] = None     # (a refused plan is read again, not drawn again)
     st["note"] = why or ""
     st["said"] = e.said if e.said else ""
     return why
@@ -2690,7 +2793,11 @@ def _drop_target(panel, st: dict, view: graphview.View) -> None:
     row = next((r for r in patch_list(panel) if r["slug"] == slug), None)
     if row is None:
         return
-    why = graphview.splice_target(render_edit(panel), c, row["name"], row["ports"])
+    e = render_edit(panel)
+    # (wave 3 P2) as the drop will judge it: a cable of the dream it would replace
+    have = patches.spec_names(getattr(e.graph, "spec", None))
+    why = graphview.splice_target(e, c, row["name"], row["ports"],
+                                  [n for n in row.get("replaces", ()) if n in have])
     if why is None:
         st["drop_cable"] = c.id
     else:

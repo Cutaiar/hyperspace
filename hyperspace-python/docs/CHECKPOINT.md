@@ -233,9 +233,9 @@ an idealized control object; draft PR #342 is its record.
   417–429 and 460 (D1, 417, still open), plan 38's 430–439 (its D1–D5
   are 430–434, taken as recommended) and 461–470, plan 39's 440–459 and
   471–497 (440–447 the owner's own), and the integrator's 498–500; and
-  plan 40's 501–536 (501–510 its D1–D10, the owner's own; **521 and 524
-  pending the owner**: whether a preset with no group also saves as `/8`,
-  per row 394, and whether **wire as saved** gets a take-over chip).
+  plan 40's 501–536 (501–510 its D1–D10, the owner's own; **521 pending
+  the owner**: whether a preset with no group also saves as `/8`, per row
+  394; 524 answered 2026-11-04, yes, the take-over chip, wave 3 P3).
 - **Both Macs on this build before sharing presets**: an older build
   drops a preset's modifiers and positions when it saves (row 277), and
   refuses a preset with a GRAPH group outright (plan 40's `groups` key,

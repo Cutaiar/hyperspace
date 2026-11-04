@@ -161,7 +161,7 @@ Each of these blocks one PR, and the wave it sits in. None blocks wave 0 except 
 - [ ] **What is per-deck and what is shared** (settled in 0.3, plan 44, before 1.1). Recommend: one dream worker and one segment worker shared, lent to the on-air deck; media channels and the analyzer shared; tempo shared; everything that renders per deck. The deck bench already said one dream per on-air deck is the limit.
 - [ ] **Delay loops are the trails mechanism** (gates 0.8, E1). The look-back keeps the dream, so the two never compete.
 - [ ] **Register row 521, schema on every save** (touches 2.3, F1). Recommend every save writes the newest schema; that is already the rule since 2026-10-25.
-- [ ] **Register row 524, wire-as-saved take-over** (gates 3.4, P3). Free ports only, or a take-over chip.
+- [x] **Register row 524, wire-as-saved take-over** (gates 3.4, P3). Free ports only, or a take-over chip. Owner, 2026-11-04: yes, the take-over chip.
 - [ ] **Which gamepad button is base chase** (gates 4.6, B2). GUIDE is free but opens the OS overlay over Bluetooth; plan 42's `pad:LP` / `RP` back buttons on the Edge are the obvious candidates now.
 - [ ] **The APC crossfader stays dim** (assumed by 3.1, D4) until dim has another home.
 - [ ] **Plan 42 D1–D10** (register rows 544–553) are still "(rec), pending the owner" after last night's merges. Not a gate here, but they are Dillon's and open.
