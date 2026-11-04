@@ -2,7 +2,9 @@
 of up to sixteen source ids with one of them on the channel (`slot`), and
 a transport for a timed source.
 
-`MediaState` is the one object the rest reads: the registry's `media.*`
+`Channels` (plan 44 D3; `MediaState` is its old name) is the one object a deck reads, over
+the rig's `MediaSources` (the resolver, the opener, the closer, the mixer —
+shared by every deck: one decode for every reader): the registry's `media.*`
 params write its channels' fields (params.py), the preset's `media`
 section is its bins (`to_json` / `from_json`), the renderer reads
 `frame(c)` and `channels[c].fit`, the MEDIA page `status`, `playhead` and
@@ -249,27 +251,33 @@ def read_bins(doc) -> tuple[dict[str, list[str | None]], list[str]]:
     return bins, notes
 
 
-class MediaState:
+class MediaSources:
+    """What the channels read their pictures and sound through — the rig's,
+    one for every deck (plan 44 D3, §2 "the media sources"): the resolver
+    (an id → a file or a live feed), the opener, the closer thread a dropped
+    source goes to, the soundtracks' bookkeeping and the mixer (plan 45
+    V2–V3: `live_mixer`, the analyzer's `mix` source). A decode is one for
+    every reader; the channels' state (bins, slots, transports) is a deck's
+    (`Channels`)."""
+
     def __init__(self, resolver=None, opener=adapters.open_source):
         self.resolver = resolver if resolver is not None else NoResolver()
         self.opener = opener
-        self.channels: dict[str, Channel] = {c: Channel(c) for c in CHANNELS}
-        self._closed = False
         self.closer = Closer()
         self.mixer = mixer.Mixer()
         self.sound = _Sound()
 
     def _closer(self) -> Closer:
-        """The closer; made here for a MediaState from before it (a hot
-        reload re-classes, never re-inits)."""
+        """The closer; made here for an object from before it (a hot reload
+        re-classes, never re-inits)."""
         c = self.__dict__.get("closer")
         if c is None:
             c = self.closer = Closer()
         return c
 
     def _mixer(self) -> mixer.Mixer:
-        """The mixer (plan 45 V2); made here for a MediaState from before
-        it, and re-classed to the module's `Mixer` after a hot reload of
+        """The mixer (plan 45 V2); made here for an object from before it,
+        and re-classed to the module's `Mixer` after a hot reload of
         `media.mixer` (its stream, and the callback reached through the
         class, live on)."""
         m = self.__dict__.get("mixer")
@@ -283,7 +291,7 @@ class MediaState:
         return m
 
     def live_mixer(self) -> mixer.Mixer:
-        """The mixer this state feeds — the public door (the analyzer's
+        """The mixer the channels feed — the public door (the analyzer's
         `mix` source, plan 45 V3); `_mixer` is the hot-reload accessor
         behind it."""
         return self._mixer()
@@ -293,6 +301,72 @@ class MediaState:
         if s is None:
             s = self.sound = _Sound()
         return s
+
+    def drain(self, timeout: float = CLOSE_BUDGET_S) -> bool:
+        """Wait up to `timeout` s for the dropped sources' closes to finish."""
+        return self._closer().drain(timeout)
+
+
+def _through(name: str) -> property:
+    """A deck's channels' view of their sources' `name` (plan 44 D3)."""
+    return property(lambda self: getattr(self._sources(), name),
+                    lambda self, v: setattr(self._sources(), name, v),
+                    doc=f"The media sources' `{name}` (`MediaSources`).")
+
+
+class Channels:
+    """A deck's eight media channels (plan 44 D3): each `Channel`'s bin,
+    slot, fit and transport — what the deck's `media.*` params write
+    (`params.build_performance`), the preset's `media` section (`to_json`
+    / `from_json`), what the deck's renderer reads (`frame`) — over the
+    rig's `MediaSources` (`sources`: one for every deck; made here when
+    none is given, from `resolver` and `opener`). `resolver`, `opener`,
+    `closer`, `mixer` and `sound` read and write the sources'."""
+
+    resolver = _through("resolver")
+    opener = _through("opener")
+    closer = _through("closer")
+    mixer = _through("mixer")
+    sound = _through("sound")
+
+    def __init__(self, resolver=None, opener=adapters.open_source, *,
+                 sources: MediaSources | None = None):
+        self.__dict__["_media_sources"] = (sources if sources is not None
+                                           else MediaSources(resolver, opener))
+        self.channels: dict[str, Channel] = {c: Channel(c) for c in CHANNELS}
+        self._closed = False
+
+    @property
+    def sources(self) -> MediaSources:
+        """The rig's media sources these channels read through."""
+        return self._sources()
+
+    def _sources(self) -> MediaSources:
+        """The sources — made here, from what the object held itself, for a
+        `MediaState` from before plan 44 D3 (a hot reload re-classes it)."""
+        src = self.__dict__.get("_media_sources")
+        if src is None:
+            src = MediaSources.__new__(MediaSources)
+            for name in ("resolver", "opener", "closer", "mixer", "sound"):
+                if name in self.__dict__:
+                    src.__dict__[name] = self.__dict__.pop(name)
+            src.__dict__.setdefault("resolver", NoResolver())
+            src.__dict__.setdefault("opener", adapters.open_source)
+            self.__dict__["_media_sources"] = src
+        return src
+
+    def _closer(self) -> Closer:
+        return self._sources()._closer()
+
+    def _mixer(self) -> mixer.Mixer:
+        return self._sources()._mixer()
+
+    def live_mixer(self) -> mixer.Mixer:
+        """The sources' mixer (plan 45 V3: the analyzer's `mix` source)."""
+        return self._sources().live_mixer()
+
+    def _sound(self) -> _Sound:
+        return self._sources()._sound()
 
     # -- the frame thread ---------------------------------------------------
 
@@ -537,7 +611,7 @@ class MediaState:
 
     def drain(self, timeout: float = CLOSE_BUDGET_S) -> bool:
         """Wait up to `timeout` s for the dropped sources' closes to finish."""
-        return self._closer().drain(timeout)
+        return self._sources().drain(timeout)
 
     def close(self, budget: float = CLOSE_BUDGET_S) -> bool:
         """App exit: every source dropped and closed, waiting at most
@@ -552,6 +626,11 @@ class MediaState:
         quiet = self._mixer().close(min(mixer.CLOSE_BUDGET_S, budget))
         left = max(budget - (time.monotonic() - t0), 0.0)
         return self.drain(pool.left(left)) and quiet
+
+
+# plan 44 D3: the one object before the split, by its old name — a deck's
+# channels over the rig's sources (`MediaState(resolver, opener)` makes both)
+MediaState = Channels
 
 
 def _forward(tr: Transport | None) -> bool:

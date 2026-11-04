@@ -41,15 +41,17 @@ def tracker(skel=None, mode="desktop") -> NS:
 
 # ---------------------------------------------------------------- no GL
 
-def test_the_params_are_session_off_by_default_and_learnable(tmp_path):
+def test_the_params_are_the_looks_but_the_mirror_off_by_default_and_learnable(tmp_path):
     from test_params import make
 
     reg = make(tmp_path)[0]
-    assert "ghost" in SESSION_GROUPS
+    # plan 43 §6 / plan 44 D3: the hands' look is the preset's; the mirror the room's
+    assert "ghost" not in SESSION_GROUPS
     for pid in ("ghost.on", "ghost.alpha", "ghost.mirror", "ghost.guide", "ghost.tethers",
                 "ghost.style"):
         p = reg[pid]
-        assert p.persist and part_of(p) == "session", pid
+        want = "session" if pid == "ghost.mirror" else "performance"
+        assert p.persist and part_of(p) == want, pid
         # plan 21 R12 / WP6: only the switch and the opacity may follow a
         # hand or an LFO; the rest are settings (still learnable on the desk)
         assert p.modulatable is (pid in ("ghost.on", "ghost.alpha")), pid

@@ -747,7 +747,7 @@ def test_a_mixer_of_another_class_is_left_as_it_is():
 
 def test_a_media_state_from_before_the_mixer_gets_one():
     m, _, _ = rig("shared:a.mp4")
-    del m.__dict__["mixer"]
+    del m.sources.__dict__["mixer"]          # (plan 44 D3: the mixer is the sources')
     m.poll(DT, 0.0)
     assert isinstance(m.mixer, M.Mixer)
 

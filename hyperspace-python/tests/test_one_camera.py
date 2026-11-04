@@ -67,7 +67,7 @@ def old_preset(src: Path = TRIP, *, marked: bool = True) -> dict:
 def old_show(**extra) -> dict:
     """A show from before C2 (`hyperspace.project/2`): the eye in its
     session, the camera node's GRAPH position in its layout."""
-    return {"schema": L.PROJECT_SCHEMA, "name": "rig", "bank": [None] * 8,
+    return {"schema": L.PROJECT_V2, "name": "rig", "bank": [None] * 8,
             "session": {"tempo.bpm": 128.0, **EYE},
             "layout": {"render:camera": CAMERA_AT, "device:apc40": [1, 2]}, **extra}
 
@@ -166,7 +166,7 @@ def test_frame_save_load_another_and_load_back_puts_the_framing_and_the_turn_bac
     pose = view.pose()
     path = rig.presets.save_as("FRAMED")
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.preset/9" == preset.SAVE_SCHEMA
+    assert doc["schema"] == "hyperspace.preset/10" == preset.SAVE_SCHEMA   # (plan 44 D3)
     assert doc["values"]["eye.fov"] == 31.0 and doc["values"]["eye.distance"] == 6.0
     assert list(doc[preset.POSE_KEY]) == list(POSE_IDS)
     assert [doc[preset.POSE_KEY][k] for k in POSE_IDS] == pytest.approx(pose, abs=1e-6)
@@ -293,7 +293,9 @@ def test_an_old_show_hands_its_eye_to_old_presets_and_keeps_none_itself(tmp_path
     bak = home / "projects" / "rig.hyp.json.bak-v2-eye"
     assert bak.read_bytes() == before
     pr.save()
-    assert sorted(p.name for p in show.parent.glob("rig.hyp.json.bak-*")) == [bak.name]
+    # (plan 44 D3: a /2 show's first write keeps it as .bak-v2-look too)
+    assert sorted(p.name for p in show.parent.glob("rig.hyp.json.bak-*")) == [
+        bak.name, "rig.hyp.json.bak-v2-look"]
     # a fresh launch: the show holds no eye now, but its `.bak-v2-eye` does
     # — still handed to old presets (review 2.2) — and the /9 carries its own
     again = boot(home, show="rig")
@@ -326,8 +328,9 @@ def test_a_bank_autosave_before_the_tool_still_hands_old_presets_the_eye(tmp_pat
 
 
 def test_the_tool_copies_nothing_when_nothing_it_reads_is_retapered(tmp_path, monkeypatch):
-    """Review 2.7: a dry run with no unmarked template reads the library
-    itself (no retapered copy); with one, it makes the copy once."""
+    """Review 2.7: a dry run reads the library itself (no retapered copy)
+    — and since plan 44 D3 retired the desk templates, a left-over unmarked
+    one makes no copy either: nothing a load reads is retapered."""
     tool = _tool()
     made = []
     real = tool.retapered_copy
@@ -338,7 +341,7 @@ def test_the_tool_copies_nothing_when_nothing_it_reads_is_retapered(tmp_path, mo
     assert made == []
     lib2 = _library(tmp_path / "two")
     tool.main(["--library", str(lib2)], picture=same_picture)
-    assert len(made) == 1
+    assert made == []
 
 
 def test_an_old_preset_with_no_old_eye_takes_the_builds(tmp_path):
@@ -568,7 +571,6 @@ def _library(tmp_path: Path) -> Path:
     """A library like the owner's before C2: an old show holding the eye,
     two `/7` presets (one with the taper marker, one without), a `/9`
     already, a patch and a desk template from before the tapers."""
-    from hyperspace.library import DESK_SCHEMA
     lib = tmp_path / "Drive" / "Hyperspace"
     presets = lib / "presets"
     presets.mkdir(parents=True)
@@ -579,8 +581,11 @@ def _library(tmp_path: Path) -> Path:
     _write(lib / "projects" / "rig.hyp.json", old_show())
     (lib / "patches").mkdir()
     shutil.copyfile(OLD_PATCH, lib / "patches" / "acid-wash.json")
-    _write(lib / "desk" / "old-desk.json", {"schema": DESK_SCHEMA, "name": "old desk", "desk": [
-        {"source": "cc:0:49", "target": "fx.warp.speed", "op": "set", "value": 0.75}]})
+    # (plan 44 D3: a desk template left over — never read, never rewritten)
+    _write(lib / "desk" / "old-desk.json", {"schema": "hyperspace.desk/1", "name": "old desk",
+                                            "desk": [{"source": "cc:0:49", "target":
+                                                      "fx.warp.speed", "op": "set",
+                                                      "value": 0.75}]})
     return lib
 
 
@@ -605,10 +610,10 @@ def test_the_tool_retapers_backs_up_and_moves_the_eye_into_every_preset(tmp_path
     out = capsys.readouterr().out
     assert _tree(lib) == before and not list(home.glob("library-backup-*"))
     assert "show: rig (the library's one show) — eye.distance 5, eye.fov 30" in out
-    assert "retaper first: 2 document(s)" in out and "patch acid-wash.json" in out
-    assert "desk old-desk.json" in out
-    assert "shows holding the eye: 1 — rig.hyp.json" in out
-    assert "would rewrite 2 as /9, leave 1 untouched (already /9), skip 0" in out
+    assert "retaper first: 1 document(s)" in out and "patch acid-wash.json" in out
+    assert "desk old-desk.json" not in out                  # (plan 44 D3: retired)
+    assert "shows to rewrite as /3: 1 — rig.hyp.json" in out
+    assert "would rewrite 2 as /10, leave 1 untouched (already /10), skip 0" in out
     assert tool.main(["--library", str(lib), "--apply"], picture=same_picture) == 0
     out = capsys.readouterr().out
     backups = list(home.glob("library-backup-*"))
@@ -624,19 +629,21 @@ def test_the_tool_retapers_backs_up_and_moves_the_eye_into_every_preset(tmp_path
     assert (lib / "presets" / "dial.json").read_bytes() == before["presets/dial.json"]
     show = json.loads((lib / "projects" / "rig.hyp.json").read_text())
     assert show["session"] == {"tempo.bpm": 128.0} and show["layout"] == {"device:apc40": [1, 2]}
-    assert (lib / "projects" / "rig.hyp.json.bak-v2-eye").read_bytes() == \
+    assert show["schema"] == "hyperspace.project/3" and "rig" not in show
+    assert (lib / "projects" / "rig.hyp.json.bak-v2-look").read_bytes() == \
         before["projects/rig.hyp.json"]
-    for rel in ("patches/acid-wash.json", "desk/old-desk.json"):
-        assert json.loads((lib / rel).read_text())["units"]["fx.depth"] == "taper", rel
-    assert "retapered 2 document(s)" in out and "rewrote 2 as /9" in out
-    assert "rewrote 1 show(s) without the eye" in out
+    assert json.loads((lib / "patches/acid-wash.json").read_text())["units"]["fx.depth"] == \
+        "taper"
+    assert (lib / "desk/old-desk.json").read_bytes() == before["desk/old-desk.json"]
+    assert "retapered 1 document(s)" in out and "rewrote 2 as /10" in out
+    assert "rewrote 1 show(s) as /3" in out
     # once more: nothing to do, the eye read from the show's backup
     after = _tree(lib)
     assert tool.main(["--library", str(lib), "--apply"], picture=same_picture) == 0
     out = capsys.readouterr().out
-    assert "its eye from rig.hyp.json.bak-v2-eye" in out
-    assert "retaper first" not in out and "shows holding the eye" not in out
-    assert "rewrote 0 as /9, left 3 untouched (already /9)" in out
+    assert "its eye from a backup of rig.hyp.json" in out
+    assert "retaper first" not in out and "shows to rewrite" not in out
+    assert "rewrote 0 as /10, left 3 untouched (already /10)" in out
     assert {k: v for k, v in _tree(lib).items() if "bak" not in k} == \
         {k: v for k, v in after.items() if "bak" not in k}
 
@@ -866,7 +873,7 @@ def test_an_old_show_with_the_camera_under_its_old_id_and_no_eye(tmp_path):
     assert doc["layout"] == {"device:apc40": [1, 2]}
     assert (home / "projects" / "rig.hyp.json.bak-v2-eye").read_bytes() == before
     assert headless.show_seed(json.loads(before)) == {
-        "schema": L.PROJECT_SCHEMA, "name": headless.SEED_SHOW, "session": {},
+        "schema": L.PROJECT_V2, "name": headless.SEED_SHOW, "session": {},
         "layout": {"render:camera": [7, 8]}}
 
 
@@ -890,55 +897,10 @@ def test_a_show_with_nothing_of_the_camera_seeds_nothing(tmp_path, monkeypatch, 
     monkeypatch.setattr(headless, "resave", resave)
     tool = _tool()
     tool.main(["--library", str(lib)], picture=same_picture)
-    assert "show: rig (the library's one show) — no eye (the build's default)" in \
+    assert "show: rig (the library's one show) — no eye nor look (the build's defaults)" in \
         capsys.readouterr().out
     assert seen and all(s is None for s in seen)
     seen.clear()
     _write(lib / "projects" / "rig.hyp.json", old_show())
     tool.main(["--library", str(lib)], picture=same_picture)
     assert seen and all(s is not None and s["session"] == EYE for s in seen)
-
-
-def test_a_preset_naming_an_unmarked_template_is_computed_against_it_retapered(
-        tmp_path, capsys):
-    """Review 5: the presets' `/9` are computed after the retaper — a
-    preset naming an unmarked desk template is written as it saves against
-    the retapered template (resaved against the library after --apply, it
-    is a fixed point), and the dry run said those same bytes."""
-    from hyperspace.library import DESK_SCHEMA
-    lib = tmp_path / "Drive" / "Hyperspace"
-    _write(lib / "desk" / "old-desk.json", {"schema": DESK_SCHEMA, "name": "old desk", "desk": [
-        {"source": "cc:0:49", "target": "fx.warp.speed", "op": "set", "value": 0.75},
-        {"source": "cc:0:48", "target": "fx.warp.amount", "op": "abs"}]})
-    doc = old_preset(CORPUS / "presets" / "party-noita.json")
-    doc[preset.TEMPLATE_KEY] = "old desk"
-    doc["desk"] = []
-    (lib / "presets").mkdir(parents=True)
-    (lib / "presets" / "noita.json").write_text(preset.dumps(doc))
-    tool = _tool()
-    dry = {}
-
-    def keep(path, *, library=None, show=None):
-        return ["x"] * 8, []
-
-    real_check = tool.check
-
-    def check(path, library, scratch, **kw):
-        r = real_check(path, library, scratch, **kw)
-        dry.setdefault(path.name, r.data)
-        return r
-
-    tool.check = check
-    try:
-        assert tool.main(["--library", str(lib)], picture=keep) == 0
-        assert tool.main(["--library", str(lib), "--apply"], picture=keep) == 0
-    finally:
-        tool.check = real_check
-    capsys.readouterr()
-    written = (lib / "presets" / "noita.json").read_bytes()
-    assert json.loads((lib / "desk" / "old-desk.json").read_text())["units"]["fx.depth"] == \
-        "taper"
-    assert written == dry["noita.json"]                       # the dry run said the same
-    again, _, _ = headless.resave(lib / "presets" / "noita.json", tmp_path / "again",
-                                  library=lib)
-    assert again == written

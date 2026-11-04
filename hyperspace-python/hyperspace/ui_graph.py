@@ -28,9 +28,9 @@ The collapse state is the page's UI state (`st["open"]`), saved nowhere.
 did; the details chip shows only with a selection on a narrow page.
 
 An expanded node folds its port groups (the hands' axes, the desk's
-knobs) one by one. A desk template's node (plan 28 N5) is a subgraph:
-collapsed it draws none of its rows; its **+** opens it and its rows are
-cables (`is_open`, `drawn_cable`). A desk
+knobs) one by one. (Plan 28 N5's desk-template subgraph went with the
+templates, plan 44 D3; `is_open` and `drawn_cable` stay for any cable
+inside a subgraph.) A desk
 layer that is down (SHIFT not latched, or latched) draws its node and its
 ports faint. Hovering a cable says its reading and its depth; a
 port, its reading; a device, its status. Selecting a route shows its
@@ -481,7 +481,7 @@ def view_of(panel) -> graphview.View | None:
         bands = (getattr(router, "labels", {}).get("lane")
                  or (getattr(chain, "band_names", None) if chain is not None else None))
         st["view"] = graphview.build(table, reg, router, devices, rgraph, spec,
-                                     lanes=lanes, bands=bands, template=template_of(panel),
+                                     lanes=lanes, bands=bands,
                                      slots=getattr(panel, "outputs", None) or (),
                                      groups=groups)
         st["key"] = k
@@ -496,29 +496,6 @@ def groups_key(groups) -> tuple:
     return tuple((g.get("id"), g.get("name"), tuple(g.get("nodes") or ()), bool(g.get("open")),
                   g.get("patch"), len(g.get("kept_by_host") or ()))
                  for g in groups or () if isinstance(g, dict))
-
-
-def template_of(panel):
-    """The loaded preset's desk template (plan 24 C3) as ``(name, rows)`` —
-    the rows as the load expanded them, the ones a save compacts against
-    (`preset.Presets._desk_part`), else the library's file — or None when
-    the preset names none. Read when the view is
-    rebuilt, not each frame: a load moves the table's rows, so the view's
-    key moves with it."""
-    presets = getattr(getattr(panel, "library", None), "presets", None)
-    if presets is None or not hasattr(presets, "template_of_loaded"):
-        return None
-    try:
-        ref = presets.template_of_loaded()
-        if not ref:
-            return None
-        at_load = getattr(presets, "template_at_load", None)   # (none before a reload)
-        held = at_load() if at_load is not None else None
-        if held is not None and held[0] == ref:
-            return ref, list(held[1])
-        return ref, list(presets.lib.desk_template(ref).get("desk") or [])
-    except LibraryError:            # a template that will not read: the overrides alone
-        return None
 
 
 def full(st: dict, nid: str) -> bool:
@@ -619,12 +596,9 @@ def hidden_by(st: dict, view: graphview.View, pin: str) -> str:
 
 def shown(st: dict, n: graphview.VNode) -> list[graphview.VPort]:
     """The ports node `n` draws: none while it is collapsed (plan 28 N7);
-    expanded, `graphview.visible` with this page's state — a desk
-    template's node every mapped control."""
+    expanded, `graphview.visible` with this page's state."""
     if collapsed(st, n.id):
         return []
-    if n.kind == graphview.TEMPLATE:
-        return list(n.ports)
     return graphview.visible(n, full(st, n.id), st["folds"])
 
 
@@ -653,7 +627,7 @@ def areas_of(st: dict, view: graphview.View, stored=None) -> graphview.Layout:
     title and lines, an expanded one its ports, the open idle lines'
     nodes under them."""
     return graphview.layout(
-        view, stored, lambda nid: full(st, nid) or nid.startswith(f"{graphview.TEMPLATE}:"),
+        view, stored, lambda nid: full(st, nid),
         st["folds"], collapsed=lambda nid: collapsed(st, nid),
         idle_open=st.setdefault("idle_open", set()))
 
@@ -1177,6 +1151,8 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
     if imgui.is_item_hovered():
         ui.tooltip(line)
     _area_chips(st)
+    for want in window_wants(panel):       # plan 44 D3: a window the rig lacks
+        imgui.text_colored(ui.WARN, want)
     hold = getattr(panel, "hold", None)
     if hold is not None and hold.on:        # plan 38: first, in red, while it lasts
         imgui.text_colored(ui.WARN, hold_line(hold, time.perf_counter()))
@@ -1202,6 +1178,19 @@ def panel_wants(panel) -> list:
     if got is None or got[0] != key:
         got = panel.__dict__["_wants_cache"] = (key, devices.wants(router.table, rig))
     return got[1]
+
+
+def window_wants(panel) -> list[str]:
+    """Plan 44 D3 (row 623): the windows the loaded preset wires or cuts
+    that this rig has not open (`graphview.window_wanted_lines` over the
+    presets' graph and bus cuts and the panel's outputs), one line each —
+    what OUTPUT and the GRAPH head say; [] with no presets (a test's panel)."""
+    presets = getattr(getattr(panel, "library", None), "presets", None)
+    if presets is None:
+        return []
+    spec = getattr(getattr(presets, "graph", None), "spec", None)
+    count = len(getattr(panel, "outputs", None) or ())
+    return graphview.window_wanted_lines(spec, getattr(presets, "bus", None), count)
 
 
 def _wants_chip(panel, beside: bool = True) -> None:
@@ -1892,12 +1881,9 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
         imgui.pop_id()
         ed.end_node()
         return
-    if n.kind == graphview.TEMPLATE:          # a subgraph: every mapped control
-        every = True
-    else:
-        every = full(st, n.id)
-        if imgui.small_button("patched only" if every else "all ports"):
-            st["flip"] ^= {n.id}
+    every = full(st, n.id)
+    if imgui.small_button("patched only" if every else "all ports"):
+        st["flip"] ^= {n.id}
     ports = shown(st, n)
     group = None
     many = graphview.grouped(n, every)
@@ -3051,7 +3037,8 @@ def render_edit(panel) -> graphview.Edit:
     rg = getattr(holdmod.canvas_renderer(panel), "_graph", None)      # (plan 38 B3)
     e = graphview.Edit(graph=gs, render=rg, push=lambda label: undo.push(label, load=True))
     e.slots = getattr(panel, "outputs", None) or ()     # (plan 35 G: a window's name)
-    e.show = getattr(lib, "project", None)              # (plan 36 T1: the rig's wires)
+    e.show = getattr(lib, "project", None)
+    e.presets = getattr(lib, "presets", None)           # (plan 44 D3: the bus cuts are the preset's)
     return e
 
 

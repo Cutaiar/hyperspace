@@ -155,7 +155,7 @@ def test_a_media_preset_and_one_without_are_both_six(rig):
     """Row 394: with media or without, the save is `/6`, with the bins (an
     empty section when none is assigned) and every media-family value."""
     doc = rig.presets.document("x")
-    assert doc["schema"] == preset.SAVE_SCHEMA == "hyperspace.preset/9"
+    assert doc["schema"] == preset.SAVE_SCHEMA == "hyperspace.preset/10"
     assert doc[preset.MEDIA_KEY] == {"channels": {}}
     rig.reg.media.assign("a", 0, "shared:loops/tunnel.mp4")
     doc = rig.presets.document("x")
@@ -204,7 +204,7 @@ def test_bins_round_trip(rig, tmp_path):
     rig.reg["media.a.slot"].set(1)
     path = rig.presets.save_as("MEDIA")
     text = path.read_text()
-    assert '"schema": "hyperspace.preset/9"' in text
+    assert '"schema": "hyperspace.preset/10"' in text
     assert '  "a": ["shared:loops/tunnel.mp4", "camera:FaceTime HD Camera"]' in text
     want = m.to_json()
     m.from_json({})

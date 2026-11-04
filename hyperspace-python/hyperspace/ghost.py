@@ -98,7 +98,7 @@ STYLES = ["HANDS", "JOINTS", "PALMS", "CAGE", "MARIONETTE"]   # PARTS, in this o
 
 @dataclass
 class GhostState:
-    """What the ghost.* params write. Session, not performance: see
+    """What the ghost.* params write. The look's, but for `mirror`: see
     `register`."""
 
     on: bool = False
@@ -118,10 +118,43 @@ def prefix(n: int = 1) -> str:
     return GROUP if n == 1 else f"{GROUP}.{n}"
 
 
+class RoomSetting:
+    """A hands node's room setting — its mirror (plan 44 D3, review of
+    #351): the value is held here, on the session's param, and written to
+    every deck's `GhostState` that follows it, each held weakly (a deck
+    rebuilt or dropped lets its old state go, and is never written again)."""
+
+    def __init__(self, value: bool = False):
+        import weakref
+        self._ref = weakref.ref
+        self.value = bool(value)
+        self._states: list = []
+
+    def follow(self, state: GhostState) -> None:
+        """`state` reads this setting from now on, the current value at once."""
+        self._states = [r for r in self._states if r() is not None and r() is not state]
+        self._states.append(self._ref(state))
+        state.mirror = self.value
+
+    @property
+    def states(self) -> list[GhostState]:
+        """The live states that follow, in the order they came."""
+        return [st for r in self._states if (st := r()) is not None]
+
+    def set(self, v) -> None:
+        self.value = bool(v)
+        for st in self.states:
+            st.mirror = self.value
+
+
 def register(reg, state: GhostState, n: int = 1) -> None:
-    """ghost.* — session params (params.SESSION_GROUPS): the hands are the
-    room's display, like the output's placement, so a preset load never
-    switches them off mid-set. They show on the HANDS page and can be
+    """ghost.* — the hands' look, performance params (plan 43 §6, plan 44
+    D3, schema `/10`): a preset is a complete look, so it carries how the
+    hands are drawn and a load lands it, as it lands the eye — the one
+    exception is `mirror` (`params.SESSION_KEYS`), a fact of the room (a
+    real mirror in front of the performer's hands): the session's single
+    copy, kept by the show, declared once and written to every deck's
+    hands state. They show on the HANDS page and can be
     learned onto a desk button or knob. Only `on` and `alpha` are
     modulatable (a hand or an LFO may drive them); `mirror`, `guide`,
     `tethers` and `style` are settings of the rig and the show — a
@@ -142,13 +175,29 @@ def register(reg, state: GhostState, n: int = 1) -> None:
                    lambda v: setattr(state, "alpha", float(v)), lo=0.0, hi=1.0,
                    fmt=lambda v: f"{v * 100:.0f}%", group=GROUP,
                    tip="How solid the ghost hands are over the picture.")
-    reg.toggle(f"{pre}.mirror", f"{lb} mirror", lambda: state.mirror,
-               lambda v: setattr(state, "mirror", bool(v)), group=GROUP, modulatable=False,
-               tip="Flip the ghost hands left for right, the hands only — for a real "
-                   "mirror in front of the performer's hands. For a Pepper's Ghost "
-                   "glass use Flip X / Flip Y on the OUTPUT page, which mirror the whole "
-                   "picture; with an output flip on, leave this off or the hands flip "
-                   "twice.")
+    mirror = reg.get(f"{pre}.mirror")
+    room = mirror.__dict__.get("room") if mirror is not None else None
+    if mirror is not None and not isinstance(room, RoomSetting):
+        # a param from before this build (a hot reload): its setting kept,
+        # given a room of its own — never declared twice (review of #351)
+        room = RoomSetting(bool(mirror.get()))
+        mirror.get, mirror.put = (lambda: room.value), room.set
+        mirror.__dict__["room"] = room
+    elif not isinstance(room, RoomSetting):
+        # the session's (plan 44 D3): one setting for the room, owned by the
+        # session's param and read from there — written to every live deck's
+        # hands state, held weakly so a deck rebuilt lets its old state go
+        room = RoomSetting(bool(state.mirror))
+        mirror = reg.toggle(
+            f"{pre}.mirror", f"{lb} mirror", lambda: room.value, room.set, group=GROUP,
+            modulatable=False,
+            tip="Flip the ghost hands left for right, the hands only — for a real "
+                "mirror in front of the performer's hands. For a Pepper's Ghost "
+                "glass use Flip X / Flip Y on the OUTPUT page, which mirror the whole "
+                "picture; with an output flip on, leave this off or the hands flip "
+                "twice. The room's, not the preset's: a show keeps it.")
+        mirror.__dict__["room"] = room
+    room.follow(state)
     reg.enum(f"{pre}.guide", f"{lb} guide", lambda: state.guide,
              lambda i: setattr(state, "guide", int(i)), GUIDES, group=GROUP,
              modulatable=False,

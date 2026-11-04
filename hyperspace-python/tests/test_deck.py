@@ -263,7 +263,7 @@ def test_one_sources_fed_once_drives_two_routers_as_one_router_did(tmp_path):
     assert b.router.sources is shared and b.deck.sources is shared
     assert solo.router.sources is not shared
     assert a.reg is not b.reg and a.router is not b.router
-    assert any(t is b.table for t in shared.tables)
+    assert any(t is b.table.session for t in shared.tables)
     rigs = (solo, a, b)
     names = sorted(a.lib.list(PRESETS))
     assert names == sorted(solo.lib.list(PRESETS)) == sorted(b.lib.list(PRESETS))
@@ -369,7 +369,7 @@ def test_the_deck_holds_the_rig_boot_hands_out(tmp_path):
     # plan 44 D2: the router reads the deck's sources (its own while there
     # is one deck), and the clock the banks step on is theirs
     assert d.sources is d.router.sources and d.sources.clock is d.clock
-    assert d.sources.tables == [d.table] and d.router.feeds is d.sources.feeds
+    assert d.sources.tables == [d.table.session] and d.router.feeds is d.sources.feeds
     assert undo.installed() is d.undo
     assert d.router.lfos is d.lfos and d.router.bank("env") is d.envs
     assert d.router.sequencer is d.seq and d.undo.marks is d.marks
@@ -558,9 +558,12 @@ def test_the_band_hooks_are_the_rigs_and_two_decks_leave_them_once(tmp_path, mon
     # D1: `attach`, `startup`, `install` off; D2+ decides their real shape)
     second = Deck.build(library=r.lib, control=r.control, audio=r.audio,
                         table=lambda reg: Bindings(),
-                        attach=False, startup=False, install=False)
+                        attach=False, startup=False, install=False, on_air=False)
     assert r.lib.reg is r.reg and undo.installed() is r.undo      # the first deck's still
-    assert startups == [] and r.lib.current(PRESETS) == loaded    # nothing re-landed
+    # (plan 44 D3: what is loaded is each deck's presets' own — the first's
+    # is as it was; the library's kind is the deck built last, D5's seam)
+    assert startups == [] and r.presets.current == loaded         # nothing re-landed
+    assert second.presets.current is None and r.lib.presets is second.presets
     assert band() == ONCE                                                 # still once
     assert (r.lib._layout_hooks["band"], r.lib._extra_hooks["band"],
             r.lib._load_hooks["band"]) == hooks

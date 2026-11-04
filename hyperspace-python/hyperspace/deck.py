@@ -45,7 +45,7 @@ from .hold import register as register_hold
 from .learn import Learn
 from .library import Marks
 from .lookback import DreamState
-from .params import Registry, build_registry
+from .params import Registry, SessionRegistry, build_registry
 from .preset import Presets
 from .routing import Bindings, Router, Sources
 from .view import ViewState
@@ -98,18 +98,33 @@ class Deck:
         """The presets' graph section (`preset.GraphSection`)."""
         return self.presets.graph
 
+    @property
+    def session(self) -> SessionRegistry | None:
+        """The rig's params this deck's registry holds by reference (plan 44
+        D3, `params.SessionRegistry`): one for every deck."""
+        return self.reg.session
+
+    @property
+    def session_table(self):
+        """The rig's half of the binding table this deck's table holds by
+        reference (plan 44 D3, `routing.SessionTable`): the session rows
+        and `bindings.json`."""
+        return self.table.session
+
     @classmethod
     def build(cls, *, library, control, audio, table: Callable[[Registry], Bindings],
               renderer=None, media=None, restart: Callable[[], Any] | None = None,
               dream=None, fx=None, ghost=None,
               clock: tempo.Clock | None = None, lfos: lfo.LFOs | None = None,
               sources: Sources | None = None,
+              session: SessionRegistry | None = None,
               hands: Callable[[Registry], Any] | None = None,
               outputs: Callable[[Registry], Any] | None = None,
               panel: Callable[..., Any] | None = None,
               devices: Callable[..., Any] | None = None,
               made: RigMade | None = None,
               attach: bool = True, startup: bool = True, install: bool = True,
+              on_air: bool = True,
               warm: bool = False) -> Deck:
         """`app.main`'s deck lines, in their order. `library`, `control`
         and `audio` (anything with a `.chain`) are the rig's, built and
@@ -124,7 +139,10 @@ class Deck:
         an LFO bank to use in place of new ones, `sources` the shared
         sources the router reads (plan 44 D2; new ones when None) — their
         clock, when they have one, is the deck's unless `clock` is given,
-        and a different `clock` is refused there. The hooks, each called
+        and a different `clock` is refused there. `session` (plan 44 D3) is
+        the rig's params (`params.build_session`) this deck's registry
+        follows; None: `build_registry` makes them (the one deck there is
+        today). The hooks, each called
         where `main` builds that rig object, each returning what it made:
         `hands(reg)` the hands' setup, `outputs(reg)` the outputs' params
         and switches, `panel(reg, view, clock=, lfos=, envs=, seq=, hold=,
@@ -142,7 +160,9 @@ class Deck:
         `install` (this deck's undo is the one `undo.push` and the
         `edit.*` triggers reach). All three default on, as `main` has them;
         a second deck built beside the first passes all three False, and
-        D2+ decides their real shape. `warm`: build every shape's geometry
+        D2+ decides their real shape. `on_air` (plan 44 D3, review of #351):
+        this deck is the session's lead — its `apply` lands the session's
+        params once a frame; a deck built beside it passes False. `warm`: build every shape's geometry
         on a background thread once the startup preset has landed."""
         if renderer is not None:
             given = [k for k, v in (("dream", dream), ("fx", fx), ("ghost", ghost))
@@ -162,7 +182,11 @@ class Deck:
                              dream=dream if dream is not None else DreamState(),
                              fx=fx if fx is not None else FxState(),
                              ghost=ghost if ghost is not None else GhostState(),
-                             media=media, restart=restart)
+                             media=media, restart=restart, session=session)
+        if on_air and reg.session is not None:
+            # (review of #351: the deck on air lands the session's params —
+            # named, never "whichever registry followed first")
+            reg.session.lead = reg
         made = made if made is not None else RigMade()
         if hands is not None:
             made.hands = hands(reg)            # before attach: "default" includes them
@@ -218,6 +242,9 @@ class Deck:
             # plan 26 A4: a preset's graph section sets the renderer's wiring and
             # hands an extra hands node its own state (`Renderer.ghost_states`)
             presets.graph.attach(renderer)
+            # plan 44 D3: the bus cuts are the loaded preset's — the renderer
+            # reads them off the presets (`graph.rig_of`: `Presets.rig`)
+            renderer.rig_source = presets
         if hold is not None:
             hold.section = presets.graph       # plan 38 B3: landings keep the held program's nodes
         # one Learn over the live table, whatever the MIDI gate says: a knob
@@ -277,6 +304,10 @@ class Deck:
                (r.ghost.state, "ghost", "GhostState")] if r is not None else []),
             (self.view, "view", "ViewState"),
             (self.reg, "params", "Registry"),
+            # plan 44 D3: the rig's params this deck holds by reference (listed
+            # here while there is one deck; D4+ hands the rig's in)
+            *([(sr, "params", "SessionRegistry")]
+              if (sr := getattr(self.reg, "session", None)) is not None else []),
             *[(p, "params", "Param") for p in self.reg],
             (self.marks, "library", "Marks"),
             (self.undo, "undo", "Undo"),

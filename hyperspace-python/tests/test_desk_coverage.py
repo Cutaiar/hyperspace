@@ -103,11 +103,11 @@ def test_every_corpus_presets_numbers_are_in_the_report(tool, tmp_path):
     assert (k7.status, k7.target, k7.why) == (tool.DEAD, "view.bmp_alpha", "no media channel")
 
 
-def test_a_library_template_preset_is_reported_with_its_expanded_desk(tool, tmp_path):
-    """`--library` copies a library's presets and templates into the scratch
-    home (the source is only read): the fixture preset's row is its
-    template plus overrides — D2 the dream (on), K2 dark (a dark row), K3
-    the pattern mix (faces on), S1 the lines opacity."""
+def test_a_library_preset_that_named_a_template_is_reported_with_its_own_rows(tool, tmp_path):
+    """`--library` copies a library's presets into the scratch home (the
+    source is only read): plan 44 D3 retired the desk templates, so the
+    fixture preset that named one is its own rows — D2 the dream (on), K3
+    the pattern mix (faces on) — and every other control dark."""
     lib = tmp_path / "lib"
     shutil.copytree(FIXTURES, lib)
     before = sorted(p.read_bytes() for p in lib.rglob("*.json"))
@@ -116,15 +116,15 @@ def test_a_library_template_preset_is_reported_with_its_expanded_desk(tool, tmp_
     controls, rows = tool.coverage(home, lib)
     (row,) = [r for r in rows if r.name == "TEMPLATED"]
     cells = {c.glyph: (c.status, c.target) for c in row.cells}
-    assert cells["D1"] == (tool.MAPPED, "view.depth4")
+    assert cells["D1"] == (tool.DARK, "")
     assert cells["D2"] == (tool.MAPPED, "dream.mix")
     assert cells["K2"] == (tool.DARK, "")
     assert cells["K3"] == (tool.MAPPED, "view.pattern_mix")
-    assert cells["S1"] == (tool.MAPPED, "view.lines_alpha")
-    assert row.count(tool.MAPPED) == 7
+    assert cells["S1"] == (tool.DARK, "")
+    assert row.count(tool.MAPPED) == 2
     assert sorted(p.read_bytes() for p in lib.rglob("*.json")) == before
     text = tool.report(controls, rows)
-    assert "| TEMPLATED | 7 | 31 | 0 | 31 | 27 over |" in text
+    assert "| TEMPLATED | 2 |" in text
 
 
 # ---------------------------------------------------------------- the dead rule

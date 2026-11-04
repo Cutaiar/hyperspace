@@ -5,20 +5,20 @@
    "values": {id: base, …},            the performance part (params.PARTS)
    "routes": [row, …],                 the performer rows (routing.Binding)
    "desk":   [row, …],                 the APC40's preset layer (routing.Binding)
-   "macros": {"macro.1": {…}, …},      the macros' labels and subscribers
-   "modules": {"dream": "wake", …}}    module-preset labels (D3)
+   "macros": {"macro.1": {…}, …}}     the macros' labels and subscribers
 
-(plan 24 C3: a file may also name a desk template, ``"desk_template":
-"<name>"`` before ``desk``, and then ``desk`` holds only its overrides —
-"desk templates" below.)
+(plan 44 D3, ``/10``: the module labels ``modules`` and plan 24 C3's
+``desk_template`` are retired — a load of an older file drops both,
+`graphmigrate.ten` — and ``"bus": {"cut": [{"from", "to"}, …]}`` is the
+preset's bus cuts, `BUS_KEY`, below.)
 
 (plan 32 S: a ``media`` section holds the channels' bins:
 ``{"channels": {"a": ["shared:loops/tunnel.mp4", null, …], …}}``.)
 
 **The schema a save writes** (row 394, the owner's decision of
 2026-10-25, superseding D1's ladder, R10 and R15): always the newest,
-``hyperspace.preset/9`` (`SAVE_SCHEMA`, plan 43 C2; row 521 closed: no
-``/7``-or-``/8`` fork), in today's words — the wired frame (plan 35) that
+``hyperspace.preset/10`` (`SAVE_SCHEMA`, plan 44 D3; ``/9`` was plan 43
+C2's, row 521 closed: no ``/7``-or-``/8`` fork), in today's words — the wired frame (plan 35) that
 says everything (plan 36 W3: every edge a wire, the hands entries and
 `laid` written, effects only where the section names them), today's node
 ids and canvas ids, every value the registry holds (the media family, the
@@ -32,8 +32,20 @@ migration to ``/7`` (`graphmigrate.seven`), with a note: ``/2`` is the
 format above, ``/3`` adds the envelopes and the sequencer (plan 31),
 ``/4`` media (plan 32), ``/5`` the free graph (plan 33), ``/6`` the wired
 frame (plan 35), ``/8`` the groups (plan 40), ``/9`` the one orbit camera
-(plan 43 C2); a re-save is ``/9``. tools/migrate_library.py rewrites a
-library's presets that way, once.
+(plan 43 C2), ``/10`` the look made whole (plan 44 D3: the hands' and
+clouds' looks in ``values``, the bus cuts in ``bus``, read from the open
+show for an older file — `graphmigrate.ten`); a re-save is ``/10``.
+tools/migrate_library.py rewrites a library's presets that way, once.
+
+**The look made whole** (plan 44 D3, plan 43 §6): the hands' look
+(``ghost.*`` but ``ghost.mirror``, the room's) and the clouds'
+(``cloud.*``) are performance params, saved and landed like any value;
+and the **bus cuts** — which of the rig's cables from All outputs into a
+window this preset cuts (`graph.RigWires`, plan 36 T1's ``rig``, once
+the show's) — are `Presets.bus`: read from ``bus`` by a load (none: every
+cable stands), written by a save when any is cut, in the dirty dot and
+in a load's undo step, and what the renderer reads (`rig_source` is the
+presets, `graph.rig_of` reads `rig`).
 
 **The one orbit camera** (plan 43 C2, the owner, 2026-11-02): a preset
 is a complete look, so the camera is all of it — `camera.*` (the shape's
@@ -65,9 +77,9 @@ replaces rows, never an offset. In order (plan 13 §5):
    that is not modulatable (dropped), a second performer on one target
    (the referee's, below);
 2. land the values: **every** persisted param of every performance group
-   gets the file's value or its group default (`Library.resolved`: the
-   group's default module preset over the build values), in registry
-   order, in one go (D2). A session param is never touched. The rotation
+   gets the file's value or the value its object was built with
+   (`Library._fresh_of` — never a group's ``default.json``, plan 44 D3),
+   in registry order, in one go (D2). A session param is never touched. The rotation
    phases (not persisted) are set to the file's pose when it has one
    (plan 43 C2), else left spinning;
 3. replace every performer row with ``routes`` (`Bindings.set_routes`;
@@ -87,18 +99,16 @@ replaces rows, never an offset. In order (plan 13 §5):
    just landed (`Router.follow_macros(force=True)`). The macro is the
    scene-setter of record: a param a base subscriber names ends at the
    subscriber's value even when ``values`` names it too;
-6. record each performance group's ``modules`` label as its current
-   module preset, clean against the values just landed — a label only,
-   never a chain-load of the module preset (D3); a group the file does
-   not name shows none;
+6. each performance group's strip is clean against the values just
+   landed, naming no module preset (plan 44 D3: the ``modules`` labels
+   are retired, row 540);
 7. the notes from step 1 are kept in ``notes`` and summed up in
    ``Library.warning`` for the panel.
 
 A save (`document`) writes the performance snapshot, every performer row
 (disabled ones too), the table's preset-layer rows (`Bindings.desk`, a
 row's ``layer`` left out: every desk row is the preset's), the table's
-macros (`Bindings.macros_doc`) and the performance groups' current
-module labels. The dirty dot (`signature`) covers all of it, so a Learn,
+macros (`Bindings.macros_doc`) and the bus cuts. The dirty dot (`signature`) covers all of it, so a Learn,
 an Unbind or a ROUTING-page edit — which change the table and write no
 file — shows as the loaded preset edited; only a save (⇧F, a pad, the
 strip's save / as…) writes it.
@@ -126,13 +136,20 @@ from .fx import declare as declare_fx
 from .ghost import GhostState
 from .ghost import prefix as ghost_prefix
 from .ghost import register as declare_ghost
-from .graph import EMPTY, FRAME_KEY, WIRED_FRAME, GraphError, GraphSpec, Wiring, read_graph
+from .graph import (
+    EMPTY,
+    FRAME_KEY,
+    WIRED_FRAME,
+    GraphError,
+    GraphSpec,
+    RigWires,
+    Wiring,
+    read_graph,
+)
 from .library import (
-    DESK_SCHEMA,
     PERFORMANCE_SCHEMA,
     PRESETS,
     RETIRED_MODULES,
-    LibraryError,
     read_positions,
 )
 from .lookback import (
@@ -192,8 +209,19 @@ WIRED_SCHEMA = graphmigrate.WIRED_SCHEMA
 GROUPS_SCHEMA = graphmigrate.GROUPS_SCHEMA
 # plan 43 C2 (rows 572, 576): `/9` is `/8` with the eye and the pose — what
 # every save writes, groups or none
-EYE_SCHEMA = SAVE_SCHEMA = graphmigrate.EYE_SCHEMA
-VERSIONS = (2, 3, 4, 5, 6, 7, 8, 9)
+EYE_SCHEMA = graphmigrate.EYE_SCHEMA
+# plan 44 D3 (rows 611–625): `/10` is `/9` with the look made whole — the
+# hands' and clouds' looks in `values`, the bus cuts in `bus`, no module
+# labels, no desk template — what every save writes
+LOOK_SCHEMA = SAVE_SCHEMA = graphmigrate.LOOK_SCHEMA
+VERSIONS = (2, 3, 4, 5, 6, 7, 8, 9, 10)
+# plan 44 D3: the preset's bus cuts, `{"cut": [{"from", "to"}, …]}` — the
+# rig's cables from All outputs into a window that this preset cuts
+# (`graph.RigWires`); no key: every cable stands
+BUS_KEY = graphmigrate.BUS_KEY
+# what a load says of a file naming a desk template (retired, plan 44 D3)
+TEMPLATE_RETIRED = ("desk template {name!r}: desk templates are retired (plan 44 D3) — "
+                    "this preset's own desk rows only")
 # plan 43 C2 (row 573): the spin's pose, `{"rot.phase.XY": angle, …}` — the
 # six `POSE_IDS` in radians — beside `values` (a phase moves every frame: it
 # is no base, so `values` stays the bases' snapshot)
@@ -304,9 +332,9 @@ class GraphSection:
       (`FxState.set_instances` + `fx.declare`: its own on, mix, order,
       clock — performance params, so the preset's `values` carry them),
       and an extra hands node's, `ghost.2.*` (`ghost.register`: the
-      session's, like `ghost.*`, on a `GhostState` of its own that is
-      kept while the app runs, so a preset that drops the node and one
-      that brings it back find its settings as they were); and (plan 33
+      preset's, like `ghost.*`, its values in the preset's `values` — but
+      `ghost.2.mirror`, the room's, which the open show keeps — on a
+      `GhostState` of its own that is kept while the app runs); and (plan 33
       S) each switch's `switch[.n].select` (`params.declare_switches`: a
       performance param, its pick in the preset's `values`); and (plan
       34 Z) each resize's `resize[.n].*` (`params.declare_resizes`, by its
@@ -409,11 +437,9 @@ class GraphSection:
         wired frame, and that is what a save writes (row 394: `/7`, plan 36
         T3; `/9` since plan 43 C2).
 
-        An extra hands node declared for the first time this run starts
-        from what the open show holds for it (`ghost.2.*` in its session —
-        the show restored before the startup preset brought the node), so
-        its settings survive a reopen and the show stays clean; after
-        that its kept state is the live one."""
+        An extra hands node declared for the first time this run takes
+        its room setting (`ghost.2.mirror`, the session's) from the open
+        show; its look is the preset's values (plan 44 D3)."""
         wiring = spec.wiring() if spec is not None else EMPTY
         reg = self.reg
         want = {ghost_prefix(h.n): h.n for h in wiring.extra}
@@ -498,11 +524,11 @@ class GraphSection:
         return free if free is not None else self.doc
 
     def _seed(self, name: str) -> None:
-        """A newly declared hands node's params from the open show's
-        session, where it holds them (`library.Project.session`) — once
-        per show opened (`Project.opened`): after that the node's kept
-        state is the live one, so a setting changed in this show is not
-        put back when a later preset brings the node again."""
+        """A newly declared hands node's session params (plan 44 D3: its
+        mirror, `params.SESSION_KEYS`; its look is the preset's) from the
+        open show's session, where it holds them (`library.Project.session`)
+        — once per show opened (`Project.opened`): after that the node's
+        kept state is the live one."""
         project = getattr(getattr(self, "lib", None), "project", None)
         seeded = self.__dict__.setdefault("_seeded", {})
         show = getattr(project, "opened", None)
@@ -511,7 +537,8 @@ class GraphSection:
         seeded[name] = show
         session = getattr(project, "session", None) or {}
         held = {pid: v for pid, v in session.items()
-                if pid.startswith(name + ".") and pid in self.reg}
+                if pid.startswith(name + ".") and pid in self.reg
+                and part_of(self.reg[pid]) == "session"}
         if held:
             self.reg.restore(held)
         if project is not None and isinstance(getattr(project, "session", None), dict):
@@ -561,35 +588,11 @@ class GraphSection:
         r.ghost_states = {name: self.states[name] for name in sorted(self.declared)}
 
 
-# ---- desk templates (plan 24 C3) ----
-#
-# A preset's desk may start from a named template — a file in the library's
-# `desk` group (`Library.desk_template`, ``hyperspace.desk/1``) — and add
-# its own overrides:
-#
-#   {"schema": "hyperspace.preset/2", …,
-#    "desk_template": "shape",                       the template's name
-#    "desk": [row, …,                                 the overrides: each row
-#             {"source": "cc:*:21", "dark": true}],    replaces every template
-#                                                     row on its control; a
-#                                                     dark row leaves that
-#                                                     control unmapped
-#
-# A load expands it (`expand_desk`): the template's rows, less every one an
-# override's control covers, then the override rows. A save writes the
-# name and the overrides again, not the expanded rows (`compact_desk`), so
-# a fix to the template lands in every preset that names it. A preset with
-# no ``desk_template`` key is exactly as before: its ``desk`` is the whole
-# preset layer. A template the library lacks is a note, and the overrides
-# alone are the desk.
-TEMPLATE_KEY = "desk_template"
-DARK = "dark"
 # plan 28 N1: the preset's modifier nodes (`modifiers.Modifier`), a list of
 # entries after `routes` — ``{"id": "mod.1", "kind": "smooth", "in":
 # ["hand:right.energy"], "attack": 0.05, "release": 0.6}``. No schema bump:
 # an older build ignores the key (and a route on a ``mod:`` lane is a
-# dormant row there). A desk template may carry the list too: a preset
-# naming the template gets its modifiers, its own overriding by id
+# dormant row there)
 MODIFIERS_KEY = "modifiers"
 # plan 28 N2: where the GRAPH page's nodes the look holds sit (the
 # modifiers, the macros, the render nodes and their params) —
@@ -700,83 +703,6 @@ def _bank_prefix(pid: str) -> str:
     head, _, rest = pid.partition(".")
     n, dot, _ = rest.partition(".")
     return f"{head}.{n}." if dot and n.isdigit() else ""
-
-
-def merge_modifiers(template, own) -> tuple[list[dict], list[str]]:
-    """The modifier entries a preset lands: the template's (in its order)
-    with each one the preset's own list names by id replaced, then the
-    preset's others. Either may be None. An entry that is not an object
-    with an id is dropped with a note."""
-    notes: list[str] = []
-
-    def entries(lst, where):
-        out = []
-        for d in lst or ():
-            if isinstance(d, dict) and isinstance(d.get("id"), str):
-                out.append(d)
-            else:
-                notes.append(f"dropped a modifier entry in {where}: not an object with an id")
-        return out
-    mine = {d["id"]: d for d in entries(own, "the preset")}
-    merged = [mine.pop(d["id"], d) for d in entries(template, "the desk template")]
-    return merged + list(mine.values()), notes
-
-
-def is_dark_row(row) -> bool:
-    """An override row that leaves its control unmapped: ``{"source", "dark": true}``."""
-    return isinstance(row, dict) and row.get(DARK) is True and isinstance(row.get("source"), str)
-
-
-def template_doc(name: str, rows, note: str = "") -> dict:
-    """A desk template's file: its name, an optional note, and the rows (a
-    preset's ``desk`` form, `desk_json`). Written with `dumps`, a row a line."""
-    doc: dict[str, Any] = {"schema": DESK_SCHEMA, "name": name}
-    if note:
-        doc["note"] = note
-    doc["desk"] = desk_json(rows)
-    return doc
-
-
-def expand_desk(template: list[dict], overrides: list[dict]) -> list[Binding]:
-    """The preset layer a template and a preset's overrides make: every
-    template row whose control no override names (an override row, or a
-    dark row, on an overlapping control — `Binding.overlaps`), in the
-    template's order, then the override rows in theirs."""
-    rows = [r for r in overrides if not is_dark_row(r)]
-    own = [Binding.from_json(r) for r in rows]
-    cover = own + [Binding(str(r["source"]), "") for r in overrides if is_dark_row(r)]
-    kept = [t for t in (Binding.from_json(r) for r in template)
-            if not any(c.overlaps(t) for c in cover)]
-    return kept + own
-
-
-def compact_desk(template: list[dict], live, keeps=None) -> list[dict]:
-    """The overrides a save writes for a preset that names a template: the
-    live preset layer's rows on every control where they differ from the
-    template's (in the live order), then a dark row for each template
-    control the live desk leaves unmapped (in the template's order).
-    `keeps(row)` says whether a load keeps a template row (not on an
-    invariant control, say): one it would drop is no difference.
-    `expand_desk(template, compact_desk(template, live))` is `live` again,
-    row for row, up to order — except a hand-edited desk holding two rows
-    on one knob by two spellings (the template's ``cc:*:16`` and a
-    ``cc:0:16``): the any-channel one is covered on the way back and lost."""
-    tmpl = [b for b in (Binding.from_json(r) for r in template)
-            if keeps is None or keeps(b)]
-    by_t: dict[str, list[dict]] = {}
-    for b, d in zip(tmpl, desk_json(tmpl)):
-        by_t.setdefault(b.source, []).append(d)
-    live = list(live)
-    by_live: dict[str, list[dict]] = {}
-    for d in desk_json(live):
-        by_live.setdefault(d["source"], []).append(d)
-    out = [d for src, ds in by_live.items() if by_t.get(src) != ds for d in ds]
-    dark: list[str] = []
-    for b in tmpl:
-        if b.source in by_live or b.source in dark or any(x.overlaps(b) for x in live):
-            continue
-        dark.append(b.source)
-    return out + [{"source": s, DARK: True} for s in dark]
 
 
 def dumps(doc: dict) -> str:
@@ -898,7 +824,17 @@ class Presets:
     it registers the ``presets`` document kind and makes itself
     ``lib.presets``, which the project's bank (F-keys, the preset row)
     loads and saves through. The kind's hooks look this object's methods
-    up at call time, so a hot reload that re-classes it reaches them."""
+    up at call time, so a hot reload that re-classes it reaches them.
+
+    Plan 44 D3: what is loaded is this object's own — `landing`, (the
+    loaded preset's name, what its load or save produced — the signature
+    the dirty dot compares against —, how to re-apply it), which
+    `Library._landed` / `current` / `is_dirty` hand here for the presets
+    group (`Library._owner`) — and so are the preset's bus cuts (`bus`)."""
+
+    # on the class: a `Presets` from before a hot reload has them
+    landing: tuple = (None, None, None)
+    bus: RigWires = RigWires()
 
     def __init__(self, lib, reg, router):
         self.lib, self.reg, self.router = lib, reg, router
@@ -927,6 +863,9 @@ class Presets:
         # plan 26 A4: the loaded preset's graph section (its instances'
         # params, the renderer's wiring once one is attached)
         self.graph = GraphSection(reg, lib=lib)
+        # plan 44 D3: the bus cuts the loaded preset holds (`graph.RigWires`)
+        self.bus = RigWires()
+        self.landing = (None, None, None)
         # row 563: membership is settled where what the preset holds changes
         # — a landing, the table's modifiers, a bank's voices
         self.graph.on_land = self.settle_groups
@@ -954,7 +893,27 @@ class Presets:
 
     @property
     def current(self) -> str | None:
-        return self.lib.current(GROUP)
+        """The loaded preset's name (plan 44 D3: this object's own)."""
+        return self.landing[0]
+
+    @property
+    def loaded(self):
+        """What the last load or save produced — the signature the dirty
+        dot compares against; None: nothing to compare (nothing loaded)."""
+        return self.landing[1]
+
+    def is_dirty(self) -> bool:
+        """Has the live look moved off what the loaded preset produced?
+        Within undo's tolerance (`undo.alike`); nothing loaded is clean, a
+        new preset never saved (`land_unsaved`'s ()) is dirty."""
+        ref = self.loaded
+        return ref is not None and not undo.alike(self.signature(), ref)
+
+    @property
+    def rig(self) -> RigWires:
+        """The bus cuts, as `graph.rig_of` and the hold read a renderer's
+        `rig_source` (plan 44 D3: the presets are it)."""
+        return self.bus
 
     def load(self, name: str) -> list[str]:
         """Load a preset by name through the library (which records it as
@@ -993,7 +952,7 @@ class Presets:
                   and not is_matte_id(k) and not is_cut_id(k)
                   and not is_segment_id(k)}
         doc = {"schema": SAVE_SCHEMA, "name": UNTITLED_PRESET, "values": values,
-               "routes": [], "macros": {}, "modules": {},
+               "routes": [], "macros": {},
                "desk": desk_json(fresh_desk(self.router.table.profile)),
                GRAPH_KEY: read_graph({FRAME_KEY: WIRED_FRAME, "wires": [
                    {"from": a, "to": b} for a, b in graphview.SCENE_CHAIN]}).to_json(),
@@ -1042,13 +1001,13 @@ class Presets:
         #    not name dropped — a desk template's rows counted as the desk
         #    they expand to — and a save writes that `/7` as `/9` (row 394, plan 43 C2)
         gs = self._graph_section()
-        template_rows = self._template_rows(doc)
+        from_show: set[str] = set()          # (the look ids `ten` handed on, below)
         migrate_notes: list[str] = []
         migrated = ""
         version = graphmigrate.schema_version(doc)
         if version is None or version < graphmigrate.SEVEN:
             old = str(doc.get("schema"))
-            doc, migrate_notes = graphmigrate.seven(doc, gs.specs(), desk=template_rows)
+            doc, migrate_notes = graphmigrate.seven(doc, gs.specs())
             # (said on the strip — `_warn` — but no problem with the file:
             # not one of `notes`, which say what did not land)
             migrated = graphmigrate.MIGRATED_NOTE.format(old=old, new=SAVE_SCHEMA)
@@ -1062,6 +1021,25 @@ class Presets:
             show = getattr(lib, "project", None)
             doc = graphmigrate.nine(doc, getattr(show, "old_eye", None),
                                     getattr(show, "camera_at", None))
+        # 0. and the look made whole (plan 44 D3): a file before `/10` drew
+        #    the hands, the clouds and the bus cables as the open show held
+        #    them, so it takes what an old show's session and `rig` held
+        #    (`Project.old_look`, `old_cuts`); its module labels and its desk
+        #    template's name are dropped — a template is said: none was ever
+        #    in a library (the owner, 2026-11-03), and its own rows are the desk
+        if version is None or version < graphmigrate.TEN:
+            if doc.get("desk_template"):
+                notes.append(TEMPLATE_RETIRED.format(name=str(doc["desk_template"])))
+            show = getattr(lib, "project", None)
+            had = set(dict(doc.get("values") or {})) if isinstance(doc.get("values"), dict) \
+                else set()
+            doc = graphmigrate.ten(doc, getattr(show, "old_look", None),
+                                   getattr(show, "old_cuts", None))
+            # (review of #351: what the show handed on for a node this preset's
+            # graph does not declare — another preset's `ghost.2.*` — is the
+            # show's leftover, dropped quietly, never an "unknown id")
+            from_show = set(dict(doc.get("values") or {})) - had \
+                if isinstance(doc.get("values"), dict) else set()
         spec, section, graph_notes = gs.read(doc.get(GRAPH_KEY))
         notes += graph_notes
         # 1. what the file names that a preset may not carry — all parsed
@@ -1107,7 +1085,8 @@ class Presets:
                 # effect's — instance 1 exists only where its graph names it)
                 later[pid] = v
             elif p is None:
-                unknown.append(pid)
+                if pid not in from_show:
+                    unknown.append(pid)
             elif part_of(p) == "session":
                 notes.append(f"{pid} is the session's, ignored")
             elif part_of(p) is None or not p.persist:
@@ -1145,41 +1124,21 @@ class Presets:
                 continue
             routes.append(b)
         # no `desk` key: a fresh preset's, the default preset layer; an
-        # explicit [] is an empty one (every preset control dark, D8). A
-        # `desk_template` (plan 24 C3): the template's rows with `desk` as
-        # its overrides; a template the library lacks is a note, and the
-        # overrides alone are the desk
-        tmods = None                      # the template's modifiers (plan 28 N1)
-        if doc.get(TEMPLATE_KEY):
-            name = str(doc[TEMPLATE_KEY])
-            try:
-                tdoc = self._template(name)
-                # (plan 33 M: as the migration read it, a row on a channel
-                # choice on its switch)
-                template = template_rows if template_rows is not None else tdoc["desk"]
-            except LibraryError as e:
-                notes.append(f"desk template {name!r} not loaded ({e}): this preset's own "
-                             "desk rows only")
-                tdoc, template = {}, []
-            tmods = tdoc.get(MODIFIERS_KEY)
-            desk = expand_desk(template, list(doc.get("desk") or []))
-            # the template's rows as this load expanded them: a save
-            # compacts against these, so a template fixed on disk after the
-            # load (the live desk is not re-expanded) cannot turn its fix
-            # into overrides that undo it (`_desk_part`)
-            key = str(doc.get("name") or (path.stem if path else ""))
-            self._at_load()[key] = (name, copy.deepcopy(template))
-            self._mods_at_load()[key] = (name, copy.deepcopy(list(tmods or [])))
-        elif "desk" in doc:
+        # explicit [] is an empty one (every preset control dark, D8)
+        if "desk" in doc:
             desk = [Binding.from_json(row) for row in doc.get("desk") or []]
         else:
             desk = fresh_desk(table.profile)
-        # plan 28 N1: the modifiers, read before the routes land — the
-        # template's, the preset's own over them by id; each parsed now, so
-        # a route onto a ``mod:<n>`` lane no modifier publishes is dropped
-        # with a note, like a route onto a param no performer may drive
-        mod_docs, mod_notes = merge_modifiers(tmods, doc.get(MODIFIERS_KEY))
-        notes += mod_notes
+        # plan 28 N1: the modifiers, read before the routes land — each
+        # parsed now, so a route onto a ``mod:<n>`` lane no modifier
+        # publishes is dropped with a note, like a route onto a param no
+        # performer may drive
+        mod_docs = []
+        for d in doc.get(MODIFIERS_KEY) or ():
+            if isinstance(d, dict) and isinstance(d.get("id"), str):
+                mod_docs.append(d)
+            else:
+                notes.append("dropped a modifier entry in the preset: not an object with an id")
         mods: list[Modifier] = []
         for d in mod_docs:
             try:
@@ -1207,13 +1166,6 @@ class Presets:
         held = routing.macros_of(doc.get("macros"))
         notes += routing.migrate_scales(routes, held)
         macros = {mid: m.to_json() for mid, m in held.items()}
-        modules = dict(doc.get("modules") or {})
-        for group in list(modules):
-            if group in RETIRED_MODULES:
-                continue                    # (plan 40 T5: kept, quietly, until a save)
-            if group not in PERFORMANCE_GROUPS or group in NO_MODULE:
-                notes.append(f"module {group}: not a performance group, ignored")
-                modules.pop(group)
         # the file parsed, nothing landed yet: one undo step for the whole
         # load, by whichever road it came (undo.py, plan 15 WP1) — with
         # what is loaded now, so undoing it puts the earlier name back too
@@ -1248,7 +1200,8 @@ class Presets:
             for pid, v in later.items():
                 p = reg.get(pid)
                 if p is None:
-                    late.append(pid)
+                    if pid not in from_show:
+                        late.append(pid)
                 elif part_of(p) == "session":
                     notes.append(f"{pid} is the session's, ignored")
                 elif part_of(p) is None or not p.persist:
@@ -1259,13 +1212,18 @@ class Presets:
                 unknown += late
                 notes.append(f"{len(late)} unknown id(s): " + ", ".join(late[:4])
                              + ("…" if len(late) > 4 else ""))
-            # 2. every performance param: the file's value, else its group default
+            # 2. every performance param: the file's value, else the value its
+            #    object was built with (plan 44 D3: `_fresh_of`, never a
+            #    group's `default.json`; a session key of a performance
+            #    group, `ghost.mirror`, is never touched)
             by_group: dict[str, dict[str, Any]] = {g: {} for g in PERFORMANCE_GROUPS}
             for pid, v in values.items():
                 by_group[reg[pid].group][pid] = v
             landed: dict[str, Any] = {}
             for group in PERFORMANCE_GROUPS:
-                landed.update(lib.resolved(group, by_group[group]))
+                fresh = {k: v for k, v in lib._fresh_of(group).items()
+                         if k in reg and part_of(reg[k]) == "performance"}
+                landed.update({**fresh, **by_group[group]})
             # a value that will not take (a hand-edited "fast" on a number)
             # must not leave half the look on this preset and half on the
             # last: the state as it was goes back and the load is refused whole
@@ -1331,12 +1289,14 @@ class Presets:
             if name is None or any(graphmigrate.effect_of(t) == name for t in driven):
                 notes.append(note)
         self.note = str(doc.get("note") or "")
-        # 6. the module labels: a label and a clean dot, never a load (D3)
+        # 6. each performance group's strip clean against what landed, naming
+        #    no module preset (plan 44 D3: the labels are retired, row 540)
         for group in PERFORMANCE_GROUPS:
             if group in NO_MODULE and group not in RETIRED_MODULES:
                 continue
-            label = modules.get(group)
-            lib.label(group, str(label) if label else None)
+            lib.label(group, None)
+        # 6¼. the bus cuts (plan 44 D3): the file's, else every cable standing
+        self.bus = RigWires.read(doc.get(BUS_KEY))
         # 6½. where the GRAPH page's nodes sit (plan 28 N2): none is the
         #     automatic layout; an entry that is not a name and two numbers
         #     is dropped with a note; an old canvas id is read in today's
@@ -1363,13 +1323,10 @@ class Presets:
 
     def document(self, name: str) -> dict:
         """The live state as a preset document, named — what a save writes."""
-        lib = self.lib
-        modules = {g: lib.current(g) for g in PERFORMANCE_GROUPS
-                   if g not in NO_MODULE and lib.current(g)}
         # row 394 (the owner, 2026-10-25): every save is the newest schema,
         # in today's words — both Macs run the same build, so nothing is
         # written down for an older one (D1's lowest-schema rule, R10 and
-        # R15 are superseded); plan 43 C2 (row 576): `/9`, groups or none
+        # R15 are superseded); plan 44 D3: `/10`, groups or none
         doc: dict[str, Any] = {"schema": SAVE_SCHEMA, "name": name}
         if self.note:
             doc["note"] = self.note
@@ -1404,7 +1361,11 @@ class Presets:
                    routes=[b.to_json() for b in table.routes()],
                    **self._modifiers_part(name),
                    **self._desk_part(name), macros=table.macros_doc(),
-                   modules=modules, **{UNITS_KEY: dict(UNITS)})
+                   **{UNITS_KEY: dict(UNITS)})
+        # plan 44 D3: the bus cuts, when any cable is cut
+        bus = self.bus.to_json()
+        if bus:
+            doc[BUS_KEY] = bus
         layout = getattr(self, "layout", None)
         if layout:                      # plan 28 N2: a preset with none writes none
             doc[LAYOUT_KEY] = {k: list(layout[k]) for k in sorted(layout)}
@@ -1451,41 +1412,10 @@ class Presets:
         return {k: v for k, v in self.reg.snapshot(part="performance").items()
                 if not k.startswith(modifiers.PREFIX) and k not in only}
 
-    def _mods_at_load(self) -> dict[str, tuple[str, list[dict]]]:
-        """preset name → (its template's name, the template's modifier
-        entries as the load read them) — `_at_load`'s twin for the
-        modifiers. On the instance, made on first use."""
-        return self.__dict__.setdefault("_template_mods_at_load", {})
-
     def _modifiers_part(self, name: str | None = None) -> dict:
         """What a save writes for the modifiers: ``{"modifiers": entries}``
-        after the routes, or nothing when there are none. A preset that
-        names a desk template writes only the entries that differ from the
-        template's (as the load read them), so a template's modifier fixed
-        on disk reaches it at the next load. (A template's modifier the
-        preset removed comes back at the next load: no entry says "none".)"""
-        live = self.router.table.modifiers_doc(self.reg)
-        ref = self.template_of_loaded()
-        tmods: list[dict] = []
-        if ref is not None:
-            held = self._mods_at_load().get(self.lib.current(GROUP) or "")
-            if held is not None and held[0] == ref:
-                tmods = held[1]
-            else:
-                try:
-                    tmods = list(self._template(ref).get(MODIFIERS_KEY) or [])
-                except LibraryError:
-                    tmods = []
-            if name is not None:
-                self._mods_at_load()[name] = (ref, copy.deepcopy(tmods))
-        theirs: dict[str, dict] = {}
-        for d in tmods:
-            try:
-                m = Modifier.from_json(d)
-            except (ValueError, TypeError):
-                continue
-            theirs[m.id] = m.to_json()
-        own = [d for d in live if not undo.alike(theirs.get(d["id"]), d)]
+        after the routes, or nothing when there are none."""
+        own = self.router.table.modifiers_doc(self.reg)
         return {MODIFIERS_KEY: own} if own else {}
 
     def _effect_files(self) -> dict:
@@ -1495,27 +1425,6 @@ class Presets:
         shader folder's once."""
         state = self._graph_section().fx
         return fx_files(state if state is not None else self.reg)
-
-    def _template(self, name: str) -> dict:
-        """Desk template `name`'s document (`Library.desk_template`), its
-        rows' depths measured along the tapers (wave 0 T1: a template file
-        from before has a `set` row's norm as it was; the tool rewrites
-        `desk/*.json` too). Raises LibraryError as the library does."""
-        tdoc = self.lib.desk_template(name)
-        tdoc, _ = retaper_depths(tdoc, self._effect_files())
-        return tdoc
-
-    def _template_rows(self, doc: dict) -> list | None:
-        """A copy of the rows of the desk template `doc` names (plan 24 C3),
-        or None: none named, or one the library lacks (the load says so when
-        it expands the desk)."""
-        name = doc.get(TEMPLATE_KEY)
-        if not name:
-            return None
-        try:
-            return copy.deepcopy(list(self._template(str(name))["desk"]))
-        except (LibraryError, KeyError, TypeError):
-            return None
 
     def _graph_section(self) -> GraphSection:
         """The graph section's lander; made here for a `Presets` from
@@ -1622,61 +1531,10 @@ class Presets:
                 out.append(group_entry({**g, "nodes": nodes}))
         return out
 
-    def template_of_loaded(self) -> str | None:
-        """The desk template the loaded preset's file names (plan 24 C3),
-        or None: read from the file, so an undo that puts an earlier preset
-        back puts its template back too."""
-        cur = self.lib.current(GROUP)
-        if not cur:
-            return None
-        try:
-            ref = self.lib.read(GROUP, cur).get(TEMPLATE_KEY)
-        except LibraryError:
-            return None
-        return str(ref) if ref else None
-
-    def _at_load(self) -> dict[str, tuple[str, list[dict]]]:
-        """preset name → (its template's name, the template's rows as the
-        load that expanded the live desk read them). On the instance, made
-        on first use (a `Presets` from before a hot reload has none)."""
-        return self.__dict__.setdefault("_templates_at_load", {})
-
-    def template_at_load(self) -> tuple[str, list[dict]] | None:
-        """The loaded preset's (template name, template rows as its load
-        read them), or None — what a save compacts against (plan 28 N5:
-        the GRAPH page's template node reads it)."""
-        return self._at_load().get(self.lib.current(GROUP) or "")
-
     def _desk_part(self, name: str | None = None) -> dict:
         """What a save writes for the desk: ``{"desk": rows}``, the whole
-        preset layer — or, when the loaded preset names a desk template,
-        ``{"desk_template": name, "desk": overrides}`` (`compact_desk`),
-        the reference and not the expanded rows. The overrides are taken
-        against the template **as the load read it**, so a template file
-        fixed since then changes no override (the fix lands at the next
-        load). A template the library lacks counts as empty: every live
-        row is an override. `name`: the preset this save writes, which
-        then holds the same template rows."""
-        table = self.router.table
-        ref = self.template_of_loaded()
-        if ref is None:
-            return {"desk": desk_json(table.desk())}
-        held = self._at_load().get(self.lib.current(GROUP) or "")
-        if held is not None and held[0] == ref:
-            template = held[1]                  # as the load expanded it
-        else:
-            try:
-                template = self._template(ref)["desk"]
-            except LibraryError:
-                template = []
-        if name is not None:                     # the file now written holds these too
-            self._at_load()[name] = (ref, copy.deepcopy(template))
-        inv = table.invariant_rows()
-
-        def keeps(b: Binding) -> bool:          # what `set_desk` keeps of a template row
-            return (b.is_midi and routing.save_refusal(b) is None
-                    and not table.is_invariant(b, inv))
-        return {TEMPLATE_KEY: ref, "desk": compact_desk(template, table.desk(), keeps)}
+        preset layer (plan 44 D3: the desk templates are retired)."""
+        return {"desk": desk_json(self.router.table.desk())}
 
     def signature(self) -> tuple:
         """What the strip's dirty dot compares: the performance bases, the
@@ -1700,13 +1558,16 @@ class Presets:
                 # plan 32: a bin entry assigned or cleared
                 None if self.media is None else json.dumps(self.media.to_json()),
                 # plan 40 T2: a group made, opened, renamed or taken apart
-                json.dumps(getattr(self, "groups", None) or None, sort_keys=True))
+                json.dumps(getattr(self, "groups", None) or None, sort_keys=True),
+                # plan 44 D3: a bus cable cut or joined on GRAPH
+                json.dumps(self.bus.to_json(), sort_keys=True))
 
     # ---- internals ----
 
     def _warn(self, name: str) -> None:
         """The strip's warning line: the load's first note — else (plan 36
-        T3) that an old file was migrated to `/9` on load, until it is saved."""
+        T3) that an old file was migrated to the newest schema on load,
+        until it is saved."""
         if self.notes:
             more = f" (+{len(self.notes) - 1} more)" if len(self.notes) > 1 else ""
             self.lib.say(warning=f"preset {name}: {self.notes[0]}{more}")

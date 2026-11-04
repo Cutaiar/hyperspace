@@ -393,39 +393,6 @@ def test_a_patch_carries_the_marker_and_an_old_one_is_read_as_it_was(tmp_path, f
     assert patches.check({**lifted, "name": "x"}) == []
 
 
-def test_a_desk_templates_rows_are_read_as_they_were_and_the_tool_rewrites_it(tmp_path, files):
-    """Review of #322 (3): a `set` row's norm in a template file from before
-    lands on the preset's desk measured along the taper; the tool rewrites
-    `desk/*.json` with the marker."""
-    from hyperspace.library import DESK_SCHEMA
-    t = _tool()
-    home = tmp_path / "home"
-    for folder in ("presets", "desk"):
-        (home / folder).mkdir(parents=True)
-    # (on the desk's preset-layer knobs: a row on an invariant control — any
-    # bare note number is one — is dropped from a preset's desk)
-    template = {"schema": DESK_SCHEMA, "name": "old desk", "desk": [
-        {"source": "cc:0:49", "target": "fx.warp.speed", "op": "set", "value": 0.75},
-        {"source": "cc:0:48", "target": "fx.warp.amount", "op": "abs"}]}
-    (home / "desk" / "old-desk.json").write_text(json.dumps(template, indent=1) + "\n")
-    doc = json.loads((CORPUS / "party-noita.json").read_text())
-    doc[preset.TEMPLATE_KEY] = "old desk"
-    doc["desk"] = []
-    (home / "presets" / "noita-t.json").write_text(preset.dumps(doc))
-    app = headless.make_app(home)
-    app.lib.load(preset.GROUP, "noita-t")
-    rows = {b.target: b for b in app.router.table.desk() if b.op == "set"}
-    lo, hi, _, taper = fx.retaper_of("fx.warp.speed", files)
-    want = lo + 0.75 * (hi - lo)
-    assert _tapered(taper, lo, hi, 0.0)._value_of_norm(rows["fx.warp.speed"].value) == pytest.approx(want)
-    # the tool
-    out, c = t.retaper(template, files, file="old-desk.json", kind="desk")
-    assert c.kind == "desk" and len(c.rows) == 1 and out[UNITS_KEY] == {DEPTH_UNIT: DEPTH_TAPER}
-    assert out["desk"][0]["value"] == pytest.approx(rows["fx.warp.speed"].value)
-    assert out["desk"][1] == template["desk"][1]
-    assert t.text(out, "desk") == json.dumps(out, indent=1) + "\n"
-
-
 def test_the_session_table_is_read_as_it_was_marked_on_write_and_rewritten_once(tmp_path, files):
     """Review of #322 (9): `Bindings.from_json` converts an unmarked file's
     rows about the effect's default, counts it as a change (so `load` writes

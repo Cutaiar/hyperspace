@@ -132,6 +132,7 @@ def test_a_learn_on_a_band_sel_alias_lands_on_the_selected_band(rig):
     # widgets read through; a registry without one learns the alias as armed
     assert reg.real(reg["band.sel.thr"]) is reg["band.2.thr"]
     reg.real_of = None
+    reg.session.real_of = None           # (plan 44 D3: the session declares the rule)
     assert Learn(reg, t).target_for("band.sel.thr").id == "band.sel.thr"
 
 

@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.preset/9",
+ "schema": "hyperspace.preset/10",
  "name": "seq-demo",
  "note": "The step sequencer's demo: kick, snare and hats on half a bar drive one-shot envelopes \u2014 the kick lights the picture, the snare punches the zoom, the hats split the colours. Press play (the SEQ page, or seq.run): the transport is never in a preset.",
  "graph": {"frame": "wired",
@@ -136,6 +136,10 @@
   "camera.pan.y": 0.0,
   "eye.fov": 47.611887036915434,
   "eye.distance": 3.7777777777777777,
+  "cloud.size": 2.0,
+  "cloud.scale": 0.3,
+  "cloud.bright": 1.0,
+  "cloud.colors": true,
   "dream.on": false,
   "dream.mix": 0.7,
   "dream.echo_mix": 0.4,
@@ -168,6 +172,11 @@
   "fx.deconverge.blend": 0,
   "fx.deconverge.amount": 0.0,
   "fx.deconverge.radial": 0.0,
+  "ghost.on": false,
+  "ghost.alpha": 0.6,
+  "ghost.guide": 0,
+  "ghost.tethers": false,
+  "ghost.style": 0,
   "macro.1": 1.0,
   "macro.2": 1.0,
   "macro.3": 1.0,
@@ -340,7 +349,6 @@
   {"source": "note:0:95", "target": "view.bright", "op": "step", "value": -3, "feedback": "led"}
  ],
  "macros": {},
- "modules": {},
  "units": {
   "camera.pan": "world",
   "fx.depth": "taper"

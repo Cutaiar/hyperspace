@@ -185,7 +185,7 @@ def test_a_project_keeps_the_session_apart(rig, tmp_path):
     reg["master.gain"].set(2.0)
     path = lib.project.save("Split")
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.project/2" and "values" not in doc
+    assert doc["schema"] == "hyperspace.project/3" and "values" not in doc
     assert doc["session"] == reg.snapshot(part="session")
     assert "master.gain" in doc["session"] and "view.shape" not in doc["session"]
     # the file holds the F-keys' eight (plan 19 WP1: `bank_doc`), the show 24
@@ -428,7 +428,7 @@ def test_presets_are_the_librarys_one_document_kind(rig, tmp_path):
     path = lib.save_as("presets", "My Routes")
     assert path == tmp_path / "presets" / "my-routes.json"
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.preset/9" and len(doc["routes"]) == 13
+    assert doc["schema"] == "hyperspace.preset/10" and len(doc["routes"]) == 13
     assert lib.current("presets") == "My Routes" and not lib.is_dirty("presets")
     lib.load("presets", "hands-play")
     assert not router.table.routes_to("view.bright")[0].source.startswith("lane")
@@ -521,7 +521,7 @@ def test_bad_files_are_reported_not_fatal(rig, tmp_path):
     d = tmp_path / "view"
     d.mkdir()
     (d / "broken.json").write_text("{not json")
-    (d / "future.json").write_text(json.dumps({"schema": "hyperspace.preset/9", "name": "F",
+    (d / "future.json").write_text(json.dumps({"schema": "hyperspace.preset/11", "name": "F",
                                                "group": "view", "values": {}}))
     (d / "other.json").write_text(json.dumps({"schema": "hyperspace.preset/1", "name": "O",
                                               "group": "camera", "values": {}}))
@@ -567,7 +567,7 @@ def test_project_save_load_new(rig, tmp_path):
     assert p == tmp_path / "projects" / "gig.hyp.json"
     assert lib.project.list() == ["gig", "house", "party"]   # house, party: the seed's
     doc = json.loads(p.read_text())
-    assert doc["schema"] == "hyperspace.project/2" and doc["name"] == "Gig"
+    assert doc["schema"] == "hyperspace.project/3" and doc["name"] == "Gig"
     # a performance group's label is the preset's, never the project's
     assert doc["modules"] == {"band": "Percussive"}
     assert doc["session"]["master.gain"] == 2.5 and "camera.zoom" not in doc["session"]
@@ -934,7 +934,7 @@ def test_the_owner_home_is_shaped_like_the_owners(owner_home):
     home = owner_home
     for show in OWNER_SHOWS:
         doc = json.loads((home / "projects" / f"{show}.hyp.json").read_text())
-        assert doc["schema"] == "hyperspace.project/2" and len(doc["bank"]) == 8
+        assert doc["schema"] == "hyperspace.project/3" and len(doc["bank"]) == 8
         assert all(doc["bank"]), show
     mine = json.loads((home / "projects" / "mine.hyp.json").read_text())
     assert mine["bank"][:3] == list(OWNER_PRESETS) and mine["startup"] == "NIGHT ONE"
@@ -943,7 +943,7 @@ def test_the_owner_home_is_shaped_like_the_owners(owner_home):
     assert len(pads) == 16 and {p["target"] for p in pads} == {"view.shape"}
     for name in OWNER_PRESETS:
         doc = json.loads((home / "presets" / f"{slug(name)}.json").read_text())
-        assert doc["schema"] == "hyperspace.preset/9" and doc["name"] == name   # (row 394)
+        assert doc["schema"] == "hyperspace.preset/10" and doc["name"] == name   # (row 394)
         by_source = {row["source"]: row for row in doc["desk"]}
         for pad in pads:
             if name == "NIGHT TWO" and pad["source"] == OWNER_PAD["source"]:
@@ -1080,7 +1080,7 @@ def test_the_first_write_past_slot_eight_keeps_the_eight_slot_file(owner_home):
     assert [p.name for p in bak8(show)] == ["mine.hyp.json.bak-v2-bank8"]
     assert bak8(show)[0].read_bytes() == old               # the file from before any far slot
     doc = json.loads(show.read_text())
-    assert doc["schema"] == "hyperspace.project/2"         # the schema stays (fork 2)
+    assert doc["schema"] == "hyperspace.project/3"         # the schema stays (fork 2; plan 44 D3: /3)
     assert len(doc["bank"]) == 12 and doc["bank"][8:] == [None, None, None, "NIGHT TWO"]
     assert doc["bank"][:8] == json.loads(old)["bank"] and not pr.is_dirty()
     # a second far write, a save and "starts on": the long bank is on disk, no second copy
@@ -1183,7 +1183,7 @@ def test_save_as_lands_on_slot_nine_once_the_f_keys_are_full(owner_home):
 
 
 def test_a_long_bank_read_by_eight_slots_shows_the_first_eight(owner_home):
-    """Fork 2's known cost, stated: the schema stays `hyperspace.project/2`,
+    """Fork 2's known cost, stated: the schema stays `hyperspace.project/3` (plan 44 D3; /2 before),
     so a build from before plan 19 opens a long bank by cutting it to
     eight (`_take`'s `[:SLOTS]` with SLOTS = 8). It shows slots 1–8
     correctly, and its next write of that show drops the far slots'
@@ -1197,7 +1197,7 @@ def test_a_long_bank_read_by_eight_slots_shows_the_first_eight(owner_home):
     pr.put_slot(8, "WAKE")
     pr.put_slot(23, "TRIP")
     doc = json.loads(show.read_text())
-    assert len(doc["bank"]) == 24 and doc["schema"] == "hyperspace.project/2"
+    assert len(doc["bank"]) == 24 and doc["schema"] == "hyperspace.project/3"
     presets_before = {p.name: p.read_bytes() for p in (home / "presets").glob("*.json")}
     # the older build's reading of the file (library.py before plan 19, SLOTS = 8)
     old_slots = 8

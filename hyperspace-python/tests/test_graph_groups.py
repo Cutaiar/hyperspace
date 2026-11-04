@@ -130,7 +130,7 @@ def test_a_preset_with_groups_round_trips_through_document_and_load_doc(tmp_path
     app.lib.load("presets", "party-noita")
     app.presets.groups = [dict(ENTRY, patch="noita-core")]
     doc = app.presets.document("noita grouped")
-    assert doc["schema"] == "hyperspace.preset/9"          # (plan 43 C2: every save)
+    assert doc["schema"] == "hyperspace.preset/10"          # (plan 43 C2: every save)
     assert doc["groups"] == [{"id": "group.1", "name": "noita core", "patch": "noita-core",
                               "nodes": NOITA_CORE, "open": False}]
     keys = list(doc)
@@ -149,7 +149,7 @@ def test_the_fixture_twin_resaves_byte_for_byte(tmp_path):
     C2) loaded and saved untouched is the same bytes — and so is every
     corpus preset, with no groups (a `/9` without the key)."""
     raw = FIXTURE.read_bytes()
-    assert json.loads(raw)["schema"] == "hyperspace.preset/9"
+    assert json.loads(raw)["schema"] == "hyperspace.preset/10"
     again, notes, _ = headless.resave(FIXTURE, tmp_path / "twin")
     assert notes == [] and again == raw
     for k, path in enumerate(CORPUS_PRESETS):
@@ -215,7 +215,7 @@ def test_signature_changes_when_a_group_is_made_and_a_save_drops_a_deleted_membe
     assert app.presets.document("x")["groups"] == [dict(ENTRY, nodes=["render:warp"])]
     app.presets.groups = [dict(ENTRY, nodes=["render:acid.4"])]
     doc = app.presets.document("x")
-    assert "groups" not in doc and doc["schema"] == "hyperspace.preset/9"   # (C2: /9 either way)
+    assert "groups" not in doc and doc["schema"] == "hyperspace.preset/10"   # (C2: /9 either way)
 
 
 # ---------------------------------------------------------------- the proof: the renderer learns nothing

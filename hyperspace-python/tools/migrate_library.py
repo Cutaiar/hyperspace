@@ -7,61 +7,72 @@
 
 The owner's decision of 2026-10-25: both Macs always run the newest build,
 so every preset in the library is moved to the newest schema and old
-schemas stop circulating. Since plan 43 C2 (rows 572, 576) that is
-``hyperspace.preset/9`` — plan 36 T3's graph that says everything (every
-edge a wire, ``/7``), the GRAPH page's groups (``/8``), and the one orbit
-camera: the eye (``eye.fov``, ``eye.distance``) in every preset's
-``values``, where until now the open show held it. A load reads an older
-file through the one-way migration (`graphmigrate.seven`, then
-`graphmigrate.nine`). Each preset under ``<library>/presets/``, every
-folder down as the library lists it (plan 48 stage 2: hidden folders
-skipped; not ``trash/``, not a backup, not a dot-file), is loaded and saved untouched
+schemas stop circulating. Since plan 44 D3 (rows 611–625) that is
+``hyperspace.preset/10`` — plan 36 T3's graph that says everything (every
+edge a wire, ``/7``), the GRAPH page's groups (``/8``), the one orbit
+camera (``/9``, plan 43 C2: the eye in every preset's ``values``) and the
+look made whole (``/10``: the hands' and clouds' looks — ``ghost.*`` but
+``ghost.mirror``, ``cloud.*`` — in ``values`` and the bus cuts in
+``bus``, where until now the open show held them; no ``modules`` labels,
+no ``desk_template``) — and every show to ``hyperspace.project/3`` (the
+rig's session, the pads and ``startup``). A load reads an older file
+through the one-way migration (`graphmigrate.seven`, then `nine`, then
+`ten`), so a library not yet at ``/9`` takes the ``/9`` step first in the
+same pass: one run, one backup. Each preset in ``<library>/presets/``,
+every folder down as the library lists them (plan 48; not ``trash/``,
+not a hidden folder, not a backup, not a dot-file) is loaded and saved untouched
 by the app itself (`hyperspace.headless.resave`: the registry, library,
 router and presets the tests save through) in a scratch library — the
-library's desk templates and module presets beside it, and **the rig's
+library's module presets beside it, and **the rig's
 show open** (below) — and three checks are made:
 
 - it loads (a file this build refuses is left as it is);
-- the ``/9`` is a fixed point: loaded and saved untouched again it is the
+- the ``/10`` is a fixed point: loaded and saved untouched again it is the
   same bytes;
-- its save round-trips the picture: the original file and its ``/9`` are
+- its save round-trips the picture: the original file and its ``/10`` are
   each drawn on the golden-frame rig (tools/golden_frames.py `picture`:
   offscreen, the clock pinned, hands present, eight windows on the rig as
   it ships, `SHIPPED`: each shows its own wires, else All outputs' by its
   bus cables), the same show open, and every output's hash must match.
   Both are drawn by *this* build — the original through the same one-way
   migration a load runs — so "round-trip picture: same" proves the
-  written ``/9`` draws what this build draws of the old file with the
+  written ``/10`` draws what this build draws of the old file with the
   rig's show open (the eye included), never that it draws what an older
   build drew. That parity is the migration's tests and the eye: a preset
   with a look-back or a dream is eyeballed live on the old and new build
   (hand check 366, party-wake).
 
-**The rig's show** (plan 43 C2): an old preset drew through the eye the
-open show's ``session`` held, so its ``/9`` takes that show's eye — and
-the camera node's GRAPH position the show's ``layout`` kept — exactly as
-the app hands it to an old preset's load (`library.Project.old_eye`).
+**The rig's show** (plan 43 C2, plan 44 D3): an old preset drew through
+the eye, the hands' and clouds' looks and the bus cuts the open show held,
+so its ``/10`` takes that show's — the eye and the looks from its
+``session``, the camera node's GRAPH position from its ``layout``, the
+cuts from its ``rig`` — exactly as the app hands them to an old preset's
+load (`library.Project.old_eye`, `old_look`, `old_cuts`): **the show's
+cuts are written into every preset the library holds** (as the ``/9``
+step wrote the show's eye into every preset), since each preset now says
+for itself which cables stand.
 The show is ``--show NAME`` (a file stem under ``<library>/projects/``),
 else this Mac's last show (``<home>/last_show``), else the library's one
 show; none (or a show that holds no eye, nor a ``.bak-v2-eye`` copy of
 itself that does) is the build's default eye, and the tool says which.
-Every show in ``<library>/projects/`` that holds the eye or the camera's
-position is then rewritten without them, ``<file>.bak-v2-eye`` kept
-beside it first (the app's own backup, `library.EYE_BACKUP`).
+Every show in ``<library>/projects/`` that is ``/2`` or holds the eye or
+the camera's position is then rewritten as ``/3`` without them
+(`library.show_without_eye`, `show_without_look`), ``<file>.bak-v2-look``
+kept beside a ``/2`` and ``<file>.bak-v2-eye`` beside a ``/3`` that still
+held the eye (the app's own backups, `library.LOOK_BACKUP`, `EYE_BACKUP`).
 
 **The retaper first** (wave 0 T1, tools/retaper_routes.py): one bump moves
 everything, so ``--apply`` measures every document of the library still
 without the taper marker (``units["fx.depth"] == "taper"``) along the
-effect tapers before anything else — the patches, the desk templates and
-this Mac's ``bindings.json`` (kept as ``bindings.json.bak-v3``) as
+effect tapers before anything else — the patches and this Mac's ``bindings.json`` (kept as ``bindings.json.bak-v3``) as
 retaper_routes.py writes them. A preset is retapered by its own resave
 (its load measures an unmarked file's depths, its save writes the marker),
-so every ``/9`` is along the tapers. The dry run says what it would
+so every ``/10`` is along the tapers. The dry run says what it would
 retaper.
 
 An old file (before ``/7``) whose load says its section was "not read"
 (the build refused it: black) is **not written**, whatever ``--force``
-says: its ``/9`` would carry the old words with the migration lost for
+says: its ``/10`` would carry the old words with the migration lost for
 good. A file whose load or save raises (a frame that does not settle
 included) is skipped alone; the run goes on. No pose is written: an old
 file had none and keeps spinning (`headless.resave` takes it back out).
@@ -75,16 +86,16 @@ written anywhere but a scratch folder.
 ``~/Hyperspace/library-backup-<YYYYMMDD-HHMMSS>/`` (the machine's home,
 ``$HYPERSPACE_HOME`` if set — never inside the library), and says where;
 then retapers, then computes and rewrites each preset that passed (against
-the retapered templates; a dry run computes against a retapered scratch
+the retapered module presets; a dry run computes against a retapered scratch
 copy, so it says what --apply writes), in place and
 atomically (a dot-named temp file renamed over it), under its own file
 name, then the shows. A file whose bytes the save would not change
-(already ``/9`` and a fixed point) is left untouched. A preset that failed
+(already ``/10`` and a fixed point) is left untouched. A preset that failed
 a check is **not written** and is listed at the end — unless ``--force
 NAME`` (its file stem; repeatable) names it, which writes it despite a
 picture or fixed-point difference (a file that does not load has nothing
 to write). No name changes. **Run it between shows, with both Macs on this
-build**: a Mac on an older build refuses a ``/9``.
+build**: a Mac on an older build refuses a ``/10`` and a ``/3`` show.
 
 ``--to FOLDER`` (plan 36 T3) writes each preset that passed into FOLDER
 under its own file name instead — the library is read, never written, so
@@ -122,7 +133,8 @@ PRESETS = "presets"
 PROJECTS = "projects"
 SHOW_SUFFIX = ".hyp.json"
 BACKUP_PREFIX = "library-backup-"
-NEWEST = "hyperspace.preset/9"
+NEWEST = "hyperspace.preset/10"           # plan 44 D3 (rows 611–625)
+SHOW_NEWEST = "hyperspace.project/3"
 # what a load note says of a graph section the build refused (preset.py:
 # `GraphSection.read`, `UNWIRED_SAID`)
 NOT_READ = "not read — black"
@@ -138,7 +150,7 @@ class Result:
     new: str = ""                   # the schema it saves as
     notes: list[str] = field(default_factory=list)
     error: str = ""                 # it does not load (nothing to write)
-    fixed: bool = False             # the /9 re-saves as itself
+    fixed: bool = False             # the /10 re-saves as itself
     picture: str = ""               # the round trip: "same", "differs (k of n outputs)", or why not drawn
     unchanged: bool = False         # the save is the file's own bytes
     data: bytes = b""               # what a write puts there
@@ -208,7 +220,13 @@ def rig_show(library: Path, home: Path, name: str | None = None
     migration ran) gives the eye its ``.bak-v2-eye`` kept. Raises
     LookupError for a `name` the library has no show of."""
     from hyperspace import headless
-    from hyperspace.library import EYE_BACKUP, LAST_SHOW, kept_eye, show_eye
+    from hyperspace.library import (
+        LAST_SHOW,
+        kept_eye,
+        kept_look,
+        show_eye,
+        show_look,
+    )
 
     shows = {p.name[: -len(SHOW_SUFFIX)]: p for p in show_files(library)}
     if name is not None:
@@ -227,16 +245,24 @@ def rig_show(library: Path, home: Path, name: str | None = None
         else:
             why = "no show in the library" if not shows else (
                 f"{len(shows)} shows and none is this Mac's last: name one with --show")
-            return None, None, f"show: none ({why}) — every preset takes the build's default eye"
+            return None, None, (f"show: none ({why}) — every preset takes the build's "
+                                "default eye, hands' and clouds' looks, and no bus cut")
     doc = _read(path)
     eye, _at = show_eye(doc)
     kept, kept_at = ({}, None) if eye else kept_eye(path)
-    seed = headless.show_seed(doc, kept, kept_at)
+    look, cuts = show_look(doc)
+    k_look, k_cuts = ({}, None) if (look or cuts.cut) else kept_look(path)
+    seed = headless.show_seed(doc, kept, kept_at, k_look, k_cuts)
     if kept:
-        how += f", its eye from {path.name}.bak-v{EYE_BACKUP}"
-    eye = seed["session"] if seed is not None else {}
-    said = (", ".join(f"{k} {v:.4g}" for k, v in sorted(eye.items())) if eye
-            else "no eye (the build's default)")
+        how += f", its eye from a backup of {path.name}"
+    if k_look or (k_cuts is not None and k_cuts.cut):
+        how += f", its look from a backup of {path.name}"
+    session = seed["session"] if seed is not None else {}
+    said = (", ".join(f"{k} {v:.4g}" for k, v in sorted(session.items())) if session
+            else "no eye nor look (the build's defaults)")
+    cut = (seed or {}).get("rig", {}).get("cut", [])
+    said += (f"; {len(cut)} bus cut(s) into every preset: "
+             + ", ".join(f"{c['from']} → {c['to']}" for c in cut) if cut else "; no bus cut")
     return path, seed, f"show: {path.name[: -len(SHOW_SUFFIX)]} ({how}) — {said}"
 
 
@@ -266,7 +292,7 @@ def check(path: Path, library: Path, scratch: Path, *, picture=None,
     res.data, res.notes, res.name = data, notes, name
     version = graphmigrate.schema_version(json.loads(original))
     if (version is None or version < graphmigrate.SEVEN) and any(NOT_READ in n for n in notes):
-        res.error = ("its graph section was not read by this build (black) — writing its /9 "
+        res.error = ("its graph section was not read by this build (black) — writing its /10 "
                      "would lose the migration for good")
         return res
     res.new = str(json.loads(data).get("schema"))
@@ -279,7 +305,7 @@ def check(path: Path, library: Path, scratch: Path, *, picture=None,
         res.fixed = again == data
     except (LibraryError, ValueError, KeyError, TypeError, OSError, RuntimeError) as e:
         res.fixed = False
-        res.notes = [*res.notes, f"its /9 does not load: {e}"]
+        res.notes = [*res.notes, f"its /10 does not load: {e}"]
     if picture is None:
         picture = _golden_picture()
     try:
@@ -302,7 +328,7 @@ def _golden_picture():
     def draw(path: Path, *, library: Path | None = None, show: dict | None = None):
         # (prefixed: never a fixture's slug, which the rig draws its own way;
         # plan 36 T3: the windows as the rig ships — the switch states the
-        # goldens emulate are retired, and a `/9` is drawn as it is wired)
+        # goldens emulate are retired, and a `/10` is drawn as it is wired)
         return golden_frames.picture(path, slug=f"lib-{_slug(path.stem)}", library=library,
                                      states=golden_frames.SHIPPED, show=show)
     return draw
@@ -329,7 +355,7 @@ def _retaper_tool():
 
 def retaper_plan(library: Path, home: Path) -> list[tuple[Path, object]]:
     """What the retaper would write first (plan 43 C2: one bump moves
-    everything): every patch, desk template and this Mac's bindings.json
+    everything): every patch and this Mac's bindings.json
     still without the taper marker, each with its `retaper_routes.Change`.
     The presets are retapered by their own resave."""
     from hyperspace import routing
@@ -338,7 +364,8 @@ def retaper_plan(library: Path, home: Path) -> list[tuple[Path, object]]:
     rt = _retaper_tool()
     files = FxState().files
     out = [(p, rt.plan(p, files, kind="patch")) for p in rt.json_files(library / rt.PATCHES)]
-    out += [(p, rt.plan(p, files, kind="desk")) for p in rt.json_files(library / rt.DESK)]
+    # (plan 44 D3: no desk templates — a `desk/` folder left over is never read,
+    # never rewritten)
     table = home / routing.FILE
     if table.is_file():
         out.append((table, rt.plan(table, files, kind="bindings")))
@@ -362,8 +389,10 @@ def retaper_write(todo) -> list[str]:
 
 def shared_retapers(library: Path, todo) -> bool:
     """Whether `retaper_plan` would rewrite a document a preset's load reads
-    beside it (`headless.SHARED_FOLDERS`: a desk template) — else the
-    library itself is what every preset is computed against."""
+    beside it (`headless.SHARED_FOLDERS`, the module presets — none today:
+    the retaper rewrites patches and `bindings.json`, plan 44 D3 retired the
+    desk templates) — else the library itself is what every preset is
+    computed against."""
     from hyperspace.headless import SHARED_FOLDERS
     for path, _c in todo:
         try:
@@ -376,10 +405,10 @@ def shared_retapers(library: Path, todo) -> bool:
 
 
 def retapered_copy(library: Path, todo, dest: Path) -> Path:
-    """The folders a preset's load reads beside it (`headless.SHARED_FOLDERS`:
-    the desk templates, the module presets) copied to `dest`, each document
+    """The folders copied beside a preset for its load (`headless.SHARED_FOLDERS`:
+    the module presets) copied to `dest`, each document
     of `retaper_plan`'s that lives there written as the retaper writes it —
-    what a dry run or --to computes every preset's /9 against, so it is what
+    what a dry run or --to computes every preset's /10 against, so it is what
     --apply (which retapers the library itself first) writes."""
     from hyperspace.headless import SHARED_FOLDERS
     for folder in SHARED_FOLDERS:
@@ -398,26 +427,32 @@ def retapered_copy(library: Path, todo, dest: Path) -> Path:
 
 
 def show_plan(library: Path) -> list[tuple[Path, bytes]]:
-    """Every show in the library that holds the eye or the camera's GRAPH
-    position, with its bytes without them (`library.show_without_eye`)."""
-    from hyperspace.library import show_text, show_without_eye
+    """Every show in the library that is ``/2`` (plan 44 D3) or holds the eye
+    or the camera's GRAPH position (plan 43 C2), with its bytes as ``/3``
+    without them (`library.show_without_eye`, `show_without_look`)."""
+    from hyperspace.library import show_text, show_without_eye, show_without_look
     out = []
     for path in show_files(library):
         doc = _read(path)
-        new = show_without_eye(doc) if doc is not None else None
-        if new is not None:
+        if doc is None:
+            continue
+        new = show_without_eye(doc) or doc
+        new = show_without_look(new) or new
+        if new is not doc:
             out.append((path, show_text(new).encode()))
     return out
 
 
 def show_write(todo) -> list[str]:
-    """Write `show_plan`'s shows, each kept as ``<file>.bak-v2-eye`` first
-    (`routing.backup`, the app's own); no backup, no write."""
+    """Write `show_plan`'s shows, each kept first (`routing.backup`, the
+    app's own) as ``<file>.bak-v2-look`` when it was ``/2``, else
+    ``<file>.bak-v2-eye``; no backup, no write."""
     from hyperspace import routing
-    from hyperspace.library import EYE_BACKUP
+    from hyperspace.library import EYE_BACKUP, LOOK_BACKUP, PROJECT_V2
     said = []
     for path, data in todo:
-        if routing.backup(path, EYE_BACKUP) is None:
+        tag = LOOK_BACKUP if (_read(path) or {}).get("schema") == PROJECT_V2 else EYE_BACKUP
+        if routing.backup(path, tag) is None:
             said.append(f"{path.name}: not rewritten — no backup could be made")
             continue
         write(path, data)
@@ -452,15 +487,43 @@ def write(path: Path, data: bytes) -> None:
         tmp.unlink(missing_ok=True)
 
 
+def _forced(r: Result, forced: set[str], stems: dict[str, int]) -> bool:
+    """Whether ``--force`` names `r`: by its file under ``presets/`` less
+    ``.json`` (``party/trip``), or by its stem alone (``trip``) only when no
+    other preset of the library has that stem (`stems`: each stem's count;
+    review of #351 — one name never forces a preset in every folder)."""
+    if r.file.removesuffix(".json") in forced:
+        return True
+    stem = Path(r.file).stem
+    return stem in forced and stems.get(stem, 1) == 1
+
+
+def stem_counts(results) -> dict[str, int]:
+    """Each file stem's count over `results` — counted once (`main`) and
+    handed to `ambiguous_forces` and `_forced`."""
+    stems: dict[str, int] = {}
+    for r in results:
+        stems[Path(r.file).stem] = stems.get(Path(r.file).stem, 0) + 1
+    return stems
+
+
+def ambiguous_forces(results, forced: set[str], stems: dict[str, int]) -> list[str]:
+    """The ``--force`` names that are no preset's path but a stem more than
+    one preset has (`stems`, `stem_counts`): each forces none, said, so the
+    owner gives the folder path."""
+    paths = {r.file.removesuffix(".json") for r in results}
+    return sorted(n for n in forced if n not in paths and stems.get(n, 0) > 1)
+
+
 def line(r: Result) -> str:
     """One preset's report line."""
     head = f"{r.file:40s} {r.name!r:36s} {r.old.rpartition('/')[2] or '?':>2} → "
     if r.error:
         return f"{r.file:40s} {'':36s} {r.old.rpartition('/')[2]:>2} → --  SKIP: {r.error}"
-    state = ("already /9, untouched" if r.unchanged and r.ok else
+    state = ("already /10, untouched" if r.unchanged and r.ok else
              "ok" if r.ok else "SKIP")
     why = [] if r.ok else [w for w in (
-        "" if r.fixed else "its /9 is not a fixed point",
+        "" if r.fixed else "its /10 is not a fixed point",
         "" if r.picture == "same" else f"round-trip picture {r.picture}") if w]
     out = f"{head}{r.new.rpartition('/')[2]}  round-trip picture: {r.picture}  fixed point: " \
           f"{'yes' if r.fixed else 'NO'}  {state}" + (f" ({'; '.join(why)})" if why else "")
@@ -475,14 +538,17 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
                     help="the library folder (default: the config's [library] path, "
                          "else the machine home)")
     ap.add_argument("--show", default=None, metavar="NAME",
-                    help="the show whose eye the presets take (its file stem; default: "
+                    help="the show whose eye, looks and bus cuts the presets take (its file "
+                         "stem; default: "
                          "this Mac's last show, else the library's only show)")
     ap.add_argument("--apply", action="store_true",
                     help="back the library up, retaper, then rewrite every preset that "
-                         "passed and every show that holds the eye")
+                         "passed as /10 and every show as /3")
     ap.add_argument("--force", action="append", default=[], metavar="NAME",
-                    help="write this preset (its file stem) despite a picture or "
-                         "fixed-point difference; repeatable")
+                    help="write this preset despite a picture or fixed-point difference: "
+                         "its path under presets/ less .json (party/trip), or its file "
+                         "stem alone when no other folder has a preset of that stem; "
+                         "repeatable")
     ap.add_argument("--to", type=Path, default=None, metavar="FOLDER",
                     help="write each preset that passed into FOLDER (the library is "
                          "only read; no backup)")
@@ -506,8 +572,8 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
              else "  — dry run, nothing is written"))
     print(said)
     print("(round-trip picture: the old file as this build loads it, the show open, vs its "
-          "/9 — not parity with an older build; eyeball dream presets live, hand check 366)")
-    # (review 5: every preset's /9 is computed against the templates as the
+          "/10 — not parity with an older build; eyeball dream presets live, hand check 366)")
+    # (review 5: every preset's /10 is computed against the module presets as the
     # retaper leaves them — with --apply the library is backed up and
     # retapered first; a dry run and --to read a retapered scratch copy, so
     # they report what --apply writes. --to writes only presets.)
@@ -517,8 +583,9 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
         print(f"retaper first: {len(retapers)} document(s) without the taper marker — "
               + ", ".join(f"{c.kind} {p.name}" for p, c in retapers))
     if shows:
-        print(f"shows holding the eye: {len(shows)} — "
-              + ", ".join(p.name for p, _ in shows) + " (each kept as .bak-v2-eye)")
+        print(f"shows to rewrite as /3: {len(shows)} — "
+              + ", ".join(p.name for p, _ in shows) + " (each kept as .bak-v2-look or "
+              ".bak-v2-eye)")
     if a.apply:
         where = backup(library, home)
         print(f"backup: {where}")
@@ -541,37 +608,41 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
     for r in results:
         counts[r.old] = counts.get(r.old, 0) + 1
     print("\nby schema found: " + ", ".join(f"{s}: {n}" for s, n in sorted(counts.items())))
+    stems = stem_counts(results)
+    for name in ambiguous_forces(results, forced, stems):
+        print(f"--force {name}: {stems[name]} presets have that name in different folders — "
+              "give the folder path (party/{name}); none forced by it".replace("{name}", name))
     writes = [r for r in results if not r.error and (not r.unchanged or a.to is not None)
-              and (r.ok or r.file.removesuffix(".json") in forced)]
+              and (r.ok or _forced(r, forced, stems))]
     skipped = [r for r in results if not r.ok
-               and (r.error or r.file.removesuffix(".json") not in forced)]
+               and (r.error or not _forced(r, forced, stems))]
     untouched = [r for r in results if r.ok and r.unchanged]
     if a.to is not None:
         a.to.mkdir(parents=True, exist_ok=True)
         for r in writes:
-            (a.to / r.file).parent.mkdir(parents=True, exist_ok=True)   # a folder's preset
+            (a.to / r.file).parent.mkdir(parents=True, exist_ok=True)
             write(a.to / r.file, r.data)
-        print(f"wrote {len(writes)} as /9 into {a.to}, skipped {len(skipped)}")
+        print(f"wrote {len(writes)} as /10 into {a.to}, skipped {len(skipped)}")
     elif a.apply:
         for r in writes:
             write(library / PRESETS / r.file, r.data)
-        print(f"rewrote {len(writes)} as /9, left {len(untouched)} untouched (already /9), "
+        print(f"rewrote {len(writes)} as /10, left {len(untouched)} untouched (already /10), "
               f"skipped {len(skipped)}")
         for problem in show_write(shows):
             print(problem)
         if shows:
-            print(f"rewrote {len(shows)} show(s) without the eye")
+            print(f"rewrote {len(shows)} show(s) as /3")
     else:
-        print(f"would rewrite {len(writes)} as /9, leave {len(untouched)} untouched "
-              f"(already /9), skip {len(skipped)}"
+        print(f"would rewrite {len(writes)} as /10, leave {len(untouched)} untouched "
+              f"(already /10), skip {len(skipped)}"
               + (f"; retaper {len(retapers)} first" if retapers else "")
-              + (f"; drop the eye from {len(shows)} show(s)" if shows else ""))
+              + (f"; rewrite {len(shows)} show(s) as /3" if shows else ""))
     if skipped:
         print("\nnot written" + (" (rerun with --force NAME to write one anyway)"
                                  if any(not r.error for r in skipped) else "") + ":")
         for r in skipped:
             why = r.error or "; ".join(w for w in (
-                "" if r.fixed else "its /9 is not a fixed point",
+                "" if r.fixed else "its /10 is not a fixed point",
                 "" if r.picture == "same" else f"round-trip picture {r.picture}") if w)
             print(f"  {r.file.removesuffix('.json')}: {why}")
     return 1 if skipped else 0

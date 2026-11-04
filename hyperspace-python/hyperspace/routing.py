@@ -255,6 +255,7 @@ import json
 import math
 import sys
 import time
+import weakref
 from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
@@ -270,16 +271,15 @@ from .params import (
     DEPTH_UNIT,
     DRIVE,
     F_KEYS,
-    PERFORMANCE_GROUPS,
     PLANES,
     ROT_RATE_MAX,
-    SESSION_GROUPS,
     UNITS_KEY,
     Kind,
     Param,
     Registry,
     fx_files,
     part_of,
+    part_of_id,
     retaper_depths,
 )
 
@@ -1425,7 +1425,7 @@ def is_session_id(pid: str | None) -> bool:
     """Does `pid` name a session param (params.SESSION_GROUPS, plan 13 §4)?
     By its group prefix, so a param this registry lacks (a band a layout
     has not built yet) is still classed."""
-    return bool(pid) and pid.partition(".")[0] in SESSION_GROUPS
+    return bool(pid) and part_of_id(pid) == "session"
 
 
 def base_refusal(pid: str, reg: Registry | None = None) -> str | None:
@@ -1438,10 +1438,10 @@ def base_refusal(pid: str, reg: Registry | None = None) -> str | None:
     has not made yet is kept when its group is a performance one."""
     p = reg.get(pid) if reg is not None else None
     if p is None:
-        group = pid.partition(".")[0]
-        if group in SESSION_GROUPS:
+        part = part_of_id(pid)
+        if part == "session":
             return "a session param, never a preset's (plan 13 D9)"
-        return None if group in PERFORMANCE_GROUPS else "not part of a preset"
+        return None if part == "performance" else "not part of a preset"
     if part_of(p) == "session":
         return "a session param, never a preset's (plan 13 D9)"
     if p.alias:
@@ -1613,7 +1613,11 @@ def register_desk(reg: Registry, table: Bindings) -> None:
     saves instead of loading (midi.py); never saved, never performed. And
     `desk.slew`: the table's knob smoothing (plan 18 WP2), a session param
     a show keeps and no preset may name. The first table a registry meets
-    keeps each."""
+    keeps each. Plan 44 D3: every one is a session param (group `desk`),
+    so a deck's registry hands it to the session registry and a second
+    deck finds it there — declared once; each reads and writes the session
+    table (`SessionTable`: the latch, the slew, the pad's feel) through
+    whichever deck's table declared it."""
     if SHIFT_PARAM not in reg:
         reg.toggle(SHIFT_PARAM, "Shift", lambda: table.layer == "global",
                    lambda v: table.set_layer("global" if v else "preset"), group="desk",
@@ -1826,16 +1830,37 @@ class Carried:
         return not (self.routes or self.desk or self.macros or self.values)
 
 
-class Bindings:
-    """The whole table: rows of every scheme, one file, indexed for the adapters.
+# the attributes of a deck's table that are the session table's (plan 44
+# D3): one value for every deck, read and written through the deck's
+# table as before (`Bindings.<name>` is a property onto `session`)
+SESSION_ATTRS = ("path", "profile", "slew", "pad_feel", "unbacked", "said", "midi_roles",
+                 "primaries", "row_schemes", "carried", "error", "migrated", "read_at",
+                 "changed", "sinks_seeded", "layer", "layers", "layer_serial")
 
-    In memory the table holds the session's controls and the loaded
-    preset's performer rows, preset layer and macros; the file
-    (`to_json`, `write`) holds only the session's (`is_session_row`)."""
+
+class SessionTable:
+    """The rig's half of the binding table (plan 44 D3): the session's rows
+    and the file they live in — `bindings.json`, which holds only them
+    (`is_session_row`: key, pad, hat, invariant and global-layer MIDI rows,
+    sink rows) — and the session's own state: the knob smoothing
+    (`desk.slew`), the pad's feel, the desk's layer latch per MIDI role
+    (`layer`, `layers`, `desk.shift`), the device registry's facts
+    (`midi_roles`, `primaries`, `row_schemes`, which `Sources.follow`
+    writes here), and what the launch did to the file (`read_at`,
+    `migrated`, `unbacked`, `said`, `error`, `carried`, `sinks_seeded`).
+
+    One for the rig. Each deck's `Bindings` follows it (`follow`) and holds
+    its rows by reference beside the deck's own (routes, the desk's preset
+    layer, the macros, the modifiers), so a deck's table is still one list;
+    a session row a deck learns, edits or drops is handed to every other
+    deck's table at once (`Bindings._share`). The file is read by
+    `Bindings.load(path)` into a first deck's table (its `.session` is this
+    table; the old file's migrations — `migrate_v1`, `remap_factory` — and
+    its `backup` first) and written here: `to_json`, `dumps`, `write`."""
 
     # knob smoothing in seconds (`desk.slew`, register_desk; midi.py reads
     # it): the session's — a show keeps it, bindings.json never does. On
-    # the class, so a table from before a hot reload has it too
+    # the class, so a session from before a hot reload has it too
     slew: float = 0.0
     # the pad's feel (`pad.feel` …, register_desk): the motion an `axis`
     # lane travels with when its row names none, and the sticks' default
@@ -1870,6 +1895,117 @@ class Bindings:
     # the schemes delivered as rows, never read as lanes (`_check`): the
     # table's own kinds, and any a device of this rig adds (`Router.use`)
     row_schemes: tuple[str, ...] = ROW_SCHEMES
+
+    # the file's migrations and its backup (module functions, the one copy)
+    migrate_v1 = staticmethod(migrate_v1)
+    remap_factory = staticmethod(remap_factory)
+    backup = staticmethod(backup)
+
+    def __init__(self, path: Path | None = None, profile: str = "apc40"):
+        self.path = path
+        self.profile = profile
+        self.carried: Carried | None = None
+        self.error = ""
+        self.migrated = False
+        self.read_at = "3"
+        self.changed = False
+        self.sinks_seeded: list[str] = []
+        self.layer = "preset"
+        self.layers: dict[str, str] = {}
+        self.layer_serial = 0
+        self._tables: list[weakref.ref] = []
+
+    # ---- the decks' tables that follow it ----
+
+    def follow(self, table: Bindings) -> None:
+        """`table` holds this session's rows from now on (weakly held: a
+        table no router keeps is forgotten). The first is the home: the
+        table the file was read into."""
+        if any(r() is table for r in self._tables):
+            return
+        self._tables.append(weakref.ref(table))
+
+    @property
+    def tables(self) -> list[Bindings]:
+        """The live tables that follow this session, in the order they came."""
+        live = [t for r in self._tables if (t := r()) is not None]
+        if len(live) != len(self._tables):
+            self._tables = [weakref.ref(t) for t in live]
+        return live
+
+    @property
+    def rows(self) -> list[Binding]:
+        """The session's rows, in their order: one list in every deck."""
+        tables = self.tables
+        return [b for b in tables[0].bindings if is_session_row(b)] if tables else []
+
+    def sinks(self, role: str | None = None, *, enabled: bool = True) -> list[Binding]:
+        """The sink rows (plan 27 B3), the session's: of `role`, enabled ones."""
+        return [b for b in self.rows if b.is_sink and (not enabled or b.enabled)
+                and (role is None or b.sink[0] == role)]
+
+    # ---- the file ----
+
+    def to_json(self, rows: Iterable[Binding] | None = None) -> dict:
+        """The file's dict: the session's rows only (`is_session_row`) — never
+        a performer row, a preset-layer row, the macros or any values;
+        those are a deck's (plan 13 §2.2). `rows`: a table's whole list, of
+        which the session's are written (default: `rows`)."""
+        rows = self.rows if rows is None else rows
+        d = {"schema": SCHEMA, "profile": self.profile,
+             "bindings": [b.to_json() for b in rows if is_session_row(b)]}
+        seeded = getattr(self, "sinks_seeded", None)
+        if seeded:
+            d["sinks_seeded"] = list(seeded)
+        # wave 0 T1: the rows' depths are measured along the effect tapers
+        d[UNITS_KEY] = {DEPTH_UNIT: DEPTH_TAPER}
+        return d
+
+    def dumps(self, rows: Iterable[Binding] | None = None) -> str:
+        """The file text: one row per line, so a diff reads as a binding."""
+        return dumps_doc(self.to_json(rows))
+
+    def write(self, rows: Iterable[Binding] | None = None) -> None:
+        """The session's rows to the file (`to_json`). While the load owes
+        the file a backup (`unbacked`) that copy is made first, and nothing
+        is written without it — the file stays as the owner had it, `error`
+        says so."""
+        if self.path is None:
+            return
+        if self.unbacked is not None and self.path.exists():
+            bak = backup(self.path, self.unbacked)
+            if bak is None:
+                self.error = NOT_REWRITTEN
+                return
+            self.said = f"{self.path.name} updated, the old file kept as {bak.name}"
+        self.unbacked = None
+        try:
+            self.path.write_text(self.dumps(rows))
+            self.error = ""
+        except OSError as e:
+            self.error = f"bindings: {e}"
+
+
+def _session_attr(name: str) -> property:
+    """A deck table's view of the session table's `name` (plan 44 D3)."""
+    return property(lambda self: getattr(self._sess(), name),
+                    lambda self, v: setattr(self._sess(), name, v),
+                    doc=f"The session table's `{name}` (`SessionTable`).")
+
+
+class Bindings:
+    """A deck's table: rows of every scheme, indexed for the adapters.
+
+    In memory the table holds the session's rows — by reference, the
+    session table's (`session`, `SessionTable`, plan 44 D3) — and this
+    deck's own: the loaded preset's performer rows, preset layer, macros
+    and modifiers, so `bindings`, `routes()`, `desk()`, `serves`, the
+    referee and `dispatch` see one list as they always have. The file
+    (`to_json`, `write`) holds only the session's (`is_session_row`), and
+    the session's state (`SESSION_ATTRS`: the slew, the pad feel, the layer
+    latch, the rig facts, what the launch did to the file) is read and
+    written through this table onto the session table."""
+
     # the loaded preset's modifiers (plan 28 N1, `modifiers.Modifier`), in
     # id order: a tuple, always replaced whole (`set_modifiers`,
     # `add_modifier`, `remove_modifier`), so a table from before a hot
@@ -1891,47 +2027,99 @@ class Bindings:
     page: object | None = None
     page_serial: int = 0
 
+    # plan 44 D3: the session table's state (`SESSION_ATTRS`) is read and
+    # written through this table — one property per name, made from the
+    # list below the class (review of #351: one list, one copy)
+
+    @property
+    def session(self) -> SessionTable:
+        """The session table this deck's table follows (plan 44 D3)."""
+        return self._sess()
+
+    def _sess(self) -> SessionTable:
+        """The session table — made here, from what the table held itself,
+        for a table from before a hot reload (re-classed, never re-inited)."""
+        s = self.__dict__.get("_session")
+        if s is None:
+            s = SessionTable()
+            for name in SESSION_ATTRS:
+                if name in self.__dict__:
+                    setattr(s, name, self.__dict__.pop(name))
+            self.__dict__["_session"] = s
+            s.follow(self)
+        return s
+
+    def _share(self) -> None:
+        """Hand this table's session rows to every other deck's table that
+        follows the session (plan 44 D3): one set of `Binding` objects,
+        first in each table's list, the deck's own rows after. A no-op with
+        one deck."""
+        others = [t for t in self._sess().tables if t is not self]
+        if not others:
+            return
+        rows = [b for b in self.bindings if is_session_row(b)]
+        for t in others:
+            t.bindings = [*rows, *(b for b in t.bindings if not is_session_row(b))]
+            t.rows_serial = getattr(t, "rows_serial", 0) + 1
+
     def __init__(self, bindings: Iterable[Binding] = (), *, path: Path | None = None,
-                 profile: str = "apc40"):
-        self.bindings: list[Binding] = list(bindings)
-        self.path = path
-        self.profile = profile
+                 profile: str | None = None, session: SessionTable | None = None):
+        # plan 44 D3: the session table this deck's table follows — given,
+        # its rows are this table's first (by reference) and `path` and
+        # `profile` are its (one naming another is refused: the file is the
+        # session's); else a new one over `path` and `profile`
+        own = list(bindings)
+        shared = False
+        if session is None:
+            session = SessionTable(path=path, profile=profile or "apc40")
+            self.bindings: list[Binding] = own
+        elif (path is not None and path != session.path) or (
+                profile is not None and profile != session.profile):
+            raise ValueError("Bindings(session=): the path and profile are the session's — "
+                             f"{session.path} / {session.profile}")
+        elif session.tables:
+            # (review of #351, round 2: a session row given that the session
+            # lacks is shared, never dropped — added after the session's,
+            # and handed to every deck by the `_share` below)
+            have = session.rows
+            known = {json.dumps(b.to_json(), sort_keys=True) for b in have}
+            extra = [b for b in own if is_session_row(b)
+                     and json.dumps(b.to_json(), sort_keys=True) not in known]
+            self.bindings = [*have, *extra, *(b for b in own if not is_session_row(b))]
+            shared = bool(extra)
+        else:
+            # (review of #351: a session no table follows yet holds no rows —
+            # the first table to follow it seeds them, its own given ones)
+            self.bindings = own
+        self.__dict__["_session"] = session
+        session.follow(self)
         # the preset content an older file carried (`Carried`), until the
         # first-launch migration moves it into presets; None once it has
         # (or for a file that never had any)
-        self.carried: Carried | None = None
-        self.error = ""
         # what the referee refused from the last preset or file, (row, why),
         # for the ROUTING page to show until the next edit
         self.dropped: list[tuple[Binding, str]] = []
         # from_json read a schema-1 file: `notes` names every row it dropped
         # or remapped (Bindings.load prints them, the ROUTING page shows them
         # next to `dropped` until the next edit), so the file can be checked
-        self.migrated = False
         self.notes: list[str] = []
         # the schema number the file was read at ("1", "2", "3"), for the
         # backup's name; `changed` — the loader moved something (the desk's
         # layers sorted, a macro `scale` moved to a subscriber) and the
         # file is written back once
-        self.read_at = "3"
-        self.changed = False
         # the macros' subscribers (plan 13 §2.4), {"macro.N": Macro}
         self.macros: dict[str, Macro] = {}
         self.macros_serial = 0        # bumped by set_macros: Router.follow_macros re-lands
         # the sink roles whose old `send` list has been translated into sink
         # rows (plan 27 B3, devices.DeviceRegistry._seed_sinks): kept in the
         # file, so deleting every row of a role never brings the list back
-        self.sinks_seeded: list[str] = []
         # the desk (plan 13 §3): which layer is up — runtime, never saved,
         # a fresh start is on the preset layer — and two counters the MIDI
         # adapter watches: a layer change or a desk replacement redraws
         # every ring and LED, and a replacement clears the faders' catch
-        self.layer = "preset"
         # the other MIDI roles' layers (plan 27 B2: the latch is per role —
         # `layer` is the first role's, SHIFT's, `desk.shift`); a role with
         # no latch of its own stays on the preset layer
-        self.layers: dict[str, str] = {}
-        self.layer_serial = 0
         self.desk_serial = 0
         # an edit of a desk row in place (the ROUTING page): a redraw only,
         # never the faders' catch cleared — no base moved
@@ -1940,6 +2128,8 @@ class Bindings:
         # retarget): what a per-frame cache keys on beside the list's identity
         # and length (ui_pad's), so it never scans the rows to notice
         self.rows_serial = 0
+        if shared:
+            self._share()                 # (the session rows it added, every deck's)
 
     # ---- construction ----
 
@@ -2114,41 +2304,20 @@ class Bindings:
         return t
 
     def to_json(self) -> dict:
-        """The file's dict: the session's controls only (`is_session_row`)
-        — never a performer row, a preset-layer row, the macros or any
-        values; those are the loaded preset's (plan 13 §2.2)."""
-        d = {"schema": SCHEMA, "profile": self.profile,
-             "bindings": [b.to_json() for b in self.bindings if is_session_row(b)]}
-        seeded = getattr(self, "sinks_seeded", None)      # a table from before a hot reload
-        if seeded:
-            d["sinks_seeded"] = list(seeded)
-        # wave 0 T1: the rows' depths are measured along the effect tapers
-        d[UNITS_KEY] = {DEPTH_UNIT: DEPTH_TAPER}
-        return d
+        """The file's dict: the session's rows of this table only
+        (`SessionTable.to_json`) — never a performer row, a preset-layer
+        row, the macros or any values; those are the loaded preset's (plan
+        13 §2.2)."""
+        return self._sess().to_json(self.bindings)
 
     def dumps(self) -> str:
         """The file text: one row per line, so a diff reads as a binding."""
-        return dumps_doc(self.to_json())
+        return self._sess().dumps(self.bindings)
 
     def write(self) -> None:
-        """The session's controls to the file (`to_json`). While the load
-        owes the file a backup (`unbacked`) that copy is made first, and
-        nothing is written without it — the file stays as the owner had
-        it, `error` says so."""
-        if self.path is None:
-            return
-        if self.unbacked is not None and self.path.exists():
-            bak = backup(self.path, self.unbacked)
-            if bak is None:
-                self.error = NOT_REWRITTEN
-                return
-            self.said = f"{self.path.name} updated, the old file kept as {bak.name}"
-        self.unbacked = None
-        try:
-            self.path.write_text(self.dumps())
-            self.error = ""
-        except OSError as e:
-            self.error = f"bindings: {e}"
+        """The session's rows to the file (`SessionTable.write`), the backup
+        a load owes made first."""
+        self._sess().write(self.bindings)
 
     # ---- queries ----
 
@@ -2550,6 +2719,8 @@ class Bindings:
         self.bindings = [x for x in self.bindings if not any(x is g for g in gone)]
         self.bindings.append(b)
         self.dropped, self.notes = [], []
+        if is_session_row(b) or any(is_session_row(g) for g in gone):
+            self._share()                 # plan 44 D3: the session's rows, every deck's
         if write:
             self.write()
         return gone
@@ -2573,6 +2744,8 @@ class Bindings:
         self._check(b)
         self.bindings.append(b)
         self.dropped, self.notes = [], []
+        if is_session_row(b):
+            self._share()                 # plan 44 D3: the session's rows, every deck's
         return b
 
     def replace_owner(self, new: Binding, *, target: str | None = None) -> Binding | None:
@@ -2625,6 +2798,8 @@ class Bindings:
         """Take a row out; a route's depth subscribers go with it unless
         another route has the same (source, target)."""
         self.bindings = [x for x in self.bindings if x is not b]
+        if is_session_row(b):
+            self._share()                 # plan 44 D3: gone from every deck
         if b.op in MOD_OPS:
             self._follow_route((b.source, b.target), None)
         self.dropped, self.notes = [], []
@@ -2731,6 +2906,14 @@ class Bindings:
 
 
 # ---------------------------------------------------------------- router
+
+# plan 44 D3 (review of #351): every name of `SESSION_ATTRS` a property of
+# a deck's table onto its session — generated from the one list, which
+# `Bindings._sess` also migrates on a hot reload
+for _name in SESSION_ATTRS:
+    setattr(Bindings, _name, _session_attr(_name))
+del _name
+
 
 class Router:
     """One deck's evaluator over one table: the adapters' row lookup (keys,
