@@ -40,6 +40,11 @@ class Sine:
     def disable(self):
         pass
 
+    ends_at = 10 ** 12
+
+    def holds(self, at, n):
+        return True
+
     def read(self, at, n, out=None):
         self.reads.append((at, n))
         s = np.sin(2 * np.pi * HZ * (at + np.arange(n)) / AUDIO_RATE)
@@ -74,11 +79,13 @@ def test_the_mix_lands_in_the_analyzers_ring_as_mono_with_the_gains_applied():
     assert FakeStream.opened == [], "no input device is grabbed for the mix"
     m.poll(DT, 0.0)
     s = opened(m, f)
+    s.pull()                                  # (V4: a new voice's first block fades in)
+    a._ring.drain()
     out = s.pull()
     got = a._ring.drain()
     assert len(got) == M.BLOCK
     np.testing.assert_allclose(got, out.mean(axis=1), atol=1e-6)    # what is heard, mono
-    at = round(m.channels["a"].transport.playhead * AUDIO_RATE)
+    at = round(m.channels["a"].transport.playhead * AUDIO_RATE) + M.BLOCK     # the head's
     want = 0.5 * (0.4 + 0.2) / 2 * np.sin(2 * np.pi * HZ * (at + np.arange(M.BLOCK)) / AUDIO_RATE)
     np.testing.assert_allclose(got, want, atol=1e-5)
 
