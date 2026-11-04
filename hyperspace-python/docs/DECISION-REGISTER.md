@@ -12769,8 +12769,12 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   (`apc40.py`), and the keyboard's `key:B`, which is not a controller. The APC's bank
   pads and `preset.next`. No Edge default: Learn covers it.
 - **Two holders.** `routing.press_momentary`: a toggle on a `momentary` row stays on until
-  every source holding it has let go, across pads, the desk and osc. A desk cable lost lets
-  go only of the desk's; a device closed lets go of the pad's (`Router.pad_lost`).
+  every source holding it has let go, across pads, the desk and osc. A source that can never
+  release goes through one door, `routing.let_go_lost`: a pad gone or closed
+  (`Router.pad_lost`), a desk's cable lost or its device closed (`MidiIO._let_go_held`), an
+  OSC sender silent for its `timeout` or its device closed or its row gone (`OscDevice.act`,
+  `close`). A phone holding a hit and sending nothing for `timeout` seconds (5 by default)
+  therefore lets go: a stuck chase is the worse failure.
 - **Qualified rows.** `pad@…` and `hat@…` are never moved: the factory has never written
   one, and at load the table does not know which role is primary. If a second pad has become
   the primary, its qualified row and a bare one on the same button both fire, on every button

@@ -920,6 +920,50 @@ def test_a_desk_button_and_a_pad_button_hold_it_together(rig):
     assert not rig.reg.chasing
 
 
+def test_a_desk_closed_lets_go(rig):
+    """A desk's device closed with its button down: no poll follows."""
+    rig.learn.arm(CHASE_PARAM)
+    assert rig.learn.learn_control("note:0:94")
+    rig.inp.queue.append(_note(True))
+    rig.midi.poll()
+    assert rig.reg.chasing
+    rig.midi.close()
+    assert not rig.reg.chasing and not rig.reg[CHASE_PARAM].__dict__["_pressed_by"]
+
+
+def test_a_cc_row_on_it_records_no_press_and_a_lost_desk_lets_go(rig):
+    """A `momentary` row on a knob (by hand: Learn refuses one) lands as `abs`, so
+    the ledger never hears of it, and losing the desk ends it all the same."""
+    rig.table.add(Binding("cc:0:48", CHASE_PARAM, "momentary"))
+    rig.inp.queue.append(mido.Message("control_change", channel=0, control=48, value=127))
+    rig.midi.poll()
+    assert not rig.reg[CHASE_PARAM].__dict__.get("_pressed_by")
+    rig.reg[CHASE_PARAM].set(True)
+    rig.midi._let_go_held()
+    assert not rig.reg.chasing
+
+
+def test_a_stale_midi_press_of_any_scheme_does_not_outlive_the_desk(rig):
+    """The door is by what the source is, not one scheme's spelling."""
+    p = rig.reg[CHASE_PARAM]
+    p.__dict__["_pressed_by"] = {"cc:0:48", "note@launch:0:94", "pitch:0"}
+    p.set(True)
+    rig.midi._let_go_held()
+    assert not rig.reg.chasing and not p.__dict__["_pressed_by"]
+
+
+def test_a_desk_row_switched_off_under_its_button_still_releases(rig):
+    rig.learn.arm(CHASE_PARAM)
+    assert rig.learn.learn_control("note:0:94")
+    rig.inp.queue.append(_note(True))
+    rig.midi.poll()
+    assert rig.reg.chasing
+    next(b for b in rig.table.bindings if b.source == "note:0:94").enabled = False
+    rig.inp.queue.append(_note(False))
+    rig.midi.poll()
+    assert not rig.reg.chasing and not rig.reg[CHASE_PARAM].__dict__["_pressed_by"]
+
+
 def test_a_lost_pad_leaves_a_toggle_it_did_not_hold(rig):
     rig.reg[CHASE_PARAM].set(True)             # held from elsewhere
     pad = Pad()
