@@ -159,7 +159,31 @@ tuned to facilitate a performance and should not be actively modified during one
   (NQ4). A mapping already on that node's params stays, and the rest fill what is left
   (NQ6). NQ5 and NQ7 as recommended.
 
-**Last questions, pending:** HT (HOLD, TAKE, DROP), XF (the crossfader), B2's button.
+**Sixth round, 2026-11-04: nothing is pending.**
+- **HOLD, TAKE and DROP go away entirely.** The owner never asked for them. With an on-air
+  and an off-air `Deck` there is nothing to hold. Two verbs remain: the crossfade, and "copy
+  on air to off air". `hold.py` goes, and so do `output.hold`, `.take` and `.drop`. DQ1 is
+  gone. Where `44-decks.md` and its reading say TAKE, read "the crossfade"; a timed
+  fade is a control on the crossfade, which the playlist also uses.
+- **The crossfader is a DJ mixer's.** The APC crossfader is the deck crossfade, the MASTER
+  fader is the dim, and `master.gain` moves to the panel: it is pre-show tuning. Two fixed
+  `Deck`s and **no swapping**. On air is whichever the fader is closer to; on-air players
+  move across as it passes the middle. So D5c has no `swap`. DQ3 is gone.
+- **No swapping presets from a controller or a pad.** The D-pad's preset list rows go. See
+  the assumption below on bank pads.
+- **Base chase is Back** (`pad:VIEW`). NQ8 is answered.
+- **Tap tempo is not a default on every controller.** It is an extremely sensitive control.
+  `pad:VIEW → tempo.tap` leaves the factory rows. It lives on the APC, and possibly on one
+  specific Edge button (not by default: Learn it if wanted).
+- **PA, new: toggles pair into a polarised axis.** A long-standing gap. D-pad up and down
+  are one degree of freedom with two poles, left and right another. Today each is a discrete
+  toggle. Pressing one moves along one pole, the other along the other pole. Whether a press
+  steps or nudges a spring is a separate, later choice: the point is the pairing, for any two
+  discrete controls. Node mode counts such a pair as one degree of freedom. Goes with NSEW.
+
+**An assumption, on the owner's word to change:** "swapping presets on a controller or a
+pad" is read as removing the gamepads' preset rows. The APC's bank pads and `preset.next`
+stay, and load only into the off-air `Deck`. If they should go too, it is a one-row change.
 
 
 ## The semantic migration (SEM)
@@ -205,8 +229,8 @@ owner's hand checks and show dates, not build time.
 
 | Stage | Serial spine | In parallel | Merges when |
 | --- | --- | --- | --- |
-| 0 | Owner: PS1, MR1, DQ1, DQ3–DQ8, NQ2, NQ4–NQ8; sign the glossary at D5a | #363; #365 when its pad charges | now |
-| 1 | **D5a** pointers, with one deck pointer per player; `docs/GLOSSARY.md` | B2, AZ, MR, PC, NSEW design | green |
+| 0 | Owner: sign the glossary at D5a | #363; #365 when its pad charges | now |
+| 1 | **D5a** pointers, with one deck pointer per player; `docs/GLOSSARY.md` | B2, PA, AZ, MR, PC, NSEW design | green |
 | 2 | **D5b** per-slot and meta undo → **PL** players and duties | NSEW build | green |
 | 3 | **D5c** copy, swap, take | **PS** the select screen; NM0 (needs PL); the format lane | green |
 | 4 | **D5d** controls, `hold.py` gone | none on `ui_graph.py`, `preset.py`, chase lines | checks 489–492, between shows |
@@ -250,8 +274,8 @@ owner's hand checks and show dates, not build time.
 | --- | --- | --- | --- | --- | --- |
 | D5a | `Decks`, read-through pointers, both on deck 1 | Core | M–L | P3 merged | yes |
 | D5b | Each deck's undo and dot; the session rule (256 of 548 watched params are session) | Core | M | D5a | yes while panel = on air |
-| D5c | `copy`, `swap`, `take`, the preview road, no caller but tests | Core | M | D5b | yes |
-| D5d | The controls on `Decks`; **`hold.py` deleted**; plan 38's leak test | Core | L | D5c, DQ1–DQ4; **merge gate: checks 489–492** | no: the first thing the owner sees |
+| D5c | `copy`, the timed fade, on air by the fader's side, the preview road, no caller but tests | Core | M | D5b | yes |
+| D5d | The crossfader and MASTER fader rows; **`hold.py` and its three controls deleted**; the leak test, both ways | Core | M–L | D5c; **merge gate: checks 489–492** | no: the first thing the owner sees |
 | D5e | Deck indicator, ROUTING's dormant words, desk diagram, SYSTEM | UI | S | D5d, DQ7 | UI only |
 | D6a | `playlist.py`, its file kind, `tick` over stand-ins | Library | M | D5d, DQ5 | no behaviour yet |
 | D6b | Triggers, the frame hook, a pane section, the warm draw | Library | S–M | D6a | |
@@ -263,7 +287,8 @@ owner's hand checks and show dates, not build time.
 | NM0 | The saved node mode: player, node, page in the preset, the cable kind and its colour; in the format lane | Format | M | PL | format |
 | N1a, N1b | APC: the rows from the saved state, per player and per deck; then the drawing | Core + UI | M + M | NM0, D5d, NQ2, NQ4; **merge gate: checks 506–509** | no |
 | N2a, N2b | Pad: rows in the Router, steer off; pad page keys, pad window, drawing | Core + UI | M + M | N1a, #365, NQ5–NQ7 | no |
-| B2 | Factory `pad:LP` row for `deck.chase` | Core | XS | NQ8; can go first | no |
+| B2 | Factory `pad:VIEW` row for `deck.chase`; `tempo.tap` and the D-pad's preset rows leave the pad's factory rows; existing `bindings.json` follows | Core | S | can go first | no |
+| PA | Pair two discrete controls into a polarised axis; the D-pad as two degrees of freedom | Core | M | B2 | no |
 | NSEW | North / south / east / west, with its migration | Controllers | M | #365, rows 546 and 552 | format move |
 | #287 | Dial readings rewritten on main, beside N2 | UI | S–M | D5d; who does it, Q4 | no |
 | PC | Pane paper cuts: T2 fine on ROUTING's sliders and GRAPH's backdrop (row 608); the save-as-patch row at `SIDE_MIN`; SEND B drawn free (row 609) moves into N1 | UI | S | U3; last | no |
@@ -355,6 +380,7 @@ BW. Pre-assign (unused ones are fine; do not reuse 602–604 or 633–635):
 | PS | 739–742 | 568–571 | CN |
 | MR | 743–745 | 572–573 | CO |
 | SEM | 746–747 | 574 | CP |
+| PA | 748–751 | 575–577 | CQ |
 
 ## Lessons from wave 3
 
