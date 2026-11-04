@@ -908,9 +908,17 @@ def picture(source: Path, *, slug: str = "picture", library: Path | None = None,
     files that draw the same have the same hashes; the frame is never
     asserted on, so a preset this build reads with a note still draws.
     Plan 43 C2: `show` (`headless.show_seed`) is open while it loads — the
-    old show's eye an old preset takes."""
-    with shared_programs(context()):
-        return _picture(source, slug, library, states, hands, show)
+    old show's eye an old preset takes.
+
+    Collected here, not in `_picture`: while its frame runs it still holds
+    the rig, whose GL objects (`gc_mode` auto, a rig is full of cycles) would
+    wait for some later collection. On another context, a test's own, that
+    collection deletes that context's objects of the same names."""
+    try:
+        with shared_programs(context()):
+            return _picture(source, slug, library, states, hands, show)
+    finally:
+        gc.collect()
 
 
 def _picture(source, slug, library, states, hands, show=None) -> tuple[list[str], list[str]]:
@@ -932,7 +940,6 @@ def _picture(source, slug, library, states, hands, show=None) -> tuple[list[str]
     finally:
         rig.close()
         _PARK.use()
-        gc.collect()
 
 
 @dataclass(frozen=True)
