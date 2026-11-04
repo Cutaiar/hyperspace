@@ -7533,6 +7533,83 @@ plan 50 copied back from the backup into `patches/`)
 preset and an **Update patch** write `patch/2`. Fail: "is not a
 hyperspace.patch".
 
+## BN. Deck 2 offscreen and the one fade (plan 44 D4)
+Register rows 648–653, 2026-11-03. Headless and on GL:
+`tests/test_deck_fade.py` (deck 2 at `xfade` 1 equals deck 1 on the same
+preset byte for byte over the corpus, half white over black within one step,
+a raise in deck 2 costing the on-air deck nothing) and `tests/test_deck.py`.
+Deck 2 is empty in this build, so every fade here goes to **black**; that is
+the test. Learning a fader adds a row to `bindings.json`: clear it after 493.
+**489. Nothing changes at 0.** (the rig, a heavy preset)
+1. Launch, load `party-trip`, leave it a minute.
+2. Open SYSTEM, the GPU lines.
+*Pass:* (1) the picture and frame rate as on the last build. (2) the usual
+block, then "deck 2: off air, draws nothing". Fail: a stall, a changed picture,
+or anything else of deck 2 on any page.
+**490. A learned fader fades, under the dim.** (the APC40 on)
+1. Learn `output.xfade` onto a free fader (the crossfader stays the dim).
+2. Raise it slowly to the top and back.
+3. At half, pull the crossfader down.
+*Pass:* (2) the picture goes smoothly to black and back, with no step at either
+end; SYSTEM shows "deck 2 gpu per node" while it is up. (3) the dim still dims
+the half-faded picture to black. Fail: a jump, or the crossfader moving the fade.
+**491. Every output fades together, and the sound stays.** (the rig's two
+outputs and a Syphon or NDI publish, a preset with a clip with sound on a
+channel and a live feed on another)
+1. Raise the fade to half.
+*Pass:* both windows and the receiver show the same half-faded picture, the
+flips and each window's own dim as before; the clip's sound does not change
+through the fade; the Syphon feed does not stutter. Fail: one output unfaded,
+or the sound dipping.
+**492. The dream stays with the deck on air.** (`[dream] enabled`, a preset
+with the dream on; deck 2 is empty, so it has no dream to take the worker)
+1. Raise the fade to half, for ten seconds, and bring it back to 0.
+*Pass:* deck 1's dream keeps deepening under the fade and is not restarted at
+0; SYSTEM's dream line keeps counting. Fail: the dream freezes or wipes. (A deck
+2 with a dream takes the worker from D5 on; the tests cover the lend.)
+**493. No file moved.** (after 489–492, `git`-free: Finder's dates)
+1. Quit, note the dates on the show, the presets and `bindings.json`.
+2. Launch and quit without touching anything.
+*Pass:* no date moves but `windows.json`'s; the fade is back at 0 at launch;
+the fader's row is the only change 490 made to `bindings.json`. Fail: a preset
+or the show rewritten.
+
+## BO. The base chase: commit the performer into the base (plan 52)
+Register rows 654–656, 2026-11-03. Headless: `tests/test_base_chase.py`
+(what shows while held against a twin the verb never touches, no jump at a
+release, a range's end, a fader row, one undo step, the dirty dot, the hold's
+refusal, two decks, Learn). For all three: on GRAPH or the on-screen desk, pick
+a free desk button, then **all params ▾ → deck → deck.chase**, so the button is
+held. Load a preset with a hand or an LFO routed onto something you can see.
+**494. Hold, move, let go: the look stays.** (the hands or a gamepad stick
+pushing a param you can see)
+1. Move the hand off its rest and stop. Hold the button: nothing moves.
+2. Move the hand again with the button down: the look follows as ever, and the
+   param's panel tick (its base) goes with it.
+3. Let go of the button with the hand still out. Then bring the hand to rest.
+*Pass:* (1) no jump. (3) no jump at the release, and the look stays where it was
+as the hand comes home. Moving out past the same spot moves the look on from
+there. Fail: a step at the press or the release, or the look returning to the
+old value.
+**495. An LFO, one undo.** (an LFO routed onto brightness or a camera axis)
+1. Hold the button for a few swings, including a still moment; let go mid-swing.
+2. Watch a whole swing. ⌘Z once, ⌘Z no further.
+3. Hold the button again, move the LFO's depth or wait a swing, and ⌘Z with it
+   still down.
+*Pass:* (1) no jump at the release; the look holds until the LFO crosses its
+zero, then swings about the value you left it at. The dirty dot is lit. (2) one
+⌘Z takes back the whole hold ("undid base chase") and the swing is about the old
+value. (3) the hold is taken back and the verb lets go though the button is down.
+Fail: several steps for one hold,
+or the swing running off the end of the range.
+**496. Under the projector's hold.** (rig on; hold engaged)
+1. With HOLD on, press the button.
+2. HOLD off (Take). Hold the button with a hand moving, and press HOLD with it
+   still down. Press DROP.
+*Pass:* (1) the button stays dark and neither the projector nor the panel ticks
+move. (2) HOLD lets the verb go with no step on the projector; DROP lands what
+showed when HOLD was pressed, the commit in it. Fail: the projector jumps.
+
 ## BS. The panel fold, stage 3: the rail gone, `ui.page` the focus (plan 49)
 Register rows 668–672, 2026-11-03. Headless: `tests/test_ui_pane.py` (the
 four new sections at 240 and 320 px, nothing past the pane's edge; every

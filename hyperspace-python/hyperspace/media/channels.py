@@ -289,6 +289,24 @@ class MediaSources:
                 m.__dict__.setdefault(k, v)
         return m
 
+    def begin_frame(self) -> None:
+        """A new frame's reads (plan 44 D4, §8): from here to the next call,
+        each source is read once (`read`) whichever deck asks."""
+        self.__dict__["_read_now"] = {}
+
+    def read(self, src) -> MediaFrame | None:
+        """`src`'s picture this frame: asked once a frame, its `gl_poll` (a
+        Syphon feed's, which may have no new frame for a second asker) or
+        `latest` — every renderer, on any deck, handed the same `MediaFrame`.
+        Before any `begin_frame` (a tool, a test), a fresh read each time."""
+        now = self.__dict__.get("_read_now")
+        if now is None:
+            return _read(src)
+        hit = now.get(id(src))
+        if hit is None:
+            hit = now[id(src)] = (src, _read(src))     # (src held: its id stays its own)
+        return hit[1]
+
     def live_mixer(self) -> mixer.Mixer:
         """The mixer the channels feed — the public door (the analyzer's
         `mix` source, plan 45 V3); `_mixer` is the hot-reload accessor
@@ -369,10 +387,12 @@ class Channels:
 
     # -- the frame thread ---------------------------------------------------
 
-    def poll(self, dt: float, now: float) -> None:
+    def poll(self, dt: float, now: float, *, heard: bool = True) -> None:
         """Once a frame: each channel's source follows its slot, a missing or
         replaced file is looked at again, and a timed source's transport is
-        stepped and handed to it. Never raises for a source's sake."""
+        stepped and handed to it. Never raises for a source's sake. `heard`
+        False (plan 44 D4, a deck off air): its channels leave the one mixer
+        alone — the on-air deck's are what it plays."""
         if getattr(self, "_closed", False):
             return
         for ch in self.channels.values():
@@ -393,8 +413,9 @@ class Channels:
                     self._freeze(ch, src)
             except Exception as e:  # noqa: BLE001 — a source must not kill the frame
                 src.status = error(f"{type(e).__name__}: {e}")
-        voices, asked = self._voices()
-        self._mixer().feed(voices, asked)
+        if heard:
+            voices, asked = self._voices()
+            self._mixer().feed(voices, asked)
 
     # -- the sound (plan 45 V2) ---------------------------------------------
 
@@ -510,12 +531,11 @@ class Channels:
         loop = LOOPS[min(max(int(ch.loop), 0), len(LOOPS) - 1)]
         src.want(tr.step(dt, ch.rate, ch.pos, ch.jog, loop))
 
-    @staticmethod
-    def _freeze(ch: Channel, src) -> None:
+    def _freeze(self, ch: Channel, src) -> None:
         """A live feed at rate 0 holds the frame it showed (row 324)."""
         if ch.rate == 0.0:
             if not ch.frozen:
-                ch.frozen, ch.held = True, _read(src)
+                ch.frozen, ch.held = True, self._sources().read(src)
         elif ch.frozen:
             ch.frozen, ch.held = False, None
 
@@ -530,7 +550,7 @@ class Channels:
         if ch.frozen:
             return ch.held
         try:
-            return _read(ch.source)
+            return self._sources().read(ch.source)
         except Exception:  # noqa: BLE001
             return None
 
@@ -615,15 +635,21 @@ class Channels:
         """Wait up to `timeout` s for the dropped sources' closes to finish."""
         return self._sources().drain(timeout)
 
+    def drop_sources(self) -> None:
+        """Every source this deck holds handed to the closer, and none opened
+        again: all a deck off air has to do at exit (plan 44 D4) — the mixer
+        and the closer's budget are the rig's, spent by the on-air deck."""
+        self._closed = True
+        for ch in self.channels.values():
+            self._switch(ch, None, 0.0)
+
     def close(self, budget: float = CLOSE_BUDGET_S) -> bool:
         """App exit: every source dropped and closed, waiting at most
         `budget` s for all the closes together, then returning whatever is
         left (the closer is a daemon: a close still stuck dies with the
         process). A poll after this opens nothing. True when all closed.
         Within what is left of the app's exit (`pool.left`)."""
-        self._closed = True
-        for ch in self.channels.values():
-            self._switch(ch, None, 0.0)
+        self.drop_sources()
         t0 = time.monotonic()
         quiet = self._mixer().close(min(mixer.CLOSE_BUDGET_S, budget))
         left = max(budget - (time.monotonic() - t0), 0.0)

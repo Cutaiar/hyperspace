@@ -262,7 +262,7 @@ class Sequencer:
         # trigger (decision 10), as a threshold modifier's output is — on a
         # router that keeps kinds (routing.Router.lane_kinds)
         kinds = getattr(router, "lane_kinds", None)
-        if isinstance(kinds, dict):
+        if kinds is not None:
             kinds[GROUP] = ["trigger"] * LANES
 
 

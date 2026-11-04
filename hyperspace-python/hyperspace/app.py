@@ -90,7 +90,7 @@ from . import (
 from .audio import AudioEngine
 from .bands import CEIL
 from .control import Control
-from .deck import Deck, RigMade
+from .deck import Deck, Fade, Mix, RigMade, register_xfade
 from .geometry import EYE_DISTANCE, EYE_FOV, px_per_unit
 from .hold import preview_size
 from .hotreload import HotReloader
@@ -100,7 +100,7 @@ from .library import home as library_home
 from .media import pool as media_pool
 from .media import proxy as media_proxy
 from .media import publish
-from .media.channels import MediaState
+from .media.channels import Channels, MediaState
 from .media.folder import MediaFolder
 from .media.panel import GRAPH as PANEL_GRAPH
 from .media.panel import PanelSource
@@ -108,7 +108,7 @@ from .outputs import CanvasTap, Offscreen, Presenter, Preview, Slot, Switches, V
 from .overlay import RENDER_DEFAULT, GlfwBackend, Output, register_switches, render_index
 from .params import Registry
 from .pinch import install as install_pinch
-from .render import Renderer
+from .render import Renderer, _samples_of
 from .routing import SLEW_DEFAULT_S, Bindings, Router, bindings_path, register_desk
 from .ui import Panel, apply_style, load_fonts
 from .view import ViewState
@@ -145,6 +145,14 @@ def _quiet(fn) -> None:
         fn()
     except Exception:  # noqa: BLE001, S110 — teardown is best-effort
         pass
+
+
+def _close_each(closes) -> None:
+    """Every one of `closes` called, whichever raises: one output's or deck's
+    teardown never leaves another's open (plan 44 D4: deck 2's segment workers
+    outlive a raise in deck 1's close otherwise)."""
+    for close in closes:
+        _quiet(close)
 
 
 @dataclass
@@ -228,11 +236,19 @@ class MediaIO:
 
     def __init__(self, folder: MediaFolder, state: MediaState):
         self.folder, self.state = folder, state
+        self.off_air: list = []       # the channels of the decks off air (plan 44 D4)
 
     def poll(self, dt: float, now: float) -> None:
+        # each source read once a frame from here on, whichever deck asks
+        # (plan 44 §8: both renderers handed the same `MediaFrame`)
+        self.state.sources.begin_frame()
         self.state.poll(dt, now)
+        for channels in self.off_air:
+            channels.poll(dt, now, heard=False)   # the mixer plays the deck on air
 
     def close(self) -> None:
+        for channels in self.off_air:
+            _quiet(channels.drop_sources)
         _quiet(self.state.close)
         _quiet(self.folder.stop)
         _quiet(media_proxy.cancel_all)
@@ -619,7 +635,7 @@ def _bands(audio) -> tuple[float, ...]:
 
 
 def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
-                 preview=None, hold=None, monitor=None) -> None:
+                 preview=None, hold=None, monitor=None, fade=None) -> None:
     """One render frame onto every output (plan 21 WP3, "the frame in
     app.draw_render"):
 
@@ -651,7 +667,12 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
     preview instead: the live wiring and look, drawn after the outputs by
     the hold's own renderer into the preview's tap (`_draw_preview`).
     Output 1 then rides `monitor` (another `Preview`, the page's inset of
-    what the projector shows) when the page asked for it."""
+    what the projector shows) when the page asked for it.
+
+    Plan 44 D4: `fade` (a `deck.Fade`). At `output.xfade` 0, exactly the
+    above. Above 0, before output 1's draw, deck 2 draws every output
+    offscreen (`Fade.draw`) and each view carries its picture to the mix
+    pass, so every presenter, publisher and panel inset shows the mix."""
     first = slots[0]
     win = first.win
     glfw.make_context_current(win)
@@ -694,6 +715,12 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
                 sl.size = (int(pub_size[0]), int(pub_size[1]))
                 views.append(View(sl.switches, sl.size, target=sl.offscreen.fit(sl.size),
                                   publish=sl.publishers))
+        if fade is not None:
+            fade.begin_frame()
+            if fade.k > 0.0:
+                fade.draw(views, max(w, 1), max(h, 1), fbw / max(w, 1), _samples_of(ctx, ctx.screen))
+                ctx.screen.use()                  # output 1's window again, with its viewport
+                ctx.viewport = (0, 0, fbw, fbh)
         if on_hold:
             with hold.program(renderer):
                 renderer.draw_outputs(s, max(w, 1), max(h, 1), fbw / max(w, 1), views)
@@ -1121,6 +1148,9 @@ class Host:
     # `lfos`, `renderer`, `learn` and `undo` above are assigned from — they
     # stay for D1, so `frame` reads what it read
     deck: Deck | None = None
+    # the decks off air (plan 44 D4): each runs its scene-setters, its pass
+    # and its integrator in the frame; nothing else in the frame touches them
+    off_air: list = field(default_factory=list)
 
     @property
     def adapters(self) -> tuple:
@@ -1137,6 +1167,18 @@ class Host:
         return self.devices.adapter("gamepad") if self.devices is not None else None
 
 
+def _off_air(h: Host, what: str, step: Callable[[Deck], object]) -> str:
+    """`step` on each deck off air (plan 44 D4), a raise costing the on-air
+    deck nothing; what the first raised, "" when none did."""
+    said = ""
+    for d in h.off_air:
+        try:
+            step(d)
+        except Exception as e:  # noqa: BLE001 — deck 2 must not cost the on-air deck
+            said = said or _err(f"deck off air: {what}", e)
+    return said
+
+
 def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     """One frame, in the order ARCHITECTURE §2 states: the scene-setters
     (keys, loop keys, the devices polled — pad, MIDI — the macros' base
@@ -1148,7 +1190,13 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     plan 27 B3), `integrate`; then the two windows draw. Returns False
     when a guarded block raised — the error is on `reloader.runtime_error`
     and the loop goes on, so the next save can fix it. `imgui.new_frame()`
-    has already run (main): `keys.typing` is this frame's value."""
+    has already run (main): `keys.typing` is this frame's value.
+
+    Plan 44 D4 (row 625): a deck off air (`Host.off_air`) sets its macros'
+    bases beside the on-air deck's and runs its pass and apply straight
+    **after** the on-air deck's, so what it reads of a session param (a
+    route's scale on `master.gain`) is this frame's, landed by the on-air
+    deck, whose rows alone move one; then its integrator."""
     reg, keys, router, reloader = h.reg, h.keys, h.router, h.reloader
     # the router's shared half (routing_sources.Sources, plan 44 D2): where
     # the audio lanes' names and the devices' feeds go — the router's own,
@@ -1223,6 +1271,8 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
         router.follow_macros()
     except Exception as e:  # noqa: BLE001
         ok, reloader.runtime_error = False, _err("macros", e)
+    if said := _off_air(h, "macros", lambda d: d.router.follow_macros()):
+        ok, reloader.runtime_error = False, said
 
     # ---- undo: every scene-setter of this frame has written its base
     # (the panel's edits are last frame's tail), so compare the bases and
@@ -1273,6 +1323,12 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
         # integrator reads them
         router.modulate(chain, dt, now)   # dt: the rows' motion; now: the LFOs'
         reg.apply()
+
+        def off_air_pass(d: Deck) -> None:
+            d.router.modulate(chain, dt, now)
+            d.reg.apply()
+        if said := _off_air(h, "pass", off_air_pass):
+            ok, reloader.runtime_error = False, said
         if devs is not None:        # the sinks read effective values out (plan 27 B3)
             devs.send(reg, chain)
             if devs.error and ok:
@@ -1285,6 +1341,8 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
         h.view.integrate(dt)
     except Exception as e:  # noqa: BLE001
         ok, reloader.runtime_error = False, _err("view.integrate", e)
+    if said := _off_air(h, "integrate", lambda d: d.view.integrate(dt)):
+        ok, reloader.runtime_error = False, said
     # the analyzer's lanes as a route reads them (out / CEIL), for the
     # patterns that draw the bands themselves (u_levels, plan 22 B3): render
     # input, read-only, like the dim — never a param
@@ -1432,6 +1490,8 @@ def main(argv: list[str] | None = None) -> None:
     # objects built between its lines — the hands' setup, the outputs, the
     # panel, the devices — are the hooks below, each run at its old place
     made = RigMade()          # what each hook below returned, filled by Deck.build
+    mix = Mix()               # output.xfade and its seconds (plan 44 D4)
+    rendering = [renderer]    # the renderers whose segment workers an exit closes
 
     def hands_setup(reg: Registry):
         return _hand_settings(reg, cfg)       # before attach: "default" includes them
@@ -1440,6 +1500,7 @@ def main(argv: list[str] | None = None) -> None:
         # the render window's placement registers before attach, so "default"
         # includes output.* and reset / the dirty dot see them (audit L6)
         output = _make_output(render_win, reg, cfg)
+        register_xfade(reg, mix)               # the deck fade (plan 44 D4): rig controls
         slots[0].output = output
         for sl in later:                       # no params: the config says (fork F10)
             sl.output = _later_output(sl)
@@ -1543,7 +1604,8 @@ def main(argv: list[str] | None = None) -> None:
         if dream_io is not None:            # what the dream node dreams with (plan 36 T4)
             renderer.dreamer.source = dream_io
         renderer.segment_cfg = cfg.get("segment", {})   # the segment workers' backend (plan 39 T4)
-        segmenters = _Closer(renderer.close)   # …closed with the adapters, at quit and restart
+        # …closed with the adapters, at quit and restart — deck 2's too (plan 44 D4)
+        segmenters = _Closer(lambda: _close_each([r.close for r in rendering]))
         # the sticks as dials (gamepad.dial, a prototype): session params on
         # whichever pad is the primary now
         _register_dial(reg, lambda: rig.adapter("gamepad"))
@@ -1561,6 +1623,23 @@ def main(argv: list[str] | None = None) -> None:
     clock, presets, undo_obj = deck.clock, deck.presets, deck.undo
     panel.undo = undo_obj              # the footer's message slot
     panel.deck = deck                  # plan 44 D1: beside its handles; D5 reads through it
+    # deck 2 (plan 44 D4): its own look over the same session, sources and
+    # clock, and a renderer of its own states on the render context (which is
+    # not current here: the control window's is). Nothing points at it: no
+    # controller, no page, no undo, no file. Built now, not on a fade's first
+    # frame: compiling its shaders then would stall the room (rec, row 648)
+    glfw.make_context_current(render_win)
+    renderer2 = renderer.sibling()
+    glfw.make_context_current(ctrl_win)
+    renderer2.segment_cfg = renderer.segment_cfg
+    channels2 = Channels(sources=media.state.sources)
+    renderer2.media = channels2
+    rendering.append(renderer2)
+    media.off_air.append(channels2)
+    deck2 = Deck.beside(deck, renderer=renderer2, media=channels2)
+    renderer2.ghost.router = deck2.router       # the guide lights what its table routes
+    fade = Fade(deck, deck2, mix, ctx, dream=dream_io)
+    panel.fade = fade                  # the SYSTEM page's second GPU block
     # panel state and chain must stay one object even after source changes
     # the live objects that get re-classed on a hot reload; re-evaluated
     # each swap so recreated ones (the chain after a source attach) count
@@ -1569,6 +1648,12 @@ def main(argv: list[str] | None = None) -> None:
         # parts, the view state, the registry and every param, the marks,
         # undo, the hold, the router, the presets, learn and the banks
         *deck.targets(),
+        # deck 2 (plan 44 D4), its channels, and the fade
+        *deck2.targets(),
+        (channels2, "media.channels", "Channels"),
+        *[(ch, "media.channels", "Channel") for ch in channels2.channels.values()],
+        (fade, "deck", "Fade"),
+        (mix, "deck", "Mix"),
         (media.state, "media.channels", "Channels"),          # plan 32 (plan 44 D3: its new name)
         (media.state.sources, "media.channels", "MediaSources"),   # plan 44 D3: the rig's half
         *[(ch, "media.channels", "Channel") for ch in media.state.channels.values()],
@@ -1609,7 +1694,7 @@ def main(argv: list[str] | None = None) -> None:
         # every render output: output 1 drawn, the others presented, the
         # others swapped first and output 1 last (_draw_render)
         _draw_render(renderer, ctx, s, slots, render_watch, preview=panel.preview,
-                     hold=hold, monitor=panel.monitor)
+                     hold=hold, monitor=panel.monitor, fade=fade)
 
     def draw_panel(dt: float, fps: float) -> None:
         # the control window: black ground, then the imgui frame opened
@@ -1645,8 +1730,9 @@ def main(argv: list[str] | None = None) -> None:
     dream_check(library.current("presets"))     # the startup preset has already landed
 
     # both exits close the publishers, in output 1's context (plan 32 T9)
-    publishers = _Closer(lambda: (_close_publishers(render_win, slots), panel.preview.close(),
-                                          panel.monitor.close()))
+    publishers = _Closer(lambda: _close_each((lambda: _close_publishers(render_win, slots),
+                                              panel.preview.close, panel.monitor.close,
+                                              fade.close)))
 
     def all_windows() -> list:            # both exits destroy these before terminate
         return [*(sl.win for sl in slots[1:]), ctrl_win, render_win]
@@ -1668,7 +1754,8 @@ def main(argv: list[str] | None = None) -> None:
                 quit=lambda: glfw.set_window_should_close(render_win, True),
                 devices=rig, dream_io=dream_io, learn=deck.learn, render_watch=render_watch,
                 undo=deck.undo, media=media,
-                outputs=[sl.output for sl in slots if sl.output is not None], deck=deck)
+                outputs=[sl.output for sl in slots if sl.output is not None], deck=deck,
+                off_air=[deck2])
 
     # smoke-test escape hatch: HYPERSPACE_FRAMES=n closes after n frames
     frames_left = int(os.environ.get("HYPERSPACE_FRAMES", "0")) or None

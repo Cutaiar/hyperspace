@@ -167,6 +167,9 @@ class State:
     marks: Any = None
     modifiers: Any = None     # the modifiers' document (plan 28 N1); None: not taken
     banks: Any = None         # each bank's ids by scheme (plan 31 B); None: not taken
+    # how much of a route's offset each base held then, those that held any
+    # (the base chase's ledger, plan 52), so a base goes back with its own
+    trims: Any = None
 
 
 @dataclass
@@ -300,7 +303,8 @@ class Undo:
                      tuple(replace(b) for b in table.desk()), table.macros_doc(),
                      self._tag(),
                      self.marks.take() if marks and self.marks is not None else None,
-                     modifiers=self._mods(), banks=self._bank_ids())
+                     modifiers=self._mods(), banks=self._bank_ids(),
+                     trims={p.id: t for p in self._params() if (t := p._trim)})
 
     def _read_lands(self):
         lands = getattr(self.marks, "lands", None)
@@ -614,7 +618,7 @@ class Undo:
                     todo[p.id] = list(v) if isinstance(v, list) else v
                 if not todo:
                     break
-                reg.restore(todo)
+                reg.restore(todo, trims=state.trims)
             # 6. the macros' bases are acted on: nothing re-lands next frame
             if self.on_restore is not None:
                 self.on_restore()
@@ -723,16 +727,14 @@ def push(label: str, *, load: bool = False) -> None:
         _guarded("push", lambda u: u.push(label, load=load))
 
 
-def keep_open(label: str, on: Undo | None = None, *, on_end=None) -> None:
-    """`Undo.keep_open` on `on`, else the installed instance; neither: a no-op."""
-    if on is not None or _installed is not None:
-        _guarded("keep open", lambda u: u.keep_open(label, on_end), on)
+def keep_open(label: str, on: Undo, *, on_end=None) -> None:
+    """`Undo.keep_open` on a deck's `Undo`, guarded as `push` is."""
+    _guarded("keep open", lambda u: u.keep_open(label, on_end), on)
 
 
-def let_close(on: Undo | None = None) -> None:
-    """`Undo.let_close` on `on`, else the installed instance; neither: a no-op."""
-    if on is not None or _installed is not None:
-        _guarded("let close", lambda u: u.let_close(), on)
+def let_close(on: Undo) -> None:
+    """`Undo.let_close` on a deck's `Undo`, guarded as `push` is."""
+    _guarded("let close", lambda u: u.let_close(), on)
 
 
 def undo() -> None:
