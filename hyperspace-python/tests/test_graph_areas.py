@@ -1022,11 +1022,11 @@ def test_delete_or_backspace_deletes_the_selected_node(rig, key):
 
 
 def test_backspace_off_the_canvas_deletes_nothing(rig):
-    """⌫ with the canvas not focused (a click on the rail took the keys) is
-    not GRAPH's: the node stays."""
+    """⌫ with the canvas not focused (a click in the side pane took the keys)
+    is not GRAPH's: the node stays."""
     _, m = _modifier_selected(rig)
-    rail = next(w for w in imgui.get_current_context().windows if "##rail" in w.name)
-    imgui.internal.focus_window(rail)
+    pane = next(w for w in imgui.get_current_context().windows if "##graph.side" in w.name)
+    imgui.internal.focus_window(pane)
     _press(rig, imgui.Key.backspace, focus=False)
     assert rig.router.table.modifier(m.id) is not None
 

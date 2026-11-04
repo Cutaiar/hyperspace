@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 from imgui_bundle import imgui, implot
+from test_ui_shell import page_frame
 
 from hyperspace import lfo, tempo, ui_lfo
 from hyperspace.analysis import Analyser
@@ -79,7 +80,7 @@ def test_the_page_fits_the_control_window(rig, monkeypatch):
         over["lfo"] = imgui.get_scroll_max_y()
     monkeypatch.setattr(Panel, "_page_lfo", measured)
     for _ in range(3):
-        frame(rig.panel)
+        page_frame(rig.panel, "lfo")
     assert over["lfo"] == 0
 
 

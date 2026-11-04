@@ -16,7 +16,14 @@ from pathlib import Path
 
 from imgui_bundle import imgui
 from test_ui_routing import _drawn
-from test_ui_shell import CONTROL_SIZE, _click, _page_scroll, frame, rig  # noqa: F401 — the fixture
+from test_ui_shell import (  # noqa: F401 — the fixture
+    CONTROL_SIZE,
+    _click,
+    _page_scroll,
+    frame,
+    page_frame,
+    rig,
+)
 
 from hyperspace import ui, ui_presets
 from hyperspace.library import HOME_UNSET, PATCHES, Library
@@ -37,9 +44,9 @@ def _rects(panel):
 
 def _page(panel, n: int = 2):
     """The PRESETS page drawn `n` frames; the page's state."""
-    frame(panel, "presets")
+    page_frame(panel, "presets")
     for _ in range(n - 1):
-        frame(panel)
+        page_frame(panel)
     return ui_presets._state(panel)
 
 
@@ -101,11 +108,11 @@ def test_the_strips_name_is_a_readout_and_opens_no_list(rig, monkeypatch):  # no
     assert "—##name" in got["button"]
     lib.load("presets", "TRIP")
     got["button"].clear()
-    frame(panel)
+    page_frame(panel)
     assert "TRIP##name" in got["button"]
     st = ui_presets._state(panel)
     _click(panel, st["rects"]["strip.presets.name"])
-    frame(panel)
+    page_frame(panel)
     assert "list" not in st                                       # no popup list opened
     assert lib.current("presets") == "TRIP"
 
@@ -142,7 +149,7 @@ def test_a_click_on_a_row_loads_it_and_the_loaded_row_is_selected(rig, monkeypat
     assert lib.current("presets") == "FIELD" and not lib.is_dirty("presets")
     assert rig.view.shape == lib.read("presets", "FIELD")["values"]["view.shape"]
     got["selectable"].clear()
-    frame(panel)
+    page_frame(panel)
     assert [label for label, on in got["selectable"] if on] == ["FIELD##pick"]
     _click(panel, st["page"]["rects"]["row.ACID"])
     assert lib.current("presets") == "ACID"
@@ -159,14 +166,14 @@ def test_cross_sends_the_file_to_the_trash_and_the_row_goes(rig, tmp_path):  # n
     assert not (tmp_path / "presets" / "dial.json").exists()
     assert [t.name for t in lib.trash()] == ["DIAL"] and "DIAL" not in lib.list("presets")
     assert lib.status == "DIAL is in the trash — the PRESETS page's trash can restore it"
-    frame(panel)
+    page_frame(panel)
     page = st["page"]
     assert "DIAL" not in [n for n, _ in page["rows"]] and len(page["rows"]) == 24
     assert page["foot"] == ["trash (1) ▸"] and "trash" in page["rects"]
     _click(panel, page["rects"]["×.ACID"])                       # F6's preset
     assert lib.warning.startswith("ACID is in the trash — F6 still names it")
     assert lib.project.bank[5] == "ACID" and "ACID" not in lib.list("presets")
-    frame(panel)
+    page_frame(panel)
     assert st["page"]["foot"] == ["trash (2) ▸"]
 
 
@@ -194,7 +201,7 @@ def test_a_folder_preset_sits_under_its_header_and_renames_in_its_folder(rig):  
     assert head[3] <= row[1] and head[0] < row[0]               # under it, indented
     assert row[0] + imgui.calc_text_size("DIAL").x < ren[0]
     _click(panel, ren)
-    frame(panel)
+    page_frame(panel)
     assert st["naming"] == "rename:party/DIAL" and st["buf"] == "DIAL"
     lib.rename("presets", "party/DIAL", st["buf"] + " TWO")
     st["naming"] = None
@@ -209,17 +216,17 @@ def test_rename_turns_the_row_into_the_field_and_enter_renames(rig, tmp_path):  
     lib.load("presets", "DIAL")
     st = _page(panel)
     _click(panel, st["page"]["rects"]["rename.DIAL"])
-    frame(panel)
+    page_frame(panel)
     row = next(r for r in st["page"]["rows"] if r[0] == "DIAL")
     assert row == ("DIAL", ("field",)) and st["naming"] == "rename:DIAL" and st["buf"] == "DIAL"
     io = imgui.get_io()
     io.add_input_characters_utf8("DIAL TWO")                      # typed over the seeded name
-    frame(panel)
+    page_frame(panel)
     io.add_key_event(imgui.Key.enter, True)
-    frame(panel)
+    page_frame(panel)
     io.add_key_event(imgui.Key.enter, False)
-    frame(panel)
-    frame(panel)
+    page_frame(panel)
+    page_frame(panel)
     assert st["naming"] is None
     assert lib.current("presets") == "DIAL TWO"
     assert (tmp_path / "presets" / "dial-two.json").is_file()
@@ -244,19 +251,19 @@ def test_the_trash_foot_shows_only_while_the_trash_holds_something_and_restores(
     assert st["page"]["foot"] == [] and "trash" not in st["page"]["rects"]
     assert lib.delete("presets", "DIAL")
     ui_presets.invalidate(panel, "presets")
-    frame(panel)
-    frame(panel)
+    page_frame(panel)
+    page_frame(panel)
     assert st["page"]["foot"] == ["trash (1) ▸"]
     _click(panel, st["page"]["rects"]["trash"])
-    frame(panel)
+    page_frame(panel)
     view = st["trash_view"]
     assert [(g, n) for g, n, _when in view["rows"]] == [("presets", "DIAL")]
     assert view["empty"] == "empty trash…"
     _click(panel, view["rects"]["restore.0"])
     assert lib.status == "restored DIAL" and "DIAL" in lib.list("presets")
     assert (tmp_path / "presets" / "dial.json").is_file() and lib.trash() == []
-    frame(panel)
-    frame(panel)
+    page_frame(panel)
+    page_frame(panel)
     assert st["page"]["foot"] == [] and "trash" not in st["page"]["rects"]
     assert "DIAL" in [n for n, _ in st["page"]["rows"]]
 
@@ -319,7 +326,7 @@ def test_the_dots_are_clean_after_a_load(rig):  # noqa: F811
         lit = [g for g in groups if ui_presets.dirty(panel, g)]
         assert lit == [], f"{name}: dirty dots on {lit}"
         assert not lib.project.is_dirty(), "the show is not unsaved"
-    frame(panel, "presets")
+    page_frame(panel, "presets")
     reg["view.bright"].set_value(reg["view.bright"].value + 1.0)   # an edit: the dot comes back
     assert ui_presets.dirty(panel, "view") and ui_presets.dirty(panel, "presets")
     assert not lib.project.is_dirty()                     # a performance move: the preset's
@@ -343,8 +350,8 @@ def test_the_dot_is_a_twelve_pixel_disc_and_save_is_lit_while_dirty(rig):  # noq
     assert ui_presets.save_tip(lib, "presets") == (
         "Write the settings over BIG BLUE WAVE (the old file goes to the trash)")
     _dirty(rig)
-    frame(panel)
-    frame(panel)
+    page_frame(panel)
+    page_frame(panel)
     rects = st["rects"]
     x0, y0, x1, y1 = rects["strip.presets.dot"]
     assert x1 - x0 == y1 - y0 == 2 * ui.DOT_R == 12
@@ -358,7 +365,7 @@ def test_the_dot_is_a_twelve_pixel_disc_and_save_is_lit_while_dirty(rig):  # noq
     _click(panel, rects["strip.presets.save"])
     assert not lib.is_dirty("presets") and lib.status == "presets: saved BIG BLUE WAVE"
     assert [t.name for t in lib.trash()] == ["BIG BLUE WAVE"]      # the old text, kept
-    frame(panel)
+    page_frame(panel)
     assert "strip.presets.dot" not in st["rects"]
     assert st["save"]["strip.presets"] == ("save", False)
     # nothing loaded: "save", disabled, and the hover says what as… does
@@ -435,7 +442,7 @@ def test_the_strip_has_a_new_chip(rig, monkeypatch):  # noqa: F811
     monkeypatch.undo()
     lib.presets.new()
     assert lib.current("presets") == preset.UNTITLED_PRESET
-    frame(panel)
+    page_frame(panel)
     _click(panel, _rects(panel)["strip.presets.save"])
     assert ui_presets._state(panel)["naming"] == "presets"
 
@@ -459,7 +466,7 @@ def test_new_then_save_never_writes_over_a_preset_named_untitled(rig):  # noqa: 
     assert st["naming"] == "presets" and st["buf"] == ""
     assert path.read_bytes() == was
     st["naming"] = None
-    frame(panel)
+    page_frame(panel)
     _click(panel, _rects(panel)["strip.presets.as"])
     assert st["naming"] == "presets" and st["buf"] == ""
     st["naming"] = None
@@ -479,24 +486,24 @@ def test_the_routing_head_draws_save_and_as_over_the_presets(rig):  # noqa: F811
 
     panel, lib = rig.panel, rig.lib
     lib.load("presets", "BIG BLUE WAVE")
-    frame(panel, "routing")
-    frame(panel)
+    page_frame(panel, "routing")
+    page_frame(panel)
     st = ui_presets._state(panel)
     assert st["save"]["head"] == ("save", False) and "head.save" in st["rects"]
     assert "head.dot" not in st["rects"]
     _dirty(rig)
-    frame(panel)
-    frame(panel)
+    page_frame(panel)
+    page_frame(panel)
     assert st["save"]["head"] == ("save", True) and "head.dot" in st["rects"]
     _click(panel, st["rects"]["head.save"])
     assert not lib.is_dirty("presets") and lib.status == "presets: saved BIG BLUE WAVE"
-    frame(panel)
+    page_frame(panel)
     assert st["save"]["head"] == ("save", False) and "head.dot" not in st["rects"]
     ui_presets._begin_naming(panel, ui_routing.NAMING, "Mine")
-    frame(panel)
+    page_frame(panel)
     ui_routing._save_as(panel, "Mine")
     st["naming"] = None
-    frame(panel)
+    page_frame(panel)
     assert lib.current("presets") == "Mine" and (lib.home / "presets" / "mine.json").is_file()
 
 
@@ -505,7 +512,7 @@ def test_the_routing_head_draws_save_and_as_over_the_presets(rig):  # noqa: F811
 def _trash_view(panel):
     st = _page(panel)
     _click(panel, st["page"]["rects"]["trash"])
-    frame(panel)
+    page_frame(panel)
     return st, st["trash_view"]
 
 
@@ -552,9 +559,9 @@ def test_empty_asks_once_and_disarms(rig, tmp_path):  # noqa: F811
     assert all(p.exists() for p in files)                     # one click empties nothing
     # the time runs out
     io.delta_time = ui_presets.EMPTY_S + 0.5
-    frame(panel)
+    page_frame(panel)
     io.delta_time = 1 / 60
-    frame(panel)
+    page_frame(panel)
     assert st["trash_view"]["empty"] == "empty trash…"
     _click(panel, st["trash_view"]["rects"]["empty"])         # armed again, not emptied
     assert all(p.exists() for p in files)
@@ -566,11 +573,11 @@ def test_empty_asks_once_and_disarms(rig, tmp_path):  # noqa: F811
     _click(panel, st["trash_view"]["rects"]["empty"])
     assert st["trash_view"]["empty"].startswith("delete 1 file")
     io.add_key_event(imgui.Key.escape, True)
-    frame(panel)
+    page_frame(panel)
     io.add_key_event(imgui.Key.escape, False)
-    frame(panel)
+    page_frame(panel)
     _click(panel, (5, 5, 6, 6))                               # outside the popup
-    frame(panel)
+    page_frame(panel)
     assert st.get("empty_armed") is None
     st, view = _trash_view(panel)
     assert view["empty"] == "empty trash…"
@@ -579,8 +586,8 @@ def test_empty_asks_once_and_disarms(rig, tmp_path):  # noqa: F811
     _click(panel, st["trash_view"]["rects"]["empty"])
     assert not any(p.exists() for p in files) and lib.trash() == []
     assert lib.status == "trash: 1 file deleted for good"
-    frame(panel)
-    frame(panel)
+    page_frame(panel)
+    page_frame(panel)
     assert st["page"]["foot"] == []
 
 
@@ -601,7 +608,7 @@ def test_the_page_does_not_reread_the_library_every_frame(rig, monkeypatch):  # 
 
     monkeypatch.setattr(Library, "_index", counted)
     for _ in range(10):
-        frame(panel)
+        page_frame(panel)
     assert len(st["page"]["rows"]) > ui_presets.LIST_ROWS
     assert len(calls) <= 3, f"{len(calls)} library index passes in 10 frames"
 
@@ -625,7 +632,7 @@ def test_the_patches_fold_lists_patches_with_rename_and_cross_and_no_pick(
     monkeypatch.setattr(lib, "load", lambda *a, **k: loads.append(a))
     monkeypatch.setattr(imgui, "selectable", lambda label, *a, **k: (
         (True, True) if label == "my wash##pick" else real_selectable(label, *a, **k)))
-    frame(panel, "presets")
+    page_frame(panel, "presets")
     drawn = ui_presets._state(panel)["patches"]
     assert drawn["group"] == PATCHES and drawn["foot"] == []
     assert drawn["rows"] == [("acid wash", ("rename", "×")), ("my wash", ("rename", "×"))]
@@ -635,22 +642,22 @@ def test_the_patches_fold_lists_patches_with_rename_and_cross_and_no_pick(
     trashed = len(lib.trash())
     monkeypatch.setattr(ui, "chip", lambda label, *a, **k: (
         label == "×##×.acid wash" or real_chip(label, *a, **k)))
-    frame(panel)
+    page_frame(panel)
     assert lib.list(PATCHES) == ["my wash"]
     assert not (lib.home / PATCHES / "acid-wash.json").exists()
     assert len(lib.trash()) == trashed + 1 and lib.trash()[0].group == PATCHES
     # rename: the row becomes the name field under the patch's own key
     monkeypatch.setattr(ui, "chip", lambda label, *a, **k: (
         label == "rename##rename.my wash" or real_chip(label, *a, **k)))
-    frame(panel)
+    page_frame(panel)
     st = ui_presets._state(panel)
     assert st["naming"] == f"rename:{PATCHES}:my wash" and st["buf"] == "my wash"
     monkeypatch.setattr(ui, "chip", real_chip)
-    frame(panel)
+    page_frame(panel)
     assert st["patches"]["rows"] == [("my wash", ("field",))]
     ui_presets._rename(panel, "my wash", "their wash", PATCHES)
     st["naming"] = None
-    frame(panel)
+    page_frame(panel)
     assert st["patches"]["rows"] == [("their wash", ("rename", "×"))]
     assert lib.list(PATCHES) == ["their wash"]
     assert (lib.home / PATCHES / "their-wash.json").is_file()
@@ -669,7 +676,7 @@ def test_the_show_line_names_the_show_and_its_dot(rig, monkeypatch):  # noqa: F8
     assert not lib.project.is_dirty()
     reg["master.gain"].set(reg["master.gain"].value + 1.0)      # a session move
     texts.clear()
-    frame(panel)
+    page_frame(panel)
     assert lib.project.is_dirty() and "●" in texts and "show.dot" in st["rects"]
     name, dot = st["rects"]["show.name"], st["rects"]["show.dot"]
     assert name[2] <= dot[0] and not _overlap(name, dot)
@@ -688,11 +695,11 @@ def test_open_lists_the_librarys_shows_and_picks_one(rig, monkeypatch):  # noqa:
         seen.append(label), real(label, *a, **k))[1])
     _click(panel, st["rects"]["show.menu"])                      # the combo opens
     seen.clear()
-    frame(panel)
+    page_frame(panel)
     assert [s for s in seen if "##" not in s] == ["house", "party"]
     monkeypatch.setattr(imgui, "selectable", lambda label, *a, **k: (
         (True, True) if label == "house" else real(label, *a, **k)))
-    frame(panel)
+    page_frame(panel)
     assert lib.project.name == "house" and lib.project.stem == "house"
     assert lib.current("presets") == "BIG BLUE WAVE"             # the house show's startup
     assert lib.project.bank[0] == "BIG BLUE WAVE" and not lib.project.is_dirty()
@@ -713,10 +720,10 @@ def test_save_as_and_new_work_the_show(rig, tmp_path):  # noqa: F811
     assert json.loads(show.read_text())["session"]["master.gain"] == reg["master.gain"].value
     _click(panel, st["rects"]["show.save_as"])
     assert st["naming"] == ui_presets.PROJECT and st["buf"] == "party"
-    frame(panel)                                              # the field stands in for the row
+    page_frame(panel)                                              # the field stands in for the row
     ui_presets._project_save_as(panel, "FRIDAY")
     st["naming"] = None
-    frame(panel)
+    page_frame(panel)
     assert proj.name == "FRIDAY" and proj.path == tmp_path / "projects" / "friday.hyp.json"
     assert proj.path.is_file() and not proj.is_dirty()
     assert ui_presets.names(panel, ui_presets.PROJECT) == ["friday", "house", "party"]
@@ -724,8 +731,8 @@ def test_save_as_and_new_work_the_show(rig, tmp_path):  # noqa: F811
     _click(panel, st["rects"]["show.new"])
     assert proj.name == "untitled" and proj.path is None and proj.is_dirty()
     assert proj.bank == [None] * 24 and proj.startup is None
-    frame(panel)
-    frame(panel)
+    page_frame(panel)
+    page_frame(panel)
     assert "show.dot" in st["rects"]                             # unsaved: the dot
 
 
@@ -772,7 +779,7 @@ def test_the_footer_says_a_library_line_again(rig, monkeypatch):  # noqa: F811
     proj = lib.project
     clock = [1000.0]
     monkeypatch.setattr(ui.time, "monotonic", lambda: clock[0])
-    frame(panel, "view")                                      # the first look only remembers
+    page_frame(panel, "view")                                      # the first look only remembers
     assert panel._message() == ("", False)
     proj.clear_slot(5)
     said = lib.status
@@ -816,7 +823,7 @@ def test_a_line_said_twice_shows_twice(rig, monkeypatch):  # noqa: F811
     proj = lib.project
     clock = [1000.0]
     monkeypatch.setattr(ui.time, "monotonic", lambda: clock[0])
-    frame(panel, "view")                                      # the first look only remembers
+    page_frame(panel, "view")                                      # the first look only remembers
     assert panel._message() == ("", False)
     proj.bank[2] = None
     empty = "F3: an empty slot — hold its pad (or ⇧F3) to save the live state into it"

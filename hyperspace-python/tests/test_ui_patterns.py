@@ -11,6 +11,7 @@ it is asserted with slack and reported as unverified.
 
 import pytest
 from test_fx import PageRig
+from test_ui_shell import page_frame
 
 from hyperspace import patterns, ui, ui_patterns, ui_routing
 from hyperspace.patterns import INPUTS, MODES, N_INPUTS
@@ -38,7 +39,7 @@ class FacesRig(PageRig):
         monkeypatch.setattr(ui, "tooltip", lambda t: (self.tips.append(t), real_tip(t))[1])
 
     def frame(self) -> None:
-        from hyperspace.ui import PANEL_W, RAIL_W
+        from hyperspace.ui import PANEL_W
 
         imgui = self.imgui
         self.rects.clear()
@@ -46,7 +47,7 @@ class FacesRig(PageRig):
         self.wrapped.clear()
         imgui.new_frame()
         imgui.set_next_window_pos(imgui.ImVec2(0, 0))
-        imgui.set_next_window_size(imgui.ImVec2(PANEL_W - RAIL_W, self.size[1]))
+        imgui.set_next_window_size(imgui.ImVec2(PANEL_W, self.size[1]))
         imgui.begin("page", None, imgui.WindowFlags_.no_title_bar | imgui.WindowFlags_.no_move)
         ui_patterns.page(self.panel, 1 / 60)
         imgui.end()
@@ -285,9 +286,7 @@ def test_the_page_fits_with_every_row_driven_and_flat_or_the_longest_mode(tmp_pa
             for mode in range(len(MODES)):
                 reg["view.pattern"].set(mode)
                 for _ in range(3):
-                    imgui.new_frame()
-                    panel.draw(1 / 60, 60.0)
-                    imgui.end_frame()
+                    page_frame(panel)
                 over_y, over_x, room = spare[-1]
                 said = (MODES[mode].name, err[:4], faces)
                 assert over_y == 0 and over_x == 0, said

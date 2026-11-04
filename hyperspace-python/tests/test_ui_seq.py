@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 from imgui_bundle import imgui, implot
+from test_ui_shell import page_frame
 
 from hyperspace import envelope, hotreload, lfo, sequencer, tempo, ui, ui_seq, undo
 from hyperspace.analysis import Analyser
@@ -152,7 +153,7 @@ def test_the_default_page_fits_the_control_window(rig, monkeypatch):
         over["seq"] = imgui.get_scroll_max_y()
     monkeypatch.setattr(Panel, "_page_seq", measured)
     for _ in range(3):
-        frame(rig.panel)
+        page_frame(rig.panel, "seq")
     assert over["seq"] == 0
 
 
@@ -207,26 +208,26 @@ def _cell_rects(monkeypatch):
 def _click(panel, x, y):
     io = imgui.get_io()
     io.add_mouse_pos_event(x, y)
-    frame(panel)
+    page_frame(panel)
     io.add_mouse_button_event(0, True)
-    frame(panel)
+    page_frame(panel)
     io.add_mouse_button_event(0, False)
-    frame(panel)
+    page_frame(panel)
     io.add_mouse_pos_event(-1, -1)
-    frame(panel)
+    page_frame(panel)
 
 
 def test_a_mouse_click_on_a_cell_toggles_it(rig, monkeypatch):
     """The real road: a press and release over the cell, through imgui."""
     rects = _cell_rects(monkeypatch)
-    frame(rig.panel)
-    frame(rig.panel)
+    page_frame(rig.panel, "seq")
+    page_frame(rig.panel, "seq")
     x, y, w, h = rects["##seq.4.2"]
     _click(rig.panel, x + w / 2, y + h / 2)
     assert rig.seq.lanes[3].steps[1] == 1.0
     # a column past the length takes no click
     rig.reg["seq.length"].set(4)
-    frame(rig.panel)
+    page_frame(rig.panel, "seq")
     x, y, w, h = rects["##seq.4.6"]
     _click(rig.panel, x + w / 2, y + h / 2)
     assert rig.seq.lanes[3].steps[5] == 0.0

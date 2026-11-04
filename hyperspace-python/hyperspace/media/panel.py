@@ -46,8 +46,8 @@ class PanelSource(SharedSource):
     feed is (`SharedSource`: holders, the newest frame, the status). `tap`
     is the `outputs.CanvasTap` (duck-typed: `want()`, `lease()` with
     `texture`, `size` and `generation`, `frame_no`, `at` on `clock`'s
-    scale); `on_page` answers whether the GRAPH page is drawing its
-    canvas now — the panel's own fact (`Panel.canvas_px is not None`),
+    scale); `on_page` answers whether GRAPH is drawing its canvas now
+    (plan 49 stage 3: while the panel is not hidden) — the panel's own fact (`Panel.canvas_px is not None`),
     read from it, so the status has one owner."""
 
     def __init__(self, tap, *, on_page=None, clock=time.monotonic):

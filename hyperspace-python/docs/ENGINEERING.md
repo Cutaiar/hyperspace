@@ -1789,11 +1789,12 @@ writes the test fixture `tests/fixtures/clouds/knot.npz`.
 
 ## 6. The control window
 
-The panel is built to be read from a few feet back in a dark room. A
-rail of sixteen pages (`ui.PAGES`); the rail shows a red dirty dot
-beside a page whose group has moved off its loaded preset. No page
-scrolls at the control size (2372 × 900, `app.CONTROL_SIZE`;
-`tests/test_ui_shell.py::test_every_page_fits_the_control_window`).
+The panel is built to be read from a few feet back in a dark room. It
+is GRAPH, always drawn, and a side pane of folding sections (plan 49,
+`ui_pane.SECTIONS`); a header shows a red dirty dot where its group has
+moved off its loaded preset. `ui.page` is the focus, by index into
+`ui.PAGES`: a section is brought up by it and scrolls in its own body
+(2372 × 900 is the control size, `app.CONTROL_SIZE`).
 The window is two 4:3 panes: the panel opens at `ui.panel_w`, leaving
 the desk diagram left of it a 4:3 slice of the height and the panel
 the rest (never under `ui.PANEL_W`, 540). On a screen narrower than
@@ -2692,7 +2693,7 @@ differs from its file), **open ▾** (your shows), **save**, **as…**,
 drops down but **open ▾**, nothing is dim, no row is special.
 
 **The dirty dot** (`ui.dirty_dot`) is a red disc on every strip, on
-ROUTING's head and on the rail; while there is something to save the
+ROUTING's head and on a section's header; while there is something to save the
 save chip is solid red. It compares the live state with the loaded
 preset or show within undo's float tolerance, so a performer's round-off
 lights nothing. Nothing asks before a save.

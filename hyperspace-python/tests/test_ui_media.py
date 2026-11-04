@@ -12,7 +12,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 from imgui_bundle import imgui
-from test_ui_shell import _click, _drawn, _mouse, frame
+from test_ui_shell import _click, _drawn, _mouse, frame, page_frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
 from hyperspace import ui_media
@@ -81,16 +81,16 @@ def test_media_tab_replaces_bitmap(rig):
     assert "bitmap" not in PAGE_KEYS and "media" in PAGE_KEYS
     assert PAGE_KEYS.index("media") == PAGE_KEYS.index("faces") + 1
     assert not hasattr(Panel, "_page_bitmap")
-    frame(rig.panel, "media")                      # no panel.media at all
+    page_frame(rig.panel, "media")                      # no panel.media at all
     attach(rig, FakeFolder())
-    frame(rig.panel, "media")
+    page_frame(rig.panel, "media")
     attach(rig, FakeFolder([entry("shared:loops/tunnel.mp4", kind="video"),
                             entry("local:me.png"), entry("shared:sync.mov", "fetching")]),
            feeds={"ndi:Resolume": NS(status="connected")})
     for tab in range(3):
         page_state(rig)["tab"] = tab
-        frame(rig.panel, "media")
-        frame(rig.panel, "media")
+        page_frame(rig.panel, "media")
+        page_frame(rig.panel, "media")
 
 
 def test_banner_lists_missing(rig, monkeypatch):
@@ -125,8 +125,8 @@ def test_assign_from_library(rig):
     sid = "shared:loops/tunnel.mp4"
     state = attach(rig, FakeFolder([entry(sid, kind="video"), entry("shared:b.png")]))
     panel = rig.panel
-    frame(panel, "media")
-    frame(panel)
+    page_frame(panel, "media")
+    page_frame(panel)
     st = page_state(rig)
     _click(panel, st["rects"][("item", sid)])
     assert st["pick"] == sid
@@ -201,14 +201,14 @@ def test_page_never_opens_sources(rig, monkeypatch):
     for c in CHANNELS:
         state.assign(c, 0, sid)
     panel = rig.panel
-    frame(panel, "media")
-    frame(panel)
+    page_frame(panel, "media")
+    page_frame(panel)
     st = page_state(rig)
     _click(panel, st["rects"][("item", sid)])
     _click(panel, st["rects"][("cell", "c", 2)])
     for tab in range(3):
         st["tab"] = tab
-        frame(panel)
+        page_frame(panel)
     _mouse(panel, 0, 0)
     assert calls == []
     assert all(ch.source is None for ch in state.channels.values())

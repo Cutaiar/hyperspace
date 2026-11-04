@@ -160,6 +160,7 @@ AUTO = "auto"            # the chip that gives a push row its source's rest back
 GATE_W = 62.0            # the pinch-gate combo on line 2
 MACRO_LABEL_W = 22.0     # a knob's number beside it; the section says "macros"
 MACRO_NAME_W = 96.0      # a macro's editable label
+MACRO_SLIDER_MIN = 60.0  # the knob's slider beside the chips, or the chips under it
 SUB_W = 58.0             # a subscriber's from / to fields
 CONTROL_W = 56.0         # the desk and session lines' control column: a glyph (plan 14 WP7)
 INDENT = 18.0            # a subscriber line under its macro
@@ -1203,14 +1204,17 @@ def _preset_line(panel, pr, table) -> None:
     layer = f"desk layer: {'global' if glob else 'preset'}"
     word = ui_presets.save_label(lib, PRESETS) if lib is not None else "save"
     sp = imgui.get_style().item_spacing.x
-    imgui.same_line(imgui.get_content_region_avail().x
-                    - ui.chip_w(word, "as…") - ui._micro_width(layer) - sp)
+    # flush right; in a narrow pane on a row of its own (plan 49 stage 3)
+    right = ui.chip_w(word, "as…") + ui._micro_width(layer) + sp
+    avail = imgui.get_content_region_avail().x
+    if imgui.get_item_rect_max().x + sp + right <= imgui.get_cursor_screen_pos().x + avail:
+        imgui.same_line(avail - right)
     ui._micro(layer, ui.RED if glob else ui.DIM)
     if imgui.is_item_hovered():
         ui.tooltip("The desk's layer — SHIFT latches it (desk.shift). Global: "
                           "the session's controls, never learned (a learn is refused); "
                           "preset: the loaded preset's desk. A preset load drops to it.")
-    imgui.same_line()
+    ui.beside(ui.chip_w(word, "as…"))
     # the preset strip's own save chip,
     # lit while there is something to save (plan 19 WP5)
     if lib is None:
@@ -1555,8 +1559,12 @@ def macros(panel, router: Router) -> None:
         if changed:
             _macro(table, p.id).label = text
         imgui.same_line()
-        panel._slider(p.id, -(ui.chip_w("+ base", "+ depth") + sp))
-        imgui.same_line()
+        # plan 49 stage 3: in a narrow pane the chips go on a row of their own
+        chips = ui.chip_w("+ base", "+ depth") + sp
+        roomy = imgui.get_content_region_avail().x - MACRO_NAME_W - sp - chips >= MACRO_SLIDER_MIN
+        panel._slider(p.id, -chips if roomy else -1)
+        if roomy:
+            imgui.same_line()
         if ui.chip("+ base"):
             q = panel.reg.get("view.bright") or base_targets(panel)[0]
             # from where the param sits to its fader's end (row 537)

@@ -16,6 +16,10 @@ from hyperspace.field import NAMES
 def view_page(tmp_path, monkeypatch):
     with build_rig(tmp_path) as r:
         imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+        # the real route: the VIEW section focused in the pane, the window
+        # tall enough to hold the whole of it
+        r.panel.desk = False
+        imgui.get_io().display_size = imgui.ImVec2(1600, 2000)
         d = Driver(step=lambda: frame(r.panel, "view"))
         d.record(monkeypatch.setattr)
         d.run(d.wait(2))

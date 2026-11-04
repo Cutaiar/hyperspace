@@ -308,7 +308,7 @@ def pick_line(panel, table, c: apc40.Control) -> tuple[str, bool]:
     if why is None:
         if panel.open and ui.PAGE_KEYS[panel.page] == "routing":
             # ROUTING is never dimmed: a click there is the widget's own
-            return (f"{c.glyph} picked: its line is framed · on any other page, click a "
+            return (f"{c.glyph} picked: its line is framed · in any other section, click a "
                     f"param to put it there · click {c.glyph} again to let go"), True
         return (f"{c.glyph} picked: click a param to put it here · click {c.glyph} again "
                 "to let go"), True
@@ -329,7 +329,7 @@ def footer_line(panel, now: float | None = None) -> tuple[str, bool] | None:
     if not can:
         return f"{line} ({secs} s)", False
     if ui.PAGE_KEYS[panel.page] == "routing":
-        return f"{c.glyph} picked ({secs} s): click a param on any other page", True
+        return f"{c.glyph} picked ({secs} s): click a param in any other section", True
     return f"{c.glyph} picked ({secs} s): click a param to put it here", True
 
 

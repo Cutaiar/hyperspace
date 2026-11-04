@@ -544,9 +544,8 @@ def test_the_editor_context_is_made_once_kept_across_a_reload_and_destroyed_on_c
     monkeypatch.setattr(ed, "create_editor", lambda cfg: made.append(cfg.settings_file)
                         or real_create(cfg))
     monkeypatch.setattr(ed, "destroy_editor", lambda c: gone.append(c) or real_destroy(c))
-    frame(rig.panel, "view")                         # another page: no context yet
-    assert made == []
-    frame(rig.panel, "graph")
+    assert made == []                                # no context before the panel draws
+    frame(rig.panel, "view")                         # plan 49 stage 3: GRAPH is always drawn
     frame(rig.panel, "graph")
     assert made == [""]                              # the widget's settings file is off
     first = ui_graph._state(rig.panel)["editor"]

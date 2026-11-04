@@ -176,8 +176,9 @@ frames the canvas on them and says so on the head ("laid out 36 nodes in
 6 areas, every one collapsed · 12 idle off the canvas", or "already
 tidy"). **The side pane is always on** (plan 49, stage 1: `ui_pane.py`):
 folding sections — the selection's details (`_side`; with nothing
-selected, a line saying so), then the bodies of the PRESETS, LOOKBACK,
-FACES and ANALYZER pages. It lies under the canvas on the panel's narrow
+selected, a line saying so), then the body of every other page, which this
+page's pane is the only home of (plan 49, stage 3: no rail; this page is
+always drawn, and `ui.page` is the focused section). It lies under the canvas on the panel's narrow
 page; the **details beside / below** chip moves it (a page 720 px wide
 puts it in a side column by itself, no chip). **The side column is resizable** (the
 owner, 2026-10-27: "for some UI, the little sidebar … is just not wide
@@ -200,6 +201,7 @@ from __future__ import annotations
 import colorsys
 import math
 import time
+from contextlib import contextmanager
 
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
@@ -674,15 +676,42 @@ def tidy(panel, st: dict, view: graphview.View) -> str:
 
 # ---------------------------------------------------------------- the page
 
+@contextmanager
+def _dimmed(panel):
+    """Disabled while a desk control is picked (`Panel._draw`): GRAPH's own
+    head and canvas. The pane dims its bodies itself (`ui_pane._body`), and
+    its headers stay live."""
+    on = getattr(panel, "_picking", False)
+    if on:
+        imgui.begin_disabled()
+    try:
+        yield
+    finally:
+        if on:
+            imgui.end_disabled()
+
+
+def band_height(avail_h: float, focused: bool) -> float:
+    """The narrow page's band: `BELOW_H`, or with a section focused all but
+    `CANVAS_MIN` of the page, so the section reads as its page did (plan 49
+    stage 3: with no rail, the desk's narrow panel has only this)."""
+    return max(BELOW_H, avail_h - CANVAS_MIN) if focused else BELOW_H
+
+
 def page(panel, dt: float) -> None:
     t0 = time.perf_counter()
     ui._micro("graph")
     view = view_of(panel)
-    if view is None:
+    st = _state(panel)
+    if view is None:            # no canvas without a router; the sections all the same
         imgui.separator()
         imgui.text_disabled("no router attached")
+        if st["machine"] is None:
+            st["machine"] = getattr(getattr(panel, "library", None), "machine", None)
+        if imgui.begin_child("##graph.side", imgui.ImVec2(0, 0)):
+            ui_pane.draw(panel, st, dt, None, below=imgui.get_content_region_avail().x < WIDE)
+        imgui.end_child()
         return
-    st = _state(panel)
     st["hide"] = hidden_ids(st, view)       # plan 36 T6: before anything asks `drawn_node`
     sel = _selection(st, view)
     if sel is not None and escaped():           # Esc closes the details: nothing selected
@@ -690,7 +719,8 @@ def page(panel, dt: float) -> None:
     publish(panel, st, sel)
     share(panel, st, sel)
     # plan 49: the pane is always on, so its chip is too (on a narrow page)
-    _head(panel, st, view, True)
+    with _dimmed(panel):
+        _head(panel, st, view, True)
     imgui.separator()
     avail = imgui.get_content_region_avail()
     wide = st["beside"] or avail.x >= WIDE
@@ -709,7 +739,8 @@ def page(panel, dt: float) -> None:
     # (the frame's width is clamped to this page; the remembered one is not,
     # so a narrow window never shrinks what a wide one was set to)
     side = side_width(st["side_w"], avail.x)
-    pos, size = details_rect((origin.x, origin.y), (avail.x, avail.y), wide, side)
+    pos, size = details_rect((origin.x, origin.y), (avail.x, avail.y), wide, side,
+                             band_height(avail.y, ui_pane.focused(st) is not None))
     # the node editor still sees a right-click over the details (they lie on
     # its canvas): noted here, before it draws, so `_menus` opens no graph
     # menu there and the control's own Learn menu opens (the owner, 2026-10-24)
@@ -727,7 +758,8 @@ def page(panel, dt: float) -> None:
                        (float(fbs.x), float(fbs.y)), imgui.internal.get_current_window().name)
     shown = _backdrop(panel, st, (origin.x, origin.y), (canvas.x, canvas.y))
     _scroll(st, (origin.x, origin.y), (canvas.x, canvas.y))
-    _canvas(panel, st, view, canvas, st["backdrop_alpha"] if shown else 0.0)
+    with _dimmed(panel):
+        _canvas(panel, st, view, canvas, st["backdrop_alpha"] if shown else 0.0)
     # the held projector's inset: in the canvas's corner, left of the pane
     # beside it, above the band under it (a narrow page)
     _monitor(panel, (origin.x, origin.y), (canvas.x - size[0], canvas.y) if wide
@@ -815,14 +847,15 @@ def _scroll(st: dict, origin, size) -> None:
 
 
 def details_rect(origin: tuple[float, float], avail: tuple[float, float],
-                 wide: bool, side_w: float = SIDE_W) -> tuple[tuple[float, float], tuple[float, float]]:
-    """Where the selection's details are laid over the canvas (screen
-    position, size): a `side_w` column on its right edge when `wide`, else a
-    `BELOW_H` band along its bottom. The canvas keeps its size underneath."""
+                 wide: bool, side_w: float = SIDE_W, band_h: float = BELOW_H,
+                 ) -> tuple[tuple[float, float], tuple[float, float]]:
+    """Where the pane is laid over the canvas (screen position, size): a
+    `side_w` column on its right edge when `wide`, else a `band_h` band
+    along its bottom. The canvas keeps its size underneath."""
     (x, y), (w, h) = origin, avail
     if wide:
         return (x + w - side_w, y), (side_w, h)
-    return (x, y + h - BELOW_H), (w, BELOW_H)
+    return (x, y + h - band_h), (w, band_h)
 
 
 def side_width(wanted: float, avail_w: float) -> float:
@@ -950,13 +983,14 @@ def select_id(panel, nid: str) -> None:
 def publish(panel, st: dict, sel) -> None:
     """The canvas's selection on the panel (2026-10-31: `Panel.
     graph_selected`, `graph_selected_at`), for whoever is not this view —
-    a controller's node mode, the side pane's fold of every page. The one
+    a controller's node mode, the side pane. The one
     selected node's id when `sel` is a node and it is the only node
     selected; None for nothing, a cable, a bundle, a group or several
-    nodes. Written each frame this page draws (a deleted node is gone from
-    the view, so the next frame publishes None), so off the page the value
-    is as of the last frame GRAPH was drawn — until `settle` sees a preset
-    land without the node. `graph_selected_at` is imgui's frame count when
+    nodes. Written each frame the panel draws (plan 49 stage 3: GRAPH is
+    always drawn; a deleted node is gone from the view, so the next frame
+    publishes None), so it is live but while the panel is hidden, when it
+    is as of the last frame drawn — until `settle` sees a preset land
+    without the node. `graph_selected_at` is imgui's frame count when
     the value last changed. An effect node's instance is `Panel.
     fx_selected` as well (`share`); that stays as it is."""
     nid = None
@@ -968,7 +1002,7 @@ def publish(panel, st: dict, sel) -> None:
 
 
 def settle(panel) -> None:
-    """Every frame, on any page (`Panel._draw`): the loaded preset's graph
+    """Every frame, panel hidden or not (`Panel._draw`): the loaded preset's graph
     spec is a new object after a load or a new (and after a graph edit) —
     seen to have changed, a published node the preset no longer holds
     (`still_held`) is let go of, so a load on the PRESETS page does not
@@ -3657,8 +3691,8 @@ def home_page(n: graphview.VNode):
 
 
 def open_on(panel, home) -> None:
-    """Turn the panel to `home`'s page (through ``ui.page``, as a page tab
-    does) with its item selected there."""
+    """Focus `home`'s section (through ``ui.page``) with its item selected
+    there."""
     key, sel = home
     if sel is not None:
         sel(panel)

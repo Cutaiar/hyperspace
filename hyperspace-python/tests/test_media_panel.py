@@ -24,7 +24,7 @@ from hyperspace.media.source import FETCHING, LOST, READY
 from hyperspace.ui import PAGE_KEYS
 
 sys.path.insert(0, str(Path(__file__).parent))
-from test_ui_shell import build_rig, frame
+from test_ui_shell import build_rig, frame, page_frame
 
 
 class Clock:
@@ -333,17 +333,17 @@ def test_the_media_page_lists_panel_graph_among_the_live_feeds(tmp_path):
         assert rows[0].name == "graph" and rows[0].kind == "live" and rows[0].status == LOST
         ui_media._state(rig.panel)["search"] = "graph"
         assert [i.sid for i in ui_media.items(rig.panel, 2)] == [GRAPH]
-        frame(rig.panel, "media")                     # the page draws it
+        page_frame(rig.panel, "media")                     # the page draws it
         # on MEDIA the page draws no canvas: the row says `off page`, with why
         src.on_page = lambda: rig.panel.canvas_px is not None
         [row] = ui_media.items(rig.panel, 2)
         assert row.status == OFF_PAGE
         assert "GRAPH page is on screen" in ui_media.hint(OFF_PAGE) and ui_media.hint(LOST) == ""
         assert f"{live.HOLD_S:g} s" in ui_media.hint(OFF_PAGE)
-        frame(rig.panel, "media")
+        page_frame(rig.panel, "media")
 
 
-def test_canvas_px_is_recorded_only_while_graph_draws(tmp_path):
+def test_canvas_px_is_recorded_while_the_panel_draws(tmp_path):
     with build_rig(tmp_path) as rig:
         panel = rig.panel
         assert panel.canvas_px is None
@@ -355,8 +355,7 @@ def test_canvas_px_is_recorded_only_while_graph_draws(tmp_path):
         assert page.startswith("CONTROLS/##page_") and "/" not in page[len("CONTROLS/"):]
         assert omit[1] > omit[0]                      # plan 49: the pane, selected or not
         frame(panel, "view")
-        assert panel.canvas_px is None
-        panel.reg["ui.page"].set(PAGE_KEYS.index("graph"))
+        assert panel.canvas_px is not None            # plan 49 stage 3: GRAPH is always drawn
         panel.open = False
         frame(panel)
         assert panel.canvas_px is None                # the panel hidden: no canvas
