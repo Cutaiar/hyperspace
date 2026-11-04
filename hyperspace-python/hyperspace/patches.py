@@ -62,12 +62,27 @@ group's strip as a spawn that replaces the group's values (`spawn`'s
 ladder (a ``patch/1`` and a ``hyperspace.preset/1`` module preset are read
 as their ``/2``), so a file of any age reaches `check`, `read` and
 `spawn` in today's words.
+
+**Frame kinds** (wave 3 P1): a patch holds any render node a preset file
+holds but the rig's own and the look's one camera — the scene, the shape,
+the backdrop, the pattern, a look-back, the dream, hands 1, its layer and
+its guide as well as what `MAY_HOLD` always named — so a "dream + fx +
+composite" patch exists. No schema moves (the file's keys are as they were;
+an older build's `check` refuses such a file in words). A patch owns of a
+frame kind only that kind's params (`_param_rows`: `rot.*` and most of
+`view.*` the shape's, a look-back's `LOOKBACK_KEYS`, the dream the rest of
+`dream.*`; `scene.*` is the band scene's and no node's). What can be made
+twice is renamed as ever (hands 1 lands as `hands.2`, a look-back as
+`lookback.2`); what a frame holds one of (`ONE_PER_FRAME`) keeps its name,
+and a host that already has it refuses the spawn in words, nothing landed
+(`Landing.taken`, `Landing.refusal`) — P2's conflict sheet is where "replace
+the host's dream" will be asked.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -115,12 +130,23 @@ KEYS = ("schema", "name", "note", "nodes", "wires", "values", "modifiers", "rout
         "macros", "lfos", "envs", "ports", "layout", UNITS_KEY)
 # (a patch of one group's keys are `GROUP_KEYS`, plan 50: `check` reads it apart)
 
-# what a patch may hold of the render graph (P1): what can be made twice —
-# the kinds `graph.wire_node_kind(…, wired=True)` names; `hands`, `layer`
-# and `guide` only for an extra hands (`hands.2` …), hands 1 being the frame's
+# what a patch may hold of the render graph: the kinds a preset's section
+# declares (`graph.wire_node_kind(…, wired=True)`), since wave 3 P1 the
+# frame's too. Not here: the rig's (`RIG_KINDS`), the look's one camera, and
+# what is a name but no node of a wired frame (an echo pin, `fx`, `frame`)
 MAY_HOLD = ("effect", "composite", "switch", "delay", "resize", "copy", "matte", "cut",
-            "segment", "hands", "layer", "guide")
-HANDS_KINDS = ("hands", "layer", "guide")
+            "segment", "hands", "layer", "guide", "scene", "shape", "backdrop", "pattern",
+            "lookback", "dream")
+# what a frame holds one of: never renamed by a spawn (`scene.2` is no node;
+# `dream.2` may be declared but no wire may touch it, D2 of plan 36), so a
+# host that already has one refuses the spawn in words (`Landing.taken`).
+# Hands 1 is no such thing — every other hands is a new number — nor is a
+# look-back (`lookback.2`)
+ONE_PER_FRAME = ("scene", "shape", "backdrop", "pattern", "dream")
+# a look-back's own knobs among `dream.*`, the rest the dream node's —
+# `params.LOOKBACK_KEYS`, spelled again because this module is a leaf
+# (tests/test_patches_frame_kinds.py holds the two spellings equal)
+LOOKBACK_KEYS = ("echo_mix", "fade", "echoes", "gap", "darken", "contrast", "occlude", "res")
 # the render nodes the GRAPH page never deletes and a patch never holds —
 # `graphview.spec_name` refuses the camera (the look's one, `CAMERA_KEPT`,
 # plan 43 C2) and the clouds (the rig's, `NOT_REMOVABLE`); the windows are
@@ -143,19 +169,21 @@ MACROS = 8                     # macro.1 … macro.8, the rig's eight knobs
 ONE_OWNER = ("hand", "axis")
 
 # the refusals' words (P1: name the thing and why)
-FRAME_WORDS = "{name} is the frame's; left out"
 WINDOW_WORDS = "{name} is the rig's window; left out — a patch's picture leaves by a port"
 RIG_WORDS = "{name} is the rig's; left out"
 CAMERA_WORDS = "{name} is the look's one camera, never a patch's; left out"   # plan 43 C2
 CHANNEL_WORDS = ("{name} is a media channel, this Mac's files; left out — a patch reads one "
                  "through a port")
-NOT_HELD_WORDS = ("{name}: a patch holds effects, composites, switches, delays, resizes, "
-                  "copies, extra hands, mattes, cuts and segments; left out")
+NOT_HELD_WORDS = "{name} is no node a patch holds; left out"
+# (a spawn, wave 3 P1) the single-instance nodes the host already has
+TAKEN_WORDS = ("{name} not spawned: this preset already has {nodes}, and a frame holds one "
+               "of each — delete it here first; nothing landed")
 SEQ_WORDS = "the sequencer is the rig's; left out"
 LANE_ENV_WORDS = ("{name} is a sequencer lane's envelope; left out (a patch's envelope "
                   "spawns as {first} or more)")
 NO_NODE_WORDS = "{name}: no such node; left out"
 COPY_WORDS = "{name} draws {of} again: take {of} with it; left out"
+LAYER_WORDS = "{name} draws {of}: take {of} with it; left out"   # (a layer's params are its hands')
 HOST_MACRO_WORDS = ("{mid} is not in the patch: its subscriber on {pid} stays the preset's "
                     "(take {mid} with it)")
 NO_MACRO_NOTE = "{mid}: no free macro — its subscribers not spawned"
@@ -336,10 +364,6 @@ def _join(base: str, n: int, suffix: str = "") -> str:
     return (base if n == 1 else f"{base}.{n}") + suffix
 
 
-def _instance_of(name: str) -> int:
-    return _family(name)[1]
-
-
 def held_words(name: str) -> str | None:
     """Why render node `name` may not be in a patch, in words — None when
     it may (P1's list: what can be made twice)."""
@@ -352,10 +376,6 @@ def held_words(name: str) -> str | None:
         return WINDOW_WORDS.format(name=name)
     if kind == "channel":
         return CHANNEL_WORDS.format(name=name)
-    if kind in HANDS_KINDS and _instance_of(name) == 1:
-        return FRAME_WORDS.format(name=name)
-    if kind in G.FRAME_KINDS:
-        return FRAME_WORDS.format(name=name)
     if kind not in MAY_HOLD:
         return NOT_HELD_WORDS.format(name=name) if kind is not None else (
             NO_NODE_WORDS.format(name=name))
@@ -453,22 +473,20 @@ class _Members:
     def ids(self, scheme: str) -> tuple[int, ...]:
         return {MOD: self.mods, LFO: self.lfos, ENV: self.envs, MACRO: self.macros}[scheme]
 
-    def prefixes(self) -> dict[str, str]:
-        """param prefix → the member that owns it (`fx.acid.2` → `acid.2`,
-        `ghost.2` → `hands.2`, `lfo.3` → `lfo.3`)."""
-        out: dict[str, str] = {}
+    def param_rows(self) -> tuple[_ParamRow, ...]:
+        """Which params the members own: each ``(prefix, member, keys)``
+        (`fx.acid.2` is `acid.2`'s, `ghost.2` `hands.2`'s, `lfo.3` `lfo.3`'s,
+        `rot` the shape's, `dream` the look-back's and the dream's by key)."""
+        out: list[_ParamRow] = []
         for name in self.render:
-            if _kind(name) == "copy":
-                continue                 # a copy's knobs are its original's
-            pre = G.param_prefix(name)
-            out.setdefault(pre, name)
+            out += [(pre, name, keys) for pre, keys in _param_rows(name)]
         for scheme in (MOD, LFO, ENV):
             for n in self.ids(scheme):
-                out[f"{scheme}.{n}"] = f"{scheme}.{n}"
-        return out
+                out.append((f"{scheme}.{n}", f"{scheme}.{n}", _any_key))
+        return tuple(out)
 
     def owns(self, pid: Any) -> bool:
-        return _owner(pid, self.prefixes(), self.macros) is not None
+        return _owner(pid, self.param_rows(), self.macros) is not None
 
     def own_lane(self, addr: Any) -> bool:
         hit = _lane(addr)
@@ -481,21 +499,77 @@ class _Members:
                 + [f"{ENV}.{n}" for n in self.envs] + [f"{MACRO}.{n}" for n in self.macros])
 
 
-def _owner(pid: Any, prefixes: Mapping[str, str], macros: Iterable[int]) -> str | None:
-    """The member whose param `pid` is, or None. A prefix owns ``<prefix>.<key>``
-    unless the key's first part is a number — ``fx.acid.2.mix`` is acid.2's,
-    never acid's."""
+# one member's claim on some params: its id prefix, the member, which keys
+# after the prefix
+_ParamRow = tuple[str, str, Callable[[str], bool]]
+
+
+def _any_key(_key: str) -> bool:
+    return True
+
+
+def _is_lookback_key(key: str) -> bool:
+    return key in LOOKBACK_KEYS
+
+
+def _is_dream_key(key: str) -> bool:
+    return key not in LOOKBACK_KEYS
+
+
+def _is_pattern_view_key(key: str) -> bool:
+    return key.startswith(("pattern", "media_"))    # `graphview._view_owner`'s rule
+
+
+def _is_shape_view_key(key: str) -> bool:
+    return not _is_pattern_view_key(key)
+
+
+def _param_rows(name: str) -> list[tuple[str, Callable[[str], bool]]]:
+    """Render node `name`'s params as ``(prefix, keys)`` — what is its to
+    carry (D5) and to rename. The canvas's owners (`graphview.OWNERS`) where
+    a frame kind's params are not under its own name: `rot.*`, `view.*` and
+    `fx.face_map` the shape's, `pattern.*`, `view.pattern*` and `view.media_*`
+    the pattern's; `dream.*` split by key between a look-back and the dream
+    (`params.is_lookback_knob`), so either can be in a patch, and land, without
+    the other's values. The scene has none: `scene.*` is the band scene's
+    (a session group); a copy's knobs are its original's."""
+    kind = _kind(name)
+    if kind in ("copy", "scene"):
+        return []
+    if kind == "shape":
+        return [("rot", _any_key), ("view", _is_shape_view_key),
+                ("fx", lambda key: key == "face_map")]
+    if kind == "pattern":
+        return [("pattern", _any_key), ("view", _is_pattern_view_key)]
+    if kind == "lookback":
+        return [(G.param_prefix(name), _is_lookback_key)]
+    if kind == "dream":
+        return [("dream", _is_dream_key)] if name == "dream" else []
+    return [(G.param_prefix(name), _any_key)]
+
+
+def _owning_row(pid: str, rows: Iterable[_ParamRow]) -> _ParamRow | None:
+    """The row `pid` falls under, the longest prefix. A prefix owns
+    ``<prefix>.<key>`` unless the key's first part is a number —
+    ``fx.acid.2.mix`` is acid.2's, never acid's."""
+    best = None
+    for row in rows:
+        pre, _who, keys = row
+        if pid.startswith(pre + ".") and (best is None or len(pre) > len(best[0])):
+            rest = pid[len(pre) + 1:]
+            if rest and not rest.split(".", 1)[0].isdecimal() and keys(rest):
+                best = row
+    return best
+
+
+def _owner(pid: Any, rows: Iterable[_ParamRow], macros: Iterable[int]) -> str | None:
+    """The member whose param `pid` is, or None."""
     if not isinstance(pid, str):
         return None
     if is_macro(pid) and int(pid.partition(".")[2]) in set(macros):
         return pid
-    best = None
-    for pre, who in prefixes.items():
-        if pid.startswith(pre + ".") and (best is None or len(pre) > len(best[0])):
-            rest = pid[len(pre) + 1:]
-            if rest and not rest.split(".", 1)[0].isdecimal():
-                best = (pre, who)
-    return best[1] if best is not None else None
+    row = _owning_row(pid, rows)
+    return row[1] if row is not None else None
 
 
 def _members_of(doc: Mapping) -> _Members:
@@ -530,7 +604,7 @@ class _Renamer:
     gone: dict[str, set[int]] = field(default_factory=dict)    # members that did not spawn
 
     def __post_init__(self) -> None:
-        self._prefixes = self.members.prefixes()
+        self._rows = self.members.param_rows()
         self._families = {_family(name)[:2] for name in self.members.render}
 
     # names
@@ -572,14 +646,16 @@ class _Renamer:
         if is_macro(pid):
             n = int(pid.partition(".")[2])
             return f"{MACRO}.{self.voice(MACRO, n)}" if n in self.members.macros else pid
-        who = _owner(pid, self._prefixes, ())
-        if who is None:
+        row = _owning_row(pid, self._rows)
+        if row is None:
             return pid
-        pre = next(p for p, w in self._prefixes.items() if w == who and pid.startswith(p + "."))
+        pre, who, _keys = row
         vo = _voice(who)
-        new = (G.param_prefix(self.name(who)) if vo is None
-               else f"{vo[0]}.{self.voice(*vo)}")
-        return new + pid[len(pre):]
+        if vo is not None:
+            return f"{vo[0]}.{self.voice(*vo)}" + pid[len(pre):]
+        moved = self.name(who)
+        # (a member that keeps its name keeps its ids: `rot.*` is no `shape.*`)
+        return pid if moved == who else G.param_prefix(moved) + pid[len(pre):]
 
     def canvas(self, cid: str) -> str:
         if cid.startswith("render:"):
@@ -687,6 +763,19 @@ def _wire_key(w: Mapping) -> tuple[str, str]:
     return (str(w.get("from")), str(w.get("to")))
 
 
+def _in_order(wires: Iterable[dict]) -> tuple[dict, ...]:
+    """A file's wires in `read`'s fixed order — except that the wires into a
+    many-wire port (`graph.MANY_PORTS`: the scene's geometry) keep theirs
+    among themselves, it being the draw order (wave 3 P1: the scene in a
+    patch)."""
+    held = list(wires)
+    out = sorted(held, key=_wire_key)
+    for port in G.MANY_PORTS:
+        them = iter([w for w in held if w.get("to") == port])
+        out = [next(them) if w.get("to") == port else w for w in out]
+    return tuple(out)
+
+
 def _entry(d: Mapping) -> dict:
     """A modifier's entry in full (every param, as a preset writes it), so a
     file that leaves a default out reads as one that says it; one this build
@@ -708,8 +797,7 @@ def read(doc: Mapping) -> Patch:
     nodes = tuple(sorted((dict(e) for e in doc.get("nodes") or () if isinstance(e, Mapping)),
                          key=lambda e: (entry_name(e) or "", str(e))))
     m = _members_of({**doc, "nodes": nodes})
-    wires = tuple(sorted((dict(w) for w in doc.get("wires") or () if isinstance(w, Mapping)),
-                         key=_wire_key))
+    wires = _in_order(dict(w) for w in doc.get("wires") or () if isinstance(w, Mapping))
     routes = tuple(dict(r) for r in doc.get("routes") or () if isinstance(r, Mapping))
     desk = tuple(dict(r) for r in doc.get("desk") or () if isinstance(r, Mapping))
     mods = tuple(sorted((_entry(x) for x in doc.get("modifiers") or () if isinstance(x, Mapping)),
@@ -773,8 +861,7 @@ def _macro_n(mid: Any) -> int:
 def check(doc: Any) -> list[str]:
     """The reasons `doc` is no patch this build can spawn, in words — []
     when it is one. The schema and the shape of every key; a node a patch
-    may not hold (a frame singleton, an output, a cloud, the camera, a
-    media channel, a look-back); a port of an unknown type or onto no
+    may not hold (an output, a cloud, the camera, a media channel); a port of an unknown type or onto no
     member; a wire to a node the patch lacks that no port covers; a value
     of a param no member has (D5); a lane envelope 1–5."""
     if not isinstance(doc, Mapping):
@@ -812,6 +899,8 @@ def check(doc: Any) -> list[str]:
             out.append(why)
         elif e.get("kind") == "copy" and e.get("of") not in m.render:
             out.append(COPY_WORDS.format(name=name, of=e.get("of")))
+        elif e.get("kind") in ("layer", "guide") and G.hands_of(name) not in m.render:
+            out.append(LAYER_WORDS.format(name=name, of=G.hands_of(name)))
     if len(set(m.render)) != len(m.render):
         out.append("a node named twice")
     held = set(m.render)
@@ -932,8 +1021,8 @@ def select(spec: G.GraphSpec | None, table, node_ids: Iterable[str]
            ) -> tuple[_Members, list[str]]:
     """The members a region of GRAPH canvas ids may hold, and, in words,
     every id it may not (P1's rule — `lift`'s, and the GRAPH page's Group):
-    a frame singleton, an output, the camera or a cloud, a media channel,
-    the sequencer, a lane envelope, a node the section lacks, a modifier
+    an output, the camera or a cloud, a media channel, a hands' layer or
+    guide without its hands, the sequencer, a lane envelope, a node the section lacks, a modifier
     the table lacks, a copy without its original, a group (no nesting),
     any other canvas id (a device, the analyzer: the rig's). Pure.
 
@@ -949,9 +1038,8 @@ def groupable(spec: G.GraphSpec | None, table, node_ids: Iterable[str]
     50, the second half of harden-node-groups: "a group holds any node,
     checked at save"). A group is a patch not yet saved, so it holds any
     node the preset file saves: every render node of its section — the
-    frame's singletons (the scene, the shape, the backdrop, the pattern, the
-    look-back, hands 1), the camera, a copy without its original — its
-    modifiers, its LFOs and envelopes (the lane envelopes too) and the
+    frame's singletons, hands 1, the camera, a copy without its original —
+    its modifiers, its LFOs and envelopes (the lane envelopes too) and the
     macros. Refused here only what no preset holds and what a group cannot:
     the rig's render kinds (`RIG_KINDS`: a window, All outputs, a media
     channel, a cloud), a device, the analyzer, the sequencer, a node or
@@ -997,6 +1085,10 @@ def _select(spec: G.GraphSpec | None, table, node_ids: Iterable[str], *, save: b
         e = entries.get(name)
         if e is not None and e.get("kind") == "copy" and e.get("of") not in render:
             refused.append(COPY_WORDS.format(name=name, of=e.get("of")))
+            render.remove(name)
+        elif _kind(name) in ("layer", "guide") and G.hands_of(name) not in render:
+            # (a hands' layer alone would land as a layer of a hands no one holds)
+            refused.append(LAYER_WORDS.format(name=name, of=G.hands_of(name)))
             render.remove(name)
     return _Members(tuple(render), tuple(sorted(voices[MOD])), tuple(sorted(voices[LFO])),
                     tuple(sorted(voices[ENV])), tuple(sorted(voices[MACRO]))), refused
@@ -1104,8 +1196,7 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
 
     Returns ``(doc, refused)``: the file's dict (``schema``, ``name`` and
     ``note`` empty, for the caller to fill) and, in words, every id it left
-    out — a frame singleton, an output, the camera or a cloud, a media
-    channel, the sequencer, a lane envelope, a copy without its original,
+    out — an output, the camera or a cloud, a media channel, the sequencer, a lane envelope, a copy without its original,
     a host macro's subscriber on a member. The caller says them and saves
     the rest.
 
@@ -1332,6 +1423,17 @@ class Landing:
     # ("" for a canvas fragment): its `values` are the group's, landed over
     # the group's fresh values (`Library.resolved`), nothing else moves
     replaces: str = ""
+    # wave 3 P1: the patch's single-instance nodes (`ONE_PER_FRAME`) the host
+    # already has. Not empty: this landing does not land (`refusal`)
+    taken: tuple[str, ...] = ()
+
+    @property
+    def refusal(self) -> str | None:
+        """Why this landing cannot land, in words (`TAKEN_WORDS`), or None."""
+        if not self.taken:
+            return None
+        return TAKEN_WORDS.format(name=self.group.get("name") or "the patch",
+                                  nodes=", ".join(self.taken))
 
 
 def _group_landing(p: Patch) -> Landing:
@@ -1378,7 +1480,10 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
     Renames, in the patch's order: a render node takes the lowest instance
     of its base the host does not hold (`graphview._new_instance`'s rule:
     `acid` → `acid.2` where the host has `acid`; a hands node and its layer
-    and guide move together); a modifier one past the highest the host
+    and guide move together, hands 1 being always the frame's; a node a
+    frame holds one of, `ONE_PER_FRAME`, keeps its name, and one the host
+    already has is said in `Landing.taken`, which refuses the landing); a
+    modifier one past the highest the host
     holds (`modifiers.next_id`); an LFO or envelope the bank's next id (its
     high-water rule; an envelope 6 or more), none when the bank is full or
     its ids are used up (a note; its rows and the subscribers on its lane
@@ -1407,11 +1512,18 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
     notes: list[str] = []
     gone = {MOD: [], LFO: [], ENV: [], MACRO: []}
     taken = _taken(host.names)
+    singles: list[str] = []
     for name in sorted(m.render, key=lambda x: (_family(x)[0], _family(x)[1])):
         base, n, _ = _family(name)
         if (base, n) in rn.render:
             continue
         hold = taken.setdefault(base, set())
+        if _kind(name) in ONE_PER_FRAME and n == 1:
+            if name in host.names:
+                singles.append(name)
+            hold.add(1)
+            rn.render[(base, 1)] = 1
+            continue
         new = next(k for k in range(1, len(hold) + 2) if k not in hold)
         hold.add(new)
         rn.render[(base, n)] = new
@@ -1541,7 +1653,8 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
     return Landing(renames=renames, nodes=nodes, wires=wires, values=values, modifiers=mods,
                    routes=routes, desk=desk, macros=macros, lfos=lfos, envs=envs,
                    layout=layout, group=group, ports=ports, conflicts=tuple(conflicts),
-                   wants={k: tuple(v) for k, v in wants.items()}, notes=tuple(notes))
+                   wants={k: tuple(v) for k, v in wants.items()}, notes=tuple(notes),
+                   taken=tuple(singles))
 
 
 def is_rig_source(addr: str) -> bool:

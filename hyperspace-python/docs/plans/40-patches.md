@@ -756,3 +756,14 @@ is read as its `/2`), a module preset is a patch of one group under
 `patches/<group>/`, and a group holds any node the preset saves — the
 patch rule ("scene is the frame's") is asked at **Save as patch**, not at
 Group. See [`50-one-format.md`](50-one-format.md), register rows 639–647.
+
+## Since: wave 3 P1 (2026-11-03)
+
+The "what a patch may hold" list above is wider: a patch holds the frame's
+kinds too (the scene, the shape, the backdrop, the pattern, a look-back, the
+dream, hands 1, its layer and guide). Still refused: the rig's kinds, the
+look's one camera, the lane envelopes, a copy without its original, and a
+hands' layer without its hands. A spawn whose single-instance node the host
+already has is refused in words, nothing landed (`Landing.taken`, row 658).
+D5 stands, with a frame kind's params read from the canvas's owners
+(row 659). Register rows 657–660; [`50-one-format.md`](50-one-format.md).

@@ -679,6 +679,10 @@ here; overturn → the change, then the same.
 | 645 | Plan 50: the migration step — `tools/migrate_library.py` moves every module preset to `patches/<group>/` as `patch/2` and rewrites every `patch/1` as `/2` in place, after the run's backup; the dry run lists them; a retired group's files (`fx/`) and an unreadable file (a module folder's or `patches/`'s) are left, said; `--to` moves none | 485 | (rec) — pending the owner; built as recommended |
 | 646 | Plan 50, not done: the show's `modules` key (a session group's band preset by name) stays — renaming it is a show schema move; `RETIRED_MODULES` and `_fresh_of` are already what the fallback needs; the band scene files (code data) stay `preset/1`, read through the one ladder; `library.migrate_doc` serves the shows alone (the preset entry, `CURRENT["hyperspace.preset"]` and `PRESET_SCHEMA` removed, review fix 8); `headless.SHARED_FOLDERS` is `patches/` alone, every folder down (review fix 2) | — | (rec) — pending the owner |
 | 647 | Plan 50: hands 1 in a group — a wired frame always holds it, so a "delete" leaves it held and a member (as a macro is) | — | (rec) — pending the owner; built as recommended |
+| 657 | Wave 3 P1: a patch holds the frame's kinds (scene, shape, backdrop, pattern, look-back, dream, hands 1, its layer and guide); the rig's (`patches.RIG_KINDS`) and the look's one camera stay refused, a lane envelope and a copy without its original too; **no `patch/3`**: the file's keys are unchanged and an older build's `check` refuses such a file in words | 497 | (rec) — pending the owner; built as recommended |
+| 658 | Wave 3 P1: a patch's single-instance node the host already has (`patches.ONE_PER_FRAME`: scene, shape, backdrop, pattern, dream) refuses the whole spawn in words, nothing landed, no sheet — P2 turns the dream's into "replace the host's dream"; hands 1 lands as the next hands, a look-back as the next look-back | 498 | (rec) — pending the owner; built as recommended |
+| 659 | Wave 3 P1: what a frame kind carries is its own params, the canvas's owners (`patches._param_rows`): `rot.*`, most of `view.*` and `fx.face_map` the shape's; `pattern.*`, `view.pattern*`, `view.media_*` the pattern's; `dream.*` split by key between a look-back (`LOOKBACK_KEYS`) and the dream; `scene.*` no node's. The spin's pose stays the host's. A hands' layer or guide needs its hands in the patch, said at the save and at a read | 497, 499 | (rec) — pending the owner; built as recommended |
+| 660 | Wave 3 P1: the "empty frame" row 641 left open — a whole preset lifted and spawned into an empty frame is that frame (proved over the corpus, hands one number on), but `Presets.load_doc` stays the replace landing, and no preset file is spawned directly (save it as a patch). A new preset holds the scene chain, so a whole-frame patch is refused there in words | — | (rec) — pending the owner; the literal merge not built |
 
 "—": no hand check shows it; tests only.
 
@@ -11936,4 +11940,99 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Recommended.** A wired frame always holds hands 1, so a "delete"
   leaves it held and the group keeps it, as a macro "deleted" is kept.
 - **Built.** `tests/test_graph_groups.py::test_groups_keep_their_invariants_over_the_corpus`.
+- **Judge it.** —.
+
+## Wave 3 — frame kinds in patches (plan 50 P1, rows 657–660)
+
+### 657. A patch holds the frame's kinds; no `patch/3`
+
+- **Asked.** Build order P1: frame kinds allowed in groups and patches, so
+  a "dream + fx + composite" patch can exist; `patches.RIG_KINDS` stays
+  refused.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** `patches.MAY_HOLD` takes the scene, the shape, the
+  backdrop, the pattern, the look-back and the dream; hands 1, its layer
+  and guide are no longer refused. Still refused: a window, All outputs, a
+  media channel, a cloud (`RIG_KINDS`); the look's one camera (plan 43 C2:
+  there is one, always there, so a patch could only set it, against D5); a
+  lane envelope; a copy without its original. **No schema move**: every
+  key of `patch/2` means what it did, the new entries are kinds a section
+  already reads, and an older build's `check` refuses the file in words
+  rather than misreading it. Both Macs update together in any case.
+- **Other options.** `patch/3` with a migration, for a change no existing
+  file needs; the camera held too, as a set-on-spawn: against D5.
+- **To reverse.** Take the kinds back out of `MAY_HOLD`.
+- **Built.** `patches.MAY_HOLD`, `held_words`,
+  `tests/test_patches_frame_kinds.py`.
+- **Judge it.** 497.
+
+### 658. A single-instance node the host already has
+
+- **Asked.** "Decide what a spawn does when the host already has a
+  single-instance frame node, and refuse in words for now if P2 owns the
+  answer."
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** Refuse the whole spawn, nothing landed and no sheet:
+  "dream wash not spawned: this preset already has dream, and a frame holds
+  one of each — delete it here first; nothing landed". `patches.spawn`
+  reports the names in `Landing.taken`, so P2 can turn the dream's into a
+  sheet row without touching the rest; the same door could take the scene's
+  and the shape's later. Landing the rest without the node was rejected:
+  the patch's composite would lose the dream it was saved around, quietly.
+  What can be made twice stays renamed: `hands` → `hands.2`, `lookback` →
+  `lookback.2` with its own `dream.2.*`. A consequence said plainly: nearly
+  every preset holds a scene and a shape, so a patch holding them lands
+  only where they have been deleted.
+- **Other options.** Replace the host's node at once (P2's question, and it
+  would drop the host's wires without asking); leave the node out and land
+  the rest.
+- **To reverse.** Drop the check in `ui_graph.spawn` and
+  `Edit._spawn_refusal`.
+- **Built.** `patches.ONE_PER_FRAME`, `TAKEN_WORDS`, `Landing.taken`,
+  `Landing.refusal`, `graphview.Edit._spawn_refusal`, `ui_graph.spawn`.
+- **Judge it.** 498.
+
+### 659. What a frame kind carries
+
+- **Asked.** Follows from 657: D5 says a patch's `values` hold only its
+  members' params, and a frame kind's params are not all under its name.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** The canvas's owners (`graphview.OWNERS`) are the rule,
+  restated in the leaf and held equal by a test over the whole registry:
+  `rot.*`, `view.*` and `fx.face_map` the shape's; `pattern.*`,
+  `view.pattern*` and `view.media_*` the pattern's; `backdrop.*` the
+  backdrop's. `dream.*` is split by key, `params.is_lookback_knob`'s rule:
+  a look-back owns `LOOKBACK_KEYS`, the dream the rest, so a dream patch
+  never sets the host's look-back knobs. (The canvas still draws them all
+  on the look-back: P2's.) `scene.*` is the band scene's, a session group,
+  and no node's. The spin's pose is outside `values`, so it stays the
+  host's. A hands' layer or guide without its hands is refused in words at
+  the save and at a read, as a copy without its original is: alone it landed
+  a layer of a hands no one holds, whose port refused `hands` and whose
+  values were for no param.
+- **Other options.** The old prefix rule (`shape.*`, which is nothing;
+  `dream.*` whole, which would overwrite the host's look-back).
+- **To reverse.** `patches._param_rows`.
+- **Built.** `patches._param_rows`, `_Members.param_rows`, `LAYER_WORDS`;
+  `read` also keeps the order of the wires into `scene.geometry`, the draw
+  order, rather than sorting it away.
+- **Judge it.** 497, 499.
+
+### 660. The empty frame
+
+- **Asked.** Row 641 left "load = spawn into an empty frame" for P1.
+- **Answer.** (rec) — pending the owner; the literal merge not built, said.
+- **Recommended.** What is now true and proved: every corpus preset's
+  section, lifted whole and spawned into an empty frame with its pins wired
+  as saved, is that section again, hands one number on (hands 1 being always
+  the frame's), with the scene's draw order. What stays two: `Presets.load_doc`
+  replaces every part, refuses whole and re-saves byte for byte; `Edit.spawn`
+  merges under fresh ids and renames hands. Making the load a spawn would
+  put a load's picture behind the hands rename for no change a user sees.
+  A preset file is not spawned directly: save its group as a patch. A new
+  preset holds `shape → scene → output.all`, so it is not an empty frame and
+  a whole-frame patch is refused there, in 658's words.
+- **Other options.** The literal merge; a preset listed in spawn ▸.
+- **To reverse.** — (nothing to undo).
+- **Built.** `tests/test_patches_frame_kinds.py::test_a_whole_preset_spawned_into_an_empty_frame_is_that_preset`.
 - **Judge it.** —.

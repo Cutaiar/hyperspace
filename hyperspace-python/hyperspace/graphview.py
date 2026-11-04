@@ -3034,7 +3034,8 @@ UPDATED_PATCH = "updated patch {name}"
 PATCH_NEEDS_NAME = "a patch needs a name"
 PATCH_EXISTS = "a patch named {name} exists — Update patch, or another name"
 # plan 50: a group holds any node the preset saves; the save is where what a
-# patch cannot carry (the frame's, the camera, a lane envelope) is refused
+# patch cannot carry (the camera, a lane envelope, a copy without its
+# original; wave 3 P1: the frame's kinds it now can) is refused
 SAVE_REFUSED = "{name} not saved as a patch: {why}"
 RIG_KINDS = patches.RIG_KINDS   # always there: the rig's own nodes (one list, plan 50)
 # …and the look's one camera (plan 43 C2: the camera is the preset's, not
@@ -4255,7 +4256,7 @@ class Edit:
         preset saves — whether it saves as a patch is asked at the save) made
         one group, folded, named "group <n>" — one undo step. Returns (the
         entry, or None when nothing was grouped; the words for what was
-        left out: "scene is the frame's; left out", a node another group
+        left out: "output.all is the rig's window; left out", a node another group
         held moved here, said; "nothing to group"). A node is in one group
         at most: grouping a member of another moves it (an emptied group
         goes); a group holds nodes, never a group."""
@@ -4403,6 +4404,8 @@ class Edit:
         words (the preset moved under the sheet; nothing is written)."""
         if self.graph is None or self.presets is None or self.table is None:
             return NO_PRESET_SPAWN
+        if landing.refusal is not None:
+            return landing.refusal      # (wave 3 P1) a dream the host already has …
         name = landing.group.get("name") or "the patch"
         have = patches.spec_names(getattr(self.graph, "spec", None))
         if any(c.startswith("render:") and c[7:] in have for c in landing.group.get("nodes", ())):
@@ -5079,9 +5082,11 @@ def _land(edit: Edit, doc: dict, label: str, said: str, dry: bool = False,
     # a frame node's bare entry is only what keeps it unwired (`_keep_declared`):
     # once a wire names it again, the wire says it
     wired = {n for x in doc.get("wires", []) for n in (x["from"], x["to"].rpartition(".")[0])}
+    # (`lookback.2` is the exception: only its entry declares it, wired or not)
     doc["nodes"] = [e for e in doc["nodes"] if not (
         e.get("kind") in rgraph.FRAME_KINDS and set(e) <= {"kind", "instance"}
-        and _node_name(e) in wired)]
+        and _node_name(e) in wired
+        and not (e.get("kind") == "lookback" and e.get("instance", 1) != 1))]
     doc["wires"] = _frame_order(doc.get("wires", []))
     if not doc.get("wires"):
         doc.pop("wires", None)
@@ -5127,7 +5132,9 @@ def _node_name(e: dict) -> str | None:
         return f"{rgraph.wired_hands_name(n)}.{kind}"
     if kind == "echo":
         return f"echo.{e.get('index')}"
-    if kind in rgraph.FRAME_KINDS or kind == "dream":
+    if kind in ("lookback", "dream"):      # (each may be declared again: `lookback.2`)
+        return kind if n == 1 else f"{kind}.{n}"
+    if kind in rgraph.FRAME_KINDS:
         return kind
     if kind in ("composite", "switch", "delay", "resize", "copy", "matte", "cut", "segment"):
         return kind if n == 1 else f"{kind}.{n}"

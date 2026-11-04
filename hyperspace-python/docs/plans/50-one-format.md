@@ -15,7 +15,8 @@ DECISIONS "The preset contract (plan 43)", its last row: *a preset is then
 a patch that fills the whole frame; a module preset is a patch of one
 group (row 540)*. Inside it, the rest of harden-node-groups (split from
 G0): *a group holds any node, checked at save*. Not here: P1 (frame kinds
-in groups and patches), P2 (replace the host's dream), P3 (wire-as-saved
+in groups and patches: **built since**, [below](#p1-frame-kinds-in-patches-wave-3)),
+P2 (replace the host's dream), P3 (wire-as-saved
 take-over, row 524) — wave 3; Dillon's #314 and #287 rebase on this in
 wave 4 (pad rows can ride in a patch: a patch's `desk` rows are any desk
 control's, unchanged).
@@ -55,10 +56,11 @@ newest; an older build refuses a `/2`.
   group patch have nothing to collide with). `Presets.load_doc`
   (replace, refused whole, byte-for-byte re-save) and `Edit.spawn` (merge
   under fresh ids) stay two landings. The literal "load = spawn into an
-  empty frame" waits for frame kinds in patches (wave 3 P1), where a
+  empty frame" waited for frame kinds in patches (wave 3 P1), where a
   preset could be spawned into another; done now it would put the load's
   round trip at risk for no change a user sees. **A deviation from the
-  ask, said.**
+  ask, said** (P1 proved the graph half and kept the two landings: row 660,
+  below).
 
 ## A group holds any node, checked at save
 
@@ -120,6 +122,51 @@ unchanged on the `patch/1` fixture (read as its `/2`). The library,
 analyzer, undo, camera, preset-folder and shared-library tests that wrote
 module presets into `<home>/<group>/` write them into
 `<home>/patches/<group>/`.
+
+## P1: frame kinds in patches (wave 3)
+
+**Status: built (2026-11-03)**, register rows 657–660, every one (rec)
+pending the owner; hand checks 497–499, group BP. **Hot reload is enough**;
+no schema moves, **no `patch/3`** (row 657), no migration: `patch/2` as it
+was, an older build refusing a file with a frame kind in words.
+
+What changed in the build:
+
+- **What a save refuses.** `patches.select` (**Save as patch**, `lift`,
+  `check`) now holds the scene, the shape, the backdrop, the pattern, a
+  look-back, the dream, hands 1, its layer and its guide. It refuses the
+  rig's kinds (`RIG_KINDS`, unchanged), the look's one camera, a lane
+  envelope, a copy without its original and, new, a hands' layer or guide
+  without its hands. The words at the save above ("scene is the frame's")
+  are gone; `groupable` is unchanged.
+- **A spawn into a host that has one** (row 658). `patches.ONE_PER_FRAME`
+  keep their names (`scene.2` is no node; a wire to `dream.2` is refused,
+  one live dream). One the host already has goes in `Landing.taken`, and
+  `Landing.refusal` refuses the whole spawn in words, before any sheet and
+  in `Edit._spawn_refusal`. P2 owns "replace the host's dream": a sheet row
+  over `Landing.taken`. Hands 1 lands as the next hands, a look-back as the
+  next look-back.
+- **Whose params** (row 659). `patches._param_rows` replaces the one-prefix
+  rule, the canvas's owners held equal by a test: the shape's `rot.*` and
+  `view.*`, the pattern's `view.pattern*`, the look-back's `LOOKBACK_KEYS`
+  and the dream the rest of `dream.*` — a dream patch never sets the host's
+  look-back. A member that keeps its name keeps its ids. The canvas still
+  draws the dream's params on the look-back: P2's.
+- **Two fixes the kinds needed.** `read` keeps the order of the wires into
+  `scene.geometry` (the draw order); `graphview._node_name` names
+  `lookback.2` and `dream.2` (it said `lookback` and `dream`) and `_land`
+  keeps `lookback.2`'s entry when a wire names it, the entry being what
+  declares it.
+- **The empty frame** (row 660). Every corpus preset lifted whole and spawned
+  into an empty frame, its pins wired as saved, is the section again, hands one
+  number on. `Presets.load_doc` is **not** rewritten as a spawn, and a preset
+  file is not spawned directly. A new preset holds the scene chain, so it is
+  not an empty frame.
+- **The "not done" list above (row 646) is unchanged**: none of it waited
+  on frame kinds.
+
+Tests: `tests/test_patches_frame_kinds.py` (new); the tests that named the
+scene as the refused thing now name what still is.
 
 ## Review fixes (PR #352)
 
