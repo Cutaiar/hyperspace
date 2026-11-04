@@ -748,3 +748,11 @@ drags call the same functions the tests call.
 - The head's "N hidden" count includes a folded group's members; ids are
   reused after the highest group is ungrouped (row 517).
 - The status line of a group asks `devices.wants` once a frame per group.
+
+## Since: plan 50 (2026-11-03)
+
+A patch is `hyperspace.patch/2` (`/1` plus the optional `group` key; a `/1`
+is read as its `/2`), a module preset is a patch of one group under
+`patches/<group>/`, and a group holds any node the preset saves — the
+patch rule ("scene is the frame's") is asked at **Save as patch**, not at
+Group. See [`50-one-format.md`](50-one-format.md), register rows 639–647.

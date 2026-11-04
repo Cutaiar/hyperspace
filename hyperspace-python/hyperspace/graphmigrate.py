@@ -1720,3 +1720,59 @@ def through_wires(spec: G.GraphSpec, n: int, rig: G.RigWires | None = None) -> l
         src = name
     out += [_w(src, port + "image"), _w(G.GROUND, port + "hands")]
     return [*entries, *out]
+
+
+# ---------------------------------------------------------------- the one ladder (plan 50)
+
+# what a load says of a file naming a desk template (retired, plan 44 D3;
+# `preset.TEMPLATE_RETIRED` is this)
+TEMPLATE_RETIRED = ("desk template {name!r}: desk templates are retired (plan 44 D3) — "
+                    "this preset's own desk rows only")
+
+
+@dataclass(frozen=True)
+class Forward:
+    """What `forward` made of a preset: the document in today's words, the
+    notes a load says (a retired desk template named), the migration's own
+    notes (an effect left out of the run: `left_out_of`), the line saying an
+    old file was migrated ("" when it was `/7` or newer), and the look ids
+    the open show handed on to a file before `/10` (`ten`; a leftover the
+    graph does not declare is dropped quietly by the load)."""
+
+    doc: dict
+    notes: tuple[str, ...] = ()
+    migrate_notes: tuple[str, ...] = ()
+    migrated: str = ""
+    from_show: frozenset[str] = frozenset()
+
+
+def forward(doc: dict, specs: Specs, *, eye: dict | None = None, camera_at: Any = None,
+            look: dict | None = None, cuts: Any = None) -> Forward:
+    """The one ladder for a whole preset (plan 50; the steps a load runs,
+    in order, each only for a file older than it): before `/7` the one-way
+    migration (`seven`, said), before `/9` the eye and the camera's GRAPH
+    place the open show held (`nine`), before `/10` the look made whole
+    (`ten`: the show's hands' and clouds' looks and its bus cuts, the
+    module labels and the desk template's name dropped — the template
+    said). A fragment's ladder is `patches.forward`; the two are the one
+    reader of the one shape (`patches.shape_of` says which a file is)."""
+    notes: list[str] = []
+    migrate_notes: list[str] = []
+    migrated = ""
+    from_show: set[str] = set()
+    version = schema_version(doc)
+    if version is None or version < SEVEN:
+        old = str(doc.get("schema"))
+        doc, migrate_notes = seven(doc, specs)
+        migrated = MIGRATED_NOTE.format(old=old, new=LOOK_SCHEMA)
+    if version is None or version < NINE:
+        doc = nine(doc, eye, camera_at)
+    if version is None or version < TEN:
+        if doc.get("desk_template"):
+            notes.append(TEMPLATE_RETIRED.format(name=str(doc["desk_template"])))
+        had = set(dict(doc.get("values") or {})) if isinstance(doc.get("values"), dict) \
+            else set()
+        doc = ten(doc, look, cuts)
+        from_show = set(dict(doc.get("values") or {})) - had \
+            if isinstance(doc.get("values"), dict) else set()
+    return Forward(doc, tuple(notes), tuple(migrate_notes), migrated, frozenset(from_show))

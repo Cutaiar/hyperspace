@@ -739,8 +739,8 @@ def three_bands(home) -> None:
                                 {"f": 900.0, "q": 1.2, "curve": "rect", "name": "MD"},
                                 {"f": 7000.0, "q": 0.8, "curve": "rect", "name": "HI"}]},
            "values": {"band.0.thr": 0.3, "band.2.post": 0.5}}
-    (home / "band").mkdir(parents=True, exist_ok=True)
-    (home / "band" / "three.json").write_text(json.dumps(doc))
+    (home / "patches" / "band").mkdir(parents=True, exist_ok=True)
+    (home / "patches" / "band" / "three.json").write_text(json.dumps(doc))
 
 
 def test_a_band_preset_load_with_a_layout_undoes_whole(rig):
@@ -749,10 +749,10 @@ def test_a_band_preset_load_with_a_layout_undoes_whole(rig):
     reg, lib, chain = rig.reg, rig.lib, rig.chain
     curve = chain.layout()["bands"][0]["curve"]
     three_bands(rig.home)
-    doc = json.loads((rig.home / "band" / "three.json").read_text())
+    doc = json.loads((rig.home / "patches" / "band" / "three.json").read_text())
     for row in doc["layout"]["bands"]:
         row["curve"] = curve
-    (rig.home / "band" / "three.json").write_text(json.dumps(doc))
+    (rig.home / "patches" / "band" / "three.json").write_text(json.dumps(doc))
     lib.poll(now=1e9)
     reg["band.4.thr"].step(5)
     settle(rig)

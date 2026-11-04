@@ -200,7 +200,7 @@ def test_the_example_is_a_patch():
     (lambda d: d.update(envs=[3]),
      "env.3 is a sequencer lane's envelope; left out (a patch's envelope spawns as 6 or more)"),
     (lambda d: d.update(schema="hyperspace.preset/7"),
-     "schema 'hyperspace.preset/7' is not hyperspace.patch/1"),
+     "schema 'hyperspace.preset/7' is not hyperspace.patch/2"),
     (lambda d: d["nodes"].append({"kind": "copy", "of": "zoomblur"}),
      "copy draws zoomblur again: take zoomblur with it; left out"),
 ])
@@ -733,7 +733,7 @@ def test_a_bad_patch_is_a_library_error(lib):
         lib.save_patch({**doc, "values": {"view.bright": 1.0}})
     (lib.home / PATCHES).mkdir(parents=True, exist_ok=True)
     (lib.home / PATCHES / "old.json").write_text(json.dumps(
-        {**doc, "name": "old", "schema": "hyperspace.patch/2"}))
+        {**doc, "name": "old", "schema": "hyperspace.patch/3"}))
     with pytest.raises(LibraryError, match="is not a hyperspace.patch"):
         lib.read_patch("old")
     (lib.home / PATCHES / "bad.json").write_text(json.dumps(

@@ -70,6 +70,15 @@ retaper_routes.py writes them. A preset is retapered by its own resave
 so every ``/10`` is along the tapers. The dry run says what it would
 retaper.
 
+**One format** (plan 50): every module preset — ``<library>/<group>/*.json``,
+``hyperspace.preset/1``, one group's values — is written as a patch of
+that group, ``<library>/patches/<group>/<file>`` (``hyperspace.patch/2``
+with a ``group`` key, `patches.forward`), its old file removed (the backup
+holds it); every ``patch/1`` under ``<library>/patches/`` is written as
+its ``/2`` in place. A retired group's files (``fx/``) and a file that
+does not read are left as they are, said. ``--to`` moves none. The dry run
+lists them.
+
 An old file (before ``/7``) whose load says its section was "not read"
 (the build refused it: black) is **not written**, whatever ``--force``
 says: its ``/10`` would carry the old words with the migration lost for
@@ -399,7 +408,9 @@ def shared_retapers(library: Path, todo) -> bool:
             rel = path.relative_to(library)
         except ValueError:
             continue
-        if rel.parts and rel.parts[0] in SHARED_FOLDERS:
+        # (plan 50: `patches/` is shared for its groups' folders — a module
+        # group's patches; a top-level patch is spawned, never read by a load)
+        if len(rel.parts) > 2 and rel.parts[0] in SHARED_FOLDERS:
             return True
     return False
 
@@ -456,6 +467,90 @@ def show_write(todo) -> list[str]:
             said.append(f"{path.name}: not rewritten — no backup could be made")
             continue
         write(path, data)
+    return said
+
+
+# plan 50: the folders in a library root that hold no module presets — the
+# document kinds', the shows', the trash, the old routing presets
+NOT_MODULES = (PRESETS, PROJECTS, "patches", "trash", "bindings")
+
+
+def group_plan(library: Path) -> tuple[list[tuple[Path, Path, bytes]], list[str]]:
+    """Plan 50 (one format): what moves to the patch's one shape — every
+    module preset (``<library>/<group>/*.json``, ``hyperspace.preset/1``,
+    one group's values) as a patch of that group,
+    ``<library>/patches/<group>/<file>`` (``hyperspace.patch/2``, a
+    ``group`` key: `patches.forward`), and every ``patch/1`` under
+    ``<library>/patches/`` as its ``/2`` in place. Returns ((from, to, the
+    bytes), the words for what is left: a file that will not read, a
+    retired group's (`library.RETIRED_MODULES`: never read, left as it is),
+    a destination already holding other bytes). A dot-file and a backup are
+    left out, as everywhere."""
+    from hyperspace import patches
+    from hyperspace.library import RETIRED_MODULES, _json_text
+    todo: list[tuple[Path, Path, bytes]] = []
+    said: list[str] = []
+    if not library.is_dir():
+        return todo, said
+
+    files = _retaper_tool().json_files          # (review fix 4: the one file list)
+    for folder in sorted(d for d in library.iterdir() if d.is_dir()):
+        if folder.name in NOT_MODULES or folder.name.startswith((".", BACKUP_PREFIX)):
+            continue
+        for path in files(folder):
+            doc = _read(path)
+            if doc is None or doc.get("schema") != "hyperspace.preset/1":
+                said.append(f"{folder.name}/{path.name}: not a module preset — left as it is")
+                continue
+            if folder.name in RETIRED_MODULES:
+                said.append(f"{folder.name}/{path.name}: a retired group's — left as it is")
+                continue
+            doc.setdefault(patches.GROUP_KEY, folder.name)
+            try:
+                new = patches.forward(doc)
+            except ValueError as e:
+                said.append(f"{folder.name}/{path.name}: {e} — left as it is")
+                continue
+            dest = library / "patches" / folder.name / path.name
+            data = _json_text(new).encode()
+            if dest.exists() and dest.read_bytes() != data:
+                said.append(f"{folder.name}/{path.name}: patches/{folder.name}/{path.name} "
+                            "holds another file — left as it is")
+                continue
+            todo.append((path, dest, data))
+    for path in files(library / "patches"):
+        doc = _read(path)
+        if doc is None:                          # (review fix 5: said, as above)
+            said.append(f"patches/{path.name}: does not read — left as it is")
+            continue
+        if doc.get("schema") != f"{patches.KIND}/1":
+            continue                             # (already /2, or the next build's)
+        todo.append((path, path, _json_text(patches.forward(doc)).encode()))
+    return todo, said
+
+
+def _patch_schema() -> str:
+    from hyperspace import patches
+    return patches.SCHEMA
+
+
+def group_write(todo) -> list[str]:
+    """Write `group_plan`'s files (after the run's backup): each to its
+    place atomically (`write`), then a moved module preset's old file
+    removed — the backup holds it. Returns what went wrong, in words."""
+    said = []
+    for src, dest, data in todo:
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            write(dest, data)
+            if src != dest:
+                src.unlink()
+                try:
+                    src.parent.rmdir()                  # an emptied group folder goes
+                except OSError:
+                    pass
+        except OSError as e:
+            said.append(f"{src.name}: not moved — {e}")
     return said
 
 
@@ -586,6 +681,15 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
         print(f"shows to rewrite as /3: {len(shows)} — "
               + ", ".join(p.name for p, _ in shows) + " (each kept as .bak-v2-look or "
               ".bak-v2-eye)")
+    # plan 50: the module presets and the /1 patches into the one shape
+    moves, left = group_plan(library) if a.to is None else ([], [])
+    if moves:
+        print(f"patches to write as {_patch_schema()}: {len(moves)} — "
+              + ", ".join(f"{s.parent.name}/{s.name}" + (
+                  f" → patches/{d.parent.name}/{d.name}" if s != d else "")
+                  for s, d, _ in moves))
+    for words in left:
+        print(f"  {words}")
     if a.apply:
         where = backup(library, home)
         print(f"backup: {where}")
@@ -593,6 +697,8 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
             print(problem)
         if retapers:
             print(f"retapered {len(retapers)} document(s) along the effect tapers")
+        if a.to is None:                        # (--to moves none, as above)
+            moves, _ = group_plan(library)      # (over what the retaper wrote)
     forced = set(a.force)
     results: list[Result] = []
     with tempfile.TemporaryDirectory(prefix="hyperspace-migrate-") as scratch:
@@ -632,11 +738,16 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
             print(problem)
         if shows:
             print(f"rewrote {len(shows)} show(s) as /3")
+        for problem in group_write(moves):
+            print(problem)
+        if moves:
+            print(f"wrote {len(moves)} patch(es) as {_patch_schema()}")
     else:
         print(f"would rewrite {len(writes)} as /10, leave {len(untouched)} untouched "
               f"(already /10), skip {len(skipped)}"
               + (f"; retaper {len(retapers)} first" if retapers else "")
-              + (f"; rewrite {len(shows)} show(s) as /3" if shows else ""))
+              + (f"; rewrite {len(shows)} show(s) as /3" if shows else "")
+              + (f"; write {len(moves)} patch(es) as {_patch_schema()}" if moves else ""))
     if skipped:
         print("\nnot written" + (" (rerun with --force NAME to write one anyway)"
                                  if any(not r.error for r in skipped) else "") + ":")

@@ -371,8 +371,10 @@ def opened_last(home, show: str = "house"):
 
 CORPUS = Path(__file__).resolve().parent / "corpus"
 # the groups the corpus holds: the twenty-five presets, the three dream
-# module presets, and the two shows (party, house) whose banks name them
+# patches of one group (plan 50: what the module presets were, under
+# patches/dream/), and the two shows (party, house) whose banks name them
 CORPUS_GROUPS = ("presets", "dream", "projects")
+# (each laid out as a library lays it out: `library.group_folder`, the one table)
 
 
 def seed(home, *groups: str, last_show: str | None = "party"):
@@ -387,12 +389,14 @@ def seed(home, *groups: str, last_show: str | None = "party"):
     stand on this seed instead — `boot_home` seeds by default."""
     import shutil
 
+    from hyperspace.library import group_folder
+
     home = Path(home)
     for group in groups or CORPUS_GROUPS:
-        src = CORPUS / group
+        src = CORPUS / group_folder(group)
         if not src.is_dir():
             raise FileNotFoundError(f"no corpus group {group!r} under {CORPUS}")
-        dst = home / group
+        dst = home / group_folder(group)
         dst.mkdir(parents=True, exist_ok=True)
         for f in sorted(src.glob("*.json")):
             if not (dst / f.name).exists():

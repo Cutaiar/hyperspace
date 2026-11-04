@@ -670,6 +670,15 @@ here; overturn → the change, then the same.
 | 636 | Plan 48 stage 2 (L2): the PRESETS list is a tree — the top-level presets first, then a folding header per folder alphabetically (its name, its count, and while folded the loaded preset's leaf when it is inside), a folder's presets then its folders, nested; a row under a header is its leaf; every folder open unless folded on this Mac (`presets.folded` in `<machine>/ui.json`, beside the pane's, written `WRITE_AFTER_S` after the last click as the pane's are); one drawing on the PRESETS page and in GRAPH's pane | 481 | (rec) — pending the owner; built as recommended |
 | 637 | Plan 48 stage 2: a preset moves between folders by its row's right-click **move to ▸** (the top level and every folder) or a drag onto a folder's header; `Library.move` keeps the file's bytes and stem, and as a rename does, the loaded preset's name follows and every show naming it is rewritten (the open one written too, each copied to the trash first); no undo step, as a rename has none | 482 | (rec) — pending the owner; built as recommended |
 | 638 | Plan 48 stage 2: **new folder** at the list's foot makes one at the top, a header's right-click one inside it; a folder renames in place (every preset keeps its leaf, the shows follow; never over another folder, asked of the disk) and is removed only when empty (a Finder `.DS_Store` aside; the item off, naming what is in the way); `tools/move_library.py` and `tools/migrate_library.py` walk `presets/` every folder down as the library does | 483 | (rec) — pending the owner; built as recommended |
+| 639 | Plan 50 F1, the schema: two names over one shape — a preset stays `hyperspace.preset/10` (no `/11`: the one format needs nothing a `/10` lacks), a patch becomes `hyperspace.patch/2` (`/1` plus the optional `group` key); an older build refuses a `patch/2` | 485, 488 | (rec) — pending the owner; built as recommended |
+| 640 | Plan 50: one reader with per-version steps — `graphmigrate.forward` for a whole preset (the `seven`, `nine`, `ten` steps a load ran inline), `patches.forward` for every fragment (a `patch/1`, a module preset `hyperspace.preset/1`); `patches.shape_of` says which reading of the one shape a file is (preset, patch, patch of one group) | 488 | (rec) — pending the owner; built as recommended |
+| 641 | Plan 50: one loader, one sheet, as far as built — opening a preset is "replace everything", no sheet (nothing to collide with); a spawn keeps plan 40's sheet; a module preset's load is `patches.spawn` of a patch of one group (`Landing.replaces`), no sheet. `Presets.load_doc` and `Edit.spawn` stay two landings over the one reader — not merged into one function | 486 | (rec) — pending the owner; a deviation from the ask, said |
+| 642 | Plan 50, harden-node-groups' second half: a group holds any node the preset saves (`patches.groupable`: the frame's singletons, the camera, a lane envelope too); refused at Group only the rig's render kinds (`patches.RIG_KINDS`, `graphview.RIG_KINDS` the same list: a window, All outputs, a media channel, a cloud — review fix 1), a device, the analyzer, the sequencer, a node the preset lacks and a group; the patch rule (`patches.select`) runs at **Save as patch**, refused in words ("group 1 not saved as a patch: scene is the frame's; left out"), nothing written | 484 | (rec) — pending the owner; built as recommended |
+| 643 | Plan 50: a module preset is a patch of one param group, `<library>/patches/<group>/<slug>.json` with `"group": "<group>"` — a folder **and** the field (the field is the file's truth, the folder keeps a group's names its own and keeps them out of GRAPH's spawnable list); every strip lists, loads, saves, resets and trashes them as before; anything else in a group's folder (a whole preset, a canvas patch, another group's, an empty `group`) is refused, the mismatch named (review fix 7) | 486 | (rec) — pending the owner; built as recommended |
+| 644 | Plan 50: a patch of one group holds `values` and, for a group that lays out its own params (the analyzer's bands), that group's `layout` — a group patch has no canvas, so the key is the group's | 487 | (rec) — pending the owner; built as recommended |
+| 645 | Plan 50: the migration step — `tools/migrate_library.py` moves every module preset to `patches/<group>/` as `patch/2` and rewrites every `patch/1` as `/2` in place, after the run's backup; the dry run lists them; a retired group's files (`fx/`) and an unreadable file (a module folder's or `patches/`'s) are left, said; `--to` moves none | 485 | (rec) — pending the owner; built as recommended |
+| 646 | Plan 50, not done: the show's `modules` key (a session group's band preset by name) stays — renaming it is a show schema move; `RETIRED_MODULES` and `_fresh_of` are already what the fallback needs; the band scene files (code data) stay `preset/1`, read through the one ladder; `library.migrate_doc` serves the shows alone (the preset entry, `CURRENT["hyperspace.preset"]` and `PRESET_SCHEMA` removed, review fix 8); `headless.SHARED_FOLDERS` is `patches/` alone, every folder down (review fix 2) | — | (rec) — pending the owner |
+| 647 | Plan 50: hands 1 in a group — a wired frame always holds it, so a "delete" leaves it held and a member (as a macro is) | — | (rec) — pending the owner; built as recommended |
 
 "—": no hand check shows it; tests only.
 
@@ -11738,3 +11747,193 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   the rewritten file; the open `Project` holds its bank), as with a
   rename.
 - **Judge it.** 483.
+
+## Wave 2 — one saved format (plan 50, rows 639–647)
+
+### 639. Two schema names over one shape; no `/11`
+
+- **Asked.** F1: "`/11` only if the one format needs it"; one name or two.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** The preset keeps `hyperspace.preset/10` and the patch
+  moves to `hyperspace.patch/2` (`/1` plus the optional `group` key,
+  `patches.VERSION`). The name says what opening a file does — a preset
+  replaces the frame, a patch spawns into it — which the library already
+  routes by schema family (`DocKind`); keeping the preset's name moves no
+  preset on either Mac. A preset is the shape with `ports` empty and is
+  never written with them, so it needs nothing `/10` lacks. A module
+  preset's `hyperspace.preset/1` is read as its `patch/2` and never
+  written again. Every save writes the newest (row 394).
+- **Built.** `patches.SCHEMA`, `READS = (1, 2)`, `GROUP_KEY`;
+  `library._patch_kind` takes both; `patches.check` refuses a `/3`.
+- **Other options.** One name, `hyperspace.look/1`, for all three: every
+  preset rewritten for a word, and the load's door would have to read the
+  shape to know whether to replace or spawn.
+- **To reverse.** `VERSION = 1` and the `group` key dropped; a `patch/2`
+  written meanwhile is a `/1` but for the key.
+- **Rough edge.** An older build refuses a `patch/2` ("is not a
+  hyperspace.patch") and finds no module presets where this one keeps
+  them: both Macs together, between shows.
+- **Judge it.** 485, 488.
+
+### 640. One reader with per-version steps
+
+- **Asked.** F1: "The reader of a /10 preset and a patch/1 is one loader
+  with per-version steps, as `graphmigrate` does today."
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** Two ladders, one per family, each the only road in:
+  `graphmigrate.forward(doc, specs, eye=, camera_at=, look=, cuts=)` — the
+  `seven`, `nine` and `ten` steps `Presets.load_doc` ran inline, unchanged,
+  returning a `Forward` (the doc, the notes, the migration's notes, the
+  migrated line, the look ids the show handed on) — and
+  `patches.forward(doc)` for every fragment (`STEPS`: `patch/1` → `/2`; a
+  module preset → a patch of its group). `patches.shape_of` reads which of
+  the one shape's three readings a file is. `Library.read` runs the
+  fragment ladder for every module group (`forward_group`), `read_patch`
+  for the patches, `scene_doc` for the band scenes.
+- **Built.** `graphmigrate.forward`, `Forward`, `TEMPLATE_RETIRED` (moved
+  from `preset`, which re-exports it); `patches.forward`, `STEPS`,
+  `shape_of`; `library.forward_group`.
+- **Other options.** One function for both families: the preset's steps
+  need the open show and the effect files; the fragment's need nothing.
+- **To reverse.** Inline `forward` back into `load_doc`.
+- **Judge it.** — (tests: `tests/test_patches_one_format.py`).
+
+### 641. One loader, one sheet — as far as built
+
+- **Asked.** F1: "`Presets.load_doc` and `modgraph.spawn` become one path:
+  load = spawn into an empty frame with 'replace everything'".
+- **Answer.** (rec) — pending the owner; built short of the ask, said.
+- **Recommended.** What is one: the reader (row 640), the shape (row 639),
+  the doors each landing goes through (they always were: `gs.land`, the
+  table's, `lib.restore`), and the sheet (plan 40's, the only one; a
+  load has nothing to collide with, a group patch neither). A module
+  preset's load is literally a spawn: `patches.spawn` of a patch of one
+  group returns a `Landing` whose `replaces` names the group, landed over
+  the group's fresh values. What stays two: `Presets.load_doc` (replace
+  every part, refused whole on a bad value, one undo step, byte-for-byte
+  re-save) and `Edit.spawn` (merge under fresh ids). Rewriting the
+  350-line load as a spawn into an empty frame risks the round trip and
+  the refusal-whole rule for no change a user sees; spawning a preset
+  into another frame needs the frame kinds in patches, which is wave 3's
+  P1.
+- **Other options.** The literal merge, in wave 3 with P1.
+- **To reverse.** — (nothing to undo).
+- **Judge it.** 486.
+
+### 642. A group holds any node, checked at save
+
+- **Asked.** The second half of harden-node-groups (split from G0).
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** A group is a patch not yet saved, so it may hold
+  anything the preset file saves: `patches.groupable` (one selector,
+  `_select`, with `select` the save's rule) refuses at Group, at a load's
+  `read_groups` and in the drawing only the rig's render kinds
+  (`patches.RIG_KINDS`, which `graphview.RIG_KINDS` is: a window, All
+  outputs, a media channel, a cloud — review fix 1: a channel had been
+  admitted, though no patch can hold one), a device, the analyzer, the
+  sequencer, a node or modifier the preset lacks and a group (no nesting). **Save as patch**
+  asks `patches.select` and refuses in words, the group kept, nothing
+  written: `graphview.SAVE_REFUSED`, "group 1 not saved as a patch:
+  scene is the frame's; left out".
+- **Built.** `patches.groupable`, `NEVER_GROUPED`; `graphview.Edit.group`,
+  `attach_groups`, `preset.Presets._groupable` read it; `Edit.save_patch`.
+  The group node draws as it did (no drawing code changed).
+- **Other options.** Keep refusing at Group (plan 40's): the owner's "every
+  node kind is first-class: … groupable, patchable" (2026-10-31).
+- **To reverse.** `groupable` → `select` at the three readers.
+- **Rough edge.** A frame singleton in a folded group: its pins are the
+  group's, as any member's; an older build drops it from the group on
+  load, said.
+- **Judge it.** 484.
+
+### 643. Module presets are patches of one group, in `patches/<group>/`
+
+- **Asked.** F1: module presets "become patches of one group … under
+  `<library>/patches/` (a `group:` field or folder, (rec))".
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** Both: the file says `"group": "dream"` (the truth a
+  read checks) and lives in `patches/dream/` (`Library.group_dir`), so a
+  group's names are its own and GRAPH's spawnable list (`patches/*.json`,
+  one level) never shows one. Every strip — view, rot, camera, output,
+  master, band, dream, tempo, lfo, seq, env — lists, steps, loads, saves,
+  resets, deletes and restores from the trash as before (the trash keeps
+  `trash/patches/<group>/`, a restore puts it back there). `read_patch`
+  refuses one by name in words. Review fix 7: `Library.read` refuses
+  anything else in a group's folder, the mismatch named — "dial.json is a
+  whole preset, not a patch of the dream group", "… a canvas patch …",
+  "… a patch of the camera group …", an empty `group` in one line
+  (`patches.GROUP_EMPTY_WORDS`) — and only an old module preset that never
+  said its group takes the folder's. A strip load lands the values directly
+  (review fix 3: the spawn of a group patch would hand them back unchanged).
+- **Built.** `library.group_dir`, `_files`, `read`, `document`
+  (`patches.group_doc`), `save_as`, `_apply_doc`, `_scan`, `restore_trash`,
+  `groups`; the corpus's three dream presets at
+  `tests/corpus/patches/dream/` as `patch/2` (conftest's `seed` and
+  `tools/desk_coverage.py` both lay the corpus out by `library.group_folder`,
+  the one table — review fix 9).
+- **Other options.** A field only, every group's in `patches/`: one name
+  space for all groups, and every strip would read the whole folder.
+- **To reverse.** `group_dir` back to `root / group`.
+- **Judge it.** 486.
+
+### 644. A group patch's `layout` is the group's
+
+- **Asked.** The band presets carry the analyzer's band layout under
+  `layout`, the shape's canvas-positions key.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** Keep `layout`: a patch of one group has no canvas, so
+  the key is the group's own (`Library.extra` / `on_layout`, the show's
+  inline copies and the band scenes all say `layout`); `patches.read`
+  reads no canvas layout from a group patch.
+- **Other options.** A new key (`group_layout`): every reader of the band
+  layout and every show's inline copy moved for a name.
+- **Judge it.** 487.
+
+### 645. The migration step
+
+- **Asked.** F1 §5.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** `tools/migrate_library.py` `group_plan` / `group_write`:
+  each `<library>/<group>/*.json` that is `hyperspace.preset/1` written
+  as `patches/<group>/<file>` (`patch/2`), its old file removed and an
+  emptied folder with it (the run's backup holds them); each
+  `patches/*.json` at `/1` rewritten as `/2` in place; a retired group's
+  (`fx/`), an unreadable file (in a module folder or `patches/`, review
+  fix 5) and a destination holding other bytes left, said; the file list is
+  `retaper_routes.json_files` (review fix 4). Dry run by default; `--apply` backs up first, retapers, then
+  writes the patches after the presets and shows; `--to` moves none.
+  Never run against the owner's library in the PR.
+- **Built.** `tools/migrate_library.py`; tests on a scratch library.
+- **Judge it.** 485.
+
+### 646. Not done in F1
+
+- **Asked.** F1: "the 'modules' word gone from the saved files",
+  `RETIRED_MODULES` and `_fresh_of` "reduced to what the fallback still
+  needs".
+- **Answer.** (rec) — pending the owner.
+- **Recommended.** Presets say no `modules` since D3 and module presets
+  say `patch` now; the **show's** `modules` key (a session group's band
+  preset by name, `Project.modules`) stays — renaming it is a show schema
+  move (`/4`) for a word, better with Dillon's show work. `RETIRED_MODULES`
+  is `("fx",)` and `_fresh_of` is the build's values, both what the fill-in
+  and the retired folder need: unchanged. The band scenes
+  (`hyperspace/scenes/band/`, code data) stay `preset/1` files, read
+  through the one ladder. Review fixes: `headless.SHARED_FOLDERS` (the
+  resave's copies) is `("patches",)`, every folder down, so a headless
+  resave sees the module groups' patches where the migration put them (2;
+  the old `<group>/` names dropped; the migration's retapered copy is made
+  only for a group's patch, a top-level one being spawned, never read by a
+  load); `library.migrate_doc` serves the shows alone — the preset entry of
+  `MIGRATIONS` / `CURRENT` and `PRESET_SCHEMA` removed (8).
+- **Judge it.** —.
+
+### 647. Hands 1 in a group
+
+- **Asked.** Found by the corpus property test once a group may hold
+  hands 1.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** A wired frame always holds hands 1, so a "delete"
+  leaves it held and the group keeps it, as a macro "deleted" is kept.
+- **Built.** `tests/test_graph_groups.py::test_groups_keep_their_invariants_over_the_corpus`.
+- **Judge it.** —.

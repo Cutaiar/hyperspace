@@ -481,8 +481,8 @@ def test_ghost_mirror_flips_the_hands_in_the_shared_camera_too():
 # ------------------------------------------- camera module presets (review fix 1)
 
 def _old_module(lib, name="off-right"):
-    (lib.home / "camera").mkdir(parents=True, exist_ok=True)
-    shutil.copy(FIXTURES / "old-camera-module.json", lib.home / "camera" / f"{name}.json")
+    (lib.home / "patches" / "camera").mkdir(parents=True, exist_ok=True)
+    shutil.copy(FIXTURES / "old-camera-module.json", lib.home / "patches" / "camera" / f"{name}.json")
 
 
 def test_an_old_camera_module_loads_at_its_converted_pan(tmp_path):
