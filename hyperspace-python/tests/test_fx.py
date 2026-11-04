@@ -920,7 +920,7 @@ def test_the_page_fits_with_the_tightest_strip_idle(fxpage, monkeypatch):
     turn with an error line, idle for each reason a chip mends: the page
     never scrolls at the control size."""
     from hyperspace.ui_fx import why_idle
-    imgui, st, reg, panel = fxpage.imgui, fxpage.st, fxpage.reg, fxpage.panel
+    st, reg, panel = fxpage.st, fxpage.reg, fxpage.panel
     # the worst case for height: an error line showing on every strip as well
     panel.renderer.fx.error = lambda n: "line 3: made up"
     for name in st.names():
