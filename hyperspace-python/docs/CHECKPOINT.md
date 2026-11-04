@@ -189,6 +189,13 @@ the tree, `tests/test_pads_joycon_real.py`); 424 and 426–429 (group AV)
 remain. **Restart** rather than hot reload (the road's module list
 changed).
 
+**The Joy-Con's version 0** (2026-11-04, the owner): the gyro and shake only.
+`totem.pan` is off by default and the poi is reached only by `[poi] on = true`;
+`motion:shake` needs repeated reversing pushes, not one jolt; the hid reader
+learns the gyro's rest offset. Rows 686–688, checks 520–522 (group BW), with a
+charged pad. Position waits for an idealized control object; draft PR #342 is
+its record.
+
 ## What is left
 
 - **Plan 46, hand checks 424 and 426–429** (the owner's Joy-Con): the

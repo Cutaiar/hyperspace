@@ -7801,3 +7801,12 @@ Only a person can settle these:
 - NanoVG in the control window on the Mac's GL (417): the tests draw the
   lab's drawings through a stand-in NanoVG, and the shots were rendered
   on Mesa's software rasteriser; one look on Dillon's Mac so far.
+
+### Group BW: the Joy-Con's version 0 (2026-11-04)
+
+**520. Gyro only.** With the totem on, turn the pad about each axis: the shape turns with it. Tip it and fling it: the shape's position does not move. Set it on the desk for 30 seconds: the shape holds still. There is no "poi off" word in the pad window's header.
+
+**521. Shake.** Shake the pad hard for two seconds: the tilt ring in the pad window pulses, more than once. Pick it up, put it down, stand up and sit down with it, swing it like a sword and thrust it: no pulse. If a real shake does not fire, record it and hand the tape back; the thresholds were set without one.
+
+**522. Rest and a dropped link.** Walk across the room with the pad and come back: the shape keeps following, with no jump when the signal recovers. Press A: the shape resets.
+

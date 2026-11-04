@@ -877,7 +877,8 @@ def test_the_drawings_show_upright_through_real_gl(monkeypatch, gl_window_ok):
 
 
 def test_the_poi_says_its_word_and_shows_its_dials_while_on(rig, monkeypatch):
-    """Plan 47, the poi: "poi off" in the header and no Poi window; on, the
+    """Plan 47, the poi: no word in the header and no Poi window while off
+    (version 0 of the pad offers no position, `[poi] on` reaches it); on, the
     header reads its length · weight · springiness, and the six dials are
     drawn in the Poi window of their own — never in the pad window, whose
     room under the header (the map's unit, a view's room) is what it was
@@ -905,7 +906,7 @@ def test_the_poi_says_its_word_and_shows_its_dials_while_on(rig, monkeypatch):
         lanes = _pad_frames(rig, monkeypatch)
         return unit, got["rect"], got["scroll"], lanes["room"], lanes["scroll"]
 
-    assert ui_pad.poi_word(reg)[0] == "poi off"
+    assert ui_pad.poi_word(reg) is None
     off = rooms()
     assert drawn == []
     assert imgui.internal.find_window_by_name("Poi") is None

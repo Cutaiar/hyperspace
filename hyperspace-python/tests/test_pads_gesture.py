@@ -76,7 +76,7 @@ def test_tilt_reads_gravity_with_the_documented_signs():
     assert motion_lanes(m)["pitch"] == pytest.approx(0.5 + 0.5 * 30 / ge.TILT_DEG, abs=1e-3)
 
 
-def test_spin_yaw_leaks_home_and_a_jolt_is_one_shake():
+def test_spin_yaw_leaks_home_and_a_jolt_is_energy_not_a_shake():
     m = ge.Motion()
     settle(m, (0, 0, 0), (0, 1, 0), 10)
     m.step((0.0, -180.0, 0.0), (0, 1, 0), 0.25)              # turning right at 180°/s
@@ -88,9 +88,9 @@ def test_spin_yaw_leaks_home_and_a_jolt_is_one_shake():
     settle(m, (0, 0, 0), (0, 1, 0), 60 * 30)
     assert motion_lanes(m)["yaw"] == pytest.approx(0.5, abs=1e-3)
     m.step((0, 0, 0), (0.0, 3.0, 0.0), DT)                   # a 2 g jolt
-    assert motion_lanes(m)["shake"] == 1.0 and motion_lanes(m)["energy"] > 0
+    assert motion_lanes(m)["shake"] == 0.0 and motion_lanes(m)["energy"] > 0
     m.step((0, 0, 0), (0.0, 3.0, 0.0), DT)
-    assert motion_lanes(m)["shake"] == 0.0                   # refractory
+    assert motion_lanes(m)["shake"] == 0.0                   # one push, however long
     settle(m, (0, 0, 0), (0, 1, 0), 60)
     assert motion_lanes(m)["energy"] < 0.05
 

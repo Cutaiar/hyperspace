@@ -579,11 +579,13 @@ def _totem(panel) -> None:
 
 
 def poi_word(reg) -> tuple[str, str] | None:
-    """The poi's word for the header (plan 47, the poi): "poi off", or its
-    dials (``poi 1.00 · 0.30 · 0.20``: length, weight, springiness); None
-    with no poi in the registry."""
+    """The poi's word for the header (plan 47, the poi) while it is on: its
+    dials (``poi 1.00 · 0.30 · 0.20``: length, weight, springiness). None
+    while it is off or absent: this pad's version 0 is the gyro and shake
+    (the owner, 2026-11-04), so the poi is reached only by `[poi] on = true`
+    until its position is replaced by an idealized control object."""
     state = getattr(reg, "poi", None)
-    if state is None or "poi.on" not in reg:
+    if state is None or "poi.on" not in reg or not state.on:
         return None
     from . import poi
     tip = ("The Joy-Con as the handle of a poi (plan 47, an experiment) — click to "
@@ -591,8 +593,6 @@ def poi_word(reg) -> tuple[str, str] | None:
            "string: swing the pad and it flies round. Length · weight · springiness; "
            "its dials are in the Poi window (\"dials\" beside this) while it is on. "
            "A (or ↓) resets.")
-    if not state.on:
-        return "poi off", tip
     word = f"poi {poi.readout(state)}"
     if state.driving is None:
         word += " (no pad)"
