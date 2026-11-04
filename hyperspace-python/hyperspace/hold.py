@@ -74,6 +74,7 @@ from typing import Any
 
 from .params import (
     PERFORMANCE_GROUPS,
+    POSE_IDS,
     cut_ids,
     lookback_ids,
     matte_ids,
@@ -185,6 +186,7 @@ class Hold:
         view = getattr(self.reg, "view", None)
         if pose is not None and callable(getattr(view, "set_pose", None)):
             view.set_pose(pose)
+            self.reg.forget_commits(POSE_IDS)    # (a load's pose holds no commit: plan 52)
         if loaded:                      # R19: a load's delays start empty — on the projector now
             reset = getattr(self.renderer, "reset_delays", None)
             if callable(reset):

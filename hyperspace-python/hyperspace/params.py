@@ -58,8 +58,9 @@ into its base. `_trim` is the ledger that keeps that from counting twice:
 how much of the pushes' offset the base already holds. The offset rides on
 top less the trim, and once the verb is let go the trim only falls, with the
 offset on its way home (`_came_home`), so the look stays where the performer
-left it. Only that empties it: a source flickering out or a base restored
-leaves it, since the offset coming back is the one the base holds. The table
+left it. A source flickering out leaves it, since the offset coming back is
+the one the base holds. A base replaced replaces it too: a load's holds no
+commit, and an undo's holds what it held then (`Registry.restore`). The table
 is not touched: a route's depth is the depth it was.
 """
 
@@ -1079,8 +1080,21 @@ class Registry:
             out[p.id] = list(v) if isinstance(v, list) else v
         return out
 
-    def restore(self, values: dict[str, Any]) -> list[str]:
-        """Set every param named; returns the ids this registry doesn't have."""
+    def forget_commits(self, ids: Iterable[str]) -> None:
+        """The base chase's ledger empties on these params (plan 52): whatever
+        their bases hold now, no commit of the verb's is in them."""
+        for pid in ids:
+            p = self._p.get(pid)
+            if p is not None:
+                p._trim = 0.0
+
+    def restore(self, values: dict[str, Any], *, trims: dict[str, float] | None = None
+                ) -> list[str]:
+        """Set every param named; returns the ids this registry doesn't have.
+        The base chase's ledger goes with the base it describes (plan 52): a
+        continuous param's trim is what `trims` (an undo's state) says that
+        base held, and none when there is no such state (a load: a look's
+        values hold no commit, so a route on them rides in full)."""
         missing = []
         for pid, v in values.items():
             p = self._p.get(pid)
@@ -1092,6 +1106,7 @@ class Registry:
                 # raw, not set_value: a saved value lands exactly where it
                 # was, detent or not (the base is detented only while modulated)
                 p.set(float(v))
+                p._trim = trims.get(pid, 0.0) if trims else 0.0
             elif k is Kind.ENUM:
                 p.set(int(v))
             elif k is Kind.TOGGLE:

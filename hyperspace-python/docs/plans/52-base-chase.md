@@ -65,10 +65,16 @@ already holds. The landing is `base + (pushes − trim) + position rows`.
 - **The source dropping out** (a lane gone NaN, a shut gate, a pad off): the
   base shows, as any param let go, and the ledger **stays**. The offset that
   comes back is the one the base holds, so a flickering gate commits nothing
-  twice, under the verb or after it. Only a source coming home empties it, and
-  one coming back at or below where it left is still on its way home. The
-  ledger's only cost is a route made later on a param that kept one: it rides
-  less the trim until it next reads zero.
+  twice, under the verb or after it. One coming back at or below where it left
+  is still on its way home.
+- **The rows going:** a param none of whose rows is left has lost the source the
+  ledger was about, so it empties (`Router._forget_lost_rows`, at the plan's
+  rebuild, no frame cost). A row made later rides in full. The referee keeps one
+  performer on a param, so a second row can only come beside the first where the
+  referee allows it (rows it does not call overlapping). Those share the ledger,
+  which is on the param's sum, and if the first source goes home first the other's
+  offset is absorbed until the sum reads zero. That is the one stale case left,
+  and it has no test.
 - **A position row** is the fader: it lands an absolute value whatever the
   base is, computed against the base, so no trim applies to it.
   `Param.modulate(position=True)` keeps its share apart (`Router.modulate`
@@ -94,12 +100,23 @@ the redo stands. Pressing again is a new hold. A press closes whatever was
 open first, so no other action's step is pinned. The step belongs to the `Undo`
 the press named (`Registry._chase_steps`), and any let-go closes that one.
 
-A restore (an undo, a redo, a load, Drop) writes the base and leaves the ledger,
-because the offset still out is still in it: the param shows the restored base,
-with nothing counted twice, and the route rides in full once the source has
-been home. So undoing a hold with the source still out shows the old **base**,
-not base plus offset. It is the same for an undo of a later knob turn, and Drop
-lands with no jump.
+A base goes back with its own ledger. Each undo state holds the trims as they
+stood (`State.trims`), and a restore lands both (`Registry.restore(trims=)`):
+
+- **Undoing a hold with a push still out** shows the old base plus the push, as if
+  the verb had never been held. **Redo** shows the commit, not counted twice.
+- **Undoing a later knob turn** on a committed param lands the commit and its
+  ledger, with no double count. **Drop** the same, with no jump. A second hold
+  undone stands as it stood before that hold.
+- **A state's ledger can be late:** a source that came home after the state was
+  taken and has pushed out since is absorbed up to that much at the undo, until
+  it next falls. The trim only ever falls from there.
+
+**A load holds no commit.** `Registry.restore` with no `trims` empties the ledger
+on every value it lands, so the look shows its saved base plus the route's whole
+offset, even if the value is the same number as the commit. The pose a load sets
+does the same (`Registry.forget_commits(POSE_IDS)`). Undoing the load brings the
+commit back with its ledger.
 
 ## Dirty
 

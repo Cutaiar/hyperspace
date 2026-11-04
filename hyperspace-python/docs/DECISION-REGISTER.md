@@ -11957,9 +11957,10 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   order of release, but an LFO under it would show half its swing while held,
   so the press would no longer be invisible. Worth judging with B2 on a
   gamepad; it would be a change to `Param.apply` alone. An undo under the verb
-  ends it, rather than committing again on the bases it put back. Undoing a hold
-  with a source still out shows the old base, with the offset still in the
-  ledger until the source has been home, so nothing is ever counted twice.
+  ends it, rather than committing again on the bases it put back. A base goes
+  back with the ledger it had (`State.trims`): undoing a hold with a push still
+  out shows the old base plus the push, as if the verb had never been held. A
+  load empties the ledger: a look holds no commit it never made.
 - **Built.** `Registry.base_chase`, `Param._commit`, `params._came_home`,
   `tests/test_base_chase.py`.
 - **Judge it.** Checks 494, 495.

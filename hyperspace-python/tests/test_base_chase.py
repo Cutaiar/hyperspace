@@ -129,6 +129,124 @@ def test_the_source_leaving_keeps_the_commit(reg):
     assert p.value == pytest.approx(0.9), "home, it rides in full"
 
 
+def test_a_knob_then_its_undo_on_a_commit_counts_nothing_twice(rig):
+    p = routed(rig)
+    rig.out_value[0] = 0.6
+    go(rig, 2)
+    rig.reg[CHASE_PARAM].set(True)
+    go(rig, 2)
+    rig.reg[CHASE_PARAM].set(False)
+    settle_with(rig)
+    shown = p.value
+    p.set(p.base * 0.5)
+    settle_with(rig)
+    moved = p.value
+    assert moved == pytest.approx(shown * 0.5)
+    assert rig.undo.undo()
+    go(rig, 2)
+    assert p.value == pytest.approx(shown), "the commit's ledger came back with its base"
+    assert rig.undo.redo()
+    go(rig, 2)
+    assert p.value == pytest.approx(moved)
+
+
+def test_a_second_hold_undone_keeps_the_first_holds_ledger(rig):
+    p = routed(rig)
+    rig.out_value[0] = 0.55
+    go(rig, 2)
+    rig.reg[CHASE_PARAM].set(True)
+    go(rig, 2)
+    rig.reg[CHASE_PARAM].set(False)
+    settle_with(rig)
+    first = p.base
+    rig.out_value[0] = 0.6
+    go(rig, 2)
+    riding = p.value
+    assert riding > first
+    rig.reg[CHASE_PARAM].set(True)
+    go(rig, 2)
+    rig.reg[CHASE_PARAM].set(False)
+    assert p.base == pytest.approx(riding)
+    assert rig.undo.undo()
+    go(rig, 2)
+    assert p.base == pytest.approx(first)
+    assert p.value == pytest.approx(riding), "as it stood before that hold"
+
+
+def test_a_load_under_a_live_route_inherits_no_commit(rig):
+    """The saved base plus the route's whole offset: a look holds no commit
+    it never made. Its undo brings the commit back, nothing counted twice."""
+    p = routed(rig)
+    rig.presets.save_as("LOOK")
+    saved = p.norm
+    rig.out_value[0] = 0.6
+    go(rig, 2)
+    offset = p.eff_norm - p.norm
+    assert offset > 0
+    rig.reg[CHASE_PARAM].set(True)
+    go(rig, 2)
+    rig.reg[CHASE_PARAM].set(False)
+    settle_with(rig)
+    committed, shown = p.norm, p.eff_norm
+    assert committed == pytest.approx(saved + offset) and shown == pytest.approx(committed)
+    rig.presets.load("LOOK")
+    go(rig, 2)
+    p = rig.reg[p.id]
+    assert p.norm == pytest.approx(saved)
+    assert p.eff_norm == pytest.approx(saved + offset), "base plus the route, in full"
+    assert rig.undo.undo()
+    go(rig, 2)
+    assert p.norm == pytest.approx(committed) and p.eff_norm == pytest.approx(shown)
+
+
+def test_a_load_with_the_same_value_as_the_commit_inherits_nothing(rig):
+    p = routed(rig)
+    rig.out_value[0] = 0.6
+    go(rig, 2)
+    rig.reg[CHASE_PARAM].set(True)
+    go(rig, 2)
+    rig.reg[CHASE_PARAM].set(False)
+    offset = p._trim
+    assert offset > 0
+    rig.presets.save_as("SAME")                # the committed value, in a file
+    rig.presets.load("SAME")
+    go(rig, 2)
+    assert p.eff_norm == pytest.approx(p.norm + offset)
+
+
+def test_a_loads_pose_inherits_no_commit(rig):
+    p = routed(rig, "rot.phase.XY")
+    rig.out_value[0] = 0.6
+    go(rig, 2)
+    rig.reg[CHASE_PARAM].set(True)
+    go(rig, 2)
+    rig.reg[CHASE_PARAM].set(False)
+    assert p._trim
+    rig.presets.save_as("POSED")
+    rig.presets.load("POSED")
+    assert p._trim == 0.0
+
+
+def test_a_row_made_after_the_last_one_went_rides_in_full(rig):
+    """The ledger was about the row that went."""
+    p = routed(rig)
+    row = rig.table.routes_to(p.id)[-1]
+    rig.out_value[0] = 0.6
+    go(rig, 2)
+    rig.reg[CHASE_PARAM].set(True)
+    go(rig, 2)
+    rig.reg[CHASE_PARAM].set(False)
+    offset = p._trim
+    assert offset > 0
+    rig.table.remove(row)
+    go(rig, 2)
+    assert p._trim == 0.0 and p.value == pytest.approx(p.base)
+    base = p.norm
+    rig.table.add(Binding("hand:1", p.id, "push", 1.0, rest=0.5))
+    go(rig, 2)
+    assert p.eff_norm == pytest.approx(base + offset)
+
+
 def test_a_source_flickering_under_the_verb_commits_once(reg):
     """A lane gone NaN, a shut gate, a pad off for one frame: a source that
     has not moved adds nothing however often it drops out."""
@@ -259,24 +377,26 @@ def test_a_knob_turned_under_the_verb_moves_the_base_and_the_look(reg):
     assert p.value == pytest.approx(0.3) and p.base == pytest.approx(0.3)
 
 
-def test_a_restored_value_is_not_counted_twice(reg):
-    """`Registry.restore`, the road of a load and of an undo, leaves the
-    ledger: the offset still out is still in it."""
+def test_a_restore_brings_the_ledger_of_the_base_it_brings(reg):
     p = declare(reg, "view.a", 0.5)
     land(p, 0.2)
     reg.base_chase(True)
     land(p, 0.2)
     reg.base_chase(False)
     assert p.base == pytest.approx(0.7)
-    p.set(0.6)                                 # a knob, then its undo
-    land(p, 0.2)
-    assert p.value == pytest.approx(0.6)
-    reg.restore({"view.a": 0.7})
+    # an undo's state says what that base held
+    reg.restore({"view.a": 0.7}, trims={"view.a": 0.2})
     land(p, 0.2)
     assert p.value == pytest.approx(0.7), "not 0.9"
-    land(p, 0.0)
-    land(p, 0.1)
-    assert p.value == pytest.approx(0.8), "home, the route rides in full"
+    # a base that held nothing: the route rides in full
+    reg.restore({"view.a": 0.5}, trims={})
+    land(p, 0.2)
+    assert p.value == pytest.approx(0.7) and p.base == pytest.approx(0.5)
+    # the same base through a road with no state, a load's: it holds no commit
+    reg.restore({"view.a": 0.7}, trims={"view.a": 0.2})
+    reg.restore({"view.a": 0.7})
+    land(p, 0.2)
+    assert p.value == pytest.approx(0.9)
 
 
 # ---------------------------------------------------------------- the reach
@@ -437,18 +557,21 @@ def test_one_hold_is_one_undo_step_however_still_it_goes(rig):
     assert p.base == pytest.approx(moved)
 
 
-def test_undo_and_redo_with_the_source_still_out_show_the_base(rig):
+def test_undo_and_redo_with_a_live_push_show_what_stood_each_side(rig):
+    """A steady push after undoing the hold: the old base plus the push, as
+    if the verb had never been held; redo, the commit, not counted twice."""
     p = routed(rig)
     start = p.base
     rig.out_value[0] = 0.6
     go(rig, 2)
     shown = p.value
+    assert shown != pytest.approx(start)
     rig.reg[CHASE_PARAM].set(True)
     go(rig, 2)
     rig.reg[CHASE_PARAM].set(False)
     assert rig.undo.undo()
     go(rig, 2)
-    assert p.base == pytest.approx(start) and p.value == pytest.approx(start)
+    assert p.base == pytest.approx(start) and p.value == pytest.approx(shown)
     assert rig.undo.redo()
     go(rig, 2)
     assert p.base == pytest.approx(shown) and p.value == pytest.approx(shown), "not counted twice"

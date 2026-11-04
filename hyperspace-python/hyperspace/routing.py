@@ -3556,6 +3556,14 @@ class Router:
         self.modgraph                                # noqa: B018 — current
         return self.__dict__["_modgraph_cut"]
 
+    def _forget_lost_rows(self, by_target: dict[str, list]) -> None:
+        """A param none of whose rows is left has lost the source its base
+        chase ledger was about (plan 52): a row made later rides in full."""
+        had = self.__dict__.get("_row_sources", {})
+        now = {t: {b.source for b, _ in rows} for t, rows in by_target.items()}
+        self.reg.forget_commits(t for t, was in had.items() if not was & now.get(t, set()))
+        self._row_sources = now
+
     def _rebuild_modgraph(self, key: tuple) -> None:
         g = self.build_modgraph()
         t = self.table
@@ -3610,6 +3618,7 @@ class Router:
         early = {e.dst for e in live if id(e) not in ordered}
         dormant = {node for _, node in cut_in}
         plan: list[tuple] = []
+        self._forget_lost_rows(by_target)
         for node in modgraph.order(g):
             if node.kind in banks:
                 i = int(node.id.split(":")[1])
