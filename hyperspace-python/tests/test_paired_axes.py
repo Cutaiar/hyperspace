@@ -128,6 +128,20 @@ def test_a_pad_lost_while_held_lets_the_route_go(rig):
     assert p.value == pytest.approx(rest)
 
 
+def test_a_device_closed_while_held_lets_the_route_go(rig):
+    """`Router.pad_lost`, the road a closing device takes with no frame after it."""
+    pad = ScriptedPad()
+    pad.frame(hat=UP)
+    rig.router.pad(pad, 0.0)
+    rig.router.pad(pad, 0.0, role="p2")
+    assert rig.router.feeds["pair"] is not None
+    rig.router.pad_lost()
+    assert rig.router.feeds["pair"] is None
+    assert rig.router.feeds["pair@p2"] is not None      # the second pad's is its own
+    rig.router.pad_lost("p2")
+    assert rig.router.feeds["pair@p2"] is None
+
+
 def test_a_second_pad_is_apart_from_the_first(rig):
     first, second = ScriptedPad(), ScriptedPad()
     first.frame()

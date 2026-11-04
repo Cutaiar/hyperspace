@@ -2016,7 +2016,7 @@ The pad's four checks from PRs #160 and #161, written into
 here. A wired Xbox 360 pad (the Afterglow AX.1) on USB, no other pad.
 
 **144. A wired Xbox 360 pad is found; the factory layout.**
-Headless: `tests/test_gamepad.py::{test_usb_pad_when_glfw_has_none,test_decode_buttons_land_on_the_glfw_indices,test_decode_sticks_and_triggers}`, `tests/test_pad_learn.py::{test_the_factory_pad_walks_the_list_and_the_desk_the_bank,test_start_and_back_are_free_and_a_learned_start_hold_saves,test_the_right_stick_click_resets_the_4d_spin}`.
+Headless: `tests/test_gamepad.py::{test_usb_pad_when_glfw_has_none,test_decode_buttons_land_on_the_glfw_indices,test_decode_sticks_and_triggers}`, `tests/test_pad_learn.py::{test_the_factory_pad_walks_nothing_and_the_desk_the_bank,test_held_start_saves_a_new_preset_and_back_chases,test_the_right_stick_click_resets_the_4d_spin}`.
 Launch from a terminal. *Pass:* the terminal says `gamepad: Afterglow
 Gamepad for Xbox 360 over USB`; the ring lights one quarter (player 1)
 instead of blinking; B flips points and X screen strokes; A flips faces

@@ -281,7 +281,7 @@ def test_an_older_files_pad_rows_move_to_the_new_layout_and_the_owners_stay(tmp_
     sheet, BACK the panel, the right-stick click the camera) move to the
     layout of 2026-10-14 — BACK's panel gone, START's sheet gone and its
     hold-to-save in its place (PAD_NEW_ROWS) — on to 2026-10-29's where it
-    moved again (X screen strokes), and BACK holds the chase (2026-11-04); a
+    moved again (X screen strokes), and BACK's holds the chase (2026-11-04); a
     row the owner learned onto a button stays; a second load changes nothing."""
     old = [Binding("pad:A", "view.rotate", "toggle"), Binding("pad:X", "view.points", "toggle"),
            Binding("pad:Y", "view.faces", "toggle"), Binding("pad:MENU", "ui.cheatsheet", "toggle"),
@@ -297,11 +297,11 @@ def test_an_older_files_pad_rows_move_to_the_new_layout_and_the_owners_stay(tmp_
     assert rows["pad:X"] == ("view.screen_strokes", "toggle")   # straight to the newest
     assert rows["pad:Y"] == ("view.lines", "toggle")
     assert rows["pad:MENU"] == ("preset.save_new", "hold")   # the sheet's row gone
-    assert rows["pad:VIEW"] == ("deck.chase", "momentary")    # the panel's row gone
+    assert rows["pad:VIEW"] == ("deck.chase", "momentary")    # the panel's row moved
     assert rows["pad:LSTICK"] == ("camera.reset", "fire")
     assert rows["pad:RSTICK"] == ("rot.reset_w", "fire")
     assert rows["hat:UP"] == ("fx.wobble.freq", "step")
-    assert sum("the pad layout of 2026-10-14" in n for n in t.notes) == 6
+    assert sum("the pad layout of 2026-10-14" in n for n in t.notes) == 5
     assert sum("the pad layout of 2026-10-29" in n for n in t.notes) == 1
     assert sum("the pad layout of 2026-11-04" in n for n in t.notes) == 1
     after = path.read_text()
@@ -329,10 +329,9 @@ def test_the_pads_bank_rows_move_straight_to_the_newest_layout(tmp_path):
         assert rows["pad:LB"] == ("preset.next", "fire")
         assert rows["pad:RB"] == ("preset.prev", "hold")
         assert rows["pad:MENU"] == ("preset.save_new", "hold")      # added, not held
-        assert rows["pad:VIEW"] == ("deck.chase", "momentary")      # added
+        assert "pad:VIEW" not in rows                               # never added
         assert sum("the pad layout of 2026-10-14" in n for n in t.notes) == 1
         assert sum("the pad layout of 2026-10-29" in n for n in t.notes) == 2
-        assert sum("the pad layout of 2026-11-04" in n for n in t.notes) == 1
         after = path.read_text()
         again = Bindings.load(path, legacy_midi=None)
         assert not again.notes and path.read_text() == after
@@ -342,8 +341,8 @@ def test_the_10_14_layout_goes_straight_to_the_newest(tmp_path):
     """The layout of 2026-10-14 (B / X walk the list, the d-pad's ← / → step
     the speed): B / X onto points and screen strokes, and ← / → free, not via
     the walk of 2026-10-29, which one load would have left behind for a second
-    to remove. BACK's chase is added; a d-pad row the owner changed stays; a
-    second load changes nothing."""
+    to remove. A d-pad row the owner changed stays; a second load changes
+    nothing."""
     old = [Binding("pad:B", "preset.list.next", "fire"),
            Binding("pad:X", "preset.list.prev", "fire"),
            Binding("hat:LEFT", "view.speed", "step", -4),
@@ -357,9 +356,8 @@ def test_the_10_14_layout_goes_straight_to_the_newest(tmp_path):
     assert rows["pad:X"] == ("view.screen_strokes", "toggle", 1.0)
     assert "hat:LEFT" not in rows
     assert rows["hat:RIGHT"] == ("view.speed", "step", 2.0)
-    assert rows["pad:VIEW"] == ("deck.chase", "momentary", 1.0)
     assert sum("the pad layout of 2026-10-29" in n for n in t.notes) == 2
-    assert sum("the pad layout of 2026-11-04" in n for n in t.notes) == 2
+    assert sum("the pad layout of 2026-11-04" in n for n in t.notes) == 1
     after = path.read_text()
     again = Bindings.load(path, legacy_midi=None)
     assert not again.notes and path.read_text() == after
@@ -538,8 +536,7 @@ def test_the_new_row_reaches_an_existing_bindings_json_once(tmp_path, capsys):
     """A file on the layout of 2026-10-29: BACK's factory row moves to the
     chase, ← / → go, the file is copied beside itself first and written back,
     and the next load finds nothing to do and leaves no second copy. Not a
-    schema move: the file's schema stays. A file with no row on BACK at all
-    gains it the same way."""
+    schema move: the file's schema stays."""
     path = tmp_path / "bindings.json"
     Bindings(THE_LAST_LAYOUT, path=path).write()
     before, schema = path.read_text(), json.loads(path.read_text())["schema"]
@@ -561,12 +558,34 @@ def test_the_new_row_reaches_an_existing_bindings_json_once(tmp_path, capsys):
     again = Bindings.load(path, legacy_midi=None)
     assert not again.notes and path.read_text() == after
     assert list(tmp_path.glob("bindings.json.bak-*")) == baks
-    # …and one that never held a row on BACK
-    bare = tmp_path / "bare.json"
-    Bindings([Binding("hat:UP", "view.bright", "step", 3)], path=bare).write()
-    t = Bindings.load(bare, legacy_midi=None)
-    assert "added pad:VIEW → deck.chase (the pad layout of 2026-11-04)" in t.notes
-    assert routing.remap_factory(t.bindings)[1] == []
+
+
+def test_a_deleted_chase_row_stays_deleted(tmp_path):
+    """BACK's row is not in PAD_NEW_ROWS: a file with nothing on BACK is one
+    where the owner took it off, and the next load does not put it back."""
+    path = tmp_path / "bindings.json"
+    Bindings(THE_LAST_LAYOUT, path=path).write()
+    t = Bindings.load(path, legacy_midi=None)
+    t.remove(next(b for b in t.bindings if b.source == "pad:VIEW"))
+    t.write()
+    for _ in range(2):
+        again = Bindings.load(path, legacy_midi=None)
+        assert not any(b.source == "pad:VIEW" for b in again.bindings) and not again.notes
+
+
+def test_a_qualified_row_on_back_is_the_owners(tmp_path):
+    """The factory has never written a qualified row, and at load the table
+    does not know which role is primary (`Bindings.primaries` comes later), so
+    `pad@…` and `hat@…` rows are the owner's, whatever they say, and stay."""
+    mine = [Binding("pad@pad:VIEW", "tempo.tap", "fire"),
+            Binding("hat@pad:LEFT", "preset.list.prev", "hold"),
+            Binding("pad@p2:VIEW", "view.lines", "toggle")]
+    path = tmp_path / "bindings.json"
+    Bindings(mine, path=path).write()
+    t = Bindings.load(path, legacy_midi=None)
+    rows = {b.source: b.target for b in t.of("pad", "hat")}
+    assert {b.source for b in mine} <= set(rows) and "pad:VIEW" not in rows
+    assert not any(b.target == CHASE_PARAM for b in t.bindings)
 
 
 @pytest.mark.parametrize("mine", [
@@ -663,7 +682,7 @@ def test_back_under_the_totem_still_chases(rig):
 
 def test_every_pad_has_back_but_the_right_joycon():
     """The row is on every model's face but a Joy-Con (R)'s, which has no −:
-    there the row is dead, harmless, and chase is one Learn pad (row 724). The
+    there the row is dead, harmless, and chase wants a row of its own (row 724). The
     (L) has its − and no + (START's hold-to-save is the row dead there)."""
     without = {m.id for m in MODELS.values() if not m.has_control("VIEW")}
     assert without == {"joycon-r"}
@@ -672,8 +691,9 @@ def test_every_pad_has_back_but_the_right_joycon():
 
 
 def test_a_right_joycon_chases_where_learn_puts_it(rig):
-    """No factory row reaches it. One Learn pad on its SL (`pad:LP`), and it
-    holds the chase as BACK does."""
+    """No factory row reaches it. A row on its SL (`pad:LP`) holds the chase as
+    BACK does; `learn_pad_button` lands one, though the panel has no widget to
+    arm it from (row 724)."""
     pad, r = ScriptedPad(), rig.router
     pad.frame(held={i for i in range(gp.N_BUTTONS) if i != gp.VIEW})
     r.pad(pad, now=0.0)
@@ -689,3 +709,91 @@ def test_a_right_joycon_chases_where_learn_puts_it(rig):
     pad.frame()
     r.pad(pad, now=0.3)
     assert not rig.reg.chasing
+
+
+def test_the_totem_skipping_a_learned_row_leaves_backs_press_alone(rig):
+    """A skip lets go only of what the skipped button holds: with `pad:A` on
+    the chase too and A in the totem's SKIP, BACK still works."""
+    rig.table.add(Binding("pad:A", CHASE_PARAM, "momentary"))
+    pad, r = ScriptedPad(), rig.router
+    for now in (0.0, 0.1):
+        pad.frame(held={gp.VIEW})
+        r.pad(pad, now=now, skip=totem.SKIP)
+        assert rig.reg.chasing, "BACK held under a skip on another row"
+    pad.frame()
+    r.pad(pad, now=0.2, skip=totem.SKIP)
+    assert not rig.reg.chasing
+    # and A's own press, taken by the skip when it starts, is let go
+    pad.frame(held={gp.A})
+    r.pad(pad, now=0.3)
+    assert rig.reg.chasing
+    pad.frame(held={gp.A})
+    r.pad(pad, now=0.4, skip=totem.SKIP)
+    assert not rig.reg.chasing
+
+
+def test_two_buttons_on_the_chase_hold_it_until_the_last_lets_go(rig):
+    rig.table.add(Binding("pad:Y", CHASE_PARAM, "momentary"))
+    pad, r = ScriptedPad(), rig.router
+    pad.frame(held={gp.VIEW})
+    r.pad(pad, now=0.0)
+    pad.frame(held={gp.VIEW, gp.Y})
+    r.pad(pad, now=0.1)
+    pad.frame(held={gp.VIEW})                   # a brush of Y
+    r.pad(pad, now=0.2)
+    assert rig.reg.chasing
+    pad.frame()
+    r.pad(pad, now=0.3)
+    assert not rig.reg.chasing
+
+
+def test_a_row_removed_under_a_held_button_lets_go(rig):
+    pad, r = ScriptedPad(), rig.router
+    pad.frame(held={gp.VIEW})
+    r.pad(pad, now=0.0)
+    assert rig.reg.chasing
+    rig.table.remove(next(b for b in rig.table.bindings if b.source == "pad:VIEW"))
+    pad.frame(held={gp.VIEW})
+    r.pad(pad, now=0.1)
+    assert not rig.reg.chasing
+
+
+def test_a_release_this_pad_did_not_press_touches_nothing(rig):
+    """The press went to a learn (`buttons=False`): its release is not a let-go
+    of a chase held from elsewhere."""
+    rig.reg[CHASE_PARAM].set(True)
+    pad, r = ScriptedPad(), rig.router
+    pad.frame(held={gp.VIEW})
+    r.pad(pad, now=0.0, buttons=False)
+    pad.frame()
+    r.pad(pad, now=0.1)
+    assert rig.reg.chasing
+    rig.reg[CHASE_PARAM].set(False)
+
+
+def test_closing_the_pad_device_lets_go_of_back(rig):
+    """A pad device closed with BACK down (config.toml saved, the entry gone):
+    no `act` follows, so `close` itself lets go. Second-pad rows likewise."""
+    from hyperspace import devices
+
+    pad = ScriptedPad()
+    pad.frame(held={gp.VIEW})
+    d = devices.PadDevice("pad", None, devices.Context(reg=rig.reg), io=pad)
+    d.act(rig.router)
+    assert rig.reg.chasing
+    d.close()
+    assert not rig.reg.chasing and d.io is None
+    # a device that never acted closes as ever
+    devices.PadDevice("pad", None, devices.Context(reg=rig.reg), io=ScriptedPad()).close()
+
+
+def test_a_pad_device_closed_lets_go_even_if_the_router_throws(rig):
+    from hyperspace import devices
+
+    d = devices.PadDevice("pad", None, devices.Context(reg=rig.reg), io=ScriptedPad())
+    closed = []
+    d.io.close = lambda: closed.append(1)
+    d._router = NS(pad_lost=lambda _role: 1 / 0)
+    with pytest.raises(ZeroDivisionError):
+        d.close()
+    assert closed == [1] and d.io is None

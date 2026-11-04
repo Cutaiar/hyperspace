@@ -1717,11 +1717,10 @@ def test_a_user_row_on_a_moved_apc_note_is_kept():
     # + the clip-stop row's eight (plan 15 WP4), + the bank's sixteen pads
     # on clip rows 4 and 5 (plan 19 WP2), + the four invariant render
     # toggles and SAVE (plan 24 C1), + START's hold-to-save (the pad
-    # layout of 2026-10-14), + BACK's base chase (2026-11-04), + SEND A's
-    # sequencer page (plan 31 §A)
-    assert ("pad:MENU", "preset.save_new") in by and ("pad:VIEW", "deck.chase") in by
+    # layout of 2026-10-14), + SEND A's sequencer page (plan 31 §A)
+    assert ("pad:MENU", "preset.save_new") in by
     assert [n.split(" ")[0] for n in notes] == (["remapped", "added"]
-                                                + ["added"] * (17 + 4 + 2 + 16 + 5 + 1 + 1 + 1))
+                                                + ["added"] * (17 + 4 + 2 + 16 + 5 + 1 + 1))
     # and a second pass has nothing to do
     again, notes2 = routing.remap_factory(out)
     assert notes2 == [] and [b.source for b in again] == [b.source for b in out]

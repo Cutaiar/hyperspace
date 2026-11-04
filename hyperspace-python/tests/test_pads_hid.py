@@ -275,7 +275,7 @@ def test_the_pad_device_feeds_touch_and_motion_lists_ports_and_sends_identity(mo
     assert e.light == (255, 0, 128) and e.players == sony.player_bits(2)
     assert e.rumble_low == 0 and e.right.mode == "off"
     xbox = devices.PadDevice("pad", {"controller": "xbox"})
-    assert xbox.schemes == ("axis", "pad", "hat") and xbox.sinks == ()
+    assert xbox.schemes == ("axis", "pair", "pad", "hat") and xbox.sinks == ()
 
 
 def test_sink_rows_become_effects():

@@ -832,6 +832,7 @@ class PadDevice(Base):
         the context carries (`Context.reg`), else the router's. The camera
         job is the primary pad's only (plan 27 B6, decision 24: defaults
         author no look): a second pad's unrouted axes do nothing."""
+        self._router = router       # `close` lets go through it: no later frame will
         io = self.io
         if io is None:
             return
@@ -853,6 +854,17 @@ class PadDevice(Base):
             self._dialed = gamepad.dialed(routed)
             if reg is not None:
                 gamepad.steer(io, router, reg, self.__dict__.get("_dt", 0.0), routed=routed)
+
+    def close(self) -> None:
+        """The port shut, and what the pad's buttons held let go: a device gone
+        has no `act`, so `Router.pad` never sees it off (a held BACK would go
+        on committing into the base)."""
+        lost = getattr(self.__dict__.pop("_router", None), "pad_lost", None)
+        try:
+            if lost is not None:            # duck-typed: a shim may have none
+                lost(self.qualifier)
+        finally:
+            super().close()
 
     def feed(self, sources) -> None:
         """The pad's touch and motion lanes into the shared sources (plan

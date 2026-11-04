@@ -195,7 +195,7 @@ def test_two_pads_open_each_under_its_role(monkeypatch):
     assert reg.wants() == ("pad", "pair", "pair (spring)", "p2")
     assert one.wants == ("pad", "pair", "pair (spring)")
     assert two.wants == ("pad", "pair", "pair (spring)", "p2")
-    assert reg.primaries() == {"axis": "pad", "pad": "pad", "hat": "pad",
+    assert reg.primaries() == {"axis": "pad", "pair": "pad", "pad": "pad", "hat": "pad",
                                "touch": "pad", "motion": "pad"}
     assert table.primaries == reg.primaries()               # the table is told
     # two joysticks: each pad reads its own, and its line says which
@@ -217,9 +217,9 @@ def test_two_pads_open_each_under_its_role(monkeypatch):
     # the first pad leaves: p2 is the primary now, its rows bare
     reg.apply(entries[1:])
     two = reg.get("p2")
-    assert two.qualifier == "" and two.schemes == ("axis", "pad", "hat", "touch", "motion")
+    assert two.qualifier == "" and two.schemes == ("axis", "pair", "pad", "hat", "touch", "motion")
     assert "devices: p2 changed — reopened" in notes
-    assert two.wants == ("pad",) and reg.wants() == ("pad",)
+    assert two.wants == ("pad", "pair", "pair (spring)") and reg.wants() == two.wants
     reg.close()
 
 

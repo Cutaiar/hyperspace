@@ -892,6 +892,34 @@ def test_a_pad_button_learned_on_it_is_held_and_a_lost_pad_lets_go(rig):
     assert not rig.reg.chasing
 
 
+def test_a_desk_button_and_a_pad_button_hold_it_together(rig):
+    """Brushing the pad's button does not end what the APC's holds, or the
+    other way about; a desk cable lost lets go only of the desk's."""
+    rig.learn.arm(CHASE_PARAM)
+    assert rig.learn.learn_control("note:0:94")
+    pad = Pad()
+    rig.inp.queue.append(_note(True))
+    rig.midi.poll()
+    assert rig.reg.chasing
+    pad.is_down = True
+    rig.router.pad(pad, now=0.0)                # BACK down
+    pad.was_down, pad.is_down = True, False
+    rig.router.pad(pad, now=0.1)                # …and up: a brush
+    assert rig.reg.chasing, "the APC's button still holds it"
+    pad.was_down, pad.is_down = False, True
+    rig.router.pad(pad, now=0.2)
+    rig.inp.queue.append(_note(False))
+    rig.midi.poll()
+    assert rig.reg.chasing, "the pad's button still holds it"
+    rig.inp.queue.append(_note(True))
+    rig.midi.poll()
+    rig.midi._let_go_held()                     # the cable went
+    assert rig.reg.chasing, "the pad's button still holds it"
+    pad.was_down, pad.is_down = True, False
+    rig.router.pad(pad, now=0.3)
+    assert not rig.reg.chasing
+
+
 def test_a_lost_pad_leaves_a_toggle_it_did_not_hold(rig):
     rig.reg[CHASE_PARAM].set(True)             # held from elsewhere
     pad = Pad()

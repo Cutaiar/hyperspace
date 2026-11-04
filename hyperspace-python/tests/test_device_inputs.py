@@ -458,11 +458,11 @@ def test_schemes_wants_and_row_schemes_come_from_the_registry(build):
     ents = entries() + [{"role": "pad", "kind": "gamepad", "enabled": True, "usb": False},
                         {"role": "leap", "kind": "hands", "enabled": False}]
     r = build(ents, plug=())
-    assert r.router.schemes() == ("lane", "lfo", "env", "seq", "axis", "touch", "motion",
+    assert r.router.schemes() == ("lane", "lfo", "env", "seq", "axis", "pair", "touch", "motion",
                                   "hand", "hands")
-    assert ui_routing.source_schemes(r.router) == ["lfo", "env", "seq", "axis", "touch",
+    assert ui_routing.source_schemes(r.router) == ["lfo", "env", "seq", "axis", "pair", "touch",
                                                    "motion", "hand", "hands"]
-    assert r.learn.wants() == ("desk", "pad", "hand:left", "hand:right")
+    assert r.learn.wants() == ("desk", "pad", "pair", "pair (spring)", "hand:left", "hand:right")
     r.learn.arm("view.bright", "hand:left")             # off, but listed: armable
     with pytest.raises(ValueError, match="no such want"):
         r.learn.arm("view.bright", "wand1")
@@ -542,8 +542,9 @@ def test_a_pre_run_bindings_json_means_the_first_pad_with_two_pads_listed(build)
     assert r.reg["view.faces"].value != faces            # the primary's A: the file's row
     # ROUTING's combo offers the second pad's axes under its role, after
     # the primary's (no page change: the registry's feeds, the pad's labels)
-    assert ui_routing.source_schemes(r.router) == ["lfo", "env", "seq", "axis", "touch",
-                                                   "motion", "axis@p2", "touch@p2", "motion@p2"]
+    assert ui_routing.source_schemes(r.router) == ["lfo", "env", "seq", "axis", "pair", "touch",
+                                                   "motion", "axis@p2", "pair@p2", "touch@p2",
+                                                   "motion@p2"]
     panel = NS(audio=NS(chain=NS(band_names=["LOW"])))
     offered = dict(ui_routing._sources(panel, r.router))
     assert offered["axis@p2:LX"] == "axis@p2 left stick X"

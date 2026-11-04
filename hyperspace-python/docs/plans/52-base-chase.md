@@ -154,8 +154,10 @@ alone. Each deck's verb reaches its own registry only
 `reg["deck.chase"].set(True / False)`, whose setter calls `reg.base_chase`.
 The pad's factory row holds it on BACK (`pad:VIEW`, `momentary`; the owner,
 2026-11-04, register row 723). An older file's factory tap-tempo row on BACK
-moves there at the next load, a file with nothing on BACK gains it, and a row
-of the owner's on BACK stays, leaving that pad without a chase. A Joy-Con (R) has
+moves there at the next load; a file with nothing on BACK stays so, as the owner
+may have deleted it; and a row of the owner's on BACK stays, leaving that pad
+without a chase. It stays on until every source holding it has let go
+(`routing.press_momentary`), and a pad device closed lets go (`Router.pad_lost`). A Joy-Con (R) has
 no BACK, so it is the same (row 724); the (L)'s − has it. Learn pad is armed from a
 widget and this param has none, so a second pad button today is a line in the file.
 A test presses it, and Learn lands a note or a pad button on

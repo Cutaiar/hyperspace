@@ -2235,7 +2235,7 @@ def build_performance(view, bank=None, dream=None, fx=None, ghost=None, media=No
             pass
     r.switch_state = picks
     # plan 52: the base chase, held. The deck's rig control, so every deck has
-    # its own: a test or a learned button presses it, and it is `Deck.chase`'s
+    # its own: a pad's BACK (the factory row) or a learned button presses it, and it is `Deck.chase`'s
     # road: `base_chase` with this deck's undo (`chase_undo`)
     r.toggle(CHASE_PARAM, "Base chase", lambda: r.chasing, lambda v: r.base_chase(bool(v)),
              group="deck", persist=False, modulatable=False,
