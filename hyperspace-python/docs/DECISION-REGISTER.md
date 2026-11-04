@@ -684,6 +684,11 @@ here; overturn → the change, then the same.
 | 670 | Plan 49 U3: the focused section's room — beside the canvas, its header at the pane's top and its body down to the headers after it; in the narrow band, alone, the band leaving `CANVAS_MIN` of canvas, a chip letting go | 507, 508 | (rec) — pending the owner; built as recommended |
 | 671 | Plan 49 U3: VIEW, ROUTING, HANDS and SYSTEM fold in, folded at first; no page stays; their rows wrap at 240–320 px and SYSTEM's and HANDS' status lines wrap | 508 | (rec) — pending the owner; built as recommended |
 | 672 | Plan 49 U3: while a desk control is picked the canvas and every body but ROUTING's are dimmed, the headers live | 509 | (rec) — pending the owner; built as recommended |
+| 673 | Plan 45 V4, the read head: each voice reads sequentially from a head of its own, written only by the callback and read by nothing else; against the playhead carried forward by the speed since the last feed it is left alone within a block and a quarter (the clocks' phase plus the frame's jitter), slewed beyond that (the excess over 0.25 s, at most half the speed), cut with a one-block crossfade past 0.25 s (both × max(1, |speed|)), and stopped after 1 s with no feed. The numbers are by ear | — | (rec) — pending the owner; built as recommended |
+| 674 | Plan 45 V4, varispeed: `Transport.velocity` (signed; 0 at a parked end; a drag of `pos` at the drag's speed up to 8× the clip, a jump at the rate) and `wrap` replace `_forward`; linear resampling with the speed gliding inside a block, no anti-alias filter, at most 16× | — | (rec) — pending the owner; built as recommended |
+| 675 | Plan 45 V4, the loop-wrap case: the head counts modulo the loop and reads straight through the seam, either way; no splice fade, so a clip not cut to loop has the click of its own two ends; a track ending within 50 ms before the picture is bridged at full level, one ending earlier fades out and back, one running past it is cut there | — | (rec) — pending the owner; built as recommended |
+| 676 | Plan 45 V4, prefetch: none. A clip up to 120 s is held whole; a longer clip's wrap fades out and back in one window decode later | — | (rec) — pending the owner; built as recommended |
+| 677 | Plan 45 V4, silence and level: the level glides per block to gain × a fade on the speed (1 from 0.05 up, 0 under 1e-3), so rate 0 is a block's fade then exact zeros with no read; a block whose next block is not wholly held takes the level to 0 (`Soundtrack.holds`), so running out is a fade; a voice leaving gets one more block; a clip not yet probed is silent | — | (rec) — pending the owner; built as recommended |
 
 "—": no hand check shows it; tests only.
 
@@ -12052,3 +12057,84 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   say "in any other section", and "its line is framed" only while ROUTING's
   body is on screen (`ui_pane.shown`), not by what `ui.page` names.
 - **Judge it.** 509.
+
+### 673. Plan 45 V4: the read head
+- **Asked.** Plan 45 V4 and the wave 3 prompt: the callback reads sequentially
+  from its own sample position, slewed toward the transport's, under the rule
+  that there is no second time base (row 562).
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** A head the transport sets and nothing reads: left alone
+  within a block and a quarter (`DEAD`), slewed beyond it (`TAU_S` = 0.25 s, at most half
+  the speed), cut with a crossfade past `CUT` = 0.25 s, both × max(1, |speed|)
+  because jitter is a time, stopped after `STALE_S` = 1 s with no feed. The
+  error is against the playhead carried forward by the speed since the last
+  feed, so a block repeated or skipped by the clocks' phase is no error at all.
+- **Built.** `media/mixer.py`; `tests/test_media_varispeed.py`
+  (`test_rate_1_with_the_clocks_out_of_phase_repeats_and_skips_nothing`,
+  `test_a_small_error_slews_without_a_click_and_closes`,
+  `test_a_stuck_frame_thread_is_ridden_through_then_faded_not_free_run`,
+  `test_the_clocks_jitter_is_no_error_at_any_rate`,
+  `test_a_slew_against_a_slow_transport_never_stops_the_tape`).
+- **Judge it.** Hand check 510.
+
+### 674. Plan 45 V4: varispeed
+- **Asked.** Plan 45 V4: the transport's speed sets the read rate; reverse,
+  scrub and a rate change sound like tape; linear first, a windowed sinc if it
+  is heard.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** `Transport.velocity`, because `speed` says 1 at a parked end
+  and the rate during a scrub. A drag of `pos` reads at the drag's speed, up to
+  `SCRUB_TAPE` = 8× the clip; faster is a jump, played at the rate. Linear, the
+  speed gliding inside a block, no anti-alias filter, `MAX_SPEED` = 16.
+- **Built.** `media/transport.py`, `media/mixer.py`;
+  `test_any_rate_reads_that_many_samples_a_sample`,
+  `test_a_drag_of_pos_reads_at_the_speed_of_the_drag`,
+  `test_the_transport_says_how_it_is_really_moving`.
+- **Judge it.** Hand checks 511 and 513.
+
+### 675. Plan 45 V4: the loop-wrap case
+- **Asked.** Plan 45: "V4 also decides the window's wrap case".
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** Read straight through the seam, the head modulo the loop, so
+  a clip cut to loop is seamless. No splice fade: it would dip every clip that
+  was cut well to spare the ones that were not. If the click of an uncut clip
+  is heard at a show, a short fade is a small change. The loop's length is the
+  picture's: a track ending up to 50 ms before it (a mux mismatch) has the gap
+  bridged at full level, one ending earlier fades out and back, and one running
+  past it is cut at the picture's end.
+- **Built.** `test_a_loop_wrap_reads_straight_through_the_seam_in_order`,
+  `test_a_few_ms_short_of_the_loop_is_bridged_at_full_level`,
+  `test_a_track_past_the_picture_is_cut_at_the_pictures_end`,
+  `test_reverse_reads_back_through_the_seam`,
+  `test_the_error_is_measured_the_short_way_round_the_loop`.
+- **Judge it.** Hand check 512.
+
+### 676. Plan 45 V4: whether a loop needs the head prefetched
+- **Asked.** Plan 45: "whether a short clip's loop needs the head prefetched".
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** No. A clip up to 120 s is held whole, so its head is in
+  memory. A longer clip's wrap is one gap of one window decode, faded, per wrap
+  of a clip over two minutes; holding its head would cost a second seek and
+  demux of a large file, on a cloud-synced library, for every channel enabled.
+- **Built.** `test_a_short_clip_needs_no_prefetch_a_whole_track_wraps_on_what_it_holds`,
+  `test_a_long_tracks_wrap_fades_out_and_back_when_the_window_arrives`.
+- **Judge it.** Hand check 512, with a clip over two minutes.
+
+### 677. Plan 45 V4: silence and level
+- **Asked.** Plan 45 V4: rate 0 is silence; a block outside the held window is
+  zeros.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** One level that glides per block to gain × a fade on the speed
+  and to 0 when this block or the next is not wholly held (`Soundtrack.holds`),
+  so running out of samples is a fade and not a step. It also covers a
+  voice starting, a gain move and a voice leaving, so none of them clicks. A
+  transport at rest has no slew, so a stopped head does not creep. A clip not
+  yet probed (duration 0) does not move and is silent; V2 repeated its first
+  block.
+- **Built.** `test_rate_0_is_silence_after_one_block_fading_and_reads_nothing`,
+  `test_a_once_clip_running_out_of_track_fades_while_it_has_samples`,
+  `test_a_head_leaving_its_window_fades_before_the_edge`,
+  `test_a_gain_move_glides_across_a_block`,
+  `test_a_voice_turned_off_fades_in_one_block_and_is_let_go`,
+  `test_the_callback_allocates_nothing_once_warm`.
+- **Judge it.** Hand checks 511 and 512.
