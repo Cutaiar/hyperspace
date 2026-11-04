@@ -12,7 +12,7 @@ any of that happens, which files hold one, and so which params to think about
 moving into the preset.
 
 The documents read, every folder down as the library lists them (plan 48; not
-``trash/``, not a backup, not a dot-file):
+``trash/``, not a dot-folder):
 
 - the presets, ``<library>/presets/**/*.json``: their ``routes`` and ``desk``
   rows and their macros' base and depth subscribers. Each is **dropped at load**;
@@ -20,7 +20,8 @@ The documents read, every folder down as the library lists them (plan 48; not
   one is **refused whole** when it is read (`patches.check`, register row 744),
   so it says so: edit the file, or take the row out and save the patch again.
 
-A file that does not parse is named and passed over. A row's `scale` naming a
+A file that does not parse, or holds a row or subscriber this build cannot read,
+is named and passed over. A row's `scale` naming a
 meta param is not listed: it reads the param and never moves it (row 18 (a)).
 """
 
@@ -38,7 +39,8 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from hyperspace.routing import Binding, is_session_id, meta_row_refusal
+from hyperspace.library import _walk
+from hyperspace.routing import Binding, Macro, meta_row_refusal
 
 PRESETS, PATCHES = "presets", "patches"
 
@@ -53,14 +55,10 @@ class Found:
 
 
 def documents(folder: Path) -> Iterator[Path]:
-    """Every JSON file under `folder`: not the trash, a backup or a dot-file."""
-    if not folder.is_dir():
-        return
-    for p in sorted(folder.rglob("*.json")):
-        parts = p.relative_to(folder).parts
-        if any(s == "trash" or s.startswith(".") or ".bak-" in s for s in parts):
-            continue
-        yield p
+    """Every JSON file the library's walker lists under `folder`, less the trash."""
+    for p in _walk(folder):
+        if "trash" not in p.relative_to(folder).parts:
+            yield p
 
 
 def _row(path: Path, key: str, r: Mapping, layer: str | None) -> Found | None:
@@ -71,20 +69,14 @@ def _row(path: Path, key: str, r: Mapping, layer: str | None) -> Found | None:
     if meta_row_refusal(b) is None:
         return None
     pair = f"{b.source} → {b.target}"
-    return Found(path, key, pair, f"{pair}  {b.op} {b.value:g}")
+    return Found(path, key, pair, f"{pair}  {b.op} {b.value}")
 
 
 def _subs(path: Path, macros: Mapping) -> Iterator[Found]:
     for mid, m in macros.items():
-        for s in (m.get("subs") or ()) if isinstance(m, Mapping) else ():
-            if not isinstance(s, Mapping):
-                continue
-            dep = s.get("depth")
-            pid = dep.get("target") if isinstance(dep, Mapping) else s.get("base")
-            if isinstance(pid, str) and is_session_id(pid):
-                kind = "depth" if isinstance(dep, Mapping) else "base"
-                pair = f"{mid} {kind} → {pid}"
-                yield Found(path, "macros", pair, pair)
+        for pid in Macro.from_json(m).meta_subs():
+            pair = f"{mid} → {pid}"
+            yield Found(path, "macros", pair, pair)
 
 
 def scan_doc(path: Path, doc: Mapping) -> list[Found]:
@@ -108,12 +100,12 @@ def scan(folder: Path) -> tuple[int, list[Found], list[str]]:
     for p in documents(folder):
         try:
             doc = json.loads(p.read_text())
-        except (OSError, ValueError) as e:
-            bad.append(f"{p}: {e}")
+            hits = scan_doc(p, doc) if isinstance(doc, Mapping) else []
+        except (OSError, ValueError, TypeError, KeyError, AttributeError) as e:
+            bad.append(f"{p}: {e!r}")
             continue
         n += 1
-        if isinstance(doc, Mapping):
-            found += scan_doc(p, doc)
+        found += hits
     return n, found, bad
 
 

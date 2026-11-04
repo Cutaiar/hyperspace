@@ -386,15 +386,14 @@ def add_route(panel, target: str, source: str | None = None, depth: float = LANE
     router = router_of(panel)
     src = source or f"lane:{panel.control.selb}"
     b = Binding(src, target, op, depth, motion=motion.DEFAULT_ROUTE_FEEL)
+    why = router.table.refusal(b)
+    if why is not None:                  # the referee's words, where the page shows them
+        _state(panel)["error"] = f"routing: {why}"
+        return None
     try:
         router.table.add(b)
     except Owned as e:
         ask(panel, e.existing, b, lambda: router.table.replace_owner(b))
-        return None
-    except ValueError as e:              # the referee's words: nothing landed
-        say = getattr(getattr(panel, "library", None), "say", None)
-        if say is not None:
-            say(str(e))
         return None
     return b
 
@@ -720,10 +719,11 @@ def ctx_item(panel, p: Param) -> None:
     real = panel._real(p)
     if router_of(panel) is None:
         return
-    if part_of(real) == "session":      # register row 743: the refusal, in words
+    why = meta_refusal(real.id)
+    if why is not None:                 # register row 743: the refusal, in words
         imgui.text_disabled(META_LINE)
         if imgui.is_item_hovered():
-            ui.tooltip(meta_refusal(real.id) or META_LINE)
+            ui.tooltip(why)
         return
     if not real.modulatable:
         imgui.text_disabled("not modulatable")
@@ -853,7 +853,7 @@ def route_target(p: Param) -> bool:
     """Can a route land on this param? Modulatable, and not the meta
     controller's (register row 743). One rule for the target combo, the
     menu's Learn items and Route from ▸ (`ui_graph.route_from_items`)."""
-    return p.modulatable and part_of(p) != "session"
+    return p.modulatable and meta_refusal(p.id) is None
 
 
 def _targets(panel) -> list[Param]:
@@ -1410,7 +1410,7 @@ def desk_target(p: Param) -> bool:
     target combo and for the menu's "Learn desk" (`Panel._desk_target`). Not
     on a meta param either (register row 743): both of those land a preset-
     layer row."""
-    return pad_target(p) and part_of(p) != "session"
+    return pad_target(p) and meta_refusal(p.id) is None
 
 
 def pad_target(p: Param) -> bool:
