@@ -7818,8 +7818,9 @@ error there is the table's, `room.MODES` and `ghost.MODES` together.
 *Pass:* (1) the bar sits at its ends and jumps between them, without a
 crawl through the middle. (2) Pitch keeps climbing and neither other bar
 jumps by half a turn. (3) Roll carries the twist; on the way down yaw may
-step, up to a quarter turn, the one step this design keeps (row 679). Say if
-it is more than a tracker glitch would be: O2 would need a guard.
+may read no value for a moment and restart if the twist was over 5° (row 685,
+O2's guard, which replaced a yaw step of up to a quarter turn). A smaller step
+goes through.
 **516. Level room, a lost hand, and stillness.** (same)
 1. Open **feel & calibration**, one hand in view, hold it flat, press **level
    room** with the mouse, hold it a second; if you can, with the Leap on a wedge
@@ -7833,6 +7834,42 @@ at once, and come back at the new angle without a glide. (4) The bars do not
 visibly shimmer: this filter is the page's `smooth` and `response`, untuned
 for a camera. Fail: a shimmer you would see on a shape (tell O2 to tune it).
 
+## BV. The orbit (plan 51 O2)
+Register rows 682–685, 2026-11-03. **Nothing here has run on a real sensor**:
+`tests/test_hands_orbit.py` plays tapes from computed poses through `TapeSource`,
+`HandsIO` and `Router.modulate`, and the tape's fist has the same palm vectors as
+its open hand. Set up: on GRAPH, wire the hands node's `R room yaw` to the camera's
+Yaw and `R room pitch` to its Pitch. Each row should read `turn`, gated by R grab.
+**517. The orbit.** (the Mac with the Leap, a shape on screen)
+1. Close a fist and turn it left and right, then tip it up and down.
+2. Open the hand, swing it elsewhere, close it there, turn again.
+3. With a fist, turn on past where the camera's Yaw reads ±180°.
+*Pass:* (1) the shape follows, about as far as the hand turned. (2) Nothing moves
+while open, and nothing jumps at the close: the turn goes on from where the shape
+sat. (3) No sweep and no snap at the seam. Fail: a jump on closing, the direction
+reversed, or the shape drifting with the fist still. Say if the sense feels wrong
+with the camera pitched far over: it is yaw then pitch, not a trackball (plan 51 §6).
+**518. The clutch itself, and undo.** (same)
+1. Close and open the fist a few times without meaning to turn.
+2. Mid-orbit, take the hand out of the box and bring it back turned, still a fist.
+3. Orbit twice with an open hand between, once holding the fist dead still for a
+   second in the middle. Press undo twice.
+4. Orbit with the fist still closed and press undo mid-turn.
+*Pass:* (1) the shape barely moves: say how much, since closing a real fist may tip
+the palm's reading, and whether a pinch would serve better (change the row's gate on
+ROUTING). (2) The shape stays when the hand goes, and nothing jumps when it returns.
+(3) Each undo takes back one whole orbit, the pause not splitting it. (4) It goes
+back and stays until the fist has opened and closed again.
+**519. Saved, held, and the cone.** (same)
+1. Orbit, save the preset, load another, load it back.
+2. Engage the hold and orbit.
+3. A fist with the fingers straight up, twist it about them, lower it.
+4. A fist swept past vertical a little to one side, fast and then slowly.
+*Pass:* (1) the camera is where you left it, and the rows are there, on the other Mac
+too once it has this build. (2) The preview turns and the projector does not. Say if
+you wanted the orbit on the projector (row 684). (3) No camera jump on the way down.
+(4) The camera holds through the pass with no sweep. Say if it holds so often near
+vertical that the 20° zone wants to be smaller (row 685).
 ## What no test covers
 
 Only a person can settle these:
