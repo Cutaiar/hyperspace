@@ -796,9 +796,10 @@ Consequences:
   pinch can drop the LFOs on the one). `tempo.tap` is not: a band on tap
   tempo would tap on every transient
   (`tests/test_tempo.py::test_a_performer_on_tap_tempo_is_dormant_but_one_on_the_lfo_trigger_fires`).
-- **A preset's route may perform any modulatable param**, a session one
-  included; a preset never sets a session *base*. The ROUTING page marks
-  such a row "session" (`ui_routing.is_session_target`).
+- **A preset's route may perform any modulatable param but a meta
+  controller's** (`part_of(p) == "session"`; `routing.meta_refusal`, register
+  row 743): no row of a preset drives one, and a preset never sets its base.
+  The line is `routing.is_session_row`, so the meta controller's own rows stay.
 - **The pattern inputs add no writer.** `pattern.mod.0–7` are ordinary
   modulatable params with a named meaning each (§5, Face patterns). The
   FACES page writes their bases like any widget, and its "+ source"
