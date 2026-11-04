@@ -3,11 +3,16 @@
 Words only: the first half pins what a person reads, the second what stayed.
 """
 
+import json
+
+import pytest
 from test_ui_shell import page_frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
 from hyperspace import graphview, patches, routing, ui, ui_desk, ui_graph, ui_pane, ui_presets
 from hyperspace.groupwords import group_part, group_title, group_word
+from hyperspace.library import PATCHES, Library, LibraryError
+from hyperspace.params import Registry
 from hyperspace.routing import Binding
 
 
@@ -17,6 +22,26 @@ def test_a_group_has_one_record_and_any_other_says_its_key(shell_rig):  # noqa: 
     assert (group_word("view"), group_title("view"), group_part("view")) == ("view",) * 3
     assert group_word("") == ""
     assert shell_rig.reg.group_word("band") == "analyzer"       # undo.py's road: a leaf
+
+
+def test_a_group_of_any_value_has_words_and_no_type_error():
+    for bad in ([], {}, 3, None):
+        assert group_word(bad) == group_title(bad) == group_part(bad) == str(bad)
+
+
+def test_a_patch_whose_group_is_not_text_is_refused_in_words(tmp_path):
+    lib = Library(tmp_path)
+    for i, bad in enumerate(([], {}, 3)):
+        doc = {"schema": patches.SCHEMA, "name": f"odd{i}", "group": bad}
+        assert patches.check(doc) == [patches.GROUP_EMPTY_WORDS.format(value=bad)]
+        (tmp_path / PATCHES).mkdir(exist_ok=True)
+        (tmp_path / PATCHES / f"odd{i}.json").write_text(json.dumps(doc))
+        with pytest.raises(LibraryError):
+            lib.read_patch(f"odd{i}")
+
+
+def test_the_registry_keeps_its_docstring():
+    assert Registry.__doc__ == "An ordered map of Param by id."
 
 
 def test_a_refusal_says_the_word_not_the_key(tmp_path):

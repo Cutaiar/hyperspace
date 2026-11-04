@@ -24,19 +24,25 @@ class GroupWords:
 GROUPS = {"band": GroupWords("analyzer", "analyzer tuning", "band")}
 
 
-def group_word(group: str) -> str:
-    """The group inside a line; its key where it has no other word."""
-    g = GROUPS.get(group)
-    return g.word if g is not None else group
+def _of(group) -> GroupWords | None:
+    """The record, for any value: a hand-edited file can hold anything there,
+    and saying so is the caller's refusal, not a TypeError from a dict."""
+    return GROUPS.get(group) if isinstance(group, str) else None
 
 
-def group_title(group: str) -> str:
-    """The group as a head or a node's title; its key where it has no other."""
-    g = GROUPS.get(group)
-    return g.title if g is not None else group
+def group_word(group) -> str:
+    """The group inside a line; its key, as text, where it has no other word."""
+    g = _of(group)
+    return g.word if g is not None else str(group)
 
 
-def group_part(group: str) -> str:
-    """One part of the group, for a small button; its key where it has no other."""
-    g = GROUPS.get(group)
-    return g.part if g is not None else group
+def group_title(group) -> str:
+    """The group as a head or a node's title; its key, as text, where it has no other."""
+    g = _of(group)
+    return g.title if g is not None else str(group)
+
+
+def group_part(group) -> str:
+    """One part of the group, for a small button; its key, as text, where it has no other."""
+    g = _of(group)
+    return g.part if g is not None else str(group)

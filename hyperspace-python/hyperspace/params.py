@@ -834,12 +834,12 @@ def is_instance_id(pid: str) -> bool:
 
 
 class Registry:
+    """An ordered map of Param by id."""
+
     @staticmethod
     def group_word(group: str) -> str:
         """`groupwords.group_word`, for `undo.py`, a leaf that holds a registry."""
         return groupwords.group_word(group)
-
-    """An ordered map of Param by id."""
 
     # class-level so a registry from before a hot reload has them (plan 28 N0):
     # `serial` moves on every add and remove (the modulation patch's cache
