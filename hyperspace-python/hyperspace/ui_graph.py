@@ -2323,6 +2323,7 @@ def _group_chips(panel, g) -> None:
             wire_as_saved(panel, g.id)
         if imgui.is_item_hovered():
             ui.tooltip(WIRE_AS_SAVED_TIP + "\n" + saved_words(ports))
+        _take_over_chip(panel, st, g.id)
     form = st.get("patch_form")
     if form is not None and form[0] == g.id:
         _patch_form(panel, g, form)
@@ -2338,6 +2339,39 @@ def _group_chips(panel, g) -> None:
             open_patch_form(panel, g, update=True)
         if imgui.is_item_hovered():
             ui.tooltip(f"Write this group over patch {g.patch} (its old text to the trash)")
+
+
+def take_over_plan(panel, gid: str) -> graphview.TakeOver | None:
+    """The take-over chip's plan for group `gid`, or None for no chip. Read
+    afresh only when the section moved: a press re-reads it and refuses a plan
+    that no longer holds, so a frame need not pay for a trial read."""
+    st = _state(panel)
+    spec = getattr(st.get("view"), "spec", None)
+    held = st.get("take_over_plan")
+    if held is not None and held[0] is spec and held[1] == gid:
+        return held[2]
+    e = group_edit(panel)
+    plan = e.take_over_of(gid) if e is not None else None
+    st["take_over_plan"] = (spec, gid, plan)
+    return plan
+
+
+def _take_over_chip(panel, st: dict, gid: str) -> None:
+    """Wave 3 P3 (row 524): under **wire as saved**, only while its press would
+    refuse a taken port this one could take: the label names what is cut. What
+    the press is judged against is what the chip said as the mouse went down."""
+    plan = take_over_plan(panel, gid)
+    if plan is None:
+        return
+    # (### : the same control whatever the label says, so a press under a label
+    # that moved reaches the refusal instead of doing nothing)
+    hit = ui.chip(plan.label + "###graph.group.take_over")
+    if imgui.is_item_activated():
+        st["take_over_asked"] = plan
+    if imgui.is_item_hovered():
+        ui.tooltip("\n".join((TAKE_OVER_TIP, *plan.words)))
+    if hit:
+        take_over(panel, gid, st.pop("take_over_asked", plan))
 
 
 # ---------------------------------------------------------------- plan 40 T3: patches
@@ -2364,6 +2398,9 @@ PATCHES_TIP = ("The patches: a click spawns one at the canvas's centre, its pins
 NO_PATCHES = "no patches yet — a group's menu: save as patch…"
 WIRE_AS_SAVED_TIP = ("Wire each open pin as the patch was saved, where this preset has that "
                      "node and the port is free — the rest said, nothing else touched")
+TAKE_OVER_TIP = ("Wire each open pin as the patch was saved, and cut what feeds a port it "
+                 "needs: the node it came from stays on the canvas, not re-wired. One undo step. "
+                 "It cuts:")
 SAVE_PATCH_TIP = ("Save this group as a patch: its nodes, values, wires, rows and the cables "
                   "across its edge — the patch's file, nothing else written")
 SHEET_UP = "{n} control{s} the preset already uses: the sheet asks which keeps each"
@@ -2554,6 +2591,22 @@ def wire_as_saved(panel, gid: str) -> str | None:
         return None
     why = e.wire_as_saved(gid)
     st = _state(panel)
+    st["note"] = why or ""
+    st["said"] = e.said if e.said else ""
+    return why
+
+
+def take_over(panel, gid: str, asked: graphview.TakeOver | None = None) -> str | None:
+    """The take-over chip on group `gid` (`Edit.wire_taking_over`): what landed
+    and what was cut on the head's line, what stays refused as its note. `asked`
+    is the plan the chip showed (None: whatever would be cut now)."""
+    e = group_edit(panel)
+    if e is None:
+        return None
+    e.said = ""
+    why = e.wire_taking_over(gid, asked)
+    st = _state(panel)
+    st["take_over_plan"] = None     # (a refused plan is read again, not drawn again)
     st["note"] = why or ""
     st["said"] = e.said if e.said else ""
     return why

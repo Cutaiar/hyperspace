@@ -212,6 +212,33 @@ Tests: `tests/test_patches_replace_dream.py` (new); P1's tests that named the
 dream as refused now name the shape, and the registry-wide owners test lost its
 exception for the dream.
 
+## P3: wire-as-saved take-over (wave 3)
+
+**Status: built (2026-11-04)**. The owner answered row 524: "yes, the take-over
+chip". Details are rows 665–667, (rec) pending the owner; hand checks 503–505,
+group BR. **Hot reload is enough**; no schema moves, stacked on P2.
+
+What changed in the build:
+
+- **The second chip** (rows 524, 665). `ui_graph._take_over_chip` under **wire as
+  saved**, drawn only while `Edit.take_over_of` has a plan. Its label names each cut
+  on a line of its own, since a single line would be clipped by the pane, and past
+  three says the count; the hover lists them. `Edit.wire_taking_over` lands every pin
+  the plain chip would and each taken outlet, one undo step, then "cut huecycle → All
+  outputs" on the head. The plan is cached by the section's identity, so a frame pays
+  for no trial read.
+- **The plain chip is unmoved.** `Edit.wire_as_saved` and the new press share
+  `Edit._saved_pins`; only `take_over=True` cuts, and the plain words are the same.
+- **What is not taken** (row 666). A taken inlet is no open pin; `scene.geometry` has
+  nothing to cut and keeps its `before`; another refusal stays refused; the rig's bus
+  cable is not a preset wire; a cut the read refuses draws no chip.
+- **WYSIWYG.** The cut's source stays on the canvas (`_keep_declared`), not re-wired.
+- **Staleness** (row 667). The chip's plan is taken at the mouse-down and the press
+  compares it, section by identity, or refuses in `TAKE_OVER_STALE`, nothing cut.
+
+Tests: `tests/test_wire_take_over.py` (new). `tests/test_graph_groups.py`'s plain
+chip tests pass untouched.
+
 ## Review fixes (PR #352)
 
 1. A group refuses the rig's media channel too: `patches.RIG_KINDS`

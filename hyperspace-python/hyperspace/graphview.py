@@ -3054,6 +3054,15 @@ PORT_TAKEN = "{port} is taken"
 NO_HOST_NODE = "no node {name}"
 NO_WAS = "{port}: the patch says nothing it was wired to"
 NOTHING_OPEN = "no pin of {name} is open"
+# wave 3 P3 (row 524, the owner's yes): the explicit chip that takes a taken
+# port over, and the words a press says when the chip no longer holds
+TAKE_OVER_CHIP = "wire as saved, replacing"
+TAKE_OVER_COUNT = "{n} cables"
+TAKE_OVER_NAMED = 3        # a chip names this many cuts, a line each; past it, the count
+CUT_SAID = "cut {cuts}"
+TAKE_OVER_UNDO = "wire {name} as saved, replacing {cuts}"
+TAKE_OVER_STALE = ("the preset changed under that chip: nothing cut — read {name}'s chip "
+                   "again")
 SAVED_PATCH = "saved {name} as a patch"
 UPDATED_PATCH = "updated patch {name}"
 PATCH_NEEDS_NAME = "a patch needs a name"
@@ -3363,6 +3372,40 @@ def open_ports(spec, entry: Mapping) -> list[dict]:
         if free:
             out.append(dict(p))
     return out
+
+
+def port_said(port: str) -> str:
+    """A wire's far end in a person's words: All outputs' picture is "All
+    outputs" and its other ports "All outputs hands"; any other port its name."""
+    head, _, name = port.rpartition(".")
+    if head != rgraph.ALL_OUTPUTS:
+        return port
+    return LABELS[rgraph.ALL_OUTPUTS] + ("" if name == "image" else f" {name}")
+
+
+@dataclass(frozen=True)
+class TakeOver:
+    """What one press of the take-over chip would do to a group (wave 3 P3):
+    the very section it read (`spec`, a landing makes a new one), the cables
+    it cuts and the wires it lands, and what stays refused. The chip's label
+    comes from here, and a press hands the chip's plan back to be checked."""
+    spec: Any
+    cuts: tuple[tuple[str, str], ...]
+    wires: tuple[str, ...]
+    refused: tuple[str, ...] = ()
+
+    @property
+    def words(self) -> list[str]:
+        return [f"{a} → {port_said(b)}" for a, b in self.cuts]
+
+    @property
+    def label(self) -> str:
+        """The chip's words, a line each, so none is clipped by the pane:
+        every cut named, or past `TAKE_OVER_NAMED` the count (the hover has
+        them all)."""
+        if len(self.cuts) > TAKE_OVER_NAMED:
+            return f"{TAKE_OVER_CHIP} {TAKE_OVER_COUNT.format(n=len(self.cuts))}"
+        return "\n".join((TAKE_OVER_CHIP, *self.words))
 
 
 def _open_pins(view: View, g: VGroup, entry: Mapping) -> None:
@@ -4765,45 +4808,16 @@ class Edit:
         as the patch was saved — an inlet `was → <member port>`, an outlet
         `<member> → was` — all in **one undo step**; every other pin
         refused in words ("output.all.image is taken", "no node
-        tripcolour"). Returns the refusals joined (None: every pin wired);
-        what landed is `said`."""
+        tripcolour"). Never takes a port over (`wire_taking_over` is the
+        chip that does). Returns the refusals joined (None: every pin
+        wired); what landed is `said`."""
         g = self._group(gid)
         if g is None:
             return NO_GROUP.format(gid=gid)
-        spec = getattr(self.graph, "spec", None)
-        ports = open_ports(spec, g)
+        ports = open_ports(getattr(self.graph, "spec", None), g)
         if not ports:
             return NOTHING_OPEN.format(name=g["name"])
-        doc = _doc(self)
-        have = set(frame_names(spec))
-        into = {x["to"] for x in doc.get("wires", [])}
-        refused, wired = [], []
-        for p in ports:
-            was = p.get("was")
-            if not isinstance(was, str) or not was:
-                refused.append(NO_WAS.format(port=p.get("id")))
-                continue
-            if "to" in p:
-                node = rgraph.pin_node(was) or was
-                w = {"from": was, "to": p["to"]}
-            else:
-                node = was.rpartition(".")[0]
-                w = {"from": p["from"], "to": was}
-                if was in into and was not in rgraph.MANY_PORTS:
-                    refused.append(PORT_TAKEN.format(port=was))
-                    continue
-            if node not in have and kind_of(node) not in ALWAYS_KINDS:
-                refused.append(NO_HOST_NODE.format(name=node))
-                continue
-            trial = copy.deepcopy(doc)
-            trial["wires"] = _wire_placed(trial.get("wires", []), w, p.get("before"))
-            why = _land(self, trial, "", "", dry=True)
-            if why is not None:
-                refused.append(f"{w['from']} → {w['to']}: {why}")
-                continue
-            doc = trial
-            into.add(w["to"])
-            wired.append(f"{w['from']} → {w['to']}")
+        doc, wired, _, refused = self._saved_pins(ports)
         why = "; ".join(refused) if refused else None
         if not wired:
             return why
@@ -4811,6 +4825,107 @@ class Edit:
         self._step(label)
         landed = self._land_quiet(doc, label, WIRED_AS_SAVED.format(wires=", ".join(wired)))
         return landed or why
+
+    def take_over_of(self, gid: str) -> TakeOver | None:
+        """What the take-over chip of group `gid` would do, or None when it
+        has nothing to do: no pin of the group is refused for a taken port
+        that a press could take. Reads only."""
+        got = self._take_over(gid)
+        return got[0] if got is not None else None
+
+    def wire_taking_over(self, gid: str, asked: TakeOver | None = None) -> str | None:
+        """The take-over chip (wave 3 P3, row 524, the owner's yes): what
+        **wire as saved** does, and each outlet's taken port is cut for it,
+        every cut named on the chip (`asked`), all of it **one undo step**,
+        the cut said after. The source of a cut cable stays on the canvas,
+        unwired (`_keep_declared`), and nothing re-wires it: the graph stays
+        WYSIWYG. `asked` is what the chip said when the mouse went down: a
+        section or a plan that has moved since refuses in words, nothing cut
+        (a bank press may load another preset under a held chip). A pin
+        refused for another reason stays refused, returned joined as ever."""
+        g = self._group(gid)
+        if g is None:
+            return NO_GROUP.format(gid=gid)
+        got = self._take_over(gid)
+        if asked is not None and (got is None or asked.spec is not got[0].spec
+                                  or asked.cuts != got[0].cuts
+                                  or asked.wires != got[0].wires):
+            return TAKE_OVER_STALE.format(name=g["name"])
+        if got is None:
+            return self.wire_as_saved(gid)    # nothing to take over: only what it says
+        plan, doc = got
+        cuts = ", ".join(plan.words)
+        label = TAKE_OVER_UNDO.format(name=g["name"], cuts=cuts)
+        self._step(label)
+        said = "; ".join((WIRED_AS_SAVED.format(wires=", ".join(plan.wires)),
+                          CUT_SAID.format(cuts=cuts)))
+        landed = self._land_quiet(doc, label, said)
+        return landed or ("; ".join(plan.refused) if plan.refused else None)
+
+    def _take_over(self, gid: str) -> tuple[TakeOver, dict] | None:
+        """(the plan, the section it lands), or None: nothing to take over."""
+        g = self._group(gid)
+        spec = getattr(self.graph, "spec", None)
+        ports = open_ports(spec, g) if g is not None else []
+        if not ports:
+            return None
+        doc, wired, cuts, refused = self._saved_pins(ports, take_over=True)
+        if not cuts:
+            return None
+        plan = TakeOver(spec=spec, cuts=tuple((x["from"], x["to"]) for x in cuts),
+                        wires=tuple(wired), refused=tuple(refused))
+        return plan, doc
+
+    def _saved_pins(self, ports: list[dict], take_over: bool = False
+                    ) -> tuple[dict, list[str], list[dict], list[str]]:
+        """`ports` as a press would land them on the section as it stands:
+        (the section after, the wires landed in words, the wires cut, the
+        refusals). A port taken is refused, or with `take_over` an outlet's
+        taken port gives up what feeds it. `scene.geometry` takes many, so
+        nothing is cut for it. An inlet's port is the patch's own: one with a
+        wire in it is no open pin (`open_ports`), so a hand's wire is not cut."""
+        spec = getattr(self.graph, "spec", None)
+        doc = _doc(self)
+        have = set(frame_names(spec))
+        into = {x["to"] for x in doc.get("wires", [])}
+        landed: set[str] = set()    # (a port this press wired is not the host's to give up)
+        refused, wired, cuts = [], [], []
+        for p in ports:
+            was = p.get("was")
+            if not isinstance(was, str) or not was:
+                refused.append(NO_WAS.format(port=p.get("id")))
+                continue
+            taking = False
+            if "to" in p:
+                node = rgraph.pin_node(was) or was
+                w = {"from": was, "to": p["to"]}
+            else:
+                node = was.rpartition(".")[0]
+                w = {"from": p["from"], "to": was}
+                if was in into and was not in rgraph.MANY_PORTS:
+                    if not take_over or was in landed:
+                        refused.append(PORT_TAKEN.format(port=was))
+                        continue
+                    taking = True
+            if node not in have and kind_of(node) not in ALWAYS_KINDS:
+                refused.append(NO_HOST_NODE.format(name=node))
+                continue
+            trial = copy.deepcopy(doc)
+            gone = [x for x in trial.get("wires", []) if x["to"] == was] if taking else []
+            trial["wires"] = _wire_placed([x for x in trial.get("wires", []) if x not in gone],
+                                          w, p.get("before"))
+            # (a node a cut was the last mention of stays drawn, faint)
+            _keep_declared(trial, [x["from"] for x in gone])
+            why = _land(self, trial, "", "", dry=True)
+            if why is not None:
+                refused.append(f"{w['from']} → {w['to']}: {why}")
+                continue
+            doc = trial
+            into.add(w["to"])
+            landed.add(w["to"])
+            cuts += gone
+            wired.append(f"{w['from']} → {w['to']}")
+        return doc, wired, cuts, refused
 
     def save_patch(self, gid: str, name: str, note: str = "") -> str | None:
         """**Save as patch…** / **Update patch** (plan 40 T3, P3): group

@@ -5918,7 +5918,8 @@ Headless: `tests/test_graph_groups.py::test_save_as_patch_writes_that_file_and_n
 4. Hover the new group; press `+`, then `−`. Drag `scene` onto its `in`
    pin and its `out` pin onto All outputs' `image`. Then ⌘Z three times.
 5. Press **new** again, spawn noita core, and press **wire as saved** on
-   its side pane. ⌘Z once.
+   its side pane. ⌘Z once. (No take-over chip here: nothing is taken; that
+   chip is 503.)
 6. Group two nodes of any preset and **save as patch…** under the name
    "noita core"; then, on `party-noita`'s first group, press **update
    patch** and **Save**.
@@ -5948,7 +5949,8 @@ the trash.
 *Fail:* a preset or `bindings.json` touched by the save or the spawn (a
 spawn writes no file); a host value changed by the spawn (D5: only the
 members' values land); the pins missing (the entry's `ports` lost, row
-523); **wire as saved** wiring a taken port (row 524 reversed); an
+523); the plain **wire as saved** wiring a taken port (row 524: only the
+take-over chip does, 503); an
 existing patch replaced in step 6 (`Edit.save_patch`'s `PATCH_EXISTS`
 check skipped); a click in the fold spawning (`_list_row`'s pick not
 suppressed for PATCHES); more than one ⌘Z to take a spawn back (the
@@ -7629,6 +7631,46 @@ look-back's (brightness, fade time, count …) under `Look-back`, none under bot
 not on the look-back. (4) the same two lists as the canvas. Saved presets play as
 they did. Fail: a knob on neither node, or a picture change on any load.
 
+## BR. Wire as saved, taking over (wave 3 P3)
+Register rows 524, 665–667, 2026-11-04. Headless: `tests/test_wire_take_over.py`
+(one press and one undo step, the words, the plain chip unmoved, what is not taken,
+several cuts, the mouse on the real chip, a stale press). Nobody has seen the chip
+drawn: the tests draw it, find it by id and click it. No file is written by any step
+but a save. Scroll the selection section if the chips sit below its fold (row 665).
+**503. Take over.** (laptop, GRAPH, the copy, the picture on a window; `acid wash`
+or any patch whose outlet was All outputs)
+1. Load `party-trip`, spawn the patch, select its group and read the pane.
+2. Press **wire as saved**.
+3. Press the chip under it, naming `huecycle → All outputs`.
+4. ⌘Z once. Press the second chip without the first.
+*Pass:* (1) two chips; the second reads "wire as saved, replacing / huecycle → All
+outputs", every word inside the pane, and its hover lists the same cut. (2) the head
+says what landed and "output.all.image is taken"; huecycle still feeds All outputs;
+the second chip stays. (3) the picture moves to the patch's run, one cable into All
+outputs, huecycle drawn with nothing out of it (faint if it reaches nothing); the head
+says "cut huecycle → All outputs"; both chips are gone. (4) one ⌘Z gives the cable and
+the chips back; one press lands every pin and the cut. *Fail:* the plain chip cutting
+anything, a chip whose label is clipped, a cable no cut named going, or huecycle wired
+to anything new.
+**504. What it does not take.** (either Mac, the copy)
+1. Spawn a patch and drag a cable by hand into its `in` pin. Read the pane.
+2. In a preset with no node the patch's other pin names, read the pane and press
+   the second chip, if there is one.
+3. Spawn a patch saved with the shape into a scene (`scene.geometry`), and press
+   **wire as saved**.
+*Pass:* (1) the chip names only the outlet's cut, and after a press your wire is
+still in. (2) "no node …" on the note, the rest landed; with nothing else taken there
+is no second chip. (3) no second chip for the scene's port; the patch draws in the
+order it was saved. *Fail:* a wire into a patch's own port cut, or a chip that cuts
+nothing.
+**505. A chip that no longer holds.** (either Mac, a bank pad to hand)
+1. Do 503 (1). Hold the mouse down on the second chip.
+2. With it held, press a bank pad that loads another preset; or wire another node
+   into All outputs with a second hand. Let go over the chip.
+*Pass:* the head says "the preset changed under that chip: nothing cut"; nothing has
+moved and ⌘Z has no new step. Pressing again reads and does what the chip now says.
+*Fail:* any cable cut by the old words.
+
 ## What no test covers
 
 Only a person can settle these:
@@ -7637,6 +7679,7 @@ Only a person can settle these:
   the section and the values, no worker;
 - the sheet's "replace" row as drawn, and the old dream buffer fading under the
   new dream (500);
+- the take-over chip as drawn, its two lines in the pane and its wording (503);
 - the hand-to-picture delay (25): a target, not a measurement;
 - the frame rate and tearing with two real screens (107): the tests pin
   which swap waits, not what the screens do;

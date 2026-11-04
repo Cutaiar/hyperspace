@@ -1336,7 +1336,8 @@ row, `set_macros`, the group and its layout at the drop point. No file is
 written; the preset's dirty dot lights. `Edit.splice` does the same and
 replaces one picture cable with the patch's inlet and outlet; `Edit.wire_as_saved`
 lands a spawned group's `was` cables where the node exists and the port is
-free.
+free; `Edit.wire_taking_over` is the explicit chip that also cuts what feeds an
+outlet's taken port, named on the chip (wave 3 P3).
 
 **The conflict sheet** (D3, D9). With conflicts, `ui_routing.modal` draws
 one sheet before anything lands, ahead of a Replace / Keep question: a
