@@ -232,16 +232,16 @@ def test_a_picture_put_back_saves_the_untouched_frame(tmp_path):
 
 
 def test_open_on_graph_selects_the_window(tmp_path):
-    """"open on GRAPH": the GRAPH page, the window's node selected there
+    """"open on GRAPH": the window's node selected there, the focus left where it is
     on its next draw (the request then spent)."""
     from test_ui_shell import build_rig, frame
 
     from hyperspace import ui_graph
-    from hyperspace.ui import PAGE_KEYS
 
     with build_rig(tmp_path) as rig:
+        was = rig.panel.page
         ui_graph.select_node(rig.panel, "output.2")
-        assert rig.panel.page == PAGE_KEYS.index("graph")
+        assert rig.panel.page == was
         assert ui_graph._state(rig.panel)["select_node"] == "render:output.2"
         for _ in range(2):
             frame(rig.panel)

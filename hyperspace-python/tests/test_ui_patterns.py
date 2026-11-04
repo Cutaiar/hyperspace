@@ -38,7 +38,7 @@ class FacesRig(PageRig):
         monkeypatch.setattr(ui, "tooltip", lambda t: (self.tips.append(t), real_tip(t))[1])
 
     def frame(self) -> None:
-        from hyperspace.ui import PANEL_W, RAIL_W
+        from hyperspace.ui import PANEL_W
 
         imgui = self.imgui
         self.rects.clear()
@@ -46,7 +46,7 @@ class FacesRig(PageRig):
         self.wrapped.clear()
         imgui.new_frame()
         imgui.set_next_window_pos(imgui.ImVec2(0, 0))
-        imgui.set_next_window_size(imgui.ImVec2(PANEL_W - RAIL_W, self.size[1]))
+        imgui.set_next_window_size(imgui.ImVec2(PANEL_W, self.size[1]))
         imgui.begin("page", None, imgui.WindowFlags_.no_title_bar | imgui.WindowFlags_.no_move)
         ui_patterns.page(self.panel, 1 / 60)
         imgui.end()
@@ -75,7 +75,7 @@ def test_the_faces_page_is_in_pages_and_draws_this_module(faces, monkeypatch):
     from hyperspace import ui
     from hyperspace.hotreload import MODULES
 
-    assert ("faces", "faces", "pattern") in ui.PAGES
+    assert "faces" in ui.PAGE_KEYS
     seen = []
     monkeypatch.setattr(ui_patterns, "page", lambda panel, dt: seen.append(panel))
     faces.reg["ui.page"].set(ui.PAGE_KEYS.index("faces"))
@@ -248,53 +248,6 @@ def test_the_page_asks_the_renderer_for_swatches_and_draws_them(faces):
                                            swatch=lambda k: got.append(k) or tex)
     faces.frame()
     assert asked == [1] and got == list(range(len(MODES)))
-
-
-def test_the_page_fits_with_every_row_driven_and_flat_or_the_longest_mode(tmp_path, monkeypatch):
-    """The whole panel at the control size, FACES open: no scroll, with
-    every input driven (the longest second lines), on FLAT and on each
-    mode, with each of what the line under the chips can say — the GLSL
-    error, Faces off, and the mode's own line, which wraps and so is the
-    tallest of the three. UNVERIFIED on the owner's Mac: this container's
-    font metrics differ (test_fx's fit tests miss here by 18 px), so some
-    slack is asked: 12 px."""
-    from types import SimpleNamespace
-
-    from hyperspace.ui import PAGE_KEYS, Panel
-    rig = FacesRig(tmp_path, monkeypatch)
-    try:
-        imgui, reg, panel = rig.imgui, rig.reg, rig.panel
-        panel.router = Router(reg, Bindings([
-            Binding(f"lane:{k}", f"pattern.mod.{k}", "push", 0.5) for k in range(6)]
-            + [Binding(f"lfo:{k - 6}", f"pattern.mod.{k}", "push", 0.5) for k in (6, 7)]))
-        panel.router.table.macros = {"macro.1": Macro("a long macro name", [
-            Sub(depth=(f"lane:{k}", f"pattern.mod.{k}")) for k in range(6)])}
-        spare = []
-        draw = Panel._page_faces
-
-        def measured(self, dt):
-            draw(self, dt)
-            spare.append((imgui.get_scroll_max_y(), imgui.get_scroll_max_x(),
-                          imgui.get_content_region_avail().y))
-        monkeypatch.setattr(Panel, "_page_faces", measured)
-        reg["ui.page"].set(PAGE_KEYS.index("faces"))
-        for err, faces in (("2:14: 'u_modd' : undeclared identifier", False), ("", False),
-                           ("", True)):
-            panel.renderer = SimpleNamespace(pattern_error=err, fx=None)
-            reg["view.faces"].set(faces)
-            for mode in range(len(MODES)):
-                reg["view.pattern"].set(mode)
-                for _ in range(3):
-                    imgui.new_frame()
-                    panel.draw(1 / 60, 60.0)
-                    imgui.end_frame()
-                over_y, over_x, room = spare[-1]
-                said = (MODES[mode].name, err[:4], faces)
-                assert over_y == 0 and over_x == 0, said
-                assert room >= 12, (*said, room)
-        print("FACES spare height px:", min(s[2] for s in spare))
-    finally:
-        rig.close()
 
 
 # ---- the renderer's side: swatches only while asked, and the frame untouched ----

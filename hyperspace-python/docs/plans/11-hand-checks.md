@@ -7533,6 +7533,43 @@ plan 50 copied back from the backup into `patches/`)
 preset and an **Update patch** write `patch/2`. Fail: "is not a
 hyperspace.patch".
 
+## BS. The panel fold, stage 3: the rail gone, `ui.page` the focus (plan 49)
+Register rows 668–672, 2026-11-03. Headless: `tests/test_ui_pane.py` (the
+four new sections at 240 and 320 px, nothing past the pane's edge; every
+slot a section but GRAPH's; the focus and the fold; the focused header at
+the pane's top; the band growing; `graph_selected` live; no router),
+`tests/test_ui_shell.py`'s dimming tests, the bodies' own tests through
+`page_frame`. A restart after pulling. Earlier checks that say "open the X
+page" now mean: focus the X section (click its header, or the row).
+**506. A saved row still lands.** (Mac, the rig's bindings, a key or pad row
+that sets `ui.page` if the rig has one; else GRAPH's **open on …** chip)
+1. Press the row; ⌘[ and ⌘] after a few.
+Right if: there is no rail; the section of the page's name comes up each
+time, at the top of the pane; GRAPH never leaves the screen; the slot that
+named GRAPH lets the section go. Wrong if: another section comes up than the
+page's name, or the canvas blanks.
+**507. Walking the sections leaves no mess.**
+1. Walk ten sections with ⌘] or a row, then quit and relaunch.
+Right if: each comes up with room (not a 160 px slit) and the one before
+folds back; the headers after it stay in view; the fold you last clicked is
+what comes back. A click on another header unfolds it and the focused one
+stays. Wrong if: everything is left open, or the pane jumps while you drag a
+fader in the focused section.
+**508. The four new sections read at the pane's width.** (the control window
+at launch size, the grip at its narrowest, then at 320 px, then the desk up)
+1. view, routing, hands (tracker on), system, each in turn; a preset strip.
+Right if: every control can be reached, nothing runs past the edge, long
+lines wrap. With the desk up (the narrow panel) the band is tall while a
+section is focused and a chip brings it back to its small height. Wrong if: a
+row overlaps, or a control cannot be reached by scrolling.
+**509. The feel at a show, and a picked control.**
+1. Pick a desk control on the diagram. Click a param in the view section.
+2. Pick again, focus routing: its line is framed and it is not dimmed.
+3. With a heavy preset (the show's biggest), any section focused: watch the FPS
+   readout against the same preset before this build (GRAPH always drawn).
+Right if: 1 maps it; 2 reads as before; 3 no frame cost you can see. Wrong if:
+headers go dead while picking, or the panel drops the output's frame rate.
+
 ## BT. Video audio 4 of 4: sync and varispeed (plan 45 V4)
 Decision register rows 673–677. A channel's sound now follows its transport
 at any rate, in either direction, and the occasional click at rate 1 that

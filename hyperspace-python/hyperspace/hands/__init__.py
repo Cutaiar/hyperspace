@@ -29,7 +29,8 @@ build if core or signal ever grows a hyperspace import.
 What the host must still provide when embedded (see app.py):
   * call register() once, so the setup becomes saveable params
   * call poll() once a render frame
-  * an entry in ui.PAGES and a page method, to reach panel.page()
+  * an entry in ui.PAGE_KEYS, a section in ui_pane.SECTIONS and a page method,
+    to reach panel.page()
 """
 
 from __future__ import annotations

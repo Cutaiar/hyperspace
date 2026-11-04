@@ -679,6 +679,11 @@ here; overturn → the change, then the same.
 | 645 | Plan 50: the migration step — `tools/migrate_library.py` moves every module preset to `patches/<group>/` as `patch/2` and rewrites every `patch/1` as `/2` in place, after the run's backup; the dry run lists them; a retired group's files (`fx/`) and an unreadable file (a module folder's or `patches/`'s) are left, said; `--to` moves none | 485 | (rec) — pending the owner; built as recommended |
 | 646 | Plan 50, not done: the show's `modules` key (a session group's band preset by name) stays — renaming it is a show schema move; `RETIRED_MODULES` and `_fresh_of` are already what the fallback needs; the band scene files (code data) stay `preset/1`, read through the one ladder; `library.migrate_doc` serves the shows alone (the preset entry, `CURRENT["hyperspace.preset"]` and `PRESET_SCHEMA` removed, review fix 8); `headless.SHARED_FOLDERS` is `patches/` alone, every folder down (review fix 2) | — | (rec) — pending the owner |
 | 647 | Plan 50: hands 1 in a group — a wired frame always holds it, so a "delete" leaves it held and a member (as a macro is) | — | (rec) — pending the owner; built as recommended |
+| 668 | Plan 49 U3: the rail is gone and GRAPH is always drawn; `ui.page` is the focus, `ui.PAGE_KEYS` keeps its sixteen slots in order so a saved index names the section of the name its page had; GRAPH's slot lets go of the focus; "every page fits the window" retired | 506 | (rec) — pending the owner; built as recommended |
+| 669 | Plan 49 U3: the focus leaves the fold alone — a section shows while focused and folds back when the focus moves on or lets go; nothing written to `ui.json` (changes the end of row 627, "kept as a click's unfold") | 507 | (rec) — pending the owner; built as recommended |
+| 670 | Plan 49 U3: the focused section's room — beside the canvas, its header at the pane's top and its body down to the headers after it; in the narrow band, alone, the band leaving `CANVAS_MIN` of canvas, a chip letting go | 507, 508 | (rec) — pending the owner; built as recommended |
+| 671 | Plan 49 U3: VIEW, ROUTING, HANDS and SYSTEM fold in, folded at first; no page stays; their rows wrap at 240–320 px and SYSTEM's and HANDS' status lines wrap | 508 | (rec) — pending the owner; built as recommended |
+| 672 | Plan 49 U3: while a desk control is picked the canvas and every body but ROUTING's are dimmed, the headers live | 509 | (rec) — pending the owner; built as recommended |
 | 673 | Plan 45 V4, the read head: each voice reads sequentially from a head of its own, written only by the callback and read by nothing else; against the playhead carried forward by the speed since the last feed it is left alone within a block and a quarter (the clocks' phase plus the frame's jitter), slewed beyond that (the excess over 0.25 s, at most half the speed), cut with a one-block crossfade past 0.25 s (both × max(1, |speed|)), and stopped after 1 s with no feed. The numbers are by ear | — | (rec) — pending the owner; built as recommended |
 | 674 | Plan 45 V4, varispeed: `Transport.velocity` (signed; 0 at a parked end; a drag of `pos` at the drag's speed up to 8× the clip, a jump at the rate) and `wrap` replace `_forward`; linear resampling with the speed gliding inside a block, no anti-alias filter, at most 16× | — | (rec) — pending the owner; built as recommended |
 | 675 | Plan 45 V4, the loop-wrap case: the head counts modulo the loop and reads straight through the seam, either way; no splice fade, so a clip not cut to loop has the click of its own two ends; a track ending within 50 ms before the picture is bridged at full level, one ending earlier fades out and back, one running past it is cut there | — | (rec) — pending the owner; built as recommended |
@@ -11942,6 +11947,116 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   leaves it held and the group keeps it, as a macro "deleted" is kept.
 - **Built.** `tests/test_graph_groups.py::test_groups_keep_their_invariants_over_the_corpus`.
 - **Judge it.** —.
+
+### 668. The rail goes; `ui.page` is the focus
+
+- **Asked.** Plan 49's third stage: "the rail is removed and `ui.page`
+  becomes 'focus section'".
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** `Panel._rail` and the page switch are gone: `_draw` draws
+  `ui_graph.page` every frame, and `ui.RETIRED` went with them. `ui.page`
+  stays an enum of the same sixteen slots in the same order
+  (`ui.PAGE_KEYS`, now names only: what each section's params are is
+  `ui_pane.SECTIONS`, one table, read by `ui_graph._page_of_group`), because a
+  binding's `set` holds an index and the rig's bindings are not ours to
+  rewrite. **What a saved index means now:** the section of the name its
+  page had — 0 output, 1 view, 2 faces, 3 media, 4 camera, 5 lookback,
+  6 fx, 7 audio, 8 analyzer, 9 routing, 11 lfo, 12 seq, 13 hands,
+  14 presets, 15 system — and 10, GRAPH's, no section: the canvas is
+  always there, so it lets go of the focus and scrolls the pane to its top.
+  `panel.page` stays the index, so `app.frame`'s ⌘[ / ⌘] (not touched: a
+  page set straight is seen by `_draw`) walks the sections focused. The
+  param's label is "Focus section". The FX slot is no longer a door: its
+  value stays FX, so a `step` row no longer jumps to GRAPH (627's rough
+  edge). `Panel.page` is the one owner of the focus (`ui_pane.focused` reads
+  it): a click that lets go moves it to GRAPH's slot (`let_go`), so `ui.page`
+  and the history say so too. Selecting a node (`ui_graph.select_id`: FX's
+  SHOW, OUTPUT's "open on GRAPH", a controller, "Route a lane here…") does
+  not move the focus: the canvas is always drawn and the section being
+  worked in stays.
+- **Retired.** "Every page fits the window without scrolling": a section
+  is as tall as the pane gives it and scrolls in its body. The height-fit
+  tests are gone, not moved (a window as wide as the panel measures neither
+  the old rule nor the new one). The rule now, in `REVIEW.md`: no control
+  passes the pane's edge, beside the canvas or in the band
+  (`test_every_section_focused_lands_in_view_and_inside_the_pane`). Other
+  body tests draw the body alone (`test_ui_shell.page_frame`); the real
+  route is `tests/test_ui_pane.py`.
+- **Other options.** Rename the param (every saved row breaks); a new table
+  of section indices (the same).
+- **Rough edge.** Words on the panel still say "page" in places (a tip's
+  "HANDS page", "open on VIEW"). They are all right to read and many tests
+  name them; a pass over the words is a small PR if the owner wants one.
+- **Judge it.** 506.
+
+### 669. The focus leaves the fold alone
+
+- **Asked.** Plan 49: a focus "unfolds and scrolls to a section".
+- **Answer.** (rec) — pending the owner; built as recommended. It changes
+  the end of row 627, where FX's unfold was kept as a click's.
+- **Recommended.** A focus shows a section without unfolding it
+  (`ui_pane.focused`): when the focus moves on or lets
+  go the section goes back to what a click left it, and `ui.json` is not
+  written. Walking the sections with a pad or ⌘] would otherwise leave them
+  all open, on this Mac for good. To keep one open: click its header twice
+  (the first lets go and folds, the second unfolds and keeps it), or unfold
+  it by a click before the focus lands.
+- **Other options.** A focus as a click's unfold (627's), written to the file.
+- **Judge it.** 507.
+
+### 670. The focused section's room
+
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** Beside the canvas the open sections share the pane
+  evenly (row 599), which with sixteen headers can be `MIN_BODY_H`: a page's
+  body in 160 px. The focused one's header goes to the pane's top and its
+  body runs down to the headers after it, which stay in view for the next
+  click; the headers above are scrolled off (the wheel over a header, or the
+  pane's scrollbar). A click on another header leaves the focus alone. In
+  the narrow band (the desk's 540 px panel, where a page used to have the
+  whole height) the band grows to all but `CANVAS_MIN` of the page
+  (`ui_graph.band_height`), the focused section alone under the chips and
+  its chip alone lit; a click on another chip shows that section, whatever
+  its fold said, and the band is `BELOW_H` again. The headers'
+  height is now measured in their own face: `row 599`'s share had reckoned
+  each at a frame's height, about twice what it is.
+- **Judge it.** 507, 508.
+
+### 671. The last four pages fold in
+
+- **Asked.** The brief: "The SYSTEM page and any page not yet a section need
+  an explicit answer".
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** All four are sections, so no page stays: **view** after
+  presets; **hands** and **routing** after seq; **system** last; all folded
+  at first, as stage 2's were. The bodies are the pages' (`Panel._page_view`
+  and so on; every section but fx now names its body `_page_<key>`). At
+  240–320 px: VIEW's ticks and field rows wrap; ROUTING's head puts the
+  layer and its chips on a row of their own, and a macro's chips go under
+  its knob; HANDS' pinch switches go under the box, the dance column under
+  the axis rows (under 460 px), the feel knobs under the plot one to a row
+  (under 340 px), its ticks and MIDI row wrap; SYSTEM's switches wrap. In
+  HANDS and SYSTEM a long status line wraps rather than running off the
+  pane. The preset strip's chips go on a row of their own when even a
+  squeezed name leaves no room (they had drawn over ▶ with the pane's
+  scrollbars up). With no router there is no canvas but the sections still
+  draw.
+- **Rough edge.** SYSTEM with the sticks' dials and HANDS with every line on
+  are long at 320 px, and at 320 px ROUTING's desk combos cut off their
+  target names (`view.dept…`): the pane's width (the grip) is the answer.
+- **Judge it.** 508.
+
+### 672. A picked desk control dims the canvas and the bodies
+
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** Plan 17 dimmed the open page, never ROUTING, and left the
+  rail live so a person could change page. The same rule on what is left:
+  GRAPH's head and canvas (`ui_graph._dimmed`) and each body (`ui_pane._body`)
+  are disabled and take the pick's click; ROUTING's body is not, wherever it
+  is in the pane; the headers are the rail's job now and stay live. The words
+  say "in any other section", and "its line is framed" only while ROUTING's
+  body is on screen (`ui_pane.shown`), not by what `ui.page` names.
+- **Judge it.** 509.
 
 ### 673. Plan 45 V4: the read head
 - **Asked.** Plan 45 V4 and the wave 3 prompt: the callback reads sequentially

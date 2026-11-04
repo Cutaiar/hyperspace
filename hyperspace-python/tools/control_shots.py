@@ -35,7 +35,7 @@ from PIL import Image
 
 from hyperspace import app, hands, ui
 from hyperspace.routing import Binding
-from hyperspace.ui import PAGE_KEYS, PAGES
+from hyperspace.ui import PAGE_KEYS
 
 OUT = Path(__file__).resolve().parents[1] / "docs" / "plans" / "assets" / "07-shell"
 SETTLE = 12          # frames on a page before the shot (imgui needs a frame or two)
@@ -57,7 +57,7 @@ elif BANDS:
     schedule = [(PAGE_KEYS.index("analyzer"), "analyzer-editor"),
                 (PAGE_KEYS.index("routing"), "routing")]
 else:
-    schedule = [(k, key) for k, (key, _, _) in enumerate(PAGES)]
+    schedule = list(enumerate(PAGE_KEYS))
 
 _draw = ui.Panel.draw
 

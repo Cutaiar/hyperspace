@@ -65,11 +65,15 @@ In Claude Code, `/deep-review` runs this review on the current branch
 
 ## The panel
 
-- **No page scrolls at the control size, across or down.**
-  `tests/test_ui_shell.py::test_every_page_fits_the_control_window` checks
-  down only, so look across as well.
+- **A section stays inside the pane; it may scroll down.** There are no
+  pages (plan 49): a section scrolls in its body, and no control passes the
+  pane's right edge beside the canvas at `SIDE_MIN` and `SIDE_W` or in the
+  narrow band (`tests/test_ui_pane.py::test_every_section_focused_lands_in_view_and_inside_the_pane`,
+  which checks controls, so look at long text as well).
 - **Widgets fit their narrowest width.** A widget fits the narrowest place
   it is drawn, such as GRAPH's side pane.
+- **`ui.PAGE_KEYS` is append-only.** A binding's `set` on `ui.page` stores an
+  index into it.
 - **Text matches the current model.** Tooltips and labels describe the
   model as it is now, not one the branch replaced.
 

@@ -29,7 +29,8 @@ def pane(tmp_path, monkeypatch):
     with build_rig(tmp_path) as r:
         r.panel.desk = False                     # the panel the whole window
         imgui.get_io().display_size = imgui.ImVec2(*WIDE)
-        d = Driver(step=lambda: frame(r.panel, "graph"))
+        frame(r.panel, "graph")                  # nothing focused; a test may focus
+        d = Driver(step=lambda: frame(r.panel))
         d.record(monkeypatch.setattr)
         d.run(d.wait(2))
         yield r, d
@@ -167,7 +168,7 @@ def test_open_bodies_share_the_pane():
 
 
 def test_every_section_open_draws_with_no_conflicting_ids(pane, monkeypatch):
-    """All five open at once: each widget its own imgui id (the label
+    """All of them open at once: each widget its own imgui id (the label
     hashed under the id stack), though the sections reuse their pages'
     labels and two of them draw preset strips."""
     r, _d = pane
@@ -177,9 +178,9 @@ def test_every_section_open_draws_with_no_conflicting_ids(pane, monkeypatch):
     r.panel.select_graph_node(view.nodes[0].id)
 
     def tall() -> None:                 # a window tall enough for every body unscrolled
-        imgui.get_io().display_size = imgui.ImVec2(1600, 2400)
+        imgui.get_io().display_size = imgui.ImVec2(1600, 4000)
         imgui.new_frame()
-        imgui.set_window_size("CONTROLS", imgui.ImVec2(1576, 2376))
+        imgui.set_window_size("CONTROLS", imgui.ImVec2(1576, 3976))
         r.panel.draw(1 / 60, 60.0)
         imgui.end_frame()
     for _ in range(3):
@@ -476,52 +477,151 @@ def test_the_media_grid_goes_four_to_a_row_and_the_seq_grid_thins_in_the_pane(
         assert _spills(d, st) == []
 
 
-def test_the_fx_page_is_retired_into_the_fx_section(pane):
-    """The rail has no FX pill; `ui.page` set to FX — a key row, an old
-    show — opens GRAPH with the fx section unfolded and drawn, and the
-    index every other page holds is what it was."""
-    from hyperspace.ui import PAGES, RETIRED
+def test_ui_page_on_fx_focuses_the_fx_section_and_every_slot_keeps_its_index(pane):
+    """The FX page went with stage 2; its slot stays, so a key row or an old
+    show that names it lands on the effects: `ui.page` set to FX focuses
+    the fx section. The slots are the ones every saved binding names."""
     r, d = pane
     st = _st(r)
+    assert PAGE_KEYS == [
+        "output", "view", "faces", "media", "camera", "lookback", "fx", "audio", "analyzer",
+        "routing", "graph", "lfo", "seq", "hands", "presets", "system"]
     fx = PAGE_KEYS.index("fx")
-    assert "fx" in RETIRED and PAGES[fx][0] == "fx"           # the slot kept
-    assert f"page{fx}" not in d.rects and f"page{PAGE_KEYS.index('graph')}" in d.rects
     assert "fx" not in st["pane_drawn"]
-    r.panel.page = PAGE_KEYS.index("view")
     r.reg["ui.page"].set(fx)
-    assert PAGE_KEYS[r.panel.page] == "graph"
-    d.run(d.wait(2))
-    assert ui_pane.opened(st)["fx"] and "fx" in st["pane_drawn"]
+    assert PAGE_KEYS[r.panel.page] == "fx"
+    d.run(d.wait(3))
+    assert ui_pane.focused(r.panel) == "fx" and "fx" in st["pane_drawn"]
     assert _inside(d.rect("fx.on"), st["details_rect"])
-    assert ui_pane.flush(st, force=True)                       # an unfold, kept as a click's
-    assert ui_pane.read_open(r.lib.machine)["fx"] is True
     # set straight, not through the param (⌘[ / ⌘]'s history): the same
-    r.panel.page = fx
-    d.run(d.wait(1))
-    assert PAGE_KEYS[r.panel.page] == "graph"
+    r.panel.page = PAGE_KEYS.index("lfo")
+    d.run(d.wait(3))
+    assert ui_pane.focused(r.panel) == "lfo" and "lfo" in st["pane_drawn"]
+    assert "fx" not in st["pane_drawn"]
 
 
-def test_focus_is_a_request_the_next_draw_acts_on_in_its_own_layout(tmp_path, monkeypatch):
-    """Review fix 1: `focus` asks, whatever layout drew last; the next
-    draw unfolds the section in its own layout. On the narrow page (the
-    band under the canvas) landing on the retired FX page unfolds the
-    band's fx section and draws it; the column beside keeps its folds."""
-    st = {"machine": None}
-    ui_pane.focus(st, "seq")
-    assert st["pane_focus"] == "seq" and not ui_pane.opened(st, "below")["seq"]
-    with build_rig(tmp_path) as r:              # the rig's 820 px window: the band
-        d = Driver(step=lambda: frame(r.panel, "graph"))
+def test_every_page_slot_but_graph_is_a_section():
+    """No page is left to switch to: the table `ui.page` indexes names a
+    section in every slot, GRAPH's being the canvas that is always drawn."""
+    assert ui_pane.section_of("graph") is None
+    assert {k for k in PAGE_KEYS if ui_pane.section_of(k) is None} == {"graph"}
+    assert set(ui_pane.KEYS) - set(PAGE_KEYS) == {"selection"}
+
+
+def test_focus_unfolds_only_while_it_holds_and_never_touches_the_fold(pane):
+    """The focused section shows however it is folded and folds back when
+    the focus moves on or lets go; nothing is written: a walk through the
+    sections leaves no pile of open ones, on screen or in ui.json."""
+    r, d = pane
+    st = _st(r)
+    before = dict(ui_pane.opened(st))
+    for key in ("lfo", "seq", "audio"):
+        r.reg["ui.page"].set(PAGE_KEYS.index(key))
+        d.run(d.wait(3))
+        assert key in st["pane_drawn"], key
+    assert "lfo" not in st["pane_drawn"] and "seq" not in st["pane_drawn"]
+    assert ui_pane.opened(st) == before and not st.get("pane_dirty")
+    r.reg["ui.page"].set(PAGE_KEYS.index("graph"))
+    d.run(d.wait(2))
+    assert ui_pane.focused(r.panel) is None and st["pane_drawn"] == ["selection", "presets"]
+
+
+def test_a_click_on_the_focused_header_lets_go_and_on_another_leaves_it(pane):
+    r, d = pane
+    st = _st(r)
+    r.reg["ui.page"].set(PAGE_KEYS.index("lfo"))
+    d.run(d.wait(3))
+    d.run(d.click("pane.camera"), d.park())
+    assert ui_pane.focused(r.panel) == "lfo" and ui_pane.opened(st)["camera"]
+    d.run(d.wait(2))
+    d.run(d.click("pane.lfo"), d.park())
+    assert ui_pane.focused(r.panel) is None and "lfo" not in st["pane_drawn"]
+    assert ui_pane.opened(st)["camera"]                       # a click's: kept
+
+
+def test_setting_the_same_slot_again_brings_the_section_back(pane):
+    """A key row pressed twice, the section folded by a click between: the
+    second press focuses it again."""
+    r, d = pane
+    st = _st(r)
+    k = PAGE_KEYS.index("seq")
+    r.reg["ui.page"].set(k)
+    d.run(d.wait(3))
+    d.run(d.click("pane.seq"), d.park())
+    assert ui_pane.focused(r.panel) is None
+    r.reg["ui.page"].set(k)
+    d.run(d.wait(3))
+    assert ui_pane.focused(r.panel) == "seq" and "seq" in st["pane_drawn"]
+
+
+def test_the_focused_section_lands_at_the_top_of_the_pane_with_room(tmp_path, monkeypatch):
+    """Selection and presets open above it, the pane shorter than the lot:
+    the focused header scrolls to the pane's top, its body runs down to the
+    headers after it, and those stay in view."""
+    with build_rig(tmp_path) as r:
+        r.panel.desk = False
+        imgui.get_io().display_size = imgui.ImVec2(*WIDE)
+        d = Driver(step=lambda: frame(r.panel))
         d.record(monkeypatch.setattr)
+        r.reg["ui.page"].set(PAGE_KEYS.index("view"))
+        d.run(d.wait(4))
+        st = _st(r)
+        (_x, y), (_w, h) = st["details_rect"]
+        head = d.rect("pane.view")
+        assert y <= head[1] <= y + 24                         # at the top of the pane
+        assert d.rect("pane.system")[3] <= y + h              # the last header still in view
+        assert d.rect("pane.fx")[1] - head[3] >= ui_pane.MIN_BODY_H   # the body's room
+
+
+def test_the_band_grows_for_the_focused_section_and_only_it_draws(tmp_path, monkeypatch):
+    """The desk's narrow panel: the band under the canvas holds the focused
+    section alone, all but `CANVAS_MIN` of the page, the chips above it; a
+    click on a chip lets go and the band is `BELOW_H` again. The column
+    beside the canvas keeps its folds."""
+    with build_rig(tmp_path) as r:              # the rig's 820 px window: the band
+        d = Driver(step=lambda: frame(r.panel))
+        d.record(monkeypatch.setattr)
+        r.reg["ui.page"].set(PAGE_KEYS.index("graph"))
         d.run(d.wait(2))
-        gst = _st(r)
-        assert gst["details_rect"][1][1] == ui_graph.BELOW_H
+        st = _st(r)
+        assert st["details_rect"][1][1] == ui_graph.BELOW_H
         r.reg["ui.page"].set(PAGE_KEYS.index("fx"))
-        d.run(d.wait(2))
-        assert PAGE_KEYS[r.panel.page] == "graph"
-        assert ui_pane.opened(gst, "below")["fx"] and "fx" in gst["pane_drawn"]
-        assert not ui_pane.opened(gst, "open")["fx"]
-        assert "pane_focus" not in gst
-        assert _inside(d.rect("fx.on"), gst["details_rect"])
+        d.run(d.wait(3))
+        assert st["details_rect"][1][1] > ui_graph.BELOW_H
+        assert st["pane_drawn"] == ["fx"]
+        assert _inside(d.rect("fx.on"), st["details_rect"])
+        assert not ui_pane.opened(st, "below")["fx"]
+        d.run(d.click("pane.seq"), d.park())
+        assert ui_pane.focused(r.panel) is None
+        assert st["details_rect"][1][1] == ui_graph.BELOW_H
+        assert ui_pane.opened(st, "below")["seq"]
+
+
+def test_the_rail_is_gone_and_graph_is_live_on_every_frame(pane):
+    """No page pill anywhere; `graph_selected` follows the canvas with any
+    section focused, not "as of the last frame GRAPH drew"."""
+    r, d = pane
+    assert not [k for k in d.rects if k.startswith("page") and k[4:].isdigit()]
+    view = ui_graph.view_of(r.panel)
+    nid = view.nodes[0].id
+    r.reg["ui.page"].set(PAGE_KEYS.index("system"))
+    d.run(d.wait(2))
+    assert r.panel.graph_selected is None
+    ui_graph._state(r.panel)["select_node"] = nid       # the canvas's selection, no page moved
+    d.run(d.wait(3))
+    assert r.panel.graph_selected == nid
+    assert PAGE_KEYS[r.panel.page] == "system"
+
+
+def test_every_section_draws_without_a_router(tmp_path, monkeypatch):
+    """A panel with no router has no canvas to draw; the sections all the
+    same."""
+    with build_rig(tmp_path) as r:
+        r.panel.router = None
+        for key in ("view", "system", "lfo"):
+            for _ in range(2):
+                frame(r.panel, key)
+            assert key in _st(r)["pane_drawn"]
 
 
 def test_the_system_page_says_what_each_open_section_costs(pane, monkeypatch):
@@ -535,7 +635,8 @@ def test_the_system_page_says_what_each_open_section_costs(pane, monkeypatch):
     said: list[str] = []
     real = imgui.text_disabled
     monkeypatch.setattr(imgui, "text_disabled", lambda s, *a: (said.append(s), real(s, *a)))
-    frame(r.panel, "system")
+    for _ in range(3):                  # focused, scrolled to, drawn
+        frame(r.panel, "system")
     assert any(s.startswith("side pane: ") for s in said)
     frame(r.panel, "graph")
 
@@ -615,5 +716,171 @@ def test_focus_lands_on_a_fold_from_before_stage_2(tmp_path, monkeypatch):
         st["pane_open"]["open"] = dict(old)          # the stage-1 state, no fx key at all
         r.reg["ui.page"].set(PAGE_KEYS.index("fx"))
         for _ in range(2):
-            frame(r.panel, "graph")
-        assert ui_pane.opened(st)["fx"] is True and "fx" in st["pane_drawn"]
+            frame(r.panel)
+        assert ui_pane.focused(r.panel) == "fx" and "fx" in st["pane_drawn"]
+
+
+# ---- stage 3 (U3): the rail goes, every page a section
+
+STAGE3_IDS = {
+    "view": "view.bright",
+    "routing": "macro.1",
+    "hands": "ghost.on",
+    "system": "ui.cheatsheet",
+}
+
+
+@pytest.mark.parametrize("key", sorted(STAGE3_IDS))
+@pytest.mark.parametrize("width", ["min", "default"])
+def test_each_stage3_section_draws_in_the_pane_and_nothing_passes_its_edge(
+        tmp_path, monkeypatch, key, width):
+    """The four pages stage 2 left, alone open, at the pane's narrowest and
+    at its default width: the page's control found by its id inside the
+    pane, and no control past the pane's right edge."""
+    with build_rig(tmp_path) as r:
+        r.panel.desk = False
+        r.panel.page = PAGE_KEYS.index("graph")
+        d = _tall_driver(r, monkeypatch)
+        d.run(d.wait(2))
+        st = _st(r)
+        st["side_w"] = ui_graph.SIDE_MIN if width == "min" else ui_graph.SIDE_W
+        _only(st, key)
+        d.run(d.wait(3))
+        assert st["pane_drawn"] == [key]
+        assert _inside(d.rect(STAGE3_IDS[key]), st["details_rect"])
+        spills = _spills(d, st)
+        assert not spills, sorted(spills)
+
+
+def _focus_rig(r, monkeypatch, layout):
+    """The real route at a real window: "band" the desk's narrow panel,
+    "min" / "default" the column beside the canvas at its two widths."""
+    r.panel.desk = layout == "band"
+    size = (960, 900) if layout == "band" else WIDE
+    imgui.get_io().display_size = imgui.ImVec2(*size)
+    d = Driver(step=lambda: frame(r.panel))
+    d.record(monkeypatch.setattr)
+    d.run(d.wait(2))
+    if layout != "band":
+        _st(r)["side_w"] = ui_graph.SIDE_MIN if layout == "min" else ui_graph.SIDE_W
+    return d
+
+
+@pytest.mark.parametrize("layout", ["band", "min", "default"])
+@pytest.mark.parametrize("key", [k for k in ui_pane.KEYS if k != "selection"])
+def test_every_section_focused_lands_in_view_and_inside_the_pane(tmp_path, monkeypatch,
+                                                                 key, layout):
+    """What replaced "every page fits the window": a section focused in the
+    real layout draws in the pane, with room, and no control passes the
+    pane's right edge."""
+    with build_rig(tmp_path) as r:
+        _with_seq(r)
+        d = _focus_rig(r, monkeypatch, layout)
+        r.reg["ui.page"].set(PAGE_KEYS.index(key))
+        d.run(d.wait(4))
+        st = _st(r)
+        assert key in st["pane_drawn"]
+        (_x, y), (_w, h) = st["details_rect"]
+        head = d.rect(f"pane.{key}")
+        assert y <= head[1] and head[3] <= y + h, (head, st["details_rect"])
+        spills = _spills(d, st)
+        assert not spills, sorted(spills)
+
+
+def test_a_fresh_launch_has_no_scrollbar_on_the_pane(pane):
+    """Selection and presets open, nothing focused: the sections fit the
+    pane exactly, with the spacing after each open body counted."""
+    r, _d = pane
+    win = imgui.internal.find_window_by_name(_st(r)["pane_window"])
+    assert win.scroll_max.y == 0
+
+
+def test_a_chip_hidden_by_the_focus_opens_what_it_asks_for(tmp_path, monkeypatch):
+    """In the band a section open in the fold but hidden by the focus is not
+    lit, and a click on it shows it: the band never ends up empty."""
+    with build_rig(tmp_path) as r:
+        d = _focus_rig(r, monkeypatch, "band")
+        st = _st(r)
+        assert ui_pane.opened(st, "below")["selection"]
+        r.reg["ui.page"].set(PAGE_KEYS.index("fx"))
+        d.run(d.wait(3))
+        assert st["pane_drawn"] == ["fx"]
+        d.run(d.click("pane.selection"), d.park(), d.wait(1))
+        assert ui_pane.focused(r.panel) is None
+        assert st["pane_drawn"] == ["selection"] and ui_pane.opened(st, "below")["selection"]
+
+
+def test_the_band_scrolls_on_a_focus(tmp_path, monkeypatch):
+    """`scroll_to` promises a scroll in either layout."""
+    with build_rig(tmp_path) as r:
+        d = _focus_rig(r, monkeypatch, "band")
+        asked: list[float] = []
+        real = imgui.set_scroll_y
+        monkeypatch.setattr(imgui, "set_scroll_y", lambda y: (asked.append(y), real(y))[1])
+        r.reg["ui.page"].set(PAGE_KEYS.index("fx"))
+        d.run(d.wait(1))
+        assert asked == [0.0]
+
+
+def test_letting_go_by_a_click_moves_the_one_owner_of_the_focus(pane):
+    """A click on the focused header: `ui.page` and `Panel.page` say so too,
+    and the pane is not scrolled away from where the click was."""
+    r, d = pane
+    st = _st(r)
+    r.reg["ui.page"].set(PAGE_KEYS.index("fx"))
+    d.run(d.wait(3))
+    assert r.reg["ui.page"].value == PAGE_KEYS.index("fx")
+    d.run(d.click("pane.fx"), d.park())
+    assert ui_pane.focused(r.panel) is None and PAGE_KEYS[r.panel.page] == "graph"
+    assert r.reg["ui.page"].value == PAGE_KEYS.index("graph")
+    assert "pane_scroll" not in st
+
+
+def test_selecting_a_node_does_not_move_the_focus(pane):
+    """FX's SHOW chip, OUTPUT's "open on GRAPH", a controller: the canvas is
+    always drawn, so the section being worked in stays."""
+    r, d = pane
+    r.reg["ui.page"].set(PAGE_KEYS.index("output"))
+    d.run(d.wait(2))
+    ui_graph.select_node(r.panel, "output.all")
+    d.run(d.wait(2))
+    assert ui_pane.focused(r.panel) == "output" and "output" in _st(r)["pane_drawn"]
+
+
+def test_the_picked_words_ask_what_is_on_screen_not_the_focus(tmp_path, monkeypatch):
+    """ROUTING's body drawn is what "its line is framed" means: unfolded by a
+    click with the focus elsewhere it counts; focused, then folded, it does
+    not."""
+    from test_ui_shell import _control, _learn_over
+
+    from hyperspace import ui_desk
+    with build_rig(tmp_path) as r:
+        d = _focus_rig(r, monkeypatch, "default")
+        st = _st(r)
+        lrn = _learn_over(r)
+        c = _control("D3")
+        lrn.pick(c.source)
+        table = r.router.table
+        d.run(d.wait(1))
+        assert "framed" not in ui_desk.pick_line(r.panel, table, c)[0]
+        d.run(d.click("pane.routing"), d.park(), d.wait(1))       # a click: the page elsewhere
+        assert PAGE_KEYS[r.panel.page] != "routing" and "routing" in st["pane_drawn"]
+        assert "framed" in ui_desk.pick_line(r.panel, table, c)[0]
+        d.run(d.click("pane.routing"), d.park(), d.wait(1))
+        r.reg["ui.page"].set(PAGE_KEYS.index("routing"))
+        d.run(d.wait(2))
+        assert "framed" in ui_desk.pick_line(r.panel, table, c)[0]
+        d.run(d.click("pane.routing"), d.park(), d.wait(1))       # its own header: lets go
+        assert "framed" not in ui_desk.pick_line(r.panel, table, c)[0]
+
+
+def test_a_macro_rows_chips_stay_beside_the_knob_where_it_fits(tmp_path, monkeypatch):
+    """Eight macro rows are one line each at the default width beside a
+    roomy body, not two: the slider's room is counted once."""
+    with build_rig(tmp_path) as r:
+        d = _focus_rig(r, monkeypatch, "default")
+        _st(r)["side_w"] = 480.0
+        r.reg["ui.page"].set(PAGE_KEYS.index("routing"))
+        d.run(d.wait(3))
+        knob, one = d.rect("macro.1"), d.rects["+ base"]
+        assert one[0] >= knob[2] - 1
