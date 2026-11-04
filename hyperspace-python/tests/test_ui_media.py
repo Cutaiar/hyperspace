@@ -12,7 +12,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 from imgui_bundle import imgui
-from test_ui_shell import _click, _drawn, _mouse, frame
+from test_ui_shell import _click, _drawn, _mouse, frame, page_frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
 from hyperspace import ui_media
@@ -81,16 +81,16 @@ def test_media_tab_replaces_bitmap(rig):
     assert "bitmap" not in PAGE_KEYS and "media" in PAGE_KEYS
     assert PAGE_KEYS.index("media") == PAGE_KEYS.index("faces") + 1
     assert not hasattr(Panel, "_page_bitmap")
-    frame(rig.panel, "media")                      # no panel.media at all
+    page_frame(rig.panel, "media")                      # no panel.media at all
     attach(rig, FakeFolder())
-    frame(rig.panel, "media")
+    page_frame(rig.panel, "media")
     attach(rig, FakeFolder([entry("shared:loops/tunnel.mp4", kind="video"),
                             entry("local:me.png"), entry("shared:sync.mov", "fetching")]),
            feeds={"ndi:Resolume": NS(status="connected")})
     for tab in range(3):
         page_state(rig)["tab"] = tab
-        frame(rig.panel, "media")
-        frame(rig.panel, "media")
+        page_frame(rig.panel, "media")
+        page_frame(rig.panel, "media")
 
 
 def test_banner_lists_missing(rig, monkeypatch):
@@ -125,8 +125,8 @@ def test_assign_from_library(rig):
     sid = "shared:loops/tunnel.mp4"
     state = attach(rig, FakeFolder([entry(sid, kind="video"), entry("shared:b.png")]))
     panel = rig.panel
-    frame(panel, "media")
-    frame(panel)
+    page_frame(panel, "media")
+    page_frame(panel)
     st = page_state(rig)
     _click(panel, st["rects"][("item", sid)])
     assert st["pick"] == sid
@@ -201,14 +201,14 @@ def test_page_never_opens_sources(rig, monkeypatch):
     for c in CHANNELS:
         state.assign(c, 0, sid)
     panel = rig.panel
-    frame(panel, "media")
-    frame(panel)
+    page_frame(panel, "media")
+    page_frame(panel)
     st = page_state(rig)
     _click(panel, st["rects"][("item", sid)])
     _click(panel, st["rects"][("cell", "c", 2)])
     for tab in range(3):
         st["tab"] = tab
-        frame(panel)
+        page_frame(panel)
     _mouse(panel, 0, 0)
     assert calls == []
     assert all(ch.source is None for ch in state.channels.values())
@@ -253,21 +253,6 @@ def test_a_thumbnail_is_decoded_once_off_the_ui_thread(rig, tmp_path, monkeypatc
     assert len(decodes) == 1
     (key, tex), = uploads.items()
     assert key[0] == "shared:a.png" and tex.size == (16, 9)
-
-
-def test_the_media_page_fits(rig, monkeypatch):
-    """Full: a library of many items, every bin full, a missing banner at
-    its most — the page still draws without scrolling at the control size."""
-    from test_ui_shell import _page_scroll
-
-    folder = FakeFolder([entry(f"shared:clip{i}.mp4", kind="video") for i in range(40)])
-    state = attach(rig, folder)
-    for c in CHANNELS:
-        for i in range(BIN):
-            state.assign(c, i, f"local:missing-{c}{i}.mp4")
-    over = _page_scroll(rig, monkeypatch)
-    assert over["media"] <= 0
-    imgui.get_io().display_size = imgui.ImVec2(820, 820)
 
 
 def test_a_bin_edit_is_one_undo_step(tmp_path):

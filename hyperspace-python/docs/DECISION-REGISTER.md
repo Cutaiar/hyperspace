@@ -596,7 +596,7 @@ here; overturn → the change, then the same.
 | 556 | Plan 44 Q1: N looks, one on air — a deck is a look with its own controls, registry's performance part, routes, graph, renderer, undo and dot; the deck is what controllers (on air), the panel and undo point at | — | owner — 2026-11-02 (as recommended; 558 with the nuance) |
 | 557 | Plan 44 Q2: hold becomes copy A into B (a deck operation; `output.hold` / `.take` / `.drop` keep their ids); no hotfix of plan 38's hold | — | owner — 2026-11-02 (as recommended; 558 with the nuance) |
 | 558 | Plan 44 Q3: shared and lent — the dream worker lent to the deck going on air; segment workers per renderer with the model shared (as today); media sources shared, the channels' state per deck; the analyzer and the clock shared | — | owner — 2026-11-02 (as recommended; 558 with the nuance) |
-| 559 | Plan 44 Q4: the APC crossfader stays the master dim; `output.xfade` is a new rig control, learnable, run by `take` over `output.xfade_s` | — | owner — 2026-11-02 (as recommended; 558 with the nuance) |
+| 559 | Plan 44 Q4: the APC crossfader stays the master dim; `output.xfade` is a new rig control, learnable, run by `take` over `output.xfade_s` | — | owner — 2026-11-02 (as recommended; 558 with the nuance); owner — 2026-11-04: as recommended (no objection when asked) |
 | 560 | No shader multiplies time by a param; `@clock` integrates rate-like params in the host | 419 | agreed — owner, 2026-11-02 |
 | 561 | Wave 0 T1: every effect's `speed` on a signed exponential taper and the fourteen amount-type params on a zero-safe log taper; a taper change migrates the route depths in the same PR (`params.retaper_depths` at load, `tools/retaper_routes.py` on the library, no schema bump) | 420 | agreed — the owner's reshaping of 2026-11-02 |
 | 562 | Plan 45 V1: a video's audio track decoded to memory as float32 stereo 48 kHz once something asks for sound, whole to 120 s, else a 120 s window around the transport's position; the transport is the one clock | 421 | owner's rule (2026-11-02, addendum 8); the policy (rec) |
@@ -628,9 +628,9 @@ here; overturn → the change, then the same.
 | 588 | Plan 48: the PRESETS page draws a folder's preset as `party / TRIP` with the folder dim; the flat list stays; a rename's field holds the leaf and keeps the folder | 440, 441 | owner — 2026-11-03: yes |
 | 589 | Wave 1 T0: the test suite cannot hang the Mac — pytest-timeout's thread method at 120 s for xdist workers (the signal method for a serial run) with no worker restart in pyproject's addopts, so a test blocked in C fails by name and ends the run; `live` tests hold a per-account `flock` (wait 60 s, then skip); one tier at a time on a shared Mac; a real-GLFW test asks a child process first (`gl_window_ok`, #332) and skips if `glfwInit` does not answer | — | owner — 2026-11-03: yes; `--dist load` goes to wave 2 T1 as recommended (measured under the live lock) |
 | 590 | Plan 44 D2: the router split — `routing_sources.Sources` (the feeds, labels, rests, gates, kinds, names and the lane cache, the device registry and `schemes`, the source-feel rule, the key-code cache, the one clock) is the shared half every source feeds; `Router(reg, table, sources)` keeps the evaluator (the patch, the banks, the macros, the modifiers' memory and their own `mod` vector, the rows' and the camera job's followers, key and pad rows; `sources=` keyword-only) and what depends on its table (an address resolved and cached against its own primaries, its pad feel); every other old source-side name on `Router` reads through to its sources (a router from before the build, after a hot reload, gets sources of its own), a router handed a second clock is refused, and `routing.py` re-exports `Sources` and the scheme grammar it moved, so no importer changes; no behaviour change (`tests/test_deck.py::test_one_sources_fed_once_drives_two_routers_as_one_router_did`) | 444, 445 | built as recommended — PR (D2) |
-| 591 | Plan 44 D2: the banks' and the modifiers' own lanes (`lfo`, `env`, `seq`, `mod`) still publish into the shared `Sources`, as they did into the one router — each router republishes before it reads, and its `mod` vector is its own (seeded from its own last outputs, put back when another router published), so each of two routers lands what it would alone, even on different modifiers; D4 gives each deck its own layer for them (names, rests, what the panel reads between passes) | — | (rec) — pending the owner; built as recommended |
-| 592 | Plan 44 D2: `devices.poll` keeps `router=` — `act` lands the deck's rows, and the pad's axis lanes reach the sources through `Router.pad`; the pad's touch and motion lanes move to `PadDevice.feed(sources)`, the feed slot; `devices.feed`, the adapters' `feed` and `audio.publish` are handed the sources; `app.frame` hands them `router.sources` — no second handle on the host | 444 | (rec) — pending the owner; built as recommended |
-| 593 | Plan 44 D2: a `Sources` follows every live table a router over it runs (`Sources.follow`, held weakly) and writes the device registry's rig facts (row schemes, MIDI roles, primaries) into each; it reads no table — an address is resolved against the asking router's own table (`Sources.resolve(source, primaries)`, cached on the router), a scheme's feel under that table's pad feel | — | (rec) — pending the owner; built as recommended |
+| 591 | **Changed by D4 (row 651): each deck has its own layer.** Plan 44 D2: the banks' and the modifiers' own lanes (`lfo`, `env`, `seq`, `mod`) still publish into the shared `Sources`, as they did into the one router — each router republishes before it reads, and its `mod` vector is its own (seeded from its own last outputs, put back when another router published), so each of two routers lands what it would alone, even on different modifiers; D4 gives each deck its own layer for them (names, rests, what the panel reads between passes) | — | owner — 2026-11-04: as recommended (no objection when asked) |
+| 592 | Plan 44 D2: `devices.poll` keeps `router=` — `act` lands the deck's rows, and the pad's axis lanes reach the sources through `Router.pad`; the pad's touch and motion lanes move to `PadDevice.feed(sources)`, the feed slot; `devices.feed`, the adapters' `feed` and `audio.publish` are handed the sources; `app.frame` hands them `router.sources` — no second handle on the host | 444 | owner — 2026-11-04: as recommended (no objection when asked) |
+| 593 | Plan 44 D2: a `Sources` follows every live table a router over it runs (`Sources.follow`, held weakly) and writes the device registry's rig facts (row schemes, MIDI roles, primaries) into each; it reads no table — an address is resolved against the asking router's own table (`Sources.resolve(source, primaries)`, cached on the router), a scheme's feel under that table's pad feel | — | owner — 2026-11-04: as recommended (no objection when asked) |
 | 594 | Plan 45 V3, the analyzer listens to the mix: a third source, `mix`, beside `mic` and `file` — the mixer's callback pushes the block it just wrote (after the gains and after the ±1 clip: what the room hears) into the analyzer's ring as mono, the mean of L and R, at 48 kHz; a callback with no voice pushes zeros; the push is one copy into a kept buffer, counts nothing and moves nothing, and the analyzer drains the ring once a frame as it drains the mic's | 446, 447 | (rec) — built as recommended (V3) |
 | 595 | Plan 45 V3, picking it: `audio.mix` ("Video sound"), a toggle beside `audio.mic` on AUDIO ("Listen to video sound"), not persisted, like the mic's; it opens no stream and grabs no input device, and opens nothing on the mixer either (the stream opens as V2 says, the first channel heard); until a channel is heard, or once the mixer has not pushed for `MIX_IDLE_FRAMES` = 6 frames (a stream never opened, failed, stopped or stalled), the bands read silence (the analyser's window zeroed each frame), and a mixer `error: …` is shown in warning colour beside the source's label; declared only when the host's `MediaState` is passed (a stand-in's mixer is fed by nobody); no config key — none names the mic or the file either | 446, 448 | (rec) — built as recommended (V3) |
 | 596 | Plan 45 V3, a hot reload and a failure: the engine's and the mixer's new fields are read with defaults (`getattr`, `MediaState._mixer()`'s fill-in), so a hot reload keeps the live stream and the live capture; the `audio.mix` toggle is a registry param, built at launch, so the button needs one restart; a ring push that raises is counted in the mixer's own `tap_errors` (SYSTEM: `analyzer push errors`, apart from voice read errors) and costs the analyzer one block, never the sound already written | 448 | (rec) — built as recommended (V3) |
@@ -659,7 +659,7 @@ here; overturn → the change, then the same.
 | 622 | Plan 44 D3: `tools/migrate_library.py` moves a library to `/10` and its shows to `/3` in one pass — dry run by default, `--apply` backs the library up to `~/Hyperspace/library-backup-<stamp>` first, retapers, then resaves every preset every folder down (plan 48; `--force` by the path under `presets/`, or by a bare stem only when no other folder holds it — said otherwise; review of #351) with the rig's show open, so a library not yet at `/9` takes the `/9` step in the same load; the show's look **and its bus cuts are written into every preset the library holds** (as the `/9` step wrote the eye), and every `/2` show is rewritten `/3` beside its `.bak-v2-look` | 467, 468 | (rec) — the brief's reading: every preset, not only the bank's |
 | 623 | Plan 44 D3 (plan 43 §6 item 3): a window the rig lacks is asked for in words — `graphview.wanted_windows(spec, cuts, count)` (every `output.<n>` past the rig's that the preset wires or cuts) and `WINDOW_WANTED` ("this preset wires Output N, which this rig has not open — add a window on OUTPUT to show it"), said on OUTPUT beside the output blocks and on the GRAPH head (`ui_graph.window_wants`, one line each, the same words, in the warning colour, as the preset's device wants are said); nothing opened | 470 | (rec) — built, review of #351 round 3 |
 | 624 | Plan 44 D3: behaviour-neutral by construction — a deck's registry lists the session's params first (they exist before `build_performance` runs), then its own, then what is declared later in declaration order; nothing reads the order across the line (snapshots are maps, `apply` lands each param alone); D1's and D2's same-state tests, `test_undo.py::test_session_params_are_covered` and `tests/test_hold.py` pass with the session shared by reference; the goldens are expected unmoved over the migrated corpus (every corpus preset's new values are the build's defaults, which the goldens drew) | — | (rec) — the goldens are the orchestrator's to run |
-| 625 | Plan 44 D3 rough edges left for D4/D5: `hold._preset_part` still sorts Drop's bases by group, so Drop puts `ghost.mirror` back with the look (hold.py was out of this PR's reach beyond `program`; D5 deletes the hold); a deck that runs after the lead lands its session offsets a frame late (the double-apply itself is closed, and the lead named, row 611); the library's presets kind is the deck built last (`lib.presets`) | — | (rec) — recorded, not built |
+| 625 | **The late offsets are settled by D4 (row 650), the presets kind's owner kept on the first deck (row 648); the rest stands for D5.** Plan 44 D3 rough edges left for D4/D5: `hold._preset_part` still sorts Drop's bases by group, so Drop puts `ghost.mirror` back with the look (hold.py was out of this PR's reach beyond `program`; D5 deletes the hold); a deck that runs after the lead lands its session offsets a frame late (the double-apply itself is closed, and the lead named, row 611); the library's presets kind is the deck built last (`lib.presets`) | — | (rec) — recorded, not built |
 | 626 | Plan 49 U2: the rest of the pages are sections of GRAPH's side pane — fx, media, lfo, seq, audio, camera, output, after U1's five, in the order selection · presets · fx · lookback · faces · media · lfo · seq · analyzer · audio · camera · output — each body the function its page draws (`ui_fx.page`, `ui_media.draw`, `ui_lfo.page`, `ui_seq.page`, `Panel._page_audio` / `_page_camera` / `_page_output`), one row of `ui_pane.SECTIONS`; every new section folded at first, beside and in the band | 471, 478 | (rec) — pending the owner; built as recommended |
 | 627 | Plan 49 U2: the FX page is retired — the rail draws no FX pill, `Panel._page_fx` is gone, its browser is the pane's fx section; its row stays in `ui.PAGES` so every index `ui.page` holds keeps its page (a key row's `set`, an old show), and landing on FX — through the param or set straight — opens GRAPH with the fx section unfolded and scrolled to (`ui.RETIRED`, `ui_pane.focus`: a request the next draw acts on in its own layout, beside the canvas or the narrow page's band — review fix 1), kept on this Mac as a click's unfold | 472 | (rec) — pending the owner; built as recommended |
 | 628 | Plan 49 U2: narrow layouts, nothing past the pane's edge at `SIDE_MIN` (240 px): a row of chips or ticks wraps where the next would pass the edge (`ui.beside`: AUDIO's buttons and transport, OUTPUT's toggles and each block's three ticks and flips, the band's twelve headers); a section note is cut to what its title leaves; LOOKBACK's cells and SEQ's folded envelopes one to a row under 360 / 320 px; an LFO's or an envelope's scope over its knobs where fewer than 220 / 200 px are beside it | 473, 474, 475, 477, 479 | (rec) — pending the owner; built as recommended |
@@ -679,6 +679,15 @@ here; overturn → the change, then the same.
 | 645 | Plan 50: the migration step — `tools/migrate_library.py` moves every module preset to `patches/<group>/` as `patch/2` and rewrites every `patch/1` as `/2` in place, after the run's backup; the dry run lists them; a retired group's files (`fx/`) and an unreadable file (a module folder's or `patches/`'s) are left, said; `--to` moves none | 485 | (rec) — pending the owner; built as recommended |
 | 646 | Plan 50, not done: the show's `modules` key (a session group's band preset by name) stays — renaming it is a show schema move; `RETIRED_MODULES` and `_fresh_of` are already what the fallback needs; the band scene files (code data) stay `preset/1`, read through the one ladder; `library.migrate_doc` serves the shows alone (the preset entry, `CURRENT["hyperspace.preset"]` and `PRESET_SCHEMA` removed, review fix 8); `headless.SHARED_FOLDERS` is `patches/` alone, every folder down (review fix 2) | — | (rec) — pending the owner |
 | 647 | Plan 50: hands 1 in a group — a wired frame always holds it, so a "delete" leaves it held and a member (as a macro is) | — | (rec) — pending the owner; built as recommended |
+| 648 | Plan 44 D4: deck 2 is built beside the first (`Deck.beside`) over its session, sources and clock, with a renderer on the same context; no controller, page, undo or file reaches it; it runs empty, so the fade goes to black until D5 | 489, 493 | (rec) — pending the owner; built as recommended |
+| 649 | Plan 44 D4: `output.xfade` and `output.xfade_s` are rig controls; `Renderer.mix_pass` is a linear mix before the dim, on every output, presenters included; the crossfader stays the dim (row 559, confirmed 2026-11-04) | 489–491 | (rec) — pending the owner; built as recommended |
+| 650 | Plan 44 D4: the pass order — the on-air deck first, a deck off air straight after, reading this frame's session values; a row onto a session param on a deck off air is dormant (§7's recommendation), so none lands late and none doubles on the room. Changes row 625 | — | owner — 2026-11-04: as recommended (no objection when asked) |
+| 651 | Plan 44 D4: each deck's `lfo`, `env`, `seq`, `mod` lanes are its own layer (`Router.lanes`), read over the sources; the sources hold none. Changes row 591 | — | (rec) — pending the owner; built as recommended |
+| 652 | Plan 44 D4: each media source is read once a frame on `MediaSources`, both renderers handed the same `MediaFrame`; deck 2 is silent, only the on-air deck feeds the mixer | 491 | (rec) — pending the owner; built as recommended |
+| 653 | Plan 44 D4: one dream worker, lent while a fade is up and the receiving deck has a dream on, the dream restarting; the deck giving it up holds its last dream. Row 558's question (a second, lower-resolution worker for the panel's deck) measured here, **not decided** | 492 | (rec) — pending the owner; the second worker is the owner's to decide |
+| 654 | Plan 52: the base chase — while held, every continuous, modulatable param of this deck writes what it shows into its base; nothing shows differently while held; a source going home **while still held** takes the look with it (what shows is what commits); after the release a ledger absorbs the offset, so a source going home moves nothing; an undo, a load or a learn under the verb ends it, so one hold is at most one step | 494, 495 | (rec) — pending the owner; built as recommended |
+| 655 | Plan 52: macros are outside the verb — a commit would move a macro's base subscribers, which its offset never did | — | (rec) — pending the owner; built as recommended |
+| 656 | Plan 52: a press under the projector's hold is refused, and engaging a hold lets the verb go, its commit kept | 496 | (rec) — pending the owner; built as recommended |
 | 657 | Wave 3 P1: a patch holds the frame's kinds (scene, shape, backdrop, pattern, look-back, dream, hands 1, its layer and guide); the rig's (`patches.RIG_KINDS`) and the look's one camera stay refused, a lane envelope and a copy without its original too; **no `patch/3`**: the file's keys are unchanged and an older build's `check` refuses such a file in words | 497 | (rec) — pending the owner; built as recommended |
 | 658 | Wave 3 P1: a patch's single-instance node the host already has (`patches.ONE_PER_FRAME`: scene, shape, backdrop, pattern, dream) refuses the whole spawn in words, nothing landed, no sheet — the dream's is now "replace the host's dream" (row 661); hands 1 lands as the next hands, a look-back as the next look-back | 498 | (rec) — pending the owner; built as recommended |
 | 659 | Wave 3 P1: what a frame kind carries is its own params, the canvas's owners (`patches._param_rows`): `rot.*`, most of `view.*` and `fx.face_map` the shape's; `pattern.*`, `view.pattern*`, `view.media_*` the pattern's; `dream.*` split by key between a look-back (`LOOKBACK_KEYS`) and the dream; `scene.*` no node's. The spin's pose stays the host's. A hands' layer or guide needs its hands at a **save**, in words; a file an older build saved with `hands.2.layer` alone still reads and spawns as it did. A second dream (`dream.2`) is refused at a save and at a read, and never renumbered onto `dream`. An inlet into `scene.geometry` keeps its draw order (the port's optional `before`) | 497, 499 | (rec) — pending the owner; built as recommended |
@@ -690,6 +699,24 @@ here; overturn → the change, then the same.
 | 665 | Wave 3 P3: the take-over chip under **wire as saved**, drawn only while a press of the plain chip would refuse a taken port this one could take; its label names each cut, a line each, up to three, then the count; one press, one undo step, its result drawn, the cut said after; the cut's source stays on the canvas, not re-wired | 503 | (rec) — pending the owner; the chip is row 524's answer, the details built as recommended |
 | 666 | Wave 3 P3: what the chip does not take — a taken inlet is no open pin, so a hand's wire stays; `scene.geometry` takes many, so nothing is cut and `before` holds the draw order; a pin refused for another reason ("no node tripcolour") stays refused beside a take-over; the rig's bus cable is not a cut; a cut the read would refuse draws no chip | 504 | (rec) — pending the owner; built as recommended |
 | 667 | Wave 3 P3: a press is judged against what the chip said as the mouse went down; if the section or the plan has moved since, it refuses in words and nothing is cut | 505 | (rec) — pending the owner; built as recommended |
+| 668 | Plan 49 U3: the rail is gone and GRAPH is always drawn; `ui.page` is the focus, `ui.PAGE_KEYS` keeps its sixteen slots in order so a saved index names the section of the name its page had; GRAPH's slot lets go of the focus; "every page fits the window" retired | 506 | (rec) — pending the owner; built as recommended |
+| 669 | Plan 49 U3: the focus leaves the fold alone — a section shows while focused and folds back when the focus moves on or lets go; nothing written to `ui.json` (changes the end of row 627, "kept as a click's unfold") | 507 | (rec) — pending the owner; built as recommended |
+| 670 | Plan 49 U3: the focused section's room — beside the canvas, its header at the pane's top and its body down to the headers after it; in the narrow band, alone, the band leaving `CANVAS_MIN` of canvas, a chip letting go | 507, 508 | (rec) — pending the owner; built as recommended |
+| 671 | Plan 49 U3: VIEW, ROUTING, HANDS and SYSTEM fold in, folded at first; no page stays; their rows wrap at 240–320 px and SYSTEM's and HANDS' status lines wrap | 508 | (rec) — pending the owner; built as recommended |
+| 672 | Plan 49 U3: while a desk control is picked the canvas and every body but ROUTING's are dimmed, the headers live | 509 | (rec) — pending the owner; built as recommended |
+| 673 | Plan 45 V4, the read head: each voice reads sequentially from a head of its own, written only by the callback and read by nothing else; against the playhead carried forward by the speed since the last feed it is left alone within a block and a quarter (the clocks' phase plus the frame's jitter), slewed beyond that (the excess over 0.25 s, at most half the speed), cut with a one-block crossfade past 0.25 s (both × max(1, |speed|)), and stopped after 1 s with no feed. The numbers are by ear | — | (rec) — pending the owner; built as recommended |
+| 674 | Plan 45 V4, varispeed: `Transport.velocity` (signed; 0 at a parked end; a drag of `pos` at the drag's speed up to 8× the clip, a jump at the rate) and `wrap` replace `_forward`; linear resampling with the speed gliding inside a block, no anti-alias filter, at most 16× | — | (rec) — pending the owner; built as recommended |
+| 675 | Plan 45 V4, the loop-wrap case: the head counts modulo the loop and reads straight through the seam, either way; no splice fade, so a clip not cut to loop has the click of its own two ends; a track ending within 50 ms before the picture is bridged at full level, one ending earlier fades out and back, one running past it is cut there | — | (rec) — pending the owner; built as recommended |
+| 676 | Plan 45 V4, prefetch: none. A clip up to 120 s is held whole; a longer clip's wrap fades out and back in one window decode later | — | (rec) — pending the owner; built as recommended |
+| 677 | Plan 45 V4, silence and level: the level glides per block to gain × a fade on the speed (1 from 0.05 up, 0 under 1e-3), so rate 0 is a block's fade then exact zeros with no read; a block whose next block is not wholly held takes the level to 0 (`Soundtrack.holds`), so running out is a fade; a voice leaving gets one more block; a clip not yet probed is silent | — | (rec) — pending the owner; built as recommended |
+| 678 | Plan 51 O1: the palm's orientation as new lanes in the room's frame, `hand:<side>.room.roll / pitch / yaw`, the same reading on both hands, after the grabs so no older lane moves; the anatomical axes stay as they are | — | (rec) — pending the owner |
+| 679 | Plan 51 O1: a room lane is the whole circle, `0.5 + degrees / 360`, filtered unwrapped; the seam is one frame and never a sweep; pitch runs on past ±90° and yaw holds inside 8° of vertical (out at 11°), so no lane flips; a dropped wire lands a `position` row at depth 1 with no feel (`learn.row_for`) | — | (rec) — pending the owner |
+| 680 | Plan 51 O1: the room is the tracking mode's stage, levelled optionally from one flat hand (HANDS, **level room**); kept as an optional `room: {mode, level}` in `hands.json`, `/3` unchanged, written only when set; applied only in its own mode and never to a tape | — | (rec) — pending the owner |
+| 681 | Plan 51 O1: a lost hand reads NaN on the room lanes that frame and returns at its new reading with no glide; they have no setup params, no DAW output and no Learn | — | (rec) — pending the owner |
+| 682 | Plan 51 O2: an orbit is a new performer op, `turn`, that adds the source's shortest change to the target's base while its gate is on; first acting frame reads, a frame not acting forgets; no feel; dormant with no gate or a source that is no whole-circle lane | — | (rec) — pending the owner |
+| 683 | Plan 51 O2: no schema move for `turn`: an older build drops the row with a note and lands the rest, and a save there loses it; both Macs update together | — | (rec) — pending the owner |
+| 684 | Plan 51 O2: the clutch is the same hand's grab, landed in the preset's row; a lost hand is an opened clutch; one undo step per closure with a 0.15 s grace; under the hold it moves the preview as a knob does | — | (rec) — pending the owner |
+| 685 | Plan 51 O2: within 20° of vertical, a yaw straying 20° or stepping 5° on leaving the cone makes the hand read NaN until it has left, then restart, not a camera jump; `ghost.mirror` does not flip a turn row, its depth does; a room lane on a clamped target stays `position`; a moved row lands as `row_for` would | — | (rec) — pending the owner |
 
 "—": no hand check shows it; tests only.
 
@@ -9612,7 +9639,7 @@ and D3 (the per-deck split) are
   The dim stays the last pass (`Renderer.dim_pass`), the mix runs before
   it. *Other option*: the crossfader fades decks and the dim moves to the
   CUE knob — which takes `view.shape` off the desk (`apc40.py:537`) and
-  changes a row every show preset's desk layer expects.
+  changes a row every show preset's desk layer expects. owner — 2026-11-04: as recommended (no objection when asked).
 - **To reverse.** Before D1: nothing to undo. After: each step is its own
   PR with a façade (`routing.py` re-exports `Sources`; the hold's ids
   kept), so a step reverts alone.
@@ -10665,12 +10692,13 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Judge it.** Hand checks 444–445 (group BD).
 
 ### 591. Plan 44 D2: the banks' and modifiers' lanes stay in the shared sources for now
+- **Changed by D4.** Row 651: each deck's own layer. The text below is D2's.
 - **Asked.** The plan puts `feeds` in the shared half and the banks and
   modifiers in the evaluator; the banks (`lfo`, `env`, `seq`) and the
   modifiers (`mod`) publish their own lanes into `feeds`, `labels` and
   `rests` every frame. Where do those lanes live once two routers share
   one `Sources`?
-- **Answer.** In the shared sources, as they did in the one router: D2
+- **Answer.** owner — 2026-11-04: as recommended (no objection when asked). In the shared sources, as they did in the one router: D2
   is behaviour-neutral and adds no layer. Each router republishes its
   banks' outputs at the top of its pass. The `mod` vector is the
   router's own (`_mod_out`): seeded from its own last outputs, never the
@@ -10705,7 +10733,7 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   `poll(sources=, …)`. But `poll` delivers each device's rows (`act`):
   the pad's buttons, the OSC rows and the sticks' camera job land on the
   deck's registry through its router.
-- **Answer.** `poll` keeps `router=`, and a device's `act` still gets the
+- **Answer.** owner — 2026-11-04: as recommended (no objection when asked). `poll` keeps `router=`, and a device's `act` still gets the
   router; the pad's `axis` lanes go to the router's sources inside
   `Router.pad` (the pad's `publish`). Its `touch` and `motion` lanes
   (`PadDevice._feed_extras`) moved to `PadDevice.feed(sources)`, the feed
@@ -10734,7 +10762,7 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   pad's lanes) and the source feel its `pad_feel`. The device registry
   moves to the shared sources; the table stays the deck's until D3 splits
   it.
-- **Answer.** A `Sources` keeps the tables of the routers built over it
+- **Answer.** owner — 2026-11-04: as recommended (no objection when asked). A `Sources` keeps the tables of the routers built over it
   (`Sources.follow`, from `Router.sources`' setter), held weakly — a
   dropped router's table is forgotten, never written again — and writes
   the rig facts into every live one whenever the registry changes
@@ -11535,6 +11563,8 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 
 ### 625. Rough edges left for D4 and D5
 
+- **Settled since.** The frame-late offsets by row 650; who owns the presets
+  kind by row 648 (the first deck, until D5). `hold._preset_part` is D5's.
 - **Answer.** (rec) — recorded.
 - **Built.** Nothing.
 - **Other options.** Fix `hold._preset_part` here (outside this PR's
@@ -11949,6 +11979,178 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Built.** `tests/test_graph_groups.py::test_groups_keep_their_invariants_over_the_corpus`.
 - **Judge it.** —.
 
+## Wave 3 — decks D4 (plan 44, rows 648–653)
+
+### 648. Deck 2 beside the first
+- **Asked.** Plan 44 §3 D4: `main` builds two decks, nothing points at the
+  second.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Built.** `Deck.beside`: its own registry, view, table, router, banks,
+  presets, undo, renderer and channels, over the first's session, sources and
+  clock. It declares nothing the session has and has no hold. Its `Presets` do
+  not claim the library's kind (`claim=False`). `Presets.load_doc` now lands
+  on its own registry, not the library's attached one. It is built on the
+  render context (`main` makes that current; the control window's is current
+  there), with the first's `_t0` (`Renderer.sibling`), and its own `GhostState`:
+  D3 made `ghost.*` per deck, `ghost.mirror` reaching it through `RoomSetting`.
+  Launch costs a second `Renderer`.
+- **Other options.** Build its renderer on first use, as the hold did: saves
+  launch time (33 ms, Renderer() here, M3 Max), but moves a shader compile into the first frame of
+  a fade, a stall the room sees, and D5 draws this renderer whenever GRAPH is
+  open anyway. Kept eager; 2 s after a fade its frame-sized targets are let go
+  (`Fade.begin_frame`, `Renderer.release_sized`), its rings and delays kept.
+- **To reverse.** Drop the `Deck.beside` lines in `main`.
+- **Rough edge.** Deck 2 is empty until D5, so `output.xfade` fades to black.
+  `Library._fresh_of` still reads the library's attached registry, so a value
+  a preset does not name, on an instance only deck 2 has, keeps what it held.
+- **Judge it.** Check 489, 493.
+
+### 649. The one fade
+- **Asked.** Plan 44 §3 D4, §5.
+- **Answer.** (rec) — pending the owner; built as recommended. Row 559's
+  "the crossfader stays the dim": confirmed, owner — 2026-11-04.
+- **Built.** `output.xfade`, `output.xfade_s` (session, `persist=False`,
+  `modulatable=False`, no desk row). `Fade.draw` draws deck 2 before output 1,
+  each output into an `Offscreen` at its size, through its switches at full
+  dim, at the window's sample count (`View.samples`) and under the render cap;
+  `Renderer.mix_pass` multiplies by 1 − k and adds the picture × k, in
+  `_compose`, before the dim; `Handoff.mix` is the presenter's step 4½.
+- **Other options.** A premultiplied *over*, as the plan's words had it: one
+  triangle, but anything transparent in deck 2 leaves deck 1 showing at k 1.
+- **To reverse.** No caller, no pass: `_draw_render(fade=None)`.
+- **Rough edge.** A mix that fails is said on SYSTEM (`mix_error`); one that
+  raises in its second triangle leaves that frame multiplied. `output.xfade_s` is
+  read by nothing until D5's take. A fader
+  learned onto `output.xfade` stays up at 1 (no swap until D5).
+- **Judge it.** Checks 489–491.
+
+### 650. The pass order, and a deck off air's rows on a session param
+- **Asked.** Row 625: a deck whose pass runs after the lead's apply lands its
+  session offsets a frame late. Plan 44 §7 left to plan 43 whether a deck's
+  row onto a session param lands at all; plan 43 did not rule.
+- **Answer.** owner — 2026-11-04: as recommended (no objection when asked); built as §7 recommends.
+- **Built.** `app.frame`: the on-air deck's pass and apply, then each deck off
+  air's. `Router.modulate`: on a deck that is not the session's lead, a row
+  whose target it does not land (`Registry.lands`) is dormant, and so is a macro
+  base subscriber on one (`follow_macros`). So the lead's
+  offsets land in the frame of its pass, a follower reads this frame's value,
+  and naming another lead moves the rows that act (the D5 swap).
+- **Other options.** Followers first, all rows landing, which was built first
+  and undone: the offsets land on time, but two decks on TUMBLE push
+  `master.gain` twice, and a follower reads its scale a frame old.
+- **To reverse.** Drop the `follower` test in `Router.modulate`.
+- **Rough edge.** ROUTING does not yet say such a row is dormant (§7 asks for
+  that): no page shows deck 2 today, so D5 says it.
+- **Judge it.** Tests only.
+
+### 651. Each deck its own lanes
+- **Asked.** Row 591 left the banks' and modifiers' lanes in the shared
+  sources until D4.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Built.** `routing_sources.LaneLayer`, `Layered`, `DECK_SCHEMES`;
+  `Router.lanes`. A write through the router of a deck's scheme lands in the
+  layer, any other in the sources; a read falls through, so a bare feed of
+  `lfo` still feeds. `Router.schemes` appends the layer's. The pass reads
+  the same views in its walk. `_put_modifiers`, `_mod_out` and `_mod_pub` are gone.
+- **To reverse.** Not cleanly: it is the panel's read between passes.
+- **Rough edge.** `mod` is now offered last among the schemes.
+- **Judge it.** Tests only.
+
+### 652. A source read once a frame; deck 2 silent
+- **Asked.** Plan 44 §8: a Syphon feed's `gl_poll` twice a frame may have no
+  new frame the second time.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Built.** `MediaSources.begin_frame` (`MediaIO.poll`) and `read`: one read
+  per source object a frame; with no frame begun a tool reads fresh.
+  `Channels.poll(heard=False)` for a deck off air leaves `Mixer.feed` alone, so
+  the mixer is fed once a frame, with the on-air deck's voices. `media/mixer.py`
+  is not touched.
+- **Other options.** Feed both decks' voices through one call (V4's heads would
+  read them apart); a deck off air in the room's ears is the owner's to want.
+- **To reverse.** `heard=True`.
+- **Rough edge.** A file opened by both decks is two decodes
+  (`Channels._switch` opens per channel, as two channels on one file did
+  before): plan 44 §2's "one decode" holds only for a shared live source. Each
+  renderer uploads its own texture during a fade.
+- **Judge it.** Check 491.
+
+### 653. One dream worker, lent; the second worker measured
+- **Asked.** Plan 44 §2, row 558; the owner's question: could a second,
+  lower-resolution worker serve the panel's deck's preview?
+- **Answer.** (rec) — pending the owner; the lend built, the second worker
+  **not decided**.
+- **Built.** `DreamWorker.lend(reg)`, `Fade.lend`. The plan said `submit` should
+  carry the params; the lend repoints the registry `submit` reads instead, since
+  the GL half has none to pass. Lent only while the receiving deck's graph holds
+  a dream node that is on, from `xfade` 0.05 (`LEND_AT`) until back at 0.
+- **Measured** (2026-11-03, M3 Max, MPS, `dream_step` × 2 at 16:9 on VGG16
+  `conv4_2` with **random weights**, so no weights file and no library; the Mac
+  was shared, load average 8–12, so read the ratios). One worker alone, p50 per
+  submit: res 384 53.5 ms, 256 25.8 ms, 192 16.2 ms, 128 8.5 ms. Two at once,
+  each waiting on the other: on-air 256 beside preview 128, both 35.2 ms (on-air
+  +37 %); beside preview 192, both 43.1 ms (+67 %). The steps add: the GPU runs
+  them one after the other. Not measured: pretrained weights, the real library's
+  presets, or with both renderers drawing beside them.
+- **Other measures.** `Fade` at 0.5 against one deck, 1080p, standalone context,
+  both decks on the preset, no MSAA, median ms with `finish`: party-trip 1.79 →
+  2.82, party-acid 1.15 → 2.42, party-noita 1.68 → 2.74, party-faces 0.73 → 1.27,
+  plasma-heart 0.68 → 1.32. An empty deck's frame steps off air: 118 µs.
+- **To reverse.** Drop `Fade.lend`; the worker stays deck 1's.
+- **Rough edge.** The deck giving the worker up holds its last dream for the
+  fade. A fader jittering across 0.05 and all the way to 0 still restarts it.
+- **Judge it.** Check 492.
+
+## Wave 3 — the base chase (plan 52, rows 654–656)
+
+### 654. What the verb commits, and when the look comes back
+
+- **Asked.** The triage's "Base chase modifier"; no written spec. What does a
+  source do once its motion is in the base?
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** The verb tracks what shows, frame by frame, so holding it
+  changes nothing on screen and a release leaves the look at what showed last.
+  The offset then counts only past where it was let go, until it comes home.
+  So: hold, push the stick, let go of the verb, let go of the stick, and the
+  look stays. The alternative was a ratchet, where the look also stays when a
+  source goes home under the held verb. It keeps a stick's throw with either
+  order of release, but an LFO under it would show half its swing while held,
+  so the press would no longer be invisible. Worth judging with B2 on a
+  gamepad; it would be a change to `Param.apply` alone. An undo under the verb
+  ends it, rather than committing again on the bases it put back. A base goes
+  back with the ledger it had (`State.trims`): undoing a hold with a push still
+  out shows the old base plus the push, as if the verb had never been held. A
+  load empties the ledger: a look holds no commit it never made.
+- **Built.** `Registry.base_chase`, `Param._commit`, `params._came_home`,
+  `tests/test_base_chase.py`.
+- **Judge it.** Checks 494, 495.
+
+### 655. Macros
+
+- **Asked.** Found in the build: `macro.*` is continuous and modulatable.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** Left out. `Router.follow_macros` moves base subscribers when
+  a macro's base moves and never for an offset, so a commit would move them for
+  the first time, a jump the moment the verb is pressed. Left out, a routed
+  macro shows as it did and nothing changes. Its subscribers' own params are
+  reached if a route lands on them.
+- **Built.** `params.CHASE_REFUSED_GROUPS`.
+- **Judge it.** —.
+
+### 656. Under the projector's hold
+
+- **Asked.** Plan 38's hold keeps the program's bases and adds this frame's
+  offset, read as `value − base`.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** Refuse the press while held. A commit empties `value − base`,
+  so the program would lose the performer and the projector would jump; and
+  what it would commit into is the preview, which the room is not watching.
+  Engaging a hold lets the verb go first, so its undo step closes before the
+  point Drop goes back to. One hold for the rig, so the rule is the rig's: every
+  deck is refused and let go. D5 retires `hold.py` and this rule with it.
+- **Built.** `Registry.chase_guard` (set on the session by `hold.register`),
+  `Hold.engage`.
+- **Judge it.** Check 496.
+
 ## Wave 3 — frame kinds in patches (plan 50 P1, rows 657–660)
 
 ### 657. A patch holds the frame's kinds; no `patch/3`
@@ -12252,3 +12454,294 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Built.** `graphview.TAKE_OVER_STALE`, `Edit.wire_taking_over`;
   `st["take_over_asked"]` in `ui_graph._take_over_chip`.
 - **Judge it.** 505.
+
+### 668. The rail goes; `ui.page` is the focus
+
+- **Asked.** Plan 49's third stage: "the rail is removed and `ui.page`
+  becomes 'focus section'".
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** `Panel._rail` and the page switch are gone: `_draw` draws
+  `ui_graph.page` every frame, and `ui.RETIRED` went with them. `ui.page`
+  stays an enum of the same sixteen slots in the same order
+  (`ui.PAGE_KEYS`, now names only: what each section's params are is
+  `ui_pane.SECTIONS`, one table, read by `ui_graph._page_of_group`), because a
+  binding's `set` holds an index and the rig's bindings are not ours to
+  rewrite. **What a saved index means now:** the section of the name its
+  page had — 0 output, 1 view, 2 faces, 3 media, 4 camera, 5 lookback,
+  6 fx, 7 audio, 8 analyzer, 9 routing, 11 lfo, 12 seq, 13 hands,
+  14 presets, 15 system — and 10, GRAPH's, no section: the canvas is
+  always there, so it lets go of the focus and scrolls the pane to its top.
+  `panel.page` stays the index, so `app.frame`'s ⌘[ / ⌘] (not touched: a
+  page set straight is seen by `_draw`) walks the sections focused. The
+  param's label is "Focus section". The FX slot is no longer a door: its
+  value stays FX, so a `step` row no longer jumps to GRAPH (627's rough
+  edge). `Panel.page` is the one owner of the focus (`ui_pane.focused` reads
+  it): a click that lets go moves it to GRAPH's slot (`let_go`), so `ui.page`
+  and the history say so too. Selecting a node (`ui_graph.select_id`: FX's
+  SHOW, OUTPUT's "open on GRAPH", a controller, "Route a lane here…") does
+  not move the focus: the canvas is always drawn and the section being
+  worked in stays.
+- **Retired.** "Every page fits the window without scrolling": a section
+  is as tall as the pane gives it and scrolls in its body. The height-fit
+  tests are gone, not moved (a window as wide as the panel measures neither
+  the old rule nor the new one). The rule now, in `REVIEW.md`: no control
+  passes the pane's edge, beside the canvas or in the band
+  (`test_every_section_focused_lands_in_view_and_inside_the_pane`). Other
+  body tests draw the body alone (`test_ui_shell.page_frame`); the real
+  route is `tests/test_ui_pane.py`.
+- **Other options.** Rename the param (every saved row breaks); a new table
+  of section indices (the same).
+- **Rough edge.** Words on the panel still say "page" in places (a tip's
+  "HANDS page", "open on VIEW"). They are all right to read and many tests
+  name them; a pass over the words is a small PR if the owner wants one.
+- **Judge it.** 506.
+
+### 669. The focus leaves the fold alone
+
+- **Asked.** Plan 49: a focus "unfolds and scrolls to a section".
+- **Answer.** (rec) — pending the owner; built as recommended. It changes
+  the end of row 627, where FX's unfold was kept as a click's.
+- **Recommended.** A focus shows a section without unfolding it
+  (`ui_pane.focused`): when the focus moves on or lets
+  go the section goes back to what a click left it, and `ui.json` is not
+  written. Walking the sections with a pad or ⌘] would otherwise leave them
+  all open, on this Mac for good. To keep one open: click its header twice
+  (the first lets go and folds, the second unfolds and keeps it), or unfold
+  it by a click before the focus lands.
+- **Other options.** A focus as a click's unfold (627's), written to the file.
+- **Judge it.** 507.
+
+### 670. The focused section's room
+
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** Beside the canvas the open sections share the pane
+  evenly (row 599), which with sixteen headers can be `MIN_BODY_H`: a page's
+  body in 160 px. The focused one's header goes to the pane's top and its
+  body runs down to the headers after it, which stay in view for the next
+  click; the headers above are scrolled off (the wheel over a header, or the
+  pane's scrollbar). A click on another header leaves the focus alone. In
+  the narrow band (the desk's 540 px panel, where a page used to have the
+  whole height) the band grows to all but `CANVAS_MIN` of the page
+  (`ui_graph.band_height`), the focused section alone under the chips and
+  its chip alone lit; a click on another chip shows that section, whatever
+  its fold said, and the band is `BELOW_H` again. The headers'
+  height is now measured in their own face: `row 599`'s share had reckoned
+  each at a frame's height, about twice what it is.
+- **Judge it.** 507, 508.
+
+### 671. The last four pages fold in
+
+- **Asked.** The brief: "The SYSTEM page and any page not yet a section need
+  an explicit answer".
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** All four are sections, so no page stays: **view** after
+  presets; **hands** and **routing** after seq; **system** last; all folded
+  at first, as stage 2's were. The bodies are the pages' (`Panel._page_view`
+  and so on; every section but fx now names its body `_page_<key>`). At
+  240–320 px: VIEW's ticks and field rows wrap; ROUTING's head puts the
+  layer and its chips on a row of their own, and a macro's chips go under
+  its knob; HANDS' pinch switches go under the box, the dance column under
+  the axis rows (under 460 px), the feel knobs under the plot one to a row
+  (under 340 px), its ticks and MIDI row wrap; SYSTEM's switches wrap. In
+  HANDS and SYSTEM a long status line wraps rather than running off the
+  pane. The preset strip's chips go on a row of their own when even a
+  squeezed name leaves no room (they had drawn over ▶ with the pane's
+  scrollbars up). With no router there is no canvas but the sections still
+  draw.
+- **Rough edge.** SYSTEM with the sticks' dials and HANDS with every line on
+  are long at 320 px, and at 320 px ROUTING's desk combos cut off their
+  target names (`view.dept…`): the pane's width (the grip) is the answer.
+- **Judge it.** 508.
+
+### 672. A picked desk control dims the canvas and the bodies
+
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** Plan 17 dimmed the open page, never ROUTING, and left the
+  rail live so a person could change page. The same rule on what is left:
+  GRAPH's head and canvas (`ui_graph._dimmed`) and each body (`ui_pane._body`)
+  are disabled and take the pick's click; ROUTING's body is not, wherever it
+  is in the pane; the headers are the rail's job now and stay live. The words
+  say "in any other section", and "its line is framed" only while ROUTING's
+  body is on screen (`ui_pane.shown`), not by what `ui.page` names.
+- **Judge it.** 509.
+
+### 673. Plan 45 V4: the read head
+- **Asked.** Plan 45 V4 and the wave 3 prompt: the callback reads sequentially
+  from its own sample position, slewed toward the transport's, under the rule
+  that there is no second time base (row 562).
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** A head the transport sets and nothing reads: left alone
+  within a block and a quarter (`DEAD`), slewed beyond it (`TAU_S` = 0.25 s, at most half
+  the speed), cut with a crossfade past `CUT` = 0.25 s, both × max(1, |speed|)
+  because jitter is a time, stopped after `STALE_S` = 1 s with no feed. The
+  error is against the playhead carried forward by the speed since the last
+  feed, so a block repeated or skipped by the clocks' phase is no error at all.
+- **Built.** `media/mixer.py`; `tests/test_media_varispeed.py`
+  (`test_rate_1_with_the_clocks_out_of_phase_repeats_and_skips_nothing`,
+  `test_a_small_error_slews_without_a_click_and_closes`,
+  `test_a_stuck_frame_thread_is_ridden_through_then_faded_not_free_run`,
+  `test_the_clocks_jitter_is_no_error_at_any_rate`,
+  `test_a_slew_against_a_slow_transport_never_stops_the_tape`).
+- **Judge it.** Hand check 510.
+
+### 674. Plan 45 V4: varispeed
+- **Asked.** Plan 45 V4: the transport's speed sets the read rate; reverse,
+  scrub and a rate change sound like tape; linear first, a windowed sinc if it
+  is heard.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** `Transport.velocity`, because `speed` says 1 at a parked end
+  and the rate during a scrub. A drag of `pos` reads at the drag's speed, up to
+  `SCRUB_TAPE` = 8× the clip; faster is a jump, played at the rate. Linear, the
+  speed gliding inside a block, no anti-alias filter, `MAX_SPEED` = 16.
+- **Built.** `media/transport.py`, `media/mixer.py`;
+  `test_any_rate_reads_that_many_samples_a_sample`,
+  `test_a_drag_of_pos_reads_at_the_speed_of_the_drag`,
+  `test_the_transport_says_how_it_is_really_moving`.
+- **Judge it.** Hand checks 511 and 513.
+
+### 675. Plan 45 V4: the loop-wrap case
+- **Asked.** Plan 45: "V4 also decides the window's wrap case".
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** Read straight through the seam, the head modulo the loop, so
+  a clip cut to loop is seamless. No splice fade: it would dip every clip that
+  was cut well to spare the ones that were not. If the click of an uncut clip
+  is heard at a show, a short fade is a small change. The loop's length is the
+  picture's: a track ending up to 50 ms before it (a mux mismatch) has the gap
+  bridged at full level, one ending earlier fades out and back, and one running
+  past it is cut at the picture's end.
+- **Built.** `test_a_loop_wrap_reads_straight_through_the_seam_in_order`,
+  `test_a_few_ms_short_of_the_loop_is_bridged_at_full_level`,
+  `test_a_track_past_the_picture_is_cut_at_the_pictures_end`,
+  `test_reverse_reads_back_through_the_seam`,
+  `test_the_error_is_measured_the_short_way_round_the_loop`.
+- **Judge it.** Hand check 512.
+
+### 676. Plan 45 V4: whether a loop needs the head prefetched
+- **Asked.** Plan 45: "whether a short clip's loop needs the head prefetched".
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** No. A clip up to 120 s is held whole, so its head is in
+  memory. A longer clip's wrap is one gap of one window decode, faded, per wrap
+  of a clip over two minutes; holding its head would cost a second seek and
+  demux of a large file, on a cloud-synced library, for every channel enabled.
+- **Built.** `test_a_short_clip_needs_no_prefetch_a_whole_track_wraps_on_what_it_holds`,
+  `test_a_long_tracks_wrap_fades_out_and_back_when_the_window_arrives`.
+- **Judge it.** Hand check 512, with a clip over two minutes.
+
+### 677. Plan 45 V4: silence and level
+- **Asked.** Plan 45 V4: rate 0 is silence; a block outside the held window is
+  zeros.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Recommended.** One level that glides per block to gain × a fade on the speed
+  and to 0 when this block or the next is not wholly held (`Soundtrack.holds`),
+  so running out of samples is a fade and not a step. It also covers a
+  voice starting, a gain move and a voice leaving, so none of them clicks. A
+  transport at rest has no slew, so a stopped head does not creep. A clip not
+  yet probed (duration 0) does not move and is silent; V2 repeated its first
+  block.
+- **Built.** `test_rate_0_is_silence_after_one_block_fading_and_reads_nothing`,
+  `test_a_once_clip_running_out_of_track_fades_while_it_has_samples`,
+  `test_a_head_leaving_its_window_fades_before_the_edge`,
+  `test_a_gain_move_glides_across_a_block`,
+  `test_a_voice_turned_off_fades_in_one_block_and_is_let_go`,
+  `test_the_callback_allocates_nothing_once_warm`.
+- **Judge it.** Hand checks 511 and 512.
+
+### 678. The room lanes
+
+- **Answer.** (rec) — pending the owner.
+- **Built.** `hands/room.py`, `Layout.room`: six lanes after the grabs, a
+  `room` port group. Up = −normal, back = −direction on either hand, so the
+  two hands read alike; `Ry(yaw) · Rx(pitch) · Rz(roll)`, right-handed about
+  the room's axes, the same way round as `geometry._camera`. The hands package
+  has no way to read the camera, and a test orbits it between frames.
+- **Judge it.** 514.
+
+### 679. A whole-circle lane, and over the top
+
+- **Answer.** (rec) — pending the owner. The other way, a clamped ±range like
+  the anatomical axes, cannot reach a camera that goes all the way round.
+- **Built.** `room.Palm` adds each frame's shortest step to a running angle,
+  runs the One Euro filter on it and wraps after. `room.angles` holds yaw
+  inside `POLE_DEG` and otherwise takes the solution nearest the last yaw. The
+  costs, in plan 51 §4: a level hand after going over the top may read pitch
+  180° rather than yaw and roll 180°, until it leaves; a twist made inside the
+  cone is a yaw step of up to 90° on the way out. Yaw lets go at
+  `POLE_EXIT_DEG`, and a hand first seen in the margin reads NaN until it
+  leaves. `learn.row_for` lands a room lane as `position`, depth 1, no feel
+  (`learn.whole_circle`, the one line outside `hands/`): the default push on a
+  spring is not one-to-one and glides through the whole range at the seam.
+- **Judge it.** 515.
+
+### 680. The room's calibration
+
+- **Answer.** (rec) — pending the owner.
+- **Built.** `room.frame` (the mode's stage, then the levelling);
+  `HandsIO.start_level` (at least a second and `CAL_MIN_SAMPLES` frames, up to
+  `LEVEL_WAIT_S` more; one hand, still, palm down, or it refuses in words; not
+  during a sweep), `clear_level`; `core.load_room`, `save_calibration(room=)`.
+  The entry records its tracking mode: another mode ignores it and keeps it in
+  the file, and a tape neither uses, makes nor clears one. No schema move: an older build ignores the key and drops it at its next save,
+  which costs one more press, and the two Macs each keep their own
+  `hands.json`. The frame leaves out `Units.tilt` and `ghost.mirror`, which are
+  about the drawing.
+- **Judge it.** 516.
+
+### 681. A lost hand on the room lanes
+
+- **Answer.** (rec) — pending the owner.
+- **Built.** `HandsIO._step_rooms` resets a `Palm` for a hand that is not
+  present or gives no frame; NaN lets a row go as any hand lane does. A glide
+  back has no right direction on a circle, so there is none. Nothing routes
+  them by default: no preset or binding changed.
+- **Judge it.** 516.
+
+### 682. The `turn` op
+
+- **Answer.** (rec) — pending the owner.
+- **Built.** `routing.TURN_OP` in `MOD_OPS`, `Router._turn`, `Router._end_turns`.
+  A gated `position` row slams to the palm's angle and returns to the base, so an
+  orbit needs a row that writes the base. It never calls `Param.modulate`, so no
+  offset or ledger exists. On a clamped target it adds up and stops at the end.
+  Dormant with no `when` (it would never stop acting, so one undo step for ever)
+  and on a source that is no whole-circle lane (a linear lane has no shortest way).
+- **Judge it.** 517.
+
+### 683. No schema move for a new op
+
+- **Answer.** (rec) — pending the owner. Accepted on this basis by the wave's
+  orchestrator, 2026-11-03.
+- **Built.** Presets stay `/10`. `preset.py` on an older build drops an op it lacks
+  with "(turn): not a performer row" and lands the rest; a save from that build
+  loses the row. Read from the code and simulated with an older `MOD_OPS`
+  (`test_what_an_older_build_does_with_the_row`), not run on an older build.
+- **Rejected.** A flag on a `position` row: an older build ignores it and slams the
+  camera. A schema move: an older build refuses the whole file for one camera row.
+
+### 684. The clutch, a lost hand, undo and the hold
+
+- **Answer.** (rec) — pending the owner.
+- **Built.** `learn.clutch_of`: the same hand's grab, in the row's `when`; alternatives
+  in plan 51 §6. A lost hand drops the gate and NaNs the lane, so the camera stays on
+  its base. One step per closure through `Undo.keep_open` / `let_close`, B1's lines, on
+  `undo.watching(reg)`. A step outlives its rows by `TURN_GRACE_S` (0.15 s), so a dropout
+  is not a new step. Anything else closing it cuts each row acting until it lets go. A
+  step a held chase is keeping is left alone, so a fist ends no verb. A hand lost or
+  blind past the grace makes two steps.
+- **The question for the rig.** Under the hold a turn moves the preview only, as a
+  knob, because it writes the base; a push or position performer rides on both. The
+  alternative, an orbit that reaches the program, would need an offset, which is what
+  this op does not have.
+- **Judge it.** 518.
+
+### 685. The cone, the mirror and clamped targets
+
+- **Answer.** (rec) — pending the owner.
+- **Built.** `Palm.step` answers plan 51's open question. Within `POLE_NEAR_DEG` (20°)
+  of vertical, a yaw straying `POLE_SWING_DEG` (20°) from where it came in, or stepping
+  `POLE_STEP_DEG` (5°) on leaving the cone, makes the hand blind until it has left; then
+  it restarts. A range, not a rate, so a slow pass is caught. Costs in plan 51 §6.
+  `ghost.mirror` is the room's and the row the preset's, so no flip: depth −1 answers
+  a mirror. `learn.row_for` lands `turn` only on a wrapping target; on any other
+  continuous target it stays O1's `position`. `learn.move_route` lands a moved row the
+  same way.
+- **Judge it.** 519.

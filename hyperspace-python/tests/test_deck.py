@@ -53,7 +53,7 @@ from hyperspace.library import PRESETS, Library, Marks
 from hyperspace.lookback import DreamState
 from hyperspace.midi import MidiIO
 from hyperspace.overlay import Output
-from hyperspace.params import Registry, build_registry
+from hyperspace.params import Registry, build_registry, part_of
 from hyperspace.preset import Presets
 from hyperspace.routing import Bindings, Router, Sources, bindings_path
 from hyperspace.view import ViewState
@@ -298,15 +298,74 @@ def test_one_sources_fed_once_drives_two_routers_as_one_router_did(tmp_path):
     assert all(driven.values()), driven
 
 
+def test_a_deck_beside_changes_nothing_on_air_and_lands_what_one_deck_lands(tmp_path):
+    """Plan 44 D4, the same-state test extended. An empty deck beside the
+    first, its pass and its apply in the frame in `app.frame`'s order, leaves
+    the first where D1's walk leaves a deck alone, to the bit. And a deck
+    beside the first loaded with the same preset lands, every frame of every
+    corpus preset, the performance values a deck alone lands."""
+    solo = _walk(boot(tmp_path / "solo"))
+    r = boot(tmp_path / "with")
+    beside = Deck.beside(r.deck, lfos=lfo.LFOs(seed=1))
+    modulate, apply = r.router.modulate, r.reg.apply
+
+    def both(*a, **k):
+        modulate(*a, **k)
+        apply()
+        beside.router.modulate(*a, **k)
+        beside.reg.apply()
+
+    def no_apply():
+        pass
+
+    r.router.modulate, r.reg.apply = both, no_apply
+    _compare(_walk(r), solo, exact=True)
+
+    alone = boot(tmp_path / "alone")
+    a = boot(tmp_path / "a")
+    b = Deck.beside(a.deck, lfos=lfo.LFOs(seed=1))
+    assert a.deck.sources is b.sources
+    names = sorted(a.lib.list(PRESETS))
+    moved = 0
+
+    def looks(reg) -> dict:
+        return {p.id: repr(p.value) for p in reg if part_of(p) == "performance"}
+
+    for name in names:
+        doc = json.loads(Path(a.lib.path_of(PRESETS, name)).read_text())
+        alone.lib.load(PRESETS, name)
+        a.lib.load(PRESETS, name)
+        b.presets.load_doc(doc)
+        alone.chain.out = a.chain.out = CEIL * np.linspace(0.15, 0.85, len(a.chain.out))
+        for k in range(FRAMES // 2):
+            for rr in (alone, a):
+                rr.t += DT
+                rr.clock.tick(rr.t)
+            _feed(alone.router.sources, a.t)
+            _feed(a.deck.sources, a.t)
+            alone.router.follow_macros()
+            alone.router.modulate(alone.chain, DT, alone.t)
+            alone.reg.apply()
+            a.router.follow_macros()
+            b.router.follow_macros()
+            a.router.modulate(a.chain, DT, a.t)
+            a.reg.apply()
+            b.router.modulate(a.chain, DT, a.t)
+            b.reg.apply()
+            want = looks(alone.reg)
+            assert looks(b.reg) == want, (name, k)
+            moved += b.reg["view.bright"].modulated
+    assert moved > 0                             # the proof has teeth
+
+
 def _mods(r) -> np.ndarray:
-    """The ``mod`` vector a router's last pass left in its sources."""
-    return np.array(r.router.sources.feeds["mod"], dtype=float)
+    """The ``mod`` vector a router's last pass left in its own lanes."""
+    return np.array(r.router.feeds["mod"], dtype=float)
 
 
 def test_two_routers_with_different_modifiers_each_keep_their_own_mod_lanes(tmp_path):
-    """Plan 44 D2, review: the ``mod`` lanes share the sources until D4
-    (row 591), but each router's vector is its own — seeded from its own
-    last outputs, never from the other router's. Two routers over one
+    """Plan 44 D2, review; D4 (row 591): the ``mod`` lanes are each router's
+    own layer, and never in the shared sources. Two routers over one
     `Sources` with different modifiers (three on one, with a delay that
     reads last frame's lane, one on the other) each leave, after their
     own pass, exactly the lanes a router over its own sources leaves."""
@@ -336,10 +395,9 @@ def test_two_routers_with_different_modifiers_each_keep_their_own_mod_lanes(tmp_
             solo = rigs["solo_" + name[-1]] if name in ("a", "b") else None
             if solo is not None:                 # straight after its own pass
                 np.testing.assert_array_equal(_mods(r), _mods(solo), err_msg=f"{name} {k}")
-                assert r.router.sources.feeds["mod"] is r.router.__dict__["_mod_out"]
-    own_a, own_b = (rigs[k].router.__dict__["_mod_out"] for k in ("a", "b"))
+                assert "mod" not in r.router.sources.feeds
+    own_a, own_b = (rigs[k].router.lanes.feeds["mod"] for k in ("a", "b"))
     assert len(own_a) == 4 and len(own_b) == 2          # each router's vector, its size
-    assert shared.feeds["mod"] is own_b                 # the last pass's, until D4 (row 591)
     assert not np.isnan(own_a[3])                       # the delay ran on a's own lane
 
 
@@ -369,7 +427,7 @@ def test_the_deck_holds_the_rig_boot_hands_out(tmp_path):
     # plan 44 D2: the router reads the deck's sources (its own while there
     # is one deck), and the clock the banks step on is theirs
     assert d.sources is d.router.sources and d.sources.clock is d.clock
-    assert d.sources.tables == [d.table.session] and d.router.feeds is d.sources.feeds
+    assert d.sources.tables == [d.table.session] and d.router.feeds.shared is d.sources.feeds
     assert undo.installed() is d.undo
     assert d.router.lfos is d.lfos and d.router.bank("env") is d.envs
     assert d.router.sequencer is d.seq and d.undo.marks is d.marks
@@ -442,7 +500,7 @@ def test_the_build_keeps_mains_order():
            "bindings = table(reg)", "library.attach(reg)", "panel(reg, s, clock=clock",
            "Router(reg, bindings, sources=sources)", "router.use_lfos(lfos, clock)",
            "router.use_bank(envs, clock)", "router.use_sequencer(seq, envs)",
-           "Presets(library, reg, router)", "presets.graph.attach(renderer)",
+           "Presets(library, reg, router", "presets.graph.attach(renderer)",
            "hold.section = presets.graph", "Learn(reg, router.table", "devices(reg, router, learn, panel=",
            "library.project.load_startup()", "geometry.warm_all(first=s.shape)",
            "Marks(library)", "undos.Undo(reg, router.table", "undos.install(undo_obj)",

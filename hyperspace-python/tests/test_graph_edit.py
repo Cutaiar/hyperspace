@@ -2309,7 +2309,7 @@ def test_a_channel_dropped_on_a_cable_takes_it_over(rig, monkeypatch):
     gs, probe = _drag_rig(rig, monkeypatch, *RUN, layout=PLACES)
     st = ui_graph._state(rig.panel)
     ui_graph.pick_channel(rig.panel, "a", (250.0, 400.0))       # media ▸ channel a: revealed
-    for _ in range(3):
+    for _ in range(60):                 # (the editor's glide to the selection, run out)
         frame(rig.panel)
     c, mid = _cable_mid(rig, "rin:output.all/image")
     _centre_on(rig, probe, (mid[0], mid[1] + 150))

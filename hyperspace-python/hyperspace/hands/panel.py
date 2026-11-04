@@ -71,6 +71,7 @@ from .core import (
     grab_name,
     mirror,
 )
+from .room import ROOM
 from .signal import shape
 
 ROW_LABEL_W = 62.0
@@ -171,8 +172,8 @@ def page(panel, dt: float) -> None:
         return
     _status(io, getattr(panel, "config_notes", None) or ())
     _box(io)
-    if _has_pinches(io):        # the switches beside the box: the page has
-        imgui.same_line()       # to fit the control window
+    if _has_pinches(io):        # the switches beside the box, where there is room
+        ui.beside(PINCHES_W)    # (plan 49 stage 3: under it in a narrow pane)
         _pinches(io)
     _ghost(panel)
     k = _axes(panel, io, settings)
@@ -502,10 +503,13 @@ def _axes(panel, io, settings) -> int:
     bad = conflicts(settings)
     h = imgui.get_text_line_height() + 2
     # the dance sources (plan 24 C4) take a column on the right of the
-    # rows, so the page grows no taller: it has to fit the control window
+    # rows, so the default twelve rows' page grows no taller: it has to fit
+    # the control window. A short `dofs` list can be shorter than the column
     dance = io is not None and getattr(io, "dance", None) is not None
-    right = DANCE_W if dance else 0.0
     top, avail = imgui.get_cursor_screen_pos(), imgui.get_content_region_avail().x
+    # plan 49 stage 3: in a pane too narrow for the column, it goes under the rows
+    column = dance and avail >= DANCE_MIN
+    right = DANCE_W if column else 0.0
     # twelve rows have to share the page with the editor: tight spacing
     imgui.push_style_var(imgui.StyleVar_.item_spacing,
                          imgui.ImVec2(imgui.get_style().item_spacing.x, 2.0))
@@ -513,11 +517,14 @@ def _axes(panel, io, settings) -> int:
         if _axis_row(panel, io, i, a, i == k, h, a.name in bad, right):
             _select(panel, i)
             k = i
-    if dance:
+    if dance and not column:
+        imgui.spacing()
+        _dance(io, h)
+    elif dance:
         end = imgui.get_cursor_screen_pos()
         imgui.set_cursor_screen_pos(imgui.ImVec2(top.x + avail - DANCE_W + DANCE_GAP, top.y))
         _dance(io, h)
-        # back under both: the column (five lines) is taller than a short
+        # back under both: the column (seven lines) is taller than a short
         # `dofs` list, and what follows must not run into it. Then an
         # empty item, so the window's content size takes the cursor; it
         # adds one item spacing, which the cursor is set that much short of
@@ -577,13 +584,18 @@ def _axis_row(panel, io, i: int, a, selected: bool, h: float, conflict: bool,
 DANCE_BAR_W = 16.0     # one dance source's bar
 DANCE_W = 220.0        # the dance column, right of the axis rows …
 DANCE_GAP = 14.0       # … this much of it a gap
+DANCE_MIN = 460.0      # narrower than this the column goes under the rows (plan 49 stage 3)
+SMALL_SLIDER_W = 58.0  # a slider on a row that may wrap: at least this much beside
+PINCHES_W = 210.0      # the pinch switches beside the box, or under it
+EDITOR_BESIDE = 340.0  # the feel knobs beside the plot; narrower, under it (plan 49 stage 3)
 
 
 def _dance(io, h: float) -> None:
     """The dance sources (plan 24 C4), live, in a column beside the axes:
     per hand a row of the five curls (thumb … pinky) and the grab switch
-    (C5: ● while the hand is a closed fist), and a row of spread, energy
-    and flick; then a row for the two hands together — gap, twist.
+    (C5: ● while the hand is a closed fist), a row of spread, energy and
+    flick, and a row of the room lanes (plan 51: roll, pitch, yaw); then a
+    row for the two hands together — gap, twist.
     Each a small bar like an axis's output, hollow while it reads nothing
     (the hand away, no skeleton). Hover a bar for its address and value:
     what a ROUTING row names."""
@@ -606,6 +618,10 @@ def _dance(io, h: float) -> None:
             if label.endswith("curl"):
                 imgui.same_line(0.0, 6.0)
                 _grab(io, s, lanes[lay.grab[s]])
+        imgui.text_colored(col, f"{side} room")     # plan 51: the whole circle, level centred
+        for kind in ROOM:
+            imgui.same_line(0.0, 3.0)
+            _dance_bar(f"hand:{s}.room.{kind}", lanes[lay.room[(s, kind)]], h, centred=True)
     for k, name in enumerate(lay.pair_names):
         if k:
             imgui.same_line(0.0, 6.0)
@@ -666,10 +682,12 @@ def _editor(panel, io, settings, k: int) -> None:
     ui._micro(f"{a.side} · {a.feature} · {FEATURES[a.feature][0]}")
     imgui.separator()
     st = io.state[k] if io is not None else None
+    roomy = imgui.get_content_region_avail().x >= EDITOR_BESIDE
     _transfer(a, st)
-    imgui.same_line()
-    imgui.begin_group()                 # the feel knobs and the flags beside the
-    if imgui.begin_table(f"##feel.{a.name}", 2,   # plot: the page has to fit the window
+    if roomy:
+        imgui.same_line()
+    imgui.begin_group()                 # the feel knobs and the flags beside the plot
+    if imgui.begin_table(f"##feel.{a.name}", 2 if roomy else 1,
                          imgui.TableFlags_.sizing_stretch_same):
         for key, label in (("deadzone", "zone"), ("curve", "curve"),
                            ("attack", "attack"), ("decay", "decay")):
@@ -677,16 +695,16 @@ def _editor(panel, io, settings, k: int) -> None:
             panel.half(f"{p}.{key}", label, label_w=ROW_LABEL_W)
         imgui.end_table()
     panel._check(f"{p}.invert")
-    imgui.same_line()
+    ui.beside(ui.check_w(panel.reg[f"{p}.bipolar"].label))
     panel._check(f"{p}.bipolar")
-    imgui.same_line()
+    ui.beside(ui.chip_w("mirror"))
     if imgui.small_button("mirror"):
         mirror(settings, a.name)
     if imgui.is_item_hovered():
         ui.tooltip("Copy this axis's feel (not its MIDI out) to the same axis "
                           "on the other hand.")
     if io is not None:
-        imgui.same_line()
+        ui.beside(ui.chip_w("solo"))
         solo = io.solo == k
         imgui.push_style_color(imgui.Col_.text, ui.RED if solo else ui.DIM)
         if imgui.small_button("solo"):
@@ -699,7 +717,7 @@ def _editor(panel, io, settings, k: int) -> None:
     imgui.same_line(ui.LABEL_W)
     panel._combo(f"{p}.rest", 70)
     if a.rest == "return":
-        imgui.same_line()
+        ui.beside(SMALL_SLIDER_W)
         panel._slider(f"{p}.rest_value")
         if imgui.begin_table(f"##spring.{a.name}", 2, imgui.TableFlags_.sizing_stretch_same):
             imgui.table_next_column()
@@ -711,10 +729,10 @@ def _editor(panel, io, settings, k: int) -> None:
     imgui.same_line(ui.LABEL_W)
     panel._combo(f"{p}.out", 70)
     if a.out != "off":
-        imgui.same_line()
+        ui.beside(58)
         panel._slider(f"{p}.channel", 58)
         if a.out in ("cc", "cc14"):
-            imgui.same_line()
+            ui.beside(SMALL_SLIDER_W)
             panel._slider(f"{p}.number")
     why = conflicts(settings).get(a.name)
     if why:
@@ -777,5 +795,33 @@ def _calibrate(io, settings, k: int) -> None:
     imgui.text_disabled(f"{a.name}: {st.lo:.1f} … {st.hi:.1f} {FEATURES[a.feature][0]}")
     said = _box_text(getattr(io, "box", None))
     imgui.text_disabled(f"box {said}" if said else "box open")
+    _level(io)
     if io.cal_note:
         imgui.text_disabled(io.cal_note)
+
+
+def _level(io) -> None:
+    """The room's frame (plan 51): level it from a flat hand, or clear it."""
+    if io.calibrating > 0:              # a sweep's palms are moving
+        return
+    if io.on_tape:
+        imgui.text_disabled("room: the tape's own frame")
+        return
+    if io.levelling > 0:
+        imgui.text_colored(ui.RED, "levelling… hold one hand flat, fingers forward")
+        return
+    if imgui.small_button("level room"):
+        io.start_level()
+    if imgui.is_item_hovered():
+        ui.tooltip("Only one hand in view: hold it flat with the fingers pointing where forward is, "
+                   "press, and keep still for a second. That palm becomes the room's "
+                   "axes for the room lanes (hand:<side>.room.*), saved to hands.json "
+                   "for this box: the answer to a sensor mounted at an angle.")
+    imgui.same_line()
+    if getattr(io, "level", None) is not None:
+        if imgui.small_button("clear##level"):
+            io.clear_level()
+        imgui.same_line()
+        imgui.text_disabled("room levelled")
+    else:
+        imgui.text_disabled("room: the tracking mode's frame")

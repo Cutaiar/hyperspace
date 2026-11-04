@@ -90,8 +90,8 @@ def test_new_from_the_strip_lays_out_at_the_page_s_view(page):
     at = ui_graph.in_view(panel)
     assert at == (300 + ui_graph.IN_VIEW_MARGIN[0] - 50, 200 + ui_graph.IN_VIEW_MARGIN[1] + 10)
     frame(panel, "presets")
-    st["seen"] = (300.0, 200.0)             # (as the GRAPH page last saw it)
     frame(panel)
+    at = ui_graph.in_view(panel)            # (GRAPH is always drawn: as it sees it now)
     _click(panel, ui_presets._state(panel)["rects"]["strip.presets.new"])
     assert page.lib.current("presets") == preset.UNTITLED_PRESET
     assert page.lib.presets.layout["render:shape"] == list(at)

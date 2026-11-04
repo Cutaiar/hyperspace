@@ -51,6 +51,17 @@ the last source lets go the base is written back. Continuous params are
 mapped as floats — no detents — so a lane never zippers; enum and toggle
 targets move with hysteresis so a noisy lane cannot flap them; a trigger
 fires on a rising edge.
+
+The base chase (plan 52) is the one way a performer reaches a base: while
+`Registry.base_chase` is on, each landing also writes what the param shows
+into its base. `_trim` is the ledger that keeps that from counting twice:
+how much of the pushes' offset the base already holds. The offset rides on
+top less the trim, and once the verb is let go the trim only falls, with the
+offset on its way home (`_came_home`), so the look stays where the performer
+left it. A source flickering out leaves it, since the offset coming back is
+the one the base holds. A base replaced replaces it too: a load's holds no
+commit, and an undo's holds what it held then (`Registry.restore`). The table
+is not touched: a route's depth is the depth it was.
 """
 
 from __future__ import annotations
@@ -205,6 +216,15 @@ EYE_DISTANCE_RANGE = (1.5, 40.0)
 MOD_ON, MOD_OFF = 0.6, 0.4
 MOD_DEADBAND = 0.15
 
+# the base chase (plan 52): the deck's rig control, held to commit the
+# performer into the base. Its group is in neither part of the split: every
+# deck has its own, and no file holds it
+CHASE_PARAM = "deck.chase"
+CHASE_LABEL = "base chase"     # the undo step's name
+# a macro's base moves its base subscribers (`Router.follow_macros`), which an
+# offset never did: committing one would jump them (register row 655)
+CHASE_REFUSED_GROUPS = ("macro",)
+
 
 class Kind(Enum):
     CONTINUOUS = "continuous"
@@ -263,6 +283,12 @@ class Param:
     # with the same mark again is a no-op, so `Router.modulate` can land a
     # param something in the pass reads and `Registry.apply` skip it
     _mark: int | None = field(default=None, repr=False)
+    # the base chase (plan 52): position rows' share of `_mod` this frame
+    # (None: no position row called); the verb is held on this param; how
+    # much of the pushes' offset the base already holds
+    _pos: float | None = field(default=None, repr=False)
+    _chase: bool = field(default=False, repr=False)
+    _trim: float = field(default=0.0, repr=False)
 
     def __post_init__(self):
         if self.alias:
@@ -581,12 +607,14 @@ class Param:
 
     # ---- modulation: any source, one rule ----
 
-    def modulate(self, u: float) -> None:
+    def modulate(self, u: float, *, position: bool = False) -> None:
         """Add a source's offset for this frame, in normalized units.
 
         A source calls this every frame it is routed here, even with 0 —
         holding the param is what keeps its base apart from the object;
-        the frame nothing calls, `apply()` writes the base back.
+        the frame nothing calls, `apply()` writes the base back. `position`:
+        the offset is a position row's, which lands an absolute value
+        whatever the base is, so the base chase's ledger leaves it out.
         """
         if not self.modulatable:
             return
@@ -598,6 +626,8 @@ class Param:
         u = float(u)
         if math.isfinite(u):
             self._mod += u
+            if position:
+                self._pos = (self._pos or 0.0) + u
         else:                   # a NaN or an inf never reaches the base (plan 14 WP1)
             self._bad = True
         self._held = True
@@ -617,12 +647,14 @@ class Param:
             self._mark = mark
         if self._base is None:
             return
-        held, mod = self._held, self._mod
-        self._held, self._mod = False, 0.0
+        held, mod, pos = self._held, self._mod, self._pos
+        self._held, self._mod, self._pos = False, 0.0, None
         k = self.kind
         if not held:                          # last source left: restore base
             if k is not Kind.TRIGGER:
                 self.put(self._value_of_norm(self._base))
+            # (the trim stays: a source back next frame, after a gate's or a
+            # lane's flicker, brings the offset the base already holds)
             self._base = self._last = self._disc = None
             return
         if k is not Kind.TRIGGER:
@@ -636,6 +668,12 @@ class Param:
                 self._base = self._base % 1.0 if self.wrap else _clamp(self._base, 0.0, 1.0)
         target = self._base + mod
         if k is Kind.CONTINUOUS:
+            push = mod if pos is None else mod - pos
+            if self._trim and not self._chase:
+                self._trim = _came_home(self._trim, push)
+            if pos is None:                   # a position row lands absolutely: no trim on it
+                target -= self._trim
+            raw = target
             target = target % 1.0 if self.wrap else _clamp(target, 0.0, 1.0)
             if self.integer and self.taper is not None:
                 self.put(self.taper.map(self._snap(target * self.steps)))
@@ -643,6 +681,8 @@ class Param:
                 self.put(self._raw_value(self._snap(target * self.steps) / self.steps))
             else:
                 self.put(self._value_of_norm(target))
+            if self._chase:
+                self._commit(raw, target, push)
         elif k is Kind.ENUM:
             self.put(int(self._snap(target * self.steps)))
         elif k is Kind.TOGGLE:
@@ -659,6 +699,16 @@ class Param:
             return
         self._last = self._norm_of(self.get())
 
+    def _commit(self, raw: float, target: float, push: float) -> None:
+        """The base chase's landing (plan 52): what the param shows now
+        becomes its base, and the trim says how much of the pushes' offset
+        that holds. The part a range's end cut off (`raw` past `target`) is
+        not in the base, so it stays on the offset's side of the ledger: the
+        next frame lands where it would have with no verb held."""
+        shown = self._norm_of(self.get()) if self.integer else target
+        self._trim = push - (0.0 if self.wrap else raw - shown)
+        self._base = shown
+
     def _snap(self, x: float) -> float:
         """Nearest integer, moving only once past the midpoint + deadband."""
         cur = self._disc
@@ -666,6 +716,25 @@ class Param:
             cur = float(round(_clamp(x, 0, self.steps)))
         self._disc = cur
         return cur
+
+
+def _came_home(trim: float, push: float) -> float:
+    """The trim after this frame's push (plan 52): it only falls, following
+    an offset on its way to zero and never past it. So a source going home
+    moves nothing (offset less trim stays 0), one pushing further than it
+    was moves the look on from where it stands, and one past zero rides in
+    full. A frame's motion is the only step it ever makes."""
+    if trim > 0.0:
+        return trim if push >= trim else max(push, 0.0)
+    return trim if push <= trim else min(push, 0.0)
+
+
+def chase_reaches(p: Param) -> bool:
+    """Does the base chase commit this param (plan 52, row 654): continuous,
+    modulatable and the deck's own. A session param is the room's and a
+    deck's verb never writes it; a macro is left out (`CHASE_REFUSED_GROUPS`)."""
+    return (p.kind is Kind.CONTINUOUS and p.modulatable and part_of(p) == "performance"
+            and p.group not in CHASE_REFUSED_GROUPS)
 
 
 def part_of(p: Param) -> str | None:
@@ -779,6 +848,14 @@ class Registry:
     # for a registry of its own (a bare one, the tests'; and one from
     # before a hot reload, on the class)
     session: SessionRegistry | None = None
+    # the base chase (plan 52): held now; who may refuse a press (the
+    # projector's hold, one for the rig: `hold.register` sets it on the
+    # session), None: nobody; this deck's `undo.Undo` (`Deck.build`), None: a
+    # bare registry has no steps
+    chasing: bool = False
+    chase_guard: Callable[[], bool] | None = None
+    chase_undo: Any = None
+    _chase_steps: Any = None             # the `undo.Undo` the press opened its step on
 
     def __init__(self, session: SessionRegistry | None = None):
         self._p: dict[str, Param] = {}
@@ -833,6 +910,8 @@ class Registry:
             raise ValueError(f"duplicate param id {p.id}")
         self._p[p.id] = p
         self.serial += 1
+        if self.chasing:                 # (a preset landed under the verb declared it)
+            p._chase = chase_reaches(p)
         return p
 
     def add(self, p: Param) -> Param:
@@ -916,6 +995,14 @@ class Registry:
         return (session is not None and session is not self
                 and session._p.get(p.id) is p)
 
+    def lands(self, p: Param) -> bool:
+        """Does this deck land `p`? All its own, and the session's only when
+        it is the session's lead (`apply`). Plan 44 D4: a row of a deck that
+        does not land its target is dormant (`Router.modulate`)."""
+        session = self.session
+        return (session is None or session is self or session.lead is self
+                or not self._owned_by_session(p))
+
     def apply(self) -> None:
         """Once per frame, after every source has called modulate(): base +
         offsets onto every modulated param, in registry order — but for
@@ -928,9 +1015,11 @@ class Registry:
         every deck, and an apply consumes its frame's offsets — so only the
         session's **lead** deck (`SessionRegistry.lead`, the first that
         follows it) lands the session's params; every other deck's apply
-        leaves them alone, its router's offsets riding into the lead's
-        next apply (a frame late for a deck that runs after the lead —
-        D4's order to settle), never releasing what another deck holds."""
+        leaves them alone, never releasing what another deck holds. Plan 44
+        D4 (row 625): only the lead's rows act on a session param
+        (`Router.modulate`: another deck's are dormant), so its offsets land
+        in the frame of its pass, and `app.frame` runs the lead first, so
+        another deck reads this frame's session values."""
         # over a copy: a modulated trigger may add or remove params
         # (a band layout change) while we are still walking the table.
         # `nonfinite`: the params that dropped a NaN / inf this frame (the
@@ -949,6 +1038,40 @@ class Registry:
                 p._bad = False
                 bad.append(p.id)
         self.nonfinite = bad
+
+    # ---- the base chase (plan 52): the verb, a deck operation ----
+
+    def base_chase(self, on: bool, *, steps=None) -> bool:
+        """Hold or let go of the verb on this deck: while on, every param it
+        reaches (`chase_reaches`) writes what it shows into its base at each
+        landing (`Param._commit`), with no per-frame scan and no change to
+        what is shown. Let go, the look stays where the performer left it.
+
+        One hold is one undo step on `steps` (a `undo.Undo`; None: this
+        deck's, `chase_undo`), remembered at the press so any
+        let-go closes that one; what closes the step otherwise (an undo, a
+        load, a learn under the verb) ends the verb with it. A press under
+        the projector's hold is refused (`chase_guard`, row 656). Returns
+        whether the verb is on now."""
+        on = bool(on)
+        rig = self.session if self.session is not None else self
+        if on and rig.chase_guard is not None and rig.chase_guard():
+            on = False
+        if on == self.chasing:
+            return on
+        if on:
+            self._chase_steps = steps if steps is not None else self.chase_undo
+            if self._chase_steps is not None:                 # before any base moves
+                undo.keep_open(CHASE_LABEL, self._chase_steps,
+                               on_end=lambda: self.base_chase(False))
+        self.chasing = on
+        for p in self._p.values():
+            p._chase = on and chase_reaches(p)
+        if not on:
+            opened, self._chase_steps = self._chase_steps, None
+            if opened is not None:
+                undo.let_close(opened)
+        return on
 
     # ---- persistence: the one serialization every preset is made of ----
 
@@ -975,8 +1098,21 @@ class Registry:
             out[p.id] = list(v) if isinstance(v, list) else v
         return out
 
-    def restore(self, values: dict[str, Any]) -> list[str]:
-        """Set every param named; returns the ids this registry doesn't have."""
+    def forget_commits(self, ids: Iterable[str]) -> None:
+        """The base chase's ledger empties on these params (plan 52): whatever
+        their bases hold now, no commit of the verb's is in them."""
+        for pid in ids:
+            p = self._p.get(pid)
+            if p is not None:
+                p._trim = 0.0
+
+    def restore(self, values: dict[str, Any], *, trims: dict[str, float] | None = None
+                ) -> list[str]:
+        """Set every param named; returns the ids this registry doesn't have.
+        The base chase's ledger goes with the base it describes (plan 52): a
+        continuous param's trim is what `trims` (an undo's state) says that
+        base held, and none when there is no such state (a load: a look's
+        values hold no commit, so a route on them rides in full)."""
         missing = []
         for pid, v in values.items():
             p = self._p.get(pid)
@@ -988,6 +1124,7 @@ class Registry:
                 # raw, not set_value: a saved value lands exactly where it
                 # was, detent or not (the base is detented only while modulated)
                 p.set(float(v))
+                p._trim = trims.get(pid, 0.0) if trims else 0.0
             elif k is Kind.ENUM:
                 p.set(int(v))
             elif k is Kind.TOGGLE:
@@ -2097,6 +2234,14 @@ def build_performance(view, bank=None, dream=None, fx=None, ghost=None, media=No
         except AttributeError:            # (a view without the field: the registry's own)
             pass
     r.switch_state = picks
+    # plan 52: the base chase, held. The deck's rig control, so every deck has
+    # its own: a test or a learned button presses it, and it is `Deck.chase`'s
+    # road: `base_chase` with this deck's undo (`chase_undo`)
+    r.toggle(CHASE_PARAM, "Base chase", lambda: r.chasing, lambda v: r.base_chase(bool(v)),
+             group="deck", persist=False, modulatable=False,
+             tip="While held, whatever the performers are doing to the look is written "
+                 "into its values; let go and the look stays where they left it. One undo "
+                 "step per hold. Refused while the projector is held.")
     # plan 34 Z: the resizes' values likewise (`ViewState.resize`)
     sizes = getattr(view, "resize", None)
     if not isinstance(sizes, dict):

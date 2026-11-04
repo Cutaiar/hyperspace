@@ -51,6 +51,7 @@ class Driver:
         # when drawn) — only the latest frame's are there now
         self.drawn: dict[str, tuple[Rect, int]] = {}
         self.mouse = (-1.0, -1.0)
+        self.revealing: str | None = None    # `reveal`: the control to scroll into view
 
     # ---- finding controls ----
 
@@ -74,8 +75,11 @@ class Driver:
             lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
             r = ((lo.x, lo.y, hi.x, hi.y), imgui.get_frame_count())
             seen[label] = r
+            key = label.split("##", 1)[1] if "##" in label else label
             if "##" in label:
-                seen[label.split("##", 1)[1]] = r
+                seen[key] = r
+            if self.revealing in (label, key) and not imgui.is_item_visible():
+                imgui.set_scroll_here_y(0.5)
             return out
         return drawn
 
@@ -113,8 +117,20 @@ class Driver:
         for _ in range(frames):
             yield
 
+    def reveal(self, key: str) -> Action:
+        """Scroll a control into view if its section's body has it scrolled
+        out (plan 49: a section can be taller than the pane; a control out
+        of view is drawn, but takes no click)."""
+        self.revealing = key
+        yield
+        self.revealing = None
+        yield
+
     def move(self, to: str | tuple[float, float], frames: int = 1) -> Action:
-        """Glide the mouse to a control's centre (or a point) over `frames`."""
+        """Glide the mouse to a control's centre (or a point) over `frames`,
+        scrolling it into view first."""
+        if isinstance(to, str):
+            yield from self.reveal(to)
         x, y = self.centre(to) if isinstance(to, str) else to
         x0, y0 = self.mouse if self.mouse[0] >= 0 else (x, y)
         io = imgui.get_io()
@@ -201,6 +217,7 @@ class Driver:
         """Press on a slider and drag to `frac` of its track (0 left, 1
         right) — a slider jumps to where it is pressed, so this shows the
         drag; `enter` lands an exact value."""
+        yield from self.reveal(slider)
         x0, y0, x1, y1 = self.rect(slider)
         pad = imgui.get_style().grab_min_size / 2 + imgui.get_style().frame_padding.x / 2
         y = (y0 + y1) / 2
