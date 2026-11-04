@@ -325,6 +325,7 @@ class Job:
     slot: Slot
     frame: int
     params: dict[str, Any]
+    lent: int = 0                         # the lend it was submitted under (`lend`)
 
 
 class DreamWorker:
@@ -335,6 +336,12 @@ class DreamWorker:
     probe). Reads ``dream.*`` from the registry on every submit, so a
     lane riding ``dream.step`` lands on the next frame.
     """
+
+    # how many times the worker has been lent (`lend`): a job for an earlier
+    # deck publishes nothing, and the dream starts afresh (on the class: a
+    # worker from before a hot reload has it)
+    lent = 0
+    _dreaming = 0                         # …and the lend `D` belongs to
 
     def __init__(self, reg, cfg: dict | None = None, *, step_fn: Callable | None = None,
                  alias: bool | None = None, start: bool = True):
@@ -426,7 +433,7 @@ class DreamWorker:
             slot = self._slots[self._writing]
             np.copyto(slot.host, frame)
         self._writing = -1
-        job = Job(slot, int(frame_index), self._params())
+        job = Job(slot, int(frame_index), self._params(), self.lent)
         self.submitted = job.frame
         with self._cv:
             if self._pending is not None:
@@ -440,6 +447,18 @@ class DreamWorker:
             return None
         self._handed = got[0]                 # the worker leaves this one alone now
         return got[1], got[2]
+
+    def lend(self, reg) -> None:
+        """Plan 44 D4 (§2, row 558): the one worker now dreams for the deck
+        whose registry is `reg`: its `dream.*` are read from the next submit
+        on, and the dream restarts — `D` is the last deck's memory (the fade
+        covers it), and a job already running for that deck publishes
+        nothing the new deck would take for its own."""
+        with self._cv:
+            self.reg = reg
+            self.lent += 1
+            self._pending = None
+            self._latest = None
 
     # ---- params, from the registry each submit ----
 
@@ -539,9 +558,12 @@ class DreamWorker:
         p = job.params
         if not self._ensure_net(p["layer"]):
             return
+        if job.lent != self.lent:             # an earlier deck's (`lend`)
+            return
         frame = self._frame_tensor(job.slot)
-        if self.D is None or self.D.shape != frame.shape:
+        if self.D is None or self.D.shape != frame.shape or self._dreaming != job.lent:
             self.D, self.M = frame.clone(), None
+            self._dreaming = job.lent
         k = p["k"]
         D = self.D * (1.0 - k) + frame * k
         mask = self._update_mask(frame, p["mask_decay"])
@@ -574,9 +596,12 @@ class DreamWorker:
         self.calls += 1
         if pixels.shape != self.shape:        # resized under us: this one is stale
             return
-        self._published = next(i for i, o in enumerate(self._outs) if o is out)
-        self._latest = (self._published, pixels, job.frame)
-        self.answered = job.frame
+        with self._cv:                        # one step with `lend`'s clearing
+            if job.lent != self.lent:         # lent since it started: not the new deck's
+                return
+            self._published = next(i for i, o in enumerate(self._outs) if o is out)
+            self._latest = (self._published, pixels, job.frame)
+            self.answered = job.frame
 
     def _pick_output(self) -> Slot:
         """An output buffer the reader is not looking at: neither the one

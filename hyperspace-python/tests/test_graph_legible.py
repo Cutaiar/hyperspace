@@ -452,14 +452,15 @@ def test_routing_no_longer_draws_routes_or_modifiers_but_their_functions_stay(
     assert router.table.modifier(m.id).inputs == ("lane:1",)
     ui_routing.remove_modifier(panel, m.id)
     assert router.table.modifier(m.id) is None
-    # "Route a lane here…" opens GRAPH now
+    # "Route a lane here…" leaves the focus where it is: the canvas is always drawn
+    was = panel.page
     monkeypatch.setattr(imgui, "menu_item_simple", lambda label, *a, **k: True)
     imgui.new_frame()
     imgui.begin("menu")
     ui_routing.ctx_item(panel, rig.reg["view.bright"])
     imgui.end()
     imgui.end_frame()
-    assert panel.page == ui.PAGE_KEYS.index("graph")
+    assert panel.page == was
 
 
 def hands(router, energy):
@@ -581,7 +582,7 @@ def test_route_a_lane_here_selects_the_new_route_on_graph(rig, monkeypatch):
         imgui.end()
         imgui.end_frame()
     b = rig.router.table.owner(target.param)
-    assert isinstance(b, Binding) and panel.page == ui.PAGE_KEYS.index("graph")
+    assert isinstance(b, Binding)
     rows = []
     real = ui_routing._row
     monkeypatch.setattr(ui_routing, "_row", lambda pn, r, x, k: rows.append(x)

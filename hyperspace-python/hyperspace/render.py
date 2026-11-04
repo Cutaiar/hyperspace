@@ -297,6 +297,23 @@ out vec4 f_color;
 void main() { f_color = vec4(0.0, 0.0, 0.0, u_factor); }
 """
 
+# the other deck's finished picture, × `u_k` (plan 44 D4, `Renderer.mix_pass`):
+# 1:1 by texelFetch, the same bytes, or scaled by the sampler for a smaller tap
+MIX_FS = """
+#version 330
+in vec2 v_uv;
+uniform sampler2D u_src;
+uniform int u_scaled;
+uniform ivec2 u_origin;      // the viewport's origin (gl_FragCoord is window-relative)
+uniform float u_k;
+out vec4 f_color;
+void main() {
+    vec4 c = u_scaled != 0 ? texture(u_src, v_uv)
+                           : texelFetch(u_src, ivec2(gl_FragCoord.xy) - u_origin, 0);
+    f_color = c * u_k;
+}
+"""
+
 # a frame texture onto an output (plan 21 WP1): 1:1 by texelFetch — the
 # same bytes, as the look-back's post pass reads the scene — or scaled
 # through the fit rect (the viewport) by the sampler. On an opaque ground
@@ -1095,6 +1112,10 @@ class Renderer:
         self.max_frame: tuple[int, int] | None = None
         self._dim_prog: moderngl.Program | None = None
         self._dim_vao: moderngl.VertexArray | None = None
+        # the deck fade's pass (plan 44 D4, `mix_pass`), likewise
+        self._mix_prog: moderngl.Program | None = None
+        self._mix_vao: moderngl.VertexArray | None = None
+        self.mix_error = ""
         # the scene texture and the look-back post pass over it; the blank
         # texture takes the sampler units before the scene pass, so the
         # scene texture is never bound while it is the render target
@@ -1233,6 +1254,25 @@ class Renderer:
         ctx.enable(moderngl.BLEND | moderngl.PROGRAM_POINT_SIZE)
         ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
 
+    def sibling(self, dream: DreamState | None = None, fx: FxState | None = None,
+                ghost: GhostState | None = None) -> Renderer:
+        """A second renderer on this one's context and its one wall clock, on
+        the states given (each a fresh one of its own when None): the hold's
+        preview, deck 2's (plan 44 D4). This context must be current."""
+        r = Renderer(self.ctx, dream=dream, fx=fx, ghost=ghost)
+        r._t0 = self._t0
+        return r
+
+    def release_sized(self) -> None:
+        """Plan 44 D4: the frame-sized targets let go, made again at the next
+        draw; a deck off air's after a fade. Its look-back rings and delays
+        stay: they are the look's memory. This context must be current."""
+        self._thumb_frame = None
+        self.scene.release()
+        self.cover.release()
+        self._release_frames()
+        self._release_pools()
+
     def _build_wire_programs(self) -> None:
         """Compile the line, point and coverage programs and their VAOs; the
         live ones are replaced only once every new one exists, so a shader
@@ -1310,6 +1350,12 @@ class Renderer:
                 res.release()
         self._dim_prog = self._dim_vao = None
         self.dim_error = ""
+        # the deck fade's (plan 44 D4), likewise
+        for res in (getattr(self, "_mix_vao", None), getattr(self, "_mix_prog", None)):
+            if res is not None:
+                res.release()
+        self._mix_prog = self._mix_vao = None
+        self.mix_error = ""
         # plan 39 T2: the mask passes, likewise — compiled again from
         # masks.py as it is now on the next ask (`mask_passes`)
         mp = self.__dict__.pop("_mask_passes", None)
@@ -1701,7 +1747,9 @@ class Renderer:
         selects = dict(getattr(s, "switch", None) or {})
         # plan 34 Z: each resize's values likewise (`ViewState.resize`)
         resizes = dict(getattr(s, "resize", None) or {})
-        frame = Frame(self, ctx, s, w, h, dpr, t, views, size, _samples_of(ctx, target),
+        samples = getattr(first, "samples", None)   # (plan 44 D4: a deck drawn for a window)
+        frame = Frame(self, ctx, s, w, h, dpr, t, views, size,
+                      samples if samples is not None else _samples_of(ctx, target),
                       target, vp, bg_alpha=getattr(self, "bg_alpha", 1.0), fx_on=fx_on,
                       stats=stats, selects=selects, resizes=resizes)
         timer = self._pass_timer()
@@ -2209,7 +2257,9 @@ class Renderer:
                                        if after else None), readout=readout,
                                 alpha=float(gh.state.alpha), factor=factor,
                                 bg_alpha=float(v.bg_alpha), flip=flip,
-                                blend="add" if blend == "add" else "over")
+                                blend="add" if blend == "add" else "over",
+                                mix=getattr(v, "mix", None),
+                                mix_k=float(getattr(v, "mix_k", 0.0)))
             if v.target is None:
                 return
         tgt, rect = v.target, v.rect
@@ -2245,6 +2295,12 @@ class Renderer:
                 guide.error = f"poi guide: {type(e).__name__}: {e}"[:160]
                 tgt.use()
                 ctx.viewport = rect
+        # the deck fade (plan 44 D4): the other deck's finished picture for
+        # this output, before the dim, so a fade under a half-dim fades under
+        # a half-dim. No fade on: the pass does not run
+        mix = getattr(v, "mix", None)
+        if mix is not None and float(getattr(v, "mix_k", 0.0)) > 0.0:
+            self.mix_pass(tgt, rect, mix, float(v.mix_k), opaque=opaque)
         # the dim, after everything: the scene, the look-back, every effect
         # and the hands dim alike, and the history and the dream worker
         # never hold it. At 1 the pass does not run and the frame is
@@ -3034,6 +3090,70 @@ class Renderer:
             self.dim_error = f"dim: {type(e).__name__}: {e}"[:160]
             return False
         self._dim_prog, self._dim_vao = prog, vao
+        return True
+
+    def mix_pass(self, target: moderngl.Framebuffer, vp: tuple[int, int, int, int],
+                 tex: moderngl.Texture, k: float, opaque: bool = True) -> bool:
+        """The one fade (plan 44 D4): `tex`, another deck's finished picture
+        for this output (premultiplied), mixed into what is on `target`'s
+        viewport `vp` at `k`, linear — 0 what is there, 1 `tex`'s bytes. Two
+        full-screen triangles beside `dim_pass`: what is there multiplied by
+        1 − k, then `tex` × k added, so a transparent part of `tex` shows
+        nothing of the leaving deck at 1. On an opaque ground alpha is left
+        exactly as it was, as the dim leaves it.
+
+        Before the dim (`_compose`), so the dim stays the last pass (decision
+        28). Leaves `target` bound with that viewport and the scene pass's
+        blend function. The program and its inputs are settled before anything
+        is multiplied, so a refusal there leaves the on-air picture as it was.
+        Whatever goes wrong is said on `mix_error` (the SYSTEM page shows it)
+        and never raised; a program that will not build is not asked for again
+        until a reload. True when it mixed."""
+        ctx = self.ctx
+        k = clamp(float(k), 0.0, 1.0)
+        if getattr(self, "_mix_prog", None) is None and not self._build_mix():
+            return False
+        prog = self._mix_prog
+        try:
+            tex.use(location=0)
+            prog["u_src"].value = 0
+            prog["u_scaled"].value = int(tuple(tex.size) != tuple(vp[2:]))
+            prog["u_origin"].value = (int(vp[0]), int(vp[1]))
+            prog["u_k"].value = k
+            if not self.dim_pass(target, vp, 1.0 - k, opaque=opaque):
+                self.mix_error = f"mix: no dim to mix with: {self.dim_error}"[:160]
+                return False
+            target.use()
+            ctx.viewport = vp
+            ctx.enable(moderngl.BLEND)
+            ctx.blend_func = (moderngl.ONE, moderngl.ONE,
+                              moderngl.ZERO if opaque else moderngl.ONE, moderngl.ONE)
+            self._mix_vao.render(moderngl.TRIANGLES, vertices=3)
+        except Exception as e:  # noqa: BLE001 — the fade must not take the frame down
+            self.mix_error = f"mix: {type(e).__name__}: {e}"[:160]
+            return False
+        finally:
+            ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
+            target.use()
+            ctx.viewport = vp
+        self.mix_error = ""
+        return True
+
+    def _build_mix(self) -> bool:
+        """The mix's program and its (attribute-less) vertex array, both or
+        neither; a failure is recorded, never raised, and not retried."""
+        if getattr(self, "mix_error", ""):
+            return False
+        prog = None
+        try:
+            prog = self.ctx.program(vertex_shader=QUAD_VS, fragment_shader=MIX_FS)
+            vao = self.ctx.vertex_array(prog, [])
+        except Exception as e:  # noqa: BLE001 — the fade must not take the frame down
+            if prog is not None:
+                prog.release()
+            self.mix_error = f"mix: {type(e).__name__}: {e}"[:160]
+            return False
+        self._mix_prog, self._mix_vao = prog, vao
         return True
 
     def _draw_cover(self, w: int, h: int) -> moderngl.Texture:

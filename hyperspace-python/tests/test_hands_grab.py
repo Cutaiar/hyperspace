@@ -74,9 +74,9 @@ def test_the_grab_lanes_follow_every_older_lane():
     thirty-eight lanes before C5 keep their places, the two grabs follow."""
     names = hands.default_addresses()
     lay = hands.Layout(HandSettings.from_config({}).axes)
-    assert names[38:] == ["left.grab", "right.grab"] == [hands.grab_name(s) for s in hands.SIDES]
-    assert (lay.grab["left"], lay.grab["right"]) == (38, 39) and lay.n == 40
-    assert lay.names[38:] == ["L grab", "R grab"]
+    assert names[38:40] == ["left.grab", "right.grab"] == [hands.grab_name(s) for s in hands.SIDES]
+    assert (lay.grab["left"], lay.grab["right"]) == (38, 39) and lay.n == 46
+    assert lay.names[38:40] == ["L grab", "R grab"]
     assert names[:38][-1] == "right.flick" and names[14:22][0] == "left.pinch.index"
     # published as gates like the pinches, after them
     assert lay.gates[:8] == [(lay.gate[(s, f)], lay.names[lay.gate[(s, f)]])
@@ -85,7 +85,7 @@ def test_the_grab_lanes_follow_every_older_lane():
     # a shorter dofs list moves every lane after the axes, the grabs too:
     # the counts are derived, never pinned
     short = hands.Layout(HandSettings.from_config({"dofs": ["x"]}).axes)
-    assert short.n == lay.n - 10 and short.grab["right"] == short.n - 1
+    assert short.n == lay.n - 10 and short.grab["right"] == short.n - 7
 
 
 # ------------------------------------------------------------- the tape
