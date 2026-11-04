@@ -305,6 +305,8 @@ from .routing_sources import (  # noqa: F401
     BUILTIN_LANES,
     DECK_SCHEMES,
     MIDI_SCHEMES,
+    PAIR_SCHEME,
+    PAIR_SEP,
     QUALIFIER,
     ROW_SCHEMES,
     LaneLayer,
@@ -312,6 +314,9 @@ from .routing_sources import (  # noqa: F401
     Sources,
     base_scheme,
     is_continuous,
+    pair_address,
+    pair_lanes,
+    pair_poles,
     qualified,
 )
 
@@ -876,6 +881,8 @@ class Binding:
             return f"d-pad {addr}{on}"
         lane = is_continuous(s)
         who = (name if name and lane else f"{s} {addr}") + on
+        if s == PAIR_SCHEME and self.op == "step":
+            return f"{who} steps ±{abs(self.value):.3g}"
         if lane and self.op in MOD_OPS:
             by = f" × {self.scale}" if self.scale else ""
             when = f" while {gate or self.when}" if self.when else ""
@@ -940,6 +947,8 @@ def row_words(row: Binding | str, names=None) -> str:
         return f"pad {addr}"
     if scheme == "hat":
         return f"d-pad {addr.lower()}"
+    if scheme == PAIR_SCHEME:
+        return f"pair {addr.replace(PAIR_SEP, ' / ')}"
     if scheme == "axis":
         return f"axis {addr}"
     if scheme == "key":
@@ -2697,6 +2706,8 @@ class Bindings:
     def _lane_only(self, b: Binding) -> bool:
         """Is `b`'s source read only as a lane — continuous, and not a
         scheme some device of this rig delivers as rows (`row_schemes`)?"""
+        if b.scheme == PAIR_SCHEME and b.op == "step":   # plan 56: `Router.pad`'s row
+            return False
         return is_continuous(b.scheme) and b.scheme not in getattr(self, "row_schemes", ())
 
     def refusal(self, b: Binding) -> str | None:
@@ -3260,6 +3271,11 @@ class Router:
             src = self.sources                   # the axes are a source: the shared half's
             publish(src, axis) if role else publish(src)
         self.sources.feed(axis, pad.lanes() if pad.on else None)
+        # plan 56: each published pair's lane (nothing published, nothing fed)
+        pairs = qualified(PAIR_SCHEME, role)
+        pair_names = self.sources.names.get(pairs)
+        if pair_names:
+            self.sources.feed(pairs, pair_lanes(pad, pair_names, skip) if pad.on else None)
         # source → press time (None once fired), one dict per pad
         holds = (self.__dict__.setdefault("_pad_holds", {}) if not role else
                  self.__dict__.setdefault("_pad_holds_of", {}).setdefault(role, {}))
@@ -3276,7 +3292,12 @@ class Router:
         # role; the primary the bare ones and — as a desk's `serves` — any
         # qualified with the primary's own role (``pad@pad:A``)
         own = role or getattr(self.table, "primaries", {}).get("pad", "")
-        for b in self.table.of("pad", "hat"):
+        for b in self.table.of("pad", "hat", PAIR_SCHEME):
+            if b.scheme == PAIR_SCHEME:
+                if (b.op == "step" and buttons and b.enabled and (
+                        b.device == role or (not role and own and b.device == own))):
+                    self._pair_step(pad, b, skip)
+                continue
             code = self._code(b)
             if code is None or not b.enabled or not (
                     b.device == role or (not role and own and b.device == own)):
@@ -3319,6 +3340,18 @@ class Router:
                 continue
             if pressed and buttons:
                 act(self.reg, b)
+
+    def _pair_step(self, pad, b: Binding, skip) -> None:
+        """A `step` row on a pair (plan 56): each pole's press moves its way,
+        as a row on that pole alone would (`act`), + pole first."""
+        poles = pair_poles(":".join(b.parts))
+        p = self.reg.get(b.target)
+        if poles is None or p is None:
+            return
+        for pole, sign in zip(poles, (1, -1), strict=True):
+            if pole.source not in skip and (
+                    pad.hat_pressed(pole.code) if pole.hat else pad.pressed(pole.code)):
+                p.step(sign * int(b.value))
 
     def _let_go_pad(self, down: set, pid: str) -> None:
         """A toggle a pad held through a momentary row, its release lost."""

@@ -3603,7 +3603,8 @@ LANE_BOUND = "lane {lane} fires env {env} already"
 # a continuous scheme's noun for the refusals ("a hand sets no base")
 NOUNS = {"hand": "a hand", "hands": "the hands", "lane": "a band", "lfo": "an LFO",
          "env": "an envelope", SEQ: "a sequencer lane",
-         "mod": "a modifier", "axis": "a stick", "ext": "an outside lane"}
+         "mod": "a modifier", "axis": "a stick", "pair": "a pair of pad buttons",
+         "ext": "an outside lane"}
 DESK_NOUNS = {"cc": "a desk knob", "note": "a desk button", "pitch": "a desk fader",
               "pad": "a pad button", "hat": "the D-pad", "key": "a key"}
 OUT_PINS = ("out", "bus", "rout")

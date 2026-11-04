@@ -768,6 +768,11 @@ Consequences:
   hand-owned param moves the **return value**, which shows when the hand
   lets go; it never prompts and is never blocked
   (`tests/test_routing.py::test_audit_3_a_knob_moves_the_return_value_under_a_hand`).
+- **Two discrete controls of a pad can be one axis** (plan 56): the address
+  declares it, `pair:<+ pole>/<− pole>`, and `Router.pad` feeds its one lane,
+  resting at 0.5, into the shared sources, so a route reads it as it reads a stick.
+  A `step` row on one acts as the two rows it stands for and stays the meta
+  controller's (`tests/test_paired_axes.py`).
 - **The base chase is the one road from a performer into a base** (plan 52):
   while `deck.chase` is held, `Param.apply` writes what it landed into the
   base, on this deck's look params only, and `Param._trim` keeps the offset

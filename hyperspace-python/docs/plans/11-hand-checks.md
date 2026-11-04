@@ -7949,6 +7949,36 @@ whether the chase should have something on the panel to learn from (row 724).
 what makes it yours: without it the row is the old factory row, and the next load takes
 it (row 724). Fail: the row gone.
 
+## CQ. Paired axes (plan 56)
+Register rows 748–751, 2026-11-04. Headless: `tests/test_paired_axes.py`, a scripted
+pad through the real `Router.pad`: each pole, both, a lost pad, a second pad, a save
+and reload, the factory pairs held to their two rows.
+**575. The factory pairs, unchanged.** (any pad)
+1. Press D-pad ↑ a few times, then ↓. Press RB, then LB.
+2. Press ↑ and ↓ together. Hover ↑ on the pad window.
+*Pass:* (1) brightness moves up and down three detents a press, the shape one each
+way, as before this build. (2) They cancel; the hover says "one axis with ↓". Fail: any
+press moving a different distance, or a press firing twice.
+**576. Learn pair, on the stepped model and the spring.** (a pad; a continuous param you can see)
+1. Right-click the param: **Learn pair**. Press ↑, read the line, press ↓. Press each a few times.
+2. On another param, **Learn pair (spring)**, with two controls that do not belong
+   together: A and ↑. Hold each, let go, hold both.
+3. Save the preset as a new one, load another, load it back. Open the pad window's
+   lanes view, and GRAPH's pad node.
+*Pass:* (1) one row, each press one detent, ↑ up and ↓ down, and the old rows on those
+poles gone. (2) A pushes up, ↑ pushes down, each glides back on release, both is still.
+(3) The route is back and still works. The lanes view's **pairs** group moves about its
+middle mark, and the pad's node has a **pairs** group with a cable from `A / UP`. Say
+whether a press should also take a route's poles off their own rows (row 751). Fail: a
+learn press that also steps the param, or a pair lost on reload.
+**577. A pad lost while held, and a second pad.** (two pads, or one you can unplug)
+1. With a spring route on `pair:UP/DOWN`, hold ↑ and pull the pad, or turn it off.
+2. Back with the pad. With a second pad, **Learn pair** from it and press the first
+   pad's ↓ as the second pole, then the second pad's.
+*Pass:* (1) the param returns to its base at once and does not stick. (2) The first
+pad's press is refused in words and the learn still waits; the row names the second
+pad's role, and only that pad moves it. Fail: a stuck offset.
+
 ## What no test covers
 
 Only a person can settle these:

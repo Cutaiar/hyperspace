@@ -287,6 +287,14 @@ def _lane_rows(r: Reading, routed=frozenset()) -> list[tuple]:
             for n, g in (("UP", "↑"), ("RIGHT", "→"), ("DOWN", "↓"), ("LEFT", "←")) if has(n)]
     if hats:
         out.append(("d-pad", hats))
+    def pole(name: str) -> int:
+        return (int(bool(r.hat & gamepad.HATS[name])) if name in gamepad.HATS
+                else int(name in r.down))
+    pairs = [(f"{gamepad.PAIR_SCHEME}:{a}/{b}", models.pair_label(r.model, a, b),
+              0.5 + 0.5 * (pole(a) - pole(b)), 0.5, True)
+             for a, b in models.natural_pairs(r.model if models.is_model(r.model) else None)]
+    if pairs:                         # plan 56: each one lane, one degree of freedom
+        out.append(("pairs", pairs))
     names = list(gamepad.BUTTONS)
     for cap, extra in (("touch", ("TOUCH",)), ("back", ("LP", "RP")), ("fn", ("LFN", "RFN"))):
         if r.has(cap):

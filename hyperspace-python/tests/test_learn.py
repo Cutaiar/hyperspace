@@ -688,7 +688,7 @@ def test_accepts_by_want():
     other = ("hand:right.y", "hand:7", "lane:0", "lfo:1", "ext:2", "key:B")
     # plan 27 B2: what can be armed is the device registry's; a Learn
     # handed none offers today's rig's
-    assert lrn.wants() == ("desk", "hand:left", "hand:right", "pad")
+    assert lrn.wants() == ("desk", "hand:left", "hand:right", "pad", "pair", "pair (spring)")
     assert not any(lrn.accepts(s) for s in (*desk, *left, *other))      # nothing armed
     lrn.arm("view.bright")
     assert lrn.want is None and all(lrn.accepts(s) for s in (*desk, *left, *other))

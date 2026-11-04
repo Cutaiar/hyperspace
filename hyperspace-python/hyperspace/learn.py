@@ -92,6 +92,7 @@ from .params import PERFORMANCE_GROUPS, Kind, Param, Registry, is_lookback_knob
 from .routing import (
     HELD_ONLY,
     MOD_OPS,
+    PAIR_SCHEME,
     SAVE_PARAM,
     SINK_OP,
     TURN_OP,
@@ -99,6 +100,8 @@ from .routing import (
     Bindings,
     Owned,
     base_scheme,
+    pair_address,
+    pair_poles,
     parse_sink,
     whole_circle,
 )
@@ -116,8 +119,12 @@ SAVE_REFUSAL = ("Save is the desk's SAVE (track 8's clip stop, held) — it take
 # registry has not been handed (a bare test rig, the probe) offers what
 # today's rig offers
 DESK = "desk"
-BARE_WANTS = (DESK, "hand:left", "hand:right", "pad")
-PAD_SCHEMES = ("pad", "hat", "axis", "touch", "motion")    # what can complete a "pad" learn
+# plan 56: a pair's two wants, its model — "pair" a step row (`Learn.learn_pair`),
+# the neutral default; "pair (spring)" a route, as a stick's. Devices restate them
+PAIR_WANT, PAIR_SPRING_WANT = "pair", "pair (spring)"
+PAIR_WANTS = (PAIR_WANT, PAIR_SPRING_WANT)
+BARE_WANTS = (DESK, "hand:left", "hand:right", "pad", *PAIR_WANTS)
+PAD_SCHEMES = ("pad", "hat", "axis", "pair", "touch", "motion")  # what can complete a "pad" learn
 
 # a push learn's depth when the adapter names none (plan 18 WP3). The hands
 # adapter passes its own `hands.learn_depth`, whose default is this number
@@ -429,10 +436,20 @@ def row_for(source: str, p: Param, when: str | None = None, *,
     scheme = base_scheme(source.partition(":")[0])
     if scheme == LANE_SCHEME and depth is None:
         depth = LANE_DEPTH                  # L: a lane's own depth, where D is a hand's
-    if not stepped and (centred or centred_target(p) or scheme in (LANE_SCHEME, lfo.GROUP)):
+    if not stepped and (centred or centred_target(p)
+                        or scheme in (LANE_SCHEME, lfo.GROUP, PAIR_SCHEME)):
         d = PUSH_DEPTH if depth is None else float(depth)
         return Binding(source, p.id, "push", d, when=when, motion=feel)
     return Binding(source, p.id, "position", 1.0, when=when, motion=feel)
+
+
+def _steps_on(x: Binding, b: Binding, bare: tuple[str, ...]) -> bool:
+    """Is `x` a pair's `step` row (plan 56) of `b`'s pad with a pole among
+    `bare` (``hat:UP``)? A row on that button, then, in a button learn's eyes."""
+    if x.scheme != PAIR_SCHEME or x.op != "step" or x.device != b.device:
+        return False
+    poles = pair_poles(":".join(x.parts))
+    return poles is not None and any(pole.source in bare for pole in poles)
 
 
 def land_moved(b: Binding, old_source: str, p: Param | None) -> None:
@@ -534,6 +551,7 @@ class Learn:
         if pid is not None:
             self.refused = False
             self.control = None          # arming a param lets a picked control go
+        self.pair_first = None           # plan 56: no pole pressed yet
         self.armed_n = getattr(self, "armed_n", 0) + 1
 
     def hold(self, on: bool = True) -> None:
@@ -549,6 +567,7 @@ class Learn:
         calls this first so nothing else can complete it too."""
         pid, self.learning = self.learning, None
         self.want = None
+        self.pair_first = None
         return pid
 
     def accepts(self, source: str) -> bool:
@@ -573,6 +592,8 @@ class Learn:
             return want == modifiers.SCHEME
         if want == DESK:
             return Binding(source, "").is_midi
+        if want in PAIR_WANTS:               # a pole, or the pair a port names (plan 56)
+            return base_scheme(source.partition(":")[0]) in ("pad", "hat", PAIR_SCHEME)
         if want == "pad":                    # any pad's: ``pad@p2:A`` too (plan 27 B6)
             return base_scheme(source.partition(":")[0]) in PAD_SCHEMES
         if ":" not in want:
@@ -702,9 +723,14 @@ class Learn:
         Pad rows are the session's, as the factory's are (`padmap`): the
         row goes into `bindings.json`, which is written now, and is no undo
         step — nor in any preset. It replaces every row on that button; the
-        param's other controls stay."""
+        param's other controls stay.
+
+        Armed for a pair (plan 56), the press is one of its poles instead
+        (`_pair_pole`)."""
         if not self.accepts(source):
             return False
+        if getattr(self, "want", None) in PAIR_WANTS:
+            return self._pair_pole(source)
         pid = self.learning
         p = self.reg.get(pid) if pid is not None else None
         if p is None:
@@ -725,7 +751,70 @@ class Learn:
         self.take()
         table = self.table
         b = Binding(source, pid, op, value)
-        gone = [x for x in table.bindings if x.source == source]
+        gone = [x for x in table.bindings if x.source == source or _steps_on(x, b, (b.bare,))]
+        for x in gone:
+            table.remove(x)
+        table.add(b)
+        table.write()
+        let_go = ", ".join(dict.fromkeys(x.target for x in gone if x.target != pid))
+        self.said(f"learned {pid} ← {b.describe()} (into {getattr(table.path, 'name', 'the session')})"
+                  + (f"; {let_go} let go" if let_go else ""))
+        return True
+
+    # ---- two presses complete it (plan 56) ----
+
+    def _pair_pole(self, source: str) -> bool:
+        """A press while armed for a pair: the first is the + pole, and the
+        learn waits; the second, another control of the same pad, is the −
+        pole, and the pair lands (`learn_pair`). A press of the first again
+        is nothing. True: the press was the learn's, whatever it did."""
+        b = Binding(source, "")
+        name = ":".join(b.parts)
+        first = self.__dict__.get("pair_first")
+        if first is None:
+            self.pair_first = source
+            self.said(f"{name} is the + pole: now press the − pole")
+            return True
+        was = Binding(first, "")
+        if first == source:
+            return True
+        if was.device != b.device:
+            self.refuse("a pair is two controls of one pad: press the − pole on the same pad")
+            return True
+        return self.learn_pair(pair_address(":".join(was.parts), name, b.device))
+
+    def learn_pair(self, source: str) -> bool:
+        """The pair `source` (``pair:UP/DOWN``) completes the armed learn, by
+        the want's model. "pair": a `step` row at one detent each way, the
+        session's like any pad button row: `bindings.json` is written, no undo
+        step, and it replaces the rows on either pole. "pair (spring)": a
+        route through `learn_source`, into the preset as a stick's; a whole-
+        number or enum target takes the step row, since a lane resting at 0.5
+        would park it mid-throw. A toggle or a trigger has no two directions:
+        refused, and the learn is over. True when it was the learn's."""
+        pid = self.learning
+        p = self.reg.get(pid) if pid is not None else None
+        if p is None:
+            self.take()
+            return False
+        if p.kind in (Kind.TOGGLE, Kind.TRIGGER):
+            self.take()
+            self.refuse(f"{p.label or pid} has no two directions: a pair moves along a range "
+                        "— not learned; Learn pad puts it on one button")
+            return True
+        if self.want == PAIR_SPRING_WANT and p.kind is Kind.CONTINUOUS and not p.integer:
+            self.learn_source(source, centred=True)
+            return True
+        self.take()
+        table = self.table
+        b = Binding(source, pid, "step", 1.0)
+        poles = pair_poles(":".join(b.parts))
+        if poles is None:
+            self.refuse(f"{source} names no two controls of a pad — not learned")
+            return True
+        bare = tuple(pole.source for pole in poles)
+        gone = [x for x in table.bindings
+                if (x.device == b.device and x.bare in bare) or _steps_on(x, b, bare)]
         for x in gone:
             table.remove(x)
         table.add(b)
@@ -832,7 +921,7 @@ class Learn:
             # a setting no performer may drive (ghost.mirror, a rig switch):
             # a route on it would sit dormant, so none is made. The learn
             # is over — no hand can ever complete it — and nothing changed
-            if Binding(source, p.id).scheme == "axis":     # any pad's stick (plan 27 B6)
+            if Binding(source, p.id).scheme in ("axis", PAIR_SCHEME):     # any pad's (plan 27 B6)
                 self.refuse(f"{p.label} can't follow a stick (not modulatable) "
                             "— not learned; Learn pad with a button puts it on one")
                 return

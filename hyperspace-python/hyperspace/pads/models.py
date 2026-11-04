@@ -149,6 +149,34 @@ for _m in MODELS.values():
         for _vid, _pid in _m.ids:
             HID_IDS.setdefault(_vid, set()).add(_pid)
 
+# Plan 56: the controls anyone reads as one degree of freedom with two poles,
+# (+ pole, − pole), up and right high as on a stick. The order is the lanes'
+# order on every pad, so it only grows at the end (`natural_pairs` says which
+# a model has). A single Joy-Con's four arrows are the face, so they are here
+PAIRS: tuple[tuple[str, str], ...] = (
+    ("UP", "DOWN"), ("RIGHT", "LEFT"), ("RB", "LB"), ("RP", "LP"), ("RFN", "LFN"),
+    ("Y", "A"), ("B", "X"),
+)
+_POLE_CAP = {"LP": "back", "RP": "back", "LFN": "fn", "RFN": "fn"}
+
+
+def natural_pairs(model: Model | None) -> tuple[tuple[str, str], ...]:
+    """The pairs `model` has both poles of (None: the Xbox face)."""
+    def has(name: str) -> bool:
+        cap = _POLE_CAP.get(name)
+        if cap is not None and (model is None or not model.has(cap)):
+            return False
+        return model is None or model.has_control(name)
+    return tuple(pair for pair in PAIRS if has(pair[0]) and has(pair[1]))
+
+
+def pair_label(model: Model | None, pos: str, neg: str) -> str:
+    """A pair in the pad's own words: "D-pad up / down", "R1 / L1"."""
+    if pos in ("UP", "DOWN", "LEFT", "RIGHT"):
+        return f"D-pad {pos.lower()} / {neg.lower()}"
+    return f"{glyph(model, pos, pos)} / {glyph(model, neg, neg)}"
+
+
 SPECS_WORDS = ("any",) + tuple(MODELS) + tuple(sorted({m.family for m in MODELS.values()}))
 
 

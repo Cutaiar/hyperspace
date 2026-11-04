@@ -82,8 +82,9 @@ def test_the_kinds_table_maps_each_kind_and_make_sorts_an_entry():
                                   "ndi", "syphon", "camera"}
     assert devices.MidiDevice.schemes == ("cc", "note", "pitch")
     # plan 42: the touchpad and the motion sensors, for a pad that may be a Sony one
-    assert devices.PadDevice.schemes == ("axis", "pad", "hat", "touch", "motion")
-    assert devices.PadDevice.schemes_for({"controller": "xbox"})[0] == ("axis", "pad", "hat")
+    assert devices.PadDevice.schemes == ("axis", "pair", "pad", "hat", "touch", "motion")
+    assert devices.PadDevice.schemes_for({"controller": "xbox"})[0] == (
+        "axis", "pair", "pad", "hat")
     assert devices.HandsDevice.schemes == ("hand", "hands")      # B2: C4's pair scheme too
     assert devices.BridgeDevice.schemes == ("ext",)
     for kind, cls in devices.KINDS.items():
@@ -92,7 +93,8 @@ def test_the_kinds_table_maps_each_kind_and_make_sorts_an_entry():
         assert isinstance(d, devices.Device)                 # the protocol, structurally
         assert d.status == "lost" and d.last == ""
     assert devices.make({"role": "r", "kind": "midi"}).sources == ()      # (no adapter yet)
-    assert len(devices.make({"role": "r", "kind": "gamepad"}).sources) == 22   # (a fixed layout; + SHARE, #197)
+    # (a fixed layout; + SHARE, #197; + its five pairs, plan 56)
+    assert len(devices.make({"role": "r", "kind": "gamepad"}).sources) == 27
     off = devices.make({"role": "r", "kind": "midi", "enabled": False})
     assert isinstance(off, devices.OffDevice) and off.status == "off" and off.kind == "midi"
     odd = devices.make({"role": "r", "kind": "wand", "enabled": True})
@@ -144,8 +146,9 @@ def test_a_second_enabled_device_claiming_a_scheme_is_refused_with_a_note(monkey
     assert not any("launchpad" in n or "pad2" in n for n in notes)
     assert [r for r, _, st, _, _ in reg.lines() if r in ("apc40", "launchpad")] == [
         "apc40", "launchpad"]                               # both desks on the SYSTEM page
-    assert reg.schemes() == ("axis", "pad", "hat", "touch", "motion",
-                             "axis@pad2", "pad@pad2", "hat@pad2", "touch@pad2", "motion@pad2",
+    assert reg.schemes() == ("axis", "pair", "pad", "hat", "touch", "motion",
+                             "axis@pad2", "pair@pad2", "pad@pad2", "hat@pad2", "touch@pad2",
+                             "motion@pad2",
                              "hand", "hands", "cc", "note", "pitch")
     # the first hands device leaves the list: leap2 is no longer refused and opens
     monkeypatch.undo()
@@ -175,21 +178,23 @@ def test_two_pads_open_each_under_its_role(monkeypatch):
     one, two = reg.get("pad"), reg.get("p2")
     assert isinstance(one, devices.PadDevice) and isinstance(two, devices.PadDevice)
     assert (one.qualifier, two.qualifier) == ("", "p2")
-    assert one.schemes == ("axis", "pad", "hat", "touch", "motion")
-    assert two.schemes == ("axis@p2", "pad@p2", "hat@p2", "touch@p2", "motion@p2")
-    assert two.feeds == ("axis@p2", "touch@p2", "motion@p2") and two.rows == ("pad@p2", "hat@p2")
+    assert one.schemes == ("axis", "pair", "pad", "hat", "touch", "motion")
+    assert two.schemes == ("axis@p2", "pair@p2", "pad@p2", "hat@p2", "touch@p2", "motion@p2")
+    assert two.feeds == ("axis@p2", "pair@p2", "touch@p2", "motion@p2")
+    assert two.rows == ("pad@p2", "hat@p2")
     assert [p.address for p in one.sources][:2] == ["axis:LX", "axis:LY"]
     assert [p.address for p in two.sources][:2] == ["axis@p2:LX", "axis@p2:LY"]
     assert "pad@p2:A" in [p.address for p in two.sources]
     assert "hat@p2:UP" in [p.address for p in two.sources]
-    assert reg.schemes() == ("axis", "pad", "hat", "touch", "motion",
-                             "axis@p2", "pad@p2", "hat@p2", "touch@p2", "motion@p2")
-    assert reg.continuous_schemes() == ("lane", "lfo", "env", "seq", "axis", "touch", "motion",
-                                        "axis@p2", "touch@p2", "motion@p2")
+    assert reg.schemes() == ("axis", "pair", "pad", "hat", "touch", "motion",
+                             "axis@p2", "pair@p2", "pad@p2", "hat@p2", "touch@p2", "motion@p2")
+    assert reg.continuous_schemes() == ("lane", "lfo", "env", "seq", "axis", "pair", "touch",
+                                        "motion", "axis@p2", "pair@p2", "touch@p2", "motion@p2")
     assert reg.row_schemes() == ("pad", "hat", "pad@p2", "hat@p2")
     # Learn pad (whichever pad moves) and "Learn p2" (that pad only)
-    assert reg.wants() == ("pad", "p2")
-    assert one.wants == ("pad",) and two.wants == ("pad", "p2")
+    assert reg.wants() == ("pad", "pair", "pair (spring)", "p2")
+    assert one.wants == ("pad", "pair", "pair (spring)")
+    assert two.wants == ("pad", "pair", "pair (spring)", "p2")
     assert reg.primaries() == {"axis": "pad", "pad": "pad", "hat": "pad",
                                "touch": "pad", "motion": "pad"}
     assert table.primaries == reg.primaries()               # the table is told
@@ -203,8 +208,8 @@ def test_two_pads_open_each_under_its_role(monkeypatch):
     reg.open_all()
     reg.poll(1 / 60, 0.0)
     assert ui.device_lines(reg) == [
-        "pad  ·  gamepad  ·  connected  ·  22 sources  ·  glfw 0",
-        "p2  ·  gamepad  ·  connected  ·  22 sources  ·  glfw 1"]
+        "pad  ·  gamepad  ·  connected  ·  27 sources  ·  glfw 0",
+        "p2  ·  gamepad  ·  connected  ·  27 sources  ·  glfw 1"]
     assert one.io.claims is two.io.claims                   # one shared set of taken joysticks
     present.discard(0)
     reg.poll(1 / 60, 0.0)
@@ -246,8 +251,8 @@ def test_two_pads_with_usb_on_the_reader_is_lent_to_the_one_without_a_joystick(m
     reg.open_all()
     reg.poll(1 / 60, 0.0)
     assert ui.device_lines(reg) == [
-        "pad  ·  gamepad  ·  connected  ·  22 sources  ·  glfw 0  ·  usb: lent to p2",
-        "p2  ·  gamepad  ·  connected  ·  22 sources  ·  usb: Afterglow"]
+        "pad  ·  gamepad  ·  connected  ·  27 sources  ·  glfw 0  ·  usb: lent to p2",
+        "p2  ·  gamepad  ·  connected  ·  27 sources  ·  usb: Afterglow"]
     reg.close()
 
 
@@ -434,9 +439,9 @@ def test_continuous_schemes_are_the_builtins_then_each_devices_feeds_in_list_ord
         devices.MidiDevice("apc40", io=io), devices.PadDevice("pad", io=io),
         devices.OffDevice("leap", "hands"), devices.BridgeDevice("bridge", io=io)])
     assert devices.BUILTIN_SCHEMES == ("lane", "lfo", "env", "seq")
-    assert reg.continuous_schemes() == ("lane", "lfo", "env", "seq", "axis", "touch", "motion",
-                                        "hand", "hands", "ext")
-    assert reg.schemes() == ("cc", "note", "pitch", "axis", "pad", "hat", "touch", "motion",
+    assert reg.continuous_schemes() == ("lane", "lfo", "env", "seq", "axis", "pair", "touch",
+                                        "motion", "hand", "hands", "ext")
+    assert reg.schemes() == ("cc", "note", "pitch", "axis", "pair", "pad", "hat", "touch", "motion",
                              "hand", "hands", "ext")
     assert devices.DeviceRegistry([]).continuous_schemes() == ("lane", "lfo", "env", "seq")
 
@@ -516,7 +521,7 @@ def test_lines_and_the_system_pages_text():
     pad = devices.PadDevice("pad", io=SimpleNamespace(on=True, source="usb",
                                                        usb_pad=SimpleNamespace(name="AX.1")))
     assert ui.device_lines(devices.DeviceRegistry(devices=[pad])) == [
-        "pad  ·  gamepad  ·  connected  ·  22 sources  ·  usb: AX.1"]
+        "pad  ·  gamepad  ·  connected  ·  27 sources  ·  usb: AX.1"]
     # a status that raises is a line, not a page that will not draw
     bad = Fake("c", log)
     type(bad).last = property(lambda self: 1 / 0)
