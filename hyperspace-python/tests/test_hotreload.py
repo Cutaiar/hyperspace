@@ -193,6 +193,7 @@ def _app_swap_targets() -> set[tuple[str, str]]:
             pairs = _triples(lam.body)
             assert pairs
             assert "deck.targets()" in ast.unparse(lam.body)
+            assert "meta.targets()" in ast.unparse(lam.body)
             return pairs | _deck_swap_targets()
     raise AssertionError("app.py builds no HotReloader")
 
@@ -201,10 +202,12 @@ def _deck_swap_targets() -> set[tuple[str, str]]:
     """The (module, class) pairs `deck.Deck.targets` lists, read from its source."""
     import ast
 
-    (deck,) = [n for n in _tree("deck").body if isinstance(n, ast.ClassDef) and n.name == "Deck"]
-    (fn,) = [n for n in deck.body if isinstance(n, ast.FunctionDef) and n.name == "targets"]
-    pairs = _triples(fn)
-    assert pairs
+    pairs: set[tuple[str, str]] = set()
+    for name in ("Deck", "MetaController"):
+        (cls,) = [n for n in _tree("deck").body if isinstance(n, ast.ClassDef) and n.name == name]
+        (fn,) = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "targets"]
+        assert _triples(fn)
+        pairs |= _triples(fn)
     return pairs
 
 

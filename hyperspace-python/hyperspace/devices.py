@@ -270,6 +270,9 @@ class Base:
     repeatable = False
     # the device's qualifier: "" for its kind's primary, else its role
     qualifier = ""
+    # which deck this controller is on (plan 44 D5a, `pointer.Pointer`); None,
+    # no meta controller yet: `ctx`'s registry and table, and the frame's router
+    pointer = None
 
     def __init__(self, role: str, entry: dict | None = None, ctx: Context | None = None, *,
                  io=None):
@@ -278,6 +281,26 @@ class Base:
         self.ctx = ctx if ctx is not None else Context()
         self.io = io
         self.error = ""          # the last exception, as `status` says it
+
+    def point(self, pointer, panel=None) -> None:
+        """This controller's own pointer, and the panel's for what follows
+        the panel (the learn); handed on to an adapter that reads a deck."""
+        self.pointer = pointer
+        point = getattr(type(self.io), "point", None)
+        if point is not None:
+            point(self.io, pointer, panel)
+
+    @property
+    def reg(self):
+        """The registry of the deck this controller is on."""
+        p = self.pointer
+        return p.deck.reg if p is not None else self.ctx.reg
+
+    @property
+    def table(self):
+        """The binding table of the deck this controller is on."""
+        p = self.pointer
+        return p.deck.table if p is not None else self.ctx.table
 
     @property
     def status(self) -> str:
@@ -468,11 +491,11 @@ class MidiDevice(Base):
                              f"{', '.join(MIDI_PROFILES)}")
         from . import midi
         e, c = self.entry, self.ctx
-        self.io = midi.MidiIO(c.reg, c.table, port=e.get("port"), profile=self.profile,
+        self.io = midi.MidiIO(self.reg, self.table, port=e.get("port"), profile=self.profile,
                               learner=c.learn, role=self.role)
 
     def _primary(self) -> bool:
-        table = self.ctx.table
+        table = self.table
         return table is None or table.is_primary(self.role)
 
     @property
@@ -775,7 +798,7 @@ class PadDevice(Base):
         m = getattr(io, "model", None)
         if not models.is_model(m) or not m.outputs:
             return
-        table = self.ctx.table
+        table = self.table
         vals: dict[int, float] = {}
         if table is not None and hasattr(table, "sinks"):
             from .routing import sink_values
@@ -818,7 +841,7 @@ class PadDevice(Base):
         # the buttons the totem holds while it reads this pad learn nothing
         # either (as their rows do not fire: `act`'s skip) — asked only
         # while a learn is armed
-        skip = (self._totem_skip(self.ctx.reg if self.ctx.reg is not None
+        skip = (self._totem_skip(self.reg if self.reg is not None
                                  else getattr(learn, "reg", None), self.io)
                 if getattr(learn, "learning", None) is not None else frozenset())
         self._taken = bool(gamepad.learn_from(self.io, learn, role=q, dials=lambda: dialed,
@@ -829,7 +852,7 @@ class PadDevice(Base):
 
     def act(self, router) -> None:
         """The pad's rows, then the sticks' camera job — on the registry
-        the context carries (`Context.reg`), else the router's. The camera
+        of the deck it is on (`Base.reg`), else the router's. The camera
         job is the primary pad's only (plan 27 B6, decision 24: defaults
         author no look): a second pad's unrouted axes do nothing."""
         self._router = router       # `close` lets go through it: no later frame will
@@ -841,7 +864,7 @@ class PadDevice(Base):
         # the sticks a route reads as a dial, for the next frame's Learn
         # (gamepad.dialed); asked only while the pad is there, once a frame
         claimed = getattr(router, "claimed", None)     # duck-typed: a shim may have none
-        reg = self.ctx.reg if self.ctx.reg is not None else getattr(router, "reg", None)
+        reg = self.reg if self.reg is not None else getattr(router, "reg", None)
         skip = self._totem(io, reg)
         quiet = self._quiet_stick(io, reg)
         if quiet:
@@ -1083,7 +1106,7 @@ class BridgeDevice(Base):
 
     def open(self) -> None:
         from . import bridge
-        self.io = bridge.Bridge(self.ctx.reg, self.entry)
+        self.io = bridge.Bridge(self.reg, self.entry)
 
     @property
     def status(self) -> str:
@@ -1128,7 +1151,7 @@ class BridgeDevice(Base):
         io = self.io
         if io is None:
             return
-        table = self.ctx.table
+        table = self.table
         if table is None or not hasattr(table, "sinks"):
             io.transmit(analyzer)                    # a bare shim: the old `send` list
             return
@@ -1265,7 +1288,7 @@ class MidiOutDevice(Base):
         h = self._carried()
         if h is not None:
             h.carry(self._send, io.name, "" if io.on else io.error)
-        table = self.ctx.table
+        table = self.table
         if self.sender is not None and table is not None and hasattr(table, "sinks"):
             rows = table.sinks(self.role)
             if rows and io.on:
@@ -1968,6 +1991,7 @@ class DeviceRegistry:
         d.error = ""
         self._opened.add(d.role)
         self._retry.pop(d.role, None)
+        self._point(d)
         return True
 
     def open_all(self) -> None:
@@ -2013,11 +2037,32 @@ class DeviceRegistry:
             d.error = ""
         return True
 
+    def point(self, pointer_of, panel) -> None:
+        """Hand every controller its own pointer, now and whenever one opens
+        (plan 44 D5a): `pointer_of(role)` is `MetaController.pointer`, keyed
+        by role so a controller that comes back is on the deck it left; `panel`
+        the panel's pointer."""
+        self.pointer_of, self.panel_pointer = pointer_of, panel
+        for d in list(self.devices):
+            self._point(d)
+
+    def _point(self, d) -> None:
+        pointer_of = self.__dict__.get("pointer_of")
+        if pointer_of is not None:
+            d.point(pointer_of(d.role), self.__dict__.get("panel_pointer"))
+
+    def table_of(self, role: str, default=None):
+        """The binding table of the deck the controller `role` is on; `default`
+        when it has no pointer yet."""
+        pointer_of = self.__dict__.get("pointer_of")
+        return pointer_of(role).deck.table if pointer_of is not None else default
+
     def poll(self, dt: float, now: float, *, router=None, learn=None) -> None:
         """The scene-setter slot: each open device polled, offered to the
-        armed Learn, then its rows delivered (`act`). A device that would
-        not open is tried again when its schedule says; the config list is
-        re-read when the file changed (`watch`)."""
+        armed Learn, then its rows delivered (`act`), on the router of the
+        deck that device is on (`router`: one with no pointer). A device that
+        would not open is tried again when its schedule says; the config list
+        is re-read when the file changed (`watch`)."""
         self.error = ""
         self._frames += 1
         if self._frames % WATCH_FRAMES == 0:
@@ -2035,7 +2080,9 @@ class DeviceRegistry:
             if learn is not None:
                 self._guard(d, lambda d=d: d.learn(learn))
             if router is not None:
-                self._guard(d, lambda d=d: d.act(router))
+                p = getattr(d, "pointer", None)
+                on = p.deck.router if p is not None else router
+                self._guard(d, lambda d=d, on=on: d.act(on))
         # plan 40 T4: after every device's poll, what changed is said; a
         # hardware that came back inside its adapter (midi.Ports.retry →
         # MidiIO._connected, which relit the desk already) tells the
@@ -2103,10 +2150,13 @@ class DeviceRegistry:
 
     def send(self, reg, analyzer=None) -> None:
         """After `reg.apply`: the sinks read effective values out, each
-        device in list order (plan 27 B3)."""
+        device in list order (plan 27 B3), off the deck that device is on
+        (`reg`: one with no pointer)."""
         for d in list(self.devices):
             if d.role in self._opened:
-                self._guard(d, lambda d=d: d.send(reg, analyzer))
+                p = getattr(d, "pointer", None)
+                on = p.deck.reg if p is not None else reg
+                self._guard(d, lambda d=d, on=on: d.send(on, analyzer))
 
     # ---- config.toml, watched ----
 

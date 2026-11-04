@@ -93,6 +93,7 @@ from .bands import CEIL
 from .config import DEFAULTS
 from .midi import RECONNECT_S, Ports, retry_after
 from .params import Kind, Registry
+from .pointer import Through
 
 FULL = 16383                    # 14 bits
 ENCODINGS = ("pitch", "cc14")
@@ -326,8 +327,11 @@ class Bridge:
     `cfg` is the ``[bridge]`` section (config.py's defaults fill what it
     leaves out). `inp`/`out` may be injected (tests: fakes with
     iter_pending() and send()); otherwise the ports are found by name and
-    reopened on their own (midi.Ports).
+    reopened on their own (midi.Ports). `reg` reads through its pointer
+    once it has one (plan 44 D5a, `point`).
     """
+
+    reg = Through("reg")
 
     def __init__(self, registry: Registry, cfg: dict | None = None, *,
                  inp=None, out=None, clock=time.monotonic):
@@ -394,6 +398,10 @@ class Bridge:
         if router is not None:
             self.receive(router)
         self.transmit(analyzer)
+
+    def point(self, pointer, panel=None) -> None:
+        """Its messages land on the deck `pointer` is on from now on."""
+        self.pointer = pointer
 
     def reconnect(self) -> bool:
         """The ports looked for again when due; True the frame they come

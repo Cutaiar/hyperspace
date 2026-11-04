@@ -82,6 +82,7 @@ from .hands import panel as ui_hands
 from .hold import canvas_renderer
 from .media import publish
 from .params import PLANES, Kind, Param, Registry, build_registry
+from .pointer import Through
 from .view import RED as RED_RGB
 from .view import ViewState
 
@@ -696,6 +697,21 @@ def _gpu_block(stats: dict, head: str) -> list[str]:
 
 
 class Panel:
+    # plan 44 D5a: what the panel shows is the deck its own pointer is on
+    # (`deck.MetaController.panel_pointer`, set by app.py), read each time; with
+    # no pointer (a panel from a test) these are plain attributes
+    reg = Through("reg")
+    view = Through("view")
+    renderer = Through("renderer")
+    router = Through("router")
+    learn = Through("learn")
+    undo = Through("undo")
+    lfos = Through("lfos")
+    envs = Through("envs")
+    seq = Through("seq")
+    hold = Through("hold")
+    deck = Through(None)
+
     def __init__(self, control: Control, audio: AudioEngine, view: ViewState, renderer=None,
                  bank=None, registry: Registry | None = None, library=None):
         self.control = control
@@ -772,10 +788,9 @@ class Panel:
         self.hand_settings = None  # set by app.py (hands.HandSettings): the HANDS page
         self.clock = None          # set by app.py (tempo.Clock): the LFO page's beat light
         self.lfos = None           # set by app.py (lfo.LFOs): the LFO page's scopes
-        # set by app.py (deck.Deck, plan 44 D1): the deck the handles above
-        # (`reg`, `router`, `learn`, `undo`, `lfos`, `hold` …) are assigned
-        # from; nothing reads through it until D5
+        # set by app.py (deck.Deck, plan 44 D1); `pointer`'s once it has one
         self.deck = None
+        self.pointer = None
         self._register_panel_params()
 
     def close(self) -> None:

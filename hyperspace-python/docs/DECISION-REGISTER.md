@@ -719,6 +719,9 @@ here; overturn → the change, then the same.
 | 685 | Plan 51 O2: within 20° of vertical, a yaw straying 20° or stepping 5° on leaving the cone makes the hand read NaN until it has left, then restart, not a camera jump; `ghost.mirror` does not flip a turn row, its depth does; a room lane on a clamped target stays `position`; a moved row lands as `row_for` would | — | (rec) — pending the owner |
 | 686 | The Joy-Con's version 0 is buttons, sticks, the gyro and shake: its sensors move no position (`poi.no_position`); the Edge and `motion:shake` are unchanged. An idealized control object for the acceleration comes later. Its own layout (`models.Model.layout`, `routing.layout_of`): SL / SR the shape, stick click the view's reset, − (+ on the R) the totem's reset, capture (HOME on the R) the totem on and off; L / ZL free; a stick route heard only while the totem reads it, else the stick orbits. Replaces the table on those controls for this pad only | 520, 521 | owner — 2026-11-04 |
 | 687 | The hid reader learns a Joy-Con's gyro rest offset (`hid.Turn(learn=True)`): every axis within 3 deg/s for one sensor second, none past 20 deg/s | 520 | (rec) — pending the owner |
+| 688 | Plan 44 D5a: the owner of the two `Deck`s is `deck.MetaController`, named from the glossary; a `Pointer` per holder (each controller by role, the keys, the mouse) and the panel's apart; exactly two `Deck`s; no `swap` | — | "name the owner of the two Decks from the glossary"; "Two fixed Decks and no swapping" (owner, 2026-11-04) |
+| 689 | Plan 44 D5a: the holders moved onto pointers, those the reading named (`SeqPage.reg`, `Library.reg` and `presets`, `dream_check`, `Mouse`'s params, `draw_render`, `Marks`) and those found while building (`rig.said`'s table, deck 2's `Learn.devices`, the totem's and poi's params, the watchdog's preset, `Presets.load` / `save_as` / its undo push); `claim` retired | — | (rec) — pending the owner |
+| 690 | Plan 44 D5a: `docs/GLOSSARY.md`, one row per concept; a desk moved mid-gesture forgets its held notes and glides and lets its held buttons go on the deck it left | — | (rec) — pending the owner's signature on the glossary |
 | 723 | Wave 4 B2: `pad:VIEW` holds `deck.chase`; `pad:VIEW → tempo.tap` and `hat:LEFT` / `hat:RIGHT → preset.list.*` leave the pad's factory rows; an old factory row moves at the next load, one the owner changed stays | 654 | owner — 2026-11-04: base chase is Back; tap tempo is not a default on every controller, "extremely sensitive"; no swapping presets from a controller or a pad |
 | 724 | Wave 4 B2: a Joy-Con (R) has no BACK and gets no factory chase, a row on its SL gives it one; Learn goes on accepting `preset.list.*` and `tempo.tap`, unrefused, and no widget is added to arm the first two | 723 | (rec) — pending the owner |
 | 748 | Plan 56: a pair is an address, `pair:<+ pole>/<− pole>`, of any two discrete controls of one pad; a model's natural pairs are published by default; one lane at rest 0.5, 1 on the + pole, 0 on the − pole, rest with both | — | owner — 2026-11-04: "toggle controls need to be able to be paired into a polarized axis"; the shape is (rec) — pending the owner |
@@ -12765,18 +12768,6 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **To reverse.** Make `no_position` answer False.
 - **Judge it.** 520, 521.
 
-### 687. Learning a Joy-Con's gyro rest offset
-
-- **Answer.** (rec) — pending the owner.
-- **Built.** `hid.Turn(learn=True)` for a Nintendo pad only. The turn is
-  otherwise unchanged: on both tapes, neither a longer gap allowance nor
-  bridging gaps was reliably better, so the 50 ms limit stands. The offset only
-  matters for a pad whose rest reads past the 3 deg/s dead band, which the
-  owner's does not (about 0.2 deg/s).
-- **Limit.** A pad held in the hand and never set down learns nothing.
-- **To reverse.** Build `Turn` without `learn`.
-- **Judge it.** 520.
-
 ### 686, continued. The Joy-Con's own controls
 
 - **Answer.** Owner, 2026-11-04, the layout above. Left to the controller: the
@@ -12796,6 +12787,70 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   turn about two axes lands where Euler angles do.
 - **To reverse.** Empty `layout` and `drops` on the two Joy-Con models.
 - **Judge it.** 521.
+
+### 687. Learning a Joy-Con's gyro rest offset
+
+- **Answer.** (rec) — pending the owner.
+- **Built.** `hid.Turn(learn=True)` for a Nintendo pad only. The turn is
+  otherwise unchanged: on both tapes, neither a longer gap allowance nor
+  bridging gaps was reliably better, so the 50 ms limit stands. The offset only
+  matters for a pad whose rest reads past the 3 deg/s dead band, which the
+  owner's does not (about 0.2 deg/s).
+- **Limit.** A pad held in the hand and never set down learns nothing.
+- **To reverse.** Build `Turn` without `learn`.
+- **Judge it.** 520.
+
+### 688. The meta controller and its pointers
+
+- **Answer.** The owner, 2026-11-04: "`rig`, `session` and lowercase "deck" all become the
+  meta controller", "`Deck` stays: it lives inside the meta controller", "Two slots only:
+  on air and off air", "Two fixed `Deck`s and **no swapping**. On air is whichever the
+  fader is closer to", and a player "holds a duty" with a controller "at one preset at a
+  time", so a pointer is per holder, not "controllers to A, panel to B".
+- **Built.** `deck.MetaController(first, second)`. `pointer(holder)` makes one on deck 1
+  the first time and keeps it by name, so a controller unplugged and back is where it
+  was. `point` moves one holder, `point_panel` the panel and the installed undo.
+  `on_air_pointer` stays on deck 1 until D5c. `pointer.Through` is a descriptor: a plain
+  attribute until the holder has a pointer, then a read of the deck's field, and an
+  assignment raises because it would be ignored. `Host`'s fields stay required fields of
+  its `__init__`; `Library.reg` and `presets` are properties, since `Library.into` also
+  overrides them.
+- **A limit, stated.** Pointers move what a controller fires and writes. Lanes are the
+  shared `Sources`, so a route on a hand or a stick runs in every deck's pass whoever
+  holds the controller: DQ4's "a row acts only on the `Deck` its player is on" is PL's
+  and D5d's, not this PR's.
+- **Judge it.** 522.
+
+### 689. The holders
+
+- **Answer.** (rec) — pending the owner.
+- **Built.** The reading's list, then these it did not name:
+  `rig.said`'s footer read deck 1's table (`DeviceRegistry.table_of`); deck 2's `Learn`
+  had no `devices`; `totem.*` and `poi.*` are registered by the panel hook on deck 1 only and
+  are no session group, so a pad on deck 2 lost them (`app._share_experiments`, one state);
+  the watchdog named the panel's preset where a stall log wants the one on air;
+  `Presets.load` and `save_as` went by the kind's hooks to the panel's deck and
+  `load_doc` pushed on the installed undo (`Library.into`, `undo.push_on`).
+  `Marks(lib, presets)` lands here rather than in D5b, because `lib.presets` moving would
+  otherwise have made deck 1's marks read deck 2. `claim` is gone: the first `Presets` over
+  a library declares the kind, whose hooks read `lib.presets`.
+- **Left for later, deliberately.** `session.lead`, `Fade.on_air`, `media.off_air`, the
+  dream's lend and `hand_over`'s direction are on-air's, D5c's. Deck 2's undo is ticked by
+  D5b. `graph_selected` is let go by `ui_graph.settle`'s spec test, but `fx_selected` and
+  the canvas's pins are not touched by a panel move: `on_panel` is the seam, unwired. A file
+  edited on disk re-lands on the panel's deck only.
+- **Judge it.** 522.
+
+### 690. The glossary, and a desk moved mid-gesture
+
+- **Answer.** (rec) — pending the owner's signature on `docs/GLOSSARY.md`.
+- **Built.** `MidiIO._follow_pointer`, one identity test a frame: held buttons let go on the
+  deck the desk left, notes and holds still down forgotten so a release fires nowhere, and
+  the new table drawn and re-armed as a load is. Nothing moves a pointer in the app yet, so
+  this runs only in tests until PL.
+- **Alternative.** Fire each held row's release on the deck it pressed: more code for a
+  gesture nobody can make until PL. Say if PL finds it matters.
+- **Judge it.** 523.
 
 ### 723. BACK holds the base chase; the pad swaps no preset and taps no tempo
 

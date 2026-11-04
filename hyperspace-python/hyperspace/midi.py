@@ -127,9 +127,10 @@ from pathlib import Path
 
 import mido
 
-from . import apc40, generic
+from . import apc40, generic, seq_page
 from .learn import Learn
 from .params import Kind, Param, Registry
+from .pointer import Through
 from .routing import (
     HELD_ONLY,
     PICKUP_TOL,
@@ -373,7 +374,14 @@ class MidiIO:
     Each role has its own layer (`Bindings.layer_of`); SHIFT's latch,
     `desk.shift`, is the first role's. `role` None is the first role —
     a bare adapter (the tests', the probe's) is today's one desk.
+
+    Plan 44 D5a: `reg` and `table` read through this desk's own pointer, and
+    `learner` through the panel's, once it has them (`point`).
     """
+
+    reg = Through("reg")
+    table = Through("table")
+    learner = Through("learn", via="panel_pointer")
 
     def __init__(self, registry: Registry, table: Bindings | None = None, *,
                  path: Path | None = None, port: str | None = None, profile: str = "apc40",
@@ -499,11 +507,12 @@ class MidiIO:
                 self._send(msg)
             self.redraw(whole=True)     # every control: lit by a row, else dark
 
-    def _let_go_held(self) -> None:
+    def _let_go_held(self, reg=None) -> None:
         """Every held button up (`HELD_PARAMS`): a press this desk can no
-        longer end."""
+        longer end. `reg`: the deck it pressed them on, if not this one."""
+        reg = reg if reg is not None else self.reg
         for pid in HELD_PARAMS:
-            held = self.reg.get(pid)
+            held = reg.get(pid)
             if held is None:
                 continue
             by = held.__dict__.setdefault("_pressed_by", set())
@@ -600,6 +609,7 @@ class MidiIO:
                 self._land_all()    # no device: nothing is left in flight
                 return
         self._was_on = True
+        self._follow_pointer()
         self._follow_table()
         self._uncatch_moved()
         for msg in self.ports.recv():
@@ -612,6 +622,38 @@ class MidiIO:
         self._glide(self._now())
         self._follow_fine()
         self.feedback()
+
+    def point(self, pointer, panel=None) -> None:
+        """This desk's rows act on the deck `pointer` is on from now on, and
+        its learn is the one the panel's deck holds (plan 44 D5a). The first
+        desk carries the sequencer page with it (`seq_page.of`)."""
+        self._on = (self.reg, self.table)      # where it was: `_follow_pointer` compares
+        self.pointer, self.panel_pointer = pointer, panel
+        if self.table.is_primary(self._role()):
+            page = seq_page.of(self.reg)
+            if page is not None:
+                page.pointer = pointer
+
+    def _follow_pointer(self) -> None:
+        """The pointer moved since the last look: nothing of the deck left may
+        act on the deck arrived at. Its held buttons let go on it; a press or
+        a hold still down is forgotten, its release going nowhere; and the
+        new table's rows are drawn and re-armed as a load's are. One identity
+        test a frame."""
+        was = self.__dict__.get("_on")
+        table = self.table
+        if was is None or was[1] is table:
+            self._on = (self.reg, table)
+            return
+        self._let_go_held(was[0])
+        self._on = (self.reg, table)
+        holds, blinks = self._hold_state()
+        holds.clear()
+        blinks.clear()
+        self._held.clear()
+        self._writes.clear()
+        self._seen = self._serials()
+        self.redraw(load=True, switch=True)
 
     def _follow_table(self) -> None:
         """A layer switch or a desk replacement since the last look: redraw

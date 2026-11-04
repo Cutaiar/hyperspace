@@ -836,7 +836,7 @@ class Presets:
     landing: tuple = (None, None, None)
     bus: RigWires = RigWires()
 
-    def __init__(self, lib, reg, router, *, claim: bool = True):
+    def __init__(self, lib, reg, router):
         self.lib, self.reg, self.router = lib, reg, router
         self.note = ""
         self.notes: list[str] = []       # step 1's notes from the last load
@@ -872,17 +872,18 @@ class Presets:
         router.table.on_modifiers = self.settle_groups
         for bank in self.banks().values():
             bank.on_change = self.settle_groups
-        # the library's presets kind has one owner until D5 points it at the
-        # panel's deck: a deck built beside the first passes `claim` False
-        # (plan 44 D4), so the strip, the dot and a load stay the first's
-        if claim:
+        # the library's presets kind is one, and its hooks read through
+        # `lib.presets`, the presets of the deck the panel is on (plan 44 D5a):
+        # the first `Presets` over a library declares it and is that until a
+        # pointer takes over; a deck beside the first changes nothing here
+        if getattr(lib, "presets", None) is None:
             lib.kind(GROUP, SCHEMA.rpartition("/")[0],
-                     load=lambda doc, path: self.load_doc(doc, path),
-                     document=lambda name: self.document(name),
-                     signature=lambda: self.signature(),
+                     load=lambda doc, path: lib.presets.load_doc(doc, path),
+                     document=lambda name: lib.presets.document(name),
+                     signature=lambda: lib.presets.signature(),
                      versions=VERSIONS,
                      text=lambda doc: dumps(doc))
-            lib.on_load(GROUP, lambda name: self._landed(name))
+            lib.on_load(GROUP, lambda name: lib.presets._landed(name))
             lib.presets = self
         self.listeners: list = []        # called with the name after every load (app.py)
 
@@ -922,15 +923,16 @@ class Presets:
     def load(self, name: str) -> list[str]:
         """Load a preset by name through the library (which records it as
         the strip's current and its clean reference); returns the ids the
-        file names that nothing has."""
-        missing = self.lib.load(GROUP, name)
+        file names that nothing has. Into this deck, whichever the panel is on."""
+        missing = self.lib.load(GROUP, name, into=self)
         self._warn(name)
         return missing
 
     def save_as(self, name: str) -> Path:
         """The live state as a preset (a file of that name is written over,
-        its old text kept in the trash)."""
-        return self.lib.save_as(GROUP, name)
+        its old text kept in the trash). This deck's, whichever the panel is on."""
+        with self.lib.into(self):
+            return self.lib.save_as(GROUP, name)
 
     def new(self, at: tuple[float, float] = (0.0, 0.0)) -> list[str]:
         """A new preset (plan 35 T7, row 387): the library's fresh values
@@ -947,7 +949,7 @@ class Presets:
         session's params stay. One undo step, named `untitled`, dirty and
         `unsaved` (R17) until it is saved."""
         lib, reg = self.lib, self.reg
-        undo.push("new preset", load=True)    # the load below joins this step
+        undo.push_on(self.reg, "new preset", load=True)    # the load below joins this step
         values = {k: v for k, v in lib._fresh_all().items()
                   if k in reg and reg[k].group in PERFORMANCE_GROUPS
                   and reg[k].group != modifiers.GROUP and reg[k].persist
@@ -1162,7 +1164,8 @@ class Presets:
         # the file parsed, nothing landed yet: one undo step for the whole
         # load, by whichever road it came (undo.py, plan 15 WP1) — with
         # what is loaded now, so undoing it puts the earlier name back too
-        undo.push(f"load {doc.get('name') or (path.stem if path else 'preset')}", load=True)
+        undo.push_on(self.reg, f"load {doc.get('name') or (path.stem if path else 'preset')}",
+                     load=True)
         # 1½. the graph lands first (plan 26 A4): its instances' params
         #     exist before their values do; the ids read for it are sorted now
         held_graph, held_values = gs.mark(), reg.snapshot(part="performance")

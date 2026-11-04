@@ -40,6 +40,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from . import apc40
+from .pointer import Through
 from .sequencer import LANES, STEPS
 
 NAME = "seq"
@@ -64,6 +65,8 @@ class SeqPage:
     what they say changes: the lane selected or the length."""
 
     name = NAME
+    # the registry of the deck the first desk is on (`MidiIO.point`, plan 44 D5a)
+    reg = Through("reg")
 
     def __init__(self, reg):
         self.reg = reg
@@ -152,6 +155,13 @@ class SeqPage:
         return shade
 
 
+def of(reg) -> SeqPage | None:
+    """The one page `register` made, from either deck's registry: it is the
+    session's, as `seq.page` is, so it is kept there."""
+    session = getattr(reg, "session", None)
+    return getattr(session if session is not None else reg, "seq_page", None)
+
+
 def page_of(table) -> SeqPage | None:
     """The sequencer page if it is the one up on `table`, else None."""
     page = getattr(table, "page", None)
@@ -168,6 +178,8 @@ def register(reg, table) -> SeqPage | None:
     if PARAM in reg:
         return None
     page = SeqPage(reg)
+    session = getattr(reg, "session", None)
+    (session if session is not None else reg).seq_page = page
 
     def put(v) -> None:
         table.set_page(page if v and page.ready() else None)
