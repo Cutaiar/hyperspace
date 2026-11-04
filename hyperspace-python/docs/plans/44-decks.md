@@ -4,7 +4,8 @@
 `Deck` bundle and `Deck.build`, no behaviour change — register row 571,
 hand check 430, group AW); D2 built (2026-11-03, rows 590–593); **D3
 built** (2026-11-03, wave 2: rows 611–625, hand checks 461–470, group BJ);
-D4–D6 a plan, not built. Written 2026-11-02 as
+**D4 built** (2026-11-03, wave 3: rows 648–653, hand checks 489–493, group
+BN); D5–D6 a plan, not built. Written 2026-11-02 as
 wave 0 item D0 of the post-show sequencing. Written against `main` at 72da1ed: every symbol below is in
 the code today unless the text says it is new. Its four decisions are
 register rows 556–559, answered by the owner on 2026-11-02 (as recommended; 558 with a nuance, §7). The build is six PRs,
@@ -379,7 +380,47 @@ line (the camera, C2, among them); D3 makes the line mechanical.
 - **Must not**: add a deck; change any id; move a group plan 43 did not
   rule on; write a file without its backup.
 
-### D4 — deck B in render only, and the `output.xfade` mix pass (M)
+### D4 — deck B in render only, and the `output.xfade` mix pass (M) — **built**
+
+*Built 2026-11-03 (wave 3, rows 648–653).* As written, with these
+differences. **The deck** (row 648): `Deck.beside(first, renderer=, media=)`
+is the one way to build it; it declares nothing the session has, gets no hold,
+and its `Presets` do not claim the library's kind (`Presets(claim=False)`), so
+the strip, the dot and a load stay deck 1's until D5. `Presets.load_doc` lands
+values on its own registry (`Presets._restore`), where it went through the
+library's attached one. Deck 2 runs empty: nothing loads into it until D5, so
+raising `output.xfade` in this build fades to **black**. **The pass** (row 649):
+`Renderer.mix_pass` is two full-screen triangles, the dim's multiply by 1 − k
+then the picture × k added, because a premultiplied *over* would leave the
+leaving deck showing through anything transparent at k 1. It runs in
+`_compose`, before the dim; a presenter does the same as step 4½ of its
+`Handoff` (`Handoff.mix`), so later windows, publishers and the panel's inset
+all show the mix. `output.xfade_s` is declared and read by nothing until D5's
+take. `View.samples` gives deck 2's scene the window's sample count, since its
+offscreen target has none. **The pass order** (row 650, changing row 625):
+the plan's text left it open. Deck 2 runs **after** the lead (modulate, apply,
+right after the lead's apply), so it reads this frame's session values; and
+§7's recommendation is built: on a deck that is not the lead, a row onto a
+session param is dormant. Running followers first, the first thing tried, did
+land their offsets the same frame, but two decks on one preset then doubled
+that row on the room (TUMBLE's hand on `master.gain`), a leak D5's test would
+refuse. **The lanes** (row 651, changing row 591): `Router.lanes`, a
+`routing_sources.LaneLayer`, holds `DECK_SCHEMES` (`lfo`, `env`, `seq`, `mod`);
+`Router.feeds`, `labels`, `rests`, `gates`, `lane_kinds` are `Layered` views
+over the sources; `_put_modifiers` and its swap are gone. **Media** (row 652):
+`MediaSources.begin_frame` / `read`, one read per source a frame, called by
+`MediaIO.poll`; **deck 2 is silent** (`Channels.poll(heard=False)`): only the
+on-air deck feeds the mixer, once a frame. **The dream** (row 653):
+`DreamWorker.lend(reg)` repoints the registry `submit` reads, rather than a
+third argument on `submit` (the GL half has no registry to hand it), bumps a
+counter so a job for the last deck publishes nothing, and restarts `D`. The
+deck that gives the worker up holds its last dream through the fade; a fader
+drawn back to 0 lends it back and the dream restarts. **The preview size**:
+`deck.draw_size(full, cap, fading)` is the rule, but off air deck 2 draws
+nothing at all in D4 (the proof demands it), so the preview-size branch is
+D5's to call from the GRAPH backdrop. **Row 558's question**, measured and not
+decided: the numbers are in row 653. **Proof**: `tests/test_deck_fade.py`, and
+`tests/test_deck.py::test_a_deck_beside_changes_nothing_on_air_and_lands_what_one_deck_lands`.
 
 `app.main` builds two decks through `Deck.build`; deck 2's renderer is
 what `hold.preview_renderer` builds today (`Renderer(ctx, dream=, fx=,

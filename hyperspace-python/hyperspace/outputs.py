@@ -111,6 +111,9 @@ class Handoff:
     4. lays `readout` (the guide and the tethers' labels when they are a
        layer of their own, WP2 — on every output that shows the hands,
        over or through) into `rect` the same way. None: nothing;
+    4½. plan 44 D4: mixes `mix`, the other deck's finished picture for this
+       output (premultiplied, the whole framebuffer), in at `mix_k`
+       (`Renderer.mix_pass`'s blend). None: no fade on;
     5. multiplies the whole framebuffer by `factor` when it is under 1
        (`Renderer.dim_pass`'s blend: colour only on an opaque ground,
        colour and alpha otherwise).
@@ -136,6 +139,8 @@ class Handoff:
     bg_alpha: float = 1.0
     flip: tuple[bool, bool] = (False, False)   # plan 23 WP1: steps 2–4 mirrored in `rect`
     blend: str = "over"                        # plan 26 A3: step 3's blend, "over" or "add"
+    mix: moderngl.Texture | None = None        # plan 44 D4: step 4½
+    mix_k: float = 0.0
 
     @staticmethod
     def name(tex: moderngl.Texture | None) -> int | None:
@@ -175,6 +180,15 @@ class View:
     # presented into it on the renderer's context
     publish: list = field(default_factory=list)
     tap: Any = None
+    # plan 44 D4: the other deck's picture for this output, a texture of the
+    # renderer's context at this view's size, mixed in at `mix_k` before the
+    # dim (`Renderer.mix_pass`); None, no fade: the frame as ever
+    mix: Any = None
+    mix_k: float = 0.0
+    # plan 44 D4: the scene's sample count when `views[0]`'s target does not
+    # say it — a deck drawn offscreen for a window, so its picture is the
+    # one that window would have drawn. None: the target's own
+    samples: int | None = None
 
     @property
     def rect(self) -> tuple[int, int, int, int]:
@@ -1022,6 +1036,7 @@ class Presenter:
                 prog["u_k"].value = float(ho.alpha)
                 prog["u_opaque"].value = 0
                 vao.render(moderngl.TRIANGLES, vertices=3)
+            self._mix(ho, full, opaque)                                         # 4½
             factor = min(max(float(ho.factor), 0.0), 1.0)
             if factor < 1.0:                                                    # 5
                 ctx.viewport = full
@@ -1036,6 +1051,31 @@ class Presenter:
             ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
             fb.use()
             ctx.viewport = full
+
+    def _mix(self, ho: Handoff, full: tuple[int, int, int, int], opaque: bool) -> None:
+        """Step 4½: `Renderer.mix_pass` in this context — what is here
+        multiplied by 1 − k, then the other deck's picture × k added."""
+        k = min(max(float(getattr(ho, "mix_k", 0.0)), 0.0), 1.0)
+        mix = getattr(ho, "mix", None)
+        if mix is None or k <= 0.0:
+            return
+        ctx = self.ctx
+        ctx.viewport = full
+        ctx.enable(moderngl.BLEND)
+        ctx.blend_func = (moderngl.ZERO, moderngl.SRC_ALPHA, moderngl.ZERO,
+                          moderngl.ONE if opaque else moderngl.SRC_ALPHA)
+        self._dim["u_factor"].value = 1.0 - k
+        self._dim_vao.render(moderngl.TRIANGLES, vertices=3)
+        ctx.blend_func = (moderngl.ONE, moderngl.ONE,
+                          moderngl.ZERO if opaque else moderngl.ONE, moderngl.ONE)
+        prog = self._prog
+        self._wrap(mix).use(location=0)
+        prog["u_flip"].value = (0, 0)                # it was mirrored when it was drawn
+        prog["u_scaled"].value = int(tuple(mix.size) != tuple(full[2:]))
+        prog["u_origin"].value = (0, 0)
+        prog["u_k"].value = k
+        prog["u_opaque"].value = 0
+        self._vao.render(moderngl.TRIANGLES, vertices=3)
 
     def on_reload(self) -> None:
         """Hot reload: rebuild at the next `present`, in this context."""

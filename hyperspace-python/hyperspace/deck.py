@@ -27,24 +27,35 @@ the live deck, and a field added to `Deck` with a default is back-filled
 on it (`hotreload._backfill_dataclass`); but `build` does not re-run, so
 what a new field should hold on a running deck arrives only with a
 restart, and a PR that adds one says "restart" (plan 44 §8).
+
+Plan 44 D4 adds the second deck and the fade. `Deck.beside` builds a deck
+beside the first over the same session, sources and clock, with a renderer on
+the same context; nothing points at it — no controller, no page, no undo —
+and it writes no file. `Mix` holds `output.xfade` (`register_xfade`) and
+`Fade` runs it: at 0 nothing of deck 2 is drawn; above 0 deck 2's renderer
+draws every output into a frame texture at that output's size, which the
+on-air deck's pass mixes in before the dim (`Renderer.mix_pass`), and the one
+dream worker is lent to it. A raise in deck 2's draw leaves the on-air deck's
+picture alone and is said on `Fade.error`.
 """
 
 from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from . import envelope, geometry, lfo, poi, sequencer, tempo, totem
 from . import undo as undos
 from .fx import FxState
 from .ghost import GhostState
-from .hold import Hold, preview_renderer
+from .hold import Hold, preview_renderer, preview_size
 from .hold import register as register_hold
 from .learn import Learn
 from .library import Marks
 from .lookback import DreamState
+from .outputs import Offscreen, View
 from .params import Registry, SessionRegistry, build_registry
 from .preset import Presets
 from .routing import Bindings, Router, Sources
@@ -124,7 +135,7 @@ class Deck:
               devices: Callable[..., Any] | None = None,
               made: RigMade | None = None,
               attach: bool = True, startup: bool = True, install: bool = True,
-              on_air: bool = True,
+              on_air: bool = True, tag: Callable[[], Any] | None = None,
               warm: bool = False) -> Deck:
         """`app.main`'s deck lines, in their order. `library`, `control`
         and `audio` (anything with a `.chain`) are the rig's, built and
@@ -183,6 +194,7 @@ class Deck:
                              fx=fx if fx is not None else FxState(),
                              ghost=ghost if ghost is not None else GhostState(),
                              media=media, restart=restart, session=session)
+        beside = session is not None and not on_air    # a deck beside the first (`beside`)
         if on_air and reg.session is not None:
             # (review of #351: the deck on air lands the session's params —
             # named, never "whichever registry followed first")
@@ -199,7 +211,8 @@ class Deck:
             clock = sources.clock
         clock = clock if clock is not None else tempo.Clock()
         lfos = lfos if lfos is not None else lfo.LFOs()
-        tempo.register(reg, clock)
+        if not beside:                         # the session's, declared by the first deck
+            tempo.register(reg, clock)
         lfo.register(reg, lfos, clock)
         # plan 31: the envelope bank (the five lane envelopes, plus extras) and
         # the step sequencer that fires them — registered beside the LFOs and
@@ -215,7 +228,7 @@ class Deck:
         # plan 38: the projector held while the next look is built — rig
         # controls beside the switches; its undo is handed over once it exists
         hold = None
-        if renderer is not None:
+        if renderer is not None and not beside:
             hold = Hold(reg, renderer, make=lambda: preview_renderer(renderer))
             register_hold(reg, hold, now=time.perf_counter)
         # one binding table for keys, pad, MIDI and lanes — read before
@@ -237,7 +250,7 @@ class Deck:
         router.use_sequencer(seq, envs)        # after the banks begin, before the plan
         # the presets (preset.py): the library's `presets/` files, landed on the
         # registry and the table; the project's bank loads through it
-        presets = Presets(library, reg, router)
+        presets = Presets(library, reg, router, claim=not beside)
         if renderer is not None:
             # plan 26 A4: a preset's graph section sets the renderer's wiring and
             # hands an extra hands node its own state (`Renderer.ghost_states`)
@@ -270,7 +283,8 @@ class Deck:
         # belong to, and a restore tells the router its macros are acted on
         marks = Marks(library)
         undo_obj = undos.Undo(reg, router.table, marks=marks,
-                              tag=lambda: tuple(s.name for s in audio.chain.spec),
+                              tag=tag if tag is not None else (
+                                  lambda: tuple(s.name for s in audio.chain.spec)),
                               on_restore=router.sync_macros,
                               # the LFOs' membership (plan 31 B), read off the
                               # router at each step, so a re-classed router counts
@@ -282,6 +296,21 @@ class Deck:
         return cls(reg=reg, view=s, table=router.table, router=router, lfos=lfos, envs=envs,
                    seq=seq, clock=clock, presets=presets, learn=learn, undo=undo_obj, marks=marks,
                    renderer=renderer, hold=hold, sources=sources)
+
+    @classmethod
+    def beside(cls, first: Deck, *, renderer=None, media=None, lfos=None) -> Deck:
+        """A deck beside `first` (plan 44 D4): its own look — registry,
+        view, table, router, banks, presets, undo, `renderer` (on the same
+        context; None headless) and `media` (its `Channels`, over the rig's
+        sources) — over `first`'s session params and rows, sources and clock.
+        It attaches to nothing, loads nothing, installs nothing: the library,
+        the strip and the undo keys stay `first`'s. Nothing points at it."""
+        return cls.build(
+            library=first.presets.lib, control=None, audio=None,
+            table=lambda reg: Bindings([], session=first.table.session),
+            renderer=renderer, media=media, lfos=lfos,
+            session=first.session, sources=first.sources,
+            attach=False, startup=False, install=False, on_air=False, tag=first.undo.tag)
 
     def targets(self) -> list[tuple[Any, str, str]]:
         """The live objects a hot reload re-classes, as (object, module,
@@ -340,3 +369,138 @@ class Deck:
             *([(sw, "poi", "PoiState")]
               if (sw := poi.state_of(self.reg)) is not None else []),
         ]
+
+
+# ------------------------------------------------------------- the fade (D4)
+
+@dataclass
+class Mix:
+    """What `output.xfade` and `output.xfade_s` write: how far the outputs
+    have gone over to the other deck, and the seconds a take will run it
+    over (D5's; nothing reads it yet)."""
+
+    xfade: float = 0.0
+    seconds: float = 2.0
+
+
+XFADE_TIP = ("Mixes the other deck's picture over this one's on every output, before "
+             "the dim: 0 this deck alone, 1 the other deck alone. Never saved; nothing "
+             "on the desk by default (the crossfader stays the master dim), learn it "
+             "onto a fader.")
+XFADE_S_TIP = "How long a take runs the fade, in seconds. 0 is a cut. Never saved."
+
+
+def register_xfade(reg, mix: Mix) -> list[str]:
+    """`output.xfade` and `output.xfade_s` (plan 44 §3 D4, §5): rig controls
+    like `output.dim` — group `output`, never persisted, not modulatable (a
+    band on the fade would cut the room on every kick), learnable onto a
+    fader — so they cross no file and an older build never sees them."""
+    rig = {"group": "output", "persist": False, "modulatable": False}
+    reg.continuous("output.xfade", "Deck fade", lambda: mix.xfade,
+                   lambda v: setattr(mix, "xfade", min(1.0, max(0.0, float(v)))),
+                   lo=0.0, hi=1.0, tip=XFADE_TIP, **rig)
+    reg.continuous("output.xfade_s", "Fade seconds", lambda: mix.seconds,
+                   lambda v: setattr(mix, "seconds", min(30.0, max(0.0, float(v)))),
+                   lo=0.0, hi=30.0, tip=XFADE_S_TIP, **rig)
+    return ["output.xfade", "output.xfade_s"]
+
+
+def draw_size(full: tuple[int, int], cap: tuple[int, int] | None, fading: bool) -> tuple[int, int]:
+    """The size a deck off air draws an output of size `full` at (plan 44 §8):
+    the output's own during a fade (its frame then fits the render cap as the
+    on-air deck's does), `preview_size` (under the cap, at most 1280 px on its
+    long side) otherwise — what D5's panel backdrop draws. In D4 nothing asks
+    for the off-air picture, so off air the deck draws nothing at all."""
+    return (int(full[0]), int(full[1])) if fading else preview_size(full, cap)
+
+
+def hand_over(main, off_air) -> None:
+    """What deck 2's renderer reads this frame that the on-air one was
+    handed (the rig's: `hold.mirror`'s road, plan 44 §3 D4): the clouds, the
+    bands, the hands' source and the poi, the window's ground and the render
+    cap (§8: on both renderers). Its dim stays 1: the mix is laid before the
+    on-air deck's dim. Its look — wiring, media, bus cuts, extra hands — is
+    its own."""
+    off_air.cloud_source = getattr(main, "cloud_source", None)
+    off_air.poi_source = getattr(main, "poi_source", None)
+    off_air.bands = getattr(main, "bands", ())
+    off_air.bg_alpha = getattr(main, "bg_alpha", 1.0)
+    off_air.max_frame = getattr(main, "max_frame", None)
+    off_air.dim = 1.0
+    g, og = getattr(main, "ghost", None), getattr(off_air, "ghost", None)
+    if g is not None and og is not None:
+        og.source = g.source
+
+
+class Fade:
+    """The one mix between the on-air deck and the deck beside it (plan 44
+    D4). `k` is `output.xfade`. Above 0, once a frame before the on-air
+    deck draws: the dream worker is lent (`lend`) and deck 2 draws (`draw`);
+    each view then carries deck 2's picture for `Renderer._compose` to mix.
+    `targets` are its frame textures, one per output, kept once made."""
+
+    def __init__(self, on_air: Deck, off_air: Deck, mix: Mix, ctx=None, *, dream=None,
+                 make_target: Callable[[Any], Any] = Offscreen):
+        self.on_air, self.off_air, self.mix, self.ctx = on_air, off_air, mix, ctx
+        self.dream = dream
+        self.make_target = make_target
+        self.targets: list = []
+        self.lent_to = on_air
+        self.error = ""
+        self.drew = False                  # did deck 2 draw the last frame?
+
+    @property
+    def k(self) -> float:
+        return self.mix.xfade
+
+    def lend(self) -> None:
+        """One dream worker (§2, row 558): the on-air deck's, and from a
+        fade's first frame the deck going on air's; the deck that gave it up
+        holds its last dream. One comparison a frame until the fade moves."""
+        to = self.off_air if self.k > 0.0 else self.on_air
+        if to is self.lent_to:
+            return
+        self.lent_to = to
+        if self.dream is None:
+            return
+        for d in (self.on_air, self.off_air):
+            d.renderer.dreamer.source = self.dream if d is to else None
+        self.dream.lend(to.reg)
+
+    def draw(self, views: list[View], w: int, h: int, dpr: float,
+             samples: int | None = None) -> bool:
+        """Deck 2 onto a frame texture per view, at that view's size and
+        through its switches at full dim; each view it drew then carries the
+        picture and `k`. `samples`: the first view's scene sample count. True
+        when it drew. At `k` 0 nothing runs; a raise is said on `error` and
+        costs the on-air deck nothing (the views carry no mix)."""
+        self.drew = False
+        k = self.k
+        if k <= 0.0:
+            return False
+        r = self.off_air.renderer
+        try:
+            hand_over(self.on_air.renderer, r)
+            while len(self.targets) < len(views):
+                self.targets.append(self.make_target(self.ctx))
+            sizes = [draw_size(v.size, r.max_frame, True) for v in views]
+            drawn = [View(replace(v.switches, dim=1.0), sz, target=self.targets[i].fit(sz),
+                          bg_alpha=v.bg_alpha, viewport=(0, 0, *sz),
+                          samples=samples if i == 0 else None)
+                     for i, (v, sz) in enumerate(zip(views, sizes, strict=True))]
+            r.draw_outputs(self.off_air.view, w, h, dpr, drawn)
+            for i, (v, d) in enumerate(zip(views, drawn, strict=True)):
+                if not d.error:
+                    v.mix, v.mix_k = self.targets[i].tex, k
+            self.error = next((d.error for d in drawn if d.error), "")
+        except Exception as e:  # noqa: BLE001 — deck 2 must not cost the on-air deck
+            self.error = f"{type(e).__name__}: {e}"[:160]
+            return False
+        self.drew = True
+        return True
+
+    def close(self) -> None:
+        """Its frame textures let go (the render context current)."""
+        for tgt in self.targets:
+            tgt.release()
+        self.targets = []

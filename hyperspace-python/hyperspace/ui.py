@@ -708,6 +708,18 @@ class PageHistory:
         return self.visited[i]
 
 
+def _gpu_block(stats: dict, head: str) -> list[str]:
+    """A GPU block of the SYSTEM page, from a renderer's `stats`."""
+    ms = stats.get("gpu_ms") or {}
+    note = stats.get("gpu_note") or ""
+    ends = [f"ends: {' · '.join(stats['ends'])}"] if stats.get("ends") else []
+    if not ms:
+        return [f"{head}: {note}"] if note else []
+    width = max(len(name) for name in ms)
+    return ([f"{head} per node, ms (median of the last frames):"]
+            + [f"  {name:<{width}}  {v:6.2f}" for name, v in ms.items()] + ends)
+
+
 class Panel:
     def __init__(self, control: Control, audio: AudioEngine, view: ViewState, renderer=None,
                  bank=None, registry: Registry | None = None, library=None):
@@ -2657,18 +2669,23 @@ class Panel:
         one line saying so. Plan 35 T4: then the ends that ran the last
         frame (`stats["ends"]`, where the pipelines were). Nothing before a
         frame has been timed, or with no renderer."""
-        stats = getattr(self.renderer, "stats", None) or {}
-        ms = stats.get("gpu_ms") or {}
-        note = stats.get("gpu_note") or ""
-        ends = [f"ends: {' · '.join(stats['ends'])}"] if stats.get("ends") else []
-        if not ms:
-            return [f"gpu: {note}"] if note else []
-        width = max(len(name) for name in ms)
-        return (["gpu per node, ms (median of the last frames):"]
-                + [f"  {name:<{width}}  {v:6.2f}" for name, v in ms.items()] + ends)
+        return _gpu_block(getattr(self.renderer, "stats", None) or {}, "gpu")
+
+    def deck2_gpu_lines(self) -> list[str]:
+        """Plan 44 D4, §8: the second GPU block, what the deck off air costs —
+        a block like the first while it draws, one line off air, and what its
+        draw raised. Nothing else of deck 2 is on the panel."""
+        fade = getattr(self, "fade", None)
+        if fade is None:
+            return []
+        said = [f"deck 2: {fade.error}"] if fade.error else []
+        if not fade.drew:
+            return ["deck 2: off air, draws nothing", *said]
+        stats = getattr(fade.off_air.renderer, "stats", None) or {}
+        return [*_gpu_block(stats, "deck 2 gpu"), *said]
 
     def _gpu_timing(self) -> None:
-        for text in self.gpu_lines():
+        for text in (*self.gpu_lines(), *self.deck2_gpu_lines()):
             imgui.text_disabled(text)
 
     def _page_system(self, dt: float) -> None:

@@ -914,6 +914,14 @@ class Registry:
         return (session is not None and session is not self
                 and session._p.get(p.id) is p)
 
+    def lands(self, p: Param) -> bool:
+        """Does this deck land `p`? All its own, and the session's only when
+        it is the session's lead (`apply`). Plan 44 D4: a row of a deck that
+        does not land its target is dormant (`Router.modulate`)."""
+        session = self.session
+        return (session is None or session is self or session.lead is self
+                or not self._owned_by_session(p))
+
     def apply(self) -> None:
         """Once per frame, after every source has called modulate(): base +
         offsets onto every modulated param, in registry order — but for
@@ -926,9 +934,11 @@ class Registry:
         every deck, and an apply consumes its frame's offsets — so only the
         session's **lead** deck (`SessionRegistry.lead`, the first that
         follows it) lands the session's params; every other deck's apply
-        leaves them alone, its router's offsets riding into the lead's
-        next apply (a frame late for a deck that runs after the lead —
-        D4's order to settle), never releasing what another deck holds."""
+        leaves them alone, never releasing what another deck holds. Plan 44
+        D4 (row 625): only the lead's rows act on a session param
+        (`Router.modulate`: another deck's are dormant), so its offsets land
+        in the frame of its pass, and `app.frame` runs the lead first, so
+        another deck reads this frame's session values."""
         # over a copy: a modulated trigger may add or remove params
         # (a band layout change) while we are still walking the table.
         # `nonfinite`: the params that dropped a NaN / inf this frame (the

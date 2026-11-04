@@ -7533,6 +7533,48 @@ plan 50 copied back from the backup into `patches/`)
 preset and an **Update patch** write `patch/2`. Fail: "is not a
 hyperspace.patch".
 
+## BN. Deck 2 offscreen and the one fade (plan 44 D4)
+Register rows 648–653, 2026-11-03. Headless and on GL:
+`tests/test_deck_fade.py` (deck 2 at `xfade` 1 equals deck 1 on the same
+preset byte for byte over the corpus, half white over black within one step,
+a raise in deck 2 costing the on-air deck nothing) and `tests/test_deck.py`.
+Deck 2 is empty in this build, so every fade here goes to **black**; that is
+the test. Learning a fader adds a row to `bindings.json`: clear it after 493.
+**489. Nothing changes at 0.** (the rig, a heavy preset)
+1. Launch, load `party-trip`, leave it a minute.
+2. Open SYSTEM, the GPU lines.
+*Pass:* (1) the picture and frame rate as on the last build. (2) the usual
+block, then "deck 2: off air, draws nothing". Fail: a stall, a changed picture,
+or anything else of deck 2 on any page.
+**490. A learned fader fades, under the dim.** (the APC40 on)
+1. Learn `output.xfade` onto a free fader (the crossfader stays the dim).
+2. Raise it slowly to the top and back.
+3. At half, pull the crossfader down.
+*Pass:* (2) the picture goes smoothly to black and back, with no step at either
+end; SYSTEM shows "deck 2 gpu per node" while it is up. (3) the dim still dims
+the half-faded picture to black. Fail: a jump, or the crossfader moving the fade.
+**491. Every output fades together, and the sound stays.** (the rig's two
+outputs and a Syphon or NDI publish, a preset with a clip with sound on a
+channel and a live feed on another)
+1. Raise the fade to half.
+*Pass:* both windows and the receiver show the same half-faded picture, the
+flips and each window's own dim as before; the clip's sound does not change
+through the fade; the Syphon feed does not stutter. Fail: one output unfaded,
+or the sound dipping.
+**492. The dream goes quiet, and comes back.** (`[dream] enabled`, a preset
+with the dream on)
+1. Raise the fade a little, for ten seconds.
+2. Bring it back to 0.
+*Pass:* (1) deck 1's dream holds still under the fade, no crash, and SYSTEM's
+dream line stops counting steps. (2) the dream starts afresh within a second
+and deepens as after a launch. Fail: the dream frozen after 0.
+**493. No file moved.** (after 489–492, `git`-free: Finder's dates)
+1. Quit, note the dates on the show, the presets and `bindings.json`.
+2. Launch and quit without touching anything.
+*Pass:* no date moves but `windows.json`'s; the fade is back at 0 at launch;
+the fader's row is the only change 490 made to `bindings.json`. Fail: a preset
+or the show rewritten.
+
 ## What no test covers
 
 Only a person can settle these:
