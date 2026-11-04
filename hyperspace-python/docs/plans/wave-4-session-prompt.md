@@ -69,7 +69,75 @@ updated):
 - The consequences to build: a preset format move (see NM0), and re-pointing a
   controller is an edit of the preset.
 
-Merge authority and the merge gates (Q1, Q2) wait until these are settled.
+**The meta controller, second round.** "The meta controller" is the owner's name
+for what the code calls the session (`SessionRegistry`, `SessionTable`): what is
+tuned to facilitate a performance and should not be actively modified during one.
+- **The analyzer's tuning and the hands' shaping are the meta controller's.** The
+  music in a room has low variance across a show, so no preset retunes the analyzer.
+  **Q7 is answered: `band.*` stays.** What plugs into the analyzer is the preset's:
+  it is a fixture on the graph every preset may wire from. The code already has this
+  shape (`graphview` draws one `analyzer` node; routes are the preset's).
+- **"Band" is a bad name.** It becomes the analyzer, in words first (AZ). The ids
+  are a format move and ride with NM0 and NSEW, or stay.
+- **Undo: one stack per deck slot, scoped to its preset, and one for the meta
+  controller.** Replaces DQ2. `Undo` already takes one registry and one table, so the
+  fifth is an `Undo` over the `SessionRegistry` and `SessionTable`, and a deck's stack
+  watches `part_of == "performance"` only. Two things to settle in D5b: U1 and U2 below.
+
+**Players.** Controllers are generic; the actors are named: player 1, 2, 3, 4.
+- People hold a controller for a long time across presets. The performer on air stays
+  the performer when another preset goes on air; a second controller is assumed to be
+  for an off-air deck, and may point at a node or param on air by choice.
+- **One controller points at one preset at a time.** Mapping on another deck moves it
+  there. So **NM3 is answered**: the decks cannot both hold it.
+- **NM1 is answered:** editing a controller's mapping is an edit to the preset.
+- **NM2 is answered:** a pad remapped between presets is how it is supposed to work.
+- A preset names a **player**, not a device. Plan 27's roles (`axis@p2`, "roles, not
+  serials") are the seam. Today's bare `pad:` and `axis:` rows read as player 1, with
+  no file change. See PL.
+
+**Pending from this round:**
+- **Q8.** A player's deck across a TAKE. Rec: a player follows a duty, not a slot:
+  "on air" stays on air through a swap, "off air" moves to the deck off air.
+- **U1.** Which stack ⌘Z takes. Rec: by where you are. The panel's slot, except inside
+  a meta section (analyzer, hands, output), which takes the meta stack. Not newest of
+  all stacks: a ⌘Z meant for a knob on B must not undo an analyzer tweak from an hour ago.
+- **U2.** What "scoped to its preset" does at a load. Rec: a load is a step on the
+  slot's stack, as today, so ⌘Z recovers a mistaken load. A swap leaves each stack with
+  its slot.
+- **Q9.** Routes onto the meta controller. Today a preset may route onto `master.gain`
+  (TUMBLE does; D4 lets only the lead deck land it). Under "we don't want to automate
+  them", should a route onto a meta param be refused? Rec: leave existing rows running,
+  and stop offering them in the picker, until a library count says what breaks.
+
+Merge authority and the merge gates (Q1, Q2) are still open.
+
+## The schedule
+
+A wave is a dependency level. Width is limited by what freezes, not by builders. Wave
+3's run shows about a day for nine PRs at this review depth, so the limit is the
+owner's hand checks and show dates, not build time.
+
+| Stage | Serial spine | In parallel | Merges when |
+| --- | --- | --- | --- |
+| 0 | Owner: Q1, Q2, Q8, Q9, U1, U2, DQ1, DQ3–DQ8, NQ2, NQ4–NQ8 | #363; #365 when its pad charges | now |
+| 1 | **D5a** pointers, with one deck pointer per player | B2, AZ, PC, NSEW design | green |
+| 2 | **D5b** per-slot and meta undo → **PL** players | NSEW build | green |
+| 3 | **D5c** copy, swap, take | NM0 (saved node mode, needs PL); the format lane | green |
+| 4 | **D5d** controls, `hold.py` gone | none on `ui_graph.py`, `preset.py`, chase lines | checks 489–492, between shows |
+| 5 | **N1a + N1b**, stacked | D5e; D6a; #287 | N1: checks 506–509 |
+| 6 | **N2a + N2b** | D6b | green |
+| 7 | | PC words pass, row 668 if wanted | green |
+
+- **The spine is serial on purpose.** D5a–D5d freeze `deck.py`, `app.frame` and the
+  handles, then `ui_graph.py` and `preset.py`. Everything else stays off them.
+- **One format lane, one migration.** NSEW, NM0 and any `band` id rename all touch saved
+  files. Build them apart, land them as one bump with one backup, between shows, both
+  Macs together. Two bumps in a week is what the rule warns against.
+- **Players go before node mode and after undo:** NM0 saves player names, and D5a's
+  pointer is built for them, so nothing is written twice.
+- **Peak width is about four builders** (stage 5), against eight in wave 3. Stage 1's
+  side lane can start the moment the answers land; it depends on no deck work.
 
 ## What changed against the build order
 
@@ -101,8 +169,10 @@ Merge authority and the merge gates (Q1, Q2) wait until these are settled.
 | D5e | Deck indicator, ROUTING's dormant words, desk diagram, SYSTEM | UI | S | D5d, DQ7 | UI only |
 | D6a | `playlist.py`, its file kind, `tick` over stand-ins | Library | M | D5d, DQ5 | no behaviour yet |
 | D6b | Triggers, the frame hook, a pane section, the warm draw | Library | S–M | D6a | |
-| NM0 | The saved node mode: controller by role, node, page in the preset, the cable kind and its colour; a format move with its migration if the build shows it needs one | Format | M | D5a, NM1–NM3 | format |
-| N1a, N1b | APC: the rows from the saved state, per controller and per deck; then the drawing | Core + UI | M + M | NM0, D5d, NQ2, NQ4; **merge gate: checks 506–509** | no |
+| PL | Players 1–4: a player names a device on this Mac, holds one deck pointer and a duty; bare rows read as player 1; plan 55 | Core | M | D5b, Q8 | yes while one deck is pointed at |
+| AZ | "Band" becomes the analyzer in the panel's words | UI | S | nothing | words only |
+| NM0 | The saved node mode: player, node, page in the preset, the cable kind and its colour; in the format lane | Format | M | PL | format |
+| N1a, N1b | APC: the rows from the saved state, per player and per deck; then the drawing | Core + UI | M + M | NM0, D5d, NQ2, NQ4; **merge gate: checks 506–509** | no |
 | N2a, N2b | Pad: rows in the Router, steer off; pad page keys, pad window, drawing | Core + UI | M + M | N1a, #365, NQ5–NQ7 | no |
 | B2 | Factory `pad:LP` row for `deck.chase` | Core | XS | NQ8; can go first | no |
 | NSEW | North / south / east / west, with its migration | Controllers | M | #365, rows 546 and 552 | format move |
@@ -134,17 +204,14 @@ Details are in the two plan documents.
   §2), calling out 669, 668, 641. Rec ask once. Only 653 and 609 gate this wave.
 - **Q6.** Merge #363 (the CI flags, green, one file). Close #342 once #365 lands,
   keeping `tools/poi_probe.py`.
-- **Q7.** Do the 78 `band.*` knobs move into the preset? They change how hard a look
-  answers the music, which favours the preset; but the analyzer is one and shared, so
-  two decks with different tuning need a band stage per deck. Hands shaping is how a
-  sensor reads one person in one room, so it stays the rig's. Rec: decide before D5b,
-  since moving them is a format move and changes what the decks share.
+- **Q7.** ~~Do the `band.*` knobs move into the preset?~~ **Answered:** no; the
+  analyzer's tuning and the hands' shaping are the meta controller's.
 
 **D5 and D6** (`44-decks-d5-d6-reading.md` §6):
 | | Question | Rec |
 | --- | --- | --- |
 | DQ1 | What does DROP leave? | Panel back on the on-air deck, hold off, B parked |
-| DQ2 | Whose undo holds a session param? | Only the panel's deck's stack |
+| DQ2 | ~~Whose undo holds a session param?~~ **Answered:** the meta controller's own stack | |
 | DQ3 | `output.xfade` moved by hand; with nothing armed | A fader to 1 completes the take; un-held it reads 0 and says why |
 | DQ4 | A `turn` row off air | Dormant; row 684 reverses |
 | DQ5 | The playlist under hold; on unsaved edits; dwell; where it lives | Pauses and says so; pauses on the dot; seconds; `playlists/`, two decks |
@@ -159,9 +226,9 @@ Details are in the two plan documents.
 | NQ2 | APC keys (the desk is Dillon's; he signs) | SEND C latches, ◀ ▶ flip, sixteen knobs |
 | NQ3 | ~~Temporary cables?~~ **Answered:** a saved cable kind of its own colour | |
 | NQ4 | In node mode with nothing to point at | The desk returns to its layers |
-| NM1 | Does re-pointing a controller light the dirty dot? It is now an edit of the preset, and the playlist pauses on the dot (DQ5) | Yes, it lights the dot; the playlist pauses only for the deck on air |
-| NM2 | A preset goes on air saying "pad → wobble": does it take that pad from whoever holds it, and from camera steer? | Yes, as the file says, and the pad window says so at once; a controller the rig lacks stays dormant and drawn |
-| NM3 | Both decks' presets claim one controller | It answers one deck at a time: the last choice wins, and the other deck draws its cable dormant |
+| NM1 | ~~Re-pointing lights the dot?~~ **Answered:** yes, it is an edit of the preset | |
+| NM2 | ~~A preset takes a pad?~~ **Answered:** remapping between presets is how it works | |
+| NM3 | ~~Both decks claim one?~~ **Answered:** one preset at a time; mapping elsewhere moves it. A cable naming a player who is on another deck is drawn dormant | |
 | NQ5 | A stick on the page | Push: the look comes back on release; chase keeps it |
 | NQ6 | Axes a saved route already reads | Free axes only |
 | NQ7 | The pad's latch, with no free button | A chip per controller, learnable; factory `pad:RP` only |
@@ -174,7 +241,7 @@ deck.
 
 ## Numbers
 
-Plans through 53; 54 is free for NSEW. Register rows through 685 plus #365's
+Plans through 53; 54 is free for NSEW, 55 for players. Register rows through 685 plus #365's
 686–687; hand checks through 519 plus #365's 520–521; groups through BV plus
 BW. Pre-assign (unused ones are fine; do not reuse 602–604 or 633–635):
 
@@ -194,6 +261,8 @@ BW. Pre-assign (unused ones are fine; do not reuse 602–604 or 633–635):
 | NSEW | 725–728 | 556–558 | CI |
 | #287 | 729–730 | 559–560 | CJ |
 | PC | 731–732 | 561–562 | CK |
+| PL | 733–736 | 563–565 | CL |
+| AZ | 737–738 | 566–567 | CM |
 
 ## Lessons from wave 3
 
