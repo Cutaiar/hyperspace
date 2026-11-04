@@ -186,22 +186,26 @@ What changed in the build:
   `Landing.replacing` is what of `taken` it may replace, and `Landing.refusal`
   no longer counts it. `ui_graph.spawn` puts up the sheet for it, with or without
   a control in question, and `ui_routing._sheet` draws the row, what the host's
-  loses (`Landing.loses`, from `Edit.replace_words`, the leaf having no registry)
+  loses and what stays (`Landing.loses`, `keeps`, from `Edit.replace_said`, the leaf having no registry)
   and **Replace and spawn**. The answer travels in `choices` under
   `patches.replace_key`, and `Edit.spawn` refuses a replace nobody answered. No
   two-way row: Cancel is what keeps the preset's. The conflict sheet lives in
   `ui_routing.py`, not `ui_graph.py`.
 - **What goes and stays** (row 662). `graphview._take_out`, now shared with
   `render_drop`, takes the entry and the wires; D2 stands, so the new dream's
-  pins are open; values are the patch's over the group's fresh ones; rows on its
-  params stay; a host group lets the node and its open pins go.
+  pins are open; values are the patch's over fresh, by what the node owns; a
+  macro's base subscribers on them let go, since one would overwrite them at the
+  next re-landing; routes, desk rows and depth subscribers stay; a host group lets
+  the node and its open pins go. A sheet whose preset changed under it refuses
+  (`Landing.asked`, `SPAWN_STALE`): the modal stops the panel, not a bank press.
 - **The door.** Adding a kind to `REPLACEABLE` is the whole of the sheet's
   change; which kind should go next is the owner's.
-- **Whose params** (row 663). `graphview.OWNERS["dream"]` is `_dream_owner`, the
-  split `patches._param_rows` already had; `ui_graph.node_params` agrees
-  (`owned_by`). `ui_lookback.py` needed no change: `SECTIONS` was already the
+- **Whose params** (row 663). `patches.dream_owner`, over `lookback.is_lookback_key`,
+  is asked by `graphview.OWNERS["dream"]` and `ui_graph.node_params`, and is the
+  split `patches._param_rows` already had. `ui_lookback.py` needed no change: `SECTIONS` was already the
   split, now tested to be.
-- **The edges** (row 664). A splice onto the replaced dream's own cable is refused;
+- **The edges** (row 664). A splice onto the replaced dream's own cable is refused,
+  and the drag's hover does not light it;
   the dream buffer is not cleared (`render.py` untouched).
 
 Tests: `tests/test_patches_replace_dream.py` (new); P1's tests that named the

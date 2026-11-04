@@ -105,7 +105,7 @@ def test_save_still_refuses_the_camera_and_a_lane_envelope_in_words():
 # ---------------------------------------------------------------- whose params
 
 def test_the_leaf_and_params_share_the_look_backs_keys():
-    assert patches.LOOKBACK_KEYS is params.LOOKBACK_KEYS
+    assert patches.is_lookback_key is params.is_lookback_key
 
 
 def test_a_frame_kinds_params_are_the_canvas_owners(tmp_path):

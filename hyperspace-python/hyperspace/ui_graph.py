@@ -1015,9 +1015,10 @@ def node_params(panel, nid: str) -> list[str]:
     of = getattr(n.ref, "effect", "") if n is not None and graphview.kind_of(name) == "copy" else ""
     pre = graphview.params_of(name, of)
     head = pre + "."
-    # (wave 3 P2: `dream.*` is a look-back's and the dream's, by key)
+    # (wave 3 P2: `dream.*` is a look-back's and the dream's, by key; no other
+    # node's prefix starts so)
     ids = [p.id for p in reg if not p.alias and (p.id == pre or p.id.startswith(head))
-           and graphview.owned_by(name, p.id)]
+           and (not p.id.startswith("dream.") or patches.dream_owner(p.id) == name)]
     return sorted(ids, key=lambda pid: reg[pid].kind is not Kind.CONTINUOUS)
 
 
@@ -2424,7 +2425,8 @@ def patch_list(panel) -> list[dict]:
             continue
         out.append({"name": name, "slug": path.name[:-5], "note": str(doc.get("note") or ""),
                     "words": graphview.patch_words(doc, _glyph(panel)),
-                    "ports": tuple(patches.read(doc).ports)})
+                    "ports": tuple(patches.read(doc).ports),
+                    "replaces": patches.replaceable(patches.read(doc).members.render)})
     st["patch_list"] = (listed, key, out)
     return out
 
@@ -2502,7 +2504,10 @@ def spawn(panel, slug: str, at=None, splice=None) -> str | None:
     if not landing.conflicts and not replacing:
         return land_spawn(panel, landing, {}, splice)
     name = landing.group.get("name") or stem
-    landing = dataclasses.replace(landing, loses=tuple(e.replace_words(landing)))
+    if replacing:
+        loses, keeps = e.replace_said(landing)
+        landing = dataclasses.replace(landing, loses=tuple(loses), keeps=tuple(keeps),
+                                      asked=e._asked(replacing))
 
     def cancelled() -> None:
         _note(st, None)
@@ -2518,8 +2523,9 @@ def spawn(panel, slug: str, at=None, splice=None) -> str | None:
         lrn.hold(True)                      # the hands learn nothing while it asks
     k = len(landing.conflicts)
     _note(st, None)
-    st["said"] = (SHEET_REPLACES.format(nodes=", ".join(replacing)) if replacing
-                  else SHEET_UP.format(n=k, s="" if k == 1 else "s"))
+    st["said"] = " · ".join(
+        [*([SHEET_REPLACES.format(nodes=", ".join(replacing))] if replacing else []),
+         *([SHEET_UP.format(n=k, s="" if k == 1 else "s")] if k else [])])
     return None
 
 
@@ -2671,7 +2677,11 @@ def _drop_target(panel, st: dict, view: graphview.View) -> None:
     row = next((r for r in patch_list(panel) if r["slug"] == slug), None)
     if row is None:
         return
-    why = graphview.splice_target(render_edit(panel), c, row["name"], row["ports"])
+    e = render_edit(panel)
+    # (wave 3 P2) as the drop will judge it: a cable of the dream it would replace
+    have = patches.spec_names(getattr(e.graph, "spec", None))
+    why = graphview.splice_target(e, c, row["name"], row["ports"],
+                                  [n for n in row.get("replaces", ()) if n in have])
     if why is None:
         st["drop_cable"] = c.id
     else:

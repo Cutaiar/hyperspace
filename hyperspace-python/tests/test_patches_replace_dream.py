@@ -108,7 +108,7 @@ def test_one_press_replaces_the_hosts_dream_as_one_undo_step(rig):  # noqa: F811
                                     "dream → composite.over")
         assert any("setting" in line for line in landing.loses)
         said = ui_graph._state(rig.panel)["said"]
-        assert said == ui_graph.SHEET_REPLACES.format(nodes="dream")
+        assert said.startswith(ui_graph.SHEET_REPLACES.format(nodes="dream"))
         frame(rig.panel)
         assert ui_routing._state(rig.panel)["sheet"]
 
@@ -173,6 +173,137 @@ def test_keep_all_existing_does_not_answer_the_dream(rig):  # noqa: F811
     assert ("dream", "composite.over") not in wires(rig)
 
 
+def macro_on_mix(rig):  # noqa: F811
+    """A base subscriber of macro.1 on `dream.mix`, its range high."""
+    table = rig.router.table
+    doc = table.macros_doc()
+    doc["macro.1"] = {"label": "", "subs": [{"base": "dream.mix", "from": 0.8, "to": 1.0}]}
+    assert table.set_macros(doc, rig.reg) == []
+    rig.router.follow_macros()
+
+
+def test_a_macros_hold_on_a_replaced_param_goes_and_the_sheet_says_so(rig):  # noqa: F811
+    """A base subscriber re-lands at the next `follow_macros` after a
+    `set_macros`, so left in place it overwrites the patch's value: it lets go,
+    under what the dream loses, and an undo puts it back."""
+    on_graph(rig, "party-wake")
+    slug = dreamy(rig, **{"dream.mix": 0.2})
+    macro_on_mix(rig)
+    u = watch(rig)
+    try:
+        landing, _ = sheet_up(rig, slug)
+        assert any(line.startswith("macro.1's hold on") for line in landing.loses)
+        assert ui_routing.settle_sheet(rig.panel, True) is None
+        table = rig.router.table
+        assert not [s for s in table.macros["macro.1"].subs if s.base == "dream.mix"]
+        rig.reg["macro.1"].set_value(1.0)
+        rig.router.follow_macros()
+        rig.router.follow_macros(force=True)
+        assert rig.reg["dream.mix"].base == pytest.approx(0.2)
+        u.undo()
+        assert [s.base for s in rig.router.table.macros["macro.1"].subs] == ["dream.mix"]
+    finally:
+        undo.install(None)
+
+
+def test_a_macro_on_anything_else_keeps_its_hold(rig):  # noqa: F811
+    on_graph(rig, "party-wake")
+    slug = dreamy(rig)
+    table = rig.router.table
+    doc = table.macros_doc()
+    doc["macro.1"] = {"label": "", "subs": [{"base": "dream.fade", "from": 0.1, "to": 0.9}]}
+    assert table.set_macros(doc, rig.reg) == []
+    sheet_up(rig, slug)
+    assert ui_routing.settle_sheet(rig.panel, True) is None
+    assert [s.base for s in table.macros["macro.1"].subs] == ["dream.fade"]
+
+
+def test_the_sheet_is_stale_when_another_preset_loads_under_it(rig):  # noqa: F811
+    """The modal stops the panel, not a pad or a bank press: what it said was
+    A's. Nothing of B is taken."""
+    on_graph(rig, "party-wake")
+    slug = dreamy(rig)
+    landing, choices = sheet_up(rig, slug)
+    assert landing.asked
+    rig.lib.load("presets", "party-wake")
+    before = state(rig)
+    e = ui_graph.group_edit(rig.panel)
+    name = landing.group["name"]
+    assert e.spawn(landing, choices) == graphview.SPAWN_STALE.format(name=name)
+    assert state(rig) == before
+    rig.panel.spawn_question = None
+
+
+def test_the_sheet_stands_while_a_frame_passes_and_a_knob_turns(rig):  # noqa: F811
+    on_graph(rig, "party-wake")
+    slug = dreamy(rig)
+    sheet_up(rig, slug)
+    frame(rig.panel)
+    rig.reg["dream.mix"].set_value(0.123)
+    frame(rig.panel)
+    assert ui_routing.settle_sheet(rig.panel, True) is None
+
+
+def test_the_sheet_is_stale_when_a_wire_of_the_dream_moves_under_it(rig):  # noqa: F811
+    on_graph(rig, "party-wake")
+    slug = dreamy(rig)
+    landing, choices = sheet_up(rig, slug)
+    e = ui_graph.group_edit(rig.panel)
+    assert graphview.render_add(e, "effect", "acid") is None     # any landing: a new section
+    name = landing.group["name"]
+    assert e.spawn(landing, choices) == graphview.SPAWN_STALE.format(name=name)
+    rig.panel.spawn_question = None
+
+
+def test_the_replaced_values_read_what_the_node_owns_for_any_kind(rig):  # noqa: F811
+    """The door for the other kinds: a shape's fresh values are by what it
+    owns (`rot.*`, most of `view.*`), not a group of its name."""
+    on_graph(rig, "party-wake")
+    e = ui_graph.group_edit(rig.panel)
+    got = e._replaced_values({}, ("shape",))
+    assert "view.bright" in got and "view.pattern" not in got
+    assert any(k.startswith("rot.") for k in got) or not any(
+        p.id.startswith("rot.") and p.persist for p in rig.reg)
+    assert all(patches.node_members(("shape",)).owns(k) for k in got)
+
+
+def test_the_head_says_both_when_a_replace_and_controls_are_asked(rig):  # noqa: F811
+    on_graph(rig, "party-wake")
+    slug = dreamy(rig)
+    landing, _ = sheet_up(rig, slug)
+    assert landing.conflicts
+    said = ui_graph._state(rig.panel)["said"]
+    assert ui_graph.SHEET_REPLACES.format(nodes="dream") in said
+    assert "the preset already uses" in said
+
+
+def test_the_drag_does_not_light_the_replaced_dreams_own_cable(rig, monkeypatch):  # noqa: F811
+    """The hover judges as the drop does: the dream's own cable says why, a
+    cable elsewhere lights."""
+    on_graph(rig, "party-wake")
+    slug = put(rig, cut("alone", ["render:dream"]))
+    row = next(r for r in ui_graph.patch_list(rig.panel) if r["slug"] == slug)
+    assert row["replaces"] == ("dream",)
+    st = ui_graph._state(rig.panel)
+    view = st["view"]
+    st["patch_drag"] = slug
+    monkeypatch.setattr(ui_graph.ed, "suspend", lambda: None)
+    monkeypatch.setattr(ui_graph.ed, "resume", lambda: None)
+    monkeypatch.setattr(ui_graph.ui, "tooltip", lambda *_: None)
+    def near(ends):
+        c = next(c for c in view.cables if c.kind == "render" and (c.ref.src, c.ref.dst) == ends)
+        monkeypatch.setattr(graphview, "cable_near", lambda *a, **k: c)
+        return c
+    near(("dream", "composite.over"))
+    ui_graph._drop_target(rig.panel, st, view)
+    assert st["drop_cable"] is None
+    assert st["drop_why"] == graphview.SPLICE_REPLACED.format(name="alone", node="dream")
+    c = near(("composite", "output.all.image"))
+    ui_graph._drop_target(rig.panel, st, view)
+    assert st["drop_cable"] == c.id
+    st["patch_drag"] = None
+
+
 def test_rows_on_the_hosts_dream_stay_and_are_said(rig):  # noqa: F811
     on_graph(rig, "party-wake")
     doc = cut("clean")
@@ -183,7 +314,8 @@ def test_rows_on_the_hosts_dream_stay_and_are_said(rig):  # noqa: F811
     assert onto
     landing, _ = sheet_up(rig, slug)
     assert not landing.conflicts
-    assert any("stay, and drive the patch's dream" in line for line in landing.loses)
+    assert any("stay, and drive the patch's dream" in line for line in landing.keeps)
+    assert not any("stay" in line for line in landing.loses)
     assert ui_routing.settle_sheet(rig.panel, True) is None
     left = [b for b in (*table.routes(), *table.desk()) if b.target == "dream.mix"]
     assert [b.source for b in left] == [b.source for b in onto]
@@ -388,4 +520,4 @@ def test_a_landing_from_before_a_hot_reload_still_refuses_or_lands(rig):  # noqa
     on_graph(rig, "party-noita")
     e = ui_graph.group_edit(rig.panel)
     old = SimpleNamespace(group={"nodes": []}, modifiers=(), lfos=(), envs=())
-    assert e._spawn_refusal(old) is None and e.replace_words(old) == []
+    assert e._spawn_refusal(old) is None and e.replace_said(old) == ([], [])

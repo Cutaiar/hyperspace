@@ -83,6 +83,7 @@ from .lookback import (
     RES,
     TINT_FROM,
     DreamState,
+    is_lookback_key,
 )
 from .media import channels as media_channels
 from .media.transport import LOOPS as MEDIA_LOOPS
@@ -1742,7 +1743,7 @@ def is_lookback_knob(pid: str) -> bool:
     `dream.<key>` or `dream.<n>.<key>` for a key of `LOOKBACK_KEYS` — not the
     dream node's own (plan 36 T4: `dream.on` gates the dream's alone)."""
     parts = pid.split(".")
-    return parts[0] == "dream" and len(parts) >= 2 and parts[-1] in LOOKBACK_KEYS
+    return parts[0] == "dream" and len(parts) >= 2 and is_lookback_key(parts[-1])
 
 
 def lookback_ids(name: str) -> list[str]:

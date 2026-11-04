@@ -7599,14 +7599,21 @@ head says so, ⌘Z has nothing new. (3) one `dream` on the canvas, in the new
 group; the head says what it replaced; the trail stops feeding it until (4), and
 what the old dream had painted fades at the new one's speed, without a flash
 (by eye). (5) one ⌘Z for the whole of (3): wires, values, the old dream's place.
-(6) refused on the head: "that cable is the dream it would replace". Fail:
+(6) the cable does not light, and its hover and the head say "that cable is the
+dream it would replace". Then spawn again and, with the sheet up, press a bank
+pad to load another preset, and press **Replace and spawn**: refused, "the preset
+changed while the sheet was up", that preset's dream as it was. Fail:
 `dream.2`, a look-back knob moved by (3), or a wire no cable draws.
 **501. What stays.** (either Mac)
 1. On `party-wake`, with a knob on `Dream brightness` and a hand on `Dream hue`,
    spawn a `dream wash` saved with no rows, replacing the dream.
 2. Turn the knob; move the hand.
+2a. On another preset, wire a macro to `Dream brightness`, then replace the dream
+   again, and turn that macro.
 3. Group `dream` and one other node, then spawn `dream wash` again, replacing it.
-*Pass:* (1) the sheet says those rows stay. (2) they drive the new dream. (3) the
+*Pass:* (1) the sheet says those rows stay, under what stays. (2) they drive the
+new dream. (2a) the sheet says the macro's hold goes, under what the dream loses;
+turning it leaves `Dream brightness` at the patch's value; ⌘Z puts the macro back. (3) the
 sheet says its place in that group goes; the group keeps the other node and has
 no open pin left on the dream. Fail: a row gone quiet, or an open pin that wires
 into the new dream from the old group.

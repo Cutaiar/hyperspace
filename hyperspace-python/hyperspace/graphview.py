@@ -128,7 +128,7 @@ from . import learn as learnmod
 from . import modifiers as modmod
 from . import sequencer as seqmod
 from .devices import SCHEME_ROLE  # plan 40 T4: the table lives in devices; read here
-from .params import PERFORMANCE_GROUPS, Kind, Param, Registry, is_lookback_knob
+from .params import PERFORMANCE_GROUPS, Kind, Param, Registry
 from .routing import (
     MOD_OPS,
     SAVE_PARAM,
@@ -395,19 +395,8 @@ def _view_owner(pid: str, ctx: _Ctx) -> str | None:
 
 
 def _dream_owner(pid: str, ctx: _Ctx | None) -> str | None:
-    # wave 3 P2: `dream.*` split by key, `patches._param_rows`' rule: a
-    # look-back's knobs on its node (`dream.2.fade` on `lookback.2`), the rest
-    # on the dream's. Params keep their ids, so no saved value moves
-    if not is_lookback_knob(pid):
-        return "dream"
-    n = pid.split(".")[1:-1]
-    return f"{rgraph.LOOKBACK}.{n[0]}" if n else rgraph.LOOKBACK
-
-
-def owned_by(name: str, pid: str) -> bool:
-    """Is `dream.*` param `pid` node `name`'s, of the nodes `params_of` gives
-    one prefix (a look-back and the dream)? True for any other node."""
-    return kind_of(name) not in (rgraph.LOOKBACK, "dream") or _dream_owner(pid, None) == name
+    # wave 3 P2: `patches.dream_owner`. Params keep their ids: no saved value moves
+    return patches.dream_owner(pid)
 
 
 def _switch_owner(pid: str, ctx: _Ctx) -> str | None:
@@ -1040,6 +1029,9 @@ def label_of(name: str, slots=(), *, of: str = "") -> str:
     return name
 
 
+DREAM_SHARE = "(its own knobs)"
+
+
 def params_of(name: str, of: str = "") -> str:
     """The prefix node `name`'s params are found by (V2: `graph.
     param_prefix` — params keep their ids); a copy's knobs are its
@@ -1052,26 +1044,34 @@ def params_of(name: str, of: str = "") -> str:
     return rgraph.param_prefix(name)
 
 
+def _params_said(name: str, of: str = "") -> str:
+    """A node's params' prefix for its hover and side head, where it differs
+    from its id; `dream.*`, split between the look-back and the dream (wave 3
+    P2), says each has only its share of it."""
+    pre = params_of(name, of)
+    if pre == "dream":
+        return f" · params dream.* {DREAM_SHARE}"
+    return "" if pre == name else f" · params {pre}.*"
+
+
 def hover_of(name: str, slots=(), *, of: str = "", tip: str = "") -> str:
     """Node `name`'s hover (V, `HOVERS`): what it is in one line (an
-    effect's own `@tip`, when its file has one), then its id and, where it
-    differs, its params' prefix — "… · id lookback · params dream.*", so
-    `dream.fade` under a node called Look-back reads why."""
+    effect's own `@tip`, when its file has one), then its id and its params'
+    prefix (`_params_said`) — "… · id lookback · params dream.* (its own
+    knobs)", so `dream.fade` under a node called Look-back reads why."""
     kind = kind_of(name)
     text = tip if kind == "effect" and tip else HOVERS.get(kind or "", "")
     out = f"{text} · id {name}" if text else f"id {name}"
-    pre = params_of(name, of)
-    return out if pre == name else f"{out} · params {pre}.*"
+    return out + _params_said(name, of)
 
 
 def side_head(n: VNode) -> str:
     """A frame node's side-panel header (V2): its title, its id and, where it
-    differs, its params' prefix — "Look-back · lookback · params dream.*"."""
+    differs, its params' prefix — "Look-back · lookback · params dream.* (its
+    own knobs)"."""
     name = n.id.partition(":")[2]
     of = getattr(n.ref, "effect", "") if kind_of(name) == "copy" else ""
-    pre = params_of(name, of)
-    head = f"{n.label} · {name}"
-    return head if pre == name else f"{head} · params {pre}.*"
+    return f"{n.label} · {name}" + _params_said(name, of)
 
 
 def _tip(reg, name: str) -> str:
@@ -3040,6 +3040,7 @@ SPAWN_STALE = "the preset changed while the sheet was up: spawn {name} again"
 LOSES_WIRES = "its wires: {wires}"
 LOSES_VALUES = "{n} setting{s}: {names}"
 LOSES_GROUP = "its place in {name}"
+LOSES_MACRO = "{mid}'s hold on {names}: a macro sets its params' values, so it lets go"
 ROWS_STAY = "{n} row{s} on its params stay, and drive the patch's {node}"
 REPLACED_SAID = "replaced this preset's {node}: {lost}"
 NOTHING_LOST = "nothing but its name"
@@ -4305,9 +4306,7 @@ class Edit:
                 continue
             said += [GROUP_MOVED.format(node=cid.removeprefix("render:"), other=g["name"])
                      for cid in gone]
-            g["nodes"] = [cid for cid in g["nodes"] if cid not in keep]
-            if not g["nodes"]:
-                groups.remove(g)
+            _drop_members(groups, g, set(keep))
         entry = self.land_group({"name": name, "nodes": keep})
         self.said = GROUPED.format(n=len(keep), s="" if len(keep) == 1 else "s",
                                    name=entry["name"])
@@ -4402,17 +4401,16 @@ class Edit:
         self._step(f"{todo[0][1]} leaves {hit[0]['name']}" if len(todo) == 1 else
                    f"{len(todo)} nodes leave {', '.join(g['name'] for g in hit)}")
         lay = getattr(self.presets, "layout", None)
-        for g, nid, at in todo:
-            g["nodes"] = [cid for cid in g["nodes"] if cid != nid]
+        for _g, nid, at in todo:
             if at is not None:
                 if lay is None:
                     lay = self.presets.layout = {}
                 lay[nid] = [round(float(at[0])), round(float(at[1]))]
         said = []
         for g in hit:
-            node = ", ".join(nid.removeprefix("render:") for gg, nid, _ in todo if gg is g)
-            if not g["nodes"]:
-                self._groups().remove(g)
+            nids = [nid for gg, nid, _ in todo if gg is g]
+            node = ", ".join(nid.removeprefix("render:") for nid in nids)
+            if _drop_members(self._groups(), g, set(nids)):
                 said.append(LEFT_EMPTY.format(node=node, name=g["name"]))
             else:
                 said.append(LEFT_GROUP.format(node=node, name=g["name"]))
@@ -4443,8 +4441,15 @@ class Edit:
         if why is not None:
             return why
         name = landing.group.get("name") or "the patch"
-        have = (patches.spec_names(getattr(self.graph, "spec", None))
-                - set(getattr(landing, "replacing", ())))
+        replacing = _replacing(landing)
+        # the sheet said what goes off the host as it stood, and a pad or a bank
+        # press may load another under the modal: its words are no longer true
+        asked = getattr(landing, "asked", ())
+        if replacing and asked:
+            now = self._asked(replacing)
+            if asked[0] is not now[0] or asked[1:] != now[1:]:   # (the very section)
+                return SPAWN_STALE.format(name=name)
+        have = patches.spec_names(getattr(self.graph, "spec", None)) - set(replacing)
         if any(c.startswith("render:") and c[7:] in have for c in landing.group.get("nodes", ())):
             return SPAWN_STALE.format(name=name)
         held = {m.id for m in getattr(self.table, "modifiers", ())}
@@ -4460,63 +4465,97 @@ class Edit:
                 return SPAWN_STALE.format(name=name)
         return None
 
-    def replace_words(self, landing) -> list[str]:
-        """What the host's node loses to `landing` (wave 3 P2), in words, for
-        the sheet and the head: its wires, the settings that will differ, its
-        place in a group; then what it does not lose, the rows on its params.
-        Reads only."""
-        names = set(getattr(landing, "replacing", ()))
-        if not names:
-            return []
-        out = []
+    def _asked(self, replacing: tuple[str, ...]) -> tuple:
+        """What a sheet's question rests on: the section it was read off (a
+        `GraphSpec` is frozen and every landing makes a new one, a load's too)
+        and the rows and groups that touch the nodes it would replace. Not
+        their values: a knob turned under the sheet stays the same question."""
+        gone = patches.node_members(replacing)
+        table = self.table
+        cids = {f"render:{n}" for n in replacing}
+        return (getattr(self.graph, "spec", None),
+                tuple(sorted((b.source, b.target) for b in (*table.routes(), *table.desk())
+                             if gone.owns(b.target))),
+                tuple(sorted((mid, str(s.base)) for mid, m in table.macros.items()
+                             for s in m.subs if s.base is not None and gone.owns(s.base))),
+                tuple(g.get("id") for g in self._groups() or ()
+                      if cids & set(g.get("nodes", ()))))
+
+    def replace_said(self, landing, after: Mapping[str, Any] | None = None
+                     ) -> tuple[list[str], list[str]]:
+        """What the host's node loses to `landing` (wave 3 P2) and what it keeps,
+        in words, for the sheet and the head: (its wires, the settings that will
+        differ, a macro's hold, its place in a group; the rows on its params).
+        `after`: `_replaced_values`, when the caller has it. Reads only."""
+        replacing = _replacing(landing)
+        if not replacing:
+            return [], []
+        names = set(replacing)
+        loses = []
         wires = [x for x in _doc(self).get("wires", []) if _touches(x, names)]
         if wires:
-            out.append(LOSES_WIRES.format(wires=", ".join(f"{x['from']} → {x['to']}"
-                                                          for x in wires)))
+            loses.append(LOSES_WIRES.format(wires=", ".join(f"{x['from']} → {x['to']}"
+                                                            for x in wires)))
         reg, gone = self.reg, patches.node_members(sorted(names))
-        after = self._replaced_values(landing)
+        if after is None:
+            after = self._replaced_values(landing.values, replacing)
         moved = [p.label or p.id for p in reg if p.id in after and p.base != after[p.id]]
         if moved:
             shown = ", ".join(moved[:3]) + (f" and {len(moved) - 3} more" if len(moved) > 3 else "")
-            out.append(LOSES_VALUES.format(n=len(moved), s="" if len(moved) == 1 else "s",
-                                           names=shown))
-        cids = {f"render:{n}" for n in names}
-        out += [LOSES_GROUP.format(name=g.get("name")) for g in self._groups() or ()
-                if cids & set(g.get("nodes", ()))]
+            loses.append(LOSES_VALUES.format(n=len(moved), s="" if len(moved) == 1 else "s",
+                                             names=shown))
         table = self.table
+        for mid, m in sorted(table.macros.items()):
+            held = [s.base for s in m.subs if s.base is not None and gone.owns(s.base)]
+            if held:
+                loses.append(LOSES_MACRO.format(mid=mid, names=", ".join(
+                    reg[b].label or b if b in reg else b for b in held)))
+        cids = {f"render:{n}" for n in names}
+        loses += [LOSES_GROUP.format(name=g.get("name")) for g in self._groups() or ()
+                  if cids & set(g.get("nodes", ()))]
         asked = {(c.host_row.get("source"), c.host_row.get("target")) for c in landing.conflicts}
         rows = sum(1 for b in (*table.routes(), *table.desk())
                    if gone.owns(b.target) and (b.source, b.target) not in asked)
         rows += sum(1 for m in table.macros.values() for s in m.subs
-                    if gone.owns(s.base if s.depth is None else s.depth[1]))
-        if rows:
-            out.append(ROWS_STAY.format(n=rows, s="" if rows == 1 else "s",
-                                        node=" and ".join(sorted(names))))
-        return out
+                    if s.depth is not None and gone.owns(s.depth[1]))
+        keeps = [ROWS_STAY.format(n=rows, s="" if rows == 1 else "s",
+                                  node=" and ".join(sorted(names)))] if rows else []
+        return loses, keeps
 
-    def _replaced_values(self, landing) -> dict[str, Any]:
-        """The values the replaced nodes' params take: the patch's over their
-        group's fresh values, as a patch of one group lands (`Library.resolved`),
-        so the node is the patch's whatever the file leaves out. {} for a
-        landing that replaces nothing."""
-        names = tuple(getattr(landing, "replacing", ()))
+    def _replaced_values(self, values: Mapping[str, Any], replacing: tuple[str, ...]
+                         ) -> dict[str, Any]:
+        """The values the replaced nodes' params take: `values` (the patch's)
+        over fresh, as a patch of one group lands (`Library.resolved`), so the
+        node is the patch's whatever the file leaves out. By what the nodes own
+        (`param_rows`), whichever groups that falls in: the shape's are `rot.*`,
+        most of `view.*` and `fx.face_map`."""
         lib = getattr(self.presets, "lib", None)
-        if not names or lib is None:
+        if not replacing or lib is None:
             return {}
-        gone = patches.node_members(names)
+        gone = patches.node_members(replacing)
         out: dict[str, Any] = {}
-        for name in names:
-            for k, v in lib.resolved(rgraph.param_prefix(name), {}).items():
-                if gone.owns(k):
-                    out[k] = v
-        out.update((k, v) for k, v in landing.values.items() if gone.owns(k))
+        for group in {pre.partition(".")[0] for pre, _who, _keys in gone.param_rows}:
+            out.update((k, v) for k, v in lib.resolved(group, {}).items() if gone.owns(k))
+        out.update((k, v) for k, v in values.items() if gone.owns(k))
         return out
 
-    def _leave_groups(self, names: Iterable[str]) -> None:
+    def _drop_replaced_macros(self, replacing: tuple[str, ...]) -> dict:
+        """The macros doc with no base subscriber on the replaced nodes' params:
+        a base subscriber sets its param's value at every re-landing
+        (`Router.follow_macros`, a `set_macros` the next frame), so it would
+        overwrite the values the patch just landed, in the same breath."""
+        gone = patches.node_members(replacing)
+        doc = self.table.macros_doc()
+        for m in doc.values():
+            m["subs"] = [s for s in m.get("subs") or ()
+                         if not (isinstance(s.get("base"), str) and gone.owns(s["base"]))]
+        return doc
+
+    def _replaced_leave_groups(self, replacing: tuple[str, ...]) -> None:
         """The replaced nodes off the groups that held them, each group's open
-        pins on them with them (an emptied group goes, as `group` does it): the
-        node that lands under their name is its spawn group's."""
-        names = set(names)
+        pins on them with them: the node that lands under their name is its
+        spawn group's."""
+        names = set(replacing)
         cids = {f"render:{n}" for n in names}
         groups = self._groups() or []
 
@@ -4525,13 +4564,10 @@ class Edit:
             return (rgraph.pin_node(at) or at) in names or at.rpartition(".")[0] in names
 
         for g in list(groups):
-            if not cids & set(g.get("nodes", ())):
-                continue
-            g["nodes"] = [c for c in g["nodes"] if c not in cids]
-            if "ports" in g:
-                g["ports"] = [p for p in g["ports"] if not on_them(p)]
-            if not g["nodes"]:
-                groups.remove(g)
+            if cids & set(g.get("nodes", ())):
+                if "ports" in g:
+                    g["ports"] = [p for p in g["ports"] if not on_them(p)]
+                _drop_members(groups, g, cids)
 
     def _land_quiet(self, doc: dict, label: str, said: str) -> str | None:
         """`_land` with no undo step of its own (the verb pushed one)."""
@@ -4569,15 +4605,18 @@ class Edit:
         Wave 3 P2: `landing.replacing`, answered by the sheet (`patches.
         replace_key` in `choices`) — the host's node goes first, as a delete
         takes it (its entry and every wire touching it), in this one step,
-        its values the patch's over fresh and its rows staying: the same id,
-        now the patch's node. `replace_words` said so before the press."""
+        its values the patch's over fresh, a macro's base subscribers on them
+        let go and its other rows staying: the same id, now the patch's node.
+        `replace_said` said so before the press, and the head says it again."""
         why = self._spawn_refusal(landing, choices)
         if why is not None:
             return why
         name = landing.group.get("name") or "patch"
         doc = _doc(self)
-        replacing = tuple(getattr(landing, "replacing", ()))
-        lost = self.replace_words(landing)
+        replacing = _replacing(landing)
+        after = self._replaced_values(landing.values, replacing)
+        lost, stay = (landing.loses, landing.keeps) if getattr(landing, "asked", ()) else (
+            self.replace_said(landing, after))
         gone = _take_out(doc, set(replacing))
         doc["nodes"] = [*doc.get("nodes", []), *copy.deepcopy(list(landing.nodes))]
         doc["wires"] = [*doc.get("wires", []), *copy.deepcopy(list(landing.wires))]
@@ -4623,21 +4662,21 @@ class Edit:
             if got is None or got.id != m.id:          # (the refusal above rules it out)
                 notes.append(f"{m.id} landed as {getattr(got, 'id', '?')}")
         lib = getattr(self.presets, "lib", None)
-        values = {**self._replaced_values(landing), **landing.values}
+        values = {**after, **landing.values}
         if values and lib is not None:
             missing = lib.restore(values)
             if missing:
                 notes.append(f"{len(missing)} value(s) for no param: " + ", ".join(missing[:4]))
         kept = self._spawn_rows(landing, choices or {}, notes)
-        if landing.macros:
-            notes += table.set_macros({**table.macros_doc(), **copy.deepcopy(landing.macros)},
-                                      reg)
+        macros = self._drop_replaced_macros(replacing) if replacing else table.macros_doc()
+        if landing.macros or macros != table.macros_doc():
+            notes += table.set_macros({**macros, **copy.deepcopy(landing.macros)}, reg)
         lay = getattr(self.presets, "layout", None)
         if lay is None:
             lay = self.presets.layout = {}
         for cid, xy in landing.layout.items():
             lay[cid] = [round(float(xy[0])), round(float(xy[1]))]
-        self._leave_groups(replacing)
+        self._replaced_leave_groups(replacing)
         entry = self.land_group({**landing.group, "kept_by_host": kept})
         if ends is None and landing.ports:
             entry["ports"] = copy.deepcopy([dict(p) for p in landing.ports])
@@ -4653,6 +4692,7 @@ class Edit:
         if replacing:
             said += " · " + REPLACED_SAID.format(node=" and ".join(replacing),
                                                  lost="; ".join(lost) or NOTHING_LOST)
+            said += "".join(f" · {line}" for line in stay)
         self.said = "; ".join([said, *notes])
         return None
 
@@ -6303,6 +6343,22 @@ def render_place(edit: Edit, cable, name: str, inlet: str | None = None) -> str 
     _onto(doc, s, d, nm, inlet)
     return _land(edit, doc, f"move {nm} onto {s} → {d}",
                  _said_onto(doc, nm, s, d, inlet, lost, moved=True))
+
+
+def _replacing(landing) -> tuple[str, ...]:
+    """`Landing.replacing`; () from a `Landing` of the class before a hot reload
+    (a sheet held open across one)."""
+    return tuple(getattr(landing, "replacing", ()))
+
+
+def _drop_members(groups: list[dict], g: dict, cids: set[str]) -> bool:
+    """Canvas ids `cids` off group `g`; a group emptied goes. Returns whether it
+    went (`Edit.group`, `leave_groups`, a replace)."""
+    g["nodes"] = [cid for cid in g["nodes"] if cid not in cids]
+    if g["nodes"]:
+        return False
+    groups.remove(g)
+    return True
 
 
 def _take_out(doc: dict, names: set[str]) -> list[dict]:

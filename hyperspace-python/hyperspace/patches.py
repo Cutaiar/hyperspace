@@ -94,7 +94,7 @@ from . import graph as G
 from . import lfo as lfomod
 from . import modbank
 from . import modifiers as modmod
-from .lookback import LOOKBACK_KEYS
+from .lookback import is_lookback_key
 from .routing import Binding, base_scheme, is_continuous, is_macro
 
 KIND = "hyperspace.patch"
@@ -149,7 +149,7 @@ MAY_HOLD = ("effect", "composite", "switch", "delay", "resize", "copy", "matte",
 ONE_PER_FRAME = ("scene", "shape", "backdrop", "pattern", "dream")
 # (wave 3 P2, row 661) of those, what the conflict sheet may replace rather
 # than refuse. The dream alone for now; a kind added here gets the sheet's row
-# and `Edit.spawn`'s door as they are, its own group's fresh values included
+# and `Edit.spawn`'s door as they are, fresh values by what the node owns
 REPLACEABLE = ("dream",)
 # the render nodes the GRAPH page never deletes and a patch never holds —
 # `graphview.spec_name` refuses the camera (the look's one, `CAMERA_KEPT`,
@@ -520,12 +520,19 @@ def _any_key(_key: str) -> bool:
     return True
 
 
-def _is_lookback_key(key: str) -> bool:
-    return key in LOOKBACK_KEYS
-
-
 def _is_dream_key(key: str) -> bool:
-    return key not in LOOKBACK_KEYS
+    return not is_lookback_key(key)
+
+
+def dream_owner(pid: str) -> str:
+    """The node a `dream.*` param is drawn on and saved with (wave 3 P2): a
+    look-back's knobs on it (`dream.2.fade` on `lookback.2`), the rest on the
+    dream. `graphview.OWNERS` and `ui_graph.node_params` ask here; `_param_rows`
+    is the same split as prefixes."""
+    key, *n = pid.split(".")[:0:-1]
+    if not is_lookback_key(key):
+        return "dream"
+    return f"lookback.{n[0]}" if len(n) == 1 else "lookback"
 
 
 def is_pattern_view_key(key: str) -> bool:
@@ -558,7 +565,7 @@ def _param_rows(name: str) -> list[tuple[str, Callable[[str], bool]]]:
     if kind == "pattern":
         return [("pattern", _any_key), ("view", is_pattern_view_key)]
     if kind == "lookback":
-        return [(G.param_prefix(name), _is_lookback_key)]
+        return [(G.param_prefix(name), is_lookback_key)]
     if kind == "dream":
         return [("dream", _is_dream_key)] if name == "dream" else []
     return [(G.param_prefix(name), _any_key)]
@@ -1465,10 +1472,14 @@ class Landing:
     # `held_taken`: those of them only the held program keeps
     taken: tuple[str, ...] = ()
     held_taken: tuple[str, ...] = ()
-    # wave 3 P2: what replacing `replacing` costs the host, in words, the
-    # sheet's (`dataclasses.replace` by `ui_graph.spawn`: this module cannot
-    # see the registry; `graphview.Edit.replace_words`)
+    # wave 3 P2: what replacing `replacing` costs the host and what it keeps,
+    # in words, and the host they were read off, the sheet's
+    # (`dataclasses.replace` by `ui_graph.spawn`: this module cannot see the
+    # registry; `graphview.Edit.replace_said`). `asked` is empty for a landing
+    # no sheet put a question for
     loses: tuple[str, ...] = ()
+    keeps: tuple[str, ...] = ()
+    asked: tuple = ()
 
     @property
     def replacing(self) -> tuple[str, ...]:
@@ -1504,6 +1515,12 @@ class Landing:
 def node_members(names: Iterable[str]) -> _Members:
     """Render nodes `names` as members, to ask whose a param is (`owns`)."""
     return _Members(tuple(names))
+
+
+def replaceable(render: Iterable[str]) -> tuple[str, ...]:
+    """Of a patch's render nodes, those the sheet could replace in a host
+    that has them (`REPLACEABLE`)."""
+    return tuple(n for n in render if _kind(n) in REPLACEABLE)
 
 
 def replace_key(name: str) -> str:

@@ -469,6 +469,7 @@ SHEET_TIP = ("Each row: which keeps this control — the patch's row, or the one
 # that keeps the preset's is Cancel, and the press that takes the patch's is Spawn
 REPLACE_ROW = "{name}: the patch's replaces this preset's"
 REPLACE_LOSES = "this preset's {name} loses"
+REPLACE_KEEPS = "what stays"
 REPLACE_TIP = ("A frame holds one. Spawn takes out this preset's and lands the patch's, one "
                "undo step; Cancel lands nothing and keeps it")
 REPLACE_GO = "Replace and spawn##sheet"
@@ -579,6 +580,10 @@ def _sheet(panel, landing, choices) -> None:
     if replacing and getattr(landing, "loses", ()):
         ui._micro(REPLACE_LOSES.format(name=" and ".join(replacing)))
         for line in landing.loses:
+            imgui.text_wrapped(line)
+    if replacing and getattr(landing, "keeps", ()):
+        ui._micro(REPLACE_KEEPS)
+        for line in landing.keeps:
             imgui.text_wrapped(line)
     if landing.conflicts:
         _control_rows(panel, landing, choices)
