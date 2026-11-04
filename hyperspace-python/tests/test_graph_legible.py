@@ -244,7 +244,7 @@ def test_a_drag_onto_a_collapsed_node_offers_its_ports_and_lands_through_edit(
     assert held is not None and held["fixed"] == "out:lane:3" and held["node"] == "render:shape"
     by_pin = {pin: why for pin, _, _, why in held["choices"]}
     assert by_pin[f"mod:{target.param}"] is None
-    assert by_pin[f"base:{target.param}"] == graphview.NO_BASE.format(what="a band")
+    assert by_pin[f"base:{target.param}"] == graphview.NO_BASE.format(what="the analyzer")
     frame(rig.panel, "graph")                     # the picker drawn (it stays open)
     calls = []
     real = graphview.Edit.connect

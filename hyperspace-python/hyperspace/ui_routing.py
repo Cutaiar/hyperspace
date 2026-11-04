@@ -898,7 +898,7 @@ def _param_combo(panel, label: str, current: str | None, width: float,
             continue
         if p.group != group:
             group = p.group
-            ui._micro(group or "misc")
+            ui._micro(undo.group_word(group) or "misc")
         sel, _ = imgui.selectable(f"{p.id}##{p.id}", p.id == current)
         if imgui.is_item_hovered() and p.tip:
             ui.tooltip(p.tip)

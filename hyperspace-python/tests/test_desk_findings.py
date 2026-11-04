@@ -244,7 +244,7 @@ def test_the_diagram_says_what_the_band_rows_and_the_corner_do(rig):
     reg = rig.reg
     text = ui_desk.text
     sub = reg["band.select"].names[0]
-    assert text(reg, Binding("note:0:51", "band.select", "set", 0.0)) == f"band {sub}"
+    assert text(reg, Binding("note:0:51", "band.select", "set", 0.0)) == f"analyzer {sub}"
     fn = reg["band.0.fn"]
     assert text(reg, Binding("note:0:49", "band.0.fn", "toggle")) == \
         f"{fn.label}: {fn.text()} · next"
@@ -252,7 +252,7 @@ def test_the_diagram_says_what_the_band_rows_and_the_corner_do(rig):
     assert text(reg, Binding("note:0:87", "overlay.passthrough", "toggle")) == \
         "Click-through (overlay)"
     assert text(reg, Binding("note:0:81", "scene.reset_all", "toggle")) == \
-        "Reset all bands (again: undo)"
+        "Reset analyzer (again: undo)"
     assert text(reg, Binding("note:0:63", "preset.next", "toggle")) == "Next bank preset"
 
 

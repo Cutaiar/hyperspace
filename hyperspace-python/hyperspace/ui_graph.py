@@ -1927,7 +1927,7 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
             group = port.group
             folded = (n.id, group) in st["folds"]
             count = sum(1 for p in n.ports if p.group == group)
-            if imgui.small_button(f"{'+' if folded else '-'} {group or 'misc'} ({count})"
+            if imgui.small_button(f"{'+' if folded else '-'} {undo.group_word(group) or 'misc'} ({count})"
                                   f"##{group}"):
                 st["folds"] ^= {(n.id, group)}
         if port not in ports:
@@ -2492,7 +2492,7 @@ def patch_list(panel) -> list[dict]:
     — factory then the user's shadowing them, hidden ones out, as the
     PRESETS list is (`ui_presets.names`, on its poll) — as ``{"name",
     "slug", "note", "words", "ports"}`` (`graphview.patch_words`: "in:
-    picture · out: picture · wants: K1, right hand y, band 1"). A patch
+    picture · out: picture · wants: K1, right hand y, analyzer 1"). A patch
     the library refuses is left out (its words on the footer once).
     Asked every frame the canvas's menu is open or a line is dragged, it
     looks at the disk only on `ui_presets`' poll (plan 40 review fix): the
@@ -3680,7 +3680,7 @@ def _param_rows(panel, st: dict, n: graphview.VNode) -> bool:
     opened = st.setdefault("side_open", {}).setdefault(n.id, {})
     patched = {p.group for p in n.ports if p.param is not None and p.patched}
     for g, pids in groups:
-        name = g or "params"
+        name = undo.group_word(g) or "params"
         if fold:
             if g not in opened:
                 opened[g] = g in patched or g == groups[0][0]

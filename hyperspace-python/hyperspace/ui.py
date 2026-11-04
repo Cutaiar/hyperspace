@@ -639,9 +639,9 @@ CHEATSHEET = [
     # the APC40's glyphs, as the desk above and the ROUTING rows print them
     ("APC40", "K D knobs · S faders · G row·col · B ⇧"),
     # the APC40 rows whose labels alone do not say it (2026-10-16)
-    ("APC40 G7 G9 G10", "band select (⇧ D knobs follow) · next transfer · reset"),
+    ("APC40 G7 G9 G10", "analyzer band (⇧ D knobs follow) · next transfer · reset"),
     ("APC40 QUANT", "next bank preset (the pad's B walks the list)"),
-    ("APC40 STOP ALL", "reset all bands · again within 8 s: undo"),
+    ("APC40 STOP ALL", "reset the analyzer · again within 8 s: undo"),
     ("APC40 MASTER PAN", "overlay · click-through (if config allows)"),
 ]
 
@@ -2508,7 +2508,7 @@ class Panel:
         analyzer section (ui_pane.py, plan 49): the page is the section at
         full height."""
         c = self.control
-        self._section("bands", "band")
+        self._section("analyzer tuning", "band")
         # scene + reset-all (relabels to Undo while the window is open)
         self._label_cell("scene")
         self._combo("scene.select", -(button_w("Reset all") + imgui.get_style().item_spacing.x))

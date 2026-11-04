@@ -716,6 +716,8 @@ here; overturn → the change, then the same.
 | 682 | Plan 51 O2: an orbit is a new performer op, `turn`, that adds the source's shortest change to the target's base while its gate is on; first acting frame reads, a frame not acting forgets; no feel; dormant with no gate or a source that is no whole-circle lane | — | (rec) — pending the owner |
 | 683 | Plan 51 O2: no schema move for `turn`: an older build drops the row with a note and lands the rest, and a save there loses it; both Macs update together | — | (rec) — pending the owner |
 | 684 | Plan 51 O2: the clutch is the same hand's grab, landed in the preset's row; a lost hand is an opened clutch; one undo step per closure with a 0.15 s grace; under the hold it moves the preview as a knob does | — | (rec) — pending the owner |
+| 737 | Wave 4 AZ: the panel says "analyzer" for the fixture and its tuning; a part reads its own name (SUB … AIR) or "analyzer 3", and "band" stays only as the plain audio word for one of the parts | — | The fixture: the owner, 2026-11-04. The parts' word: (rec) — pending the owner |
+| 738 | Wave 4 AZ: words only; `band.*` ids, `lane:` addresses, the `band` group key, the library's `band` folders, `SECTIONS` and `PAGE_KEYS` all stay; ROUTING's target list keeps printing raw ids | — | The owner, 2026-11-04 |
 | 685 | Plan 51 O2: within 20° of vertical, a yaw straying 20° or stepping 5° on leaving the cone makes the hand read NaN until it has left, then restart, not a camera jump; `ghost.mirror` does not flip a turn row, its depth does; a room lane on a clamped target stays `position`; a moved row lands as `row_for` would | — | (rec) — pending the owner |
 
 "—": no hand check shows it; tests only.
@@ -12745,3 +12747,33 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   continuous target it stays O1's `position`. `learn.move_route` lands a moved row the
   same way.
 - **Judge it.** 519.
+
+### 737. What the panel calls the analyzer
+
+- **Answer.** The owner, 2026-11-04: "Band is a ridiculous name for this thing." The
+  analyzer is a fixture on the graph, shared, and every preset may wire from it. The
+  word for its six parts was left to the builder: (rec) — pending the owner.
+- **Built.** "Analyzer" for the fixture and its tuning: the section's head ("analyzer
+  tuning"), the group node's title, status and undo lines, the desk, the cheat sheet
+  and refusals ("the analyzer sets no base"). A part reads its own name (SUB, BASS,
+  MIDB, MID, UPR, AIR), or "analyzer 3" where a route only has its number. "Band"
+  stays as the plain audio word for one slice of the spectrum, in a count ("6 bands")
+  and a sentence ("Add analyzer band"); that includes the node's noun in
+  `graphview.summary`.
+- **Rejected.** "Low", "mid" and so on as the noun: they are names, not a noun, so
+  "Add low" says nothing, and a layout may hold 1 to `N_MAX` parts under any names,
+  with SUB to AIR already saying where each listens. A new word ("range", "slice"):
+  nobody in audio says it, and a graphic EQ's parts are bands.
+
+### 738. Which saved names stayed
+
+- **Answer.** The owner, 2026-11-04, by the brief: words only.
+- **Stayed.** `band.*` param ids, `lane:` addresses, the `band` group key in a show's
+  `modules`, the `band` library and `scenes/band` folders, the `group:band` layout key,
+  `SECTIONS` keys and `PAGE_KEYS`. A rename is the format lane's question.
+- **Where a person still reads one.** ROUTING's target list prints raw ids
+  (`band.0.atk`), as for every group; a trash row's hover and a file-overwrite warning
+  name the folder (`band/`), because that is where the file is.
+- **Built.** `undo.group_word` maps a group's key to its word at each place that printed
+  the key. It is in `undo` because that leaf is the one every such module can reach.
+

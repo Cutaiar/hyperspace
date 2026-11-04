@@ -1884,9 +1884,15 @@ def _sub_group(pid: str, p: Param | None) -> str:
     return p.group
 
 
+# a group node's title where its key is not the word (the id keeps the key:
+# it is a saved layout key): beside the `analyzer` node, whose ports are the
+# wires out, this one holds what the analyzer is tuned to
+GROUP_TITLES = {"band": "analyzer tuning"}
+
+
 def _group_node(nodes: dict[str, VNode], group: str, add_node) -> VNode:
     nid = f"group:{group}"
-    return nodes.get(nid) or add_node(VNode(nid, "group", group))
+    return nodes.get(nid) or add_node(VNode(nid, "group", GROUP_TITLES.get(group) or group))
 
 
 def refresh(view: View, reg: Registry, router: Router | None, lanes=None,
@@ -2758,6 +2764,8 @@ def summary(n: VNode) -> list[str]:
     patched = sum(p.patched for p in n.ports)
     lines: list[str]
     if n.kind in ("device", "source", "analyzer"):
+        # "band" here is the plain audio word for one of the analyzer's
+        # parts, not the fixture's name (register row 737)
         noun = "band" if n.kind == "analyzer" else "port"
         lines = [f"{_count(len(n.ports), noun)} · {patched} patched",
                  _loudest(p for p in outs if p.patched)]
@@ -3486,7 +3494,7 @@ def splice_refusal(name: str, ports: Iterable[Mapping], typ: str = IMAGE) -> str
 
 def patch_words(doc: Mapping, names: Callable[[str], str | None] | None = None) -> str:
     """A patch's boundary in words, for the browser (plan 40 T3): "in:
-    picture · out: picture · wants: K1, right hand y, band 1" — its picture
+    picture · out: picture · wants: K1, right hand y, analyzer 1" — its picture
     ports by direction and type, then every rig-side source its rows and
     modifiers read, once, in `routing.row_words`' words (`names`: the
     desk's glyph, as `cable_words` passes the port's name). Pure."""
@@ -3601,7 +3609,7 @@ LANE_NO_DELETE = ("a lane always fires an envelope: drag its pin onto another "
 LANE_BOUND = "lane {lane} fires env {env} already"
 
 # a continuous scheme's noun for the refusals ("a hand sets no base")
-NOUNS = {"hand": "a hand", "hands": "the hands", "lane": "a band", "lfo": "an LFO",
+NOUNS = {"hand": "a hand", "hands": "the hands", "lane": "the analyzer", "lfo": "an LFO",
          "env": "an envelope", SEQ: "a sequencer lane",
          "mod": "a modifier", "axis": "a stick", "ext": "an outside lane"}
 DESK_NOUNS = {"cc": "a desk knob", "note": "a desk button", "pitch": "a desk fader",

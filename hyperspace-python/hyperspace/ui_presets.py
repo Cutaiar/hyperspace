@@ -58,7 +58,7 @@ import time
 
 from imgui_bundle import imgui
 
-from . import preset, ui
+from . import preset, ui, undo
 from .library import (
     PATCHES,
     PRESETS,
@@ -86,7 +86,7 @@ FOLDER_TIP = ("A folder of presets: click to fold or unfold (kept on this Mac). 
 SHOW_LINE = "show  ·  the desk's pads, the session, the rig's wires"
 SHOW_TIP = ("A show is the room the presets play in: which preset each of the desk's "
             "twenty-four pads loads (set on the desk — hold a pad, or SAVE + a pad), the "
-            "session (tempo, hands, the analyzer, the outputs), the band scene, and the "
+            "session (tempo, hands, the analyzer, the outputs), the analyzer's scene, and the "
             "bus cables cut on GRAPH. A preset is the look; the show is everything "
             "around it. Open another, save this one, or start a new one here.")
 
@@ -95,7 +95,8 @@ def trash_tag(item) -> str:
     """A trash row's dim first column: its group, and for a file in the
     library's old trash (plan 48 row 586) ``· library`` — so a row says in
     itself that "empty" leaves it and a restore is a copy."""
-    return f"{item.group} · library" if item.old else item.group
+    word = undo.group_word(item.group)
+    return f"{word} · library" if item.old else word
 
 
 # ---- state on the panel, created on first use ----
