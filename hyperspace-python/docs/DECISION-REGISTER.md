@@ -12781,10 +12781,12 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Built.** `Router.pad` hears `layout_of(pad.model, role)`'s rows and hides
   the table's on those controls. `PadDevice._no_camera_job` frees ZL / ZR
   always and the stick while the totem reads the pad. Learn ignores the
-  layout's controls. The pad window says what the pad will do.
-- **Limits.** Those controls cannot be relearned without editing the layout. A
-  route learned onto the stick runs with the totem off too, and takes the stick
-  off the orbit then. GRAPH's rig cables show the table's rows, not the layout.
+  layout's controls. The pad window says what the pad will do. A stick route is
+  heard only while the totem reads the pad (owner, 2026-11-04,
+  `PadDevice._quiet_stick`): off, its lanes read NaN, the route lets go and the
+  stick orbits.
+- **Limits.** Those controls cannot be relearned without editing the layout.
+  GRAPH's rig cables show the table's rows, not the layout.
   The totem still applies its turn as angles in a fixed plane order, so a big
   turn about two axes lands where Euler angles do.
 - **To reverse.** Empty `layout` and `drops` on the two Joy-Con models.

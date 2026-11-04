@@ -3255,7 +3255,7 @@ class Router:
                     act(self.reg, b)
 
     def pad(self, pad, now: float | None = None, *, buttons: bool = True,
-            role: str = "", skip=frozenset()) -> None:
+            role: str = "", skip=frozenset(), quiet=frozenset()) -> None:
         """One frame of the gamepad (`pad` a gamepad.Pad): its axes fed as
         the `axis` lanes (None while no pad is on, so their routes let go),
         then its pad / hat rows — unless `buttons` is False (the frame's
@@ -3280,13 +3280,19 @@ class Router:
         the pad going away, whose release would never come (plan 52).
 
         A pad model with a layout of its own (`layout_of`, a Joy-Con's) hears
-        those rows in place of the table's on the same controls."""
+        those rows in place of the table's on the same controls.
+
+        `quiet`: the `axis` lanes that read NaN this frame, so their routes
+        let go (a Joy-Con's stick while the totem is off: it orbits then)."""
         axis = qualified("axis", role)
         publish = getattr(pad, "publish", None)
         if publish is not None:
             src = self.sources                   # the axes are a source: the shared half's
             publish(src, axis) if role else publish(src)
-        self.sources.feed(axis, pad.lanes() if pad.on else None)
+        lanes = pad.lanes() if pad.on else None
+        if quiet and lanes is not None:
+            lanes = [math.nan if i in quiet else v for i, v in enumerate(lanes)]
+        self.sources.feed(axis, lanes)
         # source → press time (None once fired), one dict per pad
         holds = (self.__dict__.setdefault("_pad_holds", {}) if not role else
                  self.__dict__.setdefault("_pad_holds_of", {}).setdefault(role, {}))

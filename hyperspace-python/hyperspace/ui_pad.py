@@ -138,6 +138,17 @@ def _model(panel):
     return getattr(_pad(panel), "model", None)
 
 
+def _stick_quiet(panel, source: str) -> bool:
+    """Is a route on this stick address not heard now? A Joy-Con's, with the
+    totem off (`PadDevice._quiet_stick`)."""
+    if not getattr(_model(panel), "layout", ()):
+        return False
+    if source not in ("axis:LX", "axis:LY") and not source.startswith("axis:L."):
+        return False
+    reg = getattr(panel, "reg", None)
+    return not (reg is not None and "totem.on" in reg and reg["totem.on"].value)
+
+
 def built_in(panel, source: str) -> str:
     """What an axis does with no route on it, for the pad read now: `BUILT_IN`,
     less what a pad with a layout of its own keeps free (`PadDevice._no_camera_job`)."""
@@ -261,7 +272,7 @@ def says(panel, c: gamepad.Control, b: Binding | None) -> str:
     """What a lit control does: its row's param in the panel's words
     (`ui_desk.text`), else the built-in meaning of a free axis
     (`BUILT_IN`), else "" — a dark control."""
-    if b is not None:
+    if b is not None and not _stick_quiet(panel, c.source):
         return ui_desk.text(panel.reg, b)
     return built_in(panel, c.source)
 
@@ -716,7 +727,7 @@ def _says_of(panel, table):
 
     def says_(source: str) -> tuple[str, Binding | None]:
         b = rows_.get(source)
-        if b is not None:
+        if b is not None and not _stick_quiet(panel, source):
             return ui_desk.text(panel.reg, b), b
         return built_in(panel, source), None
     return says_

@@ -836,6 +836,9 @@ class PadDevice(Base):
         claimed = getattr(router, "claimed", None)     # duck-typed: a shim may have none
         reg = self.ctx.reg if self.ctx.reg is not None else getattr(router, "reg", None)
         skip = self._totem(io, reg)
+        quiet = self._quiet_stick(io, reg)
+        if quiet:
+            skip = {**skip, "quiet": quiet}
         if q:
             router.pad(io, buttons=not self._taken, role=q, **skip)
             if io.on and claimed is not None:
@@ -847,7 +850,7 @@ class PadDevice(Base):
             self._dialed = gamepad.dialed(routed)
             if reg is not None:
                 gamepad.steer(io, router, reg, self.__dict__.get("_dt", 0.0),
-                              routed={*routed, *self._no_camera_job(io, reg)})
+                              routed={*(set(routed) - quiet), *self._no_camera_job(io, reg)})
 
     def feed(self, sources) -> None:
         """The pad's touch and motion lanes into the shared sources (plan
@@ -881,6 +884,16 @@ class PadDevice(Base):
             if totem.drives(state, self.role):
                 skip |= totem.skip_of(io)
         return {"skip": skip} if skip else {}
+
+    def _quiet_stick(self, io, reg) -> frozenset[int]:
+        """A pad with a layout of its own (a Joy-Con) hears a stick route only
+        while the totem reads it (the owner, 2026-11-04); otherwise those
+        lanes are quiet, the routes let go and the stick orbits."""
+        from . import gamepad, totem
+        if (not getattr(getattr(io, "model", None), "layout", ())
+                or totem.drives(totem.state_of(reg), self.role)):
+            return frozenset()
+        return gamepad.left_stick_lanes()
 
     def _no_camera_job(self, io, reg) -> tuple[int, ...]:
         """The axes a pad with a layout of its own (a Joy-Con) keeps off the

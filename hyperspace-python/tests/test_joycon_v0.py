@@ -215,6 +215,52 @@ def test_a_learn_ignores_the_layouts_controls_and_takes_a_free_one():
     assert "pad:LB" not in skip and "pad:A" not in skip
 
 
+def stick_rig(model=JOYCON):
+    """A route on the stick, a stick pushed right, the real router and device."""
+    reg, _, router, pad = layout_rig(model, [routing.Binding("axis:0", "camera.pan.x", "push")])
+    pad.axis = lambda i: 1.0 if i == gamepad.AX_LX else 0.0
+    pad.lanes = lambda: [1.0, 0.5, 0.5, 0.5, 0.0, 0.0]
+    dev = PadDevice("joy", {}, Context(reg=reg), io=pad)
+    dev._dt = DT
+    return reg, router, pad, dev
+
+
+def lane(router):
+    return float(router.sources.feeds["axis"][gamepad.AX_LX])
+
+
+def test_a_stick_route_is_heard_only_with_the_totem_on_and_the_stick_orbits_with_it_off():
+    reg, router, pad, dev = stick_rig()
+    pad.frame()
+    dev.act(router)
+    assert math.isnan(lane(router))                           # off: the route lets go…
+    yaw = reg["camera.yaw"].base
+    assert yaw != pytest.approx(0.0, abs=1e-6)                # …and the stick orbits
+    reg["totem.on"].set(True)
+    pad.frame()
+    dev.act(router)
+    assert lane(router) == 1.0                                # on: the route hears it…
+    assert reg["camera.yaw"].base == pytest.approx(yaw, abs=1e-9)   # …and nothing orbits
+    reg["totem.on"].set(False)
+    pad.frame()
+    dev.act(router)
+    assert math.isnan(lane(router))
+
+
+def test_the_edges_stick_route_is_heard_as_ever():
+    reg, router, pad, dev = stick_rig(EDGE)
+    pad.frame()
+    dev.act(router)
+    assert lane(router) == 1.0
+    assert reg["camera.yaw"].base == pytest.approx(0.0, abs=1e-9)   # the route took it off the job
+
+
+def test_the_stick_lanes_are_the_left_sticks_and_its_dials():
+    lanes = gamepad.left_stick_lanes()
+    assert gamepad.AX_LX in lanes and gamepad.AX_LY in lanes and gamepad.AX_RX not in lanes
+    assert gamepad.LANES.index("L.NE") in lanes and gamepad.LANES.index("R.NE") not in lanes
+
+
 def test_the_pad_window_says_the_layout_and_leaves_the_edge_its_table():
     from hyperspace import ui_pad
     _, _, router, _ = layout_rig()
