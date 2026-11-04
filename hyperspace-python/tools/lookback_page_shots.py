@@ -123,7 +123,7 @@ def labels() -> None:
     r = boot()
     head = ("id", "page: old", "page: new", "registry: old", "registry: new", "reads")
     rows = [head + ("what it does",)]
-    for title, ids in {"look-back": ("dream.on",), **ui_lookback.SECTIONS}.items():
+    for title, ids in ui_lookback.SECTIONS.items():
         rows.append((f"— {title} —", "", "", "", "", "", ""))
         for pid in ids:
             p = r.reg[pid]

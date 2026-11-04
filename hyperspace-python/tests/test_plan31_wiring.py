@@ -481,7 +481,7 @@ def test_nan_never_reaches_a_param_from_an_idle_bank():
 # ---- plan 31 P: the envelopes and the sequencer in the preset (row 394: /6) ----
 
 # (plan 43 C2: V6 is the save schema, named for the row it pinned)
-V2, V3, V6 = "hyperspace.preset/2", "hyperspace.preset/3", "hyperspace.preset/9"
+V2, V3, V6 = "hyperspace.preset/2", "hyperspace.preset/3", "hyperspace.preset/10"
 
 
 def _new_ids(doc) -> list[str]:
@@ -569,7 +569,7 @@ def test_this_build_reads_every_old_schema_and_an_older_build_refuses_a_6(app):
     from hyperspace import preset
     from hyperspace.library import LibraryError
 
-    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9)   # (… plan 40 T2: /8; plan 43 C2: /9)
+    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10)   # (… plan 40 T2: /8; plan 43 C2: /9)
     app.reg["view.bright"].set(1.5)
     doc = {k: v for k, v in app.presets.document("p").items() if k != "graph"}
     doc["values"] = {k: v for k, v in doc["values"].items()

@@ -539,11 +539,12 @@ def test_a_preset_says_two_acids_in_data_and_carries_the_seconds_values(tmp_path
     assert reg["fx.acid.2.twist"].value == 1.9
 
 
-def test_a_second_hands_node_gets_its_own_session_params_and_state(tmp_path):
-    """`ghost.2.*`: the naming rule's same group, so the session's (a
-    preset never sets them; one that names them is noted); its own
+def test_a_second_hands_node_gets_its_own_look_and_the_rooms_mirror(tmp_path):
+    """`ghost.2.*`: the naming rule's same group, so (plan 44 D3) the
+    preset's look — a preset that names `ghost.2.alpha` lands it — but for
+    `ghost.2.mirror`, the room's (`params.SESSION_KEYS`); its own
     `GhostState`, handed to the renderer for the second node's Ghost and
-    kept while the app runs, so the node's settings come back with it."""
+    kept while the app runs, so the mirror comes back with the node."""
     from hyperspace.params import part_of
 
     rig = boot(tmp_path)
@@ -554,17 +555,20 @@ def test_a_second_hands_node_gets_its_own_session_params_and_state(tmp_path):
         values={"ghost.2.alpha": 0.2})
     rig.lib.load(PRESETS, "Glass")
     reg = rig.reg
-    assert part_of(reg["ghost.2.alpha"]) == "session" and reg["ghost.2.alpha"].label == \
+    assert part_of(reg["ghost.2.alpha"]) == "performance" and reg["ghost.2.alpha"].label == \
         "Ghost 2 opacity"
-    assert rig.presets.notes == ["ghost.2.alpha is the session's, ignored"]
+    assert part_of(reg["ghost.2.mirror"]) == "session"
+    assert rig.presets.notes == [] and reg["ghost.2.alpha"].value == pytest.approx(0.2)
     state = stub.ghost_states["ghost.2"]
     reg["ghost.2.mirror"].set(True)
     assert state.mirror and not reg["ghost.mirror"].value
     assert stub.wiring.extra == (G.HandsAt(2),)
+    reg["ghost.2.alpha"].set(0.9)
     rig.lib.load(PRESETS, "party-tumble")
     assert "ghost.2.mirror" not in reg and stub.ghost_states == {}
     rig.lib.load(PRESETS, "Glass")
     assert reg["ghost.2.mirror"].value is True and stub.ghost_states["ghost.2"] is state
+    assert reg["ghost.2.alpha"].value == pytest.approx(0.2)        # the preset's again
 
 
 def test_a_load_refused_for_a_value_puts_the_graph_back(tmp_path):
@@ -612,26 +616,29 @@ def test_an_instance_id_is_sorted_against_the_graph_the_load_lands(tmp_path):
     # a raise after the graph landed (not a value error): the graph that
     # was there comes back, with its instances' values, and the load stops
     rig.lib.load(PRESETS, "Twice")
-    real = rig.lib.resolved
+    real = rig.lib._fresh_of
 
-    def boom(group, values):
+    def boom(group):
         raise KeyError("boom")
-    rig.lib.resolved = boom
+    rig.lib._fresh_of = boom                # (plan 44 D3: what a load fills from)
     try:
         with pytest.raises((KeyError, LibraryError)):
             rig.lib.load(PRESETS, "Plain")
     finally:
-        rig.lib.resolved = real
+        rig.lib._fresh_of = real
     assert reg["fx.acid.2.twist"].value == 1.9 and rig.presets.graph.spec is not None
     assert "acid.2" in rig.reg.fx_state.specs and rig.lib.current(PRESETS) == "Twice"
 
 
 def test_a_second_hands_nodes_settings_survive_reopening_the_show(tmp_path):
-    """Review fix: a show restores its session before its startup preset
-    declares `ghost.2`; the node is seeded from the show's session when it
-    is first declared, so its settings come back, no unknown id is said,
-    and the show is clean. A preset without the node then keeps them in
-    the show (a save does not drop them, nor counts them as an edit)."""
+    """Plan 44 D3: an old (`/2`) show held a second hands node's settings in
+    its session; its look (`ghost.2.on`, `.alpha`, `.style`) is handed to
+    the presets before `/10` a load reads while it is open (`old_look`,
+    `graphmigrate.ten`), its mirror is the show's own and is seeded into
+    the node when the startup preset first declares it. No unknown id is
+    said and the show is clean; a preset without the node leaves the show
+    holding the mirror alone (the look is each preset's), and opening the
+    show again brings it back."""
     from hyperspace.library import PROJECT_SUFFIX, PROJECTS
 
     rig = boot(tmp_path)
@@ -650,25 +657,25 @@ def test_a_second_hands_nodes_settings_survive_reopening_the_show(tmp_path):
     assert missing == [] and "unknown" not in rig.lib.warning
     assert rig.lib.current(PRESETS) == "Glass"
     assert {pid: reg[pid].value for pid in session} == session
+    assert rig.lib.project.old_look == {k: v for k, v in session.items() if k != "ghost.2.mirror"}
     state = rig.presets.graph.states["ghost.2"]
     assert state.on and state.mirror and state.style == 3
     assert not rig.lib.project.is_dirty()
-    # a preset without the node: the show still holds its settings, clean
+    # the preset saved: the look is its own now, `/10`
+    saved = json.loads(rig.presets.save_as("Glass").read_text())
+    assert saved["values"]["ghost.2.alpha"] == 0.3 and "ghost.2.mirror" not in saved["values"]
+    # a preset without the node: the show holds the mirror alone, clean
     rig.lib.load(PRESETS, "party-tumble")
     assert "ghost.2.on" not in reg and not rig.lib.project.is_dirty()
     rig.lib.project.save()
-    saved = json.loads(show.read_text())["session"]
-    assert {pid: saved[pid] for pid in session} == session
-    # a change made live is the live one when the node comes back in this run
-    rig.lib.load(PRESETS, "Glass")
-    reg["ghost.2.alpha"].set(0.8)
-    rig.lib.load(PRESETS, "party-tumble")
-    rig.lib.load(PRESETS, "Glass")
-    assert reg["ghost.2.alpha"].value == 0.8
-    # opening the show again brings its own settings back
-    rig.lib.load(PRESETS, "party-tumble")
+    doc = json.loads(show.read_text())
+    assert doc["schema"] == "hyperspace.project/3"
+    assert {k: v for k, v in doc["session"].items() if k.startswith("ghost.2.")} == {
+        "ghost.2.mirror": True}
+    # opening the show again: the mirror back from it, the look from the preset
     rig.lib.project.load("rig")
-    assert reg["ghost.2.alpha"].value == 0.3 and not rig.lib.project.is_dirty()
+    assert reg["ghost.2.mirror"].value is True and reg["ghost.2.alpha"].value == 0.3
+    assert not rig.lib.project.is_dirty()
 
 
 def test_undoing_a_load_puts_the_graph_back_before_the_values(tmp_path):

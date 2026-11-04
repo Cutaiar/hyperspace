@@ -726,7 +726,7 @@ def plan33_section(presets, slug: str) -> tuple[dict, set[str]]:
     before `/7`, `source_doc`)."""
     doc = source_doc(presets, slug)
     gs = presets.graph
-    old, _ = graphmigrate.migrate(doc, gs.specs(), desk=presets._template_rows(doc), wire=False)
+    old, _ = graphmigrate.migrate(doc, gs.specs(), desk=None, wire=False)
     files = {n.partition(".")[0] for n in gs.specs()}
     return (old.get("graph") if isinstance(old.get("graph"), dict) else {}), files
 
@@ -741,7 +741,7 @@ def _placements_wait(presets, slug: str) -> dict | None:
     if (graphmigrate.schema_version(doc) or 0) >= graphmigrate.SEVEN:
         return None
     gs = presets.graph
-    out, _ = graphmigrate.migrate(doc, gs.specs(), desk=presets._template_rows(doc))
+    out, _ = graphmigrate.migrate(doc, gs.specs(), desk=None)
     section = out.get("graph")
     if not isinstance(section, dict) or not any(
             isinstance(e, dict) and any(k in e for k in G.PLACE_KEYS)
@@ -1226,7 +1226,7 @@ class Loader:
         self.presets.load(slug)
         gs = self.presets.graph
         doc = source_doc(self.presets, slug)
-        old, _ = graphmigrate.migrate(doc, gs.specs(), desk=self.presets._template_rows(doc),
+        old, _ = graphmigrate.migrate(doc, gs.specs(), desk=None,
                                       wire=False)
         effects = tuple(sorted(self.fx.specs))
         section = old.get("graph") if isinstance(old.get("graph"), dict) else {}

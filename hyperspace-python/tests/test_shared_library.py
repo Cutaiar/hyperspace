@@ -220,8 +220,8 @@ def test_a_cloud_conflict_copy_is_listed_beside_its_file(tmp_path):
 
 def test_two_files_of_one_name_neither_canonical_both_list(tmp_path):
     rig = make(tmp_path)
-    folder = tmp_path / "camera"
-    folder.mkdir()
+    folder = tmp_path / "patches" / "camera"
+    folder.mkdir(parents=True)
     for stem in ("b-copy", "a-copy"):
         (folder / f"{stem}.json").write_text(json.dumps(
             {"schema": "hyperspace.preset/1", "group": "camera", "name": "Wide",

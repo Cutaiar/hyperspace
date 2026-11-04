@@ -1262,10 +1262,12 @@ def is_rig(w: Wire) -> bool:
 
 @dataclass(frozen=True)
 class RigWires:
-    """The rig's own drawn wires as the show holds them (plan 36 T1): the
-    defaults the show has `cut` — every other default stands. Immutable:
-    `cutting` and `joining` return the new word, so an undo mark holds one
-    by reference. JSON (`to_json`, in the show's file under ``rig``):
+    """The rig's own drawn wires as a preset holds them (plan 36 T1; plan 44
+    D3 made them the preset's, `preset.Presets.bus`, where they were the
+    show's): the defaults the preset has `cut` — every other default
+    stands. Immutable: `cutting` and `joining` return the new word, so an
+    undo mark holds one by reference. JSON (`to_json`, in the preset's file
+    under ``bus``; an old show's under ``rig``, read once):
     ``{"cut": [{"from": …, "to": …}, …]}``, sorted; nothing cut is ``{}``."""
 
     cut: frozenset[Wire] = frozenset()
@@ -1304,8 +1306,8 @@ class RigWires:
 
 
 def rig_of(source: Any) -> RigWires:
-    """The rig wires `source` holds (duck-typed: its `rig`, as the open show
-    `library.Project` has) — the renderer's `rig_source`; None, or a source
+    """The rig wires `source` holds (duck-typed: its `rig`, as the loaded
+    preset `preset.Presets` has, plan 44 D3) — the renderer's `rig_source`; None, or a source
     with none, is the rig as it ships: every default standing."""
     got = getattr(source, "rig", None)
     return got if isinstance(got, RigWires) else RigWires()

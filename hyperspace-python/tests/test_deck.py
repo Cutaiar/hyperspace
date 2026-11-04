@@ -5,7 +5,9 @@ at 749be48 (a copy of that body, below) and one built through
 `Deck.build` (today's `boot`) reach the same state over every corpus
 preset; two registries share no frame state; `main` builds its deck once
 with the frame order unchanged; and every swap target the deck lists
-lives in a watched module, the deck itself included.
+lives in a watched module, the deck itself included. Plan 44 D2 adds the
+second comparison: one `Sources` fed once drives two routers over two
+registries to the values one router over its own sources lands.
 
 What differs, on purpose: the old `boot` had drifted from `main`. It
 never handed the router its banks (`use_lfos` / `use_bank` /
@@ -32,6 +34,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 from conftest import CORPUS, opened_last, seed
 from test_app_boundary import ORDER, _host
 from test_undo import DT, FakeIn, FakeOut, boot
@@ -52,7 +55,7 @@ from hyperspace.midi import MidiIO
 from hyperspace.overlay import Output
 from hyperspace.params import Registry, build_registry
 from hyperspace.preset import Presets
-from hyperspace.routing import Bindings, Router, bindings_path
+from hyperspace.routing import Bindings, Router, Sources, bindings_path
 from hyperspace.view import ViewState
 
 PKG = Path(__file__).resolve().parents[1] / "hyperspace"
@@ -221,6 +224,138 @@ def test_a_deck_built_the_old_way_and_the_new_way_reach_the_same_state(tmp_path)
     _compare(_walk(old_boot(home)), new, exact=False)     # the old boot, verbatim
 
 
+def _feed(src: Sources, t: float) -> None:
+    """One frame of what the rig's sources say, into `src`: the hands'
+    lanes (named, as the adapter publishes them) and the pad's axes, each
+    a slow wave of its own; the analyzer's lanes are the chain's."""
+    from hyperspace import gamepad
+    from hyperspace.hands.core import Layout
+
+    if "hand" not in src.names:
+        lay = Layout(hands.HandSettings.from_config({}).axes)
+        src.labels["hand"], src.gates["hand"] = lay.names, lay.gates
+        src.names["hand"] = lay.index
+        gamepad.publish(src)
+    n = len(src.names["hand"])
+    src.feed("hand", 0.5 + 0.45 * np.sin(t * (1.0 + 0.13 * np.arange(n))))
+    k = len(gamepad.LANES)
+    src.feed("axis", 0.5 + 0.4 * np.cos(t * (0.7 + 0.11 * np.arange(k))))
+
+
+def _values(reg) -> dict:
+    """Every param's effective value, as the frame left it — but the
+    panel's own `ui.*`, whose getters read an imgui panel the headless rig
+    stands in for with a namespace (none is a route's target)."""
+    return {p.id: repr(p.value) for p in reg if p.group != "ui"}
+
+
+def test_one_sources_fed_once_drives_two_routers_as_one_router_did(tmp_path):
+    """Plan 44 D2's proof, the first thing decks promise: one `Sources`
+    fed once a frame, two `Router`s over two registries both loaded with
+    the same preset, and every param of the two lands the value one router
+    over its own sources lands — every frame, over every corpus preset.
+    The pass of each reads the shared feeds (the hands, the pad, the
+    analyzer's chain) and steps its own banks, modifiers and followers."""
+    solo = boot(tmp_path / "solo")
+    a = boot(tmp_path / "a")
+    shared = a.router.sources
+    b = boot(tmp_path / "b", sources=shared)
+    assert b.router.sources is shared and b.deck.sources is shared
+    assert solo.router.sources is not shared
+    assert a.reg is not b.reg and a.router is not b.router
+    assert any(t is b.table.session for t in shared.tables)
+    rigs = (solo, a, b)
+    names = sorted(a.lib.list(PRESETS))
+    assert names == sorted(solo.lib.list(PRESETS)) == sorted(b.lib.list(PRESETS))
+    chain = a.chain                                  # one analyzer, as the rig has
+    frames = 0
+    driven: dict[str, set[str]] = {"hand": set(), "axis": set(), "lane": set()}
+    for name in names:
+        for r in rigs:
+            r.lib.load(PRESETS, name)
+        chain.out = CEIL * np.linspace(0.15, 0.85, len(chain.out))
+        for k in range(FRAMES // 2):
+            for r in rigs:
+                r.t += DT
+                r.clock.tick(r.t)
+            _feed(solo.router.sources, a.t)
+            _feed(shared, a.t)                       # fed once for both routers
+            for r in rigs:
+                r.router.follow_macros()
+                r.router.modulate(chain, DT, r.t)
+                r.reg.apply()
+            want = _values(solo.reg)
+            assert _values(a.reg) == want, (name, k)
+            assert _values(b.reg) == want, (name, k)
+            frames += 1
+        for row in a.table.mods():                   # what the shared feeds moved
+            scheme = routing.base_scheme(row.scheme)
+            p = a.reg.get(row.target)
+            if scheme in driven and p is not None and p.modulated:
+                driven[scheme].add(row.target)
+    assert frames == len(names) * (FRAMES // 2)
+    # the proof has teeth: the shared feeds drove params on both decks
+    assert all(driven.values()), driven
+
+
+def _mods(r) -> np.ndarray:
+    """The ``mod`` vector a router's last pass left in its sources."""
+    return np.array(r.router.sources.feeds["mod"], dtype=float)
+
+
+def test_two_routers_with_different_modifiers_each_keep_their_own_mod_lanes(tmp_path):
+    """Plan 44 D2, review: the ``mod`` lanes share the sources until D4
+    (row 591), but each router's vector is its own — seeded from its own
+    last outputs, never from the other router's. Two routers over one
+    `Sources` with different modifiers (three on one, with a delay that
+    reads last frame's lane, one on the other) each leave, after their
+    own pass, exactly the lanes a router over its own sources leaves."""
+    rigs = {k: boot(tmp_path / k) for k in ("solo_a", "solo_b", "a")}
+    shared = rigs["a"].router.sources
+    rigs["b"] = boot(tmp_path / "b", sources=shared)
+
+    def wire(r, many: bool) -> None:
+        t, reg = r.table, r.reg
+        if many:
+            t.add_modifier("smooth", ["lane:0"], reg, release=0.4)     # mod.1, with memory
+            t.add_modifier("scale", ["mod:1"], reg, mul=0.5)           # mod.2
+            t.add_modifier("delay", ["mod:2"], reg)                    # mod.3, a frame late
+        else:
+            t.add_modifier("scale", ["lane:1"], reg, mul=2.0)          # mod.1
+
+    for k, r in rigs.items():
+        wire(r, k.endswith("a"))
+    chain = rigs["a"].chain
+    for k in range(40):
+        chain.out = CEIL * np.array([0.1 + 0.02 * (k % 9), 0.3 - 0.01 * (k % 7)]
+                                    + [0.0] * (len(chain.out) - 2))
+        for name in ("solo_a", "solo_b", "a", "b"):
+            r = rigs[name]
+            r.router.modulate(chain, DT, 100.0 + k * DT)
+            r.reg.apply()
+            solo = rigs["solo_" + name[-1]] if name in ("a", "b") else None
+            if solo is not None:                 # straight after its own pass
+                np.testing.assert_array_equal(_mods(r), _mods(solo), err_msg=f"{name} {k}")
+                assert r.router.sources.feeds["mod"] is r.router.__dict__["_mod_out"]
+    own_a, own_b = (rigs[k].router.__dict__["_mod_out"] for k in ("a", "b"))
+    assert len(own_a) == 4 and len(own_b) == 2          # each router's vector, its size
+    assert shared.feeds["mod"] is own_b                 # the last pass's, until D4 (row 591)
+    assert not np.isnan(own_a[3])                       # the delay ran on a's own lane
+
+
+def test_a_clock_other_than_the_shared_sources_is_refused_before_anything_registers():
+    """`Deck.build(sources=…, clock=…)` with two clocks: refused up front,
+    before the registry, the banks or any hook exists — not halfway, from
+    inside the router."""
+    called = []
+    with pytest.raises(ValueError, match="own clock"):
+        Deck.build(library=None, control=None, audio=None,
+                   table=lambda reg: called.append("table"),
+                   hands=lambda reg: called.append("hands"),
+                   sources=Sources(clock=tempo.Clock()), clock=tempo.Clock())
+    assert called == []
+
+
 def test_the_deck_holds_the_rig_boot_hands_out(tmp_path):
     """`boot`'s handles are the deck's objects; a headless deck has no GL:
     no renderer, no hold, and the installed undo is the deck's."""
@@ -231,6 +366,10 @@ def test_the_deck_holds_the_rig_boot_hands_out(tmp_path):
     assert d.table is d.router.table and d.graph is d.presets.graph
     assert d.renderer is None and d.hold is None
     assert d.clock is r.clock is d.router.clock
+    # plan 44 D2: the router reads the deck's sources (its own while there
+    # is one deck), and the clock the banks step on is theirs
+    assert d.sources is d.router.sources and d.sources.clock is d.clock
+    assert d.sources.tables == [d.table.session] and d.router.feeds is d.sources.feeds
     assert undo.installed() is d.undo
     assert d.router.lfos is d.lfos and d.router.bank("env") is d.envs
     assert d.router.sequencer is d.seq and d.undo.marks is d.marks
@@ -301,7 +440,7 @@ def test_the_build_keeps_mains_order():
            "envelope.register(reg, envs, clock)", "sequencer.register(reg, seq, clock)",
            "made.outputs = outputs(reg)", "Hold(reg, renderer", "register_hold(reg, hold",
            "bindings = table(reg)", "library.attach(reg)", "panel(reg, s, clock=clock",
-           "Router(reg, bindings)", "router.use_lfos(lfos, clock)",
+           "Router(reg, bindings, sources=sources)", "router.use_lfos(lfos, clock)",
            "router.use_bank(envs, clock)", "router.use_sequencer(seq, envs)",
            "Presets(library, reg, router)", "presets.graph.attach(renderer)",
            "hold.section = presets.graph", "Learn(reg, router.table", "devices(reg, router, learn, panel=",
@@ -419,9 +558,12 @@ def test_the_band_hooks_are_the_rigs_and_two_decks_leave_them_once(tmp_path, mon
     # D1: `attach`, `startup`, `install` off; D2+ decides their real shape)
     second = Deck.build(library=r.lib, control=r.control, audio=r.audio,
                         table=lambda reg: Bindings(),
-                        attach=False, startup=False, install=False)
+                        attach=False, startup=False, install=False, on_air=False)
     assert r.lib.reg is r.reg and undo.installed() is r.undo      # the first deck's still
-    assert startups == [] and r.lib.current(PRESETS) == loaded    # nothing re-landed
+    # (plan 44 D3: what is loaded is each deck's presets' own — the first's
+    # is as it was; the library's kind is the deck built last, D5's seam)
+    assert startups == [] and r.presets.current == loaded         # nothing re-landed
+    assert second.presets.current is None and r.lib.presets is second.presets
     assert band() == ONCE                                                 # still once
     assert (r.lib._layout_hooks["band"], r.lib._extra_hooks["band"],
             r.lib._load_hooks["band"]) == hooks

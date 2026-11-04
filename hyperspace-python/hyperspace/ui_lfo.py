@@ -59,6 +59,7 @@ SAMPLES = 64          # per cycle
 BEAT_R = 7.0          # the beat light's radius
 WAVE = imgui.ImVec4(0.92, 0.92, 0.92, 1.0)
 FOLD_AT = 4           # more LFOs than this and the strips fold to one line
+BESIDE_SCOPE = 220.0  # px: a strip's knobs want this beside its scope, or go under it
 THUMB_W = 48.0        # a folded strip's thumbnail, px (its height is the frame's)
 THUMB_SAMPLES = 16    # one cycle
 NAME_W = 64.0         # a folded strip's name cell
@@ -215,11 +216,13 @@ def _strip(panel, lfos, clock, n: int, first: bool = False) -> None:
     lf = lfos.voice(n)
     p = f"{LFO_GROUP}.{n}"
     imgui.push_id(p)
+    chips = (["+ lfo"] if first else []) + ["×"]
     ui._micro(f"lfo {n}")
     imgui.same_line(SCOPE_W + imgui.get_style().item_spacing.x)
-    ui._micro(_where(lf, clock), ui.FAINT)
+    # (fitted to what the chips leave it: the side pane is narrow)
+    ui._micro(ui.fit_micro(_where(lf, clock),
+                        imgui.get_content_region_avail().x - ui.chip_w(*chips) - 12), ui.FAINT)
     # the head's chips, flush right on the label line: no row of their own
-    chips = (["+ lfo"] if first else []) + ["×"]
     imgui.same_line(imgui.get_content_region_avail().x + imgui.get_cursor_pos_x()
                     - ui.chip_w(*chips) - 4)
     if first:
@@ -231,11 +234,18 @@ def _strip(panel, lfos, clock, n: int, first: bool = False) -> None:
         ui.tooltip(f"Remove LFO {n} — the others keep their numbers; a route "
                           "from it waits, dormant")
     _scope(lf)
-    imgui.same_line()
+    # plan 49 stage 2: the knobs beside the scope, or under it where the
+    # room is narrow (the side pane); the two pickers share what the reset
+    # chip leaves them
+    sp = imgui.get_style().item_spacing.x
+    if imgui.get_content_region_avail().x - SCOPE_W - sp >= BESIDE_SCOPE:
+        imgui.same_line()
     imgui.begin_group()
-    panel._combo(f"{p}.shape", COMBO_W)
+    cw = max(40.0, min(COMBO_W, (imgui.get_content_region_avail().x - ui.chip_w("reset")
+                                 - 2 * sp) / 2))
+    panel._combo(f"{p}.shape", cw)
     imgui.same_line()
-    panel._combo(f"{p}.sync", COMBO_W)
+    panel._combo(f"{p}.sync", cw)
     imgui.same_line()
     panel._button(f"{p}.reset", "reset", small=True)
     panel.half(f"{p}.rate", "rate", label_w=ROW_LABEL_W)
@@ -260,7 +270,11 @@ def _folded(panel, lfos, n: int, first: bool = False) -> None:
     h = imgui.get_frame_height()
     sp = imgui.get_style().item_spacing.x
     pos = imgui.get_cursor_screen_pos()
-    w = THUMB_W + sp + NAME_W + sp + OUT_W
+    # the output bar gives way to the chips on a narrow line (the side pane)
+    chips = h + (ui.chip_w("+ lfo") + sp if first else 0) + sp + 4
+    out_w = max(24.0, min(OUT_W, imgui.get_content_region_avail().x - chips
+                          - THUMB_W - NAME_W - 2 * sp))
+    w = THUMB_W + sp + NAME_W + sp + out_w
     hit = imgui.invisible_button(f"##{p}.row", imgui.ImVec2(w, h))
     hov = imgui.is_item_hovered()
     dl = imgui.get_window_draw_list()
@@ -274,7 +288,7 @@ def _folded(panel, lfos, n: int, first: bool = False) -> None:
     dl.add_text(imgui.ImVec2(pos.x + THUMB_W + sp, pos.y + (h - ui.FONT_MICRO) / 2 - 1),
                 ui.u32(ui.TEXT if hov else ui.DIM), f"LFO {n}")
     imgui.pop_font()
-    _out_bar(dl, lf.out, pos.x + THUMB_W + sp + NAME_W + sp, pos.y, OUT_W, h)
+    _out_bar(dl, lf.out, pos.x + THUMB_W + sp + NAME_W + sp, pos.y, out_w, h)
     # the chips flush right: `+ lfo` on the first line, then the chevron
     imgui.same_line(imgui.get_content_region_avail().x + imgui.get_cursor_pos_x()
                     - h - (ui.chip_w("+ lfo") + sp if first else 0) - 4)

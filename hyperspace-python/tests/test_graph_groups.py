@@ -130,7 +130,7 @@ def test_a_preset_with_groups_round_trips_through_document_and_load_doc(tmp_path
     app.lib.load("presets", "party-noita")
     app.presets.groups = [dict(ENTRY, patch="noita-core")]
     doc = app.presets.document("noita grouped")
-    assert doc["schema"] == "hyperspace.preset/9"          # (plan 43 C2: every save)
+    assert doc["schema"] == "hyperspace.preset/10"          # (plan 43 C2: every save)
     assert doc["groups"] == [{"id": "group.1", "name": "noita core", "patch": "noita-core",
                               "nodes": NOITA_CORE, "open": False}]
     keys = list(doc)
@@ -149,7 +149,7 @@ def test_the_fixture_twin_resaves_byte_for_byte(tmp_path):
     C2) loaded and saved untouched is the same bytes — and so is every
     corpus preset, with no groups (a `/9` without the key)."""
     raw = FIXTURE.read_bytes()
-    assert json.loads(raw)["schema"] == "hyperspace.preset/9"
+    assert json.loads(raw)["schema"] == "hyperspace.preset/10"
     again, notes, _ = headless.resave(FIXTURE, tmp_path / "twin")
     assert notes == [] and again == raw
     for k, path in enumerate(CORPUS_PRESETS):
@@ -174,12 +174,14 @@ def test_a_member_the_graph_lacks_is_dropped_with_a_note(tmp_path):
         "group gone: kaleido is not in the preset — left out",
         "group gone: nothing of it is in the preset — left out",
         "group frame: mod.9 is not in the preset — left out",
-        "group frame: scene is the frame's; left out",
         "group twice: warp is in group acid wash already — left out",
         "groups: an entry that is not a group, ignored"]
+    # (plan 50: a group holds any node the preset saves — the scene too;
+    # whether it saves as a patch is asked at the save)
     assert app.presets.groups == [
         {"id": "group.1", "name": "acid wash", "nodes": ["render:warp"], "open": False},
-        {"id": "group.4", "name": "frame", "nodes": ["render:fractals"], "open": False},
+        {"id": "group.4", "name": "frame", "nodes": ["render:scene", "render:fractals"],
+         "open": False},
         {"id": "group.5", "name": "twice", "nodes": ["lfo.1"], "open": False}]
 
 
@@ -215,7 +217,7 @@ def test_signature_changes_when_a_group_is_made_and_a_save_drops_a_deleted_membe
     assert app.presets.document("x")["groups"] == [dict(ENTRY, nodes=["render:warp"])]
     app.presets.groups = [dict(ENTRY, nodes=["render:acid.4"])]
     doc = app.presets.document("x")
-    assert "groups" not in doc and doc["schema"] == "hyperspace.preset/9"   # (C2: /9 either way)
+    assert "groups" not in doc and doc["schema"] == "hyperspace.preset/10"   # (C2: /9 either way)
 
 
 # ---------------------------------------------------------------- the proof: the renderer learns nothing
@@ -331,14 +333,31 @@ def test_a_rig_node_is_never_a_member_and_preset_only_keeps_the_group(rig):
 
 # ---------------------------------------------------------------- the verbs
 
-def test_group_from_a_selection_refuses_scene_and_keeps_the_rest(rig):
+def test_a_group_holds_the_scene_and_the_save_refuses_it_in_words(rig):
+    """Plan 50 (harden-node-groups' second half): a group holds any node
+    the preset saves — the scene, a frame singleton, too — and the check
+    that it can be saved as a patch runs at the save: refused in words,
+    nothing written, the group as it was."""
+    noita(rig)
+    entry = ui_graph.group_nodes(rig.panel, ["render:scene", "render:warp"])
+    assert entry["nodes"] == ["render:scene", "render:warp"]
+    home = files(rig.lib.home)
+    assert ui_graph.save_patch(rig.panel, "group.1", "with the scene", "") == (
+        graphview.SAVE_REFUSED.format(name="group 1", why="scene is the frame's; left out"))
+    assert files(rig.lib.home) == home
+    assert rig.lib.presets.groups == [entry] and "patch" not in entry
+    # the preset saves it and reads it back as it was
+    doc = rig.lib.presets.document("x")
+    assert doc["groups"] == [entry]
+
+
+def test_group_from_a_selection_refuses_a_group_and_keeps_the_rest(rig):
     st = noita(rig)
-    entry = ui_graph.group_nodes(rig.panel, ["render:scene", "render:warp",
-                                             "render:doublevision", "group.7"])
+    entry = ui_graph.group_nodes(rig.panel, ["render:warp", "render:doublevision",
+                                             "group.7"])
     assert entry == {"id": "group.1", "name": "group 1",
                      "nodes": ["render:warp", "render:doublevision"], "open": False}
-    assert st["note"] == ("scene is the frame's; left out; group.7 is a group: a group holds "
-                          "nodes, not groups; left out")
+    assert st["note"] == "group.7 is a group: a group holds nodes, not groups; left out"
     assert rig.lib.presets.groups == [entry]
     frame(rig.panel, "graph")
     assert [g.id for g in st["view"].groups] == ["group.1"]
@@ -744,6 +763,11 @@ def test_groups_keep_their_invariants_over_the_corpus(tmp_path, path):
             # a macro "deleted" loses its label and subscribers; the knob is
             # the rig's and stays, so the node is still held — and a member
             assert cid in pre._held_canvas() and cid in g["nodes"]
+        elif not isinstance(res, (str, graphview.Ask)) and cid in pre._held_canvas():
+            # plan 50: a group holds any node the preset saves — hands 1 too,
+            # which a wired frame always has: "deleted", it is still held,
+            # so still a member (as a macro is)
+            assert cid in g["nodes"], cid
         elif not isinstance(res, (str, graphview.Ask)):   # (the camera: refused in words)
             deleted.append(cid)
             assert all(cid not in x["nodes"] for x in pre.groups), cid
@@ -966,13 +990,26 @@ def test_deleting_a_group_node_is_refused_in_words(rig, monkeypatch):
     assert rig.lib.presets.groups == [ENTRY]
 
 
-def test_patches_select_is_the_one_rule_for_lift_and_group():
-    """One classifier (T1's, factored): `lift` and `Edit.group` both read
-    `patches.select`; its words are the lift's."""
+def test_one_selector_two_rules_the_save_and_the_canvas():
+    """One classifier (T1's, factored; plan 50 split its rule in two): the
+    save — `lift` and `Edit.save_patch` — reads `patches.select`; the canvas
+    — `Edit.group`, the drawing, a load — `patches.groupable`; both are
+    `patches._select`, and what the save refuses the canvas may hold."""
     import inspect
     assert "select(" in inspect.getsource(patches.lift)
-    assert "patches.select(" in inspect.getsource(graphview.Edit.group)
+    assert "patches.select(" in inspect.getsource(graphview.Edit.save_patch)
+    assert "patches.groupable(" in inspect.getsource(graphview.Edit.group)
+    assert "patches.groupable(" in inspect.getsource(graphview.attach_groups)
     assert "patches.crossing(" in inspect.getsource(graphview._boundary)
+    spec = G.read_graph({"frame": "wired", "wires": [{"from": "scene", "to": "warp.image"},
+                                                      {"from": "warp", "to": "output.all.image"}]})
+    ids = ["render:scene", "render:warp", "render:output.all", "env.2"]
+    canvas, said = patches.groupable(spec, None, ids)
+    assert canvas.render == ("scene", "warp") and canvas.envs == (2,)
+    assert said == [patches.WINDOW_WORDS.format(name="output.all")]
+    saved, said = patches.select(spec, None, ids)
+    assert saved.render == ("warp",) and saved.envs == ()
+    assert len(said) == 3
 
 
 # ---------------------------------------------------------------- plan 40 T3: save, browse, spawn
@@ -1403,7 +1440,7 @@ def test_save_as_patch_writes_that_file_and_nothing_else(rig):
         assert set(after) - set(home) == {"patches/noita-core.json"}
         assert {k: v for k, v in after.items() if k in home} == home
         doc = json.loads(after["patches/noita-core.json"])
-        assert doc["schema"] == "hyperspace.patch/1" and doc["name"] == "noita core"
+        assert doc["schema"] == "hyperspace.patch/2" and doc["name"] == "noita core"
         assert doc["note"] == "the middle"
         assert [e.get("file") for e in doc["nodes"]] == ["doublevision", "fractals", "warp"]
         assert [(p["id"], p["was"]) for p in doc["ports"]] == [
@@ -1417,7 +1454,7 @@ def test_save_as_patch_writes_that_file_and_nothing_else(rig):
         assert ui_graph._state(rig.panel)["said"] == "updated patch noita core"
         rig.lib.presets.groups[0]["nodes"].append("render:scene")
         assert ui_graph.save_patch(rig.panel, "group.1", "bad", "") == (
-            "scene is the frame's; left out")
+            "noita core not saved as a patch: scene is the frame's; left out")
         assert files(rig.lib.home) == after
     finally:
         undo.install(None)

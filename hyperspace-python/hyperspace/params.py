@@ -148,11 +148,22 @@ F_KEYS = 8
 # `eye.*` (the fixed eye the world is seen through) are one camera in the
 # preset. The ids keep their group (`eye.fov`, a saved id, is a format):
 # the merge is the group's move from the session, not a rename
+# `ghost` and `cloud` (plan 43 §6 item 1, plan 44 D3, schema `/10`): the
+# hands' look and the point clouds' look are the look's — a preset carries
+# them, a load lands them — but for the one setting each hands node keeps
+# for the room (`SESSION_KEYS`: `ghost.mirror`, a real mirror in front of
+# the performer's hands; the owner's answer of 2026-11-02, kept 2026-11-03)
 PERFORMANCE_GROUPS = ("view", "rot", "camera", "eye", "pattern", "dream", "fx", "media",
-                      "backdrop", "switch", "resize", "matte", "cut", "segment", "lfo", "env",
-                      "seq", "macro", "mod")
-SESSION_GROUPS = ("tempo", "hands", "ghost", "band", "master", "scene", "audio", "output",
-                  "overlay", "ui", "desk", "cloud")
+                      "backdrop", "switch", "resize", "matte", "cut", "segment", "ghost",
+                      "cloud", "lfo", "env", "seq", "macro", "mod")
+SESSION_GROUPS = ("tempo", "hands", "band", "master", "scene", "audio", "output",
+                  "overlay", "ui", "desk")
+# plan 44 D3 (row 612): the session params inside a performance group, by
+# group → the last segment of their ids — `ghost.mirror`, and an extra
+# hands node's `ghost.2.mirror`. They keep their group (the HANDS page
+# lists the group; an id is a saved format) and are the rig's single copy:
+# `part_of` asks here first, so a preset never names one and the show keeps it
+SESSION_KEYS: dict[str, tuple[str, ...]] = {"ghost": ("mirror",)}
 # plan 43 C2 (row 573): the spin's pose — where each plane is in its turn,
 # `view.body` folded in (`ViewState.pose`) — saved by every preset under
 # these ids (its `pose` section, preset.POSE_KEY, beside `values`) and set
@@ -258,6 +269,10 @@ class Param:
             self.persist = False
         if self.kind is Kind.TEXT:
             self.modulatable = False
+        # plan 44 D3 (review of #351): its part of the split, once — an id and
+        # a group never change, and `snapshot(part=)` asks every frame the
+        # dirty dot is drawn
+        self._part = None if self.group is None else part_of_id(self.id, self.group)
 
     # ---- generic value access ----
 
@@ -653,9 +668,47 @@ class Param:
 
 def part_of(p: Param) -> str | None:
     """"performance" or "session", by the param's group; None for a group
-    in neither (no group, or `preset`, whose params never persist)."""
+    in neither (no group, or `preset`, whose params never persist). A
+    session key of a performance group (`SESSION_KEYS`: `ghost.mirror`)
+    is the session's. The one rule (plan 44 D3): a deck's registry hands
+    the session every param this calls "session". Cached on the param at
+    its declaration (`Param._part`); one from before a hot reload is asked."""
+    got = p.__dict__.get("_part", _UNSET)
+    if got is not _UNSET:
+        return got
+    return None if p.group is None else part_of_id(p.id, p.group)
+
+
+_UNSET = object()
+
+
+def group_part(group: str | None) -> str | None:
+    """The part a whole group is in ("performance", "session" or None)."""
     for name, groups in PARTS.items():
-        if p.group in groups:
+        if group in groups:
+            return name
+    return None
+
+
+def in_group(p: Param, group: str) -> bool:
+    """Whether `p` is one of `group`'s params on every per-group road — a
+    module preset's values, its reset, its dirty dot, `snapshot(group)`,
+    the library's fresh values (review of #351, round 2): its group, and
+    its group's part — so a session key (`ghost.mirror`) is never moved,
+    saved or counted by the `ghost` group's roads, though the HANDS page
+    (`Registry.group`) still lists it."""
+    return p.group == group and part_of(p) == group_part(group)
+
+
+def part_of_id(pid: str, group: str | None = None) -> str | None:
+    """`part_of` by id alone: `group` is the param's, else the id's first
+    segment (every group's ids start with it but the bank's, `preset`)."""
+    group = pid.partition(".")[0] if group is None else group
+    keys = SESSION_KEYS.get(group)
+    if keys and pid.rpartition(".")[2] in keys:
+        return "session"
+    for name, groups in PARTS.items():
+        if group in groups:
             return name
     return None
 
@@ -720,8 +773,12 @@ class Registry:
     serial: int = 0
     frame: int = 0
     landed: int | None = None
+    # plan 44 D3: the session registry this deck's registry follows — None
+    # for a registry of its own (a bare one, the tests'; and one from
+    # before a hot reload, on the class)
+    session: SessionRegistry | None = None
 
-    def __init__(self):
+    def __init__(self, session: SessionRegistry | None = None):
         self._p: dict[str, Param] = {}
         self.nonfinite: list[str] = []   # params that dropped a NaN / inf last apply()
         # the one rule for what an alias stands for right now (band.sel.*
@@ -732,10 +789,28 @@ class Registry:
         # now (hands.sel.* → the selected hand axis, hands/core.py), asked
         # after `real_of`; a module that declares an alias adds its rule
         self.aliases: dict[str, Callable[[Param], Param | None]] = {}
+        if session is not None:
+            self.follow(session)
+
+    def follow(self, session: SessionRegistry) -> None:
+        """Hold `session`'s params by reference from now on (plan 44 D3): the
+        ones it has now, added here in its order, and every one it gains or
+        loses later — one `Param` object in every deck's registry, so
+        `reg["output.dim"]` reads and writes the room's from any deck. A
+        session param declared on this registry goes to `session` (`add`)."""
+        if self.session is session:
+            return
+        if self.session is not None:
+            raise ValueError("a deck's registry follows one session")
+        self.session = session
+        session._follow(self)
+        for p in list(session):
+            self._put(p)
 
     def real(self, p: Param) -> Param:
         """The param behind an alias — where the base and the modulation
-        state live — or `p` itself when it is not one."""
+        state live — or `p` itself when it is not one. A session alias
+        (`band.sel.*`) is answered by the session's rules (plan 44 D3)."""
         if not p.alias:
             return p
         if self.real_of is not None:
@@ -745,14 +820,27 @@ class Registry:
         for prefix, rule in self.aliases.items():
             if p.id.startswith(prefix):
                 return rule(p) or p
+        session = self.session
+        if session is not None and session is not self:
+            return session.real(p)
         return p
 
-    def add(self, p: Param) -> Param:
+    def _put(self, p: Param) -> Param:
+        """`p` into this registry's own map, whoever declared it."""
         if p.id in self._p:
             raise ValueError(f"duplicate param id {p.id}")
         self._p[p.id] = p
         self.serial += 1
         return p
+
+    def add(self, p: Param) -> Param:
+        """Declare `p`. On a deck's registry (one that follows a session) a
+        session param (`part_of`) is the session's: added there, and so to
+        every deck that follows it — declared once (plan 44 D3)."""
+        session = self.session
+        if session is not None and session is not self and part_of(p) == "session":
+            return session.add(p)            # (its one duplicate check, every deck)
+        return self._put(p)
 
     def __getitem__(self, pid: str) -> Param:
         return self._p[pid]
@@ -777,7 +865,13 @@ class Registry:
 
     def remove(self, pid: str) -> Param | None:
         """Drop a param (a band that was deleted). Bindings to it go dormant —
-        every adapter already treats an unknown id as a no-op."""
+        every adapter already treats an unknown id as a no-op. A session
+        param is the session's to drop (plan 44 D3): it leaves every deck."""
+        session = self.session
+        if session is not None and session is not self:
+            q = session.get(pid)
+            if q is not None and q is self._p.get(pid):
+                return session.remove(pid)
         p = self._p.pop(pid, None)
         if p is not None:
             self.serial += 1
@@ -794,10 +888,31 @@ class Registry:
     def begin_frame(self) -> int:
         """A new frame mark (plan 28 N0): `Router.modulate` lands the params
         its pass reads under it, and the next `apply` skips those. Returns
-        the mark."""
-        self.frame += 1
+        the mark.
+
+        A deck's registry (plan 44 D3, review of #351) takes its mark from
+        its session: the first deck to begin a frame moves the session's
+        frame on, every other deck adopts it, so every deck's pass in one
+        frame lands the shared session params under **one** mark — a
+        session param a pass landed is never landed again that frame by
+        another deck, and two registries' counters can never meet by
+        chance on a shared `Param`."""
+        session = self.session
+        if session is not None and session is not self:
+            if self.frame == session.frame:      # this deck is the first this frame
+                session.frame += 1
+            self.frame = session.frame
+            session.landed = session.frame       # (the session's own apply dedups by it)
+        else:
+            self.frame += 1
         self.landed = self.frame
         return self.frame
+
+    def _owned_by_session(self, p: Param) -> bool:
+        """Whether `p` is a session param this deck holds by reference."""
+        session = self.session
+        return (session is not None and session is not self
+                and session._p.get(p.id) is p)
 
     def apply(self) -> None:
         """Once per frame, after every source has called modulate(): base +
@@ -805,14 +920,27 @@ class Registry:
         those `Router.modulate` already landed under this frame's mark
         (plan 28 N0: a param the pass reads lands before its reader), which
         `Param.apply` skips. Closes the mark: an `apply` with no pass
-        before it lands everything, as before."""
+        before it lands everything, as before.
+
+        Plan 44 D3 (review of #351): a session param is one `Param` in
+        every deck, and an apply consumes its frame's offsets — so only the
+        session's **lead** deck (`SessionRegistry.lead`, the first that
+        follows it) lands the session's params; every other deck's apply
+        leaves them alone, its router's offsets riding into the lead's
+        next apply (a frame late for a deck that runs after the lead —
+        D4's order to settle), never releasing what another deck holds."""
         # over a copy: a modulated trigger may add or remove params
         # (a band layout change) while we are still walking the table.
         # `nonfinite`: the params that dropped a NaN / inf this frame (the
         # stall log names each once, app.py) — those the pass landed too
         mark, self.landed = self.landed, None
+        session = self.session
+        follower = (session is not None and session is not self
+                    and session.lead is not self)
         bad: list[str] = []
         for p in list(self._p.values()):
+            if follower and self._owned_by_session(p):
+                continue
             if p._base is not None:
                 p.apply(mark)
             if p._bad:
@@ -827,17 +955,19 @@ class Registry:
         """{id: base value} for every persistent param, the macros
         included, or only one group, one id set, or one part of the split
         (``part="performance"`` / ``"session"``, PARTS). The filters
-        combine: each one given must hold."""
+        combine: each one given must hold. A part is `part_of`'s (plan 44
+        D3: `ghost.mirror` is the session's though its group is not)."""
         out: dict[str, Any] = {}
-        groups = None if part is None else PARTS[part]
+        if part is not None and part not in PARTS:
+            raise KeyError(part)
         for p in self._p.values():
             if not p.persist:
                 continue
-            if group is not None and p.group != group:
+            if group is not None and not in_group(p, group):
                 continue
             if ids is not None and p.id not in ids:
                 continue
-            if groups is not None and p.group not in groups:
+            if part is not None and part_of(p) != part:
                 continue
             v = p.base
             out[p.id] = list(v) if isinstance(v, list) else v
@@ -912,6 +1042,86 @@ class Registry:
     def text(self, pid, label, get, set, *, group="", tip="", persist=True) -> Param:
         return self.add(Param(pid, label, Kind.TEXT, get, set, group=group, tip=tip,
                               persist=persist))
+
+
+class SessionRegistry(Registry):
+    """The rig's params, one set for every deck (plan 44 D3): the session
+    groups (`SESSION_GROUPS`, `SESSION_KEYS`) and the params of no part
+    that only the rig declares (`app.restart`, the undo keys). Built by
+    `build_session`; each deck's `Registry` follows it (`Registry.follow`)
+    and holds these `Param` objects by reference — a param added or removed
+    here is added to or removed from every deck at once, in the order it
+    came. A performance param is refused: it is a deck's."""
+
+    def __init__(self):
+        super().__init__()
+        self._decks: list[Any] = []       # weak references to the following registries
+
+    def _follow(self, deck: Registry) -> None:
+        import weakref
+        self._decks.append(weakref.ref(deck))
+        if self.lead is None:             # nobody named yet: the first deck, until one is
+            self.lead = deck
+
+    @property
+    def decks(self) -> list[Registry]:
+        """The live deck registries that follow this session, in the order
+        they came."""
+        live = [d for r in self._decks if (d := r()) is not None]
+        if len(live) != len(self._decks):
+            import weakref
+            self._decks = [weakref.ref(d) for d in live]
+        return live
+
+    @property
+    def lead(self) -> Registry | None:
+        """The deck whose `apply` lands the session's params, once a frame
+        (review of #351, round 2): **named** — the deck on air, which
+        `Deck.build(on_air=True)` (the host's one deck today) sets — held
+        weakly; until one is named, the first deck that follows. A registry
+        that follows and is not the lead (a stale deck a closure still
+        holds, a scratch registry in a tool) never lands them. None: no
+        deck — `apply` on the session itself is then the one road."""
+        ref = self.__dict__.get("_lead")
+        return ref() if ref is not None else None
+
+    @lead.setter
+    def lead(self, deck: Registry | None) -> None:
+        import weakref
+        if deck is not None and deck.session is not self:
+            raise ValueError("the lead is a deck that follows this session")
+        self.__dict__["_lead"] = weakref.ref(deck) if deck is not None else None
+
+    def apply(self) -> None:
+        """The session's params landed from the session itself (review of
+        #351, round 2): under the frame's shared mark when a deck began one
+        (`Registry.begin_frame` sets `landed`), so in the same frame as the
+        lead's apply — before or after it — each param lands once; with no
+        frame begun (no deck, a test) every one lands, as `Registry.apply`
+        does. The lead's apply is the normal road; this one is for a host
+        with no lead."""
+        super().apply()
+
+    def add(self, p: Param) -> Param:
+        if part_of(p) == "performance":
+            raise ValueError(f"{p.id} is a performance param: a deck's, never the session's")
+        decks = self.decks
+        for d in decks:
+            if p.id in d._p:
+                raise ValueError(f"duplicate param id {p.id}")
+        self._put(p)
+        for d in decks:
+            d._put(p)
+        return p
+
+    def remove(self, pid: str) -> Param | None:
+        p = super().remove(pid)
+        if p is not None:
+            for d in self.decks:
+                if d._p.get(pid) is p:
+                    del d._p[pid]
+                    d.serial += 1
+        return p
 
 
 # ---------------------------------------------------------------- builder
@@ -1639,7 +1849,8 @@ def dream_speed_text(k: float) -> str:
 
 
 def build_registry(view, control, audio, bank=None, dream=None, fx=None,
-                   restart=None, ghost=None, media=None) -> Registry:
+                   restart=None, ghost=None, media=None, *,
+                   session: SessionRegistry | None = None) -> Registry:
     """Declare every parameter the surface owns.
 
     `audio` only needs a `.chain` attribute (tests pass a namespace); the
@@ -1660,7 +1871,214 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     without a host. Only the panel's own state (``ui.*``) is added by the
     panel once it exists.
     """
-    r = Registry()
+    if session is None:
+        session = build_session(control, audio, restart, media=media)
+    return build_performance(view, bank, dream=dream, fx=fx, ghost=ghost, media=media,
+                             session=session)
+
+
+def build_session(control, audio, restart=None, media=None) -> SessionRegistry:
+    """Declare the rig's params once (plan 44 D3): the analyzer's (`master`,
+    `scene`, `band` — the bands rebuilt on a layout change, `band.sel.*`
+    the selected band's views), the audio transport, `app.restart` and the
+    undo keys. What every deck shares by reference (`SessionRegistry`); the
+    rest of the session — the clock's, the hands', the outputs', the
+    desk's, the panel's — is declared later on a deck's registry, which
+    hands it here (`Registry.add`). `audio` only needs a `.chain` (see
+    `build_registry`); `restart` is the host's restart request; `media` the
+    rig's media sources (`media.channels.MediaSources`, or the deck's
+    `Channels` that reads through them), whose mixer `audio.mix` listens to
+    — none, a stand-in nobody feeds, and the toggle is not declared."""
+    r = SessionRegistry()
+    chain = lambda: audio.chain
+
+    # ---- master faders ----
+    g = "master"
+    r.continuous("master.gain", "Audio drive",
+                 lambda: chain().gain, lambda v: setattr(chain(), "gain", v),
+                 taper=tapers.T_DRIVE, fmt=tapers.fmt_gain, group=g,
+                 tip="Master gain on every band fader, after the transfer stage. Only "
+                     "does anything while a source is attached.")
+    r.continuous("master.dyn", "Dynamics",
+                 lambda: chain().dyn, lambda v: setattr(chain(), "dyn", v),
+                 taper=tapers.T_DYN, fmt=tapers.fmt_gain, group=g,
+                 tip="How much of the range a limiter took is put back. At 0 the chain is "
+                     "a plain level follower; up to 1× it blends toward the moving window "
+                     "and grows the expansion; past 1× only the expansion keeps growing.")
+    r.continuous("master.trim", "Input trim",
+                 lambda: chain().trim, lambda v: setattr(chain(), "trim", v),
+                 taper=tapers.T_TRIM, fmt=tapers.fmt_db, group=g,
+                 tip="One offset added to every per-band trim, at the very head of the "
+                     "chain — moves a whole song down into the 56 dB working window.")
+
+    # ---- scene ----
+    g = "scene"
+    r.enum("scene.select", "Scene", lambda: control.scene, control.select_scene,
+           control.scene_names, group=g,
+           tip="The eleven factory scenes, re-tuned onto the bands you have; the "
+               "preset strip loads a band file whole, layout included.")
+    r.trigger("scene.reset_all", "Reset all", control.reset_all_clicked, group=g,
+              tip="Reloads the selected scene across every band. Undoable for 8 s.")
+
+    # ---- bands ----
+    # The analyzer has N bands (plan 07), so this block is a function: it
+    # drops every band.* id and declares them again for the current N, and
+    # runs whenever the layout changes (a band added, removed or moved, a
+    # preset's layout applied) — control.on_layout is that hook.
+    shaper_tags = [s.tag for s in SHAPERS]
+    curve_tags = [c.tag for c in CURVES]
+    fmt_hz = lambda v: f"{v:.0f} Hz" if v < 1000 else f"{v / 1000:.2f} kHz"
+
+    def band_params(prefix: str, idx: Callable[[], int], label_of: Callable[[str], str],
+                    alias: bool = False):
+        g = "band"
+        # where the band listens: centre, Q and curve retune the analyzer in
+        # place (weights recomputed, trackers keep running)
+        r.continuous(f"{prefix}.f", label_of("Centre"),
+                     lambda: chain().spec[idx()].f,
+                     lambda v: chain().set_band(idx(), f=v),
+                     lo=F_LO, hi=F_HI, log=True, fmt=fmt_hz, group=g, alias=alias,
+                     tip="LOG, 20 Hz to 20 kHz. The band's centre frequency; the edges "
+                         "follow from it and Q.")
+        r.continuous(f"{prefix}.q", label_of("Q"),
+                     lambda: chain().spec[idx()].q,
+                     lambda v: chain().set_band(idx(), q=v),
+                     lo=Q_LO, hi=Q_HI, log=True, fmt=lambda v: f"Q {v:.2f}", group=g,
+                     alias=alias,
+                     tip="LOG, 0.1 to 20. Centre over bandwidth: 1 is an octave-ish "
+                         "band, 0.1 spans most of the spectrum, 20 is a sliver.")
+        r.enum(f"{prefix}.curve", label_of("Curve"),
+               lambda: chain().spec[idx()].curve,
+               lambda c: chain().set_band(idx(), curve=c), curve_tags, group=g, alias=alias,
+               tip="How the FFT bins between the edges are weighted: RECT is every "
+                   "bin equally (the reference), the others taper toward the edges.")
+        r.enum(f"{prefix}.fn", label_of("Transfer"),
+               lambda: chain().params[idx()].fn,
+               lambda fn: control.set_shaper(idx(), fn), shaper_tags, group=g, alias=alias)
+        r.enum(f"{prefix}.norm", label_of("Normalise"),
+               lambda: chain().params[idx()].norm,
+               lambda v: setattr(chain().params[idx()], "norm", int(v)), NORMS,
+               group=g, alias=alias, modulatable=False,
+               tip="AUTO: the reference's adaptive window — it undoes a limiter, and "
+                   "cancels most of a trim (a 6–12 dB cut can even drive harder). "
+                   "MANUAL: no window; the trim is a plain gain and the band follows "
+                   "its level, 1.0 at nominal.")
+        for knob in tapers.KNOBS:
+            r.continuous(
+                f"{prefix}.{knob.key}", label_of(knob.label),
+                (lambda k=knob.key: getattr(chain().params[idx()], k)),
+                (lambda v, k=knob.key: setattr(chain().params[idx()], k, v)),
+                taper=knob.t, fmt=knob.fmt, tip=knob.tip, group=g, alias=alias,
+            )
+
+    def build_bands():
+        g = "band"
+        r.remove_prefix("band.")
+        r.enum("band.select", "Band", lambda: control.selb,
+               lambda i: setattr(control, "selb", i), lambda: chain().band_names, group=g,
+               persist=False, modulatable=False,
+               tip="Which band's strip is open — the band.sel.* params follow it.")
+        # structural: never lane-driven (they rebuild this very block)
+        r.trigger("band.add", "Add band", control.add_band, group=g, modulatable=False,
+                  tip="A new band in the widest gap between the others; it becomes "
+                      "the open strip.")
+        r.trigger("band.remove", "Remove band", control.remove_band, group=g,
+                  modulatable=False, tip="Drops the open band. The last one stays.")
+        r.trigger("band.reset", "Reset band", control.reset_band, group=g,
+                  tip="Puts this band's whole strip back to the selected scene.")
+        for i, name in enumerate(chain().band_names):
+            band_params(f"band.{i}", (lambda i=i: i), lambda lb, b=name: f"{b} {lb}")
+            r.trigger(f"band.{i}.reset", f"{name} reset",
+                      lambda i=i: control.reset_band(i), group=g)
+        # the selected band's strip: views onto band.{selb}.*, never saved or driven
+        band_params("band.sel", lambda: control.selb, lambda lb: lb, alias=True)
+
+    def real_of(p: Param) -> Param:
+        if p.id.startswith("band.sel."):
+            return r.get(f"band.{control.selb}.{p.id[9:]}") or p
+        return p
+
+    r.real_of = real_of
+    build_bands()
+    control.on_layout = build_bands
+
+    # ---- audio transport (only what the engine exposes headlessly) ----
+    g = "audio"
+
+    def mic_on() -> bool:
+        return bool(getattr(audio, "on", False) and getattr(audio, "mode", None) == "mic")
+
+    def set_mic(on: bool) -> None:
+        devices = getattr(audio, "devices", None) or []
+        if on and devices and not mic_on():
+            sel = min(max(int(getattr(audio, "device_sel", 0)), 0), len(devices) - 1)
+            audio.start_mic(devices[sel]["index"])
+        elif not on and mic_on():
+            audio.stop()
+
+    r.toggle("audio.mic", "Mic", mic_on, set_mic, group=g, persist=False,
+             tip="Listen to the selected input device.")
+
+    # plan 45 V3: the third source — the media mixer's sum, the videos' sound.
+    # The mixer is the media sources' (plan 44 D3: shared, one for the room)
+    def mix_on() -> bool:
+        return bool(getattr(audio, "on", False) and getattr(audio, "mode", None) == "mix")
+
+    def set_mix(on: bool) -> None:
+        if on and not mix_on() and hasattr(audio, "start_mix"):
+            audio.start_mix(media.live_mixer())
+        elif not on and mix_on():
+            audio.stop()
+
+    # only with the host's media: a stand-in's mixer is fed by nobody, and
+    # the toggle would "succeed" into silence for ever
+    if media is not None:
+        r.toggle("audio.mix", "Video sound", mix_on, set_mix, group=g, persist=False,
+                 tip="Listen to the media mixer: the channels whose sound is on, summed "
+                     "after their gains. Silent until a channel's sound is on; no input "
+                     "device is opened.")
+    r.enum("audio.device", "Input device",
+           lambda: int(getattr(audio, "device_sel", 0)),
+           lambda i: setattr(audio, "device_sel", int(i)),
+           lambda: [("● " if d["loopback"] else "") + d["name"]
+                    for d in (getattr(audio, "devices", None) or [])],
+           group=g, persist=False, modulatable=False)
+    if hasattr(audio, "rescan"):
+        r.trigger("audio.rescan", "Rescan devices", audio.rescan, group=g, modulatable=False,
+                  tip="Read the input device list again — for a driver or an interface "
+                      "plugged in after launch.")
+    r.trigger("app.restart", "Restart process",
+              restart if restart is not None else (lambda: None), group="ui",
+              modulatable=False,
+              tip="Restart the process (Cmd+R). Full cold reload; view state is lost.")
+    # undo and redo (undo.py, plan 15 WP1): key rows fire them (⌘Z / Ctrl+Z,
+    # with ⇧ to redo); with no Undo installed they do nothing
+    r.trigger("edit.undo", "Undo", lambda: undo.undo(), group="ui", modulatable=False,
+              tip="Take back the last gesture or the last load, learn or delete "
+                  "(Cmd+Z or Ctrl+Z).")
+    r.trigger("edit.redo", "Redo", lambda: undo.redo(), group="ui", modulatable=False,
+              tip="Put back what the last undo took (Cmd+Shift+Z or Ctrl+Shift+Z).")
+    if hasattr(audio, "toggle_play"):
+        r.toggle("audio.play", "Play",
+                 lambda: bool(getattr(audio, "playing", False)),
+                 lambda on: audio.toggle_play() if on != bool(audio.playing) else None,
+                 group=g, persist=False, tip="Play / pause the loaded track.")
+        r.trigger("audio.restart", "Restart track", audio.restart, group=g)
+        r.trigger("audio.stop", "Stop source", audio.stop, group=g, modulatable=False)
+    return r
+
+
+def build_performance(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
+                      session: SessionRegistry | None = None) -> Registry:
+    """Declare a deck's own params (plan 44 D3): the look's — the view, the
+    media channels' (`media`, the deck's `Channels`), the backdrop, the
+    turn, the camera and the eye, the clouds' and the hands' looks, the
+    look-back and the dream, the effects, the macros — and the bank's
+    (`bank`, the show's preset slots, which load into this deck), on a
+    registry that follows `session` (the rig's params by reference: one
+    `Param` in every deck). `session` None: a fresh one of its own. The
+    other arguments are `build_registry`'s."""
+    r = Registry(session=session if session is not None else SessionRegistry())
     dream = dream if dream is not None else DreamState()
     media = media if media is not None else media_channels.MediaState()
     r.media = media
@@ -1723,7 +2141,6 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
         except AttributeError:            # (a view without the field: the registry's own)
             pass
     r.lookback_state = rings
-    chain = lambda: audio.chain
     fmt_speed = lambda x: "stop" if x <= 0 else f"{x:.3f}" if x < 1 else f"{x:.2f}"
 
     # ---- view ----
@@ -2145,25 +2562,6 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     # the ghost hands' display (ghost.py; the renderer's Ghost.state)
     declare_ghost(r, ghost if ghost is not None else GhostState())
 
-    # ---- master faders ----
-    g = "master"
-    r.continuous("master.gain", "Audio drive",
-                 lambda: chain().gain, lambda v: setattr(chain(), "gain", v),
-                 taper=tapers.T_DRIVE, fmt=tapers.fmt_gain, group=g,
-                 tip="Master gain on every band fader, after the transfer stage. Only "
-                     "does anything while a source is attached.")
-    r.continuous("master.dyn", "Dynamics",
-                 lambda: chain().dyn, lambda v: setattr(chain(), "dyn", v),
-                 taper=tapers.T_DYN, fmt=tapers.fmt_gain, group=g,
-                 tip="How much of the range a limiter took is put back. At 0 the chain is "
-                     "a plain level follower; up to 1× it blends toward the moving window "
-                     "and grows the expansion; past 1× only the expansion keeps growing.")
-    r.continuous("master.trim", "Input trim",
-                 lambda: chain().trim, lambda v: setattr(chain(), "trim", v),
-                 taper=tapers.T_TRIM, fmt=tapers.fmt_db, group=g,
-                 tip="One offset added to every per-band trim, at the very head of the "
-                     "chain — moves a whole song down into the 56 dB working window.")
-
     # ---- macros: the chaining knobs (plan 09, decision 7) ----
     # Nothing reads a macro but the router, through the macro's subscribers
     # (routing.Macro, plan 13 §2.4): a base subscriber follows the macro's
@@ -2182,97 +2580,6 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                      tip="Does nothing on its own: it acts through its subscribers — "
                          "each sets a param's base or scales a route's depth, over its "
                          "own from → to. Own it with a hand or LFO to ride the depths.")
-
-    # ---- scene ----
-    g = "scene"
-    r.enum("scene.select", "Scene", lambda: control.scene, control.select_scene,
-           control.scene_names, group=g,
-           tip="The eleven factory scenes, re-tuned onto the bands you have; the "
-               "preset strip loads a band file whole, layout included.")
-    r.trigger("scene.reset_all", "Reset all", control.reset_all_clicked, group=g,
-              tip="Reloads the selected scene across every band. Undoable for 8 s.")
-
-    # ---- bands ----
-    # The analyzer has N bands (plan 07), so this block is a function: it
-    # drops every band.* id and declares them again for the current N, and
-    # runs whenever the layout changes (a band added, removed or moved, a
-    # preset's layout applied) — control.on_layout is that hook.
-    shaper_tags = [s.tag for s in SHAPERS]
-    curve_tags = [c.tag for c in CURVES]
-    fmt_hz = lambda v: f"{v:.0f} Hz" if v < 1000 else f"{v / 1000:.2f} kHz"
-
-    def band_params(prefix: str, idx: Callable[[], int], label_of: Callable[[str], str],
-                    alias: bool = False):
-        g = "band"
-        # where the band listens: centre, Q and curve retune the analyzer in
-        # place (weights recomputed, trackers keep running)
-        r.continuous(f"{prefix}.f", label_of("Centre"),
-                     lambda: chain().spec[idx()].f,
-                     lambda v: chain().set_band(idx(), f=v),
-                     lo=F_LO, hi=F_HI, log=True, fmt=fmt_hz, group=g, alias=alias,
-                     tip="LOG, 20 Hz to 20 kHz. The band's centre frequency; the edges "
-                         "follow from it and Q.")
-        r.continuous(f"{prefix}.q", label_of("Q"),
-                     lambda: chain().spec[idx()].q,
-                     lambda v: chain().set_band(idx(), q=v),
-                     lo=Q_LO, hi=Q_HI, log=True, fmt=lambda v: f"Q {v:.2f}", group=g,
-                     alias=alias,
-                     tip="LOG, 0.1 to 20. Centre over bandwidth: 1 is an octave-ish "
-                         "band, 0.1 spans most of the spectrum, 20 is a sliver.")
-        r.enum(f"{prefix}.curve", label_of("Curve"),
-               lambda: chain().spec[idx()].curve,
-               lambda c: chain().set_band(idx(), curve=c), curve_tags, group=g, alias=alias,
-               tip="How the FFT bins between the edges are weighted: RECT is every "
-                   "bin equally (the reference), the others taper toward the edges.")
-        r.enum(f"{prefix}.fn", label_of("Transfer"),
-               lambda: chain().params[idx()].fn,
-               lambda fn: control.set_shaper(idx(), fn), shaper_tags, group=g, alias=alias)
-        r.enum(f"{prefix}.norm", label_of("Normalise"),
-               lambda: chain().params[idx()].norm,
-               lambda v: setattr(chain().params[idx()], "norm", int(v)), NORMS,
-               group=g, alias=alias, modulatable=False,
-               tip="AUTO: the reference's adaptive window — it undoes a limiter, and "
-                   "cancels most of a trim (a 6–12 dB cut can even drive harder). "
-                   "MANUAL: no window; the trim is a plain gain and the band follows "
-                   "its level, 1.0 at nominal.")
-        for knob in tapers.KNOBS:
-            r.continuous(
-                f"{prefix}.{knob.key}", label_of(knob.label),
-                (lambda k=knob.key: getattr(chain().params[idx()], k)),
-                (lambda v, k=knob.key: setattr(chain().params[idx()], k, v)),
-                taper=knob.t, fmt=knob.fmt, tip=knob.tip, group=g, alias=alias,
-            )
-
-    def build_bands():
-        g = "band"
-        r.remove_prefix("band.")
-        r.enum("band.select", "Band", lambda: control.selb,
-               lambda i: setattr(control, "selb", i), lambda: chain().band_names, group=g,
-               persist=False, modulatable=False,
-               tip="Which band's strip is open — the band.sel.* params follow it.")
-        # structural: never lane-driven (they rebuild this very block)
-        r.trigger("band.add", "Add band", control.add_band, group=g, modulatable=False,
-                  tip="A new band in the widest gap between the others; it becomes "
-                      "the open strip.")
-        r.trigger("band.remove", "Remove band", control.remove_band, group=g,
-                  modulatable=False, tip="Drops the open band. The last one stays.")
-        r.trigger("band.reset", "Reset band", control.reset_band, group=g,
-                  tip="Puts this band's whole strip back to the selected scene.")
-        for i, name in enumerate(chain().band_names):
-            band_params(f"band.{i}", (lambda i=i: i), lambda lb, b=name: f"{b} {lb}")
-            r.trigger(f"band.{i}.reset", f"{name} reset",
-                      lambda i=i: control.reset_band(i), group=g)
-        # the selected band's strip: views onto band.{selb}.*, never saved or driven
-        band_params("band.sel", lambda: control.selb, lambda lb: lb, alias=True)
-
-    def real_of(p: Param) -> Param:
-        if p.id.startswith("band.sel."):
-            return r.get(f"band.{control.selb}.{p.id[9:]}") or p
-        return p
-
-    r.real_of = real_of
-    build_bands()
-    control.on_layout = build_bands
 
     # ---- the preset bank ----
     if bank is not None:                   # library.Project: the bank of preset names
@@ -2335,48 +2642,4 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                       "(fn ← on a laptop) and OVERDUB (B11) on the desk. "
                       "Undo brings back what was up.")
 
-    # ---- audio transport (only what the engine exposes headlessly) ----
-    g = "audio"
-
-    def mic_on() -> bool:
-        return bool(getattr(audio, "on", False) and getattr(audio, "mode", None) == "mic")
-
-    def set_mic(on: bool) -> None:
-        devices = getattr(audio, "devices", None) or []
-        if on and devices and not mic_on():
-            sel = min(max(int(getattr(audio, "device_sel", 0)), 0), len(devices) - 1)
-            audio.start_mic(devices[sel]["index"])
-        elif not on and mic_on():
-            audio.stop()
-
-    r.toggle("audio.mic", "Mic", mic_on, set_mic, group=g, persist=False,
-             tip="Listen to the selected input device.")
-    r.enum("audio.device", "Input device",
-           lambda: int(getattr(audio, "device_sel", 0)),
-           lambda i: setattr(audio, "device_sel", int(i)),
-           lambda: [("● " if d["loopback"] else "") + d["name"]
-                    for d in (getattr(audio, "devices", None) or [])],
-           group=g, persist=False, modulatable=False)
-    if hasattr(audio, "rescan"):
-        r.trigger("audio.rescan", "Rescan devices", audio.rescan, group=g, modulatable=False,
-                  tip="Read the input device list again — for a driver or an interface "
-                      "plugged in after launch.")
-    r.trigger("app.restart", "Restart process",
-              restart if restart is not None else (lambda: None), group="ui",
-              modulatable=False,
-              tip="Restart the process (Cmd+R). Full cold reload; view state is lost.")
-    # undo and redo (undo.py, plan 15 WP1): key rows fire them (⌘Z / Ctrl+Z,
-    # with ⇧ to redo); with no Undo installed they do nothing
-    r.trigger("edit.undo", "Undo", lambda: undo.undo(), group="ui", modulatable=False,
-              tip="Take back the last gesture or the last load, learn or delete "
-                  "(Cmd+Z or Ctrl+Z).")
-    r.trigger("edit.redo", "Redo", lambda: undo.redo(), group="ui", modulatable=False,
-              tip="Put back what the last undo took (Cmd+Shift+Z or Ctrl+Shift+Z).")
-    if hasattr(audio, "toggle_play"):
-        r.toggle("audio.play", "Play",
-                 lambda: bool(getattr(audio, "playing", False)),
-                 lambda on: audio.toggle_play() if on != bool(audio.playing) else None,
-                 group=g, persist=False, tip="Play / pause the loaded track.")
-        r.trigger("audio.restart", "Restart track", audio.restart, group=g)
-        r.trigger("audio.stop", "Stop source", audio.stop, group=g, modulatable=False)
     return r

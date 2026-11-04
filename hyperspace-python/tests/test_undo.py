@@ -54,14 +54,16 @@ class FakeOut:
         self.sent.append(msg)
 
 
-def boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None):
+def boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None, sources=None):
     """app.main's construction order, headless, over `home` — seeded with
     the corpus first (conftest.seed: the shipped presets and the party
     show, which the home then opens with its startup preset, TUMBLE).
     The deck is `Deck.build`'s, the one order `app.main` runs too (plan 44
     D1); the rig around it is stand-ins: no GL (no renderer, no hold), a
     namespace for the audio engine, a bare `Output`, the panel's params
-    without imgui, and one `MidiIO` over fake ports."""
+    without imgui, and one `MidiIO` over fake ports. `sources`: shared
+    sources (routing_sources.Sources) for the deck's router to read, as a
+    second deck's would (plan 44 D2); None, its own."""
     seed(home)
     if show:
         opened_last(home, show)
@@ -106,9 +108,12 @@ def boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None):
 
     deck = Deck.build(library=lib, control=control, audio=audio, table=load_table,
                       dream=dream, fx=fx, ghost=ghost,
-                      clock=tempo.Clock(now=lambda: r.t), lfos=lfo.LFOs(seed=1),
+                      # shared sources bring their one clock (plan 44 §2)
+                      clock=(sources.clock if sources is not None and sources.clock
+                             is not None else tempo.Clock(now=lambda: r.t)),
+                      lfos=lfo.LFOs(seed=1),
                       hands=hands_setup, outputs=outputs_setup, panel=panel_setup,
-                      devices=devices_setup)
+                      devices=devices_setup, sources=sources)
     r.__dict__.update(lib=lib, reg=deck.reg, view=deck.view, control=control, chain=chain,
                       audio=audio, router=deck.router, table=deck.table, presets=deck.presets,
                       clock=deck.clock, lfos=deck.lfos, learn=deck.learn, inp=inp,
@@ -734,8 +739,8 @@ def three_bands(home) -> None:
                                 {"f": 900.0, "q": 1.2, "curve": "rect", "name": "MD"},
                                 {"f": 7000.0, "q": 0.8, "curve": "rect", "name": "HI"}]},
            "values": {"band.0.thr": 0.3, "band.2.post": 0.5}}
-    (home / "band").mkdir(parents=True, exist_ok=True)
-    (home / "band" / "three.json").write_text(json.dumps(doc))
+    (home / "patches" / "band").mkdir(parents=True, exist_ok=True)
+    (home / "patches" / "band" / "three.json").write_text(json.dumps(doc))
 
 
 def test_a_band_preset_load_with_a_layout_undoes_whole(rig):
@@ -744,10 +749,10 @@ def test_a_band_preset_load_with_a_layout_undoes_whole(rig):
     reg, lib, chain = rig.reg, rig.lib, rig.chain
     curve = chain.layout()["bands"][0]["curve"]
     three_bands(rig.home)
-    doc = json.loads((rig.home / "band" / "three.json").read_text())
+    doc = json.loads((rig.home / "patches" / "band" / "three.json").read_text())
     for row in doc["layout"]["bands"]:
         row["curve"] = curve
-    (rig.home / "band" / "three.json").write_text(json.dumps(doc))
+    (rig.home / "patches" / "band" / "three.json").write_text(json.dumps(doc))
     lib.poll(now=1e9)
     reg["band.4.thr"].step(5)
     settle(rig)

@@ -36,6 +36,9 @@ _LIVE_TESTS = {
     "test_segment.py::test_vision_runs_once_on_a_synthetic_frame",
     "test_segment.py::test_vision_frees_each_jobs_memory",     # 300 Vision jobs, ~2 s
     "test_segment.py::test_torch_runs_once_on_a_synthetic_frame",
+    # the dream's real VGG on MPS (its file's only MPS test; also slow, by
+    # file): the same rule, so it never shares MPS with the segment's torch
+    "test_dream.py::test_end_to_end_offscreen",
 }
 _SLOW_TESTS = {
     "test_media_core.py::test_heic_opens",
@@ -111,35 +114,106 @@ def pytest_collection_modifyitems(config, items):
         if path in _GOLDEN_FILES:
             item.add_marker(pytest.mark.golden)
         if path in _LIVE_FILES or key in _LIVE_TESTS:
+            # loopbacks share global Syphon / NDI names, torch and Vision the
+            # GPU: one at a time across every worker and run (the live lock)
             item.add_marker(pytest.mark.live)
-            # loopbacks share global Syphon / NDI names: one worker at a time
-            item.add_marker(pytest.mark.xdist_group("live"))
         if path in _SLOW_FILES or key in _SLOW_TESTS:
             item.add_marker(pytest.mark.slow)
 
 
-@pytest.fixture(autouse=True)
-def _live_devices_take_turns(request):
+# pytest's own fixtures wider than a test, which hold no device
+_WIDE_OK = {"tmp_path_factory", "tmpdir_factory", "pytestconfig", "worker_id",
+            "testrun_uid", "cache", "record_testsuite_property", "doctest_namespace"}
+
+
+def _wide_fixtures(item):
+    """(name, scope) of each fixture `item` uses that outlives one test and
+    is not one of pytest's deviceless own (`_WIDE_OK`): the live lock is
+    held per test, so such a fixture would hold its device outside it."""
+    info = getattr(item, "_fixtureinfo", None)
+    for name, defs in (info.name2fixturedefs.items() if info else ()):
+        scope = getattr(defs[-1], "scope", "function") if defs else "function"
+        if scope != "function" and name not in _WIDE_OK:
+            yield name, scope
+
+
+@pytest.hookimpl(hookwrapper=True, tryfirst=True)
+def pytest_runtest_protocol(item, nextitem):
     """A test marked `live` holds the machine-wide live lock
-    (tests/live_lock.py) for its setup, call and teardown, so live tests
-    of two pytest processes (two sessions, two worktrees) take turns;
-    xdist's `xdist_group("live")` only orders one run's. `glfw.init()`
-    and a camera, audio or HID open can block in C, not fail, while
-    another process holds the window system or the device: the lock is
-    the mitigation, the thread timeout (pyproject addopts) the backstop.
-    It waits at most `live_lock.WAIT_S` and then skips — never forever.
-    It is function-scoped: a module- or session-scoped fixture a live test
-    requests is set up before the lock is taken, outside it, so a live
-    test opens its devices in its own body or a function-scoped fixture."""
-    if request.node.get_closest_marker("live") is None:
+    (tests/live_lock.py) for its whole protocol — setup, call, teardown —
+    so no two live tests run at once: not two workers of one run (`--dist
+    load` hands a test to any worker, row 605) and not two pytest
+    processes (two sessions, two worktrees). `glfw.init()` and a camera,
+    audio or HID open can block in C, not fail, while another process
+    holds the window system or the device: the lock is the mitigation,
+    the thread timeout the backstop.
+
+    Taken here, outside pytest-timeout's own protocol wrapper (tryfirst:
+    this one is outer), so the wait is not timed: a test gets its whole
+    120 s after its turn comes. While a worker of this run holds it the
+    wait has no bound (that holder's own timeout bounds it, so a run
+    never skips its own live tests); another run's holder is waited for
+    `live_lock.WAIT_S`, a holder that names no run `RUN_WAIT_S`, then the
+    test skips with the reason (`pytest_runtest_setup`). A live test its
+    skip marks skip, or one with a fixture wider than the test, takes no
+    lock (`_takes_the_lock`)."""
+    if not _takes_the_lock(item):
         yield
         return
     import live_lock
 
-    with live_lock.held() as why_not:
-        if why_not:
-            pytest.skip(why_not)
+    with live_lock.held(run=_run_id(item.config)) as why_not:
+        item.stash[_LIVE_WHY_NOT] = why_not
         yield
+
+
+_LIVE_WHY_NOT = pytest.StashKey[str | None]()
+
+
+def _skipped_by_marks(item) -> bool:
+    """Would pytest's skipping plugin skip `item` on its skip / skipif
+    marks? (An `importorskip` or a fixture's skip cannot be known before
+    setup: those tests still queue once for a turn they will not use.)"""
+    from _pytest.skipping import evaluate_skip_marks
+
+    return evaluate_skip_marks(item) is not None
+
+
+def _takes_the_lock(item) -> bool:
+    """A live test that will run: not one its marks skip, nor one with a
+    fixture wider than the test (its setup fails it, row 605)."""
+    return (item.get_closest_marker("live") is not None and not _skipped_by_marks(item)
+            and not any(_wide_fixtures(item)))
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_setup(item):
+    """Before any fixture of a live test: refuse a fixture wider than the
+    test (`_wide_fixtures`: it would be set up outside the lock, and is
+    never set up here), then skip if the lock was not had. Per item, so
+    xdist names the test and the rest of the run goes on; only tests that
+    run are checked, so a deselected tier is never looked at (row 605). A
+    test its skip / skipif marks skip is left to the skipping plugin,
+    which runs next: a skip, not an error."""
+    if item.get_closest_marker("live") is None or _skipped_by_marks(item):
+        return
+    wide = [f"{name} ({scope}-scoped)" for name, scope in _wide_fixtures(item)]
+    if wide:
+        pytest.fail("a live test's fixture wider than the test is set up outside the "
+                    "live lock (tests/live_lock.py): open the device in the test or a "
+                    "function-scoped fixture — it uses " + ", ".join(wide), pytrace=False)
+    why_not = item.stash.get(_LIVE_WHY_NOT, None)
+    if why_not:
+        pytest.skip(why_not)
+
+
+def _run_id(config) -> str:
+    """This run's id, the same in each of its xdist workers (xdist's
+    `testrunuid`), this process's own in a serial run — read from the
+    config, not the environment, so a pytest a test starts in a
+    subprocess (it inherits `PYTEST_XDIST_TESTRUNUID`) is another run."""
+    wi = getattr(config, "workerinput", None)
+    return f"xdist-{wi['testrunuid']}" if wi and wi.get("testrunuid") else f"pid-{os.getpid()}"
 
 
 @pytest.fixture
@@ -215,6 +289,23 @@ def _no_real_hid(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_real_joysticks(monkeypatch):
+    """No test reads the machine's GLFW joysticks: none is present and a
+    GUID, buttons, hats and axes are empty, unless the test patches the
+    getter itself (a later setattr wins). Before GLFW is initialised the
+    real getters say nothing anyway; after a test in the same worker has
+    called `glfw.init()` (the real-GL ones) they read whatever pad the Mac
+    has on index 0 — a Joy-Con (L), 2026-11-03 — and a test that faked
+    the buttons but not the GUID read that pad's model (row 605)."""
+    import glfw
+
+    monkeypatch.setattr(glfw, "joystick_present", lambda j: False)
+    monkeypatch.setattr(glfw, "get_joystick_guid", lambda j: None)
+    for name in ("get_joystick_buttons", "get_joystick_hats", "get_joystick_axes"):
+        monkeypatch.setattr(glfw, name, lambda j: None)
+
+
+@pytest.fixture(autouse=True)
 def _renderers_draw_todays_frame(request, monkeypatch):
     """Plan 36 T3 (W3): the app's `Renderer` starts on the empty frame
     (`graph.EMPTY`, black) until a preset's graph lands. The tests' bare
@@ -280,8 +371,10 @@ def opened_last(home, show: str = "house"):
 
 CORPUS = Path(__file__).resolve().parent / "corpus"
 # the groups the corpus holds: the twenty-five presets, the three dream
-# module presets, and the two shows (party, house) whose banks name them
+# patches of one group (plan 50: what the module presets were, under
+# patches/dream/), and the two shows (party, house) whose banks name them
 CORPUS_GROUPS = ("presets", "dream", "projects")
+# (each laid out as a library lays it out: `library.group_folder`, the one table)
 
 
 def seed(home, *groups: str, last_show: str | None = "party"):
@@ -296,12 +389,14 @@ def seed(home, *groups: str, last_show: str | None = "party"):
     stand on this seed instead — `boot_home` seeds by default."""
     import shutil
 
+    from hyperspace.library import group_folder
+
     home = Path(home)
     for group in groups or CORPUS_GROUPS:
-        src = CORPUS / group
+        src = CORPUS / group_folder(group)
         if not src.is_dir():
             raise FileNotFoundError(f"no corpus group {group!r} under {CORPUS}")
-        dst = home / group
+        dst = home / group_folder(group)
         dst.mkdir(parents=True, exist_ok=True)
         for f in sorted(src.glob("*.json")):
             if not (dst / f.name).exists():

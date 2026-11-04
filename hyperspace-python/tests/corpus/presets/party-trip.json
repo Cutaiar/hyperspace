@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.preset/9",
+ "schema": "hyperspace.preset/10",
  "name": "TRIP",
  "note": "party-trip: a 24-cell on plasma faces under the trip stack (plasma, kaleidoscope, zoom burst, hue cycle); LFO 1 a quarter-note sine at depth 0 for the left hand to open",
  "graph": {"frame": "wired",
@@ -139,6 +139,10 @@
   "camera.pan.y": 0.0,
   "eye.fov": 47.611887036915434,
   "eye.distance": 3.7777777777777777,
+  "cloud.size": 2.0,
+  "cloud.scale": 0.3,
+  "cloud.bright": 1.0,
+  "cloud.colors": true,
   "dream.on": false,
   "dream.mix": 0.7,
   "dream.echo_mix": 0.4,
@@ -197,6 +201,11 @@
   "fx.zoomblur.cy": 0.0,
   "fx.zoomblur.glow": 0.6,
   "fx.zoomblur.taps": 16.0,
+  "ghost.on": false,
+  "ghost.alpha": 0.6,
+  "ghost.guide": 0,
+  "ghost.tethers": false,
+  "ghost.style": 0,
   "macro.1": 1.0,
   "macro.2": 1.0,
   "macro.3": 1.0,
@@ -391,7 +400,6 @@
   {"source": "cc:*:23", "target": "fx.huecycle.spread", "op": "abs", "feedback": "ring"}
  ],
  "macros": {},
- "modules": {},
  "units": {
   "camera.pan": "world",
   "fx.depth": "taper"

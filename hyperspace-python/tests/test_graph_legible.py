@@ -328,10 +328,12 @@ def test_tidy_collapses_all_relays_and_says_what_it_did(rig):
     assert st["applied"]["render:camera"] != (900.0, 40.0)
 
 
-def test_beside_shows_only_with_a_selection(rig, monkeypatch):
-    """The details chip is drawn only while something is selected and the
-    page is narrower than `WIDE`, labelled by what a click does; at `WIDE`
-    or more the details sit beside the canvas with no chip."""
+def test_beside_shows_on_a_narrow_page_selected_or_not(rig, monkeypatch):
+    """The details chip is drawn while the page is narrower than `WIDE`,
+    labelled by what a click does; at `WIDE` or more the pane sits beside
+    the canvas with no chip. Plan 49: the pane is always on, so the page
+    asks for the chip with or without a selection (`beside_chip`'s
+    `selected` is the page's True)."""
     assert ui_graph.beside_chip(False, 500.0, False) is None
     assert ui_graph.beside_chip(True, 500.0, False) == "details beside"
     assert ui_graph.beside_chip(True, 500.0, True) == "details below"
@@ -342,10 +344,15 @@ def test_beside_shows_only_with_a_selection(rig, monkeypatch):
     monkeypatch.setattr(ui, "chip", lambda label, *a, **k: chips.append(label)
                         or chip(label, *a, **k))
     frame(rig.panel, "graph")
-    assert "tidy##graph" in chips and not any(c.startswith("details") for c in chips)
-    assert "expand all##graph" in chips
-    # a bundle selected on the control window's narrow page: the chip, by what it does
+    assert "tidy##graph" in chips and "expand all##graph" in chips
+    # the control window's narrow page, nothing selected: the chip (plan 49)
     imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    frame(rig.panel, "graph")
+    chips.clear()
+    frame(rig.panel, "graph")
+    assert ui_graph._selection(st, rig.view) is None
+    assert "details beside##graph" in chips
+    # a bundle selected there: the chip, by what it does
     _in_editor(rig, link(st, next(iter(st["bundles"]))))
     frame(rig.panel, "graph")
     chips.clear()

@@ -23,7 +23,7 @@ from conftest import (
     tree,
 )
 
-from hyperspace import config, library, params, placement, preset, routing
+from hyperspace import config, library, params, patches, placement, preset, routing
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.bands import BANDS
@@ -80,10 +80,10 @@ def band(home, *names: str) -> None:
     """The band scenes `names` (code data since the library went one-tier,
     hyperspace/scenes/band/) as band presets of the user's in `home` —
     what the strip's list held while the build shipped them."""
-    (home / "band").mkdir(exist_ok=True)
+    (home / "patches" / "band").mkdir(parents=True, exist_ok=True)
     for name in names:
         doc = scene_doc(SCENES_DIR / f"{slug(name)}.json")
-        (home / "band" / f"{slug(name)}.json").write_text(json.dumps(doc))
+        (home / "patches" / "band" / f"{slug(name)}.json").write_text(json.dumps(doc))
 
 
 # ---------------------------------------------------------------- home
@@ -133,7 +133,9 @@ def test_the_band_scenes_ship_in_the_package():
     assert names == set(SCENES)
     doc = json.loads((SCENES_DIR / "balanced.json").read_text())
     assert doc["schema"] == "hyperspace.preset/1" and doc["group"] == "band"
-    assert scene_doc(SCENES_DIR / "balanced.json") == doc
+    # (plan 50: read as a patch of the band group, through the one ladder)
+    assert scene_doc(SCENES_DIR / "balanced.json") == patches.forward(doc)
+    assert patches.forward(doc)["schema"] == "hyperspace.patch/2"
     with pytest.raises(LibraryError, match="no scene file"):
         scene_doc(SCENES_DIR / "no-such.json")
     # the analyzer contract: a layout next to the flat band.{i}.* values
@@ -185,7 +187,7 @@ def test_a_project_keeps_the_session_apart(rig, tmp_path):
     reg["master.gain"].set(2.0)
     path = lib.project.save("Split")
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.project/2" and "values" not in doc
+    assert doc["schema"] == "hyperspace.project/3" and "values" not in doc
     assert doc["session"] == reg.snapshot(part="session")
     assert "master.gain" in doc["session"] and "view.shape" not in doc["session"]
     # the file holds the F-keys' eight (plan 19 WP1: `bank_doc`), the show 24
@@ -213,7 +215,7 @@ def test_a_project_keeps_the_session_apart(rig, tmp_path):
 def test_load_fills_missing_ids_from_the_default_preset(rig, tmp_path):
     lib = rig.lib
     band(tmp_path, "Balanced", "Kick & Sizzle")
-    (tmp_path / "band" / "sparse.json").write_text(json.dumps({
+    (tmp_path / "patches" / "band" / "sparse.json").write_text(json.dumps({
         "schema": "hyperspace.preset/1", "group": "band", "name": "Sparse",
         "values": {"band.3.atk": 0.9, "band.9.atk": 1.0},
     }))
@@ -232,7 +234,7 @@ def test_dirty_save_as_overwrite_reset(rig, tmp_path):
     reg["view.bright"].set_value(2.0)
     assert lib.is_dirty("view")
     path = lib.save_as("view", "Loud One")
-    assert path == tmp_path / "view" / "loud-one.json"
+    assert path == tmp_path / "patches" / "view" / "loud-one.json"
     assert lib.current("view") == "Loud One" and not lib.is_dirty("view")
     assert lib.list("view") == ["Loud One"]
     doc = json.loads(path.read_text())
@@ -256,8 +258,8 @@ def test_dirty_save_as_overwrite_reset(rig, tmp_path):
     assert lib.reset("band") == "Balanced"
     assert rig.chain.params[0].atk == 0.25 and lib.current("band") == "Balanced"
     reg["band.0.atk"].set(0.7)
-    assert lib.overwrite("band") == tmp_path / "band" / "balanced.json"
-    assert json.loads((tmp_path / "band" / "balanced.json").read_text())["values"]["band.0.atk"] == 0.7
+    assert lib.overwrite("band") == tmp_path / "patches" / "band" / "balanced.json"
+    assert json.loads((tmp_path / "patches" / "band" / "balanced.json").read_text())["values"]["band.0.atk"] == 0.7
 
 
 def test_a_band_preset_saved_from_the_strip_carries_its_layout(rig, tmp_path):
@@ -300,8 +302,8 @@ def test_a_projects_inline_band_copy_carries_the_layout(rig, tmp_path):
     control.add_band()
     chain.set_band(6, name="HIGH")
     lib.save_as("band", "Gone")
-    (tmp_path / "band" / "gone.json").unlink()        # current, but no file anywhere
-    lib._sync(tmp_path / "band" / "gone.json")
+    (tmp_path / "patches" / "band" / "gone.json").unlink()        # current, but no file anywhere
+    lib._sync(tmp_path / "patches" / "band" / "gone.json")
     assert lib.current("band") == "Gone" and lib.path_of("band", "Gone") is None
     lib.project.save("P")
     inline = json.loads((tmp_path / "projects" / "p.hyp.json").read_text())["modules"]["band"]
@@ -389,8 +391,8 @@ def test_a_project_restores_a_modules_layout(rig, tmp_path):
     assert chain.n == 6 and lib.current("band") is None         # a blank show: no module
     # …and the module as an inline copy, when its file is gone
     lib.project.load("Wide")
-    (tmp_path / "band" / "eight.json").unlink()
-    lib._sync(tmp_path / "band" / "eight.json")
+    (tmp_path / "patches" / "band" / "eight.json").unlink()
+    lib._sync(tmp_path / "patches" / "band" / "eight.json")
     lib.project.save("Wide")
     lib.load("band", "Balanced")
     assert chain.n == 6
@@ -428,7 +430,7 @@ def test_presets_are_the_librarys_one_document_kind(rig, tmp_path):
     path = lib.save_as("presets", "My Routes")
     assert path == tmp_path / "presets" / "my-routes.json"
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.preset/9" and len(doc["routes"]) == 13
+    assert doc["schema"] == "hyperspace.preset/10" and len(doc["routes"]) == 13
     assert lib.current("presets") == "My Routes" and not lib.is_dirty("presets")
     lib.load("presets", "hands-play")
     assert not router.table.routes_to("view.bright")[0].source.startswith("lane")
@@ -518,10 +520,10 @@ def test_layout_hook_runs_before_values(rig, tmp_path):
 
 def test_bad_files_are_reported_not_fatal(rig, tmp_path):
     lib = rig.lib
-    d = tmp_path / "view"
-    d.mkdir()
+    d = tmp_path / "patches" / "view"
+    d.mkdir(parents=True)
     (d / "broken.json").write_text("{not json")
-    (d / "future.json").write_text(json.dumps({"schema": "hyperspace.preset/9", "name": "F",
+    (d / "future.json").write_text(json.dumps({"schema": "hyperspace.preset/11", "name": "F",
                                                "group": "view", "values": {}}))
     (d / "other.json").write_text(json.dumps({"schema": "hyperspace.preset/1", "name": "O",
                                               "group": "camera", "values": {}}))
@@ -530,25 +532,32 @@ def test_bad_files_are_reported_not_fatal(rig, tmp_path):
         lib.load("view", "broken")
     with pytest.raises(LibraryError, match="newer"):
         lib.load("view", "F")
-    with pytest.raises(LibraryError, match="camera preset"):
+    with pytest.raises(LibraryError, match="a patch of the camera group, not a patch of the view"):
         lib.load("view", "O")
     with pytest.raises(LibraryError, match="no preset"):
         lib.load("view", "nope")
 
 
 def test_schema_migration_table():
+    """The shows' ladder (plan 50: the only one `migrate_doc` serves — a
+    preset's is `graphmigrate.forward`, a fragment's `patches.forward`)."""
     with pytest.raises(LibraryError, match="no schema"):
-        migrate_doc({}, "hyperspace.preset")
+        migrate_doc({}, "hyperspace.project")
     with pytest.raises(LibraryError, match="not a hyperspace.project"):
         migrate_doc({"schema": "hyperspace.preset/1"}, "hyperspace.project")
-    library.MIGRATIONS[("hyperspace.preset", 0)] = lambda d: {"schema": d["schema"], "values": d["v"]}
+    with pytest.raises(LibraryError, match="no ladder for hyperspace.preset"):
+        migrate_doc({"schema": "hyperspace.preset/1"}, "hyperspace.preset")
+    assert set(library.CURRENT) == {"hyperspace.project"}
+    library.MIGRATIONS[("hyperspace.project", 0)] = lambda d: {"schema": d["schema"], "v": 1}
+    library.MIGRATIONS[("hyperspace.project", 1)] = lambda d: {**d, "w": 2}
     try:
-        out = migrate_doc({"schema": "hyperspace.preset/0", "v": {"a": 1}}, "hyperspace.preset")
-        assert out == {"schema": "hyperspace.preset/1", "values": {"a": 1}}
+        out = migrate_doc({"schema": "hyperspace.project/0"}, "hyperspace.project")
+        assert out["schema"] == "hyperspace.project/3" and out["v"] == 1 and out["w"] == 2
     finally:
-        del library.MIGRATIONS[("hyperspace.preset", 0)]
+        del library.MIGRATIONS[("hyperspace.project", 0)]
+        del library.MIGRATIONS[("hyperspace.project", 1)]
     with pytest.raises(LibraryError, match="no migration"):
-        migrate_doc({"schema": "hyperspace.preset/0"}, "hyperspace.preset")
+        migrate_doc({"schema": "hyperspace.project/0"}, "hyperspace.project")
 
 
 # ---------------------------------------------------------------- projects
@@ -567,7 +576,7 @@ def test_project_save_load_new(rig, tmp_path):
     assert p == tmp_path / "projects" / "gig.hyp.json"
     assert lib.project.list() == ["gig", "house", "party"]   # house, party: the seed's
     doc = json.loads(p.read_text())
-    assert doc["schema"] == "hyperspace.project/2" and doc["name"] == "Gig"
+    assert doc["schema"] == "hyperspace.project/3" and doc["name"] == "Gig"
     # a performance group's label is the preset's, never the project's
     assert doc["modules"] == {"band": "Percussive"}
     assert doc["session"]["master.gain"] == 2.5 and "camera.zoom" not in doc["session"]
@@ -632,7 +641,7 @@ def test_editing_the_loaded_preset_reflects_in_the_app(rig, tmp_path):
     assert lib.poll(now=3.0)
     assert rig.view.bright == 3.0 and "view/Live" in lib.status
     # a file for a preset that is not loaded changes nothing but the listing
-    other = tmp_path / "view" / "other.json"
+    other = tmp_path / "patches" / "view" / "other.json"
     other.write_text(json.dumps({"schema": "hyperspace.preset/1", "group": "view",
                                  "name": "Other", "values": {"view.bright": 0.1}}))
     touch(other)
@@ -694,7 +703,9 @@ def test_the_librarys_shows_are_listed_and_load_by_name(rig, tmp_path):
 # ------------------------------------------------ plan 15 WP1: the trash
 
 def trash(home, group) -> list:
-    d = home / library.TRASH / group
+    # (plan 50: a group's patches sit under patches/<group>/, and so in the trash)
+    d = home / library.TRASH / (group if group in ("presets", "projects", "patches")
+                                else f"patches/{group}")
     return sorted(d.iterdir()) if d.is_dir() else []
 
 
@@ -934,7 +945,7 @@ def test_the_owner_home_is_shaped_like_the_owners(owner_home):
     home = owner_home
     for show in OWNER_SHOWS:
         doc = json.loads((home / "projects" / f"{show}.hyp.json").read_text())
-        assert doc["schema"] == "hyperspace.project/2" and len(doc["bank"]) == 8
+        assert doc["schema"] == "hyperspace.project/3" and len(doc["bank"]) == 8
         assert all(doc["bank"]), show
     mine = json.loads((home / "projects" / "mine.hyp.json").read_text())
     assert mine["bank"][:3] == list(OWNER_PRESETS) and mine["startup"] == "NIGHT ONE"
@@ -943,7 +954,7 @@ def test_the_owner_home_is_shaped_like_the_owners(owner_home):
     assert len(pads) == 16 and {p["target"] for p in pads} == {"view.shape"}
     for name in OWNER_PRESETS:
         doc = json.loads((home / "presets" / f"{slug(name)}.json").read_text())
-        assert doc["schema"] == "hyperspace.preset/9" and doc["name"] == name   # (row 394)
+        assert doc["schema"] == "hyperspace.preset/10" and doc["name"] == name   # (row 394)
         by_source = {row["source"]: row for row in doc["desk"]}
         for pad in pads:
             if name == "NIGHT TWO" and pad["source"] == OWNER_PAD["source"]:
@@ -1080,7 +1091,7 @@ def test_the_first_write_past_slot_eight_keeps_the_eight_slot_file(owner_home):
     assert [p.name for p in bak8(show)] == ["mine.hyp.json.bak-v2-bank8"]
     assert bak8(show)[0].read_bytes() == old               # the file from before any far slot
     doc = json.loads(show.read_text())
-    assert doc["schema"] == "hyperspace.project/2"         # the schema stays (fork 2)
+    assert doc["schema"] == "hyperspace.project/3"         # the schema stays (fork 2; plan 44 D3: /3)
     assert len(doc["bank"]) == 12 and doc["bank"][8:] == [None, None, None, "NIGHT TWO"]
     assert doc["bank"][:8] == json.loads(old)["bank"] and not pr.is_dirty()
     # a second far write, a save and "starts on": the long bank is on disk, no second copy
@@ -1183,7 +1194,7 @@ def test_save_as_lands_on_slot_nine_once_the_f_keys_are_full(owner_home):
 
 
 def test_a_long_bank_read_by_eight_slots_shows_the_first_eight(owner_home):
-    """Fork 2's known cost, stated: the schema stays `hyperspace.project/2`,
+    """Fork 2's known cost, stated: the schema stays `hyperspace.project/3` (plan 44 D3; /2 before),
     so a build from before plan 19 opens a long bank by cutting it to
     eight (`_take`'s `[:SLOTS]` with SLOTS = 8). It shows slots 1–8
     correctly, and its next write of that show drops the far slots'
@@ -1197,7 +1208,7 @@ def test_a_long_bank_read_by_eight_slots_shows_the_first_eight(owner_home):
     pr.put_slot(8, "WAKE")
     pr.put_slot(23, "TRIP")
     doc = json.loads(show.read_text())
-    assert len(doc["bank"]) == 24 and doc["schema"] == "hyperspace.project/2"
+    assert len(doc["bank"]) == 24 and doc["schema"] == "hyperspace.project/3"
     presets_before = {p.name: p.read_bytes() for p in (home / "presets").glob("*.json")}
     # the older build's reading of the file (library.py before plan 19, SLOTS = 8)
     old_slots = 8

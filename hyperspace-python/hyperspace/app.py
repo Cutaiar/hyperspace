@@ -1150,6 +1150,11 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     and the loop goes on, so the next save can fix it. `imgui.new_frame()`
     has already run (main): `keys.typing` is this frame's value."""
     reg, keys, router, reloader = h.reg, h.keys, h.router, h.reloader
+    # the router's shared half (routing_sources.Sources, plan 44 D2): where
+    # the audio lanes' names and the devices' feeds go — the router's own,
+    # so the pad's lanes (fed through the router in `devs.poll`) and every
+    # other feed land in one place
+    sources = router.sources
     h.clock.tick(now)   # the clock's "now" for the frame: a trigger and the LFO step agree
 
     # the chain object is recreated on source attach; keep bindings fresh
@@ -1251,13 +1256,13 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     try:
         audio = h.audio
         audio.step(dt)
-        audio.publish(router)       # the lanes' names, like every source (R8)
+        audio.publish(sources)      # the lanes' names, like every source (R8)
         chain = audio.chain if audio.on else None
         if devs is not None:
             # the devices' feeds: the hands feed `hand` (and complete a
             # hand Learn), the bridge feeds `ext` (its out half is a sink,
             # below) — each guarded by the registry, the first error the toast's
-            devs.feed(router)
+            devs.feed(sources)
             if devs.error and ok:
                 ok, reloader.runtime_error = False, devs.error
         # the lanes are a modulation source like any other (routing.py);
@@ -1528,7 +1533,7 @@ def main(argv: list[str] | None = None) -> None:
         panel.media = media                        # the MEDIA page: the folder and the channels
         renderer.ghost.router = router           # the guide lights what the table routes
         renderer.cloud_source = rig              # cloud:<role> → the scene's point clouds (A4b)
-        renderer.rig_source = library.project    # the show's own wires: the bus cables (plan 36 T1)
+        # (the bus cuts: the renderer reads the presets, `Deck.build` — plan 44 D3)
         media.state.resolver.devices = rig       # ndi: / syphon: / camera: ids → live feeds (plan 32 T8)
         # the GRAPH canvas (2026-11-02); `on_page` is the panel's own fact, read
         media.state.resolver.builtin[PANEL_GRAPH] = PanelSource(
@@ -1564,7 +1569,8 @@ def main(argv: list[str] | None = None) -> None:
         # parts, the view state, the registry and every param, the marks,
         # undo, the hold, the router, the presets, learn and the banks
         *deck.targets(),
-        (media.state, "media.channels", "MediaState"),        # plan 32
+        (media.state, "media.channels", "Channels"),          # plan 32 (plan 44 D3: its new name)
+        (media.state.sources, "media.channels", "MediaSources"),   # plan 44 D3: the rig's half
         *[(ch, "media.channels", "Channel") for ch in media.state.channels.values()],
         (media.folder, "media.folder", "MediaFolder"),
         (panel, "ui", "Panel"),

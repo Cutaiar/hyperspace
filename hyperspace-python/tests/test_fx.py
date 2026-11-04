@@ -455,33 +455,44 @@ def shell(tmp_path):
     return made()
 
 
-def test_the_page_draws_and_fits(tmp_path, monkeypatch):
-    """The FX page at the control size over a party preset's graph (TRIP:
-    its run), nothing open, then each of its effects' strips with an error
-    line on it, then the longest strip of all: it never scrolls."""
+def browser_scroll(panel, size) -> float:
+    """The FX browser (`ui_fx.page`) drawn as the FX page drew it, at the
+    panel's size, in a window of its own — plan 49 stage 2 retired the page
+    and the browser is GRAPH's fx section, which scrolls by itself; the
+    body at full height still fits — three frames; its scroll range."""
     from imgui_bundle import imgui
-    from test_ui_shell import frame
 
     from hyperspace import ui_fx
-    from hyperspace.ui import Panel
+    over = 0.0
+    for _ in range(3):
+        imgui.new_frame()
+        imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+        imgui.set_next_window_size(imgui.ImVec2(*size))
+        imgui.begin("fx page", None, imgui.WindowFlags_.no_title_bar | imgui.WindowFlags_.no_move)
+        ui_fx.page(panel, 1 / 60)
+        over = imgui.get_scroll_max_y()
+        imgui.end()
+        imgui.end_frame()
+    return over
+
+
+def test_the_page_draws_and_fits(tmp_path, monkeypatch):
+    """The FX browser at the control size over a party preset's graph (TRIP:
+    its run), nothing open, then each of its effects' strips with an error
+    line on it, then the longest strip of all: it never scrolls (plan 49
+    stage 2: the retired page's body, GRAPH's fx section at full height)."""
+    from hyperspace import ui_fx
+    from hyperspace.app import CONTROL_SIZE
     with shell(tmp_path) as (rig, st, stand_in):
         rig.lib.presets.load("TRIP")
         stand_in.fx.error = lambda n: "line 3: made up"
         listed = [n for _, ns in ui_fx.groups(rig.lib.presets.graph.spec) for n in ns]
         assert listed
-        over = []
-        draw = Panel._page_fx
-
-        def measured(self, dt):
-            draw(self, dt)
-            over.append(imgui.get_scroll_max_y())
-        monkeypatch.setattr(Panel, "_page_fx", measured)
         longest = max(st.specs, key=lambda n: len(st.specs[n].params))
         for sel in (None, *listed, longest):
             rig.panel.fx_selected = sel
-            for _ in range(3):
-                frame(rig.panel, "fx")
-            assert over and over[-1] == 0, f"the fx page scrolls with {sel} open"
+            assert browser_scroll(rig.panel, CONTROL_SIZE) == 0, \
+                f"the fx browser scrolls with {sel} open"
 
 
 def test_the_page_has_no_conflicting_ids(tmp_path, monkeypatch):
@@ -909,19 +920,17 @@ def test_the_page_fits_with_the_tightest_strip_idle(fxpage, monkeypatch):
     """No graph loaded (the empty-state line), every effect's strip open in
     turn with an error line, idle for each reason a chip mends: the page
     never scrolls at the control size."""
-    from hyperspace.ui import PAGE_KEYS, Panel
     from hyperspace.ui_fx import why_idle
     imgui, st, reg, panel = fxpage.imgui, fxpage.st, fxpage.reg, fxpage.panel
     # the worst case for height: an error line showing on every strip as well
     panel.renderer.fx.error = lambda n: "line 3: made up"
     over = []
-    draw = Panel._page_fx
+    real = fxpage.ui_fx.page
 
-    def measured(self, dt):
-        draw(self, dt)
+    def measured(panel, dt):
+        real(panel, dt)
         over.append(imgui.get_scroll_max_y())
-    monkeypatch.setattr(Panel, "_page_fx", measured)
-    reg["ui.page"].set(PAGE_KEYS.index("fx"))
+    monkeypatch.setattr(fxpage.ui_fx, "page", measured)
     for name in st.names():
         panel.fx_selected = name
         for reason in ("off", "bypassed"):
@@ -929,10 +938,7 @@ def test_the_page_fits_with_the_tightest_strip_idle(fxpage, monkeypatch):
             reg["fx.on"].set(reason != "bypassed")
             assert why_idle(st, name) == reason
             for _ in range(3):
-                fxpage.texts.clear()
-                imgui.new_frame()
-                panel.draw(1 / 60, 60.0)
-                imgui.end_frame()
+                fxpage.frame()          # the browser at the panel's size (PageRig)
             assert any(t.startswith(("off —", "every effect")) for t in fxpage.texts)
             assert over[-1] == 0, f"the fx page scrolls with {name} open and {reason}"
 
@@ -941,23 +947,22 @@ def test_the_palette_strip_fits_in_both_modes(fxpage, monkeypatch):
     """Plan 24 C6: the palette has 21 params; the strip packs lo/hi and
     hue/sat/val onto one row and shows the open mode's rows only, so the
     page fits in fold and in gradient mode, error line and all."""
-    from hyperspace.ui import PAGE_KEYS, Panel
+    from hyperspace.ui import Panel
     imgui, reg, panel = fxpage.imgui, fxpage.reg, fxpage.panel
     panel.renderer.fx.error = lambda n: "line 3: made up"
     over = []
-    draw = Panel._page_fx
+    real = fxpage.ui_fx.page
 
-    def measured(self, dt):
-        draw(self, dt)
+    def measured(panel, dt):
+        real(panel, dt)
         over.append(imgui.get_scroll_max_y())
-    monkeypatch.setattr(Panel, "_page_fx", measured)
+    monkeypatch.setattr(fxpage.ui_fx, "page", measured)
     drawn, picked = [], []
     real_slider, real_combo = Panel._slider, Panel._combo
     monkeypatch.setattr(Panel, "_slider", lambda self, pid, *a, **k: (drawn.append(pid),
                                                                        real_slider(self, pid, *a, **k))[1])
     monkeypatch.setattr(Panel, "_combo", lambda self, pid, *a, **k: (picked.append(pid),
                                                                       real_combo(self, pid, *a, **k))[1])
-    reg["ui.page"].set(PAGE_KEYS.index("fx"))
     panel.fx_selected = "palette"
     for mode in (0, 1):
         drawn.clear()
@@ -965,9 +970,7 @@ def test_the_palette_strip_fits_in_both_modes(fxpage, monkeypatch):
         reg["fx.palette.mode"].set(mode)
         reg["fx.palette.on"].set(True)
         for _ in range(3):
-            imgui.new_frame()
-            panel.draw(1 / 60, 60.0)
-            imgui.end_frame()
+            fxpage.frame()
         assert over[-1] == 0, f"the fx page scrolls with the palette in mode {mode}"
         shown = set(drawn)
         assert ("fx.palette.a4_val" in shown) == (mode == 1)      # the last anchor's slider
@@ -1613,7 +1616,7 @@ def test_an_old_preset_saves_no_retired_id(tmp_path):
            "media": {"channels": {"b": ["shared:x.png"]}}}
     assert app.presets.load_doc(doc) == []
     out = app.presets.document("old")
-    assert out["schema"] == "hyperspace.preset/9"
+    assert out["schema"] == "hyperspace.preset/10"
     assert not [k for k in out["values"] if M.retired(k)]
     run = G.run_back(G.read_graph(out["graph"]), "output.all.image")
     assert run == ("warp", "acid")                     # warp (@order 20) before acid (30)
@@ -1631,7 +1634,7 @@ def test_an_old_preset_saves_no_retired_id(tmp_path):
     sec = {**sec, "wires": [*keep[:at], *rerun, *keep[at:]]}
     app.presets.graph.land(G.read_graph(sec), sec)
     out = app.presets.document("old")
-    assert out["schema"] == "hyperspace.preset/9"
+    assert out["schema"] == "hyperspace.preset/10"
     assert G.run_back(G.read_graph(out["graph"]), "output.all.image") == (
         "acid", "warp")
     assert not [k for k in out["values"] if M.retired(k)]

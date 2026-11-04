@@ -419,3 +419,31 @@ def test_a_device_added_to_config_says_it_through_apply():
     assert said == ["leap off"]
     assert rig.apply([DESK]) and said == ["leap off"]          # a removal says nothing here
     assert "leap" not in rig._status                          # …and is forgotten
+
+
+def test_a_window_the_rig_lacks_is_said_on_output_and_the_graph_head(shell_rig, monkeypatch):  # noqa: F811
+    """Plan 44 D3 (row 623): a preset that wires Output 6 and cuts a bus
+    cable into Output 5, on a rig of four windows — OUTPUT (beside the
+    output blocks) and the GRAPH head each say one line per window, the
+    same words; with every window there, nothing is said."""
+    from hyperspace import graph as G
+    p = shell_rig.panel
+    texts: list[str] = []
+    real_colored = ui.imgui.text_colored
+    monkeypatch.setattr(ui.imgui, "text_colored",
+                        lambda col, text: texts.append(text) or real_colored(col, text))
+    ui_frame(p, "graph")
+    ui_frame(p, "output")
+    assert not any("which this rig has not open" in t for t in texts)
+    pre = p.library.presets
+    spec = G.read_graph({"frame": "wired", "wires": [{"from": "scene", "to": "output.6.image"}]})
+    pre.graph.land(spec, spec.to_json())
+    pre.bus = pre.bus.cutting(G.bus_wire(5, "hands"))
+    want = [graphview.WINDOW_WANTED.format(n=n) for n in (5, 6)]
+    assert ui_graph.window_wants(p) == want
+    texts.clear()
+    ui_frame(p, "output")
+    assert [t for t in texts if t in want] == want
+    texts.clear()
+    ui_frame(p, "graph")
+    assert [t for t in texts if t in want] == want

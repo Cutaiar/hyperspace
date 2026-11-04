@@ -5,28 +5,19 @@ table holds (D1, D4–D6, D12); nothing in apc40.py or midi.py is touched.
 The desk is a real `devices.MidiDevice` over a stand-in adapter that
 carries the APC40 profile (its `LAYOUT` is the device's ports), on the
 shell rig's factory table (tests/test_ui_shell.py), so the invariant, the
-global and the preset layer are the factory's. The desk template is the
-plan 24 C3 fixture (tests/fixtures/desk-templates/), copied into the rig's
+global and the preset layer are the factory's. (Plan 24 C3's desk templates are
+retired, plan 44 D3.) Every preset is the corpus's or made here in the rig's
 scratch library: no preset is edited or added."""
 
-import json
-import shutil
-from pathlib import Path
 
 import pytest
 from conftest import seed
-from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
 from hyperspace import apc40, devices, graphview, ui_graph
 from hyperspace.devices import Port
-from hyperspace.library import DESK
-from hyperspace.preset import TEMPLATE_KEY
 from hyperspace.routing import Binding
 
-FIXTURES = Path(__file__).resolve().parent / "fixtures" / "desk-templates"
-TEMPLATE = FIXTURES / "desk" / "fixture-shape.json"
-PRESET = FIXTURES / "presets" / "templated.json"
 SHIFT = "note:0:98"
 
 
@@ -65,9 +56,8 @@ def rig_devices(rig, *more, desk=True):
     return devices.DeviceRegistry(ctx=ctx, devices=listed)
 
 
-def build(rig, devs, template=None):
-    return graphview.build(rig.router.table, rig.reg, rig.router, devs, None, None,
-                           template=template)
+def build(rig, devs):
+    return graphview.build(rig.router.table, rig.reg, rig.router, devs, None, None)
 
 
 def node_of(view, pin):
@@ -212,90 +202,14 @@ def test_a_shadowed_layered_row_leaves_the_invariant_port_on_the_first_node(rig)
 
 
 # ---------------------------------------------------------------- desk templates
-
-def put_fixtures(lib) -> None:
-    for src, group in ((PRESET, "presets"), (TEMPLATE, DESK)):
-        (lib.home / group).mkdir(parents=True, exist_ok=True)
-        shutil.copy(src, lib.home / group / src.name)
-
-
-def test_a_templated_desk_is_one_collapsed_node_whose_edits_write_overrides(rig):
-    """A preset naming a desk template draws the template as one node whose
-    ports are its mapped controls; the live rows still the template's are
-    cables inside it — not drawn until it is opened — and an override hangs
-    off *apc40*. An edit inside (a cable deleted, a control dragged onto
-    another param) goes through the table, so a save writes the preset's
-    overrides and the template file is never written."""
-    lib, panel = rig.lib, rig.panel
-    put_fixtures(lib)
-    before = (lib.home / DESK / TEMPLATE.name).read_bytes()
-    lib.presets.load("TEMPLATED")
-    template = ui_graph.template_of(panel)
-    tdoc = json.loads(TEMPLATE.read_text())
-    assert template == ("fixture shape", tdoc["desk"])
-    devs = rig_devices(rig)
-    view = build(rig, devs, template)
-    tnodes = [n for n in view.nodes if n.kind == graphview.TEMPLATE]
-    assert [n.id for n in tnodes] == ["template:fixture shape"]
-    tn = tnodes[0]
-    assert graphview.home(tn) == graphview.PRESET
-    assert [p.addr for p in tn.ports] == [r["source"] for r in tdoc["desk"]]
-    inside = [c for c in view.cables if c.inside == tn.id]
-    kept = {("cc:*:16", "view.depth4"), ("cc:*:18", "camera.pitch"),
-            ("cc:*:19", "view.pattern"), ("cc:0:48", "view.bright"),
-            ("cc:0:7", "view.lines_alpha")}
-    assert {(c.ref.source, c.ref.target) for c in inside} == kept
-    assert all(node_of(view, c.src_port) is tn for c in inside)
-    # the overrides hang off the desk's first node; the overridden D2 and
-    # the dark K2 are the template's ports with no cable
-    over = {(c.ref.source, c.ref.target): c for c in desk_cables(view) if not c.inside}
-    for key in (("cc:*:17", "dream.mix"), ("cc:0:50", "view.pattern_mix")):
-        assert node_of(view, over[key].src_port).id == "device:apc40"
-    assert not tn.port("out:cc:*:17|template").patched
-    assert not tn.port("out:cc:0:49|template").patched
-
-    # on the page: collapsed until opened, then its rows are cables
-    panel.devices = devs
-    frame(panel, "graph")
-    st = ui_graph._state(panel)
-    tid = st["view"].node(tn.id)
-    assert tid is not None and not ui_graph.is_open(st, tn.id)
-    assert not any(ui_graph.drawn_cable(st, c) for c in st["view"].cables if c.inside)
-    # a base stub the collapsed template sets says so on hover
-    assert "desk template fixture shape" in ui_graph.hidden_by(st, st["view"],
-                                                                "base:view.depth4")
-    assert ui_graph.hidden_by(st, st["view"], "base:dream.mix") == ""      # an override
-    ui_graph.toggle_open(st, tn.id)
-    assert ui_graph.hidden_by(st, st["view"], "base:view.depth4") == ""
-    frame(panel, "graph")
-    assert ui_graph.is_open(st, tn.id)
-    assert all(ui_graph.drawn_cable(st, c) for c in st["view"].cables if c.inside)
-
-    # edits inside: D1's cable deleted, D3 dragged onto view.speed
-    table = rig.router.table
-    ed = graphview.Edit(table, rig.reg, rig.router, view, apc40)
-    d1 = next(c for c in inside if c.ref.source == "cc:*:16")
-    assert ed.disconnect(d1) is None
-    landed = ed.connect("out:cc:*:18|template", "base:view.speed")
-    assert isinstance(landed, Binding) and landed.layer == "preset"
-    view = build(rig, devs, ui_graph.template_of(panel))
-    d3 = next(c for c in desk_cables(view) if c.ref is landed)
-    assert d3.inside == "" and node_of(view, d3.src_port).id == "device:apc40"
-    lib.presets.save_as("TEMPLATED N5")
-    saved = json.loads((lib.home / "presets" / "templated-n5.json").read_text())
-    assert saved[TEMPLATE_KEY] == "fixture shape"
-    assert {"source": "cc:*:16", "dark": True} in saved["desk"]
-    assert any(r.get("source") == "cc:*:18" and r.get("target") == "view.speed"
-               for r in saved["desk"])
-    assert (lib.home / DESK / TEMPLATE.name).read_bytes() == before
-
+# (plan 44 D3: retired — no library held one; a preset names none)
 
 def test_a_corpus_preset_draws_no_template_node(rig):
     """Every corpus preset has a plain desk section: no template node."""
     rig.lib.load("presets", "party-trip")
-    assert ui_graph.template_of(rig.panel) is None
-    view = build(rig, rig_devices(rig), ui_graph.template_of(rig.panel))
-    assert not [n for n in view.nodes if n.kind == graphview.TEMPLATE]
+    assert not hasattr(ui_graph, "template_of") and not hasattr(graphview, "TEMPLATE")
+    view = build(rig, rig_devices(rig))
+    assert not [n for n in view.nodes if n.kind == "template"]
     assert not [c for c in view.cables if c.inside]
 
 

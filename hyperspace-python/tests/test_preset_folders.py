@@ -535,8 +535,8 @@ def test_a_non_preset_file_kept_deeper_goes_back_to_its_group(lib_dirs):
                     "values": {}}))
     (item,) = r.lib.trash()
     r.lib.restore_trash(item)
-    assert (lib_dirs.root / "camera" / "wide.json").is_file()
-    assert not (lib_dirs.root / "camera" / "odd").exists()
+    assert (lib_dirs.root / "patches" / "camera" / "wide.json").is_file()
+    assert not (lib_dirs.root / "patches" / "camera" / "odd").exists()
 
 
 def test_two_files_of_one_spelling_are_never_picked_by_sort_order(lib_dirs):

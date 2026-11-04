@@ -115,3 +115,22 @@ def test_main_prints_the_config_lines_and_never_edits_config(tmp_path, capsys, m
     assert f'[library]\npath = "{dest.resolve()}"' in out
     assert (home / "config.toml").read_text() == "config.toml"
     assert (dest / "presets" / "hi-frek.json").is_file()
+
+
+def test_a_preset_folder_is_copied_every_folder_down_hidden_ones_not(tmp_path):
+    """Plan 48 stage 2: ``presets/`` is walked as the library lists it —
+    ``party/`` and ``party/deep/`` copied, ``presets/.hidden/`` never; the
+    other groups stay one level down."""
+    home = a_home(tmp_path)
+    (home / "presets" / "party" / "deep").mkdir(parents=True)
+    (home / "presets" / "party" / "trip.json").write_text('{"name": "TRIP"}')
+    (home / "presets" / "party" / "deep" / "c.json").write_text('{"name": "C"}')
+    (home / "presets" / ".hidden" / "x.json").write_text("{}")
+    (home / "fx" / "sub").mkdir()
+    (home / "fx" / "sub" / "y.json").write_text("{}")
+    dest = tmp_path / "shared"
+    run(tmp_path, dest, home)
+    got = set(snapshot(dest))
+    assert {"presets/party/trip.json", "presets/party/deep/c.json"} <= got
+    assert not [k for k in got if ".hidden" in k or k.startswith("fx/sub")]
+    assert (dest / "presets" / "party" / "deep" / "c.json").read_text() == '{"name": "C"}'

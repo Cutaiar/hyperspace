@@ -10,7 +10,7 @@ Plan 24 C3 (decision 19). Each preset is loaded the way the app loads it —
 a headless registry, router and `Presets` over a **scratch** library home
 made for the run, never the owner's, holding the test corpus
 (`tests/corpus/presets`, the presets the build shipped until 2026-10-28,
-and `tests/corpus/dream`, the dream module presets they may name) — and
+and `tests/corpus/patches/dream`, the dream module presets they may name) — and
 each control of the APC40's
 preset layer (`layer_controls`) gets one of three words:
 
@@ -55,7 +55,7 @@ from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.fx import FxState
-from hyperspace.library import DESK, PRESETS, Library
+from hyperspace.library import PRESETS, Library, group_folder
 from hyperspace.lookback import DreamState
 from hyperspace.params import build_registry
 from hyperspace.preset import Presets
@@ -64,7 +64,7 @@ from hyperspace.view import ViewState
 
 REPORT = ROOT / "docs" / "plans" / "assets" / "24-party-fixes" / "desk-coverage.md"
 CORPUS = ROOT / "tests" / "corpus"                   # the presets, as test data
-CORPUS_GROUPS = (PRESETS, "dream")                   # what the scratch home is seeded with
+CORPUS_GROUPS = (PRESETS, "dream")      # what the scratch home is seeded with (`group_folder`)
 BAR = 4                     # the owner's bar: at most this many dark or dead
 MAPPED, DARK, DEAD = "mapped", "dark", "dead"
 MARK = {MAPPED: "●", DARK: "·", DEAD: "✕"}
@@ -193,9 +193,9 @@ def coverage(home: Path, library: Path | None = None) -> tuple[list[apc40.Contro
     """Every preset the scratch `home` lists (the corpus's, copied in, and
     with `library` that library's too), each a `Row`."""
     for group in CORPUS_GROUPS:
-        _copy_in(CORPUS / group, home / group)
+        _copy_in(CORPUS / group_folder(group), home / group_folder(group))
     if library is not None:
-        for group in (PRESETS, DESK):
+        for group in (PRESETS,):        # (plan 44 D3: desk templates are retired)
             _copy_in(library / group, home / group)
     rig = boot(home)
     controls = layer_controls(rig.table)

@@ -327,7 +327,7 @@ def test_a_saved_preset_says_its_pan_is_in_world_units_and_loads_as_saved(tmp_pa
     rig.reg["camera.pan.y"].set(-0.75)
     path = rig.presets.save_as("WORLD PAN")
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.preset/9"     # (row 394); a key marks the units
+    assert doc["schema"] == "hyperspace.preset/10"     # (row 394); a key marks the units
     assert doc[preset.UNITS_KEY] == preset.UNITS       # (…and the depths' taper, wave 0 T1)
     assert doc[preset.UNITS_KEY]["camera.pan"] == "world"
     assert doc["values"]["camera.pan.x"] == 2.5
@@ -481,8 +481,8 @@ def test_ghost_mirror_flips_the_hands_in_the_shared_camera_too():
 # ------------------------------------------- camera module presets (review fix 1)
 
 def _old_module(lib, name="off-right"):
-    (lib.home / "camera").mkdir(parents=True, exist_ok=True)
-    shutil.copy(FIXTURES / "old-camera-module.json", lib.home / "camera" / f"{name}.json")
+    (lib.home / "patches" / "camera").mkdir(parents=True, exist_ok=True)
+    shutil.copy(FIXTURES / "old-camera-module.json", lib.home / "patches" / "camera" / f"{name}.json")
 
 
 def test_an_old_camera_module_loads_at_its_converted_pan(tmp_path):
@@ -500,8 +500,9 @@ def test_an_old_camera_module_loads_at_its_converted_pan(tmp_path):
 
 def test_an_old_camera_default_fills_a_preset_at_its_converted_pan(tmp_path):
     """The same file as the group's default (`camera/default.json`): what
-    `defaults` and `resolved` fill a preset with — a preset that names no
-    pan lands at the converted pan, not 190 radii."""
+    `defaults` and `resolved` fill the camera strip with — at the converted
+    pan, not 190 radii. A whole preset that names no pan lands the build's
+    pan (plan 44 D3: a load fills from `_fresh_of`, never a `default.json`)."""
     rig = boot(tmp_path)
     _old_module(rig.lib, "default")
     rig.lib._defaults.clear()
@@ -513,7 +514,7 @@ def test_an_old_camera_default_fills_a_preset_at_its_converted_pan(tmp_path):
     (rig.lib.home / "presets").mkdir(parents=True, exist_ok=True)
     (rig.lib.home / "presets" / "no-pan.json").write_text(json.dumps(doc))
     rig.lib.presets.load("NO PAN")
-    assert rig.view.pan == pytest.approx([190.0 / 324.0, -0.25])
+    assert rig.view.pan == pytest.approx([0.0, 0.0])
 
 
 def test_a_camera_module_saved_now_says_its_pan_is_in_world_units(tmp_path):

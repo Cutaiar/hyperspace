@@ -2,9 +2,11 @@
 
 Two kinds of file, both plain JSON you can open in a text editor:
 
-  module preset   one registry *group* (view, camera, band…) —
-                  ``{"schema": "hyperspace.preset/1", "group", "name",
-                  "values": {id: base}}``, produced by ``Registry.snapshot
+  module preset   one registry *group* (view, camera, band…) — since
+                  plan 50 a patch of one group, ``<root>/patches/<group>/``,
+                  ``{"schema": "hyperspace.patch/2", "name", "group",
+                  "values": {id: base}}`` (a ``hyperspace.preset/1`` from
+                  before is read through `patches.forward`), produced by ``Registry.snapshot
                   (group)`` and applied with ``Registry.restore``. The
                   analyzer's presets also carry ``layout`` (see the
                   contract in docs/plans/07-overhaul.md): restore hands the
@@ -15,7 +17,7 @@ Two kinds of file, both plain JSON you can open in a text editor:
                   code (hyperspace/scenes/band/, control.py) — a band
                   preset in the library is the user's own, and a strip
                   load tells the scene combo through ``on_load``.
-  project         the show — ``{"schema": "hyperspace.project/2",
+  project         the show — ``{"schema": "hyperspace.project/3",
                   "name", "note", "startup": <preset name>, "bank": [8–24
                   × <preset name> | null], "session": <session snapshot>,
                   "modules": {group: name | {"name", "values", …}}}``, in
@@ -39,11 +41,16 @@ Two kinds of file, both plain JSON you can open in a text editor:
                   the project names by a preset that carries a ``layout``
                   gets that layout back on load, the same road a strip
                   load takes. A schema-1 project is refused (no old-schema
-                  support, 2026-10-25). Plan 36 T1: ``rig``, the
-                  show's own wires — ``{"cut": [{"from", "to"}, …]}``, the
-                  bus cables from All outputs into a window this show has
-                  cut on GRAPH (``graph.RigWires``); absent, every one
-                  stands.
+                  support, 2026-10-25). Plan 44 D3 (``/3``): the show
+                  is the rig's session, the pads and ``startup`` — the
+                  bus cuts (plan 36 T1's ``rig``) and the hands' and
+                  clouds' looks (``ghost.*`` but ``ghost.mirror``,
+                  ``cloud.*``) are each preset's now. A ``/2`` show is
+                  read as its ``/3`` (`show_without_look`): what it held
+                  of the look is handed to every preset before ``/10``
+                  a load reads while it is open (``Project.old_look``,
+                  ``old_cuts``), and its first write keeps the ``/2``
+                  beside it (``<file>.bak-v2-look``).
 
 A third kind of document is *not* the library's own format but goes
 through the same doors: a **document kind** registered with ``kind()``
@@ -98,10 +105,12 @@ as). None, or one that is gone or will not read (the reason in `error`),
 and the app starts on an unsaved show called ``untitled`` with an empty
 bank (``_open_default``).
 
-Loading a preset fills ids it doesn't name from the group's *default*
-preset (DEFAULT_NAMES, else one called "default", else the values the
-objects were constructed with), so a preset is the same state whatever it
-lands on; ids the registry doesn't know are reported in ``warning`` and
+Loading a module preset fills ids it doesn't name from the group's
+*default* preset (DEFAULT_NAMES, else one called "default", else the
+values the objects were constructed with); a whole preset (preset.py)
+fills them from the values the objects were constructed with alone
+(`_fresh_of`, plan 44 D3 — never a ``default.json``), so a preset is the
+same state whatever it lands on; ids the registry doesn't know are reported in ``warning`` and
 returned, never fatal. ``is_dirty(group)`` says whether the group's bases
 have moved off what the loaded (or default) preset would produce.
 
@@ -130,7 +139,7 @@ from typing import Any
 from . import patches as patchdoc
 from . import undo
 from .graph import RigWires
-from .graphmigrate import CAMERA_NODES, EYE_IDS, renamed_layout, retired
+from .graphmigrate import CAMERA_NODES, EYE_IDS, is_look_id, renamed_layout, retired
 from .palettecompat import palette_slice
 from .params import (
     F_KEYS,
@@ -140,6 +149,7 @@ from .params import (
     UNITS_KEY,
     Registry,
     fx_files,
+    in_group,
     is_instance_id,
     pan_world,
     retaper_depths,
@@ -164,16 +174,14 @@ SPRING_BACKUP = "2-spring"
 # `session`, which the presets hold since `/9` (`Project.old_eye`) —
 # <file>.bak-v2-eye
 EYE_BACKUP = "2-eye"
+# LOOK_BACKUP (plan 44 D3): the copy `Project.write` makes before the first
+# write of a `/2` show as `/3` — which drops its bus cuts (`rig`) and the
+# hands' and clouds' looks from its `session`, each preset's since `/10` —
+# <file>.bak-v2-look
+LOOK_BACKUP = "2-look"
 PRESETS = "presets"       # the presets' group, a document kind (preset.py)
-# <root>/desk/<slug>.json (plan 24 C3): the desk templates — named sets of
-# preset-layer rows a preset's desk can start from (`desk_template`,
-# preset.py `expand_desk`). A module-preset group in the library's tree,
-# which [library] path shares (plan 25). Its files are their own format,
-# DESK_SCHEMA, read only through `desk_template`: the `desk` *param* group
-# (desk.slew, desk.pad.*) has no module-preset strip, and a template is
-# never applied as its module preset
-DESK = "desk"
-DESK_SCHEMA = "hyperspace.desk/1"
+# (plan 24 C3's desk templates, `<root>/desk/`, are retired — plan 44 D3,
+# the owner, 2026-11-03: neither library held one)
 # <root>/patches/<slug>.json (plan 40 P1): the patches — a group of nodes
 # and its boundary, saved once, spawned anywhere (patches.py). A document
 # kind of the library's own (`Library.__init__`), so the folder lists,
@@ -181,10 +189,19 @@ DESK_SCHEMA = "hyperspace.desk/1"
 # loaded through the group's door — it is spawned (`patches.spawn`) — so
 # the kind's `load` refuses, and its `document` and `signature` are never
 # asked. Read through `read_patch` (the schema and `patches.check`),
-# written through `save_patch`
+# written through `save_patch`.
+# Plan 50 (one format): a module preset is a **patch of one param group**,
+# ``hyperspace.patch/2`` with a ``group`` key, under
+# ``<root>/patches/<group>/<slug>.json`` (`group_dir`) — never listed among
+# the spawnable patches (`_files` reads ``patches/`` one level), opened from
+# its group's strip (`load`: a spawn that replaces the group's values)
 PATCHES = "patches"
-PATCH_SCHEMA = patchdoc.SCHEMA          # "hyperspace.patch/1"
+PATCH_SCHEMA = patchdoc.SCHEMA          # "hyperspace.patch/2" (plan 50)
 PATCH_SPAWNED = "a patch is spawned, not loaded"
+# what `read_patch` says of a patch of one group asked for by name
+GROUP_PATCH_WORDS = "{name} is a patch of the {group} group: open it from that group's strip"
+# what `read` says of a file in a group's folder that is no patch of that group
+NOT_GROUP_WORDS = "{file} is {what}, not a patch of the {group} group"
 # the groups `rename` serves: the presets and the patches (a module preset
 # is saved under another name instead)
 RENAMABLE = (PRESETS, PATCHES)
@@ -202,9 +219,9 @@ _TRASHED = re.compile(r"(?P<stem>.+)\.(?P<stamp>\d{8}-\d{6})(?:-(?P<n>\d+))?(?P<
 HOME_ENV = "HYPERSPACE_HOME"
 DEFAULT_HOME = Path("~/Hyperspace")
 
-PRESET_SCHEMA = "hyperspace.preset/1"      # a module preset (one group)
 PERFORMANCE_SCHEMA = "hyperspace.preset/2" # a preset: the performance (preset.py)
-PROJECT_SCHEMA = "hyperspace.project/2"
+PROJECT_SCHEMA = "hyperspace.project/3"   # plan 44 D3: the rig's session, the pads, startup
+PROJECT_V2 = "hyperspace.project/2"        # read as its /3 (`show_without_look`), once
 PROJECT_V1 = "hyperspace.project/1"        # refused: no old-schema support (2026-10-25)
 PROJECT_SUFFIX = ".hyp.json"
 PROJECTS = "projects"
@@ -219,7 +236,10 @@ HOME_UNSET = "home: this show names no startup preset"
 # the outputs), a preset's (preset.LAYOUT_KEY) for the look's. No key: every
 # node is laid out automatically, and nothing is dirty
 LAYOUT = "layout"
-RIG = "rig"            # plan 36 T1: a show's own wires (`graph.RigWires`)
+# plan 36 T1: a `/2` show's own wires (`graph.RigWires`) — the bus cuts,
+# each preset's since plan 44 D3 (preset.BUS_KEY): read out of an old show
+# once (`show_look`), never written
+RIG = "rig"
 
 
 def read_layout(value: Any) -> tuple[dict[str, list[float]], int]:
@@ -444,7 +464,8 @@ def _walk_dirs(folder: Path, pattern: str = "*.json"):
     for here, dirs, _files in os.walk(folder, followlinks=False):
         dirs[:] = sorted(d for d in dirs if not d.startswith("."))
         h = Path(here)
-        yield h, sorted(h.glob(pattern))
+        # files only (review of #349: a folder named `mix.json` is no preset)
+        yield h, sorted(p for p in h.glob(pattern) if p.is_file())
 
 
 # how long a kept walk of the presets is trusted without a look at the
@@ -503,6 +524,45 @@ def show_without_eye(doc: dict) -> dict | None:
             out[LAYOUT] = rest
         else:
             out.pop(LAYOUT)
+    return out
+
+
+def _look_ids(session: dict) -> list[str]:
+    """The ids of a `/2` show's session that are a preset's since plan 44
+    D3: the hands' and the clouds' looks (`graphmigrate.is_look_id`, the
+    one set `ten` hands on — `ghost.mirror` stays the room's). Any other id
+    a show held stays the show's (the eye is plan 43 C2's own road)."""
+    return [k for k in session if is_look_id(k)]
+
+
+def show_look(doc: Any) -> tuple[dict[str, Any], RigWires]:
+    """What a `/2` show held of the look (plan 44 D3): the hands' and the
+    clouds' values in its `session` (`_look_ids`) and its bus cuts (`rig`,
+    `graph.RigWires`) — ({}, no cut) for neither, and for any `/3`. The one
+    reader: `Project._take`, `kept_look`, `headless.show_seed` and the
+    migration tool all ask it."""
+    if not isinstance(doc, dict) or doc.get("schema") not in (PROJECT_V2, None):
+        return {}, RigWires()
+    session = doc.get("session")
+    session = session if isinstance(session, dict) else {}
+    return ({k: session[k] for k in _look_ids(session)}, RigWires.read(doc.get(RIG)))
+
+
+def show_without_look(doc: dict) -> dict | None:
+    """A `/2` show's document as its `/3` (plan 44 D3): the schema, without
+    its bus cuts (`rig`) and without the look's ids in its `session`
+    (`_look_ids`); None for a document that is not `/2` (nothing to
+    rewrite). The eye is `show_without_eye`'s. Pure: the version step a
+    load reads an old show through, and tools/migrate_library.py's."""
+    if not isinstance(doc, dict) or doc.get("schema") != PROJECT_V2:
+        return None
+    out = dict(doc)
+    out["schema"] = PROJECT_SCHEMA
+    out.pop(RIG, None)
+    session = doc.get("session")
+    if isinstance(session, dict):
+        drop = set(_look_ids(session))
+        out["session"] = {k: v for k, v in session.items() if k not in drop}
     return out
 
 
@@ -573,6 +633,35 @@ def to_trash(path: Path, root: Path, origin: str | None = None) -> Path | None:
         return None
 
 
+def _move_file(src: Path, dst: Path) -> None:
+    """Move `src` to `dst` (a path that is not there), its bytes as they
+    were and never over a file (plan 48 stage 2): a hard link then an
+    unlink; where the disk makes no links (a cloud mount), an exclusive
+    copy of the bytes, then the unlink. LibraryError, and `dst` gone
+    again, when either fails."""
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.link(src, dst)
+    except FileExistsError as e:
+        raise LibraryError(f"{dst.name}: already there — nothing moved") from e
+    except OSError:
+        try:
+            data = src.read_bytes()
+            with open(dst, "xb") as f:
+                f.write(data)
+            shutil.copystat(src, dst)
+        except FileExistsError as e:
+            raise LibraryError(f"{dst.name}: already there — nothing moved") from e
+        except OSError as e:
+            dst.unlink(missing_ok=True)
+            raise LibraryError(f"{src.name}: not moved ({e})") from e
+    try:
+        src.unlink()
+    except OSError as e:
+        dst.unlink(missing_ok=True)
+        raise LibraryError(f"{src.name}: not moved ({e})") from e
+
+
 @dataclass(frozen=True)
 class Trashed:
     """A file in the trash, as its view lists it (plan 19 WP4)."""
@@ -604,17 +693,24 @@ def _order(path: Path) -> tuple[str, int]:
 
 # ---- versioning: schema "<kind>/<n>"; each step lifts a doc one version ----
 
+# (the shows' ladder only, since plan 50: a preset's is `graphmigrate.forward`,
+# a module preset's and a patch's `patches.forward` — review fix 8)
 MIGRATIONS: dict[tuple[str, int], Any] = {
-    # ("hyperspace.preset", 1): lambda doc: {...},   # 1 → 2, when there is one
+    # plan 44 D3: a /2 show less what each preset holds now (read out first:
+    # `Project._take`, `show_look`)
+    ("hyperspace.project", 2): lambda doc: show_without_look(doc) or dict(doc),
 }
 # no project 1 → 2 step: a schema-1 show (an inline theme bank) is refused
 # (`Project._take`) — no old-schema support since 2026-10-25
-CURRENT = {"hyperspace.preset": 1, "hyperspace.project": 2}
+CURRENT = {"hyperspace.project": 3}
 
 
 def migrate_doc(doc: dict, kind: str) -> dict:
-    """Lift a file to the current version of its kind, or refuse it."""
+    """Lift a file to the current version of its kind, or refuse it — a
+    show (``hyperspace.project``), the one kind it serves since plan 50."""
     schema = doc.get("schema")
+    if kind not in CURRENT:
+        raise LibraryError(f"no ladder for {kind} here")
     if not isinstance(schema, str) or "/" not in schema:
         raise LibraryError(f"no schema (expected {kind}/{CURRENT[kind]})")
     k, _, v = schema.rpartition("/")
@@ -659,17 +755,41 @@ def _patch_kind() -> DocKind:
     `read` checks a file as it does a preset's, and the doors that refuse —
     a patch is spawned (`patches.spawn`), never loaded, and what a save
     writes is `save_patch`'s document, never the live state's."""
-    kind, _, v = PATCH_SCHEMA.rpartition("/")
-    return DocKind(kind, (int(v),), _patch_spawned, _patch_spawned, _patch_spawned)
+    # (plan 50: every version the one ladder reads, `patches.forward`)
+    return DocKind(patchdoc.KIND, patchdoc.READS, _patch_spawned, _patch_spawned,
+                   _patch_spawned)
+
+
+def group_folder(group: str, kinds=()) -> str:
+    """The folder a group's files sit in, relative to a library root (plan
+    50) — the one table, `Library.group_dir`'s and the test corpus's
+    (tests/conftest.py `seed`, tools/desk_coverage.py): the presets, the
+    patches, the shows and any document kind (`kinds`) in their own
+    ``<group>``; every other group's — a module group's patches of one
+    group — in ``patches/<group>``."""
+    if group in (PRESETS, PATCHES, PROJECTS) or group in kinds:
+        return group
+    return f"{PATCHES}/{group}"
+
+
+def forward_group(doc: dict, where: str = "") -> dict:
+    """A patch of one param group in today's words (plan 50): a module
+    preset (``hyperspace.preset/1``) or a ``patch/1`` / ``/2`` through the
+    one ladder (`patches.forward`) — LibraryError, in words, for a file it
+    cannot read (another kind, a newer build's)."""
+    try:
+        return patchdoc.forward(doc)
+    except ValueError as e:
+        raise LibraryError(f"{where}{': ' if where else ''}{e}") from e
 
 
 def scene_doc(path: Path) -> dict:
-    """A band scene's file (hyperspace/scenes/band/, control.py), lifted to
-    the current module-preset schema — the analyzer's scenes are code data,
-    read without a Library."""
+    """A band scene's file (hyperspace/scenes/band/, control.py) in today's
+    words — a patch of the band group, through the one ladder
+    (`forward_group`; the files are code data, read without a Library)."""
     if not path.is_file():
         raise LibraryError(f"no scene file {path.name}")
-    return migrate_doc(_read_json(path), "hyperspace.preset")
+    return forward_group(_read_json(path), path.name)
 
 
 def _module_values(group: str, doc: dict) -> dict[str, Any]:
@@ -729,11 +849,12 @@ class Project:
         # those as on disk (`is_dirty`)
         self.layout: dict[str, list[float]] = {}
         self._saved_layout: dict[str, list[float]] = {}
-        # plan 36 T1: the rig's own wires — the bus cables from All outputs
-        # into each window, which this show has cut (`graph.RigWires`) — and
-        # those as on disk; the renderer reads `rig` (its `rig_source`)
-        self.rig = RigWires()
-        self._saved_rig = RigWires()
+        # plan 44 D3: what an old show (`/2`) held of the look — the hands'
+        # and clouds' values in its session, its bus cuts — read out by
+        # `_take` and handed to every preset before `/10` a load reads while
+        # this show is open (`graphmigrate.ten`); never written back
+        self.old_look: dict[str, Any] = {}
+        self.old_cuts = RigWires()
         # plan 43 C2: what an old show (before the eye was the preset's) kept
         # of the camera — the eye in its `session`, the camera node's GRAPH
         # position in its `layout` — read out of the file by `_take` and
@@ -749,6 +870,12 @@ class Project:
         if doc.get("schema") == PROJECT_V1:
             raise LibraryError(f"{where} is a schema-1 show, which this build does not read "
                                "(no old-schema support, 2026-10-25)")
+        # plan 44 D3: what a /2 show held of the look, before the version
+        # step drops it (`show_without_look`) — else what its first write on
+        # this build kept beside it (`kept_look`)
+        self.old_look, self.old_cuts = show_look(doc)
+        if path is not None and not self.old_look and not self.old_cuts.cut:
+            self.old_look, self.old_cuts = kept_look(path)
         doc = migrate_doc(doc, "hyperspace.project")
         self.name = str(doc.get("name") or (path.name[: -len(PROJECT_SUFFIX)] if path
                                             else UNTITLED))
@@ -790,7 +917,6 @@ class Project:
             if self.camera_at is None and kept_at is not None:
                 self.camera_at = kept_at
         self._saved_layout = copy.deepcopy(self.layout)
-        self.rig = self._saved_rig = RigWires.read(doc.get(RIG))
 
     @property
     def stem(self) -> str:
@@ -810,9 +936,6 @@ class Project:
         layout = getattr(self, "layout", None)
         if layout:                       # plan 28 N2; a show with none writes none
             doc[LAYOUT] = {k: list(layout[k]) for k in sorted(layout)}
-        rig = getattr(self, "rig", RigWires()).to_json()
-        if rig:                          # plan 36 T1; every cable standing writes none
-            doc[RIG] = rig
         return doc
 
     def mark(self) -> tuple:
@@ -820,22 +943,24 @@ class Project:
         name, note, path, stem, session, modules, bank, startup and the
         bank and startup as on disk — copies, so a later edit of the live
         show never reaches a mark; then the GRAPH page's positions of the
-        rig's nodes, and (plan 36 T1) the rig's wires, live and as on disk
-        (immutable: held as they are)."""
+        rig's nodes, live and as on disk; then what an old show kept of the
+        camera (plan 43 C2) and of the look (plan 44 D3; the bus cuts are
+        the preset's: `Marks`)."""
         return (self.name, self.note, self.path, getattr(self, "_stem", None),
                 copy.deepcopy(self.session), copy.deepcopy(self.modules), list(self.bank),
                 self.startup, (list(self._saved[0]), self._saved[1]),
                 # plan 28 N2: the GRAPH page's positions of the rig's nodes
                 copy.deepcopy(getattr(self, "layout", {})),
                 copy.deepcopy(getattr(self, "_saved_layout", {})),
-                getattr(self, "rig", RigWires()), getattr(self, "_saved_rig", RigWires()),
                 # plan 43 C2: what an old show kept of the camera, for its presets
-                dict(getattr(self, "old_eye", {})), getattr(self, "camera_at", None))
+                dict(getattr(self, "old_eye", {})), getattr(self, "camera_at", None),
+                # plan 44 D3: and of the look
+                dict(getattr(self, "old_look", {})), getattr(self, "old_cuts", RigWires()))
 
     # the mark's fixed head, and where its later parts start
     MARK_LAYOUT = 9          # the GRAPH page's layout, and as on disk (plan 28 N2)
-    MARK_RIG = 11            # the rig's wires, and as on disk (plan 36 T1)
-    MARK_EYE = 13            # an old show's eye and camera position (plan 43 C2)
+    MARK_EYE = 11            # an old show's eye and camera position (plan 43 C2)
+    MARK_LOOK = 13           # an old show's look and bus cuts (plan 44 D3)
 
     def remark(self, mark: tuple) -> None:
         """Put back what `mark()` returned: the show's own fields, nothing
@@ -846,10 +971,10 @@ class Project:
         if len(mark) > self.MARK_LAYOUT:   # plan 28 N2: the show's layout, and as on disk
             self.layout = copy.deepcopy(mark[self.MARK_LAYOUT])
             self._saved_layout = copy.deepcopy(mark[self.MARK_LAYOUT + 1])
-        if len(mark) > self.MARK_RIG:      # plan 36 T1: the rig's wires, and as on disk
-            self.rig, self._saved_rig = mark[self.MARK_RIG], mark[self.MARK_RIG + 1]
         if len(mark) > self.MARK_EYE:      # plan 43 C2: an old show's eye, for its presets
             self.old_eye, self.camera_at = dict(mark[self.MARK_EYE]), mark[self.MARK_EYE + 1]
+        if len(mark) > self.MARK_LOOK:     # plan 44 D3: and its look, for its presets
+            self.old_look, self.old_cuts = dict(mark[self.MARK_LOOK]), mark[self.MARK_LOOK + 1]
         self.session, self.modules = copy.deepcopy(session), copy.deepcopy(modules)
         self.bank = list(bank)
         self._saved = (list(saved[0]), saved[1])
@@ -1328,7 +1453,9 @@ class Project:
         file that holds the eye in its `session` (`eye.*`) or the camera's
         GRAPH position in its `layout` (both the presets' since `/9`: this
         write drops them) keeps it first as ``<file>.bak-v2-eye``.
-        No backup, no write."""
+        And (plan 44 D3) the first write of a `/2` show — written `/3`,
+        without its bus cuts and the hands' and clouds' looks, each preset's
+        now — keeps it first as ``<file>.bak-v2-look``. No backup, no write."""
         self.lib.writable()
         path = self.path_for(self.name) if self.path is None else self.path
         try:
@@ -1354,12 +1481,15 @@ class Project:
                     and backup(path, EYE_BACKUP) is None):
                 raise LibraryError(f"{path.name}: not written — no backup of the show "
                                    "with its eye could be made")
+            if (old.get("schema") == PROJECT_V2 and not _kept(path, LOOK_BACKUP)
+                    and backup(path, LOOK_BACKUP) is None):
+                raise LibraryError(f"{path.name}: not written — no backup of the /2 show "
+                                   "could be made")
         self.path = path
         _write_json(self.path, doc)
         self.lib._sync(self.path)
         self._saved = (list(self.bank), self.startup)
         self._saved_layout = copy.deepcopy(getattr(self, "layout", {}))
-        self._saved_rig = getattr(self, "rig", RigWires())
         return self.path
 
     def is_dirty(self) -> bool:
@@ -1372,8 +1502,7 @@ class Project:
                 or not undo.alike(self.session, {**self._held_back(),
                                                  **reg.snapshot(part="session")})
                 or (self.bank, self.startup) != self._saved
-                or getattr(self, "layout", {}) != getattr(self, "_saved_layout", {})
-                or getattr(self, "rig", RigWires()) != getattr(self, "_saved_rig", RigWires()))
+                or getattr(self, "layout", {}) != getattr(self, "_saved_layout", {}))
 
     def _held_back(self) -> dict:
         """The session's settings of node instances the registry lacks now
@@ -1420,7 +1549,10 @@ def kept_eye(path: Path) -> tuple[dict[str, Any], list[float] | None]:
     if hit is not None:
         return dict(hit[0]), hit[1]
     found: tuple[dict[str, Any], list[float] | None] = ({}, None)
-    for bak in sorted(path.parent.glob(f"{path.name}.bak-v{EYE_BACKUP}*")):
+    # (plan 44 D3: a /2 show the tool rewrote as /3 kept itself as `.bak-v2-look`)
+    baks = [*sorted(path.parent.glob(f"{path.name}.bak-v{EYE_BACKUP}*")),
+            *sorted(path.parent.glob(f"{path.name}.bak-v{LOOK_BACKUP}*"))]
+    for bak in baks:
         try:
             eye, at = show_eye(json.loads(bak.read_text()))
         except (OSError, ValueError):
@@ -1429,6 +1561,33 @@ def kept_eye(path: Path) -> tuple[dict[str, Any], list[float] | None]:
             found = (eye, at)
             break
     _KEPT_EYES[key] = found
+    return dict(found[0]), found[1]
+
+
+_KEPT_LOOKS: dict[tuple[str, int], tuple[dict[str, Any], RigWires]] = {}
+
+
+def kept_look(path: Path) -> tuple[dict[str, Any], RigWires]:
+    """What a show's ``.bak-v2-look`` copy kept of the look (`show_look`)
+    — the oldest copy — or ({}, no cut): a `/2` show whose first write on
+    this build made it `/3` still hands its old look to the presets before
+    `/10` (plan 44 D3), until the tool writes it into them. Remembered per
+    show file and its folder's state, as `kept_eye`."""
+    try:
+        key = (str(path), path.parent.stat().st_mtime_ns)
+    except OSError:
+        return {}, RigWires()
+    hit = _KEPT_LOOKS.get(key)
+    if hit is not None:
+        return dict(hit[0]), hit[1]
+    found: tuple[dict[str, Any], RigWires] = ({}, RigWires())
+    for bak in sorted(path.parent.glob(f"{path.name}.bak-v{LOOK_BACKUP}*")):
+        try:
+            found = show_look(json.loads(bak.read_text()))
+        except (OSError, ValueError):
+            continue
+        break
+    _KEPT_LOOKS[key] = found
     return dict(found[0]), found[1]
 
 
@@ -1478,7 +1637,8 @@ class Marks:
         loaded preset's GRAPH page layout (plan 28 N2, `Presets.layout`),
         the media channels' bins (plan 32, `Presets.media`), the GRAPH
         page's groups (plan 40 T2, `Presets.groups`) and the floor under
-        their numbers (row 563, `Presets.group_high`)."""
+        their numbers (row 563, `Presets.group_high`), and the preset's bus
+        cuts (plan 44 D3, `Presets.bus`)."""
         lib, pre = self.lib, self.lib.presets
         gs = getattr(pre, "graph", None)
         return (lib.project.mark(), self.lands(),
@@ -1489,7 +1649,8 @@ class Marks:
                 copy.deepcopy(getattr(pre, "layout", None) or {}),
                 self._bins(pre),
                 copy.deepcopy(getattr(pre, "groups", None) or []),
-                getattr(pre, "group_high", 0))
+                getattr(pre, "group_high", 0),
+                getattr(pre, "bus", None))
 
     @staticmethod
     def _bins(pre):
@@ -1501,7 +1662,7 @@ class Marks:
         """{group: landed} — every group's name, reference and re-apply
         road, by reference: cheap enough to read every frame."""
         lib = self.lib
-        return {g: lib.landed(g) for g in {*lib._current, *lib._loaded, *lib._adopted}}
+        return {g: lib.landed(g) for g in lib.landed_groups()}
 
     def mend(self, pre: dict, lands: dict) -> None:
         """After the restore of a step that is not a load: a group whose
@@ -1552,12 +1713,9 @@ class Marks:
         elif len(show) > Project.MARK_LAYOUT:
             # the same show: its GRAPH page positions still go back (plan 28
             # N2; the undo of a tidy) — unlike the bank, they are not in its
-            # file until it is saved; so do the rig's wires (plan 36 T1: the
-            # undo of a bus cable cut on GRAPH)
+            # file until it is saved
             pr.layout = copy.deepcopy(show[Project.MARK_LAYOUT])
-            if len(show) > Project.MARK_RIG:
-                pr.rig = show[Project.MARK_RIG]
-        for group in {*lib._current, *lib._loaded, *lib._adopted} - set(landed):
+        for group in lib.landed_groups() - set(landed):
             lib.reland(group, (None, None, None))
         for group, was in landed.items():
             lib.reland(group, was)
@@ -1573,6 +1731,8 @@ class Marks:
                 lib.presets.groups = copy.deepcopy(mark[7])
             if len(mark) > 8:                # and the floor under their numbers (row 563)
                 lib.presets.group_high = max(lib.presets.group_high, mark[8])
+            if len(mark) > 9 and mark[9] is not None:   # the bus cuts (plan 44 D3)
+                lib.presets.bus = mark[9]
         pr.follow()
 
 
@@ -1701,7 +1861,7 @@ class Library:
                 self._fresh.update((k, snap[k]) for k in new)
                 self._defaults.pop(group, None)
         return {k: v for k, v in self._fresh.items() if reg is not None and k in reg
-                and reg[k].group == group}
+                and in_group(reg[k], group)}       # (a session key of the group left out)
 
     def _fresh_all(self) -> dict[str, Any]:
         for g in {p.group for p in (self.reg or []) if p.persist and p.group}:
@@ -1808,16 +1968,27 @@ class Library:
                 out.update(d.name for d in root.iterdir()
                            if d.is_dir() and d.name not in (PROJECTS, TRASH, *LEGACY_DIRS)
                            and not d.name.startswith("."))
+                # plan 50: a group whose patches of one group have a folder
+                if (root / PATCHES).is_dir():
+                    out.update(d.name for d in (root / PATCHES).iterdir()
+                               if d.is_dir() and not d.name.startswith("."))
         return sorted(out - set(RETIRED_MODULES))
 
+    def group_dir(self, root: Path, group: str) -> Path:
+        """Where `group`'s files live under `root` (plan 50): a document
+        kind's — the presets, the patches — in ``<root>/<group>/``; every
+        other group's, its patches of one group (what module presets
+        were), in ``<root>/patches/<group>/`` (`group_folder`, the one table)."""
+        return root / group_folder(group, self._kinds)
+
     def _files(self, group: str) -> dict[str, Path]:
-        """file key → path, every file of the group's folder: the stem, and
-        for the presets (plan 48 row 584) the path under ``presets/`` less
-        ``.json`` — ``party/deep/c`` — every folder down, less hidden ones
-        (``.cache``)."""
+        """file key → path, every file of the group's folder (`group_dir`):
+        the stem, and for the presets (plan 48 row 584) the path under
+        ``presets/`` less ``.json`` — ``party/deep/c`` — every folder down,
+        less hidden ones (``.cache``)."""
         out: dict[str, Path] = {}
         for root in self._roots():
-            d = root / group
+            d = self.group_dir(root, group)
             if not d.is_dir():
                 continue
             if group != PRESETS:
@@ -2104,20 +2275,45 @@ class Library:
             if k != kind.schema or not v.isdigit() or int(v) not in kind.versions:
                 raise LibraryError(f"{path.name}: schema {schema!r} is not a {kind.schema}")
             return doc
-        doc = migrate_doc(doc, "hyperspace.preset")
-        if doc.get("group", group) != group:
-            raise LibraryError(f"{path.name} is a {doc['group']} preset, not {group}")
+        # plan 50: a patch of one param group, through the one ladder (a
+        # module preset from before reads as its `patch/2`; one that never
+        # said its group is the folder's). Review fix 7: anything else in a
+        # group's folder — a whole preset, a canvas patch, another group's —
+        # is refused, the mismatch named
+        if not isinstance(doc, dict):
+            raise LibraryError(f"{path.name}: not a JSON object")
+        if (doc.get("schema") == f"{patchdoc.MODULE_KIND}/{patchdoc.MODULE_VERSION}"
+                and patchdoc.GROUP_KEY not in doc):
+            doc[patchdoc.GROUP_KEY] = group
+        if patchdoc.GROUP_KEY not in doc:
+            what = ("a whole preset" if patchdoc.shape_of(doc) == patchdoc.PRESET_SHAPE
+                    else "a canvas patch" if str(doc.get("schema", "")).startswith(
+                        f"{patchdoc.KIND}/") else f"schema {doc.get('schema')!r}")
+            raise LibraryError(NOT_GROUP_WORDS.format(file=path.name, what=what, group=group))
+        doc = forward_group(doc, path.name)
+        refused = patchdoc.check(doc)
+        if refused:
+            raise LibraryError(f"{path.name}: " + "; ".join(refused))
+        if doc[patchdoc.GROUP_KEY] != group:
+            raise LibraryError(NOT_GROUP_WORDS.format(
+                file=path.name, what=f"a patch of the {doc[patchdoc.GROUP_KEY]} group",
+                group=group))
         return doc
 
     # ---- patches (plan 40 T1) ----
 
     def read_patch(self, name: str) -> dict:
         """The patch `name`: its file under ``<root>/patches/``, checked —
-        the schema (`read`) and the shape (`patches.check`). A patch that is
-        not there, or that check refuses, raises LibraryError with the
-        reasons in words."""
-        doc = self.read(PATCHES, name)
-        refused = patchdoc.check(doc)
+        the schema (`read`) and the shape (`patches.check`), after the one
+        ladder (`patches.forward`: a ``patch/1`` reads as its ``/2``, plan
+        50). A patch that is not there, that check refuses, or that is one
+        group's (spawned from that group's strip), raises LibraryError with
+        the reasons in words."""
+        doc = forward_group(self.read(PATCHES, name), name)
+        if patchdoc.names_group(doc):
+            raise LibraryError(GROUP_PATCH_WORDS.format(name=name,
+                                                        group=doc[patchdoc.GROUP_KEY]))
+        refused = patchdoc.check(doc)      # (an empty `group`: one line, review fix 6)
         if refused:
             path = self.path_of(PATCHES, name)
             raise LibraryError(f"{path.name if path else name}: " + "; ".join(refused))
@@ -2156,29 +2352,9 @@ class Library:
         self.say(f"{PATCHES}: saved {name}")
         return path
 
-    def desk_template(self, name: str) -> dict:
-        """The desk template `name` (plan 24 C3): its file under
-        ``<root>/desk/``, as ``{"schema": DESK_SCHEMA, "name", "note"?, "desk":
-        [row, …]}`` — the rows in a preset's ``desk`` form (no ``layer``).
-        A template that is not there, or not that format, raises
-        LibraryError; the caller says so and goes on without it."""
-        path = self.path_of(DESK, name)
-        if path is None:
-            raise LibraryError(f"no desk template {name!r}")
-        doc = copy.deepcopy(self._doc(path))
-        if doc.get("schema") != DESK_SCHEMA:
-            raise LibraryError(f"{path.name}: schema {doc.get('schema')!r} is not "
-                               f"{DESK_SCHEMA}")
-        rows = doc.get("desk")
-        if not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows):
-            raise LibraryError(f"{path.name}: its desk is not a list of rows")
-        return doc
-
     # ---- defaults & values ----
 
     def default_name(self, group: str) -> str | None:
-        if group == DESK:          # its folder holds desk templates, never module presets:
-            return None            # a template named "default" is no group default
         if group in RETIRED_MODULES:   # plan 40 T5: an old fx/default.json is no default
             return None
         name = DEFAULT_NAMES.get(group, "default")
@@ -2209,14 +2385,20 @@ class Library:
         (a strip load, or the scene combo re-tuning from a scene)."""
         out = self.defaults(group)
         out.update(values)
-        return {k: v for k, v in out.items() if k in self.reg}
+        # (review of #351: a group's session key — `ghost.mirror` — is no
+        # module preset's to set, whatever a file says: `params.in_group`)
+        return {k: v for k, v in out.items() if k in self.reg and in_group(self.reg[k], group)}
 
     def _landed(self, group: str, name: str | None, loaded: dict[str, Any] | None,
                 reapply=None) -> None:
         """One place for what "the group's current preset" means: its name,
         the values it produced (what is_dirty compares against) and, for a
         preset someone else applied, how to apply it again when its file
-        changes on disk."""
+        changes on disk. The presets' is their own (`_owner`, plan 44 D3)."""
+        owner = self._owner(group)
+        if owner is not None:
+            owner.landing = (name, loaded, reapply)
+            return
         self._current[group] = name
         if loaded is None:
             self._loaded.pop(group, None)
@@ -2240,7 +2422,27 @@ class Library:
 
     def landed(self, group: str) -> tuple:
         """The group's landed state, opaque, for an undo to hand back."""
+        owner = self._owner(group)
+        if owner is not None:
+            return tuple(owner.landing)
         return (self._current.get(group), self._loaded.get(group), self._adopted.get(group))
+
+    def _owner(self, group: str):
+        """Who keeps `group`'s landing when it is not the library (plan 44
+        D3): the presets kind's `Presets` — its `landing`, (current, what
+        its load produced, how to re-apply) — so a deck's dirty dot is its
+        own; None for every other group."""
+        pre = self.__dict__.get("presets")
+        if group == PRESETS and pre is not None and hasattr(type(pre), "landing"):
+            return pre
+        return None
+
+    def landed_groups(self) -> set[str]:
+        """Every group with a landing: the library's and the presets'."""
+        out = {*self._current, *self._loaded, *self._adopted}
+        if self._owner(PRESETS) is not None:
+            out.add(PRESETS)
+        return out
 
     def reland(self, group: str, mark: tuple) -> None:
         """Put back what landed() returned — the analyzer's reset undo."""
@@ -2267,6 +2469,9 @@ class Library:
     # ---- presets: the surface the strip draws ----
 
     def current(self, group: str) -> str | None:
+        owner = self._owner(group)
+        if owner is not None:
+            return owner.landing[0]
         return self._current.get(group)
 
     def load(self, group: str, name: str) -> list[str]:
@@ -2306,6 +2511,10 @@ class Library:
             if hook is not None and doc.get("layout") is not None:
                 hook(doc["layout"])                    # rebuild params first
                 self._fresh_of(group)                  # …and their build values are "fresh"
+            # plan 50: a patch of one group replaces that group's values —
+            # what `patches.spawn` of it says (`Landing.replaces`; nothing can
+            # collide, so no sheet). Landed here directly (review fix 3): the
+            # spawn would only hand its values back, at a full read's cost
             values = _module_values(group, doc)
             # (an old module file's retired ids — plan 33 T7's orders and
             # targets — are no unknown ids: the wires say them now)
@@ -2327,10 +2536,10 @@ class Library:
             self._landed(group, doc.get("name") or name, resolved)
         self.report(missing, f"{group}/{name}")
         if not quiet:
-            self.say(f"{group}: {self._current[group]}")
+            self.say(f"{group}: {self.current(group)}")
         hook = self._load_hooks.get(group)
         if hook is not None:
-            hook(self._current[group])
+            hook(self.current(group))
         return missing
 
     def land_unsaved(self, group: str, name: str, doc: dict) -> list[str]:
@@ -2411,7 +2620,7 @@ class Library:
             doc["name"] = leaf
             name = f"{folder}/{leaf}" if folder else leaf
         elif path is None:
-            path = self.home / group / f"{slug(name)}.json"
+            path = self.group_dir(self.home, group) / f"{slug(name)}.json"   # (plan 50)
         kind = self._kinds.get(group)
         text = (kind.text(doc) if kind is not None and kind.text is not None
                 else _json_text(doc))
@@ -2440,20 +2649,18 @@ class Library:
         group's `extra` hook adds beside the values (the analyzer's layout),
         unless the caller brought its own. Every band document the library
         writes is built here: a file, or a project's inline module copy. A
-        document kind's is its own hook's."""
+        document kind's is its own hook's. Plan 50: a group's document is a
+        patch of one param group (`patches.group_doc`, ``hyperspace.patch/2``)."""
         kind = self._kinds.get(group)
         if kind is not None:
             return kind.document(name)
         reg = self._need_reg()
-        doc = {"schema": PRESET_SCHEMA, "group": group, "name": name,
-               "values": reg.snapshot(group)}
-        if group == "camera":
-            doc[UNITS_KEY] = dict(UNITS)     # its pan is in world units (plan 26 A2)
         if extra is None and group in self._extra_hooks:
             extra = self._extra_hooks[group]()
-        if extra:
-            doc.update(extra)
-        return doc
+        beside = dict(extra or {})
+        if group == "camera":
+            beside[UNITS_KEY] = dict(UNITS)  # its pan is in world units (plan 26 A2)
+        return patchdoc.group_doc(group, name, reg.snapshot(group), extra=beside)
 
     def overwrite(self, group: str, *, extra: dict | None = None) -> Path | None:
         """Save over the current preset (its old text kept in the trash)."""
@@ -2484,7 +2691,7 @@ class Library:
         except OSError as e:
             raise LibraryError(f"{path.name}: {e}") from e
         self._sync(path)
-        if self._current.get(group) in (name, shown) and self.path_of(group, shown) is None:
+        if self.current(group) in (name, shown) and self.path_of(group, shown) is None:
             self._landed(group, None, None)
         if group == PRESETS:
             if still:
@@ -2544,12 +2751,12 @@ class Library:
         new = (new or "").strip()
         # plan 48 row 584: a rename keeps the folder — `new` is the leaf
         # (the folder may be spelled in front of it, as the list spells it);
-        # moving a preset between folders is stage 2's
+        # moving a preset between folders is `move` (stage 2)
         pre = self._prefix(group, path)
         leaf = new[len(pre):].strip() if pre and new.startswith(pre) else new
         if group == PRESETS and "/" in leaf:
             raise LibraryError(f"{new}: a rename keeps the folder — a name has no '/' "
-                               "(move the file in Finder to change its folder)")
+                               "(the row's right-click: move to ▸)")
         if not leaf:
             raise LibraryError("a preset needs a name")
         new = pre + leaf
@@ -2557,18 +2764,8 @@ class Library:
         if new == old:
             return path
         doc = _read_json(path)
-        # what names this file, folded: its listed names and its file key
-        # (and, at the top, its raw stem, as before plan 48)
-        mine = {self._fold(group, n) for n, p in idx.items() if p == path}
-        mine |= {self._fold(group, s) for s, p in files.items() if p == path}
-        if not pre:
-            mine.add(stem)
-        mine -= {None, ""}
-        # review of #334: what each slot resolved to before the rename (a
-        # loose read, as a pad loads it), so a slot naming it by an old
-        # spelling (`Ac/Dc`) follows it too
-        # (`snap`, taken above, is the library as it was before)
-        named = lambda n: self._resolve(group, n, snap, loose=True) == path
+        # (`snap`, taken above, is the library as it was before: steps 4–6,
+        # `_follow_many`, read what named the file from it)
         in_place = slug(leaf) == stem
         # `_taken` less this preset's own stem and name — in its own folder
         taken = ({self._fold(group, s) for s, p in files.items() if p != path}
@@ -2605,32 +2802,23 @@ class Library:
                 dst.unlink(missing_ok=True)
                 raise LibraryError(f"{path.name}: not renamed ({e})") from e
         self._sync(path, dst)                              # 4.
-        cur = self._current.get(group)
-        if cur is not None and (cur == old or self._fold(group, cur) in mine):
-            self._landed(group, new, self._loaded.get(group))
-            hook = self._load_hooks.get(group)
-            if hook is not None:
-                hook(new)
-        if group == PATCHES:
-            self.say(f"renamed {old} → {new}")
-            return dst
-        done, left = self._repoint(old, new, mine, named)  # 5.
-        self.project.follow()                              # 6.
-        self.say(f"renamed {old} → {new} ({done} show{'' if done == 1 else 's'} updated)")
-        if left:
-            self.say(warning=f"renamed {old} → {new}; not updated: {', '.join(left)}")
+        self._follow_many({path: new}, snap, "renamed", f"{old} → {new}",  # 4–6.
+                          group=group)
         return dst
 
-    def _repoint(self, old: str, new: str, mine: set[str],
-                 named=lambda n: False) -> tuple[int, list[str]]:
-        """Step 5 of `rename`: every user show naming the old preset (by its
-        name, or a slug of it or of its file stem) names the new one, each
-        copied to the trash first. Returns (shows written, shows left as
-        they were with why)."""
+    def _repoint_by(self, to) -> tuple[int, list[str]]:
+        """Step 5 of `rename` (and of a move, a folder's rename — plan 48
+        stage 2, many presets at once): `to(n)` is the name a slot or the
+        startup naming `n` takes now, None to leave it. Every user show with
+        a hit is copied to the trash once, then written; the open show
+        through its `Project` (its dot and the bank's light stay right).
+        Returns (shows written, shows left as they were with why)."""
 
         def hit(n) -> bool:
-            return isinstance(n, str) and bool(n) and (
-                n == old or self._fold(PRESETS, n) in mine or named(n))
+            return isinstance(n, str) and bool(n) and to(n) is not None
+
+        def moved(n):
+            return to(n) if hit(n) else n
 
         pr, done, left = self.project, 0, []
         for show in sorted((self.home / PROJECTS).glob(f"*{PROJECT_SUFFIX}")):
@@ -2642,8 +2830,8 @@ class Library:
                     left.append(f"{label} (it could not be kept in the trash)")
                     continue
                 was = (list(pr.bank), pr.startup)
-                pr.bank = [new if hit(n) else n for n in pr.bank]
-                pr.startup = new if hit(pr.startup) else pr.startup
+                pr.bank = [moved(n) for n in pr.bank]
+                pr.startup = moved(pr.startup)
                 try:
                     pr.write()
                 except (LibraryError, OSError) as e:
@@ -2666,9 +2854,9 @@ class Library:
             if self._to_trash(show) is None:
                 left.append(f"{label} (it could not be kept in the trash)")
                 continue
-            doc["bank"] = [new if hit(n) else n for n in bank]
+            doc["bank"] = [moved(n) for n in bank]
             if hit(doc.get("startup")):
-                doc["startup"] = new
+                doc["startup"] = moved(doc.get("startup"))
             try:
                 _write_json(show, doc)
             except LibraryError as e:
@@ -2678,9 +2866,263 @@ class Library:
             done += 1
         # the open show with no file yet (a new show): its bank in memory
         if pr.path is None and (any(hit(n) for n in pr.bank) or hit(pr.startup)):
-            pr.bank = [new if hit(n) else n for n in pr.bank]
-            pr.startup = new if hit(pr.startup) else pr.startup
+            pr.bank = [moved(n) for n in pr.bank]
+            pr.startup = moved(pr.startup)
         return done, left
+
+    # ---- folders (plan 48 stage 2): move, make, rename, remove ----
+
+    def folders(self) -> list[str]:
+        """Every folder under ``presets/``, every folder down, spelled as on
+        disk (``party``, ``party/deep``) — empty ones too, less hidden
+        ones; sorted case folded."""
+        out: set[str] = set()
+        for root in self._roots():
+            d = root / PRESETS
+            if d.is_dir():
+                out.update(self._tree(d)[1])
+        return sorted(out, key=str.lower)
+
+    def _owned(self, path: Path, snap: tuple, group: str = PRESETS) -> set[str]:
+        """What names the file `path`, folded: its listed names and its file
+        key (and, at the top, its raw stem, as before plan 48)."""
+        idx, files = snap[0], snap[1]
+        mine = {self._fold(group, n) for n, p in idx.items() if p == path}
+        mine |= {self._fold(group, s) for s, p in files.items() if p == path}
+        if not self._prefix(group, path):
+            mine.add(path.name[:-5])
+        mine -= {None, ""}
+        return mine  # type: ignore[return-value]
+
+    def _shown_name(self, path: Path, snap: tuple) -> str:
+        """The name the list gave the file at `path` in `snap`."""
+        for n, p in snap[0].items():
+            if p == path:
+                return n
+        return self._prefix(PRESETS, path) + self._leaf(PRESETS, path)
+
+    def _follow_many(self, moves: dict[Path, str], snap: tuple, verb: str, what: str,
+                     *, group: str = PRESETS) -> tuple[int, list[str]]:
+        """After files were renamed or moved (`moves`: each old path → the
+        name it is listed by now; `snap` the library as it was before) —
+        `rename`'s steps 4–6, and a move's and a folder rename's: the loaded
+        preset's name follows (its clean reference kept, the load hook
+        told); then, for the presets, every show's slots and startup
+        (`_repoint_by`: a slot naming a file by any spelling that found it
+        before — its name, its file key, a loose read, review of #334) and
+        `Project.follow()`. The status says how many shows (a patch: none
+        names one)."""
+        byfold: dict[str, str] = {}
+        for p, now in moves.items():
+            for k in self._owned(p, snap, group):
+                byfold[k] = now
+        listed = {n: moves[p] for n, p in snap[0].items() if p in moves}
+
+        def to(n) -> str | None:
+            if not isinstance(n, str) or not n:
+                return None
+            if n in listed:
+                return listed[n]
+            k = self._fold(group, n)
+            if k is not None and k in byfold:
+                return byfold[k]
+            target = self._resolve(group, n, snap, loose=True)
+            return moves.get(target) if target is not None else None
+
+        cur = self.current(group)          # (plan 44 D3: the presets' own)
+        now = to(cur) if cur is not None else None
+        if now is not None and now != cur:
+            self._landed(group, now, self.landed(group)[1])
+            hook = self._load_hooks.get(group)
+            if hook is not None:
+                hook(now)
+        if group != PRESETS:
+            self.say(f"{verb} {what}")
+            return 0, []
+        done, left = self._repoint_by(to)
+        self.project.follow()
+        self.say(f"{verb} {what} ({done} show{'' if done == 1 else 's'} updated)")
+        if left:
+            self.say(warning=f"{verb} {what}; not updated: {', '.join(left)}")
+        return done, left
+
+    @staticmethod
+    def _folder_name(name: str) -> str:
+        """One segment of a folder's name, as typed, stripped; LibraryError
+        for an empty one, one with a ``/``, a hidden one (``.cache``), one
+        ending ``.json`` (it would read as a preset's file) or one with a
+        control character (a pasted NUL: review of #349)."""
+        name = (name or "").strip()
+        if not name:
+            raise LibraryError("a folder needs a name")
+        if any(ord(c) < 32 or ord(c) == 127 for c in name):
+            raise LibraryError("a folder's name may not hold a control character")
+        if name.lower().endswith(".json"):
+            raise LibraryError(f"{name}: a folder's name may not end in '.json' "
+                               "(it would read as a preset)")
+        if "/" in name:
+            raise LibraryError(f"{name}: a folder's name has no '/' — make it inside "
+                               "the folder it belongs in")
+        if name.startswith("."):
+            raise LibraryError(f"{name}: a folder's name may not start with '.' "
+                               "(the list skips hidden folders)")
+        return name
+
+    def _existing_folder(self, folder: str) -> str:
+        """`folder` spelled as it is on disk; ``""`` for the top;
+        LibraryError for a folder that is not there."""
+        folder = (folder or "").strip().strip("/")
+        on_disk = self._folder_on_disk(folder)
+        if on_disk is None:
+            raise LibraryError(f"no folder {folder!r} under presets/")
+        return on_disk
+
+    def move(self, name: str, folder: str) -> Path:
+        """Move the preset `name` into `folder` (``""``: the top; else a
+        folder on disk) — plan 48 stage 2. The file moves whole, its bytes
+        as they were (`_move_file`), its stem and inner ``name`` kept, so it
+        is listed as ``<folder>/<leaf>``. Then, as a rename does
+        (`_follow_many`): the loaded preset's name follows if it is the one
+        moved, and every show in the home that names it — the open show's
+        bank and startup too, written as a rename writes it — names it by
+        the new name, each show copied to the trash first. No undo step
+        (a rename has none): moving it back is the net. Refused, nothing
+        moved, for no such preset, no such folder, or a folder that already
+        has a preset of that name or that file. Returns the new path."""
+        self.writable()
+        snap = self._lookup(PRESETS)
+        path = self._resolve(PRESETS, name, snap, loose=False)
+        if path is None:
+            raise LibraryError(f"no preset {name!r}")
+        folder = self._existing_folder(folder)
+        if fold_folder(self._prefix(PRESETS, path)[:-1]) == fold_folder(folder):
+            return path
+        leaf = self._leaf(PRESETS, path)
+        new = f"{folder}/{leaf}" if folder else leaf
+        base = self.home / PRESETS
+        dst = (base / folder if folder else base) / path.name
+        idx, files = snap[0], snap[1]
+        taken = ({self._fold(PRESETS, s) for s, p in files.items() if p != path}
+                 | {self._fold(PRESETS, n) for n, p in idx.items() if p != path})
+        if self._fold(PRESETS, new) in taken or dst.exists():
+            raise LibraryError(f"{leaf}: {folder or 'the top level'} already has a preset "
+                               "by that name — rename one first")
+        _move_file(path, dst)
+        self._sync(path, dst)
+        self._follow_many({path: new}, snap, "moved",
+                          f"{self._shown_name(path, snap)} → {new}")
+        return dst
+
+    def make_folder(self, parent: str, name: str) -> str:
+        """Make the folder `name` inside `parent` (``""``: the top) under
+        ``presets/`` and return it (``party/deep``). Refused when `parent`
+        is not on disk, `name` is empty, holds a ``/`` or is hidden, or a
+        folder of that name (case folded) is there already."""
+        self.writable()
+        parent = self._existing_folder(parent)
+        name = self._folder_name(name)
+        full = f"{parent}/{name}" if parent else name
+        if self._folder_on_disk(full) is not None:
+            raise LibraryError(f"{full}: that folder is already there")
+        try:
+            (self.home / PRESETS / full).mkdir(parents=True, exist_ok=False)
+        except FileExistsError as e:
+            raise LibraryError(f"{full}: that name is taken (by a file)") from e
+        except (OSError, ValueError) as e:
+            raise LibraryError(f"{full}: {e}") from e
+        self._sync()
+        self.say(f"made the folder {full}")
+        return full
+
+    def rename_folder(self, folder: str, name: str) -> str:
+        """Rename the folder `folder` (``party/deep``) to `name` in the same
+        parent and return it. Every preset inside, every folder down, keeps
+        its file and its leaf — ``party/deep/C`` becomes ``party/deeper/C``
+        — and the loaded preset and every show's slots follow, as a move
+        does (`_follow_many`). One step on disk (the folder's own rename),
+        never over another folder. Refused for no such folder, the top, or
+        a name taken in the parent."""
+        self.writable()
+        if not (folder or "").strip().strip("/"):
+            raise LibraryError("the top level is not a folder to rename")
+        folder = self._existing_folder(folder)
+        name = self._folder_name(name)
+        parent = folder.rpartition("/")[0]
+        full = f"{parent}/{name}" if parent else name
+        if full == folder:
+            return folder
+        src, dst = self.home / PRESETS / folder, self.home / PRESETS / full
+        # review of #349: taken unless `dst` is this very folder (a change of
+        # case on a disk that folds case) — asked of the disk, not of a fold:
+        # on a case-sensitive volume `Party` beside `party` is another folder
+        try:
+            itself = dst.exists() and src.samefile(dst)
+        except (OSError, ValueError):
+            itself = False
+        if os.path.lexists(dst) and not itself:
+            raise LibraryError(f"{full}: that name is taken — pick another")
+        if (not itself and fold_folder(full) != fold_folder(folder)
+                and self._folder_on_disk(full) is not None):
+            raise LibraryError(f"{full}: that name is taken — pick another")
+        snap = self._lookup(PRESETS)
+        moves: dict[Path, str] = {}
+        for p in snap[1].values():
+            if not p.is_relative_to(src):
+                continue
+            sub = p.parent.relative_to(src).as_posix()
+            pre = full if sub == "." else f"{full}/{sub}"
+            moves[p] = f"{pre}/{self._leaf(PRESETS, p)}"
+        try:
+            src.rename(dst)
+        except (OSError, ValueError) as e:
+            raise LibraryError(f"{folder}: not renamed ({e})") from e
+        self._sync(*moves, *(dst / p.relative_to(src) for p in moves))
+        self._follow_many(moves, snap, "renamed the folder", f"{folder} → {full}")
+        return full
+
+    HELD_SAID = 3       # entries `held` names before "and n more"
+
+    def held(self, folder: str) -> list[str]:
+        """What keeps the folder `folder` under ``presets/`` from being
+        removed (review of #349): every entry in it but a Finder
+        ``.DS_Store`` — presets, folders, hidden files, anything — by name
+        (a folder with a ``/``), the first HELD_SAID then ``n more``; [] for
+        an empty folder, and for one that is not there."""
+        folder = (folder or "").strip().strip("/")
+        on_disk = self._folder_on_disk(folder) if folder else None
+        if not on_disk:
+            return []
+        try:
+            got = sorted((p.name + "/" if p.is_dir() else p.name)
+                         for p in (self.home / PRESETS / on_disk).iterdir()
+                         if p.name != ".DS_Store")
+        except OSError as e:
+            return [f"(unreadable: {e})"]
+        if len(got) > self.HELD_SAID:
+            got = [*got[: self.HELD_SAID], f"{len(got) - self.HELD_SAID} more"]
+        return got
+
+    def remove_folder(self, folder: str) -> None:
+        """Remove an empty folder under ``presets/`` (a Finder
+        ``.DS_Store`` goes with it). Refused when it holds anything else —
+        a preset, a folder, any file, hidden or not: a remove never deletes
+        what the trash could not give back."""
+        self.writable()
+        if not (folder or "").strip().strip("/"):
+            raise LibraryError("the top level is not a folder to remove")
+        folder = self._existing_folder(folder)
+        d = self.home / PRESETS / folder
+        held = self.held(folder)
+        if held:
+            raise LibraryError(f"{folder}: not empty — it holds {_and(held)}; move or "
+                               "trash what is in it first")
+        try:
+            (d / ".DS_Store").unlink(missing_ok=True)
+            d.rmdir()
+        except OSError as e:
+            raise LibraryError(f"{folder}: not removed ({e})") from e
+        self._sync()
+        self.say(f"removed the folder {folder}")
 
     # ---- the trash: a view of it, restore, empty (plan 19 WP4) ----
 
@@ -2823,10 +3265,15 @@ class Library:
         show = group == PROJECTS
         suffix = PROJECT_SUFFIX if show and filename.endswith(PROJECT_SUFFIX) else ".json"
         stem = filename.removesuffix(suffix)
+        # plan 50: ``trash/patches/<group>/`` is a patch of one group — it
+        # goes back among that group's (`group_dir`)
+        if group == PATCHES and sub and "/" not in sub:
+            group, sub = sub, ""
         # only the presets have folders (plan 48): a file a non-preset group
         # kept deeper goes back where that group lists it
         sub = sub if group == PRESETS else ""
-        folder = self.home / group / sub if sub else self.home / group
+        folder = self.group_dir(self.home, group) / sub if sub else self.group_dir(self.home,
+                                                                                  group)
         pre = f"{sub}/" if sub and group == PRESETS else ""
         data = path.read_bytes()
         try:
@@ -2937,6 +3384,9 @@ class Library:
         save (nothing loaded yet is never dirty). Floats compare within
         undo's tolerance (`undo.alike`, plan 16 WP7): the last bits a
         performer leaves in a base it took light no dot."""
+        owner = self._owner(group)
+        if owner is not None:                # plan 44 D3: the presets' own dot
+            return owner.is_dirty()
         kind = self._kinds.get(group)
         if kind is not None:
             ref = self._loaded.get(group)
@@ -2972,7 +3422,10 @@ class Library:
             for d in root.iterdir():
                 if d.is_dir() and not d.name.startswith("."):
                     # the presets every folder down (plan 48), as `_files` lists them
-                    for f in self._tree(d)[0] if d.name == PRESETS else d.glob("*.json"):
+                    # (plan 50: and the patches of one group, a folder down)
+                    for f in (self._tree(d)[0] if d.name == PRESETS else
+                              [*d.glob("*.json"), *d.glob("*/*.json")] if d.name == PATCHES
+                              else d.glob("*.json")):
                         try:
                             out[f] = f.stat().st_mtime
                         except OSError:
@@ -3009,9 +3462,9 @@ class Library:
             return True
         hit = []
         try:
-            for group, name in list(self._current.items()):
+            for group in sorted(self.landed_groups()):
+                name, _loaded, reapply = self.landed(group)
                 if name is not None and self.path_of(group, name, loose=True) in changed:
-                    reapply = self._adopted.get(group)
                     if reapply is not None:            # by the road it came in
                         reapply()
                     else:

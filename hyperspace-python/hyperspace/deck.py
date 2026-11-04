@@ -2,7 +2,8 @@
 
 A `Deck` bundles what plan 44 §2 marks "per deck", as the objects exist
 today: the registry (`reg`), the view state (`view`), the binding table
-(`table`), the router, the three modulator banks (`lfos`, `envs`,
+(`table`), the router and the sources it reads (`sources`, plan 44
+D2), the three modulator banks (`lfos`, `envs`,
 `seq`), the presets and their graph section (`presets`, `presets.graph`),
 the learn, the undo and the marks it restores through, and — in the app,
 never headless — the renderer and the hold, and the clock the banks step on. D1 changes no behaviour:
@@ -44,9 +45,9 @@ from .hold import register as register_hold
 from .learn import Learn
 from .library import Marks
 from .lookback import DreamState
-from .params import Registry, build_registry
+from .params import Registry, SessionRegistry, build_registry
 from .preset import Presets
-from .routing import Bindings, Router
+from .routing import Bindings, Router, Sources
 from .view import ViewState
 
 
@@ -86,23 +87,44 @@ class Deck:
     marks: Marks
     renderer: Any = None
     hold: Hold | None = None
+    # what the sources said this frame (routing_sources.Sources, plan 44
+    # D2): the router's shared half, the one the devices and the analyzer
+    # feed. Built here while there is one deck (`build(sources=…)` hands a
+    # rig's one in, so two routers read one feed); plan 44 §2 calls it shared
+    sources: Sources | None = None
 
     @property
     def graph(self):
         """The presets' graph section (`preset.GraphSection`)."""
         return self.presets.graph
 
+    @property
+    def session(self) -> SessionRegistry | None:
+        """The rig's params this deck's registry holds by reference (plan 44
+        D3, `params.SessionRegistry`): one for every deck."""
+        return self.reg.session
+
+    @property
+    def session_table(self):
+        """The rig's half of the binding table this deck's table holds by
+        reference (plan 44 D3, `routing.SessionTable`): the session rows
+        and `bindings.json`."""
+        return self.table.session
+
     @classmethod
     def build(cls, *, library, control, audio, table: Callable[[Registry], Bindings],
               renderer=None, media=None, restart: Callable[[], Any] | None = None,
               dream=None, fx=None, ghost=None,
               clock: tempo.Clock | None = None, lfos: lfo.LFOs | None = None,
+              sources: Sources | None = None,
+              session: SessionRegistry | None = None,
               hands: Callable[[Registry], Any] | None = None,
               outputs: Callable[[Registry], Any] | None = None,
               panel: Callable[..., Any] | None = None,
               devices: Callable[..., Any] | None = None,
               made: RigMade | None = None,
               attach: bool = True, startup: bool = True, install: bool = True,
+              on_air: bool = True,
               warm: bool = False) -> Deck:
         """`app.main`'s deck lines, in their order. `library`, `control`
         and `audio` (anything with a `.chain`) are the rig's, built and
@@ -114,7 +136,13 @@ class Deck:
         each when None) — given with a renderer they are a ValueError,
         since the renderer's states are the ones it draws. `media` is the channels' `MediaState`, `restart`
         the `app.restart` param's callback, `clock` / `lfos` a clock and
-        an LFO bank to use in place of new ones. The hooks, each called
+        an LFO bank to use in place of new ones, `sources` the shared
+        sources the router reads (plan 44 D2; new ones when None) — their
+        clock, when they have one, is the deck's unless `clock` is given,
+        and a different `clock` is refused there. `session` (plan 44 D3) is
+        the rig's params (`params.build_session`) this deck's registry
+        follows; None: `build_registry` makes them (the one deck there is
+        today). The hooks, each called
         where `main` builds that rig object, each returning what it made:
         `hands(reg)` the hands' setup, `outputs(reg)` the outputs' params
         and switches, `panel(reg, view, clock=, lfos=, envs=, seq=, hold=,
@@ -132,7 +160,9 @@ class Deck:
         `install` (this deck's undo is the one `undo.push` and the
         `edit.*` triggers reach). All three default on, as `main` has them;
         a second deck built beside the first passes all three False, and
-        D2+ decides their real shape. `warm`: build every shape's geometry
+        D2+ decides their real shape. `on_air` (plan 44 D3, review of #351):
+        this deck is the session's lead — its `apply` lands the session's
+        params once a frame; a deck built beside it passes False. `warm`: build every shape's geometry
         on a background thread once the startup preset has landed."""
         if renderer is not None:
             given = [k for k, v in (("dream", dream), ("fx", fx), ("ghost", ghost))
@@ -141,18 +171,32 @@ class Deck:
                 raise ValueError(f"Deck.build: {', '.join(given)} given with a renderer, "
                                  "whose own states the deck's params must drive")
             dream, fx, ghost = renderer.lookback.state, renderer.fx.state, renderer.ghost.state
+        # one clock for every deck (plan 44 §2): a clock other than the shared
+        # sources' is refused before anything registers on it
+        if (sources is not None and clock is not None and sources.clock is not None
+                and clock is not sources.clock):
+            raise ValueError("Deck.build: the sources step every bank on their own clock; "
+                             "a different `clock` was given")
         s = ViewState()
         reg = build_registry(s, control, audio, library.project,
                              dream=dream if dream is not None else DreamState(),
                              fx=fx if fx is not None else FxState(),
                              ghost=ghost if ghost is not None else GhostState(),
-                             media=media, restart=restart)
+                             media=media, restart=restart, session=session)
+        if on_air and reg.session is not None:
+            # (review of #351: the deck on air lands the session's params —
+            # named, never "whichever registry followed first")
+            reg.session.lead = reg
         made = made if made is not None else RigMade()
         if hands is not None:
             made.hands = hands(reg)            # before attach: "default" includes them
         # the tap-tempo clock and the LFO bank (tempo.py, lfo.py; four by
         # default, up to 16, plan 31 B): their knobs are params too, so a
         # preset carries a tempo and an LFO arrangement
+        # one clock for every deck (plan 44 §2): shared sources that have
+        # one bring it, and the router refuses any other (`Router.use_bank`)
+        if clock is None and sources is not None:
+            clock = sources.clock
         clock = clock if clock is not None else tempo.Clock()
         lfos = lfos if lfos is not None else lfo.LFOs()
         tempo.register(reg, clock)
@@ -184,7 +228,10 @@ class Deck:
             # the panel's own ui.* params, and its handles on what exists now
             made.panel = panel(reg, s, clock=clock, lfos=lfos, envs=envs, seq=seq, hold=hold,
                                output=made.outputs)
-        router = Router(reg, bindings)
+        # the router: this deck's evaluator over the sources every source
+        # feeds (plan 44 D2) — the rig's when handed in, else its own
+        sources = sources if sources is not None else Sources()
+        router = Router(reg, bindings, sources=sources)
         router.use_lfos(lfos, clock)           # they step inside the pass (plan 28 N0)
         router.use_bank(envs, clock)           # …and so do the envelopes (plan 31)
         router.use_sequencer(seq, envs)        # after the banks begin, before the plan
@@ -195,6 +242,9 @@ class Deck:
             # plan 26 A4: a preset's graph section sets the renderer's wiring and
             # hands an extra hands node its own state (`Renderer.ghost_states`)
             presets.graph.attach(renderer)
+            # plan 44 D3: the bus cuts are the loaded preset's — the renderer
+            # reads them off the presets (`graph.rig_of`: `Presets.rig`)
+            renderer.rig_source = presets
         if hold is not None:
             hold.section = presets.graph       # plan 38 B3: landings keep the held program's nodes
         # one Learn over the live table, whatever the MIDI gate says: a knob
@@ -231,7 +281,7 @@ class Deck:
             hold.undo = undo_obj           # Drop goes back to the hold's point through it
         return cls(reg=reg, view=s, table=router.table, router=router, lfos=lfos, envs=envs,
                    seq=seq, clock=clock, presets=presets, learn=learn, undo=undo_obj, marks=marks,
-                   renderer=renderer, hold=hold)
+                   renderer=renderer, hold=hold, sources=sources)
 
     def targets(self) -> list[tuple[Any, str, str]]:
         """The live objects a hot reload re-classes, as (object, module,
@@ -254,6 +304,10 @@ class Deck:
                (r.ghost.state, "ghost", "GhostState")] if r is not None else []),
             (self.view, "view", "ViewState"),
             (self.reg, "params", "Registry"),
+            # plan 44 D3: the rig's params this deck holds by reference (listed
+            # here while there is one deck; D4+ hands the rig's in)
+            *([(sr, "params", "SessionRegistry")]
+              if (sr := getattr(self.reg, "session", None)) is not None else []),
             *[(p, "params", "Param") for p in self.reg],
             (self.marks, "library", "Marks"),
             (self.undo, "undo", "Undo"),
@@ -261,6 +315,10 @@ class Deck:
             # …and its preview renderer once made
             *([(hold.preview, "render", "Renderer")]
               if hold is not None and hold.preview is not None else []),
+            # the router's shared half (plan 44 D2), while the deck builds it
+            # (getattr: a stand-in deck, or one from before D2, has none)
+            *([(src, "routing_sources", "Sources")]
+              if (src := getattr(self, "sources", None)) is not None else []),
             (self.router, "routing", "Router"),
             (self.presets, "preset", "Presets"),
             (self.presets.graph, "preset", "GraphSection"),      # plan 26 A4
