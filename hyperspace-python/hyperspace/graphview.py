@@ -4073,8 +4073,13 @@ class Edit:
         row, pid = picked.ref, self._param(to.partition(":")[2]).id
         cur = self.table.owner(pid)
         if cur is not None and cur is not row:
-            return Ask(cur, row, lambda: self.table.replace_owner(row, target=pid))
-        return self.table.move_route(row, target=pid)
+            def replaced():
+                gone = self.table.replace_owner(row, target=pid)
+                learnmod.land_moved(row, row.source, self.reg.get(pid))
+                return gone
+
+            return Ask(cur, row, replaced)
+        return learnmod.move_route(self.table, self.reg, row, target=pid)
 
     # ---- a cable deleted ----
 
@@ -4152,7 +4157,7 @@ class Edit:
         b = cable.ref
         if b.op == "push" and b.rest is None and self.router is not None:
             b.rest = self.router.rest_of(src)
-        table.move_route(b, source=m.address)
+        learnmod.move_route(table, self.reg, b, source=m.address)
         return m
 
     def show_macro(self, mid: str):

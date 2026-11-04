@@ -710,6 +710,10 @@ here; overturn → the change, then the same.
 | 679 | Plan 51 O1: a room lane is the whole circle, `0.5 + degrees / 360`, filtered unwrapped; the seam is one frame and never a sweep; pitch runs on past ±90° and yaw holds inside 8° of vertical (out at 11°), so no lane flips; a dropped wire lands a `position` row at depth 1 with no feel (`learn.row_for`) | — | (rec) — pending the owner |
 | 680 | Plan 51 O1: the room is the tracking mode's stage, levelled optionally from one flat hand (HANDS, **level room**); kept as an optional `room: {mode, level}` in `hands.json`, `/3` unchanged, written only when set; applied only in its own mode and never to a tape | — | (rec) — pending the owner |
 | 681 | Plan 51 O1: a lost hand reads NaN on the room lanes that frame and returns at its new reading with no glide; they have no setup params, no DAW output and no Learn | — | (rec) — pending the owner |
+| 682 | Plan 51 O2: an orbit is a new performer op, `turn`, that adds the source's shortest change to the target's base while its gate is on; first acting frame reads, a frame not acting forgets; no feel; dormant with no gate or a source that is no whole-circle lane | — | (rec) — pending the owner |
+| 683 | Plan 51 O2: no schema move for `turn`: an older build drops the row with a note and lands the rest, and a save there loses it; both Macs update together | — | (rec) — pending the owner |
+| 684 | Plan 51 O2: the clutch is the same hand's grab, landed in the preset's row; a lost hand is an opened clutch; one undo step per closure with a 0.15 s grace; under the hold it moves the preview as a knob does | — | (rec) — pending the owner |
+| 685 | Plan 51 O2: within 20° of vertical, a yaw straying 20° or stepping 5° on leaving the cone makes the hand read NaN until it has left, then restart, not a camera jump; `ghost.mirror` does not flip a turn row, its depth does; a room lane on a clamped target stays `position`; a moved row lands as `row_for` would | — | (rec) — pending the owner |
 
 "—": no hand check shows it; tests only.
 
@@ -12598,3 +12602,54 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   back has no right direction on a circle, so there is none. Nothing routes
   them by default: no preset or binding changed.
 - **Judge it.** 516.
+
+### 682. The `turn` op
+
+- **Answer.** (rec) — pending the owner.
+- **Built.** `routing.TURN_OP` in `MOD_OPS`, `Router._turn`, `Router._end_turns`.
+  A gated `position` row slams to the palm's angle and returns to the base, so an
+  orbit needs a row that writes the base. It never calls `Param.modulate`, so no
+  offset or ledger exists. On a clamped target it adds up and stops at the end.
+  Dormant with no `when` (it would never stop acting, so one undo step for ever)
+  and on a source that is no whole-circle lane (a linear lane has no shortest way).
+- **Judge it.** 517.
+
+### 683. No schema move for a new op
+
+- **Answer.** (rec) — pending the owner. Accepted on this basis by the wave's
+  orchestrator, 2026-11-03.
+- **Built.** Presets stay `/10`. `preset.py` on an older build drops an op it lacks
+  with "(turn): not a performer row" and lands the rest; a save from that build
+  loses the row. Read from the code and simulated with an older `MOD_OPS`
+  (`test_what_an_older_build_does_with_the_row`), not run on an older build.
+- **Rejected.** A flag on a `position` row: an older build ignores it and slams the
+  camera. A schema move: an older build refuses the whole file for one camera row.
+
+### 684. The clutch, a lost hand, undo and the hold
+
+- **Answer.** (rec) — pending the owner.
+- **Built.** `learn.clutch_of`: the same hand's grab, in the row's `when`; alternatives
+  in plan 51 §6. A lost hand drops the gate and NaNs the lane, so the camera stays on
+  its base. One step per closure through `Undo.keep_open` / `let_close`, B1's lines, on
+  `undo.watching(reg)`. A step outlives its rows by `TURN_GRACE_S` (0.15 s), so a dropout
+  is not a new step. Anything else closing it cuts each row acting until it lets go. A
+  step a held chase is keeping is left alone, so a fist ends no verb. A hand lost or
+  blind past the grace makes two steps.
+- **The question for the rig.** Under the hold a turn moves the preview only, as a
+  knob, because it writes the base; a push or position performer rides on both. The
+  alternative, an orbit that reaches the program, would need an offset, which is what
+  this op does not have.
+- **Judge it.** 518.
+
+### 685. The cone, the mirror and clamped targets
+
+- **Answer.** (rec) — pending the owner.
+- **Built.** `Palm.step` answers plan 51's open question. Within `POLE_NEAR_DEG` (20°)
+  of vertical, a yaw straying `POLE_SWING_DEG` (20°) from where it came in, or stepping
+  `POLE_STEP_DEG` (5°) on leaving the cone, makes the hand blind until it has left; then
+  it restarts. A range, not a rate, so a slow pass is caught. Costs in plan 51 §6.
+  `ghost.mirror` is the room's and the row the preset's, so no flip: depth −1 answers
+  a mirror. `learn.row_for` lands `turn` only on a wrapping target; on any other
+  continuous target it stays O1's `position`. `learn.move_route` lands a moved row the
+  same way.
+- **Judge it.** 519.

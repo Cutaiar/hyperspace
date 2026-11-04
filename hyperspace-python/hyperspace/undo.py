@@ -10,7 +10,9 @@ turn on the desk, one typed value or one toggle is one step, whatever
 wrote it (the panel, a key row, a MIDI row, the mouse).
 
 A performer makes no step: a hand, a band or an LFO writes an *offset*
-(`Router.modulate`), never the base, and the fingerprint reads bases. The
+(`Router.modulate`), not the base, and the fingerprint reads bases. Two write
+the base, each keeping its own one step open (`Undo.keep_open`): a `turn` row
+(plan 51 O2), one step per clutch closure, and the base chase (plan 52). The
 frame a performer takes a param, and the frame it lets go, the base can
 move in its last bits (the norm round trip in `Param.modulate` /
 `Param.apply`), so two fingerprints are *the same* when every float pair
@@ -66,6 +68,7 @@ import sys
 from dataclasses import dataclass, fields, replace
 from operator import attrgetter
 from typing import Any
+from weakref import WeakKeyDictionary, ref
 
 SETTLE_S = 0.4        # quiet time that ends a step. Plan 18's knob slew must stay under it.
 LIMIT = 100           # steps kept; the oldest goes first
@@ -209,6 +212,10 @@ class Undo:
     def __init__(self, reg, table, *, marks=None, tag=None, tagged=("band.",),
                  on_restore=None, banks=None):
         self.reg, self.table = reg, table
+        try:
+            _watching[reg] = ref(self)
+        except TypeError:                 # a stand-in registry: found only by `installed`
+            pass
         self.marks, self.tag, self.tagged = marks, tag, tuple(tagged)
         self.on_restore = on_restore
         self.banks = banks
@@ -668,6 +675,27 @@ class Undo:
 # kept across a hot reload of this module (importlib.reload re-executes it
 # over the same globals)
 _installed: Undo | None = globals().get("_installed")
+
+
+# each registry's own `Undo`, a deck's whether or not it is the installed one, so
+# a performer writing that registry's bases finds its stack (`watching`). Weak on
+# both sides: an `Undo` holds its registry
+_watching = globals().get("_watching")
+if _watching is None:
+    _watching = WeakKeyDictionary()
+
+
+def watching(reg) -> Undo | None:
+    """The `Undo` over `reg`; else the installed one if it is over `reg` (an
+    `Undo` from before a hot reload is not in the map); else None."""
+    try:
+        got = _watching.get(reg)
+    except TypeError:
+        got = None
+    u = got() if got is not None else None
+    if u is None and _installed is not None and _installed.reg is reg:
+        return _installed
+    return u
 
 
 def install(u: Undo | None) -> None:

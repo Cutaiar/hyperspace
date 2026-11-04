@@ -125,7 +125,7 @@ from imgui_bundle import imgui
 
 from . import apc40, motion, ui, ui_feel, ui_presets, undo
 from .bands import CEIL
-from .learn import LANE_DEPTH
+from .learn import LANE_DEPTH, clutch_of, is_auto_clutch, land_moved, move_route
 from .library import PRESETS
 from .modifiers import KINDS as MOD_KINDS
 from .modifiers import PARAMS as MOD_PARAMS
@@ -135,6 +135,7 @@ from .params import Kind, Param, part_of
 from .routing import (
     SAVE_PARAM,
     SHIFT_PARAM,
+    TURN_OP,
     Binding,
     Macro,
     Owned,
@@ -143,15 +144,18 @@ from .routing import (
     base_refusal,
     base_sub,
     factory_desk,
+    whole_circle,
 )
 
 NAMING = "routing.preset"  # the head's save as… name field (ui_presets._name_field)
 DEPTH_MOD = 1.0           # ±, the depth slider's throw
-# the op chip cycles push ↔ position; what each one's depth means
-OP_CHIP = {"push": "push", "position": "pos"}
-NEXT_OP = {"push": "position", "position": "push"}
+# the op chip cycles push ↔ position, or position ↔ turn from a whole-circle
+# lane (`_next_op`); what each one's depth means
+OP_CHIP = {"push": "push", "position": "pos", "turn": "turn"}
+NEXT_OP = {"push": "position", "position": "push", "turn": "position"}
 DEPTH_TIP = {"push": " — 1 is the full throw at a lane's asymptote",
-             "position": " — a fraction of the target's throw; 1 is all of it"}
+             "position": " — a fraction of the target's throw; 1 is all of it",
+             "turn": " — of the target's throw per whole turn of the source; 1 is one for one"}
 BAR_W = 56.0
 SRC_W = 84.0             # the source combo: a lane's number and name
 DEPTH_W = 112.0
@@ -409,7 +413,9 @@ def _wake(router: Router, b: Binding) -> Binding | None:
 def _retarget(router: Router, b: Binding, picked: str) -> Binding | None:
     """Replace, for a row moved onto a taken target: the owner goes, `b`
     now points at `picked`. Returns the row removed."""
-    return router.table.replace_owner(b, target=picked)
+    gone = router.table.replace_owner(b, target=picked)
+    land_moved(b, b.source, router.reg.get(picked))
+    return gone
 
 
 def _question(panel) -> tuple[Binding, Binding, Callable[[bool], object]] | None:
@@ -931,7 +937,8 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
         for i, lb in enumerate(labels):
             sel, _ = imgui.selectable(lb, i == cur)
             if sel and i < len(sources):
-                router.table.move_route(b, source=sources[i][0])   # its subscribers too
+                # its subscribers too
+                move_route(router.table, router.reg, b, source=sources[i][0])
         imgui.end_combo()
     imgui.same_line()
     sp = imgui.get_style().item_spacing.x
@@ -945,7 +952,7 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     if picked:
         cur = router.table.owner(picked)
         if cur is None or cur is b or not b.is_performer:
-            router.table.move_route(b, target=picked)
+            move_route(router.table, router.reg, b, target=picked)
         else:                               # the referee, on a retarget
             ask(panel, cur, replace(b, target=picked),
                 lambda picked=picked: _retarget(router, b, picked))
@@ -960,15 +967,20 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
         if imgui.is_item_hovered():
             ui.tooltip(SESSION_TIP)
     imgui.same_line()
-    _feel_chip(router, b, feel_w)
+    if b.op == TURN_OP:                     # a turn reads no feel: nothing to pick
+        imgui.dummy(imgui.ImVec2(feel_w, 0))
+    else:
+        _feel_chip(router, b, feel_w)
     imgui.same_line()
     label = OP_CHIP.get(b.op, "push")
     if ui.lit_chip(f"{label}##op", b.op != "push", ui.DIM, imgui.ImVec2(op_w, 0)):
-        b.op = NEXT_OP.get(b.op, "push")
+        _flip_op(b, p is not None and p.wrap)
     if imgui.is_item_hovered():
         ui.tooltip("push: depth × (source − rest) added to the base\n"
                           "pos:  depth × source is the position across the whole\n"
                           "      control, along its curve, while the source is live\n"
+                          "turn: the source's change is added to the base and stays;\n"
+                          "      shut the gate, move freely, open it: no jump\n"
                           "click to switch")
     imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("×"))
     imgui.push_style_color(imgui.Col_.text, ui.DIM)
@@ -1305,6 +1317,30 @@ def _control_cell(table, b: Binding, color=None) -> None:
         imgui.text_colored(color, control_glyph(table, b))
     if imgui.is_item_hovered():
         ui.tooltip(f"{control_name(table, b)}  ·  {b.describe()}")
+
+
+def _next_op(b: Binding, wraps: bool) -> str:
+    """What the op chip's click makes of a row: a whole-circle lane on a
+    wrapping target goes between position and turn (plan 51), as `row_for`
+    would land it; anything else between push and position, as ever."""
+    if b.op == "position" and wraps and whole_circle(b.source):
+        return TURN_OP
+    return NEXT_OP.get(b.op, "push")
+
+
+def _flip_op(b: Binding, wraps: bool) -> None:
+    """The op chip's click. Landing on `turn` is landing as a dropped wire does:
+    the hand's clutch if the row has no gate, and no feel, so an old spring does
+    not come back unseen when it flips away again. Leaving `turn`, the hand's own
+    clutch goes with it, as `land_moved` does, and a gate someone picked stays."""
+    was = b.op
+    b.op = _next_op(b, wraps)
+    if b.op == TURN_OP:
+        b.motion = None
+        if b.when is None:
+            b.when = clutch_of(b.source)
+    elif was == TURN_OP and is_auto_clutch(b.source, b.when):
+        b.when = None
 
 
 def _op_text(b: Binding) -> str:
