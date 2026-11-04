@@ -67,17 +67,29 @@ Two layers, both the rig's, neither a preset's:
    with the fingers pointing where "forward" is, press, keep still for a
    second. The mean palm over at least `CAL_MIN_SAMPLES` frames becomes
    the room's axes. It answers a Leap mounted at an angle and a performer
-   facing somewhere other than the sensor's −z, in one gesture. Too few
-   frames leaves the room as it was, and says so.
+   facing somewhere other than the sensor's −z, in one gesture.
 
-The result is a rotation saved as `"room"` in `hands.json`, stage → room.
-The key is written only when the room was levelled and read as the identity
-when absent, so **no schema move**: an unlevelled file is byte-for-byte what
-it was, and a build from before ignores the key (and drops it at its next
-save, costing one more press). A bad entry is ignored and said once on
-stderr, as `units` does. **clear** on the same line goes back to the
-tracking mode's frame. `reset ranges` does not touch it: it answers where
-the sensor is, not how far a hand goes.
+The window runs at least `LEVEL_S` and on until enough frames have arrived,
+up to `LEVEL_WAIT_S` more, so a slow frame rate can still pass. The room is
+left as it was, in words, when too few frames arrive, a second hand comes into
+view at any point, the palm strays more than `LEVEL_STILL_DEG` from its mean,
+or its up is more than `LEVEL_TILT_DEG` from the stage's. The button is hidden
+and `start_level` refuses during a calibration sweep, whose palms are moving,
+and a sweep started during a levelling ends it.
+
+The result is saved in `hands.json` as `"room": {"mode", "level"}`, the
+tracking mode it was made in and the stage → room rotation. The key is written
+only when the room was levelled and read as no levelling when absent, so **no
+schema move**: an unlevelled file is written as before, and a build from before
+ignores the key (and drops it at its next save, costing one more press). A bad
+entry is ignored and said once on stderr, as `units` does. **clear** on the
+same line goes back to the tracking mode's frame. `reset ranges` does not touch
+it: it answers where the sensor is, not how far a hand goes.
+
+A levelling applies only in the mode it was made in, because it is relative to
+that mode's stage. In another mode it is ignored and said once, and stays in the
+file. **A tape never uses one and cannot make or clear one**: it has its own
+mode and no rig, so the rig's `hands.json` is not its to rewrite.
 
 ## 4. The lane scale and wrap at ±180°
 
@@ -85,6 +97,14 @@ the sensor is, not how far a hand goes.
 at 0.5. Depth 1 onto a wrapping param with a full-circle range (`camera.yaw`,
 `camera.pitch`: ±π) is one-to-one, a 90° turn of the palm being a 90° turn
 of the shape, and the seam at 0 / 1 lands on the same orientation in both.
+
+**A dropped wire lands that row.** `learn.row_for` makes a room lane a
+`position` row at depth 1 with no feel, on any continuous target (GRAPH's cable
+and Route from ▸ both go through it). The default it would otherwise get, a
+push at the hands' Learn depth on the `smooth` spring, is not one-to-one, and
+the spring glides across the seam through the whole range. This is the one line
+of knowledge outside `hands/`: `learn.whole_circle` reads the address, because
+`row_for` has only the address, and `learn` may not import the hands.
 
 - **Filtered unwrapped.** Each fresh tracking frame adds its shortest step
   to a running angle, and the One Euro filter (the HANDS page's `smooth` and
@@ -99,7 +119,9 @@ of the shape, and the seam at 0 / 1 lands on the same orientation in both.
   clamped range the anatomical axes are still there.
 - **Over the top.** At fingers-vertical yaw and roll become one turn. Two
   rules keep the lanes from flipping. Inside `POLE_DEG` (8°) of vertical yaw
-  holds and roll carries the twist. Past it, of the two solutions (yaw, or
+  holds and roll carries the twist, until the fingers are `POLE_EXIT_DEG` (11°)
+  off vertical, so noise on the edge does not let it go. Past it, of the two
+  solutions (yaw, or
   yaw + 180° with pitch and roll going the long way) a hand takes the one
   nearest its last yaw. So pitch runs on past ±90° ("tumbling over the top is
   just more turn", as `camera.pitch` does), with no 180° flip in any lane. The
@@ -114,7 +136,9 @@ The same as every other reading of that hand. When the tracker loses it, the
 box keeps it out or the confidence floor drops it, all three lanes read NaN
 that frame, so a row lets go and its base returns. The running angle and the
 filter forget. A returning hand starts at its new reading with no glide,
-because a glide across a circle has no right direction. A source with no
+because a glide across a circle has no right direction. A hand first seen
+within the pole's margin has no yaw to read, so all three lanes stay NaN until
+it leaves the margin, rather than latching a guess. A source with no
 skeleton (a palm-only fake) reads NaN, as the curls do; the lanes read the
 skeleton's palm vectors because the features hold only the anatomical angles.
 
@@ -146,5 +170,5 @@ Not built here; O2's builder may overturn any of it.
 - **Saved and held.** Because it writes the base, `hold.HELD_GROUPS`, the save
   and undo all see an ordinary camera move.
 - **Open questions for O2.** Whether the yaw step on leaving the pole cone
-  (§4) needs a guard; `Palm.pole` is there to read. Whether `ghost.mirror`
+  (§4) needs a guard; `Palm.pole` is there to read, and the hysteresis uses it. Whether `ghost.mirror`
   should flip the row's sign. Whether one hand or either hand may clutch.

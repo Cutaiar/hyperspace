@@ -7558,8 +7558,9 @@ jumps by half a turn. (3) Roll carries the twist; on the way down yaw may
 step, up to a quarter turn, the one step this design keeps (row 679). Say if
 it is more than a tracker glitch would be: O2 would need a guard.
 **516. Level room, a lost hand, and stillness.** (same)
-1. Open **feel & calibration**, hold a hand flat, press **level room**, hold
-   it a second; if you can, with the Leap on a wedge first.
+1. Open **feel & calibration**, one hand in view, hold it flat, press **level
+   room** with the mouse, hold it a second; if you can, with the Leap on a wedge
+   first. Then try it with both hands in view: it should refuse in words.
 2. Check 514's first step, restart the app, and again.
 3. Take the hand out of view and bring it back turned.
 4. Hold it still for ten seconds with no support.

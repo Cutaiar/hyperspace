@@ -168,6 +168,11 @@ def unit(v: float, lo: float, hi: float) -> float:
     return min(1.0, max(0.0, (v - lo) / (hi - lo))) if hi != lo else 0.0
 
 
+def dot(a, b) -> float:
+    """Two 3-vectors' dot product: the one both core.py and room.py use."""
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
 class OneEuro:
     """The One Euro filter (Casiez et al. 2012) over a scalar: a low-pass
     whose cutoff rises with speed — a still hand does not shimmer, a moving

@@ -151,8 +151,9 @@ on both hands, whatever the camera does:
 Each is the whole circle, 0.5 + degrees / 360, filtered unwrapped so ±180°
 is a seam and never a sweep; NaN while the hand is away or has no skeleton.
 The frame is the tracking mode's, optionally levelled from a flat hand
-(`HandsIO.start_level`), kept as ``"room"`` in hands.json only when set: a
-key a file may lack, so no schema move. Like the dance sources they have no
+(`HandsIO.start_level`), kept as ``"room": {"mode", "level"}`` in hands.json
+only when set: a key a file may lack, so no schema move. It applies only in
+the mode it was made in, and never to a tape, which plays in its own frame. Like the dance sources they have no
 setup params, no DAW output and no Learn.
 """
 
@@ -170,7 +171,18 @@ from pathlib import Path
 
 import mido
 
-from .room import ROOM, ROOM_REST, Mat, Palm, frame, is_rotation, level_of, palm_axes
+from .room import (
+    MODES,
+    ROOM,
+    ROOM_REST,
+    Mat,
+    Palm,
+    frame,
+    is_rotation,
+    level_of,
+    mode_name,
+    palm_axes,
+)
 from .signal import (
     FULL,
     HYST_14,
@@ -181,6 +193,7 @@ from .signal import (
     OneEuro,
     Smooth,
     describe,
+    dot,
     encode,
     quantize,
     shape,
@@ -206,7 +219,15 @@ BOX_AXES = ("x", "y", "z")
 BOX_MARGIN = 40.0     # mm: the sweep's box stands this far outside what the palms covered
 BOX_EDGE = 15.0       # mm: a hand that is in stays in until it is this far past a face
 BOX_MIN_SPAN = 120.0  # mm: a coordinate swept over less than this is left open
-LEVEL_S = 1.0         # s a flat hand is held to level the room (plan 51)
+# levelling the room from a flat hand (plan 51): held at least LEVEL_S, then
+# on until CAL_MIN_SAMPLES frames arrived, for at most LEVEL_WAIT_S more (so a
+# slow frame rate can still pass). Refused when any frame's palm strayed past
+# LEVEL_STILL_DEG from the mean, or the palm's up is past LEVEL_TILT_DEG from
+# the stage's: a mount tilted that far is not what the gesture is for
+LEVEL_S = 1.0
+LEVEL_WAIT_S = 3.0
+LEVEL_STILL_DEG = 10.0
+LEVEL_TILT_DEG = 60.0
 # "x" / "y" / "z" → (lo, hi) in mm, or None for an open coordinate
 Box = dict[str, tuple[float, float] | None]
 GROUP = "hands"
@@ -442,12 +463,8 @@ def _sub(a, b) -> tuple[float, float, float]:
     return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
 
 
-def _dot(a, b) -> float:
-    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-
-
 def _len(a) -> float:
-    return math.sqrt(_dot(a, a))
+    return math.sqrt(dot(a, a))
 
 
 def _angle(a, b) -> float | None:
@@ -455,7 +472,7 @@ def _angle(a, b) -> float | None:
     la, lb = _len(a), _len(b)
     if la < 1e-6 or lb < 1e-6:
         return None
-    return math.degrees(math.acos(min(1.0, max(-1.0, _dot(a, b) / (la * lb)))))
+    return math.degrees(math.acos(min(1.0, max(-1.0, dot(a, b) / (la * lb)))))
 
 
 def bend(bones: list) -> float:
@@ -490,7 +507,7 @@ def spread(skel: dict | None) -> float | None:
     for f in ("index", "pinky"):
         b = digits[DIGITS.index(f)][1]                  # the proximal bone
         d = _sub(b["next"], b["prev"])
-        k = _dot(d, n) / (nn * nn)
+        k = dot(d, n) / (nn * nn)
         p = (d[0] - k * n[0], d[1] - k * n[1], d[2] - k * n[2])
         if _len(d) < 1e-6 or _len(p) < SPREAD_MIN_FLAT * _len(d):
             return 0.0
@@ -1059,10 +1076,11 @@ def load_units(path: Path | None) -> Units:
     return out
 
 
-def load_room(path: Path | None) -> Mat | None:
-    """The room's levelling in the file (stage → room, plan 51), None when
-    it has none: no file, no key, ``"room": null``. A bad entry is ignored
-    and said once on stderr."""
+def load_room(path: Path | None) -> dict | None:
+    """The room's levelling in the file (plan 51) as ``{"mode", "level"}``,
+    the tracking mode it was made in and its stage → room rotation; None when
+    it has none: no file, no key, ``"room": null``. A bad entry is ignored and
+    said once on stderr."""
     if path is None or not path.exists():
         return None
     try:
@@ -1071,16 +1089,17 @@ def load_room(path: Path | None) -> Mat | None:
         return None
     if raw is None:
         return None
-    if not is_rotation(raw):
-        print(f"hands: {path.name}: room: not a rotation ({str(raw)[:40]!r}); "
+    ok = isinstance(raw, dict) and raw.get("mode") in MODES and is_rotation(raw.get("level"))
+    if not ok:
+        print(f"hands: {path.name}: room: not a mode and a rotation ({str(raw)[:40]!r}); "
               "the tracking mode's frame", file=sys.stderr)
         return None
-    return tuple(tuple(float(n) for n in row) for row in raw)
+    return {"mode": raw["mode"], "level": tuple(tuple(float(n) for n in r) for r in raw["level"])}
 
 
 def save_calibration(path: Path, ranges: dict[str, tuple[float, float]],
                      box: Box | None = None, units: Units | None = None,
-                     room: Mat | None = None) -> None:
+                     room: dict | None = None) -> None:
     data = {"schema": CAL_SCHEMA,
             "axes": {k: {"lo": round(lo, 3), "hi": round(hi, 3)}
                      for k, (lo, hi) in ranges.items()},
@@ -1089,7 +1108,8 @@ def save_calibration(path: Path, ranges: dict[str, tuple[float, float]],
              for c in BOX_AXES},
             "units": (units or Units()).to_json()}
     if room is not None:        # only when levelled: an unlevelled file stays as it was
-        data["room"] = [[round(n, 6) for n in row] for row in room]
+        data["room"] = {"mode": room["mode"],
+                        "level": [[round(n, 6) for n in row] for row in room["level"]]}
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=1) + "\n")
 
@@ -1412,8 +1432,6 @@ class HandsIO:
         # the calibration into the shape's units (plan 26 A2), from the box
         # unless the file says otherwise
         self.units: Units = load_units(cal_path)
-        # the room's levelling (plan 51), None for the tracking mode's frame
-        self.level: Mat | None = load_room(cal_path)
         self.state = []
         for a in settings.axes:
             lo, hi = default_range(a.side, a.feature)
@@ -1425,6 +1443,12 @@ class HandsIO:
             source = TapeSource(Path(self.cfg["tape"]), clock)
             self.cfg["mode"] = source.mode
         self.source = source if source is not None else LeapSource(self.cfg["mode"], clock)
+        # the room's levelling (plan 51): the file's entry, kept whole so a save
+        # never loses one this run does not apply; `level` what applies now,
+        # None for the tracking mode's frame
+        self._room_doc: dict | None = load_room(cal_path)
+        self.level: Mat | None = self._level_from(self._room_doc)
+        self._room_m: Mat | None = None       # Leap → room, built when first read
         self.layout = Layout(settings.axes)
         self._rests: list[float] | None = None      # the rests vector last published
         self.error = ""
@@ -1445,7 +1469,7 @@ class HandsIO:
         self.grab = {s: Gate() for s in SIDES}
         # the room lanes (plan 51): each hand's palm in the room's frame
         self.room = {s: Palm() for s in SIDES}
-        # a levelling in progress: (normal, direction) of each frame's palms
+        # a levelling in progress: (normal, direction) of each frame's one palm
         self._level_seen: list[tuple] | None = None
         self._level_until = 0.0
         self.frame: dict[str, dict | None] = {s: None for s in SIDES}  # native features
@@ -1595,26 +1619,64 @@ class HandsIO:
         """The room lanes' state, made for a HandsIO from before a hot reload."""
         if getattr(self, "room", None) is None:
             self.room = {s: Palm() for s in SIDES}
-            self.level, self._level_seen, self._level_until = None, None, 0.0
+            self._room_doc = load_room(getattr(self, "cal_path", None))
+            self.level = self._level_from(self._room_doc)
+            self._room_m, self._level_seen, self._level_until = None, None, 0.0
         return self.room
+
+    @property
+    def on_tape(self) -> bool:
+        """Is a tape playing instead of the camera? It has its own mode and
+        no rig: no levelling applies to it, and none is made or cleared."""
+        return isinstance(self.source, TapeSource)
+
+    def _level_from(self, doc: dict | None) -> Mat | None:
+        """The levelling that applies now: the file's, unless a tape is
+        playing or it was made in another tracking mode (said once on stderr;
+        the entry stays in the file)."""
+        if doc is None or self.on_tape:
+            return None
+        if doc["mode"] != mode_name(self.cfg["mode"]):
+            print(f"hands: room: levelled in {doc['mode']}, tracking in {self.cfg['mode']}; "
+                  "the tracking mode's frame", file=sys.stderr)
+            return None
+        return doc["level"]
+
+    def _frame(self) -> Mat:
+        """Leap → room, cached until the levelling changes."""
+        if self._room_m is None:
+            mode = self.source.mode if self.on_tape else self.cfg["mode"]
+            self._room_m = frame(mode, self.level)
+        return self._room_m
 
     def _step_rooms(self, t: float, fresh: bool) -> None:
         """Each hand's palm in the room, from this frame's skeleton; a hand
-        away, or with no skeleton to read, forgets. A levelling in progress
-        keeps the raw palms as well."""
-        rooms = self._rooms()
-        g, m = self.settings, frame(self.cfg["mode"], self.level)
+        away, or with no skeleton to read, forgets."""
+        rooms, g = self._rooms(), self.settings
         for s in SIDES:
             sk = self.skeleton.get(s)
             n, d = (sk.get("normal"), sk.get("direction")) if sk else (None, None)
-            axes = palm_axes(n, d, m) if n and d else None
+            axes = palm_axes(n, d, self._frame()) if n and d else None
             if axes is None:
-                rooms[s].reset()
-                continue
-            if fresh or not rooms[s].deg:
+                if rooms[s].deg:
+                    rooms[s].reset()
+            elif fresh or not rooms[s].deg:
                 rooms[s].step(axes, t, g.smooth, g.response)
-                if self._level_seen is not None:
-                    self._level_seen.append((sk["normal"], sk["direction"]))
+        if self._level_seen is not None and fresh:
+            self._level_sample()
+
+    def _level_sample(self) -> None:
+        """This frame's palm for a levelling in progress. One hand only: a
+        second one would be averaged in and saved as a wrong rotation, so it
+        ends the levelling, whichever hand pressed the button."""
+        if all(self.present[s] for s in SIDES):
+            self._level_seen = None
+            self.cal_note = "room left as it was (two hands in view: level with one)"
+            return
+        sk = next((self.skeleton[s] for s in SIDES if s in self.skeleton), None)
+        n, d = (sk.get("normal"), sk.get("direction")) if sk else (None, None)
+        if n and d:
+            self._level_seen.append((n, d))
 
     def _layout(self) -> Layout:
         """The layout, rebuilt when it is one from before a hot reload
@@ -1916,6 +1978,8 @@ class HandsIO:
         self._cal = {a.name: [] for a in self.axes}
         self._palm = []
         self._cal_until = self.clock() + seconds
+        self._rooms()
+        self._level_seen = None         # moving palms are no levelling
         self.cal_note = "sweep every axis end to end"
 
     def cancel_calibration(self) -> None:
@@ -1980,21 +2044,33 @@ class HandsIO:
     def levelling(self) -> float:
         """Seconds left in a levelling, 0 when none is running."""
         self._rooms()
-        return max(0.0, self._level_until - self.clock()) if self._level_seen is not None else 0.0
+        if self._level_seen is None:
+            return 0.0
+        wait = 0.0 if len(self._level_seen) >= CAL_MIN_SAMPLES else LEVEL_WAIT_S
+        return max(0.0, self._level_until + wait - self.clock())
 
     def start_level(self, seconds: float = LEVEL_S) -> None:
         """Level the room from the palm held flat for `seconds`: its axes
         become the room's, so a tilted mount reads level and its fingers
-        point the way "forward" means (plan 51)."""
+        point the way "forward" means (plan 51). Not during a sweep, whose
+        palms are moving, and not from a tape, which is not this rig."""
         self._rooms()
+        if self.calibrating > 0:
+            return
+        if self.on_tape:
+            self.cal_note = "room left as it was (a tape plays in its own frame)"
+            return
         self._level_seen = []
         self._level_until = self.clock() + seconds
         self.cal_note = "levelling: hold one hand flat, fingers forward"
 
     def clear_level(self) -> None:
-        """Back to the tracking mode's own frame."""
+        """Back to the tracking mode's own frame. Not from a tape: the file
+        is the rig's."""
         self._rooms()
-        self.level, self._level_seen = None, None
+        if self.on_tape:
+            return
+        self.level, self._level_seen, self._room_doc, self._room_m = None, None, None, None
         for p in self.room.values():
             p.reset()
         self.cal_note = "room: the tracking mode's frame"
@@ -2004,16 +2080,28 @@ class HandsIO:
         seen = self._level_seen
         if seen is None or now < self._level_until:
             return
-        self._level_seen = None
         if len(seen) < CAL_MIN_SAMPLES:
+            if now < self._level_until + LEVEL_WAIT_S:
+                return
+            self._level_seen = None
             self.cal_note = "room left as it was (too few frames of a palm)"
             return
-        mean = lambda i: tuple(sum(p[i][c] for p in seen) / len(seen) for c in range(3))
-        level = level_of(mean(0), mean(1), self.cfg["mode"])
+        self._level_seen = None
+        mean = [tuple(sum(p[i][c] for p in seen) / len(seen) for c in range(3)) for i in (0, 1)]
+        level = level_of(mean[0], mean[1], self.cfg["mode"])
         if level is None:
             self.cal_note = "room left as it was (no palm to read)"
             return
+        off = max((_angle(p[i], mean[i]) or 0.0) for p in seen for i in (0, 1))
+        if off > LEVEL_STILL_DEG:
+            self.cal_note = f"room left as it was (the hand moved {off:.0f}°: keep it still)"
+            return
+        if level[1][1] < math.cos(math.radians(LEVEL_TILT_DEG)):
+            self.cal_note = "room left as it was (hold the palm flat, facing down)"
+            return
         self.level = level
+        self._room_doc = {"mode": mode_name(self.cfg["mode"]), "level": level}
+        self._room_m = None
         for p in self.room.values():       # the frame moved: no step across it
             p.reset()
         self.cal_note = f"room levelled on {len(seen)} frames"
@@ -2045,7 +2133,7 @@ class HandsIO:
             save_calibration(self.cal_path,
                              {a.name: (st.lo, st.hi) for a, st in zip(self.axes, self.state)},
                              getattr(self, "box", None), getattr(self, "units", None),
-                             getattr(self, "level", None))
+                             getattr(self, "_room_doc", None))
         except OSError as e:
             self.cal_note = f"save: {e}"[:120]
 

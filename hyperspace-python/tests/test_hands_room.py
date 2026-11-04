@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 from test_hands import Clock, FakeOut, _frame, hand, make_app
 
-from hyperspace import ghost
+from hyperspace import ghost, learn
 from hyperspace import hands as H
 from hyperspace.hands import HandSettings, HandsIO
 from hyperspace.hands import core as hc
@@ -68,22 +68,37 @@ def write_tape(path, poses, side="right", mode="desktop", at=(40.0, 200.0, 0.0))
     return path
 
 
-def play(path, *, smooth=1e6, response=0.0, cal=None, router=None, each=None, **cfg):
-    """A tape through `HandsIO`, a poll a frame; the list of `lanes()`. The
-    default filter passes through: a test that wants it turns it on."""
+class Camera:
+    """A tape standing in for the camera: what `HandsIO` sees of a live
+    source, so what a tape may not do (level the rig) can be tested."""
+
+    def __init__(self, tape):
+        self.tape, self.frames, self.on = tape, tape.frames, True
+
+    def snapshot(self):
+        return self.tape.snapshot()
+
+
+def play(path, *, smooth=1e6, response=0.0, cal=None, router=None, each=None, live=False,
+         dt=1.0 / FPS, **cfg):
+    """A tape through `HandsIO`, a poll every `dt`, as long as the tape lasts;
+    the list of `lanes()`. The default filter passes through: a test that
+    wants it turns it on. `live` plays it as the camera, not as a tape."""
     clock = Clock()
     src = T.TapeSource(path, clock, loop=False)
+    if live:
+        src = Camera(src)
     settings = HandSettings.from_config(cfg)
     settings.smooth, settings.response = smooth, response
     io = HandsIO(settings, cfg, source=src, out=FakeOut(), clock=clock, cal_path=cal)
     clock.t = 0.5 / FPS
     out = []
-    for k in range(len(src.frames)):
-        io.poll(1.0 / FPS, None, router)
+    for k in range(round(len(src.frames) / FPS / dt)):
+        io.poll(dt, None, router)
         out.append(list(io.lanes()))
         if each is not None:
             each(io, k)
-        clock.t += 1.0 / FPS
+        clock.t += dt
     return NS(io=io, lanes=out, clock=clock)
 
 
@@ -176,7 +191,7 @@ def test_every_angle_reads_back_through_the_plain_reading():
     rng = random.Random(51)
     m = R.MODES["desktop"]
     for _ in range(300):
-        want = (rng.uniform(-179, 179), rng.uniform(-80, 80), rng.uniform(-179, 179))
+        want = (rng.uniform(-179, 179), rng.uniform(-75, 75), rng.uniform(-179, 179))
         n, d = pose(*want)
         assert R.angles(R.palm_axes(n, d, m))[:3] == pytest.approx(want, abs=1e-6)
 
@@ -293,7 +308,7 @@ def _level(tmp_path, sensor, seconds=0.5):
         if k == 0:
             io.start_level(seconds)
 
-    return play(path, cal=cal, each=start), cal
+    return play(path, cal=cal, each=start, live=True), cal
 
 
 def test_levelling_makes_a_tilted_mount_read_as_a_level_one(tmp_path):
@@ -314,9 +329,10 @@ def test_the_levelling_is_saved_and_read_back_and_cleared(tmp_path):
     _, cal = _level(tmp_path, _tilted())
     raw = json.loads(cal.read_text())
     assert raw["schema"] == hc.CAL_SCHEMA == "hyperspace.hands/3"       # no schema move
+    assert raw["room"]["mode"] == "desktop" and len(raw["room"]["level"]) == 3
     again = play(write_tape(tmp_path / "again.json",
                             [pose(roll=25.0, pitch=-15.0, yaw=40.0, sensor=_tilted())] * 3),
-                 cal=cal)
+                 cal=cal, live=True)
     got = [deg(lane(again, f"right.room.{k}")[-1]) for k in R.ROOM]
     assert got == pytest.approx([25.0, -15.0, 40.0], abs=0.1)
     again.io.clear_level()
@@ -331,25 +347,115 @@ def test_an_unlevelled_file_is_written_as_it_was(tmp_path):
     assert set(json.loads(cal.read_text())) == {"schema", "axes", "box", "units"}
 
 
+def _start(io, k):
+    if k == 0:
+        io.start_level()
+
+
 def test_too_few_frames_leave_the_room_as_it_was(tmp_path):
+    """A hand there for ten frames of the whole wait."""
     cal = tmp_path / "hands.json"
+    poses = [UP_AWAY] * 10 + [None] * int(FPS * (hc.LEVEL_S + hc.LEVEL_WAIT_S + 0.2))
+    run = play(write_tape(tmp_path / "t.json", poses), cal=cal, each=_start, live=True)
+    assert run.io.level is None and "too few" in run.io.cal_note
+    assert run.io.levelling == 0.0 and not cal.exists()
 
-    def start(io, k):
-        if k == 0:
-            io.start_level(0.05)
 
-    run = play(write_tape(tmp_path / "t.json", [UP_AWAY] * 10), cal=cal, each=start)
-    assert run.io.level is None and "left as it was" in run.io.cal_note
-    assert not cal.exists()
+def test_a_slow_frame_rate_can_still_level(tmp_path):
+    """20 fps gives twenty frames in the second: the window runs on until
+    enough have arrived."""
+    cal = tmp_path / "hands.json"
+    poses = [pose(sensor=_tilted())] * int(FPS * 2.0)
+    seen = []
+    run = play(write_tape(tmp_path / "t.json", poses), cal=cal, each=lambda io, k: (
+        _start(io, k), seen.append(io.level)), live=True, dt=1.0 / 20.0)
+    assert run.io.level is not None and "levelled on 3" in run.io.cal_note
+    assert seen[20] is None         # past the second, still short
+
+
+def test_two_hands_in_view_refuse_and_save_nothing(tmp_path):
+    """The natural gesture: one hand held up, the other reaching for the
+    button. A second palm would be averaged into the saved rotation."""
+    cal = tmp_path / "hands.json"
+    path = write_tape(tmp_path / "t.json", [UP_AWAY] * 120)
+    tape = json.loads(path.read_text())
+    other = hand("left", pos=(-40.0, 200.0, 0.0), normal=pose(roll=70.0)[0], direction=UP_AWAY[1])
+    for f in tape["frames"][40:60]:
+        f["hands"]["left"] = {"features": hc.features(other), "confidence": 1.0,
+                              "skeleton": hc.skeleton(other)}
+    path.write_text(json.dumps(tape))
+    run = play(path, cal=cal, each=_start, live=True)
+    assert run.io.level is None and "two hands" in run.io.cal_note and not cal.exists()
+
+
+def test_a_moving_hand_refuses_and_saves_nothing(tmp_path):
+    cal = tmp_path / "hands.json"
+    poses = [pose(yaw=-40.0 + k) for k in range(120)]
+    run = play(write_tape(tmp_path / "t.json", poses), cal=cal, each=_start, live=True)
+    assert run.io.level is None and "moved" in run.io.cal_note and not cal.exists()
+
+
+def test_a_palm_not_facing_down_refuses_and_saves_nothing(tmp_path):
+    cal = tmp_path / "hands.json"
+    run = play(write_tape(tmp_path / "t.json", [pose(roll=90.0)] * 120), cal=cal, each=_start,
+               live=True)
+    assert run.io.level is None and "facing down" in run.io.cal_note and not cal.exists()
+
+
+def test_a_sweep_refuses_a_levelling_and_ends_one(tmp_path):
+    run = play(write_tape(tmp_path / "t.json", [UP_AWAY] * 2), live=True)
+    run.io.start_calibration(5.0)
+    note = run.io.cal_note
+    run.io.start_level()
+    assert run.io.levelling == 0.0 and run.io.cal_note == note
+    run.io.cancel_calibration()
+    run.io.start_level()
+    assert run.io.levelling > 0.0
+    run.io.start_calibration(5.0)
+    assert run.io.levelling == 0.0
+
+
+def _levelled(tmp_path, mode="desktop"):
+    cal = tmp_path / "hands.json"
+    level = R.level_of(*pose(sensor=_tilted()), mode)
+    hc.save_calibration(cal, {}, room={"mode": mode, "level": level})
+    return cal
+
+
+def test_a_levelling_from_another_mode_is_ignored_said_and_kept(tmp_path, capsys):
+    cal = _levelled(tmp_path, "desktop")
+    run = play(write_tape(tmp_path / "t.json", [UP_AWAY] * 3), cal=cal, live=True,
+               mode="screentop")
+    assert run.io.level is None and "levelled in desktop" in capsys.readouterr().err
+    run.io.save_ranges()
+    assert json.loads(cal.read_text())["room"]["mode"] == "desktop"
+
+
+def test_a_tape_plays_in_its_own_frame_and_never_touches_the_rigs_file(tmp_path):
+    """A screentop tape on a desktop rig that has a levelling: the tape's
+    mode, no levelling, and no way to make or clear one from it."""
+    cal = _levelled(tmp_path, "desktop")
+    before = cal.read_text()
+    p = pose(roll=25.0, pitch=-15.0, yaw=40.0, sensor=R.MODES["screentop"])
+    run = play(write_tape(tmp_path / "t.json", [p] * 3, mode="screentop"), cal=cal)
+    assert run.io.on_tape and run.io.level is None
+    got = [deg(lane(run, f"right.room.{k}")[-1]) for k in R.ROOM]
+    assert got == pytest.approx([25.0, -15.0, 40.0], abs=0.05)
+    run.io.start_level()
+    assert run.io.levelling == 0.0 and "tape" in run.io.cal_note
+    run.io.clear_level()
+    assert cal.read_text() == before
 
 
 @pytest.mark.parametrize("bad", ["yes", [1, 2, 3], [[1, 0, 0], [0, 1, 0]],
                                  [[2, 0, 0], [0, 1, 0], [0, 0, 1]],
                                  [[1, 0, 0], [0, 1, 0], [0, 0, -1]],     # a mirror
                                  [[1, 0, 0], [0, 1, 0], [0, 0, "x"]]])
-def test_a_bad_room_entry_is_ignored_and_said(tmp_path, capsys, bad):
+@pytest.mark.parametrize("mode", ["desktop", "nosuch"])
+def test_a_bad_room_entry_is_ignored_and_said(tmp_path, capsys, bad, mode):
     cal = tmp_path / "hands.json"
-    cal.write_text(json.dumps({"schema": hc.CAL_SCHEMA, "axes": {}, "room": bad}))
+    room = {"mode": mode, "level": bad}
+    cal.write_text(json.dumps({"schema": hc.CAL_SCHEMA, "axes": {}, "room": room}))
     assert hc.load_room(cal) is None
     assert "room" in capsys.readouterr().err
 
@@ -406,7 +512,7 @@ def test_the_hands_page_draws_the_room_row_and_the_level_line(tmp_path, monkeypa
     from hyperspace.app import CONTROL_SIZE
 
     with build_rig(tmp_path) as rig:
-        run = play(write_tape(tmp_path / "t.json", [UP_AWAY] * 3))
+        run = play(write_tape(tmp_path / "t.json", [UP_AWAY] * 3), live=True)
         rig.panel.hands = run.io
         imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
         calls = []
@@ -422,6 +528,10 @@ def test_the_hands_page_draws_the_room_row_and_the_level_line(tmp_path, monkeypa
         run.io.level = R.MODES["desktop"]
         run.io._level_seen = None
         frame(rig.panel, "hands")           # the "clear" line
+        run.io.start_calibration(5.0)
+        calls.clear()
+        frame(rig.panel, "hands")           # a sweep: no line at all
+        assert calls
 
 
 def test_a_hot_reloaded_handsio_makes_its_room_state(tmp_path):
@@ -430,7 +540,7 @@ def test_a_hot_reloaded_handsio_makes_its_room_state(tmp_path):
     src = T.TapeSource(write_tape(tmp_path / "t.json", [UP_AWAY] * 4), clock, loop=False)
     settings = HandSettings.from_config({})
     io = HandsIO(settings, {}, source=src, out=FakeOut(), clock=clock)
-    for k in ("room", "level", "_level_seen", "_level_until"):
+    for k in ("room", "level", "_room_doc", "_room_m", "_level_seen", "_level_until"):
         delattr(io, k)
     old = hc.Layout.__new__(hc.Layout)
     old.pair_index, old.grab = {}, {}
@@ -460,6 +570,83 @@ def test_a_route_turns_the_one_camera_one_for_one_across_the_seam(tmp_path):
     for got, a in zip(seen, want):
         assert R.wrap(got - a) == pytest.approx(0.0, abs=0.2)
     assert yaw.base == pytest.approx(0.0)                   # the row never wrote the base
+
+
+def test_a_hand_first_seen_in_the_cone_guesses_no_yaw(tmp_path):
+    """Fingers straight up from the first frame: nothing to read yaw from, so
+    no lane reads until the hand leaves the margin; then it reads plainly."""
+    poses = [pose(yaw=30.0, pitch=88.0)] * 4 + [pose(yaw=30.0, pitch=60.0)] * 2
+    run = play(write_tape(tmp_path / "t.json", poses))
+    y = lane(run, "right.room.yaw")
+    assert all(math.isnan(v) for v in y[:4])
+    assert deg(y[4]) == pytest.approx(30.0, abs=0.1)
+    assert deg(lane(run, "right.room.pitch")[4]) == pytest.approx(60.0, abs=0.1)
+
+
+def test_noise_on_the_cones_edge_does_not_let_yaw_go(tmp_path):
+    """A hand hovering about POLE_DEG off vertical, its yaw noisy as a short
+    vector's is: once in, it stays in until POLE_EXIT_DEG."""
+    poses = [pose(yaw=10.0, pitch=70.0 + k) for k in range(14)]             # in, at 83°
+    poses += [pose(yaw=10.0 + (60.0 if k % 2 else -60.0), pitch=81.0 if k % 2 else 83.0)
+              for k in range(30)]
+    seen = []
+    run = play(write_tape(tmp_path / "t.json", poses),
+               each=lambda io, k: seen.append(io.room["right"].pole))
+    assert all(seen[14:])
+    assert all(deg(v) == pytest.approx(10.0, abs=0.2) for v in lane(run, "right.room.yaw"))
+
+
+def test_a_dropped_wire_lands_one_for_one_with_no_feel(tmp_path):
+    """Through the real wire path: the device's own ports on a GRAPH view,
+    `Edit.connect` as a drag makes it, then the row driven by a tape across
+    the seam. Depth 1, no spring, on a centred target and a plain one."""
+    from test_ui_shell import build_rig
+
+    from hyperspace import devices, graphview
+    from hyperspace.hands.device import HandsDevice
+    from hyperspace.motion import DEFAULT_ROUTE_FEEL
+
+    want = [170.0 + k for k in range(21)]
+    path = write_tape(tmp_path / "t.json", [pose(yaw=a) for a in want])
+    with build_rig(tmp_path) as rig:
+        table, reg = rig.router.table, rig.reg
+        for b in list(table.bindings):
+            if b.target in ("camera.yaw", "view.bright"):
+                table.remove(b)
+        io_run = play(path)
+        devs = devices.DeviceRegistry(devices=[HandsDevice("hands", {}, None, io=io_run.io)])
+        view = graphview.build(table, reg, rig.router, devs, None, None)
+        e = graphview.Edit(table, reg, rig.router, view)
+        assert e.refusal("out:hand:right.room.yaw", "mod:camera.yaw") is None
+        row = e.connect("out:hand:right.room.yaw", "mod:camera.yaw")
+        assert (row.op, row.value, row.motion) == ("position", 1.0, None)
+        plain = e.connect("out:hand:right.room.pitch", "mod:view.bright")
+        assert (plain.op, plain.value, plain.motion) == ("position", 1.0, None)
+        # the anatomical axis beside it lands as it always did
+        roll = e.connect("out:hand:right.roll", "mod:camera.pitch")
+        assert roll.op == "push" and roll.motion == DEFAULT_ROUTE_FEEL
+        table.remove(roll)
+        table.remove(plain)
+
+        yaw = reg["camera.yaw"]
+        yaw.set(0.0)
+        seen = []
+
+        def each(io, k):
+            rig.router.modulate()
+            reg.apply()
+            seen.append(math.degrees(yaw.value))
+
+        play(path, router=rig.router, each=each)
+    for got, a in zip(seen, want):
+        assert R.wrap(got - a) == pytest.approx(0.0, abs=0.2)
+
+
+def test_the_learn_table_leaves_every_other_hand_lane_alone():
+    assert learn.whole_circle("hand:right.room.yaw")
+    for s in ("hand:right.roll", "hand:right.yaw", "hand:7", "hands:twist", "lane:0", "lfo:0",
+              "axis:room.yaw"):
+        assert not learn.whole_circle(s)
 
 
 def test_a_real_tape_plays_room_lanes_when_there_is_one():

@@ -503,7 +503,8 @@ def _axes(panel, io, settings) -> int:
     bad = conflicts(settings)
     h = imgui.get_text_line_height() + 2
     # the dance sources (plan 24 C4) take a column on the right of the
-    # rows, so the page grows no taller: it has to fit the control window
+    # rows, so the default twelve rows' page grows no taller: it has to fit
+    # the control window. A short `dofs` list can be shorter than the column
     dance = io is not None and getattr(io, "dance", None) is not None
     right = DANCE_W if dance else 0.0
     top, avail = imgui.get_cursor_screen_pos(), imgui.get_content_region_avail().x
@@ -518,7 +519,7 @@ def _axes(panel, io, settings) -> int:
         end = imgui.get_cursor_screen_pos()
         imgui.set_cursor_screen_pos(imgui.ImVec2(top.x + avail - DANCE_W + DANCE_GAP, top.y))
         _dance(io, h)
-        # back under both: the column (five lines) is taller than a short
+        # back under both: the column (seven lines) is taller than a short
         # `dofs` list, and what follows must not run into it. Then an
         # empty item, so the window's content size takes the cursor; it
         # adds one item spacing, which the cursor is set that much short of
@@ -790,13 +791,18 @@ def _calibrate(io, settings, k: int) -> None:
 
 def _level(io) -> None:
     """The room's frame (plan 51): level it from a flat hand, or clear it."""
+    if io.calibrating > 0:              # a sweep's palms are moving
+        return
+    if io.on_tape:
+        imgui.text_disabled("room: the tape's own frame")
+        return
     if io.levelling > 0:
         imgui.text_colored(ui.RED, "levelling… hold one hand flat, fingers forward")
         return
     if imgui.small_button("level room"):
         io.start_level()
     if imgui.is_item_hovered():
-        ui.tooltip("Hold one hand flat with the fingers pointing where forward is, "
+        ui.tooltip("Only one hand in view: hold it flat with the fingers pointing where forward is, "
                    "press, and keep still for a second. That palm becomes the room's "
                    "axes for the room lanes (hand:<side>.room.*), saved to hands.json "
                    "for this box: the answer to a sensor mounted at an angle.")
