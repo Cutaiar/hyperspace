@@ -129,8 +129,9 @@ import mido
 
 from . import apc40, generic
 from .learn import Learn
-from .params import CHASE_PARAM, Kind, Param, Registry
+from .params import Kind, Param, Registry
 from .routing import (
+    HELD_ONLY,
     PICKUP_TOL,
     SAVE_PARAM,
     Binding,
@@ -175,9 +176,10 @@ __all__ = ["FINE_DIV", "FINE_PARAM", "PICKUP_TOL", "Binding", "DeskEvent", "Desk
 
 
 # the desk's held buttons: a toggle the hand holds on, never saved, never
-# performed, that a reconnect lets go of (`MidiIO._enter`) so a lost
-# note-off cannot leave it down — SAVE (routing.register_desk) and FINE
-HELD_PARAMS = (SAVE_PARAM, FINE_PARAM, CHASE_PARAM)   # (the base chase: plan 52)
+# performed, that losing the desk or a reconnect lets go of
+# (`MidiIO._let_go_held`) so a lost note-off cannot leave it down — SAVE
+# (routing.register_desk), the base chase (plan 52) and FINE
+HELD_PARAMS = (*HELD_ONLY, FINE_PARAM)
 
 
 def register_held(reg: Registry, pid: str, label: str, tip: str) -> None:
@@ -480,10 +482,7 @@ class MidiIO:
         # a SAVE whose note-off was lost (plan 24 C1) must not turn the next
         # pad press into a save: power-up lets go of it
         # (and of FINE, wave 2 T3: the knobs it moved are forgotten with it)
-        for pid in HELD_PARAMS:
-            held = self.reg.get(pid)
-            if held is not None and held.value:
-                held.set(False)
+        self._let_go_held()
         self._fine_held, self._fine_was = None, False
         self.__dict__["_fine_moved"] = set()
         # where the faders were is forgotten too: one moved while the cable
@@ -498,6 +497,14 @@ class MidiIO:
             for msg in self.profile.enter():
                 self._send(msg)
             self.redraw(whole=True)     # every control: lit by a row, else dark
+
+    def _let_go_held(self) -> None:
+        """Every held button up (`HELD_PARAMS`): a press this desk can no
+        longer end."""
+        for pid in HELD_PARAMS:
+            held = self.reg.get(pid)
+            if held is not None and held.value:
+                held.set(False)
 
     def close(self) -> None:
         self._land_all()        # knob smoothing: no value is left between detents at exit
@@ -580,11 +587,14 @@ class MidiIO:
 
     def poll(self) -> None:
         if not self.on:
+            if self.__dict__.pop("_was_on", False):
+                self._let_go_held()     # the cable went: no note-off is coming (plan 52)
             if self.ports.retry():
                 self._connected()
             if not self.on:
                 self._land_all()    # no device: nothing is left in flight
                 return
+        self._was_on = True
         self._follow_table()
         self._uncatch_moved()
         for msg in self.ports.recv():

@@ -28,7 +28,7 @@ from hyperspace.params import (
     build_session,
     chase_reaches,
 )
-from hyperspace.routing import Binding
+from hyperspace.routing import Binding, Bindings, latch_refusal
 from hyperspace.tapers import T_DRIVE
 from hyperspace.undo import SETTLE_S
 from hyperspace.view import ViewState
@@ -123,7 +123,35 @@ def test_the_source_leaving_keeps_the_commit(reg):
     p.apply()                                  # nothing called: the source is gone
     assert not p.modulated and p.value == pytest.approx(0.8)
     land(p, 0.1)
-    assert p.value == pytest.approx(0.9), "a source back later rides it in full"
+    assert p.value == pytest.approx(0.8), "back lower than it left: still on its way home"
+    land(p, 0.0)
+    land(p, 0.1)
+    assert p.value == pytest.approx(0.9), "home, it rides in full"
+
+
+def test_a_source_flickering_under_the_verb_commits_once(reg):
+    """A lane gone NaN, a shut gate, a pad off for one frame: a source that
+    has not moved adds nothing however often it drops out."""
+    p = declare(reg, "view.a", 0.5)
+    reg.base_chase(True)
+    for _ in range(6):
+        land(p, 0.1)
+        assert p.value == pytest.approx(0.6)
+        p.apply()                              # the gap
+        assert p.value == pytest.approx(0.6)
+    assert p.base == pytest.approx(0.6)
+
+
+def test_a_source_flickering_after_the_release_stays_put(reg):
+    p = declare(reg, "view.a", 0.5)
+    reg.base_chase(True)
+    land(p, 0.3)
+    reg.base_chase(False)
+    for _ in range(6):
+        p.apply()
+        assert p.value == pytest.approx(0.8)
+        land(p, 0.3)
+        assert p.value == pytest.approx(0.8)
 
 
 SWEEP = [{}, {"wrap": True}, {"lo": 1.0, "hi": 100.0, "log": True}, {"taper": T_DRIVE},
@@ -231,16 +259,24 @@ def test_a_knob_turned_under_the_verb_moves_the_base_and_the_look(reg):
     assert p.value == pytest.approx(0.3) and p.base == pytest.approx(0.3)
 
 
-def test_a_landed_value_rides_in_full(reg):
-    """`Registry.restore`, the road of a load and of an undo: the value says
-    what the base is, the route on top as if nothing had been committed."""
-    p = declare(reg, "view.a", 0.2)
+def test_a_restored_value_is_not_counted_twice(reg):
+    """`Registry.restore`, the road of a load and of an undo, leaves the
+    ledger: the offset still out is still in it."""
+    p = declare(reg, "view.a", 0.5)
+    land(p, 0.2)
     reg.base_chase(True)
-    land(p, 0.3)
+    land(p, 0.2)
     reg.base_chase(False)
-    reg.restore({"view.a": 0.2})
-    land(p, 0.3)
-    assert p.value == pytest.approx(0.5) and p.base == pytest.approx(0.2)
+    assert p.base == pytest.approx(0.7)
+    p.set(0.6)                                 # a knob, then its undo
+    land(p, 0.2)
+    assert p.value == pytest.approx(0.6)
+    reg.restore({"view.a": 0.7})
+    land(p, 0.2)
+    assert p.value == pytest.approx(0.7), "not 0.9"
+    land(p, 0.0)
+    land(p, 0.1)
+    assert p.value == pytest.approx(0.8), "home, the route rides in full"
 
 
 # ---------------------------------------------------------------- the reach
@@ -353,6 +389,22 @@ def test_the_real_router_commits_and_nothing_jumps(rig):
     assert rig.table.routes()[-1].value == 1.0, "the route's depth is the depth it was"
 
 
+def test_a_lane_gone_nan_does_not_commit_again_through_the_router(rig):
+    p = routed(rig)
+    rig.out_value[0] = 0.6
+    rig.reg[CHASE_PARAM].set(True)
+    go(rig, 2)
+    shown = p.value
+    for _ in range(4):
+        rig.out_value[0] = float("nan")        # out of view for a frame
+        go(rig)
+        rig.out_value[0] = 0.6
+        go(rig)
+        assert p.value == pytest.approx(shown)
+    rig.reg[CHASE_PARAM].set(False)
+    assert p.base == pytest.approx(shown)
+
+
 def test_one_hold_is_one_undo_step_however_still_it_goes(rig):
     p = routed(rig)
     start = p.base
@@ -385,7 +437,7 @@ def test_one_hold_is_one_undo_step_however_still_it_goes(rig):
     assert p.base == pytest.approx(moved)
 
 
-def test_undo_with_the_source_still_out_shows_what_it_would_have(rig):
+def test_undo_and_redo_with_the_source_still_out_show_the_base(rig):
     p = routed(rig)
     start = p.base
     rig.out_value[0] = 0.6
@@ -396,8 +448,69 @@ def test_undo_with_the_source_still_out_shows_what_it_would_have(rig):
     rig.reg[CHASE_PARAM].set(False)
     assert rig.undo.undo()
     go(rig, 2)
+    assert p.base == pytest.approx(start) and p.value == pytest.approx(start)
+    assert rig.undo.redo()
+    go(rig, 2)
+    assert p.base == pytest.approx(shown) and p.value == pytest.approx(shown), "not counted twice"
+
+
+def test_an_undo_under_the_verb_ends_it(rig):
+    """One hold is never more than one step: the undo takes the hold back and
+    the verb lets go, so the source moving on opens nothing."""
+    p = routed(rig)
+    start = p.base
+    rig.reg[CHASE_PARAM].set(True)
+    rig.out_value[0] = 0.6
+    go(rig, 2)
+    assert rig.undo.undo()
+    assert not rig.reg.chasing and not rig.reg[CHASE_PARAM].value
     assert p.base == pytest.approx(start)
-    assert p.value == pytest.approx(shown), "as if the verb had never been held"
+    assert rig.undo.redos, "the redo stands"
+    rig.out_value[0] = 0.7
+    settle_with(rig)
+    assert p.base == pytest.approx(start) and rig.undo.redos and labels(rig) == []
+    rig.reg[CHASE_PARAM].set(False)            # the hand comes off: nothing to do
+    assert not rig.reg.chasing and labels(rig) == []
+
+
+def test_an_action_under_the_verb_ends_it_and_is_its_own_step(rig):
+    p = routed(rig)
+    rig.reg[CHASE_PARAM].set(True)
+    rig.undo.push("an action")                 # the very frame of the press
+    assert not rig.reg.chasing
+    assert labels(rig) == ["an action"], "a press that moved nothing leaves no step"
+    rig.undo.clear()
+    rig.reg[CHASE_PARAM].set(True)
+    rig.out_value[0] = 0.6
+    go(rig, 2)
+    moved = p.base
+    rig.undo.push("a later action")
+    assert not rig.reg.chasing and labels(rig) == [CHASE_LABEL, "a later action"]
+    rig.out_value[0] = 0.7
+    go(rig, 2)
+    assert p.base == pytest.approx(moved)
+
+
+def test_an_action_open_at_the_press_is_not_pinned(rig):
+    routed(rig)
+    rig.undo.push("an action")
+    rig.reg["view.bright"].set(0.123)
+    rig.reg[CHASE_PARAM].set(True)
+    settle_with(rig)
+    rig.reg[CHASE_PARAM].set(False)
+    assert labels(rig) == ["an action"]
+    assert rig.undo._open is None
+
+
+def test_the_step_closes_on_the_undo_the_press_opened_it_on(rig):
+    """A deck's own `Undo`: any let-go, from any road, closes that one."""
+    from hyperspace.undo import Undo, installed
+    own = Undo(rig.reg, rig.table)
+    routed(rig)
+    rig.reg.base_chase(True, steps=own)
+    assert own._kept is not None and installed()._kept is None
+    rig.reg[CHASE_PARAM].set(False)            # the setter names no undo
+    assert own._kept is None and not rig.reg.chasing
 
 
 def test_a_hold_that_moved_nothing_costs_no_step_and_no_dirty_dot(rig):
@@ -475,13 +588,29 @@ def test_engaging_the_hold_lets_the_verb_go_and_keeps_its_commit(held):
     go(held, 2)
     shown = p.base
     assert held.hold.engage()
-    assert not held.reg.chasing and held.undo._open is None and not held.undo._keep
+    assert not held.reg.chasing and held.undo._open is None and held.undo._kept is None
     assert labels(held) == [CHASE_LABEL], "the step closed before the point Drop goes back to"
     held.out_value[0] = 0.5
     go(held, 3)
     assert p.base == pytest.approx(shown) and held.hold.changed() == []
     held.hold.drop()
     assert p.base == pytest.approx(shown), "Drop goes back to the hold's point, the commit in it"
+
+
+def test_drop_does_not_jump_with_the_source_still_out(held):
+    p = routed(held)
+    held.out_value[0] = 0.6
+    go(held, 2)
+    held.reg[CHASE_PARAM].set(True)
+    go(held, 2)
+    held.reg[CHASE_PARAM].set(False)
+    shown = p.value
+    assert held.hold.engage()
+    p.set(p.base * 0.5)                        # the operator builds the next look
+    go(held, 2)
+    held.hold.drop()
+    go(held, 2)
+    assert p.value == pytest.approx(shown)
 
 
 # ---------------------------------------------------------------- pressing it
@@ -505,11 +634,102 @@ def test_a_desk_button_learned_on_it_is_held_not_latched(rig):
     assert not rig.reg.chasing
 
 
-def test_a_pad_button_learned_on_it_is_held(rig):
+def test_a_knob_is_refused_in_words(rig):
+    rig.learn.arm(CHASE_PARAM)
+    assert not rig.learn.learn_control("cc:0:48")
+    assert rig.learn.refused and not [b for b in rig.table.bindings if b.target == CHASE_PARAM]
+
+
+class Pad:
+    """One button on a pad, read as `Router.pad` reads it."""
+
+    def __init__(self):
+        self.on, self.is_down, self.was_down, self.hat = True, False, False, 0
+
+    def lanes(self):
+        return None
+
+    def down(self, _code):
+        return self.is_down
+
+    def pressed(self, _code):
+        return self.is_down and not self.was_down
+
+    def released(self, _code):
+        return self.was_down and not self.is_down
+
+    def hat_pressed(self, _code):
+        return False
+
+    def hat_released(self, _code):
+        return False
+
+
+def test_a_pad_button_learned_on_it_is_held_and_a_lost_pad_lets_go(rig):
     rig.learn.arm(CHASE_PARAM)
     assert rig.learn.learn_pad_button("pad:Y")
     row = [b for b in rig.table.bindings if b.target == CHASE_PARAM]
     assert [b.op for b in row] == ["momentary"]
+    pad = Pad()
+    pad.is_down = True
+    rig.router.pad(pad, now=0.0)
+    assert rig.reg.chasing
+    pad.was_down = True
+    rig.router.pad(pad, now=0.1)
+    assert rig.reg.chasing, "still held"
+    pad.on = False                             # asleep, or unplugged, with the button down
+    rig.router.pad(pad, now=0.2)
+    assert not rig.reg.chasing
+    # …and the totem taking the button has the same hole
+    pad.on, pad.was_down = True, False
+    rig.router.pad(pad, now=0.3)
+    assert rig.reg.chasing
+    pad.was_down = True
+    rig.router.pad(pad, now=0.4, skip=frozenset({"pad:Y"}))
+    assert not rig.reg.chasing
+    # a release as ever
+    pad.was_down = False
+    rig.router.pad(pad, now=0.5)
+    assert rig.reg.chasing
+    pad.was_down, pad.is_down = True, False
+    rig.router.pad(pad, now=0.6)
+    assert not rig.reg.chasing
+
+
+def test_a_lost_pad_leaves_a_toggle_it_did_not_hold(rig):
+    rig.reg[CHASE_PARAM].set(True)             # held from elsewhere
+    pad = Pad()
+    pad.on = False
+    rig.router.pad(pad, now=0.0)
+    assert rig.reg.chasing
+
+
+@pytest.mark.parametrize("row", [Binding("key:S", CHASE_PARAM, "toggle"),
+                                 Binding("note:0:94", CHASE_PARAM, "toggle"),
+                                 Binding("note:0:94", CHASE_PARAM, "set", 1.0)],
+                         ids=["key", "note-toggle", "set"])
+def test_a_row_that_could_latch_it_is_refused(row):
+    assert latch_refusal(row) is not None
+    with pytest.raises(ValueError):
+        Bindings().bind(row, write=False)
+    kept = Bindings.from_json({"bindings": [row.to_json()]}, desk=False)
+    assert not [b for b in kept.bindings if b.target == CHASE_PARAM]
+
+
+def test_a_cable_pulled_mid_hold_lets_it_go(rig):
+    """A note-off that is never coming: at once, not at the reconnect, and
+    once: a desk that stays away does not hold the verb off for others."""
+    rig.reg[CHASE_PARAM].set(True)
+    rig.midi.poll()
+    assert rig.reg.chasing
+    rig.midi.ports.inp = rig.midi.ports.out = None
+    rig.midi.ports.retry = lambda: False       # (no looking for a real desk)
+    assert not rig.midi.on
+    rig.midi.poll()
+    assert not rig.reg.chasing
+    rig.reg[CHASE_PARAM].set(True)
+    rig.midi.poll()
+    assert rig.reg.chasing
 
 
 def test_a_reconnect_lets_it_go(rig):

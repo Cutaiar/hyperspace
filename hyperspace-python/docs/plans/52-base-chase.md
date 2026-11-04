@@ -21,6 +21,9 @@ The verb changes nothing on screen while it is held. A chased param shows, on
 every frame, what it would have shown with no verb
 (`test_while_held_it_shows_what_it_would_have_shown`). Only the base moves.
 
+The exception is a source dropping out for a frame: the look holds rather than
+falling back to the base, since the base is what it showed.
+
 A consequence to judge (row 654): a source that goes home **while the verb is
 still held** takes the look home with it, because that is what shows. To keep
 a stick's throw, let go of the verb first, then the stick.
@@ -59,8 +62,13 @@ already holds. The landing is `base + (pushes − trim) + position rows`.
   - a source going home moves nothing, so the look stays;
   - a source pushing further than it was moves the look on from there;
   - a source past zero rides in full, and the ledger is empty for good.
-- **The source leaving** (out of view, gate shut): the ledger empties and the
-  base shows, as any param let go.
+- **The source dropping out** (a lane gone NaN, a shut gate, a pad off): the
+  base shows, as any param let go, and the ledger **stays**. The offset that
+  comes back is the one the base holds, so a flickering gate commits nothing
+  twice, under the verb or after it. Only a source coming home empties it, and
+  one coming back at or below where it left is still on its way home. The
+  ledger's only cost is a route made later on a param that kept one: it rides
+  less the trim until it next reads zero.
 - **A position row** is the fader: it lands an absolute value whatever the
   base is, computed against the base, so no trim applies to it.
   `Param.modulate(position=True)` keeps its share apart (`Router.modulate`
@@ -78,12 +86,20 @@ The release closes it at once (`Undo.let_close`), and a hold that moved
 nothing leaves no step, as any empty step. This is the only change to
 `undo.py`'s rule.
 
-A restore lands through `Registry.restore`, which empties the ledger: the
-route rides the restored base in full. Undoing with the source still out shows
-exactly what would have shown with no verb. **Redo with the source still out**
-shows the committed base plus the whole offset, the one place an offset is
-counted on top; with the source home it is the committed look. A load empties
-it the same way.
+**Anything else that closes the step ends the verb** (`Undo.keep_open`'s
+`on_end`): an undo, an action's push (a load, a learn), a band reshape, a
+`clear`. So one hold is never more than one step: an undo under the verb takes
+the hold back and the verb lets go, however long the button stays down, and
+the redo stands. Pressing again is a new hold. A press closes whatever was
+open first, so no other action's step is pinned. The step belongs to the `Undo`
+the press named (`Registry._chase_steps`), and any let-go closes that one.
+
+A restore (an undo, a redo, a load, Drop) writes the base and leaves the ledger,
+because the offset still out is still in it: the param shows the restored base,
+with nothing counted twice, and the route rides in full once the source has
+been home. So undoing a hold with the source still out shows the old **base**,
+not base plus offset. It is the same for an undo of a later knob turn, and Drop
+lands with no jump.
 
 ## Dirty
 
@@ -115,8 +131,16 @@ alone. Each deck's verb reaches its own registry only
 
 Today: `reg["deck.chase"].set(True / False)`, whose setter calls
 `reg.base_chase`. A test presses it, and Learn lands a note or a pad button on
-it as `momentary`, so it is held and not latched. A lost note-off is let go at
-the desk's reconnect (`midi.HELD_PARAMS`).
+it as `momentary`, so it is held and not latched, and a knob is refused in
+words. A row that could latch it (a `key` row, a `toggle`, a `set`, by hand in
+a file) is refused and dropped on load, as for the desk's SAVE
+(`routing.latch_refusal` over `routing.HELD_ONLY`). `HELD_ONLY` is by id, not an
+attribute on `Param`, because the referee has a row and no registry.
+
+A release that will never come lets go at once: the desk's cable pulled
+(`MidiIO._let_go_held`, on the frame it is lost, and at a reconnect as before),
+a pad gone to sleep or unplugged, or the totem taking its button (`Router.pad`,
+only for what that pad holds).
 
 **No frame hook is wanted.** While D4 holds `deck.py` frozen, the one seam
 left is this method, for after D4:
@@ -135,4 +159,5 @@ deck's hold would not be kept as one step on its own stack.
 - B2, the gamepad row (wave 4; the button is the owner's choice).
 - A panel button or a light for the verb: `deck.chase` is reached through the
   desk's "all params ▾" menu.
-- A `key:` row holds nothing: keys have no `momentary`, so one toggles it.
+- A key cannot press it: keys have no `momentary`, and a key row that would
+  toggle it is refused.

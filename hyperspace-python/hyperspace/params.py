@@ -58,7 +58,9 @@ into its base. `_trim` is the ledger that keeps that from counting twice:
 how much of the pushes' offset the base already holds. The offset rides on
 top less the trim, and once the verb is let go the trim only falls, with the
 offset on its way home (`_came_home`), so the look stays where the performer
-left it. The table is not touched: a route's depth is the depth it was.
+left it. Only that empties it: a source flickering out or a base restored
+leaves it, since the offset coming back is the one the base holds. The table
+is not touched: a route's depth is the depth it was.
 """
 
 from __future__ import annotations
@@ -648,8 +650,9 @@ class Param:
         if not held:                          # last source left: restore base
             if k is not Kind.TRIGGER:
                 self.put(self._value_of_norm(self._base))
+            # (the trim stays: a source back next frame, after a gate's or a
+            # lane's flicker, brings the offset the base already holds)
             self._base = self._last = self._disc = None
-            self._trim = 0.0
             return
         if k is not Kind.TRIGGER:
             # something wrote the object since we did (the rotation
@@ -846,6 +849,7 @@ class Registry:
     # projector's hold, `hold.register`), None: nobody
     chasing: bool = False
     chase_guard: Callable[[], bool] | None = None
+    _chase_steps: Any = None             # the `undo.Undo` the press opened its step on
 
     def __init__(self, session: SessionRegistry | None = None):
         self._p: dict[str, Param] = {}
@@ -1028,21 +1032,26 @@ class Registry:
         what is shown. Let go, the look stays where the performer left it.
 
         One hold is one undo step on `steps` (a `undo.Undo`; None: the
-        installed one, today's lead deck). A press under the projector's
-        hold is refused (`chase_guard`, row 656). Returns whether the verb
-        is on now."""
+        installed one, today's lead deck), remembered at the press so any
+        let-go closes that one; what closes the step otherwise (an undo, a
+        load, a learn under the verb) ends the verb with it. A press under
+        the projector's hold is refused (`chase_guard`, row 656). Returns
+        whether the verb is on now."""
         on = bool(on)
         if on and self.chase_guard is not None and self.chase_guard():
             on = False
         if on == self.chasing:
             return on
         if on:
-            undo.keep_open(CHASE_LABEL, steps)   # before any base moves
+            self._chase_steps = steps if steps is not None else undo.installed()
+            undo.keep_open(CHASE_LABEL, self._chase_steps,    # before any base moves
+                           on_end=lambda: self.base_chase(False))
         self.chasing = on
         for p in self._p.values():
             p._chase = on and chase_reaches(p)
         if not on:
-            undo.let_close(steps)
+            opened, self._chase_steps = self._chase_steps, None
+            undo.let_close(opened)
         return on
 
     # ---- persistence: the one serialization every preset is made of ----
@@ -1083,9 +1092,6 @@ class Registry:
                 # raw, not set_value: a saved value lands exactly where it
                 # was, detent or not (the base is detented only while modulated)
                 p.set(float(v))
-                # a landed value says what the base is: a route rides it in
-                # full, as if nothing had been committed (plan 52)
-                p._trim = 0.0
             elif k is Kind.ENUM:
                 p.set(int(v))
             elif k is Kind.TOGGLE:

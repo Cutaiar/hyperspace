@@ -7553,11 +7553,14 @@ old value.
 **495. An LFO, one undo.** (an LFO routed onto brightness or a camera axis)
 1. Hold the button for a few swings, including a still moment; let go mid-swing.
 2. Watch a whole swing. ⌘Z once, ⌘Z no further.
+3. Hold the button again, move the LFO's depth or wait a swing, and ⌘Z with it
+   still down.
 *Pass:* (1) no jump at the release; the look holds until the LFO crosses its
 zero, then swings about the value you left it at. The dirty dot is lit. (2) one
 ⌘Z takes back the whole hold ("undid base chase") and the swing is about the old
-value. Fail: several steps for one hold, or the swing running off the end of the
-range.
+value. (3) the hold is taken back and the verb lets go though the button is down.
+Fail: several steps for one hold,
+or the swing running off the end of the range.
 **496. Under the projector's hold.** (rig on; hold engaged)
 1. With HOLD on, press the button.
 2. HOLD off (Take). Hold the button with a hand moving, and press HOLD with it

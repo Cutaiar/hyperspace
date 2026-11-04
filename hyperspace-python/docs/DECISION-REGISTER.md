@@ -679,7 +679,7 @@ here; overturn → the change, then the same.
 | 645 | Plan 50: the migration step — `tools/migrate_library.py` moves every module preset to `patches/<group>/` as `patch/2` and rewrites every `patch/1` as `/2` in place, after the run's backup; the dry run lists them; a retired group's files (`fx/`) and an unreadable file (a module folder's or `patches/`'s) are left, said; `--to` moves none | 485 | (rec) — pending the owner; built as recommended |
 | 646 | Plan 50, not done: the show's `modules` key (a session group's band preset by name) stays — renaming it is a show schema move; `RETIRED_MODULES` and `_fresh_of` are already what the fallback needs; the band scene files (code data) stay `preset/1`, read through the one ladder; `library.migrate_doc` serves the shows alone (the preset entry, `CURRENT["hyperspace.preset"]` and `PRESET_SCHEMA` removed, review fix 8); `headless.SHARED_FOLDERS` is `patches/` alone, every folder down (review fix 2) | — | (rec) — pending the owner |
 | 647 | Plan 50: hands 1 in a group — a wired frame always holds it, so a "delete" leaves it held and a member (as a macro is) | — | (rec) — pending the owner; built as recommended |
-| 654 | Plan 52: the base chase — while held, every continuous, modulatable param of this deck writes what it shows into its base; nothing shows differently while held; a source going home **while still held** takes the look with it (what shows is what commits); after the release a ledger absorbs the offset, so a source going home moves nothing | 494, 495 | (rec) — pending the owner; built as recommended |
+| 654 | Plan 52: the base chase — while held, every continuous, modulatable param of this deck writes what it shows into its base; nothing shows differently while held; a source going home **while still held** takes the look with it (what shows is what commits); after the release a ledger absorbs the offset, so a source going home moves nothing; an undo, a load or a learn under the verb ends it, so one hold is at most one step | 494, 495 | (rec) — pending the owner; built as recommended |
 | 655 | Plan 52: macros are outside the verb — a commit would move a macro's base subscribers, which its offset never did | — | (rec) — pending the owner; built as recommended |
 | 656 | Plan 52: a press under the projector's hold is refused, and engaging a hold lets the verb go, its commit kept | 496 | (rec) — pending the owner; built as recommended |
 
@@ -11956,7 +11956,10 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   source goes home under the held verb. It keeps a stick's throw with either
   order of release, but an LFO under it would show half its swing while held,
   so the press would no longer be invisible. Worth judging with B2 on a
-  gamepad; it would be a change to `Param.apply` alone.
+  gamepad; it would be a change to `Param.apply` alone. An undo under the verb
+  ends it, rather than committing again on the bases it put back. Undoing a hold
+  with a source still out shows the old base, with the offset still in the
+  ledger until the source has been home, so nothing is ever counted twice.
 - **Built.** `Registry.base_chase`, `Param._commit`, `params._came_home`,
   `tests/test_base_chase.py`.
 - **Judge it.** Checks 494, 495.

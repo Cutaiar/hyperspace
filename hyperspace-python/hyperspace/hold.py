@@ -153,8 +153,8 @@ class Hold:
         if self.on:
             return False
         r, reg = self.renderer, self.reg
-        # the base chase ends here (plan 52, row 656): the point Drop goes
-        # back to is taken with its step closed, and the hold's bases stay put
+        # the base chase ends here (plan 52, row 656), as the point Drop goes
+        # back to is taken, and the hold's bases stay put
         let_go = getattr(reg, "base_chase", None)
         if let_go is not None:
             let_go(False)
