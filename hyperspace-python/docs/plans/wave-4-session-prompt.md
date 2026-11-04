@@ -186,6 +186,33 @@ pad" is read as removing the gamepads' preset rows. The APC's bank pads and `pre
 stay, and load only into the off-air `Deck`. If they should go too, it is a one-row change.
 
 
+## Joy-Con version 0 (#365), from another session, 2026-11-04
+
+The Joy-Con integration was scaled back to a workable control surface for an upcoming
+show. Draft PR #365 (`origin/worktree-joycon-v0`) belongs to that session: do not change
+it. The owner holds it until the Joy-Con is hand-checked.
+
+- **Where it lands:** before N2a and the NSEW build. If hand checks slip past those, ask
+  the owner; do not build against a `main` without it.
+- **Its layout** lives in `models.Model.layout` and `routing.layout_of`, and replaces table
+  rows on those controls: SL / SR previous and next shape in both modes, stick click view
+  reset, − (+ on R) totem reset, capture (HOME on R) totem on and off. L and ZL are free.
+  Stick routes act only with the totem on. `Router.pad(skip=)` holds layout rows off too.
+- **Numbers:** rows 686–687, checks 520–521, group BW stay #365's.
+- **The rule for wave 4:** a PR touching `routing.py`, `devices.py`, `gamepad.py`,
+  `totem.py`, `pads/models.py` or `ui_pad.py` merges `origin/worktree-joycon-v0` into a
+  scratch branch and runs `tests/test_joycon_v0.py`. The keeper holds the combined proof on
+  `origin/scratch/wave4-joycon`. B2 has a real code conflict with it in `routing.py`.
+- **N2a must** make `PadDevice._quiet_stick` and `steer` stand down on the axes a node mode
+  holds, or that stick is dead and the view orbits under it.
+- **What the owner's later answers changed in the note:** N2 has no page key, so the clash
+  on SR is gone. A Joy-Con enters node mode by the panel chip (NQ7). Base chase moved to
+  Back, which #365's layout gives to totem reset on the (L), and the (R) has none. B2's
+  row 724 suggested SL, which #365 holds, and Learn cannot arm the chase from the panel.
+  **Pending:** where a Joy-Con's chase goes (rec: the free shoulder, L or R).
+- **Pending:** the show's date, and whether wave 4 lands before it. Rec if it is soon: #365
+  alone on today's `main`, and wave 4 after, because B2, MR and D5a change what hands do.
+
 ## The semantic migration (SEM)
 
 **Slot it right after D5d, as stage 4.5.** D5d deletes `hold.py` and settles the deck
