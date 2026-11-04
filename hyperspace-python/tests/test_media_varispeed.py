@@ -32,6 +32,10 @@ class Ramp:
         self.start, self.length = start, length
         self.reads = []
 
+    @property
+    def ends_at(self):
+        return self.start + self.length
+
     def holds(self, at, n):
         return self.start <= at and at + n <= self.start + self.length
 
@@ -223,7 +227,7 @@ def test_play_after_a_hold_starts_on_the_transport_and_fades_in():
     d.frame()
     first = d.block()
     assert abs(first[0]) < first[-1] / 20 and d.head.level == 1.0
-    assert abs(d.head.at - (held + DT * AUDIO_RATE + N / 2)) <= N, "it glided up from a stop"
+    assert d.head.at == round(held + DT * AUDIO_RATE) + N, "on the transport, at speed at once"
 
 
 def test_a_jogs_dying_coast_fades_out_with_the_speed():
@@ -312,6 +316,56 @@ def test_a_small_error_slews_without_a_click_and_closes():
     assert steps.min() > 0.85
     err = round(d.tr.playhead * AUDIO_RATE) + N - d.head.at
     assert abs(err) <= M.DEAD + 2
+
+
+@pytest.mark.parametrize("rate", [1.0, 4.0, 8.0, 15.9, -4.0])
+def test_the_clocks_jitter_is_no_error_at_any_rate(rate):
+    """±1.5 ms on the frame's dt, callbacks and steps out of phase: not one
+    block's speed is bent and nothing reads as a jump, even near `MAX_SPEED`,
+    where a block is more than `CUT` at speed 1."""
+    rng = np.random.default_rng(45)
+    d = Deck(duration=600.0, track=Ramp(length=600 * AUDIO_RATE))
+    d.pos = d.tr.last_pos = 0.5
+    d.tr.playhead = 300.0
+    d.rate = rate
+    d.play(5)
+    frame_at, block_at, last = 0.0, 0.3 * DT, 0.0     # two clocks, the same mean period
+    for k in range(1, 1200):
+        frame_at = k * DT + rng.uniform(-0.0015, 0.0015)
+        while block_at < frame_at:
+            d.block()
+            assert d.head.speed == rate and d.head.level == 1.0
+            block_at += N / AUDIO_RATE
+        d.frame(frame_at - last)
+        last = frame_at
+
+
+def test_after_a_slew_rate_1_comes_back_to_whole_samples():
+    d = Deck(duration=20.0)
+    d.pos = d.tr.last_pos = 0.1
+    d.tr.playhead = 2.0
+    d.play(5)
+    d.tr.playhead += 0.1 + 0.3 / AUDIO_RATE
+    d.play(240)
+    assert d.head.speed == 1.0 and d.head.at == round(d.head.at)
+    out = d.play(5)
+    want = (d.head.at - 5 * N + np.arange(5 * N)) * SCALE
+    np.testing.assert_allclose(out, want, atol=2e-8)
+
+
+def test_a_slew_against_a_slow_transport_never_stops_the_tape():
+    """Rate 0.1, the head well ahead: the trim stays under the speed."""
+    d = Deck(duration=20.0)
+    d.pos = d.tr.last_pos = 0.1
+    d.tr.playhead = 2.0
+    d.play(3)
+    d.rate = 0.1
+    d.play(10)
+    d.tr.playhead -= 3000 / AUDIO_RATE
+    for _ in range(60):
+        d.frame()
+        d.block()
+        assert d.head.speed >= 0.05 and d.head.level == 1.0
 
 
 def test_inside_the_dead_band_the_head_is_left_alone():
@@ -455,6 +509,79 @@ def test_a_long_tracks_wrap_fades_out_and_back_when_the_window_arrives():
     assert abs(round(d.tr.playhead * AUDIO_RATE) + N - d.head.at) <= N
 
 
+def hard_step(out):
+    """The largest sample-to-sample move: a ramp's slope, or a fade's over a
+    block (0.1 of value over 800 samples is 1.25e-4), or a click."""
+    return np.abs(np.diff(out)).max()
+
+
+LIMIT = 2.5e-4          # the ramp is at most 0.048 + a fade's slope: a hard step is 0.048
+
+
+def test_a_once_clip_running_out_of_track_fades_while_it_has_samples():
+    d = Deck(duration=1.0, track=Ramp(length=AUDIO_RATE), loop="once")
+    d.play(2)
+    out = d.play(70)
+    assert out[-1] == 0.0 and out.max() > 0.04
+    assert hard_step(out) < LIMIT, "no step at the end of the track"
+
+
+def test_a_pingpong_bounce_at_the_track_end_has_no_step():
+    d = Deck(duration=1.0, track=Ramp(length=AUDIO_RATE), loop="pingpong")
+    d.play(2)
+    assert hard_step(d.play(150)) < LIMIT
+
+
+def test_a_track_far_shorter_than_its_loop_fades_out_and_back():
+    d = Deck(duration=1.0, track=Ramp(length=round(0.8 * AUDIO_RATE)))
+    d.play(2)
+    out = d.play(150)
+    assert hard_step(out) < LIMIT and (out == 0.0).sum() >= 0.2 * AUDIO_RATE - 2 * N
+
+
+def test_a_head_leaving_its_window_fades_before_the_edge():
+    d = Deck(duration=20.0, track=Ramp(length=AUDIO_RATE))
+    d.play(2)
+    out = d.play(70)
+    assert out[-1] == 0.0 and hard_step(out) < LIMIT
+
+
+def test_a_few_ms_short_of_the_loop_is_bridged_at_full_level():
+    """A mux mismatch: AAC ending 5 ms before the picture. No dip at the wrap,
+    the gap a line from the last sample to the first, and still on time."""
+    short = AUDIO_RATE - 240
+    d = Deck(duration=1.0, track=Ramp(length=short))
+    d.play(2)
+    levels, got = [], []
+    for _ in range(70):
+        d.frame()
+        got.append(d.block())
+        levels.append(d.head.level)
+    assert set(levels) == {1.0}, "no dip on the loop"
+    p = places(np.concatenate(got))
+    seam = np.flatnonzero(np.diff(p) < 0)
+    assert len(seam) >= 1 and hard_step(np.concatenate(got)) < 3e-4, "a line, not a click"
+    top = np.argmax(p)
+    assert p[top] == short - 1
+    assert np.all(np.diff(p[top:top + 241]) < 0), "down the line over the gap"
+    assert np.all(p[top + 241:top + 300] == np.arange(59)), "then the track's first samples"
+    assert abs(round(d.tr.playhead * AUDIO_RATE) + N - d.head.at) <= 1
+
+
+def test_a_track_past_the_picture_is_cut_at_the_pictures_end():
+    d = Deck(duration=1.0, track=Ramp(length=2 * AUDIO_RATE))
+    d.play(2)
+    p = places(d.play(70))
+    assert p.max() == AUDIO_RATE - 1 and p.min() == 0
+
+
+def test_a_track_too_short_to_bridge_is_not_bridged():
+    t = Ramp(length=AUDIO_RATE - M.SEAM_SLACK - 1)
+    d = Deck(duration=1.0, track=t)
+    d.play(70)
+    assert d.mx.errors == 0 and all(at != t.ends_at - 1 or n != 1 for at, n in t.reads)
+
+
 def _ramp_data(start, n):
     v = (start + np.arange(n, dtype=np.float64)) * SCALE
     return np.stack([v, v], axis=1).astype(np.float32)
@@ -480,6 +607,7 @@ def test_a_voice_turned_off_fades_in_one_block_and_is_let_go():
     d.pos = d.tr.last_pos = 0.5
     d.tr.playhead = 5.0
     d.play(3)
+    d.mx._stream = object()                     # (a stream is there to play the fade)
     d.mx.feed((), asked=False)
     assert d.mx.voices == () and len(d.mx._live) == 1, "one more block, to fade out"
     out = np.zeros((N, 2), np.float32)
@@ -487,6 +615,38 @@ def test_a_voice_turned_off_fades_in_one_block_and_is_let_go():
     assert out[0, 0] > 0.0 and out[-1, 0] == 0.0
     d.mx.feed((), asked=False)
     assert d.mx._live == () and d.mx._heads == {}, "and nothing is kept"
+
+
+def test_a_voice_that_cannot_be_read_is_let_go_and_keeps_counting_no_more():
+    class Bad(Ramp):
+        def read(self, at, n, out=None):
+            raise RuntimeError("bad read")
+
+    d = Deck(track=Bad())
+    d.mx._stream = object()
+    d.frame()
+    d.head.level = 1.0                          # it was sounding when it broke
+    d.block()
+    assert d.mx.errors == 1 and d.head.level == 0.0
+    d.mx.feed((), asked=False)
+    assert d.mx._live == () and d.mx._heads == {}, "nothing pinned"
+
+
+def test_with_no_stream_a_voice_gone_is_let_go_at_once():
+    """A device unplugged: no callback will ever fade it, and the entry would
+    pin the transport and up to 46 MB of soundtrack."""
+    d = Deck()
+    d.play(3)
+    assert d.mx._stream is None and d.head.level == 1.0
+    d.mx.feed((), asked=False)
+    assert d.mx._live == () and d.mx._heads == {}
+
+
+def test_a_voice_with_nothing_to_hear_yet_reads_nothing_and_keeps_up():
+    d = Deck(track=Ramp(length=AUDIO_RATE, start=100 * AUDIO_RATE))
+    d.play(10)
+    assert d.track.reads == [] and d.head.level == 0.0
+    assert d.head.at == round(d.tr.playhead * AUDIO_RATE), "it sits on the transport"
 
 
 def test_a_new_voice_fades_in_and_two_transports_on_one_track_read_apart():
@@ -508,12 +668,15 @@ def test_a_new_voice_fades_in_and_two_transports_on_one_track_read_apart():
 
 # ---------------------------------------------------------------- the callback's manners
 
-def test_the_callback_allocates_nothing_once_warm():
+@pytest.mark.parametrize("short", [0, 240])
+def test_the_callback_allocates_nothing_once_warm(short):
     """Rate 1.37 with a wrap in the block and a gain moving: the worst of
-    it. Every array the callback touches is kept; python's small objects
-    (a float, a view) come and go. A real `Soundtrack`: the fake allocates."""
+    it, and with a seam to bridge (`short`). Every array the callback touches
+    is kept; python's small objects (a float, a view) come and go. A real
+    `Soundtrack`: the fake allocates."""
     st = Soundtrack("nothing.mov")
-    st._win = _Window(0, _ramp_data(0, AUDIO_RATE))
+    st._win = _Window(0, _ramp_data(0, AUDIO_RATE - short))
+    st.whole = True
     d = Deck(duration=1.0, track=st)
     d.rate = 1.37
     d.play(10)
@@ -528,7 +691,7 @@ def test_the_callback_allocates_nothing_once_warm():
             base = tracemalloc.get_traced_memory()[0]
             d.mx._callback(out, N, None, None)
             peak = tracemalloc.get_traced_memory()[1] - base
-            assert peak < N, f"{peak} bytes: a block's array would be {N * 8}"
+            assert peak < 2 * N, f"{peak} bytes: a block's array would be {N * 8}"
     finally:
         tracemalloc.stop()
     assert d.mx.errors == 0

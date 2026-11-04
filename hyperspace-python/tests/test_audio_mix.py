@@ -40,6 +40,8 @@ class Sine:
     def disable(self):
         pass
 
+    ends_at = 10 ** 12
+
     def holds(self, at, n):
         return True
 

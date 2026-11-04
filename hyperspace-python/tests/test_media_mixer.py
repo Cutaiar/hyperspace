@@ -41,6 +41,8 @@ class FakeTrack:
         self.enabled = False
         self.disables += 1
 
+    ends_at = 10 ** 12
+
     def holds(self, at, n):
         return True
 

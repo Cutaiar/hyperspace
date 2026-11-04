@@ -24,12 +24,17 @@ where it is, and it has no way to run on alone. Against the playhead,
 carried forward by the velocity for the blocks since that playhead came
 (`since`, zeroed by every feed), it does one of these a block:
 
-- within `DEAD` samples: nothing. That is the jitter of the two clocks;
+- within `DEAD` samples: nothing. That is the jitter of the two clocks. At
+  rate ±1 it also comes back to whole samples, so the output is the track's
+  own samples again and not an interpolation after a slew;
 - beyond that and up to `CUT`: slews, the speed trimmed by the excess over
   `TAU_S`, so a small error is a small bend of pitch and never a jump (the
-  trim at most the speed itself, so it never stops the tape or turns it);
+  trim at most `TRIM_MAX` of the speed, so it never stops the tape or turns it);
 - beyond `CUT` (a scrub, a far jog): cuts, the block a crossfade from where
   the head was to where the transport is;
+
+(`DEAD` and `CUT` scale with the speed above 1: the clocks' jitter is a
+time, so in samples of source it grows with the rate);
 - the transport at rest, or no feed for `STALE_S` (the frame thread stuck):
   it stops and fades, and once silent sits on the playhead. It never creeps
   toward a stopped transport, and it never free-runs.
@@ -37,17 +42,24 @@ carried forward by the velocity for the blocks since that playhead came
 **The level glides too**, one block at a time, so no start or stop clicks: it
 goes to the gain × `fade(speed)`, which is 1 from `FADE_SPEED` up, falling to
 0 at `HOLD_SPEED` — **rate 0 is silence**, not one sample held as DC — and to
-0 for a block not wholly held in memory (`Soundtrack.holds`): **a block
-outside the window is zeros**, and the window arriving fades back in. A
-silent voice's head sits on the transport, so it starts exactly there. A
-voice gone from the tuple (its toggle off, its gain 0, its slot changed) gets
-one more block, fading out (`_bind`).
+0 when this block or the next is not wholly held in memory
+(`Soundtrack.holds`): **a block outside the window is zeros**, the fade runs
+while there are still samples to fade, and the window arriving fades back in.
+A voice with nothing to hear yet reads nothing. A silent voice's head sits on
+the transport, so it starts exactly there, at speed at once (no glide up from
+a stop, which would leave it late for good). A voice gone from the tuple (its
+toggle off, its gain 0, its slot changed) gets one more block, fading out
+(`_bind`).
 
 **The loop wrap** (`wrap`): the head counts modulo the loop and reads straight
 through the seam, sample after sample in either direction, the error measured
 the short way round. So the wrap is neither a jump nor a gap, and a clip cut
 to loop is seamless; a clip that was not has the click of its own two ends
-(no splice fade: heard first, plan 45). **No head is prefetched**: a clip up
+(no splice fade: heard first, plan 45). The loop's length is the picture's, so
+a track ending up to `SEAM_SLACK` before it (a mux mismatch) has that gap
+bridged, a line from its last sample to its first, at full level; a track
+ending further before it fades out and back; one running past it is cut at
+the picture's end. **No head is prefetched**: a clip up
 to `AUDIO_WINDOW_S` is held whole, and a longer one's wrap is a fade out and
 back in, one window decode later (plan 45, "What changed in the build (V4)").
 
@@ -102,9 +114,11 @@ CEILING = 1.0                 # the sum is clipped here: gain is the performer's
 HOLD_SPEED = 1e-3             # slower than this (a hold, a jog's coast dying out) is silent
 FADE_SPEED = 0.05             # slower than this the level falls with the speed
 MAX_SPEED = 16.0              # the most source a block reads: × BLOCK bounds `_src`
-DEAD = float(BLOCK)           # samples: inside this the two clocks' jitter is left alone
+DEAD = 1.25 * BLOCK           # samples × max(1, |speed|): the clocks' phase (a block) + frame jitter
 TAU_S = 0.25                  # the slew: the error beyond `DEAD` is closed at this time constant
-CUT = 0.25 * AUDIO_RATE       # samples: beyond this the head does not slew, it cuts
+TRIM_MAX = 0.5                # the slew: at most this share of the speed; never stops the tape
+CUT = 0.25 * AUDIO_RATE       # samples × max(1, |speed|): beyond this the head cuts
+SEAM_SLACK = AUDIO_RATE // 20 # a track this much shorter than its loop still loops seamlessly
 STALE_S = 1.0                 # no feed for this long and the head stops: never free-runs
 MIN_WRAP = AUDIO_RATE // 1000 # a loop shorter than this is no loop: bounds `_fetch`'s reads
 
@@ -221,7 +235,8 @@ class Mixer:
     def _bind(self, voices: tuple[Voice, ...]) -> tuple:
         """Each voice with its head, a new one made here and not in the
         callback; a voice gone from the tuple stays one more block at gain 0
-        while it still sounds, so it fades instead of stopping dead."""
+        while it still sounds and a stream is there to play it, so it fades
+        instead of stopping dead, and is let go after."""
         heads, live, seen = self._heads, [], set()
         for v in voices:
             key = v.track if v.key is None else v.key
@@ -232,7 +247,7 @@ class Mixer:
             live.append((v, head))
         for key in [k for k in heads if k not in seen]:
             head, v = heads[key]
-            if head.level > 0.0:
+            if head.level > 0.0 and self._stream is not None:     # else no callback will come
                 live.append((v._replace(gain=0.0), head))
             else:
                 del heads[key]
@@ -272,6 +287,7 @@ class Mixer:
             self._closed = True
             self.voices = ()
             self._live = ()
+            self._heads = {}
             t = self._opener
         if t is not None:
             t.join(max(end - time.monotonic(), 0.0))
@@ -347,11 +363,15 @@ class Mixer:
         self._ramp = np.repeat(((i + 1.0) / frames).astype(np.float32).reshape(-1, 1),
                                AUDIO_CHANNELS, axis=1)
         self._env = np.zeros((frames, AUDIO_CHANNELS), np.float32)
+        self._edge = np.zeros((2, AUDIO_CHANNELS), np.float32)      # a bridged seam's two sides
+        self._count = np.arange(SEAM_SLACK + 2, dtype=np.float32)
+        self._line = np.zeros(SEAM_SLACK + 2, np.float32)
+        self._line2 = np.zeros(SEAM_SLACK + 2, np.float32)
 
-    def _fetch(self, st, at: int, n: int, wrap: int) -> bool:
+    def _fetch(self, st, at: int, n: int, wrap: int, end: int) -> None:
         """`n` source samples from `at` into `_src`, round the loop when it
-        wraps (each piece one `read`); whether all of them are held."""
-        src, held, k = self._src, True, 0
+        wraps (each piece one `read`), a track's gap before the seam bridged."""
+        src, k = self._src, 0
         at = at % wrap if wrap else at
         while k < n:
             c = min(n - k, wrap - at) if wrap else n
@@ -359,12 +379,48 @@ class Mixer:
             block = st.read(at, c, out=view)
             if block.shape != view.shape:
                 raise ValueError(f"read gave {block.shape}")
-            held = held and st.holds(at, c)
+            if wrap and at + c > end:
+                self._bridge(st, view, at, c, end, wrap)
             k += c
             at = 0
-        return held
 
-    def _tape(self, st, at: float, v0: float, v1: float, wrap: int) -> bool:
+    def _bridge(self, st, view, at: int, c: int, end: int, wrap: int) -> None:
+        """Places `end`..`wrap` of the piece in `view`: a line from the track's
+        last sample to its first, so a few ms short of the loop is no click."""
+        edge = self._edge
+        st.read(end - 1, 1, out=edge[:1])
+        st.read(0, 1, out=edge[1:])
+        lo = max(at, end)
+        m, x = at + c - lo, lo - end + 1
+        line, line2 = self._line[:m], self._line2[:m]
+        np.multiply(self._count[x:x + m], 1.0 / (wrap - end + 1), out=line)
+        for ch in range(AUDIO_CHANNELS):
+            a = float(edge[0, ch])
+            np.multiply(line, float(edge[1, ch]) - a, out=line2)
+            np.add(line2, a, out=view[lo - at:, ch])
+
+    @staticmethod
+    def _held(st, lo: int, n: int, wrap: int, end: int) -> bool:
+        """Whether the `n` source samples from `lo` are in memory, round the
+        loop when it wraps; a bridged gap counts as held."""
+        if not wrap:
+            return st.holds(lo, n)
+        at = lo % wrap
+        while n > 0:
+            c = min(n, wrap - at)
+            if at < end and not st.holds(at, min(c, end - at)):
+                return False
+            n -= c
+            at = 0
+        return True
+
+    def _span_held(self, st, at: float, speed: float, frames: int, wrap: int, end: int) -> bool:
+        """Whether a block from `at` at a steady `speed` would be wholly held."""
+        last = at + speed * (frames - 1)
+        lo = math.floor(min(at, last))
+        return self._held(st, lo, math.ceil(max(at, last)) - lo + 1, wrap, end)
+
+    def _tape(self, st, at: float, v0: float, v1: float, wrap: int, end: int) -> bool:
         """The block from head place `at`, the speed gliding v0 → v1, linearly
         resampled into `_one`; whether its source is all held."""
         pos, tmp, idx, one, two = self._pos, self._tmp, self._idx, self._one, self._two
@@ -374,7 +430,7 @@ class Mixer:
         np.add(pos, at, out=pos)
         lo = math.floor(pos.min())
         n = math.ceil(pos.max()) - lo + 1
-        held = self._fetch(st, lo, n, wrap)
+        self._fetch(st, lo, n, wrap, end)
         np.floor(pos, out=tmp)
         np.subtract(pos, tmp, out=pos)              # `pos` is now each sample's fraction
         np.copyto(self._frac, self._pos1, casting="unsafe")
@@ -387,7 +443,7 @@ class Mixer:
         np.subtract(two, one, out=two)
         np.multiply(two, self._frac, out=two)
         np.add(one, two, out=one)
-        return held
+        return self._held(st, lo, n, wrap, end)
 
     def _lay(self, mix, l0: float, l1: float) -> None:
         """`_one` into the mix, its level gliding l0 → l1 across the block."""
@@ -404,45 +460,51 @@ class Mixer:
     def _voice(self, v: Voice, head: _Head, frames: int, mix) -> None:
         """One voice's block into the mix, and its head moved on (module
         docstring: the head against the transport)."""
+        st = v.track
         if head.seen is not v:
             head.seen, head.since = v, 0
         speed = max(-MAX_SPEED, min(v.speed, MAX_SPEED))
         wrap = round(v.wrap * AUDIO_RATE)
         if wrap < MIN_WRAP:
             wrap = 0
+        end = st.ends_at if wrap else 0
+        if not 0 < wrap - end <= SEAM_SLACK:
+            end = wrap                                    # no gap to bridge
         target = round(v.at * AUDIO_RATE) + speed * head.since
         if wrap:
             target %= wrap
-        started = head.at is not None
-        at = head.at if started else target
-        was, was_speed = head.level, head.speed if started else speed
+        was = head.level
+        silent = was == 0.0 or head.at is None    # it sits on the transport, at speed at once
+        at, was_speed = (target, speed) if silent else (head.at, head.speed)
         err = target - at
         if wrap:
             err = (err + wrap / 2) % wrap - wrap / 2      # the short way round the loop
+        scale = max(1.0, abs(speed))                      # the clocks' jitter, in source samples
         if head.since >= STALE_S * AUDIO_RATE or abs(speed) < HOLD_SPEED:
             speed = 0.0     # the master has stopped saying, or stopped: no creeping to it
-        elif abs(err) > CUT:
+        elif abs(err) > CUT * scale:
             if was > 0.0:                                 # the crossfade's way out
-                self._tape(v.track, at, was_speed, was_speed, wrap)
+                self._tape(st, at, was_speed, was_speed, wrap, end)
                 self._lay(mix, was, 0.0)
             at, was, was_speed = target, 0.0, speed
-        elif abs(err) > DEAD:
-            trim = (abs(err) - DEAD) / (TAU_S * AUDIO_RATE)
-            trim = min(trim, abs(speed))                  # it never turns the tape round
+        elif abs(err) > DEAD * scale + 1.0:       # (+ 1: a slew's tail ends, it is not forever)
+            trim = min((abs(err) - DEAD * scale) / (TAU_S * AUDIO_RATE), TRIM_MAX * abs(speed))
             speed = max(-MAX_SPEED, min(speed + math.copysign(trim, err), MAX_SPEED))
+        elif abs(speed) == 1.0 and was_speed == speed:
+            at = round(at)                                # the track's own samples again
         amount = abs(speed)
         want = (v.gain * min(amount / FADE_SPEED, 1.0)) if amount >= HOLD_SPEED else 0.0
         level = 0.0
-        if want > 0.0 or was > 0.0:
-            held = self._tape(v.track, at, was_speed, speed, wrap)
-            level = want if held else 0.0
+        audible = want > 0.0 and self._span_held(st, at, speed, frames, wrap, end)
+        if audible or not silent:                         # (silent with nothing to hear: no read)
+            held = self._tape(st, at, was_speed, speed, wrap, end)
+            at += (was_speed + speed) / 2.0 * frames
+            if want > 0.0 and held and self._span_held(st, at, speed, frames, wrap, end):
+                level = want                              # (the next block is there too)
             if level > 0.0 or was > 0.0:
                 self._lay(mix, was, level)
-            at += (was_speed + speed) / 2.0 * frames
-            if wrap:
-                at %= wrap
-        else:
-            at = target                                   # silent: it sits on the transport
+        if wrap:
+            at %= wrap
         head.at, head.speed, head.level = at, speed, level
         head.since += frames
 
@@ -466,6 +528,7 @@ class Mixer:
                     self._voice(v, head, frames, mix)
                 except Exception:  # noqa: BLE001 — one bad voice is silence, not a dead stream
                     self.errors += 1
+                    head.level = 0.0            # not sounding: `_bind` may let it go
             np.clip(mix, -CEILING, CEILING, out=mix)
             outdata[:] = mix
             self._push(mix, frames)           # V3: what is heard, to the analyzer

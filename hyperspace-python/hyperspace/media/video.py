@@ -284,6 +284,13 @@ class Soundtrack(_Follower):
         return w is not None and w.start <= at and at + n <= w.end
 
     @property
+    def ends_at(self) -> int:
+        """The sample the track ends at: the window's own end when it is held
+        whole (what really decoded), else what the probe said."""
+        w = self._win
+        return w.end if self.whole and w is not None else round(self.duration * self.rate)
+
+    @property
     def held(self) -> tuple[float, float] | None:
         """(from, to) in seconds of the samples in memory; None with none."""
         w = self._win

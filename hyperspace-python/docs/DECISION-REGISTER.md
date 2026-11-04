@@ -679,11 +679,11 @@ here; overturn → the change, then the same.
 | 645 | Plan 50: the migration step — `tools/migrate_library.py` moves every module preset to `patches/<group>/` as `patch/2` and rewrites every `patch/1` as `/2` in place, after the run's backup; the dry run lists them; a retired group's files (`fx/`) and an unreadable file (a module folder's or `patches/`'s) are left, said; `--to` moves none | 485 | (rec) — pending the owner; built as recommended |
 | 646 | Plan 50, not done: the show's `modules` key (a session group's band preset by name) stays — renaming it is a show schema move; `RETIRED_MODULES` and `_fresh_of` are already what the fallback needs; the band scene files (code data) stay `preset/1`, read through the one ladder; `library.migrate_doc` serves the shows alone (the preset entry, `CURRENT["hyperspace.preset"]` and `PRESET_SCHEMA` removed, review fix 8); `headless.SHARED_FOLDERS` is `patches/` alone, every folder down (review fix 2) | — | (rec) — pending the owner |
 | 647 | Plan 50: hands 1 in a group — a wired frame always holds it, so a "delete" leaves it held and a member (as a macro is) | — | (rec) — pending the owner; built as recommended |
-| 673 | Plan 45 V4, the read head: each voice reads sequentially from a head of its own, written only by the callback and read by nothing else; against the playhead carried forward by the speed since the last feed it is left alone within one block, slewed beyond that (the excess over 0.25 s, at most the speed itself), cut with a one-block crossfade past 0.25 s, and stopped after 1 s with no feed. The numbers are by ear | — | (rec) — pending the owner; built as recommended |
+| 673 | Plan 45 V4, the read head: each voice reads sequentially from a head of its own, written only by the callback and read by nothing else; against the playhead carried forward by the speed since the last feed it is left alone within a block and a quarter (the clocks' phase plus the frame's jitter), slewed beyond that (the excess over 0.25 s, at most half the speed), cut with a one-block crossfade past 0.25 s (both × max(1, |speed|)), and stopped after 1 s with no feed. The numbers are by ear | — | (rec) — pending the owner; built as recommended |
 | 674 | Plan 45 V4, varispeed: `Transport.velocity` (signed; 0 at a parked end; a drag of `pos` at the drag's speed up to 8× the clip, a jump at the rate) and `wrap` replace `_forward`; linear resampling with the speed gliding inside a block, no anti-alias filter, at most 16× | — | (rec) — pending the owner; built as recommended |
-| 675 | Plan 45 V4, the loop-wrap case: the head counts modulo the loop and reads straight through the seam, either way; no splice fade, so a clip not cut to loop has the click of its own two ends | — | (rec) — pending the owner; built as recommended |
+| 675 | Plan 45 V4, the loop-wrap case: the head counts modulo the loop and reads straight through the seam, either way; no splice fade, so a clip not cut to loop has the click of its own two ends; a track ending within 50 ms before the picture is bridged at full level, one ending earlier fades out and back, one running past it is cut there | — | (rec) — pending the owner; built as recommended |
 | 676 | Plan 45 V4, prefetch: none. A clip up to 120 s is held whole; a longer clip's wrap fades out and back in one window decode later | — | (rec) — pending the owner; built as recommended |
-| 677 | Plan 45 V4, silence and level: the level glides per block to gain × a fade on the speed (1 from 0.05 up, 0 under 1e-3), so rate 0 is a block's fade then exact zeros with no read; a block not wholly held takes the level to 0 (`Soundtrack.holds`); a voice leaving gets one more block; a clip not yet probed is silent | — | (rec) — pending the owner; built as recommended |
+| 677 | Plan 45 V4, silence and level: the level glides per block to gain × a fade on the speed (1 from 0.05 up, 0 under 1e-3), so rate 0 is a block's fade then exact zeros with no read; a block whose next block is not wholly held takes the level to 0 (`Soundtrack.holds`), so running out is a fade; a voice leaving gets one more block; a clip not yet probed is silent | — | (rec) — pending the owner; built as recommended |
 
 "—": no hand check shows it; tests only.
 
@@ -11949,14 +11949,17 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   that there is no second time base (row 562).
 - **Answer.** (rec) — pending the owner; built as recommended.
 - **Recommended.** A head the transport sets and nothing reads: left alone
-  within one block (`DEAD`), slewed beyond it (`TAU_S` = 0.25 s), cut with a
-  crossfade past `CUT` = 0.25 s, stopped after `STALE_S` = 1 s with no feed. The
+  within a block and a quarter (`DEAD`), slewed beyond it (`TAU_S` = 0.25 s, at most half
+  the speed), cut with a crossfade past `CUT` = 0.25 s, both × max(1, |speed|)
+  because jitter is a time, stopped after `STALE_S` = 1 s with no feed. The
   error is against the playhead carried forward by the speed since the last
   feed, so a block repeated or skipped by the clocks' phase is no error at all.
 - **Built.** `media/mixer.py`; `tests/test_media_varispeed.py`
   (`test_rate_1_with_the_clocks_out_of_phase_repeats_and_skips_nothing`,
   `test_a_small_error_slews_without_a_click_and_closes`,
-  `test_a_stuck_frame_thread_is_ridden_through_then_faded_not_free_run`).
+  `test_a_stuck_frame_thread_is_ridden_through_then_faded_not_free_run`,
+  `test_the_clocks_jitter_is_no_error_at_any_rate`,
+  `test_a_slew_against_a_slow_transport_never_stops_the_tape`).
 - **Judge it.** Hand check 510.
 
 ### 674. Plan 45 V4: varispeed
@@ -11980,8 +11983,13 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Recommended.** Read straight through the seam, the head modulo the loop, so
   a clip cut to loop is seamless. No splice fade: it would dip every clip that
   was cut well to spare the ones that were not. If the click of an uncut clip
-  is heard at a show, a short fade is a small change.
+  is heard at a show, a short fade is a small change. The loop's length is the
+  picture's: a track ending up to 50 ms before it (a mux mismatch) has the gap
+  bridged at full level, one ending earlier fades out and back, and one running
+  past it is cut at the picture's end.
 - **Built.** `test_a_loop_wrap_reads_straight_through_the_seam_in_order`,
+  `test_a_few_ms_short_of_the_loop_is_bridged_at_full_level`,
+  `test_a_track_past_the_picture_is_cut_at_the_pictures_end`,
   `test_reverse_reads_back_through_the_seam`,
   `test_the_error_is_measured_the_short_way_round_the_loop`.
 - **Judge it.** Hand check 512.
@@ -12002,12 +12010,15 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   zeros.
 - **Answer.** (rec) — pending the owner; built as recommended.
 - **Recommended.** One level that glides per block to gain × a fade on the speed
-  and to 0 for a block not wholly held (`Soundtrack.holds`). It also covers a
+  and to 0 when this block or the next is not wholly held (`Soundtrack.holds`),
+  so running out of samples is a fade and not a step. It also covers a
   voice starting, a gain move and a voice leaving, so none of them clicks. A
   transport at rest has no slew, so a stopped head does not creep. A clip not
   yet probed (duration 0) does not move and is silent; V2 repeated its first
   block.
 - **Built.** `test_rate_0_is_silence_after_one_block_fading_and_reads_nothing`,
+  `test_a_once_clip_running_out_of_track_fades_while_it_has_samples`,
+  `test_a_head_leaving_its_window_fades_before_the_edge`,
   `test_a_gain_move_glides_across_a_block`,
   `test_a_voice_turned_off_fades_in_one_block_and_is_let_go`,
   `test_the_callback_allocates_nothing_once_warm`.

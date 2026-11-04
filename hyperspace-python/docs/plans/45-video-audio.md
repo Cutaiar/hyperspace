@@ -278,12 +278,14 @@ video, nothing audible changes, memory stays flat, **no extra read**
   then on written only by the callback. It moves `speed × frames` samples a
   block. Its error against the playhead, carried forward by the speed for the
   blocks since that playhead came (the count is zeroed by every feed, so no
-  clock is kept), is left alone inside `DEAD` (one block, 16.7 ms: the two
-  clocks' jitter), slewed beyond it (the excess over `TAU_S` = 0.25 s, the
-  trim at most the speed itself), and cut beyond `CUT` (0.25 s: one block's
-  crossfade). With no feed for `STALE_S` = 1 s it stops and fades. So a hitch
-  is ridden through and a stuck frame thread goes quiet. Every number is
-  judged by ear (hand checks 510–513).
+  clock is kept), is left alone inside `DEAD` (a block and a quarter, 21 ms:
+  the two clocks' phase can wander a whole block, plus the frame's jitter), slewed beyond it (the excess over `TAU_S` = 0.25 s, the
+  trim at most half the speed, so it never stops the tape), and cut beyond
+  `CUT` (0.25 s: one block's crossfade). Both thresholds are × max(1, |speed|),
+  since the jitter is a time and so grows in source samples with the rate.
+  With no feed for `STALE_S` = 1 s it stops and fades. So a hitch is ridden
+  through and a stuck frame thread goes quiet. Every number is judged by ear
+  (hand checks 510–513).
 - **The transport says how it is moving (rec, row 674).** `speed` could not:
   it stays 1 at a parked `once` end, and it is the rate during a scrub.
   `Transport.velocity` is signed and true: 0 at a parked end, pingpong's sign
@@ -294,27 +296,42 @@ video, nothing audible changes, memory stays flat, **no extra read**
   does not move, so it is silent until it does.
 - **Resampling (rec, row 674).** Linear, with the speed gliding from last
   block's to this block's inside the block, so a rate change, a turn and a
-  slew never step. At rate 1 the head stays on whole samples and the output
-  is the track's samples exactly. There is no anti-alias filter: above rate 1
+  slew never step. At rate ±1 inside the dead band the head returns to whole
+  samples (a move of at most half a sample, once, after a slew), so the output
+  is the track's samples exactly and not the low-pass of a fraction held. Blocks
+  actually being trimmed stay fractional. There is no anti-alias filter: above rate 1
   it aliases as a cheap tape does. A windowed sinc only if it is heard.
   `MAX_SPEED` = 16 bounds what one block may read.
 - **Silence and level (rec, row 677).** The level glides per block too: to
   gain × the speed's fade (1 from `FADE_SPEED` = 0.05 up, 0 under
   `HOLD_SPEED`). So rate 0 fades in one block and then is exact zeros with no
   read, and a voice starting, a gain move and a voice leaving (`_bind` keeps
-  it one more block at gain 0) are all ramps. A transport at rest has no slew:
-  the head fades, and once silent sits on the playhead. `Soundtrack.holds(at,
-  n)` is new: a block not wholly held takes the level to 0, so a window
-  arriving fades in rather than clicking.
+  it one more block at gain 0, while a stream is there to play it) are all
+  ramps. A transport at rest has no slew: the head fades, and once silent sits
+  on the playhead, and it restarts at speed at once, so it is not left late by
+  the glide. `Soundtrack.holds(at, n)` is new: **the level looks one block
+  ahead**, going to 0 in the block before samples run out, so the end of a
+  track, a pingpong bounce there and a head leaving its window are fades and
+  not steps, and a window arriving fades in. A voice with nothing to hear yet
+  reads nothing, and only keeps its place.
 - **The wrap (rec, row 675).** The head counts modulo the loop and reads
   straight through the seam, in pieces, sample after sample, either way; the
   error is measured the short way round. A wrap is no jump and no gap, and a
   clip cut to loop is seamless. **No splice fade**: a clip not cut to loop has
   the click of its own two ends, and a fade at the seam would put a dip in
-  every clip that was cut well. A track shorter than the picture fades out
-  over its last block and back in after the wrap. Hand check 512 judges it; a
-  fade is a small change if it is heard. A `once` or pingpong clip does not
-  wrap (`wrap` 0): reading past the track is zeros.
+  every clip that was cut well. The loop's length is the picture's, so what
+  the audio does at the end depends on its length against the picture:
+  - **Ending up to `SEAM_SLACK` = 50 ms early** (`Soundtrack.ends_at`; a mux
+    mismatch, an AAC frame is 21 ms): the gap is bridged at full level by a line
+    from the last sample to the first. It stays on time with no dip and no
+    click; the gap itself is what the file has.
+  - **Ending further early:** it fades out over its last block and back in
+    after the wrap.
+  - **Running past the picture:** the rest is not read, and the wrap cuts it
+    at the picture's end, with the same click as any uncut clip.
+
+  Hand check 512 judges it; a fade is a small change if it is heard. A `once`
+  or pingpong clip does not wrap (`wrap` 0): reading past the track is zeros.
 - **No prefetch (rec, row 676).** A clip up to 120 s is held whole, so its
   head is always there and needs nothing. A longer clip's wrap has let its
   head go: `want(0)` starts the one window decode (a fraction of a second)
@@ -325,8 +342,8 @@ video, nothing audible changes, memory stays flat, **no extra read**
   Hand check 512 is where to change this.
 - **The callback's cost.** Nothing the size of a block is allocated once warm:
   `tests/test_media_varispeed.py::test_the_callback_allocates_nothing_once_warm`
-  holds a callback under 800 bytes by `tracemalloc` at rate 1.37 with a wrap
-  and a gain move, real `Soundtrack`. What is left is python's small objects
+  holds a callback under 1600 bytes by `tracemalloc` at rate 1.37 with a wrap,
+  a bridged seam and a gain move, real `Soundtrack`. What is left is python's small objects
   (a float, a view), as V2 had. The per-channel arrays are (frames, channels)
   on purpose: a broadcasting ufunc with `out=` allocates 7 kB each call.
 - **Not touched.** `channels.py`'s frame-read paths and `publish.py`: only
