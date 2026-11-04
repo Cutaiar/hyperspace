@@ -74,7 +74,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from . import fx, patterns, tapers, undo
+from . import fx, groupwords, patterns, tapers, undo
 from .analyzer import CURVES, F_HI, F_LO, Q_HI, Q_LO
 from .bands import CEIL, NORMS, SHAPERS
 from .fx import FxState
@@ -834,6 +834,11 @@ def is_instance_id(pid: str) -> bool:
 
 
 class Registry:
+    @staticmethod
+    def group_word(group: str) -> str:
+        """`groupwords.group_word`, for `undo.py`, a leaf that holds a registry."""
+        return groupwords.group_word(group)
+
     """An ordered map of Param by id."""
 
     # class-level so a registry from before a hot reload has them (plan 28 N0):
@@ -2115,7 +2120,8 @@ def build_session(control, audio, restart=None, media=None) -> SessionRegistry:
         r.enum("band.select", "Analyzer band", lambda: control.selb,
                lambda i: setattr(control, "selb", i), lambda: chain().band_names, group=g,
                persist=False, modulatable=False,
-               tip="Which of the analyzer's bands has its strip open; the knobs below follow it.")
+               tip="Which of the analyzer's bands has its strip open; the selected-band "
+                   "targets (band.sel.*) follow it.")
         # structural: never lane-driven (they rebuild this very block)
         r.trigger("band.add", "Add analyzer band", control.add_band, group=g, modulatable=False,
                   tip="A new analyzer band in the widest gap between the others; it becomes "

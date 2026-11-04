@@ -7922,8 +7922,8 @@ vertical that the 20° zone wants to be smaller (row 685).
 Register rows 737–738, 2026-11-04. Words only: nothing should move or load differently.
 **566. The words read right.** (the Mac, an APC40 for step 3 if it is to hand)
 1. Open ANALYZER in the side pane. The head reads ANALYZER TUNING; drag the pane to its narrowest and look again.
-2. Click the `analyzer` node. It reads "6 bands · n patched". With **preset only** off, the node beside it reads `analyzer tuning`.
-3. Open the desk diagram with SHIFT latched, click **big**. G7's row reads "analyzer SUB" to "analyzer AIR", B18 and B19 "Analyzer +1" and "Analyzer -1", G6·9 "Reset analyzer".
+2. Click the `analyzer` node. It reads "6 bands · n patched". With **preset only** off, the node beside it reads `analyzer tuning`; click it and its **open on ANALYZER** chip takes you to the section.
+3. Open the desk diagram with SHIFT latched, click **big**. G7's row reads "analyzer SUB" to "analyzer AIR", B18 and B19 "Band +1" and "Band -1", G6·9 "Reset analyzer".
 4. Load another analyzer scene and watch the footer; press ⌘Z and read the undo line.
 
 Expected: "analyzer" throughout, "band" only as a count or the plain audio word, and every label legible at both widths.

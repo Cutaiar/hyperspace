@@ -128,6 +128,7 @@ from . import learn as learnmod
 from . import modifiers as modmod
 from . import sequencer as seqmod
 from .devices import SCHEME_ROLE  # plan 40 T4: the table lives in devices; read here
+from .groupwords import group_title
 from .params import PERFORMANCE_GROUPS, Kind, Param, Registry
 from .routing import (
     MOD_OPS,
@@ -1884,15 +1885,10 @@ def _sub_group(pid: str, p: Param | None) -> str:
     return p.group
 
 
-# a group node's title where its key is not the word (the id keeps the key:
-# it is a saved layout key): beside the `analyzer` node, whose ports are the
-# wires out, this one holds what the analyzer is tuned to
-GROUP_TITLES = {"band": "analyzer tuning"}
-
-
 def _group_node(nodes: dict[str, VNode], group: str, add_node) -> VNode:
     nid = f"group:{group}"
-    return nodes.get(nid) or add_node(VNode(nid, "group", GROUP_TITLES.get(group) or group))
+    # the id keeps the key, a saved layout key; only its title is words
+    return nodes.get(nid) or add_node(VNode(nid, "group", group_title(group)))
 
 
 def refresh(view: View, reg: Registry, router: Router | None, lanes=None,

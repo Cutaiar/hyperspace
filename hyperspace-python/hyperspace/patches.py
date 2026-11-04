@@ -94,6 +94,7 @@ from . import graph as G
 from . import lfo as lfomod
 from . import modbank
 from . import modifiers as modmod
+from .groupwords import group_word
 from .lookback import is_lookback_key
 from .routing import Binding, base_scheme, is_continuous, is_macro
 
@@ -323,7 +324,7 @@ def _check_group(doc: Mapping) -> list[str]:
     out: list[str] = []
     group = doc[GROUP_KEY]
     for key in sorted(set(doc) - set(GROUP_KEYS)):
-        out.append(GROUP_ONLY_WORDS.format(key=key, group=group))
+        out.append(GROUP_ONLY_WORDS.format(key=key, group=group_word(group)))
     if not isinstance(doc.get("values", {}), dict):
         out.append("values is not a map")
     if not isinstance(doc.get("name", ""), str) or not isinstance(doc.get("note", ""), str):

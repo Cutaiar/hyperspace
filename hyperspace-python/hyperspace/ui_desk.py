@@ -81,8 +81,9 @@ from dataclasses import dataclass, replace
 
 from imgui_bundle import imgui
 
-from . import apc40, learn, ui, ui_pane, ui_routing, undo
+from . import apc40, learn, ui, ui_pane, ui_routing
 from .apc40 import GREEN, GREEN_BLINK, RED, RED_BLINK, YELLOW, YELLOW_BLINK
+from .groupwords import group_part, group_word
 from .params import PERFORMANCE_GROUPS, Kind
 from .routing import Binding, led_shade
 
@@ -401,7 +402,7 @@ def _offer_all(panel, used, rest) -> None:
             take(panel, pid)
     imgui.separator()
     for group, ids in rest:
-        if imgui.begin_menu(f"{undo.group_word(group)}##all.{group}"):
+        if imgui.begin_menu(f"{group_word(group)}##all.{group}"):
             for pid in ids:
                 p = panel.reg.get(pid)
                 if imgui.menu_item_simple(f"{p.label if p is not None else pid}##all.{pid}"):
@@ -618,10 +619,10 @@ DESK_WORDS = {
 # an enum `set` row whose choice's name alone does not say what the
 # button does: the word goes before the name (the track-select row, G7:
 # "analyzer SUB" — the strip the device knobs follow under SHIFT)
-SET_WORDS = {"band.select": "analyzer"}
+SET_WORDS = {"band.select": group_word("band")}
 # a `step` row's word where the param's label is too long for a small button
-# at a size a person can read (B18, B19: "Analyzer +1")
-STEP_WORDS = {"band.select": "Analyzer"}
+# at a size a person can read (B18, B19: "Band +1", the next band's strip)
+STEP_WORDS = {"band.select": group_part("band").capitalize()}
 
 
 def text(reg, b: Binding) -> str:

@@ -58,7 +58,8 @@ import time
 
 from imgui_bundle import imgui
 
-from . import preset, ui, undo
+from . import preset, ui
+from .groupwords import group_word
 from .library import (
     PATCHES,
     PRESETS,
@@ -95,7 +96,7 @@ def trash_tag(item) -> str:
     """A trash row's dim first column: its group, and for a file in the
     library's old trash (plan 48 row 586) ``· library`` — so a row says in
     itself that "empty" leaves it and a restore is a copy."""
-    word = undo.group_word(item.group)
+    word = group_word(item.group)
     return f"{word} · library" if item.old else word
 
 

@@ -224,6 +224,7 @@ from . import (
 from . import hold as holdmod
 from .bands import CEIL
 from .graph import Effect
+from .groupwords import group_title
 from .library import LibraryError
 from .params import Kind
 from .routing import base_refusal, is_macro
@@ -1927,7 +1928,8 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
             group = port.group
             folded = (n.id, group) in st["folds"]
             count = sum(1 for p in n.ports if p.group == group)
-            if imgui.small_button(f"{'+' if folded else '-'} {undo.group_word(group) or 'misc'} ({count})"
+            sign = "+" if folded else "-"
+            if imgui.small_button(f"{sign} {group_title(group) or 'misc'} ({count})"
                                   f"##{group}"):
                 st["folds"] ^= {(n.id, group)}
         if port not in ports:
@@ -3680,7 +3682,7 @@ def _param_rows(panel, st: dict, n: graphview.VNode) -> bool:
     opened = st.setdefault("side_open", {}).setdefault(n.id, {})
     patched = {p.group for p in n.ports if p.param is not None and p.patched}
     for g, pids in groups:
-        name = undo.group_word(g) or "params"
+        name = group_title(g) or "params"
         if fold:
             if g not in opened:
                 opened[g] = g in patched or g == groups[0][0]
@@ -3768,7 +3770,7 @@ def home_page(n: graphview.VNode):
     if n.kind == "device" and (n.role == "leap" or n.id == "device:leap"):
         return ("hands", None)
     if n.kind == "group":
-        key = _page_of_group(n.label)
+        key = _page_of_group(n.id.partition(":")[2])    # the group's key; the label is words
         return (key, None) if key is not None else None
     # plan 35 G: by the wired frame's ids — `render:camera` (was `render:eye`),
     # a channel `render:channel.<c>`, All outputs the OUTPUT page with no

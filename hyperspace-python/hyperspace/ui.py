@@ -78,6 +78,7 @@ from .graph import (
     through_of,
     wire_words,
 )
+from .groupwords import group_title
 from .hands import panel as ui_hands
 from .hold import canvas_renderer
 from .media import publish
@@ -2508,7 +2509,7 @@ class Panel:
         analyzer section (ui_pane.py, plan 49): the page is the section at
         full height."""
         c = self.control
-        self._section("analyzer tuning", "band")
+        self._section(group_title("band"), "band")
         # scene + reset-all (relabels to Undo while the window is open)
         self._label_cell("scene")
         self._combo("scene.select", -(button_w("Reset all") + imgui.get_style().item_spacing.x))

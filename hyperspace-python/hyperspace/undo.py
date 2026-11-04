@@ -87,19 +87,6 @@ ROW_FIELDS = ("source", "target", "op", "value", "enabled", "scale", "when", "re
               "layer", "pickup", "feedback", "on", "off", "ring")
 LEFT = "the analyzer's bands have changed: their strips were left"
 
-# ---- a param group, in the words a person reads (register row 737) ----
-# A group's key is saved (a show's `modules`, a library folder, a binding's
-# `band.*` id), so it stays what it is; this is what the panel says for it.
-# "band" is the analyzer's group: "the analyzer" is the fixture on the graph,
-# a band is one slice of its spectrum. Here because this is the leaf every
-# module that says a group's name can already reach.
-GROUP_WORDS = {"band": "analyzer"}
-
-
-def group_word(group: str) -> str:
-    """What the panel calls a param group; its key where it has no other."""
-    return GROUP_WORDS.get(group, group)
-
 
 def watched(p) -> bool:
     """Is this param's base part of the undo history: persisted, not an
@@ -676,7 +663,7 @@ class Undo:
         if ids and not parts:
             groups = {getattr(self.reg.get(pid), "group", "") for pid in ids}
             if len(groups) == 1:
-                return f"{len(ids)} {group_word(groups.pop()) or 'param'} settings"
+                return f"{len(ids)} {self.reg.group_word(groups.pop()) or 'param'} settings"
         if parts and not ids:
             return ", ".join(parts)
         n = len(ids) + len(parts)
