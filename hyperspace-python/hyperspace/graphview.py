@@ -3950,10 +3950,6 @@ class Edit:
         if p.id == SAVE_PARAM:
             return learnmod.SAVE_REFUSAL
         if Binding(addr, p.id).is_midi:
-            # register row 743: this row would land in the preset layer
-            why = meta_refusal(p.id)
-            if why is not None:
-                return why
             # plan 28 N5 (D5): the global layer is never a Learn target, so a
             # drag from the SHIFT node is refused whatever the latch
             port = self._port(src)
@@ -3964,6 +3960,8 @@ class Edit:
                 return f"{addr} is invariant (the session's)"
             if why == "global":
                 return f"{addr} is on the global layer: latch SHIFT off to map into the preset"
+            # register row 743: what is left would land in the preset layer
+            return meta_refusal(p.id)
         return None
 
     def _input_refusal(self, skind: str, addr: str | None, pid: str) -> str | None:

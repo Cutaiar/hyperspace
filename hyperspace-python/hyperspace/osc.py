@@ -338,7 +338,7 @@ class OscDevice(Base):
                 self._taken = True
                 return True
         target = learn.target_for(learn.learning)
-        if target is None or not target.modulatable:
+        if not learn.routable(target):
             return False
         for i in self.moved:
             rest = self.layout.rests[i]

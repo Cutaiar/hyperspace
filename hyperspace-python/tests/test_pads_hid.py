@@ -303,6 +303,9 @@ class Armed:
     def target_for(self, pid):
         return NS(modulatable=True)
 
+    def routable(self, target):
+        return target is not None and target.modulatable
+
     def accepts(self, source):
         return source.partition(":")[0].partition("@")[0] in ("pad", "hat", "axis", "touch",
                                                               "motion")

@@ -177,6 +177,12 @@ SESSION_GROUPS = ("tempo", "hands", "band", "master", "scene", "audio", "output"
 # lists the group; an id is a saved format) and are the rig's single copy:
 # `part_of` asks here first, so a preset never names one and the show keeps it
 SESSION_KEYS: dict[str, tuple[str, ...]] = {"ghost": ("mirror",)}
+# review of #371: the session params whose group is not their id's first segment
+# (`edit.undo`, `app.restart`: group `ui`; `seq.page`: group `desk`). The app's
+# verbs and the desk's page latch: no part of a look. Asked first by `part_of_id`,
+# so a table with no registry (`routing.meta_refusal`) and `part_of` cannot
+# disagree (tests/test_meta_rule.py walks the registry)
+SESSION_IDS = ("app.restart", "edit.undo", "edit.redo", "seq.page", "seq.select")
 # plan 43 C2 (row 573): the spin's pose — where each plane is in its turn,
 # `view.body` folded in (`ViewState.pose`) — saved by every preset under
 # these ids (its `pose` section, preset.POSE_KEY, beside `values`) and set
@@ -774,6 +780,8 @@ def in_group(p: Param, group: str) -> bool:
 def part_of_id(pid: str, group: str | None = None) -> str | None:
     """`part_of` by id alone: `group` is the param's, else the id's first
     segment (every group's ids start with it but the bank's, `preset`)."""
+    if pid in SESSION_IDS:
+        return "session"
     group = pid.partition(".")[0] if group is None else group
     keys = SESSION_KEYS.get(group)
     if keys and pid.rpartition(".")[2] in keys:

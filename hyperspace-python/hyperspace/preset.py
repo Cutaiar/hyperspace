@@ -196,7 +196,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
     part_of,
     retaper_depths,
 )
-from .routing import MOD_OPS, Binding, is_continuous, is_session_id
+from .routing import MOD_OPS, Binding, is_continuous, is_session_id, meta_row_refusal
 
 SCHEMA = PERFORMANCE_SCHEMA
 # the schemas a load reads (each migrated on load; row 394: a save writes
@@ -1375,7 +1375,9 @@ class Presets:
         # `headless.resave`)
         pose = self._pose()
         doc.update(values=values, **({POSE_KEY: pose} if pose else {}),
-                   routes=[b.to_json() for b in table.routes()],
+                   # (not a row a hot reload left standing on a meta param: row 743)
+                   routes=[b.to_json() for b in table.routes()
+                           if meta_row_refusal(b) is None],
                    **self._modifiers_part(name),
                    **self._desk_part(name), macros=table.macros_doc(),
                    **{UNITS_KEY: dict(UNITS)})
@@ -1551,7 +1553,8 @@ class Presets:
     def _desk_part(self, name: str | None = None) -> dict:
         """What a save writes for the desk: ``{"desk": rows}``, the whole
         preset layer (plan 44 D3: the desk templates are retired)."""
-        return {"desk": desk_json(self.router.table.desk())}
+        return {"desk": desk_json(b for b in self.router.table.desk()
+                                  if meta_row_refusal(b) is None)}
 
     def signature(self) -> tuple:
         """What the strip's dirty dot compares: the performance bases, the

@@ -1536,6 +1536,12 @@ class Macro:
         d: dict = {"label": self.label} if self.label else {}
         return {**d, "subs": [s.to_json() for s in self.subs]}
 
+    def meta_subs(self) -> list[str]:
+        """The meta params this macro's subscribers name (row 744), a depth
+        subscriber by its route's target."""
+        names = (s.base if s.depth is None else s.depth[1] for s in self.subs)
+        return [pid for pid in names if is_session_id(pid)]
+
     @classmethod
     def from_json(cls, d: dict) -> Macro:
         return cls(str(d.get("label", "")), [Sub.from_json(s) for s in d.get("subs", [])])
@@ -1570,8 +1576,9 @@ def meta_refusal(pid: str | None) -> str | None:
     rule (the owner, 2026-11-04, register row 743; overturns the old "a route
     may perform a session param"): tuning like `master.gain` happens before
     the show, and the refusal says which params belong in the preset. By the
-    id's group (`is_session_id`), so a param this build has not made yet is
-    still classed; `part_of == "session"` is the whole test."""
+    id (`is_session_id`), so a table with no registry and a param this build
+    has not made yet are still classed; it says what `part_of` says of every
+    param a registry holds."""
     return META_WORDS.format(pid=pid) if is_session_id(pid) else None
 
 
@@ -2740,8 +2747,8 @@ class Bindings:
                     continue
                 notes.append(f"dropped {b.source} → {b.target}: that control is "
                              "invariant, the session's (plan 13 D6)")
-            elif meta_row_refusal(b) is not None:
-                notes.append(f"dropped {b.source} → {b.target}: {meta_row_refusal(b)}")
+            elif (why := meta_row_refusal(b)) is not None:
+                notes.append(f"dropped {b.source} → {b.target}: {why}")
             else:
                 new.append(b)
         self.bindings = keep + new
@@ -4021,9 +4028,14 @@ class Router:
         rows' motion (`feel_of`); None, a 60 Hz frame. A row that does not
         act this frame — its source not live, its gate shut — loses its
         follower, and starts afresh. A cable `modgraph` keeps off to break a
-        loop does not run."""
+        loop does not run. Plan 44 D4 (row 625, §7's recommendation): on a
+        deck that is not the session's lead, a row onto a session param is
+        dormant. No door lets one in since row 743, but a hot reload leaves
+        one standing until the next load (row 745)."""
         dt = 1 / 60 if dt is None else dt
         reg = self.reg
+        session = getattr(reg, "session", None)
+        follower = session is not None and session is not reg and session.lead is not reg
         self._sync_modifiers()                   # plan 28 N1: the ``mod:<n>`` lanes
         self.modgraph                                # noqa: B018 — the cached plan, current
         plan = self.__dict__["_plan"]
@@ -4077,8 +4089,8 @@ class Router:
                 if b.when is not None and not self.gated(b, feeds):
                     continue         # gate open: apply() writes the base back
                 p = reg.get(b.target)
-                if p is None:
-                    continue
+                if p is None or (follower and not reg.lands(p)):
+                    continue         # (plan 44 D4: a session param is the lead's to move)
                 depth = b.value
                 if b.scale is not None:
                     sp = self.reg.get(b.scale)

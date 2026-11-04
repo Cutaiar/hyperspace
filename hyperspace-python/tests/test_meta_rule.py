@@ -15,12 +15,13 @@ from pathlib import Path
 import pytest
 from conftest import seed
 from test_graph_groups import BREATH
+from test_pad_learn import ScriptedPad
 from test_presets import boot, put
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
-from hyperspace import graphview, headless, patches, ui_graph, ui_routing, undo
+from hyperspace import gamepad, graphview, headless, patches, ui_graph, ui_routing, undo
 from hyperspace.learn import Learn
-from hyperspace.params import part_of
+from hyperspace.params import part_of, part_of_id
 from hyperspace.routing import (
     MOD_OPS,
     Binding,
@@ -49,6 +50,25 @@ def tool():
     sys.modules["meta_routes"] = mod
     spec.loader.exec_module(mod)
     return mod
+
+
+# ------------------------------------------------- one predicate
+
+def test_the_id_and_the_param_say_the_same_of_every_param(tmp_path):
+    """Review of #371: the doors judge by id (a table has no registry), the panel
+    by the param. Over a whole app's registry the two can never disagree."""
+    app = headless.make_app(seed(tmp_path))
+    assert not [p.id for p in app.reg if part_of(p) != part_of_id(p.id)]
+
+
+@pytest.mark.parametrize("pid", ["edit.undo", "edit.redo", "app.restart", "seq.page",
+                                 "seq.select"])
+def test_the_five_with_a_foreign_prefix_are_refused_at_the_doors(pid):
+    t = Bindings()
+    with pytest.raises(ValueError, match="meta controller"):
+        t.add(Binding("note:0:60", pid, "toggle", layer="preset"))
+    assert t.set_desk([Binding("note:0:60", pid, "toggle")])
+    assert not t.desk()
 
 
 # ------------------------------------------------- the line, by layer alone
@@ -205,6 +225,52 @@ def test_a_picked_control_is_refused_on_a_meta_param_and_stays_picked(tmp_path):
     assert lrn.control == "cc:3:16" and lrn.learning is None
 
 
+def test_a_row_a_hot_reload_left_is_not_saved(tmp_path):
+    """Review of #371: the rule holds on the way in, so a row already in the
+    live table (a hot reload) must not be written back by a save."""
+    r = boot(tmp_path)
+    table = r.router.table
+    table.bindings.append(Binding("hand:left.y", "master.gain", "push", 0.375))
+    table.bindings.append(Binding("cc:3:16", "tempo.bpm", "abs", layer="preset"))
+    doc = r.presets.document("LEFT")
+    assert not [x for x in doc["routes"] if x["target"] == "master.gain"]
+    assert not [x for x in doc["desk"] if x["target"] == "tempo.bpm"]
+
+
+def test_stick_drift_never_ends_a_learn_a_button_can_land(tmp_path):
+    """Review of #371: Learn pad on a meta param waits for a button, so the
+    adapters ask `routable` before reading an axis."""
+    r = boot(tmp_path)
+    lrn = Learn(r.reg, r.router.table)
+    assert lrn.routable(r.reg["view.bright"])
+    assert not lrn.routable(r.reg["master.gain"]) and not lrn.routable(None)
+    assert not lrn.routable(r.reg["ghost.guide"])                 # not modulatable
+    pad = ScriptedPad()
+    pad.frame()
+    lrn.arm("master.gain", "pad")
+    pad.frame(axes=[1.0, 0.0, 0.0, 0.0, -1.0, -1.0])              # a stick, well past drift
+    gamepad.learn_from(pad, lrn)
+    assert lrn.learning == "master.gain" and not lrn.refused
+    pad.frame(held={gamepad.A}, axes=[1.0, 0.0, 0.0, 0.0, -1.0, -1.0])
+    assert gamepad.learn_from(pad, lrn) is True
+    assert any(b.source == "pad:A" and b.target == "master.gain" for b in lrn.table.bindings)
+
+
+def test_a_drag_from_an_invariant_control_says_invariant_not_the_rule(rig):
+    """Review of #371: a row on an invariant control is the meta controller's, so
+    the rule's words would say the opposite of the line."""
+    table = rig.router.table
+    view = graphview.build(table, rig.reg, rig.router, None, None, None)
+    e = graphview.Edit(table, rig.reg, rig.router, view)
+    fader = next(b.source for b in table.invariant_rows() if b.target == "master.gain")
+    why = e._value_refusal(f"out:{fader}", "base:tempo.bpm")
+    assert "invariant" in why and "meta controller" not in why
+    lrn = Learn(rig.reg, table)
+    lrn.arm("tempo.bpm", "desk")
+    assert lrn.learn_control(fader) is False
+    assert "invariant" in lrn.last and lrn.learning == "tempo.bpm"
+
+
 # ------------------------------------------------------------- the pickers
 
 def test_routing_and_the_desk_combo_offer_no_meta_param(rig):
@@ -234,10 +300,9 @@ def test_route_a_lane_here_says_why_on_a_meta_param(rig, monkeypatch):
 def test_add_route_says_why_and_lands_nothing(rig):
     panel = rig.panel
     table = ui_routing.router_of(panel).table
-    said = []
-    panel.library.say = said.append
     assert ui_routing.add_route(panel, "master.gain") is None
-    assert not table.routes_to("master.gain") and WORDS in said[0]
+    assert not table.routes_to("master.gain")
+    assert WORDS in ui_routing._state(panel)["error"]
 
 
 def test_route_from_offers_no_lfo_or_envelope_or_macro_on_a_meta_param(rig):
@@ -386,10 +451,24 @@ def test_the_tool_lists_every_row_that_would_drop_and_writes_nothing(tmp_path, c
     assert "patches: 1 row(s) in 1 of 1 file(s), each patch refused whole when read" in out
     assert "a.json  [routes]  hand:left.y → master.gain  push 0.375" in out
     assert "a.json  [desk]  cc:0:48 → tempo.bpm" in out
-    assert "macro.1 base → master.dyn" in out and "macro.1 depth → master.gain" in out
+    assert "macro.1 → master.dyn" in out and "macro.1 → master.gain" in out
     assert "   2 × hand:left.y → master.gain" in out
     assert "gone.json" not in out and "clean.json" not in out and "view.bright" not in out
     assert "could not read" in out and "bad.json" in out
+
+
+def test_a_malformed_row_names_its_file_and_the_report_goes_on(tmp_path, capsys):
+    """Review of #371: `{"value": null}` crashed the report's format; a row or a
+    subscriber this build cannot read is the bad file's, named and passed over."""
+    t = tool()
+    lib = _library(tmp_path / "lib")
+    row = {"source": "hand:left.y", "target": "master.gain", "op": "push", "value": None}
+    (lib / "presets" / "nulled.json").write_text(json.dumps({"routes": [row]}))
+    (lib / "presets" / "subbed.json").write_text(json.dumps(
+        {"macros": {"macro.1": {"subs": [{"depth": 3}]}}}))
+    assert t.main([str(lib)]) == 0
+    out = capsys.readouterr().out
+    assert "subbed.json" in out and "a.json  [routes]" in out
 
 
 def test_the_tool_has_no_default_path(tmp_path, capsys):

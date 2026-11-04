@@ -726,7 +726,7 @@ here; overturn → the change, then the same.
 | 724 | Wave 4 B2: a Joy-Con (R) has no BACK and gets no factory chase, a row on its SL gives it one; Learn goes on accepting `preset.list.*` and `tempo.tap`, unrefused, and no widget is added to arm the first two | 723 | (rec) — pending the owner |
 | 743 | Wave 4 MR: the hard rule. No row of a preset may drive a meta controller param (`part_of(p) == "session"`); refused in words at Learn, at the pickers and at `Bindings`' doors, dropped with a note at a load, removed by the next save; the meta controller's own rows stay, the line being `is_session_row`. Overturns row 19 (a) | 572, 573 | owner — 2026-11-04: "a hard rule" |
 | 744 | Wave 4 MR: macro base and depth subscribers on a meta param drop at `set_macros`; a modifier has no target, so its route is what is refused; a patch naming one is refused whole by `check`, and a spawn's doors drop what reaches them with a note | 573 | (rec) — pending the owner |
-| 745 | Wave 4 MR: row 650's dormant test comes out of `Router.modulate`, dead for routes now; `follow_macros`' and `Registry.apply`'s stay; `party-tumble` loses its row, and `tools/meta_routes.py` lists the library's without writing | 572 | (rec) — pending the owner |
+| 745 | Wave 4 MR: row 650's dormant test stays in `Router.modulate` for a row a hot reload left standing, and a save filters such rows; `party-tumble` loses its row, and `tools/meta_routes.py` lists the library's without writing | 572 | (rec) — pending the owner |
 | 748 | Plan 56: a pair is an address, `pair:<+ pole>/<− pole>`, of any two discrete controls of one pad; a model's natural pairs are published by default; one lane at rest 0.5, 1 on the + pole, 0 on the − pole, rest with both | — | owner — 2026-11-04: "toggle controls need to be able to be paired into a polarized axis"; the shape is (rec) — pending the owner |
 | 749 | Plan 56: the step-or-spring choice is the row's op: `step`, the neutral default and the meta controller's, or a route with a feel, the preset's; Learn pair and Learn pair (spring), two presses | 748 | (rec) — pending the owner; the owner, 2026-11-04: the choice "is immaterial to what I'm saying right now" |
 | 750 | Plan 56: the factory's `hat:UP/DOWN → view.bright ±3` and `pad:LB/RB → view.shape ±1` stay two rows and act exactly as they did; no saved-format change, an older build reads a pair's row as dormant | 748 | (rec) — pending the owner |
@@ -12943,7 +12943,10 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   meta params belong in the preset." Overturns row 19 (a), whose ledger line was in
   DECISIONS.md: the `ui_routing.SESSION_MARK` and `SESSION_TIP` mark and `is_session_target`
   are gone with it.
-- **Built.** `routing.meta_refusal(pid)` by the id's group, and `meta_row_refusal(b, target)`,
+- **Built.** `routing.meta_refusal(pid)` by the id (`part_of_id`, which a test holds to
+  `part_of` over the whole registry, with `params.SESSION_IDS` for the five whose id
+  prefix is not their group: `edit.undo`, `edit.redo`, `app.restart`, `seq.page`,
+  `seq.select`), and `meta_row_refusal(b, target)`,
   which asks `is_session_row` first: that is what `SessionTable` holds, so a route of any op,
   on or off, and a preset-layer desk row are a preset's, and an invariant or global-layer
   desk row (the APC's MASTER fader), a key, a pad button and a sink are not. No list of ids.
@@ -12995,12 +12998,12 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Asked.** Row 650 kept a deck off air's row on a session param dormant, so two decks on
   one preset would not push the room twice. No such row exists now.
 - **Answer.** (rec) — pending the owner; built as recommended.
-- **Built.** The `follower` test is out of `Router.modulate`: the clean part. Left alone, and
-  reported: `Registry.apply`'s `_owned_by_session` skip is the session base's own, not a
-  route's; `Router.follow_macros`' `lands` test keeps a macro base subscriber written past
-  `set_macros` dormant (`test_a_macro_on_a_deck_off_air_never_writes_a_session_base`); and
-  `Router.modulate`'s later `lands` is a landing for a `scale`. Row 650's pass order stands:
-  `app.frame` is frozen and is D4's, and a follower still reads this frame's session values.
+- **Built.** Nothing removed. The rule holds on the way into the table, so a hot reload
+  leaves a row standing until the next load: the `follower` test stays in `Router.modulate`
+  for it (the review of #371, which undid its removal), and `Presets.document` filters
+  such rows, so a save never writes one back. `Registry.apply`'s `_owned_by_session` skip,
+  `follow_macros`' `lands` test and row 650's pass order stand: `app.frame` is frozen and
+  is D4's, and a follower still reads this frame's session values.
   `party-tumble` loses `hand:left.y → master.gain`; `tools/preset_shots.py` loses its pose;
   `test_routing`'s lag test loses its `party-tumble` scale case, which only a hand on
   `master.gain` made late. `tools/meta_routes.py` reads a library path, writes nothing and
@@ -13008,7 +13011,7 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Goldens.** `party-tumble`'s could move only if the frame read `master.gain`: the golden
   rig calls `router.modulate()` with no chain, so the lane rows it scales are dormant and
   nothing drawn reads it. None expected; the `--all` run decides.
-- **To reverse.** Put the `follower` test back, with row 743.
+- **To reverse.** Stop the filter in `Presets.document`, with row 743.
 - **Judge it.** 572.
 
 ### 748. Two discrete controls pair into one polarised axis

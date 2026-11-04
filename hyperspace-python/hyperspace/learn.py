@@ -644,12 +644,6 @@ class Learn:
         if pid == SAVE_PARAM:
             self.refuse(SAVE_REFUSAL)
             return False
-        why = meta_refusal(pid)
-        if why is not None:
-            if self.want == "desk":
-                self.take()
-            self.refuse(f"{why} — not learned")
-            return False
         table = self.table
         b = Binding(source, pid, "abs", layer="preset")
 
@@ -663,6 +657,12 @@ class Learn:
         if why == "global":
             self.refuse(f"{named(b)} is on the global layer (the session's) "
                         "— latch SHIFT off to learn into the preset")
+            return False
+        why = meta_refusal(pid)          # (only now: a row on these two is the session's)
+        if why is not None:
+            if self.want == "desk":
+                self.take()
+            self.refuse(f"{why} — not learned")
             return False
         kind, number = b.kind, b.number
         if pid in HELD_ONLY and kind != "note":
@@ -893,6 +893,13 @@ class Learn:
             return None
         real = getattr(self.reg, "real", None)
         return real(p) if real is not None else p
+
+    def routable(self, target: Param | None) -> bool:
+        """Can a route land on `target`? What an adapter asks before it reads
+        an axis for a learn (`gamepad.learn_from`, `osc`): on a param no route
+        can take, drift on a stick must not reach `learn_source` and end a
+        learn a button could still land."""
+        return target is not None and target.modulatable and meta_refusal(target.id) is None
 
     def learn_source(self, source: str, when: str | None = None, *,
                      centred: bool = False, depth: float | None = None) -> None:
