@@ -73,10 +73,10 @@ class Camera:
     source, so what a tape may not do (level the rig) can be tested."""
 
     def __init__(self, tape):
-        self.tape, self.frames, self.on = tape, tape.frames, True
+        self._tape, self.frames, self.on = tape, tape.frames, True
 
     def snapshot(self):
-        return self.tape.snapshot()
+        return self._tape.snapshot()
 
 
 def play(path, *, smooth=1e6, response=0.0, cal=None, router=None, each=None, live=False,
@@ -345,6 +345,36 @@ def test_an_unlevelled_file_is_written_as_it_was(tmp_path):
     run = play(write_tape(tmp_path / "t.json", [UP_AWAY] * 2), cal=cal)
     run.io.save_ranges()
     assert set(json.loads(cal.read_text())) == {"schema", "axes", "box", "units"}
+
+
+@pytest.mark.parametrize("mode", [["desktop"], {"a": 1}, None, 3])
+def test_a_room_entrys_mode_of_any_type_is_ignored_and_said(tmp_path, capsys, mode):
+    """Not only an unknown name: a list is unhashable, and must not raise out
+    of `HandsIO.__init__`."""
+    cal = tmp_path / "hands.json"
+    room = {"mode": mode, "level": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]}
+    cal.write_text(json.dumps({"schema": hc.CAL_SCHEMA, "axes": {}, "room": room}))
+    run = play(write_tape(tmp_path / "t.json", [UP_AWAY] * 2), cal=cal, live=True)
+    assert run.io.level is None and "room" in capsys.readouterr().err
+
+
+def test_a_tape_from_before_a_hot_reload_is_still_a_tape(tmp_path):
+    """Both modules reload, so a playing tape is an instance of the old class:
+    still no levelling, and the rig's file untouched."""
+    cal = _levelled(tmp_path, "desktop")
+    before = cal.read_text()
+    body = {k: v for k, v in T.TapeSource.__dict__.items() if k not in ("__dict__", "__weakref__")}
+    old = type("TapeSource", (), body)
+    assert not issubclass(old, T.TapeSource)
+    clock = Clock()
+    src = old(write_tape(tmp_path / "t.json", [UP_AWAY] * 2), clock, loop=False)
+    io = HandsIO(HandSettings.from_config({}), {}, source=src, out=FakeOut(), clock=clock,
+                 cal_path=cal)
+    assert io.on_tape and io.level is None
+    io.start_level()
+    assert io.levelling == 0.0
+    io.clear_level()
+    assert cal.read_text() == before
 
 
 def _start(io, k):
