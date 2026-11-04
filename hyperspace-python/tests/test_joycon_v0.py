@@ -168,6 +168,16 @@ def test_sl_and_sr_step_the_shape_in_both_modes(model, totem_on):
     assert reg["view.shape"].base == start
 
 
+def test_skip_holds_a_layout_row_off_too():
+    """`Router.pad(skip=)` is the one door for holding a button off a pad, so a
+    later page key on SR can take it from the layout's row."""
+    reg, _, router, pad = layout_rig()
+    start = reg["view.shape"].base
+    pad.frame(hold=("RP",))
+    router.pad(pad, buttons=True, skip=frozenset({"pad:RP"}))
+    assert reg["view.shape"].base == start
+
+
 def test_the_old_rows_on_those_controls_are_not_heard():
     reg, _, router, pad = layout_rig()
     lines, points = reg["view.lines"].value, reg["view.points"].value

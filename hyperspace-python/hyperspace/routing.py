@@ -3317,7 +3317,7 @@ class Router:
             if code is None or not b.enabled or not (
                     b.device == role or (not role and own and b.device == own)):
                 continue
-            if i < n_table and ((skip and b.bare in skip) or layout.hides(b)):
+            if (skip and b.bare in skip) or (i < n_table and layout.hides(b)):
                 if b.op == "hold":
                     holds.pop((b.source, b.target), None)
                 elif b.target in down_now:
