@@ -1089,7 +1089,8 @@ def load_room(path: Path | None) -> dict | None:
         return None
     if raw is None:
         return None
-    ok = isinstance(raw, dict) and raw.get("mode") in MODES and is_rotation(raw.get("level"))
+    ok = (isinstance(raw, dict) and isinstance(raw.get("mode"), str)
+          and raw["mode"] in MODES and is_rotation(raw.get("level")))
     if not ok:
         print(f"hands: {path.name}: room: not a mode and a rotation ({str(raw)[:40]!r}); "
               "the tracking mode's frame", file=sys.stderr)
@@ -1627,8 +1628,10 @@ class HandsIO:
     @property
     def on_tape(self) -> bool:
         """Is a tape playing instead of the camera? It has its own mode and
-        no rig: no levelling applies to it, and none is made or cleared."""
-        return isinstance(self.source, TapeSource)
+        no rig: no levelling applies to it, and none is made or cleared. By
+        what it holds, not `isinstance`: a tape from before a hot reload is
+        an instance of the old class."""
+        return isinstance(getattr(self.source, "tape", None), dict)
 
     def _level_from(self, doc: dict | None) -> Mat | None:
         """The levelling that applies now: the file's, unless a tape is
