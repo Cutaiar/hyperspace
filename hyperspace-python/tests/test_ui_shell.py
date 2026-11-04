@@ -877,7 +877,7 @@ _SYMBOLS = {"←": "LEFT", "→": "RIGHT", "↑": "UP", "↓": "DOWN", "space": 
             "Home": "HOME"}
 _PADS = {"pad A Y · B X": ["A", "Y", "B", "X"], "pad BACK": ["VIEW"],
          "LB / RB": ["LB", "RB"], "sticks": ["LSTICK", "RSTICK"], "hold START": ["MENU"]}
-_HATS = {"hold d-pad ← / →", "d-pad ↑ / ↓"}
+_HATS = {"d-pad ↑ / ↓"}
 _MOUSE = {"drag", "⇧drag", "scroll", "right-click", *_HATS, "LT / RT",
           "APC40"}                                   # the desk's glyph legend, not a key
 

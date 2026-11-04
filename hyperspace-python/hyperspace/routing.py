@@ -561,11 +561,21 @@ THEME_TO_PRESET = {
 # tap tempo (PAD_NEW_ROWS) — the pad makes no edits worth an undo, and a
 # held ← / → makes a stray load rare. Every older B / X form above maps
 # straight to the newest.
+# 2026-11-04 (the owner, register row 723): no swapping presets from a pad,
+# so the walk leaves the d-pad too and ← / → are free; tap tempo is too
+# sensitive to be a default on every controller, so BACK holds the base
+# chase instead (the APC keeps TAP TEMPO, the keyboard B). `PAD_LAYOUT_11_04`.
+# The speed rows go straight there, not through the walk: one pass, one key.
 PRESET_WALK_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float]] = {
     ("pad:B", "preset.list.next", "fire", 1.0): ("view.points", "toggle", 1.0),
     ("pad:X", "preset.list.prev", "fire", 1.0): ("view.screen_strokes", "toggle", 1.0),
-    ("hat:LEFT", "view.speed", "step", -4.0): ("preset.list.prev", "hold", 1.0),
-    ("hat:RIGHT", "view.speed", "step", 4.0): ("preset.list.next", "hold", 1.0),
+}
+PAD_LAYOUT_11_04: dict[tuple[str, str, str, float], tuple[str, str, float] | None] = {
+    ("pad:VIEW", "tempo.tap", "fire", 1.0): (CHASE_PARAM, "momentary", 1.0),
+    ("hat:LEFT", "preset.list.prev", "hold", 1.0): None,
+    ("hat:RIGHT", "preset.list.next", "hold", 1.0): None,
+    ("hat:LEFT", "view.speed", "step", -4.0): None,
+    ("hat:RIGHT", "view.speed", "step", 4.0): None,
 }
 PAD_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float] | None] = {
     ("pad:RSTICK", "camera.reset", "fire", 1.0): ("rot.reset_w", "fire", 1.0),
@@ -578,6 +588,7 @@ PAD_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float] | None] = {
     ("pad:Y", "view.faces", "toggle", 1.0): ("view.lines", "toggle", 1.0),
     ("pad:MENU", "ui.cheatsheet", "toggle", 1.0): None,
     **PRESET_WALK_REMAP,
+    **PAD_LAYOUT_11_04,
 }
 # Pad rows added where nothing uses the button, as (source, target, op,
 # value) — the pad's APC_NEW_ROWS. Until 2026-10-14 a row `padmap` gained
@@ -588,7 +599,7 @@ PAD_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float] | None] = {
 # second load finds the source taken.
 PAD_NEW_ROWS = (
     ("pad:MENU", "preset.save_new", "hold", 1.0),
-    ("pad:VIEW", "tempo.tap", "fire", 1.0),                 # 2026-10-29
+    ("pad:VIEW", CHASE_PARAM, "momentary", 1.0),            # 2026-11-04
 )
 KEY_NEW_ROWS = (
     ("key:B", "tempo.tap", "fire", 1.0),
@@ -1113,24 +1124,22 @@ def keymap() -> list[Binding]:
 
 
 def padmap() -> list[Binding]:
-    """Xbox-layout gamepad buttons and the d-pad. The d-pad's ← / → held
-    HOLD_S step the preset list — the PRESETS page's list, by name, a new
-    save included (`Project.walk`), not the bank the desk walks; a brush
-    does nothing (2026-10-29: on B / X a stray press threw the look away).
-    A / Y the faces and lines, B / X the points and screen strokes, ↑ / ↓
-    the brightness; the left-stick click resets the camera, the
-    right-stick click the 4D spin; START (``pad:MENU``) held HOLD_S saves
-    the live state as a new preset, and BACK (``pad:VIEW``) taps the tempo (the
-    owner's layout — PAD_REMAP moves an older file's, PAD_NEW_ROWS adds
-    what it never held)."""
+    """Xbox-layout gamepad buttons and the d-pad. A / Y the faces and lines,
+    B / X the points and screen strokes, ↑ / ↓ the brightness; the
+    left-stick click resets the camera, the right-stick click the 4D spin;
+    START (``pad:MENU``) held HOLD_S saves the live state as a new preset,
+    and BACK (``pad:VIEW``), while held, chases the base (`deck.chase`,
+    plan 52). No row swaps a preset or taps the tempo, and ← / → are free:
+    the owner, 2026-11-04 (register row 723); both stay learnable, on a
+    button of one's choosing. The owner's layout: PAD_REMAP moves an older
+    file's, PAD_NEW_ROWS adds what it never held."""
     rows = [
         ("pad:A", "view.faces", "toggle"), ("pad:B", "view.points", "toggle"),
         ("pad:X", "view.screen_strokes", "toggle"), ("pad:Y", "view.lines", "toggle"),
-        ("pad:MENU", "preset.save_new", "hold"), ("pad:VIEW", "tempo.tap", "fire"),
+        ("pad:MENU", "preset.save_new", "hold"), ("pad:VIEW", CHASE_PARAM, "momentary"),
         ("pad:LB", "view.shape", "step", -1), ("pad:RB", "view.shape", "step", 1),
         ("pad:LSTICK", "camera.reset", "fire"), ("pad:RSTICK", "rot.reset_w", "fire"),
         ("hat:UP", "view.bright", "step", 3), ("hat:DOWN", "view.bright", "step", -3),
-        ("hat:LEFT", "preset.list.prev", "hold"), ("hat:RIGHT", "preset.list.next", "hold"),
     ]
     return [Binding(src, pid, op, *arg) for src, pid, op, *arg in rows]
 
@@ -1301,7 +1310,8 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
     since plan 13 WP2, any row on a ``theme.*`` param moved to the
     ``preset.*`` param of the same slot (THEME_TO_PRESET); the pad's four
     old factory rows (and B / X's bank rows) moved to the layout of
-    2026-10-14, and the preset walk to the d-pad held (2026-10-29)
+    2026-10-14, the preset walk to the d-pad held (2026-10-29), and off the
+    pad with BACK's tap tempo the base chase now (2026-11-04)
     (PAD_REMAP); the track faders' eight invariant audio rows
     moved to the SHIFT layer (FADER_SHIFT_ROWS, plan 24 C2).
     Idempotent: a second pass finds every old row gone
@@ -1337,14 +1347,16 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
                          "map of plan 24: the track faders are the presets')")
             b = replace(b, layer="global")
         elif (b.source, b.target, b.op, float(b.value)) in PAD_REMAP:
-            hit = PAD_REMAP[(b.source, b.target, b.op, float(b.value))]
+            key = (b.source, b.target, b.op, float(b.value))
+            hit = PAD_REMAP[key]
+            when = ("2026-11-04" if key in PAD_LAYOUT_11_04
+                    else "2026-10-29" if hit in PRESET_WALK_REMAP.values()
+                    else "2026-10-14")
             if hit is None:
                 notes.append(f"removed {b.source} → {b.target} (the pad layout of "
-                             "2026-10-14: the button is free)")
+                             f"{when}: the button is free)")
                 continue
             target, op, value = hit
-            when = ("2026-10-29" if hit in PRESET_WALK_REMAP.values()
-                    else "2026-10-14")
             notes.append(f"remapped {b.source}: {b.target} → {target} (the pad layout "
                          f"of {when})")
             b = replace(b, target=target, op=op, value=value)
@@ -1368,7 +1380,7 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
         if source in used:
             continue
         out.append(Binding(source, target, op, value))
-        when = "2026-10-29" if source == "pad:VIEW" else "2026-10-14"
+        when = "2026-11-04" if source == "pad:VIEW" else "2026-10-14"
         notes.append(f"added {source} → {target} (the pad layout of {when})")
     # a key row is taken by its chord, however its modifiers are ordered:
     # "key:SUPER+SHIFT+Z" holds ⌘⇧Z as "key:SHIFT+SUPER+Z" does

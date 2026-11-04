@@ -2019,11 +2019,10 @@ here. A wired Xbox 360 pad (the Afterglow AX.1) on USB, no other pad.
 Headless: `tests/test_gamepad.py::{test_usb_pad_when_glfw_has_none,test_decode_buttons_land_on_the_glfw_indices,test_decode_sticks_and_triggers}`, `tests/test_pad_learn.py::{test_the_factory_pad_walks_the_list_and_the_desk_the_bank,test_start_and_back_are_free_and_a_learned_start_hold_saves,test_the_right_stick_click_resets_the_4d_spin}`.
 Launch from a terminal. *Pass:* the terminal says `gamepad: Afterglow
 Gamepad for Xbox 360 over USB`; the ring lights one quarter (player 1)
-instead of blinking; B / X step to the next / previous preset of the
-PRESETS page's list (by name, wrapping; a preset saved a moment ago is
-in it — not the desk's bank); A flips faces and Y lines; LB / RB step
-the shape; the D-pad steps brightness (up / down) and speed (left /
-right); START and BACK do nothing; the left stick orbits (up tilts the
+instead of blinking; B flips points and X screen strokes; A flips faces
+and Y lines; LB / RB step the shape; the D-pad steps brightness (up /
+down) and left / right do nothing; START held saves a new preset; BACK
+held is the base chase (group CH); the left stick orbits (up tilts the
 camera up; held, it tumbles over the top and keeps going round) and its
 click resets the camera; the right stick's up / down zooms and its
 right / left speeds up / slows (through zero into reverse) the spin in
@@ -2059,7 +2058,8 @@ setting moved → the route's rest.
 **147. Momentary and hold on a pad button.**
 Headless: `tests/test_pad_learn.py::{test_momentary_holds_a_toggle_while_the_button_is_down,test_hold_fires_once_after_hold_s,test_the_hold_times_agree}`.
 In `bindings.json` change the `pad:Y` row's op to `"momentary"` and the
-`pad:B` row (`preset.list.next`) to `"hold"`; ⌘R. *Pass:* lines show
+`pad:B` row to `"target": "preset.list.next", "op": "hold"`; ⌘R; put them
+back afterwards. *Pass:* lines show
 only while Y is held; B steps the preset only after about 0.6 s held,
 once per press; a tap does nothing. *Fail:* lines stay on after Y is
 let go; B fires on a tap or repeats while held → the pad's hold timing
@@ -7917,6 +7917,37 @@ too once it has this build. (2) The preview turns and the projector does not. Sa
 you wanted the orbit on the projector (row 684). (3) No camera jump on the way down.
 (4) The camera holds through the pass with no sweep. Say if it holds so often near
 vertical that the 20° zone wants to be smaller (row 685).
+
+## CH. BACK holds the base chase; the pad swaps no preset and taps no tempo (wave 4 B2)
+Register rows 723–724, 2026-11-04. Headless: `tests/test_pad_learn.py` (the old
+factory rows moving once, with their backup; a row of the owner's on BACK or the
+d-pad staying; the hold, the release, a sleeping pad, the totem; every model's
+BACK) and `tests/test_pads_nintendo.py`.
+**554. BACK on the pad you play.** (a preset with a stick routed onto something you can see)
+1. On a `bindings.json` from before this build, launch, and read the terminal's
+   `bindings:` lines. Look beside the file.
+2. Hold BACK, push the stick, let go of BACK, then of the stick.
+3. Tap BACK; brush and hold the D-pad's ← / →; hover BACK on the pad window. Tap the
+   APC's TAP TEMPO and the keyboard's B.
+*Pass:* (1) one backup, `bindings.json.bak-v…`, and notes for BACK and ← / →
+dated 2026-11-04; the second launch says nothing. Had you put your own row on
+BACK, it is still there and the pad has no chase. (2) The look stays where it was
+left. (3) No tempo tap and no preset changes from the pad; the hover names
+`deck.chase`; TAP TEMPO and B both tap. Fail: a tempo jump from BACK, a
+preset loading from the D-pad, or a chase that goes on after the button is up.
+**555. The Joy-Cons, and a row of your own.** (a Joy-Con of each hand)
+1. On the (L), hold − and push its stick. Turn the totem on if you use it and do it again.
+2. On the (R), press every button: nothing chases, because it has no −. Add
+   `{"source": "pad:LP", "target": "deck.chase", "op": "momentary"}` to `bindings.json`
+   and ⌘R (`pad@<role>:LP` if it is not the primary). Hold SL and push the stick.
+3. Add `{"source": "hat:RIGHT", "target": "preset.list.next", "op": "hold", "value": 0}`,
+   relaunch, hold the D-pad's →. Take the rows out afterwards if you don't want them.
+*Pass:* (1) and (2) it holds and lets go as BACK does, the totem's planes unaffected.
+Say whether SL is the right button for the (R) in a Wii-Remote hold, or HOME, and
+whether the chase should have something on the panel to learn from (row 724).
+(3) The row survives the relaunch and walks the list once per hold. The `"value": 0` is
+what makes it yours: without it the row is the old factory row, and the next load takes
+it (row 724). Fail: the row gone.
 
 ## What no test covers
 

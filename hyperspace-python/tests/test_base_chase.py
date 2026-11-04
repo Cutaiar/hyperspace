@@ -817,8 +817,8 @@ def test_a_desk_button_learned_on_it_is_held_not_latched(rig):
     src = "note:0:94"
     rig.learn.arm(CHASE_PARAM)
     assert rig.learn.learn_control(src)
-    row = [b for b in rig.table.bindings if b.target == CHASE_PARAM]
-    assert [b.op for b in row] == ["momentary"]
+    row = [b for b in rig.table.bindings if b.source == src]
+    assert [(b.target, b.op) for b in row] == [(CHASE_PARAM, "momentary")]
     rig.inp.queue.append(_note(True))
     rig.midi.poll()
     assert rig.reg.chasing
@@ -830,7 +830,8 @@ def test_a_desk_button_learned_on_it_is_held_not_latched(rig):
 def test_a_knob_is_refused_in_words(rig):
     rig.learn.arm(CHASE_PARAM)
     assert not rig.learn.learn_control("cc:0:48")
-    assert rig.learn.refused and not [b for b in rig.table.bindings if b.target == CHASE_PARAM]
+    assert rig.learn.refused
+    assert [b.source for b in rig.table.bindings if b.target == CHASE_PARAM] == ["pad:VIEW"]
 
 
 class Pad:
@@ -859,6 +860,8 @@ class Pad:
 
 
 def test_a_pad_button_learned_on_it_is_held_and_a_lost_pad_lets_go(rig):
+    for b in [b for b in rig.table.bindings if b.target == CHASE_PARAM]:
+        rig.table.remove(b)                    # BACK's factory row: this stub is one button
     rig.learn.arm(CHASE_PARAM)
     assert rig.learn.learn_pad_button("pad:Y")
     row = [b for b in rig.table.bindings if b.target == CHASE_PARAM]

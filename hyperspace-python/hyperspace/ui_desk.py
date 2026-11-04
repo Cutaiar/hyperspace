@@ -608,7 +608,7 @@ def _room(panel) -> tuple[float, float, float, float]:
 # desk (the owner's findings, 2026-10-16): MASTER select and PAN only
 # matter in overlay mode, which config.toml's [output] overlay must allow;
 # STOP ALL resets the bands to the selected scene and a second press within
-# 8 s undoes it; QUANT walks the bank, not the preset list (the pad's B)
+# 8 s undoes it; QUANT walks the bank, not the preset list
 DESK_WORDS = {
     "overlay.on": "Overlay (if config allows)",
     "overlay.passthrough": "Click-through (overlay)",
