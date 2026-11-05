@@ -155,6 +155,7 @@ from .params import (
     pan_world,
     retaper_depths,
 )
+from .pointer import Through
 
 SLOTS = 24                # the bank: F1–F8, then the desk's clip rows 4 and 5
 # F_KEYS (8) is the slots a function key reaches, and a show file's bank is
@@ -1079,6 +1080,22 @@ class Project:
     def _loader(self):
         return getattr(self.lib, "presets", None)
 
+    @property
+    def active(self) -> int:
+        """The slot lit (`load_slot`, `follow`): that of the preset loaded on
+        the deck this view is of, so one deck's load moves no other's light
+        (plan 44 D5a, `Presets.active_slot`). No presets yet: this object's."""
+        slot = getattr(getattr(self.lib, "presets", None), "active_slot", None)
+        return slot if slot is not None else self.__dict__.get("active", -1)
+
+    @active.setter
+    def active(self, k: int) -> None:
+        pre = getattr(self.lib, "presets", None)
+        if getattr(pre, "active_slot", None) is not None:
+            pre.active_slot = k
+        else:
+            self.__dict__["active"] = k
+
     def load_slot(self, k: int) -> None:
         """Slot k (F<k+1> for the first eight): the preset it names,
         through the one loader. An empty slot, or a name with no file,
@@ -1351,7 +1368,7 @@ class Project:
         if lib.warning == HOME_UNSET:                 # it names one now
             lib.warning = ""
         if self._loader() is not None and lib.path_of(PRESETS, name, loose=True) is not None:
-            undo.push(f"home → {name}", load=True)
+            undo.push_on(lib.reg, f"home → {name}", load=True)
         self.load_startup()
 
     # ---- API ----
@@ -1753,6 +1770,10 @@ class Library:
     builds it after the router).
     """
 
+    # the panel's deck's, once pointed (plan 44 D5a); one deck's own: `DeckLibrary`
+    reg = Through("reg")
+    presets = Through("presets")
+
     def __init__(self, home_dir: Path | None = None, *, machine: Path | None = None,
                  period: float = 0.5):
         # `home` is the library root — presets, shows, module groups, the
@@ -1773,7 +1794,7 @@ class Library:
             _missing.discard(self.home)
             (self.home / PROJECTS).mkdir(parents=True, exist_ok=True)
         self.period = period
-        self.reg: Registry | None = None
+        self.reg = None            # (`reg`, below: the panel's deck's, once pointed)
         self.status = ""
         self.error = ""
         self.warning = ""
@@ -1795,7 +1816,7 @@ class Library:
         self._docs: dict[Path, tuple[float, dict]] = {}   # parsed files, by mtime
         self._mtimes: dict[Path, float] = {}
         self._next = 0.0
-        self.presets = None        # preset.Presets, set by its constructor
+        self.presets = None        # preset.Presets, set by its constructor (`presets`, below)
         self.project = Project(self)
         if self.missing is not None:
             text = missing_text(self.missing)
@@ -1827,6 +1848,18 @@ class Library:
         if warning is not None:
             self.warning = warning
             said["warning"] = said.get("warning", 0) + 1
+
+    # ---- which deck (plan 44 D5a): this object is the panel's view ----
+
+    @property
+    def base(self) -> Library:
+        """The one library, whichever view this is (`DeckLibrary`)."""
+        return self
+
+    def on_deck(self, presets=None) -> DeckLibrary:
+        """The library as one deck sees it (`DeckLibrary`), for `presets`; None:
+        they are not built yet, and the `Presets` handed it says so."""
+        return DeckLibrary(self, presets)
 
     def attach(self, reg: Registry) -> list[str]:
         """Bind the registry; its state right now is what "default" means.
@@ -2403,6 +2436,10 @@ class Library:
         if owner is not None:
             owner.landing = (name, loaded, reapply)
             return
+        labels = self._labels(group)
+        if labels is not None:
+            labels[group] = (name, loaded, reapply)
+            return
         self._current[group] = name
         if loaded is None:
             self._loaded.pop(group, None)
@@ -2429,6 +2466,9 @@ class Library:
         owner = self._owner(group)
         if owner is not None:
             return tuple(owner.landing)
+        labels = self._labels(group)
+        if labels is not None:
+            return labels.get(group, (None, None, None))
         return (self._current.get(group), self._loaded.get(group), self._adopted.get(group))
 
     def _owner(self, group: str):
@@ -2436,16 +2476,26 @@ class Library:
         D3): the presets kind's `Presets` — its `landing`, (current, what
         its load produced, how to re-apply) — so a deck's dirty dot is its
         own; None for every other group."""
-        pre = self.__dict__.get("presets")
+        pre = self.presets
         if group == PRESETS and pre is not None and hasattr(type(pre), "landing"):
             return pre
         return None
+
+    def _labels(self, group: str) -> dict | None:
+        """Where a performance group's landing is kept: on the deck's presets
+        (`Presets.labels`, plan 44 D5a), since what a section's dot compares
+        against is that deck's. None: a session group, or no presets yet,
+        kept here, the one strip the meta controller has."""
+        if group not in PERFORMANCE_GROUPS:
+            return None
+        return getattr(self.presets, "labels", None)
 
     def landed_groups(self) -> set[str]:
         """Every group with a landing: the library's and the presets'."""
         out = {*self._current, *self._loaded, *self._adopted}
         if self._owner(PRESETS) is not None:
             out.add(PRESETS)
+        out.update(getattr(self.presets, "labels", ()))
         return out
 
     def reland(self, group: str, mark: tuple) -> None:
@@ -2476,7 +2526,7 @@ class Library:
         owner = self._owner(group)
         if owner is not None:
             return owner.landing[0]
-        return self._current.get(group)
+        return self.landed(group)[0]
 
     def load(self, group: str, name: str) -> list[str]:
         """Apply a preset; returns the ids it names that this registry lacks."""
@@ -2510,7 +2560,7 @@ class Library:
         else:
             # a module preset load, step or file-watch re-apply: one undo
             # step, the layout it may rebuild included (undo.py, plan 15)
-            undo.push(f"{group_word(group)}: {doc.get('name') or name}", load=True)
+            undo.push_on(self.reg, f"{group_word(group)}: {doc.get('name') or name}", load=True)
             hook = self._layout_hooks.get(group)
             if hook is not None and doc.get("layout") is not None:
                 hook(doc["layout"])                    # rebuild params first
@@ -2564,7 +2614,7 @@ class Library:
         not the reference), and `reapply` as what poll() calls when the
         file changes on disk, in place of a whole load."""
         loaded = self.reg.snapshot(group) if self.reg is not None else None
-        again = self._current.get(group) == name
+        again = self.current(group) == name
         self._landed(group, name, loaded, reapply)
         if again:
             # the same scene set again — a knob on `scene.select` sends the
@@ -3393,11 +3443,10 @@ class Library:
         if owner is not None:                # plan 44 D3: the presets' own dot
             return owner.is_dirty()
         kind = self._kinds.get(group)
+        ref = self.landed(group)[1]
         if kind is not None:
-            ref = self._loaded.get(group)
             return ref is not None and not undo.alike(kind.signature(), ref)
         reg = self._need_reg()
-        ref = self._loaded.get(group)
         if ref is None:
             ref = self.resolved(group, {})
         snap = reg.snapshot(group)
@@ -3413,7 +3462,7 @@ class Library:
             return None
         self._need_reg()
         # (the other branch pushes in `load`)
-        undo.push(f"reset {group_word(group)}", load=True)
+        undo.push_on(self.reg, f"reset {group_word(group)}", load=True)
         self.restore(self.resolved(group, {}))
         self._landed(group, None, None)
         return None
@@ -3486,3 +3535,66 @@ class Library:
         if hit:
             self.say(f"library: {', '.join(hit)} · {time.strftime('%H:%M:%S')}")
         return True
+
+
+# ------------------------------------------------- one deck's view (plan 44 D5a)
+
+class DeckProject(Project):
+    """The one show as one deck sees it: every field is the show's (it shares
+    the show's `__dict__`), but `lib` is that deck's `DeckLibrary`, so a bank
+    verb this object does (a pad on that deck's table) loads, saves and lights
+    on that deck. What a deck's `preset.*` params close over."""
+
+    __slots__ = ("lib",)
+
+    def __init__(self, lib: DeckLibrary):        # never `Project.__init__`: nothing is new
+        self.__dict__ = lib.base.project.__dict__
+        self.lib = lib
+
+
+class DeckLibrary(Library):
+    """The library as one deck sees it: every file, hook and session label is
+    the one library's (it shares its `__dict__`), but `presets` and `reg` are
+    this deck's, always, with nothing to remember to say. `Presets.lib` is one,
+    so its load, save, new and marks cannot reach another deck, whichever the
+    panel is on; the plain `Library` is the panel's view of the same state
+    (`Library.pointer`). The presets kind's and load hooks are this deck's too."""
+
+    __slots__ = ("_project", "base", "own")
+
+    def __init__(self, base: Library, presets=None):   # never `Library.__init__`: nothing is new
+        self.__dict__ = base.__dict__
+        self.base, self.own = base, presets
+        self._project = DeckProject(self)
+
+    def on_deck(self, presets=None) -> DeckLibrary:
+        """This view, for its first `Presets` (`Deck.build` makes it before them,
+        for the deck's bank params); another's is a view of its own."""
+        if presets is None or self.own is presets:
+            return self
+        if self.own is None:
+            self.own = presets
+            return self
+        return DeckLibrary(self.base, presets)
+
+    @property
+    def presets(self):
+        return self.own if self.own is not None else self.base.presets
+
+    @property
+    def reg(self):
+        return self.own.reg if self.own is not None else self.base.reg
+
+    @property
+    def project(self) -> DeckProject:
+        return self._project
+
+    @property
+    def _kinds(self) -> dict[str, DocKind]:
+        kinds = self.__dict__["_kinds"]
+        return kinds if self.own is None else {**kinds, PRESETS: self.own.doc_kind}
+
+    @property
+    def _load_hooks(self) -> dict[str, Any]:
+        hooks = self.__dict__["_load_hooks"]
+        return hooks if self.own is None else {**hooks, PRESETS: self.own._landed}

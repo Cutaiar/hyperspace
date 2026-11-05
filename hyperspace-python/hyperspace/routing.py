@@ -1956,7 +1956,8 @@ class Carried:
 # table as before (`Bindings.<name>` is a property onto `session`)
 SESSION_ATTRS = ("path", "profile", "slew", "pad_feel", "unbacked", "said", "midi_roles",
                  "primaries", "row_schemes", "carried", "error", "migrated", "read_at",
-                 "changed", "sinks_seeded", "layer", "layers", "layer_serial")
+                 "changed", "sinks_seeded", "layer", "layers", "layer_serial",
+                 "page", "page_serial")
 
 
 class SessionTable:
@@ -1983,6 +1984,10 @@ class SessionTable:
     # it): the session's — a show keeps it, bindings.json never does. On
     # the class, so a session from before a hot reload has it too
     slew: float = 0.0
+    # the surface page up on the desk (`Bindings.page`): the desk's, so it
+    # stays up whichever deck the desk is on (plan 44 D5a). On the class too
+    page: object | None = None
+    page_serial: int = 0
     # the pad's feel (`pad.feel` …, register_desk): the motion an `axis`
     # lane travels with when its row names none, and the sticks' default
     # camera job's (app.py). The session's, on the class like `slew`
@@ -2144,9 +2149,7 @@ class Bindings:
     # every row on their controls, invariant ones included, while it is up;
     # they are in memory only — never in `bindings`, never saved, never
     # Learnable. `page_serial` counts the flips (`set_page`): midi.py
-    # redraws the whole desk on one. On the class, for a hot reload
-    page: object | None = None
-    page_serial: int = 0
+    # redraws the whole desk on one. The session table's (`SESSION_ATTRS`)
 
     # plan 44 D3: the session table's state (`SESSION_ATTRS`) is read and
     # written through this table — one property per name, made from the
@@ -3433,19 +3436,25 @@ class Router:
 
     def pad_lost(self, role: str = "") -> None:
         """The pad is gone, asleep, unplugged or its device closed: no release
-        is coming. Its lanes off, its timers forgotten, what it held let go."""
-        axis = qualified("axis", role)
-        self.sources.feed(axis, None)
+        is coming. Its lanes off, and all `pad_left` does."""
+        self.sources.feed(qualified("axis", role), None)
         pairs = qualified(PAIR_SCHEME, role)     # plan 56: a pair's route lets go too
         if pairs in self.sources.names:
             self.sources.feed(pairs, None)
+        self.pad_left(role)
+
+    def pad_left(self, role: str = "") -> None:
+        """The pad has gone, or moved to another deck (plan 44 D5a): no press of
+        it stays on this one. Its timers forgotten, what it held let go, the
+        camera job's followers start afresh. Its lanes stay: they are the
+        shared half's, and the deck it moved to reads them."""
         self._pad_timing(role).clear()
         down = self._pad_pressed(role)
         if down:
             gone = {source for source, _target in down}
             down.clear()
             let_go_lost(self.reg, gone.__contains__)
-        self.felt(axis, None, 0.0)           # the camera job's followers start afresh
+        self.felt(qualified("axis", role), None, 0.0)
 
     def _let_go_pad(self, down: set, key: tuple[str, str]) -> None:
         """One momentary row's button up, or its release lost."""

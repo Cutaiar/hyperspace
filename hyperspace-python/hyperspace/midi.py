@@ -127,9 +127,10 @@ from pathlib import Path
 
 import mido
 
-from . import apc40, generic
+from . import apc40, generic, seq_page
 from .learn import Learn
 from .params import Kind, Param, Registry
+from .pointer import Through
 from .routing import (
     HELD_ONLY,
     PICKUP_TOL,
@@ -374,7 +375,14 @@ class MidiIO:
     Each role has its own layer (`Bindings.layer_of`); SHIFT's latch,
     `desk.shift`, is the first role's. `role` None is the first role —
     a bare adapter (the tests', the probe's) is today's one desk.
+
+    Plan 44 D5a: `reg` and `table` read through this desk's own pointer, and
+    `learner` through the panel's, once it has them (`point`).
     """
+
+    reg = Through("reg")
+    table = Through("table")
+    learner = Through("learn", via="panel_pointer")
 
     def __init__(self, registry: Registry, table: Bindings | None = None, *,
                  path: Path | None = None, port: str | None = None, profile: str = "apc40",
@@ -500,18 +508,19 @@ class MidiIO:
                 self._send(msg)
             self.redraw(whole=True)     # every control: lit by a row, else dark
 
-    def _let_go_held(self) -> None:
+    def _let_go_held(self, reg=None) -> None:
         """Every press this desk can no longer end (`routing.let_go_lost`), its
         own and no other desk's, and every held button (`HELD_PARAMS`) up, unless
         another device's button still has it. FINE records no press, so this
-        is what lets it go."""
+        is what lets it go. `reg`: the deck it pressed them on, if not this one."""
+        reg = reg if reg is not None else self.reg
         presses = self._presses()
         gone = {source for rows in presses.values() for source, _target in rows}
         presses.clear()
         if gone:
-            let_go_lost(self.reg, gone.__contains__)
+            let_go_lost(reg, gone.__contains__)
         for pid in HELD_PARAMS:
-            held = self.reg.get(pid)
+            held = reg.get(pid)
             if held is not None and held.value and not held.__dict__.get("_pressed_by"):
                 held.set(False)
 
@@ -611,6 +620,7 @@ class MidiIO:
                 self._land_all()    # no device: nothing is left in flight
                 return
         self._was_on = True
+        self._follow_pointer()
         self._follow_table()
         self._uncatch_moved()
         for msg in self.ports.recv():
@@ -623,6 +633,47 @@ class MidiIO:
         self._glide(self._now())
         self._follow_fine()
         self.feedback()
+
+    def point(self, pointer, panel=None) -> None:
+        """This desk's rows act on the deck `pointer` is on from now on, and
+        its learn is the one the panel's deck holds (plan 44 D5a). The first
+        desk carries the sequencer page with it (`seq_page.of`)."""
+        self._on = (self.reg, self.table)      # where it was: `_follow_pointer` compares
+        self.pointer, self.panel_pointer = pointer, panel
+        if self.table.is_primary(self._role()):
+            page = seq_page.of(self.reg)
+            if page is not None:
+                page.pointer = pointer
+
+    def _follow_pointer(self) -> None:
+        """The pointer moved since the last look: nothing of the deck left may
+        act on the deck arrived at. Each press still down is released now on
+        the deck it pressed, by the road a note-off takes, and its real note-off
+        goes nowhere (its key stays, mapped to no rows); its held buttons let go
+        there too; a timed hold is forgotten; a glide or a catch on a preset's
+        param goes, a session param's stays (`is_session_id`: the same object
+        on both); and the new table's rows are drawn and re-armed as a load's
+        are. One identity test a frame."""
+        was = self.__dict__.get("_on")
+        table = self.table
+        if was is None or was[1] is table:
+            self._on = (self.reg, table)
+            return
+        for key, rows in self._held.items():
+            for b in rows:
+                p = was[0].get(b.target)
+                if p is not None and b.enabled and b.op != "hold":
+                    self._apply(b, p, 0)
+            self._held[key] = []
+        self._let_go_held(was[0])
+        self._on = (self.reg, table)
+        holds, blinks = self._hold_state()
+        holds.clear()
+        blinks.clear()
+        for pid in [pid for pid in self._writes if not is_session_id(pid)]:
+            del self._writes[pid]
+        self._seen = self._serials()
+        self.redraw(load=True)
 
     def _follow_table(self) -> None:
         """A layer switch or a desk replacement since the last look: redraw

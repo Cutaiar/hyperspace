@@ -37,6 +37,10 @@ draws every output into a frame texture at that output's size, which the
 on-air deck's pass mixes in before the dim (`Renderer.mix_pass`), and the one
 dream worker is lent to it. A raise in deck 2's draw leaves the on-air deck's
 picture alone and is said on `Fade.error`.
+
+Plan 44 D5a adds `MetaController`, what owns the two decks and every holder's
+pointer (`pointer.Pointer`). Every pointer starts on deck 1 and nothing in the
+app moves one yet.
 """
 
 from __future__ import annotations
@@ -57,6 +61,7 @@ from .library import Marks
 from .lookback import DreamState
 from .outputs import Offscreen, View
 from .params import Registry, SessionRegistry, build_registry
+from .pointer import Pointer
 from .preset import Presets
 from .routing import Bindings, Router, Sources
 from .view import ViewState
@@ -188,8 +193,10 @@ class Deck:
                 and clock is not sources.clock):
             raise ValueError("Deck.build: the sources step every bank on their own clock; "
                              "a different `clock` was given")
+        library = library.base           # (a deck's own view, `Deck.beside`: the one library)
+        on_deck = library.on_deck()      # this deck's bank and presets (plan 44 D5a)
         s = ViewState()
-        reg = build_registry(s, control, audio, library.project,
+        reg = build_registry(s, control, audio, on_deck.project,
                              dream=dream if dream is not None else DreamState(),
                              fx=fx if fx is not None else FxState(),
                              ghost=ghost if ghost is not None else GhostState(),
@@ -250,7 +257,7 @@ class Deck:
         router.use_sequencer(seq, envs)        # after the banks begin, before the plan
         # the presets (preset.py): the library's `presets/` files, landed on the
         # registry and the table; the project's bank loads through it
-        presets = Presets(library, reg, router, claim=not beside)
+        presets = Presets(on_deck, reg, router)
         if renderer is not None:
             # plan 26 A4: a preset's graph section sets the renderer's wiring and
             # hands an extra hands node its own state (`Renderer.ghost_states`)
@@ -281,7 +288,7 @@ class Deck:
         # parts through the table, what is loaded through the library's marks;
         # the bands' names in strip order say which layout a strip's values
         # belong to, and a restore tells the router its macros are acted on
-        marks = Marks(library)
+        marks = Marks(presets.lib)
         undo_obj = undos.Undo(reg, router.table, marks=marks,
                               tag=tag if tag is not None else (
                                   lambda: tuple(s.name for s in audio.chain.spec)),
@@ -311,7 +318,8 @@ class Deck:
         context; None headless) and `media` (its `Channels`, over the rig's
         sources) — over `first`'s session params and rows, sources and clock.
         It attaches to nothing, loads nothing, installs nothing: the library,
-        the strip and the undo keys stay `first`'s. Nothing points at it."""
+        the strip and the undo keys stay `first`'s until `MetaController.point_panel`
+        moves them. Nothing points at it yet."""
         return cls.build(
             library=first.presets.lib, control=None, audio=None,
             table=lambda reg: Bindings([], session=first.table.session),
@@ -357,6 +365,9 @@ class Deck:
               if (src := getattr(self, "sources", None)) is not None else []),
             (self.router, "routing", "Router"),
             (self.presets, "preset", "Presets"),
+            # plan 44 D5a: its view of the library (getattr: a stand-in deck has none)
+            *([(on, "library", "DeckLibrary"), (on.project, "library", "DeckProject")]
+              if (on := getattr(self.presets, "lib", None)) is not None else []),
             (self.presets.graph, "preset", "GraphSection"),      # plan 26 A4
             (self.learn, "learn", "Learn"),
             (self.clock, "tempo", "Clock"),
@@ -376,6 +387,79 @@ class Deck:
             *([(sw, "poi", "PoiState")]
               if (sw := poi.state_of(self.reg)) is not None else []),
         ]
+
+
+# ------------------------------------------------------- the two decks (D5a)
+
+# the holders that are no device; a device's holder name is its role
+KEYS = "window:keys"
+MOUSE = "window:mouse"
+
+
+class MetaController:
+    """What is set for a performance or an install, around the looks: it owns
+    exactly two `Deck`s (`docs/GLOSSARY.md`) and says which deck each holder is
+    on. Each controller has its own pointer (`pointer(role)`, `point`), and so do
+    the keys and the mouse, and the panel has its own (`panel_pointer`,
+    `point_panel`): none moves with another, so players can sit on either deck
+    and the panel can show either. `on_air_pointer` is the deck the outputs
+    show; it stays on deck 1 until the crossfader decides it (D5c).
+
+    A holder reads through its pointer each time. `point` moves only the
+    pointer: what a holder kept of the deck it left is its own to let go when
+    it next looks (`MidiIO._follow_pointer`). A deck not in `decks` is refused."""
+
+    def __init__(self, first: Deck, second: Deck):
+        self.decks = (first, second)
+        self.on_air_pointer = Pointer(first)
+        self.panel_pointer = Pointer(first)
+        self.pointers: dict[str, Pointer] = {}
+        self.on_panel: list[Callable[[Deck], Any]] = []   # told after the panel moves
+
+    @property
+    def on_air(self) -> Deck:
+        return self.on_air_pointer.deck
+
+    @property
+    def off_air(self) -> Deck:
+        return self.decks[1] if self.on_air is self.decks[0] else self.decks[0]
+
+    @property
+    def panel(self) -> Deck:
+        return self.panel_pointer.deck
+
+    def pointer(self, holder: str) -> Pointer:
+        """`holder`'s pointer, on deck 1 the first time it is asked for, and
+        kept by name, so a controller unplugged and back is where it was."""
+        got = self.pointers.get(holder)
+        if got is None:
+            got = self.pointers[holder] = Pointer(self.decks[0])
+        return got
+
+    def _ours(self, deck: Deck) -> Deck:
+        if not any(deck is d for d in self.decks):
+            raise ValueError("MetaController: that deck is not one of its two")
+        return deck
+
+    def point(self, holder: str, deck: Deck) -> None:
+        """Move one holder to `deck`; nothing else moves."""
+        self.pointer(holder).deck = self._ours(deck)
+
+    def point_panel(self, deck: Deck) -> None:
+        """Move the panel to `deck`, and with it what follows the panel: the
+        library's verbs (`Library.pointer` is this pointer), Learn, and the undo
+        that `undo.push` and the `edit.*` triggers reach. Nothing else moves."""
+        self.panel_pointer.deck = self._ours(deck)
+        undos.install(deck.undo)
+        for fn in self.on_panel:
+            fn(deck)
+
+    def targets(self) -> list[tuple[Any, str, str]]:
+        """The live objects a hot reload re-classes (the decks list their own)."""
+        return [(self, "deck", "MetaController"),
+                (self.on_air_pointer, "pointer", "Pointer"),
+                (self.panel_pointer, "pointer", "Pointer"),
+                *[(p, "pointer", "Pointer") for p in self.pointers.values()]]
 
 
 # ------------------------------------------------------------- the fade (D4)

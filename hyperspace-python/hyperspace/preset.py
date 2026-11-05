@@ -152,6 +152,7 @@ from .library import (
     PERFORMANCE_SCHEMA,
     PRESETS,
     RETIRED_MODULES,
+    DocKind,
     read_positions,
 )
 from .lookback import (
@@ -838,8 +839,19 @@ class Presets:
     landing: tuple = (None, None, None)
     bus: RigWires = RigWires()
 
-    def __init__(self, lib, reg, router, *, claim: bool = True):
-        self.lib, self.reg, self.router = lib, reg, router
+    def __init__(self, lib, reg, router):
+        self.reg, self.router = reg, router
+        # plan 44 D5a: the library as this deck sees it, so nothing this object
+        # does through it can reach another deck, whichever the panel is on
+        on_deck = getattr(lib, "on_deck", None)
+        self.lib = lib = on_deck(self) if on_deck is not None else lib
+        base = getattr(lib, "base", lib)
+        # the performance groups' landings (`Library._labels`) and the bank's
+        # lit slot (`Project.active`) on this deck
+        self.labels: dict[str, tuple] = {}
+        first = getattr(base, "presets", None) is None
+        self.active_slot = (getattr(base.project, "__dict__", {}).get("active", -1)
+                            if first and hasattr(base, "project") else -1)
         self.note = ""
         self.notes: list[str] = []       # step 1's notes from the last load
         self.migrated = ""               # plan 36 T3: "/N migrated to /9" when that load was old
@@ -874,18 +886,24 @@ class Presets:
         router.table.on_modifiers = self.settle_groups
         for bank in self.banks().values():
             bank.on_change = self.settle_groups
-        # the library's presets kind has one owner until D5 points it at the
-        # panel's deck: a deck built beside the first passes `claim` False
-        # (plan 44 D4), so the strip, the dot and a load stay the first's
-        if claim:
-            lib.kind(GROUP, SCHEMA.rpartition("/")[0],
-                     load=lambda doc, path: self.load_doc(doc, path),
-                     document=lambda name: self.document(name),
-                     signature=lambda: self.signature(),
-                     versions=VERSIONS,
-                     text=lambda doc: dumps(doc))
-            lib.on_load(GROUP, lambda name: self._landed(name))
-            lib.presets = self
+        # this deck's hooks for the presets kind (`DeckLibrary._kinds`); the
+        # one library's read through `lib.presets`, the presets of the deck the
+        # panel is on (plan 44 D5a): the first `Presets` over a library declares
+        # them and is that until a pointer takes over
+        self.doc_kind = DocKind(SCHEMA.rpartition("/")[0], tuple(VERSIONS),
+                                lambda doc, path: self.load_doc(doc, path),
+                                lambda name: self.document(name),
+                                lambda: self.signature(),
+                                lambda doc: dumps(doc))
+        if first:
+            base.kind(GROUP, SCHEMA.rpartition("/")[0],
+                      load=lambda doc, path: base.presets.load_doc(doc, path),
+                      document=lambda name: base.presets.document(name),
+                      signature=lambda: base.presets.signature(),
+                      versions=VERSIONS,
+                      text=lambda doc: dumps(doc))
+            base.on_load(GROUP, lambda name: base.presets._landed(name))
+            base.presets = self
         self.listeners: list = []        # called with the name after every load (app.py)
 
     # ---- the API ----
@@ -949,7 +967,7 @@ class Presets:
         session's params stay. One undo step, named `untitled`, dirty and
         `unsaved` (R17) until it is saved."""
         lib, reg = self.lib, self.reg
-        undo.push("new preset", load=True)    # the load below joins this step
+        undo.push_on(self.reg, "new preset", load=True)    # the load below joins this step
         values = {k: v for k, v in lib._fresh_all().items()
                   if k in reg and reg[k].group in PERFORMANCE_GROUPS
                   and reg[k].group != modifiers.GROUP and reg[k].persist
@@ -1166,7 +1184,8 @@ class Presets:
         # the file parsed, nothing landed yet: one undo step for the whole
         # load, by whichever road it came (undo.py, plan 15 WP1) — with
         # what is loaded now, so undoing it puts the earlier name back too
-        undo.push(f"load {doc.get('name') or (path.stem if path else 'preset')}", load=True)
+        undo.push_on(self.reg, f"load {doc.get('name') or (path.stem if path else 'preset')}",
+                     load=True)
         # 1½. the graph lands first (plan 26 A4): its instances' params
         #     exist before their values do; the ids read for it are sorted now
         held_graph, held_values = gs.mark(), reg.snapshot(part="performance")
@@ -1292,8 +1311,7 @@ class Presets:
         for group in PERFORMANCE_GROUPS:
             if group in NO_MODULE and group not in RETIRED_MODULES:
                 continue
-            if lib.presets is self:      # (the strip is the deck that holds the library's)
-                lib.label(group, None)
+            lib.label(group, None)
         # 6¼. the bus cuts (plan 44 D3): the file's, else every cable standing
         self.bus = RigWires.read(doc.get(BUS_KEY))
         # 6½. where the GRAPH page's nodes sit (plan 28 N2): none is the

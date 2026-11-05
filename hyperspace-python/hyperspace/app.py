@@ -90,7 +90,7 @@ from . import (
 from .audio import AudioEngine
 from .bands import CEIL
 from .control import Control
-from .deck import Deck, Fade, Mix, RigMade, register_xfade
+from .deck import KEYS, MOUSE, Deck, Fade, MetaController, Mix, RigMade, register_xfade
 from .geometry import EYE_DISTANCE, EYE_FOV, px_per_unit
 from .hold import preview_size
 from .hotreload import HotReloader
@@ -108,6 +108,7 @@ from .outputs import CanvasTap, Offscreen, Presenter, Preview, Slot, Switches, V
 from .overlay import RENDER_DEFAULT, GlfwBackend, Output, register_switches, render_index
 from .params import Registry
 from .pinch import install as install_pinch
+from .pointer import Pointer, Through
 from .render import Renderer, _samples_of
 from .routing import SLEW_DEFAULT_S, Bindings, Router, bindings_path, register_desk
 from .ui import Panel, apply_style, load_fonts
@@ -929,6 +930,17 @@ class Awake:
             proc.wait(timeout=1.0)     # reaped, so no zombie rides through ⌘R's execv
 
 
+def _share_experiments(first: Registry, second: Registry, *, poi_cfg: dict) -> None:
+    """The totem's and the poi's params on the second deck too (plan 44 D5a),
+    over the one state each: they are registered by the panel hook, which only
+    the first deck runs, and neither is a session group, so a pad or the panel
+    on deck 2 would lose them. Inert until something points there."""
+    if (state := totem.state_of(first)) is not None:
+        totem.register(second, state)
+    if (swing := poi.state_of(first)) is not None:
+        poi.register(second, swing, poi_cfg)
+
+
 def _open_awake(cfg: dict):
     """`Awake`, unless [output] keep_awake = false (on by default)."""
     if cfg.get("output", {}).get("keep_awake", True) is False:
@@ -1002,21 +1014,30 @@ class Mouse:
     drained once per frame.
     """
 
-    def __init__(self, win, reg: Registry, view: ViewState, switches=None):
-        self.win, self.view = win, view
+    def __init__(self, win, reg: Registry, view: ViewState, switches=None,
+                 pointer: Pointer | None = None):
+        self.win = win
         # output 1's switches (plan 23 WP1): on a flipped output the cursor
         # is mirrored before use, so a drag and the wheel follow the picture
         self.switches = switches
-        self.yaw, self.pitch, self.zoom = reg["camera.yaw"], reg["camera.pitch"], reg["camera.zoom"]
-        self.pan_x, self.pan_y = reg["camera.pan.x"], reg["camera.pan.y"]
+        self.pointer = pointer      # the deck it is on (plan 44 D5a); None: `reg`, always
+        self.use(reg, view)
         self.drag = {"btn": None, "x": 0.0, "y": 0.0}
         self._wheel = 0.0
         glfw.set_scroll_callback(win, self._on_scroll)
+
+    def use(self, reg: Registry, view: ViewState) -> None:
+        """The camera params it writes and the view it reads: `reg`'s."""
+        self.reg, self.view = reg, view
+        self.yaw, self.pitch, self.zoom = reg["camera.yaw"], reg["camera.pitch"], reg["camera.zoom"]
+        self.pan_x, self.pan_y = reg["camera.pan.x"], reg["camera.pan.y"]
 
     def _on_scroll(self, _win, _dx: float, dy: float) -> None:
         self._wheel += dy
 
     def poll(self, shift: bool) -> None:
+        if self.pointer is not None and self.pointer.deck.reg is not self.reg:
+            self.use(self.pointer.deck.reg, self.pointer.deck.view)
         win, s, drag = self.win, self.view, self.drag
         x, y = glfw.get_cursor_pos(win)
         w, h = glfw.get_window_size(win)
@@ -1145,12 +1166,16 @@ class Host:
     # first; each applied once a frame (plan 21 WP3)
     outputs: list = field(default_factory=list)
     # the deck (deck.py, plan 44 D1): the bundle `reg`, `view`, `router`,
-    # `lfos`, `renderer`, `learn` and `undo` above are assigned from — they
-    # stay for D1, so `frame` reads what it read
+    # `lfos`, `renderer`, `learn` and `undo` above belong to
     deck: Deck | None = None
     # the decks off air (plan 44 D4): each runs its scene-setters, its pass
     # and its integrator in the frame; nothing else in the frame touches them
     off_air: list = field(default_factory=list)
+    # the pointers `Host`'s handles read through (plan 44 D5a, below); None (a
+    # host from a test): the handles are what was assigned
+    on_air_pointer: Pointer | None = None
+    panel_pointer: Pointer | None = None
+    keys_pointer: Pointer | None = None     # the keys' own: key rows and ↑/↓
 
     @property
     def adapters(self) -> tuple:
@@ -1165,6 +1190,18 @@ class Host:
         """The open `gamepad.Pad`, or None (the pad device runs the
         sticks' camera job itself, plan 27 B2)."""
         return self.devices.adapter("gamepad") if self.devices is not None else None
+
+
+# plan 44 D5a: `frame`'s flat handles read through the pointers. The outputs,
+# the pass and the sinks' fallback are the deck on air's; Learn and the undo
+# that is ticked are the panel's (D5b ticks every deck's). Set after the class,
+# so the dataclass keeps them as required fields of its `__init__`
+for _handle in ("reg", "view", "router", "lfos", "renderer"):
+    setattr(Host, _handle, Through(_handle, via="on_air_pointer"))
+Host.deck = Through(None, via="on_air_pointer")
+Host.deck.name = "deck"
+for _handle in ("learn", "undo"):
+    setattr(Host, _handle, Through(_handle, via="panel_pointer"))
 
 
 def _off_air(h: Host, what: str, step: Callable[[Deck], object]) -> str:
@@ -1196,13 +1233,15 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     bases beside the on-air deck's and runs its pass and apply straight
     **after** the on-air deck's, so what it reads of a session param (a
     route's scale on `master.gain`) is this frame's, landed by the on-air
-    deck, whose rows alone move one; then its integrator."""
+    deck, the session's lead; then its integrator."""
     reg, keys, router, reloader = h.reg, h.keys, h.router, h.reloader
     # the router's shared half (routing_sources.Sources, plan 44 D2): where
     # the audio lanes' names and the devices' feeds go — the router's own,
     # so the pad's lanes (fed through the router in `devs.poll`) and every
     # other feed land in one place
     sources = router.sources
+    # the keys' own deck (plan 44 D5a): their rows and ↑/↓
+    on_keys = h.keys_pointer.deck if h.keys_pointer is not None else h
     h.clock.tick(now)   # the clock's "now" for the frame: a trigger and the LFO step agree
 
     # the chain object is recreated on source attach; keep bindings fresh
@@ -1229,14 +1268,14 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
             for key, by in ((glfw.KEY_LEFT_BRACKET, -1), (glfw.KEY_RIGHT_BRACKET, 1)):
                 if keys.pressed(key) and (page := hist.step(by)) is not None:
                     h.panel.page = page
-    router.keys(keys)        # key rows: B / ⇧B, R, F1–F8 / ⇧F1–F8, and the rest
+    on_keys.router.keys(keys)   # key rows: B / ⇧B, R, F1–F8 / ⇧F1–F8, and the rest
     # ↑/↓ ride depth4 toward its range limit, accelerating with hold
     for key, sgn in ((glfw.KEY_UP, 1.0), (glfw.KEY_DOWN, -1.0)):
         hold = keys.held(key, now)
         if hold > 0.0:
             ramp = min(hold / D4_RAMP, 1.0)
             rate = D4_RATE0 + (D4_RATE1 - D4_RATE0) * ramp * ramp
-            _ride_depth(reg["view.depth4"], sgn * rate * dt)
+            _ride_depth(on_keys.reg["view.depth4"], sgn * rate * dt)
 
     # ---- the devices, polled (devices.py, plan 27): the pad (a second
     # hand on the same controls — imgui never claims it, so it works even
@@ -1588,7 +1627,7 @@ def main(argv: list[str] | None = None) -> None:
         rig.listeners.append(point_at_devices)
         # plan 40 T4: a device coming or going, said in the footer with what it brings
         rig.said = lambda role, was, now: library.say(
-            devices.arrival(router.table, rig, role, was, now) or None)
+            devices.arrival(rig.table_of(role, router.table), rig, role, was, now) or None)
         point_at_devices()
         panel.devices = rig                        # the SYSTEM page's device lines
         panel.media = media                        # the MEDIA page: the folder and the channels
@@ -1619,7 +1658,7 @@ def main(argv: list[str] | None = None) -> None:
                       devices=devices_setup, made=made, warm=True)
     hand_settings, output, panel = made.hands, made.outputs, made.panel
     rig, dream_io, awake, segmenters = made.devices
-    s, reg, router, hold = deck.view, deck.reg, deck.router, deck.hold
+    s, reg, router = deck.view, deck.reg, deck.router
     clock, presets, undo_obj = deck.clock, deck.presets, deck.undo
     panel.undo = undo_obj              # the footer's message slot
     panel.deck = deck                  # plan 44 D1: beside its handles; D5 reads through it
@@ -1638,8 +1677,15 @@ def main(argv: list[str] | None = None) -> None:
     media.off_air.append(channels2)
     deck2 = Deck.beside(deck, renderer=renderer2, media=channels2)
     renderer2.ghost.router = deck2.router       # the guide lights what its table routes
+    deck2.learn.devices = rig                   # what can be armed, on either deck's Learn
+    _share_experiments(deck.reg, deck2.reg, poi_cfg=poi.configured(cfg))
     fade = Fade(deck, deck2, mix, ctx, dream=dream_io)
     panel.fade = fade                  # the SYSTEM page's second GPU block
+    # the owner of the two decks (plan 44 D5a): every holder's pointer, each on
+    # deck 1 and moved by nothing yet. Each handle reads through its own from here
+    meta = MetaController(deck, deck2)
+    panel.pointer = library.pointer = meta.panel_pointer
+    rig.point(meta.pointer, meta.panel_pointer)
     # panel state and chain must stay one object even after source changes
     # the live objects that get re-classed on a hot reload; re-evaluated
     # each swap so recreated ones (the chain after a source attach) count
@@ -1650,6 +1696,7 @@ def main(argv: list[str] | None = None) -> None:
         *deck.targets(),
         # deck 2 (plan 44 D4), its channels, and the fade
         *deck2.targets(),
+        *meta.targets(),
         (channels2, "media.channels", "Channels"),
         *[(ch, "media.channels", "Channel") for ch in channels2.channels.values()],
         (fade, "deck", "Fade"),
@@ -1688,13 +1735,15 @@ def main(argv: list[str] | None = None) -> None:
     # (the registry appends to this very list, so the page follows)
     panel.config_notes = cfg["notes"]
     keys = Keys(render_win, ctrl_win, [sl.win for sl in later])   # keys from every window
-    mouse = Mouse(render_win, reg, s, slots[0].switches)          # the mouse: output 1 only
+    mouse = Mouse(render_win, reg, s, slots[0].switches,          # the mouse: output 1 only
+                  pointer=meta.pointer(MOUSE))
 
     def draw_render(dt: float) -> None:
         # every render output: output 1 drawn, the others presented, the
-        # others swapped first and output 1 last (_draw_render)
-        _draw_render(renderer, ctx, s, slots, render_watch, preview=panel.preview,
-                     hold=hold, monitor=panel.monitor, fade=fade)
+        # others swapped first and output 1 last (_draw_render); the deck on air
+        on_air = meta.on_air
+        _draw_render(on_air.renderer, ctx, on_air.view, slots, render_watch,
+                     preview=panel.preview, hold=on_air.hold, monitor=panel.monitor, fade=fade)
 
     def draw_panel(dt: float, fps: float) -> None:
         # the control window: black ground, then the imgui frame opened
@@ -1707,7 +1756,7 @@ def main(argv: list[str] | None = None) -> None:
     # a raising render draw, or 2 s with no render frame presented while the
     # panel runs, each with every thread's stack; kill -USR1 dumps on demand
     watchdog = Watchdog(home / LOG_NAME,
-                        preset=lambda: library.current("presets"))
+                        preset=lambda: meta.on_air.presets.current)
     # with two or more outputs the stall is "no output presented", and one
     # output dark while another presents is a warning naming it (WP3)
     opened = [sl for sl in slots if sl.opened and sl.output is not None]
@@ -1717,17 +1766,19 @@ def main(argv: list[str] | None = None) -> None:
                           for sl in opened]) if len(opened) > 1 else None)
     panel.watchdog, panel.render_watch = watchdog, render_watch
 
-    def dream_check(name: str | None) -> None:
+    def dream_check(on: Deck, name: str | None) -> None:
         # a preset that asks for the dream — a dream node on (plan 36 T4:
         # `dream.on`) with a mix above 0 — with no worker to dream: the
         # dream passes its picture through. Said on the banner (until
-        # dismissed), logged once. Echoes alone are a normal mode.
-        if reg["dream.on"].base and reg["dream.mix"].base > 0 and dream_io is None:
+        # dismissed), logged once. Echoes alone are a normal mode. The deck
+        # it landed on, either (plan 44 D5a)
+        if on.reg["dream.on"].base and on.reg["dream.mix"].base > 0 and dream_io is None:
             why = panel.dream_error or "[dream] enabled = false in config.toml"
             render_watch.warn(f"{name} turns the dream on, but there is no dream worker ({why}); "
                               "the dream passes its picture through")
-    presets.listeners.append(dream_check)
-    dream_check(library.current("presets"))     # the startup preset has already landed
+    for on in meta.decks:
+        on.presets.listeners.append(lambda name, on=on: dream_check(on, name))
+    dream_check(deck, presets.current)          # the startup preset has already landed
 
     # both exits close the publishers, in output 1's context (plan 32 T9)
     publishers = _Closer(lambda: _close_each((lambda: _close_publishers(render_win, slots),
@@ -1755,7 +1806,8 @@ def main(argv: list[str] | None = None) -> None:
                 devices=rig, dream_io=dream_io, learn=deck.learn, render_watch=render_watch,
                 undo=deck.undo, media=media,
                 outputs=[sl.output for sl in slots if sl.output is not None], deck=deck,
-                off_air=[deck2])
+                off_air=[meta.off_air], on_air_pointer=meta.on_air_pointer,
+                panel_pointer=meta.panel_pointer, keys_pointer=meta.pointer(KEYS))
 
     # smoke-test escape hatch: HYPERSPACE_FRAMES=n closes after n frames
     frames_left = int(os.environ.get("HYPERSPACE_FRAMES", "0")) or None

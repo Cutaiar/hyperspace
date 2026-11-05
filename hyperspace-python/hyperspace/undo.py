@@ -727,6 +727,17 @@ def push(label: str, *, load: bool = False) -> None:
         _guarded("push", lambda u: u.push(label, load=load))
 
 
+def push_on(reg, label: str, *, load: bool = False) -> None:
+    """`Undo.push` on the stack over `reg` (`watching`), whichever is installed
+    (plan 44 D5a: a load into a deck the panel is not on opens no step on
+    the panel's); no such stack: the installed one, as `push`."""
+    u = watching(reg)
+    if u is None or u is _installed:
+        push(label, load=load)
+    else:
+        _guarded("push", lambda v: v.push(label, load=load), on=u)
+
+
 def keep_open(label: str, on: Undo, *, on_end=None) -> None:
     """`Undo.keep_open` on a deck's `Undo`, guarded as `push` is."""
     _guarded("keep open", lambda u: u.keep_open(label, on_end), on)
