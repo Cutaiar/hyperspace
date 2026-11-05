@@ -85,7 +85,7 @@ from . import apc40, learn, ui, ui_pane, ui_routing
 from .apc40 import GREEN, GREEN_BLINK, RED, RED_BLINK, YELLOW, YELLOW_BLINK
 from .groupwords import group_part, group_word
 from .params import PERFORMANCE_GROUPS, Kind
-from .routing import Binding, led_shade
+from .routing import FINE_PARAM, Binding, fine_gives_way, led_shade
 
 MIN_W = 300.0              # the window is never narrower, px
 MIN_H = 120.0              # …or shorter (a control window with no room above the sheet)
@@ -142,6 +142,7 @@ def _key(table) -> tuple:
     lane or the length changes)."""
     return (table.layer, table.layer_serial, table.desk_serial,
             getattr(table, "redraw_serial", 0), id(table.bindings), len(table.bindings),
+            getattr(table, "rows_serial", 0),
             getattr(table, "page_serial", 0),
             id(table.page_rows) if getattr(table, "page", None) is not None else None)
 
@@ -155,17 +156,42 @@ def on_page(table, c: apc40.Control) -> bool:
     return any(probe.overlaps(b) for b in getattr(table, "page_rows", ()))
 
 
+FINE_OWNS = "held, every knob moves a tenth as far"
+# the FINE button as a row for the desk to draw (row 732): `midi.MidiIO` reads
+# the button itself, so the table has no row on it
+FINE_ROW = Binding(f"note:{apc40.FINE[1]}:{apc40.FINE[0]}", FINE_PARAM, "momentary",
+                   feedback="led")
+
+
+def fine_row(table) -> Binding | None:
+    """`FINE_ROW`, or None where a row of the first desk's takes the button
+    (`fine_gives_way`, over the rows `MidiIO.bindings` gives the adapter: a
+    second desk's row on the same note is that desk's own)."""
+    rows = (b for b in table.midi() if table.serves(None, b))
+    return None if fine_gives_way(rows, *apc40.FINE) else FINE_ROW
+
+
+def is_fine(table, c: apc40.Control) -> bool:
+    """Is this control the FINE button, as the table stands? It is reserved:
+    neither learned nor picked."""
+    return c.source == FINE_ROW.source and fine_row(table) is not None
+
+
 def lit(table) -> dict[str, Binding]:
     """{glyph: row} for every control the desk shows now — the invariant
     rows and the up layer's (`Bindings.active`), enabled; the first row a
     control has wins, as on the device. An any-channel row lights every
-    control it names."""
+    control it names. The FINE button is drawn as one (`fine_row`)."""
     out: dict[str, Binding] = {}
     for b in table.active():
         if not b.enabled:
             continue
         for c in apc40.controls(b.source):
             out.setdefault(c.glyph, b)
+    row = fine_row(table)
+    if row is not None:
+        for c in apc40.controls(row.source):
+            out.setdefault(c.glyph, row)
     return out
 
 
@@ -185,6 +211,8 @@ def mappable(table, c: apc40.Control) -> str | None:
     (D6), and nothing is mapped while the global layer is up (D5) — what
     `Learn.learn_control` refuses, asked before the click."""
     name = apc40.named(c.source) or c.glyph
+    if is_fine(table, c):
+        return f"{name}: {FINE_OWNS}"
     if on_page(table, c):                       # (learn.blocked says "invariant" too)
         return f"{name}: {PAGE_OWNS}"
     why = learn.blocked(table, c.source)        # the rule `learn_control` refuses by
@@ -502,6 +530,9 @@ def click(panel, table, c: apc40.Control, b: Binding | None) -> None:
     if on_page(table, c):                   # neither learned nor picked (plan 31 §A)
         lrn.said(f"{c.glyph}: {PAGE_OWNS}")
         return
+    if is_fine(table, c):                   # reserved: a row here would take the button
+        lrn.said(f"{c.glyph}: {FINE_OWNS}")
+        return
     if getattr(lrn, "learning", None) is not None:
         if lrn.accepts(c.source):
             lrn.learn_control(c.source, apc40)
@@ -540,7 +571,7 @@ def _hover(panel, table, c: apc40.Control, b: Binding | None) -> str:
     """The hover, and what a click would do now."""
     tip = label(table, c, b, panel.reg)
     lrn = getattr(panel, "learn", None)
-    if lrn is None:
+    if lrn is None or is_fine(table, c):
         return tip
     if getattr(lrn, "learning", None) is not None:
         return f"{tip}\nclick: learn {lrn.learning} here" if lrn.accepts(c.source) else tip
@@ -615,6 +646,7 @@ DESK_WORDS = {
     "overlay.passthrough": "Click-through (overlay)",
     "scene.reset_all": "Reset analyzer (again: undo)",
     "preset.next": "Next bank preset",
+    FINE_PARAM: "Fine (hold)",
 }
 # an enum `set` row whose choice's name alone does not say what the
 # button does: the word goes before the name (the track-select row, G7:

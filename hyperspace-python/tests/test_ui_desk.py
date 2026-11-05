@@ -24,6 +24,7 @@ from test_ui_shell import (
 from hyperspace import apc40, routing, ui, ui_desk, ui_routing
 from hyperspace.app import CONTROL_SIZE
 from hyperspace.geometry import SHAPES
+from hyperspace.learn import Learn
 from hyperspace.routing import Binding
 
 # ---------------------------------------------------------------- the layout
@@ -125,14 +126,15 @@ def test_the_diagram_lights_the_loaded_presets_desk_and_the_invariant_controls(r
     assert "S1" not in inv          # the track faders are layered since plan 24 C2 (decision 17)
     frame(panel, "routing")
     lit = ui_desk.lit_cached(panel, table)
-    assert set(lit) == _glyphs(b for b in table.desk() if b.enabled) | inv
+    fine = {_fine_control().glyph}                            # the adapter's, drawn (row 732)
+    assert set(lit) == _glyphs(b for b in table.desk() if b.enabled) | inv | fine
     assert "D1" in lit and lit["D1"].layer == "preset"        # TRIP's device knobs
     # SHIFT: the global layer's rows instead of the preset's
     table.toggle_layer()
     frame(panel)
     lit = ui_desk.lit_cached(panel, table)
     glob = [b for b in table.midi() if b.layer == "global" and b.enabled]
-    assert set(lit) == (_glyphs(glob) - inv) | inv
+    assert set(lit) == (_glyphs(glob) - inv) | inv | fine
     assert lit["D1"].target == "band.sel.trim"                # the band strip under SHIFT
     assert "K6" not in lit                                    # free on the global layer: dark
     table.toggle_layer()
@@ -724,3 +726,85 @@ def test_the_panel_opens_beside_a_four_by_three_desk():
     assert ui.panel_w((2932, 996)) == 2932 - 36 - int(4 / 3 * 972)
     assert ui.panel_w((960, 900)) == ui.PANEL_W
     assert ui.panel_w((1696, 900)) == ui.PANEL_W
+
+
+# ---------------------------------------------------------------- FINE (row 732)
+
+def _fine_control() -> apc40.Control:
+    number, ch = apc40.FINE
+    return apc40.controls(f"note:{ch}:{number}")[0]
+
+
+def test_send_b_is_drawn_as_fine_and_lit_while_held(rig):
+    panel, table = rig.panel, rig.router.table
+    c = _fine_control()
+    b = ui_desk.lit(table)[c.glyph]
+    assert b.target == routing.FINE_PARAM
+    assert "Fine" in ui_desk.text(panel.reg, b)
+    assert "unmapped" not in ui_desk.label(table, c, b, panel.reg)
+    p = panel.reg[routing.FINE_PARAM]
+    assert ui_desk._led(panel, b) is None
+    p.set(True)
+    assert ui_desk._led(panel, b) is not None
+    p.set(False)
+
+
+def test_fine_is_not_picked_or_learned_from_the_diagram(rig):
+    panel, table = rig.panel, rig.router.table
+    panel.learn = Learn(panel.reg, table)
+    c = _fine_control()
+    before = len(table.bindings)
+    assert "tenth" in ui_desk.mappable(table, c)
+    ui_desk.click(panel, table, c, ui_desk.lit(table)[c.glyph])
+    assert panel.learn.control is None
+    panel.learn.arm("view.speed", "desk")
+    ui_desk.click(panel, table, c, ui_desk.lit(table)[c.glyph])
+    assert len(table.bindings) == before and panel.learn.learning == "view.speed"
+    panel.learn.arm(None)
+
+
+def test_a_row_on_send_b_takes_the_button_as_the_adapter_says(rig):
+    """The rule `midi.MidiIO._fine_control` acts on: a row of the table's is
+    drawn instead, and an off one gives way."""
+    table = rig.router.table
+    c = _fine_control()
+    assert ui_desk.is_fine(table, c)
+    table.bind(Binding(c.source, "view.points", "toggle", feedback="led", layer="preset"),
+               write=False)
+    row = next(x for x in table.bindings if x.source == c.source)
+    assert not ui_desk.is_fine(table, c) and ui_desk.lit(table)[c.glyph] is row
+    row.enabled = False
+    assert ui_desk.is_fine(table, c)
+    assert ui_desk.lit(table)[c.glyph].target == routing.FINE_PARAM
+
+
+def test_a_second_desks_row_on_the_same_note_leaves_fine_alone(rig):
+    """The adapter's rule: `MidiIO.bindings` is this role's rows, and a
+    qualified row of another desk's is that desk's."""
+    table = rig.router.table
+    c = _fine_control()
+    number, ch = apc40.FINE
+    table.bind(Binding(f"note@launch:{ch}:{number}", "view.points", "toggle", layer="preset"),
+               write=False)
+    assert ui_desk.is_fine(table, c)
+
+
+def test_the_cached_map_follows_a_row_on_send_b_switched_off(rig):
+    """`Bindings.enable` moves `rows_serial`, the only thing that changes."""
+    panel, table = rig.panel, rig.router.table
+    c = _fine_control()
+    table.bind(Binding(c.source, "view.points", "toggle", feedback="led", layer="preset"),
+               write=False)
+    frame(panel)
+    assert ui_desk.lit_cached(panel, table)[c.glyph].target == "view.points"
+    table.enable(next(x for x in table.bindings if x.source == c.source), False)
+    assert ui_desk.lit_cached(panel, table)[c.glyph].target == routing.FINE_PARAM
+
+
+def test_desk_fine_stands_beside_desk_save_with_no_desk_attached(rig):
+    """`register_desk` declares it: the panel draws it with no adapter."""
+    assert rig.panel.midi is None
+    p = rig.reg[routing.FINE_PARAM]
+    save = rig.reg[routing.SAVE_PARAM]
+    assert (p.kind, p.group, p.persist, p.modulatable) == (
+        save.kind, save.group, save.persist, save.modulatable)

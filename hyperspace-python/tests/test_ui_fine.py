@@ -10,14 +10,18 @@ untapered float slider (`Panel._slider`), `view.bright` a tapered fader
 (`Panel._fader`), `view.instances` a tapered integer slider and
 `view.inst_fit` a toggle."""
 
+import math
+
 import pytest
 from imgui_bundle import imgui
-from test_ui_shell import build_rig, page_frame
+from test_ui_shell import build_rig, frame, page_frame
 from ui_driver import Driver
 
-from hyperspace import ui, undo
+from hyperspace import ui, ui_graph, undo
 from hyperspace.app import CONTROL_SIZE
 from hyperspace.field import NAMES
+from hyperspace.motion import Motion
+from hyperspace.routing import Binding
 
 DX = 120.0     # px the mouse travels in each drag
 
@@ -265,3 +269,179 @@ def test_a_tapered_slider_keeps_a_base_between_detents_on_a_shift_press(tmp_path
         d.run(d.move((x - 2 * DX, y), 8), d.press(False), shift(False), d.park())
         fine = 30.5 - p.position()
         assert fine == pytest.approx(plain * ui.FINE, abs=1)
+
+
+# ---- what T2 left out (row 731): the sliders drawn straight from imgui ----
+
+
+def rows_frame(r, rows):
+    """One frame of a route's rows, as GRAPH's side pane draws them, wide."""
+    imgui.new_frame()
+    r.panel._fine_frame()
+    imgui.set_next_window_pos(imgui.ImVec2(10, 10))
+    imgui.set_next_window_size(imgui.ImVec2(900, 300))
+    imgui.begin("rows")
+    ui_graph.route_rows(r.panel, rows)
+    imgui.end()
+    imgui.end_frame()
+
+
+@pytest.fixture()
+def route(tmp_path, monkeypatch):
+    with build_rig(tmp_path) as r:
+        imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+        b = r.router.table.add(Binding("lane:1", "view.bright", "push", 0.2, rest=0.4))
+        d = Driver(step=lambda: rows_frame(r, [b]))
+        d.record(monkeypatch.setattr)
+        d.run(d.wait(2))
+        yield r, d, b
+
+
+def fine_and_plain(d, key, read, reset, dx=DX):
+    """How far a Shift drag and a plain drag of `dx` move a raw slider, each
+    read from the press (a plain press lands where the mouse is)."""
+    reset()
+    d.run(d.reveal(key))
+    x, y = d.centre(key)
+    d.run(d.move((x, y)), d.press(True))
+    at_press = read()
+    d.run(d.move((x + dx, y), 8), d.press(False), d.park())
+    plain = read() - at_press
+    reset()
+    d.run(d.wait(1))
+    before = read()
+    d.run(drag(d, key, dx, held=True))
+    return read() - before, plain
+
+
+def test_a_shift_drag_moves_a_routes_depth_and_rest_a_tenth_as_far(route):
+    _, d, b = route
+    fine, plain = fine_and_plain(d, "depth", lambda: b.value, lambda: setattr(b, "value", 0.2),
+                                 20)
+    assert plain > 0.1 and fine == pytest.approx(plain * ui.FINE, rel=0.05)
+    fine, plain = fine_and_plain(d, "rest", lambda: b.rest, lambda: setattr(b, "rest", 0.4), 6)
+    assert plain > 0.1 and fine == pytest.approx(plain * ui.FINE, rel=0.05)
+
+
+def test_the_readout_and_the_fill_are_the_values_through_a_fine_drag(route, monkeypatch):
+    """imgui's slider follows the mouse; what it is told to print must not.
+    A real slider, the mouse far right of a depth at +0.20."""
+    _, d, b = route
+    shown: list[str] = []
+    fills: list[float] = []
+    real, track = imgui.slider_float, ui.Panel._track
+
+    def noted(label, v, lo, hi, fmt="%.3f", *a):
+        if label == "##depth":
+            shown.append(fmt)
+        return real(label, v, lo, hi, fmt, *a)
+
+    def tracked(self, draw, norm, *a, **k):
+        fills.append(norm)
+        return track(self, draw, norm, *a, **k)
+    monkeypatch.setattr(ui.Panel, "_track", tracked)
+    d2 = Driver(step=d.step)                     # (over a wrap of its own, so the driver sees it)
+    monkeypatch.setattr(imgui, "slider_float", noted)
+    d2.record(monkeypatch.setattr)
+    b.value = 0.2
+    d2.run(d2.wait(1))
+    _x0, y0, x1, y1 = d2.rect("depth")
+    y = (y0 + y1) / 2
+    d2.run(shift(True), d2.move((x1 - 2, y)), d2.press(True), d2.wait(2))
+    assert shown[-1] == "+0.20" and b.value == pytest.approx(0.2)
+    d2.run(d2.move((x1 + 8, y), 2))
+    assert 0.2 < b.value < 0.3
+    d2.run(d2.wait(1))
+    assert float(shown[-1]) == pytest.approx(b.value, abs=0.006)     # not imgui's +1.00
+    assert fills[-2] == pytest.approx((b.value + 1) / 2, abs=1e-6)   # (the rest is drawn last)
+    d2.run(d2.press(False), shift(False), d2.park())
+
+
+def test_a_depth_a_file_left_out_of_range_comes_in_without_a_jump(route):
+    """Row 608's no-jump holds for 1.5 on a ±1 slider: it creeps in, no further out."""
+    _, d, b = route
+    b.value = 1.5
+    d.run(d.wait(1))
+    x, y = d.centre("depth")
+    d.run(shift(True), d.move((x, y)), d.press(True), d.move((x - 10, y), 2))
+    moved = b.value
+    assert 1.4 < moved < 1.5
+    d.run(d.move((x + 200, y), 4))
+    assert moved < b.value <= 1.5
+    d.run(d.press(False), shift(False), d.park())
+
+
+def test_a_shift_press_leaves_an_auto_rest_auto_until_the_mouse_moves(route):
+    """A press with no move writes nothing: a rest following its source stays so."""
+    _, d, b = route
+    b.rest = None
+    d.run(d.wait(1))
+    x, y = d.centre("rest")
+    d.run(shift(True), d.move((x, y)), d.press(True), d.wait(2), d.press(False), shift(False),
+          d.park())
+    assert b.rest is None
+
+
+def test_a_shift_drag_on_a_routes_feel_follows_a_log_slider_along_its_curve(route):
+    """`dur` is logarithmic: a fine drag is a tenth of the plain drag along
+    the throw, where its log moves evenly, not its value."""
+    _, d, b = route
+    start = Motion("spring", dur=0.2, bounce=0.0)
+
+    def reset():
+        b.motion = start
+    reset()
+    d.run(d.wait(1))
+    fine, plain = fine_and_plain(d, "dur", lambda: math.log(b.motion.dur), reset, 30)
+    assert plain > 0.1 and fine == pytest.approx(plain * ui.FINE, rel=0.1)
+    fine, plain = fine_and_plain(d, "bounce", lambda: b.motion.bounce, reset, 30)
+    assert plain > 0.05 and fine == pytest.approx(plain * ui.FINE, rel=0.1)
+
+
+def test_the_raw_tooltip_says_fine_while_shift_is_held(route, monkeypatch):
+    _, d, _b = route
+    said: list[str] = []
+    monkeypatch.setattr(ui, "tooltip", said.append)
+    d.run(d.move("depth"), d.wait(1))
+    assert said and not any("FINE" in s for s in said)
+    said.clear()
+    d.run(shift(True), d.wait(1))
+    assert said and said[-1].startswith(ui.FINE_TIP) and "Depth" in said[-1]
+    x, y = d.centre("depth")
+    d.run(d.press(True), d.move((x, y + 200), 4))        # off the track, still held
+    said.clear()
+    d.run(d.wait(1))
+    assert said and set(said) == {ui.FINE_TIP}
+    d.run(d.press(False), shift(False), d.park())
+
+
+def test_a_shift_drag_moves_a_macro_subscribers_from_and_to_a_tenth_as_far(tmp_path, monkeypatch):
+    with build_rig(tmp_path) as r:
+        imgui.get_io().display_size = imgui.ImVec2(1600, 1200)
+        table = r.router.table
+        table.set_macros({"macro.1": {"subs": [{"base": "view.depth4", "from": 0.2, "to": 0.8}]}},
+                         r.reg)
+        d = Driver(step=lambda: page_frame(r.panel, "routing"))
+        d.record(monkeypatch.setattr)
+        d.run(d.wait(2))
+        s = table.macros["macro.1"].subs[0]
+        fine, plain = fine_and_plain(d, "from", lambda: s.lo, lambda: setattr(s, "lo", 0.2), 6)
+        assert plain > 0.05 and fine == pytest.approx(plain * ui.FINE, rel=0.1)
+        fine, plain = fine_and_plain(d, "to", lambda: s.hi, lambda: setattr(s, "hi", 0.5), 6)
+        assert plain > 0.05 and fine == pytest.approx(plain * ui.FINE, rel=0.1)
+
+
+def test_a_shift_drag_moves_graphs_backdrop_a_tenth_as_far(tmp_path, monkeypatch):
+    with build_rig(tmp_path) as r:
+        r.panel.desk = False
+        imgui.get_io().display_size = imgui.ImVec2(1600, 900)
+        d = Driver(step=lambda: frame(r.panel))
+        frame(r.panel, "graph")
+        d.record(monkeypatch.setattr)
+        d.run(d.wait(2))
+        st = ui_graph._state(r.panel)
+        st["backdrop"] = True
+        d.run(d.wait(2))
+        fine, plain = fine_and_plain(d, "graph.backdrop", lambda: st["backdrop_alpha"],
+                                     lambda: st.__setitem__("backdrop_alpha", 0.3), 20)
+        assert plain > 0.1 and fine == pytest.approx(plain * ui.FINE, rel=0.1)
