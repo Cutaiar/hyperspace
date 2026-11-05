@@ -99,7 +99,7 @@ pins this order over stubs:
 | 9 | the modulator banks and the sequencer, **inside the pass** (step 10): every bank's `begin` and `publish` first (the LFOs, the envelopes — a held global trigger lands and moves `clock.epoch`); then `Router._step_sequencer` — `Sequencer.step` fires each crossed step's envelope (`Envelopes.fire(n, at=t_k, gate=…)`) and feeds `seq`; then the plan, where each voice steps at its own node (`Bank.step_one`), feeding `lfo` and `env` (plan 28 N0, plan 31) | feed |
 | 10 | `router.modulate(chain, dt, now)` — the modulation patch (`Router.modgraph`, `modgraph.order`) in dependency order: at a bank voice's node (an LFO's, an envelope's) it steps; at a modifier's it steps the modifier and writes its `mod` lane; at a param's, every live performer row on it calls `p.modulate(offset)`, and a param a later node reads (a `scale`, a macro behind a depth subscriber, an LFO knob, a modifier's own param) is landed there and then (`Param.apply` under the frame's mark) | offsets; the `lfo`, `env`, `seq` and `mod` lanes; the objects of the params the pass reads |
 | 11 | `reg.apply()` — base + offsets onto every other live object (a param the pass landed under this frame's mark is skipped) | objects |
-| 11a | Plan 44 D4: each deck off air's `router.modulate` and `reg.apply` (its rows on a session param dormant, so it reads this frame's session values; its macros at step 8's slot, its integrator with the on-air deck's) | that deck's objects |
+| 11a | Plan 44 D4: each deck off air's `router.modulate` and `reg.apply` (a row on a session param a hot reload left standing dormant, row 745, so it reads this frame's session values; no door lets one in, row 743; its macros at step 8's slot, its integrator with the on-air deck's) | that deck's objects |
 | 12 | `devices.send(reg, chain)` — **the sink slot**: the bridge sends its sink rows (`routing.sink_values`: effective values, the lanes) through `Bridge.send_values`; `hands-daw` sends the hands' DAW messages and its own sink rows | nothing in the app (MIDI out) |
 | 13 | `view.integrate(dt)` — `ang += rate · dt`; on the frame the 3D switch changes, the 4D pose folded into `body` (`held`) | an object, directly |
 | 14 | `renderer.bands = app._bands(audio)` — the analyzer's lanes, out / CEIL, handed to the renderer as a read-only input; then `draw_render` — the render graph evaluated, every render output (below) | the screens |
@@ -768,6 +768,11 @@ Consequences:
   hand-owned param moves the **return value**, which shows when the hand
   lets go; it never prompts and is never blocked
   (`tests/test_routing.py::test_audit_3_a_knob_moves_the_return_value_under_a_hand`).
+- **Two discrete controls of a pad can be one axis** (plan 56): the address
+  declares it, `pair:<+ pole>/<− pole>`, and `Router.pad` feeds its one lane,
+  resting at 0.5, into the shared sources, so a route reads it as it reads a stick.
+  A `step` row on one acts as the two rows it stands for and stays the meta
+  controller's (`tests/test_paired_axes.py`).
 - **The base chase is the one road from a performer into a base** (plan 52):
   while `deck.chase` is held, `Param.apply` writes what it landed into the
   base, on this deck's look params only, and `Param._trim` keeps the offset
@@ -796,9 +801,10 @@ Consequences:
   pinch can drop the LFOs on the one). `tempo.tap` is not: a band on tap
   tempo would tap on every transient
   (`tests/test_tempo.py::test_a_performer_on_tap_tempo_is_dormant_but_one_on_the_lfo_trigger_fires`).
-- **A preset's route may perform any modulatable param**, a session one
-  included; a preset never sets a session *base*. The ROUTING page marks
-  such a row "session" (`ui_routing.is_session_target`).
+- **A preset's route may perform any modulatable param but a meta
+  controller's** (`part_of(p) == "session"`; `routing.meta_refusal`, register
+  row 743): no row of a preset drives one, and a preset never sets its base.
+  The line is `routing.is_session_row`, so the meta controller's own rows stay.
 - **The pattern inputs add no writer.** `pattern.mod.0–7` are ordinary
   modulatable params with a named meaning each (§5, Face patterns). The
   FACES page writes their bases like any widget, and its "+ source"
@@ -1125,7 +1131,7 @@ is not live is dormant: its lane reads NaN and a route on it lets go
 | the crossfader | invariant row → `output.dim`, the master dim (CC 0 black — hand check 55); a rig setting, 1 at every launch | base of a rig setting |
 | a bank pad (clip rows 1, 4, 5) or a bank button | invariant `set` rows → `preset.select = k` → `Project.load_slot(k)` (`apc40.BANK_PADS`: 24 slots, `library.SLOTS`). Lights by `routing.led_level`: loaded, filled, empty | a preset load |
 | a hold on an empty bank pad | its invariant `preset.select` row, held → `Param.held` → `Project.save_into(k)`: a new preset named from the loaded one (`library.next_name`), into that slot; a filled slot is never written | files, not params; no undo step |
-| the pad's B / X | `pad:B` / `pad:X` rows → `preset.list.next` / `prev` → `Project.walk` → `Library.next` / `prev` on the presets: the PRESETS page's list (`Library.list`: every preset by name, re-read each step so a new save is in it), wrapping. The APC40's QUANT (`preset.next`) walks the bank's filled slots instead (`Project.cycle`) | a preset load |
+| a row Learn put on `preset.list.next` / `prev` (no factory row since 2026-11-04, row 723) | → `Project.walk` → `Library.next` / `prev` on the presets: the PRESETS page's list (`Library.list`: every preset by name, re-read each step so a new save is in it), wrapping. The APC40's QUANT (`preset.next`) walks the bank's filled slots instead (`Project.cycle`) | a preset load |
 | a macro's knob | its base → `Router.follow_macros` → each base subscriber's base | base |
 | an analyzer band, a hand axis, a pinch, a DAW lane, an LFO | `lane:` / `hand:` / `ext:` / `lfo:` → its performer row → `Router.modulate` | offset (a pinch may instead gate a row) |
 | right-click → Learn hand / Learn desk / click-then-map | `Learn` (§3.5) | the loaded preset's table |
@@ -1446,6 +1452,7 @@ docstring has the rest.
 | `preset.py` | the preset document kind: values, routes, desk, macros, module labels, the `graph` section (nodes and wires), the modifiers, the banks' membership (`lfos`, `envs`), the GRAPH page's layout, and since plan 40 its `groups` (written only when one exists, then `hyperspace.preset/8`); `hyperspace.preset/3` only when a preset uses the sequencer, the envelopes or N ≠ 4 LFOs, else `/2` | `Presets` (`load`, `load_doc`, `document`, `signature`, `layout`, `template_at_load`, `live_groups`, `settle_groups`, `group_high`, `parts`, `banks`), `schema_of`, `SCHEMA_V3`, `VERSIONS`, `GraphSection`, `GRAPH_KEY`, `MODIFIERS_KEY`, `LAYOUT_KEY`, `GROUPS_KEY`, `read_groups`, `group_entry`, `merge_modifiers` | a load lands every performance base and replaces every performer row, never a session param; a route onto a non-modulatable param is dropped with a note (`tests/test_presets.py`) |
 | `config.py` | `config.toml`: defaults, reading, `[[output.screens]]`, `[[devices]]` (checked per entry; the old device tables translated; `[hands] out` → `hands-daw`) | `DEFAULTS`, `load`, `screens`, `number`, `devices`, `read_devices`, `DEVICE_TABLES`, `MIDI_OUT`, `DAW_ROLE` | a bad value is its default with a note, never a raise (`tests/test_config.py`) |
 | `undo.py` | undo and redo with no write hook | `Undo`, `watched`, `alike`, `install`, `push`, `SETTLE_S`, `LIMIT` | a leaf (`tests/test_undo.py::test_undo_imports_nothing_from_the_package`); §3.2 (`tests/test_undo.py`) |
+| `groupwords.py` | what the panel calls a param group where that is not its saved key (wave 4 AZ, rows 737–738) | `GroupWords`, `GROUPS`, `group_word`, `group_title`, `group_part`, reached from `undo.py` through `Registry.group_word` | a leaf; `tests/test_analyzer_words.py` |
 | `hold.py` | hold the projector (plan 38): the program drawn from the wiring, rig cables and look held at HOLD while edits land as the preview behind GRAPH; take, drop; the `output.hold` / `.take` / `.drop` controls | `Hold` (`engage`, `take`, `drop`, `program`, `draw_preview`, `keep`, `program_only`, `reset_delays`, `changed`, `rewired`), `HELD_GROUPS`, `ONE_FOR_BOTH`, `PROGRAM_IDS`, `program_value`, `preview_size`, `mirror`, `MIRRORED`, `preview_renderer`, `canvas_renderer`, `register` | at module level imports only `undo` and `params`' groups and id helpers, no graph and no GL (`preview_renderer` imports `render` when first called; the renderer, registry and undo are arguments, read duck-typed); the program writes with `Param.put`, never `set`, and puts every live value, the wiring and the rig back even when the draw raises; never constructs a `Wiring` or fills in a cable (`tests/test_hold.py`) |
 | `devices.py` | the device registry: the protocol, the ports, today's devices (MIDI, the pad, the bridge, `midi-out`), the point-cloud type, file and device, the list's open / retry / watch / close | `Device`, `Port`, `Context`, `Base`, `OffDevice`, `RefusedDevice`, `MidiDevice`, `PadDevice`, `BridgeDevice`, `MidiOutDevice`, `CloudDevice`, `PointCloud`, `write_clouds`, `read_clouds`, `kinds`, `make`, `DeviceRegistry` (`poll`, `feed`, `send`, `continuous_schemes`, `row_schemes`, `midi_roles`, `primaries`, `wants`, `sink_ports`, `clouds`, `lines`, `watch`, `apply`, `said`), `retry_after`, `WATCH_FRAMES`; what a preset wants (plan 40, §3.11): `wants` → `Want`, `wants_for`, `want_words`, `want_lines`, `missing_chip`, `wanted_lines`, `arrival`, `SCHEME_ROLE` | the one importer of every adapter module, each inside its device's `open` (`tests/test_app_boundary.py::test_importing_app_leaves_every_gated_adapter_unimported`); one device's exception never stops the frame; two enabled devices never feed one Router key — a second pad publishes under its role, a second hands device is refused (`tests/test_devices.py`) |
 | `osc.py` | an OSC sender as a device: a non-blocking UDP socket read in `poll`, axes fed under the role, hits as rows | `OscDevice`, `Server`, `Layout`, `fire`, `TIMEOUT_S`, `DEFAULT_PORT` | `pythonosc` only inside `Server`; only this module and the kind table name the device (`tests/test_osc.py`) |

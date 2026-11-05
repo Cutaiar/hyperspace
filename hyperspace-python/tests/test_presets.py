@@ -1325,7 +1325,8 @@ def test_a_saved_route_onto_a_setting_is_dropped_with_a_note(rig):
         assert not table.routes_to(pid), pid
     assert table.owner("view.inst_amp").source == "hand:right.y"
     notes = rig.presets.notes
-    assert "dropped hand:right.x → ghost.mirror: not modulatable" in notes
+    assert ("dropped hand:right.x → ghost.mirror: ghost.mirror is the meta controller's, "
+            "tuned before the show; no preset row may drive it") in notes     # (row 743)
     assert "dropped hand:left.roll → ghost.guide: not modulatable" in notes
     assert "dropped lfo:0 → ghost.tethers: not modulatable" in notes
     assert (path.read_bytes(), path.stat().st_mtime_ns) == before

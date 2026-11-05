@@ -212,8 +212,8 @@ def test_a_base_subscriber_on_a_session_param_is_dropped_with_a_note(tmp_path):
     """D9, review of PR #67: a base subscriber names a performance param —
     persisted, not an alias — never a session one, so a preset load never
     writes a session base through a macro. `set_macros` drops any other
-    with a note (the load's notes, and the migration's); a depth subscriber
-    on a route that performs a session param stays (decision 19 (a))."""
+    with a note (the load's notes, and the migration's), and a depth
+    subscriber on a route onto one goes with that route (register row 743)."""
     from test_presets import boot, put
 
     r = boot(tmp_path)
@@ -225,7 +225,7 @@ def test_a_base_subscriber_on_a_session_param_is_dropped_with_a_note(tmp_path):
         {"base": "tempo.bpm", "from": 1.0, "to": 1.0},               # session: dropped
         {"base": "band.sel.trim", "from": 1.0, "to": 1.0},           # an alias: dropped
         {"base": "view.bright", "from": 0.0, "to": 0.6},             # performance: kept
-        depth_sub("hand:1", "master.gain", 0.0, 1.0)]}}              # a depth: kept
+        depth_sub("hand:1", "master.gain", 0.0, 1.0)]}}              # a depth: dropped
     routes = [{"source": "hand:1", "target": "master.gain", "op": "push", "value": 0.3}]
     put(tmp_path, "MIXED", routes=routes, macros=macros, values={"macro.1": 0.5})
     r.presets.load("MIXED")
@@ -233,9 +233,10 @@ def test_a_base_subscriber_on_a_session_param_is_dropped_with_a_note(tmp_path):
     assert real.value == pytest.approx(trim)
     assert reg["view.bright"].norm == pytest.approx(0.3, abs=1e-6)
     assert table.macros_doc()["macro.1"] == {"label": "Mixed", "subs": [
-        {"base": "view.bright", "from": 0.0, "to": 0.6},
-        depth_sub("hand:1", "master.gain")]}
+        {"base": "view.bright", "from": 0.0, "to": 0.6}]}
+    assert not table.routes_to("master.gain")
     notes = r.presets.notes
+    assert any("macro.1's depth subscriber on hand:1 → master.gain" in n for n in notes)
     assert any("macro.1's base subscriber tempo.bpm" in n and "D9" in n for n in notes)
     assert any("macro.1's base subscriber band.sel.trim" in n for n in notes)
     # set_macros on its own: the same rule, by group prefix with no registry

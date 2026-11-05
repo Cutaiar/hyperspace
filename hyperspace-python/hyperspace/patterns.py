@@ -69,7 +69,7 @@ INPUTS: tuple[Input, ...] = (
           "lane 5, AIR: bright sound, sharp image — the hats crisp the lines."),
     Input("HUE", "Turns the palette round the colour wheel, half a turn per unit: "
                  "0 half a turn back, 1 as designed, 2.6 four fifths of a turn on.",
-          "free for an LFO: a band on hue flickers, a slow cycle does not."),
+          "free for an LFO: an analyzer band on hue flickers, a slow cycle does not."),
     Input("SPREAD", "How differently each face plays: 0 every face in unison, "
                     "1 as designed, 2.6 each face its own phase and colour.",
           "free for a macro or a knob: unison or scattered is a scene's choice."),
@@ -135,7 +135,7 @@ MODES: tuple[Mode, ...] = (
           "ash and flame part in hue", "broad glow to hot points", _HUE,
           "each face its own coals")),
     # after EMBER: appended, never inserted — presets hold the mode as an index
-    Mode("METER", "The bands themselves: an LED wedge per band, lit as far as it reads.",
+    Mode("METER", "The analyzer's bands: an LED wedge per band, lit as far as it reads.",
          ("LED segment size", _GLOW, "bends the wheel (above 1)",
           _SPEED.format("the wheel turns"), "hue spread across the bands",
           "LED edges: soft to crisp", _HUE, "each face its own turn")),
@@ -179,5 +179,5 @@ def tip(k: int) -> str:
     """Input `k`'s tooltip: its name, what it means in every mode, and how to drive it."""
     i = INPUTS[k]
     return (f"{i.name} — {i.meaning} The same kind of change in every pattern "
-            f"(hyperspace/patterns.py says what it does in each). Route a band, an LFO "
-            f"or a knob here; 1.0 is the un-driven look.")
+            f"(hyperspace/patterns.py says what it does in each). Route an analyzer band, "
+            f"an LFO or a knob here; 1.0 is the un-driven look.")

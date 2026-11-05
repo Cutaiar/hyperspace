@@ -491,7 +491,7 @@ def test_factory_table_binds_only_real_params(tmp_path):
     # + R, F1–F8, ⇧F1–F8 (plan 11), + undo and redo on ⌘ and Ctrl (plan 15 WP1),
     # + Home (plan 15 WP2)
     assert len(t.of("key")) == 25 + 17 + 4 + 1
-    assert len(t.of("pad")) == 10 and len(t.of("hat")) == 4    # BACK taps, START saves
+    assert len(t.of("pad")) == 9 and len(t.of("hat")) == 2     # BACK chases, START is free
     assert len(t.midi()) == 113 + 6 + 1 + 4 + 1 + 1 and t.mods() == []   # + SHIFT, the global track
     # knobs, OVERDUB (plan 15 WP2) (the clip-stop row's eight, plan 15 WP4,
     # retired 2026-10-09), SAVE on track 8's clip stop (plan 24 C1),
@@ -1709,19 +1709,17 @@ def test_a_user_row_on_a_moved_apc_note_is_kept():
     assert (f"note:0:{apc40.N_NUDGE_P}", "tempo.nudge") in by
     assert (f"note:0:{apc40.N_METRO}", "view.lines") in by
     assert ("key:B", "view.points") in by and ("key:SHIFT+B", "lfo.trigger") in by
-    assert not any(b.target == "tempo.tap" for b in out if b.source != "pad:VIEW")
+    assert not any(b.target == "tempo.tap" for b in out)
     assert not any(b.source == f"note:0:{apc40.N_QUANT}" for b in out)   # no QUANT row added
     # the free OVERDUB gets home (plan 15 WP2); + R and the F-keys (plan 11),
     # + undo and redo and the Home key (plan 15)
     assert (f"note:0:{apc40.N_OVERDUB}", "preset.home") in by
     # + the clip-stop row's eight (plan 15 WP4), + the bank's sixteen pads
     # on clip rows 4 and 5 (plan 19 WP2), + the four invariant render
-    # toggles and SAVE (plan 24 C1), + START's hold-to-save (the pad
-    # layout of 2026-10-14), + BACK's tap tempo (2026-10-29), + SEND A's
-    # sequencer page (plan 31 §A)
-    assert ("pad:MENU", "preset.save_new") in by and ("pad:VIEW", "tempo.tap") in by
+    # toggles and SAVE (plan 24 C1), + SEND A's sequencer page (plan 31 §A)
+    assert not any(b.source == "pad:MENU" for b in out)
     assert [n.split(" ")[0] for n in notes] == (["remapped", "added"]
-                                                + ["added"] * (17 + 4 + 2 + 16 + 5 + 1 + 1 + 1))
+                                                + ["added"] * (17 + 4 + 2 + 16 + 5 + 1))
     # and a second pass has nothing to do
     again, notes2 = routing.remap_factory(out)
     assert notes2 == [] and [b.source for b in again] == [b.source for b in out]
@@ -1748,13 +1746,12 @@ def test_a_schema_2_file_gets_the_moved_factory_rows_once(tmp_path, capsys):
     path.write_text(json.dumps({"schema": SCHEMA, "profile": "apc40", "bindings": rows}))
     t = Bindings.load(path, legacy_midi=None)
     err = capsys.readouterr().err
-    assert not t.migrated and not t.error and len(t.notes) == 8
+    assert not t.migrated and not t.error and len(t.notes) == 7
     assert f"remapped note:0:{apc40.N_TAP}: theme.next → tempo.tap" in err
     assert f"added note:0:{apc40.N_METRO} → lfo.trigger" in err
     assert f"added note:0:{apc40.N_QUANT} → preset.next" in err
     assert "added key:B → tempo.tap" in err and "added key:SHIFT+B → lfo.trigger" in err
-    assert "added pad:VIEW → tempo.tap" in err                    # BACK (2026-10-29)
-    assert f"bindings: updated {path} (8 rows changed)" in err
+    assert f"bindings: updated {path} (7 rows changed)" in err
     by = {(b.source, b.target): b for b in t.bindings}
     assert by[(f"note:0:{apc40.N_TAP}", "tempo.tap")].feedback == "led"
     assert (by[(f"note:0:{apc40.N_NUDGE_P}", "tempo.nudge")].value,
@@ -2579,8 +2576,7 @@ def _play_tape(tmp_path: Path, name: str, *, lagged: bool):
     analyzer's lanes fed, LFO 1 on, for TAPE_FRAMES frames. What a lagged
     read multiplies is held still, so a lagged param's sequence moves only
     with the value it was late on and the shift is exact: the analyzer's
-    lanes are held, each at its own level (a lane row scaled by a gain a
-    hand rides — party-tumble's — moves with the hand alone), and LFO 1 is
+    lanes are held, each at its own level, and LFO 1 is
     a square wave at 0.01 Hz, +1 over the whole tape (party-trip's and
     lfo-breathe's LFO chains move with the hand on its depth alone). The
     hands move every frame. Run as app.frame runs steps 3 and 9–11: on the base
@@ -2662,7 +2658,6 @@ def test_every_factory_preset_lands_the_same_values_one_frame_earlier(tmp_path):
     # what that LFO drives, one frame earlier
     assert ("party-trip", "camera.zoom") in shifted_somewhere
     assert ("lfo-breathe", "view.bright") in shifted_somewhere
-    assert ("party-tumble", "rot.rate.ZW") in shifted_somewhere   # the scale path
 
 
 def test_a_cycle_without_a_delay_disables_its_last_cable_with_a_note(tmp_path):

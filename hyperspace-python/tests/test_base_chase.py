@@ -30,7 +30,7 @@ from hyperspace.params import (
     build_session,
     chase_reaches,
 )
-from hyperspace.routing import Binding, Bindings, latch_refusal
+from hyperspace.routing import Binding, Bindings, latch_refusal, press_momentary
 from hyperspace.tapers import T_DRIVE
 from hyperspace.undo import SETTLE_S
 from hyperspace.view import ViewState
@@ -817,8 +817,8 @@ def test_a_desk_button_learned_on_it_is_held_not_latched(rig):
     src = "note:0:94"
     rig.learn.arm(CHASE_PARAM)
     assert rig.learn.learn_control(src)
-    row = [b for b in rig.table.bindings if b.target == CHASE_PARAM]
-    assert [b.op for b in row] == ["momentary"]
+    row = [b for b in rig.table.bindings if b.source == src]
+    assert [(b.target, b.op) for b in row] == [(CHASE_PARAM, "momentary")]
     rig.inp.queue.append(_note(True))
     rig.midi.poll()
     assert rig.reg.chasing
@@ -830,7 +830,8 @@ def test_a_desk_button_learned_on_it_is_held_not_latched(rig):
 def test_a_knob_is_refused_in_words(rig):
     rig.learn.arm(CHASE_PARAM)
     assert not rig.learn.learn_control("cc:0:48")
-    assert rig.learn.refused and not [b for b in rig.table.bindings if b.target == CHASE_PARAM]
+    assert rig.learn.refused
+    assert [b.source for b in rig.table.bindings if b.target == CHASE_PARAM] == ["pad:VIEW"]
 
 
 class Pad:
@@ -859,6 +860,8 @@ class Pad:
 
 
 def test_a_pad_button_learned_on_it_is_held_and_a_lost_pad_lets_go(rig):
+    for b in [b for b in rig.table.bindings if b.target == CHASE_PARAM]:
+        rig.table.remove(b)                    # BACK's factory row: this stub is one button
     rig.learn.arm(CHASE_PARAM)
     assert rig.learn.learn_pad_button("pad:Y")
     row = [b for b in rig.table.bindings if b.target == CHASE_PARAM]
@@ -887,6 +890,96 @@ def test_a_pad_button_learned_on_it_is_held_and_a_lost_pad_lets_go(rig):
     pad.was_down, pad.is_down = True, False
     rig.router.pad(pad, now=0.6)
     assert not rig.reg.chasing
+
+
+def test_a_desk_button_and_a_pad_button_hold_it_together(rig):
+    """Brushing the pad's button does not end what the APC's holds, or the
+    other way about; a desk cable lost lets go only of the desk's."""
+    rig.learn.arm(CHASE_PARAM)
+    assert rig.learn.learn_control("note:0:94")
+    pad = Pad()
+    rig.inp.queue.append(_note(True))
+    rig.midi.poll()
+    assert rig.reg.chasing
+    pad.is_down = True
+    rig.router.pad(pad, now=0.0)                # BACK down
+    pad.was_down, pad.is_down = True, False
+    rig.router.pad(pad, now=0.1)                # …and up: a brush
+    assert rig.reg.chasing, "the APC's button still holds it"
+    pad.was_down, pad.is_down = False, True
+    rig.router.pad(pad, now=0.2)
+    rig.inp.queue.append(_note(False))
+    rig.midi.poll()
+    assert rig.reg.chasing, "the pad's button still holds it"
+    rig.inp.queue.append(_note(True))
+    rig.midi.poll()
+    rig.midi._let_go_held()                     # the cable went
+    assert rig.reg.chasing, "the pad's button still holds it"
+    pad.was_down, pad.is_down = True, False
+    rig.router.pad(pad, now=0.3)
+    assert not rig.reg.chasing
+
+
+def test_a_desk_closed_lets_go(rig):
+    """A desk's device closed with its button down: no poll follows."""
+    rig.learn.arm(CHASE_PARAM)
+    assert rig.learn.learn_control("note:0:94")
+    rig.inp.queue.append(_note(True))
+    rig.midi.poll()
+    assert rig.reg.chasing
+    rig.midi.close()
+    assert not rig.reg.chasing and not rig.reg[CHASE_PARAM].__dict__["_pressed_by"]
+
+
+def test_a_cc_row_on_it_records_no_press_and_a_lost_desk_lets_go(rig):
+    """A `momentary` row on a knob (by hand: Learn refuses one) lands as `abs`, so
+    the ledger never hears of it, and losing the desk ends it all the same."""
+    rig.table.add(Binding("cc:0:48", CHASE_PARAM, "momentary"))
+    rig.inp.queue.append(mido.Message("control_change", channel=0, control=48, value=127))
+    rig.midi.poll()
+    assert not rig.reg[CHASE_PARAM].__dict__.get("_pressed_by")
+    rig.reg[CHASE_PARAM].set(True)
+    rig.midi._let_go_held()
+    assert not rig.reg.chasing
+
+
+@pytest.mark.parametrize("lost", ["close", "_let_go_held"])
+def test_a_desk_lost_leaves_what_another_desk_holds(rig, lost):
+    """A press recorded by one desk is that desk's: losing the other leaves it,
+    qualified or not, and its own release still ends the chase."""
+    p = rig.reg[CHASE_PARAM]
+    press_momentary(p, "note@launch:0:94", True)     # the second desk's button
+    rig.learn.arm(CHASE_PARAM)
+    assert rig.learn.learn_control("note:0:94")
+    rig.inp.queue.append(_note(True))
+    rig.midi.poll()
+    getattr(rig.midi, lost)()
+    assert rig.reg.chasing, "the second desk's button still holds it"
+    assert p.__dict__["_pressed_by"] == {"note@launch:0:94"}
+    press_momentary(p, "note@launch:0:94", False)
+    assert not rig.reg.chasing
+
+
+@pytest.mark.parametrize("change", ["removed", "retargeted", "switched off", "its rows forgotten"])
+def test_a_desk_row_changed_under_its_button_still_releases(rig, change):
+    rig.learn.arm(CHASE_PARAM)
+    assert rig.learn.learn_control("note:0:94")
+    rig.inp.queue.append(_note(True))
+    rig.midi.poll()
+    assert rig.reg.chasing
+    row = next(b for b in rig.table.bindings if b.source == "note:0:94")
+    if change == "removed":
+        rig.table.remove(row)
+    elif change == "retargeted":
+        row.target = "view.lines"               # as the desk rows' combo does
+    elif change == "switched off":
+        row.enabled = False
+    else:
+        rig.midi._held.clear()                  # the release finds no rows of the press
+        rig.table.remove(row)
+    rig.inp.queue.append(_note(False))
+    rig.midi.poll()
+    assert not rig.reg.chasing and not rig.reg[CHASE_PARAM].__dict__["_pressed_by"]
 
 
 def test_a_lost_pad_leaves_a_toggle_it_did_not_hold(rig):

@@ -720,6 +720,17 @@ here; overturn → the change, then the same.
 | 688 | Plan 44 D5a: the owner of the two `Deck`s is `deck.MetaController`, named from the glossary; a `Pointer` per holder (each controller by role, the keys, the mouse) and the panel's apart; exactly two `Deck`s; no `swap`; a deck's presets see the library through `library.DeckLibrary`, so they cannot reach another deck | — | "name the owner of the two Decks from the glossary"; "Two fixed Decks and no swapping" (owner, 2026-11-04) |
 | 689 | Plan 44 D5a: the holders moved onto pointers, those the reading named (`SeqPage.reg`, `Library.reg` and `presets`, `dream_check`, `Mouse`'s params, `draw_render`, `Marks`) and those found while building (`rig.said`'s table, deck 2's `Learn.devices`, the totem's and poi's params, the watchdog's preset, the bank's verbs, its lit slot and the section references); `Bindings.page` is the session's; `claim` retired | — | (rec) — pending the owner |
 | 690 | Plan 44 D5a: `docs/GLOSSARY.md`, one row per concept; a controller moved mid-gesture releases what it holds on the deck it left, and its real release goes nowhere | — | (rec) — pending the owner's signature on the glossary |
+| 723 | Wave 4 B2: `pad:VIEW` holds `deck.chase`; `pad:VIEW → tempo.tap` and `hat:LEFT` / `hat:RIGHT → preset.list.*` leave the pad's factory rows; an old factory row moves at the next load, one the owner changed stays | 654 | owner — 2026-11-04: base chase is Back; tap tempo is not a default on every controller, "extremely sensitive"; no swapping presets from a controller or a pad |
+| 724 | Wave 4 B2: rows by model: a Joy-Con's chase is L / R in #365's `Model.layout`; hold-to-save is the Edge's, there too, by a qualified row until then; Learn goes on accepting `preset.list.*` and `tempo.tap`, unrefused | 723 | owner — 2026-11-04 on the Joy-Con and the Edge; (rec) — pending the owner on Learn |
+| 737 | Wave 4 AZ: the panel says "analyzer" for the fixture and its tuning; a part reads its own name (SUB … AIR) or "analyzer 3", and "band" stays only as the plain audio word for one of the parts | 566 | owner — 2026-11-04: band for one bin, as built |
+| 738 | Wave 4 AZ: words only; `band.*` ids, `lane:` addresses, the `band` group key, the library's `band` folders, `SECTIONS` and `PAGE_KEYS` all stay; ROUTING's target list keeps printing raw ids | 567 | The owner, 2026-11-04 |
+| 743 | Wave 4 MR: the hard rule. No row of a preset may drive a meta controller param (`part_of(p) == "session"`); refused in words at Learn, at the pickers and at `Bindings`' doors, dropped with a note at a load, removed by the next save; the meta controller's own rows stay, the line being `is_session_row`. Overturns row 19 (a) | 572, 573 | owner — 2026-11-04: "a hard rule" |
+| 744 | Wave 4 MR: macro base and depth subscribers on a meta param drop at `set_macros`; a modifier has no target, so its route is what is refused; a patch naming one is refused whole by `check`, and a spawn's doors drop what reaches them with a note | 573 | (rec) — pending the owner |
+| 745 | Wave 4 MR: row 650's dormant test stays in `Router.modulate` for a row a hot reload left standing, and a save filters such rows; `party-tumble` loses its row, and `tools/meta_routes.py` lists the library's without writing | 572 | (rec) — pending the owner |
+| 748 | Plan 56: a pair is an address, `pair:<+ pole>/<− pole>`, of any two discrete controls of one pad; a model's natural pairs are published by default; one lane at rest 0.5, 1 on the + pole, 0 on the − pole, rest with both | — | owner — 2026-11-04: "toggle controls need to be able to be paired into a polarized axis"; the shape is (rec) — pending the owner |
+| 749 | Plan 56: the step-or-spring choice is the row's op: `step`, the neutral default and the meta controller's, or a route with a feel, the preset's; Learn pair and Learn pair (spring), two presses | 748 | (rec) — pending the owner; the owner, 2026-11-04: the choice "is immaterial to what I'm saying right now" |
+| 750 | Plan 56: the factory's `hat:UP/DOWN → view.bright ±3` and `pad:LB/RB → view.shape ±1` stay two rows and act exactly as they did; no saved-format change, an older build reads a pair's row as dormant | 748 | (rec) — pending the owner |
+| 751 | Plan 56: not built, poles on keys or MIDI notes; a route on a pair leaves its poles' own rows alone, and both act | 748 | (rec) — pending the owner |
 
 "—": no hand check shows it; tests only.
 
@@ -12812,3 +12823,265 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   took no longer turns a latched toggle off: a small change to one deck's behaviour too.
   Nothing moves a pointer in the app yet, so the rest runs only in tests until PL.
 - **Judge it.** 523.
+
+### 723. BACK holds the base chase; the pad swaps no preset and taps no tempo
+
+- **Asked.** Which button holds the chase (plan 53 NQ8), and what stays on the pad.
+- **Answer.** The owner, 2026-11-04: base chase is Back; tap tempo must not be on by
+  default on every controller, "extremely sensitive"; no swapping presets from a
+  controller or a pad. It overrules plan 53's `pad:LP`.
+- **Built.** `padmap` and `PAD_NEW_ROWS`: `pad:VIEW → deck.chase`, `momentary`.
+  `PAD_LAYOUTS["2026-11-04"]`: the exact old factory row on BACK becomes the
+  chase, the exact rows on ← / → are dropped, with a note and the file's backup. The
+  older speed rows on ← / → drop too, straight: through the walk of 2026-10-29, one
+  load would have left a row for the next to remove. Not a schema move.
+- **Delete sticks.** BACK's row is added to no file: it arrives by moving the row every
+  file since 2026-10-29 holds. A file with nothing on BACK stays that way, including a file
+  last opened between 2026-10-14 and 2026-10-29 (one line by hand). `PAD_NEW_ROWS` is gone.
+- **START.** The owner, 2026-11-04: hold-to-save is the Edge's only (row 724). The exact old
+  `pad:MENU → preset.save_new` drops at the next load, a changed row stays.
+- **Stays.** A row of the owner's on BACK, however close: Learn pad writes
+  `tempo.tap` as `fire` with value 0, not the factory's 1, so it is kept. That pad has
+  no chase until Learn gives it one. The same on ← / →. TAP TEMPO on the APC
+  (`apc40.py`), and the keyboard's `key:B`, which is not a controller. The APC's bank
+  pads and `preset.next`. No Edge default: Learn covers it.
+- **Two holders.** `routing.press_momentary`: a toggle on a `momentary` row stays on until
+  every source holding it has let go, across pads, the desk and osc. A source that can never
+  release goes through one door, `routing.let_go_lost`: a pad gone or closed
+  (`Router.pad_lost`), a desk's cable lost or its device closed (`MidiIO._let_go_held`, that
+  desk's presses only, as it recorded them, so a row changed under a held button still
+  releases), an
+  OSC sender silent for its `timeout` or its device closed or its row gone (`OscDevice.act`,
+  `close`). A phone holding a hit and sending nothing for `timeout` seconds (5 by default)
+  therefore lets go: a stuck chase is the worse failure.
+- **Qualified rows.** `pad@…` and `hat@…` are never moved: the factory has never written
+  one, and at load the table does not know which role is primary. If a second pad has become
+  the primary, its qualified row and a bare one on the same button both fire, on every button
+  and as before this row.
+- **Limit.** The factory rows name no pad, so they are the primary's; a second pad
+  still starts with none (row 212). An old factory row is recognised by its exact value,
+  so a hand-written row identical to it is taken at every load, and the file cannot say who
+  wrote it. A layout stamp in the file would settle that and is a saved-format change, left
+  to the format lane (row 724).
+- **Judge it.** 554.
+
+### 724. Rows by model: the Joy-Con's chase, the Edge's hold-to-save; whether Learn offers the list
+
+- **Joy-Con.** The owner, 2026-11-04: its chase is L on the left and R on the right, added to
+  `Model.layout` in #365 by that session; − and capture are the totem's. So on this build the
+  generic row chases on the (L)'s − and does nothing on the (R), which has no −, until #365 lands.
+  Nothing is built here for it. Its check is with #365's.
+- **The Edge's hold-to-save.** The owner, 2026-11-04: hold-to-save is the Edge's only, "the
+  controller Dylan will be using for VJ-style setups"; press-and-hold save must not be mapped on
+  other controllers; a controller is generic with extensions by model. The generic row goes
+  (row 723). `Model.layout` in #365 is its home: one line on the Edge's `Model`. **Today**, with no
+  code: an entry `role = "edge"`, `controller = "edge"` and a row `pad@edge:MENU` in that Mac's
+  `bindings.json`. `controller =` pins the Edge to the role, the qualifier gives the row to that
+  role alone, primary or not, and no load moves a qualified row. It takes both lines by hand, so an
+  Edge in the default `role = "pad"` has no save. A factory `pad@edge:MENU` would tie a row to a
+  role's name, not a model, and is not built.
+- **How a row gets there.** `Learn.learn_pad_button` lands `deck.chase` as `momentary`, but the
+  panel arms Learn pad from a widget's right-click, and `deck.chase` and `preset.list.*` have no
+  widget (`tempo.tap` has, the tempo line's "tap"). So plan 53 §5's "one Learn pad" is not reachable
+  from the panel for the chase: today it is one line in `bindings.json` and ⌘R. The chip plan 53 NQ7
+  proposes, or plan 52's panel button, would arm it. Not built here. `preset.save_new` has a widget,
+  but Learn writes `fire`, which saves on a brush: `hold` is written by hand.
+- **Learn and the list.** (rec) — pending the owner; built as recommended. `preset.list.*` stay in
+  the registry. **Recommended:** go on accepting them, unrefused, and give them no widget. A
+  hand-written row is a deliberate act by the person who said the default must go, a refusal is a
+  rule with no owner's word behind it, and once decks land they load only off air. The APC's "all
+  params ▾" still offers them, as it offers every param. A row Learn writes is `fire`, so it would
+  load on a brush, the thing the 2026-10-29 hold was for. By hand it wants `hold` and `"value": 0`:
+  at the default value it is the old factory row and the next load takes it, as the exact-row rule
+  must, since the file cannot say who wrote it. The same goes for `tempo.tap` by hand on BACK
+  (`fire`, default value), which moves to the chase, and for a bare `pad:MENU → preset.save_new`.
+- **Judge it.** 555.
+
+### 737. What the panel calls the analyzer
+
+- **Answer.** The owner, 2026-11-04: "Band is a ridiculous name for this thing." The
+  analyzer is a fixture on the graph, shared, and every preset may wire from it. On the
+  word for its parts, the owner, 2026-11-04: "The word 'band' is fine when you are
+  referring to a specific bin that frequencies accumulate in... EQ in general uses the
+  word 'band'." Band for one bin, as built.
+- **Built.** "Analyzer" for the fixture and its tuning: the section's head ("analyzer
+  tuning"), the group node's title, status and undo lines, the desk, the cheat sheet
+  and refusals ("the analyzer sets no base"). A part reads its own name (SUB, BASS,
+  MIDB, MID, UPR, AIR), or "analyzer 3" where a route only has its number. "Band"
+  stays as the plain audio word for one slice of the spectrum, in a count ("6 bands")
+  and a sentence ("Add analyzer band"); that includes the node's noun in
+  `graphview.summary` and the desk's B18 and B19, "Band +1" and "Band -1", which move
+  which band's strip is open.
+- **Rejected.** "Low", "mid" and so on as the noun: they are names, not a noun, so
+  "Add low" says nothing, and a layout may hold 1 to `N_MAX` parts under any names,
+  with SUB to AIR already saying where each listens. A new word ("range", "slice"):
+  nobody in audio says it, and a graphic EQ's parts are bands.
+
+### 738. Which saved names stayed
+
+- **Answer.** The owner, 2026-11-04, by the brief: words only.
+- **Stayed.** `band.*` param ids, `lane:` addresses, the `band` group key in a show's
+  `modules`, the `band` library and `scenes/band` folders, the `group:band` layout key,
+  `SECTIONS` keys and `PAGE_KEYS`. A rename is the format lane's question.
+- **Where a person still reads one.** ROUTING's target list prints raw ids
+  (`band.0.atk`), as for every group; a trash row's hover and a file-overwrite warning
+  name the folder (`band/`), because that is where the file is.
+- **Built.** `groupwords.py`, a leaf, holds one record per group: its short word
+  ("analyzer"), its title ("analyzer tuning") and its part ("band"). Everywhere that
+  printed the key now reads the record, including a patch's refusal and "only a preset
+  can be renamed". `undo.py` must stay a leaf, so it asks through `Registry.group_word`.
+
+### 743. No row of a preset on a meta param
+
+- **Asked.** Q9 of the wave 4 plan: may a preset's route drive a session param, as row
+  19 (a) allowed ("a route may lean on a session control")? A read-only count of the
+  Drive library, 2026-11-04: 49 rows in 48 of 110 presets are one row,
+  `hand:left.y → master.gain`, push 0.375, copied down from `party-tumble`, and 2 more
+  are `axis:RX → master.dyn`. The first the owner calls "quite annoying", the second unwanted.
+- **Answer.** owner — 2026-11-04: "a hard rule. No route from a preset onto a meta param.
+  Tuning like `master.gain` happens before the show, and the refusal shows quickly which
+  meta params belong in the preset." Overturns row 19 (a), whose ledger line was in
+  DECISIONS.md: the `ui_routing.SESSION_MARK` and `SESSION_TIP` mark and `is_session_target`
+  are gone with it.
+- **Built.** `routing.meta_refusal(pid)` by the id (`part_of_id`, which a test holds to
+  `part_of` over the whole registry, with `params.SESSION_IDS` for the five whose id
+  prefix is not their group: `edit.undo`, `edit.redo`, `app.restart`, `seq.page`,
+  `seq.select`), and `meta_row_refusal(b, target)`,
+  which asks `is_session_row` first: that is what `SessionTable` holds, so a route of any op,
+  on or off, and a preset-layer desk row are a preset's, and an invariant or global-layer
+  desk row (the APC's MASTER fader), a key, a pad button and a sink are not. No list of ids.
+  The doors: `Bindings.refusal`, so `_check`, `add` and `enable`; `bind`; `replace_owner` and
+  `move_route`, before anything moves; `referee`, so `set_routes` and a load; `set_desk`.
+  In words: `Learn.learn_source` and `learn_control` (a desk-armed learn ends, a bare arm
+  waits for a pad button); ROUTING's and the desk's target combos, "Learn hand", "Learn
+  desk", `route_from_items` and the GRAPH page's stubs do not offer one; a GRAPH cable or a
+  moved route end is refused by `Edit`; the param's menu says "the meta controller's: tuned
+  before the show" where "Route a lane here…" was. Learn pad stays on a meta param: a pad
+  row is the meta controller's. A saved row drops with a note, the file untouched, no dirty
+  dot, and a later save writes it out.
+- **Other options.** Keep row 19 (a)'s mark, which is what the owner overturned. Rewrite the
+  library's files in a migration: refused, since a row that drops at load needs no format
+  move, and the save takes it out. A `band.sel.*` knob in a preset's desk goes too, which
+  the old docstring called on purpose: the factory's global-layer rows on them stay.
+- **To reverse.** Have `meta_refusal` return None, and bring the mark back from git.
+- **Rough edge.** A `scale` naming `master.gain` still reads a meta param (row 18 (a)), so
+  the MASTER fader still scales a preset's rate rows. It never moves the param, so the rule
+  does not reach it; say if it should. Learn desk has always landed in the preset layer,
+  so it is now refused on every meta param, triggers too: `output.hold` and `output.take`
+  (check AI.5 learned them onto free buttons), `tempo.tap`, `band.select`. A desk button on
+  one is now a row in `bindings.json` or a pad button through Learn pad. Any such preset-
+  layer row in the library drops at load, and `tools/meta_routes.py` lists it. Question
+  for the owner: should Learn desk on a meta param land an invariant row in `bindings.json`,
+  as Learn pad does? Recommended, as a follow-up; not built, since it is a new road.
+- **Judge it.** 572, 573.
+
+### 744. Macros, modifiers and patches under the rule
+
+- **Asked.** The rule's text names routes. What of the rest?
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Built.** A base subscriber on a meta param was already dropped (D9). A depth subscriber
+  on one now drops too at `settle_bases`, said: it names a route that cannot land. A
+  modifier reads lanes and writes none, so it has no target to refuse; the route off its
+  lane goes through the same door (`test_a_modifier_has_no_target_its_route_is_refused`).
+  `patches.check` refuses a patch naming a meta param in a route, a desk row or a
+  subscriber, whole and in words, as it does any row a patch may not hold, so a save never
+  writes one and `read_patch` says so. A `Landing` that reaches `Edit.spawn` anyway keeps
+  the rest and says what the doors refused.
+- **Other options.** A patch's row dropped with a note at read, as a preset's: friendlier to
+  a saved patch, but `check` is one yes-or-no and a patch that loses a row is not what was
+  saved. `tools/meta_routes.py` lists any such patch, so the owner sees it first.
+- **To reverse.** Take the two `meta_refusal` tests out of `patches.check`.
+- **Judge it.** 573.
+
+### 745. What the rule makes dead, and the corpus
+
+- **Asked.** Row 650 kept a deck off air's row on a session param dormant, so two decks on
+  one preset would not push the room twice. No such row exists now.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Built.** Nothing removed. The rule holds on the way into the table, so a hot reload
+  leaves a row standing until the next load: the `follower` test stays in `Router.modulate`
+  for it (the review of #371, which undid its removal), and `Presets.document` filters
+  such rows, so a save never writes one back. `Registry.apply`'s `_owned_by_session` skip,
+  `follow_macros`' `lands` test and row 650's pass order stand: `app.frame` is frozen and
+  is D4's, and a follower still reads this frame's session values.
+  `party-tumble` loses `hand:left.y → master.gain`; `tools/preset_shots.py` loses its pose;
+  `test_routing`'s lag test loses its `party-tumble` scale case, which only a hand on
+  `master.gain` made late. `tools/meta_routes.py` reads a library path, writes nothing and
+  lists every row that would drop; the owner runs it.
+- **Goldens.** `party-tumble`'s could move only if the frame read `master.gain`: the golden
+  rig calls `router.modulate()` with no chain, so the lane rows it scales are dormant and
+  nothing drawn reads it. None expected; the `--all` run decides.
+- **To reverse.** Stop the filter in `Presets.document`, with row 743.
+- **Judge it.** 572.
+
+### 748. Two discrete controls pair into one polarised axis
+
+- **Asked.** How a pair is declared, what it publishes, how it is addressed.
+- **Answer.** The owner, 2026-11-04: "toggle controls need to be able to be paired
+  into a polarized axis: pressing one of the toggle controls moves you along one pole
+  of the axis, and pressing the other moves you on the other pole"; and "you need to be
+  able to pair discrete toggles into poles of a degree of freedom". The shape below is
+  (rec) — pending the owner.
+- **Built.** The address declares the pair: `pair:<+ pole>/<− pole>` in the rows' own
+  control names, `pair@p2:…` on a second pad, so there is no table of pairs and a preset
+  carries its own. `models.PAIRS`, filtered by `natural_pairs(model)`, are published by
+  default; `Sources.resolve` publishes any other valid pair the first time a row names
+  it. One lane per pair, fed by `Router.pad`: 0.5 at rest, 1 on the + pole, 0 on the −
+  pole, 0.5 with both; `None` with no pad, so a route lets go. Lanes are the source's and
+  shared, as a stick's are; a row is its deck's.
+- **Node mode.** `gamepad.degrees_of_freedom(model, pairs)`: a pair is one entry.
+- **Other options.** A table of pairs in the device's config: a preset would then
+  depend on a machine's file. New lanes under `axis`: they would land on the camera job's
+  `claims` and take the pad's feel unasked.
+- **Judge it.** 576, 577.
+
+### 749. Step or spring is the row's op
+
+- **Answer.** (rec) — pending the owner. The owner, 2026-11-04: "Should D-pad up move you
+  along a step function along that degree of freedom, or should it nudge a spring? [That]
+  is immaterial to what I'm saying right now."
+- **Built.** No new field. A `step` row on a pair is the neutral default: + pole
+  `p.step(+n)`, − pole `p.step(−n)`, once per press, and it is the meta controller's like
+  every pad button row (`is_session_row`, `bindings.json`, no undo step). A route on a pair
+  (`push`, `position`) is the preset's, with the row's feel. Learn pair lands the first,
+  Learn pair (spring) the second, each from two presses, + pole first. A whole-number or
+  enum target takes the step row on either, because a lane resting at 0.5 would park it
+  mid-throw. A toggle or a trigger is refused, having no two directions. A cable from a
+  pair's GRAPH port makes a route, as a stick's does. `Bindings._lane_only` lets `step`
+  through for this scheme alone.
+- **Judge it.** 576.
+
+### 750. The factory pairs keep their behaviour; no saved-format change
+
+- **Answer.** (rec) — pending the owner, from the brief: the two factory pairs must keep
+  their behaviour exactly.
+- **Built.** `hat:UP/DOWN → view.bright ±3` and `pad:LB/RB → view.shape ±1` stay two rows
+  in `padmap`, unmigrated. Tests: `test_the_factory_pairs_act_exactly_as_they_did`, and
+  `test_a_step_row_on_a_pair_acts_as_the_two_rows_it_stands_for`, which runs a press script
+  through both shapes and compares every frame.
+- **An older build.** No saved key moved. A route on a pair is a continuous row with no
+  feed: dormant, kept, written back, as a row naming a device the machine lacks. It does
+  own its target, as such a row does. A `step` row in `bindings.json` loads inert, because
+  `from_json` does not referee button ops. An older GRAPH draws a grey `pair` placeholder.
+- **Judge it.** 575.
+
+### 751. Not built: poles off the pad; a route leaves its poles' rows
+
+- **Answer.** (rec) — pending the owner.
+- **Keys and MIDI notes.** "Any two discrete controls" is built for any two of a pad.
+  Keys and notes dispatch through `Router.keys` and `midi.py`, and `pair_poles` would need
+  their state. The address has room. **Recommended:** later, when one is wanted; the APC's
+  NUDGE − / + are the likely first, and they are two rows that work today.
+- **A route and its poles' rows.** A route on `pair:UP/DOWN` does not take `hat:UP` and
+  `hat:DOWN` off their own rows: a preset's route may not edit the meta controller's table,
+  so a press acts on both, both are drawn, and the learn's line says what else a press
+  moves (`_also_moved`). A `step` row and a route on one pair stand together for the same
+  reason: refusing would not hold, since the `step` row outlives the preset and the next
+  preset may name the pair. Learn pair's `step` row, being the same layer as the poles'
+  rows, does replace them. **Recommended:** leave it until node mode and players decide
+  how a preset takes a control over.
+- **A learn on one pole of a `step` pair** leaves the other pole moving as it did, as a
+  row of its own (`_split_pairs`), and says so.
+- **A control something else holds is no pole** (`models.control_free`), whether the
+  totem's `skip` or, with #365, a model's own layout.
+- **Judge it.** 576.
