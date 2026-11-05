@@ -12938,7 +12938,8 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Answer.** The owner, 2026-11-04: two verbs remain, the crossfade and "copy on air to off air"; a timed
   fade is a control on the crossfade, which the playlist also uses.
 - **Row 3 of the reading is right.** `Registry.restore` with no trims empties the ledger, and the copy with
-  none jumps (the test fails without it). A wrinkle: a rebuilt patch forgets a param whose rows are lost
+  none jumps (the test fails without it). The ledger is carried by `Registry.take_running`, not `restore(trims=)`
+  as the reading has it: the pose's ids have a ledger and no snapshot holds them, so one owner. A wrinkle: a rebuilt patch forgets a param whose rows are lost
   (`_forget_lost_rows`), so the copy rebuilds it **before** the ledger lands, or a deck that had another row
   on that param loses the trim.
 - **Row 4 is right and short.** The document's pose is folded (`ViewState.pose`), not the same bits, so the
@@ -12951,6 +12952,9 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   the bit, `signature` and the dirty dot the same. GL: copy, then `xfade` 1 equals deck 1 at 0 byte for byte on
   the 23 presets with no feedback, within a mean of 8/255 on the 2 with a delay or look-back (their trails
   start empty, as a load's do).
+- **Sound.** A deck leaving the air lets its soundtracks go at once (`Channels._unheard`), and one coming on asks
+  afresh. Each channel opens its own source, so no track is shared between decks, and no patch can reach another
+  through one.
 - **Not carried.** A clip's place: a channel opens its source at the next poll. Trails. Node mode (#377) rides
   the document; a copy moves no player, so a saved cable naming a player on the other deck is dormant there.
 - **Undo.** One step (`push_on` first; the load nests in it). Onto an empty deck, `Undo.clear` afterwards, so no
@@ -12967,6 +12971,10 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   fade's own frame on a frame it drew, so its delays turn once. `_draw_render(panel_deck=)` chooses it only when
   the panel is on the deck off air, so never today. `preview_size` moved to `outputs.py`; `hold.py` re-exports it
   until D5d. Whether a delay's trail survives a move from the preview's size to the fade's is **not proved**: check 528.
+- **When it warms.** A preset listener, the one road for a load and a copy; a save fires it too but lands no new
+  graph, so only a new `graph.spec` counts, and it leaves a trail alone. Asked for one deck: not drawn above 0, or if
+  that deck has gone on air. A failure stays on SYSTEM until the next warm draw and is said in the footer at once.
+- **SYSTEM.** Names the deck off air by number, and shows its GPU block while the backdrop draws it too.
 - **Warm draw, measured** (the reading's risk 3). 25 corpus presets, a fresh renderer pair each, 1920×1080, standalone
   context with `ctx.finish()`, this Mac, shared. Worst is the first preset of the process (driver cache cold), so
   a real first compile may be above these:

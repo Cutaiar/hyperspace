@@ -138,9 +138,20 @@ def test_crossing_moves_on_air_once_and_each_player_with_its_duty(rig):
     assert on.deck is two                         # the performer stays on air
     assert off.deck is one                        # the other stays off air
     assert keys.deck is two and mouse.deck is two  # the picture's
+    meta.pointers.pop("window:keys")               # asked for after the crossing: on air
+    assert meta.pointer("window:keys").deck is two
     assert meta.panel is one                      # the panel is where it was put
     assert undo.installed() is one.undo
     assert meta.players.get(1).duty == "on_air" and meta.players.get(2).duty == "off_air"
+
+
+def test_keys_pointed_elsewhere_go_to_the_picture_at_a_crossing(rig):
+    meta, two = rig.meta, rig.two
+    keys = meta.pointer("window:keys")
+    meta.point("window:keys", two)                 # by hand, ahead of the fade
+    rig.mix.xfade = 1.0
+    meta.tick(rig.r.t, DT)
+    assert keys.deck is two                        # never inverted off air
 
 
 def test_a_held_chase_lets_go_on_the_deck_left_one_step_on_its_stack(rig):
@@ -452,11 +463,32 @@ def test_the_mixer_plays_the_deck_on_air():
     io = app.MediaIO(SimpleNamespace(stop=lambda: None), a)
     io.off_air.append(b)
     io.poll(DT, 1.0)
-    assert log == [("a", True), ("b", False)]     # nothing asks: as it was
+    assert log == [("b", False), ("a", True)]     # nothing asks: the first; the silent one first
     log.clear()
     io.heard = lambda: b
     io.poll(DT, 1.0)
     assert log == [("a", False), ("b", True)]
+
+
+def test_a_deck_leaving_the_air_lets_its_soundtrack_go_and_coming_back_asks_again():
+    """Plan 45's roads over the move: the deck left does not decode on, and turning
+    play-audio off on the other deck cannot strand it silent on return."""
+    from test_media_mixer import rig as media_rig
+    from test_media_mixer import track
+
+    m, _, _ = media_rig("shared:a.mp4")
+    ch = m.channels["a"]
+    ch.play_audio = True
+    m.poll(DT, 0.0)
+    t = track(m, "a")
+    assert (t.enables, t.disables) == (1, 0) and ch.heard is t
+    m.poll(DT, 0.1, heard=False)
+    assert ch.heard is None and m.drain(2.0)
+    assert (t.enables, t.disables) == (1, 1)
+    m.poll(DT, 0.2, heard=False)
+    assert m.drain(2.0) and (t.enables, t.disables) == (1, 1)    # once
+    m.poll(DT, 0.3)
+    assert ch.heard is t and (t.enables, t.disables) == (2, 1)
 
 
 def test_the_poi_guide_is_on_the_picture_of_the_deck_its_pad_is_on(rig):
@@ -471,6 +503,20 @@ def test_the_poi_guide_is_on_the_picture_of_the_deck_its_pad_is_on(rig):
     rig.meta.follow_fader()
     assert poi.guides(state, two.reg) and not poi.guides(state, one.reg)
     assert poi.guides(state, None)                # a renderer with no deck behind it
+
+
+def test_the_guide_asks_the_renderers_own_deck_whatever_a_hold_swapped_in(rig):
+    """`Hold.program` swaps `rig_source` for its `_HeldRig`, which has no `reg`."""
+    from hyperspace.hold import _HeldRig
+    from hyperspace.render import Renderer
+
+    state = poi.PoiState()
+    state.on, state.on_reg = True, rig.two.reg
+    guide = SimpleNamespace(shown=True, layer=lambda *a: pytest.fail("drew on the other's"))
+    r = SimpleNamespace(poi_source=state, poi_guide=guide, rig_source=_HeldRig("cables"),
+                        deck_reg=rig.one.reg)
+    Renderer._poi_layer(r, None, (8, 8), None, None)
+    assert guide.shown is False
 
 
 def test_main_puts_the_rigs_wires_on_both_renderers():
@@ -557,6 +603,134 @@ def test_k_is_the_other_decks_share_and_0_at_either_end():
     assert f.fade.k == 0.0
 
 
+def _system(fade):
+    from hyperspace.ui import Panel
+
+    return Panel.deck2_gpu_lines(SimpleNamespace(fade=fade))
+
+
+def test_system_names_the_deck_off_air_and_says_when_the_backdrop_draws_it():
+    f = _fading()
+    f.a.renderer.mix_error = f.b.renderer.mix_error = ""
+    f.b.renderer.stats = f.a.renderer.stats = {"gpu_ms": {"scene": 1.5}, "ends": ["shown(scene)"]}
+    assert _system(f.fade) == ["deck 2: off air, draws nothing"]
+    f.fade.previewed = True
+    assert _system(f.fade)[0].startswith("deck 2 gpu")
+    f.fade.previewed = False
+    f.pointer.deck = f.b
+    assert _system(f.fade) == ["deck 1: off air, draws nothing"]
+    f.fade.warm_error = "warm draw: no"
+    assert _system(f.fade)[-1] == "deck 1: warm draw: no"
+
+
+class _Tgt:
+    def __init__(self, ctx=None):
+        self.tex = object()
+        self.released = False
+
+    def fit(self, size):
+        return self
+
+    def release(self):
+        self.released = True
+
+
+def _warming(dreams=(False, False)):
+    f = _fading(dreams)
+    f.fade.make_target = _Tgt
+    log = []
+    for d, name in ((f.a, "a"), (f.b, "b")):
+        d.view = name
+        r = d.renderer
+        r.reset_delays = lambda name=name: log.append(f"reset {name}")
+        r.release_sized = lambda: None
+        r.draw_outputs = lambda s, w, h, dpr, views: log.append(f"draw {s}")
+    f.log = log
+    return f
+
+
+def _land(deck):
+    deck.graph.spec = SimpleNamespace(dream=None)
+
+
+def test_a_save_lands_no_new_graph_so_it_asks_for_no_warm_draw():
+    f = _warming()
+    f.fade.ask_warm(f.b)
+    assert f.fade.warm_deck is None               # told, nothing new
+    _land(f.b)
+    f.fade.ask_warm(f.b)
+    assert f.fade.warm_deck is f.b
+    assert f.fade.warm(8, 8, 1.0, Switches())
+    f.log.clear()
+    f.fade.ask_warm(f.b)                          # the save
+    assert f.fade.warm_deck is None
+    assert not f.fade.warm(8, 8, 1.0, Switches()) and f.log == []
+
+
+def test_a_real_save_on_the_deck_off_air_keeps_its_spec(rig):
+    two = rig.two
+    two.presets.load(min(two.presets.lib.list(PRESETS)))
+    spec = two.graph.spec
+    two.presets.save_as("a save")
+    assert two.graph.spec is spec
+
+
+def test_a_warm_asked_during_a_fade_or_for_a_deck_gone_on_air_draws_nothing():
+    f = _warming()
+    f.mix.xfade = 0.2
+    _land(f.b)
+    f.fade.ask_warm(f.b)
+    assert not f.fade.warm(8, 8, 1.0, Switches())  # drawn by the fade anyway, and forgotten
+    assert f.fade.warm_deck is None
+    f.mix.xfade = 1.0
+    f.pointer.deck = f.b
+    assert not f.fade.warm(8, 8, 1.0, Switches()) and f.log == []
+    f = _warming()
+    _land(f.b)
+    f.fade.ask_warm(f.b)
+    f.mix.xfade = 1.0                              # a cut before the frame
+    f.pointer.deck = f.b
+    assert not f.fade.warm(8, 8, 1.0, Switches()) and f.log == []  # deck 1's trails stand
+
+
+def test_a_failed_warm_draw_is_said_and_outlasts_the_frames_at_0():
+    f = _warming()
+    said = []
+    f.fade.said = said.append
+
+    def boom(*a):
+        raise RuntimeError("no compile")
+
+    f.b.renderer.draw_outputs = boom
+    _land(f.b)
+    f.fade.ask_warm(f.b)
+    assert not f.fade.warm(8, 8, 1.0, Switches())
+    assert "no compile" in said[0]
+    f.fade.lend = lambda: None
+    for _ in range(5):
+        f.fade.begin_frame()
+    assert "no compile" in f.fade.warm_error
+    f.b.renderer.draw_outputs = lambda *a: None
+    _land(f.b)
+    f.fade.ask_warm(f.b)
+    assert f.fade.warm(8, 8, 1.0, Switches()) and f.fade.warm_error == ""
+
+
+def test_the_backdrop_never_keeps_a_fades_texture_that_failed_or_went():
+    f = _warming()
+    f.fade.begin_frame = lambda: None
+    pv = SimpleNamespace(tap=None, tex="last", publish=lambda tex, t: setattr(pv, "tex", tex))
+    tgt = _Tgt()
+    f.fade.targets, f.fade.drew, f.fade.first_ok = [tgt], True, False
+    assert not f.fade.preview(pv, 8, 8, 1.0, (8, 8), Switches())   # a frame that failed
+    assert pv.tex == "last"
+    f.fade.first_ok = True
+    assert f.fade.preview(pv, 8, 8, 1.0, (8, 8), Switches())
+    assert pv.tex is tgt.tex
+    f.fade.close()
+    assert pv.tex is None and tgt.released
+
+
 # ----------------------------------------------------------------- GL
 
 def _docs() -> list[Path]:
@@ -577,7 +751,8 @@ def _gl(ctx, home):
     mix = Mix()
     meta = MetaController(first, second, mix=mix)
     fade = Fade(first, second, mix, ctx, pointer=meta.on_air_pointer)
-    meta.fade = fade
+    for d in meta.decks:                          # as `app.main`
+        d.presets.listeners.append(lambda name, d=d: fade.ask_warm(d))
     return SimpleNamespace(a=first, b=second, meta=meta, fade=fade, mix=mix)
 
 
@@ -719,13 +894,14 @@ def test_a_warm_draw_compiles_now_and_leaves_the_picture_as_it_was(ctx, tmp_path
 
     warm = _gl(ctx, tmp_path / "warm")
     warm.b.presets.load_doc(doc, None)
+    assert warm.fade.warm_deck is None           # `load_doc` alone tells no listener
     warm.fade.ask_warm(warm.b)
     warm.fade.ask_warm(warm.a)                   # (on air: drawn anyway, no matter)
     r2, orig = warm.b.renderer, warm.b.renderer.draw_outputs
     r2.draw_outputs = lambda s, w, h, dpr, views: orig(s, w, h, dpr, views, t_now=t)
     assert warm.fade.warm(*size, 1.0, Switches())
     del r2.draw_outputs
-    assert not warm.fade.warm_asked and not warm.fade.error
+    assert warm.fade.warm_deck is None and not warm.fade.warm_error
     assert not warm.fade.warm(*size, 1.0, Switches())    # once
     warm.mix.xfade = 1.0
     warm.meta.tick(t, DT)

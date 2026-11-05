@@ -349,7 +349,7 @@ def test_the_media_side_polls_the_decks_off_air_on_one_read():
     io = app.MediaIO(SimpleNamespace(stop=lambda: None), state)
     io.off_air.append(other)
     io.poll(DT, 1.0)
-    assert log == ["begin", "on air True", "off air False"]
+    assert log == ["begin", "off air False", "on air True"]
 
 
 # ------------------------------------------------------- the size, the handover

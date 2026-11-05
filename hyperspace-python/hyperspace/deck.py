@@ -286,6 +286,7 @@ class Deck:
             # plan 44 D3: the bus cuts are the loaded preset's — the renderer
             # reads them off the presets (`graph.rig_of`: `Presets.rig`)
             renderer.rig_source = presets
+            renderer.deck_reg = reg            # whose picture it is (the poi's guide)
         if hold is not None:
             hold.section = presets.graph       # plan 38 B3: landings keep the held program's nodes
         # one Learn over the live table, whatever the MIDI gate says: a knob
@@ -457,18 +458,17 @@ def meta_stack(first: Deck) -> undos.Undo:
 
 def _carry(src: Deck, dst: Deck) -> None:
     """What `Presets.document` does not hold and a copy must (the reading's rows 3
-    and 4), after the doc road landed the rest: the chase ledger by
-    `Registry.restore(trims=)`, the turn as it stands (`pose` folds it, which is
-    not the same bits), the field's and the media path's phases, each param's and
-    row's and bank's running state, and the renderer's clocks. One clock steps both
+    and 4), after the doc road landed the rest: the turn as it stands (`pose` folds
+    it, which is not the same bits), the field's and the media path's phases, each
+    param's running state with its chase ledger (`Registry.take_running`: the pose's
+    ledger too, which no snapshot holds), each row's and bank's, and the renderer's
+    clocks. One clock steps both
     banks, so nothing here is a lock: each deck runs on from where the copy left it.
     A clip's place and the trails are not carried: a load's start empty."""
     dst.router.modgraph                  # noqa: B018 — its lost rows forgotten first (plan 52)
     sv, dv = src.view, dst.view
     dv.ang, dv.body, dv.held = list(sv.ang), copy.copy(sv.body), sv.held
     dv.inst_phase, dv.media_phase = sv.inst_phase, sv.media_phase
-    trims = {p.id: p._trim for p in src.reg if p._trim and part_of(p) == "performance"}
-    dst.reg.restore(src.reg.snapshot(part="performance"), trims=trims)
     dst.reg.take_running(src.reg)
     dst.router.take_running(src.router)
     theirs = src.router._banks()
@@ -529,12 +529,10 @@ class MetaController:
     player, so the device list reads it again.
 
     `mix` is the crossfader (`output.xfade`, `output.xfade_s`): `tick` runs a
-    timed `crossfade` and follows the fader, `parked` is the one list of decks off
-    air, what `Host.off_air` reads, and `fade`, when there is one, is asked for a
-    warm draw after a copy."""
+    timed `crossfade` and follows the fader, and `parked` is the one list of decks
+    off air, what `Host.off_air` reads."""
 
     # (class-level: read by a meta controller from before a hot reload)
-    fade: Any = None
     timed: TimedFade | None = None
 
     def __init__(self, first: Deck, second: Deck, players: Players | None = None,
@@ -576,7 +574,7 @@ class MetaController:
         got = self.pointers.get(holder)
         if got is None:
             if holder in (KEYS, MOUSE):
-                deck = self.decks[0]
+                deck = self.on_air
             else:
                 player = self.players.player_of(holder)
                 deck, self.seats[holder] = self.deck_for(player.duty), player.number
@@ -679,7 +677,7 @@ class MetaController:
         for holder in (KEYS, MOUSE):
             p = self.pointers.get(holder)
             if p is not None:
-                p.deck = self.decks[1] if p.deck is self.decks[0] else self.decks[0]
+                p.deck = deck
         for fn in self.on_air_moved:
             fn(deck)
 
@@ -737,8 +735,6 @@ class MetaController:
         presets.unsaved = src.presets.unsaved
         if empty:
             dst.undo.clear()
-        if self.fade is not None:
-            self.fade.ask_warm(dst)
         return missing
 
     def targets(self) -> list[tuple[Any, str, str]]:
@@ -838,6 +834,11 @@ REST_FRAMES = 120
 WARM_SIZE = (64, 36)
 
 
+def _spec_of(deck):
+    """The graph `deck` has landed; a stand-in with none: None."""
+    return getattr(getattr(deck, "graph", None), "spec", None)
+
+
 def _dreams(deck) -> bool:
     """Does this deck's look use the dream worker now: a dream node in its
     graph, turned on?"""
@@ -864,9 +865,16 @@ class Fade:
         self.targets: list = []
         self.lent_to = self.rest = self.on_air  # who has the worker; the deck the fade left
         self.error = ""
-        self.drew = False                  # did the deck off air draw the last frame?
+        self.drew = False                  # did the deck off air's fade draw the last frame?
+        self.previewed = False             # …or the panel's backdrop? (`preview`)
+        self.first_ok = False              # did a fade's draw of the first view hold?
+        self.shown = None                  # the `Preview` handed a fade's texture
         self.resting = REST_FRAMES         # frames at 0 since it last did
-        self.warm_asked = False            # a warm draw at the next quiet frame
+        self.warm_deck: Deck | None = None   # the deck to draw once (`ask_warm`)
+        self.warm_error = ""               # what its last warm draw said, until the next
+        self.said: Callable[[str], Any] | None = None   # told when a warm draw fails
+        # each deck's graph as last told (`ask_warm`): a save lands no new one
+        self.specs = {id(d): _spec_of(d) for d in self.decks}
 
     @property
     def on_air(self) -> Deck:
@@ -887,6 +895,7 @@ class Fade:
         """The frame's start, whatever `k`: the lend; and at 0 what the fade
         said is forgotten, and after `REST_FRAMES` its frame-sized targets are
         let go (the render context is current)."""
+        self.previewed = False
         self.lend()
         if self.k > 0.0:
             self.resting = 0
@@ -923,38 +932,47 @@ class Fade:
             d.renderer.dreamer.source = self.dream if d is to else None
         self.dream.lend(to.reg)
 
-    def ask_warm(self, deck: Deck | None = None) -> None:
-        """A look landed on `deck`: if it is the deck off air, draw it once at the
-        next frame (`warm`), which is on the render context, as a copy or a load
-        from the panel is not. A deck on air is drawn anyway."""
-        if deck is None or deck is self.off_air:
-            self.warm_asked = True
+    def ask_warm(self, deck: Deck) -> None:
+        """A preset listener: a look landed on `deck`, or was saved, which landed no
+        new graph and must not wipe a trail, so only a new graph counts. If `deck` is
+        off air, draw it once at the next frame (`warm`), which is on the render
+        context, as a copy or a load from the panel is not. A deck on air is drawn."""
+        spec = _spec_of(deck)
+        if spec is self.specs.get(id(deck)):
+            return
+        self.specs[id(deck)] = spec
+        if deck is self.off_air:
+            self.warm_deck = deck
 
     def warm(self, w: int, h: int, dpr: float, switches, samples: int | None = None) -> bool:
         """Once after a copy or a load: the deck off air drawn small and thrown
         away, so a shader's compile lands now and not in a fade's first frame (the
-        reading's risk 3). Not above 0, where it is drawn anyway. Leaves nothing:
-        its delays hold nothing again, its targets go, a raise is said on `error`.
-        True when it drew."""
-        if not self.warm_asked or self.k > 0.0:
+        reading's risk 3). Not above 0, where it is drawn anyway, nor once that deck
+        has gone on air. Leaves nothing: its delays hold nothing again, its targets
+        go. A raise stays on `warm_error` until the next warm draw, and `said` is
+        told at once: this is the moment to learn it. True when it drew."""
+        deck, self.warm_deck = self.warm_deck, None
+        if deck is None or deck is not self.off_air or self.k > 0.0:
             return False
-        self.warm_asked = False
-        r = self.off_air.renderer
+        r = deck.renderer
         tgt = self.make_target(self.ctx)
+        why = ""
         try:
             hand_over(self.on_air.renderer, r)
             view = View(replace(switches, dim=1.0), WARM_SIZE, target=tgt.fit(WARM_SIZE),
                         viewport=(0, 0, *WARM_SIZE), samples=samples)
-            r.draw_outputs(self.off_air.view, w, h, dpr, [view])
-            self.error = view.error or ""
+            r.draw_outputs(deck.view, w, h, dpr, [view])
+            why = view.error or ""
         except Exception as e:  # noqa: BLE001 — the deck off air must not cost the on-air deck
-            self.error = f"{type(e).__name__}: {e}"[:160]
-            return False
+            why = f"{type(e).__name__}: {e}"[:160]
         finally:
             tgt.release()
             r.reset_delays()
             r.release_sized()
-        return True
+        self.warm_error = f"warm draw: {why}" if why else ""
+        if why and self.said is not None:
+            self.said(f"the deck off air will not draw: {why}")
+        return not why
 
     def preview(self, panel_view, w: int, h: int, dpr: float, full: tuple[int, int],
                 switches) -> bool:
@@ -962,10 +980,16 @@ class Fade:
         `outputs.Preview`), after `draw`: a fade's own picture on a frame the deck
         already drew, since its delays turn once a frame (`render.py`), else one
         draw at `draw_size(full, cap, False)` into the preview's tap. A raise is
-        said on `error`. True when it published."""
+        said on `error`, and a frame that fails leaves the last picture lit. True when
+        it published."""
+        self.previewed = True
         if self.drew and self.targets:
+            if not self.first_ok:
+                return False
             panel_view.publish(self.targets[0].tex, 0.0)
+            self.shown = panel_view         # (a texture of ours: `_forget_shown`)
             return True
+        self.shown = None
         tap = panel_view.tap
         if tap is None:
             return False
@@ -1008,7 +1032,9 @@ class Fade:
                           bg_alpha=v.bg_alpha, viewport=(0, 0, *sz),
                           samples=samples if i == 0 else None)
                      for i, (v, sz) in enumerate(zip(views, sizes, strict=True))]
+            self._forget_shown()
             r.draw_outputs(self.off_air.view, w, h, dpr, drawn)
+            self.first_ok = bool(drawn) and not drawn[0].error
             for i, (v, d) in enumerate(zip(views, drawn, strict=True)):
                 if not d.error:
                     v.mix, v.mix_k = self.targets[i].tex, k
@@ -1024,3 +1050,11 @@ class Fade:
         for tgt in self.targets:
             tgt.release()
         self.targets = []
+        self._forget_shown()
+
+    def _forget_shown(self) -> None:
+        """A `Preview` still showing a frame texture that has gone (a close, a
+        resize) holds none: the page reads a black box, never a dead texture."""
+        pv = self.shown
+        if pv is not None and all(t.tex is not pv.tex for t in self.targets):
+            pv.tex, self.shown = None, None

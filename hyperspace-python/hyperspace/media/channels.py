@@ -392,7 +392,9 @@ class Channels:
         replaced file is looked at again, and a timed source's transport is
         stepped and handed to it. Never raises for a source's sake. `heard`
         False (plan 44 D4, a deck off air): its channels leave the one mixer
-        alone — the on-air deck's are what it plays."""
+        alone — the on-air deck's are what it plays — and what they asked of a
+        soundtrack ends now (`_unheard`), so a deck that leaves the air decodes no
+        sound it cannot play, and coming back asks afresh."""
         if getattr(self, "_closed", False):
             return
         for ch in self.channels.values():
@@ -416,8 +418,24 @@ class Channels:
         if heard:
             voices, asked = self._voices()
             self._mixer().feed(voices, asked)
+        else:
+            self._unheard()
 
     # -- the sound (plan 45 V2) ---------------------------------------------
+
+    def _unheard(self) -> None:
+        """Each channel's soundtrack let go, at once: no toggle is flicking here,
+        the deck left the air. Nothing held: one compare a channel."""
+        for ch in self.channels.values():
+            if ch.heard is None:
+                continue
+            try:
+                self._sound().off(ch.heard, self._closer())
+            except Exception as e:  # noqa: BLE001 — a soundtrack must not kill the frame
+                if ch.source is not None:
+                    ch.source.status = error(f"{type(e).__name__}: {e}")
+                continue
+            ch.heard, ch.quiet = None, 0
 
     def _voices(self) -> tuple[tuple, bool]:
         """Each channel's soundtrack follows its play-audio toggle: enabled

@@ -255,7 +255,8 @@ class MediaIO:
         # (plan 44 §8: both renderers handed the same `MediaFrame`)
         self.state.sources.begin_frame()
         heard = self.heard() if self.heard is not None else self.state
-        for channels in (self.state, *self.off_air):
+        # the deck not heard first, so what it lets go is let go before the one on air asks
+        for channels in sorted((self.state, *self.off_air), key=lambda c: c is heard):
             channels.poll(dt, now, heard=channels is heard)   # the mixer plays the deck on air
 
     def close(self) -> None:
@@ -735,7 +736,7 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
                                   publish=sl.publishers))
         if fade is not None:
             fade.begin_frame()
-            if fade.k > 0.0 or fade.warm_asked or off_preview:
+            if fade.k > 0.0 or fade.warm_deck is not None or off_preview:
                 lw, lh, dpr = max(w, 1), max(h, 1), fbw / max(w, 1)
                 samples = _samples_of(ctx, ctx.screen)
                 fade.warm(lw, lh, dpr, first.switches, samples)
@@ -1720,8 +1721,8 @@ def main(argv: list[str] | None = None) -> None:
     # deck 1 and moved by nothing yet. Each handle reads through its own from here
     meta = MetaController(deck, deck2, players, mix=mix)
     fade = Fade(deck, deck2, mix, ctx, dream=dream_io, pointer=meta.on_air_pointer)
-    meta.fade = fade
     media.heard = lambda: meta.on_air.presets.media
+    fade.said = lambda text: library.say(warning=text)    # a warm draw's failure, at once
     panel.fade = fade                  # the SYSTEM page's second GPU block
     panel.pointer = library.pointer = meta.panel_pointer
     panel.meta_undo = meta.undo        # the footer's message slot, beside the deck's

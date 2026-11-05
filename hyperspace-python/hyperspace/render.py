@@ -1169,6 +1169,8 @@ class Renderer:
         # None: nothing is drawn
         self.poi_source = None
         self.poi_guide = None
+        # the registry of the deck this renderer draws (`Deck.build`); None: no deck
+        self.deck_reg = None
         # plan 36 T1: whoever holds the rig's own wires (the open show,
         # `library.Project.rig`, by `app`); None: every bus cable standing
         self.rig_source = None
@@ -1784,7 +1786,7 @@ class Renderer:
         guide = getattr(self, "poi_guide", None)
         # (one state on both decks: its guide belongs to the picture of the deck
         # its pad is on, so a fade draws it once, on that picture's side)
-        mine = getattr(getattr(self, "rig_source", None), "reg", None)
+        mine = getattr(self, "deck_reg", None)
         if state is None or not getattr(state, "on", False) or not poi.guides(state, mine):
             if guide is not None:
                 guide.shown = False

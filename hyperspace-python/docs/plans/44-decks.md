@@ -488,7 +488,7 @@ through its pointer, `k` is the other deck's share, and `preview` and `warm` are
 `app.main`, so deck 1 stays on air (registers 694–696). **For D5d:** call `meta.tick(now, dt)` at the
 head of `frame`, beside `clock.tick`, so the deck arriving gets this frame's `dim`, `bands` and `max_frame`;
 `ui_media.media_of` reads deck 1's channels whichever deck the panel is on; `XFADE_TIP` and
-`test_the_crossfader_is_still_the_dim` are yours to change; `Fade.warm` is asked on any look landing off air already.
+`test_the_crossfader_is_still_the_dim` are yours to change; `Fade.warm` is asked by a preset listener in `app.main` already, on a new graph off air.
 
 The first PR a performer notices. **New** `deck.Decks`: the list, `on_air`
 and `panel` indices, `take(seconds)`, `copy(src, dst)`. The retargets:
