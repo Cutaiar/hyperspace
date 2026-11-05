@@ -25,7 +25,7 @@ from hyperspace import devices, hands, lfo, routing, tempo, undo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
-from hyperspace.deck import Deck
+from hyperspace.deck import Deck, meta_stack
 from hyperspace.library import PRESETS, Library
 from hyperspace.midi import MidiIO
 from hyperspace.overlay import Output
@@ -114,11 +114,14 @@ def boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None, sour
                       lfos=lfo.LFOs(seed=1),
                       hands=hands_setup, outputs=outputs_setup, panel=panel_setup,
                       devices=devices_setup, sources=sources)
+    # the meta controller's stack (plan 44 D5b), as `MetaController` builds it
+    meta_undo = meta_stack(deck)
+    undo.install_meta(meta_undo)
     r.__dict__.update(lib=lib, reg=deck.reg, view=deck.view, control=control, chain=chain,
                       audio=audio, router=deck.router, table=deck.table, presets=deck.presets,
                       clock=deck.clock, lfos=deck.lfos, learn=deck.learn, inp=inp,
                       out=out, undo=deck.undo, envs=deck.envs, seq=deck.seq, home=Path(home),
-                      deck=deck)
+                      deck=deck, meta_undo=meta_undo)
     return r
 
 
@@ -136,6 +139,7 @@ def frames(r, n: int = 1, *, hand=None, lanes: bool = False) -> None:
         r.midi.poll()
         r.router.follow_macros()
         r.undo.tick(r.t)
+        r.meta_undo.tick(r.t)
         if hand is not None:
             r.router.feed("hand", hand(r.t))
         r.router.modulate(r.chain if lanes else None)
@@ -328,7 +332,8 @@ def test_integrated_state_and_the_clock_are_not_watched(rig):
 
 
 def test_session_params_are_covered(rig):
-    """The hands' feel and the master faders undo like the look does."""
+    """The hands' feel and the master faders undo like the look does, on the
+    meta controller's stack (plan 44 D5b)."""
     reg = rig.reg
     smooth, gain = reg["hands.smooth"], reg["master.gain"]
     was = (smooth.base, gain.base)
@@ -336,9 +341,10 @@ def test_session_params_are_covered(rig):
     settle(rig)
     gain.step(-2)
     settle(rig)
-    assert len(rig.undo.stack) == 2 and (smooth.base, gain.base) != was
-    rig.undo.undo()
-    rig.undo.undo()
+    assert len(rig.meta_undo.stack) == 2 and (smooth.base, gain.base) != was
+    assert rig.undo.stack == []
+    rig.meta_undo.undo()
+    rig.meta_undo.undo()
     assert (smooth.base, gain.base) == was
 
 
@@ -456,9 +462,10 @@ def test_save_after_undoing_a_load_writes_the_earlier_preset(rig):
     assert b.read_text() == b_text
 
 
-def test_a_show_load_and_its_startup_preset_are_one_step(rig):
-    """Nested pushes in one frame are one action: the show and the preset
-    it starts on undo together, and the `Project` comes back."""
+def test_a_show_load_and_its_startup_preset_are_one_step_each(rig):
+    """A show is the meta controller's and the preset it starts on is a load on
+    its deck (plan 44 D5b): one step on each stack, each undoing its own, and
+    both undone the `Project` comes back as it was."""
     reg, lib, pr = rig.reg, rig.lib, rig.lib.project
     reg["master.gain"].step(-3)                        # a session edit
     settle(rig)
@@ -467,21 +474,27 @@ def test_a_show_load_and_its_startup_preset_are_one_step(rig):
     last = lib.last_show()
     pr.load("house")
     settle(rig)
-    assert labels(rig)[1:] == ["show house"]
+    meta = rig.meta_undo
+    assert [s.label for s in meta.stack][1:] == ["show house"]
+    assert labels(rig) == [f"load {pr.startup}"]
     assert pr.name == "house" and lib.current(PRESETS) != "TUMBLE"
-    assert rig.undo.undo() and rig.undo.status == "undid show house"
+    assert meta.undo() and meta.status == "undid show house"
+    assert rig.undo.undo()                             # …and the preset it started on
     session = reg.snapshot(part="session")
     assert (pr.name, list(pr.bank), pr.startup, pr.path) == party[:4]
     assert same_look(look(rig), party[4]) and session == party[5]
     assert (lib.current(PRESETS), lib.current("band")) == party[6:]
     assert pr.active == 0 and lib.last_show() != last  # `last_show` is not rewritten
-    assert rig.undo.redo()
+    assert meta.redo() and rig.undo.redo()
     assert pr.name == "house" and pr.startup == lib.current(PRESETS)
-    # a new show is one step too
+    # a new show is one step on each too
+    meta.undo()
     rig.undo.undo()
     pr.new("fresh")
     settle(rig)
     assert labels(rig)[-1] == "new show" and pr.name == "fresh"
+    assert meta.stack[-1].label == "new show"
+    meta.undo()
     rig.undo.undo()
     assert pr.name == "party" and lib.current(PRESETS) == "TUMBLE"
 
@@ -685,18 +698,19 @@ def test_a_scene_pick_undoes_with_its_strips(rig):
     one step, and the restore's second pass puts the strips back — edited
     ones included."""
     reg, lib = rig.reg, rig.lib
+    meta = rig.meta_undo                               # (plan 44 D5b: the analyzer's)
     reg["band.1.thr"].step(6)                          # a strip off its scene
     settle(rig)
     band = reg.snapshot("band")
     scene, cur = reg["scene.select"].base, lib.current("band")
     reg["scene.select"].set(4)
     settle(rig)
-    assert len(rig.undo.stack) == 2 and reg.snapshot("band") != band
+    assert len(meta.stack) == 2 and reg.snapshot("band") != band
     assert lib.current("band") != cur
-    assert rig.undo.undo()
+    assert meta.undo()
     assert reg["scene.select"].base == scene and reg.snapshot("band") == band
     assert lib.current("band") == cur and lib.is_dirty("band")
-    assert rig.undo.redo() and reg["scene.select"].base == 4
+    assert meta.redo() and reg["scene.select"].base == 4
     assert reg.snapshot("band") != band and not lib.is_dirty("band")
 
 
@@ -746,7 +760,7 @@ def three_bands(home) -> None:
 def test_a_band_preset_load_with_a_layout_undoes_whole(rig):
     """`Marks.before`: a load that brings its own layout is one step, and
     undoing it puts the layout back first, then the strips, then the name."""
-    reg, lib, chain = rig.reg, rig.lib, rig.chain
+    reg, lib, chain, meta = rig.reg, rig.lib, rig.chain, rig.meta_undo
     curve = chain.layout()["bands"][0]["curve"]
     three_bands(rig.home)
     doc = json.loads((rig.home / "patches" / "band" / "three.json").read_text())
@@ -760,73 +774,74 @@ def test_a_band_preset_load_with_a_layout_undoes_whole(rig):
     assert chain.n == 6
     lib.load("band", "THREE")
     settle(rig)
-    assert chain.n == 3 and "band.4.thr" not in reg and labels(rig)[-1] == "analyzer: THREE"
-    assert rig.undo.undo() and rig.undo.status == "undid analyzer: THREE"
+    assert chain.n == 3 and "band.4.thr" not in reg and meta.stack[-1].label == "analyzer: THREE"
+    assert meta.undo() and meta.status == "undid analyzer: THREE"
     assert chain.n == 6 and chain.layout() == layout and reg.snapshot("band") == band
     assert lib.current("band") == cur
-    assert rig.undo.redo()
+    assert meta.redo()
     assert chain.n == 3 and lib.current("band") == "THREE" and not lib.is_dirty("band")
-    assert rig.undo.undo() and rig.undo.undo()         # …and the strip edit before it
-    assert chain.n == 6 and reg.snapshot("band") != band and rig.undo.stack == []
+    assert meta.undo() and meta.undo()                 # …and the strip edit before it
+    assert chain.n == 6 and reg.snapshot("band") != band and meta.stack == []
+    assert rig.undo.stack == []                        # no deck's
 
 
 def test_strips_are_put_back_only_onto_the_layout_they_were_made_on(rig):
     """The tag (fork 4): after a band is added, an older strip edit is
     left and the rest of that step lands, with a note; with the band
-    removed again, it lands."""
-    reg, control = rig.reg, rig.control
-    thr, bright = reg["band.0.thr"], reg["view.bright"]
-    was = (thr.base, bright.base)
+    removed again, it lands. (Plan 44 D5b: the meta controller's stack.)"""
+    reg, control, meta = rig.reg, rig.control, rig.meta_undo
+    thr, gain = reg["band.0.thr"], reg["master.gain"]
+    was = (thr.base, gain.base)
 
     def edit():
         thr.step(5)
-        bright.step(5)                                 # the same frame: one gesture
+        gain.step(5)                                   # the same frame: one gesture
         settle(rig)
-        assert len(rig.undo.stack) == 1
+        assert len(meta.stack) == 1
         return thr.base
 
     edited = edit()
     i = control.add_band()
     frames(rig, 3)
-    assert rig.undo.undo()
-    assert bright.base == was[1]                       # the rest of the step landed
+    assert meta.undo()
+    assert gain.base == was[1]                         # the rest of the step landed
     assert reg["band.0.thr"].base == edited            # the strip was left
-    assert "the analyzer's bands have changed: their strips were left" in rig.undo.status
+    assert "the analyzer's bands have changed: their strips were left" in meta.status
     control.remove_band(i)
     frames(rig, 3)
     # the same again, the band removed before the undo: the layout is the
     # one the step was made on, so the strip lands too
     reg["band.0.thr"].set(was[0])
     settle(rig)
-    rig.undo.clear()
+    meta.clear()
     thr = reg["band.0.thr"]
     edit()
     i = control.add_band()
     frames(rig, 3)
     control.remove_band(i)
     frames(rig, 3)
-    assert rig.undo.undo() and "bands" not in rig.undo.status
-    assert (reg["band.0.thr"].base, bright.base) == was
+    assert meta.undo() and "bands" not in meta.status
+    assert (reg["band.0.thr"].base, gain.base) == was
 
 
 def test_a_band_add_remove_or_move_makes_no_step(rig):
     """Tick step 1: the watched ids or the tag changed — not a step (the
     band strip's own 8-second reset undo is untouched beside it)."""
-    control, chain = rig.control, rig.chain
+    control, chain, meta = rig.control, rig.chain, rig.meta_undo
     i = control.add_band()
     settle(rig)
-    assert chain.n == 7 and rig.undo.stack == []
+    assert chain.n == 7 and meta.stack == [] and rig.undo.stack == []
     control.move_band(0, 3)
     settle(rig)
-    assert rig.undo.stack == []
+    assert meta.stack == [] and rig.undo.stack == []
     control.remove_band(i)
     settle(rig)
-    assert chain.n == 6 and rig.undo.stack == []
-    assert rig.undo.undo() is False
-    # …and an edit after it is a step again
+    assert chain.n == 6 and meta.stack == [] and rig.undo.stack == []
+    assert meta.undo() is False
+    # …and an edit after it is a step again, on the meta controller's stack
     rig.reg["band.2.thr"].step(3)
     settle(rig)
-    assert len(rig.undo.stack) == 1
+    assert len(meta.stack) == 1 and rig.undo.stack == []
 
 
 def test_the_stack_is_bounded(rig):
@@ -858,20 +873,20 @@ def test_undoing_a_scene_pick_names_the_band_preset_it_was_on(rig):
     the strip's own name back, so Save cannot write a user preset's look
     under a factory scene's name. A slider undone after a save-as stays
     on the new name (fork 2)."""
-    reg, lib = rig.reg, rig.lib
+    reg, lib, meta = rig.reg, rig.lib, rig.meta_undo
     reg["band.1.thr"].step(4)
     lib.save_as("band", "Mine")                        # scene 0's strips, edited, as Mine
     settle(rig)
-    rig.undo.clear()
+    meta.clear()
     band = reg.snapshot("band")
     reg["scene.select"].set(3)
     settle(rig)
-    assert lib.current("band") != "Mine" and len(rig.undo.stack) == 1
-    assert rig.undo.undo()
+    assert lib.current("band") != "Mine" and len(meta.stack) == 1
+    assert meta.undo()
     assert lib.current("band") == "Mine" and not lib.is_dirty("band")
     assert reg.snapshot("band") == band and reg["scene.select"].base == 0
-    assert rig.undo.redo() and lib.current("band") != "Mine"
-    assert rig.undo.undo() and lib.current("band") == "Mine"
+    assert meta.redo() and lib.current("band") != "Mine"
+    assert meta.undo() and lib.current("band") == "Mine"
     # a slider, then a save-as, then undo: the value goes back, the name stays
     frames(rig, 3)
     reg["view.bright"].step(3)
@@ -1038,6 +1053,7 @@ def test_an_idle_app_makes_no_step(tmp_path):
         renderer.ghost.source, renderer.ghost.router = hands_io, r.router
     reg["ghost.on"].set(True)
     r.undo.clear()
+    r.meta_undo.clear()
 
     def move_hands(t):
         hs = []
@@ -1068,7 +1084,7 @@ def test_an_idle_app_makes_no_step(tmp_path):
         restart=lambda: None, quit=lambda: None,
         devices=devices.DeviceRegistry(devices=[devices.MidiDevice("apc40", io=r.midi),
                                                 devices.HandsDevice("leap", io=hands_io)]),
-        dream_io=None, learn=r.learn, undo=r.undo)
+        dream_io=None, learn=r.learn, undo=r.undo, stacks=(r.undo, r.meta_undo))
 
     def run(n):
         for _ in range(n):
@@ -1095,6 +1111,7 @@ def test_an_idle_app_makes_no_step(tmp_path):
             ctx.release()
     assert labels(r) == [f"load {n}" for n in order]
     assert r.undo.redos == []
+    assert r.meta_undo.stack == []                      # and the meta controller's, nothing
     # it was not a still life: hands, lanes and LFOs all held params
     table_sources = {b.source.split(":")[0] for b in r.table.routes()}
     assert len(performed) > 20 and "hand" in table_sources

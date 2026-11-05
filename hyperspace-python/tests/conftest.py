@@ -353,6 +353,7 @@ def _no_undo_left_installed():
     from hyperspace import undo
 
     undo.install(None)
+    undo.install_meta(None)
 
 
 def opened_last(home, show: str = "house"):

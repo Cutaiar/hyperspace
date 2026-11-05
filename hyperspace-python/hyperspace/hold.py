@@ -69,11 +69,9 @@ import copy
 import math
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import replace
 from typing import Any
 
 from .params import (
-    PERFORMANCE_GROUPS,
     POSE_IDS,
     cut_ids,
     lookback_ids,
@@ -203,7 +201,7 @@ class Hold:
         undo, point = self.undo, self.point
         self._release()                 # the revert lands the hold point as it was
         if undo is not None and point is not None:
-            undo.revert(_preset_part(point, self.reg), "drop the preview")
+            undo.revert(point, "drop the preview")   # a deck's stack holds only the preset
         else:
             todo = {pid: v for pid, v in self.values.items()
                     if pid in self.reg and not alike(self.reg[pid].base, v)}
@@ -474,17 +472,6 @@ def register(reg, hold: Hold, now: Callable[[], float] = lambda: 0.0) -> list[st
     reg.trigger("output.drop", "Drop preview", hold.drop, tip=DROP_TIP,
                 lit=lambda: hold.on, **rig)
     return ["output.hold", "output.take", "output.drop"]
-
-
-def _preset_part(state, reg):
-    """An undo state with only the preset's bases (the performance groups)
-    — Drop puts the look back, never the rig."""
-    bases = getattr(state, "bases", None)
-    if bases is None:
-        return state
-    keep = {pid: v for pid, v in bases.items()
-            if (p := reg.get(pid)) is None or p.group in PERFORMANCE_GROUPS}
-    return replace(state, bases=keep)
 
 
 # plan 38 B3: each kind `GraphSection.names` settles → the param ids of an

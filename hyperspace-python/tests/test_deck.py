@@ -44,7 +44,7 @@ from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.bands import CEIL
 from hyperspace.control import Control
-from hyperspace.deck import Deck
+from hyperspace.deck import Deck, in_preset
 from hyperspace.fx import FxState
 from hyperspace.ghost import GhostState
 from hyperspace.hotreload import MODULES
@@ -113,8 +113,7 @@ def old_boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None):
     inp, out = FakeIn(), FakeOut()
     midi = MidiIO(reg, router.table, inp=inp, out=out, learner=learn)
     lib.project.load_startup()
-    u = undo.Undo(reg, router.table, marks=Marks(lib),
-                  tag=lambda: tuple(s.name for s in audio.chain.spec),
+    u = undo.Undo(reg, router.table, marks=Marks(lib), only=in_preset,
                   on_restore=router.sync_macros)
     undo.install(u)
     r.__dict__.update(lib=lib, reg=reg, view=view, control=control, chain=chain, audio=audio,

@@ -658,11 +658,11 @@ def test_undoing_a_load_puts_the_earlier_layout_back(tmp_path):
     pr.load("show-plain")
     settle(r)
     assert pr.layout == {} and not pr.is_dirty()
-    r.undo.clear()
+    r.meta_undo.clear()
     pr.load("show-laid")
     settle(r)
     assert pr.layout == {"lfo.1": [0, 10]}
-    assert r.undo.undo()
+    assert r.meta_undo.undo()                         # a show: the meta controller's (plan 44 D5b)
     assert pr.name == "show-plain" and pr.layout == {} and not pr.is_dirty()
 
 
