@@ -724,7 +724,7 @@ here; overturn → the change, then the same.
 | 690 | Plan 44 D5a: `docs/GLOSSARY.md`, one row per concept; a controller moved mid-gesture releases what it holds on the deck it left, and its real release goes nowhere | — | (rec) — pending the owner's signature on the glossary |
 | 723 | Wave 4 B2: `pad:VIEW` holds `deck.chase`; `pad:VIEW → tempo.tap` and `hat:LEFT` / `hat:RIGHT → preset.list.*` leave the pad's factory rows; an old factory row moves at the next load, one the owner changed stays | 654 | owner — 2026-11-04: base chase is Back; tap tempo is not a default on every controller, "extremely sensitive"; no swapping presets from a controller or a pad |
 | 724 | Wave 4 B2: rows by model: a Joy-Con's chase is L / R in #365's `Model.layout`; hold-to-save is the Edge's, there too, by a qualified row until then; Learn goes on accepting `preset.list.*` and `tempo.tap`, unrefused | 723 | owner — 2026-11-04 on the Joy-Con and the Edge; (rec) — pending the owner on Learn |
-| 737 | Wave 4 AZ: the panel says "analyzer" for the fixture and its tuning; a part reads its own name (SUB … AIR) or "analyzer 3", and "band" stays only as the plain audio word for one of the parts | 566 | The fixture: the owner, 2026-11-04. The parts' word: (rec) — pending the owner |
+| 737 | Wave 4 AZ: the panel says "analyzer" for the fixture and its tuning; a part reads its own name (SUB … AIR) or "analyzer 3", and "band" stays only as the plain audio word for one of the parts | 566 | owner — 2026-11-04: band for one bin, as built |
 | 738 | Wave 4 AZ: words only; `band.*` ids, `lane:` addresses, the `band` group key, the library's `band` folders, `SECTIONS` and `PAGE_KEYS` all stay; ROUTING's target list keeps printing raw ids | 567 | The owner, 2026-11-04 |
 | 743 | Wave 4 MR: the hard rule. No row of a preset may drive a meta controller param (`part_of(p) == "session"`); refused in words at Learn, at the pickers and at `Bindings`' doors, dropped with a note at a load, removed by the next save; the meta controller's own rows stay, the line being `is_session_row`. Overturns row 19 (a) | 572, 573 | owner — 2026-11-04: "a hard rule" |
 | 744 | Wave 4 MR: macro base and depth subscribers on a meta param drop at `set_macros`; a modifier has no target, so its route is what is refused; a patch naming one is refused whole by `check`, and a spawn's doors drop what reaches them with a note | 573 | (rec) — pending the owner |
@@ -12945,8 +12945,10 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 ### 737. What the panel calls the analyzer
 
 - **Answer.** The owner, 2026-11-04: "Band is a ridiculous name for this thing." The
-  analyzer is a fixture on the graph, shared, and every preset may wire from it. The
-  word for its six parts was left to the builder: (rec) — pending the owner.
+  analyzer is a fixture on the graph, shared, and every preset may wire from it. On the
+  word for its parts, the owner, 2026-11-04: "The word 'band' is fine when you are
+  referring to a specific bin that frequencies accumulate in... EQ in general uses the
+  word 'band'." Band for one bin, as built.
 - **Built.** "Analyzer" for the fixture and its tuning: the section's head ("analyzer
   tuning"), the group node's title, status and undo lines, the desk, the cheat sheet
   and refusals ("the analyzer sets no base"). A part reads its own name (SUB, BASS,
