@@ -47,6 +47,7 @@ def _pointed(r) -> SimpleNamespace:
     pointer, as `app.main` does: all on deck 1."""
     second = Deck.beside(r.deck, lfos=lfo.LFOs(seed=1))
     meta = MetaController(r.deck, second)
+    r.meta_undo = meta.undo                # (`boot`'s stood in until there was a meta controller)
     r.lib.pointer = meta.panel_pointer
     r.midi.point(meta.pointer(DESK), meta.panel_pointer)
     return SimpleNamespace(r=r, meta=meta, one=r.deck, two=second)
@@ -612,7 +613,9 @@ def test_the_experiments_are_on_both_decks_over_one_state(rig):
 
 def test_the_meta_controller_is_a_swap_target_of_a_watched_module(rig):
     from hyperspace import deck as deckmod
+    from hyperspace import library as librarymod
     from hyperspace import pointer as pointermod
+    from hyperspace import undo as undomod
 
     rig.meta.pointer("a role")
     targets = rig.meta.targets()
@@ -621,4 +624,5 @@ def test_the_meta_controller_is_a_swap_target_of_a_watched_module(rig):
     assert "pointer" in MODULES and MODULES.index("pointer") < MODULES.index("seq_page")
     for obj, mod, cls in targets:
         assert mod in MODULES
-        assert type(obj) is getattr({"deck": deckmod, "pointer": pointermod}[mod], cls)
+        assert type(obj) is getattr({"deck": deckmod, "pointer": pointermod, "undo": undomod,
+                                     "library": librarymod}[mod], cls)

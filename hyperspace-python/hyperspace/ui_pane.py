@@ -249,6 +249,29 @@ def focused(panel) -> str | None:
     return section_of(keys[page]) if isinstance(page, int) and 0 <= page < len(keys) else None
 
 
+def where(panel) -> str | None:
+    """The section you are in, for ⌘Z (plan 44 D5b): the one under the mouse; with
+    the mouse on the panel but in no section (the canvas, a header) none, since
+    the canvas is the panel's deck; with the mouse off the panel, the focus. Both
+    readings are of the latest draw."""
+    from . import ui_graph  # (late: ui_graph imports this module)
+    st = panel.__dict__.get(ui_graph.STATE) or {}
+    under = st.get("pane_under")
+    if under is not None:
+        return under
+    return None if getattr(panel, "_mouse_on_panel", False) else focused(panel)
+
+
+def left(panel) -> None:
+    """A frame's draw begins: nothing is under the mouse until it says so, so a
+    panel hidden or collapsed says the mouse is off it (`where`)."""
+    from . import ui_graph  # (late: ui_graph imports this module)
+    panel._mouse_on_panel = False
+    st = panel.__dict__.get(ui_graph.STATE)
+    if st is not None:
+        st["pane_under"] = None
+
+
 def scroll_to(st: dict) -> None:
     """Ask the pane's next draw, in whichever layout that is, to scroll the
     focused section into view — with none focused, to the pane's top. Not a
@@ -375,6 +398,8 @@ def _body(panel, st: dict, key: str, body, dt: float, selection, h: float,
         imgui.begin_disabled()
     try:
         if imgui.begin_child("##body", imgui.ImVec2(0, h)):
+            if imgui.is_window_hovered(imgui.HoveredFlags_.child_windows):
+                st["pane_under"] = key     # what ⌘Z goes by (`where`)
             t0 = time.perf_counter()
             if body is not None:
                 body(panel, dt)

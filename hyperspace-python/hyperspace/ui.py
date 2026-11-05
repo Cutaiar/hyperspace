@@ -657,6 +657,11 @@ CHEATSHEET = [
 # named. Never reorder it; a new section goes at the end. FX's slot is the
 # fx section. GRAPH's has no section (the canvas is always there): it lets
 # go of the focus.
+# the sections that hold the meta controller's params: ⌘Z there takes its stack
+# (plan 44 D5b, `Panel.in_meta_section`). The owner named analyzer, hands and
+# output; audio holds the master faders and nothing of a preset (row 692)
+META_SECTIONS = ("output", "audio", "analyzer", "hands")
+
 PAGE_KEYS = ["output", "view", "faces", "media", "camera", "lookback", "fx", "audio", "analyzer",
              "routing", "graph", "lfo", "seq", "hands", "presets", "system"]
 
@@ -776,6 +781,7 @@ class Panel:
         self.pad = None       # set by app.py unless [gamepad] enabled = false (gamepad.Pad)
         self.learn = None     # set by app.py: the armed param and the held question (learn.Learn)
         self.undo = None      # set by app.py (undo.Undo): its status shows in the footer
+        self.meta_undo = None  # the meta controller's stack (plan 44 D5b): so does its
         self._fine_drag = None   # the slider a Shift drag holds (`_fine`): its id, mouse x, throw
         self._shift = self._mouse_down = False   # this frame's ⇧ and left button (`_fine_frame`)
         self.devices = None   # set by app.py (devices.DeviceRegistry): the SYSTEM page's lines
@@ -852,6 +858,11 @@ class Panel:
                tip="Which section of GRAPH's side pane to bring up: it unfolds and scrolls "
                    "to the top of the pane, and folds again when the focus moves on unless "
                    "you unfolded it yourself. graph lets go of the focus.")
+
+    def in_meta_section(self) -> bool:
+        """Is the panel inside a meta section (`ui_pane.where`)? What ⌘Z goes by,
+        through `undo.where`: its meta stack there, else the panel's deck's."""
+        return ui_pane.where(self) in META_SECTIONS
 
     def go_page(self, i) -> None:
         """`ui.page`'s setter, and `_draw` for an index set straight (⌘[ /
@@ -1800,6 +1811,7 @@ class Panel:
             self._alert_banner()
 
     def _draw(self, dt: float, fps: float) -> None:
+        ui_pane.left(self)
         # Replace / Keep, its own window, before anything can return: a
         # held hand learn is never parked behind a hidden or collapsed panel
         ui_routing.modal(self)
@@ -1830,6 +1842,9 @@ class Panel:
         # where the panel is: the desk takes the room left of it (ui_desk.room;
         # drawn before the panel, it reads this next frame)
         self._panel_x = imgui.get_window_pos().x
+        # is the mouse on the panel: what ⌘Z goes by (`ui_pane.where`)
+        self._mouse_on_panel = imgui.is_window_hovered(
+            imgui.HoveredFlags_.root_and_child_windows)
         if not opened:
             imgui.end()
             return
@@ -1873,7 +1888,10 @@ class Panel:
         now = time.monotonic() if now is None else now
         st = self.__dict__.setdefault(     # (a Panel from before a hot reload has none)
             "_msg", {"seen": None, "text": "", "warn": False, "at": -MESSAGE_S})
-        u, lib, lrn = getattr(self, "undo", None), self.library, getattr(self, "learn", None)
+        lib, lrn = self.library, getattr(self, "learn", None)
+        # whichever of the two stacks spoke last (plan 44 D5b)
+        u = max((x for x in (getattr(self, "undo", None), getattr(self, "meta_undo", None))
+                 if x is not None), key=lambda x: getattr(x, "said_at", 0.0), default=None)
         said = getattr(lib, "said", None) or {}
         cur = {"status": (getattr(lib, "status", "") or "", said.get("status", 0)),
                "warning": (getattr(lib, "warning", "") or "", said.get("warning", 0)),

@@ -720,6 +720,9 @@ here; overturn → the change, then the same.
 | 688 | Plan 44 D5a: the owner of the two `Deck`s is `deck.MetaController`, named from the glossary; a `Pointer` per holder (each controller by role, the keys, the mouse) and the panel's apart; exactly two `Deck`s; no `swap`; a deck's presets see the library through `library.DeckLibrary`, so they cannot reach another deck | — | "name the owner of the two Decks from the glossary"; "Two fixed Decks and no swapping" (owner, 2026-11-04) |
 | 689 | Plan 44 D5a: the holders moved onto pointers, those the reading named (`SeqPage.reg`, `Library.reg` and `presets`, `dream_check`, `Mouse`'s params, `draw_render`, `Marks`) and those found while building (`rig.said`'s table, deck 2's `Learn.devices`, the totem's and poi's params, the watchdog's preset, the bank's verbs, its lit slot and the section references); `Bindings.page` is the session's; `claim` retired | — | (rec) — pending the owner |
 | 690 | Plan 44 D5a: `docs/GLOSSARY.md`, one row per concept; a controller moved mid-gesture releases what it holds on the deck it left, and its real release goes nowhere | — | (rec) — pending the owner's signature on the glossary |
+| 691 | Plan 44 D5b: one undo stack per `Deck`, scoped to its preset, and one for the meta controller over `SessionRegistry` and `SessionTable`; all three ticked each frame; a load is a step on its deck's stack | 524 | The owner, 2026-11-04 |
+| 692 | Plan 44 D5b: ⌘Z goes by where you are, the panel's `Deck` except inside a meta section. The section is the one under the mouse, the canvas is the deck, and with the mouse off the panel the focus says; the audio section counts as a meta section beside the owner's three | 524, 525 | The owner, 2026-11-04, for the rule and the three sections; (rec) — pending the owner, for the mouse and for audio |
+| 693 | Plan 44 D5b: the show's mark and the session groups' labels are on the meta stack (`library.MetaMarks`); a show load is one step there and its startup preset one on the panel's deck's, so undoing all of a show load is two ⌘Zs in two places; undoing a row of the meta controller's table writes `bindings.json` | 525 | (rec) — pending the owner |
 
 "—": no hand check shows it; tests only.
 
@@ -12812,3 +12815,69 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   took no longer turns a latched toggle off: a small change to one deck's behaviour too.
   Nothing moves a pointer in the app yet, so the rest runs only in tests until PL.
 - **Judge it.** 523.
+
+### 691. Three undo stacks
+
+- **Answer.** The owner, 2026-11-04, overruling DQ2 of `44-decks-d5-d6-reading.md`: "one stack
+  per deck slot, scoped to its preset, and one for the meta controller", with two slots now.
+  Meta params are tuned to facilitate a performance and are not actively modified during one.
+  "A load is a step on its deck's stack", so ⌘Z recovers a mistaken load, and a stack stays with
+  its `Deck`.
+- **Built.** `Undo(only=)` narrows `watched`; a deck passes `deck.in_preset`. `deck.meta_stack`
+  is an `Undo` over `SessionRegistry` and `SessionTable`, owned by `MetaController` as `undo`.
+  `SessionTable` gains what `Undo` reads of a table (none of a deck's parts) and `rows`, a part of
+  the fingerprint on this stack alone. `MetaController.stacks` are the three; `Host.stacks` is what
+  `app.frame` ticks, one failing not costing the others their tick.
+- **Behaviour on one deck.** One change, which the design requires: a ⌘Z no longer takes back a
+  meta edit made while you were elsewhere, and a gesture that moved a meta param and a preset param
+  is one step on each stack. The band reshape's tag moved with the `band.*` values: a band added
+  no longer closes a deck's open step.
+- **The cost.** Measured headless with `timeit`-style loops, a tick each, quiet frames: one stack over
+  all 548 params 91 µs; deck 1 (292 params) 60 µs; deck 2 (434: an empty deck still declares its `fx`
+  knobs, 321 after a load) 62 µs; the meta stack (256 params and 161 rows) 93 µs; all three 220 µs per
+  frame, 1.3% of a 16.7 ms frame. No whole-history scan and no rebuild: the rows are a scan of the table,
+  as the deck's routes and desk have always been. `is_session_row` tests the layer first, which took 25 µs
+  off the meta stack. Not measured in the running app.
+- **Judge it.** 524.
+
+### 692. Where ⌘Z goes
+
+- **Answer.** The owner, 2026-11-04: "the panel's `Deck`, except inside a meta section (analyzer,
+  hands, output), which takes the meta stack. Never newest-of-all-stacks: a ⌘Z meant for a knob on
+  one deck must not undo an analyzer tweak from an hour ago." What counts as inside and audio are
+  (rec) — pending the owner.
+- **Built.** `undo.here` picks the stack and `undo.where` is told how, by `Panel.in_meta_section`.
+  `ui_pane.where` reads the latest draw: the section body under the mouse; with the mouse on the panel
+  in no body, nothing, since the canvas is the panel's deck; with the mouse off the panel, the focus
+  (`Panel.page`). The focus alone would not do, because open sections sit beside each other and a
+  click in one leaves the focus where it was. An empty stack says "nothing to undo" and never crosses.
+  The footer says whichever stack spoke last.
+- **Recommended, beyond the owner's three: audio.** It holds the master faders and nothing of a preset,
+  and without it a ⌘Z on `master.gain` where you just moved it would take back something else on
+  the deck. One word in `ui.META_SECTIONS` removes it.
+- **Known edges.** The hands section also draws `ghost.*`, which are the preset's, and ROUTING draws
+  rows of both layers: in hands ⌘Z takes the meta stack, and on ROUTING the deck's, so a session row
+  learned there is undone from a meta section. SYSTEM draws `desk.slew` and the pad's feel, whose
+  undo is likewise in a meta section. PS or D5e may want a word on it.
+- **Judge it.** 524, 525.
+
+### 693. The show's mark, and the meta controller's table
+
+- **Answer.** (rec) — pending the owner.
+- **The show's mark belongs on the meta stack.** A show is what is set for a performance. `MetaMarks`
+  holds it, the session groups' labels (row 689's one strip, which a deck's undo no longer relands) and
+  the band layout. `Project.load` pushes on the meta stack; its startup preset's own load pushes on the
+  panel's deck's. `Project.new` pushes on both, since it puts fresh values on both layers. Undoing all
+  of a show load is therefore two ⌘Zs in two places, and neither alone moves what the other holds,
+  which is what "⌘Z in a meta section never moves a deck" requires.
+- **What a deck's `Marks` still reads of the show:** which show it is and the GRAPH page's positions
+  of its rig nodes, so undoing a tidy puts them back while the show is the same one. Those are panel
+  positions, drawn on the deck's canvas, and affect no picture.
+- **Rows.** `SessionTable.set_rows` puts the rows in every deck's table, draws the desk again, keeps
+  faders' catch and writes `bindings.json`, the one file a restore writes, since a row lives there the
+  moment it changes. Before D5b those rows had no undo at all.
+- **Left.** After a show undo only the panel's deck's lit slot follows (`Project.follow`); the other's
+  catches up on its next load. `Learn`'s and the ROUTING page's `undo.push` still reach the panel's
+  deck, whose stack drops the empty step, so a session row's step on the meta stack is named by the
+  watcher ("rows").
+- **Judge it.** 525.

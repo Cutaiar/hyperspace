@@ -7933,6 +7933,27 @@ pointer is on deck 1 and nothing in the app moves one. Tests cover pointing at d
 Read `docs/GLOSSARY.md`. *Pass:* each row says what you mean. Say which to change;
 SEM renames the code from it.
 
+## BY. Three undo stacks (plan 44 D5b)
+Register rows 691–693, 2026-11-04. Restart first. **One thing is different on purpose:**
+a ⌘Z no longer takes back a meta edit made while you were elsewhere.
+**524. ⌘Z by where you are.** (the rig, or a laptop)
+1. With the mouse on the analyzer section, move a band's threshold. Then on GRAPH, with the
+   mouse on the canvas, turn a preset knob.
+2. Mouse on the canvas, ⌘Z. *Pass:* the knob goes back and the threshold stays.
+3. ⌘Z again until "nothing to undo". *Pass:* the threshold still stays.
+4. Mouse on the analyzer section, ⌘Z. *Pass:* the threshold goes back, the footer says so, and the
+   picture's preset values do not move. Do the same with `master.gain` in the audio section, and say
+   whether audio should count as a meta section.
+5. Load the wrong preset, ⌘Z on the canvas. *Pass:* the earlier preset is back with its unsaved edits.
+*Fail:* any ⌘Z that moves the other layer, or a knob or an orbit that ends up as two steps.
+**525. A show, and the table's rows.** (anywhere; a throwaway show)
+1. Open another show. Mouse on the canvas, ⌘Z. *Pass:* the earlier preset is back, the show's name stays.
+2. Mouse on the hands section, ⌘Z. *Pass:* the show's name, its bank and the analyzer's name are back,
+   and the picture does not move.
+3. Say whether two ⌘Zs in two places is what you want for a show load (row 693).
+4. Learn a key row on ROUTING, then ⌘Z in a meta section, and restart. *Pass:* the row is gone, and stays
+   gone after the restart.
+
 ## What no test covers
 
 Only a person can settle these:

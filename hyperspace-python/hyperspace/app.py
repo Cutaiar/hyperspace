@@ -24,7 +24,7 @@ fullscreen, overlay) through the output.* params. ``hyperspace --laptop``
      (only with [output] overlay = true in config.toml — decision 21)
   F1–F8  load a preset of the bank               ⇧F1–F8  save the live state as it
   B  tap tempo      ⇧B  LFO trigger: the downbeat is now, synced LFOs restart
-  Cmd+Z / Ctrl+Z  undo the last gesture or load     with ⇧  redo (undo.py)
+  Cmd+Z / Ctrl+Z  undo the last gesture or load here  with ⇧  redo (undo.py)
 
 Every input path — keys, the Xbox-layout gamepad, a MIDI controller, the
 analyzer's lanes — is one binding table over the parameter registry
@@ -87,6 +87,7 @@ from . import (
     tempo,
     totem,
 )
+from . import undo as undos
 from .audio import AudioEngine
 from .bands import CEIL
 from .control import Control
@@ -1161,7 +1162,10 @@ class Host:
     learn: object | None = None       # learn.Learn: what MIDI and the hands complete
     media: MediaIO | None = None      # the media folder and channels (plan 32)
     render_watch: RenderWatch | None = None   # the render window's health (watchdog.py)
-    undo: object | None = None        # undo.Undo: ticked once a frame (plan 15 WP1)
+    undo: object | None = None        # undo.Undo of the panel's deck (plan 15 WP1)
+    # every undo stack, each ticked once a frame (plan 44 D5b): each deck's and
+    # the meta controller's. Empty (a host from a test): `undo` alone
+    stacks: tuple = ()
     # every opened render output's window settings, output 1's (`output`)
     # first; each applied once a frame (plan 21 WP3)
     outputs: list = field(default_factory=list)
@@ -1318,9 +1322,11 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     # the preset's table against last frame's — a change opens a step, a
     # settle time closes it. No performer has run yet; a performer writes a
     # base only on a step it holds open (undo.py, plan 15 WP1; plan 51 O2) ----
-    if h.undo is not None:
+    for stack in h.stacks or (h.undo,):
+        if stack is None:
+            continue
         try:
-            h.undo.tick(now)
+            stack.tick(now)
         except Exception as e:  # noqa: BLE001
             ok, reloader.runtime_error = False, _err("undo", e)
 
@@ -1685,6 +1691,8 @@ def main(argv: list[str] | None = None) -> None:
     # deck 1 and moved by nothing yet. Each handle reads through its own from here
     meta = MetaController(deck, deck2)
     panel.pointer = library.pointer = meta.panel_pointer
+    panel.meta_undo = meta.undo        # the footer's message slot, beside the deck's
+    undos.where(panel.in_meta_section)  # what ⌘Z goes by (plan 44 D5b)
     rig.point(meta.pointer, meta.panel_pointer)
     # panel state and chain must stay one object even after source changes
     # the live objects that get re-classed on a hot reload; re-evaluated
@@ -1806,7 +1814,7 @@ def main(argv: list[str] | None = None) -> None:
                 devices=rig, dream_io=dream_io, learn=deck.learn, render_watch=render_watch,
                 undo=deck.undo, media=media,
                 outputs=[sl.output for sl in slots if sl.output is not None], deck=deck,
-                off_air=[meta.off_air], on_air_pointer=meta.on_air_pointer,
+                off_air=[meta.off_air], stacks=meta.stacks, on_air_pointer=meta.on_air_pointer,
                 panel_pointer=meta.panel_pointer, keys_pointer=meta.pointer(KEYS))
 
     # smoke-test escape hatch: HYPERSPACE_FRAMES=n closes after n frames

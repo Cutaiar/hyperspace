@@ -40,7 +40,8 @@ picture alone and is said on `Fade.error`.
 
 Plan 44 D5a adds `MetaController`, what owns the two decks and every holder's
 pointer (`pointer.Pointer`). Every pointer starts on deck 1 and nothing in the
-app moves one yet.
+app moves one yet. D5b splits undo: a stack per deck, scoped to its preset
+(`in_preset`), and one for the meta controller (`meta_stack`), so three.
 """
 
 from __future__ import annotations
@@ -57,14 +58,20 @@ from .ghost import GhostState
 from .hold import Hold, preview_renderer, preview_size
 from .hold import register as register_hold
 from .learn import Learn
-from .library import Marks
+from .library import Marks, MetaMarks
 from .lookback import DreamState
 from .outputs import Offscreen, View
-from .params import Registry, SessionRegistry, build_registry
+from .params import Registry, SessionRegistry, build_registry, part_of
 from .pointer import Pointer
 from .preset import Presets
 from .routing import Bindings, Router, Sources
 from .view import ViewState
+
+
+def in_preset(p) -> bool:
+    """Is `p` a param of the preset, what a `Deck`'s undo stack watches (plan 44
+    D5b)? A meta param is on the meta controller's stack (`meta_stack`)."""
+    return part_of(p) == "performance"
 
 
 @dataclass
@@ -108,6 +115,9 @@ class Deck:
     # feed. Built here while there is one deck (`build(sources=…)` hands a
     # rig's one in, so two routers read one feed); plan 44 §2 calls it shared
     sources: Sources | None = None
+    # the bands' names in strip order (`undo.Undo.tag`): the shape the meta
+    # controller's stack keeps `band.*` values for (`meta_stack`)
+    band_shape: Callable[[], Any] | None = None
 
     @property
     def graph(self):
@@ -284,14 +294,12 @@ class Deck:
             # (rectified 600-cell, 600-cell, 120-cell, Clifford torus) does not stutter
             geometry.warm_all(first=s.shape)
         # undo (undo.py, plan 15 WP1), built after the startup preset so a
-        # launch starts with an empty stack: bases through the registry, table
-        # parts through the table, what is loaded through the library's marks;
-        # the bands' names in strip order say which layout a strip's values
-        # belong to, and a restore tells the router its macros are acted on
+        # launch starts with an empty stack: this deck's preset only (plan 44
+        # D5b), bases through the registry, table parts through the table, what
+        # is loaded through the deck's marks, and a restore tells the router its
+        # macros are acted on. The meta params are on `meta_stack`'s
         marks = Marks(presets.lib)
-        undo_obj = undos.Undo(reg, router.table, marks=marks,
-                              tag=tag if tag is not None else (
-                                  lambda: tuple(s.name for s in audio.chain.spec)),
+        undo_obj = undos.Undo(reg, router.table, marks=marks, only=in_preset,
                               on_restore=router.sync_macros,
                               # the LFOs' membership (plan 31 B), read off the
                               # router at each step, so a re-classed router counts
@@ -303,7 +311,10 @@ class Deck:
             hold.undo = undo_obj           # Drop goes back to the hold's point through it
         return cls(reg=reg, view=s, table=router.table, router=router, lfos=lfos, envs=envs,
                    seq=seq, clock=clock, presets=presets, learn=learn, undo=undo_obj, marks=marks,
-                   renderer=renderer, hold=hold, sources=sources)
+                   renderer=renderer, hold=hold, sources=sources,
+                   band_shape=tag if tag is not None else (
+                       (lambda: tuple(s.name for s in audio.chain.spec))
+                       if audio is not None else None))
 
     def chase(self, on: bool) -> bool:
         """Hold or let go of the base chase on this deck (plan 52): the
@@ -325,7 +336,8 @@ class Deck:
             table=lambda reg: Bindings([], session=first.table.session),
             renderer=renderer, media=media, lfos=lfos,
             session=first.session, sources=first.sources,
-            attach=False, startup=False, install=False, on_air=False, tag=first.undo.tag)
+            attach=False, startup=False, install=False, on_air=False,
+            tag=first.band_shape)
 
     def targets(self) -> list[tuple[Any, str, str]]:
         """The live objects a hot reload re-classes, as (object, module,
@@ -396,6 +408,15 @@ KEYS = "window:keys"
 MOUSE = "window:mouse"
 
 
+def meta_stack(first: Deck) -> undos.Undo:
+    """The meta controller's undo stack (plan 44 D5b): an `Undo` over the
+    `SessionRegistry` and the `SessionTable` every deck holds by reference, what
+    is loaded through the library's `MetaMarks`. `first` is whichever deck has
+    the band hooks; the stack is no deck's."""
+    return undos.Undo(first.session, first.session_table,
+                      marks=MetaMarks(first.presets.lib.base), tag=first.band_shape)
+
+
 class MetaController:
     """What is set for a performance or an install, around the looks: it owns
     exactly two `Deck`s (`docs/GLOSSARY.md`) and says which deck each holder is
@@ -407,7 +428,11 @@ class MetaController:
 
     A holder reads through its pointer each time. `point` moves only the
     pointer: what a holder kept of the deck it left is its own to let go when
-    it next looks (`MidiIO._follow_pointer`). A deck not in `decks` is refused."""
+    it next looks (`MidiIO._follow_pointer`). A deck not in `decks` is refused.
+
+    `undo` is its own stack (`meta_stack`, plan 44 D5b), beside one on each deck:
+    `stacks` are the three, all ticked each frame. A stack stays with its `Deck`
+    whatever points at it."""
 
     def __init__(self, first: Deck, second: Deck):
         self.decks = (first, second)
@@ -415,6 +440,8 @@ class MetaController:
         self.panel_pointer = Pointer(first)
         self.pointers: dict[str, Pointer] = {}
         self.on_panel: list[Callable[[Deck], Any]] = []   # told after the panel moves
+        self.undo = meta_stack(first)
+        undos.install_meta(self.undo)
 
     @property
     def on_air(self) -> Deck:
@@ -427,6 +454,11 @@ class MetaController:
     @property
     def panel(self) -> Deck:
         return self.panel_pointer.deck
+
+    @property
+    def stacks(self) -> tuple[undos.Undo, ...]:
+        """Every undo stack: each deck's and this one's."""
+        return (self.decks[0].undo, self.decks[1].undo, self.undo)
 
     def pointer(self, holder: str) -> Pointer:
         """`holder`'s pointer, on deck 1 the first time it is asked for, and
@@ -457,6 +489,8 @@ class MetaController:
     def targets(self) -> list[tuple[Any, str, str]]:
         """The live objects a hot reload re-classes (the decks list their own)."""
         return [(self, "deck", "MetaController"),
+                (self.undo, "undo", "Undo"),
+                (self.undo.marks, "library", "MetaMarks"),
                 (self.on_air_pointer, "pointer", "Pointer"),
                 (self.panel_pointer, "pointer", "Pointer"),
                 *[(p, "pointer", "Pointer") for p in self.pointers.values()]]

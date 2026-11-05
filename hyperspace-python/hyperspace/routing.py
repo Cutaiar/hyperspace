@@ -1850,7 +1850,9 @@ def is_session_row(b: Binding) -> bool:
     row (push / position, disabled ones too) and a preset-layer MIDI row —
     those are the loaded preset's. A sink row (plan 27 B3, `SINK_OP`) is
     the session's: sinks are rig (D1 / D9)."""
-    return b.op not in MOD_OPS and not (b.is_midi and b.layer == "preset")
+    # (the layer first: the undo stack reads this for every row, every frame,
+    # and `is_midi` parses the source)
+    return b.op not in MOD_OPS and not (b.layer == "preset" and b.is_midi)
 
 
 @dataclass
@@ -1984,6 +1986,38 @@ class SessionTable:
         """The session's rows, in their order: one list in every deck."""
         tables = self.tables
         return [b for b in tables[0].bindings if is_session_row(b)] if tables else []
+
+    # ---- the meta controller's undo stack (undo.py, plan 44 D5b) ----
+
+    # what `undo.Undo` reads of any table: a deck's routes, desk and macros are
+    # its own, so here there are none, and `rows` is what is watched
+    bindings: tuple = ()
+    macros: dict = {}  # noqa: RUF012 — never mutated: there are none
+
+    def routes(self) -> tuple:
+        return ()
+
+    def desk(self) -> tuple:
+        return ()
+
+    def macros_doc(self) -> dict:
+        return {}
+
+    def set_rows(self, rows: Iterable[Binding]) -> None:
+        """An undo's restore: these are the session's rows now, in every deck's
+        table, with each table's own after them as `Bindings._share` leaves
+        them, and in the file, where a row lives the moment it changes."""
+        tables = self.tables
+        if not tables:
+            return
+        home = tables[0]
+        home.bindings = [*rows, *(b for b in home.bindings if not is_session_row(b))]
+        home.dropped, home.notes = [], []
+        home._share()
+        for t in tables:
+            t.redraw_serial += 1          # the rings and LEDs, no fader's catch
+        home.rows_serial += 1
+        self.write()
 
     def sinks(self, role: str | None = None, *, enabled: bool = True) -> list[Binding]:
         """The sink rows (plan 27 B3), the session's: of `role`, enabled ones."""

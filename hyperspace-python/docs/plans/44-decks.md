@@ -472,6 +472,14 @@ decides, D5c). `MidiIO`, the pad, the bridge, `Mouse`, `SeqPage`, `Host`, `Panel
 frame's order is unchanged. A pointer moves rows and base writes, not lanes: `Sources`
 is shared, so routes on a hand or a stick run in each deck's pass (register 688).
 What the text below calls `Decks` is `MetaController`; `Context` stays what factories get.
+**D5b, built:** three undo stacks, overruling DQ2 in the reading. A `Deck`'s `Undo` watches
+`part_of == "performance"` only (`deck.in_preset`) and restores through a `Marks` of that
+deck's groups; `MetaController.undo` (`deck.meta_stack`) is an `Undo` over `SessionRegistry`
+and `SessionTable`, with `library.MetaMarks`: the show's mark, the session groups' labels, the
+band layout. `app.frame` ticks all three. ⌘Z is `undo.here`: the panel's deck, or the meta
+stack inside a meta section (`ui.META_SECTIONS`, under the mouse first, then the focus), never
+the newest of all. A load is a step on its deck's stack; a show load is a step on the meta
+stack, and its startup preset one on the panel's deck's (registers 691–693).
 
 The first PR a performer notices. **New** `deck.Decks`: the list, `on_air`
 and `panel` indices, `take(seconds)`, `copy(src, dst)`. The retargets:

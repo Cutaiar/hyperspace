@@ -37,9 +37,21 @@ What is watched (`watched`): a param that is persisted, not an alias, not
 a trigger, and not in `EXCLUDED_GROUPS` (the clock: a tap burst rewrites
 `tempo.bpm` on every tap, slower than the settle time). The integrated
 angles (`rot.phase.*`), selections, the panel's own state, transport and
-the rig's output settings are all `persist=False`. The session's rows of
-the table (keys, pad, invariant and global-layer MIDI rows) are not
-watched: they are `bindings.json`'s.
+the rig's output settings are all `persist=False`.
+
+**Three stacks** (plan 44 D5b, the owner's design, 2026-11-04): one `Undo` per
+`Deck`, scoped to its preset (`only`: `deck.in_preset`), and one for the meta
+controller over `SessionRegistry` and `SessionTable` (`install_meta`). The
+second watches the meta params, whose tuning is done before a performance and
+not during one, and the meta controller's rows of the table (keys, pad,
+invariant and global-layer MIDI rows, sinks). Those rows live in `bindings.json`
+the moment they change, so their restore (`SessionTable.set_rows`) writes that
+file: the one write a restore makes.
+
+**⌘Z goes by where you are** (`here`): the panel's `Deck`, except inside a meta
+section (`where`), which takes the meta stack. Never the newest of all stacks: a
+⌘Z meant for a knob on one deck must not take back an analyzer tweak from an hour
+ago. Pressing it never crosses over: a stack with nothing says so.
 
 The band layout: a band added, removed or moved re-declares every
 `band.*` param and is **not** a step. Each state is tagged with the shape
@@ -56,9 +68,10 @@ declared afresh, then its knobs land.
 
 Imports nothing from the package: the registry and the table arrive as
 arguments and are used duck-typed (the rule lfo.py and tempo.py keep), so
-any module may import this one. `install` holds the app's one `Undo`;
-`push` / `undo` / `redo` at module level act on it and do nothing when
-none is installed (every test that builds no `Undo`).
+any module may import this one. `install` holds the panel's `Deck`'s `Undo`,
+`install_meta` the meta controller's; `push` and `push_meta` at module level
+act on one each, `undo` / `redo` on the one `here` names, and all do nothing
+when none is installed (every test that builds no `Undo`).
 """
 
 from __future__ import annotations
@@ -170,6 +183,7 @@ class State:
     # how much of a route's offset each base held then, those that held any
     # (the base chase's ledger, plan 52), so a base goes back with its own
     trims: Any = None
+    rows: tuple = ()          # the meta controller's rows (`SessionTable`, plan 44 D5b)
 
 
 @dataclass
@@ -206,17 +220,23 @@ class Undo:
     (optional) is the modulator banks by scheme (plan 31 B: the LFOs), or
     a callable returning them: each has `doc()` (its ids) and `set(ids)`;
     a step holds their membership and a restore puts it back before the
-    bases, so a voice's params exist before their values land.
+    bases, so a voice's params exist before their values land. `only`
+    (optional) narrows `watched` to the params this stack is for: a `Deck`'s
+    takes those of its preset (plan 44 D5b). A `table` with `rows` and
+    `set_rows(rows)` (`SessionTable`) has those watched too.
     """
 
+    only = None      # on the class: a live `Undo` from before a hot reload has it
+
     def __init__(self, reg, table, *, marks=None, tag=None, tagged=("band.",),
-                 on_restore=None, banks=None):
+                 on_restore=None, banks=None, only=None):
         self.reg, self.table = reg, table
         try:
             _watching[reg] = ref(self)
         except TypeError:                 # a stand-in registry: found only by `installed`
             pass
         self.marks, self.tag, self.tagged = marks, tag, tuple(tagged)
+        self.only = only
         self.on_restore = on_restore
         self.banks = banks
         self.stack: list[Step] = []       # the undo stack, newest last
@@ -242,6 +262,10 @@ class Undo:
     def _tag(self):
         return self.tag() if self.tag is not None else None
 
+    def _watches(self, p) -> bool:
+        """Is `p`'s base on this stack: `watched`, and this stack's (`only`)."""
+        return watched(p) and (self.only is None or self.only(p))
+
     def _params(self) -> list:
         """The watched params, in registry order. A band layout change and
         a shader reload re-declare params, so the registry is read every
@@ -251,7 +275,7 @@ class Undo:
         every = list(self.reg)
         if every != self._every:
             self._every = every
-            self._watched = [p for p in every if watched(p)]
+            self._watched = [p for p in every if self._watches(p)]
             self._ids = tuple(p.id for p in self._watched)
         return self._watched
 
@@ -272,8 +296,13 @@ class Undo:
         """Each bank's membership as a preset holds it: scheme → ids."""
         return {scheme: list(b.doc()) for scheme, b in self._banks().items()}
 
+    def _table_rows(self) -> list:
+        """The meta controller's rows, for a table that has them (`SessionTable`);
+        none for a deck's, whose `routes` and `desk` are its own."""
+        return getattr(self.table, "rows", ())
+
     def _fingerprint(self) -> tuple:
-        """(ids, bases, routes, desk, macros, tag, modifiers, banks) as of now — the cheap
+        """(ids, bases, routes, desk, macros, tag, modifiers, banks, rows) as of now — the cheap
         read `tick` makes every frame. The preset layer is read as the
         table's rows whose `layer` is "preset" (what `table.desk()`
         returns, without asking every row whether it is a MIDI row)."""
@@ -281,14 +310,15 @@ class Undo:
         table = self.table
         return (self._ids, tuple([p.base for p in ps]), _rows(table.routes()),
                 _rows([b for b in table.bindings if b.layer == "preset"]),
-                _macros(table), self._tag(), self._mods(), self._bank_ids())
+                _macros(table), self._tag(), self._mods(), self._bank_ids(),
+                _rows(self._table_rows()))
 
     @staticmethod
     def _same_fp(a: tuple, b: tuple) -> bool:
         """Equal, or equal but for float pairs within the tolerance."""
         if a == b:
             return True
-        if a[0] != b[0] or a[2:6] != b[2:6] or not alike(a[6:], b[6:]):
+        if a[0] != b[0] or a[2:6] != b[2:6] or a[8] != b[8] or not alike(a[6:8], b[6:8]):
             return False
         return all(x is y or _same(x, y) for x, y in zip(a[1], b[1], strict=True))
 
@@ -304,7 +334,8 @@ class Undo:
                      self._tag(),
                      self.marks.take() if marks and self.marks is not None else None,
                      modifiers=self._mods(), banks=self._bank_ids(),
-                     trims={p.id: t for p in self._params() if (t := p._trim)})
+                     trims={p.id: t for p in self._params() if (t := p._trim)},
+                     rows=tuple(replace(b) for b in self._table_rows()))
 
     def _read_lands(self):
         lands = getattr(self.marks, "lands", None)
@@ -539,7 +570,8 @@ class Undo:
             ids.append(pid)
         parts = [name for name, a, b in (("routes", _rows(then.routes), _rows(now.routes)),
                                          ("desk", _rows(then.desk), _rows(now.desk)),
-                                         ("macros", then.macros, now.macros)) if a != b]
+                                         ("macros", then.macros, now.macros),
+                                         ("rows", _rows(then.rows), _rows(now.rows))) if a != b]
         if not alike(then.modifiers or [], now.modifiers or []):
             parts.append("modifiers")
         if then.banks is not None and now.banks is not None:
@@ -589,6 +621,10 @@ class Undo:
             # 4. the macros
             if table.macros_doc() != state.macros:
                 table.set_macros(state.macros, reg)
+            # 4¼. the meta controller's rows (plan 44 D5b): through the table's
+            #     own call, which writes `bindings.json`, where they live
+            if _rows(self._table_rows()) != _rows(state.rows):
+                table.set_rows(self._rows_for(state.rows, self._table_rows()))
             # 4½. the modifiers and their params (plan 28 N1)
             if state.modifiers is not None and not alike(self._mods(), state.modifiers):
                 table.set_modifiers(state.modifiers, reg)
@@ -607,7 +643,7 @@ class Undo:
             for _ in range(PASSES):
                 todo = {}
                 for p in reg:
-                    if p.id not in state.bases or not watched(p):
+                    if p.id not in state.bases or not self._watches(p):
                         continue
                     v = state.bases[p.id]
                     if _same(p.base, v):
@@ -673,8 +709,11 @@ class Undo:
 # ---- the installed instance: what every push site and the two triggers reach ----
 
 # kept across a hot reload of this module (importlib.reload re-executes it
-# over the same globals)
+# over the same globals): the panel's `Deck`'s stack, the meta controller's,
+# and what says whether the panel is inside a meta section
 _installed: Undo | None = globals().get("_installed")
+_meta: Undo | None = globals().get("_meta")
+_where = globals().get("_where")
 
 
 # each registry's own `Undo`, a deck's whether or not it is the installed one, so
@@ -699,9 +738,37 @@ def watching(reg) -> Undo | None:
 
 
 def install(u: Undo | None) -> None:
-    """Make `u` the app's undo (app.main); None uninstalls."""
+    """Make `u` the stack of the panel's `Deck` (app.main,
+    `MetaController.point_panel`); None uninstalls."""
     global _installed
     _installed = u
+
+
+def install_meta(u: Undo | None) -> None:
+    """Make `u` the meta controller's stack (`MetaController`); None uninstalls,
+    and with it `where`."""
+    global _meta, _where
+    _meta = u
+    if u is None:
+        _where = None
+
+
+def meta_installed() -> Undo | None:
+    return _meta
+
+
+def where(inside_meta) -> None:
+    """`inside_meta()`: is the panel inside a meta section now (`ui.Panel`)?"""
+    global _where
+    _where = inside_meta
+
+
+def here() -> Undo | None:
+    """The stack ⌘Z acts on: the meta controller's inside a meta section, else
+    that of the panel's `Deck` (the owner, 2026-11-04). Never the newest of them."""
+    if _meta is not None and _where is not None and _where():
+        return _meta
+    return _installed
 
 
 def installed() -> Undo | None:
@@ -738,6 +805,13 @@ def push_on(reg, label: str, *, load: bool = False) -> None:
         _guarded("push", lambda v: v.push(label, load=load), on=u)
 
 
+def push_meta(label: str, *, load: bool = False) -> None:
+    """`Undo.push` on the meta controller's stack (a show, an analyzer preset);
+    none installed: a no-op."""
+    if _meta is not None:
+        _guarded("push", lambda u: u.push(label, load=load), on=_meta)
+
+
 def keep_open(label: str, on: Undo, *, on_end=None) -> None:
     """`Undo.keep_open` on a deck's `Undo`, guarded as `push` is."""
     _guarded("keep open", lambda u: u.keep_open(label, on_end), on)
@@ -749,12 +823,14 @@ def let_close(on: Undo) -> None:
 
 
 def undo() -> None:
-    """`Undo.undo` on the installed instance (the `edit.undo` trigger)."""
-    if _installed is not None:
-        _guarded("undo", lambda u: u.undo())
+    """`Undo.undo` on the stack `here` names (the `edit.undo` trigger)."""
+    at = here()
+    if at is not None:
+        _guarded("undo", lambda u: u.undo(), on=at)
 
 
 def redo() -> None:
-    """`Undo.redo` on the installed instance (the `edit.redo` trigger)."""
-    if _installed is not None:
-        _guarded("redo", lambda u: u.redo())
+    """`Undo.redo` on the stack `here` names (the `edit.redo` trigger)."""
+    at = here()
+    if at is not None:
+        _guarded("redo", lambda u: u.redo(), on=at)
