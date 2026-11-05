@@ -168,3 +168,178 @@ def badge(dl, cell, theme, variant_table) -> None:
         radius=RADII["4xl"],
         border_w=1.0,
     )
+
+
+# --------------------------------------------------------------------------
+# text
+# --------------------------------------------------------------------------
+
+def push_css_font(faces, variant: str, css_px: float):
+    """Push a face at a size that means what CSS means by it.
+
+    See FONT_SPAN_EM: stb_truetype sizes by ascent-descent, CSS by the em.
+    """
+    imgui.push_font(faces.get(variant), css_px * FONT_SPAN_EM.get(variant, 1.0))
+
+
+def fit_text(s, faces, variant, size, max_w) -> str:
+    """The longest prefix of `s` that fits in max_w, with an ellipsis.
+
+    shadcn leans on `truncate` / `line-clamp-1`; ImGui clips nothing by
+    itself. Same binary search ui.py:317-329 uses."""
+    if max_w <= 0 or text_w(s, faces, variant, size) <= max_w:
+        return s
+    lo, hi = 0, len(s)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if text_w(s[:mid] + "\u2026", faces, variant, size) <= max_w:
+            lo = mid
+        else:
+            hi = mid - 1
+    return s[:lo] + "\u2026"
+
+
+def label(dl, x, y, s, faces, variant, size, col, *, align="left", box_w=0.0,
+          baseline_box=0.0, max_w=0.0):
+    """Draw `s` at (x, y). With baseline_box, centre it vertically in that
+    height the way a CSS line box would; with align/box_w, align horizontally.
+    Returns the advance width."""
+    if max_w:
+        s = fit_text(s, faces, variant, size, max_w)
+    push_css_font(faces, variant, size)
+    try:
+        ext = imgui.calc_text_size(s)
+        tx = x
+        if align == "right":
+            tx = x + box_w - ext.x
+        elif align == "center":
+            tx = x + (box_w - ext.x) / 2.0
+        ty = y + (baseline_box - ext.y) / 2.0 if baseline_box else y
+        dl.add_text(imgui.ImVec2(round(tx), round(ty)), _u32(col), s)
+        return float(ext.x)
+    finally:
+        imgui.pop_font()
+
+
+def text_w(s, faces, variant, size) -> float:
+    push_css_font(faces, variant, size)
+    try:
+        return float(imgui.calc_text_size(s).x)
+    finally:
+        imgui.pop_font()
+
+
+# --------------------------------------------------------------------------
+# widgets
+# --------------------------------------------------------------------------
+
+def button(dl, x, y, w, h, s, faces, theme, *, variant="outline", state="rest"):
+    """shadcn Button. `state` is rest | hover | active, which in an immediate
+    mode UI is read back off the stock widget - see FINDINGS on the sandwich."""
+    r = RADII["md"]                                   # rounded-md = 8
+    if variant == "default":
+        base, ink = "primary", "primary-foreground"
+        bg = rgba(base, 0.90 if state != "rest" else 1.0, theme=theme)
+        box(dl, x, y, w, h, fill_col=bg, radius=r)
+    elif variant == "outline":
+        bg = rgba("accent", 1.0, theme=theme) if state != "rest" else rgba("transparent", theme=theme)
+        box(dl, x, y, w, h, fill_col=bg,
+            border_col=rgba("border", theme=theme), radius=r)
+        ink = "foreground"
+    else:                                             # ghost
+        bg = rgba("accent", 1.0, theme=theme) if state != "rest" else rgba("transparent", theme=theme)
+        box(dl, x, y, w, h, fill_col=bg, radius=r)
+        ink = "foreground"
+    label(dl, x, y, s, faces, "medium", 14, rgba(ink, theme=theme),
+          align="center", box_w=w, baseline_box=h)
+
+
+def tabs(dl, x, y, h, items, active, faces, theme, *, pad=3.0, gap=0.0):
+    """shadcn Tabs: a muted track, the active trigger raised on a card fill.
+    Returns the list of per-item rects so a caller can hit-test them."""
+    ih = h - 2 * pad
+    widths = [text_w(s, faces, "medium", 14) + 20 for s in items]
+    total = sum(widths) + gap * (len(items) - 1) + 2 * pad
+    fill(dl, x, y, total, h, rgba("muted", theme=theme), RADII["lg"])
+    rects, cx = [], x + pad
+    for i, (s, w) in enumerate(zip(items, widths)):
+        if i == active:
+            # the raised trigger carries shadow-sm in shadcn
+            shadow(dl, cx, y + pad, w, ih, (0, 0, 0, 0.10), RADII["md"],
+                   dy=1.0, blur=3.0)
+            fill(dl, cx, y + pad, w, ih, rgba("card", theme=theme), RADII["md"])
+        ink = "foreground" if i == active else "muted-foreground"
+        label(dl, cx, y + pad, s, faces, "medium", 14, rgba(ink, theme=theme),
+              align="center", box_w=w, baseline_box=ih)
+        rects.append((cx, y + pad, w, ih))
+        cx += w + gap
+    return rects, total
+
+
+def sidebar_item(dl, x, y, w, h, s, faces, theme, *, active=False, icon=None):
+    """A sidebar menu button: rounded-md, accent fill when active."""
+    if active:
+        fill(dl, x, y, w, h, rgba("accent", theme=theme), RADII["md"])
+    ink = rgba("foreground" if active else "muted-foreground", theme=theme)
+    tx = x + 10
+    if icon is not None:
+        icon(dl, x + 10, y + h / 2.0, ink)
+        tx = x + 32
+    label(dl, tx, y, s, faces, "medium", 14, ink, baseline_box=h)
+
+
+def meter(dl, x, y, w, h, frac, theme, *, track="muted", bar="primary"):
+    """The plane-routing bar: a full-round track with a filled lead."""
+    r = h / 2.0
+    fill(dl, x, y, w, h, rgba(track, theme=theme), r)
+    fw = max(0.0, min(1.0, frac)) * w
+    if fw > 1.0:
+        fill(dl, x, y, fw, h, rgba(bar, theme=theme), r)
+
+
+def sparkline(dl, x, y, w, h, values, col, *, lo=0.0, hi=1.0, fill_a=0.18):
+    """A filled area chart. Two polylines rather than a tessellated mesh: the
+    fill is a concave polygon, so it goes through add_concave_poly_filled -
+    the same call ui_bands.py:261 already uses for the spectrogram."""
+    if len(values) < 2:
+        return
+    span = max(hi - lo, 1e-6)
+    pts = []
+    for i, v in enumerate(values):
+        px = x + w * i / (len(values) - 1)
+        py = y + h * (1.0 - (min(max(v, lo), hi) - lo) / span)
+        pts.append(imgui.ImVec2(px, py))
+    if fill_a > 0:
+        # One convex trapezoid per segment rather than one concave polygon:
+        # add_concave_poly_filled triangulates the whole outline and leaves
+        # visible streaks across an area chart's interior.
+        c = _u32((col[0], col[1], col[2], fill_a))
+        base = y + h
+        for a, b in zip(pts, pts[1:]):
+            dl.add_quad_filled(imgui.ImVec2(a.x, a.y), imgui.ImVec2(b.x, b.y),
+                               imgui.ImVec2(b.x, base), imgui.ImVec2(a.x, base), c)
+    # imgui_bundle orders this (col, thickness, flags), as with add_rect
+    dl.add_polyline(pts, _u32(col), thickness=1.5, flags=0)
+
+
+def hrule(dl, x, y, w, theme, col="border"):
+    fill(dl, x, y, w, 1, rgba(col, theme=theme))
+
+
+def trend_arrow(dl, x, y, size, up: bool, col) -> None:
+    """A small up/down triangle.
+
+    Geist's latin subset has no arrows, and ImGui draws a missing glyph as a
+    box or nothing - so trend marks are drawn, not typed. The panel already
+    takes this approach for device glyphs (ui_players.py:421-539).
+    """
+    h = size * 0.5
+    cx, cy = x + size / 2.0, y + size / 2.0
+    if up:
+        pts = [(cx, cy - h * 0.7), (cx + h * 0.8, cy + h * 0.5),
+               (cx - h * 0.8, cy + h * 0.5)]
+    else:
+        pts = [(cx, cy + h * 0.7), (cx + h * 0.8, cy - h * 0.5),
+               (cx - h * 0.8, cy - h * 0.5)]
+    dl.add_triangle_filled(imgui.ImVec2(*pts[0]), imgui.ImVec2(*pts[1]),
+                           imgui.ImVec2(*pts[2]), _u32(col))

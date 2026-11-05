@@ -1,0 +1,388 @@
+"""The dkit primitives composed into the Hyperspace dashboard, in Dear ImGui.
+
+This is the demo the kit exists for: the same surface as
+prototypes/dashboard/, drawn with nothing but the helpers in draw.py, on the
+project's own stack, headless.
+
+    HYPERSPACE_HOME=$(mktemp -d) uv run python tools/dkit/dashboard.py \
+        --out /tmp/dkit --theme dark
+
+Layout follows the house pattern (ui_players.lay_out, ui_players.py:122-176):
+a pure function of width that returns every rectangle, with no imgui in it, so
+it can be reasoned about and tested without a GL context. Drawing is a second
+pass over those rects.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+
+import glfw
+import numpy as np
+import OpenGL.GL as GL
+from imgui_bundle import imgui
+from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
+from PIL import Image
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+
+import draw as D          # noqa: E402
+import gradient as G      # noqa: E402
+import tokens as T        # noqa: E402
+
+SHAPES = json.loads(
+    (HERE / "../../../prototypes/dashboard/src/data/shapes.json")
+    .resolve().read_text()
+)
+
+# BANDS, mirroring hyperspace/bands.py: each frequency band drives one plane.
+BANDS = [("SUB", "ZW", 20, 60, 1), ("BASS", "XW", 60, 160, 1),
+         ("MIDB", "YW", 160, 400, -1), ("MID", "XY", 400, 1200, -1),
+         ("UPR", "XZ", 1200, 4000, 1), ("AIR", "YZ", 4000, 14000, -1)]
+CEIL = 2.6
+
+NAV = ["Overview", "Catalog", "Scenes", "Analyzer", "Routing"]
+SOURCES = ["Audio in", "Solids", "Compounds", "Effects"]
+TABS = ["All", "4-polytopes", "Regular", "Stars", "Solids"]
+
+STATS = [
+    ("Shapes in catalog", "101", "+43", True, "Catalog complete",
+     "61 four-dimensional, 40 three-dimensional"),
+    ("Frame rate", "59.6 fps", "-0.4", False, "Holding the vsync budget",
+     "16.8 ms mean frame, 2.1 ms headroom"),
+    ("Rotation planes", "6 / 6", "all live", True, "Every plane driven",
+     "XY · XZ · YZ · XW · YW · ZW"),
+    ("Analyzer load", "4.5%", "+0.3%", True, "FFT under budget",
+     "2048-point window at 60 Hz"),
+]
+
+
+def ticks(n=180, seed=0x4d21):
+    """The same seeded stand-in for a live analyzer frame the React side uses."""
+    rnd = np.random.default_rng(seed)
+    out, state = [], [0.4] * len(BANDS)
+    for _ in range(n):
+        row = []
+        for k in range(len(BANDS)):
+            inertia = 0.82 - k * 0.07
+            state[k] = state[k] * inertia + rnd.random() * (1 - k * 0.09) * (1 - inertia)
+            row.append(state[k] * CEIL)
+        out.append(row)
+    return out
+
+
+# --------------------------------------------------------------------------
+# layout: a pure function of size, no imgui
+# --------------------------------------------------------------------------
+
+@dataclass
+class Rects:
+    sidebar: tuple = (0, 0, 0, 0)
+    nav: list = field(default_factory=list)
+    sources: list = field(default_factory=list)
+    header: tuple = (0, 0, 0, 0)
+    stats: list = field(default_factory=list)
+    bands_card: tuple = (0, 0, 0, 0)
+    facets: list = field(default_factory=list)
+    routing_card: tuple = (0, 0, 0, 0)
+    routing_rows: list = field(default_factory=list)
+    table_tabs: tuple = (0, 0, 0, 0)
+    table_rows: list = field(default_factory=list)
+    table_head: tuple = (0, 0, 0, 0)
+    cols: list = field(default_factory=list)
+
+
+COL_PAD = 14      # a right-aligned cell stops short of the next column
+SIDEBAR_W = 240
+HEADER_H = 48
+GUT = 24
+CARD_GAP = 16
+
+
+def lay_out(w: int, h: int, n_rows: int = 8) -> Rects:
+    r = Rects()
+    r.sidebar = (0, 0, SIDEBAR_W, h)
+
+    y = 16 + 56
+    for i, _ in enumerate(NAV):
+        r.nav.append((8, y + i * 34, SIDEBAR_W - 16, 32))
+    y2 = y + len(NAV) * 34 + 28
+    for i, _ in enumerate(SOURCES):
+        r.sources.append((8, y2 + i * 34, SIDEBAR_W - 16, 32))
+
+    cx = SIDEBAR_W
+    cw = w - SIDEBAR_W
+    r.header = (cx, 0, cw, HEADER_H)
+
+    inner_x = cx + GUT
+    inner_w = cw - 2 * GUT
+    y = HEADER_H + GUT
+
+    sw = (inner_w - 3 * CARD_GAP) / 4.0
+    for i in range(4):
+        r.stats.append((inner_x + i * (sw + CARD_GAP), y, sw, 136))
+    y += 136 + CARD_GAP
+
+    r.bands_card = (inner_x, y, inner_w, 258)
+    fx, fy = inner_x + 20, y + 84
+    fw = (inner_w - 40 - 2 * 24) / 3.0
+    for i in range(6):
+        col, row = i % 3, i // 3
+        r.facets.append((fx + col * (fw + 24), fy + row * 86, fw, 60))
+    y += 258 + CARD_GAP
+
+    r.routing_card = (inner_x, y, inner_w, 196)
+    ry = y + 56
+    for i in range(6):
+        r.routing_rows.append((inner_x + 20, ry + i * 22, inner_w - 40, 18))
+    y += 196 + CARD_GAP
+
+    r.table_tabs = (inner_x, y, 0, 32)
+    y += 32 + 12
+    r.table_head = (inner_x, y, inner_w, 36)
+    y += 36
+    for i in range(n_rows):
+        r.table_rows.append((inner_x, y + i * 34, inner_w, 34))
+
+    # Shape | Kind | Schlafli | Dim | Cells | Family
+    fracs = [0.22, 0.29, 0.13, 0.06, 0.08, 0.22]
+    cxx = inner_x + 12
+    for f in fracs:
+        cwid = (inner_w - 24) * f
+        r.cols.append((cxx, cwid))
+        cxx += cwid
+    return r
+
+
+# --------------------------------------------------------------------------
+# drawing
+# --------------------------------------------------------------------------
+
+def _dot(dl, cx, cy, col, rad=3.0):
+    dl.add_circle_filled(imgui.ImVec2(cx + rad, cy), rad, D._u32(col))
+
+
+def paint(dl, r: Rects, w, h, faces, theme, grad_tex, series):
+    bgc = T.rgba("background", theme=theme)
+    D.fill(dl, 0, 0, w, h, bgc)
+
+    # ---- sidebar ----------------------------------------------------------
+    D.fill(dl, *r.sidebar[:2], r.sidebar[2], r.sidebar[3], T.rgba("sidebar", theme=theme))
+    D.fill(dl, SIDEBAR_W - 1, 0, 1, h, T.rgba("border", theme=theme))
+
+    D.fill(dl, 12, 16, 32, 32, T.rgba("primary", theme=theme), D.RADII["md"])
+    D.label(dl, 24, 16, "H", faces, "semibold", 16,
+            T.rgba("primary-foreground", theme=theme), baseline_box=32)
+    D.label(dl, 54, 14, "Hyperspace", faces, "semibold", 14,
+            T.rgba("foreground", theme=theme), baseline_box=18)
+    D.label(dl, 54, 31, "4D polytope visualizer", faces, "regular", 12,
+            T.rgba("muted-foreground", theme=theme), baseline_box=14)
+
+    for i, (name, rect) in enumerate(zip(NAV, r.nav)):
+        D.sidebar_item(dl, *rect, name, faces, theme, active=(i == 0))
+    D.label(dl, 18, r.sources[0][1] - 22, "Sources", faces, "medium", 12,
+            T.rgba("muted-foreground", theme=theme), baseline_box=16)
+    for name, rect in zip(SOURCES, r.sources):
+        D.sidebar_item(dl, *rect, name, faces, theme)
+
+    # ---- header -----------------------------------------------------------
+    hx, hy, hw, hh = r.header
+    D.fill(dl, hx, hy + hh - 1, hw, 1, T.rgba("border", theme=theme))
+    D.label(dl, hx + GUT, hy, "Overview", faces, "medium", 16,
+            T.rgba("foreground", theme=theme), baseline_box=hh)
+    bw = D.text_w("Overview", faces, "medium", 16)
+    bx = hx + GUT + bw + 12
+    D.box(dl, bx, hy + (hh - 20) / 2, 86, 20,
+          border_col=T.rgba("border", theme=theme), radius=T.RADII["4xl"])
+    _dot(dl, bx + 8, hy + hh / 2, (0.20, 0.83, 0.60, 1.0), 3.0)
+    D.label(dl, bx + 20, hy + (hh - 20) / 2, "Rendering", faces, "medium", 12,
+            T.rgba("foreground", theme=theme), baseline_box=20)
+    D.button(dl, hx + hw - GUT - 72, hy + (hh - 32) / 2, 72, 32, "GitHub",
+             faces, theme, variant="ghost")
+
+    # ---- stat cards -------------------------------------------------------
+    for (title, value, delta, up, head, detail), rect in zip(STATS, r.stats):
+        x, y, cw, ch = rect
+        D.card(dl, {"x": x, "y": y, "w": cw, "h": ch, "variant": "gradient"},
+               theme, grad_tex)
+        D.label(dl, x + 20, y + 16, title, faces, "regular", 14,
+                T.rgba("muted-foreground", theme=theme), baseline_box=20)
+        D.label(dl, x + 20, y + 38, value, faces, "semibold", 30,
+                T.rgba("foreground", theme=theme), baseline_box=36)
+        dwid = D.text_w(delta, faces, "medium", 12) + 26
+        D.box(dl, x + cw - 20 - dwid, y + 14, dwid, 20,
+              border_col=T.rgba("border", theme=theme), radius=T.RADII["4xl"])
+        D.trend_arrow(dl, x + cw - 20 - dwid + 7, y + 19, 10, up,
+                      T.rgba("foreground", theme=theme))
+        D.label(dl, x + cw - 20 - dwid + 19, y + 14, delta, faces, "medium", 12,
+                T.rgba("foreground", theme=theme), baseline_box=20)
+        hwid = D.label(dl, x + 20, y + ch - 52, head, faces, "medium", 14,
+                       T.rgba("foreground", theme=theme), baseline_box=20)
+        D.trend_arrow(dl, x + 26 + hwid, y + ch - 47, 10, up,
+                      T.rgba("foreground", theme=theme))
+        D.label(dl, x + 20, y + ch - 32, detail, faces, "regular", 13,
+                T.rgba("muted-foreground", theme=theme), baseline_box=18,
+                max_w=cw - 40)
+
+    # ---- band levels ------------------------------------------------------
+    x, y, cw, ch = r.bands_card
+    D.card(dl, {"x": x, "y": y, "w": cw, "h": ch, "variant": "plain"}, theme, None)
+    D.label(dl, x + 20, y + 14, "Band levels", faces, "medium", 16,
+            T.rgba("foreground", theme=theme), baseline_box=20)
+    D.label(dl, x + 20, y + 34, "Each frequency band drives one rotation plane",
+            faces, "regular", 13, T.rgba("muted-foreground", theme=theme),
+            baseline_box=18)
+    ink = T.rgba("foreground", theme=theme)
+    for i, (rect, (name, plane, *_)) in enumerate(zip(r.facets, BANDS)):
+        fx, fy, fw, fh = rect
+        D.label(dl, fx, fy - 18, name, faces, "medium", 12, ink, baseline_box=14)
+        nw = D.text_w(name, faces, "medium", 12)
+        D.label(dl, fx + nw + 6, fy - 18, plane, faces, "regular", 12,
+                T.rgba("muted-foreground", theme=theme), baseline_box=14)
+        vals = [t[i] for t in series]
+        D.label(dl, fx, fy - 18, f"{vals[-1]:.2f}", faces, "regular", 12,
+                T.rgba("muted-foreground", theme=theme), align="right",
+                box_w=fw, baseline_box=14)
+        D.fill(dl, fx, fy + fh, fw, 1, T.rgba("border", theme=theme))
+        D.sparkline(dl, fx, fy, fw, fh, vals, ink, lo=0.0, hi=CEIL)
+
+    # ---- plane routing ----------------------------------------------------
+    x, y, cw, ch = r.routing_card
+    D.card(dl, {"x": x, "y": y, "w": cw, "h": ch, "variant": "plain"}, theme, None)
+    D.label(dl, x + 20, y + 14, "Plane routing", faces, "medium", 16, ink,
+            baseline_box=20)
+    D.label(dl, x + 20, y + 34, "Band to rotation plane, with the latest level",
+            faces, "regular", 13, T.rgba("muted-foreground", theme=theme),
+            baseline_box=18)
+    last = series[-1]
+    for i, (rect, (name, plane, lo, hi, direction)) in enumerate(zip(r.routing_rows, BANDS)):
+        rx, ry, rw, rh = rect
+        D.label(dl, rx, ry, name, faces, "medium", 12, ink, baseline_box=rh)
+        D.box(dl, rx + 48, ry, 34, rh, fill_col=T.rgba("secondary", theme=theme),
+              radius=T.RADII["4xl"])
+        D.label(dl, rx + 48, ry, plane, faces, "medium", 11, ink,
+                align="center", box_w=34, baseline_box=rh)
+        bar_x = rx + 94
+        bar_w = rw - 94 - 190
+        D.meter(dl, bar_x, ry + rh / 2 - 4, bar_w, 8, last[i] / CEIL, theme)
+        D.label(dl, rx + rw - 186, ry, f"{lo}–{hi} Hz", faces, "regular", 12,
+                T.rgba("muted-foreground", theme=theme), align="right",
+                box_w=110, baseline_box=rh)
+        D.label(dl, rx + rw - 60, ry, f"{'+' if direction > 0 else '−'}{last[i]:.2f}",
+                faces, "regular", 12, ink, align="right", box_w=60, baseline_box=rh)
+
+    # ---- table ------------------------------------------------------------
+    tx, ty, _, th = r.table_tabs
+    _, tabs_w = D.tabs(dl, tx, ty, th, TABS, 0, faces, theme)
+    shown = len(r.table_rows)
+    D.label(dl, tx, ty, f"Showing {shown} of {len(SHAPES)}", faces, "regular", 13,
+            T.rgba("muted-foreground", theme=theme), align="right",
+            box_w=r.table_head[2], baseline_box=th)
+
+    hx, hy, hw, hh = r.table_head
+    D.fill(dl, hx, hy, hw, hh, T.rgba("muted", theme=theme), 0.0)
+    D.fill(dl, hx, hy + hh - 1, hw, 1, T.rgba("border", theme=theme))
+    heads = ["Shape", "Kind", "Schläfli", "Dim", "Cells", "Family"]
+    aligns = ["left", "left", "left", "center", "right", "left"]
+    for (cxp, cwid), head, al in zip(r.cols, heads, aligns):
+        D.label(dl, cxp, hy, head, faces, "medium", 13, ink, align=al,
+                box_w=cwid - (COL_PAD if al == "right" else 0), baseline_box=hh)
+
+    for row, rect in zip(SHAPES[:shown], r.table_rows):
+        rx, ry, rw, rh = rect
+        D.fill(dl, rx, ry + rh - 1, rw, 1, T.rgba("border", theme=theme))
+        cells = [row["name"], row["kind"], row["schlafli"] or "—",
+                 f"{row['dims']}D",
+                 str(row["cells"]) if row["cells"] else "—", None]
+        for (cxp, cwid), val, al in zip(r.cols, cells, aligns):
+            if val is None:
+                bw2 = D.text_w(row["family"], faces, "medium", 12) + 16
+                D.box(dl, cxp, ry + (rh - 20) / 2, bw2, 20,
+                      border_col=T.rgba("border", theme=theme),
+                      radius=T.RADII["4xl"])
+                D.label(dl, cxp, ry + (rh - 20) / 2, row["family"], faces,
+                        "medium", 12, ink, align="center", box_w=bw2,
+                        baseline_box=20)
+            else:
+                col = ink if al != "left" or val == row["name"] else \
+                    T.rgba("muted-foreground", theme=theme)
+                variant = "medium" if val == row["name"] else "regular"
+                D.label(dl, cxp, ry, val, faces, variant, 13, col, align=al,
+                        box_w=cwid - (COL_PAD if al == "right" else 0),
+                        baseline_box=rh, max_w=cwid - COL_PAD)
+
+
+def render(theme_name: str, w: int, h: int) -> np.ndarray:
+    theme = T.LIGHT if theme_name == "light" else T.DARK
+    if not glfw.init():
+        raise SystemExit("GLFW failed to initialise (no display?)")
+    for hint, v in ((glfw.CONTEXT_VERSION_MAJOR, 3), (glfw.CONTEXT_VERSION_MINOR, 3),
+                    (glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE),
+                    (glfw.OPENGL_FORWARD_COMPAT, True), (glfw.VISIBLE, False),
+                    (glfw.SAMPLES, 0)):
+        glfw.window_hint(hint, v)
+    win = glfw.create_window(w, h, "dkit dashboard", None, None)
+    if not win:
+        glfw.terminate()
+        raise SystemExit("could not create the hidden window")
+    glfw.make_context_current(win)
+    imgui.create_context()
+    impl = GlfwRenderer(win)
+
+    io = imgui.get_io()
+    faces = {k: io.fonts.add_font_from_file_ttf(str(HERE / "fonts" / fn), 16.0)
+             for k, fn in (("regular", "Geist-Regular.ttf"),
+                           ("medium", "Geist-Medium.ttf"),
+                           ("semibold", "Geist-SemiBold.ttf"))}
+
+    LL = T.LIGHT_L if theme_name == "light" else T.DARK_L
+    grad_tex = G.upload_1d(G.ramp_oklab(*G.card_gradient(LL), n=256))
+    series = ticks()
+    rects = lay_out(w, h)
+    bgc = T.rgba("background", theme=theme)
+
+    for _ in range(2):
+        glfw.poll_events()
+        impl.process_inputs()
+        imgui.new_frame()
+        GL.glClearColor(bgc[0], bgc[1], bgc[2], 1.0)
+        GL.glClear(GL.GL_COLOR_BUFFER_BIT)
+        paint(imgui.get_background_draw_list(), rects, w, h, faces, theme,
+              grad_tex, series)
+        imgui.render()
+        impl.render(imgui.get_draw_data())
+        GL.glFinish()
+
+    fw, fh = glfw.get_framebuffer_size(win)
+    raw = GL.glReadPixels(0, 0, fw, fh, GL.GL_RGB, GL.GL_UNSIGNED_BYTE)
+    px = np.frombuffer(raw, np.uint8).reshape(fh, fw, 3)[::-1]
+    if not px.any():
+        raise SystemExit("the hidden window read back black: no picture here")
+    impl.shutdown()
+    glfw.terminate()
+    return px.copy()
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", default="/tmp/dkit")
+    ap.add_argument("--theme", default="dark", choices=("light", "dark"))
+    ap.add_argument("--width", type=int, default=1440)
+    ap.add_argument("--height", type=int, default=1100)
+    a = ap.parse_args()
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    px = render(a.theme, a.width, a.height)
+    dest = out / f"dashboard-{a.theme}.png"
+    Image.fromarray(px).save(dest)
+    print(f"wrote {dest}  {px.shape[1]}x{px.shape[0]}")
+
+
+if __name__ == "__main__":
+    main()

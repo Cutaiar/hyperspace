@@ -89,6 +89,36 @@ Two findings worth carrying forward:
   project already solves this the other way, with a mono face for readouts
   (`ui.py:126-129`).
 
+## The demo
+
+`dashboard.py` composes the primitives into the Hyperspace dashboard — the
+same surface as `prototypes/dashboard/`, drawn with nothing but `draw.py`, on
+real catalog and band data, headless, in both themes.
+
+```bash
+HYPERSPACE_HOME=$(mktemp -d) uv run python tools/dkit/dashboard.py \
+    --out /tmp/dkit --theme dark
+```
+
+Layout follows the house pattern (`ui_players.lay_out`,
+`ui_players.py:122-176`): a pure function of size returning every rectangle,
+no imgui in it, drawn in a second pass.
+
+Primitives now in the kit: Badge, Card, Button, Tabs, SidebarItem, Table,
+meter, sparkline, trend arrow, plus `label`/`fit_text` for type. Three were
+added by the demo rather than by the diff, because composing is what exposes
+them:
+
+* **truncation** — shadcn leans on `truncate`/`line-clamp`; ImGui clips
+  nothing, so long text ran out of its card. `fit_text` is the same binary
+  search `ui.py:317-329` uses.
+* **drawn trend marks** — Geist's latin subset has no arrows, so ↗/↘ came out
+  as missing glyphs. They are triangles now, the way `ui_players.py:421-539`
+  draws device glyphs.
+* **per-segment area fill** — `add_concave_poly_filled` triangulates a whole
+  outline and leaves visible streaks across an area chart. One convex
+  trapezoid per segment is exact.
+
 ## Running it
 
 ```bash

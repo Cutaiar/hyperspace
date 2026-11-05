@@ -81,8 +81,8 @@ reading documentation.
 
 ## What this does not yet prove
 
-Honest scope. The kit covers **static chrome for two primitives**. It does not
-cover:
+Honest scope. The kit covers **static chrome for six primitives**, composed into a
+demoable dashboard (`dashboard.py`, both themes). It does not cover:
 
 - **Interaction states and transitions.** shadcn animates on a 150ms
   cubic-bezier; ImGui is stateless per frame, so this needs an `id → (value,
@@ -93,9 +93,9 @@ cover:
   (`ui_players.lay_out`, `ui_players.py:122-176` — a pure width→rects function,
   unit-tested without imgui), and it is the right one, but the shadcn layouts
   would have to be written out by hand.
-- **The remaining primitives** — Button, Tabs, Table, SidebarItem. All are
-  combinations of the five operations above, so the risk is low, but "low risk"
-  is not "done".
+- **Interaction.** `dashboard.py` draws every state the primitives support,
+  but nothing is wired to a stock widget yet, so nothing is clickable and the
+  `##id` discipline below is still only designed for, not done.
 - **The Mac.** Every number here is Mesa/llvmpipe under Xvfb. The Mac is Metal
   and will differ; the project already gates its render goldens on
   `GL_RENDERER` for exactly this reason (`tests/test_golden_frames.py:336`).
