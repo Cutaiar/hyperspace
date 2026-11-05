@@ -33,6 +33,23 @@ import tokens as T        # noqa: E402
 
 SPEC = json.loads((HERE / "spec.json").read_text())
 
+# Geist ships only as a variable woff2, which stb_truetype can read neither of.
+# tools/shadkit/fonts holds static instances cut from that exact file at the
+# three weights shadcn uses, so the comparison is the same typeface.
+FACES = {"regular": "Geist-Regular.ttf",
+         "medium": "Geist-Medium.ttf",
+         "semibold": "Geist-SemiBold.ttf"}
+
+
+def load_faces():
+    io = imgui.get_io()
+    out = {}
+    for k, fn in FACES.items():
+        p = HERE / "fonts" / fn
+        if p.exists():
+            out[k] = io.fonts.add_font_from_file_ttf(str(p), 16.0)
+    return out      # 1.92 builds the atlas lazily; there is no Build() any more
+
 
 def render(theme_name: str, tess: float | None = None) -> np.ndarray:
     cv = SPEC["canvas"]
@@ -59,6 +76,8 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
 
     bg = T.rgba(cv["bg"] if theme_name == "light" else theme["background"])
     grad_tex = G.upload_1d(G.ramp_oklab(*G.CARD_GRADIENT, n=256))
+    faces = load_faces()
+    ink = T.rgba("foreground", theme=theme)
 
     # Two frames: the first builds the font atlas and settles the backend.
     for _ in range(2):
@@ -73,6 +92,8 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
                 D.badge(dl, cell, theme, T.BADGE)
             elif cell["kind"] == "card":
                 D.card(dl, cell, theme, grad_tex)
+            elif cell["kind"] == "text":
+                D.text_cell(dl, cell, faces, ink)
         imgui.render()
         impl.render(imgui.get_draw_data())
         GL.glFinish()

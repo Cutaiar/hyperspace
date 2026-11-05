@@ -130,6 +130,34 @@ def card(dl, cell, theme, grad_tex: int | None) -> None:
            rgba("foreground", 0.10, theme=theme), r + 1, 1.0)
 
 
+# (hhea.ascender - hhea.descender) / unitsPerEm, per face. Geist: 1300/1000.
+FONT_SPAN_EM = {"regular": 1.30, "medium": 1.30, "semibold": 1.30}
+
+
+def text_cell(dl, cell, faces, col) -> None:
+    """One pinned string, vertically centred in its box like CSS line-height.
+
+    ImGui 1.92 renders any face at any size through push_font(face, size), so
+    the size comes from the spec rather than from a baked atlas entry.
+    """
+    face = faces.get(cell["variant"])
+    # ImGui's font size is NOT a CSS px. stb_truetype scales so that
+    # ascent - descent equals the requested size; CSS maps the em square to
+    # font-size. Geist is upem 1000 with ascent 1005 / descent -295, so its
+    # span is 1.30 em and ImGui renders 14px CSS text at 77% unless asked for
+    # 14 * 1.30. Per-face, because the ratio is a property of the font.
+    size = float(cell["size"]) * FONT_SPAN_EM.get(cell["variant"], 1.0)
+    imgui.push_font(face, size)
+    try:
+        ext = imgui.calc_text_size(cell["text"])
+        # CSS centres the line box, so the glyph box sits at (h - lineheight)/2;
+        # ImGui's text origin is the top of its own line, which is `size`-based.
+        ty = cell["y"] + (cell["h"] - ext.y) / 2.0
+        dl.add_text(imgui.ImVec2(cell["x"], ty), _u32(col), cell["text"])
+    finally:
+        imgui.pop_font()
+
+
 def badge(dl, cell, theme, variant_table) -> None:
     """One shadcn Badge, pinned to the spec rect."""
     v = variant_table[cell["variant"]]

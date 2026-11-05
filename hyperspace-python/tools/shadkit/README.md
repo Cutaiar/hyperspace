@@ -49,19 +49,45 @@ bounds — which is exactly CSS `border-box`, and the correct inset is **none**.
 Filled (unrounded) rect edges snap by pixel centre; rounded fills are
 antialiased and land exactly.
 
-## Results so far — Phase 0, Badge
+## Results — Badge and Card, 14 chrome cells
 
 ```
-flat: edges+fills   max 0-1 levels, 0 pixels over threshold, all 10 cells
+flat: edges+fills   max 0-1 levels, 0 pixels over threshold, all 14 cells
 corners             worst displacement 0.776 px   (bar 1.0)
 background          0 pixels differ
 ```
 
-Straight edges, borders, radii, fills and colours are **pixel-exact**. The
-whole residual is corner-arc antialiasing, at roughly a third of a pixel
-(mean +0.28px on r=10, -0.15px on r=26 — ImGui's small-radius arcs sit a touch
-outside Chromium's). Lowering ImGui's `circle_tessellation_max_error` does not
-help and slightly hurts, so this is the rasterizers differing, not geometry.
+Straight edges, borders, radii, fills, gradients, rings, shadows and colours
+are **pixel-exact to within a level**. The whole residual is corner-arc
+antialiasing at roughly a third of a pixel (mean +0.28px at r=10, -0.15px at
+r=26 — ImGui's small-radius arcs sit a touch outside Chromium's). Lowering
+`circle_tessellation_max_error` does not help and slightly hurts, so this is
+the two rasterizers differing, not geometry to be fixed.
+
+### Text (advisory)
+
+Geist ships only as a variable woff2, which stb_truetype can read neither of,
+so `fonts/` holds static instances cut from that exact file at wght 400/500/600.
+With those, ink extents land within a few px on a 110-170px string:
+
+```
+text.title30   144x29  vs  144x29   (exact)
+text.body14    113x11  vs  115x10
+text.num14     138x12  vs  132x12   <- tabular-nums, -4%
+```
+
+Two findings worth carrying forward:
+
+* **ImGui's font size is not a CSS px.** stb_truetype scales so that
+  `ascent - descent` equals the requested size; CSS maps the em square to
+  `font-size`. Geist is upem 1000 with ascent 1005 / descent -295, so its span
+  is 1.30em and ImGui renders 14px CSS text at 77% unless asked for 14 x 1.30.
+  The ratio is a property of the font, so the kit keeps it per face
+  (`draw.FONT_SPAN_EM`).
+* **No OpenType features.** `tabular-nums` is the one shadcn leans on, and
+  stb_truetype cannot apply it — hence -6px on a digit-heavy string. The
+  project already solves this the other way, with a mono face for readouts
+  (`ui.py:126-129`).
 
 ## Running it
 

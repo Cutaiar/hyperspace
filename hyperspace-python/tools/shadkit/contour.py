@@ -103,6 +103,8 @@ def edge_radius(rs, vs, filled: bool):
 def measure(react: np.ndarray, mine: np.ndarray) -> dict:
     out = {}
     for c in SPEC["cells"]:
+        if c["kind"] not in KIND:        # text cells are advisory, not chrome
+            continue
         r, _, ring = geom(c)
         filled = not ring
         deltas = []

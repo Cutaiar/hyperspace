@@ -26,6 +26,8 @@ type Cell = {
   w: number
   h: number
   text: string
+  size?: number
+  weight?: number
 }
 
 export default function Gallery({ withText }: { withText: boolean }) {
@@ -57,7 +59,24 @@ export default function Gallery({ withText }: { withText: boolean }) {
             lineHeight: 0,
           }}
         >
-          {c.kind === "card" ? (
+          {c.kind === "text" ? (
+            // Text cells always draw: they are the advisory pass, measured by
+            // ink extent rather than by pixel diff. line-height = cell height
+            // pins the baseline deterministically.
+            <span
+              style={{
+                fontFamily: '"Geist Variable", sans-serif',
+                fontSize: c.size,
+                fontWeight: c.weight,
+                lineHeight: `${c.h}px`,
+                color: "#0a0a0a",
+                whiteSpace: "pre",
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              {c.text}
+            </span>
+          ) : c.kind === "card" ? (
             <Card
               className={
                 "h-full w-full p-0 " +

@@ -62,6 +62,8 @@ def corner_mask(shape: tuple[int, int]) -> np.ndarray:
     """True where a cell's rounded corner arc lives."""
     m = np.zeros(shape, bool)
     for c in SPEC["cells"]:
+        if c["kind"] not in C.KIND:
+            continue
         r, outset, _ = C.geom(c)
         # the corner box must also cover chrome that lives outside the box -
         # a card's ring sits at x-1 and its shadow reaches ~3px further
@@ -100,6 +102,8 @@ def main() -> int:
 
     failed = []
     for c in SPEC["cells"]:
+        if c["kind"] not in C.KIND:      # text: measured by ink extent, see README
+            continue
         x0, y0 = max(c["x"] - PAD, 0), max(c["y"] - PAD, 0)
         x1 = min(c["x"] + c["w"] + PAD, strict.shape[1])
         y1 = min(c["y"] + c["h"] + PAD, strict.shape[0])
@@ -122,14 +126,44 @@ def main() -> int:
     inside = np.zeros(strict.shape, bool)
     for c in SPEC["cells"]:
         inside[max(c["y"] - PAD, 0):c["y"] + c["h"] + PAD,
-               max(c["x"] - PAD, 0):c["x"] + c["w"] + PAD] = True
+               max(c["x"] - PAD, 0):c["x"] + c["w"] + PAD] = True   # text too
     bg = int((strict[~inside] > a.tol).sum())
+
+    # text is advisory, so keep it out of the chrome summary
+    textmask = np.zeros(strict.shape, bool)
+    for c in SPEC["cells"]:
+        if c["kind"] not in C.KIND:
+            textmask[c["y"]:c["y"] + c["h"], c["x"]:c["x"] + c["w"]] = True
+    chrome = ~corners & ~textmask
 
     allarc = [float(np.abs(v).max()) for v in arcs.values() if len(v)]
     print("-" * 76)
     print(f"background pixels differing at all: {bg}")
-    print(f"worst flat-region delta: {int(strict[~corners].max())} levels   "
+    print(f"worst flat-region delta: {int(strict[chrome].max())} levels   "
           f"worst corner displacement: {max(allarc):.3f} px")
+
+    # --- advisory: text, by ink extent (never a pass/fail) ------------------
+    rows = [c for c in SPEC["cells"] if c["kind"] not in C.KIND]
+    if rows:
+        ga = react.max(axis=2)
+        gb = mine.max(axis=2)
+
+        def ink(img, c):
+            r = img[c["y"]:c["y"] + c["h"], c["x"]:c["x"] + c["w"]] < 200
+            if not r.any():
+                return None
+            ys, xs = np.where(r)
+            return int(xs.max() - xs.min() + 1), int(ys.max() - ys.min() + 1)
+
+        print()
+        print("text (advisory - ink extent, px):")
+        print(f"  {'cell':14} {'react':>9} {'imgui':>9} {'dw':>4} {'dh':>4}")
+        for c in rows:
+            ia, ib = ink(ga, c), ink(gb, c)
+            if not ia or not ib:
+                continue
+            print(f"  {c['id']:14} {ia[0]:4}x{ia[1]:<4} {ib[0]:4}x{ib[1]:<4} "
+                  f"{ib[0] - ia[0]:+4} {ib[1] - ia[1]:+4}")
 
     amp = np.clip(tol.astype(np.int32) * 4, 0, 255).astype(np.uint8)
     sheet = np.concatenate(
