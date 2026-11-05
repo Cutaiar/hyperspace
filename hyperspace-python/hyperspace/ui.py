@@ -53,6 +53,7 @@ from . import (
     ui_pad,
     ui_pane,
     ui_patterns,
+    ui_players,
     ui_presets,
     ui_routing,
     ui_seq,
@@ -635,6 +636,7 @@ CHEATSHEET = [
     ("← →", "previous / next shape"),
     ("space", "pause rotation"),
     ("P / L / F", "points / lines / faces"),
+    ("O", "who is on air: the player screen"),
     ("1–6", "planes XY XZ YZ XW YW ZW"),
     ("↑ ↓", "4D depth · hold accelerates"),
     ("[ ]  , .", "brightness · speed"),
@@ -686,7 +688,7 @@ CHEATSHEET = [
 META_SECTIONS = ("output", "audio", "analyzer", "hands")
 
 PAGE_KEYS = ["output", "view", "faces", "media", "camera", "lookback", "fx", "audio", "analyzer",
-             "routing", "graph", "lfo", "seq", "hands", "presets", "system"]
+             "routing", "graph", "lfo", "seq", "hands", "presets", "system", "players"]
 
 
 class PageHistory:
@@ -805,6 +807,7 @@ class Panel:
         self.learn = None     # set by app.py: the armed param and the held question (learn.Learn)
         self.undo = None      # set by app.py (undo.Undo): its status shows in the footer
         self.meta_undo = None  # the meta controller's stack (plan 44 D5b): so does its
+        self.meta = None       # set by app.py (deck.MetaController): the player screen's moves
         self._fine_drag = None   # the slider a Shift drag holds (`_fine`): its id, mouse x, throw
         self._shift = self._mouse_down = False   # this frame's ⇧ and left button (`_fine_frame`)
         self.devices = None   # set by app.py (devices.DeviceRegistry): the SYSTEM page's lines
@@ -882,15 +885,18 @@ class Panel:
                    "to the top of the pane, and folds again when the focus moves on unless "
                    "you unfolded it yourself. graph lets go of the focus.")
 
-    def in_meta_section(self) -> bool:
+    def in_meta_section(self) -> bool | None:
         """What ⌘Z goes by, through `undo.where`: its meta stack here, else the
         panel's deck's. **What is under the mouse decides:** a param undo watches
         says by its own layer, wherever it is drawn (a mixed section: hands with
         `ghost.*`, SYSTEM with `desk.slew`, a rig node in the selection); else the
-        section under it (`ui_pane.where`); else the deck."""
+        section under it (`ui_pane.where`); else the deck. None over the player
+        screen: no stack, since a move is on none of them (`undo.here`)."""
         p = getattr(self, "_param_under", None)
         if p is not None and undo.watched(p):
             return part_of(p) != "performance"
+        if ui_players.over(self):
+            return None
         return ui_pane.where(self) in META_SECTIONS
 
     def go_page(self, i) -> None:
@@ -1933,6 +1939,8 @@ class Panel:
         # the poi's dials, their own window while the poi is on (plan 47): out
         # of the pad window, whose room stays the pad's; GRAPH's side pane too
         ui_pad.poi_window(self)
+        # the player screen, large (ui_players.py): over everything, the panel folded too
+        ui_players.window(self)
         if getattr(self, "desk", True):     # (a Panel from before a hot reload)
             ui_desk.diagram(self)
         if not self.open:
@@ -2037,6 +2045,7 @@ class Panel:
         imgui.push_font(_FONTS["num"], FONT_MICRO + 1)
         imgui.text_colored(FAINT, f"{fps:5.1f} FPS")
         imgui.pop_font()
+        ui_players.footer(self)
         note, warn = self._message()
         color = WARN if warn else FAINT
         # an armed learn has the slot, on every page (plan 17 WP2): what it
@@ -2100,6 +2109,10 @@ class Panel:
                 tooltip("the open show — the presets section")
 
     # ---- pages ----
+
+    def _page_players(self, dt: float) -> None:
+        """Who is on air, and what they hold (ui_players.py)."""
+        ui_players.section(self, dt)
 
     def _page_output(self, dt: float) -> None:
         """Where the render window shows: screen, fullscreen, overlay (overlay.py)."""
@@ -2745,17 +2758,19 @@ class Panel:
 
     def deck2_gpu_lines(self) -> list[str]:
         """Plan 44 D4, §8: the second GPU block, what the deck off air costs —
-        a block like the first while it draws, one line off air, and what its
-        draw raised. Nothing else of deck 2 is on the panel."""
+        a block like the first while it draws (a fade, or the panel's backdrop),
+        one line otherwise, and what its draw raised, or its last warm draw's.
+        Named by its number: either deck can be off air (D5c)."""
         fade = getattr(self, "fade", None)
         if fade is None:
             return []
         mixed = getattr(fade.on_air.renderer, "mix_error", "")
-        said = [f"deck 2: {e}" for e in (fade.error, mixed) if e]
-        if not fade.drew:
-            return ["deck 2: off air, draws nothing", *said]
+        deck = f"deck {2 if fade.off_air is fade.decks[1] else 1}"
+        said = [f"{deck}: {e}" for e in (fade.error, fade.warm_error, mixed) if e]
+        if not (fade.drew or fade.previewed):
+            return [f"{deck}: off air, draws nothing", *said]
         stats = getattr(fade.off_air.renderer, "stats", None) or {}
-        return [*_gpu_block(stats, "deck 2 gpu"), *said]
+        return [*_gpu_block(stats, f"{deck} gpu"), *said]
 
     def _gpu_timing(self) -> None:
         for text in (*self.gpu_lines(), *self.deck2_gpu_lines()):

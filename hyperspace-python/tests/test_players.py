@@ -401,7 +401,7 @@ def test_main_builds_the_players_before_the_devices_and_moves_none():
     import inspect
     src = inspect.getsource(app.main)
     assert src.index("Players.load(home") < src.index("_open_devices(cfg")
-    assert "players=players" in src and "MetaController(deck, deck2, players)" in src
+    assert "players=players" in src and "MetaController(deck, deck2, players, mix=mix)" in src
     assert "move_player(" not in src
     assert "meta.on_players.append" in src and "on.learn.mapped" in src
 

@@ -7957,6 +7957,27 @@ a ⌘Z no longer takes back a meta edit made while you were elsewhere.
 4. Learn a key row on ROUTING, then ⌘Z in a meta section, and restart. *Pass:* the row is gone, and stays
    gone after the restart.
 
+## BZ. The crossfader's side and copy on air (plan 44 D5c)
+Register rows 694–696, 2026-11-04. Restart first. **Nothing here is meant to look different yet:** no control
+calls the new verbs until D5d.
+**526. Neutral at 0.** (the rig, or a laptop)
+1. Launch, load three looks, turn knobs, ⌘Z, open GRAPH. *Pass:* all as before.
+2. Reload a saved look with sound in a clip. *Pass:* the clip is heard.
+*Fail:* anything looks, sounds or feels different at `output.xfade` 0.
+**527. The fade as it was, and the poi's guide.** (the rig, with the poi on if the Joy-Con is about)
+1. Load a look with a dream. Raise `output.xfade` from the panel, to 1 and back. *Pass:* deck 2 is black
+   at 1, as before; the dream comes back at 0.
+2. With `poi.on` and the guide showing, raise it to 0.5. *Pass:* the guide fades with deck 1's picture: at 1 it
+   is gone. It used to draw on both.
+**528. After D5d: crossing, copy, the first fade.** (the rig, with the APC40 and a pad; do with 489–492)
+1. Copy on air to off air on a look with no feedback. Fade across slowly. *Pass:* you cannot see the crossing.
+2. Leave the fader sitting at the middle. *Pass:* the pad stays on one deck, no flicker in who acts.
+3. Copy a feedback look, fade across. *Pass:* trails build from empty, and say if that bothers you.
+4. Copy, then a preset with shaders not used since launch, press copy again. *Pass:* any hitch is at the press
+   and not in the fade. Read `stall.log`.
+5. Hold GRAPH on the deck off air, then fade. *Pass:* a delay's trail carries across the size change; say if it restarts.
+6. Time a 5-second fade by the clock. Grab the fader mid-way. *Pass:* it stops there and is yours.
+
 ## CF. Node mode's saved form (plan 57)
 Register rows 715–717, 2026-11-04. Restart first. Headless: `tests/test_nodemode.py` (the round
 trip over the corpus, the fill, the kind). **No panel writes the key until N1b,** so 546 and 547
@@ -8030,8 +8051,8 @@ Expected: the diagram says what the button does, and no row lands on it from the
 ## CL. Players and duties (plan 55)
 Register rows 733–736, 2026-11-04. Headless: `tests/test_players.py`, two players with
 fake pads over two decks with different patches, through the real registry, router and
-pass. Until PS lands there is no screen: the checks that move a player do it by editing
-`~/Hyperspace/players.json` and relaunching (`{"schema": "players/1", "duties": {"2":
+pass. These checks predate PS (group CN), and can move a player on its screen instead of
+editing `~/Hyperspace/players.json` and relaunching (`{"schema": "players/1", "duties": {"2":
 "off_air"}, "controllers": {}}`). Delete the file to put everyone back on air.
 **563. With nobody moved, nothing changes.** (the rig, no `players.json`)
 1. Launch. Play a preset with hand and stick routes, a base chase on BACK, and an orbit.
@@ -8068,6 +8089,39 @@ Expected: "analyzer" throughout, "band" only as a count or the plain audio word,
 1. Note a route from SUB and an APC40 knob on an analyzer strip. Quit, reopen, load the show.
 
 Expected: the route and the knob work as before; no warning about a missing param.
+
+## CN. The player select screen (wave 4 PS)
+Register rows 739–742, 2026-11-04. Headless: `tests/test_ui_players.py`, the real panel and
+`MetaController` by mouse through `tests/ui_driver.py`. **Restart:** a new module.
+**568. Moving a player by mouse.** (the rig, two pads)
+1. Press O in the control window, or click the footer's chip ("on air … · off air …").
+2. Drag player 2's number across to OFF AIR. Drag it back.
+3. Move player 2 off air again and relaunch.
+*Pass:* (2) the footer and the line under the lanes say what moved, the moment it moves; player
+2's pad plays deck 2 and not deck 1, and player 1's pad does not change. (3) Player 2 is still
+off air, and the launch notes say so. Fail: a jump on the on-air picture, or a pad left behind.
+**569. Glyphs, connections and lights.** (a DualSense or Edge, an Xbox pad, a Joy-Con, the APC40, the Leap)
+1. List them and open the board.
+2. Switch a pad off, then back on.
+3. Drag a pad to player 2's token.
+4. Give away player 1's only pad, then give it back.
+*Pass:* (1) each is drawn as itself and known from across the room. (2) It fades and is struck
+through, and comes back. (3) Its light and player lamps change to player 2's, and the words name its
+address. (4) The words say the bare pad rows wait. Fail: a pad reopening with no word, or a lamp
+left on the old number. Say whether two pads both showing player 1 reads right (row 742).
+**570. Reaching it during a show.** (the rig, a preset on the output)
+1. Press O, move someone, press Esc. Check the points stayed as they were, and press ⌘Z over the board: it says there is nothing to undo, and no setting goes back.
+2. Rename a preset, typing an O. Press Esc while naming with the board open: only the naming ends. Fold the panel and press O.
+3. Drag the side pane to its narrowest, and focus the section from a key row.
+*Pass:* (1) no hitch on the output. (2) Typing does not open it; folded, O does. (3) Everything
+is inside the pane and readable. Say whether it is effortless, and whether a click on a token
+should select, as built, or move (row 739), and whether O should work on the render window (row 740).
+**571. The tray.** (one more pad than `[[devices]]` lists)
+1. Plug it in, and hover it under NOBODY HOLDS.
+2. Unplug it.
+*Pass:* (1) it appears within a second, as itself, and its tooltip says to add an entry. (2)
+"nothing loose". Say whether a controller should be able to be held by nobody, and whether the
+tray should add the entry (row 741).
 
 ## CO. No preset row on a meta param (wave 4 MR)
 Register rows 743–745, 2026-11-04.

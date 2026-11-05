@@ -909,12 +909,15 @@ def _base(name: str) -> str:
 
 
 def test_the_cheat_sheet_matches_the_tables_and_the_loop_keys():
+    from hyperspace import ui_players
+
     """ui.CHEATSHEET is the canonical human list (app.py): every key row in
     the factory table and every key the loop handles itself is on it, and
     it names nothing that is neither (audit U2)."""
     sheet_keys, sheet_pads = _sheet_keys()
     table_keys = {b.key_name for b in keymap()}
-    known = table_keys | {_base(k) for k in LOOP_KEYS}
+    known = table_keys | {_base(k) for k in LOOP_KEYS} | {ui_players.KEY}  # the panel's own
+    assert ui_players.KEY in sheet_keys, "the player screen's key missing from the sheet"
     assert not table_keys - sheet_keys, "table rows missing from the sheet"
     assert not {_base(k) for k in LOOP_KEYS} - sheet_keys, "loop keys missing from the sheet"
     assert not sheet_keys - known, "the sheet names keys nothing handles"

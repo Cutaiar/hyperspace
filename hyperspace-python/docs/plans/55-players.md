@@ -2,7 +2,7 @@
 
 **Status: built (2026-11-04)** as wave 4 PL on `wave4/pl`. Register rows 733–736; hand
 checks 563–565, group CL. **Restart, not hot reload:** a new module and new fields on
-long-lived objects. The select screen is PS, next, by another builder.
+long-lived objects. The select screen is built too, as wave 4 PS: see below.
 
 The owner, 2026-11-04: "Controllers are generic; the actors are named: player 1, 2, 3,
 4." A player "registers any number of controllers and holds a duty: on air or off air.
@@ -81,6 +81,23 @@ off-air players stay with the off-air `Deck`.
 
 Nothing in `app.main` moves a player. Status words for a role stay `devices.lines()`'s.
 
+## The select screen (wave 4 PS)
+
+`ui_players.py`, register rows 739–742, hand checks 568–571, group CN. A party game's team
+screen: lanes ON AIR and OFF AIR, a token per player, each controller in its own glyph and
+struck through when it is not there. **The mouse moves people, and nothing else does:** a drag
+across, or a click on the token and then the lane; a controller by a drag to a token, or a click
+and a click. Said at once, on the board and in the footer. A player holding nothing is an empty
+seat, there to give a controller to.
+
+It uses the table above and adds nothing to it. The panel reaches it through `Panel.meta`. The
+board is a side pane section (last, folded, its header saying who is where) and the same board
+large in its own window, from the footer's chip or O. Its ids are in the module's docstring.
+
+**What the surface lacks.** There is no call to let a controller go, and a listed controller
+always has a holder, so a drag to the tray cannot be: the tray shows the pads no entry lists
+(row 741). **A pad's lights follow its player** (`PadDevice.identity`, row 742).
+
 ## A row acts only on its player's `Deck`
 
 `Router.feeds` hides a shared scheme whose controller's pointer is on another deck
@@ -126,8 +143,8 @@ nothing jumps. Switching off or resetting from the other deck acts on the right 
 
 ## Found, not changed
 
-- **The poi's guide** (`renderer.poi_source`) is one wire handed over to deck 2's renderer
-  (`hand_over`), so a fade draws the guide on both pictures. D5c's list.
+- **The poi's guide:** fixed in D5c. Both renderers hold the wire; `poi.guides` draws it on the
+  picture of the deck its pad is on (row 694).
 - **`poi.reset`, `poi.*` dials and `totem.w.*` on the panel** act on the pad's one state
   from either deck. They are a controller's, never a look's.
 - **The totem and the poi read one pad each,** not one per player: two players cannot
