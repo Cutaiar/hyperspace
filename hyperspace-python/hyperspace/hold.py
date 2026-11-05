@@ -71,6 +71,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import Any
 
+from .outputs import preview_size  # noqa: F401 — moved there: this file goes in D5d
 from .params import (
     POSE_IDS,
     cut_ids,
@@ -102,9 +103,6 @@ HELD_GROUPS = ("view", "camera", "pattern", "dream", "fx", "backdrop", "switch",
 # the rates, so the program moves at the live rate as the turn does
 ONE_FOR_BOTH = ("view.three_d", "view.speed", "view.inst_rate", "view.media_rate")
 ONE_FOR_BOTH_PREFIXES = ("view.plane.",)
-# the preview's long side at most: the GRAPH page's backdrop, not a show
-PREVIEW_MAX = 1280
-
 ENGAGE_TIP = ("Hold the projector on what it shows now. Every output keeps this look — "
               "live, still moving with the music — while you build the next one; the "
               "GRAPH page shows your changes behind the nodes. TAKE puts them on the "
@@ -405,17 +403,6 @@ def program_value(p, base):
     u = u % 1.0 if p.wrap else min(max(u, 0.0), 1.0)
     v = p._value_of_norm(u)
     return round(v) if getattr(p, "integer", False) else v
-
-
-def preview_size(full: tuple[int, int], cap: tuple[int, int] | None = None) -> tuple[int, int]:
-    """The preview's size: output 1's framebuffer `full` under the render
-    cap `cap`, shrunk (aspect kept) to `PREVIEW_MAX` on its long side."""
-    w, h = max(int(full[0]), 1), max(int(full[1]), 1)
-    if cap is not None:
-        k = min(1.0, cap[0] / w, cap[1] / h)
-        w, h = max(round(w * k), 1), max(round(h * k), 1)
-    k = min(1.0, PREVIEW_MAX / max(w, h))
-    return max(round(w * k), 1), max(round(h * k), 1)
 
 
 # the main renderer's inputs the preview renderer reads the same way —

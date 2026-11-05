@@ -60,7 +60,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 # pyGLFW and imgui_bundle each ship a libglfw; loading both trips ObjC class
 # collisions on macOS. Point pyGLFW at imgui_bundle's copy before it loads.
@@ -93,7 +93,6 @@ from .bands import CEIL
 from .control import Control
 from .deck import KEYS, MOUSE, Deck, Fade, MetaController, Mix, RigMade, register_xfade
 from .geometry import EYE_DISTANCE, EYE_FOV, px_per_unit
-from .hold import preview_size
 from .hotreload import HotReloader
 from .learn import Learn
 from .library import Library
@@ -105,7 +104,16 @@ from .media.channels import Channels, MediaState
 from .media.folder import MediaFolder
 from .media.panel import GRAPH as PANEL_GRAPH
 from .media.panel import PanelSource
-from .outputs import CanvasTap, Offscreen, Presenter, Preview, Slot, Switches, View
+from .outputs import (
+    CanvasTap,
+    Offscreen,
+    Presenter,
+    Preview,
+    Slot,
+    Switches,
+    View,
+    preview_size,
+)
 from .overlay import RENDER_DEFAULT, GlfwBackend, Output, register_switches, render_index
 from .params import Registry
 from .pinch import install as install_pinch
@@ -239,15 +247,17 @@ class MediaIO:
 
     def __init__(self, folder: MediaFolder, state: MediaState):
         self.folder, self.state = folder, state
-        self.off_air: list = []       # the channels of the decks off air (plan 44 D4)
+        self.off_air: list = []       # the channels of the decks but the first (plan 44 D4)
+        self.heard: Callable[[], Any] | None = None   # the channels on air; None: `state`
 
     def poll(self, dt: float, now: float) -> None:
         # each source read once a frame from here on, whichever deck asks
         # (plan 44 §8: both renderers handed the same `MediaFrame`)
         self.state.sources.begin_frame()
-        self.state.poll(dt, now)
-        for channels in self.off_air:
-            channels.poll(dt, now, heard=False)   # the mixer plays the deck on air
+        heard = self.heard() if self.heard is not None else self.state
+        # the deck not heard first, so what it lets go is let go before the one on air asks
+        for channels in sorted((self.state, *self.off_air), key=lambda c: c is heard):
+            channels.poll(dt, now, heard=channels is heard)   # the mixer plays the deck on air
 
     def close(self) -> None:
         for channels in self.off_air:
@@ -638,7 +648,7 @@ def _bands(audio) -> tuple[float, ...]:
 
 
 def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
-                 preview=None, hold=None, monitor=None, fade=None) -> None:
+                 preview=None, hold=None, monitor=None, fade=None, panel_deck=None) -> None:
     """One render frame onto every output (plan 21 WP3, "the frame in
     app.draw_render"):
 
@@ -675,7 +685,11 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
     Plan 44 D4: `fade` (a `deck.Fade`). At `output.xfade` 0, exactly the
     above. Above 0, before output 1's draw, deck 2 draws every output
     offscreen (`Fade.draw`) and each view carries its picture to the mix
-    pass, so every presenter, publisher and panel inset shows the mix."""
+    pass, so every presenter, publisher and panel inset shows the mix.
+
+    Plan 44 D5c: `panel_deck`, the deck the panel is on. Off air, the page's
+    backdrop is that deck's picture (`Fade.preview`), not output 1's, and a look
+    just landed there is drawn once small (`Fade.warm`)."""
     first = slots[0]
     win = first.win
     glfw.make_context_current(win)
@@ -696,7 +710,9 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
     offscreen = [sl for sl in slots[1:] if sl.publish_only and sl.offscreen is not None]
     on_hold = hold is not None and bool(getattr(hold, "on", False))
     wanted = preview is not None and preview.take()
-    shown_to_panel = wanted and not on_hold
+    off_preview = (wanted and not on_hold and fade is not None and panel_deck is not None
+                   and panel_deck is fade.off_air)
+    shown_to_panel = wanted and not on_hold and not off_preview
     watched = on_hold and monitor is not None and monitor.take()
     pubs, tap = first.publishers, first.tap
     if shown_to_panel or watched:
@@ -720,8 +736,14 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
                                   publish=sl.publishers))
         if fade is not None:
             fade.begin_frame()
-            if fade.k > 0.0:
-                fade.draw(views, max(w, 1), max(h, 1), fbw / max(w, 1), _samples_of(ctx, ctx.screen))
+            if fade.k > 0.0 or fade.warm_deck is not None or off_preview:
+                lw, lh, dpr = max(w, 1), max(h, 1), fbw / max(w, 1)
+                samples = _samples_of(ctx, ctx.screen)
+                fade.warm(lw, lh, dpr, first.switches, samples)
+                if fade.k > 0.0:
+                    fade.draw(views, lw, lh, dpr, samples)
+                if off_preview:
+                    off_preview = fade.preview(preview, lw, lh, dpr, (fbw, fbh), first.switches)
                 ctx.screen.use()                  # output 1's window again, with its viewport
                 ctx.viewport = (0, 0, fbw, fbh)
         if on_hold:
@@ -731,7 +753,7 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
             renderer.draw_outputs(s, max(w, 1), max(h, 1), fbw / max(w, 1), views)
         previewed = on_hold and wanted and _draw_preview(hold, renderer, ctx, s, (w, h),
                                                          (fbw, fbh), preview, first.switches)
-        if later or shown_to_panel or watched or previewed:
+        if later or shown_to_panel or watched or previewed or off_preview:
             (flush or _gl_flush)()
         for sl, v in shown:
             try:
@@ -1629,7 +1651,8 @@ def main(argv: list[str] | None = None) -> None:
             # with a controller behind it now, re-picked on every connect
             panel.pad = rig.live_adapter("gamepad")
             panel.hands = rig.adapter("hands")
-            renderer.ghost.source = panel.hands      # no tracker, nothing draws
+            for r in rendering:                      # either deck can be on air (D5c)
+                r.ghost.source = panel.hands         # no tracker, nothing draws
             router.follow_devices()                  # the MIDI roles and row schemes, again
         # schemes from the registry (plan 27 B2): the router asks it which
         # sources are lanes and in what order the pages offer them, the learn
@@ -1683,6 +1706,9 @@ def main(argv: list[str] | None = None) -> None:
     renderer2 = renderer.sibling()
     glfw.make_context_current(ctrl_win)
     renderer2.segment_cfg = renderer.segment_cfg
+    # the rig's wires, on both (plan 44 D5c): either deck can be on air
+    renderer2.cloud_source, renderer2.poi_source = renderer.cloud_source, renderer.poi_source
+    renderer2.ghost.source = renderer.ghost.source
     channels2 = Channels(sources=media.state.sources)
     renderer2.media = channels2
     rendering.append(renderer2)
@@ -1691,11 +1717,13 @@ def main(argv: list[str] | None = None) -> None:
     renderer2.ghost.router = deck2.router       # the guide lights what its table routes
     deck2.learn.devices = rig                   # what can be armed, on either deck's Learn
     _share_experiments(deck.reg, deck2.reg, poi_cfg=poi.configured(cfg))
-    fade = Fade(deck, deck2, mix, ctx, dream=dream_io)
-    panel.fade = fade                  # the SYSTEM page's second GPU block
     # the owner of the two decks (plan 44 D5a): every holder's pointer, each on
     # deck 1 and moved by nothing yet. Each handle reads through its own from here
-    meta = MetaController(deck, deck2, players)
+    meta = MetaController(deck, deck2, players, mix=mix)
+    fade = Fade(deck, deck2, mix, ctx, dream=dream_io, pointer=meta.on_air_pointer)
+    media.heard = lambda: meta.on_air.presets.media
+    fade.said = lambda text: library.say(warning=text)    # a warm draw's failure, at once
+    panel.fade = fade                  # the SYSTEM page's second GPU block
     panel.pointer = library.pointer = meta.panel_pointer
     panel.meta_undo = meta.undo        # the footer's message slot, beside the deck's
     # what ⌘Z goes by (plan 44 D5b); read off the class each time, as a reloaded
@@ -1765,7 +1793,8 @@ def main(argv: list[str] | None = None) -> None:
         # others swapped first and output 1 last (_draw_render); the deck on air
         on_air = meta.on_air
         _draw_render(on_air.renderer, ctx, on_air.view, slots, render_watch,
-                     preview=panel.preview, hold=on_air.hold, monitor=panel.monitor, fade=fade)
+                     preview=panel.preview, hold=on_air.hold, monitor=panel.monitor, fade=fade,
+                     panel_deck=meta.panel)
 
     def draw_panel(dt: float, fps: float) -> None:
         # the control window: black ground, then the imgui frame opened
@@ -1800,6 +1829,7 @@ def main(argv: list[str] | None = None) -> None:
                               "the dream passes its picture through")
     for on in meta.decks:
         on.presets.listeners.append(lambda name, on=on: dream_check(on, name))
+        on.presets.listeners.append(lambda name, on=on: fade.ask_warm(on))
     dream_check(deck, presets.current)          # the startup preset has already landed
 
     # both exits close the publishers, in output 1's context (plan 32 T9)
@@ -1828,7 +1858,7 @@ def main(argv: list[str] | None = None) -> None:
                 devices=rig, dream_io=dream_io, learn=deck.learn, render_watch=render_watch,
                 undo=deck.undo, media=media,
                 outputs=[sl.output for sl in slots if sl.output is not None], deck=deck,
-                off_air=[meta.off_air], stacks=meta.stacks, on_air_pointer=meta.on_air_pointer,
+                off_air=meta.parked, stacks=meta.stacks, on_air_pointer=meta.on_air_pointer,
                 panel_pointer=meta.panel_pointer, keys_pointer=meta.pointer(KEYS))
 
     # smoke-test escape hatch: HYPERSPACE_FRAMES=n closes after n frames

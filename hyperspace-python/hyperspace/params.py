@@ -1119,6 +1119,23 @@ class Registry:
             if p is not None:
                 p._trim = 0.0
 
+    def take_running(self, src: Registry) -> None:
+        """What `src`'s params are in the middle of, onto this deck's of the same
+        id, for "copy on air to off air" (`MetaController.copy_on_air`): the base
+        a route rides on to the last bit, what it last wrote, where a discrete
+        target and a trigger's edge stand, and the chase ledger. So the next
+        landing here is the next landing there. Performance params only: a
+        session param is one object, on both already. No undo step, no dirty dot:
+        the bases are the ones the doc road landed."""
+        for p in self._p.values():
+            q = src._p.get(p.id)
+            if q is None or q is p or part_of(p) != "performance":
+                continue
+            p._trim = q._trim
+            if p.kind is not Kind.TRIGGER and p.get() != q.get():
+                p.put(q.get())                 # what it shows, as `_last` says it does
+            p._base, p._last, p._disc, p._armed = q._base, q._last, q._disc, q._armed
+
     def restore(self, values: dict[str, Any], *, trims: dict[str, float] | None = None
                 ) -> list[str]:
         """Set every param named; returns the ids this registry doesn't have.
