@@ -531,8 +531,11 @@ def test_the_pad_window_says_which_pole(rig):
     rig.table.add(b)
     panel = NS(reg=rig.reg, pad=None)
     up = gp.control("hat:UP")
-    assert ui_pad.says(panel, up, b).endswith("+")
-    assert ui_pad.says(panel, gp.control("hat:DOWN"), b).endswith("−")
+    assert ui_pad.says(panel, up, b) == "Brightness +1"
+    assert ui_pad.says(panel, gp.control("hat:DOWN"), b) == "Brightness -1"
+    route = Binding("pair:UP/DOWN", "view.speed", "push", 0.5)
+    assert ui_pad.says(panel, up, route).endswith(" +")
+    assert ui_pad.says(panel, gp.control("hat:DOWN"), route).endswith(" −")
     assert "one axis with ↓" in ui_pad.label(panel, up, b)
     assert "one axis with" not in ui_pad.label(panel, gp.control("pad:MENU"), None)
 
@@ -577,3 +580,189 @@ def test_two_decks_read_one_lane_and_keep_their_rows(rig):
     deck_a.pad(pad, 0.1)
     assert p.position() == was
     assert src.feeds["pair"][natural[1]] == 1.0
+
+
+# ---- review findings on #372 ----
+
+def test_a_row_naming_a_natural_pair_first_leaves_the_rest_to_merge():
+    src = Sources()
+    src.resolve("pair:UP/DOWN")
+    assert src.labels["pair"] == ["UP / DOWN"]
+    gp.publish(src)
+    assert len(src.names["pair"]) == len(models.natural_pairs(None))
+    assert src.labels["pair"][src.names["pair"]["UP/DOWN"]] == "D-pad up / down"
+    assert len(src.rests["pair"]) == len(src.names["pair"])
+
+
+def test_publishing_again_writes_nothing():
+    src = Sources()
+    gp.publish(src)
+    names, labels = src.names["pair"], src.labels["pair"]
+    gp.publish(src)
+    assert src.names["pair"] is names and src.labels["pair"] is labels
+
+
+def test_a_pad_publishes_only_the_pairs_it_has():
+    src = Sources()
+    gp.publish(src, "axis", MODELS["x360"])
+    assert "RP/LP" not in src.names["pair"] and "RFN/LFN" not in src.names["pair"]
+    gp.publish(src, "axis", MODELS["edge"])     # another pad comes: its lanes, its words
+    assert "RP/LP" in src.names["pair"]
+    assert src.labels["pair"][src.names["pair"]["RB/LB"]] == "R1 / L1"
+
+
+def test_a_scripted_pads_model_is_what_it_publishes():
+    pad, src = ScriptedPad(), Sources()
+    pad.model = MODELS["joycon-l"]
+    pad.publish(src)
+    assert set(src.names["pair"]) == {
+        f"{a}/{b}" for a, b in models.natural_pairs(MODELS["joycon-l"])}
+    assert {"Y/A", "B/X"} <= set(src.names["pair"]) and "UP/DOWN" not in src.names["pair"]
+
+
+def test_a_second_pads_row_is_not_on_the_windows_controls(rig):
+    theirs = Binding("pair@p2:RB/LB", "view.speed", "step", 1.0)
+    rig.table.add(theirs)
+    shown = ui_pad.rows(rig.table)
+    assert shown["pad:RB"] is not theirs and shown["pad:LB"] is not theirs
+    assert shown["pad:RB"].target == "view.shape"
+
+
+def test_a_cable_from_a_pair_onto_a_stepped_param_is_a_step_row(rig):
+    devs = devices.DeviceRegistry(devices=[devices.PadDevice("pad", io=ScriptedPad())])
+    view = graphview.build(rig.table, rig.reg, rig.router, devs, None, None)
+    e = graphview.Edit(rig.table, rig.reg, rig.router, view)
+    p = next(q for q in rig.reg if q.modulatable and q.integer and q.kind.name == "CONTINUOUS")
+    got = e.connect("out:pair:UP/DOWN", f"mod:{p.id}")
+    assert isinstance(got, Binding) and (got.source, got.op, got.value) == (
+        "pair:UP/DOWN", "step", 1.0)
+    assert not any(b.source == "pair:UP/DOWN" and b.op == "position" for b in rig.table.bindings)
+
+
+def test_a_learn_says_what_else_the_press_moves(rig):
+    """Row 751: the layers do not edit each other, so a press may move both, and
+    the line says so, whichever came second."""
+    rig.table.add(Binding("pair:UP/DOWN", "camera.zoom", "push", 0.5))
+    rig.learn.arm("view.speed", PAIR_WANT)
+    rig.learn.learn_pad_button("hat:UP")
+    rig.learn.learn_pad_button("hat:DOWN")
+    assert "also moves camera.zoom" in rig.learn.last
+    assert rig.table.owner("camera.zoom") is not None    # the preset's route stands
+    rig.learn.arm("view.depth4", PAIR_SPRING_WANT)
+    rig.learn.learn_pad_button("pad:Y")
+    rig.learn.learn_pad_button("pad:A")
+    assert "also moves view.faces" in rig.learn.last or "also moves view.lines" in rig.learn.last
+
+
+def test_a_button_learn_on_one_pole_leaves_the_other_moving(rig):
+    p = rig.reg["view.speed"]
+    clear_pad_rows(rig.table)
+    rig.table.add(Binding("pair:UP/DOWN", p.id, "step", 2.0))
+    rig.learn.arm("view.bright")
+    assert rig.learn.learn_pad_button("hat:UP")
+    assert not rig.table.of("pair")
+    assert [(b.source, b.target, b.value) for b in rig.table.of("hat")] == [
+        ("hat:DOWN", p.id, -2.0), ("hat:UP", "view.bright", 1.0)]
+    assert "view.speed keeps" in rig.learn.last
+    # the other way about, on a second pad
+    rig.table.add(Binding("pair@p2:UP/DOWN", p.id, "step", 2.0))
+    rig.learn.arm("view.bright")
+    assert rig.learn.learn_pad_button("hat@p2:DOWN")
+    assert ("hat@p2:UP", 2.0) in [(b.source, b.value) for b in rig.table.of("hat")]
+
+
+def test_a_pair_learn_sharing_a_pole_leaves_the_other_moving(rig):
+    p = rig.reg["view.speed"]
+    clear_pad_rows(rig.table)
+    rig.table.add(Binding("pair:UP/DOWN", p.id, "step", 1.0))
+    rig.learn.arm("view.bright", PAIR_WANT)
+    rig.learn.learn_pad_button("hat:UP")
+    rig.learn.learn_pad_button("hat:LEFT")
+    assert [b.source for b in rig.table.of("pair")] == ["pair:UP/LEFT"]
+    assert [(b.source, b.value) for b in rig.table.of("hat")] == [("hat:DOWN", -1.0)]
+
+
+def test_no_window_system_leaves_a_pair_dormant(monkeypatch, rig):
+    import sys
+
+    import hyperspace
+    monkeypatch.setattr(routing_sources, "_POLES", {})
+    monkeypatch.delattr(hyperspace, "gamepad")
+    monkeypatch.setitem(sys.modules, "hyperspace.gamepad", None)
+    assert routing_sources.pair_poles("UP/DOWN") is None
+    assert Sources().resolve("pair:UP/DOWN")[2] == -1
+    assert routing_sources._POLES == {}                 # asked again once it is there
+
+
+def test_a_pair_mixing_a_hat_and_a_button_says_so():
+    assert models.pair_label(None, "UP", "A") == "UP / A"
+    assert models.pair_label(None, "A", "UP") == "A / UP"
+
+
+def test_the_hover_names_the_partner_in_the_pads_own_words(rig):
+    panel = NS(reg=rig.reg, pad=NS(on=True, model=MODELS["edge"]))
+    assert "one axis with R1" in ui_pad.label(panel, gp.control("pad:LB"), None)
+
+
+def test_the_lanes_view_lists_a_pair_a_row_names(rig):
+    clear_pad_rows(rig.table)
+    rig.table.add(Binding("pair:A/UP", "view.speed", "step", 2.0))
+    says = ui_pad._says_of(NS(reg=rig.reg), rig.table)
+    pad = ScriptedPad()
+    pad.frame(hat=UP)
+    groups = dict(ui_pad_views._lane_rows(ui_pad_views.read(pad), ui_pad_views._routed(says)))
+    row = {s: v for s, _, v, _, _ in groups["pairs"]}
+    assert row["pair:A/UP"] == 0.0
+    assert says("pair:A/UP")[0].endswith("±2")
+
+
+# ---- a control something else holds is no pole: the one predicate ----
+
+def test_every_road_asks_one_predicate(rig, monkeypatch):
+    """`models.control_free` says no to LB: offered nowhere, counted nowhere,
+    read nowhere, fired nowhere. What #365's layout will say about SL and SR."""
+    real = models.control_free
+    monkeypatch.setattr(models, "control_free",
+                        lambda m, name, skip=frozenset(): name != "LB" and real(m, name, skip))
+    assert ("RB", "LB") not in models.natural_pairs(None)
+    assert gp.paired_with("pad:RB") is None
+    dof = gp.degrees_of_freedom()
+    assert not any("pad:LB" in d for d in dof) and ("pad:RB",) in dof
+    clear_pad_rows(rig.table)
+    p = rig.reg["view.speed"]
+    rig.table.add(Binding("pair:RB/LB", p.id, "step", 1.0))
+    assert rig.router.lane("pair:RB/LB")[1] >= 0    # a row names it, though no pad offers it
+    pad = ScriptedPad()
+    pad.frame()
+    rig.router.pad(pad, 0.0)
+    was = p.position()
+    pad.frame(held={gp.LB})
+    rig.router.pad(pad, 0.1)
+    assert p.position() == was                      # no step
+    assert lane(rig, "pair:RB/LB") == 0.5           # no lane
+    pad.frame()
+    rig.router.pad(pad, 0.2)
+    pad.frame(held={gp.RB})
+    rig.router.pad(pad, 0.3)
+    assert p.position() == was + 1                  # the free pole still moves it
+    assert lane(rig, "pair:RB/LB") == 1.0
+    # and Learn pair does not take it for a pole
+    rig.learn.arm("view.speed", PAIR_WANT)
+    pad.frame()
+    pad.frame(held={gp.LB})
+    assert gp.learn_from(pad, rig.learn) is False
+    assert rig.learn.__dict__.get("pair_first") is None
+    views = dict(ui_pad_views._lane_rows(ui_pad_views.read(pad)))
+    assert not any(s == "pair:RB/LB" for s, *_ in views["pairs"])
+
+
+def test_a_layout_holds_its_controls():
+    """Fails at #365's merge until `models.control_free` reads `Model.layout`: the
+    one line the PR body names. Skipped until the field exists."""
+    if "layout" not in models.Model.__dataclass_fields__:
+        pytest.skip("no Model.layout on this base (#365)")
+    joy = MODELS["joycon-l"]
+    assert not models.control_free(joy, "LP") and not models.control_free(joy, "RP")
+    assert ("RP", "LP") not in models.natural_pairs(joy)
+    assert gp.paired_with("pad:LP", joy) is None
+    assert models.control_free(joy, "Y")
