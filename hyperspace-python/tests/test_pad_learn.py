@@ -279,8 +279,7 @@ def test_a_stick_never_ends_a_learn_on_a_setting_it_cannot_drive(rig):
 def test_an_older_files_pad_rows_move_to_the_new_layout_and_the_owners_stay(tmp_path):
     """The old factory pad rows (A rotate, X points, Y faces, START the
     sheet, BACK the panel, the right-stick click the camera) move to the
-    layout of 2026-10-14 — BACK's panel gone, START's sheet gone and its
-    hold-to-save in its place (PAD_NEW_ROWS) — on to 2026-10-29's where it
+    layout of 2026-10-14 — START's sheet gone — on to 2026-10-29's where it
     moved again (X screen strokes), and BACK's holds the chase (2026-11-04); a
     row the owner learned onto a button stays; a second load changes nothing."""
     old = [Binding("pad:A", "view.rotate", "toggle"), Binding("pad:X", "view.points", "toggle"),
@@ -296,12 +295,12 @@ def test_an_older_files_pad_rows_move_to_the_new_layout_and_the_owners_stay(tmp_
     assert rows["pad:A"] == ("view.faces", "toggle")
     assert rows["pad:X"] == ("view.screen_strokes", "toggle")   # straight to the newest
     assert rows["pad:Y"] == ("view.lines", "toggle")
-    assert rows["pad:MENU"] == ("preset.save_new", "hold")   # the sheet's row gone
+    assert "pad:MENU" not in rows                            # the sheet's row gone
     assert rows["pad:VIEW"] == ("deck.chase", "momentary")    # the panel's row moved
     assert rows["pad:LSTICK"] == ("camera.reset", "fire")
     assert rows["pad:RSTICK"] == ("rot.reset_w", "fire")
     assert rows["hat:UP"] == ("fx.wobble.freq", "step")
-    assert sum("the pad layout of 2026-10-14" in n for n in t.notes) == 5
+    assert sum("the pad layout of 2026-10-14" in n for n in t.notes) == 4
     assert sum("the pad layout of 2026-10-29" in n for n in t.notes) == 1
     assert sum("the pad layout of 2026-11-04" in n for n in t.notes) == 1
     after = path.read_text()
@@ -328,9 +327,9 @@ def test_the_pads_bank_rows_move_straight_to_the_newest_layout(tmp_path):
         assert rows["pad:X"] == ("view.screen_strokes", "toggle")
         assert rows["pad:LB"] == ("preset.next", "fire")
         assert rows["pad:RB"] == ("preset.prev", "hold")
-        assert rows["pad:MENU"] == ("preset.save_new", "hold")      # added, not held
+        assert "pad:MENU" not in rows                               # never added
         assert "pad:VIEW" not in rows                               # never added
-        assert sum("the pad layout of 2026-10-14" in n for n in t.notes) == 1
+        assert sum("the pad layout of 2026-10-14" in n for n in t.notes) == 0
         assert sum("the pad layout of 2026-10-29" in n for n in t.notes) == 2
         after = path.read_text()
         again = Bindings.load(path, legacy_midi=None)
@@ -356,8 +355,9 @@ def test_the_10_14_layout_goes_straight_to_the_newest(tmp_path):
     assert rows["pad:X"] == ("view.screen_strokes", "toggle", 1.0)
     assert "hat:LEFT" not in rows
     assert rows["hat:RIGHT"] == ("view.speed", "step", 2.0)
+    assert "pad:MENU" not in rows
     assert sum("the pad layout of 2026-10-29" in n for n in t.notes) == 2
-    assert sum("the pad layout of 2026-11-04" in n for n in t.notes) == 1
+    assert sum("the pad layout of 2026-11-04" in n for n in t.notes) == 2
     after = path.read_text()
     again = Bindings.load(path, legacy_midi=None)
     assert not again.notes and path.read_text() == after
@@ -377,12 +377,24 @@ def test_the_factory_pad_walks_nothing_and_the_desk_the_bank():
                for b in factory_desk())
 
 
-def test_held_start_saves_a_new_preset_and_back_chases(rig):
-    """START carries the factory's hold-to-save and fires it once the
-    button has been down HOLD_S; BACK holds the base chase (2026-11-04)."""
+def test_back_chases_and_start_is_free_on_the_generic_rows(rig):
+    """2026-11-04: hold-to-save is the Edge's only. The generic rows have
+    nothing on START, and holding it does nothing; BACK holds the base chase."""
     rows = {b.source: (b.target, b.op) for b in routing.padmap()}
-    assert rows["pad:MENU"] == ("preset.save_new", "hold")
+    assert "pad:MENU" not in rows
     assert rows["pad:VIEW"] == ("deck.chase", "momentary")
+    pad, r = ScriptedPad(), rig.router
+    saved = []
+    rig.reg["preset.save_new"].fire = lambda: saved.append(1)
+    pad.frame(held={gp.MENU})
+    r.pad(pad, now=1.0)
+    pad.frame(held={gp.MENU})
+    r.pad(pad, now=1.0 + routing.HOLD_S)
+    assert saved == []
+
+
+def test_held_start_on_a_row_saves_once_after_hold_s(rig):
+    """The row hold-to-save is, on whichever pad has it."""
     pad, r = ScriptedPad(), rig.router
     saved = []
     rig.reg["preset.save_new"].fire = lambda: saved.append(1)
@@ -391,6 +403,34 @@ def test_held_start_saves_a_new_preset_and_back_chases(rig):
     r.pad(pad, now=1.0)
     pad.frame(held={gp.MENU})
     r.pad(pad, now=1.0 + routing.HOLD_S)
+    assert saved == [1]
+
+
+@pytest.mark.parametrize("edge_is_primary", [True, False], ids=["primary", "second"])
+def test_an_edge_entry_keeps_hold_to_save_on_a_qualified_row_alone(rig, edge_is_primary):
+    """Until a model can carry rows (register row 724): an entry `role = "edge"`,
+    `controller = "edge"`, and one row `pad@edge:MENU`. Only that entry's pad hears
+    it, primary or not; no load moves it; the other pad's START does nothing."""
+    rig.table.add(Binding("pad@edge:MENU", "preset.save_new", "hold"))
+    rig.table.write()
+    t = Bindings.load(rig.path, legacy_midi=None)
+    assert [b.target for b in t.of("pad") if b.source == "pad@edge:MENU"] == ["preset.save_new"]
+    assert not [n for n in t.notes if "MENU" in n]
+    table, r = rig.table, rig.router
+    table.primaries = {"pad": "edge" if edge_is_primary else "pad"}
+    saved = []
+    rig.reg["preset.save_new"].fire = lambda: saved.append(1)
+    edge_role = "" if edge_is_primary else "edge"
+    other_role = "p2" if edge_is_primary else ""
+    def held(role, base):
+        pad = ScriptedPad()
+        pad.frame(held={gp.MENU})
+        r.pad(pad, now=base, role=role)
+        pad.frame(held={gp.MENU})
+        r.pad(pad, now=base + routing.HOLD_S, role=role)
+    held(other_role, 1.0)
+    assert saved == []
+    held(edge_role, 3.0)
     assert saved == [1]
 
 
@@ -529,6 +569,7 @@ def _second(d):
 THE_LAST_LAYOUT = [Binding("pad:VIEW", "tempo.tap", "fire"),     # as the factory wrote them
                    Binding("hat:LEFT", "preset.list.prev", "hold"),
                    Binding("hat:RIGHT", "preset.list.next", "hold"),
+                   Binding("pad:MENU", "preset.save_new", "hold"),
                    Binding("hat:UP", "view.bright", "step", 3)]
 
 
@@ -543,8 +584,10 @@ def test_the_new_row_reaches_an_existing_bindings_json_once(tmp_path, capsys):
     t = Bindings.load(path, legacy_midi=None)
     rows = {b.source: (b.target, b.op) for b in t.of("pad", "hat")}
     assert rows["pad:VIEW"] == (CHASE_PARAM, "momentary")
-    assert "hat:LEFT" not in rows and "hat:RIGHT" not in rows
+    assert "hat:LEFT" not in rows and "hat:RIGHT" not in rows and "pad:MENU" not in rows
     assert rows["hat:UP"] == ("view.bright", "step")
+    assert ("removed pad:MENU → preset.save_new (the pad layout of 2026-11-04: "
+            "the button is free)") in t.notes
     assert "remapped pad:VIEW: tempo.tap → deck.chase (the pad layout of 2026-11-04)" in t.notes
     assert ("removed hat:LEFT → preset.list.prev (the pad layout of 2026-11-04: "
             "the button is free)") in t.notes
@@ -561,7 +604,7 @@ def test_the_new_row_reaches_an_existing_bindings_json_once(tmp_path, capsys):
 
 
 def test_a_deleted_chase_row_stays_deleted(tmp_path):
-    """BACK's row is not in PAD_NEW_ROWS: a file with nothing on BACK is one
+    """No pad row is added to a file: one with nothing on BACK or START is one
     where the owner took it off, and the next load does not put it back."""
     path = tmp_path / "bindings.json"
     Bindings(THE_LAST_LAYOUT, path=path).write()
@@ -570,7 +613,8 @@ def test_a_deleted_chase_row_stays_deleted(tmp_path):
     t.write()
     for _ in range(2):
         again = Bindings.load(path, legacy_midi=None)
-        assert not any(b.source == "pad:VIEW" for b in again.bindings) and not again.notes
+        assert not any(b.source in ("pad:VIEW", "pad:MENU") for b in again.bindings)
+        assert not again.notes
 
 
 def test_a_qualified_row_on_back_is_the_owners(tmp_path):
@@ -610,6 +654,7 @@ def test_a_d_pad_row_the_owner_changed_stays(tmp_path):
     button, is the owner's, and survives as many loads as it likes."""
     mine = [Binding("hat:LEFT", "preset.list.prev", "fire", 0.0),
             Binding("hat:RIGHT", "camera.reset", "hold"),
+            Binding("pad:MENU", "preset.save_new", "hold", 0.0),
             Binding("pad:LP", "preset.list.next", "hold"),
             Binding("hat:DOWN", "preset.list.next", "hold"),
             Binding("hat:UP", "preset.list.prev", "hold", 0.0)]      # value 0: not the old row
@@ -620,6 +665,7 @@ def test_a_d_pad_row_the_owner_changed_stays(tmp_path):
         rows = {b.source: (b.target, b.op) for b in t.of("pad", "hat")}
         assert rows["hat:LEFT"] == ("preset.list.prev", "fire")
         assert rows["hat:RIGHT"] == ("camera.reset", "hold")
+        assert rows["pad:MENU"] == ("preset.save_new", "hold")
         assert rows["pad:LP"] == ("preset.list.next", "hold")
         assert rows["hat:DOWN"] == ("preset.list.next", "hold")
         assert rows["hat:UP"] == ("preset.list.prev", "hold")
@@ -681,34 +727,13 @@ def test_back_under_the_totem_still_chases(rig):
 
 
 def test_every_pad_has_back_but_the_right_joycon():
-    """The row is on every model's face but a Joy-Con (R)'s, which has no −:
-    there the row is dead, harmless, and chase wants a row of its own (row 724). The
-    (L) has its − and no + (START's hold-to-save is the row dead there)."""
+    """The row is on every model's face but a Joy-Con (R)'s, where it is dead and
+    harmless. A Joy-Con's chase is its own: L on the left, R on the right, in #365's
+    layout, which also gives − and capture to the totem (row 724)."""
     without = {m.id for m in MODELS.values() if not m.has_control("VIEW")}
     assert without == {"joycon-r"}
     assert MODELS["joycon-l"].glyphs["VIEW"] == "−"
-    assert not MODELS["joycon-l"].has_control("MENU")
-
-
-def test_a_right_joycon_chases_where_learn_puts_it(rig):
-    """No factory row reaches it. A row on its SL (`pad:LP`) holds the chase as
-    BACK does; `learn_pad_button` lands one, though the panel has no widget to
-    arm it from (row 724)."""
-    pad, r = ScriptedPad(), rig.router
-    pad.frame(held={i for i in range(gp.N_BUTTONS) if i != gp.VIEW})
-    r.pad(pad, now=0.0)
-    assert not rig.reg.chasing
-    pad.frame()
-    r.pad(pad, now=0.1)
-    rig.learn.arm(CHASE_PARAM)
-    assert rig.learn.learn_pad_button("pad:LP")
-    pad.frame()
-    pad.buttons = [i == gp.LP for i in range(gp.LP + 1)]     # past an Xbox face's list
-    r.pad(pad, now=0.2)
-    assert rig.reg.chasing
-    pad.frame()
-    r.pad(pad, now=0.3)
-    assert not rig.reg.chasing
+    assert MODELS["joycon-l"].glyphs["LB"] == "L" and MODELS["joycon-r"].glyphs["RB"] == "R"
 
 
 def test_the_totem_skipping_a_learned_row_leaves_backs_press_alone(rig):

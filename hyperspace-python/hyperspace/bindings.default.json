@@ -53,7 +53,6 @@
   {"source": "pad:B", "target": "view.points", "op": "toggle"},
   {"source": "pad:X", "target": "view.screen_strokes", "op": "toggle"},
   {"source": "pad:Y", "target": "view.lines", "op": "toggle"},
-  {"source": "pad:MENU", "target": "preset.save_new", "op": "hold"},
   {"source": "pad:VIEW", "target": "deck.chase", "op": "momentary"},
   {"source": "pad:LB", "target": "view.shape", "op": "step", "value": -1},
   {"source": "pad:RB", "target": "view.shape", "op": "step"},

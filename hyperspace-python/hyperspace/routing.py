@@ -554,7 +554,7 @@ THEME_TO_PRESET = {
 # hold-to-save. That row was dropped here too for one night: a file
 # written before `padmap` gained it never gained it either (no pad row
 # was ever added to an existing file), which read as a pad whose buttons
-# the map could not find. PAD_NEW_ROWS adds it instead.
+# the map could not find. A table of new rows added it, until 2026-11-04.
 # 2026-10-29: the preset walk leaves the face buttons, where a thumb
 # brushing B or X threw the live look away, for the d-pad's ← / → held
 # HOLD_S; speed leaves the pad. B takes points, X screen strokes, and BACK
@@ -563,7 +563,10 @@ THEME_TO_PRESET = {
 # so the walk leaves the d-pad too and ← / → are free; tap tempo is too
 # sensitive to be a default on every controller, so BACK holds the base
 # chase instead (the APC keeps TAP TEMPO, the keyboard B). Older rows on the
-# same buttons go straight there, for the same reason.
+# same buttons go straight there, for the same reason. Hold-to-save is the
+# Edge's only, "the controller Dylan will be using for VJ-style setups", so
+# START's row goes from the generic rows: a controller is generic with
+# extensions by model (row 723).
 PAD_LAYOUTS: dict[str, dict[tuple[str, str, str, float], tuple[str, str, float] | None]] = {
     "2026-10-14": {
         ("pad:RSTICK", "camera.reset", "fire", 1.0): ("rot.reset_w", "fire", 1.0),
@@ -582,6 +585,7 @@ PAD_LAYOUTS: dict[str, dict[tuple[str, str, str, float], tuple[str, str, float] 
     "2026-11-04": {
         ("pad:VIEW", "tempo.tap", "fire", 1.0): (CHASE_PARAM, "momentary", 1.0),
         ("pad:VIEW", "ui.panel", "toggle", 1.0): (CHASE_PARAM, "momentary", 1.0),
+        ("pad:MENU", "preset.save_new", "hold", 1.0): None,
         ("hat:LEFT", "preset.list.prev", "hold", 1.0): None,
         ("hat:RIGHT", "preset.list.next", "hold", 1.0): None,
         ("hat:LEFT", "view.speed", "step", -4.0): None,
@@ -590,18 +594,9 @@ PAD_LAYOUTS: dict[str, dict[tuple[str, str, str, float], tuple[str, str, float] 
 }
 # row → (the layout that moved it, what it became)
 PAD_REMAP = {key: (when, hit) for when, rows in PAD_LAYOUTS.items() for key, hit in rows.items()}
-# Pad rows added where nothing uses the button, as (source, target, op,
-# value, the layout's date) — the pad's APC_NEW_ROWS. Until 2026-10-14 a row
-# `padmap` gained reached a fresh table only (`Bindings.factory`), so every
-# pad already carrying a bindings.json stayed on the layout of the day it was
-# written: START's hold-to-save was added, never arrived, and was taken back
-# out as a mapping fault. A row the owner put on the button is left alone, and
-# a second load finds the source taken. A row here comes back if it is deleted.
-# BACK's chase is not here: it arrives by moving the row every file since
-# 2026-10-29 holds (PAD_LAYOUTS), so the owner can delete it for good.
-PAD_NEW_ROWS = (
-    ("pad:MENU", "preset.save_new", "hold", 1.0, "2026-10-14"),
-)
+# No pad row is added to an existing file: a row that was never there may be
+# one the owner deleted, and an added row comes back every load. A new default
+# arrives by moving the row it replaces, as BACK's chase does.
 KEY_NEW_ROWS = (
     ("key:B", "tempo.tap", "fire", 1.0),
     ("key:SHIFT+B", "lfo.trigger", "fire", 1.0),
@@ -1128,16 +1123,14 @@ def padmap() -> list[Binding]:
     """Xbox-layout gamepad buttons and the d-pad. A / Y the faces and lines,
     B / X the points and screen strokes, ↑ / ↓ the brightness; the
     left-stick click resets the camera, the right-stick click the 4D spin;
-    START (``pad:MENU``) held HOLD_S saves the live state as a new preset,
-    and BACK (``pad:VIEW``), while held, chases the base (`deck.chase`,
-    plan 52). No row swaps a preset or taps the tempo, and ← / → are free:
-    the owner, 2026-11-04 (register row 723); both stay learnable, on a
-    button of one's choosing. The owner's layout: PAD_LAYOUTS moves an older
-    file's, PAD_NEW_ROWS adds what it never held."""
+    BACK (``pad:VIEW``), while held, chases the base (`deck.chase`, plan 52).
+    The rows every controller shares: no row swaps a preset, taps the tempo
+    or saves, and ← / → and START are free: the owner, 2026-11-04 (register
+    rows 723–724). The owner's layout: PAD_LAYOUTS moves an older file's."""
     rows = [
         ("pad:A", "view.faces", "toggle"), ("pad:B", "view.points", "toggle"),
         ("pad:X", "view.screen_strokes", "toggle"), ("pad:Y", "view.lines", "toggle"),
-        ("pad:MENU", "preset.save_new", "hold"), ("pad:VIEW", CHASE_PARAM, "momentary"),
+        ("pad:VIEW", CHASE_PARAM, "momentary"),
         ("pad:LB", "view.shape", "step", -1), ("pad:RB", "view.shape", "step", 1),
         ("pad:LSTICK", "camera.reset", "fire"), ("pad:RSTICK", "rot.reset_w", "fire"),
         ("hat:UP", "view.bright", "step", 3), ("hat:DOWN", "view.bright", "step", -3),
@@ -1406,11 +1399,6 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
         out.append(new)
         notes.append(f"added {source} → {target} (the APC40 map of "
                      f"{APC_REMAP_PLAN.get(source, 'plan 09')})")
-    for source, target, op, value, when in PAD_NEW_ROWS:
-        if source in used:
-            continue
-        out.append(Binding(source, target, op, value))
-        notes.append(f"added {source} → {target} (the pad layout of {when})")
     # a key row is taken by its chord, however its modifiers are ordered:
     # "key:SUPER+SHIFT+Z" holds ⌘⇧Z as "key:SHIFT+SUPER+Z" does
     chords = {(b.key_name, b.modifiers) for b in out if b.scheme == "key"}
