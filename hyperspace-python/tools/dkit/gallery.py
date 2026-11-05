@@ -1,11 +1,11 @@
-"""Render the shadkit gallery to a PNG, headless.
+"""Render the dkit gallery to a PNG, headless.
 
 The hidden-window pattern is lifted from tools/sheet_shots.py:40-85 — the
 project's established way to screenshot imgui without a display, black-frame
 guard included.
 
-    HYPERSPACE_HOME=$(mktemp -d) uv run python tools/shadkit/gallery.py \
-        --out /tmp/shadkit
+    HYPERSPACE_HOME=$(mktemp -d) uv run python tools/dkit/gallery.py \
+        --out /tmp/dkit
 
 Writes <out>/imgui.png at exactly the spec's canvas size.
 """
@@ -34,7 +34,7 @@ import tokens as T        # noqa: E402
 SPEC = json.loads((HERE / "spec.json").read_text())
 
 # Geist ships only as a variable woff2, which stb_truetype can read neither of.
-# tools/shadkit/fonts holds static instances cut from that exact file at the
+# tools/dkit/fonts holds static instances cut from that exact file at the
 # three weights shadcn uses, so the comparison is the same typeface.
 FACES = {"regular": "Geist-Regular.ttf",
          "medium": "Geist-Medium.ttf",
@@ -64,7 +64,7 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
     glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, True)
     glfw.window_hint(glfw.VISIBLE, False)
     glfw.window_hint(glfw.SAMPLES, 0)          # the panel window uses 0 too
-    win = glfw.create_window(w, h, "shadkit", None, None)
+    win = glfw.create_window(w, h, "dkit", None, None)
     if not win:
         glfw.terminate()
         raise SystemExit("could not create the hidden window")
@@ -115,7 +115,7 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default="/tmp/shadkit")
+    ap.add_argument("--out", default="/tmp/dkit")
     ap.add_argument("--theme", default="light", choices=("light", "dark"))
     ap.add_argument("--tess", type=float, default=None,
                     help="ImGui circle_tessellation_max_error")

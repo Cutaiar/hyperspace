@@ -4,7 +4,7 @@ import "./index.css"
 import App from "./App.tsx"
 import Gallery from "./Gallery.tsx"
 
-// ?gallery swaps the dashboard for the shadkit diff grid. No router: the
+// ?gallery swaps the dashboard for the dkit diff grid. No router: the
 // harness only ever loads one URL.
 const q = new URLSearchParams(location.search)
 

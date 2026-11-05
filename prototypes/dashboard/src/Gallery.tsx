@@ -1,7 +1,7 @@
-// The React side of the shadkit diff harness.
+// The React side of the dkit diff harness.
 //
 // It renders the REAL shadcn components, but pinned to the rects in
-// tools/shadkit/spec.json so the ImGui side can draw the same boxes. That
+// tools/dkit/spec.json so the ImGui side can draw the same boxes. That
 // isolates chrome fidelity from text metrics: the two rasterizers will never
 // agree on glyphs, so the box must not depend on them.
 //
@@ -9,7 +9,7 @@
 // ?gallery&text    the same grid with text, advisory only
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
-import spec from "../../../hyperspace-python/tools/shadkit/spec.json"
+import spec from "../../../hyperspace-python/tools/dkit/spec.json"
 
 // The dashboard decorates its stat cards on top of the base Card; that
 // combination (gradient + shadow-xs + ring) is the hard case for ImGui, so
@@ -44,7 +44,7 @@ export default function Gallery({
   else document.documentElement.classList.remove("dark")
   return (
     <div
-      id="shadkit-canvas"
+      id="dkit-canvas"
       style={{
         position: "relative",
         width: spec.canvas.w,

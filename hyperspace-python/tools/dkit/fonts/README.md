@@ -1,4 +1,4 @@
-# shadkit's fonts
+# dkit's fonts
 
 The diff oracle renders in **Geist**, so the ImGui side has to as well or the
 text comparison means nothing.

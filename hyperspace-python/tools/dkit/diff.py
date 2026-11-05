@@ -1,6 +1,6 @@
 """Diff the ImGui gallery against the React oracle, per cell.
 
-    uv run python tools/shadkit/diff.py /tmp/shadkit
+    uv run python tools/dkit/diff.py /tmp/dkit
 
 Two metrics, because one is not enough:
 

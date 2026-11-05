@@ -44,7 +44,7 @@ def fill(dl, x, y, w, h, col, radius=0.0) -> None:
 def border(dl, x, y, w, h, col, radius=0.0, width=1.0) -> None:
     """A CSS border: `width` px drawn INSIDE the box edge.
 
-    Calibrated against tools/shadkit/probe_stroke.py, not against an assumption.
+    Calibrated against tools/dkit/probe_stroke.py, not against an assumption.
     An add_rect stroke of thickness 1 is NOT centred on the path: the top/left
     edges cover [p_min, p_min + 1] and the bottom/right cover [p_max - 1, p_max].
     So the stroke already falls wholly INSIDE the rect bounds, which is exactly

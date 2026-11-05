@@ -1,4 +1,4 @@
-# shadkit
+# dkit
 
 Can Dear ImGui, on this project's own stack, be made to look like shadcn/ui?
 
@@ -97,14 +97,14 @@ export UV_NO_GROUP="hands dream"
 
 # oracle (needs the dashboard built and previewing on :4173)
 ( cd ../prototypes/dashboard && npm run build && npx vite preview --port 4173 & )
-node tools/shadkit/capture_react.js "http://localhost:4173/?gallery" /tmp/shadkit
+node tools/dkit/capture_react.js "http://localhost:4173/?gallery" /tmp/dkit
 
 # the kit, and the verdict
-HYPERSPACE_HOME=$(mktemp -d) uv run python tools/shadkit/gallery.py --out /tmp/shadkit
-uv run python tools/shadkit/diff.py /tmp/shadkit
+HYPERSPACE_HOME=$(mktemp -d) uv run python tools/dkit/gallery.py --out /tmp/dkit
+uv run python tools/dkit/diff.py /tmp/dkit
 ```
 
-`/tmp/shadkit/contact.png` is `react | imgui | diff x4`.
+`/tmp/dkit/contact.png` is `react | imgui | diff x4`.
 
 ## Known limits
 
