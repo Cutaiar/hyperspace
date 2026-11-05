@@ -329,7 +329,7 @@ def step(state: TotemState | None, pad, reg, dt: float, role: str = "",
 
 
 def _own_layout(pad) -> bool:
-    return bool(getattr(getattr(pad, "model", None), "layout", ()))
+    return bool(getattr(getattr(pad, "model", None), "totem_layout", False))
 
 
 def skip_of(pad) -> frozenset:

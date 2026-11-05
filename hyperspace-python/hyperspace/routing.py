@@ -975,16 +975,15 @@ def _macro_n(mid: str) -> int:
 
 class PadLayout(NamedTuple):
     """A pad model's own controls as rows (`models.Model.layout`): `rows`
-    stand in for every table row on `sources`, and the table's `drops` are
-    not heard. Empty for a pad with none: its table as ever."""
+    stand in for every table row on `sources`. Empty for a pad with none: its
+    table as ever."""
 
     rows: tuple[Binding, ...] = ()
     sources: frozenset[str] = frozenset()
-    drops: frozenset[tuple[str, str]] = frozenset()
 
     def hides(self, b: Binding) -> bool:
         """Is this table row not heard by this pad?"""
-        return b.bare in self.sources or (b.bare, b.target) in self.drops
+        return b.bare in self.sources
 
 
 NO_LAYOUT = PadLayout()
@@ -1003,8 +1002,7 @@ def layout_of(model, role: str = "") -> PadLayout:
         head = f"pad{QUALIFIER}{role}" if role else "pad"
         got = _layouts[key] = PadLayout(
             tuple(Binding(f"{head}:{c}", t, op, v) for c, t, op, v in spec),
-            frozenset(f"pad:{c}" for c, _, _, _ in spec),
-            frozenset((f"pad:{c}", t) for c, t in getattr(model, "drops", ())))
+            frozenset(f"pad:{c}" for c, _, _, _ in spec))
     return got
 
 
@@ -3395,8 +3393,9 @@ class Router:
         its row going, or by the pad going away (`pad_lost`), whose release
         would never come (plan 52).
 
-        A pad model with a layout of its own (`layout_of`, a Joy-Con's) hears
-        those rows in place of the table's on the same controls.
+        A pad model with a layout of its own (`layout_of`: a Joy-Con's, the
+        Edge's hold-to-save) hears those rows in place of the table's on the
+        same controls.
 
         `quiet`: the `axis` lanes that read NaN this frame, so their routes
         let go (a Joy-Con's stick while the totem is off: it orbits then)."""
@@ -3441,7 +3440,9 @@ class Router:
             if code is None or not b.enabled or not (
                     b.device == role or (not role and own and b.device == own)):
                 continue
-            if (skip and b.bare in skip) or (i < n_table and layout.hides(b)):
+            if i < n_table and layout.hides(b):
+                continue                         # not this pad's: nor are its timer or press
+            if skip and b.bare in skip:
                 if b.op == "hold":
                     holds.pop((b.source, b.target), None)
                 elif (b.source, b.target) in down_now:

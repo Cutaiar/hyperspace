@@ -145,7 +145,7 @@ def _model(panel):
 def _stick_quiet(panel, source: str) -> bool:
     """Is a route on this stick address not heard now? A Joy-Con's, with the
     totem off (`PadDevice._quiet_stick`)."""
-    if not getattr(_model(panel), "layout", ()):
+    if not getattr(_model(panel), "totem_layout", False):
         return False
     if source not in ("axis:LX", "axis:LY") and not source.startswith("axis:L."):
         return False
@@ -157,7 +157,7 @@ def built_in(panel, source: str) -> str:
     """What an axis does with no route on it, for the pad read now: `BUILT_IN`,
     less what a pad with a layout of its own keeps free (`PadDevice._no_camera_job`)."""
     model = _model(panel)
-    if getattr(model, "layout", ()):
+    if getattr(model, "totem_layout", False):
         if source in ("axis:LT", "axis:RT"):
             return ""
         if source in ("axis:LX", "axis:LY"):

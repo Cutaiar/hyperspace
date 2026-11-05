@@ -71,12 +71,14 @@ class Model:
     caps: frozenset[str] = frozenset()
     glyphs: dict[str, str] = field(default_factory=dict)
     controls: frozenset[str] | None = None
-    # a pad's own controls (the owner, 2026-11-04, a Joy-Con's): (control,
-    # param, op, value) rows that stand in for every table row on that
-    # control, whichever table is loaded; and (control, param) table rows
-    # this pad does not hear, the control left free for a learned row
+    # a pad's own controls (the owner, 2026-11-04): (control, param, op, value)
+    # rows that stand in for every table row on that control, whichever table
+    # is loaded (a controller is generic, with extensions by model)
     layout: tuple[tuple[str, str, str, float], ...] = ()
-    drops: tuple[tuple[str, str], ...] = ()
+    # the totem's reset is a row of `layout`, and its sticks and triggers have
+    # no camera job but the one the totem leaves (a Joy-Con's). Apart from
+    # `layout`: having rows of its own says nothing of the camera job
+    totem_layout: bool = False
 
     def has(self, cap: str) -> bool:
         return cap in self.caps
@@ -115,13 +117,19 @@ _JOYCON_CAPS = frozenset({"motion", "back", "rumble", "players"})
 _JOYCON_COMMON = frozenset({"LX", "LY", "LSTICK", "A", "B", "X", "Y", "LP", "RP"})
 # the Joy-Con's own layout (the owner, 2026-11-04): SL / SR the shape in every
 # mode, the stick's click the view's reset; − (+ on the R) the totem's reset,
-# capture (HOME on the R) the totem on and off. L / ZL (R / ZR) are free
+# capture (HOME on the R) the totem on and off; L (R) holds the base chase
+# (register row 724). ZL (ZR) is free
 _JOYCON_ROWS = (("LP", "view.shape", "step", -1.0), ("RP", "view.shape", "step", 1.0),
                 ("LSTICK", "camera.reset", "fire", 1.0))
 _JOYCON_L_LAYOUT = (*_JOYCON_ROWS, ("VIEW", "totem.reset", "fire", 1.0),
-                    ("SHARE", "totem.on", "toggle", 1.0))
+                    ("SHARE", "totem.on", "toggle", 1.0),
+                    ("LB", "deck.chase", "momentary", 1.0))
 _JOYCON_R_LAYOUT = (*_JOYCON_ROWS, ("MENU", "totem.reset", "fire", 1.0),
-                    ("GUIDE", "totem.on", "toggle", 1.0))
+                    ("GUIDE", "totem.on", "toggle", 1.0),
+                    ("RB", "deck.chase", "momentary", 1.0))
+# hold-to-save is the Edge's alone (row 724): "the controller Dylan will be
+# using for VJ-style setups"
+_EDGE_LAYOUT = (("MENU", "preset.save_new", "hold", 1.0),)
 _JOYCON_L_GLYPHS = {
     "A": "↓", "B": "→", "X": "←", "Y": "↑", "LB": "L", "LT": "ZL", "LP": "SL", "RP": "SR",
     "VIEW": "−", "SHARE": "◉", "LSTICK": "L3",
@@ -142,15 +150,15 @@ MODELS: dict[str, Model] = {m.id: m for m in (
     Model("dualsense", "DualSense", "sony", "hid", ((SONY_VID, 0x0CE6),),
           _SONY_OUT, {**_SONY_GLYPHS}),
     Model("edge", "DualSense Edge", "sony", "hid", ((SONY_VID, 0x0DF2),),
-          _SONY_OUT | {"back", "fn"}, {**_SONY_GLYPHS}),
+          _SONY_OUT | {"back", "fn"}, {**_SONY_GLYPHS}, None, _EDGE_LAYOUT),
     Model("joycon-l", "Joy-Con (L)", "nintendo", "hid", ((NINTENDO_VID, 0x2006),),
           _JOYCON_CAPS, {**_JOYCON_L_GLYPHS},
           _JOYCON_COMMON | {"LB", "LT", "VIEW", "SHARE"},
-          _JOYCON_L_LAYOUT, (("LB", "view.shape"),)),
+          _JOYCON_L_LAYOUT, True),
     Model("joycon-r", "Joy-Con (R)", "nintendo", "hid", ((NINTENDO_VID, 0x2007),),
           _JOYCON_CAPS, {**_JOYCON_R_GLYPHS},
           _JOYCON_COMMON | {"RB", "RT", "MENU", "GUIDE"},
-          _JOYCON_R_LAYOUT, (("RB", "view.shape"),)),
+          _JOYCON_R_LAYOUT, True),
     # the Pro Controller speaks the Joy-Con's protocol with the whole face
     # (both sticks, a D-pad): the codec reads it; no hand has checked one
     Model("procon", "Pro Controller", "nintendo", "hid", ((NINTENDO_VID, 0x2009),),
@@ -189,7 +197,7 @@ def control_free(model: Model | None, name: str, skip=frozenset()) -> bool:
     question plan 56 asks, wherever a pair is offered, counted or read: not
     while something else holds it, `skip` (sources, as `Router.pad`'s: the
     totem's). `model` is here for what a pad's own layout holds."""
-    return pole_source(name) not in skip
+    return pole_source(name) not in skip and not any(row[0] == name for row in getattr(model, "layout", ()))
 
 
 def natural_pairs(model: Model | None) -> tuple[tuple[str, str], ...]:
