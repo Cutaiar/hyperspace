@@ -112,6 +112,7 @@ LABEL_W = 104    # the label column in a _row
 HALF_LABEL_W = 78    # the label column in a half-width table cell (Panel.half)
 SLIDER_MIN = 60.0   # a slider sharing a row in a narrow pane is never thinner
 LABEL_GAP = 12   # px between a label cell's text room and its control (Panel._label_cell)
+SCENE_COMBO_MIN = 100   # px; the analyzer's scene combo keeps this beside its label and Reset all
 ROUND = 8.0      # corner radius of frames; chips and grabs go rounder
 # the dirty dot (plan 19 WP5): a filled red disc 12 px across beside a
 # preset's name — where the "●" glyph left about 7 px of ink — and the
@@ -133,6 +134,8 @@ HEADER_DOT_R = 5.0
 
 FONT_BASE = 16.0
 FONT_MICRO = 12.5
+TAG_GAP = 3.0       # px kept between two meter tags (`tag_px`)
+TAG_MIN_PX = 9.0    # the smallest they go
 FONT_NUM = 16.0
 FONT_BIG = 52.0
 
@@ -481,6 +484,12 @@ def check_w(label: str) -> float:
     words = label.split("##")[0]
     return imgui.get_frame_height() + (s.item_inner_spacing.x + imgui.calc_text_size(words).x
                                        if words else 0.0)
+
+
+def tag_px(widest: float, room: float, px: float = FONT_MICRO) -> float:
+    """The type size that fits a tag `widest` wide at `px` into `room`, no
+    larger than `px`, no smaller than `TAG_MIN_PX`."""
+    return max(min(px, px * room / widest if widest > 0 else px), TAG_MIN_PX)
 
 
 def beside(w: float) -> bool:
@@ -1360,7 +1369,13 @@ class Panel:
         value before this frame's imgui write; `x0`, `span` the throw
         (`_throw`). One drag is one undo step: the writes come every frame
         the mouse moves, as a plain drag's do (`undo.SETTLE_S`)."""
-        if p.integer or not imgui.is_item_active():
+        if p.integer:
+            return False, None
+        return self._fine_throw(t0, span)
+
+    def _fine_throw(self, t0: float, span: float) -> tuple[bool, float | None]:
+        """`_fine` for the item just drawn, whatever it writes to."""
+        if not imgui.is_item_active():
             return False, None
         shift = getattr(self, "_shift", False)
         if not getattr(self, "_mouse_down", False):
@@ -1385,6 +1400,36 @@ class Panel:
         """Where a slider's grab centre travels: its left end and length
         in screen px, `half` in from either end of the frame."""
         return r0.x + half, r1.x - r0.x - 2 * half
+
+    def _fine_raw(self, changed: bool, v: float, before: float, lo: float, hi: float,
+                  log: bool = False) -> tuple[bool, float]:
+        """A slider drawn straight from imgui, with no `Param` behind it (a
+        route's depth, GRAPH's backdrop; row 731), called right after it:
+        what its caller should take for `changed, v`. `before` is the value
+        it was drawn with; `log` when the slider is logarithmic (`lo` > 0)."""
+        if hi <= lo:
+            return changed, v
+        r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        _x0, span = self._throw(r0, r1, self._grab_half(r1.x - r0.x))
+        log = log and lo > 0
+        t0 = (math.log(max(before, lo) / lo) / math.log(hi / lo) if log
+              else (before - lo) / (hi - lo))
+        own, t = self._fine_throw(t0, span)
+        if not own:
+            return changed, v
+        if t is None:                   # a frame the mouse did not move writes nothing
+            return False, before
+        return True, lo * (hi / lo) ** t if log else lo + t * (hi - lo)
+
+    def _fine_raw_tip(self, words: str) -> None:
+        """A raw slider's tooltip, as `_fine_tip` says it for a param's."""
+        shift = getattr(self, "_shift", False)
+        st = getattr(self, "_fine_drag", None)
+        hovered = imgui.is_item_hovered()
+        if shift and not hovered and st is not None and st["id"] == imgui.get_item_id():
+            tooltip(FINE_TIP)
+        elif hovered:
+            tooltip(f"{FINE_TIP}\n{words}" if shift else words)
 
     def _fine_tip(self, a: Param, p: Param) -> None:
         """The slider's tooltip, led by "FINE" while ⇧ is held over a
@@ -1809,8 +1854,12 @@ class Panel:
             # band combo's
             self._ctx(self.reg["band.select"], f".{i}")
             self._learn_frame(self.reg["band.select"])   # armed from a meter: framed on it
-        # band tags, centred under their bars, in the micro face
+        # band tags, centred under their bars, in the micro face — smaller
+        # where the widest would touch its neighbour (a narrow pane)
         imgui.push_font(_FONTS["micro"], FONT_MICRO)
+        widest = max((imgui.calc_text_size(name).x for name in a.band_names), default=0.0)
+        imgui.pop_font()
+        imgui.push_font(_FONTS["micro"], tag_px(widest, bw + gap - TAG_GAP))
         for i, name in enumerate(a.band_names):
             tw = imgui.calc_text_size(name).x
             imgui.set_cursor_screen_pos(
@@ -2563,11 +2612,18 @@ class Panel:
         full height."""
         c = self.control
         self._section(group_title("band"), "band")
-        # scene + reset-all (relabels to Undo while the window is open)
-        self._label_cell("scene")
-        self._combo("scene.select", -(button_w("Reset all") + imgui.get_style().item_spacing.x))
-        imgui.same_line()
-        self._button("scene.reset_all", "Undo" if c.undo_armed else "Reset all")
+        # scene + reset-all (relabels to Undo while the window is open); where
+        # the three would leave the combo too little, the button takes a row
+        # and the label only its own room
+        reset = "Undo" if c.undo_armed else "Reset all"
+        take = button_w("Reset all") + imgui.get_style().item_spacing.x
+        roomy = imgui.get_content_region_avail().x - LABEL_W - take >= SCENE_COMBO_MIN
+        self._label_cell("scene", width=LABEL_W if roomy
+                         else imgui.calc_text_size("SCENE").x + LABEL_GAP + 4)
+        self._combo("scene.select", -take if roomy else -1)
+        if roomy:
+            imgui.same_line()
+        self._button("scene.reset_all", reset)
         imgui.spacing()
         self._meters(dt)
         ui_bands.section(self, dt)

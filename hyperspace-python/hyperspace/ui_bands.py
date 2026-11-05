@@ -42,6 +42,7 @@ from .params import Kind, Registry
 
 PLOT_H = 136           # px; the page has to fit the control window with the meters and the strip
 FN_W = 84              # px; the strip's shaper and curve combos
+BAND_W = 120           # px; the band row's combo, at most
 POOL = 2               # the heat map is max-pooled this much in both axes
 PROFILE_W = 0.16       # the weighting curves' width along the right edge, of the plot
 DB_LO, DB_HI = -90.0, -20.0   # the colour ramp's ends (u = 0 is −80 dB, u = 1 is −24)
@@ -58,6 +59,7 @@ RAMP = np.array([
 ], dtype=np.float32)
 TICKS = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000]
 HINT = "BOX FITS  ·  LINES MOVE  ·  CLICK SELECTS"
+HINT_SHORT = "BOX  ·  LINES  ·  CLICK"       # a narrow plot's; hovered, it says `HINT`
 
 
 # ------------------------------------------------------- pure geometry
@@ -105,6 +107,11 @@ def pooled(spec: np.ndarray, k: int = POOL) -> np.ndarray:
     t, f = T // k, F // k
     m = spec[: t * k, : f * k].reshape(t, k, f, k).max(axis=(1, 3))
     return np.ascontiguousarray(m.T[::-1], dtype=np.float32)
+
+
+def hint_for(room: float, measure) -> str:
+    """The longest hint `measure` (text → px) fits in `room`, or none."""
+    return next((h for h in (HINT, HINT_SHORT) if measure(h) <= room), "")
 
 
 def band_under(specs: list[tuple[float, float]], f: float) -> int | None:
@@ -218,11 +225,15 @@ def _overlays(panel, freqs: np.ndarray, ly: np.ndarray) -> None:
     implot.push_plot_clip_rect()
     # the affordance, in the top-left corner on a dark backing (the names
     # below keep clear of it)
-    tw = imgui.calc_text_size(HINT).x
-    dl.add_rect_filled(imgui.ImVec2(x0 + 1, pos.y + 1),
-                       imgui.ImVec2(x0 + tw + 7, pos.y + ui.FONT_MICRO + 5),
-                       ui.u32(imgui.ImVec4(0, 0, 0, 0.7)))
-    dl.add_text(imgui.ImVec2(x0 + 4, pos.y + 2), ui.u32(ui.DIM), HINT)
+    hint = hint_for(size.x - 8, lambda s: imgui.calc_text_size(s).x)
+    _state(panel)["hint"] = hint
+    if hint:
+        a = imgui.ImVec2(x0 + 1, pos.y + 1)
+        b = imgui.ImVec2(x0 + imgui.calc_text_size(hint).x + 7, pos.y + ui.FONT_MICRO + 5)
+        dl.add_rect_filled(a, b, ui.u32(imgui.ImVec4(0, 0, 0, 0.7)))
+        dl.add_text(imgui.ImVec2(x0 + 4, pos.y + 2), ui.u32(ui.DIM), hint)
+        if hint != HINT and imgui.is_mouse_hovering_rect(a, b, False):
+            ui.tooltip(HINT)
     order = sorted(range(chain.n), key=lambda i: i == c.selb)   # the selected on top
     for i in order:
         sel = i == c.selb
@@ -343,9 +354,13 @@ def band_row(panel) -> None:
     imgui.end_disabled()
     if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
         ui.tooltip("Move the band one strip later")
-    ui.beside(120)                      # (plan 49 stage 3: rows wrap in a narrow pane)
-    panel._combo("band.select", 120)
-    avail, reset_w = imgui.get_content_region_avail().x, ui.chip_w("Reset")
+    reset_w = ui.chip_w("Reset")
+    width = BAND_W                      # (plan 49 stage 3: rows wrap in a narrow pane)
+    if not ui.beside(BAND_W):           # on a row of its own, Reset beside it if it can be
+        width = max(min(BAND_W, imgui.get_content_region_avail().x - reset_w
+                        - imgui.get_style().item_spacing.x), BAND_W / 2)
+    panel._combo("band.select", width)
+    avail = imgui.get_content_region_avail().x
     if (imgui.get_item_rect_max().x + imgui.get_style().item_spacing.x + reset_w
             <= imgui.get_cursor_screen_pos().x + avail):
         imgui.same_line(avail - reset_w)
@@ -371,16 +386,20 @@ def strip(panel) -> None:
     c, a, r = panel.control, panel.audio, panel.reg
     P = a.chain.params[c.selb]
     lo, hi = edges(*_base_fq(r, c.selb))
+    full = imgui.get_content_region_avail().x
     imgui.text_colored(ui.RED, f"{a.chain.band_names[c.selb]} · {SHAPERS[P.fn].tag}")
-    imgui.same_line()
-    imgui.text_disabled(f"{lo:.0f}–{hi:.0f} Hz")
+    hz = f"{lo:.0f}–{hi:.0f} Hz"
+    ui.beside(imgui.calc_text_size(hz).x)
+    imgui.text_disabled(hz)
     sp = imgui.get_style().item_spacing.x
-    imgui.same_line(imgui.get_content_region_avail().x - 2 * FN_W - 2 * sp
-                    - ui.chip_w("MANUAL"))
+    # flush right on the title's line where it all fits, else a row of its own
+    whole = 2 * FN_W + 2 * sp + ui.chip_w("MANUAL")
+    if ui.beside(whole):
+        imgui.same_line(full - whole)
     _norm_chip(panel)
-    imgui.same_line()
+    ui.beside(2 * FN_W + sp)
     panel._combo("band.sel.fn", FN_W, SHAPERS[P.fn].name)
-    imgui.same_line()
+    ui.beside(FN_W)
     panel._combo("band.sel.curve", FN_W)
     # the ten faders (f, q, the eight knobs) in two columns so the page fits
     if imgui.begin_table("##bandstrip", 2, imgui.TableFlags_.sizing_stretch_same):

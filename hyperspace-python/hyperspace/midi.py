@@ -132,6 +132,8 @@ from .learn import Learn
 from .params import Kind, Param, Registry
 from .pointer import Through
 from .routing import (
+    FINE_DIV,
+    FINE_PARAM,
     HELD_ONLY,
     PICKUP_TOL,
     SAVE_PARAM,
@@ -139,6 +141,7 @@ from .routing import (
     Bindings,
     act,
     bindings_path,
+    fine_gives_way,
     is_session_id,
     led_lit,
     led_shade,
@@ -171,9 +174,6 @@ SLEW_TOL = 1e-6     # norm: further than this from our last write, someone else 
 SLEW_BACK_S = 0.05  # a new glide starts at the previous poll, no further back than this
 DESK_LOG_SIZE = 20  # the desk event log keeps this many events (plan 24 C1)
 
-FINE_PARAM = "desk.fine"   # the fine button held (wave 2 T3); `register_fine`
-FINE_DIV = 10              # held, a knob moves its param this many times less
-
 __all__ = ["FINE_DIV", "FINE_PARAM", "PICKUP_TOL", "Binding", "DeskEvent", "DeskLog", "MidiIO", "Ports", "Slew",
            "find_port", "retry_after"]
 
@@ -183,26 +183,6 @@ __all__ = ["FINE_DIV", "FINE_PARAM", "PICKUP_TOL", "Binding", "DeskEvent", "Desk
 # (`MidiIO._let_go_held`) so a lost note-off cannot leave it down — SAVE
 # (routing.register_desk), the base chase (plan 52) and FINE
 HELD_PARAMS = (*HELD_ONLY, FINE_PARAM)
-
-
-def register_held(reg: Registry, pid: str, label: str, tip: str) -> None:
-    """A held button's param (`HELD_PARAMS`): a toggle in group desk,
-    `persist=False`, not modulatable. The first registration stands."""
-    if pid in reg:
-        return
-    held = [False]
-    reg.toggle(pid, label, lambda: held[0], lambda v: held.__setitem__(0, bool(v)),
-               group="desk", persist=False, modulatable=False, tip=tip)
-
-
-def register_fine(reg: Registry) -> None:
-    """`desk.fine`: the desk's fine button held (wave 2 T3) — on, every
-    knob moves its param FINE_DIV times less. The rig's, like `desk.save`
-    (to move beside it in `routing.register_desk` once D2 has landed)."""
-    register_held(reg, FINE_PARAM, "Fine",
-                  f"The desk's FINE button held: a knob moves its value {FINE_DIV} times "
-                  "less for the same turn. Let go and the knob carries on from where the "
-                  "value is.")
 
 
 @dataclass(frozen=True)
@@ -442,7 +422,6 @@ class MidiIO:
         self.desk_log = DeskLog()
         # SHIFT's param and the smoothing's, for a bare adapter too
         register_desk(registry, self.table)
-        register_fine(registry)
         # the fine button (wave 2 T3): the knobs it moved, by control, and
         # its LED as last sent
         self._fine_moved: set[tuple] = set()
@@ -1073,12 +1052,7 @@ class MidiIO:
         if key == self.__dict__.get("_fine_seen"):
             return self.__dict__.get("_fine_at")
         number, ch = fine
-        at: tuple[int, int] | None = ch, number
-        for b in self.bindings:
-            if (b.enabled and b.kind == "note" and b.number == number
-                    and b.channel in (None, ch)):
-                at = None           # the owner's row (an off one gives way)
-                break
+        at = None if fine_gives_way(self.bindings, number, ch) else (ch, number)
         self._fine_seen, self._fine_at = key, at
         return at
 
@@ -1091,7 +1065,7 @@ class MidiIO:
         keeps the press, so `fell_back` reads its release as Mode 2's."""
         p = self.reg.get(FINE_PARAM)
         if p is None:                   # an adapter from before a hot reload
-            register_fine(self.reg)
+            register_desk(self.reg, self.table)
             p = self.reg[FINE_PARAM]
         if pressed:
             self._held[(ch, number)] = []
@@ -1453,7 +1427,7 @@ class MidiIO:
 
     def on_reload(self) -> None:
         """Hot reload: re-send everything so the surface matches the code."""
-        register_fine(self.reg)
+        register_desk(self.reg, self.table)
         self._fine_out = None
         for b in (*self.bindings, *self._page_rows()):
             b.last_out = None

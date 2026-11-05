@@ -1170,7 +1170,7 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
     if imgui.is_item_hovered():
         ui.tooltip(PRESET_ONLY_TIP)
     imgui.same_line()
-    _backdrop_chips(st)
+    _backdrop_chips(panel, st)
     label = beside_chip(selected, width, st["beside"])
     if label is not None:
         imgui.same_line()
@@ -1339,7 +1339,7 @@ def cable_tints(st: dict, view: graphview.View) -> dict[str, imgui.ImVec4]:
     return out
 
 
-def _backdrop_chips(st: dict) -> None:
+def _backdrop_chips(panel, st: dict) -> None:
     """The head's **output behind** chip and, while it is lit, its alpha."""
     if ui.lit_chip("output behind##graph", st["backdrop"]):
         st["backdrop"] = not st["backdrop"]
@@ -1348,10 +1348,12 @@ def _backdrop_chips(st: dict) -> None:
     if st["backdrop"]:
         imgui.same_line()
         imgui.set_next_item_width(imgui.get_font_size() * 6)
-        _, st["backdrop_alpha"] = imgui.slider_float("##graph.backdrop", st["backdrop_alpha"],
-                                                     0.0, 1.0, "%.2f")
-        if imgui.is_item_hovered():
-            ui.tooltip(BACKDROP_TIP)
+        was = st["backdrop_alpha"]
+        changed, v = imgui.slider_float("##graph.backdrop", was, 0.0, 1.0, "%.2f")
+        changed, v = panel._fine_raw(changed, v, was, 0.0, 1.0)
+        if changed:
+            st["backdrop_alpha"] = v
+        panel._fine_raw_tip(BACKDROP_TIP)
 
 
 def backdrop_rect(origin: tuple[float, float], avail: tuple[float, float],
@@ -2368,7 +2370,7 @@ def _group_chips(panel, g) -> None:
     if imgui.is_item_hovered():
         ui.tooltip(SAVE_PATCH_TIP)
     if g.patch:
-        imgui.same_line()
+        ui.beside(ui.chip_w("update patch##graph.group"))
         if ui.chip("update patch##graph.group"):
             open_patch_form(panel, g, update=True)
         if imgui.is_item_hovered():

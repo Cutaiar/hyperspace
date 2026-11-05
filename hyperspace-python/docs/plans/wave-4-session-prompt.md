@@ -187,8 +187,9 @@ stay, and load only into the off-air `Deck`. If they should go too, it is a one-
 
 
 **Seventh round, 2026-11-04.**
-- **Timing:** the show is in the near future, not today. Small wanted items land before it;
-  the deck spine lands after it (see the schedule's note).
+- **Timing:** the show is in the near future, not today. Every wave lands before it (the
+  owner, final: see the eighth round and the schedule's note). The first draft of this bullet
+  split small items from the spine on a recommendation, which the owner overruled.
 - **A controller is generic, with extensions.** The APC is not a separate kind of thing: it
   inherits the generic physical control system and has extensions, the way the DualSense Edge
   does, by which it may talk to the meta controller. Some of its controls are reserved: not
@@ -205,6 +206,17 @@ stay, and load only into the off-air `Deck`. If they should go too, it is a one-
 - **Base chase on a Joy-Con:** − or capture if free, else a trigger or bumper. #365 gives both
   to the totem, so: **L on the left, R on the right.** That row belongs to #365's layout, so
   it is that session's to add.
+
+**Eighth round, 2026-11-04.**
+- **Every wave lands before the next show.** Final, and it replaces any split into "before
+  the show" and "after it". Nothing is held back until after one.
+- **Patch and loadable patch replace "preset" as the words.** A patch is the concept; a
+  loadable patch, a preset today, is a patch with no wires coming out. New text uses them; old
+  names in code stay until SEM. `docs/GLOSSARY.md` waits for the owner and is not edited.
+- **Shows and sessions go.** Tuning moves to one meta controller file per install, with the
+  bank beside it. **Open:** where the bank belongs.
+- **Venues probably go.** Composing displays and peripherals in the app is new work, not
+  scheduled in this wave.
 
 ## Joy-Con version 0 (#365), from another session, 2026-11-04
 
@@ -230,9 +242,9 @@ it. The owner holds it until the Joy-Con is hand-checked.
   Back, which #365's layout gives to totem reset on the (L), and the (R) has none. B2's
   row 724 suggested SL, which #365 holds, and Learn cannot arm the chase from the panel.
   **Answered:** L on the left, R on the right, in #365's layout.
-- **Before the show:** AZ, MR, B2, PA and #365, in that order: small, wanted, and each one
-  hand-checkable. **After it:** D5a and the spine, which touch every controller's path. On
-  #365's merge, add the one `control_free` line in #372's body and take the keeper's
+- **The order, all of it before the next show:** AZ, MR, B2, PA and #365: small, wanted, and
+  each one hand-checkable. Then the rest of the spine, which touches every controller's path.
+  AZ, MR, B2, PA, D5a and D5b are merged; #365 waits for its hand check. On #365's merge, add the one `control_free` line in #372's body and take the keeper's
   `routing.py` shape from `origin/scratch/wave4-joycon`.
 
 ## The semantic migration (SEM)
@@ -249,7 +261,7 @@ the wall it adds (below) is not, so it is sized M–L, and it may be two PRs.
 | `Deck` | `Deck` | **Stays:** a loaded preset, living inside the meta controller. "Slot" is not a type: on air and off air say which `Deck` |
 | analyzer | `band` (336 uses) | Words in AZ; ids in the format lane or never |
 | player, duty | none yet | New: named right from PL |
-| preset | preset, and "performance" (`part_of`) | One word: preset |
+| patch, loadable patch | preset, and "performance" (`part_of`) | The eighth round's words, replacing "one word: preset". Old names stay until SEM |
 
 **SEM must also make the line hold mechanically,** not only rename it: every param is in
 exactly one layer, a test fails on anything in neither or both, and an import wall keeps
@@ -279,8 +291,8 @@ owner's hand checks and show dates, not build time.
 | Stage | Serial spine | In parallel | Merges when |
 | --- | --- | --- | --- |
 | 0 | Owner: sign the glossary at D5a | #363; #365 when its pad charges | now |
-| 1 | **D5a** pointers, with one deck pointer per player; `docs/GLOSSARY.md` | B2, PA, AZ, MR, PC, NSEW design | green |
-| 2 | **D5b** per-slot and meta undo → **PL** players and duties | NSEW build | green |
+| 1 | **D5a** pointers, with one deck pointer per player; `docs/GLOSSARY.md` (**merged**, #370) | B2, PA, AZ, MR, PC, NSEW design | green |
+| 2 | **D5b** per-slot and meta undo (**merged**, #373) → **PL** players and duties | NSEW build | green |
 | 3 | **D5c** copy, swap, take | **PS** the select screen; NM0 (needs PL); the format lane | green |
 | 4 | **D5d** controls, `hold.py` gone | none on `ui_graph.py`, `preset.py`, chase lines | checks 489–492, between shows |
 | 4.5 | **SEM**, the rename, alone | nothing open | green, goldens unmoved |
@@ -288,6 +300,9 @@ owner's hand checks and show dates, not build time.
 | 6 | **N2a + N2b** | D6b | green |
 | 7 | | PC words pass, row 668 if wanted | green |
 
+- **Every wave lands before the next show (the owner, final).** No stage waits until after
+  one. "Between shows" below means not during one, and the show is the deadline for all of it.
+  D5a and D5b are merged; PL is next on the spine.
 - **The spine is serial on purpose.** D5a–D5d freeze `deck.py`, `app.frame` and the
   handles, then `ui_graph.py` and `preset.py`. Everything else stays off them.
 - **One format lane, one migration.** NSEW, NM0 and any `band` id rename all touch saved

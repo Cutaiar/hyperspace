@@ -3,6 +3,7 @@ sections — selection, presets, lookback, faces, analyzer — each drawing
 what its page draws, found by the panel driver by the ids its page uses;
 the fold state is this Mac's, in ui.json beside the pane's width."""
 
+import itertools
 import json
 
 import pytest
@@ -10,7 +11,7 @@ from imgui_bundle import imgui
 from test_ui_shell import build_rig, frame
 from ui_driver import Driver
 
-from hyperspace import ui_graph, ui_pane, ui_presets
+from hyperspace import ui, ui_bands, ui_graph, ui_pane, ui_presets
 from hyperspace.ui import PAGE_KEYS
 
 WIDE = (1600, 900)      # a page wider than ui_graph.WIDE: the pane beside the canvas
@@ -884,3 +885,113 @@ def test_a_macro_rows_chips_stay_beside_the_knob_where_it_fits(tmp_path, monkeyp
         d.run(d.wait(3))
         knob, one = d.rect("macro.1"), d.rects["+ base"]
         assert one[0] >= knob[2] - 1
+
+
+# ---------------------------------------------------------------- the paper cuts (row 731)
+
+def _analyzer_at(r, monkeypatch, width):
+    r.panel.desk = False
+    r.panel.page = PAGE_KEYS.index("graph")
+    d = _tall_driver(r, monkeypatch)
+    d.run(d.wait(2))
+    st = _st(r)
+    st["side_w"] = width
+    _only(st, "analyzer")
+    return d, st
+
+
+def test_save_as_patch_and_update_patch_keep_inside_the_narrowest_pane(tmp_path, monkeypatch):
+    """#364's 19 px: the two chips one row where they fit, and two where not."""
+    with build_rig(tmp_path) as r:
+        r.panel.desk = False
+        r.lib.load("presets", "party-noita")
+        r.lib.presets.groups = []
+        frame(r.panel, "graph")
+        entry = ui_graph.group_nodes(r.panel, ["render:warp", "render:doublevision"])
+        entry["patch"] = "noita-core"
+        d = _tall_driver(r, monkeypatch)
+        d.run(d.wait(2))
+        st = _st(r)
+        st["select_group"] = entry["id"]
+        for width, across in ((ui_graph.SIDE_MIN, False), (ui_graph.SIDE_MIN + 200, True)):
+            st["side_w"] = width
+            d.run(d.wait(3))
+            save = d.rect("save as patch…##graph.group")
+            update = d.rect("update patch##graph.group")
+            assert (update[1] == save[1]) is across
+            assert not _spills(d, st), sorted(_spills(d, st))
+
+
+@pytest.mark.parametrize("width", [ui_graph.SIDE_MIN, ui_graph.SIDE_W])
+def test_the_analyzers_scene_combo_keeps_its_room_and_nothing_collides(tmp_path, monkeypatch,
+                                                                       width):
+    """AZ's report at 240 px: the combo collapsed to nothing beside its label
+    and Reset all; the AUTO chip and the transfer row drew over each other."""
+    with build_rig(tmp_path) as r:
+        d, st = _analyzer_at(r, monkeypatch, width)
+        d.run(d.wait(3))
+        assert not _spills(d, st), sorted(_spills(d, st))
+        scene = d.rect("scene.select")
+        assert scene[2] - scene[0] >= ui.SCENE_COMBO_MIN
+        reset = d.rect(next(k for k in d.rects if k.endswith("##scene.reset_all")))
+        fn, curve = d.rect("band.sel.fn"), d.rect("band.sel.curve")
+        norm = d.rect(next(k for k in d.rects if k.endswith("##norm")))
+        for a, b in ((scene, reset), (norm, fn), (fn, curve), (norm, curve)):
+            apart = a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1]
+            assert apart, (a, b)
+
+
+def test_the_analyzers_title_stays_clear_of_its_chips_at_every_width(tmp_path, monkeypatch):
+    drawn: list[tuple[str, tuple[float, float, float, float]]] = []
+    real = imgui.text_disabled
+
+    def noted(s, *a):
+        real(s, *a)
+        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        drawn.append((s, (lo.x, lo.y, hi.x, hi.y)))
+    monkeypatch.setattr(imgui, "text_disabled", noted)
+    with build_rig(tmp_path) as r:
+        d, st = _analyzer_at(r, monkeypatch, ui_graph.SIDE_MIN)
+        for width in (ui_graph.SIDE_MIN, ui_graph.SIDE_W, 500.0):
+            st["side_w"] = width
+            d.run(d.wait(3))
+            hz = next(rect for s, rect in reversed(drawn) if s.endswith(" Hz"))
+            norm = d.rect(next(k for k in d.rects if k.endswith("##norm")))
+            assert hz[2] <= norm[0] or hz[3] <= norm[1], (width, hz, norm)
+            (x, _y), (w, _h) = st["details_rect"]
+            assert hz[2] <= x + w
+
+
+def test_the_meter_tags_do_not_touch_at_the_narrowest_pane(tmp_path, monkeypatch):
+    tags: dict[str, tuple[float, float]] = {}
+    real = imgui.text_colored
+
+    def noted(color, s, *a):
+        real(color, s, *a)
+        tags[s] = (imgui.get_item_rect_min().x, imgui.get_item_rect_max().x)
+    monkeypatch.setattr(imgui, "text_colored", noted)
+    with build_rig(tmp_path) as r:
+        d, _ = _analyzer_at(r, monkeypatch, ui_graph.SIDE_MIN)
+        d.run(d.wait(3))
+        spans = sorted(tags[n] for n in r.chain.band_names)
+        assert all(a[1] < b[0] for a, b in itertools.pairwise(spans)), spans
+
+
+def test_the_size_of_a_tag_and_the_hint_a_plot_shows():
+    assert ui.tag_px(20.0, 40.0, 12.0) == 12.0               # room: as it was
+    assert ui.tag_px(30.0, 27.0, 12.0) == pytest.approx(10.8)
+    assert ui.tag_px(100.0, 10.0, 12.0) == ui.TAG_MIN_PX
+    long, short = ui_bands.HINT, ui_bands.HINT_SHORT
+    assert ui_bands.hint_for(len(long), len) == long
+    assert ui_bands.hint_for(len(long) - 1, len) == short
+    assert ui_bands.hint_for(len(short) - 1, len) == ""
+
+
+def test_the_spectrogram_says_the_hint_that_fits_at_each_width(tmp_path, monkeypatch):
+    with build_rig(tmp_path) as r:
+        d, st = _analyzer_at(r, monkeypatch, ui_graph.SIDE_MIN)
+        d.run(d.wait(3))
+        assert ui_bands._state(r.panel)["hint"] == ui_bands.HINT_SHORT
+        st["side_w"] = 500.0
+        d.run(d.wait(3))
+        assert ui_bands._state(r.panel)["hint"] == ui_bands.HINT

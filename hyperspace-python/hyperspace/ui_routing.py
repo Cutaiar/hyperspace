@@ -1004,11 +1004,11 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
         (float(b.value) - lo) / span, -lo / span if lo < 0 < hi else 0.0, knob=False,
     )
     imgui.pop_font()
+    changed, v = panel._fine_raw(changed, v, float(b.value), lo, hi)
     if changed:
         b.value = v
-    if imgui.is_item_hovered():
-        ui.tooltip("Depth, signed" + DEPTH_TIP.get(b.op, DEPTH_TIP["push"])
-                          + "\nctrl-click to type")
+    panel._fine_raw_tip("Depth, signed" + DEPTH_TIP.get(b.op, DEPTH_TIP["push"])
+                        + "\nctrl-click to type")
     imgui.same_line()
     if b.op == "push":
         auto = b.rest is None
@@ -1021,12 +1021,12 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
         if auto:
             imgui.pop_style_color()
         imgui.pop_font()
+        changed, v = panel._fine_raw(changed, v, rest, 0.0, 1.0)
         if changed:
             b.rest = v                              # dragged: the row's own number
-        if imgui.is_item_hovered():
-            ui.tooltip("Rest — the source reading that pushes nothing"
-                              + (" (the source's own)" if auto else " (this row's own)")
-                              + "\ndrag to set the row's own; ctrl-click to type")
+        panel._fine_raw_tip("Rest — the source reading that pushes nothing"
+                            + (" (the source's own)" if auto else " (this row's own)")
+                            + "\ndrag to set the row's own; ctrl-click to type")
         imgui.same_line()
         if not auto:
             imgui.push_style_color(imgui.Col_.text, ui.DIM)
@@ -1141,12 +1141,12 @@ def _feel_line(panel, router: Router, b: Binding) -> None:
             imgui.same_line()
         imgui.set_next_item_width(knob_w)
         flags = imgui.SliderFlags_.logarithmic if log else 0
-        changed, v = imgui.slider_float(f"##{k}", float(getattr(m, k)) * unit, lo * unit,
-                                        hi * unit, fmt, flags)
+        was = float(getattr(m, k)) * unit
+        changed, v = imgui.slider_float(f"##{k}", was, lo * unit, hi * unit, fmt, flags)
+        changed, v = panel._fine_raw(changed, v, was, lo * unit, hi * unit, log)
         if changed:
             b.motion = m = replace(m, **{k: min(max(v / unit, lo), hi)})
-        if imgui.is_item_hovered():
-            ui.tooltip(tip + "\nctrl-click to type")
+        panel._fine_raw_tip(tip + "\nctrl-click to type")
     imgui.pop_font()
     imgui.dummy(imgui.ImVec2(18, 0))
     imgui.same_line()
@@ -1583,17 +1583,17 @@ def _sub(panel, router: Router, mid: str, s: Sub, shared: dict[str, list[str]]) 
     imgui.same_line()
     imgui.set_next_item_width(SUB_W)
     changed, v = imgui.slider_float("##from", float(s.lo), lo, hi, "from " + fmt)
+    changed, v = panel._fine_raw(changed, v, float(s.lo), lo, hi)
     if changed:
         s.lo, edited = v, True
-    if imgui.is_item_hovered():
-        ui.tooltip(tip)
+    panel._fine_raw_tip(tip)
     imgui.same_line()
     imgui.set_next_item_width(SUB_W)
     changed, v = imgui.slider_float("##to", float(s.hi), lo, hi, "to " + fmt)
+    changed, v = panel._fine_raw(changed, v, float(s.hi), lo, hi)
     if changed:
         s.hi, edited = v, True
-    if imgui.is_item_hovered():
-        ui.tooltip(tip)
+    panel._fine_raw_tip(tip)
     if mark:
         imgui.same_line()
         imgui.text_colored(ui.WARN, mark)
