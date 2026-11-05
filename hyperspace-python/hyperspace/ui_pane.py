@@ -73,7 +73,7 @@ from pathlib import Path
 
 from imgui_bundle import imgui
 
-from . import library, ui, ui_fx, ui_presets
+from . import library, ui, ui_fx, ui_players, ui_presets
 
 UI_FILE = "ui.json"      # <machine>/ui.json: this Mac's panel settings
 
@@ -125,6 +125,8 @@ SECTIONS: tuple[tuple[str, str, tuple[str, ...], Callable | None], ...] = (
     ("camera", "camera", ("camera",), _paged("camera")),
     ("output", "output", ("output",), _paged("output")),
     ("system", "system", (), _wrapped("system")),
+    # last, so focused it has the pane: a body has the room under the headers after it
+    ("players", "players", (), _paged("players")),
 )
 KEYS = tuple(k for k, *_ in SECTIONS)
 # beside the canvas: selection and presets open at first (stage 1); every
@@ -133,7 +135,7 @@ DEFAULT_OPEN = {k: k in ("selection", "presets") for k in KEYS}
 DEFAULT_BELOW = {k: k == "selection" for k in KEYS}     # the narrow page's band
 LAYOUTS = {"open": DEFAULT_OPEN, "below": DEFAULT_BELOW}   # ui.json's pane.<layout>
 ROUTING = "routing"      # the section a picked desk control never dims (`_body`)
-MIN_BODY_H = 160.0       # beside the canvas, an open body is never shorter (the pane scrolls)
+MIN_BODY_H = 150.0       # beside the canvas, an open body is never shorter (the pane scrolls)
 CHIP_MAX = 220.0         # px: the most a band header's words take
 WRITE_AFTER_S = 0.5      # a fold is written this long after the last click
 COST_KEEP = 0.9          # a body's running mean: this much the last mean, the rest the newest
@@ -341,7 +343,7 @@ def draw(panel, st: dict, dt: float, selection: Callable[[], None] | None,
             # with one focused it is the only body, so the only chip lit: a
             # click on another asks for that one, whatever its fold says
             on = key == held if held else bool(got.get(key))
-            if _header(panel, key, title, on, said if key == "selection" else "", groups,
+            if _header(panel, key, title, on, _said(panel, key, said), groups,
                        chip=True, first=i == 0):
                 set_open(st, key, not on, layout)
                 if held:                        # a chip lets go: the band as it was clicked
@@ -366,7 +368,7 @@ def draw(panel, st: dict, dt: float, selection: Callable[[], None] | None,
                   if held else h)
         for key, title, groups, body in SECTIONS:
             on = bool(got.get(key)) or key == held
-            if _header(panel, key, title, on, said if key == "selection" else "", groups):
+            if _header(panel, key, title, on, _said(panel, key, said), groups):
                 set_open(st, key, not on, layout)
                 on = not on
                 if key == held:                 # its own header lets go
@@ -427,6 +429,14 @@ def timing_line(panel) -> str:
     if not got:
         return ""
     return "side pane: " + "  ·  ".join(f"{k} {ms:.2f}" for ms, k in got) + " ms"
+
+
+def _said(panel, key: str, said: str) -> str:
+    """What a header names beside its title: the selection's what is selected;
+    the players' who is where, so it reads folded."""
+    if key == "selection":
+        return said
+    return ui_players.summary(panel) if key == "players" else ""
 
 
 def _header(panel, key: str, title: str, on: bool, said: str, groups,
