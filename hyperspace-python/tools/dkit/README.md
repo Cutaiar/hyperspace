@@ -119,6 +119,42 @@ them:
   outline and leaves visible streaks across an area chart. One convex
   trapezoid per segment is exact.
 
+## Interaction and easing
+
+`interact.py` is `Panel._track` (`hyperspace/ui.py:1311-1357`) generalized —
+the one place in 20,800 lines of UI code that already runs a real widget for
+behaviour and paints its own chrome. Two rules it keeps:
+
+* **Every interactive primitive carries an `invisible_button` with its
+  `##id`.** `tests/ui_driver.py:43-46` finds controls that way and
+  twenty-two `test_ui_*.py` files depend on it. `Ui.hit` also refuses a
+  duplicate id, because two widgets sharing one is a silent bug in both
+  ImGui and the driver.
+* **Chrome is drawn from eased state.** ImGui keeps nothing between frames,
+  so shadcn's `150ms cubic-bezier(.4,0,.2,1)` lives in `ease.Anim`, keyed by
+  widget id and stepped once a frame. Per `REVIEW.md` the step is O(live
+  widgets) and drops anything that stopped drawing.
+
+`ease.cubic_bezier` is pinned to Chromium's own Web Animations output to
+1e-5 (`test_ease.py`), because this curve is what everything in the kit
+moves on.
+
+`ease.mix` interpolates **premultiplied**, and that is not a detail: a
+straight RGBA lerp from `transparent` goes through transparent *black*, so a
+sidebar item measurably darkened to 20 on its way from 23 to 38 before this
+was fixed. Browsers premultiply; so does the kit.
+
+```bash
+# a hover easing in and out, as a frame sequence
+HYPERSPACE_HOME=$(mktemp -d) uv run python tools/dkit/dashboard.py \
+    --out /tmp/dkit --theme dark --hover
+```
+
+The demo now draws into a real window's draw list rather than the background
+list — `replay.keep` (`hyperspace/replay.py:91`) only carries the page
+window's own list into the canvas tap, so background-list chrome would be
+missing from `panel:graph`.
+
 ## Running it
 
 ```bash

@@ -34,7 +34,9 @@ sys.path.insert(0, str(HERE))
 
 import draw as D          # noqa: E402
 import gradient as G      # noqa: E402
+import interact as I      # noqa: E402
 import tokens as T        # noqa: E402
+from ease import Anim     # noqa: E402
 
 SHAPES = json.loads(
     (HERE / "../../../prototypes/dashboard/src/data/shapes.json")
@@ -168,7 +170,8 @@ def _dot(dl, cx, cy, col, rad=3.0):
     dl.add_circle_filled(imgui.ImVec2(cx + rad, cy), rad, D._u32(col))
 
 
-def paint(dl, r: Rects, w, h, faces, theme, grad_tex, series):
+def paint(ui: I.Ui, r: Rects, w, h, series, state):
+    dl, faces, theme, grad_tex = ui.dl, ui.faces, ui.theme, ui.grad_tex
     bgc = T.rgba("background", theme=theme)
     D.fill(dl, 0, 0, w, h, bgc)
 
@@ -185,11 +188,13 @@ def paint(dl, r: Rects, w, h, faces, theme, grad_tex, series):
             T.rgba("muted-foreground", theme=theme), baseline_box=14)
 
     for i, (name, rect) in enumerate(zip(NAV, r.nav)):
-        D.sidebar_item(dl, *rect, name, faces, theme, active=(i == 0))
+        if I.sidebar_item(ui, f"nav.{i}", *rect, name,
+                          active=(i == state["nav"])).clicked:
+            state["nav"] = i
     D.label(dl, 18, r.sources[0][1] - 22, "Sources", faces, "medium", 12,
             T.rgba("muted-foreground", theme=theme), baseline_box=16)
-    for name, rect in zip(SOURCES, r.sources):
-        D.sidebar_item(dl, *rect, name, faces, theme)
+    for i, (name, rect) in enumerate(zip(SOURCES, r.sources)):
+        I.sidebar_item(ui, f"src.{i}", *rect, name)
 
     # ---- header -----------------------------------------------------------
     hx, hy, hw, hh = r.header
@@ -203,8 +208,8 @@ def paint(dl, r: Rects, w, h, faces, theme, grad_tex, series):
     _dot(dl, bx + 8, hy + hh / 2, (0.20, 0.83, 0.60, 1.0), 3.0)
     D.label(dl, bx + 20, hy + (hh - 20) / 2, "Rendering", faces, "medium", 12,
             T.rgba("foreground", theme=theme), baseline_box=20)
-    D.button(dl, hx + hw - GUT - 72, hy + (hh - 32) / 2, 72, 32, "GitHub",
-             faces, theme, variant="ghost")
+    I.button(ui, "hdr.github", hx + hw - GUT - 72, hy + (hh - 32) / 2, 72, 32,
+             "GitHub", variant="ghost")
 
     # ---- stat cards -------------------------------------------------------
     for (title, value, delta, up, head, detail), rect in zip(STATS, r.stats):
@@ -279,7 +284,9 @@ def paint(dl, r: Rects, w, h, faces, theme, grad_tex, series):
 
     # ---- table ------------------------------------------------------------
     tx, ty, _, th = r.table_tabs
-    _, tabs_w = D.tabs(dl, tx, ty, th, TABS, 0, faces, theme)
+    picked, _tabs_w = I.tabs(ui, "tab", tx, ty, th, TABS, state["tab"])
+    if picked is not None:
+        state["tab"] = picked
     shown = len(r.table_rows)
     D.label(dl, tx, ty, f"Showing {shown} of {len(SHAPES)}", faces, "regular", 13,
             T.rgba("muted-foreground", theme=theme), align="right",
@@ -294,8 +301,9 @@ def paint(dl, r: Rects, w, h, faces, theme, grad_tex, series):
         D.label(dl, cxp, hy, head, faces, "medium", 13, ink, align=al,
                 box_w=cwid - (COL_PAD if al == "right" else 0), baseline_box=hh)
 
-    for row, rect in zip(SHAPES[:shown], r.table_rows):
+    for ri, (row, rect) in enumerate(zip(SHAPES[:shown], r.table_rows)):
         rx, ry, rw, rh = rect
+        I.row(ui, f"row.{ri}", rx, ry, rw, rh)
         D.fill(dl, rx, ry + rh - 1, rw, 1, T.rgba("border", theme=theme))
         cells = [row["name"], row["kind"], row["schlafli"] or "—",
                  f"{row['dims']}D",
@@ -318,7 +326,21 @@ def paint(dl, r: Rects, w, h, faces, theme, grad_tex, series):
                         baseline_box=rh, max_w=cwid - COL_PAD)
 
 
-def render(theme_name: str, w: int, h: int) -> np.ndarray:
+WIN_FLAGS = (imgui.WindowFlags_.no_title_bar | imgui.WindowFlags_.no_resize
+             | imgui.WindowFlags_.no_move | imgui.WindowFlags_.no_scrollbar
+             | imgui.WindowFlags_.no_scroll_with_mouse
+             | imgui.WindowFlags_.no_collapse
+             | imgui.WindowFlags_.no_bring_to_front_on_focus
+             | imgui.WindowFlags_.no_background)
+
+
+def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0):
+    """Draw the dashboard, optionally stepping a script of mouse positions.
+
+    `script` is a list of (x, y) — one per frame — so a hover transition can
+    be captured headlessly. Returns a list of frames (the last one only, if
+    no script was given).
+    """
     theme = T.LIGHT if theme_name == "light" else T.DARK
     if not glfw.init():
         raise SystemExit("GLFW failed to initialise (no display?)")
@@ -346,27 +368,51 @@ def render(theme_name: str, w: int, h: int) -> np.ndarray:
     series = ticks()
     rects = lay_out(w, h)
     bgc = T.rgba("background", theme=theme)
+    anim = Anim()
+    state = {"tab": 0, "nav": 0}
 
-    for _ in range(2):
+    # two warm-up frames settle the backend and the font atlas, and let the
+    # animation store see every widget once before anything is scripted
+    steps = [None, None] + list(script or [None])
+    frames = []
+    for i, mouse in enumerate(steps):
         glfw.poll_events()
         impl.process_inputs()
+        if mouse is not None:
+            io.add_mouse_pos_event(float(mouse[0]), float(mouse[1]))
         imgui.new_frame()
         GL.glClearColor(bgc[0], bgc[1], bgc[2], 1.0)
         GL.glClear(GL.GL_COLOR_BUFFER_BIT)
-        paint(imgui.get_background_draw_list(), rects, w, h, faces, theme,
-              grad_tex, series)
+
+        imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+        imgui.set_next_window_size(imgui.ImVec2(w, h))
+        imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(0, 0))
+        imgui.push_style_var(imgui.StyleVar_.window_border_size, 0.0)
+        imgui.begin("##dkit", None, WIN_FLAGS)
+        # a real window's list, not the background list: replay.keep
+        # (hyperspace/replay.py:91) only carries the page window's own list
+        # into the canvas tap
+        ui = I.Ui(imgui.get_window_draw_list(), faces, theme, anim, grad_tex)
+        paint(ui, rects, w, h, series, state)
+        imgui.end()
+        imgui.pop_style_var(2)
+
         imgui.render()
         impl.render(imgui.get_draw_data())
         GL.glFinish()
+        ui.frame_done(dt)
 
-    fw, fh = glfw.get_framebuffer_size(win)
-    raw = GL.glReadPixels(0, 0, fw, fh, GL.GL_RGB, GL.GL_UNSIGNED_BYTE)
-    px = np.frombuffer(raw, np.uint8).reshape(fh, fw, 3)[::-1]
-    if not px.any():
-        raise SystemExit("the hidden window read back black: no picture here")
+        if i >= 2:
+            fw, fh = glfw.get_framebuffer_size(win)
+            raw = GL.glReadPixels(0, 0, fw, fh, GL.GL_RGB, GL.GL_UNSIGNED_BYTE)
+            px = np.frombuffer(raw, np.uint8).reshape(fh, fw, 3)[::-1]
+            if not px.any():
+                raise SystemExit("the hidden window read back black")
+            frames.append(px.copy())
+
     impl.shutdown()
     glfw.terminate()
-    return px.copy()
+    return frames
 
 
 def main() -> None:
@@ -375,10 +421,24 @@ def main() -> None:
     ap.add_argument("--theme", default="dark", choices=("light", "dark"))
     ap.add_argument("--width", type=int, default=1440)
     ap.add_argument("--height", type=int, default=1100)
+    ap.add_argument("--hover", action="store_true",
+                    help="emit a frame sequence of a hover easing in and out")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    px = render(a.theme, a.width, a.height)
+    if a.hover:
+        # walk the pointer onto a sidebar item, hold it there, then leave:
+        # enough frames either side to show the 150ms ease settle
+        tx, ty, tw, th = lay_out(a.width, a.height).nav[2]
+        spot = (tx + tw / 2, ty + th / 2)
+        away = (a.width - 40, a.height - 40)
+        script = [away] * 2 + [spot] * 14 + [away] * 14
+        frames = render(a.theme, a.width, a.height, script=script)
+        for i, px in enumerate(frames):
+            Image.fromarray(px).save(out / f"hover-{a.theme}-{i:03d}.png")
+        print(f"wrote {len(frames)} frames to {out}/hover-{a.theme}-*.png")
+        return
+    px = render(a.theme, a.width, a.height)[-1]
     dest = out / f"dashboard-{a.theme}.png"
     Image.fromarray(px).save(dest)
     print(f"wrote {dest}  {px.shape[1]}x{px.shape[0]}")
