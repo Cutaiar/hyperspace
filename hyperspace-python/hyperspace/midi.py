@@ -65,7 +65,7 @@ row draws going dark. A knob's ring also re-bases the endless encoder
 (`apc40.RING_REBASES_KNOB`, hand check 31), so the row is caught at the
 value just sent; the faders keep soft pickup, and a desk replacement (a
 preset load) clears the catch of a fader whose param it moved — the
-crossfader and the session's faders keep their hold through it.
+crossfader, MASTER and the session's faders keep their hold through it.
 
 Bindings persist with every other source's in bindings.json (routing.py;
 an old midi_map.json is migrated on first run). With no file the device
@@ -1318,7 +1318,7 @@ class MidiIO:
         (`_writes` is per param: another control on the same param may
         have made the last write): a fader whose base the load moved
         picks up, and one whose param the load left alone (the
-        crossfader's dim, SM, and the audio strip on S1–S8 under SHIFT: a
+        crossfader, SM's dim, and the audio strip on S1–S8 under SHIFT: a
         preset never moves a session param, D9) keeps its hold (plan 15 WP3, fork 19). A load also ends
         every glide (knob smoothing) but a session param's, before anything
         else: the load's value stands, even where it equals the glide's

@@ -6,7 +6,7 @@ today: the registry (`reg`), the view state (`view`), the binding table
 D2), the three modulator banks (`lfos`, `envs`,
 `seq`), the presets and their graph section (`presets`, `presets.graph`),
 the learn, the undo and the marks it restores through, and — in the app,
-never headless — the renderer and the hold, and the clock the banks step on. D1 changes no behaviour:
+never headless — the renderer, and the clock the banks step on. D1 changes no behaviour:
 there is one deck, `app.main` builds it, and `app.Host` and `ui.Panel`
 keep their flat handles, assigned from it.
 
@@ -48,15 +48,16 @@ its player's duty says.
 D5c makes it a DJ mixer's crossfader, with no swap: `output.xfade` 0 is deck 1
 alone, 1 deck 2 alone, and on air is whichever the fader is closer to
 (`MetaController.follow_fader`, `MIDDLE`). `Fade` mixes the other deck over the
-one on air by `Fade.k`, the other's share. Two verbs: the crossfade, by hand or
-timed (`crossfade`, `tick`), and `copy_on_air`. Nothing in `app.main` calls them
-yet, so deck 1 stays on air and raising the fader mixes as D4 did; D5d wires them.
+one on air by `Fade.k`, the other's share. Two verbs, and no others (the owner,
+2026-11-04): the crossfade, by hand or timed (`crossfade`, `tick`), and
+`copy_on_air`. D5d wires them: `app.frame` ticks the meta controller first, the
+desk's crossfader is `output.xfade`, and GRAPH's head has both verbs and which
+deck the panel is on. A bank verb never changes what is on air (`bars_load`).
 """
 
 from __future__ import annotations
 
 import copy
-import time
 from collections.abc import Callable
 from dataclasses import dataclass, fields, replace
 from typing import Any
@@ -65,8 +66,6 @@ from . import envelope, geometry, lfo, poi, sequencer, tempo, totem
 from . import undo as undos
 from .fx import FxState
 from .ghost import GhostState
-from .hold import Hold, preview_renderer
-from .hold import register as register_hold
 from .learn import Learn
 from .library import Marks, MetaMarks
 from .lookback import DreamState
@@ -102,7 +101,7 @@ class RigMade:
 @dataclass
 class Deck:
     """One look and its controls (plan 44 §1), today's singletons bundled.
-    `renderer` and `hold` are None on a headless deck (no GL)."""
+    `renderer` is None on a headless deck (no GL)."""
 
     reg: Registry
     view: ViewState
@@ -120,7 +119,6 @@ class Deck:
     undo: undos.Undo
     marks: Marks
     renderer: Any = None
-    hold: Hold | None = None
     # what the sources said this frame (routing_sources.Sources, plan 44
     # D2): the router's shared half, the one the devices and the analyzer
     # feed. Built here while there is one deck (`build(sources=…)` hands a
@@ -168,7 +166,7 @@ class Deck:
         wired to each other first (the band hooks, `control.library`);
         `table(reg)` loads the binding table and declares the desk's
         params on `reg`. `renderer` (the app's; None headless) supplies the
-        look-back's, the effects' and the hands' states and gets a hold;
+        look-back's, the effects' and the hands' states;
         headless, `dream` / `fx` / `ghost` stand in for them (a fresh one
         each when None) — given with a renderer they are a ValueError,
         since the renderer's states are the ones it draws. `media` is the channels' `MediaState`, `restart`
@@ -182,7 +180,7 @@ class Deck:
         today). The hooks, each called
         where `main` builds that rig object, each returning what it made:
         `hands(reg)` the hands' setup, `outputs(reg)` the outputs' params
-        and switches, `panel(reg, view, clock=, lfos=, envs=, seq=, hold=,
+        and switches, `panel(reg, view, clock=, lfos=, envs=, seq=,
         output=)` the panel (its `ui.*` params, and its handles on what
         exists by then; `output` is what `outputs` returned), and
         `devices(reg, router, learn, panel=, hand_settings=)` the devices —
@@ -253,12 +251,6 @@ class Deck:
         # includes output.* and reset / the dirty dot see them (audit L6)
         if outputs is not None:
             made.outputs = outputs(reg)
-        # plan 38: the projector held while the next look is built — rig
-        # controls beside the switches; its undo is handed over once it exists
-        hold = None
-        if renderer is not None and not beside:
-            hold = Hold(reg, renderer, make=lambda: preview_renderer(renderer))
-            register_hold(reg, hold, now=time.perf_counter)
         # one binding table for keys, pad, MIDI and lanes — read before
         # attach for the same reason: the desk's session param, `desk.slew`,
         # is the table's
@@ -267,7 +259,7 @@ class Deck:
             library.attach(reg)
         if panel is not None:
             # the panel's own ui.* params, and its handles on what exists now
-            made.panel = panel(reg, s, clock=clock, lfos=lfos, envs=envs, seq=seq, hold=hold,
+            made.panel = panel(reg, s, clock=clock, lfos=lfos, envs=envs, seq=seq,
                                output=made.outputs)
         # the router: this deck's evaluator over the sources every source
         # feeds (plan 44 D2) — the rig's when handed in, else its own
@@ -287,8 +279,6 @@ class Deck:
             # reads them off the presets (`graph.rig_of`: `Presets.rig`)
             renderer.rig_source = presets
             renderer.deck_reg = reg            # whose picture it is (the poi's guide)
-        if hold is not None:
-            hold.section = presets.graph       # plan 38 B3: landings keep the held program's nodes
         # one Learn over the live table, whatever the MIDI gate says: a knob
         # or a hand completes it, the panel's prompt settles what the referee
         # refused (learn.py; the band.sel.* rule is the registry's `real`)
@@ -319,11 +309,9 @@ class Deck:
         reg.chase_undo = undo_obj          # one base chase hold, one step here (plan 52)
         if install:
             undos.install(undo_obj)        # what undo.push and the edit.* triggers reach
-        if hold is not None:
-            hold.undo = undo_obj           # Drop goes back to the hold's point through it
         return cls(reg=reg, view=s, table=router.table, router=router, lfos=lfos, envs=envs,
                    seq=seq, clock=clock, presets=presets, learn=learn, undo=undo_obj, marks=marks,
-                   renderer=renderer, hold=hold, sources=sources,
+                   renderer=renderer, sources=sources,
                    band_shape=tag if tag is not None else (
                        (lambda: tuple(s.name for s in audio.chain.spec))
                        if audio is not None else None))
@@ -354,11 +342,11 @@ class Deck:
     def targets(self) -> list[tuple[Any, str, str]]:
         """The live objects a hot reload re-classes, as (object, module,
         class) — the deck itself, then the ones `app.main` listed for these
-        objects, in its order; re-evaluated each swap, so a voice or a
-        preview renderer made since counts. The clock is listed here while
+        objects, in its order; re-evaluated each swap, so a voice made since
+        counts. The clock is listed here while
         the deck builds it (plan 44 §2 calls it shared: D3+ hands the rig's
         in, and the rig lists it)."""
-        r, hold = self.renderer, self.hold
+        r = self.renderer
         return [
             (self, "deck", "Deck"),
             *([(r, "render", "Renderer"),
@@ -379,10 +367,6 @@ class Deck:
             *[(p, "params", "Param") for p in self.reg],
             (self.marks, "library", "Marks"),
             (self.undo, "undo", "Undo"),
-            *([(hold, "hold", "Hold")] if hold is not None else []),   # plan 38
-            # …and its preview renderer once made
-            *([(hold.preview, "render", "Renderer")]
-              if hold is not None and hold.preview is not None else []),
             # the router's shared half (plan 44 D2), while the deck builds it
             # (getattr: a stand-in deck, or one from before D2, has none)
             *([(src, "routing_sources", "Sources")]
@@ -530,7 +514,8 @@ class MetaController:
 
     `mix` is the crossfader (`output.xfade`, `output.xfade_s`): `tick` runs a
     timed `crossfade` and follows the fader, and `parked` is the one list of decks
-    off air, what `Host.off_air` reads."""
+    off air, what `Host.off_air` reads. `bars_load` is what a bank verb from a row
+    asks each deck's `DeckProject`."""
 
     # (class-level: read by a meta controller from before a hot reload)
     timed: TimedFade | None = None
@@ -538,6 +523,8 @@ class MetaController:
     def __init__(self, first: Deck, second: Deck, players: Players | None = None,
                  mix: Mix | None = None):
         self.decks = (first, second)
+        for deck in self.decks:
+            deck.presets.lib.project.barred = lambda deck=deck: self.bars_load(deck)
         self.mix = mix if mix is not None else Mix()
         self.parked = [second]
         self.on_air_moved: list[Callable[[Deck], Any]] = []   # told after on air moves
@@ -562,6 +549,25 @@ class MetaController:
     @property
     def panel(self) -> Deck:
         return self.panel_pointer.deck
+
+    def words(self, deck: Deck) -> str:
+        """`deck` as the panel says it: "deck 1 · on air", "deck 2 · off air"."""
+        n = 1 if deck is self.decks[0] else 2
+        return f"deck {n} · {'on air' if deck is self.on_air else 'off air'}"
+
+    def bars_load(self, deck: Deck) -> str | None:
+        """Why a bank verb from a row may not load onto `deck`, or None when it may
+        (the owner, 2026-11-04: changing what is on air is intentional, never from the
+        desk). The panel's own load is the intentional one and never asks. A row acts on
+        the deck its player is on, so a controller on the deck on air is refused, and
+        while the crossfader is between its ends both decks are on air."""
+        if deck is self.on_air:
+            return ("not loaded: that deck is on air. Move this controller's player off "
+                    "air, or load it from the panel")
+        if 0.0 < self.mix.xfade < 1.0:
+            return ("not loaded: the crossfader is between its ends, so both decks are on "
+                    "air. Bring it to one end first")
+        return None
 
     @property
     def stacks(self) -> tuple[undos.Undo, ...]:
@@ -782,19 +788,17 @@ class TimedFade:
 # enough that "closer to" is what it reads as
 MIDDLE = 0.03
 
-# (the panel's words change with D5d, which is what makes on air move in the app)
-XFADE_TIP = ("Mixes the other deck's picture over this one's on every output, before "
-             "the dim: 0 this deck alone, 1 the other deck alone. Never saved; nothing "
-             "on the desk by default (the crossfader stays the master dim), learn it "
-             "onto a fader.")
+XFADE_TIP = ("The crossfader, as a DJ mixer's: 0 deck 1 alone, 1 deck 2 alone, and what is "
+             "on air is the deck it is closer to. The desk's crossfader. Fading into an "
+             "empty deck is black. Never saved.")
 XFADE_S_TIP = "How long a timed fade runs the crossfader, in seconds. 0 is a cut. Never saved."
 
 
 def register_xfade(reg, mix: Mix) -> list[str]:
-    """`output.xfade` and `output.xfade_s` (plan 44 §3 D4, §5): rig controls
-    like `output.dim` — group `output`, never persisted, not modulatable (a
-    band on the fade would cut the room on every kick), learnable onto a
-    fader — so they cross no file and an older build never sees them."""
+    """`output.xfade` and `output.xfade_s` (plan 44 §3 D4): the meta controller's,
+    like `output.dim` — group `output`, never persisted, not modulatable (a band
+    on the fade would cut the room on every kick) — so they cross no file. The
+    desk's crossfader is the first (D5d, `apc40.META_CONTROLS`)."""
     rig = {"group": "output", "persist": False, "modulatable": False}
     reg.continuous("output.xfade", "Deck fade", lambda: mix.xfade,
                    lambda v: setattr(mix, "xfade", min(1.0, max(0.0, float(v)))),

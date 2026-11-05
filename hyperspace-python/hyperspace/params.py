@@ -861,12 +861,9 @@ class Registry:
     # for a registry of its own (a bare one, the tests'; and one from
     # before a hot reload, on the class)
     session: SessionRegistry | None = None
-    # the base chase (plan 52): held now; who may refuse a press (the
-    # projector's hold, one for the rig: `hold.register` sets it on the
-    # session), None: nobody; this deck's `undo.Undo` (`Deck.build`), None: a
-    # bare registry has no steps
+    # the base chase (plan 52): held now; this deck's `undo.Undo`
+    # (`Deck.build`), None: a bare registry has no steps
     chasing: bool = False
-    chase_guard: Callable[[], bool] | None = None
     chase_undo: Any = None
     _chase_steps: Any = None             # the `undo.Undo` the press opened its step on
 
@@ -1063,13 +1060,9 @@ class Registry:
         One hold is one undo step on `steps` (a `undo.Undo`; None: this
         deck's, `chase_undo`), remembered at the press so any
         let-go closes that one; what closes the step otherwise (an undo, a
-        load, a learn under the verb) ends the verb with it. A press under
-        the projector's hold is refused (`chase_guard`, row 656). Returns
+        load, a learn under the verb) ends the verb with it. Returns
         whether the verb is on now."""
         on = bool(on)
-        rig = self.session if self.session is not None else self
-        if on and rig.chase_guard is not None and rig.chase_guard():
-            on = False
         if on == self.chasing:
             return on
         if on:
@@ -2273,7 +2266,7 @@ def build_performance(view, bank=None, dream=None, fx=None, ghost=None, media=No
              group="deck", persist=False, modulatable=False,
              tip="While held, whatever the performers are doing to the look is written "
                  "into its values; let go and the look stays where they left it. One undo "
-                 "step per hold. Refused while the projector is held.")
+                 "step per hold.")
     # plan 34 Z: the resizes' values likewise (`ViewState.resize`)
     sizes = getattr(view, "resize", None)
     if not isinstance(sizes, dict):

@@ -264,10 +264,10 @@ def test_two_desks_open_each_with_its_profile_and_its_own_rows(build):
     lines = ui.device_lines(r.devices)
     assert lines[0].startswith("apc40  ·  midi  ·  connected  ·  ")
     assert lines[1].startswith("launch  ·  midi  ·  connected  ·  0 sources  ·  Launch Control XL")
-    # the APC40's crossfader still dims through its invariant row, the
-    # generic desk's CC 15 does nothing (no row of its own)
+    # the APC40's MASTER still dims through its invariant row, the
+    # generic desk's CC 14 does nothing (no row of its own)
     dim = r.reg["output.dim"]
-    push(r, LAUNCH, cc(apc40.CC_XFADE, 0))
+    push(r, LAUNCH, cc(apc40.CC_MASTER, 0))
     assert dim.value == pytest.approx(1.0)
     r.devices.close()
     assert r.bus.ports[LAUNCH].sent == []                          # not even a leave
@@ -379,7 +379,7 @@ def test_a_missing_desk_is_lost_its_rows_wait_and_it_comes_up_with_its_feedback(
     toggles = {m.note: m.velocity for m in port.sent if m.type == "note_on" and m.channel == 0}
     assert toggles[apc40.N_SCENE[2]] == (1 if r.reg["view.faces"].value else 0)
     assert len(port.sent) > 50
-    push(r, APC, cc(apc40.CC_XFADE, 127), cc(apc40.CC_XFADE, 64))   # and its rows act
+    push(r, APC, cc(apc40.CC_MASTER, 127), cc(apc40.CC_MASTER, 64))   # and its rows act
     assert r.reg["output.dim"].value < 1.0
     # a generic entry with no port is an error line, never the first port there
     r2 = build(entries(launch=False) + [{"role": "nano", "kind": "midi", "enabled": True,

@@ -67,7 +67,7 @@ The ghost hands (ghost.py) are a geometry in the same
 camera (plan 26 A3): by default their own layer, laid over the finished
 frame (or onto it before the effects); wired into the scene, solid,
 before the shape; off, the frame is untouched. Last of all the master
-dim (`Renderer.dim`, the crossfader's `output.dim`; plan 15 WP3)
+dim (`Renderer.dim`, the MASTER fader's `output.dim`; plan 15 WP3)
 multiplies what is there — it draws nothing of its own, and at 1 it does
 not run.
 
@@ -2533,8 +2533,7 @@ class Renderer:
     def segmenter(self, name: str):
         """Segment node `name`'s worker (plan 39 T4, `segment.SegmentWorker`),
         made on its first need from `segment_cfg` and kept by name across
-        graph rebuilds — or None on a renderer with no `segment_cfg` (the
-        hold's preview: only the program renderer runs a model). Closed when
+        graph rebuilds — or None on a renderer with no `segment_cfg`. Closed when
         no graph has held its node for `SIZED_KEEP_FRAMES` (`_tend_segments`)
         and in `close`. `segment_factory(cfg, name)`, when set, makes it
         instead (tests). segment.py is imported here, on the first need,
@@ -2606,7 +2605,7 @@ class Renderer:
         close list, at quit and restart) — all stopped first, then joined
         against one shared deadline of `timeout` seconds, the ones
         `_tend_segments` stopped earlier too — never anything another
-        renderer shares (the hold's preview has none of its own). Threads
+        renderer shares. Threads
         only: the GL it holds goes with its context, which may not be
         current at this point of the exit."""
         workers = [*(self.__dict__.get("_segmenters") or {}).values(),

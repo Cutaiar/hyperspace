@@ -104,13 +104,13 @@ def test_shift_release_never_reevaluates_a_held_button(rig):
 
 def test_a_layer_switch_rebases_the_knobs_and_leaves_the_faders_to_pick_up(rig):
     reg = rig.reg
-    smooth, bright, gain = reg["hands.smooth"], reg["view.bright"], reg["master.gain"]
+    smooth, bright, gain = reg["hands.smooth"], reg["view.bright"], reg["output.dim"]
     smooth.set_norm(0.2)
     bright.set_norm(0.7)
     gain.set_norm(0.5)
     rig.midi.poll()
     push(rig, cc(apc40.CC_MASTER, 64))            # the fader caught at its value
-    fader = row(rig, "master.gain")
+    fader = row(rig, "output.dim")
     assert fader.caught
     # SHIFT: track knob 1 is hand smoothing now — its ring is drawn and the
     # encoder re-based there, so the next turn continues from the ring
@@ -144,11 +144,11 @@ def test_a_layer_switch_rebases_the_knobs_and_leaves_the_faders_to_pick_up(rig):
 
 def test_a_preset_load_clears_the_faders_catch(rig):
     t, reg = rig.midi.table, rig.reg
-    post = reg["master.gain"]
+    post = reg["output.dim"]
     post.set_norm(0.5)
     rig.midi.poll()
     push(rig, cc(apc40.CC_MASTER, 64))
-    fader = row(rig, "master.gain")
+    fader = row(rig, "output.dim")
     assert fader.caught
     post.set_norm(0.9)            # the load moves the base under the fader …
     t.set_desk(t.desk())          # … and replaces the desk
@@ -170,11 +170,12 @@ def test_the_crossfader_keeps_its_hold_across_a_preset_load(rig):
     detent), on the far side from each move: a cleared catch would neither
     be within the tolerance nor cross, and the fader would be dead."""
     t, reg = rig.midi.table, rig.reg
-    dim, gain = reg["output.dim"], reg["master.gain"]
+    dim, gain = reg["output.xfade"], reg["output.dim"]
+    dim.set_norm(1.0)
     gain.set_norm(0.5)
     rig.midi.poll()
     push(rig, cc(apc40.CC_XFADE, 127), cc(apc40.CC_XFADE, 64), cc(apc40.CC_MASTER, 64))
-    xf, master = row(rig, "output.dim"), row(rig, "master.gain")
+    xf, master = row(rig, "output.xfade"), row(rig, "output.dim")
     assert xf.caught and master.caught
     assert xf.last_hw > dim.norm == pytest.approx(0.5)      # the fader just above the value
     serial = t.desk_serial
@@ -224,10 +225,10 @@ def test_a_desk_edit_on_the_page_redraws_and_keeps_the_faders_catch(rig):
     from hyperspace import ui_routing
 
     t, reg = rig.midi.table, rig.reg
-    reg["master.gain"].set_norm(0.5)
+    reg["output.dim"].set_norm(0.5)
     rig.midi.poll()
     push(rig, cc(apc40.CC_MASTER, 64))
-    fader = row(rig, "master.gain")
+    fader = row(rig, "output.dim")
     assert fader.caught
     knob = next(b for b in t.desk() if b.number == 0x30)
     rig.out.sent.clear()
@@ -237,7 +238,7 @@ def test_a_desk_edit_on_the_page_redraws_and_keeps_the_faders_catch(rig):
     assert fader.caught                                          # still caught
     assert sent_cc(rig, 0x30) == [round(reg["view.speed"].norm * 127)]   # redrawn
     push(rig, cc(apc40.CC_MASTER, 30))
-    assert reg["master.gain"].norm == pytest.approx(30 / 127, abs=PICKUP_TOL)
+    assert reg["output.dim"].norm == pytest.approx(30 / 127, abs=PICKUP_TOL)
 
 
 def test_a_control_that_loses_its_row_goes_dark(rig):
@@ -327,7 +328,7 @@ def test_invariant_controls_mean_one_thing_on_both_layers(rig):
             x.pickup = False
         v = 20 if layer == "preset" else 100
         push(rig, cc(apc40.CC_MASTER, v))
-        assert reg["master.gain"].norm == pytest.approx(v / 127, abs=PICKUP_TOL), layer
+        assert reg["output.dim"].norm == pytest.approx(v / 127, abs=PICKUP_TOL), layer
         assert reg["view.speed"].norm == pytest.approx(speed), layer
         clock.tick(10.0 * (layer == "global") + 1.0)
         push(rig, note(apc40.N_METRO), note(apc40.N_METRO, 0))            # the LFO trigger
@@ -356,7 +357,7 @@ def test_a_desk_row_on_an_invariant_control_is_dropped_with_a_note(rig):
     assert f"note:0:{SHIFT}" in notes[1] and "invariant" in notes[1]
     assert "key:Z" in notes[2] and "not a desk control" in notes[2]
     assert [(b.source, b.layer) for b in t.desk()] == [("cc:0:16", "preset")]  # layer forced
-    assert row(rig, "master.gain").source == "cc:0:14"                         # untouched
+    assert row(rig, "output.dim").source == "cc:0:14"                         # untouched
 
 
 # ---------------------------------------------------------- the sorted map
@@ -375,8 +376,8 @@ def _old_map() -> list[tuple[str, str]]:
         *[(f"cc:0:{0x30 + i}", p) for i, p in enumerate(view)],
         *[(f"cc:{i}:{a.CC_FADER}", f"band.{i}.post") for i in range(6)],
         (f"cc:6:{a.CC_FADER}", "master.dyn"), (f"cc:7:{a.CC_FADER}", "master.trim"),
-        (f"cc:0:{a.CC_MASTER}", "master.gain"),
-        (f"cc:0:{a.CC_XFADE}", "output.dim"),            # overlay.bg before plan 15 WP3
+        (f"cc:0:{a.CC_MASTER}", "output.dim"),
+        (f"cc:0:{a.CC_XFADE}", "output.xfade"),            # overlay.bg before plan 15 WP3
         (f"cc:0:{a.CC_CUE}", "view.shape"),
         *[(n(a.N_SELECT, i), "band.select") for i in range(6)],
         *[(n(a.N_ACTIVATOR, i), f"view.plane.{pl}") for i, pl in enumerate(planes)],
@@ -497,7 +498,7 @@ def test_an_old_bindings_file_is_sorted_in_memory_and_its_preset_rows_carried(tm
         {"source": f"note:0:{SHIFT}", "target": "view.points", "op": "toggle"},  # on SHIFT
     ]
     v2["bindings"] = [b for b in v2["bindings"]
-                      if not (b["source"] == "cc:0:14" and b["target"] == "master.gain")]
+                      if not (b["source"] == "cc:0:14" and b["target"] == "output.dim")]
     text = json.dumps(v2)
     path.write_text(text)
     t = Bindings.load(path, legacy_midi=None)
@@ -534,11 +535,11 @@ def test_undoing_a_desk_row_redraws_and_keeps_the_layer_and_the_faders_catch(tmp
 
     r = boot(tmp_path / "home")
     t, reg, u = r.table, r.reg, r.undo
-    reg["master.gain"].set_norm(0.5)
+    reg["output.dim"].set_norm(0.5)
     frames(r)
     r.inp.queue.append(cc(apc40.CC_MASTER, 64))
     frames(r)
-    fader = next(b for b in t.midi() if b.target == "master.gain")
+    fader = next(b for b in t.midi() if b.target == "output.dim")
     assert fader.caught and fader.layer is None
     settle(r)
     u.clear()
@@ -563,7 +564,7 @@ def test_undoing_a_desk_row_redraws_and_keeps_the_layer_and_the_faders_catch(tmp
     assert r.out.sent and t.layer == "global" and fader.caught      # …and nothing dropped
     r.inp.queue.append(cc(apc40.CC_MASTER, 30))
     frames(r)
-    assert reg["master.gain"].norm == pytest.approx(30 / 127, abs=PICKUP_TOL)   # still caught
+    assert reg["output.dim"].norm == pytest.approx(30 / 127, abs=PICKUP_TOL)   # still caught
     # back on the preset layer the restored knob is drawn again
     r.inp.queue += [note(SHIFT), note(SHIFT, 0)]
     r.out.sent.clear()
@@ -575,7 +576,7 @@ def test_undoing_a_desk_row_redraws_and_keeps_the_layer_and_the_faders_catch(tmp
     r.inp.queue += [note(SHIFT), note(SHIFT, 0)]
     frames(r)
     assert t.layer == "global"
-    reg["master.gain"].set_norm(0.9)
+    reg["output.dim"].set_norm(0.9)
     t.set_desk(t.desk())
     frames(r)
     assert t.layer == "preset" and t.desk_serial == serials[0] + 1 and not fader.caught
@@ -707,7 +708,7 @@ def test_a_preset_load_stops_a_glide_on_a_performance_param_and_not_on_the_dim(t
     """D2 and D9, mid-glide. A real preset load (the host's objects,
     tests/test_undo.py's boot): the knob's glide on a performance param is
     dropped and the load's value stands; the crossfader's glide on
-    `output.dim`, a session param no preset moves, goes on arriving and
+    `output.xfade`, a session param no preset moves, goes on arriving and
     the fader keeps its hold. A desk replacement that leaves the value
     where the glide last wrote it (the load's value happens to equal it)
     still ends the glide."""
@@ -723,8 +724,9 @@ def test_a_preset_load_stops_a_glide_on_a_performance_param_and_not_on_the_dim(t
                     and b.feedback == "ring" and b.layer == "preset"
                     and not reg[b.target].integer)
 
-    dim = reg["output.dim"]
-    xfade = next(b for b in t.midi() if b.target == "output.dim")
+    dim = reg["output.xfade"]
+    dim.set_norm(1.0)
+    xfade = next(b for b in t.midi() if b.target == "output.xfade")
     r.inp.queue.append(cc(apc40.CC_XFADE, 127))     # brought up to full: caught
     frames(r, 20)
     assert xfade.caught and dim.value == 1.0 and not slews
@@ -733,12 +735,12 @@ def test_a_preset_load_stops_a_glide_on_a_performance_param_and_not_on_the_dim(t
     r.inp.queue += [cc(k.number, 0 if p.norm > 0.5 else 127, k.channel or 0),
                     cc(apc40.CC_XFADE, 0)]
     frames(r, 3)
-    assert set(slews) == {p.id, "output.dim"}
+    assert set(slews) == {p.id, "output.xfade"}
     assert r.lib.current("presets") == "TUMBLE"
     r.presets.load("TRIP")                          # mid-glide
     loaded, dim_mid = p.base, dim.norm
     frames(r)
-    assert set(slews) == {"output.dim"} and p.base == loaded and dim.norm < dim_mid
+    assert set(slews) == {"output.xfade"} and p.base == loaded and dim.norm < dim_mid
     frames(r, 20)
     assert p.base == loaded                         # the load's value stands
     assert dim.value == 0.0 and xfade.caught and not slews      # the dim arrived

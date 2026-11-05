@@ -30,6 +30,7 @@ from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer, legacy_layout
 from hyperspace.bands import BANDS, CEIL, default_params
 from hyperspace.control import Control
+from hyperspace.deck import Mix, register_xfade
 from hyperspace.geometry import RATE
 from hyperspace.library import Library
 from hyperspace.offline import load_wav
@@ -78,6 +79,7 @@ def rig(sr: float = 48_000.0, tmp_path: Path | None = None, full: bool = False):
         reg.trigger("audio.stop", "Stop", lambda: None)
         reg.toggle("audio.play", "Play", lambda: False, lambda v: None)
         Output(None, None).register(reg)
+        register_xfade(reg, Mix())
         clock = tempo.Clock(now=lambda: 0.0)
         tempo.register(reg, clock)
         lfos = lfo.LFOs(seed=1)
@@ -1604,12 +1606,13 @@ def test_the_clip_stop_save_bar_is_retired_and_the_row_freed(tmp_path, capsys):
     assert not [b for b in t.bindings if b.source in free]
 
 
-def test_an_old_crossfader_row_moves_to_the_dim_with_a_backup(tmp_path, capsys):
-    """Plan 15 WP3: a bindings.json written before the master dim carries
-    the factory crossfader row on the overlay's ground. Exactly that row is
-    swapped for the dim, noted with its plan; the file as it was is kept
-    beside itself first; the next load is quiet. A crossfader row the owner
-    changed is left alone, and no dim row is added beside it."""
+@pytest.mark.parametrize("old", ["overlay.bg", "output.dim"])
+def test_an_old_crossfader_row_moves_to_the_decks_with_a_backup(tmp_path, capsys, old):
+    """Plan 15 WP3's row on the overlay's ground and the dim's since (plan 44 D5d,
+    the owner, 2026-11-04): exactly that row is swapped for the crossfade, in one
+    pass, noted with its plan; the file as it was is kept beside itself first; the
+    next load is quiet. A crossfader row the owner changed is left alone, and no
+    row is added beside it."""
     xf = f"cc:0:{apc40.CC_XFADE}"
 
     def write(home, **change):
@@ -1617,8 +1620,8 @@ def test_an_old_crossfader_row_moves_to_the_dim_with_a_backup(tmp_path, capsys):
         for b in session_rows():
             d = b.to_json()
             if d["source"] == xf:
-                assert d == {"source": xf, "target": "output.dim", "op": "abs", "ring": 0}
-                d = {**d, "target": "overlay.bg", **change}
+                assert d == {"source": xf, "target": "output.xfade", "op": "abs", "ring": 0}
+                d = {**d, "target": old, **change}
             rows.append(d)
         path = bindings_path(home)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -1630,11 +1633,11 @@ def test_an_old_crossfader_row_moves_to_the_dim_with_a_backup(tmp_path, capsys):
     t = Bindings.load(path, legacy_midi=None)
     err = capsys.readouterr().err
     assert t.error == ""
-    assert t.notes == [f"remapped {xf}: overlay.bg → output.dim (the APC40 map of plan 15)"]
+    assert t.notes == [f"remapped {xf}: {old} → output.xfade (the APC40 map of plan 44)"]
     assert t.notes[0] in err and "kept as bindings.json.bak-v" in err
     row, = [b for b in t.bindings if b.source == xf]
     assert (row.target, row.op, row.layer, row.pickup, row.feedback) == (
-        "output.dim", "abs", None, True, None)
+        "output.xfade", "abs", None, True, None)
     assert [b.to_json() for b in t.bindings] == [b.to_json() for b in session_rows()]
     bak, = path.parent.glob("bindings.json.bak-*")
     assert json.loads(bak.read_text()) == doc                 # the file as it was
@@ -1648,11 +1651,40 @@ def test_an_old_crossfader_row_moves_to_the_dim_with_a_backup(tmp_path, capsys):
         path, doc = write(tmp_path / f"mine{k}", **change)
         t = Bindings.load(path, legacy_midi=None)
         row, = [b for b in t.bindings if b.source == xf]
-        assert (row.target, row.op) == (change.get("target", "overlay.bg"),
+        assert (row.target, row.op) == (change.get("target", old),
                                         change.get("op", "abs"))
-        assert not any(b.target == "output.dim" for b in t.bindings)
+        assert not any(b.target == "output.xfade" for b in t.bindings)
         assert t.notes == [] and json.loads(path.read_text()) == doc
         assert not list(path.parent.glob("bindings.json.bak-*"))
+
+
+def test_the_master_faders_old_row_moves_to_the_dim_and_the_gain_keeps_the_panel(tmp_path, capsys):
+    """Both rows of an old file move at once, once, with one backup; `master.gain`
+    is left with no desk row. A row learned on HOLD, TAKE or DROP goes with a note."""
+    master, xf = f"cc:0:{apc40.CC_MASTER}", f"cc:0:{apc40.CC_XFADE}"
+    rows = []
+    for b in session_rows():
+        d = b.to_json()
+        if d["source"] == master:
+            d["target"] = "master.gain"
+        elif d["source"] == xf:
+            d["target"] = "output.dim"
+        rows.append(d)
+    rows.append({"source": "note:0:81", "target": "output.take", "op": "fire"})
+    rows.append({"source": "key:SHIFT+H", "target": "output.hold", "op": "toggle"})
+    path = bindings_path(tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"schema": SCHEMA, "profile": "apc40", "bindings": rows}))
+    t = Bindings.load(path, legacy_midi=None)
+    capsys.readouterr()
+    targets = {b.source: b.target for b in t.bindings}
+    assert targets[master] == "output.dim" and targets[xf] == "output.xfade"
+    assert not {"master.gain", "output.take", "output.hold"} & {b.target for b in t.bindings}
+    assert any("HOLD, TAKE and DROP are gone" in n for n in t.notes)
+    assert len(list(path.parent.glob("bindings.json.bak-*"))) == 1
+    again = Bindings.load(path, legacy_midi=None)
+    assert again.notes == [] and not again.changed
+    assert len(list(path.parent.glob("bindings.json.bak-*"))) == 1
 
 
 def test_a_theme_row_in_an_old_bindings_file_is_remapped_to_the_preset_bank(tmp_path, capsys):

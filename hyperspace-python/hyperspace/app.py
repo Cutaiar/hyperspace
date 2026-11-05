@@ -58,7 +58,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -112,7 +112,6 @@ from .outputs import (
     Slot,
     Switches,
     View,
-    preview_size,
 )
 from .overlay import RENDER_DEFAULT, GlfwBackend, Output, register_switches, render_index
 from .params import Registry
@@ -648,7 +647,7 @@ def _bands(audio) -> tuple[float, ...]:
 
 
 def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
-                 preview=None, hold=None, monitor=None, fade=None, panel_deck=None) -> None:
+                 preview=None, monitor=None, fade=None, panel_deck=None) -> None:
     """One render frame onto every output (plan 21 WP3, "the frame in
     app.draw_render"):
 
@@ -674,14 +673,6 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
     publisher — through output 1's own tap, else its own — and is flushed
     for the control window as a presenter's frame is.
 
-    Plan 38: with the projector held (`hold`, a `hold.Hold` that is on),
-    every output is the program — drawn inside `Hold.program`, the held
-    wiring and look on the renderer — and the page's backdrop is the
-    preview instead: the live wiring and look, drawn after the outputs by
-    the hold's own renderer into the preview's tap (`_draw_preview`).
-    Output 1 then rides `monitor` (another `Preview`, the page's inset of
-    what the projector shows) when the page asked for it.
-
     Plan 44 D4: `fade` (a `deck.Fade`). At `output.xfade` 0, exactly the
     above. Above 0, before output 1's draw, deck 2 draws every output
     offscreen (`Fade.draw`) and each view carries its picture to the mix
@@ -689,7 +680,9 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
 
     Plan 44 D5c: `panel_deck`, the deck the panel is on. Off air, the page's
     backdrop is that deck's picture (`Fade.preview`), not output 1's, and a look
-    just landed there is drawn once small (`Fade.warm`)."""
+    just landed there is drawn once small (`Fade.warm`). Output 1 then rides
+    `monitor` (another `Preview`, the page's inset of what is on air) when the
+    page asked for it."""
     first = slots[0]
     win = first.win
     glfw.make_context_current(win)
@@ -708,12 +701,11 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
     first.size = (fbw, fbh)
     later = [sl for sl in slots[1:] if sl.opened and sl.presenter is not None]
     offscreen = [sl for sl in slots[1:] if sl.publish_only and sl.offscreen is not None]
-    on_hold = hold is not None and bool(getattr(hold, "on", False))
     wanted = preview is not None and preview.take()
-    off_preview = (wanted and not on_hold and fade is not None and panel_deck is not None
-                   and panel_deck is fade.off_air)
-    shown_to_panel = wanted and not on_hold and not off_preview
-    watched = on_hold and monitor is not None and monitor.take()
+    panel_off = fade is not None and panel_deck is not None and panel_deck is fade.off_air
+    off_preview = wanted and panel_off
+    shown_to_panel = wanted and not panel_off
+    watched = panel_off and monitor is not None and monitor.take()
     pubs, tap = first.publishers, first.tap
     if shown_to_panel or watched:
         pv = preview if shown_to_panel else monitor
@@ -746,14 +738,8 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
                     off_preview = fade.preview(preview, lw, lh, dpr, (fbw, fbh), first.switches)
                 ctx.screen.use()                  # output 1's window again, with its viewport
                 ctx.viewport = (0, 0, fbw, fbh)
-        if on_hold:
-            with hold.program(renderer):
-                renderer.draw_outputs(s, max(w, 1), max(h, 1), fbw / max(w, 1), views)
-        else:
-            renderer.draw_outputs(s, max(w, 1), max(h, 1), fbw / max(w, 1), views)
-        previewed = on_hold and wanted and _draw_preview(hold, renderer, ctx, s, (w, h),
-                                                         (fbw, fbh), preview, first.switches)
-        if later or shown_to_panel or watched or previewed or off_preview:
+        renderer.draw_outputs(s, max(w, 1), max(h, 1), fbw / max(w, 1), views)
+        if later or shown_to_panel or watched or off_preview:
             (flush or _gl_flush)()
         for sl, v in shown:
             try:
@@ -773,35 +759,9 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
         glfw.swap_buffers(win)
 
 
-def _draw_preview(hold, renderer, ctx, s, logical: tuple[int, int], full: tuple[int, int],
-                  preview, switches: Switches | None = None) -> bool:
-    """Plan 38: the preview frame while the projector is held — the live
-    wiring and look, drawn by the hold's renderer (`Hold.draw_preview`)
-    into the preview's tap at `hold.preview_size` (output 1's framebuffer
-    `full` under the render cap, at most `PREVIEW_MAX` on its long side),
-    then handed to the preview as its picture. Output 1's window is bound
-    again after, with its viewport. True when drawn.
-
-    Plan 38 B3: drawn with output 1's `switches` (its mutes and flips, as
-    the unheld backdrop shows output 1) at full dim — the preview is the
-    look, the room's dim stays the projector's."""
-    tap = getattr(preview, "tap", None)
-    sw = replace(switches, dim=1.0) if switches is not None else Switches()
-    if tap is None:
-        return False
-    size = preview_size(full, getattr(renderer, "max_frame", None))
-    try:
-        drew = hold.draw_preview(s, logical[0], logical[1], size, tap.fit(size),
-                                 lambda sz, fbo: View(sw, sz, target=fbo,
-                                                      viewport=(0, 0, *sz)))
-    except Exception as e:  # noqa: BLE001 — the preview must not cost the program
-        hold.error, drew = _err("preview", e), False
-    finally:
-        ctx.screen.use()
-        ctx.viewport = (0, 0, *full)
-    if drew:
-        preview.publish(tap.tex, 0.0)
-    return drew
+def control_title(meta) -> str:
+    """The control window's title: which `Deck` the panel is on."""
+    return f"{TITLE} — controls · {meta.words(meta.panel)}"
 
 
 def _desk_table(reg: Registry, table: Bindings) -> Bindings:
@@ -1204,6 +1164,9 @@ class Host:
     on_air_pointer: Pointer | None = None
     panel_pointer: Pointer | None = None
     keys_pointer: Pointer | None = None     # the keys' own: key rows and ↑/↓
+    # the crossfader and the decks (deck.MetaController): `frame` ticks it first, so
+    # every handle above reads the frame's deck on air from the frame's first line
+    meta: MetaController | None = None
 
     @property
     def adapters(self) -> tuple:
@@ -1261,7 +1224,17 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     bases beside the on-air deck's and runs its pass and apply straight
     **after** the on-air deck's, so what it reads of a session param (a
     route's scale on `master.gain`) is this frame's, landed by the on-air
-    deck, the session's lead; then its integrator."""
+    deck, the session's lead; then its integrator.
+
+    Plan 44 D5d: the crossfader comes first of all (`MetaController.tick`), so the
+    deck arriving on air is the one this frame's `dim`, `bands` and `max_frame` go
+    to, and `reg` and `router` here are that deck's."""
+    ok = True
+    if h.meta is not None:
+        try:
+            h.meta.tick(now, dt)
+        except Exception as e:  # noqa: BLE001
+            ok, h.reloader.runtime_error = False, _err("crossfader", e)
     reg, keys, router, reloader = h.reg, h.keys, h.router, h.reloader
     # the router's shared half (routing_sources.Sources, plan 44 D2): where
     # the audio lanes' names and the devices' feeds go — the router's own,
@@ -1314,7 +1287,6 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     # its rows; the hands and the bridge feed below. A device that raises
     # records itself on the registry; the frame goes on and `ok` keeps the
     # note alive until a clean frame ----
-    ok = True
     devs = h.devices
     if devs is not None:
         devs.poll(dt, now, router=router, learn=h.learn)
@@ -1557,7 +1529,7 @@ def main(argv: list[str] | None = None) -> None:
     control.library = library
 
     # the deck (deck.py, plan 44 D1): the registry, the view state, the
-    # table, the router, the banks, the presets, learn, undo and the hold,
+    # table, the router, the banks, the presets, learn and undo,
     # built by `Deck.build` in the order these lines had here. The rig
     # objects built between its lines — the hands' setup, the outputs, the
     # panel, the devices — are the hooks below, each run at its old place
@@ -1592,7 +1564,7 @@ def main(argv: list[str] | None = None) -> None:
             Path(mc.get("map", "midi_map.json")),
         ))
 
-    def panel_setup(reg: Registry, s: ViewState, *, clock, lfos, envs, seq, hold,
+    def panel_setup(reg: Registry, s: ViewState, *, clock, lfos, envs, seq,
                     output) -> Panel:
         # the Joy-Con totem (plan 47, an experiment): off unless `[totem] on`
         # says so or the pad window's word is clicked; never saved, so it may
@@ -1621,9 +1593,8 @@ def main(argv: list[str] | None = None) -> None:
         panel.output = output
         panel.outputs = slots                  # the OUTPUT page: a block per output (plan 21 WP4)
         panel.preview = Preview(ctx)           # output 1 behind the GRAPH page (2026-10-26)
-        panel.monitor = Preview(ctx)           # plan 38: while held, the projector's inset there
+        panel.monitor = Preview(ctx)           # on the deck off air, what is on air's inset there
         panel.canvas_tap = CanvasTap(ui_gl)    # the GRAPH canvas as `panel:graph` (2026-11-02)
-        panel.hold = hold
         return panel
 
     def devices_setup(reg: Registry, router: Router, learn: Learn, *, panel,
@@ -1726,6 +1697,7 @@ def main(argv: list[str] | None = None) -> None:
     panel.fade = fade                  # the SYSTEM page's second GPU block
     panel.pointer = library.pointer = meta.panel_pointer
     panel.meta_undo = meta.undo        # the footer's message slot, beside the deck's
+    panel.meta = meta                  # GRAPH's head: the deck it shows, the two verbs
     # what ⌘Z goes by (plan 44 D5b); read off the class each time, as a reloaded
     # `ui.py` re-classes the panel and a bound method would keep the old function
     undos.where(lambda: panel.in_meta_section())
@@ -1742,7 +1714,7 @@ def main(argv: list[str] | None = None) -> None:
     reloader = HotReloader(targets=lambda: [
         # the deck's objects (deck.py, plan 44 D1): the renderer and its
         # parts, the view state, the registry and every param, the marks,
-        # undo, the hold, the router, the presets, learn and the banks
+        # undo, the router, the presets, learn and the banks
         *deck.targets(),
         # deck 2 (plan 44 D4), its channels, and the fade
         *deck2.targets(),
@@ -1793,8 +1765,10 @@ def main(argv: list[str] | None = None) -> None:
         # others swapped first and output 1 last (_draw_render); the deck on air
         on_air = meta.on_air
         _draw_render(on_air.renderer, ctx, on_air.view, slots, render_watch,
-                     preview=panel.preview, hold=on_air.hold, monitor=panel.monitor, fade=fade,
+                     preview=panel.preview, monitor=panel.monitor, fade=fade,
                      panel_deck=meta.panel)
+
+    titled = [None]                     # what the control window's title last said
 
     def draw_panel(dt: float, fps: float) -> None:
         # the control window: black ground, then the imgui frame opened
@@ -1802,6 +1776,11 @@ def main(argv: list[str] | None = None) -> None:
         glfw.make_context_current(ctrl_win)
         ui_gl.clear(0.0, 0.0, 0.0, 1.0)
         panel.draw(dt, fps)
+        # the deck the panel is on, as GRAPH's head says it (plan 44 D5d, DQ7)
+        title = control_title(meta)
+        if title != titled[0]:
+            titled[0] = title
+            glfw.set_window_title(ctrl_win, title)
 
     # the stall log (watchdog.py), <home>/stall.log: a 2 s whole-loop stall,
     # a raising render draw, or 2 s with no render frame presented while the
@@ -1859,7 +1838,7 @@ def main(argv: list[str] | None = None) -> None:
                 undo=deck.undo, media=media,
                 outputs=[sl.output for sl in slots if sl.output is not None], deck=deck,
                 off_air=meta.parked, stacks=meta.stacks, on_air_pointer=meta.on_air_pointer,
-                panel_pointer=meta.panel_pointer, keys_pointer=meta.pointer(KEYS))
+                panel_pointer=meta.panel_pointer, keys_pointer=meta.pointer(KEYS), meta=meta)
 
     # smoke-test escape hatch: HYPERSPACE_FRAMES=n closes after n frames
     frames_left = int(os.environ.get("HYPERSPACE_FRAMES", "0")) or None

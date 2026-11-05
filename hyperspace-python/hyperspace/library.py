@@ -3621,13 +3621,38 @@ class DeckProject(Project):
     """The one show as one deck sees it: every field is the show's (it shares
     the show's `__dict__`), but `lib` is that deck's `DeckLibrary`, so a bank
     verb this object does (a pad on that deck's table) loads, saves and lights
-    on that deck. What a deck's `preset.*` params close over."""
+    on that deck. What a deck's `preset.*` params close over, so what a row reaches.
 
-    __slots__ = ("lib",)
+    `barred` (the meta controller's, plan 44 D5d) says why a row may not load onto
+    this deck, or None: a load from a row never changes what is on air. A save does
+    not change the picture, so it is not asked, nor is the panel's load, which is
+    the plain `Project`'s and the intentional one. None: nothing is barred."""
+
+    __slots__ = ("barred", "lib")
 
     def __init__(self, lib: DeckLibrary):        # never `Project.__init__`: nothing is new
         self.__dict__ = lib.base.project.__dict__
         self.lib = lib
+        self.barred = None
+
+    def _says_barred(self, what: str) -> bool:
+        why = self.barred() if self.barred is not None else None
+        if why is not None:
+            self.lib.say(warning=f"{what}: {why}")
+        return why is not None
+
+    def load_slot(self, k: int) -> None:
+        # (an empty slot goes on: it loads nothing, and says how to fill it)
+        if not (0 <= k < len(self.bank) and self.bank[k] is not None
+                and self._says_barred(slot_key(k))):
+            Project.load_slot(self, k)
+
+    def walk(self, step: int = 1) -> str | None:
+        return None if self._says_barred("the preset list") else Project.walk(self, step)
+
+    def home(self) -> None:
+        if not (self.startup and self._says_barred("home")):
+            Project.home(self)
 
 
 class DeckLibrary(Library):

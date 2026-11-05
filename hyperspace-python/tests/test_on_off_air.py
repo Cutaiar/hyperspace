@@ -1,0 +1,740 @@
+"""Plan 44 D5d: the two `Deck`s as the owner sees them. HOLD, TAKE and DROP are gone
+(the owner, 2026-11-04); two verbs remain, the crossfade and "copy on air to off air",
+and the panel may look at either deck.
+
+The absolute rule first: no patch reaches the other deck, by any road, either way
+round. Then what `test_hold.py` promised, as promises of the new model; each names the
+old test it replaces (DECISION-REGISTER row 697). Then the desk, the library verbs, the
+frame's first line and the head.
+"""
+
+from __future__ import annotations
+
+import ast
+import inspect
+import json
+from pathlib import Path
+from types import SimpleNamespace as NS
+
+import numpy as np
+import pytest
+from conftest import seed
+from test_graph_legible import party as _party
+from test_midi import cc, push
+from test_ui_shell import frame
+from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
+from test_undo import DT, boot
+
+from hyperspace import (
+    apc40,
+    app,
+    deck,
+    graph,
+    graphview,
+    hotreload,
+    lfo,
+    preset,
+    ui_graph,
+    ui_media,
+    undo,
+)
+from hyperspace.deck import Deck, Fade, MetaController, Mix
+from hyperspace.learn import blocked
+from hyperspace.library import PRESETS
+from hyperspace.outputs import Preview, PreviewTextures, Switches, View, preview_size
+from hyperspace.params import POSE_IDS, part_of
+from hyperspace.routing import CHASE_PARAM, Binding, Bindings
+
+CORPUS = Path(__file__).parent / "corpus" / "presets"
+SIZE = (160, 100)
+T = 7.0
+
+
+def _doc(name: str) -> dict:
+    return json.loads((CORPUS / f"{name}.json").read_text())
+
+
+# ------------------------------------------------------------------- rigs
+
+@pytest.fixture()
+def rig(tmp_path):
+    """`boot` plus deck 2, the desk and the library pointed as `app.main` points them,
+    each deck on a look of its own."""
+    r = boot(tmp_path / "home")
+    two = Deck.beside(r.deck, lfos=lfo.LFOs(seed=1))
+    meta = MetaController(r.deck, two, mix=r.mix)
+    r.meta_undo = meta.undo
+    r.lib.pointer = meta.panel_pointer
+    r.midi.point(meta.pointer("apc40"), meta.panel_pointer)
+    _looks(r.deck, two)
+    yield NS(r=r, meta=meta, one=r.deck, two=two, lib=r.lib, mix=r.mix)
+    undo.install(None)
+
+
+def _looks(first, second) -> None:
+    """Each deck on a look of its own, each undo stack quiet after it."""
+    first.presets.load("party-acid")
+    second.presets.load("party-trip")
+    assert (first.presets.current, second.presets.current) == ("ACID", "TRIP")
+    for d in (first, second):
+        d.undo.tick(1.0)
+        d.undo.tick(2.0)
+
+
+def _gl(ctx, home, *, empty: bool = False):
+    """Two decks with renderers on one context, as `app.main` builds them."""
+    from hyperspace.render import Renderer
+
+    seeded = boot(home)
+    r1 = Renderer(ctx)
+    r2 = r1.sibling()
+    audio = NS(chain=seeded.chain, on=True)
+    first = Deck.build(library=seeded.lib, control=seeded.control, audio=audio,
+                       table=lambda reg: Bindings([]), renderer=r1,
+                       attach=False, startup=False, install=False)
+    second = Deck.beside(first, renderer=r2)
+    mix = Mix()
+    meta = MetaController(first, second, mix=mix)
+    seeded.lib.pointer = meta.panel_pointer
+    fade = Fade(first, second, mix, ctx, pointer=meta.on_air_pointer)
+    if empty:
+        first.presets.load("party-acid")
+    else:
+        _looks(first, second)
+    return NS(r=seeded, lib=seeded.lib, meta=meta, one=first, two=second, fade=fade, mix=mix,
+              decks=(first, second), chain=seeded.chain)
+
+
+def _close(rig) -> None:
+    rig.fade.close()
+    for d in rig.decks:
+        d.renderer.close()
+    undo.install(None)
+
+
+def _picture(ctx, d, t: float = T) -> np.ndarray:
+    tex = ctx.texture(SIZE, 4)
+    fbo = ctx.framebuffer([tex])
+    fbo.use()
+    ctx.viewport = (0, 0, *SIZE)
+    v = View(Switches(), SIZE, target=fbo, viewport=(0, 0, *SIZE))
+    d.renderer.draw_outputs(d.view, *SIZE, 1.0, [v], t_now=t)
+    assert not v.error, v.error
+    got = np.frombuffer(fbo.read(components=4), np.uint8).reshape(SIZE[1], SIZE[0], 4).copy()
+    fbo.release()
+    tex.release()
+    return got
+
+
+def _pass(rig) -> None:
+    """Every deck's pass, on a clock that does not move, so only an edit moves a thing."""
+    for d in rig.meta.decks:
+        d.router.follow_macros()
+    for d in rig.meta.decks:
+        d.router.modulate(rig.chain, 0.0, T)
+        d.reg.apply()
+
+
+def _state(d) -> dict:
+    """What a patch is, on one deck: nothing here may move when the other acts."""
+    t = d.table
+    return {"bases": d.reg.snapshot(part="performance"),
+            "routes": [b.to_json() for b in t.routes()],
+            "desk": [b.to_json() for b in t.desk()],
+            "modifiers": t.modifiers_doc(d.reg),
+            "macros": t.macros_doc(),
+            "modgraph": d.router._modgraph_key(),
+            "spec": d.presets.graph.spec,
+            "name": d.presets.current,
+            "turn": list(d.view.ang),
+            "steps": [s.label for s in d.undo.stack]}
+
+
+# ---------------------------------------------------- the leak test, both ways
+
+def _route(rig, d):
+    d.table.add(Binding("lane:0", "view.bright", "push", 0.2))
+
+
+def _lfo_rate(rig, d):
+    rig.lib.reg["lfo.1.rate"].set(3.5)                  # (the panel's handle)
+
+
+def _modifier(rig, d):
+    d.table.add_modifier("scale", ("lane:0",), d.reg, mul=0.5)
+
+
+def _macro(rig, d):
+    d.table.set_macros({"macro.1": {"label": "m", "subs": [
+        {"base": "view.bright", "from": 0.1, "to": 0.9}]}}, d.reg)
+    rig.lib.reg["macro.1"].set(0.3)
+
+
+def _load(rig, d):
+    rig.lib.load(PRESETS, "party-wake")
+
+
+def _graph_edit(rig, d):
+    e = graphview.Edit(graph=d.presets.graph, push=lambda label: undo.push(label, load=True))
+    assert e.add_node("effect", "kaleido") is None
+
+
+def _pattern_reset(rig, d):
+    rig.lib.reset("pattern")
+
+
+def _pattern_road(rig, d):
+    p = next(p for p in d.reg if p.group == "pattern" and p.persist and part_of(p) == "performance"
+             and getattr(p.kind, "value", "") == "continuous")
+    p.set_norm(0.5 if p.norm != 0.5 else 0.25)
+
+
+def _bright(rig, d):
+    d.reg["view.bright"].set(0.17)
+    d.undo.tick(3.0)
+    d.undo.tick(4.0)
+
+
+def _undo(rig, d):
+    assert undo.here() is d.undo
+    assert d.undo.undo()
+
+
+def _save(rig, d):
+    """A save over the name both decks have loaded, and the library's watch after it,
+    with the panel on the other deck, which would land a file it saw change."""
+    other = rig.meta.decks[0] if d is rig.meta.decks[1] else rig.meta.decks[1]
+    d.reg["view.bright"].set(0.33)
+    d.presets.save_as(d.presets.current)
+    rig.meta.point_panel(other)
+    rig.lib.poll(now=10_000.0)
+    rig.meta.point_panel(d)
+
+
+# road → (what it does, a set-up before the other deck is looked at)
+ROADS = {"route": (_route, None), "lfo rate": (_lfo_rate, None), "modifier": (_modifier, None),
+         "macro": (_macro, None), "load": (_load, None), "graph edit": (_graph_edit, None),
+         "pattern strip reset": (_pattern_reset, _pattern_road), "undo": (_undo, _bright),
+         "save": (_save, None)}
+
+
+@pytest.mark.empty_frame
+@pytest.mark.parametrize("who", [0, 1], ids=["deck 1 on air acts", "deck 2 off air acts"])
+@pytest.mark.parametrize("road", list(ROADS))
+def test_no_patch_reaches_the_other_deck(ctx, tmp_path, road, who):
+    """The owner's absolute rule: whatever the panel does on its deck, by the road it
+    really goes, the other's `snapshot`, `routes()`, modgraph key and GL frame are as
+    they were to the bit. And each road does act on the deck it was on."""
+    rig = _gl(ctx, tmp_path / "rig")
+    d, other = rig.decks[who], rig.decks[1 - who]
+    act, ready = ROADS[road]
+    if road == "save":                     # the same name on both: the file is shared
+        other.presets.load(d.presets.current)
+    rig.meta.point_panel(d)
+    if ready is not None:
+        ready(rig, d)
+    _pass(rig)
+    theirs, pic = _state(other), _picture(ctx, other)
+    assert (_picture(ctx, other) == pic).all(), "the frame is not repeatable: no proof"
+    mine = _state(d)
+    act(rig, d)
+    _pass(rig)
+    assert _state(d) != mine or road == "save", "the road did nothing to prove"
+    now = _state(other)
+    assert {k: (theirs[k], now[k]) for k in theirs if theirs[k] != now[k]} == {}
+    assert (_picture(ctx, other) == pic).all()
+    assert ctx.error == "GL_NO_ERROR"
+    _close(rig)
+
+
+def test_a_pad_press_on_the_off_air_deck_reaches_only_it(rig):
+    """A library verb by the row road, the one a panel road cannot show."""
+    rig.meta.register("apc40", 2)
+    rig.meta.move_player(2, "off_air")
+    theirs = _state(rig.one)
+    rig.two.presets.lib.project.bank[0] = "party-wake"
+    rig.two.reg["preset.select"].set(0)
+    assert rig.two.presets.current == "WAKE"
+    assert _state(rig.one) == theirs
+
+
+# --------------------------------------------------- what test_hold promised, rewritten
+
+@pytest.mark.empty_frame
+def test_on_gl_on_air_keeps_its_frame_while_the_other_deck_is_edited(ctx, tmp_path):
+    """Was `..._the_projector_keeps_the_held_frame_while_the_preview_shows_the_edit`:
+    a new preset and a turned knob on the deck off air, and on air is the same bytes;
+    the fader across, the outputs show the edit."""
+    rig = _gl(ctx, tmp_path / "rig")
+    rig.meta.point_panel(rig.two)
+    before = _picture(ctx, rig.one)
+    assert before[..., :3].max() > 0
+    rig.two.presets.load("party-wake")
+    rig.two.reg["view.bright"].set(0.2)
+    assert (_picture(ctx, rig.one) == before).all()
+    edited = _picture(ctx, rig.two)
+    assert not (edited == before).all()
+    rig.mix.xfade = 1.0
+    rig.meta.tick(T, DT)
+    assert rig.meta.on_air is rig.two and rig.fade.k == 0.0
+    assert (_picture(ctx, rig.meta.on_air) == edited).all()
+    _close(rig)
+
+
+@pytest.mark.empty_frame
+def test_on_gl_a_bus_cable_cut_off_air_stays_off_the_picture_on_air(ctx, tmp_path):
+    """Was `..._a_bus_cable_cut_after_the_hold_stays_off_the_projector`: the cuts are
+    the preset's (plan 44 D3), so each deck's renderer reads its own."""
+    rig = _gl(ctx, tmp_path / "rig")
+    rig.two.presets.load("party-acid")
+    before = _picture(ctx, rig.one)
+    assert (_picture(ctx, rig.two) == before).all()
+    rig.two.presets.bus = rig.two.presets.bus.cutting(graph.bus_wire(1, "image"))
+    assert rig.two.renderer.rig_source is rig.two.presets
+    assert _picture(ctx, rig.two)[..., :3].max() == 0
+    assert (_picture(ctx, rig.one) == before).all()
+    _close(rig)
+
+
+@pytest.mark.empty_frame
+def test_on_gl_a_graph_edit_off_air_leaves_the_wiring_on_air(ctx, tmp_path):
+    """Was `..._the_program_draws_the_held_wiring_while_a_graph_edit_lands`."""
+    rig = _gl(ctx, tmp_path / "rig")
+    rig.meta.point_panel(rig.two)
+    wiring, built = rig.one.renderer.wiring, _picture(ctx, rig.one)
+    e = graphview.Edit(graph=rig.two.presets.graph, push=lambda s: undo.push(s, load=True))
+    assert e.add_node("effect", "kaleido") is None
+    _picture(ctx, rig.two)
+    assert rig.one.renderer.wiring is wiring
+    assert (_picture(ctx, rig.one) == built).all()
+    _close(rig)
+
+
+@pytest.mark.empty_frame
+def test_on_gl_a_blank_graph_off_air_leaves_on_air_whole_and_a_fade_into_it_is_black(ctx, tmp_path):
+    """Was `..._a_blank_graph_landed_while_held_leaves_the_projector_whole`. And the
+    owner, 2026-11-04: a crossfade may fade into an empty deck, which is black."""
+    rig = _gl(ctx, tmp_path / "rig", empty=True)
+    assert rig.two.presets.current is None and rig.two.presets.graph.spec is None
+    before = _picture(ctx, rig.one)
+    assert before[..., :3].max() > 0
+    assert _picture(ctx, rig.two)[..., :3].max() == 0
+    rig.mix.xfade = 1.0
+    rig.meta.tick(T, DT)
+    assert rig.meta.on_air is rig.two
+    assert _picture(ctx, rig.meta.on_air)[..., :3].max() == 0
+    _close(rig)
+
+
+def test_a_bus_cut_off_air_is_on_that_deck_and_its_undo_puts_it_back(rig):
+    """Was `test_a_bus_cable_cut_after_the_hold...` and `test_drop_puts_a_bus_cable_cut...`,
+    headless: one step on the deck it was cut on, the other deck's cuts as they were."""
+    rig.meta.point_panel(rig.two)
+    cuts = rig.one.presets.bus
+    undo.push("cut", load=True)
+    rig.two.presets.bus = rig.two.presets.bus.cutting(graph.bus_wire(1, "image"))
+    assert rig.one.presets.bus is cuts
+    assert graph.bus_wire(1, "image") in rig.two.presets.bus.cut
+    assert undo.here().undo()
+    assert graph.bus_wire(1, "image") not in rig.two.presets.bus.cut
+
+
+def test_edits_off_air_come_back_one_step_at_a_time_and_on_air_never_moves(rig):
+    """Was `test_drop_goes_back_to_the_hold_point_as_one_undo_step`: there is no Drop,
+    so ⌘Z on the deck the panel is on is how an edit goes back."""
+    rig.meta.point_panel(rig.two)
+    theirs = _state(rig.one)
+    was = rig.two.reg["view.bright"].base
+    rig.two.reg["view.bright"].set(0.21)
+    rig.two.undo.tick(3.0)
+    rig.two.undo.tick(4.0)
+    assert len(rig.two.undo.stack) >= 1 and undo.here() is rig.two.undo
+    assert undo.here().undo()
+    assert rig.two.reg["view.bright"].base == pytest.approx(was)
+    assert _state(rig.one) == theirs
+
+
+def test_a_whole_new_look_off_air_is_one_step_back_and_one_forward(rig):
+    """Was `test_drop_after_a_whole_new_look_is_one_undo_step_back_and_one_forward`."""
+    rig.meta.point_panel(rig.two)
+    was, n = _state(rig.two)["bases"], len(rig.two.undo.stack)
+    rig.lib.load(PRESETS, "party-wake")
+    assert rig.two.presets.current == "WAKE" and len(rig.two.undo.stack) == n + 1
+    assert undo.here().undo()
+    assert rig.two.presets.current == "TRIP" and _state(rig.two)["bases"] == was
+    assert undo.here().redo()
+    assert rig.two.presets.current == "WAKE"
+    assert rig.one.presets.current == "ACID"
+
+
+def test_a_load_resets_the_delays_of_its_own_deck_only(rig):
+    """Was `test_a_load_while_held_resets_the_previews_delays_and_the_projectors_at_take`."""
+    reset = []
+    for d, name in ((rig.one, "one"), (rig.two, "two")):
+        d.presets.graph.attach(NS(wiring=None, ghost_states={}, name=name,
+                                  reset_delays=lambda name=name: reset.append(name)))
+    rig.two.presets.load("party-wake")
+    assert reset == ["two"]
+
+
+def test_a_load_off_air_keeps_the_eye_and_turn_on_air_and_brings_its_own(rig):
+    """Was `test_a_preset_loaded_under_hold_keeps_the_projectors_eye_and_turn_until_take`.
+    Each deck has its own view, so nothing waits: the deck it landed on has its pose."""
+    rig.meta.point_panel(rig.two)
+    one = rig.one
+    fov, turn = one.reg["eye.fov"].base, list(one.view.ang)
+    doc = _doc("dial")
+    doc["values"]["eye.fov"] = 70.0
+    pose = [0.1, -0.2, 0.3, 0.4, -0.5, 0.6]
+    doc[preset.POSE_KEY] = dict(zip(POSE_IDS, pose, strict=True))
+    rig.two.presets.load_doc(doc)
+    assert rig.two.view.ang == pose and rig.two.reg["eye.fov"].base == 70.0
+    assert one.view.ang == turn and one.reg["eye.fov"].base == fov
+    saved = rig.two.presets.document("x")[preset.POSE_KEY]
+    assert [saved[k] for k in POSE_IDS] == pose
+
+
+def test_the_output_controls(rig):
+    """Was `test_the_output_controls`: the crossfader and its seconds, the meta
+    controller's, both decks' one param; hold, take and drop are gone."""
+    reg = rig.one.reg
+    for pid in ("output.xfade", "output.xfade_s"):
+        p = reg[pid]
+        assert p is rig.two.reg[pid] and part_of(p) == "session"
+        assert p.group == "output" and not p.persist and not p.modulatable
+    for pid in ("output.hold", "output.take", "output.drop"):
+        assert pid not in reg
+    assert not hasattr(rig.one, "hold") and not hasattr(rig.one.presets.graph, "hold")
+    assert not hasattr(reg, "chase_guard")
+    assert not (Path(deck.__file__).parent / "hold.py").exists()
+    assert "hold" not in hotreload.MODULES
+
+
+def test_the_two_verbs_on_the_rows_of_the_desk(tmp_path):
+    """Was `test_learned_desk_buttons_light_while_held`: what the desk has now is its
+    crossfader and its MASTER, the factory's rows over fake ports, each moving the
+    meta controller's param whichever deck the desk's player is on."""
+    r = boot(tmp_path / "home")
+    two = Deck.beside(r.deck, lfos=lfo.LFOs(seed=1))
+    meta = MetaController(r.deck, two, mix=r.mix)
+    r.midi.point(meta.pointer("apc40"), meta.panel_pointer)
+    r.mix.xfade = 0.0
+    for on_air in (True, False):
+        r.mix.xfade = 0.0
+        if not on_air:
+            meta.register("apc40", 2)
+            meta.move_player(2, "off_air")
+        assert (r.midi.reg is r.reg) is on_air
+        xf, dim = r.reg["output.xfade"], r.reg["output.dim"]
+        rows = {b.target: b for b in r.midi.table.bindings}
+        rows["output.xfade"].caught = rows["output.dim"].caught = False
+        push(r, cc(apc40.CC_XFADE, 0), cc(apc40.CC_XFADE, 64))
+        assert xf.value == pytest.approx(64 / 127, abs=0.01), on_air
+        push(r, cc(apc40.CC_MASTER, 127), cc(apc40.CC_MASTER, 64))
+        assert dim.value == pytest.approx(64 / 127, abs=0.02), on_air
+    undo.install(None)
+
+
+def test_preview_size_keeps_the_aspect_under_both_caps():
+    """Kept from `test_hold`: the deck off air's backdrop still draws at it."""
+    assert preview_size((1920, 1080), None) == (1280, 720)
+    assert preview_size((1920, 1080), (960, 540)) == (960, 540)
+    assert preview_size((640, 360), None) == (640, 360)
+
+
+def test_the_head_and_the_title_say_which_deck_the_panel_is_on(rig):
+    """Was `test_the_head_line_says_how_long_and_what_changed`. DQ7."""
+    meta = rig.meta
+    assert meta.words(rig.one) == "deck 1 · on air" and meta.words(rig.two) == "deck 2 · off air"
+    assert app.control_title(meta).endswith("controls · deck 1 · on air")
+    panel = NS(meta=meta)
+    assert not ui_graph.panel_off_air(panel) and not ui_graph.panel_off_air(NS())
+    meta.point_panel(rig.two)
+    assert ui_graph.panel_off_air(panel)
+    assert app.control_title(meta).endswith("controls · deck 2 · off air")
+    rig.mix.xfade = 1.0
+    meta.tick(T, DT)
+    assert meta.words(rig.two) == "deck 2 · on air" and not ui_graph.panel_off_air(panel)
+    assert meta.words(rig.one) == "deck 1 · off air"
+
+
+def _draws(monkeypatch, log, size=None):
+    from test_app_boundary import _Ctx, _rig_slots, _SwapGlfw
+
+    monkeypatch.setattr(app, "glfw", _SwapGlfw(log, {"w1": size} if size else None or {}))
+    return _Ctx(log), _rig_slots("x")
+
+
+class _Tap:
+    tex = "tap-tex"
+
+    def fit(self, size):
+        return "fbo"
+
+
+def _fade_stub(log, off):
+    return NS(off_air=off, k=0.0, warm_deck=None, begin_frame=lambda: None,
+              warm=lambda *a: False, draw=lambda *a: False,
+              preview=lambda pv, *a: (log.append("preview"), pv.publish("deck-tex", 0.0), True)[-1])
+
+
+def test_off_air_the_outputs_draw_on_air_and_the_backdrop_is_the_panels_deck(monkeypatch):
+    """Was `test_held_the_outputs_draw_the_program_and_the_preview_follows`: every output
+    from the on-air renderer, output 1 riding the inset (`monitor`), the page's backdrop
+    the deck off air's own picture, one flush."""
+    log: list[str] = []
+    ctx, slots = _draws(monkeypatch, log, (1600, 1000))
+    calls = []
+    main = NS(bg_alpha=1.0, max_frame=None,
+              draw_outputs=lambda s, w, h, dpr, views, t_now=None: calls.append(views))
+    off = object()
+    preview, monitor = Preview(), Preview()
+    preview.tap, monitor.tap = _Tap(), object()
+    preview.want()
+    monitor.want()
+    app._draw_render(main, ctx, object(), slots, flush=lambda: log.append("flush"),
+                     preview=preview, monitor=monitor, fade=_fade_stub(log, off), panel_deck=off)
+    assert len(calls) == 1 and calls[0][0].publish == [monitor]
+    assert calls[0][0].tap is monitor.tap
+    assert "preview" in log and preview.tex == "deck-tex"
+    assert not preview.wanted and not monitor.wanted and log.count("flush") == 1
+
+
+def test_with_the_page_closed_the_deck_off_air_draws_nothing(monkeypatch):
+    """Was `test_held_with_the_page_closed_draws_no_preview`."""
+    log: list[str] = []
+    ctx, slots = _draws(monkeypatch, log)
+    off = object()
+    main = NS(bg_alpha=1.0, draw_outputs=lambda *a, **k: log.append("draw"))
+    app._draw_render(main, ctx, object(), slots, flush=lambda: log.append("flush"),
+                     preview=Preview(), monitor=Preview(), fade=_fade_stub(log, off), panel_deck=off)
+    assert log.count("draw") == 1 and "preview" not in log and "flush" not in log
+
+
+def test_on_the_on_air_deck_the_backdrop_is_output_1_and_no_inset(monkeypatch):
+    log: list[str] = []
+    ctx, slots = _draws(monkeypatch, log)
+    calls = []
+    on, off = object(), object()
+    main = NS(bg_alpha=1.0, draw_outputs=lambda s, w, h, dpr, views, t_now=None: calls.append(views))
+    preview, monitor = Preview(), Preview()
+    preview.tap = object()
+    preview.want()
+    monitor.want()
+    app._draw_render(main, ctx, object(), slots, flush=lambda: None, preview=preview,
+                     monitor=monitor, fade=_fade_stub(log, off), panel_deck=on)
+    assert calls[0][0].publish == [preview] and monitor.wanted
+
+
+@pytest.mark.empty_frame
+def test_the_on_air_inset_and_red_frame_draw_only_off_air(shell_rig):  # noqa: F811
+    """Was `test_the_projector_inset_draws_framed_while_held`."""
+    from imgui_bundle import imgui
+
+    asked = []
+    mon = NS(tex=NS(glo=7, size=(160, 90)), want=lambda: asked.append(True))
+    one, two = object(), object()
+    panel = NS(meta=NS(panel=two, on_air=one), monitor=mon)
+    imgui.new_frame()
+    imgui.begin("probe")
+    try:
+        dl = imgui.get_foreground_draw_list()
+        before = dl.vtx_buffer.size()
+        ui_graph._monitor(NS(meta=NS(panel=one, on_air=one), monitor=mon), (0.0, 0.0), (800.0, 600.0))
+        assert not asked and dl.vtx_buffer.size() == before
+        ui_graph._monitor(panel, (0.0, 0.0), (800.0, 600.0))
+        assert asked == [True] and dl.vtx_buffer.size() > before
+    finally:
+        imgui.end()
+        imgui.end_frame()
+
+
+def _on_party(rig):
+    seed(rig.lib.home, "presets")
+    return _party(rig)
+
+
+def test_the_page_wants_its_thumbnails_from_the_panels_deck(shell_rig):  # noqa: F811
+    """Was `test_held_the_page_wants_from_the_previews_thumbnails`: each deck's own
+    `PreviewTextures`, whichever is on air."""
+    r = shell_rig
+    st = _on_party(r)
+    g = r.panel.renderer._graph
+    mine, theirs = PreviewTextures(None), PreviewTextures(None)
+    r.panel.renderer = NS(_graph=g, thumbs=mine, stats={})
+    r.panel.preview, r.panel.monitor = Preview(), Preview()
+    st["preset_only"], st["pan"] = False, (-1600.0, 0.0)
+    frame(r.panel, "graph")
+    frame(r.panel, "graph")
+    got = ui_graph._state(r.panel)
+    assert got["thumbs"] is mine and got["preview"] is r.panel.preview
+    assert mine.wanted and not theirs.wanted
+
+
+@pytest.mark.empty_frame
+def test_on_gl_each_deck_makes_its_own_thumbnails(ctx, tmp_path):
+    """Was `..._held_the_preview_renderer_makes_the_thumbnails_and_the_main_none`, and
+    `..._a_hold_with_the_page_closed_makes_no_thumbnail`: only a renderer the page
+    asked of makes any; the deck off air's are its own."""
+    rig = _gl(ctx, tmp_path / "rig")
+    one, two = rig.one.renderer, rig.two.renderer
+    _picture(ctx, rig.two)                         # page closed: nothing asked
+    assert two.thumbs.count == 0 and not two.thumbs.tex
+    assert two.thumbs is not one.thumbs
+    panel = NS(renderer=two, preview=Preview())
+    th, _, _ = ui_graph.picture_sources(panel)
+    assert th is two.thumbs
+    th.want({"scene": "picture"})
+    _picture(ctx, rig.two)
+    assert two.thumbs.count == 1 and "scene" in two.thumbs.tex and one.thumbs.count == 0
+    _close(rig)
+
+
+# ------------------------------------------------------- the reserved desk controls
+
+@pytest.mark.parametrize("control", apc40.META_CONTROLS)
+def test_no_preset_may_learn_or_bind_the_reserved_controls(rig, control):
+    """The owner: the APC "inherits our generic controller setup ... and it should have
+    extensions". Refused whatever the table holds on it, so a deleted row frees nothing."""
+    table = rig.two.table
+    assert blocked(table, control) == "invariant"
+    table.session.set_rows([b for b in table.session.rows if b.source != control])
+    assert not any(b.source == control for b in table.bindings)
+    assert blocked(table, control) == "invariant"
+    notes = table.set_desk([Binding(control, "view.bright", "abs")])
+    assert any("invariant" in n for n in notes)
+    assert not any(b.source == control for b in table.desk())
+
+
+def test_a_second_apc_gets_the_same_and_another_profile_does_not():
+    t = Bindings.factory("apc40")
+    assert t.is_invariant(Binding(f"cc@apc2:0:{apc40.CC_XFADE}", "x", "abs", layer="preset"))
+    other = Bindings([], profile="launchpad")
+    assert not other.is_invariant(Binding(f"cc:0:{apc40.CC_XFADE}", "x", "abs", layer="preset"))
+
+
+def test_the_crossfader_keeps_its_catch_and_a_timed_fade_is_not_undoable(rig):
+    meta = rig.meta
+    n = len(rig.one.undo.stack), len(meta.undo.stack)
+    rig.one.reg["output.xfade_s"].set(0.0)
+    meta.crossfade()
+    meta.tick(T, DT)
+    for k in range(3):
+        for s in meta.stacks:
+            s.tick(T + k)
+    assert meta.on_air is rig.two
+    assert (len(rig.one.undo.stack), len(meta.undo.stack)) == n
+
+
+# ----------------------------------------------------------------- the library verbs
+
+@pytest.mark.parametrize("verb", ["preset.select", "preset.next", "preset.prev", "preset.load.0",
+                                  "preset.list.next", "preset.home"])
+def test_a_library_verb_from_a_row_on_air_is_refused_in_words(rig, verb):
+    """The owner, 2026-11-04: no preset changes on air from the desk or a pad. A row acts
+    on the deck its player is on, and that deck is on air."""
+    d = rig.one
+    project = d.presets.lib.project
+    project.bank[0], project.bank[1] = "party-wake", "party-tumble"
+    project.startup = "party-wake"
+    theirs = _state(d)
+    rig.lib.warning = ""
+    if verb == "preset.select":
+        d.reg[verb].set(0)
+    else:
+        d.reg[verb].fire()
+    assert _state(d) == theirs
+    assert "on air" in rig.lib.warning and "not loaded" in rig.lib.warning
+
+
+def test_the_same_pad_off_air_loads_there_with_its_light(rig):
+    project = rig.two.presets.lib.project
+    project.bank[0] = "party-wake"
+    rig.two.reg["preset.select"].set(0)
+    assert rig.two.presets.current == "WAKE" and project.active == 0
+    assert rig.one.presets.lib.project.active != 0
+
+
+def test_the_pad_follows_the_crossfader_off_the_air(rig):
+    """Across the middle the deck that was on air takes a pad, and the other refuses."""
+    project = rig.one.presets.lib.project
+    project.bank[0] = "party-wake"
+    rig.mix.xfade = 1.0
+    rig.meta.tick(T, DT)
+    rig.one.reg["preset.select"].set(0)
+    assert rig.one.presets.current == "WAKE"
+    was = rig.two.presets.current
+    rig.two.reg["preset.select"].set(0)
+    assert rig.two.presets.current == was
+
+
+def test_between_the_ends_both_decks_are_on_air_and_a_pad_is_refused(rig):
+    project = rig.two.presets.lib.project
+    project.bank[0] = "party-wake"
+    rig.mix.xfade = 0.3
+    was = rig.two.presets.current
+    rig.lib.warning = ""
+    rig.two.reg["preset.select"].set(0)
+    assert rig.two.presets.current == was and "between its ends" in rig.lib.warning
+
+
+def test_an_empty_pad_says_how_to_fill_it_and_a_hold_still_saves_on_air(rig):
+    d = rig.one
+    project = d.presets.lib.project
+    empty = project.next_empty()
+    rig.lib.warning = ""
+    d.reg["preset.select"].set(empty)
+    assert "an empty slot" in rig.lib.warning
+    was = d.presets.current
+    assert d.reg["preset.select"].held(empty)
+    assert project.bank[empty] is not None and d.presets.current != was
+    assert rig.two.presets.current == "TRIP"
+
+
+def test_the_panels_own_load_on_air_is_the_intentional_one(rig):
+    rig.lib.load(PRESETS, "party-wake")
+    assert rig.one.presets.current == "WAKE"
+
+
+# --------------------------------------------------------- the frame and the panel
+
+def test_the_crossfader_ticks_first_so_the_handles_read_the_deck_arriving(rig):
+    """D5c's seam: the deck arriving must get this frame's `dim`, `bands` and
+    `max_frame`, so `tick` is the frame's first act, before `h.reg`."""
+    src = inspect.getsource(app.frame)
+    assert src.index("h.meta.tick(now, dt)") < src.index("reg, keys, router, reloader = h.reg")
+    assert src.index("h.meta.tick(now, dt)") < src.index("h.clock.tick(now)")
+    assert "meta=meta" in inspect.getsource(app.main)
+    assert "hold" not in inspect.signature(app._draw_render).parameters
+
+
+def test_a_raising_tick_costs_the_frame_nothing():
+    """(The guard every block of `frame` has: a hot reload's fix comes next save.)"""
+    tree = ast.parse(inspect.getsource(app.frame))
+    first = next(n for n in tree.body[0].body if isinstance(n, ast.If))
+    assert any(isinstance(n, ast.Try) for n in first.body)
+
+
+def test_the_media_page_reads_the_channels_of_the_panels_deck(rig):
+    """D5c's seam: `media_of` read deck 1's whichever deck the panel was on."""
+    one, two = NS(name="one"), NS(name="two")
+    rig.one.reg.media, rig.two.reg.media = one, two
+    panel = NS(media=NS(state=one), reg=rig.one.reg)
+    assert ui_media.media_of(panel) is one
+    panel.reg = rig.two.reg
+    assert ui_media.media_of(panel) is two
+    assert ui_media.media_of(NS(media=NS(state=one))) is one          # a stand-in's
+
+
+def test_the_chase_on_the_deck_off_air_works_and_stays_there(rig):
+    """Row 656 went with the hold: nothing refuses a press."""
+    rig.two.reg[CHASE_PARAM].set(True)
+    assert rig.two.reg.chasing and not rig.one.reg.chasing
+    rig.two.reg[CHASE_PARAM].set(False)
+
+
+@pytest.mark.parametrize("words", ["HOLD", "TAKE", "DROP", "projector is held", "preview"])
+def test_no_tip_still_names_the_hold(rig, words):
+    """REVIEW's "text matches the current model", over every param's own words."""
+    for p in rig.one.reg:
+        assert words not in (p.tip or ""), p.id

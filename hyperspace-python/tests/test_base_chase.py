@@ -3,8 +3,7 @@ base; let go, the look stays where the performer left it.
 
 The param model first, against a twin the verb never touches (what shows is
 what would have shown), then the rig: the real router's rows, undo's one step
-per hold, the dirty dot, the projector's hold, Learn, and two decks over one
-session."""
+per hold, the dirty dot, Learn, and two decks over one session."""
 
 from __future__ import annotations
 
@@ -16,7 +15,6 @@ import mido
 import pytest
 from test_undo import boot, frames, labels
 
-from hyperspace import hold as H
 from hyperspace import lfo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
@@ -680,64 +678,6 @@ def test_the_turn_commits_with_no_step(rig):
     assert p.base == pytest.approx(shown, abs=0.05)
 
 
-# ---------------------------------------------------------------- the projector's hold
-
-@pytest.fixture()
-def held(rig):
-    rig.renderer = SimpleNamespace(wiring=None, ghost_states={})
-    rig.hold = H.Hold(rig.reg, rig.renderer, undo=rig.undo, section=rig.presets.graph)
-    H.register(rig.reg, rig.hold)
-    return rig
-
-
-def test_under_the_projectors_hold_the_press_is_refused(held):
-    p = routed(held)
-    held.out_value[0] = 0.6
-    go(held, 2)
-    base = p.base
-    assert held.hold.engage()
-    held.reg[CHASE_PARAM].set(True)
-    assert not held.reg[CHASE_PARAM].value and not held.reg.chasing
-    go(held, 2)
-    assert p.base == pytest.approx(base) and held.hold.changed() == []
-    held.hold.take()
-    held.reg[CHASE_PARAM].set(True)
-    assert held.reg.chasing, "let go of the hold, the verb works"
-
-
-def test_engaging_the_hold_lets_the_verb_go_and_keeps_its_commit(held):
-    p = routed(held)
-    held.out_value[0] = 0.6
-    go(held, 2)
-    held.reg[CHASE_PARAM].set(True)
-    go(held, 2)
-    shown = p.base
-    assert held.hold.engage()
-    assert not held.reg.chasing and held.undo._open is None and held.undo._kept is None
-    assert labels(held) == [CHASE_LABEL], "the step closed before the point Drop goes back to"
-    held.out_value[0] = 0.5
-    go(held, 3)
-    assert p.base == pytest.approx(shown) and held.hold.changed() == []
-    held.hold.drop()
-    assert p.base == pytest.approx(shown), "Drop goes back to the hold's point, the commit in it"
-
-
-def test_drop_does_not_jump_with_the_source_still_out(held):
-    p = routed(held)
-    held.out_value[0] = 0.6
-    go(held, 2)
-    held.reg[CHASE_PARAM].set(True)
-    go(held, 2)
-    held.reg[CHASE_PARAM].set(False)
-    shown = p.value
-    assert held.hold.engage()
-    p.set(p.base * 0.5)                        # the operator builds the next look
-    go(held, 2)
-    held.hold.drop()
-    go(held, 2)
-    assert p.value == pytest.approx(shown)
-
-
 # ---------------------------------------------------------------- two decks
 
 def beside(r):
@@ -792,18 +732,6 @@ def test_deck_2s_control_uses_deck_2s_undo(rig):
     b.reg[CHASE_PARAM].set(False)
     assert b.undo._kept is None
     assert [s.label for s in b.undo.stack] == [CHASE_LABEL] and labels(rig) == []
-
-
-def test_the_hold_refuses_and_lets_go_on_every_deck(held):
-    routed(held)
-    b = beside(held)
-    assert b.chase(True)
-    go_both(held, b)
-    assert held.hold.engage()
-    assert not b.reg.chasing and b.undo._kept is None, "engaging lets deck 2 go too"
-    assert not b.chase(True) and not b.reg[CHASE_PARAM].value, "and a press there is refused"
-    held.hold.take()
-    assert b.chase(True)
 
 
 # ---------------------------------------------------------------- pressing it

@@ -462,7 +462,12 @@ APC_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float]] = {
     (f"note:0:{apc40.N_TAP}", "theme.next", "toggle", 1.0): ("tempo.tap", "toggle", 1.0),
     (f"note:0:{apc40.N_NUDGE_P}", "view.shape", "step", 1.0): ("tempo.nudge", "step", 1.0),
     (f"note:0:{apc40.N_NUDGE_M}", "view.shape", "step", -1.0): ("tempo.nudge", "step", -1.0),
-    (f"cc:0:{apc40.CC_XFADE}", "overlay.bg", "abs", 1.0): ("output.dim", "abs", 1.0),
+    (f"cc:0:{apc40.CC_XFADE}", "overlay.bg", "abs", 1.0): ("output.xfade", "abs", 1.0),
+    # plan 44 D5d (the owner, 2026-11-04, overturning row 559): the crossfader is
+    # the decks', the MASTER fader the dim, and `master.gain` is the panel's. One
+    # pass applies one key, so the old row above goes straight there too
+    (f"cc:0:{apc40.CC_XFADE}", "output.dim", "abs", 1.0): ("output.xfade", "abs", 1.0),
+    (f"cc:0:{apc40.CC_MASTER}", "master.gain", "abs", 1.0): ("output.dim", "abs", 1.0),
     **BANK_REMAP,
 }
 # Plan 24 C1 made the render toggles on scene launch 1–4 invariant
@@ -485,7 +490,8 @@ FADER_SHIFT_ROWS: frozenset[tuple[str, str, str, float]] = frozenset(
     for ch, pid in zip(apc40.TRACK_FADERS, apc40.SHIFT_FADERS))
 # which plan moved or added each source, for the note `remap_factory`
 # writes; a source not named here is plan 09's
-APC_REMAP_PLAN = {f"cc:0:{apc40.CC_XFADE}": "plan 15",
+APC_REMAP_PLAN = {f"cc:0:{apc40.CC_XFADE}": "plan 44",
+                  f"cc:0:{apc40.CC_MASTER}": "plan 44",
                   f"note:0:{apc40.N_OVERDUB}": "plan 15",
                   **{f"note:{k}:{apc40.N_CLIPSTOP}": "plan 15" for k in range(8)},
                   **{source: "plan 19" for _k, source in _FAR_PADS},
@@ -493,6 +499,11 @@ APC_REMAP_PLAN = {f"cc:0:{apc40.CC_XFADE}": "plan 15",
                   **{source: "plan 24" for source, *_ in FADER_SHIFT_ROWS},
                   f"note:{apc40.SAVE[1]}:{apc40.SAVE[0]}": "plan 24",
                   SEQ_PAGE_SOURCE: "plan 31"}
+# HOLD, TAKE and DROP went (plan 44 D5d, the owner, 2026-11-04): a row learned on
+# one drops at the next load, with a note and the file's backup
+GONE_TARGETS = frozenset(("output.hold", "output.take", "output.drop"))
+# Each profile's controls reserved for the meta controller (`Bindings.is_invariant`)
+META_CONTROLS: dict[str, tuple[str, ...]] = {"apc40": apc40.META_CONTROLS}
 # Factory preset-layer rows a later plan took for the session, as (source,
 # target, op, value): plan 19's sixteen shape pads. Every preset saved
 # before it holds them in its `desk`; `Bindings.set_desk` drops such a row
@@ -1380,6 +1391,11 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
         if key in RETIRED_ROWS:
             notes.append(f"removed {b.source} → {b.target} (the clip-stop SAVE AS bar is "
                          "retired: hold an empty bank pad to save into it; the row is free)")
+            continue
+        if b.target in GONE_TARGETS:
+            notes.append(f"removed {b.source} → {b.target} (HOLD, TAKE and DROP are gone: "
+                         "the crossfade and \"copy on air to off air\" replace them; the "
+                         "row is free)")
             continue
         hit = APC_REMAP.get(key)
         if hit is not None:
@@ -2564,10 +2580,15 @@ class Bindings:
     def is_invariant(self, b: Binding, rows: list[Binding] | None = None) -> bool:
         """Is `b`'s control invariant — SHIFT (the first role's latch), or
         the control of an enabled layer-None row on the same device
-        (`rows`, when the caller has them)? A layered row on such a control
+        (`rows`, when the caller has them), or one of the profile's
+        controls reserved for the meta controller (`META_CONTROLS`, whatever
+        the table holds on it: plan 44 D5d)? A layered row on such a control
         never acts and never lights (D6)."""
         if not b.is_midi:
             return False
+        if any(Binding(b.bare, "").overlaps(Binding(s, ""))
+               for s in META_CONTROLS.get(self.profile, ())):
+            return True
         if self.is_primary(b.device) and Binding(b.bare, "").overlaps(_SHIFT):
             return True
         # a page's control while it is up: the page's, so no Learn takes it.

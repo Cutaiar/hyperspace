@@ -77,8 +77,7 @@ twice is renamed as ever (hands 1 lands as `hands.2`, a look-back as
 and a host that already has it refuses the spawn in words, nothing landed
 (`Landing.taken`, `Landing.refusal`) — but for the dream (`REPLACEABLE`,
 wave 3 P2): the conflict sheet asks to replace the host's, whose wires and
-values go (`Landing.replacing`, `graphview.Edit.spawn`), and only what the
-held program alone keeps stays refused, there being nothing to replace.
+values go (`Landing.replacing`, `graphview.Edit.spawn`).
 """
 
 from __future__ import annotations
@@ -183,9 +182,6 @@ NOT_HELD_WORDS = "{name} is no node a patch holds; left out"
 # (a spawn, wave 3 P1) the single-instance nodes the host already has
 TAKEN_WORDS = ("{name} not spawned: this preset already has {nodes}, and a frame holds one "
                "of each — delete it here first; nothing landed")
-# (the same, of what only the held program keeps: nothing here to delete)
-HELD_TAKEN_WORDS = ("{name} not spawned: the output hold still plays {nodes}, and a frame "
-                    "holds one of each — drop the hold first; nothing landed")
 SECOND_DREAM_WORDS = "{name} is a second dream, which no wire may touch (one live dream); left out"
 SEQ_WORDS = "the sequencer is the rig's; left out"
 LANE_ENV_WORDS = ("{name} is a sequencer lane's envelope; left out (a patch's envelope "
@@ -1347,8 +1343,7 @@ class Host:
     """What `spawn` reads of the preset a patch lands in — a small
     read-only view the caller builds (`Host.of` from the live parts):
 
-    - `names`: every render node the host's section has, and the instance
-      names a held program keeps (plan 38's `fx.hold`): a spawned node takes
+    - `names`: every render node the host's section has: a spawned node takes
       none of them;
     - `modifiers`: the modifier ids held (a new one is one past the highest,
       `modifiers.next_id`);
@@ -1371,12 +1366,9 @@ class Host:
     macros: frozenset[str] = frozenset()
     desk: tuple[Binding, ...] = ()
     routes: tuple[Binding, ...] = ()
-    # those of `names` only a held program keeps (wave 3 P1: `Landing.held_taken`)
-    held: frozenset[str] = frozenset()
 
     @classmethod
-    def of(cls, spec: G.GraphSpec | None, table, banks: Mapping[str, Any] | None = None,
-           held: Iterable[str] = ()) -> Host:
+    def of(cls, spec: G.GraphSpec | None, table, banks: Mapping[str, Any] | None = None) -> Host:
         """The view of a live preset: its landed `spec`, its `table`
         (`routing.Bindings`), its banks by scheme (each with `next_id()`,
         `MAX` and a length) and the held program's instance names. Reads
@@ -1401,12 +1393,11 @@ class Host:
             nxt[s] = int(b.next_id())
             room[s] = (0 if nxt[s] > modbank.MAX_ID
                        else int(getattr(b, "MAX", modbank.MAX)) - len(b))
-        return cls(names=spec_names(spec) | frozenset(held),
+        return cls(names=spec_names(spec),
                    modifiers=tuple(m.id for m in getattr(table, "modifiers", ())),
                    next_voice=nxt, room=room, macros=frozenset(used),
                    desk=tuple(replace(b) for b in table.desk()),
-                   routes=tuple(replace(b) for b in table.routes()),
-                   held=frozenset(held) - spec_names(spec))
+                   routes=tuple(replace(b) for b in table.routes()))
 
     def owner(self, pid: str) -> Binding | None:
         """`Bindings.owner`: the one performer on `pid`, or None."""
@@ -1478,9 +1469,7 @@ class Landing:
     replaces: str = ""
     # wave 3 P1: the patch's single-instance nodes (`ONE_PER_FRAME`) the host
     # already has. Not empty: this landing does not land (`refusal`).
-    # `held_taken`: those of them only the held program keeps
     taken: tuple[str, ...] = ()
-    held_taken: tuple[str, ...] = ()
     # wave 3 P2: what replacing `replacing` costs the host and what it keeps,
     # in words, and the host they were read off, the sheet's
     # (`dataclasses.replace` by `ui_graph.spawn`: this module cannot see the
@@ -1492,23 +1481,18 @@ class Landing:
 
     @property
     def replacing(self) -> tuple[str, ...]:
-        """Of `taken`, what the conflict sheet may replace (`REPLACEABLE`):
-        on the preset, so there is something to replace; what only the held
-        program keeps is refused (`refusal`)."""
-        return tuple(n for n in self.taken
-                     if n not in self.held_taken and _kind(n) in REPLACEABLE)
+        """Of `taken`, what the conflict sheet may replace (`REPLACEABLE`)."""
+        return tuple(n for n in self.taken if _kind(n) in REPLACEABLE)
 
     @property
     def refusal(self) -> str | None:
         """Why this landing cannot land, in words, or None: what the preset
-        has to delete first (`TAKEN_WORDS`), else what the hold keeps
-        (`HELD_TAKEN_WORDS`). What it may replace (`replacing`) is no refusal
-        but a row of the sheet."""
-        own = [n for n in self.taken if n not in self.held_taken and n not in self.replacing]
-        words, nodes = (TAKEN_WORDS, own) if own else (HELD_TAKEN_WORDS, self.held_taken)
+        has to delete first (`TAKEN_WORDS`). What it may replace (`replacing`) is
+        no refusal but a row of the sheet."""
+        nodes = [n for n in self.taken if n not in self.replacing]
         if not nodes:
             return None
-        return words.format(name=self.group.get("name") or "the patch", nodes=", ".join(nodes))
+        return TAKEN_WORDS.format(name=self.group.get("name") or "the patch", nodes=", ".join(nodes))
 
     def unanswered(self, choices: Mapping | None) -> str | None:
         """The words for a landing that would replace a node nobody said to
@@ -1757,8 +1741,7 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
                    routes=routes, desk=desk, macros=macros, lfos=lfos, envs=envs,
                    layout=layout, group=group, ports=ports, conflicts=tuple(conflicts),
                    wants={k: tuple(v) for k, v in wants.items()}, notes=tuple(notes),
-                   taken=tuple(singles),
-                   held_taken=tuple(n for n in singles if n in host.held))
+                   taken=tuple(singles))
 
 
 def is_rig_source(addr: str) -> bool:
