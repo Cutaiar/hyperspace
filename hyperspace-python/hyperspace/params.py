@@ -2193,8 +2193,8 @@ def build_session(control, audio, restart=None, media=None) -> SessionRegistry:
     # with ⇧ to redo), on the stack `undo.here` names; none installed: nothing
     r.trigger("edit.undo", "Undo", lambda: undo.undo(), group="ui", modulatable=False,
               tip="Take back the last gesture or the last load, learn or delete on the "
-                  "deck the panel is on; inside the output, audio, analyzer or hands "
-                  "section, the last change there (Cmd+Z or Ctrl+Z).")
+                  "deck the panel is on; with the mouse on a rig setting, or in the output, "
+                  "audio, analyzer or hands section, the last rig change (Cmd+Z or Ctrl+Z).")
     r.trigger("edit.redo", "Redo", lambda: undo.redo(), group="ui", modulatable=False,
               tip="Put back what the last undo took (Cmd+Shift+Z or Ctrl+Shift+Z).")
     if hasattr(audio, "toggle_play"):

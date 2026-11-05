@@ -980,12 +980,15 @@ class Project:
         self.bank = list(bank)
         self._saved = (list(saved[0]), saved[1])
 
+    def ident(self) -> tuple:
+        """Which show this is: its name, file and stem. (The bank and startup may
+        differ: they are written to the show's file the moment they change.)"""
+        return (self.name, self.path, getattr(self, "_stem", None))
+
     @staticmethod
-    def same_show(a: tuple, b: tuple) -> bool:
-        """Do two marks name one show — the same name, file and stem?
-        (The bank and startup may differ: they are written to the show's
-        file the moment they change.)"""
-        return (a[0], a[2], a[3]) == (b[0], b[2], b[3])
+    def ident_of(mark: tuple) -> tuple:
+        """`ident` as of a `mark`."""
+        return (mark[0], mark[2], mark[3])
 
     def _apply(self) -> list[str]:
         """Push the document's session into the registry; returns unknown
@@ -1639,7 +1642,51 @@ def _bank_len(doc: dict) -> int:
 
 # ---------------------------------------------------------------- marks
 
-class Marks:
+class _Landings:
+    """One stack's share of what has landed in the library: the groups it answers
+    for (`_mine`), read and put back. The two marks' common part."""
+
+    def __init__(self, lib: Library):
+        self.lib = lib
+
+    def _mine(self, group: str, kinds) -> bool:
+        raise NotImplementedError
+
+    def _groups(self) -> set[str]:
+        lib = self.lib
+        kinds = lib._kinds
+        return {g for g in lib.landed_groups() if self._mine(g, kinds)}
+
+    def lands(self) -> dict:
+        """{group: landed} — each of this stack's groups' name, reference and
+        re-apply road, by reference: cheap enough to read every frame."""
+        lib = self.lib
+        return {g: lib.landed(g) for g in self._groups()}
+
+    def mend(self, pre: dict, lands: dict) -> None:
+        """After the restore of a step that is not a load: a group whose
+        landed state the restore itself moved (`pre` is `lands()` from
+        just before it) — a `scene.select` put back adopts its scene —
+        gets the step's own back, so the strip names what it named before
+        the step. A group the restore left alone is left alone: a slider
+        undone after a save-as stays on the new name (plan 15 fork 2)."""
+        lib = self.lib
+        now = self.lands()
+        for group in {*pre, *now}:
+            if now.get(group) != pre.get(group):
+                lib.reland(group, lands.get(group, (None, None, None)))
+
+    def _reland(self, landed: dict) -> None:
+        """Every one of this stack's groups as `landed` has it: a group that had
+        no landing then has none now (`Library.reland`)."""
+        lib = self.lib
+        for group in self._groups() - set(landed):
+            lib.reland(group, (None, None, None))
+        for group, was in landed.items():
+            lib.reland(group, was)
+
+
+class Marks(_Landings):
     """What is loaded on one `Deck`, for an undo step that undoes a load (undo.py;
     plan 15 WP1, fork 2; per deck since plan 44 D5a, scoped to the preset since
     D5b): that deck's landed names and clean references, and the loaded preset's
@@ -1651,23 +1698,15 @@ class Marks:
     session groups' labels, each group's layout. So a deck's undo never relands
     the one strip the meta controller has."""
 
-    def __init__(self, lib: Library):
-        self.lib = lib
-
-    def _groups(self) -> set[str]:
-        """The groups with a landing that are the deck's: every one but the
-        meta controller's (`MetaMarks`)."""
-        lib = self.lib
-        kinds = lib._kinds
-        return {g for g in lib.landed_groups() if g in kinds or g not in SESSION_GROUPS}
+    def _mine(self, group: str, kinds) -> bool:
+        return group in kinds or group not in SESSION_GROUPS
 
     def _show(self) -> tuple:
         """Which show this is, and the GRAPH page's positions of its rig nodes
         (plan 28 N2): a tidy on a deck moves them, and undoing it puts them back
         while the show is the same one."""
         pr = self.lib.project
-        return (pr.name, pr.path, getattr(pr, "_stem", None),
-                copy.deepcopy(getattr(pr, "layout", {})))
+        return (pr.ident(), copy.deepcopy(getattr(pr, "layout", {})))
 
     def take(self) -> tuple:
         """(`_show`, {group: landed}, the loaded preset's note and the notes
@@ -1696,24 +1735,13 @@ class Marks:
         media = getattr(pre, "media", None)
         return media.to_json() if media is not None else None
 
-    def lands(self) -> dict:
-        """{group: landed} — each of this stack's groups' name, reference and
-        re-apply road, by reference: cheap enough to read every frame."""
-        lib = self.lib
-        return {g: lib.landed(g) for g in self._groups()}
-
-    def mend(self, pre: dict, lands: dict) -> None:
-        """After the restore of a step that is not a load: a group whose
-        landed state the restore itself moved (`pre` is `lands()` from
-        just before it) — a `scene.select` put back adopts its scene —
-        gets the step's own back, so the strip names what it named before
-        the step. A group the restore left alone is left alone: a slider
-        undone after a save-as stays on the new name (plan 15 fork 2)."""
-        lib = self.lib
-        now = self.lands()
-        for group in {*pre, *now}:
-            if now.get(group) != pre.get(group):
-                lib.reland(group, lands.get(group, (None, None, None)))
+    def equal(self, mark: tuple) -> bool:
+        """Would `put(mark)` change nothing now? So not by another show's name: the
+        show is `MetaMarks`', and across a change of show `put` leaves it be."""
+        now = self.take()
+        if mark[1:] != now[1:]:
+            return False
+        return mark[0][0] != now[0][0] or mark[0][1] == now[0][1]
 
     def before(self, mark: tuple) -> None:
         """First in a restore: the loaded preset's graph goes back first of all
@@ -1732,12 +1760,9 @@ class Marks:
         until it is saved). The rest of the show is `MetaMarks`'."""
         lib, pr = self.lib, self.lib.project
         (show, landed, note, _graph, layout, bins, groups, group_high, bus) = mark
-        if show[:3] == self._show()[:3]:
-            pr.layout = copy.deepcopy(show[3])
-        for group in self._groups() - set(landed):
-            lib.reland(group, (None, None, None))
-        for group, was in landed.items():
-            lib.reland(group, was)
+        if show[0] == pr.ident():
+            pr.layout = copy.deepcopy(show[1])
+        self._reland(landed)
         pre = lib.presets
         if pre is not None:
             pre.note, pre.notes, pre.desk_notes = note[0], list(note[1]), list(note[2])
@@ -1752,7 +1777,7 @@ class Marks:
         pr.follow()
 
 
-class MetaMarks(Marks):
+class MetaMarks(_Landings):
     """What is loaded on the meta controller, for its stack (plan 44 D5b): the
     show's own fields, the session groups' landed names and clean references (the
     one strip the meta controller has) and each group's layout. `lib` is the one
@@ -1760,10 +1785,8 @@ class MetaMarks(Marks):
     set for a performance, so undoing a show load is ⌘Z in a meta section, and the
     startup preset it brought up is a load on its deck's stack."""
 
-    def _groups(self) -> set[str]:
-        lib = self.lib
-        kinds = lib._kinds
-        return {g for g in lib.landed_groups() if g in SESSION_GROUPS and g not in kinds}
+    def _mine(self, group: str, kinds) -> bool:
+        return group in SESSION_GROUPS and group not in kinds
 
     def take(self) -> tuple:
         """(the show's mark, {group: landed}, {group: its `extra` hook's dict —
@@ -1792,14 +1815,11 @@ class MetaMarks(Marks):
         and startup are left as they are: they are in the show's file the moment
         they change, and reverting them in memory would make the show's dirty dot
         lie. `last_show` is never rewritten."""
-        lib, pr = self.lib, self.lib.project
+        pr = self.lib.project
         show, landed, _extras = mark
-        if not Project.same_show(show, pr.mark()):
+        if Project.ident_of(show) != pr.ident():
             pr.remark(show)
-        for group in self._groups() - set(landed):
-            lib.reland(group, (None, None, None))
-        for group, was in landed.items():
-            lib.reland(group, was)
+        self._reland(landed)
         pr.follow()
 
 

@@ -41,17 +41,18 @@ the rig's output settings are all `persist=False`.
 
 **Three stacks** (plan 44 D5b, the owner's design, 2026-11-04): one `Undo` per
 `Deck`, scoped to its preset (`only`: `deck.in_preset`), and one for the meta
-controller over `SessionRegistry` and `SessionTable` (`install_meta`). The
-second watches the meta params, whose tuning is done before a performance and
+controller over `SessionRegistry` and `SessionTable` (`install_meta`,
+`deck.meta_stack`). The second watches the meta params, whose tuning is done before a performance and
 not during one, and the meta controller's rows of the table (keys, pad,
 invariant and global-layer MIDI rows, sinks). Those rows live in `bindings.json`
 the moment they change, so their restore (`SessionTable.set_rows`) writes that
 file: the one write a restore makes.
 
-**⌘Z goes by where you are** (`here`): the panel's `Deck`, except inside a meta
-section (`where`), which takes the meta stack. Never the newest of all stacks: a
+**⌘Z goes by where you are** (`here`): the panel's `Deck`, except with the mouse
+in a meta section or on a meta param (`where`), which takes the meta stack. Never the newest of all stacks: a
 ⌘Z meant for a knob on one deck must not take back an analyzer tweak from an hour
-ago. Pressing it never crosses over: a stack with nothing says so.
+ago, and never the panel's focus, which says nothing of where you are an hour on.
+Pressing it never crosses over: a stack with nothing says so.
 
 The band layout: a band added, removed or moved re-declares every
 `band.*` param and is **not** a step. Each state is tagged with the shape
@@ -183,7 +184,7 @@ class State:
     # how much of a route's offset each base held then, those that held any
     # (the base chase's ledger, plan 52), so a base goes back with its own
     trims: Any = None
-    rows: tuple = ()          # the meta controller's rows (`SessionTable`, plan 44 D5b)
+    rows: tuple = ()          # the meta controller's rows (`deck.MetaRows`, plan 44 D5b)
 
 
 @dataclass
@@ -223,7 +224,7 @@ class Undo:
     bases, so a voice's params exist before their values land. `only`
     (optional) narrows `watched` to the params this stack is for: a `Deck`'s
     takes those of its preset (plan 44 D5b). A `table` with `rows` and
-    `set_rows(rows)` (`SessionTable`) has those watched too.
+    `set_rows(rows)` (`deck.MetaRows`) has those watched too.
     """
 
     only = None      # on the class: a live `Undo` from before a hot reload has it
@@ -297,7 +298,7 @@ class Undo:
         return {scheme: list(b.doc()) for scheme, b in self._banks().items()}
 
     def _table_rows(self) -> list:
-        """The meta controller's rows, for a table that has them (`SessionTable`);
+        """The meta controller's rows, for a table that has them (`deck.MetaRows`);
         none for a deck's, whose `routes` and `desk` are its own."""
         return getattr(self.table, "rows", ())
 
@@ -446,7 +447,8 @@ class Undo:
 
     def _marks_equal(self, mark) -> bool:
         try:
-            return bool(self.marks.take() == mark)
+            equal = getattr(self.marks, "equal", None)    # marks that know what they restore
+            return bool(equal(mark) if equal is not None else self.marks.take() == mark)
         except Exception:  # noqa: BLE001 — marks that will not compare are kept
             return False
 
@@ -766,8 +768,12 @@ def where(inside_meta) -> None:
 def here() -> Undo | None:
     """The stack ⌘Z acts on: the meta controller's inside a meta section, else
     that of the panel's `Deck` (the owner, 2026-11-04). Never the newest of them."""
-    if _meta is not None and _where is not None and _where():
-        return _meta
+    if _meta is not None and _where is not None:
+        try:
+            if _where():
+                return _meta
+        except Exception as e:  # noqa: BLE001 — a panel that raises is not inside one
+            print(f"undo: where failed ({type(e).__name__}: {e})", file=sys.stderr)
     return _installed
 
 

@@ -475,10 +475,10 @@ What the text below calls `Decks` is `MetaController`; `Context` stays what fact
 **D5b, built:** three undo stacks, overruling DQ2 in the reading. A `Deck`'s `Undo` watches
 `part_of == "performance"` only (`deck.in_preset`) and restores through a `Marks` of that
 deck's groups; `MetaController.undo` (`deck.meta_stack`) is an `Undo` over `SessionRegistry`
-and `SessionTable`, with `library.MetaMarks`: the show's mark, the session groups' labels, the
+and `SessionTable` (through `deck.MetaRows`), with `library.MetaMarks`: the show's mark, the session groups' labels, the
 band layout. `app.frame` ticks all three. ⌘Z is `undo.here`: the panel's deck, or the meta
-stack inside a meta section (`ui.META_SECTIONS`, under the mouse first, then the focus), never
-the newest of all. A load is a step on its deck's stack; a show load is a step on the meta
+stack by what is under the mouse (`Panel.in_meta_section`: a watched param by its own layer, else
+a section in `ui.META_SECTIONS`; never the focus), never the newest of all. A load is a step on its deck's stack; a show load is a step on the meta
 stack, and its startup preset one on the panel's deck's (registers 691–693).
 
 The first PR a performer notices. **New** `deck.Decks`: the list, `on_air`

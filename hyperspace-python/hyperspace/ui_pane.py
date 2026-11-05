@@ -250,23 +250,19 @@ def focused(panel) -> str | None:
 
 
 def where(panel) -> str | None:
-    """The section you are in, for ⌘Z (plan 44 D5b): the one under the mouse; with
-    the mouse on the panel but in no section (the canvas, a header) none, since
-    the canvas is the panel's deck; with the mouse off the panel, the focus. Both
-    readings are of the latest draw."""
+    """The section you are in, for ⌘Z (plan 44 D5b): the one under the mouse, as of
+    the latest draw; anywhere else (the canvas, a header, the desk, the render
+    window) none. Never the focus: a click in another section leaves it, and a
+    key row or a pad moves it, so it would say "analyzer" an hour on."""
     from . import ui_graph  # (late: ui_graph imports this module)
-    st = panel.__dict__.get(ui_graph.STATE) or {}
-    under = st.get("pane_under")
-    if under is not None:
-        return under
-    return None if getattr(panel, "_mouse_on_panel", False) else focused(panel)
+    return (panel.__dict__.get(ui_graph.STATE) or {}).get("pane_under")
 
 
 def left(panel) -> None:
-    """A frame's draw begins: nothing is under the mouse until it says so, so a
-    panel hidden or collapsed says the mouse is off it (`where`)."""
+    """A frame's draw begins: nothing is under the mouse until the draw says so, so
+    a panel hidden or collapsed says nothing is (`where`, `Panel.in_meta_section`)."""
     from . import ui_graph  # (late: ui_graph imports this module)
-    panel._mouse_on_panel = False
+    panel._param_under = None
     st = panel.__dict__.get(ui_graph.STATE)
     if st is not None:
         st["pane_under"] = None

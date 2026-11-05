@@ -56,6 +56,7 @@ from . import (
     ui_presets,
     ui_routing,
     ui_seq,
+    undo,
 )
 from .analyzer import N_MAX
 from .audio import AudioEngine
@@ -81,7 +82,7 @@ from .graph import (
 from .hands import panel as ui_hands
 from .hold import canvas_renderer
 from .media import publish
-from .params import PLANES, Kind, Param, Registry, build_registry
+from .params import PLANES, Kind, Param, Registry, build_registry, part_of
 from .pointer import Through
 from .view import RED as RED_RGB
 from .view import ViewState
@@ -860,8 +861,14 @@ class Panel:
                    "you unfolded it yourself. graph lets go of the focus.")
 
     def in_meta_section(self) -> bool:
-        """Is the panel inside a meta section (`ui_pane.where`)? What ⌘Z goes by,
-        through `undo.where`: its meta stack there, else the panel's deck's."""
+        """What ⌘Z goes by, through `undo.where`: its meta stack here, else the
+        panel's deck's. **What is under the mouse decides:** a param undo watches
+        says by its own layer, wherever it is drawn (a mixed section: hands with
+        `ghost.*`, SYSTEM with `desk.slew`, a rig node in the selection); else the
+        section under it (`ui_pane.where`); else the deck."""
+        p = getattr(self, "_param_under", None)
+        if p is not None and undo.watched(p):
+            return part_of(p) != "performance"
         return ui_pane.where(self) in META_SECTIONS
 
     def go_page(self, i) -> None:
@@ -886,6 +893,8 @@ class Panel:
         gets its own popup. `extra`,
         when given, is called inside the popup after the param's own items
         to draw the caller's (a bank slot's "put preset here…")."""
+        if imgui.is_item_hovered():             # what ⌘Z goes by (`in_meta_section`)
+            self._param_under = a
         if getattr(self, "_picking", False):    # a desk control is picked: the click is its
             self._ctx_pick(a)
             return
@@ -1842,9 +1851,6 @@ class Panel:
         # where the panel is: the desk takes the room left of it (ui_desk.room;
         # drawn before the panel, it reads this next frame)
         self._panel_x = imgui.get_window_pos().x
-        # is the mouse on the panel: what ⌘Z goes by (`ui_pane.where`)
-        self._mouse_on_panel = imgui.is_window_hovered(
-            imgui.HoveredFlags_.root_and_child_windows)
         if not opened:
             imgui.end()
             return
@@ -1903,6 +1909,8 @@ class Panel:
                 text, was = cur[key][0], seen.get(key, cur[key])  # (no such key before a reload)
                 if not isinstance(was, tuple):             # remembered before a hot reload
                     was = (was, cur[key][1])
+                if key == "undo" and cur[key][1] < was[1]:
+                    continue                               # a stack that spoke earlier: old news
                 if cur[key] != was and text:
                     warn = key == "warning" or (key == "learn" and getattr(lrn, "refused", False))
                     st.update(text=text, warn=warn, at=now, key=key)

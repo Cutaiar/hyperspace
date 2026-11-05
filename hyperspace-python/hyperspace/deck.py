@@ -408,12 +408,39 @@ KEYS = "window:keys"
 MOUSE = "window:mouse"
 
 
+class MetaRows:
+    """The meta controller's table as `undo.Undo` reads a table: its rows, and none
+    of what a deck's table has of its own (routes, desk layer, macros)."""
+
+    bindings: tuple = ()
+    macros: dict = {}  # noqa: RUF012 — never mutated: there are none
+
+    def __init__(self, session):
+        self.session = session
+
+    @property
+    def rows(self) -> list:
+        return self.session.rows
+
+    def set_rows(self, rows) -> None:
+        self.session.set_rows(rows)
+
+    def routes(self) -> tuple:
+        return ()
+
+    def desk(self) -> tuple:
+        return ()
+
+    def macros_doc(self) -> dict:
+        return {}
+
+
 def meta_stack(first: Deck) -> undos.Undo:
     """The meta controller's undo stack (plan 44 D5b): an `Undo` over the
     `SessionRegistry` and the `SessionTable` every deck holds by reference, what
     is loaded through the library's `MetaMarks`. `first` is whichever deck has
     the band hooks; the stack is no deck's."""
-    return undos.Undo(first.session, first.session_table,
+    return undos.Undo(first.session, MetaRows(first.session_table),
                       marks=MetaMarks(first.presets.lib.base), tag=first.band_shape)
 
 
@@ -491,6 +518,7 @@ class MetaController:
         return [(self, "deck", "MetaController"),
                 (self.undo, "undo", "Undo"),
                 (self.undo.marks, "library", "MetaMarks"),
+                (self.undo.table, "deck", "MetaRows"),
                 (self.on_air_pointer, "pointer", "Pointer"),
                 (self.panel_pointer, "pointer", "Pointer"),
                 *[(p, "pointer", "Pointer") for p in self.pointers.values()]]

@@ -66,7 +66,7 @@ def test_there_are_three_stacks_and_they_watch_apart(rig):
         # (between them, every watched param of the deck: nothing fell through)
         assert ids | m == {p.id for p in deck.reg if undo.watched(p)}
     assert all(part_of(rig.reg[i]) != "performance" for i in m)
-    assert meta.reg is rig.one.session and meta.table is rig.one.session_table
+    assert meta.reg is rig.one.session and meta.table.session is rig.one.session_table
 
 
 def test_undo_is_per_deck(rig):
@@ -381,13 +381,62 @@ def test_where_you_are_is_the_section_under_the_mouse(pane):
     assert ui_pane.where(p) == "analyzer" and p.in_meta_section()
     d.run(d.move("new##new"), d.wait(1))               # the presets section
     assert ui_pane.where(p) == "presets" and not p.in_meta_section()
-    # the mouse off the panel: the focus says
+
+
+def test_the_focus_never_says_where_you_are(pane):
+    """A key row or a pad focused the analyzer, or a click did an hour ago, and the
+    mouse is off the panel, on the desk or in the render window: the deck."""
+    r, d = pane
+    p = r.panel
+    d.run(d.park(), d.wait(1))
     frame(p, "analyzer")
-    p._mouse_on_panel, st["pane_under"] = False, None
-    assert ui_pane.where(p) == "analyzer" and p.in_meta_section()
-    frame(p, "graph")
-    p._mouse_on_panel, st["pane_under"] = False, None
+    assert ui_pane.focused(p) == "analyzer"
+    d.run(d.move((-50.0, -50.0)), d.wait(2))
     assert ui_pane.where(p) is None and not p.in_meta_section()
+    assert undo.here() is undo.installed()
+
+
+def _drawn_params(r, d, part: str) -> list[str]:
+    """Ids of the params undo watches, of one layer, drawn last frame."""
+    ids = {k.rpartition("##")[2] for k in d.rects}
+    return sorted(k for k in ids if k in r.reg and undo.watched(r.reg[k])
+                  and part_of(r.reg[k]) == part)
+
+
+def test_a_param_under_the_mouse_says_by_its_own_layer_in_a_mixed_section(pane):
+    """The hands section is a meta section that also draws the preset's params: the
+    param under the mouse decides, and off every param the section does."""
+    r, d = pane
+    p = r.panel
+    frame(p, "hands")
+    d.run(d.wait(2))
+    meta, preset = _drawn_params(r, d, "session"), _drawn_params(r, d, "performance")
+    assert meta and preset, (meta[:5], preset[:5])
+    d.run(d.reveal(meta[0]), d.move(meta[0]), d.wait(2))
+    assert p._param_under is r.reg[meta[0]] and p.in_meta_section()
+    d.run(d.reveal(preset[0]), d.move(preset[0]), d.wait(2))
+    assert p._param_under is r.reg[preset[0]] and not p.in_meta_section()
+
+
+def test_a_meta_param_in_a_decks_section_takes_the_meta_stack(pane):
+    """SYSTEM is no meta section and draws `desk.slew`: over it, meta; off it, the deck."""
+    r, d = pane
+    p = r.panel
+    frame(p, "system")
+    d.run(d.reveal("desk.slew"), d.move("desk.slew"), d.wait(2))
+    assert p.in_meta_section()
+    d.run(d.move((-50.0, -50.0)), d.wait(2))
+    assert not p.in_meta_section()
+
+
+def test_a_param_undo_does_not_watch_leaves_it_to_the_section(pane):
+    """`band.sel.*` are aliases: over one in the analyzer section, the section says."""
+    r, d = pane
+    p = r.panel
+    frame(p, "analyzer")
+    d.run(d.move("band.sel.thr"), d.wait(2))
+    assert p._param_under is not None and not undo.watched(p._param_under)
+    assert p.in_meta_section()
 
 
 def test_the_canvas_is_the_panels_deck_whatever_has_the_focus(pane):
@@ -397,6 +446,28 @@ def test_the_canvas_is_the_panels_deck_whatever_has_the_focus(pane):
     (x, y), _size = ui_graph._state(p)["details_rect"]
     d.run(d.move((x - 200, y + 200)), d.wait(2))       # left of the pane: the canvas
     assert ui_pane.where(p) is None and not p.in_meta_section()
+
+
+def test_a_selected_rig_node_s_param_takes_the_meta_stack(pane):
+    """The selection section shows a node's params: over a meta one of a rig node
+    it is the meta stack, though the selection is no meta section."""
+    r, d = pane
+    p = r.panel
+    view = ui_graph.view_of(p)
+
+    def metas(n):
+        return [k for _g, pids in ui_graph.side_groups(p, n)[:1] for k in pids
+                if undo.watched(r.reg[k]) and part_of(r.reg[k]) == "session"]
+
+    node = next((n for n in view.nodes if metas(n)), None)
+    assert node is not None, sorted({n.kind for n in view.nodes})
+    p.select_graph_node(node.id)
+    d.run(d.wait(3))
+    st = ui_graph._state(p)
+    assert "selection" in st["pane_drawn"]
+    meta = metas(node)
+    d.run(d.reveal(meta[0]), d.move(meta[0]), d.wait(2))
+    assert ui_pane.where(p) == "selection" and p.in_meta_section()
 
 
 def test_the_footer_says_whichever_stack_spoke_last(tmp_path):
@@ -413,3 +484,82 @@ def test_the_footer_says_whichever_stack_spoke_last(tmp_path):
     assert Panel._message(p, now=0.5)[0] == "undid b"
     deck_u.status, deck_u.said_at = "undid c", 3.0
     assert Panel._message(p, now=0.6)[0] == "undid c"
+
+
+def test_the_footer_follows_the_panels_deck(rig):
+    """`Panel.undo` reads through the panel's pointer: moved to deck 2, its stack's
+    words reach the footer; what deck 2 said before the move does not."""
+    from hyperspace.ui import Panel
+
+    two = rig.two
+    two.undo._say("old words")
+    p = Panel.__new__(Panel)
+    p.library = SimpleNamespace(status="", warning="", said={})
+    p.meta_undo = rig.meta.undo
+    p.pointer = rig.meta.panel_pointer
+    rig.r.t += 10.0
+    go(rig, 1)
+    rig.one.undo._say("deck 1 said")
+    Panel._message(p, now=100.0)
+    rig.meta.point_panel(two)
+    assert p.undo is two.undo
+    assert Panel._message(p, now=100.1)[0] != "old words"
+    two.undo._now = rig.r.t + 5.0
+    two.undo.undo()
+    assert Panel._message(p, now=100.2)[0] == "nothing to undo"
+
+
+def test_a_where_that_raises_is_not_inside_a_meta_section(rig):
+    def boom():
+        raise RuntimeError("no")
+
+    undo.where(boom)
+    assert undo.here() is rig.one.undo
+    rig.reg["edit.undo"].fire()                        # says so; no raise
+    assert rig.one.undo.status == "nothing to undo"
+
+
+def test_a_decks_step_across_a_show_change_that_changes_nothing_of_it_drops(rig):
+    """A deck's marks name the show only for its layout: a step whose `put` would
+    change nothing is no step, whatever the show is called now. `Project.new` on a
+    deck already at fresh values leaves "undid new show" unsaid."""
+    pr, one = rig.lib.project, rig.one
+    pr.new("first")
+    go(rig)
+    one.undo.clear()
+    rig.meta.undo.clear()
+    pr.new("second")
+    go(rig)
+    assert pr.name == "second"
+    assert [s.label for s in one.undo.stack] == []     # nothing of the deck moved
+    assert [s.label for s in rig.meta.undo.stack] == ["new show"]
+    assert one.undo.undo() is False
+
+
+def test_undoing_a_tidys_positions_stays_within_one_show(rig):
+    """The same show: positions go back. Another show: they are not landed on it."""
+    pr, one = rig.lib.project, rig.one
+    pr.layout["lfo.1"] = [1, 2]
+    go(rig)
+    undo.push("tidy", load=True)
+    pr.layout["lfo.1"] = [9, 9]
+    rig.one.reg["view.bright"].step(1)                 # (so the step has something)
+    go(rig)
+    assert one.undo.undo() and pr.layout["lfo.1"] == [1, 2]
+    assert one.undo.redo() and pr.layout["lfo.1"] == [9, 9]
+    assert one.undo.undo()
+    undo.push("tidy", load=True)
+    pr.layout["lfo.1"] = [7, 7]
+    rig.one.reg["view.bright"].step(1)
+    go(rig)
+    pr.name = "another"
+    assert one.undo.undo() and pr.layout["lfo.1"] == [7, 7]
+
+
+def test_the_session_table_has_no_decks_table_face():
+    """`deck.MetaRows` is what `Undo` reads; `SessionTable` holds rows, and nothing
+    on it pretends to be a deck's table."""
+    from hyperspace.routing import SessionTable
+
+    for name in ("bindings", "routes", "desk", "macros", "macros_doc"):
+        assert not hasattr(SessionTable, name), name

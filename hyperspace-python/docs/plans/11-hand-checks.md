@@ -7945,6 +7945,10 @@ a ⌘Z no longer takes back a meta edit made while you were elsewhere.
    picture's preset values do not move. Do the same with `master.gain` in the audio section, and say
    whether audio should count as a meta section.
 5. Load the wrong preset, ⌘Z on the canvas. *Pass:* the earlier preset is back with its unsaved edits.
+6. Tweak a band, then press the key row that focuses the analyzer. Move the mouse to the desk diagram,
+   turn a desk knob, ⌘Z. *Pass:* the knob goes back and the band stays.
+7. In the hands section, ⌘Z with the mouse on a `ghost` row, then on a shaping knob. *Pass:* the first
+   takes the deck's, the second the last hands change.
 *Fail:* any ⌘Z that moves the other layer, or a knob or an orbit that ends up as two steps.
 **525. A show, and the table's rows.** (anywhere; a throwaway show)
 1. Open another show. Mouse on the canvas, ⌘Z. *Pass:* the earlier preset is back, the show's name stays.

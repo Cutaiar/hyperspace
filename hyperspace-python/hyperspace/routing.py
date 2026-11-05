@@ -1987,22 +1987,6 @@ class SessionTable:
         tables = self.tables
         return [b for b in tables[0].bindings if is_session_row(b)] if tables else []
 
-    # ---- the meta controller's undo stack (undo.py, plan 44 D5b) ----
-
-    # what `undo.Undo` reads of any table: a deck's routes, desk and macros are
-    # its own, so here there are none, and `rows` is what is watched
-    bindings: tuple = ()
-    macros: dict = {}  # noqa: RUF012 — never mutated: there are none
-
-    def routes(self) -> tuple:
-        return ()
-
-    def desk(self) -> tuple:
-        return ()
-
-    def macros_doc(self) -> dict:
-        return {}
-
     def set_rows(self, rows: Iterable[Binding]) -> None:
         """An undo's restore: these are the session's rows now, in every deck's
         table, with each table's own after them as `Bindings._share` leaves

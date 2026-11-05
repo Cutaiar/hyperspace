@@ -1692,7 +1692,9 @@ def main(argv: list[str] | None = None) -> None:
     meta = MetaController(deck, deck2)
     panel.pointer = library.pointer = meta.panel_pointer
     panel.meta_undo = meta.undo        # the footer's message slot, beside the deck's
-    undos.where(panel.in_meta_section)  # what ⌘Z goes by (plan 44 D5b)
+    # what ⌘Z goes by (plan 44 D5b); read off the class each time, as a reloaded
+    # `ui.py` re-classes the panel and a bound method would keep the old function
+    undos.where(lambda: panel.in_meta_section())
     rig.point(meta.pointer, meta.panel_pointer)
     # panel state and chain must stay one object even after source changes
     # the live objects that get re-classed on a hot reload; re-evaluated
