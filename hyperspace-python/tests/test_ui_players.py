@@ -444,6 +444,55 @@ def test_esc_drops_a_carried_token_and_the_release_moves_nobody(rig, tmp_path):
     assert meta.players.get(2).duty == Duty.OFF_AIR, "the next press drags as ever"
 
 
+def test_esc_with_no_board_on_screen_is_graphs(rig, monkeypatch):
+    """A pick survives no fold: GRAPH's Esc is neither lost to it nor spent on it."""
+    r, d = rig, rig.d
+    st = ui_players._state(r.panel)
+    _click(d, _head(d, "players.p2"))
+    assert st["sel"] == (ui_players.SEL_PLAYER, 2)
+    r.reg["ui.page"].set(PAGE_KEYS.index("graph"))
+    ui_pane.set_open(ui_graph._state(r.panel), "players", False)
+    d.run(d.park(), d.wait(3))
+    assert "players" not in ui_graph._state(r.panel)["pane_drawn"]
+    assert st["sel"] is None, "it went with its board"
+    seen = []
+    real = ui_players.window
+
+    def spying(panel):
+        pressed = imgui.is_key_pressed(imgui.Key.escape, False)
+        real(panel)
+        if pressed:
+            seen.append((ui_players.took_escape(), ui_graph.escaped()))
+    monkeypatch.setattr(ui_players, "window", spying)
+    d.run(d.key(imgui.Key.escape), d.wait(1))
+    assert seen == [(False, True)], "the board took nothing: GRAPH has it"
+
+
+def test_a_stamp_from_another_imgui_context_never_takes_graphs_esc(rig, monkeypatch):
+    """A frame count starts again with a context (a relaunch, a test): an old stamp
+    that happens to match must not swallow the key, with or without a meta controller."""
+    r, d = rig, rig.d
+    r.panel.meta = None
+    seen = []
+    real = ui_players.window
+
+    def spying(panel):
+        ui_players._esc_frame = imgui.get_frame_count()      # the coincidence
+        real(panel)
+        seen.append(ui_players.took_escape())
+    monkeypatch.setattr(ui_players, "window", spying)
+    d.run(d.wait(1))
+    assert seen and not any(seen)
+
+
+def test_esc_with_a_board_on_screen_still_lets_go_of_the_pick(rig):
+    r, d = rig, rig.d
+    st = ui_players._state(r.panel)
+    _click(d, _head(d, "players.p2"))
+    d.run(d.key(imgui.Key.escape), d.wait(1))
+    assert st["sel"] is None
+
+
 def test_a_stray_click_on_a_lane_after_a_move_moves_nobody(rig):
     d, meta = rig.d, rig.meta
     _click(d, _head(d, "players.p2"))
@@ -517,6 +566,22 @@ def test_an_entry_that_is_off_still_draws_as_itself():
     assert ui_players._glyph_key(keys)[0] == "midi"
     assert ui_players._glyph_key(edge) == ("sony", "DualSense Edge")
     assert ui_players._state_of(apc) == "off"
+
+
+def test_no_stack_installed_says_nothing_of_a_player(monkeypatch):
+    """Two ways to no stack: only the player screen's speaks of players."""
+    said = []
+    monkeypatch.setattr(undo, "_meta", SimpleNamespace(_say=said.append))
+    monkeypatch.setattr(undo, "_installed", None)
+    monkeypatch.setattr(undo, "_where", lambda: False)
+    assert undo.here() is None
+    undo.undo()
+    undo.redo()
+    assert said == []
+    monkeypatch.setattr(undo, "_where", lambda: None)
+    assert undo.here() is None
+    undo.undo()
+    assert said == [undo.NOTHING_HERE]
 
 
 def test_undo_over_the_board_takes_nothing_back_and_says_so(rig, monkeypatch):

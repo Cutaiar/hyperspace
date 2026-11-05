@@ -767,17 +767,31 @@ NOTHING_HERE = "nothing to undo here: drag the player back"
 def here() -> Undo | None:
     """The stack ⌘Z acts on: the meta controller's inside a meta section, else
     that of the panel's `Deck` (the owner, 2026-11-04). Never the newest of them.
-    None where `where` says None: there, nothing is taken back (the player screen)."""
+    None where `where` says None: there, nothing is taken back (the player screen);
+    and with no stack installed. `_on_no_stack` tells the two apart."""
+    inside = _inside()
+    if inside is None:
+        return None
+    return _meta if inside else _installed
+
+
+def _inside() -> bool | None:
+    """What `where` says now: a meta section, not one, or None for where no stack
+    answers. False with no meta controller or nothing to ask."""
     if _meta is not None and _where is not None:
         try:
-            inside = _where()
-            if inside is None:
-                return None
-            if inside:
-                return _meta
+            got = _where()
+            return None if got is None else bool(got)
         except Exception as e:  # noqa: BLE001 — a panel that raises is not inside one
             print(f"undo: where failed ({type(e).__name__}: {e})", file=sys.stderr)
-    return _installed
+    return False
+
+
+def _on_no_stack() -> None:
+    """⌘Z found no stack. Said only where `where` said so: no stack installed says
+    nothing, as before, and has no player to drag back."""
+    if _inside() is None:
+        _meta._say(NOTHING_HERE)
 
 
 def installed() -> Undo | None:
@@ -836,8 +850,8 @@ def undo() -> None:
     at = here()
     if at is not None:
         _guarded("undo", lambda u: u.undo(), on=at)
-    elif _meta is not None:
-        _meta._say(NOTHING_HERE)
+    else:
+        _on_no_stack()
 
 
 def redo() -> None:
@@ -845,5 +859,5 @@ def redo() -> None:
     at = here()
     if at is not None:
         _guarded("redo", lambda u: u.redo(), on=at)
-    elif _meta is not None:
-        _meta._say(NOTHING_HERE)
+    else:
+        _on_no_stack()

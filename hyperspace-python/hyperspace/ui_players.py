@@ -704,6 +704,7 @@ def _board(panel, sfx: str, s: float) -> None:
     ids and drag apart from the pane's."""
     meta = _meta(panel)
     st = _state(panel)
+    st["board_seen"] = imgui.get_frame_count()
     hold = {p.number: held(panel, p.number) for p in meta.players}
     duties = {p.number: p.duty for p in meta.players}
     tray = _tray(panel, st)
@@ -850,6 +851,8 @@ def window(panel) -> None:
     """The board large, in a window of its own over what is drawn, drawn whether or
     not the panel is folded. P or the footer's chip toggles it; Esc lets go of what
     is picked up or selected, then closes it."""
+    global _esc_frame
+    _esc_frame = -1         # first in every frame: a frame count starts again with a context
     if _meta(panel) is None:
         return
     st = _state(panel)
@@ -858,6 +861,10 @@ def window(panel) -> None:
     # first in every frame, so another board drawing cannot hide it
     if st["drag"] is not None and st.get("drag_seen", -1) < imgui.get_frame_count() - 1:
         st["drag"] = None
+    # a pick does not outlive its board: unseen, it could only move someone unseen, and
+    # Esc on GRAPH is GRAPH's (`_escape` takes only what is on screen)
+    if st.get("board_seen", -1) < imgui.get_frame_count() - 1:
+        st["sel"] = None
     _escape(st)
     if _key_toggles(panel):
         st["large"] = not st["large"]

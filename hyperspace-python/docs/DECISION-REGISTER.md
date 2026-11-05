@@ -13283,9 +13283,10 @@ meta controller.
 **⌘Z over the board takes nothing back and says "nothing to undo here: drag the player back"**
 (`Panel.in_meta_section` answers None, `undo.here` names no stack). A move is on no stack: the
 meta stack snapshots params, rows and marks, and a duty is none of those, so putting moves on it
-means changing `MetaMarks` in `deck.py`, frozen while D5c is open. With the mouse on the board
-⌘Z used to reach an earlier analyzer or output setting. Putting moves on the stack is the better
-end state and a small change once D5c lands.
+means changing `MetaMarks` in `deck.py`, which was frozen while this was built. With the mouse on
+the board ⌘Z used to reach an earlier analyzer or output setting. **Moves go onto the meta stack in
+a small follow-up PR after this lands** (the coordinator, 2026-11-04): a player's move is a meta
+edit, and this line goes then.
 
 A seventeenth header took the room a fresh launch's pane fits in at 900 px high, so an open body's
 floor (`ui_pane.MIN_BODY_H`) goes from 160 to 150 px and the pane still opens with no scrollbar.
