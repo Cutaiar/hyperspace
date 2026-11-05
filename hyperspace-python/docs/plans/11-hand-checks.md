@@ -8054,7 +8054,7 @@ Expected: the route and the knob work as before; no warning about a missing para
 Register rows 739–742, 2026-11-04. Headless: `tests/test_ui_players.py`, the real panel and
 `MetaController` by mouse through `tests/ui_driver.py`. **Restart:** a new module.
 **568. Moving a player by mouse.** (the rig, two pads)
-1. Press P in the control window, or click the footer's chip ("on air … · off air …").
+1. Press O in the control window, or click the footer's chip ("on air … · off air …").
 2. Drag player 2's number across to OFF AIR. Drag it back.
 3. Move player 2 off air again and relaunch.
 *Pass:* (2) the footer and the line under the lanes say what moved, the moment it moves; player
@@ -8070,12 +8070,12 @@ through, and comes back. (3) Its light and player lamps change to player 2's, an
 address. (4) The words say the bare pad rows wait. Fail: a pad reopening with no word, or a lamp
 left on the old number. Say whether two pads both showing player 1 reads right (row 742).
 **570. Reaching it during a show.** (the rig, a preset on the output)
-1. Press P, move someone, press Esc.
-2. Rename a preset, typing a P. Fold the panel and press P.
+1. Press O, move someone, press Esc. Check the points stayed as they were, and press ⌘Z over the board: it says there is nothing to undo, and no setting goes back.
+2. Rename a preset, typing an O. Press Esc while naming with the board open: only the naming ends. Fold the panel and press O.
 3. Drag the side pane to its narrowest, and focus the section from a key row.
-*Pass:* (1) no hitch on the output. (2) Typing does not open it; folded, P does. (3) Everything
+*Pass:* (1) no hitch on the output. (2) Typing does not open it; folded, O does. (3) Everything
 is inside the pane and readable. Say whether it is effortless, and whether a click on a token
-should select, as built, or move (row 739), and whether P should work on the render window (row 740).
+should select, as built, or move (row 739), and whether O should work on the render window (row 740).
 **571. The tray.** (one more pad than `[[devices]]` lists)
 1. Plug it in, and hover it under NOBODY HOLDS.
 2. Unplug it.

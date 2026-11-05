@@ -92,7 +92,7 @@ seat, there to give a controller to.
 
 It uses the table above and adds nothing to it. The panel reaches it through `Panel.meta`. The
 board is a side pane section (last, folded, its header saying who is where) and the same board
-large in its own window, from the footer's chip or P. Its ids are in the module's docstring.
+large in its own window, from the footer's chip or O. Its ids are in the module's docstring.
 
 **What the surface lacks.** There is no call to let a controller go, and a listed controller
 always has a holder, so a drag to the tray cannot be: the tray shows the pads no entry lists

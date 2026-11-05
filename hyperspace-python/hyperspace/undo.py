@@ -761,12 +761,19 @@ def where(inside_meta) -> None:
     _where = inside_meta
 
 
+NOTHING_HERE = "nothing to undo here: drag the player back"
+
+
 def here() -> Undo | None:
     """The stack ⌘Z acts on: the meta controller's inside a meta section, else
-    that of the panel's `Deck` (the owner, 2026-11-04). Never the newest of them."""
+    that of the panel's `Deck` (the owner, 2026-11-04). Never the newest of them.
+    None where `where` says None: there, nothing is taken back (the player screen)."""
     if _meta is not None and _where is not None:
         try:
-            if _where():
+            inside = _where()
+            if inside is None:
+                return None
+            if inside:
                 return _meta
         except Exception as e:  # noqa: BLE001 — a panel that raises is not inside one
             print(f"undo: where failed ({type(e).__name__}: {e})", file=sys.stderr)
@@ -829,6 +836,8 @@ def undo() -> None:
     at = here()
     if at is not None:
         _guarded("undo", lambda u: u.undo(), on=at)
+    elif _meta is not None:
+        _meta._say(NOTHING_HERE)
 
 
 def redo() -> None:
@@ -836,3 +845,5 @@ def redo() -> None:
     at = here()
     if at is not None:
         _guarded("redo", lambda u: u.redo(), on=at)
+    elif _meta is not None:
+        _meta._say(NOTHING_HERE)

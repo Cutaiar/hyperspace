@@ -636,6 +636,7 @@ CHEATSHEET = [
     ("← →", "previous / next shape"),
     ("space", "pause rotation"),
     ("P / L / F", "points / lines / faces"),
+    ("O", "who is on air: the player screen"),
     ("1–6", "planes XY XZ YZ XW YW ZW"),
     ("↑ ↓", "4D depth · hold accelerates"),
     ("[ ]  , .", "brightness · speed"),
@@ -683,9 +684,8 @@ CHEATSHEET = [
 # go of the focus.
 # the sections that hold the meta controller's params: ⌘Z there takes its stack
 # (plan 44 D5b, `Panel.in_meta_section`). The owner named analyzer, hands and
-# output; audio holds the master faders and nothing of a preset (row 692). Players
-# holds no param, but who is on what is the meta controller's: never a deck's undo
-META_SECTIONS = ("output", "audio", "analyzer", "hands", "players")
+# output; audio holds the master faders and nothing of a preset (row 692)
+META_SECTIONS = ("output", "audio", "analyzer", "hands")
 
 PAGE_KEYS = ["output", "view", "faces", "media", "camera", "lookback", "fx", "audio", "analyzer",
              "routing", "graph", "lfo", "seq", "hands", "presets", "system", "players"]
@@ -885,15 +885,18 @@ class Panel:
                    "to the top of the pane, and folds again when the focus moves on unless "
                    "you unfolded it yourself. graph lets go of the focus.")
 
-    def in_meta_section(self) -> bool:
+    def in_meta_section(self) -> bool | None:
         """What ⌘Z goes by, through `undo.where`: its meta stack here, else the
         panel's deck's. **What is under the mouse decides:** a param undo watches
         says by its own layer, wherever it is drawn (a mixed section: hands with
         `ghost.*`, SYSTEM with `desk.slew`, a rig node in the selection); else the
-        section under it (`ui_pane.where`); else the deck."""
+        section under it (`ui_pane.where`); else the deck. None over the player
+        screen: no stack, since a move is on none of them (`undo.here`)."""
         p = getattr(self, "_param_under", None)
         if p is not None and undo.watched(p):
             return part_of(p) != "performance"
+        if ui_players.over(self):
+            return None
         return ui_pane.where(self) in META_SECTIONS
 
     def go_page(self, i) -> None:

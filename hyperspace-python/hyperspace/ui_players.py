@@ -17,8 +17,9 @@ it gets there, is plan 55's. They run after the board's draw (`_board`), since
 
 **Where it lives.** A section of the side pane (`ui_pane`, folded at first, its
 header saying who is where) and the same board large, in a window of its own, over
-whatever is drawn (`window`). The footer's chip and the P key open and close the
-large one, with the panel folded too. Esc closes it. Both are the one `_board`; every
+whatever is drawn (`window`). The footer's chip and the O key open and close the
+large one, with the panel folded too. Esc closes it. O has no row in `routing.keymap`, and
+if one is learned onto it the row has it and the board does not (`_key_toggles`). Both are the one `_board`; every
 size is `lay_out`, a plain function of the width, tested at 240, 320 and large.
 
 **The tray** is what nobody holds. By plan 55's rule every listed controller has a
@@ -63,12 +64,14 @@ BIG_DESIGN = 520.0       # its scale: its width over this
 BIG_MAX = 2.4
 DRAG_PX = 4.0            # past this a press on a token is a drag
 LOOSE_S = 1.0            # how often the tray looks for a pad nobody lists
+KEY = "O"                # opens the board: no row in `routing.keymap` (a test holds it so)
+STAYS = " Stays until moved."
 HINT = "Drag a player across to change duty. Drag a controller to another player."
 TRAY_NONE = "nothing loose"
 TRAY_TIP = ("Seen on this Mac, in no [[devices]] entry of config.toml, so nobody can hold it "
             "yet. Add an entry and it comes in on player 1.")
-OPEN_TIP = "The player screen, large: who is on air, and what they hold (P)"
-LARGE_TIP = "The same board, large, for across the room (P, or the footer's chip)"
+OPEN_TIP = "The player screen, large: who is on air, and what they hold (O)"
+LARGE_TIP = "The same board, large, for across the room (O, or the footer's chip)"
 STATE_WORDS = {"on": "connected", "lost": "lost", "off": "off in config.toml",
                "error": "error", "gone": "not listed now"}
 
@@ -77,6 +80,7 @@ CARD = imgui.ImVec4(0.13, 0.13, 0.15, 1.0)
 WHITE = imgui.ImVec4(1, 1, 1, 1)
 
 Rect = tuple[float, float, float, float]
+_esc_frame = -1          # the frame the board last took Esc (`took_escape`)
 
 
 @dataclass(frozen=True)
@@ -196,11 +200,14 @@ def glyph_of_model(model) -> str:
 def _glyph_key(d) -> tuple[str, str]:
     """(`GLYPHS`' key, the words) for a listed device."""
     kind = getattr(d, "kind", "")
+    entry = getattr(d, "entry", None) or {}     # an `OffDevice` has only this to say what it is
     if kind == "gamepad":
         model = getattr(d, "model", None)
+        if model is None:
+            model = models.MODELS.get(models.parse_spec(entry.get("controller", "any")))
         return glyph_of_model(model), (model.name if model is not None else "gamepad")
     if kind == "midi":
-        apc = getattr(d, "profile", "") == "apc40"
+        apc = str(entry.get("profile") or "apc40") == "apc40"      # as `MidiDevice.profile`
         return ("apc40", "APC40") if apc else ("midi", "MIDI desk")
     if kind == "hands":
         return "hands", "Ultraleap hands"
@@ -234,27 +241,41 @@ def held(panel, number: int) -> list[Held]:
 
 
 def loose(panel) -> list[Held]:
-    """Pads the Mac sees that no entry reads (the module's tray). Never raises: a
+    """Pads the Mac sees that no entry reads (the module's tray). A pad an entry
+    is off for, or is waiting to take, is that entry's: one pad each. Never raises: a
     tray costs nothing if it cannot look."""
     regs = getattr(panel, "devices", None)
+    waiting = [d for d in (regs if regs is not None else ())
+               if getattr(d, "kind", "") == "gamepad" and _state_of(d) != "on"]
+
+    def spoken_for(model, vid=None, pid=None) -> bool:
+        for d in waiting:
+            spec = (getattr(d, "entry", None) or {}).get("controller", "any")
+            if models.matches(spec, model, vid, pid):
+                waiting.remove(d)
+                return True
+        return False
     claims = getattr(getattr(regs, "ctx", None), "pads", None)
     hub = getattr(claims, "hub", None)
     out: list[Held] = []
     try:
         if hub is not None:
             for path, r in list(hub.readers.items()):
-                if path not in hub.held:
+                if path not in hub.held and not spoken_for(
+                        r.model, getattr(r, "vid", None), getattr(r, "pid", None)):
                     out.append(Held(str(r.name), glyph_of_model(r.model), str(r.name), "on"))
         import glfw
         taken = getattr(claims, "taken", {})
         for j in range(glfw.JOYSTICK_1, glfw.JOYSTICK_LAST + 1):
             if j in taken or not glfw.joystick_present(j):
                 continue
-            model = models.by_ids(*models.glfw_ids(glfw.get_joystick_guid(j)))
+            vid, pid = models.glfw_ids(glfw.get_joystick_guid(j))
+            model = models.by_ids(vid, pid)
             # a pad the hid road reads shows here as well: the hub says if it is free
             if model.road == "hid" and hub is not None:
                 continue
-            out.append(Held(model.name, glyph_of_model(model), model.name, "on"))
+            if not spoken_for(model, vid, pid):
+                out.append(Held(model.name, glyph_of_model(model), model.name, "on"))
     except Exception:  # noqa: BLE001 — see the docstring
         return out
     return out
@@ -288,12 +309,11 @@ def duty_words(number: int, duty: Duty, roles, left: int, reached: int) -> str:
     """What a duty change does, said as it happens."""
     head = f"Player {number} {WORDS[duty]}"
     if not roles:
-        return f"{head}: holds no controller yet. Stays until moved."
+        return f"{head}: holds no controller yet.{STAYS}"
     them = ", ".join(roles)
     if left == reached:
-        return f"{head}: {them} stay on deck {reached}. Stays until moved."
-    return (f"{head}: {them} now on deck {reached}; rows on deck {left} go quiet. "
-            "Stays until moved.")
+        return f"{head}: {them} stay on deck {reached}.{STAYS}"
+    return f"{head}: {them} now on deck {reached}; rows on deck {left} go quiet.{STAYS}"
 
 
 def give_words(role: str, number: int, deck: int, reopened: bool, address: str | None,
@@ -309,10 +329,15 @@ def give_words(role: str, number: int, deck: int, reopened: bool, address: str |
 
 
 def _say(panel, st: dict, words: str) -> None:
-    st["said"] = words
+    """The line under the lanes and the footer. A move the file did not keep says so,
+    in the warning colour, and does not promise it stays (`Players.save`)."""
+    error = _meta(panel).players.error
+    if error:
+        words = f"{words.removesuffix(STAYS).rstrip()} {error}"
+    st["said"], st["said_warn"] = words, bool(error)
     lib = getattr(panel, "library", None)
     if lib is not None and hasattr(lib, "say"):
-        lib.say(words)
+        lib.say(warning=words) if error else lib.say(words)
 
 
 def move(panel, number: int, duty: Duty) -> None:
@@ -346,9 +371,10 @@ def give(panel, role: str, number: int) -> None:
 def _clicked_lane(panel, st: dict, duty: Duty) -> None:
     sel = st["sel"]
     if sel is not None and sel[0] == SEL_PLAYER:
+        st["sel"] = None                # one click, one move: a later stray click moves nobody
         move(panel, sel[1], duty)
     elif sel is None:
-        st["said"] = "Click a player first, then the lane."
+        st["said"], st["said_warn"] = "Click a player first, then the lane.", False
 
 
 def _clicked_card(panel, st: dict, number: int) -> None:
@@ -360,8 +386,18 @@ def _clicked_card(panel, st: dict, number: int) -> None:
         st["sel"] = None if sel == (SEL_PLAYER, number) else (SEL_PLAYER, number)
 
 
-def _clicked_ctl(st: dict, role: str) -> None:
-    st["sel"] = None if st["sel"] == (SEL_CTL, role) else (SEL_CTL, role)
+def _clicked_ctl(panel, st: dict, role: str) -> None:
+    """A click on a controller: picks it, or lets go of it; with another player's
+    controller picked, the click is on this player, as anywhere on their token."""
+    sel = st["sel"]
+    players = _meta(panel).players
+    if sel is not None and sel[0] == SEL_CTL and sel[1] != role:
+        number = players.player_of(role).number
+        if players.player_of(sel[1]).number != number:
+            give(panel, sel[1], number)
+            st["sel"] = None
+            return
+    st["sel"] = None if sel == (SEL_CTL, role) else (SEL_CTL, role)
 
 
 # ---------------------------------------------------------------- the glyphs
@@ -624,9 +660,11 @@ def _button(ident: str, r: Rect, over: bool = True) -> bool:
 
 def _dragging(st: dict, sfx: str, what: tuple) -> None:
     """The item just drawn: a press on it held past `DRAG_PX` picks it up."""
-    if st["drag"] is None and imgui.is_item_active() and imgui.is_mouse_dragging(0, DRAG_PX):
+    if (st["drag"] is None and not st.get("no_drag") and imgui.is_item_active()
+            and imgui.is_mouse_dragging(0, DRAG_PX)):
         st["drag"] = (sfx, *what)
         st["sel"] = None
+        st["drag_seen"] = imgui.get_frame_count()
 
 
 def _drop_on(bd: Board, what: str, x: float, y: float):
@@ -666,12 +704,6 @@ def _board(panel, sfx: str, s: float) -> None:
     ids and drag apart from the pane's."""
     meta = _meta(panel)
     st = _state(panel)
-    # a drag whose board went undrawn (folded, scrolled out, closed) is over: the mouse
-    # may have let go unseen, and it must not land when the board is next drawn
-    frame_no = imgui.get_frame_count()
-    if st["drag"] is not None and st["drag"][0] == sfx and st.get("drag_seen", frame_no) < frame_no - 1:
-        st["drag"] = None
-    st["drag_seen"] = frame_no
     hold = {p.number: held(panel, p.number) for p in meta.players}
     duties = {p.number: p.duty for p in meta.players}
     tray = _tray(panel, st)
@@ -706,16 +738,17 @@ def _board(panel, sfx: str, s: float) -> None:
     # the buttons, on what was drawn: lane, then token, then controller. A move runs
     # below, past the last of them: `register` can close and open a device
     act = None
+    free = st["drag"] is None and not st.get("no_drag")   # a release ending a drag is no click
     for duty in LANES:
-        if _button(f"##players{sfx}.lane.{duty.value}", bd.lanes[duty]) and st["drag"] is None:
+        if _button(f"##players{sfx}.lane.{duty.value}", bd.lanes[duty]) and free:
             act = (_clicked_lane, panel, st, duty)
     for n, card in bd.cards.items():
-        if _button(f"##players{sfx}.p{n}", card.rect) and st["drag"] is None:
+        if _button(f"##players{sfx}.p{n}", card.rect) and free:
             act = (_clicked_card, panel, st, n)
         _dragging(st, sfx, (SEL_PLAYER, n))
         for h, (role, rect) in zip(hold[n], card.cells, strict=False):
-            if _button(f"##players{sfx}.ctl.{role}", rect, over=False) and st["drag"] is None:
-                act = (_clicked_ctl, st, role)
+            if _button(f"##players{sfx}.ctl.{role}", rect, over=False) and free:
+                act = (_clicked_ctl, panel, st, role)
             _dragging(st, sfx, (SEL_CTL, role))
             if imgui.is_item_hovered() and st["drag"] is None:
                 ui.tooltip(f"{role}  ·  {h.name}  ·  {STATE_WORDS[h.state]}  ·  "
@@ -728,8 +761,11 @@ def _board(panel, sfx: str, s: float) -> None:
     imgui.set_cursor_screen_pos(origin)
     imgui.dummy(_v(room, bd.h))
 
+    if not imgui.is_mouse_down(0):
+        st["no_drag"] = False
     drag = st["drag"] if st["drag"] is not None and st["drag"][0] == sfx else None
     if drag is not None:
+        st["drag_seen"] = imgui.get_frame_count()
         _draw_carried(hold, drag, mouse, s)
         if not imgui.is_mouse_down(0):
             st["drag"] = None
@@ -741,7 +777,8 @@ def _board(panel, sfx: str, s: float) -> None:
     if act is not None:
         act[0](*act[1:])
     imgui.push_text_wrap_pos(0.0)
-    imgui.text_colored(ui.TEXT if st["said"] else ui.FAINT, st["said"] or HINT)
+    imgui.text_colored(ui.WARN if st.get("said_warn") else ui.TEXT if st["said"] else ui.FAINT,
+                       st["said"] or HINT)
     imgui.pop_text_wrap_pos()
 
 
@@ -752,7 +789,7 @@ def section(panel, dt: float = 0.0) -> None:
         imgui.text_disabled("no players here")
         return
     st = _state(panel)
-    if ui.lit_chip("large  (P)##players.large", st["large"]):
+    if ui.lit_chip("large  (O)##players.large", st["large"]):
         st["large"] = not st["large"]
     if imgui.is_item_hovered():
         ui.tooltip(LARGE_TIP)
@@ -771,10 +808,42 @@ def footer(panel) -> None:
         ui.tooltip(OPEN_TIP)
 
 
-def _key_toggles() -> bool:
+def _row_on_key(panel) -> bool:
+    """Does the live table have a row on the key? Asked only when it is pressed."""
+    table = getattr(getattr(panel, "router", None), "table", None)
+    rows = table.of("key") if table is not None else ()
+    return any(b.key_name == KEY for b in rows)
+
+
+def _key_toggles(panel) -> bool:
     io = imgui.get_io()
-    return (not io.want_text_input and not (io.key_ctrl or io.key_super or io.key_alt)
-            and imgui.is_key_pressed(imgui.Key.p, False))
+    return (not io.want_text_input and not (io.key_ctrl or io.key_super or io.key_alt or io.key_shift)
+            and imgui.is_key_pressed(imgui.Key.o, False) and not _row_on_key(panel))
+
+
+def took_escape() -> bool:
+    """Did the board take this frame's Esc? Then GRAPH's own does not act on it
+    (`ui_graph.escaped`; `window` runs first in the frame)."""
+    return _esc_frame == imgui.get_frame_count()
+
+
+def _escape(st: dict) -> None:
+    """Esc, when nothing else wants it (`ui_graph.escaped`): drops what is carried, then
+    lets go of what is picked, then closes the large window. A carried thing stays
+    down until the mouse comes up (`no_drag`): the button still holds the press."""
+    global _esc_frame
+    from . import ui_graph  # (late: ui_graph imports ui_pane, which imports this)
+    if not ui_graph.escaped():
+        return
+    if st["drag"] is not None:
+        st["drag"], st["no_drag"] = None, True
+    elif st["sel"] is not None:
+        st["sel"] = None
+    elif st["large"]:
+        st["large"] = False
+    else:
+        return
+    _esc_frame = imgui.get_frame_count()
 
 
 def window(panel) -> None:
@@ -784,9 +853,16 @@ def window(panel) -> None:
     if _meta(panel) is None:
         return
     st = _state(panel)
-    if _key_toggles():
+    # a drag whose board went undrawn (folded, scrolled out, closed) is over: the mouse
+    # may have let go unseen, and it must not land when the board is next drawn. Here,
+    # first in every frame, so another board drawing cannot hide it
+    if st["drag"] is not None and st.get("drag_seen", -1) < imgui.get_frame_count() - 1:
+        st["drag"] = None
+    _escape(st)
+    if _key_toggles(panel):
         st["large"] = not st["large"]
     if not st["large"]:
+        st["over_big"] = False
         return
     io = imgui.get_io()
     w, h = min(BIG_W, io.display_size.x - 24), min(BIG_H, io.display_size.y - 24)
@@ -800,14 +876,18 @@ def window(panel) -> None:
                 imgui.internal.bring_window_to_display_front(imgui.internal.get_current_window())
             except Exception:  # noqa: BLE001, S110 — an imgui without the internal call
                 pass
+        st["over_big"] = imgui.is_window_hovered(imgui.HoveredFlags_.child_windows)
         if opened:
             room = imgui.get_content_region_avail().x
             _board(panel, ".big", max(1.0, min(BIG_MAX, room / BIG_DESIGN)))
     finally:
         imgui.end()
-    if imgui.is_key_pressed(imgui.Key.escape, False):
-        if st["sel"] is not None or st["drag"] is not None:
-            st["sel"] = st["drag"] = None
-        else:
-            shown = False
     st["large"] = bool(shown)
+
+
+def over(panel) -> bool:
+    """Is the mouse over a board, as of the latest draw? ⌘Z there has nothing to take
+    back (`Panel.in_meta_section`): a move is on no undo stack, and neither a deck's
+    edit nor an analyzer's setting should go back in its place."""
+    from . import ui_pane  # (late: ui_pane imports this module)
+    return bool(_state(panel).get("over_big")) or ui_pane.where(panel) == "players"

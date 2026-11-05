@@ -14,11 +14,11 @@ from hyperspace.pads import models
 from hyperspace.ui import PAGE_KEYS
 
 
-def dev(kind, status="connected", model=None, profile=""):
-    return NS(kind=kind, status=status, model=models.MODELS.get(model), profile=profile)
+def dev(kind, status="connected", model=None):
+    return NS(kind=kind, status=status, model=models.MODELS.get(model), entry={})
 
 
-FAKES = {"edge": dev("gamepad", model="edge"), "apc40": dev("midi", profile="apc40"),
+FAKES = {"edge": dev("gamepad", model="edge"), "apc40": dev("midi"),
          "leap": dev("hands", "lost"), "xbox": dev("gamepad", model="xbox"),
          "joyl": dev("gamepad", model="joycon-l"), "joyr": dev("gamepad", "lost", model="joycon-r"),
          "osc": dev("osc")}

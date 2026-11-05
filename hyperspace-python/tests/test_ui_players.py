@@ -10,7 +10,7 @@ from test_ui_shell import build_rig, frame
 from ui_driver import Driver
 
 from hyperspace import deck as deck_mod
-from hyperspace import devices, ui_graph, ui_pane, ui_players
+from hyperspace import devices, routing, ui_graph, ui_pane, ui_players, undo
 from hyperspace.deck import MetaController
 from hyperspace.pads import models
 from hyperspace.players import FILE, Duty, Players
@@ -354,25 +354,199 @@ def test_the_section_chip_opens_it_large(rig):
     assert ui_players._state(r.panel)["large"]
 
 
-def test_p_opens_it_and_esc_closes_it_and_a_modifier_does_neither(rig):
+def test_the_key_opens_it_and_esc_closes_it_and_a_modifier_does_neither(rig):
     r, d = rig, rig.d
     st = ui_players._state(r.panel)
-    d.run(d.key(imgui.Key.p))
+    d.run(d.key(imgui.Key.o))
     assert st["large"]
-    d.run(d.key(imgui.Key.p))
+    d.run(d.key(imgui.Key.o))
     assert not st["large"]
-    d.run(d.key(imgui.Key.p))
+    d.run(d.key(imgui.Key.o))
     assert st["large"]
     d.run(d.key(imgui.Key.escape), d.wait(1))
     assert not st["large"]
-    d.run(d.key(imgui.Key.p, d.ctrl))
-    assert not st["large"], "a modified P is not P"
+    d.run(d.key(imgui.Key.o, d.ctrl))
+    assert not st["large"], "a modified O is not O"
+
+
+def test_the_key_has_no_row_so_it_changes_nothing_on_the_output():
+    """`Keys` polls the control window for every row whenever imgui is not typing: a
+    key with a row opens the board and changes the look in one press."""
+    taken = {b.source.removeprefix("key:") for b in routing.keymap()}
+    assert ui_players.KEY not in taken
+    assert not any(k.endswith(f"+{ui_players.KEY}") for k in taken)
+    assert hasattr(imgui.Key, ui_players.KEY.lower())
+
+
+def test_a_row_learned_onto_the_key_keeps_it(rig):
+    r, d = rig, rig.d
+    st = ui_players._state(r.panel)
+    table = r.panel.router.table
+    table.set_routes([*table.routes(), routing.Binding(f"key:{ui_players.KEY}", "view.bright", "push", 1.0)])
+    d.run(d.key(imgui.Key.o))
+    assert not st["large"]
+
+
+def test_esc_in_a_text_field_leaves_the_board_open(rig):
+    """The field has the key: `ui_graph.escaped`. A slider being typed into, for one."""
+    r, d = rig, rig.d
+    st = ui_players._state(r.panel)
+    r.reg["ui.page"].set(PAGE_KEYS.index("view"))
+    d.run(d.wait(3))
+    st["large"] = True
+    d.run(d.wait(2))
+    io = imgui.get_io()
+    d.run(d.move("view.instances"), d.wait(1))
+    io.add_key_event(d.ctrl, True)
+    d.run(d.press(True), d.press(False))
+    io.add_key_event(d.ctrl, False)
+    d.run(d.wait(2))
+    assert io.want_text_input, "the field is open"
+    d.run(d.key(imgui.Key.escape), d.wait(1))
+    assert st["large"], "only the field closed"
+    d.run(d.key(imgui.Key.escape), d.wait(1))
+    assert not st["large"], "the next one is the board's"
+
+
+def test_esc_closing_the_board_does_not_also_reach_graph(rig, monkeypatch):
+    """The board draws first; GRAPH, asking after it in that frame, is told no."""
+    r, d = rig, rig.d
+    st = ui_players._state(r.panel)
+    st["large"] = True
+    d.run(d.wait(2))
+    seen = []
+    real = ui_players.window
+
+    def spying(panel):
+        pressed = imgui.is_key_pressed(imgui.Key.escape, False)
+        real(panel)
+        if pressed:
+            seen.append((ui_players.took_escape(), ui_graph.escaped()))
+    monkeypatch.setattr(ui_players, "window", spying)
+    d.run(d.key(imgui.Key.escape), d.wait(1))
+    assert not st["large"] and seen == [(True, False)]
+    assert ui_players.took_escape() is False, "only for the frame it was taken"
+
+
+def test_esc_drops_a_carried_token_and_the_release_moves_nobody(rig, tmp_path):
+    r, d, meta = rig, rig.d, rig.meta
+    st = ui_players._state(r.panel)
+    d.run(d.move(_head(d, "players.p2")), d.wait(1), d.press(True), d.wait(1))
+    aim = _corner(d, "players.lane.off_air")
+    d.run(d.move(aim, frames=4), d.wait(1))
+    assert st["drag"] is not None
+    d.run(d.key(imgui.Key.escape), d.wait(2))
+    assert st["drag"] is None, "and it is not picked straight back up"
+    d.run(d.press(False), d.wait(2))
+    assert meta.players.get(2).duty == Duty.ON_AIR and not (tmp_path / FILE).exists()
+    assert st["sel"] is None, "the release is no click either"
+    _drag(d, _head(d, "players.p2"), _corner(d, "players.lane.off_air"))
+    assert meta.players.get(2).duty == Duty.OFF_AIR, "the next press drags as ever"
+
+
+def test_a_stray_click_on_a_lane_after_a_move_moves_nobody(rig):
+    d, meta = rig.d, rig.meta
+    _click(d, _head(d, "players.p2"))
+    _click(d, _corner(d, "players.lane.off_air"))
+    assert meta.players.get(2).duty == Duty.OFF_AIR
+    _click(d, _corner(d, "players.lane.on_air"))
+    assert meta.players.get(2).duty == Duty.OFF_AIR, "it stays until someone moves it"
+
+
+def test_a_large_boards_drag_does_not_outlive_it_while_the_pane_draws(rig, tmp_path):
+    """The pane's board draws on: the large one's drag still goes when it closes."""
+    r, d, meta = rig, rig.d, rig.meta
+    st = ui_players._state(r.panel)
+    st["large"] = True
+    d.run(d.wait(2))
+    d.run(d.move(_head(d, "players.big.p2")), d.wait(1), d.press(True), d.wait(1))
+    d.run(d.move(_corner(d, "players.big.lane.off_air"), frames=4), d.wait(1))
+    assert st["drag"] is not None and st["drag"][0] == ".big"
+    st["large"] = False
+    d.run(d.wait(3))
+    assert st["drag"] is None
+    d.run(d.press(False), d.wait(2))
+    st["large"] = True
+    d.run(d.wait(3))
+    assert meta.players.get(2).duty == Duty.ON_AIR and not (tmp_path / FILE).exists()
+
+
+def test_a_click_on_the_targets_controller_gives_the_picked_one(rig, tmp_path, monkeypatch):
+    """Cells cover most of a token: a click on one is a click on that player."""
+    d, meta = rig.d, rig.meta
+    _click(d, "players.ctl.leap")
+    _click(d, "players.ctl.p2")
+    assert meta.players.player_of("leap").number == 2
+
+
+def test_a_click_on_the_same_players_other_controller_picks_that_one(rig):
+    r, d, meta = rig, rig.d, rig.meta
+    _click(d, "players.ctl.leap")
+    _click(d, "players.ctl.pad")
+    assert ui_players._state(r.panel)["sel"] == (ui_players.SEL_CTL, "pad")
+    assert meta.players.player_of("leap").number == 1
+
+
+def test_a_move_the_file_did_not_keep_says_so(rig, tmp_path):
+    r, d, meta = rig, rig.d, rig.meta
+    meta.players.path = tmp_path / "no-such-folder" / FILE
+    _drag(d, _head(d, "players.p2"), _corner(d, "players.lane.off_air"))
+    assert meta.players.get(2).duty == Duty.OFF_AIR
+    said = _said(r)
+    assert "not remembered" in said and "Stays until moved" not in said
+    assert ui_players._state(r.panel)["said_warn"] and r.lib.warning == said
+
+
+def test_a_pad_an_entry_is_off_for_or_waits_for_is_not_loose(rig):
+    r = rig
+    edge = models.MODELS["edge"]
+    ctx = r.panel.devices.ctx
+    r.panel.devices.devices.append(devices.OffDevice("spare", "gamepad", {"controller": "edge"}, ctx))
+    ctx.pads = SimpleNamespace(taken={}, hub=SimpleNamespace(
+        readers={"a": SimpleNamespace(name="DualSense Edge", model=edge, vid=None, pid=None),
+                 "b": SimpleNamespace(name="DualSense Edge", model=edge, vid=None, pid=None)},
+        held={}))
+    assert [h.role for h in ui_players.loose(r.panel)] == ["DualSense Edge"], "one is spoken for"
+
+
+def test_an_entry_that_is_off_still_draws_as_itself():
+    apc = devices.OffDevice("desk", "midi", {})
+    keys = devices.OffDevice("keys", "midi", {"profile": "generic"})
+    edge = devices.OffDevice("edge", "gamepad", {"controller": "edge"})
+    assert ui_players._glyph_key(apc)[0] == "apc40"
+    assert ui_players._glyph_key(keys)[0] == "midi"
+    assert ui_players._glyph_key(edge) == ("sony", "DualSense Edge")
+    assert ui_players._state_of(apc) == "off"
+
+
+def test_undo_over_the_board_takes_nothing_back_and_says_so(rig, monkeypatch):
+    """A move is on no stack: over the board neither a deck's edit nor a meta setting
+    goes back in its place."""
+    r, d = rig, rig.d
+    said, touched = [], []
+    meta_stack = SimpleNamespace(_say=said.append, undo=lambda: touched.append("meta"))
+    deck_stack = SimpleNamespace(undo=lambda: touched.append("deck"))
+    monkeypatch.setattr(undo, "_meta", meta_stack)
+    monkeypatch.setattr(undo, "_installed", deck_stack)
+    monkeypatch.setattr(undo, "_where", r.panel.in_meta_section)
+    d.run(d.move(_corner(d, "players.lane.on_air")), d.wait(2))
+    assert ui_players.over(r.panel) and r.panel.in_meta_section() is None
+    undo.undo()
+    undo.redo()
+    assert not touched and said == [undo.NOTHING_HERE, undo.NOTHING_HERE]
+    d.run(d.park(), d.wait(2))
+    undo.undo()
+    assert touched == ["deck"], "off the board, as ever"
+    r.panel.__dict__[ui_players.STATE]["large"] = True
+    d.run(d.wait(2))
+    d.run(d.move(_corner(d, "players.big.lane.on_air")), d.wait(2))
+    assert ui_players.over(r.panel) and r.panel.in_meta_section() is None
 
 
 def test_it_opens_with_the_panel_folded(rig):
     r, d = rig, rig.d
     r.panel.open = False
-    d.run(d.wait(1), d.key(imgui.Key.p), d.wait(2))
+    d.run(d.wait(1), d.key(imgui.Key.o), d.wait(2))
     assert "players.big.p1" in d.rects
 
 
@@ -383,7 +557,7 @@ def test_a_panel_with_no_meta_controller_draws_no_board(tmp_path, monkeypatch):
         d = Driver(step=lambda: frame(r.panel))
         d.record(monkeypatch.setattr)
         r.reg["ui.page"].set(PAGE_KEYS.index("players"))
-        d.run(d.wait(4), d.key(imgui.Key.p))
+        d.run(d.wait(4), d.key(imgui.Key.o))
         assert "players.open" not in d.rects and "players.lane.on_air" not in d.rects
 
 

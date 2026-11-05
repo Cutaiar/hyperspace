@@ -734,7 +734,7 @@ here; overturn → the change, then the same.
 | 737 | Wave 4 AZ: the panel says "analyzer" for the fixture and its tuning; a part reads its own name (SUB … AIR) or "analyzer 3", and "band" stays only as the plain audio word for one of the parts | 566 | owner — 2026-11-04: band for one bin, as built |
 | 738 | Wave 4 AZ: words only; `band.*` ids, `lane:` addresses, the `band` group key, the library's `band` folders, `SECTIONS` and `PAGE_KEYS` all stay; ROUTING's target list keeps printing raw ids | 567 | The owner, 2026-11-04 |
 | 739 | Wave 4 PS: the player select screen, a party game's team screen. ON AIR and OFF AIR lanes, a token per player with its number on its colour and what it holds in the controller's own glyph, struck through when it is not there. The mouse moves people and nothing else does: drag a token across or click it then the lane; drag a controller to a token or click it then the token. Every move is said at once, on the board and in the footer, and goes through `move_player` and `register` | 568, 569 | owner — 2026-11-04: "we can just use the mouse to move people around"; click-then-lane selecting first, so a click on a token alone moves nobody, is (rec) — pending the owner |
-| 740 | Wave 4 PS: where it lives. A side pane section, folded at first and last in the pane so focused it has the room, whose header says who is where; the same board large in its own window; the footer's chip, always there, and the P key open it. `Panel.meta` is the one new handle | 570 | (rec) — pending the owner |
+| 740 | Wave 4 PS: where it lives. A side pane section, folded at first and last in the pane so focused it has the room, whose header says who is where; the same board large in its own window; the footer's chip, always there, and the O key, which has no row in the keymap, open it. ⌘Z over the board takes nothing back and says so. `Panel.meta` is the one new handle | 570 | (rec) — pending the owner |
 | 741 | Wave 4 PS: the tray. Plan 55 gives every listed controller a holder, player 1 unless told, and has no call to let one go, so a listed controller is never in the tray and none can be dragged there. It shows the pads the Mac sees that no `[[devices]]` entry lists, read-only. A player holding nothing is drawn as an empty seat and takes a controller | 571 | (rec) — pending the owner: a let-go call and adding an entry from the tray are the owner's to ask for |
 | 742 | Wave 4 PS: a pad's light and player number follow who holds it, not its place in the list, so two pads of player 1 show player 1's colour until one is given away. An entry's own `light` or `player` still wins; a sink row still does | 569 | (rec) — pending the owner |
 | 743 | Wave 4 MR: the hard rule. No row of a preset may drive a meta controller param (`part_of(p) == "session"`); refused in words at Learn, at the pickers and at `Bindings`' doors, dropped with a note at a load, removed by the next save; the meta controller's own rows stay, the line being `is_session_row`. Overturns row 19 (a) | 572, 573 | owner — 2026-11-04: "a hard rule" |
@@ -13174,19 +13174,26 @@ during a show changes nothing. A one-click toggle would be quicker and is a smal
 **The question.** "Effortless" means reachable at once during a show.
 
 **(rec) — pending the owner.** Three doors to one board. The footer's chip is always drawn and
-reads "on air 1 4 · off air 2 3", so it is the answer to who is where as well as the way in; P
-does the same in the control window; both open the board large in its own window, over GRAPH,
+reads "on air 1 4 · off air 2 3", so it is the answer to who is where as well as the way in; O
+does the same in the control window, chosen because P, L, F and the rest are rows of
+`routing.keymap` that `Keys` polls there too, and a row learned onto O keeps it; both open the board large in its own window, over GRAPH,
 with the panel folded too, for reading from across a room. Esc closes it. The side pane's section
 is the same board at 240 to 320 px, folded at first, so a fresh Mac's pane reads as it did, and
 last in the pane, because a focused section has only the room under the headers after it. Its
 slot is the last in `ui.PAGE_KEYS`, which is append-only, so a key row or a pad can focus it.
 
-P reaches the control window only. A key on the render window is `app.frame`'s, frozen while D5c
+O reaches the control window only. A key on the render window is `app.frame`'s, frozen while D5c
 is open; say if it should work there too.
 
 `Panel.meta` is new, one line in `app.main` beside `panel.meta_undo`: the panel had no way to the
-meta controller. Players is in `ui.META_SECTIONS`, so ⌘Z over the board never takes a deck's
-stack; a duty is not itself undoable, since one more drag undoes it.
+meta controller.
+
+**⌘Z over the board takes nothing back and says "nothing to undo here: drag the player back"**
+(`Panel.in_meta_section` answers None, `undo.here` names no stack). A move is on no stack: the
+meta stack snapshots params, rows and marks, and a duty is none of those, so putting moves on it
+means changing `MetaMarks` in `deck.py`, frozen while D5c is open. With the mouse on the board
+⌘Z used to reach an earlier analyzer or output setting. Putting moves on the stack is the better
+end state and a small change once D5c lands.
 
 A seventeenth header took the room a fresh launch's pane fits in at 900 px high, so an open body's
 floor (`ui_pane.MIN_BODY_H`) goes from 160 to 150 px and the pane still opens with no scrollbar.
@@ -13199,7 +13206,8 @@ and neither `Players` nor `MetaController` has a call to let a controller go.
 
 **(rec) — pending the owner.** The surface was left as it is, as asked. The tray shows the pads
 the Mac sees that no entry reads: a HID pad the hub holds for nobody, and a GLFW joystick no pad
-has taken, looked for once a second while the board is drawn. It is read-only, since holding one
+has taken, looked for once a second while the board is drawn, and not a pad an entry is off
+for or waiting to take, whose owner must not be told to add a second entry. It is read-only, since holding one
 means an entry in `config.toml`. MIDI ports are not looked for: asking the system for them is the
 kind of call that should not run in a show's frames. When there is nothing it says "nothing loose".
 
