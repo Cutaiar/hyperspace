@@ -186,6 +186,26 @@ pad" is read as removing the gamepads' preset rows. The APC's bank pads and `pre
 stay, and load only into the off-air `Deck`. If they should go too, it is a one-row change.
 
 
+**Seventh round, 2026-11-04.**
+- **Timing:** the show is in the near future, not today. Small wanted items land before it;
+  the deck spine lands after it (see the schedule's note).
+- **A controller is generic, with extensions.** The APC is not a separate kind of thing: it
+  inherits the generic physical control system and has extensions, the way the DualSense Edge
+  does, by which it may talk to the meta controller. Some of its controls are reserved: not
+  learnable or bindable by a preset, and mapped exclusively onto meta params, such as the
+  crossfade. Another MIDI desk like it gets the same. So no new Learn road is needed for now:
+  a preset's Learn desk on a meta param stays refused.
+- **Hold-to-save is the Edge's only.** It is Dylan's controller for VJ-style setups. For
+  controllers held by anyone else, a press-and-hold save should not be mapped at all. So
+  `pad:MENU → preset.save_new` leaves the generic factory rows and becomes an Edge extension.
+  Not on the Joy-Con.
+- **`preset.*` and `deck.chase` become meta params,** decided with SEM after a sweep of which
+  desk rows are factory ones. Preset loading must be very intentional.
+- **"Band" is right for one bin:** EQ uses the word. "6 bands", SUB to AIR, as AZ built it.
+- **Base chase on a Joy-Con:** − or capture if free, else a trigger or bumper. #365 gives both
+  to the totem, so: **L on the left, R on the right.** That row belongs to #365's layout, so
+  it is that session's to add.
+
 ## Joy-Con version 0 (#365), from another session, 2026-11-04
 
 The Joy-Con integration was scaled back to a workable control surface for an upcoming
@@ -209,9 +229,11 @@ it. The owner holds it until the Joy-Con is hand-checked.
   on SR is gone. A Joy-Con enters node mode by the panel chip (NQ7). Base chase moved to
   Back, which #365's layout gives to totem reset on the (L), and the (R) has none. B2's
   row 724 suggested SL, which #365 holds, and Learn cannot arm the chase from the panel.
-  **Pending:** where a Joy-Con's chase goes (rec: the free shoulder, L or R).
-- **Pending:** the show's date, and whether wave 4 lands before it. Rec if it is soon: #365
-  alone on today's `main`, and wave 4 after, because B2, MR and D5a change what hands do.
+  **Answered:** L on the left, R on the right, in #365's layout.
+- **Before the show:** AZ, MR, B2, PA and #365, in that order: small, wanted, and each one
+  hand-checkable. **After it:** D5a and the spine, which touch every controller's path. On
+  #365's merge, add the one `control_free` line in #372's body and take the keeper's
+  `routing.py` shape from `origin/scratch/wave4-joycon`.
 
 ## The semantic migration (SEM)
 
