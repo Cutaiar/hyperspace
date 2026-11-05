@@ -609,6 +609,16 @@ def test_the_lab_draws_a_joycon_as_itself():
         assert not got & {"axis:LT", "pad:LB", "pad:VIEW", "pad:SHARE", "pad:RSTICK"}, (view, got)
 
 
+def test_only_the_left_joycon_can_reach_backs_factory_row():
+    """The generic chase is on `pad:VIEW`: the (L)'s − decodes to it until #365's
+    layout gives − to the totem, and no bit of the (R)'s report does (row 724)."""
+    left = nintendo.decode(full_report(b4=0x01), "l")
+    assert [NAMES[i] for i, v in enumerate(left.buttons) if v] == ["VIEW"]
+    every = nintendo.decode(full_report(b3=0xFF, b4=0xFF, b5=0xFF), "r")
+    held = {NAMES[i] for i, v in enumerate(every.buttons) if v}
+    assert "VIEW" not in held and "MENU" in held
+
+
 # ---- a Joy-Con asleep when it was opened (paired, listed, not answering) ----
 
 def simple_report() -> bytes:

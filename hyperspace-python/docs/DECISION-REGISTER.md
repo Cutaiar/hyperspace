@@ -717,6 +717,8 @@ here; overturn → the change, then the same.
 | 683 | Plan 51 O2: no schema move for `turn`: an older build drops the row with a note and lands the rest, and a save there loses it; both Macs update together | — | (rec) — pending the owner |
 | 684 | Plan 51 O2: the clutch is the same hand's grab, landed in the preset's row; a lost hand is an opened clutch; one undo step per closure with a 0.15 s grace; under the hold it moves the preview as a knob does | — | (rec) — pending the owner |
 | 685 | Plan 51 O2: within 20° of vertical, a yaw straying 20° or stepping 5° on leaving the cone makes the hand read NaN until it has left, then restart, not a camera jump; `ghost.mirror` does not flip a turn row, its depth does; a room lane on a clamped target stays `position`; a moved row lands as `row_for` would | — | (rec) — pending the owner |
+| 723 | Wave 4 B2: `pad:VIEW` holds `deck.chase`; `pad:VIEW → tempo.tap` and `hat:LEFT` / `hat:RIGHT → preset.list.*` leave the pad's factory rows; an old factory row moves at the next load, one the owner changed stays | 654 | owner — 2026-11-04: base chase is Back; tap tempo is not a default on every controller, "extremely sensitive"; no swapping presets from a controller or a pad |
+| 724 | Wave 4 B2: rows by model: a Joy-Con's chase is L / R in #365's `Model.layout`; hold-to-save is the Edge's, there too, by a qualified row until then; Learn goes on accepting `preset.list.*` and `tempo.tap`, unrefused | 723 | owner — 2026-11-04 on the Joy-Con and the Edge; (rec) — pending the owner on Learn |
 | 737 | Wave 4 AZ: the panel says "analyzer" for the fixture and its tuning; a part reads its own name (SUB … AIR) or "analyzer 3", and "band" stays only as the plain audio word for one of the parts | 566 | owner — 2026-11-04: band for one bin, as built |
 | 738 | Wave 4 AZ: words only; `band.*` ids, `lane:` addresses, the `band` group key, the library's `band` folders, `SECTIONS` and `PAGE_KEYS` all stay; ROUTING's target list keeps printing raw ids | 567 | The owner, 2026-11-04 |
 | 743 | Wave 4 MR: the hard rule. No row of a preset may drive a meta controller param (`part_of(p) == "session"`); refused in words at Learn, at the pickers and at `Bindings`' doors, dropped with a note at a load, removed by the next save; the meta controller's own rows stay, the line being `is_session_row`. Overturns row 19 (a) | 572, 573 | owner — 2026-11-04: "a hard rule" |
@@ -12750,6 +12752,79 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   continuous target it stays O1's `position`. `learn.move_route` lands a moved row the
   same way.
 - **Judge it.** 519.
+
+### 723. BACK holds the base chase; the pad swaps no preset and taps no tempo
+
+- **Asked.** Which button holds the chase (plan 53 NQ8), and what stays on the pad.
+- **Answer.** The owner, 2026-11-04: base chase is Back; tap tempo must not be on by
+  default on every controller, "extremely sensitive"; no swapping presets from a
+  controller or a pad. It overrules plan 53's `pad:LP`.
+- **Built.** `padmap` and `PAD_NEW_ROWS`: `pad:VIEW → deck.chase`, `momentary`.
+  `PAD_LAYOUTS["2026-11-04"]`: the exact old factory row on BACK becomes the
+  chase, the exact rows on ← / → are dropped, with a note and the file's backup. The
+  older speed rows on ← / → drop too, straight: through the walk of 2026-10-29, one
+  load would have left a row for the next to remove. Not a schema move.
+- **Delete sticks.** BACK's row is added to no file: it arrives by moving the row every
+  file since 2026-10-29 holds. A file with nothing on BACK stays that way, including a file
+  last opened between 2026-10-14 and 2026-10-29 (one line by hand). `PAD_NEW_ROWS` is gone.
+- **START.** The owner, 2026-11-04: hold-to-save is the Edge's only (row 724). The exact old
+  `pad:MENU → preset.save_new` drops at the next load, a changed row stays.
+- **Stays.** A row of the owner's on BACK, however close: Learn pad writes
+  `tempo.tap` as `fire` with value 0, not the factory's 1, so it is kept. That pad has
+  no chase until Learn gives it one. The same on ← / →. TAP TEMPO on the APC
+  (`apc40.py`), and the keyboard's `key:B`, which is not a controller. The APC's bank
+  pads and `preset.next`. No Edge default: Learn covers it.
+- **Two holders.** `routing.press_momentary`: a toggle on a `momentary` row stays on until
+  every source holding it has let go, across pads, the desk and osc. A source that can never
+  release goes through one door, `routing.let_go_lost`: a pad gone or closed
+  (`Router.pad_lost`), a desk's cable lost or its device closed (`MidiIO._let_go_held`, that
+  desk's presses only, as it recorded them, so a row changed under a held button still
+  releases), an
+  OSC sender silent for its `timeout` or its device closed or its row gone (`OscDevice.act`,
+  `close`). A phone holding a hit and sending nothing for `timeout` seconds (5 by default)
+  therefore lets go: a stuck chase is the worse failure.
+- **Qualified rows.** `pad@…` and `hat@…` are never moved: the factory has never written
+  one, and at load the table does not know which role is primary. If a second pad has become
+  the primary, its qualified row and a bare one on the same button both fire, on every button
+  and as before this row.
+- **Limit.** The factory rows name no pad, so they are the primary's; a second pad
+  still starts with none (row 212). An old factory row is recognised by its exact value,
+  so a hand-written row identical to it is taken at every load, and the file cannot say who
+  wrote it. A layout stamp in the file would settle that and is a saved-format change, left
+  to the format lane (row 724).
+- **Judge it.** 554.
+
+### 724. Rows by model: the Joy-Con's chase, the Edge's hold-to-save; whether Learn offers the list
+
+- **Joy-Con.** The owner, 2026-11-04: its chase is L on the left and R on the right, added to
+  `Model.layout` in #365 by that session; − and capture are the totem's. So on this build the
+  generic row chases on the (L)'s − and does nothing on the (R), which has no −, until #365 lands.
+  Nothing is built here for it. Its check is with #365's.
+- **The Edge's hold-to-save.** The owner, 2026-11-04: hold-to-save is the Edge's only, "the
+  controller Dylan will be using for VJ-style setups"; press-and-hold save must not be mapped on
+  other controllers; a controller is generic with extensions by model. The generic row goes
+  (row 723). `Model.layout` in #365 is its home: one line on the Edge's `Model`. **Today**, with no
+  code: an entry `role = "edge"`, `controller = "edge"` and a row `pad@edge:MENU` in that Mac's
+  `bindings.json`. `controller =` pins the Edge to the role, the qualifier gives the row to that
+  role alone, primary or not, and no load moves a qualified row. It takes both lines by hand, so an
+  Edge in the default `role = "pad"` has no save. A factory `pad@edge:MENU` would tie a row to a
+  role's name, not a model, and is not built.
+- **How a row gets there.** `Learn.learn_pad_button` lands `deck.chase` as `momentary`, but the
+  panel arms Learn pad from a widget's right-click, and `deck.chase` and `preset.list.*` have no
+  widget (`tempo.tap` has, the tempo line's "tap"). So plan 53 §5's "one Learn pad" is not reachable
+  from the panel for the chase: today it is one line in `bindings.json` and ⌘R. The chip plan 53 NQ7
+  proposes, or plan 52's panel button, would arm it. Not built here. `preset.save_new` has a widget,
+  but Learn writes `fire`, which saves on a brush: `hold` is written by hand.
+- **Learn and the list.** (rec) — pending the owner; built as recommended. `preset.list.*` stay in
+  the registry. **Recommended:** go on accepting them, unrefused, and give them no widget. A
+  hand-written row is a deliberate act by the person who said the default must go, a refusal is a
+  rule with no owner's word behind it, and once decks land they load only off air. The APC's "all
+  params ▾" still offers them, as it offers every param. A row Learn writes is `fire`, so it would
+  load on a brush, the thing the 2026-10-29 hold was for. By hand it wants `hold` and `"value": 0`:
+  at the default value it is the old factory row and the next load takes it, as the exact-row rule
+  must, since the file cannot say who wrote it. The same goes for `tempo.tap` by hand on BACK
+  (`fire`, default value), which moves to the chase, and for a bare `pad:MENU → preset.save_new`.
+- **Judge it.** 555.
 
 ### 737. What the panel calls the analyzer
 

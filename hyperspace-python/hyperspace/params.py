@@ -2249,7 +2249,7 @@ def build_performance(view, bank=None, dream=None, fx=None, ghost=None, media=No
             pass
     r.switch_state = picks
     # plan 52: the base chase, held. The deck's rig control, so every deck has
-    # its own: a test or a learned button presses it, and it is `Deck.chase`'s
+    # its own: a pad's BACK (the factory row) or a learned button presses it, and it is `Deck.chase`'s
     # road: `base_chase` with this deck's undo (`chase_undo`)
     r.toggle(CHASE_PARAM, "Base chase", lambda: r.chasing, lambda v: r.base_chase(bool(v)),
              group="deck", persist=False, modulatable=False,
@@ -2783,17 +2783,18 @@ def build_performance(view, bank=None, dream=None, fx=None, ghost=None, media=No
                       "stop) and tap a pad instead to choose the pad.")
         r.trigger("preset.next", "Next preset", lambda: bank.cycle(1), group=g)
         r.trigger("preset.prev", "Previous preset", lambda: bank.cycle(-1), group=g)
-        # the preset list, not the bank (2026-10-14): the pad's d-pad ← / →, held, step
-        # what the PRESETS page lists, saved ones included
+        # the preset list, not the bank (2026-10-14): they step what the PRESETS
+        # page lists, saved ones included. No factory row: Learn puts them on a
+        # control (the owner, 2026-11-04, no swapping presets from a pad)
         r.trigger("preset.list.next", "Next preset in the list", lambda: bank.walk(1),
                   group=g,
                   tip="Load the next preset of the PRESETS page's list — every "
                       "preset by name, a new one included — wrapping at the end. "
-                      "The pad's d-pad →, held. The desk's QUANT walks the pads instead.")
+                      "The desk's QUANT walks the pads instead.")
         r.trigger("preset.list.prev", "Previous preset in the list", lambda: bank.walk(-1),
                   group=g,
                   tip="Load the previous preset of the PRESETS page's list, wrapping "
-                      "at the start. The pad's d-pad ←, held.")
+                      "at the start.")
         # home (plan 15 WP2, decision 27): the show's startup preset. Lit
         # while the show names one — the light the desk's OVERDUB shows
         r.trigger("preset.home", "Home", bank.home, group=g,

@@ -188,6 +188,8 @@ class OscDevice(Base):
         self.schemes, self.feeds, self._rows = self.publishes(role, self.entry)
         self.layout: Layout | None = None
         self.message = ""                   # the last message, for the status line
+        self._pressed: set[str] = set()     # the momentary rows' sources this sender holds
+        self._pressed_on = None             # the registry they are held on
         self._reset()
 
     @classmethod
@@ -255,7 +257,8 @@ class OscDevice(Base):
     def close(self) -> None:
         """The socket closed; the router it fed is told the lanes are gone,
         so a held value does not outlive the device (an entry removed or
-        changed, a quit)."""
+        changed, a quit), and what its hits hold is let go."""
+        self._let_go(lambda _source: True)
         router = self.__dict__.pop("_router", None)
         super().close()
         self._reset()
@@ -346,16 +349,36 @@ class OscDevice(Base):
         return False
 
     def act(self, router) -> None:
-        """This frame's hits delivered as rows (unless one completed a learn)."""
-        if self._taken or not self.hits:
-            return
+        """This frame's hits delivered as rows (unless one completed a learn).
+        A momentary press has a release only if the sender sends one: its
+        silence (`lost`, `timeout` seconds), or its row going, lets go."""
         from .routing import MOD_OPS
 
+        if self._pressed:
+            if self.status == "lost":
+                self._let_go(lambda _source: True)
+            else:
+                live = {b.source for b in router.table.of(self.role) if b.enabled}
+                self._let_go(lambda source: source not in live)
+        if self._taken or not self.hits:
+            return
         rows = [b for b in router.table.of(self.role) if b.enabled and b.op not in MOD_OPS]
         for name, vel in self.hits:
             for b in rows:
                 if ":".join(b.parts) == name:
                     fire(router.reg, b, vel)
+                    if b.op == "momentary":
+                        (self._pressed.add if vel > 0.0 else self._pressed.discard)(b.source)
+                        self._pressed_on = router.reg
+
+    def _let_go(self, lost) -> None:
+        """The presses `lost` names, through the one door (`routing.let_go_lost`)."""
+        from .routing import let_go_lost
+
+        gone = {s for s in self._pressed if lost(s)}
+        if gone:
+            self._pressed -= gone
+            let_go_lost(self._pressed_on, gone.__contains__)
 
     def feed(self, router) -> None:
         """The axes under the role: their names, labels and rests published
@@ -387,7 +410,7 @@ def fire(reg, b, velocity: float) -> None:
     `momentary` holds a toggle while it is above 0, `hold` does nothing (no
     OSC hit has a duration), any other op acts when it is above 0."""
     from .params import Kind
-    from .routing import act, land
+    from .routing import act, land, press_momentary
 
     p = reg.get(b.target)
     if p is None or not b.enabled:
@@ -401,7 +424,7 @@ def fire(reg, b, velocity: float) -> None:
             land(p, velocity)
     elif b.op == "momentary":
         if p.kind is Kind.TOGGLE:
-            p.set(pressed)
+            press_momentary(p, b.source, pressed)
         elif pressed:
             p.toggle()
     elif b.op == "hold":

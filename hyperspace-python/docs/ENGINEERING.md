@@ -2150,13 +2150,12 @@ the key names is ignored.
 
 **Gamepad** (Xbox layout, Bluetooth or USB; `gamepad.py` keeps its own
 button map; the factory rows in `bindings.default.json`): A faces · Y
-lines · B points · X screen strokes · hold the d-pad's ← / → (HOLD_S,
-0.6 s) for the previous / next preset in the PRESETS list — a brush does
-nothing · d-pad ↑↓ brightness · BACK tap tempo · LB / RB previous / next shape · left stick orbit, its click
+lines · B points · X screen strokes · d-pad ↑↓ brightness, ← / → free ·
+BACK, held, the base chase (`deck.chase`, plan 52) · LB / RB previous / next shape · left stick orbit, its click
 resets the camera · right stick ↕ zoom, ↔ the spin of the W planes, its
-click resets the 4D spin · LT / RT 4D depth out / in · hold START to save
-the live state as a new preset. Share, on a pad that has one, is free;
-Learn pad puts anything on it. (2026-10-29: the walk left B / X, where a
+click resets the 4D spin · LT / RT 4D depth out / in. START and Share, on a
+pad that has one, are free; Learn pad puts anything on them. Hold-to-save
+is the Edge's alone (register row 724). (2026-10-29: the walk left B / X, where a
 stray thumb threw the look away; speed left the pad.)
 
 **The pad diagram** (`ui_pad.py`) draws that, live, instead of asking

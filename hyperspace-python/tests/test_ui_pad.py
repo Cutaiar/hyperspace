@@ -65,7 +65,7 @@ def test_a_lane_addressed_by_number_names_the_same_control():
 
 def test_every_factory_pad_row_lands_on_a_control(rig):
     """`rows` reads the table's pad, D-pad and axis rows — the factory
-    map's thirteen, each on the control it names."""
+    map's, each on the control it names."""
     table = rig.router.table
     got = ui_pad.rows(table)
     assert set(got) == {b.source for b in padmap()}

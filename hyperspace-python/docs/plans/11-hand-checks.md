@@ -2015,14 +2015,13 @@ The pad's four checks from PRs #160 and #161, written into
 here. A wired Xbox 360 pad (the Afterglow AX.1) on USB, no other pad.
 
 **144. A wired Xbox 360 pad is found; the factory layout.**
-Headless: `tests/test_gamepad.py::{test_usb_pad_when_glfw_has_none,test_decode_buttons_land_on_the_glfw_indices,test_decode_sticks_and_triggers}`, `tests/test_pad_learn.py::{test_the_factory_pad_walks_the_list_and_the_desk_the_bank,test_start_and_back_are_free_and_a_learned_start_hold_saves,test_the_right_stick_click_resets_the_4d_spin}`.
+Headless: `tests/test_gamepad.py::{test_usb_pad_when_glfw_has_none,test_decode_buttons_land_on_the_glfw_indices,test_decode_sticks_and_triggers}`, `tests/test_pad_learn.py::{test_the_factory_pad_walks_nothing_and_the_desk_the_bank,test_held_start_saves_a_new_preset_and_back_chases,test_the_right_stick_click_resets_the_4d_spin}`.
 Launch from a terminal. *Pass:* the terminal says `gamepad: Afterglow
 Gamepad for Xbox 360 over USB`; the ring lights one quarter (player 1)
-instead of blinking; B / X step to the next / previous preset of the
-PRESETS page's list (by name, wrapping; a preset saved a moment ago is
-in it — not the desk's bank); A flips faces and Y lines; LB / RB step
-the shape; the D-pad steps brightness (up / down) and speed (left /
-right); START and BACK do nothing; the left stick orbits (up tilts the
+instead of blinking; B flips points and X screen strokes; A flips faces
+and Y lines; LB / RB step the shape; the D-pad steps brightness (up /
+down) and left / right and START do nothing; BACK
+held is the base chase (group CH); the left stick orbits (up tilts the
 camera up; held, it tumbles over the top and keeps going round) and its
 click resets the camera; the right stick's up / down zooms and its
 right / left speeds up / slows (through zero into reverse) the spin in
@@ -2058,7 +2057,8 @@ setting moved → the route's rest.
 **147. Momentary and hold on a pad button.**
 Headless: `tests/test_pad_learn.py::{test_momentary_holds_a_toggle_while_the_button_is_down,test_hold_fires_once_after_hold_s,test_the_hold_times_agree}`.
 In `bindings.json` change the `pad:Y` row's op to `"momentary"` and the
-`pad:B` row (`preset.list.next`) to `"hold"`; ⌘R. *Pass:* lines show
+`pad:B` row to `"target": "preset.list.next", "op": "hold"`; ⌘R; put them
+back afterwards. *Pass:* lines show
 only while Y is held; B steps the preset only after about 0.6 s held,
 once per press; a tap does nothing. *Fail:* lines stay on after Y is
 let go; B fires on a tap or repeats while held → the pad's hold timing
@@ -7916,6 +7916,37 @@ too once it has this build. (2) The preview turns and the projector does not. Sa
 you wanted the orbit on the projector (row 684). (3) No camera jump on the way down.
 (4) The camera holds through the pass with no sweep. Say if it holds so often near
 vertical that the 20° zone wants to be smaller (row 685).
+
+## CH. BACK holds the base chase; the generic pad swaps, taps and saves nothing (wave 4 B2)
+Register rows 723–724, 2026-11-04. Headless: `tests/test_pad_learn.py` (the old
+factory rows moving once, with their backup; a row of the owner's on BACK or the
+d-pad staying; the hold, the release, a sleeping pad, the totem; every model's
+BACK) and `tests/test_pads_nintendo.py`.
+**554. BACK on the pad you play.** (a preset with a stick routed onto something you can see)
+1. On a `bindings.json` from before this build, launch, and read the terminal's
+   `bindings:` lines. Look beside the file.
+2. Hold BACK, push the stick, let go of BACK, then of the stick.
+3. Tap BACK; brush and hold the D-pad's ← / →; hover BACK on the pad window. Tap the
+   APC's TAP TEMPO and the keyboard's B.
+*Pass:* (1) one backup, `bindings.json.bak-v…`, and notes for BACK, START and ← / →
+dated 2026-11-04; the second launch says nothing. Had you put your own row on
+BACK, it is still there and the pad has no chase. (2) The look stays where it was
+left. (3) No tempo tap and no preset changes from the pad; the hover names
+`deck.chase`; TAP TEMPO and B both tap. Fail: a tempo jump from BACK, a
+preset loading from the D-pad, or a chase that goes on after the button is up.
+**555. START, and a row of your own.** (any pad but the Edge; then the Edge, if here)
+1. On a `bindings.json` from before this build, hold START: nothing saves. The first launch's
+   terminal said `removed pad:MENU → preset.save_new`.
+2. With an Edge: in `config.toml`, its entry `role = "edge"`, `controller = "edge"`. Add
+   `{"source": "pad@edge:MENU", "target": "preset.save_new", "op": "hold"}` to `bindings.json`.
+   Relaunch, and hold OPTIONS with another pad plugged in if you have one. Press its START too.
+3. Add `{"source": "hat:RIGHT", "target": "preset.list.next", "op": "hold", "value": 0}`,
+   relaunch, hold the D-pad's →. Take the rows out afterwards if you don't want them.
+*Pass:* (1) and (2) the Edge saves one new preset after 0.6 s held, and no other pad does. (3) The
+row survives the relaunch and walks the list once per hold. The `"value": 0` is what makes it
+yours: without it the row is the old factory row, and the next load takes it (row 724). Fail: a
+save from another pad, or the row gone. A Joy-Con's chase, L on the left and R on the right, is
+checked with #365's layout, not here.
 
 ## CM. "Band" becomes the analyzer in the panel (wave 4 AZ)
 Register rows 737–738, 2026-11-04. Words only: nothing should move or load differently.

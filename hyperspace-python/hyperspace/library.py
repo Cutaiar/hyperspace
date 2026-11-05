@@ -1290,7 +1290,7 @@ class Project:
 
     def cycle(self, step: int = 1) -> None:
         """Flip to the next filled slot — the APC's QUANT (`preset.next` /
-        `preset.prev`). The pad's d-pad ← / → walk the list instead (`walk`)."""
+        `preset.prev`). `preset.list.*` walk the list instead (`walk`)."""
         filled = [k for k, s in enumerate(self.bank) if s is not None]
         if not filled:
             return
@@ -1306,8 +1306,9 @@ class Project:
         (`Library.list`: by name, case folded), wrapping at both ends;
         from a preset not in it (none loaded) the first or the last
         (`Library.next` / `prev`). The list is read from disk each step, so a preset saved
-        a moment ago (`save_new`, the strip's "as…") is in it. The pad's
-        d-pad → / ← held (`preset.list.next` / `prev`, 2026-10-29) — not the bank,
+        a moment ago (`save_new`, the strip's "as…") is in it. On
+        `preset.list.next` / `prev`, which no factory row reaches (2026-11-04:
+        Learn puts them on a control) — not the bank,
         which the desk walks (`cycle`). A load is the drop-down's pick:
         one undo step; a bad file shows on the library's error line and
         the show runs on. Returns the name loaded, or None."""

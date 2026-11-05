@@ -708,9 +708,9 @@ class Learn:
         completes the armed learn: a button row like a desk note's — a
         trigger fires, a toggle or an enum toggles (the enum steps to its
         next choice), and a fader steps one detent: down for the D-pad's
-        DOWN and LEFT, up for anything else (the factory's D-pad rows on
-        brightness and speed, one detent at a time; their size is edited
-        in the file). True when it landed.
+        DOWN and LEFT, up for anything else (one detent at a time, as the
+        factory's D-pad rows on brightness; their size is edited in the
+        file). True when it landed.
 
         Pad rows are the session's, as the factory's are (`padmap`): the
         row goes into `bindings.json`, which is written now, and is no undo

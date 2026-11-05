@@ -7929,10 +7929,8 @@ pad connected.
 
 **Right if:** the terminal says `gamepad: Afterglow Gamepad for Xbox 360
 over USB`; the pad's ring lights one quarter (player 1) instead of
-blinking; B / X step to the next / previous preset of the PRESETS page's
-list (its drop-down, by name, wrapping; a preset saved a moment ago is
-in it — not the desk's bank), A flips faces and Y lines, LB / RB step the shape, the D-pad steps brightness (up / down)
-and speed (left / right), START and BACK do nothing, the left stick
+blinking; B flips points and X screen strokes, A flips faces and Y lines, LB / RB step the shape, the D-pad steps brightness (up / down)
+and left / right and START do nothing, BACK held is the base chase, the left stick
 orbits (up tilts the camera up; held, it tumbles over the top and keeps
 going round, as the sideways orbit does) and its click resets the
 camera, the right stick's up / down zooms and its right / left speeds
@@ -7986,8 +7984,8 @@ go leaves the setting moved.
 
 **Needs:** a pad; `bindings.json` open in an editor.
 
-**Do:** change the `pad:Y` row's op to `"momentary"` and, for a button
-with a trigger on it (`pad:B` → `preset.list.next`), to `"hold"`. ⌘R.
+**Do:** change the `pad:Y` row's op to `"momentary"` and the `pad:B` row
+to `"target": "preset.list.next", "op": "hold"`. ⌘R. Afterwards put them back.
 
 **Right if:** lines show only while Y is held; B steps the preset only
 after about 0.6 s held, once per press; a tap does nothing.

@@ -141,6 +141,8 @@ from .routing import (
     is_session_id,
     led_lit,
     led_shade,
+    let_go_lost,
+    press_momentary,
     register_desk,
 )
 
@@ -499,14 +501,28 @@ class MidiIO:
             self.redraw(whole=True)     # every control: lit by a row, else dark
 
     def _let_go_held(self) -> None:
-        """Every held button up (`HELD_PARAMS`): a press this desk can no
-        longer end."""
+        """Every press this desk can no longer end (`routing.let_go_lost`), its
+        own and no other desk's, and every held button (`HELD_PARAMS`) up, unless
+        another device's button still has it. FINE records no press, so this
+        is what lets it go."""
+        presses = self._presses()
+        gone = {source for rows in presses.values() for source, _target in rows}
+        presses.clear()
+        if gone:
+            let_go_lost(self.reg, gone.__contains__)
         for pid in HELD_PARAMS:
             held = self.reg.get(pid)
-            if held is not None and held.value:
+            if held is not None and held.value and not held.__dict__.get("_pressed_by"):
                 held.set(False)
 
+    def _presses(self) -> dict[tuple[int, int], set[tuple[str, str]]]:
+        """What each note of this desk still down holds through a momentary row:
+        (channel, note) → its rows' (source, target) as they were at the press.
+        A row deleted, retargeted or switched off since cannot lose its release."""
+        return self.__dict__.setdefault("_momentary_down", {})
+
     def close(self) -> None:
+        self._let_go_held()     # no poll follows, so `poll`'s cable check will not (plan 52)
         self._land_all()        # knob smoothing: no value is left between detents at exit
         if self.out is not None:
             try:
@@ -748,9 +764,16 @@ class MidiIO:
                 did.append(f"{p.label}: held {HOLD_S:g} s fires it")
             else:
                 self._apply(b, p, value)
+                if pressed and b.op == "momentary" and p.kind is Kind.TOGGLE:
+                    self._presses().setdefault((ch, number), set()).add((b.source, b.target))
                 did.append(p.label if p.kind is Kind.TRIGGER else f"{p.label} → {p.text()}")
                 if b.op == "set" and getattr(p, "held", None) is not None:
                     timed.append(b)     # a press that is a hold as well (a bank pad)
+        if kind == "note" and not pressed:
+            for pressed_by, target in self._presses().pop((ch, number), ()):
+                p = self.reg.get(target)        # whatever became of the row since
+                if p is not None and pressed_by in p.__dict__.get("_pressed_by", ()):
+                    press_momentary(p, pressed_by, False)
         if pressed:
             what = ("; ".join(did) if did
                     else "nothing (its row is off)" if rows
@@ -916,7 +939,7 @@ class MidiIO:
             pressed = value > 0
             if op == "momentary":
                 if p.kind is Kind.TOGGLE:
-                    p.set(pressed)
+                    press_momentary(p, b.source, pressed)
                 elif pressed:
                     p.toggle()
             elif not pressed:

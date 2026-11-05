@@ -554,42 +554,49 @@ THEME_TO_PRESET = {
 # hold-to-save. That row was dropped here too for one night: a file
 # written before `padmap` gained it never gained it either (no pad row
 # was ever added to an existing file), which read as a pad whose buttons
-# the map could not find. PAD_NEW_ROWS adds it instead.
+# the map could not find. A table of new rows added it, until 2026-11-04.
 # 2026-10-29: the preset walk leaves the face buttons, where a thumb
 # brushing B or X threw the live look away, for the d-pad's ← / → held
 # HOLD_S; speed leaves the pad. B takes points, X screen strokes, and BACK
-# tap tempo (PAD_NEW_ROWS) — the pad makes no edits worth an undo, and a
-# held ← / → makes a stray load rare. Every older B / X form above maps
-# straight to the newest.
-PRESET_WALK_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float]] = {
-    ("pad:B", "preset.list.next", "fire", 1.0): ("view.points", "toggle", 1.0),
-    ("pad:X", "preset.list.prev", "fire", 1.0): ("view.screen_strokes", "toggle", 1.0),
-    ("hat:LEFT", "view.speed", "step", -4.0): ("preset.list.prev", "hold", 1.0),
-    ("hat:RIGHT", "view.speed", "step", 4.0): ("preset.list.next", "hold", 1.0),
+# tap tempo. Every older B / X form above maps straight to the newest.
+# 2026-11-04 (the owner, register row 723): no swapping presets from a pad,
+# so the walk leaves the d-pad too and ← / → are free; tap tempo is too
+# sensitive to be a default on every controller, so BACK holds the base
+# chase instead (the APC keeps TAP TEMPO, the keyboard B). Older rows on the
+# same buttons go straight there, for the same reason. Hold-to-save is the
+# Edge's only, "the controller Dylan will be using for VJ-style setups", so
+# START's row goes from the generic rows: a controller is generic with
+# extensions by model (row 723).
+PAD_LAYOUTS: dict[str, dict[tuple[str, str, str, float], tuple[str, str, float] | None]] = {
+    "2026-10-14": {
+        ("pad:RSTICK", "camera.reset", "fire", 1.0): ("rot.reset_w", "fire", 1.0),
+        ("pad:A", "view.rotate", "toggle", 1.0): ("view.faces", "toggle", 1.0),
+        ("pad:Y", "view.faces", "toggle", 1.0): ("view.lines", "toggle", 1.0),
+        ("pad:MENU", "ui.cheatsheet", "toggle", 1.0): None,
+    },
+    "2026-10-29": {
+        ("pad:X", "view.points", "toggle", 1.0): ("view.screen_strokes", "toggle", 1.0),
+        ("pad:X", "preset.prev", "fire", 1.0): ("view.screen_strokes", "toggle", 1.0),
+        ("pad:B", "preset.next", "fire", 1.0): ("view.points", "toggle", 1.0),
+        ("pad:B", "theme.next", "fire", 1.0): ("view.points", "toggle", 1.0),
+        ("pad:B", "preset.list.next", "fire", 1.0): ("view.points", "toggle", 1.0),
+        ("pad:X", "preset.list.prev", "fire", 1.0): ("view.screen_strokes", "toggle", 1.0),
+    },
+    "2026-11-04": {
+        ("pad:VIEW", "tempo.tap", "fire", 1.0): (CHASE_PARAM, "momentary", 1.0),
+        ("pad:VIEW", "ui.panel", "toggle", 1.0): (CHASE_PARAM, "momentary", 1.0),
+        ("pad:MENU", "preset.save_new", "hold", 1.0): None,
+        ("hat:LEFT", "preset.list.prev", "hold", 1.0): None,
+        ("hat:RIGHT", "preset.list.next", "hold", 1.0): None,
+        ("hat:LEFT", "view.speed", "step", -4.0): None,
+        ("hat:RIGHT", "view.speed", "step", 4.0): None,
+    },
 }
-PAD_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float] | None] = {
-    ("pad:RSTICK", "camera.reset", "fire", 1.0): ("rot.reset_w", "fire", 1.0),
-    ("pad:VIEW", "ui.panel", "toggle", 1.0): None,
-    ("pad:A", "view.rotate", "toggle", 1.0): ("view.faces", "toggle", 1.0),
-    ("pad:X", "view.points", "toggle", 1.0): ("view.screen_strokes", "toggle", 1.0),
-    ("pad:X", "preset.prev", "fire", 1.0): ("view.screen_strokes", "toggle", 1.0),
-    ("pad:B", "preset.next", "fire", 1.0): ("view.points", "toggle", 1.0),
-    ("pad:B", "theme.next", "fire", 1.0): ("view.points", "toggle", 1.0),
-    ("pad:Y", "view.faces", "toggle", 1.0): ("view.lines", "toggle", 1.0),
-    ("pad:MENU", "ui.cheatsheet", "toggle", 1.0): None,
-    **PRESET_WALK_REMAP,
-}
-# Pad rows added where nothing uses the button, as (source, target, op,
-# value) — the pad's APC_NEW_ROWS. Until 2026-10-14 a row `padmap` gained
-# reached a fresh table only (`Bindings.factory`), so every pad already
-# carrying a bindings.json stayed on the layout of the day it was written:
-# START's hold-to-save was added, never arrived, and was taken back out as
-# a mapping fault. A row the owner put on the button is left alone, and a
-# second load finds the source taken.
-PAD_NEW_ROWS = (
-    ("pad:MENU", "preset.save_new", "hold", 1.0),
-    ("pad:VIEW", "tempo.tap", "fire", 1.0),                 # 2026-10-29
-)
+# row → (the layout that moved it, what it became)
+PAD_REMAP = {key: (when, hit) for when, rows in PAD_LAYOUTS.items() for key, hit in rows.items()}
+# No pad row is added to an existing file: a row that was never there may be
+# one the owner deleted, and an added row comes back every load. A new default
+# arrives by moving the row it replaces, as BACK's chase does.
 KEY_NEW_ROWS = (
     ("key:B", "tempo.tap", "fire", 1.0),
     ("key:SHIFT+B", "lfo.trigger", "fire", 1.0),
@@ -1113,24 +1120,20 @@ def keymap() -> list[Binding]:
 
 
 def padmap() -> list[Binding]:
-    """Xbox-layout gamepad buttons and the d-pad. The d-pad's ← / → held
-    HOLD_S step the preset list — the PRESETS page's list, by name, a new
-    save included (`Project.walk`), not the bank the desk walks; a brush
-    does nothing (2026-10-29: on B / X a stray press threw the look away).
-    A / Y the faces and lines, B / X the points and screen strokes, ↑ / ↓
-    the brightness; the left-stick click resets the camera, the
-    right-stick click the 4D spin; START (``pad:MENU``) held HOLD_S saves
-    the live state as a new preset, and BACK (``pad:VIEW``) taps the tempo (the
-    owner's layout — PAD_REMAP moves an older file's, PAD_NEW_ROWS adds
-    what it never held)."""
+    """Xbox-layout gamepad buttons and the d-pad. A / Y the faces and lines,
+    B / X the points and screen strokes, ↑ / ↓ the brightness; the
+    left-stick click resets the camera, the right-stick click the 4D spin;
+    BACK (``pad:VIEW``), while held, chases the base (`deck.chase`, plan 52).
+    The rows every controller shares: no row swaps a preset, taps the tempo
+    or saves, and ← / → and START are free: the owner, 2026-11-04 (register
+    rows 723–724). The owner's layout: PAD_LAYOUTS moves an older file's."""
     rows = [
         ("pad:A", "view.faces", "toggle"), ("pad:B", "view.points", "toggle"),
         ("pad:X", "view.screen_strokes", "toggle"), ("pad:Y", "view.lines", "toggle"),
-        ("pad:MENU", "preset.save_new", "hold"), ("pad:VIEW", "tempo.tap", "fire"),
+        ("pad:VIEW", CHASE_PARAM, "momentary"),
         ("pad:LB", "view.shape", "step", -1), ("pad:RB", "view.shape", "step", 1),
         ("pad:LSTICK", "camera.reset", "fire"), ("pad:RSTICK", "rot.reset_w", "fire"),
         ("hat:UP", "view.bright", "step", 3), ("hat:DOWN", "view.bright", "step", -3),
-        ("hat:LEFT", "preset.list.prev", "hold"), ("hat:RIGHT", "preset.list.next", "hold"),
     ]
     return [Binding(src, pid, op, *arg) for src, pid, op, *arg in rows]
 
@@ -1148,6 +1151,39 @@ def legacy6_routes() -> list[Binding]:
     rows += [Binding(f"lane:{i}", f"pattern.mod.{i}", "push", PATTERN_DEPTH)
              for i in range(len(BANDS))]
     return rows
+
+
+def press_momentary(p: Param, source: str, down: bool) -> None:
+    """A `momentary` row's press or release on a toggle, whichever road it came
+    by (`Router.pad`, `MidiIO._apply`, osc): the toggle stays on while any
+    source holds it, so brushing BACK does not end a chase the APC's button is
+    still holding, or the other way about. `source` is the row's, which names
+    its device. Kept on the param, the one thing the roads share. A road that
+    records a press owes `let_go_lost` when its source can no longer release."""
+    by = p.__dict__.setdefault("_pressed_by", set())
+    if down:
+        by.add(source)
+        p.set(True)
+    else:
+        by.discard(source)
+        if not by:
+            p.set(False)
+
+
+def let_go_lost(reg, lost) -> None:
+    """The one door for a source that will never release (a pad gone, a desk's
+    cable, an OSC sender silent): every press whose source `lost(source)` says so
+    is forgotten, and a toggle nothing holds any more goes off. A stale press
+    would otherwise keep the toggle up against every later release, and a base
+    chase left on goes on writing into the bases. Walks the registry, so a road
+    calls it when something is lost, never once a frame."""
+    for p in reg:
+        by = p.__dict__.get("_pressed_by")
+        if by:
+            gone = {s for s in by if lost(s)}
+            by -= gone
+            if gone and not by:
+                p.set(False)
 
 
 def latch_refusal(b: Binding) -> str | None:
@@ -1307,8 +1343,9 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
     since plan 13 WP2, any row on a ``theme.*`` param moved to the
     ``preset.*`` param of the same slot (THEME_TO_PRESET); the pad's four
     old factory rows (and B / X's bank rows) moved to the layout of
-    2026-10-14, and the preset walk to the d-pad held (2026-10-29)
-    (PAD_REMAP); the track faders' eight invariant audio rows
+    2026-10-14, the preset walk to the d-pad held (2026-10-29), and off the
+    pad with BACK's tap tempo the base chase now (2026-11-04)
+    (PAD_LAYOUTS); the track faders' eight invariant audio rows
     moved to the SHIFT layer (FADER_SHIFT_ROWS, plan 24 C2).
     Idempotent: a second pass finds every old row gone
     and every source taken. Returns (rows, a note per change).
@@ -1323,11 +1360,12 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
     notes: list[str] = []
     moved_theme = False
     for b in rows:
-        if (b.source, b.target, b.op, float(b.value)) in RETIRED_ROWS:
+        key = (b.source, b.target, b.op, float(b.value))
+        if key in RETIRED_ROWS:
             notes.append(f"removed {b.source} → {b.target} (the clip-stop SAVE AS bar is "
                          "retired: hold an empty bank pad to save into it; the row is free)")
             continue
-        hit = APC_REMAP.get((b.source, b.target, b.op, float(b.value)))
+        hit = APC_REMAP.get(key)
         if hit is not None:
             target, op, value = hit
             plan = APC_REMAP_PLAN.get(b.source, "plan 09")
@@ -1337,20 +1375,17 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
             b = replace(b, target=target, op=op, value=value)
             if plan == "plan 19":
                 b = replace(b, layer=None, feedback="led", on=apc40.GREEN, off=0)
-        elif ((b.source, b.target, b.op, float(b.value)) in FADER_SHIFT_ROWS
-              and b.layer is None):
+        elif key in FADER_SHIFT_ROWS and b.layer is None:
             notes.append(f"moved {b.source} → {b.target} to the SHIFT layer (the APC40 "
                          "map of plan 24: the track faders are the presets')")
             b = replace(b, layer="global")
-        elif (b.source, b.target, b.op, float(b.value)) in PAD_REMAP:
-            hit = PAD_REMAP[(b.source, b.target, b.op, float(b.value))]
+        elif key in PAD_REMAP:
+            when, hit = PAD_REMAP[key]
             if hit is None:
                 notes.append(f"removed {b.source} → {b.target} (the pad layout of "
-                             "2026-10-14: the button is free)")
+                             f"{when}: the button is free)")
                 continue
             target, op, value = hit
-            when = ("2026-10-29" if hit in PRESET_WALK_REMAP.values()
-                    else "2026-10-14")
             notes.append(f"remapped {b.source}: {b.target} → {target} (the pad layout "
                          f"of {when})")
             b = replace(b, target=target, op=op, value=value)
@@ -1370,12 +1405,6 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
         out.append(new)
         notes.append(f"added {source} → {target} (the APC40 map of "
                      f"{APC_REMAP_PLAN.get(source, 'plan 09')})")
-    for source, target, op, value in PAD_NEW_ROWS:
-        if source in used:
-            continue
-        out.append(Binding(source, target, op, value))
-        when = "2026-10-29" if source == "pad:VIEW" else "2026-10-14"
-        notes.append(f"added {source} → {target} (the pad layout of {when})")
     # a key row is taken by its chord, however its modifiers are ordered:
     # "key:SUPER+SHIFT+Z" holds ⌘⇧Z as "key:SHIFT+SUPER+Z" does
     chords = {(b.key_name, b.modifiers) for b in out if b.scheme == "key"}
@@ -3293,31 +3322,30 @@ class Router:
         reads this pad (totem.SKIP, the plan 47 experiment). A skipped
         `hold` row forgets a press it was timing, so a press that began
         before the skip does not fire when the skip ends mid-press. A
-        `momentary` row's toggle this pad holds is let go by a skip or by
-        the pad going away, whose release would never come (plan 52)."""
+        `momentary` row's press is let go by a skip of its own button, by
+        its row going, or by the pad going away (`pad_lost`), whose release
+        would never come (plan 52)."""
         axis = qualified("axis", role)
         publish = getattr(pad, "publish", None)
         if publish is not None:
             src = self.sources                   # the axes are a source: the shared half's
             publish(src, axis) if role else publish(src)
-        self.sources.feed(axis, pad.lanes() if pad.on else None)
-        # source → press time (None once fired), one dict per pad
-        holds = (self.__dict__.setdefault("_pad_holds", {}) if not role else
-                 self.__dict__.setdefault("_pad_holds_of", {}).setdefault(role, {}))
-        # the toggles this pad holds down through a momentary row
-        down_now = self.__dict__.setdefault("_pad_down", {}).setdefault(role, set())
         if not pad.on:
-            holds.clear()
-            for pid in list(down_now):
-                self._let_go_pad(down_now, pid)
-            self.felt(axis, None, 0.0)       # the camera job's followers start afresh
+            self.pad_lost(role)
             return
+        self.sources.feed(axis, pad.lanes())
+        holds = self._pad_timing(role)
+        down_now = self._pad_pressed(role)
         now = time.monotonic() if now is None else now
         # each pad hears its own rows: a second pad those qualified with its
         # role; the primary the bare ones and — as a desk's `serves` — any
         # qualified with the primary's own role (``pad@pad:A``)
         own = role or getattr(self.table, "primaries", {}).get("pad", "")
-        for b in self.table.of("pad", "hat"):
+        rows = self.table.of("pad", "hat")
+        if down_now:                         # a row gone or off under a held button
+            for key in down_now - {(b.source, b.target) for b in rows if b.enabled}:
+                self._let_go_pad(down_now, key)
+        for b in rows:
             code = self._code(b)
             if code is None or not b.enabled or not (
                     b.device == role or (not role and own and b.device == own)):
@@ -3325,8 +3353,8 @@ class Router:
             if skip and b.bare in skip:
                 if b.op == "hold":
                     holds.pop((b.source, b.target), None)
-                elif b.target in down_now:
-                    self._let_go_pad(down_now, b.target)
+                elif (b.source, b.target) in down_now:
+                    self._let_go_pad(down_now, (b.source, b.target))
                 continue
             hat = b.scheme == "hat"
             down = bool(pad.hat & code) if hat else pad.down(code)
@@ -3348,25 +3376,46 @@ class Router:
                 p = self.reg.get(b.target)
                 if p is None:
                     continue
-                if pressed and buttons:
-                    if p.kind is Kind.TOGGLE:
-                        p.set(True)
-                        down_now.add(b.target)
-                    else:
+                if p.kind is not Kind.TOGGLE:
+                    if pressed and buttons:
                         p.toggle()
-                elif released and p.kind is Kind.TOGGLE:
-                    p.set(False)
-                    down_now.discard(b.target)
+                elif pressed and buttons:
+                    press_momentary(p, b.source, True)
+                    down_now.add((b.source, b.target))
+                elif released and (b.source, b.target) in down_now:
+                    self._let_go_pad(down_now, (b.source, b.target))
                 continue
             if pressed and buttons:
                 act(self.reg, b)
 
-    def _let_go_pad(self, down: set, pid: str) -> None:
-        """A toggle a pad held through a momentary row, its release lost."""
-        down.discard(pid)
-        p = self.reg.get(pid)
+    def _pad_timing(self, role: str) -> dict:
+        """(source, target) → press time (None once fired), one dict per pad."""
+        return (self.__dict__.setdefault("_pad_holds", {}) if not role else
+                self.__dict__.setdefault("_pad_holds_of", {}).setdefault(role, {}))
+
+    def _pad_pressed(self, role: str) -> set:
+        """The (source, target) of each momentary row this pad's button holds."""
+        return self.__dict__.setdefault("_pad_rows_down", {}).setdefault(role, set())
+
+    def pad_lost(self, role: str = "") -> None:
+        """The pad is gone, asleep, unplugged or its device closed: no release
+        is coming. Its lanes off, its timers forgotten, what it held let go."""
+        axis = qualified("axis", role)
+        self.sources.feed(axis, None)
+        self._pad_timing(role).clear()
+        down = self._pad_pressed(role)
+        if down:
+            gone = {source for source, _target in down}
+            down.clear()
+            let_go_lost(self.reg, gone.__contains__)
+        self.felt(axis, None, 0.0)           # the camera job's followers start afresh
+
+    def _let_go_pad(self, down: set, key: tuple[str, str]) -> None:
+        """One momentary row's button up, or its release lost."""
+        down.discard(key)
+        p = self.reg.get(key[1])
         if p is not None:
-            p.set(False)
+            press_momentary(p, key[0], False)
 
     def claimed(self, scheme: str) -> set[int]:
         """The lanes of `scheme` an enabled route reads — a pad axis with
