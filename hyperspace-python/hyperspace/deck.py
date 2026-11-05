@@ -44,25 +44,33 @@ app moves one yet. D5b splits undo: a stack per deck, scoped to its preset
 (`in_preset`), and one for the meta controller (`meta_stack`), so three.
 Plan 55 adds the players (`players.Players`): a controller's pointer goes where
 its player's duty says.
+
+D5c makes it a DJ mixer's crossfader, with no swap: `output.xfade` 0 is deck 1
+alone, 1 deck 2 alone, and on air is whichever the fader is closer to
+(`MetaController.follow_fader`, `MIDDLE`). `Fade` mixes the other deck over the
+one on air by `Fade.k`, the other's share. Two verbs: the crossfade, by hand or
+timed (`crossfade`, `tick`), and `copy_on_air`. Nothing in `app.main` calls them
+yet, so deck 1 stays on air and raising the fader mixes as D4 did; D5d wires them.
 """
 
 from __future__ import annotations
 
+import copy
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from typing import Any
 
 from . import envelope, geometry, lfo, poi, sequencer, tempo, totem
 from . import undo as undos
 from .fx import FxState
 from .ghost import GhostState
-from .hold import Hold, preview_renderer, preview_size
+from .hold import Hold, preview_renderer
 from .hold import register as register_hold
 from .learn import Learn
 from .library import Marks, MetaMarks
 from .lookback import DreamState
-from .outputs import Offscreen, View
+from .outputs import Offscreen, View, preview_size
 from .params import Registry, SessionRegistry, build_registry, part_of
 from .players import Duty, Players
 from .pointer import Pointer
@@ -278,6 +286,7 @@ class Deck:
             # plan 44 D3: the bus cuts are the loaded preset's — the renderer
             # reads them off the presets (`graph.rig_of`: `Presets.rig`)
             renderer.rig_source = presets
+            renderer.deck_reg = reg            # whose picture it is (the poi's guide)
         if hold is not None:
             hold.section = presets.graph       # plan 38 B3: landings keep the held program's nodes
         # one Learn over the live table, whatever the MIDI gate says: a knob
@@ -447,6 +456,52 @@ def meta_stack(first: Deck) -> undos.Undo:
                       marks=MetaMarks(first.presets.lib.base), tag=first.band_shape)
 
 
+def _carry(src: Deck, dst: Deck) -> None:
+    """What `Presets.document` does not hold and a copy must (the reading's rows 3
+    and 4), after the doc road landed the rest: the turn as it stands (`pose` folds
+    it, which is not the same bits), the field's and the media path's phases, each
+    param's running state with its chase ledger (`Registry.take_running`: the pose's
+    ledger too, which no snapshot holds), each row's and bank's, and the renderer's
+    clocks. One clock steps both
+    banks, so nothing here is a lock: each deck runs on from where the copy left it.
+    A clip's place and the trails are not carried: a load's start empty."""
+    dst.router.modgraph                  # noqa: B018 — its lost rows forgotten first (plan 52)
+    sv, dv = src.view, dst.view
+    dv.ang, dv.body, dv.held = list(sv.ang), copy.copy(sv.body), sv.held
+    dv.inst_phase, dv.media_phase = sv.inst_phase, sv.media_phase
+    dst.reg.take_running(src.reg)
+    dst.router.take_running(src.router)
+    theirs = src.router._banks()
+    for scheme, bank in dst.router._banks().items():
+        _carry_bank(theirs[scheme], bank)
+    dst.seq.__dict__.update({k: copy.copy(v) for k, v in src.seq.__dict__.items()
+                             if k in SEQ_RUNNING})
+    if src.renderer is not None and dst.renderer is not None:
+        dst.renderer.take_running(src.renderer)
+
+
+# the sequencer's runtime, what `sequencer.Sequencer` keeps on the class until it runs
+SEQ_RUNNING = frozenset(("k_last", "epoch_seen", "playhead", "pulses", "shift", "pending",
+                         "last_spb", "was_running", "stopped"))
+
+
+def _carry_bank(src, dst) -> None:
+    """One modulator bank's running state: each voice's fields marked runtime (not
+    in its `repr`), the frame's outputs and a random LFO's stream."""
+    for n, voice in src._voices.items():
+        mine = dst._voices.get(n)
+        if mine is None:
+            continue
+        for f in fields(voice):
+            if not f.repr:
+                setattr(mine, f.name, copy.deepcopy(getattr(voice, f.name)))
+    dst.outputs = list(src.outputs)
+    dst.pending = getattr(src, "pending", False)
+    rng = getattr(src, "rng", None)
+    if rng is not None:
+        dst.rng.setstate(rng.getstate())
+
+
 class MetaController:
     """What is set for a performance or an install, around the looks: it owns
     exactly two `Deck`s (`docs/GLOSSARY.md`) and says which deck each holder is
@@ -467,13 +522,25 @@ class MetaController:
     `players` (plan 55) say where the controllers go: a controller's pointer
     starts on the deck its player's duty says (`deck_for`), `move_player` moves
     all a player holds, `register` moves a controller to a player. On air is
-    `on_air`, off air `off_air`; when D5c's crossfader moves `on_air_pointer` it
-    calls `place_players` and both duties go across. The keys and the mouse are
-    no player's, nor is the panel. `on_players` is told when who holds what
-    changes: a pad's rows name its player, so the device list reads it again."""
+    `on_air`, off air `off_air`; when the crossfader moves `on_air_pointer`
+    (`follow_fader`) both duties go across. The keys and the mouse are no player's
+    and act on the picture, so they go across too; the panel stays where it was
+    put. `on_players` is told when who holds what changes: a pad's rows name its
+    player, so the device list reads it again.
 
-    def __init__(self, first: Deck, second: Deck, players: Players | None = None):
+    `mix` is the crossfader (`output.xfade`, `output.xfade_s`): `tick` runs a
+    timed `crossfade` and follows the fader, and `parked` is the one list of decks
+    off air, what `Host.off_air` reads."""
+
+    # (class-level: read by a meta controller from before a hot reload)
+    timed: TimedFade | None = None
+
+    def __init__(self, first: Deck, second: Deck, players: Players | None = None,
+                 mix: Mix | None = None):
         self.decks = (first, second)
+        self.mix = mix if mix is not None else Mix()
+        self.parked = [second]
+        self.on_air_moved: list[Callable[[Deck], Any]] = []   # told after on air moves
         self.players = players if players is not None else Players()
         self.on_players: list[Callable[[], Any]] = []
         self.seats: dict[str, int] = {}     # role → the player it was last placed for
@@ -507,7 +574,7 @@ class MetaController:
         got = self.pointers.get(holder)
         if got is None:
             if holder in (KEYS, MOUSE):
-                deck = self.decks[0]
+                deck = self.on_air
             else:
                 player = self.players.player_of(holder)
                 deck, self.seats[holder] = self.deck_for(player.duty), player.number
@@ -579,6 +646,97 @@ class MetaController:
         for fn in self.on_panel:
             fn(deck)
 
+    # ---- the crossfader (D5c): on air by the fader's side, no swap ----
+
+    def follow_fader(self) -> bool:
+        """On air follows the side the fader is on, past `MIDDLE` so a fader
+        sitting at the middle never flaps. True when on air moved."""
+        x, first, second = self.mix.xfade, *self.decks
+        if self.on_air is first and x >= 0.5 + MIDDLE:
+            self._go_on_air(second)
+        elif self.on_air is second and x <= 0.5 - MIDDLE:
+            self._go_on_air(first)
+        else:
+            return False
+        return True
+
+    def _go_on_air(self, deck: Deck) -> None:
+        """`deck` on air: the session's lead with it, what the deck left held of a
+        chase let go there (one step on its stack), every player where its duty now
+        says, the keys and the mouse with the picture they act on. A press across
+        the move ends on the deck it was made on, as any move's does
+        (`routing.let_go_lost`). The panel and the undo it reaches stay."""
+        left = self.on_air
+        left.chase(False)
+        self.on_air_pointer.deck = deck
+        self.parked[0] = left
+        session = deck.session
+        if session is not None:
+            session.lead = deck.reg
+        self.place_players()
+        for holder in (KEYS, MOUSE):
+            p = self.pointers.get(holder)
+            if p is not None:
+                p.deck = deck
+        for fn in self.on_air_moved:
+            fn(deck)
+
+    def crossfade(self, to: float | None = None) -> None:
+        """Run the fader to `to` (None: the end of the deck off air) over
+        `output.xfade_s` seconds, read now; 0 is a cut. `tick` moves it, from the
+        fader's place. A hand on the fader meanwhile ends it there."""
+        if to is None:
+            to = 1.0 if self.on_air is self.decks[0] else 0.0
+        self.timed = TimedFade(self.mix.xfade, float(to), self.mix.seconds)
+
+    def tick(self, now: float, dt: float) -> None:
+        """Once a frame: a timed fade's step, through `output.xfade`'s `Param`, then
+        on air by the fader. `dt` dates a fade asked for since the last frame."""
+        run = self.timed
+        if run is not None:
+            if self.mix.xfade != run.wrote:
+                self.timed = None             # a hand took the fader
+            else:
+                if run.began is None:
+                    run.began = now - dt
+                done = now - run.began >= run.seconds
+                x = run.to if done else (run.start + (run.to - run.start)
+                                         * (now - run.began) / run.seconds)
+                self._write_fader(x)
+                run.wrote = self.mix.xfade
+                if done:
+                    self.timed = None
+        self.follow_fader()
+
+    def _write_fader(self, x: float) -> None:
+        p = self.decks[0].reg.get("output.xfade")
+        if p is not None:
+            p.set(x)
+        else:
+            self.mix.xfade = x                # (no param: a rig with no outputs hook)
+
+    # ---- copy on air to off air (D5c): the second verb ----
+
+    def copy_on_air(self) -> list[str]:
+        """The deck on air's look onto the deck off air, so the two run as one
+        until someone touches either. One step on the off-air deck's stack; onto an
+        empty deck, none, since there is nothing to go back to. What it does to the
+        deck on air: nothing. Returns the ids the document names that the deck
+        lacks. See `_carry` for what a document does not hold."""
+        src, dst = self.on_air, self.off_air
+        name, presets = src.presets.current, dst.presets
+        empty = presets.current is None and dst.graph.spec is None and not dst.undo.stack
+        doc = src.presets.document(name or "untitled")
+        undos.push_on(dst.reg, f"copy {name or 'untitled'} from on air", load=True)
+        missing = presets.load_doc(doc)
+        _carry(src, dst)
+        presets.landing = (*copy.deepcopy(src.presets.landing[:2]), None)
+        presets._landed(name)
+        presets.unsaved = src.presets.unsaved
+        if empty:
+            dst.undo.clear()
+        return missing
+
     def targets(self) -> list[tuple[Any, str, str]]:
         """The live objects a hot reload re-classes (the decks list their own)."""
         return [(self, "deck", "MetaController"),
@@ -596,19 +754,40 @@ class MetaController:
 
 @dataclass
 class Mix:
-    """What `output.xfade` and `output.xfade_s` write: how far the outputs
-    have gone over to the other deck, and the seconds a take will run it
-    over (D5's; nothing reads it yet)."""
+    """What `output.xfade` and `output.xfade_s` write: the crossfader, 0 deck 1
+    alone and 1 deck 2 alone, and the seconds a timed fade runs it over
+    (`MetaController.crossfade`)."""
 
     xfade: float = 0.0
     seconds: float = 2.0
 
 
+@dataclass
+class TimedFade:
+    """A timed fade running: from `start` to `to` over `seconds`. `began` is set at
+    its first `tick`; `wrote` is where it left the fader, so a hand on it shows."""
+
+    start: float
+    to: float
+    seconds: float
+    began: float | None = None
+    wrote: float = 0.0
+
+    def __post_init__(self):
+        self.wrote = self.start
+
+
+# How far past the middle the fader must go before on air moves, each way: 4 steps
+# of a 7-bit desk fader (1/127), more than one at rest jitters by, and small
+# enough that "closer to" is what it reads as
+MIDDLE = 0.03
+
+# (the panel's words change with D5d, which is what makes on air move in the app)
 XFADE_TIP = ("Mixes the other deck's picture over this one's on every output, before "
              "the dim: 0 this deck alone, 1 the other deck alone. Never saved; nothing "
              "on the desk by default (the crossfader stays the master dim), learn it "
              "onto a fader.")
-XFADE_S_TIP = "How long a take runs the fade, in seconds. 0 is a cut. Never saved."
+XFADE_S_TIP = "How long a timed fade runs the crossfader, in seconds. 0 is a cut. Never saved."
 
 
 def register_xfade(reg, mix: Mix) -> list[str]:
@@ -630,33 +809,34 @@ def draw_size(full: tuple[int, int], cap: tuple[int, int] | None, fading: bool) 
     """The size a deck off air draws an output of size `full` at (plan 44 §8):
     the output's own during a fade (its frame then fits the render cap as the
     on-air deck's does), `preview_size` (under the cap, at most 1280 px on its
-    long side) otherwise — what D5's panel backdrop draws. In D4 nothing asks
-    for the off-air picture, so off air the deck draws nothing at all."""
+    long side) otherwise, what the panel's backdrop draws (`Fade.preview`)."""
     return (int(full[0]), int(full[1])) if fading else preview_size(full, cap)
 
 
 def hand_over(main, off_air) -> None:
-    """What deck 2's renderer reads this frame that the on-air one was
-    handed (the rig's: `hold.mirror`'s road, plan 44 §3 D4): the clouds, the
-    bands, the hands' source and the poi, the window's ground and the render
-    cap (§8: on both renderers). Its dim stays 1: the mix is laid before the
-    on-air deck's dim. Its look — wiring, media, bus cuts, extra hands — is
-    its own."""
-    off_air.cloud_source = getattr(main, "cloud_source", None)
-    off_air.poi_source = getattr(main, "poi_source", None)
+    """What the off-air deck's renderer reads this frame that the frame gave the
+    on-air one: the bands, the window's ground and the render cap (§8: on both
+    renderers). Its dim stays 1: the mix is laid before the on-air deck's dim. Its
+    look — wiring, media, bus cuts, extra hands — is its own, and the rig's wires
+    (the clouds, the hands' source, the poi) stand on both from `app.main`, so
+    either deck can be on air."""
     off_air.bands = getattr(main, "bands", ())
     off_air.bg_alpha = getattr(main, "bg_alpha", 1.0)
     off_air.max_frame = getattr(main, "max_frame", None)
     off_air.dim = 1.0
-    g, og = getattr(main, "ghost", None), getattr(off_air, "ghost", None)
-    if g is not None and og is not None:
-        og.source = g.source
 
 
 # the fade at which a deck with a dream takes the worker, and how long after a
 # fade the deck off air keeps its frame-sized targets (frames, 2 s at 60 Hz)
 LEND_AT = 0.05
 REST_FRAMES = 120
+# what a warm draw draws at: small, since a compile does not depend on the size
+WARM_SIZE = (64, 36)
+
+
+def _spec_of(deck):
+    """The graph `deck` has landed; a stand-in with none: None."""
+    return getattr(getattr(deck, "graph", None), "spec", None)
 
 
 def _dreams(deck) -> bool:
@@ -667,33 +847,55 @@ def _dreams(deck) -> bool:
 
 
 class Fade:
-    """The one mix between the on-air deck and the deck beside it (plan 44
-    D4). `k` is `output.xfade`. Once a frame before the on-air deck draws:
-    `begin_frame` (the dream worker's lend, and at 0 the fade's rest); above
-    0, deck 2 draws (`draw`) and each view carries its picture for
-    `Renderer._compose` to mix. `targets` are its frame textures, one per
-    output, let go `REST_FRAMES` after the fade with deck 2's other
-    frame-sized targets."""
+    """The one mix between the deck on air and the other (plan 44 D4). `k` is the
+    other's share of the picture, off `output.xfade`. Once a frame before the on-air
+    deck draws: `begin_frame` (the dream worker's lend, and at 0 the fade's rest);
+    above 0, the deck off air draws (`draw`) and each view carries its picture for
+    `Renderer._compose` to mix. `targets` are its frame textures, one per output,
+    let go `REST_FRAMES` after the fade with that deck's other frame-sized targets.
+    Which deck is which reads through `pointer`, the meta controller's on air."""
 
     def __init__(self, on_air: Deck, off_air: Deck, mix: Mix, ctx=None, *, dream=None,
-                 make_target: Callable[[Any], Any] = Offscreen):
-        self.on_air, self.off_air, self.mix, self.ctx = on_air, off_air, mix, ctx
+                 make_target: Callable[[Any], Any] = Offscreen, pointer: Pointer | None = None):
+        self.decks = (on_air, off_air)
+        self.pointer = pointer if pointer is not None else Pointer(on_air)
+        self.mix, self.ctx = mix, ctx
         self.dream = dream
         self.make_target = make_target
         self.targets: list = []
-        self.lent_to = on_air
+        self.lent_to = self.rest = self.on_air  # who has the worker; the deck the fade left
         self.error = ""
-        self.drew = False                  # did deck 2 draw the last frame?
+        self.drew = False                  # did the deck off air's fade draw the last frame?
+        self.previewed = False             # …or the panel's backdrop? (`preview`)
+        self.first_ok = False              # did a fade's draw of the first view hold?
+        self.shown = None                  # the `Preview` handed a fade's texture
         self.resting = REST_FRAMES         # frames at 0 since it last did
+        self.warm_deck: Deck | None = None   # the deck to draw once (`ask_warm`)
+        self.warm_error = ""               # what its last warm draw said, until the next
+        self.said: Callable[[str], Any] | None = None   # told when a warm draw fails
+        # each deck's graph as last told (`ask_warm`): a save lands no new one
+        self.specs = {id(d): _spec_of(d) for d in self.decks}
+
+    @property
+    def on_air(self) -> Deck:
+        return self.pointer.deck
+
+    @property
+    def off_air(self) -> Deck:
+        return self.decks[1] if self.on_air is self.decks[0] else self.decks[0]
 
     @property
     def k(self) -> float:
-        return self.mix.xfade
+        """The deck off air's share of the picture: 0 at the on-air deck's end of
+        the fader, so that deck draws alone, by the bytes it draws alone."""
+        x = self.mix.xfade
+        return x if self.on_air is self.decks[0] else 1.0 - x
 
     def begin_frame(self) -> None:
         """The frame's start, whatever `k`: the lend; and at 0 what the fade
         said is forgotten, and after `REST_FRAMES` its frame-sized targets are
         let go (the render context is current)."""
+        self.previewed = False
         self.lend()
         if self.k > 0.0:
             self.resting = 0
@@ -706,23 +908,107 @@ class Fade:
                 self.off_air.renderer.release_sized()
 
     def lend(self) -> None:
-        """One dream worker (§2, row 558): the on-air deck's, and the deck
-        going on air's while a fade is up and its look has a dream on
-        (`_dreams`) — from `LEND_AT` on and until the fade is back at 0, so a
-        fader nudged or jittering at the bottom of its throw never wipes the
-        on-air deck's dream. The deck that gave it up holds its last dream.
-        One comparison a frame until the answer moves."""
+        """One dream worker (§2, row 558): at rest the on-air deck's, and in a fade
+        the deck coming in's while its look has a dream on (`_dreams`) — from
+        `LEND_AT` on and until the fader reaches an end, so a fader nudged or
+        jittering at the bottom of its throw never wipes the on-air deck's dream,
+        and on air moving at the middle, where neither deck stops being drawn,
+        restarts nothing. The deck that gave it up holds its last dream. One
+        comparison a frame until the answer moves."""
         k = self.k
-        take = k > 0.0 and _dreams(self.off_air) and (self.lent_to is self.off_air or k >= LEND_AT)
-        to = self.off_air if take else self.on_air
+        if k <= 0.0:
+            self.rest = self.on_air
+        rest = self.rest
+        coming = self.decks[1] if rest is self.decks[0] else self.decks[0]
+        share = k if coming is self.off_air else 1.0 - k
+        take = k > 0.0 and _dreams(coming) and (self.lent_to is coming or share >= LEND_AT)
+        to = coming if take else rest
         if to is self.lent_to:
             return
         self.lent_to = to
         if self.dream is None:
             return
-        for d in (self.on_air, self.off_air):
+        for d in self.decks:
             d.renderer.dreamer.source = self.dream if d is to else None
         self.dream.lend(to.reg)
+
+    def ask_warm(self, deck: Deck) -> None:
+        """A preset listener: a look landed on `deck`, or was saved, which landed no
+        new graph and must not wipe a trail, so only a new graph counts. If `deck` is
+        off air, draw it once at the next frame (`warm`), which is on the render
+        context, as a copy or a load from the panel is not. A deck on air is drawn."""
+        spec = _spec_of(deck)
+        if spec is self.specs.get(id(deck)):
+            return
+        self.specs[id(deck)] = spec
+        if deck is self.off_air:
+            self.warm_deck = deck
+
+    def warm(self, w: int, h: int, dpr: float, switches, samples: int | None = None) -> bool:
+        """Once after a copy or a load: the deck off air drawn small and thrown
+        away, so a shader's compile lands now and not in a fade's first frame (the
+        reading's risk 3). Not above 0, where it is drawn anyway, nor once that deck
+        has gone on air. Leaves nothing: its delays hold nothing again, its targets
+        go. A raise stays on `warm_error` until the next warm draw, and `said` is
+        told at once: this is the moment to learn it. True when it drew."""
+        deck, self.warm_deck = self.warm_deck, None
+        if deck is None or deck is not self.off_air or self.k > 0.0:
+            return False
+        r = deck.renderer
+        tgt = self.make_target(self.ctx)
+        why = ""
+        try:
+            hand_over(self.on_air.renderer, r)
+            view = View(replace(switches, dim=1.0), WARM_SIZE, target=tgt.fit(WARM_SIZE),
+                        viewport=(0, 0, *WARM_SIZE), samples=samples)
+            r.draw_outputs(deck.view, w, h, dpr, [view])
+            why = view.error or ""
+        except Exception as e:  # noqa: BLE001 — the deck off air must not cost the on-air deck
+            why = f"{type(e).__name__}: {e}"[:160]
+        finally:
+            tgt.release()
+            r.reset_delays()
+            r.release_sized()
+        self.warm_error = f"warm draw: {why}" if why else ""
+        if why and self.said is not None:
+            self.said(f"the deck off air will not draw: {why}")
+        return not why
+
+    def preview(self, panel_view, w: int, h: int, dpr: float, full: tuple[int, int],
+                switches) -> bool:
+        """The deck off air for the panel's backdrop (`panel_view`, an
+        `outputs.Preview`), after `draw`: a fade's own picture on a frame the deck
+        already drew, since its delays turn once a frame (`render.py`), else one
+        draw at `draw_size(full, cap, False)` into the preview's tap. A raise is
+        said on `error`, and a frame that fails leaves the last picture lit. True when
+        it published."""
+        self.previewed = True
+        if self.drew and self.targets:
+            if not self.first_ok:
+                return False
+            panel_view.publish(self.targets[0].tex, 0.0)
+            self.shown = panel_view         # (a texture of ours: `_forget_shown`)
+            return True
+        self.shown = None
+        tap = panel_view.tap
+        if tap is None:
+            return False
+        r = self.off_air.renderer
+        self.resting = 0                   # its frame-sized targets rest as a fade's do
+        try:
+            hand_over(self.on_air.renderer, r)
+            size = draw_size(full, r.max_frame, False)
+            view = View(replace(switches, dim=1.0), size, target=tap.fit(size),
+                        viewport=(0, 0, *size))
+            r.draw_outputs(self.off_air.view, w, h, dpr, [view])
+        except Exception as e:  # noqa: BLE001 — the deck off air must not cost the on-air deck
+            self.error = f"{type(e).__name__}: {e}"[:160]
+            return False
+        if view.error:
+            self.error = view.error
+            return False
+        panel_view.publish(tap.tex, 0.0)
+        return True
 
     def draw(self, views: list[View], w: int, h: int, dpr: float,
              samples: int | None = None) -> bool:
@@ -746,7 +1032,9 @@ class Fade:
                           bg_alpha=v.bg_alpha, viewport=(0, 0, *sz),
                           samples=samples if i == 0 else None)
                      for i, (v, sz) in enumerate(zip(views, sizes, strict=True))]
+            self._forget_shown()
             r.draw_outputs(self.off_air.view, w, h, dpr, drawn)
+            self.first_ok = bool(drawn) and not drawn[0].error
             for i, (v, d) in enumerate(zip(views, drawn, strict=True)):
                 if not d.error:
                     v.mix, v.mix_k = self.targets[i].tex, k
@@ -762,3 +1050,11 @@ class Fade:
         for tgt in self.targets:
             tgt.release()
         self.targets = []
+        self._forget_shown()
+
+    def _forget_shown(self) -> None:
+        """A `Preview` still showing a frame texture that has gone (a close, a
+        resize) holds none: the page reads a black box, never a dead texture."""
+        pv = self.shown
+        if pv is not None and all(t.tex is not pv.tex for t in self.targets):
+            pv.tex, self.shown = None, None

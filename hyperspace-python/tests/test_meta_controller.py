@@ -96,7 +96,8 @@ def test_exactly_two_decks_and_every_pointer_starts_on_the_first(rig):
     assert meta.decks == (one, two)
     assert meta.on_air is one and meta.off_air is two and meta.panel is one
     assert meta.pointer("anything").deck is one
-    assert list(inspect.signature(MetaController).parameters) == ["first", "second", "players"]
+    assert list(inspect.signature(MetaController).parameters) == ["first", "second", "players",
+                                                                    "mix"]
     assert not hasattr(meta, "swap")                 # on air is the crossfader's, D5c
     with pytest.raises(ValueError, match="not one of its two"):
         meta.point("pad", SimpleNamespace())
@@ -582,7 +583,7 @@ def test_every_pointer_on_deck_1_lands_every_corpus_preset_as_before(tmp_path):
 
 def test_main_points_every_holder_and_moves_none():
     src = inspect.getsource(app.main)
-    for line in ("MetaController(deck, deck2, players)", "panel.pointer = library.pointer",
+    for line in ("MetaController(deck, deck2, players, mix=mix)", "panel.pointer = library.pointer",
                  "rig.point(meta.pointer, meta.panel_pointer)", "pointer=meta.pointer(MOUSE)",
                  "on_air_pointer=meta.on_air_pointer", "panel_pointer=meta.panel_pointer",
                  "keys_pointer=meta.pointer(KEYS)", "on_air = meta.on_air",

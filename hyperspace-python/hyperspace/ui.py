@@ -2758,17 +2758,19 @@ class Panel:
 
     def deck2_gpu_lines(self) -> list[str]:
         """Plan 44 D4, §8: the second GPU block, what the deck off air costs —
-        a block like the first while it draws, one line off air, and what its
-        draw raised. Nothing else of deck 2 is on the panel."""
+        a block like the first while it draws (a fade, or the panel's backdrop),
+        one line otherwise, and what its draw raised, or its last warm draw's.
+        Named by its number: either deck can be off air (D5c)."""
         fade = getattr(self, "fade", None)
         if fade is None:
             return []
         mixed = getattr(fade.on_air.renderer, "mix_error", "")
-        said = [f"deck 2: {e}" for e in (fade.error, mixed) if e]
-        if not fade.drew:
-            return ["deck 2: off air, draws nothing", *said]
+        deck = f"deck {2 if fade.off_air is fade.decks[1] else 1}"
+        said = [f"{deck}: {e}" for e in (fade.error, fade.warm_error, mixed) if e]
+        if not (fade.drew or fade.previewed):
+            return [f"{deck}: off air, draws nothing", *said]
         stats = getattr(fade.off_air.renderer, "stats", None) or {}
-        return [*_gpu_block(stats, "deck 2 gpu"), *said]
+        return [*_gpu_block(stats, f"{deck} gpu"), *said]
 
     def _gpu_timing(self) -> None:
         for text in (*self.gpu_lines(), *self.deck2_gpu_lines()):

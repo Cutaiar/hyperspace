@@ -7957,6 +7957,27 @@ a ⌘Z no longer takes back a meta edit made while you were elsewhere.
 4. Learn a key row on ROUTING, then ⌘Z in a meta section, and restart. *Pass:* the row is gone, and stays
    gone after the restart.
 
+## BZ. The crossfader's side and copy on air (plan 44 D5c)
+Register rows 694–696, 2026-11-04. Restart first. **Nothing here is meant to look different yet:** no control
+calls the new verbs until D5d.
+**526. Neutral at 0.** (the rig, or a laptop)
+1. Launch, load three looks, turn knobs, ⌘Z, open GRAPH. *Pass:* all as before.
+2. Reload a saved look with sound in a clip. *Pass:* the clip is heard.
+*Fail:* anything looks, sounds or feels different at `output.xfade` 0.
+**527. The fade as it was, and the poi's guide.** (the rig, with the poi on if the Joy-Con is about)
+1. Load a look with a dream. Raise `output.xfade` from the panel, to 1 and back. *Pass:* deck 2 is black
+   at 1, as before; the dream comes back at 0.
+2. With `poi.on` and the guide showing, raise it to 0.5. *Pass:* the guide fades with deck 1's picture: at 1 it
+   is gone. It used to draw on both.
+**528. After D5d: crossing, copy, the first fade.** (the rig, with the APC40 and a pad; do with 489–492)
+1. Copy on air to off air on a look with no feedback. Fade across slowly. *Pass:* you cannot see the crossing.
+2. Leave the fader sitting at the middle. *Pass:* the pad stays on one deck, no flicker in who acts.
+3. Copy a feedback look, fade across. *Pass:* trails build from empty, and say if that bothers you.
+4. Copy, then a preset with shaders not used since launch, press copy again. *Pass:* any hitch is at the press
+   and not in the fade. Read `stall.log`.
+5. Hold GRAPH on the deck off air, then fade. *Pass:* a delay's trail carries across the size change; say if it restarts.
+6. Time a 5-second fade by the clock. Grab the fader mid-way. *Pass:* it stops there and is yours.
+
 ## CH. BACK holds the base chase; the generic pad swaps, taps and saves nothing (wave 4 B2)
 Register rows 723–724, 2026-11-04. Headless: `tests/test_pad_learn.py` (the old
 factory rows moving once, with their backup; a row of the owner's on BACK or the

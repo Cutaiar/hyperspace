@@ -723,6 +723,9 @@ here; overturn → the change, then the same.
 | 691 | Plan 44 D5b: one undo stack per `Deck`, scoped to its preset, and one for the meta controller over `SessionRegistry` and `SessionTable`; all three ticked each frame; a load is a step on its deck's stack | 524 | The owner, 2026-11-04 |
 | 692 | Plan 44 D5b: ⌘Z goes by where you are, the panel's `Deck` except inside a meta section. What is under the mouse decides: a param undo watches by its own layer, wherever it is drawn; else the section; anywhere else the deck, never the focus. The audio section counts as a meta section beside the owner's three | 524, 525 | The owner, 2026-11-04, for the rule and the three sections; (rec) — pending the owner, for the mouse and for audio |
 | 693 | Plan 44 D5b: the show's mark and the session groups' labels are on the meta stack (`library.MetaMarks`); a show load is one step there and its startup preset one on the panel's deck's, so undoing all of a show load is two ⌘Zs in two places; undoing a row of the meta controller's table writes `bindings.json` | 525 | (rec) — pending the owner |
+| 694 | Plan 44 D5c: on air is the crossfader's side (`MetaController.follow_fader`), with hysteresis `MIDDLE` = 0.03 each way; the session's lead, `Fade`, the mixer, `Host.off_air`, the dream's lend and the rig's wires follow; players go by duty; the keys and mouse with the picture; the panel stays; the poi's guide on the picture of its pad's deck | The owner, 2026-11-04: "On air is whichever the fader is closer to" (middle: rec) |
+| 695 | Plan 44 D5c: `MetaController.copy_on_air`, the doc road and the running state; one step on the off-air stack, none onto an empty deck; a timed fade (`crossfade`, `tick`, `output.xfade_s`), 0 cuts | The owner, 2026-11-04: two verbs remain |
+| 696 | Plan 44 D5c: `Fade.preview` and `Fade.warm`, measured; a parked deck keeps running (row 17 of the reading: no skip) | (rec) — pending the owner |
 | 723 | Wave 4 B2: `pad:VIEW` holds `deck.chase`; `pad:VIEW → tempo.tap` and `hat:LEFT` / `hat:RIGHT → preset.list.*` leave the pad's factory rows; an old factory row moves at the next load, one the owner changed stays | 654 | owner — 2026-11-04: base chase is Back; tap tempo is not a default on every controller, "extremely sensitive"; no swapping presets from a controller or a pad |
 | 724 | Wave 4 B2: rows by model: a Joy-Con's chase is L / R in #365's `Model.layout`; hold-to-save is the Edge's, there too, by a qualified row until then; Learn goes on accepting `preset.list.*` and `tempo.tap`, unrefused | 723 | owner — 2026-11-04 on the Joy-Con and the Edge; (rec) — pending the owner on Learn |
 | 731 | Wave 4 PC: T2's ⇧ fine mode reaches every slider left out (a route's depth and rest, its feel's knobs, a macro subscriber's from and to, GRAPH's backdrop); the side pane's paper cuts at 240 px (the patch chips, the analyzer's scene row, meter tags, transfer row, spectrogram hint) | 561 | (rec) — pending the owner |
@@ -12910,6 +12913,95 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   deck, whose stack drops the empty step, so a session row's step on the meta stack is named by the
   watcher ("rows").
 - **Judge it.** 525.
+
+### 694. On air by the fader's side
+
+- **Answer.** The owner, 2026-11-04: "Two fixed `Deck`s and **no swapping**. On air is whichever the
+  fader is closer to; on-air players move across as it passes the middle." The middle's width is (rec).
+- **The middle.** On air moves at 0.53 going up and 0.47 coming down (`deck.MIDDLE`): four steps of a 7-bit
+  fader, more than one at rest jitters by. The picture does not show the move: the mix either side is one
+  picture within two 8-bit steps (`test_the_mix_either_side_of_the_middle_is_one_picture`).
+- **What follows it.** `session.lead`, `Fade.on_air` and `off_air` (read through the pointer), `Fade.k` (the
+  other deck's share, so 0 at either end, and that deck draws by the bytes it draws alone), `MediaIO`'s heard
+  channels, `meta.parked`, which is `Host.off_air`, and the rig's wires, now set on both renderers.
+- **The lend.** It no longer asks which deck is on air: the deck the fade left keeps the worker until the deck
+  coming in takes it at `LEND_AT`, and the answer changes only at the ends, so the crossing restarts nothing.
+- **Who moves.** Players by duty (`place_players`). The keys and the mouse are no player's but act on the
+  picture, so they go across. **The panel stays where it was put**, so after a crossing a panel left behind is
+  on the deck off air, its backdrop the preview road. A chase held on the deck left lets go there, one step.
+- **The poi's guide.** One `PoiState` on both renderers; the guide draws on the picture of the deck its pad
+  is on (`poi.guides`), on the deck on air with no pad driving. Plan 55 recorded it as drawn on both.
+- **Not wired.** `app.main` has no caller of `tick`, so deck 1 stays on air and a raised `output.xfade` mixes as
+  D4 did. D5d's slot must be before the frame's `h.renderer.dim` and `bands` are set, or the deck arriving draws
+  one frame with stale ones; the head of `frame`, beside `clock.tick`, is the place, not before `_draw_render`
+  as the reading says.
+- **Judge it.** 528, after D5d.
+
+### 695. Copy on air to off air, and the timed fade
+
+- **Answer.** The owner, 2026-11-04: two verbs remain, the crossfade and "copy on air to off air"; a timed
+  fade is a control on the crossfade, which the playlist also uses.
+- **Row 3 of the reading is right.** `Registry.restore` with no trims empties the ledger, and the copy with
+  none jumps (the test fails without it). The ledger is carried by `Registry.take_running`, not `restore(trims=)`
+  as the reading has it: the pose's ids have a ledger and no snapshot holds them, so one owner. A wrinkle: a rebuilt patch forgets a param whose rows are lost
+  (`_forget_lost_rows`), so the copy rebuilds it **before** the ledger lands, or a deck that had another row
+  on that param loses the trim.
+- **Row 4 is right and short.** The document's pose is folded (`ViewState.pose`), not the same bits, so the
+  copy takes the angles, the body and the switch as they stand. Beyond the list: the bits of each modulated
+  base (`Registry.take_running`), each row's follower, a modifier's memory, a `turn`'s last reading
+  (`Router.take_running`), the banks' runtime and a random LFO's stream, the sequencer's place, and the
+  renderer's pattern and effect clocks (`Renderer.take_running`). **Not a lock:** it is one copy of where they are;
+  one clock and one lane vector then keep them equal until someone touches either.
+- **Proof.** Every corpus preset, just loaded and after 45 frames: 120 frames, every performance param equal to
+  the bit, `signature` and the dirty dot the same. GL: copy, then `xfade` 1 equals deck 1 at 0 byte for byte on
+  the 23 presets with no feedback, within a mean of 8/255 on the 2 with a delay or look-back (their trails
+  start empty, as a load's do).
+- **Sound.** A deck leaving the air lets its soundtracks go at once (`Channels._unheard`), and one coming on asks
+  afresh. Each channel opens its own source, so no track is shared between decks, and no patch can reach another
+  through one.
+- **Not carried.** A clip's place: a channel opens its source at the next poll. Trails. Node mode (#377) rides
+  the document; a copy moves no player, so a saved cable naming a player on the other deck is dormant there.
+- **Undo.** One step (`push_on` first; the load nests in it). Onto an empty deck, `Undo.clear` afterwards, so no
+  ⌘Z back to black. Its label says "copy NAME from on air".
+- **The timed fade.** `crossfade(to=None)` reads `output.xfade_s` then; `tick(now, dt)` writes through the
+  param from the fader's place, dates a fade asked between frames at `now − dt`, so the first frame moves. 0 cuts at the next tick. **A hand on the
+  fader ends it there** (rec): a fader moved meanwhile differs from what the fade last wrote.
+- **Judge it.** 528, after D5d.
+
+### 696. The preview road, the warm draw, and the parked deck
+
+- **Answer.** (rec) — pending the owner.
+- **Preview.** `Fade.preview`: the deck off air into the preview's tap at `draw_size(full, cap, False)`, or the
+  fade's own frame on a frame it drew, so its delays turn once. `_draw_render(panel_deck=)` chooses it only when
+  the panel is on the deck off air, so never today. `preview_size` moved to `outputs.py`; `hold.py` re-exports it
+  until D5d. Whether a delay's trail survives a move from the preview's size to the fade's is **not proved**: check 528.
+- **When it warms.** A preset listener, the one road for a load and a copy; a save fires it too but lands no new
+  graph, so only a new `graph.spec` counts, and it leaves a trail alone. Asked for one deck: not drawn above 0, or if
+  that deck has gone on air. A failure stays on SYSTEM until the next warm draw and is said in the footer at once.
+- **SYSTEM.** Names the deck off air by number, and shows its GPU block while the backdrop draws it too.
+- **Warm draw, measured** (the reading's risk 3). 25 corpus presets, a fresh renderer pair each, 1920×1080, standalone
+  context with `ctx.finish()`, this Mac, shared. Worst is the first preset of the process (driver cache cold), so
+  a real first compile may be above these:
+
+  | ms | median | max |
+  | --- | --- | --- |
+  | cold first frame above steady | 5.4 | 103.1 |
+  | the warm draw itself, at 64×36 | 3.8 | 26.3 |
+  | first frame after a warm draw above steady | 1.0 | 5.6 |
+  | steady | 1.4 | 3.9 |
+
+  So it does hide the compile: a fade's first frame costs at most 5.6 ms more, and the operator's press pays up to
+  26 ms once. **That one hitch is on the room's thread**, at a copy or load of a look with new shaders. Not measured:
+  a real window's multisampled target, and a dream's or a segment's own start.
+- **Parked deck, measured** (row 17 of the reading): follow macros, pass, apply, integrate and media poll with a real
+  deck 2 on each corpus preset, 240 frames, full lanes. **Median 0.146 ms, worst preset's median 0.327 ms,
+  worst frame 0.428 ms**, against 0.111 ms empty and 0.090 ms for the same on-air pass. That is 0.9–2 % of a 16.7 ms frame,
+  with no media open. **Recommend no skip:** the parked deck must keep its turn, banks and followers running for a copy to
+  stay equal and a fade to start live, and the cost is small. What a parked deck's open sources cost is not in this
+  figure; row 653's was an empty deck.
+- **Found, left for D5d.** `ui_media.media_of` reads `panel.media.state`, deck 1's channels, whichever deck the panel is
+  on: the MEDIA page would edit the wrong deck once the panel moves. One line, but in the page.
+- **Judge it.** 527, 528.
 
 ### 723. BACK holds the base chase; the pad swaps no preset and taps no tempo
 
