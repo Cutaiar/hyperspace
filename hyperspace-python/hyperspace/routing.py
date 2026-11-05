@@ -386,6 +386,11 @@ SHIFT_PARAM = "desk.shift"
 # the desk's SAVE (plan 24 C1): held, a bank pad's tap saves into its slot
 # (midi.MidiIO._save_tap); a momentary row on apc40.SAVE, track 8's clip stop
 SAVE_PARAM = "desk.save"
+# the desk's FINE (wave 2 T3, row 609): held, a knob moves its param FINE_DIV
+# times less. `midi.MidiIO` reads the button; it has no row, so a table's row
+# on it takes it (`fine_gives_way`)
+FINE_PARAM = "desk.fine"
+FINE_DIV = 10
 # what only a held button may drive: a row that could leave one on is refused
 # (`latch_refusal`). By id, because the referee has a row and no registry.
 # `desk.fine` is left out: a learned toggle on it is allowed (`midi._follow_fine`)
@@ -1725,13 +1730,22 @@ def led_shade(b: Binding, p: Param) -> str:
     return ("off", "held", "on")[led_level(b, p)]
 
 
+def fine_gives_way(rows: Iterable[Binding], number: int, channel: int) -> bool:
+    """Does an enabled row name the FINE button (any layer)? That row is the
+    owner's, and the button gives way (an off row does not count). The one
+    rule `midi.MidiIO._fine_control` acts on and `ui_desk` draws."""
+    return any(b.enabled and b.kind == "note" and b.number == number
+               and b.channel in (None, channel) for b in rows)
+
+
 def register_desk(reg: Registry, table: Bindings) -> None:
     """`desk.shift`: the layer latch as a toggle over the table — on while
     the global layer is up — so SHIFT is a row like any other (a note row
     toggles it, its LED reads it) and a page or key row can reach it too.
     Never saved, never performed. `desk.save`: the desk's SAVE held (plan
     24 C1) — a momentary row sets it, and while it is on a bank pad's tap
-    saves instead of loading (midi.py); never saved, never performed. And
+    saves instead of loading (midi.py); never saved, never performed.
+    `desk.fine`: the desk's FINE held, the same shape (wave 2 T3). And
     `desk.slew`: the table's knob smoothing (plan 18 WP2), a session param
     a show keeps and no preset may name. The first table a registry meets
     keeps each. Plan 44 D3: every one is a session param (group `desk`),
@@ -1758,6 +1772,14 @@ def register_desk(reg: Registry, table: Bindings) -> None:
                        "new preset; a filled one gets a new preset too (TRIP → TRIP 2) "
                        "and the old one stays in the preset list. Nothing is ever "
                        "overwritten. SAVE alone does nothing.")
+    if FINE_PARAM not in reg:
+        fine = [False]                  # (as SAVE's: `midi.HELD_PARAMS` lets go of it)
+        reg.toggle(FINE_PARAM, "Fine", lambda: fine[0],
+                   lambda v: fine.__setitem__(0, bool(v)), group="desk",
+                   persist=False, modulatable=False,
+                   tip=f"The desk's FINE button held: a knob moves its value {FINE_DIV} times "
+                       "less for the same turn. Let go and the knob carries on from where the "
+                       "value is.")
     if SLEW_PARAM not in reg:
         reg.continuous(SLEW_PARAM, "Knob smoothing",
                        lambda: getattr(table, "slew", 0.0),

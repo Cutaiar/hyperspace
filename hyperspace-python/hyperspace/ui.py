@@ -112,6 +112,7 @@ LABEL_W = 104    # the label column in a _row
 HALF_LABEL_W = 78    # the label column in a half-width table cell (Panel.half)
 SLIDER_MIN = 60.0   # a slider sharing a row in a narrow pane is never thinner
 LABEL_GAP = 12   # px between a label cell's text room and its control (Panel._label_cell)
+SCENE_COMBO_MIN = 100   # px; the analyzer's scene combo keeps this beside its label and Reset all
 ROUND = 8.0      # corner radius of frames; chips and grabs go rounder
 # the dirty dot (plan 19 WP5): a filled red disc 12 px across beside a
 # preset's name — where the "●" glyph left about 7 px of ink — and the
@@ -133,6 +134,10 @@ HEADER_DOT_R = 5.0
 
 FONT_BASE = 16.0
 FONT_MICRO = 12.5
+TAG_GAP = 3.0       # px kept between two meter tags (`tag_px`)
+# the sizes a tag may be, largest first: glyphs land on whole pixels, so width
+# is not linear in size and each is measured. Past the last a tag is left out
+TAG_SIZES = (FONT_MICRO, 11.0, 10.0)
 FONT_NUM = 16.0
 FONT_BIG = 52.0
 
@@ -481,6 +486,24 @@ def check_w(label: str) -> float:
     words = label.split("##")[0]
     return imgui.get_frame_height() + (s.item_inner_spacing.x + imgui.calc_text_size(words).x
                                        if words else 0.0)
+
+
+def tag_px(width_at: Callable[[float], float], room: float) -> float:
+    """The largest of `TAG_SIZES` at which a tag `width_at` that size measures
+    fits `room`; the smallest if none does."""
+    return next((px for px in TAG_SIZES if width_at(px) <= room), TAG_SIZES[-1])
+
+
+def tags_shown(spans: list[tuple[float, float]], first: int, gap: float = TAG_GAP) -> list[int]:
+    """Which of these tags (x0, x1 each) to draw so that none touches another:
+    `first` for certain (the selected band's), then each in order that keeps
+    `gap` from those already kept."""
+    kept = [first] if 0 <= first < len(spans) else []
+    for i, (x0, x1) in enumerate(spans):
+        if i not in kept and all(x1 + gap <= spans[k][0] or spans[k][1] + gap <= x0
+                                 for k in kept):
+            kept.append(i)
+    return sorted(kept)
 
 
 def beside(w: float) -> bool:
@@ -1360,7 +1383,13 @@ class Panel:
         value before this frame's imgui write; `x0`, `span` the throw
         (`_throw`). One drag is one undo step: the writes come every frame
         the mouse moves, as a plain drag's do (`undo.SETTLE_S`)."""
-        if p.integer or not imgui.is_item_active():
+        if p.integer:
+            return False, None
+        return self._fine_throw(t0, span)
+
+    def _fine_throw(self, t0: float, span: float) -> tuple[bool, float | None]:
+        """`_fine` for the item just drawn, whatever it writes to."""
+        if not imgui.is_item_active():
             return False, None
         shift = getattr(self, "_shift", False)
         if not getattr(self, "_mouse_down", False):
@@ -1372,12 +1401,13 @@ class Panel:
             if not shift:
                 return False, None
             x = io.mouse_pos.x if imgui.is_item_activated() else io.mouse_pos_prev.x
-            st = self._fine_drag = {"id": key, "x": x, "t": min(max(t0, 0.0), 1.0)}
+            st = self._fine_drag = {"id": key, "x": x, "t": t0,
+                                    "lo": min(t0, 0.0), "hi": max(t0, 1.0)}
         x = io.mouse_pos.x
         moved, st["x"] = x - st["x"], x
         if moved == 0 or span <= 0:
             return True, None
-        st["t"] = min(max(st["t"] + moved / span * (FINE if shift else 1.0), 0.0), 1.0)
+        st["t"] = min(max(st["t"] + moved / span * (FINE if shift else 1.0), st["lo"]), st["hi"])
         return True, st["t"]
 
     @staticmethod
@@ -1385,6 +1415,51 @@ class Panel:
         """Where a slider's grab centre travels: its left end and length
         in screen px, `half` in from either end of the frame."""
         return r0.x + half, r1.x - r0.x - 2 * half
+
+    def _raw_slider(self, key: str, value: float, lo: float, hi: float, fmt: str, tip: str,
+                    width: float = -1, log: bool = False, dim: bool = False,
+                    num: bool = True) -> tuple[bool, float]:
+        """A float slider with no `Param` behind it (a route's depth, GRAPH's
+        backdrop; row 731): `(changed, value)`, as `imgui.slider_float` gives
+        them, with ⇧-drag fine mode and its tooltip. Drawn as `Panel._slider`
+        draws a param's, and for the same reason: the readout and the fill
+        are the value's, where imgui's own would follow the mouse through a
+        fine drag. `log` when the throw is logarithmic (`lo` > 0); `num` for
+        the readouts' face, off for words that need the room. A value a
+        file left outside the range is not pulled in by a fine drag: it can
+        come in, and go no further out."""
+        value = float(value)
+        log = log and lo > 0
+        t0 = (math.log(max(value, lo) / lo) / math.log(hi / lo) if log
+              else (value - lo) / ((hi - lo) or 1.0))
+        origin = -lo / (hi - lo) if lo < 0 < hi else 0.0
+        text = (fmt % value).replace("%", "%%")
+        flags = imgui.SliderFlags_.logarithmic if log else 0
+        imgui.set_next_item_width(width)
+        if num:
+            imgui.push_font(_FONTS["num"], FONT_NUM)
+        if dim:
+            imgui.push_style_color(imgui.Col_.text, DIM)
+        changed, v = self._track(
+            lambda: imgui.slider_float(f"##{key}", value, lo, hi, text, flags),
+            t0, origin, knob=False)
+        if dim:
+            imgui.pop_style_color()
+        if num:
+            imgui.pop_font()
+        r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        own, t = self._fine_throw(t0, self._throw(r0, r1, self._grab_half(r1.x - r0.x))[1])
+        if own:
+            changed = t is not None     # a frame the mouse did not move writes nothing
+            v = value if t is None else lo * (hi / lo) ** t if log else lo + t * (hi - lo)
+        shift = getattr(self, "_shift", False)
+        st = getattr(self, "_fine_drag", None)
+        hovered = imgui.is_item_hovered()
+        if shift and not hovered and st is not None and st["id"] == imgui.get_item_id():
+            tooltip(FINE_TIP)
+        elif hovered:
+            tooltip(f"{FINE_TIP}\n{tip}" if shift else tip)
+        return changed, v
 
     def _fine_tip(self, a: Param, p: Param) -> None:
         """The slider's tooltip, led by "FINE" while ⇧ is held over a
@@ -1809,14 +1884,25 @@ class Panel:
             # band combo's
             self._ctx(self.reg["band.select"], f".{i}")
             self._learn_frame(self.reg["band.select"])   # armed from a meter: framed on it
-        # band tags, centred under their bars, in the micro face
-        imgui.push_font(_FONTS["micro"], FONT_MICRO)
+        # band tags, centred under their bars, in the micro face — smaller
+        # where the widest would touch its neighbour (a narrow pane), and
+        # the ones that still would left out: a meter's hover names its band
+        def widest(px: float) -> float:
+            imgui.push_font(_FONTS["micro"], px)
+            w = max((imgui.calc_text_size(name).x for name in a.band_names), default=0.0)
+            imgui.pop_font()
+            return w
+        imgui.push_font(_FONTS["micro"], tag_px(widest, bw + gap - TAG_GAP))
+        right = origin.x + n * bw + (n - 1) * gap
+        spans = []
         for i, name in enumerate(a.band_names):
             tw = imgui.calc_text_size(name).x
-            imgui.set_cursor_screen_pos(
-                imgui.ImVec2(origin.x + i * (bw + gap) + (bw - tw) / 2, origin.y + mh + 4)
-            )
-            imgui.text_colored(RED if i == self.control.selb else DIM, name)
+            x = origin.x + i * (bw + gap) + (bw - tw) / 2
+            x = max(min(x, right - tw), origin.x)
+            spans.append((x, x + tw))
+        for i in tags_shown(spans, self.control.selb):
+            imgui.set_cursor_screen_pos(imgui.ImVec2(spans[i][0], origin.y + mh + 4))
+            imgui.text_colored(RED if i == self.control.selb else DIM, a.band_names[i])
         imgui.pop_font()
         imgui.set_cursor_screen_pos(imgui.ImVec2(origin.x, origin.y + mh + 4 + FONT_MICRO + 4))
 
@@ -2563,11 +2649,18 @@ class Panel:
         full height."""
         c = self.control
         self._section(group_title("band"), "band")
-        # scene + reset-all (relabels to Undo while the window is open)
-        self._label_cell("scene")
-        self._combo("scene.select", -(button_w("Reset all") + imgui.get_style().item_spacing.x))
-        imgui.same_line()
-        self._button("scene.reset_all", "Undo" if c.undo_armed else "Reset all")
+        # scene + reset-all (relabels to Undo while the window is open); where
+        # the three would leave the combo too little, the button takes a row
+        # and the label only its own room
+        reset = "Undo" if c.undo_armed else "Reset all"
+        take = button_w("Reset all") + imgui.get_style().item_spacing.x
+        roomy = imgui.get_content_region_avail().x - LABEL_W - take >= SCENE_COMBO_MIN
+        self._label_cell("scene", width=LABEL_W if roomy
+                         else imgui.calc_text_size("SCENE").x + LABEL_GAP + 4)
+        self._combo("scene.select", -take if roomy else -1)
+        if roomy:
+            imgui.same_line()
+        self._button("scene.reset_all", reset)
         imgui.spacing()
         self._meters(dt)
         ui_bands.section(self, dt)

@@ -8015,6 +8015,25 @@ Fail: the on-air look moving under the second pad.
 fade first shows it. Say whether the totem's switches should follow the player, as built
 (row 735). Fail: a phase jump, or a pan left behind on a deck. Moving a player mid-turn
 has no way to be done by hand until PS: repeat this check there.
+## CK. Pane paper cuts (wave 4 PC)
+Register rows 731–732, 2026-11-04. Headless: `tests/test_ui_fine.py` (every raw slider's drag,
+its tip), `tests/test_ui_pane.py` (nothing past the pane, nothing colliding, at 240 px and the
+default) and `tests/test_ui_desk.py`. What they cannot judge is the feel and the legibility.
+**561. ⇧ on a route, and the analyzer at its narrowest.** (the Mac, the party show)
+1. Click a wire to show a route's row. Hold ⇧ and drag its depth, then its rest. Each creeps; let ⇧ go mid-drag and it carries on at the full rate with no jump.
+2. Give the row a spring feel. ⇧-drag its duration and bounce. On the macros in ROUTING, ⇧-drag a subscriber's from and to. In GRAPH's head, light **output behind** and ⇧-drag its alpha.
+3. Hover one of them with ⇧ held: the tooltip leads with FINE.
+4. Drag the pane to its narrowest and open ANALYZER. The scene combo reads the scene's name, with Reset all under it. The six tags under the meters do not touch and can be read from where you sit. The hint in the spectrogram reads BOX · LINES · CLICK, whole; hovering it gives the long form. AUTO and the two combos sit on rows of their own, clear of the title.
+5. Select a group from a patch at that width. **save as patch…** and **update patch** sit one above the other, inside the pane.
+
+Expected: nothing passes the pane's edge and no control sits on another. At the default width the same section is no worse than it was.
+
+**562. SEND B on the desk.** (the Mac, the APC40, the desk diagram open at **big**)
+1. Read SEND B on the diagram: "Fine (hold)", not dark. Hover it: it names `desk.fine`.
+2. Hold SEND B. Its button lights on the diagram as on the device, and a knob creeps. Let go.
+3. Click SEND B on the diagram: the footer says what it does and nothing is picked. Arm Learn desk on a param and click it: the learn still waits.
+
+Expected: the diagram says what the button does, and no row lands on it from the diagram.
 
 ## CM. "Band" becomes the analyzer in the panel (wave 4 AZ)
 Register rows 737–738, 2026-11-04. Words only: nothing should move or load differently.

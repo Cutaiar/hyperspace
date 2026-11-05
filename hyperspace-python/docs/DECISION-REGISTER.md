@@ -729,6 +729,8 @@ here; overturn → the change, then the same.
 | 734 | Plan 55: players 1–4, each with a duty that stays until moved; bare rows are player 1's and `@p2` player 2's, a player's first pad publishing under that name; moving a player moves all it holds; on air and off air are `MetaController.on_air` and `off_air`, so until D5c an off-air player is on deck 2; `<home>/players.json` on this Mac, only what differs, no patch and no show | — | owner — 2026-11-04: Q8; the file and the defaults are (rec) — pending the owner |
 | 735 | Plan 55: one `TotemState` and one `PoiState`, the pad's, with what they hold of a look kept to the deck their pad is on (`on_reg`); a pad arriving gives the old deck back and takes over afresh | — | owner — 2026-11-04: "no preset can affect another preset"; one state, not one per deck, is (rec) — pending the owner |
 | 736 | Plan 55: mapping a controller on another deck moves that controller, not its player; moving or placing the player brings it back. `@p2` always means player 2: a role so spelled takes the name only if player 2 holds it. A player's second pad of a kind keeps its role as its address, or `p3-pad` if the role is spelled as a name. A kind's primary is player 1's whatever its role. The camera job is the first pad listed on each deck | — | owner — 2026-11-04: "Mapping on another deck moves it"; the rest is (rec) — pending the owner |
+| 731 | Wave 4 PC: T2's ⇧ fine mode reaches every slider left out (a route's depth and rest, its feel's knobs, a macro subscriber's from and to, GRAPH's backdrop); the side pane's paper cuts at 240 px (the patch chips, the analyzer's scene row, meter tags, transfer row, spectrogram hint) | 561 | (rec) — pending the owner |
+| 732 | Wave 4 PC: the on-screen desk draws SEND B as FINE, reserved from its clicks; `desk.fine` is declared beside `desk.save`; a row of the owner's on SEND B still takes the button | 562 | (rec) — pending the owner; the reservation follows the owner's seventh round, 2026-11-04 |
 | 737 | Wave 4 AZ: the panel says "analyzer" for the fixture and its tuning; a part reads its own name (SUB … AIR) or "analyzer 3", and "band" stays only as the plain audio word for one of the parts | 566 | owner — 2026-11-04: band for one bin, as built |
 | 738 | Wave 4 AZ: words only; `band.*` ids, `lane:` addresses, the `band` group key, the library's `band` folders, `SECTIONS` and `PAGE_KEYS` all stay; ROUTING's target list keeps printing raw ids | 567 | The owner, 2026-11-04 |
 | 743 | Wave 4 MR: the hard rule. No row of a preset may drive a meta controller param (`part_of(p) == "session"`); refused in words at Learn, at the pickers and at `Bindings`' doors, dropped with a note at a load, removed by the next save; the meta controller's own rows stay, the line being `is_session_row`. Overturns row 19 (a) | 572, 573 | owner — 2026-11-04: "a hard rule" |
@@ -11238,7 +11240,7 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   reached**: ROUTING's own sliders (a route's depth and rest, a
   modifier's knobs, a span's from / to, `ui_routing.py`) and GRAPH's
   backdrop (`ui_graph.py`, U1's on #345) — they call imgui directly; a
-  later PR can pass them through `Panel._fine`. **No arrow keys**: the
+  later PR can pass them through `Panel._fine` (done: row 731). **No arrow keys**: the
   panel does not turn on imgui's keyboard navigation, so a slider takes no
   arrows to make finer. A fader's imgui label is its param id now
   (`##view.bright`, was `##s` under the id's push), so the driver finds
@@ -11281,7 +11283,7 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   in the desk log. `desk.fine` is learnable as `desk.slew` is (a learned
   toggle row would latch it). It is registered by `midi.register_held`,
   the held-button shape SAVE has; **move it beside `desk.save` in
-  `routing.register_desk` after D2** (routing.py was frozen for D2).
+  `routing.register_desk` after D2** (routing.py was frozen for D2; moved: row 732).
 - **Other options.** A clip stop (1–7 are free, but the sequencer page
   shadows them); a track select 7–8 (far from the knobs); SEND C or
   device ◀ ▶ (as free; SEND B is nearer the track knobs). ÷4 or ÷20.
@@ -11291,8 +11293,8 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   is its value: every release would leave it out of place).
 - **To reverse.** `apc40.FINE = None` (or the line out): the adapter's
   `_fine_control` is then None everywhere and nothing else changes.
-- **Rough edge.** The on-screen desk (ui_desk.py) draws SEND B as free:
-  it reads the table, and FINE is not a row. A learn armed while SEND B
+- **Rough edge.** The on-screen desk (ui_desk.py) drew SEND B as free:
+  it reads the table, and FINE is not a row (fixed: row 732). A learn armed while SEND B
   is pressed ignores the press. An enum or integer knob held fine steps
   as before. Between a ring sent mid-turn and the encoder taking it, a
   message already in flight reads a few steps large (the same race the
@@ -13059,6 +13061,52 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   which this item must not change. A new address form for players (`@player2`): the owner
   named `axis@p2`, and a rule that keeps the name true costs less than a second grammar.
 - **Judge it.** 564.
+### 731. The pane's paper cuts: T2's reach, and what fits at 240 px
+- **Asked.** `wave-4-inherited.md` §3 and #364, AZ's report on #368. REVIEW: "a widget fits the
+  narrowest place it is drawn."
+- **Answer.** (rec) — pending the owner; nothing here changes a value or a file.
+- **Built, fine mode.** `Panel._raw_slider` draws every such slider, as `Panel._slider` draws a
+  param's: filled, the readout the value's own, so neither follows the mouse through a fine drag.
+  So the rest, the feel's knobs, from / to and the backdrop look as the depth did already, and a
+  plain drag is no longer rounded to the printed digits. It shares `_fine_throw` with
+  `Panel._fine`, so the rules are row 608's: a press writes nothing, ⇧ let go mid-drag carries on
+  coarse with no jump, Ctrl+click stays typing. A depth a file left out of range creeps in and
+  goes no further out. Reached: a route's depth, rest and feel knobs, a
+  macro subscriber's from and to, GRAPH's backdrop. A logarithmic knob (the spring's duration)
+  moves along its log, as the slider does. A rest following its source stays so through a ⇧
+  press that does not move.
+- **Built, the pane.** `save as patch…` and `update patch` use `ui.beside`. In the analyzer
+  section: the scene combo keeps `SCENE_COMBO_MIN` (Reset all takes its own row, the label only
+  its own width); the tags under the meters take the largest size that fits (`tag_px`, down to 10 px), and one that
+  would still touch is left out with the selected band's kept (`tags_shown`); the transfer
+  row wraps where it does not fit on the title's line, which at the old code's flush-right
+  drew on top of the title at 320 px too; the spectrogram's hint drops to `HINT_SHORT` and says
+  the long form when hovered (`hint_for`); the band combo gives way so Reset stays beside it.
+- **Other options.** One fader column at 240 px: not needed, two read fine. Dropping the hint
+  altogether at 240: it is the plot's only affordance.
+- **Rough edge.** The Q fader's readout says "Q 0.87" under a "Q" label at every width. Left.
+- **The "page" words stay out** (row 668): schedule stage 7.
+- **Judge it.** 561.
+
+### 732. SEND B is drawn as FINE
+- **Asked.** Row 609's rough edge: the desk draws the button as free. The owner, seventh round,
+  2026-11-04: "Some of its controls are reserved: not learnable or bindable by a preset."
+- **Answer.** (rec) — pending the owner on the last point below.
+- **Built.** `register_desk` declares `desk.fine` beside `desk.save`, so a panel with no desk
+  has it; `midi.register_fine` and `register_held` are gone and `FINE_PARAM`, `FINE_DIV` moved
+  to `routing.py`, still importable from `midi`. `ui_desk.FINE_ROW` is a row for the drawing
+  only, never in the table; it lights while held and reads "Fine (hold)". `ui_desk.is_fine`
+  refuses it to a click: not picked, not learned, the footer says why. One rule,
+  `routing.fine_gives_way`, decides for both the adapter and the drawing, over the first desk's
+  rows. Row 609's reversal, `apc40.FINE = None`, now takes `FINE_ROW` out with it.
+- **Other options.** A real row through `Bindings.dispatch` (row 609's "clean shape"): it needs
+  `APC_NEW_ROWS` to reach the owner's `bindings.json`, and the adapter's press handling would
+  have to go in the same PR. No user-visible gain.
+- **For the owner.** A row on SEND B still takes the button and the desk then draws that row,
+  so a file that already has one keeps working. Under the seventh round SEND B could refuse rows
+  outright. Recommendation: leave it for the generic-controller work, where reserved controls
+  become a rule rather than one button.
+- **Judge it.** 562.
 
 ### 737. What the panel calls the analyzer
 
