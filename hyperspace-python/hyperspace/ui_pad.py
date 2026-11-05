@@ -60,7 +60,7 @@ import math
 from imgui_bundle import imgui
 
 from . import gamepad, ui, ui_desk, ui_pad_nvg, ui_pad_views, ui_routing
-from .routing import PAIR_SCHEME, Binding, pair_poles
+from .routing import PAIR_SCHEME, Binding, layout_of, pair_poles
 
 SCHEMES = ("pad", "hat", "axis", "pair", "touch", "motion")   # the schemes a pad control's row can have
 EDGE = ui_desk.EDGE                 # from the control window's edges, as the desk sits
@@ -101,15 +101,19 @@ def _state(panel) -> dict:
     return panel.__dict__.setdefault("_pad_state", {})
 
 
-def rows(table) -> dict[str, Binding]:
+def rows(table, model=None) -> dict[str, Binding]:
     """{source: the row that acts} for every enabled pad, D-pad or axis
     row of the table — the first row a control has wins, as the adapters
     read them. Keyed by the layout's source, so a lane addressed by
-    number (``axis:4``) lands on the control it names."""
+    number (``axis:4``) lands on the control it names. `model`, the pad
+    read: its own layout's rows stand in for the table's (`layout_of`)."""
     out: dict[str, Binding] = {}
     every = gamepad.layout_for(gamepad.models.MODELS["edge"])   # every control a pad can have
+    layout = layout_of(model)
+    for b in layout.rows:
+        out[b.source] = b
     for b in table.of(*SCHEMES):
-        if not b.enabled:
+        if not b.enabled or layout.hides(b):
             continue
         # (the window's controls are the primary's: a second pad's row is not on them)
         poles = pair_poles(":".join(b.parts)) if b.scheme == PAIR_SCHEME and not b.device else None
@@ -121,15 +125,46 @@ def rows(table) -> dict[str, Binding]:
     return out
 
 
-def source_rows(table) -> dict[str, Binding]:
+def source_rows(table, model=None) -> dict[str, Binding]:
     """{source: the row that acts} by the exact address a row names — the
     lanes view's (``touch:pinch`` apart from ``touch:x``), where `rows`
-    folds every touch row onto the touchpad."""
-    out: dict[str, Binding] = {}
+    folds every touch row onto the touchpad. `model` as `rows`."""
+    layout = layout_of(model)
+    out: dict[str, Binding] = {b.source: b for b in layout.rows}
     for b in table.of(*SCHEMES):
-        if b.enabled:
+        if b.enabled and not layout.hides(b):
             out.setdefault(b.source, b)
     return out
+
+
+def _model(panel):
+    """The model of the pad read now, for its own layout; None with no pad."""
+    return getattr(_pad(panel), "model", None)
+
+
+def _stick_quiet(panel, source: str) -> bool:
+    """Is a route on this stick address not heard now? A Joy-Con's, with the
+    totem off (`PadDevice._quiet_stick`)."""
+    if not getattr(_model(panel), "totem_layout", False):
+        return False
+    if source not in ("axis:LX", "axis:LY") and not source.startswith("axis:L."):
+        return False
+    reg = getattr(panel, "reg", None)
+    return not (reg is not None and "totem.on" in reg and reg["totem.on"].value)
+
+
+def built_in(panel, source: str) -> str:
+    """What an axis does with no route on it, for the pad read now: `BUILT_IN`,
+    less what a pad with a layout of its own keeps free (`PadDevice._no_camera_job`)."""
+    model = _model(panel)
+    if getattr(model, "totem_layout", False):
+        if source in ("axis:LT", "axis:RT"):
+            return ""
+        if source in ("axis:LX", "axis:LY"):
+            reg = getattr(panel, "reg", None)
+            if reg is not None and "totem.on" in reg and reg["totem.on"].value:
+                return ""
+    return BUILT_IN.get(source, "")
 
 
 def view_of(panel) -> str:
@@ -160,9 +195,10 @@ def _key(table) -> tuple:
 
 def rows_cached(panel, table) -> dict[str, Binding]:
     st = _state(panel)
-    key = _key(table)
+    model = _model(panel)
+    key = (*_key(table), getattr(model, "id", ""))
     if st.get("key") != key or st.get("table") is not table:
-        st.update(key=key, table=table, rows=rows(table))
+        st.update(key=key, table=table, rows=rows(table, model))
     return st["rows"]
 
 
@@ -240,7 +276,7 @@ def says(panel, c: gamepad.Control, b: Binding | None) -> str:
     """What a lit control does: its row's param in the panel's words
     (`ui_desk.text`), else the built-in meaning of a free axis
     (`BUILT_IN`), else "" — a dark control."""
-    if b is not None:
+    if b is not None and not _stick_quiet(panel, c.source):
         if b.scheme != PAIR_SCHEME:
             return ui_desk.text(panel.reg, b)
         poles = pair_poles(":".join(b.parts))
@@ -249,7 +285,7 @@ def says(panel, c: gamepad.Control, b: Binding | None) -> str:
             return ui_desk.text(panel.reg, Binding(c.source, b.target, "step",
                                                    b.value if up else -b.value))
         return f"{ui_desk.text(panel.reg, b)} {'+' if up else '−'}"
-    return BUILT_IN.get(c.source, "")
+    return built_in(panel, c.source)
 
 
 def label(panel, c: gamepad.Control, b: Binding | None) -> str:
@@ -568,7 +604,7 @@ def totem_word(reg) -> tuple[str, str] | None:
     tip = ("The Joy-Con as a 4D totem (plan 47, an experiment) — click to switch it "
            f"{'off' if state.on else 'on'}. Its gyro turns three planes, one per axis "
            "(x → YZ, y → XZ, z → XY); X / Y / B throw x / y / z into W (XW, YW, ZW); "
-           "A (or ↓) resets the shape to the world's axes from where the pad is; the "
+           "A (or ↓; a Joy-Con's − or +) resets the shape to the world's axes from where the pad is; the "
            "tilt moves the shape.")
     if not state.on:
         return "totem off", tip
@@ -699,19 +735,20 @@ def _says_of(panel, table):
     """`says(source)` for a view: (the words, the row) — a row's param in
     the panel's words, else an axis's built-in meaning, else nothing."""
     st = _state(panel)
-    key = _key(table)
+    model = _model(panel)
+    key = (*_key(table), getattr(model, "id", ""))
     if st.get("src_key") != key or st.get("src_table") is not table:
-        st.update(src_key=key, src_table=table, src_rows=source_rows(table))
+        st.update(src_key=key, src_table=table, src_rows=source_rows(table, model))
     rows_ = st["src_rows"]
 
     def says_(source: str) -> tuple[str, Binding | None]:
         b = rows_.get(source)
-        if b is not None:
+        if b is not None and not _stick_quiet(panel, source):
             words = ui_desk.text(panel.reg, b)
             if b.scheme == PAIR_SCHEME and b.op == "step":      # the lane: both ways
                 words = f"{words.rpartition(' ')[0]} ±{abs(b.value):g}"
             return words, b
-        return BUILT_IN.get(source, ""), None
+        return built_in(panel, source), None
     says_.pairs = tuple(s for s in rows_ if s.startswith(f"{PAIR_SCHEME}:"))   # the lanes view's
     return says_
 

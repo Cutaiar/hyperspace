@@ -189,6 +189,16 @@ the tree, `tests/test_pads_joycon_real.py`); 424 and 426–429 (group AV)
 remain. **Restart** rather than hot reload (the road's module list
 changed).
 
+**The Joy-Con's version 0** (2026-11-04, the owner): buttons, sticks, the gyro
+and shake. A Nintendo pad's sensors move no position (`poi.no_position`) and its
+reader learns the gyro's rest offset; the Edge and `motion:shake` are unchanged.
+The Joy-Con has its own layout on its model (`routing.layout_of`): SL / SR the
+shape, stick click the view's reset, − the totem's reset, capture the totem; L
+the base chase; ZL free, and the stick free while the totem reads it. The Edge's
+hold-to-save is its own layout too. Rows 686–687, checks
+520–521 (group BW), with a charged pad. Position waits for
+an idealized control object; draft PR #342 is its record.
+
 ## What is left
 
 - **Plan 46, hand checks 424 and 426–429** (the owner's Joy-Con): the

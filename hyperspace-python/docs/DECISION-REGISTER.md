@@ -717,6 +717,8 @@ here; overturn → the change, then the same.
 | 683 | Plan 51 O2: no schema move for `turn`: an older build drops the row with a note and lands the rest, and a save there loses it; both Macs update together | — | (rec) — pending the owner |
 | 684 | Plan 51 O2: the clutch is the same hand's grab, landed in the preset's row; a lost hand is an opened clutch; one undo step per closure with a 0.15 s grace; under the hold it moves the preview as a knob does | — | (rec) — pending the owner |
 | 685 | Plan 51 O2: within 20° of vertical, a yaw straying 20° or stepping 5° on leaving the cone makes the hand read NaN until it has left, then restart, not a camera jump; `ghost.mirror` does not flip a turn row, its depth does; a room lane on a clamped target stays `position`; a moved row lands as `row_for` would | — | (rec) — pending the owner |
+| 686 | The Joy-Con's version 0 is buttons, sticks, the gyro and shake: its sensors move no position (`poi.no_position`); the Edge and `motion:shake` are unchanged. An idealized control object for the acceleration comes later. Its own layout (`models.Model.layout`, `routing.layout_of`): SL / SR the shape, stick click the view's reset, − (+ on the R) the totem's reset, capture (HOME on the R) the totem on and off; L (R) holds the base chase (row 724); ZL free; a stick route heard only while the totem reads it, else the stick orbits. Replaces the table on those controls for this pad only. The Edge's layout is hold-to-save on `pad:MENU` (row 724) | 520, 521 | owner — 2026-11-04 |
+| 687 | The hid reader learns a Joy-Con's gyro rest offset (`hid.Turn(learn=True)`): every axis within 3 deg/s for one sensor second, none past 20 deg/s | 520 | (rec) — pending the owner |
 | 688 | Plan 44 D5a: the owner of the two `Deck`s is `deck.MetaController`, named from the glossary; a `Pointer` per holder (each controller by role, the keys, the mouse) and the panel's apart; exactly two `Deck`s; no `swap`; a deck's presets see the library through `library.DeckLibrary`, so they cannot reach another deck | — | "name the owner of the two Decks from the glossary"; "Two fixed Decks and no swapping" (owner, 2026-11-04) |
 | 689 | Plan 44 D5a: the holders moved onto pointers, those the reading named (`SeqPage.reg`, `Library.reg` and `presets`, `dream_check`, `Mouse`'s params, `draw_render`, `Marks`) and those found while building (`rig.said`'s table, deck 2's `Learn.devices`, the totem's and poi's params, the watchdog's preset, the bank's verbs, its lit slot and the section references); `Bindings.page` is the session's; `claim` retired | — | (rec) — pending the owner |
 | 690 | Plan 44 D5a: `docs/GLOSSARY.md`, one row per concept; a controller moved mid-gesture releases what it holds on the deck it left, and its real release goes nowhere | — | (rec) — pending the owner's signature on the glossary |
@@ -12776,6 +12778,53 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   same way.
 - **Judge it.** 519.
 
+### 686. The Joy-Con's version 0: buttons, sticks, the gyro and shake
+
+- **Answer.** Owner, 2026-11-04: drop position for this pad for now, and leave
+  the DualSense Edge and the meaning of a shake as they are. An idealized
+  control object for the acceleration takes tuning there is no time for yet.
+- **Built.** `poi.no_position(pad)`, true for the Nintendo family: the poi does
+  not read such a pad and the totem's tilt adds no pan from it. `motion:shake`
+  is unchanged. Draft PR #342 is the record of the position work.
+- **To reverse.** Make `no_position` answer False.
+- **Judge it.** 520, 521.
+
+### 686, continued. The Joy-Con's own controls
+
+- **The Edge.** Owner, 2026-11-04: hold-to-save is the Edge's alone, on its
+  `Model.layout`. `Model.totem_layout` is separate, and only the Joy-Cons set it:
+  rows of its own give the Edge none of the totem's gates. On the Edge a row on
+  `pad:MENU` is no longer heard or learned, whatever the table says.
+- **Answer.** Owner, 2026-11-04, the layout above. Left to the controller: the
+  layout lives on the pad model, not in `bindings.json`, so no other pad and no
+  table changes; ↓ goes back to its row now the reset is on − (it was the
+  totem's); X, Y and B stay the totem's W planes.
+- **Built.** `Router.pad` hears `layout_of(pad.model, role)`'s rows and hides
+  the table's on those controls. `PadDevice._no_camera_job` frees ZL / ZR
+  always and the stick while the totem reads the pad. Learn ignores the
+  layout's controls. The pad window says what the pad will do. A stick route is
+  heard only while the totem reads the pad (owner, 2026-11-04,
+  `PadDevice._quiet_stick`): off, its lanes read NaN, the route lets go and the
+  stick orbits.
+- **Limits.** Those controls cannot be relearned without editing the layout.
+  GRAPH's rig cables show the table's rows, not the layout.
+  The totem still applies its turn as angles in a fixed plane order, so a big
+  turn about two axes lands where Euler angles do.
+- **To reverse.** Empty `layout` and clear `totem_layout` on the two Joy-Con models.
+- **Judge it.** 521.
+
+### 687. Learning a Joy-Con's gyro rest offset
+
+- **Answer.** (rec) — pending the owner.
+- **Built.** `hid.Turn(learn=True)` for a Nintendo pad only. The turn is
+  otherwise unchanged: on both tapes, neither a longer gap allowance nor
+  bridging gaps was reliably better, so the 50 ms limit stands. The offset only
+  matters for a pad whose rest reads past the 3 deg/s dead band, which the
+  owner's does not (about 0.2 deg/s).
+- **Limit.** A pad held in the hand and never set down learns nothing.
+- **To reverse.** Build `Turn` without `learn`.
+- **Judge it.** 520.
+
 ### 688. The meta controller and its pointers
 
 - **Answer.** The owner, 2026-11-04: "`rig`, `session` and lowercase "deck" all become the
@@ -13204,6 +13253,7 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   which this item must not change. A new address form for players (`@player2`): the owner
   named `axis@p2`, and a rule that keeps the name true costs less than a second grammar.
 - **Judge it.** 564.
+
 ### 737. What the panel calls the analyzer
 
 - **Answer.** The owner, 2026-11-04: "Band is a ridiculous name for this thing." The

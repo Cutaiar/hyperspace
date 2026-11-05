@@ -190,7 +190,7 @@ class HidPad:
         self._raw: bytes | None = None       # the newest report, decoded on `latest`
         self._raw_t = 0.0
         # the gyro integrated here, every report (`take_turn`)
-        self._turn = Turn()
+        self._turn = Turn(learn=self.nintendo)
         self._frame: sony.Frame | None = None
         self._frame_of: bytes | None = None
         self.update_version = 0
@@ -463,7 +463,7 @@ class TapePad:
         self._i = 0
         self._loop_n = 0               # how many times round the loop `latest` is
         self._taken: int | None = None # the position (loop × reports + i) `take_turn` reached
-        self._turn = Turn()
+        self._turn = Turn(learn=self.nintendo)
 
     @property
     def length(self) -> float:
@@ -529,6 +529,11 @@ def _clock(codec, raw: bytes):
     return f(raw) if f is not None else None
 
 
+OFFSET_S = 1.0               # sensor seconds of rest before its mean is the gyro's offset
+OFFSET_SPREAD_DPS = 3.0      # …every axis within this, top to bottom (a still Joy-Con's ~2)
+OFFSET_MAX_DPS = 20.0        # …and no axis past this: a real offset is far less
+
+
 class Turn:
     """The gyro integrated report by report: each report's samples, through
     the calibration and the soft dead band (`gesture.turn_of`), times the
@@ -537,13 +542,46 @@ class Turn:
     arrives all at once after a pause still covers the time it was sent
     over), arrival time for a codec with none or across a gap the clock may
     have wrapped through; at most `gesture.REPORT_DT_MAX` a report (the
-    first after a real gap). `take` hands the sum over and starts again."""
+    first after a real gap). `take` hands the sum over and starts again.
 
-    def __init__(self):
+    **A Joy-Con's gyro offset is learned here** (`learn`; other pads as they
+    were), so a pad whose rest reads past the dead band never turns the shape
+    on its own: a sensor axis that holds
+    within `OFFSET_SPREAD_DPS`, under `OFFSET_MAX_DPS` on all three, for
+    `OFFSET_S` of sensor time is at rest, and its mean becomes the offset
+    taken off every reading after. A hand is never that steady, so a slow
+    real turn is not learned away."""
+
+    def __init__(self, learn: bool = False):
+        self.learn = learn
         self.sum = [0.0, 0.0, 0.0]
         self.n = 0
         self.last_t: float | None = None
         self.last_clock: tuple[int, int, float] | None = None
+        self.offset = [0.0, 0.0, 0.0]        # deg/s, the sensor's axes
+        self._rest_s = 0.0                   # the rest being measured: how long
+        self._rest_sum = [0.0, 0.0, 0.0]     # …the rates × their time
+        self._rest_lo: list[float] | None = None
+        self._rest_hi: list[float] | None = None
+
+    def _learn(self, rate, each: float) -> None:
+        """One sample toward the rest (`OFFSET_*`)."""
+        lo = self._rest_lo or list(rate)
+        hi = self._rest_hi or list(rate)
+        lo = [min(a, b) for a, b in zip(lo, rate, strict=True)]
+        hi = [max(a, b) for a, b in zip(hi, rate, strict=True)]
+        if (max(b - a for a, b in zip(lo, hi, strict=True)) > OFFSET_SPREAD_DPS
+                or max(abs(v) for v in rate) > OFFSET_MAX_DPS):
+            self._rest_s, self._rest_sum = 0.0, [0.0, 0.0, 0.0]
+            self._rest_lo, self._rest_hi = None, None
+            return
+        self._rest_lo, self._rest_hi = lo, hi
+        self._rest_s += each
+        self._rest_sum = [a + v * each for a, v in zip(self._rest_sum, rate, strict=True)]
+        if self._rest_s >= OFFSET_S:
+            self.offset = [a / self._rest_s for a in self._rest_sum]
+            self._rest_s, self._rest_sum = 0.0, [0.0, 0.0, 0.0]
+            self._rest_lo, self._rest_hi = None, None
 
     def add(self, samples, t: float, cal, clock=None) -> None:
         last, self.last_t = self.last_t, t
@@ -560,7 +598,11 @@ class Turn:
             return
         each = dt / len(samples)
         for s in samples:
-            for a, v in enumerate(gesture.turn_of(cal.gyro_dps(s), each)):
+            rate = cal.gyro_dps(s)
+            if self.learn:
+                self._learn(rate, each)
+            less = [v - o for v, o in zip(rate, self.offset, strict=True)]
+            for a, v in enumerate(gesture.turn_of(less, each)):
                 self.sum[a] += v
 
     def take(self) -> tuple[tuple[float, float, float], int]:
