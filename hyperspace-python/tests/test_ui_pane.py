@@ -7,11 +7,12 @@ import itertools
 import json
 
 import pytest
-from imgui_bundle import imgui
+from imgui_bundle import imgui, implot
 from test_ui_shell import build_rig, frame
 from ui_driver import Driver
 
 from hyperspace import ui, ui_bands, ui_graph, ui_pane, ui_presets
+from hyperspace.analyzer import N_MAX
 from hyperspace.ui import PAGE_KEYS
 
 WIDE = (1600, 900)      # a page wider than ui_graph.WIDE: the pane beside the canvas
@@ -978,20 +979,106 @@ def test_the_meter_tags_do_not_touch_at_the_narrowest_pane(tmp_path, monkeypatch
 
 
 def test_the_size_of_a_tag_and_the_hint_a_plot_shows():
-    assert ui.tag_px(20.0, 40.0, 12.0) == 12.0               # room: as it was
-    assert ui.tag_px(30.0, 27.0, 12.0) == pytest.approx(10.8)
-    assert ui.tag_px(100.0, 10.0, 12.0) == ui.TAG_MIN_PX
+    assert ui.tag_px(lambda px: 2 * px, 40.0) == ui.FONT_MICRO     # room: as it was
+    assert ui.tag_px(lambda px: 2 * px, 22.0) == ui.TAG_SIZES[1]
+    assert ui.tag_px(lambda px: 30.0 if px > 10 else 20.0, 25.0) == ui.TAG_SIZES[-1]   # measured
+    assert ui.tag_px(lambda px: 99.0, 10.0) == ui.TAG_SIZES[-1]
     long, short = ui_bands.HINT, ui_bands.HINT_SHORT
     assert ui_bands.hint_for(len(long), len) == long
     assert ui_bands.hint_for(len(long) - 1, len) == short
     assert ui_bands.hint_for(len(short) - 1, len) == ""
 
 
+def test_every_tag_shows_at_six_bands_and_none_touch_at_the_most(tmp_path, monkeypatch):
+    """The six at the narrowest all read; at sixteen (`N_MAX`) a tag that
+    would still touch is left out, and the selected band's never is."""
+    tags: dict[str, tuple[float, float]] = {}
+    real = imgui.text_colored
+
+    def noted(color, s, *a):
+        real(color, s, *a)
+        tags[s] = (imgui.get_item_rect_min().x, imgui.get_item_rect_max().x)
+    monkeypatch.setattr(imgui, "text_colored", noted)
+    with build_rig(tmp_path) as r:
+        d, _ = _analyzer_at(r, monkeypatch, ui_graph.SIDE_MIN)
+        d.run(d.wait(3))
+        assert set(r.chain.band_names) <= set(tags)
+        while r.chain.n < N_MAX:
+            r.panel.control.add_band()
+        r.panel.control.selb = 7
+        tags.clear()
+        d.run(d.wait(1))
+        tags.clear()
+        d.step()
+        shown = sorted(tags[n] for n in r.chain.band_names if n in tags)
+        assert r.chain.band_names[7] in tags and 1 < len(shown) < N_MAX
+        assert all(a[1] < b[0] for a, b in itertools.pairwise(shown)), shown
+
+
+def test_tags_shown_keeps_the_first_and_never_a_touching_pair():
+    spans = [(float(k), k + 2.5) for k in range(0, 12, 2)]
+    assert ui.tags_shown(spans, 3, 0.0) == [0, 3, 5]
+    assert ui.tags_shown([(0.0, 1.0), (2.0, 3.0)], 1, 0.5) == [0, 1]
+    assert ui.tags_shown([], 0) == []
+
+
+class _Plot:
+    """A plot's draw list, noting the text drawn on it."""
+
+    def __init__(self, real, said):
+        self.real, self.said = real, said
+
+    def add_text(self, pos, color, text, *a):
+        self.said.append(text)
+        self.real.add_text(pos, color, text, *a)
+
+    def __getattr__(self, name):
+        return getattr(self.real, name)
+
+
+def _hint_rig(monkeypatch):
+    """What the plot's list is told, and where the plot is."""
+    said, at, tips = [], [], []
+    real_list, real_pos = implot.get_plot_draw_list, implot.get_plot_pos
+    monkeypatch.setattr(implot, "get_plot_draw_list", lambda: _Plot(real_list(), said))
+
+    def pos():
+        p = real_pos()
+        at[:] = [(p.x, p.y)]
+        return p
+    monkeypatch.setattr(implot, "get_plot_pos", pos)
+    monkeypatch.setattr(ui, "tooltip", tips.append)
+    return said, at, tips
+
+
 def test_the_spectrogram_says_the_hint_that_fits_at_each_width(tmp_path, monkeypatch):
+    said, _at, _tips = _hint_rig(monkeypatch)
     with build_rig(tmp_path) as r:
         d, st = _analyzer_at(r, monkeypatch, ui_graph.SIDE_MIN)
         d.run(d.wait(3))
-        assert ui_bands._state(r.panel)["hint"] == ui_bands.HINT_SHORT
+        assert ui_bands.HINT_SHORT in said and ui_bands.HINT not in said
         st["side_w"] = 500.0
         d.run(d.wait(3))
-        assert ui_bands._state(r.panel)["hint"] == ui_bands.HINT
+        said.clear()
+        d.run(d.wait(1))
+        assert ui_bands.HINT in said and ui_bands.HINT_SHORT not in said
+
+
+def test_the_short_hints_tooltip_only_over_a_plot_nothing_covers(tmp_path, monkeypatch):
+    """Hovered it says the long form; not during a drag on the plot, and not
+    through an open list drawn over it."""
+    _said, at, tips = _hint_rig(monkeypatch)
+    with build_rig(tmp_path) as r:
+        d, _ = _analyzer_at(r, monkeypatch, ui_graph.SIDE_MIN)
+        d.run(d.wait(3))
+        over = (at[0][0] + 12, at[0][1] + 6)
+        d.run(d.move(over), d.wait(2))
+        assert ui_bands.HINT in tips
+        tips.clear()
+        d.run(d.press(True), d.wait(2))
+        assert ui_bands.HINT not in tips
+        d.run(d.press(False), d.park())
+        d.run(d.click("scene.select"), d.wait(2))    # its list opens down over the plot
+        tips.clear()
+        d.run(d.move(over), d.wait(2))
+        assert ui_bands.HINT not in tips

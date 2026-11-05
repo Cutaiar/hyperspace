@@ -1347,13 +1347,10 @@ def _backdrop_chips(panel, st: dict) -> None:
         ui.tooltip(BACKDROP_TIP)
     if st["backdrop"]:
         imgui.same_line()
-        imgui.set_next_item_width(imgui.get_font_size() * 6)
-        was = st["backdrop_alpha"]
-        changed, v = imgui.slider_float("##graph.backdrop", was, 0.0, 1.0, "%.2f")
-        changed, v = panel._fine_raw(changed, v, was, 0.0, 1.0)
+        changed, v = panel._raw_slider("graph.backdrop", st["backdrop_alpha"], 0.0, 1.0, "%.2f",
+                                       BACKDROP_TIP, imgui.get_font_size() * 6)
         if changed:
             st["backdrop_alpha"] = v
-        panel._fine_raw_tip(BACKDROP_TIP)
 
 
 def backdrop_rect(origin: tuple[float, float], avail: tuple[float, float],

@@ -12980,16 +12980,20 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Asked.** `wave-4-inherited.md` §3 and #364, AZ's report on #368. REVIEW: "a widget fits the
   narrowest place it is drawn."
 - **Answer.** (rec) — pending the owner; nothing here changes a value or a file.
-- **Built, fine mode.** `Panel._fine_raw` takes the slider imgui just drew and says what its
-  caller should take; `_fine_raw_tip` is its word. Both share `_fine_throw` with
+- **Built, fine mode.** `Panel._raw_slider` draws every such slider, as `Panel._slider` draws a
+  param's: filled, the readout the value's own, so neither follows the mouse through a fine drag.
+  So the rest, the feel's knobs, from / to and the backdrop look as the depth did already, and a
+  plain drag is no longer rounded to the printed digits. It shares `_fine_throw` with
   `Panel._fine`, so the rules are row 608's: a press writes nothing, ⇧ let go mid-drag carries on
-  coarse with no jump, Ctrl+click stays typing. Reached: a route's depth, rest and feel knobs, a
+  coarse with no jump, Ctrl+click stays typing. A depth a file left out of range creeps in and
+  goes no further out. Reached: a route's depth, rest and feel knobs, a
   macro subscriber's from and to, GRAPH's backdrop. A logarithmic knob (the spring's duration)
   moves along its log, as the slider does. A rest following its source stays so through a ⇧
   press that does not move.
 - **Built, the pane.** `save as patch…` and `update patch` use `ui.beside`. In the analyzer
   section: the scene combo keeps `SCENE_COMBO_MIN` (Reset all takes its own row, the label only
-  its own width); the tags under the meters shrink to fit (`tag_px`, down to 9 px); the transfer
+  its own width); the tags under the meters take the largest size that fits (`tag_px`, down to 10 px), and one that
+  would still touch is left out with the selected band's kept (`tags_shown`); the transfer
   row wraps where it does not fit on the title's line, which at the old code's flush-right
   drew on top of the title at 320 px too; the spectrogram's hint drops to `HINT_SHORT` and says
   the long form when hovered (`hint_for`); the band combo gives way so Reset stays beside it.
@@ -13005,10 +13009,11 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Answer.** (rec) — pending the owner on the last point below.
 - **Built.** `register_desk` declares `desk.fine` beside `desk.save`, so a panel with no desk
   has it; `midi.register_fine` and `register_held` are gone and `FINE_PARAM`, `FINE_DIV` moved
-  to `routing.py`, still importable from `midi`. `ui_desk.fine_row` makes a row for the drawing
+  to `routing.py`, still importable from `midi`. `ui_desk.FINE_ROW` is a row for the drawing
   only, never in the table; it lights while held and reads "Fine (hold)". `ui_desk.is_fine`
   refuses it to a click: not picked, not learned, the footer says why. One rule,
-  `routing.fine_gives_way`, decides for both the adapter and the drawing.
+  `routing.fine_gives_way`, decides for both the adapter and the drawing, over the first desk's
+  rows. Row 609's reversal, `apc40.FINE = None`, now takes `FINE_ROW` out with it.
 - **Other options.** A real row through `Bindings.dispatch` (row 609's "clean shape"): it needs
   `APC_NEW_ROWS` to reach the owner's `bindings.json`, and the adapter's press handling would
   have to go in the same PR. No user-visible gain.

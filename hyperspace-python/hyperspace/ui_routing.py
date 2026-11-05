@@ -995,38 +995,23 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     # line 2: depth · rest · scale · live
     imgui.dummy(imgui.ImVec2(18, 0))
     imgui.same_line()
-    imgui.set_next_item_width(DEPTH_W)
-    lo, hi, fmt = -DEPTH_MOD, DEPTH_MOD, "%+.2f"
-    span = (hi - lo) or 1.0
-    imgui.push_font(ui._FONTS["num"], ui.FONT_NUM)
-    changed, v = panel._track(
-        lambda: imgui.slider_float("##depth", float(b.value), lo, hi, fmt),
-        (float(b.value) - lo) / span, -lo / span if lo < 0 < hi else 0.0, knob=False,
-    )
-    imgui.pop_font()
-    changed, v = panel._fine_raw(changed, v, float(b.value), lo, hi)
+    changed, v = panel._raw_slider(
+        "depth", b.value, -DEPTH_MOD, DEPTH_MOD, "%+.2f",
+        "Depth, signed" + DEPTH_TIP.get(b.op, DEPTH_TIP["push"]) + "\nctrl-click to type",
+        DEPTH_W)
     if changed:
         b.value = v
-    panel._fine_raw_tip("Depth, signed" + DEPTH_TIP.get(b.op, DEPTH_TIP["push"])
-                        + "\nctrl-click to type")
     imgui.same_line()
     if b.op == "push":
         auto = b.rest is None
         rest = router.rest_of(b.source) if auto else float(b.rest)
-        imgui.set_next_item_width(REST_W)
-        imgui.push_font(ui._FONTS["num"], ui.FONT_NUM)
-        if auto:                                    # the source's own: shown, dimmed
-            imgui.push_style_color(imgui.Col_.text, ui.DIM)
-        changed, v = imgui.slider_float("##rest", rest, 0.0, 1.0, "%.2f")
-        if auto:
-            imgui.pop_style_color()
-        imgui.pop_font()
-        changed, v = panel._fine_raw(changed, v, rest, 0.0, 1.0)
+        changed, v = panel._raw_slider(             # the source's own: shown, dimmed
+            "rest", rest, 0.0, 1.0, "%.2f",
+            "Rest — the source reading that pushes nothing"
+            + (" (the source's own)" if auto else " (this row's own)")
+            + "\ndrag to set the row's own; ctrl-click to type", REST_W, dim=auto)
         if changed:
             b.rest = v                              # dragged: the row's own number
-        panel._fine_raw_tip("Rest — the source reading that pushes nothing"
-                            + (" (the source's own)" if auto else " (this row's own)")
-                            + "\ndrag to set the row's own; ctrl-click to type")
         imgui.same_line()
         if not auto:
             imgui.push_style_color(imgui.Col_.text, ui.DIM)
@@ -1135,19 +1120,13 @@ def _feel_line(panel, router: Router, b: Binding) -> None:
             ui.tooltip("A named spring, each drawn as its curve — sets the duration and "
                        "bounce beside it; custom once either is moved off one")
         imgui.same_line()
-    imgui.push_font(ui._FONTS["num"], ui.FONT_NUM)
     for j, (k, lo, hi, unit, fmt, log, tip) in enumerate(knobs):
         if j:
             imgui.same_line()
-        imgui.set_next_item_width(knob_w)
-        flags = imgui.SliderFlags_.logarithmic if log else 0
-        was = float(getattr(m, k)) * unit
-        changed, v = imgui.slider_float(f"##{k}", was, lo * unit, hi * unit, fmt, flags)
-        changed, v = panel._fine_raw(changed, v, was, lo * unit, hi * unit, log)
+        changed, v = panel._raw_slider(k, float(getattr(m, k)) * unit, lo * unit, hi * unit, fmt,
+                                       tip + "\nctrl-click to type", knob_w, log)
         if changed:
             b.motion = m = replace(m, **{k: min(max(v / unit, lo), hi)})
-        panel._fine_raw_tip(tip + "\nctrl-click to type")
-    imgui.pop_font()
     imgui.dummy(imgui.ImVec2(18, 0))
     imgui.same_line()
     trace = ui_feel.sample(panel, ("route", b.source, b.target),
@@ -1581,19 +1560,13 @@ def _sub(panel, router: Router, mid: str, s: Sub, shared: dict[str, list[str]]) 
         lo, hi, fmt = 0.0, 1.0, "%.2f"
         tip = "the param's fader position at the macro's 0 / 1 — from > to runs the other way"
     imgui.same_line()
-    imgui.set_next_item_width(SUB_W)
-    changed, v = imgui.slider_float("##from", float(s.lo), lo, hi, "from " + fmt)
-    changed, v = panel._fine_raw(changed, v, float(s.lo), lo, hi)
+    changed, v = panel._raw_slider("from", s.lo, lo, hi, "from " + fmt, tip, SUB_W, num=False)
     if changed:
         s.lo, edited = v, True
-    panel._fine_raw_tip(tip)
     imgui.same_line()
-    imgui.set_next_item_width(SUB_W)
-    changed, v = imgui.slider_float("##to", float(s.hi), lo, hi, "to " + fmt)
-    changed, v = panel._fine_raw(changed, v, float(s.hi), lo, hi)
+    changed, v = panel._raw_slider("to", s.hi, lo, hi, "to " + fmt, tip, SUB_W, num=False)
     if changed:
         s.hi, edited = v, True
-    panel._fine_raw_tip(tip)
     if mark:
         imgui.same_line()
         imgui.text_colored(ui.WARN, mark)

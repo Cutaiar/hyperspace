@@ -778,6 +778,29 @@ def test_a_row_on_send_b_takes_the_button_as_the_adapter_says(rig):
     assert ui_desk.lit(table)[c.glyph].target == routing.FINE_PARAM
 
 
+def test_a_second_desks_row_on_the_same_note_leaves_fine_alone(rig):
+    """The adapter's rule: `MidiIO.bindings` is this role's rows, and a
+    qualified row of another desk's is that desk's."""
+    table = rig.router.table
+    c = _fine_control()
+    number, ch = apc40.FINE
+    table.bind(Binding(f"note@launch:{ch}:{number}", "view.points", "toggle", layer="preset"),
+               write=False)
+    assert ui_desk.is_fine(table, c)
+
+
+def test_the_cached_map_follows_a_row_on_send_b_switched_off(rig):
+    """`Bindings.enable` moves `rows_serial`, the only thing that changes."""
+    panel, table = rig.panel, rig.router.table
+    c = _fine_control()
+    table.bind(Binding(c.source, "view.points", "toggle", feedback="led", layer="preset"),
+               write=False)
+    frame(panel)
+    assert ui_desk.lit_cached(panel, table)[c.glyph].target == "view.points"
+    table.enable(next(x for x in table.bindings if x.source == c.source), False)
+    assert ui_desk.lit_cached(panel, table)[c.glyph].target == routing.FINE_PARAM
+
+
 def test_desk_fine_stands_beside_desk_save_with_no_desk_attached(rig):
     """`register_desk` declares it: the panel draws it with no adapter."""
     assert rig.panel.midi is None

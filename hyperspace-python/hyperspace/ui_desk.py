@@ -142,6 +142,7 @@ def _key(table) -> tuple:
     lane or the length changes)."""
     return (table.layer, table.layer_serial, table.desk_serial,
             getattr(table, "redraw_serial", 0), id(table.bindings), len(table.bindings),
+            getattr(table, "rows_serial", 0),
             getattr(table, "page_serial", 0),
             id(table.page_rows) if getattr(table, "page", None) is not None else None)
 
@@ -156,25 +157,24 @@ def on_page(table, c: apc40.Control) -> bool:
 
 
 FINE_OWNS = "held, every knob moves a tenth as far"
+# the FINE button as a row for the desk to draw (row 732): `midi.MidiIO` reads
+# the button itself, so the table has no row on it
+FINE_ROW = Binding(f"note:{apc40.FINE[1]}:{apc40.FINE[0]}", FINE_PARAM, "momentary",
+                   feedback="led")
 
 
 def fine_row(table) -> Binding | None:
-    """The FINE button as a row for the desk to draw (row 732): `midi.MidiIO`
-    reads the button itself, so the table has no row on it, and a row of the
-    table's takes it (`fine_gives_way`). None then, or on a profile with
-    none."""
-    fine = getattr(apc40, "FINE", None)
-    if fine is None or fine_gives_way(table.bindings, *fine):
-        return None
-    number, ch = fine
-    return Binding(f"note:{ch}:{number}", FINE_PARAM, "momentary", feedback="led")
+    """`FINE_ROW`, or None where a row of the first desk's takes the button
+    (`fine_gives_way`, over the rows `MidiIO.bindings` gives the adapter: a
+    second desk's row on the same note is that desk's own)."""
+    rows = (b for b in table.midi() if table.serves(None, b))
+    return None if fine_gives_way(rows, *apc40.FINE) else FINE_ROW
 
 
 def is_fine(table, c: apc40.Control) -> bool:
     """Is this control the FINE button, as the table stands? It is reserved:
     neither learned nor picked."""
-    row = fine_row(table)
-    return row is not None and c.source == row.source
+    return c.source == FINE_ROW.source and fine_row(table) is not None
 
 
 def lit(table) -> dict[str, Binding]:

@@ -135,7 +135,9 @@ HEADER_DOT_R = 5.0
 FONT_BASE = 16.0
 FONT_MICRO = 12.5
 TAG_GAP = 3.0       # px kept between two meter tags (`tag_px`)
-TAG_MIN_PX = 9.0    # the smallest they go
+# the sizes a tag may be, largest first: glyphs land on whole pixels, so width
+# is not linear in size and each is measured. Past the last a tag is left out
+TAG_SIZES = (FONT_MICRO, 11.0, 10.0)
 FONT_NUM = 16.0
 FONT_BIG = 52.0
 
@@ -486,10 +488,22 @@ def check_w(label: str) -> float:
                                        if words else 0.0)
 
 
-def tag_px(widest: float, room: float, px: float = FONT_MICRO) -> float:
-    """The type size that fits a tag `widest` wide at `px` into `room`, no
-    larger than `px`, no smaller than `TAG_MIN_PX`."""
-    return max(min(px, px * room / widest if widest > 0 else px), TAG_MIN_PX)
+def tag_px(width_at: Callable[[float], float], room: float) -> float:
+    """The largest of `TAG_SIZES` at which a tag `width_at` that size measures
+    fits `room`; the smallest if none does."""
+    return next((px for px in TAG_SIZES if width_at(px) <= room), TAG_SIZES[-1])
+
+
+def tags_shown(spans: list[tuple[float, float]], first: int, gap: float = TAG_GAP) -> list[int]:
+    """Which of these tags (x0, x1 each) to draw so that none touches another:
+    `first` for certain (the selected band's), then each in order that keeps
+    `gap` from those already kept."""
+    kept = [first] if 0 <= first < len(spans) else []
+    for i, (x0, x1) in enumerate(spans):
+        if i not in kept and all(x1 + gap <= spans[k][0] or spans[k][1] + gap <= x0
+                                 for k in kept):
+            kept.append(i)
+    return sorted(kept)
 
 
 def beside(w: float) -> bool:
@@ -1387,12 +1401,13 @@ class Panel:
             if not shift:
                 return False, None
             x = io.mouse_pos.x if imgui.is_item_activated() else io.mouse_pos_prev.x
-            st = self._fine_drag = {"id": key, "x": x, "t": min(max(t0, 0.0), 1.0)}
+            st = self._fine_drag = {"id": key, "x": x, "t": t0,
+                                    "lo": min(t0, 0.0), "hi": max(t0, 1.0)}
         x = io.mouse_pos.x
         moved, st["x"] = x - st["x"], x
         if moved == 0 or span <= 0:
             return True, None
-        st["t"] = min(max(st["t"] + moved / span * (FINE if shift else 1.0), 0.0), 1.0)
+        st["t"] = min(max(st["t"] + moved / span * (FINE if shift else 1.0), st["lo"]), st["hi"])
         return True, st["t"]
 
     @staticmethod
@@ -1401,35 +1416,50 @@ class Panel:
         in screen px, `half` in from either end of the frame."""
         return r0.x + half, r1.x - r0.x - 2 * half
 
-    def _fine_raw(self, changed: bool, v: float, before: float, lo: float, hi: float,
-                  log: bool = False) -> tuple[bool, float]:
-        """A slider drawn straight from imgui, with no `Param` behind it (a
-        route's depth, GRAPH's backdrop; row 731), called right after it:
-        what its caller should take for `changed, v`. `before` is the value
-        it was drawn with; `log` when the slider is logarithmic (`lo` > 0)."""
-        if hi <= lo:
-            return changed, v
-        r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
-        _x0, span = self._throw(r0, r1, self._grab_half(r1.x - r0.x))
+    def _raw_slider(self, key: str, value: float, lo: float, hi: float, fmt: str, tip: str,
+                    width: float = -1, log: bool = False, dim: bool = False,
+                    num: bool = True) -> tuple[bool, float]:
+        """A float slider with no `Param` behind it (a route's depth, GRAPH's
+        backdrop; row 731): `(changed, value)`, as `imgui.slider_float` gives
+        them, with ⇧-drag fine mode and its tooltip. Drawn as `Panel._slider`
+        draws a param's, and for the same reason: the readout and the fill
+        are the value's, where imgui's own would follow the mouse through a
+        fine drag. `log` when the throw is logarithmic (`lo` > 0); `num` for
+        the readouts' face, off for words that need the room. A value a
+        file left outside the range is not pulled in by a fine drag: it can
+        come in, and go no further out."""
+        value = float(value)
         log = log and lo > 0
-        t0 = (math.log(max(before, lo) / lo) / math.log(hi / lo) if log
-              else (before - lo) / (hi - lo))
-        own, t = self._fine_throw(t0, span)
-        if not own:
-            return changed, v
-        if t is None:                   # a frame the mouse did not move writes nothing
-            return False, before
-        return True, lo * (hi / lo) ** t if log else lo + t * (hi - lo)
-
-    def _fine_raw_tip(self, words: str) -> None:
-        """A raw slider's tooltip, as `_fine_tip` says it for a param's."""
+        t0 = (math.log(max(value, lo) / lo) / math.log(hi / lo) if log
+              else (value - lo) / ((hi - lo) or 1.0))
+        origin = -lo / (hi - lo) if lo < 0 < hi else 0.0
+        text = (fmt % value).replace("%", "%%")
+        flags = imgui.SliderFlags_.logarithmic if log else 0
+        imgui.set_next_item_width(width)
+        if num:
+            imgui.push_font(_FONTS["num"], FONT_NUM)
+        if dim:
+            imgui.push_style_color(imgui.Col_.text, DIM)
+        changed, v = self._track(
+            lambda: imgui.slider_float(f"##{key}", value, lo, hi, text, flags),
+            t0, origin, knob=False)
+        if dim:
+            imgui.pop_style_color()
+        if num:
+            imgui.pop_font()
+        r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+        own, t = self._fine_throw(t0, self._throw(r0, r1, self._grab_half(r1.x - r0.x))[1])
+        if own:
+            changed = t is not None     # a frame the mouse did not move writes nothing
+            v = value if t is None else lo * (hi / lo) ** t if log else lo + t * (hi - lo)
         shift = getattr(self, "_shift", False)
         st = getattr(self, "_fine_drag", None)
         hovered = imgui.is_item_hovered()
         if shift and not hovered and st is not None and st["id"] == imgui.get_item_id():
             tooltip(FINE_TIP)
         elif hovered:
-            tooltip(f"{FINE_TIP}\n{words}" if shift else words)
+            tooltip(f"{FINE_TIP}\n{tip}" if shift else tip)
+        return changed, v
 
     def _fine_tip(self, a: Param, p: Param) -> None:
         """The slider's tooltip, led by "FINE" while ⇧ is held over a
@@ -1855,17 +1885,24 @@ class Panel:
             self._ctx(self.reg["band.select"], f".{i}")
             self._learn_frame(self.reg["band.select"])   # armed from a meter: framed on it
         # band tags, centred under their bars, in the micro face — smaller
-        # where the widest would touch its neighbour (a narrow pane)
-        imgui.push_font(_FONTS["micro"], FONT_MICRO)
-        widest = max((imgui.calc_text_size(name).x for name in a.band_names), default=0.0)
-        imgui.pop_font()
+        # where the widest would touch its neighbour (a narrow pane), and
+        # the ones that still would left out: a meter's hover names its band
+        def widest(px: float) -> float:
+            imgui.push_font(_FONTS["micro"], px)
+            w = max((imgui.calc_text_size(name).x for name in a.band_names), default=0.0)
+            imgui.pop_font()
+            return w
         imgui.push_font(_FONTS["micro"], tag_px(widest, bw + gap - TAG_GAP))
+        right = origin.x + n * bw + (n - 1) * gap
+        spans = []
         for i, name in enumerate(a.band_names):
             tw = imgui.calc_text_size(name).x
-            imgui.set_cursor_screen_pos(
-                imgui.ImVec2(origin.x + i * (bw + gap) + (bw - tw) / 2, origin.y + mh + 4)
-            )
-            imgui.text_colored(RED if i == self.control.selb else DIM, name)
+            x = origin.x + i * (bw + gap) + (bw - tw) / 2
+            x = max(min(x, right - tw), origin.x)
+            spans.append((x, x + tw))
+        for i in tags_shown(spans, self.control.selb):
+            imgui.set_cursor_screen_pos(imgui.ImVec2(spans[i][0], origin.y + mh + 4))
+            imgui.text_colored(RED if i == self.control.selb else DIM, a.band_names[i])
         imgui.pop_font()
         imgui.set_cursor_screen_pos(imgui.ImVec2(origin.x, origin.y + mh + 4 + FONT_MICRO + 4))
 

@@ -323,6 +323,54 @@ def test_a_shift_drag_moves_a_routes_depth_and_rest_a_tenth_as_far(route):
     assert plain > 0.1 and fine == pytest.approx(plain * ui.FINE, rel=0.05)
 
 
+def test_the_readout_and_the_fill_are_the_values_through_a_fine_drag(route, monkeypatch):
+    """imgui's slider follows the mouse; what it is told to print must not.
+    A real slider, the mouse far right of a depth at +0.20."""
+    _, d, b = route
+    shown: list[str] = []
+    fills: list[float] = []
+    real, track = imgui.slider_float, ui.Panel._track
+
+    def noted(label, v, lo, hi, fmt="%.3f", *a):
+        if label == "##depth":
+            shown.append(fmt)
+        return real(label, v, lo, hi, fmt, *a)
+
+    def tracked(self, draw, norm, *a, **k):
+        fills.append(norm)
+        return track(self, draw, norm, *a, **k)
+    monkeypatch.setattr(ui.Panel, "_track", tracked)
+    d2 = Driver(step=d.step)                     # (over a wrap of its own, so the driver sees it)
+    monkeypatch.setattr(imgui, "slider_float", noted)
+    d2.record(monkeypatch.setattr)
+    b.value = 0.2
+    d2.run(d2.wait(1))
+    _x0, y0, x1, y1 = d2.rect("depth")
+    y = (y0 + y1) / 2
+    d2.run(shift(True), d2.move((x1 - 2, y)), d2.press(True), d2.wait(2))
+    assert shown[-1] == "+0.20" and b.value == pytest.approx(0.2)
+    d2.run(d2.move((x1 + 8, y), 2))
+    assert 0.2 < b.value < 0.3
+    d2.run(d2.wait(1))
+    assert float(shown[-1]) == pytest.approx(b.value, abs=0.006)     # not imgui's +1.00
+    assert fills[-2] == pytest.approx((b.value + 1) / 2, abs=1e-6)   # (the rest is drawn last)
+    d2.run(d2.press(False), shift(False), d2.park())
+
+
+def test_a_depth_a_file_left_out_of_range_comes_in_without_a_jump(route):
+    """Row 608's no-jump holds for 1.5 on a ±1 slider: it creeps in, no further out."""
+    _, d, b = route
+    b.value = 1.5
+    d.run(d.wait(1))
+    x, y = d.centre("depth")
+    d.run(shift(True), d.move((x, y)), d.press(True), d.move((x - 10, y), 2))
+    moved = b.value
+    assert 1.4 < moved < 1.5
+    d.run(d.move((x + 200, y), 4))
+    assert moved < b.value <= 1.5
+    d.run(d.press(False), shift(False), d.park())
+
+
 def test_a_shift_press_leaves_an_auto_rest_auto_until_the_mouse_moves(route):
     """A press with no move writes nothing: a rest following its source stays so."""
     _, d, b = route

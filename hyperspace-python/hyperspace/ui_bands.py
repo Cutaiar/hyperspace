@@ -226,13 +226,13 @@ def _overlays(panel, freqs: np.ndarray, ly: np.ndarray) -> None:
     # the affordance, in the top-left corner on a dark backing (the names
     # below keep clear of it)
     hint = hint_for(size.x - 8, lambda s: imgui.calc_text_size(s).x)
-    _state(panel)["hint"] = hint
     if hint:
         a = imgui.ImVec2(x0 + 1, pos.y + 1)
         b = imgui.ImVec2(x0 + imgui.calc_text_size(hint).x + 7, pos.y + ui.FONT_MICRO + 5)
         dl.add_rect_filled(a, b, ui.u32(imgui.ImVec4(0, 0, 0, 0.7)))
         dl.add_text(imgui.ImVec2(x0 + 4, pos.y + 2), ui.u32(ui.DIM), hint)
-        if hint != HINT and imgui.is_mouse_hovering_rect(a, b, False):
+        if (hint != HINT and implot.is_plot_hovered() and not imgui.is_mouse_down(0)
+                and imgui.is_mouse_hovering_rect(a, b, False)):
             ui.tooltip(HINT)
     order = sorted(range(chain.n), key=lambda i: i == c.selb)   # the selected on top
     for i in order:
