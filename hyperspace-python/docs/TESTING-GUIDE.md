@@ -7930,7 +7930,7 @@ pad connected.
 **Right if:** the terminal says `gamepad: Afterglow Gamepad for Xbox 360
 over USB`; the pad's ring lights one quarter (player 1) instead of
 blinking; B flips points and X screen strokes, A flips faces and Y lines, LB / RB step the shape, the D-pad steps brightness (up / down)
-and left / right do nothing, START held saves a new preset, BACK held is the base chase, the left stick
+and left / right and START do nothing, BACK held is the base chase, the left stick
 orbits (up tilts the camera up; held, it tumbles over the top and keeps
 going round, as the sideways orbit does) and its click resets the
 camera, the right stick's up / down zooms and its right / left speeds

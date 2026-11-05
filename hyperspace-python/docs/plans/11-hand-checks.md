@@ -2020,7 +2020,7 @@ Launch from a terminal. *Pass:* the terminal says `gamepad: Afterglow
 Gamepad for Xbox 360 over USB`; the ring lights one quarter (player 1)
 instead of blinking; B flips points and X screen strokes; A flips faces
 and Y lines; LB / RB step the shape; the D-pad steps brightness (up /
-down) and left / right do nothing; START held saves a new preset; BACK
+down) and left / right and START do nothing; BACK
 held is the base chase (group CH); the left stick orbits (up tilts the
 camera up; held, it tumbles over the top and keeps going round) and its
 click resets the camera; the right stick's up / down zooms and its
@@ -7932,7 +7932,7 @@ pointer is on deck 1 and nothing in the app moves one. Tests cover pointing at d
 Read `docs/GLOSSARY.md`. *Pass:* each row says what you mean. Say which to change;
 SEM renames the code from it.
 
-## CH. BACK holds the base chase; the pad swaps no preset and taps no tempo (wave 4 B2)
+## CH. BACK holds the base chase; the generic pad swaps, taps and saves nothing (wave 4 B2)
 Register rows 723–724, 2026-11-04. Headless: `tests/test_pad_learn.py` (the old
 factory rows moving once, with their backup; a row of the owner's on BACK or the
 d-pad staying; the hold, the release, a sleeping pad, the totem; every model's
@@ -7943,25 +7943,25 @@ BACK) and `tests/test_pads_nintendo.py`.
 2. Hold BACK, push the stick, let go of BACK, then of the stick.
 3. Tap BACK; brush and hold the D-pad's ← / →; hover BACK on the pad window. Tap the
    APC's TAP TEMPO and the keyboard's B.
-*Pass:* (1) one backup, `bindings.json.bak-v…`, and notes for BACK and ← / →
+*Pass:* (1) one backup, `bindings.json.bak-v…`, and notes for BACK, START and ← / →
 dated 2026-11-04; the second launch says nothing. Had you put your own row on
 BACK, it is still there and the pad has no chase. (2) The look stays where it was
 left. (3) No tempo tap and no preset changes from the pad; the hover names
 `deck.chase`; TAP TEMPO and B both tap. Fail: a tempo jump from BACK, a
 preset loading from the D-pad, or a chase that goes on after the button is up.
-**555. The Joy-Cons, and a row of your own.** (a Joy-Con of each hand)
-1. On the (L), hold − and push its stick. Turn the totem on if you use it and do it again.
-2. On the (R), press every button: nothing chases, because it has no −. Add
-   `{"source": "pad:LP", "target": "deck.chase", "op": "momentary"}` to `bindings.json`
-   and ⌘R (`pad@<role>:LP` if it is not the primary). Hold SL and push the stick.
+**555. START, and a row of your own.** (any pad but the Edge; then the Edge, if here)
+1. On a `bindings.json` from before this build, hold START: nothing saves. The first launch's
+   terminal said `removed pad:MENU → preset.save_new`.
+2. With an Edge: in `config.toml`, its entry `role = "edge"`, `controller = "edge"`. Add
+   `{"source": "pad@edge:MENU", "target": "preset.save_new", "op": "hold"}` to `bindings.json`.
+   Relaunch, and hold OPTIONS with another pad plugged in if you have one. Press its START too.
 3. Add `{"source": "hat:RIGHT", "target": "preset.list.next", "op": "hold", "value": 0}`,
    relaunch, hold the D-pad's →. Take the rows out afterwards if you don't want them.
-*Pass:* (1) and (2) it holds and lets go as BACK does, the totem's planes unaffected.
-Say whether SL is the right button for the (R) in a Wii-Remote hold, or HOME, and
-whether the chase should have something on the panel to learn from (row 724).
-(3) The row survives the relaunch and walks the list once per hold. The `"value": 0` is
-what makes it yours: without it the row is the old factory row, and the next load takes
-it (row 724). Fail: the row gone.
+*Pass:* (1) and (2) the Edge saves one new preset after 0.6 s held, and no other pad does. (3) The
+row survives the relaunch and walks the list once per hold. The `"value": 0` is what makes it
+yours: without it the row is the old factory row, and the next load takes it (row 724). Fail: a
+save from another pad, or the row gone. A Joy-Con's chase, L on the left and R on the right, is
+checked with #365's layout, not here.
 
 ## CM. "Band" becomes the analyzer in the panel (wave 4 AZ)
 Register rows 737–738, 2026-11-04. Words only: nothing should move or load differently.

@@ -610,8 +610,8 @@ def test_the_lab_draws_a_joycon_as_itself():
 
 
 def test_only_the_left_joycon_can_reach_backs_factory_row():
-    """The factory's base chase is on `pad:VIEW`: the (L)'s − decodes to it,
-    and no bit of the (R)'s report does (register row 724)."""
+    """The generic chase is on `pad:VIEW`: the (L)'s − decodes to it until #365's
+    layout gives − to the totem, and no bit of the (R)'s report does (row 724)."""
     left = nintendo.decode(full_report(b4=0x01), "l")
     assert [NAMES[i] for i, v in enumerate(left.buttons) if v] == ["VIEW"]
     every = nintendo.decode(full_report(b3=0xFF, b4=0xFF, b5=0xFF), "r")
