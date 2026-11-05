@@ -7978,6 +7978,25 @@ calls the new verbs until D5d.
 5. Hold GRAPH on the deck off air, then fade. *Pass:* a delay's trail carries across the size change; say if it restarts.
 6. Time a 5-second fade by the clock. Grab the fader mid-way. *Pass:* it stops there and is yours.
 
+## CF. Node mode's saved form (plan 57)
+Register rows 715–717, 2026-11-04. Restart first. Headless: `tests/test_nodemode.py` (the round
+trip over the corpus, the fill, the kind). **No panel writes the key until N1b,** so 546 and 547
+edit a throwaway copy by hand. Never the shared library's own file.
+**546. Back when reopened.** (anywhere; a throwaway copy of a preset)
+1. Save a copy of a preset as `nm-test`. In its file, at the top level, add `"node_mode": [{"player": 1, "controller": "gamepad", "node": "macro.1"}]`.
+2. Load it, then press save. *Pass:* no warning on the strip, and the key is still in the file,
+   on one line per entry.
+3. Change `macro.1` to `render:nothing` and load it. *Pass:* the strip says node mode's
+   `nothing` is not in the preset, and a save writes no key.
+**547. Nothing moves without it.** (anywhere; another throwaway copy)
+1. Load a preset, save a copy, and keep a copy of the file. Load it and save it again.
+*Pass:* `cmp` finds the two files equal, and neither says `node_mode`. The pose moves if the shape
+was spinning: stop the spin first, or read only the `node_mode` part. `"schema"` stays `/10`.
+**548. The colour.** (with N1b, on GRAPH)
+Point a controller at a node. *Pass:* its cables read as a kind of their own beside white value
+cables, amber triggers, blue geometry and violet masks, and faint when its player is on the other
+`Deck`. Say whether the green is right (row 716).
+
 ## CH. BACK holds the base chase; the generic pad swaps, taps and saves nothing (wave 4 B2)
 Register rows 723–724, 2026-11-04. Headless: `tests/test_pad_learn.py` (the old
 factory rows moving once, with their backup; a row of the owner's on BACK or the

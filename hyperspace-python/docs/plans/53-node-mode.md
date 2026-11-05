@@ -12,7 +12,11 @@
 >   the file" no longer holds as a goal: re-pointing is an edit (NM1).
 > - **N3 and NQ9 are gone:** there is nothing to keep. §4 stands only as a record of the
 >   Learn prompt's doors.
-> - **New:** NM0, the saved form, likely a format move; §1's gaps in `midi.py`, the learn
+> - **New:** NM0, the saved form, built as data in `nodemode.py` and written up in
+>   [plan 57](57-format-lane.md): an optional key, `node_mode`, **not** a format move
+>   (`{"player", "controller", "node"}`, the rows derived, pending the owner, rows 715–717).
+>   Where §2 and §3 describe a page of rows held in memory, read `nodemode.fill` over that
+>   saved state, and §6's sixteen-knob paging as gone. §1's gaps in `midi.py`, the learn
 >   collisions, the graph seams and all of §5 still apply.
 > The rewritten questions are in `wave-4-session-prompt.md` (NM1–NM3).
 
