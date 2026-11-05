@@ -218,6 +218,7 @@ from . import (
     ui_fx,
     ui_pad,
     ui_pane,
+    ui_players,
     ui_routing,
     undo,
 )
@@ -1075,10 +1076,12 @@ def effect_node(view: graphview.View, name: str) -> graphview.VNode | None:
 
 def escaped() -> bool:
     """Esc pressed this frame, and nothing else wants it: no text field
-    being typed in, no popup open (imgui closes that on Esc itself)."""
+    being typed in, no popup open (imgui closes that on Esc itself), and the
+    player screen, drawn first, did not take it."""
     return (imgui.is_key_pressed(imgui.Key.escape, False)
             and not imgui.get_io().want_text_input
-            and not imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id))
+            and not imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id)
+            and not ui_players.took_escape())
 
 
 DELETE_KEYS = (imgui.Key.delete, imgui.Key.backspace)     # ⌫ is a Mac's "delete"
