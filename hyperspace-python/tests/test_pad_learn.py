@@ -543,7 +543,7 @@ def test_learn_p2_completes_only_from_the_second_pad(rig):
     one, two = ScriptedPad(), ScriptedPad()
     lrn.devices = devices.DeviceRegistry(devices=[
         devices.PadDevice("pad", io=one), _second(devices.PadDevice("p2", io=two))])
-    assert lrn.wants() == ("desk", "pad", "p2")
+    assert lrn.wants() == ("desk", "pad", "pair", "pair (spring)", "p2")
     lrn.arm("view.points", "p2")
     one.frame()
     one.frame(held={gp.A})

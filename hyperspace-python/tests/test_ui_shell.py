@@ -258,7 +258,7 @@ def test_system_page_shows_one_line_per_device(rig, monkeypatch):
         devices.OffDevice("leap", "hands"),
         devices.BridgeDevice("bridge", io=bridge, audio=None)])
     rig.panel.devices = reg
-    assert shown() == [("pad  ·  gamepad  ·  lost  ·  22 sources", False),
+    assert shown() == [("pad  ·  gamepad  ·  lost  ·  27 sources", False),
                        ("apc40  ·  midi  ·  lost  ·  0 sources", False),
                        ("leap  ·  hands  ·  off  ·  0 sources", False),
                        ("bridge  ·  bridge  ·  lost  ·  16 sources", False)]

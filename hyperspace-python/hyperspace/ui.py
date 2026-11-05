@@ -517,7 +517,7 @@ def wanted_lines(registry, table) -> list[str]:
 
 
 # the wants the menu offers by their own items (desk, the hands, the pad)
-_OWN_WANTS = frozenset(("desk", "hand:left", "hand:right", "pad"))
+_OWN_WANTS = frozenset(("desk", "hand:left", "hand:right", "pad", *learn.PAIR_WANTS))
 
 
 def learn_wants(lrn) -> list[str]:
@@ -1058,6 +1058,15 @@ class Panel:
         if (pad is not None and pad.on and ui_routing.pad_target(a)
                 and imgui.menu_item_simple("Learn pad")):
             lrn.arm(a.id, "pad")
+        # plan 56: two presses, one axis. A pair moves along a range, so a
+        # param with one; "(spring)" a route, on what a route can carry
+        if pad is not None and pad.on and self._desk_target(a) and p.kind in (
+                Kind.CONTINUOUS, Kind.ENUM):
+            if imgui.menu_item_simple("Learn pair"):
+                lrn.arm(a.id, learn.PAIR_WANT)
+            if (p.modulatable and p.kind is Kind.CONTINUOUS and not p.integer
+                    and imgui.menu_item_simple("Learn pair (spring)")):
+                lrn.arm(a.id, learn.PAIR_SPRING_WANT)
         # any other device the registry lists can be armed for by its role
         # (plan 27 B2, `Learn.wants`): "Learn <role>", on a param a lane
         # can drive; the device completes it from its own `learn`
@@ -1105,6 +1114,10 @@ class Panel:
             return f"move the {want.partition(':')[2]} hand…"
         if want == "pad":
             return "press a pad button or the D-pad, or push a stick or a trigger…"
+        if want in learn.PAIR_WANTS:
+            first = self.learn.__dict__.get("pair_first")
+            return (f"{first} is the + pole: press the − pole…" if first
+                    else "press the + pole, then the − pole…")
         knob, hand = self.midi is not None, self.hands is not None
         if knob and hand:
             return "move a control or a hand…"

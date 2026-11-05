@@ -132,6 +132,7 @@ from .groupwords import group_title
 from .params import PERFORMANCE_GROUPS, Kind, Param, Registry
 from .routing import (
     MOD_OPS,
+    PAIR_SCHEME,
     SAVE_PARAM,
     Binding,
     Bindings,
@@ -3610,7 +3611,8 @@ LANE_BOUND = "lane {lane} fires env {env} already"
 # a continuous scheme's noun for the refusals ("a hand sets no base")
 NOUNS = {"hand": "a hand", "hands": "the hands", "lane": "the analyzer", "lfo": "an LFO",
          "env": "an envelope", SEQ: "a sequencer lane",
-         "mod": "a modifier", "axis": "a stick", "ext": "an outside lane"}
+         "mod": "a modifier", "axis": "a stick", "pair": "a pair of pad buttons",
+         "ext": "an outside lane"}
 DESK_NOUNS = {"cc": "a desk knob", "note": "a desk button", "pitch": "a desk fader",
               "pad": "a pad button", "hat": "the D-pad", "key": "a key"}
 OUT_PINS = ("out", "bus", "rout")
@@ -4020,6 +4022,8 @@ class Edit:
         addr = self.address(src)
         p = self._param(pid)
         if kind == MOD:
+            if _scheme(addr) == PAIR_SCHEME and (p.kind is not Kind.CONTINUOUS or p.integer):
+                return self._pair_step_row(addr, p)
             return self._add(self.route_for(src, p))
         return self._setter(addr, p)
 
@@ -4048,6 +4052,18 @@ class Edit:
             return Ask(e.existing, b, lambda: table.replace_owner(b))
         except ValueError as e:
             return Refusal(str(e))
+
+    def _pair_step_row(self, addr: str, p: Param):
+        """A pair's cable onto a stepped param: a route's lane, resting at 0.5,
+        would park it mid-throw, so the row Learn pair lands (plan 56), through
+        a Learn of its own, as `_setter`'s."""
+        lane = self.router.lane if self.router is not None else None
+        lrn = learnmod.Learn(self.reg, self.table, lane=lane)
+        lrn.arm(p.id, learnmod.PAIR_WANT)
+        if not lrn.learn_pair(addr) or lrn.refused:
+            return Refusal(lrn.last or f"{addr} did not land on {p.id}")
+        return next((b for b in reversed(self.table.bindings)
+                     if b.source == addr and b.target == p.id), None)
 
     def _setter(self, addr: str, p: Param):
         """A desk control or a pad button into `p`'s base: the row the

@@ -149,6 +149,49 @@ for _m in MODELS.values():
         for _vid, _pid in _m.ids:
             HID_IDS.setdefault(_vid, set()).add(_pid)
 
+# Plan 56: the controls anyone reads as one degree of freedom with two poles,
+# (+ pole, − pole), up and right high as on a stick. The order is the lanes'
+# order on every pad, so it only grows at the end (`natural_pairs` says which
+# a model has). A single Joy-Con's four arrows are the face, so they are here
+PAIRS: tuple[tuple[str, str], ...] = (
+    ("UP", "DOWN"), ("RIGHT", "LEFT"), ("RB", "LB"), ("RP", "LP"), ("RFN", "LFN"),
+    ("Y", "A"), ("B", "X"),
+)
+_POLE_CAP = {"LP": "back", "RP": "back", "LFN": "fn", "RFN": "fn"}
+HAT_NAMES = frozenset(("UP", "RIGHT", "DOWN", "LEFT"))
+
+
+def pole_source(name: str) -> str:
+    """The unqualified row source a discrete control's name is (``UP`` →
+    ``hat:UP``, ``A`` → ``pad:A``)."""
+    return f"hat:{name}" if name in HAT_NAMES else f"pad:{name}"
+
+
+def control_free(model: Model | None, name: str, skip=frozenset()) -> bool:
+    """May the discrete control `name` be a pole on `model` right now? The one
+    question plan 56 asks, wherever a pair is offered, counted or read: not
+    while something else holds it, `skip` (sources, as `Router.pad`'s: the
+    totem's). `model` is here for what a pad's own layout holds."""
+    return pole_source(name) not in skip
+
+
+def natural_pairs(model: Model | None) -> tuple[tuple[str, str], ...]:
+    """The pairs `model` has both poles of, each free (None: the Xbox face)."""
+    def has(name: str) -> bool:
+        cap = _POLE_CAP.get(name)
+        if cap is not None and (model is None or not model.has(cap)):
+            return False
+        return (model is None or model.has_control(name)) and control_free(model, name)
+    return tuple(pair for pair in PAIRS if has(pair[0]) and has(pair[1]))
+
+
+def pair_label(model: Model | None, pos: str, neg: str) -> str:
+    """A pair in the pad's own words: "D-pad up / down", "R1 / L1"."""
+    if pos in HAT_NAMES and neg in HAT_NAMES:
+        return f"D-pad {pos.lower()} / {neg.lower()}"
+    return f"{glyph(model, pos, pos)} / {glyph(model, neg, neg)}"
+
+
 SPECS_WORDS = ("any",) + tuple(MODELS) + tuple(sorted({m.family for m in MODELS.values()}))
 
 

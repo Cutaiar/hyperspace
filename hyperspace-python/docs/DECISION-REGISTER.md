@@ -724,6 +724,10 @@ here; overturn → the change, then the same.
 | 743 | Wave 4 MR: the hard rule. No row of a preset may drive a meta controller param (`part_of(p) == "session"`); refused in words at Learn, at the pickers and at `Bindings`' doors, dropped with a note at a load, removed by the next save; the meta controller's own rows stay, the line being `is_session_row`. Overturns row 19 (a) | 572, 573 | owner — 2026-11-04: "a hard rule" |
 | 744 | Wave 4 MR: macro base and depth subscribers on a meta param drop at `set_macros`; a modifier has no target, so its route is what is refused; a patch naming one is refused whole by `check`, and a spawn's doors drop what reaches them with a note | 573 | (rec) — pending the owner |
 | 745 | Wave 4 MR: row 650's dormant test stays in `Router.modulate` for a row a hot reload left standing, and a save filters such rows; `party-tumble` loses its row, and `tools/meta_routes.py` lists the library's without writing | 572 | (rec) — pending the owner |
+| 748 | Plan 56: a pair is an address, `pair:<+ pole>/<− pole>`, of any two discrete controls of one pad; a model's natural pairs are published by default; one lane at rest 0.5, 1 on the + pole, 0 on the − pole, rest with both | — | owner — 2026-11-04: "toggle controls need to be able to be paired into a polarized axis"; the shape is (rec) — pending the owner |
+| 749 | Plan 56: the step-or-spring choice is the row's op: `step`, the neutral default and the meta controller's, or a route with a feel, the preset's; Learn pair and Learn pair (spring), two presses | 748 | (rec) — pending the owner; the owner, 2026-11-04: the choice "is immaterial to what I'm saying right now" |
+| 750 | Plan 56: the factory's `hat:UP/DOWN → view.bright ±3` and `pad:LB/RB → view.shape ±1` stay two rows and act exactly as they did; no saved-format change, an older build reads a pair's row as dormant | 748 | (rec) — pending the owner |
+| 751 | Plan 56: not built, poles on keys or MIDI notes; a route on a pair leaves its poles' own rows alone, and both act | 748 | (rec) — pending the owner |
 
 "—": no hand check shows it; tests only.
 
@@ -12942,3 +12946,75 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   nothing drawn reads it. None expected; the `--all` run decides.
 - **To reverse.** Stop the filter in `Presets.document`, with row 743.
 - **Judge it.** 572.
+
+### 748. Two discrete controls pair into one polarised axis
+
+- **Asked.** How a pair is declared, what it publishes, how it is addressed.
+- **Answer.** The owner, 2026-11-04: "toggle controls need to be able to be paired
+  into a polarized axis: pressing one of the toggle controls moves you along one pole
+  of the axis, and pressing the other moves you on the other pole"; and "you need to be
+  able to pair discrete toggles into poles of a degree of freedom". The shape below is
+  (rec) — pending the owner.
+- **Built.** The address declares the pair: `pair:<+ pole>/<− pole>` in the rows' own
+  control names, `pair@p2:…` on a second pad, so there is no table of pairs and a preset
+  carries its own. `models.PAIRS`, filtered by `natural_pairs(model)`, are published by
+  default; `Sources.resolve` publishes any other valid pair the first time a row names
+  it. One lane per pair, fed by `Router.pad`: 0.5 at rest, 1 on the + pole, 0 on the −
+  pole, 0.5 with both; `None` with no pad, so a route lets go. Lanes are the source's and
+  shared, as a stick's are; a row is its deck's.
+- **Node mode.** `gamepad.degrees_of_freedom(model, pairs)`: a pair is one entry.
+- **Other options.** A table of pairs in the device's config: a preset would then
+  depend on a machine's file. New lanes under `axis`: they would land on the camera job's
+  `claims` and take the pad's feel unasked.
+- **Judge it.** 576, 577.
+
+### 749. Step or spring is the row's op
+
+- **Answer.** (rec) — pending the owner. The owner, 2026-11-04: "Should D-pad up move you
+  along a step function along that degree of freedom, or should it nudge a spring? [That]
+  is immaterial to what I'm saying right now."
+- **Built.** No new field. A `step` row on a pair is the neutral default: + pole
+  `p.step(+n)`, − pole `p.step(−n)`, once per press, and it is the meta controller's like
+  every pad button row (`is_session_row`, `bindings.json`, no undo step). A route on a pair
+  (`push`, `position`) is the preset's, with the row's feel. Learn pair lands the first,
+  Learn pair (spring) the second, each from two presses, + pole first. A whole-number or
+  enum target takes the step row on either, because a lane resting at 0.5 would park it
+  mid-throw. A toggle or a trigger is refused, having no two directions. A cable from a
+  pair's GRAPH port makes a route, as a stick's does. `Bindings._lane_only` lets `step`
+  through for this scheme alone.
+- **Judge it.** 576.
+
+### 750. The factory pairs keep their behaviour; no saved-format change
+
+- **Answer.** (rec) — pending the owner, from the brief: the two factory pairs must keep
+  their behaviour exactly.
+- **Built.** `hat:UP/DOWN → view.bright ±3` and `pad:LB/RB → view.shape ±1` stay two rows
+  in `padmap`, unmigrated. Tests: `test_the_factory_pairs_act_exactly_as_they_did`, and
+  `test_a_step_row_on_a_pair_acts_as_the_two_rows_it_stands_for`, which runs a press script
+  through both shapes and compares every frame.
+- **An older build.** No saved key moved. A route on a pair is a continuous row with no
+  feed: dormant, kept, written back, as a row naming a device the machine lacks. It does
+  own its target, as such a row does. A `step` row in `bindings.json` loads inert, because
+  `from_json` does not referee button ops. An older GRAPH draws a grey `pair` placeholder.
+- **Judge it.** 575.
+
+### 751. Not built: poles off the pad; a route leaves its poles' rows
+
+- **Answer.** (rec) — pending the owner.
+- **Keys and MIDI notes.** "Any two discrete controls" is built for any two of a pad.
+  Keys and notes dispatch through `Router.keys` and `midi.py`, and `pair_poles` would need
+  their state. The address has room. **Recommended:** later, when one is wanted; the APC's
+  NUDGE − / + are the likely first, and they are two rows that work today.
+- **A route and its poles' rows.** A route on `pair:UP/DOWN` does not take `hat:UP` and
+  `hat:DOWN` off their own rows: a preset's route may not edit the meta controller's table,
+  so a press acts on both, both are drawn, and the learn's line says what else a press
+  moves (`_also_moved`). A `step` row and a route on one pair stand together for the same
+  reason: refusing would not hold, since the `step` row outlives the preset and the next
+  preset may name the pair. Learn pair's `step` row, being the same layer as the poles'
+  rows, does replace them. **Recommended:** leave it until node mode and players decide
+  how a preset takes a control over.
+- **A learn on one pole of a `step` pair** leaves the other pole moving as it did, as a
+  row of its own (`_split_pairs`), and says so.
+- **A control something else holds is no pole** (`models.control_free`), whether the
+  totem's `skip` or, with #365, a model's own layout.
+- **Judge it.** 576.

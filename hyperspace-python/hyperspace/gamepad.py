@@ -113,6 +113,10 @@ AXIS_LABELS = ("left stick X", "left stick Y", "right stick X", "right stick Y",
 AXIS_RESTS = (0.5, 0.5, 0.5, 0.5, 0.0, 0.0)
 STICKS = frozenset(AXES[:4])      # centred: a learn on one lands a push
 
+# plan 56: a pair's lane, its scheme (routing_sources.PAIR_SCHEME, restated:
+# nothing above pads/ is imported here; tests/test_paired_axes.py holds them equal)
+PAIR_SCHEME = "pair"
+
 # how far from rest an axis must travel to complete a learn
 LEARN_TRAVEL = 0.4
 
@@ -866,8 +870,9 @@ class Pad:
 
     def publish(self, router, scheme: str = "axis") -> None:
         """The axes' names, labels and rests on the router (`publish`),
-        under `scheme` (a second pad's ``axis@p2``)."""
-        publish(router, scheme)
+        under `scheme` (a second pad's ``axis@p2``), and the pairs this
+        pad's model has."""
+        publish(router, scheme, shown_model(self))
 
     def poll(self, dt: float | None = None) -> None:
         """Read the pad for this frame: a tape when the entry names one,
@@ -1150,15 +1155,21 @@ def learn_from(pad: Pad, learn, role: str = "", dials=frozenset,
         return False
     target = learn.target_for(learn.learning)
     q = f"@{role}" if role else ""          # routing.QUALIFIER (nothing imported here)
+    model = getattr(pad, "model", None)
+    model = model if models.is_model(model) else None
+
+    def no_pole(name: str) -> bool:         # plan 56: armed for a pair, only a free control
+        return str(getattr(learn, "want", "")).startswith(PAIR_SCHEME) and not models.control_free(
+            model, name)
     named = getattr(pad, "buttons_named", None)      # plan 42: the extras the pad has
     for name, i in (named if isinstance(named, dict) else BUTTONS).items():
-        if f"pad:{name}" in skip:
+        if f"pad:{name}" in skip or no_pole(name):
             continue
         if pad.pressed(i) and learn.accepts(f"pad{q}:{name}"):
             learn.learn_pad_button(f"pad{q}:{name}")
             return True
     for name, bit in HATS.items():
-        if f"hat:{name}" in skip:
+        if f"hat:{name}" in skip or no_pole(name):
             continue
         if pad.hat_pressed(bit) and learn.accepts(f"hat{q}:{name}"):
             learn.learn_pad_button(f"hat{q}:{name}")
@@ -1236,12 +1247,52 @@ def _learn_extra(pad, learn=None) -> tuple[str, str, bool] | None:
     return None
 
 
-def publish(router, scheme: str = "axis") -> None:
+def paired_with(source: str, model=None) -> str | None:
+    """The other pole of the natural pair the discrete control `source` is on
+    (``hat:UP`` → ``hat:DOWN``), None when it is on none of `model`'s."""
+    for a, b in models.natural_pairs(model if models.is_model(model) else None):
+        a, b = models.pole_source(a), models.pole_source(b)
+        if source in (a, b):
+            return b if source == a else a
+    return None
+
+
+def degrees_of_freedom(model=None, pairs=None) -> list[tuple[str, ...]]:
+    """The pad's degrees of freedom, as the sources each is made of (plan 56,
+    for node mode, plan 53): a stick's axis and a trigger one each, a pair
+    of discrete controls one, any other discrete control one. `pairs`, the
+    (+, −) control names to pair: None is `model`'s natural ones; a pair
+    with a pole the pad lacks, or one already paired, is left out."""
+    m = model if models.is_model(model) else None
+
+    def has(name: str) -> bool:
+        return m is None or m.has_control(name)
+    extras = {"TOUCH": "touch", "LP": "back", "RP": "back", "LFN": "fn", "RFN": "fn"}
+    left = [n for n in BUTTONS if has(n)] + [n for n in HATS if has(n)]
+    left += [n for n, cap in extras.items() if m is not None and m.has(cap) and has(n)]
+    left = [n for n in left if models.control_free(m, n)]
+    out: list[tuple[str, ...]] = [(f"axis:{n}",) for n in AXES if has(n)]
+    for a, b in (models.natural_pairs(m) if pairs is None else pairs):
+        if a in left and b in left:
+            left.remove(a)
+            left.remove(b)
+            out.append((models.pole_source(a), models.pole_source(b)))
+    return out + [(models.pole_source(n),) for n in left]
+
+
+def publish(router, scheme: str = "axis", model=None) -> None:
     """The `axis` lanes' names, labels and rests on `router` (its `names`,
     `labels`, `rests` dicts, duck-typed) — the pad's to say, not the
     table's (plan 27 B2: they left `Router._publish_axes`). Once: the names
     map is published as one new dict, so the router's address cache keeps.
     `scheme` is a second pad's qualified key (``axis@p2``, plan 27 B6)."""
+    # plan 56: `model`'s natural pairs; merged every frame, since a preset's row
+    # can have named a pair first, and another model can come (`Sources.add_pairs`)
+    add = getattr(router, "add_pairs", None)
+    if add is not None:
+        m = model if models.is_model(model) else None
+        add(PAIR_SCHEME + scheme[len("axis"):],       # ``axis@p2`` → ``pair@p2``
+            [(f"{a}/{b}", models.pair_label(m, a, b)) for a, b in models.natural_pairs(m)])
     if scheme in router.names:
         return
     # the six axes, then the sticks' dial lanes (LANES: `axis:L.N` …)
