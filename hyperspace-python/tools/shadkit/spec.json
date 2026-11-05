@@ -1,0 +1,18 @@
+{
+  "_comment": "The shared gallery spec. Both the React oracle and the ImGui kit read this file and draw the SAME rects, so a diff measures chrome, never text metrics. Rects are CSS/content-box pixels at device-pixel-ratio 1, origin top-left.",
+  "canvas": { "w": 760, "h": 260, "bg": "#ffffff" },
+  "cells": [
+    { "id": "badge.outline",   "kind": "badge", "variant": "outline",   "x": 40,  "y": 40,  "w": 86, "h": 20, "text": "+12.5%" },
+    { "id": "badge.secondary", "kind": "badge", "variant": "secondary", "x": 170, "y": 40,  "w": 86, "h": 20, "text": "ZW" },
+    { "id": "badge.default",   "kind": "badge", "variant": "default",   "x": 300, "y": 40,  "w": 86, "h": 20, "text": "Done" },
+    { "id": "badge.destructive","kind":"badge", "variant": "destructive","x": 430,"y": 40,  "w": 86, "h": 20, "text": "-20%" },
+
+    { "id": "badge.wide.outline",   "kind": "badge", "variant": "outline",   "x": 40,  "y": 100, "w": 180, "h": 20, "text": "Star polychora" },
+    { "id": "badge.tall.outline",   "kind": "badge", "variant": "outline",   "x": 260, "y": 100, "w": 120, "h": 32, "text": "taller" },
+    { "id": "badge.sq.secondary",   "kind": "badge", "variant": "secondary", "x": 420, "y": 100, "w": 40,  "h": 40, "text": "6" },
+
+    { "id": "badge.small.outline",  "kind": "badge", "variant": "outline",   "x": 40,  "y": 180, "w": 56, "h": 16, "text": "4D" },
+    { "id": "badge.big.default",    "kind": "badge", "variant": "default",   "x": 140, "y": 180, "w": 220, "h": 70, "text": "big" },
+    { "id": "badge.big.outline",    "kind": "badge", "variant": "outline",   "x": 400, "y": 180, "w": 220, "h": 70, "text": "unclamped r=26" }
+  ]
+}
