@@ -1,5 +1,56 @@
 # Changelog
 
+## v1.3 — 2026-11-04
+
+### Panel
+
+- GRAPH is always on screen: the rail is gone and every other page (presets, look-back, faces, analyzer, media, fx, LFO, sequencer, audio, camera, output, view, routing, hands, system) is a folding section of GRAPH's side pane; ⌘[ / ⌘] and `ui.page` now pick the focus section, and the FX page is retired (#345, #350, #360)
+- LOOKBACK is drawn as its two picture nodes, LOOK-BACK and DREAM, with `dream.on` on the dream's head (#350)
+- Hold Shift while dragging a panel slider or fader and it moves a tenth as far, with no jump when Shift goes down or up, one undo step a drag (#348)
+- The panel says "analyzer", not "band", for the audio analyzer and its tuning; nothing saved changes (#368)
+- `--laptop` (or `--single`) launches for one screen with no projector: the render window opens as a plain window, extra outputs and saved window spots are left alone, and the control panel comes to the front (#299)
+
+### Presets
+
+- The presets list is a tree of folding folders: right-click a preset → move to ▸, or drag it onto a folder; make, rename and remove folders from the panel (#349)
+- A preset now holds the hands' look, the clouds' look and the bus cuts; presets move to `/10` and shows to `/3`, migrated with a backup (#351)
+- One saved format: module presets are patches of one group (`patches/<group>/`, `hyperspace.patch/2`), and a group holds any node the preset saves; run `tools/migrate_library.py --apply` once, both Macs on this build, between shows (#352)
+- A patch can hold the scene, shape, backdrop, pattern, look-back and dream, so a dream + fx + composite patch can be saved; spawning one where the host already has that node is refused in words (#355)
+- Spawning a patch with a dream into a preset that has one offers **Replace and spawn** on the sheet, one press and one undo step (#361)
+- A new **wire as saved, replacing …** chip lands a patch's outlets even on taken ports and names each cable it cuts; the plain chip still never cuts (#364)
+
+### Routes
+
+- Base chase: while `deck.chase` is held, the performer's motion goes into the base, so on release the look stays where you left it; one undo step per hold (#356)
+- A preset can no longer route onto a meta param (rig tuning such as `master.gain`): Learn, ROUTING and GRAPH don't offer one, a saved row drops at load with a note, and `tools/meta_routes.py` lists what a library would lose (#371)
+
+### Gamepad
+
+- BACK holds the base chase; by default the pad no longer taps tempo or swaps presets, and an existing `bindings.json` follows once, with a backup (#369)
+- Paired axes: two buttons of one pad (`pair:UP/DOWN`, `pair:A/UP`) act as one two-way lane, through **Learn pair** / **Learn pair (spring)** on the param menu or a **pairs** port group on GRAPH's pad node (#372)
+- Experiment: the Joy-Con as a poi's handle — the shape is the weight on a spring string and swings and flies out as you swing the pad; switch it on with "poi off" in the pad window's header or `[poi]`, tune it in its own **Poi** window, with a handle / string / weight guide over the output (#336, #338, #339)
+- A sleeping Joy-Con wakes without a restart, the pad window follows a controller connected after launch, and a hard swing no longer loses the pad's attitude (#338, #339)
+
+### Desk
+
+- APC40: hold SEND B and every knob moves its param a tenth as far (`desk.fine`); let go and the next detent carries on with no jump (#344)
+
+### Media
+
+- The analyzer can listen to the video sound: AUDIO → **Listen to video sound** drives the bands and the beat from the media mix, as the mic does (#343)
+- A video's sound now follows its picture: no clicks at rate 1, any rate plays at that speed, reverse and scrubs are heard, and rate 0 is silent (#357)
+
+### Hands
+
+- Ultraleap room-frame palm lanes, `hand:<side>.room.roll` / `pitch` / `yaw`, read the same on both hands, with HANDS → feel & calibration → **level room** (#358)
+- The orbit: close a hand and turn it, and the camera turns with it, staying put when you open it — a new `turn` route op, clutched by the same hand's grab; not yet tried on a real sensor (#358, #362)
+
+### For developers
+
+- Decks: the router's shared `Sources` (`routing_sources.py`) split from its per-deck evaluator, the rig's `SessionRegistry` beside each deck's `Registry`, and deck 2 drawn offscreen with `output.xfade` as the one mix pass — deck 2 runs empty until D5, so leave the fade at 0 (#346, #351, #359)
+- Tests run `--dist load --max-worker-restart=4` locally and in CI, so a crash costs one test; the live lock keeps live tests apart within a run; `tools/sort_register.py` sorts the register (#347, #363)
+- The golden tool frees its rig on its own GL context, so a stray free no longer fails a later test with `GL_INVALID_OPERATION` (#366)
+
 ## v1.2 — 2026-11-02
 
 ### Graph
