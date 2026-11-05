@@ -27,7 +27,21 @@ from PIL import Image
 
 HERE = Path(__file__).resolve().parent
 SPEC = json.loads((HERE / "spec.json").read_text())
-BADGE_RADIUS = 26.0
+# Per-kind chrome geometry: the requested corner radius, how far the chrome
+# reaches OUTSIDE the box (a card's ring is 1px out and its shadow ~3), and
+# whether the corner reads as a filled step or as a thin ring.
+KIND = {
+    "badge": {"radius": 26.0, "outset": 0, "ring": False},
+    "card":  {"radius": 14.0, "outset": 3, "ring": True},
+}
+
+
+def geom(cell):
+    """(clamped radius, outset, is_ring) for one cell."""
+    k = KIND[cell["kind"]]
+    r = min(k["radius"], min(cell["w"], cell["h"]) / 2.0)
+    ring = k["ring"] or cell.get("variant") == "outline"
+    return r, k["outset"], ring
 
 # (dx, dy) toward the corner's centre, and the angle range of its arc
 CORNERS = {
@@ -89,8 +103,8 @@ def edge_radius(rs, vs, filled: bool):
 def measure(react: np.ndarray, mine: np.ndarray) -> dict:
     out = {}
     for c in SPEC["cells"]:
-        r = min(BADGE_RADIUS, min(c["w"], c["h"]) / 2.0)
-        filled = c["variant"] != "outline"
+        r, _, ring = geom(c)
+        filled = not ring
         deltas = []
         for name, (a0, a1) in CORNERS.items():
             cx = c["x"] + r if "l" in name else c["x"] + c["w"] - r

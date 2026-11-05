@@ -8,7 +8,14 @@
 // ?gallery         the chrome pass (text hidden) — this is what gets diffed
 // ?gallery&text    the same grid with text, advisory only
 import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
 import spec from "../../../hyperspace-python/tools/shadkit/spec.json"
+
+// The dashboard decorates its stat cards on top of the base Card; that
+// combination (gradient + shadow-xs + ring) is the hard case for ImGui, so
+// the gallery carries both.
+const CARD_DECOR =
+  "bg-gradient-to-t from-primary/5 to-card shadow-xs dark:bg-card"
 
 type Cell = {
   id: string
@@ -50,15 +57,24 @@ export default function Gallery({ withText }: { withText: boolean }) {
             lineHeight: 0,
           }}
         >
-          <Badge
-            variant={c.variant as never}
-            // Pin to the spec rect: override the component's intrinsic
-            // h-5/w-fit sizing without touching its chrome.
-            className="h-full w-full"
-            style={{ color: withText ? undefined : "transparent" }}
-          >
-            {withText ? c.text : ""}
-          </Badge>
+          {c.kind === "card" ? (
+            <Card
+              className={
+                "h-full w-full p-0 " +
+                (c.variant === "gradient" ? CARD_DECOR : "")
+              }
+            />
+          ) : (
+            <Badge
+              variant={c.variant as never}
+              // Pin to the spec rect: override the component's intrinsic
+              // h-5/w-fit sizing without touching its chrome.
+              className="h-full w-full"
+              style={{ color: withText ? undefined : "transparent" }}
+            >
+              {withText ? c.text : ""}
+            </Badge>
+          )}
         </div>
       ))}
     </div>

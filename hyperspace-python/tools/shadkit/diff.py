@@ -37,8 +37,7 @@ import contour as C
 HERE = Path(__file__).resolve().parent
 SPEC = json.loads((HERE / "spec.json").read_text())
 
-PAD = 6            # how far outside a cell's rect to look, for stroke spill
-BADGE_RADIUS = 26.0
+PAD = 8            # how far outside a cell's rect to look, for chrome spill
 
 
 def load(p: Path) -> np.ndarray:
@@ -63,9 +62,12 @@ def corner_mask(shape: tuple[int, int]) -> np.ndarray:
     """True where a cell's rounded corner arc lives."""
     m = np.zeros(shape, bool)
     for c in SPEC["cells"]:
-        r = min(BADGE_RADIUS, min(c["w"], c["h"]) / 2.0)
-        k = int(np.ceil(r)) + 2
-        x, y, w, h = c["x"], c["y"], c["w"], c["h"]
+        r, outset, _ = C.geom(c)
+        # the corner box must also cover chrome that lives outside the box -
+        # a card's ring sits at x-1 and its shadow reaches ~3px further
+        k = int(np.ceil(r)) + 2 + outset
+        x, y = c["x"] - outset, c["y"] - outset
+        w, h = c["w"] + 2 * outset, c["h"] + 2 * outset
         for cx, cy in ((x, y), (x + w - k, y), (x, y + h - k), (x + w - k, y + h - k)):
             m[max(cy, 0): cy + k, max(cx, 0): cx + k] = True
     return m

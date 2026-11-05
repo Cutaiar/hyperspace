@@ -28,6 +28,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import draw as D          # noqa: E402
+import gradient as G      # noqa: E402
 import tokens as T        # noqa: E402
 
 SPEC = json.loads((HERE / "spec.json").read_text())
@@ -57,6 +58,7 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
     impl = GlfwRenderer(win)
 
     bg = T.rgba(cv["bg"] if theme_name == "light" else theme["background"])
+    grad_tex = G.upload_1d(G.ramp_oklab(*G.CARD_GRADIENT, n=256))
 
     # Two frames: the first builds the font atlas and settles the backend.
     for _ in range(2):
@@ -69,6 +71,8 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
         for cell in SPEC["cells"]:
             if cell["kind"] == "badge":
                 D.badge(dl, cell, theme, T.BADGE)
+            elif cell["kind"] == "card":
+                D.card(dl, cell, theme, grad_tex)
         imgui.render()
         impl.render(imgui.get_draw_data())
         GL.glFinish()
