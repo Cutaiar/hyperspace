@@ -7978,6 +7978,46 @@ calls the new verbs until D5d.
 5. Hold GRAPH on the deck off air, then fade. *Pass:* a delay's trail carries across the size change; say if it restarts.
 6. Time a 5-second fade by the clock. Grab the fader mid-way. *Pass:* it stops there and is yours.
 
+## CA. The crossfader, copy, and the panel on either deck (plan 44 D5d)
+Register rows 697–702, 2026-11-04. Restart first. HOLD, TAKE and DROP are gone, so group AI's checks are retired. **This
+replaces the mechanism a show relies on: run it at the rig before one.** 528 goes with it.
+**529. The verbs that replaced the hold.** (the rig)
+1. GRAPH's head. *Pass:* no hold, take or drop; a chip, "copy on air to off air", a slider, "fade" and seconds.
+2. Copy, click the chip, load another look on deck 2, turn knobs. *Pass:* the room does not move.
+3. **fade.** *Pass:* it runs over the seconds; on air goes across at the middle once.
+*Fail:* anything on the panel names a hold.
+**530. The desk.** (the rig, with the APC40)
+1. Launch once. *Pass:* a `bindings.json.bak-*` beside the file and the note on SYSTEM.
+2. Crossfader end to end. *Pass:* deck 1 to deck 2, a mix between. MASTER down. *Pass:* black, whichever deck.
+3. Audio: AUDIO section's master drive. *Pass:* it moves the analyzer; no desk control does.
+4. Arm Learn on a param and move the crossfader, then MASTER. *Pass:* "invariant", not learned, each still doing its job.
+5. Move the fader off the value during a timed fade. *Pass:* nothing until your hand reaches the value.
+6. Move a pad's player off air (the player screen). *Pass:* both faders still work.
+*Fail:* a fader moves `master.gain`, or a preset can claim either.
+**531. Which deck am I on.** (a laptop)
+1. Chip on the deck on air. *Pass:* grey "deck 1 · on air", the window's title the same, no frame.
+2. Click it. *Pass:* red "deck 2 · off air", the title the same, a red frame round the canvas, the ON AIR inset showing the room,
+   the nodes' pictures deck 2's.
+3. Fade across without clicking. *Pass:* the chip reads "deck 2 · on air", the frame goes.
+*Judge:* can you tell from across the room? Does the inset cover too much?
+**532. No pad changes what is on air.** (the rig, with the APC40)
+1. APC on air, press a filled bank pad, QUANT, OVERDUB. *Pass:* nothing changes; the footer says why.
+2. Press F1. *Pass:* the same. Say if you want F-keys kept (row 700).
+3. Move the APC's player off air. Press a pad. *Pass:* deck 2 loads, its light on; the room does not move.
+4. Fader at the middle, press again. *Pass:* refused.
+5. Hold an empty pad on air. *Pass:* it saves; the picture does not move.
+*Judge:* is refusing on air right, or should a press on air load the deck off air (row 700)?
+**533. Fading in practice.** (the rig)
+1. Fade into an empty deck after a launch. *Pass:* black, and allowed.
+2. Fade with dim down, a render cap set and sound on. *Pass:* no flash of a wrong size or brightness at the middle.
+3. Orbit with a fist on the deck on air after a copy. *Pass:* only that deck's camera moves. Fade across. *Pass:* a step if they differ; say if it bothers you.
+4. MEDIA section on deck 2. *Pass:* it shows deck 2's channels.
+**534. Nothing crosses.** (a laptop)
+1. Different looks on each deck. Panel on deck 2: add a route, edit GRAPH, reset a pattern strip, ⌘Z, save. Watch the room.
+   *Pass:* it never moves.
+2. Fade across, panel on the other, the same. *Pass:* the same, both ways.
+*Fail:* any edit shows on the other deck. The owner's absolute rule: report it.
+
 ## CH. BACK holds the base chase; the generic pad swaps, taps and saves nothing (wave 4 B2)
 Register rows 723–724, 2026-11-04. Headless: `tests/test_pad_learn.py` (the old
 factory rows moving once, with their backup; a row of the owner's on BACK or the

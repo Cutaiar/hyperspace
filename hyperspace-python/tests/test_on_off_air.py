@@ -462,6 +462,7 @@ def _draws(monkeypatch, log, size=None):
     from test_app_boundary import _Ctx, _rig_slots, _SwapGlfw
 
     monkeypatch.setattr(app, "glfw", _SwapGlfw(log, {"w1": size} if size else None or {}))
+    monkeypatch.setattr(app, "_samples_of", lambda ctx, target: None)     # (no GL here)
     return _Ctx(log), _rig_slots("x")
 
 

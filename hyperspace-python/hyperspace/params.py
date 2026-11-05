@@ -2775,7 +2775,8 @@ def build_performance(view, bank=None, dream=None, fx=None, ghost=None, media=No
                    "performance: the look, its routes, its LFOs and macros, never the "
                    "tempo, the hands or the analyzer. Hold SAVE (track 8's clip stop) "
                    "and tap a pad to save the live state into it as a new preset, or "
-                   "hold an empty pad.")
+                   "hold an empty pad. A pad loads only into the deck off air: on the "
+                   "deck on air it is refused, and the panel's own load is how.")
         # the F-keys' slots have a load and a save trigger each; slots past
         # them are reached through `preset.select` and the page (plan 19
         # fork 1: no params added)

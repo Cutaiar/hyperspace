@@ -596,7 +596,7 @@ here; overturn → the change, then the same.
 | 556 | Plan 44 Q1: N looks, one on air — a deck is a look with its own controls, registry's performance part, routes, graph, renderer, undo and dot; the deck is what controllers (on air), the panel and undo point at | — | owner — 2026-11-02 (as recommended; 558 with the nuance) |
 | 557 | Plan 44 Q2: hold becomes copy A into B (a deck operation; `output.hold` / `.take` / `.drop` keep their ids); no hotfix of plan 38's hold | — | owner — 2026-11-02 (as recommended; 558 with the nuance) |
 | 558 | Plan 44 Q3: shared and lent — the dream worker lent to the deck going on air; segment workers per renderer with the model shared (as today); media sources shared, the channels' state per deck; the analyzer and the clock shared | — | owner — 2026-11-02 (as recommended; 558 with the nuance) |
-| 559 | Plan 44 Q4: the APC crossfader stays the master dim; `output.xfade` is a new rig control, learnable, run by `take` over `output.xfade_s` | — | owner — 2026-11-02 (as recommended; 558 with the nuance); owner — 2026-11-04: as recommended (no objection when asked) |
+| 559 | Plan 44 Q4: the APC crossfader stays the master dim; `output.xfade` is a new rig control, learnable, run by `take` over `output.xfade_s` | — | owner — 2026-11-02 (as recommended; 558 with the nuance); owner — 2026-11-04: as recommended (no objection when asked); **overturned by the owner 2026-11-04: row 698** |
 | 560 | No shader multiplies time by a param; `@clock` integrates rate-like params in the host | 419 | agreed — owner, 2026-11-02 |
 | 561 | Wave 0 T1: every effect's `speed` on a signed exponential taper and the fourteen amount-type params on a zero-safe log taper; a taper change migrates the route depths in the same PR (`params.retaper_depths` at load, `tools/retaper_routes.py` on the library, no schema bump) | 420 | agreed — the owner's reshaping of 2026-11-02 |
 | 562 | Plan 45 V1: a video's audio track decoded to memory as float32 stereo 48 kHz once something asks for sound, whole to 120 s, else a 120 s window around the transport's position; the transport is the one clock | 421 | owner's rule (2026-11-02, addendum 8); the policy (rec) |
@@ -687,7 +687,7 @@ here; overturn → the change, then the same.
 | 653 | Plan 44 D4: one dream worker, lent while a fade is up and the receiving deck has a dream on, the dream restarting; the deck giving it up holds its last dream. Row 558's question (a second, lower-resolution worker for the panel's deck) measured here, **not decided** | 492 | (rec) — pending the owner; the second worker is the owner's to decide |
 | 654 | Plan 52: the base chase — while held, every continuous, modulatable param of this deck writes what it shows into its base; nothing shows differently while held; a source going home **while still held** takes the look with it (what shows is what commits); after the release a ledger absorbs the offset, so a source going home moves nothing; an undo, a load or a learn under the verb ends it, so one hold is at most one step | 494, 495 | (rec) — pending the owner; built as recommended |
 | 655 | Plan 52: macros are outside the verb — a commit would move a macro's base subscribers, which its offset never did | — | (rec) — pending the owner; built as recommended |
-| 656 | Plan 52: a press under the projector's hold is refused, and engaging a hold lets the verb go, its commit kept | 496 | (rec) — pending the owner; built as recommended |
+| 656 | Plan 52: a press under the projector's hold is refused, and engaging a hold lets the verb go, its commit kept | 496 | **gone with the hold, row 697** |
 | 657 | Wave 3 P1: a patch holds the frame's kinds (scene, shape, backdrop, pattern, look-back, dream, hands 1, its layer and guide); the rig's (`patches.RIG_KINDS`) and the look's one camera stay refused, a lane envelope and a copy without its original too; **no `patch/3`**: the file's keys are unchanged and an older build's `check` refuses such a file in words | 497 | (rec) — pending the owner; built as recommended |
 | 658 | Wave 3 P1: a patch's single-instance node the host already has (`patches.ONE_PER_FRAME`: scene, shape, backdrop, pattern, dream) refuses the whole spawn in words, nothing landed, no sheet — the dream's is now "replace the host's dream" (row 661); hands 1 lands as the next hands, a look-back as the next look-back | 498 | (rec) — pending the owner; built as recommended |
 | 659 | Wave 3 P1: what a frame kind carries is its own params, the canvas's owners (`patches._param_rows`): `rot.*`, most of `view.*` and `fx.face_map` the shape's; `pattern.*`, `view.pattern*`, `view.media_*` the pattern's; `dream.*` split by key between a look-back (`LOOKBACK_KEYS`) and the dream; `scene.*` no node's. The spin's pose stays the host's. A hands' layer or guide needs its hands at a **save**, in words; a file an older build saved with `hands.2.layer` alone still reads and spawns as it did. A second dream (`dream.2`) is refused at a save and at a read, and never renumbered onto `dream`. An inlet into `scene.geometry` keeps its draw order (the port's optional `before`) | 497, 499 | (rec) — pending the owner; built as recommended |
@@ -715,7 +715,7 @@ here; overturn → the change, then the same.
 | 681 | Plan 51 O1: a lost hand reads NaN on the room lanes that frame and returns at its new reading with no glide; they have no setup params, no DAW output and no Learn | — | (rec) — pending the owner |
 | 682 | Plan 51 O2: an orbit is a new performer op, `turn`, that adds the source's shortest change to the target's base while its gate is on; first acting frame reads, a frame not acting forgets; no feel; dormant with no gate or a source that is no whole-circle lane | — | (rec) — pending the owner |
 | 683 | Plan 51 O2: no schema move for `turn`: an older build drops the row with a note and lands the rest, and a save there loses it; both Macs update together | — | (rec) — pending the owner |
-| 684 | Plan 51 O2: the clutch is the same hand's grab, landed in the preset's row; a lost hand is an opened clutch; one undo step per closure with a 0.15 s grace; under the hold it moves the preview as a knob does | — | (rec) — pending the owner |
+| 684 | Plan 51 O2: the clutch is the same hand's grab, landed in the preset's row; a lost hand is an opened clutch; one undo step per closure with a 0.15 s grace; under the hold it moved the preview as a knob does | — | (rec) — pending the owner; **the hold's part reversed, row 701** |
 | 685 | Plan 51 O2: within 20° of vertical, a yaw straying 20° or stepping 5° on leaving the cone makes the hand read NaN until it has left, then restart, not a camera jump; `ghost.mirror` does not flip a turn row, its depth does; a room lane on a clamped target stays `position`; a moved row lands as `row_for` would | — | (rec) — pending the owner |
 | 688 | Plan 44 D5a: the owner of the two `Deck`s is `deck.MetaController`, named from the glossary; a `Pointer` per holder (each controller by role, the keys, the mouse) and the panel's apart; exactly two `Deck`s; no `swap`; a deck's presets see the library through `library.DeckLibrary`, so they cannot reach another deck | — | "name the owner of the two Decks from the glossary"; "Two fixed Decks and no swapping" (owner, 2026-11-04) |
 | 689 | Plan 44 D5a: the holders moved onto pointers, those the reading named (`SeqPage.reg`, `Library.reg` and `presets`, `dream_check`, `Mouse`'s params, `draw_render`, `Marks`) and those found while building (`rig.said`'s table, deck 2's `Learn.devices`, the totem's and poi's params, the watchdog's preset, the bank's verbs, its lit slot and the section references); `Bindings.page` is the session's; `claim` retired | — | (rec) — pending the owner |
@@ -726,6 +726,12 @@ here; overturn → the change, then the same.
 | 694 | Plan 44 D5c: on air is the crossfader's side (`MetaController.follow_fader`), with hysteresis `MIDDLE` = 0.03 each way; the session's lead, `Fade`, the mixer, `Host.off_air`, the dream's lend and the rig's wires follow; players go by duty; the keys and mouse with the picture; the panel stays; the poi's guide on the picture of its pad's deck | The owner, 2026-11-04: "On air is whichever the fader is closer to" (middle: rec) |
 | 695 | Plan 44 D5c: `MetaController.copy_on_air`, the doc road and the running state; one step on the off-air stack, none onto an empty deck; a timed fade (`crossfade`, `tick`, `output.xfade_s`), 0 cuts | The owner, 2026-11-04: two verbs remain |
 | 696 | Plan 44 D5c: `Fade.preview` and `Fade.warm`, measured; a parked deck keeps running (row 17 of the reading: no skip) | (rec) — pending the owner |
+| 697 | Plan 44 D5d: HOLD, TAKE and DROP go: `hold.py`, `output.hold`/`.take`/`.drop`, `GraphSection.hold`, `keep`, `hold_pose`, the `_values`/`parts` filters, `chase_guard`, `Undo.checkpoint`/`revert`, `Landing.held_taken`. A learned row on one drops at the next load, with a note and a backup | 656, 684 | owner — 2026-11-04: "HOLD, TAKE and DROP go away entirely" |
+| 698 | Plan 44 D5d: the APC crossfader is `output.xfade`, MASTER is `output.dim`, `master.gain` has no desk row; old factory rows move at the next load; both are reserved (`apc40.META_CONTROLS`, `Bindings.is_invariant`): no preset learns or binds them whatever the table holds | 559 | owner — 2026-11-04: the crossfader is a DJ mixer's; the APC "inherits our generic controller setup... and it should have extensions" |
+| 699 | Plan 44 D5d (DQ7): GRAPH's head: "deck N · on air", red off air, a click for the other deck; copy; the crossfade slider, a timed fade and its seconds. The same words in the control window's title; a red canvas frame and an ON AIR inset on the deck off air, whose backdrop is forced on | — | owner — 2026-11-04: DQ7 as recommended |
+| 700 | Plan 44 D5d (DQ6): a library verb from a row (`preset.select`, `.next`, `.prev`, `.load.N`, `.list.*`, `.home`) is refused in words on the deck on air and while the crossfader is between its ends; the panel's load is not asked; a save is not asked | — | owner — 2026-11-04: no preset changes on air from the desk or a pad; (rec) on what a press on air does, and on F-keys — pending the owner |
+| 701 | Plan 44 D5d: `meta.tick` is the frame's first act; `ui_media.media_of` reads the panel's deck's channels; an orbit moves the deck it is on (684 reversed); a chase is refused by nothing (656 gone) | 656, 684 | owner — 2026-11-04: a row acts only on the `Deck` its player is on |
+| 702 | Plan 44 D5d: `test_no_patch_reaches_the_other_deck`: nine roads each way round, no leak found. The accepted limits: the shared dream worker (DQ8); a Drive sync lands on the panel's deck | — | owner — 2026-11-04: "no preset can affect another preset"; the absolute rule |
 | 723 | Wave 4 B2: `pad:VIEW` holds `deck.chase`; `pad:VIEW → tempo.tap` and `hat:LEFT` / `hat:RIGHT → preset.list.*` leave the pad's factory rows; an old factory row moves at the next load, one the owner changed stays | 654 | owner — 2026-11-04: base chase is Back; tap tempo is not a default on every controller, "extremely sensitive"; no swapping presets from a controller or a pad |
 | 724 | Wave 4 B2: rows by model: a Joy-Con's chase is L / R in #365's `Model.layout`; hold-to-save is the Edge's, there too, by a qualified row until then; Learn goes on accepting `preset.list.*` and `tempo.tap`, unrefused | 723 | owner — 2026-11-04 on the Joy-Con and the Edge; (rec) — pending the owner on Learn |
 | 731 | Wave 4 PC: T2's ⇧ fine mode reaches every slider left out (a route's depth and rest, its feel's knobs, a macro subscriber's from and to, GRAPH's backdrop); the side pane's paper cuts at 240 px (the patch chips, the analyzer's scene row, meter tags, transfer row, spectrogram hint) | 561 | (rec) — pending the owner |
@@ -13002,6 +13008,81 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Found, left for D5d.** `ui_media.media_of` reads `panel.media.state`, deck 1's channels, whichever deck the panel is
   on: the MEDIA page would edit the wrong deck once the panel moves. One line, but in the page.
 - **Judge it.** 527, 528.
+
+### 697. HOLD, TAKE and DROP are gone
+
+- **Answer.** The owner, 2026-11-04: "HOLD, TAKE and DROP go away entirely", and never asked for them. With an on-air
+  and an off-air `Deck` there is nothing to hold.
+- **Built.** Everything in the row's list. `Fade`'s picture of the deck off air replaces the preview, each deck's own
+  view replaces `hold_pose`, each deck's own `reset_delays` replaces the seam.
+- **`bindings.json`.** `routing.GONE_TARGETS`: a row on one of the three drops with a note and the file's backup. A preset's
+  row on one was already dropped by the meta rule.
+- **`test_hold.py` (40) and `test_hold_thumbnails.py` (5) are deleted**; `tests/test_on_off_air.py` holds the promises.
+  Rewritten (19, each docstring names its old test): all four `on_gl`, both headless bus cuts (one test), Drop as one step, Drop after a whole
+  look, a load's delays, the eye and turn, the output controls, the lit desk buttons (as the two faders on either duty),
+  the head line, both `_draw_render`, the inset, the page's thumbnails, the two `on_gl` thumbnails (one test), `preview_size` (kept).
+  Deleted, mechanism with no successor: `only_the_looks_render_params_are_held`, `program_draws_the_held_look`,
+  `a_raise_puts_the_wiring...back`, `turns_speed_and_planes_are_not_held`, `field_and_media_rates_are_one_for_both`,
+  the landing-keeps pair, `effects_clock_runs_on_through_hold`, `undo_after_take...`, `program_only...`,
+  `knob_turned_on_a_held_matte...`, `drop_after_a_blank_landing...`, `every_kind...program_ids`,
+  `drop_after_a_landing...`, `canvas_reads_the_previews_graph`, `program_takes_the_held_wiring`,
+  `modulated_param_rides`, `unmoved_param_costs_nothing`, `take_lets_go`, `drop_without_undo`,
+  `preview_renderer_reads`, `preview_that_raises`, `held_groups_are_the_renderers`, two of the thumbnails file.
+  `test_base_chase` loses four, `test_hands_orbit` two becomes one, `test_deck_crossfade` loses the `_HeldRig` guide.
+- **Judge it.** 529.
+
+### 698. The crossfader, MASTER and the reserved controls
+
+- **Answer.** The owner, 2026-11-04, overturning row 559 and plan 44 §5: the APC crossfader is the deck crossfade, MASTER
+  the dim, and `master.gain` moves to the panel: it is pre-show tuning. It was drawn in the AUDIO section already.
+- **Files.** `APC_REMAP`, as B2's: the exact old rows move in one pass (`overlay.bg` too, straight), with a backup. A row
+  the owner changed stays. No schema move.
+- **Reserved.** `apc40.META_CONTROLS`, read by `is_invariant` per the table's profile, on every role of it, so a second APC
+  gets the same and a deleted row frees nothing. Learn, the desk's click and a preset's `desk` all ask there. A meta row
+  of the owner's on such a control stays, as any session row does. No new Learn road.
+- **Limit.** Pickup: a timed fade leaves the physical fader behind; soft pickup catches it where the value is.
+- **Judge it.** 530.
+
+### 699. What the panel says
+
+- **Answer.** DQ7 as recommended, the owner, 2026-11-04.
+- **Built.** `ui_graph._deck_row`, `MetaController.words`, `app.control_title`, `_monitor`. On the deck off air the
+  backdrop is forced on, since nothing else draws that deck, and the output's thumbnail is that deck's own.
+- **The title.** The OS window's. imgui's "CONTROLS" stays: `replay` and tests find the page's list by that name.
+- **Not here.** The preset strip's name and the desk diagram's line are D5e.
+- **Judge it.** 531.
+
+### 700. A library verb from a row
+
+- **Answer.** The owner, 2026-11-04: no preset changes on air from the desk or a pad; bank pads and `preset.next` load only
+  into the off-air `Deck`.
+- **Built.** `DeckProject.barred`, asked by `load_slot`, `walk`, `home`. The row acts on its player's deck (row 733), so a
+  controller on air is refused and one off air loads there. Between the fader's ends both decks are on air, so that is refused too.
+- **Still allowed.** An empty pad's words and hold-to-save; a save moves no picture. The panel's load.
+- **The question.** (rec) As built, the APC on air (the default: player 1) refuses every pad until its player is moved off air.
+  The alternative loads a press on air into the deck off air instead, which breaks "a row acts only on the `Deck` its player
+  is on". One line in `DeckProject`. **Recommended:** as built; the words say what to do.
+- **F-keys** go the same road, since keys sit on the picture, so F1–F8 are refused on air. (rec) — pending the owner.
+- **Judge it.** 532.
+
+### 701. The frame's first line, and two seams
+
+- **Built.** `meta.tick` before `h.reg` is read, guarded as every block is. `media_of` through `panel.reg`.
+- **684 reversed.** An orbit writes the base of the deck it acts on, on air or off, which the row's player decides.
+- **656 gone.** Nothing refuses a chase; `_go_on_air` lets go of one on the deck left.
+- **Parked deck.** Keeps running (row 696).
+- **Judge it.** 533.
+
+### 702. The leak test
+
+- **Answer.** The owner, 2026-11-04: the absolute rule.
+- **Built.** Route, LFO rate, modifier, macro, load, GRAPH edit, a `pattern` strip reset, a ⌘Z and a save, by their real
+  roads, each with deck 1 or deck 2 acting, the other's bases, routes, desk, modifiers, macros, modgraph key, spec, name,
+  turn, stack and GL frame compared to the bit. The save road has both decks on one name and runs the library's watch with
+  the panel on the other. **No leak found.** D5a to D5c closed them.
+- **Known limits, not preset to preset.** The shared dream worker (DQ8). A file changed from outside, the other Mac's save,
+  re-lands on the deck the panel is on if that deck holds that name (the reading §4).
+- **Judge it.** 534.
 
 ### 723. BACK holds the base chase; the pad swaps no preset and taps no tempo
 

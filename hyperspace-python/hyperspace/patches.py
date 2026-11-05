@@ -1371,7 +1371,7 @@ class Host:
     def of(cls, spec: G.GraphSpec | None, table, banks: Mapping[str, Any] | None = None) -> Host:
         """The view of a live preset: its landed `spec`, its `table`
         (`routing.Bindings`), its banks by scheme (each with `next_id()`,
-        `MAX` and a length) and the held program's instance names. Reads
+        `MAX` and a length). Reads
         only. A bank not handed in starts one past the highest voice id the
         table names (a lane on a row, a modifier input, a depth subscriber)
         and past its default membership (LFO 5, envelope 6) — never on an

@@ -67,7 +67,7 @@ from . import undo as undos
 from .fx import FxState
 from .ghost import GhostState
 from .learn import Learn
-from .library import Marks, MetaMarks
+from .library import DeckProject, Marks, MetaMarks
 from .lookback import DreamState
 from .outputs import Offscreen, View, preview_size
 from .params import Registry, SessionRegistry, build_registry, part_of
@@ -524,7 +524,9 @@ class MetaController:
                  mix: Mix | None = None):
         self.decks = (first, second)
         for deck in self.decks:
-            deck.presets.lib.project.barred = lambda deck=deck: self.bars_load(deck)
+            project = getattr(getattr(getattr(deck, "presets", None), "lib", None), "project", None)
+            if isinstance(project, DeckProject):     # (a stand-in deck has none)
+                project.barred = lambda deck=deck: self.bars_load(deck)
         self.mix = mix if mix is not None else Mix()
         self.parked = [second]
         self.on_air_moved: list[Callable[[Deck], Any]] = []   # told after on air moves

@@ -4192,7 +4192,7 @@ class Router:
         """A closure begins: one undo step from here until no row acts, however
         still the hand goes (`Undo.keep_open`, the base chase's), on the `Undo`
         that watches this deck's registry, chosen here each closure. Whatever
-        else closes the step (an undo, a load, the hold, a chase's press) cuts
+        else closes the step (an undo, a load, a chase's press) cuts
         the rows acting then, each until it has not acted for TURN_GRACE_S (a
         dropout is not letting go), so a fist still closed cannot run on from
         what was just put back, and it has no step left to close. A step someone else is keeping (a held chase) is left to them:

@@ -1248,7 +1248,7 @@ class Renderer:
         self._build_face_program()
         # plan 39 T4: the segment nodes' workers (`segmenter`), made from
         # `segment_cfg` (the config's [segment], app.py hands it over) on a
-        # node's first need — None, as the hold's preview renderer is given,
+        # node's first need — None until `app.main` gives it,
         # makes none: its segments pass their pictures through — and motion
         # mode's background models (`motion_pair`), each by its node's name
         self.segment_cfg: dict | None = None
@@ -1260,7 +1260,7 @@ class Renderer:
     def sibling(self, dream: DreamState | None = None, fx: FxState | None = None,
                 ghost: GhostState | None = None) -> Renderer:
         """A second renderer on this one's context and its one wall clock, on
-        the states given (each a fresh one of its own when None): the hold's
+        the states given (each a fresh one of its own when None): a
         preview, deck 2's (plan 44 D4). This context must be current."""
         r = Renderer(self.ctx, dream=dream, fx=fx, ghost=ghost)
         r._t0 = self._t0
