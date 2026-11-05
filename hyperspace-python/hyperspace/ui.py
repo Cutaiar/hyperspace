@@ -78,6 +78,7 @@ from .graph import (
     through_of,
     wire_words,
 )
+from .groupwords import group_title
 from .hands import panel as ui_hands
 from .hold import canvas_renderer
 from .media import publish
@@ -637,9 +638,9 @@ CHEATSHEET = [
     # the APC40's glyphs, as the desk above and the ROUTING rows print them
     ("APC40", "K D knobs · S faders · G row·col · B ⇧"),
     # the APC40 rows whose labels alone do not say it (2026-10-16)
-    ("APC40 G7 G9 G10", "band select (⇧ D knobs follow) · next transfer · reset"),
+    ("APC40 G7 G9 G10", "analyzer band (⇧ D knobs follow) · next transfer · reset"),
     ("APC40 QUANT", "next bank preset (the pad's B walks the list)"),
-    ("APC40 STOP ALL", "reset all bands · again within 8 s: undo"),
+    ("APC40 STOP ALL", "reset the analyzer · again within 8 s: undo"),
     ("APC40 MASTER PAN", "overlay · click-through (if config allows)"),
 ]
 
@@ -1027,11 +1028,12 @@ class Panel:
     def _ctx_learn(self, a: Param, p: Param) -> None:
         """The Learn items of a param not armed (plan 17 WP2, fork 5).
         **Learn desk**: wherever a desk row can go — not a file path, not
-        SHIFT's own param (what `ui_routing._desk_targets` leaves out) —
-        with or without a MIDI adapter. **Learn hand ▸ left / right**: only
-        with a tracker, on a param a hand can drive (the real one is
-        modulatable), for the sides the rig's axes have. **Learn pad**:
-        while a gamepad is connected, wherever Learn desk is offered — a
+        SHIFT's own param, not a meta param (what `ui_routing._desk_targets`
+        leaves out) — with or without a MIDI adapter. **Learn hand ▸ left /
+        right**: only with a tracker, on a param a hand can drive (the real
+        one is modulatable and no meta param), for the sides the rig's
+        axes have. **Learn pad**: while a gamepad is connected, wherever a
+        pad button can go (`ui_routing.pad_target`, a meta param too) — a
         button, the D-pad, a stick or a trigger completes it
         (`gamepad.learn_from`). **Route from ▸** (the owner, 2026-10-24:
         "there is no Learn option for routing one of the LFOs there";
@@ -1046,20 +1048,20 @@ class Panel:
         lrn = self.learn
         if self._desk_target(a) and imgui.menu_item_simple("Learn desk"):
             lrn.arm(a.id, "desk")
-        sides = self._hand_sides() if p.modulatable else []
+        sides = self._hand_sides() if ui_routing.route_target(p) else []
         if sides and imgui.begin_menu("Learn hand"):
             for side in sides:
                 if imgui.menu_item_simple(side):
                     lrn.arm(a.id, f"hand:{side}")
             imgui.end_menu()
         pad = getattr(self, "pad", None)
-        if (pad is not None and pad.on and self._desk_target(a)
+        if (pad is not None and pad.on and ui_routing.pad_target(a)
                 and imgui.menu_item_simple("Learn pad")):
             lrn.arm(a.id, "pad")
         # any other device the registry lists can be armed for by its role
         # (plan 27 B2, `Learn.wants`): "Learn <role>", on a param a lane
         # can drive; the device completes it from its own `learn`
-        if p.modulatable:
+        if ui_routing.route_target(p):
             for want in learn_wants(lrn):
                 if imgui.menu_item_simple(f"Learn {want}"):
                     lrn.arm(a.id, want)
@@ -2506,7 +2508,7 @@ class Panel:
         analyzer section (ui_pane.py, plan 49): the page is the section at
         full height."""
         c = self.control
-        self._section("bands", "band")
+        self._section(group_title("band"), "band")
         # scene + reset-all (relabels to Undo while the window is open)
         self._label_cell("scene")
         self._combo("scene.select", -(button_w("Reset all") + imgui.get_style().item_spacing.x))

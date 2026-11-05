@@ -224,6 +224,7 @@ from . import (
 from . import hold as holdmod
 from .bands import CEIL
 from .graph import Effect
+from .groupwords import group_title
 from .library import LibraryError
 from .params import Kind
 from .routing import base_refusal, is_macro
@@ -1927,7 +1928,8 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
             group = port.group
             folded = (n.id, group) in st["folds"]
             count = sum(1 for p in n.ports if p.group == group)
-            if imgui.small_button(f"{'+' if folded else '-'} {group or 'misc'} ({count})"
+            sign = "+" if folded else "-"
+            if imgui.small_button(f"{sign} {group_title(group) or 'misc'} ({count})"
                                   f"##{group}"):
                 st["folds"] ^= {(n.id, group)}
         if port not in ports:
@@ -2492,7 +2494,7 @@ def patch_list(panel) -> list[dict]:
     — factory then the user's shadowing them, hidden ones out, as the
     PRESETS list is (`ui_presets.names`, on its poll) — as ``{"name",
     "slug", "note", "words", "ports"}`` (`graphview.patch_words`: "in:
-    picture · out: picture · wants: K1, right hand y, band 1"). A patch
+    picture · out: picture · wants: K1, right hand y, analyzer 1"). A patch
     the library refuses is left out (its words on the footer once).
     Asked every frame the canvas's menu is open or a line is dragged, it
     looks at the disk only on `ui_presets`' poll (plan 40 review fix): the
@@ -3680,7 +3682,7 @@ def _param_rows(panel, st: dict, n: graphview.VNode) -> bool:
     opened = st.setdefault("side_open", {}).setdefault(n.id, {})
     patched = {p.group for p in n.ports if p.param is not None and p.patched}
     for g, pids in groups:
-        name = g or "params"
+        name = group_title(g) or "params"
         if fold:
             if g not in opened:
                 opened[g] = g in patched or g == groups[0][0]
@@ -3768,7 +3770,7 @@ def home_page(n: graphview.VNode):
     if n.kind == "device" and (n.role == "leap" or n.id == "device:leap"):
         return ("hands", None)
     if n.kind == "group":
-        key = _page_of_group(n.label)
+        key = _page_of_group(n.id.partition(":")[2])    # the group's key; the label is words
         return (key, None) if key is not None else None
     # plan 35 G: by the wired frame's ids — `render:camera` (was `render:eye`),
     # a channel `render:channel.<c>`, All outputs the OUTPUT page with no
@@ -4223,7 +4225,7 @@ def route_from_items(panel, p) -> dict[str, list[tuple]] | None:
     """The submenus for the real param `p`, ``{section: items}`` in
     `SECTIONS`' order with only the sections offered, or None when none
     is (no router; a trigger). "lfo" and "env" come on a param a lane
-    may drive (`modulatable`); "macro" on one a base subscriber may name
+    may drive (`ui_routing.route_target`: modulatable, no meta param); "macro" on one a base subscriber may name
     (`base_refusal` None, not a macro, no text) where the rig has macros.
     Each item is ``(label, pin, checked, why)``: a voice or a macro by its
     label and its ``out:`` / ``bus:`` pin, checked when it already lands
@@ -4235,7 +4237,7 @@ def route_from_items(panel, p) -> dict[str, list[tuple]] | None:
     if router is None or p is None or p.kind in (Kind.TRIGGER, Kind.TEXT):
         return None
     out: dict[str, list[tuple]] = {}
-    if p.modulatable:
+    if ui_routing.route_target(p):
         for scheme in graphview.BANK_SCHEMES:
             out[scheme] = _bank_items(panel, router, p, scheme)
     macros = list(panel.reg.group(MACRO))

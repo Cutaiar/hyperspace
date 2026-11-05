@@ -719,6 +719,11 @@ here; overturn → the change, then the same.
 | 685 | Plan 51 O2: within 20° of vertical, a yaw straying 20° or stepping 5° on leaving the cone makes the hand read NaN until it has left, then restart, not a camera jump; `ghost.mirror` does not flip a turn row, its depth does; a room lane on a clamped target stays `position`; a moved row lands as `row_for` would | — | (rec) — pending the owner |
 | 723 | Wave 4 B2: `pad:VIEW` holds `deck.chase`; `pad:VIEW → tempo.tap` and `hat:LEFT` / `hat:RIGHT → preset.list.*` leave the pad's factory rows; an old factory row moves at the next load, one the owner changed stays | 654 | owner — 2026-11-04: base chase is Back; tap tempo is not a default on every controller, "extremely sensitive"; no swapping presets from a controller or a pad |
 | 724 | Wave 4 B2: rows by model: a Joy-Con's chase is L / R in #365's `Model.layout`; hold-to-save is the Edge's, there too, by a qualified row until then; Learn goes on accepting `preset.list.*` and `tempo.tap`, unrefused | 723 | owner — 2026-11-04 on the Joy-Con and the Edge; (rec) — pending the owner on Learn |
+| 737 | Wave 4 AZ: the panel says "analyzer" for the fixture and its tuning; a part reads its own name (SUB … AIR) or "analyzer 3", and "band" stays only as the plain audio word for one of the parts | 566 | owner — 2026-11-04: band for one bin, as built |
+| 738 | Wave 4 AZ: words only; `band.*` ids, `lane:` addresses, the `band` group key, the library's `band` folders, `SECTIONS` and `PAGE_KEYS` all stay; ROUTING's target list keeps printing raw ids | 567 | The owner, 2026-11-04 |
+| 743 | Wave 4 MR: the hard rule. No row of a preset may drive a meta controller param (`part_of(p) == "session"`); refused in words at Learn, at the pickers and at `Bindings`' doors, dropped with a note at a load, removed by the next save; the meta controller's own rows stay, the line being `is_session_row`. Overturns row 19 (a) | 572, 573 | owner — 2026-11-04: "a hard rule" |
+| 744 | Wave 4 MR: macro base and depth subscribers on a meta param drop at `set_macros`; a modifier has no target, so its route is what is refused; a patch naming one is refused whole by `check`, and a spawn's doors drop what reaches them with a note | 573 | (rec) — pending the owner |
+| 745 | Wave 4 MR: row 650's dormant test stays in `Router.modulate` for a row a hot reload left standing, and a save filters such rows; `party-tumble` loses its row, and `tools/meta_routes.py` lists the library's without writing | 572 | (rec) — pending the owner |
 
 "—": no hand check shows it; tests only.
 
@@ -12820,3 +12825,120 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   must, since the file cannot say who wrote it. The same goes for `tempo.tap` by hand on BACK
   (`fire`, default value), which moves to the chase, and for a bare `pad:MENU → preset.save_new`.
 - **Judge it.** 555.
+
+### 737. What the panel calls the analyzer
+
+- **Answer.** The owner, 2026-11-04: "Band is a ridiculous name for this thing." The
+  analyzer is a fixture on the graph, shared, and every preset may wire from it. On the
+  word for its parts, the owner, 2026-11-04: "The word 'band' is fine when you are
+  referring to a specific bin that frequencies accumulate in... EQ in general uses the
+  word 'band'." Band for one bin, as built.
+- **Built.** "Analyzer" for the fixture and its tuning: the section's head ("analyzer
+  tuning"), the group node's title, status and undo lines, the desk, the cheat sheet
+  and refusals ("the analyzer sets no base"). A part reads its own name (SUB, BASS,
+  MIDB, MID, UPR, AIR), or "analyzer 3" where a route only has its number. "Band"
+  stays as the plain audio word for one slice of the spectrum, in a count ("6 bands")
+  and a sentence ("Add analyzer band"); that includes the node's noun in
+  `graphview.summary` and the desk's B18 and B19, "Band +1" and "Band -1", which move
+  which band's strip is open.
+- **Rejected.** "Low", "mid" and so on as the noun: they are names, not a noun, so
+  "Add low" says nothing, and a layout may hold 1 to `N_MAX` parts under any names,
+  with SUB to AIR already saying where each listens. A new word ("range", "slice"):
+  nobody in audio says it, and a graphic EQ's parts are bands.
+
+### 738. Which saved names stayed
+
+- **Answer.** The owner, 2026-11-04, by the brief: words only.
+- **Stayed.** `band.*` param ids, `lane:` addresses, the `band` group key in a show's
+  `modules`, the `band` library and `scenes/band` folders, the `group:band` layout key,
+  `SECTIONS` keys and `PAGE_KEYS`. A rename is the format lane's question.
+- **Where a person still reads one.** ROUTING's target list prints raw ids
+  (`band.0.atk`), as for every group; a trash row's hover and a file-overwrite warning
+  name the folder (`band/`), because that is where the file is.
+- **Built.** `groupwords.py`, a leaf, holds one record per group: its short word
+  ("analyzer"), its title ("analyzer tuning") and its part ("band"). Everywhere that
+  printed the key now reads the record, including a patch's refusal and "only a preset
+  can be renamed". `undo.py` must stay a leaf, so it asks through `Registry.group_word`.
+
+### 743. No row of a preset on a meta param
+
+- **Asked.** Q9 of the wave 4 plan: may a preset's route drive a session param, as row
+  19 (a) allowed ("a route may lean on a session control")? A read-only count of the
+  Drive library, 2026-11-04: 49 rows in 48 of 110 presets are one row,
+  `hand:left.y → master.gain`, push 0.375, copied down from `party-tumble`, and 2 more
+  are `axis:RX → master.dyn`. The first the owner calls "quite annoying", the second unwanted.
+- **Answer.** owner — 2026-11-04: "a hard rule. No route from a preset onto a meta param.
+  Tuning like `master.gain` happens before the show, and the refusal shows quickly which
+  meta params belong in the preset." Overturns row 19 (a), whose ledger line was in
+  DECISIONS.md: the `ui_routing.SESSION_MARK` and `SESSION_TIP` mark and `is_session_target`
+  are gone with it.
+- **Built.** `routing.meta_refusal(pid)` by the id (`part_of_id`, which a test holds to
+  `part_of` over the whole registry, with `params.SESSION_IDS` for the five whose id
+  prefix is not their group: `edit.undo`, `edit.redo`, `app.restart`, `seq.page`,
+  `seq.select`), and `meta_row_refusal(b, target)`,
+  which asks `is_session_row` first: that is what `SessionTable` holds, so a route of any op,
+  on or off, and a preset-layer desk row are a preset's, and an invariant or global-layer
+  desk row (the APC's MASTER fader), a key, a pad button and a sink are not. No list of ids.
+  The doors: `Bindings.refusal`, so `_check`, `add` and `enable`; `bind`; `replace_owner` and
+  `move_route`, before anything moves; `referee`, so `set_routes` and a load; `set_desk`.
+  In words: `Learn.learn_source` and `learn_control` (a desk-armed learn ends, a bare arm
+  waits for a pad button); ROUTING's and the desk's target combos, "Learn hand", "Learn
+  desk", `route_from_items` and the GRAPH page's stubs do not offer one; a GRAPH cable or a
+  moved route end is refused by `Edit`; the param's menu says "the meta controller's: tuned
+  before the show" where "Route a lane here…" was. Learn pad stays on a meta param: a pad
+  row is the meta controller's. A saved row drops with a note, the file untouched, no dirty
+  dot, and a later save writes it out.
+- **Other options.** Keep row 19 (a)'s mark, which is what the owner overturned. Rewrite the
+  library's files in a migration: refused, since a row that drops at load needs no format
+  move, and the save takes it out. A `band.sel.*` knob in a preset's desk goes too, which
+  the old docstring called on purpose: the factory's global-layer rows on them stay.
+- **To reverse.** Have `meta_refusal` return None, and bring the mark back from git.
+- **Rough edge.** A `scale` naming `master.gain` still reads a meta param (row 18 (a)), so
+  the MASTER fader still scales a preset's rate rows. It never moves the param, so the rule
+  does not reach it; say if it should. Learn desk has always landed in the preset layer,
+  so it is now refused on every meta param, triggers too: `output.hold` and `output.take`
+  (check AI.5 learned them onto free buttons), `tempo.tap`, `band.select`. A desk button on
+  one is now a row in `bindings.json` or a pad button through Learn pad. Any such preset-
+  layer row in the library drops at load, and `tools/meta_routes.py` lists it. Question
+  for the owner: should Learn desk on a meta param land an invariant row in `bindings.json`,
+  as Learn pad does? Recommended, as a follow-up; not built, since it is a new road.
+- **Judge it.** 572, 573.
+
+### 744. Macros, modifiers and patches under the rule
+
+- **Asked.** The rule's text names routes. What of the rest?
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Built.** A base subscriber on a meta param was already dropped (D9). A depth subscriber
+  on one now drops too at `settle_bases`, said: it names a route that cannot land. A
+  modifier reads lanes and writes none, so it has no target to refuse; the route off its
+  lane goes through the same door (`test_a_modifier_has_no_target_its_route_is_refused`).
+  `patches.check` refuses a patch naming a meta param in a route, a desk row or a
+  subscriber, whole and in words, as it does any row a patch may not hold, so a save never
+  writes one and `read_patch` says so. A `Landing` that reaches `Edit.spawn` anyway keeps
+  the rest and says what the doors refused.
+- **Other options.** A patch's row dropped with a note at read, as a preset's: friendlier to
+  a saved patch, but `check` is one yes-or-no and a patch that loses a row is not what was
+  saved. `tools/meta_routes.py` lists any such patch, so the owner sees it first.
+- **To reverse.** Take the two `meta_refusal` tests out of `patches.check`.
+- **Judge it.** 573.
+
+### 745. What the rule makes dead, and the corpus
+
+- **Asked.** Row 650 kept a deck off air's row on a session param dormant, so two decks on
+  one preset would not push the room twice. No such row exists now.
+- **Answer.** (rec) — pending the owner; built as recommended.
+- **Built.** Nothing removed. The rule holds on the way into the table, so a hot reload
+  leaves a row standing until the next load: the `follower` test stays in `Router.modulate`
+  for it (the review of #371, which undid its removal), and `Presets.document` filters
+  such rows, so a save never writes one back. `Registry.apply`'s `_owned_by_session` skip,
+  `follow_macros`' `lands` test and row 650's pass order stand: `app.frame` is frozen and
+  is D4's, and a follower still reads this frame's session values.
+  `party-tumble` loses `hand:left.y → master.gain`; `tools/preset_shots.py` loses its pose;
+  `test_routing`'s lag test loses its `party-tumble` scale case, which only a hand on
+  `master.gain` made late. `tools/meta_routes.py` reads a library path, writes nothing and
+  lists every row that would drop; the owner runs it.
+- **Goldens.** `party-tumble`'s could move only if the frame read `master.gain`: the golden
+  rig calls `router.modulate()` with no chain, so the lane rows it scales are dormant and
+  nothing drawn reads it. None expected; the `--all` run decides.
+- **To reverse.** Stop the filter in `Presets.document`, with row 743.
+- **Judge it.** 572.

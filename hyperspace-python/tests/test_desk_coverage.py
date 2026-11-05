@@ -257,7 +257,8 @@ def test_a_picked_control_is_offered_this_presets_params_and_a_click_maps_it(rig
     assert all(learn.cannot_show(p, values) is None for p in ids)
     assert "fx.kaleido.segments" in ids                  # an effect TRIP has on
     assert not [p for p in ids if p.startswith("dream.")]   # TRIP's look-back is off
-    assert {g for g, _ in rest} >= {"view", "band"}
+    assert "view" in {g for g, _ in rest}
+    assert "band" not in {g for g, _ in rest}            # the meta controller's (row 743)
     # in a narrow control window (the small desk, ~107 × 79 px of ground)
     # the chip lies inside the offer and at least three items show whole
     st = ui_desk._state(panel)

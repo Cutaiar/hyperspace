@@ -1811,7 +1811,7 @@ the panel at 540 and the desk takes what is left.
 | LOOKBACK | The look-back switch and three sections: ECHOES, DREAM, BOTH (§2). |
 | FX | The effect stack (§2). |
 | AUDIO | Listen to mic / Listen to video sound (the media mix, plan 45 V3) / Load track / Stop, the device and **rescan**, the transport, the master faders (gain, dynamics, trim). |
-| ANALYZER | The band scene and Reset all, the meters, the band editor (spectrogram with the bands over it, the selected band's strip). |
+| ANALYZER | Under its head, ANALYZER TUNING: the analyzer's scene and Reset all, the meters, the band editor (spectrogram with the bands over it, the selected band's strip). |
 | ROUTING | One page over the loaded preset: a pointer to GRAPH (where the routes and the modifiers are edited since plan 28 N7), desk rows, macros, the session's MIDI rows read-only, the sinks, and a filter (§9). |
 | GRAPH | Both graphs on one canvas — devices, the analyzer, LFOs, modifiers, macros, params under their render nodes, the render graph, the outputs — laid out in titled areas by concern, every node collapsed by default, one wire a node pair, the idle macros off the canvas; the routes and the modifiers are edited here (below). |
 | LFO | The tap-tempo clock and the LFOs (four by default, up to 16: `+ lfo`, `×`; above four all but the open strip fold to a line; plan 31). |
@@ -2271,14 +2271,14 @@ doing its job while a learn is armed.
 | PLAY · STOP · REC · CLIP/TRACK | invariant | track play · stop · microphone · restart the track |
 | Track select · solo · rec-arm (G7, G9, G10; columns 1–6) | invariant | select that band · step its transfer function · reset it |
 | ◀ ▶ | invariant | previous / next band |
-| STOP ALL | invariant | Reset all bands |
+| STOP ALL | invariant | Reset the analyzer |
 | DEVICE ON/OFF · DETAIL | invariant | panel · cheat sheet |
 | MASTER select · PAN | invariant | overlay · overlay click-through |
 | SEND B | both (the adapter's, not a row) | **FINE**: held, every knob moves its param a tenth as far (lit while held); let go, each knob carries on from its param. A row put on SEND B takes it over |
 | D1–D8 | global | the selected band's strip: trim, contrast, transient, pre, post, attack, decay, threshold |
 | K1–K5 | global | hand steadiness, response, catch, the selected axis's return, BPM (K6–K8 dark) |
 | S1–S6 · S7 · S8 | global | band 1–6 post-drive · master dynamics · master trim (`apc40.SHIFT_FADERS`) |
-| Clip row 2 · row 3, columns 1–3 | global | band scenes 1–8 · 9–11 |
+| Clip row 2 · row 3, columns 1–3 | global | analyzer scenes 1–8 · 9–11 |
 | K1–K8 | preset (factory default) | brightness, speed, instances, pattern mix, field amp, field rate, bitmap opacity, zoom |
 | D1–D4 | preset (factory default) | 4D depth, camera yaw, camera pitch, pattern (D5–D8 dark) |
 | S1–S8 | preset | the preset's own fader rows; **none by default**, so dark unless the preset binds one |
@@ -2514,8 +2514,9 @@ typed word, matched anywhere — a desk line's glyph, Akai's name and
 target; a macro's id, label and subscribers; a session or sink row. It is UI state:
 not saved, no undo step, empty at launch, left alone by a preset load;
 its × and a click on a desk control clear it. A route's `scale` can only
-be a session param; a route may perform a session param, marked
-"session" on its row.
+be a session param, which it only reads. No route lands on a session
+param at all (register row 743): the target combo does not offer one,
+and the param's menu says why.
 
 **The order the routes run in** (plan 28 N0). `Router.modulate` runs
 the table as a graph (`modgraph.py`, ARCHITECTURE §2), each node after
