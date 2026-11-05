@@ -12771,7 +12771,9 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Two holders.** `routing.press_momentary`: a toggle on a `momentary` row stays on until
   every source holding it has let go, across pads, the desk and osc. A source that can never
   release goes through one door, `routing.let_go_lost`: a pad gone or closed
-  (`Router.pad_lost`), a desk's cable lost or its device closed (`MidiIO._let_go_held`), an
+  (`Router.pad_lost`), a desk's cable lost or its device closed (`MidiIO._let_go_held`, that
+  desk's presses only, as it recorded them, so a row changed under a held button still
+  releases), an
   OSC sender silent for its `timeout` or its device closed or its row gone (`OscDevice.act`,
   `close`). A phone holding a hit and sending nothing for `timeout` seconds (5 by default)
   therefore lets go: a stuck chase is the worse failure.
