@@ -3,6 +3,7 @@ gyro and shake, with its sensors moving no position, and every other pad as it
 was. Real bytes from the owner's tapes (`joycon-bt-excerpt.jsonl`,
 `joycon-v0-moves.jsonl`)."""
 
+import dataclasses
 import json
 import math
 from pathlib import Path
@@ -14,7 +15,7 @@ from test_poi import rig as poi_rig
 from test_totem import DT, FakePad, ShimRouter, phase
 from test_totem import rig as totem_rig
 
-from hyperspace import gamepad, poi, routing, totem
+from hyperspace import gamepad, params, poi, routing, totem
 from hyperspace.devices import Context, PadDevice
 from hyperspace.pads import gesture, hid, models, nintendo
 
@@ -209,12 +210,99 @@ def test_the_sticks_click_resets_the_view_and_the_totem_keeps_the_rotation():
     assert reg["camera.zoom"].value == 1.0 and state.ang[0] == 1.0
 
 
-def test_l_is_free_and_a_learned_row_on_it_fires():
-    reg, _, router, pad = layout_rig(table_rows=[routing.Binding("pad:LB", "view.points", "toggle")])
-    shape, points = reg["view.shape"].base, reg["view.points"].value
+def test_the_shoulder_holds_the_chase_on_both_joycons():
+    assert ("LB", params.CHASE_PARAM, "momentary", 1.0) in JOYCON.layout
+    assert ("RB", params.CHASE_PARAM, "momentary", 1.0) in models.MODELS["joycon-r"].layout
+    reg, _, router, pad = layout_rig()
+    shape = reg["view.shape"].base
     press(router, pad, "LB")
-    assert reg["view.shape"].base == shape                  # the factory's row: dropped
-    assert reg["view.points"].value != points               # the learned one: heard
+    assert reg["view.shape"].base == shape                  # the factory's shape row: not heard
+
+
+def test_a_layout_rows_momentary_press_holds_until_the_release():
+    """A row of the layout is a row: whatever lets go of a press whose row has
+    gone has to count these, or the chase drops on the next frame."""
+    model = dataclasses.replace(JOYCON, id="test-momentary",
+                                layout=(("LB", "view.points", "momentary", 1.0),))
+    reg, _, router, pad = layout_rig(model)
+    reg["view.points"].set(False)
+    for _ in range(5):
+        pad.frame(hold=("LB",))
+        router.pad(pad, buttons=True)
+        assert reg["view.points"].value is True
+    pad.frame()
+    router.pad(pad, buttons=True)
+    assert reg["view.points"].value is False
+    pad.frame(hold=("LB",))
+    router.pad(pad, buttons=True)
+    assert reg["view.points"].value is True
+    pad.on = False                                          # the pad gone: it lets go
+    router.pad(pad, buttons=True)
+    assert reg["view.points"].value is False
+
+
+def test_a_hidden_table_row_on_the_same_param_lets_nothing_go():
+    """The generic chase on − sits under the layout's on L: same param, and it
+    must not end L's press."""
+    model = dataclasses.replace(JOYCON, id="test-hidden",
+                                layout=(*JOYCON.layout[:3], ("VIEW", "totem.reset", "fire", 1.0),
+                                        ("LB", "view.points", "momentary", 1.0)))
+    reg, _, router, pad = layout_rig(model, [routing.Binding("pad:VIEW", "view.points", "momentary")])
+    reg["view.points"].set(False)
+    for _ in range(3):
+        pad.frame(hold=("LB",))
+        router.pad(pad, buttons=True)
+        assert reg["view.points"].value is True
+
+
+def saved(reg):
+    """Counts `preset.save_new` firing, in place of the real save."""
+    fired = []
+    p = reg.get("preset.save_new")
+    if p is None:
+        reg.trigger("preset.save_new", "Save new", lambda: fired.append(1), group="preset")
+    else:
+        p.fire = lambda: fired.append(1)
+    return fired
+
+
+def hold_menu(router, pad, seconds):
+    pad.frame(hold=("MENU",))
+    router.pad(pad, now=100.0, buttons=True)
+    pad.frame(hold=("MENU",))
+    router.pad(pad, now=100.0 + seconds, buttons=True)
+    pad.frame()
+    router.pad(pad, now=100.0 + seconds + 0.01, buttons=True)
+
+
+def test_hold_to_save_is_in_the_edges_layout_once_and_only_when_held():
+    reg, _, router, pad = layout_rig(EDGE, [routing.Binding("pad:MENU", "preset.save_new", "hold")])
+    fired = saved(reg)
+    hold_menu(router, pad, 0.05)
+    assert fired == []                                      # a brush saves nothing
+    hold_menu(router, pad, routing.HOLD_S + 0.1)
+    assert fired == [1]                                     # the old table row is not a second save
+
+
+def test_an_edge_on_any_table_saves_and_no_other_pad_gets_it_from_the_layout():
+    reg, _, router, pad = layout_rig(EDGE)
+    router.table.bindings = [b for b in router.table.bindings if b.source != "pad:MENU"]
+    fired = saved(reg)
+    hold_menu(router, pad, routing.HOLD_S + 0.1)
+    assert fired == [1]
+    assert not models.MODELS["dualsense"].layout and not models.MODELS["x360"].layout
+
+
+def test_a_layout_alone_gives_a_pad_none_of_the_totems_gates():
+    """The Edge has rows of its own and keeps its camera job and its A reset."""
+    assert EDGE.layout and not EDGE.totem_layout
+    assert JOYCON.totem_layout and models.MODELS["joycon-r"].totem_layout
+    reg, _, _, pad = layout_rig(EDGE)
+    dev = PadDevice("edge", {}, Context(reg=reg), io=pad)
+    assert dev._quiet_stick(pad, reg) == frozenset()
+    assert dev._no_camera_job(pad, reg) == ()
+    assert totem.skip_of(pad) == totem.SKIP
+    assert dev._totem_skip(reg, pad) == {"pad:MENU"}        # a learn leaves its save alone
 
 
 def test_a_learn_ignores_the_layouts_controls_and_takes_a_free_one():
@@ -222,7 +310,7 @@ def test_a_learn_ignores_the_layouts_controls_and_takes_a_free_one():
     dev = PadDevice("joy", {}, Context(reg=reg), io=pad)
     skip = dev._totem_skip(reg, pad)
     assert {"pad:LP", "pad:RP", "pad:LSTICK", "pad:VIEW", "pad:SHARE"} <= skip
-    assert "pad:LB" not in skip and "pad:A" not in skip
+    assert "pad:LB" in skip and "pad:A" not in skip
 
 
 def stick_rig(model=JOYCON):
@@ -276,7 +364,9 @@ def test_the_pad_window_says_the_layout_and_leaves_the_edge_its_table():
     _, _, router, _ = layout_rig()
     said = ui_pad.source_rows(router.table, JOYCON)
     assert said["pad:RP"].target == "view.shape" and said["pad:SHARE"].target == "totem.on"
-    assert said["pad:VIEW"].target == "totem.reset" and "pad:LB" not in said
+    assert said["pad:VIEW"].target == "totem.reset"
+    assert said["pad:LB"].target == params.CHASE_PARAM
+    assert ui_pad.source_rows(router.table, EDGE)["pad:MENU"].target == "preset.save_new"
     edge = ui_pad.source_rows(router.table, EDGE)
     assert edge["pad:VIEW"].target == "tempo.tap" and edge["pad:LB"].target == "view.shape"
     assert ui_pad.rows(router.table, JOYCON)["pad:LSTICK"].target == "camera.reset"

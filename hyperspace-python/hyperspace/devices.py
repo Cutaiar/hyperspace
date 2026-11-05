@@ -890,7 +890,7 @@ class PadDevice(Base):
         while the totem reads it (the owner, 2026-11-04); otherwise those
         lanes are quiet, the routes let go and the stick orbits."""
         from . import gamepad, totem
-        if (not getattr(getattr(io, "model", None), "layout", ())
+        if (not getattr(getattr(io, "model", None), "totem_layout", False)
                 or totem.drives(totem.state_of(reg), self.role)):
             return frozenset()
         return gamepad.left_stick_lanes()
@@ -901,7 +901,7 @@ class PadDevice(Base):
         triggers always, and its stick while the totem reads this pad, whose
         gyro has the rotation."""
         from . import gamepad, totem
-        if not getattr(getattr(io, "model", None), "layout", ()):
+        if not getattr(getattr(io, "model", None), "totem_layout", False):
             return ()
         free = (gamepad.AX_LT, gamepad.AX_RT)
         if totem.drives(totem.state_of(reg), self.role):

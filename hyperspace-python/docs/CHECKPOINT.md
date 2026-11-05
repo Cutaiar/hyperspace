@@ -194,7 +194,8 @@ and shake. A Nintendo pad's sensors move no position (`poi.no_position`) and its
 reader learns the gyro's rest offset; the Edge and `motion:shake` are unchanged.
 The Joy-Con has its own layout on its model (`routing.layout_of`): SL / SR the
 shape, stick click the view's reset, − the totem's reset, capture the totem; L
-and ZL free, and the stick free while the totem reads it. Rows 686–687, checks
+the base chase; ZL free, and the stick free while the totem reads it. The Edge's
+hold-to-save is its own layout too. Rows 686–687, checks
 520–521 (group BW), with a charged pad. Position waits for
 an idealized control object; draft PR #342 is its record.
 
