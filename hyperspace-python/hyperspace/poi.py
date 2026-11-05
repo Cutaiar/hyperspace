@@ -392,6 +392,18 @@ def owns_pan(reg) -> bool:
     return state is not None and state.on and (state.on_reg is None or state.on_reg is reg)
 
 
+def guides(state: PoiState, reg) -> bool:
+    """Is its guide on the picture of the deck over `reg`? The deck its pad is on,
+    or with no pad driving, the deck on air (the session's lead). A renderer with
+    no deck behind it (`reg` None: a test's) draws it."""
+    if reg is None:
+        return True
+    if state.on_reg is not None:
+        return state.on_reg is reg
+    session = getattr(reg, "session", None)
+    return session is None or session.lead is None or session.lead is reg
+
+
 def _live(pad) -> bool:
     has = getattr(pad, "has", None)
     lanes = getattr(pad, "motion_lanes", None)

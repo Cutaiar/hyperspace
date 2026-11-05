@@ -111,6 +111,7 @@ import moderngl
 import numpy as np
 
 from . import field as _field_mod
+from . import poi
 from .field import (  # noqa: F401 — re-exported: the layouts were render.py's
     LAYOUT_GRID,
     LAYOUT_HEX,
@@ -1263,6 +1264,17 @@ class Renderer:
         r._t0 = self._t0
         return r
 
+    def take_running(self, src: Renderer) -> None:
+        """The clocks `src` integrates, as this renderer's, for "copy on air to
+        off air": the patterns' and every effect's. A clock of a node this look
+        does not hold stays out. Trails are not copied: a load's delays start
+        empty, as any load's do."""
+        self._ptime, self._ptime_at = src._ptime, src._ptime_at
+        mine, theirs = self.fx.state, src.fx.state
+        mine.phase = {n: v for n, v in theirs.phase.items() if n in mine.values}
+        mine.clocks = {n: dict(v) for n, v in theirs._clocks().items() if n in mine.values}
+        mine._t_last = getattr(theirs, "_t_last", None)
+
     def release_sized(self) -> None:
         """Plan 44 D4: the frame-sized targets let go, made again at the next
         draw; a deck off air's after a fade. Its look-back rings and delays
@@ -1770,7 +1782,10 @@ class Renderer:
         the frame and the frame goes on."""
         state = getattr(self, "poi_source", None)
         guide = getattr(self, "poi_guide", None)
-        if state is None or not getattr(state, "on", False):
+        # (one state on both decks: its guide belongs to the picture of the deck
+        # its pad is on, so a fade draws it once, on that picture's side)
+        mine = getattr(getattr(self, "rig_source", None), "reg", None)
+        if state is None or not getattr(state, "on", False) or not poi.guides(state, mine):
             if guide is not None:
                 guide.shown = False
             return

@@ -308,6 +308,21 @@ class Offscreen:
 
 
 
+# the off-air picture's long side at most: the GRAPH page's backdrop, not a show
+PREVIEW_MAX = 1280
+
+
+def preview_size(full: tuple[int, int], cap: tuple[int, int] | None = None) -> tuple[int, int]:
+    """The backdrop's size: output 1's framebuffer `full` under the render cap
+    `cap`, shrunk (aspect kept) to `PREVIEW_MAX` on its long side."""
+    w, h = max(int(full[0]), 1), max(int(full[1]), 1)
+    if cap is not None:
+        k = min(1.0, cap[0] / w, cap[1] / h)
+        w, h = max(round(w * k), 1), max(round(h * k), 1)
+    k = min(1.0, PREVIEW_MAX / max(w, h))
+    return max(round(w * k), 1), max(round(h * k), 1)
+
+
 class Preview:
     """Output 1's picture for the control window (2026-10-26: the GRAPH
     page's backdrop): a publisher in shape — `_draw_render` adds it to

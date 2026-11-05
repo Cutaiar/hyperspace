@@ -342,13 +342,14 @@ def test_a_deck_off_air_leaves_the_mixer_alone():
 def test_the_media_side_polls_the_decks_off_air_on_one_read():
     log: list[str] = []
     state = SimpleNamespace(sources=SimpleNamespace(begin_frame=lambda: log.append("begin")),
-                            poll=lambda dt, now: log.append("on air"), close=lambda: None)
+                            poll=lambda dt, now, heard: log.append(f"on air {heard}"),
+                            close=lambda: None)
     other = SimpleNamespace(poll=lambda dt, now, heard: log.append(f"off air {heard}"),
                             drop_sources=lambda: log.append("drop"))
     io = app.MediaIO(SimpleNamespace(stop=lambda: None), state)
     io.off_air.append(other)
     io.poll(DT, 1.0)
-    assert log == ["begin", "on air", "off air False"]
+    assert log == ["begin", "on air True", "off air False"]
 
 
 # ------------------------------------------------------- the size, the handover
@@ -362,14 +363,17 @@ def test_the_off_air_size_is_the_preview_and_the_fade_the_output():
 
 
 def test_both_renderers_are_under_the_render_cap_and_deck_2_keeps_full_dim():
-    main = SimpleNamespace(cloud_source="clouds", poi_source="poi", bands=(0.5,), bg_alpha=0.5,
+    main = SimpleNamespace(cloud_source=None, poi_source=None, bands=(0.5,), bg_alpha=0.5,
                            max_frame=(1920, 1080), dim=0.3,
-                           ghost=SimpleNamespace(source="hands"))
-    r = SimpleNamespace(ghost=SimpleNamespace(source=None), wiring="its own", media="its own")
+                           ghost=SimpleNamespace(source=None))
+    # the rig's wires stand on both from `app.main` (D5c): an on-air deck with none
+    # takes nothing from one that has them
+    r = SimpleNamespace(ghost=SimpleNamespace(source="hands"), wiring="its own", media="its own",
+                        cloud_source="clouds", poi_source="poi")
     hand_over(main, r)
     assert r.max_frame == (1920, 1080) and r.dim == 1.0 and r.bg_alpha == 0.5
-    assert (r.cloud_source, r.poi_source, r.bands, r.ghost.source) == ("clouds", "poi", (0.5,),
-                                                                       "hands")
+    assert r.bands == (0.5,)
+    assert (r.cloud_source, r.poi_source, r.ghost.source) == ("clouds", "poi", "hands")
     assert r.wiring == "its own" and r.media == "its own"
 
 
@@ -960,6 +964,6 @@ def test_main_builds_deck_2_beside_the_first_and_points_nothing_at_it():
     # (plan 44 D5a: and to the meta controller, which leaves every pointer on deck 1)
     assert src.count("deck2") == (src.count("deck2.router") + src.count("deck2.targets")
                                   + src.count("deck2.learn") + src.count("deck2.reg") + 3)
-    assert "MetaController(deck, deck2, players)" in src
+    assert "MetaController(deck, deck2, players, mix=mix)" in src
     assert "panel.deck = deck2" not in src and "undo.install(deck2" not in src
     assert ".point_panel(" not in src and "meta.point(" not in src     # nothing moves one

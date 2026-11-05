@@ -6,8 +6,8 @@ hand check 430, group AW); D2 built (2026-11-03, rows 590–593); **D3
 built** (2026-11-03, wave 2: rows 611–625, hand checks 461–470, group BJ);
 **D4 built** (2026-11-03, wave 3: rows 648–653, hand checks 489–493, group
 BN); **D5a built** (2026-11-04, wave 4: `deck.MetaController` and a pointer per
-holder, every one on deck 1, rows 688–690, hand checks 522–523, group BX); the rest of
-D5, and D6, a plan, not built. Written 2026-11-02 as
+holder, every one on deck 1, rows 688–690, hand checks 522–523, group BX); **D5b** and
+**D5c built** (rows 691–696, groups BY, BZ); D5d, D5e and D6, a plan, not built. Written 2026-11-02 as
 wave 0 item D0 of the post-show sequencing. Written against `main` at 72da1ed: every symbol below is in
 the code today unless the text says it is new. Its four decisions are
 register rows 556–559, answered by the owner on 2026-11-02 (as recommended; 558 with a nuance, §7). The build is six PRs,
@@ -480,6 +480,15 @@ band layout. `app.frame` ticks all three. ⌘Z is `undo.here`: the panel's deck,
 stack by what is under the mouse (`Panel.in_meta_section`: a watched param by its own layer, else
 a section in `ui.META_SECTIONS`; never the focus), never the newest of all. A load is a step on its deck's stack; a show load is a step on the meta
 stack, and its startup preset one on the panel's deck's (registers 691–693).
+
+**D5c, built:** no `swap`, no `take`, no `Decks`. `MetaController`: `follow_fader` (on air by the
+fader's side, `MIDDLE` 0.03), `crossfade` and `tick` (the timed fade, through `output.xfade`'s
+`Param`), `copy_on_air` (the doc road and `_carry`), `parked` (`Host.off_air`). `Fade` reads on air
+through its pointer, `k` is the other deck's share, and `preview` and `warm` are new. No caller in
+`app.main`, so deck 1 stays on air (registers 694–696). **For D5d:** call `meta.tick(now, dt)` at the
+head of `frame`, beside `clock.tick`, so the deck arriving gets this frame's `dim`, `bands` and `max_frame`;
+`ui_media.media_of` reads deck 1's channels whichever deck the panel is on; `XFADE_TIP` and
+`test_the_crossfader_is_still_the_dim` are yours to change; `Fade.warm` is asked on any look landing off air already.
 
 The first PR a performer notices. **New** `deck.Decks`: the list, `on_air`
 and `panel` indices, `take(seconds)`, `copy(src, dst)`. The retargets:

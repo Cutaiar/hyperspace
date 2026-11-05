@@ -265,6 +265,7 @@ to ``hyperspace/bindings.default.json`` (`write_factory`).
 
 from __future__ import annotations
 
+import copy
 import json
 import math
 import sys
@@ -3607,6 +3608,18 @@ class Router:
         that feel is off or nothing has run it."""
         fs = self.__dict__.get("_felt", {}).get(scheme)
         return None if fs is None else [f.x for f in fs]
+
+    def take_running(self, src: Router) -> None:
+        """What `src`'s rows and modifiers remember, as this router's, for "copy
+        on air to off air" over tables that now hold the same rows: every row's
+        follower, the feel's followers, a modifier's memory and its lane, a `turn`
+        row's last reading. So neither deck starts its motion afresh from a copy."""
+        have, d = src.__dict__, self.__dict__
+        for name in ("_movers", "_felt", "_mod_states", "_turns"):
+            d[name] = copy.deepcopy(have.get(name, {}))
+        for scheme, vec in src.lanes.feeds.items():
+            if vec is not None and scheme in self.lanes.feeds:
+                self.lanes.feeds[scheme] = copy.copy(vec)
 
     def _move(self, b: Binding, m: Motion, u: float, p: Param, depth: float,
               dt: float, movers: dict, rests: dict | None = None) -> float:

@@ -126,8 +126,8 @@ nothing jumps. Switching off or resetting from the other deck acts on the right 
 
 ## Found, not changed
 
-- **The poi's guide** (`renderer.poi_source`) is one wire handed over to deck 2's renderer
-  (`hand_over`), so a fade draws the guide on both pictures. D5c's list.
+- **The poi's guide:** fixed in D5c. Both renderers hold the wire; `poi.guides` draws it on the
+  picture of the deck its pad is on (row 694).
 - **`poi.reset`, `poi.*` dials and `totem.w.*` on the panel** act on the pad's one state
   from either deck. They are a controller's, never a look's.
 - **The totem and the poi read one pad each,** not one per player: two players cannot
