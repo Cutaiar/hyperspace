@@ -4225,7 +4225,7 @@ def route_from_items(panel, p) -> dict[str, list[tuple]] | None:
     """The submenus for the real param `p`, ``{section: items}`` in
     `SECTIONS`' order with only the sections offered, or None when none
     is (no router; a trigger). "lfo" and "env" come on a param a lane
-    may drive (`modulatable`); "macro" on one a base subscriber may name
+    may drive (`ui_routing.route_target`: modulatable, no meta param); "macro" on one a base subscriber may name
     (`base_refusal` None, not a macro, no text) where the rig has macros.
     Each item is ``(label, pin, checked, why)``: a voice or a macro by its
     label and its ``out:`` / ``bus:`` pin, checked when it already lands
@@ -4237,7 +4237,7 @@ def route_from_items(panel, p) -> dict[str, list[tuple]] | None:
     if router is None or p is None or p.kind in (Kind.TRIGGER, Kind.TEXT):
         return None
     out: dict[str, list[tuple]] = {}
-    if p.modulatable:
+    if ui_routing.route_target(p):
         for scheme in graphview.BANK_SCHEMES:
             out[scheme] = _bank_items(panel, router, p, scheme)
     macros = list(panel.reg.group(MACRO))

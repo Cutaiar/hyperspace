@@ -144,7 +144,10 @@ from .routing import (
     base_sub,
     is_continuous,
     is_macro,
+    is_session_id,
     is_session_row,
+    meta_refusal,
+    meta_row_refusal,
     row_words,
 )
 
@@ -1592,7 +1595,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             targets.append(pid)
 
     for p in reg:
-        if p.modulatable and not p.alias:
+        if p.modulatable and not p.alias and not is_session_id(p.id):    # (register row 743)
             want(p.id)
     for b in (*routes, *setters):
         want(b.target)
@@ -3932,6 +3935,9 @@ class Edit:
             if not is_continuous(scheme):
                 return KEY_ROWS if _scheme(addr) == "key" else DESK_NO_MOD.format(
                     what=_desk_noun(addr))
+            why = meta_refusal(p.id)
+            if why is not None:
+                return why
             if not p.modulatable:
                 return NOT_MODULATABLE.format(label=p.label or p.id)
             cur = self.table.owner(p.id)
@@ -3957,6 +3963,8 @@ class Edit:
                 return f"{addr} is invariant (the session's)"
             if why == "global":
                 return f"{addr} is on the global layer: latch SHIFT off to map into the preset"
+            # register row 743: what is left would land in the preset layer
+            return meta_refusal(p.id)
         return None
 
     def _input_refusal(self, skind: str, addr: str | None, pid: str) -> str | None:
@@ -4125,6 +4133,9 @@ class Edit:
             return NO_PARAM.format(pid=to.partition(":")[2])
         if p.id == picked.ref.target:
             return ALREADY
+        why = meta_row_refusal(picked.ref, p.id)
+        if why is not None:
+            return why
         if not p.modulatable:
             return NOT_MODULATABLE.format(label=p.label or p.id)
         return None

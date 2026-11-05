@@ -1163,7 +1163,7 @@ def learn_from(pad: Pad, learn, role: str = "", dials=frozenset,
         if pad.hat_pressed(bit) and learn.accepts(f"hat{q}:{name}"):
             learn.learn_pad_button(f"hat{q}:{name}")
             return True
-    if target is None or not target.modulatable:
+    if not learn.routable(target):
         return False
     sticks = dials()
     pad.dials()                 # the sectors as the sticks read now

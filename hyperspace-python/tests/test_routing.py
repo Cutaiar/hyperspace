@@ -2579,8 +2579,7 @@ def _play_tape(tmp_path: Path, name: str, *, lagged: bool):
     analyzer's lanes fed, LFO 1 on, for TAPE_FRAMES frames. What a lagged
     read multiplies is held still, so a lagged param's sequence moves only
     with the value it was late on and the shift is exact: the analyzer's
-    lanes are held, each at its own level (a lane row scaled by a gain a
-    hand rides — party-tumble's — moves with the hand alone), and LFO 1 is
+    lanes are held, each at its own level, and LFO 1 is
     a square wave at 0.01 Hz, +1 over the whole tape (party-trip's and
     lfo-breathe's LFO chains move with the hand on its depth alone). The
     hands move every frame. Run as app.frame runs steps 3 and 9–11: on the base
@@ -2662,7 +2661,6 @@ def test_every_factory_preset_lands_the_same_values_one_frame_earlier(tmp_path):
     # what that LFO drives, one frame earlier
     assert ("party-trip", "camera.zoom") in shifted_somewhere
     assert ("lfo-breathe", "view.bright") in shifted_somewhere
-    assert ("party-tumble", "rot.rate.ZW") in shifted_somewhere   # the scale path
 
 
 def test_a_cycle_without_a_delay_disables_its_last_cable_with_a_note(tmp_path):
