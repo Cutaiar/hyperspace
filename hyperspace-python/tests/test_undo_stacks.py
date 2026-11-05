@@ -377,7 +377,9 @@ def test_where_you_are_is_the_section_under_the_mouse(pane):
     p = r.panel
     d.run(d.click("pane.analyzer"), d.park(), d.wait(1))
     assert "analyzer" in st["pane_drawn"]
-    d.run(d.move("scene.select"), d.wait(1))
+    d.run(d.reveal("scene.select"))
+    x0, y0, _x1, _y1 = d.rect("scene.select")          # its top: the pane may clip its bottom
+    d.run(d.move((x0 + 4, y0 + 3)), d.wait(1))
     assert ui_pane.where(p) == "analyzer" and p.in_meta_section()
     d.run(d.move("new##new"), d.wait(1))               # the presets section
     assert ui_pane.where(p) == "presets" and not p.in_meta_section()

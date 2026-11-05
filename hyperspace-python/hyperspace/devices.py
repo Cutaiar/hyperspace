@@ -812,13 +812,16 @@ class PadDevice(Base):
     @property
     def identity(self) -> tuple[tuple[int, int, int], int]:
         """(light colour, player number) with no sink row on them: the
-        entry's ``light`` / ``player``, else by the pad's place among the
-        pads (`PLAYER_LIGHTS`, as a PlayStation numbers its pads)."""
+        entry's ``light`` / ``player``, else by who holds the pad (plan 55), else
+        by its place among the pads (`PLAYER_LIGHTS`, as a PlayStation numbers
+        its pads)."""
         place = 1
         claims = getattr(self.ctx, "pads", None)
         io = self.io
         if claims is not None and io is not None and io in getattr(claims, "order", ()):
             place = claims.order.index(io) + 1
+        if (held_by := getattr(self.ctx, "players", None)) is not None:
+            place = held_by.player_of(self.role).number     # plan 55: its player, once there are
         rgb = _hex_rgb(self.entry.get("light"))
         if rgb is None:
             rgb = PLAYER_LIGHTS[(place - 1) % len(PLAYER_LIGHTS)]

@@ -1698,6 +1698,7 @@ def main(argv: list[str] | None = None) -> None:
     meta = MetaController(deck, deck2, players)
     panel.pointer = library.pointer = meta.panel_pointer
     panel.meta_undo = meta.undo        # the footer's message slot, beside the deck's
+    panel.meta = meta                  # the player screen (ui_players.py): its moves
     # what ⌘Z goes by (plan 44 D5b); read off the class each time, as a reloaded
     # `ui.py` re-classes the panel and a bound method would keep the old function
     undos.where(lambda: panel.in_meta_section())

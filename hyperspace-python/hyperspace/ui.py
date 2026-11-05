@@ -53,6 +53,7 @@ from . import (
     ui_pad,
     ui_pane,
     ui_patterns,
+    ui_players,
     ui_presets,
     ui_routing,
     ui_seq,
@@ -682,11 +683,12 @@ CHEATSHEET = [
 # go of the focus.
 # the sections that hold the meta controller's params: ⌘Z there takes its stack
 # (plan 44 D5b, `Panel.in_meta_section`). The owner named analyzer, hands and
-# output; audio holds the master faders and nothing of a preset (row 692)
-META_SECTIONS = ("output", "audio", "analyzer", "hands")
+# output; audio holds the master faders and nothing of a preset (row 692). Players
+# holds no param, but who is on what is the meta controller's: never a deck's undo
+META_SECTIONS = ("output", "audio", "analyzer", "hands", "players")
 
 PAGE_KEYS = ["output", "view", "faces", "media", "camera", "lookback", "fx", "audio", "analyzer",
-             "routing", "graph", "lfo", "seq", "hands", "presets", "system"]
+             "routing", "graph", "lfo", "seq", "hands", "presets", "system", "players"]
 
 
 class PageHistory:
@@ -805,6 +807,7 @@ class Panel:
         self.learn = None     # set by app.py: the armed param and the held question (learn.Learn)
         self.undo = None      # set by app.py (undo.Undo): its status shows in the footer
         self.meta_undo = None  # the meta controller's stack (plan 44 D5b): so does its
+        self.meta = None       # set by app.py (deck.MetaController): the player screen's moves
         self._fine_drag = None   # the slider a Shift drag holds (`_fine`): its id, mouse x, throw
         self._shift = self._mouse_down = False   # this frame's ⇧ and left button (`_fine_frame`)
         self.devices = None   # set by app.py (devices.DeviceRegistry): the SYSTEM page's lines
@@ -1933,6 +1936,8 @@ class Panel:
         # the poi's dials, their own window while the poi is on (plan 47): out
         # of the pad window, whose room stays the pad's; GRAPH's side pane too
         ui_pad.poi_window(self)
+        # the player screen, large (ui_players.py): over everything, the panel folded too
+        ui_players.window(self)
         if getattr(self, "desk", True):     # (a Panel from before a hot reload)
             ui_desk.diagram(self)
         if not self.open:
@@ -2037,6 +2042,7 @@ class Panel:
         imgui.push_font(_FONTS["num"], FONT_MICRO + 1)
         imgui.text_colored(FAINT, f"{fps:5.1f} FPS")
         imgui.pop_font()
+        ui_players.footer(self)
         note, warn = self._message()
         color = WARN if warn else FAINT
         # an armed learn has the slot, on every page (plan 17 WP2): what it
@@ -2100,6 +2106,10 @@ class Panel:
                 tooltip("the open show — the presets section")
 
     # ---- pages ----
+
+    def _page_players(self, dt: float) -> None:
+        """Who is on air, and what they hold (ui_players.py)."""
+        ui_players.section(self, dt)
 
     def _page_output(self, dt: float) -> None:
         """Where the render window shows: screen, fullscreen, overlay (overlay.py)."""

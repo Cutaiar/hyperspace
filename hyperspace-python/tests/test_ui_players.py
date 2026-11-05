@@ -1,0 +1,417 @@
+"""The player select screen (wave 4 PS, plan 55): mouse-driven, by control id,
+through the real panel and the real `MetaController`. Its decks stand in: what a
+pointer's move does to a row is `test_players.py`'s; here, that the board moved it."""
+
+from types import SimpleNamespace
+
+import pytest
+from imgui_bundle import imgui
+from test_ui_shell import build_rig, frame
+from ui_driver import Driver
+
+from hyperspace import deck as deck_mod
+from hyperspace import devices, ui_graph, ui_pane, ui_players
+from hyperspace.deck import MetaController
+from hyperspace.pads import models
+from hyperspace.players import FILE, Duty, Players
+from hyperspace.ui import PAGE_KEYS
+
+WIDE = (1600, 900)
+
+
+class Fake(devices.Base):
+    """A controller of `kind` with a status to read."""
+
+    def __init__(self, role, kind="gamepad", said="connected", ctx=None):
+        super().__init__(role, None, ctx)
+        self.kind, self.said, self.io = kind, said, object()
+
+    @property
+    def status(self):
+        return self.said
+
+
+def _with_meta(r, tmp_path, monkeypatch, roles=("pad", "p2", "apc40", "leap")):
+    """The real meta controller over stand-in decks, and a list of controllers."""
+    monkeypatch.setattr(deck_mod, "meta_stack", lambda first: SimpleNamespace())
+    monkeypatch.setattr(deck_mod.undos, "install_meta", lambda u: None)
+    meta = MetaController(SimpleNamespace(name="one"), SimpleNamespace(name="two"),
+                          Players.load(tmp_path))
+    ctx = devices.Context(players=meta.players)
+    kinds = {"apc40": "midi", "leap": "hands"}
+    devs = [Fake(role, kinds.get(role, "gamepad"), ctx=ctx) for role in roles]
+    regs = devices.DeviceRegistry(devices=devs, ctx=ctx)
+    meta.players.tell(roles, ("pad", "apc40"))
+    regs.point(meta.pointer, meta.panel_pointer)
+    r.panel.meta, r.panel.devices = meta, regs
+    return meta
+
+
+@pytest.fixture()
+def rig(tmp_path, monkeypatch):
+    with build_rig(tmp_path) as r:
+        r.panel.desk = False
+        imgui.get_io().display_size = imgui.ImVec2(*WIDE)
+        r.meta = _with_meta(r, tmp_path, monkeypatch)
+        d = Driver(step=lambda: frame(r.panel))
+        d.record(monkeypatch.setattr)
+        d.run(d.wait(2))
+        r.reg["ui.page"].set(PAGE_KEYS.index("players"))
+        d.run(d.wait(3))
+        r.d = d
+        yield r
+
+
+def _corner(d, key):
+    """A point on the lane its tokens leave free: its heading."""
+    x0, y0, x1, _y1 = d.rect(key)
+    return (x0 + x1) / 2, y0 + 4
+
+
+def _head(d, key):
+    """A token's own head, its number: its controllers are their own controls."""
+    x0, y0, _x1, _y1 = d.rect(key)
+    return x0 + 8, y0 + 8
+
+
+def _drag(d, grip, to):
+    """Press on `grip` (an id, or a point) and drop on `to` (a point, or a function
+    of the driver, read once the press has scrolled what it needs into view)."""
+    d.run(d.move(grip), d.wait(1), d.press(True), d.wait(1))
+    d.run(d.move(to() if callable(to) else to, frames=6), d.wait(1), d.press(False), d.wait(1),
+          d.park(), d.wait(1))
+
+
+def _click(d, to):
+    d.run(d.move(to), d.wait(1), d.press(True), d.press(False), d.wait(1))
+
+
+def _said(r):
+    return ui_players._state(r.panel)["said"]
+
+
+# ---------------------------------------------------------------- a duty
+
+def test_dragging_a_token_across_changes_duty_and_says_so(rig, tmp_path):
+    r, d, meta = rig, rig.d, rig.meta
+    _drag(d, _head(d, "players.p2"), _corner(d, "players.lane.off_air"))
+    assert meta.players.get(2).duty == Duty.OFF_AIR
+    assert meta.pointer("p2").deck is meta.off_air, "what it holds went with it"
+    assert meta.pointer("pad").deck is meta.on_air, "nobody else moved"
+    assert (tmp_path / FILE).exists(), "it stays: remembered"
+    assert _said(r) == ("Player 2 off air: p2 now on deck 2; rows on deck 1 go quiet. "
+                        "Stays until moved.")
+    assert r.lib.status == _said(r), "on the footer too, the moment it happens"
+    _drag(d, _head(d, "players.p2"), _corner(d, "players.lane.on_air"))
+    assert meta.players.get(2).duty == Duty.ON_AIR
+    assert meta.pointer("p2").deck is meta.on_air
+
+
+def test_a_click_on_the_token_then_the_lane_changes_duty(rig):
+    r, d, meta = rig, rig.d, rig.meta
+    _click(d, _head(d, "players.p1"))
+    assert ui_players._state(r.panel)["sel"] == (ui_players.SEL_PLAYER, 1)
+    assert meta.players.get(1).duty == Duty.ON_AIR, "a click on a token alone moves nobody"
+    _click(d, _corner(d, "players.lane.off_air"))
+    assert meta.players.get(1).duty == Duty.OFF_AIR
+    assert meta.pointer("pad").deck is meta.off_air and meta.pointer("leap").deck is meta.off_air
+
+
+def test_a_click_on_a_lane_with_nobody_picked_moves_nobody_and_says_how(rig):
+    r, d, meta = rig, rig.d, rig.meta
+    before = [p.duty for p in meta.players]
+    _click(d, _corner(d, "players.lane.off_air"))
+    assert [p.duty for p in meta.players] == before
+    assert "first" in _said(r)
+
+
+def test_a_drop_on_nothing_moves_nobody(rig, tmp_path):
+    r, d, meta = rig, rig.d, rig.meta
+    x0, y0, _x1, _y1 = d.rect("players.lane.on_air")
+    _drag(d, _head(d, "players.p2"), (x0 - 200, y0 + 10))
+    assert meta.players.get(2).duty == Duty.ON_AIR and not (tmp_path / FILE).exists()
+    assert ui_players._state(r.panel)["drag"] is None
+
+
+def test_a_drag_whose_board_went_away_never_lands(rig, tmp_path):
+    """Picked up, the section hidden, the mouse let go unseen: back in view with the
+    mouse over a lane, nobody moves."""
+    r, d, meta = rig, rig.d, rig.meta
+    d.run(d.move(_head(d, "players.p2")), d.wait(1), d.press(True), d.wait(1))
+    aim = _corner(d, "players.lane.off_air")
+    d.run(d.move(aim, frames=4), d.wait(1))
+    assert ui_players._state(r.panel)["drag"] is not None
+    r.reg["ui.page"].set(PAGE_KEYS.index("view"))
+    d.run(d.press(False), d.wait(3))
+    r.reg["ui.page"].set(PAGE_KEYS.index("players"))
+    d.run(d.wait(3))
+    assert ui_players._state(r.panel)["drag"] is None
+    assert meta.players.get(2).duty == Duty.ON_AIR and not (tmp_path / FILE).exists()
+
+
+def test_a_token_dropped_in_its_own_lane_is_no_move(rig, tmp_path):
+    r, d = rig, rig.d
+    _drag(d, _head(d, "players.p2"), _corner(d, "players.lane.on_air"))
+    assert not (tmp_path / FILE).exists() and not _said(r)
+
+
+def test_an_empty_seat_takes_a_duty_and_says_it_holds_nothing(rig):
+    r, d, meta = rig, rig.d, rig.meta
+    _drag(d, _head(d, "players.p3"), _corner(d, "players.lane.off_air"))
+    assert meta.players.get(3).duty == Duty.OFF_AIR
+    assert _said(r) == "Player 3 off air: holds no controller yet. Stays until moved."
+
+
+# ---------------------------------------------------------------- a controller
+
+def test_dragging_a_controller_to_a_token_registers_it(rig, tmp_path):
+    r, d, meta = rig, rig.d, rig.meta
+    told = []
+    meta.on_players.append(lambda: told.append(1))
+    meta.move_player(2, Duty.OFF_AIR)
+    d.run(d.wait(2))
+    _drag(d, "players.ctl.leap", lambda: _head(d, "players.p2"))
+    assert meta.players.player_of("leap").number == 2 and told == [1]
+    assert meta.pointer("leap").deck is meta.off_air, "it goes to its new player's deck"
+    assert "leap" in meta.players.controllers_of(2)
+    assert "leap" not in meta.players.controllers_of(1)
+    assert _said(r) == "leap to player 2, on deck 2."
+
+
+def test_a_controller_clicked_then_a_token_registers_it(rig):
+    r, d, meta = rig, rig.d, rig.meta
+    _click(d, "players.ctl.leap")
+    assert ui_players._state(r.panel)["sel"] == (ui_players.SEL_CTL, "leap")
+    assert meta.players.player_of("leap").number == 1
+    _click(d, _head(d, "players.p4"))
+    assert meta.players.player_of("leap").number == 4
+    assert ui_players._state(r.panel)["sel"] is None
+
+
+def test_a_press_on_a_controller_is_not_a_press_on_its_token(rig):
+    """A drag starts on what is under the mouse: the controller, not its player."""
+    d, meta = rig.d, rig.meta
+    _drag(d, "players.ctl.leap", _corner(d, "players.lane.off_air"))
+    assert meta.players.get(1).duty == Duty.ON_AIR
+
+
+def test_the_words_when_a_pad_is_given_away():
+    words = ui_players.give_words("pad", 2, 1, True, "p2", True)
+    assert "@p2" in words and "reopened" in words and "bare pad rows wait" in words
+    assert "the bare ones" in ui_players.give_words("edge", 1, 1, False, "", False)
+
+
+# ---------------------------------------------------------------- what is drawn
+
+def test_a_token_shows_each_controller_as_itself_and_whether_it_is_there(rig):
+    r, meta = rig, rig.meta
+    r.panel.devices.get("leap").said = "lost"
+    r.panel.devices.get("apc40").said = "off"
+    meta.players.hold("gone", 3)
+    held = {h.role: h for n in (1, 2, 3, 4) for h in ui_players.held(r.panel, n)}
+    assert held["pad"].state == "on" and held["leap"].state == "lost"
+    assert held["apc40"].state == "off" and held["gone"].state == "gone"
+    assert held["leap"].glyph == "hands" and held["gone"].glyph == "unknown"
+
+
+@pytest.mark.parametrize("model,glyph", [("xbox", "xbox"), ("x360", "xbox"), ("edge", "sony"),
+                                         ("dualsense", "sony"), ("joycon-l", "joycon-l"),
+                                         ("joycon-r", "joycon-r"), ("procon", "procon"),
+                                         ("generic", "pad")])
+def test_every_pad_has_its_own_glyph(model, glyph):
+    assert ui_players.glyph_of_model(models.MODELS[model]) == glyph
+    assert glyph in ui_players.GLYPHS
+
+
+def test_every_glyph_draws_in_every_state(rig, monkeypatch):
+    r, d = rig, rig.d
+    real = ui_players.held
+
+    def many(panel, number):
+        if number != 1:
+            return real(panel, number)
+        return [ui_players.Held(f"r{k}", g, g, tuple(ui_players.STATE_WORDS)[k % 5])
+                for k, g in enumerate(ui_players.GLYPHS)]
+    monkeypatch.setattr(ui_players, "held", many)
+    d.run(d.wait(2))
+    assert "players" in ui_graph._state(r.panel)["pane_drawn"]
+
+
+def test_the_tray_shows_a_pad_no_entry_reads(rig):
+    r = rig
+    claims = SimpleNamespace(taken={}, hub=SimpleNamespace(
+        readers={"a": SimpleNamespace(name="DualSense", model=models.MODELS["dualsense"]),
+                 "b": SimpleNamespace(name="Joy-Con (L)", model=models.MODELS["joycon-l"])},
+        held={"b": object()}))
+    r.panel.devices.ctx.pads = claims
+    loose = ui_players.loose(r.panel)
+    assert [(h.role, h.glyph) for h in loose] == [("DualSense", "sony")]
+    st = ui_players._state(r.panel)
+    assert ui_players._tray(r.panel, st, now=1e9) == loose
+    r.d.run(r.d.wait(2))
+    assert "players.tray.0" in r.d.rects
+
+
+def test_the_header_and_the_footer_say_who_is_where(rig):
+    r, d, meta = rig, rig.d, rig.meta
+    assert ui_players.summary(r.panel) == "on air 1 2  ·  off air —"
+    meta.move_player(2, Duty.OFF_AIR)
+    assert ui_players.summary(r.panel) == "on air 1  ·  off air 2"
+    assert ui_pane._said(r.panel, "players", "") == ui_players.summary(r.panel)
+    assert "players.open" in d.rects
+
+
+# ---------------------------------------------------------------- the fit rule
+
+@pytest.mark.parametrize("width", [150.0, 178.0, 240.0, 320.0, 700.0, 960.0, 1900.0])
+@pytest.mark.parametrize("s", [1.0, 1.6, 2.4])
+@pytest.mark.parametrize("n", [0, 1, 5, 9])
+def test_nothing_passes_the_edge_at_any_width(width, s, n):
+    roles = [f"r{k}" for k in range(n)]
+    duties = {1: Duty.ON_AIR, 2: Duty.OFF_AIR, 3: Duty.ON_AIR, 4: Duty.ON_AIR}
+    bd = ui_players.lay_out(width, duties, {1: roles, 2: roles}, s, tray=n)
+    for c in bd.cards.values():
+        lane = bd.lanes[duties[c.number]]
+        assert lane[0] <= c.rect[0] and c.rect[2] <= lane[2] + 0.01
+        assert lane[1] <= c.rect[1] and c.rect[3] <= lane[3] + 0.01
+        for _role, cell in c.cells:
+            assert c.rect[0] <= cell[0] and cell[2] <= c.rect[2] + 0.01
+            assert c.rect[1] <= cell[1] and cell[3] <= c.rect[3] + 0.01
+    for b in (*bd.lanes.values(), bd.tray, *bd.tray_cells):
+        assert 0 <= b[0] and b[2] <= width + 0.01
+        assert b[3] <= bd.h + 0.01
+
+
+def test_tokens_do_not_overlap():
+    duties = dict.fromkeys((1, 2, 3, 4), Duty.ON_AIR)
+    bd = ui_players.lay_out(240.0, duties, {1: ["a", "b", "c"]})
+    rects = [c.rect for c in bd.cards.values()]
+    for i, a in enumerate(rects):
+        for b in rects[i + 1:]:
+            assert a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1]
+
+
+def test_at_the_narrowest_two_tokens_sit_side_by_side():
+    duties = dict.fromkeys((1, 2, 3, 4), Duty.ON_AIR)
+    # the pane's 240, less its padding and two scrollbars: 178 measured in the app
+    bd = ui_players.lay_out(178.0, duties, {1: ["a", "b", "c", "d"]})
+    assert bd.cards[1].rect[1] == bd.cards[2].rect[1] < bd.cards[3].rect[1]
+    cells = bd.cards[1].cells
+    assert cells[0][1][1] == cells[1][1][1] < cells[2][1][1], "two controllers a row"
+    assert bd.lanes[Duty.ON_AIR][3] < bd.lanes[Duty.OFF_AIR][1], "one lane over the other"
+
+
+@pytest.mark.parametrize("side", [ui_graph.SIDE_MIN, ui_graph.SIDE_W])
+def test_the_section_fits_the_pane(tmp_path, monkeypatch, side):
+    with build_rig(tmp_path) as r:
+        r.panel.desk = False
+        imgui.get_io().display_size = imgui.ImVec2(*WIDE)
+        _with_meta(r, tmp_path, monkeypatch,
+                   roles=("pad", "p2", "p3", "p4", "edge", "apc40", "leap", "osc1"))
+        d = Driver(step=lambda: frame(r.panel))
+        d.record(monkeypatch.setattr)
+        d.run(d.wait(2))
+        st = ui_graph._state(r.panel)
+        st["side_w"] = side
+        r.reg["ui.page"].set(PAGE_KEYS.index("players"))
+        d.run(d.wait(4))
+        (x, _y), (w, _h) = st["details_rect"]
+        ids = [k for k in d.rects if k.startswith("players.") and k != "players.open"]
+        assert len(ids) > 8
+        for k in ids:
+            assert d.rects[k][2] <= x + w + 1, (k, d.rects[k], x + w)
+
+
+def test_the_band_under_the_canvas_draws_it(tmp_path, monkeypatch):
+    with build_rig(tmp_path) as r:
+        r.panel.desk = True
+        imgui.get_io().display_size = imgui.ImVec2(960, 900)
+        _with_meta(r, tmp_path, monkeypatch)
+        d = Driver(step=lambda: frame(r.panel))
+        d.record(monkeypatch.setattr)
+        d.run(d.wait(2))
+        r.reg["ui.page"].set(PAGE_KEYS.index("players"))
+        d.run(d.wait(4))
+        assert "players.lane.off_air" in d.rects
+
+
+# ---------------------------------------------------------------- reaching it
+
+def test_the_footer_chip_opens_it_large_and_it_moves_people_too(rig):
+    r, d, meta = rig, rig.d, rig.meta
+    _click(d, "players.open")
+    assert ui_players._state(r.panel)["large"]
+    d.run(d.wait(2))
+    small, big = d.rect("players.p1"), d.rect("players.big.p1")
+    assert big[2] - big[0] > (small[2] - small[0]) * 1.5, "large is large"
+    _drag(d, _head(d, "players.big.p2"), _corner(d, "players.big.lane.off_air"))
+    assert meta.players.get(2).duty == Duty.OFF_AIR
+
+
+def test_the_section_chip_opens_it_large(rig):
+    r, d = rig, rig.d
+    _click(d, "players.large")
+    assert ui_players._state(r.panel)["large"]
+
+
+def test_p_opens_it_and_esc_closes_it_and_a_modifier_does_neither(rig):
+    r, d = rig, rig.d
+    st = ui_players._state(r.panel)
+    d.run(d.key(imgui.Key.p))
+    assert st["large"]
+    d.run(d.key(imgui.Key.p))
+    assert not st["large"]
+    d.run(d.key(imgui.Key.p))
+    assert st["large"]
+    d.run(d.key(imgui.Key.escape), d.wait(1))
+    assert not st["large"]
+    d.run(d.key(imgui.Key.p, d.ctrl))
+    assert not st["large"], "a modified P is not P"
+
+
+def test_it_opens_with_the_panel_folded(rig):
+    r, d = rig, rig.d
+    r.panel.open = False
+    d.run(d.wait(1), d.key(imgui.Key.p), d.wait(2))
+    assert "players.big.p1" in d.rects
+
+
+def test_a_panel_with_no_meta_controller_draws_no_board(tmp_path, monkeypatch):
+    with build_rig(tmp_path) as r:
+        r.panel.desk = False
+        imgui.get_io().display_size = imgui.ImVec2(*WIDE)
+        d = Driver(step=lambda: frame(r.panel))
+        d.record(monkeypatch.setattr)
+        r.reg["ui.page"].set(PAGE_KEYS.index("players"))
+        d.run(d.wait(4), d.key(imgui.Key.p))
+        assert "players.open" not in d.rects and "players.lane.on_air" not in d.rects
+
+
+def test_players_is_a_section_at_the_end_of_the_page_keys():
+    """Append-only: every saved binding keeps its slot."""
+    assert PAGE_KEYS[-1] == "players" and PAGE_KEYS.index("system") == 15
+    assert "players" in ui_pane.KEYS
+
+
+def test_the_section_is_folded_at_first():
+    assert not ui_pane.DEFAULT_OPEN["players"] and not ui_pane.DEFAULT_BELOW["players"]
+
+
+# ---------------------------------------------------------------- the pad's lights
+
+def test_a_pads_lights_show_its_player():
+    players = Players()
+    ctx = devices.Context(players=players)
+    pad = devices.PadDevice("edge", None, ctx)
+    assert pad.identity == (devices.PLAYER_LIGHTS[0], 1)
+    players.hold("edge", 3)
+    assert pad.identity == (devices.PLAYER_LIGHTS[2], 3)
+    own = devices.PadDevice("edge", {"light": "#102030", "player": 5}, ctx)
+    assert own.identity == ((16, 32, 48), 5), "the entry's own word still wins"
+
+
+def test_the_app_hands_the_panel_its_meta_controller():
+    import inspect
+
+    from hyperspace import app
+    assert "panel.meta = meta" in inspect.getsource(app)
