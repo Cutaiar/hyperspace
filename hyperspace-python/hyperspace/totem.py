@@ -80,6 +80,7 @@ import math
 import sys
 import time
 from dataclasses import dataclass, field
+from typing import Any
 
 from . import poi
 
@@ -142,6 +143,10 @@ class TotemState:
     ref: tuple[float, float] | None = None    # (roll, pitch) radians at the reset
     pan_out: list[float] = field(default_factory=lambda: [0.0, 0.0])   # the pan it has added
     note: str = ""                # the last change, for the terminal and the pad window
+    # the registry `ang`, `ref` and `pan_out` are of: one `TotemState` is on both
+    # decks (`app._share_experiments`), one pad's, and what it holds of a look
+    # goes no further than the deck it took it from (plan 55)
+    on_reg: Any = None
 
     def say(self, note: str) -> None:
         self.note = note
@@ -210,14 +215,18 @@ def reset(state: TotemState, reg) -> None:
         if id(q) in held:
             q.put(held[id(q)])
         q.set(0.0)
-    state.ang = [_base(reg, f"rot.phase.{n}") for n in PLANES]
-    state.ref = None
-    state.pan_out = [0.0, 0.0]          # the reset zeroed the pan, the totem's share with it
+    if state.on_reg is None or state.on_reg is reg:
+        state.ang = [_base(reg, f"rot.phase.{n}") for n in PLANES]
+        state.ref = None
+        state.pan_out = [0.0, 0.0]      # the reset zeroed the pan, the totem's share with it
+    # (else a reset of a deck the totem is not on: that deck's view, none of its angles)
     state.say(f"reset — {readout(state)}")
 
 
 def _give_back_pan(state: TotemState, reg) -> None:
-    """Take back the pan the tilt added (off, or a pad letting go)."""
+    """Take back the pan the tilt added (off, or a pad letting go), on the deck
+    it added it to, whichever deck asks."""
+    reg = state.on_reg if state.on_reg is not None else reg
     for j, axis in enumerate("xy"):
         p = reg.get(f"camera.pan.{axis}") if hasattr(reg, "get") else None
         if state.pan_out[j] and p is not None:
@@ -309,9 +318,11 @@ def step(state: TotemState | None, pad, reg, dt: float, role: str = "",
     motion = pad.motion
     take = getattr(motion, "take_turn", None)
     turn = take() if take is not None else (0.0, 0.0, 0.0)
+    if state.driving is not None and state.on_reg is not reg:
+        state.driving = None                      # its pad moved decks: this deck's angles
     if state.driving is None:                     # taking over: nothing jumps
         _give_back_pan(state, reg)
-        state.driving = role
+        state.driving, state.on_reg = role, reg
         state.ang = [_base(reg, f"rot.phase.{n}") for n in PLANES]
         state.ref = None
         turn = (0.0, 0.0, 0.0)                    # what it turned before is not ours

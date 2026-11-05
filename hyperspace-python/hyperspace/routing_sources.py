@@ -190,23 +190,31 @@ class Layered(MutableMapping):
     over the shared sources' (plan 44 D4). A read finds the layer's entry,
     else the sources'; a write of a deck's scheme (`DECK_SCHEMES`) lands in
     the layer, any other in the sources, so an adapter handed the router
-    writes where it always did."""
+    writes where it always did. `hide` (plan 55): shared schemes this view
+    does not read, a controller's on another deck (`Sources.away_from`). A
+    write and a delete still reach them."""
 
-    __slots__ = ("own", "shared")
+    __slots__ = ("hide", "own", "shared")
 
-    def __init__(self, own: dict, shared: dict):
-        self.own, self.shared = own, shared
+    def __init__(self, own: dict, shared: dict, hide=frozenset()):
+        self.own, self.shared, self.hide = own, shared, hide
 
     def __getitem__(self, scheme: str) -> Any:
         own = self.own
-        return own[scheme] if scheme in own else self.shared[scheme]
+        if scheme in own:
+            return own[scheme]
+        if scheme in self.hide:
+            raise KeyError(scheme)
+        return self.shared[scheme]
 
     def get(self, scheme: str, default: Any = None) -> Any:
         own = self.own
-        return own[scheme] if scheme in own else self.shared.get(scheme, default)
+        if scheme in own:
+            return own[scheme]
+        return default if scheme in self.hide else self.shared.get(scheme, default)
 
     def __contains__(self, scheme: object) -> bool:
-        return scheme in self.own or scheme in self.shared
+        return scheme in self.own or (scheme in self.shared and scheme not in self.hide)
 
     def __setitem__(self, scheme: str, value: Any) -> None:
         (self.own if scheme in DECK_SCHEMES else self.shared)[scheme] = value
@@ -215,13 +223,15 @@ class Layered(MutableMapping):
         del (self.own if scheme in self.own else self.shared)[scheme]
 
     def __iter__(self) -> Iterator[str]:
-        yield from self.shared
+        for scheme in self.shared:
+            if scheme not in self.hide or scheme in self.own:
+                yield scheme
         for scheme in self.own:
             if scheme not in self.shared:
                 yield scheme
 
     def __len__(self) -> int:
-        return len(self.shared) + sum(s not in self.shared for s in self.own)
+        return sum(1 for _ in self)
 
 
 class LaneLayer:
@@ -246,6 +256,7 @@ class LaneLayer:
 
 _NO_LANES: dict = {}      # a router's lane cache before its first miss; never written
 _NO_PRIMARIES: dict = {}  # a table that names no primaries; never written
+_NOWHERE: frozenset = frozenset()   # `away_from`, with every controller on this deck
 
 
 class Sources:
@@ -461,6 +472,19 @@ class Sources:
         return self._codes[src]
 
     # ---- the feeds ----
+
+    def away_from(self, router) -> frozenset[str]:
+        """The schemes `router`'s pass does not read this frame (plan 55): those
+        of a controller whose pointer is on another deck, so a row acts only on
+        the `Deck` its player is on. Asked of the device registry (`holders`:
+        scheme → that controller's pointer), a pointer's move counting at once.
+        The analyzer is nobody's, a deck's own lanes are its own, and a bare
+        registry or none holds nothing, so nothing is hidden."""
+        holders = getattr(self.__dict__.get("devices"), "holders", None)
+        if holders is None:
+            return _NOWHERE
+        away = [s for s, p in holders().items() if p.deck.router is not router]
+        return frozenset(away) if away else _NOWHERE
 
     def feed(self, scheme: str, values) -> None:
         """An adapter hands in this frame's vector for `ext` / `lfo` sources

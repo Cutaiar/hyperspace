@@ -1462,7 +1462,8 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         if owner is None and at and role:
             owner = nodes.get(f"device:{role}")
         if owner is None:
-            d = by_scheme.get(scheme) or by_scheme.get(base)
+            # (a row that names a role or player no device is: its placeholder, below)
+            d = by_scheme.get(scheme) or (None if at and role else by_scheme.get(base))
             if d is None and base in ("cc", "note", "pitch") and midi_first and not at:
                 owner = nodes.get(f"device:{midi_first}")
             elif d is not None:

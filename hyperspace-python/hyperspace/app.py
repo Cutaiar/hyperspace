@@ -109,6 +109,7 @@ from .outputs import CanvasTap, Offscreen, Presenter, Preview, Slot, Switches, V
 from .overlay import RENDER_DEFAULT, GlfwBackend, Output, register_switches, render_index
 from .params import Registry
 from .pinch import install as install_pinch
+from .players import Players
 from .pointer import Pointer, Through
 from .render import Renderer, _samples_of
 from .routing import SLEW_DEFAULT_S, Bindings, Router, bindings_path, register_desk
@@ -935,7 +936,8 @@ def _share_experiments(first: Registry, second: Registry, *, poi_cfg: dict) -> N
     """The totem's and the poi's params on the second deck too (plan 44 D5a),
     over the one state each: they are registered by the panel hook, which only
     the first deck runs, and neither is a session group, so a pad or the panel
-    on deck 2 would lose them. Inert until something points there."""
+    on deck 2 would lose them. One state, one pad: what it holds of a look is of
+    the deck its pad is on (`on_reg`, plan 55) and goes no further."""
     if (state := totem.state_of(first)) is not None:
         totem.register(second, state)
     if (swing := poi.state_of(first)) is not None:
@@ -1461,6 +1463,9 @@ def main(argv: list[str] | None = None) -> None:
     if args.laptop:
         config.laptop(cfg)
     home = library_home()                 # the folder config.load has just ensured
+    # the players, on this Mac (plan 55): beside bindings.json, before the devices
+    # read who holds what
+    players = Players.load(home, cfg.setdefault("notes", []))
     # the render outputs (plan 21 WP3: one per [[output.screens]] entry, one
     # with no list) and the controls; output 1's window is the render window.
     # On a laptop the rig's windows.json is not read: its spots are the rig's
@@ -1614,7 +1619,8 @@ def main(argv: list[str] | None = None) -> None:
         # skeletons) — is pointed at it now and again whenever the list changes
         rig = _open_devices(cfg, devices.Context(reg=reg, table=router.table, learn=learn,
                                                  audio=audio, hand_settings=hand_settings,
-                                                 notes=cfg.setdefault("notes", []), home=home),
+                                                 notes=cfg.setdefault("notes", []), home=home,
+                                                 players=players),
                             home)
 
         def point_at_devices() -> None:
@@ -1689,13 +1695,18 @@ def main(argv: list[str] | None = None) -> None:
     panel.fade = fade                  # the SYSTEM page's second GPU block
     # the owner of the two decks (plan 44 D5a): every holder's pointer, each on
     # deck 1 and moved by nothing yet. Each handle reads through its own from here
-    meta = MetaController(deck, deck2)
+    meta = MetaController(deck, deck2, players)
     panel.pointer = library.pointer = meta.panel_pointer
     panel.meta_undo = meta.undo        # the footer's message slot, beside the deck's
     # what ⌘Z goes by (plan 44 D5b); read off the class each time, as a reloaded
     # `ui.py` re-classes the panel and a bound method would keep the old function
     undos.where(lambda: panel.in_meta_section())
     rig.point(meta.pointer, meta.panel_pointer)
+    # plan 55: who holds what names a pad's rows, so the list is read again when it
+    # changes; a mapping on either deck moves the controller mapped
+    meta.on_players.append(lambda: rig.apply(rig.entries))
+    for on in meta.decks:
+        on.learn.mapped = lambda b, on=on: rig.mapped(on, b)
     # panel state and chain must stay one object even after source changes
     # the live objects that get re-classed on a hot reload; re-evaluated
     # each swap so recreated ones (the chain after a source attach) count

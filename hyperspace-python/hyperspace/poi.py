@@ -67,6 +67,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from typing import Any
 
 GROUP = "poi"
 RESET_BUTTON = "A"
@@ -223,6 +224,10 @@ class PoiState:
     zoom_home: float | None = None
     zoom_last: float | None = None
     note: str = ""
+    # the registry the homes and lasts are of: one `PoiState` is on both decks
+    # (`app._share_experiments`), one pad's, and what it holds of a look goes no
+    # further than the deck it took it from (plan 55)
+    on_reg: Any = None
 
     def say(self, note: str) -> None:
         import sys
@@ -382,9 +387,9 @@ def is_state(obj) -> bool:
 
 
 def owns_pan(reg) -> bool:
-    """Is a poi swinging the shape (the totem's tilt-pan steps aside)?"""
+    """Is a poi swinging this deck's shape (the totem's tilt-pan steps aside)?"""
     state = state_of(reg)
-    return state is not None and state.on
+    return state is not None and state.on and (state.on_reg is None or state.on_reg is reg)
 
 
 def _live(pad) -> bool:
@@ -410,8 +415,11 @@ def step(state: PoiState | None, pad, reg, dt: float, role: str = "") -> None:
             state.driving = None
             state.say("the pad's sensors went quiet")
         return
+    if state.driving is not None and state.on_reg is not reg:
+        _release(state, state.on_reg)  # its pad moved decks: that deck's shape back home
+        state.driving = None
     if state.driving is None:
-        state.driving = role
+        state.driving, state.on_reg = role, reg
         reset(state)
         state.say(f"reading {role or 'the pad'} — {readout(state)}")
     _buttons(state, pad, reg)
@@ -605,7 +613,9 @@ def _clamp_to(p, v: float) -> float:
 
 def _release(state: PoiState, reg) -> None:
     """Switched off: the pan and the zoom back to the home the poi found
-    (each axis unless someone else has written it since), and forgotten."""
+    (each axis unless someone else has written it since), and forgotten. On the
+    deck it wrote them on, whichever deck asks."""
+    reg = state.on_reg if state.on_reg is not None else reg
     px, py = _param(reg, "camera.pan.x"), _param(reg, "camera.pan.y")
     if state.pan_home is not None and state.pan_last is not None and px is not None \
             and py is not None:

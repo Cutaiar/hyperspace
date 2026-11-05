@@ -42,6 +42,8 @@ Plan 44 D5a adds `MetaController`, what owns the two decks and every holder's
 pointer (`pointer.Pointer`). Every pointer starts on deck 1 and nothing in the
 app moves one yet. D5b splits undo: a stack per deck, scoped to its preset
 (`in_preset`), and one for the meta controller (`meta_stack`), so three.
+Plan 55 adds the players (`players.Players`): a controller's pointer goes where
+its player's duty says.
 """
 
 from __future__ import annotations
@@ -62,6 +64,7 @@ from .library import Marks, MetaMarks
 from .lookback import DreamState
 from .outputs import Offscreen, View
 from .params import Registry, SessionRegistry, build_registry, part_of
+from .players import Duty, Players
 from .pointer import Pointer
 from .preset import Presets
 from .routing import Bindings, Router, Sources
@@ -459,10 +462,20 @@ class MetaController:
 
     `undo` is its own stack (`meta_stack`, plan 44 D5b), beside one on each deck:
     `stacks` are the three, all ticked each frame. A stack stays with its `Deck`
-    whatever points at it."""
+    whatever points at it.
 
-    def __init__(self, first: Deck, second: Deck):
+    `players` (plan 55) say where the controllers go: a controller's pointer
+    starts on the deck its player's duty says (`deck_for`), `move_player` moves
+    all a player holds, `register` moves a controller to a player. On air is
+    `on_air`, off air `off_air`; when D5c's crossfader moves `on_air_pointer` it
+    calls `place_players` and both duties go across. The keys and the mouse are
+    no player's, nor is the panel. `on_players` is told when who holds what
+    changes: a pad's rows name its player, so the device list reads it again."""
+
+    def __init__(self, first: Deck, second: Deck, players: Players | None = None):
         self.decks = (first, second)
+        self.players = players if players is not None else Players()
+        self.on_players: list[Callable[[], Any]] = []
         self.on_air_pointer = Pointer(first)
         self.panel_pointer = Pointer(first)
         self.pointers: dict[str, Pointer] = {}
@@ -492,8 +505,46 @@ class MetaController:
         kept by name, so a controller unplugged and back is where it was."""
         got = self.pointers.get(holder)
         if got is None:
-            got = self.pointers[holder] = Pointer(self.decks[0])
+            deck = (self.decks[0] if holder in (KEYS, MOUSE)
+                    else self.deck_for(self.players.player_of(holder).duty))
+            got = self.pointers[holder] = Pointer(deck)
         return got
+
+    def deck_for(self, duty: Duty | str) -> Deck:
+        """The `Deck` a duty means now."""
+        return self.on_air if Duty(duty) == Duty.ON_AIR else self.off_air
+
+    def deck_of_player(self, number: int) -> Deck:
+        return self.deck_for(self.players.get(number).duty)
+
+    def move_player(self, number: int, duty: Duty | str) -> None:
+        """Player `number` to `duty`, remembered, and everything it holds with
+        it. It stays until someone moves it. Each controller lets go of the deck
+        it left at its next `act` (`Router.pad_left`, `MidiIO._follow_pointer`,
+        `routing.let_go_lost`); a row on it there goes dormant in that deck's
+        next pass."""
+        self.players.move(number, duty)
+        self._place(number)
+
+    def _place(self, number: int) -> None:
+        deck = self.deck_of_player(number)
+        for role, p in self.pointers.items():
+            if role not in (KEYS, MOUSE) and self.players.player_of(role).number == number:
+                p.deck = deck
+
+    def place_players(self) -> None:
+        """Every player where its duty says: for what moves on air (D5c), so an
+        on-air player stays on air and an off-air one with the off-air `Deck`."""
+        for player in self.players:
+            self._place(player.number)
+
+    def register(self, role: str, number: int) -> None:
+        """Player `number` holds the controller `role` from now on, remembered;
+        the controller goes to that player's deck."""
+        self.players.hold(role, number)
+        self.point(role, self.deck_of_player(number))
+        for fn in self.on_players:
+            fn()
 
     def _ours(self, deck: Deck) -> Deck:
         if not any(deck is d for d in self.decks):
@@ -516,6 +567,8 @@ class MetaController:
     def targets(self) -> list[tuple[Any, str, str]]:
         """The live objects a hot reload re-classes (the decks list their own)."""
         return [(self, "deck", "MetaController"),
+                (self.players, "players", "Players"),
+                *[(p, "players", "Player") for p in self.players],
                 (self.undo, "undo", "Undo"),
                 (self.undo.marks, "library", "MetaMarks"),
                 (self.undo.table, "deck", "MetaRows"),
