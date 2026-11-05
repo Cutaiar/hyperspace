@@ -13071,7 +13071,7 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Answer.** The owner, 2026-11-04: no preset changes on air from the desk or a pad; bank pads and `preset.next` load only
   into the off-air `Deck`.
 - **Built.** `DeckProject.barred`, asked by `load_slot`, `walk`, `home`. The row acts on its player's deck (row 733), so a
-  controller on air is refused and one off air loads there. Between the fader's ends both decks are on air, so that is refused too.
+  controller on air is refused and one off air loads there. Between the fader's ends or in a timed fade both decks are on air, or are about to be (`MetaController.mixing`, which copy asks too), so that is refused too.
 - **Still allowed.** An empty pad's words and hold-to-save; a save moves no picture. The panel's load.
 - **The question.** (rec) As built, the APC on air (the default: player 1) refuses every pad until its player is moved off air.
   The alternative loads a press on air into the deck off air instead, which breaks "a row acts only on the `Deck` its player

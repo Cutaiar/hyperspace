@@ -561,6 +561,12 @@ class MetaController:
         n = 1 if deck is self.decks[0] else 2
         return f"deck {n} · {'on air' if deck is self.on_air else 'off air'}"
 
+    @property
+    def mixing(self) -> bool:
+        """Is the deck off air in the picture, or about to be: the fader between its
+        ends, or a timed fade asked for, even while it is still within `ENDS`?"""
+        return self.timed is not None or between_ends(self.mix.xfade)
+
     def bars_load(self, deck: Deck) -> str | None:
         """Why a bank verb from a row may not load onto `deck`, or None when it may
         (the owner, 2026-11-04: changing what is on air is intentional, never from the
@@ -570,18 +576,18 @@ class MetaController:
         if deck is self.on_air:
             return ("not loaded: that deck is on air. Move this controller's player off "
                     "air, or load it from the panel")
-        if between_ends(self.mix.xfade):
-            return ("not loaded: the crossfader is between its ends, so both decks are on "
-                    "air. Bring it to one end first")
+        if self.mixing:
+            return ("not loaded: the crossfader is between its ends or fading, so both decks "
+                    "are on air. Let it reach one end first")
         return None
 
     def bars_copy(self) -> str | None:
         """Why "copy on air to off air" may not run now, or None. Between the fader's
         ends, or in a timed fade, the deck off air is in the picture: a copy would jump
         every output."""
-        if self.timed is not None or between_ends(self.mix.xfade):
+        if self.mixing:
             return ("not copied: the deck off air is in the picture while the crossfader is "
-                    "between its ends. Bring it to one end first")
+                    "between its ends or fading. Let it reach one end first")
         return None
 
     @property

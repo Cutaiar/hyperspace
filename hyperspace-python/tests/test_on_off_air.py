@@ -808,6 +808,26 @@ def test_between_the_ends_both_decks_are_on_air_and_a_pad_is_refused(rig):
     assert rig.two.presets.current == was and "between its ends" in rig.lib.warning
 
 
+def test_a_pad_is_refused_from_the_first_frame_of_a_timed_fade(rig):
+    """Still within `ENDS` the deck off air is about to come up: a load there would
+    be a look changed from the desk, in front of the room."""
+    project = rig.two.presets.lib.project
+    project.bank[0] = "party-wake"
+    rig.one.reg["output.xfade_s"].set(30.0)
+    rig.meta.crossfade()
+    was = rig.two.presets.current
+    for t in (0.0, 0.1):                               # asked for; then running, inside ENDS
+        rig.meta.tick(t, DT)
+        assert rig.mix.xfade < deck.ENDS and rig.meta.timed is not None
+        rig.lib.warning = ""
+        rig.two.reg["preset.select"].set(0)
+        assert rig.two.presets.current == was and "not loaded" in rig.lib.warning
+    rig.one.reg["output.xfade_s"].set(0.0)
+    rig.meta.crossfade()
+    rig.meta.tick(1.0, DT)
+    assert rig.meta.timed is None and rig.meta.bars_load(rig.one) is None      # it arrived
+
+
 def test_an_empty_pad_says_how_to_fill_it_and_a_hold_still_saves_on_air(rig):
     d = rig.one
     project = d.presets.lib.project
