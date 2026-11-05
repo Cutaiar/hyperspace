@@ -1308,7 +1308,7 @@ def ride_depth(p, octaves: float) -> None:
     p.nudge(1.0 + 0.05 * 2.0 ** (u + octaves) - p.base)
 
 
-def steer(pad, router, reg, dt: float, routed=None) -> None:
+def steer(pad, router, reg, dt: float, routed=None, scheme: str = "axis") -> None:
     """The sticks' default camera job (moved from app.frame, plan 27 B2):
     each axis **while no route names it** (`router.claimed("axis")`, an
     `axis:LX` row takes its stick off the job) writes a relative move on
@@ -1324,8 +1324,8 @@ def steer(pad, router, reg, dt: float, routed=None) -> None:
         return
     # a dial lane (`axis:L.NE` …) takes its whole stick off the job (`claims`);
     # `routed`, the lanes a route reads, when the caller already asked
-    routed = claims(router.claimed("axis") or () if routed is None else routed)
-    felt = router.felt("axis", pad.lanes(), dt)
+    routed = claims(router.claimed(scheme) or () if routed is None else routed)
+    felt = router.felt(scheme, pad.lanes(), dt)
     if felt is None:
         axis, trigger = pad.axis, pad.trigger
     else:

@@ -355,7 +355,7 @@ class OscDevice(Base):
         from .routing import MOD_OPS
 
         if self._pressed:
-            if self.status == "lost":
+            if self._pressed_on is not router.reg or self.status == "lost":     # moved to another deck (plan 55)
                 self._let_go(lambda _source: True)
             else:
                 live = {b.source for b in router.table.of(self.role) if b.enabled}

@@ -19,12 +19,22 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+# every move of any pointer counts here (kept across a hot reload of this file): what
+# a reader that caches what the pointers say compares (`Sources.away_from`)
+moves: int = globals().get("moves", 0)
+
 
 @dataclass
 class Pointer:
-    """One holder's place: the `Deck` it is on now."""
+    """One holder's place: the `Deck` it is on now. A plain attribute to read."""
 
     deck: Any
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        object.__setattr__(self, name, value)
+        if name == "deck":
+            global moves
+            moves += 1
 
 
 class Through:

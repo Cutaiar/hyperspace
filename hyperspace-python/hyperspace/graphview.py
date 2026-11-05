@@ -1460,9 +1460,13 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         elif base == modmod.SCHEME:
             owner = nodes.get(modmod.id_of(addr) or "")
         if owner is None and at and role:
-            owner = nodes.get(f"device:{role}")
+            # whoever publishes the address (plan 55: a player's name, which a
+            # role may be spelled as), else the role it names
+            d = by_scheme.get(scheme)
+            owner = nodes.get(f"device:{d.role if d is not None else role}")
         if owner is None:
-            d = by_scheme.get(scheme) or by_scheme.get(base)
+            # (a row that names a role or player no device is: its placeholder, below)
+            d = by_scheme.get(scheme) or (None if at and role else by_scheme.get(base))
             if d is None and base in ("cc", "note", "pitch") and midi_first and not at:
                 owner = nodes.get(f"device:{midi_first}")
             elif d is not None:

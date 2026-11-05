@@ -518,6 +518,10 @@ def move_route(table: Bindings, reg: Registry, b: Binding, *, source: str | None
 class Learn:
     """The armed param and the question the referee left for the panel."""
 
+    # told each row a learn makes (plan 55: `DeviceRegistry.mapped`, so a controller
+    # mapped on another deck moves there); None: nobody asks
+    mapped = None
+
     def __init__(self, reg: Registry, table: Bindings, lane=None, devices=None):
         self.reg = reg
         self.table = table
@@ -716,6 +720,7 @@ class Learn:
         self.take()
         undo.push(f"learn {pid}")                    # one undo step (undo.py, plan 15)
         gone = table.bind(b, write=False)            # the preset rows it replaced
+        self._mapped(b)
         table.redraw_serial = getattr(table, "redraw_serial", 0) + 1
         glyph = getattr(profile, "glyph", None)
         let_go = list(dict.fromkeys(
@@ -804,6 +809,7 @@ class Learn:
         _, kept = _split_pairs(table, b, (b.bare,))
         table.add(b)
         table.write()
+        self._mapped(b)
         let_go = ", ".join(dict.fromkeys(x.target for x in gone if x.target != pid))
         keeps = "".join(f"; {x.target} keeps {x.describe()}" for x in kept)
         self.said(f"learned {pid} ← {b.describe()} (into {getattr(table.path, 'name', 'the session')})"
@@ -872,6 +878,7 @@ class Learn:
         pairs, kept = _split_pairs(table, b, bare)
         table.add(b)
         table.write()
+        self._mapped(b)
         kept_targets = {x.target for x in kept}
         let_go = ", ".join(dict.fromkeys(x.target for x in (*gone, *pairs)
                                          if x.target != pid and x.target not in kept_targets))
@@ -1003,6 +1010,7 @@ class Learn:
         if cur is not None and self.same_source(cur.source, source):
             undo.push(f"learn {p.id}")               # one undo step (undo.py, plan 15)
             cur.when = when                          # the same axis again: no move
+            self._mapped(cur)
             self.said(f"learned {p.id} ← {cur.describe()} (into the preset)")
             return
         if cur is not None:
@@ -1032,6 +1040,10 @@ class Learn:
         self._place(new)
         return new
 
+    def _mapped(self, b: Binding) -> None:
+        if self.mapped is not None:
+            self.mapped(b)
+
     def _place(self, b: Binding) -> None:
         """The learned row into the table: the axis's other push / position
         rows go first, whatever their op and switched on or off (one axis,
@@ -1051,6 +1063,7 @@ class Learn:
         for x in gone:
             table.remove(x)
         table.replace_owner(b)
+        self._mapped(b)
         frm = ", ".join(dict.fromkeys(x.target for x in gone if x.target != b.target))
         self.said(f"learned {b.target} ← {b.describe()} (into the preset"
                   + (f"; moved from {frm})" if frm else ")"))

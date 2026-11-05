@@ -727,6 +727,10 @@ here; overturn → the change, then the same.
 | 724 | Wave 4 B2: rows by model: a Joy-Con's chase is L / R in #365's `Model.layout`; hold-to-save is the Edge's, there too, by a qualified row until then; Learn goes on accepting `preset.list.*` and `tempo.tap`, unrefused | 723 | owner — 2026-11-04 on the Joy-Con and the Edge; (rec) — pending the owner on Learn |
 | 731 | Wave 4 PC: T2's ⇧ fine mode reaches every slider left out (a route's depth and rest, its feel's knobs, a macro subscriber's from and to, GRAPH's backdrop); the side pane's paper cuts at 240 px (the patch chips, the analyzer's scene row, meter tags, transfer row, spectrogram hint) | 561 | (rec) — pending the owner |
 | 732 | Wave 4 PC: the on-screen desk draws SEND B as FINE, reserved from its clicks; `desk.fine` is declared beside `desk.save`; a row of the owner's on SEND B still takes the button | 562 | (rec) — pending the owner; the reservation follows the owner's seventh round, 2026-11-04 |
+| 733 | Plan 55: a row acts only on the `Deck` its player is on. `Router.feeds` hides a shared scheme whose controller's pointer is elsewhere, so the row is dormant by the road a source not live is; the analyzer and a deck's own lanes are nobody's. Answers DQ4; deck 2's rows on a controller wait for a player | — | owner — 2026-11-04: "A row acts only on the `Deck` its player is on" |
+| 734 | Plan 55: players 1–4, each with a duty that stays until moved; bare rows are player 1's and `@p2` player 2's, a player's first pad publishing under that name; moving a player moves all it holds; on air and off air are `MetaController.on_air` and `off_air`, so until D5c an off-air player is on deck 2; `<home>/players.json` on this Mac, only what differs, no patch and no show | — | owner — 2026-11-04: Q8; the file and the defaults are (rec) — pending the owner |
+| 735 | Plan 55: one `TotemState` and one `PoiState`, the pad's, with what they hold of a look kept to the deck their pad is on (`on_reg`); a pad arriving gives the old deck back and takes over afresh | — | owner — 2026-11-04: "no preset can affect another preset"; one state, not one per deck, is (rec) — pending the owner |
+| 736 | Plan 55: mapping a controller on another deck moves that controller, not its player; moving or placing the player brings it back. `@p2` always means player 2: a role so spelled takes the name only if player 2 holds it. A player's second pad of a kind keeps its role as its address, or `p3-pad` if the role is spelled as a name. A kind's primary is player 1's whatever its role. The camera job is the first pad listed on each deck | — | owner — 2026-11-04: "Mapping on another deck moves it"; the rest is (rec) — pending the owner |
 | 737 | Wave 4 AZ: the panel says "analyzer" for the fixture and its tuning; a part reads its own name (SUB … AIR) or "analyzer 3", and "band" stays only as the plain audio word for one of the parts | 566 | owner — 2026-11-04: band for one bin, as built |
 | 738 | Wave 4 AZ: words only; `band.*` ids, `lane:` addresses, the `band` group key, the library's `band` folders, `SECTIONS` and `PAGE_KEYS` all stay; ROUTING's target list keeps printing raw ids | 567 | The owner, 2026-11-04 |
 | 743 | Wave 4 MR: the hard rule. No row of a preset may drive a meta controller param (`part_of(p) == "session"`); refused in words at Learn, at the pickers and at `Bindings`' doors, dropped with a note at a load, removed by the next save; the meta controller's own rows stay, the line being `is_session_row`. Overturns row 19 (a) | 572, 573 | owner — 2026-11-04: "a hard rule" |
@@ -13023,6 +13027,87 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   become a rule rather than one button.
 - **Judge it.** 562.
 
+### 733. A row acts only on the `Deck` its player is on
+
+- **Asked.** D5a left it: "Pointers do not move lanes." `Sources` is shared, so a route
+  on a hand, a stick or the bridge ran in each deck's own pass whoever held the
+  controller. And DQ4: a `turn` row off air.
+- **Answer.** The owner, 2026-11-04: "The absolute rule: no preset can affect another
+  preset." "A row acts only on the `Deck` its player is on, which answers DQ4."
+- **Built.** `Router.feeds` is a view that hides each shared scheme whose controller's
+  pointer is on another deck (`Sources.away_from`, `DeviceRegistry.holders`). The pass, a
+  `when` gate, a modifier's input and `graphview.reading` all read it, so such a row is
+  dormant by the road a source not live is, loses its follower and its turn's reading,
+  and is drawn faint. A `turn` row acts on its player's `Deck` and no other: row 684's
+  "under the hold" goes with D5d.
+- **What changes with everyone on air.** Deck 1 nothing, to the bit. Deck 2's rows on a
+  controller stop running in its pass, which shows only with `output.xfade` above 0, until
+  D5c moves the on-air players across.
+- **Other options.** A test per row against its device: every reader of a lane would
+  need it, and one forgotten is a leak. Separate `Sources` per deck: a device feeds once,
+  and a pad moved would need its lanes copied.
+- **Judge it.** 563, 564.
+
+### 734. Players, duties, and where they are remembered
+
+- **Asked.** Q8, and how a patch can name someone who is not a device.
+- **Answer.** The owner, 2026-11-04: "A player registers any number of controllers and
+  holds a duty: on air or off air. It stays until someone moves it. An off-air player stays
+  with the off-air preset." "A preset names a **player**, not a device. Plan 27's roles
+  (`axis@p2`, 'roles, not serials') are the seam. Today's bare `pad:` and `axis:` rows read
+  as player 1, with no file change." The file and the defaults below are (rec) — pending
+  the owner.
+- **Built.** `players.py`. `devices.qualifiers_of` publishes a player's first pad under
+  the player's name. With nothing registered it gives what plan 27 B6 gave: `p2`–`p4`
+  are those players', all else player 1's. Until D5c deck 1 is on air, so off air is deck
+  2; `place_players` is D5c's call. `<home>/players.json`, beside `bindings.json`, holds
+  only what differs and is written only on a move.
+- **Other options.** `player =` on each `[[devices]]` entry: the owner's config.toml is
+  hand-written and read by a watcher, and a duty moved at the show should not rewrite it.
+  In a show file: shows are going away. In `bindings.json`: it is the rows', and a duty is
+  no row.
+- **Judge it.** 563, 565.
+
+### 735. The totem's and the poi's shared state
+
+- **Asked.** `totem.register(second, state)` shares one state: turn it on deck 2, point
+  back to deck 1, and deck 1's phase jumps. It wrote a look param across decks. The poi
+  left a deck displaced and could read another deck's home the same way.
+- **Answer.** The owner, 2026-11-04: "no preset can affect another preset." The shape
+  below is (rec) — pending the owner.
+- **Built.** One state stays, since the totem's switches are the controller's and should
+  follow a performer across a move. `on_reg` says which registry its angles, reference
+  and pan share (the poi's homes and lasts) are of; `step` on another registry gives the
+  old one back and takes over afresh, adopting that deck's phases. `set_on(False)` and
+  the totem's reset act on the right one from either deck's param. `poi.owns_pan` asks
+  whose deck.
+- **Other options.** A state per deck: `totem.on` would then stay behind when the
+  player moved, and one pad's switches would disagree with themselves.
+- **Judge it.** 565.
+
+### 736. What mapping moves, and three edges of who holds what
+
+- **Asked.** NM3 said one controller points at one preset at a time and mapping elsewhere
+  moves it. Does the player go with it? And: a player's second pad; a first pad called `p2`.
+- **Answer.** The owner, 2026-11-04: "One controller points at one preset at a time.
+  Mapping on another deck moves it there." The rest is (rec) — pending the owner.
+- **Built.** `Learn.mapped` reports a row made; `DeviceRegistry.mapped` moves that
+  controller to the Learn's deck. The duty stands, so a player can straddle ("a second
+  controller … may point at a node or param on air by choice") until someone moves or
+  places the player, which brings every controller back. A second pad of one player keeps
+  its role as its address, so a row on it names a device: refusing it would lose a working
+  rig. A kind's primary is player 1's whatever its role, so a rig whose first enabled pad
+  is `p2` keeps its bare rows. `@p2` always means player 2: a role so spelled takes the name
+  only if player 2 holds it, and is `p3-pad` as a second of a kind, so no step of a swap
+  refuses a working pad. The camera job is the first pad listed on each deck: on air,
+  the first pad, as before; off air alone, or the only pad given to player 2, a stick
+  still orbits, and no pad of player 1's is said.
+- **Other options.** Mapping moves the player: it would drag the performer's other
+  controllers off the deck they were playing. A player's first pad steers, whichever the
+  player: it would start a second pad orbiting on every two-pad rig with everyone on air,
+  which this item must not change. A new address form for players (`@player2`): the owner
+  named `axis@p2`, and a rule that keeps the name true costs less than a second grammar.
+- **Judge it.** 564.
 ### 737. What the panel calls the analyzer
 
 - **Answer.** The owner, 2026-11-04: "Band is a ridiculous name for this thing." The

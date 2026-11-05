@@ -3161,7 +3161,12 @@ class Router:
 
     @property
     def feeds(self) -> Layered:
-        return Layered(self.lanes.feeds, self.sources.feeds)
+        """This deck's lanes over the sources', less those of a controller on
+        another deck (plan 55, `Sources.away_from`): what the pass, a gate, a
+        modifier's input and the panel's readings all read, so a row on a player
+        elsewhere is dormant by the road a source not live is, and drawn so."""
+        src = self.sources
+        return Layered(self.lanes.feeds, src.feeds, src.away_from(self))
 
     @property
     def labels(self) -> Layered:
@@ -4009,7 +4014,10 @@ class Router:
         rows' motion (`feel_of`); None, a 60 Hz frame. A row that does not
         act this frame — its source not live, its gate shut — loses its
         follower, and starts afresh. A cable `modgraph` keeps off to break a
-        loop does not run. Plan 44 D4 (row 625, §7's recommendation): on a
+        loop does not run. Plan 55: a row on a controller whose player is on
+        another deck has no reading here (`feeds`), so it does not act, and
+        loses its follower and its turn's reading. Plan 44 D4 (row 625, §7's
+        recommendation): on a
         deck that is not the session's lead, a row onto a session param is
         dormant. No door lets one in since row 743, but a hot reload leaves
         one standing until the next load (row 745)."""

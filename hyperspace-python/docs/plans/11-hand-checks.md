@@ -8008,6 +8008,33 @@ Expected: nothing passes the pane's edge and no control sits on another. At the 
 
 Expected: the diagram says what the button does, and no row lands on it from the diagram.
 
+## CL. Players and duties (plan 55)
+Register rows 733–736, 2026-11-04. Headless: `tests/test_players.py`, two players with
+fake pads over two decks with different patches, through the real registry, router and
+pass. Until PS lands there is no screen: the checks that move a player do it by editing
+`~/Hyperspace/players.json` and relaunching (`{"schema": "players/1", "duties": {"2":
+"off_air"}, "controllers": {}}`). Delete the file to put everyone back on air.
+**563. With nobody moved, nothing changes.** (the rig, no `players.json`)
+1. Launch. Play a preset with hand and stick routes, a base chase on BACK, and an orbit.
+2. Look for `players.json` in `~/Hyperspace`.
+*Pass:* (1) all as before this build. (2) No file. Fail: any route that no longer moves
+on air, or a file written by a launch.
+**564. A second pad off air moves nothing on air.** (two pads, `axis@p2` routes on the look on air)
+1. With player 2 on air, push the second pad's stick: the route moves the picture. Press
+   and hold a toggle mapped on `pad@p2`.
+2. Set player 2 off air in `players.json` and relaunch: the launch notes say so. Push the
+   second pad's stick, press its buttons.
+3. Raise `output.xfade` until deck 2 shows, with a route on `axis@p2` on deck 2's preset.
+*Pass:* (2) nothing on air moves, whatever the second pad does; the first pad still plays.
+GRAPH draws the `axis@p2` cable faint. (3) The second pad moves deck 2's picture only.
+Fail: the on-air look moving under the second pad.
+**565. The totem across a move.** (a Joy-Con, `totem.on`)
+1. Turn the Joy-Con so the shape is well off its start. With `players.json` naming the
+   Joy-Con's role on player 2 off air, relaunch and repeat with the fader part way.
+*Pass:* the totem turns only the deck it is on, and no picture jumps when a launch or a
+fade first shows it. Say whether the totem's switches should follow the player, as built
+(row 735). Fail: a phase jump, or a pan left behind on a deck. Moving a player mid-turn
+has no way to be done by hand until PS: repeat this check there.
 ## CM. "Band" becomes the analyzer in the panel (wave 4 AZ)
 Register rows 737–738, 2026-11-04. Words only: nothing should move or load differently.
 **566. The words read right.** (the Mac, an APC40 for step 3 if it is to hand)

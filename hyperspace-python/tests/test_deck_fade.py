@@ -960,6 +960,6 @@ def test_main_builds_deck_2_beside_the_first_and_points_nothing_at_it():
     # (plan 44 D5a: and to the meta controller, which leaves every pointer on deck 1)
     assert src.count("deck2") == (src.count("deck2.router") + src.count("deck2.targets")
                                   + src.count("deck2.learn") + src.count("deck2.reg") + 3)
-    assert "MetaController(deck, deck2)" in src
+    assert "MetaController(deck, deck2, players)" in src
     assert "panel.deck = deck2" not in src and "undo.install(deck2" not in src
     assert ".point_panel(" not in src and "meta.point(" not in src     # nothing moves one
