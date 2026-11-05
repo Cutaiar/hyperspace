@@ -125,6 +125,7 @@ from imgui_bundle import imgui
 
 from . import apc40, motion, ui, ui_feel, ui_presets, undo
 from .bands import CEIL
+from .groupwords import group_word
 from .learn import LANE_DEPTH, clutch_of, is_auto_clutch, land_moved, move_route
 from .library import PRESETS
 from .modifiers import KINDS as MOD_KINDS
@@ -898,7 +899,7 @@ def _param_combo(panel, label: str, current: str | None, width: float,
             continue
         if p.group != group:
             group = p.group
-            ui._micro(group or "misc")
+            ui._micro(group_word(group) or "misc")
         sel, _ = imgui.selectable(f"{p.id}##{p.id}", p.id == current)
         if imgui.is_item_hovered() and p.tip:
             ui.tooltip(p.tip)
