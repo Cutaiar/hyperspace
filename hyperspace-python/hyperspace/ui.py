@@ -56,6 +56,7 @@ from . import (
     ui_presets,
     ui_routing,
     ui_seq,
+    undo,
 )
 from .analyzer import N_MAX
 from .audio import AudioEngine
@@ -82,7 +83,7 @@ from .groupwords import group_title
 from .hands import panel as ui_hands
 from .hold import canvas_renderer
 from .media import publish
-from .params import PLANES, Kind, Param, Registry, build_registry
+from .params import PLANES, Kind, Param, Registry, build_registry, part_of
 from .pointer import Through
 from .view import RED as RED_RGB
 from .view import ViewState
@@ -656,6 +657,11 @@ CHEATSHEET = [
 # named. Never reorder it; a new section goes at the end. FX's slot is the
 # fx section. GRAPH's has no section (the canvas is always there): it lets
 # go of the focus.
+# the sections that hold the meta controller's params: ⌘Z there takes its stack
+# (plan 44 D5b, `Panel.in_meta_section`). The owner named analyzer, hands and
+# output; audio holds the master faders and nothing of a preset (row 692)
+META_SECTIONS = ("output", "audio", "analyzer", "hands")
+
 PAGE_KEYS = ["output", "view", "faces", "media", "camera", "lookback", "fx", "audio", "analyzer",
              "routing", "graph", "lfo", "seq", "hands", "presets", "system"]
 
@@ -775,6 +781,7 @@ class Panel:
         self.pad = None       # set by app.py unless [gamepad] enabled = false (gamepad.Pad)
         self.learn = None     # set by app.py: the armed param and the held question (learn.Learn)
         self.undo = None      # set by app.py (undo.Undo): its status shows in the footer
+        self.meta_undo = None  # the meta controller's stack (plan 44 D5b): so does its
         self._fine_drag = None   # the slider a Shift drag holds (`_fine`): its id, mouse x, throw
         self._shift = self._mouse_down = False   # this frame's ⇧ and left button (`_fine_frame`)
         self.devices = None   # set by app.py (devices.DeviceRegistry): the SYSTEM page's lines
@@ -852,6 +859,17 @@ class Panel:
                    "to the top of the pane, and folds again when the focus moves on unless "
                    "you unfolded it yourself. graph lets go of the focus.")
 
+    def in_meta_section(self) -> bool:
+        """What ⌘Z goes by, through `undo.where`: its meta stack here, else the
+        panel's deck's. **What is under the mouse decides:** a param undo watches
+        says by its own layer, wherever it is drawn (a mixed section: hands with
+        `ghost.*`, SYSTEM with `desk.slew`, a rig node in the selection); else the
+        section under it (`ui_pane.where`); else the deck."""
+        p = getattr(self, "_param_under", None)
+        if p is not None and undo.watched(p):
+            return part_of(p) != "performance"
+        return ui_pane.where(self) in META_SECTIONS
+
     def go_page(self, i) -> None:
         """`ui.page`'s setter, and `_draw` for an index set straight (⌘[ /
         ⌘]): focus slot `i` of `PAGE_KEYS` — its section shown and scrolled
@@ -874,6 +892,8 @@ class Panel:
         gets its own popup. `extra`,
         when given, is called inside the popup after the param's own items
         to draw the caller's (a bank slot's "put preset here…")."""
+        if imgui.is_item_hovered():             # what ⌘Z goes by (`in_meta_section`)
+            self._param_under = a
         if getattr(self, "_picking", False):    # a desk control is picked: the click is its
             self._ctx_pick(a)
             return
@@ -1813,6 +1833,7 @@ class Panel:
             self._alert_banner()
 
     def _draw(self, dt: float, fps: float) -> None:
+        ui_pane.left(self)
         # Replace / Keep, its own window, before anything can return: a
         # held hand learn is never parked behind a hidden or collapsed panel
         ui_routing.modal(self)
@@ -1886,7 +1907,10 @@ class Panel:
         now = time.monotonic() if now is None else now
         st = self.__dict__.setdefault(     # (a Panel from before a hot reload has none)
             "_msg", {"seen": None, "text": "", "warn": False, "at": -MESSAGE_S})
-        u, lib, lrn = getattr(self, "undo", None), self.library, getattr(self, "learn", None)
+        lib, lrn = self.library, getattr(self, "learn", None)
+        # whichever of the two stacks spoke last (plan 44 D5b)
+        u = max((x for x in (getattr(self, "undo", None), getattr(self, "meta_undo", None))
+                 if x is not None), key=lambda x: getattr(x, "said_at", 0.0), default=None)
         said = getattr(lib, "said", None) or {}
         cur = {"status": (getattr(lib, "status", "") or "", said.get("status", 0)),
                "warning": (getattr(lib, "warning", "") or "", said.get("warning", 0)),
@@ -1898,6 +1922,8 @@ class Panel:
                 text, was = cur[key][0], seen.get(key, cur[key])  # (no such key before a reload)
                 if not isinstance(was, tuple):             # remembered before a hot reload
                     was = (was, cur[key][1])
+                if key == "undo" and cur[key][1] < was[1]:
+                    continue                               # a stack that spoke earlier: old news
                 if cur[key] != was and text:
                     warn = key == "warning" or (key == "learn" and getattr(lrn, "refused", False))
                     st.update(text=text, warn=warn, at=now, key=key)

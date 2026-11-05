@@ -981,12 +981,15 @@ class Project:
         self.bank = list(bank)
         self._saved = (list(saved[0]), saved[1])
 
+    def ident(self) -> tuple:
+        """Which show this is: its name, file and stem. (The bank and startup may
+        differ: they are written to the show's file the moment they change.)"""
+        return (self.name, self.path, getattr(self, "_stem", None))
+
     @staticmethod
-    def same_show(a: tuple, b: tuple) -> bool:
-        """Do two marks name one show — the same name, file and stem?
-        (The bank and startup may differ: they are written to the show's
-        file the moment they change.)"""
-        return (a[0], a[2], a[3]) == (b[0], b[2], b[3])
+    def ident_of(mark: tuple) -> tuple:
+        """`ident` as of a `mark`."""
+        return (mark[0], mark[2], mark[3])
 
     def _apply(self) -> list[str]:
         """Push the document's session into the registry; returns unknown
@@ -1393,9 +1396,10 @@ class Project:
         else:
             path = self.path_for(name)
         doc = _read_json(path)
-        # the file is read, nothing replaced yet: one undo step for the show
-        # and the startup preset it brings up (undo.py)
-        undo.push(f"show {doc.get('name') or path.name[: -len(PROJECT_SUFFIX)]}", load=True)
+        # the file is read, nothing replaced yet: one step on the meta controller's
+        # stack for the show; the startup preset it brings up is a load, a step
+        # on its deck's (undo.py, plan 44 D5b)
+        undo.push_meta(f"show {doc.get('name') or path.name[: -len(PROJECT_SUFFIX)]}", load=True)
         self._take(doc, path, path.name)
         missing = self._apply()
         lib.report(missing, path.name)
@@ -1409,7 +1413,10 @@ class Project:
         """A fresh show: default state, an empty bank, no file yet (not
         remembered until it is saved)."""
         lib = self.lib
-        undo.push("new show", load=True)              # one undo step (undo.py, plan 15)
+        # one step on the meta controller's stack, and one on the deck's: a new
+        # show puts every group's fresh values on both (undo.py, plan 44 D5b)
+        undo.push_meta("new show", load=True)
+        undo.push_on(lib.reg, "new show", load=True)
         self._take({"schema": PROJECT_SCHEMA, "name": name}, None)
         self.name = name
         lib._fresh_layouts()                          # the layout the app started with…
@@ -1637,20 +1644,74 @@ def _bank_len(doc: dict) -> int:
 
 # ---------------------------------------------------------------- marks
 
-class Marks:
-    """What is loaded, for an undo step that undoes a load (undo.py; plan
-    15 WP1, fork 2): the show's own fields, every group's landed name and
-    clean reference, each group's layout, and the loaded preset's note.
-    Opaque to undo.py, which only calls `take`, `before` and `put` — so
-    after undoing a load the library says the earlier preset is loaded
-    again, and Save cannot write the earlier look over the later file."""
+class _Landings:
+    """One stack's share of what has landed in the library: the groups it answers
+    for (`_mine`), read and put back. The two marks' common part."""
 
     def __init__(self, lib: Library):
         self.lib = lib
 
+    def _mine(self, group: str, kinds) -> bool:
+        raise NotImplementedError
+
+    def _groups(self) -> set[str]:
+        lib = self.lib
+        kinds = lib._kinds
+        return {g for g in lib.landed_groups() if self._mine(g, kinds)}
+
+    def lands(self) -> dict:
+        """{group: landed} — each of this stack's groups' name, reference and
+        re-apply road, by reference: cheap enough to read every frame."""
+        lib = self.lib
+        return {g: lib.landed(g) for g in self._groups()}
+
+    def mend(self, pre: dict, lands: dict) -> None:
+        """After the restore of a step that is not a load: a group whose
+        landed state the restore itself moved (`pre` is `lands()` from
+        just before it) — a `scene.select` put back adopts its scene —
+        gets the step's own back, so the strip names what it named before
+        the step. A group the restore left alone is left alone: a slider
+        undone after a save-as stays on the new name (plan 15 fork 2)."""
+        lib = self.lib
+        now = self.lands()
+        for group in {*pre, *now}:
+            if now.get(group) != pre.get(group):
+                lib.reland(group, lands.get(group, (None, None, None)))
+
+    def _reland(self, landed: dict) -> None:
+        """Every one of this stack's groups as `landed` has it: a group that had
+        no landing then has none now (`Library.reland`)."""
+        lib = self.lib
+        for group in self._groups() - set(landed):
+            lib.reland(group, (None, None, None))
+        for group, was in landed.items():
+            lib.reland(group, was)
+
+
+class Marks(_Landings):
+    """What is loaded on one `Deck`, for an undo step that undoes a load (undo.py;
+    plan 15 WP1, fork 2; per deck since plan 44 D5a, scoped to the preset since
+    D5b): that deck's landed names and clean references, and the loaded preset's
+    note. Opaque to undo.py, which only calls `take`, `before` and `put` — so
+    after undoing a load the library says the earlier preset is loaded
+    again, and Save cannot write the earlier look over the later file.
+
+    The meta controller's half is `MetaMarks`, on its own stack: the show, the
+    session groups' labels, each group's layout. So a deck's undo never relands
+    the one strip the meta controller has."""
+
+    def _mine(self, group: str, kinds) -> bool:
+        return group in kinds or group not in SESSION_GROUPS
+
+    def _show(self) -> tuple:
+        """Which show this is, and the GRAPH page's positions of its rig nodes
+        (plan 28 N2): a tidy on a deck moves them, and undoing it puts them back
+        while the show is the same one."""
+        pr = self.lib.project
+        return (pr.ident(), copy.deepcopy(getattr(pr, "layout", {})))
+
     def take(self) -> tuple:
-        """(the show's mark, {group: landed}, {group: its `extra` hook's
-        dict — the band layout}, the loaded preset's note and the notes
+        """(`_show`, {group: landed}, the loaded preset's note and the notes
         its load left for the panel, the loaded preset's graph — plan 26
         A4, `preset.GraphSection.mark`, None with no presets), the
         loaded preset's GRAPH page layout (plan 28 N2, `Presets.layout`),
@@ -1658,10 +1719,9 @@ class Marks:
         page's groups (plan 40 T2, `Presets.groups`) and the floor under
         their numbers (row 563, `Presets.group_high`), and the preset's bus
         cuts (plan 44 D3, `Presets.bus`)."""
-        lib, pre = self.lib, self.lib.presets
+        pre = self.lib.presets
         gs = getattr(pre, "graph", None)
-        return (lib.project.mark(), self.lands(),
-                {g: copy.deepcopy(hook()) for g, hook in lib._extra_hooks.items()},
+        return (self._show(), self.lands(),
                 (getattr(pre, "note", ""), list(getattr(pre, "notes", ())),
                  list(getattr(pre, "desk_notes", ()))),
                 gs.mark() if gs is not None else None,
@@ -1677,36 +1737,71 @@ class Marks:
         media = getattr(pre, "media", None)
         return media.to_json() if media is not None else None
 
-    def lands(self) -> dict:
-        """{group: landed} — every group's name, reference and re-apply
-        road, by reference: cheap enough to read every frame."""
-        lib = self.lib
-        return {g: lib.landed(g) for g in lib.landed_groups()}
-
-    def mend(self, pre: dict, lands: dict) -> None:
-        """After the restore of a step that is not a load: a group whose
-        landed state the restore itself moved (`pre` is `lands()` from
-        just before it) — a `scene.select` put back adopts its scene —
-        gets the step's own back, so the strip names what it named before
-        the step. A group the restore left alone is left alone: a slider
-        undone after a save-as stays on the new name (plan 15 fork 2)."""
-        lib = self.lib
-        now = self.lands()
-        for group in {*pre, *now}:
-            if now.get(group) != pre.get(group):
-                lib.reland(group, lands.get(group, (None, None, None)))
+    def equal(self, mark: tuple) -> bool:
+        """Would `put(mark)` change nothing now? So not by another show's name: the
+        show is `MetaMarks`', and across a change of show `put` leaves it be."""
+        now = self.take()
+        if mark[1:] != now[1:]:
+            return False
+        return mark[0][0] != now[0][0] or mark[0][1] == now[0][1]
 
     def before(self, mark: tuple) -> None:
-        """First in a restore: a group whose layout differs from the
-        mark's gets it back through its own `on_layout` hook, so its
-        params exist before their values land — the order `_apply_doc`
-        keeps. The loaded preset's graph goes back first of all (plan 26
-        A4): an effect instance's params (`fx.acid.2.*`) exist before their
-        values land."""
+        """First in a restore: the loaded preset's graph goes back first of all
+        (plan 26 A4): an effect instance's params (`fx.acid.2.*`) exist before
+        their values land."""
+        gs = getattr(self.lib.presets, "graph", None)
+        if mark[3] is not None and gs is not None:
+            gs.put(mark[3])
+
+    def put(self, mark: tuple) -> None:
+        """Last in a restore: each of the deck's groups' name, reference and
+        re-apply road as they were (`Library.reland`; a group that had none then
+        has none now), the loaded preset's note and its load's notes for the
+        panel, and the bank's lit slot. While the show is the same one its GRAPH
+        page positions go back too (the undo of a tidy; they are not in its file
+        until it is saved). The rest of the show is `MetaMarks`'."""
+        lib, pr = self.lib, self.lib.project
+        (show, landed, note, _graph, layout, bins, groups, group_high, bus) = mark
+        if show[0] == pr.ident():
+            pr.layout = copy.deepcopy(show[1])
+        self._reland(landed)
+        pre = lib.presets
+        if pre is not None:
+            pre.note, pre.notes, pre.desk_notes = note[0], list(note[1]), list(note[2])
+            pre.layout = copy.deepcopy(layout)   # the GRAPH page's positions (plan 28 N2)
+            media = getattr(pre, "media", None)
+            if bins is not None and media is not None:
+                media.from_json(bins)            # the bins (plan 32)
+            pre.groups = copy.deepcopy(groups)   # the GRAPH page's groups (plan 40 T2)
+            pre.group_high = max(pre.group_high, group_high)   # …and their floor (row 563)
+            if bus is not None:                  # the bus cuts (plan 44 D3)
+                pre.bus = bus
+        pr.follow()
+
+
+class MetaMarks(_Landings):
+    """What is loaded on the meta controller, for its stack (plan 44 D5b): the
+    show's own fields, the session groups' landed names and clean references (the
+    one strip the meta controller has) and each group's layout. `lib` is the one
+    library. **The show's mark is here and on no deck's stack:** a show is what is
+    set for a performance, so undoing a show load is ⌘Z in a meta section, and the
+    startup preset it brought up is a load on its deck's stack."""
+
+    def _mine(self, group: str, kinds) -> bool:
+        return group in SESSION_GROUPS and group not in kinds
+
+    def take(self) -> tuple:
+        """(the show's mark, {group: landed}, {group: its `extra` hook's dict —
+        the band layout})."""
         lib = self.lib
-        gs = getattr(lib.presets, "graph", None)
-        if len(mark) > 4 and mark[4] is not None and gs is not None:
-            gs.put(mark[4])
+        return (lib.project.mark(), self.lands(),
+                {g: copy.deepcopy(hook()) for g, hook in lib._extra_hooks.items()})
+
+    def before(self, mark: tuple) -> None:
+        """First in a restore: a group whose layout differs from the mark's gets
+        it back through its own `on_layout` hook, so its params exist before their
+        values land — the order `_apply_doc` keeps."""
+        lib = self.lib
         for group, extra in mark[2].items():
             hook, now = lib._layout_hooks.get(group), lib._extra_hooks.get(group)
             if hook is None or now is None or not extra or extra.get("layout") is None:
@@ -1716,42 +1811,17 @@ class Marks:
                 lib._fresh_of(group)
 
     def put(self, mark: tuple) -> None:
-        """Last in a restore: every group's name, reference and re-apply
-        road as they were (`Library.reland`; a group that had none then
-        has none now), the loaded preset's note and its load's notes for the
-        panel, and the bank's lit slot.
-        The show's own fields go back (`Project.remark`) only when the
-        show itself differs — the undo of a show load. Otherwise the bank
-        and startup are left as they are: they are in the show's file
-        the moment they change, and reverting them in memory would make
-        the show's dirty dot lie. `last_show` is never rewritten."""
-        lib, pr = self.lib, self.lib.project
-        show, landed, _extras, note = mark[:4]
-        if not Project.same_show(show, pr.mark()):
+        """Last in a restore: the session groups' names, references and re-apply
+        roads as they were. The show's own fields go back (`Project.remark`) only
+        when the show itself differs — the undo of a show load. Otherwise the bank
+        and startup are left as they are: they are in the show's file the moment
+        they change, and reverting them in memory would make the show's dirty dot
+        lie. `last_show` is never rewritten."""
+        pr = self.lib.project
+        show, landed, _extras = mark
+        if Project.ident_of(show) != pr.ident():
             pr.remark(show)
-        elif len(show) > Project.MARK_LAYOUT:
-            # the same show: its GRAPH page positions still go back (plan 28
-            # N2; the undo of a tidy) — unlike the bank, they are not in its
-            # file until it is saved
-            pr.layout = copy.deepcopy(show[Project.MARK_LAYOUT])
-        for group in lib.landed_groups() - set(landed):
-            lib.reland(group, (None, None, None))
-        for group, was in landed.items():
-            lib.reland(group, was)
-        if lib.presets is not None:
-            lib.presets.note, lib.presets.notes, lib.presets.desk_notes = (
-                note[0], list(note[1]), list(note[2]))
-            if len(mark) > 5:            # the GRAPH page's positions (plan 28 N2)
-                lib.presets.layout = copy.deepcopy(mark[5])
-            media = getattr(lib.presets, "media", None)
-            if len(mark) > 6 and mark[6] is not None and media is not None:
-                media.from_json(mark[6])     # the bins (plan 32)
-            if len(mark) > 7:                # the GRAPH page's groups (plan 40 T2)
-                lib.presets.groups = copy.deepcopy(mark[7])
-            if len(mark) > 8:                # and the floor under their numbers (row 563)
-                lib.presets.group_high = max(lib.presets.group_high, mark[8])
-            if len(mark) > 9 and mark[9] is not None:   # the bus cuts (plan 44 D3)
-                lib.presets.bus = mark[9]
+        self._reland(landed)
         pr.follow()
 
 
@@ -2560,7 +2630,7 @@ class Library:
         else:
             # a module preset load, step or file-watch re-apply: one undo
             # step, the layout it may rebuild included (undo.py, plan 15)
-            undo.push_on(self.reg, f"{group_word(group)}: {doc.get('name') or name}", load=True)
+            self._push(group, f"{group_word(group)}: {doc.get('name') or name}")
             hook = self._layout_hooks.get(group)
             if hook is not None and doc.get("layout") is not None:
                 hook(doc["layout"])                    # rebuild params first
@@ -3433,6 +3503,14 @@ class Library:
             self.say(f"trash: {gone} file{'' if gone == 1 else 's'} deleted for good")
         return gone
 
+    def _push(self, group: str, label: str) -> None:
+        """A load of one group's values: one step on the stack that watches them
+        (plan 44 D5b), the meta controller's for a session group, else the deck's."""
+        if group in SESSION_GROUPS:
+            undo.push_meta(label, load=True)
+        else:
+            undo.push_on(self.reg, label, load=True)
+
     def is_dirty(self, group: str) -> bool:
         """Have the group's bases moved off the loaded (or default) preset?
         For a document kind: has its signature moved since the last load or
@@ -3462,7 +3540,7 @@ class Library:
             return None
         self._need_reg()
         # (the other branch pushes in `load`)
-        undo.push_on(self.reg, f"reset {group_word(group)}", load=True)
+        self._push(group, f"reset {group_word(group)}")
         self.restore(self.resolved(group, {}))
         self._landed(group, None, None)
         return None
