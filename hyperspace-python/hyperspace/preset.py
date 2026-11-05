@@ -12,6 +12,11 @@
 `graphmigrate.ten` — and ``"bus": {"cut": [{"from", "to"}, …]}`` is the
 preset's bus cuts, `BUS_KEY`, below.)
 
+(plan 57, NM0: ``"node_mode": [{"player", "controller", "node"}, …]``, what
+each player's controller points at: `nodemode`. Optional, so a preset with
+none saves as it did, byte for byte; no schema of its own. The rows are derived,
+never saved: `nodemode.fill`.)
+
 (plan 32 S: a ``media`` section holds the channels' bins:
 ``{"channels": {"a": ["shared:loops/tunnel.mp4", null, …], …}}``.)
 
@@ -110,7 +115,7 @@ replaces rows, never an offset. In order (plan 13 §5):
 A save (`document`) writes the performance snapshot, every performer row
 (disabled ones too), the table's preset-layer rows (`Bindings.desk`, a
 row's ``layer`` left out: every desk row is the preset's), the table's
-macros (`Bindings.macros_doc`) and the bus cuts. The dirty dot (`signature`) covers all of it, so a Learn,
+macros (`Bindings.macros_doc`), the bus cuts and the node mode. The dirty dot (`signature`) covers all of it, so a Learn,
 an Unbind or a ROUTING-page edit — which change the table and write no
 file — shows as the loaded preset edited; only a save (⇧F, a pad, the
 strip's save / as…) writes it.
@@ -133,7 +138,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from . import apc40, graphmigrate, graphview, modifiers, patches, routing, undo
+from . import apc40, graphmigrate, graphview, modifiers, nodemode, patches, routing, undo
 from .fx import declare as declare_fx
 from .ghost import GhostState
 from .ghost import prefix as ghost_prefix
@@ -222,6 +227,9 @@ VERSIONS = (2, 3, 4, 5, 6, 7, 8, 9, 10)
 # rig's cables from All outputs into a window that this preset cuts
 # (`graph.RigWires`); no key: every cable stands
 BUS_KEY = graphmigrate.BUS_KEY
+# plan 57 (NM0): what the controllers point at, `nodemode.NodeMode`'s JSON; no
+# key: nothing does
+NODE_MODE_KEY = nodemode.KEY
 # what a load says of a file naming a desk template (retired, plan 44 D3;
 # said by the one ladder since plan 50)
 TEMPLATE_RETIRED = graphmigrate.TEMPLATE_RETIRED
@@ -748,7 +756,8 @@ def dumps(doc: dict) -> str:
             rows = ",\n".join(f"  {json.dumps(c)}: {json.dumps(b)}"
                                for c, b in v["channels"].items())
             text = '{"channels": {\n' + rows + '\n }}'
-        elif key in ("routes", MODIFIERS_KEY, "desk", GROUPS_KEY) and isinstance(v, list):
+        elif (key in ("routes", MODIFIERS_KEY, "desk", GROUPS_KEY, NODE_MODE_KEY)
+              and isinstance(v, list)):
             if v:
                 rows = ",\n".join("  " + json.dumps(r) for r in v)
                 text = f"[\n{rows}\n ]"
@@ -879,6 +888,8 @@ class Presets:
         self.graph = GraphSection(reg, lib=lib)
         # plan 44 D3: the bus cuts the loaded preset holds (`graph.RigWires`)
         self.bus = RigWires()
+        # plan 57: what this preset's controllers point at (`nodemode`)
+        self.node_mode = nodemode.NodeMode()
         self.landing = (None, None, None)
         # row 563: membership is settled where what the preset holds changes
         # — a landing, the table's modifiers, a bank's voices
@@ -1332,11 +1343,35 @@ class Presets:
         #     named, kept or dropped (row 563: an id is never handed out twice)
         self.group_high = max((group_number(g.get("id")) for g in raw_groups
                                if isinstance(g, dict)), default=0)
+        #     plan 57 (NM0): and what its controllers point at; a node the
+        #     graph does not have is left out, said; no key is nothing pointed
+        mode, mode_notes = nodemode.NodeMode.read(doc.get(NODE_MODE_KEY))
+        canvas = self._held_canvas()
+        notes += mode_notes + [nodemode.NODE_GONE.format(node=e.node.removeprefix("render:"))
+                               for e in mode.entries if e.node not in canvas]
+        self.node_mode = mode.kept_in(canvas)
         # 7. the notes, for the panel
         self.notes = notes
         self.migrated = migrated            # plan 36 T3: the one-way migration's word
         self._warn(str(doc.get("name") or (path.stem if path else "preset")))
         return unknown
+
+    def point_node_mode(self, player: int, controller: str, node: str) -> str | None:
+        """Player `player`'s `controller` on `node`, one undo step, the dot lit
+        (plan 53 NM1: an edit of the preset); another node just switches. Why
+        not (the words), when the preset does not have `node`."""
+        if node not in self._held_canvas():
+            return nodemode.NODE_GONE.format(node=node.removeprefix("render:"))
+        if self.node_mode.of(player, controller) != node:
+            undo.push_on(self.reg, "node mode", load=True)
+            self.node_mode = self.node_mode.pointing(player, controller, node)
+        return None
+
+    def leave_node_mode(self, player: int, controller: str) -> None:
+        """That controller off its node, as an edit too."""
+        if self.node_mode.of(player, controller) is not None:
+            undo.push_on(self.reg, "leave node mode", load=True)
+            self.node_mode = self.node_mode.leaving(player, controller)
 
     def document(self, name: str) -> dict:
         """The live state as a preset document, named — what a save writes."""
@@ -1394,6 +1429,9 @@ class Presets:
         groups = self.live_groups()
         if groups:
             doc[GROUPS_KEY] = groups
+        # plan 57 (NM0): a preset that points at nothing writes nothing
+        if self.node_mode:
+            doc[NODE_MODE_KEY] = self.node_mode.to_json()
         # plan 32 S: the channels' bins
         media = self.media
         if media is not None:
@@ -1519,7 +1557,10 @@ class Presets:
         none is taken out of the list — in the same operation that removed
         the node, so the next draw and the next save find the lists already
         right. Hung on the mechanisms, not the callers: the graph section's
-        `on_land`, the table's `on_modifiers`, each bank's `on_change`."""
+        `on_land`, the table's `on_modifiers`, each bank's `on_change`.
+        A node mode on a node that went lets go there too (plan 57)."""
+        if self.node_mode:
+            self.node_mode = self.node_mode.kept_in(self._held_canvas())
         groups = self.groups
         if not groups:
             return
@@ -1580,7 +1621,9 @@ class Presets:
                 # plan 40 T2: a group made, opened, renamed or taken apart
                 json.dumps(getattr(self, "groups", None) or None, sort_keys=True),
                 # plan 44 D3: a bus cable cut or joined on GRAPH
-                json.dumps(self.bus.to_json(), sort_keys=True))
+                json.dumps(self.bus.to_json(), sort_keys=True),
+                # plan 57: a controller pointed at another node (NM1: an edit)
+                json.dumps(self.node_mode.to_json()))
 
     # ---- internals ----
 

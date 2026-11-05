@@ -238,6 +238,9 @@ COLOURS = {
     graphview.GEOMETRY: imgui.ImVec4(0.38, 0.72, 1.0, 1.0),
     graphview.MASK: imgui.ImVec4(0.72, 0.52, 1.0, 1.0),
 }
+# a cable of a kind with a colour of its own, whatever it carries (plan 57: the
+# owner's "a special type of cable", not white, as the value cables nearly are)
+KIND_COLOURS = {graphview.NODE_MODE: imgui.ImVec4(0.30, 0.90, 0.55, 1.0)}
 DORMANT_ALPHA = 0.22
 THIN, THICK = 1.5, 5.5   # a value cable at rest and at full reading
 WIRE = 3.0               # a render cable, a trigger
@@ -3036,7 +3039,7 @@ def _cable(st: dict, c: graphview.VCable, a: str | None = None, b: str | None = 
     node's stub for a render cable: plan 28 N7)."""
     k = st.get("tints", {}).get(c.id)          # plan 37 C2: tinted while the switch is lit
     if k is None:
-        k = COLOURS.get(c.type, ui.DIM)
+        k = KIND_COLOURS.get(c.kind) or COLOURS.get(c.type, ui.DIM)
     col = imgui.ImVec4(k.x, k.y, k.z, DORMANT_ALPHA if c.dormant else
                        THROUGH_ALPHA if c.kind == graphview.THROUGH else k.w)
     if c.type == graphview.VALUE:
