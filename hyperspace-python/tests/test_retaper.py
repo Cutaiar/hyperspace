@@ -40,7 +40,7 @@ OLD_PATCH = ROOT / "tests" / "fixtures" / "patches" / "acid-wash.json"
 # PR #304's amount-type params, the ones the `amount` flag now marks
 AMOUNTS = {"fx.acid.bend", "fx.acid.twist", "fx.acid.breathe", "fx.deconverge.amount",
            "fx.deconverge.radial", "fx.displace.amount", "fx.doublevision.amount",
-           "fx.fractals.amount", "fx.glimmer.amount", "fx.plasma.level",
+           "fx.fractals.amount", "fx.glimmer.amount", "fx.grow.amount", "fx.plasma.level",
            "fx.tripcolour.amount", "fx.warp.amount", "fx.wobble.amount", "fx.zoomblur.amount"}
 
 
