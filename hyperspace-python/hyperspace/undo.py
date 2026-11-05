@@ -755,10 +755,6 @@ def install_meta(u: Undo | None) -> None:
         _where = None
 
 
-def meta_installed() -> Undo | None:
-    return _meta
-
-
 def where(inside_meta) -> None:
     """`inside_meta()`: is the panel inside a meta section now (`ui.Panel`)?"""
     global _where
